@@ -225,7 +225,7 @@ jobs:
           GH_REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
-          version="$(sed -n 's/^pdfcraft\\.version=//p' apps/pdfcraft-android/android/gradle.properties)"
+          version="$(awk -F= '$1=="pdfcraft.version" {print $2; exit}' apps/pdfcraft-android/android/gradle.properties)"
           tag="v$version"
           apk="dist/pdfcraft-android-$version.apk"
           test -s "$apk"
@@ -238,7 +238,7 @@ jobs:
             exit 1
           fi
           tools="$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -n 1)"
-          build="$("${tools}aapt" dump badging "$apk" | sed -n "s/^package:.*versionCode='\\([0-9]*\\)'.*/\\1/p" | head -n 1)"
+          build="$("${tools}aapt" dump badging "$apk" | awk -F"\x27" '/^package:/ {print $4; exit}')"
           if ! [[ "$build" =~ ^[1-9][0-9]*$ ]]; then
             echo "::error::Could not read the signed APK manifest's actual Android build number."
             exit 1
