@@ -36,7 +36,7 @@ class DocumentFiles(private val context: Context) {
             val f = File(requireNotNull(uri.path) { context.getString(R.string.files_error_no_path) })
             if (f.canonicalPath.startsWith(context.filesDir.canonicalPath)) return f
         }
-        val name = displayName(uri)
+        val name = OpenTiming.measure("provider_metadata") { displayName(uri) }
         val dir = File(workDir, sha(uri.toString())).apply { mkdirs() }
         // A failed provider write may have truncated the original; prefer the recovery copy.
         if (PendingWorkingCopy.isPending(dir)) {

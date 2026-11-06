@@ -74,6 +74,7 @@ import io.github.artcraftandroid.pdfcraft.ui.PdfMotion
 import io.github.artcraftandroid.pdfcraft.ui.SheetHost
 import io.github.artcraftandroid.pdfcraft.ui.pdfColors
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
 /**
@@ -147,6 +148,19 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
         }
     }
 
+    LaunchedEffect(doc) {
+        androidx.compose.runtime.withFrameNanos { }
+        if (android.util.Log.isLoggable("PdfCraftOpen", android.util.Log.DEBUG))
+            android.util.Log.d("PdfCraftOpen", "viewer_frame_ms=${doc.images.elapsedOpenMs()}")
+    }
+
+    // The first page renders without waiting for a scan of links across the whole PDF.
+    // Cache only visible pages and a small neighborhood as the viewport moves.
+    LaunchedEffect(doc) {
+        snapshotFlow { doc.info.generation to doc.viewer.visiblePages(extra = 0.5f) }
+            .collectLatest { (_, visible) -> vm.loadVisibleLinks(doc, visible) }
+    }
+
     // Opening the document, scrolling and zooming show the scrubber and page pill for a while.
     LaunchedEffect(doc) {
         snapshotFlow { Triple(doc.viewer.scrollX, doc.viewer.scrollY, doc.viewer.zoom) }.collect {
@@ -214,22 +228,33 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
             gap = with(density) { (if (c.dark) 3f else 4f).toDp() },
             gesturesEnabled = gesturesForTool,
             onTap = { p, at ->
+                // Fields, comments, edits and selection must remain immediate; no link
+                // hydration is allowed to delay those higher-priority interactions.
                 when {
                     selection.selection != null -> selection.clear()
                     ctl.tool == ViewerTool.Edit -> vm.editTap(doc, at)
                     vm.tapField(doc, at) -> Unit
                     vm.tapComment(doc, at) -> Unit
-                    vm.tapLink(doc, at) -> Unit
-                    // while reading aloud, a word moves the reading there; anywhere else shows or hides the bars
-                    vm.readAloud != null && at != null && ctl.tool == ViewerTool.None -> scope.launch {
-                        val slop = 12f / doc.viewer.pixelsPerPoint(at.page).coerceAtLeast(0.1f) * density.density
-                        if (!vm.readAloudAt(doc, at, slop)) ctl.toggleBars()
+                    else -> scope.launch {
+                        val generation = doc.info.generation
+                        // Only unresolved link taps wait for their one page's link table.
+                        if (at != null && ctl.tool == ViewerTool.None && at.page !in doc.linkPagesLoaded)
+                            vm.loadVisibleLinks(doc, at.page..at.page)
+                        if (vm.document !== doc || doc.info.generation != generation) return@launch
+                        when {
+                            vm.tapLink(doc, at) -> Unit
+                            // Reading aloud may jump to a tapped word.
+                            vm.readAloud != null && at != null && ctl.tool == ViewerTool.None -> {
+                                val slop = 12f / doc.viewer.pixelsPerPoint(at.page).coerceAtLeast(0.1f) * density.density
+                                if (!vm.readAloudAt(doc, at, slop)) ctl.toggleBars()
+                            }
+                            doc.viewer.mode == PageMode.SinglePage && doc.viewer.zoom <= 1.01f && edgeTap(p.x, doc.viewer.viewW) != 0 -> {
+                                doc.viewer.goToPage(doc.viewer.currentPage + edgeTap(p.x, doc.viewer.viewW))
+                                ctl.barsVisible = false
+                            }
+                            else -> ctl.toggleBars()
+                        }
                     }
-                    doc.viewer.mode == PageMode.SinglePage && doc.viewer.zoom <= 1.01f && edgeTap(p.x, doc.viewer.viewW) != 0 -> {
-                        doc.viewer.goToPage(doc.viewer.currentPage + edgeTap(p.x, doc.viewer.viewW))
-                        ctl.barsVisible = false
-                    }
-                    else -> ctl.toggleBars()
                 }
             },
             // a double tap zooms with the bars out of the way, as the reference's does

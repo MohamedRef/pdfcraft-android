@@ -45,7 +45,19 @@ class PageImages(
     private val scope: CoroutineScope,
     private val budgetBytes: Int,
     workers: Int = 2,
+    private val openedAt: Long = android.os.SystemClock.elapsedRealtime(),
 ) {
+    fun elapsedOpenMs(): Long = android.os.SystemClock.elapsedRealtime() - openedAt
+    private var firstDrawReported = false
+
+    /** First whole-page raster submitted to Canvas; GPU presentation still needs a trace. */
+    fun reportFirstDraw() {
+        if (!firstDrawReported) {
+            firstDrawReported = true
+            if (Log.isLoggable("PdfCraftOpen", Log.DEBUG)) Log.d("PdfCraftOpen", "first_page_canvas_ms=${android.os.SystemClock.elapsedRealtime() - openedAt}")
+        }
+    }
+
     private val lock = Any()
     private val cache = LinkedHashMap<ImageKey, PageImage>(64, 0.75f, true)
     private val fallback = HashMap<Int, PageImage>()
@@ -119,7 +131,7 @@ class PageImages(
             }
             val image = try {
                 withContext(engine.renders) {
-                    val img = engine.session.renderPage(doc, r.key.page.toUInt(), r.scale, r.tile)
+                    val img = io.github.artcraftandroid.pdfcraft.engine.OpenTiming.measure("page_render") { engine.session.renderPage(doc, r.key.page.toUInt(), r.scale, r.tile) }
                     PageImage(r.key, img.toBitmap().asImageBitmap(), r.scale, r.tile?.x?.toInt() ?: 0, r.tile?.y?.toInt() ?: 0)
                 }
             } catch (e: Exception) {
