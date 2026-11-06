@@ -238,7 +238,7 @@ jobs:
             exit 1
           fi
           tools="$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -n 1)"
-          build="$("${tools}aapt" dump badging "$apk" | awk -F"\x27" '/^package:/ {print $4; exit}')"
+          build="$("${tools}aapt" dump badging "$apk" | awk -F"'" '/^package:/ {print $4; exit}')"
           if ! [[ "$build" =~ ^[1-9][0-9]*$ ]]; then
             echo "::error::Could not read the signed APK manifest's actual Android build number."
             exit 1
