@@ -68,6 +68,9 @@ pub struct RenderConfig {
     pub layers: Arc<Vec<(i32, i32, bool)>>,
     /// View ▸ Hide all comments: markup annotations aren't drawn (fields and links still are).
     pub hide_comments: bool,
+    /// Android paints sticky-note icons as overlays; hide only /Text appearances in its
+    /// page raster, keeping other annotations (highlights, ink, stamps) visible.
+    pub hide_notes: bool,
     /// Refuse a whole-page raster that would be reduced by the renderer's hard size caps.
     /// Tiled requests remain available for pages that exceed those caps. Both modes refuse
     /// a raster whose rounded integer dimensions exceed the final pixel-allocation budget.
@@ -110,6 +113,7 @@ impl RenderConfig {
         InterpreterSettings {
             ocg_overrides: self.layers.clone(),
             hide_comments: self.hide_comments,
+            hide_notes: self.hide_notes,
             font_resolver: Arc::new(move |query| {
                 japanese_fallback(query).or_else(|| system_fonts.then(|| system_fallback(query)).flatten()).or_else(|| standard(query))
             }),

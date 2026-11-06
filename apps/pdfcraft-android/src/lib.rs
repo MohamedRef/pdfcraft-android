@@ -718,14 +718,18 @@ impl MobileSession {
                 .annotations
                 .iter()
                 .filter(|a| a.subtype != "Link" && a.subtype != "Widget" && a.subtype != "Popup")
-                .map(|a| CommentInfo {
+                .map(|a| {
+                    // Released 0.18.2 inspector exposes display fields only; the editor holds
+                    // raw /M, alpha and stroke width. Preserve the Android UI record contract.
+                    let props = d.comment_props(a.page, a.index);
+                    CommentInfo {
                     page: u32::try_from(a.page).unwrap_or(u32::MAX),
                     index: u32::try_from(a.index).unwrap_or(u32::MAX),
                     subtype: a.subtype.clone(),
                     kind: pdfcraft_engine::comment_kind(a).to_string(),
                     author: a.author.clone(),
                     contents: a.contents.clone(),
-                    modified: a.modified_raw.clone().or_else(|| a.modified.clone()),
+                    modified: props.as_ref().and_then(|p| p.modified.clone()).or_else(|| a.modified.clone()),
                     rect: d.info.pages.get(a.page).map(|p| view_rect(p, a.rect)).unwrap_or_default(),
                     color: a.color.map(rgb),
                     name: a.name.clone(),
@@ -733,8 +737,9 @@ impl MobileSession {
                     state: a.state.clone(),
                     locked: a.locked,
                     fill_sign: a.fill_sign,
-                    opacity: a.opacity,
-                    width: a.width,
+                    opacity: props.as_ref().map(|p| p.opacity as f32).filter(|v| v.is_finite()).unwrap_or(1.0).clamp(0.0, 1.0),
+                    width: props.as_ref().and_then(|p| p.width).map(|w| w as f32).filter(|w| w.is_finite() && *w >= 0.0),
+                }
                 })
                 .collect()
         })
