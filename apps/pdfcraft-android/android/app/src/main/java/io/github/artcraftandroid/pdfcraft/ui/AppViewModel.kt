@@ -2227,6 +2227,23 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         }
     }
 
+    /**
+     * Export the PDF's embedded outline (not the reader's private, on-device bookmarks) to a
+     * portable JSON tree. Rust owns the schema, nesting limit and atomic temporary write.
+     * Only the finished JSON is published to Downloads; source PDF bytes are never modified.
+     */
+    fun exportEmbeddedBookmarks(doc: OpenDocument) = job(text(R.string.sheet_export_embedded_bookmarks)) { eng ->
+        val out = tempFile("json")
+        try {
+            eng.tool("bookmark_export", mapOf("doc" to doc.id, "out" to out.absolutePath))
+            require(out.isFile && out.length() > 0L) { text(R.string.sheet_export_embedded_bookmarks_failed) }
+            deliver(out, "${DocumentFiles.safeName(doc.title)}_bookmarks.json", "application/json")
+        } finally {
+            // deliver() removes the temp file on success; an engine/provider error must do so too.
+            out.delete()
+        }
+    }
+
     /** Export [doc] as a Word, RTF, Excel or PowerPoint document. */
     fun exportDocument(doc: OpenDocument, ext: String) = job(text(R.string.msg_busy_exporting_to, ext.uppercase())) { eng ->
         val out = tempFile(ext)
