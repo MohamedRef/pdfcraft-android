@@ -60,6 +60,84 @@ jobs:
           path: apps/pdfcraft-android/android/app/build/test-results/testDebugUnitTest/
           if-no-files-found: ignore
 
+  # Run a real release-mode build of each supported device ABI before a PR is mergeable.
+  # Pull-request code never receives the permanent release signing secrets.
+  apk-smoke:
+    name: APK smoke (${{ matrix.abi }})
+    if: github.event_name == 'pull_request'
+    needs: [rust-tests, android-tests]
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    strategy:
+      fail-fast: false
+      matrix:
+        abi: [arm64-v8a, armeabi-v7a]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Install Rust, cargo-ndk, Android SDK and NDK
+        run: |
+          rustup toolchain install
+          cargo install cargo-ndk --version 4.1.2 --locked
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;29.0.14206865" >/dev/null
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: pr-apk-smoke-${{ matrix.abi }}
+      - name: Build release-mode APK with temporary CI debug signature
+        working-directory: apps/pdfcraft-android/android
+        run: ./gradlew assembleRelease "-Ppdfcraft.abis=${{ matrix.abi }}" --no-daemon --stacktrace
+      - name: Verify package, signature and compiled Rust library
+        working-directory: apps/pdfcraft-android/android
+        env:
+          ABI: ${{ matrix.abi }}
+        run: |
+          apk="app/build/outputs/apk/release/app-release.apk"
+          test -s "$apk" || { echo "::error::APK file not produced for $ABI"; exit 1; }
+          tools="$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -n 1)"
+          "${tools}apksigner" verify --print-certs "$apk" > "$RUNNER_TEMP/apk-certs.txt"
+          grep -q 'certificate DN: CN=Android Debug' "$RUNNER_TEMP/apk-certs.txt" || {
+            echo "::error::PR smoke APK must have the temporary Android debug signature, not the production signing key"
+            exit 1
+          }
+          "${tools}aapt" dump badging "$apk" > "$RUNNER_TEMP/apk-badging.txt"
+          grep -Fq "name='io.github.mohamedref.pdfcraft'" "$RUNNER_TEMP/apk-badging.txt" || {
+            echo "::error::Unexpected Android applicationId"
+            exit 1
+          }
+          grep -Eq "versionCode='[1-9][0-9]*'" "$RUNNER_TEMP/apk-badging.txt" || {
+            echo "::error::Invalid Android versionCode"
+            exit 1
+          }
+          unzip -Z -1 "$apk" | grep -Fxq "lib/$ABI/libpdfcraft_android.so" || {
+            echo "::error::Missing compiled Rust engine for $ABI"
+            exit 1
+          }
+          echo "Release-mode APK for $ABI built, debug-signed and validated (CI only, not distributable)." >> "$GITHUB_STEP_SUMMARY"
+
+  # Branch protection should require this single non-skippable PR status check.
+  # A skipped or failed dependency is a failed merge gate.
+  merge-gate:
+    name: Merge gate (Rust, Android, ABI APKs)
+    if: ${{ always() && github.event_name == 'pull_request' }}
+    needs: [rust-tests, android-tests, apk-smoke]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every PR test and ABI release build to succeed
+        env:
+          RUST_RESULT: ${{ needs.rust-tests.result }}
+          ANDROID_RESULT: ${{ needs.android-tests.result }}
+          APK_RESULT: ${{ needs.apk-smoke.result }}
+        run: |
+          echo "Rust: $RUST_RESULT; Android: $ANDROID_RESULT; APK builds: $APK_RESULT"
+          if [ "$RUST_RESULT" != success ] || [ "$ANDROID_RESULT" != success ] || [ "$APK_RESULT" != success ]; then
+            echo '::error::PR is not merge-ready: Rust tests, Android tests, and release APK builds for both ABIs must all pass.'
+            exit 1
+          fi
+          echo 'Rust tests, Android unit tests, and both release ABI APK builds passed.' >> "$GITHUB_STEP_SUMMARY"
+
   signed-apk:
     if: github.event_name != 'pull_request'
     needs: [rust-tests, android-tests]

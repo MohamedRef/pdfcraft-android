@@ -39,3 +39,18 @@ Both the `PdfCraft Custom - tests and APK` and `Release` workflows validate the 
 If the original keystore or password has been lost, GitHub cannot recover them from its encrypted repository secrets. You will need the original signing material from a secure backup to issue a compatible update.
 
 If **no APK has been distributed or installed**, you can rotate to a new signing identity. Generate a fresh PKCS#12 on a trusted local machine, replace all four signing secrets, and update the `PDFCRAFT_CERT_SHA256` Actions variable with its new public fingerprint before building. Back up the PKCS#12 securely for future updates. An exposed keystore and password should not be reused for a public release.
+
+## Pull requests and merge protection
+
+The `PdfCraft Custom - tests and APK` workflow runs against every pull request targeting `main`:
+
+- `rust-tests` tests the Rust COS, engine, and Android library.
+- `android-tests` runs Android JVM tests.
+- `APK smoke (arm64-v8a)` and `APK smoke (armeabi-v7a)` build **release-mode** packages and validate their debug-only CI signatures, application ID, version code and bundled Rust native library. These APKs are **not** suitable for distribution or for updating an installed release.
+- `Merge gate (Rust, Android, ABI APKs)` must succeed; it fails if any required job fails, is cancelled, or is skipped. `Conventional title` is a separate PR-title check.
+
+In **Settings > Rules > Rulesets** (or **Branches > Branch protection rules**), add protection for `main`. Require a pull request before merging, require the **Merge gate (Rust, Android, ABI APKs)** and **Conventional title** status checks, require branches to be up to date, and disable direct push/bypass where your GitHub permissions allow. Branch protection settings cannot be enforced by simply committing a YAML file.
+
+Do not merge while any required check is pending, failed, skipped, or cancelled. The production `signed-apk` job uses the private release keystore and runs only on trusted `main` pushes/manual dispatch; it is intentionally skipped for untrusted PR code. A passing PR gate proves both APK variants can be compiled, but it **does not claim to verify production signing**.
+
+If the production `signed-apk` job fails, correct the repository signing secrets and fingerprint variable and rerun it. Never turn production signing checks off to make `main` appear green.

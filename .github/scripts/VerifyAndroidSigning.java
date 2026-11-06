@@ -21,7 +21,10 @@ public final class VerifyAndroidSigning {
     private static String required(String name) {
         String value = System.getenv(name);
         if (value == null || value.isEmpty()) {
-            fail("Missing Android signing secret", "Set " + name + " in repository Actions secrets.");
+            String location = "PDFCRAFT_CERT_SHA256".equals(name)
+                    ? "Settings > Secrets and variables > Actions > Variables"
+                    : "Settings > Secrets and variables > Actions > Secrets";
+            fail("Missing Android signing setting", "Set " + name + " under " + location + ".");
         }
         return value;
     }
