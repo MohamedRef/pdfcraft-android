@@ -2,7 +2,7 @@
 
 ## Next-batch preparation — contents from heading styles
 
-`feat/android-text-style-bookmarks` adds an opt-in text-style selector and explicit native heading-bookmark creation, with nine ordered levels, signed/read-only/copy/assembly protection and an atomic native generation check. Local bridge regression passed analysis/append/Undo/Redo/save/reopen/source-byte preservation; Android JVM/Compose CI and batch device QA remain required. Selector currently exposes the first 300 native styles. This is separate preparation outside the published APK; see [text-style integration](ANDROID_TEXT_STYLE_BOOKMARKS.md).
+`feat/android-text-style-bookmarks` adds an opt-in text-style selector and explicit native heading-bookmark creation, with nine ordered levels, signed/read-only/copy/assembly protection and an atomic native generation check. Local bridge regression passed analysis/append/Undo/Redo/save/reopen/source-byte preservation; Android JVM/Compose CI and batch device QA remain required. Selector exposes the complete native result (largest 200 styles from the first 5,000 pages). This is separate preparation outside the published APK; see [text-style integration](ANDROID_TEXT_STYLE_BOOKMARKS.md).
 
 ## LIVE CHECKPOINT — 2026-11-06: repository review, signed beta and open drafts
 

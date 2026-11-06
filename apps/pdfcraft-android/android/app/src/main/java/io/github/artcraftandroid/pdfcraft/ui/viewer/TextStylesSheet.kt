@@ -43,7 +43,6 @@ internal fun TextStylesSheet(vm: AppViewModel, doc: OpenDocument) {
     var styles by remember(doc.id, generation) { mutableStateOf<List<PdfTextStyle>?>(null) }
     var selected by remember(doc.id, generation) { mutableStateOf<List<Int>>(emptyList()) }
     var loadedGeneration by remember(doc.id) { mutableStateOf<ULong?>(null) }
-    var total by remember(doc.id, generation) { mutableStateOf(0) }
     var loading by remember(doc.id) { mutableStateOf(false) }
     var failed by remember(doc.id, generation) { mutableStateOf(false) }
     // Changing generation invalidates the list and selection above. A running analysis also
@@ -70,8 +69,8 @@ internal fun TextStylesSheet(vm: AppViewModel, doc: OpenDocument) {
                     val result = engine.tool("text_styles", mapOf("doc" to doc.id))
                     check(vm.document === doc && doc.info.generation == generation)
                     val rows = result.getJSONArray("styles")
-                    total = rows.length()
-                    styles = (0 until minOf(total, 300)).map { i ->
+                    // The pinned native engine already returns at most 200 styles.
+                    styles = (0 until rows.length()).map { i ->
                         val row = rows.getJSONObject(i)
                         PdfTextStyle(row.getString("font"), row.getDouble("size"), row.getBoolean("bold"),
                             row.getBoolean("italic"), row.getInt("lines"), row.getInt("pages"), row.getString("sample"))
@@ -96,9 +95,6 @@ internal fun TextStylesSheet(vm: AppViewModel, doc: OpenDocument) {
                 failed -> item { Text(stringResource(R.string.text_styles_failed), modifier = Modifier.padding(18.dp)) }
                 styles?.isEmpty() == true -> item { Text(stringResource(R.string.text_styles_empty), modifier = Modifier.padding(18.dp)) }
                 else -> {
-                    if (total > 300) item {
-                        Text(stringResource(R.string.text_styles_limit, 300, total), modifier = Modifier.padding(18.dp))
-                    }
                     itemsIndexed(styles.orEmpty()) { index, style ->
                         val level = selected.indexOf(index) + 1
                         val enabled = !loading && canEdit && (level > 0 || selected.size < 9)
