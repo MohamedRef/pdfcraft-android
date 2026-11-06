@@ -77,12 +77,16 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /** A stroke being drawn: its page and points (in the page's points). */
-internal class InkStroke(val page: Int, val appearance: InkAppearance) {
+internal class InkStroke(val page: Int, val appearance: InkAppearance, stylus: Boolean = false) {
     val points = mutableStateListOf<Offset>()
+    val pressures = mutableStateListOf<Float>()
+    var pressureSensitive by mutableStateOf(stylus)
 
     /** The clean shape shown while the finger is held still (press and hold to snap). */
     var preview by mutableStateOf<List<Offset>?>(null)
 }
+
+private data class InkSaveSegment(val page: Int, val appearance: InkAppearance, val points: List<Offset>)
 
 /** How long the finger stays still to snap a stroke to a shape, and how far it may wander. */
 private const val SNAP_HOLD_MS = 500L
@@ -117,8 +121,8 @@ fun ToolLayer(vm: AppViewModel, doc: OpenDocument) {
  */
 fun Modifier.toolGestures(
     doc: OpenDocument,
-    onDown: (Offset) -> Unit,
-    onMove: (Offset) -> Unit,
+    onDown: (Offset, Float, Boolean) -> Unit,
+    onMove: (Offset, Float, Boolean) -> Unit,
     onUp: (Offset, moved: Boolean) -> Unit,
     onCancel: () -> Unit,
     penOnly: Boolean = false,
@@ -134,7 +138,7 @@ fun Modifier.toolGestures(
         var one = !navigation && !eraser
         var moved = false
         var last = down.position
-        if (one) onDown(last)
+        if (one) onDown(last, down.pressure, activePen)
         try {
             while (true) {
                 val event = awaitPointerEvent()
@@ -148,20 +152,20 @@ fun Modifier.toolGestures(
                     one = activePen
                     last = arrivingPen.position
                     routing.penStarted()
-                    if (one) onDown(last)
+                    if (one) onDown(last, arrivingPen.pressure, activePen)
                 }
                 val active = event.changes.firstOrNull { it.id == activeId }
                 // Touch/palm pointers do not replace the pen or interrupt its stroke.
                 if (activePen) {
                     if (active == null || !active.pressed) {
                         if (active?.isConsumed == true) { onCancel(); one = false }
-                        else if (active != null) { last = active.position; onMove(last) }
+                        else if (active != null && active.positionChanged()) { last = active.position; onMove(last, active.pressure, true) }
                         break
                     }
                     if (active.positionChanged()) {
                         last = active.position
                         moved = true
-                        onMove(last)
+                        onMove(last, active.pressure, true)
                     }
                     event.changes.forEach { it.consume() }
                     continue
@@ -187,7 +191,7 @@ fun Modifier.toolGestures(
                 if (active.positionChanged()) {
                     if ((active.position - down.position).getDistance() > viewConfiguration.touchSlop) moved = true
                     last = active.position
-                    onMove(last)
+                    onMove(last, active.pressure, false)
                     active.consume()
                 }
             }
@@ -205,8 +209,8 @@ private fun TapLayer(doc: OpenDocument, onTap: (PagePoint) -> Unit) {
     Box(
         Modifier.fillMaxSize().toolGestures(
             doc,
-            onDown = {},
-            onMove = { },
+            onDown = { _, _, _ -> },
+            onMove = { _, _, _ -> },
             onUp = { p, moved -> if (!moved) doc.viewer.screenToPage(p)?.let(onTap) },
             onCancel = {},
         ),
@@ -267,7 +271,7 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
         Modifier.fillMaxSize().toolGestures(
             doc,
             penOnly = prefs.stylusOnly,
-            onDown = { p ->
+            onDown = { p, _, _ ->
                 val at = doc.viewer.screenToPage(p) ?: return@toolGestures
                 stillAt = p
                 movedAt = System.currentTimeMillis()
@@ -364,7 +368,7 @@ private fun MarkupLayer(vm: AppViewModel, doc: OpenDocument) {
                     anchor = at.page to g
                 }
             },
-            onMove = { p -> extendTo(p) },
+            onMove = { p, _, _ -> extendTo(p) },
             onUp = { _, _ ->
                 val d = drag
                 drag = null
