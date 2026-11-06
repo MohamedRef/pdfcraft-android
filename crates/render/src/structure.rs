@@ -139,33 +139,21 @@ pub(crate) struct LazyStructure {
     // input object number (which can be sparse or hostile). Only queried objects fill slots.
     objects: Vec<Slot>,
     failed: AtomicBool,
-    /// Objects skipped only because their (object) stream decodes past the cap.
-    limited: AtomicBool,
 }
 
 impl LazyStructure {
     pub(crate) fn new(bytes: Arc<Vec<u8>>, password: Option<&str>) -> std::result::Result<Self, String> {
-        Self::new_with_limit(bytes, password, 256 << 20)
-    }
-
-    /// [`LazyStructure::new`] with object and cross-reference streams capped at `stream_limit` decoded bytes.
-    pub(crate) fn new_with_limit(bytes: Arc<Vec<u8>>, password: Option<&str>, stream_limit: usize) -> std::result::Result<Self, String> {
-        let source = Document::open_with_stream_limit(bytes, password, stream_limit).map_err(|e| e.to_string())?;
+        let source = Document::open_with_stream_limit(bytes, password, 256 << 20).map_err(|e| e.to_string())?;
         if !source.repair_log().is_empty() {
             return Err("the structure requires compatibility repair".into());
         }
         let trailer = convert_dict(source.trailer(), 0).map_err(|e| e.to_string())?;
         let objects = source.object_numbers().into_iter().map(|n| (n, OnceLock::new())).collect();
-        Ok(Self { source, trailer, objects, failed: AtomicBool::new(false), limited: AtomicBool::new(false) })
+        Ok(Self { source, trailer, objects, failed: AtomicBool::new(false) })
     }
 
     pub(crate) fn failed(&self) -> bool {
         self.failed.load(Ordering::Relaxed)
-    }
-
-    /// Whether some objects were left out because their data decodes past the cap.
-    pub(crate) fn limited(&self) -> bool {
-        self.limited.load(Ordering::Relaxed)
     }
 }
 
@@ -184,17 +172,7 @@ impl Structure for LazyStructure {
         }
         slot.1
             .get_or_init(|| {
-                let result = match self.source.try_get(id.0) {
-                    Ok(o) => convert(&o, 0).ok().map(Box::new),
-                    // Too big to decode within the cap: left out, which is what the cap is for.
-                    // Not damage, so it doesn't send inspection to the load-everything reader
-                    // (on a 350 MB textbook with a 509 MB object stream that took 7.6 GB).
-                    Err(e) if e.is_decode_limit() => {
-                        self.limited.store(true, Ordering::Relaxed);
-                        return None;
-                    }
-                    Err(_) => None,
-                };
+                let result = self.source.try_get(id.0).ok().and_then(|o| convert(&o, 0).ok()).map(Box::new);
                 if result.is_none() {
                     self.failed.store(true, Ordering::Relaxed);
                 }
@@ -209,8 +187,19 @@ fn convert_dict(dict: &pdfcraft_cos::Dict, depth: usize) -> Result<Dictionary> {
     if depth > 100 {
         return Err(Error::RecursionLimit);
     }
-    dict.iter().map(|(key, value)| Ok((key.clone(), convert(value, depth + 1)?))).collect::<Result<Vec<_>>>().map(|items| items.into_iter().collect())
+    dict.iter()
+        .filter(|(key, _)| key.as_slice() != PRIVATE_DATA)
+        .map(|(key, value)| Ok((key.clone(), convert(value, depth + 1)?)))
+        .collect::<Result<Vec<_>>>()
+        .map(|items| items.into_iter().collect())
 }
+
+/// `/PieceInfo`: an application's private data about a page, form or document (ISO 32000-1
+/// §14.5), left out of what inspection keeps. Nothing here reads it, and every object read is
+/// kept converted for the inspection's lifetime: InDesign writes kilobytes of it into every page,
+/// and a 1,412-page book held over a gigabyte of it (#5873). The file and the editing document are
+/// untouched; this is the read-only view inspection walks.
+const PRIVATE_DATA: &[u8] = b"PieceInfo";
 
 fn convert(object: &CosObject, depth: usize) -> Result<Object> {
     if depth > 100 {

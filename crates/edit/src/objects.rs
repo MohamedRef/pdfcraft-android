@@ -52,9 +52,6 @@ fn valid_rect(rect: [f64; 4]) -> bool {
 }
 
 pub fn editable_objects(doc: &Document, page: usize) -> Result<Vec<EditableObject>, EditError> {
-    // Text and images inside text-bearing forms, as Edit text reads them (see `inline_forms`).
-    let view = crate::inline_forms::view(doc, page)?;
-    let doc: &Document = &view;
     checked_streams(doc, page)?;
     let added: Vec<_> = crate::list_added(doc).into_iter().filter(|a| a.page == page).collect();
     if added.len() > MAX_PAGE_OBJECTS {
@@ -110,10 +107,6 @@ pub fn move_objects(doc: &mut Document, page: usize, targets: &[ObjectTarget], o
     if !offset.iter().all(|v| v.is_finite() && v.abs() <= MAX_COORDINATE) || offset == [0.0, 0.0] {
         return Err(EditError::Invalid("the move must be finite and non-zero".into()));
     }
-    crate::inline_forms::edit_inlined(doc, page, |doc| move_objects_inlined(doc, page, targets, offset))
-}
-
-fn move_objects_inlined(doc: &mut Document, page: usize, targets: &[ObjectTarget], offset: [f64; 2]) -> Result<(), EditError> {
     let inventory: BTreeMap<_, _> = editable_objects(doc, page)?.into_iter().map(|o| (o.target, o)).collect();
     let mut unique = BTreeSet::new();
     for target in targets {

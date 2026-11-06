@@ -55,13 +55,16 @@ impl Document {
             if w <= 0 || h <= 0 || w > i64::from(MAX_SIDE) || h > i64::from(MAX_SIDE) || w.saturating_mul(h) > MAX_PIXELS as i64 {
                 return Err(SignatureImageError::PlacedSize.to_string());
             }
-            let (_, bytes) = pdfcraft_create::image_file(&editor.cos, picture)?;
+            // Decoded within an allowance sized for the small picture a signature is, not the
+            // document's: a stream that inflates past it is refused before it is held whole.
+            let (_, bytes) =
+                pdfcraft_create::image_file_within(&editor.cos, picture, &mut pdfcraft_cos::ImageBudget::with_work(SIGNATURE_IMAGE_WORK))?;
             let image = SignatureImage::from_bytes(&bytes).map_err(|e| e.to_string())?;
             let opacity =
                 pdfcraft_annot::props(&editor.cos, page, index).map(|p| p.opacity).filter(|v| v.is_finite()).unwrap_or(1.0).clamp(0.0, 1.0) as f32;
             let turn = pdfcraft_annot::picture_rotation(&editor.cos, page, index).map_err(|e| e.to_string())?;
             let mut cos = editor.cos.clone();
-            pdfcraft_annot::delete_annotation(&mut cos, page, index).map_err(|e| e.to_string())?;
+            pdfcraft_annot::lift_annotation(&mut cos, page, index).map_err(|e| e.to_string())?;
             let bytes = Arc::new(pdfcraft_cos::write_incremental(&cos, &pdfcraft_cos::SaveOptions::default()).map_err(|e| e.to_string())?);
             Ok(Some(ImageSignaturePreview { image, opacity, turn, page, bytes, config: self.config.clone() }))
         })?
@@ -90,6 +93,9 @@ pub fn upright_box(rotation: i64, at: [f64; 2], width: f64, height: f64) -> Opti
 /// Saved signatures live in settings, so both source and normalized PNG are bounded.
 pub const MAX_SIGNATURE_IMAGE_BYTES: usize = 4 << 20;
 const MAX_PIXELS: u64 = 4 << 20;
+/// Steps of decoding the signature's picture may take: every stage of its filters, for a
+/// picture of at most [`MAX_PIXELS`] samples, fits in it many times over.
+const SIGNATURE_IMAGE_WORK: u64 = 1 << 28;
 const MAX_SIDE: u32 = 4096;
 /// Larger sources (scans, phone photos) are decoded within these bounds, then scaled down.
 const MAX_SOURCE_SIDE: u32 = 8192;
@@ -193,24 +199,6 @@ impl SignatureImage {
         // Sides are at most 4096 pixels; 0 would be refused by the signer, never drawn.
         let side = |v: usize| u32::try_from(v).unwrap_or(0);
         pdfcraft_sign::Graphic::Image { width: side(self.size[0]), height: side(self.size[1]), rgba: self.rgba.clone() }
-    }
-
-    /// Whether some of the image is see-through: ink on a transparent background, not a photo.
-    pub fn has_transparency(&self) -> bool {
-        self.rgba.as_chunks::<4>().0.iter().any(|[.., a]| *a < u8::MAX)
-    }
-
-    /// The ink drawn in `rgb`: every pixel takes that colour and keeps its own alpha.
-    pub fn in_color(&self, rgb: [u8; 3]) -> Result<Self, SignatureImageError> {
-        let [w, h] = self.size;
-        let mut rgba = self.rgba.as_ref().clone();
-        for [r, g, b, _] in rgba.as_chunks_mut::<4>().0 {
-            [*r, *g, *b] = rgb;
-        }
-        let image = image::RgbaImage::from_raw(w as u32, h as u32, rgba).ok_or(SignatureImageError::Size)?;
-        let mut png = Cursor::new(Vec::new());
-        DynamicImage::ImageRgba8(image).write_to(&mut png, ImageFormat::Png)?;
-        Self::from_bytes(&png.into_inner())
     }
 
     /// Make near-white paper transparent, keeping darker ink.

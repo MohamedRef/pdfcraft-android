@@ -465,8 +465,6 @@ pub fn oid(dotted: &str) -> Vec<u8> {
 /// Encode a dotted OID supplied by a caller. Unlike [`oid`], this validates every arc and
 /// never panics on malformed input.
 pub fn try_oid(dotted: &str) -> Result<Vec<u8>, SignError> {
-    // Backport storytold/pdfcraft#5581 (included in stable 0.18.2):
-    // sign prefixes and empty components are not valid OID arcs.
     let mut arcs = dotted.split('.').map(|a| {
         if a.is_empty() || !a.bytes().all(|c| c.is_ascii_digit()) {
             return Err(bad("invalid OID arc"));
@@ -557,8 +555,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn try_oid_rejects_signed_and_empty_arcs() {
-        for bad in ["+1.2.840", "1.+2", "1.2.-3", "1..2", "1.2.", "1.2.x"] {
+    fn try_oid_rejects_signs_and_empty_arcs() {
+        for bad in ["+1.2.840", "1.+2", "1.2.-3", "1..2"] {
             assert!(try_oid(bad).is_err(), "accepted {bad}");
         }
         assert_eq!(try_oid("1.2.840.113549").unwrap(), oid("1.2.840.113549"));

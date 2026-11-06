@@ -18,14 +18,6 @@ Today it holds what generated appearances need without a font program:
   value or a comment's text, which is stored as typed, draw the `?` and mark the annotation with
   `set_undrawn_mark` (`UNDRAWN_MARK`, read back by `undrawn_mark`) so the edit is reported and
   flattening refuses. `script_missing` names what the typed-signature script font and its Inter fallback both lack.
-- Inter (`INTER_REGULAR`, bundled in every build) stands in for text WinAnsiEncoding can't hold
-  but Inter can (Turkish ş, Polish ł, Czech ř, Romanian ț, Greek, Cyrillic, …): `needs_inter` says
-  when, and `first_undrawable_inter` is `first_undrawable` for paths that do so. Generated
-  appearances (text boxes, Fill & Sign text, form fields) draw it as Inter's outlines
-  (`inter_path`, measured with `inter_width`), so they need no font resource; page content gets
-  Type 3 fonts drawn from the same face (`INTER` as a `CraftFont` for the editor's fallback, and
-  `ShapedScript::Inter` / `shape_inter` for added text). Text Inter lacks too keeps the behaviour
-  above.
 
 It also holds the fonts of the optional [craft-fonts](https://github.com/storytold/craft-fonts)
 build input. `build.rs` embeds them as `CRAFT_FONTS` when the build sets
@@ -80,7 +72,7 @@ needed.
 wasm32 builds embed only BIZ UDPGothic Regular and any `Arab`, `Telu`, `Hebr` or `Thai` face, to keep the web build small: the web build
 currently has no Chinese face, so Chinese there still shows the replacement glyph.
 Font files are never
-committed here (`AGENTS.md` §1.4; team members: [craftrules `standards/fonts.md`](https://github.com/storytold/craftrules/blob/main/standards/fonts.md), internal).
+committed here (`AGENTS.md` §1.4).
 
 The full font subsystem (parsing, shaping, subsetting and embedding) arrives with M2.2/M7.
 

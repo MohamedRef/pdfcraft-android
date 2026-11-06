@@ -85,16 +85,6 @@ impl StandardFont {
         }
     }
 
-    /// PdfCraft patch: the advance width, in 1/1000 em, of the glyph that WinAnsiEncoding code
-    /// `code` shows in this font (`None` for codes the encoding leaves undefined, or glyphs the
-    /// font's metrics don't list). Lets text laid out in a standard font be measured exactly.
-    pub fn win_ansi_width(&self, code: u8) -> Option<f32> {
-        match self {
-            Self::Symbol | Self::ZapfDingBats => None,
-            _ => crate::font::generated::win_ansi::get(code).and_then(|name| self.get_width(name)),
-        }
-    }
-
     pub(crate) fn as_str(&self) -> &'static str {
         match self {
             Self::Helvetica => "Helvetica",

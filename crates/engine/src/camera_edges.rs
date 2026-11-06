@@ -4,27 +4,22 @@
 //! caller falls back to corners the user places.
 //!
 //! Steps: shrink the picture to [`WORK`] pixels on its long side, blur it, take Sobel gradients
-//! and keep thin edges; vote for lines (a Hough transform that only votes along each edge's own
-//! gradient direction, give or take a few degrees, each edge pixel counting about the same, so a
-//! long faint sheet edge outvotes shorter, darker lines of text); take the strongest
-//! near-horizontal and near-vertical lines separately (text lines would otherwise take every
-//! place); pair two of each; keep the quadrilaterals whose four sides lie on edges, and choose
-//! the largest.
+//! and keep thin, strong edges; vote for lines (a Hough transform that only votes along each
+//! edge's own gradient direction, give or take a few degrees); pair two near-horizontal with two near-vertical lines; keep
+//! the quadrilaterals whose four sides lie on edges, and choose the largest.
 
 use pdfcraft_geom::perspective::{Point, order_quad};
 
 /// The working size: the long side of the shrunken picture, in pixels.
 const WORK: usize = 400;
-/// The most lines tried of each direction, near-horizontal and near-vertical (strongest first).
-const MAX_LINES: usize = 16;
+/// The most lines tried (strongest first).
+const MAX_LINES: usize = 24;
 /// A side counts when at least this share of it lies on a matching edge.
 const MIN_SUPPORT: f64 = 0.55;
 /// A document fills at least this share of the picture.
 const MIN_AREA: f64 = 0.12;
 /// How far (share of the picture's size) a corner may lie outside the picture.
 const MARGIN: f64 = 0.02;
-/// The faintest gradient that is an edge (Sobel, on 0–255 grey): below it is noise and grain.
-const EDGE_FLOOR: f32 = 24.0;
 
 /// A grey picture, row-major, read with bounds checks.
 struct Grey {
@@ -120,13 +115,11 @@ fn edges(g: &Grey) -> Vec<Option<Edge>> {
             grad.push(Edge { mag: gx.hypot(gy), dir: gy.atan2(gx) });
         }
     }
-    // The threshold: a small share of the 98th percentile, never below a faint-edge floor. The
-    // percentile is often black text on the sheet; white paper on a light desk is a far weaker
-    // edge, and must still count.
+    // The threshold: a share of the 98th percentile, never below a faint-edge floor.
     let mut mags: Vec<f32> = grad.iter().map(|e| e.mag).filter(|m| m.is_finite()).collect();
     mags.sort_by(f32::total_cmp);
     let p98 = mags.get(mags.len() * 98 / 100).copied().unwrap_or(0.0);
-    let threshold = (0.08 * p98).max(EDGE_FLOOR);
+    let threshold = (0.25 * p98).max(24.0);
     let mag = |x: isize, y: isize| -> f32 {
         if x < 0 || y < 0 || x >= g.w as isize || y >= g.h as isize {
             return 0.0;
@@ -155,62 +148,38 @@ struct Line {
 }
 
 /// The strongest lines through the edges: each edge votes for the lines within 6° of its own
-/// normal, a faint one about half as much as a clear one (so a line's votes mostly say how long
-/// it is), dark-to-light and light-to-dark edges apart (the two edges of a line of text are one
-/// of each, and never add up to one long line); peaks are taken strongest first, clearing their
-/// neighbourhood, up to [`MAX_LINES`] near-horizontal and as many near-vertical ones.
+/// normal, weighted by its strength; peaks are taken strongest first, clearing their
+/// neighbourhood.
 fn hough(edges: &[Option<Edge>], w: usize, h: usize) -> Vec<Line> {
     const STEPS: usize = 180;
     let diag = ((w * w + h * h) as f64).sqrt().ceil() as usize;
     let rows = 2 * diag + 1;
-    // Cell (side, θ, ρ): side 0 has the gradient along the normal (cos θ, sin θ), side 1 against it.
-    let cell = |side: usize, t: usize, r: usize| (side * STEPS + t) * rows + r;
-    let mut acc = vec![0.0f32; 2 * STEPS * rows];
+    let mut acc = vec![0.0f32; STEPS * rows];
     let trig: Vec<(f64, f64)> = (0..STEPS).map(|t| (t as f64).to_radians()).map(|a| (a.cos(), a.sin())).collect();
     for (i, e) in edges.iter().enumerate() {
         let Some(e) = e else { continue };
         let (x, y) = ((i % w) as f64, (i / w) as f64);
-        let dir = (e.dir as f64).to_degrees().rem_euclid(360.0).round() as isize;
-        let (normal, side) = (dir.rem_euclid(STEPS as isize), usize::from(dir.rem_euclid(360) >= STEPS as isize));
+        let normal = (e.dir as f64).to_degrees().rem_euclid(180.0).round() as isize;
         // ±6°: a jagged (aliased) edge's local gradient leans towards the axes.
         for t in normal - 6..=normal + 6 {
-            // past 0° or 180° the normal turns round, and the gradient is on its other side
-            let side = if (0..STEPS as isize).contains(&t) { side } else { 1 - side };
             let t = t.rem_euclid(STEPS as isize) as usize;
             let Some(&(c, s)) = trig.get(t) else { continue };
             let r = (x * c + y * s).round() as isize + diag as isize;
-            if let Some(v) = usize::try_from(r).ok().filter(|&r| r < rows).and_then(|r| acc.get_mut(cell(side, t, r))) {
-                *v += (e.mag / (2.0 * EDGE_FLOOR)).clamp(0.5, 1.0);
+            if let Some(cell) = usize::try_from(r).ok().and_then(|r| acc.get_mut(t * rows + r)) {
+                *cell += e.mag;
             }
         }
     }
-    // A line between two of the 1° steps spreads its votes over neighbouring ρ (a 300 px edge
-    // half a degree off by 2–3 px): each line is scored by the votes within ±2 px of it, so a
-    // slightly slanted sheet edge isn't outvoted by text lines that happen to fall on a step.
-    let mut acc: Vec<f32> = (0..2 * STEPS * rows)
-        .map(|i| {
-            let (row, r) = (i / rows, i % rows);
-            (r.saturating_sub(2)..=(r + 2).min(rows - 1)).filter_map(|q| acc.get(row * rows + q)).sum()
-        })
-        .collect();
-    let mut lines: Vec<Line> = Vec::new();
-    let (mut flat, mut upright) = (0, 0);
+    let mut lines = Vec::new();
     let first = acc.iter().copied().fold(0.0f32, f32::max);
-    while flat < MAX_LINES || upright < MAX_LINES {
+    while lines.len() < MAX_LINES {
         let Some((best, &v)) = acc.iter().enumerate().max_by(|a, b| a.1.total_cmp(b.1)) else { break };
         if v <= 0.0 || v < 0.08 * first {
             break;
         }
-        let (t, r) = ((best / rows) % STEPS, best % rows);
-        let line = Line { theta: (t as f64).to_radians(), rho: r as f64 - diag as f64 };
-        // a direction that has its fill only clears the peak
-        let count = if is_flat(&line) { &mut flat } else { &mut upright };
-        if *count < MAX_LINES {
-            *count += 1;
-            lines.push(line);
-        }
-        // Clear ±6° and ±6 px around the peak, on both sides (a thin rule has an edge of each
-        // on the same line; θ wraps, flipping ρ's sign).
+        let (t, r) = (best / rows, best % rows);
+        lines.push(Line { theta: (t as f64).to_radians(), rho: r as f64 - diag as f64 });
+        // Clear ±6° and ±6 px around the peak (θ wraps, flipping ρ's sign).
         for dt in -6isize..=6 {
             let tt = t as isize + dt;
             let (tt, flip) = if tt < 0 {
@@ -222,21 +191,13 @@ fn hough(edges: &[Option<Edge>], w: usize, h: usize) -> Vec<Line> {
             };
             let rr = if flip { 2 * diag as isize - r as isize } else { r as isize };
             for dr in -6isize..=6 {
-                let Some(q) = usize::try_from(rr + dr).ok().filter(|&q| q < rows) else { continue };
-                for side in 0..2 {
-                    if let Some(v) = acc.get_mut(cell(side, tt as usize, q)) {
-                        *v = 0.0;
-                    }
+                if let Some(cell) = usize::try_from(rr + dr).ok().filter(|&q| q < rows).and_then(|q| acc.get_mut(tt as usize * rows + q)) {
+                    *cell = 0.0;
                 }
             }
         }
     }
     lines
-}
-
-/// A line whose normal is within 45° of vertical: near-horizontal.
-fn is_flat(l: &Line) -> bool {
-    (l.theta.to_degrees() - 90.0).abs() <= 45.0
 }
 
 fn intersect(a: Line, b: Line) -> Option<Point> {
@@ -535,84 +496,6 @@ mod tests {
         // White paper on a white desk: no edge to find.
         let img = photo(900, 1200, SHEET, 246.0, |_, _| 244.0, false, 2.0);
         assert_eq!(detect_document(&img, 900, 1200), None);
-    }
-
-    /// Corners close to the picture's edges: the sheet nearly fills the frame, as when a page is
-    /// photographed close up.
-    const CLOSE: [Point; 4] = [[40.0, 50.0], [860.0, 40.0], [870.0, 1160.0], [30.0, 1170.0]];
-
-    #[test]
-    fn a_sheet_filling_almost_the_whole_picture() {
-        assert_near(detect_document(&photo_boxed(900, 1200, CLOSE, 240.0, 95.0, false), 900, 1200), CLOSE, 6.0);
-        // Its top edge 1–2 % from the picture's: twelve lines of text must not take its place.
-        let closer = [[15.0, 20.0], [885.0, 12.0], [890.0, 1185.0], [10.0, 1190.0]];
-        assert_near(detect_document(&photo_boxed(900, 1200, closer, 240.0, 95.0, false), 900, 1200), closer, 6.0);
-    }
-
-    #[test]
-    fn white_paper_on_a_light_desk() {
-        // The sheet's edges are far fainter than its black text.
-        assert_near(detect_document(&photo_boxed(900, 1200, SHEET, 245.0, 200.0, false), 900, 1200), SHEET, 6.0);
-    }
-
-    #[test]
-    fn a_form_is_found_by_its_sheet_not_its_ruled_box() {
-        for (sheet, desk) in [(SHEET, 205.0), (SHEET, 90.0), (CLOSE, 120.0)] {
-            assert_near(detect_document(&photo_boxed(900, 1200, sheet, 240.0, desk, true), 900, 1200), sheet, 6.0);
-        }
-    }
-
-    /// [`photo`] with text, plus (when `boxed`) a form's thick ruled box over most of the sheet.
-    fn photo_boxed(w: u32, h: u32, sheet: [Point; 4], paper: f32, desk: f32, boxed: bool) -> Vec<u8> {
-        let base = photo(w, h, sheet, paper, |_, _| desk, true, 5.0);
-        if !boxed {
-            return base;
-        }
-        let at = |u: f64, v: f64| -> Point {
-            let top = [sheet[0][0] + (sheet[1][0] - sheet[0][0]) * u, sheet[0][1] + (sheet[1][1] - sheet[0][1]) * u];
-            let bot = [sheet[3][0] + (sheet[2][0] - sheet[3][0]) * u, sheet[3][1] + (sheet[2][1] - sheet[3][1]) * u];
-            [top[0] + (bot[0] - top[0]) * v, top[1] + (bot[1] - top[1]) * v]
-        };
-        let outer = [at(0.07, 0.08), at(0.93, 0.08), at(0.93, 0.92), at(0.07, 0.92)];
-        let inner = [at(0.075, 0.084), at(0.925, 0.084), at(0.925, 0.916), at(0.075, 0.916)];
-        let mut out = base;
-        for y in 0..h {
-            for x in 0..w {
-                let (fx, fy) = (x as f64 + 0.5, y as f64 + 0.5);
-                if inside(&outer, fx, fy) && !inside(&inner, fx, fy) {
-                    let i = ((y * w + x) * 4) as usize;
-                    out[i..i + 3].copy_from_slice(&[25, 25, 25]);
-                }
-            }
-        }
-        out
-    }
-
-    #[test]
-    fn thin_lines_of_text_do_not_take_the_sheets_edge() {
-        // Eighteen thin lines of text and a title, the sheet's top edge slanting between two of
-        // the 1° steps: each line's two edges must not add up to outvote the sheet's one.
-        let sheet = [[156.0, 180.0], [744.0, 150.0], [798.0, 1032.0], [102.0, 1074.0]];
-        let mut img = photo(900, 1200, sheet, 236.0, |_, _| 85.0, false, 4.0);
-        let at = |u: f64, v: f64| -> Point {
-            let top = [sheet[0][0] + (sheet[1][0] - sheet[0][0]) * u, sheet[0][1] + (sheet[1][1] - sheet[0][1]) * u];
-            let bot = [sheet[3][0] + (sheet[2][0] - sheet[3][0]) * u, sheet[3][1] + (sheet[2][1] - sheet[3][1]) * u];
-            [top[0] + (bot[0] - top[0]) * v, top[1] + (bot[1] - top[1]) * v]
-        };
-        let mut bars = vec![[at(0.1, 0.07), at(0.6, 0.07), at(0.6, 0.1), at(0.1, 0.1)]];
-        for k in 0..18 {
-            let (v, u1) = (0.16 + k as f64 * 0.042, if k % 5 == 4 { 0.55 } else { 0.9 });
-            bars.push([at(0.1, v), at(u1, v), at(u1, v + 0.012), at(0.1, v + 0.012)]);
-        }
-        for y in 0..1200u32 {
-            for x in 0..900u32 {
-                if bars.iter().any(|b| inside(b, x as f64 + 0.5, y as f64 + 0.5)) {
-                    let i = ((y * 900 + x) * 4) as usize;
-                    img[i..i + 3].copy_from_slice(&[40, 40, 45]);
-                }
-            }
-        }
-        assert_near(detect_document(&img, 900, 1200), sheet, 6.0);
     }
 
     #[test]

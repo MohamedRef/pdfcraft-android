@@ -40,9 +40,11 @@ pub fn fmt(v: f64) -> String {
 }
 
 /// The font size an auto-sized (`0 Tf`) text field uses for `text` in a `width` × `height` box
-/// (inside the padding), measured by `width_of(text, size)`: at most 12 pt and at least 4 pt.
-/// Single-line text shrinks until it fits the width; multiline text takes the largest size whose
-/// wrapped lines fit the height. The page appearance and the on-screen editor share this.
+/// (inside the padding), measured by `width_of(text, size)`, never under 4 pt. Single-line text
+/// takes the size the height gives, as Acrobat Reader draws it however tall the box (the size is
+/// implementation-defined, ISO 32000-2 §12.7.4.3), and shrinks until it fits the width; multiline
+/// text takes the largest size up to 12 pt whose wrapped lines fit the height. The page
+/// appearance and the on-screen editor share this.
 pub fn auto_text_size(text: &str, width: f64, height: f64, multiline: bool, width_of: impl Fn(&str, f64) -> f64) -> f64 {
     let wrap_width = if width.is_finite() { width.max(1.0) } else { 1.0 };
     auto_text_size_by(
@@ -53,6 +55,17 @@ pub fn auto_text_size(text: &str, width: f64, height: f64, multiline: bool, widt
         |size| wrap_with(text, size, wrap_width, &width_of).len() as f64 * size * 1.15,
     )
 }
+
+/// The automatic font size of a comb field (`Field::is_comb`) whose cells are `height` tall inside
+/// the padding: 4 to 12 pt, as only the height bounds a one-character cell. The page appearance
+/// and the on-screen editor share this.
+pub fn comb_auto_text_size(height: f64) -> f64 {
+    if height.is_finite() { (height / 1.15).clamp(4.0, 12.0) } else { 4.0 }
+}
+
+/// The tallest box single-line auto-size follows, as a sanity bound: the largest page side
+/// ISO 32000-1 Annex C recommends.
+pub(crate) const MAX_AUTO_HEIGHT: f64 = 14_400.0;
 
 /// [`auto_text_size`] with the text measured by the caller: `line_width(size)` is its width on
 /// one line, `wrapped_height(size)` its height wrapped at `width`. The screen measures in its
@@ -67,7 +80,7 @@ pub fn auto_text_size_by(width: f64, height: f64, multiline: bool, line_width: i
         }
         return size;
     }
-    let size = (height / 1.15).clamp(4.0, 12.0);
+    let size = (height.min(MAX_AUTO_HEIGHT) / 1.15).max(4.0);
     let tw = line_width(size);
     if tw.is_finite() && tw > width { (size * width / tw).max(4.0) } else { size }
 }
@@ -109,7 +122,7 @@ pub fn text_box(doc: &Document, f: &Field, w: &Widget) -> TextBox {
         size: (da.size > 0.0 && da.size.is_finite()).then_some(da.size),
         multiline,
         password: f.has(flags::PASSWORD),
-        comb: f.has(flags::COMB) && !multiline && !f.has(flags::PASSWORD) && f.max_len.is_some_and(|m| m > 0),
+        comb: f.is_comb(),
     }
 }
 
@@ -286,9 +299,6 @@ enum FontText {
     Simple(Box<Metrics>),
     /// A composite font with a predefined Unicode CMap.
     Unicode(UnicodeCMap),
-    /// No font: text the standard fonts can't hold (Turkish ş, Polish ł, Greek, Cyrillic, …) drawn
-    /// as the outlines of the bundled Inter ([`pdfcraft_fonts::inter_path`]).
-    Inter,
 }
 
 impl FontText {
@@ -298,8 +308,6 @@ impl FontText {
             // Selection checks every displayed string first; wrapping only removes line breaks.
             Self::Simple(metrics) => metrics.encode(&s.replace('\t', " ")).unwrap_or_default(),
             Self::Unicode(cmap) => cmap.encode(s),
-            // Drawn as paths (see `field_appearance_drawn`), never shown as a string.
-            Self::Inter => Vec::new(),
         }
     }
 
@@ -320,8 +328,6 @@ impl FontText {
                 s.chars().map(|c| if c == '\t' { ' ' } else { c }).find(|c| metrics.encode(c.encode_utf8(&mut [0; 4])).is_none())
             }
             Self::Unicode(cmap) => cmap.first_unencodable(s),
-            // Chosen only when Inter draws every character the standard fonts can't.
-            Self::Inter => pdfcraft_fonts::first_undrawable_inter(s),
         }
     }
 
@@ -334,7 +340,6 @@ impl FontText {
                 None => helvetica_width(s, size),
             },
             Self::Unicode(_) => cjk_width(s, size),
-            Self::Inter => pdfcraft_fonts::inter_width(s, size),
         }
     }
 }
@@ -488,7 +493,7 @@ fn frame(doc: &Document, wd: &Dict, w: f64, h: f64) -> (String, f64) {
 
 /// Whether `wd` is a check box or radio button PdfCraft laid out for a round XFA check button
 /// (`/PCXfaRound true`, written by the XFA layout).
-fn is_round(doc: &Document, wd: &Dict) -> bool {
+pub(crate) fn is_round(doc: &Document, wd: &Dict) -> bool {
     matches!(wd.get(b"PCXfaRound").map(|o| doc.resolve(o)).as_deref(), Some(Object::Bool(true)))
 }
 
@@ -594,7 +599,7 @@ fn comb_dividers(doc: &Document, wd: &Dict, w: f64, h: f64, cells: usize) -> Str
     let inset = border_width(doc, wd);
     let lw = line_width(doc, wd);
     let Some(bc) = color_array(doc, mk.as_ref(), b"BC") else { return String::new() };
-    if !(inset > 0.0 && inset.is_finite() && lw > 0.0 && lw.is_finite()) || !(2..=MAX_COMB_DIVIDERS).contains(&cells) {
+    if !(inset > 0.0 && inset.is_finite() && lw > 0.0 && lw.is_finite() && (2..=MAX_COMB_DIVIDERS).contains(&cells)) {
         return String::new();
     }
     let cell = w / cells as f64;
@@ -769,16 +774,10 @@ fn field_appearance_fit(doc: &Document, f: &Field, w: &Widget, values: &[String]
             enc.can_encode(&text)
         }
     };
-    // What is shown: every option of a list box, else the text.
-    let shown =
-        if f.kind == FieldKind::List { f.options.iter().map(|(_, display)| display.as_str()).collect::<Vec<_>>().join("\n") } else { text.clone() };
     let (font_name, font_obj, enc) = match dr_font(doc, &da.font).filter(|(_, enc)| can_show(enc)) {
         Some((o, enc)) => (da.font.clone(), o, enc),
-        // Helvetica can't hold it but Inter draws it all: paths, no font.
-        None if pdfcraft_fonts::needs_inter(&shown) => (String::new(), Object::Null, FontText::Inter),
         None => ("Helv".to_string(), helvetica(), FontText::WinAnsi),
     };
-    let inter = enc == FontText::Inter;
     let width_of = |text: &str, size: f64| enc.width(text, size);
     let (mut c, bw) = frame(doc, &wd, width, height);
     let pad = 2.0 + bw;
@@ -787,20 +786,11 @@ fn field_appearance_fit(doc: &Document, f: &Field, w: &Widget, values: &[String]
     let mut body: Vec<u8> = Vec::new();
     // The first character drawn that the font can't hold (drawn as `?`), for the caller to report.
     let mut unencodable: Option<char> = None;
-    let mut show = |body: &mut Vec<u8>, x: f64, y: f64, text: &str, size: f64| {
+    let mut show = |body: &mut Vec<u8>, x: f64, y: f64, text: &str| {
         // A line break in a single-line value is a space, as in viewers (multiline text is split).
         let text: String = text.chars().map(|c| if matches!(c, '\n' | '\r') { ' ' } else { c }).collect();
         if unencodable.is_none() {
             unencodable = enc.first_unencodable(&text);
-        }
-        if inter {
-            // A string of spaces has no outline, and `f` needs a path.
-            let path = pdfcraft_fonts::inter_path(&text, size, x, y);
-            if !path.is_empty() {
-                body.extend(path.bytes());
-                body.extend_from_slice(b"f\n");
-            }
-            return;
         }
         body.extend(format!("1 0 0 1 {} {} Tm ", n(x), n(y)).bytes());
         body.extend(literal(&enc.encode(&text)));
@@ -831,12 +821,12 @@ fn field_appearance_fit(doc: &Document, f: &Field, w: &Widget, values: &[String]
                 if values.contains(export) {
                     c.push_str(&format!("0.6 0.75 0.86 rg\n{} {} {} {} re f\n", n(bw), n(y - line), n(width - 2.0 * bw), n(line)));
                 }
-                show(&mut body, pad, y - line + size * 0.25, display, size);
+                show(&mut body, pad, y - line + size * 0.25, display);
                 y -= line;
             }
         }
         _ => {
-            let comb = f.has(flags::COMB) && !f.has(flags::MULTILINE) && !f.has(flags::PASSWORD) && f.max_len.is_some_and(|m| m > 0);
+            let comb = f.is_comb();
             if f.kind == FieldKind::Text && f.has(flags::MULTILINE) {
                 if size == 0.0 {
                     size = auto_text_size(&text, inner_w, height - 2.0 * pad, true, width_of);
@@ -852,7 +842,7 @@ fn field_appearance_fit(doc: &Document, f: &Field, w: &Widget, values: &[String]
                     if y - 0.207 * size >= bw - 0.01 {
                         room += 1;
                     }
-                    show(&mut body, x_for(line, size), y, line, size);
+                    show(&mut body, x_for(line, size), y, line);
                     y -= size * 1.15;
                 }
                 if room < lines.len() {
@@ -863,9 +853,8 @@ fn field_appearance_fit(doc: &Document, f: &Field, w: &Widget, values: &[String]
                 }
             } else {
                 if size == 0.0 {
-                    // Comb cells hold one character each, so only the height limits them.
                     size = if comb {
-                        ((height - 2.0 * pad) / 1.15).clamp(4.0, 12.0)
+                        comb_auto_text_size(height - 2.0 * pad)
                     } else {
                         auto_text_size(&text, inner_w, height - 2.0 * pad, false, width_of)
                     };
@@ -883,14 +872,14 @@ fn field_appearance_fit(doc: &Document, f: &Field, w: &Widget, values: &[String]
                     c.push_str(&comb_dividers(doc, &wd, width, height, cells));
                     for (i, ch) in text.chars().take(cells).enumerate() {
                         let s = ch.to_string();
-                        show(&mut body, cell * i as f64 + (cell - width_of(&s, size)) / 2.0, y, &s, size);
+                        show(&mut body, cell * i as f64 + (cell - width_of(&s, size)) / 2.0, y, &s);
                     }
                 } else {
                     let tw = width_of(&text.replace(['\n', '\r'], " "), size);
                     if overflow.is_none() && tw > inner_w + 0.01 {
                         overflow = Some(Overflow::Wide { width: tw, room: inner_w, size });
                     }
-                    show(&mut body, x_for(&text, size), y, &text, size);
+                    show(&mut body, x_for(&text, size), y, &text);
                 }
             }
         }
@@ -898,22 +887,23 @@ fn field_appearance_fit(doc: &Document, f: &Field, w: &Widget, values: &[String]
     // Acrobat regenerates only what is inside /Tx BMC when it redraws a field (e.g. on focus
     // changes), discarding what came before it (issues #1613, #633). The background and border
     // therefore go inside the marked-content block too, so a redraw keeps them with the text.
-    let clip = format!("/Tx BMC\nq\n{c}{} {} {} {} re W n\n", n(bw), n(bw), n(width - 2.0 * bw), n(height - 2.0 * bw));
-    let mut content = Vec::new();
+    let mut content = format!(
+        "/Tx BMC\nq\n{c}{} {} {} {} re W n\nBT\n/{} {} Tf\n{}\n",
+        n(bw),
+        n(bw),
+        n(width - 2.0 * bw),
+        n(height - 2.0 * bw),
+        font_name,
+        n(size),
+        da.color
+    )
+    .into_bytes();
+    content.extend(body);
+    content.extend_from_slice(b"ET\nQ\nEMC\n");
+    let mut fonts = Dict::new();
+    fonts.set(font_name.into_bytes(), font_obj);
     let mut res = Dict::new();
-    if inter {
-        // Paths in the text colour: no text object, no font.
-        content.extend(format!("{clip}{}\n", da.color).bytes());
-        content.extend(body);
-        content.extend_from_slice(b"Q\nEMC\n");
-    } else {
-        content.extend(format!("{clip}BT\n/{} {} Tf\n{}\n", font_name, n(size), da.color).bytes());
-        content.extend(body);
-        content.extend_from_slice(b"ET\nQ\nEMC\n");
-        let mut fonts = Dict::new();
-        fonts.set(font_name.into_bytes(), font_obj);
-        res.set(b"Font".to_vec(), Object::Dict(fonts));
-    }
+    res.set(b"Font".to_vec(), Object::Dict(fonts));
     let mut d = Dict::new();
     d.set(b"Type".to_vec(), Object::name("XObject"));
     d.set(b"Subtype".to_vec(), Object::name("Form"));
@@ -1051,9 +1041,10 @@ fn check_mark(style: crate::author::CheckStyle, cx: f64, cy: f64, s: f64, color:
 }
 
 /// How a check box or radio button widget `w` of field `f` looks in state on (`on`) or Off when
-/// the file has no appearance for that state: its `/MK` background and border ([`frame`]), and
-/// when on, its caption `/MK /CA` (ISO 32000-2 Table 192: the normal caption, which check boxes
-/// and radio buttons may use too) as a ZapfDingbats character, as in the check box example of
+/// the file has no appearance for that state, or leaves its appearances to the viewer
+/// (`/NeedAppearances`): its `/MK` background and border ([`frame`]), and when on, its caption
+/// `/MK /CA` (ISO 32000-2 Table 192: the normal caption, which check boxes and radio buttons may
+/// use too) as a ZapfDingbats character, as in the check box example of
 /// 12.7.5.2.3: `4` (a check mark) by default, `l` (a dot) for a radio button. The character is
 /// drawn in the `/DA` colour, at the `/DA` size or, for an automatic size (`0 Tf`), filling most
 /// of the box. ZapfDingbats is one of the standard 14 fonts, so no font program is needed.
