@@ -797,7 +797,12 @@ fn wav_samples(data: &[u8]) -> std::result::Result<(u32, u8, Vec<u8>), String> {
         return Err("the recording must be 16-bit PCM, mono or stereo, at 4 to 96 kHz".into());
     };
     let samples = samples.filter(|s| s.len() >= 2).ok_or("the recording is empty")?;
-    let samples = samples.get(..samples.len().min(MAX_SOUND_BYTES) & !1).unwrap_or_default();
+    if samples.len() > MAX_SOUND_BYTES {
+        return Err("the recording exceeds the 32 MiB mobile limit".into());
+    }
+    if samples.len() % 2 != 0 {
+        return Err("the recording has an incomplete PCM sample".into());
+    }
     Ok((rate, channels as u8, samples.as_chunks::<2>().0.iter().flat_map(|s| [s[1], s[0]]).collect()))
 }
 
