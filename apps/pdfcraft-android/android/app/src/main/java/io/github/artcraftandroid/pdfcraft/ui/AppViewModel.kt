@@ -168,6 +168,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                     files.keepAccess(uri)
                     files.workingCopy(uri)
                 } }
+                io.github.artcraftandroid.pdfcraft.engine.OpenTiming.milestone("working_copy_ready", openStartedAt, bytes = file.length())
                 openFile(eng, uri, file, password)
             } catch (e: java.io.FileNotFoundException) {
                 // Moved or deleted since it was opened, or a link a file manager lent that a
@@ -214,6 +215,8 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         }
         val eng = engine ?: return
         viewModelScope.launch {
+            // A password retry is a new open request; do not include time spent in the dialog.
+            openStartedAt = android.os.SystemClock.elapsedRealtime()
             opening = true
             try {
                 openFile(eng, req.uri, req.file, password)
@@ -226,13 +229,16 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     private suspend fun openFile(eng: Engine, uri: Uri, file: File, password: String?) {
         try {
             document?.let { current ->
-                if (!saveAndClose(eng, current)) {
+                val previousSaved = saveAndClose(eng, current)
+                io.github.artcraftandroid.pdfcraft.engine.OpenTiming.milestone("previous_document_closed", openStartedAt)
+                if (!previousSaved) {
                     readOnlyPrompt = current
                     return
                 }
                 document = null
             }
             val info = io.github.artcraftandroid.pdfcraft.engine.OpenTiming.measure("native_open") { eng.command { open(file.absolutePath, password) } }
+            io.github.artcraftandroid.pdfcraft.engine.OpenTiming.milestone("native_ready", openStartedAt, bytes = file.length(), pages = info.pages.size)
             val images = PageImages(eng, info.id, viewModelScope, imageBudget, openedAt = openStartedAt)
             val source = uri.takeIf { it.scheme == "content" || it.scheme == "file" }
             val doc = OpenDocument(info.id, info, source, file, images, password, eng, viewModelScope)
@@ -242,12 +248,15 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             }
             doc.writable = writable
             doc.notWrittenBack = source?.let { withContext(Dispatchers.IO) { files.hasPendingWriteBack(it) } } ?: false
+            io.github.artcraftandroid.pdfcraft.engine.OpenTiming.milestone("source_access_ready", openStartedAt)
             loadLinks(eng, doc)
+            io.github.artcraftandroid.pdfcraft.engine.OpenTiming.milestone("overlays_ready", openStartedAt, pages = info.pages.size)
             doc.controller.nightMode = savedNightMode
             if (savedPageMode != doc.viewer.mode) doc.viewer.switchMode(savedPageMode)
             // a file left in Reading Mode reopens in it, unless it was opened for a tool
             readingMode = recent?.reading == true && pendingTool == null
             document = doc
+            io.github.artcraftandroid.pdfcraft.engine.OpenTiming.milestone("viewer_model_ready", openStartedAt, pages = info.pages.size)
             if (doc.info.signed) announceSignatures(doc)
             startPendingTool(doc)
             pendingPage = recent?.lastPage?.takeIf { it in 0 until info.pages.size }
@@ -2224,6 +2233,23 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         runTool(doc, "page_set_box", args) {
             toolScreen = null
             tell(text(if (page == null) R.string.msg_crop_all else R.string.msg_crop_page))
+        }
+    }
+
+    /**
+     * Export the PDF's embedded outline (not the reader's private, on-device bookmarks) to a
+     * portable JSON tree. Rust owns the schema, nesting limit and atomic temporary write.
+     * Only the finished JSON is published to Downloads; source PDF bytes are never modified.
+     */
+    fun exportEmbeddedBookmarks(doc: OpenDocument) = job(text(R.string.sheet_export_embedded_bookmarks)) { eng ->
+        val out = tempFile("json")
+        try {
+            eng.tool("bookmark_export", mapOf("doc" to doc.id, "out" to out.absolutePath))
+            require(out.isFile && out.length() > 0L) { text(R.string.sheet_export_embedded_bookmarks_failed) }
+            deliver(out, "${DocumentFiles.safeName(doc.title)}_bookmarks.json", "application/json")
+        } finally {
+            // deliver() removes the temp file on success; an engine/provider error must do so too.
+            out.delete()
         }
     }
 
