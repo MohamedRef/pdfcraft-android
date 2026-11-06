@@ -77,3 +77,5 @@ Read this file and the full mandatory audit. Inspect live GitHub. The last confi
 - Tests added for 10,000-page selection, multiple batches, invalidation and extreme viewport bounds. CI pending on the new head. No Samsung/emulator execution, 100/500 MB sample benchmark or Xodo comparison available locally; **no measured speed improvement claimed**. Release/version unchanged until verified merge.
 
 - Follow-up review: hydrate a tapped page before dispatching the first link tap if viewport loading has not finished; abandon the tap if the document/generation changes while waiting. Existing field/comment precedence retained.
+
+- Release preparation on the same PR: next patch beta `0.0.8-beta.1` with base code `801`, expected ARM64 **0.0.8-beta.1 (8012)**. Actual APK manifest must confirm 8012. Existing **0.0.7-beta.4 (7042)** and its public asset remain unchanged. On verified merge, the existing main workflow builds with the permanent key and publishes the new version only after Rust/Android tests and signing/package checks. Do not report publication until that run and Release API succeed.
