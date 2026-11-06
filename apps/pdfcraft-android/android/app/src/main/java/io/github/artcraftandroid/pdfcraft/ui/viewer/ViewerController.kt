@@ -51,6 +51,8 @@ class ViewerController {
     var tool by mutableStateOf(ViewerTool.None)
     var markup by mutableStateOf(TextMarkup.Highlight)
     var commentMode by mutableStateOf(CommentMode.Text)
+    /** Drawing sub-tool. Stylus eraser/button may temporarily override it per gesture. */
+    var eraserMode by mutableStateOf(false)
 
     var sheet by mutableStateOf(ViewerSheet.None)
 
@@ -87,6 +89,7 @@ class ViewerController {
     /** Switch to [t]; tapping the active tool again goes back to plain viewing. */
     fun switchTool(t: ViewerTool) {
         tool = if (tool == t) ViewerTool.None else t
+        if (tool != ViewerTool.Draw) eraserMode = false
         picker = Picker.None
         signPanel = false
         barsVisible = true

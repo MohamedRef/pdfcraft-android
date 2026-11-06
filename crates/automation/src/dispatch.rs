@@ -874,6 +874,7 @@ impl Automation {
             "view_reading_colors" => self.view_reading_colors(&a)?,
             "comments_summarize" => self.comments_summarize(&a)?,
             "comment_edit" => self.comment_edit(&a)?,
+            "comment_erase" => self.comment_erase(&a)?,
             "comment_delete" => self.comment_delete(&a)?,
             other => return Err(ToolError::UnknownTool(other.into())),
         };

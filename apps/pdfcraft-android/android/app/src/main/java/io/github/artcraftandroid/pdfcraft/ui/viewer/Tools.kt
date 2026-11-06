@@ -52,6 +52,8 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.PointerType
+import androidx.compose.ui.input.pointer.isPrimaryPressed
+import androidx.compose.ui.input.pointer.isSecondaryPressed
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChanged
 import androidx.compose.ui.platform.LocalContext
@@ -126,50 +128,83 @@ fun Modifier.toolGestures(
     onUp: (Offset, moved: Boolean) -> Unit,
     onCancel: () -> Unit,
     penOnly: Boolean = false,
+    onEraserDown: (Offset) -> Unit = {},
+    onEraserMove: (Offset) -> Unit = {},
+    onEraserUp: (Offset) -> Unit = {},
+    onEraserCancel: () -> Unit = {},
 ): Modifier = pointerInput(doc, penOnly) {
     val routing = StylusRouting()
     awaitEachGesture {
         val down = awaitFirstDown(requireUnconsumed = false)
-        var activePen = down.type == PointerType.Stylus
+        val stylus = down.type == PointerType.Stylus
+        var activePen = stylus || down.type == PointerType.Eraser
         var activeId = down.id
-        var eraser = down.type == PointerType.Eraser
+        // Some pens report an eraser tip; other Android devices expose a stylus button.
+        // A button stays in eraser mode until lift even when the button is released mid-stroke.
+        var eraser = down.type == PointerType.Eraser ||
+            (stylus && (currentEvent.buttons.isPrimaryPressed || currentEvent.buttons.isSecondaryPressed))
         if (activePen) routing.penStarted()
         var navigation = down.type == PointerType.Touch && routing.fingersNavigate(penOnly)
         var one = !navigation && !eraser
+        var eraseOne = !navigation && eraser
         var moved = false
         var last = down.position
         var lastPressure = down.pressure
         if (one) onDown(last, lastPressure, activePen)
+        if (eraseOne) onEraserDown(last)
         try {
             while (true) {
                 val event = awaitPointerEvent()
                 val arrivingPen = event.changes.firstOrNull { it.pressed && (it.type == PointerType.Stylus || it.type == PointerType.Eraser) }
-                if (!activePen && !eraser && arrivingPen != null) {
+                if (!activePen && arrivingPen != null) {
                     if (one) onCancel()
+                    if (eraseOne) onEraserCancel()
                     activeId = arrivingPen.id
-                    activePen = arrivingPen.type == PointerType.Stylus
-                    eraser = !activePen
+                    activePen = true
+                    eraser = arrivingPen.type == PointerType.Eraser ||
+                        (event.buttons.isPrimaryPressed || event.buttons.isSecondaryPressed)
                     navigation = false
-                    one = activePen
+                    one = !eraser
+                    eraseOne = eraser
                     last = arrivingPen.position
                     lastPressure = arrivingPen.pressure
                     routing.penStarted()
-                    if (one) onDown(last, lastPressure, activePen)
+                    if (one) onDown(last, lastPressure, true)
+                    if (eraseOne) onEraserDown(last)
                 }
                 val active = event.changes.firstOrNull { it.id == activeId }
-                // Touch/palm pointers do not replace the pen or interrupt its stroke.
+                // A pen button pressed during ink cancels the provisional stroke before erasing.
+                if (activePen && !eraser && (event.buttons.isPrimaryPressed || event.buttons.isSecondaryPressed)) {
+                    if (one) onCancel()
+                    one = false
+                    eraser = true
+                    eraseOne = true
+                    onEraserDown(last)
+                }
+                // Touch/palm pointers do not replace or interrupt an active pen or eraser tip.
                 if (activePen) {
                     if (active == null || !active.pressed) {
-                        if (active?.isConsumed == true) { onCancel(); one = false }
-                        else if (active != null && active.positionChanged()) { last = active.position; onMove(last, lastPressure, true) }
+                        if (active?.isConsumed == true) {
+                            if (one) onCancel()
+                            if (eraseOne) onEraserCancel()
+                            one = false
+                            eraseOne = false
+                        } else if (active != null && active.positionChanged()) {
+                            last = active.position
+                            if (eraseOne) onEraserMove(last) else if (one) onMove(last, lastPressure, true)
+                        }
                         break
                     }
                     if (active.positionChanged()) {
                         last = active.position
                         moved = true
-                        // Release events can report zero pressure; don't create a spurious thick tip.
-                        if (active.pressure.isFinite() && active.pressure > 0f) lastPressure = active.pressure
-                        onMove(last, lastPressure, true)
+                        if (eraseOne) {
+                            onEraserMove(last)
+                        } else if (one) {
+                            // Some devices report zero pressure on pen-up; avoid a thick tail.
+                            if (active.pressure.isFinite() && active.pressure > 0f) lastPressure = active.pressure
+                            onMove(last, lastPressure, true)
+                        }
                     }
                     event.changes.forEach { it.consume() }
                     continue
@@ -179,7 +214,6 @@ fun Modifier.toolGestures(
                     if (active?.isConsumed == true && one) { onCancel(); one = false }
                     break
                 }
-                if (eraser) { event.changes.forEach { it.consume() }; continue }
                 if (navigation || routing.cancelForExtraTouch(false, pressed.size)) {
                     if (one) { one = false; onCancel() }
                     val zoom = event.calculateZoom()
@@ -190,7 +224,6 @@ fun Modifier.toolGestures(
                     continue
                 }
                 if (!one) continue
-                // Do not join a replacement pointer to a stroke whose original finger lifted.
                 if (active == null || !active.pressed) { onCancel(); one = false; continue }
                 if (active.positionChanged()) {
                     if ((active.position - down.position).getDistance() > viewConfiguration.touchSlop) moved = true
@@ -199,9 +232,10 @@ fun Modifier.toolGestures(
                     active.consume()
                 }
             }
-            if (one) onUp(last, moved)
+            if (eraseOne) onEraserUp(last) else if (one) onUp(last, moved)
         } catch (e: kotlinx.coroutines.CancellationException) {
             if (one) onCancel()
+            if (eraseOne) onEraserCancel()
             throw e
         }
     }
@@ -257,10 +291,18 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
             undone.clear()
         }
         doc.localUndo = LocalUndo(
-            canUndo = { strokes.isNotEmpty() },
-            canRedo = { undone.isNotEmpty() },
-            undo = { if (strokes.isNotEmpty()) undone.add(strokes.removeAt(strokes.lastIndex)) },
-            redo = { if (undone.isNotEmpty()) strokes.add(undone.removeAt(undone.lastIndex)) },
+            // Draw edits are local until committed. The eraser commits them first and then
+            // relies on the native document's undo/redo for its one-gesture ink edit.
+            canUndo = { strokes.isNotEmpty() || doc.info.undo != null },
+            canRedo = { undone.isNotEmpty() || doc.info.redo != null },
+            undo = {
+                if (strokes.isNotEmpty()) undone.add(strokes.removeAt(strokes.lastIndex))
+                else if (doc.info.undo != null) vm.runTool(doc, "edit_undo")
+            },
+            redo = {
+                if (undone.isNotEmpty()) strokes.add(undone.removeAt(undone.lastIndex))
+                else if (doc.info.redo != null) vm.runTool(doc, "edit_redo")
+            },
         )
         onDispose {
             doc.localUndo = null
@@ -279,11 +321,64 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
             }
         }
     }
+    var eraserPage by remember { mutableStateOf<Int?>(null) }
+    val eraserPoints = remember { mutableStateListOf<Offset>() }
+    var eraserScreen by remember { mutableStateOf<Offset?>(null) }
+
+    fun beginErase(p: Offset) {
+        val at = doc.viewer.screenToPage(p) ?: return
+        // Queue all pending freehand ink first. The native eraser then sees the just-drawn
+        // annotations on the same serial engine dispatcher, not a stale UI comment list.
+        doc.commitTool?.invoke()
+        current = null
+        eraserPage = at.page
+        eraserScreen = p
+        eraserPoints.clear()
+        eraserPoints.add(Offset(at.x, at.y))
+    }
+
+    fun moveErase(p: Offset) {
+        val page = eraserPage ?: return
+        val at = doc.viewer.screenToPage(p, nearest = true) ?: return
+        if (at.page != page) return
+        eraserScreen = p
+        val pt = Offset(at.x, at.y)
+        if (eraserPoints.lastOrNull() == pt) return
+        // Bound native work while preserving every region of a long hand gesture.
+        if (eraserPoints.size >= 512) {
+            val sampled = eraserPoints.filterIndexed { index, _ -> index % 2 == 0 }
+            eraserPoints.clear()
+            eraserPoints.addAll(sampled)
+        }
+        eraserPoints.add(pt)
+    }
+
+    fun cancelErase() {
+        eraserPage = null
+        eraserScreen = null
+        eraserPoints.clear()
+    }
+
+    fun finishErase(p: Offset) {
+        val page = eraserPage ?: return
+        moveErase(p)
+        val path = eraserPoints.map { listOf(it.x.toDouble(), it.y.toDouble()) }
+        cancelErase()
+        if (path.isNotEmpty()) {
+            // One native Edit::Batch per gesture, preserving one document-level undo step.
+            vm.runTool(doc, "comment_erase", mapOf("page" to page + 1, "path" to path, "radius" to 8.0))
+        }
+    }
+
     Box(
         Modifier.fillMaxSize().toolGestures(
             doc,
             penOnly = prefs.stylusOnly,
             onDown = { p, pressure, isStylus ->
+                if (doc.controller.eraserMode) {
+                    beginErase(p)
+                    return@toolGestures
+                }
                 val at = doc.viewer.screenToPage(p) ?: return@toolGestures
                 stillAt = p
                 movedAt = System.currentTimeMillis()
@@ -295,6 +390,10 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                 }
             },
             onMove = { p, pressure, _ ->
+                if (eraserPage != null) {
+                    moveErase(p)
+                    return@toolGestures
+                }
                 val s = current ?: return@toolGestures
                 if ((p - stillAt).getDistance() > slop) {
                     stillAt = p
@@ -307,7 +406,11 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                     s.pressures.add(pressure)
                 }
             },
-            onUp = { _, _ ->
+            onUp = { p, _ ->
+                if (eraserPage != null) {
+                    finishErase(p)
+                    return@toolGestures
+                }
                 val s = current
                 current = null
                 if (s != null) {
@@ -327,9 +430,14 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                 }
             },
             onCancel = {
+                if (eraserPage != null) cancelErase()
                 current?.let { strokes.remove(it) }
                 current = null
             },
+            onEraserDown = { p -> beginErase(p) },
+            onEraserMove = { p -> moveErase(p) },
+            onEraserUp = { p -> finishErase(p) },
+            onEraserCancel = { cancelErase() },
         ),
     ) {
         Canvas(Modifier.fillMaxSize()) {
@@ -350,6 +458,16 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                         style = Stroke(width = run.width * doc.viewer.pixelsPerPoint(s.page), cap = StrokeCap.Round, join = StrokeJoin.Round),
                     )
                 }
+            }
+            val page = eraserPage
+            val screen = eraserScreen
+            if (page != null && screen != null) {
+                drawCircle(
+                    Color.DarkGray.copy(alpha = 0.75f),
+                    radius = 8f * doc.viewer.pixelsPerPoint(page),
+                    center = screen,
+                    style = Stroke(width = 1.5.dp.toPx()),
+                )
             }
         }
     }
@@ -452,7 +570,8 @@ fun ToolSubToolbar(vm: AppViewModel, doc: OpenDocument) {
         ViewerTool.Draw -> SubToolbar {
             val snapOn = stringResource(R.string.toolbar_snap_on)
             val snapOff = stringResource(R.string.toolbar_snap_off)
-            SubTool(LucideIcons.PenLine, stringResource(R.string.toolbar_draw_freeform), true, {})
+            SubTool(LucideIcons.PenLine, stringResource(R.string.toolbar_draw_freeform), !ctl.eraserMode, { ctl.eraserMode = false })
+            SubTool(LucideIcons.Eraser, stringResource(R.string.toolbar_eraser), ctl.eraserMode, { ctl.eraserMode = true })
             SubTool(LucideIcons.PenLine, stringResource(R.string.toolbar_stylus_only), prefs.stylusOnly, {
                 prefs.updateStylusOnly(!prefs.stylusOnly)
             })

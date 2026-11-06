@@ -707,6 +707,68 @@ impl Automation {
         self.apply(a, edit)
     }
 
+    /// Draw-tool eraser: cut all ordinary, unlocked Ink annotations intersecting the traced path.
+    /// PDF undo treats the entire gesture as one edit, even when multiple annotations are hit.
+    /// This uses the existing engine EraseInk implementation, not a destructive rectangle mask.
+    pub(crate) fn comment_erase(&mut self, a: &Args) -> Result<Value> {
+        let page = self.page(a)?;
+        let info = self.doc(a)?.info.pages[page].clone();
+        let raw = a.get("path").and_then(Value::as_array).ok_or_else(|| ToolError::InvalidArgs("path must be [x,y] points".into()))?;
+        if raw.is_empty() || raw.len() > 512 {
+            return Err(ToolError::InvalidArgs("eraser path requires 1 to 512 points".into()));
+        }
+        let radius = a.opt_num("radius")?.unwrap_or(8.0);
+        if !radius.is_finite() || !(0.1..=100.0).contains(&radius) {
+            return Err(ToolError::InvalidArgs("eraser radius must be 0.1 to 100 points".into()));
+        }
+        let path: Vec<[f64; 2]> = raw
+            .iter()
+            .map(|p| {
+                let values = p.as_array().ok_or_else(|| ToolError::InvalidArgs("each eraser point must be [x,y]".into()))?;
+                let [x, y] = values.as_slice() else {
+                    return Err(ToolError::InvalidArgs("each eraser point must have exactly 2 coordinates".into()));
+                };
+                let x = x.as_f64().filter(|v| v.is_finite()).ok_or_else(|| ToolError::InvalidArgs("eraser x must be finite".into()))?;
+                let y = y.as_f64().filter(|v| v.is_finite()).ok_or_else(|| ToolError::InvalidArgs("eraser y must be finite".into()))?;
+                Ok(to_user(&info, x, y))
+            })
+            .collect::<Result<Vec<_>>>()?;
+        let min_x = path.iter().map(|p| p[0]).fold(f64::INFINITY, f64::min);
+        let min_y = path.iter().map(|p| p[1]).fold(f64::INFINITY, f64::min);
+        let max_x = path.iter().map(|p| p[0]).fold(f64::NEG_INFINITY, f64::max);
+        let max_y = path.iter().map(|p| p[1]).fold(f64::NEG_INFINITY, f64::max);
+        let mut indices: Vec<usize> = self
+            .doc(a)?
+            .info
+            .annotations
+            .iter()
+            .filter(|c| {
+                // Ink signatures/initials and freehand highlights are not ordinary pen drawings.
+                c.page == page && c.subtype == "Ink" && !c.fill_sign && !c.locked
+                    && c.intent.as_deref() != Some("FreehandHighlight")
+            })
+            .filter(|c| {
+                let r = c.rect;
+                (r[0].min(r[2]) as f64) <= max_x + radius
+                    && (r[2].max(r[0]) as f64) >= min_x - radius
+                    && (r[1].min(r[3]) as f64) <= max_y + radius
+                    && (r[3].max(r[1]) as f64) >= min_y - radius
+            })
+            .map(|c| c.index)
+            .collect();
+        if indices.is_empty() {
+            return Ok(json!({ "candidates": 0 }));
+        }
+        // If an entire annotation disappears, lower indices still designate the same objects.
+        indices.sort_unstable_by(|a, b| b.cmp(a));
+        indices.dedup();
+        let candidates = indices.len();
+        let edits = indices.into_iter().map(|index| Edit::EraseInk { page, index, path: path.clone(), radius }).collect();
+        let mut out = self.apply(a, Edit::Batch { label: "Erase ink".into(), edits })?;
+        out["candidates"] = json!(candidates);
+        Ok(out)
+    }
+
     pub(crate) fn comment_delete(&mut self, a: &Args) -> Result<Value> {
         let (page, index) = self.comment_target(a)?;
         self.apply(a, Edit::DeleteAnnotation { page, index })
