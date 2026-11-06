@@ -66,7 +66,7 @@ import io.github.artcraftandroid.pdfcraft.ui.viewer.CreateIdScreen
 import io.github.artcraftandroid.pdfcraft.ui.viewer.IdPasswordDialog
 import io.github.artcraftandroid.pdfcraft.ui.viewer.SignFieldChoiceDialog
 import io.github.artcraftandroid.pdfcraft.ui.viewer.SignaturePadScreen
-import io.github.artcraftandroid.pdfcraft.ui.viewer.ViewerScreen
+import io.github.artcraftandroid.pdfcraft.ui.viewer.AdaptiveViewer
 
 /** Home or the viewer, and everything that can come over them: tools, settings, dialogs, snackbars. */
 @Composable
@@ -103,7 +103,7 @@ fun AppRoot(vm: AppViewModel, onBrowse: () -> Unit, onPickSignatureImage: () -> 
     val fullWidthViewer = doc != null && vm.statusBarInDocuments
     Box(Modifier.fillMaxSize().background(Color.Black)) {
         if (fullWidthViewer && doc != null) {
-            Box(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.navigationBars.only(WindowInsetsSides.Horizontal))) { ViewerScreen(vm, doc) }
+            Box(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.navigationBars.only(WindowInsetsSides.Horizontal))) { AdaptiveViewer(vm, doc) }
         }
         Box(
             Modifier.fillMaxSize()
@@ -112,7 +112,7 @@ fun AppRoot(vm: AppViewModel, onBrowse: () -> Unit, onPickSignatureImage: () -> 
         ) {
             when {
                 fullWidthViewer -> Unit
-                doc != null -> ViewerScreen(vm, doc)
+                doc != null -> AdaptiveViewer(vm, doc)
                 else -> HomeRoot(vm, onBrowse)
             }
             // here rather than in the file's row: a sheet inside a scrolling list has no height to fill
