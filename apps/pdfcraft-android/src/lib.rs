@@ -998,3 +998,6 @@ fn flatten_outline(items: &[pdfcraft_render::OutlineItem], level: u32, out: &mut
         flatten_outline(&item.children, level.saturating_add(1), out);
     }
 }
+
+#[cfg(test)]
+mod eraser_tests;
