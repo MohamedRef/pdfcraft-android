@@ -42,6 +42,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.foundation.layout.heightIn
@@ -53,6 +55,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
@@ -427,6 +430,55 @@ private fun About(vm: AppViewModel) {
         modifier = Modifier.fillMaxWidth()
             .pointerInput(version) { detectTapGestures(onLongPress = { clipboard.setText(AnnotatedString(version)); vm.tell(copied) }) }
             .padding(horizontal = 20.dp, vertical = 12.dp),
+    )
+    SheetDivider()
+    Section("App updates")
+    val context = LocalContext.current
+    val updateScope = rememberCoroutineScope()
+    var checking by remember { mutableStateOf(false) }
+    var checked by remember { mutableStateOf(false) }
+    var update by remember { mutableStateOf<ApkUpdate?>(null) }
+    var updateMessage by remember { mutableStateOf<String?>(null) }
+    SheetRow(LucideIcons.RotateCw, if (checking) "Checking GitHub Releases…" else "Check for updates", {
+        if (!checking) {
+            checking = true
+            updateMessage = null
+            updateScope.launch {
+                try {
+                    update = fetchApkUpdates(installedVersionCode(context)).firstOrNull()
+                    checked = true
+                    updateMessage = if (update == null) "No newer published APK available." else null
+                } catch (e: Exception) {
+                    checked = false
+                    update = null
+                    updateMessage = "Unable to check for updates. Check your connection and try again."
+                } finally {
+                    checking = false
+                }
+            }
+        }
+    })
+    update?.let { candidate ->
+        Text(
+            "Available: ${candidate.version} (${candidate.channel})  •  ${candidate.assetName}",
+            color = c.text, fontSize = 14.sp,
+            modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
+        )
+        SheetRow(LucideIcons.Download, "Download APK", {
+            try {
+                downloadApkUpdate(context, candidate)
+                updateMessage = "Download started. Open Downloads when it finishes to install."
+            } catch (e: Exception) {
+                updateMessage = "Download could not start. Please try again."
+            }
+        })
+    }
+    updateMessage?.let { message ->
+        Text(message, color = c.textSecondary, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp))
+    }
+    Text(
+        "Checks public Alpha, Beta, Preview and Stable releases. Installing an APK requires your approval.",
+        color = c.textSecondary, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
     )
     SheetDivider()
     Section(stringResource(R.string.home_section_legal))
