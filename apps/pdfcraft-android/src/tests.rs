@@ -83,6 +83,11 @@ fn refuses_bad_render_requests() {
     // an absurd scale is capped, not an allocation of terabytes
     let huge = s.render_page(doc, 0, 1.0e9, None).unwrap();
     assert!(huge.width <= pdfcraft_render::MAX_SIDE as u32 && huge.height <= pdfcraft_render::MAX_SIDE as u32);
+    assert!(u64::from(huge.width) * u64::from(huge.height) <= MAX_MOBILE_PAGE_PIXELS);
+    assert_eq!(huge.rgba.len(), huge.width as usize * huge.height as usize * 4);
+    // Reject hostile tile sizes before asking the native renderer to allocate pixels.
+    assert!(matches!(s.render_page(doc, 0, 1.0, Some(TileRect { x: 0, y: 0, width: 0, height: 1 })), Err(MobileError::Render(_))));
+    assert!(matches!(s.render_page(doc, 0, 1.0, Some(TileRect { x: 0, y: 0, width: 8192, height: 8192 })), Err(MobileError::Render(_))));
 }
 
 #[test]
