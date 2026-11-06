@@ -194,7 +194,7 @@ private fun EditFormatBar(vm: AppViewModel, doc: OpenDocument, para: Paragraph) 
             FormatPanel.Script -> Column(Modifier.fillMaxWidth().padding(12.dp)) {
                 Text(stringResource(R.string.edit_script_scope), color = c.textSecondary)
                 Row {
-                    val enabled = (vm.editing == null || vm.editDraft == para.text) && vm.busy == null
+                    val enabled = (vm.editing == null || (vm.editDraft == para.text && !vm.editComposing)) && vm.busy == null
                     TextButton(enabled = enabled, onClick = { vm.scriptParagraph(doc, para, "superscript") }) {
                         Text(stringResource(R.string.edit_superscript))
                     }
@@ -562,6 +562,7 @@ private fun BoxScope.InlineEditor(vm: AppViewModel, doc: OpenDocument, para: Par
                     value = it
                     vm.editDraft = it.text
                     vm.editTextSelection = it.selection.start to it.selection.end
+                    vm.editComposing = it.composition != null
                 },
                 textStyle = TextStyle(
                     color = parseHex(para.color ?: "#000000"), fontSize = sp, lineHeight = sp * 1.2f, fontFamily = family,

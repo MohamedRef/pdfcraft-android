@@ -6,7 +6,7 @@ The panel offers Superscript (x²) and Subscript (H₂O). With a nonempty inline
 
 ## Safety and selection
 
-- Uncommitted typing changes must be finished before using script controls. An unchanged draft can be dismissed without losing typed content.
+- Uncommitted typing changes and active IME composition must be finished before using script controls. An unchanged draft can be dismissed without losing typed content.
 - Compose UTF-16 selections are normalized and converted to native half-open UTF-8 byte ranges in one pass without copying paragraph/UTF-8 buffers. Invalid bounds, split surrogate pairs and byte-offset overflow fail before a native edit.
 - For ranges, the selected paragraph text must exactly match fresh native `editor_text` (or `text` fallback). This prevents applying display-text offsets to differently normalized editor text.
 - Provider read-only, signed, unreadable, closed/switched and stale-generation targets are refused. Generation validation, range-text comparison and script execution run together on the serial native dispatcher. Native permissions remain authoritative.

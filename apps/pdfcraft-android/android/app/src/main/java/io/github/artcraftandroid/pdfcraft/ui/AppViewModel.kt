@@ -1694,10 +1694,12 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     var editSelectAll = false
     var editDraft: String? = null
     var editTextSelection: Pair<Int, Int>? = null
+    var editComposing by mutableStateOf(false)
 
     fun startInlineEdit(para: io.github.artcraftandroid.pdfcraft.ui.viewer.Paragraph, selectAll: Boolean) {
         editSelectAll = selectAll
         editDraft = para.text
+        editComposing = false
         editTextSelection = if (selectAll) 0 to para.text.length else para.text.length to para.text.length
         editSelection = para
         editing = para
@@ -1710,6 +1712,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         editing = null
         editDraft = null
         editTextSelection = null
+        editComposing = false
         if (text != para.text) runTool(doc, "text_edit", mapOf("page" to para.page + 1, "paragraph" to para.number, "text" to text))
     }
 
@@ -1735,7 +1738,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     fun scriptParagraph(doc: OpenDocument, para: io.github.artcraftandroid.pdfcraft.ui.viewer.Paragraph, script: String) {
         val typing = editing
         if (script !in setOf("superscript", "subscript") || (typing != null &&
-            (typing.number != para.number || typing.page != para.page || editDraft != para.text)) || document !== doc ||
+            (typing.number != para.number || typing.page != para.page || editDraft != para.text || editComposing)) || document !== doc ||
             !doc.writable || doc.info.signed || doc.info.readOnlyReason != null) {
             tell(text(R.string.edit_script_unavailable))
             return
@@ -1749,6 +1752,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         editing = null
         editDraft = null
         editTextSelection = null
+        editComposing = false
         val generation = doc.info.generation
         job(text(R.string.edit_script_applying)) { eng ->
             if (document !== doc || editing != null || !doc.writable) {
