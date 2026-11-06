@@ -1,0 +1,146 @@
+name: Verify PDF details and build signed Android update
+
+on:
+  push:
+    branches: [main, feat/issue-55-file-details]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-update-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_INCREMENTAL: '0'
+  CARGO_TERM_COLOR: always
+
+jobs:
+  rust-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 100
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install pinned Rust
+        run: rustup toolchain install
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: issue55-rust-tests
+      - name: Run Rust tests
+        run: cargo test --locked -p pdfcraft-android
+
+  android-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Install Rust, cargo-ndk, Android SDK and NDK
+        run: |
+          rustup toolchain install
+          cargo install cargo-ndk --version 4.1.2 --locked
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-37" "ndk;29.0.14206865" >/dev/null
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: issue55-android-tests
+      - name: Run Android JVM unit tests
+        working-directory: apps/pdfcraft-android/android
+        run: ./gradlew testDebugUnitTest "-Ppdfcraft.abis=arm64-v8a" --no-daemon --stacktrace
+      - name: Publish unit test results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: android-unit-test-results
+          path: apps/pdfcraft-android/android/app/build/test-results/testDebugUnitTest/
+          if-no-files-found: ignore
+
+  signed-apk:
+    needs: [rust-tests, android-tests]
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v7
+      - name: Require the upstream release signing key, never use a debug key
+        env:
+          KEYSTORE_BASE64: ${{ secrets.PDFCRAFT_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.PDFCRAFT_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.PDFCRAFT_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.PDFCRAFT_KEY_PASSWORD }}
+        run: |
+          for secret in "$KEYSTORE_BASE64" "$KEYSTORE_PASSWORD" "$KEY_ALIAS" "$KEY_PASSWORD"; do
+            if [ -z "$secret" ]; then
+              echo "::error::Original signing secrets are missing. Set PDFCRAFT_KEYSTORE_BASE64, PDFCRAFT_KEYSTORE_PASSWORD, PDFCRAFT_KEY_ALIAS and PDFCRAFT_KEY_PASSWORD under Settings > Secrets and variables > Actions. Forks do not inherit upstream secrets."
+              exit 1
+            fi
+          done
+          printf '%s' "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.p12"
+          test -s "$RUNNER_TEMP/release.p12"
+          chmod 600 "$RUNNER_TEMP/release.p12"
+          echo "PDFCRAFT_KEYSTORE=$RUNNER_TEMP/release.p12" >> "$GITHUB_ENV"
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Install Rust, cargo-ndk, Android SDK and NDK
+        run: |
+          rustup toolchain install
+          cargo install cargo-ndk --version 4.1.2 --locked
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-37" "ndk;29.0.14206865" >/dev/null
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: issue55-android-release
+      - name: Build both original Android ABI variants
+        working-directory: apps/pdfcraft-android/android
+        env:
+          PDFCRAFT_KEYSTORE_PASSWORD: ${{ secrets.PDFCRAFT_KEYSTORE_PASSWORD }}
+          PDFCRAFT_KEY_ALIAS: ${{ secrets.PDFCRAFT_KEY_ALIAS }}
+          PDFCRAFT_KEY_PASSWORD: ${{ secrets.PDFCRAFT_KEY_PASSWORD }}
+        run: |
+          version="$(sed -n 's/^pdfcraft\.version=//p' gradle.properties)"
+          mkdir -p "$GITHUB_WORKSPACE/dist"
+          for abi in arm64-v8a armeabi-v7a; do
+            ./gradlew assembleRelease "-Ppdfcraft.abis=$abi" --no-daemon --stacktrace
+            suffix=""
+            if [ "$abi" = armeabi-v7a ]; then suffix="-armeabi-v7a"; fi
+            cp app/build/outputs/apk/release/app-release.apk "$GITHUB_WORKSPACE/dist/pdfcraft-android-$version$suffix.apk"
+          done
+      - name: Prove update compatibility against official v0.0.7-beta APK
+        run: |
+          curl -fL --retry 3 --silent --show-error \
+            "https://github.com/artcraft-android/pdfcraft-android/releases/download/v0.0.7-beta/pdfcraft-android-0.0.7-beta.apk" \
+            -o "$RUNNER_TEMP/upstream.apk"
+          tools="$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -n 1)"
+          signer="$tools"apksigner
+          aapt="$tools"aapt
+          original_cert="$("$signer" verify --print-certs "$RUNNER_TEMP/upstream.apk" | sed -n 's/^Signer #1 certificate SHA-256 digest: //p' | head -n 1)"
+          original_info="$("$aapt" dump badging "$RUNNER_TEMP/upstream.apk" | grep '^package:')"
+          original_app="$(echo "$original_info" | sed -n "s/^package: name='\([^']*\)'.*/\1/p")"
+          original_code="$(echo "$original_info" | sed -n "s/.*versionCode='\([0-9][0-9]*\)'.*/\1/p")"
+          test -n "$original_cert"
+          test "$original_app" = "io.github.artcraftandroid.pdfcraft"
+          test -n "$original_code"
+          for apk in dist/*.apk; do
+            cert="$("$signer" verify --print-certs "$apk" | sed -n 's/^Signer #1 certificate SHA-256 digest: //p' | head -n 1)"
+            info="$("$aapt" dump badging "$apk" | grep '^package:')"
+            app="$(echo "$info" | sed -n "s/^package: name='\([^']*\)'.*/\1/p")"
+            code="$(echo "$info" | sed -n "s/.*versionCode='\([0-9][0-9]*\)'.*/\1/p")"
+            if [ "$cert" != "$original_cert" ] || [ "$app" != "$original_app" ] || [ -z "$code" ] || [ "$code" -le "$original_code" ]; then
+              echo "::error::$(basename "$apk") is NOT update-compatible with the official APK: signature, package or versionCode differs."
+              exit 1
+            fi
+            echo "Update verified: $(basename "$apk"), versionCode=$code, signing SHA-256=$cert"
+          done
+      - name: Upload verified Android update APKs
+        uses: actions/upload-artifact@v7
+        with:
+          name: pdfcraft-0.0.7-beta.2-original-key-update
+          path: dist/*.apk
+          if-no-files-found: error
+          retention-days: 30
+      - name: Clean up original signing key
+        if: always()
+        run: rm -f "$RUNNER_TEMP/release.p12"
