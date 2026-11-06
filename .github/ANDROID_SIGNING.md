@@ -42,10 +42,15 @@ If **no APK has been distributed or installed**, you can rotate to a new signing
 
 ## Pull requests and merge protection
 
-Owner policy (2026-11-06): work in batches of three PRs. Each PR must pass `rust-tests` (including provenance), `android-tests` (JVM/regressions) and `Merge gate (Rust and Android)` plus the title check. JVM tests may compile the native library to generate matching UniFFI bindings; they do not package a release APK.
+The `PdfCraft Custom - tests and APK` workflow runs against every pull request targeting `main`:
 
-After a batch is merged, dispatch `android-update.yml` on `main` once to run tests, build the permanent-key signed ARM64 APK, verify certificate/package/manifest, hash and publish the release. No APK smoke packaging per PR and no signed build on ordinary main pushes. Do not skip failed tests. APK/device checks are release gates, not PR evidence.
+- `rust-tests` tests the Rust COS, engine, and Android library.
+- `android-tests` runs Android JVM tests.
+- `APK smoke (arm64-v8a)` and `APK smoke (armeabi-v7a)` build **release-mode** packages and validate their debug-only CI signatures, application ID, version code and bundled Rust native library. These APKs are **not** suitable for distribution or for updating an installed release.
+- `Merge gate (Rust, Android, ABI APKs)` must succeed; it fails if any required job fails, is cancelled, or is skipped. `Conventional title` is a separate PR-title check.
 
-If branch protection is configured, require `Merge gate (Rust and Android)` and `Conventional title`; retire the legacy `Merge gate (Rust, Android, ABI APKs)` requirement. At policy change, GitHub reported main was not branch-protected. Production signing checks remain required and may never be bypassed.
+In **Settings > Rules > Rulesets** (or **Branches > Branch protection rules**), add protection for `main`. Require a pull request before merging, require the **Merge gate (Rust, Android, ABI APKs)** and **Conventional title** status checks, require branches to be up to date, and disable direct push/bypass where your GitHub permissions allow. Branch protection settings cannot be enforced by simply committing a YAML file.
 
-Every public release must include clear notes for new features, fixes, improvements and known/unverified behavior. Generated notes group labeled PRs via `.github/release.yml`; supplement them with measured findings and limitations, never an unsupported performance claim.
+Do not merge while any required check is pending, failed, skipped, or cancelled. The production `signed-apk` job uses the private release keystore and runs only on trusted `main` pushes/manual dispatch; it is intentionally skipped for untrusted PR code. A passing PR gate proves both APK variants can be compiled, but it **does not claim to verify production signing**.
+
+If the production `signed-apk` job fails, correct the repository signing secrets and fingerprint variable and rerun it. Never turn production signing checks off to make `main` appear green.
