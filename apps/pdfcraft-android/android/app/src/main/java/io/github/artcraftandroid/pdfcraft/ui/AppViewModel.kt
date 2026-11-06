@@ -51,6 +51,8 @@ import io.github.artcraftandroid.pdfcraft.engine.RecentFiles
 import io.github.artcraftandroid.pdfcraft.engine.userMessage
 import io.github.artcraftandroid.pdfcraft.ui.viewer.PageImages
 import java.io.File
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.launch
@@ -2284,8 +2286,11 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 withContext(Dispatchers.IO) {
                     val stream = getApplication<Application>().contentResolver.openInputStream(uri)
                         ?: throw java.io.IOException(text(R.string.sheet_import_embedded_bookmarks_unreadable))
+                    val copyContext = currentCoroutineContext()
                     stream.use { input ->
-                        staged.outputStream().use { output -> EmbeddedBookmarkJson.copyBounded(input, output) }
+                        staged.outputStream().use { output ->
+                            EmbeddedBookmarkJson.copyBounded(input, output) { copyContext.ensureActive() }
+                        }
                     }
                 }
                 // The SAF provider may be slow. Recheck after staging and before every write.
@@ -2346,9 +2351,12 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                     }
                     val stream = getApplication<Application>().contentResolver.openInputStream(uri)
                         ?: throw java.io.IOException(text(R.string.sheet_copy_embedded_bookmarks_unreadable))
+                    val copyContext = currentCoroutineContext()
                     stream.use { input ->
                         source.outputStream().use { output ->
-                            SafBoundedCopy.copy(input, output, SafBoundedCopy.MAX_BOOKMARK_SOURCE_PDF_BYTES, "PDF")
+                            SafBoundedCopy.copy(input, output, SafBoundedCopy.MAX_BOOKMARK_SOURCE_PDF_BYTES, "PDF") {
+                                copyContext.ensureActive()
+                            }
                         }
                     }
                 }

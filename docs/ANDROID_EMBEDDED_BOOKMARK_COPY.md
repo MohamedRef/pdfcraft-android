@@ -38,3 +38,7 @@ Temporary native source ownership now survives cancellation during blocking open
 in a non-cancellable cleanup block, and a cancelled operation does not begin target copying.
 JVM regressions cover cancellation during open, failed copy and successful close-once behavior.
 Physical provider/Undo/save/reopen tests remain pending; this correction is not device evidence.
+
+### Streaming cancellation follow-up
+
+Bounded SAF staging now checks the coroutine before each provider read and again before writing the returned chunk, for both JSON import and PDF copy. Cancellation stops further chunks and the existing `use`/`finally` paths close streams and delete partial files. Two JVM regressions cover cancellation before any read and cancellation arriving during a read (no returned bytes published and no subsequent read). A provider already blocked in `InputStream.read` cannot be forcibly interrupted by this cooperative check; no immediate cancellation guarantee is claimed for hostile/blocking providers.

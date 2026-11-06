@@ -7,6 +7,6 @@ import java.io.OutputStream
 internal object EmbeddedBookmarkJson {
     const val MAX_BYTES = 16L * 1024L * 1024L
 
-    fun copyBounded(input: InputStream, output: OutputStream): Long =
-        SafBoundedCopy.copy(input, output, MAX_BYTES, "Bookmark JSON")
+    fun copyBounded(input: InputStream, output: OutputStream, checkpoint: () -> Unit = {}): Long =
+        SafBoundedCopy.copy(input, output, MAX_BYTES, "Bookmark JSON", checkpoint)
 }

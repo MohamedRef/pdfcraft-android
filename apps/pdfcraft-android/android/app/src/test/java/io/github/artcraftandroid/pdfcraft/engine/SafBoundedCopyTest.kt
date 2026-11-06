@@ -4,6 +4,7 @@ import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.io.InputStream
+import kotlinx.coroutines.CancellationException
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertThrows
@@ -44,5 +45,36 @@ class SafBoundedCopyTest {
         assertThrows(IllegalArgumentException::class.java) {
             SafBoundedCopy.copy(ByteArrayInputStream(byteArrayOf(1)), ByteArrayOutputStream(), 0L, "PDF")
         }
+    }
+    @Test fun canceledBeforeReadDoesNotConsumeProvider() {
+        val input = ByteArrayInputStream(byteArrayOf(1, 2, 3))
+        val output = ByteArrayOutputStream()
+        assertThrows(CancellationException::class.java) {
+            SafBoundedCopy.copy(input, output, 8L, "PDF") { throw CancellationException("cancelled") }
+        }
+        assertEquals(3, input.available())
+        assertEquals(0, output.size())
+    }
+
+    @Test fun cancellationDuringReadDoesNotPublishChunkOrReadAgain() {
+        var canceled = false
+        var reads = 0
+        val input = object : InputStream() {
+            override fun read(): Int = error("bulk read expected")
+            override fun read(b: ByteArray, off: Int, len: Int): Int {
+                reads++
+                b[off] = 42
+                canceled = true
+                return 1
+            }
+        }
+        val output = ByteArrayOutputStream()
+        assertThrows(CancellationException::class.java) {
+            SafBoundedCopy.copy(input, output, 8L, "PDF") {
+                if (canceled) throw CancellationException("cancelled")
+            }
+        }
+        assertEquals(1, reads)
+        assertEquals(0, output.size())
     }
 }

@@ -12,13 +12,17 @@ internal object SafBoundedCopy {
     /**
      * The caller owns and closes both streams. A thrown exception leaves an incomplete output,
      * which the caller must delete rather than passing to any native PDF operation.
+     * checkpoint checks cancellation before reads and before publishing returned bytes. It cannot
+     * interrupt a provider that is currently blocked inside InputStream.read.
      */
-    fun copy(input: InputStream, output: OutputStream, maxBytes: Long, kind: String): Long {
+    fun copy(input: InputStream, output: OutputStream, maxBytes: Long, kind: String, checkpoint: () -> Unit = {}): Long {
         require(maxBytes > 0L)
         val buffer = ByteArray(BUFFER_BYTES)
         var total = 0L
         while (true) {
+            checkpoint()
             val n = input.read(buffer)
+            checkpoint()
             if (n < 0) break
             if (n == 0) throw IOException("$kind provider did not make progress.")
             if (n > maxBytes - total) {
