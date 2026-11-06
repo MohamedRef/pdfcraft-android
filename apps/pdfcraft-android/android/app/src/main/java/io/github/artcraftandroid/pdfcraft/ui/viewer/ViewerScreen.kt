@@ -227,7 +227,13 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
             look = canvasLook,
             gap = with(density) { (if (c.dark) 3f else 4f).toDp() },
             gesturesEnabled = gesturesForTool,
-            onTap = { p, at ->
+            onTap = { p, at -> scope.launch {
+                // A tap can arrive before viewport hydration. Resolve that page first so the
+                // first tap on a link still follows it, rather than falling through to bars.
+                val generation = doc.info.generation
+                if (at != null && ctl.tool == ViewerTool.None && selection.selection == null && at.page !in doc.linkPagesLoaded)
+                    vm.loadVisibleLinks(doc, at.page..at.page)
+                if (vm.document !== doc || doc.info.generation != generation) return@launch
                 when {
                     selection.selection != null -> selection.clear()
                     ctl.tool == ViewerTool.Edit -> vm.editTap(doc, at)
@@ -245,7 +251,7 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
                     }
                     else -> ctl.toggleBars()
                 }
-            },
+            } },
             // a double tap zooms with the bars out of the way, as the reference's does
             onDoubleTap = { if (ctl.tool == ViewerTool.None && !ctl.searching) ctl.barsVisible = false },
             // with no tool out, a mouse drag selects text, as a desktop does
