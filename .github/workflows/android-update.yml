@@ -90,6 +90,7 @@ jobs:
           PDFCRAFT_KEYSTORE_PASSWORD: ${{ secrets.PDFCRAFT_KEYSTORE_PASSWORD }}
           PDFCRAFT_KEY_ALIAS: ${{ secrets.PDFCRAFT_KEY_ALIAS }}
           PDFCRAFT_KEY_PASSWORD: ${{ secrets.PDFCRAFT_KEY_PASSWORD }}
+          PDFCRAFT_CERT_SHA256: ${{ vars.PDFCRAFT_CERT_SHA256 }}
         run: java .github/scripts/VerifyAndroidSigning.java
       - name: Install Rust, cargo-ndk, Android SDK and NDK
         run: |
@@ -115,13 +116,20 @@ jobs:
             cp app/build/outputs/apk/release/app-release.apk "$GITHUB_WORKSPACE/dist/pdfcraft-custom-$version$suffix.apk"
           done
       - name: Verify stable personal certificate and app ID
+        env:
+          PDFCRAFT_CERT_SHA256: ${{ vars.PDFCRAFT_CERT_SHA256 }}
         run: |
           tools="$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -n 1)"
           signer="${tools}apksigner"
           aapt="${tools}aapt"
           for apk in dist/*.apk; do
             "$signer" verify --print-certs "$apk" > "$RUNNER_TEMP/certs.txt"
-            grep -qi 'fcd16ff2e401a4f379c658982a97ce78a9f00bb44e8d20038603889b0d1bfdfa' "$RUNNER_TEMP/certs.txt" || { echo '::error::Wrong personal signing certificate'; exit 1; }
+            expected_cert="$(printf '%s' "$PDFCRAFT_CERT_SHA256" | tr -d ':[:space:]' | tr '[:upper:]' '[:lower:]')"
+            if ! [[ "$expected_cert" =~ ^[0-9a-f]{64}$ ]]; then
+              echo '::error::PDFCRAFT_CERT_SHA256 Actions variable must be a valid SHA-256 fingerprint'
+              exit 1
+            fi
+            grep -qiF "$expected_cert" "$RUNNER_TEMP/certs.txt" || { echo '::error::Wrong personal signing certificate'; exit 1; }
             "$aapt" dump badging "$apk" | grep -q "name='io.github.mohamedref.pdfcraft'" || { echo '::error::Wrong application ID'; exit 1; }
             "$aapt" dump badging "$apk" | grep -q "versionCode='[1-9][0-9]*'" || { echo '::error::Invalid version code'; exit 1; }
           done

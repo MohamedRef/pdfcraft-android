@@ -9,8 +9,14 @@ import java.util.HexFormat;
 
 /** Fail fast on incorrect GitHub Actions signing secrets, without printing secret values. */
 public final class VerifyAndroidSigning {
-    private static final String EXPECTED_CERT_SHA256 =
-            "fcd16ff2e401a4f379c658982a97ce78a9f00bb44e8d20038603889b0d1bfdfa";
+    private static String expectedCertificateSha256() {
+        String value = required("PDFCRAFT_CERT_SHA256")
+                .replace(":", "").replaceAll("\\s", "").toLowerCase(java.util.Locale.ROOT);
+        if (!value.matches("[0-9a-f]{64}")) {
+            fail("Invalid signing certificate fingerprint", "PDFCRAFT_CERT_SHA256 repository Actions variable must contain the certificate's 64-character SHA-256 fingerprint.");
+        }
+        return value;
+    }
 
     private static String required(String name) {
         String value = System.getenv(name);
@@ -66,7 +72,7 @@ public final class VerifyAndroidSigning {
         }
         String actual = HexFormat.of().formatHex(
                 MessageDigest.getInstance("SHA-256").digest(cert.getEncoded()));
-        if (!EXPECTED_CERT_SHA256.equals(actual)) {
+        if (!expectedCertificateSha256().equals(actual)) {
             fail("Unexpected signing certificate", "The keystore uses a different certificate. Keep the original signing identity so updates install over existing versions.");
             return;
         }

@@ -73,6 +73,7 @@ jobs:
           PDFCRAFT_KEYSTORE_PASSWORD: ${{ secrets.PDFCRAFT_KEYSTORE_PASSWORD }}
           PDFCRAFT_KEY_ALIAS: ${{ secrets.PDFCRAFT_KEY_ALIAS }}
           PDFCRAFT_KEY_PASSWORD: ${{ secrets.PDFCRAFT_KEY_PASSWORD }}
+          PDFCRAFT_CERT_SHA256: ${{ vars.PDFCRAFT_CERT_SHA256 }}
         run: |
           if [ -n "${PDFCRAFT_KEYSTORE:-}" ]; then
             java .github/scripts/VerifyAndroidSigning.java
