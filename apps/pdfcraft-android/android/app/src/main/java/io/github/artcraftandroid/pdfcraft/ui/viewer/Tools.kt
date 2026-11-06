@@ -138,7 +138,8 @@ fun Modifier.toolGestures(
         var one = !navigation && !eraser
         var moved = false
         var last = down.position
-        if (one) onDown(last, down.pressure, activePen)
+        var lastPressure = down.pressure
+        if (one) onDown(last, lastPressure, activePen)
         try {
             while (true) {
                 val event = awaitPointerEvent()
@@ -151,21 +152,24 @@ fun Modifier.toolGestures(
                     navigation = false
                     one = activePen
                     last = arrivingPen.position
+                    lastPressure = arrivingPen.pressure
                     routing.penStarted()
-                    if (one) onDown(last, arrivingPen.pressure, activePen)
+                    if (one) onDown(last, lastPressure, activePen)
                 }
                 val active = event.changes.firstOrNull { it.id == activeId }
                 // Touch/palm pointers do not replace the pen or interrupt its stroke.
                 if (activePen) {
                     if (active == null || !active.pressed) {
                         if (active?.isConsumed == true) { onCancel(); one = false }
-                        else if (active != null && active.positionChanged()) { last = active.position; onMove(last, active.pressure, true) }
+                        else if (active != null && active.positionChanged()) { last = active.position; onMove(last, lastPressure, true) }
                         break
                     }
                     if (active.positionChanged()) {
                         last = active.position
                         moved = true
-                        onMove(last, active.pressure, true)
+                        // Release events can report zero pressure; don't create a spurious thick tip.
+                        if (active.pressure.isFinite() && active.pressure > 0f) lastPressure = active.pressure
+                        onMove(last, lastPressure, true)
                     }
                     event.changes.forEach { it.consume() }
                     continue
