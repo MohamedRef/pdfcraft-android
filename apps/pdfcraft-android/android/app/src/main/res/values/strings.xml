@@ -1224,4 +1224,5 @@
     <string name="service_action_forward">Forward 15 seconds</string>
     <!-- Translator note: notification button that stops reading aloud -->
     <string name="service_action_stop">Stop</string>
+    <string name="toolbar_stylus_only">Pen only (fingers scroll)</string>
 </resources>
