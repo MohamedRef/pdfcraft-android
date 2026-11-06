@@ -474,6 +474,7 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
                 ViewerSheet.FileDetails -> FileDetailsSheet(vm, doc)
                 ViewerSheet.ViewSettings -> ViewSettingsSheet(vm, doc)
                 ViewerSheet.Bookmarks -> BookmarksSheet(vm, doc)
+                ViewerSheet.TextStyles -> TextStylesSheet(vm, doc)
                 ViewerSheet.Attachments -> AttachmentsSheet(vm, doc)
                 ViewerSheet.Comments -> Unit
                 ViewerSheet.MoreTools -> MoreToolsSheet(vm, doc)

@@ -1228,4 +1228,18 @@
     <!-- Translator note: notification button that stops reading aloud -->
     <string name="service_action_stop">Stop</string>
     <string name="toolbar_stylus_only">Pen only (fingers scroll)</string>
+    <string name="text_styles_title">Create contents from headings</string>
+    <string name="text_styles_explanation">Analyze text styles, then choose up to nine in heading order. The first style is level 1, the next level 2, and so on. New entries are added under an “Untitled” bookmark; existing contents stay in place. You can Undo the change.</string>
+    <string name="text_styles_scan">Analyze text styles</string>
+    <string name="text_styles_scope">Analyzes the first 5,000 pages when requested. Large documents may take time.</string>
+    <string name="text_styles_loading">Analyzing text styles…</string>
+    <string name="text_styles_failed">Could not analyze text styles. The document may restrict copying, or it changed during analysis. Try again.</string>
+    <string name="text_styles_empty">No text styles found. Image-only pages need text recognition first.</string>
+    <string name="text_styles_limit">Showing the first %1$d of %2$d styles, largest first.</string>
+    <string name="text_styles_description">%1$s, %2$s pt · %3$d lines on %4$d pages</string>
+    <string name="text_styles_level">Heading level %1$d</string>
+    <string name="text_styles_create">Add contents from selected styles</string>
+    <string name="text_styles_creating">Creating PDF contents…</string>
+    <string name="text_styles_created">Heading bookmarks added. This change can be undone.</string>
+    <string name="text_styles_unavailable">Cannot create contents: the PDF changed, is closed, signed, read-only, or restricts copying or document assembly. Use an editable copy and analyze again.</string>
 </resources>
