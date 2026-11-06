@@ -9,11 +9,15 @@ import java.util.HexFormat;
 
 /** Fail fast on incorrect GitHub Actions signing secrets, without printing secret values. */
 public final class VerifyAndroidSigning {
-    private static String expectedCertificateSha256() {
-        String value = required("PDFCRAFT_CERT_SHA256")
-                .replace(":", "").replaceAll("\\s", "").toLowerCase(java.util.Locale.ROOT);
+    /** Optional pin for an already published app; an unset pin does not disable APK verification. */
+    private static String optionalCertificatePin() {
+        String raw = System.getenv("PDFCRAFT_CERT_SHA256");
+        if (raw == null || raw.isBlank()) return null;
+        String value = raw.replace(":", "").replaceAll("\\s", "")
+                .toLowerCase(java.util.Locale.ROOT);
         if (!value.matches("[0-9a-f]{64}")) {
-            fail("Invalid signing certificate fingerprint", "PDFCRAFT_CERT_SHA256 repository Actions variable must contain the certificate's 64-character SHA-256 fingerprint.");
+            fail("Invalid signing certificate fingerprint",
+                    "PDFCRAFT_CERT_SHA256 Actions variable must contain a valid SHA-256 fingerprint.");
         }
         return value;
     }
@@ -21,7 +25,8 @@ public final class VerifyAndroidSigning {
     private static String required(String name) {
         String value = System.getenv(name);
         if (value == null || value.isEmpty()) {
-            fail("Missing Android signing secret", "Set " + name + " in repository Actions secrets.");
+            fail("Missing Android signing secret",
+                    "Set " + name + " under Settings > Secrets and variables > Actions > Secrets.");
         }
         return value;
     }
@@ -72,10 +77,21 @@ public final class VerifyAndroidSigning {
         }
         String actual = HexFormat.of().formatHex(
                 MessageDigest.getInstance("SHA-256").digest(cert.getEncoded()));
-        if (!expectedCertificateSha256().equals(actual)) {
-            fail("Unexpected signing certificate", "The keystore uses a different certificate. Keep the original signing identity so updates install over existing versions.");
+        String pin = optionalCertificatePin();
+        if (pin != null && !pin.equals(actual)) {
+            fail("Unexpected signing certificate",
+                    "The configured signing certificate differs from PDFCRAFT_CERT_SHA256. Preserve the original signing key for app updates.");
             return;
         }
-        System.out.println("Verified PKCS12 store password, private key alias/password and pinned signing certificate.");
+
+        // GitHub Actions passes GITHUB_ENV to subsequent steps. The public certificate digest
+        // is derived from the very keystore used to sign the APK, never from PR-provided code.
+        String githubEnv = System.getenv("GITHUB_ENV");
+        if (githubEnv != null && !githubEnv.isBlank()) {
+            Files.writeString(Path.of(githubEnv), "PDFCRAFT_SIGNING_CERT_SHA256=" + actual + System.lineSeparator(),
+                    java.nio.file.StandardOpenOption.CREATE, java.nio.file.StandardOpenOption.APPEND);
+        }
+        System.out.println("Verified PKCS12 store password, private key alias/password, and certificate."
+                + (pin == null ? " No pinned certificate variable was configured." : " Pinned certificate matches."));
     }
 }

@@ -116,6 +116,17 @@ jobs:
           echo >>"$GITHUB_STEP_SUMMARY"
           for apk in dist/*.apk; do
             certs="$("$apksigner" verify --print-certs "$apk")"
+            if [ -n "${PDFCRAFT_KEYSTORE:-}" ]; then
+              expected_cert="${PDFCRAFT_SIGNING_CERT_SHA256:-}"
+              if ! [[ "$expected_cert" =~ ^[0-9a-f]{64}$ ]]; then
+                echo "::error::Signing preflight did not export a valid certificate fingerprint"
+                exit 1
+              fi
+              grep -qiF "$expected_cert" <<<"$certs" || {
+                echo "::error::Release APK was signed with a certificate different from the validated keystore"
+                exit 1
+              }
+            fi
             if [ "$GITHUB_REF_TYPE" = tag ] && grep -q "CN=Android Debug" <<<"$certs"; then
               echo "::error::$apk is signed with the debug key"
               exit 1
