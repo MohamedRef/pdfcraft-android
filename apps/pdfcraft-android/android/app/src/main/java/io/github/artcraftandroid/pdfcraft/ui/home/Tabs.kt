@@ -464,7 +464,7 @@ private fun About(vm: AppViewModel) {
             color = c.text, fontSize = 14.sp,
             modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
         )
-        SheetRow(LucideIcons.Download, "Download APK", {
+        SheetRow(LucideIcons.FileDown, "Download APK", {
             try {
                 downloadApkUpdate(context, candidate)
                 updateMessage = "Download started. Open Downloads when it finishes to install."
