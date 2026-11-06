@@ -42,3 +42,10 @@ Physical provider/Undo/save/reopen tests remain pending; this correction is not 
 ### Streaming cancellation follow-up
 
 Bounded SAF staging now checks the coroutine before each provider read and again before writing the returned chunk, for both JSON import and PDF copy. Cancellation stops further chunks and the existing `use`/`finally` paths close streams and delete partial files. Two JVM regressions cover cancellation before any read and cancellation arriving during a read (no returned bytes published and no subsequent read). A provider already blocked in `InputStream.read` cannot be forcibly interrupted by this cooperative check; no immediate cancellation guarantee is claimed for hostile/blocking providers.
+
+
+### Sequential integration checkpoint
+
+Export #25 merged as `952cc4a723f8fa3c1194a2312b504ce892ee95db` after CI 42284568284 and successful post-merge main CI 42285518972. Import #26 merged as `cbe7d49b3a0da8270cbda40a3fe7cd845beceae6` after CI 42285569355; its new main run must also pass. This branch now includes that main and retains all five cancellation regressions (three temporary-native-source lifecycle tests and two cooperative staging tests). Its earlier CI 42284370987 passed, but the final integration head requires fresh checks. Fourteen native bookmark host regressions passed locally; no physical SAF/provider/save-reopen proof claimed.
+
+Per the owner’s batch-APK policy, current-head Rust/provenance, Android JVM, title and merge checks gate source merging. Physical QA remains explicitly outstanding for the single post-batch signed APK. No password prompt for encrypted source PDFs is added by this integration; such sources fail without changing the target.
