@@ -88,7 +88,7 @@ class DocumentFiles(private val context: Context) {
     fun lastModified(uri: Uri): Long? {
         if (uri.scheme == ContentResolver.SCHEME_FILE) return uri.path?.let { File(it).lastModified() }?.takeIf { it > 0 }
         fun column(name: String): Long? = runCatching {
-            resolver.query(uri, arrayOf(name), null, null, null)?.use { c -> if (c.moveToFirst() && !c.isNull(0)) c.getLong(0) else null }
+            resolver.query(uri, arrayOf(name), null, null, null)?.use { c -> if (c.moveToFirst()) c.namedLong(name) else null }
         }.getOrNull()
         return column(DocumentsContract.Document.COLUMN_LAST_MODIFIED)?.takeIf { it > 0 }
             ?: column(MediaStore.MediaColumns.DATE_MODIFIED)?.takeIf { it > 0 }?.times(1000)
@@ -135,7 +135,7 @@ class DocumentFiles(private val context: Context) {
     fun displayName(uri: Uri): String {
         val name = runCatching {
             resolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { c ->
-                if (c.moveToFirst()) c.getString(0) else null
+                if (c.moveToFirst()) c.namedString(OpenableColumns.DISPLAY_NAME) else null
             }
         }.getOrNull() ?: uri.lastPathSegment?.substringAfterLast('/') ?: "Document.pdf"
         return safeName(name)
@@ -144,7 +144,7 @@ class DocumentFiles(private val context: Context) {
     /** The file name another app gives [uri], as it is (any extension). */
     fun displayNameRaw(uri: Uri): String {
         val name = runCatching {
-            resolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { c -> if (c.moveToFirst()) c.getString(0) else null }
+            resolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { c -> if (c.moveToFirst()) c.namedString(OpenableColumns.DISPLAY_NAME) else null }
         }.getOrNull() ?: uri.lastPathSegment?.substringAfterLast('/') ?: "File"
         return name.replace(Regex("[\\\\/:*?\"<>|\\p{Cntrl}]"), "_").trim().ifEmpty { "File" }
     }
@@ -153,7 +153,7 @@ class DocumentFiles(private val context: Context) {
     fun size(uri: Uri): Long? {
         if (uri.scheme == ContentResolver.SCHEME_FILE) return uri.path?.let { File(it).length() }
         return runCatching {
-            resolver.query(uri, arrayOf(OpenableColumns.SIZE), null, null, null)?.use { c -> if (c.moveToFirst() && !c.isNull(0)) c.getLong(0) else null }
+            resolver.query(uri, arrayOf(OpenableColumns.SIZE), null, null, null)?.use { c -> if (c.moveToFirst()) c.namedLong(OpenableColumns.SIZE) else null }
         }.getOrNull()
     }
 
@@ -169,7 +169,7 @@ class DocumentFiles(private val context: Context) {
 
     /** A document's flags (DocumentsContract.Document.FLAG_*), when its provider says. */
     private fun documentFlags(uri: Uri): Int? = runCatching {
-        resolver.query(uri, arrayOf(DocumentsContract.Document.COLUMN_FLAGS), null, null, null)?.use { c -> if (c.moveToFirst() && !c.isNull(0)) c.getInt(0) else null }
+        resolver.query(uri, arrayOf(DocumentsContract.Document.COLUMN_FLAGS), null, null, null)?.use { c -> if (c.moveToFirst()) c.namedInt(DocumentsContract.Document.COLUMN_FLAGS) else null }
     }.getOrNull()
 
     /** Whether the app's local working PDF still has an uncommitted provider write. */

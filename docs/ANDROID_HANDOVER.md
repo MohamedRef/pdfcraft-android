@@ -1,5 +1,9 @@
 # PdfCraft Android - development handover
 
+## Independent next-batch fix — provider metadata columns
+
+`fix/android-provider-metadata-columns` replaces column-zero assumptions with named Cursor lookups for filename, size, dates and flags, with four JVM proxy-Cursor regressions. A reordered `_id=2` fixture explains a possible source-level misread; it does not reproduce the owner’s actual device/provider, so the reported filename issue stays unverified. Current-head CI/manual provider tests remain required. This fix is outside the frozen current release candidate; see [provider metadata](ANDROID_PROVIDER_METADATA.md).
+
 ## LIVE CHECKPOINT — 2026-11-06: repository review, signed beta and open drafts
 
 **This section supersedes older checkpoint text below that says the beta is unpublished or performance instrumentation is draft. Keep historical notes for audit.**
