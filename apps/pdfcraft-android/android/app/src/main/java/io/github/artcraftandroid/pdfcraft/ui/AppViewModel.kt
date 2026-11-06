@@ -471,6 +471,28 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         }
     }
 
+    /**
+     * Apply multiple same-kind edits in submission order with one refresh. Pressure-aware ink may
+     * create several PDF annotations, so one refresh per short segment would stall the viewer.
+     * This remains the existing serial engine queue; do not interleave a subsequent document edit.
+     */
+    fun runToolBatch(doc: OpenDocument, name: String, argsList: List<Map<String, Any?>>) {
+        if (argsList.isEmpty()) return
+        val eng = engine ?: return
+        viewModelScope.launch {
+            try {
+                for (args in argsList) {
+                    eng.tool(name, args + ("doc" to doc.id))
+                }
+            } catch (e: MobileException) {
+                tell(e.userMessage)
+            } finally {
+                // A partially accepted batch must be visible even if a later segment is refused.
+                refresh(doc)
+            }
+        }
+    }
+
     /** Undo: inside a tool that keeps its own history (Draw) only that; else the document's last edit, named in a message. */
     fun undo(doc: OpenDocument) {
         doc.localUndo?.let { it.undo(); return }
