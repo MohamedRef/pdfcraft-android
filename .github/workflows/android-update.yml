@@ -43,7 +43,7 @@ jobs:
         run: |
           rustup toolchain install
           cargo install cargo-ndk --version 4.1.2 --locked
-          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-37" "ndk;29.0.14206865" >/dev/null
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;29.0.14206865" >/dev/null
       - uses: Swatinem/rust-cache@v2
         with:
           key: issue55-android-tests
@@ -89,7 +89,7 @@ jobs:
         run: |
           rustup toolchain install
           cargo install cargo-ndk --version 4.1.2 --locked
-          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-37" "ndk;29.0.14206865" >/dev/null
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;29.0.14206865" >/dev/null
       - uses: Swatinem/rust-cache@v2
         with:
           key: issue55-android-release
