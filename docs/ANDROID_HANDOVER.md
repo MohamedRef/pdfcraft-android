@@ -1,5 +1,9 @@
 # PdfCraft Android - development handover
 
+## Next-batch preparation — read-only page backgrounds
+
+Branch `feat/android-page-backdrop-inspection` adds File details → Page backgrounds using the existing `doc_backdrops` tool in opt-in groups of up to 24 pages. Native bridge regression passed locally on Rust 1.99.0 (white fill/image/blank classification, scoped pages, invalid input, unchanged document state/source bytes), as did source provenance. Android current-head CI and manual routing/RTL/large-file/device QA are still required; no merge or APK claim. See [Android background inspection](ANDROID_PAGE_BACKDROPS.md). This separate preparation does not close opening latency, Samsung QA or the draft bookmark/tablet integrations.
+
 ## LIVE CHECKPOINT — 2026-11-06: signed S Pen beta published, profiler merged
 
 **This section supersedes older checkpoint text below that says the beta is unpublished or performance instrumentation is draft. Keep historical notes for audit.**
