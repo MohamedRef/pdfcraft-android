@@ -120,3 +120,14 @@ Stylus scope: pen input owns its pointer, palm/finger contact does not cancel or
 Reference behavior: https://feedback.xodo.com/support/solutions/articles/35000202905-stylus-and-fingers and https://feedback.xodo.com/support/solutions/articles/35000202835-adding-an-ink-annotation . Pressure reference: https://feedback.xodo.com/support/solutions/articles/35000202927-how-to-enable-pressure-for-ink- . Long-term parity must be tracked feature by feature; no claim to all Xodo capabilities or assets.
 
 - Stylus-only PR updated on provider #13 → standalone native #16 → current main with merged CI #17 / release notes #18. Source diff remains stylus routing/preferences/tests only. No per-PR APK; full signed packaging once after merged features.
+
+### Batch 1 third increment — ink appearance persistence (2026-11-06)
+
+- Current mobile ink preview and export used the latest global pen style for all uncommitted strokes. Capture color, opacity, width and author at stroke start instead; preview and saved PDF annotations use that immutable appearance through undo/redo.
+- Export groups only adjacent same-page/same-appearance strokes, keeping red/blue/red overlap order intact; global grouping by style would reorder overlapping ink. Existing native Ink annotation tools remain unchanged and editable; no flattening or pressure claim. Added JVM regressions for consecutive grouping, multi-page/style boundaries and immutable style transitions.
+- Based on main `172be4b` as an independent third PR alongside #13 and #14. Integration must merge latest main into each remaining PR and rerun gates after earlier batch merges. No new version branding in this PR: preserve the release version selected by integrated main.
+- Next stylus backlog: pressure-preserving PDF appearances, real stroke eraser + physical eraser/button mapping, hover, historical/coalesced input and cancellation/device traces; then lasso/move/resize, favorites and handwriting. Existing text markup, notes, voice, forms/signatures and undo are retained. Xodo parity is a roadmap, not a verified current claim.
+
+- Integrated #13 and #14 into the third PR; CI now validates all three increments together. Retarget to main after prior sequential merges only if the resulting tested source tree is unchanged; otherwise rerun checks.
+
+- Ink-only PR updated to the complete current stack: #16 native → #13 provider → #14 stylus → #15 ink appearance, inheriting already merged CI #17 and release notes #18. Each source diff remains separate. Required current-head gates are Rust/provenance + Android JVM + Merge gate (Rust and Android). No additional APK until this complete stack is merged; then manually dispatch one signed ARM64 release.
