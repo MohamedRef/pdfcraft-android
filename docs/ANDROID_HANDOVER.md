@@ -89,3 +89,14 @@ Read this file and the full mandatory audit. Inspect live GitHub. The last confi
 ### Categorized release notes — separate change
 
 Owner requires every release to explain features, fixes and improvements. Enable GitHub generated notes grouped by enhancement/bug/performance labels; preserve source/build identity, signing/hash gates and manual-batch release policy inherited from the CI PR. Durable rule added to AGENTS.md. Supplement generated notes with actual behavior, known issues and evidence limits before user handoff. No product/native change; no APK rebuild needed for notes alone. Public beta.8 notes already record owner's negative large-file performance result, with unchanged APK bytes.
+
+### Measured native opening work on the supplied encrypted PDF
+
+- Local profiling found standalone document-timestamp discovery decrypting unrelated image stream payloads. Added a bounded raw-metadata scan using the existing parser and stream-boundary validation; names/keys (not encrypted PDF strings) identify candidates. Every match is then loaded/decrypted and validated through the original path. Compressed, edited, repaired and uncertain objects retain the normal reader; no signature/security feature disabled.
+- Initial direct-value-only prototype failed the existing incomplete-stream-cache regression and was corrected **before publication** to use the original raw stream parser. Malformed stream boundaries still report errors and cannot be cached as a complete scan. Added differential escaped-name/AES128/AES256 and unreadable timestamp stream regressions.
+- Local `cargo +1.99.0 test --locked -p pdfcraft-sign -p pdfcraft-cos`: **333 passed, 0 failed, 5 ignored** (7 test/doctest result groups). Updated only three narrow engine-source provenance exceptions with reasons; stable upstream SHA unchanged. New exact-head CI and final host timings still required before merge.
+- The supplied file is encrypted with no repair notes; host native opens before this fix were roughly 2.5–4.4 seconds, while raster generation was around 0.07–0.12 seconds. These are host dev/optimized timings, not controlled Android benchmark results. Original file bytes are never committed or redistributed. Android provider file-name discrepancy is not reproduced in native host API.
+
+- This native fix is isolated from provider copying, stylus, ink appearance and CI policy per owner instruction. Final local host probe on supplied encrypted file: MobileSession open 1848/1871/1918 ms, first raster 74/72/76 ms; prior uncontrolled host samples roughly 2.5–4.4 s. No Samsung speed-up claim.
+
+- Native PR updated against main `a6968a3` after verified CI-policy #17 and notes #18 merges. Current required gates are Rust/provenance + Android JVM + Merge gate (Rust and Android); no per-PR APK. Native code remains isolated from provider/stylus/ink features.
