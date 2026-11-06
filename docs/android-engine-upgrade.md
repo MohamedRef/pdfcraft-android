@@ -17,6 +17,15 @@ The current upstream and Android trees are **not interchangeable**: in the `crat
 4. **Validate Android-specific behavior**: both ARM ABIs, model files, 16 KB page compatibility, runtime native loading, encryption/owner permissions, malformed inputs, huge PDFs, page tiles, edits/undo, all save/reopen paths, SAF/MediaStore write failures, and trim-memory/process recreation. Include device/emulator smoke tests in GitHub Actions before calling a release stable. A successful unit build by itself is not proof of runtime stability.
 5. **Expand features last**, keeping desktop-only functionality optional. Validate any OCR/font/3D dependencies on Android, not just Linux CI. Keep the custom package ID and the existing private release keystore unchanged for in-place updates of PdfCraft Custom.
 
+
+## Phase 1A: bounded JBIG2 decoding port (stacked PR)
+
+Imported the 12 changed source files of the complete vendored `hayro-jbig2` crate from upstream `5aaa8186fd88d4c59f139665ff7809bd03775626` (same `hayro-jbig2 0.3.0` manifest, no new external dependencies). These backports cover retained bitmaps/contexts, segment count and references, work accounting and bounded halftone/symbol decoding. They belong together: taking one decoder file without the others breaks the internal decode signatures and limits.
+
+The Android fork continues to use the pinned older `hayro-interpret` and `pdfcraft-render` until a separate, coherent renderer upgrade passes tests. The public `Image::decode` / `Image::decode_with` entry points remain. PR CI runs the embedded `hayro-jbig2` unit tests and full `pdfcraft-render` tests, plus the Android Kotlin/JNA build.
+
+**Do not treat this as an entire 0.18.1 engine upgrade.** After CI passes, validate repeated hostile JBIG2 files on emulator, memory pressure, and that image decoding and fallback remain correct.
+
 ## Required CI gates
 
 PRs run Rust regression suites for `pdfcraft-cos`, `pdfcraft-engine`, and `pdfcraft-android` plus the Android JVM/NDK build tests. The APK signing job runs only outside PRs, and verifies both signing certificate and application ID. No debug-signed APK may masquerade as an upgrade.
