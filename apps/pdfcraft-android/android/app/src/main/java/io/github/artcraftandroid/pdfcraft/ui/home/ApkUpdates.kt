@@ -33,9 +33,11 @@ internal fun updateVersionBase(version: String): Long? {
     val major = match.groupValues[1].toLongOrNull() ?: return null
     val minor = match.groupValues[2].toLongOrNull() ?: return null
     val patch = match.groupValues[3].toLongOrNull() ?: return null
-    val pre = if (match.groupValues[4].isEmpty()) 99L
-        else match.groupValues[6].toLongOrNull() ?: 1L
-    if (minor !in 0..99 || patch !in 0..99 || (pre != 99L && pre !in 1..98)) return null
+    // Gradle reserves 99 exclusively for a stable release. Prerelease numbers must be 1..98.
+    val prerelease = match.groupValues[4].isNotEmpty()
+    val pre = if (prerelease) match.groupValues[6].toLongOrNull() ?: 1L else 99L
+    if (minor !in 0..99 || patch !in 0..99) return null
+    if (prerelease && pre !in 1..98) return null
     return ((major * 100 + minor) * 100 + patch) * 100 + pre
 }
 
