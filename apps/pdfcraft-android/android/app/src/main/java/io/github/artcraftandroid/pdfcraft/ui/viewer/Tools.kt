@@ -152,6 +152,24 @@ fun Modifier.toolGestures(
         var lastPressure = down.pressure
         if (one) onDown(last, lastPressure, activePen)
         if (eraseOne) onEraserDown(last)
+        fun dispatchPenMotion(change: androidx.compose.ui.input.pointer.PointerInputChange) {
+            val nextPressure = change.pressure.takeIf { it.isFinite() && it > 0f } ?: lastPressure
+            val samples = stylusMotionPoints(
+                previousPosition = change.previousPosition,
+                position = change.position,
+                previousTime = change.previousUptimeMillis,
+                currentTime = change.uptimeMillis,
+                previousPressure = lastPressure,
+                pressure = nextPressure,
+                history = change.historical.map { StylusHistoryPoint(it.uptimeMillis, it.position) },
+            )
+            for (sample in samples) {
+                moved = true
+                last = sample.position
+                if (eraseOne) onEraserMove(last) else if (one) onMove(last, sample.pressure, true)
+            }
+            lastPressure = nextPressure
+        }
         try {
             while (true) {
                 val event = awaitPointerEvent()
@@ -189,22 +207,15 @@ fun Modifier.toolGestures(
                             if (eraseOne) onEraserCancel()
                             one = false
                             eraseOne = false
-                        } else if (active != null && active.positionChanged()) {
-                            last = active.position
-                            if (eraseOne) onEraserMove(last) else if (one) onMove(last, lastPressure, true)
+                        } else if (active != null && (active.positionChanged() || active.historical.isNotEmpty())) {
+                            dispatchPenMotion(active)
                         }
                         break
                     }
-                    if (active.positionChanged()) {
-                        last = active.position
-                        moved = true
-                        if (eraseOne) {
-                            onEraserMove(last)
-                        } else if (one) {
-                            // Some devices report zero pressure on pen-up; avoid a thick tail.
-                            if (active.pressure.isFinite() && active.pressure > 0f) lastPressure = active.pressure
-                            onMove(last, lastPressure, true)
-                        }
+                    if (active.positionChanged() || active.historical.isNotEmpty()) {
+                        // HistoricalChange has time/position but not hardware pressure.
+                        // Preserve all valid ordered intermediate points on this active S Pen.
+                        dispatchPenMotion(active)
                     }
                     event.changes.forEach { it.consume() }
                     continue
