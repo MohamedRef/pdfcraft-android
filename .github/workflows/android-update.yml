@@ -98,7 +98,7 @@ jobs:
           test -s "$apk" || { echo "::error::APK file not produced for $ABI"; exit 1; }
           tools="$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -n 1)"
           "${tools}apksigner" verify --print-certs "$apk" > "$RUNNER_TEMP/apk-certs.txt"
-          grep -q 'certificate DN: CN=Android Debug' "$RUNNER_TEMP/apk-certs.txt" || {
+          grep -Eq 'certificate DN:.*CN=Android Debug([,[:space:]]|$)' "$RUNNER_TEMP/apk-certs.txt" || {
             echo "::error::PR smoke APK must have the temporary Android debug signature, not the production signing key"
             exit 1
           }
@@ -196,21 +196,19 @@ jobs:
             if [ "$abi" = armeabi-v7a ]; then suffix="-armeabi-v7a"; fi
             cp app/build/outputs/apk/release/app-release.apk "$GITHUB_WORKSPACE/dist/pdfcraft-custom-$version$suffix.apk"
           done
-      - name: Verify stable personal certificate and app ID
-        env:
-          PDFCRAFT_CERT_SHA256: ${{ vars.PDFCRAFT_CERT_SHA256 }}
+      - name: Verify release APK matches validated signing certificate and app ID
         run: |
           tools="$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -n 1)"
           signer="${tools}apksigner"
           aapt="${tools}aapt"
           for apk in dist/*.apk; do
             "$signer" verify --print-certs "$apk" > "$RUNNER_TEMP/certs.txt"
-            expected_cert="$(printf '%s' "$PDFCRAFT_CERT_SHA256" | tr -d ':[:space:]' | tr '[:upper:]' '[:lower:]')"
+            expected_cert="${PDFCRAFT_SIGNING_CERT_SHA256:-}"
             if ! [[ "$expected_cert" =~ ^[0-9a-f]{64}$ ]]; then
-              echo '::error::PDFCRAFT_CERT_SHA256 Actions variable must be a valid SHA-256 fingerprint'
+              echo '::error::Signing preflight did not export a valid certificate fingerprint'
               exit 1
             fi
-            grep -qiF "$expected_cert" "$RUNNER_TEMP/certs.txt" || { echo '::error::Wrong personal signing certificate'; exit 1; }
+            grep -qiF "$expected_cert" "$RUNNER_TEMP/certs.txt" || { echo '::error::APK certificate does not match the validated PKCS12 keystore'; exit 1; }
             "$aapt" dump badging "$apk" | grep -q "name='io.github.mohamedref.pdfcraft'" || { echo '::error::Wrong application ID'; exit 1; }
             "$aapt" dump badging "$apk" | grep -q "versionCode='[1-9][0-9]*'" || { echo '::error::Invalid version code'; exit 1; }
           done
