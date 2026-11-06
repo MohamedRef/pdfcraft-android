@@ -321,6 +321,55 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
             }
         }
     }
+    var eraserPage by remember { mutableStateOf<Int?>(null) }
+    val eraserPoints = remember { mutableStateListOf<Offset>() }
+    var eraserScreen by remember { mutableStateOf<Offset?>(null) }
+
+    fun beginErase(p: Offset) {
+        val at = doc.viewer.screenToPage(p) ?: return
+        // Queue all pending freehand ink first. The native eraser then sees the just-drawn
+        // annotations on the same serial engine dispatcher, not a stale UI comment list.
+        doc.commitTool?.invoke()
+        current = null
+        eraserPage = at.page
+        eraserScreen = p
+        eraserPoints.clear()
+        eraserPoints.add(Offset(at.x, at.y))
+    }
+
+    fun moveErase(p: Offset) {
+        val page = eraserPage ?: return
+        val at = doc.viewer.screenToPage(p, nearest = true) ?: return
+        if (at.page != page) return
+        eraserScreen = p
+        val pt = Offset(at.x, at.y)
+        if (eraserPoints.lastOrNull() == pt) return
+        // Bound native work while preserving every region of a long hand gesture.
+        if (eraserPoints.size >= 512) {
+            val sampled = eraserPoints.filterIndexed { index, _ -> index % 2 == 0 }
+            eraserPoints.clear()
+            eraserPoints.addAll(sampled)
+        }
+        eraserPoints.add(pt)
+    }
+
+    fun cancelErase() {
+        eraserPage = null
+        eraserScreen = null
+        eraserPoints.clear()
+    }
+
+    fun finishErase(p: Offset) {
+        val page = eraserPage ?: return
+        moveErase(p)
+        val path = eraserPoints.map { listOf(it.x.toDouble(), it.y.toDouble()) }
+        cancelErase()
+        if (path.isNotEmpty()) {
+            // One native Edit::Batch per gesture, preserving one document-level undo step.
+            vm.runTool(doc, "comment_erase", mapOf("page" to page + 1, "path" to path, "radius" to 8.0))
+        }
+    }
+
     Box(
         Modifier.fillMaxSize().toolGestures(
             doc,
