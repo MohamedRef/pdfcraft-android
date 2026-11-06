@@ -223,6 +223,11 @@ fun BookmarksSheet(vm: AppViewModel, doc: OpenDocument) {
                 stringResource(R.string.sheet_import_embedded_bookmarks),
                 { vm.pickEmbeddedBookmarksImport(doc) },
             )
+            SheetRow(
+                LucideIcons.Copy,
+                stringResource(R.string.sheet_copy_embedded_bookmarks),
+                { vm.pickEmbeddedBookmarksCopy(doc) },
+            )
         }
         if (tab == 0) {
             val all = outline
