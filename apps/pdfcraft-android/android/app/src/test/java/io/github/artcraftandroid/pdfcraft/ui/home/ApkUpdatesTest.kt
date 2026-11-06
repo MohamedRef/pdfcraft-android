@@ -11,7 +11,7 @@ class ApkUpdatesTest {
         assertEquals(199L, updateVersionBase("0.0.1"))
         assertEquals(10001L, updateVersionBase("0.1.0-alpha"))
         assertNull(updateVersionBase("1.100.0"))
-        assertEquals(10000098L, updateVersionBase("1.0.0-beta.98"))
+        assertEquals(1000098L, updateVersionBase("1.0.0-beta.98"))
         assertNull(updateVersionBase("1.0.0-beta.99"))
         assertNull(updateVersionBase("1.0.0-preview.0"))
         assertNull(updateVersionBase("1.0.0-alpha.100"))
