@@ -24,6 +24,8 @@ import io.github.artcraftandroid.pdfcraft.ui.viewer.PagePoint
 import io.github.artcraftandroid.pdfcraft.ui.viewer.ReadAloud
 import io.github.artcraftandroid.pdfcraft.ui.viewer.ViewerTool
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.flow.first
 import org.json.JSONObject
 import android.app.Application
@@ -92,6 +94,9 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         private set
 
     val messages = Channel<Message>(Channel.BUFFERED)
+
+    /** Avoid overlapping onPause, close, and manual saves to a single provider URI. */
+    private val saveMutex = Mutex()
 
     /** How many bytes of page images to keep: an eighth of the app's heap, between 32 and 192 MB. */
     private val imageBudget: Int = run {
@@ -212,7 +217,13 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
 
     private suspend fun openFile(eng: Engine, uri: Uri, file: File, password: String?) {
         try {
-            document?.let { saveAndClose(eng, it) }
+            document?.let { current ->
+                if (!saveAndClose(eng, current)) {
+                    readOnlyPrompt = current
+                    return
+                }
+                document = null
+            }
             val info = eng.command { open(file.absolutePath, password) }
             val images = PageImages(eng, info.id, viewModelScope, imageBudget)
             val source = uri.takeIf { it.scheme == "content" || it.scheme == "file" }
@@ -222,6 +233,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 recents.list().firstOrNull { it.uri == uri.toString() } to (source == null || files.canWrite(source))
             }
             doc.writable = writable
+            doc.notWrittenBack = source?.let { withContext(Dispatchers.IO) { files.hasPendingWriteBack(it) } } ?: false
             loadLinks(eng, doc)
             doc.controller.nightMode = savedNightMode
             if (savedPageMode != doc.viewer.mode) doc.viewer.switchMode(savedPageMode)
@@ -267,13 +279,12 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         val eng = engine ?: return
         if (doc.controller.tool != ViewerTool.None) leaveTool(doc)
         viewModelScope.launch {
-            // changes the file's place can't take (known read-only, or found so now) are offered as a copy
-            if ((doc.info.dirty || doc.notWrittenBack) && (!doc.writable || !save(doc, quiet = true))) {
+            // Never dispose of a working document until a provider accepted the saved bytes.
+            if (!saveAndClose(eng, doc)) {
                 readOnlyPrompt = doc
                 return@launch
             }
             document = null
-            saveAndClose(eng, doc)
             readingMode = false
             refreshRecents()
             if (doc.fromOtherApp) leave.trySend(Unit)
@@ -306,7 +317,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         }
     }
 
-    private suspend fun saveAndClose(eng: Engine, doc: OpenDocument) {
+    private suspend fun saveAndClose(eng: Engine, doc: OpenDocument): Boolean {
         val reading = readingMode
         val pending = pendingPage
         // the spot at the screen's top-left and the zoom, to reopen there (as the reference does)
@@ -322,12 +333,13 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 }
             }
         }
-        save(doc)
+        if (!save(doc, quiet = true)) return false
         // Recent shows the size the file has now, not the size it had when opened
         withContext(Dispatchers.IO) {
             doc.source?.let { src -> files.size(src)?.let { size -> recents.update(src.toString()) { it.copy(size = size) } } }
         }
         closeQuietly(eng, doc)
+        return true
     }
 
     private suspend fun closeQuietly(eng: Engine, doc: OpenDocument) {
@@ -350,22 +362,32 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
      * valid), then back over the file it came from when the app may write there. Returns
      * whether the changes reached the original; [quiet] leaves a failure's message to the caller.
      */
-    suspend fun save(doc: OpenDocument, quiet: Boolean = false): Boolean {
-        val eng = engine ?: return false
-        if (!doc.info.dirty && !doc.notWrittenBack) return true
-        return try {
+    suspend fun save(doc: OpenDocument, quiet: Boolean = false): Boolean = saveMutex.withLock {
+        val eng = engine ?: return@withLock false
+        if (!doc.info.dirty && !doc.notWrittenBack) return@withLock true
+        try {
             if (doc.info.dirty) eng.tool("doc_save", mapOf("doc" to doc.id))
             refresh(doc)
             val src = doc.source
             if (src != null && src.scheme == "content") {
+                // The provider may truncate its original before writing fails. Mark the
+                // app-owned working copy first, and clear only after the stream closes.
+                withContext(Dispatchers.IO) { files.markPendingWriteBack(src) }
                 if (!doc.writable) {
                     doc.notWrittenBack = true
-                    return false
+                    return@withLock false
                 }
-                withContext(Dispatchers.IO) { files.writeBack(doc.file, src) }
+                withContext(Dispatchers.IO) {
+                    files.writeBack(doc.file, src)
+                    files.clearPendingWriteBack(src)
+                }
             } else if (src != null && src.scheme == "file") {
                 val target = File(requireNotNull(src.path))
-                if (target.canonicalPath != doc.file.canonicalPath) withContext(Dispatchers.IO) { doc.file.copyTo(target, overwrite = true) }
+                if (target.canonicalPath != doc.file.canonicalPath) withContext(Dispatchers.IO) {
+                    files.markPendingWriteBack(src)
+                    doc.file.copyTo(target, overwrite = true)
+                    files.clearPendingWriteBack(src)
+                }
             }
             doc.notWrittenBack = false
             true
@@ -653,7 +675,12 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             try {
                 // a read-only source can't take the changes, but the working copy has them all
                 if (doc.info.dirty) engine?.tool("doc_save", mapOf("doc" to doc.id))
-                withContext(Dispatchers.IO) { files.writeBack(doc.file, target) }
+                withContext(Dispatchers.IO) {
+                    files.writeBack(doc.file, target)
+                    // When Save a copy resolves the close prompt, the recovery is now safe.
+                    if (then != null) doc.source?.let { files.clearPendingWriteBack(it) }
+                }
+                if (then != null) doc.notWrittenBack = false
                 refresh(doc)
                 tell(text(R.string.msg_saved_copy))
                 then?.invoke()
