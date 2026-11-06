@@ -10,10 +10,9 @@
 </p>
 
 <p align="center">
-  <a href="https://f-droid.org/en/packages/io.github.artcraftandroid.pdfcraft/"><img src="https://fdroid.gitlab.io/artwork/badge/get-it-on.png" alt="Get it on F-Droid" height="60"></a>
-  <a href="https://github.com/artcraft-android/pdfcraft-android/releases"><img src="https://raw.githubusercontent.com/Kunzisoft/Github-badge/main/get-it-on-github.png" alt="Get it on GitHub" height="60"></a>
-  <a href="https://apps.obtainium.imranr.dev/redirect?r=obtainium://add/https://github.com/artcraft-android/pdfcraft-android"><img src="https://raw.githubusercontent.com/ImranR98/Obtainium/main/assets/graphics/badge_obtainium.png" alt="Get it on Obtainium" height="60"></a>
-  <br><sub>Each release has two APKs: the plain one for most phones, the <code>-armeabi-v7a</code> one for 32-bit ARM phones.</sub>
+  <a href="https://github.com/MohamedRef/pdfcraft-android/releases"><img src="https://raw.githubusercontent.com/Kunzisoft/Github-badge/main/get-it-on-github.png" alt="Get this fork on GitHub" height="60"></a>
+  <a href="https://apps.obtainium.imranr.dev/redirect?r=obtainium://add/https://github.com/MohamedRef/pdfcraft-android"><img src="https://raw.githubusercontent.com/ImranR98/Obtainium/main/assets/graphics/badge_obtainium.png" alt="Track this fork with Obtainium" height="60"></a>
+  <br><sub>This fork currently publishes one permanently signed <code>arm64-v8a</code> APK per release. The original project's F-Droid listing and APKs are separate and must not be treated as updates for this app.</sub>
 </p>
 
 <p align="center">
@@ -26,6 +25,7 @@
 </p>
 
 <p align="center">
+  <a href="#desktop-engine-parity-and-current-release">Engine parity &amp; releases</a> ·
   <a href="#reading">Reading</a> ·
   <a href="#navigate-long-documents">Navigate</a> ·
   <a href="#comments">Comments</a> ·
@@ -47,6 +47,31 @@
   <br>
   <sub>The PdfCraft Showcase, a 13-page specimen PDF, open on its cover.</sub>
 </p>
+
+<br>
+
+## Desktop engine parity and current release
+
+**Latest verified public APK:** [PdfCraft Android 0.0.9-beta.1 (9012)](https://github.com/MohamedRef/pdfcraft-android/releases/tag/v0.0.9-beta.1), a permanently signed `arm64-v8a` prerelease with a SHA-256 sidecar. **Next sequential version: `0.0.10-beta.1 (10012)`**, currently in release-numbering correction and **not published yet**. Do not try to install a CI artifact or a differently signed upstream APK as an update. The app's update checker uses this fork's published GitHub Releases.
+
+The mobile Rust engine is based on the original [storytold/pdfcraft **v0.18.2**](https://github.com/storytold/pdfcraft/releases/tag/v0.18.2), pinned to commit `7faa4f35cefb0dea04137ec475bdc770945c22cd`. Its reviewed stable-source import contains **32 mobile-suitable crates** and **nine vendor patches** protected by a CI provenance lock. The internal Rust workspace's `0.14.0` package version remains different from that pinned upstream **source baseline** and from the Android app's APK version.
+
+| Parity scope | Source-level comparison with desktop v0.18.2 | Remaining work / limitation |
+| --- | --- | --- |
+| Headless command-name coverage | **187/189 (98.9%)** desktop tool names also exist in Android | This is **not** an end-user feature parity percentage |
+| Shared command definitions | **186/187** match textually ignoring whitespace | `comment_add` has an intentional Android Sound/WAV adaptation; identical definitions do not prove identical runtime behavior |
+| Deliberately deferred | `model_add`, `model_render` | 3D/PRC rendering is excluded pending memory, ABI and device evaluation |
+| Android-only commands | `photo_find_document`, `comment_erase` | Preserved mobile document-finding and real Ink Eraser additions |
+| Bookmark support | Native `bookmark_export`, `bookmark_import`, `bookmark_copy` are present | Android currently shows PDF contents and keeps user bookmarks separately; full embedded-outline import/export/copy UI and SAF workflow need testing and integration |
+| Other mobile-suitable tools | `text_styles`, `bookmark_from_text_styles`, `doc_backdrops`, `text_script`, `doc_bates_multi` | Native command presence is **not proof** of a usable Android UI or safe provider workflow |
+
+**S Pen work on `main`:** [PR #19](https://github.com/MohamedRef/pdfcraft-android/pull/19) pressure-sensitive ink, [#20](https://github.com/MohamedRef/pdfcraft-android/pull/20) editable PDF Ink Eraser, and [#21](https://github.com/MohamedRef/pdfcraft-android/pull/21) hover preview with bounded historical points have all merged and passed source-level automated checks. **They are not part of the published beta.1 (9012)** and have **not been physically verified** on Samsung Galaxy S24 Ultra or Galaxy Tab S11.
+
+**Outstanding opening-performance issue:** The owner still reports that large PDFs open noticeably slower than Xodo. Previous native/SAF changes have **not** demonstrated improved device time-to-first-page. Keep the problem open until controlled profiling and real-device comparisons demonstrate a meaningful improvement. Do not sacrifice safe working copies, source files, signatures or memory bounds to claim better speed.
+
+**Sequential roadmap:** First finish and publish **one** correctly numbered S Pen beta after CI/signature/manifest/hash checks; then address first-page opening time in its own PR. After those gates, build Android-native import/export/copy of PDF outline bookmarks using existing stable Rust tooling, followed by text styles, backdrop inspection, text scripts and multi-document Bates in separate tested PRs. Desktop-only `egui` and unreleased upstream `main` additions are not automatically mobile features.
+
+Development truth and verification evidence: [Android handover](docs/ANDROID_HANDOVER.md) and [v0.18.2 engine parity audit](https://github.com/MohamedRef/pdfcraft-android/blob/sync/storytold-0182-android-safe/docs/android-desktop-engine-parity-0.18.2.md).
 
 <br>
 
@@ -216,6 +241,8 @@ PdfCraft for Android is in beta.
 | Export to Word, RTF, Excel, PowerPoint, JPEG and PNG | ✅ · Word 97 ⬜ |
 | Recognize text | ✅ (the Latin alphabet without accents) |
 | A customizable quick toolbar, upright and sideways layouts, light and dark themes | ✅ |
+| S Pen pressure-sensitive ink, editable eraser, hover and historical input | 🚧 merged into main, pending signed beta and device verification |
+| About-screen GitHub Releases update checker | ✅ source implemented; device installation/upgrade test not yet verified |
 | A mouse and a keyboard: the wheel scrolls and zooms, a drag selects text, shortcuts; zoom buttons on DeX and Chromebooks | ✅ · a tablet layout ⬜ |
 | Extra Features in Preferences, off until you turn them on: the status bar in documents, the number of search results | ✅ |
 | Translations: all of the app's text is ready to translate ([how](#translating)) | ✅ · Spanish, German, French, Italian, Brazilian Portuguese and Arabic ✅ · other languages ⬜ |
@@ -246,7 +273,7 @@ Build time dependencies:
   ```
 </details>
 
-*Builds are only tested on Windows 11.*
+*Rust/provenance and Android JVM checks also run in GitHub Actions. Signed release APKs use this fork's permanent Android signing key. Physical Samsung device and SAF/provider edge-case testing remain separate.*
 
 <br>
 
