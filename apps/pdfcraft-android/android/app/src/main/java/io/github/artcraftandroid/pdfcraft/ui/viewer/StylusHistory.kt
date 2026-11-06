@@ -32,13 +32,15 @@ internal fun stylusMotionPoints(
     var lastPosition = previousPosition
     var lastTime = previousTime
     if (currentTime > previousTime) {
+        // Sample before sorting: even a maliciously huge history allocates at most 64 points.
+        val stride = ((history.size + MAX_STYLUS_HISTORY_POINTS - 1) / MAX_STYLUS_HISTORY_POINTS).coerceAtLeast(1)
         val ordered = history.asSequence()
+            .filterIndexed { index, _ -> index % stride == 0 }
             .filter { it.uptimeMillis > previousTime && it.uptimeMillis < currentTime && valid(it.position) }
             .sortedBy { it.uptimeMillis }
             .toList()
-        val stride = ((ordered.size + MAX_STYLUS_HISTORY_POINTS - 1) / MAX_STYLUS_HISTORY_POINTS).coerceAtLeast(1)
-        for ((i, point) in ordered.withIndex()) {
-            if (i % stride != 0 || point.uptimeMillis <= lastTime || point.position == lastPosition) continue
+        for (point in ordered) {
+            if (point.uptimeMillis <= lastTime || point.position == lastPosition) continue
             val fraction = ((point.uptimeMillis - previousTime).toDouble() / (currentTime - previousTime).toDouble()).toFloat()
             points += StylusMotionPoint(point.uptimeMillis, point.position, prev + (now - prev) * fraction)
             lastPosition = point.position
