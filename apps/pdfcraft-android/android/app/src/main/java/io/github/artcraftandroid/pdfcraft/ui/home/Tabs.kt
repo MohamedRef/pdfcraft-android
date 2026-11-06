@@ -436,12 +436,16 @@ private fun About(vm: AppViewModel) {
     Section("App updates")
     val updateScope = rememberCoroutineScope()
     var checking by remember { mutableStateOf(false) }
+    var downloading by remember { mutableStateOf(false) }
+    var downloadPercent by remember { mutableStateOf(0) }
+    var verifiedApk by remember { mutableStateOf<java.io.File?>(null) }
     var update by remember { mutableStateOf<ApkUpdate?>(null) }
     var updateMessage by remember { mutableStateOf<String?>(null) }
     SheetRow(LucideIcons.RotateCw, if (checking) "Checking GitHub Releases…" else "Check for updates", {
         if (!checking) {
             checking = true
             updateMessage = null
+            verifiedApk = null
             updateScope.launch {
                 try {
                     update = fetchApkUpdates(installedVersionCode(context)).firstOrNull()
@@ -473,14 +477,39 @@ private fun About(vm: AppViewModel) {
                 modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
             )
         }
-        SheetRow(LucideIcons.FileDown, "Download APK", {
-            try {
-                downloadApkUpdate(context, candidate)
-                updateMessage = "Download started. Open Downloads when it finishes to install."
-            } catch (e: Exception) {
-                updateMessage = "Download could not start. Please try again."
-            }
-        })
+        if (verifiedApk == null) {
+            SheetRow(LucideIcons.FileDown, if (downloading) "Downloading & verifying… ${downloadPercent}%" else "Download APK", {
+                if (!downloading) {
+                    downloading = true
+                    downloadPercent = 0
+                    updateMessage = null
+                    updateScope.launch {
+                        try {
+                            verifiedApk = downloadAndVerifyApk(context, candidate) { percent ->
+                                downloadPercent = percent
+                            }
+                            updateMessage = "APK verified. Tap Install APK to continue."
+                        } catch (e: Exception) {
+                            verifiedApk = null
+                            updateMessage = e.message ?: "APK download or verification failed. Please retry."
+                        } finally {
+                            downloading = false
+                        }
+                    }
+                }
+            })
+        }
+        verifiedApk?.let { apk ->
+            SheetRow(LucideIcons.Check, "Install verified APK", {
+                try {
+                    val launched = openVerifiedApkInstaller(context, apk)
+                    updateMessage = if (launched) "Confirm installation in Android's installer."
+                        else "Allow PdfCraft to install updates in Settings, then tap Install verified APK again."
+                } catch (e: Exception) {
+                    updateMessage = e.message ?: "Android could not open the APK installer."
+                }
+            })
+        }
     }
     updateMessage?.let { message ->
         Text(message, color = c.textSecondary, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp))
