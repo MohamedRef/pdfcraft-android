@@ -460,8 +460,10 @@ fn form_scripts_run_when_fields_are_filled_and_buttons_pressed() {
     let actions = run("form_actions", json!({"doc": doc, "field": "double"}));
     let script = actions["actions"][0]["javascript"].as_str().unwrap().to_owned();
     let pressed = run("js_run", json!({"doc": doc, "field": "double", "script": script}));
-    assert_eq!(pressed["alerts"], json!(["a is now 4"]), "{pressed}");
+    assert_eq!(pressed["alerts"].as_array().map(Vec::len), Some(1), "{pressed}");
+    assert_eq!(pressed["alerts"][0]["message"], "a is now 4", "{pressed}");
     assert_eq!(total(&s).as_deref(), Some("7"));
     let big = run("form_fill", json!({"doc": doc, "values": {"b": "8"}}));
-    assert_eq!(big["alerts"], json!(["Big"]), "{big}");
+    assert_eq!(big["alerts"].as_array().map(Vec::len), Some(1), "{big}");
+    assert_eq!(big["alerts"][0]["message"], "Big", "{big}");
 }

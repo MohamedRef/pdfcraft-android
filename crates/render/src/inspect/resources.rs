@@ -466,3 +466,113 @@ trailer << /Size 7 /Root 1 0 R >>
         assert_eq!((f.substitute.as_deref(), f.substitution.as_deref()), (None, None), "the document's own glyphs are shown");
     }
 }
+
+
+// Android/mobile audio compatibility (restored from this fork's previous stable render API).
+// Stream bytes are capped to avoid allocating unbounded WAV/PCM buffers on phones.
+const MAX_SOUND_BYTES: usize = 32 << 20;
+
+/// Decode a PDF Sound comment to a bounded PCM WAV for Android's audio player.
+/// This is intentionally kept out of the original desktop engine's processing paths.
+pub fn sound_wav(bytes: &[u8], password: Option<&str>, page: usize, index: usize) -> Result<Vec<u8>, String> {
+    let run = || -> Result<Vec<u8>, String> {
+        let options = load_options(password);
+        let doc = Document::load_mem_with_options(bytes, options).map_err(|e| e.to_string())?;
+        let insp = Inspector::new(&doc);
+        let (&pid, _) = insp.page_index.iter().find(|(_, i)| **i == page).ok_or("page not found")?;
+        let annots = doc.get_dictionary(pid).map_err(|e| e.to_string())?.get(b"Annots").map_err(|e| e.to_string())?;
+        let a = insp.resolve(annots).as_array().map_err(|e| e.to_string())?.get(index).ok_or("comment not found")?;
+        let sound = insp.dict(a).and_then(|d| d.get(b"Sound").ok()).ok_or("the comment has no recording")?;
+        let stream = insp.resolve(sound).as_stream().map_err(|_| "the recording is not a sound stream".to_string())?;
+        let num =
+            |k: &[u8]| stream.dict.get(k).ok().map(|o| insp.resolve(o)).and_then(|o| o.as_float().ok().or_else(|| o.as_i64().ok().map(|v| v as f32)));
+        let rate = num(b"R").filter(|r| r.is_finite() && *r >= 1.0 && *r <= 384_000.0).ok_or("the recording has no sampling rate")? as u32;
+        let channels = num(b"C").map_or(1, |c| if c.is_finite() { c.clamp(1.0, 8.0) as u16 } else { 1 });
+        let bits = num(b"B").map_or(8, |b| if b.is_finite() { b as u16 } else { 8 });
+        let encoding = stream.dict.get(b"E").ok().map(|o| insp.resolve(o)).and_then(|o| o.as_name().ok()).unwrap_or(b"Raw").to_vec();
+        let data = if stream.dict.get(b"Filter").is_ok() {
+            stream.decompressed_content_with_limit(MAX_SOUND_BYTES).map_err(|e| e.to_string())?
+        } else {
+            if stream.content.len() > MAX_SOUND_BYTES {
+                return Err("the recording exceeds the mobile 32 MiB audio limit".into());
+            }
+            stream.content.clone()
+        };
+        let (pcm, bits) = match (encoding.as_slice(), bits) {
+            (b"muLaw", _) => (data.iter().flat_map(|b| mu_law(*b).to_le_bytes()).collect::<Vec<u8>>(), 16),
+            (b"ALaw", _) => (data.iter().flat_map(|b| a_law(*b).to_le_bytes()).collect::<Vec<u8>>(), 16),
+            (b"Signed", 8) => (data.iter().map(|b| b ^ 0x80).collect(), 8),
+            (_, 8) => (data, 8),
+            (b"Signed", 16) => (data.as_chunks::<2>().0.iter().flat_map(|s| [s[1], s[0]]).collect(), 16),
+            // Raw (unsigned) 16-bit samples: flip the sign bit after swapping to little-endian.
+            (_, 16) => (data.as_chunks::<2>().0.iter().flat_map(|s| [s[1], s[0] ^ 0x80]).collect(), 16),
+            (_, b) => return Err(format!("{b}-bit recordings can't be played")),
+        };
+        Ok(wav(&pcm, rate, channels, bits))
+    };
+    catch_unwind(AssertUnwindSafe(run)).unwrap_or_else(|p| Err(format!("reading the recording crashed: {}", crate::raster::panic_message(&p))))
+}
+
+/// A WAV file of little-endian linear PCM.
+fn wav(pcm: &[u8], rate: u32, channels: u16, bits: u16) -> Vec<u8> {
+    let len = u32::try_from(pcm.len()).unwrap_or(u32::MAX - 36).min(u32::MAX - 36);
+    let block = channels.saturating_mul(bits / 8).max(1);
+    let mut w = Vec::with_capacity(pcm.len().saturating_add(44));
+    w.extend_from_slice(b"RIFF");
+    w.extend_from_slice(&(len + 36).to_le_bytes());
+    w.extend_from_slice(b"WAVEfmt ");
+    w.extend_from_slice(&16u32.to_le_bytes());
+    w.extend_from_slice(&1u16.to_le_bytes());
+    w.extend_from_slice(&channels.to_le_bytes());
+    w.extend_from_slice(&rate.to_le_bytes());
+    w.extend_from_slice(&rate.saturating_mul(u32::from(block)).to_le_bytes());
+    w.extend_from_slice(&block.to_le_bytes());
+    w.extend_from_slice(&bits.to_le_bytes());
+    w.extend_from_slice(b"data");
+    w.extend_from_slice(&len.to_le_bytes());
+    w.extend_from_slice(pcm.get(..len as usize).unwrap_or(pcm));
+    w
+}
+
+/// G.711 μ-law to 16-bit linear.
+fn mu_law(b: u8) -> i16 {
+    let u = !b;
+    let t = ((i32::from(u & 0x0F) << 3) + 0x84) << ((u & 0x70) >> 4);
+    (if u & 0x80 != 0 { 0x84 - t } else { t - 0x84 }) as i16
+}
+
+/// G.711 A-law to 16-bit linear.
+fn a_law(b: u8) -> i16 {
+    let a = b ^ 0x55;
+    let seg = (a & 0x70) >> 4;
+    let mut t = i32::from(a & 0x0F) << 4;
+    t = match seg {
+        0 => t + 8,
+        1 => t + 0x108,
+        s => (t + 0x108) << (s - 1),
+    };
+    (if a & 0x80 != 0 { t } else { -t }) as i16
+}
+
+#[cfg(test)]
+mod mobile_audio_compat_tests {
+    use super::{a_law, mu_law, sound_wav, wav};
+
+    #[test]
+    fn wav_contains_valid_mono_pcm_header() {
+        let data = wav(&[0, 127, 255], 8000, 1, 8);
+        assert_eq!(&data[..4], b"RIFF");
+        assert_eq!(&data[8..12], b"WAVE");
+        assert_eq!(u32::from_le_bytes(data[24..28].try_into().unwrap()), 8000);
+        assert_eq!(u16::from_le_bytes(data[34..36].try_into().unwrap()), 8);
+        assert_eq!(u32::from_le_bytes(data[40..44].try_into().unwrap()), 3);
+        assert_eq!(&data[44..], &[0, 127, 255]);
+    }
+
+    #[test]
+    fn sound_codecs_decode_to_pcm_without_panics() {
+        assert_eq!(mu_law(0xff), 0);
+        assert_eq!(a_law(0xd5), 8);
+        assert!(sound_wav(b"not a pdf", None, 0, 0).is_err());
+    }
+}

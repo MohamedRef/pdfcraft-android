@@ -9398,3 +9398,15 @@ fn a_stream_with_a_crypt_filter_of_its_own_is_drawn() {
         }
     }
 }
+
+
+/// The mobile UI overlays sticky notes but still needs other annotations rasterized.
+#[test]
+fn render_config_keeps_sticky_notes_separate_from_all_comments() {
+    let cfg = super::RenderConfig { hide_comments: false, hide_notes: true, ..Default::default() };
+    let settings = cfg.settings();
+    assert!(!settings.hide_comments);
+    assert!(settings.hide_notes);
+    let defaults = super::RenderConfig::default().settings();
+    assert!(!defaults.hide_comments && !defaults.hide_notes);
+}

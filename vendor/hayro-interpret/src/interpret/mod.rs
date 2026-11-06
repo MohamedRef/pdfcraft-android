@@ -108,6 +108,9 @@ pub struct InterpreterSettings {
     /// PdfCraft patch: hide comments (markup annotations) but keep form fields (`/Widget`)
     /// and links, for the viewer's "Hide all comments".
     pub hide_comments: bool,
+    /// Android compatibility: skip /Text sticky-note appearances but draw other markup.
+    /// Notes are overlaid by Android UI at constant screen size.
+    pub hide_notes: bool,
     /// PdfCraft patch: viewer overrides for optional content groups (object number, generation,
     /// visible), applied on top of the document's default configuration (Layers panel toggles).
     pub ocg_overrides: Arc<Vec<(i32, i32, bool)>>,
@@ -143,6 +146,7 @@ impl Default for InterpreterSettings {
             warning_sink: Arc::new(|_| {}),
             render_annotations: true,
             hide_comments: false,
+            hide_notes: false,
             ocg_overrides: Arc::new(Vec::new()),
             cancelled: None,
             preview: false,
@@ -221,6 +225,11 @@ pub fn interpret_page<'a>(
             if context.settings.hide_comments
                 && !matches!(annot.get::<hayro_syntax::object::Name<'_>>(SUBTYPE).as_deref(), Some(b"Widget" | b"Link"))
             {
+                continue;
+            }
+
+            // Keep Android's fixed-size sticky-note overlays without dropping ink/highlights.
+            if context.settings.hide_notes && annot.get::<hayro_syntax::object::Name<'_>>(SUBTYPE).as_deref() == Some(b"Text") {
                 continue;
             }
 
