@@ -28,6 +28,8 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           key: issue55-rust-tests
+      - name: Verify pinned upstream engine source
+        run: python3 scripts/verify_android_engine_source.py
       - name: Run Rust tests
         run: cargo test --locked -p pdfcraft-cos -p pdfcraft-create -p pdfcraft-sign -p pdfcraft-engine -p pdfcraft-render -p pdfcraft-android
 
