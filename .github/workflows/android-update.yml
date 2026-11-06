@@ -29,7 +29,7 @@ jobs:
         with:
           key: issue55-rust-tests
       - name: Run Rust tests
-        run: cargo test --locked -p pdfcraft-cos -p pdfcraft-engine -p pdfcraft-render -p pdfcraft-android
+        run: cargo test --locked -p pdfcraft-cos -p pdfcraft-create -p pdfcraft-sign -p pdfcraft-engine -p pdfcraft-render -p pdfcraft-android
 
   android-tests:
     runs-on: ubuntu-latest
