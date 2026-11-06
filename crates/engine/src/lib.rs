@@ -277,6 +277,16 @@ fn uses_scripts(edit: &Edit) -> bool {
     }
 }
 
+/// Deleting a page from an unsigned PDF must discard its old content on save.
+/// Ported from storytold/pdfcraft#4279, including nested batches.
+fn deletes_pages(edit: &Edit) -> bool {
+    match edit {
+        Edit::DeletePages { .. } => true,
+        Edit::Batch { edits, .. } => edits.iter().any(deletes_pages),
+        _ => false,
+    }
+}
+
 fn scope_of(edit: &Edit) -> Scope {
     match edit {
         Edit::SetInfo { .. } => Scope::Metadata,
@@ -4115,6 +4125,12 @@ impl Session {
         // Signed documents are only ever saved incrementally: an edit that needs a full rewrite
         // (applying redactions, changing security, sanitizing) would invalidate the signatures.
         // So does any edit to a file rebuilt from object headers: it has no chain to append to.
+        // Deleted pages remain in prior incremental revisions. For unsigned files, force
+        // a full rewrite so a saved file does not retain supposedly removed content.
+        // Signed files must keep the signed bytes, so their saves remain incremental.
+        if !signed && deletes_pages(&edit) {
+            next.require_full_save();
+        }
         let rewrites = |c: &pdfcraft_cos::Document| c.full_save_required() || c.encryption_changed();
         if signed && ((rewrites(&next) && !rewrites(&editor.cos)) || (next.is_modified() && next.revisions().is_empty())) {
             return Err(EditError::SignedRewrite(edit.label().to_string()));

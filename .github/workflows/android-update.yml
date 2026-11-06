@@ -2,7 +2,9 @@ name: PdfCraft Custom - tests and APK
 
 on:
   push:
-    branches: [main, feat/issue-55-file-details]
+    branches: [main]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -28,7 +30,7 @@ jobs:
         with:
           key: issue55-rust-tests
       - name: Run Rust tests
-        run: cargo test --locked -p pdfcraft-android
+        run: cargo test --locked -p pdfcraft-cos -p pdfcraft-engine -p pdfcraft-android
 
   android-tests:
     runs-on: ubuntu-latest
@@ -59,6 +61,7 @@ jobs:
           if-no-files-found: ignore
 
   signed-apk:
+    if: github.event_name != 'pull_request'
     needs: [rust-tests, android-tests]
     runs-on: ubuntu-latest
     timeout-minutes: 150
