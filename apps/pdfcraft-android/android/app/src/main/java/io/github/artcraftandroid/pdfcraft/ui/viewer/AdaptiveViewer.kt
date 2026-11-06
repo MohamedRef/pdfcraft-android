@@ -6,7 +6,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -14,7 +13,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
@@ -161,7 +159,11 @@ private fun ExpandedPageRail(doc: OpenDocument, onCollapse: () -> Unit) {
                 enabled = viewer.canZoomOut,
                 size = 42.dp,
             )
-            TextButton(onClick = { viewer.zoomTo(1f, focus) }) {
+            TextButton(onClick = {
+                val page = viewer.currentPage
+                viewer.zoomTo(1f, focus)
+                if (viewer.mode == PageMode.SinglePage) viewer.goToPage(page)
+            }) {
                 Text(stringResource(R.string.viewer_fit_width), fontSize = 12.sp, color = c.text)
             }
             BarIcon(
