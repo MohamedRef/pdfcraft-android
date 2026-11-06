@@ -446,6 +446,7 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
         SheetHost(ctl.sheet.takeIf { it != ViewerSheet.None }) { sheet ->
             when (sheet) {
                 ViewerSheet.More -> MoreSheet(vm, doc)
+                ViewerSheet.FileDetails -> FileDetailsSheet(vm, doc)
                 ViewerSheet.ViewSettings -> ViewSettingsSheet(vm, doc)
                 ViewerSheet.Bookmarks -> BookmarksSheet(vm, doc)
                 ViewerSheet.Attachments -> AttachmentsSheet(vm, doc)

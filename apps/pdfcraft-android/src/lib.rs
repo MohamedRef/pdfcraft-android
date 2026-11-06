@@ -103,6 +103,23 @@ pub struct DocumentInfo {
     pub generation: u64,
 }
 
+/// One custom PDF document-information field.
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct MetadataField {
+    pub name: String,
+    pub value: String,
+}
+
+/// Extended properties are fetched only when File details opens, never during page rendering.
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct DocumentProperties {
+    pub creation_date: Option<String>,
+    pub modification_date: Option<String>,
+    pub custom_metadata: Vec<MetadataField>,
+    pub allows_modification: bool,
+    pub xmp_packet: Option<String>,
+}
+
 /// A bookmark, flattened in reading order.
 #[derive(Debug, Clone, uniffi::Record)]
 pub struct OutlineEntry {
@@ -558,6 +575,17 @@ impl MobileSession {
     /// Document `doc` as it is now.
     pub fn document(&self, doc: u64) -> Result<DocumentInfo, MobileError> {
         self.with_doc(doc, document_info)
+    }
+
+    /// Extra properties from the current parsed PDF. Never reads or writes the source URI.
+    pub fn file_properties(&self, doc: u64) -> Result<DocumentProperties, MobileError> {
+        self.with_doc(doc, |d| DocumentProperties {
+            creation_date: d.info_value("CreationDate"),
+            modification_date: d.info_value("ModDate"),
+            custom_metadata: d.custom_info().into_iter().map(|(name, value)| MetadataField { name, value }).collect(),
+            allows_modification: d.allows_modification(),
+            xmp_packet: d.xmp_metadata(),
+        })
     }
 
     /// Document `doc`'s bookmarks, flattened in reading order (at most as many as the engine reads).

@@ -1,0 +1,131 @@
+name: PdfCraft Custom - tests and APK
+
+on:
+  push:
+    branches: [main, feat/issue-55-file-details]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-update-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_INCREMENTAL: '0'
+  CARGO_TERM_COLOR: always
+
+jobs:
+  rust-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 100
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install pinned Rust
+        run: rustup toolchain install
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: issue55-rust-tests
+      - name: Run Rust tests
+        run: cargo test --locked -p pdfcraft-android
+
+  android-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Install Rust, cargo-ndk, Android SDK and NDK
+        run: |
+          rustup toolchain install
+          cargo install cargo-ndk --version 4.1.2 --locked
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;29.0.14206865" >/dev/null
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: issue55-android-tests
+      - name: Run Android JVM unit tests
+        working-directory: apps/pdfcraft-android/android
+        run: ./gradlew testDebugUnitTest "-Ppdfcraft.abis=arm64-v8a" --no-daemon --stacktrace
+      - name: Publish unit test results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: android-unit-test-results
+          path: apps/pdfcraft-android/android/app/build/test-results/testDebugUnitTest/
+          if-no-files-found: ignore
+
+  signed-apk:
+    needs: [rust-tests, android-tests]
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v7
+      - name: Require permanent personal signing key
+        env:
+          KEYSTORE_BASE64: ${{ secrets.PDFCRAFT_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.PDFCRAFT_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.PDFCRAFT_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.PDFCRAFT_KEY_PASSWORD }}
+        run: |
+          for secret in "$KEYSTORE_BASE64" "$KEYSTORE_PASSWORD" "$KEY_ALIAS" "$KEY_PASSWORD"; do
+            if [ -z "$secret" ]; then
+              echo "::error::Personal signing secrets are missing. Set PDFCRAFT_KEYSTORE_BASE64, PDFCRAFT_KEYSTORE_PASSWORD, PDFCRAFT_KEY_ALIAS and PDFCRAFT_KEY_PASSWORD under Settings > Secrets and variables > Actions. Forks do not inherit upstream secrets."
+              exit 1
+            fi
+          done
+          printf '%s' "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.p12"
+          test -s "$RUNNER_TEMP/release.p12"
+          chmod 600 "$RUNNER_TEMP/release.p12"
+          echo "PDFCRAFT_KEYSTORE=$RUNNER_TEMP/release.p12" >> "$GITHUB_ENV"
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Install Rust, cargo-ndk, Android SDK and NDK
+        run: |
+          rustup toolchain install
+          cargo install cargo-ndk --version 4.1.2 --locked
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;29.0.14206865" >/dev/null
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: issue55-android-release
+      - name: Build both personal Android ABI variants
+        working-directory: apps/pdfcraft-android/android
+        env:
+          PDFCRAFT_KEYSTORE_PASSWORD: ${{ secrets.PDFCRAFT_KEYSTORE_PASSWORD }}
+          PDFCRAFT_KEY_ALIAS: ${{ secrets.PDFCRAFT_KEY_ALIAS }}
+          PDFCRAFT_KEY_PASSWORD: ${{ secrets.PDFCRAFT_KEY_PASSWORD }}
+        run: |
+          version="$(sed -n 's/^pdfcraft\.version=//p' gradle.properties)"
+          mkdir -p "$GITHUB_WORKSPACE/dist"
+          for abi in arm64-v8a armeabi-v7a; do
+            ./gradlew assembleRelease "-Ppdfcraft.abis=$abi" --no-daemon --stacktrace
+            suffix=""
+            if [ "$abi" = armeabi-v7a ]; then suffix="-armeabi-v7a"; fi
+            cp app/build/outputs/apk/release/app-release.apk "$GITHUB_WORKSPACE/dist/pdfcraft-custom-$version$suffix.apk"
+          done
+      - name: Verify stable personal certificate and app ID
+        run: |
+          tools="$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -n 1)"
+          signer="${tools}apksigner"
+          aapt="${tools}aapt"
+          for apk in dist/*.apk; do
+            "$signer" verify --print-certs "$apk" > "$RUNNER_TEMP/certs.txt"
+            grep -qi 'fcd16ff2e401a4f379c658982a97ce78a9f00bb44e8d20038603889b0d1bfdfa' "$RUNNER_TEMP/certs.txt" || { echo '::error::Wrong personal signing certificate'; exit 1; }
+            "$aapt" dump badging "$apk" | grep -q "name='io.github.mohamedref.pdfcraft'" || { echo '::error::Wrong application ID'; exit 1; }
+            "$aapt" dump badging "$apk" | grep -q "versionCode='[1-9][0-9]*'" || { echo '::error::Invalid version code'; exit 1; }
+          done
+      - name: Upload verified Android update APKs
+        uses: actions/upload-artifact@v7
+        with:
+          name: pdfcraft-custom-signed-apks
+          path: dist/*.apk
+          if-no-files-found: error
+          retention-days: 30
+      - name: Clean up original signing key
+        if: always()
+        run: rm -f "$RUNNER_TEMP/release.p12"
