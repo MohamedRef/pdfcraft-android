@@ -384,7 +384,7 @@ private fun MarkupLayer(vm: AppViewModel, doc: OpenDocument) {
     Box(
         Modifier.fillMaxSize().toolGestures(
             doc,
-            onDown = { p ->
+            onDown = { p, _, _ ->
                 val at = doc.viewer.screenToPage(p) ?: return@toolGestures
                 scope.launch {
                     val n = withContext(eng.commands) { eng.session.glyphCount(doc.id, at.page.toUInt()) }
