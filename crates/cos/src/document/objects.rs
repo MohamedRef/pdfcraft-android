@@ -478,6 +478,31 @@ impl Document {
         self.scan_objects_subset(self.object_numbers())
     }
 
+    /// Candidate discovery without decrypting stream bodies (raw ranges remain shared).
+    /// Names/keys are usable, but strings may still be encrypted. Always load a matched object
+    /// normally before validation. Compressed, edited, repaired or uncertain headers fall back
+    /// to the ordinary bounded reader. This is not an authoritative object-reading API.
+    pub fn scan_object_headers_checked(&self) -> impl Iterator<Item = (ObjRef, Result<Arc<Object>, CosError>)> + use<> {
+        let numbers = self.object_numbers();
+        let mut reader = self.object_reader();
+        numbers.into_iter().map(move |num| {
+            let document = &reader.document;
+            let reference = ObjRef::new(num, document.generation(num));
+            if document.header_offset == 0
+                && document.repair_log().is_empty()
+                && !document.overlay.contains_key(&num)
+                && let Some(XrefEntry::InFile { offset, .. }) = document.xref_entry(num)
+                && let Ok(offset) = usize::try_from(offset)
+                && let Ok((id, header)) =
+                    parse_indirect_shared(&document.data, offset, &|r| document.try_get(r.num).ok().and_then(|o| o.as_int()), &document.endstreams)
+                && id.num == num
+            {
+                return (reference, Ok(Arc::new(header)));
+            }
+            (reference, reader.try_get(reference))
+        })
+    }
+
     /// Inspect selected current objects with the same bounded cache as a whole-file scan.
     /// Missing/freed numbers yield `Null`; malformed objects return their read error.
     pub fn scan_objects_subset(&self, numbers: Vec<u32>) -> impl Iterator<Item = (ObjRef, Result<Arc<Object>, CosError>)> + use<> {
