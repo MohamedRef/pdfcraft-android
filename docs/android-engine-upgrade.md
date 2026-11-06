@@ -33,3 +33,17 @@ PRs run Rust regression suites for `pdfcraft-cos`, `pdfcraft-engine`, and `pdfcr
 The manual/emulator matrix remains a **required follow-up**, not something that the host Rust/JVM tests can establish. Do not merge or tag an engine-version bump until runtime device tests and data-integrity tests are green.
 
 Upstream references: https://github.com/storytold/pdfcraft , https://github.com/storytold/pdfcraft/pull/5566 , https://github.com/storytold/pdfcraft/pull/4279 .
+
+
+## Android content-provider crash recovery (stabilization PR)
+
+A successful Rust doc_save means the app-owned PDF contains the edits. It does **not** mean Android's content provider accepted them: an output stream opened in truncate mode may fail after damaging the original. Pending write-back is now marked on disk before a destructive provider write, and the working copy is kept across close, recents pruning and process restarts until a successful write-back or a completed Save a copy. When reopening, a pending local copy takes precedence over the provider's potentially damaged original.
+
+Closing a document or switching documents no longer silently throws away unsaved work when save fails. Serializing onPause/close/manual saves avoids overlapping writes to the same provider. Arbitrary Android document providers do **not** promise atomic write-back: emulator failure injection for unavailable/revoked providers, out-of-space errors, and partial streams is still needed before claiming fully proven runtime recovery.
+
+
+### Save and reopen safety audit checkpoint (PR #5)
+
+The earlier crash-recovery patch passed Rust/JVM but missed two user-visible edge cases. A reopen of the *same content URI* could have refreshed the working file from the provider **before** `saveAndClose`, potentially overwriting live unsaved edits. Reopening now leaves the already-open document untouched. A deliberate **Discard** from the save failure prompt now deletes the marked working copy instead of resurrecting discarded edits later. A missing local recovery file while a marker exists refuses to open the possibly truncated provider original. Save a copy now shares the same mutex as automatic saves to prevent overlapping reads/writes.
+
+Before merge, CI must run Rust + JVM + both ARM release APK smoke builds on the current `main` merge base, and device/emulator SAF fault tests are still necessary to prove provider behavior. A green compiler does not establish failure-injection runtime correctness.
