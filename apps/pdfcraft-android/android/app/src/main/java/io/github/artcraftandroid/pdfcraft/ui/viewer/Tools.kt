@@ -291,10 +291,18 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
             undone.clear()
         }
         doc.localUndo = LocalUndo(
-            canUndo = { strokes.isNotEmpty() },
-            canRedo = { undone.isNotEmpty() },
-            undo = { if (strokes.isNotEmpty()) undone.add(strokes.removeAt(strokes.lastIndex)) },
-            redo = { if (undone.isNotEmpty()) strokes.add(undone.removeAt(undone.lastIndex)) },
+            // Draw edits are local until committed. The eraser commits them first and then
+            // relies on the native document's undo/redo for its one-gesture ink edit.
+            canUndo = { strokes.isNotEmpty() || doc.info.undo != null },
+            canRedo = { undone.isNotEmpty() || doc.info.redo != null },
+            undo = {
+                if (strokes.isNotEmpty()) undone.add(strokes.removeAt(strokes.lastIndex))
+                else if (doc.info.undo != null) vm.runTool(doc, "edit_undo")
+            },
+            redo = {
+                if (undone.isNotEmpty()) strokes.add(undone.removeAt(undone.lastIndex))
+                else if (doc.info.redo != null) vm.runTool(doc, "edit_redo")
+            },
         )
         onDispose {
             doc.localUndo = null
