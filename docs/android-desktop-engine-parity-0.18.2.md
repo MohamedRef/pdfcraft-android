@@ -243,3 +243,10 @@ The owner explicitly promoted **About → Check for Updates** to the **first nex
 - **All required automated PR jobs succeeded:** [Actions 42218541208](https://github.com/MohamedRef/pdfcraft-android/actions/runs/42218541208) reports `rust-tests=success` (including pinned upstream-source provenance), `android-tests=success`, `APK smoke (arm64-v8a)=success`, and `Merge gate (Rust, Android, ABI APKs)=success` on the same head. `signed-apk=skipped` is expected in PR checks; no permanently signed APK from this PR is claimed.
 - **Integration discrepancy review:** four old monolithic Forms/FormCalc/XFA files correspond to reorganized stable engine APIs and equivalent finite/strict-hex fixes in their new modules. Preserved post-#7 Rust tests and #11 ARM64-only packaging, secure update verification and signed GitHub Releases publication. The pinned stable engine and Android bridge/provenance layering remain intact. Physical Samsung devices, emulator PDF regression workflows and SAF/voice/annotation runtime integration **not performed**; do not infer those from green CI.
 - **Next operator step:** mark #8 ready, merge exact verified SHA into `main`, inspect new main SHA and post-merge CI; only then bump separately to the owner-approved `0.0.7-beta.4 (7042)` and publish a new, permanently signed public Beta Release. No future Semantic Versioning renumbering should alter this currently agreed beta.
+
+### PR #8 merge checkpoint (2026-11-06)
+
+- PR #8 merged to main as commit `72083071ac3395b0c3a8a378041f23a8cb714d4f`, using tested head `5ea3f72e19f72a7c2545cda05e1cd2f91f3ed1bd`.
+- Current-head CI: https://github.com/MohamedRef/pdfcraft-android/actions/runs/42218541208. Rust, Android JVM, ARM64 release-mode smoke and merge gate succeeded. PR signed APK was skipped.
+- Post-merge main CI: https://github.com/MohamedRef/pdfcraft-android/actions/runs/42221318495, initially in progress. Device-level execution and SAF/audio/pen/manual regressions not tested.
+- All previously open PRs are closed. Await post-merge main CI before publishing owner-requested signed beta.4 (7042) from main.
