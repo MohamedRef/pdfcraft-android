@@ -42,3 +42,8 @@ hardware QA. Required manual regression: draw without leaving Draw, resize repea
 840dp, collapse/expand the rail, verify strokes and local Undo/Redo, then save/reopen. Also test
 text selection, form focus, RTL and multi-window. Existing JVM breakpoint tests do not verify
 Compose lifetime or physical-device behavior.
+
+
+### Batch integration review
+
+Synchronized the reviewed layout branch with main `952cc4a723f8fa3c1194a2312b504ce892ee95db` after export #25 merged. Existing mouse/keyboard behavior is preserved, rather than counted as a new feature. Required per-PR gates remain current-head Rust/provenance, Android JVM, title and aggregate merge success with no conflicts; physical tablet/DeX/accessibility/input checks remain outstanding for the single batch APK, per the owner’s no-per-PR-APK policy. Prior green CI 42282145245 is not evidence for this new integration head. No new release version is selected here.
