@@ -51,6 +51,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.input.pointer.PointerType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChanged
 import androidx.compose.ui.platform.LocalContext
@@ -120,39 +121,81 @@ fun Modifier.toolGestures(
     onMove: (Offset) -> Unit,
     onUp: (Offset, moved: Boolean) -> Unit,
     onCancel: () -> Unit,
-): Modifier = pointerInput(doc) {
+    penOnly: Boolean = false,
+): Modifier = pointerInput(doc, penOnly) {
+    val routing = StylusRouting()
     awaitEachGesture {
         val down = awaitFirstDown(requireUnconsumed = false)
-        var one = true
+        var activePen = down.type == PointerType.Stylus
+        var activeId = down.id
+        var eraser = down.type == PointerType.Eraser
+        if (activePen) routing.penStarted()
+        var navigation = down.type == PointerType.Touch && routing.fingersNavigate(penOnly)
+        var one = !navigation && !eraser
         var moved = false
         var last = down.position
-        onDown(down.position)
-        while (true) {
-            val event = awaitPointerEvent()
-            val pressed = event.changes.filter { it.pressed }
-            if (pressed.isEmpty()) break
-            if (pressed.size > 1) {
-                if (one) {
-                    one = false
-                    onCancel()
+        if (one) onDown(last)
+        try {
+            while (true) {
+                val event = awaitPointerEvent()
+                val arrivingPen = event.changes.firstOrNull { it.pressed && (it.type == PointerType.Stylus || it.type == PointerType.Eraser) }
+                if (!activePen && !eraser && arrivingPen != null) {
+                    if (one) onCancel()
+                    activeId = arrivingPen.id
+                    activePen = arrivingPen.type == PointerType.Stylus
+                    eraser = !activePen
+                    navigation = false
+                    one = activePen
+                    last = arrivingPen.position
+                    routing.penStarted()
+                    if (one) onDown(last)
                 }
-                val zoom = event.calculateZoom()
-                if (zoom != 1f) doc.viewer.zoomBy(zoom, event.calculateCentroid())
-                val pan = event.calculatePan()
-                if (pan != Offset.Zero) doc.viewer.scrollBy(pan.x, pan.y)
-                event.changes.forEach { if (it.positionChanged()) it.consume() }
-                continue
+                val active = event.changes.firstOrNull { it.id == activeId }
+                // Touch/palm pointers do not replace the pen or interrupt its stroke.
+                if (activePen) {
+                    if (active == null || !active.pressed) {
+                        if (active?.isConsumed == true) { onCancel(); one = false }
+                        else if (active != null) { last = active.position; onMove(last) }
+                        break
+                    }
+                    if (active.positionChanged()) {
+                        last = active.position
+                        moved = true
+                        onMove(last)
+                    }
+                    event.changes.forEach { it.consume() }
+                    continue
+                }
+                val pressed = event.changes.filter { it.pressed }
+                if (pressed.isEmpty()) {
+                    if (active?.isConsumed == true && one) { onCancel(); one = false }
+                    break
+                }
+                if (eraser) { event.changes.forEach { it.consume() }; continue }
+                if (navigation || routing.cancelForExtraTouch(false, pressed.size)) {
+                    if (one) { one = false; onCancel() }
+                    val zoom = event.calculateZoom()
+                    if (zoom != 1f) doc.viewer.zoomBy(zoom, event.calculateCentroid())
+                    val pan = event.calculatePan()
+                    if (pan != Offset.Zero) doc.viewer.scrollBy(pan.x, pan.y)
+                    event.changes.forEach { if (it.positionChanged()) it.consume() }
+                    continue
+                }
+                if (!one) continue
+                // Do not join a replacement pointer to a stroke whose original finger lifted.
+                if (active == null || !active.pressed) { onCancel(); one = false; continue }
+                if (active.positionChanged()) {
+                    if ((active.position - down.position).getDistance() > viewConfiguration.touchSlop) moved = true
+                    last = active.position
+                    onMove(last)
+                    active.consume()
+                }
             }
-            if (!one) continue
-            val c = pressed.first()
-            if (c.positionChanged()) {
-                if ((c.position - down.position).getDistance() > viewConfiguration.touchSlop) moved = true
-                last = c.position
-                onMove(c.position)
-                c.consume()
-            }
+            if (one) onUp(last, moved)
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            if (one) onCancel()
+            throw e
         }
-        if (one) onUp(last, moved)
     }
 }
 
@@ -223,6 +266,7 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
     Box(
         Modifier.fillMaxSize().toolGestures(
             doc,
+            penOnly = prefs.stylusOnly,
             onDown = { p ->
                 val at = doc.viewer.screenToPage(p) ?: return@toolGestures
                 stillAt = p
@@ -376,6 +420,9 @@ fun ToolSubToolbar(vm: AppViewModel, doc: OpenDocument) {
             val snapOn = stringResource(R.string.toolbar_snap_on)
             val snapOff = stringResource(R.string.toolbar_snap_off)
             SubTool(LucideIcons.PenLine, stringResource(R.string.toolbar_draw_freeform), true, {})
+            SubTool(LucideIcons.PenLine, stringResource(R.string.toolbar_stylus_only), prefs.stylusOnly, {
+                prefs.updateStylusOnly(!prefs.stylusOnly)
+            })
             SubDivider()
             SubProperty(LucideIcons.Menu, stringResource(R.string.toolbar_line_thickness), picker == Picker.Width, { toggle(Picker.Width) })
             ColorDot(prefs.color(StyledTool.Ink), picker == Picker.Color) { toggle(Picker.Color) }

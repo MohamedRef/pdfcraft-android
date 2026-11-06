@@ -270,9 +270,29 @@ The owner explicitly promoted **About → Check for Updates** to the **first nex
 
 - Interaction precedence fix: form-field, comment, editing and selection taps remain synchronous; only links awaiting viewport hydration use an asynchronous page lookup. This prevents slow link extraction from delaying form/comment taps. Requires fresh CI on the exact updated PR head.
 
+### Batch 1 of three PRs — stylus and annotations
+
+Owner requests batches of three PRs and Xodo-like stylus/annotation capabilities. Current batch: #13 seekable provider snapshots; second PR adds stylus/finger routing; third preserves per-stroke ink appearance. Each needs Rust/provenance, Android JVM, ARM64 and aggregate checks; merges remain sequential against latest main. Existing #12 signed release continues independently.
+
+Stylus scope: pen input owns its pointer, palm/finger contact does not cancel or extend that pen stroke; a pen arriving after a finger cancels provisional finger ink and takes over. After using the pen, fingers navigate for the tool session; explicit persisted Pen only option works before first contact. Two fingers still navigate in finger-drawing mode. Eraser tips are ignored (never accidentally draw); erasing behavior, pressure, hover/button shortcuts, lasso and handwriting are **not implemented in this increment**. Cancellation discards provisional ink. Requires real S Pen testing; JVM policy tests are not device evidence.
+
+Reference behavior: https://feedback.xodo.com/support/solutions/articles/35000202905-stylus-and-fingers and https://feedback.xodo.com/support/solutions/articles/35000202835-adding-an-ink-annotation . Pressure reference: https://feedback.xodo.com/support/solutions/articles/35000202927-how-to-enable-pressure-for-ink- . Long-term parity must be tracked feature by feature; no claim to all Xodo capabilities or assets.
+
+### Next sequential performance increment: seekable provider snapshots — 2026-11-06
+
+- Owner explicitly requested the next feature after #12 merge, while #12 post-merge signed publication continues. Started from main `172be4b10daa1ff98f848074d07b799b40d6d21a`; no outstanding feature PR at start. PR #12 exact-head tests passed; its main run is [42235100637](https://github.com/MohamedRef/pdfcraft-android/actions/runs/42235100637), currently Rust success/Android pending.
+- In-place opening is **not enabled**: save, print, share, signing and encrypted-copy paths require a durable local file; removing it before a full lifecycle redesign risks data loss. This increment instead transfers seekable regular provider asset ranges to a fresh local snapshot through `FileChannel.transferTo`, preserving the full working-copy/recovery design. Asset offset/declared length respected; unknown/nonregular sources stream, unsupported descriptor paths retry the original provider stream into a truncated temporary file. Source is read-only. No metadata-only cache.
+- Transfer handles partial progress, switches to a bounded 256 KiB buffer when zero/unsupported transfer occurs, rejects unexpected EOF/overflow and zero progress, and cleans up partial temporary files before returning errors. Added JVM regressions for asset subranges, short transfers, zero-transfer fallback and truncation/overflow. Tests pending; **no device speed claim**.
+- API references: https://developer.android.com/reference/java/nio/channels/FileChannel and https://developer.android.com/reference/android/content/res/AssetFileDescriptor . Timing adds `provider_descriptor_copy` and `provider_stream_fallback`; no paths/content logged.
+- Prepared next sequential patch **0.0.9-beta.1 (expected ARM64 9012)** to avoid reusing #12's intended **0.0.8-beta.1 (8012)** release number. Actual manifest and permanent signer require CI verification. No merge or second release yet. First Aid 2026 owner baseline remains approximately 5 s PdfCraft / 1 s Xodo, not an instrumented measurement.
+
+- Batch integration: stylus PR now includes provider snapshot PR #13; base will be #13 branch so CI tests their combined tree before sequential retarget/merge into main.
+
 ### Batch 1 third increment — ink appearance persistence (2026-11-06)
 
 - Current mobile ink preview and export used the latest global pen style for all uncommitted strokes. Capture color, opacity, width and author at stroke start instead; preview and saved PDF annotations use that immutable appearance through undo/redo.
 - Export groups only adjacent same-page/same-appearance strokes, keeping red/blue/red overlap order intact; global grouping by style would reorder overlapping ink. Existing native Ink annotation tools remain unchanged and editable; no flattening or pressure claim. Added JVM regressions for consecutive grouping, multi-page/style boundaries and immutable style transitions.
 - Based on main `172be4b` as an independent third PR alongside #13 and #14. Integration must merge latest main into each remaining PR and rerun gates after earlier batch merges. No new version branding in this PR: preserve the release version selected by integrated main.
 - Next stylus backlog: pressure-preserving PDF appearances, real stroke eraser + physical eraser/button mapping, hover, historical/coalesced input and cancellation/device traces; then lasso/move/resize, favorites and handwriting. Existing text markup, notes, voice, forms/signatures and undo are retained. Xodo parity is a roadmap, not a verified current claim.
+
+- Integrated #13 and #14 into the third PR; CI now validates all three increments together. Retarget to main after prior sequential merges only if the resulting tested source tree is unchanged; otherwise rerun checks.

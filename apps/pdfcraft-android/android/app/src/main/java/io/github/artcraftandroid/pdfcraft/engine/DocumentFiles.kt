@@ -46,12 +46,37 @@ class DocumentFiles(private val context: Context) {
         }
         val target = File(dir, name)
         val tmp = File(dir, ".$name.part")
-        resolver.openInputStream(uri).use { input ->
-            requireNotNull(input) { context.getString(R.string.common_file_unreadable) }
-            tmp.outputStream().use { input.copyTo(it) }
-        }
-        if (!tmp.renameTo(target)) {
-            tmp.copyTo(target, overwrite = true)
+        try {
+            val copied = try {
+                OpenTiming.measure("provider_descriptor_copy") {
+                    resolver.openAssetFileDescriptor(uri, "r")?.use { asset ->
+                        val size = asset.parcelFileDescriptor.statSize
+                        val length = if (asset.declaredLength >= 0) asset.declaredLength else size - asset.startOffset
+                        asset.createInputStream().use { input ->
+                            tmp.outputStream().use { output ->
+                                if (size > 0 && length > 0 && asset.startOffset >= 0 && asset.startOffset <= size && length <= size - asset.startOffset) {
+                                    PdfSnapshotCopy.copyRange(input.channel, output.channel, asset.startOffset, length)
+                                } else {
+                                    // Pipes, remote and unknown-size assets retain bounded streaming.
+                                    input.copyTo(output, PdfSnapshotCopy.BUFFER_BYTES)
+                                }
+                            }
+                        }
+                        true
+                    } ?: false
+                }
+            } catch (_: IOException) { false } catch (_: UnsupportedOperationException) { false }
+            if (!copied) OpenTiming.measure("provider_stream_fallback") {
+                resolver.openInputStream(uri).use { input ->
+                    requireNotNull(input) { context.getString(R.string.common_file_unreadable) }
+                    // Starting afresh truncates a partial descriptor transfer before retrying.
+                    tmp.outputStream().use { input.copyTo(it, PdfSnapshotCopy.BUFFER_BYTES) }
+                }
+            }
+            if (!tmp.renameTo(target)) {
+                tmp.copyTo(target, overwrite = true)
+            }
+        } finally {
             tmp.delete()
         }
         // the copy keeps the source's date, which the More sheet shows as when it was modified

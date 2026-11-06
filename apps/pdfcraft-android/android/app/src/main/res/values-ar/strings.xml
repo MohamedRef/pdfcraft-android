@@ -848,4 +848,5 @@
     <string name="service_action_back">رجوع ١٥ ثانية</string>
     <string name="service_action_forward">تقديم ١٥ ثانية</string>
     <string name="service_action_stop">إيقاف</string>
+    <string name="toolbar_stylus_only">القلم فقط (الإصبع للتمرير)</string>
 </resources>
