@@ -1009,9 +1009,18 @@ mod formcalc {
         assert_eq!(calc(r#"Format("9.99", 2.344)"#), "2.34");
     }
 
+    /// Mobile-compatible XFA FormCalc correctness fixes from upstream #4508 / #4586.
+    #[test]
+    fn round_keeps_huge_values_finite() {
+        assert_eq!(calc("Round(1e300, 12) == 1e300"), "1");
+        assert_eq!(calc("Round(1.2345, 2)"), "1.23");
+    }
+
     #[test]
     fn built_in_functions_cover_the_common_set() {
         assert_eq!(calc("Abs(-2.5)"), "2.5");
+        assert_eq!(calc(r#"Decode("a%2Fb", "url")"#), "a/b");
+        assert_eq!(calc(r#"Decode("a%+fb", "url")"#), "a%+fb");
         assert_eq!(calc("Ceil(2.1)"), "3");
         assert_eq!(calc("Floor(-2.1)"), "-3");
         assert_eq!(calc("Mod(7, 3)"), "1");

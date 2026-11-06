@@ -38,6 +38,12 @@ class DocumentFiles(private val context: Context) {
         }
         val name = displayName(uri)
         val dir = File(workDir, sha(uri.toString())).apply { mkdirs() }
+        // A failed provider write may have truncated the original; prefer the recovery copy.
+        if (PendingWorkingCopy.isPending(dir)) {
+            return existingCopy(uri) ?: throw IOException(
+                "A PDF write-back failed, but its local recovery copy is missing. Refusing to replace it from the possibly damaged original."
+            )
+        }
         val target = File(dir, name)
         val tmp = File(dir, ".$name.part")
         resolver.openInputStream(uri).use { input ->
@@ -70,8 +76,10 @@ class DocumentFiles(private val context: Context) {
      */
     fun dropCopyIfReachable(uri: Uri) {
         if (uri.scheme != ContentResolver.SCHEME_CONTENT) return
+        val dir = File(workDir, sha(uri.toString()))
+        if (PendingWorkingCopy.isPending(dir)) return
         if (resolver.persistedUriPermissions.none { it.uri == uri && it.isReadPermission }) return
-        File(workDir, sha(uri.toString())).deleteRecursively()
+        dir.deleteRecursively()
     }
 
     /**
@@ -85,8 +93,13 @@ class DocumentFiles(private val context: Context) {
         open?.let { wanted += sha(it) }
         val settled = System.currentTimeMillis() - 10 * 60 * 1000L
         workDir.listFiles()?.forEach { dir ->
-            if (dir.name !in wanted && dir.lastModified() < settled) dir.deleteRecursively()
+            if (!PendingWorkingCopy.isPending(dir) && dir.name !in wanted && dir.lastModified() < settled) dir.deleteRecursively()
         }
+    }
+
+    /** Explicit Discard from the unsaved-changes prompt. Never call from automatic cleanup. */
+    fun discardWorkingCopy(uri: Uri) {
+        PendingWorkingCopy.discard(File(workDir, sha(uri.toString())))
     }
 
     /** The working copy made earlier for [uri], if there is one (for thumbnails). */
@@ -134,7 +147,21 @@ class DocumentFiles(private val context: Context) {
         resolver.query(uri, arrayOf(DocumentsContract.Document.COLUMN_FLAGS), null, null, null)?.use { c -> if (c.moveToFirst() && !c.isNull(0)) c.getInt(0) else null }
     }.getOrNull()
 
-    /** Write [file] over [uri] (truncating it). */
+    /** Whether the app's local working PDF still has an uncommitted provider write. */
+    fun hasPendingWriteBack(uri: Uri): Boolean =
+        PendingWorkingCopy.isPending(File(workDir, sha(uri.toString())))
+
+    /** Persist a marker before asking a content provider to truncate its source. */
+    fun markPendingWriteBack(uri: Uri) {
+        PendingWorkingCopy.mark(File(workDir, sha(uri.toString())))
+    }
+
+    /** Clear only after a successful provider write or explicit completed Save a copy. */
+    fun clearPendingWriteBack(uri: Uri) {
+        PendingWorkingCopy.clear(File(workDir, sha(uri.toString())))
+    }
+
+    /** Write [file] over [uri] (truncating it). The caller keeps a durable recovery copy. */
     fun writeBack(file: File, uri: Uri) {
         val out = resolver.openOutputStream(uri, "wt") ?: error(context.getString(R.string.files_error_write))
         out.use { o -> file.inputStream().use { it.copyTo(o) } }
