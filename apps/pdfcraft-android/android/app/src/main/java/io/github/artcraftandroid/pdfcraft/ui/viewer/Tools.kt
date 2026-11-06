@@ -77,12 +77,16 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /** A stroke being drawn: its page and points (in the page's points). */
-internal class InkStroke(val page: Int, val appearance: InkAppearance) {
+internal class InkStroke(val page: Int, val appearance: InkAppearance, stylus: Boolean = false) {
     val points = mutableStateListOf<Offset>()
+    val pressures = mutableStateListOf<Float>()
+    var pressureSensitive by mutableStateOf(stylus)
 
     /** The clean shape shown while the finger is held still (press and hold to snap). */
     var preview by mutableStateOf<List<Offset>?>(null)
 }
+
+private data class InkSaveSegment(val page: Int, val appearance: InkAppearance, val points: List<Offset>)
 
 /** How long the finger stays still to snap a stroke to a shape, and how far it may wander. */
 private const val SNAP_HOLD_MS = 500L
@@ -117,8 +121,8 @@ fun ToolLayer(vm: AppViewModel, doc: OpenDocument) {
  */
 fun Modifier.toolGestures(
     doc: OpenDocument,
-    onDown: (Offset) -> Unit,
-    onMove: (Offset) -> Unit,
+    onDown: (Offset, Float, Boolean) -> Unit,
+    onMove: (Offset, Float, Boolean) -> Unit,
     onUp: (Offset, moved: Boolean) -> Unit,
     onCancel: () -> Unit,
     penOnly: Boolean = false,
@@ -134,7 +138,8 @@ fun Modifier.toolGestures(
         var one = !navigation && !eraser
         var moved = false
         var last = down.position
-        if (one) onDown(last)
+        var lastPressure = down.pressure
+        if (one) onDown(last, lastPressure, activePen)
         try {
             while (true) {
                 val event = awaitPointerEvent()
@@ -147,21 +152,24 @@ fun Modifier.toolGestures(
                     navigation = false
                     one = activePen
                     last = arrivingPen.position
+                    lastPressure = arrivingPen.pressure
                     routing.penStarted()
-                    if (one) onDown(last)
+                    if (one) onDown(last, lastPressure, activePen)
                 }
                 val active = event.changes.firstOrNull { it.id == activeId }
                 // Touch/palm pointers do not replace the pen or interrupt its stroke.
                 if (activePen) {
                     if (active == null || !active.pressed) {
                         if (active?.isConsumed == true) { onCancel(); one = false }
-                        else if (active != null) { last = active.position; onMove(last) }
+                        else if (active != null && active.positionChanged()) { last = active.position; onMove(last, lastPressure, true) }
                         break
                     }
                     if (active.positionChanged()) {
                         last = active.position
                         moved = true
-                        onMove(last)
+                        // Release events can report zero pressure; don't create a spurious thick tip.
+                        if (active.pressure.isFinite() && active.pressure > 0f) lastPressure = active.pressure
+                        onMove(last, lastPressure, true)
                     }
                     event.changes.forEach { it.consume() }
                     continue
@@ -187,7 +195,7 @@ fun Modifier.toolGestures(
                 if (active.positionChanged()) {
                     if ((active.position - down.position).getDistance() > viewConfiguration.touchSlop) moved = true
                     last = active.position
-                    onMove(last)
+                    onMove(last, active.pressure, false)
                     active.consume()
                 }
             }
@@ -205,8 +213,8 @@ private fun TapLayer(doc: OpenDocument, onTap: (PagePoint) -> Unit) {
     Box(
         Modifier.fillMaxSize().toolGestures(
             doc,
-            onDown = {},
-            onMove = { },
+            onDown = { _, _, _ -> },
+            onMove = { _, _, _ -> },
             onUp = { p, moved -> if (!moved) doc.viewer.screenToPage(p)?.let(onTap) },
             onCancel = {},
         ),
@@ -223,20 +231,28 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
     // Capture appearance at pointer down. Adjacent matching strokes may share an annotation.
     DisposableEffect(doc) {
         doc.commitTool = {
-            val batches = consecutiveInkBatches(strokes.filter { it.points.size >= 2 }) { it.page to it.appearance }
-            for (list in batches) {
+            val segments = strokes.flatMap { stroke ->
+                val points = stroke.points.toList()
+                inkWidthRuns(stroke.pressures.toList(), stroke.appearance.width, stroke.pressureSensitive).map { run ->
+                    InkSaveSegment(
+                        stroke.page, stroke.appearance.copy(width = run.width),
+                        points.subList(run.start, run.end + 1),
+                    )
+                }
+            }
+            // PDF Ink /BS has one width. Keep adjacent equal-style runs together in paint order.
+            val batches = consecutiveInkBatches(segments) { it.page to it.appearance }
+            val commands = batches.map { list ->
                 val page = list.first().page
                 val appearance = list.first().appearance
-                vm.runTool(
-                    doc, "comment_add",
-                    mapOf(
-                        "page" to page + 1, "type" to "ink",
-                        "strokes" to list.map { s -> s.points.map { listOf(it.x.toDouble(), it.y.toDouble()) } },
-                        "color" to Color(appearance.argb).hex(), "opacity" to appearance.opacity.toDouble(), "width" to appearance.width.toDouble(),
-                        "author" to appearance.author,
-                    ),
+                mapOf(
+                    "page" to page + 1, "type" to "ink",
+                    "strokes" to list.map { segment -> segment.points.map { listOf(it.x.toDouble(), it.y.toDouble()) } },
+                    "color" to Color(appearance.argb).hex(), "opacity" to appearance.opacity.toDouble(), "width" to appearance.width.toDouble(),
+                    "author" to appearance.author,
                 )
             }
+            vm.runToolBatch(doc, "comment_add", commands)
             strokes.clear()
             undone.clear()
         }
@@ -267,14 +283,18 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
         Modifier.fillMaxSize().toolGestures(
             doc,
             penOnly = prefs.stylusOnly,
-            onDown = { p ->
+            onDown = { p, pressure, isStylus ->
                 val at = doc.viewer.screenToPage(p) ?: return@toolGestures
                 stillAt = p
                 movedAt = System.currentTimeMillis()
                 val appearance = InkAppearance(prefs.color(StyledTool.Ink).toArgbInt(), prefs.opacity(StyledTool.Ink), prefs.inkWidth, prefs.author.ifBlank { null })
-                current = InkStroke(at.page, appearance).also { it.points.add(Offset(at.x, at.y)); strokes.add(it) }
+                current = InkStroke(at.page, appearance, isStylus).also {
+                    it.points.add(Offset(at.x, at.y))
+                    it.pressures.add(pressure)
+                    strokes.add(it)
+                }
             },
-            onMove = { p ->
+            onMove = { p, pressure, _ ->
                 val s = current ?: return@toolGestures
                 if ((p - stillAt).getDistance() > slop) {
                     stillAt = p
@@ -282,7 +302,10 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                     s.preview = null
                 }
                 val at = doc.viewer.screenToPage(p, nearest = true) ?: return@toolGestures
-                if (at.page == s.page) s.points.add(Offset(at.x, at.y))
+                if (at.page == s.page) {
+                    s.points.add(Offset(at.x, at.y))
+                    s.pressures.add(pressure)
+                }
             },
             onUp = { _, _ ->
                 val s = current
@@ -296,6 +319,10 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                     if (shape != null) {
                         s.points.clear()
                         s.points.addAll(shape)
+                        // Shape snapping deliberately uses the selected, constant pen width.
+                        s.pressureSensitive = false
+                        s.pressures.clear()
+                        s.pressures.addAll(List(shape.size) { 1f })
                     }
                 }
             },
@@ -308,16 +335,21 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
         Canvas(Modifier.fillMaxSize()) {
             for (s in strokes) {
                 val pts = s.preview ?: s.points
-                if (pts.isEmpty()) continue
-                val path = Path()
-                pts.forEachIndexed { i, pt ->
-                    val o = doc.viewer.pageToScreen(s.page, pt.x, pt.y)
-                    if (i == 0) path.moveTo(o.x, o.y) else path.lineTo(o.x, o.y)
+                val runs = if (s.preview != null) {
+                    if (pts.size >= 2) listOf(InkWidthRun(0, pts.lastIndex, s.appearance.width)) else emptyList()
+                } else inkWidthRuns(s.pressures.toList(), s.appearance.width, s.pressureSensitive)
+                for (run in runs) {
+                    val path = Path()
+                    for (i in run.start..run.end) {
+                        val pt = pts[i]
+                        val o = doc.viewer.pageToScreen(s.page, pt.x, pt.y)
+                        if (i == run.start) path.moveTo(o.x, o.y) else path.lineTo(o.x, o.y)
+                    }
+                    drawPath(
+                        path, Color(s.appearance.argb).copy(alpha = s.appearance.opacity),
+                        style = Stroke(width = run.width * doc.viewer.pixelsPerPoint(s.page), cap = StrokeCap.Round, join = StrokeJoin.Round),
+                    )
                 }
-                drawPath(
-                    path, Color(s.appearance.argb).copy(alpha = s.appearance.opacity),
-                    style = Stroke(width = s.appearance.width * doc.viewer.pixelsPerPoint(s.page), cap = StrokeCap.Round, join = StrokeJoin.Round),
-                )
             }
         }
     }
@@ -352,7 +384,7 @@ private fun MarkupLayer(vm: AppViewModel, doc: OpenDocument) {
     Box(
         Modifier.fillMaxSize().toolGestures(
             doc,
-            onDown = { p ->
+            onDown = { p, _, _ ->
                 val at = doc.viewer.screenToPage(p) ?: return@toolGestures
                 scope.launch {
                     val n = withContext(eng.commands) { eng.session.glyphCount(doc.id, at.page.toUInt()) }
@@ -364,7 +396,7 @@ private fun MarkupLayer(vm: AppViewModel, doc: OpenDocument) {
                     anchor = at.page to g
                 }
             },
-            onMove = { p -> extendTo(p) },
+            onMove = { p, _, _ -> extendTo(p) },
             onUp = { _, _ ->
                 val d = drag
                 drag = null

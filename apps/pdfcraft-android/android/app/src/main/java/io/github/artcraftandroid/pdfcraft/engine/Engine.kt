@@ -42,6 +42,16 @@ class Engine private constructor(val session: MobileSession) {
         if (out.trimStart().startsWith("{")) JSONObject(out) else JSONObject().put("result", out)
     }
 
+    /**
+     * Run related edit commands on the same serial dispatcher without another UI command
+     * interleaving between pressure-width fragments. This is not a PDF rollback transaction.
+     */
+    suspend fun toolBatch(name: String, argsList: List<Map<String, Any?>>) {
+        command {
+            for (args in argsList) execute(name, toJson(args).toString())
+        }
+    }
+
     fun trimMemory() = session.releaseMemory()
 
     /**

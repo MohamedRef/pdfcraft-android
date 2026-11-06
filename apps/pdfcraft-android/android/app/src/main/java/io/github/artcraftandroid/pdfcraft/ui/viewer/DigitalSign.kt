@@ -172,8 +172,8 @@ fun CertPlaceLayer(vm: AppViewModel, doc: OpenDocument) {
     Box(
         Modifier.fillMaxSize().toolGestures(
             doc,
-            onDown = { start = it; end = it },
-            onMove = { end = it },
+            onDown = { p, _, _ -> start = p; end = p },
+            onMove = { p, _, _ -> end = p },
             onUp = { p, moved ->
                 val s = start
                 start = null
