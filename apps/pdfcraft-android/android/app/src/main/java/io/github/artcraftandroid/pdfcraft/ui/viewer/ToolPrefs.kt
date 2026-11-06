@@ -73,6 +73,15 @@ class ToolPrefs(context: Context) {
         prefs.edit().putFloat("${t.key}.opacity", v).apply()
     }
 
+    /** Pen-only mode rejects finger ink before a stylus has touched the screen. */
+    var stylusOnly by mutableStateOf(prefs.getBoolean("ink.stylusOnly", false))
+        private set
+
+    fun updateStylusOnly(on: Boolean) {
+        stylusOnly = on
+        prefs.edit().putBoolean("ink.stylusOnly", on).apply()
+    }
+
     /** Draw ▸ Snap to shape: strokes that look like a line, box, oval or polygon become one. */
     var snapToShape by mutableStateOf(prefs.getBoolean("ink.snap", true))
         private set

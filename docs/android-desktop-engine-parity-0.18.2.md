@@ -269,3 +269,11 @@ The owner explicitly promoted **About → Check for Updates** to the **first nex
 - Release preparation on the same PR: next patch beta `0.0.8-beta.1` with base code `801`, expected ARM64 **0.0.8-beta.1 (8012)**. Actual APK manifest must confirm 8012. Existing **0.0.7-beta.4 (7042)** and its public asset remain unchanged. On verified merge, the existing main workflow builds with the permanent key and publishes the new version only after Rust/Android tests and signing/package checks. Do not report publication until that run and Release API succeed.
 
 - Interaction precedence fix: form-field, comment, editing and selection taps remain synchronous; only links awaiting viewport hydration use an asynchronous page lookup. This prevents slow link extraction from delaying form/comment taps. Requires fresh CI on the exact updated PR head.
+
+### Batch 1 of three PRs — stylus and annotations
+
+Owner requests batches of three PRs and Xodo-like stylus/annotation capabilities. Current batch: #13 seekable provider snapshots; second PR adds stylus/finger routing; third preserves per-stroke ink appearance. Each needs Rust/provenance, Android JVM, ARM64 and aggregate checks; merges remain sequential against latest main. Existing #12 signed release continues independently.
+
+Stylus scope: pen input owns its pointer, palm/finger contact does not cancel or extend that pen stroke; a pen arriving after a finger cancels provisional finger ink and takes over. After using the pen, fingers navigate for the tool session; explicit persisted Pen only option works before first contact. Two fingers still navigate in finger-drawing mode. Eraser tips are ignored (never accidentally draw); erasing behavior, pressure, hover/button shortcuts, lasso and handwriting are **not implemented in this increment**. Cancellation discards provisional ink. Requires real S Pen testing; JVM policy tests are not device evidence.
+
+Reference behavior: https://feedback.xodo.com/support/solutions/articles/35000202905-stylus-and-fingers and https://feedback.xodo.com/support/solutions/articles/35000202835-adding-an-ink-annotation . Pressure reference: https://feedback.xodo.com/support/solutions/articles/35000202927-how-to-enable-pressure-for-ink- . Long-term parity must be tracked feature by feature; no claim to all Xodo capabilities or assets.
