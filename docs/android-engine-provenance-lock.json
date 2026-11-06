@@ -1001,10 +1001,7 @@
     "crates/render/src/lib.rs": "Public sound_wav re-export for Android native wrapper.",
     "crates/render/src/raster.rs": "Selective sticky-note rendering flag used by Compose overlay.",
     "crates/render/src/raster/tests.rs": "Regression test for selective note hiding and normal annotation painting.",
-    "vendor/hayro-interpret/src/interpret/mod.rs": "Android-only /Text annotation appearance filter and interpreter setting.",
-    "crates/cos/src/document/objects.rs": "Bounded raw-metadata scan validates stream boundaries without decrypting unrelated payloads; uncertain/compressed/edited/repaired objects retain ordinary reader.",
-    "crates/sign/src/pdf/listing.rs": "Discover timestamps using unencrypted names/key presence from headers, then fully load and validate every candidate as before.",
-    "crates/sign/src/pdf_discovery_tests.rs": "Differential encrypted/escaped-name timestamp discovery and unreadable-stream validation regressions."
+    "vendor/hayro-interpret/src/interpret/mod.rs": "Android-only /Text annotation appearance filter and interpreter setting."
   },
   "allowed_local_additions": {}
 }
