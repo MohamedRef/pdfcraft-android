@@ -420,10 +420,11 @@ private fun Section(title: String) {
 @Composable
 private fun About(vm: AppViewModel) {
     val c = pdfColors
+    val context = LocalContext.current
     val clipboard = LocalClipboardManager.current
     val uri = LocalUriHandler.current
     Section(stringResource(R.string.home_section_about))
-    val version = stringResource(R.string.home_version, vm.appVersion, io.github.artcraftandroid.pdfcraft.core.engineVersion())
+    val version = stringResource(R.string.home_version, "${vm.appVersion} (${installedVersionCode(context)})", io.github.artcraftandroid.pdfcraft.core.engineVersion())
     val copied = stringResource(R.string.home_version_copied)
     Text(
         version, color = c.text, fontSize = 16.sp,
@@ -433,10 +434,8 @@ private fun About(vm: AppViewModel) {
     )
     SheetDivider()
     Section("App updates")
-    val context = LocalContext.current
     val updateScope = rememberCoroutineScope()
     var checking by remember { mutableStateOf(false) }
-    var checked by remember { mutableStateOf(false) }
     var update by remember { mutableStateOf<ApkUpdate?>(null) }
     var updateMessage by remember { mutableStateOf<String?>(null) }
     SheetRow(LucideIcons.RotateCw, if (checking) "Checking GitHub Releases…" else "Check for updates", {
@@ -446,10 +445,8 @@ private fun About(vm: AppViewModel) {
             updateScope.launch {
                 try {
                     update = fetchApkUpdates(installedVersionCode(context)).firstOrNull()
-                    checked = true
                     updateMessage = if (update == null) "No newer published APK available." else null
                 } catch (e: Exception) {
-                    checked = false
                     update = null
                     updateMessage = "Unable to check for updates. Check your connection and try again."
                 } finally {
@@ -460,10 +457,22 @@ private fun About(vm: AppViewModel) {
     })
     update?.let { candidate ->
         Text(
-            "Available: ${candidate.version} (${candidate.channel})  •  ${candidate.assetName}",
+            "Available: ${candidate.version} (${candidate.versionBase * 10L + 2L}) • ${candidate.channel}",
             color = c.text, fontSize = 14.sp,
             modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
         )
+        Text(
+            "Published ${candidate.publishedAt.take(10)} • ${candidate.size / (1024 * 1024)} MB",
+            color = c.textSecondary, fontSize = 13.sp,
+            modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
+        )
+        if (candidate.notes.isNotBlank()) {
+            Text(
+                candidate.notes.take(300), color = c.textSecondary, fontSize = 13.sp,
+                maxLines = 5, overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
+            )
+        }
         SheetRow(LucideIcons.FileDown, "Download APK", {
             try {
                 downloadApkUpdate(context, candidate)
