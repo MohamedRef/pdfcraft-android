@@ -30,3 +30,15 @@
 - This is a **page list** layout, not image thumbnail generation or desktop-grade dual-page viewing.
 - The original text selection is limited to one PDF page; cross-page selections need separate engine/UI changes.
 - All input behaviors cited as existing are **code inspection evidence**, not measured real-device success.
+
+## Review correction: retain the viewer during resize
+
+Compact and expanded layouts now keep `ViewerScreen` at one stable composition call site.
+The original conditional moved it into/out of a Row, which disposes remembered tool state;
+Draw stores provisional strokes locally and only commits them when the tool is left. A
+breakpoint transition could therefore discard ink before native save/Undo. The rail alone
+changes visibility, preserving the reader subtree. This is a source-level fix, not witnessed
+hardware QA. Required manual regression: draw without leaving Draw, resize repeatedly across
+840dp, collapse/expand the rail, verify strokes and local Undo/Redo, then save/reopen. Also test
+text selection, form focus, RTL and multi-window. Existing JVM breakpoint tests do not verify
+Compose lifetime or physical-device behavior.

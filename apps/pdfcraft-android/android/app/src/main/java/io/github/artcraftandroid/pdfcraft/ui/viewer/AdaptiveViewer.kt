@@ -66,10 +66,11 @@ fun AdaptiveViewer(vm: AppViewModel, doc: OpenDocument) {
         isDesktop(context, configuration),
     )
     var railOpen by remember(doc) { mutableStateOf(true) }
-    if (!wide || doc.pageCount < 2 || vm.readingMode || doc.controller.pagesOpen) {
-        ViewerScreen(vm, doc)
-    } else {
-        Row(Modifier.fillMaxSize()) {
+    val showRail = wide && doc.pageCount >= 2 && !vm.readingMode && !doc.controller.pagesOpen
+    // Keep ViewerScreen at one composition call site across breakpoint changes. Moving it
+    // between compact/expanded branches discards remembered uncommitted ink and tool state.
+    Row(Modifier.fillMaxSize()) {
+        if (showRail) {
             if (railOpen) {
                 ExpandedPageRail(doc, onCollapse = { railOpen = false })
             } else {
@@ -85,8 +86,8 @@ fun AdaptiveViewer(vm: AppViewModel, doc: OpenDocument) {
                 }
             }
             Box(Modifier.width(1.dp).fillMaxHeight().background(pdfColors.divider))
-            Box(Modifier.weight(1f).fillMaxHeight()) { ViewerScreen(vm, doc) }
         }
+        Box(Modifier.weight(1f).fillMaxHeight()) { ViewerScreen(vm, doc) }
     }
 }
 
