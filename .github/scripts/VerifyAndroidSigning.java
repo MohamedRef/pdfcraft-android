@@ -88,7 +88,7 @@ public final class VerifyAndroidSigning {
         // is derived from the very keystore used to sign the APK, never from PR-provided code.
         String githubEnv = System.getenv("GITHUB_ENV");
         if (githubEnv != null && !githubEnv.isBlank()) {
-            Files.writeString(Path.of(githubEnv), "PDFCRAFT_SIGNING_CERT_SHA256=" + actual + "\\n",
+            Files.writeString(Path.of(githubEnv), "PDFCRAFT_SIGNING_CERT_SHA256=" + actual + System.lineSeparator(),
                     java.nio.file.StandardOpenOption.CREATE, java.nio.file.StandardOpenOption.APPEND);
         }
         System.out.println("Verified PKCS12 store password, private key alias/password, and certificate."
