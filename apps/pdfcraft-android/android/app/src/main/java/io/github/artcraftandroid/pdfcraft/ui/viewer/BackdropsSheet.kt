@@ -40,6 +40,9 @@ fun BackdropsSheet(vm: AppViewModel, doc: OpenDocument) {
     LaunchedEffect(doc.id, doc.info.generation, start) {
         try {
             check(vm.document === doc)
+            // A render-only document has no parsed COS editor; the native batch API would
+            // otherwise return an empty list, which must not be presented as a clean scan.
+            check(doc.info.readOnlyReason == null && doc.pageCount > 0)
             val engine = checkNotNull(vm.engine)
             val result = engine.tool("doc_backdrops", mapOf("doc" to doc.id, "pages" to pages.map { it + 1 }))
             val rows = result.getJSONArray("pages")

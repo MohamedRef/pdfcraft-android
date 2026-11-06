@@ -4,7 +4,7 @@ File details → Page backgrounds exposes the existing stable-v0.18.2 `doc_backd
 
 The result distinguishes opaque white fills, page-sized images and pages with no covering backdrop detected. This is an explanation of why an added background may be hidden, not a promise that every drawing or transparency is classified. The panel does not add, replace or remove backgrounds. It writes no output files or provider data, and does not refresh the document as if it were edited.
 
-Calls use the existing serialized native dispatcher. Effects are keyed to document ID, generation and requested page group; cancellation propagates and obsolete results are not displayed for another document. At most 24 result rows enter the virtualized list. Unknown result kinds or failed commands show an error rather than a false absence of background.
+Calls use the existing serialized native dispatcher. Effects are keyed to document ID, generation and requested page group; cancellation propagates and obsolete results are not displayed for another document. At most 24 result rows enter the virtualized list. Unknown result kinds or failed commands show an error rather than a false absence of background. Render-only documents whose structure could not be parsed are rejected before the command, because the native API uses an empty result when no COS editor is available; that empty fallback is not a successful inspection. Provider read-only access alone does not block analysis.
 
 ## Verification
 
