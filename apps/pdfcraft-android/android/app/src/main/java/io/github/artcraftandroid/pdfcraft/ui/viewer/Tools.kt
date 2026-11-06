@@ -238,19 +238,17 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
             }
             // PDF Ink /BS has one width. Keep adjacent equal-style runs together in paint order.
             val batches = consecutiveInkBatches(segments) { it.page to it.appearance }
-            for (list in batches) {
+            val commands = batches.map { list ->
                 val page = list.first().page
                 val appearance = list.first().appearance
-                vm.runTool(
-                    doc, "comment_add",
-                    mapOf(
-                        "page" to page + 1, "type" to "ink",
-                        "strokes" to list.map { segment -> segment.points.map { listOf(it.x.toDouble(), it.y.toDouble()) } },
-                        "color" to Color(appearance.argb).hex(), "opacity" to appearance.opacity.toDouble(), "width" to appearance.width.toDouble(),
-                        "author" to appearance.author,
-                    ),
+                mapOf(
+                    "page" to page + 1, "type" to "ink",
+                    "strokes" to list.map { segment -> segment.points.map { listOf(it.x.toDouble(), it.y.toDouble()) } },
+                    "color" to Color(appearance.argb).hex(), "opacity" to appearance.opacity.toDouble(), "width" to appearance.width.toDouble(),
+                    "author" to appearance.author,
                 )
             }
+            vm.runToolBatch(doc, "comment_add", commands)
             strokes.clear()
             undone.clear()
         }
