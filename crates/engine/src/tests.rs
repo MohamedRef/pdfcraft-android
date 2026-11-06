@@ -857,12 +857,46 @@ fn revert_preserves_the_saved_pages_after_undo() {
 #[test]
 fn full_save_is_readable_and_smaller_after_deletes() {
     let (mut s, id) = session_with(5);
+    let original = s.save_bytes(id).unwrap();
     s.apply(id, Edit::DeletePages { pages: vec![0, 1, 2] }).unwrap();
     let full = s.save_full_bytes(id).unwrap();
-    assert!(full.len() < s.save_bytes(id).unwrap().len());
+    assert!(full.len() < original.len());
     let mut s2 = Session::new();
     let id2 = s2.open("full.pdf", None, full, None).unwrap();
     assert_eq!(page_texts(&s2, id2), ["Page 4", "Page 5"]);
+}
+
+/// From storytold/pdfcraft#4279: deleting unsigned pages must not leave their bytes
+/// embedded in a previous incremental PDF revision.
+#[test]
+fn saving_after_deleting_pages_rewrites_the_file_without_them() {
+    let (mut s, id) = session_with(6);
+    let original = s.save_bytes(id).unwrap();
+    s.apply(id, Edit::DeletePages { pages: vec![1, 2, 3, 4] }).unwrap();
+    let saved = s.save_bytes(id).unwrap();
+    assert!(saved.len() < original.len(), "the file should shrink when pages are deleted");
+    assert!(!saved.starts_with(original.as_slice()), "a full rewrite, not an appended revision");
+    assert!(!saved.windows(6).any(|w| w == b"Page 3"), "deleted text must not be retained");
+    let mut reopened = Session::new();
+    let back = reopened.open("saved.pdf", None, saved, None).unwrap();
+    assert_eq!(page_texts(&reopened, back), ["Page 1", "Page 6"]);
+}
+
+#[test]
+fn deleting_pages_in_a_batch_also_rewrites_unsigned_files() {
+    let (mut s, id) = session_with(6);
+    let original = s.save_bytes(id).unwrap();
+    let batch = Edit::Batch {
+        label: "Delete then rotate".into(),
+        edits: vec![
+            Edit::Batch { label: "Delete pages".into(), edits: vec![Edit::DeletePages { pages: vec![1, 2, 3, 4] }] },
+            Edit::RotatePages { pages: vec![0], degrees: 90 },
+        ],
+    };
+    s.apply(id, batch).unwrap();
+    let saved = s.save_bytes(id).unwrap();
+    assert!(!saved.starts_with(original.as_slice()));
+    assert!(!saved.windows(6).any(|w| w == b"Page 3"));
 }
 
 #[test]
