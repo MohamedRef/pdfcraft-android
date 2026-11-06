@@ -250,3 +250,11 @@ The owner explicitly promoted **About → Check for Updates** to the **first nex
 - Current-head CI: https://github.com/MohamedRef/pdfcraft-android/actions/runs/42218541208. Rust, Android JVM, ARM64 release-mode smoke and merge gate succeeded. PR signed APK was skipped.
 - Post-merge main CI: https://github.com/MohamedRef/pdfcraft-android/actions/runs/42221318495, initially in progress. Device-level execution and SAF/audio/pen/manual regressions not tested.
 - All previously open PRs are closed. Await post-merge main CI before publishing owner-requested signed beta.4 (7042) from main.
+
+### Beta.4 release commit pushed to main — 2026-11-06
+
+- The previously merged #8 engine tree is byte-for-byte identical between green PR head `5ea3f72e19f72a7c2545cda05e1cd2f91f3ed1bd` and merge commit `72083071ac3395b0c3a8a378041f23a8cb714d4f` (tree `e0110ae89f2c39f87a84c4787602f160f09b6e36`).
+- Owner-approved Beta update pushed **directly to `main`**, version/packaging/docs commit `d2baefdd064554766b1be281209060687c23033e`. This changes Gradle version from `0.0.7-beta.3` to `0.0.7-beta.4`, base versionCode from `703` to `704`, targeting the actual ARM64 manifest versionCode **7042**; default ABI narrowed to arm64-v8a. Unrelated Android functions and permanent signing settings are untouched.
+- [Main after-merge run 42221318495](https://github.com/MohamedRef/pdfcraft-android/actions/runs/42221318495) was still in progress at release bump; the source tree was checked identical to the passed PR CI tree, but **the previous main run's final result was not yet verified**.
+- [Beta.4 Actions 42221831656](https://github.com/MohamedRef/pdfcraft-android/actions/runs/42221831656) started for the exact new main SHA and was pending at first check. Production APK, signer, manifest, asset SHA-256 and published release **must not be claimed until the run completes successfully and Release API confirms them**.
+- Beta.3 remains [published](https://github.com/MohamedRef/pdfcraft-android/releases/tag/v0.0.7-beta.3) at 7032. A future SemVer policy for releases **after** beta.4 is documented in main's audit file, not silently applied to beta.4. Real Samsung device update/data retention and SAF/voice/S Pen behavior remain unverified.
