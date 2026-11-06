@@ -163,7 +163,13 @@ fun Modifier.toolGestures(
                 currentTime = change.uptimeMillis,
                 previousPressure = lastPressure,
                 pressure = nextPressure,
-                history = change.historical.map { StylusHistoryPoint(it.uptimeMillis, it.position) },
+                // Bound allocations before creating historical snapshots; providers can send long batches.
+                history = change.historical.let { raw ->
+                    val stride = ((raw.size.toLong() + MAX_STYLUS_HISTORY_POINTS - 1) /
+                        MAX_STYLUS_HISTORY_POINTS).coerceAtLeast(1).toInt()
+                    raw.asSequence().filterIndexed { index, _ -> index % stride == 0 }
+                        .map { StylusHistoryPoint(it.uptimeMillis, it.position) }.toList()
+                },
             )
             for (sample in samples) {
                 moved = true
