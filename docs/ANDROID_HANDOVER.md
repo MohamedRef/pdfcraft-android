@@ -80,6 +80,27 @@ Read this file and the full mandatory audit. Inspect live GitHub. The last confi
 
 - Release preparation on the same PR: next patch beta `0.0.8-beta.1` with base code `801`, expected ARM64 **0.0.8-beta.1 (8012)**. Actual APK manifest must confirm 8012. Existing **0.0.7-beta.4 (7042)** and its public asset remain unchanged. On verified merge, the existing main workflow builds with the permanent key and publishes the new version only after Rust/Android tests and signing/package checks. Do not report publication until that run and Release API succeed.
 
+### Owner policy: tests per PR, signed APK per merged batch (2026-11-06)
+
+- Separate CI-only change: Rust/provenance and Android JVM/regressions plus `Merge gate (Rust and Android)` on each PR. No separate APK packaging job per PR. Android JVM still compiles matching native UniFFI bindings as necessary.
+- Ordinary main pushes run tests without signed publication. After merging the batch, manually dispatch `android-update.yml` on main once to run tests and build/verify/publish the permanent-key signed ARM64 APK. Certificate, package, manifest, versionCode and digest gates remain. This owner instruction supersedes historical per-PR APK requirements.
+- GitHub reported main was not branch-protected at inspection. If protection is configured, require the new `Merge gate (Rust and Android)` status and title check, retiring the old ABI-APK gate name. Release-note improvements are in a separate PR. No product behavior or native engine change in this CI PR.
+
+### Categorized release notes — separate change
+
+Owner requires every release to explain features, fixes and improvements. Enable GitHub generated notes grouped by enhancement/bug/performance labels; preserve source/build identity, signing/hash gates and manual-batch release policy inherited from the CI PR. Durable rule added to AGENTS.md. Supplement generated notes with actual behavior, known issues and evidence limits before user handoff. No product/native change; no APK rebuild needed for notes alone. Public beta.8 notes already record owner's negative large-file performance result, with unchanged APK bytes.
+
+### Measured native opening work on the supplied encrypted PDF
+
+- Local profiling found standalone document-timestamp discovery decrypting unrelated image stream payloads. Added a bounded raw-metadata scan using the existing parser and stream-boundary validation; names/keys (not encrypted PDF strings) identify candidates. Every match is then loaded/decrypted and validated through the original path. Compressed, edited, repaired and uncertain objects retain the normal reader; no signature/security feature disabled.
+- Initial direct-value-only prototype failed the existing incomplete-stream-cache regression and was corrected **before publication** to use the original raw stream parser. Malformed stream boundaries still report errors and cannot be cached as a complete scan. Added differential escaped-name/AES128/AES256 and unreadable timestamp stream regressions.
+- Local `cargo +1.99.0 test --locked -p pdfcraft-sign -p pdfcraft-cos`: **333 passed, 0 failed, 5 ignored** (7 test/doctest result groups). Updated only three narrow engine-source provenance exceptions with reasons; stable upstream SHA unchanged. New exact-head CI and final host timings still required before merge.
+- The supplied file is encrypted with no repair notes; host native opens before this fix were roughly 2.5–4.4 seconds, while raster generation was around 0.07–0.12 seconds. These are host dev/optimized timings, not controlled Android benchmark results. Original file bytes are never committed or redistributed. Android provider file-name discrepancy is not reproduced in native host API.
+
+- This native fix is isolated from provider copying, stylus, ink appearance and CI policy per owner instruction. Final local host probe on supplied encrypted file: MobileSession open 1848/1871/1918 ms, first raster 74/72/76 ms; prior uncontrolled host samples roughly 2.5–4.4 s. No Samsung speed-up claim.
+
+- Native PR updated against main `a6968a3` after verified CI-policy #17 and notes #18 merges. Current required gates are Rust/provenance + Android JVM + Merge gate (Rust and Android); no per-PR APK. Native code remains isolated from provider/stylus/ink features.
+
 ### Next sequential performance increment: seekable provider snapshots — 2026-11-06
 
 - Owner explicitly requested the next feature after #12 merge, while #12 post-merge signed publication continues. Started from main `172be4b10daa1ff98f848074d07b799b40d6d21a`; no outstanding feature PR at start. PR #12 exact-head tests passed; its main run is [42235100637](https://github.com/MohamedRef/pdfcraft-android/actions/runs/42235100637), currently Rust success/Android pending.
@@ -87,3 +108,5 @@ Read this file and the full mandatory audit. Inspect live GitHub. The last confi
 - Transfer handles partial progress, switches to a bounded 256 KiB buffer when zero/unsupported transfer occurs, rejects unexpected EOF/overflow and zero progress, and cleans up partial temporary files before returning errors. Added JVM regressions for asset subranges, short transfers, zero-transfer fallback and truncation/overflow. Tests pending; **no device speed claim**.
 - API references: https://developer.android.com/reference/java/nio/channels/FileChannel and https://developer.android.com/reference/android/content/res/AssetFileDescriptor . Timing adds `provider_descriptor_copy` and `provider_stream_fallback`; no paths/content logged.
 - Prepared next sequential patch **0.0.9-beta.1 (expected ARM64 9012)** to avoid reusing #12's intended **0.0.8-beta.1 (8012)** release number. Actual manifest and permanent signer require CI verification. No merge or second release yet. First Aid 2026 owner baseline remains approximately 5 s PdfCraft / 1 s Xodo, not an instrumented measurement.
+
+- Provider-only PR now stacked on standalone native fix #16, so its CI validates native+provider integration without mixing the source diff. Retarget to main only after #16 merges and verify tested merge tree is unchanged. New CI policy inherited from main: no per-PR APK.
