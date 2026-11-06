@@ -158,8 +158,8 @@ internal fun verifyDownloadedApk(context: Context, apk: File, update: ApkUpdate)
     if (archive.packageName != context.packageName || archive.longVersionCode != update.apkVersionCode) {
         throw IOException("The downloaded APK package or build number is not the expected update.")
     }
-    val newSigners = archive.signingInfo?.apkContentsSigners?.map { it.toByteArray().contentHashCode() }?.toSet()
-    val existingSigners = installed.signingInfo?.apkContentsSigners?.map { it.toByteArray().contentHashCode() }?.toSet()
+    val newSigners = archive.signingInfo?.apkContentsSigners?.map { MessageDigest.getInstance("SHA-256").digest(it.toByteArray()).toHex() }?.toSet()
+    val existingSigners = installed.signingInfo?.apkContentsSigners?.map { MessageDigest.getInstance("SHA-256").digest(it.toByteArray()).toHex() }?.toSet()
     if (newSigners.isNullOrEmpty() || newSigners != existingSigners) {
         throw IOException("The APK certificate is not the installed app's signing certificate.")
     }
@@ -178,7 +178,7 @@ internal suspend fun downloadAndVerifyApk(
 ): File = withContext(Dispatchers.IO) {
     val dir = File(context.cacheDir, "updates")
     if (!dir.isDirectory && !dir.mkdirs()) throw IOException("Cannot create the update download folder.")
-    val partial = File.createTempFile("pdfcraft-download-", ".part", dir)
+    val partial = File.createTempFile("pdfcraft-download-", ".apk", dir)
     val result = File(dir, update.assetName)
     try {
         val url = URL(update.downloadUrl)
