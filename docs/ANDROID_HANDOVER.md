@@ -79,3 +79,10 @@ Read this file and the full mandatory audit. Inspect live GitHub. The last confi
 - Follow-up review: hydrate a tapped page before dispatching the first link tap if viewport loading has not finished; abandon the tap if the document/generation changes while waiting. Existing field/comment precedence retained.
 
 - Release preparation on the same PR: next patch beta `0.0.8-beta.1` with base code `801`, expected ARM64 **0.0.8-beta.1 (8012)**. Actual APK manifest must confirm 8012. Existing **0.0.7-beta.4 (7042)** and its public asset remain unchanged. On verified merge, the existing main workflow builds with the permanent key and publishes the new version only after Rust/Android tests and signing/package checks. Do not report publication until that run and Release API succeed.
+
+### Batch 1 third increment — ink appearance persistence (2026-11-06)
+
+- Current mobile ink preview and export used the latest global pen style for all uncommitted strokes. Capture color, opacity, width and author at stroke start instead; preview and saved PDF annotations use that immutable appearance through undo/redo.
+- Export groups only adjacent same-page/same-appearance strokes, keeping red/blue/red overlap order intact; global grouping by style would reorder overlapping ink. Existing native Ink annotation tools remain unchanged and editable; no flattening or pressure claim. Added JVM regressions for consecutive grouping, multi-page/style boundaries and immutable style transitions.
+- Based on main `172be4b` as an independent third PR alongside #13 and #14. Integration must merge latest main into each remaining PR and rerun gates after earlier batch merges. No new version branding in this PR: preserve the release version selected by integrated main.
+- Next stylus backlog: pressure-preserving PDF appearances, real stroke eraser + physical eraser/button mapping, hover, historical/coalesced input and cancellation/device traces; then lasso/move/resize, favorites and handwriting. Existing text markup, notes, voice, forms/signatures and undo are retained. Xodo parity is a roadmap, not a verified current claim.

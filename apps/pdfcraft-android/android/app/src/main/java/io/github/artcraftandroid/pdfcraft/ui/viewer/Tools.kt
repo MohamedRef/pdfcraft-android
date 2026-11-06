@@ -76,7 +76,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /** A stroke being drawn: its page and points (in the page's points). */
-class InkStroke(val page: Int) {
+internal class InkStroke(val page: Int, val appearance: InkAppearance) {
     val points = mutableStateListOf<Offset>()
 
     /** The clean shape shown while the finger is held still (press and hold to snap). */
@@ -177,25 +177,20 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
     val undone = remember { mutableStateListOf<InkStroke>() }
     var current by remember { mutableStateOf<InkStroke?>(null) }
     val prefs = vm.toolPrefs
-    val color = prefs.color(StyledTool.Ink)
-    val opacity = prefs.opacity(StyledTool.Ink)
-    val width = prefs.inkWidth
-    // what is drawn is added as one ink comment per page when the tool is left, in the
-    // colour and width set then
+    // Capture appearance at pointer down. Adjacent matching strokes may share an annotation.
     DisposableEffect(doc) {
         doc.commitTool = {
-            val color = prefs.color(StyledTool.Ink)
-            val opacity = prefs.opacity(StyledTool.Ink)
-            val width = prefs.inkWidth
-            val byPage = strokes.filter { it.points.size >= 2 }.groupBy { it.page }
-            for ((page, list) in byPage) {
+            val batches = consecutiveInkBatches(strokes.filter { it.points.size >= 2 }) { it.page to it.appearance }
+            for (list in batches) {
+                val page = list.first().page
+                val appearance = list.first().appearance
                 vm.runTool(
                     doc, "comment_add",
                     mapOf(
                         "page" to page + 1, "type" to "ink",
                         "strokes" to list.map { s -> s.points.map { listOf(it.x.toDouble(), it.y.toDouble()) } },
-                        "color" to color.hex(), "opacity" to opacity.toDouble(), "width" to width.toDouble(),
-                        "author" to prefs.author.ifBlank { null },
+                        "color" to Color(appearance.argb).hex(), "opacity" to appearance.opacity.toDouble(), "width" to appearance.width.toDouble(),
+                        "author" to appearance.author,
                     ),
                 )
             }
@@ -232,7 +227,8 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                 val at = doc.viewer.screenToPage(p) ?: return@toolGestures
                 stillAt = p
                 movedAt = System.currentTimeMillis()
-                current = InkStroke(at.page).also { it.points.add(Offset(at.x, at.y)); strokes.add(it) }
+                val appearance = InkAppearance(prefs.color(StyledTool.Ink).toArgbInt(), prefs.opacity(StyledTool.Ink), prefs.inkWidth, prefs.author.ifBlank { null })
+                current = InkStroke(at.page, appearance).also { it.points.add(Offset(at.x, at.y)); strokes.add(it) }
                 undone.clear()
             },
             onMove = { p ->
@@ -274,8 +270,8 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                     if (i == 0) path.moveTo(o.x, o.y) else path.lineTo(o.x, o.y)
                 }
                 drawPath(
-                    path, color.copy(alpha = opacity),
-                    style = Stroke(width = width * doc.viewer.pixelsPerPoint(s.page), cap = StrokeCap.Round, join = StrokeJoin.Round),
+                    path, Color(s.appearance.argb).copy(alpha = s.appearance.opacity),
+                    style = Stroke(width = s.appearance.width * doc.viewer.pixelsPerPoint(s.page), cap = StrokeCap.Round, join = StrokeJoin.Round),
                 )
             }
         }
