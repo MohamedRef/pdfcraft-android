@@ -111,7 +111,10 @@ impl DigestCache {
         self.discovery_scans.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let mut complete = true;
         let candidates: Vec<_> = doc
-            .scan_objects_checked()
+            // Candidate membership depends only on PDF names and key presence, which are not
+            // encrypted. Decrypting every unrelated image stream here delays large-file open.
+            // Matched candidates are fully read and validated by list_cached below.
+            .scan_object_headers_checked()
             .filter_map(|(reference, object)| match object {
                 Ok(object) => is_document_timestamp(&object).then_some(reference),
                 Err(_) => {
