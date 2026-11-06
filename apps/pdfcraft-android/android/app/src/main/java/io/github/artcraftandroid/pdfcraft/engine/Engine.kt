@@ -86,10 +86,19 @@ class Engine private constructor(val session: MobileSession) {
     }
 }
 
+/** Reject invalid native buffers *before* allocating a Bitmap on the Java heap. */
+internal fun expectedBitmapByteCount(width: Long, height: Long): Int? {
+    if (width <= 0L || height <= 0L || width > 8192L || height > 8192L) return null
+    val bytes = width * height * 4L
+    return bytes.takeIf { it <= 4L * 1024L * 1024L * 4L }?.toInt()
+}
+
 /** The pixels as a bitmap: the engine's premultiplied RGBA bytes are the `ARGB_8888` memory layout. */
 fun RenderedImage.toBitmap(): Bitmap {
-    val bitmap = Bitmap.createBitmap(width.toInt().coerceAtLeast(1), height.toInt().coerceAtLeast(1), Bitmap.Config.ARGB_8888)
-    if (rgba.size >= bitmap.byteCount) bitmap.copyPixelsFromBuffer(ByteBuffer.wrap(rgba))
+    val expected = expectedBitmapByteCount(width.toLong(), height.toLong())
+    require(expected != null && rgba.size == expected) { "Invalid native PDF raster dimensions or buffer length" }
+    val bitmap = Bitmap.createBitmap(width.toInt(), height.toInt(), Bitmap.Config.ARGB_8888)
+    bitmap.copyPixelsFromBuffer(ByteBuffer.wrap(rgba))
     return bitmap
 }
 

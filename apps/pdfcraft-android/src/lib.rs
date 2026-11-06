@@ -428,6 +428,10 @@ fn rgb(c: [f32; 3]) -> u32 {
 /// How many idle renderers a document keeps (a page view and its thumbnails can render at once).
 const RENDERERS_PER_DOC: usize = 3;
 
+/// Avoid multiple 64-megapixel Rust/JNA/Bitmap copies on a phone. Hi-res zoom uses 512px tiles.
+const MAX_MOBILE_PAGE_PIXELS: u64 = 4 * 1024 * 1024;
+const MAX_MOBILE_TILE_PIXELS: u64 = 1024 * 1024;
+
 /// The documents' idle renderers: the bytes they render, and the renderers themselves.
 type RendererCache = HashMap<u64, (Arc<Vec<u8>>, Vec<PageRenderer>)>;
 
@@ -605,7 +609,8 @@ impl MobileSession {
         if !(scale.is_finite() && scale > 0.0) {
             return Err(MobileError::Render(format!("the scale must be a positive number, not {scale}")));
         }
-        let (bytes, config, pages) = self.with_doc(doc, |d| {
+        let index = page as usize;
+        let (bytes, config, pages, size) = self.with_doc(doc, |d| {
             // the app draws sticky notes itself, as fixed-size icons over the page
             let config = RenderConfig {
                 password: d.password.as_deref().map(Arc::from),
@@ -613,18 +618,42 @@ impl MobileSession {
                 hide_notes: true,
                 ..RenderConfig::default()
             };
-            (d.display.clone(), config, d.info.pages.len())
+            (d.display.clone(), config, d.info.pages.len(), d.info.pages.get(index).map(|p| (p.width, p.height)))
         })?;
-        let index = page as usize;
-        if index >= pages {
+        let Some((width, height)) = size else {
             return Err(MobileError::Render(format!("page {} is out of range: the document has {pages} pages", index.saturating_add(1))));
-        }
+        };
+        let max_pixels = if let Some(t) = tile.as_ref() {
+            let count = u64::from(t.width).saturating_mul(u64::from(t.height));
+            if count == 0 || count > MAX_MOBILE_TILE_PIXELS {
+                return Err(MobileError::Render("the requested tile is empty or too large for mobile rendering".into()));
+            }
+            MAX_MOBILE_TILE_PIXELS
+        } else {
+            MAX_MOBILE_PAGE_PIXELS
+        };
+        let mobile_scale = if tile.is_none() {
+            // Keep two concurrent page rasters comfortably below the Android heap budget.
+            // The 2% headroom accounts for ceil-to-pixel rounding on both axes.
+            let area = width.max(1.0) * height.max(1.0);
+            let cap = ((MAX_MOBILE_PAGE_PIXELS as f32 * 0.98) / area).sqrt();
+            if !cap.is_finite() || cap <= 0.0 {
+                return Err(MobileError::Render("the page's dimensions exceed mobile rendering limits".into()));
+            }
+            scale.min(cap)
+        } else {
+            scale
+        };
         let mut renderer = self.take_renderer(doc, &bytes, config);
-        let tile = tile.map(|t| Tile { x: t.x, y: t.y, w: t.width, h: t.height });
-        let out = renderer.render(RenderRequest { page: index, kind: RequestKind::Pixels, tile, scale, tag: 0, preview: false });
+        let raster_tile = tile.map(|t| Tile { x: t.x, y: t.y, w: t.width, h: t.height });
+        let out = renderer.render(RenderRequest { page: index, kind: RequestKind::Pixels, tile: raster_tile, scale: mobile_scale, tag: 0, preview: false });
         self.return_renderer(doc, &bytes, renderer);
         if let Some(e) = out.error {
             return Err(MobileError::Render(format!("page {} could not be drawn: {e}", index.saturating_add(1))));
+        }
+        let pixels = u64::from(out.width).saturating_mul(u64::from(out.height));
+        if pixels == 0 || pixels > max_pixels || (out.rgba.len() as u64) != pixels.saturating_mul(4) {
+            return Err(MobileError::Render("the renderer returned an invalid or oversized pixel buffer".into()));
         }
         Ok(RenderedImage { width: out.width, height: out.height, rgba: out.rgba.to_vec() })
     }
