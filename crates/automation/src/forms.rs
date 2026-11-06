@@ -319,6 +319,7 @@ impl Automation {
 
     pub(crate) fn form_fill(&mut self, a: &Args) -> Result<Value> {
         let doc = self.doc(a)?;
+        let doc_id = doc.id;
         let values = a
             .get("values")
             .and_then(Value::as_object)
@@ -333,6 +334,15 @@ impl Automation {
         }
         let edit = if edits.len() == 1 { edits.remove(0) } else { Edit::Batch { label: "Fill in form".into(), edits } };
         let mut out = self.apply(a, edit)?;
+        // Fill/Calculate scripts may show alerts or request viewer actions. Do not silently
+        // drop them when returning an updated form summary to Android callers.
+        let scripts = self.session.take_js_output(doc_id);
+        if !scripts.is_empty() {
+            out["alerts"] = json!(scripts.alerts.iter().map(crate::a11y::alert_json).collect::<Vec<Value>>());
+            out["console"] = json!(scripts.console);
+            out["requests"] = json!(scripts.requests.iter().map(crate::a11y::request_json).collect::<Vec<Value>>());
+            out["script_errors"] = json!(scripts.errors);
+        }
         out["filled"] = json!(values.len());
         // A value the box cuts off at a fixed font size is saved whole but shows only in part:
         // said, not silent (#4018).

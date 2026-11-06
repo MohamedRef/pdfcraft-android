@@ -10,6 +10,7 @@ use crate::{Args, Automation, Result, ToolError, child, failed, unused, write_at
 
 mod documents;
 mod form_tools;
+pub(crate) use form_tools::{alert_json, request_json};
 mod ocr;
 
 fn status_id(s: Status) -> &'static str {

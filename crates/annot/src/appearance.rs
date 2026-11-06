@@ -19,7 +19,7 @@ use crate::{NOTE_SIZE, Rgb, n};
 mod symbols;
 
 pub(crate) use symbols::display_stamp;
-use symbols::{CAPTION_SIZE, attach_icon, ellipse, line_caption, line_layout, note_icon, stamp};
+use symbols::{CAPTION_SIZE, attach_icon, sound_icon, ellipse, line_caption, line_layout, note_icon, stamp};
 
 /// Length of an arrowhead for a line of width `w`.
 pub fn arrow_size(w: f64) -> f64 {
@@ -427,6 +427,7 @@ pub fn build(d: &Dict) -> Option<Stream> {
     match context.subtype {
         b"Text" => return draw_icon(&context, "Note", [1.0, 0.82, 0.0], drawing),
         b"FileAttachment" => return draw_icon(&context, "PushPin", [0.0, 0.47, 0.84], drawing),
+        b"Sound" => return draw_icon(&context, "Sound", [0.0, 0.47, 0.84], drawing),
         b"Stamp" => return draw_stamp(&context, drawing),
         b"FreeText" => return draw_free_text(&context, drawing),
         _ => {}
@@ -1016,7 +1017,7 @@ fn draw_icon(context: &AppearanceContext<'_>, name: &str, fallback: Rgb, mut dra
     let d = context.dict;
     let col = context.stroke.unwrap_or(fallback);
     let icon = d.name(b"Name").map(|n| String::from_utf8_lossy(n).into_owned()).unwrap_or_else(|| name.into());
-    let content = if name == "Note" { note_icon(&icon, col) } else { attach_icon(&icon, col) };
+    let content = if name == "Note" { note_icon(&icon, col) } else if name == "Sound" { sound_icon(col) } else { attach_icon(&icon, col) };
     drawing.content.push_str(&content);
     Some(form([0.0, 0.0, NOTE_SIZE, NOTE_SIZE], drawing.content.as_bytes(), drawing.resources))
 }

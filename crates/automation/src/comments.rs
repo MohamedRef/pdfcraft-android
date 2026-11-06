@@ -410,6 +410,17 @@ impl Automation {
                     };
                     Shape::Attachment { at: icon_anchor(&info, x, y), icon, file, data }
                 }
+                "sound" => {
+                    let [x, y] = a.need::<2>("at", "a voice comment (its icon's top-left)")?;
+                    let path = self.resolve(a.str("path")?, false)?;
+                    let size = std::fs::metadata(&path).map_err(|e| failed(format!("{}: {e}", path.display())))?.len();
+                    if size > (MAX_SOUND_BYTES as u64 + 1024 * 1024) {
+                        return Err(failed("voice recording exceeds the 32 MiB mobile safety limit".to_string()));
+                    }
+                    let data = crate::read_input(&path)?;
+                    let (rate, channels, samples) = wav_samples(&data).map_err(|e| failed(format!("{}: {e}", path.display())))?;
+                    Shape::Sound { at: icon_anchor(&info, x, y), rate, channels, samples }
+                }
                 "caret" => {
                     let [x, y] = a.need::<2>("at", "a caret (the insertion point on the baseline)")?;
                     Shape::Caret { rect: rect_to_user(&info, [x - 4.0, y, x + 4.0, y + 8.0]) }
@@ -756,3 +767,42 @@ mod tests {
         assert_eq!(hex([1.0, 0.5, 0.0]), "#FF8000");
     }
 }
+
+/// The most audio a voice comment holds: an hour of 48 kHz stereo 16-bit samples.
+const MAX_SOUND_BYTES: usize = 32 * 1024 * 1024;
+
+/// A WAV file's 16-bit PCM samples, big-endian as PDF stores them (§13.3), with the sampling
+/// rate and channel count.
+fn wav_samples(data: &[u8]) -> std::result::Result<(u32, u8, Vec<u8>), String> {
+    let u16_at = |i: usize| data.get(i..i + 2).and_then(|b| <[u8; 2]>::try_from(b).ok()).map(u16::from_le_bytes);
+    let u32_at = |i: usize| data.get(i..i + 4).and_then(|b| <[u8; 4]>::try_from(b).ok()).map(u32::from_le_bytes);
+    if data.get(..4) != Some(b"RIFF") || data.get(8..12) != Some(b"WAVE") {
+        return Err("not a WAV recording".into());
+    }
+    let (mut fmt, mut samples) = (None, None);
+    let mut i = 12usize;
+    while let (Some(id), Some(len)) = (data.get(i..i + 4), u32_at(i + 4)) {
+        let body = i + 8;
+        let len = len as usize;
+        match id {
+            b"fmt " => fmt = Some((u16_at(body), u16_at(body + 2), u32_at(body + 4), u16_at(body + 14))),
+            // A recorder that stopped early may leave the length unset: take what is there.
+            b"data" => samples = data.get(body..body.saturating_add(len).min(data.len())),
+            _ => {}
+        }
+        // Chunks are padded to an even length.
+        i = body.saturating_add(len).saturating_add(len & 1);
+    }
+    let Some((Some(1), Some(channels @ 1..=2), Some(rate @ 4000..=96000), Some(16))) = fmt else {
+        return Err("the recording must be 16-bit PCM, mono or stereo, at 4 to 96 kHz".into());
+    };
+    let samples = samples.filter(|s| s.len() >= 2).ok_or("the recording is empty")?;
+    if samples.len() > MAX_SOUND_BYTES {
+        return Err("the recording exceeds the 32 MiB mobile limit".into());
+    }
+    if samples.len() % 2 != 0 {
+        return Err("the recording has an incomplete PCM sample".into());
+    }
+    Ok((rate, channels as u8, samples.as_chunks::<2>().0.iter().flat_map(|s| [s[1], s[0]]).collect()))
+}
+
