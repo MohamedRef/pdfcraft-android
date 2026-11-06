@@ -191,7 +191,7 @@ jobs:
           gh api "repos/$GH_REPO/git/refs" -X POST -f ref="refs/tags/$tag" -f sha="$GITHUB_SHA" >/dev/null
           args=()
           if [[ "$version" == *-* ]]; then args+=(--prerelease); fi
-          gh release create "$tag" --verify-tag --title "PdfCraft $version ($build)" \
+          gh release create "$tag" --verify-tag --generate-notes --title "PdfCraft $version ($build)" \
             --notes "Signed ARM64 Android update, build $version ($build). Source: $GITHUB_SHA. Tested in Rust and Android CI; user-approved installation required." \
             "${args[@]}" "$apk" "$apk.sha256"
           echo "Published $tag, Android build ($build), signed ARM64 APK with SHA-256." >> "$GITHUB_STEP_SUMMARY"
