@@ -375,6 +375,10 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
             doc,
             penOnly = prefs.stylusOnly,
             onDown = { p, pressure, isStylus ->
+                if (doc.controller.eraserMode) {
+                    beginErase(p)
+                    return@toolGestures
+                }
                 val at = doc.viewer.screenToPage(p) ?: return@toolGestures
                 stillAt = p
                 movedAt = System.currentTimeMillis()
@@ -386,6 +390,10 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                 }
             },
             onMove = { p, pressure, _ ->
+                if (eraserPage != null) {
+                    moveErase(p)
+                    return@toolGestures
+                }
                 val s = current ?: return@toolGestures
                 if ((p - stillAt).getDistance() > slop) {
                     stillAt = p
@@ -398,7 +406,11 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                     s.pressures.add(pressure)
                 }
             },
-            onUp = { _, _ ->
+            onUp = { p, _ ->
+                if (eraserPage != null) {
+                    finishErase(p)
+                    return@toolGestures
+                }
                 val s = current
                 current = null
                 if (s != null) {
@@ -418,9 +430,14 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                 }
             },
             onCancel = {
+                if (eraserPage != null) cancelErase()
                 current?.let { strokes.remove(it) }
                 current = null
             },
+            onEraserDown = { p -> beginErase(p) },
+            onEraserMove = { p -> moveErase(p) },
+            onEraserUp = { p -> finishErase(p) },
+            onEraserCancel = { cancelErase() },
         ),
     ) {
         Canvas(Modifier.fillMaxSize()) {
@@ -441,6 +458,16 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                         style = Stroke(width = run.width * doc.viewer.pixelsPerPoint(s.page), cap = StrokeCap.Round, join = StrokeJoin.Round),
                     )
                 }
+            }
+            val page = eraserPage
+            val screen = eraserScreen
+            if (page != null && screen != null) {
+                drawCircle(
+                    Color.DarkGray.copy(alpha = 0.75f),
+                    radius = 8f * doc.viewer.pixelsPerPoint(page),
+                    center = screen,
+                    style = Stroke(width = 1.5.dp.toPx()),
+                )
             }
         }
     }
