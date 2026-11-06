@@ -906,6 +906,19 @@ impl Document {
         self.editor.as_ref().map(|e| pdfcraft_organize::custom_info(&e.cos)).unwrap_or_default()
     }
 
+    /// A bounded, read-only copy of the catalog's XMP metadata packet, when present.
+    /// Keep the UI from decoding or allocating arbitrarily large untrusted streams.
+    pub fn xmp_metadata(&self) -> Option<String> {
+        let editor = self.editor.as_ref()?;
+        let root = editor.cos.root()?;
+        let catalog = editor.cos.get(root);
+        let metadata = catalog.as_dict()?.get(b"Metadata")?;
+        let object = editor.cos.resolve(metadata);
+        let pdfcraft_cos::Object::Stream(stream) = &*object else { return None };
+        let bytes = stream.decoded_within(256 << 10).ok()?;
+        Some(String::from_utf8_lossy(&bytes).into_owned())
+    }
+
     /// The name shown on the tab and window: the document title when the document asks for it
     /// (Initial View ▸ Show: Document Title) and has a real one, else the file name.
     pub fn display_name(&self) -> String {

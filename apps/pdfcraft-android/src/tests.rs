@@ -35,6 +35,25 @@ fn opens_a_document_and_describes_its_pages() {
 }
 
 #[test]
+fn file_properties_are_read_only_and_match_the_parsed_document() {
+    let s = MobileSession::new();
+    let info = s.open(blank_pdf(2), None).unwrap();
+    let before = s.document(info.id).unwrap().generation;
+    let properties = s.file_properties(info.id).unwrap();
+    let expected = s.with_doc(info.id, |d| {
+        (d.info_value("CreationDate"), d.info_value("ModDate"), d.custom_info(), d.allows_modification(), d.xmp_metadata())
+    }).unwrap();
+    assert_eq!(properties.creation_date, expected.0);
+    assert_eq!(properties.modification_date, expected.1);
+    assert_eq!(properties.custom_metadata.iter().map(|field| (field.name.clone(), field.value.clone())).collect::<Vec<_>>(), expected.2);
+    assert_eq!(properties.allows_modification, expected.3);
+    assert_eq!(properties.xmp_packet, expected.4);
+    assert_eq!(s.document(info.id).unwrap().generation, before);
+    assert!(!s.document(info.id).unwrap().dirty);
+    assert!(matches!(s.file_properties(u64::MAX), Err(MobileError::NoDocument(_))));
+}
+
+#[test]
 fn renders_a_page_and_a_tile() {
     let s = MobileSession::new();
     let doc = s.open(blank_pdf(1), None).unwrap().id;
