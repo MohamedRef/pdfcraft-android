@@ -56,7 +56,7 @@ class OpenDocument(
     var notWrittenBack = false
 
     /** The links of each page (0-based), refreshed when the document changes. */
-    var links: Map<Int, List<io.github.artcraftandroid.pdfcraft.core.LinkInfo>> = emptyMap()
+    var links by mutableStateOf<Map<Int, List<io.github.artcraftandroid.pdfcraft.core.LinkInfo>>>(emptyMap())
     /** Only visible page links are loaded; the initial open never scans every page. */
     val linkPagesLoaded = HashSet<Int>()
 

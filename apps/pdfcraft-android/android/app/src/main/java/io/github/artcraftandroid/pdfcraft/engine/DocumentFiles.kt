@@ -36,7 +36,7 @@ class DocumentFiles(private val context: Context) {
             val f = File(requireNotNull(uri.path) { context.getString(R.string.files_error_no_path) })
             if (f.canonicalPath.startsWith(context.filesDir.canonicalPath)) return f
         }
-        val name = displayName(uri)
+        val name = OpenTiming.measure("provider_metadata") { displayName(uri) }
         val dir = File(workDir, sha(uri.toString())).apply { mkdirs() }
         // A failed provider write may have truncated the original; prefer the recovery copy.
         if (PendingWorkingCopy.isPending(dir)) {
@@ -45,32 +45,18 @@ class DocumentFiles(private val context: Context) {
             )
         }
         val target = File(dir, name)
-        // Use trustworthy provider metadata to skip another full copy of a large PDF.
-        // Unknown/changed metadata always takes the safe slow path.
-        val fingerprint = PdfSourceFingerprint(size(uri), lastModified(uri))
-        if (PdfWorkingCopyCache.canReuse(dir, target, fingerprint)) {
-            dir.setLastModified(System.currentTimeMillis())
-            return target
-        }
         val tmp = File(dir, ".$name.part")
-        PdfWorkingCopyCache.clear(dir)
-        try {
-            resolver.openInputStream(uri).use { input ->
-                requireNotNull(input) { context.getString(R.string.common_file_unreadable) }
-                tmp.outputStream().use { input.copyTo(it) }
-            }
-            if (!tmp.renameTo(target)) {
-                tmp.copyTo(target, overwrite = true)
-                tmp.delete()
-            }
-            // Keep the source's timestamp for File details, not for cache age.
-            fingerprint.modified?.let { target.setLastModified(it) }
-            if (target.length() == fingerprint.size) PdfWorkingCopyCache.record(dir, fingerprint)
-            dir.setLastModified(System.currentTimeMillis())
-            return target
-        } finally {
+        resolver.openInputStream(uri).use { input ->
+            requireNotNull(input) { context.getString(R.string.common_file_unreadable) }
+            tmp.outputStream().use { input.copyTo(it) }
+        }
+        if (!tmp.renameTo(target)) {
+            tmp.copyTo(target, overwrite = true)
             tmp.delete()
         }
+        // the copy keeps the source's date, which the More sheet shows as when it was modified
+        lastModified(uri)?.let { target.setLastModified(it) }
+        return target
     }
 
     /** When [uri] was last modified (ms), when its provider says: a document's or a media file's date. */
@@ -91,7 +77,7 @@ class DocumentFiles(private val context: Context) {
     fun dropCopyIfReachable(uri: Uri) {
         if (uri.scheme != ContentResolver.SCHEME_CONTENT) return
         val dir = File(workDir, sha(uri.toString()))
-        if (PendingWorkingCopy.isPending(dir) || PdfWorkingCopyCache.hasStamp(dir)) return
+        if (PendingWorkingCopy.isPending(dir)) return
         if (resolver.persistedUriPermissions.none { it.uri == uri && it.isReadPermission }) return
         dir.deleteRecursively()
     }
@@ -105,19 +91,9 @@ class DocumentFiles(private val context: Context) {
         val readable = resolver.persistedUriPermissions.filter { it.isReadPermission }.mapTo(HashSet()) { it.uri.toString() }
         val wanted = recent.filter { it !in readable }.mapTo(HashSet()) { sha(it) }
         open?.let { wanted += sha(it) }
-        val now = System.currentTimeMillis()
-        val recentThreshold = now - 10 * 60 * 1000L
-        val cacheThreshold = now - 24 * 60 * 60 * 1000L
-        val maxCacheBytes = 1024L * 1024 * 1024
-        var cachedBytes = 0L
-        workDir.listFiles()?.filter { it.isDirectory }?.sortedByDescending { it.lastModified() }?.forEach { dir ->
-            if (PendingWorkingCopy.isPending(dir) || dir.name in wanted) return@forEach
-            val stamped = PdfWorkingCopyCache.hasStamp(dir)
-            val expires = dir.lastModified() < if (stamped) cacheThreshold else recentThreshold
-            val bytes = dir.listFiles()?.sumOf { if (it.isFile) it.length() else 0L } ?: 0L
-            val exceedsBudget = stamped && cachedBytes + bytes > maxCacheBytes && dir.lastModified() < recentThreshold
-            if (expires || exceedsBudget) dir.deleteRecursively()
-            else if (stamped) cachedBytes += bytes
+        val settled = System.currentTimeMillis() - 10 * 60 * 1000L
+        workDir.listFiles()?.forEach { dir ->
+            if (!PendingWorkingCopy.isPending(dir) && dir.name !in wanted && dir.lastModified() < settled) dir.deleteRecursively()
         }
     }
 

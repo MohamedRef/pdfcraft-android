@@ -148,6 +148,12 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
         }
     }
 
+    LaunchedEffect(doc) {
+        androidx.compose.runtime.withFrameNanos { }
+        if (android.util.Log.isLoggable("PdfCraftOpen", android.util.Log.DEBUG))
+            android.util.Log.d("PdfCraftOpen", "viewer_frame_ms=${doc.images.elapsedOpenMs()}")
+    }
+
     // The first page renders without waiting for a scan of links across the whole PDF.
     // Cache only visible pages and a small neighborhood as the viewport moves.
     LaunchedEffect(doc) {

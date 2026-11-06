@@ -11,5 +11,5 @@ internal fun missingVisibleLinkPages(
     maxBatch: Int = 12,
 ): List<Int> =
     if (pageCount <= 0 || maxBatch <= 0) emptyList()
-    else visible.asSequence().filter { it >= 0 && it < pageCount && it !in alreadyLoaded }
+    else (maxOf(0, visible.first)..minOf(pageCount - 1, visible.last)).asSequence().filter { it !in alreadyLoaded }
         .take(maxBatch).toList()

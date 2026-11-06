@@ -280,7 +280,10 @@ private fun DrawScope.drawPages(state: ViewerState, images: PageImages, gen: Lon
         drawRect(look.pageShadow, topLeft = Offset(r.left - 1f, r.top - 1f), size = Size(r.width + 2f, r.height + 2f))
         drawRect(if (look.invert) Color.Black else Color.White, topLeft = r.topLeft, size = r.size)
         val base = images.get(ImageKey(i, gen, state.baseLevel())) ?: images.get(ImageKey(i, gen, 0)) ?: images.latestBase(i)
-        if (base != null) drawImageIn(base, r, look.invert)
+        if (base != null) {
+            drawImageIn(base, r, look.invert)
+            images.reportFirstDraw()
+        }
         if (level > 0) {
             val s = state.levelScale(i, level, maxScale)
             val k = state.pixelsPerPoint(i) / s

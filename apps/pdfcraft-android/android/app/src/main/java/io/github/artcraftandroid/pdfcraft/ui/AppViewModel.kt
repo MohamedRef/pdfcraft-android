@@ -138,6 +138,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
 
     /** The document another app is opening in PdfCraft, until it opens. */
     private var otherAppUri: Uri? = null
+    private var openStartedAt = 0L
 
     /** Fires when a document another app opened is closed: the activity finishes, back to that app. */
     val leave = Channel<Unit>(Channel.CONFLATED)
@@ -160,12 +161,13 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         }
         viewModelScope.launch {
             val eng = engine ?: application.engine.await().getOrNull() ?: run { tell(engineProblem ?: text(R.string.msg_engine_not_started)); return@launch }
+            openStartedAt = android.os.SystemClock.elapsedRealtime()
             opening = true
             try {
-                val file = withContext(Dispatchers.IO) {
+                val file = io.github.artcraftandroid.pdfcraft.engine.OpenTiming.measure("provider_and_working_copy") { withContext(Dispatchers.IO) {
                     files.keepAccess(uri)
                     files.workingCopy(uri)
-                }
+                } }
                 openFile(eng, uri, file, password)
             } catch (e: java.io.FileNotFoundException) {
                 // Moved or deleted since it was opened, or a link a file manager lent that a
@@ -230,8 +232,8 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 }
                 document = null
             }
-            val info = eng.command { open(file.absolutePath, password) }
-            val images = PageImages(eng, info.id, viewModelScope, imageBudget)
+            val info = io.github.artcraftandroid.pdfcraft.engine.OpenTiming.measure("native_open") { eng.command { open(file.absolutePath, password) } }
+            val images = PageImages(eng, info.id, viewModelScope, imageBudget, openedAt = openStartedAt)
             val source = uri.takeIf { it.scheme == "content" || it.scheme == "file" }
             val doc = OpenDocument(info.id, info, source, file, images, password, eng, viewModelScope)
             doc.fromOtherApp = otherAppUri == uri
@@ -423,27 +425,33 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     }
 
     private suspend fun loadLinks(eng: Engine, doc: OpenDocument) {
-        doc.widgets = runCatching { eng.command { widgets(doc.id) } }.getOrDefault(emptyList())
-        doc.comments = runCatching { eng.command { comments(doc.id) } }.getOrDefault(emptyList())
+        doc.widgets = runCatching { io.github.artcraftandroid.pdfcraft.engine.OpenTiming.measure("widgets") { eng.command { widgets(doc.id) } } }.getOrDefault(emptyList())
+        doc.comments = runCatching { io.github.artcraftandroid.pdfcraft.engine.OpenTiming.measure("comments") { eng.command { comments(doc.id) } } }.getOrDefault(emptyList())
         // Do not scan every link on every page before showing a large document.
         // The viewer loads only its visible pages after the first frame.
-        loadSignatures(eng, doc)
+        io.github.artcraftandroid.pdfcraft.engine.OpenTiming.measure("signatures") { loadSignatures(eng, doc) }
     }
 
     /** Resolve only the displayed PDF pages' links without blocking the opening screen. */
     suspend fun loadVisibleLinks(doc: OpenDocument, visible: IntRange) {
         if (document !== doc) return
         val eng = engine ?: return
-        val missing = missingVisibleLinkPages(visible, doc.pageCount, doc.linkPagesLoaded)
-        if (missing.isEmpty()) return
         val generation = doc.info.generation
-        val result = runCatching {
-            eng.command { missing.associateWith { p -> links(doc.id, p.toUInt()) } }
-        }.getOrNull() ?: return
-        // An edit or a different document can finish while the worker is fetching links.
-        if (document !== doc || doc.info.generation != generation) return
-        doc.links = doc.links + result
-        doc.linkPagesLoaded.addAll(result.keys)
+        while (document === doc && doc.info.generation == generation) {
+            val missing = missingVisibleLinkPages(visible, doc.pageCount, doc.linkPagesLoaded)
+            if (missing.isEmpty()) return
+            val result = try {
+                io.github.artcraftandroid.pdfcraft.engine.OpenTiming.measure("visible_links") {
+                    eng.command { missing.associateWith { p -> links(doc.id, p.toUInt()) } }
+                }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (_: Exception) { return }
+            if (document !== doc || doc.info.generation != generation) return
+            doc.links = doc.links + result
+            doc.linkPagesLoaded.addAll(result.keys)
+            kotlinx.coroutines.yield()
+        }
     }
 
     /**

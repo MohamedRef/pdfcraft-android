@@ -15,4 +15,17 @@ class VisibleLinkPagesTest {
         assertEquals(emptyList<Int>(), missingVisibleLinkPages(0..3, 4, setOf(0, 1, 2, 3)))
         assertEquals(emptyList<Int>(), missingVisibleLinkPages(0..3, 4, emptySet(), maxBatch = 0))
     }
+    @Test fun everyVisiblePageCanBeHydratedAcrossBatches() {
+        val loaded = HashSet<Int>()
+        repeat(3) { loaded.addAll(missingVisibleLinkPages(0..29, 10000, loaded)) }
+        assertEquals((0..29).toSet(), loaded)
+        assertEquals(emptyList<Int>(), missingVisibleLinkPages(0..29, 10000, loaded))
+        loaded.clear() // an edit invalidates the previous generation
+        assertEquals((0..11).toList(), missingVisibleLinkPages(0..29, 10000, loaded))
+    }
+
+    @Test fun hostileViewportBoundsAreClampedBeforeIteration() {
+        assertEquals(listOf(0, 1), missingVisibleLinkPages(Int.MIN_VALUE..Int.MAX_VALUE, 2, emptySet()))
+        assertEquals(emptyList<Int>(), missingVisibleLinkPages(5..1, 10, emptySet()))
+    }
 }

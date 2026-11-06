@@ -67,3 +67,11 @@
 ## Starting instruction for the next developer
 
 Read this file and the full mandatory audit. Inspect live GitHub. The last confirmed published product is **0.0.7-beta.4 (7042)**, all earlier PRs are merged, and the *newest unresolved request* is **large-PDF opening latency vs Xodo**. Make a measured, safe, Android-focused performance improvement through one PR, not just a plan. Keep all functionality and publish a signed version only after verified merge and release gates.
+
+### Large PDF performance — PR #12 review checkpoint (2026-11-06)
+
+- Refreshed live state: main `05963db9a69901cc4b7a9ff38524b81163e9ae69`, latest release unchanged **0.0.7-beta.4 (7042)**, one existing draft PR [#12](https://github.com/MohamedRef/pdfcraft-android/pull/12) at `ccf8a519`. Continued that PR and merged latest main into its branch; no second feature PR.
+- Narrowed change to lazy visible-page links plus opt-in monotonic instrumentation. Removed metadata-only working-copy cache: provider size/mtime cannot guarantee unchanged contents. Recovery/full-copy safety retained. Direct seekable/provider reading and thumbnail copy elimination are deferred pending safe lifetime/copy-on-write tests; native parsing unchanged.
+- Links load in batches of at most 12, drain the visible range, invalidate on generation changes, discard stale results after document switch/edit and propagate coroutine cancellation. Link map is Compose observable. Widgets/comments/signatures still load before display to preserve interactive behavior.
+- Enable timing: `adb shell setprop log.tag.PdfCraftOpen DEBUG`, then `adb logcat -s PdfCraftOpen:D`. Fixed-stage durations: provider metadata/copy, native open, widgets/comments/signatures, visible links and page rendering. `viewer_frame_ms` and `first_page_canvas_ms` are elapsed since open request (including copy/native); Canvas submission is not proof of GPU display. Disable with `adb shell setprop log.tag.PdfCraftOpen INFO`. No URI, password, file name or contents in these timing records.
+- Tests added for 10,000-page selection, multiple batches, invalidation and extreme viewport bounds. CI pending on the new head. No Samsung/emulator execution, 100/500 MB sample benchmark or Xodo comparison available locally; **no measured speed improvement claimed**. Release/version unchanged until verified merge.
