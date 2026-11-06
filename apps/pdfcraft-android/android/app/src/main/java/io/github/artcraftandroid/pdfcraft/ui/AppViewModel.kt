@@ -229,7 +229,9 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     private suspend fun openFile(eng: Engine, uri: Uri, file: File, password: String?) {
         try {
             document?.let { current ->
-                if (!saveAndClose(eng, current)) {
+                val previousSaved = saveAndClose(eng, current)
+                io.github.artcraftandroid.pdfcraft.engine.OpenTiming.milestone("previous_document_closed", openStartedAt)
+                if (!previousSaved) {
                     readOnlyPrompt = current
                     return
                 }
@@ -246,6 +248,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             }
             doc.writable = writable
             doc.notWrittenBack = source?.let { withContext(Dispatchers.IO) { files.hasPendingWriteBack(it) } } ?: false
+            io.github.artcraftandroid.pdfcraft.engine.OpenTiming.milestone("source_access_ready", openStartedAt)
             loadLinks(eng, doc)
             io.github.artcraftandroid.pdfcraft.engine.OpenTiming.milestone("overlays_ready", openStartedAt, pages = info.pages.size)
             doc.controller.nightMode = savedNightMode
