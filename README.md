@@ -52,7 +52,7 @@
 
 ## Desktop engine parity and current release
 
-**Latest verified public APK:** [PdfCraft Android 0.0.9-beta.1 (9012)](https://github.com/MohamedRef/pdfcraft-android/releases/tag/v0.0.9-beta.1), a permanently signed `arm64-v8a` prerelease with a SHA-256 sidecar. **Next sequential version: `0.0.10-beta.1 (10012)`**, currently in release-numbering correction and **not published yet**. Do not try to install a CI artifact or a differently signed upstream APK as an update. The app's update checker uses this fork's published GitHub Releases.
+**Latest verified public APK:** [PdfCraft Android 0.0.9-beta.1 (9012)](https://github.com/MohamedRef/pdfcraft-android/releases/tag/v0.0.9-beta.1), a permanently signed `arm64-v8a` prerelease with a SHA-256 sidecar. **Next sequential version: `0.0.10-beta (10012)`**, currently in release-numbering correction and **not published yet**. Do not try to install a CI artifact or a differently signed upstream APK as an update. The app's update checker uses this fork's published GitHub Releases.
 
 The mobile Rust engine is based on the original [storytold/pdfcraft **v0.18.2**](https://github.com/storytold/pdfcraft/releases/tag/v0.18.2), pinned to commit `7faa4f35cefb0dea04137ec475bdc770945c22cd`. Its reviewed stable-source import contains **32 mobile-suitable crates** and **nine vendor patches** protected by a CI provenance lock. The internal Rust workspace's `0.14.0` package version remains different from that pinned upstream **source baseline** and from the Android app's APK version.
 
