@@ -5,6 +5,9 @@ import kotlin.math.roundToInt
 /** Inclusive point indices in one original stroke. Neighboring runs share their boundary point. */
 internal data class InkWidthRun(val start: Int, val end: Int, val width: Float)
 
+/** Avoid generating an unbounded number of PDF annotations for one long pen stroke. */
+internal const val MAX_INK_WIDTH_RUNS = 64
+
 /**
  * PDF Ink annotations have one /BS width per annotation, not a width for every InkList point.
  * Quantize stylus pressure and split only at width transitions, so saved PDF appearances retain
@@ -29,9 +32,11 @@ internal fun inkWidthRuns(pressures: List<Float>, selectedWidth: Float, stylus: 
     val runs = ArrayList<InkWidthRun>()
     var start = 0
     var currentWidth = width(0)
+    // Short strokes keep full pressure detail; long strokes have a deterministic annotation cap.
+    val minimumRunEdges = ((pressures.lastIndex + MAX_INK_WIDTH_RUNS - 1) / MAX_INK_WIDTH_RUNS).coerceAtLeast(1)
     for (i in 1 until pressures.lastIndex) {
         val nextWidth = width(i)
-        if (nextWidth != currentWidth) {
+        if (nextWidth != currentWidth && i - start >= minimumRunEdges && runs.size < MAX_INK_WIDTH_RUNS - 1) {
             runs += InkWidthRun(start, i, currentWidth)
             start = i
             currentWidth = nextWidth
