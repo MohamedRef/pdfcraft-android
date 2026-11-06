@@ -49,3 +49,9 @@ Priority discrepancy categories:
 5. **Post-release sync**. Review commits added after `v0.18.2` only against a *new stable release*; create separate small PRs, never automatically merge upstream `main`.
 
 This report is a **source-level audit**, not proof of full runtime or feature parity. Current Android native build must continue to identify itself with its real underlying code version until the coherent core upgrade is verified.
+
+## Implementation log — 2026-11-06
+
+- Work started against `sync/storytold-0182-android-safe`; upstream target remains immutable stable `7faa4f35cefb0dea04137ec475bdc770945c22cd`.
+- Existing work preserved: [#5](https://github.com/MohamedRef/pdfcraft-android/pull/5) working-copy recovery, [#6](https://github.com/MohamedRef/pdfcraft-android/pull/6) validation backports/audit, and [#7](https://github.com/MohamedRef/pdfcraft-android/pull/7) forms/XFA safety. At inspection, #6 and #7 Rust, Android JVM and both ARM ABI APK smoke checks passed; signed release jobs were skipped. These checks establish their respective small changes, not full engine parity.
+- In progress: inspect repository instructions, pin and compare the stable core snapshot with Android adaptations, then implement and test coherent migration increments. Each delivered increment will update this file with changes, commands/results, unresolved gates and the next action. No release/version parity claim yet.
