@@ -140,6 +140,8 @@ jobs:
   signed-apk:
     if: github.event_name != 'pull_request'
     needs: [rust-tests, android-tests]
+    permissions:
+      contents: write  # publish an already signed and verified APK only from main
     runs-on: ubuntu-latest
     timeout-minutes: 150
     steps:
@@ -190,7 +192,7 @@ jobs:
           version="$(sed -n 's/^pdfcraft\.version=//p' gradle.properties)"
           mkdir -p "$GITHUB_WORKSPACE/dist"
           ./gradlew assembleRelease "-Ppdfcraft.abis=arm64-v8a" --no-daemon --stacktrace
-          cp app/build/outputs/apk/release/app-release.apk "$GITHUB_WORKSPACE/dist/pdfcraft-custom-$version.apk"
+          cp app/build/outputs/apk/release/app-release.apk "$GITHUB_WORKSPACE/dist/pdfcraft-android-$version.apk"
       - name: Verify release APK matches validated signing certificate and app ID
         run: |
           tools="$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -n 1)"
@@ -214,6 +216,42 @@ jobs:
           path: dist/*.apk
           if-no-files-found: error
           retention-days: 30
+      # The updater intentionally only trusts *published* owner GitHub Releases with SHA-256.
+      # GITHUB_TOKEN-created tags do not recursively trigger the tag-specific Release workflow.
+      - name: Publish verified signed ARM64 APK as an update release
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          version="$(sed -n 's/^pdfcraft\\.version=//p' apps/pdfcraft-android/android/gradle.properties)"
+          tag="v$version"
+          apk="dist/pdfcraft-android-$version.apk"
+          test -s "$apk"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "Release $tag already exists; no second release with the same build number." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          if gh api "repos/$GH_REPO/git/ref/tags/$tag" >/dev/null 2>&1; then
+            echo "::error::Tag $tag exists without a published release; review its origin before proceeding."
+            exit 1
+          fi
+          tools="$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -n 1)"
+          build="$("${tools}aapt" dump badging "$apk" | sed -n "s/^package:.*versionCode='\\([0-9]*\\)'.*/\\1/p" | head -n 1)"
+          if ! [[ "$build" =~ ^[1-9][0-9]*$ ]]; then
+            echo "::error::Could not read the signed APK manifest's actual Android build number."
+            exit 1
+          fi
+          sha256sum "$apk" > "$apk.sha256"
+          gh api "repos/$GH_REPO/git/refs" -X POST -f ref="refs/tags/$tag" -f sha="$GITHUB_SHA" >/dev/null
+          args=()
+          if [[ "$version" == *-* ]]; then args+=(--prerelease); fi
+          gh release create "$tag" --verify-tag --title "PdfCraft $version ($build)" \
+            --notes "Signed ARM64 Android update, build $version ($build). Source: $GITHUB_SHA. Tested in Rust and Android CI; user-approved installation required." \
+            "${args[@]}" "$apk" "$apk.sha256"
+          echo "Published $tag, Android build ($build), signed ARM64 APK with SHA-256." >> "$GITHUB_STEP_SUMMARY"
+
       - name: Clean up original signing key
         if: always()
         run: rm -f "$RUNNER_TEMP/release.p12"
