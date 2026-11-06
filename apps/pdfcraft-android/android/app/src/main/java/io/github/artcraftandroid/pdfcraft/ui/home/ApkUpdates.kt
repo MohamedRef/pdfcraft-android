@@ -74,7 +74,8 @@ internal fun updateChannel(version: String): String = when {
 
 /** Release assets uploaded by GitHub have a digest. Missing/invalid digest fails closed. */
 internal fun releaseSha256(digest: String?): String? {
-    val raw = digest?.removePrefix("sha256:") ?: return null
+    if (digest?.startsWith("sha256:") != true) return null
+    val raw = digest.removePrefix("sha256:")
     if (raw.length != 64 || !raw.all { it in '0'..'9' || it in 'a'..'f' || it in 'A'..'F' }) return null
     return raw.lowercase()
 }
