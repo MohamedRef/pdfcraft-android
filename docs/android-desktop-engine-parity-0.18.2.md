@@ -1,5 +1,15 @@
 # PdfCraft desktop engine → Android parity audit
 
+## Published beta and Android-integration checkpoint — 2026-11-06
+
+- **Published signed owner APK:** [PdfCraft Android `0.0.10-beta (10012)`](https://github.com/MohamedRef/pdfcraft-android/releases/tag/v0.0.10-beta), tag `v0.0.10-beta`, permanent key fingerprint `0C:B9:F1:8F:2E:41:E2:CF:0B:0F:18:66:B4:09:AD:FF:79:8C:1D:83:DF:E6:32:5D:03:FB:B0:B1:3E:E0:51:C1`; [publishing CI #42271041345](https://github.com/MohamedRef/pdfcraft-android/actions/runs/42271041345) `success`. Release has ARM64 signed APK and SHA-256 sidecar; app source [`da4bc288`](https://github.com/MohamedRef/pdfcraft-android/commit/da4bc2881214080bd55eaf96a6a781808fb33093). This establishes signed source distribution, **not on-device feature parity**.
+- **Performance diagnostic merged:** [PR #24](https://github.com/MohamedRef/pdfcraft-android/pull/24) merge [`8d2d17d`](https://github.com/MohamedRef/pdfcraft-android/commit/8d2d17dc258415ae6263890e3def3412708968d2) with exact-head Rust/JVM/merge gate [#42266990919](https://github.com/MohamedRef/pdfcraft-android/actions/runs/42266990919) passed. `PDF_OPEN_PROFILING.md` provides stage and Xodo comparison protocol. **Large-file first-visible-page speed remains an unresolved user complaint; no Samsung device latency baseline or speed fix**.
+- **First two integration PRs:** [#25](https://github.com/MohamedRef/pdfcraft-android/pull/25) embedded outline JSON export via existing `bookmark_export` + Android MediaStore Downloads (head `c4d077ee44b922853af71fd444e29bb71c5508f3`); [#26](https://github.com/MohamedRef/pdfcraft-android/pull/26) bounded (`16 MiB`) SAF JSON import into unsiged editable PDF via existing `bookmark_import`, append-only with Undo/Redo, read-only/signed-target checks, temp cleanup and JVM stream tests (head `317524aee25496caabb222014d0bd5c3e1cc69bb`). Both remain **draft, unmerged** awaiting exact-current-head CI and device/provider open/save/reopen validation. #26 is intentionally stacked on #25. Neither changes the original Rust command definition or appears in `0.0.10-beta`.
+- **Do not conflate parity scopes:** v0.18.2 source names remain **187/189**, common tool definitions **186/187**; physical Samsung UI / SAF / signature behavior and real time-to-first-page are not verified. Next missing mobile UI: cross-document `bookmark_copy` with bounded SAF staging, source session close and no overwrite; then text styles, backdrops, text-script controls and multi-PDF Bates in individual PRs.
+
+---
+
+
 ## Current post-import parity checkpoint — 2026-11-06
 
 > **This section supersedes the historical 179/189 command-name count below.** The older numbers and pre-import observations remain only as the original migration history, not the current Android state.
