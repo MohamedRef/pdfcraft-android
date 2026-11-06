@@ -42,6 +42,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.foundation.layout.heightIn
@@ -53,6 +55,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
@@ -407,7 +410,7 @@ private fun Preferences(vm: AppViewModel) {
 }
 
 /** PdfCraft for Android's own repository: its help, its issues and its source. */
-private const val APP_REPO = "https://github.com/artcraft-android/pdfcraft-android"
+private const val APP_REPO = "https://github.com/MohamedRef/pdfcraft-android"
 
 @Composable
 private fun Section(title: String) {
@@ -417,16 +420,103 @@ private fun Section(title: String) {
 @Composable
 private fun About(vm: AppViewModel) {
     val c = pdfColors
+    val context = LocalContext.current
     val clipboard = LocalClipboardManager.current
     val uri = LocalUriHandler.current
     Section(stringResource(R.string.home_section_about))
-    val version = stringResource(R.string.home_version, vm.appVersion, io.github.artcraftandroid.pdfcraft.core.engineVersion())
+    val version = stringResource(R.string.home_version, "${vm.appVersion} (${installedVersionCode(context)})", io.github.artcraftandroid.pdfcraft.core.engineVersion())
     val copied = stringResource(R.string.home_version_copied)
     Text(
         version, color = c.text, fontSize = 16.sp,
         modifier = Modifier.fillMaxWidth()
             .pointerInput(version) { detectTapGestures(onLongPress = { clipboard.setText(AnnotatedString(version)); vm.tell(copied) }) }
             .padding(horizontal = 20.dp, vertical = 12.dp),
+    )
+    SheetDivider()
+    Section("App updates")
+    val updateScope = rememberCoroutineScope()
+    var checking by remember { mutableStateOf(false) }
+    var downloading by remember { mutableStateOf(false) }
+    var downloadPercent by remember { mutableStateOf(0) }
+    var verifiedApk by remember { mutableStateOf<java.io.File?>(null) }
+    var update by remember { mutableStateOf<ApkUpdate?>(null) }
+    var updateMessage by remember { mutableStateOf<String?>(null) }
+    SheetRow(LucideIcons.RotateCw, if (checking) "Checking GitHub Releases…" else "Check for updates", {
+        if (!checking) {
+            checking = true
+            updateMessage = null
+            verifiedApk = null
+            updateScope.launch {
+                try {
+                    update = fetchApkUpdates(installedVersionCode(context)).firstOrNull()
+                    updateMessage = if (update == null) "No newer published APK available." else null
+                } catch (e: Exception) {
+                    update = null
+                    updateMessage = "Unable to check for updates. Check your connection and try again."
+                } finally {
+                    checking = false
+                }
+            }
+        }
+    })
+    update?.let { candidate ->
+        Text(
+            "Available: ${candidate.version} (${candidate.versionBase * 10L + 2L}) • ${candidate.channel}",
+            color = c.text, fontSize = 14.sp,
+            modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
+        )
+        Text(
+            "Published ${candidate.publishedAt.take(10)} • ${candidate.size / (1024 * 1024)} MB",
+            color = c.textSecondary, fontSize = 13.sp,
+            modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
+        )
+        if (candidate.notes.isNotBlank()) {
+            Text(
+                candidate.notes.take(300), color = c.textSecondary, fontSize = 13.sp,
+                maxLines = 5, overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
+            )
+        }
+        if (verifiedApk == null) {
+            SheetRow(LucideIcons.FileDown, if (downloading) "Downloading & verifying… ${downloadPercent}%" else "Download APK", {
+                if (!downloading) {
+                    downloading = true
+                    downloadPercent = 0
+                    updateMessage = null
+                    updateScope.launch {
+                        try {
+                            verifiedApk = downloadAndVerifyApk(context, candidate) { percent ->
+                                downloadPercent = percent
+                            }
+                            updateMessage = "APK verified. Tap Install APK to continue."
+                        } catch (e: Exception) {
+                            verifiedApk = null
+                            updateMessage = e.message ?: "APK download or verification failed. Please retry."
+                        } finally {
+                            downloading = false
+                        }
+                    }
+                }
+            })
+        }
+        verifiedApk?.let { apk ->
+            SheetRow(LucideIcons.Check, "Install verified APK", {
+                try {
+                    val launched = openVerifiedApkInstaller(context, apk)
+                    updateMessage = if (launched) "Confirm installation in Android's installer."
+                        else "Allow PdfCraft to install updates in Settings, then tap Install verified APK again."
+                } catch (e: Exception) {
+                    updateMessage = e.message ?: "Android could not open the APK installer."
+                }
+            })
+        }
+    }
+    updateMessage?.let { message ->
+        Text(message, color = c.textSecondary, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp))
+    }
+    Text(
+        "Checks public Alpha, Beta, Preview and Stable releases. Installing an APK requires your approval.",
+        color = c.textSecondary, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
     )
     SheetDivider()
     Section(stringResource(R.string.home_section_legal))
