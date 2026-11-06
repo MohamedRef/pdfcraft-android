@@ -1,5 +1,13 @@
 # PdfCraft Android - development handover
 
+## Current verified state — November 6, 2026
+
+- **Official release:** [PdfCraft `0.0.9-beta.1 (9012)`](https://github.com/MohamedRef/pdfcraft-android/releases/tag/v0.0.9-beta.1), published 2026-11-06 16:04:11 UTC. ARM64 permanent-key signed APK and `.sha256` are attached. Release APK SHA-256: `f1c4f57608e5a34c2f72468c51affa01735f715dfdb0c81e907b2c70a0332739`.
+- **Published source:** `bee4f80a4825c7b5ee4f289592c5b96332e66935` on `main`, including PRs [#16](https://github.com/MohamedRef/pdfcraft-android/pull/16) (native open), [#13](https://github.com/MohamedRef/pdfcraft-android/pull/13) (seekable-copy), [#14](https://github.com/MohamedRef/pdfcraft-android/pull/14) (stylus routing) and [#15](https://github.com/MohamedRef/pdfcraft-android/pull/15) (stroke style/order), with [#17](https://github.com/MohamedRef/pdfcraft-android/pull/17) CI policy and [#18](https://github.com/MohamedRef/pdfcraft-android/pull/18) notes.
+- **Published release tests:** [workflow 42246678785](https://github.com/MohamedRef/pdfcraft-android/actions/runs/42246678785) completed success: Rust/provenance, Android JVM and signed ARM64 APK. PR-only merge gate skipped by design on manual dispatch. Existing PR #15 head checks were green before its merge at `bee4f80`. User has not reported on-device installation or benchmark results yet.
+- **Open PRs at the checkpoint:** zero. A new independent feature branch `feat/stylus-pressure-ink` has been started, with a PR and CI to follow. Do not mistake branch work for merged product or a new release.
+- **Required workflow:** finish each feature in one PR, wait for Rust/provenance + Android JVM + aggregate merge gate, resolve conflicts, merge sequentially; **one signed Beta only after the complete 3-feature batch**, not one APK per PR. After every milestone update this handover and the mandatory audit at `sync/storytold-0182-android-safe`. Treat older release and PR status below as historical checkpoints.
+
 **Snapshot: 2026-11-06.** This is a living handover. Before making any changes, recheck GitHub `main`, open PRs, Actions, releases, and the mandatory audit document. Historical snapshots are not a substitute for live checks.
 
 ## Repository and source of truth
@@ -27,7 +35,7 @@
 
 **Integration checks:** [PR #8 Actions 42218541208](https://github.com/MohamedRef/pdfcraft-android/actions/runs/42218541208) passed Rust (including provenance), Android JVM, release-mode ARM64 APK smoke and aggregate merge gate for exact head `5ea3f72e19f72a7c2545cda05e1cd2f91f3ed1bd`. The merge commit used the same source tree. The intermediate post-merge `main` [run 42221318495](https://github.com/MohamedRef/pdfcraft-android/actions/runs/42221318495) was **cancelled** by a later push; never label it green.
 
-## Latest officially published APK
+## Historical release checkpoint: 0.0.7-beta.4 (7042)
 
 - **PdfCraft 0.0.7-beta.4 (7042)**, [public non-draft prerelease](https://github.com/MohamedRef/pdfcraft-android/releases/tag/v0.0.7-beta.4), signed ARM64 APK.
 - [Direct APK](https://github.com/MohamedRef/pdfcraft-android/releases/download/v0.0.7-beta.4/pdfcraft-android-0.0.7-beta.4.apk); 48,372,020 bytes; asset SHA-256 `b8c967665383bd5641339577dd22635af696b85df08d425c406dd9efc65a475c` (GitHub release asset metadata). A `.sha256` file accompanies it.
@@ -64,7 +72,7 @@
 - Never delete or disable Android functions to make CI green. Preserve signer certificate, user's documents, recovery paths, render/edit/sign/audio/comments/OCR and Android responsive support. Never claim real-device tests or faster-than-Xodo results without measurements.
 - Required progress logging: append commits, CI URLs, pass/fail/skipped jobs, merge SHAs, limitations and device-unverified notes to the **mandatory branch audit document** linked at the top; update this handover at meaningful milestones.
 
-## Starting instruction for the next developer
+## Archived starting instruction (earlier baseline)
 
 Read this file and the full mandatory audit. Inspect live GitHub. The last confirmed published product is **0.0.7-beta.4 (7042)**, all earlier PRs are merged, and the *newest unresolved request* is **large-PDF opening latency vs Xodo**. Make a measured, safe, Android-focused performance improvement through one PR, not just a plan. Keep all functionality and publish a signed version only after verified merge and release gates.
 
@@ -131,3 +139,12 @@ Reference behavior: https://feedback.xodo.com/support/solutions/articles/3500020
 - Integrated #13 and #14 into the third PR; CI now validates all three increments together. Retarget to main after prior sequential merges only if the resulting tested source tree is unchanged; otherwise rerun checks.
 
 - Ink-only PR updated to the complete current stack: #16 native → #13 provider → #14 stylus → #15 ink appearance, inheriting already merged CI #17 and release notes #18. Each source diff remains separate. Required current-head gates are Rust/provenance + Android JVM + Merge gate (Rust and Android). No additional APK until this complete stack is merged; then manually dispatch one signed ARM64 release.
+
+### Next batch — S Pen improvements (in progress, 2026-11-06)
+
+**Owner-approved order:** (1) pressure-aware ink appearance in PDF, (2) real eraser with stylus eraser/button handling, (3) hover and high-frequency/historical stylus input + cancellation regression tests. One PR at a time: finish/merge/test the preceding PR before starting the next, then publish one new Beta with monotonically increasing `versionName (manifest versionCode)`. Lasso/transform, favorite pens and handwriting polish remain later backlog.
+
+**Feature 1 technical scope:** `feat/stylus-pressure-ink` starts from published `bee4f80`. Android Compose pointer events expose stylus pressure; capture synchronized page points and pressure samples. A PDF Ink annotation has one stroke width (`/BS /W`) rather than per-point width, so approximate variable-pressure appearance with adjacent ordered sub-strokes in discrete width bands. Keep source pen styles, original paint order, redo cancellation and existing native engine immutable. Bound number of exported segments to prevent unbounded PDF annotation growth. Normal finger ink and snapped shapes use a constant selected width. Test touch vs pen, missing/invalid pressure, low-to-high strokes, contiguous segments and annotation limits. Batching must avoid one UI refresh per segment. **Physical Samsung S Pen correctness, SVG-style smooth pressure, edit-as-one-stroke, and Xodo parity are not yet verified.**
+
+**Acceptance gates for feature 1:** compile/run Android JVM tests, Rust/source provenance and merge gate on the exact current PR head. Verify no loss of forms, voice/comments, saved PDF, native signing, SAF recovery and ink undo/redo. Device-specific pressure traces and re-opened PDF visual checks are still outstanding; do not claim on-device success without data. No release build during individual PR development.
+
