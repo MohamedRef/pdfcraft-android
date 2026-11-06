@@ -729,6 +729,8 @@
     <!-- Translator note: the tab with the reader's own bookmarks -->
     <string name="sheet_tab_bookmarks">Bookmarks</string>
     <string name="sheet_no_contents">This document has no table of contents.</string>
+    <string name="sheet_export_embedded_bookmarks">Export embedded PDF bookmarks (JSON)</string>
+    <string name="sheet_export_embedded_bookmarks_failed">Could not create the PDF bookmarks export.</string>
     <string name="sheet_up_level">Up a level</string>
     <!-- Translator note: accessibility label. %1$s is the title of an entry in the table of contents -->
     <string name="sheet_expand_entry">Expand %1$s</string>
