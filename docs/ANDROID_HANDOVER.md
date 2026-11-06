@@ -80,6 +80,16 @@ Read this file and the full mandatory audit. Inspect live GitHub. The last confi
 
 - Release preparation on the same PR: next patch beta `0.0.8-beta.1` with base code `801`, expected ARM64 **0.0.8-beta.1 (8012)**. Actual APK manifest must confirm 8012. Existing **0.0.7-beta.4 (7042)** and its public asset remain unchanged. On verified merge, the existing main workflow builds with the permanent key and publishes the new version only after Rust/Android tests and signing/package checks. Do not report publication until that run and Release API succeed.
 
+### Owner policy: tests per PR, signed APK per merged batch (2026-11-06)
+
+- Separate CI-only change: Rust/provenance and Android JVM/regressions plus `Merge gate (Rust and Android)` on each PR. No separate APK packaging job per PR. Android JVM still compiles matching native UniFFI bindings as necessary.
+- Ordinary main pushes run tests without signed publication. After merging the batch, manually dispatch `android-update.yml` on main once to run tests and build/verify/publish the permanent-key signed ARM64 APK. Certificate, package, manifest, versionCode and digest gates remain. This owner instruction supersedes historical per-PR APK requirements.
+- GitHub reported main was not branch-protected at inspection. If protection is configured, require the new `Merge gate (Rust and Android)` status and title check, retiring the old ABI-APK gate name. Release-note improvements are in a separate PR. No product behavior or native engine change in this CI PR.
+
+### Categorized release notes — separate change
+
+Owner requires every release to explain features, fixes and improvements. Enable GitHub generated notes grouped by enhancement/bug/performance labels; preserve source/build identity, signing/hash gates and manual-batch release policy inherited from the CI PR. Durable rule added to AGENTS.md. Supplement generated notes with actual behavior, known issues and evidence limits before user handoff. No product/native change; no APK rebuild needed for notes alone. Public beta.8 notes already record owner's negative large-file performance result, with unchanged APK bytes.
+
 ### Measured native opening work on the supplied encrypted PDF
 
 - Local profiling found standalone document-timestamp discovery decrypting unrelated image stream payloads. Added a bounded raw-metadata scan using the existing parser and stream-boundary validation; names/keys (not encrypted PDF strings) identify candidates. Every match is then loaded/decrypted and validated through the original path. Compressed, edited, repaired and uncertain objects retain the normal reader; no signature/security feature disabled.
@@ -88,3 +98,5 @@ Read this file and the full mandatory audit. Inspect live GitHub. The last confi
 - The supplied file is encrypted with no repair notes; host native opens before this fix were roughly 2.5–4.4 seconds, while raster generation was around 0.07–0.12 seconds. These are host dev/optimized timings, not controlled Android benchmark results. Original file bytes are never committed or redistributed. Android provider file-name discrepancy is not reproduced in native host API.
 
 - This native fix is isolated from provider copying, stylus, ink appearance and CI policy per owner instruction. Final local host probe on supplied encrypted file: MobileSession open 1848/1871/1918 ms, first raster 74/72/76 ms; prior uncontrolled host samples roughly 2.5–4.4 s. No Samsung speed-up claim.
+
+- Native PR updated against main `a6968a3` after verified CI-policy #17 and notes #18 merges. Current required gates are Rust/provenance + Android JVM + Merge gate (Rust and Android); no per-PR APK. Native code remains isolated from provider/stylus/ink features.
