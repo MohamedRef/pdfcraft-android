@@ -42,6 +42,7 @@ import io.github.artcraftandroid.pdfcraft.plural
 import io.github.artcraftandroid.pdfcraft.text
 import io.github.artcraftandroid.pdfcraft.core.MobileException
 import io.github.artcraftandroid.pdfcraft.engine.DocumentFiles
+import io.github.artcraftandroid.pdfcraft.engine.EmbeddedBookmarkJson
 import io.github.artcraftandroid.pdfcraft.engine.Engine
 import io.github.artcraftandroid.pdfcraft.engine.RecentFile
 import io.github.artcraftandroid.pdfcraft.engine.RecentFiles
@@ -2241,6 +2242,60 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         } finally {
             // deliver() removes the temp file on success; an engine/provider error must do so too.
             out.delete()
+        }
+    }
+
+    /** Ask Android SAF to pick JSON for the currently displayed PDF, not for private bookmarks. */
+    val bookmarkJsonPicks = Channel<Unit>(Channel.CONFLATED)
+    private var bookmarkJsonTarget: OpenDocument? = null
+
+    fun pickEmbeddedBookmarksImport(doc: OpenDocument) {
+        if (document !== doc || !doc.writable || doc.info.signed || doc.info.readOnlyReason != null) {
+            tell(text(R.string.sheet_import_embedded_bookmarks_unavailable))
+            return
+        }
+        bookmarkJsonTarget = doc
+        bookmarkJsonPicks.trySend(Unit)
+    }
+
+    /** SAF picker result, including cancellation. A changed/closed target is never edited. */
+    fun onBookmarkJsonPicked(uri: Uri?) {
+        val doc = bookmarkJsonTarget
+        bookmarkJsonTarget = null
+        if (uri == null || doc == null) return
+        if (document !== doc || !doc.writable || doc.info.signed || doc.info.readOnlyReason != null) {
+            tell(text(R.string.sheet_import_embedded_bookmarks_unavailable))
+            return
+        }
+        job(text(R.string.sheet_import_embedded_bookmarks)) { eng ->
+            val staged = tempFile("json")
+            try {
+                withContext(Dispatchers.IO) {
+                    val stream = getApplication<Application>().contentResolver.openInputStream(uri)
+                        ?: throw java.io.IOException(text(R.string.sheet_import_embedded_bookmarks_unreadable))
+                    stream.use { input ->
+                        staged.outputStream().use { output -> EmbeddedBookmarkJson.copyBounded(input, output) }
+                    }
+                }
+                // The SAF provider may be slow. Recheck after staging and before every write.
+                if (document !== doc || !doc.writable || doc.info.signed || doc.info.readOnlyReason != null) {
+                    tell(text(R.string.sheet_import_embedded_bookmarks_unavailable))
+                    return@job
+                }
+                val result = eng.tool("bookmark_import", mapOf(
+                    "doc" to doc.id, "file" to staged.absolutePath, "replace" to false,
+                ))
+                refresh(doc) // Rebuild the outline, generation, and Undo / Redo state.
+                tell(text(R.string.sheet_import_embedded_bookmarks_done))
+                val unmapped = result.optJSONArray("unmapped")?.length() ?: 0
+                if (unmapped > 0) tell(text(R.string.sheet_import_embedded_bookmarks_unmapped, unmapped))
+                if (result.optBoolean("truncated", false)) {
+                    tell(text(R.string.sheet_import_embedded_bookmarks_truncated))
+                }
+            } finally {
+                // Failure, cancellation, bad JSON and no-storage paths must not persist source data.
+                staged.delete()
+            }
         }
     }
 
