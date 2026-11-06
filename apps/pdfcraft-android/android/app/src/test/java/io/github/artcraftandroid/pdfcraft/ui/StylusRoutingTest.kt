@@ -21,4 +21,16 @@ class StylusRoutingTest {
         assertTrue(session.cancelForExtraTouch(false, 2))
         assertFalse(session.cancelForExtraTouch(false, 1))
     }
+    @Test fun penHistoryAndHoverMustNotClaimFingerDrawingAfterPenUse() {
+        val session = StylusRouting()
+        assertFalse(session.fingersNavigate(false))
+        // Hover is a visual event only; it must not mark the stylus as used.
+        assertFalse(session.fingersNavigate(false))
+        session.penStarted()
+        assertFalse(session.cancelForExtraTouch(true, 3))
+        assertTrue(session.fingersNavigate(false))
+        // Touch gestures remain navigation after the pen draws, even if historical moves exist.
+        assertTrue(session.cancelForExtraTouch(false, 2))
+        assertTrue(StylusRouting().fingersNavigate(true))
+    }
 }

@@ -52,6 +52,8 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.PointerType
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.isPrimaryPressed
 import androidx.compose.ui.input.pointer.isSecondaryPressed
 import androidx.compose.ui.input.pointer.pointerInput
@@ -152,6 +154,30 @@ fun Modifier.toolGestures(
         var lastPressure = down.pressure
         if (one) onDown(last, lastPressure, activePen)
         if (eraseOne) onEraserDown(last)
+        fun dispatchPenMotion(change: androidx.compose.ui.input.pointer.PointerInputChange) {
+            val nextPressure = change.pressure.takeIf { it.isFinite() && it > 0f } ?: lastPressure
+            val samples = stylusMotionPoints(
+                previousPosition = change.previousPosition,
+                position = change.position,
+                previousTime = change.previousUptimeMillis,
+                currentTime = change.uptimeMillis,
+                previousPressure = lastPressure,
+                pressure = nextPressure,
+                // Bound allocations before creating historical snapshots; providers can send long batches.
+                history = change.historical.let { raw ->
+                    val stride = ((raw.size.toLong() + MAX_STYLUS_HISTORY_POINTS - 1) /
+                        MAX_STYLUS_HISTORY_POINTS).coerceAtLeast(1).toInt()
+                    raw.asSequence().filterIndexed { index, _ -> index % stride == 0 }
+                        .map { StylusHistoryPoint(it.uptimeMillis, it.position) }.toList()
+                },
+            )
+            for (sample in samples) {
+                moved = true
+                last = sample.position
+                if (eraseOne) onEraserMove(last) else if (one) onMove(last, sample.pressure, true)
+            }
+            lastPressure = nextPressure
+        }
         try {
             while (true) {
                 val event = awaitPointerEvent()
@@ -189,22 +215,15 @@ fun Modifier.toolGestures(
                             if (eraseOne) onEraserCancel()
                             one = false
                             eraseOne = false
-                        } else if (active != null && active.positionChanged()) {
-                            last = active.position
-                            if (eraseOne) onEraserMove(last) else if (one) onMove(last, lastPressure, true)
+                        } else if (active != null && (active.positionChanged() || active.historical.isNotEmpty())) {
+                            dispatchPenMotion(active)
                         }
                         break
                     }
-                    if (active.positionChanged()) {
-                        last = active.position
-                        moved = true
-                        if (eraseOne) {
-                            onEraserMove(last)
-                        } else if (one) {
-                            // Some devices report zero pressure on pen-up; avoid a thick tail.
-                            if (active.pressure.isFinite() && active.pressure > 0f) lastPressure = active.pressure
-                            onMove(last, lastPressure, true)
-                        }
+                    if (active.positionChanged() || active.historical.isNotEmpty()) {
+                        // HistoricalChange has time/position but not hardware pressure.
+                        // Preserve all valid ordered intermediate points on this active S Pen.
+                        dispatchPenMotion(active)
                     }
                     event.changes.forEach { it.consume() }
                     continue
@@ -324,6 +343,9 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
     var eraserPage by remember { mutableStateOf<Int?>(null) }
     val eraserPoints = remember { mutableStateListOf<Offset>() }
     var eraserScreen by remember { mutableStateOf<Offset?>(null) }
+    // Preview only: hovering never inserts annotation points or touches document history.
+    var hoverPosition by remember(doc) { mutableStateOf<Offset?>(null) }
+    var hoverEraser by remember(doc) { mutableStateOf(false) }
 
     fun beginErase(p: Offset) {
         val at = doc.viewer.screenToPage(p) ?: return
@@ -371,7 +393,26 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
     }
 
     Box(
-        Modifier.fillMaxSize().toolGestures(
+        Modifier.fillMaxSize()
+            .pointerInput(doc) {
+                awaitPointerEventScope {
+                    while (true) {
+                        val event = awaitPointerEvent(PointerEventPass.Initial)
+                        when (event.type) {
+                            PointerEventType.Exit, PointerEventType.Press, PointerEventType.Release -> hoverPosition = null
+                            PointerEventType.Enter, PointerEventType.Move -> {
+                                val pen = event.changes.firstOrNull {
+                                    !it.pressed && (it.type == PointerType.Stylus || it.type == PointerType.Eraser)
+                                }
+                                // Do not treat finger motion or a pressed stylus as a hover event.
+                                hoverPosition = pen?.position?.takeIf { it.x.isFinite() && it.y.isFinite() }
+                                hoverEraser = pen?.type == PointerType.Eraser
+                            }
+                        }
+                    }
+                }
+            }
+            .toolGestures(
             doc,
             penOnly = prefs.stylusOnly,
             onDown = { p, pressure, isStylus ->
@@ -468,6 +509,19 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                     center = screen,
                     style = Stroke(width = 1.5.dp.toPx()),
                 )
+            }
+            val hovering = hoverPosition
+            if (hovering != null && current == null && eraserPage == null) {
+                val onPage = doc.viewer.screenToPage(hovering)
+                if (onPage != null) {
+                    val diameter = if (doc.controller.eraserMode || hoverEraser) 16f else prefs.inkWidth
+                    drawCircle(
+                        Color.DarkGray.copy(alpha = 0.6f),
+                        radius = maxOf(2f, diameter * doc.viewer.pixelsPerPoint(onPage.page) / 2f),
+                        center = hovering,
+                        style = Stroke(width = 1.dp.toPx()),
+                    )
+                }
             }
         }
     }
