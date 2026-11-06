@@ -94,8 +94,8 @@ fun FillSignLayer(vm: AppViewModel, doc: OpenDocument) {
     Box(
         Modifier.fillMaxSize().toolGestures(
             doc,
-            onDown = {},
-            onMove = {},
+            onDown = { _, _, _ -> },
+            onMove = { _, _, _ -> },
             onUp = { p, moved ->
                 if (moved) return@toolGestures
                 val at = doc.viewer.screenToPage(p) ?: return@toolGestures
