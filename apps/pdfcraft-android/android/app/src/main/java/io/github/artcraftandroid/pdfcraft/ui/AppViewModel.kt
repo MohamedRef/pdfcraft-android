@@ -481,9 +481,8 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         val eng = engine ?: return
         viewModelScope.launch {
             try {
-                for (args in argsList) {
-                    eng.tool(name, args + ("doc" to doc.id))
-                }
+                // Keep all adjacent pressure widths contiguous on the engine's serial queue.
+                eng.toolBatch(name, argsList.map { it + ("doc" to doc.id) })
             } catch (e: MobileException) {
                 tell(e.userMessage)
             } finally {
