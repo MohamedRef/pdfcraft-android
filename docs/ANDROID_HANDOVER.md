@@ -21,7 +21,7 @@
 
 ## RELEASE NUMBER CORRECTION — 2026-11-06 (owner-requested, unpublished)
 
-- **Final owner-confirmed naming:** `0.0.10-beta (10012)`, with **no `.1` suffix after beta**. The Kotlin Gradle version parser deliberately maps the bare `-beta` to prerelease code 1, so `pdfcraft.versionCode=1001` and ARM64 manifest code `10012` are unchanged. `v0.0.10-beta` is the intended tag, not `v0.0.10-beta.1`. PR #23 has been corrected in place; superseded CI on older heads must not be used for merging.
+- **Final owner-confirmed naming:** `0.0.10-beta (10012)`, with **no `.1` suffix after beta**. The Kotlin Gradle version parser deliberately maps the bare `-beta` to prerelease code 1, so `pdfcraft.versionCode=1001` and ARM64 manifest code `10012` are unchanged. `v0.0.10-beta` is the intended tag, without any numbered beta suffix. PR #23 has been corrected in place; superseded CI on older heads must not be used for merging.
 
 
 - The owner explicitly requires **`0.0.10-beta (10012)`**, not another `0.0.9` prerelease. Verified Gradle code: base = `((major*100+minor)*100+patch)*100+prereleaseNumber`; `0.0.10-beta` gives base `1001`, ARM64 ABI digit `2` makes Android manifest versionCode **10012**. This strictly increases above public `0.0.9-beta.1 (9012)`.
