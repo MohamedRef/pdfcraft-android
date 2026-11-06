@@ -273,7 +273,6 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                 movedAt = System.currentTimeMillis()
                 val appearance = InkAppearance(prefs.color(StyledTool.Ink).toArgbInt(), prefs.opacity(StyledTool.Ink), prefs.inkWidth, prefs.author.ifBlank { null })
                 current = InkStroke(at.page, appearance).also { it.points.add(Offset(at.x, at.y)); strokes.add(it) }
-                undone.clear()
             },
             onMove = { p ->
                 val s = current ?: return@toolGestures
@@ -289,6 +288,8 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                 val s = current
                 current = null
                 if (s != null) {
+                    // A palm/cancelled gesture must not discard a user's redo history.
+                    if (s.points.size >= 2) undone.clear()
                     // a held shape always snaps; with Snap to shape on, any stroke that is one does
                     val shape = s.preview ?: if (prefs.snapToShape) ShapeSnap.recognise(s.points.toList())?.outline() else null
                     s.preview = null
