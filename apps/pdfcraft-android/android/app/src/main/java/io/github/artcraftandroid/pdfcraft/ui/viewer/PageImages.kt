@@ -8,6 +8,7 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import io.github.artcraftandroid.pdfcraft.core.TileRect
 import io.github.artcraftandroid.pdfcraft.engine.Engine
+import io.github.artcraftandroid.pdfcraft.engine.OpenTiming
 import io.github.artcraftandroid.pdfcraft.engine.toBitmap
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -49,6 +50,8 @@ class PageImages(
 ) {
     fun elapsedOpenMs(): Long = android.os.SystemClock.elapsedRealtime() - openedAt
     private var firstDrawReported = false
+    private var firstRequestReported = false
+    private var firstRasterReported = false
 
     /** First whole-page raster submitted to Canvas; GPU presentation still needs a trace. */
     fun reportFirstDraw() {
@@ -86,6 +89,11 @@ class PageImages(
 
     /** The images the view wants now, most wanted first. */
     fun want(requests: List<ImageRequest>) {
+        // Distinguish waiting for Compose layout from waiting for the engine's first image.
+        if (!firstRequestReported && requests.isNotEmpty()) {
+            firstRequestReported = true
+            OpenTiming.milestone("first_page_requested", openedAt)
+        }
         synchronized(lock) { wanted = requests }
         signal.trySend(Unit)
     }
@@ -150,6 +158,10 @@ class PageImages(
                         if (old == null || old.key.gen <= r.key.gen) fallback[r.key.page] = image
                     }
                     evict()
+                }
+                if (r.key.isBase && !firstRasterReported) {
+                    firstRasterReported = true
+                    OpenTiming.milestone("first_page_raster_ready", openedAt, bytes = image.bytes.toLong())
                 }
                 version++
             }
