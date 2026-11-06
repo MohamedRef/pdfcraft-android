@@ -74,6 +74,7 @@ import io.github.artcraftandroid.pdfcraft.ui.PdfMotion
 import io.github.artcraftandroid.pdfcraft.ui.SheetHost
 import io.github.artcraftandroid.pdfcraft.ui.pdfColors
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
 /**
@@ -145,6 +146,13 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
                 vm.pendingSpot = null
             }
         }
+    }
+
+    // The first page renders without waiting for a scan of links across the whole PDF.
+    // Cache only visible pages and a small neighborhood as the viewport moves.
+    LaunchedEffect(doc) {
+        snapshotFlow { doc.info.generation to doc.viewer.visiblePages(extra = 0.5f) }
+            .collectLatest { (_, visible) -> vm.loadVisibleLinks(doc, visible) }
     }
 
     // Opening the document, scrolling and zooming show the scrubber and page pill for a while.

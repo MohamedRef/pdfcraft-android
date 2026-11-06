@@ -425,10 +425,25 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     private suspend fun loadLinks(eng: Engine, doc: OpenDocument) {
         doc.widgets = runCatching { eng.command { widgets(doc.id) } }.getOrDefault(emptyList())
         doc.comments = runCatching { eng.command { comments(doc.id) } }.getOrDefault(emptyList())
-        doc.links = runCatching {
-            eng.command { (0 until doc.info.pages.size).associateWith { p -> links(doc.id, p.toUInt()) } }
-        }.getOrDefault(emptyMap())
+        // Do not scan every link on every page before showing a large document.
+        // The viewer loads only its visible pages after the first frame.
         loadSignatures(eng, doc)
+    }
+
+    /** Resolve only the displayed PDF pages' links without blocking the opening screen. */
+    suspend fun loadVisibleLinks(doc: OpenDocument, visible: IntRange) {
+        if (document !== doc) return
+        val eng = engine ?: return
+        val missing = missingVisibleLinkPages(visible, doc.pageCount, doc.linkPagesLoaded)
+        if (missing.isEmpty()) return
+        val generation = doc.info.generation
+        val result = runCatching {
+            eng.command { missing.associateWith { p -> links(doc.id, p.toUInt()) } }
+        }.getOrNull() ?: return
+        // An edit or a different document can finish while the worker is fetching links.
+        if (document !== doc || doc.info.generation != generation) return
+        doc.links = doc.links + result
+        doc.linkPagesLoaded.addAll(result.keys)
     }
 
     /**

@@ -57,6 +57,8 @@ class OpenDocument(
 
     /** The links of each page (0-based), refreshed when the document changes. */
     var links: Map<Int, List<io.github.artcraftandroid.pdfcraft.core.LinkInfo>> = emptyMap()
+    /** Only visible page links are loaded; the initial open never scans every page. */
+    val linkPagesLoaded = HashSet<Int>()
 
     /** The comments, refreshed when the document changes (tapping one selects it). */
     var comments: List<io.github.artcraftandroid.pdfcraft.core.CommentInfo> = emptyList()
@@ -85,6 +87,10 @@ class OpenDocument(
     fun update(newInfo: DocumentInfo) {
         val pagesChanged = newInfo.pages.size != info.pages.size ||
             newInfo.pages.zip(info.pages).any { (a, b) -> a.width != b.width || a.height != b.height }
+        if (pagesChanged || newInfo.generation != info.generation) {
+            links = emptyMap()
+            linkPagesLoaded.clear()
+        }
         info = newInfo
         if (pagesChanged) viewer.pages = newInfo.pages.map { PageSize(it.width, it.height) }
         selection.clear()
