@@ -54,19 +54,6 @@ jobs:
           distribution: temurin
           java-version: '21'
 
-      # the Rust release and targets rust-toolchain.toml names
-      - name: Install Rust
-        run: rustup toolchain install
-
-      - uses: Swatinem/rust-cache@v2
-        with:
-          key: release-android
-
-      - name: Install cargo-ndk and the Android NDK
-        run: |
-          cargo install cargo-ndk --version 4.1.2 --locked
-          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;29.0.14206865" >/dev/null
-
       - name: Release key
         env:
           KEYSTORE_BASE64: ${{ secrets.PDFCRAFT_KEYSTORE_BASE64 }}
@@ -80,6 +67,29 @@ jobs:
           else
             echo "::warning::No release key: this dry run is signed with the debug key"
           fi
+
+      - name: Verify signing passwords, alias and certificate before building
+        env:
+          PDFCRAFT_KEYSTORE_PASSWORD: ${{ secrets.PDFCRAFT_KEYSTORE_PASSWORD }}
+          PDFCRAFT_KEY_ALIAS: ${{ secrets.PDFCRAFT_KEY_ALIAS }}
+          PDFCRAFT_KEY_PASSWORD: ${{ secrets.PDFCRAFT_KEY_PASSWORD }}
+        run: |
+          if [ -n "${PDFCRAFT_KEYSTORE:-}" ]; then
+            java .github/scripts/VerifyAndroidSigning.java
+          fi
+
+      # the Rust release and targets rust-toolchain.toml names
+      - name: Install Rust
+        run: rustup toolchain install
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: release-android
+
+      - name: Install cargo-ndk and the Android NDK
+        run: |
+          cargo install cargo-ndk --version 4.1.2 --locked
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;29.0.14206865" >/dev/null
 
       # one APK per ABI (each about half the size of one holding both): 64-bit ARM for most
       # phones (pdfcraft-android-<version>.apk), 32-bit ARM for older and low-end ones

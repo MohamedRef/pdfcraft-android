@@ -85,6 +85,12 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
+      - name: Verify signing passwords, alias and certificate before building
+        env:
+          PDFCRAFT_KEYSTORE_PASSWORD: ${{ secrets.PDFCRAFT_KEYSTORE_PASSWORD }}
+          PDFCRAFT_KEY_ALIAS: ${{ secrets.PDFCRAFT_KEY_ALIAS }}
+          PDFCRAFT_KEY_PASSWORD: ${{ secrets.PDFCRAFT_KEY_PASSWORD }}
+        run: java .github/scripts/VerifyAndroidSigning.java
       - name: Install Rust, cargo-ndk, Android SDK and NDK
         run: |
           rustup toolchain install
