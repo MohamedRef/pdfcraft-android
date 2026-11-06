@@ -981,12 +981,18 @@
     "crates/automation/src/model_render.rs": "3D rendering and PRC excluded pending mobile memory/ABI proof."
   },
   "allowed_adaptations": {
+    "crates/annot/src/appearance.rs": "Android Sound annotation drawing dispatch; preserve microphone icon.",
+    "crates/annot/src/appearance/symbols.rs": "Original voice-comment microphone icon in mobile PDF rendering.",
+    "crates/annot/src/create.rs": "Restore bounded Sound comment PDF object serialization and validation.",
+    "crates/annot/src/types.rs": "Android Sound annotation shape, style and subtype retained from original mobile implementation.",
     "crates/automation/Cargo.toml": "Exclude desktop-only PRC and model-render dependencies.",
+    "crates/automation/src/comments.rs": "Bounded WAV-to-Sound comment creation via mobile headless bridge.",
     "crates/automation/src/dispatch.rs": "Omit model_add/model_render, keep Android photo_find_document dispatch.",
     "crates/automation/src/lib.rs": "Exclude 3D modules and retain Android-only photo detection.",
     "crates/automation/src/tools.rs": "Headless tool table excludes 3D and includes photo_find_document.",
     "crates/engine/src/camera.rs": "Android photo detection / EXIF backport.",
     "crates/engine/src/document.rs": "Bounded Android XMP metadata reader exposed through File Details.",
+    "crates/engine/src/edit/labels.rs": "Android-only Sound comment edit/history label.",
     "crates/render/src/inspect.rs": "Re-export bounded sound_wav for Android voice-comment playback.",
     "crates/render/src/inspect/resources.rs": "Bounded WAV extraction + tests; preserves phone sound-comment playback.",
     "crates/render/src/lib.rs": "Public sound_wav re-export for Android native wrapper.",
