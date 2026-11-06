@@ -24,6 +24,7 @@ class ApkUpdatesTest {
         assertNull(releaseSha256(null))
         assertNull(releaseSha256("sha256:abc"))
         assertNull(releaseSha256("md5:" + hex))
+        assertNull(releaseSha256(hex))
         assertNull(releaseSha256("sha256:" + "x".repeat(64)))
     }
 
