@@ -29,8 +29,10 @@ Only fixed stage names, monotonic elapsed milliseconds, byte counts and page cou
 | `provider_stream_fallback duration_ms` | Retry via provider input stream after unsupported/failing descriptor | Source copied read-only; target is still a safe local working copy |
 | `provider_and_working_copy duration_ms` | End-to-end access and safe working-copy preparation | Includes metadata and rename, not just bulk transfer |
 | `working_copy_ready elapsed_ms` | Elapsed time from open tap to available working bytes | `bytes` is local PDF size, not heap allocation |
+| `previous_document_closed elapsed_ms` | End-to-end elapsed after saving/closing an earlier open PDF, if any | A blocked write-back may dominate switches between two PDFs |
 | `native_open duration_ms` | Open/decrypt/parse using Rust `MobileSession` | Only measures this engine call; not first page |
 | `native_ready elapsed_ms` | Cumulative elapsed time after the Rust document is created | Includes safe copy, optional earlier document close and parse |
+| `source_access_ready elapsed_ms` | End-to-end elapsed after Recent metadata/SAF write-capability checks | Isolates permission/provider query delay from native parsing and overlays |
 | `widgets` / `comments` / `signatures duration_ms` | Separate overlay/validation operations | These are currently awaited before publishing viewer model |
 | `overlays_ready elapsed_ms` | Cumulative elapsed time after overlay metadata | Compare with `native_ready` to identify blocking overlay work |
 | `viewer_model_ready elapsed_ms` | First state publication of `OpenDocument` to Compose | **Not** the first visible page |
