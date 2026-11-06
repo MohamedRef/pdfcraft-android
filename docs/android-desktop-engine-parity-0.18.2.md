@@ -299,3 +299,8 @@ The owner explicitly promoted **About → Check for Updates** to the **first nex
 - Diagnostic instrumentation (disabled unless DEBUG): `adb shell setprop log.tag.PdfCraftOpen DEBUG` then `adb logcat -s PdfCraftOpen:D`; stages include provider copy, native open, overlays and rendering. Instrumentation never logs URI/file names or PDF contents.
 
 - Android test artifact independently downloaded and XML reports counted for `ebc8aae` / [42232134118](https://github.com/MohamedRef/pdfcraft-android/actions/runs/42232134118): **71 tests across 17 JVM suites, 0 failures/errors/skips**. `VisibleLinkPagesTest`: 4 passed. Rust/provenance success; ARM64 release-mode smoke still compiling, aggregate not yet passed. No merge or signed release claimed at this checkpoint.
+
+### PR #12 merged after all required automated gates — 2026-11-06
+
+- [Exact-head CI 42232134118](https://github.com/MohamedRef/pdfcraft-android/actions/runs/42232134118), source `ebc8aae570a8f456a2e9344d0855224a84410378`: Rust/provenance, Android JVM (71 tests), ARM64 release-mode APK smoke and aggregate merge gate **all success**; title success, permanent signed job intentionally skipped in PR. Rechecked latest main `05963db`, GitHub mergeable and matching head, then marked ready and merged [#12](https://github.com/MohamedRef/pdfcraft-android/pull/12) as **`172be4b10daa1ff98f848074d07b799b40d6d21a`**. No device benchmark asserted.
+- Main now contains both handover/checkpoint docs, lazy links, opt-in timing and next patch version preparation. Post-merge main CI and permanent signed release publication are the next required checks. Do not claim **0.0.8-beta.1 (expected 8012)** is downloadable until verified. No additional feature PR started.
