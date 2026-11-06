@@ -3,7 +3,10 @@
 //! another one's output; the commit writes into the document it was opened on, and refuses if
 //! that document has changed since.
 
-use super::*;
+use super::{
+    BlockStyle, Document, EditError, LineEdit, MAX_TYPE3_GLYPHS, TextBlock, TextEditLayout, TextLine, group_blocks, layout_draft, rewrite_block_from,
+    text_lines,
+};
 
 /// One paragraph being edited: the document as it was opened, and the page's lines then.
 pub struct TextSession {
@@ -23,9 +26,7 @@ impl TextSession {
             .get(block)
             .cloned()
             .ok_or_else(|| EditError::Invalid(format!("page {} has no paragraph {}", page + 1, block + 1)))?;
-        // Drafts lay out on the page as `text_lines` read it: its text-bearing forms inlined.
-        let base = crate::inline_forms::view(doc, page)?.into_owned();
-        Ok(Self { base, base_state: doc.read_state(), page, block, lines, source })
+        Ok(Self { base: doc.clone(), base_state: doc.read_state(), page, block, lines, source })
     }
 
     /// The paragraph as it was when the session opened.
@@ -66,9 +67,6 @@ impl TextSession {
         if !self.is_current(doc) {
             return Err(EditError::Invalid("the paragraph changed while it was being edited".into()));
         }
-        // A page drawing its text in forms is inlined first, as the session read it.
-        crate::inline_forms::edit_inlined(doc, self.page, |doc| {
-            rewrite_block_from(doc, self.page, self.lines.clone(), self.block, text, style, max_glyphs)
-        })
+        rewrite_block_from(doc, self.page, self.lines.clone(), self.block, text, style, max_glyphs)
     }
 }

@@ -737,12 +737,7 @@ impl<S: Simd, T: FineKernel<S>> Fine<S, T> {
                         fill_complex_paint!($may_have_transparency, $filler, None::<&Tint>)
                     };
                     ($may_have_transparency:expr, $filler:expr, $tint:expr) => {
-                        // PdfCraft patch: an opaque gradient or image also goes through the
-                        // compositing path when a mask or a blend mode is in effect. Upstream only
-                        // checked the paint's own transparency and the coverage, so an opaque paint
-                        // overwrote the destination, dropping soft masks and blend modes (Chrome's
-                        // CSS opacity and mix-blend-mode in printed PDFs).
-                        if $may_have_transparency || alphas.is_some() || mask.is_some() || !default_blend {
+                        if $may_have_transparency || alphas.is_some() {
                             T::apply_painter(self.simd, color_buf, $filler);
                             if let Some(t) = $tint {
                                 T::apply_tint(self.simd, color_buf, t);

@@ -6,7 +6,9 @@ Layer L4. Create a PDF (Acrobat's Create a PDF tool), execution plan M10.2:
 - `from_images(&[(name, bytes)])`: one page per image, sized from the image's resolution
   (PNG `pHYs`, JPEG JFIF density; 72 dpi when absent). JPEG data is embedded as is
   (`/DCTDecode`, grey, RGB or Adobe-inverted CMYK); PNG is decoded and stored with Flate,
-  with transparency as a soft mask. An ICC profile in the file (JPEG `APP2 ICC_PROFILE`, PNG
+  with transparency as a soft mask. A picture of only pure black and white (a 1-bit PNG or TIFF,
+  eight-bit grey, a two-colour palette, RGB without a profile) is stored at one bit per pixel, as
+  CCITT Group 4 or Flate, whichever is smaller as stored (`pdfcraft_filters::encode_g4`). An ICC profile in the file (JPEG `APP2 ICC_PROFILE`, PNG
   `iCCP`) that matches the image's colour space is kept as an `/ICCBased` colour space with
   the device space as `/Alternate`; images with the same profile share one profile object.
   JPEG metadata scanning skips marker fill bytes and reads application segments after the
@@ -21,43 +23,27 @@ Layer L4. Create a PDF (Acrobat's Create a PDF tool), execution plan M10.2:
 - `from_text_escaped(text, …)`: the same for reports PdfCraft generates from documents
   (comment summaries, compare reports): such characters are written as `[U+XXXX]` and the first
   line says so (`ESCAPED_NOTE`).
-- `from_office(name, bytes)`: Word (.docx), Excel (.xlsx), PowerPoint (.pptx) and RTF files,
-  converted on the device (`src/office/`); `office_kind` tells them apart by content (a zip with
-  a Word, Excel or PowerPoint main part, an RTF header) and `source_kind` returns
-  `SourceKind::Office` for them. Legacy binary .doc/.xls/.ppt files (OLE2) are recognised and
-  refused with advice to save them as .docx/.xlsx/.pptx.
-  - Word: sections (page size, margins), styles with `basedOn` chains and document defaults
-    (headings look like headings even without styles.xml), run and paragraph properties, tabs,
-    line and page breaks, bullets and numbering, tables (grid widths, spans, vertical merges,
-    shading, borders, table-style first row and banding; rows split across pages when taller
-    than one), inline and VML pictures, text boxes (after their paragraph), default headers
-    and footers with page numbers.
-  - Excel: each visible sheet in order, used range only; shared, rich and inline strings,
-    numbers with built-in and custom formats (dates, times, percentages, currency, scientific),
-    booleans, cached formula results; column widths, row heights, merged cells, fonts, fills,
-    borders, alignment, wrapping and text running over empty neighbours; light grid lines;
-    wide sheets are scaled down (to 50%) and turned landscape, then paginated down and across.
-  - PowerPoint: a page per visible slide at the slide size; placeholders inherit position,
-    body properties and list styles from the layout and master; master and layout decorations
-    and backgrounds; text with bullets, numbering, spacing and autofit scaling; preset and
-    custom geometry with fills and outlines, shape-style colours; pictures (cropped); groups;
-    tables (the default table style is approximated). Charts and SmartArt are left out.
-  - RTF: font table (family), colour table, character and paragraph formatting, tabs, Unicode
-    (`\u`), code pages, simple tables, PNG/JPEG pictures and page breaks.
-
-  Text is set in the standard 14 fonts (Helvetica, Times, Courier by the document's family)
-  in WinAnsiEncoding, measured with their real widths; characters outside Western European
-  scripts are drawn as `?`. Everything read is untrusted: the zip reader caps entry count
-  (10 000), inflated size per entry (64 MiB, measured while inflating) and in total
-  (256 MiB), refuses ZIP64 and encryption; XML parts are size-, depth- and node-capped;
-  recursion is bounded and output is capped at 5 000 pages.
 
 Every function returns a `pdfcraft_cos::Document`; the caller writes it.
 
 Image export and Save Image As apply each lossless image's Decode pair before converting its color components.
+JBIG2 images and masks are decoded through `pdfcraft_cos::ImageBudget` (`pdfcraft_filters::decode_jbig2_within`), behind
+other filters too, with the `/JBIG2Globals` of their own `/DecodeParms` entry, as `JBIG2Decode` gives them: black as 0. An image
+whose JBIG2 page isn't its size (PdfCraft's renderer draws the whole page into the image; the page is refused before it is decoded),
+or whose globals can't be read or decode to more than 32 MiB (they are decoded before the page's size is known, so they have a
+limit of their own), is skipped, and such a mask is left out and the image exported opaque, as JPX and CCITT masks are.
+Past what one export may decode, which its images share, filters, decoders and pixels alike (`ImageBudget`; a JPEG when it has to be
+decoded, as a mask, to apply one, or to undo a CMYK file's inversion, and not when it is written as it is), an image is skipped, and so is one whose mask is past it, which would otherwise come out showing what the mask hides. An export also stops at 2 GiB of files held, or twice the document if that
+is more, since they stay in memory until it ends.
 Indexed Decode values select palette entries after rounding and clipping. Color-key masks compare the original samples.
 Missing, null or malformed Decode arrays keep the default mapping.
 Soft-mask Decode intervals map samples to opacity before the mask is resized, including reversed ranges and indirect entries.
 The existing 16-bit path still uses each sample's high byte.
 JPEG image Decode handling remains limited.
 ICC transforms and calibrated color conversion remain outside this export path.
+CCITT fax images (Group 3 and 4) are decoded for export through `pdfcraft_cos::Document::decoded_image` with their
+`/DecodeParms` (`/Columns` has to be the image's width; up to `/Height` rows, whatever `/Rows` says), behind other filters such as
+`ASCII85Decode` too. Byte-aligned Group 3 rows are read by their end-of-line codes, whether the fill starts each code on a byte or
+ends it on one, when the data starts with one (T.4 sends one before the first row), and on bytes otherwise, whatever `/EndOfLine`
+says; data that comes up short is reported. Data with codes but none before the first row is read on bytes, and is reported or,
+at `/K 0`, may come out wrong. JPEG 2000 images are still reported, not exported.

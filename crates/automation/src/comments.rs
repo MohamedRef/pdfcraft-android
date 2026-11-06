@@ -75,7 +75,7 @@ fn to_user(p: &PageInfo, x: f64, y: f64) -> [f64; 2] {
     [ux as f64, uy as f64]
 }
 
-fn rect_to_user(p: &PageInfo, r: [f64; 4]) -> [f64; 4] {
+pub(crate) fn rect_to_user(p: &PageInfo, r: [f64; 4]) -> [f64; 4] {
     let (a, b) = (to_user(p, r[0], r[1]), to_user(p, r[2], r[3]));
     [a[0].min(b[0]), a[1].min(b[1]), a[0].max(b[0]), a[1].max(b[1])]
 }
@@ -183,6 +183,7 @@ impl Automation {
                 "page": c.page + 1,
                 "index": c.index + 1,
                 "type": c.subtype,
+                "intent": c.intent,
                 "author": c.author,
                 "contents": c.contents,
                 "modified": c.modified,
@@ -328,7 +329,7 @@ impl Automation {
                     let [start, end] = ending_pair(kind, endings.as_deref())?;
                     Shape::Line { from: to_user(&info, f[0], f[1]), to: to_user(&info, t[0], t[1]), start, end }
                 }
-                "ink" => {
+                "ink" | "freehand_highlight" => {
                     let wrong = || ToolError::InvalidArgs("strokes must be an array of arrays of [x, y] points".into());
                     let strokes = a.get("strokes").ok_or_else(|| ToolError::InvalidArgs("ink needs `strokes`".into()))?;
                     let strokes = strokes
@@ -346,7 +347,7 @@ impl Automation {
                                 .collect::<Result<Vec<_>>>()
                         })
                         .collect::<Result<Vec<_>>>()?;
-                    Shape::Ink { strokes }
+                    if kind == "freehand_highlight" { Shape::FreehandHighlight { strokes } } else { Shape::Ink { strokes } }
                 }
                 "polygon" | "cloud" | "polyline" => {
                     let wrong = || ToolError::InvalidArgs(format!("{kind} needs `points`: an array of [x, y] points"));
@@ -412,7 +413,11 @@ impl Automation {
                 "sound" => {
                     let [x, y] = a.need::<2>("at", "a voice comment (its icon's top-left)")?;
                     let path = self.resolve(a.str("path")?, false)?;
-                    let data = std::fs::read(&path).map_err(|e| failed(format!("{}: {e}", path.display())))?;
+                    let size = std::fs::metadata(&path).map_err(|e| failed(format!("{}: {e}", path.display())))?.len();
+                    if size > (MAX_SOUND_BYTES as u64 + 1024 * 1024) {
+                        return Err(failed("voice recording exceeds the 32 MiB mobile safety limit".to_string()));
+                    }
+                    let data = crate::read_input(&path)?;
                     let (rate, channels, samples) = wav_samples(&data).map_err(|e| failed(format!("{}: {e}", path.display())))?;
                     Shape::Sound { at: icon_anchor(&info, x, y), rate, channels, samples }
                 }
@@ -509,6 +514,10 @@ impl Automation {
         if sensitivity.is_some() && !scan {
             return Err(ToolError::InvalidArgs("sensitivity is only for scan: true".into()));
         }
+        let requested_color = a.color("color")?;
+        if requested_color.is_some() && !matches!(kind, "text" | "date") {
+            return Err(ToolError::InvalidArgs("color is only for type text or date".into()));
+        }
         let requested_size = a.opt_num("font_size")?;
         if requested_size.is_some() && !matches!(kind, "text" | "date") {
             return Err(ToolError::InvalidArgs("font_size is only for type text or date".into()));
@@ -541,9 +550,10 @@ impl Automation {
             return self.apply(a, edit);
         }
         let text_at = |t: &str| {
-            // Measured as the appearance draws it (in Inter when the standard fonts can't hold it).
-            let w = (pdfcraft_engine::annot_text::text_measure(t)(t, size) + 8.0).clamp(20.0, 600.0);
-            let h = size * 1.2 + 6.0;
+            let longest = t.lines().map(|line| pdfcraft_engine::annot_text::text_width(line, size)).fold(0.0, f64::max);
+            let w = (longest + 8.0).clamp(20.0, 600.0);
+            let rows = pdfcraft_engine::annot_text::wrap(t, size, w - 4.0).len().max(1);
+            let h = rows as f64 * size * 1.2 + 6.0;
             let rect = pdfcraft_engine::text_box_at(i64::from(info.rotation), at, w, h).unwrap_or([at[0], at[1] - h, at[0] + w, at[1]]);
             Shape::Typewriter { rect, font_size: size }
         };
@@ -587,7 +597,10 @@ impl Automation {
                 (Shape::Mark { rect: mark.rect_at(at, i64::from(info.rotation)), mark }, String::new())
             }
         };
-        let style = Style::default_for(&shape);
+        let mut style = Style::default_for(&shape);
+        if let Some(color) = requested_color {
+            style.color = color;
+        }
         self.apply(a, Edit::AddAnnotation(NewAnnotation { page, shape, style, contents, author }))
     }
 
@@ -742,8 +755,21 @@ impl Automation {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn colours_parse_by_hex_and_name() {
+        assert_eq!(parse_color("#FF0000").unwrap(), [1.0, 0.0, 0.0]);
+        assert_eq!(parse_color("black").unwrap(), [0.0, 0.0, 0.0]);
+        assert!(parse_color("#12").is_err() && parse_color("chartreuse").is_err());
+        assert_eq!(hex([1.0, 0.5, 0.0]), "#FF8000");
+    }
+}
+
 /// The most audio a voice comment holds: an hour of 48 kHz stereo 16-bit samples.
-const MAX_SOUND_BYTES: usize = 48_000 * 2 * 2 * 3600;
+const MAX_SOUND_BYTES: usize = 32 * 1024 * 1024;
 
 /// A WAV file's 16-bit PCM samples, big-endian as PDF stores them (§13.3), with the sampling
 /// rate and channel count.
@@ -771,19 +797,12 @@ fn wav_samples(data: &[u8]) -> std::result::Result<(u32, u8, Vec<u8>), String> {
         return Err("the recording must be 16-bit PCM, mono or stereo, at 4 to 96 kHz".into());
     };
     let samples = samples.filter(|s| s.len() >= 2).ok_or("the recording is empty")?;
-    let samples = samples.get(..samples.len().min(MAX_SOUND_BYTES) & !1).unwrap_or_default();
+    if samples.len() > MAX_SOUND_BYTES {
+        return Err("the recording exceeds the 32 MiB mobile limit".into());
+    }
+    if samples.len() % 2 != 0 {
+        return Err("the recording has an incomplete PCM sample".into());
+    }
     Ok((rate, channels as u8, samples.as_chunks::<2>().0.iter().flat_map(|s| [s[1], s[0]]).collect()))
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn colours_parse_by_hex_and_name() {
-        assert_eq!(parse_color("#FF0000").unwrap(), [1.0, 0.0, 0.0]);
-        assert_eq!(parse_color("black").unwrap(), [0.0, 0.0, 0.0]);
-        assert!(parse_color("#12").is_err() && parse_color("chartreuse").is_err());
-        assert_eq!(hex([1.0, 0.5, 0.0]), "#FF8000");
-    }
-}
