@@ -806,6 +806,39 @@ fn soft_masks_of_another_size_and_stencil_and_colour_key_masks_become_alpha() {
     assert!(rgba[4] <= 2 && rgba[7] == 128, "{rgba:?}");
 }
 
+/// Upstream storytold/pdfcraft#5678: malformed or unresolved /Decode operands must not
+/// silently flip a stencil mask in exported images; indirect finite numbers work.
+#[test]
+fn stencil_mask_decode_resolves_only_two_finite_numbers() {
+    let export = |decode: &str| {
+        let pdf = format!(
+            "%PDF-1.7\n1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj\n\
+             2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj\n\
+             3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 100 100] /Resources << /XObject << /Im 4 0 R >> >> >> endobj\n\
+             4 0 obj << /Subtype /Image /ImageMask true /Width 8 /Height 1 /BitsPerComponent 1 /Decode {decode} /Filter /ASCIIHexDecode /Length 3 >> stream\nF0>\nendstream endobj\n\
+             5 0 obj 1 endobj\n6 0 obj 0 endobj\n7 0 obj 7 0 R endobj\n8 0 obj 9 0 R endobj\n9 0 obj 8 0 R endobj\n\
+             trailer << /Root 1 0 R >>\n%%EOF"
+        );
+        let doc = Document::open(Arc::new(pdf.into_bytes())).unwrap();
+        let mut export = crate::extract::extract_images(&doc, &[0], 1);
+        assert_eq!(export.images.len(), 1, "{decode}: {:?}", export.skipped);
+        export.images.remove(0).data
+    };
+    let (inverted, identity) = (export("[1 0]"), export("[0 1]"));
+    assert_ne!(inverted, identity);
+    for decode in ["[5 0 R 0]", "[1 6 0 R]", "[5 0 R 6 0 R]"] {
+        assert_eq!(export(decode), inverted, "{decode}");
+    }
+    for decode in ["[0 5 0 R]", "[6 0 R 1]", "[6 0 R 5 0 R]"] {
+        assert_eq!(export(decode), identity, "{decode}");
+    }
+    for decode in ["[7 0 R 0]", "[1 7 0 R]", "[8 0 R 0]", "[1 8 0 R]", "[7 0 R 8 0 R]", "[1]", "[1 /Name]", "[/Name 0]"] {
+        assert_eq!(export(decode), identity, "{decode}");
+    }
+    assert_eq!(export("[1 1]"), identity);
+    assert_eq!(export(&format!("[{} 0]", "9".repeat(400))), identity);
+}
+
 #[test]
 fn damaged_masks_and_sizes_never_panic() {
     for (w, h, mw, mh, data) in [(4, 2, -3, 1, vec![]), (4, 2, i64::MAX, 2, vec![0; 8]), (-4, 2, 4, 2, vec![0; 8]), (4, 2, 4, 2, vec![])] {
