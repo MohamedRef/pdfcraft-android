@@ -236,7 +236,7 @@ android {
     ndkVersion = "29.0.14206865"
 
     defaultConfig {
-        applicationId = "io.github.artcraftandroid.pdfcraft"
+        applicationId = "io.github.mohamedref.pdfcraft"
         minSdk = minApi
         targetSdk = 36
         versionCode = appVersionCode

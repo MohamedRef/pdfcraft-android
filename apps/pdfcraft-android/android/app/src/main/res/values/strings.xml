@@ -10,7 +10,7 @@
   few, many). A string left out shows in English.
 -->
 <resources>
-    <string name="app_name" translatable="false">PdfCraft</string>
+    <string name="app_name" translatable="false">PdfCraft Custom</string>
     <string name="open_with">Open in PdfCraft</string>
 
     <!-- Shared: buttons and words used on many screens -->
