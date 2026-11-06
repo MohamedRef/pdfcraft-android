@@ -3,6 +3,8 @@ package io.github.artcraftandroid.pdfcraft.ui.viewer
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -28,6 +30,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -109,7 +112,7 @@ private val EditColors = listOf(
 )
 
 /** Which formatting panel is open over the bar. */
-private enum class FormatPanel { None, Size, Font, Color, Align, List }
+private enum class FormatPanel { None, Size, Font, Color, Align, List, Script }
 
 /**
  * Edit PDF's bottom bar. With nothing selected: Organize pages, then Add text and Add image. With a
@@ -188,10 +191,22 @@ private fun EditFormatBar(vm: AppViewModel, doc: OpenDocument, para: Paragraph) 
                 vm.styleParagraph(doc, para, mapOf("align" to a))
             }
             FormatPanel.List -> ListPanel(ListStyle.of(vm.editDraft?.takeIf { vm.editing != null } ?: para.text)) { vm.listParagraph(doc, para, it) }
+            FormatPanel.Script -> Column(Modifier.fillMaxWidth().padding(12.dp)) {
+                Text(stringResource(R.string.edit_script_scope), color = c.textSecondary)
+                Row {
+                    val enabled = (vm.editing == null || vm.editDraft == para.text) && vm.busy == null
+                    TextButton(enabled = enabled, onClick = { vm.scriptParagraph(doc, para, "superscript") }) {
+                        Text(stringResource(R.string.edit_superscript))
+                    }
+                    TextButton(enabled = enabled, onClick = { vm.scriptParagraph(doc, para, "subscript") }) {
+                        Text(stringResource(R.string.edit_subscript))
+                    }
+                }
+            }
             FormatPanel.None -> Unit
         }
         Row(
-            Modifier.fillMaxWidth().height(BottomBarHeight).barTopLine(),
+            Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).height(BottomBarHeight).barTopLine(),
             horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -222,6 +237,7 @@ private fun EditFormatBar(vm: AppViewModel, doc: OpenDocument, para: Paragraph) 
             FormatButton(alignIcon(vm.editAlign[para.page to para.number] ?: "left"), stringResource(R.string.edit_align_text), true, tintSelected = panel == FormatPanel.Align || true) { toggle(FormatPanel.Align) }
             // bulleted and numbered lists, as the reference's phone toolbar offers
             FormatButton(LucideIcons.List, stringResource(R.string.edit_list), true, tintSelected = true) { toggle(FormatPanel.List) }
+            FormatButton(LucideIcons.Superscript, stringResource(R.string.edit_script_title), true, tintSelected = panel == FormatPanel.Script) { toggle(FormatPanel.Script) }
         }
     }
 }
@@ -542,7 +558,11 @@ private fun BoxScope.InlineEditor(vm: AppViewModel, doc: OpenDocument, para: Par
         ) {
             BasicTextField(
                 value = value,
-                onValueChange = { value = it },
+                onValueChange = {
+                    value = it
+                    vm.editDraft = it.text
+                    vm.editTextSelection = it.selection.start to it.selection.end
+                },
                 textStyle = TextStyle(
                     color = parseHex(para.color ?: "#000000"), fontSize = sp, lineHeight = sp * 1.2f, fontFamily = family,
                     fontWeight = if (para.bold) FontWeight.Bold else FontWeight.Normal,

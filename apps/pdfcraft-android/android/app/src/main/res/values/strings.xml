@@ -1235,4 +1235,10 @@
     <!-- Translator note: notification button that stops reading aloud -->
     <string name="service_action_stop">Stop</string>
     <string name="toolbar_stylus_only">Pen only (fingers scroll)</string>
+    <string name="edit_script_title">Superscript and subscript</string>
+    <string name="edit_superscript">Superscript (x²)</string>
+    <string name="edit_subscript">Subscript (H₂O)</string>
+    <string name="edit_script_scope">Applies to selected text in the inline editor, or the whole paragraph when no text is selected. Uses Unicode forms supported by the font; other characters stay unchanged. Finish any typing changes first. Use Undo to restore the original text.</string>
+    <string name="edit_script_applying">Formatting paragraph…</string>
+    <string name="edit_script_unavailable">Finish typing and select a paragraph in an editable, unsigned PDF. If the document changed, select it again.</string>
 </resources>

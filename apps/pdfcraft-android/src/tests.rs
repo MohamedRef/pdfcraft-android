@@ -467,3 +467,27 @@ fn form_scripts_run_when_fields_are_filled_and_buttons_pressed() {
     assert_eq!(big["alerts"].as_array().map(Vec::len), Some(1), "{big}");
     assert_eq!(big["alerts"][0]["message"], "Big", "{big}");
 }
+
+
+#[test]
+fn paragraph_script_uses_native_unicode_toggle_and_survives_reopen() {
+    let s = MobileSession::new();
+    let path = text_pdf("H2O + CO2");
+    let original = std::fs::read(&path).unwrap();
+    let doc = s.open(path.clone(), None).unwrap().id;
+    let rows: Value = serde_json::from_str(&s.execute("text_paragraphs".into(), json!({"doc": doc, "page": 1}).to_string()).unwrap()).unwrap();
+    let paragraph = rows["paragraphs"].as_array().unwrap().iter().find(|row| row["text"] == "H2O + CO2").unwrap()["paragraph"].clone();
+    let args = json!({"doc": doc, "page": 1, "paragraph": paragraph, "script": "subscript", "range": [1, 2]});
+    let result: Value = serde_json::from_str(&s.execute("text_script".into(), args.to_string()).unwrap()).unwrap();
+    assert_eq!(result["paragraph"]["text"], "H₂O + CO2");
+    s.execute("edit_undo".into(), json!({"doc": doc}).to_string()).unwrap();
+    assert!(s.page_plain_text(doc, 0).unwrap().contains("H2O + CO2"));
+    s.execute("edit_redo".into(), json!({"doc": doc}).to_string()).unwrap();
+    assert!(s.page_plain_text(doc, 0).unwrap().contains("H₂O + CO2"));
+    let out = scratch().join("script.pdf");
+    s.execute("doc_save".into(), json!({"doc": doc, "path": out}).to_string()).unwrap();
+    s.close(doc, true).unwrap();
+    let reopened = s.open(out.to_string_lossy().into_owned(), None).unwrap().id;
+    assert!(s.page_plain_text(reopened, 0).unwrap().contains("H₂O + CO2"));
+    assert_eq!(std::fs::read(&path).unwrap(), original);
+}

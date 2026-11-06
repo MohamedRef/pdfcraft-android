@@ -1,5 +1,9 @@
 # PdfCraft Android - development handover
 
+## Next-batch preparation — superscript and subscript
+
+`feat/android-paragraph-script-controls` exposes native `text_script` from Edit PDF for selected text or a whole paragraph. Includes UTF-16→UTF-8 range validation, fresh editor-text/generation checks and unchanged-draft handling; the toolbar scrolls on narrow windows. Local native bridge regression passed selected-digit conversion, Undo/Redo, save/reopen and source preservation. Kotlin/Compose current-head CI and physical selection/IME/font/provider QA remain required. Separate next-batch work with #30/#31, outside the published APK; see [script controls](ANDROID_TEXT_SCRIPT_CONTROLS.md).
+
 ## LIVE CHECKPOINT — 2026-11-06: repository review, signed beta and open drafts
 
 **This section supersedes older checkpoint text below that says the beta is unpublished or performance instrumentation is draft. Keep historical notes for audit.**

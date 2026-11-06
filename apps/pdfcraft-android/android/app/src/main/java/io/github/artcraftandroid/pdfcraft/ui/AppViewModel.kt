@@ -1693,10 +1693,12 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     /** Typing in a paragraph: whether it opened with everything selected, and the text so far. */
     var editSelectAll = false
     var editDraft: String? = null
+    var editTextSelection: Pair<Int, Int>? = null
 
     fun startInlineEdit(para: io.github.artcraftandroid.pdfcraft.ui.viewer.Paragraph, selectAll: Boolean) {
         editSelectAll = selectAll
         editDraft = para.text
+        editTextSelection = if (selectAll) 0 to para.text.length else para.text.length to para.text.length
         editSelection = para
         editing = para
     }
@@ -1707,6 +1709,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         val text = editDraft ?: para.text
         editing = null
         editDraft = null
+        editTextSelection = null
         if (text != para.text) runTool(doc, "text_edit", mapOf("page" to para.page + 1, "paragraph" to para.number, "text" to text))
     }
 
@@ -1726,6 +1729,55 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     fun styleParagraph(doc: OpenDocument, para: io.github.artcraftandroid.pdfcraft.ui.viewer.Paragraph, style: Map<String, Any?>) {
         val typed = editDraft?.takeIf { editing != null && it != para.text }
         runTool(doc, "text_edit", paraArgs(para) + style + (if (typed != null) mapOf("text" to typed) else emptyMap()))
+    }
+
+    /** Unicode script toggle for selected text or a paragraph; no uncommitted draft is lost. */
+    fun scriptParagraph(doc: OpenDocument, para: io.github.artcraftandroid.pdfcraft.ui.viewer.Paragraph, script: String) {
+        val typing = editing
+        if (script !in setOf("superscript", "subscript") || (typing != null &&
+            (typing.number != para.number || typing.page != para.page || editDraft != para.text)) || document !== doc ||
+            !doc.writable || doc.info.signed || doc.info.readOnlyReason != null) {
+            tell(text(R.string.edit_script_unavailable))
+            return
+        }
+        val range = if (typing != null) {
+            val (anchor, focus) = editTextSelection ?: (0 to 0)
+            try { io.github.artcraftandroid.pdfcraft.engine.nativeUtf8Range(para.text, anchor, focus) }
+            catch (_: IllegalArgumentException) { tell(text(R.string.edit_script_unavailable)); return }
+        } else null
+        // Only an unchanged draft reaches here, so dismissing the inline editor loses no typing.
+        editing = null
+        editDraft = null
+        editTextSelection = null
+        val generation = doc.info.generation
+        job(text(R.string.edit_script_applying)) { eng ->
+            if (document !== doc || editing != null || !doc.writable) {
+                tell(text(R.string.edit_script_unavailable))
+                return@job
+            }
+            val raw = eng.command {
+                val current = document(doc.id)
+                require(current.generation == generation && !current.signed && current.readOnlyReason == null) {
+                    text(R.string.edit_script_unavailable)
+                }
+                if (range != null) {
+                    val listed = JSONObject(execute("text_paragraphs", Engine.toJson(
+                        mapOf("doc" to doc.id, "page" to para.page + 1)).toString())).getJSONArray("paragraphs")
+                    val row = (0 until listed.length()).map { listed.getJSONObject(it) }
+                        .firstOrNull { it.getInt("paragraph") == para.number }
+                    // A range is valid only against the exact native editor text, not display
+                    // text normalized differently by PDF extraction or a stale local draft.
+                    require(row != null && row.optString("editor_text", row.optString("text")) == para.text) {
+                        text(R.string.edit_script_unavailable)
+                    }
+                }
+                execute("text_script", Engine.toJson(paraArgs(para) + mapOf("doc" to doc.id, "script" to script) +
+                    (range?.let { mapOf("range" to it) } ?: emptyMap())).toString())
+            }
+            refresh(doc)
+            val warnings = JSONObject(raw).optJSONArray("warnings")
+            for (i in 0 until minOf(warnings?.length() ?: 0, 3)) tell(warnings!!.getString(i).take(500))
+        }
     }
 
     /** Move [para] by ([dx], [dy]) points (right and down on screen). */
