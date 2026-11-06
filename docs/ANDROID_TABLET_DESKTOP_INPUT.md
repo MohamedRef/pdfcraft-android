@@ -47,3 +47,6 @@ Compose lifetime or physical-device behavior.
 ### Batch integration review
 
 Synchronized the reviewed layout branch with main `952cc4a723f8fa3c1194a2312b504ce892ee95db` after export #25 merged. Existing mouse/keyboard behavior is preserved, rather than counted as a new feature. Required per-PR gates remain current-head Rust/provenance, Android JVM, title and aggregate merge success with no conflicts; physical tablet/DeX/accessibility/input checks remain outstanding for the single batch APK, per the owner’s no-per-PR-APK policy. Prior green CI 42282145245 is not evidence for this new integration head. No new release version is selected here.
+
+
+Final batch synchronization: main `380b77d6389188516c75810d94a0f2e732270c9e` includes sequentially merged outline export #25, import #26 and copy #28, with staging/native-source cancellation fixes. Current tablet integration includes that complete bookmark stack and requires a fresh exact-head run; the previous f74cb42 run 42285637888 passed before this final synchronization. Keep next-batch #30/#31/#32 drafts out of the current release. No manual Samsung tests have been completed here.
