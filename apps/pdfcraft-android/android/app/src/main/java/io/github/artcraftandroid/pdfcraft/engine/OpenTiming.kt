@@ -13,4 +13,17 @@ internal object OpenTiming {
             }
         }
     }
+
+    /**
+     * Elapsed time since the user's latest open request. Every caller supplies a fixed stage name;
+     * only aggregate byte/page counts are logged, never a document name, URI, password or contents.
+     * This is diagnostics, NOT a measured performance improvement or GPU first-paint timestamp.
+     */
+    fun milestone(stage: String, openedAtMs: Long, bytes: Long? = null, pages: Int? = null) {
+        if (!Log.isLoggable("PdfCraftOpen", Log.DEBUG)) return
+        val elapsed = (SystemClock.elapsedRealtime() - openedAtMs).coerceAtLeast(0)
+        val size = bytes?.let { " bytes=${it.coerceAtLeast(0)}" }.orEmpty()
+        val count = pages?.let { " pages=${it.coerceAtLeast(0)}" }.orEmpty()
+        Log.d("PdfCraftOpen", "$stage elapsed_ms=$elapsed$size$count")
+    }
 }
