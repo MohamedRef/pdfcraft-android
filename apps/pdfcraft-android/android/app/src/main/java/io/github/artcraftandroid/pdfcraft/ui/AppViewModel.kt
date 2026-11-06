@@ -44,6 +44,7 @@ import io.github.artcraftandroid.pdfcraft.core.MobileException
 import io.github.artcraftandroid.pdfcraft.engine.DocumentFiles
 import io.github.artcraftandroid.pdfcraft.engine.EmbeddedBookmarkJson
 import io.github.artcraftandroid.pdfcraft.engine.SafBoundedCopy
+import io.github.artcraftandroid.pdfcraft.engine.withTemporaryBookmarkSource
 import io.github.artcraftandroid.pdfcraft.engine.Engine
 import io.github.artcraftandroid.pdfcraft.engine.RecentFile
 import io.github.artcraftandroid.pdfcraft.engine.RecentFiles
@@ -2358,22 +2359,30 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
 
                 // A second native document is opened read-only. The originating SAF URI is never
                 // passed to Rust, and the temporary source is closed and removed in all outcomes.
-                val opened = eng.tool("doc_open", mapOf("path" to source.absolutePath))
-                val from = opened.optLong("doc", 0L)
-                if (from <= 0L) throw java.io.IOException(text(R.string.sheet_copy_embedded_bookmarks_unreadable))
-                try {
-                    val sourceInfo = eng.command { document(from) }
+                withTemporaryBookmarkSource(
+                    open = {
+                        val opened = eng.tool("doc_open", mapOf("path" to source.absolutePath))
+                        opened.optLong("doc", 0L).also {
+                            if (it <= 0L) throw java.io.IOException(text(R.string.sheet_copy_embedded_bookmarks_unreadable))
+                        }
+                    },
+                    close = { from ->
+                        runCatching { eng.tool("doc_close", mapOf("doc" to from, "discard_changes" to true)) }
+                        Unit
+                    },
+                ) { from ->
+                    val sourceInfo = eng.command { document(from.toULong()) }
                     if (!sourceInfo.allowsCopying) {
                         tell(text(R.string.sheet_copy_embedded_bookmarks_copy_restricted))
-                        return@job
+                        return@withTemporaryBookmarkSource
                     }
                     if (!sourceInfo.hasOutline) {
                         tell(text(R.string.sheet_copy_embedded_bookmarks_empty))
-                        return@job
+                        return@withTemporaryBookmarkSource
                     }
                     if (document !== doc || !doc.writable || doc.info.signed || doc.info.readOnlyReason != null) {
                         tell(text(R.string.sheet_copy_embedded_bookmarks_unavailable))
-                        return@job
+                        return@withTemporaryBookmarkSource
                     }
                     val result = eng.tool("bookmark_copy", mapOf("doc" to doc.id, "from" to from, "replace" to false))
                     refresh(doc)
@@ -2383,8 +2392,6 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                     if (result.optBoolean("truncated", false)) {
                         tell(text(R.string.sheet_import_embedded_bookmarks_truncated))
                     }
-                } finally {
-                    runCatching { eng.tool("doc_close", mapOf("doc" to from, "discard_changes" to true)) }
                 }
             } finally {
                 source.delete()

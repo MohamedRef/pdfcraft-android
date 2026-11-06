@@ -29,3 +29,12 @@
 - [ ] S24 Ultra and Galaxy Tab S11 phone/tablet layout and stylus interactions are **not claimed verified**.
 
 This is a draft stacked after the JSON export/import PRs, not part of the already signed `0.0.10-beta (10012)` release. Performance remains unresolved independently under `docs/PDF_OPEN_PROFILING.md`.
+
+## Repository audit correction
+
+The original CI failed Kotlin compilation because the JSON tool ID is `Long` and generated
+`MobileSession.document` expects `ULong`; convert only after validating the ID is positive.
+Temporary native source ownership now survives cancellation during blocking open. Closure runs
+in a non-cancellable cleanup block, and a cancelled operation does not begin target copying.
+JVM regressions cover cancellation during open, failed copy and successful close-once behavior.
+Physical provider/Undo/save/reopen tests remain pending; this correction is not device evidence.
