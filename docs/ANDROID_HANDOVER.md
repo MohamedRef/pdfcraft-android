@@ -112,3 +112,7 @@ Reference behavior: https://feedback.xodo.com/support/solutions/articles/3500020
 - The supplied file is encrypted with no repair notes; host native opens before this fix were roughly 2.5–4.4 seconds, while raster generation was around 0.07–0.12 seconds. These are host dev/optimized timings, not controlled Android benchmark results. Original file bytes are never committed or redistributed. Android provider file-name discrepancy is not reproduced in native host API.
 
 - Final host probe on supplied First Aid 2026 after raw-metadata timestamp discovery fix: read **119 ms**, structural inspection **482 ms**, engine open **1674 ms**, MobileSession opens **1848 / 1871 / 1918 ms**; first rasters **74 / 72 / 76 ms**. Apple Silicon, Rust 1.99 dev/optimized, warm-cache uncontrolled host sample; not Android performance evidence. Earlier host baseline approximately 2.5–4.4 s. Private probe source/logs remain local under work.
+
+### Scope split requested by owner
+
+Native encrypted-file opening fix moved to standalone #16; CI batch gate policy moved to #17; categorized release notes moved to #18. #13 now contains only provider snapshot copying/version preparation, #14 only stylus routing relative to #13, #15 only ink appearance relative to #14. Earlier combined-head measurements/logs are historical; each new head must pass its applicable CI. No force push or history deletion used; explicit reversions preserve the audit trail.
