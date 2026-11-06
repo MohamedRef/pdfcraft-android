@@ -42,6 +42,10 @@ class MainActivity : ComponentActivity() {
     private var pickKind = FilePickKind.Open
     private val pickMany = registerForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris -> vm.onFilesPicked(pickKind, uris) }
     private val pickOne = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> vm.onFilesPicked(pickKind, listOfNotNull(uri)) }
+    // Separate picker/result from the regular file pick kind, so a stale PDF selection cannot
+    // accidentally feed untrusted bookmark JSON into another tool or document.
+    private val pickBookmarkJson = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> vm.onBookmarkJsonPicked(uri) }
+    private val pickBookmarkPdf = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> vm.onBookmarkPdfPicked(uri) }
 
     private val saveCopy = registerForActivityResult(ActivityResultContracts.CreateDocument("application/pdf")) { uri -> vm.copyTo(uri) }
     private val takePhoto = registerForActivityResult(ActivityResultContracts.TakePicture()) { ok -> vm.onScanPhoto(ok) }
@@ -80,6 +84,16 @@ class MainActivity : ComponentActivity() {
         lifecycleScope.launch { for (u in vm.leave) finish() }
         lifecycleScope.launch { for ((file, name) in vm.prints) print(file, name) }
         lifecycleScope.launch { for (name in vm.saveCopyRequests) launchSafely { saveCopy.launch(name) } }
+        lifecycleScope.launch {
+            for (ignored in vm.bookmarkJsonPicks) {
+                launchSafely { pickBookmarkJson.launch(arrayOf("application/json", "text/plain", "application/octet-stream")) }
+            }
+        }
+        lifecycleScope.launch {
+            for (ignored in vm.bookmarkPdfPicks) {
+                launchSafely { pickBookmarkPdf.launch(arrayOf("application/pdf")) }
+            }
+        }
         lifecycleScope.launch {
             for (kind in vm.filePicks) {
                 pickKind = kind

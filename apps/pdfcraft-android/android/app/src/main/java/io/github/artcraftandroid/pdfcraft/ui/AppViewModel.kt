@@ -42,12 +42,17 @@ import io.github.artcraftandroid.pdfcraft.plural
 import io.github.artcraftandroid.pdfcraft.text
 import io.github.artcraftandroid.pdfcraft.core.MobileException
 import io.github.artcraftandroid.pdfcraft.engine.DocumentFiles
+import io.github.artcraftandroid.pdfcraft.engine.EmbeddedBookmarkJson
+import io.github.artcraftandroid.pdfcraft.engine.SafBoundedCopy
+import io.github.artcraftandroid.pdfcraft.engine.withTemporaryBookmarkSource
 import io.github.artcraftandroid.pdfcraft.engine.Engine
 import io.github.artcraftandroid.pdfcraft.engine.RecentFile
 import io.github.artcraftandroid.pdfcraft.engine.RecentFiles
 import io.github.artcraftandroid.pdfcraft.engine.userMessage
 import io.github.artcraftandroid.pdfcraft.ui.viewer.PageImages
 import java.io.File
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.launch
@@ -2250,6 +2255,155 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         } finally {
             // deliver() removes the temp file on success; an engine/provider error must do so too.
             out.delete()
+        }
+    }
+
+    /** Ask Android SAF to pick JSON for the currently displayed PDF, not for private bookmarks. */
+    val bookmarkJsonPicks = Channel<Unit>(Channel.CONFLATED)
+    private var bookmarkJsonTarget: OpenDocument? = null
+
+    fun pickEmbeddedBookmarksImport(doc: OpenDocument) {
+        if (document !== doc || !doc.writable || doc.info.signed || doc.info.readOnlyReason != null) {
+            tell(text(R.string.sheet_import_embedded_bookmarks_unavailable))
+            return
+        }
+        bookmarkJsonTarget = doc
+        bookmarkJsonPicks.trySend(Unit)
+    }
+
+    /** SAF picker result, including cancellation. A changed/closed target is never edited. */
+    fun onBookmarkJsonPicked(uri: Uri?) {
+        val doc = bookmarkJsonTarget
+        bookmarkJsonTarget = null
+        if (uri == null || doc == null) return
+        if (document !== doc || !doc.writable || doc.info.signed || doc.info.readOnlyReason != null) {
+            tell(text(R.string.sheet_import_embedded_bookmarks_unavailable))
+            return
+        }
+        job(text(R.string.sheet_import_embedded_bookmarks)) { eng ->
+            val staged = tempFile("json")
+            try {
+                withContext(Dispatchers.IO) {
+                    val stream = getApplication<Application>().contentResolver.openInputStream(uri)
+                        ?: throw java.io.IOException(text(R.string.sheet_import_embedded_bookmarks_unreadable))
+                    val copyContext = currentCoroutineContext()
+                    stream.use { input ->
+                        staged.outputStream().use { output ->
+                            EmbeddedBookmarkJson.copyBounded(input, output) { copyContext.ensureActive() }
+                        }
+                    }
+                }
+                // The SAF provider may be slow. Recheck after staging and before every write.
+                if (document !== doc || !doc.writable || doc.info.signed || doc.info.readOnlyReason != null) {
+                    tell(text(R.string.sheet_import_embedded_bookmarks_unavailable))
+                    return@job
+                }
+                val result = eng.tool("bookmark_import", mapOf(
+                    "doc" to doc.id, "file" to staged.absolutePath, "replace" to false,
+                ))
+                refresh(doc) // Rebuild the outline, generation, and Undo / Redo state.
+                tell(text(R.string.sheet_import_embedded_bookmarks_done))
+                val unmapped = result.optJSONArray("unmapped")?.length() ?: 0
+                if (unmapped > 0) tell(text(R.string.sheet_import_embedded_bookmarks_unmapped, unmapped))
+                if (result.optBoolean("truncated", false)) {
+                    tell(text(R.string.sheet_import_embedded_bookmarks_truncated))
+                }
+            } finally {
+                // Failure, cancellation, bad JSON and no-storage paths must not persist source data.
+                staged.delete()
+            }
+        }
+    }
+
+    /** Copy another PDF's actual embedded outline, never the reader's private bookmark store. */
+    val bookmarkPdfPicks = Channel<Unit>(Channel.CONFLATED)
+    private var bookmarkCopyTarget: OpenDocument? = null
+
+    fun pickEmbeddedBookmarksCopy(doc: OpenDocument) {
+        if (document !== doc || !doc.writable || doc.info.signed || doc.info.readOnlyReason != null) {
+            tell(text(R.string.sheet_copy_embedded_bookmarks_unavailable))
+            return
+        }
+        bookmarkCopyTarget = doc
+        bookmarkPdfPicks.trySend(Unit)
+    }
+
+    /** SAF result can be null on cancel; a stale/closed target is never edited. */
+    fun onBookmarkPdfPicked(uri: Uri?) {
+        val doc = bookmarkCopyTarget
+        bookmarkCopyTarget = null
+        if (uri == null || doc == null) return
+        if (document !== doc || !doc.writable || doc.info.signed || doc.info.readOnlyReason != null) {
+            tell(text(R.string.sheet_copy_embedded_bookmarks_unavailable))
+            return
+        }
+        if (uri == doc.source) {
+            tell(text(R.string.sheet_copy_embedded_bookmarks_same_source))
+            return
+        }
+        job(text(R.string.sheet_copy_embedded_bookmarks_busy)) { eng ->
+            val source = tempFile("pdf")
+            try {
+                withContext(Dispatchers.IO) {
+                    val size = files.size(uri)
+                    if (size != null && size > SafBoundedCopy.MAX_BOOKMARK_SOURCE_PDF_BYTES) {
+                        throw java.io.IOException(text(R.string.sheet_copy_embedded_bookmarks_too_large))
+                    }
+                    val stream = getApplication<Application>().contentResolver.openInputStream(uri)
+                        ?: throw java.io.IOException(text(R.string.sheet_copy_embedded_bookmarks_unreadable))
+                    val copyContext = currentCoroutineContext()
+                    stream.use { input ->
+                        source.outputStream().use { output ->
+                            SafBoundedCopy.copy(input, output, SafBoundedCopy.MAX_BOOKMARK_SOURCE_PDF_BYTES, "PDF") {
+                                copyContext.ensureActive()
+                            }
+                        }
+                    }
+                }
+                if (document !== doc || !doc.writable || doc.info.signed || doc.info.readOnlyReason != null) {
+                    tell(text(R.string.sheet_copy_embedded_bookmarks_unavailable))
+                    return@job
+                }
+
+                // A second native document is opened read-only. The originating SAF URI is never
+                // passed to Rust, and the temporary source is closed and removed in all outcomes.
+                withTemporaryBookmarkSource(
+                    open = {
+                        val opened = eng.tool("doc_open", mapOf("path" to source.absolutePath))
+                        opened.optLong("doc", 0L).also {
+                            if (it <= 0L) throw java.io.IOException(text(R.string.sheet_copy_embedded_bookmarks_unreadable))
+                        }
+                    },
+                    close = { from ->
+                        runCatching { eng.tool("doc_close", mapOf("doc" to from, "discard_changes" to true)) }
+                        Unit
+                    },
+                ) { from ->
+                    val sourceInfo = eng.command { document(from.toULong()) }
+                    if (!sourceInfo.allowsCopying) {
+                        tell(text(R.string.sheet_copy_embedded_bookmarks_copy_restricted))
+                        return@withTemporaryBookmarkSource
+                    }
+                    if (!sourceInfo.hasOutline) {
+                        tell(text(R.string.sheet_copy_embedded_bookmarks_empty))
+                        return@withTemporaryBookmarkSource
+                    }
+                    if (document !== doc || !doc.writable || doc.info.signed || doc.info.readOnlyReason != null) {
+                        tell(text(R.string.sheet_copy_embedded_bookmarks_unavailable))
+                        return@withTemporaryBookmarkSource
+                    }
+                    val result = eng.tool("bookmark_copy", mapOf("doc" to doc.id, "from" to from, "replace" to false))
+                    refresh(doc)
+                    tell(text(R.string.sheet_copy_embedded_bookmarks_done))
+                    val unmapped = result.optJSONArray("unmapped")?.length() ?: 0
+                    if (unmapped > 0) tell(text(R.string.sheet_import_embedded_bookmarks_unmapped, unmapped))
+                    if (result.optBoolean("truncated", false)) {
+                        tell(text(R.string.sheet_import_embedded_bookmarks_truncated))
+                    }
+                }
+            } finally {
+                source.delete()
+            }
         }
     }
 

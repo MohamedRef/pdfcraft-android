@@ -210,11 +210,23 @@ fun BookmarksSheet(vm: AppViewModel, doc: OpenDocument) {
             }
         }
         SheetDivider(inset = 0.dp)
-        if (tab == 0 && hasOutline) {
+        if (tab == 0) {
+            if (hasOutline) {
+                SheetRow(
+                    LucideIcons.FileOutput,
+                    stringResource(R.string.sheet_export_embedded_bookmarks),
+                    { vm.exportEmbeddedBookmarks(doc) },
+                )
+            }
             SheetRow(
-                LucideIcons.FileOutput,
-                stringResource(R.string.sheet_export_embedded_bookmarks),
-                { vm.exportEmbeddedBookmarks(doc) },
+                LucideIcons.FileInput,
+                stringResource(R.string.sheet_import_embedded_bookmarks),
+                { vm.pickEmbeddedBookmarksImport(doc) },
+            )
+            SheetRow(
+                LucideIcons.Copy,
+                stringResource(R.string.sheet_copy_embedded_bookmarks),
+                { vm.pickEmbeddedBookmarksCopy(doc) },
             )
         }
         if (tab == 0) {

@@ -734,6 +734,22 @@
     <string name="sheet_no_contents">This document has no table of contents.</string>
     <string name="sheet_export_embedded_bookmarks">Export embedded PDF bookmarks (JSON)</string>
     <string name="sheet_export_embedded_bookmarks_failed">Could not create the PDF bookmarks export.</string>
+    <string name="sheet_import_embedded_bookmarks">Import embedded PDF bookmarks (JSON)</string>
+    <string name="sheet_import_embedded_bookmarks_unavailable">Cannot import bookmarks into a closed, read-only, or signed PDF. Use an editable copy instead.</string>
+    <string name="sheet_import_embedded_bookmarks_unreadable">The selected bookmark file could not be read.</string>
+    <string name="sheet_import_embedded_bookmarks_done">PDF bookmarks added. This change can be undone.</string>
+    <!-- %1$d is the number of bookmarks with page destinations outside the target PDF. -->
+    <string name="sheet_import_embedded_bookmarks_unmapped">%1$d imported bookmark destinations do not map to a page in this PDF.</string>
+    <string name="sheet_import_embedded_bookmarks_truncated">This JSON came from an outline with deeper nested bookmarks. Some branches may be missing.</string>
+    <string name="sheet_copy_embedded_bookmarks">Copy embedded bookmarks from another PDF</string>
+    <string name="sheet_copy_embedded_bookmarks_busy">Copying embedded PDF bookmarks…</string>
+    <string name="sheet_copy_embedded_bookmarks_unavailable">Cannot add bookmarks to a closed, signed, or read-only PDF. Use an editable copy instead.</string>
+    <string name="sheet_copy_embedded_bookmarks_same_source">Choose a different PDF as the source.</string>
+    <string name="sheet_copy_embedded_bookmarks_too_large">Source PDF exceeds the 512 MiB copy limit.</string>
+    <string name="sheet_copy_embedded_bookmarks_unreadable">Could not read or open the selected PDF.</string>
+    <string name="sheet_copy_embedded_bookmarks_copy_restricted">The source PDF does not allow copying its contents.</string>
+    <string name="sheet_copy_embedded_bookmarks_empty">The selected PDF has no embedded bookmarks.</string>
+    <string name="sheet_copy_embedded_bookmarks_done">Embedded PDF bookmarks copied. This change can be undone.</string>
     <string name="sheet_up_level">Up a level</string>
     <!-- Translator note: accessibility label. %1$s is the title of an entry in the table of contents -->
     <string name="sheet_expand_entry">Expand %1$s</string>
