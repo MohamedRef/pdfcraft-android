@@ -15,3 +15,7 @@ Example: `PdfCraft 0.0.7-beta.2 (7022)` for an `arm64-v8a` APK, or `PdfCraft 0.0
 - Before marking a new build ready for download, verify that its displayed `versionCode` matches the built APK's manifest.
 
 For pull requests and signing requirements, follow `.github/ANDROID_SIGNING.md` and its merge-gate checks.
+
+## Release notes (owner requirement)
+
+Every public release must clearly describe new features, fixes, improvements and known/unverified behavior. Use categorized generated PR notes (`.github/release.yml`) and supplement them with concise user-facing behavior and validation limits. Do not claim a measured speed-up, full feature parity or device success unless evidenced. Include actual `versionName (versionCode)` and source/CI links. Keep published APKs immutable; correct notes without silently replacing an existing build.

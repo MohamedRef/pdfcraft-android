@@ -80,13 +80,26 @@ Read this file and the full mandatory audit. Inspect live GitHub. The last confi
 
 - Release preparation on the same PR: next patch beta `0.0.8-beta.1` with base code `801`, expected ARM64 **0.0.8-beta.1 (8012)**. Actual APK manifest must confirm 8012. Existing **0.0.7-beta.4 (7042)** and its public asset remain unchanged. On verified merge, the existing main workflow builds with the permanent key and publishes the new version only after Rust/Android tests and signing/package checks. Do not report publication until that run and Release API succeed.
 
-### Batch 1 of three PRs — stylus and annotations
+### Owner policy: tests per PR, signed APK per merged batch (2026-11-06)
 
-Owner requests batches of three PRs and Xodo-like stylus/annotation capabilities. Current batch: #13 seekable provider snapshots; second PR adds stylus/finger routing; third preserves per-stroke ink appearance. Each needs Rust/provenance, Android JVM, ARM64 and aggregate checks; merges remain sequential against latest main. Existing #12 signed release continues independently.
+- Separate CI-only change: Rust/provenance and Android JVM/regressions plus `Merge gate (Rust and Android)` on each PR. No separate APK packaging job per PR. Android JVM still compiles matching native UniFFI bindings as necessary.
+- Ordinary main pushes run tests without signed publication. After merging the batch, manually dispatch `android-update.yml` on main once to run tests and build/verify/publish the permanent-key signed ARM64 APK. Certificate, package, manifest, versionCode and digest gates remain. This owner instruction supersedes historical per-PR APK requirements.
+- GitHub reported main was not branch-protected at inspection. If protection is configured, require the new `Merge gate (Rust and Android)` status and title check, retiring the old ABI-APK gate name. Release-note improvements are in a separate PR. No product behavior or native engine change in this CI PR.
 
-Stylus scope: pen input owns its pointer, palm/finger contact does not cancel or extend that pen stroke; a pen arriving after a finger cancels provisional finger ink and takes over. After using the pen, fingers navigate for the tool session; explicit persisted Pen only option works before first contact. Two fingers still navigate in finger-drawing mode. Eraser tips are ignored (never accidentally draw); erasing behavior, pressure, hover/button shortcuts, lasso and handwriting are **not implemented in this increment**. Cancellation discards provisional ink. Requires real S Pen testing; JVM policy tests are not device evidence.
+### Categorized release notes — separate change
 
-Reference behavior: https://feedback.xodo.com/support/solutions/articles/35000202905-stylus-and-fingers and https://feedback.xodo.com/support/solutions/articles/35000202835-adding-an-ink-annotation . Pressure reference: https://feedback.xodo.com/support/solutions/articles/35000202927-how-to-enable-pressure-for-ink- . Long-term parity must be tracked feature by feature; no claim to all Xodo capabilities or assets.
+Owner requires every release to explain features, fixes and improvements. Enable GitHub generated notes grouped by enhancement/bug/performance labels; preserve source/build identity, signing/hash gates and manual-batch release policy inherited from the CI PR. Durable rule added to AGENTS.md. Supplement generated notes with actual behavior, known issues and evidence limits before user handoff. No product/native change; no APK rebuild needed for notes alone. Public beta.8 notes already record owner's negative large-file performance result, with unchanged APK bytes.
+
+### Measured native opening work on the supplied encrypted PDF
+
+- Local profiling found standalone document-timestamp discovery decrypting unrelated image stream payloads. Added a bounded raw-metadata scan using the existing parser and stream-boundary validation; names/keys (not encrypted PDF strings) identify candidates. Every match is then loaded/decrypted and validated through the original path. Compressed, edited, repaired and uncertain objects retain the normal reader; no signature/security feature disabled.
+- Initial direct-value-only prototype failed the existing incomplete-stream-cache regression and was corrected **before publication** to use the original raw stream parser. Malformed stream boundaries still report errors and cannot be cached as a complete scan. Added differential escaped-name/AES128/AES256 and unreadable timestamp stream regressions.
+- Local `cargo +1.99.0 test --locked -p pdfcraft-sign -p pdfcraft-cos`: **333 passed, 0 failed, 5 ignored** (7 test/doctest result groups). Updated only three narrow engine-source provenance exceptions with reasons; stable upstream SHA unchanged. New exact-head CI and final host timings still required before merge.
+- The supplied file is encrypted with no repair notes; host native opens before this fix were roughly 2.5–4.4 seconds, while raster generation was around 0.07–0.12 seconds. These are host dev/optimized timings, not controlled Android benchmark results. Original file bytes are never committed or redistributed. Android provider file-name discrepancy is not reproduced in native host API.
+
+- This native fix is isolated from provider copying, stylus, ink appearance and CI policy per owner instruction. Final local host probe on supplied encrypted file: MobileSession open 1848/1871/1918 ms, first raster 74/72/76 ms; prior uncontrolled host samples roughly 2.5–4.4 s. No Samsung speed-up claim.
+
+- Native PR updated against main `a6968a3` after verified CI-policy #17 and notes #18 merges. Current required gates are Rust/provenance + Android JVM + Merge gate (Rust and Android); no per-PR APK. Native code remains isolated from provider/stylus/ink features.
 
 ### Next sequential performance increment: seekable provider snapshots — 2026-11-06
 
@@ -96,7 +109,17 @@ Reference behavior: https://feedback.xodo.com/support/solutions/articles/3500020
 - API references: https://developer.android.com/reference/java/nio/channels/FileChannel and https://developer.android.com/reference/android/content/res/AssetFileDescriptor . Timing adds `provider_descriptor_copy` and `provider_stream_fallback`; no paths/content logged.
 - Prepared next sequential patch **0.0.9-beta.1 (expected ARM64 9012)** to avoid reusing #12's intended **0.0.8-beta.1 (8012)** release number. Actual manifest and permanent signer require CI verification. No merge or second release yet. First Aid 2026 owner baseline remains approximately 5 s PdfCraft / 1 s Xodo, not an instrumented measurement.
 
-- Batch integration: stylus PR now includes provider snapshot PR #13; base will be #13 branch so CI tests their combined tree before sequential retarget/merge into main.
+- Provider-only PR now stacked on standalone native fix #16, so its CI validates native+provider integration without mixing the source diff. Retarget to main only after #16 merges and verify tested merge tree is unchanged. New CI policy inherited from main: no per-PR APK.
+
+### Batch 1 of three PRs — stylus and annotations
+
+Owner requests batches of three PRs and Xodo-like stylus/annotation capabilities. Current batch: #13 seekable provider snapshots; second PR adds stylus/finger routing; third preserves per-stroke ink appearance. Each needs Rust/provenance, Android JVM, ARM64 and aggregate checks; merges remain sequential against latest main. Existing #12 signed release continues independently.
+
+Stylus scope: pen input owns its pointer, palm/finger contact does not cancel or extend that pen stroke; a pen arriving after a finger cancels provisional finger ink and takes over. After using the pen, fingers navigate for the tool session; explicit persisted Pen only option works before first contact. Two fingers still navigate in finger-drawing mode. Eraser tips are ignored (never accidentally draw); erasing behavior, pressure, hover/button shortcuts, lasso and handwriting are **not implemented in this increment**. Cancellation discards provisional ink. Requires real S Pen testing; JVM policy tests are not device evidence.
+
+Reference behavior: https://feedback.xodo.com/support/solutions/articles/35000202905-stylus-and-fingers and https://feedback.xodo.com/support/solutions/articles/35000202835-adding-an-ink-annotation . Pressure reference: https://feedback.xodo.com/support/solutions/articles/35000202927-how-to-enable-pressure-for-ink- . Long-term parity must be tracked feature by feature; no claim to all Xodo capabilities or assets.
+
+- Stylus-only PR updated on provider #13 → standalone native #16 → current main with merged CI #17 / release notes #18. Source diff remains stylus routing/preferences/tests only. No per-PR APK; full signed packaging once after merged features.
 
 ### Batch 1 third increment — ink appearance persistence (2026-11-06)
 
@@ -107,24 +130,4 @@ Reference behavior: https://feedback.xodo.com/support/solutions/articles/3500020
 
 - Integrated #13 and #14 into the third PR; CI now validates all three increments together. Retarget to main after prior sequential merges only if the resulting tested source tree is unchanged; otherwise rerun checks.
 
-### Revised owner CI/release policy and negative device result
-
-- Owner reports **no perceptible opening improvement in 0.0.8-beta.1 (8012)** for First Aid 2026, both Recent and file-manager entry. File is approximately 340 MB; delay is before entering viewer. Opening latency remains unresolved. Local supplied PDF is 352,078,544 bytes, 869 pages, 16,569 links; read-only host probe shows native open takes seconds while first raster takes around 0.1 s. Signature discovery and display preparation are being profiled; no Samsung speed-up claim. Private source PDF is not committed/uploaded.
-- Owner explicitly replaces per-PR APK smoke gates: each PR requires Rust/provenance, Android JVM/regressions and new `Merge gate (Rust and Android)`. APK packaging/permanent signing/package/manifest/hash checks run once after the merged batch via manual dispatch on main. Ordinary main pushes no longer auto-publish. No branch protection was configured when checked; docs name the new required status. This instruction supersedes older mandatory per-PR APK text.
-- Release notes are now mandatory: new features, fixes, improvements and known/unverified behavior. Workflow uses generated notes grouped by PR labels, supplemented before user handoff; existing beta notes must record the negative device result honestly.
-
-### Measured native opening work on the supplied encrypted PDF
-
-- Local profiling found standalone document-timestamp discovery decrypting unrelated image stream payloads. Added a bounded raw-metadata scan using the existing parser and stream-boundary validation; names/keys (not encrypted PDF strings) identify candidates. Every match is then loaded/decrypted and validated through the original path. Compressed, edited, repaired and uncertain objects retain the normal reader; no signature/security feature disabled.
-- Initial direct-value-only prototype failed the existing incomplete-stream-cache regression and was corrected **before publication** to use the original raw stream parser. Malformed stream boundaries still report errors and cannot be cached as a complete scan. Added differential escaped-name/AES128/AES256 and unreadable timestamp stream regressions.
-- Local `cargo +1.99.0 test --locked -p pdfcraft-sign -p pdfcraft-cos`: **333 passed, 0 failed, 5 ignored** (7 test/doctest result groups). Updated only three narrow engine-source provenance exceptions with reasons; stable upstream SHA unchanged. New exact-head CI and final host timings still required before merge.
-- The supplied file is encrypted with no repair notes; host native opens before this fix were roughly 2.5–4.4 seconds, while raster generation was around 0.07–0.12 seconds. These are host dev/optimized timings, not controlled Android benchmark results. Original file bytes are never committed or redistributed. Android provider file-name discrepancy is not reproduced in native host API.
-
-- Final host probe on supplied First Aid 2026 after raw-metadata timestamp discovery fix: read **119 ms**, structural inspection **482 ms**, engine open **1674 ms**, MobileSession opens **1848 / 1871 / 1918 ms**; first rasters **74 / 72 / 76 ms**. Apple Silicon, Rust 1.99 dev/optimized, warm-cache uncontrolled host sample; not Android performance evidence. Earlier host baseline approximately 2.5–4.4 s. Private probe source/logs remain local under work.
-
-### Latest published release and batch policy (supersedes historical snapshot above)
-
-- Latest public release is **0.0.8-beta.1 (8012)**, source `172be4b10daa1ff98f848074d07b799b40d6d21a`, [release](https://github.com/MohamedRef/pdfcraft-android/releases/tag/v0.0.8-beta.1), [signed CI](https://github.com/MohamedRef/pdfcraft-android/actions/runs/42235100637). CI succeeded; downloaded APK independently SHA-256 checked `5564f40b43211b63fe09e761ebdb1a951a6d102b1f5f303c5675ad5e6e2d6079`, 48,388,404 bytes, ARM64 only. Permanent cert same as beta.4. Owner installed but reports opening still slow; no data-retention/upgrade test claimed.
-- Current batch #13 (native/provider opening + revised CI), #14 (stylus routing), #15 (per-stroke appearance) uses PR Rust/provenance and Android JVM gates only. No APK per PR. Manual main release once after all three merges validates signed ARM64 APK, version/package/cert/hash and publishes generated categorized release notes. Prepared integrated version **0.0.9-beta.1 (expected 9012)**, not yet published. Earlier per-PR APK requirements and 'no performance fix' statements above are historical.
-
-- Scope split: this PR's source diff now contains only ink appearance/redo behavior relative to #14. Native fix is #16, CI policy #17, release notes #18; inherited source changes were explicitly removed from #13/#14/#15 without rewriting history. Recheck latest head; old combined-head results are historical.
+- Ink-only PR updated to the complete current stack: #16 native → #13 provider → #14 stylus → #15 ink appearance, inheriting already merged CI #17 and release notes #18. Each source diff remains separate. Required current-head gates are Rust/provenance + Android JVM + Merge gate (Rust and Android). No additional APK until this complete stack is merged; then manually dispatch one signed ARM64 release.
