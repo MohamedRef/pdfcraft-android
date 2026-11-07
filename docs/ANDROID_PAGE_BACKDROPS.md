@@ -1,5 +1,7 @@
 # Read-only page background inspection on Android
 
+**Published checkpoint — 2026-11-07:** Included in [0.0.11-beta (11012)](https://github.com/MohamedRef/pdfcraft-android/releases/tag/v0.0.11-beta), release source `d81ef5d9060a0008d798b7a1f26e571274655c4c`. [Publishing CI](https://github.com/MohamedRef/pdfcraft-android/actions/runs/42345606702) plus independent manifest/certificate/hash/ABI checks passed. Earlier candidate, reopened and unmerged statements below describe preparation history; physical Samsung/provider behavior remains unverified.
+
 File details → Page backgrounds exposes the existing stable-v0.18.2 `doc_backdrops` command without an engine fork or PDF edits. The panel checks up to 24 pages per request, starting with the group containing the current page. Previous/next controls inspect other groups on demand. No background analysis runs during PDF opening.
 
 The result distinguishes opaque white fills, page-sized images and pages with no covering backdrop detected. This is an explanation of why an added background may be hidden, not a promise that every drawing or transparency is classified. The panel does not add, replace or remove backgrounds. It writes no output files or provider data, and does not refresh the document as if it were edited.

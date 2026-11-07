@@ -1,6 +1,28 @@
 # PdfCraft Android - development handover
 
-## LIVE CHECKPOINT — 2026-11-07 (Cairo): one combined release, Actions restored
+## LIVE CHECKPOINT — 2026-11-07 (Cairo): combined beta published and verified
+
+- **Published:** [PdfCraft Android 0.0.11-beta (11012)](https://github.com/MohamedRef/pdfcraft-android/releases/tag/v0.0.11-beta), public ARM64 prerelease, published `2026-11-07T06:20:23Z`. One signed APK and its SHA-256 sidecar cover the complete integration batch. Earlier candidate/unpublished statements below are historical.
+- **Immutable release source:** `d81ef5d9060a0008d798b7a1f26e571274655c4c`; [signed publishing CI 42345606702](https://github.com/MohamedRef/pdfcraft-android/actions/runs/42345606702) completed success for Rust/provenance, Android JVM and permanent-key signed APK verification. Later documentation commits do not change the released binary.
+- **Independent downloaded-artifact checks:** aapt reads package `io.github.mohamedref.pdfcraft`, versionName `0.0.11-beta`, manifest versionCode **11012**. apksigner verification succeeded with the existing certificate `0cb9f18f2e41e2cf0b0f1866b409adff798c1d83dfe6325d03fbb0b13ee051c1`. ZIP native libraries contain only `arm64-v8a`.
+- **APK:** 48,475,356 bytes; SHA-256 `946d20b542f17d87e4b3dbc78e3822212cca562f83b7a3fbdbaf8ac50a60cccc`, equal to both the downloaded sidecar and GitHub asset digest. Exact asset name/URL, public prerelease status and increasing build number satisfy the updater's source-level discovery conditions; physical updater/install/upgrade/data-retention tests remain unverified.
+- **Merged product work:** #24 opening diagnostics; #25/#26/#28 embedded outline JSON export/import/cross-PDF copy; #27 tablet/DeX rail and resize-state preservation; #30 page-background inspection; #31 heading-style contents; #32 selected text superscript/subscript; #34 named provider metadata columns. #33 prepared the version and #35 reconciled release notes plus the upstream review. All required current-head PR checks passed before merging; no per-PR APK was packaged.
+- Merge records: #30 `9933697`, #31 `eb1718f`, #32 `50f972a`, #34 `1989d89`, #35 `d81ef5d9060a0008d798b7a1f26e571274655c4c`. Each merge tree matched its tested head. #30/#31 post-main runs passed; superseded intermediate main runs #32 `42345060768`, #34 `42345256554` and #35 `42345587911` were **cancelled**, not green. The final-source release dispatch above passed its own full Rust/JVM stages before building.
+- Existing `0.0.10-beta (10012)` APK remains unchanged. Read [categorized release notes](releases/0.0.11-beta.md) for features, fixes, improvements and limits.
+
+### Unresolved behavior and next work
+
+- **Large-PDF opening is still unresolved.** The owner's same-file Samsung report remains about five seconds before the viewer versus about one second in Xodo. This beta now contains #24's diagnostic stages; follow [the profiling protocol](PDF_OPEN_PROFILING.md). Host timings and successful CI are not device speed evidence. Never upload the private fixture.
+- The provider metadata test reproduces reordered columns with `_id=2`, but the owner's actual filename “2” case needs same-provider confirmation. Samsung/S Pen/DeX, SAF failure/recovery, forms/XFA, OCR, comments/voice, signatures, physical install/upgrade and edit/save/reopen checks remain outstanding. Do not claim full Xodo parity.
+- Latest desktop stable reviewed: [v0.19.0](https://github.com/storytold/pdfcraft/releases/tag/v0.19.0), immutable `8c572792d6760bdc903d6f9a032e3e38e8f71cb8`. [Impact review](UPSTREAM_0.19.0_REVIEW.md) records 235 commits, 243 changed paths, 147 selected mobile paths, twelve overlapping adaptations and six added commands. **No v0.19.0 engine was imported into this release.** Android remains on reviewed v0.18.2 `7faa4f35cefb0dea04137ec475bdc770945c22cd` (32 suitable crates, nine vendor patches), with old command-name statistics applying only to that baseline.
+- Continue with a dedicated reviewed v0.19.0 engine-upgrade PR, provider-safe multi-document Bates, remaining runtime/schema/SAF parity and stylus lasso/move/resize/presets/handwriting. Preserve owner AGENTS, package/signing identity, recovery, updater integrity and all native features. One feature/fix per PR; Rust/provenance, Android JVM, title and aggregate gate before merging. One signed APK release after each owner-selected batch.
+- GitHub's disabled-fork Actions gate was re-enabled successfully. No support complaint was submitted. The owner stopped computer/browser UI control; subsequent repository work does not authorize resuming UI automation. #34's accidental closing-keyword auto-close was corrected and it is now genuinely merged.
+
+Maintain the [mandatory append-only audit](https://github.com/MohamedRef/pdfcraft-android/blob/sync/storytold-0182-android-safe/docs/android-desktop-engine-parity-0.18.2.md) after significant work. Publication evidence above supersedes the preparation snapshots below.
+
+---
+
+## Historical preparation checkpoint — 2026-11-07: combined release and Actions recovery
 
 The owner explicitly requested **all open integrations merged and one signed release**. Earlier next-batch/exclusion statements are superseded. Keep `0.0.11-beta (11012)` as the candidate (expected ARM64 manifest code until signed verification); do not publish an earlier subset or replace existing APKs.
 
