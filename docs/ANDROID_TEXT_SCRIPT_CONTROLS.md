@@ -19,3 +19,6 @@ Local Rust 1.99.0 mobile-bridge regression passed selected-digit conversion (`H2
 Device/batch APK checks still outstanding: selecting text with touch/S Pen/keyboard, focus and IME state, changed drafts, repeated/queued taps, ligatures/normalization, fonts missing script glyphs, encrypted/restricted/signed PDFs, errors/warnings, RTL/accessibility, narrow toolbar scrolling and save/reopen. No physical Samsung verification or opening-speed improvement is claimed.
 
 This is next-batch work alongside read-only backgrounds #30 and heading-style contents #31. It is absent from published `0.0.10-beta (10012)` and the earlier bookmark/tablet batch candidate. No per-PR APK.
+
+
+Owner scope update (2026-11-07 Cairo): include this integration with #30/#31/#34 and the bookmark/tablet work in one candidate release, after complete-stack tests. Previous next-batch exclusions are superseded. Combined bridge tests retain background, heading-style and selected-script regressions; no physical Samsung/IME verification is claimed.
