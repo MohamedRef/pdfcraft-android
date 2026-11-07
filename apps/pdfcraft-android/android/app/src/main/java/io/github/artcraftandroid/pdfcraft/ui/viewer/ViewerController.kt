@@ -55,6 +55,8 @@ class ViewerController {
     var eraserMode by mutableStateOf(false)
     /** Select or move still-uncommitted Draw strokes without modifying saved PDF annotations. */
     var lassoMode by mutableStateOf(false)
+    /** Explicit annotation shape, independent of freehand snap recognition. */
+    var inkShapeMode by mutableStateOf(InkShapeMode.Freehand)
 
     var sheet by mutableStateOf(ViewerSheet.None)
 
@@ -94,6 +96,7 @@ class ViewerController {
         if (tool != ViewerTool.Draw) {
             eraserMode = false
             lassoMode = false
+            inkShapeMode = InkShapeMode.Freehand
         }
         picker = Picker.None
         signPanel = false
