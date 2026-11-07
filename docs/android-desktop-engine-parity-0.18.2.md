@@ -347,3 +347,11 @@ Reference behavior: https://feedback.xodo.com/support/solutions/articles/3500020
 
 - Core QuadPoints-based PDF creation and persistence remain in the upstream v0.19.0 engine. The gap is Kotlin selection/UI behavior: menu selection was cleared immediately, before native raster refresh. New proposed patch holds a transient overlay for each selected line through `comment_add` and refresh; the overlay identity avoids an older completion clearing a newer highlight. Underline/strikeout use the same lifecycle.
 - Native writing, annotation placement, document permissions, color/opacity preferences, undo and SAF save paths are unchanged. Device tests are required for rapid successive highlights, zoom/rotation, long PDFs, RTL and selection-menu gestures. A later independent PR will address precise glyph vs word boundaries and S Pen freehand parity.
+
+
+### Optional vertical quick toolbar parity with Xodo annotation palette (2026-11-07)
+
+- The original Xodo screenshot shows an annotator's left-side vertical palette and a separate customization state. Android PdfCraft already has a persistent drag/tap reordering UI for its bottom quick bar. This PR adds only a user-optional left/right **vertical quick toolbar** reusing the same saved set of actions and More tools. Existing bottom toolbar remains the default, and the active editor's safe sub-toolbar stays at the bottom; this is not a pixel-perfect clone nor a full Xodo tool family.
+- Changes are Compose UI and QuickToolbarPrefs only. Native engine, signed/protected document handling, PDF bytes/annotation persistence, S Pen pressure/eraser and previous highlight paths are unmodified. Current-head CI and real physical-device checks pending; no new per-feature APK.
+
+- Added handle-only rail drag with left/right edge snapping and persisted center-relative vertical offset; haptic feedback at grab and completed snap only, respecting OS haptic controls. No PDF pointer gesture interception. Requires Samsung S Pen/touch and window-resize QA.

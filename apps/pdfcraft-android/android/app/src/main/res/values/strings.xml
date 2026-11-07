@@ -1327,4 +1327,8 @@
     <string name="scan_enhance_busy">Enhancing selected scanned pages…</string>
     <string name="scan_enhance_finished">Enhanced %1$d scanned pages</string>
     <string name="scan_enhance_no_changes">No eligible scanned images were changed.</string>
+    <string name="toolbar_vertical_mode">Vertical toolbar</string>
+    <string name="toolbar_vertical_right">Dock on the right</string>
+    <string name="toolbar_vertical_more">More tools</string>
+    <string name="toolbar_drag_handle">Drag to move toolbar. Release to snap to the nearest side.</string>
 </resources>

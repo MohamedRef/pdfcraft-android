@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.windowInsetsBottomHeight
 import androidx.compose.foundation.layout.windowInsetsTopHeight
@@ -32,6 +33,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -54,6 +56,8 @@ import androidx.compose.material3.Text
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.unit.IntOffset
+import kotlin.math.roundToInt
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
@@ -125,7 +129,10 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
     val topPx = with(density) { TopBarHeight.toPx() }
     // the quick toolbar grows with a large font setting: the page area leaves room for that too
     var quickExtraPx by remember { mutableIntStateOf(0) }
-    val bottomPx = with(density) { if (ctl.tool == ViewerTool.None) QuickBarHeight.toPx() + quickExtraPx else BottomBarHeight.toPx() }
+    val railVisible = vm.quickToolbar.railMode && ctl.tool == ViewerTool.None
+    val bottomPx = with(density) {
+        if (railVisible) 0f else if (ctl.tool == ViewerTool.None) QuickBarHeight.toPx() + quickExtraPx else BottomBarHeight.toPx()
+    }
     // keyed on the document too: one opened over another (Create, Combine) has a fresh page view
     LaunchedEffect(doc, ctl.barsVisible, statusPx, navPx, ctl.searching, ctl.tool, vm.readingMode, bottomPx, statusBar) {
         val bottomShown = ctl.barsVisible && !ctl.searching && !vm.readingMode
@@ -425,12 +432,66 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
                 }
             }
         }
+        // Drag a dedicated handle; snap to nearest edge, remember its vertical position.
+        // No drag listener is attached to tool buttons or the PDF canvas.
+        var railDragX by remember(doc) { mutableFloatStateOf(0f) }
+        var railDragY by remember(doc) { mutableFloatStateOf(0f) }
+        val viewportWidthPx = with(density) { config.screenWidthDp.dp.toPx() }
+        val railWidthPx = with(density) { 58.dp.toPx() }
+        val maxRailShiftPx = with(density) {
+            ((config.screenHeightDp.dp.toPx() - doc.viewer.padTop -
+                navPx - 400.dp.toPx()) / 2f).coerceAtLeast(0f)
+        }
+        val prefsRail = vm.quickToolbar
+        val storedYpx = with(density) { prefsRail.railYOffsetDp.dp.toPx() }
+        val railXpx = (
+            if (prefsRail.railRight) viewportWidthPx - railWidthPx else 0f
+        ) + railDragX
+        val clampedXpx = railXpx.coerceIn(0f, (viewportWidthPx - railWidthPx).coerceAtLeast(0f))
+        val clampedYpx = (storedYpx + railDragY).coerceIn(-maxRailShiftPx, maxRailShiftPx)
+        // Optional Xodo-like dock: same saved shortcuts, accessible on left or right.
+        // The normal bottom sub-toolbar remains available for active tools.
+        AnimatedVisibility(
+            visible = railVisible && ctl.barsVisible && !ctl.searching && !vm.readingMode &&
+                vm.readAloud == null && vm.fieldActions == null,
+            modifier = Modifier.align(if (prefsRail.railRight) Alignment.CenterEnd else Alignment.CenterStart)
+                .offset {
+                    val initialX = if (prefsRail.railRight) viewportWidthPx - railWidthPx else 0f
+                    IntOffset((clampedXpx - initialX).roundToInt(), clampedYpx.roundToInt())
+                }
+                .padding(
+                    top = with(density) { doc.viewer.padTop.toDp() },
+                    bottom = with(density) { navPx.toDp() + 8.dp },
+                ).then(cutoutSides),
+        ) {
+            VerticalQuickToolbar(
+                tools = vm.quickToolbar.bar,
+                onTool = { vm.runQuickTool(doc, it) },
+                onMoreTools = { ctl.sheet = if (ctl.sheet == ViewerSheet.MoreTools) ViewerSheet.None else ViewerSheet.MoreTools },
+                moreToolsOpen = ctl.sheet == ViewerSheet.MoreTools,
+                onHandleMove = { dx, dy ->
+                    railDragX += dx
+                    railDragY += dy
+                },
+                onHandleRelease = {
+                    prefsRail.updateRailRight(clampedXpx + railWidthPx / 2f > viewportWidthPx / 2f)
+                    prefsRail.updateRailYOffsetDp(with(density) { clampedYpx.toDp().value })
+                    railDragX = 0f
+                    railDragY = 0f
+                },
+                onHandleCancel = {
+                    railDragX = 0f
+                    railDragY = 0f
+                },
+            )
+        }
+
         // the Read Aloud player takes the bottom bar's place
         // while typing on the page, the bar (with its formatting) rides above the keyboard
         if (vm.readAloud == null && vm.fieldActions == null) Column(Modifier.fillMaxWidth().align(Alignment.BottomCenter).then(if (vm.editing != null) Modifier.imePadding() else Modifier)) {
             vm.success?.let { SuccessBannerView(it, onClose = { vm.success = null }) }
             AnimatedVisibility(
-                ctl.barsVisible && !ctl.searching && !vm.readingMode,
+                ctl.barsVisible && !ctl.searching && !vm.readingMode && (!railVisible || ctl.tool != ViewerTool.None),
                 enter = slideInVertically(tween(PdfMotion.BARS_MS)) { it } + fadeIn(tween(PdfMotion.BARS_MS)),
                 exit = slideOutVertically(tween(PdfMotion.BARS_MS)) { it } + fadeOut(tween(PdfMotion.BARS_MS)),
             ) {
