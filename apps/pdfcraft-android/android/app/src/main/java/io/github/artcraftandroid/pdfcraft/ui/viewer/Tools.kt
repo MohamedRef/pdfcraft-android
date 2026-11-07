@@ -543,10 +543,10 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                 current?.let { strokes.remove(it) }
                 current = null
             },
-            onEraserDown = { p -> beginErase(p) },
-            onEraserMove = { p -> moveErase(p) },
-            onEraserUp = { p -> finishErase(p) },
-            onEraserCancel = { cancelErase() },
+            onEraserDown = { p -> if (!doc.controller.lassoMode) beginErase(p) },
+            onEraserMove = { p -> if (!doc.controller.lassoMode) moveErase(p) },
+            onEraserUp = { p -> if (!doc.controller.lassoMode) finishErase(p) },
+            onEraserCancel = { if (!doc.controller.lassoMode) cancelErase() },
         ),
     ) {
         Canvas(Modifier.fillMaxSize()) {
