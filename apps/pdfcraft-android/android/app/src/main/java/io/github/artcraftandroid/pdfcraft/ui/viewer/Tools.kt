@@ -702,7 +702,7 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
             if (hovering != null && current == null && eraserPage == null) {
                 val onPage = doc.viewer.screenToPage(hovering)
                 if (onPage != null) {
-                    val diameter = if (doc.controller.eraserMode || hoverEraser) 16f else prefs.inkWidth
+                    val diameter = if (doc.controller.eraserMode || hoverEraser) 16f else inkStyleWidthRuns(listOf(1f, 1f), prefs.inkWidth, false, prefs.inkStyle).firstOrNull()?.width ?: prefs.inkWidth
                     drawCircle(
                         Color.DarkGray.copy(alpha = 0.6f),
                         radius = maxOf(2f, diameter * doc.viewer.pixelsPerPoint(onPage.page) / 2f),
