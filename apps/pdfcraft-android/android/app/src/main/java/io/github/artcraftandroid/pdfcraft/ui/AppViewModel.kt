@@ -2153,6 +2153,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         val epoch = batesPendingPick ?: return
         batesPendingPick = null
         if (uris.isEmpty() || toolScreen != ToolScreen.Bates || batesRunning || epoch != batesEpoch) return
+        if (uris.size > io.github.artcraftandroid.pdfcraft.engine.MAX_BATES_FILES) { tell(text(R.string.bates_limits)); return }
         val remaining = io.github.artcraftandroid.pdfcraft.engine.MAX_BATES_FILES - batesFiles.size
         val selected = uris.distinct().filter { u -> batesFiles.none { it.uri == u } }
         if (selected.size > remaining) { tell(text(R.string.bates_limits)); return }

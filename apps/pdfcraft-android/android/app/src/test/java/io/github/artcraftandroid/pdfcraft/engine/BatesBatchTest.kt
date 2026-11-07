@@ -31,7 +31,7 @@ class BatesBatchTest {
         val events = mutableListOf<String>()
         var cancelled = false
         assertThrows(CancellationException::class.java) {
-            publishNewBatchCopy(
+            publishNewBatchCopy<String>(
                 reserve = { events += "reserve:new"; "new" },
                 write = { events += "write:$it"; cancelled = true },
                 commit = { events += "commit:$it" },
@@ -45,11 +45,11 @@ class BatesBatchTest {
     @Test fun publicationFailureRetainsPrimaryErrorAndCleanupEvidence() {
         val original = IllegalStateException("publication failed")
         val thrown = assertThrows(IllegalStateException::class.java) {
-            publishNewBatchCopy({ "owned-row" }, {}, { throw original }, { throw IllegalArgumentException("cleanup failed") }, {})
+            publishNewBatchCopy<String>({ "owned-row" }, {}, { throw original }, { throw IllegalArgumentException("cleanup failed") }, {})
         }
         assertSame(original, thrown)
         assertEquals("cleanup failed", thrown.suppressed.single().message)
-        assertEquals("new", publishNewBatchCopy({ "new" }, {}, {}, { fail("must not delete published copy") }, {}))
+        assertEquals("new", publishNewBatchCopy<String>({ "new" }, {}, {}, { fail("must not delete published copy") }, {}))
     }
 
     @Test fun committedCopyIsRememberedEvenWhenCallerWasCancelled() = runBlocking {
@@ -73,7 +73,7 @@ class BatesBatchTest {
     @Test fun cleanupCannotHideFailureBySuppressingItself() {
         val original = IllegalStateException("same failure")
         assertSame(original, assertThrows(IllegalStateException::class.java) {
-            publishNewBatchCopy({ "new" }, { throw original }, {}, { throw original }, {})
+            publishNewBatchCopy<String>({ "new" }, { throw original }, {}, { throw original }, {})
         })
     }
 }

@@ -16,6 +16,7 @@ internal data class BatesSettings private constructor(val start: Long, val digit
             val n = start.toLongOrNull()?.takeIf { it in 1..999_999_999_999L } ?: return null
             val d = digits.toIntOrNull()?.takeIf { it in 1..12 } ?: return null
             fun valid(s: String): Boolean {
+                if (s.length > 128) return false
                 var i = 0
                 while (i < s.length) {
                     val c = s[i++]
