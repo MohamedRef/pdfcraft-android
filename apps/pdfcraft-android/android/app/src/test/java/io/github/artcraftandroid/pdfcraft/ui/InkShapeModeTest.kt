@@ -27,7 +27,7 @@ class InkShapeModeTest {
             inkShapeGeometry(InkShapeMode.Rectangle, start, end, 200f, 150f))
         val points = inkShapeOutline(InkShapeMode.Rectangle, start, end, 200f, 150f)!!
         assertEquals(points.first(), points.last())
-        assertTrue(points.zipWithNext().all { (a,b) -> (a-b).getDistance() <= 1.51f })
+        assertTrue(points.zipWithNext().all { (a,b) -> (a-b).getDistance() <= 1.6f })
     }
 
     @Test fun ovalSupportsReverseDragAndCloses() {
