@@ -2,6 +2,7 @@ package io.github.artcraftandroid.pdfcraft.ui.viewer
 
 
 import kotlinx.coroutines.flow.conflate
+import kotlinx.coroutines.flow.collect
 
 import io.github.artcraftandroid.pdfcraft.engine.userMessage
 
