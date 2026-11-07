@@ -40,9 +40,9 @@ fn file_properties_are_read_only_and_match_the_parsed_document() {
     let info = s.open(blank_pdf(2), None).unwrap();
     let before = s.document(info.id).unwrap().generation;
     let properties = s.file_properties(info.id).unwrap();
-    let expected = s.with_doc(info.id, |d| {
-        (d.info_value("CreationDate"), d.info_value("ModDate"), d.custom_info(), d.allows_modification(), d.xmp_metadata())
-    }).unwrap();
+    let expected = s
+        .with_doc(info.id, |d| (d.info_value("CreationDate"), d.info_value("ModDate"), d.custom_info(), d.allows_modification(), d.xmp_metadata()))
+        .unwrap();
     assert_eq!(properties.creation_date, expected.0);
     assert_eq!(properties.modification_date, expected.1);
     assert_eq!(properties.custom_metadata.iter().map(|field| (field.name.clone(), field.value.clone())).collect::<Vec<_>>(), expected.2);
@@ -468,7 +468,6 @@ fn form_scripts_run_when_fields_are_filled_and_buttons_pressed() {
     assert_eq!(big["alerts"][0]["message"], "Big", "{big}");
 }
 
-
 /// Exercise the exact headless route used by the opt-in Android backgrounds panel.
 #[test]
 fn backdrop_inspection_is_scoped_and_does_not_edit_the_document() {
@@ -505,9 +504,12 @@ fn backdrop_inspection_is_scoped_and_does_not_edit_the_document() {
     let inspect = |pages: Value| -> Value {
         serde_json::from_str(&s.execute("doc_backdrops".into(), json!({"doc": doc.id, "pages": pages}).to_string()).unwrap()).unwrap()
     };
-    assert_eq!(inspect(json!([1, 2, 3]))["pages"], json!([
-        {"page": 1, "backdrop": "fill"}, {"page": 2, "backdrop": "image"},
-    ]));
+    assert_eq!(
+        inspect(json!([1, 2, 3]))["pages"],
+        json!([
+            {"page": 1, "backdrop": "fill"}, {"page": 2, "backdrop": "image"},
+        ])
+    );
     assert_eq!(inspect(json!([2]))["pages"], json!([{"page": 2, "backdrop": "image"}]));
     assert_eq!(inspect(json!([3]))["pages"], json!([]));
     assert!(s.execute("doc_backdrops".into(), json!({"doc": doc.id, "pages": [4]}).to_string()).is_err());
@@ -518,7 +520,6 @@ fn backdrop_inspection_is_scoped_and_does_not_edit_the_document() {
     assert_eq!(std::fs::read(&path).unwrap(), bytes);
     std::fs::remove_dir_all(dir).unwrap();
 }
-
 
 #[test]
 fn style_bookmarks_append_undo_and_survive_save_through_mobile_tools() {
@@ -545,11 +546,12 @@ fn style_bookmarks_append_undo_and_survive_save_through_mobile_tools() {
     s.close(doc, true).unwrap();
     let reopened = s.open(out.to_string_lossy().into_owned(), None).unwrap();
     let restored = s.outline(reopened.id).unwrap();
-    assert_eq!(restored.iter().map(|entry| (&entry.title, entry.level, entry.page)).collect::<Vec<_>>(),
-        expected.iter().map(|entry| (&entry.title, entry.level, entry.page)).collect::<Vec<_>>());
+    assert_eq!(
+        restored.iter().map(|entry| (&entry.title, entry.level, entry.page)).collect::<Vec<_>>(),
+        expected.iter().map(|entry| (&entry.title, entry.level, entry.page)).collect::<Vec<_>>()
+    );
     assert_eq!(std::fs::read(&path).unwrap(), original);
 }
-
 
 #[test]
 fn paragraph_script_uses_native_unicode_toggle_and_survives_reopen() {
@@ -572,4 +574,87 @@ fn paragraph_script_uses_native_unicode_toggle_and_survives_reopen() {
     let reopened = s.open(out.to_string_lossy().into_owned(), None).unwrap().id;
     assert!(s.page_plain_text(reopened, 0).unwrap().contains("H₂O + CO2"));
     assert_eq!(std::fs::read(&path).unwrap(), original);
+}
+
+#[test]
+fn upgraded_tool_table_preserves_mobile_tools_and_adds_stable_019_schemas() {
+    let session = MobileSession::new();
+    let tools = session.tools();
+    let names: std::collections::HashSet<_> = tools.iter().map(|t| t.name.as_str()).collect();
+    assert_eq!(names.len(), tools.len(), "tool names must remain unique");
+    assert_eq!(names.len(), 195);
+    for name in [
+        "photo_find_document",
+        "comment_erase",
+        "comment_add",
+        "bookmark_export",
+        "bookmark_import",
+        "bookmark_copy",
+        "bookmark_from_text_styles",
+        "text_script",
+        "doc_backdrops",
+        "form_fill",
+        "sign_document",
+        "comments_copy",
+        "comments_paste",
+        "ocr_dictionary",
+        "ocr_words",
+        "ocr_review_apply",
+        "page_enhance_scan",
+    ] {
+        assert!(names.contains(name), "missing mobile/stable tool: {name}");
+    }
+    for omitted in ["model_add", "model_render"] {
+        assert!(!names.contains(omitted));
+    }
+    for tool in &tools {
+        let schema: Value = serde_json::from_str(&tool.input_schema).unwrap();
+        assert_eq!(schema["type"], "object", "invalid schema for {}", tool.name);
+    }
+}
+
+#[test]
+fn new_comment_clipboard_keeps_ink_and_refuses_losing_embedded_payloads() {
+    let s = MobileSession::new();
+    let source = blank_pdf(1);
+    let original = std::fs::read(&source).unwrap();
+    let doc = s.open(source.clone(), None).unwrap().id;
+    let samples = [1i16, -42, 1100, -32000];
+    let wav = wav_file(&samples);
+    s.execute("comment_add".into(), serde_json::json!({"doc":doc,"page":1,"type":"sound","at":[100,100],"path":wav}).to_string()).unwrap();
+    s.execute(
+        "comment_add".into(),
+        serde_json::json!({"doc":doc,"page":1,"type":"ink","strokes":[[[10,10],[40,50]]],"width":3,"opacity":0.6}).to_string(),
+    )
+    .unwrap();
+    let comments = s.comments(doc).unwrap();
+    let sound = comments.iter().find(|c| c.subtype == "Sound").unwrap();
+    let ink = comments.iter().find(|c| c.subtype == "Ink").unwrap();
+    let generation = s.document(doc).unwrap().generation;
+    let copied = s.execute("comments_copy".into(), serde_json::json!({"doc":doc,"comments":[[1,sound.index+1],[1,ink.index+1]]}).to_string());
+    assert!(copied.unwrap_err().to_string().contains("recordings"));
+    assert_eq!(s.document(doc).unwrap().generation, generation);
+    let out = scratch().join("still-voice.wav");
+    s.save_sound(doc, 0, sound.index, out.to_string_lossy().into_owned()).unwrap();
+    assert_eq!(&std::fs::read(&out).unwrap()[44..], samples.iter().flat_map(|s| s.to_le_bytes()).collect::<Vec<_>>());
+    let copied: Value =
+        serde_json::from_str(&s.execute("comments_copy".into(), serde_json::json!({"doc":doc,"comments":[[1,ink.index+1]]}).to_string()).unwrap())
+            .unwrap();
+    let target = s.open(blank_pdf(1), None).unwrap().id;
+    s.execute("comments_paste".into(), serde_json::json!({"doc":target,"page":1,"xfdf":copied["xfdf"]}).to_string()).unwrap();
+    let pasted = s.comments(target).unwrap();
+    assert_eq!(pasted.len(), 1);
+    assert_eq!(pasted[0].subtype, "Ink");
+    assert_eq!(pasted[0].width, Some(3.0));
+    assert!((pasted[0].opacity - 0.6).abs() < 0.01);
+    s.execute("edit_undo".into(), serde_json::json!({"doc":target}).to_string()).unwrap();
+    assert!(s.comments(target).unwrap().is_empty());
+    assert_eq!(std::fs::read(source).unwrap(), original);
+    let attachment_doc = s.open(attachments_pdf(), None).unwrap().id;
+    let attachments = s.comments(attachment_doc).unwrap();
+    let attachment = attachments.iter().find(|c| c.subtype == "FileAttachment").unwrap();
+    let generation = s.document(attachment_doc).unwrap().generation;
+    let result = s.execute("comments_copy".into(), serde_json::json!({"doc":attachment_doc,"comments":[[1,attachment.index+1]]}).to_string());
+    assert!(result.unwrap_err().to_string().contains("attachments"));
+    assert_eq!(s.document(attachment_doc).unwrap().generation, generation);
 }

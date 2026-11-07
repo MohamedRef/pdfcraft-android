@@ -56,7 +56,9 @@
 
 **Included in this beta:** embedded outline export/import/cross-PDF copy, adaptive tablet navigation, page-background inspection, heading-style contents, superscript/subscript, provider metadata corrections and opening-stage diagnostics. Earlier APKs remain unchanged. See the [live handover](docs/ANDROID_HANDOVER.md) for evidence and known limits.
 
-The mobile Rust engine is based on the original [storytold/pdfcraft **v0.18.2**](https://github.com/storytold/pdfcraft/releases/tag/v0.18.2), pinned to commit `7faa4f35cefb0dea04137ec475bdc770945c22cd`. Its reviewed stable-source import contains **32 mobile-suitable crates** and **nine vendor patches** protected by a CI provenance lock. The internal Rust workspace's `0.14.0` package version remains different from that pinned upstream **source baseline** and from the Android app's APK version.
+**Development branch upgrade:** [PR #37](https://github.com/MohamedRef/pdfcraft-android/pull/37) imports stable v0.19.0 with the Android adaptations preserved; checks/merge are pending. Its source pin and internal Rust packages are now v0.19.0. The latest published APK above still uses the verified prior baseline. [Upgrade evidence](docs/ANDROID_ENGINE_0.19.0_UPGRADE.md).
+
+The latest published APK's mobile Rust engine is based on the original [storytold/pdfcraft **v0.18.2**](https://github.com/storytold/pdfcraft/releases/tag/v0.18.2), pinned to commit `7faa4f35cefb0dea04137ec475bdc770945c22cd`. Its reviewed stable-source import contains **32 mobile-suitable crates** and **nine vendor patches** protected by a CI provenance lock. That published source used internal Rust package version `0.14.0`; the upgrade aligns source/internal packages at `0.19.0`, independently of the Android app version.
 
 | Parity scope | Source-level comparison with desktop v0.18.2 | Remaining work / limitation |
 | --- | --- | --- |
@@ -73,7 +75,7 @@ The mobile Rust engine is based on the original [storytold/pdfcraft **v0.18.2**]
 
 **Combined release integration:** [0.0.11-beta (11012)](https://github.com/MohamedRef/pdfcraft-android/releases/tag/v0.0.11-beta) includes merged PRs #24/#25/#26/#28/#27/#30/#31/#32/#34, with #33/#35 release preparation and documentation. Each PR passed its required checks, and the final release source passed publishing CI. Physical Samsung/provider/save-reopen behavior remains unverified; multi-document Bates and remaining runtime parity follow.
 
-**Upstream release review:** [desktop v0.19.0](https://github.com/storytold/pdfcraft/releases/tag/v0.19.0) was published on 2026-11-06. It is newer than this app’s pinned v0.18.2 source baseline; see the [Android impact review](docs/UPSTREAM_0.19.0_REVIEW.md). It has not been imported into this Android release.
+**Upstream release review:** [desktop v0.19.0](https://github.com/storytold/pdfcraft/releases/tag/v0.19.0) was published on 2026-11-06. It is newer than this app’s pinned v0.18.2 source baseline; see the [Android impact review](docs/UPSTREAM_0.19.0_REVIEW.md). It is being integrated in the independent engine PR; the published Android release still uses v0.18.2.
 
 Development truth and verification evidence: [Android handover](docs/ANDROID_HANDOVER.md) and [v0.18.2 engine parity audit](https://github.com/MohamedRef/pdfcraft-android/blob/sync/storytold-0182-android-safe/docs/android-desktop-engine-parity-0.18.2.md).
 
