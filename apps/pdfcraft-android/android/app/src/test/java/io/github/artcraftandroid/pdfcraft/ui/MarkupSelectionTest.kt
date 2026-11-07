@@ -5,6 +5,7 @@ import io.github.artcraftandroid.pdfcraft.ui.viewer.MAX_MARKUP_GLYPHS
 import io.github.artcraftandroid.pdfcraft.ui.viewer.MAX_MARKUP_LINE_RECTS
 import io.github.artcraftandroid.pdfcraft.ui.viewer.markupLineRects
 import io.github.artcraftandroid.pdfcraft.ui.viewer.markupWordRange
+import io.github.artcraftandroid.pdfcraft.ui.viewer.markupEndpointNearGlyph
 import org.junit.Assert.*
 import org.junit.Test
 
@@ -47,4 +48,18 @@ class MarkupSelectionTest {
         assertTrue(markupLineRects(listOf(1f, 2f, 4f, 4f, 1f, 2f, Float.POSITIVE_INFINITY, 5f)).isEmpty())
         assertTrue(markupLineRects(List((MAX_MARKUP_LINE_RECTS + 1) * 4) { it.toFloat() }).isEmpty())
     }
+    @Test fun smallOutsideLineDragSnapsButDistantOrInvalidTargetsDoNot() {
+        val glyph = listOf(50f, 100f, 62f, 118f)
+        assertTrue(markupEndpointNearGlyph(63f, 110f, glyph, 4f))
+        assertTrue(markupEndpointNearGlyph(54f, 120f, glyph, 4f))
+        assertFalse(markupEndpointNearGlyph(90f, 110f, glyph, 4f))
+        assertFalse(markupEndpointNearGlyph(54f, 160f, glyph, 4f))
+        assertFalse(markupEndpointNearGlyph(Float.NaN, 110f, glyph, 4f))
+        assertFalse(markupEndpointNearGlyph(54f, 110f, glyph, Float.NaN))
+        assertFalse(markupEndpointNearGlyph(54f, 110f, glyph, -1f))
+        assertFalse(markupEndpointNearGlyph(54f, 110f, glyph.take(3), 4f))
+        assertFalse(markupEndpointNearGlyph(54f, 110f, listOf(50f, Float.POSITIVE_INFINITY, 62f, 118f), 4f))
+        assertFalse(markupEndpointNearGlyph(54f, 110f, listOf(62f, 100f, 50f, 118f), 4f).not())
+    }
+
 }
