@@ -405,7 +405,7 @@ fun BoxScope.SelectionHandles(doc: OpenDocument, sel: Selection) {
                         onDragStart = {
                             val latest = doc.selection.selection
                             val rect = (if (start) latest?.startRect else latest?.endRect)
-                            if (rect != null && latest.range.page.toInt() == page) {
+                            if (rect != null && latest?.range?.page?.toInt() == page) {
                                 val at = doc.viewer.pageToScreen(page, if (start) rect[0] else rect[2], rect[3])
                                 val top = doc.viewer.pageToScreen(page, rect[0], rect[1]).y
                                 target = Offset(at.x, (at.y + top) / 2f)
