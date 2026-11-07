@@ -1,5 +1,7 @@
 # Provider metadata columns: filename, size, dates and write flags
 
+**Published checkpoint — 2026-11-07:** Included in [0.0.11-beta (11012)](https://github.com/MohamedRef/pdfcraft-android/releases/tag/v0.0.11-beta), release source `d81ef5d9060a0008d798b7a1f26e571274655c4c`. [Publishing CI](https://github.com/MohamedRef/pdfcraft-android/actions/runs/42345606702) plus independent manifest/certificate/hash/ABI checks passed. Earlier candidate, reopened and unmerged statements below describe preparation history; physical Samsung/provider behavior remains unverified.
+
 DocumentFiles now resolves requested metadata by column name instead of assuming it is column zero. This covers both display-name methods, size, document/media modification dates and document write flags. Providers returning a proper single-column projection behave the same. When a provider returns extra or reordered columns, its unrelated row ID is no longer read as the filename, byte count or flags. Missing/null columns still use existing URI/name or capability fallbacks; cursor lifetime and safe PDF snapshots/write-back are unchanged.
 
 This is a source-confirmed defensive correction relevant to the owner’s report that a file appeared as “2”. A reordered cursor with `_id=2` reproduces that class of misread in a unit fixture. It does **not** prove the owner’s actual Samsung provider returned that cursor; the real filename report remains unverified until device testing.

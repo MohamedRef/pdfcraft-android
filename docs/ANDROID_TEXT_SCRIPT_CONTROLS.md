@@ -1,5 +1,7 @@
 # Android superscript and subscript controls
 
+**Published checkpoint — 2026-11-07:** Included in [0.0.11-beta (11012)](https://github.com/MohamedRef/pdfcraft-android/releases/tag/v0.0.11-beta), release source `d81ef5d9060a0008d798b7a1f26e571274655c4c`. [Publishing CI](https://github.com/MohamedRef/pdfcraft-android/actions/runs/42345606702) plus independent manifest/certificate/hash/ABI checks passed. Earlier candidate, reopened and unmerged statements below describe preparation history; physical Samsung/provider behavior remains unverified.
+
 Edit PDF → select a paragraph → Superscript and subscript exposes the existing `text_script` native command. The formatting toolbar now scrolls horizontally so additional controls remain reachable in narrow phone windows.
 
 The panel offers Superscript (x²) and Subscript (H₂O). With a nonempty inline-editor selection it formats only that text; otherwise it formats the selected paragraph. Unicode forms are stored in extracted text, not a baseline-shift-only visual style. Characters without a mapping stay unchanged. The font must support the mapped glyphs; native rewrite warnings are shown locally (at most three bounded messages). Undo restores the exact prior mixture; repeated toggles need not reconstruct mixed original forms.

@@ -1,5 +1,7 @@
 # Android contents from heading styles
 
+**Published checkpoint — 2026-11-07:** Included in [0.0.11-beta (11012)](https://github.com/MohamedRef/pdfcraft-android/releases/tag/v0.0.11-beta), release source `d81ef5d9060a0008d798b7a1f26e571274655c4c`. [Publishing CI](https://github.com/MohamedRef/pdfcraft-android/actions/runs/42345606702) plus independent manifest/certificate/hash/ABI checks passed. Earlier candidate, reopened and unmerged statements below describe preparation history; physical Samsung/provider behavior remains unverified.
+
 Contents → Create contents from headings exposes the existing stable-engine `text_styles` and `bookmark_from_text_styles` commands. Analysis starts only when the user requests it; it may read the first 5,000 pages. The pinned native engine returns at most the largest 200 styles, with samples capped to 60 characters; Android exposes that complete native result without another selector cap. Image-only files need OCR first. No analysis runs while opening a PDF.
 
 Choose at most nine styles in the desired heading order. Selection order defines levels 1–9; deselect/reselect to change order. Only exact font, point size, bold and italic matching fields go to native code; line/page counts and sample text are display-only. Displayed font names/samples are bounded, the list is virtualized and no extracted text is logged or exported.

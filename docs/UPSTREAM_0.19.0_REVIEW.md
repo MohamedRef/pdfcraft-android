@@ -49,4 +49,4 @@ The owner’s encrypted large-PDF opening issue remains unresolved. Source chang
 4. Pass Rust/provenance, Android JVM, ARM64 native bindings, aggregate merge gate and focused regressions for encrypted/signed PDFs, forms/XFA, voice/notes/ink, OCR/scan memory, save/reopen and cancellation.
 5. Measure the private large PDF locally without upload, then require same-file Samsung/Xodo first-visible-page trials before a speed claim. Publish through the existing permanent-key signing/manifest/hash process only after integration verification.
 
-No v0.19.0 source or new command was imported by this review. The combined 0.0.11-beta candidate still uses the protected v0.18.2 engine; its actual ARM64 build number must be verified at release.
+No v0.19.0 source or new command was imported by this review. The published [0.0.11-beta (11012)](https://github.com/MohamedRef/pdfcraft-android/releases/tag/v0.0.11-beta) uses the protected v0.18.2 engine; its ARM64 manifest build number, signature and hash have been independently verified. Device performance remains unverified.
