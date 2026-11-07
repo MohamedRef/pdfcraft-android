@@ -1,5 +1,13 @@
 # PdfCraft Android - development handover
 
+## ACTIVE NEXT BATCH — ink selection and transforms (2026-11-07)
+
+- Existing v0.19.0 engine #37, multi-document Bates #38 and favorite pens #39 are merged, with release preparation #40. At batch start `main` was `69c40cfadd3d0763d9bb940587658fc584d6d2c3`; final source tests [42369115173](https://github.com/MohamedRef/pdfcraft-android/actions/runs/42369115173) passed both Rust/provenance and Android JVM. The single permanent-key signed release workflow [42370494659](https://github.com/MohamedRef/pdfcraft-android/actions/runs/42370494659) was in progress when this feature started. Do not confuse a dispatched workflow with a published release; check its completed status and actual public APK.
+- **Feature 1/3, lasso selection:** new branch `feat/android-ink-lasso-selection` adds Draw → Lasso selection using a bounded same-page polygon in PDF coordinates and finite-input validation. Only fully enclosed, uncommitted ink is visually selected, never existing saved annotations, signatures, forms, sound, bookmarks or content. Exiting lasso clears selection; no document mutation or release/version changes. Detailed scope and JVM tests: [ANDROID_INK_LASSO.md](ANDROID_INK_LASSO.md). **CI pending**; do not merge unless current-head Rust, Android JVM and aggregate merge gate pass and conflicts/review threads are clear.
+- **Feature 2/3 planned:** selected pending ink drag/move with one undoable transform and pressure/paint-order preservation, in a separate PR only after feature 1 merges and is verified.
+- **Feature 3/3 planned:** selected pending ink resize with safe geometry/undo, and separately assessed future saved-PDF annotation lasso support. Do not promise native persisted-annotation transforms before the native edit/permission contract is reviewed.
+- **Release discipline:** one PR per feature, no individual PR APK. After all three pass, merge sequentially, verify final `main`, prepare one monotonically increasing beta version and release one signed ARM64 APK. No physical-device or Xodo parity claims without Samsung evidence.
+
 ## VERIFIED MERGE CHECKPOINT — 2026-11-07, next beta awaiting signed publication
 
 - **Upstream engine:** PR [#37](https://github.com/MohamedRef/pdfcraft-android/pull/37) merged into main at `552aed9504b0764b0818bdeb72543abdc227f768`; exact-head Rust/provenance and Android JVM CI [42355818983](https://github.com/MohamedRef/pdfcraft-android/actions/runs/42355818983) passed. Current source pins stable PdfCraft v0.19.0, with reviewed Android adaptations.
