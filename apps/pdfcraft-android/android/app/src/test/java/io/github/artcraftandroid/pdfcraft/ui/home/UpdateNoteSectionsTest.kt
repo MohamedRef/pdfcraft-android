@@ -30,7 +30,7 @@ class UpdateNoteSectionsTest {
     }
 
     @Test fun markdownReferencesBecomeReadableWithoutLinkMarkup() {
-        val notes = "## New features\n- Added [S Pen pressure](https://github.com/org/repo/pull/19) and \`Ink\`."
+        val notes = "## New features\n- Added [S Pen pressure](https://github.com/org/repo/pull/19) and `Ink`."
         assertEquals("Added S Pen pressure and Ink.", updateNoteSections(notes).single().entries.single())
     }
 
