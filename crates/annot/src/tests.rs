@@ -1347,7 +1347,7 @@ fn the_eraser_cuts_strokes_and_removes_empty_drawings() {
     let all: Vec<[f64; 2]> = (0..=20).map(|k| [100.0 + k as f64 * 10.0, 500.0]).chain((0..=20).map(|k| [100.0 + k as f64 * 10.0, 400.0])).collect();
     erase_ink(&mut doc, 0, i, &all[..21], 8.0, &meta("e")).unwrap();
     erase_ink(&mut doc, 0, i, &all[21..], 8.0, &meta("e")).unwrap();
-    assert!(!list(&doc, 0).iter().any(|d| d.name(b"Subtype") == Some(b"Ink")));
+    assert!(!list(&doc, 0).iter().any(|d| d.name(b"Subtype") == Some(&b"Ink"[..])));
 }
 
 #[test]
@@ -1355,13 +1355,13 @@ fn freehand_highlight_segments_can_be_erased_without_losing_their_intent() {
     let mut doc = fixture();
     let stroke = (0..=20).map(|k| [100.0 + k as f64 * 10.0, 400.0]).collect::<Vec<_>>();
     let i = add_annotation(&mut doc, &new(0, Shape::FreehandHighlight { strokes: vec![stroke] }), &meta("marker")).unwrap();
-    assert_eq!(list(&doc, 0)[i].name(b"Subtype"), Some(b"Ink"));
-    assert_eq!(list(&doc, 0)[i].name(b"IT"), Some(b"FreehandHighlight"));
+    assert_eq!(list(&doc, 0)[i].name(b"Subtype"), Some(&b"Ink"[..]));
+    assert_eq!(list(&doc, 0)[i].name(b"IT"), Some(&b"FreehandHighlight"[..]));
     assert!(erase_ink(&mut doc, 0, i, &[[200.0, 450.0], [200.0, 350.0]], 8.0, &meta("erase")).unwrap());
-    assert_eq!(list(&doc, 0)[i].name(b"IT"), Some(b"FreehandHighlight"));
-    assert_eq!(list(&doc, 0)[i].name(b"Subtype"), Some(b"Ink"));
+    assert_eq!(list(&doc, 0)[i].name(b"IT"), Some(&b"FreehandHighlight"[..]));
+    assert_eq!(list(&doc, 0)[i].name(b"Subtype"), Some(&b"Ink"[..]));
     let reopened = reopen(&doc);
-    assert_eq!(list(&reopened, 0)[i].name(b"IT"), Some(b"FreehandHighlight"));
+    assert_eq!(list(&reopened, 0)[i].name(b"IT"), Some(&b"FreehandHighlight"[..]));
 }
 
 /// A one-page document from object bodies (object 1 is the catalog, 3 the page).
