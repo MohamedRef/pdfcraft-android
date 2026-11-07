@@ -321,3 +321,9 @@ Reference behavior: https://feedback.xodo.com/support/solutions/articles/3500020
 - Integrated #13 and #14 into the third PR; CI now validates all three increments together. Retarget to main after prior sequential merges only if the resulting tested source tree is unchanged; otherwise rerun checks.
 
 - Ink-only PR updated to the complete current stack: #16 native → #13 provider → #14 stylus → #15 ink appearance, inheriting already merged CI #17 and release notes #18. Each source diff remains separate. Required current-head gates are Rust/provenance + Android JVM + Merge gate (Rust and Android). No additional APK until this complete stack is merged; then manually dispatch one signed ARM64 release.
+
+### Markup tap/selection diagnostic and proposed correction — 2026-11-07
+
+- Android-only Kotlin UI fix, stacked after pending Draw lasso #41. Source review identified asynchronous Markup anchor acquisition, preview cancellation, and final release depending on stale preview; unrestricted nearestGlyph could grab unrelated text. No engine code changes or upstream provenance differences.
+- Candidate behavior: tap highlights a bounded word; drag snaps complete words in either direction; final selection rereads finger-up endpoint, cancel/second finger invalidates preview; reject malformed or oversized quads. Native comment_add and undo semantics unchanged.
+- New JVM boundary checks; full Rust/provenance + Android/ARM64 + title/merge gate required on final PR head. Hardware/SAF/RTL/PDF save-reopen and current-release inclusion unverified. See docs/ANDROID_HIGHLIGHT_SELECTION.md.

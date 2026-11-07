@@ -1,5 +1,19 @@
 package io.github.artcraftandroid.pdfcraft.ui.viewer
 
+import kotlinx.coroutines.flow.filter
+
+import kotlinx.coroutines.flow.collectLatest
+
+import io.github.artcraftandroid.pdfcraft.engine.userMessage
+
+import io.github.artcraftandroid.pdfcraft.engine.Engine
+
+import io.github.artcraftandroid.pdfcraft.core.MobileException
+
+import androidx.lifecycle.viewModelScope
+
+import androidx.compose.runtime.snapshotFlow
+
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -676,62 +690,109 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
     }
 }
 
+/** A gesture only holds coordinates; no native query runs on pointer down. */
+private class MarkupGesture(val start: PagePoint, val downScreen: Offset) {
+    var latest by mutableStateOf(start)
+    var moved by mutableStateOf(false)
+}
+
+/**
+ * Resolve both word endpoints and their rectangles on the native serial dispatcher.
+ * A tap marks its whole word; a drag snaps to word boundaries in either direction.
+ * The engine's wordAt has a bounded glyph hit box, unlike unrestricted nearestGlyph.
+ */
+private suspend fun resolveMarkup(
+    eng: Engine,
+    doc: OpenDocument,
+    start: PagePoint,
+    end: PagePoint,
+    slopPoints: Float,
+    tap: Boolean,
+): MarkupDrag? = withContext(eng.commands) {
+    if (start.page != end.page) return@withContext null
+    val page = start.page.toUInt()
+    val anchor = eng.session.wordAt(doc.id, page, start.x, start.y, slopPoints) ?: return@withContext null
+    val focus = if (tap) anchor else eng.session.wordAt(doc.id, page, end.x, end.y, slopPoints)
+    val range = markupWordRange(anchor, focus) ?: return@withContext null
+    val rects = markupLineRects(eng.session.textRects(doc.id, range))
+    if (rects.isEmpty()) null else MarkupDrag(range, rects)
+}
+
 @Composable
 private fun MarkupLayer(vm: AppViewModel, doc: OpenDocument) {
-    val scope = rememberCoroutineScope()
-    var drag by remember { mutableStateOf<MarkupDrag?>(null) }
-    var anchor by remember { mutableStateOf<Pair<Int, UInt>?>(null) }
-    var job by remember { mutableStateOf<Job?>(null) }
     val eng = vm.engine ?: return
-    val markup = doc.controller.markup
-    val color = vm.toolPrefs.color(markup.styled)
-    val opacity = vm.toolPrefs.opacity(markup.styled)
+    val scope = rememberCoroutineScope()
+    var drag by remember(doc) { mutableStateOf<MarkupDrag?>(null) }
+    var active by remember(doc) { mutableStateOf<MarkupGesture?>(null) }
+    var previewJob by remember(doc) { mutableStateOf<Job?>(null) }
+    val marker = doc.controller.markup
+    val color = vm.toolPrefs.color(marker.styled)
+    val opacity = vm.toolPrefs.opacity(marker.styled)
+    val moveThresholdPx = with(LocalDensity.current) { 8.dp.toPx() }
+    val hitRadiusPx = with(LocalDensity.current) { 14.dp.toPx() }
 
-    fun extendTo(p: Offset) {
-        val (page, a) = anchor ?: return
-        val at = doc.viewer.screenToPage(p, nearest = true) ?: return
-        if (at.page != page) return
-        job?.cancel()
-        job = scope.launch {
-            val g = withContext(eng.commands) { eng.session.nearestGlyph(doc.id, page.toUInt(), at.x, at.y) } ?: return@launch
-            val s = minOf(a, g)
-            val e = maxOf(a, g) + 1u
-            val range = TextRange(page.toUInt(), s, e)
-            val rects = withContext(eng.commands) { eng.session.textRects(doc.id, range) }
-            drag = MarkupDrag(range, rects.toList().chunked(4).filter { it.size == 4 }.map { it.toFloatArray() })
-        }
+    fun resetPreview() {
+        active = null
+        previewJob?.cancel()
+        previewJob = null
+        drag = null
     }
 
     Box(
         Modifier.fillMaxSize().toolGestures(
             doc,
-            onDown = { p, _, _ ->
-                val at = doc.viewer.screenToPage(p) ?: return@toolGestures
-                scope.launch {
-                    val n = withContext(eng.commands) { eng.session.glyphCount(doc.id, at.page.toUInt()) }
-                    if (n == 0u) {
-                        vm.tell(text(R.string.toolbar_no_text_to_mark))
-                        return@launch
+            onDown = { screen, _, _ ->
+                resetPreview()
+                val start = doc.viewer.screenToPage(screen) ?: return@toolGestures
+                val gesture = MarkupGesture(start, screen)
+                active = gesture
+                // One conflated collector per gesture. Old queries are cancelled on newer
+                // movement, and their results cannot resurrect a selection after release.
+                previewJob = scope.launch {
+                    snapshotFlow { gesture.latest to gesture.moved }
+                        .filter { it.second }
+                        .collectLatest { (end, _) ->
+                            val radius = (hitRadiusPx / doc.viewer.pixelsPerPoint(start.page).coerceAtLeast(0.1f)).coerceIn(0.1f, 24f)
+                            val preview = resolveMarkup(eng, doc, start, end, radius, tap = false)
+                            if (active === gesture) drag = preview
+                        }
+                }
+            },
+            onMove = { screen, _, _ ->
+                val gesture = active ?: return@toolGestures
+                val at = doc.viewer.screenToPageOf(gesture.start.page, screen) ?: return@toolGestures
+                if ((screen - gesture.downScreen).getDistance() > moveThresholdPx) gesture.moved = true
+                gesture.latest = at
+            },
+            onUp = { screen, _ ->
+                val gesture = active ?: return@toolGestures
+                val end = doc.viewer.screenToPageOf(gesture.start.page, screen) ?: gesture.latest
+                val tap = !gesture.moved && (screen - gesture.downScreen).getDistance() <= moveThresholdPx
+                val page = gesture.start.page
+                val radius = (hitRadiusPx / doc.viewer.pixelsPerPoint(page).coerceAtLeast(0.1f)).coerceIn(0.1f, 24f)
+                val selectedMarkup = doc.controller.markup
+                val selectedColor = vm.toolPrefs.color(selectedMarkup.styled)
+                val selectedOpacity = vm.toolPrefs.opacity(selectedMarkup.styled)
+                resetPreview()
+                // Final selection is computed from the *release* position, not the last
+                // asynchronous preview. Keep the completed gesture alive if Done is tapped.
+                vm.viewModelScope.launch {
+                    try {
+                        if (vm.document !== doc || !doc.info.allowsAnnotation) return@launch
+                        val selected = resolveMarkup(eng, doc, gesture.start, end, radius, tap)
+                        if (vm.document !== doc || !doc.info.allowsAnnotation) return@launch
+                        if (selected != null) {
+                            vm.addMarkup(doc, selectedMarkup, selected.range.page.toInt(), selected.rects, selectedColor, selectedOpacity)
+                        } else if (tap) {
+                            val count = withContext(eng.commands) { eng.session.glyphCount(doc.id, page.toUInt()) }
+                            if (count == 0u && vm.document === doc) vm.tell(text(R.string.toolbar_no_text_to_mark))
+                        }
+                    } catch (e: MobileException) {
+                        if (vm.document === doc) vm.tell(e.userMessage)
                     }
-                    val g = withContext(eng.commands) { eng.session.nearestGlyph(doc.id, at.page.toUInt(), at.x, at.y) } ?: return@launch
-                    anchor = at.page to g
                 }
             },
-            onMove = { p, _, _ -> extendTo(p) },
-            onUp = { _, _ ->
-                val d = drag
-                drag = null
-                anchor = null
-                if (d != null && d.rects.isNotEmpty()) {
-                    // the sub-tool and its colour as they are now, not when the layer was made
-                    val m = doc.controller.markup
-                    vm.addMarkup(doc, m, d.range.page.toInt(), d.rects, vm.toolPrefs.color(m.styled), vm.toolPrefs.opacity(m.styled))
-                }
-            },
-            onCancel = {
-                drag = null
-                anchor = null
-            },
+            onCancel = { resetPreview() },
         ),
     ) {
         Canvas(Modifier.fillMaxSize()) {
@@ -740,7 +801,7 @@ private fun MarkupLayer(vm: AppViewModel, doc: OpenDocument) {
             for (r in d.rects) {
                 val a = doc.viewer.pageToScreen(page, r[0], r[1])
                 val b = doc.viewer.pageToScreen(page, r[2], r[3])
-                when (markup) {
+                when (marker) {
                     TextMarkup.Highlight -> drawRect(color.copy(alpha = 0.4f * opacity), a, Size(b.x - a.x, b.y - a.y))
                     TextMarkup.Underline -> drawLine(color.copy(alpha = opacity), Offset(a.x, b.y - 1f), Offset(b.x, b.y - 1f), 2.dp.toPx())
                     TextMarkup.Strikethrough -> drawLine(color.copy(alpha = opacity), Offset(a.x, (a.y + b.y) / 2f), Offset(b.x, (a.y + b.y) / 2f), 2.dp.toPx())
