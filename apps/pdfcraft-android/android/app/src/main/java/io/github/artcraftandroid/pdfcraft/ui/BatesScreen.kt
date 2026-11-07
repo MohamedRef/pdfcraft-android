@@ -38,13 +38,13 @@ fun BatesScreen(vm: AppViewModel) {
             Text(stringResource(R.string.bates_about), color = c.label)
             Text(stringResource(R.string.bates_limits), color = c.label, fontSize = 13.sp)
             Text(stringResource(R.string.bates_passwords), color = c.label, fontSize = 13.sp)
-            OutlinedTextField(start, { start = it }, enabled = !running, singleLine = true,
+            OutlinedTextField(start, { if (it.length <= 20) start = it else vm.tell(io.github.artcraftandroid.pdfcraft.text(R.string.bates_invalid)) }, enabled = !running, singleLine = true,
                 label = { Text(stringResource(R.string.bates_start)) }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.fillMaxWidth())
-            OutlinedTextField(digits, { digits = it }, enabled = !running, singleLine = true,
+            OutlinedTextField(digits, { if (it.length <= 3) digits = it else vm.tell(io.github.artcraftandroid.pdfcraft.text(R.string.bates_invalid)) }, enabled = !running, singleLine = true,
                 label = { Text(stringResource(R.string.bates_digits)) }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.fillMaxWidth())
-            OutlinedTextField(prefix, { prefix = it }, enabled = !running, singleLine = true,
+            OutlinedTextField(prefix, { if (it.length <= 128) prefix = it else vm.tell(io.github.artcraftandroid.pdfcraft.text(R.string.bates_invalid)) }, enabled = !running, singleLine = true,
                 label = { Text(stringResource(R.string.bates_prefix)) }, modifier = Modifier.fillMaxWidth())
-            OutlinedTextField(suffix, { suffix = it }, enabled = !running, singleLine = true,
+            OutlinedTextField(suffix, { if (it.length <= 128) suffix = it else vm.tell(io.github.artcraftandroid.pdfcraft.text(R.string.bates_invalid)) }, enabled = !running, singleLine = true,
                 label = { Text(stringResource(R.string.bates_suffix)) }, modifier = Modifier.fillMaxWidth())
             if (settings != null) Text(stringResource(R.string.bates_preview, settings.preview), color = c.text)
             else Text(stringResource(R.string.bates_invalid), color = c.red)
