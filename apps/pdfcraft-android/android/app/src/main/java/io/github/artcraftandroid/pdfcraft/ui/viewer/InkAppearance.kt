@@ -1,7 +1,7 @@
 package io.github.artcraftandroid.pdfcraft.ui.viewer
 
 /** Immutable appearance captured when ink begins, retained through undo/redo and save. */
-internal data class InkAppearance(val argb: Int, val opacity: Float, val width: Float, val author: String?)
+internal data class InkAppearance(val argb: Int, val opacity: Float, val width: Float, val author: String?, val style: InkStyle = InkStyle.Ballpoint)
 
 /** Merge only adjacent equal appearances; globally grouping red/blue/red changes paint order. */
 internal fun <T, K> consecutiveInkBatches(items: List<T>, key: (T) -> K): List<List<T>> {

@@ -73,20 +73,30 @@ class ToolPrefs(context: Context) {
         prefs.edit().putFloat("${t.key}.opacity", v).apply()
     }
 
+    /** Selected nib affects only ink drawn after the change; other appearance settings persist. */
+    internal var inkStyle by mutableStateOf(InkStyle.fromKey(prefs.getString("ink.style", null)) ?: InkStyle.Ballpoint)
+        private set
+
+    internal fun updateInkStyle(style: InkStyle) {
+        inkStyle = style
+        prefs.edit().putString("ink.style", style.key).apply()
+    }
+
     internal var inkPresets by mutableStateOf(InkPreset.defaults.mapIndexed { i, fallback ->
         InkPreset.decode(runCatching { prefs.getString("ink.preset.v1.$i", null) }.getOrNull()) ?: fallback
     })
         private set
 
-    internal fun currentInkPreset(): InkPreset? = InkPreset.create(colors.getValue(StyledTool.Ink).intValue, inkWidth, opacity(StyledTool.Ink))
+    internal fun currentInkPreset(): InkPreset? = InkPreset.create(colors.getValue(StyledTool.Ink).intValue, inkWidth, opacity(StyledTool.Ink), inkStyle)
 
     internal fun applyInkPreset(index: Int): Boolean {
         val preset = inkPresets.getOrNull(index) ?: return false
         // One synchronous UI event and one preferences transaction: only the next stroke changes.
-        prefs.edit().putInt("ink.color", preset.argb).putFloat("ink.width", preset.width).putFloat("ink.opacity", preset.opacity).apply()
+        prefs.edit().putInt("ink.color", preset.argb).putFloat("ink.width", preset.width).putFloat("ink.opacity", preset.opacity).putString("ink.style", preset.style.key).apply()
         colors.getValue(StyledTool.Ink).intValue = preset.argb
         opacities.getValue(StyledTool.Ink).floatValue = preset.opacity
         inkWidth = preset.width
+        inkStyle = preset.style
         return true
     }
 
