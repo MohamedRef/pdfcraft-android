@@ -11,7 +11,7 @@ Calls use the existing serialized native dispatcher. Effects are keyed to docume
 - Native Android bridge regression: synthetic PDF with white-fill, page-sized-image and blank pages; exact command/schema, scoped selection, invalid page rejection, unchanged generation/dirty/Undo and source bytes.
 - Required PR checks: pinned source provenance/Rust, Android JVM/Compose compilation, title and aggregate merge gate. No APK packaging for this individual PR.
 - Still pending on device/emulator: file-details routing, previous/next groups, final partial group, switching/closing/editing while inspection runs, signed/read-only/encrypted files, RTL/accessibility, tablet resizing and large/scanned files. Native host tests are not physical Samsung evidence.
-- Published `0.0.10-beta (10012)` does not include this integration. A later batch release must retain the production certificate and document its actual manifest build number. This does not resolve opening latency versus Xodo.
+- Published `0.0.10-beta (10012)` does not include this integration. The combined release must retain the production certificate and document its actual manifest build number. This does not resolve opening latency versus Xodo.
 
 
 Owner scope update (2026-11-07 Cairo): include this PR with #31/#32/#34 and the bookmark/tablet batch in one `0.0.11-beta (11012)` candidate, after integration/current-head checks. Previous next-batch release isolation is superseded; manifest/signature/assets and physical QA remain unverified until actually performed.

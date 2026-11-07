@@ -13,7 +13,7 @@ The explicit Add action creates entries below a new “Untitled” root and pres
 - Required per-PR Rust/provenance, Android JVM, title and aggregate merge gates. No per-PR APK, per owner policy.
 - Manual batch-APK QA outstanding: selection ordering, cancel/close/re-analyze after edits, queued/double taps, malformed/encrypted/restricted/signed files, native style tolerance, long/Unicode fonts, OCR/scanned documents, existing outlines, save/reopen, RTL/accessibility, S Pen and phone/tablet UI.
 - Native limits remain 200 listed styles and analysis of the first 5,000 pages (`crates/engine/src/text_style_bookmarks.rs`). These are stable desktop engine limits, not an additional Android truncation. Full UI/runtime parity is not claimed.
-- Next-batch preparation only; not in published `0.0.10-beta (10012)`, not a PDF-opening optimization. Integration with open import/copy/tablet PRs must be synchronized and rechecked before merging.
+- Combined-release integration; not in published `0.0.10-beta (10012)`, not a PDF-opening optimization. Integration with the full bookmark/tablet/background/text-script/provider stack must pass current-head checks before merging.
 
 
 Review reconciliation: an earlier draft described an extra 300-style Android cap. Inspection of the actual stable implementation showed `MAX_STYLES=200` and `SAMPLE_CHARS=60`, making that cap/banner unreachable. Removed them and corrected the limits. Synchronized with main after the complete bookmark/tablet batch; current-head CI must pass again.
