@@ -481,6 +481,21 @@ fun MoreToolsSheet(vm: AppViewModel, doc: OpenDocument) {
             return@PdfSheet
         }
         SheetTitle(stringResource(R.string.common_tool_more_tools))
+        val placement = vm.quickToolbar
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(stringResource(R.string.toolbar_vertical_mode), color = pdfColors.text, modifier = Modifier.weight(1f))
+            PdfSwitch(placement.railMode) { placement.setRailMode(it) }
+        }
+        if (placement.railMode) Row(
+            Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(stringResource(R.string.toolbar_vertical_right), color = pdfColors.text, modifier = Modifier.weight(1f))
+            PdfSwitch(placement.railRight) { placement.setRailRight(it) }
+        }
         val slots = toolbarSlots(androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp)
         val prefs = vm.quickToolbar
         val tools = prefs.bar.drop(slots) + prefs.grid

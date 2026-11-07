@@ -125,7 +125,10 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
     val topPx = with(density) { TopBarHeight.toPx() }
     // the quick toolbar grows with a large font setting: the page area leaves room for that too
     var quickExtraPx by remember { mutableIntStateOf(0) }
-    val bottomPx = with(density) { if (ctl.tool == ViewerTool.None) QuickBarHeight.toPx() + quickExtraPx else BottomBarHeight.toPx() }
+    val railVisible = vm.quickToolbar.railMode && ctl.tool == ViewerTool.None
+    val bottomPx = with(density) {
+        if (railVisible) 0f else if (ctl.tool == ViewerTool.None) QuickBarHeight.toPx() + quickExtraPx else BottomBarHeight.toPx()
+    }
     // keyed on the document too: one opened over another (Create, Combine) has a fresh page view
     LaunchedEffect(doc, ctl.barsVisible, statusPx, navPx, ctl.searching, ctl.tool, vm.readingMode, bottomPx, statusBar) {
         val bottomShown = ctl.barsVisible && !ctl.searching && !vm.readingMode
@@ -425,12 +428,31 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
                 }
             }
         }
+        // Optional Xodo-like dock: same saved shortcuts, accessible on left or right.
+        // The normal bottom sub-toolbar remains available for active tools.
+        AnimatedVisibility(
+            visible = railVisible && ctl.barsVisible && !ctl.searching && !vm.readingMode &&
+                vm.readAloud == null && vm.fieldActions == null,
+            modifier = Modifier.align(if (vm.quickToolbar.railRight) Alignment.CenterEnd else Alignment.CenterStart)
+                .padding(
+                    top = with(density) { doc.viewer.padTop.toDp() },
+                    bottom = with(density) { navPx.toDp() + 8.dp },
+                ).then(cutoutSides),
+        ) {
+            VerticalQuickToolbar(
+                tools = vm.quickToolbar.bar,
+                onTool = { vm.runQuickTool(doc, it) },
+                onMoreTools = { ctl.sheet = if (ctl.sheet == ViewerSheet.MoreTools) ViewerSheet.None else ViewerSheet.MoreTools },
+                moreToolsOpen = ctl.sheet == ViewerSheet.MoreTools,
+            )
+        }
+
         // the Read Aloud player takes the bottom bar's place
         // while typing on the page, the bar (with its formatting) rides above the keyboard
         if (vm.readAloud == null && vm.fieldActions == null) Column(Modifier.fillMaxWidth().align(Alignment.BottomCenter).then(if (vm.editing != null) Modifier.imePadding() else Modifier)) {
             vm.success?.let { SuccessBannerView(it, onClose = { vm.success = null }) }
             AnimatedVisibility(
-                ctl.barsVisible && !ctl.searching && !vm.readingMode,
+                ctl.barsVisible && !ctl.searching && !vm.readingMode && (!railVisible || ctl.tool != ViewerTool.None),
                 enter = slideInVertically(tween(PdfMotion.BARS_MS)) { it } + fadeIn(tween(PdfMotion.BARS_MS)),
                 exit = slideOutVertically(tween(PdfMotion.BARS_MS)) { it } + fadeOut(tween(PdfMotion.BARS_MS)),
             ) {

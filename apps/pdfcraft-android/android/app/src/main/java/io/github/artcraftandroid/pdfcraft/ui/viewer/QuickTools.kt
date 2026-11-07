@@ -109,6 +109,22 @@ fun toolbarSlots(widthDp: Int): Int = when {
 class QuickToolbarPrefs(context: Context) {
     private val prefs = context.getSharedPreferences("quick_toolbar", Context.MODE_PRIVATE)
 
+    /** Optional Xodo-style vertical rail; legacy bottom arrangement stays the default. */
+    var railMode by mutableStateOf(prefs.getBoolean("railMode", false))
+        private set
+    var railRight by mutableStateOf(prefs.getBoolean("railRight", false))
+        private set
+
+    fun setRailMode(enabled: Boolean) {
+        railMode = enabled
+        prefs.edit().putBoolean("railMode", enabled).apply()
+    }
+
+    fun setRailRight(enabled: Boolean) {
+        railRight = enabled
+        prefs.edit().putBoolean("railRight", enabled).apply()
+    }
+
     var bar by mutableStateOf(read("bar") ?: QuickTool.DEFAULT_BAR)
         private set
 

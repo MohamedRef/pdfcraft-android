@@ -1,5 +1,12 @@
 # PdfCraft Android - development handover
 
+## XODO INSPIRED VERTICAL QUICK TOOLBAR — 2026-11-07 (PR pending)
+
+- Current main includes Highlight preview PR #45, merged `09f71fbe5422d58359f4cb12ecb5462bd784d442` after exact-head Rust, Android, title and aggregate CI. Native engine remains upstream v0.19.0.
+- Proposed standalone `feat/android-optional-vertical-quick-toolbar` adds an opt-in left/right dock in More tools, using the existing saved QuickToolbarPrefs bar order and the same tool actions. Bottom dock remains default; active-tool sub-toolbars stay on the bottom. No duplication of the existing drag-to-arrange customization, and no changes to PDF native editing, release version, permissions, updater or signing.
+- Must check exact-head Rust/provenance + Android JVM/ARM64 + PR title + aggregate CI before merge; physical phone, tablet, DeX, accessibility and touch/scroll QA pending. Follow-up work, not in this PR: customized sub-tool grouping, precise Xodo-style text drag and native Freehand Highlight. Do not claim full Xodo parity.
+
+
 ## Highlight / Xodo parity — in review, not released
 
 - Upstream PdfCraft v0.19.0 uses native text-layer geometry and PDF QuadPoints. Android previously dismissed a text-selection menu immediately on Highlight/Underline/Strikeout, leaving a blank visual gap before native refresh. The proposed `fix/android-highlight-selection-preview-parity` bridge keeps the selected quads visible until the existing native `comment_add`/refresh operation settles. It changes no Rust engine, PDF encoding, provider paths, signing or release version.
