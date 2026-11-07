@@ -1,5 +1,14 @@
 # PdfCraft Android - development handover
 
+## ACTIVE NEXT BATCH — draft ink lasso and movement (2026-11-07)
+
+- **Current product source:** merged upstream v0.19.0 (#37), multi-document Bates (#38), favorite pens (#39) and release-preparation (#40); main `69c40cfadd3d0763d9bb940587658fc584d6d2c3` passed push CI 42369115173. There were no open PRs at batch start.
+- **Previous batch now published:** [PdfCraft 0.0.12-beta (12012)](https://github.com/MohamedRef/pdfcraft-android/releases/tag/v0.0.12-beta), public prerelease published 2026-11-07T12:12:36Z from main after full signed [workflow 42370494659](https://github.com/MohamedRef/pdfcraft-android/actions/runs/42370494659) **success**. GitHub release reports the signed ARM64 APK asset `pdfcraft-android-0.0.12-beta.apk` (49,143,604 bytes), `.sha256` sidecar and APK asset SHA-256 `107c9abc93e8b06120f2ad3db5064b90b1d3fddffafc67becf11adf82c581b36`. Release title and notes state actual manifest build 12012; independent downloaded APK/aapt/apksigner validation is still a distinct optional external verification, and physical install/upgrade remains unverified.
+- **Next feature branch:** `feat/android-draft-ink-lasso-move`, based on the tested main source; adds a Draw lasso mode to select and move **uncommitted** ink only. Does not yet select embedded/saved PDF ink annotations, resize ink, or edit engine data. Existing pen/eraser/stylus/pressure/favorites/save behavior is intentionally retained. New draft edits have ordered Undo/Redo and bounded same-page moves; cancel discards unfinished selections/moves without native edits.
+- **Verification pending:** new lasso geometry JVM regressions plus existing full Android JVM and Rust/provenance/current-head aggregate CI; real S Pen/gesture/multi-window/device and save/reopen QA remain necessary. No per-PR APK, no version change or extra release while the previous batch is publishing. After checks, merge this PR alone, then start subsequent stylus feature work as a separate PR.
+- **Next planned pieces:** safe resize of unsaved ink, then a separate assessed native edit workflow for saved PDF Ink annotations. Large PDF opening versus Xodo is still unmeasured on the actual owner's same-file Samsung setup. Protect private files and provider recovery; never claim a speedup from host-only results.
+
+
 ## VERIFIED MERGE CHECKPOINT — 2026-11-07, next beta awaiting signed publication
 
 - **Upstream engine:** PR [#37](https://github.com/MohamedRef/pdfcraft-android/pull/37) merged into main at `552aed9504b0764b0818bdeb72543abdc227f768`; exact-head Rust/provenance and Android JVM CI [42355818983](https://github.com/MohamedRef/pdfcraft-android/actions/runs/42355818983) passed. Current source pins stable PdfCraft v0.19.0, with reviewed Android adaptations.
