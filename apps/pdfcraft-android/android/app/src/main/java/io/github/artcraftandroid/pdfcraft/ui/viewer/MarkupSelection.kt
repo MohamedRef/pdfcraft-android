@@ -32,3 +32,20 @@ internal fun markupLineRects(flat: List<Float>): List<FloatArray> {
     }
     return rects
 }
+
+/**
+ * A small additional tolerance is allowed only for the drag endpoint. Never
+ * accept a distant nearestGlyph result, such as text in another column.
+ * Reject truncated or nonfinite native glyph geometry before indexing it.
+ */
+internal fun markupEndpointNearGlyph(x: Float, y: Float, rect: List<Float>, tolerance: Float): Boolean {
+    if (!x.isFinite() || !y.isFinite() || !tolerance.isFinite() || tolerance < 0f ||
+        rect.size != 4 || rect.any { !it.isFinite() }) return false
+    val left = minOf(rect[0], rect[2])
+    val right = maxOf(rect[0], rect[2])
+    val top = minOf(rect[1], rect[3])
+    val bottom = maxOf(rect[1], rect[3])
+    if (left >= right || top >= bottom) return false
+    return x >= left - tolerance && x <= right + tolerance &&
+        y >= top - tolerance && y <= bottom + tolerance
+}
