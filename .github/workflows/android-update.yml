@@ -33,7 +33,7 @@ jobs:
       - name: Run Rust tests
         run: cargo test --locked -p pdfcraft-cos -p pdfcraft-create -p pdfcraft-sign -p pdfcraft-js -p pdfcraft-forms -p pdfcraft-xfa -p pdfcraft-engine -p pdfcraft-render -p pdfcraft-android
       - name: Verify native PDF freehand highlighter appearance across reopen
-        run: cargo test --locked -p pdfcraft-annot freehand_highlight_is_compatible_ink_with_marker_blending
+        run: cargo test --locked -p pdfcraft-annot freehand_highlight
 
   android-tests:
     runs-on: ubuntu-latest
