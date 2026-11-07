@@ -474,8 +474,8 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
                     railDragY += dy
                 },
                 onHandleRelease = {
-                    prefsRail.setRailRight(clampedXpx + railWidthPx / 2f > viewportWidthPx / 2f)
-                    prefsRail.setRailYOffsetDp(with(density) { clampedYpx.toDp().value })
+                    prefsRail.updateRailRight(clampedXpx + railWidthPx / 2f > viewportWidthPx / 2f)
+                    prefsRail.updateRailYOffsetDp(with(density) { clampedYpx.toDp().value })
                     railDragX = 0f
                     railDragY = 0f
                 },
