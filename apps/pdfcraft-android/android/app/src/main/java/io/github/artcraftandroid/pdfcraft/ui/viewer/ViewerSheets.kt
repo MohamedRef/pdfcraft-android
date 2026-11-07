@@ -487,14 +487,14 @@ fun MoreToolsSheet(vm: AppViewModel, doc: OpenDocument) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(stringResource(R.string.toolbar_vertical_mode), color = pdfColors.text, modifier = Modifier.weight(1f))
-            PdfSwitch(placement.railMode, onChange = { placement.setRailMode(it) })
+            PdfSwitch(placement.railMode, onChange = { placement.updateRailMode(it) })
         }
         if (placement.railMode) Row(
             Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(stringResource(R.string.toolbar_vertical_right), color = pdfColors.text, modifier = Modifier.weight(1f))
-            PdfSwitch(placement.railRight, onChange = { placement.setRailRight(it) })
+            PdfSwitch(placement.railRight, onChange = { placement.updateRailRight(it) })
         }
         val slots = toolbarSlots(androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp)
         val prefs = vm.quickToolbar

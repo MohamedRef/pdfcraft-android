@@ -119,18 +119,18 @@ class QuickToolbarPrefs(context: Context) {
     var railYOffsetDp by mutableStateOf(prefs.getFloat("railYOffsetDp", 0f).takeIf { it.isFinite() }?.coerceIn(-400f, 400f) ?: 0f)
         private set
 
-    fun setRailYOffsetDp(value: Float) {
+    fun updateRailYOffsetDp(value: Float) {
         if (!value.isFinite()) return
         railYOffsetDp = value.coerceIn(-400f, 400f)
         prefs.edit().putFloat("railYOffsetDp", railYOffsetDp).apply()
     }
 
-    fun setRailMode(enabled: Boolean) {
+    fun updateRailMode(enabled: Boolean) {
         railMode = enabled
         prefs.edit().putBoolean("railMode", enabled).apply()
     }
 
-    fun setRailRight(enabled: Boolean) {
+    fun updateRailRight(enabled: Boolean) {
         railRight = enabled
         prefs.edit().putBoolean("railRight", enabled).apply()
     }
