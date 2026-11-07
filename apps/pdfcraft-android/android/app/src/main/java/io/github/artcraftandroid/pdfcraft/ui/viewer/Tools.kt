@@ -284,6 +284,12 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
     var selectedInk by remember { mutableStateOf<Set<InkStroke>>(emptySet()) }
     var current by remember { mutableStateOf<InkStroke?>(null) }
     val prefs = vm.toolPrefs
+    LaunchedEffect(doc.controller.lassoMode) {
+        // A lasso outline is transient: toggling back to pen/eraser clears selection.
+        selectedInk = emptySet()
+        lassoPoints.clear()
+        lassoPage = null
+    }
     // Capture appearance at pointer down. Adjacent matching strokes may share an annotation.
     DisposableEffect(doc) {
         doc.commitTool = {
