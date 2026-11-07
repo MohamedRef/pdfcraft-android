@@ -84,7 +84,11 @@ jobs:
   signed-apk:
     # One-time owner-approved 0.0.13-beta release on the exact squash-merge commit.
     # Keep manual dispatch for all other batches; normal main pushes never sign.
-    if: github.ref == 'refs/heads/main' && (github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && startsWith(github.event.head_commit.message, 'chore(release): publish 0.0.13-beta (13012)')))
+    if: >-
+      github.ref == 'refs/heads/main' &&
+      (github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'push' &&
+      startsWith(github.event.head_commit.message, 'chore(release): publish 0.0.13-beta (13012)')))
     needs: [rust-tests, android-tests]
     permissions:
       contents: write  # publish an already signed and verified APK only from main
@@ -173,7 +177,11 @@ jobs:
       # The updater intentionally only trusts *published* owner GitHub Releases with SHA-256.
       # GITHUB_TOKEN-created tags do not recursively trigger the tag-specific Release workflow.
       - name: Publish verified signed ARM64 APK as an update release
-        if: github.ref == 'refs/heads/main' && (github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && startsWith(github.event.head_commit.message, 'chore(release): publish 0.0.13-beta (13012)')))
+        if: >-
+      github.ref == 'refs/heads/main' &&
+      (github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'push' &&
+      startsWith(github.event.head_commit.message, 'chore(release): publish 0.0.13-beta (13012)')))
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
