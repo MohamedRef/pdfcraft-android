@@ -1227,7 +1227,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
      * Native 0.19.0 scanned-page cleanup. Bounded UI page scope, explicit confirm,
      * and no new provider-path writes: native edits the already-open working PDF.
      */
-    fun enhanceScannedPages(doc: OpenDocument, plan: io.github.artcraftandroid.pdfcraft.ui.viewer.ScanEnhancePlan) {
+    internal fun enhanceScannedPages(doc: OpenDocument, plan: io.github.artcraftandroid.pdfcraft.ui.viewer.ScanEnhancePlan) {
         if (document !== doc || busy != null || !doc.writable || doc.info.signed ||
             doc.info.readOnlyReason != null || doc.pageCount == 0 ||
             !io.github.artcraftandroid.pdfcraft.ui.viewer.validScanEnhancePlan(plan, doc.pageCount)) {
