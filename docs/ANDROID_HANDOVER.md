@@ -1,5 +1,9 @@
 # PdfCraft Android - development handover
 
+## ACTIVE WORK — dedicated v0.19.0 engine upgrade (2026-11-07)
+
+Owner authorized upgrading to immutable upstream `8c572792d6760bdc903d6f9a032e3e38e8f71cb8` in one independent PR from main `7f597ad`. Preserve every Android/stylus/voice/recovery/updater/signing feature. [Upgrade status and checklist](ANDROID_ENGINE_0.19.0_UPGRADE.md) tracks reconciliation and actual checks. Source import/testing is in progress, not yet merged or released; published 0.0.11-beta (11012) remains the verified v0.18.2 binary below.
+
 ## LIVE CHECKPOINT — 2026-11-07 (Cairo): combined beta published and verified
 
 - **Published:** [PdfCraft Android 0.0.11-beta (11012)](https://github.com/MohamedRef/pdfcraft-android/releases/tag/v0.0.11-beta), public ARM64 prerelease, published `2026-11-07T06:20:23Z`. One signed APK and its SHA-256 sidecar cover the complete integration batch. Earlier candidate/unpublished statements below are historical.
