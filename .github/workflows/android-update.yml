@@ -84,13 +84,13 @@ jobs:
           echo 'Rust and Android JVM tests passed; APK packaging is verified once per release batch.' >> "$GITHUB_STEP_SUMMARY"
 
   signed-apk:
-    # One-time owner-approved 0.0.13-beta release on the exact squash-merge commit.
+    # One-time owner-approved 0.0.14-beta release on the exact squash-merge commit.
     # Keep manual dispatch for all other batches; normal main pushes never sign.
     if: >-
       github.ref == 'refs/heads/main' &&
       (github.event_name == 'workflow_dispatch' ||
       (github.event_name == 'push' &&
-      startsWith(github.event.head_commit.message, 'chore(release): publish 0.0.13-beta (13012)')))
+      startsWith(github.event.head_commit.message, 'chore(release): publish 0.0.14-beta (14012)')))
     needs: [rust-tests, android-tests]
     permissions:
       contents: write  # publish an already signed and verified APK only from main
@@ -103,9 +103,9 @@ jobs:
         run: |
           set -euo pipefail
           prop=apps/pdfcraft-android/android/gradle.properties
-          grep -Fxq 'pdfcraft.version=0.0.13-beta' "$prop"
-          grep -Fxq 'pdfcraft.versionCode=1301' "$prop"
-          echo 'Exact approved 0.0.13-beta (13012) release properties verified.' >> "$GITHUB_STEP_SUMMARY"
+          grep -Fxq 'pdfcraft.version=0.0.14-beta' "$prop"
+          grep -Fxq 'pdfcraft.versionCode=1401' "$prop"
+          echo 'Exact approved 0.0.14-beta (14012) release properties verified.' >> "$GITHUB_STEP_SUMMARY"
       - name: Require permanent personal signing key
         env:
           KEYSTORE_BASE64: ${{ secrets.PDFCRAFT_KEYSTORE_BASE64 }}
@@ -183,7 +183,7 @@ jobs:
           github.ref == 'refs/heads/main' &&
           (github.event_name == 'workflow_dispatch' ||
           (github.event_name == 'push' &&
-          startsWith(github.event.head_commit.message, 'chore(release): publish 0.0.13-beta (13012)')))
+          startsWith(github.event.head_commit.message, 'chore(release): publish 0.0.14-beta (14012)')))
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
