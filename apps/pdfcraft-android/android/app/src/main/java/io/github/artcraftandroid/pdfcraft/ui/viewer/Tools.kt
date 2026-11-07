@@ -1043,7 +1043,7 @@ fun InkWidthRow(color: Color, selected: Float?, onPick: (Float) -> Unit) {
                     .semantics { contentDescription = description },
                 contentAlignment = Alignment.Center,
             ) {
-                Canvas(Modifier.size(32.dp)) { drawCircle(color, radius = (1.5f + w / 2f).dp.toPx(), center = center) })
+                Canvas(Modifier.size(32.dp)) { drawCircle(color, radius = (1.5f + w / 2f).dp.toPx(), center = center) }
             }
         }
     }
