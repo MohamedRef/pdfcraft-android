@@ -1,5 +1,9 @@
 package io.github.artcraftandroid.pdfcraft.engine
 
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
+
 internal const val MAX_BATES_FILES = 20
 internal const val MAX_BATES_BYTES = 512L * 1024L * 1024L
 
@@ -58,7 +62,12 @@ internal fun <T> publishNewBatchCopy(
         commit(entry)
         return entry
     } catch (failure: Throwable) {
-        try { rollback(entry) } catch (cleanup: Throwable) { failure.addSuppressed(cleanup) }
+        try { rollback(entry) } catch (cleanup: Throwable) { if (cleanup !== failure) failure.addSuppressed(cleanup) }
         throw failure
     }
+}
+
+/** Remember a committed row before dispatching back to a caller that may already be cancelled. */
+internal suspend fun <T> rememberBatesPublication(publish: suspend () -> T, remember: (T) -> Unit) {
+    withContext(NonCancellable + Dispatchers.IO) { remember(publish()) }
 }

@@ -2,6 +2,9 @@ package io.github.artcraftandroid.pdfcraft.engine
 
 import org.junit.Assert.*
 import org.junit.Test
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import java.util.concurrent.CancellationException
 
 class BatesBatchTest {
@@ -47,5 +50,30 @@ class BatesBatchTest {
         assertSame(original, thrown)
         assertEquals("cleanup failed", thrown.suppressed.single().message)
         assertEquals("new", publishNewBatchCopy({ "new" }, {}, {}, { fail("must not delete published copy") }, {}))
+    }
+
+    @Test fun committedCopyIsRememberedEvenWhenCallerWasCancelled() = runBlocking {
+        val publishing = CompletableDeferred<Unit>()
+        val release = CompletableDeferred<Unit>()
+        val remembered = mutableListOf<String>()
+        val job = launch {
+            rememberBatesPublication(publish = {
+                publishing.complete(Unit)
+                release.await() // Simulate a commit already in flight.
+                "new-owned-row"
+            }, remember = { remembered.add(it) })
+        }
+        publishing.await()
+        job.cancel()
+        release.complete(Unit)
+        job.join()
+        assertEquals(listOf("new-owned-row"), remembered)
+    }
+
+    @Test fun cleanupCannotHideFailureBySuppressingItself() {
+        val original = IllegalStateException("same failure")
+        assertSame(original, assertThrows(IllegalStateException::class.java) {
+            publishNewBatchCopy({ "new" }, { throw original }, {}, { throw original }, {})
+        })
     }
 }

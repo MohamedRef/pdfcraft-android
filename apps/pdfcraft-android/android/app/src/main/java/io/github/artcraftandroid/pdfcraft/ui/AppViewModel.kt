@@ -2273,15 +2273,15 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                         val last = settings.prefix + interval.last.toString().padStart(settings.digits, '0') + settings.suffix
                         val savedMessage = text(R.string.bates_saved_range, first, last)
                         // Store the committed URI before returning to a possibly cancelled caller.
-                        withContext(kotlinx.coroutines.NonCancellable + Dispatchers.IO) {
+                        io.github.artcraftandroid.pdfcraft.engine.rememberBatesPublication(publish = {
                             context.ensureActive()
                             val output = File(inputs[i].getValue("output"))
                             require(output.isFile && output.length() in 1..io.github.artcraftandroid.pdfcraft.engine.MAX_BATES_BYTES)
                             val base = DocumentFiles.safeName(picked[i].name).substringBeforeLast('.')
                             val bounded = StringBuilder().apply { base.codePoints().limit(48).forEach { appendCodePoint(it) } }.toString()
                             val uri = files.saveBatesCopy(output, "${bounded}_bates.pdf") { context.ensureActive() }
-                            results.add(BatesExportResult(picked[i].name, savedMessage, uri))
-                        }
+                            BatesExportResult(picked[i].name, savedMessage, uri)
+                        }, remember = { results.add(it) })
                     } catch (e: kotlinx.coroutines.CancellationException) { throw e }
                     catch (_: Exception) { results.add(BatesExportResult(picked[i].name, text(R.string.bates_export_failed), null)) }
                 }
