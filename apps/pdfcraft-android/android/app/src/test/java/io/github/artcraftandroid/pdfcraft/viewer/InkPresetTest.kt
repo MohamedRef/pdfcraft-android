@@ -20,12 +20,19 @@ class InkPresetTest {
         }
     }
 
+    @Test fun legacyProfilesStillLoadWithoutChangingAppearance() {
+        val legacy = InkPreset.decode("v1|ff0000ff|2.5|0.75")!!
+        assertEquals(InkStyle.Ballpoint, legacy.style)
+        assertEquals(2.5f, legacy.width, 0.001f)
+        assertEquals(0.75f, legacy.opacity, 0.001f)
+    }
+
     @Test fun profileStorageDoesNotDependOnDecimalLocale() {
         val previous = Locale.getDefault()
         try {
             Locale.setDefault(Locale.FRANCE)
             val preset = InkPreset.create(0xFF0000FF.toInt(), 2.5f, 0.75f)!!
-            assertEquals("v1|ff0000ff|2.5|0.75", preset.encode())
+            assertEquals("v2|ff0000ff|2.5|0.75|ballpoint", preset.encode())
             assertEquals(preset, InkPreset.decode(preset.encode()))
         } finally { Locale.setDefault(previous) }
     }

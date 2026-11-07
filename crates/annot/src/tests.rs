@@ -1347,7 +1347,21 @@ fn the_eraser_cuts_strokes_and_removes_empty_drawings() {
     let all: Vec<[f64; 2]> = (0..=20).map(|k| [100.0 + k as f64 * 10.0, 500.0]).chain((0..=20).map(|k| [100.0 + k as f64 * 10.0, 400.0])).collect();
     erase_ink(&mut doc, 0, i, &all[..21], 8.0, &meta("e")).unwrap();
     erase_ink(&mut doc, 0, i, &all[21..], 8.0, &meta("e")).unwrap();
-    assert!(!list(&doc, 0).iter().any(|d| d.name(b"Subtype") == Some(b"Ink")));
+    assert!(!list(&doc, 0).iter().any(|d| d.name(b"Subtype") == Some(&b"Ink"[..])));
+}
+
+#[test]
+fn freehand_highlight_segments_can_be_erased_without_losing_their_intent() {
+    let mut doc = fixture();
+    let stroke = (0..=20).map(|k| [100.0 + k as f64 * 10.0, 400.0]).collect::<Vec<_>>();
+    let i = add_annotation(&mut doc, &new(0, Shape::FreehandHighlight { strokes: vec![stroke] }), &meta("marker")).unwrap();
+    assert_eq!(list(&doc, 0)[i].name(b"Subtype"), Some(&b"Ink"[..]));
+    assert_eq!(list(&doc, 0)[i].name(b"IT"), Some(&b"FreehandHighlight"[..]));
+    assert!(erase_ink(&mut doc, 0, i, &[[200.0, 450.0], [200.0, 350.0]], 8.0, &meta("erase")).unwrap());
+    assert_eq!(list(&doc, 0)[i].name(b"IT"), Some(&b"FreehandHighlight"[..]));
+    assert_eq!(list(&doc, 0)[i].name(b"Subtype"), Some(&b"Ink"[..]));
+    let reopened = reopen(&doc);
+    assert_eq!(list(&reopened, 0)[i].name(b"IT"), Some(&b"FreehandHighlight"[..]));
 }
 
 /// A one-page document from object bodies (object 1 is the catalog, 3 the page).
@@ -2619,6 +2633,29 @@ fn freehand_highlight_is_compatible_ink_with_marker_blending() {
     for (a, b) in rect_from_border.iter().zip([10.0, 90.0, 130.0, 110.0]) {
         assert!((a - b).abs() < 1e-4, "expected [10, 90, 130, 110], got {rect_from_border:?}");
     }
+}
+
+#[test]
+fn freehand_highlight_eraser_keeps_marker_intent_and_blending() {
+    let shape = Shape::FreehandHighlight { strokes: vec![vec![[20.0, 100.0], [120.0, 100.0]]] };
+    let mut annotation = new(0, shape.clone());
+    annotation.style = Style::default_for(&shape);
+    let mut doc = fixture();
+    let index = add_annotation(&mut doc, &annotation, &meta("marker-erase")).unwrap();
+
+    // A small eraser crossing the middle must split, not remove, the broad marker.
+    assert!(erase_ink(&mut doc, 0, index, &[[70.0, 100.0]], 6.0, &meta("marker-erase")).unwrap());
+    let reopened = reopen(&doc);
+    let ink = &list(&reopened, 0)[index];
+    assert_eq!(ink.name(b"Subtype"), Some(&b"Ink"[..]));
+    assert_eq!(ink.name(b"IT"), Some(&b"FreehandHighlight"[..]));
+    assert_eq!(ink.get(b"CA").and_then(Object::as_f64), Some(0.35));
+    let strokes = ink.get(b"InkList").unwrap().as_array().unwrap();
+    assert_eq!(strokes.len(), 2, "partial erase keeps two marker fragments");
+    let ap = ink.get(b"AP").unwrap().as_dict().unwrap().reference(b"N").unwrap();
+    let resources = reopened.get(ap).as_dict().unwrap().get(b"Resources").cloned().unwrap();
+    let blend = resources.as_dict().unwrap().get(b"ExtGState").unwrap().as_dict().unwrap().get(b"GS0").unwrap().as_dict().unwrap();
+    assert_eq!(blend.name(b"BM"), Some(&b"Multiply"[..]));
 }
 
 /// A 3D annotation is PDF 1.6 and a PRC model 1.7 (ISO 32000-2 §13.6): an older document's

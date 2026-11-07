@@ -61,6 +61,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
@@ -329,7 +330,7 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
         doc.commitTool = {
             val segments = strokes.flatMap { stroke ->
                 val points = stroke.points.toList()
-                inkWidthRuns(stroke.pressures.toList(), stroke.appearance.width, stroke.pressureSensitive).map { run ->
+                inkStyleWidthRuns(stroke.pressures.toList(), stroke.appearance.width, stroke.pressureSensitive, stroke.appearance.style).map { run ->
                     InkSaveSegment(
                         stroke.page, stroke.appearance.copy(width = run.width),
                         points.subList(run.start, run.end + 1),
@@ -342,7 +343,7 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                 val page = list.first().page
                 val appearance = list.first().appearance
                 mapOf(
-                    "page" to page + 1, "type" to "ink",
+                    "page" to page + 1, "type" to inkStyleEngineType(appearance.style),
                     "strokes" to list.map { segment -> segment.points.map { listOf(it.x.toDouble(), it.y.toDouble()) } },
                     "color" to Color(appearance.argb).hex(), "opacity" to appearance.opacity.toDouble(), "width" to appearance.width.toDouble(),
                     "author" to appearance.author,
@@ -443,7 +444,7 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
         cancelErase()
         if (path.isNotEmpty()) {
             // One native Edit::Batch per gesture, preserving one document-level undo step.
-            vm.runTool(doc, "comment_erase", mapOf("page" to page + 1, "path" to path, "radius" to 8.0))
+            vm.runTool(doc, "comment_erase", mapOf("page" to page + 1, "path" to path, "radius" to 8.0, "erase_highlights" to true))
         }
     }
 
@@ -542,7 +543,12 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                 val at = doc.viewer.screenToPage(p) ?: return@toolGestures
                 stillAt = p
                 movedAt = System.currentTimeMillis()
-                val appearance = InkAppearance(prefs.color(StyledTool.Ink).toArgbInt(), prefs.opacity(StyledTool.Ink), prefs.inkWidth, prefs.author.ifBlank { null })
+                val inkStyle = prefs.inkStyle
+                val appearance = InkAppearance(
+                    prefs.color(StyledTool.Ink).toArgbInt(),
+                    inkStyleOpacity(prefs.opacity(StyledTool.Ink), inkStyle),
+                    prefs.inkWidth, prefs.author.ifBlank { null }, inkStyle,
+                )
                 current = InkStroke(at.page, appearance, isStylus && doc.controller.inkShapeMode == InkShapeMode.Freehand, doc.controller.inkShapeMode).also {
                     it.points.add(Offset(at.x, at.y))
                     it.pressures.add(pressure)
@@ -644,8 +650,8 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
             for (s in strokes) {
                 val pts = s.preview ?: s.points
                 val runs = if (s.preview != null) {
-                    if (pts.size >= 2) listOf(InkWidthRun(0, pts.lastIndex, s.appearance.width)) else emptyList()
-                } else inkWidthRuns(s.pressures.toList(), s.appearance.width, s.pressureSensitive)
+                    if (pts.size >= 2) inkStyleWidthRuns(List(pts.size) { 1f }, s.appearance.width, false, s.appearance.style) else emptyList()
+                } else inkStyleWidthRuns(s.pressures.toList(), s.appearance.width, s.pressureSensitive, s.appearance.style)
                 for (run in runs) {
                     val path = Path()
                     for (i in run.start..run.end) {
@@ -657,6 +663,7 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                     drawPath(
                         path, Color(s.appearance.argb).copy(alpha = s.appearance.opacity),
                         style = Stroke(width = run.width * doc.viewer.pixelsPerPoint(s.page), cap = StrokeCap.Round, join = StrokeJoin.Round),
+                        blendMode = if (s.appearance.style == InkStyle.Highlighter) BlendMode.Multiply else BlendMode.SrcOver,
                     )
                 }
             }
@@ -695,7 +702,7 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
             if (hovering != null && current == null && eraserPage == null) {
                 val onPage = doc.viewer.screenToPage(hovering)
                 if (onPage != null) {
-                    val diameter = if (doc.controller.eraserMode || hoverEraser) 16f else prefs.inkWidth
+                    val diameter = if (doc.controller.eraserMode || hoverEraser) 16f else inkStyleWidthRuns(listOf(1f, 1f), prefs.inkWidth, false, prefs.inkStyle).firstOrNull()?.width ?: prefs.inkWidth
                     drawCircle(
                         Color.DarkGray.copy(alpha = 0.6f),
                         radius = maxOf(2f, diameter * doc.viewer.pixelsPerPoint(onPage.page) / 2f),

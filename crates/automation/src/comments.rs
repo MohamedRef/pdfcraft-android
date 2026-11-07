@@ -828,6 +828,13 @@ impl Automation {
                 Ok(to_user(&info, x, y))
             })
             .collect::<Result<Vec<_>>>()?;
+        // Opt-in for Android's dedicated freehand marker; retain legacy desktop default.
+        // Fill/sign Ink and locked annotations are never eligible.
+        let erase_highlights = match a.get("erase_highlights") {
+            None => false,
+            Some(Value::Bool(value)) => *value,
+            _ => return Err(ToolError::InvalidArgs("erase_highlights must be a boolean".into())),
+        };
         let min_x = path.iter().map(|p| p[0]).fold(f64::INFINITY, f64::min);
         let min_y = path.iter().map(|p| p[1]).fold(f64::INFINITY, f64::min);
         let max_x = path.iter().map(|p| p[0]).fold(f64::NEG_INFINITY, f64::max);
@@ -839,7 +846,7 @@ impl Automation {
             .iter()
             .filter(|c| {
                 // Ink signatures/initials and freehand highlights are not ordinary pen drawings.
-                c.page == page && c.subtype == "Ink" && !c.fill_sign && !c.locked && c.intent.as_deref() != Some("FreehandHighlight")
+                c.page == page && c.subtype == "Ink" && !c.fill_sign && !c.locked && (erase_highlights || c.intent.as_deref() != Some("FreehandHighlight"))
             })
             .filter(|c| {
                 let r = c.rect;
