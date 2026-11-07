@@ -56,7 +56,7 @@ class ViewerController {
     /** Select or move still-uncommitted Draw strokes without modifying saved PDF annotations. */
     var lassoMode by mutableStateOf(false)
     /** Explicit annotation shape, independent of freehand snap recognition. */
-    var inkShapeMode by mutableStateOf(InkShapeMode.Freehand)
+    internal var inkShapeMode by mutableStateOf(InkShapeMode.Freehand)
 
     var sheet by mutableStateOf(ViewerSheet.None)
 
