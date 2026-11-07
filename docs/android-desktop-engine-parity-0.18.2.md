@@ -327,3 +327,10 @@ Reference behavior: https://feedback.xodo.com/support/solutions/articles/3500020
 - Android-only Kotlin UI fix, stacked after pending Draw lasso #41. Source review identified asynchronous Markup anchor acquisition, preview cancellation, and final release depending on stale preview; unrestricted nearestGlyph could grab unrelated text. No engine code changes or upstream provenance differences.
 - Candidate behavior: tap highlights a bounded word; drag snaps complete words in either direction; final selection rereads finger-up endpoint, cancel/second finger invalidates preview; reject malformed or oversized quads. Native comment_add and undo semantics unchanged.
 - New JVM boundary checks; full Rust/provenance + Android/ARM64 + title/merge gate required on final PR head. Hardware/SAF/RTL/PDF save-reopen and current-release inclusion unverified. See docs/ANDROID_HIGHLIGHT_SELECTION.md.
+
+
+### Markup selection and preview follow-up — 2026-11-07
+
+- [PR #43](https://github.com/MohamedRef/pdfcraft-android/pull/43) expanded source-level repair: immediate touch feedback, one conflated native preview resolver per gesture, bounded near-line drag snapping, final finger-up recomputation, and a held visual overlay until native comment_add/refresh finishes. Native errors clear the overlay; superseded gestures cannot clear a new preview. Text selection handles now use a stable screen target and coalesced native lookups, with revision guards against old results after clear.
+- Existing tool/save identity unchanged. Added a narrow optional native-tool completion callback to the Kotlin ViewModel without modifying Rust tooling, on-disk PDF encoding or SAF copies. JVM geometry tests include strict bounds, nonfinite values and reverse dragging; physical S Pen and timed rendering behavior still unverified.
+- Previous lasso #41 passed exact-head Rust/JVM/merge CI and merged `f4dc5b78b2405d4bbf8b8f42d25763209292cb9b`; this separate highlight PR targets main. **Await fresh exact-head CI before merge**, then verify the new main source; no per-PR APK or release bump. Keep other draft PR #42 separate.

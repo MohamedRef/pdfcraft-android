@@ -2,9 +2,9 @@
 
 ## HIGHLIGHT SELECTION FIX — 2026-11-07 (proposed, not merged)
 
-- A source review found the Markup touch anchor and drag rectangle preview race native text queries. Fast taps can do nothing; finger-up may use stale, incomplete preview. A separate fix based on lasso PR #41 introduces bounded word-at-pointer hit testing, whole-word tap, forward/reverse word drags, conflated preview, and independent final selection from release coordinates.
-- [Feature/QA note](ANDROID_HIGHLIGHT_SELECTION.md); five focused JVM regressions plus full Rust/provenance/Android CI required. This is not device-verified, merged, or released; do not describe it as a fix in an APK until gates and batch publication succeed.
-- Current published version remains **0.0.12-beta (12012)**, issued before either the lasso or the highlight fix. Keep the preceding lasso PR independently gated and merged first; retarget/check this PR next. No per-PR APK.
+- A source review found the Markup touch anchor and drag rectangle preview race native text queries. Fast taps can do nothing; finger-up may use stale, incomplete preview. A separate fix based on lasso PR #41 introduces bounded word-at-pointer hit testing, whole-word tap, forward/reverse word drags, immediate touch feedback, conflated preview, persistent preview through native commit, stable text-selection handles, and independent final selection from release coordinates.
+- [Feature/QA note](ANDROID_HIGHLIGHT_SELECTION.md); focused JVM regressions for word ranges, strict geometry and nearby text tolerance, plus full Rust/provenance/Android CI required. This is not device-verified, merged, or released; do not describe it as a fix in an APK until gates and batch publication succeed.
+- Current published version remains **0.0.12-beta (12012)**, issued before either the lasso or the highlight fix. Lasso PR #41 passed exact-head CI and merged as `f4dc5b78b2405d4bbf8b8f42d25763209292cb9b`; highlight PR #43 now targets main and is awaiting its own latest-head checks. No per-PR APK.
 
 
 ## ACTIVE NEXT BATCH — draft ink lasso and movement (2026-11-07)
