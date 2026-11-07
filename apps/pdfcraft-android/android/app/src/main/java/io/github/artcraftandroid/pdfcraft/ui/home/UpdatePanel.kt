@@ -61,7 +61,7 @@ internal fun updateNoteSections(markdown: String): List<UpdateNoteSection> {
         val content = line.trim()
         if (content.startsWith("- ") && groups.getValue(section).size < 25) {
             val plain = content.removePrefix("- ")
-                .replace(Regex("""\\[([^]]+)]\\([^)]*\\)"""), "$1")
+                .replace(Regex("""\[([^]]+)]\([^)]*\)"""), "$1")
                 .replace("**", "").replace("`", "")
                 .trim().take(800)
             if (plain.isNotBlank()) groups.getValue(section).add(plain)
