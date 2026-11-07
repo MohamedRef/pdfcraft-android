@@ -173,39 +173,116 @@ internal fun verifyDownloadedApk(context: Context, apk: File, update: ApkUpdate)
     }
 }
 
-/** Download to private cache and verify before offering the Android package installer. */
+/** Private persistent storage is not auto-evicted like cacheDir; interrupted APKs can resume later. */
+internal fun apkUpdateDirectory(context: Context): File = File(context.filesDir, "updates")
+
+internal fun apkCachedBytes(context: Context, update: ApkUpdate): Long {
+    val partial = File(apkUpdateDirectory(context), apkPartialFileName(update.sha256))
+    return partial.takeIf { it.isFile && it.length() in 1L..update.size }?.length() ?: 0L
+}
+
+/**
+ * Continue a content-addressed partial APK using HTTP Range; never install or expose partial data.
+ * Exact metadata, HTTPS, SHA-256, package ID, ABI, version and signing identity are all mandatory.
+ * On transient failure or coroutine cancellation, the partial file is retained for next attempt.
+ */
 internal suspend fun downloadAndVerifyApk(
     context: Context, update: ApkUpdate, onProgress: suspend (Int) -> Unit,
 ): File = withContext(Dispatchers.IO) {
-    val dir = File(context.cacheDir, "updates")
+    val dir = apkUpdateDirectory(context)
     if (!dir.isDirectory && !dir.mkdirs()) throw IOException("Cannot create the update download folder.")
-    val partial = File.createTempFile("pdfcraft-download-", ".apk", dir)
+    if (update.size !in 1..MAX_APK_BYTES ||
+        update.assetName != "pdfcraft-android-${update.version}.apk" ||
+        !Regex("""pdfcraft-android-[0-9][0-9A-Za-z.\\-]*\\.apk""").matches(update.assetName)
+    ) throw IOException("Untrusted update metadata.")
+
+    val partial = File(dir, apkPartialFileName(update.sha256))
     val result = File(dir, update.assetName)
-    try {
-        val url = URL(update.downloadUrl)
-        if (url.protocol != "https" || url.host != "github.com") throw IOException("Untrusted APK URL.")
+    // A downloaded and verified APK survives activity recreation and process death.
+    if (result.isFile) {
+        try {
+            if (result.length() == update.size) {
+                verifyDownloadedApk(context, result, update)
+                withContext(Dispatchers.Main) { onProgress(100) }
+                return@withContext result
+            }
+        } catch (_: IOException) {
+            // Failed verification: a stale cached APK is never offered to the installer.
+        }
+        if (!result.delete()) throw IOException("Cannot remove an invalid cached APK.")
+    }
+
+    if (partial.length() > update.size) {
+        if (!partial.delete()) throw IOException("Cannot reset an invalid partial update.")
+    }
+    if (partial.length() == update.size && partial.isFile) {
+        // A previous download might have completed its last byte before losing the process.
+        try {
+            verifyDownloadedApk(context, partial, update)
+            if (!partial.renameTo(result)) throw IOException("Cannot finalize a verified APK.")
+            withContext(Dispatchers.Main) { onProgress(100) }
+            return@withContext result
+        } catch (e: IOException) {
+            if (!partial.delete()) throw IOException("Cannot reset a corrupted APK.", e)
+        }
+    }
+
+    val url = URL(update.downloadUrl)
+    if (url.protocol != "https" || url.host != "github.com" ||
+        url.toString() != "$RELEASE_DOWNLOAD_ROOT" + "v${update.version}/${update.assetName}"
+    ) throw IOException("Untrusted APK URL.")
+
+    var freshRetryUsed = false
+    var previousPercent = -1
+    while (true) {
+        currentCoroutineContext().ensureActive()
+        val offset = partial.length()
         val connection = url.openConnection() as HttpsURLConnection
         try {
             connection.instanceFollowRedirects = true
             connection.connectTimeout = 15_000
             connection.readTimeout = 20_000
             connection.setRequestProperty("User-Agent", "PdfCraft-Android-UpdateChecker")
-            if (connection.responseCode != HttpsURLConnection.HTTP_OK || connection.url.protocol != "https") {
-                throw IOException("APK download could not be completed securely (HTTP ${connection.responseCode}).")
+            connection.setRequestProperty("Accept-Encoding", "identity")
+            if (offset > 0L) connection.setRequestProperty("Range", "bytes=$offset-")
+            val status = connection.responseCode
+            if (connection.url.protocol != "https" ||
+                !(connection.url.host == "github.com" || connection.url.host.endsWith(".githubusercontent.com"))
+            ) throw IOException("APK download redirected outside trusted HTTPS hosts.")
+            val action = apkResumeAction(offset, status, connection.getHeaderField("Content-Range"), update.size)
+            if (action == ApkResumeAction.RETRY_WITHOUT_RANGE) {
+                if (freshRetryUsed) throw IOException("APK server rejected the download twice.")
+                freshRetryUsed = true
+                if (!partial.delete()) throw IOException("Cannot reset a rejected APK range.")
+                continue
             }
-            val reportedLength = connection.contentLengthLong
-            if (reportedLength > MAX_APK_BYTES) throw IOException("The APK download is unexpectedly large.")
-            var received = 0L
-            var previousPercent = -1
+            val resumed = if (action == ApkResumeAction.APPEND) offset else 0L
+            val transferLength = connection.contentLengthLong
+            if (transferLength > update.size - resumed || transferLength < -1L) {
+                throw IOException("APK response is larger than the published release.")
+            }
+            if (connection.contentEncoding?.lowercase() !in listOf(null, "identity")) {
+                throw IOException("Compressed APK response cannot be safely resumed.")
+            }
+            if (resumed > 0L) {
+                val initial = (resumed * 100L / update.size).toInt().coerceIn(0, 100)
+                withContext(Dispatchers.Main) { onProgress(initial) }
+                previousPercent = initial
+            } else {
+                // A 200 after a Range request means the CDN ignored Range: truncate, never append.
+                previousPercent = 0
+                withContext(Dispatchers.Main) { onProgress(0) }
+            }
+            var received = resumed
             connection.inputStream.use { stream ->
-                partial.outputStream().buffered().use { output ->
+                partial.outputStream(append = resumed > 0L).buffered().use { output ->
                     val buffer = ByteArray(64 * 1024)
                     while (true) {
                         currentCoroutineContext().ensureActive()
                         val bytes = stream.read(buffer)
                         if (bytes < 0) break
                         received += bytes
-                        if (received > MAX_APK_BYTES || received > update.size) throw IOException("APK size differs from release metadata.")
+                        if (received > update.size) throw IOException("APK exceeds the published release size.")
                         output.write(buffer, 0, bytes)
                         val percent = (received * 100L / update.size).toInt().coerceIn(0, 100)
                         if (percent > previousPercent) {
@@ -215,17 +292,25 @@ internal suspend fun downloadAndVerifyApk(
                     }
                 }
             }
-            if (received != update.size) throw IOException("The APK download was incomplete.")
+            if (received != update.size || partial.length() != update.size) {
+                throw IOException("Download interrupted. Tap Resume to continue from the saved bytes.")
+            }
         } finally {
             connection.disconnect()
         }
-        verifyDownloadedApk(context, partial, update)
-        if (result.exists() && !result.delete()) throw IOException("An old APK cannot be replaced.")
-        if (!partial.renameTo(result)) throw IOException("Failed to finalize the verified APK.")
-        result
-    } finally {
-        partial.delete()
+        break
     }
+
+    try {
+        verifyDownloadedApk(context, partial, update)
+    } catch (e: Exception) {
+        // Corrupt or wrong-signature APK bytes must never be resumed or installed.
+        partial.delete()
+        throw e
+    }
+    if (!partial.renameTo(result)) throw IOException("Could not save the verified APK.")
+    withContext(Dispatchers.Main) { onProgress(100) }
+    result
 }
 
 /** No silent installs: the owner must grant permission and confirm Android's install dialog. */
