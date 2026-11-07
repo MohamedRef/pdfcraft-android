@@ -2258,6 +2258,31 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         }
     }
 
+    /** Append heading-derived contents with the native engine; reject stale style analyses. */
+    internal fun createStyleBookmarks(
+        doc: OpenDocument,
+        generation: ULong,
+        styles: List<io.github.artcraftandroid.pdfcraft.engine.PdfTextStyle>,
+    ) = job(text(R.string.text_styles_creating)) { eng ->
+        if (document !== doc || doc.info.generation != generation || !doc.writable ||
+            doc.info.signed || doc.info.readOnlyReason != null || !doc.info.allowsCopying || !doc.info.allowsAssembly) {
+            tell(text(R.string.text_styles_unavailable))
+            return@job
+        }
+        val levels = io.github.artcraftandroid.pdfcraft.engine.headingStyleArguments(styles)
+        eng.command {
+            // Check and mutate in one serialized native command: a queued double tap or another
+            // edit cannot apply a second tree from the same stale analysis.
+            val current = document(doc.id)
+            require(current.generation == generation && !current.signed && current.readOnlyReason == null &&
+                current.allowsCopying && current.allowsAssembly) { text(R.string.text_styles_unavailable) }
+            execute("bookmark_from_text_styles", Engine.toJson(mapOf("doc" to doc.id, "levels" to levels)).toString())
+        }
+        refresh(doc)
+        if (document === doc) doc.controller.sheet = io.github.artcraftandroid.pdfcraft.ui.viewer.ViewerSheet.Bookmarks
+        tell(text(R.string.text_styles_created))
+    }
+
     /** Ask Android SAF to pick JSON for the currently displayed PDF, not for private bookmarks. */
     val bookmarkJsonPicks = Channel<Unit>(Channel.CONFLATED)
     private var bookmarkJsonTarget: OpenDocument? = null

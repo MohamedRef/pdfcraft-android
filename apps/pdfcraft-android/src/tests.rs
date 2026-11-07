@@ -518,3 +518,34 @@ fn backdrop_inspection_is_scoped_and_does_not_edit_the_document() {
     assert_eq!(std::fs::read(&path).unwrap(), bytes);
     std::fs::remove_dir_all(dir).unwrap();
 }
+
+
+#[test]
+fn style_bookmarks_append_undo_and_survive_save_through_mobile_tools() {
+    let s = MobileSession::new();
+    let path = text_pdf("Heading\nBody text");
+    let original = std::fs::read(&path).unwrap();
+    let doc = s.open(path.clone(), None).unwrap().id;
+    s.execute("bookmark_add".into(), json!({"doc": doc, "title": "Keep", "page": 1}).to_string()).unwrap();
+    let before = s.document(doc).unwrap();
+    let styles: Value = serde_json::from_str(&s.execute("text_styles".into(), json!({"doc": doc}).to_string()).unwrap()).unwrap();
+    assert_eq!(s.document(doc).unwrap().generation, before.generation, "style analysis is read-only");
+    let style = styles["styles"].as_array().unwrap().first().unwrap();
+    let level = json!({"font": style["font"], "size": style["size"], "bold": style["bold"], "italic": style["italic"]});
+    s.execute("bookmark_from_text_styles".into(), json!({"doc": doc, "levels": [level]}).to_string()).unwrap();
+    let expected = s.outline(doc).unwrap();
+    assert_eq!(expected[0].title, "Untitled");
+    assert!(expected.iter().any(|entry| entry.title == "Keep"));
+    assert!(expected.len() >= 3);
+    s.execute("edit_undo".into(), json!({"doc": doc}).to_string()).unwrap();
+    assert_eq!(s.outline(doc).unwrap().iter().map(|entry| entry.title.as_str()).collect::<Vec<_>>(), ["Keep"]);
+    s.execute("edit_redo".into(), json!({"doc": doc}).to_string()).unwrap();
+    let out = scratch().join("style-bookmarks.pdf");
+    s.execute("doc_save".into(), json!({"doc": doc, "path": out}).to_string()).unwrap();
+    s.close(doc, true).unwrap();
+    let reopened = s.open(out.to_string_lossy().into_owned(), None).unwrap();
+    let restored = s.outline(reopened.id).unwrap();
+    assert_eq!(restored.iter().map(|entry| (&entry.title, entry.level, entry.page)).collect::<Vec<_>>(),
+        expected.iter().map(|entry| (&entry.title, entry.level, entry.page)).collect::<Vec<_>>());
+    assert_eq!(std::fs::read(&path).unwrap(), original);
+}
