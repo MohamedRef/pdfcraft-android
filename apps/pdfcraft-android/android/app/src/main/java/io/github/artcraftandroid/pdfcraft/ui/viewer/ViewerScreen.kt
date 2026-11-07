@@ -281,6 +281,7 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
                 vm.readAloud?.let { drawReadAloud(doc, it) }
                 drawSearchHits(doc)
                 drawSelection(doc)
+                vm.pendingMarkupPreview?.takeIf { it.doc === doc }?.let { drawPendingMarkup(it) }
                 drawLinkFlash(doc)
             },
         )
@@ -578,6 +579,24 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawSearchHits(doc:
                 topLeft = Offset(a.x - 1f, a.y - 1f),
                 size = Size(b.x - a.x + 2f, b.y - a.y + 2f),
             )
+        }
+    }
+}
+
+/** Visual bridge between selection dismissal and the updated native page raster. */
+private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawPendingMarkup(preview: PendingMarkupPreview) {
+    val doc = preview.doc
+    val c = preview.color
+    val alpha = preview.opacity.coerceIn(0f, 1f)
+    for (r in preview.rects) {
+        if (r.size != 4 || r.any { !it.isFinite() }) continue
+        val a = doc.viewer.pageToScreen(preview.page, r[0], r[1])
+        val b = doc.viewer.pageToScreen(preview.page, r[2], r[3])
+        if (b.x <= a.x || b.y <= a.y) continue
+        when (preview.markup) {
+            TextMarkup.Highlight -> drawRect(c.copy(alpha = 0.4f * alpha), a, Size(b.x - a.x, b.y - a.y))
+            TextMarkup.Underline -> drawLine(c.copy(alpha = alpha), Offset(a.x, b.y - 1f), Offset(b.x, b.y - 1f), 2f * density)
+            TextMarkup.Strikethrough -> drawLine(c.copy(alpha = alpha), Offset(a.x, (a.y + b.y) / 2f), Offset(b.x, (a.y + b.y) / 2f), 2f * density)
         }
     }
 }

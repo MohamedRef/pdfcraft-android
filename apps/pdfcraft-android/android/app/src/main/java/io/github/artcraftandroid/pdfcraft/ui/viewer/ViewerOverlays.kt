@@ -202,7 +202,8 @@ fun BoxScope.SelectionMenu(vm: AppViewModel, doc: OpenDocument, sel: Selection) 
     val allowed = doc.info.allowsAnnotation
     val prefs = vm.toolPrefs
     fun markup(m: TextMarkup) {
-        vm.addMarkup(doc, m, page, sel.rects, prefs.color(m.styled), prefs.opacity(m.styled))
+        if (!allowed) return
+        vm.addSelectedMarkup(doc, m, page, sel.rects, prefs.color(m.styled), prefs.opacity(m.styled))
         doc.selection.clear()
     }
     Column(
