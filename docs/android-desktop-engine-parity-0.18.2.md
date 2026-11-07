@@ -353,3 +353,5 @@ Reference behavior: https://feedback.xodo.com/support/solutions/articles/3500020
 
 - The original Xodo screenshot shows an annotator's left-side vertical palette and a separate customization state. Android PdfCraft already has a persistent drag/tap reordering UI for its bottom quick bar. This PR adds only a user-optional left/right **vertical quick toolbar** reusing the same saved set of actions and More tools. Existing bottom toolbar remains the default, and the active editor's safe sub-toolbar stays at the bottom; this is not a pixel-perfect clone nor a full Xodo tool family.
 - Changes are Compose UI and QuickToolbarPrefs only. Native engine, signed/protected document handling, PDF bytes/annotation persistence, S Pen pressure/eraser and previous highlight paths are unmodified. Current-head CI and real physical-device checks pending; no new per-feature APK.
+
+- Added handle-only rail drag with left/right edge snapping and persisted center-relative vertical offset; haptic feedback at grab and completed snap only, respecting OS haptic controls. No PDF pointer gesture interception. Requires Samsung S Pen/touch and window-resize QA.

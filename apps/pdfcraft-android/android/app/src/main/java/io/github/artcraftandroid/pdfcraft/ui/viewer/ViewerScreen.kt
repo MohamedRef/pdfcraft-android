@@ -32,6 +32,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -54,6 +55,8 @@ import androidx.compose.material3.Text
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.unit.IntOffset
+import kotlin.math.roundToInt
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
@@ -428,12 +431,33 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
                 }
             }
         }
+        // Drag a dedicated handle; snap to nearest edge, remember its vertical position.
+        // No drag listener is attached to tool buttons or the PDF canvas.
+        var railDragX by remember(doc) { mutableFloatStateOf(0f) }
+        var railDragY by remember(doc) { mutableFloatStateOf(0f) }
+        val viewportWidthPx = with(density) { config.screenWidthDp.dp.toPx() }
+        val railWidthPx = with(density) { 58.dp.toPx() }
+        val maxRailShiftPx = with(density) {
+            ((config.screenHeightDp.dp.toPx() - doc.viewer.padTop -
+                navPx - 400.dp.toPx()) / 2f).coerceAtLeast(0f)
+        }
+        val prefsRail = vm.quickToolbar
+        val storedYpx = with(density) { prefsRail.railYOffsetDp.dp.toPx() }
+        val railXpx = (
+            if (prefsRail.railRight) viewportWidthPx - railWidthPx else 0f
+        ) + railDragX
+        val clampedXpx = railXpx.coerceIn(0f, (viewportWidthPx - railWidthPx).coerceAtLeast(0f))
+        val clampedYpx = (storedYpx + railDragY).coerceIn(-maxRailShiftPx, maxRailShiftPx)
         // Optional Xodo-like dock: same saved shortcuts, accessible on left or right.
         // The normal bottom sub-toolbar remains available for active tools.
         AnimatedVisibility(
             visible = railVisible && ctl.barsVisible && !ctl.searching && !vm.readingMode &&
                 vm.readAloud == null && vm.fieldActions == null,
-            modifier = Modifier.align(if (vm.quickToolbar.railRight) Alignment.CenterEnd else Alignment.CenterStart)
+            modifier = Modifier.align(if (prefsRail.railRight) Alignment.CenterEnd else Alignment.CenterStart)
+                .offset {
+                    val initialX = if (prefsRail.railRight) viewportWidthPx - railWidthPx else 0f
+                    IntOffset((clampedXpx - initialX).roundToInt(), clampedYpx.roundToInt())
+                }
                 .padding(
                     top = with(density) { doc.viewer.padTop.toDp() },
                     bottom = with(density) { navPx.toDp() + 8.dp },
@@ -444,6 +468,20 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
                 onTool = { vm.runQuickTool(doc, it) },
                 onMoreTools = { ctl.sheet = if (ctl.sheet == ViewerSheet.MoreTools) ViewerSheet.None else ViewerSheet.MoreTools },
                 moreToolsOpen = ctl.sheet == ViewerSheet.MoreTools,
+                onHandleMove = { dx, dy ->
+                    railDragX += dx
+                    railDragY += dy
+                },
+                onHandleRelease = {
+                    prefsRail.setRailRight(clampedXpx + railWidthPx / 2f > viewportWidthPx / 2f)
+                    prefsRail.setRailYOffsetDp(with(density) { clampedYpx.toDp().value })
+                    railDragX = 0f
+                    railDragY = 0f
+                },
+                onHandleCancel = {
+                    railDragX = 0f
+                    railDragY = 0f
+                },
             )
         }
 

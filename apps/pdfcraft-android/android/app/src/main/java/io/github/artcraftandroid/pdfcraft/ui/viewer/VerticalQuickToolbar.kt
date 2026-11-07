@@ -3,10 +3,15 @@ package io.github.artcraftandroid.pdfcraft.ui.viewer
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
@@ -40,12 +45,17 @@ fun VerticalQuickToolbar(
     onTool: (QuickTool) -> Unit,
     onMoreTools: () -> Unit,
     moreToolsOpen: Boolean,
+    onHandleMove: (Float, Float) -> Unit,
+    onHandleRelease: () -> Unit,
+    onHandleCancel: () -> Unit,
 ) {
     val colors = pdfColors
+    val haptics = LocalHapticFeedback.current
+    val maxRailHeight = (LocalConfiguration.current.screenHeightDp - 150).coerceAtLeast(200).dp
     Column(
         Modifier
-            .fillMaxHeight()
-            .padding(vertical = 8.dp)
+            .heightIn(max = maxRailHeight)
+            .padding(vertical = 4.dp)
             .clip(RoundedCornerShape(10.dp))
             .background(colors.surface)
             .border(1.dp, colors.divider, RoundedCornerShape(10.dp))
@@ -54,6 +64,29 @@ fun VerticalQuickToolbar(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(3.dp),
     ) {
+        val dragTitle = stringResource(R.string.toolbar_drag_handle)
+        Box(
+            Modifier.size(width = 48.dp, height = 34.dp)
+                .pointerInput(Unit) {
+                    detectDragGestures(
+                        onDragStart = { haptics.performHapticFeedback(HapticFeedbackType.LongPress) },
+                        onDrag = { change, delta ->
+                            change.consume()
+                            onHandleMove(delta.x, delta.y)
+                        },
+                        onDragEnd = {
+                            onHandleRelease()
+                            // One tick at snap, never vibrate continuously while dragging.
+                            haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        },
+                        onDragCancel = { onHandleCancel() },
+                    )
+                }
+                .semantics { contentDescription = dragTitle },
+            contentAlignment = Alignment.Center,
+        ) {
+            Box(Modifier.size(width = 26.dp, height = 4.dp).background(colors.divider, RoundedCornerShape(3.dp)))
+        }
         for (tool in tools.distinct().take(8)) {
             RailTool(
                 icon = tool.icon,

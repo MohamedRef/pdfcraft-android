@@ -3,7 +3,7 @@
 ## XODO INSPIRED VERTICAL QUICK TOOLBAR — 2026-11-07 (PR pending)
 
 - Current main includes Highlight preview PR #45, merged `09f71fbe5422d58359f4cb12ecb5462bd784d442` after exact-head Rust, Android, title and aggregate CI. Native engine remains upstream v0.19.0.
-- Proposed standalone `feat/android-optional-vertical-quick-toolbar` adds an opt-in left/right dock in More tools, using the existing saved QuickToolbarPrefs bar order and the same tool actions. Bottom dock remains default; active-tool sub-toolbars stay on the bottom. No duplication of the existing drag-to-arrange customization, and no changes to PDF native editing, release version, permissions, updater or signing.
+- Proposed standalone `feat/android-optional-vertical-quick-toolbar` adds an opt-in left/right dock in More tools, using the existing saved QuickToolbarPrefs bar order and the same tool actions. A dedicated drag handle gives one haptic pulse at pickup and one at release/snap (respects device haptics); the bar snaps to its nearest edge, retains vertical placement and resets a cancelled drag. No continual vibration while moving. Bottom dock remains default; active-tool sub-toolbars stay on the bottom. No duplication of the existing drag-to-arrange customization, and no changes to PDF native editing, release version, permissions, updater or signing.
 - Must check exact-head Rust/provenance + Android JVM/ARM64 + PR title + aggregate CI before merge; physical phone, tablet, DeX, accessibility and touch/scroll QA pending. Follow-up work, not in this PR: customized sub-tool grouping, precise Xodo-style text drag and native Freehand Highlight. Do not claim full Xodo parity.
 
 

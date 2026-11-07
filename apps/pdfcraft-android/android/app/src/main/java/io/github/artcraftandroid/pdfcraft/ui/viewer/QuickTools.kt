@@ -115,6 +115,16 @@ class QuickToolbarPrefs(context: Context) {
     var railRight by mutableStateOf(prefs.getBoolean("railRight", false))
         private set
 
+    /** Center-relative vertical position in dp; clamped again at each viewport size. */
+    var railYOffsetDp by mutableStateOf(prefs.getFloat("railYOffsetDp", 0f).takeIf { it.isFinite() }?.coerceIn(-400f, 400f) ?: 0f)
+        private set
+
+    fun setRailYOffsetDp(value: Float) {
+        if (!value.isFinite()) return
+        railYOffsetDp = value.coerceIn(-400f, 400f)
+        prefs.edit().putFloat("railYOffsetDp", railYOffsetDp).apply()
+    }
+
     fun setRailMode(enabled: Boolean) {
         railMode = enabled
         prefs.edit().putBoolean("railMode", enabled).apply()
