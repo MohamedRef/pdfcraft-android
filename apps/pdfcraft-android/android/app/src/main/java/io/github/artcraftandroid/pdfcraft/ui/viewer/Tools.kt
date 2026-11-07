@@ -1,5 +1,19 @@
 package io.github.artcraftandroid.pdfcraft.ui.viewer
 
+
+import kotlinx.coroutines.flow.conflate
+import kotlinx.coroutines.flow.collect
+
+import io.github.artcraftandroid.pdfcraft.engine.userMessage
+
+import io.github.artcraftandroid.pdfcraft.engine.Engine
+
+import io.github.artcraftandroid.pdfcraft.core.MobileException
+
+import androidx.lifecycle.viewModelScope
+
+import androidx.compose.runtime.snapshotFlow
+
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -676,71 +690,177 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
     }
 }
 
+/** A gesture only holds coordinates; no native query runs on pointer down. */
+private class MarkupGesture(val start: PagePoint, val downScreen: Offset) {
+    var latest by mutableStateOf(start)
+    var moved by mutableStateOf(false)
+}
+
+/**
+ * Resolve both word endpoints and their rectangles on the native serial dispatcher.
+ * A tap marks its whole word; a drag snaps to word boundaries in either direction.
+ * The engine's wordAt has a bounded glyph hit box, unlike unrestricted nearestGlyph.
+ */
+private suspend fun resolveMarkup(
+    eng: Engine,
+    doc: OpenDocument,
+    start: PagePoint,
+    end: PagePoint,
+    slopPoints: Float,
+    tap: Boolean,
+): MarkupDrag? = withContext(eng.commands) {
+    if (start.page != end.page) return@withContext null
+    val page = start.page.toUInt()
+    val anchor = eng.session.wordAt(doc.id, page, start.x, start.y, slopPoints) ?: return@withContext null
+    // A drag ending slightly outside the last line still targets its nearest word.
+    // A tap deliberately does not use nearestGlyph: blank space must stay blank.
+    val focus = if (tap) anchor else {
+        eng.session.wordAt(doc.id, page, end.x, end.y, slopPoints) ?: run {
+            val glyph = eng.session.nearestGlyph(doc.id, page, end.x, end.y) ?: return@withContext null
+            val rect = eng.session.glyphRect(doc.id, page, glyph).toList()
+            if (!markupEndpointNearGlyph(end.x, end.y, rect, (slopPoints * 2f).coerceAtMost(40f)))
+                return@withContext null
+            val centerX = (minOf(rect[0], rect[2]) + maxOf(rect[0], rect[2])) / 2f
+            val centerY = (minOf(rect[1], rect[3]) + maxOf(rect[1], rect[3])) / 2f
+            eng.session.wordAt(doc.id, page, centerX, centerY, 0.1f)
+        }
+    }
+    val range = markupWordRange(anchor, focus) ?: return@withContext null
+    val rects = markupLineRects(eng.session.textRects(doc.id, range).toList())
+    if (rects.isEmpty()) null else MarkupDrag(range, rects)
+}
+
 @Composable
 private fun MarkupLayer(vm: AppViewModel, doc: OpenDocument) {
-    val scope = rememberCoroutineScope()
-    var drag by remember { mutableStateOf<MarkupDrag?>(null) }
-    var anchor by remember { mutableStateOf<Pair<Int, UInt>?>(null) }
-    var job by remember { mutableStateOf<Job?>(null) }
     val eng = vm.engine ?: return
-    val markup = doc.controller.markup
-    val color = vm.toolPrefs.color(markup.styled)
-    val opacity = vm.toolPrefs.opacity(markup.styled)
+    val scope = rememberCoroutineScope()
+    var drag by remember(doc) { mutableStateOf<MarkupDrag?>(null) }
+    var active by remember(doc) { mutableStateOf<MarkupGesture?>(null) }
+    var previewJob by remember(doc) { mutableStateOf<Job?>(null) }
+    var pendingTap by remember(doc) { mutableStateOf<Offset?>(null) }
+    var requestSerial by remember(doc) { androidx.compose.runtime.mutableIntStateOf(0) }
+    val marker = doc.controller.markup
+    val color = vm.toolPrefs.color(marker.styled)
+    val opacity = vm.toolPrefs.opacity(marker.styled)
+    val moveThresholdPx = with(LocalDensity.current) { 8.dp.toPx() }
+    val hitRadiusPx = with(LocalDensity.current) { 14.dp.toPx() }
 
-    fun extendTo(p: Offset) {
-        val (page, a) = anchor ?: return
-        val at = doc.viewer.screenToPage(p, nearest = true) ?: return
-        if (at.page != page) return
-        job?.cancel()
-        job = scope.launch {
-            val g = withContext(eng.commands) { eng.session.nearestGlyph(doc.id, page.toUInt(), at.x, at.y) } ?: return@launch
-            val s = minOf(a, g)
-            val e = maxOf(a, g) + 1u
-            val range = TextRange(page.toUInt(), s, e)
-            val rects = withContext(eng.commands) { eng.session.textRects(doc.id, range) }
-            drag = MarkupDrag(range, rects.toList().chunked(4).filter { it.size == 4 }.map { it.toFloatArray() })
-        }
+    fun resetPreview() {
+        active = null
+        previewJob?.cancel()
+        previewJob = null
+        drag = null
     }
 
     Box(
         Modifier.fillMaxSize().toolGestures(
             doc,
-            onDown = { p, _, _ ->
-                val at = doc.viewer.screenToPage(p) ?: return@toolGestures
-                scope.launch {
-                    val n = withContext(eng.commands) { eng.session.glyphCount(doc.id, at.page.toUInt()) }
-                    if (n == 0u) {
-                        vm.tell(text(R.string.toolbar_no_text_to_mark))
-                        return@launch
-                    }
-                    val g = withContext(eng.commands) { eng.session.nearestGlyph(doc.id, at.page.toUInt(), at.x, at.y) } ?: return@launch
-                    anchor = at.page to g
+            onDown = { screen, _, _ ->
+                requestSerial++
+                resetPreview()
+                pendingTap = screen
+                val start = doc.viewer.screenToPage(screen) ?: return@toolGestures
+                val gesture = MarkupGesture(start, screen)
+                active = gesture
+                // One native query at a time, skipping intermediate points. The initial
+                // word previews on finger-down; fast moves cannot starve the preview.
+                previewJob = scope.launch {
+                    snapshotFlow { gesture.latest to gesture.moved }
+                        .conflate()
+                        .collect { (end, moved) ->
+                            val radius = (hitRadiusPx / doc.viewer.pixelsPerPoint(start.page).coerceAtLeast(0.1f)).coerceIn(0.1f, 24f)
+                            val preview = resolveMarkup(eng, doc, start, end, radius, tap = !moved)
+                            if (active === gesture && gesture.latest == end && gesture.moved == moved) {
+                                drag = preview
+                                pendingTap = null
+                            }
+                        }
                 }
             },
-            onMove = { p, _, _ -> extendTo(p) },
-            onUp = { _, _ ->
-                val d = drag
-                drag = null
-                anchor = null
-                if (d != null && d.rects.isNotEmpty()) {
-                    // the sub-tool and its colour as they are now, not when the layer was made
-                    val m = doc.controller.markup
-                    vm.addMarkup(doc, m, d.range.page.toInt(), d.rects, vm.toolPrefs.color(m.styled), vm.toolPrefs.opacity(m.styled))
+            onMove = { screen, _, _ ->
+                val gesture = active ?: return@toolGestures
+                val at = doc.viewer.screenToPageOf(gesture.start.page, screen) ?: return@toolGestures
+                if ((screen - gesture.downScreen).getDistance() > moveThresholdPx) gesture.moved = true
+                if (drag == null) pendingTap = screen
+                gesture.latest = at
+            },
+            onUp = { screen, _ ->
+                val gesture = active ?: return@toolGestures
+                val end = doc.viewer.screenToPageOf(gesture.start.page, screen) ?: gesture.latest
+                val tap = !gesture.moved && (screen - gesture.downScreen).getDistance() <= moveThresholdPx
+                val page = gesture.start.page
+                val radius = (hitRadiusPx / doc.viewer.pixelsPerPoint(page).coerceAtLeast(0.1f)).coerceIn(0.1f, 24f)
+                val selectedMarkup = doc.controller.markup
+                val selectedColor = vm.toolPrefs.color(selectedMarkup.styled)
+                val selectedOpacity = vm.toolPrefs.opacity(selectedMarkup.styled)
+                val serial = requestSerial
+                active = null
+                previewJob?.cancel()
+                previewJob = null
+                // Keep the last correctly resolved preview visible until the final native
+                // selection is ready. A quick tap gets a small pending marker instead.
+                pendingTap = if (drag == null) screen else null
+                // Final selection is computed from the *release* position, not the last
+                // asynchronous preview. Keep the completed gesture alive if Done is tapped.
+                vm.viewModelScope.launch {
+                    var queued = false
+                    try {
+                        if (vm.document !== doc || !doc.info.allowsAnnotation) return@launch
+                        val selected = resolveMarkup(eng, doc, gesture.start, end, radius, tap)
+                        if (vm.document !== doc || !doc.info.allowsAnnotation) return@launch
+                        if (selected != null) {
+                            if (requestSerial == serial) {
+                                drag = selected
+                                pendingTap = null
+                            }
+                            queued = true
+                            vm.addMarkup(
+                                doc, selectedMarkup, selected.range.page.toInt(), selected.rects,
+                                selectedColor, selectedOpacity,
+                                onSettled = {
+                                    // The overlay stays visible while native save/refresh runs,
+                                    // preventing the old one-second blank flicker.
+                                    if (requestSerial == serial) {
+                                        pendingTap = null
+                                        drag = null
+                                    }
+                                },
+                            )
+                        } else if (tap) {
+                            val count = withContext(eng.commands) { eng.session.glyphCount(doc.id, page.toUInt()) }
+                            if (count == 0u && vm.document === doc) vm.tell(text(R.string.toolbar_no_text_to_mark))
+                        }
+                    } catch (e: MobileException) {
+                        if (vm.document === doc) vm.tell(e.userMessage)
+                    } finally {
+                        if (!queued && requestSerial == serial) {
+                            pendingTap = null
+                            drag = null
+                        }
+                    }
                 }
             },
             onCancel = {
-                drag = null
-                anchor = null
+                requestSerial++
+                pendingTap = null
+                resetPreview()
             },
         ),
     ) {
         Canvas(Modifier.fillMaxSize()) {
+            pendingTap?.let { point ->
+                drawCircle(
+                    color.copy(alpha = 0.65f),
+                    radius = 10.dp.toPx(), center = point,
+                    style = Stroke(width = 1.5.dp.toPx()),
+                )
+            }
             val d = drag ?: return@Canvas
             val page = d.range.page.toInt()
             for (r in d.rects) {
                 val a = doc.viewer.pageToScreen(page, r[0], r[1])
                 val b = doc.viewer.pageToScreen(page, r[2], r[3])
-                when (markup) {
+                when (marker) {
                     TextMarkup.Highlight -> drawRect(color.copy(alpha = 0.4f * opacity), a, Size(b.x - a.x, b.y - a.y))
                     TextMarkup.Underline -> drawLine(color.copy(alpha = opacity), Offset(a.x, b.y - 1f), Offset(b.x, b.y - 1f), 2.dp.toPx())
                     TextMarkup.Strikethrough -> drawLine(color.copy(alpha = opacity), Offset(a.x, (a.y + b.y) / 2f), Offset(b.x, (a.y + b.y) / 2f), 2.dp.toPx())

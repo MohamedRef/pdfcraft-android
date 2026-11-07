@@ -15,89 +15,127 @@ import kotlinx.coroutines.withContext
 data class Selection(val range: TextRange, val rects: List<FloatArray>, val startRect: FloatArray?, val endRect: FloatArray?)
 
 /**
- * Text selection: a long press selects the word under the finger, the handles at either end
- * extend it glyph by glyph, and a mouse drag selects the text it crosses. A selection stays on one page, as a phone screen shows one page's
- * text at a time.
+ * Selected text stays on one page. Long-press chooses a word, drag handles refine
+ * its bounds, and a desktop mouse can select a span.
  */
 @Stable
 class TextSelectionState(private val engine: Engine, private val doc: ULong, private val scope: CoroutineScope) {
     var selection by mutableStateOf<Selection?>(null)
         private set
 
-    /** Where a handle is being dragged (screen), for the magnifier over it; null when none is. */
     var magnifierAt by mutableStateOf<androidx.compose.ui.geometry.Offset?>(null)
 
-    /** The glyph the selection started from, which stays put while the other handle moves. */
-    private var anchor = 0
+    // Increment whenever a selection is cleared or superseded, so slow native
+    // responses cannot bring an old selection back after dismissal/navigation.
+    private var revision = 0
 
-    /** Select the word at [p]; false when there is no text there. */
+    /** Select the word at [p]; false if no text lies within [slopPoints]. */
     suspend fun selectWordAt(p: PagePoint, slopPoints: Float): Boolean {
-        val range = withContext(engine.commands) { engine.session.wordAt(doc, p.page.toUInt(), p.x, p.y, slopPoints) } ?: return false
-        anchor = range.start.toInt()
-        show(range)
-        return true
+        val id = ++revision
+        val range = withContext(engine.commands) {
+            engine.session.wordAt(doc, p.page.toUInt(), p.x, p.y, slopPoints)
+        } ?: return false
+        if (id != revision) return false
+        show(range, id)
+        return id == revision && selection?.range == range
     }
 
-    // the latest mouse drag waiting to be shown, and the work showing one (one at a time)
     private var span: Pair<PagePoint, PagePoint>? = null
     private var spanJob: Job? = null
 
-    /**
-     * A mouse drag from [from] to [to] on one page: the text between them, as a desktop selects.
-     * Moves arrive faster than the engine answers, so only the latest is shown.
-     */
+    /** Multiple mouse events are conflated to the newest endpoint. */
     fun selectSpan(from: PagePoint, to: PagePoint) {
+        if (from.page != to.page) return
         span = from to to
         if (spanJob?.isActive == true) return
+        val id = ++revision
         spanJob = scope.launch {
             while (true) {
                 val (a, b) = span ?: break
                 span = null
                 val page = a.page.toUInt()
                 val (ga, gb) = withContext(engine.commands) {
-                    engine.session.nearestGlyph(doc, page, a.x, a.y) to engine.session.nearestGlyph(doc, page, b.x, b.y)
+                    engine.session.nearestGlyph(doc, page, a.x, a.y) to
+                        engine.session.nearestGlyph(doc, page, b.x, b.y)
                 }
-                if (ga == null || gb == null) continue
-                anchor = ga.toInt()
-                show(TextRange(page, minOf(ga, gb), maxOf(ga, gb) + 1u))
+                if (id != revision) break
+                if (span != null || ga == null || gb == null) continue
+                show(TextRange(page, minOf(ga, gb), maxOf(ga, gb) + 1u), id)
             }
         }
     }
 
-    /** Select all the text of [page]. */
     fun selectPage(page: Int) {
+        val id = ++revision
         scope.launch {
             val n = withContext(engine.commands) { engine.session.glyphCount(doc, page.toUInt()) }
-            if (n == 0u) return@launch
-            anchor = 0
-            show(TextRange(page.toUInt(), 0u, n))
+            if (n == 0u || id != revision) return@launch
+            show(TextRange(page.toUInt(), 0u, n), id)
         }
     }
 
-    /** A handle moved to [p] on the selection's page: [start] says which one. */
+    private data class HandleMove(val start: Boolean, val point: PagePoint, val fixed: UInt)
+    private var handlePending: HandleMove? = null
+    private var handleJob: Job? = null
+    private var handleStart: Boolean? = null
+    private var fixedGlyph: UInt? = null
+
+    /** Capture the stationary end ONCE. It must not change when handles cross. */
+    fun beginHandleDrag(start: Boolean) {
+        val sel = selection ?: return
+        handleJob?.cancel()
+        handlePending = null
+        handleStart = start
+        fixedGlyph = if (start) sel.range.end - 1u else sel.range.start
+        ++revision
+    }
+
+    /** Leave the last requested endpoint to finish, but reset the next gesture's anchor. */
+    fun endHandleDrag() {
+        handleStart = null
+        fixedGlyph = null
+        magnifierAt = null
+    }
+
+    /** Only one native query at a time; retain the latest finger position. */
     fun dragHandle(start: Boolean, p: PagePoint) {
         val sel = selection ?: return
         if (p.page.toUInt() != sel.range.page) return
-        scope.launch {
-            val g = withContext(engine.commands) { engine.session.nearestGlyph(doc, sel.range.page, p.x, p.y) } ?: return@launch
-            val fixed = if (start) sel.range.end.toInt() - 1 else sel.range.start.toInt()
-            val a = minOf(fixed, g.toInt())
-            val b = maxOf(fixed, g.toInt()) + 1
-            anchor = fixed
-            show(TextRange(sel.range.page, a.toUInt(), b.toUInt()))
+        val fixed = if (handleStart == start) fixedGlyph else null
+        handlePending = HandleMove(
+            start, p, fixed ?: if (start) sel.range.end - 1u else sel.range.start,
+        )
+        if (handleJob?.isActive == true) return
+        val id = revision
+        handleJob = scope.launch {
+            while (true) {
+                val request = handlePending ?: break
+                handlePending = null
+                val g = withContext(engine.commands) {
+                    engine.session.nearestGlyph(doc, request.point.page.toUInt(), request.point.x, request.point.y)
+                } ?: continue
+                if (id != revision) break
+                if (handlePending != null) continue
+                val a = minOf(request.fixed, g)
+                val b = maxOf(request.fixed, g) + 1u
+                show(TextRange(request.point.page.toUInt(), a, b), id)
+            }
         }
     }
 
-    private suspend fun show(range: TextRange) {
-        val (rects, s, e) = withContext(engine.commands) {
+    /** Native text/geometry is validated before it becomes visible on screen. */
+    private suspend fun show(range: TextRange, id: Int) {
+        val (rects, start, end) = withContext(engine.commands) {
             Triple(
                 engine.session.textRects(doc, range),
                 engine.session.glyphRect(doc, range.page, range.start),
-                engine.session.glyphRect(doc, range.page, if (range.end > range.start) range.end - 1u else range.start),
+                engine.session.glyphRect(doc, range.page, range.end - 1u),
             )
         }
-        selection = Selection(range, rects.toList().chunked(4).filter { it.size == 4 }.map { it.toFloatArray() },
-            s.takeIf { it.size == 4 }?.toFloatArray(), e.takeIf { it.size == 4 }?.toFloatArray())
+        if (id != revision) return
+        val boxes = markupLineRects(rects.toList())
+        if (boxes.isEmpty() || start.size != 4 || end.size != 4) return
+        selection = Selection(range, boxes, start.toFloatArray(), end.toFloatArray())
     }
 
     suspend fun text(): String? {
@@ -106,6 +144,16 @@ class TextSelectionState(private val engine: Engine, private val doc: ULong, pri
     }
 
     fun clear() {
+        ++revision
         selection = null
+        magnifierAt = null
+        span = null
+        spanJob?.cancel()
+        spanJob = null
+        handlePending = null
+        handleJob?.cancel()
+        handleJob = null
+        handleStart = null
+        fixedGlyph = null
     }
 }

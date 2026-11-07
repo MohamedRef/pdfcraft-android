@@ -386,31 +386,48 @@ fun BoxScope.SelectionHandles(doc: OpenDocument, sel: Selection) {
     val page = sel.range.page.toInt()
     val density = LocalDensity.current
     val size = with(density) { 20.dp.toPx() }
-    // the reference's handles: 20 dp drops in one blue in both themes
     val blue = Color(0xFF4285F4)
     val startLabel = stringResource(R.string.viewer_selection_start)
     val endLabel = stringResource(R.string.viewer_selection_end)
     for (start in listOf(true, false)) {
         val r = (if (start) sel.startRect else sel.endRect) ?: continue
-        // the handle hangs from the line's bottom, at its outer edge
+        // The handle is positioned from the latest selected glyph, but its gesture
+        // coordinates use a stable target captured at drag start. Recomposition as
+        // the selected range changes must never reset the accumulated movement.
         val anchor = doc.viewer.pageToScreen(page, if (start) r[0] else r[2], r[3])
-        val lineHeight = doc.viewer.pageToScreen(page, r[0], r[3]).y - doc.viewer.pageToScreen(page, r[0], r[1]).y
-        var drag by remember(sel.range, start) { mutableStateOf(Offset.Zero) }
         Box(
             Modifier
                 .offset { IntOffset((anchor.x - size / 2f).roundToInt(), anchor.y.roundToInt()) }
                 .size(20.dp)
-                .pointerInput(sel.range.page, start) {
+                .pointerInput(doc, page, start) {
+                    var target = Offset.Zero
                     detectDragGestures(
-                        onDragEnd = { drag = Offset.Zero; doc.selection.magnifierAt = null },
-                        onDragCancel = { drag = Offset.Zero; doc.selection.magnifierAt = null },
-                    ) { change, d ->
+                        onDragStart = {
+                            val latest = doc.selection.selection
+                            val rect = (if (start) latest?.startRect else latest?.endRect)
+                            if (rect != null && latest?.range?.page?.toInt() == page) {
+                                val at = doc.viewer.pageToScreen(page, if (start) rect[0] else rect[2], rect[3])
+                                val top = doc.viewer.pageToScreen(page, rect[0], rect[1]).y
+                                target = Offset(at.x, (at.y + top) / 2f)
+                                doc.selection.beginHandleDrag(start)
+                                doc.selection.magnifierAt = target
+                            } else target = Offset.Unspecified
+                        },
+                        onDragEnd = {
+                            doc.selection.endHandleDrag()
+                            doc.selection.magnifierAt = null
+                        },
+                        onDragCancel = {
+                            doc.selection.endHandleDrag()
+                            doc.selection.magnifierAt = null
+                        },
+                    ) { change, delta ->
                         change.consume()
-                        drag += d
-                        // aim at the middle of the line the handle is under
-                        val target = Offset(anchor.x, anchor.y - lineHeight / 2f) + drag
-                        doc.selection.magnifierAt = target
-                        doc.viewer.screenToPage(target, nearest = true)?.let { doc.selection.dragHandle(start, it) }
+                        if (target.x.isFinite() && target.y.isFinite()) {
+                            target += delta
+                            doc.selection.magnifierAt = target
+                            doc.viewer.screenToPageOf(page, target)?.let { doc.selection.dragHandle(start, it) }
+                        }
                     }
                 }
                 .semantics { contentDescription = if (start) startLabel else endLabel },
@@ -418,8 +435,7 @@ fun BoxScope.SelectionHandles(doc: OpenDocument, sel: Selection) {
             androidx.compose.foundation.Canvas(Modifier.fillMaxSize()) {
                 val rad = this.size.width / 2f
                 drawCircle(blue, rad, Offset(rad, rad * 1.1f))
-                // the point of the drop reaches up to the text
-                drawRect(blue, topLeft = if (start) Offset(rad, 0f) else Offset(0f, 0f), size = androidx.compose.ui.geometry.Size(rad, rad))
+                drawRect(blue, topLeft = Offset(if (start) rad else 0f, 0f), size = androidx.compose.ui.geometry.Size(rad, rad))
             }
         }
     }

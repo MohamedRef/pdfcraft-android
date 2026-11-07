@@ -474,7 +474,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
      * Run engine tool [name] on [doc] (its `doc` argument is filled in), then refresh. [onDone]
      * gets the result; a refusal is told in a snackbar.
      */
-    fun runTool(doc: OpenDocument, name: String, args: Map<String, Any?> = emptyMap(), onDone: (JSONObject) -> Unit = {}) {
+    fun runTool(doc: OpenDocument, name: String, args: Map<String, Any?> = emptyMap(), onSettled: (() -> Unit)? = null, onDone: (JSONObject) -> Unit = {}) {
         val eng = engine ?: return
         viewModelScope.launch {
             try {
@@ -483,6 +483,8 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 onDone(r)
             } catch (e: MobileException) {
                 tell(e.userMessage)
+            } finally {
+                onSettled?.invoke()
             }
         }
     }
@@ -1046,7 +1048,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     private val author: String? get() = toolPrefs.author.ifBlank { null }
 
     /** Mark text with [markup]: [rects] (points, one per line) on [page]. */
-    fun addMarkup(doc: OpenDocument, markup: TextMarkup, page: Int, rects: List<FloatArray>, color: androidx.compose.ui.graphics.Color, opacity: Float, contents: String? = null) {
+    fun addMarkup(doc: OpenDocument, markup: TextMarkup, page: Int, rects: List<FloatArray>, color: androidx.compose.ui.graphics.Color, opacity: Float, contents: String? = null, onSettled: (() -> Unit)? = null) {
         val quads = rects.map { r -> listOf(r[0], r[1], r[2], r[1], r[0], r[3], r[2], r[3]).map { it.toDouble() } }
         runTool(
             doc, "comment_add",
@@ -1054,6 +1056,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 "page" to page + 1, "type" to markup.engineType, "quads" to quads,
                 "color" to color.hex(), "opacity" to opacity.toDouble(), "author" to author, "contents" to contents,
             ),
+            onSettled = onSettled,
         )
     }
 
