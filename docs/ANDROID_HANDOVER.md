@@ -1,5 +1,14 @@
 # PdfCraft Android - development handover
 
+## ACTIVE NEXT BATCH — draft ink lasso and movement (2026-11-07)
+
+- **Current product source:** merged upstream v0.19.0 (#37), multi-document Bates (#38), favorite pens (#39) and release-preparation (#40); main `69c40cfadd3d0763d9bb940587658fc584d6d2c3` passed push CI 42369115173. There were no open PRs at batch start.
+- **Signed release still in progress:** explicit workflow dispatch [42370494659](https://github.com/MohamedRef/pdfcraft-android/actions/runs/42370494659) on main for 0.0.12-beta, expected ARM64 manifest code 12012. Rust and Android JVM stages succeeded, but signed APK packaging/publication was still running at this checkpoint. Do not call 0.0.12-beta published until the actual release/artifact/signing/digest are verified.
+- **Next feature branch:** `feat/android-draft-ink-lasso-move`, based on the tested main source; adds a Draw lasso mode to select and move **uncommitted** ink only. Does not yet select embedded/saved PDF ink annotations, resize ink, or edit engine data. Existing pen/eraser/stylus/pressure/favorites/save behavior is intentionally retained. New draft edits have ordered Undo/Redo and bounded same-page moves; cancel discards unfinished selections/moves without native edits.
+- **Verification pending:** new lasso geometry JVM regressions plus existing full Android JVM and Rust/provenance/current-head aggregate CI; real S Pen/gesture/multi-window/device and save/reopen QA remain necessary. No per-PR APK, no version change or extra release while the previous batch is publishing. After checks, merge this PR alone, then start subsequent stylus feature work as a separate PR.
+- **Next planned pieces:** safe resize of unsaved ink, then a separate assessed native edit workflow for saved PDF Ink annotations. Large PDF opening versus Xodo is still unmeasured on the actual owner's same-file Samsung setup. Protect private files and provider recovery; never claim a speedup from host-only results.
+
+
 ## VERIFIED MERGE CHECKPOINT — 2026-11-07, next beta awaiting signed publication
 
 - **Upstream engine:** PR [#37](https://github.com/MohamedRef/pdfcraft-android/pull/37) merged into main at `552aed9504b0764b0818bdeb72543abdc227f768`; exact-head Rust/provenance and Android JVM CI [42355818983](https://github.com/MohamedRef/pdfcraft-android/actions/runs/42355818983) passed. Current source pins stable PdfCraft v0.19.0, with reviewed Android adaptations.
