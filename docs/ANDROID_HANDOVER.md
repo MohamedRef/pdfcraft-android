@@ -1,5 +1,14 @@
 # PdfCraft Android - development handover
 
+## 0.0.13-beta (13012) — release preparation (2026-11-07, not yet published)
+
+- Current public version before this batch: `0.0.12-beta (12012)`, tag `v0.0.12-beta`. Never append `.1` after `beta`.
+- Features in batch: merged #41 draft ink lasso select/move; merged #43 reliable Highlight/selection; merged #44 scanned page enhancement; merged #45 persistent selection-menu preview; pending #46 optional draggable left/right quick rail with snap and haptics.
+- Proposed release PR is **stacked on PR #46**, and must **not be merged** until #46 passes exact-head Rust, Android JVM and merge-gate checks, merges to main and source is verified. Then retarget release PR to main, verify latest-head CI and merge with squash **title exactly** `chore(release): publish 0.0.13-beta (13012)`.
+- One-time automation in `.github/workflows/android-update.yml` allows that *exact* main push to run the existing signed publishing job. Every other push remains tests-only; manual dispatch still works for normal future releases. The release job validates `pdfcraft.version=0.0.13-beta`, `pdfcraft.versionCode=1301`, Rust/provenance/Android tests, the original PKCS#12 signing certificate, ARM64 package/manifest and SHA-256 before publishing tag `v0.0.13-beta`. Do not rotate keys. No separate tag push or duplicate APK pipeline.
+- Per-version owner-reviewed notes are `docs/releases/0.0.13-beta.md`; check the completed signed main Actions run and *actual* public GitHub Release + signed APK/sidecar before declaring download available. Device upgrade, S Pen haptics, tablet/DeX and Xodo speed remain physically unverified.
+
+
 ## XODO INSPIRED VERTICAL QUICK TOOLBAR — 2026-11-07 (PR pending)
 
 - Current main includes Highlight preview PR #45, merged `09f71fbe5422d58359f4cb12ecb5462bd784d442` after exact-head Rust, Android, title and aggregate CI. Native engine remains upstream v0.19.0.

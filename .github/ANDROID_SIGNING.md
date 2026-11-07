@@ -40,6 +40,10 @@ If the original keystore or password has been lost, GitHub cannot recover them f
 
 If **no APK has been distributed or installed**, you can rotate to a new signing identity. Generate a fresh PKCS#12 on a trusted local machine, replace all four signing secrets, and replace the optional `PDFCRAFT_CERT_SHA256` Actions variable with its new public fingerprint if one is already set. After the first release, configure the pin so future releases cannot accidentally change signing identity. Back up the PKCS#12 securely for future updates. An exposed keystore and password should not be reused for a public release.
 
+## One-time controlled release after PR #46 (0.0.13-beta only)
+
+The `0.0.13-beta (13012)` release preparation PR stages a one-time, exact-squash-commit-title trigger on a `main` push: `chore(release): publish 0.0.13-beta (13012)`. Only this title combined with `refs/heads/main` enables the existing signed job automatically; every other push still runs tests only, and manual `workflow_dispatch` remains available for later releases. The job also checks the release properties match 0.0.13-beta/1301, runs Rust and Android JVM tests, validates the existing original signer, packages arm64 and verifies actual APK certificate, package, build code and digest before creating the tag and public prerelease. This one-time release route does not bypass signing or CI and must not be used on a PR event. If a gate fails, stop and fix it rather than manufacturing a release.
+
 ## Pull requests and merge protection
 
 Owner policy (2026-11-06): work in batches of three PRs. Each PR must pass `rust-tests` (including provenance), `android-tests` (JVM/regressions) and `Merge gate (Rust and Android)` plus the title check. JVM tests may compile the native library to generate matching UniFFI bindings; they do not package a release APK.
