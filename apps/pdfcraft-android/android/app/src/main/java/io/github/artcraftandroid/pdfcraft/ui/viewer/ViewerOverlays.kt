@@ -423,7 +423,7 @@ fun BoxScope.SelectionHandles(doc: OpenDocument, sel: Selection) {
                         },
                     ) { change, delta ->
                         change.consume()
-                        if (target.isSpecified) {
+                        if (target.x.isFinite() && target.y.isFinite()) {
                             target += delta
                             doc.selection.magnifierAt = target
                             doc.viewer.screenToPageOf(page, target)?.let { doc.selection.dragHandle(start, it) }
