@@ -279,6 +279,9 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
     val strokes = remember { mutableStateListOf<InkStroke>() }
     // strokes taken back, for redo; a new stroke clears them
     val undone = remember { mutableStateListOf<InkStroke>() }
+    val lassoPoints = remember { mutableStateListOf<Offset>() }
+    var lassoPage by remember { mutableStateOf<Int?>(null) }
+    var selectedInk by remember { mutableStateOf<Set<InkStroke>>(emptySet()) }
     var current by remember { mutableStateOf<InkStroke?>(null) }
     val prefs = vm.toolPrefs
     // Capture appearance at pointer down. Adjacent matching strokes may share an annotation.
@@ -308,6 +311,9 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
             vm.runToolBatch(doc, "comment_add", commands)
             strokes.clear()
             undone.clear()
+            lassoPoints.clear()
+            lassoPage = null
+            selectedInk = emptySet()
         }
         doc.localUndo = LocalUndo(
             // Draw edits are local until committed. The eraser commits them first and then
@@ -315,7 +321,11 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
             canUndo = { strokes.isNotEmpty() || doc.info.undo != null },
             canRedo = { undone.isNotEmpty() || doc.info.redo != null },
             undo = {
-                if (strokes.isNotEmpty()) undone.add(strokes.removeAt(strokes.lastIndex))
+                if (strokes.isNotEmpty()) {
+                    val removed = strokes.removeAt(strokes.lastIndex)
+                    selectedInk = selectedInk - removed
+                    undone.add(removed)
+                }
                 else if (doc.info.undo != null) vm.runTool(doc, "edit_undo")
             },
             redo = {
@@ -346,6 +356,45 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
     // Preview only: hovering never inserts annotation points or touches document history.
     var hoverPosition by remember(doc) { mutableStateOf<Offset?>(null) }
     var hoverEraser by remember(doc) { mutableStateOf(false) }
+
+    fun beginLasso(p: Offset) {
+        val at = doc.viewer.screenToPage(p) ?: return
+        lassoPage = at.page
+        lassoPoints.clear()
+        lassoPoints.add(Offset(at.x, at.y))
+        selectedInk = emptySet()
+    }
+
+    fun moveLasso(p: Offset) {
+        val page = lassoPage ?: return
+        val at = doc.viewer.screenToPage(p, nearest = true) ?: return
+        if (at.page != page) return
+        val point = Offset(at.x, at.y)
+        if (point == lassoPoints.lastOrNull()) return
+        if (lassoPoints.size >= 512) {
+            val sampled = lassoPoints.filterIndexed { i, _ -> i % 2 == 0 }
+            lassoPoints.clear()
+            lassoPoints.addAll(sampled)
+        }
+        lassoPoints.add(point)
+    }
+
+    fun finishLasso(p: Offset) {
+        val page = lassoPage ?: return
+        moveLasso(p)
+        val outline = lassoPoints.toList()
+        selectedInk = strokes.filter { stroke ->
+            stroke !== current && stroke.page == page &&
+                lassoEnclosesStroke(outline, stroke.points.toList())
+        }.toSet()
+        lassoPage = null
+        lassoPoints.clear()
+    }
+
+    fun cancelLasso() {
+        lassoPage = null
+        lassoPoints.clear()
+    }
 
     fun beginErase(p: Offset) {
         val at = doc.viewer.screenToPage(p) ?: return
@@ -416,6 +465,10 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
             doc,
             penOnly = prefs.stylusOnly,
             onDown = { p, pressure, isStylus ->
+                if (doc.controller.lassoMode) {
+                    beginLasso(p)
+                    return@toolGestures
+                }
                 if (doc.controller.eraserMode) {
                     beginErase(p)
                     return@toolGestures
@@ -431,6 +484,10 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                 }
             },
             onMove = { p, pressure, _ ->
+                if (doc.controller.lassoMode) {
+                    moveLasso(p)
+                    return@toolGestures
+                }
                 if (eraserPage != null) {
                     moveErase(p)
                     return@toolGestures
@@ -448,6 +505,10 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                 }
             },
             onUp = { p, _ ->
+                if (doc.controller.lassoMode) {
+                    finishLasso(p)
+                    return@toolGestures
+                }
                 if (eraserPage != null) {
                     finishErase(p)
                     return@toolGestures
@@ -471,6 +532,7 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                 }
             },
             onCancel = {
+                if (doc.controller.lassoMode) cancelLasso()
                 if (eraserPage != null) cancelErase()
                 current?.let { strokes.remove(it) }
                 current = null
@@ -499,6 +561,27 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                         style = Stroke(width = run.width * doc.viewer.pixelsPerPoint(s.page), cap = StrokeCap.Round, join = StrokeJoin.Round),
                     )
                 }
+            }
+            for (stroke in selectedInk) {
+                val bounds = inkSelectionBounds(listOf(stroke.points.toList())) ?: continue
+                val corner1 = doc.viewer.pageToScreen(stroke.page, bounds.left, bounds.top)
+                val corner2 = doc.viewer.pageToScreen(stroke.page, bounds.right, bounds.bottom)
+                drawRect(
+                    Color(0xFF3884DE),
+                    topLeft = Offset(minOf(corner1.x, corner2.x), minOf(corner1.y, corner2.y)),
+                    size = Size(kotlin.math.abs(corner2.x - corner1.x).coerceAtLeast(1f),
+                        kotlin.math.abs(corner2.y - corner1.y).coerceAtLeast(1f)),
+                    style = Stroke(width = 1.5.dp.toPx()),
+                )
+            }
+            val currentLassoPage = lassoPage
+            if (currentLassoPage != null && lassoPoints.size > 1) {
+                val outline = Path()
+                for ((index, point) in lassoPoints.withIndex()) {
+                    val screen = doc.viewer.pageToScreen(currentLassoPage, point.x, point.y)
+                    if (index == 0) outline.moveTo(screen.x, screen.y) else outline.lineTo(screen.x, screen.y)
+                }
+                drawPath(outline, Color(0xFF3884DE), style = Stroke(width = 1.5.dp.toPx()))
             }
             val page = eraserPage
             val screen = eraserScreen
@@ -624,8 +707,9 @@ fun ToolSubToolbar(vm: AppViewModel, doc: OpenDocument) {
         ViewerTool.Draw -> SubToolbar {
             val snapOn = stringResource(R.string.toolbar_snap_on)
             val snapOff = stringResource(R.string.toolbar_snap_off)
-            SubTool(LucideIcons.PenLine, stringResource(R.string.toolbar_draw_freeform), !ctl.eraserMode, { ctl.eraserMode = false })
-            SubTool(LucideIcons.Eraser, stringResource(R.string.toolbar_eraser), ctl.eraserMode, { ctl.eraserMode = true })
+            SubTool(LucideIcons.PenLine, stringResource(R.string.toolbar_draw_freeform), !ctl.eraserMode && !ctl.lassoMode, { ctl.eraserMode = false; ctl.lassoMode = false })
+            SubTool(LucideIcons.Eraser, stringResource(R.string.toolbar_eraser), ctl.eraserMode && !ctl.lassoMode, { ctl.eraserMode = true; ctl.lassoMode = false })
+            SubTool(LucideIcons.Lasso, stringResource(R.string.ink_lasso_select), ctl.lassoMode, { ctl.lassoMode = true; ctl.eraserMode = false })
             SubTool(LucideIcons.PenLine, stringResource(R.string.toolbar_stylus_only), prefs.stylusOnly, {
                 prefs.updateStylusOnly(!prefs.stylusOnly)
             })
