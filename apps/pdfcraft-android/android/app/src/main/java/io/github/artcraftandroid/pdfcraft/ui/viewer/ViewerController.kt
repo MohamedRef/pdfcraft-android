@@ -53,6 +53,8 @@ class ViewerController {
     var commentMode by mutableStateOf(CommentMode.Text)
     /** Drawing sub-tool. Stylus eraser/button may temporarily override it per gesture. */
     var eraserMode by mutableStateOf(false)
+    /** Lasso selects uncommitted ink only; native PDF annotations remain untouched. */
+    var lassoMode by mutableStateOf(false)
 
     var sheet by mutableStateOf(ViewerSheet.None)
 
@@ -89,7 +91,7 @@ class ViewerController {
     /** Switch to [t]; tapping the active tool again goes back to plain viewing. */
     fun switchTool(t: ViewerTool) {
         tool = if (tool == t) ViewerTool.None else t
-        if (tool != ViewerTool.Draw) eraserMode = false
+        if (tool != ViewerTool.Draw) { eraserMode = false; lassoMode = false }
         picker = Picker.None
         signPanel = false
         barsVisible = true
