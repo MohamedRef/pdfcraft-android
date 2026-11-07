@@ -1,5 +1,9 @@
 # PdfCraft Android - development handover
 
+## Owner scope update — 2026-11-07 (Cairo)
+
+The owner now explicitly requires all open feature/fix PRs #30/#31/#32/#34 merged and one shared signed release with the existing bookmark/tablet batch. Earlier next-batch/exclusion statements are historical and superseded. Keep candidate `0.0.11-beta (11012)` (expected until signed manifest verification), synchronize/test the complete stack, update release notes, verify final main and publish one APK. No release was dispatched before this scope change. Physical Samsung/Xodo/provider evidence remains separate.
+
 ## LIVE CHECKPOINT — 2026-11-06: bookmark/tablet batch merged, release preparation
 
 This checkpoint replaces earlier live summaries. Earlier snapshots below are historical; recheck current GitHub heads and checks before acting.
