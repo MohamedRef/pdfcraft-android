@@ -714,7 +714,7 @@ private suspend fun resolveMarkup(
     val anchor = eng.session.wordAt(doc.id, page, start.x, start.y, slopPoints) ?: return@withContext null
     val focus = if (tap) anchor else eng.session.wordAt(doc.id, page, end.x, end.y, slopPoints)
     val range = markupWordRange(anchor, focus) ?: return@withContext null
-    val rects = markupLineRects(eng.session.textRects(doc.id, range))
+    val rects = markupLineRects(eng.session.textRects(doc.id, range).toList())
     if (rects.isEmpty()) null else MarkupDrag(range, rects)
 }
 
