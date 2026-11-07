@@ -193,7 +193,7 @@ internal suspend fun downloadAndVerifyApk(
     if (!dir.isDirectory && !dir.mkdirs()) throw IOException("Cannot create the update download folder.")
     if (update.size !in 1..MAX_APK_BYTES ||
         update.assetName != "pdfcraft-android-${update.version}.apk" ||
-        !Regex("""pdfcraft-android-[0-9][0-9A-Za-z.\\-]*\\.apk""").matches(update.assetName)
+        !Regex("""pdfcraft-android-[0-9][0-9A-Za-z.\-]*\.apk""").matches(update.assetName)
     ) throw IOException("Untrusted update metadata.")
 
     val partial = File(dir, apkPartialFileName(update.sha256))
@@ -275,7 +275,7 @@ internal suspend fun downloadAndVerifyApk(
             }
             var received = resumed
             connection.inputStream.use { stream ->
-                partial.outputStream(append = resumed > 0L).buffered().use { output ->
+                java.io.FileOutputStream(partial, resumed > 0L).buffered().use { output ->
                     val buffer = ByteArray(64 * 1024)
                     while (true) {
                         currentCoroutineContext().ensureActive()
