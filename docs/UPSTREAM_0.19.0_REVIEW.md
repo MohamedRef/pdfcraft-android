@@ -1,6 +1,6 @@
 # Desktop v0.19.0 — Android impact review
 
-**Current development update:** Dedicated [upgrade PR #37](https://github.com/MohamedRef/pdfcraft-android/pull/37) now imports the selected v0.19.0 source with preserved Android adaptations; final checks/merge are pending. See [upgrade evidence](ANDROID_ENGINE_0.19.0_UPGRADE.md). The assessment below records the original pre-upgrade comparison; published 0.0.11-beta (11012) remains the v0.18.2 binary.
+**Current development update:** Dedicated [upgrade PR #37](https://github.com/MohamedRef/pdfcraft-android/pull/37) merged the selected v0.19.0 source with preserved Android adaptations after successful exact-head and post-main checks. See [upgrade evidence](ANDROID_ENGINE_0.19.0_UPGRADE.md). The assessment below records the original pre-upgrade comparison; published 0.0.11-beta (11012) remains the v0.18.2 binary.
 
 Verified 2026-11-07 (Cairo) using the upstream GitHub release, immutable tag and code comparison. This is a review, not an engine upgrade or a runtime-parity claim.
 
