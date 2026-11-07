@@ -467,3 +467,109 @@ fn form_scripts_run_when_fields_are_filled_and_buttons_pressed() {
     assert_eq!(big["alerts"].as_array().map(Vec::len), Some(1), "{big}");
     assert_eq!(big["alerts"][0]["message"], "Big", "{big}");
 }
+
+
+/// Exercise the exact headless route used by the opt-in Android backgrounds panel.
+#[test]
+fn backdrop_inspection_is_scoped_and_does_not_edit_the_document() {
+    use serde_json::{Value, json};
+    let fill = "q 1 g 0 0 612 792 re f Q";
+    let image = "q 612 0 0 792 0 0 cm /Im Do Q";
+    let objects = vec![
+        "<< /Type /Catalog /Pages 2 0 R >>".to_string(),
+        "<< /Type /Pages /Kids [3 0 R 4 0 R 5 0 R] /Count 3 /MediaBox [0 0 612 792] >>".into(),
+        "<< /Type /Page /Parent 2 0 R /Contents 6 0 R >>".into(),
+        "<< /Type /Page /Parent 2 0 R /Contents 7 0 R /Resources << /XObject << /Im 8 0 R >> >> >>".into(),
+        "<< /Type /Page /Parent 2 0 R >>".into(),
+        format!("<< /Length {} >>\nstream\n{fill}\nendstream", fill.len()),
+        format!("<< /Length {} >>\nstream\n{image}\nendstream", image.len()),
+        "<< /Type /XObject /Subtype /Image /Width 1 /Height 1 /ColorSpace /DeviceGray /BitsPerComponent 8 /Filter /ASCIIHexDecode /Length 3 >>\nstream\nFF>\nendstream".into(),
+    ];
+    let mut bytes = b"%PDF-1.7\n".to_vec();
+    let mut offsets = Vec::new();
+    for (i, object) in objects.iter().enumerate() {
+        offsets.push(bytes.len());
+        bytes.extend_from_slice(format!("{} 0 obj\n{object}\nendobj\n", i + 1).as_bytes());
+    }
+    let xref = bytes.len();
+    bytes.extend_from_slice(format!("xref\n0 {}\n0000000000 65535 f \n", objects.len() + 1).as_bytes());
+    for offset in offsets {
+        bytes.extend_from_slice(format!("{offset:010} 00000 n \n").as_bytes());
+    }
+    bytes.extend_from_slice(format!("trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n", objects.len() + 1).as_bytes());
+    let dir = scratch();
+    let path = dir.join("backgrounds.pdf");
+    std::fs::write(&path, &bytes).unwrap();
+    let s = MobileSession::new();
+    let doc = s.open(path.to_string_lossy().into_owned(), None).unwrap();
+    let inspect = |pages: Value| -> Value {
+        serde_json::from_str(&s.execute("doc_backdrops".into(), json!({"doc": doc.id, "pages": pages}).to_string()).unwrap()).unwrap()
+    };
+    assert_eq!(inspect(json!([1, 2, 3]))["pages"], json!([
+        {"page": 1, "backdrop": "fill"}, {"page": 2, "backdrop": "image"},
+    ]));
+    assert_eq!(inspect(json!([2]))["pages"], json!([{"page": 2, "backdrop": "image"}]));
+    assert_eq!(inspect(json!([3]))["pages"], json!([]));
+    assert!(s.execute("doc_backdrops".into(), json!({"doc": doc.id, "pages": [4]}).to_string()).is_err());
+    let after = s.document(doc.id).unwrap();
+    assert_eq!(after.generation, doc.generation);
+    assert!(!after.dirty);
+    assert!(after.undo.is_none());
+    assert_eq!(std::fs::read(&path).unwrap(), bytes);
+    std::fs::remove_dir_all(dir).unwrap();
+}
+
+
+#[test]
+fn style_bookmarks_append_undo_and_survive_save_through_mobile_tools() {
+    let s = MobileSession::new();
+    let path = text_pdf("Heading\nBody text");
+    let original = std::fs::read(&path).unwrap();
+    let doc = s.open(path.clone(), None).unwrap().id;
+    s.execute("bookmark_add".into(), json!({"doc": doc, "title": "Keep", "page": 1}).to_string()).unwrap();
+    let before = s.document(doc).unwrap();
+    let styles: Value = serde_json::from_str(&s.execute("text_styles".into(), json!({"doc": doc}).to_string()).unwrap()).unwrap();
+    assert_eq!(s.document(doc).unwrap().generation, before.generation, "style analysis is read-only");
+    let style = styles["styles"].as_array().unwrap().first().unwrap();
+    let level = json!({"font": style["font"], "size": style["size"], "bold": style["bold"], "italic": style["italic"]});
+    s.execute("bookmark_from_text_styles".into(), json!({"doc": doc, "levels": [level]}).to_string()).unwrap();
+    let expected = s.outline(doc).unwrap();
+    assert_eq!(expected[0].title, "Untitled");
+    assert!(expected.iter().any(|entry| entry.title == "Keep"));
+    assert!(expected.len() >= 3);
+    s.execute("edit_undo".into(), json!({"doc": doc}).to_string()).unwrap();
+    assert_eq!(s.outline(doc).unwrap().iter().map(|entry| entry.title.as_str()).collect::<Vec<_>>(), ["Keep"]);
+    s.execute("edit_redo".into(), json!({"doc": doc}).to_string()).unwrap();
+    let out = scratch().join("style-bookmarks.pdf");
+    s.execute("doc_save".into(), json!({"doc": doc, "path": out}).to_string()).unwrap();
+    s.close(doc, true).unwrap();
+    let reopened = s.open(out.to_string_lossy().into_owned(), None).unwrap();
+    let restored = s.outline(reopened.id).unwrap();
+    assert_eq!(restored.iter().map(|entry| (&entry.title, entry.level, entry.page)).collect::<Vec<_>>(),
+        expected.iter().map(|entry| (&entry.title, entry.level, entry.page)).collect::<Vec<_>>());
+    assert_eq!(std::fs::read(&path).unwrap(), original);
+}
+
+
+#[test]
+fn paragraph_script_uses_native_unicode_toggle_and_survives_reopen() {
+    let s = MobileSession::new();
+    let path = text_pdf("H2O + CO2");
+    let original = std::fs::read(&path).unwrap();
+    let doc = s.open(path.clone(), None).unwrap().id;
+    let rows: Value = serde_json::from_str(&s.execute("text_paragraphs".into(), json!({"doc": doc, "page": 1}).to_string()).unwrap()).unwrap();
+    let paragraph = rows["paragraphs"].as_array().unwrap().iter().find(|row| row["text"] == "H2O + CO2").unwrap()["paragraph"].clone();
+    let args = json!({"doc": doc, "page": 1, "paragraph": paragraph, "script": "subscript", "range": [1, 2]});
+    let result: Value = serde_json::from_str(&s.execute("text_script".into(), args.to_string()).unwrap()).unwrap();
+    assert_eq!(result["paragraph"]["text"], "H₂O + CO2");
+    s.execute("edit_undo".into(), json!({"doc": doc}).to_string()).unwrap();
+    assert!(s.page_plain_text(doc, 0).unwrap().contains("H2O + CO2"));
+    s.execute("edit_redo".into(), json!({"doc": doc}).to_string()).unwrap();
+    assert!(s.page_plain_text(doc, 0).unwrap().contains("H₂O + CO2"));
+    let out = scratch().join("script.pdf");
+    s.execute("doc_save".into(), json!({"doc": doc, "path": out}).to_string()).unwrap();
+    s.close(doc, true).unwrap();
+    let reopened = s.open(out.to_string_lossy().into_owned(), None).unwrap().id;
+    assert!(s.page_plain_text(reopened, 0).unwrap().contains("H₂O + CO2"));
+    assert_eq!(std::fs::read(&path).unwrap(), original);
+}

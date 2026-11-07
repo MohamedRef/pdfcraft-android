@@ -1247,4 +1247,34 @@
     <!-- Translator note: notification button that stops reading aloud -->
     <string name="service_action_stop">Stop</string>
     <string name="toolbar_stylus_only">Pen only (fingers scroll)</string>
+    <string name="edit_script_title">Superscript and subscript</string>
+    <string name="edit_superscript">Superscript (x²)</string>
+    <string name="edit_subscript">Subscript (H₂O)</string>
+    <string name="edit_script_scope">Applies to selected text in the inline editor, or the whole paragraph when no text is selected. Uses Unicode forms supported by the font; other characters stay unchanged. Finish any typing changes first. Use Undo to restore the original text.</string>
+    <string name="edit_script_applying">Formatting paragraph…</string>
+    <string name="edit_script_unavailable">Finish typing and select a paragraph in an editable, unsigned PDF. If the document changed, select it again.</string>
+    <string name="text_styles_title">Create contents from headings</string>
+    <string name="text_styles_explanation">Analyze text styles, then choose up to nine in heading order. The first style is level 1, the next level 2, and so on. New entries are added under an “Untitled” bookmark; existing contents stay in place. You can Undo the change.</string>
+    <string name="text_styles_scan">Analyze text styles</string>
+    <string name="text_styles_scope">Lists the native engine’s largest 200 styles from the first 5,000 pages when requested. Large documents may take time.</string>
+    <string name="text_styles_loading">Analyzing text styles…</string>
+    <string name="text_styles_failed">Could not analyze text styles. The document may restrict copying, or it changed during analysis. Try again.</string>
+    <string name="text_styles_empty">No text styles found. Image-only pages need text recognition first.</string>
+    <string name="text_styles_description">%1$s, %2$s pt · %3$d lines on %4$d pages</string>
+    <string name="text_styles_level">Heading level %1$d</string>
+    <string name="text_styles_create">Add contents from selected styles</string>
+    <string name="text_styles_creating">Creating PDF contents…</string>
+    <string name="text_styles_created">Heading bookmarks added. This change can be undone.</string>
+    <string name="text_styles_unavailable">Cannot create contents: the PDF changed, is closed, signed, read-only, or restricts copying or document assembly. Use an editable copy and analyze again.</string>
+    <string name="backdrops_title">Page backgrounds</string>
+    <string name="backdrops_explanation">Inspect backgrounds painted by the PDF itself. A white fill can hide an added background; a page-sized image may cover it too. This inspection does not change the PDF.</string>
+    <string name="backdrops_range">Pages %1$d–%2$d of %3$d</string>
+    <string name="backdrops_page">Page %1$d: %2$s</string>
+    <string name="backdrops_fill">Opaque white fill</string>
+    <string name="backdrops_image">Page-sized image</string>
+    <string name="backdrops_none">No covering background detected</string>
+    <string name="backdrops_loading">Inspecting these pages…</string>
+    <string name="backdrops_failed">Could not inspect these pages. Open this panel again to retry.</string>
+    <string name="backdrops_previous">Previous pages</string>
+    <string name="backdrops_next">Next pages</string>
 </resources>

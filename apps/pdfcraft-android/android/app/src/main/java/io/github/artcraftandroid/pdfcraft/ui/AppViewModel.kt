@@ -1697,10 +1697,14 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     /** Typing in a paragraph: whether it opened with everything selected, and the text so far. */
     var editSelectAll = false
     var editDraft: String? = null
+    var editTextSelection: Pair<Int, Int>? = null
+    var editComposing by mutableStateOf(false)
 
     fun startInlineEdit(para: io.github.artcraftandroid.pdfcraft.ui.viewer.Paragraph, selectAll: Boolean) {
         editSelectAll = selectAll
         editDraft = para.text
+        editComposing = false
+        editTextSelection = if (selectAll) 0 to para.text.length else para.text.length to para.text.length
         editSelection = para
         editing = para
     }
@@ -1711,6 +1715,8 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         val text = editDraft ?: para.text
         editing = null
         editDraft = null
+        editTextSelection = null
+        editComposing = false
         if (text != para.text) runTool(doc, "text_edit", mapOf("page" to para.page + 1, "paragraph" to para.number, "text" to text))
     }
 
@@ -1730,6 +1736,56 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     fun styleParagraph(doc: OpenDocument, para: io.github.artcraftandroid.pdfcraft.ui.viewer.Paragraph, style: Map<String, Any?>) {
         val typed = editDraft?.takeIf { editing != null && it != para.text }
         runTool(doc, "text_edit", paraArgs(para) + style + (if (typed != null) mapOf("text" to typed) else emptyMap()))
+    }
+
+    /** Unicode script toggle for selected text or a paragraph; no uncommitted draft is lost. */
+    fun scriptParagraph(doc: OpenDocument, para: io.github.artcraftandroid.pdfcraft.ui.viewer.Paragraph, script: String) {
+        val typing = editing
+        if (script !in setOf("superscript", "subscript") || (typing != null &&
+            (typing.number != para.number || typing.page != para.page || editDraft != para.text || editComposing)) || document !== doc ||
+            !doc.writable || doc.info.signed || doc.info.readOnlyReason != null) {
+            tell(text(R.string.edit_script_unavailable))
+            return
+        }
+        val range = if (typing != null) {
+            val (anchor, focus) = editTextSelection ?: (0 to 0)
+            try { io.github.artcraftandroid.pdfcraft.engine.nativeUtf8Range(para.text, anchor, focus) }
+            catch (_: IllegalArgumentException) { tell(text(R.string.edit_script_unavailable)); return }
+        } else null
+        // Only an unchanged draft reaches here, so dismissing the inline editor loses no typing.
+        editing = null
+        editDraft = null
+        editTextSelection = null
+        editComposing = false
+        val generation = doc.info.generation
+        job(text(R.string.edit_script_applying)) { eng ->
+            if (document !== doc || editing != null || !doc.writable) {
+                tell(text(R.string.edit_script_unavailable))
+                return@job
+            }
+            val raw = eng.command {
+                val current = document(doc.id)
+                require(current.generation == generation && !current.signed && current.readOnlyReason == null) {
+                    text(R.string.edit_script_unavailable)
+                }
+                if (range != null) {
+                    val listed = JSONObject(execute("text_paragraphs", Engine.toJson(
+                        mapOf("doc" to doc.id, "page" to para.page + 1)).toString())).getJSONArray("paragraphs")
+                    val row = (0 until listed.length()).map { listed.getJSONObject(it) }
+                        .firstOrNull { it.getInt("paragraph") == para.number }
+                    // A range is valid only against the exact native editor text, not display
+                    // text normalized differently by PDF extraction or a stale local draft.
+                    require(row != null && row.optString("editor_text", row.optString("text")) == para.text) {
+                        text(R.string.edit_script_unavailable)
+                    }
+                }
+                execute("text_script", Engine.toJson(paraArgs(para) + mapOf("doc" to doc.id, "script" to script) +
+                    (range?.let { mapOf("range" to it) } ?: emptyMap())).toString())
+            }
+            refresh(doc)
+            val warnings = JSONObject(raw).optJSONArray("warnings")
+            for (i in 0 until minOf(warnings?.length() ?: 0, 3)) tell(warnings!!.getString(i).take(500))
+        }
     }
 
     /** Move [para] by ([dx], [dy]) points (right and down on screen). */
@@ -2256,6 +2312,31 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             // deliver() removes the temp file on success; an engine/provider error must do so too.
             out.delete()
         }
+    }
+
+    /** Append heading-derived contents with the native engine; reject stale style analyses. */
+    internal fun createStyleBookmarks(
+        doc: OpenDocument,
+        generation: ULong,
+        styles: List<io.github.artcraftandroid.pdfcraft.engine.PdfTextStyle>,
+    ) = job(text(R.string.text_styles_creating)) { eng ->
+        if (document !== doc || doc.info.generation != generation || !doc.writable ||
+            doc.info.signed || doc.info.readOnlyReason != null || !doc.info.allowsCopying || !doc.info.allowsAssembly) {
+            tell(text(R.string.text_styles_unavailable))
+            return@job
+        }
+        val levels = io.github.artcraftandroid.pdfcraft.engine.headingStyleArguments(styles)
+        eng.command {
+            // Check and mutate in one serialized native command: a queued double tap or another
+            // edit cannot apply a second tree from the same stale analysis.
+            val current = document(doc.id)
+            require(current.generation == generation && !current.signed && current.readOnlyReason == null &&
+                current.allowsCopying && current.allowsAssembly) { text(R.string.text_styles_unavailable) }
+            execute("bookmark_from_text_styles", Engine.toJson(mapOf("doc" to doc.id, "levels" to levels)).toString())
+        }
+        refresh(doc)
+        if (document === doc) doc.controller.sheet = io.github.artcraftandroid.pdfcraft.ui.viewer.ViewerSheet.Bookmarks
+        tell(text(R.string.text_styles_created))
     }
 
     /** Ask Android SAF to pick JSON for the currently displayed PDF, not for private bookmarks. */

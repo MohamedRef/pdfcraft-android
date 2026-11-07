@@ -7,3 +7,6 @@ This is a source-confirmed defensive correction relevant to the owner’s report
 Four JVM cases use the actual Cursor interface through a JDK proxy (no Android method bodies): reordered filename, independent size/date/read-only flags, absent/null columns and ordinary single-column responses. Current-head Android CI must compile and run them; no local Android SDK/device test is claimed. Android specifies named lookup in [Cursor.getColumnIndex](https://developer.android.com/reference/android/database/Cursor#getColumnIndex(java.lang.String)).
 
 Next-batch independent fix, outside the frozen bookmark/tablet release candidate and published `0.0.10-beta (10012)`. No per-PR APK and no opening-speed claim. Manual provider tests still needed: Samsung My Files/Downloads/cloud, absent metadata, revoked grants and safe read-only/failed-write recovery. No source PDF, URI or filename is logged or uploaded.
+
+
+Owner scope update (2026-11-07 Cairo): this PR was unintentionally auto-closed by an issue-closing keyword in the release-preparation description, not merged or abandoned. It is reopened, and the keyword was corrected. Include it with #30/#31/#32 and the bookmark/tablet work in one release after complete-stack verification. Older frozen-candidate exclusions are superseded.

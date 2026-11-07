@@ -230,6 +230,8 @@ fun BookmarksSheet(vm: AppViewModel, doc: OpenDocument) {
             )
         }
         if (tab == 0) {
+            SheetRow(LucideIcons.ListTree, stringResource(R.string.text_styles_title),
+                { ctl.sheet = ViewerSheet.TextStyles }, chevron = true)
             val all = outline
             when {
                 all == null -> Text("…", color = c.textSecondary, modifier = Modifier.padding(20.dp))
