@@ -140,7 +140,7 @@ internal fun InkPresetsPicker(vm: AppViewModel, onApplied: () -> Unit) {
         // Large visual size preview and an adjustable slider instead of seven cramped bars.
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text(stringResource(R.string.toolbar_line_thickness), color = c.text, fontSize = 14.sp, modifier = Modifier.weight(1f))
-            Text("${prefs.inkWidth.toInt()} pt", color = c.text, fontSize = 14.sp)
+            Text(stringResource(R.string.ink_width_value, prefs.inkWidth), color = c.text, fontSize = 14.sp)
         }
         Slider(
             value = prefs.inkWidth.coerceIn(1f, 10f),
