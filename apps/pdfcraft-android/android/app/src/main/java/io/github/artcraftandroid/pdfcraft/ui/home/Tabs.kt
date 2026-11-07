@@ -187,6 +187,7 @@ fun ToolsTab(vm: AppViewModel) {
             HubTool(LucideIcons.FilePlus2, "Create PDF", R.string.common_tool_create_pdf, R.string.home_about_create, ToolHues.create, setOf("Create")) { vm.openCreate() },
             HubTool(LucideIcons.Camera, "New scan", R.string.home_new_scan, R.string.home_about_scan, ToolHues.scan, setOf("Create")) { vm.startScan() },
             HubTool(LucideIcons.Combine, "Combine files", R.string.common_tool_combine, R.string.home_about_combine, ToolHues.combine, setOf("Create", "Edit")) { vm.pickFiles(io.github.artcraftandroid.pdfcraft.ui.FilePickKind.Combine) },
+            HubTool(LucideIcons.FilePenLine, "Bates numbering", R.string.bates_title, R.string.bates_about, ToolHues.edit, setOf("Edit")) { vm.openBates() },
             HubTool(LucideIcons.LayoutGrid, "Organize pages", R.string.common_tool_organize, R.string.home_about_organize, ToolHues.organize, setOf("Edit")) { vm.toolForFile(FileTool.Organize) },
             HubTool(LucideIcons.Crop, "Crop pages", R.string.common_tool_crop, R.string.home_about_crop, ToolHues.crop, setOf("Edit")) { vm.toolForFile(FileTool.Crop) },
             HubTool(LucideIcons.FilePenLine, "Edit PDF", R.string.common_tool_edit_pdf, R.string.home_about_edit, ToolHues.edit, setOf("Edit")) { vm.toolForFile(FileTool.Edit) },

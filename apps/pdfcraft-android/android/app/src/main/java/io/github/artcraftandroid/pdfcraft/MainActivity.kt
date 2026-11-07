@@ -47,6 +47,8 @@ class MainActivity : ComponentActivity() {
     private val pickBookmarkJson = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> vm.onBookmarkJsonPicked(uri) }
     private val pickBookmarkPdf = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> vm.onBookmarkPdfPicked(uri) }
 
+    private val pickBatesPdfs = registerForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { vm.onBatesFilesPicked(it) }
+
     private val saveCopy = registerForActivityResult(ActivityResultContracts.CreateDocument("application/pdf")) { uri -> vm.copyTo(uri) }
     private val takePhoto = registerForActivityResult(ActivityResultContracts.TakePicture()) { ok -> vm.onScanPhoto(ok) }
     private val pickImage = registerForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri -> vm.addImage(uri) }
@@ -92,6 +94,12 @@ class MainActivity : ComponentActivity() {
         lifecycleScope.launch {
             for (ignored in vm.bookmarkPdfPicks) {
                 launchSafely { pickBookmarkPdf.launch(arrayOf("application/pdf")) }
+            }
+        }
+        lifecycleScope.launch {
+            for (ignored in vm.batesPicks) launchSafely {
+                try { pickBatesPdfs.launch(arrayOf("application/pdf")) }
+                catch (e: Exception) { vm.onBatesFilesPicked(emptyList()); throw e }
             }
         }
         lifecycleScope.launch {

@@ -259,6 +259,34 @@ class DocumentFiles(private val context: Context) {
         return uri
     }
 
+    /** A new app-owned pending row, with cooperative cancellation and no replacement path. */
+    internal fun saveBatesCopy(file: File, name: String, checkpoint: () -> Unit): Uri = publishNewBatchCopy(
+        reserve = {
+            val values = android.content.ContentValues().apply {
+                put(MediaStore.MediaColumns.DISPLAY_NAME, name)
+                put(MediaStore.MediaColumns.MIME_TYPE, "application/pdf")
+                put(MediaStore.MediaColumns.RELATIVE_PATH, android.os.Environment.DIRECTORY_DOWNLOADS)
+                put(MediaStore.MediaColumns.IS_PENDING, 1)
+            }
+            resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
+                ?: throw IOException(context.getString(R.string.files_error_save_downloads))
+        },
+        write = { uri ->
+            resolver.openOutputStream(uri, "w").use { out ->
+                if (out == null) throw IOException(context.getString(R.string.files_error_save_downloads))
+                file.inputStream().use { input -> SafBoundedCopy.copy(input, out, MAX_BATES_BYTES, "PDF", checkpoint) }
+            }
+        },
+        commit = { uri ->
+            val values = android.content.ContentValues().apply { put(MediaStore.MediaColumns.IS_PENDING, 0) }
+            if (resolver.update(uri, values, null, null) != 1) throw IOException(context.getString(R.string.files_error_save_downloads))
+        },
+        rollback = { uri ->
+            if (resolver.delete(uri, null, null) != 1) throw IOException("Could not remove the incomplete new download.")
+        },
+        checkpoint = checkpoint,
+    )
+
     /** Save an image into Pictures/PdfCraft (exported pages). */
     fun saveToPictures(file: File, name: String, mime: String): Uri {
         val values = android.content.ContentValues().apply {

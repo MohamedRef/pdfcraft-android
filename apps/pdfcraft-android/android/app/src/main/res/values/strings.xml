@@ -1277,4 +1277,29 @@
     <string name="backdrops_failed">Could not inspect these pages. Open this panel again to retry.</string>
     <string name="backdrops_previous">Previous pages</string>
     <string name="backdrops_next">Next pages</string>
+    <!-- Multi-document Bates: saved inputs, fresh copies and explicit partial results. -->
+    <string name="bates_title">Bates numbering</string>
+    <string name="bates_about">Number saved PDFs consecutively in the order below. New copies go to Downloads; originals stay intact.</string>
+    <string name="bates_limits">Up to 20 PDFs, 512 MiB combined input. Save any open edits before selecting their files.</string>
+    <string name="bates_passwords">Password prompts are not included yet. Signed or read-only PDFs are refused; encrypted files must open without a password. Cancel stops before further exports; the current numbering operation may need to finish first.</string>
+    <string name="bates_start">Start number (1–999999999999)</string>
+    <string name="bates_digits">Minimum digits (1–12)</string>
+    <string name="bates_prefix">Prefix</string>
+    <string name="bates_suffix">Suffix</string>
+    <string name="bates_preview">First number: %1$s</string>
+    <string name="bates_invalid">Check the numbers. Keep prefix and suffix short, without # or &gt;&gt;.</string>
+    <string name="bates_up">Move up</string>
+    <string name="bates_down">Move down</string>
+    <string name="bates_remove">Remove</string>
+    <string name="bates_run">Number and export copies</string>
+    <string name="bates_reading">Reading PDF %1$d of %2$d…</string>
+    <string name="bates_numbering">Numbering copies…</string>
+    <string name="bates_exporting">Saving copy %1$d of %2$d…</string>
+    <string name="bates_saved_range">Saved: %1$s – %2$s</string>
+    <string name="bates_finished">%1$d copies saved; %2$d failed. Previously saved copies remain in Downloads.</string>
+    <string name="bates_cancelling">Cancelling… waiting for the current operation.</string>
+    <string name="bates_cancelled">Cancelled. %1$d copies were saved before cancellation.</string>
+    <string name="bates_failed">Could not complete numbering. Check file access, passwords and editing permissions. Originals were not changed.</string>
+    <string name="bates_source_refused">A signed or read-only PDF cannot be numbered by this tool.</string>
+    <string name="bates_export_failed">Could not save this new copy to Downloads.</string>
 </resources>

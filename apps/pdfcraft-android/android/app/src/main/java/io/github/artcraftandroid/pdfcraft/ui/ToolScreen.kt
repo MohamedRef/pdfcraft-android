@@ -8,5 +8,6 @@ sealed class ToolScreen {
     data object Create : ToolScreen()
     class Crop(val doc: OpenDocument) : ToolScreen()
     class Export(val doc: OpenDocument) : ToolScreen()
+    data object Bates : ToolScreen()
     data object Scan : ToolScreen()
 }
