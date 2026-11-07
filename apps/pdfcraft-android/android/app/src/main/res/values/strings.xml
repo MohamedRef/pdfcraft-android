@@ -1367,6 +1367,7 @@
     <string name="updater_install">Install verified APK</string>
     <string name="updater_install_notice">Installing always requires your approval. APK signature and SHA-256 are checked first.</string>
     <string name="ink_styles_title">Pen styles</string>
+    <string name="ink_width_value">%1$.1f pt</string>
     <string name="ink_style_ballpoint">Ballpoint</string>
     <string name="ink_style_fountain">Fountain</string>
     <string name="ink_style_pencil">Pencil</string>
