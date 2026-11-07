@@ -178,10 +178,10 @@ jobs:
       # GITHUB_TOKEN-created tags do not recursively trigger the tag-specific Release workflow.
       - name: Publish verified signed ARM64 APK as an update release
         if: >-
-      github.ref == 'refs/heads/main' &&
-      (github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'push' &&
-      startsWith(github.event.head_commit.message, 'chore(release): publish 0.0.13-beta (13012)')))
+          github.ref == 'refs/heads/main' &&
+          (github.event_name == 'workflow_dispatch' ||
+          (github.event_name == 'push' &&
+          startsWith(github.event.head_commit.message, 'chore(release): publish 0.0.13-beta (13012)')))
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
