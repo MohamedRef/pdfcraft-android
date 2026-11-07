@@ -2635,6 +2635,29 @@ fn freehand_highlight_is_compatible_ink_with_marker_blending() {
     }
 }
 
+#[test]
+fn freehand_highlight_eraser_keeps_marker_intent_and_blending() {
+    let shape = Shape::FreehandHighlight { strokes: vec![vec![[20.0, 100.0], [120.0, 100.0]]] };
+    let mut annotation = new(0, shape.clone());
+    annotation.style = Style::default_for(&shape);
+    let mut doc = fixture();
+    let index = add_annotation(&mut doc, &annotation, &meta("marker-erase")).unwrap();
+
+    // A small eraser crossing the middle must split, not remove, the broad marker.
+    assert!(erase_ink(&mut doc, 0, index, &[[70.0, 100.0]], 6.0, &meta("marker-erase")).unwrap());
+    let reopened = reopen(&doc);
+    let ink = &list(&reopened, 0)[index];
+    assert_eq!(ink.name(b"Subtype"), Some(&b"Ink"[..]));
+    assert_eq!(ink.name(b"IT"), Some(&b"FreehandHighlight"[..]));
+    assert_eq!(ink.get(b"CA").and_then(Object::as_f64), Some(0.35));
+    let strokes = ink.get(b"InkList").unwrap().as_array().unwrap();
+    assert_eq!(strokes.len(), 2, "partial erase keeps two marker fragments");
+    let ap = ink.get(b"AP").unwrap().as_dict().unwrap().reference(b"N").unwrap();
+    let resources = reopened.get(ap).as_dict().unwrap().get(b"Resources").cloned().unwrap();
+    let blend = resources.as_dict().unwrap().get(b"ExtGState").unwrap().as_dict().unwrap().get(b"GS0").unwrap().as_dict().unwrap();
+    assert_eq!(blend.name(b"BM"), Some(&b"Multiply"[..]));
+}
+
 /// A 3D annotation is PDF 1.6 and a PRC model 1.7 (ISO 32000-2 §13.6): an older document's
 /// catalog says so, and a newer one is left as it is.
 #[test]
