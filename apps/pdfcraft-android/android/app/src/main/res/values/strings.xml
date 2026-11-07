@@ -1302,4 +1302,13 @@
     <string name="bates_failed">Could not complete numbering. Check file access, passwords and editing permissions. Originals were not changed.</string>
     <string name="bates_source_refused">A signed or read-only PDF cannot be numbered by this tool.</string>
     <string name="bates_export_failed">Could not save this new copy to Downloads.</string>
+    <string name="ink_presets_title">Favorite pens</string>
+    <string name="ink_presets_help">Save three combinations of color, width and opacity. A selected pen applies to new strokes; author and pen-only settings stay separate.</string>
+    <string name="ink_preset_slot">Pen %1$d</string>
+    <string name="ink_preset_selected">Pen %1$d · selected</string>
+    <string name="ink_preset_details">%1$.1f pt · %2$d%% opacity</string>
+    <string name="ink_preset_use">Use pen</string>
+    <string name="ink_preset_save">Replace with current pen</string>
+    <string name="ink_preset_saved">Saved favorite pen %1$d.</string>
+    <string name="ink_preset_invalid">Choose a valid pen width and opacity first.</string>
 </resources>

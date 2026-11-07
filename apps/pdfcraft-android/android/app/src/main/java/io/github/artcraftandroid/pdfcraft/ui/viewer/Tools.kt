@@ -602,7 +602,7 @@ private fun MarkupLayer(vm: AppViewModel, doc: OpenDocument) {
 }
 
 /** Which property picker a sub-toolbar has open. */
-enum class Picker { None, Color, Width, TextSize }
+enum class Picker { None, Color, Width, TextSize, Presets }
 
 /** The active tool's sub-toolbar. */
 @Composable
@@ -630,6 +630,7 @@ fun ToolSubToolbar(vm: AppViewModel, doc: OpenDocument) {
                 prefs.updateStylusOnly(!prefs.stylusOnly)
             })
             SubDivider()
+            SubProperty(LucideIcons.PenLine, stringResource(R.string.ink_presets_title), picker == Picker.Presets, { toggle(Picker.Presets) })
             SubProperty(LucideIcons.Menu, stringResource(R.string.toolbar_line_thickness), picker == Picker.Width, { toggle(Picker.Width) })
             ColorDot(prefs.color(StyledTool.Ink), picker == Picker.Color) { toggle(Picker.Color) }
             SubDivider()
@@ -719,6 +720,7 @@ fun PropertyPicker(vm: AppViewModel, tool: StyledTool, picker: Picker, markup: T
                 }
                 Spacer(Modifier.height(8.dp))
             }
+            Picker.Presets -> InkPresetsPicker(vm, onDismiss)
             Picker.None -> Unit
         }
     }

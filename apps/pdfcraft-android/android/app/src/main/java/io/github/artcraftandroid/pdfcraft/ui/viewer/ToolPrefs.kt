@@ -73,6 +73,31 @@ class ToolPrefs(context: Context) {
         prefs.edit().putFloat("${t.key}.opacity", v).apply()
     }
 
+    internal var inkPresets by mutableStateOf(InkPreset.defaults.mapIndexed { i, fallback ->
+        InkPreset.decode(runCatching { prefs.getString("ink.preset.v1.$i", null) }.getOrNull()) ?: fallback
+    })
+        private set
+
+    internal fun currentInkPreset(): InkPreset? = InkPreset.create(colors.getValue(StyledTool.Ink).intValue, inkWidth, opacity(StyledTool.Ink))
+
+    internal fun applyInkPreset(index: Int): Boolean {
+        val preset = inkPresets.getOrNull(index) ?: return false
+        // One synchronous UI event and one preferences transaction: only the next stroke changes.
+        prefs.edit().putInt("ink.color", preset.argb).putFloat("ink.width", preset.width).putFloat("ink.opacity", preset.opacity).apply()
+        colors.getValue(StyledTool.Ink).intValue = preset.argb
+        opacities.getValue(StyledTool.Ink).floatValue = preset.opacity
+        inkWidth = preset.width
+        return true
+    }
+
+    internal fun saveInkPreset(index: Int): Boolean {
+        if (index !in inkPresets.indices) return false
+        val preset = currentInkPreset() ?: return false
+        prefs.edit().putString("ink.preset.v1.$index", preset.encode()).apply()
+        inkPresets = inkPresets.mapIndexed { i, existing -> if (i == index) preset else existing }
+        return true
+    }
+
     /** Pen-only mode rejects finger ink before a stylus has touched the screen. */
     var stylusOnly by mutableStateOf(prefs.getBoolean("ink.stylusOnly", false))
         private set

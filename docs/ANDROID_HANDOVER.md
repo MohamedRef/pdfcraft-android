@@ -1,10 +1,12 @@
 # PdfCraft Android - development handover
 
-## ACTIVE BATCH — v0.19.0 merged; multi-document Bates integration (2026-11-07)
+## ACTIVE BATCH — v0.19.0, Bates and favorite pens (2026-11-07)
 
-Engine PR [#37](https://github.com/MohamedRef/pdfcraft-android/pull/37) merged as `552aed9504b0764b0818bdeb72543abdc227f768`, tree identical to tested `e493d17`; exact-head [42355818983](https://github.com/MohamedRef/pdfcraft-android/actions/runs/42355818983) passed every required gate. Source now pins v0.19.0, 989 exact files / 27 documented adaptations / two 3D omissions, preserving all Android/stylus/voice/recovery/updater additions. Full local workspace passed 4,392 tests (13 reported ignores). Published 0.0.11-beta (11012) remains the earlier v0.18.2 binary; no new APK yet.
+- Engine [PR #37](https://github.com/MohamedRef/pdfcraft-android/pull/37) merged as `552aed9504b0764b0818bdeb72543abdc227f768`, tree identical to tested `e493d17`. Exact-head [42355818983](https://github.com/MohamedRef/pdfcraft-android/actions/runs/42355818983) and post-main [42360494031](https://github.com/MohamedRef/pdfcraft-android/actions/runs/42360494031) passed. Source pins v0.19.0, 989 exact files / 27 explicit adaptations / two 3D omissions. Full local workspace passed 4,392 tests (13 reported ignores), preserving Android/stylus/voice/recovery/updater behavior.
+- [PR #38](https://github.com/MohamedRef/pdfcraft-android/pull/38): [multi-document Bates](ANDROID_MULTI_DOCUMENT_BATES.md), head `0950783887379ef24e4ceb64fa6efbe4dfa27646`. Bounded SAF snapshots, explicit ordering/settings, signed/read-only guards, new Downloads rows, interval validation and cancellation ownership. [Current source CI 42361462487](https://github.com/MohamedRef/pdfcraft-android/actions/runs/42361462487) is pending at this checkpoint; superseded 3982b5b checks were cancelled, not green.
+- Third independent PR: [favorite pen presets](ANDROID_INK_PRESETS.md), stacked on #38 while its checks run. Three persisted appearance slots, with author, pressure/input routing, eraser and existing strokes preserved. Parser/storage regressions and current-head CI required.
 
-Next independent PR adds [multi-document Bates UI](ANDROID_MULTI_DOCUMENT_BATES.md): read-only bounded SAF snapshots, explicit ordering/settings, signed/read-only guards, new Downloads copies, interval validation and honest per-file/cancellation results. Implementation and exact-head checks are in progress. Continue the three-PR batch policy; no per-PR APK. Remaining device latency/stylus/provider/upgrade QA stays open.
+Published 0.0.11-beta (11012) remains the earlier verified v0.18.2 binary. No APK per PR. After all three feature PRs and release preparation pass/merge, build one signed release with categorized notes. Samsung/Xodo opening latency, S Pen/provider/Downloads/save/upgrade behavior and remaining runtime parity remain outstanding.
 
 ## LIVE CHECKPOINT — 2026-11-07 (Cairo): combined beta published and verified
 
