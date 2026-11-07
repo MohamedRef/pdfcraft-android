@@ -480,6 +480,7 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
                 ViewerSheet.Comments -> Unit
                 ViewerSheet.MoreTools -> MoreToolsSheet(vm, doc)
                 ViewerSheet.Signatures -> SignaturesSheet(vm, doc)
+                ViewerSheet.ScanEnhance -> ScanEnhanceSheet(vm, doc)
                 ViewerSheet.None -> Unit
             }
         }

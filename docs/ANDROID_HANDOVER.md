@@ -1,5 +1,13 @@
 # PdfCraft Android - development handover
 
+## PROPOSED NEXT PARITY INCREMENT — Scan enhancement (2026-11-07)
+
+- The Android mobile engine is already stable upstream v0.19.0, with 193/195 shared tool names plus two intentional 3D deferrals; the remaining important gap is Android UI/runtime exposure, not engine reimport.
+- A focused follow-up branch `feat/android-scan-enhancement-parity` is stacked on pending Highlight PR #43, **not merged**. It exposes native `page_enhance_scan` from More, with single/current-plus-up-to-11 page scope, cleanup strength, edge shadow and speckle options, explicit confirm, permission/unsigned guards and preserved Undo semantics. See [scope and QA](ANDROID_SCAN_ENHANCEMENT.md). No new version or APK.
+- Status: feature PR needs current-head Rust/provenance, Android JVM/ARM64, title and merge-gate checks. Parent Highlight PR #43 must first pass and merge; then retarget parity PR to main, verify no conflicts and rerun any changed-source checks. Additional manual same-file Samsung, signed, encrypted, scan/OCR, provider recovery and saved result checks are **not verified**.
+- Other v0.19.0 UI candidates after this: OCR word-confidence review/corrections and safe ordinary comment copy/paste. Preserve embedded Sound/FileAttachment refusal; no Xodo full-parity assertion.
+
+
 ## HIGHLIGHT SELECTION FIX — 2026-11-07 (proposed, not merged)
 
 - A source review found the Markup touch anchor and drag rectangle preview race native text queries. Fast taps can do nothing; finger-up may use stale, incomplete preview. A separate fix based on lasso PR #41 introduces bounded word-at-pointer hit testing, whole-word tap, forward/reverse word drags, immediate touch feedback, conflated preview, persistent preview through native commit, stable text-selection handles, and independent final selection from release coordinates.

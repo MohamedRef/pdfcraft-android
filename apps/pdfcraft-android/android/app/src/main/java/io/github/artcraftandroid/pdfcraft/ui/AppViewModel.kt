@@ -1223,6 +1223,46 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     fun openCrop(doc: OpenDocument) { toolScreen = ToolScreen.Crop(doc) }
     fun startScan() { toolScreen = ToolScreen.Scan }
 
+    /**
+     * Native 0.19.0 scanned-page cleanup. Bounded UI page scope, explicit confirm,
+     * and no new provider-path writes: native edits the already-open working PDF.
+     */
+    fun enhanceScannedPages(doc: OpenDocument, plan: io.github.artcraftandroid.pdfcraft.ui.viewer.ScanEnhancePlan) {
+        if (document !== doc || busy != null || !doc.writable || doc.info.signed ||
+            doc.info.readOnlyReason != null || doc.pageCount == 0 ||
+            !io.github.artcraftandroid.pdfcraft.ui.viewer.validScanEnhancePlan(plan, doc.pageCount)) {
+            tell(text(R.string.scan_enhance_unavailable))
+            return
+        }
+        val eng = engine ?: return
+        val generation = doc.info.generation
+        viewModelScope.launch {
+            if (document !== doc || busy != null || doc.info.generation != generation) return@launch
+            busy = text(R.string.scan_enhance_busy)
+            try {
+                val result = eng.tool("page_enhance_scan", mapOf(
+                    "doc" to doc.id,
+                    "pages" to plan.pages,
+                    "level" to plan.level,
+                    "edge_shadows" to plan.edgeShadows,
+                    "despeckle" to plan.despeckle,
+                ))
+                refresh(doc)
+                if (document !== doc) return@launch
+                val done = result.optJSONArray("pages_cleaned")?.length() ?: 0
+                if (done > 0) {
+                    success = SuccessBanner(text(R.string.scan_enhance_finished, done)) { undo(doc) }
+                } else {
+                    tell(text(R.string.scan_enhance_no_changes))
+                }
+            } catch (e: MobileException) {
+                if (document === doc) tell(e.userMessage)
+            } finally {
+                busy = null
+            }
+        }
+    }
+
     /** Recognize text: make scanned pages searchable and selectable. */
     fun recognizeText(doc: OpenDocument) {
         val eng = engine ?: return
