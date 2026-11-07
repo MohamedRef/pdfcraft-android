@@ -449,3 +449,41 @@ fn matching_timestamp_header_does_not_bypass_an_unreadable_stream_body() {
     assert!(doc.try_get(3).is_err());
     assert!(list_cached(&doc, doc.bytes(), &TrustStore::default(), &DigestCache::default()).is_empty());
 }
+
+#[test]
+fn header_discovery_matches_generation_aware_reader_and_repair_fallback() {
+    for (header_generation, xref_generation, length_generation) in [(7, 7, 9), (7, 0, 9), (7, 7, 8)] {
+        let mut bytes = b"%PDF-1.7\n".to_vec();
+        let objects = [
+            (0, "<< /Type /Catalog /Pages 2 0 R /Unknown 3 7 R >>".to_string()),
+            (0, "<< /Type /Pages /Kids [] /Count 0 >>".to_string()),
+            (
+                header_generation,
+                format!(
+                    "<< /Type /DocTimeStamp /SubFilter /ETSI.RFC3161 /ByteRange [0 1 2 1] /Length 4 {length_generation} R >>\nstream\nABC\nendstream"
+                ),
+            ),
+            (9, "3".to_string()),
+        ];
+        let mut offsets = Vec::new();
+        for (i, (generation, object)) in objects.iter().enumerate() {
+            offsets.push(bytes.len());
+            bytes.extend_from_slice(format!("{} {generation} obj\n{object}\nendobj\n", i + 1).as_bytes());
+        }
+        let xref = bytes.len();
+        bytes.extend_from_slice(b"xref\n0 5\n0000000000 65535 f \n");
+        for (i, offset) in offsets.iter().enumerate() {
+            let generation = if i == 2 { xref_generation } else { objects[i].0 };
+            bytes.extend_from_slice(format!("{offset:010} {generation:05} n \n").as_bytes());
+        }
+        bytes.extend_from_slice(format!("trailer\n<< /Size 5 /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n").as_bytes());
+        let doc = Document::open(Arc::new(bytes)).unwrap();
+        let expected: Vec<_> = doc.scan_objects_checked().filter_map(|(r, o)| o.ok().filter(|o| is_document_timestamp(o)).map(|_| r)).collect();
+        assert_eq!(expected.len(), 1);
+        assert_eq!(DigestCache::default().timestamp_candidates(&doc), expected);
+        assert!(list_cached(&doc, doc.bytes(), &TrustStore::default(), &DigestCache::default()).iter().all(|s| s.status != Status::Valid));
+        if header_generation != xref_generation {
+            assert!(!doc.repair_log().is_empty(), "contradictory generations must use the repair-aware reader");
+        }
+    }
+}

@@ -40,9 +40,9 @@ fn file_properties_are_read_only_and_match_the_parsed_document() {
     let info = s.open(blank_pdf(2), None).unwrap();
     let before = s.document(info.id).unwrap().generation;
     let properties = s.file_properties(info.id).unwrap();
-    let expected = s.with_doc(info.id, |d| {
-        (d.info_value("CreationDate"), d.info_value("ModDate"), d.custom_info(), d.allows_modification(), d.xmp_metadata())
-    }).unwrap();
+    let expected = s
+        .with_doc(info.id, |d| (d.info_value("CreationDate"), d.info_value("ModDate"), d.custom_info(), d.allows_modification(), d.xmp_metadata()))
+        .unwrap();
     assert_eq!(properties.creation_date, expected.0);
     assert_eq!(properties.modification_date, expected.1);
     assert_eq!(properties.custom_metadata.iter().map(|field| (field.name.clone(), field.value.clone())).collect::<Vec<_>>(), expected.2);
@@ -468,7 +468,6 @@ fn form_scripts_run_when_fields_are_filled_and_buttons_pressed() {
     assert_eq!(big["alerts"][0]["message"], "Big", "{big}");
 }
 
-
 /// Exercise the exact headless route used by the opt-in Android backgrounds panel.
 #[test]
 fn backdrop_inspection_is_scoped_and_does_not_edit_the_document() {
@@ -505,9 +504,12 @@ fn backdrop_inspection_is_scoped_and_does_not_edit_the_document() {
     let inspect = |pages: Value| -> Value {
         serde_json::from_str(&s.execute("doc_backdrops".into(), json!({"doc": doc.id, "pages": pages}).to_string()).unwrap()).unwrap()
     };
-    assert_eq!(inspect(json!([1, 2, 3]))["pages"], json!([
-        {"page": 1, "backdrop": "fill"}, {"page": 2, "backdrop": "image"},
-    ]));
+    assert_eq!(
+        inspect(json!([1, 2, 3]))["pages"],
+        json!([
+            {"page": 1, "backdrop": "fill"}, {"page": 2, "backdrop": "image"},
+        ])
+    );
     assert_eq!(inspect(json!([2]))["pages"], json!([{"page": 2, "backdrop": "image"}]));
     assert_eq!(inspect(json!([3]))["pages"], json!([]));
     assert!(s.execute("doc_backdrops".into(), json!({"doc": doc.id, "pages": [4]}).to_string()).is_err());
@@ -518,7 +520,6 @@ fn backdrop_inspection_is_scoped_and_does_not_edit_the_document() {
     assert_eq!(std::fs::read(&path).unwrap(), bytes);
     std::fs::remove_dir_all(dir).unwrap();
 }
-
 
 #[test]
 fn style_bookmarks_append_undo_and_survive_save_through_mobile_tools() {
@@ -545,11 +546,12 @@ fn style_bookmarks_append_undo_and_survive_save_through_mobile_tools() {
     s.close(doc, true).unwrap();
     let reopened = s.open(out.to_string_lossy().into_owned(), None).unwrap();
     let restored = s.outline(reopened.id).unwrap();
-    assert_eq!(restored.iter().map(|entry| (&entry.title, entry.level, entry.page)).collect::<Vec<_>>(),
-        expected.iter().map(|entry| (&entry.title, entry.level, entry.page)).collect::<Vec<_>>());
+    assert_eq!(
+        restored.iter().map(|entry| (&entry.title, entry.level, entry.page)).collect::<Vec<_>>(),
+        expected.iter().map(|entry| (&entry.title, entry.level, entry.page)).collect::<Vec<_>>()
+    );
     assert_eq!(std::fs::read(&path).unwrap(), original);
 }
-
 
 #[test]
 fn paragraph_script_uses_native_unicode_toggle_and_survives_reopen() {
@@ -572,4 +574,41 @@ fn paragraph_script_uses_native_unicode_toggle_and_survives_reopen() {
     let reopened = s.open(out.to_string_lossy().into_owned(), None).unwrap().id;
     assert!(s.page_plain_text(reopened, 0).unwrap().contains("H₂O + CO2"));
     assert_eq!(std::fs::read(&path).unwrap(), original);
+}
+
+#[test]
+fn upgraded_tool_table_preserves_mobile_tools_and_adds_stable_019_schemas() {
+    let session = MobileSession::new();
+    let tools = session.tools();
+    let names: std::collections::HashSet<_> = tools.iter().map(|t| t.name.as_str()).collect();
+    assert_eq!(names.len(), tools.len(), "tool names must remain unique");
+    assert_eq!(names.len(), 195);
+    for name in [
+        "photo_find_document",
+        "comment_erase",
+        "comment_add",
+        "bookmark_export",
+        "bookmark_import",
+        "bookmark_copy",
+        "bookmark_from_text_styles",
+        "text_script",
+        "doc_backdrops",
+        "form_fill",
+        "sign_add",
+        "comments_copy",
+        "comments_paste",
+        "ocr_dictionary",
+        "ocr_words",
+        "ocr_review_apply",
+        "page_enhance_scan",
+    ] {
+        assert!(names.contains(name), "missing mobile/stable tool: {name}");
+    }
+    for omitted in ["model_add", "model_render"] {
+        assert!(!names.contains(omitted));
+    }
+    for tool in &tools {
+        let schema: Value = serde_json::from_str(&tool.input_schema).unwrap();
+        assert_eq!(schema["type"], "object", "invalid schema for {}", tool.name);
+    }
 }

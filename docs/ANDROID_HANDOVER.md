@@ -2,7 +2,7 @@
 
 ## ACTIVE WORK — dedicated v0.19.0 engine upgrade (2026-11-07)
 
-Owner authorized upgrading to immutable upstream `8c572792d6760bdc903d6f9a032e3e38e8f71cb8` in one independent PR from main `7f597ad`. Preserve every Android/stylus/voice/recovery/updater/signing feature. [Upgrade status and checklist](ANDROID_ENGINE_0.19.0_UPGRADE.md) tracks reconciliation and actual checks. Source import/testing is in progress, not yet merged or released; published 0.0.11-beta (11012) remains the verified v0.18.2 binary below.
+Owner authorized upgrading to immutable upstream `8c572792d6760bdc903d6f9a032e3e38e8f71cb8` in one independent PR from main `7f597ad`. Preserve every Android/stylus/voice/recovery/updater/signing feature. [Upgrade status and checklist](ANDROID_ENGINE_0.19.0_UPGRADE.md) tracks reconciliation and actual checks. PR [#37](https://github.com/MohamedRef/pdfcraft-android/pull/37) has imported the selected source: provenance 992 exact files / 24 reviewed adaptations / two omissions; internal Rust packages now 0.19.0. All Android UI/production bridge code is preserved. Baseline 23 bridge tests passed an initial local build; full workspace and current-head remote checks are pending. Not yet merged or released; published 0.0.11-beta (11012) remains the verified v0.18.2 binary below.
 
 ## LIVE CHECKPOINT — 2026-11-07 (Cairo): combined beta published and verified
 
