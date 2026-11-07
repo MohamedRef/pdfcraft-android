@@ -911,7 +911,7 @@ fun ToolSubToolbar(vm: AppViewModel, doc: OpenDocument) {
         ViewerTool.Draw -> SubToolbar {
             val snapOn = stringResource(R.string.toolbar_snap_on)
             val snapOff = stringResource(R.string.toolbar_snap_off)
-            SubTool(LucideIcons.PenLine, stringResource(R.string.toolbar_draw_freeform), !ctl.eraserMode && !ctl.lassoMode && ctl.inkShapeMode == InkShapeMode.Freehand, {
+            SubTool(LucideIcons.PenTool, stringResource(R.string.toolbar_draw_freeform), !ctl.eraserMode && !ctl.lassoMode && ctl.inkShapeMode == InkShapeMode.Freehand, {
                 ctl.eraserMode = false; ctl.lassoMode = false; ctl.inkShapeMode = InkShapeMode.Freehand
             })
             SubTool(LucideIcons.Minus, stringResource(R.string.toolbar_draw_line), !ctl.eraserMode && !ctl.lassoMode && ctl.inkShapeMode == InkShapeMode.Line, {
@@ -933,8 +933,8 @@ fun ToolSubToolbar(vm: AppViewModel, doc: OpenDocument) {
                 prefs.updateStylusOnly(!prefs.stylusOnly)
             })
             SubDivider()
-            SubProperty(LucideIcons.PenLine, stringResource(R.string.ink_presets_title), picker == Picker.Presets, { toggle(Picker.Presets) })
-            SubProperty(LucideIcons.Menu, stringResource(R.string.toolbar_line_thickness), picker == Picker.Width, { toggle(Picker.Width) })
+            SubProperty(LucideIcons.Pencil, stringResource(R.string.ink_presets_title), picker == Picker.Presets, { toggle(Picker.Presets) })
+            SubProperty(LucideIcons.SlidersHorizontal, stringResource(R.string.toolbar_line_thickness), picker == Picker.Width, { toggle(Picker.Width) })
             ColorDot(prefs.color(StyledTool.Ink), picker == Picker.Color) { toggle(Picker.Color) }
             SubDivider()
             SubTool(LucideIcons.Shapes, stringResource(R.string.toolbar_snap_to_shape), prefs.snapToShape, {
@@ -1043,7 +1043,7 @@ fun InkWidthRow(color: Color, selected: Float?, onPick: (Float) -> Unit) {
                     .semantics { contentDescription = description },
                 contentAlignment = Alignment.Center,
             ) {
-                Box(Modifier.width(28.dp).height((1 + i * 1.2f).dp).background(color))
+                Canvas(Modifier.size(32.dp)) { drawCircle(color, radius = (1.5f + w / 2f).dp.toPx(), center = center) })
             }
         }
     }
