@@ -95,7 +95,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /** A stroke being drawn: its page and points (in the page's points). */
-internal class InkStroke(val page: Int, val appearance: InkAppearance, stylus: Boolean = false) {
+internal class InkStroke(val page: Int, val appearance: InkAppearance, stylus: Boolean = false, val shapeMode: InkShapeMode = InkShapeMode.Freehand) {
     val points = mutableStateListOf<Offset>()
     val pressures = mutableStateListOf<Float>()
     var pressureSensitive by mutableStateOf(stylus)
@@ -386,6 +386,7 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
     val slop = with(LocalDensity.current) { SNAP_SLOP.toPx() }
     LaunchedEffect(current) {
         val s = current ?: return@LaunchedEffect
+        if (s.shapeMode != InkShapeMode.Freehand) return@LaunchedEffect
         while (true) {
             delay(50)
             if (s.preview == null && System.currentTimeMillis() - movedAt >= SNAP_HOLD_MS) {
@@ -542,7 +543,7 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                 stillAt = p
                 movedAt = System.currentTimeMillis()
                 val appearance = InkAppearance(prefs.color(StyledTool.Ink).toArgbInt(), prefs.opacity(StyledTool.Ink), prefs.inkWidth, prefs.author.ifBlank { null })
-                current = InkStroke(at.page, appearance, isStylus).also {
+                current = InkStroke(at.page, appearance, isStylus && doc.controller.inkShapeMode == InkShapeMode.Freehand, doc.controller.inkShapeMode).also {
                     it.points.add(Offset(at.x, at.y))
                     it.pressures.add(pressure)
                     strokes.add(it)
@@ -558,15 +559,25 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                     return@toolGestures
                 }
                 val s = current ?: return@toolGestures
-                if ((p - stillAt).getDistance() > slop) {
+                if (s.shapeMode == InkShapeMode.Freehand && (p - stillAt).getDistance() > slop) {
                     stillAt = p
                     movedAt = System.currentTimeMillis()
                     s.preview = null
                 }
                 val at = doc.viewer.screenToPage(p, nearest = true) ?: return@toolGestures
                 if (at.page == s.page) {
-                    s.points.add(Offset(at.x, at.y))
-                    s.pressures.add(pressure)
+                    val pos = Offset(at.x, at.y)
+                    if (s.shapeMode == InkShapeMode.Freehand) {
+                        s.points.add(pos)
+                        s.pressures.add(pressure)
+                    } else {
+                        // Keep only endpoints in Compose state while dragging; native ink gets a
+                        // densified outline after lift. A temporary preview never reaches the engine.
+                        if (s.points.size == 1) s.points.add(pos) else s.points[1] = pos
+                        s.preview = doc.viewer.pages.getOrNull(s.page)?.let { page ->
+                            inkShapeOutline(s.shapeMode, s.points.first(), pos, page.width, page.height)
+                        }
+                    }
                 }
             },
             onUp = { p, _ ->
@@ -589,8 +600,15 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                         strokes.remove(s)
                     }
                     // a held shape always snaps; with Snap to shape on, any stroke that is one does
-                    val shape = s.preview ?: if (prefs.snapToShape) ShapeSnap.recognise(s.points.toList())?.outline() else null
+                    val shape = if (s.shapeMode != InkShapeMode.Freehand) {
+                        val page = doc.viewer.pages.getOrNull(s.page)
+                        if (page != null && s.points.size >= 2) inkShapeOutline(s.shapeMode, s.points.first(), s.points.last(), page.width, page.height) else null
+                    } else s.preview ?: if (prefs.snapToShape) ShapeSnap.recognise(s.points.toList())?.outline() else null
                     s.preview = null
+                    if (s.shapeMode != InkShapeMode.Freehand && shape == null) {
+                        strokes.remove(s)
+                        edits.remove(DraftInkEdit.Added(s))
+                    }
                     if (shape != null) {
                         s.points.clear()
                         s.points.addAll(shape)
@@ -893,8 +911,17 @@ fun ToolSubToolbar(vm: AppViewModel, doc: OpenDocument) {
         ViewerTool.Draw -> SubToolbar {
             val snapOn = stringResource(R.string.toolbar_snap_on)
             val snapOff = stringResource(R.string.toolbar_snap_off)
-            SubTool(LucideIcons.PenLine, stringResource(R.string.toolbar_draw_freeform), !ctl.eraserMode && !ctl.lassoMode, {
-                ctl.eraserMode = false; ctl.lassoMode = false
+            SubTool(LucideIcons.PenLine, stringResource(R.string.toolbar_draw_freeform), !ctl.eraserMode && !ctl.lassoMode && ctl.inkShapeMode == InkShapeMode.Freehand, {
+                ctl.eraserMode = false; ctl.lassoMode = false; ctl.inkShapeMode = InkShapeMode.Freehand
+            })
+            SubTool(LucideIcons.Minus, stringResource(R.string.toolbar_draw_line), !ctl.eraserMode && !ctl.lassoMode && ctl.inkShapeMode == InkShapeMode.Line, {
+                ctl.eraserMode = false; ctl.lassoMode = false; ctl.inkShapeMode = InkShapeMode.Line
+            })
+            SubTool(LucideIcons.Square, stringResource(R.string.toolbar_draw_rectangle), !ctl.eraserMode && !ctl.lassoMode && ctl.inkShapeMode == InkShapeMode.Rectangle, {
+                ctl.eraserMode = false; ctl.lassoMode = false; ctl.inkShapeMode = InkShapeMode.Rectangle
+            })
+            SubTool(LucideIcons.Circle, stringResource(R.string.toolbar_draw_oval), !ctl.eraserMode && !ctl.lassoMode && ctl.inkShapeMode == InkShapeMode.Oval, {
+                ctl.eraserMode = false; ctl.lassoMode = false; ctl.inkShapeMode = InkShapeMode.Oval
             })
             SubTool(LucideIcons.Eraser, stringResource(R.string.toolbar_eraser), ctl.eraserMode, {
                 ctl.eraserMode = true; ctl.lassoMode = false
