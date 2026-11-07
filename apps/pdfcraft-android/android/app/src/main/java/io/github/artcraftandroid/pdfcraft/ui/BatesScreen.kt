@@ -28,6 +28,7 @@ fun BatesScreen(vm: AppViewModel) {
     var suffix by remember { mutableStateOf("") }
     val settings = BatesSettings.parse(start, digits, prefix, suffix)
     val running = vm.batesRunning
+    val canChangeSelection = !running && !vm.batesSelectionLoading
     BackHandler { vm.closeBates() }
     Column(Modifier.fillMaxSize().background(c.surface).safeTopPadding().navigationBarsPadding().imePadding()) {
         Row(Modifier.fillMaxWidth().height(56.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -48,14 +49,15 @@ fun BatesScreen(vm: AppViewModel) {
                 label = { Text(stringResource(R.string.bates_suffix)) }, modifier = Modifier.fillMaxWidth())
             if (settings != null) Text(stringResource(R.string.bates_preview, settings.preview), color = c.text)
             else Text(stringResource(R.string.bates_invalid), color = c.red)
-            TextButton(onClick = vm::pickBatesFiles, enabled = !running) { Text(stringResource(R.string.tools_add_files)) }
+            TextButton(onClick = vm::pickBatesFiles, enabled = canChangeSelection) { Text(stringResource(R.string.tools_add_files)) }
+            if (vm.batesSelectionLoading) CircularProgressIndicator()
             vm.batesFiles.forEachIndexed { i, file ->
                 Column(Modifier.fillMaxWidth()) {
                     Text("${i + 1}. ${file.name}", color = c.text, maxLines = 2, overflow = TextOverflow.Ellipsis)
                     Row {
-                        TextButton(onClick = { vm.moveBatesFile(i, -1) }, enabled = !running && i > 0) { Text(stringResource(R.string.bates_up)) }
-                        TextButton(onClick = { vm.moveBatesFile(i, 1) }, enabled = !running && i + 1 < vm.batesFiles.size) { Text(stringResource(R.string.bates_down)) }
-                        TextButton(onClick = { vm.removeBatesFile(i) }, enabled = !running) { Text(stringResource(R.string.bates_remove)) }
+                        TextButton(onClick = { vm.moveBatesFile(i, -1) }, enabled = canChangeSelection && i > 0) { Text(stringResource(R.string.bates_up)) }
+                        TextButton(onClick = { vm.moveBatesFile(i, 1) }, enabled = canChangeSelection && i + 1 < vm.batesFiles.size) { Text(stringResource(R.string.bates_down)) }
+                        TextButton(onClick = { vm.removeBatesFile(i) }, enabled = canChangeSelection) { Text(stringResource(R.string.bates_remove)) }
                     }
                 }
             }
@@ -71,7 +73,7 @@ fun BatesScreen(vm: AppViewModel) {
         if (running) {
             TextButton(onClick = vm::closeBates, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.common_cancel)) }
         } else {
-            Button(onClick = { vm.runBates(start, digits, prefix, suffix) }, enabled = settings != null && vm.batesFiles.isNotEmpty(), modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+            Button(onClick = { vm.runBates(start, digits, prefix, suffix) }, enabled = settings != null && vm.batesFiles.isNotEmpty() && !vm.batesSelectionLoading, modifier = Modifier.fillMaxWidth().padding(16.dp)) {
                 Text(stringResource(R.string.bates_run))
             }
         }

@@ -2113,6 +2113,8 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     val batesPicks = Channel<Unit>(Channel.BUFFERED)
     var batesRunning by mutableStateOf(false)
         private set
+    var batesSelectionLoading by mutableStateOf(false)
+        private set
     var batesStatus by mutableStateOf("")
         private set
     var batesResults by mutableStateOf<List<BatesExportResult>>(emptyList())
@@ -2125,6 +2127,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         if (batesRunning) return
         batesEpoch++
         batesPendingPick = null
+        batesSelectionLoading = false
         batesFiles.clear()
         batesResults = emptyList()
         batesStatus = ""
@@ -2138,13 +2141,14 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         } else {
             batesEpoch++
             batesPendingPick = null
+            batesSelectionLoading = false
             batesFiles.clear()
             toolScreen = null
         }
     }
 
     fun pickBatesFiles() {
-        if (batesRunning || toolScreen != ToolScreen.Bates || batesPendingPick != null) return
+        if (batesRunning || batesSelectionLoading || toolScreen != ToolScreen.Bates || batesPendingPick != null) return
         batesPendingPick = batesEpoch
         if (!batesPicks.trySend(Unit).isSuccess) batesPendingPick = null
     }
@@ -2157,6 +2161,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         val remaining = io.github.artcraftandroid.pdfcraft.engine.MAX_BATES_FILES - batesFiles.size
         val selected = uris.distinct().filter { u -> batesFiles.none { it.uri == u } }
         if (selected.size > remaining) { tell(text(R.string.bates_limits)); return }
+        batesSelectionLoading = true
         viewModelScope.launch {
             try {
                 val picked = withContext(Dispatchers.IO) {
@@ -2172,12 +2177,13 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 }
             } catch (e: kotlinx.coroutines.CancellationException) { throw e }
             catch (_: Exception) { tell(text(R.string.bates_failed)) }
+            finally { if (epoch == batesEpoch) batesSelectionLoading = false }
         }
     }
 
     fun moveBatesFile(index: Int, delta: Int) {
         val target = index + delta
-        if (!batesRunning && index in batesFiles.indices && target in batesFiles.indices) {
+        if (!batesRunning && !batesSelectionLoading && index in batesFiles.indices && target in batesFiles.indices) {
             val item = batesFiles.removeAt(index)
             batesFiles.add(target, item)
             batesResults = emptyList()
@@ -2185,14 +2191,14 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     }
 
     fun removeBatesFile(index: Int) {
-        if (!batesRunning && index in batesFiles.indices) { batesFiles.removeAt(index); batesResults = emptyList() }
+        if (!batesRunning && !batesSelectionLoading && index in batesFiles.indices) { batesFiles.removeAt(index); batesResults = emptyList() }
     }
 
     fun runBates(start: String, digits: String, prefix: String, suffix: String) {
         val app = getApplication<Application>()
         val settings = io.github.artcraftandroid.pdfcraft.engine.BatesSettings.parse(start, digits, prefix, suffix) ?: return
         val eng = engine ?: return
-        if (batesRunning || toolScreen != ToolScreen.Bates || batesFiles.size !in 1..io.github.artcraftandroid.pdfcraft.engine.MAX_BATES_FILES) return
+        if (batesRunning || batesSelectionLoading || toolScreen != ToolScreen.Bates || batesFiles.size !in 1..io.github.artcraftandroid.pdfcraft.engine.MAX_BATES_FILES) return
         val picked = batesFiles.toList()
         batesEpoch++ // Ignore stale picker/metadata callbacks for this frozen batch.
         batesPendingPick = null
