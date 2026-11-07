@@ -59,7 +59,7 @@ class MarkupSelectionTest {
         assertFalse(markupEndpointNearGlyph(54f, 110f, glyph, -1f))
         assertFalse(markupEndpointNearGlyph(54f, 110f, glyph.take(3), 4f))
         assertFalse(markupEndpointNearGlyph(54f, 110f, listOf(50f, Float.POSITIVE_INFINITY, 62f, 118f), 4f))
-        assertFalse(markupEndpointNearGlyph(54f, 110f, listOf(62f, 100f, 50f, 118f), 4f).not())
+        assertTrue(markupEndpointNearGlyph(54f, 110f, listOf(62f, 100f, 50f, 118f), 4f))
     }
 
 }
