@@ -3,7 +3,7 @@
 //! Geometry follows the automation convention: points from the top-left of the displayed page,
 //! y down. It is converted to PDF user space (crop box, `/Rotate`) here.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use pdfcraft_engine::{
     BorderShape, Edit, LineEnding, Markup, NewAnnotation, NoteIcon, ReviewState, Rgb, Shape, StampGroup, StampKind, Style, SummarySort,
@@ -839,8 +839,7 @@ impl Automation {
             .iter()
             .filter(|c| {
                 // Ink signatures/initials and freehand highlights are not ordinary pen drawings.
-                c.page == page && c.subtype == "Ink" && !c.fill_sign && !c.locked
-                    && c.intent.as_deref() != Some("FreehandHighlight")
+                c.page == page && c.subtype == "Ink" && !c.fill_sign && !c.locked && c.intent.as_deref() != Some("FreehandHighlight")
             })
             .filter(|c| {
                 let r = c.rect;
@@ -884,6 +883,24 @@ impl Automation {
                 return Err(failed(format!("there is no comment {} on page {} (see comment_list)", index + 1, page + 1)));
             }
             which.push((page, index));
+        }
+        // XFDF carries these annotation kinds but not their embedded recording/file bytes.
+        // Follow reply positions, not possibly duplicate names, to refuse a whole affected
+        // selection before returning a clipboard payload that would silently lose its data.
+        let selected: HashSet<_> = which.iter().copied().collect();
+        let parents: HashMap<_, _> = all.iter().filter_map(|c| c.parent.map(|p| ((c.page, c.index), p))).collect();
+        for embedded in all.iter().filter(|c| matches!(c.subtype.as_str(), "Sound" | "FileAttachment")) {
+            let mut at = Some((embedded.page, embedded.index));
+            let mut seen = HashSet::new();
+            while let Some(pos) = at {
+                if !seen.insert(pos) {
+                    break;
+                }
+                if selected.contains(&pos) {
+                    return Err(failed("Voice recordings and file attachments cannot be copied by this tool; keep them in their original PDF."));
+                }
+                at = parents.get(&pos).copied();
+            }
         }
         let xfdf = self.session.export_comments(id, &which).map_err(failed)?;
         Ok(json!({ "xfdf": xfdf, "comments": which.len() }))
@@ -1012,4 +1029,3 @@ fn wav_samples(data: &[u8]) -> std::result::Result<(u32, u8, Vec<u8>), String> {
     }
     Ok((rate, channels as u8, samples.as_chunks::<2>().0.iter().flat_map(|s| [s[1], s[0]]).collect()))
 }
-

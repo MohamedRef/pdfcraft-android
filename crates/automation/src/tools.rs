@@ -1024,7 +1024,7 @@ pub fn tools() -> Vec<ToolDef> {
         t(
             "comments_copy",
             "Copy comments",
-            "The XFDF of these comments, each with its replies: what Copy puts on the clipboard. Paste it into this or another document with comments_paste. `comments`: [[page, index], …], 1-based as comment_list reports them.",
+            "The XFDF of these comments, each with its replies: what Copy puts on the clipboard. Paste it into this or another document with comments_paste. `comments`: [[page, index], …], 1-based as comment_list reports them. Selections containing voice recordings or file attachments (including replies) are refused because their embedded data cannot be transferred by this tool.",
         )
         .ro()
         .with(schema(

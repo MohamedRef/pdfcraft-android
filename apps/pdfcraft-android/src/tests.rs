@@ -594,7 +594,7 @@ fn upgraded_tool_table_preserves_mobile_tools_and_adds_stable_019_schemas() {
         "text_script",
         "doc_backdrops",
         "form_fill",
-        "sign_add",
+        "sign_document",
         "comments_copy",
         "comments_paste",
         "ocr_dictionary",
@@ -611,4 +611,50 @@ fn upgraded_tool_table_preserves_mobile_tools_and_adds_stable_019_schemas() {
         let schema: Value = serde_json::from_str(&tool.input_schema).unwrap();
         assert_eq!(schema["type"], "object", "invalid schema for {}", tool.name);
     }
+}
+
+#[test]
+fn new_comment_clipboard_keeps_ink_and_refuses_losing_embedded_payloads() {
+    let s = MobileSession::new();
+    let source = blank_pdf(1);
+    let original = std::fs::read(&source).unwrap();
+    let doc = s.open(source.clone(), None).unwrap().id;
+    let samples = [1i16, -42, 1100, -32000];
+    let wav = wav_file(&samples);
+    s.execute("comment_add".into(), serde_json::json!({"doc":doc,"page":1,"type":"sound","at":[100,100],"path":wav}).to_string()).unwrap();
+    s.execute(
+        "comment_add".into(),
+        serde_json::json!({"doc":doc,"page":1,"type":"ink","strokes":[[[10,10],[40,50]]],"width":3,"opacity":0.6}).to_string(),
+    )
+    .unwrap();
+    let comments = s.comments(doc).unwrap();
+    let sound = comments.iter().find(|c| c.subtype == "Sound").unwrap();
+    let ink = comments.iter().find(|c| c.subtype == "Ink").unwrap();
+    let generation = s.document(doc).unwrap().generation;
+    let copied = s.execute("comments_copy".into(), serde_json::json!({"doc":doc,"comments":[[1,sound.index+1],[1,ink.index+1]]}).to_string());
+    assert!(copied.unwrap_err().to_string().contains("recordings"));
+    assert_eq!(s.document(doc).unwrap().generation, generation);
+    let out = scratch().join("still-voice.wav");
+    s.save_sound(doc, 0, sound.index, out.to_string_lossy().into_owned()).unwrap();
+    assert_eq!(&std::fs::read(&out).unwrap()[44..], samples.iter().flat_map(|s| s.to_le_bytes()).collect::<Vec<_>>());
+    let copied: Value =
+        serde_json::from_str(&s.execute("comments_copy".into(), serde_json::json!({"doc":doc,"comments":[[1,ink.index+1]]}).to_string()).unwrap())
+            .unwrap();
+    let target = s.open(blank_pdf(1), None).unwrap().id;
+    s.execute("comments_paste".into(), serde_json::json!({"doc":target,"page":1,"xfdf":copied["xfdf"]}).to_string()).unwrap();
+    let pasted = s.comments(target).unwrap();
+    assert_eq!(pasted.len(), 1);
+    assert_eq!(pasted[0].subtype, "Ink");
+    assert_eq!(pasted[0].width, Some(3.0));
+    assert!((pasted[0].opacity - 0.6).abs() < 0.01);
+    s.execute("edit_undo".into(), serde_json::json!({"doc":target}).to_string()).unwrap();
+    assert!(s.comments(target).unwrap().is_empty());
+    assert_eq!(std::fs::read(source).unwrap(), original);
+    let attachment_doc = s.open(attachments_pdf(), None).unwrap().id;
+    let attachments = s.comments(attachment_doc).unwrap();
+    let attachment = attachments.iter().find(|c| c.subtype == "FileAttachment").unwrap();
+    let generation = s.document(attachment_doc).unwrap().generation;
+    let result = s.execute("comments_copy".into(), serde_json::json!({"doc":attachment_doc,"comments":[[1,attachment.index+1]]}).to_string());
+    assert!(result.unwrap_err().to_string().contains("attachments"));
+    assert_eq!(s.document(attachment_doc).unwrap().generation, generation);
 }

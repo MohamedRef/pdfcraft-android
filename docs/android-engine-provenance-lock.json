@@ -1036,11 +1036,11 @@
     "crates/automation/Cargo.toml": "Exclude desktop-only PRC and model-render dependencies.",
     "crates/automation/src/a11y.rs": "Mobile form-fill script output reuses the released JS request/alert JSON serializers without changing their content.",
     "crates/automation/src/a11y/form_tools.rs": "Expose existing request_json and alert_json as crate-visible for form-fill reports; no output schema alteration.",
-    "crates/automation/src/comments.rs": "Bounded WAV-to-Sound comment creation and mobile erase-path wrapper over existing native Edit::EraseInk; exclude FillSign and locked ink, cap gesture input.",
+    "crates/automation/src/comments.rs": "Bounded WAV-to-Sound comment creation and mobile erase-path wrapper over existing native Edit::EraseInk; exclude FillSign and locked ink, cap gesture input. Refuse clipboard selections/reply threads with embedded Sound/FileAttachment payloads to prevent silent payload loss.",
     "crates/automation/src/dispatch.rs": "Omit model3d dispatch; retain Android photo detection and bounded mobile comment_erase routing.",
     "crates/automation/src/forms.rs": "Return already-executed form calculation alerts, viewer requests, console logs and script errors to Android instead of silently dropping them.",
     "crates/automation/src/lib.rs": "Exclude 3D modules and retain Android-only photo detection.",
-    "crates/automation/src/tools.rs": "Headless tool table excludes 3D and includes Android photo_find_document plus bounded comment_erase schema.",
+    "crates/automation/src/tools.rs": "Headless tool table excludes 3D and includes Android photo_find_document plus bounded comment_erase schema. Explicit clipboard embedded-payload limit.",
     "crates/engine/src/camera.rs": "Android photo detection / EXIF backport.",
     "crates/engine/src/document.rs": "Bounded Android XMP metadata reader exposed through File Details.",
     "crates/engine/src/edit/labels.rs": "Android-only Sound comment edit/history label.",
@@ -1052,7 +1052,8 @@
     "vendor/hayro-interpret/src/interpret/mod.rs": "Android-only /Text annotation appearance filter and interpreter setting.",
     "crates/cos/src/document/objects.rs": "Bounded generation-aware raw-header candidate scan; exact header reference and generation-aware Length lookup, with ordinary reader fallback for repaired/edited/compressed/uncertain objects.",
     "crates/sign/src/pdf/listing.rs": "Discover timestamps using unencrypted names/key presence from headers, then fully load and validate every candidate as before.",
-    "crates/sign/src/pdf_discovery_tests.rs": "Differential encrypted/escaped-name and nonzero/repaired-generation timestamp discovery; unreadable-body validation regressions."
+    "crates/sign/src/pdf_discovery_tests.rs": "Differential encrypted/escaped-name and nonzero/repaired-generation timestamp discovery; unreadable-body validation regressions.",
+    "crates/annot/src/tests.rs": "Display-only missing-appearance regression expects the preserved Android Sound microphone icon; source annotations remain untouched."
   },
   "allowed_local_additions": {}
 }
