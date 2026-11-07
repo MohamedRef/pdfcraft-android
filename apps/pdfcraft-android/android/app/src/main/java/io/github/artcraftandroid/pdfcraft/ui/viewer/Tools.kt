@@ -457,11 +457,11 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
             val anchor = moveAnchor ?: return
             val pageSize = doc.viewer.pages.getOrNull(page) ?: return
             moveOffset = boundedInkLassoMove(
-                selected.map { stroke -> stroke.points.map { it + moveOffset } },
+                selected.map { stroke -> stroke.points.toList() },
                 point - anchor,
                 pageSize.width,
                 pageSize.height,
-            ) + moveOffset
+            )
         } else {
             addInkLassoPoint(lassoPoints, point)
         }
