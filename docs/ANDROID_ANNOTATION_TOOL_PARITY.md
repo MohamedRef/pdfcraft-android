@@ -9,6 +9,12 @@ Adds direct **Line**, **Rectangle**, and **Oval** choices beside **Freehand** in
 - Exact shapes are bounded to their source page. Tiny/invalid gestures are discarded. Freehand keeps existing stylus pressure behavior and snap-to-shape.
 - Shape tools stay mutually exclusive with Lasso and Eraser. Hardware eraser still takes priority; touch routing is unchanged. Native ink remains undoable through the existing local/native undo sequence.
 
+## Pen palette UI pass (Samsung Notes-inspired, original assets)
+- The existing three appearance presets are displayed as large, tappable pen cards with original illustrated nibs and real ink-colour/width previews, instead of small line rows.
+- The picker includes an adjustable width slider, ink preview, existing colour grid and opacity control, plus explicit save-to-slot actions. It is vertically scrollable on narrow phones.
+- Distinct nib/pencil/settings icons replace repeated generic strokes in the Draw toolbar; stroke width swatches now use circular pen-point previews.
+- This is a UI and appearance-presets improvement, **not** yet new fountain/brush/pencil rendering algorithms; those require engine-side proof of appearance persistence and export parity.
+
 ## Coverage / QA
 Added deterministic unit tests for reversed drags, closed shapes, page clamps, invalid coordinates and tiny gestures. Existing ink appearance, lasso, pressure and shape-snap suites must pass. Run the repository's required **exact PR head** Android/JVM/ARM64 and aggregate merge gates before merging.
 
