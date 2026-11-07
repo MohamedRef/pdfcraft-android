@@ -211,6 +211,25 @@ fun BookmarksSheet(vm: AppViewModel, doc: OpenDocument) {
         }
         SheetDivider(inset = 0.dp)
         if (tab == 0) {
+            if (hasOutline) {
+                SheetRow(
+                    LucideIcons.FileOutput,
+                    stringResource(R.string.sheet_export_embedded_bookmarks),
+                    { vm.exportEmbeddedBookmarks(doc) },
+                )
+            }
+            SheetRow(
+                LucideIcons.FileInput,
+                stringResource(R.string.sheet_import_embedded_bookmarks),
+                { vm.pickEmbeddedBookmarksImport(doc) },
+            )
+            SheetRow(
+                LucideIcons.Copy,
+                stringResource(R.string.sheet_copy_embedded_bookmarks),
+                { vm.pickEmbeddedBookmarksCopy(doc) },
+            )
+        }
+        if (tab == 0) {
             val all = outline
             when {
                 all == null -> Text("…", color = c.textSecondary, modifier = Modifier.padding(20.dp))
