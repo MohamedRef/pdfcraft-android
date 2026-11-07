@@ -12,6 +12,7 @@ import io.github.artcraftandroid.pdfcraft.ui.viewer.VoicePrompt
 import io.github.artcraftandroid.pdfcraft.ui.viewer.ReplyPrompt
 import io.github.artcraftandroid.pdfcraft.ui.viewer.StyledTool
 import io.github.artcraftandroid.pdfcraft.ui.viewer.TextMarkup
+import io.github.artcraftandroid.pdfcraft.ui.viewer.PendingMarkupPreview
 import io.github.artcraftandroid.pdfcraft.ui.viewer.TextPrompt
 import io.github.artcraftandroid.pdfcraft.ui.viewer.ToolPrefs
 import io.github.artcraftandroid.pdfcraft.ui.viewer.engineType
@@ -1046,6 +1047,23 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     var replyPrompt by mutableStateOf<ReplyPrompt?>(null)
 
     private val author: String? get() = toolPrefs.author.ifBlank { null }
+
+    /** A pending selection-menu annotation, rendered until the native refresh settles. */
+    var pendingMarkupPreview by mutableStateOf<PendingMarkupPreview?>(null)
+        private set
+
+    /** Same annotation path as the drawing tool, with a temporary visual bridge. */
+    fun addSelectedMarkup(
+        doc: OpenDocument, markup: TextMarkup, page: Int, rects: List<FloatArray>,
+        color: androidx.compose.ui.graphics.Color, opacity: Float,
+    ) {
+        if (document !== doc || !doc.info.allowsAnnotation || rects.isEmpty()) return
+        val preview = PendingMarkupPreview(doc, page, rects.map { it.copyOf() }, markup, color, opacity)
+        pendingMarkupPreview = preview
+        addMarkup(doc, markup, page, rects, color, opacity, onSettled = {
+            if (pendingMarkupPreview === preview) pendingMarkupPreview = null
+        })
+    }
 
     /** Mark text with [markup]: [rects] (points, one per line) on [page]. */
     fun addMarkup(doc: OpenDocument, markup: TextMarkup, page: Int, rects: List<FloatArray>, color: androidx.compose.ui.graphics.Color, opacity: Float, contents: String? = null, onSettled: (() -> Unit)? = null) {

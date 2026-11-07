@@ -341,3 +341,9 @@ Reference behavior: https://feedback.xodo.com/support/solutions/articles/3500020
 - The stable engine `page_enhance_scan` command was already imported and pinned in #37; this proposed UI-only parity increment provides More → Enhance scanned pages for an open writable/unsigned PDF. It **does not** invent a second scan renderer or alter the native image processing algorithm.
 - User action is explicit: current page or at most 12 sequential pages, level 0–100, edge shadows and speckle toggles, and confirmation prior to editing. Native `comment_add` and all other features unchanged. Native command should preserve OCR text layer, link and comment objects while modifying eligible image objects; unsupported images can be skipped.
 - Local page-range JVM checks exercise 10,000-page file scoping, invalid positions/settings and noncontiguous native inputs. PR is stacked after unresolved Highlight #43 for ordered integration; **CI/device/real PDF results pending**. One owner-signed Beta only for a fully verified merged feature batch; current public 0.0.12-beta unchanged. See docs/ANDROID_SCAN_ENHANCEMENT.md.
+
+
+### Highlight/Xodo parity: selection menu preview bridge (2026-11-07)
+
+- Core QuadPoints-based PDF creation and persistence remain in the upstream v0.19.0 engine. The gap is Kotlin selection/UI behavior: menu selection was cleared immediately, before native raster refresh. New proposed patch holds a transient overlay for each selected line through `comment_add` and refresh; the overlay identity avoids an older completion clearing a newer highlight. Underline/strikeout use the same lifecycle.
+- Native writing, annotation placement, document permissions, color/opacity preferences, undo and SAF save paths are unchanged. Device tests are required for rapid successive highlights, zoom/rotation, long PDFs, RTL and selection-menu gestures. A later independent PR will address precise glyph vs word boundaries and S Pen freehand parity.

@@ -1,5 +1,12 @@
 # PdfCraft Android - development handover
 
+## Highlight / Xodo parity — in review, not released
+
+- Upstream PdfCraft v0.19.0 uses native text-layer geometry and PDF QuadPoints. Android previously dismissed a text-selection menu immediately on Highlight/Underline/Strikeout, leaving a blank visual gap before native refresh. The proposed `fix/android-highlight-selection-preview-parity` bridge keeps the selected quads visible until the existing native `comment_add`/refresh operation settles. It changes no Rust engine, PDF encoding, provider paths, signing or release version.
+- Next isolated follow-up after this lands: character-accurate drag adjustment vs Xodo-style word snapping; then interactive performance/text cache and Freehand Highlight with S Pen. Desktop provides glyph-level selection and a separate freehand highlight tool, while touch affordances require Android adaptation.
+- Tests/physical Samsung gesture QA still required. Do not merge without current-head Android, Rust and aggregate gate success. PR #44 already passed and merged before this change.
+
+
 ## PROPOSED NEXT PARITY INCREMENT — Scan enhancement (2026-11-07)
 
 - The Android mobile engine is already stable upstream v0.19.0, with 193/195 shared tool names plus two intentional 3D deferrals; the remaining important gap is Android UI/runtime exposure, not engine reimport.
