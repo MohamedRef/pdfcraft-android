@@ -757,8 +757,8 @@ private fun MarkupLayer(vm: AppViewModel, doc: OpenDocument) {
             doc,
             onDown = { screen, _, _ ->
                 requestSerial++
-                pendingTap = null
                 resetPreview()
+                pendingTap = screen
                 val start = doc.viewer.screenToPage(screen) ?: return@toolGestures
                 val gesture = MarkupGesture(start, screen)
                 active = gesture
@@ -770,7 +770,10 @@ private fun MarkupLayer(vm: AppViewModel, doc: OpenDocument) {
                         .collect { (end, moved) ->
                             val radius = (hitRadiusPx / doc.viewer.pixelsPerPoint(start.page).coerceAtLeast(0.1f)).coerceIn(0.1f, 24f)
                             val preview = resolveMarkup(eng, doc, start, end, radius, tap = !moved)
-                            if (active === gesture && gesture.latest == end && gesture.moved == moved) drag = preview
+                            if (active === gesture && gesture.latest == end && gesture.moved == moved) {
+                                drag = preview
+                                pendingTap = null
+                            }
                         }
                 }
             },
@@ -778,6 +781,7 @@ private fun MarkupLayer(vm: AppViewModel, doc: OpenDocument) {
                 val gesture = active ?: return@toolGestures
                 val at = doc.viewer.screenToPageOf(gesture.start.page, screen) ?: return@toolGestures
                 if ((screen - gesture.downScreen).getDistance() > moveThresholdPx) gesture.moved = true
+                if (drag == null) pendingTap = screen
                 gesture.latest = at
             },
             onUp = { screen, _ ->
