@@ -883,6 +883,10 @@
 
     <!-- Draw tool -->
     <string name="toolbar_draw_freeform">Draw freeform</string>
+    <string name="toolbar_draw_line">Straight line</string>
+    <string name="toolbar_draw_rectangle">Rectangle</string>
+    <string name="toolbar_draw_oval">Oval</string>
+    <string name="ink_preset_save_short">Save %1$d</string>
     <string name="toolbar_eraser">Eraser</string>
     <string name="toolbar_ink_lasso">Lasso, select and move unsaved ink</string>
     <string name="toolbar_line_thickness">Line thickness</string>
