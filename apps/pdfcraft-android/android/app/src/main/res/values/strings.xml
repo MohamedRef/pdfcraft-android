@@ -1311,4 +1311,6 @@
     <string name="ink_preset_save">Replace with current pen</string>
     <string name="ink_preset_saved">Saved favorite pen %1$d.</string>
     <string name="ink_preset_invalid">Choose a valid pen width and opacity first.</string>
+    <string name="ink_lasso_select">Lasso selection</string>
+    <string name="ink_lasso_limit">Lasso selects only ink drawn in the current session. Saved PDF annotations are unchanged.</string>
 </resources>
