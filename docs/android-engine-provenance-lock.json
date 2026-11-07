@@ -1053,7 +1053,9 @@
     "crates/cos/src/document/objects.rs": "Bounded generation-aware raw-header candidate scan; exact header reference and generation-aware Length lookup, with ordinary reader fallback for repaired/edited/compressed/uncertain objects.",
     "crates/sign/src/pdf/listing.rs": "Discover timestamps using unencrypted names/key presence from headers, then fully load and validate every candidate as before.",
     "crates/sign/src/pdf_discovery_tests.rs": "Differential encrypted/escaped-name and nonzero/repaired-generation timestamp discovery; unreadable-body validation regressions.",
-    "crates/annot/src/tests.rs": "Display-only missing-appearance regression expects the preserved Android Sound microphone icon; source annotations remain untouched."
+    "crates/annot/src/tests.rs": "Display-only missing-appearance regression expects the preserved Android Sound microphone icon; source annotations remain untouched.",
+    "crates/automation/tests/it/main.rs": "Mobile test scope retains desktop 3D test sources but does not register scenarios requiring deliberately omitted tools; explicit UnknownTool/no-document-edit rejection regression replaces those inapplicable scenarios.",
+    "crates/automation/tests/it/automation_roots.rs": "Root confinement tests exercise supported Android photo/Sound/OCR dictionary inputs instead of the deliberately absent model_add tool; all supported-file access assertions retained."
   },
   "allowed_local_additions": {}
 }

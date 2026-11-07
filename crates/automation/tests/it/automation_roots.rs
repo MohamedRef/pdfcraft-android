@@ -145,8 +145,8 @@ fn tools_that_read_a_path_are_held_to_the_read_root() {
     ok(&mut server, "doc_open", json!({"path": s(&base.join("in/a.pdf"))}));
     let (secret, pic, gone) = (s(&base.join("outside/secret.pdf")), s(&base.join("outside/pic.png")), s(&base.join("outside/gone.bin")));
     let out = s(&base.join("out/result.pdf"));
-    std::fs::write(base.join("in/m.prc"), b"PRC model").unwrap();
-    let model = s(&base.join("in/m.prc"));
+    let dictionary = s(&base.join("outside/ocr-dictionary-en.txt"));
+    std::fs::write(&dictionary, "privateword\n").unwrap();
     for (tool, args) in [
         ("page_insert_file", json!({"doc": 1, "path": secret, "at": 1})),
         ("page_replace", json!({"doc": 1, "pages": [1], "path": secret})),
@@ -155,11 +155,12 @@ fn tools_that_read_a_path_are_held_to_the_read_root() {
         ("doc_create", json!({"from": "images", "paths": [pic]})),
         ("stamp_custom", json!({"doc": 1, "page": 1, "path": secret, "at": [10, 10]})),
         ("stamp_custom", json!({"doc": 1, "page": 1, "path": secret, "rect": [10, 10, 493, 300]})),
-        ("model_add", json!({"doc": 1, "page": 1, "path": secret, "rect": [10, 10, 100, 100]})),
-        ("model_add", json!({"doc": 1, "page": 1, "path": model, "rect": [10, 10, 100, 100], "poster": pic})),
+        ("photo_find_document", json!({"path": pic})),
+        ("ocr_dictionary", json!({"path": dictionary})),
         ("page_add_image", json!({"doc": 1, "page": 1, "path": pic})),
         ("image_edit", json!({"doc": 1, "page": 1, "image": 1, "action": "replace", "path": pic})),
         ("comment_add", json!({"doc": 1, "page": 1, "type": "attachment", "at": [10, 10], "path": secret})),
+        ("comment_add", json!({"doc": 1, "page": 1, "type": "sound", "at": [10, 10], "path": secret})),
         ("fill_sign_add", json!({"doc": 1, "page": 1, "type": "signature", "at": [10, 10], "path": pic})),
         ("form_set_image", json!({"doc": 1, "field": "f", "path": pic})),
         ("doc_import_data", json!({"doc": 1, "path": secret})),
