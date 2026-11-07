@@ -27,10 +27,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import io.github.artcraftandroid.pdfcraft.R
 import io.github.artcraftandroid.pdfcraft.ui.pdfColors
 import java.io.File
 import kotlinx.coroutines.CancellationException
@@ -87,10 +89,10 @@ internal fun UpdatePanel() {
     var showAllNotes by remember { mutableStateOf(false) }
     var showKnownLimits by remember { mutableStateOf(false) }
 
-    Text("App updates", color = colors.accent, fontWeight = FontWeight.SemiBold,
+    Text(stringResource(R.string.updater_title), color = colors.accent, fontWeight = FontWeight.SemiBold,
         fontSize = 13.sp, modifier = Modifier.padding(start = 20.dp, top = 16.dp, bottom = 8.dp))
     Text(
-        "Download updates directly from published GitHub Releases. Interrupted downloads can resume.",
+        stringResource(R.string.updater_description),
         color = colors.textSecondary, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
     )
     TextButton(
@@ -108,15 +110,15 @@ internal fun UpdatePanel() {
                     showKnownLimits = false
                     cachedBytes = found?.let { apkCachedBytes(context, it) } ?: 0L
                     progress = if (found == null) 0 else (cachedBytes * 100L / found.size).toInt()
-                    message = if (found == null) "You're up to date. No newer published APK found." else null
+                    message = if (found == null) context.getString(R.string.updater_no_updates) else null
                 } catch (e: Exception) {
-                    message = "Unable to check GitHub Releases. Check your connection and retry."
+                    message = context.getString(R.string.updater_check_error)
                 } finally {
                     checking = false
                 }
             }
         },
-    ) { Text(if (checking) "Checking for updates…" else "Check for updates", color = colors.accent) }
+    ) { Text(stringResource(if (checking) R.string.updater_checking else R.string.updater_check), color = colors.accent) }
 
     candidate?.let { update ->
         Column(
@@ -127,20 +129,20 @@ internal fun UpdatePanel() {
                 .padding(14.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            Text("Update available", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = colors.accent)
+            Text(stringResource(R.string.updater_available), fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = colors.accent)
             Text("${update.version} (${update.apkVersionCode})", fontSize = 22.sp,
                 fontWeight = FontWeight.Bold, color = colors.text)
             Text(
-                "${update.channel} · Published ${update.publishedAt.take(10)} · ${readableMegabytes(update.size)} MB",
+                stringResource(R.string.updater_build_details, update.channel, update.publishedAt.take(10), readableMegabytes(update.size)),
                 fontSize = 12.sp, color = colors.textSecondary,
             )
             val sections = remember(update.notes) { updateNoteSections(update.notes) }
             if (sections.isNotEmpty()) {
-                Text("What's new", fontSize = 17.sp, fontWeight = FontWeight.SemiBold,
+                Text(stringResource(R.string.updater_whats_new), fontSize = 17.sp, fontWeight = FontWeight.SemiBold,
                     color = colors.text, modifier = Modifier.padding(top = 6.dp))
                 for (section in sections) {
                     if (section.title == "Known limits" && !showKnownLimits) continue
-                    Text(section.title, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = colors.accent)
+                    Text(stringResource(updaterSectionTitle(section.title)), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = colors.accent)
                     val visible = if (showAllNotes || section.title == "Known limits") section.entries else section.entries.take(3)
                     for (item in visible) {
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -152,12 +154,12 @@ internal fun UpdatePanel() {
                 }
                 if (sections.any { it.title != "Known limits" && it.entries.size > 3 }) {
                     TextButton(onClick = { showAllNotes = !showAllNotes }) {
-                        Text(if (showAllNotes) "Show fewer changes" else "Show all changes", color = colors.accent)
+                        Text(stringResource(if (showAllNotes) R.string.updater_show_less else R.string.updater_show_all), color = colors.accent)
                     }
                 }
                 if (sections.any { it.title == "Known limits" }) {
                     TextButton(onClick = { showKnownLimits = !showKnownLimits }) {
-                        Text(if (showKnownLimits) "Hide known limits" else "Read known limits", color = colors.accent)
+                        Text(stringResource(if (showKnownLimits) R.string.updater_hide_limits else R.string.updater_read_limits), color = colors.accent)
                     }
                 }
             } else if (update.notes.isNotBlank()) {
@@ -166,7 +168,7 @@ internal fun UpdatePanel() {
             TextButton(onClick = {
                 uriHandler.openUri("https://github.com/MohamedRef/pdfcraft-android/releases/tag/v${update.version}")
             }) {
-                Text("Full release details on GitHub", color = colors.accent)
+                Text(stringResource(R.string.updater_release_details), color = colors.accent)
             }
 
             if (verifiedApk == null) {
@@ -182,7 +184,7 @@ internal fun UpdatePanel() {
                         )
                     }
                     Text(
-                        "$progress% · ${readableMegabytes(if (downloading) update.size * progress / 100L else cachedBytes)} / ${readableMegabytes(update.size)} MB",
+                        stringResource(R.string.updater_progress, progress, readableMegabytes(if (downloading) update.size * progress / 100L else cachedBytes), readableMegabytes(update.size)),
                         color = colors.textSecondary, fontSize = 12.sp,
                     )
                 }
@@ -198,15 +200,15 @@ internal fun UpdatePanel() {
                                         progress = percent
                                     }
                                     cachedBytes = update.size
-                                    message = "Download complete and verified. Confirm installation below."
+                                    message = context.getString(R.string.updater_download_verified)
                                 } catch (_: CancellationException) {
                                     cachedBytes = apkCachedBytes(context, update)
                                     progress = (cachedBytes * 100L / update.size).toInt()
-                                    message = "Download paused. Your progress was kept."
+                                    message = context.getString(R.string.updater_paused)
                                 } catch (e: Exception) {
                                     cachedBytes = apkCachedBytes(context, update)
                                     progress = (cachedBytes * 100L / update.size).toInt()
-                                    message = e.message ?: "Download interrupted. Tap Resume to retry."
+                                    message = e.message ?: context.getString(R.string.updater_interrupted)
                                 } finally {
                                     downloading = false
                                     downloadJob = null
@@ -214,27 +216,26 @@ internal fun UpdatePanel() {
                             }
                         },
                     ) {
-                        Text(if (cachedBytes > 0L) "Resume download" else "Download APK", color = colors.accent)
+                        Text(stringResource(if (cachedBytes > 0L) R.string.updater_resume else R.string.updater_download), color = colors.accent)
                     }
                     if (downloading) {
                         Spacer(Modifier.width(8.dp))
                         TextButton(onClick = { downloadJob?.cancel() }) {
-                            Text("Pause", color = colors.text)
+                            Text(stringResource(R.string.updater_pause), color = colors.text)
                         }
                     }
                 }
             } else {
-                Text("Verified APK ready", color = colors.accent, fontWeight = FontWeight.SemiBold)
+                Text(stringResource(R.string.updater_apk_ready), color = colors.accent, fontWeight = FontWeight.SemiBold)
                 TextButton(onClick = {
                     try {
                         val launched = openVerifiedApkInstaller(context, verifiedApk!!)
-                        message = if (launched) "Confirm installation in Android's installer."
-                            else "Allow PdfCraft to install updates in Settings, then tap Install again."
+                        message = context.getString(if (launched) R.string.updater_confirm_install else R.string.updater_allow_install)
                     } catch (e: Exception) {
-                        message = e.message ?: "Android couldn't open the installer."
+                        message = e.message ?: context.getString(R.string.updater_installer_error)
                     }
                 }) {
-                    Text("Install verified APK", color = colors.accent, fontWeight = FontWeight.SemiBold)
+                    Text(stringResource(R.string.updater_install), color = colors.accent, fontWeight = FontWeight.SemiBold)
                 }
             }
         }
@@ -243,7 +244,15 @@ internal fun UpdatePanel() {
         Text(it, fontSize = 13.sp, color = colors.textSecondary,
             modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp))
     }
-    Text("Installing always requires your approval. APK signature and SHA-256 are checked first.",
+    Text(stringResource(R.string.updater_install_notice),
         color = colors.textSecondary, fontSize = 12.sp,
         modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp))
+}
+
+private fun updaterSectionTitle(name: String): Int = when (name) {
+    "New features" -> R.string.updater_features
+    "Fixes" -> R.string.updater_fixes
+    "Improvements" -> R.string.updater_improvements
+    "Known limits" -> R.string.updater_limits
+    else -> R.string.updater_whats_new
 }
