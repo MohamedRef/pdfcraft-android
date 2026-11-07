@@ -618,7 +618,8 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                     val path = Path()
                     for (i in run.start..run.end) {
                         val pt = pts[i]
-                        val o = doc.viewer.pageToScreen(s.page, pt.x, pt.y)
+                        val previewPoint = if (moving && s in selected) pt + moveOffset else pt
+                        val o = doc.viewer.pageToScreen(s.page, previewPoint.x, previewPoint.y)
                         if (i == run.start) path.moveTo(o.x, o.y) else path.lineTo(o.x, o.y)
                     }
                     drawPath(
