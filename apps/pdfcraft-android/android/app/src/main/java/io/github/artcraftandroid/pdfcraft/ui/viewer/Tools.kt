@@ -799,12 +799,29 @@ private fun MarkupLayer(vm: AppViewModel, doc: OpenDocument) {
                 // Final selection is computed from the *release* position, not the last
                 // asynchronous preview. Keep the completed gesture alive if Done is tapped.
                 vm.viewModelScope.launch {
+                    var queued = false
                     try {
                         if (vm.document !== doc || !doc.info.allowsAnnotation) return@launch
                         val selected = resolveMarkup(eng, doc, gesture.start, end, radius, tap)
                         if (vm.document !== doc || !doc.info.allowsAnnotation) return@launch
                         if (selected != null) {
-                            vm.addMarkup(doc, selectedMarkup, selected.range.page.toInt(), selected.rects, selectedColor, selectedOpacity)
+                            if (requestSerial == serial) {
+                                drag = selected
+                                pendingTap = null
+                            }
+                            queued = true
+                            vm.addMarkup(
+                                doc, selectedMarkup, selected.range.page.toInt(), selected.rects,
+                                selectedColor, selectedOpacity,
+                                onSettled = {
+                                    // The overlay stays visible while native save/refresh runs,
+                                    // preventing the old one-second blank flicker.
+                                    if (requestSerial == serial) {
+                                        pendingTap = null
+                                        drag = null
+                                    }
+                                },
+                            )
                         } else if (tap) {
                             val count = withContext(eng.commands) { eng.session.glyphCount(doc.id, page.toUInt()) }
                             if (count == 0u && vm.document === doc) vm.tell(text(R.string.toolbar_no_text_to_mark))
@@ -812,8 +829,7 @@ private fun MarkupLayer(vm: AppViewModel, doc: OpenDocument) {
                     } catch (e: MobileException) {
                         if (vm.document === doc) vm.tell(e.userMessage)
                     } finally {
-                        // Do not erase the preview belonging to a newer gesture.
-                        if (requestSerial == serial) {
+                        if (!queued && requestSerial == serial) {
                             pendingTap = null
                             drag = null
                         }
