@@ -52,3 +52,9 @@ After a batch is merged, dispatch `android-update.yml` on `main` once to run tes
 
 If branch protection is configured, require `Merge gate (Rust and Android)` and `Conventional title`; retire the legacy `Merge gate (Rust, Android, ABI APKs)` requirement. At policy change, GitHub reported main was not branch-protected. Production signing checks remain required and may never be bypassed.
 
+
+## Planned single beta batch: 0.0.14-beta (14012)
+
+After PRs #48, #49 and #50 have been **merged and individually verified** with exact-head Android JVM and Rust/provenance merge gates, merge the 0.0.14-beta release preparation PR on `main` with the exact squash-commit title `chore(release): publish 0.0.14-beta (14012)`. The signed APK job recognizes **only** this title on `main`, checks `pdfcraft.version=0.0.14-beta` and `pdfcraft.versionCode=1401`, verifies the permanent private signing identity and actual ARM64 manifest build, then publishes `v0.0.14-beta` with digest and curated release notes. A failed gate must block publication; do not use a debug-signed APK or publish a manually assembled artifact.
+
+The earlier 0.0.13-beta release is immutable. VersionCode 14012 supersedes 13012. Once published, confirm the GitHub release and APK digest exist, and test the in-app update/upgrade on actual hardware. The automated workflow cannot prove all device-specific pen or networking behavior.
