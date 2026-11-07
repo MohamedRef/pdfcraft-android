@@ -56,7 +56,9 @@
 
 **Included in this beta:** embedded outline export/import/cross-PDF copy, adaptive tablet navigation, page-background inspection, heading-style contents, superscript/subscript, provider metadata corrections and opening-stage diagnostics. Earlier APKs remain unchanged. See the [live handover](docs/ANDROID_HANDOVER.md) for evidence and known limits.
 
-**Development branch upgrade:** [PR #37](https://github.com/MohamedRef/pdfcraft-android/pull/37) imports stable v0.19.0 with the Android adaptations preserved; checks/merge are pending. Its source pin and internal Rust packages are now v0.19.0. The latest published APK above still uses the verified prior baseline. [Upgrade evidence](docs/ANDROID_ENGINE_0.19.0_UPGRADE.md).
+**Merged development source:** [PR #37](https://github.com/MohamedRef/pdfcraft-android/pull/37) brought stable v0.19.0 to main with Android/stylus/voice/recovery/updater adaptations retained. Source pin: `8c572792d6760bdc903d6f9a032e3e38e8f71cb8`; internal Rust packages now 0.19.0. [Upgrade evidence](docs/ANDROID_ENGINE_0.19.0_UPGRADE.md). The table below describes the published v0.18.2 binary; development-source tool coverage is 193/195 upstream names, 191/193 whitespace-equal shared definitions, with mobile Sound/clipboard safety exceptions and two intentionally deferred 3D tools. These counts do not measure full mobile runtime/UI parity.
+
+**Next candidate:** 0.0.12-beta is planned for the engine upgrade, [multi-document Bates](docs/ANDROID_MULTI_DOCUMENT_BATES.md) and [favorite pen presets](docs/ANDROID_INK_PRESETS.md). Expected ARM64 build 12012 awaits actual APK manifest verification. [Curated release notes](docs/releases/0.0.12-beta.md); this candidate is not yet available for installation.
 
 The latest published APK's mobile Rust engine is based on the original [storytold/pdfcraft **v0.18.2**](https://github.com/storytold/pdfcraft/releases/tag/v0.18.2), pinned to commit `7faa4f35cefb0dea04137ec475bdc770945c22cd`. Its reviewed stable-source import contains **32 mobile-suitable crates** and **nine vendor patches** protected by a CI provenance lock. That published source used internal Rust package version `0.14.0`; the upgrade aligns source/internal packages at `0.19.0`, independently of the Android app version.
 
@@ -75,7 +77,7 @@ The latest published APK's mobile Rust engine is based on the original [storytol
 
 **Combined release integration:** [0.0.11-beta (11012)](https://github.com/MohamedRef/pdfcraft-android/releases/tag/v0.0.11-beta) includes merged PRs #24/#25/#26/#28/#27/#30/#31/#32/#34, with #33/#35 release preparation and documentation. Each PR passed its required checks, and the final release source passed publishing CI. Physical Samsung/provider/save-reopen behavior remains unverified; multi-document Bates and remaining runtime parity follow.
 
-**Upstream release review:** [desktop v0.19.0](https://github.com/storytold/pdfcraft/releases/tag/v0.19.0) was published on 2026-11-06. It is newer than this app’s pinned v0.18.2 source baseline; see the [Android impact review](docs/UPSTREAM_0.19.0_REVIEW.md). It is being integrated in the independent engine PR; the published Android release still uses v0.18.2.
+**Upstream release review:** [desktop v0.19.0](https://github.com/storytold/pdfcraft/releases/tag/v0.19.0) was published on 2026-11-06. It is newer than this app’s pinned v0.18.2 source baseline; see the [Android impact review](docs/UPSTREAM_0.19.0_REVIEW.md). It is merged in development source; the currently published Android APK still uses v0.18.2.
 
 Development truth and verification evidence: [Android handover](docs/ANDROID_HANDOVER.md) and [v0.18.2 engine parity audit](https://github.com/MohamedRef/pdfcraft-android/blob/sync/storytold-0182-android-safe/docs/android-desktop-engine-parity-0.18.2.md).
 

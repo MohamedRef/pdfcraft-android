@@ -2,6 +2,8 @@
 
 ## Live status — 2026-11-07
 
+**Merged checkpoint:** [PR #37](https://github.com/MohamedRef/pdfcraft-android/pull/37) merged as `552aed9504b0764b0818bdeb72543abdc227f768` after final-head CI 42355818983 and post-main CI 42360494031 succeeded. The source below is now on main; published 0.0.11-beta (11012) remains the old engine binary until the next verified release. Earlier PR-progress wording below is retained as validation history.
+
 Dedicated upgrade branch from main `7f597ad45612f53cc01f801cf97f34fb9421f0ee`. The owner authorized importing stable v0.19.0 while preserving every Android feature, stylus/ink, voice, recovery, signing and updater behavior. Source integration and local validation are complete on the PR; latest-head GitHub checks must succeed before merge; the released 0.0.11-beta (11012) remains immutable and uses v0.18.2.
 
 Target: immutable upstream `8c572792d6760bdc903d6f9a032e3e38e8f71cb8` (`v0.19.0`), replacing source pin `7faa4f35cefb0dea04137ec475bdc770945c22cd`. Review context: [upstream impact assessment](UPSTREAM_0.19.0_REVIEW.md).
