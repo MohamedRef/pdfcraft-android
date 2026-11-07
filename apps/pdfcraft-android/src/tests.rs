@@ -469,6 +469,57 @@ fn form_scripts_run_when_fields_are_filled_and_buttons_pressed() {
 }
 
 
+/// Exercise the exact headless route used by the opt-in Android backgrounds panel.
+#[test]
+fn backdrop_inspection_is_scoped_and_does_not_edit_the_document() {
+    use serde_json::{Value, json};
+    let fill = "q 1 g 0 0 612 792 re f Q";
+    let image = "q 612 0 0 792 0 0 cm /Im Do Q";
+    let objects = vec![
+        "<< /Type /Catalog /Pages 2 0 R >>".to_string(),
+        "<< /Type /Pages /Kids [3 0 R 4 0 R 5 0 R] /Count 3 /MediaBox [0 0 612 792] >>".into(),
+        "<< /Type /Page /Parent 2 0 R /Contents 6 0 R >>".into(),
+        "<< /Type /Page /Parent 2 0 R /Contents 7 0 R /Resources << /XObject << /Im 8 0 R >> >> >>".into(),
+        "<< /Type /Page /Parent 2 0 R >>".into(),
+        format!("<< /Length {} >>\nstream\n{fill}\nendstream", fill.len()),
+        format!("<< /Length {} >>\nstream\n{image}\nendstream", image.len()),
+        "<< /Type /XObject /Subtype /Image /Width 1 /Height 1 /ColorSpace /DeviceGray /BitsPerComponent 8 /Filter /ASCIIHexDecode /Length 3 >>\nstream\nFF>\nendstream".into(),
+    ];
+    let mut bytes = b"%PDF-1.7\n".to_vec();
+    let mut offsets = Vec::new();
+    for (i, object) in objects.iter().enumerate() {
+        offsets.push(bytes.len());
+        bytes.extend_from_slice(format!("{} 0 obj\n{object}\nendobj\n", i + 1).as_bytes());
+    }
+    let xref = bytes.len();
+    bytes.extend_from_slice(format!("xref\n0 {}\n0000000000 65535 f \n", objects.len() + 1).as_bytes());
+    for offset in offsets {
+        bytes.extend_from_slice(format!("{offset:010} 00000 n \n").as_bytes());
+    }
+    bytes.extend_from_slice(format!("trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n", objects.len() + 1).as_bytes());
+    let dir = scratch();
+    let path = dir.join("backgrounds.pdf");
+    std::fs::write(&path, &bytes).unwrap();
+    let s = MobileSession::new();
+    let doc = s.open(path.to_string_lossy().into_owned(), None).unwrap();
+    let inspect = |pages: Value| -> Value {
+        serde_json::from_str(&s.execute("doc_backdrops".into(), json!({"doc": doc.id, "pages": pages}).to_string()).unwrap()).unwrap()
+    };
+    assert_eq!(inspect(json!([1, 2, 3]))["pages"], json!([
+        {"page": 1, "backdrop": "fill"}, {"page": 2, "backdrop": "image"},
+    ]));
+    assert_eq!(inspect(json!([2]))["pages"], json!([{"page": 2, "backdrop": "image"}]));
+    assert_eq!(inspect(json!([3]))["pages"], json!([]));
+    assert!(s.execute("doc_backdrops".into(), json!({"doc": doc.id, "pages": [4]}).to_string()).is_err());
+    let after = s.document(doc.id).unwrap();
+    assert_eq!(after.generation, doc.generation);
+    assert!(!after.dirty);
+    assert!(after.undo.is_none());
+    assert_eq!(std::fs::read(&path).unwrap(), bytes);
+    std::fs::remove_dir_all(dir).unwrap();
+}
+
+
 #[test]
 fn style_bookmarks_append_undo_and_survive_save_through_mobile_tools() {
     let s = MobileSession::new();

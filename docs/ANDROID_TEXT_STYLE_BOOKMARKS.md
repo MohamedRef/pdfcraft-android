@@ -17,3 +17,6 @@ The explicit Add action creates entries below a new “Untitled” root and pres
 
 
 Review reconciliation: an earlier draft described an extra 300-style Android cap. Inspection of the actual stable implementation showed `MAX_STYLES=200` and `SAMPLE_CHARS=60`, making that cap/banner unreachable. Removed them and corrected the limits. Synchronized with main after the complete bookmark/tablet batch; current-head CI must pass again.
+
+
+Owner scope update (2026-11-07 Cairo): include this integration with #30/#32/#34 and the bookmark/tablet batch in one `0.0.11-beta (11012)` candidate after complete-stack CI. Earlier next-batch exclusion is superseded. Combined tests retain both background-inspection and heading-style regressions; physical QA remains outstanding.

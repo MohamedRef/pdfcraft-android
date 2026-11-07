@@ -1260,4 +1260,15 @@
     <string name="text_styles_creating">Creating PDF contents…</string>
     <string name="text_styles_created">Heading bookmarks added. This change can be undone.</string>
     <string name="text_styles_unavailable">Cannot create contents: the PDF changed, is closed, signed, read-only, or restricts copying or document assembly. Use an editable copy and analyze again.</string>
+    <string name="backdrops_title">Page backgrounds</string>
+    <string name="backdrops_explanation">Inspect backgrounds painted by the PDF itself. A white fill can hide an added background; a page-sized image may cover it too. This inspection does not change the PDF.</string>
+    <string name="backdrops_range">Pages %1$d–%2$d of %3$d</string>
+    <string name="backdrops_page">Page %1$d: %2$s</string>
+    <string name="backdrops_fill">Opaque white fill</string>
+    <string name="backdrops_image">Page-sized image</string>
+    <string name="backdrops_none">No covering background detected</string>
+    <string name="backdrops_loading">Inspecting these pages…</string>
+    <string name="backdrops_failed">Could not inspect these pages. Open this panel again to retry.</string>
+    <string name="backdrops_previous">Previous pages</string>
+    <string name="backdrops_next">Next pages</string>
 </resources>
