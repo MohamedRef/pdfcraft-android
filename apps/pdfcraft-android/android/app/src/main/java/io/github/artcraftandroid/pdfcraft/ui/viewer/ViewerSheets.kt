@@ -129,6 +129,8 @@ fun MoreSheet(vm: AppViewModel, doc: OpenDocument) {
             GroupDivider()
             SheetRow(LucideIcons.FileOutput, stringResource(R.string.sheet_export_as), { close(); vm.openExport(doc) })
             SheetRow(LucideIcons.FileArchive, stringResource(R.string.common_tool_compress), { close(); vm.openCompress(doc) })
+            SheetRow(LucideIcons.WandSparkles, stringResource(R.string.scan_enhance_title),
+                { ctl.sheet = ViewerSheet.ScanEnhance }, chevron = true)
             SheetRow(LucideIcons.Combine, stringResource(R.string.common_tool_combine), { close(); vm.openCombine(doc) })
             SheetRow(LucideIcons.FileLock2, stringResource(R.string.common_tool_set_password), { close(); vm.openProtect(doc) })
             SheetRow(LucideIcons.FilePlus2, stringResource(R.string.common_tool_create_pdf), { close(); vm.openCreate() })

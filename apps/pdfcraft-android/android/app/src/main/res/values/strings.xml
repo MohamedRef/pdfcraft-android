@@ -1312,4 +1312,19 @@
     <string name="ink_preset_save">Replace with current pen</string>
     <string name="ink_preset_saved">Saved favorite pen %1$d.</string>
     <string name="ink_preset_invalid">Choose a valid pen width and opacity first.</string>
+    <!-- Native PDFCraft v0.19.0 scan enhancement, opt-in on an already-open editable PDF. -->
+    <string name="scan_enhance_title">Enhance scanned pages</string>
+    <string name="scan_enhance_explanation">Clean scanned paper backgrounds and improve legibility. The original PDF image objects are modified, while existing OCR text, links, and comments are preserved by the engine. You can undo before saving.</string>
+    <string name="scan_enhance_current">Current page only, page %1$d</string>
+    <string name="scan_enhance_batch">From page %1$d to %2$d (up to 12 pages)</string>
+    <string name="scan_enhance_level">Background cleanup: %1$d%%</string>
+    <string name="scan_enhance_edges">Lighten edge shadows</string>
+    <string name="scan_enhance_speckles">Remove isolated specks</string>
+    <string name="scan_enhance_apply">Enhance pages</string>
+    <string name="scan_enhance_confirm_title">Enhance these PDF pages?</string>
+    <string name="scan_enhance_confirm_body">This edits image data on the selected pages. Unsupported images are skipped. Review the result before saving your PDF.</string>
+    <string name="scan_enhance_unavailable">Scan enhancement needs an editable, unsigned PDF. This file cannot be changed.</string>
+    <string name="scan_enhance_busy">Enhancing selected scanned pages…</string>
+    <string name="scan_enhance_finished">Enhanced %1$d scanned pages</string>
+    <string name="scan_enhance_no_changes">No eligible scanned images were changed.</string>
 </resources>
