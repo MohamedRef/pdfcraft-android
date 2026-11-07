@@ -1,8 +1,7 @@
 package io.github.artcraftandroid.pdfcraft.ui.viewer
 
-import kotlinx.coroutines.flow.filter
 
-import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.conflate
 
 import io.github.artcraftandroid.pdfcraft.engine.userMessage
 
@@ -712,7 +711,19 @@ private suspend fun resolveMarkup(
     if (start.page != end.page) return@withContext null
     val page = start.page.toUInt()
     val anchor = eng.session.wordAt(doc.id, page, start.x, start.y, slopPoints) ?: return@withContext null
-    val focus = if (tap) anchor else eng.session.wordAt(doc.id, page, end.x, end.y, slopPoints)
+    // A drag ending slightly outside the last line still targets its nearest word.
+    // A tap deliberately does not use nearestGlyph: blank space must stay blank.
+    val focus = if (tap) anchor else {
+        eng.session.wordAt(doc.id, page, end.x, end.y, slopPoints) ?: run {
+            val glyph = eng.session.nearestGlyph(doc.id, page, end.x, end.y) ?: return@withContext null
+            val rect = eng.session.glyphRect(doc.id, page, glyph).toList()
+            if (!markupEndpointNearGlyph(end.x, end.y, rect, (slopPoints * 2f).coerceAtMost(40f)))
+                return@withContext null
+            val centerX = (minOf(rect[0], rect[2]) + maxOf(rect[0], rect[2])) / 2f
+            val centerY = (minOf(rect[1], rect[3]) + maxOf(rect[1], rect[3])) / 2f
+            eng.session.wordAt(doc.id, page, centerX, centerY, 0.1f)
+        }
+    }
     val range = markupWordRange(anchor, focus) ?: return@withContext null
     val rects = markupLineRects(eng.session.textRects(doc.id, range).toList())
     if (rects.isEmpty()) null else MarkupDrag(range, rects)
@@ -725,6 +736,8 @@ private fun MarkupLayer(vm: AppViewModel, doc: OpenDocument) {
     var drag by remember(doc) { mutableStateOf<MarkupDrag?>(null) }
     var active by remember(doc) { mutableStateOf<MarkupGesture?>(null) }
     var previewJob by remember(doc) { mutableStateOf<Job?>(null) }
+    var pendingTap by remember(doc) { mutableStateOf<Offset?>(null) }
+    var requestSerial by remember(doc) { androidx.compose.runtime.mutableIntStateOf(0) }
     val marker = doc.controller.markup
     val color = vm.toolPrefs.color(marker.styled)
     val opacity = vm.toolPrefs.opacity(marker.styled)
@@ -742,19 +755,21 @@ private fun MarkupLayer(vm: AppViewModel, doc: OpenDocument) {
         Modifier.fillMaxSize().toolGestures(
             doc,
             onDown = { screen, _, _ ->
+                requestSerial++
+                pendingTap = null
                 resetPreview()
                 val start = doc.viewer.screenToPage(screen) ?: return@toolGestures
                 val gesture = MarkupGesture(start, screen)
                 active = gesture
-                // One conflated collector per gesture. Old queries are cancelled on newer
-                // movement, and their results cannot resurrect a selection after release.
+                // One native query at a time, skipping intermediate points. The initial
+                // word previews on finger-down; fast moves cannot starve the preview.
                 previewJob = scope.launch {
                     snapshotFlow { gesture.latest to gesture.moved }
-                        .filter { it.second }
-                        .collectLatest { (end, _) ->
+                        .conflate()
+                        .collect { (end, moved) ->
                             val radius = (hitRadiusPx / doc.viewer.pixelsPerPoint(start.page).coerceAtLeast(0.1f)).coerceIn(0.1f, 24f)
-                            val preview = resolveMarkup(eng, doc, start, end, radius, tap = false)
-                            if (active === gesture) drag = preview
+                            val preview = resolveMarkup(eng, doc, start, end, radius, tap = !moved)
+                            if (active === gesture && gesture.latest == end && gesture.moved == moved) drag = preview
                         }
                 }
             },
@@ -773,7 +788,13 @@ private fun MarkupLayer(vm: AppViewModel, doc: OpenDocument) {
                 val selectedMarkup = doc.controller.markup
                 val selectedColor = vm.toolPrefs.color(selectedMarkup.styled)
                 val selectedOpacity = vm.toolPrefs.opacity(selectedMarkup.styled)
-                resetPreview()
+                val serial = requestSerial
+                active = null
+                previewJob?.cancel()
+                previewJob = null
+                // Keep the last correctly resolved preview visible until the final native
+                // selection is ready. A quick tap gets a small pending marker instead.
+                pendingTap = if (drag == null) screen else null
                 // Final selection is computed from the *release* position, not the last
                 // asynchronous preview. Keep the completed gesture alive if Done is tapped.
                 vm.viewModelScope.launch {
@@ -789,13 +810,30 @@ private fun MarkupLayer(vm: AppViewModel, doc: OpenDocument) {
                         }
                     } catch (e: MobileException) {
                         if (vm.document === doc) vm.tell(e.userMessage)
+                    } finally {
+                        // Do not erase the preview belonging to a newer gesture.
+                        if (requestSerial == serial) {
+                            pendingTap = null
+                            drag = null
+                        }
                     }
                 }
             },
-            onCancel = { resetPreview() },
+            onCancel = {
+                requestSerial++
+                pendingTap = null
+                resetPreview()
+            },
         ),
     ) {
         Canvas(Modifier.fillMaxSize()) {
+            pendingTap?.let { point ->
+                drawCircle(
+                    color.copy(alpha = 0.65f),
+                    radius = 10.dp.toPx(), center = point,
+                    style = Stroke(width = 1.5.dp.toPx()),
+                )
+            }
             val d = drag ?: return@Canvas
             val page = d.range.page.toInt()
             for (r in d.rects) {
