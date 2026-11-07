@@ -2201,6 +2201,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             val context = currentCoroutineContext()
             val results = mutableListOf<BatesExportResult>()
             var directory: File? = null
+            var preparing: PickedFile? = null
             var finalStatus = text(R.string.bates_failed)
             try {
                 val dir = withContext(kotlinx.coroutines.NonCancellable + Dispatchers.IO) {
@@ -2211,6 +2212,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 var bytes = 0L
                 val inputs = mutableListOf<Map<String, String>>()
                 for ((i, file) in picked.withIndex()) {
+                    preparing = file
                     context.ensureActive()
                     batesStatus = text(R.string.bates_reading, i + 1, picked.size)
                     val input = File(dir, "input-${i + 1}.pdf")
@@ -2234,6 +2236,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                     }
                     inputs.add(mapOf("input" to input.absolutePath, "output" to output.absolutePath))
                 }
+                preparing = null
                 batesStatus = text(R.string.bates_numbering)
                 // Ownership lasts until the blocking native operation returns, including cancellation.
                 val report = withContext(kotlinx.coroutines.NonCancellable) {
@@ -2286,6 +2289,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             } catch (_: kotlinx.coroutines.CancellationException) {
                 finalStatus = text(R.string.bates_cancelled, results.count { it.uri != null })
             } catch (_: Exception) {
+                preparing?.let { results.add(BatesExportResult(it.name, text(R.string.bates_failed), null)) }
                 finalStatus = text(R.string.bates_failed)
             } finally {
                 withContext(kotlinx.coroutines.NonCancellable) {
