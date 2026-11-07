@@ -55,6 +55,8 @@ class MainActivity : ComponentActivity() {
     private val pickFolder = registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri -> uri?.let(vm::addLocalFolder) }
     private val micPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted -> vm.onMicPermission(granted) }
 
+    private val pickBatesPdfs = registerForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { vm.onBatesFilesPicked(it) }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         // transparent system bars with no contrast scrim: every screen paints the bands behind the
         // status bar and the navigation buttons itself, in its own colours (AppRoot)
@@ -92,6 +94,12 @@ class MainActivity : ComponentActivity() {
         lifecycleScope.launch {
             for (ignored in vm.bookmarkPdfPicks) {
                 launchSafely { pickBookmarkPdf.launch(arrayOf("application/pdf")) }
+            }
+        }
+        lifecycleScope.launch {
+            for (ignored in vm.batesPicks) launchSafely {
+                try { pickBatesPdfs.launch(arrayOf("application/pdf")) }
+                catch (e: Exception) { vm.onBatesFilesPicked(emptyList()); throw e }
             }
         }
         lifecycleScope.launch {
