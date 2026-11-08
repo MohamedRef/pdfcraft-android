@@ -52,7 +52,7 @@ import io.github.artcraftandroid.pdfcraft.ui.PdfSwitch
  * This is a tool identity illustration and a live preview, not a promise of textured PDF ink.
  */
 @Composable
-private fun PenNibPreview(color: Color, width: Float, opacity: Float, style: InkStyle, modifier: Modifier = Modifier) {
+internal fun PenNibPreview(color: Color, width: Float, opacity: Float, style: InkStyle, modifier: Modifier = Modifier) {
     Canvas(modifier) {
         val u = size.width / 64f
         val cx = size.width / 2f
@@ -248,7 +248,7 @@ internal fun InkPresetsPicker(vm: AppViewModel, onApplied: () -> Unit) {
     }
 }
 
-private fun inkStyleLabel(style: InkStyle): Int = when (style) {
+internal fun inkStyleLabel(style: InkStyle): Int = when (style) {
     InkStyle.Ballpoint -> R.string.ink_style_ballpoint
     InkStyle.Fountain -> R.string.ink_style_fountain
     InkStyle.Pencil -> R.string.ink_style_pencil
