@@ -987,7 +987,15 @@ fun ToolSheets(vm: AppViewModel, doc: OpenDocument) {
         else -> null
     }
     SheetHost(ctl.picker.takeIf { it != Picker.None && styled != null }) { p ->
-        PropertyPicker(vm, styled ?: StyledTool.Highlight, p, ctl.markup) { ctl.picker = Picker.None }
+        PropertyPicker(vm, styled ?: StyledTool.Highlight, p, ctl.markup) {
+            ctl.picker = Picker.None
+            // Pen selection works even after the eraser/lasso or shape tool was active.
+            if (p == Picker.Presets && ctl.tool == ViewerTool.Draw) {
+                ctl.eraserMode = false
+                ctl.lassoMode = false
+                ctl.inkShapeMode = InkShapeMode.Freehand
+            }
+        }
     }
     if (ctl.tool == ViewerTool.FillSign && ctl.signPanel) SignPanel(vm, doc) { ctl.signPanel = false }
 }
