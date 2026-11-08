@@ -511,7 +511,7 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
                             onExtraHeight = { quickExtraPx = it },
                         )
                     } else {
-                        if (ctl.tool == ViewerTool.Draw) DrawToolbar(vm, doc) else ToolSubToolbar(vm, doc)
+                        ToolSubToolbar(vm, doc)
                     }
                 }
             }
