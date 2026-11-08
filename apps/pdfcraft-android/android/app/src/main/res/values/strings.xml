@@ -1375,4 +1375,14 @@
     <string name="ink_style_pencil">Pencil</string>
     <string name="ink_style_brush">Brush</string>
     <string name="ink_style_highlighter">Highlighter</string>
+    <!-- Compact, readable captions; full tool names stay in accessibility descriptions. -->
+    <string name="ink_toolbar_ballpoint">Ball</string>
+    <string name="ink_toolbar_fountain">Fountain</string>
+    <string name="ink_toolbar_pencil">Pencil</string>
+    <string name="ink_toolbar_brush">Brush</string>
+    <string name="ink_toolbar_marker">Marker</string>
+    <string name="ink_toolbar_eraser">Erase</string>
+    <string name="ink_toolbar_lasso">Lasso</string>
+    <string name="ink_toolbar_settings">Pens</string>
+    <string name="ink_toolbar_color">Color</string>
 </resources>
