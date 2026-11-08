@@ -28,6 +28,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
@@ -44,38 +45,85 @@ import io.github.artcraftandroid.pdfcraft.text
 import io.github.artcraftandroid.pdfcraft.ui.AppViewModel
 import io.github.artcraftandroid.pdfcraft.ui.LucideIcons
 import io.github.artcraftandroid.pdfcraft.ui.pdfColors
+import io.github.artcraftandroid.pdfcraft.ui.PdfSwitch
 
-/** Original nib illustration: ink-coloured tip, two-tone barrel, live sample stroke. */
+/**
+ * Distinct original silhouettes rather than five copies of a generic grey metal barrel.
+ * This is a tool identity illustration and a live preview, not a promise of textured PDF ink.
+ */
 @Composable
-private fun PenNibPreview(color: Color, width: Float, opacity: Float, style: InkStyle, modifier: Modifier = Modifier) {
+internal fun PenNibPreview(color: Color, width: Float, opacity: Float, style: InkStyle, modifier: Modifier = Modifier) {
     Canvas(modifier) {
         val u = size.width / 64f
-        val center = size.width / 2f
-        val tipY = size.height * (if (style == InkStyle.Highlighter) 0.24f else 0.15f)
-        val bodyTop = size.height * 0.43f
-        val bodyBottom = size.height * 0.78f
-        val nibHalfWidth = when (style) {
-            InkStyle.Pencil -> 6f
-            InkStyle.Fountain -> 12f
-            InkStyle.Brush -> 11f
-            InkStyle.Highlighter -> 15f
-            InkStyle.Ballpoint -> 8f
+        val cx = size.width / 2f
+        val top = size.height * 0.12f
+        val bottom = size.height * 0.71f
+        val dark = Color(0xFF343944)
+        val light = Color(0xFF969FAE)
+        when (style) {
+            InkStyle.Ballpoint -> {
+                drawRoundRect(dark, Offset(cx - 7f * u, top), Size(14f * u, bottom - top), cornerRadius = androidx.compose.ui.geometry.CornerRadius(5f * u))
+                drawRect(light, Offset(cx - 3f * u, top + 5f * u), Size(3f * u, bottom - top - 15f * u))
+                drawCircle(color.copy(alpha = 1f), radius = 4f * u, center = Offset(cx, bottom + 4f * u))
+            }
+            InkStyle.Fountain -> {
+                drawRoundRect(dark, Offset(cx - 12f * u, top), Size(24f * u, bottom - top - 10f * u), cornerRadius = androidx.compose.ui.geometry.CornerRadius(4f * u))
+                val nib = Path().apply {
+                    moveTo(cx - 13f * u, bottom - 13f * u)
+                    lineTo(cx + 13f * u, bottom - 13f * u)
+                    lineTo(cx, bottom + 12f * u)
+                    close()
+                }
+                drawPath(nib, Color(0xFFC8A76B))
+                drawLine(dark, Offset(cx, bottom - 11f * u), Offset(cx, bottom + 8f * u), 1.4f * u)
+                drawCircle(dark, radius = 2.5f * u, center = Offset(cx, bottom - 3f * u))
+            }
+            InkStyle.Pencil -> {
+                drawRect(Color(0xFFD6B079), Offset(cx - 8f * u, top), Size(16f * u, bottom - top - 11f * u))
+                drawRect(Color(0xFFF0D3A6), Offset(cx - 8f * u, top), Size(4f * u, bottom - top - 11f * u))
+                val wood = Path().apply {
+                    moveTo(cx - 8f * u, bottom - 11f * u)
+                    lineTo(cx + 8f * u, bottom - 11f * u)
+                    lineTo(cx, bottom + 12f * u)
+                    close()
+                }
+                drawPath(wood, Color(0xFFE8CAA1))
+                val lead = Path().apply {
+                    moveTo(cx - 3f * u, bottom + 4f * u)
+                    lineTo(cx + 3f * u, bottom + 4f * u)
+                    lineTo(cx, bottom + 12f * u)
+                    close()
+                }
+                drawPath(lead, dark)
+            }
+            InkStyle.Brush -> {
+                drawRoundRect(Color(0xFF966846), Offset(cx - 8f * u, top), Size(16f * u, bottom - top - 14f * u), cornerRadius = androidx.compose.ui.geometry.CornerRadius(7f * u))
+                drawRect(light, Offset(cx - 10f * u, bottom - 22f * u), Size(20f * u, 12f * u))
+                val bristles = Path().apply {
+                    moveTo(cx - 9f * u, bottom - 10f * u)
+                    lineTo(cx + 9f * u, bottom - 10f * u)
+                    quadraticTo(cx + 5f * u, bottom + 7f * u, cx, bottom + 16f * u)
+                    quadraticTo(cx - 5f * u, bottom + 7f * u, cx - 9f * u, bottom - 10f * u)
+                    close()
+                }
+                drawPath(bristles, color.copy(alpha = 0.9f))
+            }
+            InkStyle.Highlighter -> {
+                drawRoundRect(color.copy(alpha = 0.88f), Offset(cx - 15f * u, top), Size(30f * u, bottom - top), cornerRadius = androidx.compose.ui.geometry.CornerRadius(4f * u))
+                drawRect(dark, Offset(cx - 15f * u, bottom - 13f * u), Size(30f * u, 9f * u))
+                drawRect(dark, Offset(cx - 11f * u, bottom - 4f * u), Size(22f * u, 12f * u))
+            }
         }
-        val nib = Path().apply {
-            moveTo(center, tipY)
-            lineTo(center - nibHalfWidth * u, bodyTop)
-            lineTo(center + nibHalfWidth * u, bodyTop)
-            close()
-        }
-        drawPath(nib, Color(0xFF484A50))
-        drawLine(Color(0xFF9DA3AD), Offset(center, tipY + 3f * u), Offset(center, bodyTop - 2f * u), 1.1f * u)
-        drawRect(Color(0xFF6E747E), Offset(center - 12f * u, bodyTop), androidx.compose.ui.geometry.Size(24f * u, bodyBottom - bodyTop))
-        drawRect(Color(0xFFB1B5BD), Offset(center - 12f * u, bodyTop), androidx.compose.ui.geometry.Size(8f * u, bodyBottom - bodyTop))
-        drawRect(Color(0xFF363A41), Offset(center - 13f * u, bodyTop), androidx.compose.ui.geometry.Size(26f * u, 4f * u))
         val visibleWidth = inkStyleWidthRuns(listOf(1f, 1f), width, false, style).firstOrNull()?.width ?: width
-        drawLine(color.copy(alpha = inkStyleOpacity(opacity, style)), Offset(center - 15f * u, size.height * 0.91f),
-            Offset(center + 15f * u, size.height * 0.91f),
-            strokeWidth = (visibleWidth.coerceIn(1f, 22f) * 0.4f + 1.8f) * u, cap = StrokeCap.Round)
+        val inkAlpha = inkStyleOpacity(opacity, style)
+        val baseline = size.height * 0.93f
+        drawLine(
+            color.copy(alpha = inkAlpha),
+            Offset(cx - 19f * u, baseline),
+            Offset(cx + 19f * u, baseline - if (style == InkStyle.Fountain || style == InkStyle.Brush) 3f * u else 0f),
+            strokeWidth = (visibleWidth.coerceIn(1f, 22f) * 0.45f + 1.2f) * u,
+            cap = if (style == InkStyle.Highlighter) StrokeCap.Square else StrokeCap.Round,
+        )
     }
 }
 
@@ -90,6 +138,32 @@ internal fun InkPresetsPicker(vm: AppViewModel, onApplied: () -> Unit) {
         Text(stringResource(R.string.ink_presets_title), color = c.text, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
         Text(stringResource(R.string.ink_presets_help), color = c.label, fontSize = 13.sp)
 
+        // An enabled Pen-only setting makes every finger gesture navigate instead of ink.
+        // Keep the state and the escape switch next to the actual pen controls.
+        Row(
+            Modifier.fillMaxWidth().clickable { prefs.updateStylusOnly(!prefs.stylusOnly) }
+                .padding(vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text(stringResource(R.string.toolbar_stylus_only), color = c.text, fontSize = 14.sp)
+                Text(stringResource(R.string.ink_pen_only_explanation), color = c.label, fontSize = 12.sp)
+            }
+            PdfSwitch(prefs.stylusOnly, { prefs.updateStylusOnly(it) })
+        }
+
+        Row(
+            Modifier.fillMaxWidth().clickable { prefs.updateSnapToShape(!prefs.snapToShape) }
+                .padding(vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text(stringResource(R.string.toolbar_snap_to_shape), color = c.text, fontSize = 14.sp)
+                Text(stringResource(R.string.ink_snap_explanation), color = c.label, fontSize = 12.sp)
+            }
+            PdfSwitch(prefs.snapToShape, { prefs.updateSnapToShape(it) })
+        }
+
         Text(stringResource(R.string.ink_styles_title), color = c.text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
         Row(
             Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
@@ -99,17 +173,17 @@ internal fun InkPresetsPicker(vm: AppViewModel, onApplied: () -> Unit) {
                 val active = prefs.inkStyle == style
                 val label = stringResource(inkStyleLabel(style))
                 Column(
-                    Modifier.width(92.dp)
+                    Modifier.width(104.dp)
                         .border(if (active) 2.dp else 1.dp, if (active) c.accent else c.divider, RoundedCornerShape(12.dp))
                         .background(if (active) c.pressed else c.surface, RoundedCornerShape(12.dp))
-                        .clickable(role = Role.RadioButton) { prefs.updateInkStyle(style) }
+                        .clickable(role = Role.RadioButton) { prefs.updateInkStyle(style); onApplied() }
                         .semantics { contentDescription = label }
                         .padding(8.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
                     PenNibPreview(prefs.color(StyledTool.Ink), prefs.inkWidth, prefs.opacity(StyledTool.Ink), style,
-                        Modifier.size(width = 38.dp, height = 55.dp))
+                        Modifier.size(width = 54.dp, height = 72.dp))
                     Text(label, color = c.text, fontSize = 11.sp, maxLines = 1)
                 }
             }
@@ -129,7 +203,7 @@ internal fun InkPresetsPicker(vm: AppViewModel, onApplied: () -> Unit) {
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
-                    PenNibPreview(Color(preset.argb), preset.width, preset.opacity, preset.style, Modifier.size(width = 56.dp, height = 86.dp))
+                    PenNibPreview(Color(preset.argb), preset.width, preset.opacity, preset.style, Modifier.size(width = 46.dp, height = 72.dp))
                     Text(stringResource(inkStyleLabel(preset.style)), color = c.text, fontSize = 12.sp, fontWeight = if (chosen) FontWeight.SemiBold else FontWeight.Normal)
                     Text(stringResource(R.string.ink_preset_slot, index + 1), color = c.label, fontSize = 11.sp)
                     Text(stringResource(R.string.ink_preset_details, preset.width, (preset.opacity * 100).toInt()),
@@ -174,7 +248,7 @@ internal fun InkPresetsPicker(vm: AppViewModel, onApplied: () -> Unit) {
     }
 }
 
-private fun inkStyleLabel(style: InkStyle): Int = when (style) {
+internal fun inkStyleLabel(style: InkStyle): Int = when (style) {
     InkStyle.Ballpoint -> R.string.ink_style_ballpoint
     InkStyle.Fountain -> R.string.ink_style_fountain
     InkStyle.Pencil -> R.string.ink_style_pencil
