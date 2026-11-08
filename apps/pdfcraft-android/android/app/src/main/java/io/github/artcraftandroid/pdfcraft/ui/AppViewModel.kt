@@ -65,7 +65,13 @@ data class BatesExportResult(val name: String, val message: String, val uri: Uri
 data class Message(val text: String, val actionLabel: String? = null, val action: (() -> Unit)? = null)
 
 /** A document waiting for its password before it opens. */
-data class PasswordRequest(val uri: Uri, val file: File, val wrong: Boolean, val fromOtherApp: Boolean = false)
+data class PasswordRequest(
+    val uri: Uri,
+    val file: File,
+    val wrong: Boolean,
+    val fromOtherApp: Boolean = false,
+    val requestId: Long = 0L,
+)
 
 /** Script alerts waiting at once, at most. */
 private const val MAX_SCRIPT_ALERTS = 20
@@ -185,14 +191,14 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                     files.workingCopy(uri)
                 } }
                 io.github.artcraftandroid.pdfcraft.engine.OpenTiming.milestone("working_copy_ready", openStartedAt, bytes = file.length())
-                openFile(eng, uri, file, password, fromOtherApp)
+                openFile(eng, uri, file, password, fromOtherApp, requestId)
             } catch (e: java.io.FileNotFoundException) {
                 // Moved or deleted since it was opened, or a link a file manager lent that a
                 // restart ended (#50; its provider no longer finds it): PdfCraft's own copy opens
                 // if it kept one, as below; otherwise it leaves Recent.
                 val copy = withContext(Dispatchers.IO) { files.existingCopy(uri) }
                 if (copy != null) {
-                    openFile(eng, uri, copy, password, fromOtherApp)
+                    openFile(eng, uri, copy, password, fromOtherApp, requestId)
                     tell(text(R.string.msg_opened_own_copy))
                 } else {
                     withContext(Dispatchers.IO) { recents.remove(setOf(uri.toString())) }
@@ -206,7 +212,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 // can't write to); the original needs opening again from the app it's in.
                 val copy = withContext(Dispatchers.IO) { files.existingCopy(uri) }
                 if (copy != null) {
-                    openFile(eng, uri, copy, password, fromOtherApp)
+                    openFile(eng, uri, copy, password, fromOtherApp, requestId)
                     tell(text(R.string.msg_opened_own_copy))
                 } else {
                     tell(text(R.string.msg_file_access_lost))
@@ -223,22 +229,26 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     /** The password dialog's answer: try again with [password], or give up (null). */
     fun answerPassword(password: String?) {
         val req = passwordRequest ?: return
+        if (req.requestId != lastOpenRequest) {
+            passwordRequest = null
+            return
+        }
         passwordRequest = null
         if (password == null) return
         // OK with nothing typed: the field turns red, as a wrong password does
         if (password.isEmpty()) {
-            passwordRequest = PasswordRequest(req.uri, req.file, wrong = true, fromOtherApp = req.fromOtherApp)
+            passwordRequest = PasswordRequest(req.uri, req.file, wrong = true, fromOtherApp = req.fromOtherApp, requestId = req.requestId)
             return
         }
         val eng = engine ?: return
         viewModelScope.launch {
             openMutex.withLock {
                 // A newer external intent supersedes the old password dialog.
-                if (passwordRequest != null) return@withLock
+                if (passwordRequest != null || req.requestId != lastOpenRequest) return@withLock
                 openStartedAt = android.os.SystemClock.elapsedRealtime()
                 opening = true
                 try {
-                    openFile(eng, req.uri, req.file, password, req.fromOtherApp)
+                    openFile(eng, req.uri, req.file, password, req.fromOtherApp, req.requestId)
                 } catch (e: Exception) {
                     tell(e.userMessage)
                 } finally {
@@ -248,7 +258,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         }
     }
 
-    private suspend fun openFile(eng: Engine, uri: Uri, file: File, password: String?, fromOtherApp: Boolean) {
+    private suspend fun openFile(eng: Engine, uri: Uri, file: File, password: String?, fromOtherApp: Boolean, requestId: Long) {
         try {
             document?.let { current ->
                 val previousSaved = saveAndClose(eng, current)
@@ -288,9 +298,9 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             }
             refreshRecents()
         } catch (e: MobileException.NeedsPassword) {
-            passwordRequest = PasswordRequest(uri, file, wrong = false, fromOtherApp = fromOtherApp)
+            passwordRequest = PasswordRequest(uri, file, wrong = false, fromOtherApp = fromOtherApp, requestId = requestId)
         } catch (e: MobileException.WrongPassword) {
-            passwordRequest = PasswordRequest(uri, file, wrong = true, fromOtherApp = fromOtherApp)
+            passwordRequest = PasswordRequest(uri, file, wrong = true, fromOtherApp = fromOtherApp, requestId = requestId)
         } catch (e: MobileException) {
             tell(e.userMessage)
         }
