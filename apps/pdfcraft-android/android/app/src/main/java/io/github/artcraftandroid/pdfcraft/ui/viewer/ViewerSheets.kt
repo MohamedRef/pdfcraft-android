@@ -131,7 +131,7 @@ fun MoreSheet(vm: AppViewModel, doc: OpenDocument) {
             SheetRow(LucideIcons.FileArchive, stringResource(R.string.common_tool_compress), { close(); vm.openCompress(doc) })
             SheetRow(LucideIcons.WandSparkles, stringResource(R.string.scan_enhance_title),
                 { ctl.sheet = ViewerSheet.ScanEnhance }, chevron = true)
-            SheetRow(LucideIcons.ScanText, stringResource(R.string.ocr_review_title),
+            SheetRow(LucideIcons.Glasses, stringResource(R.string.ocr_review_title),
                 { ctl.sheet = ViewerSheet.OcrConfidence }, chevron = true)
             SheetRow(LucideIcons.Combine, stringResource(R.string.common_tool_combine), { close(); vm.openCombine(doc) })
             SheetRow(LucideIcons.FileLock2, stringResource(R.string.common_tool_set_password), { close(); vm.openProtect(doc) })
