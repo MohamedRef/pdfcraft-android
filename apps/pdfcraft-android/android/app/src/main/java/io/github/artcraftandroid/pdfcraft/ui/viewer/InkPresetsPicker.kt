@@ -45,6 +45,7 @@ import io.github.artcraftandroid.pdfcraft.text
 import io.github.artcraftandroid.pdfcraft.ui.AppViewModel
 import io.github.artcraftandroid.pdfcraft.ui.LucideIcons
 import io.github.artcraftandroid.pdfcraft.ui.pdfColors
+import io.github.artcraftandroid.pdfcraft.ui.PdfSwitch
 
 /**
  * Distinct original silhouettes rather than five copies of a generic grey metal barrel.
@@ -136,6 +137,20 @@ internal fun InkPresetsPicker(vm: AppViewModel, onApplied: () -> Unit) {
     ) {
         Text(stringResource(R.string.ink_presets_title), color = c.text, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
         Text(stringResource(R.string.ink_presets_help), color = c.label, fontSize = 13.sp)
+
+        // An enabled Pen-only setting makes every finger gesture navigate instead of ink.
+        // Keep the state and the escape switch next to the actual pen controls.
+        Row(
+            Modifier.fillMaxWidth().clickable { prefs.updateStylusOnly(!prefs.stylusOnly) }
+                .padding(vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text(stringResource(R.string.toolbar_stylus_only), color = c.text, fontSize = 14.sp)
+                Text(stringResource(R.string.ink_pen_only_explanation), color = c.label, fontSize = 12.sp)
+            }
+            PdfSwitch(prefs.stylusOnly, { prefs.updateStylusOnly(it) })
+        }
 
         Text(stringResource(R.string.ink_styles_title), color = c.text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
         Row(
