@@ -92,13 +92,20 @@ internal fun DrawToolbar(vm: AppViewModel, doc: OpenDocument) {
                         DrawToolbarButton(label, active, onClick = {
                             activateDrawingPen(ctl, prefs, style)
                             ctl.picker = Picker.None
-                        }) {
+                        }, caption = stringResource(when (style) {
+                            InkStyle.Ballpoint -> R.string.ink_toolbar_ballpoint
+                            InkStyle.Fountain -> R.string.ink_toolbar_fountain
+                            InkStyle.Pencil -> R.string.ink_toolbar_pencil
+                            InkStyle.Brush -> R.string.ink_toolbar_brush
+                            InkStyle.Highlighter -> R.string.ink_toolbar_marker
+                        })) {
                             PenNibPreview(color, prefs.inkWidth, opacity, style, Modifier.size(29.dp, 31.dp))
                         }
                     }
                     DrawToolbarButton(
                         label = stringResource(R.string.toolbar_eraser),
                         active = ctl.eraserMode,
+                        caption = stringResource(R.string.ink_toolbar_eraser),
                         onClick = {
                             ctl.eraserMode = true
                             ctl.lassoMode = false
@@ -108,6 +115,7 @@ internal fun DrawToolbar(vm: AppViewModel, doc: OpenDocument) {
                     DrawToolbarButton(
                         label = stringResource(R.string.toolbar_ink_lasso),
                         active = ctl.lassoMode,
+                        caption = stringResource(R.string.ink_toolbar_lasso),
                         onClick = {
                             ctl.lassoMode = true
                             ctl.eraserMode = false
@@ -145,6 +153,7 @@ internal fun DrawToolbar(vm: AppViewModel, doc: OpenDocument) {
                     DrawToolbarButton(
                         label = stringResource(R.string.toolbar_color_drawing),
                         active = picker == Picker.Color,
+                        caption = stringResource(R.string.ink_toolbar_color),
                         onClick = { ctl.picker = if (picker == Picker.Color) Picker.None else Picker.Color },
                     ) {
                         Box(
@@ -155,6 +164,7 @@ internal fun DrawToolbar(vm: AppViewModel, doc: OpenDocument) {
                     DrawToolbarButton(
                         label = stringResource(R.string.ink_presets_title),
                         active = picker == Picker.Presets,
+                        caption = stringResource(R.string.ink_toolbar_settings),
                         onClick = { ctl.picker = if (picker == Picker.Presets) Picker.None else Picker.Presets },
                     ) {
                         Icon(LucideIcons.SlidersHorizontal, null, tint = if (picker == Picker.Presets) c.toolAccent else c.icon, modifier = Modifier.size(24.dp))
@@ -194,6 +204,7 @@ private fun DrawToolbarButton(
     label: String,
     active: Boolean,
     onClick: () -> Unit,
+    caption: String = label,
     icon: @Composable () -> Unit,
 ) {
     val c = pdfColors
@@ -213,7 +224,7 @@ private fun DrawToolbarButton(
     ) {
         Box(Modifier.height(33.dp), contentAlignment = Alignment.Center) { icon() }
         Text(
-            label,
+            caption,
             color = tint,
             fontSize = 9.sp,
             fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal,
