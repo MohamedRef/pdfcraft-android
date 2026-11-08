@@ -27,3 +27,12 @@ internal fun acceptableExternalPdfUri(action: String?, uri: IncomingPdfUri): Boo
 /** Prefer a valid URI; broken/unsupported candidates must not hide later ClipData entries. */
 internal fun firstExternalPdfCandidate(action: String?, uris: List<IncomingPdfUri>): Int? =
     uris.indexOfFirst { acceptableExternalPdfUri(action, it) }.takeIf { it >= 0 }
+
+/** Recreating an Activity must not repeat an open while its retained ViewModel is still active. */
+internal fun shouldRouteInitialPdfIntent(
+    savedInstanceStatePresent: Boolean,
+    hasDocument: Boolean,
+    opening: Boolean,
+    awaitingPassword: Boolean,
+): Boolean =
+    !savedInstanceStatePresent || (!hasDocument && !opening && !awaitingPassword)
