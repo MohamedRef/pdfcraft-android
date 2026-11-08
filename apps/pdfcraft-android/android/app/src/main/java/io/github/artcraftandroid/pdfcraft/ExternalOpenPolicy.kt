@@ -36,3 +36,11 @@ internal fun shouldRouteInitialPdfIntent(
     awaitingPassword: Boolean,
 ): Boolean =
     !savedInstanceStatePresent || (!hasDocument && !opening && !awaitingPassword)
+
+/** Reject stale provider recovery and preserve unresolved save/discard choices. */
+internal fun canProceedWithPdfOpen(
+    requestId: Long,
+    latestRequestId: Long,
+    awaitingSaveChoice: Boolean,
+    resolvingSaveChoice: Boolean,
+): Boolean = requestId == latestRequestId && !awaitingSaveChoice && !resolvingSaveChoice
