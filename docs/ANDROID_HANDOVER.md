@@ -1,5 +1,15 @@
 # PdfCraft Android - development handover
 
+## NEXT COMBINED BETA — 0.0.15-beta (15012), 2026-11-08
+
+- **Latest published:** [0.0.14-beta (14012)](https://github.com/MohamedRef/pdfcraft-android/releases/tag/v0.0.14-beta), signed ARM64 owner build. Do not present unbuilt or unverified 0.0.15-beta as downloadable.
+- **Merged after the previous beta:** [#53 OCR confidence review](https://github.com/MohamedRef/pdfcraft-android/pull/53) on current page, and [#55 direct pen UI and marker erase](https://github.com/MohamedRef/pdfcraft-android/pull/55) with two visible rows, revised nib illustrations, tap dots, and highlighter-safe native Ink eraser. PR #54 was superseded by #55 and not merged.
+- **#55 validation:** exact-head Rust engine and provenance, Android JVM/UI, title and aggregate Merge Gate passed on head `68f0e38c3e2a35c8c916c95b6240e35ebe4ddd78` before squash merge `7898503e4bd9404c42e7ee53a8d903c71102261f`.
+- **Proposed release:** one `0.0.15-beta (15012)`, `pdfcraft.versionCode=1501` (ARM64 ABI digit 2), with curated `docs/releases/0.0.15-beta.md` and one exact-title release trigger. Do not tag or merge release preparation until fresh Rust/provenance, Android JVM, merge gate, and main branch verification are green.
+- **Publication requirement:** release commit must use exact squash title `chore(release): publish 0.0.15-beta (15012)` to invoke the existing one-time signed main workflow. Verify PKCS12 signer, package ID, ABI, manifest versionCode, APK SHA-256, public tag and matching published `.apk` + `.sha256` before claiming published.
+- **Device work still pending:** real Samsung S24 Ultra / tablet S Pen pressure and hover, cursor accuracy, marker-erase continuity, handwriting latency and save/reopen; low storage, resumable update and in-place installation. CI evidence does not prove real-device parity.
+
+
 ## PEN UX REPAIR — 2026-11-08 (pending review)
 
 - Working branch: `fix/android-pen-ux-after-ocr`, based on current main. User reported ugly nibs/icons and controls not doing what they appear to do. All code is still unmerged and no APK is published for this repair.
