@@ -53,6 +53,19 @@ class ExternalOpenPolicyTest {
         assertTrue(shouldRouteInitialPdfIntent(true, false, false, false))
     }
 
+    @Test fun supersededProviderFailureCannotResurrectAnOlderOpen() {
+        // Request A starts, then B arrives while A's provider/cache copy suspends.
+        val requestA = 41L
+        val requestB = 42L
+        assertTrue(canProceedWithPdfOpen(requestA, requestA, false, false))
+        assertFalse(canProceedWithPdfOpen(requestA, requestB, false, false))
+        assertTrue(canProceedWithPdfOpen(requestB, requestB, false, false))
+        // Neither an unresolved nor an actively resolving save choice allows replacement.
+        assertFalse(canProceedWithPdfOpen(requestB, requestB, true, false))
+        assertFalse(canProceedWithPdfOpen(requestB, requestB, false, true))
+        assertFalse(canProceedWithPdfOpen(requestA, requestB, true, true))
+    }
+
     @Test fun clipFallbackDoesNotLetBrokenFirstItemMaskValidPdf() {
         val candidates = listOf(
             IncomingPdfUri("https", "example.com", "/pdf"),
