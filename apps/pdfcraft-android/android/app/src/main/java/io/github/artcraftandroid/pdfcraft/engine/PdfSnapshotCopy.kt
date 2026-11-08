@@ -8,6 +8,16 @@ import java.nio.channels.FileChannel
 /** Bounded-memory copy of exactly one provider asset range; never closes caller-owned channels. */
 internal object PdfSnapshotCopy {
     const val BUFFER_BYTES = 256 * 1024
+    /**
+     * A few document providers advertise a descriptor length but supply a non-seekable
+     * pipe or a FileChannel that rejects positional reads. Retry via ContentResolver's
+     * regular input stream; never swallow permission denial or fatal VM errors.
+     */
+    fun retryWithProviderStream(error: Throwable): Boolean =
+        error is IOException ||
+            error is UnsupportedOperationException ||
+            error is IllegalStateException
+
     private const val TRANSFER_BYTES = 8L * 1024 * 1024
 
     fun copyRange(
