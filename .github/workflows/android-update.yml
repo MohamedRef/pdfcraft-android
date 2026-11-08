@@ -61,7 +61,7 @@ jobs:
           key: issue55-android-tests
       - name: Run Android JVM unit tests
         working-directory: apps/pdfcraft-android/android
-        run: ./gradlew testDebugUnitTest "-Ppdfcraft.abis=arm64-v8a" --no-daemon --stacktrace
+        run: bash "$GITHUB_WORKSPACE/scripts/gradle_with_network_retries.sh" ./gradlew testDebugUnitTest "-Ppdfcraft.abis=arm64-v8a" --no-daemon --stacktrace
       - name: Publish unit test results
         if: always()
         uses: actions/upload-artifact@v7
@@ -159,7 +159,7 @@ jobs:
         run: |
           version="$(sed -n 's/^pdfcraft\.version=//p' gradle.properties)"
           mkdir -p "$GITHUB_WORKSPACE/dist"
-          ./gradlew assembleRelease "-Ppdfcraft.abis=arm64-v8a" --no-daemon --stacktrace
+          bash "$GITHUB_WORKSPACE/scripts/gradle_with_network_retries.sh" ./gradlew assembleRelease "-Ppdfcraft.abis=arm64-v8a" --no-daemon --stacktrace
           cp app/build/outputs/apk/release/app-release.apk "$GITHUB_WORKSPACE/dist/pdfcraft-android-$version.apk"
       - name: Verify release APK matches validated signing certificate and app ID
         run: |
