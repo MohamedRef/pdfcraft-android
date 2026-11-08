@@ -1,5 +1,12 @@
 # PdfCraft Android - development handover
 
+## RELEASE CHECKPOINT - 2026-11-08 (after PR #59 merge)
+
+- PR #59 merged into main at `1515ffac5b84771186c99bf5ae52fbe88be694f7` after Rust, Android JVM and merge gate passed on exact head `f8c33b4874e88b426631b83dc0f65a6fc6de9e81` (run 42470402789).
+- PR #61 remains draft until reconciled with merged main and its own exact-head CI passes. It must publish only one owner-signed `0.0.15-beta (15012)` release, never an unsigned APK or duplicate tag.
+- Open with Samsung hardware reproduction and Logcat validation remain pending; passing JVM tests does not establish a physical-device fix.
+
+
 ## RELEASE 0.0.15-beta SIGNER PARSER INCIDENT — 2026-11-08
 
 - **Build artifact verified, release not published:** owner-approved [workflow run 42461307429](https://github.com/MohamedRef/pdfcraft-android/actions/runs/42461307429), source `c3cbc0222b5b54a21f1c67c8f0522ac1f66f9f19`: Rust tests, Android JVM tests, PKCS12 preflight and signed ARM64 APK build **succeeded**. Final publish job failed at `scripts/verify_android_apk_certificate.py` with “APK signer mismatch”; the tag `v0.0.15-beta` was not created. The last publicly verified beta remains `0.0.14-beta (14012)`.
