@@ -52,6 +52,15 @@ class ToolPrefs(context: Context) {
     var textSize by mutableFloatStateOf(prefs.getFloat("freetext.size", 16f))
         private set
 
+    /** Persistent eraser size in PDF page points, independent of zoom and ink stroke width. */
+    var eraserRadius by mutableFloatStateOf(normalizedEraserRadius(prefs.getFloat("ink.eraser.radius", ERASER_RADIUS_DEFAULT)))
+        private set
+
+    fun updateEraserRadius(radius: Float) {
+        eraserRadius = normalizedEraserRadius(radius)
+        prefs.edit().putFloat("ink.eraser.radius", eraserRadius).apply()
+    }
+
     /** Fill & Sign's one colour for everything it places, and its text size. */
     var fillColor by mutableIntStateOf(prefs.getInt("fill.color", 0xFF000000.toInt()))
         private set

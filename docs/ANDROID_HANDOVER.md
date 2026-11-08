@@ -8,6 +8,13 @@
 - **Release continuation:** merge the parser-fix PR *only when exact-head CI is green*. Use the exact squash commit title `chore(release): publish 0.0.15-beta (15012)` for a controlled retry on `main`. Check signed build, metadata, checksums, public tag/release and updater availability. Do not publish the failed first attempt as an official GitHub Release. Fix PR #59 (Open with crash) and eraser #58 remain separate, and neither is in the already built 0.0.15-beta artifact.
 - **Traceability:** CI artifact `pdfcraft-custom-signed-apks` contains `pdfcraft-android-0.0.15-beta.apk`; SHA256 of this signed *unpublished* build is `9527eaba420ff44c790db23eeaa4bc02364cdbe8ee9c655235d4226ef751c85d`. This is not a public release URL and must not be presented as the current installed update.
 
+## NEXT ANNOTATION BATCH — Adjustable eraser (after 0.0.15-beta release prep)
+
+- Branch `feat/android-adjustable-eraser` is separate from the already merged and signed-release-queued `0.0.15-beta (15012)` source. It must not change or republish that release tag/APK.
+- Draw has contextual Eraser size controls (second-row access or tapping the selected Eraser again), a persistent 2–32 pt radius, and matching zoom-correct circle overlays. Size is captured at the gesture start and passed to the existing safe native `comment_erase` command, including opted-in freehand marker Ink.
+- See [implementation and device QA](ANDROID_ADJUSTABLE_ERASER.md). New pure JVM radius and command-boundary tests were added. **No claim of merged code or measured Samsung UX performance until exact-head gates and device testing.**
+- Continue separately monitoring the queued signed release job; the last publicly verified APK remains 0.0.14-beta until the v0.0.15-beta public release and verified assets exist.
+
 ## HIGH PRIORITY REGRESSION — Android "Open with" crashes (2026-11-08; USER-REPORTED, NOT FIXED)
 
 **Report:** Opening a PDF from another app / Samsung My Files using **Open with > PdfCraft** can crash PdfCraft. User requested an extensive investigation across many different scenarios, not a narrow exception swallow. **No Android crash stack trace, reproducible test, fix or device validation has yet been obtained.** Treat this as a release-quality blocker for the next *fix* batch, not as a proven root cause, and do not claim it was solved by CI.
