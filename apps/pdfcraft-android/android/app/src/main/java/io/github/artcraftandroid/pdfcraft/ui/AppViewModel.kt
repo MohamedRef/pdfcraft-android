@@ -175,7 +175,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         }
         // Never replace the document while its unsaved write-back choice is unresolved.
         // Otherwise a rapid second Open with could bypass Save a copy / Discard.
-        if (readOnlyPrompt != null) return
+        if (readOnlyPrompt != null || resolvingReadOnly) return
         val requestId = ++lastOpenRequest
         // Lock the entire copy/open/replace transaction. A newer external request may arrive
         // while the previous provider streams slowly; only the latest waiting one opens.
@@ -332,6 +332,9 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     var readOnlyPrompt by mutableStateOf<OpenDocument?>(null)
         private set
 
+    /** Blocks new external opens while an unresolved Save a copy or Discard is in flight. */
+    private var resolvingReadOnly = false
+
     /** Leave the viewer: changes are saved first, as the reference does (no prompt). */
     fun closeDocument() {
         val doc = document ?: return
@@ -353,35 +356,53 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         }
     }
 
-    /** The read-only prompt's answer: keep the changes in a copy, or drop them. */
+    /** Resolve an unsaved write-back prompt without racing an incoming Open with. */
     fun answerReadOnly(saveCopy: Boolean?) {
         val doc = readOnlyPrompt ?: return
-        readOnlyPrompt = null
+        if (saveCopy == null) {
+            readOnlyPrompt = null
+            return
+        }
         val eng = engine ?: return
-        when (saveCopy) {
-            null -> return
-            true -> saveCopyAs(doc, then = {
-                document = null
+        readOnlyPrompt = null
+        resolvingReadOnly = true
+        if (saveCopy) {
+            saveCopyAs(doc, then = {
+                // The saved copy finished. Close only after excluding concurrent opens.
                 viewModelScope.launch {
-                    closeQuietly(eng, doc)
-                    refreshRecents()
-                    if (doc.fromOtherApp) leave.trySend(Unit)
+                    try {
+                        openMutex.withLock {
+                            if (document !== doc) return@withLock
+                            closeQuietly(eng, doc)
+                            document = null
+                            refreshRecents()
+                            if (doc.fromOtherApp) leave.trySend(Unit)
+                        }
+                    } finally {
+                        resolvingReadOnly = false
+                    }
                 }
             })
-            false -> {
-                // A user-confirmed Discard must not reappear as an unsynced recovery PDF.
-                // Close the native reader before removing its working file.
-                viewModelScope.launch {
-                    closeQuietly(eng, doc)
-                    doc.source?.let { src ->
-                        withContext(Dispatchers.IO) {
-                            runCatching { files.discardWorkingCopy(src) }
-                                .onFailure { tell(it.userMessage) }
+        } else {
+            viewModelScope.launch {
+                try {
+                    openMutex.withLock {
+                        if (document !== doc) return@withLock
+                        // Explicit Discard, never automatic cleanup: preserve file recovery
+                        // until the user confirms and the native document has closed.
+                        closeQuietly(eng, doc)
+                        doc.source?.let { src ->
+                            withContext(Dispatchers.IO) {
+                                runCatching { files.discardWorkingCopy(src) }
+                                    .onFailure { tell(it.userMessage) }
+                            }
                         }
+                        document = null
+                        refreshRecents()
+                        if (doc.fromOtherApp) leave.trySend(Unit)
                     }
-                    document = null
-                    refreshRecents()
-                    if (doc.fromOtherApp) leave.trySend(Unit)
+                } finally {
+                    resolvingReadOnly = false
                 }
             }
         }
@@ -428,7 +449,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             // A paused Activity must not save a closed/replaced engine document.
             // Use the same lock as Open with and Close before touching native handles.
             openMutex.withLock {
-                if (document === doc && readOnlyPrompt == null) save(doc)
+                if (document === doc && readOnlyPrompt == null && !resolvingReadOnly) save(doc)
             }
         }
     }
@@ -790,7 +811,14 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         copyOf = null
         val then = afterCopy
         afterCopy = null
-        if (target == null) return
+        if (target == null) {
+            // User cancelled Android's file picker: do not lose the unsaved recovery choice.
+            if (then != null && resolvingReadOnly) {
+                readOnlyPrompt = doc
+                resolvingReadOnly = false
+            }
+            return
+        }
         viewModelScope.launch {
             try {
                 // The Save a copy picker, onPause and auto-save must never race over
@@ -807,6 +835,10 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 tell(text(R.string.msg_saved_copy))
                 then?.invoke()
             } catch (e: Exception) {
+                if (then != null && resolvingReadOnly) {
+                    readOnlyPrompt = doc
+                    resolvingReadOnly = false
+                }
                 tell(e.userMessage)
             }
         }
