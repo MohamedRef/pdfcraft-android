@@ -1,11 +1,59 @@
 # PdfCraft Android - development handover
 
+## RELEASE 0.0.15-beta SIGNER PARSER INCIDENT — 2026-11-08
+
+- **Build artifact verified, release not published:** owner-approved [workflow run 42461307429](https://github.com/MohamedRef/pdfcraft-android/actions/runs/42461307429), source `c3cbc0222b5b54a21f1c67c8f0522ac1f66f9f19`: Rust tests, Android JVM tests, PKCS12 preflight and signed ARM64 APK build **succeeded**. Final publish job failed at `scripts/verify_android_apk_certificate.py` with “APK signer mismatch”; the tag `v0.0.15-beta` was not created. The last publicly verified beta remains `0.0.14-beta (14012)`.
+- **Confirmed root cause:** build job verified that actual APK certificate matched the owner PKCS12 and pinned GitHub variable `PDFCRAFT_CERT_SHA256`. The signed APK's V2 X509 certificate was independently inspected and its SHA256 is `0cb9f18f2e41e2cf0b0f1866b409adff798c1d83dfe6325d03fbb0b13ee051c1`, the exact expected permanent signer. The publishing Python parser demanded the older `Signer #1 certificate SHA-256 digest:` label, but Android Build Tools 37 emits `V2 Signer: certificate SHA-256 digest:` (or V3 variant), producing a **false-negative signer mismatch**, not an invalid or rotated signing key.
+- **Fix branch:** `fix/android37-signer-certificate-parser`; adjust only the trusted `apksigner verify --print-certs` output parser to accept `Signer #n`, `V2 Signer`, `V3.0 Signer`, `V3.1 Signer` and SDK-range variants. The workflow still requires `apksigner verify` success, every signer certificate SHA256 to equal the pinned owner identity, the configured variable, APK SHA256, package name, versionCode and release notes. Tests reject mixed/different signers, public-key digests and missing certificate lines. **Never remove/bypass this security gate or rotate the key.**
+- **Release continuation:** merge the parser-fix PR *only when exact-head CI is green*. Use the exact squash commit title `chore(release): publish 0.0.15-beta (15012)` for a controlled retry on `main`. Check signed build, metadata, checksums, public tag/release and updater availability. Do not publish the failed first attempt as an official GitHub Release. Fix PR #59 (Open with crash) and eraser #58 remain separate, and neither is in the already built 0.0.15-beta artifact.
+- **Traceability:** CI artifact `pdfcraft-custom-signed-apks` contains `pdfcraft-android-0.0.15-beta.apk`; SHA256 of this signed *unpublished* build is `9527eaba420ff44c790db23eeaa4bc02364cdbe8ee9c655235d4226ef751c85d`. This is not a public release URL and must not be presented as the current installed update.
+
 ## NEXT ANNOTATION BATCH — Adjustable eraser (after 0.0.15-beta release prep)
 
 - Branch `feat/android-adjustable-eraser` is separate from the already merged and signed-release-queued `0.0.15-beta (15012)` source. It must not change or republish that release tag/APK.
 - Draw has contextual Eraser size controls (second-row access or tapping the selected Eraser again), a persistent 2–32 pt radius, and matching zoom-correct circle overlays. Size is captured at the gesture start and passed to the existing safe native `comment_erase` command, including opted-in freehand marker Ink.
 - See [implementation and device QA](ANDROID_ADJUSTABLE_ERASER.md). New pure JVM radius and command-boundary tests were added. **No claim of merged code or measured Samsung UX performance until exact-head gates and device testing.**
 - Continue separately monitoring the queued signed release job; the last publicly verified APK remains 0.0.14-beta until the v0.0.15-beta public release and verified assets exist.
+
+## HIGH PRIORITY REGRESSION — Android "Open with" crashes (2026-11-08; USER-REPORTED, NOT FIXED)
+
+**Report:** Opening a PDF from another app / Samsung My Files using **Open with > PdfCraft** can crash PdfCraft. User requested an extensive investigation across many different scenarios, not a narrow exception swallow. **No Android crash stack trace, reproducible test, fix or device validation has yet been obtained.** Treat this as a release-quality blocker for the next *fix* batch, not as a proven root cause, and do not claim it was solved by CI.
+
+### Reviewed entry points and current implementation
+
+- `MainActivity.kt`: exported `singleTask` activity with PDF `ACTION_VIEW` (`content://` and `file://`) and `ACTION_SEND` / `ACTION_SEND_MULTIPLE` filters. `onCreate` only calls `openFromIntent(intent)` when `savedInstanceState == null`; `onNewIntent` calls `openFromIntent`, but currently does not call `setIntent(intent)`. `ACTION_VIEW` reads `intent.data`; `ACTION_SEND` reads `EXTRA_STREAM`. Unexpected/malformed/unsupported external intents and activity recreation need safe handling.
+- `AppViewModel.open`: waits for a lazily initialized native engine; copies the incoming URI on `Dispatchers.IO`; opens through the Rust engine; and marks files as launched from another app so Back returns to the source. `otherAppUri`, `openStartedAt`, `opening` are shared mutable fields, and each external `open` starts a separate coroutine without a centralized request lock or latest-request policy. **Possible overlapping-open/race risk**, not proven to explain the user's crash.
+- `DocumentFiles.workingCopy`: the engine needs a local path, so external provider input is copied into a private working file. It first attempts a seekable `AssetFileDescriptor` copy, falls back to an input stream for unsupported/non-seekable/cloud providers, and protects `.writeback-pending` recovery copies. Permission grants from `Open with` are typically temporary, unlike persisted SAF picker access. Some providers return absent/reordered metadata, unknown sizes, pipes, partial reads, or throw when queried.
+- Existing catches handle some `FileNotFoundException`, `SecurityException`, `MobileException`, and ordinary `Exception` paths. **This does not prove that all lifecycle, provider or native exceptions are caught or that recovery preserves every open state.** Never blanket-catch errors, delete recovery data, bypass native validation or automatically overwrite a provider file to hide a crash.
+- `OpenTiming` logs elapsed stages with a debug opt-in and deliberately omits document names, URIs and contents. Add non-sensitive failure-stage breadcrumbs and sanitized exception classes to diagnosis if needed. Do not log document contents, full URI, credentials or private paths.
+
+### Diagnostic matrix (test independently; expected result is open successfully or show a useful non-fatal error)
+
+| Axis | Scenarios to reproduce |
+| --- | --- |
+| Launch state | App killed/cold start; warm with Home; viewer already open; viewer has unsaved annotations; app in background; process death and recreated Activity; rotate/DeX split screen; repeated rapid Open with / double taps |
+| Incoming action | `ACTION_VIEW` data; `ACTION_SEND` stream; `ACTION_SEND_MULTIPLE` first valid PDF; missing data; `ClipData`-only provider; unexpected MIME; missing/bad parcelable; new intent into `singleTask` |
+| Scheme and grants | `content://` temporary read grant; SAF persisted access; read-only grant; revoked grant; `file://` own/app-external path; provider refuses write; grant lost after process recreation |
+| Source application | Samsung My Files; Android Files/DocumentsUI; Downloads; WhatsApp/Telegram attachment; Gmail/email; Google Drive/OneDrive/cloud placeholder; third-party PDF/file manager; recently saved PdfCraft PDF |
+| Provider shape | Seekable file descriptor with start offset; pipe/non-seekable stream; unknown/incorrect length; reordered/missing `DISPLAY_NAME` or size; null stream; transient I/O exception; provider death/cancel; slow offline/cloud read |
+| PDF data | Small valid PDF; 0-byte/truncated/corrupt/not-really-PDF; password-protected/incorrect password; signed/annotated/form PDFs; huge/many-page image PDF; non-ASCII filename; filename with separators/duplicate name; low-disk copy |
+| State and durability | Open same URI twice; open different URI while first opening; open with unsaved edits; Back returns to source; read-only Save a copy; Recent after permission expiration; interruption mid-copy; failed save/writeback retains private recovery copy |
+| Platform | Current Samsung S24 Ultra / One UI Android build; API 29 minSdk; API 35/36+ scoped-storage and URI permission differences; mobile/tablet/DeX; updated versus freshly installed app |
+
+### Implementation work — next isolated crash-fix PR, separate from pen/eraser and release work
+
+1. Capture reproducible **AndroidRuntime FATAL EXCEPTION + sanitized stack trace** from real `Open with`, including app build, Android version, source app, launch state, URI scheme (not the URI), and whether the same PDF opens with PdfCraft's internal picker. Logcat capture, with secrets/document data removed: `adb logcat -c`, reproduce, then `adb logcat -d -b crash -v time > pdfcraft-openwith-crash.txt`; optionally enable `adb shell setprop log.tag.PdfCraftOpen DEBUG` for sanitized stage timings.
+2. Add a small, testable external-intent router that validates action, URI scheme/MIME, grant flags, `ClipData` fallback when appropriate, and malformed parcelables; preserve permission grants, update the activity's latest intent in `onNewIntent`, and handle Activity recreation explicitly without accidental duplicate opens. Do not accept arbitrary external paths or invent access rights.
+3. Serialize or reject superseded document-open requests; snapshot request-specific `fromOtherApp` / timing fields instead of sharing mutable state between asynchronous opens. Never overwrite a live working copy or close an unsaved document until prior save/recovery is safe. Evaluate cancellation and memory carefully rather than changing engine ownership blindly.
+4. Harden `DocumentFiles` for provider metadata query failures, null/expired/remote streams, mismatched asset ranges and interrupted copies. Keep bounded-memory streaming, recovery markers and safe temporary-file replacement; treat unsupported/corrupt PDFs as non-fatal errors where safe, and avoid caching unvalidated partials as successful opens.
+5. Add automated JVM/Android tests for intent routing, malformed input and recreation, simultaneous open requests, temporary URI permissions, providers with pipes/offsets/unknown sizes, and preserved pending-writeback. On-device reproduction on Samsung **remains mandatory**; pass current-head Rust/provenance, Android JVM, aggregate merge gate and verify existing PDF save/export/annotations.
+6. Record the actual crash signature, reproducible case, exact code fix, PR and test evidence here when known. **No fix PR exists for this issue at this checkpoint**; do not label it resolved or ship an unvalidated hotfix.
+
+### Parallel-work boundary (status at this checkpoint)
+
+- The owner-signed `0.0.15-beta (15012)` release-trigger commit `c3cbc0222b5b54a21f1c67c8f0522ac1f66f9f19` is merged, but [publishing run 42461307429](https://github.com/MohamedRef/pdfcraft-android/actions/runs/42461307429) was still **in progress**, and public `v0.0.15-beta` assets were **not verified as published** at the last check. `v0.0.14-beta (14012)` remains the last verified public APK.
+- [PR #58](https://github.com/MohamedRef/pdfcraft-android/pull/58) (adjustable eraser) is a separate open feature PR with Android/Rust checks running. It is **not a fix for Open with**, not in the 0.0.15 source, and must not be conflated with this crash investigation.
+- A newly observed external-file crash is a reason to validate/repair before declaring the *next* release stable; do not replace an already signed/tagged APK or rotate its signing key. Keep all fixes in reviewed PRs and record CI/device evidence here.
 
 ## HIGH PRIORITY REGRESSION — Android "Open with" crashes (2026-11-08; USER-REPORTED, NOT FIXED)
 
