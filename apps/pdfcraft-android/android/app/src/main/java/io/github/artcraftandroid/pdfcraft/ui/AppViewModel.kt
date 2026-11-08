@@ -164,7 +164,6 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
      * as the reference does (#47).
      */
     fun open(uri: Uri, password: String? = null, fromOtherApp: Boolean = false) {
-        val requestId = ++lastOpenRequest
         // a file opened from another app comes to the front, not under Settings
         settingsOpen = false
         showLicences = false
@@ -177,12 +176,15 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         // Never replace the document while its unsaved write-back choice is unresolved.
         // Otherwise a rapid second Open with could bypass Save a copy / Discard.
         if (readOnlyPrompt != null) return
+        val requestId = ++lastOpenRequest
         // Lock the entire copy/open/replace transaction. A newer external request may arrive
         // while the previous provider streams slowly; only the latest waiting one opens.
         viewModelScope.launch {
           openMutex.withLock {
             if (requestId != lastOpenRequest) return@withLock
             val eng = engine ?: application.engine.await().getOrNull() ?: run { tell(engineProblem ?: text(R.string.msg_engine_not_started)); return@withLock }
+            // An older request can become obsolete while waiting for the native engine.
+            if (requestId != lastOpenRequest) return@withLock
             openStartedAt = android.os.SystemClock.elapsedRealtime()
             opening = true
             var openStage = "provider_copy"
@@ -192,6 +194,9 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                     files.workingCopy(uri)
                 } }
                 io.github.artcraftandroid.pdfcraft.engine.OpenTiming.milestone("working_copy_ready", openStartedAt, bytes = file.length())
+                // Providers may stream a cloud PDF for seconds. Do not replace a live viewer
+                // with that obsolete result when the user has since opened another document.
+                if (requestId != lastOpenRequest) return@withLock
                 openStage = "native_open"
                 openFile(eng, uri, file, password, fromOtherApp, requestId)
             } catch (e: java.io.FileNotFoundException) {
