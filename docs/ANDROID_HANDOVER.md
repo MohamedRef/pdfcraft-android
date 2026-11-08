@@ -1,3 +1,11 @@
+## APK DOWNLOAD FAILURE - CHROME SUCCEEDS, IN-APP STALLS (2026-11-08)
+
+- **User reproduction:** GitHub Release APK downloads normally in Chrome, while the PdfCraft in-app update downloader spins and eventually fails. Account access and repo signing are not evidence of an outage. This isolates investigation to the Android client/CDN network flow, but no on-device HTTP trace has been collected.
+- **Code finding:** In-app `HttpsURLConnection` had a 20s read timeout and did not automatically retry transient network errors; it retained a digest-named partial for a *manual* Resume instead. This can explain the reported stall/failure, but device root cause is not proven.
+- **Proposed isolated fix:** branch `fix/android-release-download-retries`: 20s connect, 40s read, at most three delayed automatic attempts on socket timeout/reset, DNS interruption, truncated response or retryable GitHub CDN HTTP 408/429/5xx. Resume from the exact saved byte offset using strictly verified HTTP Range metadata. Never retry invalid ranges, bad certificates, wrong hash, incorrect package/signature or storage failures; cancellation stays immediate. Existing final SHA256/Android package/signature validation remains mandatory.
+- **Verification:** JVM tests cover retryability classes, bounded backoff and existing 200/206/416 resume invariants. **Do not claim tested or merged until exact-head Rust, Android JVM and merge gate pass.** Real Galaxy S24 Ultra test with Wi-Fi interruption, retry after 20-40s stall, HTTP 206, Android install and release CDN remains pending.
+- **Release:** This fix belongs to a later tested release batch; do not alter or republish `0.0.15-beta` or its signing key.
+
 # PdfCraft Android - development handover
 
 ## RELEASE CHECKPOINT - 2026-11-08 (after PR #59 merge)
