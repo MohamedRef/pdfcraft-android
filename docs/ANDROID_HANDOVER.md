@@ -25,6 +25,12 @@
 | State and durability | Open same URI twice; open different URI while first opening; open with unsaved edits; Back returns to source; read-only Save a copy; Recent after permission expiration; interruption mid-copy; failed save/writeback retains private recovery copy |
 | Platform | Current Samsung S24 Ultra / One UI Android build; API 29 minSdk; API 35/36+ scoped-storage and URI permission differences; mobile/tablet/DeX; updated versus freshly installed app |
 
+### Current implementation checkpoint — PR #59 (review pending, 2026-11-08)
+
+- [PR #59](https://github.com/MohamedRef/pdfcraft-android/pull/59), branch `fix/android-open-with-crash`, is **open and not merged**. It implements a defensive external Intent/ClipData URI router and scheme validation, `singleTask` `setIntent` behavior, recreation handling, serialized source copy/native opens and close, request-local external origin through password/permission recovery, plus deterministic routing tests. Details: [fix scope and QA](ANDROID_OPEN_WITH_CRASH_FIX.md).
+- These are source-review risk mitigations, **not a proven reproduction-specific crash fix**; no device Logcat or confirmed root-cause stack trace was available when authored. Test actual S24 Ultra Open with, cloud and read-only providers, double launches, old unsaved annotations, encrypted and corrupt PDFs. Exact PR-head Android/Rust/Merge Gate must pass before merge.
+- Keep signing, app package, existing local PDF recovery and the isolated `0.0.15-beta` pipeline unchanged; any subsequent device-proven fixes need separate reviewed commits and checks.
+
 ### Implementation work — next isolated crash-fix PR, separate from pen/eraser and release work
 
 1. Capture reproducible **AndroidRuntime FATAL EXCEPTION + sanitized stack trace** from real `Open with`, including app build, Android version, source app, launch state, URI scheme (not the URI), and whether the same PDF opens with PdfCraft's internal picker. Logcat capture, with secrets/document data removed: `adb logcat -c`, reproduce, then `adb logcat -d -b crash -v time > pdfcraft-openwith-crash.txt`; optionally enable `adb shell setprop log.tag.PdfCraftOpen DEBUG` for sanitized stage timings.
