@@ -355,3 +355,9 @@ Reference behavior: https://feedback.xodo.com/support/solutions/articles/3500020
 - Changes are Compose UI and QuickToolbarPrefs only. Native engine, signed/protected document handling, PDF bytes/annotation persistence, S Pen pressure/eraser and previous highlight paths are unmodified. Current-head CI and real physical-device checks pending; no new per-feature APK.
 
 - Added handle-only rail drag with left/right edge snapping and persisted center-relative vertical offset; haptic feedback at grab and completed snap only, respecting OS haptic controls. No PDF pointer gesture interception. Requires Samsung S Pen/touch and window-resize QA.
+
+### Pen input and toolbar parity correction (2026-11-08, pending PR)
+
+- The user reported that 0.0.14-beta's pens, icons and tool UX were unsatisfactory. This proposed Kotlin-only repair makes nib tool identity visually distinct, Pen/Highlighter actions explicit, and restores drawing on style/favorite selection. It moves Eraser/Lasso to visible primary positions, disables conflicting selected-button auto-scroll, and surfaces Pen-only and Snap states instead of hiding the causes of apparently nonfunctional input.
+- Freehand tap-only ink is represented by a minimal two-point round-capped PDF Ink stroke; malformed points are refused. Native PDF annotation and shared v0.19.0 engine remain untouched.
+- Real Samsung note-taking feel, pen pressure and tap/save/reopen are **not verified** by JVM tests. See [pen UX repair QA](ANDROID_PEN_UX_REPAIR.md). Merge only after exact-head CI and no regressions; do not label full Samsung Notes/Xodo parity.
