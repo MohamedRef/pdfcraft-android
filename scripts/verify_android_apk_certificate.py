@@ -13,9 +13,21 @@ def normalize(text: str) -> str:
     return re.sub(r"[^0-9a-f]", "", text.lower())
 
 
+# Build Tools 36 and earlier: "Signer #1 certificate SHA-256 digest: ..."
+# Build Tools 37: "V2 Signer: certificate SHA-256 digest: ..." and "V3.0 Signer: ..."
+# Some releases also print a signer SDK range. Parse *only actual certificate* lines,
+# never a public-key digest or an arbitrary 64-hex string elsewhere in the output.
+_CERT_SHA256_LINE = re.compile(
+    r"(?im)^\s*(?:Signer\s+#\d+|Signer\s+\([^\r\n)]*\)|V\d+(?:\.\d+)?\s+Signer)"
+    r"\s*:?\s*certificate SHA-256 digest:\s*([0-9a-fA-F:]+)\s*$"
+)
+
+
 def verify(apksigner_output: str, configured_pin: str = "") -> bool:
-    found = re.search(r"Signer #\d+ certificate SHA-256 digest:\s*([0-9a-fA-F:]+)", apksigner_output)
-    if not found or normalize(found.group(1)) != EXPECTED:
+    # apksigner's successful 'verify' exit status is checked by the invoking workflow
+    # before this parser is called. Every listed signer must use the permanent owner key.
+    digests = [normalize(m.group(1)) for m in _CERT_SHA256_LINE.finditer(apksigner_output)]
+    if not digests or any(len(digest) != 64 or digest != EXPECTED for digest in digests):
         return False
     return not configured_pin or normalize(configured_pin) == EXPECTED
 
