@@ -1,6 +1,36 @@
 package io.github.artcraftandroid.pdfcraft.ui.home
 
+import java.io.EOFException
 import java.io.IOException
+import java.net.SocketException
+import java.net.SocketTimeoutException
+import java.net.UnknownHostException
+import javax.net.ssl.SSLException
+import javax.net.ssl.SSLHandshakeException
+import javax.net.ssl.SSLPeerUnverifiedException
+
+/**
+ * Only network interruptions and retryable CDN responses may retry. Never retry
+ * certificate trust errors, file-system failures, or invalid range/response data.
+ */
+internal class ApkHttpStatusException(val status: Int) :
+    IOException("GitHub APK download returned HTTP $status.")
+
+internal const val MAX_APK_NETWORK_RETRIES = 3
+
+internal fun apkRetryable(error: IOException): Boolean = when (error) {
+    is ApkHttpStatusException -> error.status in setOf(408, 429, 500, 502, 503, 504)
+    is SSLHandshakeException, is SSLPeerUnverifiedException -> false
+    is SocketTimeoutException, is SocketException, is UnknownHostException, is EOFException -> true
+    is SSLException -> true // Remote TLS stream interruption; not certificate validation.
+    else -> false
+}
+
+internal fun apkRetryDelayMillis(retryNumber: Int): Long = when (retryNumber) {
+    1 -> 1_000L
+    2 -> 2_000L
+    else -> 4_000L
+}
 
 /** HTTP range validation is deliberately independent of Android and the network. */
 internal enum class ApkResumeAction { RESTART, APPEND, RETRY_WITHOUT_RANGE }
@@ -35,7 +65,7 @@ internal fun apkResumeAction(
         }
         416 -> if (requestedOffset > 0L) ApkResumeAction.RETRY_WITHOUT_RANGE
             else throw IOException("APK server refused the requested download.")
-        else -> throw IOException("APK server returned HTTP $status.")
+        else -> throw ApkHttpStatusException(status)
     }
 }
 
