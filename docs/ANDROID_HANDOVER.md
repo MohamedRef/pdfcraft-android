@@ -1,5 +1,12 @@
 # PdfCraft Android - development handover
 
+## NEXT ANNOTATION BATCH — Adjustable eraser (after 0.0.15-beta release prep)
+
+- Branch `feat/android-adjustable-eraser` is separate from the already merged and signed-release-queued `0.0.15-beta (15012)` source. It must not change or republish that release tag/APK.
+- Draw has contextual Eraser size controls (second-row access or tapping the selected Eraser again), a persistent 2–32 pt radius, and matching zoom-correct circle overlays. Size is captured at the gesture start and passed to the existing safe native `comment_erase` command, including opted-in freehand marker Ink.
+- See [implementation and device QA](ANDROID_ADJUSTABLE_ERASER.md). New pure JVM radius and command-boundary tests were added. **No claim of merged code or measured Samsung UX performance until exact-head gates and device testing.**
+- Continue separately monitoring the queued signed release job; the last publicly verified APK remains 0.0.14-beta until the v0.0.15-beta public release and verified assets exist.
+
 ## NEXT COMBINED BETA — 0.0.15-beta (15012), 2026-11-08
 
 - **Latest published:** [0.0.14-beta (14012)](https://github.com/MohamedRef/pdfcraft-android/releases/tag/v0.0.14-beta), signed ARM64 owner build. Do not present unbuilt or unverified 0.0.15-beta as downloadable.
