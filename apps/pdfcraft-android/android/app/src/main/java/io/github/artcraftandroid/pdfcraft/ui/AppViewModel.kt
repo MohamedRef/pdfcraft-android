@@ -168,6 +168,9 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             if (fromOtherApp) document?.fromOtherApp = true
             return
         }
+        // Never replace the document while its unsaved write-back choice is unresolved.
+        // Otherwise a rapid second Open with could bypass Save a copy / Discard.
+        if (readOnlyPrompt != null) return
         // Lock the entire copy/open/replace transaction. A newer external request may arrive
         // while the previous provider streams slowly; only the latest waiting one opens.
         viewModelScope.launch {
@@ -315,15 +318,18 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         val eng = engine ?: return
         if (doc.controller.tool != ViewerTool.None) leaveTool(doc)
         viewModelScope.launch {
-            // Never dispose of a working document until a provider accepted the saved bytes.
-            if (!saveAndClose(eng, doc)) {
-                readOnlyPrompt = doc
-                return@launch
+            openMutex.withLock {
+                if (document !== doc) return@withLock
+                // Opening a second document and closing the first must not race native handles.
+                if (!saveAndClose(eng, doc)) {
+                    readOnlyPrompt = doc
+                    return@withLock
+                }
+                document = null
+                readingMode = false
+                refreshRecents()
+                if (doc.fromOtherApp) leave.trySend(Unit)
             }
-            document = null
-            readingMode = false
-            refreshRecents()
-            if (doc.fromOtherApp) leave.trySend(Unit)
         }
     }
 
