@@ -1373,4 +1373,15 @@
     <string name="ink_style_pencil">Pencil</string>
     <string name="ink_style_brush">Brush</string>
     <string name="ink_style_highlighter">Highlighter</string>
+    <!-- Read-only page-specific upstream native OCR word confidence review. -->
+    <string name="ocr_review_title">Review OCR confidence</string>
+    <string name="ocr_review_scope">Current page: %1$d</string>
+    <string name="ocr_review_read_only">Check words with low recognition confidence. This review does not edit your PDF.</string>
+    <string name="ocr_review_loading">Checking recognition confidence…</string>
+    <string name="ocr_review_error">OCR review is unavailable for this page. Check that text recognition is installed and copying is allowed.</string>
+    <string name="ocr_review_counts">%1$d recognized words · %2$d need attention</string>
+    <string name="ocr_review_skipped">Page skipped: %1$s</string>
+    <string name="ocr_review_empty">No words found on this page.</string>
+    <string name="ocr_review_limited">Showing up to %1$d words, with uncertain recognition first.</string>
+    <string name="ocr_review_unknown">n/a</string>
 </resources>

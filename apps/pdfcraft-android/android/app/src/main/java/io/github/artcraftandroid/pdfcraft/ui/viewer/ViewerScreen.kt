@@ -543,6 +543,7 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
                 ViewerSheet.MoreTools -> MoreToolsSheet(vm, doc)
                 ViewerSheet.Signatures -> SignaturesSheet(vm, doc)
                 ViewerSheet.ScanEnhance -> ScanEnhanceSheet(vm, doc)
+                ViewerSheet.OcrConfidence -> OcrConfidenceReviewSheet(vm, doc)
                 ViewerSheet.None -> Unit
             }
         }

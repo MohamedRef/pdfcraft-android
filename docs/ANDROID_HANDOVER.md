@@ -1,5 +1,12 @@
 # PdfCraft Android - development handover
 
+## CURRENT PARITY PROPOSAL — OCR word-confidence inspection (2026-11-08)
+
+- Branch `feat/android-ocr-confidence-review`, pending PR and exact-head CI. Upstream engine remains released v0.19.0 and current APK remains `0.0.14-beta (14012)`; do not publish per-feature APKs.
+- Adds a read-only, current-page More > Review OCR confidence sheet over native `ocr_words`, without retained correction handles or PDF edits. Low-confidence words appear first in a bounded list and the full native word count remains visible. See [scope and device QA](ANDROID_OCR_CONFIDENCE_REVIEW.md).
+- Pending Rust/provenance, Android JVM, title and merge-gate tests. Physical Samsung and large scanned PDF/permission checks remain outstanding.
+
+
 ## 0.0.13-beta (13012) — release preparation (2026-11-07, not yet published)
 
 - Current public version before this batch: `0.0.12-beta (12012)`, tag `v0.0.12-beta`. Never append `.1` after `beta`.

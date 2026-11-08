@@ -355,3 +355,9 @@ Reference behavior: https://feedback.xodo.com/support/solutions/articles/3500020
 - Changes are Compose UI and QuickToolbarPrefs only. Native engine, signed/protected document handling, PDF bytes/annotation persistence, S Pen pressure/eraser and previous highlight paths are unmodified. Current-head CI and real physical-device checks pending; no new per-feature APK.
 
 - Added handle-only rail drag with left/right edge snapping and persisted center-relative vertical offset; haptic feedback at grab and completed snap only, respecting OS haptic controls. No PDF pointer gesture interception. Requires Samsung S Pen/touch and window-resize QA.
+
+### Proposed v0.19.0 OCR words read-only Android UI bridge (2026-11-08)
+
+- Branch `feat/android-ocr-confidence-review` adds a new current-page UI over existing native `ocr_words` to inspect confidence and suspect entries without applying recognition, retaining a review handle, exporting text or changing PDF content. This is incremental UI/runtime parity only; current shared engine is already stable v0.19.0.
+- The engine's `doc_to_copy` permission guard remains authoritative. The UI requests exactly one 1-based page and bounds the visible list to 100 words, prioritizing suspect words after examining the complete page list. Page/generation guards reject stale results.
+- Review, dictionary mutation and `ocr_review_apply` remain deferred. This branch must pass exact-head Rust/provenance, Android JVM and merge gate before merge; no device/benchmark claims. See [feature handoff](ANDROID_OCR_CONFIDENCE_REVIEW.md).
