@@ -66,7 +66,15 @@ class MainActivity : ComponentActivity() {
         )
         window.isNavigationBarContrastEnforced = false
         super.onCreate(savedInstanceState)
-        if (savedInstanceState == null) openFromIntent(intent)
+        // A process recreated from a saved task still needs its incoming PDF. Avoid reopening
+        // when the retained ViewModel already owns the document or an open request.
+        if (shouldRouteInitialPdfIntent(
+                savedInstanceStatePresent = savedInstanceState != null,
+                hasDocument = vm.document != null,
+                opening = vm.opening,
+                awaitingPassword = vm.passwordRequest != null,
+            )
+        ) openFromIntent(intent)
         collectRequests()
         setContent {
             PdfcraftTheme {
@@ -177,18 +185,55 @@ class MainActivity : ComponentActivity() {
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        // singleTask reuses this Activity. Android's getIntent() otherwise exposes a stale
+        // document after a newer Open with, including across subsequent recreation.
+        setIntent(intent)
         openFromIntent(intent)
     }
 
-    /** A PDF another app opens with PdfCraft, or shares to it, opens in the viewer. */
-    private fun openFromIntent(intent: Intent?) {
-        val uri: Uri? = when (intent?.action) {
-            Intent.ACTION_VIEW -> intent.data
-            Intent.ACTION_SEND -> IntentCompat.getParcelableExtra(intent, Intent.EXTRA_STREAM, Uri::class.java)
-            Intent.ACTION_SEND_MULTIPLE -> IntentCompat.getParcelableArrayListExtra(intent, Intent.EXTRA_STREAM, Uri::class.java)?.firstOrNull()
-            else -> null
+    /** Extract external PDF URIs defensively: other apps can supply broken extras or ClipData. */
+    private fun externalPdfUri(intent: Intent?): Uri? {
+        if (intent == null) return null
+        val action = intent.action ?: return null
+        if (action != Intent.ACTION_VIEW && action != Intent.ACTION_SEND && action != Intent.ACTION_SEND_MULTIPLE) return null
+        val candidates = ArrayList<Uri>()
+        // A sender may place the only working URI into ClipData rather than EXTRA_STREAM.
+        // The permission grant covers the whole receiving Intent, including these clip items.
+        // Each parcelable is isolated: a malformed single-item field must not prevent a
+        // valid multiple-item list (or the permission-bearing ClipData) from being checked.
+        when (action) {
+            Intent.ACTION_VIEW -> runCatching { intent.data }.getOrNull()?.let(candidates::add)
+            Intent.ACTION_SEND -> runCatching {
+                IntentCompat.getParcelableExtra(intent, Intent.EXTRA_STREAM, Uri::class.java)
+            }.getOrNull()?.let(candidates::add)
+            Intent.ACTION_SEND_MULTIPLE -> {
+                runCatching {
+                    IntentCompat.getParcelableArrayListExtra(intent, Intent.EXTRA_STREAM, Uri::class.java)
+                }.getOrNull()?.let(candidates::addAll)
+                runCatching {
+                    IntentCompat.getParcelableExtra(intent, Intent.EXTRA_STREAM, Uri::class.java)
+                }.getOrNull()?.let(candidates::add)
+            }
         }
-        uri?.let { vm.open(it, fromOtherApp = true) }
+        runCatching {
+            val clip = intent.clipData
+            if (clip != null) {
+                for (i in 0 until minOf(clip.itemCount, 32)) {
+                    clip.getItemAt(i).uri?.let(candidates::add)
+                }
+            }
+        }
+        val chosen = firstExternalPdfCandidate(
+            action,
+            candidates.map { IncomingPdfUri(it.scheme, it.authority, it.path) },
+        ) ?: return null
+        return candidates[chosen]
+    }
+
+    /** An external document must not terminate the whole app on a malformed parcelable. */
+    private fun openFromIntent(intent: Intent?) {
+        val uri = runCatching { externalPdfUri(intent) }.getOrNull() ?: return
+        vm.open(uri, fromOtherApp = true)
     }
 
     /** Hand [file] to Android's print framework. */

@@ -65,7 +65,12 @@ class DocumentFiles(private val context: Context) {
                         true
                     } ?: false
                 }
-            } catch (_: IOException) { false } catch (_: UnsupportedOperationException) { false }
+            } catch (e: Exception) {
+                // A vendor/provider can claim a seekable asset but expose a pipe or a
+                // channel that rejects positional reads. Only recoverable descriptor errors
+                // fall back to a fresh, truncating provider stream. Security denial escapes.
+                if (PdfSnapshotCopy.retryWithProviderStream(e)) false else throw e
+            }
             if (!copied) OpenTiming.measure("provider_stream_fallback") {
                 resolver.openInputStream(uri).use { input ->
                     requireNotNull(input) { context.getString(R.string.common_file_unreadable) }

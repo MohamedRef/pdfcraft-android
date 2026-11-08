@@ -37,6 +37,7 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
+import io.github.artcraftandroid.pdfcraft.canProceedWithPdfOpen
 import io.github.artcraftandroid.pdfcraft.PdfcraftApplication
 import io.github.artcraftandroid.pdfcraft.R
 import io.github.artcraftandroid.pdfcraft.plural
@@ -65,7 +66,13 @@ data class BatesExportResult(val name: String, val message: String, val uri: Uri
 data class Message(val text: String, val actionLabel: String? = null, val action: (() -> Unit)? = null)
 
 /** A document waiting for its password before it opens. */
-data class PasswordRequest(val uri: Uri, val file: File, val wrong: Boolean)
+data class PasswordRequest(
+    val uri: Uri,
+    val file: File,
+    val wrong: Boolean,
+    val fromOtherApp: Boolean = false,
+    val requestId: Long = 0L,
+)
 
 /** Script alerts waiting at once, at most. */
 private const val MAX_SCRIPT_ALERTS = 20
@@ -144,9 +151,15 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         }
     }
 
-    /** The document another app is opening in PdfCraft, until it opens. */
-    private var otherAppUri: Uri? = null
+    /** Opening is serial: multiple ACTION_VIEW deliveries must not share a working file or engine document. */
+    private val openMutex = Mutex()
+    private var lastOpenRequest = 0L
     private var openStartedAt = 0L
+
+    /** Shared gate for initial, native and cached-copy open paths. */
+    private fun isCurrentOpenRequest(requestId: Long): Boolean = canProceedWithPdfOpen(
+        requestId, lastOpenRequest, readOnlyPrompt != null, resolvingReadOnly,
+    )
 
     /** Fires when a document another app opened is closed: the activity finishes, back to that app. */
     val leave = Channel<Unit>(Channel.CONFLATED)
@@ -157,7 +170,6 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
      * as the reference does (#47).
      */
     fun open(uri: Uri, password: String? = null, fromOtherApp: Boolean = false) {
-        otherAppUri = uri.takeIf { fromOtherApp }
         // a file opened from another app comes to the front, not under Settings
         settingsOpen = false
         showLicences = false
@@ -167,24 +179,43 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             if (fromOtherApp) document?.fromOtherApp = true
             return
         }
+        // Never replace the document while its unsaved write-back choice is unresolved.
+        // Otherwise a rapid second Open with could bypass Save a copy / Discard.
+        if (readOnlyPrompt != null || resolvingReadOnly) return
+        val requestId = ++lastOpenRequest
+        // Lock the entire copy/open/replace transaction. A newer external request may arrive
+        // while the previous provider streams slowly; only the latest waiting one opens.
         viewModelScope.launch {
-            val eng = engine ?: application.engine.await().getOrNull() ?: run { tell(engineProblem ?: text(R.string.msg_engine_not_started)); return@launch }
+          openMutex.withLock {
+            if (!isCurrentOpenRequest(requestId)) return@withLock
+            val eng = engine ?: application.engine.await().getOrNull() ?: run { tell(engineProblem ?: text(R.string.msg_engine_not_started)); return@withLock }
+            // An older request can become obsolete while waiting for the native engine.
+            if (!isCurrentOpenRequest(requestId)) return@withLock
             openStartedAt = android.os.SystemClock.elapsedRealtime()
             opening = true
+            var openStage = "provider_copy"
             try {
                 val file = io.github.artcraftandroid.pdfcraft.engine.OpenTiming.measure("provider_and_working_copy") { withContext(Dispatchers.IO) {
                     files.keepAccess(uri)
                     files.workingCopy(uri)
                 } }
                 io.github.artcraftandroid.pdfcraft.engine.OpenTiming.milestone("working_copy_ready", openStartedAt, bytes = file.length())
-                openFile(eng, uri, file, password)
+                // Providers may stream a cloud PDF for seconds. Do not replace a live viewer
+                // with that obsolete result when the user has since opened another document.
+                if (!isCurrentOpenRequest(requestId)) return@withLock
+                openStage = "native_open"
+                openFile(eng, uri, file, password, fromOtherApp, requestId)
             } catch (e: java.io.FileNotFoundException) {
+                io.github.artcraftandroid.pdfcraft.engine.OpenTiming.failure(openStage, e)
                 // Moved or deleted since it was opened, or a link a file manager lent that a
                 // restart ended (#50; its provider no longer finds it): PdfCraft's own copy opens
                 // if it kept one, as below; otherwise it leaves Recent.
                 val copy = withContext(Dispatchers.IO) { files.existingCopy(uri) }
+                // A newer intent may arrive during a slow provider/cache fallback.
+                // Do not resurrect an obsolete document or alter its Recent entry.
+                if (!isCurrentOpenRequest(requestId)) return@withLock
                 if (copy != null) {
-                    openFile(eng, uri, copy, password)
+                    openFile(eng, uri, copy, password, fromOtherApp, requestId)
                     tell(text(R.string.msg_opened_own_copy))
                 } else {
                     withContext(Dispatchers.IO) { recents.remove(setOf(uri.toString())) }
@@ -192,49 +223,67 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                     tell(text(R.string.msg_file_moved))
                 }
             } catch (e: SecurityException) {
+                io.github.artcraftandroid.pdfcraft.engine.OpenTiming.failure(openStage, e)
                 // A file another app lent for one visit (Files, Downloads: "Open with"): Android
                 // takes that access back later, so Recent can't read it again. PdfCraft's own copy
                 // opens instead, read-only (changes are offered as a copy, as for any file it
                 // can't write to); the original needs opening again from the app it's in.
                 val copy = withContext(Dispatchers.IO) { files.existingCopy(uri) }
+                // A newer intent may arrive during a slow provider/cache fallback.
+                // Do not resurrect an obsolete document or alter its Recent entry.
+                if (!isCurrentOpenRequest(requestId)) return@withLock
                 if (copy != null) {
-                    openFile(eng, uri, copy, password)
+                    openFile(eng, uri, copy, password, fromOtherApp, requestId)
                     tell(text(R.string.msg_opened_own_copy))
                 } else {
                     tell(text(R.string.msg_file_access_lost))
                 }
             } catch (e: Exception) {
-                tell(e.userMessage)
+                io.github.artcraftandroid.pdfcraft.engine.OpenTiming.failure(openStage, e)
+                // An obsolete provider error must not interrupt the newer viewer.
+                if (isCurrentOpenRequest(requestId)) tell(e.userMessage)
             } finally {
                 opening = false
             }
+          }
         }
     }
 
     /** The password dialog's answer: try again with [password], or give up (null). */
     fun answerPassword(password: String?) {
         val req = passwordRequest ?: return
+        if (req.requestId != lastOpenRequest) {
+            passwordRequest = null
+            return
+        }
         passwordRequest = null
         if (password == null) return
         // OK with nothing typed: the field turns red, as a wrong password does
         if (password.isEmpty()) {
-            passwordRequest = PasswordRequest(req.uri, req.file, wrong = true)
+            passwordRequest = PasswordRequest(req.uri, req.file, wrong = true, fromOtherApp = req.fromOtherApp, requestId = req.requestId)
             return
         }
         val eng = engine ?: return
         viewModelScope.launch {
-            // A password retry is a new open request; do not include time spent in the dialog.
-            openStartedAt = android.os.SystemClock.elapsedRealtime()
-            opening = true
-            try {
-                openFile(eng, req.uri, req.file, password)
-            } finally {
-                opening = false
+            openMutex.withLock {
+                // A newer external intent supersedes the old password dialog.
+                if (passwordRequest != null || req.requestId != lastOpenRequest) return@withLock
+                openStartedAt = android.os.SystemClock.elapsedRealtime()
+                opening = true
+                try {
+                    openFile(eng, req.uri, req.file, password, req.fromOtherApp, req.requestId)
+                } catch (e: Exception) {
+                    tell(e.userMessage)
+                } finally {
+                    opening = false
+                }
             }
         }
     }
 
-    private suspend fun openFile(eng: Engine, uri: Uri, file: File, password: String?) {
+    private suspend fun openFile(eng: Engine, uri: Uri, file: File, password: String?, fromOtherApp: Boolean, requestId: Long) {
+        // Covers password retry and all provider fallback paths too.
+        if (!isCurrentOpenRequest(requestId)) return
         try {
             document?.let { current ->
                 val previousSaved = saveAndClose(eng, current)
@@ -250,7 +299,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             val images = PageImages(eng, info.id, viewModelScope, imageBudget, openedAt = openStartedAt)
             val source = uri.takeIf { it.scheme == "content" || it.scheme == "file" }
             val doc = OpenDocument(info.id, info, source, file, images, password, eng, viewModelScope)
-            doc.fromOtherApp = otherAppUri == uri
+            doc.fromOtherApp = fromOtherApp
             val (recent, writable) = withContext(Dispatchers.IO) {
                 recents.list().firstOrNull { it.uri == uri.toString() } to (source == null || files.canWrite(source))
             }
@@ -274,9 +323,9 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             }
             refreshRecents()
         } catch (e: MobileException.NeedsPassword) {
-            passwordRequest = PasswordRequest(uri, file, wrong = false)
+            passwordRequest = PasswordRequest(uri, file, wrong = false, fromOtherApp = fromOtherApp, requestId = requestId)
         } catch (e: MobileException.WrongPassword) {
-            passwordRequest = PasswordRequest(uri, file, wrong = true)
+            passwordRequest = PasswordRequest(uri, file, wrong = true, fromOtherApp = fromOtherApp, requestId = requestId)
         } catch (e: MobileException) {
             tell(e.userMessage)
         }
@@ -298,53 +347,77 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     var readOnlyPrompt by mutableStateOf<OpenDocument?>(null)
         private set
 
+    /** Blocks new external opens while an unresolved Save a copy or Discard is in flight. */
+    private var resolvingReadOnly = false
+
     /** Leave the viewer: changes are saved first, as the reference does (no prompt). */
     fun closeDocument() {
         val doc = document ?: return
         val eng = engine ?: return
         if (doc.controller.tool != ViewerTool.None) leaveTool(doc)
         viewModelScope.launch {
-            // Never dispose of a working document until a provider accepted the saved bytes.
-            if (!saveAndClose(eng, doc)) {
-                readOnlyPrompt = doc
-                return@launch
+            openMutex.withLock {
+                if (document !== doc) return@withLock
+                // Opening a second document and closing the first must not race native handles.
+                if (!saveAndClose(eng, doc)) {
+                    readOnlyPrompt = doc
+                    return@withLock
+                }
+                document = null
+                readingMode = false
+                refreshRecents()
+                if (doc.fromOtherApp) leave.trySend(Unit)
             }
-            document = null
-            readingMode = false
-            refreshRecents()
-            if (doc.fromOtherApp) leave.trySend(Unit)
         }
     }
 
-    /** The read-only prompt's answer: keep the changes in a copy, or drop them. */
+    /** Resolve an unsaved write-back prompt without racing an incoming Open with. */
     fun answerReadOnly(saveCopy: Boolean?) {
         val doc = readOnlyPrompt ?: return
-        readOnlyPrompt = null
+        if (saveCopy == null) {
+            readOnlyPrompt = null
+            return
+        }
         val eng = engine ?: return
-        when (saveCopy) {
-            null -> return
-            true -> saveCopyAs(doc, then = {
-                document = null
+        readOnlyPrompt = null
+        resolvingReadOnly = true
+        if (saveCopy) {
+            saveCopyAs(doc, then = {
+                // The saved copy finished. Close only after excluding concurrent opens.
                 viewModelScope.launch {
-                    closeQuietly(eng, doc)
-                    refreshRecents()
-                    if (doc.fromOtherApp) leave.trySend(Unit)
+                    try {
+                        openMutex.withLock {
+                            if (document !== doc) return@withLock
+                            closeQuietly(eng, doc)
+                            document = null
+                            refreshRecents()
+                            if (doc.fromOtherApp) leave.trySend(Unit)
+                        }
+                    } finally {
+                        resolvingReadOnly = false
+                    }
                 }
             })
-            false -> {
-                // A user-confirmed Discard must not reappear as an unsynced recovery PDF.
-                // Close the native reader before removing its working file.
-                viewModelScope.launch {
-                    closeQuietly(eng, doc)
-                    doc.source?.let { src ->
-                        withContext(Dispatchers.IO) {
-                            runCatching { files.discardWorkingCopy(src) }
-                                .onFailure { tell(it.userMessage) }
+        } else {
+            viewModelScope.launch {
+                try {
+                    openMutex.withLock {
+                        if (document !== doc) return@withLock
+                        // Explicit Discard, never automatic cleanup: preserve file recovery
+                        // until the user confirms and the native document has closed.
+                        closeQuietly(eng, doc)
+                        doc.source?.let { src ->
+                            withContext(Dispatchers.IO) {
+                                runCatching { files.discardWorkingCopy(src) }
+                                    .onFailure { tell(it.userMessage) }
+                            }
                         }
+                        document = null
+                        refreshRecents()
+                        if (doc.fromOtherApp) leave.trySend(Unit)
                     }
-                    document = null
-                    refreshRecents()
-                    if (doc.fromOtherApp) leave.trySend(Unit)
+                } finally {
+                    resolvingReadOnly = false
                 }
             }
         }
@@ -387,7 +460,13 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     fun onPause() {
         val doc = document ?: return
         if (doc.controller.tool == ViewerTool.Draw) doc.commitTool?.invoke()
-        viewModelScope.launch { save(doc) }
+        viewModelScope.launch {
+            // A paused Activity must not save a closed/replaced engine document.
+            // Use the same lock as Open with and Close before touching native handles.
+            openMutex.withLock {
+                if (document === doc && readOnlyPrompt == null && !resolvingReadOnly) save(doc)
+            }
+        }
     }
 
     /**
@@ -747,7 +826,14 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         copyOf = null
         val then = afterCopy
         afterCopy = null
-        if (target == null) return
+        if (target == null) {
+            // User cancelled Android's file picker: do not lose the unsaved recovery choice.
+            if (then != null && resolvingReadOnly) {
+                readOnlyPrompt = doc
+                resolvingReadOnly = false
+            }
+            return
+        }
         viewModelScope.launch {
             try {
                 // The Save a copy picker, onPause and auto-save must never race over
@@ -764,6 +850,10 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 tell(text(R.string.msg_saved_copy))
                 then?.invoke()
             } catch (e: Exception) {
+                if (then != null && resolvingReadOnly) {
+                    readOnlyPrompt = doc
+                    resolvingReadOnly = false
+                }
                 tell(e.userMessage)
             }
         }

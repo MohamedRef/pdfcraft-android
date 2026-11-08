@@ -5,6 +5,11 @@ import android.util.Log
 
 /** Enable with `adb shell setprop log.tag.PdfCraftOpen DEBUG`. No document identifiers. */
 internal object OpenTiming {
+    /** Opt-in error breadcrumbs: no filenames, URIs, paths, PDF contents or exception messages. */
+    fun failure(stage: String, error: Throwable) {
+        if (!Log.isLoggable("PdfCraftOpen", Log.DEBUG)) return
+        Log.w("PdfCraftOpen", "failed_stage=$stage error_class=${error.javaClass.simpleName}")
+    }
     inline fun <T> measure(stage: String, block: () -> T): T {
         val start = SystemClock.elapsedRealtimeNanos()
         try { return block() } finally {

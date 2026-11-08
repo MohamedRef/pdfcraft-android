@@ -30,6 +30,15 @@ class PdfSnapshotCopyTest {
         } finally { dir.toFile().deleteRecursively() }
     }
 
+    @Test fun nonSeekableProviderDescriptorRetriesViaStreamingWithoutIgnoringSecurity() {
+        org.junit.Assert.assertTrue(PdfSnapshotCopy.retryWithProviderStream(java.io.IOException("Provider stream seek failed")))
+        org.junit.Assert.assertTrue(PdfSnapshotCopy.retryWithProviderStream(UnsupportedOperationException("No channel")))
+        org.junit.Assert.assertTrue(PdfSnapshotCopy.retryWithProviderStream(IllegalStateException("Non-seekable channel")))
+        org.junit.Assert.assertFalse(PdfSnapshotCopy.retryWithProviderStream(SecurityException("Provider grant revoked")))
+        org.junit.Assert.assertFalse(PdfSnapshotCopy.retryWithProviderStream(OutOfMemoryError("Low memory")))
+        org.junit.Assert.assertFalse(PdfSnapshotCopy.retryWithProviderStream(IllegalArgumentException("Invalid provider request")))
+    }
+
     @Test fun copiesOnlyAssetRange() = checkRange(false)
     @Test fun handlesShortTransfers() = checkRange(false, short = true)
     @Test fun zeroTransferUsesBufferedFallback() = checkRange(true)
