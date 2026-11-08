@@ -53,8 +53,8 @@ class SigningTests(unittest.TestCase):
     def test_multiple_signers_fail_closed_if_any_certificate_changes(self):
         expected = signing.EXPECTED
         good = "V2 Signer: certificate SHA-256 digest: " + expected
-        matching = "\\nV3.0 Signer: certificate SHA-256 digest: " + expected
-        tampered = "\\nV3.0 Signer: certificate SHA-256 digest: " + ("a" * 64)
+        matching = "\nV3.0 Signer: certificate SHA-256 digest: " + expected
+        tampered = "\nV3.0 Signer: certificate SHA-256 digest: " + ("a" * 64)
         self.assertTrue(signing.verify(good + matching))
         self.assertFalse(signing.verify(good + tampered))
         self.assertFalse(signing.verify("V2 Signer: public key SHA-256 digest: " + expected))
