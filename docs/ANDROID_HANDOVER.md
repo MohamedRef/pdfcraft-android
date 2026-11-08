@@ -1,5 +1,14 @@
 # PdfCraft Android - development handover
 
+## PEN UX REPAIR — 2026-11-08 (pending review)
+
+- Working branch: `fix/android-pen-ux-after-ocr`, based on current main. User reported ugly nibs/icons and controls not doing what they appear to do. All code is still unmerged and no APK is published for this repair.
+- Five distinct custom nib silhouettes and live ink previews, separate Pen/Highlighter actions, primary Eraser/Lasso/settings ordering, stable selected states without competing auto-scroll, explicit Pen-only and Snap switches, and restore writing mode on preset application.
+- A one-tap freehand stroke previously vanished because the native PDF path expects at least two points; an adapted two-point round-capped dot is now covered by unit tests.
+- See [implementation and physical-device QA](ANDROID_PEN_UX_REPAIR.md). Run exact-PR-head Rust/provenance, Android JVM/unit and merge gates; manually test Samsung pressure, tap persistence after save/reopen, lasso, eraser, zoom, tablet and DeX. No version/signing changes.
+
+
+
 ## CURRENT PARITY PROPOSAL — OCR word-confidence inspection (2026-11-08)
 
 - Branch `feat/android-ocr-confidence-review`, pending PR and exact-head CI. Upstream engine remains released v0.19.0 and current APK remains `0.0.14-beta (14012)`; do not publish per-feature APKs.
@@ -343,3 +352,9 @@ Reference behavior: https://feedback.xodo.com/support/solutions/articles/3500020
 - **Existing before this branch:** mouse wheel scrolling and Ctrl+wheel zoom, mouse drag text selection, DeX/ChromeOS hover zoom buttons, and opt-in keyboard shortcuts (N/P/Page Up/Down/arrows/Ctrl+P/Ctrl+plus/minus). No duplicated renderer or native engine changes.
 - **Added:** expanded-window adaptive reader with collapsible virtualized page navigation pane, selected page, direct page jump, zoom and fit-width controls. Tablet breakpoint requires width >=840dp and smallest width >=600dp, or desktop detection. Compact and Reading Mode preserve old one-pane view. New tests cover breakpoints and navigation through window resize.
 - **Pending:** exact-head CI merge gate and manual tablet/DeX/Chromebook, accessibility, multiwindow, mouse, keyboard, stylus/form input regression. No beta built; do not claim on-device tests or PDF-open speed gains.
+
+### Direct-access ink toolbar follow-up (2026-11-08, still unmerged)
+- New `DrawToolbar.kt` replaces only Draw's single-row subtoolbar with an immediate two-row, pen-first surface. First row: 5 real pen style actions + Eraser/Lasso. Second row: 3 saved pens, Color, Settings and 3 shapes. On narrow devices rows scroll independently but no auto-navigation hides the active primary controls.
+- Nib silhouettes reused from the app's own `InkPresetsPicker.kt` and short captions have full accessibility descriptions. All ink operations still use the existing v0.19.0 PDF-native engine and signed APK remains unchanged.
+- Viewer bottom padding and property-sheet offset now use the 112dp drawing toolbar height to prevent obscuring the PDF. Exact-head Android JVM/Rust and merge-gate tests plus real S Pen/device testing remain REQUIRED before merging.
+- Source audit: Tratto MIT, Folio Apache 2.0, xnotes MIT reviewed. Direct toolbar composition is original code; no external code/assets were copied. See [Pen UX repair](ANDROID_PEN_UX_REPAIR.md).
