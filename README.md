@@ -58,7 +58,7 @@
 
 **Engine baseline:** the Android project includes the reviewed mobile-suitable [upstream PdfCraft v0.19.0 integration](docs/ANDROID_ENGINE_0.19.0_UPGRADE.md), merged in [PR #37](https://github.com/MohamedRef/pdfcraft-android/pull/37). The desktop and Android interfaces are not fully equivalent; 3D/PRC workflows and some advanced UIs remain excluded or unverified. Native command availability is **not** measured mobile UX parity. See the [development handover](docs/ANDROID_HANDOVER.md) and [annotation parity notes](docs/ANDROID_ANNOTATION_TOOL_PARITY.md) for remaining work.
 
-**Follow-up under review:** [PR #55](https://github.com/MohamedRef/pdfcraft-android/pull/55) adds a direct two-row pen toolbar and refines the annotation eraser and tap-only strokes. These follow-up changes are **not included** in the 0.0.14-beta APK unless another newer release is published and verified. Merge only after exact-head Rust, Android JVM and aggregate CI gates pass.
+**Merged after this release:** [PR #55](https://github.com/MohamedRef/pdfcraft-android/pull/55) added a direct two-row pen toolbar, freehand marker eraser fixes and tap-only dot strokes. Exact-head Rust, Android JVM and merge-gate checks passed before merging into `main` as `7898503e4bd9404c42e7ee53a8d903c71102261f`. These newer changes are **not part of the 0.0.14-beta APK**. Physical S Pen tests remain outstanding.
 
 | Area | Available source behavior | Remaining limitations |
 | --- | --- | --- |
