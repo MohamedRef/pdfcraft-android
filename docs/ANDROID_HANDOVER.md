@@ -1,13 +1,11 @@
 # PdfCraft Android - development handover
 
-## RELEASE CONTINUATION CHECKPOINT - 2026-11-08
+## RELEASE CHECKPOINT - 2026-11-08 (after PR #59 merge)
 
-- Last verified published release remains **0.0.14-beta (14012)**. The `v0.0.15-beta` tag and public assets were not yet found at this checkpoint. Do not represent a signed CI artifact as a published update.
-- Adjustable eraser [#58](https://github.com/MohamedRef/pdfcraft-android/pull/58) **merged** to `main` at `bff39b651cfb054120412c6b909a516c2b07eeba`. Its PR-head Rust/JVM/merge gate passed; device S Pen validation is still missing.
-- External Open with crash hardening [#59](https://github.com/MohamedRef/pdfcraft-android/pull/59) **remains open** pending latest-head Rust/JVM/merge gate. The latest-request helper now guards normal and cached fallback opening and suppresses obsolete provider errors; regression tests cover A -> B supersession. This does **not** establish a device root-cause fix.
-- The first `0.0.15-beta` publishing attempt was blocked by certificate parser wording, fixed in `main`. Another signed job failed on a 10-second Gradle distribution timeout. The Gradle wrapper now permits 120 seconds without disabling distribution SHA256 validation. A separate transient-network-only Gradle retry script guards test/build dependency failures (e.g. Kotlin artifact HTTP 504) without swallowing source/test failures.
-- Release preparation [#61](https://github.com/MohamedRef/pdfcraft-android/pull/61) is a **draft**, updating curated `docs/releases/0.0.15-beta.md` with #58 and planned #59 hardening plus explicit unverified Samsung crash caveat. **Merge order:** #59 only after its exact-head checks pass, then revalidate #61 on integrated main and merge it with exact squash title `chore(release): publish 0.0.15-beta (15012)`. This triggers the existing owner-signed ARM64 release workflow. Confirm successful release jobs, public tag, APK, SHA256 sidecar, manifest code 15012 and updater before announcing publication. Never rotate or bypass the permanent signing identity.
-- Capture an actual redacted Samsung Open with AndroidRuntime FATAL EXCEPTION and test rapid/malformed/cloud/password/revoked-permission files, including Save a copy and re-open, after publishing any beta that contains the hardening. Do not claim that hardware validation has occurred.
+- PR #59 merged into main at `1515ffac5b84771186c99bf5ae52fbe88be694f7` after Rust, Android JVM and merge gate passed on exact head `f8c33b4874e88b426631b83dc0f65a6fc6de9e81` (run 42470402789).
+- PR #61 remains draft until reconciled with merged main and its own exact-head CI passes. It must publish only one owner-signed `0.0.15-beta (15012)` release, never an unsigned APK or duplicate tag.
+- Open with Samsung hardware reproduction and Logcat validation remain pending; passing JVM tests does not establish a physical-device fix.
+
 
 ## RELEASE 0.0.15-beta SIGNER PARSER INCIDENT — 2026-11-08
 
@@ -48,6 +46,13 @@
 | PDF data | Small valid PDF; 0-byte/truncated/corrupt/not-really-PDF; password-protected/incorrect password; signed/annotated/form PDFs; huge/many-page image PDF; non-ASCII filename; filename with separators/duplicate name; low-disk copy |
 | State and durability | Open same URI twice; open different URI while first opening; open with unsaved edits; Back returns to source; read-only Save a copy; Recent after permission expiration; interruption mid-copy; failed save/writeback retains private recovery copy |
 | Platform | Current Samsung S24 Ultra / One UI Android build; API 29 minSdk; API 35/36+ scoped-storage and URI permission differences; mobile/tablet/DeX; updated versus freshly installed app |
+
+### Current implementation checkpoint — PR #59 (review pending, 2026-11-08)
+
+- [PR #59](https://github.com/MohamedRef/pdfcraft-android/pull/59), branch `fix/android-open-with-crash`, is **open and not merged**. It implements a defensive external Intent/ClipData URI router and scheme validation, `singleTask` `setIntent` behavior, recreation handling, serialized source copy/native opens and close, request-local external origin through password/permission recovery, plus deterministic routing tests. Details: [fix scope and QA](ANDROID_OPEN_WITH_CRASH_FIX.md).
+- These are source-review risk mitigations, **not a proven reproduction-specific crash fix**; no device Logcat or confirmed root-cause stack trace was available when authored. Test actual S24 Ultra Open with, cloud and read-only providers, double launches, old unsaved annotations, encrypted and corrupt PDFs. Exact PR-head Android/Rust/Merge Gate must pass before merge.
+- Provider hardening follow-up: `DocumentFiles.workingCopy` now retries non-seekable or vendor-misreported asset descriptor failures through a fresh `openInputStream` copy, retaining the existing recovery file and leaving `SecurityException`/fatal errors unmasked. The pure Kotlin `PdfSnapshotCopyTest` checks recoverable versus denied/fatal provider conditions. Device cloud-provider/pipe tests remain pending.
+- Keep signing, app package, existing local PDF recovery and the isolated `0.0.15-beta` pipeline unchanged; any subsequent device-proven fixes need separate reviewed commits and checks.
 
 ### Implementation work — next isolated crash-fix PR, separate from pen/eraser and release work
 
