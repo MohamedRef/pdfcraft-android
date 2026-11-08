@@ -398,6 +398,8 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
     var eraserPage by remember { mutableStateOf<Int?>(null) }
     val eraserPoints = remember { mutableStateListOf<Offset>() }
     var eraserScreen by remember { mutableStateOf<Offset?>(null) }
+    // Snapshot for the duration of a gesture: slider changes never resize an in-flight erase.
+    var activeEraserRadius by remember { mutableFloatStateOf(prefs.eraserRadius) }
     // Preview only: hovering never inserts annotation points or touches document history.
     var hoverPosition by remember(doc) { mutableStateOf<Offset?>(null) }
     var hoverEraser by remember(doc) { mutableStateOf(false) }
@@ -410,6 +412,7 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
         doc.commitTool?.invoke()
         current = null
         eraserPage = at.page
+        activeEraserRadius = prefs.eraserRadius
         eraserScreen = p
         eraserPoints.clear()
         eraserPoints.add(Offset(at.x, at.y))
@@ -444,7 +447,7 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
         cancelErase()
         if (path.isNotEmpty()) {
             // One native Edit::Batch per gesture, including freehand marker Ink.
-            vm.runTool(doc, "comment_erase", inkEraseCommand(page, path))
+            vm.runTool(doc, "comment_erase", inkEraseCommand(page, path, activeEraserRadius.toDouble()))
         }
     }
 
@@ -702,7 +705,7 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
             if (page != null && screen != null) {
                 drawCircle(
                     Color.DarkGray.copy(alpha = 0.75f),
-                    radius = 8f * doc.viewer.pixelsPerPoint(page),
+                    radius = activeEraserRadius * doc.viewer.pixelsPerPoint(page),
                     center = screen,
                     style = Stroke(width = 1.5.dp.toPx()),
                 )
@@ -711,7 +714,7 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
             if (hovering != null && current == null && eraserPage == null) {
                 val onPage = doc.viewer.screenToPage(hovering)
                 if (onPage != null) {
-                    val diameter = if (doc.controller.eraserMode || hoverEraser) 16f else inkStyleWidthRuns(listOf(1f, 1f), prefs.inkWidth, false, prefs.inkStyle).firstOrNull()?.width ?: prefs.inkWidth
+                    val diameter = if (doc.controller.eraserMode || hoverEraser) prefs.eraserRadius * 2f else inkStyleWidthRuns(listOf(1f, 1f), prefs.inkWidth, false, prefs.inkStyle).firstOrNull()?.width ?: prefs.inkWidth
                     drawCircle(
                         Color.DarkGray.copy(alpha = 0.6f),
                         radius = maxOf(2f, diameter * doc.viewer.pixelsPerPoint(onPage.page) / 2f),
@@ -905,7 +908,7 @@ private fun MarkupLayer(vm: AppViewModel, doc: OpenDocument) {
 }
 
 /** Which property picker a sub-toolbar has open. */
-enum class Picker { None, Color, Width, TextSize, Presets }
+enum class Picker { None, Color, Width, TextSize, Presets, EraserSize }
 
 /** The active tool's sub-toolbar. */
 @Composable
@@ -1015,6 +1018,46 @@ fun PropertyPicker(vm: AppViewModel, tool: StyledTool, picker: Picker, markup: T
                 Spacer(Modifier.height(8.dp))
             }
             Picker.Presets -> InkPresetsPicker(vm, onDismiss)
+            Picker.EraserSize -> {
+                Text(
+                    stringResource(R.string.ink_eraser_size_title),
+                    color = c.text,
+                    fontSize = 17.sp,
+                    fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
+                    modifier = Modifier.padding(start = 20.dp, bottom = 12.dp),
+                )
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        stringResource(R.string.ink_eraser_diameter, (prefs.eraserRadius * 2f).toInt()),
+                        color = c.text,
+                        fontSize = 15.sp,
+                        modifier = Modifier.width(90.dp),
+                    )
+                    Slider(
+                        value = prefs.eraserRadius,
+                        onValueChange = { prefs.updateEraserRadius(it) },
+                        valueRange = ERASER_RADIUS_MIN..ERASER_RADIUS_MAX,
+                        colors = SliderDefaults.colors(thumbColor = c.accent, activeTrackColor = c.accent),
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+                Box(Modifier.fillMaxWidth().height(78.dp), contentAlignment = Alignment.Center) {
+                    Box(
+                        Modifier.size((prefs.eraserRadius * 2f).dp)
+                            .border(2.dp, c.toolAccent, RoundedCornerShape(50)),
+                    )
+                }
+                Text(
+                    stringResource(R.string.ink_eraser_size_help),
+                    color = c.label,
+                    fontSize = 12.sp,
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
+                )
+                Spacer(Modifier.height(12.dp))
+            }
             Picker.None -> Unit
         }
     }
