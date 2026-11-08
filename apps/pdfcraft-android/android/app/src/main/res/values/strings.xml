@@ -1385,4 +1385,7 @@
     <string name="ink_toolbar_lasso">Lasso</string>
     <string name="ink_toolbar_settings">Pens</string>
     <string name="ink_toolbar_color">Color</string>
+    <string name="ink_toolbar_line">Line</string>
+    <string name="ink_toolbar_rectangle">Box</string>
+    <string name="ink_toolbar_oval">Oval</string>
 </resources>
