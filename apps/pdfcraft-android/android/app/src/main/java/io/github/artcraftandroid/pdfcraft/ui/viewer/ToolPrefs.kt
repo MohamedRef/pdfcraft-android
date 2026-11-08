@@ -77,10 +77,25 @@ class ToolPrefs(context: Context) {
     internal var inkStyle by mutableStateOf(InkStyle.fromKey(prefs.getString("ink.style", null)) ?: InkStyle.Ballpoint)
         private set
 
+    /** The pen button must restore the last writing nib, not leave the marker active. */
+    internal var lastWritingPen by mutableStateOf(
+        InkStyle.fromKey(prefs.getString("ink.lastWritingPen", null))
+            ?.takeUnless { it == InkStyle.Highlighter }
+            ?: inkStyle.takeUnless { it == InkStyle.Highlighter }
+            ?: InkStyle.Ballpoint,
+    )
+        private set
+
     internal fun updateInkStyle(style: InkStyle) {
         inkStyle = style
-        prefs.edit().putString("ink.style", style.key).apply()
+        if (style != InkStyle.Highlighter) lastWritingPen = style
+        prefs.edit().putString("ink.style", style.key).also {
+            if (style != InkStyle.Highlighter) it.putString("ink.lastWritingPen", style.key)
+        }.apply()
     }
+
+    /** Selecting Pen always switches away from a previously selected highlighter. */
+    internal fun selectWritingPen() = updateInkStyle(lastWritingPen)
 
     internal var inkPresets by mutableStateOf(InkPreset.defaults.mapIndexed { i, fallback ->
         InkPreset.decode(runCatching { prefs.getString("ink.preset.v1.$i", null) }.getOrNull()) ?: fallback
@@ -92,11 +107,15 @@ class ToolPrefs(context: Context) {
     internal fun applyInkPreset(index: Int): Boolean {
         val preset = inkPresets.getOrNull(index) ?: return false
         // One synchronous UI event and one preferences transaction: only the next stroke changes.
-        prefs.edit().putInt("ink.color", preset.argb).putFloat("ink.width", preset.width).putFloat("ink.opacity", preset.opacity).putString("ink.style", preset.style.key).apply()
+        prefs.edit().putInt("ink.color", preset.argb).putFloat("ink.width", preset.width).putFloat("ink.opacity", preset.opacity)
+            .putString("ink.style", preset.style.key).also {
+                if (preset.style != InkStyle.Highlighter) it.putString("ink.lastWritingPen", preset.style.key)
+            }.apply()
         colors.getValue(StyledTool.Ink).intValue = preset.argb
         opacities.getValue(StyledTool.Ink).floatValue = preset.opacity
         inkWidth = preset.width
         inkStyle = preset.style
+        if (preset.style != InkStyle.Highlighter) lastWritingPen = preset.style
         return true
     }
 
