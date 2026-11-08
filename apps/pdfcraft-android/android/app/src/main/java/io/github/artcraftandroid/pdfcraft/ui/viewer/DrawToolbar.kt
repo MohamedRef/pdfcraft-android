@@ -107,9 +107,13 @@ internal fun DrawToolbar(vm: AppViewModel, doc: OpenDocument) {
                         active = ctl.eraserMode,
                         caption = stringResource(R.string.ink_toolbar_eraser),
                         onClick = {
-                            ctl.eraserMode = true
-                            ctl.lassoMode = false
-                            ctl.picker = Picker.None
+                            if (ctl.eraserMode) {
+                                ctl.picker = if (picker == Picker.EraserSize) Picker.None else Picker.EraserSize
+                            } else {
+                                ctl.eraserMode = true
+                                ctl.lassoMode = false
+                                ctl.picker = Picker.None
+                            }
                         },
                     ) { Icon(LucideIcons.Eraser, null, tint = if (ctl.eraserMode) c.toolAccent else c.icon, modifier = Modifier.size(24.dp)) }
                     DrawToolbarButton(
@@ -150,16 +154,30 @@ internal fun DrawToolbar(vm: AppViewModel, doc: OpenDocument) {
                             }
                         }
                     }
-                    DrawToolbarButton(
-                        label = stringResource(R.string.toolbar_color_drawing),
-                        active = picker == Picker.Color,
-                        caption = stringResource(R.string.ink_toolbar_color),
-                        onClick = { ctl.picker = if (picker == Picker.Color) Picker.None else Picker.Color },
-                    ) {
-                        Box(
-                            Modifier.size(23.dp).border(1.5.dp, c.icon, RoundedCornerShape(50))
-                                .padding(3.dp).background(color, RoundedCornerShape(50)),
-                        )
+                    if (ctl.eraserMode) {
+                        DrawToolbarButton(
+                            label = stringResource(R.string.ink_eraser_size_title),
+                            active = picker == Picker.EraserSize,
+                            caption = stringResource(R.string.ink_eraser_size_short, (prefs.eraserRadius * 2f).toInt()),
+                            onClick = { ctl.picker = if (picker == Picker.EraserSize) Picker.None else Picker.EraserSize },
+                        ) {
+                            Box(
+                                Modifier.size((8f + prefs.eraserRadius * 0.4f).dp)
+                                    .border(1.5.dp, if (picker == Picker.EraserSize) c.toolAccent else c.icon, RoundedCornerShape(50)),
+                            )
+                        }
+                    } else {
+                        DrawToolbarButton(
+                            label = stringResource(R.string.toolbar_color_drawing),
+                            active = picker == Picker.Color,
+                            caption = stringResource(R.string.ink_toolbar_color),
+                            onClick = { ctl.picker = if (picker == Picker.Color) Picker.None else Picker.Color },
+                        ) {
+                            Box(
+                                Modifier.size(23.dp).border(1.5.dp, c.icon, RoundedCornerShape(50))
+                                    .padding(3.dp).background(color, RoundedCornerShape(50)),
+                            )
+                        }
                     }
                     DrawToolbarButton(
                         label = stringResource(R.string.ink_presets_title),
