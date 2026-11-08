@@ -18,8 +18,8 @@ def normalize(text: str) -> str:
 # Some releases also print a signer SDK range. Parse *only actual certificate* lines,
 # never a public-key digest or an arbitrary 64-hex string elsewhere in the output.
 _CERT_SHA256_LINE = re.compile(
-    r"(?im)^\\s*(?:Signer\\s+#\\d+|Signer\\s+\\([^\\r\\n)]*\\)|V\\d+(?:\\.\\d+)?\\s+Signer)"
-    r"\\s*:?\\s*certificate SHA-256 digest:\\s*([0-9a-fA-F:]+)\\s*$"
+    r"(?im)^\s*(?:Signer\s+#\d+|Signer\s+\([^\r\n)]*\)|V\d+(?:\.\d+)?\s+Signer)"
+    r"\s*:?\s*certificate SHA-256 digest:\s*([0-9a-fA-F:]+)\s*$"
 )
 
 
