@@ -17,6 +17,7 @@ import javax.net.ssl.HttpsURLConnection
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 
@@ -233,72 +234,89 @@ internal suspend fun downloadAndVerifyApk(
     ) throw IOException("Untrusted APK URL.")
 
     var freshRetryUsed = false
+    var networkRetries = 0
     var previousPercent = -1
     while (true) {
         currentCoroutineContext().ensureActive()
-        val offset = partial.length()
-        val connection = url.openConnection() as HttpsURLConnection
+        // A timeout or disconnected CDN is recoverable; only verified response
+        // metadata may append to the existing SHA-addressed partial APK.
         try {
-            connection.instanceFollowRedirects = true
-            connection.connectTimeout = 15_000
-            connection.readTimeout = 20_000
-            connection.setRequestProperty("User-Agent", "PdfCraft-Android-UpdateChecker")
-            connection.setRequestProperty("Accept-Encoding", "identity")
-            if (offset > 0L) connection.setRequestProperty("Range", "bytes=$offset-")
-            val status = connection.responseCode
-            if (connection.url.protocol != "https" ||
-                !(connection.url.host == "github.com" || connection.url.host.endsWith(".githubusercontent.com"))
-            ) throw IOException("APK download redirected outside trusted HTTPS hosts.")
-            val action = apkResumeAction(offset, status, connection.getHeaderField("Content-Range"), update.size)
-            if (action == ApkResumeAction.RETRY_WITHOUT_RANGE) {
-                if (freshRetryUsed) throw IOException("APK server rejected the download twice.")
-                freshRetryUsed = true
-                if (!partial.delete()) throw IOException("Cannot reset a rejected APK range.")
-                continue
-            }
-            val resumed = if (action == ApkResumeAction.APPEND) offset else 0L
-            val transferLength = connection.contentLengthLong
-            if (transferLength > update.size - resumed || transferLength < -1L) {
-                throw IOException("APK response is larger than the published release.")
-            }
-            if (connection.contentEncoding?.lowercase() !in listOf(null, "identity")) {
-                throw IOException("Compressed APK response cannot be safely resumed.")
-            }
-            if (resumed > 0L) {
-                val initial = (resumed * 100L / update.size).toInt().coerceIn(0, 100)
-                withContext(Dispatchers.Main) { onProgress(initial) }
-                previousPercent = initial
-            } else {
-                // A 200 after a Range request means the CDN ignored Range: truncate, never append.
-                previousPercent = 0
-                withContext(Dispatchers.Main) { onProgress(0) }
-            }
-            var received = resumed
-            connection.inputStream.use { stream ->
-                java.io.FileOutputStream(partial, resumed > 0L).buffered().use { output ->
-                    val buffer = ByteArray(64 * 1024)
-                    while (true) {
-                        currentCoroutineContext().ensureActive()
-                        val bytes = stream.read(buffer)
-                        if (bytes < 0) break
-                        received += bytes
-                        if (received > update.size) throw IOException("APK exceeds the published release size.")
-                        output.write(buffer, 0, bytes)
-                        val percent = (received * 100L / update.size).toInt().coerceIn(0, 100)
-                        if (percent > previousPercent) {
-                            previousPercent = percent
-                            withContext(Dispatchers.Main) { onProgress(percent) }
+            val offset = partial.length()
+            val connection = url.openConnection() as HttpsURLConnection
+            try {
+                connection.instanceFollowRedirects = true
+                connection.connectTimeout = 20_000
+                connection.readTimeout = 40_000
+                connection.setRequestProperty("User-Agent", "PdfCraft-Android-UpdateChecker")
+                connection.setRequestProperty("Accept-Encoding", "identity")
+                if (offset > 0L) connection.setRequestProperty("Range", "bytes=$offset-")
+                val status = connection.responseCode
+                if (connection.url.protocol != "https" ||
+                    !(connection.url.host == "github.com" || connection.url.host.endsWith(".githubusercontent.com"))
+                ) throw IOException("APK download redirected outside trusted HTTPS hosts.")
+                val action = apkResumeAction(offset, status, connection.getHeaderField("Content-Range"), update.size)
+                if (action == ApkResumeAction.RETRY_WITHOUT_RANGE) {
+                    if (freshRetryUsed) throw IOException("APK server rejected the download twice.")
+                    freshRetryUsed = true
+                    if (!partial.delete()) throw IOException("Cannot reset a rejected APK range.")
+                    continue
+                }
+                val resumed = if (action == ApkResumeAction.APPEND) offset else 0L
+                val transferLength = connection.contentLengthLong
+                if (transferLength > update.size - resumed || transferLength < -1L) {
+                    throw IOException("APK response is larger than the published release.")
+                }
+                if (connection.contentEncoding?.lowercase() !in listOf(null, "identity")) {
+                    throw IOException("Compressed APK response cannot be safely resumed.")
+                }
+                if (resumed > 0L) {
+                    val initial = (resumed * 100L / update.size).toInt().coerceIn(0, 100)
+                    withContext(Dispatchers.Main) { onProgress(initial) }
+                    previousPercent = initial
+                } else {
+                    // HTTP 200 after Range means CDN ignored it. Truncate, never append.
+                    previousPercent = 0
+                    withContext(Dispatchers.Main) { onProgress(0) }
+                }
+                var received = resumed
+                connection.inputStream.use { stream ->
+                    java.io.FileOutputStream(partial, resumed > 0L).buffered().use { output ->
+                        val buffer = ByteArray(64 * 1024)
+                        while (true) {
+                            currentCoroutineContext().ensureActive()
+                            val bytes = stream.read(buffer)
+                            if (bytes < 0) break
+                            received += bytes
+                            if (received > update.size) throw IOException("APK exceeds the published release size.")
+                            output.write(buffer, 0, bytes)
+                            val percent = (received * 100L / update.size).toInt().coerceIn(0, 100)
+                            if (percent > previousPercent) {
+                                previousPercent = percent
+                                withContext(Dispatchers.Main) { onProgress(percent) }
+                            }
                         }
                     }
                 }
+                if (received != update.size || partial.length() != update.size) {
+                    // EOF is recoverable; preserve bytes and request the exact missing suffix.
+                    throw java.io.EOFException("APK transfer ended before all published bytes arrived.")
+                }
+            } finally {
+                connection.disconnect()
             }
-            if (received != update.size || partial.length() != update.size) {
-                throw IOException("Download interrupted. Tap Resume to continue from the saved bytes.")
+            break
+        } catch (e: IOException) {
+            // Never retry malformed HTTP metadata, disk writes, or trust failures.
+            if (!apkRetryable(e) || networkRetries >= MAX_APK_NETWORK_RETRIES) {
+                throw IOException(
+                    if (apkRetryable(e)) "Download interrupted after automatic retries. Tap Resume to continue saved bytes."
+                    else e.message ?: "APK download failed.",
+                    e,
+                )
             }
-        } finally {
-            connection.disconnect()
+            networkRetries++
+            delay(apkRetryDelayMillis(networkRetries))
         }
-        break
     }
 
     try {
