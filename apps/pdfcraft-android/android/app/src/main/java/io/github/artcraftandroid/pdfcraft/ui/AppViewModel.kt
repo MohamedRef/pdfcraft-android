@@ -424,7 +424,13 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     fun onPause() {
         val doc = document ?: return
         if (doc.controller.tool == ViewerTool.Draw) doc.commitTool?.invoke()
-        viewModelScope.launch { save(doc) }
+        viewModelScope.launch {
+            // A paused Activity must not save a closed/replaced engine document.
+            // Use the same lock as Open with and Close before touching native handles.
+            openMutex.withLock {
+                if (document === doc && readOnlyPrompt == null) save(doc)
+            }
+        }
     }
 
     /**
