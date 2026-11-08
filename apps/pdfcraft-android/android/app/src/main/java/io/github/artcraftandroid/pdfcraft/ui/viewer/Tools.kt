@@ -1011,7 +1011,7 @@ fun PropertyPicker(vm: AppViewModel, tool: StyledTool, picker: Picker, markup: T
     val prefs = vm.toolPrefs
     val c = pdfColors
     // over the tool's bar, which stays in view with the picker's button shaded
-    PdfSheet(onDismiss = onDismiss, modifier = Modifier.padding(bottom = BottomBarHeight + 1.dp).navigationBarsPadding(), bottomBand = false) {
+    PdfSheet(onDismiss = onDismiss, modifier = Modifier.padding(bottom = (if (tool == StyledTool.Ink) DrawToolbarHeight else BottomBarHeight) + 1.dp).navigationBarsPadding(), bottomBand = false) {
         when (picker) {
             Picker.Color -> {
                 val title = stringResource(
