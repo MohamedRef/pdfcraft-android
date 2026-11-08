@@ -12,6 +12,7 @@ Selecting PdfCraft from another app's **Open with** chooser sometimes crashes th
 - The `fromOtherApp` origin is carried as a request-local value into native opening, password challenge and revoked-URI fallback, rather than shared global `otherAppUri`.
 - Security boundary remains: native PDF engine validates copied bytes; provider access is still copied into private disk for safe engine use; no request grants are fabricated, no arbitrary URL downloads, no sign/ID changes, no data deletion or bypass of pending writeback recovery.
 - Pure Kotlin JVM tests cover valid/suspicious URI schemes, supported actions and ordering of incoming candidate URIs.
+- Follow-up 2026-11-08: all provider-copy success, `FileNotFoundException` and `SecurityException` cached-copy recovery paths now check a single latest-request and unresolved-save gate. A slow A provider cannot reopen its recovery copy or delete its Recent entry after a newer B intent arrives. Superseded general error messages are likewise suppressed; native open and password retry share the gate. JVM regression tests check A→B supersession and Save a copy / Discard pending states. This is a deterministic policy test, not an end-to-end concurrent Android provider test.
 
 ## Remaining investigations / acceptance
 - A live Samsung S24 Ultra reproduction and sanitized `adb logcat -b crash` stack trace are essential to determine whether the crash was in Intent dispatch, provider metadata/read, old-document save, native PDF open or UI rendering. No success claim until verified.
