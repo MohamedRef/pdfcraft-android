@@ -131,7 +131,7 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
     var quickExtraPx by remember { mutableIntStateOf(0) }
     val railVisible = vm.quickToolbar.railMode && ctl.tool == ViewerTool.None
     val bottomPx = with(density) {
-        if (railVisible) 0f else if (ctl.tool == ViewerTool.None) QuickBarHeight.toPx() + quickExtraPx else BottomBarHeight.toPx()
+        if (railVisible) 0f else if (ctl.tool == ViewerTool.None) QuickBarHeight.toPx() + quickExtraPx else if (ctl.tool == ViewerTool.Draw) DrawToolbarHeight.toPx() else BottomBarHeight.toPx()
     }
     // keyed on the document too: one opened over another (Create, Combine) has a fresh page view
     LaunchedEffect(doc, ctl.barsVisible, statusPx, navPx, ctl.searching, ctl.tool, vm.readingMode, bottomPx, statusBar) {

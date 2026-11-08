@@ -1308,7 +1308,9 @@
     <string name="bates_source_refused">A signed or read-only PDF cannot be numbered by this tool.</string>
     <string name="bates_export_failed">Could not save this new copy to Downloads.</string>
     <string name="ink_presets_title">Favorite pens</string>
-    <string name="ink_presets_help">Save three combinations of color, width and opacity. A selected pen applies to new strokes; author and pen-only settings stay separate.</string>
+    <string name="ink_presets_help">Choose your pen, then draw. Your color, size and opacity apply immediately to new marks. Tap a favorite to restore its settings.</string>
+    <string name="ink_snap_explanation">Hold a freehand stroke briefly to turn it into a clean shape.</string>
+    <string name="ink_pen_only_explanation">On: fingers pan and zoom, only the S Pen draws. Off: use your finger or S Pen.</string>
     <string name="ink_preset_slot">Pen %1$d</string>
     <string name="ink_preset_selected">Pen %1$d · selected</string>
     <string name="ink_preset_details">%1$.1f pt · %2$d%% opacity</string>
@@ -1373,6 +1375,18 @@
     <string name="ink_style_pencil">Pencil</string>
     <string name="ink_style_brush">Brush</string>
     <string name="ink_style_highlighter">Highlighter</string>
+    <string name="ink_toolbar_oval">Oval</string>
+    <string name="ink_toolbar_rectangle">Box</string>
+    <string name="ink_toolbar_line">Line</string>
+    <string name="ink_toolbar_color">Color</string>
+    <string name="ink_toolbar_settings">Pens</string>
+    <string name="ink_toolbar_lasso">Lasso</string>
+    <string name="ink_toolbar_eraser">Erase</string>
+    <string name="ink_toolbar_marker">Marker</string>
+    <string name="ink_toolbar_brush">Brush</string>
+    <string name="ink_toolbar_pencil">Pencil</string>
+    <string name="ink_toolbar_fountain">Fountain</string>
+    <string name="ink_toolbar_ballpoint">Ball</string>
     <!-- Read-only page-specific upstream native OCR word confidence review. -->
     <string name="ocr_review_title">Review OCR confidence</string>
     <string name="ocr_review_scope">Current page: %1$d</string>

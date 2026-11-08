@@ -387,7 +387,7 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
     val slop = with(LocalDensity.current) { SNAP_SLOP.toPx() }
     LaunchedEffect(current) {
         val s = current ?: return@LaunchedEffect
-        if (s.shapeMode != InkShapeMode.Freehand) return@LaunchedEffect
+        if (s.shapeMode != InkShapeMode.Freehand || s.appearance.style == InkStyle.Highlighter) return@LaunchedEffect
         while (true) {
             delay(50)
             if (s.preview == null && System.currentTimeMillis() - movedAt >= SNAP_HOLD_MS) {
@@ -440,11 +440,11 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
     fun finishErase(p: Offset) {
         val page = eraserPage ?: return
         moveErase(p)
-        val path = eraserPoints.map { listOf(it.x.toDouble(), it.y.toDouble()) }
+        val path = eraserPoints.toList()
         cancelErase()
         if (path.isNotEmpty()) {
-            // One native Edit::Batch per gesture, preserving one document-level undo step.
-            vm.runTool(doc, "comment_erase", mapOf("page" to page + 1, "path" to path, "radius" to 8.0, "erase_highlights" to true))
+            // One native Edit::Batch per gesture, including freehand marker Ink.
+            vm.runTool(doc, "comment_erase", inkEraseCommand(page, path))
         }
     }
 
@@ -599,6 +599,15 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                 current = null
                 if (s != null) {
                     // A palm/cancelled gesture must not discard a user's redo history.
+                    // A tap is an actual dot, not a discarded stroke. Native PDF Ink needs
+                    // two points, so represent the dot by a microscopic round-capped segment.
+                    if (s.shapeMode == InkShapeMode.Freehand && s.points.size == 1) {
+                        val persisted = persistedInkTapPoints(s.points.toList())
+                        if (persisted.size == 2) {
+                            s.points.add(persisted.last())
+                            s.pressures.add(s.pressures.firstOrNull() ?: 1f)
+                        }
+                    }
                     if (s.points.size >= 2) {
                         edits.add(DraftInkEdit.Added(s))
                         undone.clear()
@@ -609,7 +618,7 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                     val shape = if (s.shapeMode != InkShapeMode.Freehand) {
                         val page = doc.viewer.pages.getOrNull(s.page)
                         if (page != null && s.points.size >= 2) inkShapeOutline(s.shapeMode, s.points.first(), s.points.last(), page.width, page.height) else null
-                    } else s.preview ?: if (prefs.snapToShape) ShapeSnap.recognise(s.points.toList())?.outline() else null
+                    } else if (s.appearance.style == InkStyle.Highlighter) null else s.preview ?: if (prefs.snapToShape) ShapeSnap.recognise(s.points.toList())?.outline() else null
                     s.preview = null
                     if (s.shapeMode != InkShapeMode.Freehand && shape == null) {
                         strokes.remove(s)
@@ -915,40 +924,7 @@ fun ToolSubToolbar(vm: AppViewModel, doc: OpenDocument) {
             SubDivider()
             ColorDot(prefs.color(ctl.markup.styled), picker == Picker.Color) { toggle(Picker.Color) }
         }
-        ViewerTool.Draw -> SubToolbar {
-            val snapOn = stringResource(R.string.toolbar_snap_on)
-            val snapOff = stringResource(R.string.toolbar_snap_off)
-            SubTool(LucideIcons.PenTool, stringResource(R.string.toolbar_draw_freeform), !ctl.eraserMode && !ctl.lassoMode && ctl.inkShapeMode == InkShapeMode.Freehand, {
-                ctl.eraserMode = false; ctl.lassoMode = false; ctl.inkShapeMode = InkShapeMode.Freehand
-            })
-            SubTool(LucideIcons.Minus, stringResource(R.string.toolbar_draw_line), !ctl.eraserMode && !ctl.lassoMode && ctl.inkShapeMode == InkShapeMode.Line, {
-                ctl.eraserMode = false; ctl.lassoMode = false; ctl.inkShapeMode = InkShapeMode.Line
-            })
-            SubTool(LucideIcons.Square, stringResource(R.string.toolbar_draw_rectangle), !ctl.eraserMode && !ctl.lassoMode && ctl.inkShapeMode == InkShapeMode.Rectangle, {
-                ctl.eraserMode = false; ctl.lassoMode = false; ctl.inkShapeMode = InkShapeMode.Rectangle
-            })
-            SubTool(LucideIcons.Circle, stringResource(R.string.toolbar_draw_oval), !ctl.eraserMode && !ctl.lassoMode && ctl.inkShapeMode == InkShapeMode.Oval, {
-                ctl.eraserMode = false; ctl.lassoMode = false; ctl.inkShapeMode = InkShapeMode.Oval
-            })
-            SubTool(LucideIcons.Eraser, stringResource(R.string.toolbar_eraser), ctl.eraserMode, {
-                ctl.eraserMode = true; ctl.lassoMode = false
-            })
-            SubTool(LucideIcons.Lasso, stringResource(R.string.toolbar_ink_lasso), ctl.lassoMode, {
-                ctl.lassoMode = true; ctl.eraserMode = false
-            })
-            SubTool(LucideIcons.PenLine, stringResource(R.string.toolbar_stylus_only), prefs.stylusOnly, {
-                prefs.updateStylusOnly(!prefs.stylusOnly)
-            })
-            SubDivider()
-            SubProperty(LucideIcons.Pencil, stringResource(R.string.ink_presets_title), picker == Picker.Presets, { toggle(Picker.Presets) })
-            SubProperty(LucideIcons.SlidersHorizontal, stringResource(R.string.toolbar_line_thickness), picker == Picker.Width, { toggle(Picker.Width) })
-            ColorDot(prefs.color(StyledTool.Ink), picker == Picker.Color) { toggle(Picker.Color) }
-            SubDivider()
-            SubTool(LucideIcons.Shapes, stringResource(R.string.toolbar_snap_to_shape), prefs.snapToShape, {
-                prefs.updateSnapToShape(!prefs.snapToShape)
-                vm.tell(if (prefs.snapToShape) snapOn else snapOff)
-            })
-        }
+        ViewerTool.Draw -> DrawToolbar(vm, doc)
         ViewerTool.Comment -> SubToolbar {
             SubTool(LucideIcons.MessageSquareText, stringResource(R.string.toolbar_text_comment), ctl.commentMode == CommentMode.Text, { ctl.commentMode = CommentMode.Text })
             SubTool(LucideIcons.MicAudioLines, stringResource(R.string.toolbar_voice_comment), ctl.commentMode == CommentMode.Voice, { ctl.commentMode = CommentMode.Voice })
@@ -979,7 +955,15 @@ fun ToolSheets(vm: AppViewModel, doc: OpenDocument) {
         else -> null
     }
     SheetHost(ctl.picker.takeIf { it != Picker.None && styled != null }) { p ->
-        PropertyPicker(vm, styled ?: StyledTool.Highlight, p, ctl.markup) { ctl.picker = Picker.None }
+        PropertyPicker(vm, styled ?: StyledTool.Highlight, p, ctl.markup) {
+            ctl.picker = Picker.None
+            // Pen selection works even after the eraser/lasso or shape tool was active.
+            if (p == Picker.Presets && ctl.tool == ViewerTool.Draw) {
+                ctl.eraserMode = false
+                ctl.lassoMode = false
+                ctl.inkShapeMode = InkShapeMode.Freehand
+            }
+        }
     }
     if (ctl.tool == ViewerTool.FillSign && ctl.signPanel) SignPanel(vm, doc) { ctl.signPanel = false }
 }
@@ -990,7 +974,7 @@ fun PropertyPicker(vm: AppViewModel, tool: StyledTool, picker: Picker, markup: T
     val prefs = vm.toolPrefs
     val c = pdfColors
     // over the tool's bar, which stays in view with the picker's button shaded
-    PdfSheet(onDismiss = onDismiss, modifier = Modifier.padding(bottom = BottomBarHeight + 1.dp).navigationBarsPadding(), bottomBand = false) {
+    PdfSheet(onDismiss = onDismiss, modifier = Modifier.padding(bottom = (if (tool == StyledTool.Ink) DrawToolbarHeight else BottomBarHeight) + 1.dp).navigationBarsPadding(), bottomBand = false) {
         when (picker) {
             Picker.Color -> {
                 val title = stringResource(

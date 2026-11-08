@@ -49,6 +49,7 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontStyle
@@ -439,7 +440,8 @@ private fun Modifier.slideToWhenChosen(selected: Boolean): Modifier {
 /** A sub-toolbar tool: 62 dp apart, as the reference spaces them. */
 @Composable
 fun SubTool(icon: ImageVector, description: String, selected: Boolean, onClick: () -> Unit, enabled: Boolean = true) {
-    SubButton(icon, description, selected, onClick, enabled, width = 62.dp)
+    // Maintain a generous 48dp tap target while fitting the core drawing actions.
+    SubButton(icon, description, selected, onClick, enabled, width = 54.dp)
 }
 
 /** Fill & Sign's text tool: an "A" in a dashed box (a field to type in). */
@@ -482,12 +484,21 @@ fun SubProperty(icon: ImageVector, description: String, selected: Boolean, onCli
 @Composable
 private fun SubButton(icon: ImageVector, description: String, selected: Boolean, onClick: () -> Unit, enabled: Boolean, width: Dp, shaded: Boolean = false) {
     val c = pdfColors
-    val tint = if (selected && !shaded) c.toolAccent else c.icon
+    val tint = if (selected) c.toolAccent else c.icon
     Box(
-        Modifier.width(width).height(54.dp).slideToWhenChosen(selected && !shaded).clickable(enabled = enabled, role = Role.Button, onClick = onClick).semantics { contentDescription = description },
+        // Do not auto-scroll when the Snap or Pen-only toggle is also selected.
+        // Multiple independent active toggles previously fought over the bar position.
+        Modifier.width(width).height(54.dp).clickable(enabled = enabled, role = Role.Button, onClick = onClick)
+            .semantics {
+                contentDescription = description
+                if (selected) this.selected = true
+            },
         contentAlignment = Alignment.Center,
     ) {
-        if (shaded && selected) Box(Modifier.requiredSize(40.dp).background(c.pressed, androidx.compose.foundation.shape.RoundedCornerShape(5.dp)))
+        if (selected) Box(
+            Modifier.requiredSize(42.dp)
+                .background(c.pressed, androidx.compose.foundation.shape.RoundedCornerShape(12.dp)),
+        )
         Icon(icon, null, tint = if (enabled) tint else tint.copy(alpha = 0.38f), modifier = Modifier.size(24.dp))
     }
 }
