@@ -1,5 +1,13 @@
 # PdfCraft Android - development handover
 
+## PEN UX REPAIR — 2026-11-08 (pending review)
+
+- Working branch: `fix/android-pen-ux-functional-toolbar`, based on current main. User reported ugly nibs/icons and controls not doing what they appear to do. All code is still unmerged and no APK is published for this repair.
+- Five distinct custom nib silhouettes and live ink previews, separate Pen/Highlighter actions, primary Eraser/Lasso/settings ordering, stable selected states without competing auto-scroll, explicit Pen-only and Snap switches, and restore writing mode on preset application.
+- A one-tap freehand stroke previously vanished because the native PDF path expects at least two points; an adapted two-point round-capped dot is now covered by unit tests.
+- See [implementation and physical-device QA](ANDROID_PEN_UX_REPAIR.md). Run exact-PR-head Rust/provenance, Android JVM/unit and merge gates; manually test Samsung pressure, tap persistence after save/reopen, lasso, eraser, zoom, tablet and DeX. No version/signing changes.
+
+
 ## 0.0.13-beta (13012) — release preparation (2026-11-07, not yet published)
 
 - Current public version before this batch: `0.0.12-beta (12012)`, tag `v0.0.12-beta`. Never append `.1` after `beta`.
