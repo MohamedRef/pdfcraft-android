@@ -602,9 +602,11 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                     // A tap is an actual dot, not a discarded stroke. Native PDF Ink needs
                     // two points, so represent the dot by a microscopic round-capped segment.
                     if (s.shapeMode == InkShapeMode.Freehand && s.points.size == 1) {
-                        val dot = s.points.first()
-                        s.points.add(Offset(dot.x + 0.01f, dot.y + 0.01f))
-                        s.pressures.add(s.pressures.firstOrNull() ?: 1f)
+                        val persisted = persistedInkTapPoints(s.points.toList())
+                        if (persisted.size == 2) {
+                            s.points.add(persisted.last())
+                            s.pressures.add(s.pressures.firstOrNull() ?: 1f)
+                        }
                     }
                     if (s.points.size >= 2) {
                         edits.add(DraftInkEdit.Added(s))
