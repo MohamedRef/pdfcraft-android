@@ -1,4 +1,4 @@
-name: PdfCraft Custom - tests and APK
+name: PdfCraft Android - tests, signed APK and release
 
 on:
   push:
@@ -11,7 +11,8 @@ permissions:
 
 concurrency:
   group: android-update-${{ github.ref }}
-  cancel-in-progress: true
+  # Do not cancel an in-progress signed publication when another main push lands.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   CARGO_INCREMENTAL: '0'
@@ -19,6 +20,7 @@ env:
 
 jobs:
   rust-tests:
+    name: Rust engine and provenance
     runs-on: ubuntu-latest
     timeout-minutes: 100
     steps:
@@ -30,12 +32,17 @@ jobs:
           key: issue55-rust-tests
       - name: Verify pinned upstream engine source
         run: python3 scripts/verify_android_engine_source.py
+      - name: Validate owner-reviewed release notes
+        run: python3 scripts/verify_android_release_notes.py
+      - name: Verify release workflow regression tests
+        run: python3 -m unittest discover -s scripts -p 'test_android_release_workflow.py'
       - name: Run Rust tests
         run: cargo test --locked -p pdfcraft-cos -p pdfcraft-create -p pdfcraft-sign -p pdfcraft-js -p pdfcraft-forms -p pdfcraft-xfa -p pdfcraft-engine -p pdfcraft-render -p pdfcraft-android
       - name: Verify native PDF freehand highlighter appearance across reopen
         run: cargo test --locked -p pdfcraft-annot freehand_highlight
 
   android-tests:
+    name: Android JVM and UI tests
     runs-on: ubuntu-latest
     timeout-minutes: 120
     steps:
@@ -84,6 +91,7 @@ jobs:
           echo 'Rust and Android JVM tests passed; APK packaging is verified once per release batch.' >> "$GITHUB_STEP_SUMMARY"
 
   signed-apk:
+    name: Build and verify signed ARM64 APK
     # One-time owner-approved 0.0.14-beta release on the exact squash-merge commit.
     # Keep manual dispatch for all other batches; normal main pushes never sign.
     if: >-
@@ -169,70 +177,122 @@ jobs:
             "$aapt" dump badging "$apk" | grep -q "name='io.github.mohamedref.pdfcraft'" || { echo '::error::Wrong application ID'; exit 1; }
             "$aapt" dump badging "$apk" | grep -q "versionCode='[1-9][0-9]*'" || { echo '::error::Invalid version code'; exit 1; }
           done
-      - name: Upload verified Android update APKs
+      - name: Produce checksum and publish build summary
+        run: |
+          set -euo pipefail
+          apk="$(find dist -maxdepth 1 -name '*.apk' -type f -print -quit)"
+          test -n "$apk"
+          sha256sum "$apk" > "$apk.sha256"
+          {
+            echo '## Verified Android release artifact'
+            echo "- APK: $(basename "$apk")"
+            echo "- SHA-256: $(cut -d' ' -f1 "$apk.sha256")"
+            echo "- Signing: owner PKCS12 identity and ARM64 package verified"
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload verified signed APK and checksum
         uses: actions/upload-artifact@v7
         with:
           name: pdfcraft-custom-signed-apks
-          path: dist/*.apk
+          path: |
+            dist/*.apk
+            dist/*.sha256
           if-no-files-found: error
           retention-days: 30
-      # The updater intentionally only trusts *published* owner GitHub Releases with SHA-256.
-      # GITHUB_TOKEN-created tags do not recursively trigger the tag-specific Release workflow.
-      - name: Publish verified signed ARM64 APK as an update release
-        if: >-
-          github.ref == 'refs/heads/main' &&
-          (github.event_name == 'workflow_dispatch' ||
-          (github.event_name == 'push' &&
-          startsWith(github.event.head_commit.message, 'chore(release): publish 0.0.14-beta (14012)')))
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-        run: |
-          set -euo pipefail
-          version="$(awk -F= '$1=="pdfcraft.version" {print $2; exit}' apps/pdfcraft-android/android/gradle.properties)"
-          tag="v$version"
-          apk="dist/pdfcraft-android-$version.apk"
-          test -s "$apk"
-          if gh release view "$tag" >/dev/null 2>&1; then
-            echo "Release $tag already exists; no second release with the same build number." >> "$GITHUB_STEP_SUMMARY"
-            exit 0
-          fi
-          if gh api "repos/$GH_REPO/git/ref/tags/$tag" >/dev/null 2>&1; then
-            echo "::error::Tag $tag exists without a published release; review its origin before proceeding."
-            exit 1
-          fi
-          tools="$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -n 1)"
-          build="$("${tools}aapt" dump badging "$apk" | awk -F"'" '/^package:/ {print $4; exit}')"
-          if ! [[ "$build" =~ ^[1-9][0-9]*$ ]]; then
-            echo "::error::Could not read the signed APK manifest's actual Android build number."
-            exit 1
-          fi
-          sha256sum "$apk" > "$apk.sha256"
-          gh api "repos/$GH_REPO/git/refs" -X POST -f ref="refs/tags/$tag" -f sha="$GITHUB_SHA" >/dev/null
-          # A per-version owner-reviewed notes file records known issues/hardware limits.
-          # Keep the generic fallback for releases without curated notes.
-          notes_file="$RUNNER_TEMP/pdfcraft-$version-release-notes.md"
-          curated_notes="docs/releases/$version.md"
-          if [ -f "$curated_notes" ]; then
-            cp "$curated_notes" "$notes_file"
-          else
-            printf 'Signed ARM64 Android update. User-approved installation required.\n' > "$notes_file"
-          fi
-          {
-            echo
-            echo "## Source and verification"
-            echo "- Build: \`$version ($build)\` (arm64-v8a)."
-            echo "- Source: [\`$GITHUB_SHA\`](https://github.com/$GH_REPO/commit/$GITHUB_SHA)."
-            echo "- CI: [workflow run $GITHUB_RUN_ID](https://github.com/$GH_REPO/actions/runs/$GITHUB_RUN_ID), Rust/provenance, Android JVM and signed APK verification."
-            echo "- Installer: Android user confirmation required. Verify the accompanying SHA-256."
-          } >> "$notes_file"
-          args=()
-          if [[ "$version" == *-* ]]; then args+=(--prerelease); fi
-          gh release create "$tag" --verify-tag --generate-notes --title "PdfCraft $version ($build)" \
-            --notes-file "$notes_file" \
-            "${args[@]}" "$apk" "$apk.sha256"
-          echo "Published $tag, Android build ($build), signed ARM64 APK with SHA-256." >> "$GITHUB_STEP_SUMMARY"
-
       - name: Clean up original signing key
         if: always()
         run: rm -f "$RUNNER_TEMP/release.p12"
+
+
+  publish-release:
+    name: Publish GitHub Release and update feed
+    # Publish only after both test jobs and the signed APK job complete.
+    # A signed artifact, not a debug/fallback build, is the only permitted input.
+    if: >-
+      github.ref == 'refs/heads/main' &&
+      (github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'push' &&
+      startsWith(github.event.head_commit.message, 'chore(release): publish 0.0.14-beta (14012)')))
+    needs: [signed-apk]
+    permissions:
+      contents: write
+      actions: read
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - name: Download verified APK from this workflow run
+        uses: actions/download-artifact@v7
+        with:
+          name: pdfcraft-custom-signed-apks
+          path: dist
+      - name: Verify checksum, manifest and publish curated release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          PDFCRAFT_CERT_SHA256: ${{ vars.PDFCRAFT_CERT_SHA256 }}
+        run: |
+          set -euo pipefail
+          version="$(awk -F= '$1=="pdfcraft.version" {print $2; exit}' apps/pdfcraft-android/android/gradle.properties)"
+          base_code="$(awk -F= '$1=="pdfcraft.versionCode" {print $2; exit}' apps/pdfcraft-android/android/gradle.properties)"
+          tag="v$version"
+          apk="dist/pdfcraft-android-$version.apk"
+          test -s "$apk" && test -s "$apk.sha256"
+          sha256sum -c "$apk.sha256"
+          tools="$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -n 1)"
+          "${tools}apksigner" verify --print-certs "$apk" > "$RUNNER_TEMP/apk-signer.txt"
+          # Cross-job signer pin prevents uploading a substituted artifact.
+          python3 scripts/verify_android_apk_certificate.py "$RUNNER_TEMP/apk-signer.txt"
+          package_name="$("${tools}aapt" dump badging "$apk" | awk -F"'" '/^package:/ {print $2; exit}')"
+          build="$("${tools}aapt" dump badging "$apk" | awk -F"'" '/^package:/ {print $4; exit}')"
+          version_name="$("${tools}aapt" dump badging "$apk" | awk -F"'" '/^package:/ {print $6; exit}')"
+          expected_build="$((base_code * 10 + 2))"
+          test "$package_name" = io.github.mohamedref.pdfcraft
+          test "$version_name" = "$version"
+          test "$build" = "$expected_build"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "Existing $tag is immutable; no duplicate release or replaced APK." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          if gh api "repos/$GH_REPO/git/ref/tags/$tag" >/dev/null 2>&1; then
+            echo "::error::Tag $tag exists without a published release; manual review required."
+            exit 1
+          fi
+          # Keep a complete human-curated summary above the machine-generated PR history.
+          notes_file="$RUNNER_TEMP/pdfcraft-release-notes.md"
+          curated_notes="docs/releases/$version.md"
+          python3 scripts/verify_android_release_notes.py "$curated_notes" "$build"
+          cp "$curated_notes" "$notes_file"
+          {
+            echo
+            echo '## Source and verification'
+            echo "- Version: $version ($build) (arm64-v8a)."
+            echo "- Source: https://github.com/$GH_REPO/commit/$GITHUB_SHA."
+            echo "- CI: [run $GITHUB_RUN_ID](https://github.com/$GH_REPO/actions/runs/$GITHUB_RUN_ID), Rust, Android JVM and signed APK verification."
+            echo "- SHA-256: $(cut -d' ' -f1 "$apk.sha256")."
+          } >> "$notes_file"
+          generated="$RUNNER_TEMP/pdfcraft-generated-pr-notes.md"
+          gh api -X POST "repos/$GH_REPO/releases/generate-notes" \
+            -f tag_name="$tag" -f target_commitish="$GITHUB_SHA" --jq '.body' > "$generated"
+          if [ -s "$generated" ]; then
+            {
+              echo
+              echo '## Merged pull requests'
+              awk '
+                /^## What.s Changed/ { next }
+                /^## / { sub(/^## /, "### ") }
+                { print }
+              ' "$generated"
+            } >> "$notes_file"
+          fi
+          # Tag creation is deliberately last: a failed notes/signing gate leaves no release tag.
+          gh api "repos/$GH_REPO/git/refs" -X POST -f ref="refs/tags/$tag" -f sha="$GITHUB_SHA" >/dev/null
+          args=()
+          if [[ "$version" == *-* ]]; then args+=(--prerelease); fi
+          gh release create "$tag" --verify-tag --title "PdfCraft $version ($build)" \
+            --notes-file "$notes_file" "${args[@]}" "$apk" "$apk.sha256"
+          {
+            echo "## Published PdfCraft $version ($build)"
+            echo "- Signed ARM64 APK: $(basename "$apk")"
+            echo "- SHA-256 sidecar: $(basename "$apk.sha256")"
+            echo "- [Public release](https://github.com/$GH_REPO/releases/tag/$tag)"
+          } >> "$GITHUB_STEP_SUMMARY"
