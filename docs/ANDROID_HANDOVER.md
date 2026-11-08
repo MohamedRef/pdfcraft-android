@@ -1,5 +1,14 @@
 # PdfCraft Android - development handover
 
+## RELEASE CONTINUATION CHECKPOINT - 2026-11-08
+
+- Last verified published release remains **0.0.14-beta (14012)**. The `v0.0.15-beta` tag and public assets were not yet found at this checkpoint. Do not represent a signed CI artifact as a published update.
+- Adjustable eraser [#58](https://github.com/MohamedRef/pdfcraft-android/pull/58) **merged** to `main` at `bff39b651cfb054120412c6b909a516c2b07eeba`. Its PR-head Rust/JVM/merge gate passed; device S Pen validation is still missing.
+- External Open with crash hardening [#59](https://github.com/MohamedRef/pdfcraft-android/pull/59) **remains open** pending latest-head Rust/JVM/merge gate. The latest-request helper now guards normal and cached fallback opening and suppresses obsolete provider errors; regression tests cover A -> B supersession. This does **not** establish a device root-cause fix.
+- The first `0.0.15-beta` publishing attempt was blocked by certificate parser wording, fixed in `main`. Another signed job failed on a 10-second Gradle distribution timeout. The Gradle wrapper now permits 120 seconds without disabling distribution SHA256 validation. A separate transient-network-only Gradle retry script guards test/build dependency failures (e.g. Kotlin artifact HTTP 504) without swallowing source/test failures.
+- Release preparation [#61](https://github.com/MohamedRef/pdfcraft-android/pull/61) is a **draft**, updating curated `docs/releases/0.0.15-beta.md` with #58 and planned #59 hardening plus explicit unverified Samsung crash caveat. **Merge order:** #59 only after its exact-head checks pass, then revalidate #61 on integrated main and merge it with exact squash title `chore(release): publish 0.0.15-beta (15012)`. This triggers the existing owner-signed ARM64 release workflow. Confirm successful release jobs, public tag, APK, SHA256 sidecar, manifest code 15012 and updater before announcing publication. Never rotate or bypass the permanent signing identity.
+- Capture an actual redacted Samsung Open with AndroidRuntime FATAL EXCEPTION and test rapid/malformed/cloud/password/revoked-permission files, including Save a copy and re-open, after publishing any beta that contains the hardening. Do not claim that hardware validation has occurred.
+
 ## RELEASE 0.0.15-beta SIGNER PARSER INCIDENT — 2026-11-08
 
 - **Build artifact verified, release not published:** owner-approved [workflow run 42461307429](https://github.com/MohamedRef/pdfcraft-android/actions/runs/42461307429), source `c3cbc0222b5b54a21f1c67c8f0522ac1f66f9f19`: Rust tests, Android JVM tests, PKCS12 preflight and signed ARM64 APK build **succeeded**. Final publish job failed at `scripts/verify_android_apk_certificate.py` with “APK signer mismatch”; the tag `v0.0.15-beta` was not created. The last publicly verified beta remains `0.0.14-beta (14012)`.
