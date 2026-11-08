@@ -37,6 +37,7 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
+import io.github.artcraftandroid.pdfcraft.canProceedWithPdfOpen
 import io.github.artcraftandroid.pdfcraft.PdfcraftApplication
 import io.github.artcraftandroid.pdfcraft.R
 import io.github.artcraftandroid.pdfcraft.plural
@@ -155,6 +156,11 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     private var lastOpenRequest = 0L
     private var openStartedAt = 0L
 
+    /** Shared gate for initial, native and cached-copy open paths. */
+    private fun isCurrentOpenRequest(requestId: Long): Boolean = canProceedWithPdfOpen(
+        requestId, lastOpenRequest, readOnlyPrompt != null, resolvingReadOnly,
+    )
+
     /** Fires when a document another app opened is closed: the activity finishes, back to that app. */
     val leave = Channel<Unit>(Channel.CONFLATED)
 
@@ -181,10 +187,10 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         // while the previous provider streams slowly; only the latest waiting one opens.
         viewModelScope.launch {
           openMutex.withLock {
-            if (requestId != lastOpenRequest || readOnlyPrompt != null) return@withLock
+            if (!isCurrentOpenRequest(requestId)) return@withLock
             val eng = engine ?: application.engine.await().getOrNull() ?: run { tell(engineProblem ?: text(R.string.msg_engine_not_started)); return@withLock }
             // An older request can become obsolete while waiting for the native engine.
-            if (requestId != lastOpenRequest) return@withLock
+            if (!isCurrentOpenRequest(requestId)) return@withLock
             openStartedAt = android.os.SystemClock.elapsedRealtime()
             opening = true
             var openStage = "provider_copy"
@@ -196,7 +202,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 io.github.artcraftandroid.pdfcraft.engine.OpenTiming.milestone("working_copy_ready", openStartedAt, bytes = file.length())
                 // Providers may stream a cloud PDF for seconds. Do not replace a live viewer
                 // with that obsolete result when the user has since opened another document.
-                if (requestId != lastOpenRequest || readOnlyPrompt != null) return@withLock
+                if (!isCurrentOpenRequest(requestId)) return@withLock
                 openStage = "native_open"
                 openFile(eng, uri, file, password, fromOtherApp, requestId)
             } catch (e: java.io.FileNotFoundException) {
@@ -205,6 +211,9 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 // restart ended (#50; its provider no longer finds it): PdfCraft's own copy opens
                 // if it kept one, as below; otherwise it leaves Recent.
                 val copy = withContext(Dispatchers.IO) { files.existingCopy(uri) }
+                // A newer intent may arrive during a slow provider/cache fallback.
+                // Do not resurrect an obsolete document or alter its Recent entry.
+                if (!isCurrentOpenRequest(requestId)) return@withLock
                 if (copy != null) {
                     openFile(eng, uri, copy, password, fromOtherApp, requestId)
                     tell(text(R.string.msg_opened_own_copy))
@@ -220,6 +229,9 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 // opens instead, read-only (changes are offered as a copy, as for any file it
                 // can't write to); the original needs opening again from the app it's in.
                 val copy = withContext(Dispatchers.IO) { files.existingCopy(uri) }
+                // A newer intent may arrive during a slow provider/cache fallback.
+                // Do not resurrect an obsolete document or alter its Recent entry.
+                if (!isCurrentOpenRequest(requestId)) return@withLock
                 if (copy != null) {
                     openFile(eng, uri, copy, password, fromOtherApp, requestId)
                     tell(text(R.string.msg_opened_own_copy))
@@ -228,7 +240,8 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 }
             } catch (e: Exception) {
                 io.github.artcraftandroid.pdfcraft.engine.OpenTiming.failure(openStage, e)
-                tell(e.userMessage)
+                // An obsolete provider error must not interrupt the newer viewer.
+                if (isCurrentOpenRequest(requestId)) tell(e.userMessage)
             } finally {
                 opening = false
             }
@@ -269,6 +282,8 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     }
 
     private suspend fun openFile(eng: Engine, uri: Uri, file: File, password: String?, fromOtherApp: Boolean, requestId: Long) {
+        // Covers password retry and all provider fallback paths too.
+        if (!isCurrentOpenRequest(requestId)) return
         try {
             document?.let { current ->
                 val previousSaved = saveAndClose(eng, current)
