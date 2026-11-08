@@ -188,7 +188,13 @@ private fun DrawShapeButton(
 ) {
     val c = pdfColors
     val selected = ctl.inkShapeMode == shape && !ctl.eraserMode && !ctl.lassoMode
-    DrawToolbarButton(label, selected, onClick = {
+    val shortLabel = stringResource(when (shape) {
+        InkShapeMode.Line -> R.string.ink_toolbar_line
+        InkShapeMode.Rectangle -> R.string.ink_toolbar_rectangle
+        InkShapeMode.Oval -> R.string.ink_toolbar_oval
+        InkShapeMode.Freehand -> R.string.toolbar_draw_freeform
+    })
+    DrawToolbarButton(label, selected, caption = shortLabel, onClick = {
         prefs.selectWritingPen()
         ctl.inkShapeMode = shape
         ctl.eraserMode = false
@@ -226,11 +232,11 @@ private fun DrawToolbarButton(
         Text(
             caption,
             color = tint,
-            fontSize = 9.sp,
+            fontSize = 10.sp,
             fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            lineHeight = 10.sp,
+            lineHeight = 11.sp,
         )
     }
 }
