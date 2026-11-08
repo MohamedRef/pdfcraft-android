@@ -68,7 +68,13 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         // A process recreated from a saved task still needs its incoming PDF. Avoid reopening
         // when the retained ViewModel already owns the document or an open request.
-        if (savedInstanceState == null || (vm.document == null && !vm.opening)) openFromIntent(intent)
+        if (shouldRouteInitialPdfIntent(
+                savedInstanceStatePresent = savedInstanceState != null,
+                hasDocument = vm.document != null,
+                opening = vm.opening,
+                awaitingPassword = vm.passwordRequest != null,
+            )
+        ) openFromIntent(intent)
         collectRequests()
         setContent {
             PdfcraftTheme {
