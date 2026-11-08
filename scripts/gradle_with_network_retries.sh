@@ -20,7 +20,7 @@ for ((attempt=1; attempt<=max_attempts; attempt++)); do
   if (( status == 0 )); then
     exit 0
   fi
-  if (( attempt == max_attempts )) || ! grep -Eiq       '(Received status code (429|502|503|504)|Gateway Time-out|Read timed out|SocketTimeoutException|Connection reset|Temporary failure in name resolution|Downloading from .* failed: timeout)'       "$log_file"; then
+  if (( attempt == max_attempts )) || ! grep -Eiq       '(Received status code (429|502|503|504)|Server returned HTTP response code: (429|502|503|504)|Gateway Time-out|Read timed out|SocketTimeoutException|Connection reset|Temporary failure in name resolution|Downloading from .* failed: timeout)'       "$log_file"; then
     echo "::error::Gradle command failed (exit $status); not hiding build/test failures." >&2
     exit "$status"
   fi
