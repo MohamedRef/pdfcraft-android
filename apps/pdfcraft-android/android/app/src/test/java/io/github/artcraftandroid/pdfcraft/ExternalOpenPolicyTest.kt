@@ -41,6 +41,18 @@ class ExternalOpenPolicyTest {
         }
     }
 
+    @Test fun coldAndRecreatedActivityOnlyRouteWhenNoLiveOpenExists() {
+        assertTrue(shouldRouteInitialPdfIntent(false, false, false, false))
+        assertTrue(shouldRouteInitialPdfIntent(true, false, false, false))
+        assertFalse(shouldRouteInitialPdfIntent(true, true, false, false))
+        assertFalse(shouldRouteInitialPdfIntent(true, false, true, false))
+        assertFalse(shouldRouteInitialPdfIntent(true, false, false, true))
+        // A retained encrypted PDF must not be opened again merely because of rotation.
+        assertFalse(shouldRouteInitialPdfIntent(true, false, false, true))
+        // A genuine process death has no retained document or dialog; replay the original intent.
+        assertTrue(shouldRouteInitialPdfIntent(true, false, false, false))
+    }
+
     @Test fun clipFallbackDoesNotLetBrokenFirstItemMaskValidPdf() {
         val candidates = listOf(
             IncomingPdfUri("https", "example.com", "/pdf"),
