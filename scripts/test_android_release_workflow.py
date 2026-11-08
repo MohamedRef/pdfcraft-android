@@ -42,6 +42,26 @@ class SigningTests(unittest.TestCase):
         self.assertTrue(signing.verify(output))
         self.assertTrue(signing.verify(output, ":".join(cert[i:i + 2] for i in range(0, 64, 2))))
 
+    def test_android37_v2_v3_signer_output_matches_original_owner(self):
+        expected = signing.EXPECTED
+        for prefix in ("V2 Signer:", "V3.0 Signer:", "V3.1 Signer:", "Signer #1", "Signer (minSdkVersion=24, maxSdkVersion=32)"):
+            output = f"{prefix} certificate SHA-256 digest: {expected}"
+            self.assertTrue(signing.verify(output), prefix)
+        colon = ":".join(expected[i:i + 2] for i in range(0, 64, 2)).upper()
+        self.assertTrue(signing.verify("V2 Signer: certificate SHA-256 digest: " + colon, colon))
+
+    def test_multiple_signers_fail_closed_if_any_certificate_changes(self):
+        expected = signing.EXPECTED
+        good = "V2 Signer: certificate SHA-256 digest: " + expected
+        matching = "\\nV3.0 Signer: certificate SHA-256 digest: " + expected
+        tampered = "\\nV3.0 Signer: certificate SHA-256 digest: " + ("a" * 64)
+        self.assertTrue(signing.verify(good + matching))
+        self.assertFalse(signing.verify(good + tampered))
+        self.assertFalse(signing.verify("V2 Signer: public key SHA-256 digest: " + expected))
+        self.assertFalse(signing.verify("SourceStamp certificate SHA-256 digest: " + expected))
+        self.assertFalse(signing.verify("V2 Signer: certificate SHA-256 digest: " + expected + "f"))
+        self.assertFalse(signing.verify("V2 Signer: certificate SHA-256 digest: " + expected[:-1]))
+
     def test_wrong_missing_or_mismatched_certificate_fails(self):
         output = "Signer #1 certificate SHA-256 digest: " + signing.EXPECTED
         self.assertFalse(signing.verify(output, "a" * 64))
