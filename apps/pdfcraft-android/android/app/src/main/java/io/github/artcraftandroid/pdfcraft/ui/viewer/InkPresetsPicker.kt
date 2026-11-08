@@ -152,6 +152,18 @@ internal fun InkPresetsPicker(vm: AppViewModel, onApplied: () -> Unit) {
             PdfSwitch(prefs.stylusOnly, { prefs.updateStylusOnly(it) })
         }
 
+        Row(
+            Modifier.fillMaxWidth().clickable { prefs.updateSnapToShape(!prefs.snapToShape) }
+                .padding(vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text(stringResource(R.string.toolbar_snap_to_shape), color = c.text, fontSize = 14.sp)
+                Text(stringResource(R.string.ink_snap_explanation), color = c.label, fontSize = 12.sp)
+            }
+            PdfSwitch(prefs.snapToShape, { prefs.updateSnapToShape(it) })
+        }
+
         Text(stringResource(R.string.ink_styles_title), color = c.text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
         Row(
             Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
