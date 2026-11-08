@@ -1290,7 +1290,13 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         val eng = engine ?: return null
         val generation = doc.info.generation
         withContext(Dispatchers.IO) {
-            runCatching { eng.prepareOcrModels(getApplication()) }
+            try {
+                eng.prepareOcrModels(getApplication())
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                // The authoritative ocr_status check below reports unavailable models.
+            }
         }
         val status = eng.tool("ocr_status")
         if (status.optBoolean("available", false) != true) {
