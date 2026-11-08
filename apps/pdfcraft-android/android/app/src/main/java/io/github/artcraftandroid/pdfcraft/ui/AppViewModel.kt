@@ -181,7 +181,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         // while the previous provider streams slowly; only the latest waiting one opens.
         viewModelScope.launch {
           openMutex.withLock {
-            if (requestId != lastOpenRequest) return@withLock
+            if (requestId != lastOpenRequest || readOnlyPrompt != null) return@withLock
             val eng = engine ?: application.engine.await().getOrNull() ?: run { tell(engineProblem ?: text(R.string.msg_engine_not_started)); return@withLock }
             // An older request can become obsolete while waiting for the native engine.
             if (requestId != lastOpenRequest) return@withLock
@@ -196,7 +196,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 io.github.artcraftandroid.pdfcraft.engine.OpenTiming.milestone("working_copy_ready", openStartedAt, bytes = file.length())
                 // Providers may stream a cloud PDF for seconds. Do not replace a live viewer
                 // with that obsolete result when the user has since opened another document.
-                if (requestId != lastOpenRequest) return@withLock
+                if (requestId != lastOpenRequest || readOnlyPrompt != null) return@withLock
                 openStage = "native_open"
                 openFile(eng, uri, file, password, fromOtherApp, requestId)
             } catch (e: java.io.FileNotFoundException) {
