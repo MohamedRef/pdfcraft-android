@@ -193,14 +193,20 @@ class MainActivity : ComponentActivity() {
         val candidates = ArrayList<Uri>()
         // A sender may place the only working URI into ClipData rather than EXTRA_STREAM.
         // The permission grant covers the whole receiving Intent, including these clip items.
-        runCatching {
-            if (action == Intent.ACTION_VIEW) intent.data?.let(candidates::add)
-            else {
-                IntentCompat.getParcelableExtra(intent, Intent.EXTRA_STREAM, Uri::class.java)?.let(candidates::add)
-                if (action == Intent.ACTION_SEND_MULTIPLE) {
+        // Each parcelable is isolated: a malformed single-item field must not prevent a
+        // valid multiple-item list (or the permission-bearing ClipData) from being checked.
+        when (action) {
+            Intent.ACTION_VIEW -> runCatching { intent.data }.getOrNull()?.let(candidates::add)
+            Intent.ACTION_SEND -> runCatching {
+                IntentCompat.getParcelableExtra(intent, Intent.EXTRA_STREAM, Uri::class.java)
+            }.getOrNull()?.let(candidates::add)
+            Intent.ACTION_SEND_MULTIPLE -> {
+                runCatching {
                     IntentCompat.getParcelableArrayListExtra(intent, Intent.EXTRA_STREAM, Uri::class.java)
-                        ?.let(candidates::addAll)
-                }
+                }.getOrNull()?.let(candidates::addAll)
+                runCatching {
+                    IntentCompat.getParcelableExtra(intent, Intent.EXTRA_STREAM, Uri::class.java)
+                }.getOrNull()?.let(candidates::add)
             }
         }
         runCatching {
