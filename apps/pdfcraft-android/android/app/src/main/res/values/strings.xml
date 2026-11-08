@@ -1382,6 +1382,10 @@
     <string name="ink_toolbar_settings">Pens</string>
     <string name="ink_toolbar_lasso">Lasso</string>
     <string name="ink_toolbar_eraser">Erase</string>
+    <string name="ink_eraser_size_title">Eraser size</string>
+    <string name="ink_eraser_size_short">%1$d pt</string>
+    <string name="ink_eraser_diameter">Diameter %1$d pt</string>
+    <string name="ink_eraser_size_help">The eraser size is measured in PDF points. Its outline follows the current page zoom and matches the native erasing area.</string>
     <string name="ink_toolbar_marker">Marker</string>
     <string name="ink_toolbar_brush">Brush</string>
     <string name="ink_toolbar_pencil">Pencil</string>
