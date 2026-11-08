@@ -185,14 +185,17 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             val eng = engine ?: application.engine.await().getOrNull() ?: run { tell(engineProblem ?: text(R.string.msg_engine_not_started)); return@withLock }
             openStartedAt = android.os.SystemClock.elapsedRealtime()
             opening = true
+            var openStage = "provider_copy"
             try {
                 val file = io.github.artcraftandroid.pdfcraft.engine.OpenTiming.measure("provider_and_working_copy") { withContext(Dispatchers.IO) {
                     files.keepAccess(uri)
                     files.workingCopy(uri)
                 } }
                 io.github.artcraftandroid.pdfcraft.engine.OpenTiming.milestone("working_copy_ready", openStartedAt, bytes = file.length())
+                openStage = "native_open"
                 openFile(eng, uri, file, password, fromOtherApp, requestId)
             } catch (e: java.io.FileNotFoundException) {
+                io.github.artcraftandroid.pdfcraft.engine.OpenTiming.failure(openStage, e)
                 // Moved or deleted since it was opened, or a link a file manager lent that a
                 // restart ended (#50; its provider no longer finds it): PdfCraft's own copy opens
                 // if it kept one, as below; otherwise it leaves Recent.
@@ -206,6 +209,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                     tell(text(R.string.msg_file_moved))
                 }
             } catch (e: SecurityException) {
+                io.github.artcraftandroid.pdfcraft.engine.OpenTiming.failure(openStage, e)
                 // A file another app lent for one visit (Files, Downloads: "Open with"): Android
                 // takes that access back later, so Recent can't read it again. PdfCraft's own copy
                 // opens instead, read-only (changes are offered as a copy, as for any file it
@@ -218,6 +222,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                     tell(text(R.string.msg_file_access_lost))
                 }
             } catch (e: Exception) {
+                io.github.artcraftandroid.pdfcraft.engine.OpenTiming.failure(openStage, e)
                 tell(e.userMessage)
             } finally {
                 opening = false
