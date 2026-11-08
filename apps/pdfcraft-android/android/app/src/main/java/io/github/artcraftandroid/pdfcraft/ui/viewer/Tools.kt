@@ -387,7 +387,7 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
     val slop = with(LocalDensity.current) { SNAP_SLOP.toPx() }
     LaunchedEffect(current) {
         val s = current ?: return@LaunchedEffect
-        if (s.shapeMode != InkShapeMode.Freehand) return@LaunchedEffect
+        if (s.shapeMode != InkShapeMode.Freehand || s.appearance.style == InkStyle.Highlighter) return@LaunchedEffect
         while (true) {
             delay(50)
             if (s.preview == null && System.currentTimeMillis() - movedAt >= SNAP_HOLD_MS) {
@@ -440,11 +440,11 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
     fun finishErase(p: Offset) {
         val page = eraserPage ?: return
         moveErase(p)
-        val path = eraserPoints.map { listOf(it.x.toDouble(), it.y.toDouble()) }
+        val path = eraserPoints.toList()
         cancelErase()
         if (path.isNotEmpty()) {
-            // One native Edit::Batch per gesture, preserving one document-level undo step.
-            vm.runTool(doc, "comment_erase", mapOf("page" to page + 1, "path" to path, "radius" to 8.0, "erase_highlights" to true))
+            // One native Edit::Batch per gesture, including freehand marker Ink.
+            vm.runTool(doc, "comment_erase", inkEraseCommand(page, path))
         }
     }
 
@@ -618,7 +618,7 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                     val shape = if (s.shapeMode != InkShapeMode.Freehand) {
                         val page = doc.viewer.pages.getOrNull(s.page)
                         if (page != null && s.points.size >= 2) inkShapeOutline(s.shapeMode, s.points.first(), s.points.last(), page.width, page.height) else null
-                    } else s.preview ?: if (prefs.snapToShape) ShapeSnap.recognise(s.points.toList())?.outline() else null
+                    } else if (s.appearance.style == InkStyle.Highlighter) null else s.preview ?: if (prefs.snapToShape) ShapeSnap.recognise(s.points.toList())?.outline() else null
                     s.preview = null
                     if (s.shapeMode != InkShapeMode.Freehand && shape == null) {
                         strokes.remove(s)
