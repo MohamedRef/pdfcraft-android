@@ -923,39 +923,42 @@ fun ToolSubToolbar(vm: AppViewModel, doc: OpenDocument) {
             ColorDot(prefs.color(ctl.markup.styled), picker == Picker.Color) { toggle(Picker.Color) }
         }
         ViewerTool.Draw -> SubToolbar {
-            val snapOn = stringResource(R.string.toolbar_snap_on)
-            val snapOff = stringResource(R.string.toolbar_snap_off)
-            // Pen and marker are separate real modes. Returning to Pen restores the
-            // previously chosen writing nib rather than silently leaving marker active.
-            SubTool(LucideIcons.PenLine, stringResource(R.string.toolbar_draw_freeform), !ctl.eraserMode && !ctl.lassoMode && ctl.inkShapeMode == InkShapeMode.Freehand && prefs.inkStyle != InkStyle.Highlighter, {
-                prefs.selectWritingPen()
-                ctl.eraserMode = false; ctl.lassoMode = false; ctl.inkShapeMode = InkShapeMode.Freehand
-            })
-            SubTool(LucideIcons.Highlighter, stringResource(R.string.ink_style_highlighter), !ctl.eraserMode && !ctl.lassoMode && ctl.inkShapeMode == InkShapeMode.Freehand && prefs.inkStyle == InkStyle.Highlighter, {
-                prefs.updateInkStyle(InkStyle.Highlighter)
-                ctl.eraserMode = false; ctl.lassoMode = false; ctl.inkShapeMode = InkShapeMode.Freehand
-            })
-            SubTool(LucideIcons.Minus, stringResource(R.string.toolbar_draw_line), !ctl.eraserMode && !ctl.lassoMode && ctl.inkShapeMode == InkShapeMode.Line, {
-                ctl.eraserMode = false; ctl.lassoMode = false; ctl.inkShapeMode = InkShapeMode.Line
-            })
-            SubTool(LucideIcons.Square, stringResource(R.string.toolbar_draw_rectangle), !ctl.eraserMode && !ctl.lassoMode && ctl.inkShapeMode == InkShapeMode.Rectangle, {
-                ctl.eraserMode = false; ctl.lassoMode = false; ctl.inkShapeMode = InkShapeMode.Rectangle
-            })
-            SubTool(LucideIcons.Circle, stringResource(R.string.toolbar_draw_oval), !ctl.eraserMode && !ctl.lassoMode && ctl.inkShapeMode == InkShapeMode.Oval, {
-                ctl.eraserMode = false; ctl.lassoMode = false; ctl.inkShapeMode = InkShapeMode.Oval
-            })
+            // First-screen priorities: ink, marker, eraser, lasso, pen settings.
+            // Advanced geometric shapes remain available by horizontal scroll.
+            SubTool(LucideIcons.PenLine, stringResource(R.string.toolbar_draw_freeform),
+                !ctl.eraserMode && !ctl.lassoMode && ctl.inkShapeMode == InkShapeMode.Freehand && prefs.inkStyle != InkStyle.Highlighter, {
+                    prefs.selectWritingPen()
+                    ctl.eraserMode = false; ctl.lassoMode = false; ctl.inkShapeMode = InkShapeMode.Freehand
+                })
+            SubTool(LucideIcons.Highlighter, stringResource(R.string.ink_style_highlighter),
+                !ctl.eraserMode && !ctl.lassoMode && ctl.inkShapeMode == InkShapeMode.Freehand && prefs.inkStyle == InkStyle.Highlighter, {
+                    prefs.updateInkStyle(InkStyle.Highlighter)
+                    ctl.eraserMode = false; ctl.lassoMode = false; ctl.inkShapeMode = InkShapeMode.Freehand
+                })
             SubTool(LucideIcons.Eraser, stringResource(R.string.toolbar_eraser), ctl.eraserMode, {
                 ctl.eraserMode = true; ctl.lassoMode = false
             })
             SubTool(LucideIcons.Lasso, stringResource(R.string.toolbar_ink_lasso), ctl.lassoMode, {
                 ctl.lassoMode = true; ctl.eraserMode = false
             })
+            SubProperty(LucideIcons.SlidersHorizontal, stringResource(R.string.ink_presets_title),
+                picker == Picker.Presets, { toggle(Picker.Presets) })
             SubDivider()
-            SubProperty(LucideIcons.SlidersHorizontal, stringResource(R.string.ink_presets_title), picker == Picker.Presets, { toggle(Picker.Presets) })
-            SubTool(LucideIcons.Shapes, stringResource(R.string.toolbar_snap_to_shape), prefs.snapToShape, {
-                prefs.updateSnapToShape(!prefs.snapToShape)
-                vm.tell(if (prefs.snapToShape) snapOn else snapOff)
-            })
+            SubTool(LucideIcons.Minus, stringResource(R.string.toolbar_draw_line),
+                !ctl.eraserMode && !ctl.lassoMode && ctl.inkShapeMode == InkShapeMode.Line, {
+                    prefs.selectWritingPen()
+                    ctl.eraserMode = false; ctl.lassoMode = false; ctl.inkShapeMode = InkShapeMode.Line
+                })
+            SubTool(LucideIcons.Square, stringResource(R.string.toolbar_draw_rectangle),
+                !ctl.eraserMode && !ctl.lassoMode && ctl.inkShapeMode == InkShapeMode.Rectangle, {
+                    prefs.selectWritingPen()
+                    ctl.eraserMode = false; ctl.lassoMode = false; ctl.inkShapeMode = InkShapeMode.Rectangle
+                })
+            SubTool(LucideIcons.Circle, stringResource(R.string.toolbar_draw_oval),
+                !ctl.eraserMode && !ctl.lassoMode && ctl.inkShapeMode == InkShapeMode.Oval, {
+                    prefs.selectWritingPen()
+                    ctl.eraserMode = false; ctl.lassoMode = false; ctl.inkShapeMode = InkShapeMode.Oval
+                })
         }
         ViewerTool.Comment -> SubToolbar {
             SubTool(LucideIcons.MessageSquareText, stringResource(R.string.toolbar_text_comment), ctl.commentMode == CommentMode.Text, { ctl.commentMode = CommentMode.Text })
