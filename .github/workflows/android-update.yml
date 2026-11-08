@@ -181,8 +181,8 @@ jobs:
           sha256sum "$apk" > "$apk.sha256"
           {
             echo '## Verified Android release artifact'
-            echo "- APK: `$(basename "$apk")`"
-            echo "- SHA-256: `$(cut -d' ' -f1 "$apk.sha256")`"
+            echo "- APK: $(basename "$apk")"
+            echo "- SHA-256: $(cut -d' ' -f1 "$apk.sha256")"
             echo "- Signing: owner PKCS12 identity and ARM64 package verified"
           } >> "$GITHUB_STEP_SUMMARY"
       - name: Upload verified signed APK and checksum
@@ -225,6 +225,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
+          PDFCRAFT_CERT_SHA256: ${{ vars.PDFCRAFT_CERT_SHA256 }}
         run: |
           set -euo pipefail
           version="$(awk -F= '$1=="pdfcraft.version" {print $2; exit}' apps/pdfcraft-android/android/gradle.properties)"
@@ -234,7 +235,9 @@ jobs:
           test -s "$apk" && test -s "$apk.sha256"
           sha256sum -c "$apk.sha256"
           tools="$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -n 1)"
-          "${tools}apksigner" verify "$apk"
+          "${tools}apksigner" verify --print-certs "$apk" > "$RUNNER_TEMP/apk-signer.txt"
+          # Cross-job signer pin prevents uploading a substituted artifact.
+          python3 scripts/verify_android_apk_certificate.py "$RUNNER_TEMP/apk-signer.txt"
           package_name="$("${tools}aapt" dump badging "$apk" | awk -F"'" '/^package:/ {print $2; exit}')"
           build="$("${tools}aapt" dump badging "$apk" | awk -F"'" '/^package:/ {print $4; exit}')"
           version_name="$("${tools}aapt" dump badging "$apk" | awk -F"'" '/^package:/ {print $6; exit}')"
@@ -258,10 +261,10 @@ jobs:
           {
             echo
             echo '## Source and verification'
-            echo "- Version: `$version ($build)` (arm64-v8a)."
-            echo "- Source: [`$GITHUB_SHA`](https://github.com/$GH_REPO/commit/$GITHUB_SHA)."
+            echo "- Version: $version ($build) (arm64-v8a)."
+            echo "- Source: https://github.com/$GH_REPO/commit/$GITHUB_SHA."
             echo "- CI: [run $GITHUB_RUN_ID](https://github.com/$GH_REPO/actions/runs/$GITHUB_RUN_ID), Rust, Android JVM and signed APK verification."
-            echo "- SHA-256: `$(cut -d' ' -f1 "$apk.sha256")`."
+            echo "- SHA-256: $(cut -d' ' -f1 "$apk.sha256")."
           } >> "$notes_file"
           generated="$RUNNER_TEMP/pdfcraft-generated-pr-notes.md"
           gh api -X POST "repos/$GH_REPO/releases/generate-notes" \
@@ -285,7 +288,7 @@ jobs:
             --notes-file "$notes_file" "${args[@]}" "$apk" "$apk.sha256"
           {
             echo "## Published PdfCraft $version ($build)"
-            echo "- Signed ARM64 APK: `$(basename "$apk")`"
-            echo "- SHA-256 sidecar: `$(basename "$apk.sha256")`"
+            echo "- Signed ARM64 APK: $(basename "$apk")"
+            echo "- SHA-256 sidecar: $(basename "$apk.sha256")"
             echo "- [Public release](https://github.com/$GH_REPO/releases/tag/$tag)"
           } >> "$GITHUB_STEP_SUMMARY"
