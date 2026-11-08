@@ -203,7 +203,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 // can't write to); the original needs opening again from the app it's in.
                 val copy = withContext(Dispatchers.IO) { files.existingCopy(uri) }
                 if (copy != null) {
-                    openFile(eng, uri, copy, password)
+                    openFile(eng, uri, copy, password, fromOtherApp)
                     tell(text(R.string.msg_opened_own_copy))
                 } else {
                     tell(text(R.string.msg_file_access_lost))
