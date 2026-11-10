@@ -1196,6 +1196,13 @@ pub fn erase_ink(doc: &mut Document, page: usize, index: usize, path: &[[f64; 2]
             v.as_chunks::<2>().0.iter().map(|p| [p[0], p[1]]).collect()
         })
         .collect();
+    // Android pressure ink: each point's relative width (`/PCWidths`), carried through the cut.
+    let factors: Option<Vec<Vec<f64>>> = d
+        .get(b"PCWidths")
+        .map(|l| doc.resolve(l))
+        .and_then(|l| l.as_array().cloned())
+        .map(|l| l.iter().map(|s| doc.resolve(s).as_array().map(|a| a.iter().filter_map(|x| doc.resolve(x).as_f64()).collect()).unwrap_or_default()).collect())
+        .filter(|f: &Vec<Vec<f64>>| f.len() == strokes.len() && f.iter().zip(&strokes).all(|(f, s)| f.len() == s.len()));
     // Distance from a point to the eraser's path (segments, or a single point).
     let near = |p: [f64; 2]| -> bool {
         if path.len() == 1 {
@@ -1210,34 +1217,43 @@ pub fn erase_ink(doc: &mut Document, page: usize, index: usize, path: &[[f64; 2]
         })
     };
     let mut kept: Vec<Vec<[f64; 2]>> = Vec::new();
+    let mut kept_factors: Vec<Vec<f64>> = Vec::new();
     let mut erased = false;
-    for s in &strokes {
+    for (si, s) in strokes.iter().enumerate() {
+        let f = factors.as_ref().map(|f| &f[si]);
+        let factor = |i: usize| f.map_or(1.0, |f| f[i]);
         // Densify so long segments are cut where the eraser crosses them.
-        let mut pts: Vec<[f64; 2]> = Vec::new();
-        for w in s.windows(2) {
+        let mut pts: Vec<([f64; 2], f64)> = Vec::new();
+        for (i, w) in s.windows(2).enumerate() {
             let n = ((w[1][0] - w[0][0]).hypot(w[1][1] - w[0][1]) / (radius / 2.0)).ceil().clamp(1.0, 2000.0) as usize;
             for k in 0..n {
                 let t = k as f64 / n as f64;
-                pts.push([w[0][0] + (w[1][0] - w[0][0]) * t, w[0][1] + (w[1][1] - w[0][1]) * t]);
+                let fw = factor(i) + (factor(i + 1) - factor(i)) * t;
+                pts.push(([w[0][0] + (w[1][0] - w[0][0]) * t, w[0][1] + (w[1][1] - w[0][1]) * t], fw));
             }
         }
         if let Some(last) = s.last() {
-            pts.push(*last);
+            pts.push((*last, factor(s.len() - 1)));
         }
         let mut run: Vec<[f64; 2]> = Vec::new();
-        for p in pts {
+        let mut run_f: Vec<f64> = Vec::new();
+        for (p, fw) in pts {
             if near(p) {
                 erased = true;
                 if run.len() >= 2 {
                     kept.push(std::mem::take(&mut run));
+                    kept_factors.push(std::mem::take(&mut run_f));
                 }
                 run.clear();
+                run_f.clear();
             } else {
                 run.push(p);
+                run_f.push(fw);
             }
         }
         if run.len() >= 2 {
             kept.push(run);
+            kept_factors.push(run_f);
         }
     }
     if !erased {
@@ -1248,9 +1264,13 @@ pub fn erase_ink(doc: &mut Document, page: usize, index: usize, path: &[[f64; 2]
         return Ok(true);
     }
     let width = d.get(b"BS").and_then(|b| b.as_dict()).and_then(|b| b.get(b"W")).and_then(|w| w.as_f64()).unwrap_or(1.0);
-    let rect = grow(bounds(kept.iter().flatten().copied()).unwrap_or_default(), width / 2.0 + 1.0);
+    let widest = if factors.is_some() { kept_factors.iter().flatten().copied().fold(0.0, f64::max).max(1.0) } else { 1.0 };
+    let rect = grow(bounds(kept.iter().flatten().copied()).unwrap_or_default(), width * widest / 2.0 + 1.0);
     doc.update_dict(r, |d| {
         d.set(b"InkList".to_vec(), Object::Array(kept.iter().map(|s| num_array(&s.concat())).collect()));
+        if factors.is_some() {
+            d.set(b"PCWidths".to_vec(), Object::Array(kept_factors.iter().map(|f| num_array(f)).collect()));
+        }
         d.set(b"Rect".to_vec(), num_array(&rect));
         touch(d, meta);
     })?;

@@ -377,7 +377,25 @@ impl Automation {
                                 .collect::<Result<Vec<_>>>()
                         })
                         .collect::<Result<Vec<_>>>()?;
-                    if kind == "freehand_highlight" { Shape::FreehandHighlight { strokes } } else { Shape::Ink { strokes } }
+                    // Android pressure ink: `widths`, one width in points per point of each stroke.
+                    match a.get("widths").filter(|w| !w.is_null()) {
+                        Some(w) if kind == "ink" => {
+                            let bad = || ToolError::InvalidArgs("widths must have one positive width per point of each stroke".into());
+                            let widths = w
+                                .as_array()
+                                .ok_or_else(bad)?
+                                .iter()
+                                .map(|s| s.as_array().ok_or_else(bad)?.iter().map(|v| v.as_f64().filter(|x| x.is_finite() && *x > 0.0 && *x <= 400.0).ok_or_else(bad)).collect::<Result<Vec<f64>>>())
+                                .collect::<Result<Vec<_>>>()?;
+                            if widths.len() != strokes.len() || widths.iter().zip(&strokes).any(|(w, s)| w.len() != s.len()) {
+                                return Err(bad());
+                            }
+                            Shape::PressureInk { strokes, widths }
+                        }
+                        Some(_) => return Err(ToolError::InvalidArgs("widths apply to ink only".into())),
+                        None if kind == "freehand_highlight" => Shape::FreehandHighlight { strokes },
+                        None => Shape::Ink { strokes },
+                    }
                 }
                 "polygon" | "cloud" | "polyline" => {
                     let wrong = || ToolError::InvalidArgs(format!("{kind} needs `points`: an array of [x, y] points"));

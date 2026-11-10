@@ -1001,3 +1001,6 @@ fn flatten_outline(items: &[pdfcraft_render::OutlineItem], level: u32, out: &mut
 
 #[cfg(test)]
 mod eraser_tests;
+
+#[cfg(test)]
+mod pressure_ink_tests;

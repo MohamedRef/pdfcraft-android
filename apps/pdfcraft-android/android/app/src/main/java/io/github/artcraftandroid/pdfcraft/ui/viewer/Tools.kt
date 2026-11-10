@@ -106,8 +106,6 @@ internal class InkStroke(val page: Int, val appearance: InkAppearance, stylus: B
     val paths = InkPathCache()
 }
 
-private data class InkSaveSegment(val page: Int, val appearance: InkAppearance, val points: List<Offset>)
-
 /** Reversible changes to the uncommitted Draw layer, in actual gesture order. */
 private sealed class DraftInkEdit {
     data class Added(val stroke: InkStroke) : DraftInkEdit()
@@ -329,27 +327,9 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
     // Capture appearance at pointer down. Adjacent matching strokes may share an annotation.
     DisposableEffect(doc) {
         doc.commitTool = {
-            val segments = strokes.flatMap { stroke ->
-                val points = stroke.points.toList()
-                inkStyleWidthRuns(stroke.pressures.toList(), stroke.appearance.width, stroke.pressureSensitive, stroke.appearance.style).map { run ->
-                    InkSaveSegment(
-                        stroke.page, stroke.appearance.copy(width = run.width),
-                        points.subList(run.start, run.end + 1),
-                    )
-                }
-            }
-            // PDF Ink /BS has one width. Keep adjacent equal-style runs together in paint order.
-            val batches = consecutiveInkBatches(segments) { it.page to it.appearance }
-            val commands = batches.map { list ->
-                val page = list.first().page
-                val appearance = list.first().appearance
-                mapOf(
-                    "page" to page + 1, "type" to inkStyleEngineType(appearance.style),
-                    "strokes" to list.map { segment -> segment.points.map { listOf(it.x.toDouble(), it.y.toDouble()) } },
-                    "color" to Color(appearance.argb).hex(), "opacity" to appearance.opacity.toDouble(), "width" to appearance.width.toDouble(),
-                    "author" to appearance.author,
-                )
-            }
+            val commands = inkSaveCommands(
+                strokes.map { s -> InkSaveStroke(s.page, s.appearance, s.points.toList(), s.pressures.toList(), s.pressureSensitive) },
+            ) { argb -> Color(argb).hex() }
             vm.runToolBatch(doc, "comment_add", commands)
             strokes.clear()
             edits.clear()

@@ -58,3 +58,27 @@ internal fun inkStyleWidthRuns(
 
 internal fun inkStyleEngineType(style: InkStyle): String =
     if (style == InkStyle.Highlighter) "freehand_highlight" else "ink"
+
+/**
+ * One width per point for pressure ink saved as a single drawing (engine `comment_add` `widths`).
+ * Same profile as [inkStyleWidthRuns], unquantized: base × style factor × (0.35 + 0.65 × pressure).
+ */
+internal fun inkStylePointWidths(pressures: List<Float>, width: Float, style: InkStyle): List<Float> {
+    val safeWidth = width.takeIf { it.isFinite() && it > 0f }?.coerceIn(0.1f, 30f) ?: 1f
+    val factor = when (style) {
+        InkStyle.Ballpoint -> 1f
+        InkStyle.Fountain -> 1.12f
+        InkStyle.Pencil -> 0.7f
+        InkStyle.Brush -> 1.55f
+        InkStyle.Highlighter -> 2.25f
+    }
+    return pressures.map { raw ->
+        val p = raw.takeIf { it.isFinite() && it > 0f }?.coerceIn(0f, 1f) ?: 1f
+        val shaped = when (style) {
+            InkStyle.Fountain -> p.pow(1.6f)
+            InkStyle.Brush -> p.pow(1.35f)
+            else -> p
+        }
+        safeWidth * factor * (0.35f + 0.65f * shaped)
+    }
+}
