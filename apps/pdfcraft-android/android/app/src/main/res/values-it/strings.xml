@@ -1154,4 +1154,17 @@
     <string name="service_action_forward">Avanti di 15 secondi</string>
     <string name="service_action_stop">Interrompi</string>
 
+    <string name="toolbar_squiggly">Ondulata</string>
+    <string name="viewer_hint_squiggly">Trascina sul testo per sottolinearlo con una linea ondulata</string>
+    <string name="toolbar_color_squiggly">Colore della sottolineatura ondulata</string>
+    <string name="toolbar_draw_arrow">Freccia</string>
+    <string name="ink_toolbar_arrow">Freccia</string>
+    <string name="toolbar_draw_cloud">Nuvola di revisione</string>
+    <string name="ink_toolbar_cloud">Nuvola</string>
+    <string name="toolbar_stamp">Timbro</string>
+    <string name="toolbar_stamp_choose">Scegli un timbro</string>
+    <string name="viewer_hint_stamp">Tocca dove va il timbro</string>
+    <string name="toolbar_text_box">Casella di testo</string>
+    <string name="toolbar_callout">Richiamo</string>
+    <string name="viewer_hint_callout">Tocca ciò a cui punta il richiamo</string>
 </resources>

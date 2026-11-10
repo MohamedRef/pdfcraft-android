@@ -1172,4 +1172,17 @@
     <string name="service_action_forward">Avanzar 15 segundos</string>
     <!-- Translator note: notification button that stops reading aloud -->
     <string name="service_action_stop">Detener</string>
+    <string name="toolbar_squiggly">Subrayado ondulado</string>
+    <string name="viewer_hint_squiggly">Arrastra sobre el texto para subrayarlo con una línea ondulada</string>
+    <string name="toolbar_color_squiggly">Color del subrayado ondulado</string>
+    <string name="toolbar_draw_arrow">Flecha</string>
+    <string name="ink_toolbar_arrow">Flecha</string>
+    <string name="toolbar_draw_cloud">Nube de revisión</string>
+    <string name="ink_toolbar_cloud">Nube</string>
+    <string name="toolbar_stamp">Sello</string>
+    <string name="toolbar_stamp_choose">Elegir un sello</string>
+    <string name="viewer_hint_stamp">Toca donde va el sello</string>
+    <string name="toolbar_text_box">Cuadro de texto</string>
+    <string name="toolbar_callout">Llamada</string>
+    <string name="viewer_hint_callout">Toca lo que señala la llamada</string>
 </resources>

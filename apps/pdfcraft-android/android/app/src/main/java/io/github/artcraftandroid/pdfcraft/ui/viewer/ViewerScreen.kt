@@ -589,10 +589,11 @@ private fun toolHint(tool: ViewerTool, markup: TextMarkup, doc: OpenDocument): S
         TextMarkup.Highlight -> text(R.string.viewer_hint_highlight)
         TextMarkup.Underline -> text(R.string.viewer_hint_underline)
         TextMarkup.Strikethrough -> text(R.string.viewer_hint_strikethrough)
+        TextMarkup.Squiggly -> text(R.string.viewer_hint_squiggly)
     }
     ViewerTool.Draw -> text(R.string.viewer_hint_draw)
-    ViewerTool.Comment -> text(R.string.viewer_hint_comment)
-    ViewerTool.Text -> text(R.string.viewer_hint_text)
+    ViewerTool.Comment -> if (doc.controller.commentMode == CommentMode.Stamp) text(R.string.viewer_hint_stamp) else text(R.string.viewer_hint_comment)
+    ViewerTool.Text -> if (doc.controller.textCallout) text(R.string.viewer_hint_callout) else text(R.string.viewer_hint_text)
     ViewerTool.FillSign -> if (doc.info.fields > 0u) null else text(R.string.viewer_hint_fill_sign)
     else -> null
 }
@@ -659,6 +660,7 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawPendingMarkup(p
             TextMarkup.Highlight -> drawRect(c.copy(alpha = 0.4f * alpha), a, Size(b.x - a.x, b.y - a.y))
             TextMarkup.Underline -> drawLine(c.copy(alpha = alpha), Offset(a.x, b.y - 1f), Offset(b.x, b.y - 1f), 2f * density)
             TextMarkup.Strikethrough -> drawLine(c.copy(alpha = alpha), Offset(a.x, (a.y + b.y) / 2f), Offset(b.x, (a.y + b.y) / 2f), 2f * density)
+            TextMarkup.Squiggly -> drawSquiggle(c.copy(alpha = alpha), a.x, b.x, b.y - 2f * density, 1.5f * density)
         }
     }
 }

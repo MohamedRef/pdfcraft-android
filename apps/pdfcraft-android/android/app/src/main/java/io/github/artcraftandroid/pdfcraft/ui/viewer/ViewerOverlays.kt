@@ -78,7 +78,7 @@ import kotlin.math.roundToInt
 class NotePrompt(val doc: OpenDocument, val at: PagePoint?, val selection: Selection? = null)
 
 /** Free text waiting to be typed at a point (Text tool). */
-class TextPrompt(val doc: OpenDocument, val at: PagePoint)
+class TextPrompt(val doc: OpenDocument, val at: PagePoint, val callout: Boolean = false)
 
 /** A reply waiting to be written. */
 class ReplyPrompt(val doc: OpenDocument, val comment: CommentInfo)
@@ -219,6 +219,7 @@ fun BoxScope.SelectionMenu(vm: AppViewModel, doc: OpenDocument, sel: Selection) 
             MenuIcon(LucideIcons.Highlighter, stringResource(R.string.common_tool_highlight), allowed) { markup(TextMarkup.Highlight) }
             MenuIcon(LucideIcons.Underline, stringResource(R.string.common_tool_underline), allowed) { markup(TextMarkup.Underline) }
             MenuIcon(LucideIcons.Strikethrough, stringResource(R.string.viewer_strikethrough), allowed) { markup(TextMarkup.Strikethrough) }
+            MenuIcon(LucideIcons.Spline, stringResource(R.string.toolbar_squiggly), allowed) { markup(TextMarkup.Squiggly) }
         }
         // an inset divider, then the rows with 8 dp above and below, as the reference's menu
         Box(Modifier.fillMaxWidth().padding(horizontal = 4.dp).height(1.dp).background(c.divider))

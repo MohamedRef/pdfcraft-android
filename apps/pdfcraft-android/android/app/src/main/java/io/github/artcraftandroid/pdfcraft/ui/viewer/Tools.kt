@@ -18,6 +18,8 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.calculateCentroid
@@ -146,9 +148,19 @@ fun ToolLayer(vm: AppViewModel, doc: OpenDocument) {
         ViewerTool.Draw -> DrawLayer(vm, doc)
         ViewerTool.Markup -> MarkupLayer(vm, doc)
         ViewerTool.Comment -> TapLayer(doc) { p ->
-            if (doc.controller.commentMode == CommentMode.Voice) vm.startVoice(doc, p) else vm.notePrompt = NotePrompt(doc, p)
+            when (doc.controller.commentMode) {
+                CommentMode.Voice -> vm.startVoice(doc, p)
+                CommentMode.Stamp -> vm.runTool(
+                    doc, "comment_add",
+                    mapOf(
+                        "page" to p.page + 1, "type" to "stamp", "at" to listOf(p.x.toDouble(), p.y.toDouble()),
+                        "stamp" to doc.controller.stamp, "author" to vm.toolPrefs.author.ifBlank { null },
+                    ),
+                )
+                CommentMode.Text -> vm.notePrompt = NotePrompt(doc, p)
+            }
         }
-        ViewerTool.Text -> TapLayer(doc) { p -> vm.textPrompt = TextPrompt(doc, p) }
+        ViewerTool.Text -> TapLayer(doc) { p -> vm.textPrompt = TextPrompt(doc, p, callout = doc.controller.textCallout) }
         ViewerTool.FillSign -> if (vm.certPlacing === doc) CertPlaceLayer(vm, doc) else FillSignLayer(vm, doc)
         else -> Unit
     }
@@ -592,6 +604,24 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                             s.pressures.add(s.pressures.firstOrNull() ?: 1f)
                         }
                     }
+                    if (s.shapeMode.isAnnotation) {
+                        // An arrow or cloud is its own PDF annotation, not ink: add the pending
+                        // drafts first so the document's history keeps the drawing order.
+                        strokes.remove(s)
+                        s.preview = null
+                        val pageSize = doc.viewer.pages.getOrNull(s.page)
+                        val geometry = if (pageSize != null && s.points.size >= 2) {
+                            inkShapeGeometry(s.shapeMode, s.points.first(), s.points.last(), pageSize.width, pageSize.height)
+                        } else null
+                        val args = geometry?.let {
+                            shapeAnnotationArgs(s.shapeMode, it, s.page, Color(s.appearance.argb).hex(), s.appearance.opacity, s.appearance.width.coerceAtLeast(0.5f), s.appearance.author)
+                        }
+                        if (args != null) {
+                            doc.commitTool?.invoke()
+                            vm.runTool(doc, "comment_add", args)
+                        }
+                        return@toolGestures
+                    }
                     if (s.points.size >= 2) {
                         edits.add(DraftInkEdit.Added(s))
                         undone.clear()
@@ -875,6 +905,7 @@ private fun MarkupLayer(vm: AppViewModel, doc: OpenDocument) {
                     TextMarkup.Highlight -> drawRect(color.copy(alpha = 0.4f * opacity), a, Size(b.x - a.x, b.y - a.y))
                     TextMarkup.Underline -> drawLine(color.copy(alpha = opacity), Offset(a.x, b.y - 1f), Offset(b.x, b.y - 1f), 2.dp.toPx())
                     TextMarkup.Strikethrough -> drawLine(color.copy(alpha = opacity), Offset(a.x, (a.y + b.y) / 2f), Offset(b.x, (a.y + b.y) / 2f), 2.dp.toPx())
+                    TextMarkup.Squiggly -> drawSquiggle(color.copy(alpha = opacity), a.x, b.x, b.y - 2.dp.toPx(), 1.5.dp.toPx())
                 }
             }
         }
@@ -882,7 +913,7 @@ private fun MarkupLayer(vm: AppViewModel, doc: OpenDocument) {
 }
 
 /** Which property picker a sub-toolbar has open. */
-enum class Picker { None, Color, Width, TextSize, Presets, EraserSize }
+enum class Picker { None, Color, Width, TextSize, Presets, EraserSize, Stamp }
 
 /** The active tool's sub-toolbar. */
 @Composable
@@ -898,6 +929,7 @@ fun ToolSubToolbar(vm: AppViewModel, doc: OpenDocument) {
             SubTool(LucideIcons.Highlighter, stringResource(R.string.common_tool_highlight), ctl.markup == TextMarkup.Highlight, { ctl.markup = TextMarkup.Highlight })
             SubTool(LucideIcons.Underline, stringResource(R.string.common_tool_underline), ctl.markup == TextMarkup.Underline, { ctl.markup = TextMarkup.Underline })
             SubTool(LucideIcons.Strikethrough, stringResource(R.string.toolbar_strikethrough), ctl.markup == TextMarkup.Strikethrough, { ctl.markup = TextMarkup.Strikethrough })
+            SubTool(LucideIcons.Spline, stringResource(R.string.toolbar_squiggly), ctl.markup == TextMarkup.Squiggly, { ctl.markup = TextMarkup.Squiggly })
             SubDivider()
             ColorDot(prefs.color(ctl.markup.styled), picker == Picker.Color) { toggle(Picker.Color) }
         }
@@ -905,9 +937,18 @@ fun ToolSubToolbar(vm: AppViewModel, doc: OpenDocument) {
         ViewerTool.Comment -> SubToolbar {
             SubTool(LucideIcons.MessageSquareText, stringResource(R.string.toolbar_text_comment), ctl.commentMode == CommentMode.Text, { ctl.commentMode = CommentMode.Text })
             SubTool(LucideIcons.MicAudioLines, stringResource(R.string.toolbar_voice_comment), ctl.commentMode == CommentMode.Voice, { ctl.commentMode = CommentMode.Voice })
+            SubTool(LucideIcons.Stamp, stringResource(R.string.toolbar_stamp), ctl.commentMode == CommentMode.Stamp, {
+                ctl.commentMode = CommentMode.Stamp
+                ctl.picker = Picker.Stamp
+            })
+            if (ctl.commentMode == CommentMode.Stamp) {
+                SubDivider()
+                SubProperty(LucideIcons.SlidersHorizontal, stringResource(R.string.toolbar_stamp_choose), picker == Picker.Stamp, { toggle(Picker.Stamp) })
+            }
         }
         ViewerTool.Text -> SubToolbar {
-            SubTool(LucideIcons.Type, stringResource(R.string.toolbar_tool_text), true, {})
+            SubTool(LucideIcons.Type, stringResource(R.string.toolbar_text_box), !ctl.textCallout, { ctl.textCallout = false })
+            SubTool(LucideIcons.MessageSquareQuote, stringResource(R.string.toolbar_callout), ctl.textCallout, { ctl.textCallout = true })
             SubDivider()
             SubProperty(LucideIcons.ALargeSmall, stringResource(R.string.toolbar_text_size), picker == Picker.TextSize, { toggle(Picker.TextSize) })
             ColorDot(prefs.color(StyledTool.FreeText), picker == Picker.Color) { toggle(Picker.Color) }
@@ -943,6 +984,7 @@ fun ToolSheets(vm: AppViewModel, doc: OpenDocument) {
         }
     }
     if (ctl.tool == ViewerTool.FillSign && ctl.signPanel) SignPanel(vm, doc) { ctl.signPanel = false }
+    if (ctl.tool == ViewerTool.Comment && ctl.picker == Picker.Stamp) StampPicker(ctl) { ctl.picker = Picker.None }
 }
 
 /** The colour, thickness or text-size picker of a tool, as a sheet above its sub-toolbar. */
@@ -959,6 +1001,7 @@ fun PropertyPicker(vm: AppViewModel, tool: StyledTool, picker: Picker, markup: T
                         StyledTool.Highlight -> R.string.toolbar_color_highlight
                         StyledTool.Underline -> R.string.toolbar_color_underline
                         StyledTool.Strikethrough -> R.string.toolbar_color_strikethrough
+                        StyledTool.Squiggly -> R.string.toolbar_color_squiggly
                         StyledTool.Ink -> R.string.toolbar_color_drawing
                         StyledTool.FreeText -> R.string.toolbar_color_text
                         StyledTool.Note -> R.string.toolbar_color_comment
@@ -1032,7 +1075,7 @@ fun PropertyPicker(vm: AppViewModel, tool: StyledTool, picker: Picker, markup: T
                 )
                 Spacer(Modifier.height(12.dp))
             }
-            Picker.None -> Unit
+            Picker.None, Picker.Stamp -> Unit
         }
     }
 }
@@ -1148,3 +1191,34 @@ fun OpacitySlider(color: Color, value: Float, onChange: (Float) -> Unit) {
 }
 
 private fun Color.luminance(): Float = 0.2126f * red + 0.7152f * green + 0.0722f * blue
+
+/** The standard stamps, as a list above the Comment tool's bar; picking one closes it. */
+@Composable
+private fun StampPicker(ctl: ViewerController, onDismiss: () -> Unit) {
+    val c = pdfColors
+    PdfSheet(onDismiss = onDismiss, modifier = Modifier.padding(bottom = BottomBarHeight + 1.dp).navigationBarsPadding(), bottomBand = false) {
+        Text(
+            stringResource(R.string.toolbar_stamp_choose), color = c.text, fontSize = 17.sp,
+            fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
+            modifier = Modifier.padding(start = 20.dp, top = 3.dp, bottom = 10.dp),
+        )
+        Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
+            for (stamp in STANDARD_STAMPS) {
+                val selected = ctl.stamp == stamp
+                Text(
+                    stampLabel(stamp),
+                    color = if (selected) c.toolAccent else c.text,
+                    fontSize = 16.sp,
+                    fontWeight = if (selected) androidx.compose.ui.text.font.FontWeight.SemiBold else null,
+                    modifier = Modifier.fillMaxWidth()
+                        .clickable(role = Role.RadioButton) {
+                            ctl.stamp = stamp
+                            onDismiss()
+                        }
+                        .padding(horizontal = 20.dp, vertical = 12.dp),
+                )
+            }
+            Spacer(Modifier.height(12.dp))
+        }
+    }
+}
