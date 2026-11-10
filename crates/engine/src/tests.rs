@@ -12059,3 +12059,113 @@ fn a_document_encrypting_only_its_embedded_files_opens_and_saves_without_a_passw
     let reopened = pdfcraft_cos::Document::open(saved).unwrap();
     assert!(reopened.embedded_files_locked(), "the attachment stays encrypted");
 }
+
+#[test]
+fn open_field_reuse_matches_fresh_display_with_comments_fields_and_orphan_widgets() {
+    for (comment, field, listed) in [
+        (false, true, true),
+        (true, true, true),
+        (true, false, false),
+        (false, true, false),
+    ] {
+        let acro = if listed {
+            "/AcroForm << /Fields [5 0 R] /NeedAppearances true /DA (/Helv 12 Tf 0 g) >>"
+        } else {
+            ""
+        };
+        let objects = [
+            format!("<< /Type /Catalog /Pages 2 0 R {acro} >>"),
+            "<< /Type /Pages /Kids [3 0 R] /Count 1 >>".into(),
+            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] /Annots [4 0 R 5 0 R] >>".into(),
+            if comment { "<< /Type /Annot /Subtype /FreeText /Rect [10 110 190 180] /DA (/Helv 20 Tf 0 g) /Contents (A comment) >>" } else { "null" }
+                .into(),
+            if field {
+                "<< /Type /Annot /Subtype /Widget /FT /Tx /T (input) /V (A value) /DA (/Helv 12 Tf 0 g) /Rect [10 20 190 70] /P 3 0 R >>"
+            } else {
+                "null"
+            }
+            .into(),
+        ];
+        let mut bytes = b"%PDF-1.7\n".to_vec();
+        let mut offsets = Vec::new();
+        for (i, object) in objects.iter().enumerate() {
+            offsets.push(bytes.len());
+            bytes.extend_from_slice(format!("{} 0 obj\n{object}\nendobj\n", i + 1).as_bytes());
+        }
+        let xref = bytes.len();
+        bytes.extend_from_slice(b"xref\n0 6\n0000000000 65535 f \n");
+        for offset in offsets {
+            bytes.extend_from_slice(format!("{offset:010} 00000 n \n").as_bytes());
+        }
+        bytes.extend_from_slice(
+            format!("trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n").as_bytes(),
+        );
+        let source = Arc::new(bytes);
+        let mut session = Session::new();
+        let id = session
+            .open("forms.pdf", None, source.clone(), None)
+            .unwrap();
+        let doc = session.docs.iter_mut().find(|d| d.id == id).unwrap();
+        assert_eq!(doc.form.len(), usize::from(field));
+        if field {
+            assert_eq!(doc.form[0].value, vec!["A value".to_owned()]);
+        }
+        let actual = doc.display.clone();
+        let mut signatures = doc.signatures.as_ref().clone();
+        let editor = doc.editor.as_mut().unwrap();
+        editor.appearances.clear();
+        editor.field_appearances.clear();
+        let expected = crate::document::display_bytes(
+            doc.editor.as_mut(),
+            &source,
+            &mut signatures,
+            &doc.captions,
+        );
+        let mut captured = Some(pdfcraft_forms::fields_with_adopted(
+            &doc.editor.as_ref().unwrap().cos,
+        ));
+        let shared = crate::document::display_bytes_collect_fields(
+            doc.editor.as_mut(),
+            &source,
+            &mut signatures,
+            &doc.captions,
+            Some(&mut captured),
+            &pdfcraft_render::OpenTrace::default(),
+        );
+        assert_eq!(
+            captured.is_some(),
+            !comment,
+            "a changed comment overlay must not publish source fields"
+        );
+        if let Some(fields) = captured {
+            assert_eq!(fields.items.len(), usize::from(field));
+        }
+        let raster = |bytes: Arc<Vec<u8>>| {
+            let mut renderer =
+                pdfcraft_render::PageRenderer::new(bytes, pdfcraft_render::RenderConfig::default());
+            let page = renderer.render(pdfcraft_render::RenderRequest {
+                page: 0,
+                scale: 1.0,
+                ..Default::default()
+            });
+            assert!(page.error.is_none(), "{:?}", page.error);
+            page.rgba
+        };
+        let expected = raster(expected);
+        assert_eq!(
+            raster(actual),
+            expected,
+            "comment={comment}, field={field}, listed={listed}"
+        );
+        assert_eq!(
+            raster(shared),
+            expected,
+            "explicit collection preserves the same pixels"
+        );
+        assert_eq!(
+            *session.save_bytes(id).unwrap(),
+            *source,
+            "display appearances never enter the saved file"
+        );
+    }
+}

@@ -5,10 +5,11 @@ use std::sync::{Arc, OnceLock};
 use pdfcraft_cos::{SaveOptions, write_incremental};
 use pdfcraft_render::{DocInfo, OpenError, OpenTrace, RenderConfig, RenderPool, inspect, inspect_with_trace};
 
+use crate::document::display_bytes_collect_fields;
 use crate::history::{Editor, Keys, TextBlocksCache};
 use crate::{
-    AppearanceCache, DocId, Document, Session, StatusCaptions, TrustStore, XFA_SCRIPTS_OFF, XfaLayout, display_bytes, display_config, guard,
-    info_fields, js, note_warnings, print_preview_layers, recovered_render_password, render_threads, same_pages, signatures_of, xfa, xfa_layout,
+    AppearanceCache, DocId, Document, Session, StatusCaptions, TrustStore, XFA_SCRIPTS_OFF, XfaLayout, display_config, guard, info_fields, js,
+    note_warnings, print_preview_layers, recovered_render_password, render_threads, same_pages, signatures_of, xfa, xfa_layout,
     xfa_values_from_datasets,
 };
 
@@ -349,12 +350,17 @@ impl Session {
         }
         // The print preview draws the layers as they print.
         config.print_layers = context.trace.measure("native_print_layers", || print_preview_layers(editor.as_ref().map(|e| &e.cos), &info.layers));
-        let display = context.trace.measure("native_display", || display_bytes(editor.as_mut(), &bytes, &mut signatures, &context.captions));
+        let mut discovered_fields = None;
+        let display = context.trace.measure("native_display", || {
+            display_bytes_collect_fields(editor.as_mut(), &bytes, &mut signatures, &context.captions, Some(&mut discovered_fields), &context.trace)
+        });
         let renderer = context.trace.measure("native_render_pool", || RenderPool::new(display.clone(), render_threads(), display_config(&config)));
         let (form, adopted) = editor
             .as_ref()
             .map(|e| {
-                let mut fields = context.trace.measure("native_form_fields", || pdfcraft_forms::fields_with_adopted(&e.cos));
+                let mut fields = context
+                    .trace
+                    .measure("native_form_fields", || discovered_fields.take().unwrap_or_else(|| pdfcraft_forms::fields_with_adopted(&e.cos)));
                 xfa::mark_script_buttons(&e.cos, &mut fields.items);
                 (fields.items, fields.adopted_page_fields)
             })
