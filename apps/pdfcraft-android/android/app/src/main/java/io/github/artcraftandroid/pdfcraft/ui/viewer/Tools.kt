@@ -62,10 +62,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.PointerType
 import androidx.compose.ui.input.pointer.PointerEventType
@@ -104,6 +101,9 @@ internal class InkStroke(val page: Int, val appearance: InkAppearance, stylus: B
 
     /** The clean shape shown while the finger is held still (press and hold to snap). */
     var preview by mutableStateOf<List<Offset>?>(null)
+
+    /** Smoothed page-space paths, rebuilt only when this stroke's points change. */
+    val paths = InkPathCache()
 }
 
 private data class InkSaveSegment(val page: Int, val appearance: InkAppearance, val points: List<Offset>)
@@ -661,24 +661,17 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
     ) {
         Canvas(Modifier.fillMaxSize()) {
             for (s in strokes) {
-                val pts = s.preview ?: s.points
-                val runs = if (s.preview != null) {
-                    if (pts.size >= 2) inkStyleWidthRuns(List(pts.size) { 1f }, s.appearance.width, false, s.appearance.style) else emptyList()
-                } else inkStyleWidthRuns(s.pressures.toList(), s.appearance.width, s.pressureSensitive, s.appearance.style)
-                for (run in runs) {
-                    val path = Path()
-                    for (i in run.start..run.end) {
-                        val pt = pts[i]
-                        val previewPoint = if (moving && s in selected) pt + moveOffset else pt
-                        val o = doc.viewer.pageToScreen(s.page, previewPoint.x, previewPoint.y)
-                        if (i == run.start) path.moveTo(o.x, o.y) else path.lineTo(o.x, o.y)
-                    }
-                    drawPath(
-                        path, Color(s.appearance.argb).copy(alpha = s.appearance.opacity),
-                        style = Stroke(width = run.width * doc.viewer.pixelsPerPoint(s.page), cap = StrokeCap.Round, join = StrokeJoin.Round),
-                        blendMode = if (s.appearance.style == InkStyle.Highlighter) BlendMode.Multiply else BlendMode.SrcOver,
-                    )
-                }
+                val pageRect = doc.viewer.pageRectOnScreen(s.page)
+                val lift = if (moving && s in selected) moveOffset else Offset.Zero
+                drawInkStroke(
+                    runs = s.paths.runs(s),
+                    color = Color(s.appearance.argb),
+                    opacity = s.appearance.opacity,
+                    highlighter = s.appearance.style == InkStyle.Highlighter,
+                    origin = doc.viewer.pageToScreen(s.page, lift.x, lift.y),
+                    scale = doc.viewer.pixelsPerPoint(s.page),
+                    pageBoundsOnScreen = pageRect,
+                )
             }
             if (doc.controller.lassoMode) {
                 val page = lassoPage
