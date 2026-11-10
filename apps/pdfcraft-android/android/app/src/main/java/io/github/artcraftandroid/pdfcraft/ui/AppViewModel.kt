@@ -512,11 +512,11 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     }
 
     /** Read the document's state from the engine again (after an edit, undo or save). */
-    suspend fun refresh(doc: OpenDocument) {
+    suspend fun refresh(doc: OpenDocument, touchedPage: Int? = null) {
         val eng = engine ?: return
         val info = runCatching { eng.command { document(doc.id) } }.getOrNull() ?: return
         val changed = info.generation != doc.info.generation
-        doc.update(info)
+        doc.update(info, touchedPage)
         if (changed) loadLinks(eng, doc)
     }
 
@@ -559,7 +559,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         viewModelScope.launch {
             try {
                 val r = eng.tool(name, args + ("doc" to doc.id))
-                refresh(doc)
+                refresh(doc, io.github.artcraftandroid.pdfcraft.ui.viewer.pageTouchedBy(name, args))
                 onDone(r)
             } catch (e: MobileException) {
                 tell(e.userMessage)
@@ -585,7 +585,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 tell(e.userMessage)
             } finally {
                 // A partially accepted batch must be visible even if a later segment is refused.
-                refresh(doc)
+                refresh(doc, io.github.artcraftandroid.pdfcraft.ui.viewer.pageTouchedByBatch(name, argsList))
             }
         }
     }

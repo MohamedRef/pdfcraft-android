@@ -64,6 +64,8 @@ class PageImages(
     private val lock = Any()
     private val cache = LinkedHashMap<ImageKey, PageImage>(64, 0.75f, true)
     private val fallback = HashMap<Int, PageImage>()
+    /** The newest cached tile at each (page, level, tile), whatever its generation. */
+    private val tileFallback = HashMap<Triple<Int, Int, Int>, PageImage>()
     private var wanted: List<ImageRequest> = emptyList()
     private val inFlight = HashSet<ImageKey>()
     private val failed = HashSet<ImageKey>()
@@ -103,10 +105,14 @@ class PageImages(
     /** The newest whole-page image of [page], whatever its generation. */
     fun latestBase(page: Int): PageImage? = synchronized(lock) { fallback[page] }
 
+    /** The newest cached tile [tile] of [page] at [level], whatever its generation. */
+    fun latestTile(page: Int, level: Int, tile: Int): PageImage? = synchronized(lock) { tileFallback[Triple(page, level, tile)] }
+
     /** Forget everything (the document was replaced). */
     fun clear() = synchronized(lock) {
         cache.clear()
         fallback.clear()
+        tileFallback.clear()
         failed.clear()
         bytes = 0
     }
@@ -122,6 +128,7 @@ class PageImages(
             }
         }
         fallback.values.retainAll { it.key in keep }
+        tileFallback.values.retainAll { it.key in keep }
     }
 
     private fun next(): ImageRequest? = synchronized(lock) {
@@ -156,6 +163,10 @@ class PageImages(
                     if (r.key.isBase) {
                         val old = fallback[r.key.page]
                         if (old == null || old.key.gen <= r.key.gen) fallback[r.key.page] = image
+                    } else {
+                        val slot = Triple(r.key.page, r.key.level, r.key.tile)
+                        val old = tileFallback[slot]
+                        if (old == null || old.key.gen <= r.key.gen) tileFallback[slot] = image
                     }
                     evict()
                 }
@@ -181,6 +192,8 @@ class PageImages(
             bytes -= e.value.bytes
             it.remove()
             if (fallback[e.key.page]?.key == e.key) fallback.remove(e.key.page)
+            val slot = Triple(e.key.page, e.key.level, e.key.tile)
+            if (tileFallback[slot]?.key == e.key) tileFallback.remove(slot)
         }
     }
 }

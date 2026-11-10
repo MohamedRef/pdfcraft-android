@@ -269,17 +269,20 @@ class ViewerState(pages: List<PageSize>) {
      * What to render for the current view, most wanted first: the visible pages whole, the tiles
      * of the visible area at the current zoom level when zoomed in, then the pages around.
      */
-    fun requests(gen: Long, maxScale: Float): List<ImageRequest> {
+    fun requests(gen: Long, maxScale: Float): List<ImageRequest> = requests(PageGenerations(gen), maxScale)
+
+    /** [requests] with each page at its own generation ([PageGenerations]). */
+    fun requests(gens: PageGenerations, maxScale: Float): List<ImageRequest> {
         if (viewW <= 0f || pages.isEmpty()) return emptyList()
         val out = ArrayList<ImageRequest>()
         val visible = visiblePages()
-        for (i in visible) out.add(baseRequest(i, gen, maxScale))
+        for (i in visible) out.add(baseRequest(i, gens.of(i), maxScale))
         val level = detailLevel()
         if (level > 0) {
-            for (i in visible) tilesFor(i, gen, level, maxScale, out)
+            for (i in visible) tilesFor(i, gens.of(i), level, maxScale, out)
         }
         val around = visiblePages(if (zoom < LOWRES_BELOW) 0.5f else 1.5f)
-        for (i in around) if (i !in visible) out.add(baseRequest(i, gen, maxScale))
+        for (i in around) if (i !in visible) out.add(baseRequest(i, gens.of(i), maxScale))
         return out
     }
 
