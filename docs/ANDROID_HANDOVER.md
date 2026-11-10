@@ -11,6 +11,13 @@
 
 # PdfCraft Android - development handover
 
+## RELEASE 0.0.16-beta (16012) — 2026-11-10 (owner requested)
+
+- Release PR stages `0.0.16-beta` / ARM64 build `16012` (`pdfcraft.versionCode=1601`), same package ID and signer. The publish trigger matches only `chore(release): publish 0.0.16-beta (16012)`.
+- Included on main: engine v0.20.0 (#65), cached smooth draft ink (#63), per-page render generations (#67), single-annotation pressure ink (#66), squiggly/arrow/cloud/stamps/callout (#68), real historical pressure + predicted tail (#69), updater retries (#62), high-priority fixes #70/#71/#100/#112 (#186), security fixes for attachments and private `file://` (#136), lasso on saved annotations (#137).
+- #66 was merged while a cancelled run still showed a failing check (#206). Policy from now on: merge only when every check on the head is green and the state is clean.
+- Physical S Pen, saved-lasso, page-edit and provider-save checks remain outstanding. Open reviewer issues: #70–#205; checkpoint #207.
+
 ## RELEASE CHECKPOINT - 2026-11-08 (after PR #59 merge)
 
 - PR #59 merged into main at `1515ffac5b84771186c99bf5ae52fbe88be694f7` after Rust, Android JVM and merge gate passed on exact head `f8c33b4874e88b426631b83dc0f65a6fc6de9e81` (run 42470402789).
