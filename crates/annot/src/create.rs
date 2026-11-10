@@ -103,6 +103,13 @@ pub(crate) fn rect_for(shape: &Shape, style: &Style) -> Result<[f64; 4], AnnotEr
             }
             grow(ink_bounds(strokes).unwrap_or_default(), half + 1.0)
         }
+        Shape::PressureInk { strokes, widths } => {
+            if strokes.iter().all(Vec::is_empty) || !strokes.iter().flatten().all(|p| finite(p)) {
+                return Err(bad("drawing (no points)"));
+            }
+            let widest = pressure_ink_factors(strokes, widths).ok_or_else(|| bad("drawing (one positive width per point)"))?.1;
+            grow(ink_bounds(strokes).unwrap_or_default(), widest / 2.0 + 1.0)
+        }
         // A new cloud has intensity 1 (`/BE /I 1`).
         Shape::Polygon { vertices, cloud } => polygon_rect(vertices, style.width, cloud.then_some(1.0))?,
         Shape::PolyLine { vertices, start, end } => {
@@ -178,7 +185,7 @@ fn subject(shape: &Shape) -> &'static str {
         Shape::Line { start: LineEnding::None, end: LineEnding::OpenArrow, .. } => "Arrow",
         Shape::Line { .. } => "Line",
         Shape::FreehandHighlight { .. } => "Freehand Highlight",
-        Shape::Ink { .. } => "Pencil",
+        Shape::Ink { .. } | Shape::PressureInk { .. } => "Pencil",
         Shape::TextBox { .. } => "Text Box",
         Shape::Typewriter { .. } => "Typewriter",
         Shape::Mark { mark, .. } => mark.label(),
@@ -320,6 +327,18 @@ pub fn add_annotation(doc: &mut Document, new: &NewAnnotation, meta: &Meta) -> R
                 d.set(b"IT".to_vec(), Object::name("FreehandHighlight"));
             }
             border(&mut d);
+        }
+        Shape::PressureInk { strokes, widths } => {
+            d.set(b"C".to_vec(), rgb(style.color));
+            let (factors, _, mean) = pressure_ink_factors(strokes, widths).ok_or_else(|| AnnotError::Invalid("pressure ink widths".into()))?;
+            let kept: Vec<usize> = (0..strokes.len()).filter(|&i| !strokes[i].is_empty()).collect();
+            d.set(b"InkList".to_vec(), Object::Array(kept.iter().map(|&i| num_array(&strokes[i].concat())).collect()));
+            d.set(b"PCWidths".to_vec(), Object::Array(kept.iter().map(|&i| num_array(&factors[i])).collect()));
+            border(&mut d);
+            // The mean width, which the relative widths multiply; not the requested style width.
+            if let Some(Object::Dict(bs)) = d.get_mut(b"BS") {
+                bs.set(b"W".to_vec(), Object::Real(mean));
+            }
         }
         Shape::Polygon { vertices, cloud } => {
             d.set(b"C".to_vec(), rgb(style.color));
@@ -546,4 +565,28 @@ pub fn orient_image_stamp(doc: &mut Document, page: usize, index: usize, rotatio
     stream.dict.set(b"Matrix".to_vec(), num_array(&matrix));
     doc.set(normal, Object::Stream(stream));
     Ok(())
+}
+
+/// The widest pressure-ink drawing may be, relative to its `/BS /W` (and the narrowest).
+pub(crate) const PRESSURE_INK_MAX_FACTOR: f64 = 8.0;
+pub(crate) const PRESSURE_INK_MIN_FACTOR: f64 = 0.02;
+
+/// Each point's width of a [`Shape::PressureInk`] relative to the drawing's mean width (what
+/// `/PCWidths` stores), and its widest width in points; `None` unless every stroke has exactly one
+/// finite positive width per point. Relative widths keep a drawing's look through `/BS /W`
+/// changes (Edit ▸ line width scales every point). The third value is the mean, `/BS /W`.
+pub(crate) fn pressure_ink_factors(strokes: &[Vec<[f64; 2]>], widths: &[Vec<f64>]) -> Option<(Vec<Vec<f64>>, f64, f64)> {
+    if strokes.len() != widths.len() || strokes.iter().zip(widths).any(|(s, w)| s.len() != w.len()) {
+        return None;
+    }
+    let all: Vec<f64> = widths.iter().flatten().copied().collect();
+    if all.is_empty() || !all.iter().all(|w| w.is_finite() && *w > 0.0) {
+        return None;
+    }
+    let mean = all.iter().sum::<f64>() / all.len() as f64;
+    let factors = widths
+        .iter()
+        .map(|s| s.iter().map(|w| ((w / mean) * 1000.0).round() / 1000.0).map(|f| f.clamp(PRESSURE_INK_MIN_FACTOR, PRESSURE_INK_MAX_FACTOR)).collect())
+        .collect();
+    Some((factors, all.iter().copied().fold(0.0, f64::max).min(mean * PRESSURE_INK_MAX_FACTOR), mean))
 }

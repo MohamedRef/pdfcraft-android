@@ -1189,6 +1189,14 @@ fn draw_ink(context: &AppearanceContext<'_>, drawing: &mut AppearanceDrawing) ->
     let c = &mut drawing.content;
     let col = stroke?;
     let list = d.get(b"InkList")?.as_array()?;
+    if let Some(outline) = pressure_ink_outline(list, d.get(b"PCWidths").and_then(Object::as_array).map(Vec::as_slice), w) {
+        // Android pressure ink: one filled outline, so a translucent line is as opaque throughout
+        // as one pen stroke, where overlapping strokes of varying width would darken.
+        c.push_str(&rg(col));
+        c.push_str(&outline);
+        c.push_str("f\n");
+        return Some(());
+    }
     // `/BS` gives an ink stroke its width and dash pattern (Table 182).
     c.push_str(&format!("{}{} w 1 J 1 j\n{}", rg_stroke(col), n(w), dash(d)));
     for s in list {
@@ -1204,6 +1212,94 @@ fn draw_ink(context: &AppearanceContext<'_>, drawing: &mut AppearanceDrawing) ->
         c.push_str("S\n");
     }
     Some(())
+}
+
+/// Most samples one stroke of pressure ink is drawn with; past it, points are skipped evenly.
+const PRESSURE_INK_MAX_SAMPLES: usize = 20_000;
+
+/// The filled outline of Android pressure ink (`/PCWidths`, one width relative to `width` per
+/// `/InkList` point): along each stroke's Catmull-Rom curve ([`smooth_segments`]), a disc at every
+/// point and a quadrilateral between neighbouring samples, all wound the same way so the nonzero
+/// fill paints their union once. `None` (draw the plain ink) unless the widths match the points.
+pub(crate) fn pressure_ink_outline(list: &[Object], factors: Option<&[Object]>, width: f64) -> Option<String> {
+    let factors = factors?;
+    if factors.len() != list.len() || !(width.is_finite() && width > 0.0) {
+        return None;
+    }
+    let mut out = String::new();
+    for (s, f) in list.iter().zip(factors) {
+        let v: Vec<f64> = s.as_array()?.iter().map(Object::as_f64).collect::<Option<_>>()?;
+        let pts: Vec<(f64, f64)> = v.as_chunks::<2>().0.iter().map(|p| (p[0], p[1])).collect();
+        let ws: Vec<f64> = f.as_array()?.iter().map(Object::as_f64).collect::<Option<_>>()?;
+        if pts.is_empty() || ws.len() != pts.len() || !ws.iter().all(|x| x.is_finite() && *x > 0.0) {
+            return None;
+        }
+        let radius = |i: usize| (ws[i] * width / 2.0).clamp(0.01, 400.0);
+        // Samples along the smoothed curve, with widths between their points' widths.
+        let mut samples: Vec<((f64, f64), f64)> = vec![(pts[0], radius(0))];
+        for (i, [c1, c2, end]) in smooth_segments(&pts).into_iter().enumerate() {
+            let p0 = pts[i];
+            let (r0, r1) = (radius(i), radius(i + 1));
+            let len = (end.0 - p0.0).hypot(end.1 - p0.1);
+            let steps = (len / r0.min(r1).max(0.5)).ceil().clamp(1.0, 8.0) as usize;
+            for k in 1..=steps {
+                let t = k as f64 / steps as f64;
+                let u = 1.0 - t;
+                let b = [u * u * u, 3.0 * u * u * t, 3.0 * u * t * t, t * t * t];
+                let at = (b[0] * p0.0 + b[1] * c1.0 + b[2] * c2.0 + b[3] * end.0, b[0] * p0.1 + b[1] * c1.1 + b[2] * c2.1 + b[3] * end.1);
+                samples.push((at, r0 + (r1 - r0) * t));
+            }
+        }
+        if samples.len() > PRESSURE_INK_MAX_SAMPLES {
+            let stride = samples.len().div_ceil(PRESSURE_INK_MAX_SAMPLES);
+            let last = *samples.last()?;
+            samples = samples.into_iter().step_by(stride).collect();
+            samples.push(last);
+        }
+        for i in 0..pts.len() {
+            disc(&mut out, pts[i], radius(i));
+        }
+        for pair in samples.windows(2) {
+            let ((a, ra), (b, rb)) = (pair[0], pair[1]);
+            let (dx, dy) = (b.0 - a.0, b.1 - a.1);
+            let len = dx.hypot(dy);
+            if len < 1e-6 {
+                continue;
+            }
+            let (nx, ny) = (-dy / len, dx / len);
+            let mut quad = [(a.0 + nx * ra, a.1 + ny * ra), (a.0 - nx * ra, a.1 - ny * ra), (b.0 - nx * rb, b.1 - ny * rb), (b.0 + nx * rb, b.1 + ny * rb)];
+            if signed_area(&quad) < 0.0 {
+                quad.reverse();
+            }
+            out.push_str(&format!("{} {} m\n", n(quad[0].0), n(quad[0].1)));
+            for p in &quad[1..] {
+                out.push_str(&format!("{} {} l\n", n(p.0), n(p.1)));
+            }
+            out.push_str("h\n");
+        }
+    }
+    (!out.is_empty()).then_some(out)
+}
+
+/// Twice the signed area of a closed polygon: positive when it winds counter-clockwise.
+fn signed_area(p: &[(f64, f64)]) -> f64 {
+    (0..p.len()).map(|i| {
+        let (a, b) = (p[i], p[(i + 1) % p.len()]);
+        a.0 * b.1 - b.0 * a.1
+    }).sum()
+}
+
+/// A counter-clockwise circle of four Bézier quarters (the winding [`pressure_ink_outline`] fills).
+fn disc(out: &mut String, (x, y): (f64, f64), r: f64) {
+    let k = r * 0.552_284_75;
+    out.push_str(&format!(
+        "{} {} m\n{} {} {} {} {} {} c\n{} {} {} {} {} {} c\n{} {} {} {} {} {} c\n{} {} {} {} {} {} c\nh\n",
+        n(x + r), n(y),
+        n(x + r), n(y + k), n(x + k), n(y + r), n(x), n(y + r),
+        n(x - k), n(y + r), n(x - r), n(y + k), n(x - r), n(y),
+        n(x - r), n(y - k), n(x - k), n(y - r), n(x), n(y - r),
+        n(x + k), n(y - r), n(x + r), n(y - k), n(x + r), n(y),
+    ));
 }
 
 fn draw_stamp(context: &AppearanceContext<'_>, mut drawing: AppearanceDrawing) -> Option<Stream> {

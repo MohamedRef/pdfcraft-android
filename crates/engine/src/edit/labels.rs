@@ -345,7 +345,7 @@ fn add_annotation(s: &Shape) -> &'static str {
         Shape::Line { start: LineEnding::None, end: LineEnding::OpenArrow, .. } => "Add arrow",
         Shape::Line { .. } => "Add line",
         Shape::FreehandHighlight { .. } => "Add freehand highlight",
-        Shape::Ink { .. } => "Add drawing",
+        Shape::Ink { .. } | Shape::PressureInk { .. } => "Add drawing",
         Shape::TextBox { .. } => "Add text box",
         Shape::Typewriter { .. } => "Add text",
         Shape::Mark { mark: FillMark::Check, .. } => "Add checkmark",
