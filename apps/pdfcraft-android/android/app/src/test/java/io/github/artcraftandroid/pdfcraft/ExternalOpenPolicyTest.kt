@@ -116,7 +116,7 @@ class PrivateFileIntentTest {
 
 class AttachmentPolicyTest {
     @org.junit.Test fun appPackagesAreNeverHandedOut() {
-        val f = io.github.artcraftandroid.pdfcraft.ui.viewer::installableAttachment
+        val f: (String, String?) -> Boolean = { n, t -> io.github.artcraftandroid.pdfcraft.ui.viewer.installableAttachment(n, t) }
         org.junit.Assert.assertTrue(f("invoice.apk", null))
         org.junit.Assert.assertTrue(f("Invoice.APK", null))
         org.junit.Assert.assertTrue(f("bundle.xapk", null))
