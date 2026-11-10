@@ -319,7 +319,7 @@
     <string name="voice_record_comment">Gravar comentário de voz</string>
     <string name="voice_mic_failed">Não foi possível iniciar o microfone. Talvez outro app esteja usando-o.</string>
     <string name="voice_nothing_recorded">Nada foi gravado.</string>
-    <string name="voice_limit_warning">A gravação para após 30 minutos.</string>
+    <string name="voice_limit_warning">A gravação para após 17 minutos.</string>
     <string name="voice_recording">Gravando…</string>
     <string name="voice_playing">Reproduzindo…</string>
     <string name="voice_listen_first">Ouça sua gravação antes de publicá-la</string>
@@ -762,4 +762,5 @@
     <string name="toolbar_text_box">Caixa de texto</string>
     <string name="toolbar_callout">Chamada</string>
     <string name="viewer_hint_callout">Toque no que a chamada aponta</string>
+    <string name="discard_kept_recovery">O arquivo original parece danificado, então o PdfCraft manteve sua cópia editada. Abra o arquivo de novo para salvar uma cópia.</string>
 </resources>

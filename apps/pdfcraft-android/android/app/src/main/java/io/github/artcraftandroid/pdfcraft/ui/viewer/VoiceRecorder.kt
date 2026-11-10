@@ -24,8 +24,9 @@ import java.io.RandomAccessFile
 import kotlin.math.abs
 
 /** The longest voice comment, and when the recorder warns that the end is near. */
-const val VOICE_MAX_MS = 30 * 60 * 1000L
-const val VOICE_WARN_MS = 29 * 60 * 1000L
+/** 32 MiB of 16 kHz mono 16-bit samples, the engine's Sound limit, is about 17.4 minutes. */
+const val VOICE_MAX_MS = 17 * 60 * 1000L
+const val VOICE_WARN_MS = 16 * 60 * 1000L
 
 /**
  * Records a voice comment: 16 kHz mono 16-bit PCM from the microphone, with the phone's noise

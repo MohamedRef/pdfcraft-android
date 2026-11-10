@@ -114,7 +114,12 @@ fun MoreSheet(vm: AppViewModel, doc: OpenDocument) {
         Column(Modifier.verticalScroll(scroll).padding(top = 5.dp)) {
             SheetRow(LucideIcons.Info, stringResource(R.string.file_details_title), { ctl.sheet = ViewerSheet.FileDetails }, chevron = true)
             SheetRow(LucideIcons.Glasses, stringResource(R.string.sheet_view_settings), { ctl.sheet = ViewerSheet.ViewSettings }, chevron = true)
-            SheetRow(LucideIcons.LayoutGrid, stringResource(R.string.sheet_pages), { close(); ctl.pagesOpen = true }, chevron = true)
+            SheetRow(LucideIcons.LayoutGrid, stringResource(R.string.sheet_pages), {
+                close()
+                // Draft ink keeps page numbers; add it before pages can move or go away.
+                doc.commitTool?.invoke()
+                ctl.pagesOpen = true
+            }, chevron = true)
             if (doc.info.attachments > 0u) SheetRow(LucideIcons.Paperclip, stringResource(R.string.sheet_attachments), { ctl.sheet = ViewerSheet.Attachments }, chevron = true)
             SheetRow(LucideIcons.Bookmark, stringResource(R.string.sheet_bookmarks_contents), { ctl.sheet = ViewerSheet.Bookmarks }, chevron = true)
             SheetRow(LucideIcons.MessagesSquare, stringResource(R.string.sheet_comment_list), { ctl.sheet = ViewerSheet.Comments }, chevron = true)

@@ -460,7 +460,7 @@
     <string name="voice_record_comment">Enregistrer un commentaire vocal</string>
     <string name="voice_mic_failed">Impossible de démarrer le microphone. Une autre application l\'utilise peut-être.</string>
     <string name="voice_nothing_recorded">Rien n\'a été enregistré.</string>
-    <string name="voice_limit_warning">L\'enregistrement s\'arrête à 30 minutes.</string>
+    <string name="voice_limit_warning">L\'enregistrement s\'arrête à 17 minutes.</string>
     <string name="voice_recording">Enregistrement…</string>
     <string name="voice_playing">Lecture…</string>
     <string name="voice_listen_first">Écoutez votre enregistrement avant de le publier</string>
@@ -1057,4 +1057,5 @@
     <string name="toolbar_text_box">Zone de texte</string>
     <string name="toolbar_callout">Légende</string>
     <string name="viewer_hint_callout">Touchez ce que désigne la légende</string>
+    <string name="discard_kept_recovery">Le fichier d\'origine semble endommagé : PdfCraft a donc gardé votre copie modifiée. Rouvrez le fichier pour en enregistrer une copie.</string>
 </resources>

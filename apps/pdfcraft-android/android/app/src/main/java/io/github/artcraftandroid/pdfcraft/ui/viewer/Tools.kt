@@ -384,7 +384,7 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
         if (s.shapeMode != InkShapeMode.Freehand || s.appearance.style == InkStyle.Highlighter) return@LaunchedEffect
         while (true) {
             delay(50)
-            if (s.preview == null && System.currentTimeMillis() - movedAt >= SNAP_HOLD_MS) {
+            if (prefs.snapToShape && s.preview == null && System.currentTimeMillis() - movedAt >= SNAP_HOLD_MS) {
                 s.preview = ShapeSnap.recognise(s.points.toList())?.outline()
             }
         }
@@ -633,7 +633,7 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                     val shape = if (s.shapeMode != InkShapeMode.Freehand) {
                         val page = doc.viewer.pages.getOrNull(s.page)
                         if (page != null && s.points.size >= 2) inkShapeOutline(s.shapeMode, s.points.first(), s.points.last(), page.width, page.height) else null
-                    } else if (s.appearance.style == InkStyle.Highlighter) null else s.preview ?: if (prefs.snapToShape) ShapeSnap.recognise(s.points.toList())?.outline() else null
+                    } else if (s.appearance.style == InkStyle.Highlighter) null else s.preview // only a held stroke snaps: handwriting (l, 1, o, 0) is never turned into a shape on lift
                     s.preview = null
                     if (s.shapeMode != InkShapeMode.Freehand && shape == null) {
                         strokes.remove(s)
