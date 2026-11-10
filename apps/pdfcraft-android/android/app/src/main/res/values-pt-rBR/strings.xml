@@ -319,7 +319,7 @@
     <string name="voice_record_comment">Gravar comentário de voz</string>
     <string name="voice_mic_failed">Não foi possível iniciar o microfone. Talvez outro app esteja usando-o.</string>
     <string name="voice_nothing_recorded">Nada foi gravado.</string>
-    <string name="voice_limit_warning">A gravação para após 30 minutos.</string>
+    <string name="voice_limit_warning">A gravação para após 17 minutos.</string>
     <string name="voice_recording">Gravando…</string>
     <string name="voice_playing">Reproduzindo…</string>
     <string name="voice_listen_first">Ouça sua gravação antes de publicá-la</string>
@@ -749,6 +749,9 @@
     <string name="service_action_back">Voltar 15 segundos</string>
     <string name="service_action_forward">Avançar 15 segundos</string>
     <string name="service_action_stop">Parar</string>
+    <string name="updater_download_browser">Baixar o APK no navegador</string>
+    <string name="updater_browser_open_error">Não foi possível abrir o download oficial do GitHub no navegador.</string>
+    <string name="updater_browser_notice">Se o download no app falhar, tente o link oficial do GitHub no navegador. Downloads pelo navegador exigem instalação manual e não são verificados por SHA-256 pelo PdfCraft.</string>
     <string name="toolbar_squiggly">Ondulado</string>
     <string name="viewer_hint_squiggly">Arraste sobre o texto para sublinhá-lo com uma linha ondulada</string>
     <string name="toolbar_color_squiggly">Cor do sublinhado ondulado</string>
@@ -763,4 +766,5 @@
     <string name="toolbar_callout">Chamada</string>
     <string name="viewer_hint_callout">Toque no que a chamada aponta</string>
     <string name="attachment_install_refused">%1$s é um pacote de app. O PdfCraft não abre apps anexados a PDFs.</string>
+    <string name="discard_kept_recovery">O arquivo original parece danificado, então o PdfCraft manteve sua cópia editada. Abra o arquivo de novo para salvar uma cópia.</string>
 </resources>

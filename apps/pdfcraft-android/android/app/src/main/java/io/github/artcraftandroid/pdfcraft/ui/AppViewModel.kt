@@ -407,10 +407,13 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                         // until the user confirms and the native document has closed.
                         closeQuietly(eng, doc)
                         doc.source?.let { src ->
-                            withContext(Dispatchers.IO) {
+                            val discarded = withContext(Dispatchers.IO) {
                                 runCatching { files.discardWorkingCopy(src) }
                                     .onFailure { tell(it.userMessage) }
+                                    .getOrDefault(false)
                             }
+                            // The original may be truncated: the edited copy stays for the next open.
+                            if (!discarded) tell(text(R.string.discard_kept_recovery))
                         }
                         document = null
                         refreshRecents()
@@ -1289,7 +1292,9 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 "page" to at.page + 1, "type" to "sound", "at" to listOf(at.x.toDouble(), at.y.toDouble()),
                 "path" to file.absolutePath, "color" to toolPrefs.color(StyledTool.Note).hex(), "author" to author,
             ),
-        ) { file.delete() }
+            // The recording is in the PDF or was refused: either way the cache copy goes.
+            onSettled = { file.delete() },
+        )
     }
 
     /** Voice comment [c]'s recording as a WAV file to play, or null when it can't be read. */

@@ -225,6 +225,25 @@ internal fun UpdatePanel() {
                         }
                     }
                 }
+                // A browser uses Android's regular external download path when an ISP/CDN
+                // route blocks only the app's own HTTPS client. The URL was verified by
+                // parseUpdates against the exact official GitHub release asset.
+                TextButton(
+                    enabled = !downloading,
+                    onClick = {
+                        try {
+                            uriHandler.openUri(update.downloadUrl)
+                        } catch (_: Exception) {
+                            message = context.getString(R.string.updater_browser_open_error)
+                        }
+                    },
+                ) {
+                    Text(stringResource(R.string.updater_download_browser), color = colors.accent)
+                }
+                Text(
+                    stringResource(R.string.updater_browser_notice),
+                    fontSize = 12.sp, color = colors.textSecondary,
+                )
             } else {
                 Text(stringResource(R.string.updater_apk_ready), color = colors.accent, fontWeight = FontWeight.SemiBold)
                 TextButton(onClick = {

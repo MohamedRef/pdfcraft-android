@@ -128,9 +128,44 @@ class DocumentFiles(private val context: Context) {
     }
 
     /** Explicit Discard from the unsaved-changes prompt. Never call from automatic cleanup. */
-    fun discardWorkingCopy(uri: Uri) {
-        PendingWorkingCopy.discard(File(workDir, sha(uri.toString())))
+    /**
+     * Discard [uri]'s working copy, unless a failed write-back may have damaged the original: then
+     * the edited copy may be the only intact one, so it is kept (and offered again on the next
+     * open). Returns whether it was discarded.
+     */
+    fun discardWorkingCopy(uri: Uri): Boolean {
+        val dir = File(workDir, sha(uri.toString()))
+        if (PendingWorkingCopy.isPending(dir) && !originalLooksIntact(uri)) return false
+        PendingWorkingCopy.discard(dir)
+        return true
     }
+
+    /** Whether [uri] still starts like a PDF and, when its end can be read, ends like one. */
+    private fun originalLooksIntact(uri: Uri): Boolean = runCatching {
+        resolver.openAssetFileDescriptor(uri, "r")?.use { afd ->
+            val length = afd.length
+            java.io.FileInputStream(afd.fileDescriptor).use { input ->
+                input.channel.position(afd.startOffset)
+                // InputStream.readNBytes needs API 33; the app supports API 29.
+                fun readUpTo(count: Int): ByteArray {
+                    val buf = ByteArray(count)
+                    var n = 0
+                    while (n < count) {
+                        val r = input.read(buf, n, count - n)
+                        if (r < 0) break
+                        n += r
+                    }
+                    return buf.copyOf(n)
+                }
+                val head = readUpTo(1024)
+                val tail = if (length > 0 && input.channel.size() > 0) {
+                    input.channel.position(afd.startOffset + (length - 2048).coerceAtLeast(0))
+                    readUpTo(minOf(2048L, length).toInt())
+                } else null
+                pdfLooksIntact(head, tail)
+            }
+        } ?: false
+    }.getOrDefault(false)
 
     /** The working copy made earlier for [uri], if there is one (for thumbnails). */
     fun existingCopy(uri: Uri): File? =
