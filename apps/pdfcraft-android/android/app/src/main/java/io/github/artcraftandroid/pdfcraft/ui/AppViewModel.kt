@@ -1118,9 +1118,15 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 if (out.name.lowercase().endsWith(".pdf")) {
                     open(Uri.fromFile(out))
                 } else {
+                    val type = android.webkit.MimeTypeMap.getSingleton().getMimeTypeFromExtension(out.extension.lowercase())
+                    if (io.github.artcraftandroid.pdfcraft.ui.viewer.installableAttachment(out.name, type)) {
+                        // An app package inside a PDF is never handed to the installer.
+                        out.delete()
+                        tell(text(R.string.attachment_install_refused, out.name))
+                        return@launch
+                    }
                     val uri = files.shareable(out, out.name)
-                    val type = android.webkit.MimeTypeMap.getSingleton().getMimeTypeFromExtension(out.extension.lowercase()) ?: "*/*"
-                    intents.trySend(Intent.createChooser(Intent(Intent.ACTION_VIEW).setDataAndType(uri, type).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION), null))
+                    intents.trySend(Intent.createChooser(Intent(Intent.ACTION_VIEW).setDataAndType(uri, type ?: "*/*").addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION), null))
                 }
             } catch (e: Exception) {
                 tell(e.userMessage)
