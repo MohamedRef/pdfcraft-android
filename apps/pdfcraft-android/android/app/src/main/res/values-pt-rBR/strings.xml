@@ -749,4 +749,7 @@
     <string name="service_action_back">Voltar 15 segundos</string>
     <string name="service_action_forward">Avançar 15 segundos</string>
     <string name="service_action_stop">Parar</string>
+    <string name="updater_download_browser">Baixar o APK no navegador</string>
+    <string name="updater_browser_open_error">Não foi possível abrir o download oficial do GitHub no navegador.</string>
+    <string name="updater_browser_notice">Se o download no app falhar, tente o link oficial do GitHub no navegador. Downloads pelo navegador exigem instalação manual e não são verificados por SHA-256 pelo PdfCraft.</string>
 </resources>

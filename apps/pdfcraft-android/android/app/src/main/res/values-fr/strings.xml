@@ -1044,4 +1044,7 @@
     <string name="service_action_back">Reculer de 15 secondes</string>
     <string name="service_action_forward">Avancer de 15 secondes</string>
     <string name="service_action_stop">Arrêter</string>
+    <string name="updater_download_browser">Télécharger l\'APK dans le navigateur</string>
+    <string name="updater_browser_open_error">Impossible d\'ouvrir le téléchargement GitHub officiel dans le navigateur.</string>
+    <string name="updater_browser_notice">Si le téléchargement dans l\'app échoue, essayez le lien GitHub officiel dans le navigateur. Les téléchargements du navigateur s\'installent manuellement et ne sont pas vérifiés par SHA-256 dans PdfCraft.</string>
 </resources>

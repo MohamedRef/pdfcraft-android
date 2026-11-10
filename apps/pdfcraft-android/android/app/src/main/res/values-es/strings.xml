@@ -1172,4 +1172,7 @@
     <string name="service_action_forward">Avanzar 15 segundos</string>
     <!-- Translator note: notification button that stops reading aloud -->
     <string name="service_action_stop">Detener</string>
+    <string name="updater_download_browser">Descargar el APK en el navegador</string>
+    <string name="updater_browser_open_error">No se pudo abrir la descarga oficial de GitHub en el navegador.</string>
+    <string name="updater_browser_notice">Si la descarga en la app falla, prueba el enlace oficial de GitHub en el navegador. Las descargas del navegador se instalan manualmente y PdfCraft no verifica su SHA-256.</string>
 </resources>

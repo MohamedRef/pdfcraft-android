@@ -71,6 +71,13 @@ class ApkResumePolicyTest {
         assertEquals(4000L, apkRetryDelayMillis(3))
     }
 
+    @Test fun progressRestartsTheRetryBudget() {
+        assertEquals(true, apkRetryBudgetResets(-1L, 1024L))
+        assertEquals(true, apkRetryBudgetResets(1024L, 4096L))
+        assertEquals(false, apkRetryBudgetResets(4096L, 4096L))
+        assertEquals(false, apkRetryBudgetResets(-1L, 0L))
+    }
+
     @Test fun progressFormatsPersistedBytes() {
         assertEquals("0.0", readableMegabytes(-1))
         assertEquals("1.5", readableMegabytes(1572864L))

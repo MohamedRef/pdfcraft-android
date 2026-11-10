@@ -26,6 +26,9 @@ internal fun apkRetryable(error: IOException): Boolean = when (error) {
     else -> false
 }
 
+/** A failed attempt that saved bytes beyond [lastMark] restarts the retry count. */
+internal fun apkRetryBudgetResets(lastMark: Long, savedBytes: Long): Boolean = savedBytes > lastMark && savedBytes > 0L
+
 internal fun apkRetryDelayMillis(retryNumber: Int): Long = when (retryNumber) {
     1 -> 1_000L
     2 -> 2_000L

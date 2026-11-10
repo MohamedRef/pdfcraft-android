@@ -235,6 +235,10 @@ internal suspend fun downloadAndVerifyApk(
 
     var freshRetryUsed = false
     var networkRetries = 0
+    // Bytes saved when the retry budget was last reset: an attempt that made progress earns a
+    // fresh budget, so a slow, often-interrupted connection still finishes instead of failing
+    // after three interruptions of an otherwise advancing download.
+    var progressMark = -1L
     var previousPercent = -1
     while (true) {
         currentCoroutineContext().ensureActive()
@@ -307,6 +311,11 @@ internal suspend fun downloadAndVerifyApk(
             break
         } catch (e: IOException) {
             // Never retry malformed HTTP metadata, disk writes, or trust failures.
+            val saved = partial.length()
+            if (apkRetryBudgetResets(progressMark, saved)) {
+                progressMark = saved
+                networkRetries = 0
+            }
             if (!apkRetryable(e) || networkRetries >= MAX_APK_NETWORK_RETRIES) {
                 throw IOException(
                     if (apkRetryable(e)) "Download interrupted after automatic retries. Tap Resume to continue saved bytes."

@@ -1164,4 +1164,7 @@
     <string name="service_action_forward">15 Sekunden vor</string>
     <!-- Translator note: notification button that stops reading aloud -->
     <string name="service_action_stop">Stopp</string>
+    <string name="updater_download_browser">APK stattdessen im Browser herunterladen</string>
+    <string name="updater_browser_open_error">Der offizielle GitHub-Download konnte nicht im Browser geöffnet werden.</string>
+    <string name="updater_browser_notice">Wenn der Download in der App fehlschlägt, versuche den offiziellen GitHub-Link im Browser. Browser-Downloads müssen manuell installiert werden und werden von PdfCraft nicht per SHA-256 geprüft.</string>
 </resources>
