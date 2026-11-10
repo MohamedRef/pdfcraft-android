@@ -45,6 +45,17 @@ class DocumentFiles(private val context: Context) {
             )
         }
         val target = File(dir, name)
+        // An unchanged source reuses the copy made last time instead of copying it in again (#210).
+        val source = OpenTiming.measure("provider_stamp") { sourceStamp(uri) }
+        val reused = OpenTiming.measure("working_copy_reuse_check") {
+            canReuseCopy(CopyStamp.read(dir), source, target, PendingWorkingCopy.isPending(dir))
+        }
+        if (reused) {
+            OpenTiming.measure("working_copy_reused") { dir.setLastModified(System.currentTimeMillis()) }
+            return target
+        }
+        // the stamp describes the copy being replaced: never let it outlive a failed copy
+        CopyStamp.clear(dir)
         val tmp = File(dir, ".$name.part")
         try {
             val copied = try {
@@ -86,7 +97,39 @@ class DocumentFiles(private val context: Context) {
         }
         // the copy keeps the source's date, which the More sheet shows as when it was modified
         lastModified(uri)?.let { target.setLastModified(it) }
+        // Remember what the source looked like, so the next open can reuse this copy. Only when
+        // the provider reports both values and the copy has exactly the size it reported.
+        if (source != null && source.usable && target.length() == source.size) {
+            runCatching { CopyStamp.write(dir, CopyStamp(source, target.length(), target.lastModified())) }
+        }
+        // a copy under an older name (the source was renamed) would otherwise be found instead
+        dir.listFiles()?.forEach { if (it.isFile && !it.name.startsWith(".") && it.name != target.name) it.delete() }
+        dir.setLastModified(System.currentTimeMillis())
         return target
+    }
+
+    /** The source's size and modification date, when its provider reports both. */
+    private fun sourceStamp(uri: Uri): SourceStamp? {
+        val size = size(uri) ?: return null
+        val modified = lastModified(uri) ?: return null
+        return SourceStamp(size, modified).takeIf { it.usable }
+    }
+
+    /** Whether [dir] holds a copy the next open may reuse (see [canReuseCopy]). */
+    private fun reusable(dir: File): Boolean = CopyStamp.read(dir) != null && !PendingWorkingCopy.isPending(dir)
+
+    /**
+     * Keep reusable copies within [reuseBudget], most recently used first; [open]'s stays.
+     * Copies that are not reusable are left to the rules that already govern them.
+     */
+    private fun enforceReuseBudget(open: String?) {
+        // a copy written in the last few minutes may belong to a document being opened right now
+        val settled = System.currentTimeMillis() - 10 * 60 * 1000L
+        val dirs = workDir.listFiles()?.filter { it.isDirectory && reusable(it) && it.lastModified() < settled }.orEmpty()
+        if (dirs.isEmpty()) return
+        val sizes = dirs.map { d -> KeptCopy(d.name, d.listFiles()?.sumOf { it.length() } ?: 0L, d.lastModified()) }
+        val keep = copiesToKeep(sizes, reuseBudget(workDir.usableSpace), open?.let { sha(it) })
+        for (d in dirs) if (d.name !in keep) d.deleteRecursively()
     }
 
     /** When [uri] was last modified (ms), when its provider says: a document's or a media file's date. */
@@ -109,6 +152,9 @@ class DocumentFiles(private val context: Context) {
         val dir = File(workDir, sha(uri.toString()))
         if (PendingWorkingCopy.isPending(dir)) return
         if (resolver.persistedUriPermissions.none { it.uri == uri && it.isReadPermission }) return
+        // A reusable copy stays for the next open (#210), within the space budget.
+        // (pruneCopies keeps them within the space budget)
+        if (reusable(dir)) return
         dir.deleteRecursively()
     }
 
@@ -120,11 +166,16 @@ class DocumentFiles(private val context: Context) {
     fun pruneCopies(recent: Collection<String>, open: String?) {
         val readable = resolver.persistedUriPermissions.filter { it.isReadPermission }.mapTo(HashSet()) { it.uri.toString() }
         val wanted = recent.filter { it !in readable }.mapTo(HashSet()) { sha(it) }
+        // reusable copies of documents still in Recent may stay, within the budget below (#210)
+        val inRecent = recent.mapTo(HashSet()) { sha(it) }
         open?.let { wanted += sha(it) }
         val settled = System.currentTimeMillis() - 10 * 60 * 1000L
         workDir.listFiles()?.forEach { dir ->
-            if (!PendingWorkingCopy.isPending(dir) && dir.name !in wanted && dir.lastModified() < settled) dir.deleteRecursively()
+            if (PendingWorkingCopy.isPending(dir) || dir.name in wanted || dir.lastModified() >= settled) return@forEach
+            if (dir.name in inRecent && reusable(dir)) return@forEach
+            dir.deleteRecursively()
         }
+        enforceReuseBudget(open)
     }
 
     /** Explicit Discard from the unsaved-changes prompt. Never call from automatic cleanup. */
