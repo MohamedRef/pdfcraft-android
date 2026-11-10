@@ -437,7 +437,7 @@ pub(crate) type EndstreamIndex = std::sync::OnceLock<Vec<usize>>;
 fn endstream_offsets(data: &[u8]) -> Vec<usize> {
     #[cfg(test)]
     ENDSTREAM_SCAN.with(|c| c.set(c.get() + data.len()));
-    data.windows(9).enumerate().filter(|(i, w)| *w == b"endstream" && endstream_at(data, *i)).map(|(i, _)| i).collect()
+    memchr::memmem::find_iter(data, b"endstream").filter(|&i| endstream_at(data, i)).collect()
 }
 
 fn parse_indirect_in(
@@ -575,7 +575,7 @@ fn find_endstream(data: &[u8], from: usize, endstreams: Option<&EndstreamIndex>)
         }
         None => {
             let hay = data.get(from..)?;
-            let found = hay.windows(9).enumerate().position(|(i, w)| w == b"endstream" && endstream_at(hay, i));
+            let found = memchr::memmem::find_iter(hay, b"endstream").find(|&i| endstream_at(hay, i));
             #[cfg(test)]
             ENDSTREAM_SCAN.with(|c| c.set(c.get() + found.map_or(hay.len(), |p| p + 9)));
             found? + from
@@ -594,6 +594,62 @@ fn find_endstream(data: &[u8], from: usize, endstreams: Option<&EndstreamIndex>)
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn assert_endstream_search_matches_original(data: &[u8]) {
+        let expected: Vec<_> = data.windows(9).enumerate().filter(|(i, w)| *w == b"endstream" && endstream_at(data, *i)).map(|(i, _)| i).collect();
+        assert_eq!(endstream_offsets(data), expected);
+        let indexed = EndstreamIndex::new();
+        for from in [0, 1, data.len() / 2, data.len().saturating_sub(1), data.len(), data.len().saturating_add(1), usize::MAX] {
+            let mut end = expected.iter().copied().find(|&at| at >= from);
+            if let Some(at) = &mut end {
+                if *at > from && data[*at - 1] == b'\n' {
+                    *at -= 1;
+                }
+                if *at > from && data[*at - 1] == b'\r' {
+                    *at -= 1;
+                }
+            }
+            assert_eq!(find_endstream(data, from, None), end, "direct from={from}");
+            assert_eq!(find_endstream(data, from, Some(&indexed)), end, "indexed from={from}");
+        }
+    }
+
+    #[test]
+    fn fast_endstream_search_preserves_token_boundaries_and_line_endings() {
+        for data in [
+            &b""[..],
+            b"endstrea",
+            b"endstream",
+            b"endstreamendstream",
+            b"endstreamer\nendstream/",
+            b"\r\nendstream\r\nendstream\n",
+            b"\0endstream%comment\nendstream",
+        ] {
+            assert_endstream_search_matches_original(data);
+        }
+        // Every possible byte after the keyword, including regular PDF characters, binary
+        // data, whitespace and delimiters: an embedded `endstreamer` remains payload.
+        for byte in 0..=255u8 {
+            let mut data = b"abc\r\nendstream".to_vec();
+            data.push(byte);
+            data.extend_from_slice(b"\r\nmore\nendstream\n");
+            assert_endstream_search_matches_original(&data);
+        }
+    }
+
+    proptest::proptest! {
+        #[test]
+        fn fast_endstream_search_matches_original_on_noisy_stream_data(
+            chunks in proptest::collection::vec(proptest::collection::vec(proptest::num::u8::ANY, 0..200), 0..40)
+        ) {
+            let mut data = Vec::new();
+            for (i, chunk) in chunks.iter().enumerate() {
+                data.extend_from_slice(chunk);
+                data.extend_from_slice(if i % 2 == 0 { b"\r\nendstream\n" } else { b"endstreamer" });
+            }
+            assert_endstream_search_matches_original(&data);
+        }
+    }
 
     #[test]
     fn numbers_with_multibyte_garbage_do_not_panic() {
