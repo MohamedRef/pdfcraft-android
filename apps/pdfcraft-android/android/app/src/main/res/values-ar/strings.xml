@@ -850,6 +850,9 @@
     <string name="service_action_forward">تقديم ١٥ ثانية</string>
     <string name="service_action_stop">إيقاف</string>
     <string name="toolbar_stylus_only">القلم فقط (الإصبع للتمرير)</string>
+    <string name="updater_download_browser">نزّل الـ APK من المتصفح بدلًا من ذلك</string>
+    <string name="updater_browser_open_error">تعذّر فتح رابط التنزيل الرسمي على GitHub في المتصفح.</string>
+    <string name="updater_browser_notice">إذا فشل التنزيل داخل التطبيق، جرّب رابط GitHub الرسمي في المتصفح. يتطلب التنزيل من المتصفح تثبيتًا يدويًا، ولا يتحقق PdfCraft من بصمة SHA-256 له.</string>
     <string name="toolbar_squiggly">خط متعرج</string>
     <string name="viewer_hint_squiggly">اسحب على النص لتسطيره بخط متموج</string>
     <string name="toolbar_color_squiggly">لون الخط المتعرج</string>

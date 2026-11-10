@@ -1361,6 +1361,9 @@
     <string name="updater_interrupted">Download interrupted. Tap Resume to retry.</string>
     <string name="updater_resume">Resume download</string>
     <string name="updater_download">Download APK</string>
+    <string name="updater_download_browser">Download APK in browser instead</string>
+    <string name="updater_browser_open_error">Could not open the official GitHub download in your browser.</string>
+    <string name="updater_browser_notice">If the in-app download fails, try the official GitHub link in your browser. Browser downloads require manual installation and are not SHA-256-verified by PdfCraft.</string>
     <string name="updater_pause">Pause</string>
     <string name="updater_apk_ready">Verified APK ready</string>
     <string name="updater_confirm_install">Confirm installation in Android\'s installer.</string>

@@ -1154,6 +1154,9 @@
     <string name="service_action_forward">Avanti di 15 secondi</string>
     <string name="service_action_stop">Interrompi</string>
 
+    <string name="updater_download_browser">Scarica l\'APK nel browser</string>
+    <string name="updater_browser_open_error">Impossibile aprire il download ufficiale di GitHub nel browser.</string>
+    <string name="updater_browser_notice">Se il download nell\'app non riesce, prova il link ufficiale di GitHub nel browser. I download dal browser vanno installati manualmente e PdfCraft non ne verifica lo SHA-256.</string>
     <string name="toolbar_squiggly">Ondulata</string>
     <string name="viewer_hint_squiggly">Trascina sul testo per sottolinearlo con una linea ondulata</string>
     <string name="toolbar_color_squiggly">Colore della sottolineatura ondulata</string>
