@@ -1174,4 +1174,10 @@
     <string name="toolbar_ink_lasso">Lazo: seleziona, sposta, ricolora o elimina inchiostro e forme</string>
     <string name="attachment_install_refused">%1$s è un pacchetto di app. PdfCraft non apre app allegate ai PDF.</string>
     <string name="discard_kept_recovery">Il file originale sembra danneggiato, quindi PdfCraft ha conservato la copia modificata. Riapri il file per salvarne una copia.</string>
+    <string name="home_section_diagnostics">Diagnostica</string>
+    <string name="home_record_open_timings">Registra i tempi di apertura</string>
+    <string name="home_record_open_timings_body">Conserva quanto dura ogni passaggio dell’apertura di un file, per misurare un’apertura lenta. Solo nomi dei passaggi, tempi, dimensioni e numero di pagine; nessun nome di file né contenuto. Disattivandolo si cancella tutto.</string>
+    <string name="home_share_open_timings">Condividi i tempi di apertura</string>
+    <string name="home_open_timings_empty">Ancora nessun tempo: attiva l’opzione e apri un file.</string>
+    <string name="home_open_timings_subject">Tempi di apertura di PdfCraft</string>
 </resources>

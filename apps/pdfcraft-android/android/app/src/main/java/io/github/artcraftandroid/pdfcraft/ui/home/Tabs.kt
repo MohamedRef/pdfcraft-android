@@ -436,6 +436,16 @@ private fun About(vm: AppViewModel) {
     SheetDivider()
     UpdatePanel()
     SheetDivider()
+    Section(stringResource(R.string.home_section_diagnostics))
+    SheetRow(null, stringResource(R.string.home_record_open_timings), { vm.updateRecordOpenTimings(!vm.recordOpenTimings) }) {
+        PdfSwitch(vm.recordOpenTimings, { vm.updateRecordOpenTimings(it) })
+    }
+    Text(
+        stringResource(R.string.home_record_open_timings_body),
+        color = c.textSecondary, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 20.dp),
+    )
+    if (vm.recordOpenTimings) SheetRow(null, stringResource(R.string.home_share_open_timings), { vm.shareOpenTimings() })
+    SheetDivider()
     Section(stringResource(R.string.home_section_legal))
     SheetRow(null, stringResource(R.string.home_licences), { vm.showLicences = true })
     SheetRow(null, stringResource(R.string.home_source_code), { uri.openUri(APP_REPO) })

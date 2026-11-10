@@ -1184,4 +1184,10 @@
     <string name="toolbar_ink_lasso">Lasso: Tinte und Formen auswählen, verschieben, umfärben oder löschen</string>
     <string name="attachment_install_refused">%1$s ist ein App-Paket. PdfCraft öffnet keine an PDFs angehängten Apps.</string>
     <string name="discard_kept_recovery">Die Originaldatei scheint beschädigt zu sein, daher hat PdfCraft deine bearbeitete Kopie behalten. Öffne die Datei erneut, um eine Kopie zu speichern.</string>
+    <string name="home_section_diagnostics">Diagnose</string>
+    <string name="home_record_open_timings">Öffnungszeiten aufzeichnen</string>
+    <string name="home_record_open_timings_body">Speichert, wie lange jeder Schritt beim Öffnen einer Datei dauert, um langsames Öffnen zu messen. Nur Schrittnamen, Zeiten, Größen und Seitenzahlen, keine Dateinamen oder Inhalte. Beim Ausschalten wird alles gelöscht.</string>
+    <string name="home_share_open_timings">Öffnungszeiten teilen</string>
+    <string name="home_open_timings_empty">Noch keine Öffnungszeiten: Einschalten und dann eine Datei öffnen.</string>
+    <string name="home_open_timings_subject">PdfCraft-Öffnungszeiten</string>
 </resources>
