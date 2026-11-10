@@ -764,6 +764,91 @@ fn shifted_subsection_end(data: &[u8], at: usize) -> Option<u32> {
 /// Every `N G obj` header in `data`, in file order, as (number, offset, generation, position
 /// after `obj`).
 fn object_headers(data: &[u8]) -> Vec<(u32, u64, u16, usize)> {
+    // Android adaptation (#212): the same headers as the byte-by-byte scan (`object_headers_scan`
+    // in tests), located from the `obj` keywords instead. A 350 MB file whose cross-reference data
+    // needed repair spent seconds starting a lexer at nearly every digit, image data included.
+    let mut headers = Vec::new();
+    // Where the forward scan resumes: after the last header it read.
+    let mut resume = 0usize;
+    let mut from = 0usize;
+    fn take(h: Header, headers: &mut Vec<(u32, u64, u16, usize)>, resume: &mut usize) {
+        if let Some(num) = h.num {
+            headers.push((num, h.offset, h.generation, h.end));
+        }
+        *resume = h.end;
+    }
+    while let Some(k) = find(data, b"obj", from, data.len()) {
+        from = k + 1;
+        // `eat_keyword` follows `skip_ws`, which stops after a whitespace byte (a comment ends at
+        // an end-of-line byte), so a header's keyword always follows whitespace.
+        if k == 0 || !is_whitespace(data[k - 1]) || k < resume {
+            continue;
+        }
+        let lo = k.saturating_sub(HEADER_REACH).max(resume);
+        if data[lo..k].contains(&b'%') {
+            // A comment can hide a keyword inside a longer header: read this stretch exactly as
+            // the forward scan does.
+            let mut j = lo;
+            while j < k {
+                match header_at(data, j) {
+                    Some(h) => {
+                        j = h.end;
+                        take(h, &mut headers, &mut resume);
+                    }
+                    None => j += 1,
+                }
+            }
+            from = from.max(resume);
+            continue;
+        }
+        // Without comments, at most one start ends at this keyword, normally a few bytes back.
+        let mut i = k;
+        while i > lo {
+            i -= 1;
+            if let Some(h) = header_at(data, i)
+                && h.end == k + 3
+            {
+                take(h, &mut headers, &mut resume);
+                break;
+            }
+        }
+    }
+    headers
+}
+
+/// How far before its `obj` keyword a header may start: its number, generation, and the
+/// whitespace and comments between them.
+const HEADER_REACH: usize = 4096;
+
+/// A header the forward scan reads; `num` is `None` when the number does not fit (it is skipped).
+struct Header {
+    num: Option<u32>,
+    offset: u64,
+    generation: u16,
+    end: usize,
+}
+
+/// The header `N G obj` starting at `i`, exactly as the forward scan tests it.
+fn header_at(data: &[u8], i: usize) -> Option<Header> {
+    let at_start = i == 0 || is_whitespace(data[i - 1]) || data[i - 1] == b'>';
+    if !(at_start && data[i].is_ascii_digit()) {
+        return None;
+    }
+    let mut lx = Lexer::new(data, i);
+    let n = lx.token();
+    lx.skip_ws();
+    let g = lx.token();
+    if !n.is_empty() && !g.is_empty() && n.iter().all(u8::is_ascii_digit) && g.iter().all(u8::is_ascii_digit) && lx.eat_keyword(b"obj") {
+        let num = std::str::from_utf8(n).ok().and_then(|s| s.parse::<u32>().ok());
+        let generation = std::str::from_utf8(g).ok().and_then(|s| s.parse::<u16>().ok()).unwrap_or(0);
+        return Some(Header { num, offset: i as u64, generation, end: lx.pos });
+    }
+    None
+}
+
+/// The original scan, kept to check the fast one against.
+#[cfg(test)]
+fn object_headers_scan(data: &[u8]) -> Vec<(u32, u64, u16, usize)> {
     let mut headers = Vec::new();
     let mut i = 0;
     while i < data.len() {
@@ -788,6 +873,7 @@ fn object_headers(data: &[u8]) -> Vec<(u32, u64, u16, usize)> {
     }
     headers
 }
+
 
 /// The offset of the section before the one whose trailer this is (`/Prev`), if any. Some writers
 /// give it as a reference, `N 0 R`. When the sections read so far (`lookup`) place that object
@@ -837,33 +923,9 @@ pub(crate) fn find(hay: &[u8], needle: &[u8], from: usize, to: usize) -> Option<
     if from >= to || needle.is_empty() || to - from < needle.len() {
         return None;
     }
-    let hay = &hay[from..to];
-    // Look for the needle's rarest byte first, a plain byte scan, and compare the rest only there.
-    const COMMON: &[u8] = b" etaoinsrhldcumfpgwybvkxjqz";
-    let (k, rare) =
-        needle.iter().copied().enumerate().max_by_key(|&(_, b)| COMMON.iter().position(|&c| c == b).unwrap_or(COMMON.len())).unwrap_or((0, 0));
-    let mut i = k;
-    while let Some(p) = hay.get(i..).and_then(|rest| position_of(rest, rare)) {
-        let start = i + p - k;
-        if hay.get(start..start + needle.len()) == Some(needle) {
-            return Some(start + from);
-        }
-        i += p + 1;
-    }
-    None
-}
-
-/// The first position of `byte` in `hay`. Whole 32-byte blocks are tested without branching, which
-/// the compiler turns into vector compares; only a block that holds the byte is searched.
-fn position_of(hay: &[u8], byte: u8) -> Option<usize> {
-    const BLOCK: usize = 32;
-    let (blocks, rest) = hay.as_chunks::<BLOCK>();
-    for (i, block) in blocks.iter().enumerate() {
-        if block.iter().fold(false, |any, &b| any | (b == byte)) {
-            return block.iter().position(|&b| b == byte).map(|p| i * BLOCK + p);
-        }
-    }
-    rest.iter().position(|&b| b == byte).map(|p| blocks.len() * BLOCK + p)
+    // Android adaptation (#212): `memchr`'s vectorised search instead of a rare-byte scan; same
+    // result, the first occurrence in `from..to`. Repairing a 350 MB file runs several of these.
+    memchr::memmem::find(&hay[from..to], needle).map(|p| p + from)
 }
 
 pub(super) fn rfind(hay: &[u8], needle: &[u8], from: usize) -> Option<usize> {
@@ -915,3 +977,52 @@ fn valid_xref_range(start: i64, count: i64) -> bool {
 /// The most indirect objects a document can have (the classic implementation limit, ISO
 /// 32000-1 Annex C): it bounds how much data a cross-reference stream can hold.
 const MAX_XREF_OBJECTS: usize = 8_388_607;
+
+#[cfg(test)]
+mod header_scan_tests {
+    use super::{object_headers, object_headers_scan};
+
+    fn same(data: &[u8]) {
+        assert_eq!(object_headers(data), object_headers_scan(data), "{:?}", String::from_utf8_lossy(&data[..data.len().min(200)]));
+    }
+
+    #[test]
+    fn the_fast_header_scan_finds_what_the_byte_scan_finds() {
+        for case in [
+            &b"1 0 obj\n<<>>\nendobj\n2 0 obj 3 endobj"[..],
+            b"obj 1 0 obj",
+            b"12 0 obj<<>>endobj\r\n13 1 obj\r<<>>",
+            b">4 0 obj (x) endobj 5 0obj 6 0 objx 7 0 obj\t",
+            b"5 % 1 0 obj\n 0 obj\nendobj",
+            b"1 % c\n0 %d\n obj",
+            b"99999999999 0 obj 3 0 obj",
+            b"a1 0 obj (1 0 obj) [2 0 obj]",
+            b"%PDF-1.7\n%\xe2\xe3\n1 0 obj\n<</Length 3>>stream\n1 0 obj\nendstream endobj",
+            b"",
+            b"obj",
+            b" obj",
+        ] {
+            same(case);
+        }
+    }
+
+    #[test]
+    fn the_fast_header_scan_matches_on_noisy_files() {
+        // headers, comments, and binary noise that holds digits, `%` and stray keywords
+        let pieces: [&[u8]; 14] = [b"1 0 obj\n", b" 23 4 obj ", b"%c 7 0 obj\n", b"\n", b" ", b"endobj\n", b"obj ", b"0", b"9 ", b"%", b">", b"stream\n\x00\xff", b"\r\n5\r\n0\r\nobj\r\n", b"(x)"];
+        let mut seed: u64 = 0x9e37_79b9_7f4a_7c15;
+        for _ in 0..400 {
+            let mut data = Vec::new();
+            for _ in 0..200 {
+                seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+                let r = (seed >> 33) as usize;
+                if r % 3 == 0 {
+                    data.extend_from_slice(pieces[r / 3 % pieces.len()]);
+                } else {
+                    data.push((r >> 8) as u8);
+                }
+            }
+            same(&data);
+        }
+    }
+}
