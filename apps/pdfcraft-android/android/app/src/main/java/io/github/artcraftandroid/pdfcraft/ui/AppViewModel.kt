@@ -1055,6 +1055,54 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         appPrefs.edit().putBoolean("keepScreenOn", on).apply()
     }
 
+    /** About → Diagnostics: record open timings in memory so they can be shared without adb. */
+    var recordOpenTimings by mutableStateOf(appPrefs.getBoolean("recordOpenTimings", false).also(::applyOpenTimings))
+        private set
+
+    fun updateRecordOpenTimings(on: Boolean) {
+        recordOpenTimings = on
+        appPrefs.edit().putBoolean("recordOpenTimings", on).apply()
+        applyOpenTimings(on)
+    }
+
+    private fun applyOpenTimings(on: Boolean) {
+        val timing = io.github.artcraftandroid.pdfcraft.engine.OpenTiming
+        // turning it off forgets what was recorded
+        timing.recorder = if (on) timing.recorder ?: io.github.artcraftandroid.pdfcraft.engine.TimingRecorder() else null
+    }
+
+    /** Share the recorded open timings as a text file; only stage names, times and counts. */
+    fun shareOpenTimings() {
+        val recorder = io.github.artcraftandroid.pdfcraft.engine.OpenTiming.recorder
+        val lines = recorder?.snapshot().orEmpty()
+        if (lines.isEmpty()) {
+            tell(text(R.string.home_open_timings_empty))
+            return
+        }
+        handOut {
+            val app = getApplication<Application>()
+            val am = app.getSystemService(android.content.Context.ACTIVITY_SERVICE) as? android.app.ActivityManager
+            val mem = android.app.ActivityManager.MemoryInfo().also { am?.getMemoryInfo(it) }
+            val facts = listOf(
+                "app" to "$appVersion (${io.github.artcraftandroid.pdfcraft.ui.home.installedVersionCode(app)})",
+                "engine" to io.github.artcraftandroid.pdfcraft.core.engineVersion(),
+                "device" to "${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}",
+                "android" to "${android.os.Build.VERSION.RELEASE} (API ${android.os.Build.VERSION.SDK_INT})",
+                "memory_class_mb" to "${am?.memoryClass ?: 0} (large ${am?.largeMemoryClass ?: 0})",
+                "device_ram_mb" to "${mem.totalMem / (1024 * 1024)}",
+                "max_heap_mb" to "${Runtime.getRuntime().maxMemory() / (1024 * 1024)}",
+            )
+            val report = io.github.artcraftandroid.pdfcraft.engine.timingReport(facts, lines, recorder?.droppedCount() ?: 0)
+            val file = withContext(Dispatchers.IO) {
+                File(File(app.cacheDir, "share").apply { mkdirs() }, "pdfcraft-open-timings.txt").apply { writeText(report) }
+            }
+            val uri = androidx.core.content.FileProvider.getUriForFile(app, "${app.packageName}.files", file)
+            sendIntent(listOf(uri), "text/plain")
+                .putExtra(Intent.EXTRA_SUBJECT, text(R.string.home_open_timings_subject))
+                .putExtra(Intent.EXTRA_TEXT, report)
+        }
+    }
+
     /** The viewer's keyboard shortcuts (Preferences; off until turned on, as the reference has them). */
     var keyboardShortcuts by mutableStateOf(appPrefs.getBoolean("keyboardShortcuts", false))
         private set

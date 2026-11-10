@@ -870,4 +870,10 @@
     <string name="toolbar_ink_lasso">التحديد الحر: حدد الحبر والأشكال لنقلها أو تلوينها أو حذفها</string>
     <string name="attachment_install_refused">%1$s حزمة تطبيق. لا يفتح PdfCraft التطبيقات المرفقة بملفات PDF.</string>
     <string name="discard_kept_recovery">يبدو أن الملف الأصلي تالف، لذا احتفظ PdfCraft بنسختك المعدّلة. افتح الملف مرة أخرى لحفظ نسخة.</string>
+    <string name="home_section_diagnostics">التشخيص</string>
+    <string name="home_record_open_timings">تسجيل أوقات فتح الملفات</string>
+    <string name="home_record_open_timings_body">يحفظ الوقت الذي تستغرقه كل خطوة في فتح الملف لقياس الفتح البطيء. يحفظ أسماء الخطوات والأوقات والأحجام وعدد الصفحات فقط، دون أسماء الملفات أو محتواها. إيقافه يمسح ما سُجّل.</string>
+    <string name="home_share_open_timings">مشاركة أوقات الفتح</string>
+    <string name="home_open_timings_empty">لا توجد أوقات فتح بعد: فعّل التسجيل ثم افتح ملفًا.</string>
+    <string name="home_open_timings_subject">أوقات فتح PdfCraft</string>
 </resources>

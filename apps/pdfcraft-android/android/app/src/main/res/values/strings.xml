@@ -1421,4 +1421,10 @@
     <string name="ink_lasso_recolor">Apply pen colour</string>
     <string name="attachment_install_refused">%1$s is an app package. PdfCraft does not open apps attached to PDFs.</string>
     <string name="discard_kept_recovery">The original file looks damaged, so PdfCraft kept your edited copy. Open the file again to save a copy.</string>
+    <string name="home_section_diagnostics">Diagnostics</string>
+    <string name="home_record_open_timings">Record open timings</string>
+    <string name="home_record_open_timings_body">Keeps how long each step of opening a file takes, so a slow open can be measured. Only step names, times, sizes and page counts; no file names or contents. Turning it off clears it.</string>
+    <string name="home_share_open_timings">Share open timings</string>
+    <string name="home_open_timings_empty">No open timings yet: turn this on, then open a file.</string>
+    <string name="home_open_timings_subject">PdfCraft open timings</string>
 </resources>
