@@ -41,8 +41,9 @@ class PenSampleLogTest {
     @Test fun predictionFollowsThePensSpeed() {
         val log = log(PenSample(100, 0f, 0f, 1f), PenSample(120, 20f, 0f, 1f), PenSample(140, 40f, 10f, 1f))
         val (dx, dy) = log.predictedOffset(now = 145, aheadMs = 10f)!!
-        assertEquals(10f, dx, 0.01f) // 40 px in 40 ms, 10 ms ahead
-        assertEquals(2.5f, dy, 0.01f)
+        // Over the last 20 ms the pen moved (20, 10) px: 10 ms ahead is half of that.
+        assertEquals(10f, dx, 0.01f)
+        assertEquals(5f, dy, 0.01f)
     }
 
     @Test fun noPredictionWhenUpStaleOrTooFast() {
