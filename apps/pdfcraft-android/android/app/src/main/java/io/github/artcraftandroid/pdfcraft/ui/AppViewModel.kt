@@ -1197,6 +1197,22 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         val page = prompt.doc.info.pages.getOrNull(at.page) ?: return
         // as the reference: lines that wrap where the page ends become real line breaks, and the box
         // is as wide as its longest line (measured as the engine draws it, so it doesn't wrap again)
+        if (prompt.callout) {
+            // A callout's box sits beside the point it marks, so it may use most of the page width.
+            val (lines, width, height) = FreeTextLayout.layout(text, size, (page.width * 0.6f).coerceAtLeast(size * 4))
+            val box = io.github.artcraftandroid.pdfcraft.ui.viewer.calloutBox(at.x, at.y, width + 4f, height + 4f, page.width, page.height)
+            if (box != null) {
+                runTool(
+                    prompt.doc, "comment_add",
+                    mapOf(
+                        "page" to at.page + 1, "type" to "callout", "rect" to box.map { it.toDouble() },
+                        "to" to listOf(at.x.toDouble(), at.y.toDouble()), "contents" to lines.joinToString("\n"),
+                        "color" to toolPrefs.color(StyledTool.FreeText).hex(), "font_size" to size.toDouble(), "author" to author,
+                    ),
+                )
+                return
+            }
+        }
         val (lines, width, height) = FreeTextLayout.layout(text, size, (page.width - at.x - 6f).coerceAtLeast(size * 4))
         val wrapped = lines.joinToString("\n")
         val x1 = (at.x + width).coerceAtMost(page.width)

@@ -749,4 +749,17 @@
     <string name="service_action_back">Voltar 15 segundos</string>
     <string name="service_action_forward">Avançar 15 segundos</string>
     <string name="service_action_stop">Parar</string>
+    <string name="toolbar_squiggly">Ondulado</string>
+    <string name="viewer_hint_squiggly">Arraste sobre o texto para sublinhá-lo com uma linha ondulada</string>
+    <string name="toolbar_color_squiggly">Cor do sublinhado ondulado</string>
+    <string name="toolbar_draw_arrow">Seta</string>
+    <string name="ink_toolbar_arrow">Seta</string>
+    <string name="toolbar_draw_cloud">Nuvem de revisão</string>
+    <string name="ink_toolbar_cloud">Nuvem</string>
+    <string name="toolbar_stamp">Carimbo</string>
+    <string name="toolbar_stamp_choose">Escolher um carimbo</string>
+    <string name="viewer_hint_stamp">Toque onde o carimbo vai</string>
+    <string name="toolbar_text_box">Caixa de texto</string>
+    <string name="toolbar_callout">Chamada</string>
+    <string name="viewer_hint_callout">Toque no que a chamada aponta</string>
 </resources>

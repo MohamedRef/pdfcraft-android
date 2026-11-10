@@ -31,6 +31,7 @@ enum class StyledTool(val key: String, val defaultColor: Long) {
     Highlight("highlight", 0xFFFFD100),
     Underline("underline", 0xFFC5FB72),
     Strikethrough("strikethrough", 0xFFE52237),
+    Squiggly("squiggly", 0xFF6AD928),
     Ink("ink", 0xFFE52237),
     FreeText("freetext", 0xFF0000FF),
     Note("note", 0xFFFFD800),
@@ -217,6 +218,7 @@ val TextMarkup.styled: StyledTool
         TextMarkup.Highlight -> StyledTool.Highlight
         TextMarkup.Underline -> StyledTool.Underline
         TextMarkup.Strikethrough -> StyledTool.Strikethrough
+        TextMarkup.Squiggly -> StyledTool.Squiggly
     }
 
 /** The engine's comment type for a markup tool. */
@@ -225,4 +227,5 @@ val TextMarkup.engineType: String
         TextMarkup.Highlight -> "highlight"
         TextMarkup.Underline -> "underline"
         TextMarkup.Strikethrough -> "strikeout"
+        TextMarkup.Squiggly -> "squiggly"
     }

@@ -30,10 +30,10 @@ enum class ViewerTool {
 }
 
 /** The text-markup sub-tools, in the sub-toolbar's order. */
-enum class TextMarkup { Highlight, Underline, Strikethrough }
+enum class TextMarkup { Highlight, Underline, Strikethrough, Squiggly }
 
 /** The Comment tool's sub-tools: a typed note or a voice recording where the page is tapped. */
-enum class CommentMode { Text, Voice }
+enum class CommentMode { Text, Voice, Stamp }
 
 /** What the bottom sheet over the viewer shows. */
 enum class ViewerSheet { None, More, FileDetails, Backdrops, TextStyles, ViewSettings, Attachments, Bookmarks, Comments, MoreTools, Signatures, ScanEnhance, OcrConfidence }
@@ -51,6 +51,10 @@ class ViewerController {
     var tool by mutableStateOf(ViewerTool.None)
     var markup by mutableStateOf(TextMarkup.Highlight)
     var commentMode by mutableStateOf(CommentMode.Text)
+    /** The stamp the Comment tool's Stamp mode places ([STANDARD_STAMPS]). */
+    var stamp by mutableStateOf(STANDARD_STAMPS.first())
+    /** The Text tool places a callout (a text box with a leader to the tapped point). */
+    var textCallout by mutableStateOf(false)
     /** Drawing sub-tool. Stylus eraser/button may temporarily override it per gesture. */
     var eraserMode by mutableStateOf(false)
     /** Select or move still-uncommitted Draw strokes without modifying saved PDF annotations. */
