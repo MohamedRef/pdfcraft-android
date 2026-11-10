@@ -158,6 +158,12 @@ class MainActivity : ComponentActivity() {
     override fun onKeyDown(keyCode: Int, event: android.view.KeyEvent): Boolean =
         vm.viewerKey(keyCode, event.isCtrlPressed) || super.onKeyDown(keyCode, event)
 
+    /** Log raw pen samples (real historical pressure, pen speed) before Compose handles the event. */
+    override fun dispatchTouchEvent(ev: android.view.MotionEvent): Boolean {
+        io.github.artcraftandroid.pdfcraft.ui.viewer.StylusLog.record(ev)
+        return super.dispatchTouchEvent(ev)
+    }
+
     override fun onUserInteraction() {
         super.onUserInteraction()
         lastTouch = System.currentTimeMillis()

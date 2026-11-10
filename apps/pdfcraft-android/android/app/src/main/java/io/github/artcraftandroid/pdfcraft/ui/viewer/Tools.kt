@@ -217,6 +217,7 @@ fun Modifier.toolGestures(
                     raw.asSequence().filterIndexed { index, _ -> index % stride == 0 }
                         .map { StylusHistoryPoint(it.uptimeMillis, it.position) }.toList()
                 },
+                pressureAt = { time -> StylusLog.pen.pressureAt(time) },
             )
             for (sample in samples) {
                 moved = true
@@ -681,6 +682,22 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                     origin = doc.viewer.pageToScreen(s.page, lift.x, lift.y),
                     scale = doc.viewer.pixelsPerPoint(s.page),
                     pageBoundsOnScreen = pageRect,
+                )
+            }
+            // A predicted tail on the stroke being drawn (pen only): where the pen will be about
+            // one frame from now, from its real speed. Drawn only, never saved; the next real
+            // sample replaces it.
+            current?.takeIf { it.pressureSensitive && it.shapeMode == InkShapeMode.Freehand && it.preview == null }?.let { s ->
+                val last = s.points.lastOrNull() ?: return@let
+                val (dx, dy) = StylusLog.pen.predictedOffset(android.os.SystemClock.uptimeMillis()) ?: return@let
+                val from = doc.viewer.pageToScreen(s.page, last.x, last.y)
+                val width = inkStyleWidthRuns(listOf(s.pressures.lastOrNull() ?: 1f, s.pressures.lastOrNull() ?: 1f), s.appearance.width, true, s.appearance.style)
+                    .firstOrNull()?.width ?: s.appearance.width
+                drawLine(
+                    Color(s.appearance.argb).copy(alpha = s.appearance.opacity),
+                    from, Offset(from.x + dx, from.y + dy),
+                    strokeWidth = width * doc.viewer.pixelsPerPoint(s.page),
+                    cap = androidx.compose.ui.graphics.StrokeCap.Round,
                 )
             }
             if (doc.controller.lassoMode) {
