@@ -11,6 +11,12 @@
 
 # PdfCraft Android - development handover
 
+## RELEASE 0.0.17-beta (17012) — 2026-11-10 (owner requested)
+
+- Release PR stages `0.0.17-beta` / ARM64 build `17012` (`pdfcraft.versionCode=1701`), same package ID and signer. The publish trigger matches only `chore(release): publish 0.0.17-beta (17012)`.
+- Included on main: in-app open-timing recording and sharing (#209, PR #213), so the owner can measure the slow ~300 MB open without adb.
+- Open-speed follow-ups filed: #210 (reuse unchanged working copy), #211 (first page before the copy finishes), #212 (engine reads the whole file into memory).
+
 ## RELEASE 0.0.16-beta (16012) — 2026-11-10 (owner requested)
 
 - Release PR stages `0.0.16-beta` / ARM64 build `16012` (`pdfcraft.versionCode=1601`), same package ID and signer. The publish trigger matches only `chore(release): publish 0.0.16-beta (16012)`.
