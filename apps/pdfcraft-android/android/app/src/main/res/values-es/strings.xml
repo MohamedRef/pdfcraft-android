@@ -1190,5 +1190,6 @@
     <string name="viewer_hint_callout">Toca lo que señala la llamada</string>
     <string name="ink_lasso_recolor">Aplicar el color del lápiz</string>
     <string name="toolbar_ink_lasso">Lazo: selecciona, mueve, cambia de color o elimina tinta y formas</string>
+    <string name="attachment_install_refused">%1$s es un paquete de aplicación. PdfCraft no abre aplicaciones adjuntas a PDF.</string>
     <string name="discard_kept_recovery">El archivo original parece dañado, así que PdfCraft conservó tu copia editada. Vuelve a abrir el archivo para guardar una copia.</string>
 </resources>

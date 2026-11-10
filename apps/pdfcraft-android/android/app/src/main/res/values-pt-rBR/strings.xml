@@ -767,5 +767,6 @@
     <string name="viewer_hint_callout">Toque no que a chamada aponta</string>
     <string name="ink_lasso_recolor">Aplicar a cor da caneta</string>
     <string name="toolbar_ink_lasso">Laço: selecione, mova, recolora ou exclua tinta e formas</string>
+    <string name="attachment_install_refused">%1$s é um pacote de app. O PdfCraft não abre apps anexados a PDFs.</string>
     <string name="discard_kept_recovery">O arquivo original parece danificado, então o PdfCraft manteve sua cópia editada. Abra o arquivo de novo para salvar uma cópia.</string>
 </resources>

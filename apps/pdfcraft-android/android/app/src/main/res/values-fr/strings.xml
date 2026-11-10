@@ -1062,5 +1062,6 @@
     <string name="viewer_hint_callout">Touchez ce que désigne la légende</string>
     <string name="ink_lasso_recolor">Appliquer la couleur du stylo</string>
     <string name="toolbar_ink_lasso">Lasso : sélectionner, déplacer, recolorer ou supprimer l\'encre et les formes</string>
+    <string name="attachment_install_refused">%1$s est un paquet d\'application. PdfCraft n\'ouvre pas les applications jointes aux PDF.</string>
     <string name="discard_kept_recovery">Le fichier d\'origine semble endommagé : PdfCraft a donc gardé votre copie modifiée. Rouvrez le fichier pour en enregistrer une copie.</string>
 </resources>

@@ -868,5 +868,6 @@
     <string name="viewer_hint_callout">انقر على ما تشير إليه وسيلة الشرح</string>
     <string name="ink_lasso_recolor">طبّق لون القلم</string>
     <string name="toolbar_ink_lasso">التحديد الحر: حدد الحبر والأشكال لنقلها أو تلوينها أو حذفها</string>
+    <string name="attachment_install_refused">%1$s حزمة تطبيق. لا يفتح PdfCraft التطبيقات المرفقة بملفات PDF.</string>
     <string name="discard_kept_recovery">يبدو أن الملف الأصلي تالف، لذا احتفظ PdfCraft بنسختك المعدّلة. افتح الملف مرة أخرى لحفظ نسخة.</string>
 </resources>

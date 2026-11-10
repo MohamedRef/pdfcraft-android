@@ -229,9 +229,17 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+        val privateRoots = listOfNotNull(
+            applicationInfo.dataDir, filesDir.parent, cacheDir.parent, noBackupFilesDir.parent,
+            getExternalFilesDir(null)?.parentFile?.path, externalCacheDir?.parentFile?.path,
+        ).flatMap { listOf(it, runCatching { java.io.File(it).canonicalPath }.getOrNull()) }.filterNotNull().distinct()
         val chosen = firstExternalPdfCandidate(
             action,
-            candidates.map { IncomingPdfUri(it.scheme, it.authority, it.path) },
+            candidates.map { u ->
+                val canonical = if (u.scheme.equals("file", ignoreCase = true)) u.path?.let { p -> runCatching { java.io.File(p).canonicalPath }.getOrNull() } else null
+                IncomingPdfUri(u.scheme, u.authority, u.path, canonical)
+            },
+            privateRoots,
         ) ?: return null
         return candidates[chosen]
     }
