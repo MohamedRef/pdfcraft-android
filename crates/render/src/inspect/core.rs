@@ -1,3 +1,5 @@
+use crate::OpenTrace;
+
 use super::annotations::{FieldWalk, MAX_LINK_ATTACHMENT_TEXT_BYTES};
 use super::model::{AttachmentSource, PageInfo, Xfa};
 use super::navigation::text_string;
@@ -44,7 +46,13 @@ pub fn check_pages(bytes: Arc<Vec<u8>>, password: Option<&str>, expected: usize)
 /// Inspect a document. Fails only if the renderer itself cannot open the file (or needs a
 /// password). Never panics: parser crashes are caught and reported.
 pub fn inspect(bytes: Arc<Vec<u8>>, password: Option<&str>) -> Result<DocInfo, OpenError> {
-    let pdf = catch_unwind(AssertUnwindSafe(|| Pdf::new_with_password(bytes.clone(), password.unwrap_or(""))))
+    inspect_with_trace(bytes, password, &OpenTrace::default())
+}
+
+/// The ordinary inspector, recording fixed stage names only when the caller opts in.
+pub fn inspect_with_trace(bytes: Arc<Vec<u8>>, password: Option<&str>, trace: &OpenTrace) -> Result<DocInfo, OpenError> {
+    let pdf = trace
+        .measure("native_render_parse", || catch_unwind(AssertUnwindSafe(|| Pdf::new_with_password(bytes.clone(), password.unwrap_or("")))))
         .map_err(|p| OpenError::Invalid(format!("the parser crashed: {}", crate::raster::panic_message(&p))))?
         .map_err(|e| match e {
             LoadPdfError::Decryption(DecryptionError::PasswordProtected) => {
@@ -58,24 +66,26 @@ pub fn inspect(bytes: Arc<Vec<u8>>, password: Option<&str>) -> Result<DocInfo, O
             LoadPdfError::Invalid => OpenError::Invalid("no readable page tree or cross-reference data was found".into()),
         })?;
     let mut info = DocInfo { file_size: bytes.len(), pdf_version: version_label(&format!("{:?}", pdf.version())), ..Default::default() };
-    let pages = catch_unwind(AssertUnwindSafe(|| {
-        let mut out = Vec::new();
-        for (i, page) in pdf.pages().iter().enumerate() {
-            let (w, h) = page.render_dimensions();
-            let c = page.intersected_crop_box();
-            let rotation = match page.rotation() {
-                hayro::hayro_syntax::page::Rotation::None => 0,
-                hayro::hayro_syntax::page::Rotation::Horizontal => 90,
-                hayro::hayro_syntax::page::Rotation::Flipped => 180,
-                hayro::hayro_syntax::page::Rotation::FlippedHorizontal => 270,
-            };
-            let crop = [c.x0 as f32, c.y0 as f32, c.x1 as f32, c.y1 as f32];
-            // Degenerate boxes still get a usable placeholder size so layout never divides by zero.
-            let (w, h) = if w.is_finite() && h.is_finite() && w >= 1.0 && h >= 1.0 { (w, h) } else { (612.0, 792.0) };
-            out.push(PageInfo { width: w, height: h, label: (i + 1).to_string(), crop, rotation });
-        }
-        out
-    }));
+    let pages = trace.measure("native_page_geometry", || {
+        catch_unwind(AssertUnwindSafe(|| {
+            let mut out = Vec::new();
+            for (i, page) in pdf.pages().iter().enumerate() {
+                let (w, h) = page.render_dimensions();
+                let c = page.intersected_crop_box();
+                let rotation = match page.rotation() {
+                    hayro::hayro_syntax::page::Rotation::None => 0,
+                    hayro::hayro_syntax::page::Rotation::Horizontal => 90,
+                    hayro::hayro_syntax::page::Rotation::Flipped => 180,
+                    hayro::hayro_syntax::page::Rotation::FlippedHorizontal => 270,
+                };
+                let crop = [c.x0 as f32, c.y0 as f32, c.x1 as f32, c.y1 as f32];
+                // Degenerate boxes still get a usable placeholder size so layout never divides by zero.
+                let (w, h) = if w.is_finite() && h.is_finite() && w >= 1.0 && h >= 1.0 { (w, h) } else { (612.0, 792.0) };
+                out.push(PageInfo { width: w, height: h, label: (i + 1).to_string(), crop, rotation });
+            }
+            out
+        }))
+    });
     match pages {
         Ok(p) => info.pages = p,
         Err(p) => return Err(OpenError::Invalid(format!("the page tree could not be read: {}", crate::raster::panic_message(&p)))),
@@ -90,24 +100,27 @@ pub fn inspect(bytes: Arc<Vec<u8>>, password: Option<&str>) -> Result<DocInfo, O
     inspect_structure(&mut info, |tmp| {
         // The lazy reader first; lopdf's repair/tolerance path when it can't expose the same
         // page tree or an object a panel needs. No partial result is published.
-        let lazy = catch_unwind(AssertUnwindSafe(|| {
-            let doc = LazyStructure::new(bytes.clone(), password).ok()?;
-            let mut t = DocInfo { pages: tmp.pages.clone(), ..Default::default() };
-            let inspector = Inspector::new(&doc);
-            if inspector.page_index.len() != t.pages.len() {
-                return None;
-            }
-            inspector.fill(&mut t);
-            (!doc.failed()).then_some(t)
-        }))
-        .ok()
-        .flatten();
+        let lazy = trace
+            .measure("native_inspect_lazy", || {
+                catch_unwind(AssertUnwindSafe(|| {
+                    let doc = LazyStructure::new(bytes.clone(), password).ok()?;
+                    let mut t = DocInfo { pages: tmp.pages.clone(), ..Default::default() };
+                    let inspector = Inspector::new(&doc);
+                    if inspector.page_index.len() != t.pages.len() {
+                        return None;
+                    }
+                    inspector.fill(&mut t);
+                    (!doc.failed()).then_some(t)
+                }))
+            })
+            .ok()
+            .flatten();
         if let Some(t) = lazy {
             *tmp = t;
             return Ok(());
         }
-        let doc = Document::load_mem_with_options(&bytes, options).map_err(|e| e.to_string())?;
-        Inspector::new(&doc).fill(tmp);
+        let doc = trace.measure("native_inspect_fallback_load", || Document::load_mem_with_options(&bytes, options)).map_err(|e| e.to_string())?;
+        trace.measure("native_inspect_fallback_fill", || Inspector::new(&doc).fill(tmp));
         Ok(())
     });
     if info.pages.is_empty() {

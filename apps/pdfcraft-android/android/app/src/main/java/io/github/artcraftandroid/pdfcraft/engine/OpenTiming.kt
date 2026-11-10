@@ -51,6 +51,12 @@ internal object OpenTiming {
         emit(timingLine(stage, elapsed, bytes, pages))
     }
 
+    /** A native stage completed during open; nested and parallel durations overlap. */
+    fun duration(stage: String, durationMs: Long) {
+        if (!enabled()) return
+        emit("$stage duration_ms=${durationMs.coerceAtLeast(0)}")
+    }
+
     /** A count that explains a timing, such as how many repairs opening needed. */
     fun count(stage: String, n: Long) {
         if (!enabled()) return
