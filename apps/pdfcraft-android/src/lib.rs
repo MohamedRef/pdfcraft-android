@@ -441,6 +441,33 @@ struct TextCache {
     bytes: Arc<Vec<u8>>,
     renderer: PageRenderer,
     pages: Vec<Option<Arc<PageText>>>,
+    /// Cached page indices, least recently used first ([MAX_CACHED_TEXT_PAGES] at most).
+    recent: std::collections::VecDeque<usize>,
+}
+
+/// Text layers a document keeps: a full-document search or Read Aloud otherwise kept every
+/// page's glyphs in native memory for as long as the document was open.
+const MAX_CACHED_TEXT_PAGES: usize = 48;
+
+impl TextCache {
+    /// Mark `index` as just used, and drop the least recently used layers past the bound.
+    fn touch(&mut self, index: usize) {
+        if let Some(at) = self.recent.iter().position(|&i| i == index) {
+            self.recent.remove(at);
+        }
+        self.recent.push_back(index);
+        while self.recent.len() > MAX_CACHED_TEXT_PAGES {
+            if let Some(old) = self.recent.pop_front() {
+                if let Some(slot) = self.pages.get_mut(old) {
+                    *slot = None;
+                }
+            }
+        }
+    }
+
+    fn cached(&self) -> usize {
+        self.pages.iter().filter(|p| p.is_some()).count()
+    }
 }
 
 /// The engine's session: the open documents, their edit history and the tools that act on them.
@@ -507,13 +534,16 @@ impl MobileSession {
             bytes: bytes.clone(),
             renderer: PageRenderer::new(bytes.clone(), RenderConfig { password: password.as_deref().map(Arc::from), ..RenderConfig::default() }),
             pages: vec![None; pages],
+            recent: std::collections::VecDeque::new(),
         };
         let entry = texts.entry(doc).or_insert_with(fresh);
         if !Arc::ptr_eq(&entry.bytes, &bytes) || entry.pages.len() != pages {
             *entry = fresh();
         }
         if let Some(Some(t)) = entry.pages.get(index) {
-            return Ok(t.clone());
+            let t = t.clone();
+            entry.touch(index);
+            return Ok(t);
         }
         let out = entry.renderer.render(RenderRequest { page: index, kind: RequestKind::Text, tile: None, scale: 1.0, tag: 0, preview: false });
         let text = match (out.error, out.text) {
@@ -523,6 +553,7 @@ impl MobileSession {
         };
         if let Some(slot) = entry.pages.get_mut(index) {
             *slot = Some(text.clone());
+            entry.touch(index);
         }
         Ok(text)
     }
@@ -842,6 +873,12 @@ impl MobileSession {
 
     /// Drop the idle renderers and text layers (the system is short of memory); the next render
     /// or text call makes new ones.
+    /// Text layers held for `doc` (tests and diagnostics).
+    #[cfg(test)]
+    fn cached_text_pages(&self, doc: u64) -> usize {
+        self.texts.lock().unwrap_or_else(PoisonError::into_inner).get(&doc).map_or(0, TextCache::cached)
+    }
+
     pub fn release_memory(&self) {
         self.cache().clear();
         self.texts.lock().unwrap_or_else(PoisonError::into_inner).clear();

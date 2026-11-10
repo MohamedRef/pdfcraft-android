@@ -663,3 +663,18 @@ fn new_comment_clipboard_keeps_ink_and_refuses_losing_embedded_payloads() {
     assert!(result.unwrap_err().to_string().contains("attachments"));
     assert_eq!(s.document(attachment_doc).unwrap().generation, generation);
 }
+
+#[test]
+fn text_layers_are_bounded_per_document() {
+    let s = MobileSession::new();
+    let doc = s.open(blank_pdf(60), None).unwrap().id;
+    for page in 0..60u32 {
+        s.page_plain_text(doc, page).unwrap();
+    }
+    assert_eq!(s.cached_text_pages(doc), super::MAX_CACHED_TEXT_PAGES);
+    // The most recent pages stay; an evicted page is read again on demand.
+    s.page_plain_text(doc, 0).unwrap();
+    assert_eq!(s.cached_text_pages(doc), super::MAX_CACHED_TEXT_PAGES);
+    s.release_memory();
+    assert_eq!(s.cached_text_pages(doc), 0);
+}
