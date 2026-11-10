@@ -888,6 +888,7 @@ impl Automation {
             "comments_summarize" => self.comments_summarize(&a)?,
             "comment_edit" => self.comment_edit(&a)?,
             "comment_erase" => self.comment_erase(&a)?,
+            "comments_edit_many" => self.comments_edit_many(&a)?,
             "comment_delete" => self.comment_delete(&a)?,
             "comments_copy" => self.comments_copy(&a)?,
             "comments_paste" => self.comments_paste(&a)?,

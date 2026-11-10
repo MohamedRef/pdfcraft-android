@@ -894,6 +894,64 @@ impl Automation {
         Ok(out)
     }
 
+    /// Android lasso: move, recolour or delete several comments on one page as one undo step.
+    /// `comments`: 1-based indices from comment_list. Locked and Fill & Sign comments are skipped
+    /// and reported; a delete removes from the highest index down so the others keep theirs.
+    pub(crate) fn comments_edit_many(&mut self, a: &Args) -> Result<Value> {
+        let page = self.page(a)?;
+        let info = self.doc(a)?.info.pages[page].clone();
+        let raw = a.get("comments").and_then(Value::as_array).ok_or_else(|| ToolError::InvalidArgs("comments must be an array of 1-based indices".into()))?;
+        if raw.is_empty() || raw.len() > 1000 {
+            return Err(ToolError::InvalidArgs("comments must list 1 to 1000 indices".into()));
+        }
+        let mut wanted = raw
+            .iter()
+            .map(|v| v.as_u64().filter(|i| *i >= 1).map(|i| (i - 1) as usize).ok_or_else(|| ToolError::InvalidArgs("each comment index must be a positive integer".into())))
+            .collect::<Result<Vec<usize>>>()?;
+        wanted.sort_unstable_by(|a, b| b.cmp(a));
+        wanted.dedup();
+        let doc = self.doc(a)?;
+        let on_page: Vec<_> = doc.info.annotations.iter().filter(|c| c.page == page).collect();
+        let mut skipped = Vec::new();
+        let mut indices = Vec::new();
+        for index in wanted {
+            match on_page.iter().find(|c| c.index == index) {
+                None => return Err(ToolError::InvalidArgs(format!("page {} has no comment {}", page + 1, index + 1))),
+                Some(c) if c.locked || c.fill_sign => skipped.push(index + 1),
+                Some(_) => indices.push(index),
+            }
+        }
+        let delete = match a.get("delete") {
+            None => false,
+            Some(Value::Bool(d)) => *d,
+            _ => return Err(ToolError::InvalidArgs("delete must be a boolean".into())),
+        };
+        let shift = a.nums::<2>("move")?;
+        let color = a.opt_str("color")?.map(parse_color).transpose()?;
+        if [delete, shift.is_some(), color.is_some()].iter().filter(|x| **x).count() != 1 {
+            return Err(ToolError::InvalidArgs("give exactly one of move, color or delete".into()));
+        }
+        if indices.is_empty() {
+            return Ok(json!({ "changed": 0, "skipped": skipped }));
+        }
+        let changed = indices.len();
+        let (label, edits): (&str, Vec<Edit>) = if delete {
+            ("Delete comments", indices.into_iter().map(|index| Edit::DeleteAnnotation { page, index }).collect())
+        } else if let Some([dx, dy]) = shift {
+            if !(dx.is_finite() && dy.is_finite()) || dx.abs() > 20_000.0 || dy.abs() > 20_000.0 {
+                return Err(ToolError::InvalidArgs("move must be two finite distances in points".into()));
+            }
+            let (o, d) = (to_user(&info, 0.0, 0.0), to_user(&info, dx, dy));
+            ("Move comments", indices.into_iter().map(|index| Edit::MoveAnnotation { page, index, dx: d[0] - o[0], dy: d[1] - o[1] }).collect())
+        } else {
+            ("Recolour comments", indices.into_iter().map(|index| Edit::StyleAnnotation { page, index, color, opacity: None, width: None, endings: None }).collect())
+        };
+        let mut out = self.apply(a, Edit::Batch { label: label.into(), edits })?;
+        out["changed"] = json!(changed);
+        out["skipped"] = json!(skipped);
+        Ok(out)
+    }
+
     pub(crate) fn comment_delete(&mut self, a: &Args) -> Result<Value> {
         let (page, index) = self.comment_target(a)?;
         self.apply(a, Edit::DeleteAnnotation { page, index })

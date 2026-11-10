@@ -1185,4 +1185,6 @@
     <string name="toolbar_text_box">Cuadro de texto</string>
     <string name="toolbar_callout">Llamada</string>
     <string name="viewer_hint_callout">Toca lo que señala la llamada</string>
+    <string name="ink_lasso_recolor">Aplicar el color del lápiz</string>
+    <string name="toolbar_ink_lasso">Lazo: selecciona, mueve, cambia de color o elimina tinta y formas</string>
 </resources>

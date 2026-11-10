@@ -1177,4 +1177,6 @@
     <string name="toolbar_text_box">Textfeld</string>
     <string name="toolbar_callout">Legende</string>
     <string name="viewer_hint_callout">Auf das tippen, worauf die Legende zeigt</string>
+    <string name="ink_lasso_recolor">Stiftfarbe anwenden</string>
+    <string name="toolbar_ink_lasso">Lasso: Tinte und Formen auswählen, verschieben, umfärben oder löschen</string>
 </resources>

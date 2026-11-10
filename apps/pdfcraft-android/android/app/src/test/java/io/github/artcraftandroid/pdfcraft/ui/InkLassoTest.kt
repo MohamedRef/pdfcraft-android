@@ -56,3 +56,36 @@ class InkLassoTest {
         assertNull(inkLassoBounds(emptyList()))
     }
 }
+
+class SavedLassoTest {
+    private val rect = listOf(100f, 100f, 140f, 120f)
+
+    @org.junit.Test fun aLoopAroundASavedRectangleSelectsIt() {
+        val loop = listOf(androidx.compose.ui.geometry.Offset(90f, 90f), androidx.compose.ui.geometry.Offset(150f, 90f), androidx.compose.ui.geometry.Offset(150f, 130f), androidx.compose.ui.geometry.Offset(90f, 130f))
+        org.junit.Assert.assertTrue(io.github.artcraftandroid.pdfcraft.ui.viewer.inkLassoHitsRect(loop, rect))
+    }
+
+    @org.junit.Test fun aLoopCrossingOrInsideTheRectangleSelectsIt() {
+        val crossing = listOf(androidx.compose.ui.geometry.Offset(120f, 50f), androidx.compose.ui.geometry.Offset(130f, 50f), androidx.compose.ui.geometry.Offset(125f, 110f))
+        org.junit.Assert.assertTrue(io.github.artcraftandroid.pdfcraft.ui.viewer.inkLassoHitsRect(crossing, rect))
+        val inside = listOf(androidx.compose.ui.geometry.Offset(110f, 105f), androidx.compose.ui.geometry.Offset(120f, 105f), androidx.compose.ui.geometry.Offset(115f, 115f))
+        org.junit.Assert.assertTrue(io.github.artcraftandroid.pdfcraft.ui.viewer.inkLassoHitsRect(inside, rect))
+    }
+
+    @org.junit.Test fun aLoopElsewhereOrABadRectangleSelectsNothing() {
+        val away = listOf(androidx.compose.ui.geometry.Offset(0f, 0f), androidx.compose.ui.geometry.Offset(20f, 0f), androidx.compose.ui.geometry.Offset(10f, 20f))
+        org.junit.Assert.assertFalse(io.github.artcraftandroid.pdfcraft.ui.viewer.inkLassoHitsRect(away, rect))
+        org.junit.Assert.assertFalse(io.github.artcraftandroid.pdfcraft.ui.viewer.inkLassoHitsRect(away, listOf(1f, 2f)))
+        org.junit.Assert.assertNull(io.github.artcraftandroid.pdfcraft.ui.viewer.lassoRectOutline(listOf(0f, 0f, Float.NaN, 1f)))
+    }
+
+    @org.junit.Test fun onlyDrawingsAndShapesTheUserCanMoveAreTargets() {
+        val t = io.github.artcraftandroid.pdfcraft.ui.viewer::savedLassoTarget
+        org.junit.Assert.assertTrue(t("Ink", false, false, null))
+        org.junit.Assert.assertTrue(t("Square", false, false, null))
+        org.junit.Assert.assertFalse(t("Highlight", false, false, null))
+        org.junit.Assert.assertFalse(t("Ink", true, false, null))
+        org.junit.Assert.assertFalse(t("Ink", false, true, null))
+        org.junit.Assert.assertFalse(t("FreeText", false, false, "parent"))
+    }
+}

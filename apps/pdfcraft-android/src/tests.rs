@@ -582,7 +582,7 @@ fn upgraded_tool_table_preserves_mobile_tools_and_adds_stable_020_schemas() {
     let tools = session.tools();
     let names: std::collections::HashSet<_> = tools.iter().map(|t| t.name.as_str()).collect();
     assert_eq!(names.len(), tools.len(), "tool names must remain unique");
-    assert_eq!(names.len(), 200);
+    assert_eq!(names.len(), 201);
     for name in [
         "photo_find_document",
         "comment_erase",
@@ -606,6 +606,7 @@ fn upgraded_tool_table_preserves_mobile_tools_and_adds_stable_020_schemas() {
         "object_copy",
         "object_paste",
         "text_prepare",
+        "comments_edit_many",
     ] {
         assert!(names.contains(name), "missing mobile/stable tool: {name}");
     }

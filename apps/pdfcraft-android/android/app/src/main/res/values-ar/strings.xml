@@ -863,4 +863,6 @@
     <string name="toolbar_text_box">مربع نص</string>
     <string name="toolbar_callout">وسيلة شرح</string>
     <string name="viewer_hint_callout">انقر على ما تشير إليه وسيلة الشرح</string>
+    <string name="ink_lasso_recolor">طبّق لون القلم</string>
+    <string name="toolbar_ink_lasso">التحديد الحر: حدد الحبر والأشكال لنقلها أو تلوينها أو حذفها</string>
 </resources>

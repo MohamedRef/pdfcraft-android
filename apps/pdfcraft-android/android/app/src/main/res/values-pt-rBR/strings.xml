@@ -762,4 +762,6 @@
     <string name="toolbar_text_box">Caixa de texto</string>
     <string name="toolbar_callout">Chamada</string>
     <string name="viewer_hint_callout">Toque no que a chamada aponta</string>
+    <string name="ink_lasso_recolor">Aplicar a cor da caneta</string>
+    <string name="toolbar_ink_lasso">Laço: selecione, mova, recolora ou exclua tinta e formas</string>
 </resources>

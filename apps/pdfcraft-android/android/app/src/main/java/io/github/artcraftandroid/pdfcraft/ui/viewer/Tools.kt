@@ -29,6 +29,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -112,12 +113,18 @@ internal class InkStroke(val page: Int, val appearance: InkAppearance, stylus: B
 private sealed class DraftInkEdit {
     data class Added(val stroke: InkStroke) : DraftInkEdit()
     data class Moved(val strokes: List<InkStroke>, val offset: Offset) : DraftInkEdit()
+    /** Lasso Delete of draft strokes, each restored at its own position in paint order. */
+    data class Removed(val strokes: List<Pair<Int, InkStroke>>) : DraftInkEdit()
 }
 
 private fun applyDraftInkEdit(strokes: androidx.compose.runtime.snapshots.SnapshotStateList<InkStroke>, edit: DraftInkEdit, forward: Boolean) {
     when (edit) {
         is DraftInkEdit.Added -> {
             if (forward) strokes.add(edit.stroke) else strokes.remove(edit.stroke)
+        }
+        is DraftInkEdit.Removed -> {
+            if (forward) edit.strokes.forEach { (_, s) -> strokes.remove(s) }
+            else edit.strokes.sortedBy { it.first }.forEach { (i, s) -> strokes.add(i.coerceIn(0, strokes.size), s) }
         }
         is DraftInkEdit.Moved -> {
             val d = if (forward) edit.offset else -edit.offset
@@ -332,10 +339,19 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
     var lassoPage by remember { mutableStateOf<Int?>(null) }
     val lassoPoints = remember { mutableStateListOf<Offset>() }
     val selected = remember { mutableStateListOf<InkStroke>() }
+    // Saved drawings and shapes the lasso selected on lassoPage (moved, recoloured or deleted natively).
+    val savedSelected = remember { mutableStateListOf<io.github.artcraftandroid.pdfcraft.core.CommentInfo>() }
     var moveAnchor by remember { mutableStateOf<Offset?>(null) }
     var moveOffset by remember { mutableStateOf(Offset.Zero) }
     var moving by remember { mutableStateOf(false) }
-    fun clearSelection() { selected.clear(); lassoPage = null; lassoPoints.clear(); moving = false; moveAnchor = null; moveOffset = Offset.Zero }
+    fun clearSelection() { selected.clear(); savedSelected.clear(); lassoPage = null; lassoPoints.clear(); moving = false; moveAnchor = null; moveOffset = Offset.Zero }
+    /** Every selected outline in page points: draft stroke points and saved comments' rectangles. */
+    fun selectionPaths(): List<List<Offset>> = selected.map { it.points.toList() } + savedSelected.mapNotNull { lassoRectOutline(it.rect) }
+    fun savedEdit(page: Int, extra: Map<String, Any?>) {
+        val indices = savedSelected.map { it.index.toInt() + 1 }
+        if (indices.isEmpty()) return
+        vm.runTool(doc, "comments_edit_many", mapOf("page" to page + 1, "comments" to indices) + extra)
+    }
     val prefs = vm.toolPrefs
     // Capture appearance at pointer down. Adjacent matching strokes may share an annotation.
     DisposableEffect(doc) {
@@ -447,9 +463,9 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
 
     fun beginLasso(p: Offset) {
         val at = doc.viewer.screenToPage(p) ?: run { clearSelection(); return }
-        val existing = selected.firstOrNull()?.page
-        if (existing == at.page && selected.isNotEmpty()) {
-            val b = inkLassoBounds(selected.map { it.points.toList() })
+        val existing = lassoPage
+        if (existing == at.page && (selected.isNotEmpty() || savedSelected.isNotEmpty())) {
+            val b = inkLassoBounds(selectionPaths())
             if (b?.contains(Offset(at.x, at.y), 6f) == true) {
                 moving = true
                 moveAnchor = Offset(at.x, at.y)
@@ -470,7 +486,7 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
             val anchor = moveAnchor ?: return
             val pageSize = doc.viewer.pages.getOrNull(page) ?: return
             moveOffset = boundedInkLassoMove(
-                selected.map { stroke -> stroke.points.toList() },
+                selectionPaths(),
                 point - anchor,
                 pageSize.width,
                 pageSize.height,
@@ -485,10 +501,19 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
         moveLasso(p)
         if (moving) {
             if (moveOffset != Offset.Zero) {
-                val edit = DraftInkEdit.Moved(selected.toList(), moveOffset)
-                applyDraftInkEdit(strokes, edit, forward = true)
-                edits.add(edit)
-                undone.clear()
+                if (selected.isNotEmpty()) {
+                    val edit = DraftInkEdit.Moved(selected.toList(), moveOffset)
+                    applyDraftInkEdit(strokes, edit, forward = true)
+                    edits.add(edit)
+                    undone.clear()
+                }
+                // Saved comments move natively, all in one undo step; their rectangles refresh
+                // with the document, so the saved part of the selection ends here.
+                if (savedSelected.isNotEmpty()) {
+                    savedEdit(page, mapOf("move" to listOf(moveOffset.x.toDouble(), moveOffset.y.toDouble())))
+                    savedSelected.clear()
+                    if (selected.isEmpty()) lassoPage = null
+                }
             }
             moving = false
             moveAnchor = null
@@ -497,10 +522,16 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
         }
         val polygon = lassoPoints.toList()
         selected.clear()
+        savedSelected.clear()
         if (polygon.size >= 3) {
             selected.addAll(strokes.filter { it.page == page && inkLassoHitsStroke(polygon, it.points.toList()) })
+            savedSelected.addAll(
+                doc.comments.filter { c ->
+                    c.page.toInt() == page && savedLassoTarget(c.subtype, c.locked, c.fillSign, c.replyTo) && inkLassoHitsRect(polygon, c.rect)
+                },
+            )
         }
-        if (selected.isEmpty()) clearSelection()
+        if (selected.isEmpty() && savedSelected.isEmpty()) clearSelection()
         else lassoPoints.clear()
     }
 
@@ -712,7 +743,14 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                         }
                         drawPath(path, Color(0xFF1A85CA), style = Stroke(width = 1.5.dp.toPx()))
                     }
-                    val bounds = inkLassoBounds(selected.map { it.points.toList() })
+                    // Saved comments do not move until the finger lifts: their frames follow it.
+                    for (c in savedSelected) {
+                        val o = lassoRectOutline(c.rect) ?: continue
+                        val a = doc.viewer.pageToScreen(page, o[0].x + moveOffset.x, o[0].y + moveOffset.y)
+                        val b = doc.viewer.pageToScreen(page, o[2].x + moveOffset.x, o[2].y + moveOffset.y)
+                        drawRect(Color(0xFF1A85CA).copy(alpha = 0.6f), a, Size(b.x - a.x, b.y - a.y), style = Stroke(width = 1.dp.toPx()))
+                    }
+                    val bounds = inkLassoBounds(selectionPaths())
                     if (bounds != null) {
                         val a = doc.viewer.pageToScreen(page, bounds.left + moveOffset.x, bounds.top + moveOffset.y)
                         val b = doc.viewer.pageToScreen(page, bounds.right + moveOffset.x, bounds.bottom + moveOffset.y)
@@ -742,6 +780,41 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                         center = hovering,
                         style = Stroke(width = 1.dp.toPx()),
                     )
+                }
+            }
+        }
+        // Lasso actions under the selection: Delete (drafts and saved), and Recolour saved
+        // comments with the current pen colour. Saved edits are one native undo step each.
+        val selPage = lassoPage
+        if (doc.controller.lassoMode && selPage != null && !moving && (selected.isNotEmpty() || savedSelected.isNotEmpty())) {
+            val b = inkLassoBounds(selectionPaths())
+            if (b != null) {
+                val anchor = doc.viewer.pageToScreen(selPage, b.left, b.bottom)
+                val density = LocalDensity.current
+                Row(
+                    Modifier
+                        .offset { androidx.compose.ui.unit.IntOffset(anchor.x.toInt().coerceAtLeast(0), (anchor.y + with(density) { 8.dp.toPx() }).toInt()) }
+                        .background(pdfColors.menu, RoundedCornerShape(8.dp))
+                        .padding(horizontal = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    SubTool(LucideIcons.Trash2, stringResource(R.string.common_delete), false, {
+                        if (selected.isNotEmpty()) {
+                            val removed = selected.map { s -> strokes.indexOf(s) to s }.filter { it.first >= 0 }
+                            val edit = DraftInkEdit.Removed(removed)
+                            applyDraftInkEdit(strokes, edit, forward = true)
+                            edits.add(edit)
+                            undone.clear()
+                        }
+                        savedEdit(selPage, mapOf("delete" to true))
+                        clearSelection()
+                    })
+                    if (savedSelected.isNotEmpty()) {
+                        SubTool(LucideIcons.Palette, stringResource(R.string.ink_lasso_recolor), false, {
+                            savedEdit(selPage, mapOf("color" to prefs.color(StyledTool.Ink).hex()))
+                            clearSelection()
+                        })
+                    }
                 }
             }
         }
