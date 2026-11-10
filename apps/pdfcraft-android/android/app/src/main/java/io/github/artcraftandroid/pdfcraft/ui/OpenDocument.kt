@@ -38,6 +38,10 @@ class OpenDocument(
     var info by mutableStateOf(info)
         private set
 
+    /** Which generation each page is drawn at (see [io.github.artcraftandroid.pdfcraft.ui.viewer.PageGenerations]). */
+    var pageGenerations by mutableStateOf(io.github.artcraftandroid.pdfcraft.ui.viewer.PageGenerations(info.generation.toLong()))
+        private set
+
     val viewer = ViewerState(info.pages.map { PageSize(it.width, it.height) })
     val controller = ViewerController()
     val search = SearchState(engine, id, scope)
@@ -84,13 +88,14 @@ class OpenDocument(
     val pageCount: Int get() = info.pages.size
 
     /** The engine's view of the document changed (an edit, undo, save): refresh what follows from it. */
-    fun update(newInfo: DocumentInfo) {
+    fun update(newInfo: DocumentInfo, touchedPage: Int? = null) {
         val pagesChanged = newInfo.pages.size != info.pages.size ||
             newInfo.pages.zip(info.pages).any { (a, b) -> a.width != b.width || a.height != b.height }
         if (pagesChanged || newInfo.generation != info.generation) {
             links = emptyMap()
             linkPagesLoaded.clear()
         }
+        pageGenerations = pageGenerations.next(newInfo.generation.toLong(), touchedPage, newInfo.pages.size, pagesChanged)
         info = newInfo
         if (pagesChanged) viewer.pages = newInfo.pages.map { PageSize(it.width, it.height) }
         selection.clear()

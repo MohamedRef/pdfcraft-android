@@ -1167,4 +1167,17 @@
     <string name="updater_download_browser">APK stattdessen im Browser herunterladen</string>
     <string name="updater_browser_open_error">Der offizielle GitHub-Download konnte nicht im Browser geöffnet werden.</string>
     <string name="updater_browser_notice">Wenn der Download in der App fehlschlägt, versuche den offiziellen GitHub-Link im Browser. Browser-Downloads müssen manuell installiert werden und werden von PdfCraft nicht per SHA-256 geprüft.</string>
+    <string name="toolbar_squiggly">Wellenlinie</string>
+    <string name="viewer_hint_squiggly">Über den Text ziehen, um ihn wellig zu unterstreichen</string>
+    <string name="toolbar_color_squiggly">Farbe der Wellenlinie</string>
+    <string name="toolbar_draw_arrow">Pfeil</string>
+    <string name="ink_toolbar_arrow">Pfeil</string>
+    <string name="toolbar_draw_cloud">Revisionswolke</string>
+    <string name="ink_toolbar_cloud">Wolke</string>
+    <string name="toolbar_stamp">Stempel</string>
+    <string name="toolbar_stamp_choose">Stempel wählen</string>
+    <string name="viewer_hint_stamp">Tippen, wo der Stempel hin soll</string>
+    <string name="toolbar_text_box">Textfeld</string>
+    <string name="toolbar_callout">Legende</string>
+    <string name="viewer_hint_callout">Auf das tippen, worauf die Legende zeigt</string>
 </resources>

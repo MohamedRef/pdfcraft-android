@@ -752,4 +752,17 @@
     <string name="updater_download_browser">Baixar o APK no navegador</string>
     <string name="updater_browser_open_error">Não foi possível abrir o download oficial do GitHub no navegador.</string>
     <string name="updater_browser_notice">Se o download no app falhar, tente o link oficial do GitHub no navegador. Downloads pelo navegador exigem instalação manual e não são verificados por SHA-256 pelo PdfCraft.</string>
+    <string name="toolbar_squiggly">Ondulado</string>
+    <string name="viewer_hint_squiggly">Arraste sobre o texto para sublinhá-lo com uma linha ondulada</string>
+    <string name="toolbar_color_squiggly">Cor do sublinhado ondulado</string>
+    <string name="toolbar_draw_arrow">Seta</string>
+    <string name="ink_toolbar_arrow">Seta</string>
+    <string name="toolbar_draw_cloud">Nuvem de revisão</string>
+    <string name="ink_toolbar_cloud">Nuvem</string>
+    <string name="toolbar_stamp">Carimbo</string>
+    <string name="toolbar_stamp_choose">Escolher um carimbo</string>
+    <string name="viewer_hint_stamp">Toque onde o carimbo vai</string>
+    <string name="toolbar_text_box">Caixa de texto</string>
+    <string name="toolbar_callout">Chamada</string>
+    <string name="viewer_hint_callout">Toque no que a chamada aponta</string>
 </resources>

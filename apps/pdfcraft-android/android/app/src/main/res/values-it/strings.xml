@@ -1157,4 +1157,17 @@
     <string name="updater_download_browser">Scarica l\'APK nel browser</string>
     <string name="updater_browser_open_error">Impossibile aprire il download ufficiale di GitHub nel browser.</string>
     <string name="updater_browser_notice">Se il download nell\'app non riesce, prova il link ufficiale di GitHub nel browser. I download dal browser vanno installati manualmente e PdfCraft non ne verifica lo SHA-256.</string>
+    <string name="toolbar_squiggly">Ondulata</string>
+    <string name="viewer_hint_squiggly">Trascina sul testo per sottolinearlo con una linea ondulata</string>
+    <string name="toolbar_color_squiggly">Colore della sottolineatura ondulata</string>
+    <string name="toolbar_draw_arrow">Freccia</string>
+    <string name="ink_toolbar_arrow">Freccia</string>
+    <string name="toolbar_draw_cloud">Nuvola di revisione</string>
+    <string name="ink_toolbar_cloud">Nuvola</string>
+    <string name="toolbar_stamp">Timbro</string>
+    <string name="toolbar_stamp_choose">Scegli un timbro</string>
+    <string name="viewer_hint_stamp">Tocca dove va il timbro</string>
+    <string name="toolbar_text_box">Casella di testo</string>
+    <string name="toolbar_callout">Richiamo</string>
+    <string name="viewer_hint_callout">Tocca ciò a cui punta il richiamo</string>
 </resources>

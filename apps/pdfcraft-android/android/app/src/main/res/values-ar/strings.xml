@@ -853,4 +853,17 @@
     <string name="updater_download_browser">نزّل الـ APK من المتصفح بدلًا من ذلك</string>
     <string name="updater_browser_open_error">تعذّر فتح رابط التنزيل الرسمي على GitHub في المتصفح.</string>
     <string name="updater_browser_notice">إذا فشل التنزيل داخل التطبيق، جرّب رابط GitHub الرسمي في المتصفح. يتطلب التنزيل من المتصفح تثبيتًا يدويًا، ولا يتحقق PdfCraft من بصمة SHA-256 له.</string>
+    <string name="toolbar_squiggly">خط متعرج</string>
+    <string name="viewer_hint_squiggly">اسحب على النص لتسطيره بخط متموج</string>
+    <string name="toolbar_color_squiggly">لون الخط المتعرج</string>
+    <string name="toolbar_draw_arrow">سهم</string>
+    <string name="ink_toolbar_arrow">سهم</string>
+    <string name="toolbar_draw_cloud">سحابة مراجعة</string>
+    <string name="ink_toolbar_cloud">سحابة</string>
+    <string name="toolbar_stamp">ختم</string>
+    <string name="toolbar_stamp_choose">اختر ختمًا</string>
+    <string name="viewer_hint_stamp">انقر حيث تريد وضع الختم</string>
+    <string name="toolbar_text_box">مربع نص</string>
+    <string name="toolbar_callout">وسيلة شرح</string>
+    <string name="viewer_hint_callout">انقر على ما تشير إليه وسيلة الشرح</string>
 </resources>

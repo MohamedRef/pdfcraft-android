@@ -512,11 +512,11 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     }
 
     /** Read the document's state from the engine again (after an edit, undo or save). */
-    suspend fun refresh(doc: OpenDocument) {
+    suspend fun refresh(doc: OpenDocument, touchedPage: Int? = null) {
         val eng = engine ?: return
         val info = runCatching { eng.command { document(doc.id) } }.getOrNull() ?: return
         val changed = info.generation != doc.info.generation
-        doc.update(info)
+        doc.update(info, touchedPage)
         if (changed) loadLinks(eng, doc)
     }
 
@@ -559,7 +559,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         viewModelScope.launch {
             try {
                 val r = eng.tool(name, args + ("doc" to doc.id))
-                refresh(doc)
+                refresh(doc, io.github.artcraftandroid.pdfcraft.ui.viewer.pageTouchedBy(name, args))
                 onDone(r)
             } catch (e: MobileException) {
                 tell(e.userMessage)
@@ -585,7 +585,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 tell(e.userMessage)
             } finally {
                 // A partially accepted batch must be visible even if a later segment is refused.
-                refresh(doc)
+                refresh(doc, io.github.artcraftandroid.pdfcraft.ui.viewer.pageTouchedByBatch(name, argsList))
             }
         }
     }
@@ -1197,6 +1197,22 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         val page = prompt.doc.info.pages.getOrNull(at.page) ?: return
         // as the reference: lines that wrap where the page ends become real line breaks, and the box
         // is as wide as its longest line (measured as the engine draws it, so it doesn't wrap again)
+        if (prompt.callout) {
+            // A callout's box sits beside the point it marks, so it may use most of the page width.
+            val (lines, width, height) = FreeTextLayout.layout(text, size, (page.width * 0.6f).coerceAtLeast(size * 4))
+            val box = io.github.artcraftandroid.pdfcraft.ui.viewer.calloutBox(at.x, at.y, width + 4f, height + 4f, page.width, page.height)
+            if (box != null) {
+                runTool(
+                    prompt.doc, "comment_add",
+                    mapOf(
+                        "page" to at.page + 1, "type" to "callout", "rect" to box.map { it.toDouble() },
+                        "to" to listOf(at.x.toDouble(), at.y.toDouble()), "contents" to lines.joinToString("\n"),
+                        "color" to toolPrefs.color(StyledTool.FreeText).hex(), "font_size" to size.toDouble(), "author" to author,
+                    ),
+                )
+                return
+            }
+        }
         val (lines, width, height) = FreeTextLayout.layout(text, size, (page.width - at.x - 6f).coerceAtLeast(size * 4))
         val wrapped = lines.joinToString("\n")
         val x1 = (at.x + width).coerceAtMost(page.width)

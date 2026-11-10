@@ -1405,4 +1405,17 @@
     <string name="ocr_review_empty">No words found on this page.</string>
     <string name="ocr_review_limited">Showing up to %1$d words, with uncertain recognition first.</string>
     <string name="ocr_review_unknown">n/a</string>
+    <string name="toolbar_squiggly">Squiggly</string>
+    <string name="viewer_hint_squiggly">Drag across the text to underline it with a wavy line</string>
+    <string name="toolbar_color_squiggly">Squiggly colour</string>
+    <string name="toolbar_draw_arrow">Arrow</string>
+    <string name="ink_toolbar_arrow">Arrow</string>
+    <string name="toolbar_draw_cloud">Revision cloud</string>
+    <string name="ink_toolbar_cloud">Cloud</string>
+    <string name="toolbar_stamp">Stamp</string>
+    <string name="toolbar_stamp_choose">Choose a stamp</string>
+    <string name="viewer_hint_stamp">Tap where the stamp goes</string>
+    <string name="toolbar_text_box">Text box</string>
+    <string name="toolbar_callout">Callout</string>
+    <string name="viewer_hint_callout">Tap what the callout points at</string>
 </resources>

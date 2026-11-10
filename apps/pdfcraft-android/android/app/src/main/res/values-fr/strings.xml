@@ -1047,4 +1047,17 @@
     <string name="updater_download_browser">Télécharger l\'APK dans le navigateur</string>
     <string name="updater_browser_open_error">Impossible d\'ouvrir le téléchargement GitHub officiel dans le navigateur.</string>
     <string name="updater_browser_notice">Si le téléchargement dans l\'app échoue, essayez le lien GitHub officiel dans le navigateur. Les téléchargements du navigateur s\'installent manuellement et ne sont pas vérifiés par SHA-256 dans PdfCraft.</string>
+    <string name="toolbar_squiggly">Ondulé</string>
+    <string name="viewer_hint_squiggly">Faites glisser sur le texte pour le souligner d\'une ligne ondulée</string>
+    <string name="toolbar_color_squiggly">Couleur du soulignement ondulé</string>
+    <string name="toolbar_draw_arrow">Flèche</string>
+    <string name="ink_toolbar_arrow">Flèche</string>
+    <string name="toolbar_draw_cloud">Nuage de révision</string>
+    <string name="ink_toolbar_cloud">Nuage</string>
+    <string name="toolbar_stamp">Tampon</string>
+    <string name="toolbar_stamp_choose">Choisir un tampon</string>
+    <string name="viewer_hint_stamp">Touchez l\'endroit du tampon</string>
+    <string name="toolbar_text_box">Zone de texte</string>
+    <string name="toolbar_callout">Légende</string>
+    <string name="viewer_hint_callout">Touchez ce que désigne la légende</string>
 </resources>
