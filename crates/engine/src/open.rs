@@ -107,10 +107,21 @@ impl Session {
         bytes: Arc<Vec<u8>>,
         password: Option<&str>,
     ) -> Result<PreparedDocument, OpenError> {
-        let cos = std::panic::catch_unwind(|| pdfcraft_cos::Document::open_with_password(bytes.clone(), password));
+        // Android adaptation (#212): the editing parser and the renderer's inspection read the
+        // same bytes independently, so they run side by side. Each repairs a damaged file on its
+        // own, which took seconds one after the other on a 350 MB file.
+        let open_cos = || std::panic::catch_unwind(|| pdfcraft_cos::Document::open_with_password(bytes.clone(), password));
+        #[cfg(not(target_arch = "wasm32"))]
+        let (cos, inspected) = std::thread::scope(|s| {
+            let cos = s.spawn(open_cos);
+            let inspected = inspect(bytes.clone(), password);
+            (cos.join().unwrap_or_else(Err), inspected)
+        });
+        #[cfg(target_arch = "wasm32")]
+        let (cos, inspected) = (open_cos(), inspect(bytes.clone(), password));
         // The renderer authenticates on its own. It cannot use the owner password of R2–R4
         // files, so give it the user password that owner authentication recovers.
-        let (info, render_password) = match inspect(bytes.clone(), password) {
+        let (info, render_password) = match inspected {
             Ok(info) => (info, password.map(str::to_owned)),
             Err(OpenError::WrongPassword) => {
                 let user = match &cos {

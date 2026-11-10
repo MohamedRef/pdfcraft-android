@@ -581,6 +581,12 @@ impl MobileSession {
         self.with_doc(doc, document_info)
     }
 
+    /// How many repairs opening `doc` needed, for the open timings (#212): a damaged file is
+    /// rebuilt by scanning it, which dominates opening a large one. A count only, never the notes.
+    pub fn repair_count(&self, doc: u64) -> Result<u32, MobileError> {
+        self.with_doc(doc, |d| u32::try_from(d.repair_log().len()).unwrap_or(u32::MAX))
+    }
+
     /// Extra properties from the current parsed PDF. Never reads or writes the source URI.
     pub fn file_properties(&self, doc: u64) -> Result<DocumentProperties, MobileError> {
         self.with_doc(doc, |d| DocumentProperties {

@@ -296,6 +296,11 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             }
             val info = io.github.artcraftandroid.pdfcraft.engine.OpenTiming.measure("native_open") { eng.command { open(file.absolutePath, password) } }
             io.github.artcraftandroid.pdfcraft.engine.OpenTiming.milestone("native_ready", openStartedAt, bytes = file.length(), pages = info.pages.size)
+            // a damaged file is rebuilt by scanning it, which dominates opening a large one (#212)
+            if (io.github.artcraftandroid.pdfcraft.engine.OpenTiming.enabled()) {
+                runCatching { eng.command { repairCount(info.id) } }.getOrNull()
+                    ?.let { io.github.artcraftandroid.pdfcraft.engine.OpenTiming.count("native_repairs", it.toLong()) }
+            }
             val images = PageImages(eng, info.id, viewModelScope, imageBudget, openedAt = openStartedAt)
             val source = uri.takeIf { it.scheme == "content" || it.scheme == "file" }
             val doc = OpenDocument(info.id, info, source, file, images, password, eng, viewModelScope)

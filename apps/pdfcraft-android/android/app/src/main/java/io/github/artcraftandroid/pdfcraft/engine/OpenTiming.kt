@@ -50,6 +50,12 @@ internal object OpenTiming {
         val elapsed = (SystemClock.elapsedRealtime() - openedAtMs).coerceAtLeast(0)
         emit(timingLine(stage, elapsed, bytes, pages))
     }
+
+    /** A count that explains a timing, such as how many repairs opening needed. */
+    fun count(stage: String, n: Long) {
+        if (!enabled()) return
+        emit("$stage count=${n.coerceAtLeast(0)}")
+    }
 }
 
 /** One milestone line, as logcat and the shared report show it. */
