@@ -1128,7 +1128,8 @@
     "vendor/hayro-interpret/src/interpret/mod.rs": "Android-only /Text annotation appearance filter and interpreter setting.",
     "crates/automation/src/documents.rs": "Opt-in doc_open native timing trace; preserve root resolution, input cap and prepare/commit open behavior.",
     "crates/automation/src/paths.rs": "Reserve bounded regular-file input size once before read_to_end, retaining oversized/growing-file rejection; input-byte and sparse oversized-file regression.",
-    "crates/render/src/inspect/core.rs": "Opt-in parser, page geometry, lazy inspection and compatibility fallback timings; unchanged inspection and fallback semantics."
+    "crates/render/src/inspect/core.rs": "Opt-in parser, page geometry, lazy inspection and compatibility fallback timings; unchanged inspection and fallback semantics.",
+    "crates/cos/src/parser.rs": "Android open performance (#212): use existing memchr::memmem search for endstream offsets and forward recovery, retaining token-boundary/EOL checks, one-time indexing and scan accounting. Differential boundary/all-byte and randomized tests compare the original window scan."
   },
   "allowed_local_additions": {
     "crates/render/src/open_trace.rs": "Bounded opt-in request-local diagnostics with fixed static stage names; default no clock/allocation, wasm-safe clock path, cross-thread/cap tests.",
