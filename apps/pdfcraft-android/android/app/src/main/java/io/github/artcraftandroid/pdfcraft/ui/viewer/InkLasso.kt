@@ -2,7 +2,7 @@ package io.github.artcraftandroid.pdfcraft.ui.viewer
 
 import androidx.compose.ui.geometry.Offset
 
-/** Only uncommitted Draw strokes are selectable; this never edits embedded PDF annotations. */
+/** Lasso selection: uncommitted Draw strokes, and saved drawings and shapes ([savedLassoTarget]). */
 internal const val MAX_INK_LASSO_POINTS = 128
 
 internal data class InkLassoBounds(val left: Float, val top: Float, val right: Float, val bottom: Float) {
@@ -109,4 +109,27 @@ internal fun boundedInkLassoMove(
         requested.x.coerceIn(-b.left, pageWidth - b.right),
         requested.y.coerceIn(-b.top, pageHeight - b.bottom),
     )
+}
+
+/** Saved comments the lasso may select: drawings and shapes the user placed, not text markup or replies. */
+private val LASSO_SUBTYPES = setOf("Ink", "Line", "Square", "Circle", "Polygon", "PolyLine", "FreeText", "Stamp")
+
+/** Whether a saved comment can be lasso-selected (and moved, recoloured or deleted together). */
+internal fun savedLassoTarget(subtype: String, locked: Boolean, fillSign: Boolean, replyTo: String?): Boolean =
+    subtype in LASSO_SUBTYPES && !locked && !fillSign && replyTo == null
+
+/** A saved comment's rectangle [x0, y0, x1, y1] (page points) as a closed outline the lasso can test. */
+internal fun lassoRectOutline(rect: List<Float>): List<Offset>? {
+    if (rect.size != 4 || rect.any { !it.isFinite() }) return null
+    val l = minOf(rect[0], rect[2]); val r = maxOf(rect[0], rect[2])
+    val t = minOf(rect[1], rect[3]); val b = maxOf(rect[1], rect[3])
+    return listOf(Offset(l, t), Offset(r, t), Offset(r, b), Offset(l, b), Offset(l, t))
+}
+
+/** A lasso selects a saved comment when it crosses or contains its rectangle, or lies inside it. */
+internal fun inkLassoHitsRect(polygon: List<Offset>, rect: List<Float>): Boolean {
+    val outline = lassoRectOutline(rect) ?: return false
+    if (inkLassoHitsStroke(polygon, outline)) return true
+    val b = inkLassoBounds(listOf(outline)) ?: return false
+    return polygon.size >= 3 && polygon.all { b.contains(it) }
 }

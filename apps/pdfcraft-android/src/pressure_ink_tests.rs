@@ -120,3 +120,35 @@ fn widths_that_do_not_match_the_points_are_refused_without_an_edit() {
     s.execute("comment_add".into(), json!({"doc": doc, "page": 1, "type": "ink", "strokes": [[[10, 10], [20, 20]]]}).to_string()).unwrap();
     assert_eq!(s.comments(doc).unwrap().len(), 1);
 }
+
+/// The Android lasso edits several saved comments as one undo step.
+#[test]
+fn lasso_edits_many_comments_as_one_undo_step() {
+    let s = MobileSession::new();
+    let doc = s.open(blank_letter(), None).unwrap().id;
+    for x in [100.0, 200.0, 300.0] {
+        s.execute("comment_add".into(), json!({"doc": doc, "page": 1, "type": "ink", "strokes": [[[x, 100.0], [x + 20.0, 120.0]]]}).to_string()).unwrap();
+    }
+    let rects = |s: &MobileSession| s.comments(doc).unwrap().iter().map(|c| c.rect[0]).collect::<Vec<_>>();
+    let before = rects(&s);
+    let r: Value = serde_json::from_str(&s.execute("comments_edit_many".into(), json!({"doc": doc, "page": 1, "comments": [1, 3], "move": [10, 0]}).to_string()).unwrap()).unwrap();
+    assert_eq!(r["changed"], 2);
+    let moved = rects(&s);
+    assert!((moved[0] - before[0] - 10.0).abs() < 0.01 && (moved[1] - before[1]).abs() < 0.01 && (moved[2] - before[2] - 10.0).abs() < 0.01, "{before:?} {moved:?}");
+    s.execute("edit_undo".into(), json!({"doc": doc}).to_string()).unwrap();
+    assert_eq!(rects(&s), before, "one undo restores every moved comment");
+    s.execute("comments_edit_many".into(), json!({"doc": doc, "page": 1, "comments": [3, 1], "delete": true}).to_string()).unwrap();
+    let left = s.comments(doc).unwrap();
+    assert_eq!(left.len(), 1);
+    assert!((left[0].rect[0] - before[1]).abs() < 0.01, "the middle stroke stays");
+    s.execute("edit_undo".into(), json!({"doc": doc}).to_string()).unwrap();
+    assert_eq!(s.comments(doc).unwrap().len(), 3);
+    let generation = s.document(doc).unwrap().generation;
+    for bad in [json!({"comments": [1], "move": [1, 1], "delete": true}), json!({"comments": [9], "delete": true}), json!({"comments": [], "delete": true}), json!({"comments": [1]})] {
+        let mut args = bad.as_object().unwrap().clone();
+        args.insert("doc".into(), json!(doc));
+        args.insert("page".into(), json!(1));
+        assert!(s.execute("comments_edit_many".into(), Value::Object(args).to_string()).is_err(), "{bad}");
+    }
+    assert_eq!(s.document(doc).unwrap().generation, generation);
+}

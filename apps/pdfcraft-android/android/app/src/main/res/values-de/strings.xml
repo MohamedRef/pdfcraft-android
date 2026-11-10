@@ -1180,6 +1180,8 @@
     <string name="toolbar_text_box">Textfeld</string>
     <string name="toolbar_callout">Legende</string>
     <string name="viewer_hint_callout">Auf das tippen, worauf die Legende zeigt</string>
+    <string name="ink_lasso_recolor">Stiftfarbe anwenden</string>
+    <string name="toolbar_ink_lasso">Lasso: Tinte und Formen auswählen, verschieben, umfärben oder löschen</string>
     <string name="attachment_install_refused">%1$s ist ein App-Paket. PdfCraft öffnet keine an PDFs angehängten Apps.</string>
     <string name="discard_kept_recovery">Die Originaldatei scheint beschädigt zu sein, daher hat PdfCraft deine bearbeitete Kopie behalten. Öffne die Datei erneut, um eine Kopie zu speichern.</string>
 </resources>
