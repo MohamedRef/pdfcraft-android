@@ -38,6 +38,10 @@ jobs:
         run: python3 -m unittest discover -s scripts -p 'test_android_release_workflow.py'
       - name: Run Rust tests
         run: cargo test --locked -p pdfcraft-cos -p pdfcraft-create -p pdfcraft-sign -p pdfcraft-js -p pdfcraft-forms -p pdfcraft-xfa -p pdfcraft-engine -p pdfcraft-render -p pdfcraft-android
+      - name: Verify native open diagnostics and bounded input reads
+        run: |
+          cargo test --locked -p pdfcraft-automation --lib input_read_preserves_bytes_and_rejects_oversized_regular_files
+          cargo test --locked -p pdfcraft-automation --test native_open_timings open_timings_are_opt_in_and_keep_the_same_document_summary
       - name: Verify native PDF freehand highlighter appearance across reopen
         run: cargo test --locked -p pdfcraft-annot freehand_highlight
 

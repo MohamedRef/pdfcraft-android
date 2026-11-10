@@ -664,3 +664,36 @@ fn new_comment_clipboard_keeps_ink_and_refuses_losing_embedded_payloads() {
     assert!(result.unwrap_err().to_string().contains("attachments"));
     assert_eq!(s.document(attachment_doc).unwrap().generation, generation);
 }
+
+#[test]
+fn profiled_open_preserves_document_rendering_and_records_only_stage_durations() {
+    let s = MobileSession::new();
+    let path = blank_pdf(3);
+    let original = std::fs::read(&path).unwrap();
+    let ordinary = s.open(path.clone(), None).unwrap();
+    let profiled = s.open_with_timings(path.clone(), None).unwrap();
+    assert_eq!(profiled.document.pages.len(), ordinary.pages.len());
+    assert_eq!(profiled.document.file_size, ordinary.file_size);
+    assert_eq!(profiled.document.dirty, ordinary.dirty);
+    let names: Vec<_> = profiled.timings.iter().map(|t| t.stage.as_str()).collect();
+    for expected in [
+        "native_file_read",
+        "native_cos_open",
+        "native_render_parse",
+        "native_page_geometry",
+        "native_inspect_lazy",
+        "native_prepare",
+        "native_signatures",
+        "native_summary",
+    ] {
+        assert!(names.contains(&expected), "missing {expected}: {names:?}");
+    }
+    assert!(names.iter().all(|stage| stage.starts_with("native_") && stage.bytes().all(|b| b.is_ascii_lowercase() || b == b'_')));
+    assert!(profiled.timings.len() <= 64);
+    let a = s.render_page(ordinary.id, 0, 0.25, None).unwrap();
+    let b = s.render_page(profiled.document.id, 0, 0.25, None).unwrap();
+    assert_eq!(a.rgba, b.rgba);
+    assert_eq!(std::fs::read(path).unwrap(), original);
+    assert!(matches!(s.open_with_timings("relative.pdf".into(), None), Err(MobileError::Open(_))));
+    assert_eq!(s.documents().len(), 2);
+}

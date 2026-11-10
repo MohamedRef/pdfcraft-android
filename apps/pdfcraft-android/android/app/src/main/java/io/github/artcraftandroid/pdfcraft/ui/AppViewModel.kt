@@ -294,9 +294,22 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 }
                 document = null
             }
-            val info = io.github.artcraftandroid.pdfcraft.engine.OpenTiming.measure("native_open") { eng.command { open(file.absolutePath, password) } }
+            val info = io.github.artcraftandroid.pdfcraft.engine.OpenTiming.measure("native_open") {
+                eng.command {
+                    if (io.github.artcraftandroid.pdfcraft.engine.OpenTiming.enabled()) {
+                        val opened = openWithTimings(file.absolutePath, password)
+                        // These are completed nested/parallel stages, not a sequential timeline.
+                        opened.timings.forEach {
+                            io.github.artcraftandroid.pdfcraft.engine.OpenTiming.duration(it.stage, it.durationMs.toLong())
+                        }
+                        opened.document
+                    } else {
+                        open(file.absolutePath, password)
+                    }
+                }
+            }
             io.github.artcraftandroid.pdfcraft.engine.OpenTiming.milestone("native_ready", openStartedAt, bytes = file.length(), pages = info.pages.size)
-            // a damaged file is rebuilt by scanning it, which dominates opening a large one (#212)
+            // This counts editing-parser repairs only; renderer fallback work has its own trace.
             if (io.github.artcraftandroid.pdfcraft.engine.OpenTiming.enabled()) {
                 runCatching { eng.command { repairCount(info.id) } }.getOrNull()
                     ?.let { io.github.artcraftandroid.pdfcraft.engine.OpenTiming.count("native_repairs", it.toLong()) }

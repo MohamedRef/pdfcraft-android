@@ -3,7 +3,7 @@
 use std::sync::{Arc, OnceLock};
 
 use pdfcraft_cos::{SaveOptions, write_incremental};
-use pdfcraft_render::{DocInfo, OpenError, RenderConfig, RenderPool, inspect};
+use pdfcraft_render::{DocInfo, OpenError, OpenTrace, RenderConfig, RenderPool, inspect, inspect_with_trace};
 
 use crate::history::{Editor, Keys, TextBlocksCache};
 use crate::{
@@ -20,6 +20,7 @@ pub struct OpenContext {
     trust: Arc<TrustStore>,
     captions: Arc<StatusCaptions>,
     xfa_time_scale: u32,
+    trace: OpenTrace,
 }
 
 /// A fully prepared document that has not yet been registered in a session.
@@ -39,6 +40,12 @@ struct DocumentOpenData<'a> {
 }
 
 impl OpenContext {
+    /// Attach request-local diagnostics without changing any open or editing behavior.
+    pub fn with_open_trace(mut self, trace: OpenTrace) -> Self {
+        self.trace = trace;
+        self
+    }
+
     /// Prepare a document without mutating the session that supplied this context.
     pub fn prepare_open(
         &self,
@@ -62,6 +69,7 @@ impl Session {
             trust: self.trust.clone(),
             captions: self.captions.clone(),
             xfa_time_scale: self.xfa_time_scale.unwrap_or(1),
+            trace: OpenTrace::default(),
         }
     }
 
@@ -110,15 +118,19 @@ impl Session {
         // Android adaptation (#212): the editing parser and the renderer's inspection read the
         // same bytes independently, so they run side by side. Each repairs a damaged file on its
         // own, which took seconds one after the other on a 350 MB file.
-        let open_cos = || std::panic::catch_unwind(|| pdfcraft_cos::Document::open_with_password(bytes.clone(), password));
+        let open_cos = || {
+            context
+                .trace
+                .measure("native_cos_open", || std::panic::catch_unwind(|| pdfcraft_cos::Document::open_with_password(bytes.clone(), password)))
+        };
         #[cfg(not(target_arch = "wasm32"))]
         let (cos, inspected) = std::thread::scope(|s| {
             let cos = s.spawn(open_cos);
-            let inspected = inspect(bytes.clone(), password);
+            let inspected = context.trace.measure("native_inspect", || inspect_with_trace(bytes.clone(), password, &context.trace));
             (cos.join().unwrap_or_else(Err), inspected)
         });
         #[cfg(target_arch = "wasm32")]
-        let (cos, inspected) = (open_cos(), inspect(bytes.clone(), password));
+        let (cos, inspected) = (open_cos(), inspect_with_trace(bytes.clone(), password, &context.trace));
         // The renderer authenticates on its own. It cannot use the owner password of R2–R4
         // files, so give it the user password that owner authentication recovers.
         let (info, render_password) = match inspected {
@@ -129,7 +141,7 @@ impl Session {
                     _ => None,
                 };
                 let user = user.ok_or(OpenError::WrongPassword)?;
-                (inspect(bytes.clone(), Some(&user))?, Some(user))
+                (inspect_with_trace(bytes.clone(), Some(&user), &context.trace)?, Some(user))
             }
             Err(e) => return Err(e),
         };
@@ -323,24 +335,26 @@ impl Session {
             Err(_) => (None, Some("the document structure could not be read for editing".into())),
         };
         let sig_cache = Arc::new(pdfcraft_sign::DigestCache::default());
-        let mut signatures = editor.as_ref().map(|e| signatures_of(&e.cos, &bytes, &context.trust, &sig_cache)).unwrap_or_default();
+        let mut signatures = context
+            .trace
+            .measure("native_signatures", || editor.as_ref().map(|e| signatures_of(&e.cos, &bytes, &context.trust, &sig_cache)).unwrap_or_default());
         // The inspection reads only `/Info`; a file stating its title or author only in XMP still
         // shows them (#2373).
         if let Some(e) = &editor {
-            for (field, value) in info_fields(&mut info, &e.cos) {
+            for (field, value) in context.trace.measure("native_metadata", || info_fields(&mut info, &e.cos)) {
                 if field.is_none() {
                     *field = value;
                 }
             }
         }
         // The print preview draws the layers as they print.
-        config.print_layers = print_preview_layers(editor.as_ref().map(|e| &e.cos), &info.layers);
-        let display = display_bytes(editor.as_mut(), &bytes, &mut signatures, &context.captions);
-        let renderer = RenderPool::new(display.clone(), render_threads(), display_config(&config));
+        config.print_layers = context.trace.measure("native_print_layers", || print_preview_layers(editor.as_ref().map(|e| &e.cos), &info.layers));
+        let display = context.trace.measure("native_display", || display_bytes(editor.as_mut(), &bytes, &mut signatures, &context.captions));
+        let renderer = context.trace.measure("native_render_pool", || RenderPool::new(display.clone(), render_threads(), display_config(&config)));
         let (form, adopted) = editor
             .as_ref()
             .map(|e| {
-                let mut fields = pdfcraft_forms::fields_with_adopted(&e.cos);
+                let mut fields = context.trace.measure("native_form_fields", || pdfcraft_forms::fields_with_adopted(&e.cos));
                 xfa::mark_script_buttons(&e.cos, &mut fields.items);
                 (fields.items, fields.adopted_page_fields)
             })

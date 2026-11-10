@@ -9,6 +9,7 @@
 #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
 
 mod inspect;
+mod open_trace;
 mod pixels;
 mod raster;
 mod reading;
@@ -19,9 +20,10 @@ pub mod transition;
 
 pub use inspect::{
     Annotation, Attachment, AttachmentSource, DestView, DocInfo, Field, FieldKind, FontInfo, Layer, LayerOp, Link, LinkTarget, OutlineItem, PageInfo,
-    PageTransition, RemoteDestination, ReviewStates, TransitionStyle, Xfa, attachment_data, check_pages, inspect, link_replies, pretty_date,
-    sound_wav, thread_tops,
+    PageTransition, RemoteDestination, ReviewStates, TransitionStyle, Xfa, attachment_data, check_pages, inspect, inspect_with_trace, link_replies,
+    pretty_date, sound_wav, thread_tops,
 };
+pub use open_trace::{OpenStage, OpenTrace};
 pub use pixels::Pixels;
 pub use raster::{
     MAX_PIXELS, MAX_SIDE, PRINT_TAG, PageRenderer, RenderConfig, RenderPool, RenderRequest, RenderStats, RenderWarning, RenderedPage, RequestKind,

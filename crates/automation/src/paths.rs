@@ -136,10 +136,17 @@ pub(crate) const MAX_INPUT: u64 = 512 * 1024 * 1024;
 pub(crate) fn read_input_bytes(path: &Path) -> std::io::Result<Vec<u8>> {
     use std::io::Read as _;
     let file = std::fs::File::open(path)?;
-    if file.metadata().is_ok_and(|m| m.is_file() && m.len() > MAX_INPUT) {
+    let length = file.metadata().ok().filter(|m| m.is_file()).map(|m| m.len());
+    if length.is_some_and(|n| n > MAX_INPUT) {
         return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, "input exceeds 512 MiB"));
     }
     let mut bytes = Vec::new();
+    if let Some(length) = length {
+        // Take<File> cannot provide read_to_end with the file-size hint. Reserve once instead
+        // of growing a 352 MB working copy geometrically. One spare byte permits the EOF probe;
+        // the Take limit and the final length check still reject a file that grows past the cap.
+        bytes.try_reserve_exact(length as usize + 1).map_err(|e| std::io::Error::new(std::io::ErrorKind::OutOfMemory, e))?;
+    }
     file.take(MAX_INPUT + 1).read_to_end(&mut bytes)?;
     if bytes.len() as u64 > MAX_INPUT {
         return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, "input exceeds 512 MiB"));
@@ -183,4 +190,24 @@ pub(crate) fn write_atomic_synced(
     // any step removes it and leaves the destination as it was.
     pdfcraft_platform::staging::write_atomically_with(path, bytes, StagingName::SuffixThenTag, suffixes, sync)
         .map_err(|e| failed(format!("{}: {e}", path.display())))
+}
+
+#[cfg(test)]
+mod input_tests {
+    use super::*;
+
+    #[test]
+    fn input_read_preserves_bytes_and_rejects_oversized_regular_files() {
+        let path = std::env::temp_dir().join(format!("pdfcraft-input-read-{}", std::process::id()));
+        std::fs::write(&path, []).unwrap();
+        assert!(read_input_bytes(&path).unwrap().is_empty());
+        let bytes: Vec<u8> = (0..16387).map(|n| (n % 251) as u8).collect();
+        std::fs::write(&path, &bytes).unwrap();
+        assert_eq!(read_input_bytes(&path).unwrap(), bytes);
+        let file = std::fs::OpenOptions::new().write(true).open(&path).unwrap();
+        file.set_len(MAX_INPUT + 1).unwrap();
+        drop(file);
+        assert_eq!(read_input_bytes(&path).unwrap_err().kind(), std::io::ErrorKind::InvalidData);
+        std::fs::remove_file(path).unwrap();
+    }
 }

@@ -103,6 +103,19 @@ pub struct DocumentInfo {
     pub generation: u64,
 }
 
+/// Fixed native stage names and durations, never document identifiers or contents.
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct NativeOpenTiming {
+    pub stage: String,
+    pub duration_ms: u64,
+}
+
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct ProfiledOpen {
+    pub document: DocumentInfo,
+    pub timings: Vec<NativeOpenTiming>,
+}
+
 /// One custom PDF document-information field.
 #[derive(Debug, Clone, uniffi::Record)]
 pub struct MetadataField {
@@ -489,6 +502,26 @@ impl MobileSession {
         }
     }
 
+    fn open_document(&self, path: String, password: Option<String>, recording: bool) -> Result<ProfiledOpen, MobileError> {
+        if !std::path::Path::new(&path).is_absolute() {
+            return Err(MobileError::Open(format!("the path must be absolute, not `{path}`")));
+        }
+        let mut args = json!({ "path": path, "open_timings": recording });
+        if let (Some(password), Some(args)) = (password, args.as_object_mut()) {
+            args.insert("password".into(), Value::String(password));
+        }
+        let out = first_json(self.lock().call("doc_open", &args).map_err(open_error)?);
+        let id = out.get("doc").and_then(Value::as_u64).ok_or_else(|| MobileError::Open("the document did not open".into()))?;
+        let timings = out
+            .get("open_timings")
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+            .filter_map(|s| Some(NativeOpenTiming { stage: s.get("stage")?.as_str()?.to_owned(), duration_ms: s.get("duration_ms")?.as_u64()? }))
+            .collect();
+        Ok(ProfiledOpen { document: self.document(id)?, timings })
+    }
+
     fn with_doc<T>(&self, doc: u64, f: impl FnOnce(&Document) -> T) -> Result<T, MobileError> {
         let a = self.lock();
         let d = a.session().get(DocId(doc)).ok_or(MobileError::NoDocument(doc))?;
@@ -551,16 +584,12 @@ impl MobileSession {
 
     /// Open the PDF at absolute path `path` (with `password` if it needs one).
     pub fn open(&self, path: String, password: Option<String>) -> Result<DocumentInfo, MobileError> {
-        if !std::path::Path::new(&path).is_absolute() {
-            return Err(MobileError::Open(format!("the path must be absolute, not `{path}`")));
-        }
-        let mut args = json!({ "path": path });
-        if let (Some(p), Some(o)) = (password, args.as_object_mut()) {
-            o.insert("password".into(), Value::String(p));
-        }
-        let out = self.lock().call("doc_open", &args).map_err(open_error)?;
-        let id = first_json(out).get("doc").and_then(Value::as_u64).ok_or_else(|| MobileError::Open("the document did not open".into()))?;
-        self.document(id)
+        self.open_document(path, password, false).map(|opened| opened.document)
+    }
+
+    /// The same open path, with a bounded, request-local stage trace for Diagnostics.
+    pub fn open_with_timings(&self, path: String, password: Option<String>) -> Result<ProfiledOpen, MobileError> {
+        self.open_document(path, password, true)
     }
 
     /// Close document `doc`. Unsaved edits are refused unless `discard_changes` is set.
@@ -581,8 +610,8 @@ impl MobileSession {
         self.with_doc(doc, document_info)
     }
 
-    /// How many repairs opening `doc` needed, for the open timings (#212): a damaged file is
-    /// rebuilt by scanning it, which dominates opening a large one. A count only, never the notes.
+    /// The editing parser's repair count, not the renderer's repairs or compatibility fallback.
+    /// A count only, never the notes; detailed open timings identify other expensive stages.
     pub fn repair_count(&self, doc: u64) -> Result<u32, MobileError> {
         self.with_doc(doc, |d| u32::try_from(d.repair_log().len()).unwrap_or(u32::MAX))
     }

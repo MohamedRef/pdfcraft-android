@@ -105,11 +105,28 @@ impl Automation {
 
     pub(crate) fn doc_open(&mut self, a: &Args) -> Result<Value> {
         let path = self.resolve(a.str("path")?, false)?;
-        let bytes = read_input(&path)?;
+        let recording = a.opt_bool("open_timings")?.unwrap_or(false);
+        let trace = if recording { pdfcraft_render::OpenTrace::recording() } else { pdfcraft_render::OpenTrace::default() };
+        let bytes = trace.measure("native_file_read", || read_input(&path))?;
         let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
-        let id = self.session.open(name, Some(path.to_string_lossy().into_owned()), Arc::new(bytes), a.opt_str("password")?).map_err(failed)?;
+        let password = a.opt_str("password")?;
+        let prepared = trace
+            .measure("native_prepare", || {
+                self.session.open_context().with_open_trace(trace.clone()).prepare_open(
+                    name,
+                    Some(path.to_string_lossy().into_owned()),
+                    Arc::new(bytes),
+                    password,
+                )
+            })
+            .map_err(failed)?;
+        let id = trace.measure("native_commit", || self.session.commit_open(prepared));
         let doc = self.session.get(id).ok_or_else(|| failed("the document vanished"))?;
-        Ok(summary(doc))
+        let mut out = trace.measure("native_summary", || summary(doc));
+        if recording {
+            out["open_timings"] = json!(trace.snapshot().iter().map(|s| json!({"stage": s.name, "duration_ms": s.duration_ms})).collect::<Vec<_>>());
+        }
+        Ok(out)
     }
 
     pub(crate) fn doc_close(&mut self, a: &Args) -> Result<Value> {
