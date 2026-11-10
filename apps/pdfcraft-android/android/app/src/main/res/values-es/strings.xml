@@ -482,7 +482,7 @@
     <string name="voice_record_comment">Grabar comentario de voz</string>
     <string name="voice_mic_failed">No se pudo iniciar el micrófono. Puede que otra app lo esté usando.</string>
     <string name="voice_nothing_recorded">No se grabó nada.</string>
-    <string name="voice_limit_warning">La grabación se detiene a los 30 minutos.</string>
+    <string name="voice_limit_warning">La grabación se detiene a los 17 minutos.</string>
     <string name="voice_recording">Grabando…</string>
     <string name="voice_playing">Reproduciendo…</string>
     <string name="voice_listen_first">Escucha tu grabación antes de publicarla</string>
@@ -1172,6 +1172,9 @@
     <string name="service_action_forward">Avanzar 15 segundos</string>
     <!-- Translator note: notification button that stops reading aloud -->
     <string name="service_action_stop">Detener</string>
+    <string name="updater_download_browser">Descargar el APK en el navegador</string>
+    <string name="updater_browser_open_error">No se pudo abrir la descarga oficial de GitHub en el navegador.</string>
+    <string name="updater_browser_notice">Si la descarga en la app falla, prueba el enlace oficial de GitHub en el navegador. Las descargas del navegador se instalan manualmente y PdfCraft no verifica su SHA-256.</string>
     <string name="toolbar_squiggly">Subrayado ondulado</string>
     <string name="viewer_hint_squiggly">Arrastra sobre el texto para subrayarlo con una línea ondulada</string>
     <string name="toolbar_color_squiggly">Color del subrayado ondulado</string>
@@ -1187,4 +1190,5 @@
     <string name="viewer_hint_callout">Toca lo que señala la llamada</string>
     <string name="ink_lasso_recolor">Aplicar el color del lápiz</string>
     <string name="toolbar_ink_lasso">Lazo: selecciona, mueve, cambia de color o elimina tinta y formas</string>
+    <string name="discard_kept_recovery">El archivo original parece dañado, así que PdfCraft conservó tu copia editada. Vuelve a abrir el archivo para guardar una copia.</string>
 </resources>

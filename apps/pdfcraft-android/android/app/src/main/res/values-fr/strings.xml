@@ -460,7 +460,7 @@
     <string name="voice_record_comment">Enregistrer un commentaire vocal</string>
     <string name="voice_mic_failed">Impossible de démarrer le microphone. Une autre application l\'utilise peut-être.</string>
     <string name="voice_nothing_recorded">Rien n\'a été enregistré.</string>
-    <string name="voice_limit_warning">L\'enregistrement s\'arrête à 30 minutes.</string>
+    <string name="voice_limit_warning">L\'enregistrement s\'arrête à 17 minutes.</string>
     <string name="voice_recording">Enregistrement…</string>
     <string name="voice_playing">Lecture…</string>
     <string name="voice_listen_first">Écoutez votre enregistrement avant de le publier</string>
@@ -1044,6 +1044,9 @@
     <string name="service_action_back">Reculer de 15 secondes</string>
     <string name="service_action_forward">Avancer de 15 secondes</string>
     <string name="service_action_stop">Arrêter</string>
+    <string name="updater_download_browser">Télécharger l\'APK dans le navigateur</string>
+    <string name="updater_browser_open_error">Impossible d\'ouvrir le téléchargement GitHub officiel dans le navigateur.</string>
+    <string name="updater_browser_notice">Si le téléchargement dans l\'app échoue, essayez le lien GitHub officiel dans le navigateur. Les téléchargements du navigateur s\'installent manuellement et ne sont pas vérifiés par SHA-256 dans PdfCraft.</string>
     <string name="toolbar_squiggly">Ondulé</string>
     <string name="viewer_hint_squiggly">Faites glisser sur le texte pour le souligner d\'une ligne ondulée</string>
     <string name="toolbar_color_squiggly">Couleur du soulignement ondulé</string>
@@ -1059,4 +1062,5 @@
     <string name="viewer_hint_callout">Touchez ce que désigne la légende</string>
     <string name="ink_lasso_recolor">Appliquer la couleur du stylo</string>
     <string name="toolbar_ink_lasso">Lasso : sélectionner, déplacer, recolorer ou supprimer l\'encre et les formes</string>
+    <string name="discard_kept_recovery">Le fichier d\'origine semble endommagé : PdfCraft a donc gardé votre copie modifiée. Rouvrez le fichier pour en enregistrer une copie.</string>
 </resources>

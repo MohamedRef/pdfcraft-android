@@ -486,7 +486,7 @@
     <string name="voice_record_comment">Record voice comment</string>
     <string name="voice_mic_failed">The microphone couldn\'t be started. Another app may be using it.</string>
     <string name="voice_nothing_recorded">Nothing was recorded.</string>
-    <string name="voice_limit_warning">Recording stops at 30 minutes.</string>
+    <string name="voice_limit_warning">Recording stops at 17 minutes.</string>
     <string name="voice_recording">Recording…</string>
     <string name="voice_playing">Playing…</string>
     <string name="voice_listen_first">Listen to your recording before posting it</string>
@@ -1361,6 +1361,9 @@
     <string name="updater_interrupted">Download interrupted. Tap Resume to retry.</string>
     <string name="updater_resume">Resume download</string>
     <string name="updater_download">Download APK</string>
+    <string name="updater_download_browser">Download APK in browser instead</string>
+    <string name="updater_browser_open_error">Could not open the official GitHub download in your browser.</string>
+    <string name="updater_browser_notice">If the in-app download fails, try the official GitHub link in your browser. Browser downloads require manual installation and are not SHA-256-verified by PdfCraft.</string>
     <string name="updater_pause">Pause</string>
     <string name="updater_apk_ready">Verified APK ready</string>
     <string name="updater_confirm_install">Confirm installation in Android\'s installer.</string>
@@ -1416,4 +1419,5 @@
     <string name="toolbar_callout">Callout</string>
     <string name="viewer_hint_callout">Tap what the callout points at</string>
     <string name="ink_lasso_recolor">Apply pen colour</string>
+    <string name="discard_kept_recovery">The original file looks damaged, so PdfCraft kept your edited copy. Open the file again to save a copy.</string>
 </resources>
