@@ -6,3 +6,4 @@
 .claude/
 # the phone parity tracker stays on this computer, out of the repo
 /docs/parity-mobile.md
+__pycache__/
