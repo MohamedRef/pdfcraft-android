@@ -11,6 +11,13 @@
 
 # PdfCraft Android - development handover
 
+## RELEASE 0.0.18-beta (18012) — 2026-11-10 (owner requested)
+
+- Release PR stages `0.0.18-beta` / ARM64 build `18012` (`pdfcraft.versionCode=1801`), same package ID and signer. The publish trigger matches only `chore(release): publish 0.0.18-beta (18012)`.
+- Owner's 0.0.17-beta timings (S24 Ultra): a 352 MB / 869-page PDF spent 3.2 s in `native_open`; the copy was only 0.23 s. Locally only a file needing cross-reference repair reproduced that (3.7 s).
+- Included: reuse unchanged working copies (#210, PR #214); faster repair scans and parallel cos/inspect open plus `native_repairs` in the timings (#212, PR #216).
+- Open: confirm `native_repairs` on the owner's file; hayro fallback and lopdf eager load on repaired files; #211 (first page before the copy).
+
 ## RELEASE 0.0.17-beta (17012) — 2026-11-10 (owner requested)
 
 - Release PR stages `0.0.17-beta` / ARM64 build `17012` (`pdfcraft.versionCode=1701`), same package ID and signer. The publish trigger matches only `chore(release): publish 0.0.17-beta (17012)`.
