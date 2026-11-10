@@ -32,3 +32,15 @@ internal object PendingWorkingCopy {
         if (dir.exists() && !dir.deleteRecursively()) throw IOException("Cannot discard PDF recovery copy")
     }
 }
+
+/**
+ * Whether bytes read from a PDF's start ([head]) and, when readable, its end ([tail]) look like an
+ * intact file: `%PDF-` within the first 1 KiB, and `%%EOF` near the end. A truncated original
+ * fails this, so a failed write-back's recovery copy is never discarded for it.
+ */
+internal fun pdfLooksIntact(head: ByteArray, tail: ByteArray?): Boolean {
+    val start = String(head, Charsets.ISO_8859_1)
+    if (!start.contains("%PDF-")) return false
+    if (tail == null) return true
+    return String(tail, Charsets.ISO_8859_1).contains("%%EOF")
+}

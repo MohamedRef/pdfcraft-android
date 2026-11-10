@@ -475,7 +475,7 @@
     <string name="voice_record_comment">Sprachkommentar aufnehmen</string>
     <string name="voice_mic_failed">Das Mikrofon konnte nicht gestartet werden. Möglicherweise wird es gerade von einer anderen App verwendet.</string>
     <string name="voice_nothing_recorded">Es wurde nichts aufgenommen.</string>
-    <string name="voice_limit_warning">Die Aufnahme wird nach 30 Minuten beendet.</string>
+    <string name="voice_limit_warning">Die Aufnahme wird nach 17 Minuten beendet.</string>
     <string name="voice_recording">Aufnahme läuft …</string>
     <string name="voice_playing">Wiedergabe läuft …</string>
     <string name="voice_listen_first">Höre dir deine Aufnahme an, bevor du sie veröffentlichst</string>
@@ -1180,4 +1180,5 @@
     <string name="toolbar_text_box">Textfeld</string>
     <string name="toolbar_callout">Legende</string>
     <string name="viewer_hint_callout">Auf das tippen, worauf die Legende zeigt</string>
+    <string name="discard_kept_recovery">Die Originaldatei scheint beschädigt zu sein, daher hat PdfCraft deine bearbeitete Kopie behalten. Öffne die Datei erneut, um eine Kopie zu speichern.</string>
 </resources>

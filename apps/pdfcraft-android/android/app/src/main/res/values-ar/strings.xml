@@ -340,7 +340,7 @@
     <string name="voice_record_comment">تسجيل تعليق صوتي</string>
     <string name="voice_mic_failed">تعذّر تشغيل الميكروفون. قد يستخدمه تطبيق آخر.</string>
     <string name="voice_nothing_recorded">لم يُسجّل شيء.</string>
-    <string name="voice_limit_warning">يتوقف التسجيل بعد ٣٠ دقيقة.</string>
+    <string name="voice_limit_warning">يتوقف التسجيل بعد ١٧ دقيقة.</string>
     <string name="voice_recording">جارٍ التسجيل…</string>
     <string name="voice_playing">جارٍ التشغيل…</string>
     <string name="voice_listen_first">استمع إلى تسجيلك قبل نشره</string>
@@ -866,4 +866,5 @@
     <string name="toolbar_text_box">مربع نص</string>
     <string name="toolbar_callout">وسيلة شرح</string>
     <string name="viewer_hint_callout">انقر على ما تشير إليه وسيلة الشرح</string>
+    <string name="discard_kept_recovery">يبدو أن الملف الأصلي تالف، لذا احتفظ PdfCraft بنسختك المعدّلة. افتح الملف مرة أخرى لحفظ نسخة.</string>
 </resources>
