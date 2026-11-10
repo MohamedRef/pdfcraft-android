@@ -76,7 +76,7 @@ private const val WHEEL_TURN_MS = 800L
 fun PageCanvas(
     state: ViewerState,
     images: PageImages,
-    generation: Long,
+    generations: PageGenerations,
     look: CanvasLook,
     modifier: Modifier = Modifier,
     gap: Dp = 8.dp,
@@ -106,9 +106,9 @@ fun PageCanvas(
     val wheelZoom by rememberUpdatedState(onWheelZoom)
 
     // keep the renderers working on what is in view
-    LaunchedEffect(state, images, generation) {
+    LaunchedEffect(state, images, generations) {
         snapshotFlow { Triple(state.zoom, state.scrollX to state.scrollY, state.layout) }.collect {
-            images.want(state.requests(generation, maxScale * 4f))
+            images.want(state.requests(generations, maxScale * 4f))
         }
     }
 
@@ -246,7 +246,7 @@ fun PageCanvas(
             // read the image version so arrivals redraw
             images.version
             drawRect(look.background)
-            drawPages(state, images, generation, look, maxScale * 4f)
+            drawPages(state, images, generations, look, maxScale * 4f)
             overlay()
         }
     }
@@ -272,13 +272,14 @@ private suspend fun settle(state: ViewerState, velocity: Offset, density: Float)
     }
 }
 
-private fun DrawScope.drawPages(state: ViewerState, images: PageImages, gen: Long, look: CanvasLook, maxScale: Float) {
+private fun DrawScope.drawPages(state: ViewerState, images: PageImages, gens: PageGenerations, look: CanvasLook, maxScale: Float) {
     val level = state.detailLevel()
     for (i in state.visiblePages()) {
         val r = state.pageRectOnScreen(i)
         // a thin shadow line around the paper, as a printed page on a grey desk
         drawRect(look.pageShadow, topLeft = Offset(r.left - 1f, r.top - 1f), size = Size(r.width + 2f, r.height + 2f))
         drawRect(if (look.invert) Color.Black else Color.White, topLeft = r.topLeft, size = r.size)
+        val gen = gens.of(i)
         val base = images.get(ImageKey(i, gen, state.baseLevel())) ?: images.get(ImageKey(i, gen, 0)) ?: images.latestBase(i)
         if (base != null) {
             drawImageIn(base, r, look.invert)
@@ -296,7 +297,9 @@ private fun DrawScope.drawPages(state: ViewerState, images: PageImages, gen: Lon
             val vx1 = ((size.width - r.left) / k).toInt() / ViewerState.TILE
             val vy1 = ((size.height - r.top) / k).toInt() / ViewerState.TILE
             for (ty in vy0..minOf(vy1, rows - 1)) for (tx in vx0..minOf(vx1, cols - 1)) {
-                val t = images.get(ImageKey(i, gen, level, ty * cols + tx)) ?: continue
+                // An older generation's tile stands in while this one renders, as the page does,
+                // rather than dropping to the blurry whole-page image after every edit.
+                val t = images.get(ImageKey(i, gen, level, ty * cols + tx)) ?: images.latestTile(i, level, ty * cols + tx) ?: continue
                 val dst = Rect(r.left + t.x * k, r.top + t.y * k, r.left + (t.x + t.bitmap.width) * k, r.top + (t.y + t.bitmap.height) * k)
                 drawImageIn(t, dst, look.invert)
             }

@@ -230,7 +230,7 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
         ) else PageCanvas(
             state = doc.viewer,
             images = doc.images,
-            generation = doc.info.generation.toLong(),
+            generations = doc.pageGenerations,
             look = canvasLook,
             gap = with(density) { (if (c.dark) 3f else 4f).toDp() },
             gesturesEnabled = gesturesForTool,
