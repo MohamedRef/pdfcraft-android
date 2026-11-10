@@ -1415,4 +1415,5 @@
     <string name="toolbar_text_box">Text box</string>
     <string name="toolbar_callout">Callout</string>
     <string name="viewer_hint_callout">Tap what the callout points at</string>
+    <string name="attachment_install_refused">%1$s is an app package. PdfCraft does not open apps attached to PDFs.</string>
 </resources>

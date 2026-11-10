@@ -34,7 +34,7 @@ class DocumentFiles(private val context: Context) {
     fun workingCopy(uri: Uri): File {
         if (uri.scheme == ContentResolver.SCHEME_FILE) {
             val f = File(requireNotNull(uri.path) { context.getString(R.string.files_error_no_path) })
-            if (f.canonicalPath.startsWith(context.filesDir.canonicalPath)) return f
+            if (io.github.artcraftandroid.pdfcraft.pathWithin(f.canonicalPath, context.filesDir.canonicalPath)) return f
         }
         val name = OpenTiming.measure("provider_metadata") { displayName(uri) }
         val dir = File(workDir, sha(uri.toString())).apply { mkdirs() }

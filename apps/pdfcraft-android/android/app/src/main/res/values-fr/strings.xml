@@ -1057,4 +1057,5 @@
     <string name="toolbar_text_box">Zone de texte</string>
     <string name="toolbar_callout">Légende</string>
     <string name="viewer_hint_callout">Touchez ce que désigne la légende</string>
+    <string name="attachment_install_refused">%1$s est un paquet d\'application. PdfCraft n\'ouvre pas les applications jointes aux PDF.</string>
 </resources>

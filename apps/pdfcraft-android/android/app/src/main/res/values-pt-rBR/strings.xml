@@ -762,4 +762,5 @@
     <string name="toolbar_text_box">Caixa de texto</string>
     <string name="toolbar_callout">Chamada</string>
     <string name="viewer_hint_callout">Toque no que a chamada aponta</string>
+    <string name="attachment_install_refused">%1$s é um pacote de app. O PdfCraft não abre apps anexados a PDFs.</string>
 </resources>

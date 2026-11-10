@@ -1177,4 +1177,5 @@
     <string name="toolbar_text_box">Textfeld</string>
     <string name="toolbar_callout">Legende</string>
     <string name="viewer_hint_callout">Auf das tippen, worauf die Legende zeigt</string>
+    <string name="attachment_install_refused">%1$s ist ein App-Paket. PdfCraft öffnet keine an PDFs angehängten Apps.</string>
 </resources>
