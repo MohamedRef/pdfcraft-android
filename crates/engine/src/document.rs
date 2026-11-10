@@ -722,12 +722,36 @@ pub(crate) fn display_bytes(
     signatures: &mut [SignatureInfo],
     captions: &StatusCaptions,
 ) -> Arc<Vec<u8>> {
+    display_bytes_collect_fields(editor, bytes, signatures, captions, None, &pdfcraft_render::OpenTrace::default())
+}
+
+/// Capture the field discovery already needed for display when it reads the original COS.
+/// A comment overlay keeps its own fresh discovery, without retaining a second field list.
+pub(crate) fn display_bytes_collect_fields(
+    editor: Option<&mut Editor>,
+    bytes: &Arc<Vec<u8>>,
+    signatures: &mut [SignatureInfo],
+    captions: &StatusCaptions,
+    mut fields_out: Option<&mut Option<pdfcraft_forms::Fields>>,
+    trace: &pdfcraft_render::OpenTrace,
+) -> Arc<Vec<u8>> {
+    if let Some(out) = fields_out.as_deref_mut() {
+        *out = None;
+    }
     for sig in signatures.iter_mut() {
         sig.verdict_shown = false;
     }
     let Some(e) = editor else { return bytes.clone() };
     let comments = pdfcraft_annot::with_missing_appearances_cached(&e.cos, &mut e.appearances);
-    let fields = pdfcraft_forms::with_field_appearances_cached(comments.as_ref().unwrap_or(&e.cos), &mut e.field_appearances);
+    let fields = match fields_out.filter(|_| comments.is_none()) {
+        Some(out) => {
+            let found = trace.measure("native_display_form_discovery", || pdfcraft_forms::fields_with_adopted(&e.cos));
+            let display = pdfcraft_forms::with_field_appearances_from_fields_cached(&e.cos, &mut e.field_appearances, &found.items);
+            *out = Some(found);
+            display
+        }
+        None => pdfcraft_forms::with_field_appearances_cached(comments.as_ref().unwrap_or(&e.cos), &mut e.field_appearances),
+    };
     if let Some(mut display) = fields.or(comments) {
         // Written whether or not a signature changed: the copy exists for the comments and fields.
         let _ = pdfcraft_sign::show_status_layers(&mut display, signatures, captions);

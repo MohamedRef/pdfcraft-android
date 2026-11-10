@@ -6578,3 +6578,43 @@ fn a_four_entry_mk_colour_with_a_null_is_cmyk_with_zero() {
     let rgb = off(&mut doc, "rgb");
     assert!(rgb.contains("0 0 1 rg") && rgb.contains("1 0 0 RG"), "three numbers stay RGB: {rgb}");
 }
+
+#[test]
+fn pre_enumerated_fields_keep_appearance_output_without_reading_the_form_again() {
+    for need in [false, true] {
+        let doc = left_to_the_viewer(need);
+        let discovered = fields_with_adopted(&doc);
+        let source_modified = doc.modified_objects();
+        let before = form_reads();
+        let fresh =
+            with_field_appearances_cached(&doc, &mut FieldAppearanceCache::default()).unwrap();
+        let fresh_reads = form_reads() - before;
+        let before = form_reads();
+        let shared = with_field_appearances_from_fields_cached(
+            &doc,
+            &mut FieldAppearanceCache::default(),
+            &discovered.items,
+        )
+        .unwrap();
+        let shared_reads = form_reads() - before;
+        assert_eq!(fresh_reads, shared_reads + 1, "one discovery is removed");
+        assert_eq!(fresh.modified_objects(), shared.modified_objects());
+        for number in fresh.modified_objects() {
+            assert_eq!(
+                fresh.try_get(number).unwrap(),
+                shared.try_get(number).unwrap(),
+                "appearance object {number}"
+            );
+        }
+        assert_eq!(
+            doc.modified_objects(),
+            source_modified,
+            "source is unchanged"
+        );
+        assert_eq!(
+            fields_with_adopted(&doc),
+            discovered,
+            "values/widgets/adoption stay the same"
+        );
+    }
+}

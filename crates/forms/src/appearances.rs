@@ -1,3 +1,5 @@
+use std::borrow::Borrow;
+
 use super::read::{acroform, fields};
 use super::values::merged_appearance;
 use super::{Dict, Document, FieldKind, ObjRef, Object, Widget, appearance, name_bytes};
@@ -23,9 +25,24 @@ pub fn with_field_appearances(doc: &Document) -> Option<Document> {
 /// [`with_field_appearances`], reusing the appearances `cache` drew for widgets whose inputs are
 /// the same objects as then (see [`FieldAppearanceCache`]).
 pub fn with_field_appearances_cached(doc: &Document, cache: &mut FieldAppearanceCache) -> Option<Document> {
+    with_field_appearances_iter(doc, cache, fields(doc))
+}
+
+/// Draw from fields already enumerated from this exact document state. The caller must not
+/// reuse the list after edits or with a display overlay; the ordinary wrapper enumerates afresh.
+pub fn with_field_appearances_from_fields_cached(doc: &Document, cache: &mut FieldAppearanceCache, fields: &[super::Field]) -> Option<Document> {
+    with_field_appearances_iter(doc, cache, fields)
+}
+
+fn with_field_appearances_iter<I>(doc: &Document, cache: &mut FieldAppearanceCache, fields: I) -> Option<Document>
+where
+    I: IntoIterator,
+    I::Item: Borrow<super::Field>,
+{
     let all = need_appearances(doc);
     let mut copy: Option<Document> = None;
-    for f in fields(doc) {
+    for item in fields {
+        let f = item.borrow();
         for w in &f.widgets {
             let widget = doc.get(w.obj);
             let normal = widget
@@ -67,9 +84,9 @@ pub fn with_field_appearances_cached(doc: &Document, cache: &mut FieldAppearance
                 Some(stream) => stream,
                 None => {
                     let stream = match f.kind {
-                        FieldKind::CheckBox | FieldKind::Radio => appearance::button_state_shown(doc, &f, w, state.as_deref() != Some("Off")),
-                        FieldKind::PushButton => appearance::push_button_shown(doc, &f, w),
-                        _ => appearance::field_appearance_drawn(doc, &f, w, &f.value, true).0,
+                        FieldKind::CheckBox | FieldKind::Radio => appearance::button_state_shown(doc, f, w, state.as_deref() != Some("Off")),
+                        FieldKind::PushButton => appearance::push_button_shown(doc, f, w),
+                        _ => appearance::field_appearance_drawn(doc, f, w, &f.value, true).0,
                     };
                     cache.insert(w.obj, inputs, &stream);
                     stream
