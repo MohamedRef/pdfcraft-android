@@ -80,7 +80,7 @@ class SavedLassoTest {
     }
 
     @org.junit.Test fun onlyDrawingsAndShapesTheUserCanMoveAreTargets() {
-        val t = io.github.artcraftandroid.pdfcraft.ui.viewer::savedLassoTarget
+        val t: (String, Boolean, Boolean, String?) -> Boolean = { s, l, f, r -> io.github.artcraftandroid.pdfcraft.ui.viewer.savedLassoTarget(s, l, f, r) }
         org.junit.Assert.assertTrue(t("Ink", false, false, null))
         org.junit.Assert.assertTrue(t("Square", false, false, null))
         org.junit.Assert.assertFalse(t("Highlight", false, false, null))
