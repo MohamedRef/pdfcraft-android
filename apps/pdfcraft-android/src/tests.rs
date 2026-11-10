@@ -577,12 +577,12 @@ fn paragraph_script_uses_native_unicode_toggle_and_survives_reopen() {
 }
 
 #[test]
-fn upgraded_tool_table_preserves_mobile_tools_and_adds_stable_019_schemas() {
+fn upgraded_tool_table_preserves_mobile_tools_and_adds_stable_020_schemas() {
     let session = MobileSession::new();
     let tools = session.tools();
     let names: std::collections::HashSet<_> = tools.iter().map(|t| t.name.as_str()).collect();
     assert_eq!(names.len(), tools.len(), "tool names must remain unique");
-    assert_eq!(names.len(), 195);
+    assert_eq!(names.len(), 200);
     for name in [
         "photo_find_document",
         "comment_erase",
@@ -601,6 +601,11 @@ fn upgraded_tool_table_preserves_mobile_tools_and_adds_stable_019_schemas() {
         "ocr_words",
         "ocr_review_apply",
         "page_enhance_scan",
+        "accessibility_layout_table_to_blocks",
+        "doc_fix_hairlines",
+        "object_copy",
+        "object_paste",
+        "text_prepare",
     ] {
         assert!(names.contains(name), "missing mobile/stable tool: {name}");
     }
