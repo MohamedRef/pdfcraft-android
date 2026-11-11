@@ -1331,7 +1331,10 @@
     <string name="bates_source_refused">Ein signiertes oder schreibgeschütztes PDF kann mit diesem Werkzeug nicht nummeriert werden.</string>
     <string name="bates_export_failed">Diese neue Kopie konnte nicht in „Downloads“ gespeichert werden.</string>
     <string name="ink_presets_title">Lieblingsstifte</string>
-    <string name="ink_presets_help">Wähle deinen Stift und zeichne los. Farbe, Größe und Deckkraft gelten sofort für neue Striche. Tippe auf einen Favoriten, um seine Einstellungen wiederherzustellen.</string>
+    <string name="ink_presets_help">Jeder Stift behält seine eigene Farbe, Breite und Deckkraft. Tippe auf einen Favoriten, um seine Einstellungen wiederherzustellen.</string>
+    <string name="ink_pen_settings_title">Stifteinstellungen</string>
+    <string name="ink_pen_edit_action">Farbe und Breite ändern</string>
+    <string name="ink_preset_save_help">Beim Speichern eines Favoriten wird %1$s genau so gespeichert, wie er jetzt ist. Tippe in der Leiste erneut auf den gewählten Stift, um Farbe und Breite zu ändern.</string>
     <string name="ink_snap_explanation">Halte einen Freihandstrich kurz gedrückt, um ihn in eine saubere Form umzuwandeln.</string>
     <string name="ink_pen_only_explanation">Ein: Finger verschieben und zoomen, nur der S Pen zeichnet. Aus: Zeichne mit dem Finger oder dem S Pen.</string>
     <string name="ink_preset_slot">Stift %1$d</string>
@@ -1401,7 +1404,7 @@
     <string name="ink_toolbar_rectangle">Box</string>
     <string name="ink_toolbar_line">Linie</string>
     <string name="ink_toolbar_color">Farbe</string>
-    <string name="ink_toolbar_settings">Stifte</string>
+    <string name="ink_toolbar_settings">Einstellungen</string>
     <string name="ink_toolbar_lasso">Lasso</string>
     <string name="ink_toolbar_eraser">Radieren</string>
     <string name="ink_eraser_size_title">Radierergröße</string>

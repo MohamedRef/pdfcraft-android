@@ -1211,7 +1211,10 @@
     <string name="bates_source_refused">Un PDF signé ou en lecture seule ne peut pas être numéroté par cet outil.</string>
     <string name="bates_export_failed">Impossible d\'enregistrer cette nouvelle copie dans Téléchargements.</string>
     <string name="ink_presets_title">Stylos favoris</string>
-    <string name="ink_presets_help">Choisissez votre stylo, puis dessinez. La couleur, la taille et l\'opacité s\'appliquent immédiatement aux nouveaux traits. Touchez un favori pour restaurer ses réglages.</string>
+    <string name="ink_presets_help">Chaque stylo garde sa propre couleur, son épaisseur et son opacité. Touchez un favori pour restaurer ses réglages.</string>
+    <string name="ink_pen_settings_title">Réglages du stylo</string>
+    <string name="ink_pen_edit_action">changer la couleur et l\'épaisseur</string>
+    <string name="ink_preset_save_help">Enregistrer un favori conserve %1$s tel qu\'il est maintenant. Touchez le stylo sélectionné dans la barre pour changer sa couleur et son épaisseur.</string>
     <string name="ink_snap_explanation">Maintenez brièvement un trait à main levée pour le transformer en forme nette.</string>
     <string name="ink_pen_only_explanation">Activé : les doigts déplacent et zooment, seul le S Pen dessine. Désactivé : utilisez votre doigt ou le S Pen.</string>
     <string name="ink_preset_slot">Stylo %1$d</string>
@@ -1281,7 +1284,7 @@
     <string name="ink_toolbar_rectangle">Cadre</string>
     <string name="ink_toolbar_line">Ligne</string>
     <string name="ink_toolbar_color">Couleur</string>
-    <string name="ink_toolbar_settings">Stylos</string>
+    <string name="ink_toolbar_settings">Réglages</string>
     <string name="ink_toolbar_lasso">Lasso</string>
     <string name="ink_toolbar_eraser">Gomme</string>
     <string name="ink_eraser_size_title">Taille de la gomme</string>

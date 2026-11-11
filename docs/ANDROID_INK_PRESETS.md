@@ -1,5 +1,11 @@
 # Favorite pen presets
 
+## Per-pen settings (#187, #188)
+
+Each of the five pens (Ball, Fountain, Pencil, Brush, Marker) keeps its own colour, width and opacity under `ink.<style>.color`, `ink.<style>.width` and `ink.<style>.opacity`. Switching pens never restyles another pen, and each toolbar nib preview shows its own pen's colour and width. Fresh installs start from per-pen defaults (black ball, blue fountain, grey pencil, red brush, wide yellow marker). On the first launch after the update, the old shared `ink.color`/`ink.width`/`ink.opacity` move to the pen that was last used, so that pen looks the same; the migration is written immediately so it does not move again. A favorite is a full snapshot: using it restyles its own pen type and selects it.
+
+Tapping the already selected pen opens a compact popover with that pen's width chips, a half-point slider, colours and opacity (the same second-tap pattern as the eraser size). The row-2 button is now **Settings** (sheet title **Pen settings**) and holds only Pen only, Snap to shape and favorites; the duplicated pen-style row, thickness, colour and opacity were removed from it.
+
 Draw → Favorite pens offers three persistent slots containing ink color, width and opacity. Use pen applies the selected appearance; Replace with current pen explicitly saves the current drawing settings into that slot. Author, pen-only routing, pressure/history/hover, eraser mode and snap-to-shape remain independent. Existing strokes and PDF contents are not edited by choosing a favorite.
 
 ## Persistence and input boundaries
