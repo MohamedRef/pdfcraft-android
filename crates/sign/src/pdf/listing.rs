@@ -607,3 +607,22 @@ pub(super) fn mk_rotation(doc: &Document, widget: &Dict) -> i64 {
         .and_then(|r| r.as_int().or_else(|| r.as_f64().filter(|v| v.is_finite() && v.abs() <= 1.0e6).map(|v| v.round() as i64)));
     r.map(|r| r.rem_euclid(360)).filter(|q| matches!(q, 90 | 180 | 270)).unwrap_or(0)
 }
+
+#[cfg(test)]
+mod scan_parts_tests {
+    use super::{ObjRef, scan_in_parts};
+
+    /// #212: the timestamp scan split between threads finds what one scan finds, in the same
+    /// order, and is complete only if every part is.
+    #[test]
+    fn a_scan_split_in_parts_equals_one_scan() {
+        let scan = |numbers: Vec<u32>| {
+            let found: Vec<ObjRef> = numbers.iter().filter(|n| *n % 7 == 3).map(|&n| ObjRef::new(n, 0)).collect();
+            (found, !numbers.contains(&9001))
+        };
+        for len in [0u32, 10, 4095, 4096, 9000, 20_011] {
+            let numbers: Vec<u32> = (1..=len).collect();
+            assert_eq!(scan_in_parts(numbers.clone(), scan), scan(numbers), "{len} objects");
+        }
+    }
+}

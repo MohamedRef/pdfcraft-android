@@ -56,4 +56,4 @@ pub enum CosError {
     ReadOnlyLimit,
 }
 
-pub use pdfcraft_bytes::{PdfBytes, PdfSource, PdfView, memory_snapshot, owned_bytes, read_private_input, same_storage};
+pub use pdfcraft_bytes::{PdfBytes, PdfSource, PdfView, memory_snapshot, owned_bytes, read_private_input, read_private_preview, same_storage};

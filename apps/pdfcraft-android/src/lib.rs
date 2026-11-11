@@ -189,12 +189,19 @@ pub struct ToolInfo {
     pub read_only: bool,
 }
 
+/// The app's private files directory, once the session is told it: thumbnails of working copies
+/// stored there are drawn from a read-only mapping.
+static PRIVATE_INPUT_ROOT: std::sync::OnceLock<std::path::PathBuf> = std::sync::OnceLock::new();
+
 /// Page 1 of the PDF at absolute path `path` drawn to fit `max_side` pixels, for file lists. The
 /// file is read but not opened in any session; a protected or unreadable file is an error.
 #[uniffi::export]
 pub fn file_thumbnail(path: String, max_side: u32) -> Result<RenderedImage, MobileError> {
     // File-list previews must not allocate another full large-PDF input beside an open viewer.
-    let bytes = pdfcraft_cos::read_private_input(std::path::Path::new(&path), None, 100 * 1024 * 1024)
+    // A working copy in the app's private store is mapped instead, at any size the viewer opens;
+    // other files keep the 100 MiB preview limit (a 336 MB working copy had lost its thumbnail).
+    let root = PRIVATE_INPUT_ROOT.get().map(std::path::PathBuf::as_path);
+    let bytes = pdfcraft_cos::read_private_preview(std::path::Path::new(&path), root, 512 * 1024 * 1024, 100 * 1024 * 1024)
         .map_err(|e| MobileError::Open(format!("{path}: {e}")))?;
     let mut r = PageRenderer::new(bytes, RenderConfig::default());
     if r.page_count() == 0 {
@@ -707,6 +714,8 @@ impl MobileSession {
     pub fn set_private_input_root(&self, root: String) {
         let path = std::path::PathBuf::from(root);
         if path.is_absolute() && self.private_input_root.set(path.clone()).is_ok() {
+            // file-list thumbnails (`file_thumbnail`) map working copies from the same store
+            let _ = PRIVATE_INPUT_ROOT.set(path.clone());
             self.lock().set_private_input_root(path);
         }
     }

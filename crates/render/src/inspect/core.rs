@@ -196,7 +196,7 @@ pub(super) fn inspect_structure(info: &mut DocInfo, fill: impl FnOnce(&mut DocIn
 /// phone's open converting them on one thread. Only objects that pass reads are read here: the
 /// annotation pass runs whenever the catalog resolves, visits every page of `page_ids`, skips an
 /// `/Annots` array it has already seen, and reads every referenced entry of the others.
-fn prefetch_annotations(doc: &LazyStructure, inspector: &Inspector<'_>) {
+pub(super) fn prefetch_annotations(doc: &LazyStructure, inspector: &Inspector<'_>) {
     if doc.catalog().is_err() {
         return;
     }
