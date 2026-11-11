@@ -1814,4 +1814,47 @@
     <string name="measure_exporting">جارٍ تصدير القياسات…</string>
     <string name="measure_export_none">لا توجد قياسات للتصدير</string>
     <string name="viewer_hint_measure">اضغط على النقاط للقياس. تلتصق النقاط بخطوط الرسم. اضبط المقياس أولًا للحصول على وحدات حقيقية.</string>
+    <!-- Study: masking tape and quiz mode (#143) -->
+    <string name="study_title">المذاكرة: شريط واختبار</string>
+    <string name="study_explain">غطِّ الإجابات بشريط واضغط عليها لتختبر نفسك، أو دع الاختبار يغطي التظليلات. رفع الشريط والاختبارات لا يغيّران الملف، والتطبيقات الأخرى تعرض الصفحة بدون شريط.</string>
+    <string name="study_draw_tape">رسم شريط</string>
+    <string name="study_tape_hint">اسحب فوق ما تريد تغطيته</string>
+    <string name="study_color_amber">شريط كهرماني</string>
+    <string name="study_color_blue">شريط أزرق</string>
+    <string name="study_color_lilac">شريط بنفسجي</string>
+    <string name="study_color_green">شريط أخضر</string>
+    <string name="study_reveal_all">إظهار كل الأشرطة</string>
+    <string name="study_cover_all">تغطية كل الأشرطة مرة أخرى</string>
+    <string name="study_remove_tape">إزالة كل الأشرطة</string>
+    <string name="study_tape_none">لا يوجد شريط في هذا المستند</string>
+    <string name="study_tape_removed">تمت إزالة الشريط. التراجع يعيده.</string>
+    <string name="study_tape_read_only">لا يمكن إضافة شريط إلى هذا المستند</string>
+    <string name="study_hidden_answer">إجابة مخفية، انقر مرتين لإظهارها</string>
+    <string name="study_shown_answer">إجابة ظاهرة، انقر مرتين لتغطيتها</string>
+    <string name="study_reveal">إظهار</string>
+    <string name="study_cover">تغطية</string>
+    <string name="study_quiz_page">اختبرني في تظليلات هذه الصفحة</string>
+    <string name="study_quiz_document">اختبرني في كل التظليلات</string>
+    <string name="study_quiz_none_page">لا توجد تظليلات في هذه الصفحة للاختبار</string>
+    <string name="study_quiz_none_document">لا توجد تظليلات في هذا المستند للاختبار</string>
+    <string name="study_quiz_progress">الاختبار: تمت الإجابة على %1$d من %2$d</string>
+    <string name="study_quiz_hint">اضغط على تظليل مغطى لإظهاره.</string>
+    <string name="study_quiz_did_you_know">هل كنت تعرفها؟</string>
+    <string name="study_quiz_knew">عرفتها</string>
+    <string name="study_quiz_didnt">لم أعرفها</string>
+    <string name="study_quiz_next">التالي</string>
+    <string name="study_quiz_end">إنهاء الاختبار</string>
+    <string name="study_results_title">نتيجة الاختبار</string>
+    <string name="study_results_score">عرفت %1$d من %2$d.</string>
+    <plurals name="study_results_unknown">
+        <item quantity="zero">لا شيء للمراجعة</item>
+        <item quantity="one">واحدة للمراجعة: اضغط عليها للرجوع إليها</item>
+        <item quantity="two">اثنتان للمراجعة: اضغط على إحداهما للرجوع إليها</item>
+        <item quantity="few">%1$d للمراجعة: اضغط على إحداها للرجوع إليها</item>
+        <item quantity="many">%1$d للمراجعة: اضغط على إحداها للرجوع إليها</item>
+        <item quantity="other">%1$d للمراجعة: اضغط على إحداها للرجوع إليها</item>
+    </plurals>
+    <string name="study_results_item">صفحة %1$d: %2$s</string>
+    <string name="study_results_highlight">تظليل</string>
+    <string name="study_results_retry">اختبرني في التي فاتتني</string>
 </resources>

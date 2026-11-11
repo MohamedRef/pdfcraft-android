@@ -132,6 +132,7 @@ fun MoreSheet(vm: AppViewModel, doc: OpenDocument) {
                 ctl.pagesOpen = true
             }, chevron = true)
             SheetRow(LucideIcons.Clock, stringResource(R.string.focus_timer), { ctl.sheet = ViewerSheet.FocusTimer })
+            SheetRow(LucideIcons.Bandage, stringResource(R.string.study_title), { ctl.sheet = ViewerSheet.Study }, chevron = true)
             GroupDivider()
             MoreHeading(stringResource(R.string.sheet_group_navigate))
             SheetRow(LucideIcons.Bookmark, stringResource(R.string.sheet_bookmarks_contents), { ctl.sheet = ViewerSheet.Bookmarks }, chevron = true)

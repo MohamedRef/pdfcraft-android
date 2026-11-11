@@ -290,6 +290,8 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
                     vm.markupFollowUp != null -> vm.markupFollowUp = null
                     selection.selection != null -> selection.clear()
                     ctl.tool == ViewerTool.Edit -> vm.editTap(doc, at)
+                    // tape and quiz masks lift with a tap (#143)
+                    vm.tapStudyMask(doc, at) -> Unit
                     vm.tapField(doc, at) -> Unit
                     vm.tapComment(doc, at) -> Unit
                     else -> scope.launch {
@@ -342,6 +344,7 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
             overlay = {
                 if (ctl.tool == ViewerTool.None || ctl.tool == ViewerTool.FillSign) drawFieldTints(doc)
                 if (!doc.info.commentsHidden) drawNotes(doc, ctl.nightMode, vm.selectedComment?.takeIf { it.first === doc }?.second)
+                drawStudyMasks(doc)
                 vm.selectedComment?.takeIf { it.first === doc }?.second?.let { drawCommentSelection(doc, it) }
                 vm.readAloud?.let { drawReadAloud(doc, it) }
                 drawSearchHits(doc)
@@ -364,6 +367,9 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
             }
             ExternalPresentation(doc)
         }
+
+        // Tape and quiz (#143): what covers the pages, for TalkBack, and their bars.
+        if (!vm.readingMode) StudyLayer(vm, doc)
 
         // The active tool takes the touches over the pages.
         ToolLayer(vm, doc)
@@ -661,6 +667,7 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
                 ViewerSheet.Layers -> LayersSheet(vm, doc)
                 ViewerSheet.EditContents -> EditContentsSheet(vm, doc)
                 ViewerSheet.HiddenInfo -> HiddenInfoSheet(vm, doc)
+                ViewerSheet.Study -> StudySheet(vm, doc)
                 ViewerSheet.Comments -> Unit
                 ViewerSheet.MoreTools -> MoreToolsSheet(vm, doc)
                 ViewerSheet.Signatures -> SignaturesSheet(vm, doc)
