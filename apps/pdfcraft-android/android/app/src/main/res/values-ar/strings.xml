@@ -1413,4 +1413,24 @@
     <string name="digest_purple">بنفسجي</string>
     <string name="digest_black">أسود</string>
     <string name="digest_grey">رمادي</string>
+    <string name="focus_timer">مؤقّت التركيز</string>
+    <string name="focus_work">تركيز</string>
+    <string name="focus_break">استراحة</string>
+    <string name="focus_paused_left">متوقف مؤقتاً، متبقٍ %1$d:%2$02d</string>
+    <string name="focus_preset">%1$d / %2$d دقيقة</string>
+    <string name="focus_start">ابدأ</string>
+    <string name="focus_pause">إيقاف مؤقت</string>
+    <string name="focus_resume">استئناف</string>
+    <string name="focus_stop">إيقاف</string>
+    <string name="focus_hint">التركيز والاستراحة بيتبادلوا لحد ما توقف. الإشعار بيعد تنازلياً والتطبيق في الخلفية.</string>
+    <string name="focus_break_started">وقت الاستراحة</string>
+    <string name="focus_work_started">رجوع للتركيز</string>
+    <string name="study_section">إحصائيات المذاكرة</string>
+    <string name="study_clear_stats">حذف إحصائيات المذاكرة</string>
+    <string name="study_stats_body">وقت القراءة بيتحسب بس والمستند مفتوح قدامك ولمست الشاشة في آخر دقيقتين. بيفضل على الموبايل ده بس.</string>
+    <string name="study_stats_cleared">تم حذف إحصائيات المذاكرة</string>
+    <string name="study_continue">كمّل مذاكرة</string>
+    <string name="study_week_minutes">الأسبوع ده %1$d س %2$d د</string>
+    <string name="study_page_progress">صفحة %1$d · مقروء %2$d%% · %3$d د</string>
+    <string name="study_resume_row">كمّل %1$s من صفحة %2$d، مقروء %3$d%%</string>
 </resources>

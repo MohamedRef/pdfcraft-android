@@ -138,6 +138,7 @@ fun MoreSheet(vm: AppViewModel, doc: OpenDocument) {
                 { close(); vm.toggleBookmark(doc) },
             )
             SheetRow(LucideIcons.Volume2, stringResource(R.string.common_tool_read_aloud), { close(); vm.startReadAloud(doc) })
+            SheetRow(LucideIcons.Clock, stringResource(R.string.focus_timer), { ctl.sheet = ViewerSheet.FocusTimer })
             SheetRow(LucideIcons.FilePenLine, stringResource(R.string.common_tool_edit_pdf), { close(); vm.enterTool(doc, ViewerTool.Edit) })
             GroupDivider()
             SheetRow(LucideIcons.FileOutput, stringResource(R.string.sheet_export_as), { close(); vm.openExport(doc) })

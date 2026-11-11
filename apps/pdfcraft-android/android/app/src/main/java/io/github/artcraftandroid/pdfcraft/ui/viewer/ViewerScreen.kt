@@ -378,6 +378,12 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
                 doc, visible = jumpChipVisible,
                 bottom = with(density) { doc.viewer.padBottom.toDp() },
             )
+            if (!vm.readingMode) FocusTimerPill(
+                vm, top = with(density) { doc.viewer.padTop.toDp() },
+                onOpen = { ctl.sheet = ViewerSheet.FocusTimer },
+                modifier = Modifier.align(Alignment.TopStart),
+            )
+
             // Draw mode on the last page: add a page with the notebook's template (blank otherwise)
             if (ctl.tool == ViewerTool.Draw && !vm.readingMode && doc.writable && doc.viewer.currentPage == doc.pageCount - 1) {
                 AddPageHandle(
@@ -615,6 +621,7 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
                 ViewerSheet.Signatures -> SignaturesSheet(vm, doc)
                 ViewerSheet.ScanEnhance -> ScanEnhanceSheet(vm, doc)
                 ViewerSheet.OcrConfidence -> OcrConfidenceReviewSheet(vm, doc)
+                ViewerSheet.FocusTimer -> FocusTimerSheet(vm) { ctl.sheet = ViewerSheet.None }
                 ViewerSheet.None -> Unit
             }
         }

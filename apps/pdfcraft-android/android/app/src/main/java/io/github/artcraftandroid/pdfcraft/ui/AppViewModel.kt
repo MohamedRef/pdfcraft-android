@@ -446,6 +446,8 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     /** Leave the viewer: changes are saved first, as the reference does (no prompt). */
     fun closeDocument() {
         val doc = document ?: return
+        pauseStudy()
+        studyDoc = null
         val eng = engine ?: return
         if (doc.controller.tool != ViewerTool.None) leaveTool(doc)
         viewModelScope.launch {
@@ -555,6 +557,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
 
     /** The app went to the background: save the open document, as the reference does. */
     fun onPause() {
+        pauseStudy()
         val doc = document ?: return
         if (doc.controller.tool == ViewerTool.Draw) doc.commitTool?.invoke()
         viewModelScope.launch {
@@ -707,6 +710,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         viewModelScope.launch {
             try {
                 val r = eng.tool(name, args + ("doc" to doc.id))
+                if (name == "comment_add") studyNote(doc)
                 refresh(doc, io.github.artcraftandroid.pdfcraft.ui.viewer.pageTouchedBy(name, args))
                 onDone(r)
             } catch (e: MobileException) {
@@ -3569,6 +3573,115 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         deliver(out, "Pages from ${doc.title}.pdf")
     }
 
+    // ---- Study sessions -------------------------------------------------------------------------
+
+    val studyStats = io.github.artcraftandroid.pdfcraft.engine.StudyStats(File(getApplication<Application>().filesDir, "study.json"))
+    private val studyClock = io.github.artcraftandroid.pdfcraft.engine.StudyClock()
+    private var studyDoc: OpenDocument? = null
+    private var studyPendingMs = 0L
+    private var studyPendingNotes = 0
+    private val studyPendingPages = HashSet<Int>()
+    private var studyLastFlush = 0L
+
+    /** Home's Continue studying card: the documents studied most recently, and this week's minutes. */
+    var studyRecent by mutableStateOf<List<io.github.artcraftandroid.pdfcraft.engine.DocStudy>>(emptyList())
+        private set
+    var studyWeek by mutableStateOf<List<Long>>(emptyList())
+        private set
+
+    fun refreshStudy() {
+        viewModelScope.launch {
+            val (recent, week) = withContext(Dispatchers.IO) {
+                studyStats.all().filter { it.activeMs > 0 }.take(3) to studyStats.week(java.time.LocalDate.now())
+            }
+            studyRecent = recent
+            studyWeek = week
+        }
+    }
+
+    /**
+     * The reader touched the screen: count the time since their last touch (at most two minutes,
+     * so a phone left open stops counting) toward the open document, and note the page.
+     */
+    fun studyActivity() {
+        val doc = document ?: return
+        if (doc.info.preparing) return
+        val now = android.os.SystemClock.uptimeMillis()
+        if (studyDoc !== doc) { flushStudy(); studyClock.pause(now); studyDoc = doc }
+        studyPendingMs += studyClock.activity(now)
+        studyPendingPages += doc.viewer.currentPage
+        if (now - studyLastFlush > 30_000) flushStudy()
+    }
+
+    /** An annotation was added to the open document (counted in its study record). */
+    private fun studyNote(doc: OpenDocument) { if (studyDoc === doc) studyPendingNotes++ }
+
+    /** The viewer left the front (or the document closed): stop the clock and save what was counted. */
+    fun pauseStudy() {
+        studyPendingMs += studyClock.pause(android.os.SystemClock.uptimeMillis())
+        flushStudy()
+    }
+
+    private fun flushStudy() {
+        val doc = studyDoc ?: return
+        val uri = doc.source?.toString() ?: return
+        studyLastFlush = android.os.SystemClock.uptimeMillis()
+        if (studyPendingMs == 0L && studyPendingPages.isEmpty() && studyPendingNotes == 0) return
+        val ms = studyPendingMs
+        val pages = studyPendingPages.toSet()
+        val notes = studyPendingNotes
+        studyPendingMs = 0
+        studyPendingNotes = 0
+        studyPendingPages.clear()
+        val name = doc.info.name
+        val count = doc.pageCount
+        val last = doc.viewer.currentPage
+        viewModelScope.launch(Dispatchers.IO) { runCatching { studyStats.record(uri, name, count, pages, last, ms, System.currentTimeMillis(), notes) } }
+    }
+
+    /** Settings: forget every study statistic. */
+    fun clearStudyStats() {
+        studyPendingMs = 0
+        studyPendingPages.clear()
+        studyPendingNotes = 0
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) { studyStats.clear() }
+            refreshStudy()
+            tell(text(R.string.study_stats_cleared))
+        }
+    }
+
+    /** The focus timer (Pomodoro), wall-clock based so it outlives rotation and the process. */
+    var focusTimer by mutableStateOf(io.github.artcraftandroid.pdfcraft.FocusTimerAlarm.load(getApplication()))
+        private set
+
+    /** Asks the activity for permission to show the timer's notification (Android 13+). */
+    val notificationRequests = Channel<Unit>(Channel.CONFLATED)
+
+    fun updateFocusTimer(t: io.github.artcraftandroid.pdfcraft.engine.FocusTimer) {
+        val app = getApplication<Application>()
+        if (t.running && !focusTimer.active && android.os.Build.VERSION.SDK_INT >= 33 &&
+            androidx.core.content.ContextCompat.checkSelfPermission(app, android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED &&
+            !appPrefs.getBoolean("focusNotificationAsked", false)
+        ) {
+            appPrefs.edit().putBoolean("focusNotificationAsked", true).apply()
+            notificationRequests.trySend(Unit)
+        }
+        focusTimer = t
+        io.github.artcraftandroid.pdfcraft.FocusTimerAlarm.apply(app, t)
+    }
+
+    /** Called every second while the timer shows: move to the next phase when one ends. */
+    fun tickFocusTimer() {
+        val now = System.currentTimeMillis()
+        val next = focusTimer.tick(now)
+        if (next != focusTimer) {
+            focusTimer = next
+            io.github.artcraftandroid.pdfcraft.FocusTimerAlarm.apply(getApplication(), next, now, alert = true)
+            tell(text(if (next.onBreak) R.string.focus_break_started else R.string.focus_work_started))
+        }
+    }
+
     // ---- Study digest -------------------------------------------------------------------------
 
     /**
@@ -4221,6 +4334,8 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         hasFileAccess = io.github.artcraftandroid.pdfcraft.engine.LocalFiles.hasAccess(getApplication())
         if (hasFileAccess && !had) scanLocal(force = true)
         refreshRecents()
+        refreshStudy()
+        focusTimer = io.github.artcraftandroid.pdfcraft.FocusTimerAlarm.load(getApplication())
     }
 
     /** What [uri]'s thumbnail is drawn from: the file itself, the app's working copy, or the document. */
