@@ -64,11 +64,11 @@ class SearchState(private val engine: Engine, private val doc: ULong, private va
                 if (!isActive) return@launch
                 val page = (fromPage + k) % pageCount
                 val found = runCatching {
-                    withContext(engine.thumbnails) { engine.session.findInPage(doc, page.toUInt(), text, case, whole) }
+                    withContext(engine.documentText) { engine.session.findInPage(doc, page.toUInt(), text, case, whole) }
                 }.getOrDefault(emptyList())
                 if (found.isNotEmpty()) {
                     // keep reading order: insert this page's hits where they belong
-                    val at = hits.indexOfFirst { it.range.page.toInt() > page }.let { if (it < 0) hits.size else it }
+                    val at = insertionPoint(hits, page)
                     hits.addAll(at, found)
                     if (current >= at) current += found.size
                     if (!announced) {
@@ -134,4 +134,15 @@ fun searchRows(hits: List<SearchHit>): List<SearchRow> = buildList {
         for (k in i until j) add(SearchRow.Hit(k, page, hits[k].context.trim()))
         i = j
     }
+}
+
+/** Where hits of [page] go in [hits], which are in page order: after every hit of an earlier or the same page (#98). */
+internal fun insertionPoint(hits: List<SearchHit>, page: Int): Int {
+    var lo = 0
+    var hi = hits.size
+    while (lo < hi) {
+        val mid = (lo + hi) ushr 1
+        if (hits[mid].range.page.toInt() > page) hi = mid else lo = mid + 1
+    }
+    return lo
 }

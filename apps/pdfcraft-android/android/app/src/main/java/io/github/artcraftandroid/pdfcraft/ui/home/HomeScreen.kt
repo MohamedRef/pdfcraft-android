@@ -80,8 +80,6 @@ import io.github.artcraftandroid.pdfcraft.ui.viewer.formatSize
 import java.text.DateFormat
 import java.util.Calendar
 import java.util.Date
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 
 /** The tabs along the bottom of the app. */
 enum class HomeTab(@StringRes val label: Int) { Home(R.string.home_tab_home), Files(R.string.home_tab_files), Tools(R.string.home_tab_tools), Search(R.string.home_tab_search) }
@@ -234,7 +232,7 @@ private fun HomeTabScreen(vm: AppViewModel, onBrowse: () -> Unit) {
                 } else {
                     items(rows, key = { it.key }) { r -> FileListRow(vm, r, recent = tab == 0) }
                 }
-                if (tab == 2 && vm.localRows().size > 10) {
+                if (tab == 2 && vm.localFiles.size > 10) {
                     item {
                         Text(stringResource(R.string.home_other_files), color = c.accent, fontWeight = FontWeight.SemiBold, modifier = Modifier.fillMaxWidth().clickable { vm.homeTab = HomeTab.Files; vm.filesShowLocal = true }.padding(16.dp))
                     }
@@ -343,7 +341,7 @@ fun whenLabel(t: Long): String {
 fun FileThumb(vm: AppViewModel, path: String?, width: Int, height: Int) {
     var img by remember(path) { mutableStateOf<ImageBitmap?>(null) }
     LaunchedEffect(path) {
-        if (path != null) img = withContext(Dispatchers.IO) { vm.thumbnails.of(path)?.asImageBitmap() }
+        if (path != null) img = vm.thumbnails.load(path)?.asImageBitmap()
     }
     val c = pdfColors
     Box(Modifier.size(width.dp, height.dp).clip(RoundedCornerShape(4.dp)).background(if (img != null) Color.White else c.surfaceRaised).border(1.dp, c.divider, RoundedCornerShape(4.dp)), contentAlignment = Alignment.Center) {

@@ -32,7 +32,7 @@ class TextSelectionState(private val engine: Engine, private val doc: ULong, pri
     /** Select the word at [p]; false if no text lies within [slopPoints]. */
     suspend fun selectWordAt(p: PagePoint, slopPoints: Float): Boolean {
         val id = ++revision
-        val range = withContext(engine.commands) {
+        val range = withContext(engine.interactive) {
             engine.session.wordAt(doc, p.page.toUInt(), p.x, p.y, slopPoints)
         } ?: return false
         if (id != revision) return false
@@ -54,7 +54,7 @@ class TextSelectionState(private val engine: Engine, private val doc: ULong, pri
                 val (a, b) = span ?: break
                 span = null
                 val page = a.page.toUInt()
-                val (ga, gb) = withContext(engine.commands) {
+                val (ga, gb) = withContext(engine.interactive) {
                     engine.session.nearestGlyph(doc, page, a.x, a.y) to
                         engine.session.nearestGlyph(doc, page, b.x, b.y)
                 }
@@ -68,7 +68,7 @@ class TextSelectionState(private val engine: Engine, private val doc: ULong, pri
     fun selectPage(page: Int) {
         val id = ++revision
         scope.launch {
-            val n = withContext(engine.commands) { engine.session.glyphCount(doc, page.toUInt()) }
+            val n = withContext(engine.interactive) { engine.session.glyphCount(doc, page.toUInt()) }
             if (n == 0u || id != revision) return@launch
             show(TextRange(page.toUInt(), 0u, n), id)
         }
@@ -111,7 +111,7 @@ class TextSelectionState(private val engine: Engine, private val doc: ULong, pri
             while (true) {
                 val request = handlePending ?: break
                 handlePending = null
-                val g = withContext(engine.commands) {
+                val g = withContext(engine.interactive) {
                     engine.session.nearestGlyph(doc, request.point.page.toUInt(), request.point.x, request.point.y)
                 } ?: continue
                 if (id != revision) break
@@ -125,7 +125,7 @@ class TextSelectionState(private val engine: Engine, private val doc: ULong, pri
 
     /** Native text/geometry is validated before it becomes visible on screen. */
     private suspend fun show(range: TextRange, id: Int) {
-        val (rects, start, end) = withContext(engine.commands) {
+        val (rects, start, end) = withContext(engine.interactive) {
             Triple(
                 engine.session.textRects(doc, range),
                 engine.session.glyphRect(doc, range.page, range.start),
@@ -140,7 +140,7 @@ class TextSelectionState(private val engine: Engine, private val doc: ULong, pri
 
     suspend fun text(): String? {
         val sel = selection ?: return null
-        return withContext(engine.commands) { engine.session.textOf(doc, sel.range) }
+        return withContext(engine.interactive) { engine.session.textOf(doc, sel.range) }
     }
 
     fun clear() {

@@ -96,6 +96,16 @@ fun PagesScreen(vm: AppViewModel, doc: OpenDocument, onClose: () -> Unit) {
     val landscape = LocalConfiguration.current.screenWidthDp > LocalConfiguration.current.screenHeightDp
     val columns = if (landscape) 4 else 2
     val grid = rememberLazyGridState(initialFirstVisibleItemIndex = doc.viewer.currentPage)
+    // #95: keep the thumbnails of the pages near the ones in view only, not one bitmap (about
+    // 465 KB) for every page ever scrolled past; pages scrolled back to render again.
+    LaunchedEffect(grid, thumbs) {
+        androidx.compose.runtime.snapshotFlow {
+            grid.layoutInfo.visibleItemsInfo.let { (it.firstOrNull()?.index ?: 0) to (it.lastOrNull()?.index ?: 0) }
+        }.collect { (first, last) ->
+            val window = thumbnailWindow(first, last)
+            thumbs.keys.filter { it !in window }.forEach { thumbs.remove(it) }
+        }
+    }
     // dragging a page: its index and where it would drop
     var dragFrom by remember { mutableStateOf<Int?>(null) }
     var dragTo by remember { mutableStateOf<Int?>(null) }
@@ -383,3 +393,10 @@ private fun OrganizeItem(icon: ImageVector, label: String, enabled: Boolean, onC
         Text(label, color = if (enabled) c.label else c.label.copy(alpha = 0.35f), fontSize = 10.5.sp, maxLines = 1)
     }
 }
+
+/** Thumbnails kept on each side of the pages in view. */
+internal const val THUMBNAIL_MARGIN = 24
+
+/** The pages whose thumbnails the Pages grid keeps while pages [first]..[last] are in view (#95). */
+internal fun thumbnailWindow(first: Int, last: Int): IntRange =
+    (minOf(first, last) - THUMBNAIL_MARGIN).coerceAtLeast(0)..(maxOf(first, last) + THUMBNAIL_MARGIN)

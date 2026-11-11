@@ -193,9 +193,12 @@ fun FieldTopBar(actions: FieldActions) {
 fun androidx.compose.ui.graphics.drawscope.DrawScope.drawFieldTints(doc: OpenDocument) {
     // a signed signature field is done: no tint over the signature
     val signed = doc.signatures.filter { it.signed }.mapTo(HashSet()) { it.field }
+    // #98: a frame converts only the widgets of the pages in view
+    val visible = doc.viewer.visiblePages()
     for (w in doc.widgets) {
-        if (w.readOnly || w.rect.size < 4 || w.kind == "button" || (w.kind == "signature" && w.field in signed)) continue
         val page = w.page.toInt()
+        if (page !in visible) continue
+        if (w.readOnly || w.rect.size < 4 || w.kind == "button" || (w.kind == "signature" && w.field in signed)) continue
         val a = doc.viewer.pageToScreen(page, w.rect[0], w.rect[1])
         val b = doc.viewer.pageToScreen(page, w.rect[2], w.rect[3])
         if (b.y < 0f || a.y > size.height) continue
