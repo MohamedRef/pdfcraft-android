@@ -600,7 +600,7 @@
     <string name="sheet_pages">Pages</string>
     <string name="sheet_attachments">Pièces jointes</string>
     <string name="sheet_bookmarks_contents">Signets et table des matières</string>
-    <string name="sheet_comment_list">Liste des commentaires</string>
+    <string name="sheet_comment_list">Commentaires</string>
     <string name="sheet_add_bookmark">Ajouter un signet</string>
     <string name="sheet_remove_bookmark">Supprimer le signet</string>
     <string name="sheet_export_as">Exporter en...</string>
@@ -656,7 +656,7 @@
     <string name="comments_reply">Répondre</string>
     <string name="comments_reply_hint">Répondre</string>
     <string name="comments_avatar">Avatar</string>
-    <string name="comments_empty_title">Pour commencer</string>
+    <string name="comments_empty_title">Aucun commentaire pour l\'instant</string>
     <string name="comments_empty_body">Les commentaires ajoutés avec les outils de commentaire apparaissent ici.</string>
 
     <!-- Comment List: what a comment did, in italics under its author -->
@@ -1209,6 +1209,14 @@
     <string name="bates_export_failed">Impossible d\'enregistrer cette nouvelle copie dans Téléchargements.</string>
     <string name="ink_presets_title">Stylos favoris</string>
     <string name="ink_presets_help">Chaque stylo garde sa propre couleur, son épaisseur et son opacité. Touchez un favori pour restaurer ses réglages.</string>
+    <string name="ink_latency_reset">Réinitialiser</string>
+    <string name="ink_latency_refresh">Actualiser</string>
+    <string name="ink_latency_none">pas encore mesurée</string>
+    <string name="ink_latency_value">%1$d ms en général, %2$d ms au pire (95 %%), %3$d mesures</string>
+    <string name="ink_latency_low">Faible latence</string>
+    <string name="ink_latency_normal">Normale</string>
+    <string name="ink_latency_explanation">Écrivez au stylet avec l\'encre à faible latence désactivée, puis activée, et comparez. Mesuré de l\'événement du stylet jusqu\'au dessin de l\'app ; l\'écran ajoute encore un peu.</string>
+    <string name="ink_latency_title">Latence de l\'encre sur cet appareil</string>
     <string name="palm_guard_calibrate_clear">Effacer les touches</string>
     <string name="palm_guard_calibrate_help">Approchez le stylet ou écrivez, puis posez la main comme en écrivant. Les touches vertes sont ignorées ; les rouges feraient défiler ou appuieraient sur des boutons. Réglez la taille jusqu\'à ce que la main posée tombe dans le vert.</string>
     <string name="palm_guard_calibrate">Vérifier la zone de la paume</string>
@@ -1731,4 +1739,45 @@
     <string name="updater_home_view">Voir</string>
     <string name="updater_auto_check">Rechercher les mises à jour automatiquement</string>
     <string name="updater_auto_check_body">Une fois par jour à l’ouverture, PdfCraft demande à GitHub si une version plus récente existe. Aucun fichier ni aucune donnée personnelle n’est envoyé.</string>
+    <plurals name="cards_due">
+        <item quantity="one">%d carte à revoir</item>
+        <item quantity="many">%d cartes à revoir</item>
+        <item quantity="other">%d cartes à revoir</item>
+    </plurals>
+    <plurals name="cards_due_review">
+        <item quantity="one">Réviser %d carte</item>
+        <item quantity="many">Réviser %d cartes</item>
+        <item quantity="other">Réviser %d cartes</item>
+    </plurals>
+    <string name="cards_title">Cartes mémoire</string>
+    <string name="cards_row_due">Cartes mémoire (%1$d à revoir)</string>
+    <string name="cards_make">Créer une carte</string>
+    <string name="cards_make_cloze">Créer une carte à trous</string>
+    <string name="cards_new">Nouvelle carte</string>
+    <string name="cards_edit">Modifier la carte</string>
+    <string name="cards_front">Recto</string>
+    <string name="cards_back">Verso</string>
+    <string name="cards_cloze_hint">Entourez des mots de {{ }} pour en faire un trou à compléter.</string>
+    <string name="cards_from_page">%1$s, page %2$d</string>
+    <string name="cards_saved">Carte enregistrée</string>
+    <string name="cards_need_saved_file">Enregistrez d\'abord le document pour en créer des cartes</string>
+    <string name="cards_progress">%1$d restantes · %2$d dans le paquet</string>
+    <string name="cards_export">Exporter pour Anki (TSV)</string>
+    <string name="cards_import">Importer CSV ou TSV</string>
+    <string name="cards_none">Pas encore de cartes</string>
+    <string name="cards_none_body">Sélectionnez du texte puis Créer une carte, ou ajoutez-en une avec +.</string>
+    <string name="cards_all_done">Tout est à jour</string>
+    <string name="cards_all_done_body">%1$d révisées. Les cartes reviennent quand elles sont dues.</string>
+    <string name="cards_show_answer">Afficher la réponse</string>
+    <string name="cards_again">À revoir</string>
+    <string name="cards_hard">Difficile</string>
+    <string name="cards_good">Bien</string>
+    <string name="cards_easy">Facile</string>
+    <string name="cards_span_minutes">%d min</string>
+    <string name="cards_span_days">%d j</string>
+    <string name="cards_span_months">%d mois</string>
+    <string name="cards_delete_title">Supprimer cette carte ?</string>
+    <string name="cards_busy_export">Exportation des cartes…</string>
+    <string name="cards_file_name">Cartes %1$s</string>
+    <string name="cards_imported">%1$d cartes importées</string>
 </resources>

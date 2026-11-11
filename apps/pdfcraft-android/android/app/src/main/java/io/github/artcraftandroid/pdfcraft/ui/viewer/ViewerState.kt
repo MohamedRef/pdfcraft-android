@@ -270,14 +270,25 @@ class ViewerState(pages: List<PageSize>) {
 
     /** Screen point [p] in page [page]'s points, held to the page (a drag that leaves the page). */
     fun screenToPageOf(page: Int, p: Offset): PagePoint? {
+        val at = screenToPageUnclamped(page, p) ?: return null
+        val size = pages.getOrNull(page) ?: return null
+        return PagePoint(page, at.x.coerceIn(0f, size.width), at.y.coerceIn(0f, size.height))
+    }
+
+    /**
+     * Screen point [p] in page [page]'s points, **not** held to the page: off the page it is
+     * outside `0..width` × `0..height`. Ink and the eraser use it, so a pen that leaves the page
+     * keeps its real path instead of sliding along the edge.
+     */
+    fun screenToPageUnclamped(page: Int, p: Offset): PagePoint? {
         val l = layout
         val r = l.rects.getOrNull(page) ?: return null
-        val size = pages.getOrNull(page) ?: return null
+        if (pages.getOrNull(page) == null) return null
         val s = l.scaleOf(page)
         if (s <= 0f) return null
         val lx = (p.x + scrollX) / zoom
         val ly = (p.y + scrollY) / zoom
-        return PagePoint(page, ((lx - r.left) / s).coerceIn(0f, size.width), ((ly - r.top) / s).coerceIn(0f, size.height))
+        return PagePoint(page, (lx - r.left) / s, (ly - r.top) / s)
     }
 
     /** Screen position of a point on page [page] given in its points. */

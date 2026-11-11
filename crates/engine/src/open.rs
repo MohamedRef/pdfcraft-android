@@ -8,7 +8,7 @@ use std::sync::{
 use pdfcraft_cos::{SaveOptions, write_incremental};
 use pdfcraft_render::{DocInfo, OpenError, OpenTrace, RenderConfig, RenderPool, inspect, inspect_with_trace};
 
-use crate::document::{display_bytes_collect_fields, display_bytes_from_open};
+use crate::document::{display_bytes_collect_fields, display_parts_from_open, note_lost_display};
 use crate::history::{Editor, Keys, TextBlocksCache};
 use crate::{
     AppearanceCache, DocId, Document, Session, StatusCaptions, TrustStore, XFA_SCRIPTS_OFF, XfaLayout, display_config, guard, info_fields, js,
@@ -64,9 +64,12 @@ struct DocumentOpenData<'a> {
 struct OpenPrework {
     sig_cache: Arc<pdfcraft_sign::DigestCache>,
     signatures: Vec<pdfcraft_sign::SignatureInfo>,
-    comments: Option<pdfcraft_cos::Document>,
     fields: pdfcraft_forms::Fields,
     appearances: AppearanceCache,
+    /// The display copy, drawn from the comment appearances, the fields and the signature
+    /// states above ([`display_parts_from_open`]), with the repair line to log if it was lost.
+    display: (pdfcraft_cos::PdfBytes, Option<String>),
+    field_appearances: pdfcraft_forms::FieldAppearanceCache,
 }
 
 /// Android adaptation (#212): the editing-source passes of complete opening. Each read every
@@ -86,15 +89,22 @@ fn open_prework(context: &OpenContext, cos: &pdfcraft_cos::Document, bytes: &pdf
         (comments, fields)
     };
     #[cfg(not(target_arch = "wasm32"))]
-    let (signatures, (comments, fields)) = std::thread::scope(|s| {
+    let (mut signatures, (comments, fields)) = std::thread::scope(|s| {
         let signatures = s.spawn(find_signatures);
         let display = display_work();
         // A panic stays a panic: the open guard reports it as before.
         (signatures.join().unwrap_or_else(|p| std::panic::resume_unwind(p)), display)
     });
     #[cfg(target_arch = "wasm32")]
-    let (signatures, (comments, fields)) = (find_signatures(), display_work());
-    OpenPrework { sig_cache, signatures, comments, fields, appearances }
+    let (mut signatures, (comments, fields)) = (find_signatures(), display_work());
+    // Android adaptation (#212): the display copy needs only these results and the editing
+    // source, so it is drawn here, while the renderer's inspection still runs, instead of after
+    // it. The same call on the same, unchanged source; the editor takes the cache and the result.
+    let mut field_appearances = pdfcraft_forms::FieldAppearanceCache::default();
+    let display = context.trace.measure("native_display", || {
+        display_parts_from_open(cos, &mut field_appearances, bytes, &mut signatures, &context.captions, comments, &fields)
+    });
+    OpenPrework { sig_cache, signatures, fields, appearances, display, field_appearances }
 }
 
 impl OpenContext {
@@ -552,8 +562,9 @@ impl Session {
                     None => open_prework(context, &e.cos, &bytes),
                 };
                 e.appearances = work.appearances;
+                e.field_appearances = work.field_appearances;
                 sig_cache = work.sig_cache;
-                open_display = Some((work.comments, work.fields));
+                open_display = Some((work.display, work.fields));
                 work.signatures
             }
             _ => Vec::new(),
@@ -574,12 +585,17 @@ impl Session {
         let display = if reading.is_some() {
             bytes.clone()
         } else {
-            context.trace.measure("native_display", || match (editor.as_mut(), open_display.take()) {
-                (Some(e), Some((comments, fields))) => {
-                    display_bytes_from_open(e, &bytes, &mut signatures, &context.captions, comments, fields, &mut discovered_fields)
+            match (editor.as_mut(), open_display.take()) {
+                // Drawn by the open passes beside the inspection ([`open_prework`]).
+                (Some(e), Some(((display, lost), fields))) => {
+                    note_lost_display(e, lost);
+                    discovered_fields = Some(fields);
+                    display
                 }
-                (editor, _) => display_bytes_collect_fields(editor, &bytes, &mut signatures, &context.captions, Some(&mut discovered_fields), &context.trace),
-            })
+                (editor, _) => context.trace.measure("native_display", || {
+                    display_bytes_collect_fields(editor, &bytes, &mut signatures, &context.captions, Some(&mut discovered_fields), &context.trace)
+                }),
+            }
         };
         context.check_cancelled()?;
         let renderer = context.trace.measure("native_render_pool", || RenderPool::new(display.clone(), render_threads(), display_config(&config)));

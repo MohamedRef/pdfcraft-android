@@ -213,7 +213,7 @@ private fun HomeTabScreen(vm: AppViewModel, onBrowse: () -> Unit) {
                     }
                     Text(stringResource(if (vm.recentList.isEmpty()) R.string.home_or_start_with_tool else R.string.home_start_with_tool), color = c.text, fontSize = 15.sp, lineHeight = 22.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(start = 16.dp, bottom = 8.dp))
                     ToolsCarousel(vm, onBrowse)
-                    if (vm.studyRecent.isNotEmpty()) ContinueStudying(vm)
+                    if (vm.studyRecent.isNotEmpty() || vm.dueCounts.isNotEmpty()) ContinueStudying(vm)
                     Spacer(Modifier.height(16.dp))
                     Row(Modifier.fillMaxWidth().padding(start = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                         listOf(R.string.home_list_recent, R.string.home_list_starred, R.string.home_list_on_device).forEachIndexed { i, label ->
@@ -541,11 +541,18 @@ private fun ContinueStudying(vm: AppViewModel) {
                 for (d in vm.studyWeek) Box(Modifier.weight(1f).height((2 + 16 * d / max).toInt().dp).background(c.accent.copy(alpha = if (d > 0) 0.8f else 0.2f), RoundedCornerShape(2.dp)))
             }
         }
+        val due = vm.dueCounts.values.sum()
+        if (due > 0) Text(
+            pluralStringResource(R.plurals.cards_due_review, due, due), color = c.accent, fontSize = 14.sp, fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.fillMaxWidth().clickable(role = Role.Button) { vm.startReview(null, "") }.padding(vertical = 8.dp),
+        )
         for (d in vm.studyRecent) {
             val label = stringResource(R.string.study_resume_row, d.name.removeSuffix(".pdf"), d.lastPage + 1, (d.progress * 100).toInt())
             Column(Modifier.fillMaxWidth().clickable(role = Role.Button) { vm.open(android.net.Uri.parse(d.uri)) }.semantics { contentDescription = label }.padding(vertical = 8.dp)) {
                 Text(d.name.removeSuffix(".pdf"), color = c.text, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(stringResource(R.string.study_page_progress, d.lastPage + 1, (d.progress * 100).toInt(), d.activeMs / 60_000), color = c.textSecondary, fontSize = 12.sp)
+                val docDue = vm.dueCounts[d.uri] ?: 0
+                Text(stringResource(R.string.study_page_progress, d.lastPage + 1, (d.progress * 100).toInt(), d.activeMs / 60_000) +
+                    if (docDue > 0) " · " + pluralStringResource(R.plurals.cards_due, docDue, docDue) else "", color = c.textSecondary, fontSize = 12.sp)
                 Box(Modifier.padding(top = 4.dp).fillMaxWidth().height(3.dp).background(c.divider, RoundedCornerShape(2.dp))) {
                     Box(Modifier.fillMaxWidth(d.progress).height(3.dp).background(c.accent, RoundedCornerShape(2.dp)))
                 }

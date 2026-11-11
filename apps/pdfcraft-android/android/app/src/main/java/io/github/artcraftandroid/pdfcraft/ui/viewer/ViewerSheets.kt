@@ -144,6 +144,10 @@ fun MoreSheet(vm: AppViewModel, doc: OpenDocument) {
             if (doc.info.attachments > 0u) SheetRow(LucideIcons.Paperclip, stringResource(R.string.sheet_attachments), { ctl.sheet = ViewerSheet.Attachments }, chevron = true)
             SheetRow(LucideIcons.ShieldCheck, stringResource(R.string.sign_signatures), { ctl.sheet = ViewerSheet.Signatures }, chevron = true)
             if (doc.info.layers > 0u) SheetRow(LucideIcons.Layers, stringResource(R.string.sheet_layers), { ctl.sheet = ViewerSheet.Layers }, chevron = true)
+            doc.source?.let { src ->
+                val due = vm.dueCounts[src.toString()] ?: 0
+                SheetRow(LucideIcons.SwatchBook, if (due > 0) stringResource(R.string.cards_row_due, due) else stringResource(R.string.cards_title), { close(); vm.startReview(src.toString(), doc.info.name) })
+            }
             if (doc.info.undo != null || doc.info.redo != null) {
                 GroupDivider()
                 doc.info.undoLabel?.let { SheetRow(LucideIcons.Undo2, stringResource(R.string.sheet_undo_action, it), { close(); vm.undo(doc) }) }
@@ -155,6 +159,8 @@ fun MoreSheet(vm: AppViewModel, doc: OpenDocument) {
             SheetRow(LucideIcons.FileOutput, stringResource(R.string.sheet_export_as), { close(); vm.openExport(doc) })
             SheetRow(LucideIcons.BrushCleaning, stringResource(R.string.hidden_title), { ctl.sheet = ViewerSheet.HiddenInfo }, chevron = true)
             SheetRow(LucideIcons.Stamp, stringResource(R.string.flatten_title), { close(); vm.flattenPrompt = doc }, enabled = canEditDocument(doc))
+            // a clean copy to print; the working file keeps its comments (#155). Sharing one is in Share.
+            SheetRow(LucideIcons.Printer, stringResource(R.string.sheet_print_clean), { close(); vm.print(doc, clean = true) })
             Spacer(Modifier.height(8.dp))
         }
     }

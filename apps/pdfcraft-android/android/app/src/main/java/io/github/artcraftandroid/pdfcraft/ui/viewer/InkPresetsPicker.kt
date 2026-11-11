@@ -204,6 +204,7 @@ internal fun InkPresetsPicker(vm: AppViewModel, onApplied: () -> Unit) {
             }
             PdfSwitch(prefs.lowLatencyInk, null)
         }
+        InkLatencyReport()
         // Writing hand and palm guard (#156).
         Text(stringResource(R.string.hand_title), color = c.text, fontSize = 14.sp)
         OptionChips(listOf(false, true), prefs.leftHanded, { left ->
@@ -463,4 +464,31 @@ internal fun inkStyleLabel(style: InkStyle): Int = when (style) {
     InkStyle.Pencil -> R.string.ink_style_pencil
     InkStyle.Brush -> R.string.ink_style_brush
     InkStyle.Highlighter -> R.string.ink_style_highlighter
+}
+
+/**
+ * The measured app-side ink latency of both paths (#128), so the low-latency setting can be
+ * compared with it off and on, on the user's own device.
+ */
+@Composable
+private fun InkLatencyReport() {
+    val c = pdfColors
+    var version by androidx.compose.runtime.remember { androidx.compose.runtime.mutableIntStateOf(0) }
+    val normal = androidx.compose.runtime.remember(version) { InkLatency.normal.summary() }
+    val low = androidx.compose.runtime.remember(version) { InkLatency.lowLatency.summary() }
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Text(stringResource(R.string.ink_latency_title), color = c.text, fontSize = 14.sp)
+        Text(stringResource(R.string.ink_latency_explanation), color = c.label, fontSize = 12.sp)
+        for ((label, summary) in listOf(R.string.ink_latency_normal to normal, R.string.ink_latency_low to low)) {
+            val value = summary?.let { stringResource(R.string.ink_latency_value, it.medianMs.toInt(), it.p95Ms.toInt(), it.count) }
+                ?: stringResource(R.string.ink_latency_none)
+            Text("${stringResource(label)}: $value", color = c.text, fontSize = 13.sp)
+        }
+        Row {
+            TextButton(onClick = { version++ }) { Text(stringResource(R.string.ink_latency_refresh), color = c.accent) }
+            TextButton(onClick = { InkLatency.normal.clear(); InkLatency.lowLatency.clear(); version++ }) {
+                Text(stringResource(R.string.ink_latency_reset), color = c.accent)
+            }
+        }
+    }
 }

@@ -648,7 +648,7 @@
     <string name="sheet_pages">Seiten</string>
     <string name="sheet_attachments">Anhänge</string>
     <string name="sheet_bookmarks_contents">Lesezeichen und Inhaltsverzeichnis</string>
-    <string name="sheet_comment_list">Kommentarliste</string>
+    <string name="sheet_comment_list">Kommentare</string>
     <string name="sheet_add_bookmark">Lesezeichen hinzufügen</string>
     <string name="sheet_remove_bookmark">Lesezeichen entfernen</string>
     <string name="sheet_export_as">Exportieren als …</string>
@@ -718,7 +718,7 @@
     <string name="comments_reply_hint">Antworten</string>
     <!-- Translator note: accessibility label of the commenter's picture -->
     <string name="comments_avatar">Profilbild</string>
-    <string name="comments_empty_title">Los geht\'s</string>
+    <string name="comments_empty_title">Noch keine Kommentare</string>
     <string name="comments_empty_body">Kommentare, die du mit den Kommentarfunktionen hinzufügst, werden hier angezeigt.</string>
 
     <!-- Comment List: what a comment did, in italics under its author -->
@@ -1329,6 +1329,14 @@
     <string name="bates_export_failed">Diese neue Kopie konnte nicht in „Downloads“ gespeichert werden.</string>
     <string name="ink_presets_title">Lieblingsstifte</string>
     <string name="ink_presets_help">Jeder Stift behält seine eigene Farbe, Breite und Deckkraft. Tippe auf einen Favoriten, um seine Einstellungen wiederherzustellen.</string>
+    <string name="ink_latency_reset">Zurücksetzen</string>
+    <string name="ink_latency_refresh">Aktualisieren</string>
+    <string name="ink_latency_none">noch nicht gemessen</string>
+    <string name="ink_latency_value">typisch %1$d ms, höchstens %2$d ms (95 %%), %3$d Messungen</string>
+    <string name="ink_latency_low">Geringe Latenz</string>
+    <string name="ink_latency_normal">Normal</string>
+    <string name="ink_latency_explanation">Schreibe mit dem Stift bei ausgeschalteter und dann eingeschalteter Tinte mit geringer Latenz und vergleiche. Gemessen vom Stiftereignis bis zum Zeichnen der App; der Bildschirm fügt noch etwas hinzu.</string>
+    <string name="ink_latency_title">Tintenlatenz auf diesem Gerät</string>
     <string name="palm_guard_calibrate_clear">Berührungen löschen</string>
     <string name="palm_guard_calibrate_help">Halte den Stift über den Bildschirm oder schreibe, und lege dann die Hand ab wie beim Schreiben. Grüne Berührungen werden ignoriert, rote würden scrollen oder Schaltflächen drücken. Passe die Größe an, bis die aufgelegte Hand im Grünen landet.</string>
     <string name="palm_guard_calibrate">Handballenbereich prüfen</string>
@@ -1851,4 +1859,43 @@
     <string name="updater_home_view">Ansehen</string>
     <string name="updater_auto_check">Automatisch nach Updates suchen</string>
     <string name="updater_auto_check_body">Einmal am Tag beim Öffnen fragt PdfCraft bei GitHub nach einer neueren Version. Es werden keine Dateien oder persönlichen Daten gesendet.</string>
+    <plurals name="cards_due">
+        <item quantity="one">%d Karte fällig</item>
+        <item quantity="other">%d Karten fällig</item>
+    </plurals>
+    <plurals name="cards_due_review">
+        <item quantity="one">%d fällige Lernkarte wiederholen</item>
+        <item quantity="other">%d fällige Lernkarten wiederholen</item>
+    </plurals>
+    <string name="cards_title">Lernkarten</string>
+    <string name="cards_row_due">Lernkarten (%1$d fällig)</string>
+    <string name="cards_make">Lernkarte erstellen</string>
+    <string name="cards_make_cloze">Lückentext-Karte erstellen</string>
+    <string name="cards_new">Neue Lernkarte</string>
+    <string name="cards_edit">Lernkarte bearbeiten</string>
+    <string name="cards_front">Vorderseite</string>
+    <string name="cards_back">Rückseite</string>
+    <string name="cards_cloze_hint">Setzen Sie {{ }} um Wörter, um daraus eine Lücke zu machen.</string>
+    <string name="cards_from_page">%1$s, Seite %2$d</string>
+    <string name="cards_saved">Lernkarte gespeichert</string>
+    <string name="cards_need_saved_file">Speichern Sie das Dokument zuerst, um Lernkarten daraus zu erstellen</string>
+    <string name="cards_progress">%1$d übrig · %2$d im Stapel</string>
+    <string name="cards_export">Für Anki exportieren (TSV)</string>
+    <string name="cards_import">CSV oder TSV importieren</string>
+    <string name="cards_none">Noch keine Lernkarten</string>
+    <string name="cards_none_body">Markieren Sie Text in einem Dokument und wählen Sie Lernkarte erstellen, oder fügen Sie eine mit + hinzu.</string>
+    <string name="cards_all_done">Alles erledigt</string>
+    <string name="cards_all_done_body">%1$d wiederholt. Karten kommen zurück, wenn sie fällig sind.</string>
+    <string name="cards_show_answer">Antwort zeigen</string>
+    <string name="cards_again">Nochmal</string>
+    <string name="cards_hard">Schwer</string>
+    <string name="cards_good">Gut</string>
+    <string name="cards_easy">Leicht</string>
+    <string name="cards_span_minutes">%d Min.</string>
+    <string name="cards_span_days">%d T.</string>
+    <string name="cards_span_months">%d Mon.</string>
+    <string name="cards_delete_title">Diese Lernkarte löschen?</string>
+    <string name="cards_busy_export">Lernkarten werden exportiert …</string>
+    <string name="cards_file_name">Lernkarten %1$s</string>
+    <string name="cards_imported">%1$d Lernkarten importiert</string>
 </resources>

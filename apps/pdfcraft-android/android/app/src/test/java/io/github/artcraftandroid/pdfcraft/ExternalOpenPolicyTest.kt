@@ -125,4 +125,13 @@ class AttachmentPolicyTest {
         org.junit.Assert.assertFalse(f("photo.jpg", "image/jpeg"))
         org.junit.Assert.assertFalse(f("report.docx", null))
     }
+
+    @Test
+    fun sharedCommentFilesAreImportedNotOpened() {
+        assertTrue(isCommentsType("application/vnd.adobe.xfdf"))
+        assertTrue(isCommentsType("Application/VND.FDF; charset=binary"))
+        assertFalse(isCommentsType("application/pdf"))
+        assertFalse(isCommentsType("application/octet-stream"))
+        assertFalse(isCommentsType(null))
+    }
 }

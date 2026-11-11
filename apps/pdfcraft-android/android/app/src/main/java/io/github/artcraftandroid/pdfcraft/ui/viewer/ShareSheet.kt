@@ -24,6 +24,9 @@ enum class ShareChoice(val id: String, @StringRes val label: Int) {
     /** Comments and form fields baked into the pages, so the receiver can't remove or change them. */
     Flattened("flattened", R.string.share_choice_flattened),
 
+    /** A copy without comments and markups; the open document keeps them (#155). */
+    Clean("clean", R.string.sheet_share_clean),
+
     /** The page in view, as a PDF of its own. */
     Page("page", R.string.share_choice_page),
 
@@ -34,6 +37,7 @@ enum class ShareChoice(val id: String, @StringRes val label: Int) {
         get() = when (this) {
             Pdf -> LucideIcons.FileText
             Flattened -> LucideIcons.Layers
+            Clean -> LucideIcons.BrushCleaning
             Page -> LucideIcons.File
             Images -> LucideIcons.Images
         }

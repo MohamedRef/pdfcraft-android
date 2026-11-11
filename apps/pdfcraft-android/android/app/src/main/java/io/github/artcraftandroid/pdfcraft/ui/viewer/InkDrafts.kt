@@ -10,7 +10,8 @@ import androidx.compose.ui.geometry.Offset
 
 /** Reversible changes to the uncommitted Draw layer, in actual gesture order. */
 internal sealed class DraftInkEdit {
-    data class Added(val stroke: InkStroke) : DraftInkEdit()
+    /** One gesture's strokes (several when the pen left the page and came back, #75). */
+    data class Added(val strokes: List<InkStroke>) : DraftInkEdit()
     data class Moved(val strokes: List<InkStroke>, val offset: Offset) : DraftInkEdit()
     /** Lasso Delete of draft strokes, each restored at its own position in paint order. */
     data class Removed(val strokes: List<Pair<Int, InkStroke>>) : DraftInkEdit()
@@ -25,7 +26,7 @@ internal sealed class DraftInkEdit {
 internal fun applyDraftInkEdit(strokes: SnapshotStateList<InkStroke>, edit: DraftInkEdit, forward: Boolean) {
     when (edit) {
         is DraftInkEdit.Added -> {
-            if (forward) strokes.add(edit.stroke) else strokes.remove(edit.stroke)
+            if (forward) strokes.addAll(edit.strokes) else strokes.removeAll(edit.strokes)
         }
         is DraftInkEdit.Removed -> {
             if (forward) edit.strokes.forEach { (_, s) -> strokes.remove(s) }
@@ -79,7 +80,7 @@ internal class InkDrafts {
         val kept = taken.drop(applied.coerceIn(0, taken.size))
         if (kept.isEmpty()) return 0
         strokes.addAll(0, kept)
-        edits.addAll(0, kept.map { DraftInkEdit.Added(it) })
+        edits.addAll(0, kept.map { DraftInkEdit.Added(listOf(it)) })
         return kept.size
     }
 }

@@ -5,6 +5,7 @@ import io.github.artcraftandroid.pdfcraft.ui.home.FileTool
 import io.github.artcraftandroid.pdfcraft.ui.viewer.FillElement
 import androidx.compose.ui.graphics.asImageBitmap
 import io.github.artcraftandroid.pdfcraft.engine.toBitmap
+import io.github.artcraftandroid.pdfcraft.engine.review
 import io.github.artcraftandroid.pdfcraft.engine.UserBookmark
 import io.github.artcraftandroid.pdfcraft.engine.UserBookmarks
 import io.github.artcraftandroid.pdfcraft.ui.viewer.NotePrompt
@@ -933,7 +934,6 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         }
     }
 
-    /** Share a copy of [doc] through the system's share sheet (saved first, with the ink being drawn). */
     /** The Share sheet's choice last used, marked next time (#205). */
     val lastShareChoice: io.github.artcraftandroid.pdfcraft.ui.viewer.ShareChoice
         get() = io.github.artcraftandroid.pdfcraft.ui.viewer.ShareChoice.of(appPrefs.getString("shareChoice", null))
@@ -968,6 +968,11 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                         runCatching { eng.tool("doc_close", mapOf("doc" to copy, "discard_changes" to true)) }
                     }
                     out to text(R.string.share_name_flattened, doc.title)
+                }
+                io.github.artcraftandroid.pdfcraft.ui.viewer.ShareChoice.Clean -> {
+                    // the saved file opened again without comments and markups; this one keeps them (#155)
+                    val copy = preparedCopy(doc, unlock = false, clean = true) ?: throw IllegalStateException(text(R.string.msg_clean_copy_failed))
+                    copy to doc.name
                 }
                 io.github.artcraftandroid.pdfcraft.ui.viewer.ShareChoice.Page -> {
                     val out = tempFile("pdf")
@@ -1132,8 +1137,8 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         return true
     }
 
-    /** Print [doc] through Android's print framework. */
-    fun print(doc: OpenDocument) {
+    /** Print [doc] through Android's print framework; with [clean], without its comments and markups (#155). */
+    fun print(doc: OpenDocument, clean: Boolean = false) {
         if (!doc.info.allowsPrinting) {
             tell(text(R.string.msg_print_disabled))
             return
@@ -1145,10 +1150,14 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             refresh(doc)
             save(doc)
             // the system's printing can't open a password-protected file: print an unlocked copy
-            val unlocked = if (doc.info.encrypted) unlockedCopy(doc) else null
+            val prepared = if (doc.info.encrypted || clean) preparedCopy(doc, unlock = doc.info.encrypted, clean = clean) else null
+            if (clean && prepared == null) {
+                tell(text(R.string.msg_clean_copy_failed))
+                return@launch
+            }
             // a copy, not the working file the app's pause may be saving (#79); either copy is
             // deleted when the print job finishes (the unlocked one has no password, #105)
-            val copy = unlocked ?: printSnapshot(doc)
+            val copy = prepared ?: printSnapshot(doc)
             prints.trySend(PrintJob(copy ?: doc.file, doc.name, deleteWhenDone = copy != null))
         }
     }
@@ -1163,14 +1172,27 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         }
     }
 
-    /** A temporary copy of [doc] without its password, for printing; null if the security can't be removed. */
-    private suspend fun unlockedCopy(doc: OpenDocument): File? {
+    /**
+     * A temporary copy of [doc]'s saved file, opened separately so the open document is untouched:
+     * without its password ([unlock], for printing, #105) and without its comments and markups
+     * ([clean], #155). Null when that can't be done.
+     */
+    private suspend fun preparedCopy(doc: OpenDocument, unlock: Boolean, clean: Boolean): File? {
         val eng = engine ?: return null
         val out = File(getApplication<Application>().cacheDir, "print-${System.nanoTime()}.pdf")
         return runCatching {
-            val copy = eng.tool("doc_open", mapOf("path" to doc.file.absolutePath, "password" to doc.password)).optLong("doc")
+            val copy = saveMutex.withLock {
+                eng.tool("doc_open", mapOf("path" to doc.file.absolutePath, "password" to doc.password)).optLong("doc")
+            }
             try {
-                eng.tool("doc_unprotect", mapOf("doc" to copy))
+                if (unlock) eng.tool("doc_unprotect", mapOf("doc" to copy))
+                if (clean) {
+                    val found = eng.tool("doc_hidden_info", mapOf("doc" to copy)).optJSONArray("categories")
+                    val comments = (0 until (found?.length() ?: 0)).map { found!!.getJSONObject(it) }
+                        .firstOrNull { it.optString("category") == "comments" }?.optInt("count") ?: 0
+                    // the tool fails when there is nothing to remove: a file without comments is already clean
+                    if (comments > 0) eng.tool("doc_remove_hidden", mapOf("doc" to copy, "categories" to listOf("comments")))
+                }
                 eng.tool("doc_save", mapOf("doc" to copy, "path" to out.absolutePath, "full" to true))
             } finally {
                 runCatching { eng.tool("doc_close", mapOf("doc" to copy, "discard_changes" to true)) }
@@ -1556,6 +1578,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     fun setCommentsHidden(doc: OpenDocument, hidden: Boolean) {
         val eng = engine ?: return
         if (doc.info.preparing) return
+        selectedComment = null
         viewModelScope.launch {
             if (runCatching { eng.tool("comments_hide", mapOf("doc" to doc.id, "hidden" to hidden)) }.isFailure) return@launch
             // the switch reads the engine's state; the pages draw again without waiting for an edit
@@ -3774,6 +3797,171 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         deliver(out, "Pages from ${doc.title}.pdf")
     }
 
+    // ---- Flashcards ---------------------------------------------------------------------------
+
+    val flashcards = io.github.artcraftandroid.pdfcraft.engine.Flashcards(File(getApplication<Application>().filesDir, "flashcards.json"))
+    private val fsrs = io.github.artcraftandroid.pdfcraft.engine.Fsrs()
+
+    /** A card being written (from a selection, or by hand in a deck). */
+    var cardDraft by mutableStateOf<CardDraft?>(null)
+
+    /** The review session showing: its deck (a document URI, or null for every deck). */
+    var reviewing by mutableStateOf<ReviewSession?>(null)
+
+    /** Cards due now per deck, for Home and the viewer. */
+    var dueCounts by mutableStateOf<Map<String, Int>>(emptyMap())
+        private set
+
+    fun refreshDue() {
+        viewModelScope.launch { dueCounts = withContext(Dispatchers.IO) { flashcards.dueCounts(System.currentTimeMillis()) } }
+    }
+
+    /**
+     * Selection > Make card: the selected text on the front, linked to its page. With [cloze] the
+     * front is the selection's line with the selected words as the blank to fill in.
+     */
+    fun makeCardFromSelection(doc: OpenDocument, cloze: Boolean) {
+        val uri = doc.source?.toString() ?: run { tell(text(R.string.cards_need_saved_file)); return }
+        val eng = engine ?: return
+        viewModelScope.launch {
+            val sel = doc.selection.selection ?: return@launch
+            val page = sel.range.page.toInt()
+            val picked = doc.selection.text()?.trim()?.replace(Regex("\\s+"), " ") ?: return@launch
+            var front = picked
+            if (cloze) {
+                val first = sel.rects.firstOrNull()
+                val line = first?.let { r ->
+                    runCatching { eng.tool("text_lines", mapOf("doc" to doc.id, "page" to page + 1)) }.getOrNull()?.optJSONArray("lines")?.let { a ->
+                        val cy = (r[1] + r[3]) / 2
+                        (0 until a.length()).mapNotNull { a.optJSONObject(it) }.firstOrNull { l ->
+                            val b = l.optJSONArray("rect") ?: return@firstOrNull false
+                            cy >= b.optDouble(1) && cy <= b.optDouble(3)
+                        }?.optString("text")
+                    }
+                }
+                front = io.github.artcraftandroid.pdfcraft.engine.Flashcards.clozeOf(line, picked)
+            }
+            doc.selection.clear()
+            cardDraft = CardDraft(uri, doc.info.name, page, front, "", null)
+        }
+    }
+
+    fun newCard(deck: String, deckName: String) { cardDraft = CardDraft(deck, deckName, -1, "", "", null) }
+
+    fun editCard(card: io.github.artcraftandroid.pdfcraft.engine.Flashcard) { cardDraft = CardDraft(card.deck, card.deckName, card.page, card.front, card.back, card.id) }
+
+    fun saveCard(d: CardDraft) {
+        cardDraft = null
+        if (d.front.isBlank()) return
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) {
+                val old = d.id?.let { id -> flashcards.all().firstOrNull { it.id == id } }
+                flashcards.put(
+                    old?.copy(front = d.front.trim(), back = d.back.trim())
+                        ?: io.github.artcraftandroid.pdfcraft.engine.Flashcard(
+                            id = java.util.UUID.randomUUID().toString(), deck = d.deck, deckName = d.deckName,
+                            front = d.front.trim(), back = d.back.trim(), page = d.page, created = System.currentTimeMillis(),
+                        ),
+                )
+            }
+            refreshDue()
+            if (d.id == null) tell(text(R.string.cards_saved))
+            reviewing?.let { reload(it) }
+        }
+    }
+
+    fun deleteCard(id: String) {
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) { flashcards.delete(id) }
+            refreshDue()
+            reviewing?.let { reload(it) }
+        }
+    }
+
+    /** Review the cards due in [deck] (every deck when null). */
+    fun startReview(deck: String?, deckName: String) {
+        val r = ReviewSession(deck, deckName)
+        reviewing = r
+        reload(r)
+    }
+
+    private fun reload(r: ReviewSession) {
+        viewModelScope.launch {
+            val (due, all) = withContext(Dispatchers.IO) {
+                flashcards.due(System.currentTimeMillis(), r.deck) to (if (r.deck != null) flashcards.deck(r.deck) else flashcards.all())
+            }
+            if (reviewing === r) { r.queue.clear(); r.queue.addAll(due); r.all = all }
+        }
+    }
+
+    /** The next due dates [card] would get for each rating (for the buttons). */
+    fun previewIntervals(card: io.github.artcraftandroid.pdfcraft.engine.Flashcard): Map<io.github.artcraftandroid.pdfcraft.engine.Rating, Long> {
+        val now = System.currentTimeMillis()
+        return io.github.artcraftandroid.pdfcraft.engine.Rating.entries.associateWith { fsrs.review(card, it, now).due - now }
+    }
+
+    fun rate(r: ReviewSession, card: io.github.artcraftandroid.pdfcraft.engine.Flashcard, rating: io.github.artcraftandroid.pdfcraft.engine.Rating) {
+        val next = fsrs.review(card, rating, System.currentTimeMillis())
+        r.queue.remove(card)
+        // forgotten cards come back at the end of this session
+        if (rating == io.github.artcraftandroid.pdfcraft.engine.Rating.Again) r.queue.add(next)
+        r.reviewed++
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) { flashcards.put(next) }
+            refreshDue()
+        }
+    }
+
+    /** Open a card's source page. */
+    fun openCardSource(card: io.github.artcraftandroid.pdfcraft.engine.Flashcard) {
+        reviewing = null
+        if (document?.source?.toString() == card.deck) { if (card.page >= 0) document?.viewer?.goToPage(card.page); return }
+        pendingSearch = if (card.page >= 0) card.page to "" else null
+        open(Uri.parse(card.deck))
+    }
+
+    /** Export a deck (or every card) as Anki-importable TSV to Downloads. */
+    fun exportCards(deck: String?, deckName: String) = job(text(R.string.cards_busy_export)) { _ ->
+        val cards = withContext(Dispatchers.IO) { if (deck != null) flashcards.deck(deck) else flashcards.all() }
+        if (cards.isEmpty()) { tell(text(R.string.cards_none)); return@job }
+        val out = tempFile("txt")
+        withContext(Dispatchers.IO) { out.writeText(io.github.artcraftandroid.pdfcraft.engine.Flashcards.toAnkiTsv(cards)) }
+        deliver(out, DocumentFiles.safeName(text(R.string.cards_file_name, deckName.removeSuffix(".pdf"))).removeSuffix(".pdf") + ".txt", "text/plain")
+    }
+
+    /** Import cards from a CSV/TSV/TXT file into [deck]. */
+    fun importCards(deck: String, deckName: String) {
+        cardImportDeck = deck to deckName
+        cardImportRequests.trySend(Unit)
+    }
+
+    private var cardImportDeck: Pair<String, String>? = null
+    val cardImportRequests = Channel<Unit>(Channel.CONFLATED)
+
+    fun onCardFilePicked(uri: Uri?) {
+        val (deck, name) = cardImportDeck ?: return
+        cardImportDeck = null
+        uri ?: return
+        viewModelScope.launch {
+            val n = withContext(Dispatchers.IO) {
+                runCatching {
+                    val text = getApplication<Application>().contentResolver.openInputStream(uri)?.use { s ->
+                        String(s.readNBytes(8 * 1024 * 1024), Charsets.UTF_8).removePrefix("\uFEFF")
+                    } ?: return@runCatching 0
+                    val now = System.currentTimeMillis()
+                    val cards = io.github.artcraftandroid.pdfcraft.engine.Flashcards.parseDelimited(text).take(10_000).map { (f, b) ->
+                        io.github.artcraftandroid.pdfcraft.engine.Flashcard(java.util.UUID.randomUUID().toString(), deck, name, f, b, created = now)
+                    }
+                    flashcards.putAll(cards)
+                    cards.size
+                }.getOrDefault(-1)
+            }
+            if (n < 0) tell(text(R.string.msg_that_file_unreadable)) else tell(text(R.string.cards_imported, n))
+            refreshDue()
+            reviewing?.let { reload(it) }
+        }
+    }
+
     // ---- Library ------------------------------------------------------------------------------
 
     val library = io.github.artcraftandroid.pdfcraft.engine.Library(File(getApplication<Application>().filesDir, "library.json"))
@@ -4786,6 +4974,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         refreshStudy()
         refreshLibrary()
         indexLibrary()
+        refreshDue()
         focusTimer = io.github.artcraftandroid.pdfcraft.FocusTimerAlarm.load(getApplication())
     }
 
@@ -5073,7 +5262,8 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     fun tapComment(doc: OpenDocument, at: PagePoint?): Boolean {
         if (at == null) return false
         val hit = doc.comments.lastOrNull { c ->
-            c.page.toInt() == at.page && c.replyTo == null && c.state == null && c.rect.size == 4 &&
+            // A comment the PDF hides (Hidden/NoView) is not drawn, so it cannot be tapped (#115).
+            c.page.toInt() == at.page && !c.hidden && c.replyTo == null && c.state == null && c.rect.size == 4 &&
                 at.x in (c.rect[0] - 4)..(c.rect[2] + 4) && at.y in (c.rect[1] - 4)..(c.rect[3] + 4)
         } ?: return false
         selectedComment = doc to hit
@@ -5087,13 +5277,214 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         runTool(doc, "comment_delete", commentArgs(c))
     }
 
+    // ---- Comments: review, sharing and import (#169, #158) ----------------------------------
+
+    /** The saved author name (what Mine in the Comments list filters by), or null. */
+    val commentAuthor: String? get() = author
+
+    /**
+     * Each comment's review status, by (0-based page, 0-based index), as the engine works it out
+     * (the latest status reply, by reference). Empty when nobody set one.
+     */
+    suspend fun commentStatuses(doc: OpenDocument): Map<Pair<Int, Int>, String> {
+        val eng = engine ?: return emptyMap()
+        if (doc.comments.none { it.state != null }) return emptyMap()
+        val r = runCatching { eng.tool("comment_list", mapOf("doc" to doc.id)) }.getOrNull() ?: return emptyMap()
+        return io.github.artcraftandroid.pdfcraft.ui.viewer.parseCommentStatuses(r)
+    }
+
+    /** Set comment [c]'s review status (`none`, `accepted`, `rejected`, `cancelled`, `completed`). */
+    fun setCommentStatus(doc: OpenDocument, c: io.github.artcraftandroid.pdfcraft.core.CommentInfo, status: String) {
+        runTool(doc, "comment_set_status", commentArgs(c) + mapOf("status" to status, "author" to author))
+    }
+
+    /** Lock or unlock comment [c]: a locked one can't be moved, restyled or deleted. */
+    fun lockComment(doc: OpenDocument, c: io.github.artcraftandroid.pdfcraft.core.CommentInfo, locked: Boolean) {
+        runTool(doc, "comment_lock", commentArgs(c) + ("locked" to locked)) {
+            tell(text(if (locked) R.string.comments_locked_msg else R.string.comments_unlocked_msg))
+        }
+    }
+
+    /**
+     * The comments of [doc] as an XFDF file, handed to the share sheet ([share]) or saved into
+     * Downloads: what a classmate imports into their copy of the same PDF.
+     */
+    fun exportComments(doc: OpenDocument, share: Boolean) {
+        if (doc.comments.none { !it.fillSign } && doc.commentsComplete) {
+            tell(text(R.string.comments_export_none))
+            return
+        }
+        job(text(R.string.comments_exporting)) { eng ->
+            val out = tempFile("xfdf")
+            try {
+                eng.tool("doc_export_data", mapOf("doc" to doc.id, "path" to out.absolutePath, "what" to "comments"))
+                val name = "${doc.title}.xfdf"
+                if (share) {
+                    val uri = withContext(Dispatchers.IO) { files.shareable(out, name) }
+                    intents.trySend(Intent.createChooser(sendIntent(listOf(uri), XFDF_MIME).putExtra(Intent.EXTRA_SUBJECT, text(R.string.comments_share_subject, doc.title)), null))
+                } else {
+                    deliver(out, name, XFDF_MIME)
+                }
+            } finally {
+                out.delete()
+            }
+        }
+    }
+
+    /** Asks the activity for comments to import: XFDF, FDF or another PDF. */
+    val commentImportPicks = Channel<Unit>(Channel.CONFLATED)
+    private var commentImportTarget: OpenDocument? = null
+
+    fun pickCommentsImport(doc: OpenDocument) {
+        if (!canImportComments(doc)) return
+        commentImportTarget = doc
+        commentImportPicks.trySend(Unit)
+    }
+
+    private fun canImportComments(doc: OpenDocument): Boolean {
+        if (document !== doc || !doc.info.allowsAnnotation || doc.info.readOnlyReason != null) {
+            tell(text(R.string.comments_import_unavailable))
+            return false
+        }
+        return true
+    }
+
+    /** The picker's answer (null when cancelled). */
+    fun onCommentsPicked(uri: Uri?) {
+        val doc = commentImportTarget
+        commentImportTarget = null
+        if (uri == null || doc == null) return
+        importComments(doc, uri)
+    }
+
+    /**
+     * Comments shared to the app (an `.xfdf` or `.fdf` from a messaging app) go into the document
+     * open now; with none open, the reader is asked to open the PDF they belong to first.
+     */
+    fun receiveComments(uri: Uri) {
+        val doc = document
+        if (doc == null) {
+            tell(text(R.string.comments_import_open_pdf_first))
+            return
+        }
+        importComments(doc, uri)
+    }
+
+    /**
+     * Import the comments in [uri] into [doc], each onto the page with the same number. A
+     * comment already there under the same name is replaced, so the same file imported twice
+     * doesn't add a second set. One undo step.
+     */
+    private fun importComments(doc: OpenDocument, uri: Uri) {
+        if (!canImportComments(doc)) return
+        job(text(R.string.comments_importing)) { eng ->
+            val name = withContext(Dispatchers.IO) { runCatching { files.displayNameRaw(uri) }.getOrDefault("comments") }
+            val ext = name.substringAfterLast('.', "").lowercase().takeIf { it in setOf("xfdf", "fdf", "pdf", "xml") } ?: "xfdf"
+            val staged = tempFile(ext)
+            try {
+                withContext(Dispatchers.IO) {
+                    val stream = getApplication<Application>().contentResolver.openInputStream(uri)
+                        ?: throw java.io.IOException(text(R.string.msg_that_file_unreadable))
+                    val ctx = currentCoroutineContext()
+                    val limit = if (ext == "pdf") SafBoundedCopy.MAX_BOOKMARK_SOURCE_PDF_BYTES else MAX_COMMENT_FILE_BYTES
+                    stream.use { input -> staged.outputStream().use { SafBoundedCopy.copy(input, it, limit, "Comments") { ctx.ensureActive() } } }
+                }
+                if (document !== doc) return@job
+                val before = commentCount(doc)
+                eng.tool("doc_import_data", mapOf("doc" to doc.id, "path" to staged.absolutePath))
+                refresh(doc)
+                val after = comments(doc)?.count { it.replyTo == null && it.state == null && !it.fillSign }
+                val added = if (after != null && before != null) after - before else null
+                tell(
+                    when {
+                        added == null -> text(R.string.comments_imported)
+                        added > 0 -> plural(R.plurals.comments_imported_count, added, added)
+                        else -> text(R.string.comments_imported_none_new)
+                    },
+                )
+            } finally {
+                staged.delete()
+            }
+        }
+    }
+
+    private suspend fun commentCount(doc: OpenDocument): Int? = comments(doc)?.count { it.replyTo == null && it.state == null && !it.fillSign }
+
+    /** A PDF summarising every comment, sorted by [sort] (`page`, `author`, `date`, `type`), into Downloads with Open. */
+    fun summarizeComments(doc: OpenDocument, sort: String) = job(text(R.string.comments_summarizing)) { eng ->
+        val out = tempFile("pdf")
+        try {
+            eng.tool("comments_summarize", mapOf("doc" to doc.id, "sort" to sort, "out" to out.absolutePath, "open" to false))
+            deliver(out, text(R.string.comments_summary_file, doc.title), "application/pdf")
+        } finally {
+            out.delete()
+        }
+    }
+
+    /**
+     * Comments copied from one document to paste into another (#169): each page's XFDF, by its
+     * 1-based page number. Kept in memory only, never on the system clipboard.
+     */
+    var copiedComments by mutableStateOf<Map<Int, String>>(emptyMap())
+        private set
+
+    /** Copy [list] (comments, not replies) with their replies, page by page. */
+    fun copyComments(doc: OpenDocument, list: List<io.github.artcraftandroid.pdfcraft.core.CommentInfo>) {
+        val eng = engine ?: return
+        val byPage = list.filter { it.replyTo == null && it.state == null && it.subtype != "Sound" && it.subtype != "FileAttachment" }
+            .groupBy { it.page.toInt() + 1 }
+        if (byPage.isEmpty()) {
+            tell(text(R.string.comments_copy_none))
+            return
+        }
+        viewModelScope.launch {
+            try {
+                val out = mutableMapOf<Int, String>()
+                for ((page, cs) in byPage) {
+                    val r = eng.tool("comments_copy", mapOf("doc" to doc.id, "comments" to cs.map { listOf(page, it.index.toInt() + 1) }))
+                    val xfdf = r.optString("xfdf").ifEmpty { r.optString("text") }
+                    if (xfdf.isNotEmpty()) out[page] = xfdf
+                }
+                copiedComments = out
+                val n = byPage.values.sumOf { it.size }
+                tell(plural(R.plurals.comments_copied, n, n))
+            } catch (e: MobileException) {
+                tell(e.userMessage)
+            }
+        }
+    }
+
+    /** Paste the copied comments into [doc], each onto the page with the number it had (one undo step per page). */
+    fun pasteComments(doc: OpenDocument) {
+        val copied = copiedComments
+        if (copied.isEmpty()) return
+        if (!canImportComments(doc)) return
+        val eng = engine ?: return
+        viewModelScope.launch {
+            var skipped = 0
+            try {
+                for ((page, xfdf) in copied.toSortedMap()) {
+                    if (page > doc.pageCount) { skipped++; continue }
+                    eng.tool("comments_paste", mapOf("doc" to doc.id, "page" to page, "xfdf" to xfdf))
+                }
+            } catch (e: MobileException) {
+                tell(e.userMessage)
+            } finally {
+                refresh(doc)
+            }
+            tell(if (skipped > 0) text(R.string.comments_pasted_some, skipped) else text(R.string.comments_pasted))
+        }
+    }
+
     fun recolorComment(doc: OpenDocument, c: io.github.artcraftandroid.pdfcraft.core.CommentInfo, color: androidx.compose.ui.graphics.Color) {
         runTool(doc, "comment_edit", commentArgs(c) + ("color" to color.hex())) { reselect(doc, c) }
     }
 
     /** Change a comment's opacity or line width (one undo step each). */
-    fun styleComment(doc: OpenDocument, c: io.github.artcraftandroid.pdfcraft.core.CommentInfo, style: Map<String, Any?>) {
-        runTool(doc, "comment_edit", commentArgs(c) + style) { reselect(doc, c) }
+    /** [reselect] false: the panel is closing or moving on, so the selection is left as it is. */
+    fun styleComment(doc: OpenDocument, c: io.github.artcraftandroid.pdfcraft.core.CommentInfo, style: Map<String, Any?>, reselect: Boolean = true) {
+        if (reselect) runTool(doc, "comment_edit", commentArgs(c) + style) { reselect(doc, c) }
+        else runTool(doc, "comment_edit", commentArgs(c) + style)
     }
 
     fun editCommentText(doc: OpenDocument, c: io.github.artcraftandroid.pdfcraft.core.CommentInfo, text: String) {
@@ -5188,6 +5579,12 @@ class SuccessBanner(val text: String, val undo: (() -> Unit)?)
 /** A file for the activity to print; [deleteWhenDone]: a temporary copy (an unlocked one) the job deletes (#105). */
 data class PrintJob(val file: File, val name: String, val deleteWhenDone: Boolean)
 
+/** XFDF, as Acrobat registers it: what shared comment files are sent as. */
+const val XFDF_MIME = "application/vnd.adobe.xfdf"
+
+/** The largest XFDF or FDF file imported (a PDF to take comments from may be larger). */
+private const val MAX_COMMENT_FILE_BYTES = 64L * 1024 * 1024
+
 /** What Export notes writes. */
 enum class DigestFormat(@androidx.annotation.StringRes val label: Int) {
     Markdown(R.string.digest_markdown),
@@ -5198,3 +5595,13 @@ enum class DigestFormat(@androidx.annotation.StringRes val label: Int) {
 
 /** Files past this size are not copied for the library index. */
 private const val MAX_INDEX_BYTES = 300L * 1024 * 1024
+
+/** A flashcard being written: its deck (document URI), page, sides, and its id when editing one. */
+data class CardDraft(val deck: String, val deckName: String, val page: Int, val front: String, val back: String, val id: String?)
+
+/** A review session: the cards still due in it, in order, and how many were reviewed. */
+class ReviewSession(val deck: String?, val deckName: String) {
+    val queue = androidx.compose.runtime.mutableStateListOf<io.github.artcraftandroid.pdfcraft.engine.Flashcard>()
+    var all by mutableStateOf<List<io.github.artcraftandroid.pdfcraft.engine.Flashcard>>(emptyList())
+    var reviewed by mutableStateOf(0)
+}

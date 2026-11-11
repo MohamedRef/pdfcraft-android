@@ -88,7 +88,7 @@ fn eraser_rejects_missing_or_excessive_paths_without_edit() {
     let fixture = Fixture::new();
     let mobile = MobileSession::new();
     let doc = mobile.open(fixture.0.to_string_lossy().to_string(), None).unwrap();
-    for path in [json!([]), json!([[1,2],[1]]), json!(vec![[10, 10]; 513])] {
+    for path in [json!([]), json!([[1,2],[1]]), json!(vec![[10, 10]; 4097])] {
         assert!(mobile.execute("comment_erase".into(), json!({
             "doc": doc.id, "page": 1, "path": path, "radius": 8.0,
         }).to_string()).is_err());

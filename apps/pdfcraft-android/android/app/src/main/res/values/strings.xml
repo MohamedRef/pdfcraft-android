@@ -913,7 +913,7 @@
     <!-- Translator note: default title of a new bookmark; %1$s is a page label such as iv. -->
     <string name="contents_default_title_label">Page %1$s</string>
     <string name="sheet_bookmarks_contents">Bookmarks &amp; Table of Contents</string>
-    <string name="sheet_comment_list">Comment List</string>
+    <string name="sheet_comment_list">Comments</string>
     <string name="sheet_add_bookmark">Add bookmark</string>
     <string name="sheet_remove_bookmark">Remove bookmark</string>
     <string name="sheet_export_as">Export as...</string>
@@ -930,15 +930,9 @@
     <string name="sheet_reading_mode">Reading Mode</string>
     <string name="sheet_night_mode">Night Mode</string>
     <string name="sheet_hide_annotations">Hide annotations</string>
-    <string name="comments_filter_all">All</string>
-    <string name="comments_filter_notes">Notes</string>
-    <string name="comments_filter_highlights">Highlights</string>
-    <string name="comments_filter_ink">Ink</string>
-    <string name="comments_filter_shapes">Shapes</string>
-    <string name="comments_filter_stamps">Stamps</string>
-    <string name="comments_filter_author">Author</string>
-    <string name="comments_filter_anyone">Anyone</string>
-    <string name="comments_filter_none">No comments match these filters.</string>
+    <string name="sheet_share_clean">Share without annotations</string>
+    <string name="sheet_print_clean">Print without annotations</string>
+    <string name="msg_clean_copy_failed">Couldn\'t make a copy without annotations.</string>
     <string name="sheet_reading_colors">Reading colours</string>
     <string name="sheet_reading_colors_sample">Aa</string>
     <string name="sheet_reading_colors_off">Off</string>
@@ -1026,7 +1020,7 @@
     <string name="comments_reply_hint">Reply</string>
     <!-- Translator note: accessibility label of the commenter's picture -->
     <string name="comments_avatar">Avatar</string>
-    <string name="comments_empty_title">Get started</string>
+    <string name="comments_empty_title">No comments yet</string>
     <string name="comments_empty_body">Comments you add with the commenting tools show up here.</string>
 
     <!-- Comment List: what a comment did, in italics under its author -->
@@ -1573,6 +1567,14 @@
     <string name="bates_export_failed">Could not save this new copy to Downloads.</string>
     <string name="ink_presets_title">Favorite pens</string>
     <string name="ink_presets_help">Each pen keeps its own colour, width and opacity. Tap a favorite to restore its settings.</string>
+    <string name="ink_latency_reset">Reset</string>
+    <string name="ink_latency_refresh">Update</string>
+    <string name="ink_latency_none">not measured yet</string>
+    <string name="ink_latency_value">%1$d ms typical, %2$d ms at worst (95%%), %3$d samples</string>
+    <string name="ink_latency_low">Low-latency</string>
+    <string name="ink_latency_normal">Normal</string>
+    <string name="ink_latency_explanation">Write with the pen with Low-latency ink off, then on, and compare. Measured from the pen event to the app\'s drawing; the screen adds a little more.</string>
+    <string name="ink_latency_title">Ink latency on this device</string>
     <string name="palm_guard_calibrate_clear">Clear touches</string>
     <string name="palm_guard_calibrate_help">Hover or write with the pen, then rest your hand as you do when writing. Green touches are ignored; red ones would scroll or press buttons. Adjust the size until your resting hand lands in green.</string>
     <string name="palm_guard_calibrate">Check palm area</string>
@@ -1825,6 +1827,72 @@
     <string name="updater_err_storage">The update couldn\'t be saved on this device. Free up some space and try again.</string>
     <string name="updater_err_untrusted">The update link isn\'t from PdfCraft\'s official GitHub Releases, so it was refused.</string>
     <string name="updater_err_server">The download server sent an unexpected response. Try again later or download in the browser.</string>
+    <!-- Comments list: search, filters, review, sharing and import (#196, #169, #158) -->
+    <string name="comments_more">More comment options</string>
+    <string name="comments_search">Search comments</string>
+    <string name="comments_search_hint">Search text, replies or author</string>
+    <string name="comments_search_close">Close search</string>
+    <string name="comments_shown">%1$d of %2$d threads</string>
+    <string name="comments_no_match">No comments match.</string>
+    <string name="comments_filter_all">All</string>
+    <string name="comments_filter_notes">Notes &amp; text</string>
+    <string name="comments_filter_highlights">Highlights</string>
+    <string name="comments_filter_drawings">Drawings</string>
+    <string name="comments_filter_mine">Mine</string>
+    <string name="comments_status_any">Any status</string>
+    <string name="comments_status_open">Open</string>
+    <string name="comments_status_none">None</string>
+    <string name="comments_status_accepted">Accepted</string>
+    <string name="comments_status_rejected">Rejected</string>
+    <string name="comments_status_cancelled">Cancelled</string>
+    <string name="comments_status_completed">Completed</string>
+    <string name="comments_set_status">Set status</string>
+    <string name="comments_lock">Lock</string>
+    <string name="comments_unlock">Unlock</string>
+    <string name="comments_locked">Locked</string>
+    <string name="comments_locked_msg">Comment locked</string>
+    <string name="comments_unlocked_msg">Comment unlocked</string>
+    <string name="comments_copy_comment">Copy comment</string>
+    <string name="comments_copy_all">Copy all comments</string>
+    <string name="comments_copy_shown">Copy shown comments</string>
+    <string name="comments_copy_none">No comments to copy</string>
+    <string name="comments_paste">Paste comments</string>
+    <string name="comments_pasted">Comments pasted</string>
+    <string name="comments_pasted_some">Comments pasted. %1$d pages were left out because this document is shorter.</string>
+    <string name="comments_share">Share comments (XFDF)</string>
+    <string name="comments_share_subject">Comments on %1$s</string>
+    <string name="comments_save">Save comments to Downloads</string>
+    <string name="comments_export_none">There are no comments to export</string>
+    <string name="comments_exporting">Exporting comments…</string>
+    <string name="comments_import">Import comments…</string>
+    <string name="comments_import_with">Import comments</string>
+    <string name="comments_importing">Importing comments…</string>
+    <string name="comments_import_unavailable">Comments can\'t be added to this document</string>
+    <string name="comments_import_open_pdf_first">Open the PDF these comments belong to, then import them from Comments ▸ ⋮</string>
+    <string name="comments_imported">Comments imported</string>
+    <string name="comments_imported_none_new">Imported. No new comments: the ones in this file were already here.</string>
+    <string name="comments_summarize">Summarize as PDF</string>
+    <string name="comments_summarize_sort">Sort the summary by</string>
+    <string name="comments_sort_page">Page</string>
+    <string name="comments_sort_author">Author</string>
+    <string name="comments_sort_date">Date</string>
+    <string name="comments_sort_type">Type</string>
+    <string name="comments_summarizing">Summarizing comments…</string>
+    <string name="comments_summary_file">Summary of comments on %1$s.pdf</string>
+    <string name="comments_hide_all">Hide all comments</string>
+    <string name="comments_show_all">Show all comments</string>
+    <plurals name="comments_drawings">
+        <item quantity="one">%1$d drawing</item>
+        <item quantity="other">%1$d drawings</item>
+    </plurals>
+    <plurals name="comments_copied">
+        <item quantity="one">%1$d comment copied</item>
+        <item quantity="other">%1$d comments copied</item>
+    </plurals>
+    <plurals name="comments_imported_count">
+        <item quantity="one">%1$d comment imported</item>
+        <item quantity="other">%1$d comments imported</item>
+    </plurals>
     <string name="edit_label_rotate_page">Rotate page</string>
     <string name="edit_label_change_tag_properties">Change tag properties</string>
     <string name="edit_label_rotate_pages">Rotate pages</string>
@@ -2140,4 +2208,43 @@
     <string name="updater_home_view">View</string>
     <string name="updater_auto_check">Check for updates automatically</string>
     <string name="updater_auto_check_body">Once a day when PdfCraft opens, it asks GitHub whether a newer release exists. No files or personal data are sent.</string>
+    <plurals name="cards_due">
+        <item quantity="one">%d card due</item>
+        <item quantity="other">%d cards due</item>
+    </plurals>
+    <plurals name="cards_due_review">
+        <item quantity="one">Review %d flashcard due</item>
+        <item quantity="other">Review %d flashcards due</item>
+    </plurals>
+    <string name="cards_title">Flashcards</string>
+    <string name="cards_row_due">Flashcards (%1$d due)</string>
+    <string name="cards_make">Make flashcard</string>
+    <string name="cards_make_cloze">Make fill-in card</string>
+    <string name="cards_new">New flashcard</string>
+    <string name="cards_edit">Edit flashcard</string>
+    <string name="cards_front">Front</string>
+    <string name="cards_back">Back</string>
+    <string name="cards_cloze_hint">Put {{ }} around words to make them a blank to fill in.</string>
+    <string name="cards_from_page">%1$s, page %2$d</string>
+    <string name="cards_saved">Flashcard saved</string>
+    <string name="cards_need_saved_file">Save the document first to make flashcards from it</string>
+    <string name="cards_progress">%1$d left · %2$d in deck</string>
+    <string name="cards_export">Export for Anki (TSV)</string>
+    <string name="cards_import">Import CSV or TSV</string>
+    <string name="cards_none">No flashcards yet</string>
+    <string name="cards_none_body">Select text in a document and choose Make flashcard, or add one with +.</string>
+    <string name="cards_all_done">All caught up</string>
+    <string name="cards_all_done_body">%1$d reviewed. Cards come back when they are due.</string>
+    <string name="cards_show_answer">Show answer</string>
+    <string name="cards_again">Again</string>
+    <string name="cards_hard">Hard</string>
+    <string name="cards_good">Good</string>
+    <string name="cards_easy">Easy</string>
+    <string name="cards_span_minutes">%d min</string>
+    <string name="cards_span_days">%d d</string>
+    <string name="cards_span_months">%d mo</string>
+    <string name="cards_delete_title">Delete this flashcard?</string>
+    <string name="cards_busy_export">Exporting flashcards…</string>
+    <string name="cards_file_name">Flashcards %1$s</string>
+    <string name="cards_imported">Imported %1$d flashcards</string>
 </resources>

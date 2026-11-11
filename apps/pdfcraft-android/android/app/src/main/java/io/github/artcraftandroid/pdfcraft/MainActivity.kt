@@ -28,6 +28,7 @@ import io.github.artcraftandroid.pdfcraft.ui.AppRoot
 import io.github.artcraftandroid.pdfcraft.ui.AppViewModel
 import io.github.artcraftandroid.pdfcraft.ui.FilePickKind
 import io.github.artcraftandroid.pdfcraft.ui.PdfcraftTheme
+import io.github.artcraftandroid.pdfcraft.ui.XFDF_MIME
 import java.io.File
 import java.io.FileOutputStream
 import kotlinx.coroutines.delay
@@ -46,6 +47,8 @@ class MainActivity : ComponentActivity() {
     // accidentally feed untrusted bookmark JSON into another tool or document.
     private val pickBookmarkJson = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> vm.onBookmarkJsonPicked(uri) }
     private val pickBookmarkPdf = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> vm.onBookmarkPdfPicked(uri) }
+    // Comments to import (XFDF, FDF or another PDF's): a picker of their own, like the bookmarks'.
+    private val pickComments = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> vm.onCommentsPicked(uri) }
 
     private val saveCopy = registerForActivityResult(ActivityResultContracts.CreateDocument("application/pdf")) { uri -> vm.copyTo(uri) }
     private val takePhoto = registerForActivityResult(ActivityResultContracts.TakePicture()) { ok -> vm.onScanPhoto(ok) }
@@ -55,6 +58,7 @@ class MainActivity : ComponentActivity() {
     private val pickOutputFolder = registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri -> vm.onOutputFolderPicked(uri) }
     private val pickFolder = registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri -> uri?.let(vm::addLocalFolder) }
     private val micPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted -> vm.onMicPermission(granted) }
+    private val pickCardFile = registerForActivityResult(ActivityResultContracts.OpenDocument()) { vm.onCardFilePicked(it) }
     private val notificationPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { vm.updateFocusTimer(vm.focusTimer) }
 
     private val pickBatesPdfs = registerForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { vm.onBatesFilesPicked(it) }
@@ -111,6 +115,12 @@ class MainActivity : ComponentActivity() {
         lifecycleScope.launch {
             for (ignored in vm.bookmarkPdfPicks) {
                 launchSafely { pickBookmarkPdf.launch(arrayOf("application/pdf")) }
+            }
+        }
+        lifecycleScope.launch {
+            for (ignored in vm.commentImportPicks) {
+                // providers rarely know XFDF's type: anything may be picked, the engine reads its content
+                launchSafely { pickComments.launch(arrayOf(XFDF_MIME, FDF_MIME, "application/pdf", "application/xml", "text/xml", "application/octet-stream", "*/*")) }
             }
         }
         lifecycleScope.launch {
@@ -178,6 +188,7 @@ class MainActivity : ComponentActivity() {
                 else launchSafely { micPermission.launch(android.Manifest.permission.RECORD_AUDIO) }
             }
         }
+        lifecycleScope.launch { for (u in vm.cardImportRequests) launchSafely { pickCardFile.launch(arrayOf("text/plain", "text/csv", "text/comma-separated-values", "text/tab-separated-values")) } }
         lifecycleScope.launch {
             for (u in vm.notificationRequests) if (android.os.Build.VERSION.SDK_INT >= 33) launchSafely { notificationPermission.launch(android.Manifest.permission.POST_NOTIFICATIONS) }
         }
@@ -295,7 +306,9 @@ class MainActivity : ComponentActivity() {
     /** An external document must not terminate the whole app on a malformed parcelable. */
     private fun openFromIntent(intent: Intent?) {
         val uri = runCatching { externalPdfUri(intent) }.getOrNull() ?: return
-        vm.open(uri, fromOtherApp = true)
+        // shared comments (#158) go into the document open now, not open as one
+        if (isCommentsType(runCatching { intent?.type }.getOrNull())) vm.receiveComments(uri)
+        else vm.open(uri, fromOtherApp = true)
     }
 
     /**
