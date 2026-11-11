@@ -302,6 +302,7 @@
     <string name="viewer_hint_comment">اضغط في موضع التعليق</string>
     <string name="viewer_hint_text">اضغط لإضافة نص</string>
     <string name="viewer_hint_fill_sign">اضغط حيث تريد إدخال النص</string>
+    <string name="viewer_hint_fill_sign_form">اضغط على حقل أزرق لملئه، أو اضغط في أي مكان آخر لإضافة العنصر المختار</string>
     <string name="viewer_add_image">إضافة صورة</string>
     <string name="viewer_image_from_photos">من الصور</string>
     <string name="viewer_image_from_camera">من الكاميرا</string>
@@ -732,7 +733,7 @@
     <string name="fill_tab_image">صورة</string>
     <string name="fill_draw_signature_here">ارسم توقيعك هنا</string>
     <string name="fill_draw_initials_here">ارسم أحرفك الأولى هنا</string>
-    <string name="fill_save_to_device">حفظ على الجهاز</string>
+    <string name="fill_save_to_device">تذكّر هذا التوقيع</string>
     <string name="fill_smaller">أصغر</string>
     <string name="fill_bigger">أكبر</string>
     <string name="fill_colour">اللون</string>

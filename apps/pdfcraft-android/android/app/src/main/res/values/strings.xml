@@ -422,6 +422,7 @@
     <string name="viewer_hint_comment">Tap where the comment goes</string>
     <string name="viewer_hint_text">Tap to add text</string>
     <string name="viewer_hint_fill_sign">Tap where you want to fill in text</string>
+    <string name="viewer_hint_fill_sign_form">Tap a blue field to fill it, or tap anywhere else to add the chosen item</string>
 
     <!-- Viewer: Add image sheet -->
     <string name="viewer_add_image">Add image</string>
@@ -1054,7 +1055,7 @@
     <string name="fill_tab_image">Image</string>
     <string name="fill_draw_signature_here">Draw your signature here</string>
     <string name="fill_draw_initials_here">Draw your initials here</string>
-    <string name="fill_save_to_device">Save to device</string>
+    <string name="fill_save_to_device">Remember this signature</string>
 
     <!-- Fill & Sign: the menu over a placed element -->
     <string name="fill_smaller">Smaller</string>

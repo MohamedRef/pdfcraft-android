@@ -622,7 +622,7 @@ private fun toolHint(tool: ViewerTool, markup: TextMarkup, doc: OpenDocument): S
     ViewerTool.Draw -> text(R.string.viewer_hint_draw)
     ViewerTool.Comment -> if (doc.controller.commentMode == CommentMode.Stamp) text(R.string.viewer_hint_stamp) else text(R.string.viewer_hint_comment)
     ViewerTool.Text -> if (doc.controller.textCallout) text(R.string.viewer_hint_callout) else text(R.string.viewer_hint_text)
-    ViewerTool.FillSign -> if (doc.info.fields > 0u) null else text(R.string.viewer_hint_fill_sign)
+    ViewerTool.FillSign -> text(if (doc.info.fields > 0u) R.string.viewer_hint_fill_sign_form else R.string.viewer_hint_fill_sign)
     else -> null
 }
 
