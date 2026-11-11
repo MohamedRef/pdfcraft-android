@@ -160,9 +160,11 @@ fun MoreSheet(vm: AppViewModel, doc: OpenDocument) {
             SheetRow(LucideIcons.GitCompare, stringResource(R.string.compare_with_older), { close(); vm.startCompare(doc) })
             SheetRow(LucideIcons.FileOutput, stringResource(R.string.sheet_export_as), { close(); vm.openExport(doc) })
             SheetRow(LucideIcons.BrushCleaning, stringResource(R.string.hidden_title), { ctl.sheet = ViewerSheet.HiddenInfo }, chevron = true)
+            SheetRow(LucideIcons.BadgeCheck, stringResource(R.string.std_title), { close(); vm.openStandards(doc) })
             SheetRow(LucideIcons.Heading, stringResource(R.string.marks_title), { close(); vm.openPageMarks(doc) }, enabled = canEditDocument(doc))
             SheetRow(LucideIcons.Stamp, stringResource(R.string.flatten_title), { close(); vm.flattenPrompt = doc }, enabled = canEditDocument(doc))
             // a clean copy to print; the working file keeps its comments (#155). Sharing one is in Share.
+            SheetRow(LucideIcons.Printer, stringResource(R.string.print_options_title), { close(); vm.openPrintOptions(doc) })
             SheetRow(LucideIcons.Printer, stringResource(R.string.sheet_print_clean), { close(); vm.print(doc, clean = true) })
             Spacer(Modifier.height(8.dp))
         }

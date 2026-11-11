@@ -4986,6 +4986,84 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         }
     }
 
+    /** Check & prepare: PDF/A, print readiness and thin lines (#181). */
+    fun openStandards(doc: OpenDocument) {
+        doc.commitTool?.invoke()
+        toolScreen = ToolScreen.Standards(doc)
+    }
+
+    /** A read-only report from [tool] (null, with the reason told, when it fails). */
+    suspend fun report(doc: OpenDocument, tool: String, args: Map<String, Any?> = emptyMap()): JSONObject? {
+        val eng = engine ?: return null
+        return try { eng.tool(tool, args + ("doc" to doc.id)) } catch (e: MobileException) { tell(e.userMessage); null }
+    }
+
+    /** Save as PDF/A at [level] (`pdfa_convert`, one undo step); [onDone] gets what still breaks the rules. */
+    fun convertToPdfa(doc: OpenDocument, level: String, onDone: (PdfaReport) -> Unit) {
+        runTool(doc, "pdfa_convert", mapOf("level" to level)) { r ->
+            val report = parsePdfaReport(r)
+            onDone(report)
+            tell(text(if (report.compliant) R.string.std_msg_pdfa_done else R.string.std_msg_pdfa_partly), text(R.string.common_undo)) { undo(doc) }
+        }
+    }
+
+    /** Remove the PDF/A identification (`standards_remove_id`); one undo step. */
+    fun removePdfaId(doc: OpenDocument, onDone: () -> Unit) {
+        runTool(doc, "standards_remove_id", mapOf("standard" to "pdfa")) {
+            onDone()
+            tell(text(R.string.std_msg_pdfa_id_removed), text(R.string.common_undo)) { undo(doc) }
+        }
+    }
+
+    /** Fix thin lines (`doc_fix_hairlines`): says how many strokes changed; one undo step when any did. */
+    fun fixHairlines(doc: OpenDocument, fix: HairlineFix, pages: List<Int>?) {
+        runTool(doc, "doc_fix_hairlines", fix.args(pages)) { r ->
+            val n = r.optInt("fixed")
+            if (n == 0) tell(text(R.string.std_msg_no_hairlines))
+            else tell(plural(R.plurals.std_msg_hairlines_fixed, n, n, r.optInt("pages")), text(R.string.common_undo)) { undo(doc) }
+        }
+    }
+
+    /** Print options (#185): lay the pages out with `doc_print` before the system print dialog. */
+    fun openPrintOptions(doc: OpenDocument) {
+        if (!doc.info.allowsPrinting) {
+            tell(text(R.string.msg_print_disabled))
+            return
+        }
+        toolScreen = ToolScreen.PrintOptions(doc)
+    }
+
+    /**
+     * Print [doc] with [options]: unchanged options print as [print] always has; otherwise the
+     * print-ready PDF `doc_print` makes goes to the print dialog, or with [save] to Downloads.
+     */
+    fun printWithOptions(doc: OpenDocument, options: PrintOptions, save: Boolean) {
+        if (options.isDefault && !save) {
+            toolScreen = null
+            print(doc)
+            return
+        }
+        if (doc.controller.tool == ViewerTool.Draw) doc.commitTool?.invoke()
+        job(text(R.string.print_busy)) { eng ->
+            val dir = File(getApplication<Application>().cacheDir, "print/${System.nanoTime()}").apply { mkdirs() }
+            val out = File(dir, "${doc.title}-print.pdf")
+            try {
+                eng.tool("doc_print", options.args(out.absolutePath) + ("doc" to doc.id))
+                toolScreen = null
+                if (save) {
+                    deliver(out, out.name, "application/pdf")
+                    dir.deleteRecursively()
+                } else {
+                    // the print job deletes it when it finishes
+                    prints.trySend(PrintJob(out, doc.name, deleteWhenDone = true))
+                }
+            } catch (e: Exception) {
+                dir.deleteRecursively()
+                throw e
+            }
+        }
+    }
+
     /** Page marks: headers and footers, watermarks and backgrounds. */
     fun openPageMarks(doc: OpenDocument) {
         doc.commitTool?.invoke()
