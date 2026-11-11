@@ -36,6 +36,29 @@ pub(crate) fn is_document_timestamp(object: &Object) -> bool {
     object.as_dict().is_some_and(|d| is_doc_timestamp(d) && d.contains(b"ByteRange"))
 }
 
+/// Android adaptation (#212): the whole-file timestamp scan read every object of a large file on
+/// one thread (about 0.9 s of a phone's open for a 352 MB file). Contiguous parts of `numbers`
+/// are scanned on up to four threads and their candidates joined in the same ascending order;
+/// the scan is complete only if every part is. Small files keep one thread.
+fn scan_in_parts(numbers: Vec<u32>, scan: impl Fn(Vec<u32>) -> (Vec<ObjRef>, bool) + Sync) -> (Vec<ObjRef>, bool) {
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        let threads = std::thread::available_parallelism().map_or(1, |n| n.get()).min(4);
+        if threads > 1 && numbers.len() >= 4096 {
+            let chunk = numbers.len().div_ceil(threads);
+            let parts: Vec<Vec<u32>> = numbers.chunks(chunk).map(<[u32]>::to_vec).collect();
+            let results: Vec<(Vec<ObjRef>, bool)> = std::thread::scope(|s| {
+                let handles: Vec<_> = parts.into_iter().map(|part| s.spawn(|| scan(part))).collect();
+                // A panic stays a panic, as in the one-thread scan.
+                handles.into_iter().map(|h| h.join().unwrap_or_else(|p| std::panic::resume_unwind(p))).collect()
+            });
+            let complete = results.iter().all(|(_, complete)| *complete);
+            return (results.into_iter().flat_map(|(candidates, _)| candidates).collect(), complete);
+        }
+    }
+    scan(numbers)
+}
+
 /// Only dictionary/null edits have a local effect on candidate membership. Changes to an
 /// object stream or a scalar used as an indirect /Length can affect unedited objects too.
 /// Checking both the original and current objects also covers freeing those dependencies.
@@ -111,20 +134,24 @@ impl DigestCache {
         }
         #[cfg(test)]
         self.discovery_scans.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        let mut complete = true;
-        let candidates: Vec<_> = doc
-            // Candidate membership depends only on PDF names and key presence, which are not
-            // encrypted. Decrypting every unrelated image stream here delays large-file open.
-            // Matched candidates are fully read and validated by list_cached below.
-            .scan_object_headers_checked()
-            .filter_map(|(reference, object)| match object {
-                Ok(object) => is_document_timestamp(&object).then_some(reference),
-                Err(_) => {
-                    complete = false;
-                    None
-                }
-            })
-            .collect();
+        // Candidate membership depends only on PDF names and key presence, which are not
+        // encrypted. Decrypting every unrelated image stream here delays large-file open.
+        // Matched candidates are fully read and validated by list_cached below.
+        let scan = |numbers: Vec<u32>| {
+            let mut complete = true;
+            let candidates: Vec<_> = doc
+                .scan_object_headers_checked_subset(numbers)
+                .filter_map(|(reference, object)| match object {
+                    Ok(object) => is_document_timestamp(&object).then_some(reference),
+                    Err(_) => {
+                        complete = false;
+                        None
+                    }
+                })
+                .collect();
+            (candidates, complete)
+        };
+        let (candidates, complete) = scan_in_parts(doc.object_numbers(), scan);
         if eligible
             && complete
             && candidates.len() <= DISCOVERY_CACHE_LIMIT
@@ -579,4 +606,23 @@ pub(super) fn mk_rotation(doc: &Document, widget: &Dict) -> i64 {
         .and_then(|mk| mk.as_dict().and_then(|mk| mk.get(b"R")).map(|r| doc.resolve(r)))
         .and_then(|r| r.as_int().or_else(|| r.as_f64().filter(|v| v.is_finite() && v.abs() <= 1.0e6).map(|v| v.round() as i64)));
     r.map(|r| r.rem_euclid(360)).filter(|q| matches!(q, 90 | 180 | 270)).unwrap_or(0)
+}
+
+#[cfg(test)]
+mod scan_parts_tests {
+    use super::{ObjRef, scan_in_parts};
+
+    /// #212: the timestamp scan split between threads finds what one scan finds, in the same
+    /// order, and is complete only if every part is.
+    #[test]
+    fn a_scan_split_in_parts_equals_one_scan() {
+        let scan = |numbers: Vec<u32>| {
+            let found: Vec<ObjRef> = numbers.iter().filter(|n| *n % 7 == 3).map(|&n| ObjRef::new(n, 0)).collect();
+            (found, !numbers.contains(&9001))
+        };
+        for len in [0u32, 10, 4095, 4096, 9000, 20_011] {
+            let numbers: Vec<u32> = (1..=len).collect();
+            assert_eq!(scan_in_parts(numbers.clone(), scan), scan(numbers), "{len} objects");
+        }
+    }
 }

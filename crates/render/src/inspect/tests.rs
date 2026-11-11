@@ -2297,3 +2297,60 @@ fn efopen_filters_named_by_the_file_open_and_older_handlers_do_not() {
     let legacy = Arc::new(efopen_pdf_with("EFOpen", false, "/V 2 /R 3 /Length 128"));
     assert!(matches!(check_pages(legacy, None, 1), Err(OpenError::NeedsPassword)));
 }
+
+/// #212: reading a file's page annotations ahead on several threads leaves inspection exactly as
+/// the one-by-one read makes it.
+#[test]
+fn annotation_read_ahead_keeps_inspection_identical() {
+    let pages = 6usize;
+    let per_page = 40usize;
+    let mut objects: Vec<String> = vec!["<< /Type /Catalog /Pages 2 0 R >>".into()];
+    let first_page = 3usize;
+    let first_annot = first_page + pages;
+    let kids: Vec<String> = (0..pages).map(|p| format!("{} 0 R", first_page + p)).collect();
+    objects.push(format!("<< /Type /Pages /Count {pages} /Kids [{}] >>", kids.join(" ")));
+    for p in 0..pages {
+        let annots: Vec<String> = (0..per_page).map(|k| format!("{} 0 R", first_annot + p * per_page + k)).collect();
+        objects.push(format!("<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 400] /Annots [{}] >>", annots.join(" ")));
+    }
+    for p in 0..pages {
+        for k in 0..per_page {
+            let target = first_page + (p + k + 1) % pages;
+            let y = 10 + k * 9;
+            let body = if k % 5 == 0 {
+                format!("<< /Type /Annot /Subtype /Link /Rect [10 {y} 90 {}] /A << /S /URI /URI (https://example.com/{p}/{k}) >> >>", y + 8)
+            } else if k % 13 == 0 {
+                format!("<< /Type /Annot /Subtype /Text /Rect [100 {y} 110 {}] /Contents (note {p}-{k}) /T (Mo) >>", y + 8)
+            } else {
+                format!("<< /Type /Annot /Subtype /Link /Rect [10 {y} 90 {}] /Dest [{target} 0 R /XYZ 0 400 0] >>", y + 8)
+            };
+            objects.push(body);
+        }
+    }
+    let mut bytes = b"%PDF-1.7\n".to_vec();
+    let mut offsets = Vec::new();
+    for (i, o) in objects.iter().enumerate() {
+        offsets.push(bytes.len());
+        bytes.extend_from_slice(format!("{} 0 obj\n{o}\nendobj\n", i + 1).as_bytes());
+    }
+    let xref = bytes.len();
+    bytes.extend_from_slice(format!("xref\n0 {}\n0000000000 65535 f \n", objects.len() + 1).as_bytes());
+    for o in offsets {
+        bytes.extend_from_slice(format!("{o:010} 00000 n \n").as_bytes());
+    }
+    bytes.extend_from_slice(format!("trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n", objects.len() + 1).as_bytes());
+    let pages_info = inspect(Arc::new(bytes.clone()), None).unwrap().pages;
+    let fill = |prefetch: bool| {
+        let lazy = LazyStructure::new(Arc::new(bytes.clone()), None).unwrap();
+        let inspector = Inspector::new(&lazy);
+        if prefetch {
+            core::prefetch_annotations(&lazy, &inspector);
+        }
+        let mut info = DocInfo { pages: pages_info.clone(), ..Default::default() };
+        inspector.fill(&mut info);
+        (format!("{info:?}"), lazy.failed(), info.links.len())
+    };
+    let (plain, plain_failed, links) = fill(false);
+    assert!(links > 64, "{links} links");
+    assert_eq!(fill(true), (plain, plain_failed, links));
+}

@@ -319,6 +319,8 @@ pub fn write_incremental(doc: &Document, opts: &SaveOptions) -> Result<Vec<u8>, 
         let _ = write!(out, "\nstartxref\n{xref_at}\n%%EOF\n");
     }
     let mut file = Vec::with_capacity(original.len() + usize::from(newline) + out.len());
+    // Android adaptation (#212): a mapped original is read ahead for this full copy.
+    original.will_read_all();
     file.extend_from_slice(&original);
     if newline {
         file.push(b'\n');

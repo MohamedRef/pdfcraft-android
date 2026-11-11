@@ -65,6 +65,7 @@ pub fn inspect_with_trace(bytes: pdfcraft_cos::PdfBytes, password: Option<&str>,
                     if inspector.page_index.len() != t.pages.len() {
                         return None;
                     }
+                    trace.measure("native_inspect_prefetch", || prefetch_annotations(&doc, &inspector));
                     inspector.fill(&mut t);
                     (!doc.failed()).then_some(t)
                 }))
@@ -188,6 +189,36 @@ pub(super) fn inspect_structure(info: &mut DocInfo, fill: impl FnOnce(&mut DocIn
             info.warnings.push(format!("Document structure inspection crashed and was skipped: {}", crate::raster::panic_message(&p)));
         }
     }
+}
+
+/// Android adaptation (#212): the page annotations `Inspector::annotations` reads one by one,
+/// read ahead in parallel. A file with ~28,000 link annotations spent about a second of a
+/// phone's open converting them on one thread. Only objects that pass reads are read here: the
+/// annotation pass runs whenever the catalog resolves, visits every page of `page_ids`, skips an
+/// `/Annots` array it has already seen, and reads every referenced entry of the others.
+pub(super) fn prefetch_annotations(doc: &LazyStructure, inspector: &Inspector<'_>) {
+    if doc.catalog().is_err() {
+        return;
+    }
+    let threads = std::thread::available_parallelism().map_or(1, |n| n.get()).min(4);
+    if threads < 2 {
+        return;
+    }
+    let mut ids = Vec::new();
+    let mut seen_arrays = HashSet::new();
+    for &page in &inspector.page_ids {
+        let Ok(page_dict) = doc.get_dictionary(page) else { continue };
+        let Ok(annots) = page_dict.get(b"Annots") else { continue };
+        if let Some(r) = inspector.resolved_id(annots)
+            && !seen_arrays.insert(r)
+        {
+            continue;
+        }
+        if let Object::Array(entries) = inspector.resolve(annots) {
+            ids.extend(entries.iter().filter_map(|a| a.as_reference().ok()));
+        }
+    }
+    doc.prefetch(&ids, threads);
 }
 
 pub(super) struct Inspector<'a> {

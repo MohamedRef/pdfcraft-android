@@ -157,6 +157,28 @@ impl LazyStructure {
     pub(crate) fn failed(&self) -> bool {
         self.failed.load(Ordering::Relaxed)
     }
+
+    /// Android adaptation (#212): read `ids` on up to `threads` threads ahead of a sequential
+    /// pass that reads these same objects, so their parsing and conversion run in parallel.
+    /// Each slot is filled once with what the sequential read would put there; a failed read
+    /// marks the structure failed exactly as that read would have.
+    pub(crate) fn prefetch(&self, ids: &[ObjectId], threads: usize) {
+        #[cfg(not(target_arch = "wasm32"))]
+        if threads > 1 && ids.len() >= 64 {
+            let chunk = ids.len().div_ceil(threads);
+            std::thread::scope(|s| {
+                for part in ids.chunks(chunk) {
+                    s.spawn(move || {
+                        for &id in part {
+                            let _ = self.get_object(id);
+                        }
+                    });
+                }
+            });
+        }
+        #[cfg(target_arch = "wasm32")]
+        let _ = (ids, threads);
+    }
 }
 
 impl Structure for LazyStructure {

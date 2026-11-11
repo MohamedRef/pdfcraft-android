@@ -151,7 +151,9 @@ class Thumbnails(private val context: Context) {
     fun of(path: String, maxSide: Int = 160): Bitmap? {
         if (path.startsWith("content:")) return ofContent(Uri.parse(path), maxSide)
         val f = File(path)
-        if (!f.isFile || f.length() > MAX_COPY) return null
+        // The engine maps a working copy in the app's private store (no copy, so any size it
+        // opens) and reads other files only up to its 100 MiB preview limit.
+        if (!f.isFile || f.length() > MAX_LOCAL) return null
         return cached(sha("$path|${f.lastModified()}|${f.length()}|$maxSide")) { fileThumbnail(path, maxSide.toUInt()).toBitmap() }
     }
 
@@ -195,5 +197,7 @@ class Thumbnails(private val context: Context) {
 
     private companion object {
         const val MAX_COPY = 100L * 1024 * 1024
+        /** The engine's input limit; the engine itself keeps 100 MiB for files it must copy. */
+        const val MAX_LOCAL = 512L * 1024 * 1024
     }
 }

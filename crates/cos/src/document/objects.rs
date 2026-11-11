@@ -678,7 +678,13 @@ impl Document {
     /// normally before validation. Compressed, edited, repaired or uncertain headers fall back
     /// to the ordinary bounded reader. This is not an authoritative object-reading API.
     pub fn scan_object_headers_checked(&self) -> impl Iterator<Item = (ObjRef, Result<Arc<Object>, CosError>)> + use<> {
-        let numbers = self.object_numbers();
+        self.scan_object_headers_checked_subset(self.object_numbers())
+    }
+
+    /// Android adaptation (#212): [`Self::scan_object_headers_checked`] over `numbers` only, so a
+    /// caller can split one whole-file scan between threads. Each object reads exactly as in the
+    /// whole scan; the reader's private caches only save work.
+    pub fn scan_object_headers_checked_subset(&self, numbers: Vec<u32>) -> impl Iterator<Item = (ObjRef, Result<Arc<Object>, CosError>)> + use<> {
         let mut reader = self.object_reader();
         numbers.into_iter().map(move |num| {
             let document = &reader.document;

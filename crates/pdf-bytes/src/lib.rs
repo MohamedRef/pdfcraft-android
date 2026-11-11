@@ -10,6 +10,10 @@ pub trait PdfSource: Deref<Target = [u8]> + AsRef<[u8]> + std::fmt::Debug + Send
     fn as_slice(&self) -> &[u8] {
         self.as_ref()
     }
+    /// About to read every byte once, in order (a full copy). A mapping asks the kernel to read
+    /// ahead (#212): copying a mapped 352 MB file page fault by page fault took about 0.45 s
+    /// longer than copying the same bytes from memory on a phone. Only a hint.
+    fn will_read_all(&self) {}
 }
 impl PdfSource for Vec<u8> {
     fn capacity(&self) -> usize {
@@ -22,6 +26,13 @@ impl PdfSource for memmap2::Mmap {
     }
     fn is_mapped(&self) -> bool {
         true
+    }
+    fn will_read_all(&self) {
+        #[cfg(unix)]
+        {
+            let _ = self.advise(memmap2::Advice::Sequential);
+            let _ = self.advise(memmap2::Advice::WillNeed);
+        }
     }
 }
 pub type PdfBytes = Arc<dyn PdfSource>;
@@ -60,8 +71,27 @@ pub fn read_private_input(path: &Path, root: Option<&Path>, cap: u64) -> io::Res
     read_private_with(path, root, cap, map_managed_inode)
 }
 
+/// For previews such as file-list thumbnails: a managed private file (see
+/// [`read_private_input`]) is mapped up to `cap` without copying it; any other input, or a
+/// managed file that cannot be mapped, is read into memory only up to `owned_cap`. A preview of a
+/// large working copy then neither fails nor allocates a second full copy beside an open viewer.
+pub fn read_private_preview(path: &Path, root: Option<&Path>, cap: u64, owned_cap: u64) -> io::Result<PdfBytes> {
+    read_private_bounded(path, root, cap, owned_cap, map_managed_inode)
+}
+
 fn read_private_with(path: &Path, root: Option<&Path>, cap: u64, map: impl FnOnce(&File) -> io::Result<memmap2::Mmap>) -> io::Result<PdfBytes> {
+    read_private_bounded(path, root, cap, cap, map)
+}
+
+fn read_private_bounded(
+    path: &Path,
+    root: Option<&Path>,
+    cap: u64,
+    owned_cap: u64,
+    map: impl FnOnce(&File) -> io::Result<memmap2::Mmap>,
+) -> io::Result<PdfBytes> {
     let cap = cap.min(512 * 1024 * 1024);
+    let owned_cap = owned_cap.min(cap);
     let file = File::open(path)?;
     let metadata = file.metadata()?;
     if metadata.is_file() && metadata.len() > cap {
@@ -72,6 +102,10 @@ fn read_private_with(path: &Path, root: Option<&Path>, cap: u64, map: impl FnOnc
             return Ok(Arc::new(mapped));
         }
     }
+    if metadata.is_file() && metadata.len() > owned_cap {
+        return Err(input_limit_error(owned_cap));
+    }
+    let cap = owned_cap;
     let mut bytes = Vec::new();
     if metadata.is_file() {
         bytes.try_reserve_exact(metadata.len() as usize + 1).map_err(|e| io::Error::new(io::ErrorKind::OutOfMemory, e))?;
@@ -249,6 +283,28 @@ mod tests {
                 .unwrap();
         assert!(!source.is_mapped());
         assert_eq!(source.as_slice(), original);
+    }
+
+    /// A file-list preview maps a managed working copy beyond the preview copy limit, and still
+    /// refuses to copy any other file (or an unmappable managed one) beyond it.
+    #[test]
+    fn previews_map_large_working_copies_and_keep_the_copy_limit_elsewhere() {
+        let fixture = Fixture::new();
+        let original = vec![53u8; 3 * 1024 * 1024];
+        let path = fixture.write("Documents/large.pdf", &original);
+        let preview = read_private_preview(&path, Some(&fixture.0), 8 * 1024 * 1024, 2 * 1024 * 1024).unwrap();
+        assert!(preview.is_mapped());
+        assert_eq!(preview.as_slice(), original);
+        assert!(read_private_preview(&path, None, 8 * 1024 * 1024, 2 * 1024 * 1024).is_err(), "no store root: copy limit");
+        let outside = fixture.write("outside.pdf", &original);
+        assert!(read_private_preview(&outside, Some(&fixture.0), 8 * 1024 * 1024, 2 * 1024 * 1024).is_err(), "outside the store");
+        assert!(read_private_preview(&path, Some(&fixture.0), 1024 * 1024, 2 * 1024 * 1024).is_err(), "over the overall cap");
+        let unmappable = read_private_bounded(&path, Some(&fixture.0), 8 * 1024 * 1024, 2 * 1024 * 1024, |_| {
+            Err(io::Error::new(io::ErrorKind::Unsupported, "mapping unavailable"))
+        });
+        assert!(unmappable.is_err(), "a failed mapping keeps the copy limit");
+        let small = fixture.write("small.pdf", &vec![1u8; 1024]);
+        assert!(!read_private_preview(&small, None, 8 * 1024 * 1024, 2 * 1024 * 1024).unwrap().is_mapped());
     }
 
     #[test]
