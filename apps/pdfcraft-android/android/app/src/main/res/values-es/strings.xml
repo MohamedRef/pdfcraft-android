@@ -1743,4 +1743,24 @@
     <string name="digest_purple">Morado</string>
     <string name="digest_black">Negro</string>
     <string name="digest_grey">Gris</string>
+    <string name="focus_timer">Temporizador de concentración</string>
+    <string name="focus_work">Concentración</string>
+    <string name="focus_break">Descanso</string>
+    <string name="focus_paused_left">En pausa, quedan %1$d:%2$02d</string>
+    <string name="focus_preset">%1$d / %2$d min</string>
+    <string name="focus_start">Iniciar</string>
+    <string name="focus_pause">Pausar</string>
+    <string name="focus_resume">Reanudar</string>
+    <string name="focus_stop">Detener</string>
+    <string name="focus_hint">Concentración y descanso se alternan hasta que lo detengas. La notificación sigue la cuenta atrás en segundo plano.</string>
+    <string name="focus_break_started">Hora de descansar</string>
+    <string name="focus_work_started">De vuelta a concentrarse</string>
+    <string name="study_section">Estadísticas de estudio</string>
+    <string name="study_clear_stats">Eliminar estadísticas de estudio</string>
+    <string name="study_stats_body">El tiempo de lectura solo cuenta con un documento abierto en primer plano y si tocaste la pantalla en los últimos 2 minutos. Se queda en este teléfono.</string>
+    <string name="study_stats_cleared">Estadísticas de estudio eliminadas</string>
+    <string name="study_continue">Seguir estudiando</string>
+    <string name="study_week_minutes">Esta semana %1$d h %2$d min</string>
+    <string name="study_page_progress">Página %1$d · %2$d%% leído · %3$d min</string>
+    <string name="study_resume_row">Continuar %1$s en la página %2$d, %3$d%% leído</string>
 </resources>

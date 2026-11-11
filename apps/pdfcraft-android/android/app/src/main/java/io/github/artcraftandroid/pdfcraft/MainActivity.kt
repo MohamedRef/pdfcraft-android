@@ -55,6 +55,7 @@ class MainActivity : ComponentActivity() {
     private val pickOutputFolder = registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri -> vm.onOutputFolderPicked(uri) }
     private val pickFolder = registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri -> uri?.let(vm::addLocalFolder) }
     private val micPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted -> vm.onMicPermission(granted) }
+    private val notificationPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { vm.updateFocusTimer(vm.focusTimer) }
 
     private val pickBatesPdfs = registerForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { vm.onBatesFilesPicked(it) }
 
@@ -176,6 +177,9 @@ class MainActivity : ComponentActivity() {
                 else launchSafely { micPermission.launch(android.Manifest.permission.RECORD_AUDIO) }
             }
         }
+        lifecycleScope.launch {
+            for (u in vm.notificationRequests) if (android.os.Build.VERSION.SDK_INT >= 33) launchSafely { notificationPermission.launch(android.Manifest.permission.POST_NOTIFICATIONS) }
+        }
         // keep the screen on while reading, if asked, until half an hour without a touch
         lifecycleScope.launch {
             while (true) {
@@ -207,6 +211,7 @@ class MainActivity : ComponentActivity() {
     override fun onUserInteraction() {
         super.onUserInteraction()
         lastTouch = System.currentTimeMillis()
+        vm.studyActivity()
     }
 
     private inline fun launchSafely(onFail: () -> Unit = {}, block: () -> Unit) {

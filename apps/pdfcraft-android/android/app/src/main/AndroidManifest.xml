@@ -27,6 +27,9 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
 
+    <!-- Focus timer: its countdown notification (asked for when the timer is first started) -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
     <!-- No app data leaves the phone through backup or device transfer (#107). -->
     <application
         android:name=".PdfcraftApplication"
@@ -70,6 +73,9 @@
             </intent-filter>
         </activity>
 
+        <receiver
+            android:name=".FocusTimerReceiver"
+            android:exported="false" />
         <service
             android:name=".ReadAloudService"
             android:exported="false"

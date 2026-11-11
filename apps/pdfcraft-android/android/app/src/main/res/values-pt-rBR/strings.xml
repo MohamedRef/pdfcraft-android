@@ -1320,4 +1320,24 @@
     <string name="digest_purple">Roxo</string>
     <string name="digest_black">Preto</string>
     <string name="digest_grey">Cinza</string>
+    <string name="focus_timer">Timer de foco</string>
+    <string name="focus_work">Foco</string>
+    <string name="focus_break">Pausa</string>
+    <string name="focus_paused_left">Pausado, faltam %1$d:%2$02d</string>
+    <string name="focus_preset">%1$d / %2$d min</string>
+    <string name="focus_start">Iniciar</string>
+    <string name="focus_pause">Pausar</string>
+    <string name="focus_resume">Retomar</string>
+    <string name="focus_stop">Parar</string>
+    <string name="focus_hint">Foco e pausa se alternam até você parar. A notificação continua a contagem em segundo plano.</string>
+    <string name="focus_break_started">Hora da pausa</string>
+    <string name="focus_work_started">De volta ao foco</string>
+    <string name="study_section">Estatísticas de estudo</string>
+    <string name="study_clear_stats">Excluir estatísticas de estudo</string>
+    <string name="study_stats_body">O tempo de leitura só conta com um documento aberto em primeiro plano e se você tocou na tela nos últimos 2 minutos. Fica neste telefone.</string>
+    <string name="study_stats_cleared">Estatísticas de estudo excluídas</string>
+    <string name="study_continue">Continuar estudando</string>
+    <string name="study_week_minutes">Esta semana %1$d h %2$d min</string>
+    <string name="study_page_progress">Página %1$d · %2$d%% lido · %3$d min</string>
+    <string name="study_resume_row">Continuar %1$s na página %2$d, %3$d%% lido</string>
 </resources>

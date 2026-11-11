@@ -371,6 +371,16 @@ private fun Preferences(vm: AppViewModel) {
         PdfSwitch(vm.formSuggestions, { vm.updateFormSuggestions(it) })
     }
     SheetRow(null, stringResource(R.string.home_clear_suggestions), { vm.clearFormSuggestions() })
+
+    Section(stringResource(R.string.study_section))
+    var confirmStudyClear by remember { mutableStateOf(false) }
+    SheetRow(null, stringResource(R.string.study_clear_stats), { confirmStudyClear = true })
+    Text(stringResource(R.string.study_stats_body), color = c.textSecondary, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 20.dp))
+    if (confirmStudyClear) io.github.artcraftandroid.pdfcraft.ui.PdfDialog(
+        onDismiss = { confirmStudyClear = false }, title = stringResource(R.string.study_clear_stats),
+        confirm = stringResource(R.string.common_clear), destructive = true,
+        onConfirm = { confirmStudyClear = false; vm.clearStudyStats() },
+    )
     SheetDivider()
     Section(stringResource(R.string.home_author_title))
     val authorHint = stringResource(R.string.home_author_hint)

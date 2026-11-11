@@ -1725,4 +1725,24 @@
     <string name="digest_purple">Viola</string>
     <string name="digest_black">Nero</string>
     <string name="digest_grey">Grigio</string>
+    <string name="focus_timer">Timer di concentrazione</string>
+    <string name="focus_work">Concentrazione</string>
+    <string name="focus_break">Pausa</string>
+    <string name="focus_paused_left">In pausa, mancano %1$d:%2$02d</string>
+    <string name="focus_preset">%1$d / %2$d min</string>
+    <string name="focus_start">Avvia</string>
+    <string name="focus_pause">Pausa</string>
+    <string name="focus_resume">Riprendi</string>
+    <string name="focus_stop">Ferma</string>
+    <string name="focus_hint">Concentrazione e pausa si alternano finché non fermi. La notifica continua il conto alla rovescia in background.</string>
+    <string name="focus_break_started">È ora di una pausa</string>
+    <string name="focus_work_started">Torna a concentrarti</string>
+    <string name="study_section">Statistiche di studio</string>
+    <string name="study_clear_stats">Elimina statistiche di studio</string>
+    <string name="study_stats_body">Il tempo di lettura conta solo con un documento aperto in primo piano e se hai toccato lo schermo negli ultimi 2 minuti. Resta su questo telefono.</string>
+    <string name="study_stats_cleared">Statistiche di studio eliminate</string>
+    <string name="study_continue">Continua a studiare</string>
+    <string name="study_week_minutes">Questa settimana %1$d h %2$d min</string>
+    <string name="study_page_progress">Pagina %1$d · %2$d%% letto · %3$d min</string>
+    <string name="study_resume_row">Continua %1$s a pagina %2$d, %3$d%% letto</string>
 </resources>

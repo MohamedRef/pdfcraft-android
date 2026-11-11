@@ -1985,4 +1985,24 @@
     <string name="digest_purple">Purple</string>
     <string name="digest_black">Black</string>
     <string name="digest_grey">Grey</string>
+    <string name="focus_timer">Focus timer</string>
+    <string name="focus_work">Focus</string>
+    <string name="focus_break">Break</string>
+    <string name="focus_paused_left">Paused, %1$d:%2$02d left</string>
+    <string name="focus_preset">%1$d / %2$d min</string>
+    <string name="focus_start">Start</string>
+    <string name="focus_pause">Pause</string>
+    <string name="focus_resume">Resume</string>
+    <string name="focus_stop">Stop</string>
+    <string name="focus_hint">Focus and break alternate until you stop. The notification counts down when PdfCraft is in the background.</string>
+    <string name="focus_break_started">Time for a break</string>
+    <string name="focus_work_started">Back to focus</string>
+    <string name="study_section">Study statistics</string>
+    <string name="study_clear_stats">Delete study statistics</string>
+    <string name="study_stats_body">Reading time counts only while a document is open in front and you touched the screen in the last 2 minutes. It stays on this phone.</string>
+    <string name="study_stats_cleared">Study statistics deleted</string>
+    <string name="study_continue">Continue studying</string>
+    <string name="study_week_minutes">This week %1$d h %2$d min</string>
+    <string name="study_page_progress">Page %1$d · %2$d%% read · %3$d min</string>
+    <string name="study_resume_row">Continue %1$s at page %2$d, %3$d%% read</string>
 </resources>

@@ -186,6 +186,7 @@ private fun HomeTabScreen(vm: AppViewModel, onBrowse: () -> Unit) {
                     Text(stringResource(if (vm.recentList.isEmpty()) R.string.home_welcome else R.string.home_welcome_back), color = c.text, fontSize = 24.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 16.dp, top = 8.dp, bottom = 16.dp))
                     Text(stringResource(R.string.home_start_with_tool), color = c.text, fontSize = 15.sp, lineHeight = 22.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(start = 16.dp, bottom = 8.dp))
                     ToolsCarousel(vm, onBrowse)
+                    if (vm.studyRecent.isNotEmpty()) ContinueStudying(vm)
                     Spacer(Modifier.height(16.dp))
                     Row(Modifier.fillMaxWidth().padding(start = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                         listOf(R.string.home_list_recent, R.string.home_list_starred, R.string.home_list_on_device).forEachIndexed { i, label ->
@@ -492,3 +493,34 @@ fun FileSheet(vm: AppViewModel, r: FileRow, recent: Boolean, onDismiss: () -> Un
     }
 }
 
+
+/** The last documents studied, each with its page and how much of it was read, and this week's time. */
+@Composable
+private fun ContinueStudying(vm: AppViewModel) {
+    val c = pdfColors
+    LaunchedEffect(Unit) { vm.refreshStudy() }
+    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp).clip(RoundedCornerShape(8.dp)).background(c.surfaceRaised).padding(12.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(stringResource(R.string.study_continue), color = c.text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+            val week = vm.studyWeek.sum() / 60_000
+            Text(stringResource(R.string.study_week_minutes, week / 60, week % 60), color = c.textSecondary, fontSize = 12.sp)
+        }
+        if (vm.studyWeek.isNotEmpty()) {
+            // this week's days, oldest first, as small bars
+            val max = (vm.studyWeek.maxOrNull() ?: 0L).coerceAtLeast(1L)
+            Row(Modifier.fillMaxWidth().height(24.dp).padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.Bottom) {
+                for (d in vm.studyWeek) Box(Modifier.weight(1f).height((2 + 16 * d / max).toInt().dp).background(c.accent.copy(alpha = if (d > 0) 0.8f else 0.2f), RoundedCornerShape(2.dp)))
+            }
+        }
+        for (d in vm.studyRecent) {
+            val label = stringResource(R.string.study_resume_row, d.name.removeSuffix(".pdf"), d.lastPage + 1, (d.progress * 100).toInt())
+            Column(Modifier.fillMaxWidth().clickable(role = Role.Button) { vm.open(android.net.Uri.parse(d.uri)) }.semantics { contentDescription = label }.padding(vertical = 8.dp)) {
+                Text(d.name.removeSuffix(".pdf"), color = c.text, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(stringResource(R.string.study_page_progress, d.lastPage + 1, (d.progress * 100).toInt(), d.activeMs / 60_000), color = c.textSecondary, fontSize = 12.sp)
+                Box(Modifier.padding(top = 4.dp).fillMaxWidth().height(3.dp).background(c.divider, RoundedCornerShape(2.dp))) {
+                    Box(Modifier.fillMaxWidth(d.progress).height(3.dp).background(c.accent, RoundedCornerShape(2.dp)))
+                }
+            }
+        }
+    }
+}

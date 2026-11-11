@@ -1735,4 +1735,24 @@
     <string name="digest_purple">Lila</string>
     <string name="digest_black">Schwarz</string>
     <string name="digest_grey">Grau</string>
+    <string name="focus_timer">Fokus-Timer</string>
+    <string name="focus_work">Fokus</string>
+    <string name="focus_break">Pause</string>
+    <string name="focus_paused_left">Angehalten, noch %1$d:%2$02d</string>
+    <string name="focus_preset">%1$d / %2$d Min.</string>
+    <string name="focus_start">Starten</string>
+    <string name="focus_pause">Anhalten</string>
+    <string name="focus_resume">Fortsetzen</string>
+    <string name="focus_stop">Beenden</string>
+    <string name="focus_hint">Fokus und Pause wechseln sich ab, bis Sie beenden. Die Benachrichtigung zählt im Hintergrund weiter herunter.</string>
+    <string name="focus_break_started">Zeit für eine Pause</string>
+    <string name="focus_work_started">Zurück zum Fokus</string>
+    <string name="study_section">Lernstatistik</string>
+    <string name="study_clear_stats">Lernstatistik löschen</string>
+    <string name="study_stats_body">Lesezeit zählt nur, solange ein Dokument im Vordergrund geöffnet ist und Sie in den letzten 2 Minuten den Bildschirm berührt haben. Sie bleibt auf diesem Telefon.</string>
+    <string name="study_stats_cleared">Lernstatistik gelöscht</string>
+    <string name="study_continue">Weiterlernen</string>
+    <string name="study_week_minutes">Diese Woche %1$d h %2$d min</string>
+    <string name="study_page_progress">Seite %1$d · %2$d %% gelesen · %3$d min</string>
+    <string name="study_resume_row">%1$s auf Seite %2$d fortsetzen, %3$d %% gelesen</string>
 </resources>
