@@ -379,6 +379,19 @@ private fun ZoomWritingPad(
 ) {
     val c = pdfColors
     val ctl = doc.controller
+    // A sharp background for the box (#130): the box's region rendered at the pad's magnification,
+    // a short moment after the box settles; until then the whole-page image stands in.
+    var sharp by remember(doc) { mutableStateOf<Pair<PadRender, androidx.compose.ui.graphics.ImageBitmap>?>(null) }
+    var sharpGen by remember(doc) { mutableStateOf<Long?>(null) }
+    val zbNow = ctl.zoomBox
+    val wanted = zbNow?.let { zb -> doc.viewer.pages.getOrNull(zb.page)?.let { zb.padRender(padSize, it.width, it.height) } }
+    val gen = zbNow?.let { doc.pageGenerations.of(it.page) }
+    LaunchedEffect(wanted, gen) {
+        if (wanted == null || sharp?.first == wanted && sharpGen == gen) return@LaunchedEffect
+        kotlinx.coroutines.delay(120)
+        val img = doc.images.renderRegion(wanted.page, wanted.scale, io.github.artcraftandroid.pdfcraft.core.TileRect(wanted.x.toUInt(), wanted.y.toUInt(), wanted.w.toUInt(), wanted.h.toUInt()))
+        if (img != null) { sharp = wanted to img; sharpGen = gen }
+    }
     Box(
         modifier.background(Color.White).drawBehind {
             drawLine(c.divider, Offset(0f, 0f), Offset(size.width, 0f), strokeWidth = 2f)
@@ -431,6 +444,16 @@ private fun ZoomWritingPad(
                         img.bitmap,
                         dstOffset = androidx.compose.ui.unit.IntOffset(pageRect.left.toInt(), pageRect.top.toInt()),
                         dstSize = androidx.compose.ui.unit.IntSize(pageRect.width.toInt(), pageRect.height.toInt()),
+                    )
+                }
+                // The sharp render on top, placed by page points so it lines up even while a newer one renders.
+                sharp?.let { (r, img) ->
+                    if (r.page != zb.page) return@let
+                    val k = m / r.scale
+                    drawImage(
+                        img,
+                        dstOffset = androidx.compose.ui.unit.IntOffset(Math.round(origin.x + r.x * k), Math.round(origin.y + r.y * k)),
+                        dstSize = androidx.compose.ui.unit.IntSize(Math.round(r.w * k), Math.round(r.h * k)),
                     )
                 }
                 for (s in drafts) if (s.page == zb.page) {
