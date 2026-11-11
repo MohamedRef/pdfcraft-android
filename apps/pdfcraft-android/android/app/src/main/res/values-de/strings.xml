@@ -222,8 +222,6 @@
     <string name="home_extra_body">Optionale Änderungen am Aussehen und Verhalten von PdfCraft.</string>
     <string name="home_status_bar_in_documents">Statusleiste in Dokumenten anzeigen</string>
     <string name="home_status_bar_in_documents_body">Die Statusleiste wird zusammen mit den Symbolleisten angezeigt. Wenn du sie durch Tippen ausblendest, nutzt die Seite den gesamten Bildschirm, auch den Bereich um die Kamera.</string>
-    <string name="home_search_count">Anzahl der Suchergebnisse anzeigen</string>
-    <string name="home_search_count_body">Bei der Dokumentsuche wird angezeigt, welches Ergebnis du gerade ansiehst und wie viele es insgesamt gibt, z. B. 3 von 12.</string>
 
     <!-- Settings: About PdfCraft -->
     <string name="home_section_about">Über</string>

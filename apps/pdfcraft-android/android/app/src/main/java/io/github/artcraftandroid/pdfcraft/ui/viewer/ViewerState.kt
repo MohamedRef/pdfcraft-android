@@ -175,6 +175,19 @@ class ViewerState(pages: List<PageSize>) {
         clamp()
     }
 
+    /** Where the reader is, to come back to with [goToPage] (page and points down it at the screen's top). */
+    fun spot(): JumpSpot {
+        val l = layout
+        val page = currentPage
+        if (mode != PageMode.Continuous || l.rects.isEmpty()) return JumpSpot(page, 0f)
+        val r = l.rects[page]
+        val within = (scrollY + padTop) / zoom - r.top
+        return JumpSpot(page, (within / l.scaleOf(page)).coerceAtLeast(0f))
+    }
+
+    /** Return to [spot]. */
+    fun goTo(spot: JumpSpot) = goToPage(spot.page, if (mode == PageMode.Continuous && spot.yPoints > 0f) spot.yPoints else null)
+
     /** Show the spot [x], [y] (points) of page [index] at the screen's top-left, at [level] zoom (continuous pages). */
     fun showSpot(index: Int, x: Float, y: Float, level: Float) {
         val l = layout

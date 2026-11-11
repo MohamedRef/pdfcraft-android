@@ -228,8 +228,6 @@
     <string name="home_extra_body">Modifiche facoltative all\'aspetto e al funzionamento di PdfCraft.</string>
     <string name="home_status_bar_in_documents">Mostra la barra di stato nei documenti</string>
     <string name="home_status_bar_in_documents_body">La barra di stato appare insieme alle barre degli strumenti. Quando tocchi per nasconderle, la pagina usa tutto lo schermo, anche intorno alla fotocamera.</string>
-    <string name="home_search_count">Mostra il numero dei risultati di ricerca</string>
-    <string name="home_search_count_body">La ricerca in un documento mostra a quale risultato sei e quanti ce ne sono, ad esempio 3 di 12.</string>
 
     <!-- Informazioni su PdfCraft -->
 
