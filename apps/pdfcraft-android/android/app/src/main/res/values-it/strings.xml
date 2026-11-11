@@ -1852,4 +1852,25 @@
     <string name="backup_restore_comments">Ripristina i commenti qui</string>
     <string name="backup_restoring">Ripristino…</string>
     <string name="backup_comments_restored">Commenti ripristinati</string>
+    <string name="margin_title">Margine per appunti</string>
+    <string name="margin_add">Aggiungi</string>
+    <string name="margin_side">Dove</string>
+    <string name="margin_right">Destra</string>
+    <string name="margin_bottom">Sotto</string>
+    <string name="margin_both">Entrambi</string>
+    <string name="margin_size">Dimensione, rispetto alla pagina</string>
+    <string name="margin_pages">Pagine</string>
+    <string name="margin_all_pages">Tutte le pagine</string>
+    <string name="margin_body">La pagina si allarga e il contenuto resta dov\'è, così puoi scrivere accanto. Annulla toglie il margine.</string>
+    <string name="margin_remove">Rimuovi i margini per appunti</string>
+    <string name="margin_remove_confirm">Rimuovi</string>
+    <string name="margin_remove_body">Le pagine tornano alla dimensione originale. Ciò che è scritto nel margine resta nel file ma non è più sulla pagina.</string>
+    <string name="margin_added">Margine per appunti aggiunto</string>
+    <string name="margin_removed">Margini per appunti rimossi</string>
+    <string name="margin_read_only">Questo documento non può essere modificato</string>
+    <plurals name="margin_selected_pages">
+        <item quantity="one">Questa pagina</item>
+        <item quantity="many">%d pagine</item>
+        <item quantity="other">%d pagine</item>
+    </plurals>
 </resources>

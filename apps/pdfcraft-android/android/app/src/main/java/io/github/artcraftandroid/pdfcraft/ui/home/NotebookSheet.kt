@@ -134,7 +134,7 @@ fun NotebookTemplatePicker(
         if (userTemplates.isNotEmpty()) {
             Text(stringResource(R.string.notebook_my_templates), color = c.textSecondary, fontSize = 13.sp, modifier = Modifier.padding(start = 16.dp, top = 8.dp))
             Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                for (name in userTemplates) Chip(name.removeSuffix(".pdf"), name == user, onClick = { onUser(name) }, onLongClick = onDeleteUser?.let { { it(name) } })
+                for (name in userTemplates) ChoiceChip(name.removeSuffix(".pdf"), name == user, onClick = { onUser(name) }, onLongClick = onDeleteUser?.let { { it(name) } })
             }
         }
     }
@@ -145,12 +145,12 @@ private fun <T> ChipRow(@StringRes title: Int, values: List<T>, label: (T) -> In
     val c = pdfColors
     Text(stringResource(title), color = c.textSecondary, fontSize = 13.sp, modifier = Modifier.padding(start = 16.dp, top = 8.dp))
     Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        for (v in values) Chip(stringResource(label(v)), v == selected, onClick = { onPick(v) })
+        for (v in values) ChoiceChip(stringResource(label(v)), v == selected, onClick = { onPick(v) })
     }
 }
 
 @Composable
-private fun Chip(text: String, selected: Boolean, onClick: () -> Unit, onLongClick: (() -> Unit)? = null) {
+internal fun ChoiceChip(text: String, selected: Boolean, onClick: () -> Unit, onLongClick: (() -> Unit)? = null) {
     val c = pdfColors
     val shape = RoundedCornerShape(16.dp)
     Box(

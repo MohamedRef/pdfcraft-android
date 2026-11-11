@@ -636,6 +636,7 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
                 ViewerSheet.OcrConfidence -> OcrConfidenceReviewSheet(vm, doc)
                 ViewerSheet.FocusTimer -> FocusTimerSheet(vm) { ctl.sheet = ViewerSheet.None }
                 ViewerSheet.Backups -> VersionHistorySheet(vm, doc) { ctl.sheet = ViewerSheet.None }
+                ViewerSheet.NoteMargin -> NoteMarginSheet(vm, doc, listOf(doc.viewer.currentPage)) { ctl.sheet = ViewerSheet.None }
                 ViewerSheet.None -> Unit
             }
         }

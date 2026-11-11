@@ -36,7 +36,7 @@ enum class TextMarkup { Highlight, Underline, Strikethrough, Squiggly }
 enum class CommentMode { Text, Voice, Stamp }
 
 /** What the bottom sheet over the viewer shows. */
-enum class ViewerSheet { None, More, FileDetails, Backdrops, TextStyles, ViewSettings, Attachments, Bookmarks, Comments, MoreTools, Signatures, ScanEnhance, OcrConfidence, SearchResults, Layers, EditContents, HiddenInfo, FocusTimer, Backups }
+enum class ViewerSheet { None, More, FileDetails, Backdrops, TextStyles, ViewSettings, Attachments, Bookmarks, Comments, MoreTools, Signatures, ScanEnhance, OcrConfidence, SearchResults, Layers, EditContents, HiddenInfo, FocusTimer, Backups, NoteMargin }
 
 /**
  * The viewer's own state for one document, beside the page view ([ViewerState]): whether the

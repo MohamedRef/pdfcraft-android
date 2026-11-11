@@ -144,6 +144,7 @@ fun MoreSheet(vm: AppViewModel, doc: OpenDocument) {
                 val due = vm.dueCounts[src.toString()] ?: 0
                 SheetRow(LucideIcons.SwatchBook, if (due > 0) stringResource(R.string.cards_row_due, due) else stringResource(R.string.cards_title), { close(); vm.startReview(src.toString(), doc.info.name) })
             }
+            if (doc.writable) SheetRow(LucideIcons.PanelRight, stringResource(R.string.margin_title), { doc.commitTool?.invoke(); ctl.sheet = ViewerSheet.NoteMargin })
             SheetRow(LucideIcons.FilePenLine, stringResource(R.string.common_tool_edit_pdf), { close(); vm.enterTool(doc, ViewerTool.Edit) })
             GroupDivider()
             SheetRow(LucideIcons.FileOutput, stringResource(R.string.sheet_export_as), { close(); vm.openExport(doc) })
