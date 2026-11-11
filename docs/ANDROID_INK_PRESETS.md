@@ -2,7 +2,7 @@
 
 ## Unlimited favorites, recent colours, hex entry, finer widths (#149)
 
-Favorites are one list (`ink.presets.v2`, up to 48 entries) instead of three fixed slots; the three old `ink.preset.v1.N` slots seed the list once. In Pen settings, **Add current pen** appends the selected pen; a long press on a favorite offers Replace with current pen, Move earlier, Move later and Delete. The pen popover shows the last eight ink colours (`ink.recentColors`), each announced by its hex value, and a hex field that accepts `#RRGGBB` or `#AARRGGBB` and rejects anything else with a message. Pen widths now range from 0.1 to 20 pt in 0.1 pt steps. Still open in #149: eyedropper, HSV wheel and named palette import/export.
+Favorites are one list (`ink.presets.v2`, up to 48 entries) instead of three fixed slots; the three old `ink.preset.v1.N` slots seed the list once. In Pen settings, **Add current pen** appends the selected pen; a long press on a favorite offers Replace with current pen, Move earlier, Move later and Delete. The pen popover shows the last eight ink colours (`ink.recentColors`), each announced by its hex value, and a hex field that accepts `#RRGGBB` or `#AARRGGBB` and rejects anything else with a message. Pen widths now range from 0.1 to 20 pt in 0.1 pt steps. **Pick colour from page** in the pen popover arms an eyedropper: the next tap takes the exact colour of the nearest unsaved stroke, or of the saved ink (else other coloured comment) under the finger. Still open in #149: HSV wheel and named palette import/export.
 
 ## Per-pen settings (#187, #188)
 

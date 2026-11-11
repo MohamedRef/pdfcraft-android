@@ -916,6 +916,10 @@
     <string name="bates_export_failed">Não foi possível salvar esta nova cópia em Downloads.</string>
     <string name="ink_presets_title">Canetas favoritas</string>
     <string name="ink_presets_help">Cada caneta guarda a própria cor, espessura e opacidade. Toque em uma favorita para restaurar as configurações dela.</string>
+    <string name="ink_eyedropper_none">Não há tinta nem comentário colorido ali.</string>
+    <string name="ink_eyedropper_picked">Cor da caneta definida como %1$s.</string>
+    <string name="ink_eyedropper_hint">Toque em um traço ou comentário para usar a cor dele.</string>
+    <string name="ink_eyedropper">Pegar cor da página</string>
     <string name="pen_button_click_toggle">Trocar para a caneta anterior</string>
     <string name="pen_button_click_title">Clique no botão da S Pen sem tocar na tela</string>
     <string name="pen_button_none">Nada</string>

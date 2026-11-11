@@ -334,6 +334,11 @@ internal fun PenStylePicker(vm: AppViewModel) {
         }
         ColorGrid(color) { prefs.setColor(StyledTool.Ink, it) }
         HexColorField(pen.argb) { prefs.setColor(StyledTool.Ink, Color(it)) }
+        TextButton(onClick = {
+            // Close the sheet; the next tap on the page samples a stroke's colour.
+            vm.document?.controller?.let { it.inkEyedropper = true; it.picker = Picker.None }
+            vm.tell(text(R.string.ink_eyedropper_hint))
+        }) { Text(stringResource(R.string.ink_eyedropper), color = c.accent) }
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text(stringResource(R.string.toolbar_opacity), color = c.text, fontSize = 14.sp, modifier = Modifier.weight(1f))
             Text("${(pen.opacity * 100).toInt()}%", color = c.text, fontSize = 13.sp)

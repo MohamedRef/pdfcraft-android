@@ -611,6 +611,23 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                 if (fingers == 2) vm.undo(doc) else if (fingers == 3) vm.redo(doc)
             }) else null,
             onDown = { p, pressure, isStylus ->
+                if (doc.controller.inkEyedropper) {
+                    doc.controller.inkEyedropper = false
+                    val at = doc.viewer.screenToPage(p) ?: return@toolGestures
+                    val scale = doc.viewer.pixelsPerPoint(at.page).takeIf { it.isFinite() && it > 0f } ?: 1f
+                    val picked = eyedropperColor(
+                        strokes.filter { it.page == at.page }.map { EyedropperStroke(it.points.toList(), it.appearance.width / 2f, it.appearance.argb or 0xFF000000.toInt()) },
+                        doc.comments.filter { it.page.toInt() == at.page && it.color != null }
+                            .map { EyedropperTarget(it.rect, it.color!!.toInt(), it.subtype == "Ink") },
+                        Offset(at.x, at.y),
+                        tolerance = 12f / scale,
+                    )
+                    if (picked != null) {
+                        prefs.setColor(StyledTool.Ink, Color(picked))
+                        vm.tell(text(R.string.ink_eyedropper_picked, "#%06X".format(picked and 0xFFFFFF)))
+                    } else vm.tell(text(R.string.ink_eyedropper_none))
+                    return@toolGestures
+                }
                 if (doc.controller.lassoMode) {
                     beginLasso(p)
                     return@toolGestures

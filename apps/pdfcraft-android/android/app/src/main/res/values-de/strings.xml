@@ -1331,6 +1331,10 @@
     <string name="bates_export_failed">Diese neue Kopie konnte nicht in „Downloads“ gespeichert werden.</string>
     <string name="ink_presets_title">Lieblingsstifte</string>
     <string name="ink_presets_help">Jeder Stift behält seine eigene Farbe, Breite und Deckkraft. Tippe auf einen Favoriten, um seine Einstellungen wiederherzustellen.</string>
+    <string name="ink_eyedropper_none">Dort ist keine Tinte und kein farbiger Kommentar.</string>
+    <string name="ink_eyedropper_picked">Stiftfarbe auf %1$s gesetzt.</string>
+    <string name="ink_eyedropper_hint">Tippe auf einen Strich oder Kommentar, um seine Farbe zu übernehmen.</string>
+    <string name="ink_eyedropper">Farbe von der Seite aufnehmen</string>
     <string name="pen_button_click_toggle">Zum vorherigen Stift</string>
     <string name="pen_button_click_title">S Pen-Taste klicken beim Schweben</string>
     <string name="pen_button_none">Nichts</string>

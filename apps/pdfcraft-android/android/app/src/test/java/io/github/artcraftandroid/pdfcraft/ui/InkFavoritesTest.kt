@@ -63,3 +63,23 @@ class InkFavoritesTest {
         assertEquals(listOf(5, 10, 9, 8, 7, 6, 4, 3), withRecentColor(r, 5))
     }
 }
+
+class InkEyedropperTest {
+    private val at = androidx.compose.ui.geometry.Offset(50f, 50f)
+
+    @Test
+    fun picksTheExactColourOfTheNearestDraftStroke() {
+        val near = io.github.artcraftandroid.pdfcraft.ui.viewer.EyedropperStroke(listOf(androidx.compose.ui.geometry.Offset(52f, 50f)), 1f, 0xFF123456.toInt())
+        val far = io.github.artcraftandroid.pdfcraft.ui.viewer.EyedropperStroke(listOf(androidx.compose.ui.geometry.Offset(58f, 50f)), 1f, 0xFF654321.toInt())
+        assertEquals(0xFF123456.toInt(), io.github.artcraftandroid.pdfcraft.ui.viewer.eyedropperColor(listOf(far, near), emptyList(), at, 10f))
+    }
+
+    @Test
+    fun savedInkBeatsOtherCommentsAndSmallerRectWins() {
+        val big = io.github.artcraftandroid.pdfcraft.ui.viewer.EyedropperTarget(listOf(0f, 0f, 200f, 200f), 0x00FF00, ink = true)
+        val small = io.github.artcraftandroid.pdfcraft.ui.viewer.EyedropperTarget(listOf(40f, 40f, 60f, 60f), 0xAA00BB, ink = true)
+        val note = io.github.artcraftandroid.pdfcraft.ui.viewer.EyedropperTarget(listOf(45f, 45f, 55f, 55f), 0xFFFF00, ink = false)
+        assertEquals(0xFFAA00BB.toInt(), io.github.artcraftandroid.pdfcraft.ui.viewer.eyedropperColor(emptyList(), listOf(big, note, small), at, 2f))
+        assertNull(io.github.artcraftandroid.pdfcraft.ui.viewer.eyedropperColor(emptyList(), listOf(small), androidx.compose.ui.geometry.Offset(300f, 300f), 2f))
+    }
+}
