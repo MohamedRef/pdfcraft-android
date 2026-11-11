@@ -327,6 +327,7 @@
     <string name="voice_record_again">Gravar novamente</string>
     <string name="voice_cannot_play">Não é possível reproduzir esta gravação.</string>
     <string name="voice_play_audio">Reproduzir áudio</string>
+    <string name="voice_seek">Posição da reprodução</string>
     <string name="voice_comment_kind">Comentário de voz</string>
     <string name="voice_mic_title">Usar o microfone?</string>
     <string name="voice_mic_rationale">O PdfCraft precisa do microfone para gravar comentários de voz. Você pode permitir o acesso nas configurações do app.</string>

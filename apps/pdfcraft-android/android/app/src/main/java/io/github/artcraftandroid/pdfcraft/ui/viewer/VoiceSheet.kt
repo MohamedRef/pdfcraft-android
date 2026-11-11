@@ -38,7 +38,9 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.github.artcraftandroid.pdfcraft.R
@@ -140,11 +142,18 @@ fun VoiceSheet(vm: AppViewModel, prompt: VoicePrompt) {
             RoundButton(LucideIcons.Square, stringResource(R.string.voice_stop_recording), c.red, Modifier.align(Alignment.CenterHorizontally)) { if (recorder.recording) stop() }
         } else {
             val progress = if (player.durationMs > 0) player.positionMs / player.durationMs.toFloat() else 0f
-            Waveform(recorder.levels, progress, c.accent, c.divider, Modifier.padding(horizontal = 20.dp).pointerInput(Unit) {
-                detectTapGestures { p -> player.seekTo(p.x / size.width) }
-            })
+            val seekLabel = stringResource(R.string.voice_seek)
+            // The waveform is drawn left to right in every layout direction, so taps are not mirrored.
+            val time = "${clock(player.positionMs.toLong())} / ${clock(player.durationMs.toLong())}"
+            Waveform(
+                recorder.levels, progress, c.accent, c.divider,
+                Modifier.padding(horizontal = 20.dp)
+                    .pointerInput(Unit) { detectTapGestures { p -> player.seekTo(seekFraction(p.x, size.width, rtl = false)) } }
+                    .semantics { contentDescription = seekLabel }
+                    .rangeSemantics(progress, 0f..1f, steps = 0, state = time) { player.seekTo(it) },
+            )
             Spacer(Modifier.height(8.dp))
-            Text("${clock(player.positionMs.toLong())} / ${clock(player.durationMs.toLong())}", color = c.text, fontSize = 15.sp, modifier = Modifier.align(Alignment.CenterHorizontally))
+            Text(time, color = c.text, fontSize = 15.sp, modifier = Modifier.align(Alignment.CenterHorizontally))
             Spacer(Modifier.height(12.dp))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
                 LabelledButton(LucideIcons.Trash2, stringResource(R.string.common_delete)) {
@@ -234,15 +243,23 @@ fun VoiceCommentPlayer(vm: AppViewModel, doc: OpenDocument, comment: CommentInfo
         ) { Icon(if (player.playing) LucideIcons.Pause else LucideIcons.Play, null, tint = Color.White, modifier = Modifier.size(20.dp)) }
         Spacer(Modifier.width(12.dp))
         val progress = if (player.durationMs > 0) player.positionMs / player.durationMs.toFloat() else 0f
+        val rtl = LocalLayoutDirection.current == LayoutDirection.Rtl
+        val seekLabel = stringResource(R.string.voice_seek)
+        val time = "${clock(player.positionMs.toLong())} / ${clock(player.durationMs.toLong())}"
+        // The fill grows from the start (the right edge in Arabic), so a tap is mirrored there to match.
+        // 48 dp tall for a comfortable touch target; the drawn bar stays 4 dp.
         Box(
-            Modifier.weight(1f).height(24.dp).pointerInput(Unit) { detectTapGestures { p -> player.seekTo(p.x / size.width) } },
+            Modifier.weight(1f).height(48.dp)
+                .pointerInput(rtl) { detectTapGestures { p -> player.seekTo(seekFraction(p.x, size.width, rtl)) } }
+                .semantics { contentDescription = seekLabel }
+                .rangeSemantics(progress, 0f..1f, steps = 0, state = time) { player.seekTo(it) },
             contentAlignment = Alignment.CenterStart,
         ) {
             Box(Modifier.fillMaxWidth().height(4.dp).clip(CircleShape).background(c.divider))
             Box(Modifier.fillMaxWidth(progress).height(4.dp).clip(CircleShape).background(c.accent))
         }
         Spacer(Modifier.width(12.dp))
-        Text("${clock(player.positionMs.toLong())} / ${clock(player.durationMs.toLong())}", color = c.textSecondary, fontSize = 13.sp)
+        Text(time, color = c.textSecondary, fontSize = 13.sp)
     }
 }
 

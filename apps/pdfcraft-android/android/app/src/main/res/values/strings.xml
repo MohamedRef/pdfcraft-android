@@ -496,6 +496,7 @@
     <!-- Voice comments: playing one back in its panel -->
     <string name="voice_cannot_play">This recording can\'t be played.</string>
     <string name="voice_play_audio">Play audio</string>
+    <string name="voice_seek">Playback position</string>
     <!-- Translator note: the type of a comment as comment lists name it. -->
     <string name="voice_comment_kind">Voice comment</string>
 

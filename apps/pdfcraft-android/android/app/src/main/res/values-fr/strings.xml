@@ -470,6 +470,7 @@
     <!-- Voice comments: playing one back in its panel -->
     <string name="voice_cannot_play">Impossible de lire cet enregistrement.</string>
     <string name="voice_play_audio">Lire l\'audio</string>
+    <string name="voice_seek">Position de lecture</string>
     <string name="voice_comment_kind">Commentaire vocal</string>
 
     <!-- Voice comments: the microphone was refused before -->

@@ -485,6 +485,7 @@
     <!-- Voice comments: playing one back in its panel -->
     <string name="voice_cannot_play">Diese Aufnahme kann nicht wiedergegeben werden.</string>
     <string name="voice_play_audio">Audio wiedergeben</string>
+    <string name="voice_seek">Wiedergabeposition</string>
     <!-- Translator note: the type of a comment as comment lists name it. -->
     <string name="voice_comment_kind">Sprachkommentar</string>
 
