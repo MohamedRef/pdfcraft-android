@@ -1835,4 +1835,15 @@
     <string name="save_state_save_now">Jetzt speichern</string>
     <string name="msg_copy_continues">Als %1$s gespeichert. Sie arbeiten jetzt in der Kopie; das Original ist so, wie Sie es geöffnet haben.</string>
     <string name="msg_copy_continues_saved_before">Als %1$s gespeichert. Sie arbeiten jetzt in der Kopie. Vorher gespeicherte Änderungen sind bereits im Original.</string>
+    <string name="tips_title">Tipps</string>
+    <string name="tips_next">Weiter</string>
+    <string name="tips_skip">Überspringen</string>
+    <string name="tips_draw_title">Zeichnen und scrollen</string>
+    <string name="tips_draw_body">Beim Zeichnen zeichnet ein Finger, zwei Finger scrollen und zoomen. Tippen Sie auf die Seite, um die Leisten aus- oder einzublenden.</string>
+    <string name="tips_pen_title">Mit Eingabestift?</string>
+    <string name="tips_pen_body">Schalten Sie „Nur Stift“ in den Stifteinstellungen beim Zeichnen oder in den Einstellungen ein, damit nur der Stift zeichnet und die Hand keine Spuren hinterlässt.</string>
+    <string name="tips_find_title">Zurechtfinden</string>
+    <string name="tips_find_body">⋮ enthält Kommentare, Lesezeichen und Seiten. Tippen Sie auf den Griff über der unteren Leiste, um Ihre Verknüpfungen ein- oder auszublenden.</string>
+    <string name="home_open_pdf">PDF öffnen</string>
+    <string name="home_or_start_with_tool">Oder mit einem Werkzeug beginnen</string>
 </resources>

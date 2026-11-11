@@ -184,7 +184,15 @@ private fun HomeTabScreen(vm: AppViewModel, onBrowse: () -> Unit) {
             LazyColumn(Modifier.weight(1f)) {
                 item {
                     Text(stringResource(if (vm.recentList.isEmpty()) R.string.home_welcome else R.string.home_welcome_back), color = c.text, fontSize = 24.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 16.dp, top = 8.dp, bottom = 16.dp))
-                    Text(stringResource(R.string.home_start_with_tool), color = c.text, fontSize = 15.sp, lineHeight = 22.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(start = 16.dp, bottom = 8.dp))
+                    if (vm.recentList.isEmpty()) {
+                        // a first visit: one primary action (#202)
+                        Box(
+                            Modifier.padding(start = 16.dp, end = 16.dp, bottom = 20.dp).fillMaxWidth().height(48.dp)
+                                .clip(RoundedCornerShape(24.dp)).background(c.accent).clickable(role = Role.Button, onClick = onBrowse),
+                            contentAlignment = Alignment.Center,
+                        ) { Text(stringResource(R.string.home_open_pdf), color = c.onAccent, fontSize = 16.sp, fontWeight = FontWeight.SemiBold) }
+                    }
+                    Text(stringResource(if (vm.recentList.isEmpty()) R.string.home_or_start_with_tool else R.string.home_start_with_tool), color = c.text, fontSize = 15.sp, lineHeight = 22.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(start = 16.dp, bottom = 8.dp))
                     ToolsCarousel(vm, onBrowse)
                     if (vm.studyRecent.isNotEmpty()) ContinueStudying(vm)
                     Spacer(Modifier.height(16.dp))
@@ -218,7 +226,8 @@ private fun HomeTabScreen(vm: AppViewModel, onBrowse: () -> Unit) {
                 if (rows.isEmpty()) {
                     item {
                         when (tab) {
-                            0 -> EmptyState(LucideIcons.Clock, stringResource(R.string.home_no_recent_title), stringResource(R.string.home_no_recent_body), stringResource(R.string.home_open_file), onBrowse)
+                            // Open a PDF is the button at the top
+                            0 -> EmptyState(LucideIcons.Clock, stringResource(R.string.home_no_recent_title), stringResource(R.string.home_no_recent_body))
                             1 -> EmptyState(LucideIcons.Star, stringResource(R.string.home_no_starred_title), stringResource(R.string.home_no_starred_body))
                             else -> if (!vm.hasFileAccess) EmptyState(LucideIcons.Smartphone, stringResource(R.string.home_device_files_title), stringResource(R.string.home_device_files_body), stringResource(R.string.home_add_folder)) { vm.requestFileAccess() }
                             else EmptyState(LucideIcons.Smartphone, stringResource(R.string.home_no_pdfs_title), stringResource(R.string.home_no_pdfs_body), stringResource(R.string.home_add_folder)) { vm.requestFileAccess() }

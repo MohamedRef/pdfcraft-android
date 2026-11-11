@@ -1420,4 +1420,15 @@
     <string name="save_state_save_now">Salvar agora</string>
     <string name="msg_copy_continues">Salvo como %1$s. Agora você está trabalhando na cópia; o original está como você abriu.</string>
     <string name="msg_copy_continues_saved_before">Salvo como %1$s. Agora você está trabalhando na cópia. As alterações salvas antes já estavam no original.</string>
+    <string name="tips_title">Dicas</string>
+    <string name="tips_next">Próxima</string>
+    <string name="tips_skip">Pular</string>
+    <string name="tips_draw_title">Desenhar e rolar</string>
+    <string name="tips_draw_body">Em Desenhar, um dedo desenha e dois dedos rolam e dão zoom. Toque na página para ocultar ou mostrar as barras.</string>
+    <string name="tips_pen_title">Usa uma caneta?</string>
+    <string name="tips_pen_body">Ative Só caneta nas configurações da caneta de Desenhar ou nas Preferências, para que só a caneta desenhe e a mão não deixe marcas.</string>
+    <string name="tips_find_title">Encontre o caminho</string>
+    <string name="tips_find_body">⋮ tem os comentários, favoritos e páginas. Toque na alça acima da barra inferior para mostrar ou ocultar seus atalhos.</string>
+    <string name="home_open_pdf">Abrir um PDF</string>
+    <string name="home_or_start_with_tool">Ou comece com uma ferramenta</string>
 </resources>

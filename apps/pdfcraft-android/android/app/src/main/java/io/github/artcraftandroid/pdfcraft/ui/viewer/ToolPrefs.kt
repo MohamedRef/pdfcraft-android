@@ -359,6 +359,13 @@ class ToolPrefs(context: Context) {
         return true
     }
 
+    /** True once: the first document opened shows the first-run tips (#202). */
+    fun takeFirstRunTips(): Boolean {
+        if (prefs.getBoolean("tips.seen", false)) return false
+        prefs.edit().putBoolean("tips.seen", true).apply()
+        return true
+    }
+
     fun takeSnapHint(): Boolean {
         val n = prefs.getInt("ink.snapHints", 0)
         if (n >= 3) return false

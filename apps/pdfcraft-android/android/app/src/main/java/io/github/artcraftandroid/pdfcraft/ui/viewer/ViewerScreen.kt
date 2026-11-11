@@ -419,6 +419,8 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
 
         // the file's name in a translucent white chip under the top bar for a moment after it opens
         // (80 % white: grey over the desk, near-white over a page, as the reference's)
+        // the first document opened shows the first-run tips once (#202)
+        LaunchedEffect(doc) { if (vm.toolPrefs.takeFirstRunTips()) vm.tipsOpen = true }
         var nameChip by remember(doc) { mutableStateOf(false) }
         LaunchedEffect(doc) {
             delay(900)

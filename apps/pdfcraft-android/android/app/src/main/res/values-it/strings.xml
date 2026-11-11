@@ -1825,4 +1825,15 @@
     <string name="save_state_save_now">Salva ora</string>
     <string name="msg_copy_continues">Salvato come %1$s. Ora lavori nella copia; l\'originale è come l\'hai aperto.</string>
     <string name="msg_copy_continues_saved_before">Salvato come %1$s. Ora lavori nella copia. Le modifiche salvate prima erano già nell\'originale.</string>
+    <string name="tips_title">Suggerimenti</string>
+    <string name="tips_next">Avanti</string>
+    <string name="tips_skip">Salta</string>
+    <string name="tips_draw_title">Disegnare e scorrere</string>
+    <string name="tips_draw_body">In Disegna, un dito disegna e due dita scorrono e ingrandiscono. Tocca la pagina per nascondere o mostrare le barre.</string>
+    <string name="tips_pen_title">Usi una penna?</string>
+    <string name="tips_pen_body">Attiva Solo penna nelle impostazioni della penna di Disegna o nelle Preferenze, così disegna solo la penna e la mano non lascia segni.</string>
+    <string name="tips_find_title">Orientarsi</string>
+    <string name="tips_find_body">⋮ contiene commenti, segnalibri e pagine. Tocca la maniglia sopra la barra in basso per mostrare o nascondere le scorciatoie.</string>
+    <string name="home_open_pdf">Apri un PDF</string>
+    <string name="home_or_start_with_tool">Oppure inizia con uno strumento</string>
 </resources>

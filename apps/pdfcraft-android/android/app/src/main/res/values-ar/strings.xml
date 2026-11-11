@@ -1548,4 +1548,15 @@
     <string name="save_state_save_now">احفظ الآن</string>
     <string name="msg_copy_continues">تم الحفظ باسم %1$s. أنت تعمل الآن في النسخة؛ الأصل كما فتحته.</string>
     <string name="msg_copy_continues_saved_before">تم الحفظ باسم %1$s. أنت تعمل الآن في النسخة. التغييرات المحفوظة قبل ذلك موجودة بالفعل في الأصل.</string>
+    <string name="tips_title">نصائح</string>
+    <string name="tips_next">التالي</string>
+    <string name="tips_skip">تخطٍّ</string>
+    <string name="tips_draw_title">الرسم والتمرير</string>
+    <string name="tips_draw_body">في الرسم، إصبع واحد يرسم وإصبعان للتمرير والتكبير. اضغط على الصفحة لإخفاء الأشرطة أو إظهارها.</string>
+    <string name="tips_pen_title">تستخدم قلمًا؟</string>
+    <string name="tips_pen_body">شغّل «القلم فقط» من إعدادات القلم في الرسم أو من التفضيلات، حتى يرسم القلم وحده ولا تترك يدك علامات.</string>
+    <string name="tips_find_title">اعرف طريقك</string>
+    <string name="tips_find_body">⋮ فيها التعليقات والإشارات المرجعية والصفحات. اضغط على المقبض فوق الشريط السفلي لإظهار اختصاراتك أو إخفائها.</string>
+    <string name="home_open_pdf">افتح ملف PDF</string>
+    <string name="home_or_start_with_tool">أو ابدأ بأداة</string>
 </resources>

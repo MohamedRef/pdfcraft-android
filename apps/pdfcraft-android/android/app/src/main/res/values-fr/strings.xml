@@ -1715,4 +1715,15 @@
     <string name="save_state_save_now">Enregistrer maintenant</string>
     <string name="msg_copy_continues">Enregistré sous %1$s. Vous travaillez maintenant dans la copie ; l’original est tel que vous l’avez ouvert.</string>
     <string name="msg_copy_continues_saved_before">Enregistré sous %1$s. Vous travaillez maintenant dans la copie. Les modifications enregistrées avant étaient déjà dans l’original.</string>
+    <string name="tips_title">Astuces</string>
+    <string name="tips_next">Suivant</string>
+    <string name="tips_skip">Passer</string>
+    <string name="tips_draw_title">Dessiner et défiler</string>
+    <string name="tips_draw_body">Dans Dessiner, un doigt dessine et deux doigts font défiler et zoomer. Touchez la page pour masquer ou afficher les barres.</string>
+    <string name="tips_pen_title">Avec un stylet ?</string>
+    <string name="tips_pen_body">Activez Stylet uniquement dans les réglages du stylo de Dessiner ou dans les Préférences : seul le stylet dessine et la main ne laisse aucune trace.</string>
+    <string name="tips_find_title">S’y retrouver</string>
+    <string name="tips_find_body">⋮ contient les commentaires, signets et pages. Touchez la poignée au-dessus de la barre du bas pour afficher ou masquer vos raccourcis.</string>
+    <string name="home_open_pdf">Ouvrir un PDF</string>
+    <string name="home_or_start_with_tool">Ou commencez par un outil</string>
 </resources>

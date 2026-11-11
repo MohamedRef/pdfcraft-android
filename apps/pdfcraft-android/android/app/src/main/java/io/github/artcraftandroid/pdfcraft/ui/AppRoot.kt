@@ -140,6 +140,7 @@ fun AppRoot(vm: AppViewModel, onBrowse: () -> Unit, onPickSignatureImage: () -> 
             vm.passwordRequest?.let { PasswordDialog(vm, it) }
             vm.idImport?.let { IdPasswordDialog(vm, it) }
             vm.signFieldChoice?.let { (d, w) -> SignFieldChoiceDialog(vm, d, w) }
+            if (vm.tipsOpen) FirstRunTipsDialog(onClose = { vm.tipsOpen = false })
             if (vm.authorPrompt) {
                 var name by remember { mutableStateOf("") }
                 PdfDialog(

@@ -2124,4 +2124,15 @@
     <string name="save_state_save_now">Save now</string>
     <string name="msg_copy_continues">Saved as %1$s. You\'re now working in the copy; the original is as you opened it.</string>
     <string name="msg_copy_continues_saved_before">Saved as %1$s. You\'re now working in the copy. Changes saved before this were already in the original.</string>
+    <string name="tips_title">Tips</string>
+    <string name="tips_next">Next</string>
+    <string name="tips_skip">Skip</string>
+    <string name="tips_draw_title">Draw and scroll</string>
+    <string name="tips_draw_body">In Draw, one finger draws and two fingers scroll and zoom. Tap the page to hide or show the bars.</string>
+    <string name="tips_pen_title">Using a stylus?</string>
+    <string name="tips_pen_body">Turn on Pen only in Draw\'s pen settings or in Preferences, so only the pen draws and your hand never leaves marks.</string>
+    <string name="tips_find_title">Find your way</string>
+    <string name="tips_find_body">⋮ holds the comments, bookmarks and pages. Tap the handle above the bottom bar to show or hide your shortcuts.</string>
+    <string name="home_open_pdf">Open a PDF</string>
+    <string name="home_or_start_with_tool">Or start with a tool</string>
 </resources>

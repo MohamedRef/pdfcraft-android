@@ -347,6 +347,7 @@ fun SettingsScreen(vm: AppViewModel) {
                 "help" -> {
                     val uri = LocalUriHandler.current
                     var leaving by remember { mutableStateOf<String?>(null) }
+                    SheetRow(LucideIcons.Sparkles, stringResource(R.string.tips_title), { vm.tipsOpen = true })
                     SheetRow(LucideIcons.CircleHelp, stringResource(R.string.home_help), { leaving = "$APP_REPO#readme" })
                     SheetRow(LucideIcons.MessageSquare, stringResource(R.string.home_report_problem), { leaving = "$APP_REPO/issues" })
                     leaving?.let { url ->

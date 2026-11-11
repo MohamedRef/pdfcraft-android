@@ -1843,4 +1843,15 @@
     <string name="save_state_save_now">Guardar ahora</string>
     <string name="msg_copy_continues">Guardado como %1$s. Ahora trabajas en la copia; el original queda como lo abriste.</string>
     <string name="msg_copy_continues_saved_before">Guardado como %1$s. Ahora trabajas en la copia. Los cambios guardados antes ya estaban en el original.</string>
+    <string name="tips_title">Consejos</string>
+    <string name="tips_next">Siguiente</string>
+    <string name="tips_skip">Omitir</string>
+    <string name="tips_draw_title">Dibujar y desplazarse</string>
+    <string name="tips_draw_body">En Dibujar, un dedo dibuja y dos dedos desplazan y hacen zoom. Toca la página para ocultar o mostrar las barras.</string>
+    <string name="tips_pen_title">¿Usas un lápiz?</string>
+    <string name="tips_pen_body">Activa Solo lápiz en los ajustes del lápiz de Dibujar o en Preferencias, para que solo dibuje el lápiz y la mano no deje marcas.</string>
+    <string name="tips_find_title">Orientarse</string>
+    <string name="tips_find_body">⋮ contiene los comentarios, marcadores y páginas. Toca el asa sobre la barra inferior para mostrar u ocultar tus accesos directos.</string>
+    <string name="home_open_pdf">Abrir un PDF</string>
+    <string name="home_or_start_with_tool">O empieza con una herramienta</string>
 </resources>

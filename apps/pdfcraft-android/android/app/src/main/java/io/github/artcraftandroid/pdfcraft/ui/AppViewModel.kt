@@ -850,6 +850,9 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     /** Asking for the name comments are signed with. */
     var authorPrompt by mutableStateOf(false)
 
+    /** The first-run tips are showing (the first document, or Help ▸ Tips) (#202). */
+    var tipsOpen by mutableStateOf(false)
+
     /** Leave the active tool: whatever it holds (ink being drawn) is added first. */
     fun leaveTool(doc: OpenDocument) {
         doc.commitTool?.invoke()
