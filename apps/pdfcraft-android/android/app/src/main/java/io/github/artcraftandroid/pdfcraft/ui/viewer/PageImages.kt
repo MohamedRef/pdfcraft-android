@@ -96,6 +96,8 @@ class PageImages(
     private val inFlight = HashSet<ImageKey>()
     private val failed = HashSet<ImageKey>()
     private var bytes = 0
+    /** Bumped by [invalidate]: a render started before it is of the old view and is dropped. */
+    private var viewEpoch = 0
     private val signal = Channel<Unit>(Channel.CONFLATED)
 
     /** Bumped whenever an image arrives: the canvas reads it to redraw. */
@@ -128,6 +130,20 @@ class PageImages(
     }
 
     fun get(key: ImageKey): PageImage? = synchronized(lock) { cache[key] }
+
+    /**
+     * The same generation now draws differently (a layer was shown or hidden): render what is in
+     * view again. The old pixels stay as the fallback until the new ones replace them.
+     */
+    fun invalidate() {
+        synchronized(lock) {
+            viewEpoch++
+            cache.clear()
+            failed.clear()
+            bytes = 0
+        }
+        signal.trySend(Unit)
+    }
 
     /** The newest whole-page image of [page], whatever its generation. */
     fun latestBase(page: Int): PageImage? = synchronized(lock) { fallback[page] }
@@ -171,6 +187,7 @@ class PageImages(
                 signal.receive()
                 continue
             }
+            val epoch = synchronized(lock) { viewEpoch }
             val image = try {
                 withContext(engine.renders) {
                     // #236: name what was drawn, and how many pixels a slow render had, so a report
@@ -190,6 +207,11 @@ class PageImages(
                 null
             } finally {
                 synchronized(lock) { inFlight.remove(r.key) }
+            }
+            if (image != null && synchronized(lock) { epoch != viewEpoch }) {
+                // drawn with the view before invalidate(): ask for it again
+                signal.trySend(Unit)
+                continue
             }
             if (image != null) {
                 synchronized(lock) {

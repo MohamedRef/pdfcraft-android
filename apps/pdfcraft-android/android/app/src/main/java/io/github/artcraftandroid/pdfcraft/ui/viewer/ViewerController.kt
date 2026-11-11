@@ -36,7 +36,7 @@ enum class TextMarkup { Highlight, Underline, Strikethrough, Squiggly }
 enum class CommentMode { Text, Voice, Stamp }
 
 /** What the bottom sheet over the viewer shows. */
-enum class ViewerSheet { None, More, FileDetails, Backdrops, TextStyles, ViewSettings, Attachments, Bookmarks, Comments, MoreTools, Signatures, ScanEnhance, OcrConfidence, SearchResults }
+enum class ViewerSheet { None, More, FileDetails, Backdrops, TextStyles, ViewSettings, Attachments, Bookmarks, Comments, MoreTools, Signatures, ScanEnhance, OcrConfidence, SearchResults, Layers, EditContents }
 
 /**
  * The viewer's own state for one document, beside the page view ([ViewerState]): whether the
@@ -47,6 +47,9 @@ enum class ViewerSheet { None, More, FileDetails, Backdrops, TextStyles, ViewSet
 class ViewerController {
     /** The top bar and bottom toolbar (a tap on the page toggles them). */
     var barsVisible by mutableStateOf(true)
+
+    /** The layers' visibility when the Layers sheet first listed them: what Reset goes back to. */
+    var initialLayers: List<Boolean>? = null
 
     var tool by mutableStateOf(ViewerTool.None)
     var markup by mutableStateOf(TextMarkup.Highlight)

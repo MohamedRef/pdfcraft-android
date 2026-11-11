@@ -3034,6 +3034,16 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 }
             }
             FilePickKind.Open -> open(uris.first())
+            FilePickKind.Attach -> {
+                val doc = attachTo ?: return
+                attachTo = null
+                viewModelScope.launch {
+                    val uri = uris.first()
+                    val f = withContext(Dispatchers.IO) { runCatching { copyIn(uri) }.getOrNull() }
+                    if (f == null) tell(text(R.string.msg_that_file_unreadable))
+                    else attachPrompt = AttachPrompt(doc, f, f.name)
+                }
+            }
             FilePickKind.Replace -> {
                 val (doc, pages) = replaceTarget ?: return
                 replaceTarget = null
@@ -3544,6 +3554,94 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             dir.deleteRecursively()
             throw e
         }
+    }
+
+    // ---- Layers, attachments and the PDF's own bookmarks (#174, #175, #176) ------------------
+
+    suspend fun layers(doc: OpenDocument) = engine?.let { e -> runCatching { e.command { layers(doc.id) } }.getOrNull() }.orEmpty()
+
+    /**
+     * Show or hide layer [position] (1-based, as [layers] lists them). A view setting: the file is
+     * not changed, so only the pages are drawn again. [onDone] runs either way.
+     */
+    fun setLayer(doc: OpenDocument, position: Int, visible: Boolean, onDone: () -> Unit) {
+        val eng = engine ?: return
+        viewModelScope.launch {
+            try {
+                eng.tool("layer_set", mapOf("doc" to doc.id, "layer" to position, "visible" to visible))
+                doc.images.invalidate()
+            } catch (e: MobileException) {
+                tell(e.userMessage)
+            } finally {
+                onDone()
+            }
+        }
+    }
+
+    /** Add file: the picked file, waiting for its description. */
+    var attachPrompt by mutableStateOf<AttachPrompt?>(null)
+    private var attachTo: OpenDocument? = null
+
+    fun pickAttachment(doc: OpenDocument) {
+        attachTo = doc
+        pickFiles(FilePickKind.Attach)
+    }
+
+    /** Attach [AttachPrompt.file] to the document with [description] (may be blank); one undo step. */
+    fun attach(prompt: AttachPrompt, description: String) {
+        attachPrompt = null
+        val args = mutableMapOf<String, Any?>("path" to prompt.file.absolutePath, "name" to prompt.name)
+        if (description.isNotBlank()) args["description"] = description.trim()
+        runTool(prompt.doc, "attachment_add", args, onSettled = { dropPicked(listOf(prompt.file)) }) {
+            tell(text(R.string.msg_attached, prompt.name), text(R.string.common_undo)) { undo(prompt.doc) }
+        }
+    }
+
+    fun cancelAttach() {
+        attachPrompt?.let { dropPicked(listOf(it.file)) }
+        attachPrompt = null
+    }
+
+    /** Remove the document-level attachment [name]; Undo in the snackbar brings it back. */
+    fun deleteAttachment(doc: OpenDocument, name: String) {
+        runTool(doc, "attachment_delete", mapOf("name" to name)) {
+            tell(text(R.string.msg_attachment_removed, name), text(R.string.common_undo)) { undo(doc) }
+        }
+    }
+
+    /** Every embedded bookmark with its path and style (`bookmark_list`, page by page; at most [cap]). */
+    suspend fun outlineRows(doc: OpenDocument, cap: Int = 5000): List<OutlineRow>? {
+        val eng = engine ?: return null
+        return try {
+            val out = mutableListOf<OutlineRow>()
+            var offset = 0
+            while (out.size < cap) {
+                val r = eng.tool("bookmark_list", mapOf("doc" to doc.id, "offset" to offset, "limit" to 1000))
+                fun walk(a: org.json.JSONArray?) {
+                    if (a == null) return
+                    for (i in 0 until a.length()) {
+                        val o = a.getJSONObject(i)
+                        val path = o.getJSONArray("path").let { p -> (0 until p.length()).map { p.getInt(it) } }
+                        val color = o.optJSONArray("color")?.let { c -> (0 until c.length()).map { c.getDouble(it).toFloat() } }
+                        val page = if (o.isNull("page")) null else o.optInt("page", 0).takeIf { it > 0 }?.minus(1)
+                        out += OutlineRow(path, o.optString("title"), page, color, o.optBoolean("bold"), o.optBoolean("italic"))
+                        walk(o.optJSONArray("children"))
+                    }
+                }
+                walk(r.optJSONArray("bookmarks"))
+                if (r.isNull("next")) break
+                offset = r.optInt("next", -1).takeIf { it > offset } ?: break
+            }
+            out
+        } catch (e: MobileException) {
+            tell(e.userMessage)
+            null
+        }
+    }
+
+    /** Run bookmark tool [name] on the bookmark at [path] (with [args]); one undo step each. */
+    fun editBookmark(doc: OpenDocument, name: String, path: List<Int>?, args: Map<String, Any?> = emptyMap()) {
+        runTool(doc, name, (if (path != null) mapOf("path" to path) else emptyMap<String, Any?>()) + args)
     }
 
     /** Files waiting for the person to pick the folder they go into, and what to delete afterwards. */
