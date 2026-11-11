@@ -2069,6 +2069,9 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     /** Recognize text: its options, review and batch state (#166). */
     val ocr = io.github.artcraftandroid.pdfcraft.ui.viewer.OcrState()
 
+    /** Redact: marks, the box being drawn, the look, and the checks after applying (#163). */
+    val redact = io.github.artcraftandroid.pdfcraft.ui.viewer.RedactState()
+
     /** A finished job's green banner over the viewer's bar, with Undo. */
     var success by mutableStateOf<SuccessBanner?>(null)
 

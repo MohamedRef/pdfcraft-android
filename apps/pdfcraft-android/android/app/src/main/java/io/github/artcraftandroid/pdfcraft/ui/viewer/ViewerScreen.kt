@@ -646,12 +646,14 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
                 ViewerSheet.OcrConfidence -> OcrConfidenceReviewSheet(vm, doc)
                 ViewerSheet.FocusTimer -> FocusTimerSheet(vm) { ctl.sheet = ViewerSheet.None }
                 ViewerSheet.Backups -> VersionHistorySheet(vm, doc) { ctl.sheet = ViewerSheet.None }
+                ViewerSheet.Redact -> RedactSheet(vm, doc)
                 ViewerSheet.None -> Unit
             }
         }
         if (ctl.sheet == ViewerSheet.Comments) CommentListScreen(vm, doc)
         vm.attachPrompt?.takeIf { it.doc === doc }?.let { AttachDialog(vm, it) }
         if (vm.flattenPrompt === doc) FlattenDialog(vm, doc)
+        vm.redact.findings?.let { RedactionAuditDialog(vm, doc, it) }
         vm.pageMenu?.takeIf { it.doc === doc }?.let { PageMenuView(vm, it) }
         if (vm.imageSource?.first === doc) {
             io.github.artcraftandroid.pdfcraft.ui.PdfSheet(onDismiss = { vm.imageSource = null }, dim = true) {

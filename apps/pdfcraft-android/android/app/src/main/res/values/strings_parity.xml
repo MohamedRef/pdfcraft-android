@@ -91,4 +91,57 @@
     <string name="ocr_batch_finished">Finished</string>
     <string name="ocr_batch_cancelled">Cancelled</string>
     <string name="ocr_batch_folder_gone">The folder can\'t be written to; choose it again.</string>
+    <string name="redact_title">Redact</string>
+    <string name="redact_about">Mark what to remove, then Apply: the content under the marks is deleted for good once the document is saved.</string>
+    <string name="redact_mark_area">Mark an area</string>
+    <string name="redact_mark_page">Mark page %1$d</string>
+    <string name="redact_find">Find and mark</string>
+    <string name="redact_find_hint">Text, or several separated by commas</string>
+    <string name="redact_regex_hint">Regular expression</string>
+    <string name="redact_whole_words">Whole words only</string>
+    <string name="redact_match_case">Match case</string>
+    <string name="redact_use_regex">Use a regular expression</string>
+    <string name="redact_patterns">Or every match of a pattern</string>
+    <string name="redact_pattern_phone">Phone numbers</string>
+    <string name="redact_pattern_email">Email addresses</string>
+    <string name="redact_pattern_card">Credit cards</string>
+    <string name="redact_pattern_ssn">US SSNs</string>
+    <string name="redact_pattern_date">Dates</string>
+    <string name="redact_pattern_iban">IBANs</string>
+    <string name="redact_mark_all">Mark all</string>
+    <string name="redact_no_matches">Nothing matched</string>
+    <string name="redact_look">Box colour and text shown on it</string>
+    <string name="redact_overlay_hint">Text on the box (optional)</string>
+    <string name="redact_mark_on_page">Mark on page %1$d</string>
+    <string name="redact_delete_mark">Delete the mark on page %1$d</string>
+    <string name="redact_clear">Clear all</string>
+    <string name="redact_apply">Apply</string>
+    <string name="redact_apply_title">Apply redactions?</string>
+    <string name="redact_apply_body">Text, pictures, drawings, comments and form fields under the marks are removed and boxes drawn in their place. You can undo until you save; after saving, the content is gone from the file. Consider Save a copy to keep the original.</string>
+    <string name="redact_hidden_title">Hidden information</string>
+    <string name="redact_hidden_body">The document still holds this information. Remove what you don\'t want to share:</string>
+    <string name="redact_hidden_none">No hidden information was found.</string>
+    <string name="redact_hidden_remove">Remove</string>
+    <string name="redact_hidden_removed">Hidden information removed</string>
+    <string name="redact_audit_title">Check for fake redactions</string>
+    <string name="redact_audit_none">No fake redactions found: no box hides text that can still be read, and no mark is waiting to be applied.</string>
+    <string name="redact_audit_covered">Page %1$d: covered text can still be read</string>
+    <string name="redact_audit_unapplied">Page %1$d: redaction mark not applied</string>
+    <string name="redact_place_hint">Drag over what to remove</string>
+    <plurals name="redact_marked">
+        <item quantity="one">%1$d mark added</item>
+        <item quantity="other">%1$d marks added</item>
+    </plurals>
+    <plurals name="redact_applied">
+        <item quantity="one">%1$d redaction applied</item>
+        <item quantity="other">%1$d redactions applied</item>
+    </plurals>
+    <plurals name="redact_marks_count">
+        <item quantity="one">%1$d mark waiting</item>
+        <item quantity="other">%1$d marks waiting</item>
+    </plurals>
+    <plurals name="redact_audit_found">
+        <item quantity="one">%1$d possible fake redaction:</item>
+        <item quantity="other">%1$d possible fake redactions:</item>
+    </plurals>
 </resources>
