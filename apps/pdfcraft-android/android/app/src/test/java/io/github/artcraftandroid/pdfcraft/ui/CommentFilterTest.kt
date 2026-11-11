@@ -17,7 +17,7 @@ class CommentFilterTest {
     private fun comment(subtype: String, contents: String? = null, author: String? = "Ann", page: Int = 3, replyTo: String? = null) = CommentInfo(
         page = page.toUInt(), index = (next++).toUInt(), subtype = subtype, kind = subtype, author = author, contents = contents,
         modified = null, rect = listOf(0f, 0f, 10f, 10f), color = null, name = "c$next", replyTo = replyTo, state = null,
-        locked = false, fillSign = false, opacity = 1f, width = null,
+        locked = false, fillSign = false, opacity = 1f, width = null, hidden = false,
     )
 
     private fun ink() = listOf(comment("Ink"))
