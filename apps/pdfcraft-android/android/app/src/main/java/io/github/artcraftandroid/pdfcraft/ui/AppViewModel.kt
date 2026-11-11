@@ -934,6 +934,30 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         return send.setType(mime).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
     }
 
+    /** Present [doc]: one page at a time, full screen, with a laser pointer (#157). */
+    fun startPresenting(doc: OpenDocument) {
+        val ctl = doc.controller
+        if (ctl.tool != ViewerTool.None) leaveTool(doc)
+        readingMode = false
+        doc.selection.clear()
+        doc.search.clear()
+        ctl.searching = false
+        ctl.sheet = io.github.artcraftandroid.pdfcraft.ui.viewer.ViewerSheet.None
+        ctl.modeBeforePresenting = doc.viewer.mode
+        doc.viewer.switchMode(io.github.artcraftandroid.pdfcraft.ui.viewer.PageMode.SinglePage)
+        ctl.presenting = true
+        ctl.barsVisible = false
+    }
+
+    fun stopPresenting(doc: OpenDocument) {
+        val ctl = doc.controller
+        if (!ctl.presenting) return
+        ctl.presenting = false
+        ctl.modeBeforePresenting?.let { doc.viewer.switchMode(it) }
+        ctl.modeBeforePresenting = null
+        ctl.barsVisible = true
+    }
+
     /** The keyboard shortcuts list (Ctrl+/). */
     var shortcutsHelp by mutableStateOf(false)
 
@@ -945,12 +969,26 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
      * list. Only keys no text field took reach here.
      */
     fun viewerKey(keyCode: Int, ctrl: Boolean, shift: Boolean = false): Boolean {
-        if (!keyboardShortcuts) return false
         val doc = document ?: return false
+        // a presentation clicker works even with the shortcuts turned off
+        if (!keyboardShortcuts && !doc.controller.presenting) return false
         if (toolScreen != null || readingMode) return false
         val v = doc.viewer
         val ctl = doc.controller
         val center = androidx.compose.ui.geometry.Offset(v.viewW / 2f, v.viewH / 2f)
+        // presenting: a clicker's keys turn pages (arrows, Page Up/Down, Space, Enter) and Esc ends it
+        if (ctl.presenting && !ctrl) {
+            when (keyCode) {
+                android.view.KeyEvent.KEYCODE_ESCAPE -> stopPresenting(doc)
+                android.view.KeyEvent.KEYCODE_DPAD_RIGHT, android.view.KeyEvent.KEYCODE_DPAD_DOWN, android.view.KeyEvent.KEYCODE_PAGE_DOWN,
+                android.view.KeyEvent.KEYCODE_ENTER, android.view.KeyEvent.KEYCODE_N -> v.turnPage(1)
+                android.view.KeyEvent.KEYCODE_SPACE -> v.turnPage(if (shift) -1 else 1)
+                android.view.KeyEvent.KEYCODE_DPAD_LEFT, android.view.KeyEvent.KEYCODE_DPAD_UP, android.view.KeyEvent.KEYCODE_PAGE_UP,
+                android.view.KeyEvent.KEYCODE_P -> v.turnPage(-1)
+                else -> return false
+            }
+            return true
+        }
         val drawing = ctl.tool == ViewerTool.Draw
         if (!ctrl && drawing) io.github.artcraftandroid.pdfcraft.ui.viewer.presetForKey(keyCode)?.let { return toolPrefs.applyInkPreset(it) }
         val shortcut = io.github.artcraftandroid.pdfcraft.ui.viewer.viewerShortcut(keyCode, ctrl, shift) ?: return false
