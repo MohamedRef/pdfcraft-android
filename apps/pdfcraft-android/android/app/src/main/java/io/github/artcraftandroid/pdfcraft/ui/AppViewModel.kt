@@ -3098,6 +3098,12 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 }
             }
             FilePickKind.Open -> open(uris.first())
+            FilePickKind.MarkImage -> viewModelScope.launch {
+                val f = withContext(Dispatchers.IO) { runCatching { copyIn(uris.first()) }.getOrNull() }
+                if (f == null) { tell(text(R.string.msg_that_file_unreadable)); return@launch }
+                clearMarkImage()
+                markImage = f
+            }
             FilePickKind.Attach -> {
                 val doc = attachTo ?: return
                 attachTo = null
@@ -4157,6 +4163,52 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         }
     }
 
+    /** Page marks: headers and footers, watermarks and backgrounds. */
+    fun openPageMarks(doc: OpenDocument) {
+        doc.commitTool?.invoke()
+        toolScreen = ToolScreen.PageMarks(doc)
+    }
+
+    /** The marks [doc] already has, for Update and Remove (empty when they can't be read). */
+    suspend fun pageMarks(doc: OpenDocument): Set<MarkKind> = engine?.let { e ->
+        runCatching { e.command { pageMarks(doc.id) } }.getOrNull()
+    }.orEmpty().mapNotNull { k -> MarkKind.entries.firstOrNull { it.key == k } }.toSet()
+
+    /** The picture a watermark or background is to use, picked with [pickMarkImage]. */
+    var markImage by mutableStateOf<File?>(null)
+        private set
+
+    fun pickMarkImage() = pickFiles(FilePickKind.MarkImage)
+
+    /** Forget the picked picture (and delete its copy). */
+    fun clearMarkImage() {
+        markImage?.let { dropPicked(listOf(it)) }
+        markImage = null
+    }
+
+    /** Add (or, with [replace], update) a mark of [kind] with [args]; one undo step. */
+    fun applyMark(doc: OpenDocument, kind: MarkKind, args: Map<String, Any?>, replace: Boolean) {
+        runTool(doc, kind.tool, args) {
+            toolScreen = null
+            clearMarkImage()
+            val msg = when (kind) {
+                MarkKind.HeaderFooter -> if (replace) R.string.marks_msg_hf_updated else R.string.marks_msg_hf_added
+                MarkKind.Watermark -> if (replace) R.string.marks_msg_wm_updated else R.string.marks_msg_wm_added
+                MarkKind.Background -> if (replace) R.string.marks_msg_bg_updated else R.string.marks_msg_bg_added
+            }
+            tell(text(msg), text(R.string.common_undo)) { undo(doc) }
+        }
+    }
+
+    /** Remove every mark of [kind]; one undo step. */
+    fun removeMarks(doc: OpenDocument, kind: MarkKind, onDone: () -> Unit) {
+        runTool(doc, "doc_remove_marks", mapOf("kind" to kind.key)) { r ->
+            onDone()
+            val warn = r.optJSONArray("warnings")?.length() ?: 0
+            tell(text(if (warn > 0) R.string.marks_msg_removed_with_warnings else R.string.marks_msg_removed), text(R.string.common_undo)) { undo(doc) }
+        }
+    }
+
     /** Files waiting for the person to pick the folder they go into, and what to delete afterwards. */
     private var folderOutput: FolderOutput? = null
     val outputFolderRequests = Channel<Unit>(Channel.CONFLATED)
@@ -4509,6 +4561,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             FileTool.Ocr -> recognizeText(doc)
             FileTool.Draw -> enterTool(doc, ViewerTool.Draw)
             FileTool.Split -> { organizing = true; doc.controller.pagesOpen = true; splitOpen = true }
+            FileTool.PageMarks -> openPageMarks(doc)
         }
     }
 

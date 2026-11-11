@@ -192,6 +192,7 @@ fun ToolsTab(vm: AppViewModel) {
             HubTool(LucideIcons.ScanText, "Recognize text in files", R.string.ocr_batch_title, R.string.ocr_batch_about, ToolHues.scan, setOf("Convert")) { vm.openOcrBatch() },
             HubTool(LucideIcons.LayoutGrid, "Organize pages", R.string.common_tool_organize, R.string.home_about_organize, ToolHues.organize, setOf("Edit")) { vm.toolForFile(FileTool.Organize) },
             HubTool(LucideIcons.Scissors, "Split PDF", R.string.home_tool_split, R.string.home_about_split, ToolHues.organize, setOf("Edit")) { vm.toolForFile(FileTool.Split) },
+            HubTool(LucideIcons.Heading, "Page marks", R.string.marks_title, R.string.marks_about, ToolHues.edit, setOf("Edit")) { vm.toolForFile(FileTool.PageMarks) },
             HubTool(LucideIcons.Crop, "Crop pages", R.string.common_tool_crop, R.string.home_about_crop, ToolHues.crop, setOf("Edit")) { vm.toolForFile(FileTool.Crop) },
             HubTool(LucideIcons.FilePenLine, "Edit PDF", R.string.common_tool_edit_pdf, R.string.home_about_edit, ToolHues.edit, setOf("Edit")) { vm.toolForFile(FileTool.Edit) },
             HubTool(LucideIcons.FileArchive, "Compress PDF", R.string.common_tool_compress, R.string.home_about_compress, ToolHues.compress, setOf("Convert")) { vm.toolForFile(FileTool.Compress) },

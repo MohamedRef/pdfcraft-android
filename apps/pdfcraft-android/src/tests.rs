@@ -980,3 +980,41 @@ fn text_layers_stay_bounded() {
     s.release_memory();
     assert_eq!(kept(&s), 0);
 }
+
+/// Page marks: what the app's Page marks screen sends, and what Update and Remove see.
+#[test]
+fn page_marks_are_listed_updated_and_removed() {
+    let s = MobileSession::new();
+    let doc = s.open(blank_pdf(3), None).unwrap().id;
+    let run = |name: &str, args: Value| {
+        let mut args = args;
+        args["doc"] = json!(doc);
+        s.execute(name.into(), args.to_string()).unwrap();
+    };
+    assert!(s.page_marks(doc).unwrap().is_empty());
+    // the header & footer tab's arguments, with a start number and a page range
+    run(
+        "doc_header_footer",
+        json!({ "footer_center": "<<Page 1 of n>>", "font": "Times", "font_size": 10.0, "color": "#ff0000",
+                "margins": [36.0, 36.0, 72.0, 72.0], "start_number": 5, "pages": [2, 3] }),
+    );
+    assert_eq!(s.page_marks(doc).unwrap(), vec!["header_footer"]);
+    // numbering starts at start_number on the first marked page; the count is the whole document
+    assert!(s.page_plain_text(doc, 1).unwrap().contains("Page 5 of 3"));
+    assert!(s.page_plain_text(doc, 2).unwrap().contains("Page 6 of 3"));
+    assert!(!s.page_plain_text(doc, 0).unwrap().contains("Page"));
+    run("doc_watermark", json!({ "text": "DRAFT", "rotation": 45.0, "opacity": 0.3, "behind": false, "scale": 0.5, "color": "#808080" }));
+    run("doc_background", json!({ "color": "#ffffcc", "opacity": 1.0 }));
+    let mut marks = s.page_marks(doc).unwrap();
+    marks.sort();
+    assert_eq!(marks, vec!["background", "header_footer", "watermark"]);
+    // Update replaces: still one watermark, now with the new text
+    run("doc_watermark", json!({ "text": "FINAL", "replace": true }));
+    let text = s.page_plain_text(doc, 0).unwrap();
+    assert!(text.contains("FINAL") && !text.contains("DRAFT"), "{text}");
+    run("doc_remove_marks", json!({ "kind": "watermark" }));
+    run("doc_remove_marks", json!({ "kind": "background" }));
+    assert_eq!(s.page_marks(doc).unwrap(), vec!["header_footer"]);
+    run("edit_undo", json!({}));
+    assert!(s.page_marks(doc).unwrap().contains(&"background".to_string()));
+}

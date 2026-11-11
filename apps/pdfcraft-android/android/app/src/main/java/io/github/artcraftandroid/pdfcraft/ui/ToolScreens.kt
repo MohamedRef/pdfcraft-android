@@ -229,7 +229,7 @@ fun OutlinedFileCard(vm: AppViewModel, doc: OpenDocument) {
 
 /** A radio choice of a tool page: the circle, a bold name and a line under it. */
 @Composable
-private fun ToolChoice(selected: Boolean, name: String, description: String?, onClick: () -> Unit) {
+internal fun ToolChoice(selected: Boolean, name: String, description: String?, onClick: () -> Unit) {
     val c = pdfColors
     Row(
         Modifier.fillMaxWidth().clickable(onClick = onClick).padding(start = 8.dp, end = 16.dp, top = if (description == null) 0.dp else 6.dp, bottom = if (description == null) 0.dp else 8.dp),
@@ -423,7 +423,7 @@ fun ProtectScreen(vm: AppViewModel, doc: OpenDocument) {
 }
 
 @Composable
-private fun SwitchRow(label: String, checked: Boolean, onChange: (Boolean) -> Unit) {
+internal fun SwitchRow(label: String, checked: Boolean, onChange: (Boolean) -> Unit) {
     Row(
         Modifier.fillMaxWidth().clickable(role = androidx.compose.ui.semantics.Role.Switch) { onChange(!checked) }.padding(horizontal = 24.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -558,6 +558,7 @@ fun ToolScreenHost(vm: AppViewModel, screen: ToolScreen) {
         ToolScreen.OcrBatch -> OcrBatchScreen(vm)
         ToolScreen.Scan -> ScanScreen(vm)
         ToolScreen.Create -> CreateSourcesScreen(vm)
+        is ToolScreen.PageMarks -> io.github.artcraftandroid.pdfcraft.ui.viewer.PageMarksScreen(vm, screen.doc)
     }
 }
 
@@ -659,7 +660,7 @@ fun CombineScreen(vm: AppViewModel) {
 data class PickedFile(val uri: android.net.Uri, val name: String, val size: Long?)
 
 /** What a file picker was opened for. */
-enum class FilePickKind { Combine, Create, Insert, Open, DigitalId, Replace, Attach }
+enum class FilePickKind { Combine, Create, Insert, Open, DigitalId, Replace, Attach, MarkImage }
 
 
 /**
