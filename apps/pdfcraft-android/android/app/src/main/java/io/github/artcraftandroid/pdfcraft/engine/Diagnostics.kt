@@ -14,7 +14,7 @@ internal enum class DiagArea(val tag: String, val issues: String) {
     App("app", "lifecycle, memory trims"),
     Open("open", "#211 #212 #234 #235 #317"),
     Render("render", "#236"),
-    Ink("ink", "#128"),
+    Ink("ink", "#128 #130 #144 #148 #149 #150 #156"),
     Save("save", "#97 #101-#104"),
     Scan("scan", "#286-#307"),
     Memory("memory", "#212 #92"),

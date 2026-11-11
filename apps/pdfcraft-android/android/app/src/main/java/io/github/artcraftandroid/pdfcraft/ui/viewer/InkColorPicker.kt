@@ -235,8 +235,10 @@ private fun AppViewModel.exportInkPalette(palette: InkPalette) {
                 withContext(Dispatchers.IO) {
                     ctx.contentResolver.openOutputStream(uri, "wt")!!.use { it.write(palette.toJson().toString(2).toByteArray()) }
                 }
+                PenDiag.palette("export", "saved", palette.colors.size)
                 tell(text(R.string.ink_palette_exported, palette.name))
             } catch (e: Exception) {
+                PenDiag.palette("export", "failed")
                 tell(e.userMessage)
             }
         }
@@ -263,12 +265,27 @@ private fun AppViewModel.importInkPalette() {
                 }
             }
             val textRead = read.getOrNull()
-            if (read.isFailure) { tell(read.exceptionOrNull()!!.userMessage); return@launch }
-            val palette = textRead?.let { parseInkPalette(it).getOrNull() }
+            if (read.isFailure) {
+                PenDiag.palette("import", "read_failed")
+                tell(read.exceptionOrNull()!!.userMessage)
+                return@launch
+            }
+            val parsed = textRead?.let { parseInkPalette(it) }
+            val palette = parsed?.getOrNull()
             when {
-                palette == null -> tell(text(R.string.ink_palette_import_invalid))
-                !toolPrefs.addInkPalette(palette) -> tell(text(R.string.ink_palette_full))
-                else -> tell(text(R.string.ink_palette_imported, toolPrefs.inkPaletteShown))
+                palette == null -> {
+                    val why = (parsed?.exceptionOrNull() as? PaletteImport)?.reason?.diagWord() ?: "too_large"
+                    PenDiag.palette("import", why)
+                    tell(text(R.string.ink_palette_import_invalid))
+                }
+                !toolPrefs.addInkPalette(palette) -> {
+                    PenDiag.palette("import", "full", palette.colors.size)
+                    tell(text(R.string.ink_palette_full))
+                }
+                else -> {
+                    PenDiag.palette("import", "imported", palette.colors.size)
+                    tell(text(R.string.ink_palette_imported, toolPrefs.inkPaletteShown))
+                }
             }
         }
     }

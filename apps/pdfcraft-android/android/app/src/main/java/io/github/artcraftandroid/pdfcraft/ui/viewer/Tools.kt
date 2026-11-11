@@ -419,7 +419,9 @@ private fun ZoomWritingPad(
     LaunchedEffect(wanted, gen) {
         if (wanted == null || sharp?.first == wanted && sharpGen == gen) return@LaunchedEffect
         kotlinx.coroutines.delay(120)
+        val started = android.os.SystemClock.uptimeMillis()
         val img = doc.images.renderRegion(wanted.page, wanted.scale, io.github.artcraftandroid.pdfcraft.core.TileRect(wanted.x.toUInt(), wanted.y.toUInt(), wanted.w.toUInt(), wanted.h.toUInt()))
+        PenDiag.zoomBoxRender(android.os.SystemClock.uptimeMillis() - started, wanted.scale, wanted.w, wanted.h, img != null)
         if (img != null) { sharp = wanted to img; sharpGen = gen }
     }
     Box(
@@ -455,6 +457,7 @@ private fun ZoomWritingPad(
                 val page = doc.viewer.pages.getOrNull(zb.page) ?: return@awaitEachGesture
                 if (ctl.zoomBox == zb && zb.inAdvanceZone(last.x)) {
                     val next = zb.advanced(page.width, page.height, doc.viewer.pages.size)
+                    PenDiag.zoomBoxAdvance(newLine = next.y != zb.y || next.page != zb.page, newPage = next.page != zb.page)
                     ctl.zoomBox = next
                     if (next.page != zb.page) doc.viewer.goToPage(next.page, next.y)
                 }
@@ -594,6 +597,7 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                 val saved = doc.comments.filter {
                     it.page.toInt() == s.page && it.subtype == "Ink" && !it.locked && scratchCoversRect(area, it.rect)
                 }
+                PenDiag.gesture("scratch_out", if (victims.isEmpty() && saved.isEmpty()) "nothing_under" else "erased", victims.size, saved.size)
                 if (victims.isEmpty() && saved.isEmpty()) return
                 dropGestureStroke(s)
                 if (victims.isNotEmpty()) {
@@ -610,7 +614,10 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
             }
             PenGesture.Line -> {
                 val eng = vm.engine ?: return
-                if (!doc.info.allowsAnnotation) return
+                if (!doc.info.allowsAnnotation) {
+                    PenDiag.gesture("line", "not_allowed")
+                    return
+                }
                 val marker = s.appearance.style == InkStyle.Highlighter
                 val y = pts.map { it.y }.average().toFloat()
                 // An underline sits below its line: look for words a few points higher up.
@@ -620,8 +627,12 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                 val color = Color(s.appearance.argb)
                 val opacity = s.appearance.opacity
                 vm.viewModelScope.launch {
-                    val found = try { resolveMarkup(eng, doc, start, end, 3f, tap = false) } catch (_: MobileException) { null } ?: return@launch
-                    val line = found.rects.firstOrNull { r -> lineGestureMarkup(marker, y, minOf(r[1], r[3]), maxOf(r[1], r[3])) != null } ?: return@launch
+                    val found = try { resolveMarkup(eng, doc, start, end, 3f, tap = false) } catch (_: MobileException) { null }
+                    val line = found?.rects?.firstOrNull { r -> lineGestureMarkup(marker, y, minOf(r[1], r[3]), maxOf(r[1], r[3])) != null }
+                    if (found == null || line == null) {
+                        PenDiag.gesture("line", "no_text")
+                        return@launch
+                    }
                     val markup = lineGestureMarkup(marker, y, minOf(line[1], line[3]), maxOf(line[1], line[3])) ?: return@launch
                     // Committed meanwhile (Done): it is ink now, so leave it as drawn.
                     if (vm.document !== doc || s !in strokes) return@launch
@@ -635,6 +646,7 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                     vm.runTool(doc, "comment_add", markupArgs(markup, s.page, rects, color, if (marker) opacity.coerceAtLeast(0.25f) else opacity, vm.toolPrefs.author.ifBlank { null }),
                         onSettled = {
                             steps.finished(made)
+                            PenDiag.gesture(if (marker) "line_highlight" else "line_underline", if (made > 0) "markup" else "failed")
                             if (made > 0) {
                                 edits.add(DraftInkEdit.BecameMarkup(index, s, steps.own))
                                 undone.clear()
@@ -680,7 +692,9 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                     clearSelection()
                     if (edit is DraftInkEdit.BecameMarkup) {
                         // The markup must still be this session's newest step; otherwise only forget it.
-                        if (edit.ownStep != steps.own || doc.info.undo == null) return@undo
+                        val markupUndone = edit.ownStep == steps.own && doc.info.undo != null
+                        PenDiag.gestureUndo(markupUndone)
+                        if (!markupUndone) return@undo
                         steps.releaseOwn()
                         vm.undoDocument(doc, announce = false)
                     }
@@ -986,6 +1000,7 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                             buttonClick.reset()
                         } else if (buttonClick.hover(event.buttons.isPrimaryPressed || event.buttons.isSecondaryPressed, hoverPen.uptimeMillis)) {
                             // A side-button click while hovering, with no stroke (#144).
+                            PenDiag.penButtonClick(prefs.penButtonClick)
                             when (prefs.penButtonClick) {
                                 PenButtonClick.Undo -> vm.undo(doc)
                                 PenButtonClick.TogglePens -> {
@@ -1028,6 +1043,7 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                         Offset(at.x, at.y),
                         tolerance = 12f / scale,
                     )
+                    PenDiag.eyedropper(picked != null)
                     if (picked != null) {
                         prefs.setColor(StyledTool.Ink, Color(picked))
                         vm.tell(text(R.string.ink_eyedropper_picked, "#%06X".format(picked and 0xFFFFFF)))
@@ -1152,6 +1168,14 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                 }
                 val s = current
                 current = null
+                if (s != null && (rulerEdge != null || protractorSnap != null)) {
+                    // A ruler or protractor stroke (#150) and the angle it settled on.
+                    when (protractorSnap) {
+                        ProtractorSnap.Arc -> PenDiag.guideStroke("protractor_arc", protractorReadout, s.points.size)
+                        ProtractorSnap.Ray -> PenDiag.guideStroke("protractor_ray", rayDeg, s.points.size)
+                        null -> PenDiag.guideStroke("ruler", activeRuler()?.angleDeg, s.points.size)
+                    }
+                }
                 if (s != null && heldLoop === s) {
                     // Circle-then-hold (#148): the loop selects what it encloses, as the lasso would.
                     heldLoop = null
@@ -1161,6 +1185,7 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                     lassoPage = s.page
                     s.points.forEach { addInkLassoPoint(lassoPoints, it) }
                     selectInLoop(s.page, lassoPoints.toList())
+                    PenDiag.gesture("loop_lasso", if (selected.isNotEmpty() || savedSelected.isNotEmpty()) "selected" else "nothing_inside", selected.size, savedSelected.size)
                     if (selected.isNotEmpty() || savedSelected.isNotEmpty()) doc.controller.lassoMode = true
                     else vm.tell(text(R.string.pen_gesture_lasso_empty))
                     return@toolGestures
@@ -1288,8 +1313,12 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
             },
             rejectTouch = if (prefs.palmGuard) ({ p, t ->
                 palmGuardRejects(penTracker.position, penTracker.timeMs, p, t, prefs.leftHanded, guardSizePx)
+                    .also { if (it) PenDiag.palmRejected(PalmSpot.Page, prefs.palmGuardSizeDp, prefs.leftHanded) }
             }) else null,
-            onPenDownMode = { mode -> buttonHighlighter = mode == PenDownMode.Highlight },
+            onPenDownMode = { mode ->
+                buttonHighlighter = mode == PenDownMode.Highlight
+                PenDiag.penDown(mode)
+            },
         ),
     ) {
         Canvas(Modifier.fillMaxSize()) {

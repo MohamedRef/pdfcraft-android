@@ -30,7 +30,7 @@ device: samsung SM-S928B
 ...
 Areas (lines · issues):
   [open] 41 · #211 #212 #234 #235 #317
-  [ink] 12 · #128
+  [ink] 12 · #128 #130 #144 #148 #149 #150 #156
   ...
 
 11-11 21:03:12.481 [open] open_start doc=1 scheme=content from_other_app=false has_password=false
@@ -49,7 +49,13 @@ Areas (lines · issues):
 | `app` | Process start, pause (and whether it was for the app's own picker or share sheet), resume, recording on, log cleared | `PdfcraftApplication`, `MainActivity` | #97 |
 | `open` | `open_start` with a per-open number, then every open stage and milestone of `OpenTiming` (see `docs/PDF_OPEN_PROFILING.md`) | `AppViewModel.open`, `DocumentFiles`, native timings | #211 #212 #234 #235 #317 |
 | `render` | Page, tile and prefetch render times, slow-render pixels, stale tiles, render failures | `PageImages` | #236 |
-| `ink` | One `stroke` line per pen stroke: duration, events, samples, sample rate, and app-side latency (count, median, p95, max) of the normal and low-latency paths. `latency_summary` for each path when the log is shared | `StylusLog`, `InkLatency` | #128 |
+| `ink` | One `stroke` line per pen stroke: duration, events, samples, sample rate, how the stroke started (`mode=ink`, `erase` or `highlight`, from the eraser tip or the S Pen button), and app-side latency (count, median, p95, max) of the normal and low-latency paths. `latency_summary` for each path when the log is shared | `StylusLog`, `InkLatency` | #128 #144 |
+| `ink` | `palm_guard`: finger touches the palm guard ignored on the page and on the toolbars since the last pen stroke, with the guard size and hand; written after the next stroke and when the log is shared | `PenDiag`, `PalmGuardUi`, `Tools` | #156 |
+| `ink` | `pen_button_click`: a side-button click while hovering and its action (`none`, `undo`, `toggle`) | `PenDiag`, `Tools` | #144 |
+| `ink` | `pen_gesture`: kind (`scratch_out`, `line_highlight`, `line_underline`, `loop_lasso`), outcome, and how many drafts and saved comments it erased or selected. `gesture_undo`: Undo of a stroke that became a markup, and whether the markup went too | `PenDiag`, `Tools` | #148 |
+| `ink` | `guide_stroke`: a stroke that followed the ruler or the protractor's arc or ray, with its angle in whole degrees (the ruler's angle, the arc's sweep, the ray's angle) | `PenDiag`, `Tools` | #150 |
+| `ink` | `zoom_box_advance` (new line, new page) and `zoom_box_render` (time, scale, pixels, ok) of the zoom box's sharp background | `PenDiag`, `Tools` | #130 |
+| `ink` | `eyedropper` (found a colour or not) and `palette` (import or export, outcome such as `imported`, `full`, `not_a_palette`, `newer_version`, `too_large`, and the number of colours) | `PenDiag`, `InkColorPicker` | #149 |
 | `save` | Pause with a document open (dirty or not), and each save: `doc_save`, `refresh` and `write_back` times, bytes written, trigger (`pause`, `close`, `other`) and outcome | `AppViewModel.onPause`, `AppViewModel.save` | #97 #101-#104 |
 | `scan` | Each photo (edges found, edge search time), each saved page (edges found, corners moved, largest move in % of the photo diagonal, look, clean-up time), the saved pages' size and ratio, OCR time, and a summary with found and untouched pages | `AppViewModel.onScanPhoto`, `AppViewModel.saveScan`, `ScanDiagnostics.kt` | #286-#307 (gates) |
 | `memory` | Java heap and native heap at process start, after the native open, after overlays, on memory trims and when sharing | `Diagnostics.memory` | #212 #92 |
