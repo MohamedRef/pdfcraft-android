@@ -48,7 +48,6 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -121,6 +120,7 @@ fun AppRoot(vm: AppViewModel, onBrowse: () -> Unit, onPickSignatureImage: () -> 
             // here rather than in the file's row: a sheet inside a scrolling list has no height to fill
             if (doc == null) vm.fileSheet?.let { (r, recent) -> io.github.artcraftandroid.pdfcraft.ui.home.FileSheet(vm, r, recent) { vm.fileSheet = null } }
             vm.toolScreen?.let { ToolScreenHost(vm, it) }
+            if (vm.newNotebookOpen) io.github.artcraftandroid.pdfcraft.ui.home.NewNotebookSheet(vm) { vm.newNotebookOpen = false }
             vm.signaturePad?.let { SignaturePadScreen(vm, it, onPickSignatureImage) }
             vm.certSign?.let { CertSignScreen(vm, it) }
             if (vm.idCreate) CreateIdScreen(vm)
@@ -200,6 +200,7 @@ fun AppRoot(vm: AppViewModel, onBrowse: () -> Unit, onPickSignatureImage: () -> 
                     Text(stringResource(R.string.root_reading_mode_body), color = c.text, fontSize = 14.sp)
                 }
             }
+            io.github.artcraftandroid.pdfcraft.ui.viewer.ToolDialogs(vm)
             vm.busy?.let { message ->
                 // a count and Cancel when the job has them (#200)
                 val cancel = vm.busyCancel
@@ -225,18 +226,6 @@ fun AppRoot(vm: AppViewModel, onBrowse: () -> Unit, onPickSignatureImage: () -> 
                         Spacer(Modifier.height(10.dp))
                         Text(stringResource(R.string.busy_cancel_keeps), color = c.textSecondary, fontSize = 13.sp)
                     }
-                }
-            }
-            vm.ocrScope?.let { scope ->
-                val all = scope.doc.pageCount
-                PdfDialog(
-                    onDismiss = { vm.ocrScope = null }, title = stringResource(R.string.common_tool_recognize_text),
-                    confirm = null, dismiss = stringResource(R.string.common_cancel),
-                ) {
-                    Text(stringResource(R.string.ocr_scope_body), color = c.text, fontSize = 14.sp)
-                    Spacer(Modifier.height(8.dp))
-                    SheetRow(null, stringResource(R.string.ocr_scope_page, scope.page + 1), { vm.runOcr(scope.doc, listOf(scope.page)) })
-                    if (all > 1) SheetRow(null, pluralStringResource(R.plurals.ocr_scope_all, all, all), { vm.runOcr(scope.doc, (0 until all).toList()) })
                 }
             }
         }

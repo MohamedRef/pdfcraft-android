@@ -476,6 +476,31 @@ class DocumentFiles(private val context: Context) {
         checkpoint = checkpoint,
     )
 
+    /**
+     * Write [files] into the folder tree the person picked ([tree], from OpenDocumentTree), each
+     * under its name (the provider makes taken names unique). Returns how many were written; a
+     * failure part-way removes the file it was writing and says which.
+     */
+    fun saveAllToTree(tree: Uri, files: List<Pair<File, String>>, mime: String): Int {
+        val parent = DocumentsContract.buildDocumentUriUsingTree(tree, DocumentsContract.getTreeDocumentId(tree))
+        var saved = 0
+        for ((file, name) in files) {
+            val doc = DocumentsContract.createDocument(resolver, parent, mime, name)
+                ?: throw IOException(context.getString(R.string.files_error_save_folder, name))
+            try {
+                resolver.openOutputStream(doc, "w").use { out ->
+                    if (out == null) throw IOException(context.getString(R.string.files_error_save_folder, name))
+                    file.inputStream().use { it.copyTo(out) }
+                }
+            } catch (e: Exception) {
+                runCatching { DocumentsContract.deleteDocument(resolver, doc) }
+                throw e
+            }
+            saved++
+        }
+        return saved
+    }
+
     /** Save an image into Pictures/PdfCraft (exported pages). */
     fun saveToPictures(file: File, name: String, mime: String): Uri {
         val values = android.content.ContentValues().apply {

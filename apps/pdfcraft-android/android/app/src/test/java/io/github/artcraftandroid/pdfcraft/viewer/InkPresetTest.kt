@@ -15,7 +15,7 @@ class InkPresetTest {
     }
 
     @Test fun corruptAndFutureVersionsCannotEnterTheDrawingPreferences() {
-        for (value in listOf(null, "", "x".repeat(129), "v2|ff000000|2.0|1.0", "v1|fffffffff|2|1", "v1|-f000000|2|1", "v1|zz000000|2|1", "v1|ff000000|NaN|1", "v1|ff000000|Infinity|1", "v1|ff000000|0|1", "v1|ff000000|11|1", "v1|ff000000|2|0", "v1|ff000000|2|NaN", "v1|ff000000|2|1|extra")) {
+        for (value in listOf(null, "", "x".repeat(129), "v2|ff000000|2.0|1.0", "v1|fffffffff|2|1", "v1|-f000000|2|1", "v1|zz000000|2|1", "v1|ff000000|NaN|1", "v1|ff000000|Infinity|1", "v1|ff000000|0|1", "v1|ff000000|21|1", "v1|ff000000|0.05|1", "v1|ff000000|2|0", "v1|ff000000|2|NaN", "v1|ff000000|2|1|extra")) {
             assertNull(value, InkPreset.decode(value))
         }
     }

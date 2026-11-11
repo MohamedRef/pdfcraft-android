@@ -92,6 +92,8 @@ fun PageCanvas(
     onMouseHover: (Offset) -> Unit = {},
     /** Ctrl and the wheel zoomed. */
     onWheelZoom: () -> Unit = {},
+    /** A right click (the mouse's secondary button pressed and let go without dragging). */
+    onSecondaryClick: (Offset, PagePoint?) -> Unit = { _, _ -> },
     overlay: DrawScope.() -> Unit = {},
 ) {
     val density = LocalDensity.current
@@ -104,6 +106,7 @@ fun PageCanvas(
     val mouseSelect by rememberUpdatedState(onMouseSelect)
     val mouseHover by rememberUpdatedState(onMouseHover)
     val wheelZoom by rememberUpdatedState(onWheelZoom)
+    val secondaryClick by rememberUpdatedState(onSecondaryClick)
 
     // keep the renderers working on what is in view
     LaunchedEffect(state, images, generations) {
@@ -140,11 +143,23 @@ fun PageCanvas(
             // the pointer, as the reference's viewer does
             .pointerInput(state) {
                 var lastTurn = 0L
+                // where the right button went down, for a right click (a drag with it still pans)
+                var secondaryAt: Offset? = null
+                val slop = viewConfiguration.touchSlop
                 awaitPointerEventScope {
                     while (true) {
                         val event = awaitPointerEvent()
                         val change = event.changes.firstOrNull() ?: continue
                         if (event.type == PointerEventType.Move && change.type == PointerType.Mouse && !change.pressed) mouseHover(change.position)
+                        if (change.type == PointerType.Mouse) {
+                            if (event.type == PointerEventType.Press && event.buttons.isSecondaryPressed) secondaryAt = change.position
+                            else if (event.type == PointerEventType.Move && secondaryAt?.let { (change.position - it).getDistance() > slop } == true) secondaryAt = null
+                            else if (event.type == PointerEventType.Release && secondaryAt != null && !event.buttons.isSecondaryPressed) {
+                                val at = secondaryAt!!
+                                secondaryAt = null
+                                secondaryClick(at, state.screenToPage(at))
+                            }
+                        }
                         if (event.type != PointerEventType.Scroll) continue
                         val d = change.scrollDelta
                         if (d == Offset.Zero) continue
@@ -158,7 +173,7 @@ fun PageCanvas(
                                 val rest = state.scrollBy(0f, -d.y * WHEEL_STEP)
                                 if (rest.y != 0f && change.uptimeMillis - lastTurn > WHEEL_TURN_MS) {
                                     lastTurn = change.uptimeMillis
-                                    state.goToPage(state.currentPage + if (d.y > 0f) 1 else -1)
+                                    state.turnPage(if (d.y > 0f) 1 else -1)
                                 }
                             }
                             else -> state.scrollBy(-d.x * WHEEL_STEP, -d.y * WHEEL_STEP)

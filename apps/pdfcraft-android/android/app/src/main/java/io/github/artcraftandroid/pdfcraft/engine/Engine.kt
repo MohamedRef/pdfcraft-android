@@ -25,8 +25,11 @@ class Engine private constructor(val session: MobileSession) {
     /** Tools run one at a time, in the order the UI issued them. */
     val commands: CoroutineDispatcher = Dispatchers.IO.limitedParallelism(1)
 
-    /** Page renders: the view's pages and tiles. */
-    val renders: CoroutineDispatcher = Dispatchers.Default.limitedParallelism(2)
+    /**
+     * Page renders: the view's pages and tiles. Native calls block, so every engine queue is a
+     * slice of [Dispatchers.IO], never of the CPU-sized Default pool (#90, #96).
+     */
+    val renders: CoroutineDispatcher = Dispatchers.IO.limitedParallelism(2)
 
     private val preparation = java.util.concurrent.ThreadPoolExecutor(
         0, 1, 15L, java.util.concurrent.TimeUnit.SECONDS,
@@ -41,8 +44,21 @@ class Engine private constructor(val session: MobileSession) {
 
     suspend fun completeOpen(doc: ULong) = withContext(preparation) { engineFailuresAsMobile { session.completeOpen(doc) } }
 
-    /** Thumbnails (page grids, recent files). */
-    val thumbnails: CoroutineDispatcher = Dispatchers.Default.limitedParallelism(1)
+    /** Thumbnails and previews (page grid, comment snippets, crop and file cards). */
+    val thumbnails: CoroutineDispatcher = Dispatchers.IO.limitedParallelism(1)
+
+    /**
+     * Whole-document text passes (search, the Read Aloud word count), so they never hold up
+     * thumbnails or a long press (#96).
+     */
+    val documentText: CoroutineDispatcher = Dispatchers.IO.limitedParallelism(1)
+
+    /**
+     * Text of the pages in view (selection, Read Aloud) and one-off small renders such as a
+     * colour sample. These read the document as the last finished tool left it and need not
+     * wait for queued tools (#96, #113).
+     */
+    val interactive: CoroutineDispatcher = Dispatchers.IO.limitedParallelism(2)
 
     /**
      * Run [block] on the session, after the commands issued before it. A panic in the engine
@@ -74,6 +90,7 @@ class Engine private constructor(val session: MobileSession) {
         })
     }
 
+    /** Drop native renderers and text layers. Blocking: call off the main thread (#92). */
     fun trimMemory() = session.releaseMemory()
 
     /**

@@ -3,6 +3,7 @@ package io.github.artcraftandroid.pdfcraft.ui.viewer
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -76,7 +77,7 @@ val BottomBarHeight = 70.dp
 /**
  * The top bar in plain viewing: back, a divider and the Read aloud switch, then Find, Share and
  * More. With a tool active the back arrow becomes a check mark (Done), the switch goes, and Undo
- * and Redo appear once there is something to undo.
+ * and Redo take fixed slots, disabled while there is nothing to undo or redo.
  */
 @Composable
 fun ViewerTopBar(
@@ -124,8 +125,8 @@ fun ViewerTopBar(
         if (!toolActive) {
             BarDivider(height = 24.dp)
             Spacer(Modifier.width(14.dp))
-            // with something to undo the reference shrinks the switch to a plain speaker button
-            if (canUndo && !readingAloud) BarIcon(LucideIcons.Volume2, stringResource(R.string.common_tool_read_aloud), onReadAloud) else ReadAloudSwitch(readingAloud, onReadAloud)
+            // The switch keeps its size after the first edit so nothing in the bar moves (#189).
+            ReadAloudSwitch(readingAloud, onReadAloud)
         }
         Spacer(Modifier.weight(1f))
         // while reading aloud the bar holds only back and the switch, as the reference's
@@ -133,12 +134,12 @@ fun ViewerTopBar(
             Spacer(Modifier.width(10.dp))
             return@Row
         }
+        // Fixed slots: Undo and Redo are always there, disabled when there is nothing to take
+        // back, so Search, Share and More never slide under the finger (#189).
         if (toolActive) {
-            if (canUndo || canRedo) {
-                BarIcon(LucideIcons.Undo2, stringResource(R.string.common_undo), onUndo, enabled = canUndo)
-                BarIcon(LucideIcons.Redo2, stringResource(R.string.common_redo), onRedo, enabled = canRedo)
-            }
-        } else if (canUndo) {
+            BarIcon(LucideIcons.Undo2, stringResource(R.string.common_undo), onUndo, enabled = canUndo)
+            BarIcon(LucideIcons.Redo2, stringResource(R.string.common_redo), onRedo, enabled = canRedo)
+        } else {
             UndoMenuButton(canUndo, canRedo, onUndo, onRedo, undoLabel, redoLabel)
         }
         if (onSearch != null) BarIcon(LucideIcons.Search, stringResource(R.string.viewer_find_in_document), onSearch)
@@ -148,15 +149,22 @@ fun ViewerTopBar(
     }
 }
 
-/** Undo with a corner mark: a tap opens Undo and Redo. */
+/** Undo with a corner mark: a tap undoes at once; a long press (or a tap with only Redo left) opens the named Undo and Redo menu. */
 @Composable
 fun UndoMenuButton(canUndo: Boolean, canRedo: Boolean, onUndo: () -> Unit, onRedo: () -> Unit, undoLabel: String? = null, redoLabel: String? = null) {
     val c = pdfColors
     var open by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    val undo = stringResource(R.string.common_undo)
     val undoOrRedo = stringResource(R.string.viewer_undo_or_redo)
     Box {
         Box(
-            Modifier.size(46.dp).clickable(enabled = canUndo || canRedo, role = Role.Button) { open = true }.semantics { contentDescription = undoOrRedo },
+            Modifier.size(46.dp).combinedClickable(
+                enabled = canUndo || canRedo,
+                role = Role.Button,
+                onLongClickLabel = undoOrRedo,
+                onLongClick = { open = true },
+                onClick = { if (undoTapAction(canUndo, canRedo) == UndoTap.Undo) onUndo() else open = true },
+            ).semantics { contentDescription = undo },
             contentAlignment = Alignment.Center,
         ) {
             val tint = if (canUndo || canRedo) c.icon else c.icon.copy(alpha = 0.38f)
@@ -177,6 +185,15 @@ fun UndoMenuButton(canUndo: Boolean, canRedo: Boolean, onUndo: () -> Unit, onRed
             )
         }
     }
+}
+
+internal enum class UndoTap { Undo, OpenMenu, Nothing }
+
+/** A single tap undoes; with only Redo available it opens the menu so Redo stays reachable. */
+internal fun undoTapAction(canUndo: Boolean, canRedo: Boolean): UndoTap = when {
+    canUndo -> UndoTap.Undo
+    canRedo -> UndoTap.OpenMenu
+    else -> UndoTap.Nothing
 }
 
 /** Read aloud as the reference shows it: a switch whose knob carries a speaker (crossed out while off). */

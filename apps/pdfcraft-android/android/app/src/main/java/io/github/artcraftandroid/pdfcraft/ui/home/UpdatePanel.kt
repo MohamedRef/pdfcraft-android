@@ -21,7 +21,6 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -36,6 +35,9 @@ import io.github.artcraftandroid.pdfcraft.R
 import io.github.artcraftandroid.pdfcraft.ui.pdfColors
 import java.io.File
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
@@ -77,15 +79,17 @@ internal fun UpdatePanel() {
     val colors = pdfColors
     val context = LocalContext.current
     val uriHandler = LocalUriHandler.current
-    val scope = rememberCoroutineScope()
-    var checking by remember { mutableStateOf(false) }
-    var candidate by remember { mutableStateOf<ApkUpdate?>(null) }
-    var message by remember { mutableStateOf<String?>(null) }
-    var downloading by remember { mutableStateOf(false) }
-    var progress by remember { mutableIntStateOf(0) }
-    var cachedBytes by remember { mutableLongStateOf(0L) }
-    var verifiedApk by remember { mutableStateOf<File?>(null) }
-    var downloadJob by remember { mutableStateOf<Job?>(null) }
+    // The check and the download outlive this screen: leaving About must not stop a download (#193).
+    val appContext = context.applicationContext
+    val scope = UpdaterState.scope
+    var checking by UpdaterState::checking
+    var candidate by UpdaterState::candidate
+    var message by UpdaterState::message
+    var downloading by UpdaterState::downloading
+    var progress by UpdaterState::progress
+    var cachedBytes by UpdaterState::cachedBytes
+    var verifiedApk by UpdaterState::verifiedApk
+    var downloadJob by UpdaterState::downloadJob
     var showAllNotes by remember { mutableStateOf(false) }
     var showKnownLimits by remember { mutableStateOf(false) }
 
@@ -103,11 +107,11 @@ internal fun UpdatePanel() {
             message = null
             scope.launch {
                 try {
-                    val installed = installedVersionCode(context)
+                    val installed = installedVersionCode(appContext)
                     if (!receivesGitHubApkUpdates(installed)) {
                         candidate = null
                         verifiedApk = null
-                        message = context.getString(R.string.updater_other_build)
+                        message = appContext.getString(R.string.updater_other_build)
                         return@launch
                     }
                     val found = fetchApkUpdates(installed).firstOrNull()
@@ -119,11 +123,11 @@ internal fun UpdatePanel() {
                     verifiedApk = null
                     showAllNotes = false
                     showKnownLimits = false
-                    cachedBytes = found?.let { apkCachedBytes(context, it) } ?: 0L
+                    cachedBytes = found?.let { apkCachedBytes(appContext, it) } ?: 0L
                     progress = if (found == null) 0 else (cachedBytes * 100L / found.size).toInt()
-                    message = if (found == null) context.getString(R.string.updater_no_updates) else null
+                    message = if (found == null) appContext.getString(R.string.updater_no_updates) else null
                 } catch (e: Exception) {
-                    message = context.getString(R.string.updater_check_error)
+                    message = appContext.getString(R.string.updater_check_error)
                 } finally {
                     checking = false
                 }
@@ -207,19 +211,19 @@ internal fun UpdatePanel() {
                             message = null
                             downloadJob = scope.launch {
                                 try {
-                                    verifiedApk = downloadAndVerifyApk(context, update) { percent ->
+                                    verifiedApk = downloadAndVerifyApk(appContext, update) { percent ->
                                         progress = percent
                                     }
                                     cachedBytes = update.size
-                                    message = context.getString(R.string.updater_download_verified)
+                                    message = appContext.getString(R.string.updater_download_verified)
                                 } catch (_: CancellationException) {
-                                    cachedBytes = apkCachedBytes(context, update)
+                                    cachedBytes = apkCachedBytes(appContext, update)
                                     progress = (cachedBytes * 100L / update.size).toInt()
-                                    message = context.getString(R.string.updater_paused)
+                                    message = appContext.getString(R.string.updater_paused)
                                 } catch (e: Exception) {
-                                    cachedBytes = apkCachedBytes(context, update)
+                                    cachedBytes = apkCachedBytes(appContext, update)
                                     progress = (cachedBytes * 100L / update.size).toInt()
-                                    message = e.message ?: context.getString(R.string.updater_interrupted)
+                                    message = e.updaterMessage(appContext, R.string.updater_interrupted)
                                 } finally {
                                     downloading = false
                                     downloadJob = null
@@ -262,7 +266,7 @@ internal fun UpdatePanel() {
                         val launched = openVerifiedApkInstaller(context, verifiedApk!!)
                         message = context.getString(if (launched) R.string.updater_confirm_install else R.string.updater_allow_install)
                     } catch (e: Exception) {
-                        message = e.message ?: context.getString(R.string.updater_installer_error)
+                        message = e.updaterMessage(context, R.string.updater_installer_error)
                     }
                 }) {
                     Text(stringResource(R.string.updater_install), color = colors.accent, fontWeight = FontWeight.SemiBold)
@@ -285,4 +289,21 @@ private fun updaterSectionTitle(name: String): Int = when (name) {
     "Improvements" -> R.string.updater_improvements
     "Known limits" -> R.string.updater_limits
     else -> R.string.updater_whats_new
+}
+
+/**
+ * The updater's state and its running check or download, kept for the life of the app process
+ * instead of the About screen, so going back or closing Settings never cancels a download and the
+ * progress is still there on return.
+ */
+internal object UpdaterState {
+    val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    var checking by mutableStateOf(false)
+    var candidate by mutableStateOf<ApkUpdate?>(null)
+    var message by mutableStateOf<String?>(null)
+    var downloading by mutableStateOf(false)
+    var progress by mutableIntStateOf(0)
+    var cachedBytes by mutableLongStateOf(0L)
+    var verifiedApk by mutableStateOf<File?>(null)
+    var downloadJob by mutableStateOf<Job?>(null)
 }

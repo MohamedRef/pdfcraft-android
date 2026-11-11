@@ -36,7 +36,7 @@ enum class TextMarkup { Highlight, Underline, Strikethrough, Squiggly }
 enum class CommentMode { Text, Voice, Stamp }
 
 /** What the bottom sheet over the viewer shows. */
-enum class ViewerSheet { None, More, FileDetails, Backdrops, TextStyles, ViewSettings, Attachments, Bookmarks, Comments, MoreTools, Signatures, ScanEnhance, OcrConfidence, Share, SearchResults }
+enum class ViewerSheet { None, More, FileDetails, Backdrops, TextStyles, ViewSettings, Attachments, Bookmarks, Comments, MoreTools, Signatures, ScanEnhance, OcrConfidence, SearchResults, Layers, EditContents, HiddenInfo, FocusTimer, Share }
 
 /**
  * The viewer's own state for one document, beside the page view ([ViewerState]): whether the
@@ -47,6 +47,9 @@ enum class ViewerSheet { None, More, FileDetails, Backdrops, TextStyles, ViewSet
 class ViewerController {
     /** The top bar and bottom toolbar (a tap on the page toggles them). */
     var barsVisible by mutableStateOf(true)
+
+    /** The layers' visibility when the Layers sheet first listed them: what Reset goes back to. */
+    var initialLayers: List<Boolean>? = null
 
     var tool by mutableStateOf(ViewerTool.None)
     var markup by mutableStateOf(TextMarkup.Highlight)
@@ -59,6 +62,24 @@ class ViewerController {
     var eraserMode by mutableStateOf(false)
     /** Select or move still-uncommitted Draw strokes without modifying saved PDF annotations. */
     var lassoMode by mutableStateOf(false)
+
+    /** Draw: the ruler is shown (#150) and where it is, on screen; never saved to the PDF. */
+    var rulerOn by mutableStateOf(false)
+    internal var ruler by mutableStateOf<Ruler?>(null)
+
+    /** Draw: the protractor is shown (#150) and where it is, on screen; never saved to the PDF. */
+    /** The pen's last position in root coordinates, for the toolbars' palm guard (#156). */
+    internal val penInRoot = PenTracker()
+
+    var protractorOn by mutableStateOf(false)
+    internal var protractor by mutableStateOf<Protractor?>(null)
+
+    /** Draw: the zoom writing box (#130) and its frame on the page; viewer-only. */
+    var zoomBoxOn by mutableStateOf(false)
+    internal var zoomBox by mutableStateOf<ZoomBox?>(null)
+
+    /** Draw: the next tap on the page picks the pen colour from the ink or comment there (#149). */
+    var inkEyedropper by mutableStateOf(false)
     /** Explicit annotation shape, independent of freehand snap recognition. */
     internal var inkShapeMode by mutableStateOf(InkShapeMode.Freehand)
 
@@ -79,6 +100,12 @@ class ViewerController {
 
     /** Uptime (ms) of the last scroll or zoom: the scrubber and page pill show for a while after it. */
     var lastMoved by mutableLongStateOf(0L)
+
+    /** Presentation mode (#157): the page alone, taps turn pages, a drag is a laser pointer. */
+    var presenting by mutableStateOf(false)
+
+    /** The page mode to go back to after presenting. */
+    internal var modeBeforePresenting: PageMode? = null
 
     /** The Pages screen (thumbnails, and organizing) covers the viewer. */
     var pagesOpen by mutableStateOf(false)
@@ -101,7 +128,7 @@ class ViewerController {
     val barsLocked: Boolean get() = tool != ViewerTool.None || searching || sheet != ViewerSheet.None
 
     fun toggleBars() {
-        if (!barsLocked) barsVisible = !barsVisible
+        if (!barsLocked && !presenting) barsVisible = !barsVisible
     }
 
     /** Switch to [t]; tapping the active tool again goes back to plain viewing. */

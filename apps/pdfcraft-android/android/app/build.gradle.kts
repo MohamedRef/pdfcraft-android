@@ -362,9 +362,11 @@ dependencies {
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.ui.graphics)
+    implementation(libs.androidx.graphics.core)
     implementation(libs.androidx.compose.material3)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.androidx.exifinterface)
     implementation(libs.jna) { artifact { type = "aar" } }
     testImplementation(libs.junit)
+    testImplementation(libs.org.json)
 }

@@ -78,7 +78,6 @@ import io.github.artcraftandroid.pdfcraft.ui.OpenDocument
 import io.github.artcraftandroid.pdfcraft.ui.PdfSheet
 import io.github.artcraftandroid.pdfcraft.ui.pdfColors
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.Locale
@@ -167,13 +166,22 @@ class ReadAloud(
     /** The document's words (CJK characters count one each), once counted; 250 a page until then. */
     private var totalWords by mutableIntStateOf(0)
 
-    init {
-        // count the words of every page for the time estimate, as the reference does
-        scope.launch {
-            totalWords = withContext(Dispatchers.Default) {
-                (0 until doc.pageCount).sumOf { p -> countWords(runCatching { engine.session.pagePlainText(doc.id, p.toUInt()) }.getOrDefault("")) }
+    /**
+     * Counts the words of every page for the time estimate, as the reference does. It runs on the
+     * document-wide text queue, page by page, so stopping Read Aloud stops it and the first
+     * paragraph never waits behind it (#88).
+     */
+    private val wordCount = scope.launch {
+        var words = 0
+        for (p in 0 until doc.pageCount) {
+            words += withContext(engine.documentText) {
+                countWords(runCatching { engine.session.pagePlainText(doc.id, p.toUInt()) }.getOrDefault(""))
             }
         }
+        totalWords = words
+    }
+
+    init {
         tts.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
             override fun onStart(utteranceId: String?) {}
 
@@ -205,7 +213,7 @@ class ReadAloud(
         page = p
         index = 0
         offset = 0
-        blocks = withContext(Dispatchers.Default) { runCatching { engine.session.readingBlocks(doc.id, p.toUInt()) }.getOrDefault(emptyList()) }
+        blocks = withContext(engine.interactive) { runCatching { engine.session.readingBlocks(doc.id, p.toUInt()) }.getOrDefault(emptyList()) }
         if (doc.viewer.currentPage != p) doc.viewer.goToPage(p)
     }
 
@@ -248,7 +256,7 @@ class ReadAloud(
         val block = blocks.getOrNull(index) ?: return
         base = offset.coerceIn(0, block.text.length)
         scope.launch {
-            val rects = withContext(Dispatchers.Default) { runCatching { engine.session.textRects(doc.id, block.range) }.getOrDefault(emptyList()) }
+            val rects = withContext(engine.interactive) { runCatching { engine.session.textRects(doc.id, block.range) }.getOrDefault(emptyList()) }
             blockRects = rects
             wordRects = emptyList()
             follow(rects)
@@ -262,7 +270,7 @@ class ReadAloud(
         val first = block.glyphOfChar.getOrNull(start) ?: return
         val last = block.glyphOfChar.getOrNull((end - 1).coerceAtLeast(start)) ?: first
         val range = TextRange(page.toUInt(), first, last + 1u)
-        wordRects = withContext(Dispatchers.Default) { runCatching { engine.session.textRects(doc.id, range) }.getOrDefault(emptyList()) }
+        wordRects = withContext(engine.interactive) { runCatching { engine.session.textRects(doc.id, range) }.getOrDefault(emptyList()) }
     }
 
     /** Scroll so a paragraph that starts out of view sits just under the top bar. */
@@ -362,6 +370,7 @@ class ReadAloud(
 
     fun stop() {
         playing = false
+        wordCount.cancel()
         // keep the place for next time (the reference offers to resume); a finished reading starts
         // over at the beginning next time, as the reference's does
         if (key.isNotEmpty()) {

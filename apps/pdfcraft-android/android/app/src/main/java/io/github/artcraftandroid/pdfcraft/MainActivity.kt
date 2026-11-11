@@ -52,10 +52,19 @@ class MainActivity : ComponentActivity() {
     private val pickImage = registerForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri -> vm.addImage(uri) }
     private val pickSignature = registerForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri -> vm.importSignatureImage(uri) }
     private val pickPhotos = registerForActivityResult(ActivityResultContracts.PickMultipleVisualMedia()) { uris -> vm.onPhotosPicked(uris) }
+    private val pickOutputFolder = registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri -> vm.onOutputFolderPicked(uri) }
     private val pickFolder = registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri -> uri?.let(vm::addLocalFolder) }
     private val micPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted -> vm.onMicPermission(granted) }
+    private val notificationPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { vm.updateFocusTimer(vm.focusTimer) }
 
     private val pickBatesPdfs = registerForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { vm.onBatesFilesPicked(it) }
+
+    // the editing tools' own pickers (FileRequests): each answer goes back to the tool that asked
+    private val requestCreate = registerForActivityResult(CreateTypedDocument()) { uri -> vm.requests.onCreated(uri) }
+    private val requestOpenOne = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> vm.requests.onOpened(listOfNotNull(uri)) }
+    private val requestOpenMany = registerForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris -> vm.requests.onOpened(uris) }
+    private val requestImage = registerForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri -> vm.requests.onImage(uri) }
+    private val requestFolder = registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri -> vm.requests.onFolder(uri) }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         // transparent system bars with no contrast scrim: every screen paints the bands behind the
@@ -117,7 +126,9 @@ class MainActivity : ComponentActivity() {
                     when (kind) {
                         FilePickKind.Combine -> pickMany.launch(arrayOf("application/pdf", "image/*", "text/plain") + OFFICE_TYPES)
                         FilePickKind.Create -> pickMany.launch(arrayOf("image/*", "text/plain", "application/pdf") + OFFICE_TYPES)
-                        FilePickKind.Insert, FilePickKind.Open -> pickOne.launch(arrayOf("application/pdf"))
+                        FilePickKind.Insert, FilePickKind.Open, FilePickKind.Replace -> pickOne.launch(arrayOf("application/pdf"))
+                        FilePickKind.Attach -> pickOne.launch(arrayOf("*/*"))
+                        FilePickKind.Library -> pickMany.launch(arrayOf("application/pdf"))
                         // .p12 / .pfx: providers type them as PKCS #12, or not at all
                         FilePickKind.DigitalId -> pickOne.launch(arrayOf("application/x-pkcs12", "application/pkcs12", "application/octet-stream"))
                     }
@@ -130,10 +141,35 @@ class MainActivity : ComponentActivity() {
                 launchSafely { takePhoto.launch(uri) }
             }
         }
+        lifecycleScope.launch {
+            for (r in vm.requests.creates) launchSafely {
+                try { requestCreate.launch(r.name to r.mime) } catch (e: Exception) { vm.requests.onCreated(null); throw e }
+            }
+        }
+        lifecycleScope.launch {
+            for (r in vm.requests.opens) launchSafely {
+                try { if (r.many) requestOpenMany.launch(r.mimes) else requestOpenOne.launch(r.mimes) } catch (e: Exception) { vm.requests.onOpened(emptyList()); throw e }
+            }
+        }
+        lifecycleScope.launch {
+            for (u in vm.requests.images) launchSafely {
+                try { requestImage.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) } catch (e: Exception) { vm.requests.onImage(null); throw e }
+            }
+        }
+        lifecycleScope.launch {
+            for (u in vm.requests.folders) launchSafely {
+                try { requestFolder.launch(null) } catch (e: Exception) { vm.requests.onFolder(null); throw e }
+            }
+        }
         lifecycleScope.launch { for (d in vm.imagePicks) launchSafely { pickImage.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) } }
         lifecycleScope.launch { for (u in vm.photoPicks) launchSafely { pickPhotos.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) } }
         // the folder picker opens at Documents, where PDFs usually are (Download itself can't be chosen)
         val documents = android.provider.DocumentsContract.buildDocumentUri("com.android.externalstorage.documents", "primary:Documents")
+        lifecycleScope.launch {
+            for (u in vm.outputFolderRequests) {
+                try { pickOutputFolder.launch(null) } catch (e: ActivityNotFoundException) { vm.onOutputFolderPicked(null); vm.tell(getString(R.string.main_error_no_app)) }
+            }
+        }
         lifecycleScope.launch { for (u in vm.accessRequests) launchSafely { pickFolder.launch(documents) } }
         lifecycleScope.launch {
             for (u in vm.micRequests) {
@@ -141,6 +177,9 @@ class MainActivity : ComponentActivity() {
                 if (shouldShowRequestPermissionRationale(android.Manifest.permission.RECORD_AUDIO)) vm.micRationale = true
                 else launchSafely { micPermission.launch(android.Manifest.permission.RECORD_AUDIO) }
             }
+        }
+        lifecycleScope.launch {
+            for (u in vm.notificationRequests) if (android.os.Build.VERSION.SDK_INT >= 33) launchSafely { notificationPermission.launch(android.Manifest.permission.POST_NOTIFICATIONS) }
         }
         // keep the screen on while reading, if asked, until half an hour without a touch
         lifecycleScope.launch {
@@ -156,7 +195,13 @@ class MainActivity : ComponentActivity() {
 
     // a keyboard (or desktop mode): keys the viewer takes when no text field has them
     override fun onKeyDown(keyCode: Int, event: android.view.KeyEvent): Boolean =
-        vm.viewerKey(keyCode, event.isCtrlPressed) || super.onKeyDown(keyCode, event)
+        vm.viewerKey(keyCode, event.isCtrlPressed, event.isShiftPressed) || super.onKeyDown(keyCode, event)
+
+    // the viewer's shortcuts in the system's Meta+/ list (#153)
+    override fun onProvideKeyboardShortcuts(data: MutableList<android.view.KeyboardShortcutGroup>, menu: android.view.Menu?, deviceId: Int) {
+        super.onProvideKeyboardShortcuts(data, menu, deviceId)
+        if (vm.keyboardShortcuts) data.add(io.github.artcraftandroid.pdfcraft.ui.viewer.shortcutGroup(this))
+    }
 
     /** Log raw pen samples (real historical pressure, pen speed) before Compose handles the event. */
     override fun dispatchTouchEvent(ev: android.view.MotionEvent): Boolean {
@@ -167,6 +212,7 @@ class MainActivity : ComponentActivity() {
     override fun onUserInteraction() {
         super.onUserInteraction()
         lastTouch = System.currentTimeMillis()
+        vm.studyActivity()
     }
 
     private inline fun launchSafely(onFail: () -> Unit = {}, block: () -> Unit) {
@@ -298,3 +344,11 @@ private val OFFICE_TYPES = arrayOf(
     "application/msword", "application/vnd.ms-excel", "application/vnd.ms-powerpoint",
     "application/rtf", "text/rtf",
 )
+
+/** Create a document of a type chosen per request: input is (file name, MIME type). */
+private class CreateTypedDocument : androidx.activity.result.contract.ActivityResultContract<Pair<String, String>, Uri?>() {
+    override fun createIntent(context: android.content.Context, input: Pair<String, String>): Intent =
+        Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType(input.second).putExtra(Intent.EXTRA_TITLE, input.first)
+
+    override fun parseResult(resultCode: Int, intent: Intent?): Uri? = intent.takeIf { resultCode == android.app.Activity.RESULT_OK }?.data
+}

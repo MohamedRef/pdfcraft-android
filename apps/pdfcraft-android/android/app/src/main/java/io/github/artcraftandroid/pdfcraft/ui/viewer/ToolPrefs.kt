@@ -48,8 +48,40 @@ class ToolPrefs(context: Context) {
     private val colors = StyledTool.entries.associateWith { mutableIntStateOf(prefs.getInt("${it.key}.color", it.defaultColor.toInt())) }
     private val opacities = StyledTool.entries.associateWith { mutableFloatStateOf(prefs.getFloat("${it.key}.opacity", 1f)) }
 
-    var inkWidth by mutableFloatStateOf(prefs.getFloat("ink.width", 1f))
-        private set
+    /** Each pen type's own colour, width and opacity (#187), migrated once from the old shared values. */
+    private val penSettings: Map<InkStyle, androidx.compose.runtime.MutableState<InkPenSettings>> = run {
+        val loaded = loadInkPenSettings(object : InkPrefsReader {
+            override fun contains(key: String) = prefs.contains(key)
+            override fun int(key: String, default: Int) = runCatching { prefs.getInt(key, default) }.getOrDefault(default)
+            override fun float(key: String, default: Float) = runCatching { prefs.getFloat(key, default) }.getOrDefault(default)
+            override fun string(key: String) = runCatching { prefs.getString(key, null) }.getOrNull()
+        })
+        // Persist the migration now: the last-used pen changes as soon as the user switches pens.
+        if (InkStyle.entries.any { !prefs.contains(InkPenSettings.colorKey(it)) }) {
+            val edit = prefs.edit()
+            loaded.forEach { (style, s) -> edit.putPen(style, s) }
+            edit.apply()
+        }
+        loaded.mapValues { mutableStateOf(it.value) }
+    }
+
+    /** The settings of one pen, for its toolbar preview. */
+    internal fun penSettings(style: InkStyle): InkPenSettings = penSettings.getValue(style).value
+
+    private fun updatePen(style: InkStyle, change: (InkPenSettings) -> InkPenSettings) {
+        val old = penSettings.getValue(style).value
+        val new = change(old).let { InkPenSettings.sanitized(it.argb, it.width, it.opacity) }
+        penSettings.getValue(style).value = new
+        prefs.edit().putPen(style, new).apply()
+    }
+
+    private fun android.content.SharedPreferences.Editor.putPen(style: InkStyle, s: InkPenSettings) =
+        putInt(InkPenSettings.colorKey(style), s.argb)
+            .putFloat(InkPenSettings.widthKey(style), s.width)
+            .putFloat(InkPenSettings.opacityKey(style), s.opacity)
+
+    /** The selected pen's base width. */
+    val inkWidth: Float get() = penSettings(inkStyle).width
     var textSize by mutableFloatStateOf(prefs.getFloat("freetext.size", 16f))
         private set
 
@@ -68,17 +100,24 @@ class ToolPrefs(context: Context) {
     var fillTextSize by mutableFloatStateOf(prefs.getFloat("fill.size", 12f))
         private set
 
-    fun color(t: StyledTool): Color = Color(colors.getValue(t).intValue)
-    fun opacity(t: StyledTool): Float = opacities.getValue(t).floatValue
+    fun color(t: StyledTool): Color =
+        if (t == StyledTool.Ink) Color(penSettings(inkStyle).argb) else Color(colors.getValue(t).intValue)
+    fun opacity(t: StyledTool): Float =
+        if (t == StyledTool.Ink) penSettings(inkStyle).opacity else opacities.getValue(t).floatValue
 
     fun setColor(t: StyledTool, c: Color) {
         val argb = c.toArgbInt()
+        if (t == StyledTool.Ink) {
+            rememberInkColor(argb)
+            return updatePen(inkStyle) { it.copy(argb = argb) }
+        }
         colors.getValue(t).intValue = argb
         prefs.edit().putInt("${t.key}.color", argb).apply()
     }
 
     fun setOpacity(t: StyledTool, o: Float) {
         val v = o.coerceIn(0.25f, 1f)
+        if (t == StyledTool.Ink) return updatePen(inkStyle) { it.copy(opacity = v) }
         opacities.getValue(t).floatValue = v
         prefs.edit().putFloat("${t.key}.opacity", v).apply()
     }
@@ -96,7 +135,32 @@ class ToolPrefs(context: Context) {
     )
         private set
 
+    /** The pen selected before the current one, for the side-button "toggle last two pens" (#144). */
+    internal var previousInkStyle by mutableStateOf(InkStyle.fromKey(prefs.getString("ink.previousStyle", null)) ?: InkStyle.Highlighter)
+        private set
+
+    internal fun togglePreviousPen() = updateInkStyle(previousInkStyle)
+
+    internal var penButtonHold by mutableStateOf(PenButtonHold.fromKey(prefs.getString("pen.button.hold", null)))
+        private set
+    internal var penButtonClick by mutableStateOf(PenButtonClick.fromKey(prefs.getString("pen.button.click", null)))
+        private set
+
+    internal fun updatePenButtonHold(v: PenButtonHold) {
+        penButtonHold = v
+        prefs.edit().putString("pen.button.hold", v.key).apply()
+    }
+
+    internal fun updatePenButtonClick(v: PenButtonClick) {
+        penButtonClick = v
+        prefs.edit().putString("pen.button.click", v.key).apply()
+    }
+
     internal fun updateInkStyle(style: InkStyle) {
+        if (style != inkStyle) {
+            previousInkStyle = inkStyle
+            prefs.edit().putString("ink.previousStyle", inkStyle.key).apply()
+        }
         inkStyle = style
         if (style != InkStyle.Highlighter) lastWritingPen = style
         prefs.edit().putString("ink.style", style.key).also {
@@ -107,23 +171,103 @@ class ToolPrefs(context: Context) {
     /** Selecting Pen always switches away from a previously selected highlighter. */
     internal fun selectWritingPen() = updateInkStyle(lastWritingPen)
 
-    internal var inkPresets by mutableStateOf(InkPreset.defaults.mapIndexed { i, fallback ->
-        InkPreset.decode(runCatching { prefs.getString("ink.preset.v1.$i", null) }.getOrNull()) ?: fallback
-    })
+    /** Any number of favorites (#149), one list key; the three old slots are migrated once. */
+    internal var inkPresets by mutableStateOf(
+        InkPreset.decodeList(runCatching { prefs.getString("ink.presets.v2", null) }.getOrNull())
+            ?: InkPreset.defaults.mapIndexed { i, fallback ->
+                InkPreset.decode(runCatching { prefs.getString("ink.preset.v1.$i", null) }.getOrNull()) ?: fallback
+            },
+    )
         private set
 
-    internal fun currentInkPreset(): InkPreset? = InkPreset.create(colors.getValue(StyledTool.Ink).intValue, inkWidth, opacity(StyledTool.Ink), inkStyle)
+    private fun storePresets(list: List<InkPreset>) {
+        inkPresets = list.take(InkPreset.MAX_PRESETS)
+        prefs.edit().putString("ink.presets.v2", InkPreset.encodeList(inkPresets)).apply()
+    }
+
+    /** Adds the selected pen as it is now to the end of the favorites. */
+    internal fun addInkPreset(): Boolean {
+        val preset = currentInkPreset() ?: return false
+        if (inkPresets.size >= InkPreset.MAX_PRESETS) return false
+        storePresets(inkPresets + preset)
+        return true
+    }
+
+    internal fun deleteInkPreset(index: Int): Boolean {
+        if (index !in inkPresets.indices) return false
+        storePresets(inkPresets.filterIndexed { i, _ -> i != index })
+        return true
+    }
+
+    internal fun moveInkPreset(index: Int, delta: Int) = storePresets(inkPresets.movedBy(index, delta))
+
+    /** The last eight ink colours used, most recent first (#149). */
+    internal var recentInkColors by mutableStateOf(
+        runCatching { prefs.getString("ink.recentColors", null) }.getOrNull().orEmpty().split(',')
+            .mapNotNull { parseHexColor(it) }.take(8),
+    )
+        private set
+
+    private fun rememberInkColor(argb: Int) {
+        recentInkColors = withRecentColor(recentInkColors, argb)
+        prefs.edit().putString("ink.recentColors", recentInkColors.joinToString(",") { "%08X".format(it) }).apply()
+    }
+
+    /** The user's own named colour palettes (#149). */
+    internal var inkPalettes by mutableStateOf(decodePalettes(runCatching { prefs.getString("ink.palettes.v1", null) }.getOrNull()))
+        private set
+
+    /** Which palette the pen style sheet shows: [PALETTE_STANDARD], [PALETTE_COLOR_BLIND] or a user palette's name. */
+    internal var inkPaletteShown by mutableStateOf(runCatching { prefs.getString("ink.palette.shown", null) }.getOrNull() ?: PALETTE_STANDARD)
+        private set
+
+    internal fun showInkPalette(key: String) {
+        inkPaletteShown = key
+        prefs.edit().putString("ink.palette.shown", key).apply()
+    }
+
+    private fun storePalettes(list: List<InkPalette>) {
+        inkPalettes = list.take(InkPalette.MAX_PALETTES)
+        prefs.edit().putString("ink.palettes.v1", encodePalettes(inkPalettes)).apply()
+    }
+
+    /** Adds a palette under a unique name and shows it; false when the limit is reached. */
+    internal fun addInkPalette(palette: InkPalette): Boolean {
+        if (inkPalettes.size >= InkPalette.MAX_PALETTES) return false
+        val named = palette.copy(name = uniquePaletteName(palette.name, inkPalettes.map { it.name } + RESERVED_PALETTE_KEYS))
+        storePalettes(inkPalettes + named)
+        showInkPalette(named.name)
+        return true
+    }
+
+    internal fun deleteInkPalette(name: String) {
+        storePalettes(inkPalettes.filter { it.name != name })
+        if (inkPaletteShown == name) showInkPalette(PALETTE_STANDARD)
+    }
+
+    /** Adds [argb] to the palette [name] (once); false when it is already there or the palette is full. */
+    internal fun addColorToPalette(name: String, argb: Int): Boolean {
+        val p = inkPalettes.firstOrNull { it.name == name } ?: return false
+        if (p.colors.any { it.argb == argb } || p.colors.size >= InkPalette.MAX_COLORS) return false
+        storePalettes(inkPalettes.map { if (it.name == name) it.copy(colors = it.colors + InkPalette.PaletteColor(argb)) else it })
+        return true
+    }
+
+    internal fun removeColorFromPalette(name: String, argb: Int) =
+        storePalettes(inkPalettes.map { if (it.name == name) it.copy(colors = it.colors.filter { c -> c.argb != argb }) else it })
+
+    internal fun currentInkPreset(): InkPreset? = penSettings(inkStyle).let { InkPreset.create(it.argb, it.width, it.opacity, inkStyle) }
 
     internal fun applyInkPreset(index: Int): Boolean {
         val preset = inkPresets.getOrNull(index) ?: return false
         // One synchronous UI event and one preferences transaction: only the next stroke changes.
-        prefs.edit().putInt("ink.color", preset.argb).putFloat("ink.width", preset.width).putFloat("ink.opacity", preset.opacity)
+        // A favorite is a full snapshot: it restyles its own pen type and selects it.
+        val pen = InkPenSettings.sanitized(preset.argb, preset.width, preset.opacity)
+        prefs.edit().putPen(preset.style, pen)
             .putString("ink.style", preset.style.key).also {
                 if (preset.style != InkStyle.Highlighter) it.putString("ink.lastWritingPen", preset.style.key)
             }.apply()
-        colors.getValue(StyledTool.Ink).intValue = preset.argb
-        opacities.getValue(StyledTool.Ink).floatValue = preset.opacity
-        inkWidth = preset.width
+        penSettings.getValue(preset.style).value = pen
         inkStyle = preset.style
         if (preset.style != InkStyle.Highlighter) lastWritingPen = preset.style
         return true
@@ -132,8 +276,7 @@ class ToolPrefs(context: Context) {
     internal fun saveInkPreset(index: Int): Boolean {
         if (index !in inkPresets.indices) return false
         val preset = currentInkPreset() ?: return false
-        prefs.edit().putString("ink.preset.v1.$index", preset.encode()).apply()
-        inkPresets = inkPresets.mapIndexed { i, existing -> if (i == index) preset else existing }
+        storePresets(inkPresets.mapIndexed { i, existing -> if (i == index) preset else existing })
         return true
     }
 
@@ -144,6 +287,58 @@ class ToolPrefs(context: Context) {
     fun updateStylusOnly(on: Boolean) {
         stylusOnly = on
         prefs.edit().putBoolean("ink.stylusOnly", on).apply()
+    }
+
+    /** Writing hand (#156): mirrors the default quick rail side, the zoom buttons and the palm guard. */
+    var leftHanded by mutableStateOf(prefs.getBoolean("hand.left", false))
+        private set
+
+    fun updateLeftHanded(on: Boolean) {
+        leftHanded = on
+        prefs.edit().putBoolean("hand.left", on).apply()
+    }
+
+    /** Ignore finger touches beside and below a hovering or writing pen (#156). Off by default. */
+    var palmGuard by mutableStateOf(prefs.getBoolean("hand.palmGuard", false))
+        private set
+    var palmGuardSizeDp by mutableFloatStateOf(prefs.getFloat("hand.palmGuardSize", 120f).coerceIn(60f, 240f))
+        private set
+
+    fun updatePalmGuard(on: Boolean) {
+        palmGuard = on
+        prefs.edit().putBoolean("hand.palmGuard", on).apply()
+    }
+
+    fun updatePalmGuardSizeDp(v: Float) {
+        palmGuardSizeDp = v.coerceIn(60f, 240f)
+        prefs.edit().putFloat("hand.palmGuardSize", palmGuardSizeDp).apply()
+    }
+
+    /** Low-latency wet ink through the display's front buffer (#128). Off by default until measured. */
+    var lowLatencyInk by mutableStateOf(prefs.getBoolean("ink.frontBuffer", false))
+        private set
+
+    fun updateLowLatencyInk(on: Boolean) {
+        lowLatencyInk = on
+        prefs.edit().putBoolean("ink.frontBuffer", on).apply()
+    }
+
+    /** Smart pen gestures (#148): scratch-out, line-to-highlight and underline. Off by default. */
+    var penGestures by mutableStateOf(prefs.getBoolean("ink.gestures", false))
+        private set
+
+    fun updatePenGestures(on: Boolean) {
+        penGestures = on
+        prefs.edit().putBoolean("ink.gestures", on).apply()
+    }
+
+    /** Draw: a two-finger tap undoes and a three-finger tap redoes (#189). On by default. */
+    var multiFingerUndo by mutableStateOf(prefs.getBoolean("ink.multiFingerUndo", true))
+        private set
+
+    fun updateMultiFingerUndo(on: Boolean) {
+        multiFingerUndo = on
+        prefs.edit().putBoolean("ink.multiFingerUndo", on).apply()
     }
 
     /** Draw ▸ Snap to shape: strokes that look like a line, box, oval or polygon become one. */
@@ -171,10 +366,8 @@ class ToolPrefs(context: Context) {
         return true
     }
 
-    fun updateInkWidth(w: Float) {
-        inkWidth = w
-        prefs.edit().putFloat("ink.width", w).apply()
-    }
+    /** Changes the selected pen's width only. */
+    fun updateInkWidth(w: Float) = updatePen(inkStyle) { it.copy(width = w) }
 
     fun updateTextSize(s: Float) {
         textSize = s

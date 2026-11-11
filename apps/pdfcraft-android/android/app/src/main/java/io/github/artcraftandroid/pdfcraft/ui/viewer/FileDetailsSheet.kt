@@ -225,6 +225,7 @@ fun FileDetailsSheet(vm: AppViewModel, doc: OpenDocument) {
             }
         }
         SheetDivider()
+        FileDetailsTools(vm, doc, properties)
         SheetRow(LucideIcons.Layers, stringResource(R.string.backdrops_title), { ctl.sheet = ViewerSheet.Backdrops }, chevron = true)
         SheetRow(LucideIcons.Copy, stringResource(R.string.file_details_copy_all), {
             clipboard.setText(AnnotatedString(copyText))

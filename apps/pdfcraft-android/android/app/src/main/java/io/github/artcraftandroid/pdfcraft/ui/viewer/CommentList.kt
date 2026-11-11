@@ -6,6 +6,8 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -52,6 +54,9 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.selected
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -131,6 +136,7 @@ fun CommentListScreen(vm: AppViewModel, doc: OpenDocument) {
     val folded = remember { mutableStateMapOf<Int, Boolean>() }
     val snippets = remember(doc.info.generation) { mutableStateMapOf<String, ImageBitmap>() }
     var menuFor by remember { mutableStateOf<CommentInfo?>(null) }
+    var exporting by remember { mutableStateOf(false) }
     fun close() {
         ctl.sheet = ViewerSheet.None
     }
@@ -138,7 +144,11 @@ fun CommentListScreen(vm: AppViewModel, doc: OpenDocument) {
     val all = list.orEmpty().filter { !it.fillSign }
     val parents = all.filter { it.replyTo == null && it.state == null && it.subtype in LISTED }
     // each thread: its comment, then the replies to it in order
-    val threads = parents.map { p -> listOf(p) + all.filter { it.replyTo != null && it.replyTo == p.name && it.state == null } }
+    val allThreads = parents.map { p -> listOf(p) + all.filter { it.replyTo != null && it.replyTo == p.name && it.state == null } }
+    // filters by kind and author (#155)
+    var kind by remember { mutableStateOf<CommentKind?>(null) }
+    var author by remember { mutableStateOf<String?>(null) }
+    val threads = filterThreads(allThreads, kind, author)
     Column(
         Modifier.fillMaxSize().background(Color.Black).safeTopPadding()
             .background(c.navBand).navigationBarsPadding().background(c.surface),
@@ -156,14 +166,22 @@ fun CommentListScreen(vm: AppViewModel, doc: OpenDocument) {
             Text(
                 if (list == null) stringResource(R.string.comments_title) else threadsTitle(threads.size, stringResource(R.string.comments_none)) { plural(R.plurals.comments_threads, it, it) },
                 color = c.label, fontSize = 17.sp, fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.weight(1f),
             )
+            if (threads.isNotEmpty()) BarIcon(LucideIcons.FileOutput, stringResource(R.string.digest_title), { exporting = true }, size = 48.dp)
         }
+        if (exporting) ExportNotesSheet(vm, doc) { exporting = false }
         if (list == null) {
             Text(stringResource(R.string.comments_loading), color = c.label, modifier = Modifier.padding(16.dp))
             return@Column
         }
-        if (threads.isEmpty()) {
+        if (allThreads.isEmpty()) {
             EmptyComments()
+            return@Column
+        }
+        CommentFilters(allThreads, kind, { kind = it }, author, { author = it })
+        if (threads.isEmpty()) {
+            Text(stringResource(R.string.comments_filter_none), color = c.textSecondary, fontSize = 15.sp, modifier = Modifier.padding(16.dp))
             return@Column
         }
         LazyColumn(Modifier.fillMaxSize()) {
@@ -384,5 +402,107 @@ private fun EmptyComments() {
         Spacer(Modifier.height(8.dp))
         Text(stringResource(R.string.comments_empty_body), color = c.textSecondary, fontSize = 17.sp, textAlign = TextAlign.Center)
         Spacer(Modifier.height(80.dp))
+    }
+}
+
+/** More > Export notes: the digest's format, grouping and which comments, then Export. */
+@Composable
+private fun ExportNotesSheet(vm: AppViewModel, doc: OpenDocument, onDismiss: () -> Unit) {
+    val c = pdfColors
+    var format by remember { mutableStateOf(io.github.artcraftandroid.pdfcraft.ui.DigestFormat.Markdown) }
+    var grouping by remember { mutableStateOf(io.github.artcraftandroid.pdfcraft.engine.DigestGrouping.Page) }
+    var filter by remember { mutableStateOf(io.github.artcraftandroid.pdfcraft.engine.DigestFilter.All) }
+    io.github.artcraftandroid.pdfcraft.ui.PdfSheet(onDismiss = onDismiss, dim = true) {
+        Column(Modifier.verticalScroll(rememberScrollState()).padding(bottom = 16.dp)) {
+            io.github.artcraftandroid.pdfcraft.ui.SheetTitle(stringResource(R.string.digest_title))
+            DigestChoice(R.string.digest_format, io.github.artcraftandroid.pdfcraft.ui.DigestFormat.entries, format, { it.label }) { format = it }
+            if (format != io.github.artcraftandroid.pdfcraft.ui.DigestFormat.Pdf) {
+                DigestChoice(R.string.digest_group_by, io.github.artcraftandroid.pdfcraft.engine.DigestGrouping.entries, grouping, {
+                    if (it == io.github.artcraftandroid.pdfcraft.engine.DigestGrouping.Page) R.string.digest_by_page else R.string.digest_by_color
+                }) { grouping = it }
+                DigestChoice(R.string.digest_include, io.github.artcraftandroid.pdfcraft.engine.DigestFilter.entries, filter, {
+                    when (it) {
+                        io.github.artcraftandroid.pdfcraft.engine.DigestFilter.All -> R.string.digest_all
+                        io.github.artcraftandroid.pdfcraft.engine.DigestFilter.Checked -> R.string.digest_checked
+                        io.github.artcraftandroid.pdfcraft.engine.DigestFilter.Unresolved -> R.string.digest_unresolved
+                    }
+                }) { filter = it }
+            }
+            Spacer(Modifier.height(16.dp))
+            Box(
+                Modifier.padding(horizontal = 16.dp).fillMaxWidth().heightIn(min = 48.dp).clip(RoundedCornerShape(24.dp)).background(Color(0xFF1473E6))
+                    .clickable(role = Role.Button) { onDismiss(); vm.exportNotes(doc, format, grouping, filter) },
+                contentAlignment = Alignment.Center,
+            ) { Text(stringResource(R.string.digest_export), color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.SemiBold) }
+            Text(stringResource(R.string.digest_hint), color = c.textSecondary, fontSize = 13.sp, modifier = Modifier.padding(16.dp))
+        }
+    }
+}
+
+@Composable
+private fun <T> DigestChoice(@androidx.annotation.StringRes title: Int, values: List<T>, selected: T, label: (T) -> Int, onPick: (T) -> Unit) {
+    val c = pdfColors
+    Text(stringResource(title), color = c.textSecondary, fontSize = 13.sp, modifier = Modifier.padding(start = 16.dp, top = 8.dp))
+    for (v in values) {
+        Row(Modifier.fillMaxWidth().clickable(role = Role.RadioButton) { onPick(v) }.padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+            androidx.compose.material3.RadioButton(
+                selected = v == selected, onClick = { onPick(v) },
+                colors = androidx.compose.material3.RadioButtonDefaults.colors(selectedColor = c.toolAccent, unselectedColor = c.icon),
+            )
+            Text(stringResource(label(v)), color = c.text, fontSize = 15.sp)
+        }
+    }
+}
+
+/** Chips over the comment list: All, then the kinds present, then the author picker when several wrote. */
+@Composable
+private fun CommentFilters(
+    threads: List<List<CommentInfo>>,
+    kind: CommentKind?, onKind: (CommentKind?) -> Unit,
+    author: String?, onAuthor: (String?) -> Unit,
+) {
+    val c = pdfColors
+    val kinds = remember(threads) { CommentKind.entries.filter { k -> threads.any { commentKind(it.first().subtype) == k } } }
+    val authors = remember(threads) { threadAuthors(threads) }
+    @Composable
+    fun chip(label: String, selected: Boolean, onClick: () -> Unit) {
+        Text(
+            label, color = if (selected) c.onAccent else c.text, fontSize = 14.sp, maxLines = 1,
+            modifier = Modifier.clip(RoundedCornerShape(16.dp))
+                .background(if (selected) c.accent else c.pressed)
+                .clickable(role = Role.RadioButton, onClick = onClick)
+                .semantics { this.selected = selected }
+                .heightIn(min = 32.dp).padding(horizontal = 12.dp, vertical = 6.dp),
+        )
+    }
+    Row(
+        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically,
+    ) {
+        chip(stringResource(R.string.comments_filter_all), kind == null && author == null) { onKind(null); onAuthor(null) }
+        kinds.forEach { k ->
+            val label = stringResource(
+                when (k) {
+                    CommentKind.Notes -> R.string.comments_filter_notes
+                    CommentKind.Highlights -> R.string.comments_filter_highlights
+                    CommentKind.Ink -> R.string.comments_filter_ink
+                    CommentKind.Shapes -> R.string.comments_filter_shapes
+                    CommentKind.Stamps -> R.string.comments_filter_stamps
+                },
+            )
+            chip(label, kind == k) { onKind(if (kind == k) null else k) }
+        }
+        if (authors.size > 1) {
+            Box {
+                var open by remember { mutableStateOf(false) }
+                chip(author ?: stringResource(R.string.comments_filter_author), author != null) { open = true }
+                androidx.compose.material3.DropdownMenu(expanded = open, onDismissRequest = { open = false }, containerColor = c.menu) {
+                    androidx.compose.material3.DropdownMenuItem(text = { Text(stringResource(R.string.comments_filter_anyone), color = c.text) }, onClick = { open = false; onAuthor(null) })
+                    authors.forEach { a ->
+                        androidx.compose.material3.DropdownMenuItem(text = { Text(a, color = c.text) }, onClick = { open = false; onAuthor(a) })
+                    }
+                }
+            }
+        }
     }
 }
