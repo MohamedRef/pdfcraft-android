@@ -75,6 +75,8 @@ struct OpenPrework {
 /// discovery stay on this one, so the second finds the annotations the first parsed in the
 /// editing cache. Every pass reads `cos` only and is the same call the complete path made.
 fn open_prework(context: &OpenContext, cos: &pdfcraft_cos::Document, bytes: &pdfcraft_cos::PdfBytes) -> OpenPrework {
+    // The passes below read the same annotations; keep them parsed between passes (#212).
+    let _passes = cos.open_passes();
     let sig_cache = Arc::new(pdfcraft_sign::DigestCache::default());
     let mut appearances = AppearanceCache::default();
     let find_signatures = || context.trace.measure("native_signatures", || signatures_of(cos, bytes, &context.trust, &sig_cache));

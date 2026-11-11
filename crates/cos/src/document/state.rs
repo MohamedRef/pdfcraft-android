@@ -319,6 +319,9 @@ thread_local! {
 pub(crate) struct ObjectCache {
     entries: HashMap<u32, (Loaded, usize)>,
     owned: usize,
+    /// Android adaptation (#212): live [`OpenPasses`](super::OpenPasses) guards, which raise the
+    /// editing cache's byte cap while opening reads every page annotation in several passes.
+    pub(super) open_passes: usize,
 }
 
 impl ObjectCache {
