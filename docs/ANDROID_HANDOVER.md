@@ -11,6 +11,13 @@
 
 # PdfCraft Android - development handover
 
+## RELEASE 0.0.24-beta (24012) — 2026-11-11 (owner requested)
+
+- Release PR publishes `0.0.24-beta` / ARM64 build `24012` (`pdfcraft.versionCode=2401`), same package ID and signer. Trigger matches only `chore(release): publish 0.0.24-beta (24012)`.
+- Owner's 0.0.23 timings (S24 Ultra): mapped input, first page 0.31–0.38 s; editing ready 2.7–3.0 s; Recent thumbnail of the 336 MB file missing (regression from #230's 100 MiB preview cap).
+- Included: #233 thumbnail mapping fix, parallel inspection read-ahead, parallel timestamp scan, display-copy read-ahead hint.
+- Open: the full display copy for comments without appearances (0.43–0.57 s and a second in-memory copy of the file); device measurement of 0.0.24.
+
 ## RELEASE 0.0.23-beta (23012) — 2026-11-11 (owner requested)
 
 - Release PR publishes `0.0.23-beta` / ARM64 build `23012` (`pdfcraft.versionCode=2301`), same package ID and signer. Trigger matches only `chore(release): publish 0.0.23-beta (23012)`.
