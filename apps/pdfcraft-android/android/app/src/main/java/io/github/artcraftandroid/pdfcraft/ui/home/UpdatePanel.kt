@@ -219,7 +219,7 @@ internal fun UpdatePanel() {
                                 } catch (e: Exception) {
                                     cachedBytes = apkCachedBytes(context, update)
                                     progress = (cachedBytes * 100L / update.size).toInt()
-                                    message = e.message ?: context.getString(R.string.updater_interrupted)
+                                    message = e.updaterMessage(context, R.string.updater_interrupted)
                                 } finally {
                                     downloading = false
                                     downloadJob = null
@@ -262,7 +262,7 @@ internal fun UpdatePanel() {
                         val launched = openVerifiedApkInstaller(context, verifiedApk!!)
                         message = context.getString(if (launched) R.string.updater_confirm_install else R.string.updater_allow_install)
                     } catch (e: Exception) {
-                        message = e.message ?: context.getString(R.string.updater_installer_error)
+                        message = e.updaterMessage(context, R.string.updater_installer_error)
                     }
                 }) {
                     Text(stringResource(R.string.updater_install), color = colors.accent, fontWeight = FontWeight.SemiBold)

@@ -1428,4 +1428,13 @@
     <string name="compact_previews">Weniger Speicher für Seitenvorschauen verwenden</string>
     <string name="compact_previews_body">Verringert die Farbgenauigkeit ganzer Seiten. Vergrößerte Details behalten die volle Qualität. Gilt beim erneuten Öffnen eines Dokuments.</string>
     <string name="updater_other_build">Dieser Build ist nicht die ARM64-Release-APK, daher sind In-App-Updates deaktiviert. Aktualisiere ihn dort, wo du ihn installiert hast.</string>
+    <string name="updater_err_checksum">Die heruntergeladene APK stimmt nicht mit dem veröffentlichten Release überein und wurde nicht installiert. Bitte erneut herunterladen.</string>
+    <string name="updater_err_invalid_apk">Die heruntergeladene Datei ist keine gültige signierte Android-App.</string>
+    <string name="updater_err_wrong_build">Die heruntergeladene APK ist nicht das erwartete PdfCraft-Update.</string>
+    <string name="updater_err_certificate">Die heruntergeladene APK ist nicht von PdfCraft signiert und kann die installierte App nicht ersetzen.</string>
+    <string name="updater_err_android_version">Für dieses Update ist eine neuere Android-Version erforderlich.</string>
+    <string name="updater_err_abi">Diese APK ist nicht für den Prozessor deines Telefons gebaut.</string>
+    <string name="updater_err_storage">Das Update konnte auf diesem Gerät nicht gespeichert werden. Gib Speicherplatz frei und versuche es erneut.</string>
+    <string name="updater_err_untrusted">Der Update-Link stammt nicht aus den offiziellen GitHub-Releases von PdfCraft und wurde abgelehnt.</string>
+    <string name="updater_err_server">Der Download-Server hat unerwartet geantwortet. Versuche es später erneut oder lade im Browser herunter.</string>
 </resources>

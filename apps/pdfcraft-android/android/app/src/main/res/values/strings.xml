@@ -1456,4 +1456,13 @@
     <string name="comments_loading">Loading comments…</string>
     <string name="compact_previews">Use less memory for page previews</string>
     <string name="compact_previews_body">Reduces color precision for full pages. Zoomed details retain full quality. Applies when you reopen a document.</string>
+    <string name="updater_err_checksum">The downloaded APK doesn\'t match the published release, so it wasn\'t installed. Try downloading again.</string>
+    <string name="updater_err_invalid_apk">The downloaded file isn\'t a valid signed Android app.</string>
+    <string name="updater_err_wrong_build">The downloaded APK isn\'t the expected PdfCraft update.</string>
+    <string name="updater_err_certificate">The downloaded APK isn\'t signed by PdfCraft, so it can\'t replace the installed app.</string>
+    <string name="updater_err_android_version">This update needs a newer Android version.</string>
+    <string name="updater_err_abi">This APK is not built for your phone\'s processor.</string>
+    <string name="updater_err_storage">The update couldn\'t be saved on this device. Free up some space and try again.</string>
+    <string name="updater_err_untrusted">The update link isn\'t from PdfCraft\'s official GitHub Releases, so it was refused.</string>
+    <string name="updater_err_server">The download server sent an unexpected response. Try again later or download in the browser.</string>
 </resources>
