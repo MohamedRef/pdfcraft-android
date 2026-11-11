@@ -41,4 +41,4 @@ Results and output are unchanged, because a cached object is the one a fresh loa
 ## Not changed, measured for follow-up
 
 - A comment edit clears the comment-appearance cache, so every comment without its own appearance is drawn and compressed again (about 18% of the edit before this change). About 12% of the edit is zlib setup for these small streams.
-- Keeping valid entries would need to know which annotations, and which objects they reference, the edit touched.
+- Keeping valid entries would need to know which annotations, and which objects they reference, the edit touched. Tracked in #322.
