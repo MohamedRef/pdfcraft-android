@@ -51,6 +51,54 @@ pub fn inspect(bytes: Arc<Vec<u8>>, password: Option<&str>) -> Result<DocInfo, O
 
 /// The ordinary inspector, recording fixed stage names only when the caller opts in.
 pub fn inspect_with_trace(bytes: Arc<Vec<u8>>, password: Option<&str>, trace: &OpenTrace) -> Result<DocInfo, OpenError> {
+    let (mut info, unlinked) = inspect_geometry(bytes.clone(), password, trace)?;
+    let options = load_options(password);
+    inspect_structure(&mut info, |tmp| {
+        // The lazy reader first; lopdf's repair/tolerance path when it can't expose the same
+        // page tree or an object a panel needs. No partial result is published.
+        let lazy = trace
+            .measure("native_inspect_lazy", || {
+                catch_unwind(AssertUnwindSafe(|| {
+                    let doc = LazyStructure::new(bytes.clone(), password).ok()?;
+                    let mut t = DocInfo { pages: tmp.pages.clone(), ..Default::default() };
+                    let inspector = Inspector::new(&doc);
+                    if inspector.page_index.len() != t.pages.len() {
+                        return None;
+                    }
+                    inspector.fill(&mut t);
+                    (!doc.failed()).then_some(t)
+                }))
+            })
+            .ok()
+            .flatten();
+        if let Some(t) = lazy {
+            *tmp = t;
+            return Ok(());
+        }
+        let doc = trace.measure("native_inspect_fallback_load", || Document::load_mem_with_options(&bytes, options)).map_err(|e| e.to_string())?;
+        trace.measure("native_inspect_fallback_fill", || Inspector::new(&doc).fill(tmp));
+        Ok(())
+    });
+    if info.pages.is_empty() {
+        return Err(OpenError::Invalid("the document has no pages".into()));
+    }
+    if unlinked {
+        info.warnings.push(UNLINKED_UPDATE.into());
+    }
+    Ok(info)
+}
+
+/// Exact renderer page geometry without document-wide panel inspection.
+/// This is only a reading-stage primitive; it makes no claim about forms or signatures.
+pub fn inspect_geometry_with_trace(bytes: Arc<Vec<u8>>, password: Option<&str>, trace: &OpenTrace) -> Result<DocInfo, OpenError> {
+    let (mut info, unlinked) = inspect_geometry(bytes, password, trace)?;
+    if unlinked {
+        info.warnings.push(UNLINKED_UPDATE.into());
+    }
+    Ok(info)
+}
+
+fn inspect_geometry(bytes: Arc<Vec<u8>>, password: Option<&str>, trace: &OpenTrace) -> Result<(DocInfo, bool), OpenError> {
     let pdf = trace
         .measure("native_render_parse", || catch_unwind(AssertUnwindSafe(|| Pdf::new_with_password(bytes.clone(), password.unwrap_or("")))))
         .map_err(|p| OpenError::Invalid(format!("the parser crashed: {}", crate::raster::panic_message(&p))))?
@@ -93,43 +141,10 @@ pub fn inspect_with_trace(bytes: Arc<Vec<u8>>, password: Option<&str>, trace: &O
     // Never silent: the pages of a file whose last update has no `/Prev` were found by rebuilding
     // its cross-reference data (`pdfcraft-cos` rebuilds it under the same conditions and logs it).
     let unlinked = pdf.rebuilt_unlinked_update();
-    let options = load_options(password);
     // Geometry no longer needs the renderer parser. Do not overlap its allocations with
     // structural inspection, including the compatibility fallback for damaged files.
     drop(pdf);
-    inspect_structure(&mut info, |tmp| {
-        // The lazy reader first; lopdf's repair/tolerance path when it can't expose the same
-        // page tree or an object a panel needs. No partial result is published.
-        let lazy = trace
-            .measure("native_inspect_lazy", || {
-                catch_unwind(AssertUnwindSafe(|| {
-                    let doc = LazyStructure::new(bytes.clone(), password).ok()?;
-                    let mut t = DocInfo { pages: tmp.pages.clone(), ..Default::default() };
-                    let inspector = Inspector::new(&doc);
-                    if inspector.page_index.len() != t.pages.len() {
-                        return None;
-                    }
-                    inspector.fill(&mut t);
-                    (!doc.failed()).then_some(t)
-                }))
-            })
-            .ok()
-            .flatten();
-        if let Some(t) = lazy {
-            *tmp = t;
-            return Ok(());
-        }
-        let doc = trace.measure("native_inspect_fallback_load", || Document::load_mem_with_options(&bytes, options)).map_err(|e| e.to_string())?;
-        trace.measure("native_inspect_fallback_fill", || Inspector::new(&doc).fill(tmp));
-        Ok(())
-    });
-    if info.pages.is_empty() {
-        return Err(OpenError::Invalid("the document has no pages".into()));
-    }
-    if unlinked {
-        info.warnings.push(UNLINKED_UPDATE.into());
-    }
-    Ok(info)
+    Ok((info, unlinked))
 }
 
 /// The warning for a file whose pages were found by rebuilding its cross-reference data because its

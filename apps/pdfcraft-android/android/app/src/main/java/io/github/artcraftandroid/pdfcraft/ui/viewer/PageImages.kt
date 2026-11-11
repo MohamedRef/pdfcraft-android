@@ -10,6 +10,8 @@ import io.github.artcraftandroid.pdfcraft.core.TileRect
 import io.github.artcraftandroid.pdfcraft.engine.Engine
 import io.github.artcraftandroid.pdfcraft.engine.OpenTiming
 import io.github.artcraftandroid.pdfcraft.engine.toBitmap
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
@@ -49,6 +51,9 @@ class PageImages(
     private val openedAt: Long = android.os.SystemClock.elapsedRealtime(),
 ) {
     fun elapsedOpenMs(): Long = android.os.SystemClock.elapsedRealtime() - openedAt
+    private val firstCanvas = CompletableDeferred<Unit>()
+    suspend fun awaitFirstCanvas() { withTimeoutOrNull(1000L) { firstCanvas.await() } }
+
     private var firstDrawReported = false
     private var firstRequestReported = false
     private var firstRasterReported = false
@@ -57,6 +62,7 @@ class PageImages(
     fun reportFirstDraw() {
         if (!firstDrawReported) {
             firstDrawReported = true
+            firstCanvas.complete(Unit)
             if (Log.isLoggable("PdfCraftOpen", Log.DEBUG)) Log.d("PdfCraftOpen", "first_page_canvas_ms=${android.os.SystemClock.elapsedRealtime() - openedAt}")
         }
     }
@@ -85,6 +91,7 @@ class PageImages(
 
     /** Stop the workers and drop the images (the document closed). */
     fun close() {
+        firstCanvas.cancel()
         job.cancel()
         clear()
     }

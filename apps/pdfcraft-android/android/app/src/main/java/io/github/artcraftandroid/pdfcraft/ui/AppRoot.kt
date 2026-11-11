@@ -25,6 +25,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -124,7 +125,14 @@ fun AppRoot(vm: AppViewModel, onBrowse: () -> Unit, onPickSignatureImage: () -> 
             if (vm.settingsOpen) SettingsScreen(vm)
             if (vm.showLicences) LicencesScreen(vm)
 
-            if (vm.opening) CircularProgressIndicator(Modifier.align(Alignment.Center), color = c.accent)
+            if (vm.opening && doc == null) CircularProgressIndicator(Modifier.align(Alignment.Center), color = c.accent)
+            if (doc?.info?.preparing == true) {
+                Column(Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = 76.dp)
+                    .background(c.surface).padding(horizontal = 16.dp, vertical = 8.dp)) {
+                    Text(stringResource(R.string.document_preparing), color = c.text, fontSize = 12.sp)
+                    LinearProgressIndicator(Modifier.fillMaxWidth().padding(top = 4.dp), color = c.accent)
+                }
+            }
             SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = 72.dp, start = 8.dp, end = 8.dp))
 
             vm.passwordRequest?.let { PasswordDialog(vm, it) }

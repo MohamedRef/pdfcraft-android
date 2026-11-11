@@ -318,6 +318,9 @@ impl Session {
     }
 
     pub fn close(&mut self, id: DocId) {
+        if let Some(doc) = self.get(id) {
+            doc.cancel_preparation();
+        }
         self.docs.retain(|d| d.id != id);
     }
 

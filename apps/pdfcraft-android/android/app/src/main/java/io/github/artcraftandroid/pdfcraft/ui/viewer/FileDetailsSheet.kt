@@ -259,7 +259,7 @@ private fun details(context: Context, doc: OpenDocument, source: SourcePropertie
     fun label(id: Int) = context.getString(id)
     val unavailable = label(R.string.file_details_unavailable)
     fun present(value: String?): String = value?.trim()?.takeIf { it.isNotEmpty() } ?: unavailable
-    fun yesNo(value: Boolean): String = label(if (value) R.string.file_details_allowed else R.string.file_details_not_allowed)
+    fun yesNo(value: Boolean): String = if (doc.info.preparing) label(R.string.document_preparing) else label(if (value) R.string.file_details_allowed else R.string.file_details_not_allowed)
     val info = doc.info
     val geometry = pageGeometry(info.pages)
     val sizes = geometry.firstSize?.let {
@@ -302,8 +302,8 @@ private fun details(context: Context, doc: OpenDocument, source: SourcePropertie
         Detail(label(R.string.file_details_form_filling), yesNo(info.allowsFormFilling)),
     ))
     val advanced = buildList {
-        add(Detail(label(R.string.file_details_attachments), info.attachments.toString()))
-        add(Detail(label(R.string.file_details_signature), label(if (info.signed) R.string.file_details_signature_present else R.string.file_details_signature_none)))
+        add(Detail(label(R.string.file_details_attachments), if (info.preparing) label(R.string.document_preparing) else info.attachments.toString()))
+        add(Detail(label(R.string.file_details_signature), label(if (info.preparing) R.string.document_preparing else if (info.signed) R.string.file_details_signature_present else R.string.file_details_signature_none)))
         if (props == null) {
             add(Detail(label(R.string.file_details_custom_fields), unavailable))
         } else if (props.customMetadata.isEmpty()) {
