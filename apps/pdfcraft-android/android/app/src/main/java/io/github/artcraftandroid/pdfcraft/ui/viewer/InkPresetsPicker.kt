@@ -3,6 +3,11 @@ package io.github.artcraftandroid.pdfcraft.ui.viewer
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.semantics.selected
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.horizontalScroll
@@ -177,39 +182,81 @@ internal fun InkPresetsPicker(vm: AppViewModel, onApplied: () -> Unit) {
             PdfSwitch(prefs.multiFingerUndo, null)
         }
 
-        // Samsung Notes-inspired presentation, original illustrations, no borrowed assets.
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        // Any number of favorites (#149): tap uses one, long press replaces, moves or deletes it.
+        Row(
+            Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
             prefs.inkPresets.forEachIndexed { index, preset ->
-                val chosen = prefs.currentInkPreset() == preset
-                val label = stringResource(R.string.ink_preset_slot, index + 1)
-                Column(
-                    Modifier.weight(1f)
-                        .border(if (chosen) 2.dp else 1.dp, if (chosen) c.accent else c.divider, RoundedCornerShape(14.dp))
-                        .background(if (chosen) c.pressed else c.surface, RoundedCornerShape(14.dp))
-                        .selectable(selected = chosen, role = Role.RadioButton) { if (prefs.applyInkPreset(index)) onApplied() }
-                        .semantics { contentDescription = label }
-                        .padding(vertical = 10.dp, horizontal = 4.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(4.dp),
-                ) {
-                    PenNibPreview(Color(preset.argb), preset.width, preset.opacity, preset.style, Modifier.size(width = 46.dp, height = 72.dp))
-                    Text(stringResource(inkStyleLabel(preset.style)), color = c.text, fontSize = 12.sp, fontWeight = if (chosen) FontWeight.SemiBold else FontWeight.Normal)
-                    Text(stringResource(R.string.ink_preset_slot, index + 1), color = c.label, fontSize = 11.sp)
-                    Text(stringResource(R.string.ink_preset_details, preset.width, (preset.opacity * 100).toInt()),
-                        color = c.label, fontSize = 10.sp, maxLines = 1)
-                }
+                FavoritePenCard(vm, index, preset, onApplied)
+            }
+            val add = stringResource(R.string.ink_preset_add)
+            Column(
+                Modifier.width(96.dp).height(150.dp)
+                    .border(1.dp, c.divider, RoundedCornerShape(14.dp))
+                    .clickable(role = Role.Button, enabled = prefs.inkPresets.size < InkPreset.MAX_PRESETS) {
+                        vm.tell(if (prefs.addInkPreset()) text(R.string.ink_preset_saved, prefs.inkPresets.size) else text(R.string.ink_preset_invalid))
+                    }
+                    .semantics { contentDescription = add }
+                    .padding(8.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center,
+            ) {
+                Icon(LucideIcons.Plus, null, tint = c.icon, modifier = Modifier.size(24.dp))
+                Text(add, color = c.text, fontSize = 11.sp, maxLines = 2)
             }
         }
-        // Saving stores the selected pen exactly as it is now (its colour, width and opacity).
         Text(stringResource(R.string.ink_preset_save_help, stringResource(inkStyleLabel(prefs.inkStyle))), color = c.label, fontSize = 12.sp)
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            prefs.inkPresets.indices.forEach { index ->
-                TextButton(modifier = Modifier.weight(1f), onClick = {
-                    vm.tell(if (prefs.saveInkPreset(index)) text(R.string.ink_preset_saved, index + 1) else text(R.string.ink_preset_invalid))
-                }) {
-                    Text(stringResource(R.string.ink_preset_save_short, index + 1), fontSize = 12.sp)
+    }
+}
+
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+@Composable
+private fun FavoritePenCard(vm: AppViewModel, index: Int, preset: InkPreset, onApplied: () -> Unit) {
+    val prefs = vm.toolPrefs
+    val c = pdfColors
+    val chosen = prefs.currentInkPreset() == preset
+    val label = stringResource(R.string.ink_preset_slot, index + 1)
+    val actions = stringResource(R.string.ink_preset_actions)
+    var menu by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    Box {
+        Column(
+            Modifier.width(96.dp)
+                .border(if (chosen) 2.dp else 1.dp, if (chosen) c.accent else c.divider, RoundedCornerShape(14.dp))
+                .background(if (chosen) c.pressed else c.surface, RoundedCornerShape(14.dp))
+                .combinedClickable(
+                    role = Role.RadioButton,
+                    onLongClickLabel = actions,
+                    onLongClick = { menu = true },
+                    onClick = { if (prefs.applyInkPreset(index)) onApplied() },
+                )
+                .semantics {
+                    contentDescription = label
+                    selected = chosen
                 }
-            }
+                .padding(vertical = 10.dp, horizontal = 4.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            PenNibPreview(Color(preset.argb), preset.width, preset.opacity, preset.style, Modifier.size(width = 46.dp, height = 72.dp))
+            Text(stringResource(inkStyleLabel(preset.style)), color = c.text, fontSize = 12.sp, fontWeight = if (chosen) FontWeight.SemiBold else FontWeight.Normal, maxLines = 1)
+            Text(label, color = c.label, fontSize = 11.sp)
+            Text(stringResource(R.string.ink_preset_details, preset.width, (preset.opacity * 100).toInt()),
+                color = c.label, fontSize = 10.sp, maxLines = 1)
+        }
+        androidx.compose.material3.DropdownMenu(expanded = menu, onDismissRequest = { menu = false }, containerColor = c.menu) {
+            androidx.compose.material3.DropdownMenuItem(text = { Text(stringResource(R.string.ink_preset_save), color = c.text) }, onClick = {
+                menu = false
+                vm.tell(if (prefs.saveInkPreset(index)) text(R.string.ink_preset_saved, index + 1) else text(R.string.ink_preset_invalid))
+            })
+            androidx.compose.material3.DropdownMenuItem(text = { Text(stringResource(R.string.ink_preset_move_earlier), color = c.text) },
+                enabled = index > 0, onClick = { menu = false; prefs.moveInkPreset(index, -1) })
+            androidx.compose.material3.DropdownMenuItem(text = { Text(stringResource(R.string.ink_preset_move_later), color = c.text) },
+                enabled = index < prefs.inkPresets.lastIndex, onClick = { menu = false; prefs.moveInkPreset(index, 1) })
+            androidx.compose.material3.DropdownMenuItem(text = { Text(stringResource(R.string.ink_preset_delete), color = c.text) }, onClick = {
+                menu = false
+                prefs.deleteInkPreset(index)
+            })
         }
     }
 }
@@ -238,7 +285,8 @@ internal fun PenStylePicker(vm: AppViewModel) {
         InkWidthRow(color, pen.width) { prefs.updateInkWidth(it) }
         Slider(
             value = pen.width.coerceIn(InkPenSettings.MIN_WIDTH, InkPenSettings.MAX_WIDTH),
-            onValueChange = { prefs.updateInkWidth((it * 2f).toInt().coerceIn(2, 20) / 2f) },
+            // 0.1 pt steps from 0.1 to 20 pt (#149).
+            onValueChange = { prefs.updateInkWidth(Math.round(it * 10f).coerceIn(1, 200) / 10f) },
             valueRange = InkPenSettings.MIN_WIDTH..InkPenSettings.MAX_WIDTH,
             colors = SliderDefaults.colors(thumbColor = c.accent, activeTrackColor = c.accent),
         )
@@ -249,13 +297,60 @@ internal fun PenStylePicker(vm: AppViewModel) {
                 strokeWidth = lineWidth.dp.toPx(), cap = if (style == InkStyle.Highlighter) StrokeCap.Square else StrokeCap.Round)
         }
         Text(stringResource(R.string.toolbar_color_drawing), color = c.text, fontSize = 14.sp)
+        if (prefs.recentInkColors.isNotEmpty()) {
+            Text(stringResource(R.string.ink_recent_colors), color = c.label, fontSize = 12.sp)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                prefs.recentInkColors.forEach { argb ->
+                    val name = stringResource(R.string.ink_color_hex_name, "#%06X".format(argb and 0xFFFFFF))
+                    val isSel = argb == pen.argb
+                    Box(
+                        Modifier.size(32.dp)
+                            .border(if (isSel) 2.dp else 1.dp, if (isSel) c.accent else c.divider, RoundedCornerShape(50))
+                            .padding(3.dp).background(Color(argb), RoundedCornerShape(50))
+                            .selectable(selected = isSel, role = Role.RadioButton) { prefs.setColor(StyledTool.Ink, Color(argb)) }
+                            .semantics { contentDescription = name },
+                    )
+                }
+            }
+        }
         ColorGrid(color) { prefs.setColor(StyledTool.Ink, it) }
+        HexColorField(pen.argb) { prefs.setColor(StyledTool.Ink, Color(it)) }
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text(stringResource(R.string.toolbar_opacity), color = c.text, fontSize = 14.sp, modifier = Modifier.weight(1f))
             Text("${(pen.opacity * 100).toInt()}%", color = c.text, fontSize = 13.sp)
         }
         OpacitySlider(color, pen.opacity) { prefs.setOpacity(StyledTool.Ink, it) }
         Spacer(Modifier.height(8.dp))
+    }
+}
+
+/** `#RRGGBB` / `#AARRGGBB` entry; invalid text is rejected with a message (#149). */
+@Composable
+private fun HexColorField(current: Int, onColor: (Int) -> Unit) {
+    val c = pdfColors
+    var text by androidx.compose.runtime.remember(current) { androidx.compose.runtime.mutableStateOf("#%06X".format(current and 0xFFFFFF)) }
+    var error by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    fun apply() {
+        val v = parseHexColor(text)
+        error = v == null
+        if (v != null) onColor(v)
+    }
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        androidx.compose.material3.OutlinedTextField(
+            value = text,
+            onValueChange = { text = it.take(9); error = false },
+            singleLine = true,
+            label = { Text(stringResource(R.string.ink_hex_label)) },
+            isError = error,
+            supportingText = if (error) ({ Text(stringResource(R.string.ink_hex_invalid)) }) else null,
+            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                capitalization = androidx.compose.ui.text.input.KeyboardCapitalization.Characters,
+                imeAction = androidx.compose.ui.text.input.ImeAction.Done,
+            ),
+            keyboardActions = androidx.compose.foundation.text.KeyboardActions(onDone = { apply() }),
+            modifier = Modifier.weight(1f),
+        )
+        TextButton(onClick = { apply() }) { Text(stringResource(R.string.ink_hex_apply), color = c.accent) }
     }
 }
 
