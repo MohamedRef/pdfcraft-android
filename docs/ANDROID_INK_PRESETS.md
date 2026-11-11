@@ -2,7 +2,7 @@
 
 ## Unlimited favorites, recent colours, hex entry, finer widths (#149)
 
-Favorites are one list (`ink.presets.v2`, up to 48 entries) instead of three fixed slots; the three old `ink.preset.v1.N` slots seed the list once. In Pen settings, **Add current pen** appends the selected pen; a long press on a favorite offers Replace with current pen, Move earlier, Move later and Delete. The pen popover shows the last eight ink colours (`ink.recentColors`), each announced by its hex value, and a hex field that accepts `#RRGGBB` or `#AARRGGBB` and rejects anything else with a message. Pen widths now range from 0.1 to 20 pt in 0.1 pt steps. Still open in #149: eyedropper, HSV wheel and named palette import/export.
+Favorites are one list (`ink.presets.v2`, up to 48 entries) instead of three fixed slots; the three old `ink.preset.v1.N` slots seed the list once. In Pen settings, **Add current pen** appends the selected pen; a long press on a favorite offers Replace with current pen, Move earlier, Move later and Delete. The pen popover shows the last eight ink colours (`ink.recentColors`), each announced by its hex value, and a hex field that accepts `#RRGGBB` or `#AARRGGBB` and rejects anything else with a message. Pen widths now range from 0.1 to 20 pt in 0.1 pt steps. **Pick colour from page** in the pen popover arms an eyedropper: the next tap takes the exact colour of the nearest unsaved stroke, or of the saved ink (else other coloured comment) under the finger. Still open in #149: HSV wheel and named palette import/export.
 
 ## Per-pen settings (#187, #188)
 
@@ -21,3 +21,11 @@ The Draw layer's existing immutable appearance snapshot at stroke start is uncha
 ## Verification
 
 JVM cases cover ARGB/width/opacity round-trips, corrupted/future/oversized/non-finite data and locale-independent storage. Existing ink appearance, pressure, stylus routing/history and eraser regressions remain intact. Current-head Rust/provenance, Android JVM/ARM64 bindings, title and aggregate gate are required before merge. Physical S Pen behavior, app restart, RTL/accessibility, DeX/landscape and switching favorites during drawing still need device QA. These presets are one part of the larger stylus backlog, not full Xodo parity.
+
+## S Pen side button (#144)
+
+Pen settings has two choices. **While the S Pen button is held**: Eraser (default, the earlier behaviour), Marker (that stroke uses the highlighter's own settings, then the selected pen is back) or Nothing. **S Pen button click while hovering**: Nothing (default), Undo, or Switch to previous pen. The mode of a stroke is decided at contact: pressing the button mid-stroke never cancels, splits or erases the stroke being written. The hardware eraser end always erases. A click is a press and release within 600 ms while the pen hovers without touching. Hover-click behaviour depends on the device reporting the button during hover and still needs checking on a Galaxy S Pen device.
+
+## Writing hand and palm guard (#156)
+
+Pen settings has **Writing hand** (Right or Left) and **Ignore palm while writing** (off by default) with a 60–240 dp area size. Choosing Left moves the quick rail to the right edge (it can still be dragged) and, on desktop layouts, puts the zoom buttons in the physical bottom-right corner in every language. With the guard on, a finger touch that starts inside the area beside and below the pen tip on the writing-hand side, within 1.5 s of the last pen hover or stroke sample, neither draws, scrolls, zooms nor counts as a two-finger tap; a pen arriving during that touch still writes. The area is drawn faintly while the pen hovers. Not done yet: guarding toolbar taps, a separate calibration screen and a toolbar that follows the writing position.
