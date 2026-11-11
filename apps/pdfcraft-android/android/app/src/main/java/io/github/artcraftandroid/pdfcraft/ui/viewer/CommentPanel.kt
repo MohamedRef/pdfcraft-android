@@ -60,6 +60,7 @@ import io.github.artcraftandroid.pdfcraft.ui.pdfColors
  */
 @Composable
 fun CommentPanel(vm: AppViewModel, doc: OpenDocument, c: CommentInfo) {
+    LaunchedEffect(doc.id, doc.info.generation) { vm.comments(doc) }
     val colors = pdfColors
     var editing by remember(c.page, c.index) { mutableStateOf<CommentInfo?>(null) }
     var palette by remember(c.page, c.index) { mutableStateOf(false) }
@@ -103,15 +104,15 @@ fun CommentPanel(vm: AppViewModel, doc: OpenDocument, c: CommentInfo) {
             // the navigator, and the colour button at the right
             Box(Modifier.fillMaxWidth().height(40.dp)) {
                 Row(Modifier.align(Alignment.Center), verticalAlignment = Alignment.CenterVertically) {
-                    BarIcon(LucideIcons.ChevronLeft, stringResource(R.string.comments_previous), { threads.getOrNull(position - 1)?.let(::go) }, size = 40.dp, enabled = position > 0)
+                    BarIcon(LucideIcons.ChevronLeft, stringResource(R.string.comments_previous), { threads.getOrNull(position - 1)?.let(::go) }, size = 40.dp, enabled = doc.commentsComplete && position > 0)
                     Spacer(Modifier.width(2.dp))
                     Text(
-                        if (position >= 0) stringResource(R.string.comments_position, position + 1, threads.size) else stringResource(R.string.comments_position, 1, threads.size + 1),
+                        if (!doc.commentsComplete) stringResource(R.string.comments_loading) else if (position >= 0) stringResource(R.string.comments_position, position + 1, threads.size) else stringResource(R.string.comments_position, 1, threads.size + 1),
                         color = colors.navigatorText, fontSize = 15.sp, modifier = Modifier.widthIn(min = 42.dp),
                         textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                     )
                     Spacer(Modifier.width(2.dp))
-                    BarIcon(LucideIcons.ChevronRight, stringResource(R.string.comments_next), { threads.getOrNull(position + 1)?.let(::go) }, size = 40.dp, enabled = position in 0 until threads.size - 1)
+                    BarIcon(LucideIcons.ChevronRight, stringResource(R.string.comments_next), { threads.getOrNull(position + 1)?.let(::go) }, size = 40.dp, enabled = doc.commentsComplete && position in 0 until threads.size - 1)
                 }
                 // a note has no property buttons; other comments get their colour here
                 if (canEdit && c.color != null && c.subtype != "Text" && c.subtype != "Sound") {

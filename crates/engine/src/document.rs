@@ -73,6 +73,23 @@ pub struct Document {
     pub edit_notices: Vec<EditNotice>,
 }
 
+/// Immutable metadata and editing-source snapshot for frontend overlay conversion outside
+/// the session lock. It retains a generation so late work cannot replace newer metadata.
+pub struct OverlaySnapshot {
+    pub generation: u64,
+    pub pages: Vec<pdfcraft_render::PageInfo>,
+    pub annotations: Vec<pdfcraft_render::Annotation>,
+    pub form: Arc<Vec<pdfcraft_forms::Field>>,
+    cos: Option<pdfcraft_cos::Document>,
+}
+
+impl OverlaySnapshot {
+    pub fn comment_properties(&self) -> Vec<Option<pdfcraft_annot::Props>> {
+        let selected: Vec<_> = self.annotations.iter().map(|a| (a.page, a.index)).collect();
+        self.cos.as_ref().map(|cos| pdfcraft_annot::props_batch(cos, &selected)).unwrap_or_else(|| vec![None; selected.len()])
+    }
+}
+
 /// Something the last successful edit did that the user should hear about, never left silent
 /// (AGENTS.md §4).
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -595,6 +612,27 @@ impl Document {
         let pending = editor.cos.encryption_changed();
         let permissions = if pending { pdfcraft_cos::Permissions { owner: false, ..h.permissions() } } else { h.permissions() };
         Some(SecuritySummary { method: method.into(), owner: h.auth() == pdfcraft_cos::Auth::Owner && !pending, permissions, pending })
+    }
+
+    /// Snapshot only requested pages' comments, or the entire list for an explicit panel.
+    /// Form fields share their immutable allocation; consumers filter widgets before conversion.
+    pub fn overlay_snapshot(&self, pages: Option<&[usize]>) -> Option<OverlaySnapshot> {
+        if self.preparing() {
+            return None;
+        }
+        Some(OverlaySnapshot {
+            generation: self.generation,
+            pages: self.info.pages.clone(),
+            annotations: self
+                .info
+                .annotations
+                .iter()
+                .filter(|a| !matches!(a.subtype.as_str(), "Link" | "Widget" | "Popup") && pages.is_none_or(|pages| pages.contains(&a.page)))
+                .cloned()
+                .collect(),
+            form: self.form.clone(),
+            cos: self.editor.as_ref().map(|e| e.cos.clone()),
+        })
     }
 
     /// Comment properties of the comment at `(page, index)` (Comment Properties dialog).

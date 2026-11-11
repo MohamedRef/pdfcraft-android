@@ -1818,7 +1818,11 @@ fn comments_without_appearances_get_one_for_display_only() {
     let display = with_missing_appearances(&doc).expect("four comments need an appearance, including the Android Sound icon");
     let has_ap = |doc: &Document| list(doc, 0).iter().map(|d| d.get(b"AP").is_some()).collect::<Vec<_>>();
     assert_eq!(has_ap(&doc), [false, false, false, true, false, false, false], "the document itself is untouched");
-    assert_eq!(has_ap(&display), [true, true, true, true, false, false, true], "FreeText, Ink, Text and Android Sound get one; links and widgets do not");
+    assert_eq!(
+        has_ap(&display),
+        [true, true, true, true, false, false, true],
+        "FreeText, Ink, Text and Android Sound get one; links and widgets do not"
+    );
     let shown = list(&display, 0);
     let free_text = ap_content(&display, &shown[0]);
     assert!(free_text.contains("re f") && free_text.contains("Tj"), "background box and text: {free_text}");
@@ -4350,4 +4354,17 @@ fn summaries_list_only_usable_quads() {
     set_annots(&mut doc, page, entries).unwrap();
     let summary = summaries(&doc).into_iter().find(|a| a.page == 0 && a.index == 0).unwrap();
     assert_eq!(summary.quads, vec![QUAD.map(|v| v as f32)]);
+}
+
+#[test]
+fn batched_comment_properties_preserve_order_and_copy_each_selected_array_once() {
+    let doc = fixture();
+    let selected: Vec<_> = (0..300).map(|n| (n % 2, 0)).chain([(0, 99), (99, 0)]).collect();
+    let expected: Vec<_> = selected.iter().map(|&(p, i)| props(&doc, p, i)).collect();
+    ANNOTS_ENTRIES_COPIED.with(|c| c.set(0));
+    assert_eq!(props_batch(&doc, &selected), expected);
+    assert_eq!(ANNOTS_ENTRIES_COPIED.with(std::cell::Cell::get), 2);
+    ANNOTS_ENTRIES_COPIED.with(|c| c.set(0));
+    assert!(props_batch(&doc, &[]).is_empty());
+    assert_eq!(ANNOTS_ENTRIES_COPIED.with(std::cell::Cell::get), 0);
 }

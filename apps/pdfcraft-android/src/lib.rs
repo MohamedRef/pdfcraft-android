@@ -448,6 +448,14 @@ fn rgb(c: [f32; 3]) -> u32 {
 /// How many idle renderers a document keeps (a page view and its thumbnails can render at once).
 const RENDERERS_PER_DOC: usize = 3;
 
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct PageOverlays {
+    pub generation: u64,
+    pub pages: Vec<u32>,
+    pub comments: Vec<CommentInfo>,
+    pub widgets: Vec<WidgetInfo>,
+}
+
 /// Avoid multiple 64-megapixel Rust/JNA/Bitmap copies on a phone. Hi-res zoom uses 512px tiles.
 const MAX_MOBILE_PAGE_PIXELS: u64 = 4 * 1024 * 1024;
 const MAX_MOBILE_TILE_PIXELS: u64 = 1024 * 1024;
@@ -527,6 +535,10 @@ impl MobileSession {
         if entry.1.len() < RENDERERS_PER_DOC {
             entry.1.push(renderer);
         }
+    }
+
+    fn overlay_snapshot(&self, doc: u64, pages: Option<&[usize]>) -> Result<pdfcraft_engine::OverlaySnapshot, MobileError> {
+        self.with_doc(doc, |d| d.overlay_snapshot(pages))?.ok_or_else(|| MobileError::Command("Document preparation is still running".into()))
     }
 
     fn open_document(&self, path: String, password: Option<String>, recording: bool) -> Result<ProfiledOpen, MobileError> {
@@ -852,36 +864,8 @@ impl MobileSession {
 
     /// Every comment of the document, page by page (replies included; see `reply_to`).
     pub fn comments(&self, doc: u64) -> Result<Vec<CommentInfo>, MobileError> {
-        self.with_doc(doc, |d| {
-            d.info
-                .annotations
-                .iter()
-                .filter(|a| a.subtype != "Link" && a.subtype != "Widget" && a.subtype != "Popup")
-                .map(|a| {
-                    // Released 0.18.2 inspector exposes display fields only; the editor holds
-                    // raw /M, alpha and stroke width. Preserve the Android UI record contract.
-                    let props = d.comment_props(a.page, a.index);
-                    CommentInfo {
-                        page: u32::try_from(a.page).unwrap_or(u32::MAX),
-                        index: u32::try_from(a.index).unwrap_or(u32::MAX),
-                        subtype: a.subtype.clone(),
-                        kind: pdfcraft_engine::comment_kind(a).to_string(),
-                        author: a.author.clone(),
-                        contents: a.contents.clone(),
-                        modified: props.as_ref().and_then(|p| p.modified.clone()).or_else(|| a.modified.clone()),
-                        rect: d.info.pages.get(a.page).map(|p| view_rect(p, a.rect)).unwrap_or_default(),
-                        color: a.color.map(rgb),
-                        name: a.name.clone(),
-                        reply_to: a.in_reply_to.clone(),
-                        state: a.state.clone(),
-                        locked: a.locked,
-                        fill_sign: a.fill_sign,
-                        opacity: props.as_ref().map(|p| p.opacity as f32).filter(|v| v.is_finite()).unwrap_or(1.0).clamp(0.0, 1.0),
-                        width: props.as_ref().and_then(|p| p.width).map(|w| w as f32).filter(|w| w.is_finite() && *w >= 0.0),
-                    }
-                })
-                .collect()
-        })
+        let snapshot = self.overlay_snapshot(doc, None)?;
+        Ok(comment_records(&snapshot))
     }
 
     /// The files embedded in the document.
@@ -933,49 +917,27 @@ impl MobileSession {
 
     /// Every visible widget of the document's form fields, page by page.
     pub fn widgets(&self, doc: u64) -> Result<Vec<WidgetInfo>, MobileError> {
-        use pdfcraft_engine::{FormFieldKind as K, field_flags as fl};
-        self.with_doc(doc, |d| {
-            let mut out = Vec::new();
-            for f in d.form.iter() {
-                let kind = match f.kind {
-                    K::Text => "text",
-                    K::CheckBox => "checkbox",
-                    K::Radio => "radio",
-                    K::PushButton => "button",
-                    K::Combo => "combo",
-                    K::List => "list",
-                    K::Signature => "signature",
-                };
-                for (i, w) in f.widgets.iter().enumerate() {
-                    if w.hidden {
-                        continue;
-                    }
-                    let Some(page) = w.page else { continue };
-                    let Some(p) = d.info.pages.get(page) else { continue };
-                    let r = [w.rect[0] as f32, w.rect[1] as f32, w.rect[2] as f32, w.rect[3] as f32];
-                    let on = match (&w.on_state, f.value.first()) {
-                        (Some(s), Some(v)) => s == v,
-                        _ => false,
-                    };
-                    out.push(WidgetInfo {
-                        field: f.name.clone(),
-                        kind: kind.into(),
-                        page: u32::try_from(page).unwrap_or(u32::MAX),
-                        rect: view_rect(p, r),
-                        export: f.export_of(i).map(str::to_string),
-                        on,
-                        value: f.value.first().cloned(),
-                        options: f.options.iter().flat_map(|(e, l)| [e.clone(), l.clone()]).collect(),
-                        read_only: f.read_only(),
-                        multiline: f.has(fl::MULTILINE),
-                        password: f.has(fl::PASSWORD),
-                        max_length: f.max_len.and_then(|m| u32::try_from(m).ok()),
-                        editable: f.has(fl::EDIT),
-                        multi_select: f.has(fl::MULTI_SELECT),
-                    });
-                }
-            }
-            out
+        let snapshot = self.overlay_snapshot(doc, Some(&[]))?;
+        Ok(widget_records(&snapshot, None))
+    }
+
+    /// A bounded batch of visible-page overlays, carrying their source generation.
+    pub fn page_overlays(&self, doc: u64, pages: Vec<u32>) -> Result<PageOverlays, MobileError> {
+        if pages.len() > 16 {
+            return Err(MobileError::Command("At most 16 overlay pages may be requested".into()));
+        }
+        let mut pages: Vec<usize> = pages.into_iter().map(|p| p as usize).collect();
+        pages.sort_unstable();
+        pages.dedup();
+        let snapshot = self.overlay_snapshot(doc, Some(&pages))?;
+        if pages.iter().any(|&p| p >= snapshot.pages.len()) {
+            return Err(MobileError::Command("Overlay page is out of range".into()));
+        }
+        Ok(PageOverlays {
+            generation: snapshot.generation,
+            pages: pages.iter().map(|&p| p as u32).collect(),
+            comments: comment_records(&snapshot),
+            widgets: widget_records(&snapshot, Some(&pages)),
         })
     }
 
@@ -1156,3 +1118,81 @@ mod eraser_tests;
 
 #[cfg(test)]
 mod pressure_ink_tests;
+
+fn comment_records(snapshot: &pdfcraft_engine::OverlaySnapshot) -> Vec<CommentInfo> {
+    snapshot
+        .annotations
+        .iter()
+        .zip(snapshot.comment_properties())
+        .map(|(a, props)| {
+            // Released 0.18.2 inspector exposes display fields only; the editor holds
+            // raw /M, alpha and stroke width. Preserve the Android UI record contract.
+            CommentInfo {
+                page: u32::try_from(a.page).unwrap_or(u32::MAX),
+                index: u32::try_from(a.index).unwrap_or(u32::MAX),
+                subtype: a.subtype.clone(),
+                kind: pdfcraft_engine::comment_kind(a).to_string(),
+                author: a.author.clone(),
+                contents: a.contents.clone(),
+                modified: props.as_ref().and_then(|p| p.modified.clone()).or_else(|| a.modified.clone()),
+                rect: snapshot.pages.get(a.page).map(|p| view_rect(p, a.rect)).unwrap_or_default(),
+                color: a.color.map(rgb),
+                name: a.name.clone(),
+                reply_to: a.in_reply_to.clone(),
+                state: a.state.clone(),
+                locked: a.locked,
+                fill_sign: a.fill_sign,
+                opacity: props.as_ref().map(|p| p.opacity as f32).filter(|v| v.is_finite()).unwrap_or(1.0).clamp(0.0, 1.0),
+                width: props.as_ref().and_then(|p| p.width).map(|w| w as f32).filter(|w| w.is_finite() && *w >= 0.0),
+            }
+        })
+        .collect()
+}
+
+fn widget_records(snapshot: &pdfcraft_engine::OverlaySnapshot, selected: Option<&[usize]>) -> Vec<WidgetInfo> {
+    use pdfcraft_engine::{FormFieldKind as K, field_flags as fl};
+    let mut out = Vec::new();
+    for f in snapshot.form.iter() {
+        let kind = match f.kind {
+            K::Text => "text",
+            K::CheckBox => "checkbox",
+            K::Radio => "radio",
+            K::PushButton => "button",
+            K::Combo => "combo",
+            K::List => "list",
+            K::Signature => "signature",
+        };
+        for (i, w) in f.widgets.iter().enumerate() {
+            if w.hidden {
+                continue;
+            }
+            let Some(page) = w.page else { continue };
+            if selected.is_some_and(|pages| !pages.contains(&page)) {
+                continue;
+            }
+            let Some(p) = snapshot.pages.get(page) else { continue };
+            let r = [w.rect[0] as f32, w.rect[1] as f32, w.rect[2] as f32, w.rect[3] as f32];
+            let on = match (&w.on_state, f.value.first()) {
+                (Some(s), Some(v)) => s == v,
+                _ => false,
+            };
+            out.push(WidgetInfo {
+                field: f.name.clone(),
+                kind: kind.into(),
+                page: u32::try_from(page).unwrap_or(u32::MAX),
+                rect: view_rect(p, r),
+                export: f.export_of(i).map(str::to_string),
+                on,
+                value: f.value.first().cloned(),
+                options: f.options.iter().flat_map(|(e, l)| [e.clone(), l.clone()]).collect(),
+                read_only: f.read_only(),
+                multiline: f.has(fl::MULTILINE),
+                password: f.has(fl::PASSWORD),
+                max_length: f.max_len.and_then(|m| u32::try_from(m).ok()),
+                editable: f.has(fl::EDIT),
+                multi_select: f.has(fl::MULTI_SELECT),
+            });
+        }
+    }
+    out
+}
