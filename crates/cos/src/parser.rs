@@ -13,16 +13,34 @@ const MAX_DEPTH: usize = 128;
 const MAX_NODES: usize = 1 << 22;
 
 /// One of the six PDF whitespace characters (ISO 32000-2 §7.2.3, Table 1).
-pub fn is_whitespace(b: u8) -> bool {
-    matches!(b, b'\0' | b'\t' | b'\n' | b'\x0C' | b'\r' | b' ')
-}
+/// Android adaptation (#235): each byte's class (whitespace, delimiter or regular) in one table
+/// lookup instead of a chain of comparisons; the lexer asks this for every byte it reads. The
+/// same sets as before: PDF whitespace (§7.2.3) and delimiters (§7.2.4), `%` included.
+const WHITESPACE: u8 = 1;
+const DELIMITER: u8 = 2;
+static BYTE_CLASS: [u8; 256] = {
+    let mut table = [0u8; 256];
+    let whitespace = b"\0\t\n\x0C\r ";
+    let mut i = 0;
+    while i < whitespace.len() {
+        table[whitespace[i] as usize] = WHITESPACE;
+        i += 1;
+    }
+    let delimiters = b"()<>[]{}/%";
+    let mut i = 0;
+    while i < delimiters.len() {
+        table[delimiters[i] as usize] = DELIMITER;
+        i += 1;
+    }
+    table
+};
 
-pub(crate) fn is_delimiter(b: u8) -> bool {
-    matches!(b, b'(' | b')' | b'<' | b'>' | b'[' | b']' | b'{' | b'}' | b'/' | b'%')
+pub fn is_whitespace(b: u8) -> bool {
+    BYTE_CLASS[b as usize] == WHITESPACE
 }
 
 fn is_regular(b: u8) -> bool {
-    !is_whitespace(b) && !is_delimiter(b)
+    BYTE_CLASS[b as usize] == 0
 }
 
 /// A cursor over PDF bytes.
@@ -63,8 +81,11 @@ impl<'a> Lexer<'a> {
     /// Read a run of regular characters (a keyword or number).
     pub fn token(&mut self) -> &'a [u8] {
         let start = self.pos.min(self.data.len());
-        while self.peek().is_some_and(is_regular) {
-            self.pos += 1;
+        // Android adaptation (#235): the run is found in the slice in one pass; the position
+        // moves only when the run is not empty, exactly as the byte-by-byte loop did.
+        let run = self.data[start..].iter().position(|&b| !is_regular(b)).unwrap_or(self.data.len() - start);
+        if run > 0 {
+            self.pos = start + run;
         }
         &self.data[start..self.pos]
     }
@@ -147,7 +168,11 @@ impl<'a> Lexer<'a> {
                 }
                 Ok(Object::Array(items))
             }
-            b'+' | b'-' | b'.' | b'0'..=b'9' => self.number_or_ref(),
+            b'0'..=b'9' => match self.plain_ref() {
+                Some(r) => Ok(r),
+                None => self.number_or_ref(),
+            },
+            b'+' | b'-' | b'.' => self.number_or_ref(),
             _ => {
                 let start = self.pos;
                 let tok = self.token();
@@ -314,6 +339,45 @@ impl<'a> Lexer<'a> {
                 }
             }
         }
+    }
+
+    /// Android adaptation (#235): a reference written plainly -- `N G R` with up to ten digits
+    /// for `N`, up to nine for `G`, separated by whitespace (no comment) and `R` ending its token
+    /// -- read in one pass over the bytes. Arrays of annotations, kids and contents are mostly
+    /// these. Anything else returns `None` without moving, for [`Self::number_or_ref`]; for the
+    /// references it reads it gives the same object and position (a differential test compares).
+    fn plain_ref(&mut self) -> Option<Object> {
+        let data = self.data;
+        // A run of at most `max` digits from `at`: its value and where it ends (None when empty or longer).
+        let digits = |mut at: usize, max: usize| {
+            let start = at;
+            let mut value = 0u64;
+            while let Some(d) = data.get(at).map(|b| b.wrapping_sub(b'0')).filter(|d| *d <= 9) {
+                if at - start == max {
+                    return None;
+                }
+                value = value * 10 + u64::from(d);
+                at += 1;
+            }
+            (at > start).then_some((value, at))
+        };
+        // At least one whitespace byte from `at`, and where the run ends.
+        let blanks = |mut at: usize| {
+            let start = at;
+            while data.get(at).is_some_and(|b| is_whitespace(*b)) {
+                at += 1;
+            }
+            (at > start).then_some(at)
+        };
+        let (n, at) = digits(self.pos, 10)?;
+        let (g, at) = digits(blanks(at)?, 9)?;
+        let r = blanks(at)?;
+        if data.get(r) != Some(&b'R') || data.get(r + 1).is_some_and(|b| is_regular(*b)) {
+            return None;
+        }
+        let n = u32::try_from(n).ok()?;
+        self.pos = r + 1;
+        Some(Object::Ref(ObjRef::new(n, g.min(u64::from(u16::MAX)) as u16)))
     }
 
     fn number_or_ref(&mut self) -> Result<Object, CosError> {
@@ -1013,6 +1077,95 @@ mod tests {
             ("/x(y)", b"x"),
         ] {
             assert_eq!(Lexer::new(source.as_bytes(), 0).object().unwrap(), Object::Name(want.to_vec()), "{source}");
+        }
+    }
+
+    /// #235: the byte-class table holds the same sets as the comparisons it replaced.
+    #[test]
+    fn byte_classes_match_the_pdf_sets() {
+        for b in 0..=255u8 {
+            let whitespace = matches!(b, b'\0' | b'\t' | b'\n' | b'\x0C' | b'\r' | b' ');
+            let delimiter = matches!(b, b'(' | b')' | b'<' | b'>' | b'[' | b']' | b'{' | b'}' | b'/' | b'%');
+            assert_eq!(is_whitespace(b), whitespace, "{b:#04x}");
+            assert_eq!(is_regular(b), !whitespace && !delimiter, "{b:#04x}");
+        }
+    }
+
+    /// The general reading `plain_ref` stands in for: its object and where it stops.
+    fn general_number(source: &[u8]) -> (Result<Object, CosError>, usize) {
+        let mut lexer = Lexer::new(source, 0);
+        let read = lexer.number_or_ref();
+        (read, lexer.pos)
+    }
+
+    fn assert_plain_ref_matches_general(source: &[u8]) {
+        let mut lexer = Lexer::new(source, 0);
+        match lexer.plain_ref() {
+            Some(fast) => {
+                let (general, end) = general_number(source);
+                assert_eq!(Some(fast), general.ok(), "{:?}", String::from_utf8_lossy(source));
+                assert_eq!(lexer.pos, end, "{:?}", String::from_utf8_lossy(source));
+            }
+            None => assert_eq!(lexer.pos, 0, "{:?}", String::from_utf8_lossy(source)),
+        }
+        // Through `object`, the fast path changes nothing either.
+        let mut whole = Lexer::new(source, 0);
+        let read = whole.object();
+        let mut general = Lexer::new(source, 0);
+        general.nodes = 1;
+        let expected = general.number_or_ref();
+        assert_eq!(read.ok(), expected.ok(), "{:?}", String::from_utf8_lossy(source));
+        assert_eq!(whole.pos, general.pos, "{:?}", String::from_utf8_lossy(source));
+    }
+
+    #[test]
+    fn plain_references_read_as_the_general_parse_does() {
+        for source in [
+            &b"12 0 R"[..],
+            b"12 0 R]",
+            b"12 0 R/Next",
+            b"12 0 R>>",
+            b"12\x0C0\0R ",
+            b"12 0 RG",
+            b"12 0R",
+            b"12 0 %c\nR",
+            b"12 %c\n0 R",
+            b"12 0\r\n\tR\r",
+            b"4294967295 65535 R",
+            b"4294967296 0 R",
+            b"99999999999 0 R",
+            b"1 4294967295 R",
+            b"1 999999999 R",
+            b"1 1000000000 R",
+            b"0007 0002 R",
+            b"12 0",
+            b"12 0 ",
+            b"12",
+            b"12.5 0 R",
+            b"12 0.5 R",
+            b"12 -0 R",
+            b"12 +0 R",
+            b"12 0 R(",
+            b"12 0 R1",
+        ] {
+            assert_plain_ref_matches_general(source);
+        }
+    }
+
+    proptest::proptest! {
+        #[test]
+        fn plain_references_match_the_general_parse_on_noisy_input(
+            parts in proptest::collection::vec(proptest::sample::select(vec![
+                &b"0"[..], b"7", b"12", b"4294967295", b"4294967296", b"00000000001", b"999999999", b"1000000000",
+                b" ", b"  ", b"\n", b"\r\n", b"\0", b"\x0C", b"\t", b"%c\n",
+                b"R", b"R ", b"RG", b"]", b">>", b"/N", b"(", b".", b"-", b"+", b"x", b"\xff",
+            ]), 1..8)
+        ) {
+            let mut source = b"5".to_vec();
+            for part in parts {
+                source.extend_from_slice(part);
+            }
+            assert_plain_ref_matches_general(&source);
         }
     }
 }
