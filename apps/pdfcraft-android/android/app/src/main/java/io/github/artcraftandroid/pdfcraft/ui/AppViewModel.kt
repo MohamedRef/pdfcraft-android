@@ -152,7 +152,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                     val uris = list.map { it.uri }
                     // access to documents that left Recent is given back (#108), before the copies
                     // are pruned, so a document whose grant goes keeps its copy
-                    runCatching { files.releaseUnusedAccess(uris, open) }
+                    runCatching { files.releaseUnusedAccess(uris + library.load().items.map { it.uri }, open) }
                     // copies of documents that left Recent go too (#42)
                     runCatching { files.pruneCopies(uris, open) }
                 }
@@ -467,6 +467,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 document = null
                 readingMode = false
                 refreshRecents()
+                indexLibrary()
                 withContext(Dispatchers.IO) { sweepCache() }
                 if (doc.fromOtherApp) leave.trySend(Unit)
             }
@@ -3110,6 +3111,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                     else replacePrompt = ReplacePrompt(doc, pages, f)
                 }
             }
+            FilePickKind.Library -> onLibraryPicked(uris)
             FilePickKind.DigitalId -> viewModelScope.launch {
                 val uri = uris.first()
                 val picked = withContext(Dispatchers.IO) { runCatching { copyIn(uri) }.getOrNull() }
@@ -3642,6 +3644,244 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         val out = tempFile("pdf")
         eng.tool("page_extract", mapOf("doc" to doc.id, "pages" to pages.map { it + 1 }, "out" to out.absolutePath))
         deliver(out, "Pages from ${doc.title}.pdf")
+    }
+
+    // ---- Library ------------------------------------------------------------------------------
+
+    val library = io.github.artcraftandroid.pdfcraft.engine.Library(File(getApplication<Application>().filesDir, "library.json"))
+    val libraryIndex = io.github.artcraftandroid.pdfcraft.engine.LibraryIndex(File(getApplication<Application>().filesDir, "library-index"))
+
+    var libraryData by mutableStateOf(io.github.artcraftandroid.pdfcraft.engine.LibraryData())
+        private set
+
+    /** Library items whose file can no longer be read (permission revoked, file gone). */
+    var libraryUnavailable by mutableStateOf<Set<String>>(emptySet())
+        private set
+
+    /** Items with unresolved comments (from the index), for the smart collection. */
+    var libraryUnresolved by mutableStateOf<Set<String>>(emptySet())
+        private set
+
+    /** The collection Add files puts new files into. */
+    var libraryAddTo: String? = null
+
+    /** Searching inside library documents is on (it builds an index in the background). */
+    var libraryIndexing by mutableStateOf(appPrefs.getBoolean("libraryIndex", false))
+        private set
+
+    /** The document being indexed now, if any. */
+    var indexingName by mutableStateOf<String?>(null)
+        private set
+
+    private var indexJob: kotlinx.coroutines.Job? = null
+
+    fun refreshLibrary() {
+        viewModelScope.launch {
+            val (data, gone, unresolved) = withContext(Dispatchers.IO) {
+                val d = library.load()
+                val granted = runCatching { getApplication<Application>().contentResolver.persistedUriPermissions.map { it.uri.toString() }.toSet() }.getOrDefault(emptySet())
+                val gone = d.items.filter { i ->
+                    val u = Uri.parse(i.uri)
+                    when (u.scheme) {
+                        "file" -> !File(u.path ?: "").canRead()
+                        "content" -> i.uri !in granted && files.size(u) == null
+                        else -> true
+                    }
+                }.map { it.uri }.toSet()
+                val unresolved = d.items.filter { (libraryIndex.get(it.uri)?.unresolvedComments ?: 0) > 0 }.map { it.uri }.toSet()
+                Triple(d, gone, unresolved)
+            }
+            libraryData = data
+            libraryUnavailable = gone
+            libraryUnresolved = unresolved
+        }
+    }
+
+    private fun libraryEdit(f: (io.github.artcraftandroid.pdfcraft.engine.Library) -> Unit) {
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) { f(library) }
+            refreshLibrary()
+        }
+    }
+
+    fun addCollection(name: String, parent: String?) = libraryEdit { it.addCollection(name, parent) }
+    fun renameCollection(id: String, name: String) = libraryEdit { it.renameCollection(id, name) }
+    fun deleteCollection(id: String) = libraryEdit { it.deleteCollection(id) }
+    fun setItemCollections(uri: String, ids: Set<String>) = libraryEdit { it.setItem(uri) { i -> i.copy(collections = ids) } }
+    fun setItemTags(uri: String, tags: Set<String>) = libraryEdit { l -> l.setItem(uri) { i -> i.copy(tags = tags.map(io.github.artcraftandroid.pdfcraft.engine.Library::cleanTag).filter { it.isNotEmpty() }.toSet()) } }
+    fun setItemColor(uri: String, color: Int?) = libraryEdit { it.setItem(uri) { i -> i.copy(color = color) } }
+
+    fun removeFromLibrary(uri: String) = libraryEdit { l ->
+        l.removeItem(uri)
+        libraryIndex.remove(uri)
+    }
+
+    /** Add a file that is already open or in Recent (its grant is kept) to the library. */
+    fun addToLibrary(uri: String, name: String, collection: String? = null) = libraryEdit { l ->
+        runCatching { files.keepAccess(Uri.parse(uri)) }
+        l.addItem(uri, name, System.currentTimeMillis(), collection)
+    }
+
+    /** Library > Add files: pick PDFs; they stay where they are (only lasting read access is taken). */
+    fun pickLibraryFiles(collection: String?) {
+        libraryAddTo = collection
+        pickFiles(FilePickKind.Library)
+    }
+
+    private fun onLibraryPicked(uris: List<Uri>) {
+        val to = libraryAddTo
+        libraryAddTo = null
+        libraryEdit { l ->
+            for (u in uris) {
+                runCatching { files.keepAccess(u) }
+                l.addItem(u.toString(), runCatching { files.displayNameRaw(u) }.getOrNull() ?: u.lastPathSegment.orEmpty(), System.currentTimeMillis(), to)
+            }
+        }
+        indexLibrary()
+    }
+
+    fun updateLibraryIndexing(on: Boolean) {
+        libraryIndexing = on
+        appPrefs.edit().putBoolean("libraryIndex", on).apply()
+        if (on) indexLibrary() else indexJob?.cancel()
+    }
+
+    /** Settings: delete the search index (the library itself stays). */
+    fun wipeLibraryIndex() {
+        indexJob?.cancel()
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) { libraryIndex.wipe() }
+            refreshLibrary()
+            tell(text(R.string.library_index_wiped))
+        }
+    }
+
+    /** Whether the battery allows indexing now: charging, or at least 20 %. */
+    private fun batteryAllowsIndexing(): Boolean {
+        val bm = getApplication<Application>().getSystemService(android.os.BatteryManager::class.java) ?: return true
+        val level = bm.getIntProperty(android.os.BatteryManager.BATTERY_PROPERTY_CAPACITY)
+        return bm.isCharging || level !in 0 until 20
+    }
+
+    /**
+     * Index the library's documents that changed since they were indexed: their text, outline and
+     * comments, one document at a time on the engine's queue, only while no document is open (so
+     * reading is never slowed) and the battery allows it. Each document is read from a private
+     * copy that is deleted afterwards.
+     */
+    fun indexLibrary() {
+        if (!libraryIndexing || indexJob?.isActive == true || document != null) return
+        val eng = engine ?: return
+        indexJob = viewModelScope.launch {
+            try {
+                val items = withContext(Dispatchers.IO) { library.load().items }
+                for (item in items) {
+                    if (document != null || opening || !batteryAllowsIndexing()) break
+                    val uri = Uri.parse(item.uri)
+                    val signature = withContext(Dispatchers.IO) {
+                        val size = runCatching { files.size(uri) }.getOrNull() ?: return@withContext null
+                        "$size:${runCatching { files.lastModified(uri) }.getOrNull() ?: 0}"
+                    } ?: continue
+                    if (withContext(Dispatchers.IO) { libraryIndex.has(item.uri, signature) }) continue
+                    indexingName = item.name
+                    val copy = File(getApplication<Application>().cacheDir, "index-${System.nanoTime()}.pdf")
+                    try {
+                        val ok = withContext(Dispatchers.IO) {
+                            runCatching {
+                                getApplication<Application>().contentResolver.openInputStream(uri)?.use { input ->
+                                    copy.outputStream().use { out ->
+                                        val buf = ByteArray(64 * 1024)
+                                        var total = 0L
+                                        while (true) {
+                                            val n = input.read(buf)
+                                            if (n < 0) break
+                                            total += n
+                                            // very large files are left out of the index
+                                            if (total > MAX_INDEX_BYTES) return@runCatching false
+                                            out.write(buf, 0, n)
+                                        }
+                                    }
+                                    true
+                                } ?: false
+                            }.getOrDefault(false)
+                        }
+                        if (!ok || document != null) continue
+                        val id = runCatching { eng.tool("doc_open", mapOf("path" to copy.absolutePath)).optLong("doc") }.getOrNull() ?: continue
+                        try {
+                            val text = runCatching { eng.tool("text_extract", mapOf("doc" to id)) }.getOrNull()
+                            val pages = text?.optJSONArray("pages")?.let { a -> (0 until a.length()).map { a.optJSONObject(it)?.optString("text").orEmpty() } } ?: emptyList()
+                            val outline = runCatching { eng.tool("bookmark_list", mapOf("doc" to id)) }.getOrNull()?.let(::flattenOutline) ?: emptyList()
+                            val comments = runCatching { eng.tool("comment_list", mapOf("doc" to id)) }.getOrNull()?.let(::flattenComments) ?: emptyList()
+                            withContext(Dispatchers.IO) {
+                                libraryIndex.put(io.github.artcraftandroid.pdfcraft.engine.IndexedDoc(item.uri, item.name, signature, pages, outline, comments))
+                            }
+                        } finally {
+                            runCatching { eng.tool("doc_close", mapOf("doc" to id, "discard_changes" to true)) }
+                        }
+                    } finally {
+                        withContext(kotlinx.coroutines.NonCancellable + Dispatchers.IO) { copy.delete() }
+                    }
+                }
+                withContext(Dispatchers.IO) { libraryIndex.retain(library.load().items.map { it.uri }.toSet()) }
+            } finally {
+                indexingName = null
+                refreshLibrary()
+            }
+        }
+    }
+
+    private fun flattenOutline(o: org.json.JSONObject): List<Pair<Int, String>> {
+        val out = ArrayList<Pair<Int, String>>()
+        fun walk(a: org.json.JSONArray?) {
+            a ?: return
+            for (i in 0 until a.length()) {
+                val b = a.optJSONObject(i) ?: continue
+                val title = b.optString("title")
+                if (title.isNotEmpty()) out += (b.optInt("page", 1) - 1).coerceAtLeast(0) to title
+                walk(b.optJSONArray("children"))
+            }
+        }
+        walk(o.optJSONArray("bookmarks"))
+        return out
+    }
+
+    private fun flattenComments(o: org.json.JSONObject): List<Triple<Int, String, Boolean>> {
+        val out = ArrayList<Triple<Int, String, Boolean>>()
+        val arr = o.optJSONArray("comments") ?: return out
+        val done = setOf("Accepted", "Completed", "Cancelled", "Rejected")
+        for (i in 0 until arr.length()) {
+            val c = arr.optJSONObject(i) ?: continue
+            val page = (c.optInt("page", 1) - 1).coerceAtLeast(0)
+            val unresolved = c.isNull("status") || c.optString("status") !in done
+            c.optString("contents").takeIf { !c.isNull("contents") && it.isNotBlank() }?.let { out += Triple(page, it, unresolved) }
+            val replies = c.optJSONArray("replies") ?: continue
+            for (k in 0 until replies.length()) {
+                val r = replies.optJSONObject(k) ?: continue
+                r.optString("contents").takeIf { !r.isNull("contents") && it.isNotBlank() }?.let { out += Triple(page, it, false) }
+            }
+        }
+        return out
+    }
+
+    /** Library search results for the query, off the main thread. */
+    suspend fun searchLibrary(query: String, uris: Collection<String>?): List<io.github.artcraftandroid.pdfcraft.engine.SearchHit> = withContext(Dispatchers.IO) {
+        val q = io.github.artcraftandroid.pdfcraft.engine.LibraryIndex.fold(query.trim())
+        val data = library.load()
+        val scope = uris?.toSet()
+        // names of every library file (indexed or not), then the index
+        val names = data.items.filter { (scope == null || it.uri in scope) && q.length >= 2 && io.github.artcraftandroid.pdfcraft.engine.LibraryIndex.fold(it.name).contains(q) }
+            .map { io.github.artcraftandroid.pdfcraft.engine.SearchHit(it.uri, it.name, -1, io.github.artcraftandroid.pdfcraft.engine.HitKind.Name, it.name, io.github.artcraftandroid.pdfcraft.engine.LibraryIndex.fold(it.name).indexOf(q), q.length) }
+        val inside = if (libraryIndexing) libraryIndex.search(query, scope ?: data.items.map { it.uri }) else emptyList()
+        names + inside.filter { it.kind != io.github.artcraftandroid.pdfcraft.engine.HitKind.Name }
+    }
+
+    /** After opening, go to this page and search this text (a library search hit). */
+    var pendingSearch: Pair<Int, String>? = null
+
+    fun openHit(hit: io.github.artcraftandroid.pdfcraft.engine.SearchHit, query: String) {
+        pendingSearch = if (hit.page >= 0 && hit.kind == io.github.artcraftandroid.pdfcraft.engine.HitKind.Text) hit.page to query.trim() else null
+        if (hit.page >= 0 && hit.kind != io.github.artcraftandroid.pdfcraft.engine.HitKind.Text) pendingSearch = hit.page to ""
+        open(Uri.parse(hit.uri))
     }
 
     // ---- Study sessions -------------------------------------------------------------------------
@@ -4406,6 +4646,8 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         if (hasFileAccess && !had) scanLocal(force = true)
         refreshRecents()
         refreshStudy()
+        refreshLibrary()
+        indexLibrary()
         focusTimer = io.github.artcraftandroid.pdfcraft.FocusTimerAlarm.load(getApplication())
     }
 
@@ -4813,3 +5055,6 @@ enum class DigestFormat(@androidx.annotation.StringRes val label: Int) {
     Csv(R.string.digest_csv),
     Pdf(R.string.digest_pdf),
 }
+
+/** Files past this size are not copied for the library index. */
+private const val MAX_INDEX_BYTES = 300L * 1024 * 1024

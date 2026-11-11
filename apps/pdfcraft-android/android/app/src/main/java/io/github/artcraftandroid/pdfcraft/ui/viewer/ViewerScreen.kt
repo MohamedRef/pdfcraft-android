@@ -169,6 +169,16 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
                 vm.pendingPage = null
                 vm.pendingSpot = null
             }
+            // a library search hit: its page, with the words found there highlighted
+            if (w > 0f) vm.pendingSearch?.let { (page, query) ->
+                vm.pendingSearch = null
+                doc.viewer.goToPage(page.coerceIn(0, doc.pageCount - 1))
+                if (query.isNotEmpty()) {
+                    doc.search.run(query, doc.pageCount, page.coerceIn(0, doc.pageCount - 1)) { first -> showHit(doc, first) }
+                    vm.whenSearchDone(doc)
+                    doc.controller.searching = true
+                }
+            }
         }
     }
 
