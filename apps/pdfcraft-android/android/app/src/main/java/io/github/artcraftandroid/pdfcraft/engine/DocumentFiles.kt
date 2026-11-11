@@ -89,9 +89,7 @@ class DocumentFiles(private val context: Context) {
                     tmp.outputStream().use { input.copyTo(it, PdfSnapshotCopy.BUFFER_BYTES) }
                 }
             }
-            if (!tmp.renameTo(target)) {
-                tmp.copyTo(target, overwrite = true)
-            }
+            publishWorkingCopy(tmp, target)
         } finally {
             tmp.delete()
         }
