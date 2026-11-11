@@ -268,7 +268,7 @@ pub fn digital_id_info(path: String, password: String) -> Result<DigitalIdInfo, 
     })
 }
 
-/// The engine version (`0.6.0`).
+/// The engine version: the workspace version from `Cargo.toml` (for example `0.20.0`).
 #[uniffi::export]
 pub fn engine_version() -> String {
     env!("CARGO_PKG_VERSION").into()
@@ -1249,7 +1249,7 @@ fn comment_records(snapshot: &pdfcraft_engine::OverlaySnapshot) -> Vec<CommentIn
         .iter()
         .zip(snapshot.comment_properties())
         .map(|(a, props)| {
-            // Released 0.18.2 inspector exposes display fields only; the editor holds
+            // The engine's inspector exposes display fields only; the editor holds
             // raw /M, alpha and stroke width. Preserve the Android UI record contract.
             CommentInfo {
                 page: u32::try_from(a.page).unwrap_or(u32::MAX),
