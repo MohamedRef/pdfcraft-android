@@ -916,7 +916,10 @@
     <string name="bates_source_refused">Esta ferramenta não pode numerar um PDF assinado ou somente leitura.</string>
     <string name="bates_export_failed">Não foi possível salvar esta nova cópia em Downloads.</string>
     <string name="ink_presets_title">Canetas favoritas</string>
-    <string name="ink_presets_help">Escolha sua caneta e desenhe. A cor, o tamanho e a opacidade se aplicam na hora às novas marcas. Toque em uma favorita para restaurar as configurações dela.</string>
+    <string name="ink_presets_help">Cada caneta guarda a própria cor, espessura e opacidade. Toque em uma favorita para restaurar as configurações dela.</string>
+    <string name="ink_pen_settings_title">Configurações da caneta</string>
+    <string name="ink_pen_edit_action">mudar cor e espessura</string>
+    <string name="ink_preset_save_help">Salvar uma favorita guarda %1$s exatamente como está agora. Toque na caneta selecionada na barra para mudar a cor e a espessura.</string>
     <string name="ink_snap_explanation">Segure um traço à mão livre por um instante para transformá-lo em uma forma limpa.</string>
     <string name="ink_pen_only_explanation">Ativado: os dedos movem e ampliam, só a S Pen desenha. Desativado: use o dedo ou a S Pen.</string>
     <string name="ink_preset_slot">Caneta %1$d</string>
@@ -986,7 +989,7 @@
     <string name="ink_toolbar_rectangle">Caixa</string>
     <string name="ink_toolbar_line">Linha</string>
     <string name="ink_toolbar_color">Cor</string>
-    <string name="ink_toolbar_settings">Canetas</string>
+    <string name="ink_toolbar_settings">Ajustes</string>
     <string name="ink_toolbar_lasso">Laço</string>
     <string name="ink_toolbar_eraser">Apagar</string>
     <string name="ink_eraser_size_title">Tamanho da borracha</string>
@@ -1013,4 +1016,13 @@
     <string name="compact_previews">Usar menos memória nas prévias de página</string>
     <string name="compact_previews_body">Reduz a precisão de cor das páginas inteiras. Os detalhes ampliados mantêm a qualidade total. Aplica-se ao reabrir um documento.</string>
     <string name="updater_other_build">Esta versão não é o APK oficial para ARM64, então as atualizações no app estão desativadas. Atualize-a de onde você a instalou.</string>
+    <string name="updater_err_checksum">O APK baixado não corresponde à versão publicada, por isso não foi instalado. Tente baixar novamente.</string>
+    <string name="updater_err_invalid_apk">O arquivo baixado não é um app Android assinado válido.</string>
+    <string name="updater_err_wrong_build">O APK baixado não é a atualização do PdfCraft esperada.</string>
+    <string name="updater_err_certificate">O APK baixado não foi assinado pelo PdfCraft, então não pode substituir o app instalado.</string>
+    <string name="updater_err_android_version">Esta atualização requer uma versão mais recente do Android.</string>
+    <string name="updater_err_abi">Este APK não foi feito para o processador do seu celular.</string>
+    <string name="updater_err_storage">Não foi possível salvar a atualização neste dispositivo. Libere espaço e tente novamente.</string>
+    <string name="updater_err_untrusted">O link de atualização não é das versões oficiais do PdfCraft no GitHub, por isso foi recusado.</string>
+    <string name="updater_err_server">O servidor de download enviou uma resposta inesperada. Tente mais tarde ou baixe pelo navegador.</string>
 </resources>

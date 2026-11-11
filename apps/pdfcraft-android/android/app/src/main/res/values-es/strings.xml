@@ -1339,7 +1339,10 @@
     <string name="bates_source_refused">Esta herramienta no puede numerar un PDF firmado o de solo lectura.</string>
     <string name="bates_export_failed">No se pudo guardar esta copia nueva en Descargas.</string>
     <string name="ink_presets_title">Lápices favoritos</string>
-    <string name="ink_presets_help">Elige tu lápiz y dibuja. El color, el grosor y la opacidad se aplican al momento a los trazos nuevos. Toca un favorito para recuperar sus ajustes.</string>
+    <string name="ink_presets_help">Cada lápiz conserva su propio color, grosor y opacidad. Toca un favorito para recuperar sus ajustes.</string>
+    <string name="ink_pen_settings_title">Ajustes del lápiz</string>
+    <string name="ink_pen_edit_action">cambiar color y grosor</string>
+    <string name="ink_preset_save_help">Guardar un favorito guarda %1$s tal como está ahora. Toca el lápiz seleccionado en la barra para cambiar su color y grosor.</string>
     <string name="ink_snap_explanation">Mantén un trazo a mano alzada un momento para convertirlo en una forma limpia.</string>
     <string name="ink_pen_only_explanation">Activado: los dedos desplazan y hacen zoom; solo dibuja el S Pen. Desactivado: usa el dedo o el S Pen.</string>
     <string name="ink_preset_slot">Lápiz %1$d</string>
@@ -1409,7 +1412,7 @@
     <string name="ink_toolbar_rectangle">Caja</string>
     <string name="ink_toolbar_line">Línea</string>
     <string name="ink_toolbar_color">Color</string>
-    <string name="ink_toolbar_settings">Lápices</string>
+    <string name="ink_toolbar_settings">Ajustes</string>
     <string name="ink_toolbar_lasso">Lazo</string>
     <string name="ink_toolbar_eraser">Borrar</string>
     <string name="ink_eraser_size_title">Tamaño del borrador</string>
@@ -1436,4 +1439,13 @@
     <string name="compact_previews">Usar menos memoria en las vistas previas</string>
     <string name="compact_previews_body">Reduce la precisión del color en las páginas completas. Los detalles ampliados mantienen la calidad completa. Se aplica al volver a abrir un documento.</string>
     <string name="updater_other_build">Esta compilación no es el APK oficial para ARM64, así que las actualizaciones en la app están desactivadas. Actualízala desde donde la instalaste.</string>
+    <string name="updater_err_checksum">El APK descargado no coincide con la versión publicada, así que no se instaló. Vuelve a descargarlo.</string>
+    <string name="updater_err_invalid_apk">El archivo descargado no es una app de Android firmada válida.</string>
+    <string name="updater_err_wrong_build">El APK descargado no es la actualización de PdfCraft esperada.</string>
+    <string name="updater_err_certificate">El APK descargado no está firmado por PdfCraft, así que no puede reemplazar la app instalada.</string>
+    <string name="updater_err_android_version">Esta actualización requiere una versión de Android más reciente.</string>
+    <string name="updater_err_abi">Este APK no está compilado para el procesador de tu teléfono.</string>
+    <string name="updater_err_storage">No se pudo guardar la actualización en este dispositivo. Libera espacio e inténtalo de nuevo.</string>
+    <string name="updater_err_untrusted">El enlace de actualización no proviene de las versiones oficiales de PdfCraft en GitHub, así que se rechazó.</string>
+    <string name="updater_err_server">El servidor de descarga envió una respuesta inesperada. Inténtalo más tarde o descárgalo en el navegador.</string>
 </resources>

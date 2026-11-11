@@ -322,6 +322,16 @@
     <string name="viewer_zoom_in">تكبير</string>
     <string name="viewer_zoom_out">تصغير</string>
     <string name="viewer_search_count">%1$d من %2$d</string>
+    <string name="viewer_search_show_all">عرض كل النتائج</string>
+    <string name="viewer_search_results_running">%1$d نتيجة حتى الآن…</string>
+    <plurals name="viewer_search_results">
+        <item quantity="zero">لا نتائج</item>
+        <item quantity="one">نتيجة واحدة</item>
+        <item quantity="two">نتيجتان</item>
+        <item quantity="few">%1$d نتائج</item>
+        <item quantity="many">%1$d نتيجة</item>
+        <item quantity="other">%1$d نتيجة</item>
+    </plurals>
     <string name="viewer_search_count_running">%1$d من %2$d…</string>
     <string name="viewer_searching">جارٍ البحث…</string>
     <string name="viewer_search_progress">جارٍ البحث في الصفحة %1$d من %2$d</string>
@@ -520,8 +530,17 @@
     <string name="sheet_redo_action">إعادة %1$s</string>
     <string name="sheet_continuous">متواصل</string>
     <string name="sheet_single_page">صفحة واحدة</string>
+    <string name="sheet_two_pages">صفحتان</string>
+    <string name="sheet_two_pages_cover">صفحتان مع الغلاف</string>
     <string name="sheet_reading_mode">وضع القراءة</string>
     <string name="sheet_night_mode">الوضع الليلي</string>
+    <string name="sheet_reading_colors">ألوان القراءة</string>
+    <string name="sheet_reading_colors_sample">أب</string>
+    <string name="sheet_reading_colors_off">إيقاف</string>
+    <string name="sheet_reading_colors_black_on_white">أسود على أبيض</string>
+    <string name="sheet_reading_colors_white_on_black">أبيض على أسود</string>
+    <string name="sheet_reading_colors_yellow_on_black">أصفر على أسود</string>
+    <string name="sheet_reading_colors_green_on_black">أخضر على أسود</string>
     <string name="sheet_tab_contents">الفهرس</string>
     <string name="sheet_tab_bookmarks">الإشارات المرجعية</string>
     <string name="sheet_no_contents">لا يحتوي هذا المستند على فهرس.</string>
@@ -983,7 +1002,10 @@
     <string name="bates_source_refused">لا يمكن لهذه الأداة ترقيم ملف PDF موقّع أو للقراءة فقط.</string>
     <string name="bates_export_failed">تعذّر حفظ هذه النسخة الجديدة في التنزيلات.</string>
     <string name="ink_presets_title">الأقلام المفضّلة</string>
-    <string name="ink_presets_help">اختر قلمك ثم ارسم. يُطبَّق اللون والحجم والشفافية فورًا على العلامات الجديدة. انقر على قلم مفضّل لاستعادة إعداداته.</string>
+    <string name="ink_presets_help">كل قلم يحتفظ بلونه وسُمكه وشفافيته. انقر على قلم مفضّل لاستعادة إعداداته.</string>
+    <string name="ink_pen_settings_title">إعدادات القلم</string>
+    <string name="ink_pen_edit_action">تغيير اللون والسُمك</string>
+    <string name="ink_preset_save_help">حفظ المفضلة يخزّن %1$s كما هو الآن. اضغط على القلم المحدد في الشريط لتغيير لونه وسُمكه.</string>
     <string name="ink_snap_explanation">أبقِ القلم ثابتًا لحظة في نهاية الخط الحر لتحويله إلى شكل منتظم.</string>
     <string name="ink_pen_only_explanation">عند التشغيل: الأصابع للتحريك والتكبير، والرسم بقلم S Pen فقط. عند الإيقاف: استخدم إصبعك أو قلم S Pen.</string>
     <string name="ink_preset_slot">القلم %1$d</string>
@@ -1053,7 +1075,7 @@
     <string name="ink_toolbar_rectangle">مربع</string>
     <string name="ink_toolbar_line">خط</string>
     <string name="ink_toolbar_color">اللون</string>
-    <string name="ink_toolbar_settings">الأقلام</string>
+    <string name="ink_toolbar_settings">الإعدادات</string>
     <string name="ink_toolbar_lasso">تحديد حر</string>
     <string name="ink_toolbar_eraser">ممحاة</string>
     <string name="ink_eraser_size_title">حجم الممحاة</string>
@@ -1076,6 +1098,15 @@
     <string name="ocr_review_limited">عرض حتى %1$d كلمة، مع الكلمات غير المؤكدة أولًا.</string>
     <string name="ocr_review_unknown">غير متاح</string>
     <string name="updater_other_build">هذا الإصدار ليس ملف APK الرسمي لمعالجات ARM64، لذلك التحديثات داخل التطبيق متوقفة. حدّثه من المكان الذي ثبّته منه.</string>
+    <string name="updater_err_checksum">ملف APK الذي تم تنزيله لا يطابق الإصدار المنشور، لذلك لم يُثبَّت. حاول التنزيل مرة أخرى.</string>
+    <string name="updater_err_invalid_apk">الملف الذي تم تنزيله ليس تطبيق Android صالحًا وموقّعًا.</string>
+    <string name="updater_err_wrong_build">ملف APK الذي تم تنزيله ليس تحديث PdfCraft المتوقع.</string>
+    <string name="updater_err_certificate">ملف APK الذي تم تنزيله غير موقّع من PdfCraft، لذلك لا يمكنه استبدال التطبيق المثبّت.</string>
+    <string name="updater_err_android_version">يتطلب هذا التحديث إصدارًا أحدث من Android.</string>
+    <string name="updater_err_abi">ملف APK هذا غير مخصص لمعالج هاتفك.</string>
+    <string name="updater_err_storage">تعذّر حفظ التحديث على هذا الجهاز. وفّر بعض المساحة وحاول مرة أخرى.</string>
+    <string name="updater_err_untrusted">رابط التحديث ليس من إصدارات GitHub الرسمية لـ PdfCraft، لذلك تم رفضه.</string>
+    <string name="updater_err_server">أرسل خادم التنزيل ردًا غير متوقع. حاول لاحقًا أو نزّل من المتصفح.</string>
     <!-- Comments list: search, filters, review, sharing and import (#196, #169, #158) -->
     <string name="comments_more">خيارات التعليقات</string>
     <string name="comments_search">ابحث في التعليقات</string>

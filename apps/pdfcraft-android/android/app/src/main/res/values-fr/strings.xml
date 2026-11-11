@@ -1211,7 +1211,10 @@
     <string name="bates_source_refused">Un PDF signé ou en lecture seule ne peut pas être numéroté par cet outil.</string>
     <string name="bates_export_failed">Impossible d\'enregistrer cette nouvelle copie dans Téléchargements.</string>
     <string name="ink_presets_title">Stylos favoris</string>
-    <string name="ink_presets_help">Choisissez votre stylo, puis dessinez. La couleur, la taille et l\'opacité s\'appliquent immédiatement aux nouveaux traits. Touchez un favori pour restaurer ses réglages.</string>
+    <string name="ink_presets_help">Chaque stylo garde sa propre couleur, son épaisseur et son opacité. Touchez un favori pour restaurer ses réglages.</string>
+    <string name="ink_pen_settings_title">Réglages du stylo</string>
+    <string name="ink_pen_edit_action">changer la couleur et l\'épaisseur</string>
+    <string name="ink_preset_save_help">Enregistrer un favori conserve %1$s tel qu\'il est maintenant. Touchez le stylo sélectionné dans la barre pour changer sa couleur et son épaisseur.</string>
     <string name="ink_snap_explanation">Maintenez brièvement un trait à main levée pour le transformer en forme nette.</string>
     <string name="ink_pen_only_explanation">Activé : les doigts déplacent et zooment, seul le S Pen dessine. Désactivé : utilisez votre doigt ou le S Pen.</string>
     <string name="ink_preset_slot">Stylo %1$d</string>
@@ -1281,7 +1284,7 @@
     <string name="ink_toolbar_rectangle">Cadre</string>
     <string name="ink_toolbar_line">Ligne</string>
     <string name="ink_toolbar_color">Couleur</string>
-    <string name="ink_toolbar_settings">Stylos</string>
+    <string name="ink_toolbar_settings">Réglages</string>
     <string name="ink_toolbar_lasso">Lasso</string>
     <string name="ink_toolbar_eraser">Gomme</string>
     <string name="ink_eraser_size_title">Taille de la gomme</string>
@@ -1308,4 +1311,13 @@
     <string name="compact_previews">Utiliser moins de mémoire pour les aperçus de pages</string>
     <string name="compact_previews_body">Réduit la précision des couleurs pour les pages entières. Les détails zoomés conservent leur pleine qualité. S\'applique à la réouverture d\'un document.</string>
     <string name="updater_other_build">Cette version n\'est pas l\'APK officiel ARM64, les mises à jour dans l\'application sont donc désactivées. Mettez-la à jour depuis l\'endroit où vous l\'avez installée.</string>
+    <string name="updater_err_checksum">L\'APK téléchargé ne correspond pas à la version publiée et n\'a pas été installé. Téléchargez-le à nouveau.</string>
+    <string name="updater_err_invalid_apk">Le fichier téléchargé n\'est pas une application Android signée valide.</string>
+    <string name="updater_err_wrong_build">L\'APK téléchargé n\'est pas la mise à jour PdfCraft attendue.</string>
+    <string name="updater_err_certificate">L\'APK téléchargé n\'est pas signé par PdfCraft et ne peut pas remplacer l\'application installée.</string>
+    <string name="updater_err_android_version">Cette mise à jour nécessite une version plus récente d\'Android.</string>
+    <string name="updater_err_abi">Cet APK n\'est pas conçu pour le processeur de votre téléphone.</string>
+    <string name="updater_err_storage">Impossible d\'enregistrer la mise à jour sur cet appareil. Libérez de l\'espace et réessayez.</string>
+    <string name="updater_err_untrusted">Le lien de mise à jour ne provient pas des versions GitHub officielles de PdfCraft et a été refusé.</string>
+    <string name="updater_err_server">Le serveur de téléchargement a renvoyé une réponse inattendue. Réessayez plus tard ou téléchargez dans le navigateur.</string>
 </resources>

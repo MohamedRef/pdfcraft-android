@@ -48,8 +48,40 @@ class ToolPrefs(context: Context) {
     private val colors = StyledTool.entries.associateWith { mutableIntStateOf(prefs.getInt("${it.key}.color", it.defaultColor.toInt())) }
     private val opacities = StyledTool.entries.associateWith { mutableFloatStateOf(prefs.getFloat("${it.key}.opacity", 1f)) }
 
-    var inkWidth by mutableFloatStateOf(prefs.getFloat("ink.width", 1f))
-        private set
+    /** Each pen type's own colour, width and opacity (#187), migrated once from the old shared values. */
+    private val penSettings: Map<InkStyle, androidx.compose.runtime.MutableState<InkPenSettings>> = run {
+        val loaded = loadInkPenSettings(object : InkPrefsReader {
+            override fun contains(key: String) = prefs.contains(key)
+            override fun int(key: String, default: Int) = runCatching { prefs.getInt(key, default) }.getOrDefault(default)
+            override fun float(key: String, default: Float) = runCatching { prefs.getFloat(key, default) }.getOrDefault(default)
+            override fun string(key: String) = runCatching { prefs.getString(key, null) }.getOrNull()
+        })
+        // Persist the migration now: the last-used pen changes as soon as the user switches pens.
+        if (InkStyle.entries.any { !prefs.contains(InkPenSettings.colorKey(it)) }) {
+            val edit = prefs.edit()
+            loaded.forEach { (style, s) -> edit.putPen(style, s) }
+            edit.apply()
+        }
+        loaded.mapValues { mutableStateOf(it.value) }
+    }
+
+    /** The settings of one pen, for its toolbar preview. */
+    internal fun penSettings(style: InkStyle): InkPenSettings = penSettings.getValue(style).value
+
+    private fun updatePen(style: InkStyle, change: (InkPenSettings) -> InkPenSettings) {
+        val old = penSettings.getValue(style).value
+        val new = change(old).let { InkPenSettings.sanitized(it.argb, it.width, it.opacity) }
+        penSettings.getValue(style).value = new
+        prefs.edit().putPen(style, new).apply()
+    }
+
+    private fun android.content.SharedPreferences.Editor.putPen(style: InkStyle, s: InkPenSettings) =
+        putInt(InkPenSettings.colorKey(style), s.argb)
+            .putFloat(InkPenSettings.widthKey(style), s.width)
+            .putFloat(InkPenSettings.opacityKey(style), s.opacity)
+
+    /** The selected pen's base width. */
+    val inkWidth: Float get() = penSettings(inkStyle).width
     var textSize by mutableFloatStateOf(prefs.getFloat("freetext.size", 16f))
         private set
 
@@ -68,17 +100,21 @@ class ToolPrefs(context: Context) {
     var fillTextSize by mutableFloatStateOf(prefs.getFloat("fill.size", 12f))
         private set
 
-    fun color(t: StyledTool): Color = Color(colors.getValue(t).intValue)
-    fun opacity(t: StyledTool): Float = opacities.getValue(t).floatValue
+    fun color(t: StyledTool): Color =
+        if (t == StyledTool.Ink) Color(penSettings(inkStyle).argb) else Color(colors.getValue(t).intValue)
+    fun opacity(t: StyledTool): Float =
+        if (t == StyledTool.Ink) penSettings(inkStyle).opacity else opacities.getValue(t).floatValue
 
     fun setColor(t: StyledTool, c: Color) {
         val argb = c.toArgbInt()
+        if (t == StyledTool.Ink) return updatePen(inkStyle) { it.copy(argb = argb) }
         colors.getValue(t).intValue = argb
         prefs.edit().putInt("${t.key}.color", argb).apply()
     }
 
     fun setOpacity(t: StyledTool, o: Float) {
         val v = o.coerceIn(0.25f, 1f)
+        if (t == StyledTool.Ink) return updatePen(inkStyle) { it.copy(opacity = v) }
         opacities.getValue(t).floatValue = v
         prefs.edit().putFloat("${t.key}.opacity", v).apply()
     }
@@ -112,18 +148,18 @@ class ToolPrefs(context: Context) {
     })
         private set
 
-    internal fun currentInkPreset(): InkPreset? = InkPreset.create(colors.getValue(StyledTool.Ink).intValue, inkWidth, opacity(StyledTool.Ink), inkStyle)
+    internal fun currentInkPreset(): InkPreset? = penSettings(inkStyle).let { InkPreset.create(it.argb, it.width, it.opacity, inkStyle) }
 
     internal fun applyInkPreset(index: Int): Boolean {
         val preset = inkPresets.getOrNull(index) ?: return false
         // One synchronous UI event and one preferences transaction: only the next stroke changes.
-        prefs.edit().putInt("ink.color", preset.argb).putFloat("ink.width", preset.width).putFloat("ink.opacity", preset.opacity)
+        // A favorite is a full snapshot: it restyles its own pen type and selects it.
+        val pen = InkPenSettings.sanitized(preset.argb, preset.width, preset.opacity)
+        prefs.edit().putPen(preset.style, pen)
             .putString("ink.style", preset.style.key).also {
                 if (preset.style != InkStyle.Highlighter) it.putString("ink.lastWritingPen", preset.style.key)
             }.apply()
-        colors.getValue(StyledTool.Ink).intValue = preset.argb
-        opacities.getValue(StyledTool.Ink).floatValue = preset.opacity
-        inkWidth = preset.width
+        penSettings.getValue(preset.style).value = pen
         inkStyle = preset.style
         if (preset.style != InkStyle.Highlighter) lastWritingPen = preset.style
         return true
@@ -171,10 +207,8 @@ class ToolPrefs(context: Context) {
         return true
     }
 
-    fun updateInkWidth(w: Float) {
-        inkWidth = w
-        prefs.edit().putFloat("ink.width", w).apply()
-    }
+    /** Changes the selected pen's width only. */
+    fun updateInkWidth(w: Float) = updatePen(inkStyle) { it.copy(width = w) }
 
     fun updateTextSize(s: Float) {
         textSize = s

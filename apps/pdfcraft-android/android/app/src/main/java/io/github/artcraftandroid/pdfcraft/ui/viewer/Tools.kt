@@ -1012,7 +1012,7 @@ private fun MarkupLayer(vm: AppViewModel, doc: OpenDocument) {
 }
 
 /** Which property picker a sub-toolbar has open. */
-enum class Picker { None, Color, Width, TextSize, Presets, EraserSize, Stamp }
+enum class Picker { None, Color, Width, TextSize, Presets, PenStyle, EraserSize, Stamp }
 
 /** The active tool's sub-toolbar. */
 @Composable
@@ -1134,6 +1134,7 @@ fun PropertyPicker(vm: AppViewModel, tool: StyledTool, picker: Picker, markup: T
                 Spacer(Modifier.height(8.dp))
             }
             Picker.Presets -> InkPresetsPicker(vm, onDismiss)
+            Picker.PenStyle -> PenStylePicker(vm)
             Picker.EraserSize -> {
                 Text(
                     stringResource(R.string.ink_eraser_size_title),

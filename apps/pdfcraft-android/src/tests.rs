@@ -134,6 +134,25 @@ fn renders_a_page_and_a_tile() {
 }
 
 #[test]
+fn reading_colours_reach_cached_page_renderers() {
+    let s = MobileSession::new();
+    let doc = s.open(blank_pdf(1), None).unwrap().id;
+    // warm the renderer cache with the default view
+    let white = s.render_page(doc, 0, 0.25, None).unwrap();
+    assert!(white.rgba.chunks(4).all(|p| p == [255, 255, 255, 255]));
+    s.execute("view_reading_colors".into(), format!(r#"{{"doc": {doc}, "mode": "white-on-black"}}"#)).unwrap();
+    // a view setting: the file is unchanged, but the next render must not reuse the old renderer
+    assert!(!s.document(doc).unwrap().dirty);
+    let dark = s.render_page(doc, 0, 0.25, None).unwrap();
+    assert!(dark.rgba.chunks(4).all(|p| p == [0, 0, 0, 255]), "the page clears to the reading background");
+    let tile = s.render_page(doc, 0, 1.0, Some(TileRect { x: 10, y: 10, width: 16, height: 16 })).unwrap();
+    assert!(tile.rgba.chunks(4).all(|p| p == [0, 0, 0, 255]));
+    s.execute("view_reading_colors".into(), format!(r#"{{"doc": {doc}, "mode": "off"}}"#)).unwrap();
+    let again = s.render_page(doc, 0, 0.25, None).unwrap();
+    assert_eq!(again.rgba, white.rgba, "turning reading colours off draws the page exactly as before");
+}
+
+#[test]
 fn refuses_bad_render_requests() {
     let s = MobileSession::new();
     let doc = s.open(blank_pdf(2), None).unwrap().id;

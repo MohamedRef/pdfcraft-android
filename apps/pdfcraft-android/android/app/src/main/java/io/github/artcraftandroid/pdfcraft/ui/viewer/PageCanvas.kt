@@ -158,7 +158,7 @@ fun PageCanvas(
                                 val rest = state.scrollBy(0f, -d.y * WHEEL_STEP)
                                 if (rest.y != 0f && change.uptimeMillis - lastTurn > WHEEL_TURN_MS) {
                                     lastTurn = change.uptimeMillis
-                                    state.goToPage(state.currentPage + if (d.y > 0f) 1 else -1)
+                                    state.turnPage(if (d.y > 0f) 1 else -1)
                                 }
                             }
                             else -> state.scrollBy(-d.x * WHEEL_STEP, -d.y * WHEEL_STEP)

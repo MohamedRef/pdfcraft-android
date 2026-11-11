@@ -14,6 +14,11 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.ui.semantics.Role
+import io.github.artcraftandroid.pdfcraft.ui.PdfSwitch
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
@@ -135,6 +140,67 @@ fun parseSignatures(o: JSONObject): List<SignatureEntry> {
 /** Where a digital signature goes: an empty signature field, or a box drawn on page [page]. */
 class CertTarget(val doc: OpenDocument, val field: String?, val page: Int, val rect: FloatArray?)
 
+/** A certification signature's level: which later changes keep it valid (engine `certify`). */
+enum class CertifyLevel(val arg: String, @StringRes val label: Int) {
+    NoChanges("no_changes", R.string.sign_certify_no_changes),
+    FormFill("form_fill", R.string.sign_certify_form_fill),
+    Comments("comments", R.string.sign_certify_comments),
+}
+
+/** What a visible digital signature shows (engine `appearance`); the engine's defaults, plus reason and location. */
+data class CertShown(
+    val name: Boolean = true,
+    val date: Boolean = true,
+    val reason: Boolean = true,
+    val location: Boolean = true,
+    val distinguishedName: Boolean = false,
+    val labels: Boolean = true,
+) {
+    fun toArg(): Map<String, Boolean> = mapOf(
+        "name" to name, "date" to date, "reason" to reason, "location" to location, "distinguished_name" to distinguishedName, "labels" to labels,
+    )
+}
+
+/**
+ * Sign and Certify's choices beyond the ID and the look (#178): certify at [certify] (null: an
+ * ordinary approval signature), [invisible] (no box on the page), what a visible one [shows], and
+ * the signer's [contact] details.
+ */
+data class CertOptions(
+    val certify: CertifyLevel? = null,
+    val invisible: Boolean = false,
+    val shows: CertShown = CertShown(),
+    val contact: String = "",
+)
+
+/**
+ * The `sign_document` arguments for where the signature goes and [o]: an existing field; a box
+ * on a page; or with [CertOptions.invisible] the page only (the engine makes no box, and takes no
+ * appearance or graphic for it).
+ */
+fun certPlacementArgs(field: String?, page: Int, rect: FloatArray?, o: CertOptions): Map<String, Any?> {
+    val args = mutableMapOf<String, Any?>()
+    val visible = field != null || (!o.invisible && rect != null)
+    when {
+        field != null -> args["field"] = field
+        else -> {
+            args["page"] = page + 1
+            if (visible) args["rect"] = rect?.map { it.toDouble() }
+        }
+    }
+    if (visible) args["appearance"] = o.shows.toArg()
+    o.certify?.let { args["certify"] = it.arg }
+    o.contact.trim().takeIf { it.isNotEmpty() }?.let { args["contact"] = it }
+    return args
+}
+
+/**
+ * The saved revision (1-based) that the signature in [field] signs, from `doc_revisions`
+ * ([revisions]: each revision's number and the fields signing it), or null.
+ */
+fun signedRevision(field: String, revisions: List<Pair<Int, List<String>>>): Int? =
+    revisions.firstOrNull { (_, fields) -> field in fields }?.first
+
 /** What a digital signature shows on the page beside the signer's details. */
 enum class CertLook(@StringRes val label: Int) { Name(R.string.sign_look_name), Typed(R.string.sign_look_typed), Drawn(R.string.sign_look_drawn) }
 
@@ -215,6 +281,7 @@ fun CertPlaceLayer(vm: AppViewModel, doc: OpenDocument) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(stringResource(R.string.sign_place_hint), color = c.text, fontSize = 14.sp, modifier = Modifier.weight(1f, fill = false))
+            TextButton(onClick = { vm.signInvisibly(doc) }) { Text(stringResource(R.string.sign_invisible_short), color = c.accent) }
             TextButton(onClick = { vm.certPlacing = null }) { Text(stringResource(R.string.common_cancel), color = c.accent) }
         }
     }
@@ -246,11 +313,12 @@ fun CertSignScreen(vm: AppViewModel, target: CertTarget) {
     var look by remember { mutableStateOf(CertLook.Name) }
     var reason by remember { mutableStateOf("") }
     var location by remember { mutableStateOf("") }
+    var options by remember(target) { mutableStateOf(CertOptions(invisible = target.field == null && target.rect == null)) }
     var password by remember(chosen) { mutableStateOf("") }
     val unusable = chosen?.let { idProblem(it) }
     val canSign = chosen != null && unusable == null
     fun sign() {
-        if (chosen != null && canSign) vm.signWithId(target, chosen, password, if (look == CertLook.Drawn && !hasDrawn) CertLook.Name else look, reason, location)
+        if (chosen != null && canSign) vm.signWithId(target, chosen, password, if (look == CertLook.Drawn && !hasDrawn) CertLook.Name else look, reason, location, options)
     }
     Column(Modifier.fillMaxSize().background(c.surface).pointerInput(Unit) { detectTapGestures() }.safeTopPadding().navigationBarsPadding().imePadding()) {
         Row(Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -272,6 +340,15 @@ fun CertSignScreen(vm: AppViewModel, target: CertTarget) {
             SheetRow(LucideIcons.Plus, stringResource(R.string.sign_create_id), { vm.idCreate = true })
             SheetDivider(vertical = 6.dp)
 
+            CertifySection(options) { options = it }
+            SheetDivider(vertical = 6.dp)
+
+            if (target.field == null) {
+                ToggleRow(stringResource(R.string.sign_invisible), options.invisible) { options = options.copy(invisible = it) }
+                Text(stringResource(R.string.sign_invisible_about), color = c.textSecondary, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp))
+                if (options.invisible) SheetDivider(vertical = 6.dp)
+            }
+            if (!options.invisible || target.field != null) {
             Section(stringResource(R.string.sign_section_appearance))
             Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 for (l in CertLook.entries) {
@@ -287,13 +364,18 @@ fun CertSignScreen(vm: AppViewModel, target: CertTarget) {
                 },
                 color = c.textSecondary, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
             )
+            ShownSection(options.shows) { options = options.copy(shows = it) }
             SheetDivider(vertical = 6.dp)
+            }
 
             Section(stringResource(R.string.sign_section_reason))
             Box(Modifier.padding(horizontal = 16.dp)) { PdfField(reason, { reason = it }, stringResource(R.string.sign_reason_hint), keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next)) }
             Spacer(Modifier.height(12.dp))
             Section(stringResource(R.string.sign_section_location))
             Box(Modifier.padding(horizontal = 16.dp)) { PdfField(location, { location = it }, stringResource(R.string.sign_location_hint), keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next)) }
+            Spacer(Modifier.height(12.dp))
+            Section(stringResource(R.string.sign_section_contact))
+            Box(Modifier.padding(horizontal = 16.dp)) { PdfField(options.contact, { options = options.copy(contact = it) }, stringResource(R.string.sign_contact_hint), keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next)) }
             Spacer(Modifier.height(12.dp))
 
             if (chosen != null) {
@@ -336,6 +418,54 @@ private fun shortDate(ms: Long): String = DateFormat.getDateInstance(DateFormat.
 @Composable
 private fun Section(title: String) {
     Text(title, color = pdfColors.textSecondary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 10.dp, bottom = 6.dp))
+}
+
+/** Certify document: off for an ordinary signature; on, which changes stay allowed. */
+@Composable
+private fun CertifySection(options: CertOptions, onChange: (CertOptions) -> Unit) {
+    val c = pdfColors
+    ToggleRow(stringResource(R.string.sign_certify), options.certify != null) { on ->
+        onChange(options.copy(certify = if (on) CertifyLevel.FormFill else null))
+    }
+    Text(stringResource(R.string.sign_certify_about), color = c.textSecondary, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp))
+    val level = options.certify ?: return
+    Column(Modifier.selectableGroup()) {
+        for (l in CertifyLevel.entries) {
+            Row(
+                Modifier.fillMaxWidth().heightIn(min = 48.dp)
+                    .selectable(selected = l == level, role = Role.RadioButton) { onChange(options.copy(certify = l)) }
+                    .padding(horizontal = 20.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(if (l == level) LucideIcons.CircleDot else LucideIcons.Circle, null, tint = if (l == level) c.accent else c.icon, modifier = Modifier.size(22.dp))
+                Spacer(Modifier.width(12.dp))
+                Text(stringResource(l.label), color = c.text, fontSize = 15.sp)
+            }
+        }
+    }
+}
+
+/** Which details a visible signature shows (Configure Signature Appearance). */
+@Composable
+private fun ShownSection(shows: CertShown, onChange: (CertShown) -> Unit) {
+    ToggleRow(stringResource(R.string.sign_show_name), shows.name) { onChange(shows.copy(name = it)) }
+    ToggleRow(stringResource(R.string.sign_show_date), shows.date) { onChange(shows.copy(date = it)) }
+    ToggleRow(stringResource(R.string.sign_show_reason), shows.reason) { onChange(shows.copy(reason = it)) }
+    ToggleRow(stringResource(R.string.sign_show_location), shows.location) { onChange(shows.copy(location = it)) }
+    ToggleRow(stringResource(R.string.sign_show_dn), shows.distinguishedName) { onChange(shows.copy(distinguishedName = it)) }
+    ToggleRow(stringResource(R.string.sign_show_labels), shows.labels) { onChange(shows.copy(labels = it)) }
+}
+
+/** A row that is one switch: the label, and the switch at the end; the whole row toggles. */
+@Composable
+private fun ToggleRow(label: String, on: Boolean, onChange: (Boolean) -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().heightIn(min = 48.dp).toggleable(value = on, role = Role.Switch, onValueChange = onChange).padding(horizontal = 20.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(label, color = pdfColors.text, fontSize = 15.sp, modifier = Modifier.weight(1f))
+        PdfSwitch(on, null)
+    }
 }
 
 @Composable
@@ -563,7 +693,7 @@ private fun SignatureDetails(vm: AppViewModel, doc: OpenDocument, s: SignatureEn
         } else {
             Text(stringResource(R.string.sign_field_unsigned), color = c.textSecondary, fontSize = 13.sp, modifier = Modifier.padding(top = 6.dp))
         }
-        Row(Modifier.padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        androidx.compose.foundation.layout.FlowRow(Modifier.padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             if (s.page != null && s.rect != null) {
                 TextButton(onClick = { doc.controller.sheet = ViewerSheet.None; vm.showSignature(doc, s) }) { Text(stringResource(R.string.sign_go_to), color = c.accent) }
             }
@@ -574,6 +704,9 @@ private fun SignatureDetails(vm: AppViewModel, doc: OpenDocument, s: SignatureEn
                 } else if (s.status == "unknown") {
                     TextButton(onClick = { vm.trustSigner(doc, s) }) { Text(stringResource(R.string.sign_trust), color = c.accent) }
                 }
+            }
+            if (s.signed) {
+                TextButton(onClick = { doc.controller.sheet = ViewerSheet.None; vm.openSignedVersion(doc, s) }) { Text(stringResource(R.string.sign_view_signed_version), color = c.accent) }
             }
             if (!s.signed) {
                 TextButton(onClick = {

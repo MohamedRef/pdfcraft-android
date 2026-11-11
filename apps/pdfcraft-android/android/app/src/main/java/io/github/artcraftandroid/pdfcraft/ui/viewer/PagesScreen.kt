@@ -84,6 +84,9 @@ fun PagesScreen(vm: AppViewModel, doc: OpenDocument, onClose: () -> Unit) {
     val selected = remember { mutableStateMapOf<Int, Boolean>() }
     val thumbs = remember(doc.info.generation) { mutableStateMapOf<Int, ImageBitmap>() }
     var insertMenu by remember { mutableStateOf(false) }
+    var moreMenu by remember { mutableStateOf(false) }
+    var labelsOpen by remember { mutableStateOf(false) }
+    val customLabels = remember(doc.info.generation) { io.github.artcraftandroid.pdfcraft.ui.hasCustomLabels(doc.info.pages.map { it.label }) }
     val landscape = LocalConfiguration.current.screenWidthDp > LocalConfiguration.current.screenHeightDp
     val columns = if (landscape) 4 else 2
     val grid = rememberLazyGridState(initialFirstVisibleItemIndex = doc.viewer.currentPage)
@@ -93,6 +96,7 @@ fun PagesScreen(vm: AppViewModel, doc: OpenDocument, onClose: () -> Unit) {
     val exporting = vm.imageExport
     fun close() {
         vm.organizing = false
+        vm.splitOpen = false
         vm.imageExport = null
         selected.clear()
         onClose()
@@ -245,7 +249,7 @@ fun PagesScreen(vm: AppViewModel, doc: OpenDocument, onClose: () -> Unit) {
                             }
                         }
                         Spacer(Modifier.height(8.dp))
-                        Text("${i + 1}", color = c.icon, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, lineHeight = 17.sp)
+                        Text(if (customLabels) p.label.ifEmpty { "${i + 1}" } else "${i + 1}", color = c.icon, maxLines = 1, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, lineHeight = 17.sp)
                         Spacer(Modifier.height(12.dp))
                     }
                 }
@@ -264,13 +268,14 @@ fun PagesScreen(vm: AppViewModel, doc: OpenDocument, onClose: () -> Unit) {
                 OrganizeItem(LucideIcons.Share2, stringResource(R.string.common_share), enabled) { vm.writeImages(doc, exporting, picked, share = true) }
             } else if (organizing) {
                 OrganizeItem(LucideIcons.FilePlus, stringResource(R.string.pages_insert_page), true) { insertMenu = true }
-                OrganizeItem(LucideIcons.FileOutput, stringResource(R.string.pages_extract), enabled) { vm.extractPages(doc, picked) }
+                OrganizeItem(LucideIcons.CopyPlus, stringResource(R.string.pages_duplicate), enabled && doc.info.allowsAssembly) { vm.duplicatePages(doc, picked) }
                 OrganizeItem(LucideIcons.Trash2, stringResource(R.string.common_delete), enabled && picked.size < doc.pageCount) {
                     vm.runTool(doc, "page_delete", mapOf("pages" to picked.map { it + 1 }))
                     selected.clear()
                 }
                 OrganizeItem(LucideIcons.RotateCcw, stringResource(R.string.pages_rotate_left), enabled) { vm.runTool(doc, "page_rotate", mapOf("pages" to picked.map { it + 1 }, "degrees" to -90)) }
                 OrganizeItem(LucideIcons.RotateCw, stringResource(R.string.pages_rotate_right), enabled) { vm.runTool(doc, "page_rotate", mapOf("pages" to picked.map { it + 1 }, "degrees" to 90)) }
+                OrganizeItem(LucideIcons.Ellipsis, stringResource(R.string.pages_more), true) { moreMenu = true }
             } else {
                 OrganizeItem(LucideIcons.FilePenLine, stringResource(R.string.common_tool_edit_pdf), true) {
                     close()
@@ -280,9 +285,25 @@ fun PagesScreen(vm: AppViewModel, doc: OpenDocument, onClose: () -> Unit) {
                     close()
                     vm.runQuickTool(doc, QuickTool.Crop)
                 }
+                OrganizeItem(LucideIcons.Scissors, stringResource(R.string.pages_split_short), doc.pageCount > 1) { vm.splitOpen = true }
             }
         }
     }
+    if (moreMenu) {
+        PdfSheet(onDismiss = { moreMenu = false }, dim = true) {
+            SheetTitle(stringResource(R.string.pages_more))
+            SheetRow(LucideIcons.FileOutput, stringResource(R.string.pages_extract), { moreMenu = false; vm.extractPages(doc, picked) }, enabled = picked.isNotEmpty())
+            val assemble = doc.info.allowsAssembly
+            SheetRow(LucideIcons.Replace, stringResource(R.string.pages_replace_with), { moreMenu = false; vm.pickReplaceFile(doc, picked) }, enabled = assemble && picked.isNotEmpty())
+            SheetRow(LucideIcons.ArrowUpDown, stringResource(R.string.pages_reverse_order), { moreMenu = false; vm.reversePages(doc, picked) }, enabled = assemble && doc.pageCount > 1)
+            SheetRow(LucideIcons.Tag, stringResource(R.string.pages_labels), { moreMenu = false; labelsOpen = true }, enabled = assemble)
+            SheetRow(LucideIcons.Scissors, stringResource(R.string.pages_split), { moreMenu = false; vm.splitOpen = true }, enabled = doc.pageCount > 1)
+            Spacer(Modifier.height(12.dp))
+        }
+    }
+    if (labelsOpen) PageLabelsSheet(vm, doc, picked) { labelsOpen = false }
+    if (vm.splitOpen) SplitSheet(vm, doc, picked) { vm.splitOpen = false }
+    vm.replacePrompt?.takeIf { it.doc === doc }?.let { ReplacePagesDialog(vm, it) }
     if (insertMenu) {
         // where the new pages go, as the reference asks: around the selection, or at either end
         var after by remember { mutableStateOf(true) }

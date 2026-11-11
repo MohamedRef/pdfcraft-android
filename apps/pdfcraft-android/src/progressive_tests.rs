@@ -254,7 +254,7 @@ fn progressive_late_renderers_do_not_revive_closed_or_superseded_cache_entries()
     let bytes = session.with_doc(opened.document.id, |d| d.display.clone()).unwrap();
     let late = session.take_renderer(opened.document.id, &bytes, RenderConfig::default());
     session.close(opened.document.id, true).unwrap();
-    session.return_renderer(opened.document.id, &bytes, false, late);
+    session.return_renderer(opened.document.id, &bytes, ViewKey::of(&RenderConfig::default()), late);
     assert!(!session.cache().contains_key(&opened.document.id));
     let widget = "<< /Type /Annot /Subtype /Widget /FT /Tx /T (orphan) /V (kept) /Rect [10 10 90 35] /P 5 0 R >>";
     let opened = session.begin_open(file(&fixture("", "", "/Annots [7 0 R]", &[widget])), None, 0, false).unwrap();
@@ -262,7 +262,7 @@ fn progressive_late_renderers_do_not_revive_closed_or_superseded_cache_entries()
     let late = session.take_renderer(opened.document.id, &bytes, RenderConfig::default());
     session.complete_open(opened.document.id).unwrap();
     assert!(!session.with_doc(opened.document.id, |d| Arc::ptr_eq(&d.display, &bytes)).unwrap());
-    session.return_renderer(opened.document.id, &bytes, false, late);
+    session.return_renderer(opened.document.id, &bytes, ViewKey::of(&RenderConfig::default()), late);
     assert!(!session.cache().contains_key(&opened.document.id));
 }
 

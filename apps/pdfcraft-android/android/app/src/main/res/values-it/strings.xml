@@ -1321,7 +1321,10 @@
     <string name="bates_source_refused">Questo strumento non può numerare un PDF firmato o di sola lettura.</string>
     <string name="bates_export_failed">Impossibile salvare questa nuova copia in Download.</string>
     <string name="ink_presets_title">Penne preferite</string>
-    <string name="ink_presets_help">Scegli la penna, poi disegna. Colore, dimensione e opacità si applicano subito ai nuovi tratti. Tocca un preferito per ripristinarne le impostazioni.</string>
+    <string name="ink_presets_help">Ogni penna mantiene colore, spessore e opacità propri. Tocca un preferito per ripristinarne le impostazioni.</string>
+    <string name="ink_pen_settings_title">Impostazioni penna</string>
+    <string name="ink_pen_edit_action">cambia colore e spessore</string>
+    <string name="ink_preset_save_help">Salvare un preferito memorizza %1$s così com\'è ora. Tocca la penna selezionata nella barra per cambiarne colore e spessore.</string>
     <string name="ink_snap_explanation">Tieni premuto brevemente un tratto a mano libera per trasformarlo in una forma pulita.</string>
     <string name="ink_pen_only_explanation">Attivo: le dita scorrono e ingrandiscono, disegna solo la S Pen. Disattivo: usa il dito o la S Pen.</string>
     <string name="ink_preset_slot">Penna %1$d</string>
@@ -1391,7 +1394,7 @@
     <string name="ink_toolbar_rectangle">Box</string>
     <string name="ink_toolbar_line">Linea</string>
     <string name="ink_toolbar_color">Colore</string>
-    <string name="ink_toolbar_settings">Penne</string>
+    <string name="ink_toolbar_settings">Impostazioni</string>
     <string name="ink_toolbar_lasso">Lazo</string>
     <string name="ink_toolbar_eraser">Gomma</string>
     <string name="ink_eraser_size_title">Dimensione gomma</string>
@@ -1418,4 +1421,13 @@
     <string name="compact_previews">Usa meno memoria per le anteprime delle pagine</string>
     <string name="compact_previews_body">Riduce la precisione del colore per le pagine intere. I dettagli ingranditi mantengono la qualità piena. Si applica alla riapertura del documento.</string>
     <string name="updater_other_build">Questa build non è l\'APK ufficiale ARM64, quindi gli aggiornamenti in-app sono disattivati. Aggiornala da dove l\'hai installata.</string>
+    <string name="updater_err_checksum">L\'APK scaricato non corrisponde alla versione pubblicata, quindi non è stato installato. Riprova a scaricarlo.</string>
+    <string name="updater_err_invalid_apk">Il file scaricato non è un\'app Android firmata valida.</string>
+    <string name="updater_err_wrong_build">L\'APK scaricato non è l\'aggiornamento di PdfCraft previsto.</string>
+    <string name="updater_err_certificate">L\'APK scaricato non è firmato da PdfCraft, quindi non può sostituire l\'app installata.</string>
+    <string name="updater_err_android_version">Questo aggiornamento richiede una versione di Android più recente.</string>
+    <string name="updater_err_abi">Questo APK non è compilato per il processore del tuo telefono.</string>
+    <string name="updater_err_storage">Impossibile salvare l\'aggiornamento su questo dispositivo. Libera spazio e riprova.</string>
+    <string name="updater_err_untrusted">Il link di aggiornamento non proviene dalle release GitHub ufficiali di PdfCraft, quindi è stato rifiutato.</string>
+    <string name="updater_err_server">Il server di download ha inviato una risposta imprevista. Riprova più tardi o scarica dal browser.</string>
 </resources>
