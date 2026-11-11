@@ -144,6 +144,12 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
     }
 
     // Reopen where the reader left off.
+    // two pages side by side where the window is wide enough; one page on a narrow one (#152)
+    val windowWidthDp = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp
+    LaunchedEffect(doc, vm.spreadPref, windowWidthDp) {
+        doc.viewer.showSpread(if (spreadFits(windowWidthDp)) vm.spreadPref else Spread.Single)
+    }
+
     // the reader's saved reading colours, once the engine has the whole document
     LaunchedEffect(doc, doc.info.preparing) {
         if (!doc.info.preparing) vm.applySavedReadingColors(doc)
@@ -277,7 +283,7 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
                                 if (!vm.readAloudAt(doc, at, slop)) ctl.toggleBars()
                             }
                             doc.viewer.mode == PageMode.SinglePage && doc.viewer.zoom <= 1.01f && edgeTap(p.x, doc.viewer.viewW) != 0 -> {
-                                doc.viewer.goToPage(doc.viewer.currentPage + edgeTap(p.x, doc.viewer.viewW))
+                                doc.viewer.turnPage(edgeTap(p.x, doc.viewer.viewW))
                                 ctl.barsVisible = false
                             }
                             else -> ctl.toggleBars()

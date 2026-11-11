@@ -35,4 +35,23 @@
     <string name="edit_image_crop_handle_right">Bordo destro del ritaglio</string>
     <string name="edit_image_crop_handle_bottom">Bordo inferiore del ritaglio</string>
     <string name="edit_image_crop_handle_left">Bordo sinistro del ritaglio</string>
+    <string name="sign_certify">Certifica documento</string>
+    <string name="sign_certify_about">Una firma di certificazione è dell’autore: indica quali modifiche successive mantengono valido il documento.</string>
+    <string name="sign_certify_no_changes">Nessuna modifica consentita</string>
+    <string name="sign_certify_form_fill">Compilazione di moduli e firma</string>
+    <string name="sign_certify_comments">Compilazione di moduli, firma e commenti</string>
+    <string name="sign_invisible">Firma invisibile</string>
+    <string name="sign_invisible_short">Invisibile</string>
+    <string name="sign_invisible_about">Sulla pagina non viene disegnato nulla; la firma è elencata nel pannello Firme.</string>
+    <string name="sign_show_name">Mostra nome</string>
+    <string name="sign_show_date">Mostra data</string>
+    <string name="sign_show_reason">Mostra motivo</string>
+    <string name="sign_show_location">Mostra luogo</string>
+    <string name="sign_show_dn">Mostra nome distinto</string>
+    <string name="sign_show_labels">Mostra etichette</string>
+    <string name="sign_section_contact">Contatti (facoltativo)</string>
+    <string name="sign_contact_hint">Email o telefono</string>
+    <string name="sign_view_signed_version">Visualizza versione firmata</string>
+    <string name="sign_no_signed_version">La versione firmata da questa firma non è stata trovata nel file.</string>
+    <string name="sign_signed_version_name">%1$s (firmato, %2$s)</string>
 </resources>

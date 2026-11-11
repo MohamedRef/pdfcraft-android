@@ -944,8 +944,8 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             ctrl && (keyCode == android.view.KeyEvent.KEYCODE_EQUALS || keyCode == android.view.KeyEvent.KEYCODE_PLUS || keyCode == android.view.KeyEvent.KEYCODE_NUMPAD_ADD) -> v.zoomStep(1, center)
             ctrl && (keyCode == android.view.KeyEvent.KEYCODE_MINUS || keyCode == android.view.KeyEvent.KEYCODE_NUMPAD_SUBTRACT) -> v.zoomStep(-1, center)
             ctrl -> return false
-            keyCode == android.view.KeyEvent.KEYCODE_N || keyCode == android.view.KeyEvent.KEYCODE_PAGE_DOWN -> v.goToPage(v.currentPage + 1)
-            keyCode == android.view.KeyEvent.KEYCODE_P || keyCode == android.view.KeyEvent.KEYCODE_PAGE_UP -> v.goToPage(v.currentPage - 1)
+            keyCode == android.view.KeyEvent.KEYCODE_N || keyCode == android.view.KeyEvent.KEYCODE_PAGE_DOWN -> v.turnPage(1)
+            keyCode == android.view.KeyEvent.KEYCODE_P || keyCode == android.view.KeyEvent.KEYCODE_PAGE_UP -> v.turnPage(-1)
             keyCode == android.view.KeyEvent.KEYCODE_DPAD_DOWN -> v.setScroll(v.scrollX, v.scrollY + v.viewH * 0.1f)
             keyCode == android.view.KeyEvent.KEYCODE_DPAD_UP -> v.setScroll(v.scrollX, v.scrollY - v.viewH * 0.1f)
             keyCode == android.view.KeyEvent.KEYCODE_DPAD_RIGHT -> v.setScroll(v.scrollX + v.viewW * 0.1f, v.scrollY)
@@ -1272,6 +1272,31 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         else io.github.artcraftandroid.pdfcraft.ui.viewer.PageMode.Continuous
 
     val savedNightMode: Boolean get() = appPrefs.getBoolean("nightMode", false)
+
+    /**
+     * Two pages side by side (View settings; remembered app-wide). It applies only where the
+     * window is wide enough ([io.github.artcraftandroid.pdfcraft.ui.viewer.spreadFits]); a phone
+     * held upright shows one page.
+     */
+    var spreadPref by mutableStateOf(
+        when (appPrefs.getString("spread", "single")) {
+            "two" -> io.github.artcraftandroid.pdfcraft.ui.viewer.Spread.TwoUp
+            "cover" -> io.github.artcraftandroid.pdfcraft.ui.viewer.Spread.TwoUpCover
+            else -> io.github.artcraftandroid.pdfcraft.ui.viewer.Spread.Single
+        },
+    )
+        private set
+
+    fun setSpread(spread: io.github.artcraftandroid.pdfcraft.ui.viewer.Spread) {
+        // two pages side by side are page views: leave Reading Mode for them
+        readingMode = false
+        spreadPref = spread
+        appPrefs.edit().putString("spread", when (spread) {
+            io.github.artcraftandroid.pdfcraft.ui.viewer.Spread.TwoUp -> "two"
+            io.github.artcraftandroid.pdfcraft.ui.viewer.Spread.TwoUpCover -> "cover"
+            io.github.artcraftandroid.pdfcraft.ui.viewer.Spread.Single -> "single"
+        }).apply()
+    }
 
     fun setPageMode(doc: OpenDocument, mode: io.github.artcraftandroid.pdfcraft.ui.viewer.PageMode) {
         // leaving Reading Mode: a canvas laid out already followed the page read; else it shows it on layout
@@ -1961,6 +1986,45 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         certPlacing = doc
     }
 
+    /** Sign with no box on the page (an invisible signature, on the current page): on to choosing the ID. */
+    fun signInvisibly(doc: OpenDocument) {
+        certPlacing = null
+        openCertSign(io.github.artcraftandroid.pdfcraft.ui.viewer.CertTarget(doc, null, doc.viewer.currentPage, null))
+    }
+
+    /**
+     * View signed version: the revision signature [s] signs, saved as its own file and opened as a
+     * separate document, so what was signed can be seen without the later changes.
+     */
+    fun openSignedVersion(doc: OpenDocument, s: io.github.artcraftandroid.pdfcraft.ui.viewer.SignatureEntry) {
+        val eng = engine ?: return
+        viewModelScope.launch {
+            var copy: Int? = null
+            try {
+                val list = eng.tool("doc_revisions", mapOf("doc" to doc.id)).optJSONArray("revisions")
+                val revisions = (0 until (list?.length() ?: 0)).mapNotNull { i ->
+                    val o = list?.optJSONObject(i) ?: return@mapNotNull null
+                    val by = o.optJSONArray("signed_by")
+                    o.optInt("revision") to (0 until (by?.length() ?: 0)).map { by!!.optString(it) }
+                }
+                val revision = io.github.artcraftandroid.pdfcraft.ui.viewer.signedRevision(s.field, revisions)
+                if (revision == null) {
+                    tell(text(R.string.sign_no_signed_version))
+                    return@launch
+                }
+                copy = eng.tool("doc_open_revision", mapOf("doc" to doc.id, "revision" to revision)).optInt("doc")
+                val dir = File(getApplication<Application>().cacheDir, "attachments/${System.nanoTime()}").apply { mkdirs() }
+                val out = File(dir, DocumentFiles.safeName(text(R.string.sign_signed_version_name, doc.name.removeSuffix(".pdf"), s.field) + ".pdf"))
+                eng.tool("doc_save", mapOf("doc" to copy, "path" to out.absolutePath, "full" to true))
+                open(Uri.fromFile(out))
+            } catch (e: Exception) {
+                tell(e.userMessage)
+            } finally {
+                copy?.let { c -> runCatching { eng.tool("doc_close", mapOf("doc" to c, "discard_changes" to true)) } }
+            }
+        }
+    }
+
     /** The box was drawn: on to choosing the ID. */
     fun placeCert(doc: OpenDocument, page: Int, rect: FloatArray) {
         certPlacing = null
@@ -2055,6 +2119,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         look: io.github.artcraftandroid.pdfcraft.ui.viewer.CertLook,
         reason: String,
         location: String,
+        options: io.github.artcraftandroid.pdfcraft.ui.viewer.CertOptions = io.github.artcraftandroid.pdfcraft.ui.viewer.CertOptions(),
     ) {
         val eng = engine ?: return
         val doc = t.doc
@@ -2065,13 +2130,9 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                     "doc" to doc.id, "id" to id.file.absolutePath, "password" to password, "out" to doc.file.absolutePath,
                     "reason" to reason.trim().ifEmpty { null }, "location" to location.trim().ifEmpty { null },
                 )
-                if (t.field != null) {
-                    args["field"] = t.field
-                } else {
-                    args["page"] = t.page + 1
-                    args["rect"] = t.rect?.map { it.toDouble() }
-                }
-                when (look) {
+                args += io.github.artcraftandroid.pdfcraft.ui.viewer.certPlacementArgs(t.field, t.page, t.rect, options)
+                // an invisible signature draws nothing, so it takes no picture
+                if ("field" in args || "rect" in args) when (look) {
                     io.github.artcraftandroid.pdfcraft.ui.viewer.CertLook.Name -> Unit
                     io.github.artcraftandroid.pdfcraft.ui.viewer.CertLook.Typed -> args["graphic"] = mapOf("text" to id.name)
                     io.github.artcraftandroid.pdfcraft.ui.viewer.CertLook.Drawn -> args["graphic"] = mapOf("image" to signatures.signature.absolutePath)

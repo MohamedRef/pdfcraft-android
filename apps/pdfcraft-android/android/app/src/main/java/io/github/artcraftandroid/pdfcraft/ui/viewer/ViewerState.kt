@@ -28,6 +28,10 @@ class ViewerState(pages: List<PageSize>) {
     var pages by mutableStateOf(pages)
     var mode by mutableStateOf(PageMode.Continuous)
 
+    /** Pages side by side (#152); see [showSpread]. */
+    var spread by mutableStateOf(Spread.Single)
+        private set
+
     var viewW by mutableFloatStateOf(0f)
         private set
     var viewH by mutableFloatStateOf(0f)
@@ -51,8 +55,8 @@ class ViewerState(pages: List<PageSize>) {
     val layout: DocLayout
         get() {
             val c = cachedLayout
-            if (c != null && c.pages === pages && c.mode == mode && c.viewW == viewW && c.viewH == viewH && c.padTop == padTop && c.padBottom == padBottom) return c
-            return DocLayout(pages, mode, viewW, viewH, gap, margin, padTop, padBottom).also { cachedLayout = it }
+            if (c != null && c.pages === pages && c.mode == mode && c.spread == spread && c.viewW == viewW && c.viewH == viewH && c.padTop == padTop && c.padBottom == padBottom) return c
+            return DocLayout(pages, mode, viewW, viewH, gap, margin, padTop, padBottom, spread).also { cachedLayout = it }
         }
 
     /** Continuous pages zoom out past fit-width; single-page mode rests on one page filling the width. */
@@ -74,7 +78,7 @@ class ViewerState(pages: List<PageSize>) {
                 PageMode.Continuous -> {
                     // the page under the top third, as a reader's eye is
                     val y = (scrollY + viewH * 0.33f) / zoom
-                    l.nearestPage(viewW / 2f, y)
+                    l.nearestPage((scrollX + viewW / 2f) / zoom, y)
                 }
                 PageMode.SinglePage -> l.nearestPage((scrollX + viewW / 2f) / zoom, 0f)
             }
@@ -96,7 +100,7 @@ class ViewerState(pages: List<PageSize>) {
             val r = layout.rects[anchorPage]
             when (mode) {
                 PageMode.Continuous -> { scrollY = (r.top + within * r.height) * zoom; scrollX = scrollX }
-                PageMode.SinglePage -> { zoom = 1f; scrollX = anchorPage * viewW; scrollY = 0f }
+                PageMode.SinglePage -> { zoom = 1f; scrollX = layout.groupOf(anchorPage) * viewW; scrollY = 0f }
             }
         }
         clamp()
@@ -118,6 +122,23 @@ class ViewerState(pages: List<PageSize>) {
         mode = m
         zoom = 1f
         goToPage(page)
+    }
+
+    /** Show pages [s] side by side, staying on the same page. */
+    fun showSpread(s: Spread) {
+        if (s == spread) return
+        val page = currentPage
+        spread = s
+        zoom = 1f
+        goToPage(page)
+    }
+
+    /** Turn to the next ([dir] > 0) or previous spread: two pages at a time when they show two by two. */
+    fun turnPage(dir: Int) {
+        val l = layout
+        if (l.groups.isEmpty()) return
+        val g = (l.groupOf(currentPage) + dir).coerceIn(0, l.groups.lastIndex)
+        goToPage(l.groups[g].first)
     }
 
     /** Scroll by a screen delta (a finger moving by [dx], [dy]); returns what was not consumed. */
@@ -168,7 +189,7 @@ class ViewerState(pages: List<PageSize>) {
             }
             PageMode.SinglePage -> {
                 zoom = 1f
-                scrollX = i * viewW
+                scrollX = l.groupOf(i) * viewW
                 scrollY = 0f
             }
         }
@@ -213,7 +234,7 @@ class ViewerState(pages: List<PageSize>) {
             vx > SNAP_VELOCITY -> ceil(page - 1e-3f) - 1f
             else -> page.roundToInt().toFloat()
         }
-        return target.coerceIn(0f, (pages.size - 1).coerceAtLeast(0).toFloat()) * viewW
+        return target.coerceIn(0f, (layout.groups.size - 1).coerceAtLeast(0).toFloat()) * viewW
     }
 
     fun setScroll(x: Float, y: Float) {

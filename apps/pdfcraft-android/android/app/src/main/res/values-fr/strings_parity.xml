@@ -35,4 +35,23 @@
     <string name="edit_image_crop_handle_right">Bord droit du rognage</string>
     <string name="edit_image_crop_handle_bottom">Bord inférieur du rognage</string>
     <string name="edit_image_crop_handle_left">Bord gauche du rognage</string>
+    <string name="sign_certify">Certifier le document</string>
+    <string name="sign_certify_about">Une signature de certification est celle de l’auteur : elle indique quelles modifications ultérieures gardent le document valide.</string>
+    <string name="sign_certify_no_changes">Aucune modification autorisée</string>
+    <string name="sign_certify_form_fill">Remplir les formulaires et signer</string>
+    <string name="sign_certify_comments">Remplir les formulaires, signer et commenter</string>
+    <string name="sign_invisible">Signature invisible</string>
+    <string name="sign_invisible_short">Invisible</string>
+    <string name="sign_invisible_about">Rien n’est dessiné sur la page ; la signature figure dans le panneau Signatures.</string>
+    <string name="sign_show_name">Afficher le nom</string>
+    <string name="sign_show_date">Afficher la date</string>
+    <string name="sign_show_reason">Afficher le motif</string>
+    <string name="sign_show_location">Afficher le lieu</string>
+    <string name="sign_show_dn">Afficher le nom distinctif</string>
+    <string name="sign_show_labels">Afficher les libellés</string>
+    <string name="sign_section_contact">Coordonnées (facultatif)</string>
+    <string name="sign_contact_hint">E-mail ou téléphone</string>
+    <string name="sign_view_signed_version">Voir la version signée</string>
+    <string name="sign_no_signed_version">La version signée par cette signature est introuvable dans le fichier.</string>
+    <string name="sign_signed_version_name">%1$s (signé, %2$s)</string>
 </resources>
