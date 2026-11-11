@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.absoluteOffset
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.windowInsetsBottomHeight
 import androidx.compose.foundation.layout.windowInsetsTopHeight
@@ -167,6 +168,16 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
                 if (spot != null) doc.viewer.showSpot(p, spot.first, spot.second, spot.third) else doc.viewer.goToPage(p)
                 vm.pendingPage = null
                 vm.pendingSpot = null
+            }
+            // a library search hit: its page, with the words found there highlighted
+            if (w > 0f) vm.pendingSearch?.let { (page, query) ->
+                vm.pendingSearch = null
+                doc.viewer.goToPage(page.coerceIn(0, doc.pageCount - 1))
+                if (query.isNotEmpty()) {
+                    doc.search.run(query, doc.pageCount, page.coerceIn(0, doc.pageCount - 1)) { first -> showHit(doc, first) }
+                    vm.whenSearchDone(doc)
+                    doc.controller.searching = true
+                }
             }
         }
     }
@@ -527,15 +538,17 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
         AnimatedVisibility(
             visible = railVisible && ctl.barsVisible && !ctl.searching && !vm.readingMode &&
                 vm.readAloud == null && vm.fieldActions == null,
-            modifier = Modifier.align(if (prefsRail.railRight) Alignment.CenterEnd else Alignment.CenterStart)
-                .offset {
+            // Physical sides, not start/end: the rail's side follows the writing hand, which does
+            // not change with an Arabic (right-to-left) interface (#156). Drags are physical too.
+            modifier = Modifier.align(if (prefsRail.railRight) androidx.compose.ui.AbsoluteAlignment.CenterRight else androidx.compose.ui.AbsoluteAlignment.CenterLeft)
+                .absoluteOffset {
                     val initialX = if (prefsRail.railRight) viewportWidthPx - railWidthPx else 0f
                     IntOffset((clampedXpx - initialX).roundToInt(), clampedYpx.roundToInt())
                 }
                 .padding(
                     top = with(density) { doc.viewer.padTop.toDp() },
                     bottom = with(density) { navPx.toDp() + 8.dp },
-                ).then(cutoutSides),
+                ).then(cutoutSides).palmGuardedTaps(ctl, vm.toolPrefs),
         ) {
             VerticalQuickToolbar(
                 tools = vm.quickToolbar.bar,

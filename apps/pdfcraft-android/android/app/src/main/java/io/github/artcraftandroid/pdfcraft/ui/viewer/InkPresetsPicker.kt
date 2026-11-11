@@ -230,6 +230,12 @@ internal fun InkPresetsPicker(vm: AppViewModel, onApplied: () -> Unit) {
                 valueRange = 60f..240f,
                 colors = SliderDefaults.colors(thumbColor = c.accent, activeTrackColor = c.accent),
             )
+            var calibrating by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+            TextButton(onClick = { calibrating = true }) { Text(stringResource(R.string.palm_guard_calibrate), color = c.accent) }
+            if (calibrating) PalmGuardCalibration(prefs) {
+                calibrating = false
+                vm.quickToolbar.updateRailRight(prefs.leftHanded)
+            }
         }
         // S Pen side button (#144): what holding it while writing does, and what a click while
         // hovering does. The eraser end of a pen always erases.

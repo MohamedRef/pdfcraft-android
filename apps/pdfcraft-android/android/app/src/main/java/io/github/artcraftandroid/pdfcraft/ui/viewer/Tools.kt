@@ -69,6 +69,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.drawscope.clipRect
@@ -359,6 +361,33 @@ internal fun androidx.compose.ui.graphics.drawscope.DrawScope.drawRuler(r: Ruler
     }
 }
 
+/** The protractor's half disc with 1°, 5° and 10° ticks, labels every 30° and a centre mark (#150). */
+internal fun androidx.compose.ui.graphics.drawscope.DrawScope.drawProtractor(pr: Protractor, measurer: androidx.compose.ui.text.TextMeasurer, density: Float) {
+    val ink = Color(0xFF5A6270)
+    rotate(pr.angleDeg, pivot = pr.center) {
+        // drawn at angle 0 (half disc above the baseline), then turned
+        val r = pr.radius
+        val tl = Offset(pr.center.x - r, pr.center.y - r)
+        val sz = androidx.compose.ui.geometry.Size(2 * r, 2 * r)
+        drawArc(Color(0xFFF4F1E8).copy(alpha = 0.82f), 180f, 180f, true, tl, sz)
+        drawArc(ink, 180f, 180f, true, tl, sz, style = Stroke(width = 1.2f * density))
+        for (deg in 0..180) {
+            val len = when { deg % 10 == 0 -> 14f; deg % 5 == 0 -> 9f; else -> 5f } * density
+            val a = Math.toRadians(deg.toDouble())
+            val dir = Offset(kotlin.math.cos(a).toFloat(), -kotlin.math.sin(a).toFloat())
+            drawLine(ink, pr.center + dir * r, pr.center + dir * (r - len), strokeWidth = (if (deg % 10 == 0) 1.2f else 0.8f) * density)
+            if (deg % 30 == 0) {
+                val label = measurer.measure("$deg",
+                    style = androidx.compose.ui.text.TextStyle(color = Color(0xFF1F2430), fontSize = androidx.compose.ui.unit.TextUnit(11f, androidx.compose.ui.unit.TextUnitType.Sp)))
+                val at = pr.center + dir * (r - 26f * density)
+                drawText(label, topLeft = Offset(at.x - label.size.width / 2f, at.y - label.size.height / 2f))
+            }
+        }
+        drawCircle(ink, radius = 4f * density, center = pr.center, style = Stroke(width = 1.2f * density))
+        drawLine(ink, pr.center - Offset(8f * density, 0f), pr.center + Offset(8f * density, 0f), strokeWidth = 1f * density)
+    }
+}
+
 /** Height of the zoom writing pad (#130). */
 internal val ZOOM_PAD_HEIGHT = 200.dp
 
@@ -379,6 +408,19 @@ private fun ZoomWritingPad(
 ) {
     val c = pdfColors
     val ctl = doc.controller
+    // A sharp background for the box (#130): the box's region rendered at the pad's magnification,
+    // a short moment after the box settles; until then the whole-page image stands in.
+    var sharp by remember(doc) { mutableStateOf<Pair<PadRender, androidx.compose.ui.graphics.ImageBitmap>?>(null) }
+    var sharpGen by remember(doc) { mutableStateOf<Long?>(null) }
+    val zbNow = ctl.zoomBox
+    val wanted = zbNow?.let { zb -> doc.viewer.pages.getOrNull(zb.page)?.let { zb.padRender(padSize, it.width, it.height) } }
+    val gen = zbNow?.let { doc.pageGenerations.of(it.page) }
+    LaunchedEffect(wanted, gen) {
+        if (wanted == null || sharp?.first == wanted && sharpGen == gen) return@LaunchedEffect
+        kotlinx.coroutines.delay(120)
+        val img = doc.images.renderRegion(wanted.page, wanted.scale, io.github.artcraftandroid.pdfcraft.core.TileRect(wanted.x.toUInt(), wanted.y.toUInt(), wanted.w.toUInt(), wanted.h.toUInt()))
+        if (img != null) { sharp = wanted to img; sharpGen = gen }
+    }
     Box(
         modifier.background(Color.White).drawBehind {
             drawLine(c.divider, Offset(0f, 0f), Offset(size.width, 0f), strokeWidth = 2f)
@@ -431,6 +473,16 @@ private fun ZoomWritingPad(
                         img.bitmap,
                         dstOffset = androidx.compose.ui.unit.IntOffset(pageRect.left.toInt(), pageRect.top.toInt()),
                         dstSize = androidx.compose.ui.unit.IntSize(pageRect.width.toInt(), pageRect.height.toInt()),
+                    )
+                }
+                // The sharp render on top, placed by page points so it lines up even while a newer one renders.
+                sharp?.let { (r, img) ->
+                    if (r.page != zb.page) return@let
+                    val k = m / r.scale
+                    drawImage(
+                        img,
+                        dstOffset = androidx.compose.ui.unit.IntOffset(Math.round(origin.x + r.x * k), Math.round(origin.y + r.y * k)),
+                        dstSize = androidx.compose.ui.unit.IntSize(Math.round(r.w * k), Math.round(r.h * k)),
                     )
                 }
                 for (s in drafts) if (s.page == zb.page) {
@@ -561,9 +613,23 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                     val markup = lineGestureMarkup(marker, y, minOf(line[1], line[3]), maxOf(line[1], line[3])) ?: return@launch
                     // Committed meanwhile (Done): it is ink now, so leave it as drawn.
                     if (vm.document !== doc || s !in strokes) return@launch
-                    dropGestureStroke(s)
                     val rects = found.rects.filter { r -> kotlin.math.abs((minOf(r[1], r[3]) + maxOf(r[1], r[3])) / 2f - (minOf(line[1], line[3]) + maxOf(line[1], line[3])) / 2f) < 1f }
-                    vm.addMarkup(doc, markup, s.page, rects, color, if (marker) opacity.coerceAtLeast(0.25f) else opacity)
+                    // The stroke steps aside while the markup is made; it stays in the history,
+                    // so Undo first brings the raw stroke back and a second Undo removes it.
+                    val index = strokes.indexOf(s)
+                    strokes.remove(s)
+                    steps.started()
+                    var made = 0
+                    vm.runTool(doc, "comment_add", markupArgs(markup, s.page, rects, color, if (marker) opacity.coerceAtLeast(0.25f) else opacity, vm.toolPrefs.author.ifBlank { null }),
+                        onSettled = {
+                            steps.finished(made)
+                            if (made > 0) {
+                                edits.add(DraftInkEdit.BecameMarkup(index, s, steps.own))
+                                undone.clear()
+                            } else if (s !in strokes) {
+                                strokes.add(index.coerceIn(0, strokes.size), s)
+                            }
+                        }) { r -> if (r.has("doc")) made = 1 }
                 }
             }
             PenGesture.None -> Unit
@@ -600,6 +666,12 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                 if (edits.isNotEmpty()) {
                     val edit = edits.removeAt(edits.lastIndex)
                     clearSelection()
+                    if (edit is DraftInkEdit.BecameMarkup) {
+                        // The markup must still be this session's newest step; otherwise only forget it.
+                        if (edit.ownStep != steps.own || doc.info.undo == null) return@undo
+                        steps.releaseOwn()
+                        vm.undoDocument(doc, announce = false)
+                    }
                     applyDraftInkEdit(strokes, edit, forward = false)
                     undone.add(edit)
                 } else if (doc.info.undo != null) {
@@ -612,6 +684,11 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                 if (!steps.redoesDocumentFirst() && undone.isNotEmpty()) {
                     val edit = undone.removeAt(undone.lastIndex)
                     clearSelection()
+                    if (edit is DraftInkEdit.BecameMarkup) {
+                        if (doc.info.redo == null) return@redo
+                        steps.reclaimOwn()
+                        vm.redoDocument(doc, announce = false)
+                    }
                     applyDraftInkEdit(strokes, edit, forward = true)
                     edits.add(edit)
                 } else if (steps.canRedoDocument(doc.info.redo != null)) {
@@ -628,12 +705,24 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
     var stillAt by remember { mutableStateOf(Offset.Zero) }
     var movedAt by remember { mutableStateOf(0L) }
     val slop = with(LocalDensity.current) { SNAP_SLOP.toPx() }
+    // A stroke that follows the ruler or protractor is already straight or an arc: holding at
+    // its end does not turn it into another shape (#150).
+    var strokeGuided by remember(doc) { mutableStateOf(false) }
+    // Smart pen gestures (#148): a closed loop held still at its end becomes a lasso on lift.
+    var heldLoop by remember(doc) { mutableStateOf<InkStroke?>(null) }
+    val loopHaptic = androidx.compose.ui.platform.LocalHapticFeedback.current
     LaunchedEffect(current) {
         val s = current ?: return@LaunchedEffect
         if (s.shapeMode != InkShapeMode.Freehand || s.appearance.style == InkStyle.Highlighter) return@LaunchedEffect
         while (true) {
             delay(50)
-            if (prefs.snapToShape && s.preview == null && System.currentTimeMillis() - movedAt >= SNAP_HOLD_MS) {
+            val held = System.currentTimeMillis() - movedAt >= SNAP_HOLD_MS
+            if (prefs.penGestures && !strokeGuided && held && heldLoop !== s && isClosedLoop(s.points.toList())) {
+                heldLoop = s
+                s.preview = null
+                loopHaptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+            }
+            if (prefs.snapToShape && !strokeGuided && heldLoop !== s && s.preview == null && held) {
                 s.preview = ShapeSnap.recognise(s.points.toList())?.outline()
             }
         }
@@ -648,6 +737,7 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
     var hoverEraser by remember(doc) { mutableStateOf(false) }
     var buttonHighlighter by remember(doc) { mutableStateOf(false) }
     val penTracker = remember(doc) { PenTracker() }
+    var layerOrigin by remember(doc) { mutableStateOf(Offset.Zero) }
     // The ruler (#150): screen-space, kept per document while it is open, never saved.
     val density = LocalDensity.current
     val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
@@ -661,6 +751,17 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
         )
     }
     val rulerTextMeasurer = androidx.compose.ui.text.rememberTextMeasurer()
+    // The protractor (#150): arcs along its edge, whole-degree rays from its centre.
+    if (doc.controller.protractorOn && doc.controller.protractor == null && layerSize.width > 0f) {
+        doc.controller.protractor = Protractor(
+            Offset(layerSize.width / 2f, layerSize.height * 0.6f), 0f,
+            radius = minOf(with(density) { 150.dp.toPx() }, minOf(layerSize.width, layerSize.height) * 0.38f),
+        )
+    }
+    var protractorSnap by remember(doc) { mutableStateOf<ProtractorSnap?>(null) }
+    var rayDeg by remember(doc) { mutableStateOf<Float?>(null) }
+    var arcStartDeg by remember(doc) { mutableStateOf(0f) }
+    var protractorReadout by remember(doc) { mutableStateOf<Float?>(null) }
     // Low-latency wet ink (#128), only with the setting on.
     val wet = remember(doc) { WetInk() }
     var wetLast by remember(doc) { mutableStateOf<Offset?>(null) }
@@ -686,12 +787,29 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
         return androidx.compose.ui.geometry.Rect(a, b)
     }
     fun activeRuler(): Ruler? = doc.controller.ruler?.takeIf { doc.controller.rulerOn }?.let { it.copy(angleDeg = rulerDisplayAngle(it.angleDeg)) }
-    /** A freehand stroke that starts beside the ruler follows its edge for the whole stroke. */
+    fun activeProtractor(): Protractor? =
+        doc.controller.protractor?.takeIf { doc.controller.protractorOn }?.let { it.copy(angleDeg = rulerDisplayAngle(it.angleDeg)) }
+    /**
+     * A freehand stroke that starts beside the ruler follows its edge for the whole stroke; one
+     * that starts on the protractor's arc follows the circle, and one from its centre is a ray.
+     */
     fun rulerPoint(p: Offset): Offset {
-        val r = activeRuler() ?: return p
-        val edge = rulerEdge ?: return p
         val outset = prefs.inkWidth * doc.viewer.pixelsPerPoint(current?.page ?: 0) / 2f
-        return r.project(p, edge, outset)
+        rulerEdge?.let { edge -> return activeRuler()?.project(p, edge, outset) ?: p }
+        val pr = activeProtractor() ?: return p
+        return when (protractorSnap) {
+            ProtractorSnap.Arc -> {
+                protractorReadout = sweptAngle(arcStartDeg, pr.angleOf(p), protractorReadout ?: 0f)
+                pr.projectArc(p, outset)
+            }
+            ProtractorSnap.Ray -> {
+                // The ray's direction is fixed once the pen is clear of the centre.
+                val deg = rayDeg ?: if ((p - pr.center).getDistance() > rulerReach) protractorRayAngle(pr.angleOf(p)).also { rayDeg = it } else null
+                protractorReadout = deg
+                if (deg == null) pr.center else pr.projectRay(p, deg)
+            }
+            null -> p
+        }
     }
     val guardSizePx = with(LocalDensity.current) { prefs.palmGuardSizeDp.dp.toPx() }
     val buttonClick = remember(doc) { PenButtonClickDetector() }
@@ -778,6 +896,22 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
         }
     }
 
+    /** Selects the drafts and saved comments [polygon] (page points on [page]) encloses or crosses. */
+    fun selectInLoop(page: Int, polygon: List<Offset>) {
+        selected.clear()
+        savedSelected.clear()
+        if (polygon.size >= 3) {
+            selected.addAll(strokes.filter { it.page == page && inkLassoHitsStroke(polygon, it.points.toList()) })
+            savedSelected.addAll(
+                doc.comments.filter { c ->
+                    c.page.toInt() == page && savedLassoTarget(c.subtype, c.locked, c.fillSign, c.replyTo) && inkLassoHitsRect(polygon, c.rect)
+                },
+            )
+        }
+        if (selected.isEmpty() && savedSelected.isEmpty()) clearSelection()
+        else lassoPoints.clear()
+    }
+
     fun finishLasso(p: Offset) {
         val page = lassoPage ?: return
         moveLasso(p)
@@ -803,30 +937,23 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
             moveOffset = Offset.Zero
             return
         }
-        val polygon = lassoPoints.toList()
-        selected.clear()
-        savedSelected.clear()
-        if (polygon.size >= 3) {
-            selected.addAll(strokes.filter { it.page == page && inkLassoHitsStroke(polygon, it.points.toList()) })
-            savedSelected.addAll(
-                doc.comments.filter { c ->
-                    c.page.toInt() == page && savedLassoTarget(c.subtype, c.locked, c.fillSign, c.replyTo) && inkLassoHitsRect(polygon, c.rect)
-                },
-            )
-        }
-        if (selected.isEmpty() && savedSelected.isEmpty()) clearSelection()
-        else lassoPoints.clear()
+        selectInLoop(page, lassoPoints.toList())
     }
+
 
     Box(
         Modifier.fillMaxSize()
             .onSizeChanged { layerSize = androidx.compose.ui.geometry.Size(it.width.toFloat(), it.height.toFloat()) }
+            .onGloballyPositioned { layerOrigin = it.positionInRoot() }
             .pointerInput(doc) {
                 awaitPointerEventScope {
                     while (true) {
                         val event = awaitPointerEvent(PointerEventPass.Initial)
                         event.changes.firstOrNull { it.type == PointerType.Stylus || it.type == PointerType.Eraser }
-                            ?.let { penTracker.seen(it.position, it.uptimeMillis) }
+                            ?.let {
+                                penTracker.seen(it.position, it.uptimeMillis)
+                                doc.controller.penInRoot.seen(layerOrigin + it.position, it.uptimeMillis)
+                            }
                         val hoverPen = event.changes.firstOrNull { !it.pressed && it.type == PointerType.Stylus }
                         if (event.type == PointerEventType.Press || event.type == PointerEventType.Exit || hoverPen == null) {
                             buttonClick.reset()
@@ -890,6 +1017,11 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                 }
                 clearSelection()
                 rulerEdge = if (doc.controller.inkShapeMode == InkShapeMode.Freehand) activeRuler()?.snapEdge(p, rulerReach) else null
+                protractorSnap = if (rulerEdge == null && doc.controller.inkShapeMode == InkShapeMode.Freehand) activeProtractor()?.snapAt(p, rulerReach) else null
+                rayDeg = null
+                protractorReadout = null
+                activeProtractor()?.let { arcStartDeg = it.angleOf(p) }
+                strokeGuided = rulerEdge != null || protractorSnap != null
                 val at = doc.viewer.screenToPage(rulerPoint(p)) ?: return@toolGestures
                 stillAt = p
                 movedAt = System.currentTimeMillis()
@@ -924,6 +1056,7 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                     stillAt = p
                     movedAt = System.currentTimeMillis()
                     s.preview = null
+                    if (heldLoop === s) heldLoop = null
                 }
                 val at = doc.viewer.screenToPage(p, nearest = true) ?: return@toolGestures
                 if (at.page == s.page) {
@@ -958,6 +1091,19 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                 }
                 val s = current
                 current = null
+                if (s != null && heldLoop === s) {
+                    // Circle-then-hold (#148): the loop selects what it encloses, as the lasso would.
+                    heldLoop = null
+                    strokes.remove(s)
+                    s.preview = null
+                    clearSelection()
+                    lassoPage = s.page
+                    s.points.forEach { addInkLassoPoint(lassoPoints, it) }
+                    selectInLoop(s.page, lassoPoints.toList())
+                    if (selected.isNotEmpty() || savedSelected.isNotEmpty()) doc.controller.lassoMode = true
+                    else vm.tell(text(R.string.pen_gesture_lasso_empty))
+                    return@toolGestures
+                }
                 if (s != null) {
                     // A palm/cancelled gesture must not discard a user's redo history.
                     // A tap is an actual dot, not a discarded stroke. Native PDF Ink needs
@@ -1011,7 +1157,7 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                         s.pressureSensitive = false
                         s.pressures.clear()
                         s.pressures.addAll(List(shape.size) { 1f })
-                    } else if (prefs.penGestures && s.shapeMode == InkShapeMode.Freehand && rulerEdge == null && s.points.size >= 2) {
+                    } else if (prefs.penGestures && s.shapeMode == InkShapeMode.Freehand && rulerEdge == null && protractorSnap == null && s.points.size >= 2) {
                         penGestureAfterLift(s)
                     }
                 }
@@ -1038,8 +1184,9 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
             onEraserCancel = { cancelErase() },
             penButtonHold = prefs.penButtonHold,
             ignoreAt = if (doc.controller.zoomBoxOn) ({ p -> p.y >= layerSize.height - padHeightPx }) else null,
-            overlayHit = if (doc.controller.rulerOn || doc.controller.zoomBoxOn) ({ p ->
+            overlayHit = if (doc.controller.rulerOn || doc.controller.zoomBoxOn || doc.controller.protractorOn) ({ p ->
                 when {
+                    doc.controller.protractorOn && doc.controller.protractor?.contains(p) == true -> { overlayTarget = 2; true }
                     doc.controller.rulerOn && doc.controller.ruler?.contains(p) == true -> { overlayTarget = 0; true }
                     zoomFrameOnScreen()?.contains(p) == true -> { overlayTarget = 1; true }
                     else -> false
@@ -1053,6 +1200,16 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                     val ppp = doc.viewer.pixelsPerPoint(zb.page).takeIf { it > 0f } ?: return@toolGestures
                     val moved = zb.movedBy(pan.x / ppp, pan.y / ppp, pg.width, pg.height)
                     doc.controller.zoomBox = moved.copy(lineStart = if (pan.x != 0f) moved.x else moved.lineStart)
+                    return@toolGestures
+                }
+                if (overlayTarget == 2) {
+                    val was = doc.controller.protractor ?: return@toolGestures
+                    val now = was.transformed(pan, rotation, pivot)
+                    val snapped = rulerDisplayAngle(now.angleDeg)
+                    if (snapped != now.angleDeg && rulerDisplayAngle(was.angleDeg) != snapped) {
+                        haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
+                    }
+                    doc.controller.protractor = now
                     return@toolGestures
                 }
                 val before = doc.controller.ruler ?: return@toolGestures
@@ -1145,6 +1302,21 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                 drawRect(Color(0xFF2E7DFF), f.topLeft, f.size, style = Stroke(width = 1.5f * density.density))
             }
             activeRuler()?.let { r -> drawRuler(r, rulerTextMeasurer, density.density) }
+            activeProtractor()?.let { pr ->
+                drawProtractor(pr, rulerTextMeasurer, density.density)
+                // The angle of the ray, or the angle the arc has swept, beside the pen while drawing.
+                val readout = protractorReadout
+                val pen = current?.points?.lastOrNull()?.let { doc.viewer.pageToScreen(current!!.page, it.x, it.y) }
+                if (readout != null && pen != null && protractorSnap != null) {
+                    val label = rulerTextMeasurer.measure("${"%.0f".format(java.util.Locale.ROOT, kotlin.math.abs(readout))}°",
+                        style = androidx.compose.ui.text.TextStyle(color = Color.White, fontSize = androidx.compose.ui.unit.TextUnit(13f, androidx.compose.ui.unit.TextUnitType.Sp)))
+                    val at = pen + Offset(14f * density.density, -14f * density.density - label.size.height)
+                    drawRoundRect(Color(0xE61F2430), at - Offset(6f * density.density, 3f * density.density),
+                        androidx.compose.ui.geometry.Size(label.size.width + 12f * density.density, label.size.height + 6f * density.density),
+                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(6f * density.density))
+                    drawText(label, topLeft = at)
+                }
+            }
             val hovering = hoverPosition
             if (hovering != null && prefs.palmGuard) {
                 // The guard region is visible while the pen hovers, so its size can be judged.

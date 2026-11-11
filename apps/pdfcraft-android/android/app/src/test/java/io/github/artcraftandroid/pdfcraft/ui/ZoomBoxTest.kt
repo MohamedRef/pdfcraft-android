@@ -2,7 +2,9 @@ package io.github.artcraftandroid.pdfcraft.ui
 
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import io.github.artcraftandroid.pdfcraft.ui.viewer.PadRender
 import io.github.artcraftandroid.pdfcraft.ui.viewer.ZoomBox
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -54,5 +56,17 @@ class ZoomBoxTest {
         val moved = box.movedBy(-1000f, 5000f, 600f, 800f)
         assertEquals(0f, moved.x, 0f)
         assertEquals(800f - box.height, moved.y, 0.01f)
+    }
+
+    @Test
+    fun sharpBackgroundRendersExactlyTheBoxAtThePadsMagnification() {
+        // box at (36, 100), 200 x 60 pt, shown 5x: 1000 x 300 pixels, one per pad pixel
+        assertEquals(PadRender(0, 5f, 180, 500, 1000, 300), box.padRender(pad, 600f, 800f))
+        // a box hanging over the right edge renders only the page's part of it
+        assertEquals(PadRender(0, 5f, 2500, 500, 500, 300), box.copy(x = 500f).padRender(pad, 600f, 800f))
+        // an extreme magnification is capped; the region still covers the whole box
+        assertEquals(PadRender(0, 2f, 72, 200, 400, 120), box.padRender(pad, 600f, 800f, maxScale = 2f))
+        assertNull(box.padRender(Size.Zero, 600f, 800f))
+        assertNull(box.copy(x = 700f).padRender(pad, 600f, 800f))
     }
 }

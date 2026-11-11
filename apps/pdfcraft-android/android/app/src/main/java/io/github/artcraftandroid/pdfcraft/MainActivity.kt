@@ -128,6 +128,7 @@ class MainActivity : ComponentActivity() {
                         FilePickKind.Create -> pickMany.launch(arrayOf("image/*", "text/plain", "application/pdf") + OFFICE_TYPES)
                         FilePickKind.Insert, FilePickKind.Open, FilePickKind.Replace -> pickOne.launch(arrayOf("application/pdf"))
                         FilePickKind.Attach -> pickOne.launch(arrayOf("*/*"))
+                        FilePickKind.Library -> pickMany.launch(arrayOf("application/pdf"))
                         FilePickKind.MarkImage -> pickOne.launch(arrayOf("image/*", "application/pdf"))
                         // .p12 / .pfx: providers type them as PKCS #12, or not at all
                         FilePickKind.DigitalId -> pickOne.launch(arrayOf("application/x-pkcs12", "application/pkcs12", "application/octet-stream"))

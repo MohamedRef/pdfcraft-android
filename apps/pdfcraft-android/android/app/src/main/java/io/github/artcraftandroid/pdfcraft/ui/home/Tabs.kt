@@ -373,6 +373,13 @@ private fun Preferences(vm: AppViewModel) {
     }
     SheetRow(null, stringResource(R.string.home_clear_suggestions), { vm.clearFormSuggestions() })
 
+    Section(stringResource(R.string.library_title))
+    SheetRow(null, stringResource(R.string.library_index_switch), { vm.updateLibraryIndexing(!vm.libraryIndexing) }) {
+        io.github.artcraftandroid.pdfcraft.ui.PdfSwitch(vm.libraryIndexing, null)
+    }
+    SheetRow(null, stringResource(R.string.library_wipe_index), { vm.wipeLibraryIndex() })
+    Text(stringResource(R.string.library_index_body), color = c.textSecondary, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 20.dp))
+
     Section(stringResource(R.string.study_section))
     var confirmStudyClear by remember { mutableStateOf(false) }
     SheetRow(null, stringResource(R.string.study_clear_stats), { confirmStudyClear = true })

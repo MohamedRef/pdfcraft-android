@@ -170,6 +170,21 @@ class PageImages(
     /** The newest cached tile [tile] of [page] at [level], whatever its generation. */
     fun latestTile(page: Int, level: Int, tile: Int): PageImage? = synchronized(lock) { tileFallback[Triple(page, level, tile)] }
 
+    /**
+     * One region of a page rendered now and not cached (the zoom box's sharp background, #130).
+     * Null when the render fails or the document closed.
+     */
+    suspend fun renderRegion(page: Int, scale: Float, region: TileRect): ImageBitmap? = try {
+        withContext(engine.renders + job) {
+            engine.session.renderPageCompact(doc, page.toUInt(), scale, region, compact).toBitmap().asImageBitmap()
+        }
+    } catch (e: kotlinx.coroutines.CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        Log.w("PdfCraft", "zoom box render of page $page failed: ${e.message}")
+        null
+    }
+
     /** Forget everything (the document was replaced). */
     fun clear() = synchronized(lock) {
         cache.clear()
