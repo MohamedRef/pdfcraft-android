@@ -349,6 +349,9 @@ pub struct CommentInfo {
     pub opacity: f32,
     /// Its line width in points, when it draws a line (ink, shapes, lines).
     pub width: Option<f32>,
+    /// The PDF hides it (`/F` Hidden or NoView): the page raster leaves it out, and so must the
+    /// app's own sticky-note overlay (#115).
+    pub hidden: bool,
 }
 
 /// A form field's widget on a page: what a tap there fills.
@@ -478,8 +481,9 @@ pub struct PageOverlays {
 const MAX_MOBILE_PAGE_PIXELS: u64 = 4 * 1024 * 1024;
 const MAX_MOBILE_TILE_PIXELS: u64 = 1024 * 1024;
 
-/// The documents' idle renderers: the bytes they render, and the renderers themselves.
-type RendererCache = HashMap<u64, (pdfcraft_cos::PdfBytes, Vec<PageRenderer>)>;
+/// The documents' idle renderers: the bytes they render, the view settings they were built with
+/// ([`config_key`]), and the renderers themselves.
+type RendererCache = HashMap<u64, (pdfcraft_cos::PdfBytes, String, Vec<PageRenderer>)>;
 
 /// A document's text layers: the bytes they were taken from, a renderer to extract more, and one
 /// slot per page.
@@ -552,28 +556,33 @@ impl MobileSession {
     /// An idle renderer for `bytes`, or a new one.
     fn take_renderer(&self, doc: u64, bytes: &pdfcraft_cos::PdfBytes, config: RenderConfig) -> PageRenderer {
         let mut cache = self.cache();
+        // A renderer keeps the settings it was built with, so one built before a view change
+        // (hide comments, layers, reading colours) is not reused after it (#122).
+        let key = config_key(&config);
         match cache.get_mut(&doc) {
-            Some((b, idle)) if pdfcraft_cos::same_storage(b, bytes) => idle.pop(),
+            Some((b, k, idle)) if pdfcraft_cos::same_storage(b, bytes) && *k == key => idle.pop(),
             _ => None,
         }
         .unwrap_or_else(|| PageRenderer::new(bytes.clone(), config))
     }
 
     /// Give a renderer back for the next render, unless the document has changed since.
-    fn return_renderer(&self, doc: u64, bytes: &pdfcraft_cos::PdfBytes, renderer: PageRenderer) {
+    fn return_renderer(&self, doc: u64, bytes: &pdfcraft_cos::PdfBytes, config: &RenderConfig, renderer: PageRenderer) {
         // Keep a late reading-stage render from reviving a closed or superseded cache entry.
         let auto = self.lock();
         if !auto.session().get(DocId(doc)).is_some_and(|d| pdfcraft_cos::same_storage(&d.display, bytes)) {
             return;
         }
         let mut cache = self.cache();
-        let entry = cache.entry(doc).or_insert_with(|| (bytes.clone(), Vec::new()));
-        if !pdfcraft_cos::same_storage(&entry.0, bytes) {
-            // the renderers of an older version of the document are no use any more
-            *entry = (bytes.clone(), Vec::new());
+        let key = config_key(config);
+        let entry = cache.entry(doc).or_insert_with(|| (bytes.clone(), key.clone(), Vec::new()));
+        if !pdfcraft_cos::same_storage(&entry.0, bytes) || entry.1 != key {
+            // the renderers of an older version of the document, or of older view settings, are
+            // no use any more
+            *entry = (bytes.clone(), key, Vec::new());
         }
-        if entry.1.len() < RENDERERS_PER_DOC {
-            entry.1.push(renderer);
+        if entry.2.len() < RENDERERS_PER_DOC {
+            entry.2.push(renderer);
         }
     }
 
@@ -586,8 +595,8 @@ impl MobileSession {
             return Err(MobileError::Render(format!("the scale must be a positive number, not {scale}")));
         }
         let index = page as usize;
-        let (bytes, config, pages, size, ready) = self.with_doc(doc, |d| {
-            (d.display.clone(), page_render_config(d), d.info.pages.len(), d.info.pages.get(index).map(|p| (p.width, p.height)), d.reading_page_ready(index))
+        let (bytes, config, pages, size, ready) = self.with_render_config(doc, |d, config| {
+            (d.display.clone(), config, d.info.pages.len(), d.info.pages.get(index).map(|p| (p.width, p.height)), d.reading_page_ready(index))
         })?;
         if !ready {
             return Err(MobileError::Render("This page is waiting for document preparation".into()));
@@ -616,11 +625,11 @@ impl MobileSession {
         } else {
             scale
         };
-        let mut renderer = self.take_renderer(doc, &bytes, config);
+        let mut renderer = self.take_renderer(doc, &bytes, config.clone());
         let raster_tile = tile.map(|t| Tile { x: t.x, y: t.y, w: t.width, h: t.height });
         let out =
             renderer.render(RenderRequest { page: index, kind: RequestKind::Pixels, tile: raster_tile, scale: mobile_scale, tag: 0, preview: false });
-        self.return_renderer(doc, &bytes, renderer);
+        self.return_renderer(doc, &bytes, &config, renderer);
         if let Some(e) = out.error {
             return Err(MobileError::Render(format!("page {} could not be drawn: {e}", index.saturating_add(1))));
         }
@@ -649,6 +658,15 @@ impl MobileSession {
             .filter_map(|s| Some(NativeOpenTiming { stage: s.get("stage")?.as_str()?.to_owned(), duration_ms: s.get("duration_ms")?.as_u64()? }))
             .collect();
         Ok(ProfiledOpen { document: self.document(id)?, timings })
+    }
+
+    /// [`with_doc`](Self::with_doc), with the configuration page rasters of `doc` use now.
+    fn with_render_config<T>(&self, doc: u64, f: impl FnOnce(&Document, RenderConfig) -> T) -> Result<T, MobileError> {
+        let a = self.lock();
+        let session = a.session();
+        let d = session.get(DocId(doc)).ok_or(MobileError::NoDocument(doc))?;
+        let view = session.render_config(DocId(doc)).unwrap_or_default();
+        Ok(f(d, page_render_config(d, &view)))
     }
 
     fn with_doc<T>(&self, doc: u64, f: impl FnOnce(&Document) -> T) -> Result<T, MobileError> {
@@ -779,9 +797,9 @@ impl MobileSession {
         // The reading stage parsed the file for its page sizes; the first page render starts from
         // that parse instead of making it again (#212).
         if let Some(parsed) = parsed
-            && let Ok((display, config)) = self.with_doc(id, |d| (d.display.clone(), page_render_config(d)))
+            && let Ok((display, config)) = self.with_render_config(id, |d, config| (d.display.clone(), config))
         {
-            self.return_renderer(id, &display, PageRenderer::from_parsed(display.clone(), config, parsed));
+            self.return_renderer(id, &display, &config, PageRenderer::from_parsed(display.clone(), config.clone(), parsed));
         }
         if pending {
             self.pending_opens
@@ -816,7 +834,7 @@ impl MobileSession {
         // while the completed document still draws the same bytes; a display copy supersedes them.
         if let Ok(display) = self.with_doc(doc, |d| d.display.clone()) {
             let mut cache = self.cache();
-            if cache.get(&doc).is_some_and(|(bytes, _)| !pdfcraft_cos::same_storage(bytes, &display)) {
+            if cache.get(&doc).is_some_and(|(bytes, _, _)| !pdfcraft_cos::same_storage(bytes, &display)) {
                 cache.remove(&doc);
             }
         }
@@ -1109,8 +1127,26 @@ fn first_json(out: Vec<Content>) -> Value {
 
 /// How pages of `d` are drawn here: the app draws sticky notes itself, as fixed-size icons over
 /// the page.
-fn page_render_config(d: &Document) -> RenderConfig {
-    RenderConfig { password: d.password.as_deref().map(Arc::from), hide_comments: d.comments_hidden(), hide_notes: true, ..RenderConfig::default() }
+/// The page raster configuration: the document's view settings (hidden comments, layer
+/// visibility, reading colours), with sticky-note icons left to the app's overlay. Installed CJK
+/// faces stay off, as before, so the raster does not depend on the phone's fonts.
+fn page_render_config(d: &Document, view: &RenderConfig) -> RenderConfig {
+    RenderConfig {
+        password: d.password.as_deref().map(Arc::from),
+        layers: view.layers.clone(),
+        hide_comments: d.comments_hidden(),
+        reading_colors: view.reading_colors,
+        hide_notes: true,
+        ..RenderConfig::default()
+    }
+}
+
+/// What tells two renderer configurations apart, without the password.
+fn config_key(c: &RenderConfig) -> String {
+    format!(
+        "{:?}|{}|{}|{}|{:?}|{}|{}|{:?}|{:?}",
+        c.layers, c.hide_comments, c.hide_notes, c.reject_oversize, c.reading_colors, c.transparent, c.system_fonts, c.jbig2_work, c.print_layers
+    )
 }
 
 fn native_stages(trace: &pdfcraft_render::OpenTrace, start: usize) -> Vec<NativeOpenTiming> {
@@ -1236,6 +1272,7 @@ fn comment_records(snapshot: &pdfcraft_engine::OverlaySnapshot) -> Vec<CommentIn
                 fill_sign: a.fill_sign,
                 opacity: props.as_ref().map(|p| p.opacity as f32).filter(|v| v.is_finite()).unwrap_or(1.0).clamp(0.0, 1.0),
                 width: props.as_ref().and_then(|p| p.width).map(|w| w as f32).filter(|w| w.is_finite() && *w >= 0.0),
+                hidden: props.as_ref().is_some_and(|p| p.hidden),
             }
         })
         .collect()

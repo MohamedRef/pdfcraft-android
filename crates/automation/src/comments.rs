@@ -833,8 +833,10 @@ impl Automation {
         let page = self.page(a)?;
         let info = self.doc(a)?.info.pages[page].clone();
         let raw = a.get("path").and_then(Value::as_array).ok_or_else(|| ToolError::InvalidArgs("path must be [x,y] points".into()))?;
-        if raw.is_empty() || raw.len() > 512 {
-            return Err(ToolError::InvalidArgs("eraser path requires 1 to 512 points".into()));
+        // A connected path: Android sends long gestures whole (thinning one would turn it into
+        // chords that cut ink the eraser never touched) and splits only beyond this bound.
+        if raw.is_empty() || raw.len() > 4096 {
+            return Err(ToolError::InvalidArgs("eraser path requires 1 to 4096 points".into()));
         }
         let radius = a.opt_num("radius")?.unwrap_or(8.0);
         if !radius.is_finite() || !(0.1..=100.0).contains(&radius) {

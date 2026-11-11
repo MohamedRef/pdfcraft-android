@@ -94,7 +94,7 @@ class PageImages(
     private var allowPrefetch = false
     private var wanted: List<ImageRequest> = emptyList()
     private val inFlight = HashSet<ImageKey>()
-    private val failed = HashSet<ImageKey>()
+    private val failures = RenderFailures()
     private var bytes = 0
     private val signal = Channel<Unit>(Channel.CONFLATED)
 
@@ -123,7 +123,10 @@ class PageImages(
             firstRequestReported = true
             OpenTiming.milestone("first_page_requested", openedAt)
         }
-        synchronized(lock) { wanted = requests }
+        synchronized(lock) {
+            wanted = requests
+            requests.maxOfOrNull { it.key.gen }?.let(failures::generationWanted)
+        }
         signal.trySend(Unit)
     }
 
@@ -140,7 +143,7 @@ class PageImages(
         cache.clear()
         fallback.clear()
         tileFallback.clear()
-        failed.clear()
+        failures.clear()
         bytes = 0
     }
 
@@ -159,7 +162,7 @@ class PageImages(
     }
 
     private fun next(): ImageRequest? = synchronized(lock) {
-        val r = nextRenderRequest(wanted, cache.keys, inFlight, failed, allowPrefetch) ?: return null
+        val r = nextRenderRequest(wanted, cache.keys, inFlight, failures.blocked(android.os.SystemClock.elapsedRealtime()), allowPrefetch) ?: return null
         inFlight.add(r.key)
         r
     }
@@ -184,15 +187,26 @@ class PageImages(
                     val bitmap = img.toBitmap()
                     PageImage(r.key, bitmap.asImageBitmap(), r.scale, r.tile?.x?.toInt() ?: 0, r.tile?.y?.toInt() ?: 0, bitmap.allocationByteCount)
                 }
-            } catch (e: Exception) {
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Throwable) {
+                // Exceptions and bitmap OutOfMemoryError alike: retried after a back-off (#99).
+                if (e !is Exception && e !is OutOfMemoryError) throw e
                 Log.w("PdfCraft", "render of ${r.key} failed: ${e.message}")
-                synchronized(lock) { failed.add(r.key) }
+                val wait = synchronized(lock) { failures.record(r.key, android.os.SystemClock.elapsedRealtime()) }
+                if (wait != null) {
+                    scope.launch(job) {
+                        kotlinx.coroutines.delay(wait)
+                        signal.trySend(Unit)
+                    }
+                }
                 null
             } finally {
                 synchronized(lock) { inFlight.remove(r.key) }
             }
             if (image != null) {
                 synchronized(lock) {
+                    failures.succeeded(r.key)
                     cache.put(r.key, image)?.let { bytes -= it.bytes }
                     bytes += image.bytes
                     if (r.key.isBase) {

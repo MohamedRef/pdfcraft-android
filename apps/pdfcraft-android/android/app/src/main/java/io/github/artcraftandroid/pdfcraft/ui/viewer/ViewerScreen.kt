@@ -723,7 +723,8 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawNotes(doc: Open
     val dp = density
     val s = NOTE_ICON_DP * dp
     for (n in doc.comments) {
-        if (n.subtype != "Text" || n.replyTo != null || n.state != null || n.fillSign || n.rect.size < 4) continue
+        // Hidden/NoView notes are skipped, as every viewer and the page renderer do (#115).
+        if (n.subtype != "Text" || n.hidden || n.replyTo != null || n.state != null || n.fillSign || n.rect.size < 4) continue
         val page = n.page.toInt()
         val a = doc.viewer.pageToScreen(page, n.rect[0], n.rect[1])
         val b = doc.viewer.pageToScreen(page, n.rect[2], n.rect[3])

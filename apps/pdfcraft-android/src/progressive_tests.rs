@@ -131,7 +131,7 @@ fn progressive_first_render_starts_from_the_geometry_parse() {
     let first = session.begin_open(path.clone(), None, 1, true).unwrap();
     assert!(first.document.preparing);
     let id = first.document.id;
-    assert_eq!(session.cache().get(&id).map(|(_, idle)| idle.len()), Some(1));
+    assert_eq!(session.cache().get(&id).map(|(_, _, idle)| idle.len()), Some(1));
     assert!(first.timings.iter().any(|s| s.stage == "native_reading_pages"));
     let early = session.render_page(id, 1, 1.0, None).unwrap();
     let ordinary = MobileSession::new();
@@ -140,14 +140,14 @@ fn progressive_first_render_starts_from_the_geometry_parse() {
     // completion keeps it while the document still draws the same bytes
     session.complete_open(id).unwrap();
     assert!(session.with_doc(id, |d| pdfcraft_cos::same_storage(&d.display, &d.bytes)).unwrap());
-    assert_eq!(session.cache().get(&id).map(|(_, idle)| idle.len()), Some(1));
+    assert_eq!(session.cache().get(&id).map(|(_, _, idle)| idle.len()), Some(1));
     // a fallback to the complete open keeps no reading parse
     let fallback = MobileSession::new();
     let full = fallback
         .begin_open(file(&fixture("", "/Annots [7 0 R]", "", &["<< /Type /Annot /Subtype /Text /Rect [10 10 25 25] >>"])), None, 0, false)
         .unwrap();
     assert!(!full.document.preparing);
-    assert!(fallback.cache().get(&full.document.id).is_none_or(|(_, idle)| idle.is_empty()));
+    assert!(fallback.cache().get(&full.document.id).is_none_or(|(_, _, idle)| idle.is_empty()));
 }
 
 /// Sticky notes (painted by the overlay from the complete comment list) and widgets keep their
@@ -254,7 +254,7 @@ fn progressive_late_renderers_do_not_revive_closed_or_superseded_cache_entries()
     let bytes = session.with_doc(opened.document.id, |d| d.display.clone()).unwrap();
     let late = session.take_renderer(opened.document.id, &bytes, RenderConfig::default());
     session.close(opened.document.id, true).unwrap();
-    session.return_renderer(opened.document.id, &bytes, late);
+    session.return_renderer(opened.document.id, &bytes, &RenderConfig::default(), late);
     assert!(!session.cache().contains_key(&opened.document.id));
     let widget = "<< /Type /Annot /Subtype /Widget /FT /Tx /T (orphan) /V (kept) /Rect [10 10 90 35] /P 5 0 R >>";
     let opened = session.begin_open(file(&fixture("", "", "/Annots [7 0 R]", &[widget])), None, 0, false).unwrap();
@@ -262,7 +262,7 @@ fn progressive_late_renderers_do_not_revive_closed_or_superseded_cache_entries()
     let late = session.take_renderer(opened.document.id, &bytes, RenderConfig::default());
     session.complete_open(opened.document.id).unwrap();
     assert!(!session.with_doc(opened.document.id, |d| Arc::ptr_eq(&d.display, &bytes)).unwrap());
-    session.return_renderer(opened.document.id, &bytes, late);
+    session.return_renderer(opened.document.id, &bytes, &RenderConfig::default(), late);
     assert!(!session.cache().contains_key(&opened.document.id));
 }
 
@@ -442,4 +442,50 @@ fn oversized_file_list_previews_are_refused_before_pdf_parsing() {
     let error = file_thumbnail(path.clone(), 160).unwrap_err().to_string();
     assert!(error.contains("input exceeds 100 MiB"), "{error}");
     assert_eq!(std::fs::metadata(path).unwrap().len(), 100 * 1024 * 1024 + 1);
+}
+
+/// #122: a renderer kept from before "Hide all comments" is not reused after it.
+#[test]
+fn renderers_built_before_a_view_change_are_not_reused_after_it() {
+    let ink = "q 0 0 1 RG 3 w 1 J 1 j 10 10 m 60 80 l 110 20 l S Q";
+    let bytes = fixture(
+        "",
+        "/Annots [7 0 R]",
+        "",
+        &[
+            "<< /Type /Annot /Subtype /Ink /Rect [10 10 120 90] /InkList [[10 10 60 80 110 20]] /C [0 0 1] /AP << /N 8 0 R >> >>",
+            &format!("<< /Type /XObject /Subtype /Form /BBox [10 10 120 90] /Length {} >>\nstream\n{ink}\nendstream", ink.len()),
+        ],
+    );
+    let session = MobileSession::new();
+    let doc = session.open(file(&bytes), None).unwrap().id;
+    let shown = session.render_page(doc, 0, 1.0, None).unwrap().rgba;
+    session.execute("comments_hide".into(), json!({ "doc": doc, "hidden": true }).to_string()).unwrap();
+    let hidden = session.render_page(doc, 0, 1.0, None).unwrap().rgba;
+    assert_ne!(hidden, shown, "the hidden drawing is no longer drawn");
+    session.execute("comments_hide".into(), json!({ "doc": doc, "hidden": false }).to_string()).unwrap();
+    assert_eq!(session.render_page(doc, 0, 1.0, None).unwrap().rgba, shown);
+}
+
+/// #115: notes the PDF marks Hidden or NoView are reported as hidden for the app's overlay.
+#[test]
+fn hidden_and_no_view_notes_are_reported_hidden() {
+    let bytes = fixture(
+        "",
+        "/Annots [7 0 R 8 0 R 9 0 R]",
+        "",
+        &[
+            "<< /Type /Annot /Subtype /Text /Rect [10 10 30 30] /F 2 /Contents (hidden) >>",
+            "<< /Type /Annot /Subtype /Text /Rect [40 10 60 30] /F 32 /Contents (no view) >>",
+            "<< /Type /Annot /Subtype /Text /Rect [70 10 90 30] /F 4 /Contents (shown) >>",
+        ],
+    );
+    let session = MobileSession::new();
+    let doc = session.open(file(&bytes), None).unwrap().id;
+    let notes = session.comments(doc).unwrap();
+    assert_eq!(notes.iter().map(|c| (c.contents.clone().unwrap_or_default(), c.hidden)).collect::<Vec<_>>(), [
+        ("hidden".to_string(), true),
+        ("no view".to_string(), true),
+        ("shown".to_string(), false)
+    ]);
 }

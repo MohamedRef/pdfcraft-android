@@ -3814,7 +3814,8 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     fun tapComment(doc: OpenDocument, at: PagePoint?): Boolean {
         if (at == null) return false
         val hit = doc.comments.lastOrNull { c ->
-            c.page.toInt() == at.page && c.replyTo == null && c.state == null && c.rect.size == 4 &&
+            // A comment the PDF hides (Hidden/NoView) is not drawn, so it cannot be tapped (#115).
+            c.page.toInt() == at.page && !c.hidden && c.replyTo == null && c.state == null && c.rect.size == 4 &&
                 at.x in (c.rect[0] - 4)..(c.rect[2] + 4) && at.y in (c.rect[1] - 4)..(c.rect[3] + 4)
         } ?: return false
         selectedComment = doc to hit
@@ -3833,8 +3834,10 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     }
 
     /** Change a comment's opacity or line width (one undo step each). */
-    fun styleComment(doc: OpenDocument, c: io.github.artcraftandroid.pdfcraft.core.CommentInfo, style: Map<String, Any?>) {
-        runTool(doc, "comment_edit", commentArgs(c) + style) { reselect(doc, c) }
+    /** [reselect] false: the panel is closing or moving on, so the selection is left as it is. */
+    fun styleComment(doc: OpenDocument, c: io.github.artcraftandroid.pdfcraft.core.CommentInfo, style: Map<String, Any?>, reselect: Boolean = true) {
+        if (reselect) runTool(doc, "comment_edit", commentArgs(c) + style) { reselect(doc, c) }
+        else runTool(doc, "comment_edit", commentArgs(c) + style)
     }
 
     fun editCommentText(doc: OpenDocument, c: io.github.artcraftandroid.pdfcraft.core.CommentInfo, text: String) {

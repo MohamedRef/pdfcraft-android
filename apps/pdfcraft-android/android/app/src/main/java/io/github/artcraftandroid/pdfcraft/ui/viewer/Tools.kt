@@ -60,6 +60,7 @@ import androidx.compose.ui.Modifier
 import io.github.artcraftandroid.pdfcraft.ui.LocalUndo
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.drawscope.clipPath
+import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.draw.clip
@@ -112,7 +113,8 @@ internal class InkStroke(val page: Int, val appearance: InkAppearance, stylus: B
 
 /** Reversible changes to the uncommitted Draw layer, in actual gesture order. */
 private sealed class DraftInkEdit {
-    data class Added(val stroke: InkStroke) : DraftInkEdit()
+    /** One gesture's strokes (several when the pen left the page and came back). */
+    data class Added(val strokes: List<InkStroke>) : DraftInkEdit()
     data class Moved(val strokes: List<InkStroke>, val offset: Offset) : DraftInkEdit()
     /** Lasso Delete of draft strokes, each restored at its own position in paint order. */
     data class Removed(val strokes: List<Pair<Int, InkStroke>>) : DraftInkEdit()
@@ -121,7 +123,7 @@ private sealed class DraftInkEdit {
 private fun applyDraftInkEdit(strokes: androidx.compose.runtime.snapshots.SnapshotStateList<InkStroke>, edit: DraftInkEdit, forward: Boolean) {
     when (edit) {
         is DraftInkEdit.Added -> {
-            if (forward) strokes.add(edit.stroke) else strokes.remove(edit.stroke)
+            if (forward) strokes.addAll(edit.strokes) else strokes.removeAll(edit.strokes)
         }
         is DraftInkEdit.Removed -> {
             if (forward) edit.strokes.forEach { (_, s) -> strokes.remove(s) }
@@ -205,6 +207,9 @@ fun Modifier.toolGestures(
         var one = !navigation && !eraser
         var eraseOne = !navigation && eraser
         var moved = false
+        // Where the active pointer went down: a tap is a gesture that never leaves touch slop,
+        // for a pen as for a finger (pens report sub-pixel jitter between down and up, #74).
+        var origin = down.position
         var last = down.position
         var lastPressure = down.pressure
         if (one) onDown(last, lastPressure, activePen)
@@ -228,7 +233,7 @@ fun Modifier.toolGestures(
                 pressureAt = { time -> StylusLog.pen.pressureAt(time) },
             )
             for (sample in samples) {
-                moved = true
+                if ((sample.position - origin).getDistance() > viewConfiguration.touchSlop) moved = true
                 last = sample.position
                 if (eraseOne) onEraserMove(last) else if (one) onMove(last, sample.pressure, true)
             }
@@ -249,6 +254,8 @@ fun Modifier.toolGestures(
                     one = !eraser
                     eraseOne = eraser
                     last = arrivingPen.position
+                    origin = arrivingPen.position
+                    moved = false
                     lastPressure = arrivingPen.pressure
                     routing.penStarted()
                     if (one) onDown(last, lastPressure, true)
@@ -301,7 +308,7 @@ fun Modifier.toolGestures(
                 if (!one) continue
                 if (active == null || !active.pressed) { onCancel(); one = false; continue }
                 if (active.positionChanged()) {
-                    if ((active.position - down.position).getDistance() > viewConfiguration.touchSlop) moved = true
+                    if ((active.position - origin).getDistance() > viewConfiguration.touchSlop) moved = true
                     last = active.position
                     onMove(last, active.pressure, false)
                     active.consume()
@@ -431,18 +438,13 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
 
     fun moveErase(p: Offset) {
         val page = eraserPage ?: return
-        val at = doc.viewer.screenToPage(p, nearest = true) ?: return
-        if (at.page != page) return
+        // Unclamped: an eraser that leaves the page is not dragged along its edge (#75).
+        val at = doc.viewer.screenToPageUnclamped(page, p) ?: return
         eraserScreen = p
-        val pt = Offset(at.x, at.y)
-        if (eraserPoints.lastOrNull() == pt) return
-        // Bound native work while preserving every region of a long hand gesture.
-        if (eraserPoints.size >= 512) {
-            val sampled = eraserPoints.filterIndexed { index, _ -> index % 2 == 0 }
-            eraserPoints.clear()
-            eraserPoints.addAll(sampled)
+        appendEraserPoint(eraserPoints, Offset(at.x, at.y), activeEraserRadius)?.let { chunk ->
+            // A very long gesture erases its finished part now; the rest follows on lift (#76).
+            vm.runTool(doc, "comment_erase", inkEraseCommand(page, chunk, activeEraserRadius.toDouble()))
         }
-        eraserPoints.add(pt)
     }
 
     fun cancelErase() {
@@ -460,6 +462,24 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
             // One native Edit::Batch per gesture, including freehand marker Ink.
             vm.runTool(doc, "comment_erase", inkEraseCommand(page, path, activeEraserRadius.toDouble()))
         }
+    }
+
+    /** [s] cut to its page; off-page parts are dropped and the pieces replace it in paint order. */
+    fun clipStrokeToPage(s: InkStroke): List<InkStroke> {
+        val page = doc.viewer.pages.getOrNull(s.page) ?: return listOf(s)
+        val points = s.points.toList()
+        val runs = clipInkToPage(points, s.pressures.toList(), page.width, page.height)
+        if (runs.size == 1 && runs[0].points == points) return listOf(s)
+        val at = strokes.indexOf(s).takeIf { it >= 0 } ?: strokes.size
+        strokes.remove(s)
+        val pieces = runs.map { run ->
+            InkStroke(s.page, s.appearance, s.pressureSensitive, s.shapeMode).also {
+                it.points.addAll(run.points)
+                it.pressures.addAll(run.pressures)
+            }
+        }
+        strokes.addAll(at.coerceAtMost(strokes.size), pieces)
+        return pieces
     }
 
     fun beginLasso(p: Offset) {
@@ -528,7 +548,7 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
             selected.addAll(strokes.filter { it.page == page && inkLassoHitsStroke(polygon, it.points.toList()) })
             savedSelected.addAll(
                 doc.comments.filter { c ->
-                    c.page.toInt() == page && savedLassoTarget(c.subtype, c.locked, c.fillSign, c.replyTo) && inkLassoHitsRect(polygon, c.rect)
+                    c.page.toInt() == page && !c.hidden && savedLassoTarget(c.subtype, c.locked, c.fillSign, c.replyTo) && inkLassoHitsRect(polygon, c.rect)
                 },
             )
         }
@@ -599,19 +619,22 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                     movedAt = System.currentTimeMillis()
                     s.preview = null
                 }
+                if (s.shapeMode == InkShapeMode.Freehand) {
+                    // Unclamped: ink that leaves the page keeps its real path and is cut at the
+                    // page edge on lift, never pinned along the border (#75).
+                    val at = doc.viewer.screenToPageUnclamped(s.page, p) ?: return@toolGestures
+                    s.points.add(Offset(at.x, at.y))
+                    s.pressures.add(pressure)
+                    return@toolGestures
+                }
                 val at = doc.viewer.screenToPage(p, nearest = true) ?: return@toolGestures
                 if (at.page == s.page) {
                     val pos = Offset(at.x, at.y)
-                    if (s.shapeMode == InkShapeMode.Freehand) {
-                        s.points.add(pos)
-                        s.pressures.add(pressure)
-                    } else {
-                        // Keep only endpoints in Compose state while dragging; native ink gets a
-                        // densified outline after lift. A temporary preview never reaches the engine.
-                        if (s.points.size == 1) s.points.add(pos) else s.points[1] = pos
-                        s.preview = doc.viewer.pages.getOrNull(s.page)?.let { page ->
-                            inkShapeOutline(s.shapeMode, s.points.first(), pos, page.width, page.height)
-                        }
+                    // Keep only endpoints in Compose state while dragging; native ink gets a
+                    // densified outline after lift. A temporary preview never reaches the engine.
+                    if (s.points.size == 1) s.points.add(pos) else s.points[1] = pos
+                    s.preview = doc.viewer.pages.getOrNull(s.page)?.let { page ->
+                        inkShapeOutline(s.shapeMode, s.points.first(), pos, page.width, page.height)
                     }
                 }
             },
@@ -655,21 +678,15 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                         }
                         return@toolGestures
                     }
-                    if (s.points.size >= 2) {
-                        edits.add(DraftInkEdit.Added(s))
-                        undone.clear()
-                    } else {
-                        strokes.remove(s)
-                    }
                     // a held shape always snaps; with Snap to shape on, any stroke that is one does
                     val shape = if (s.shapeMode != InkShapeMode.Freehand) {
                         val page = doc.viewer.pages.getOrNull(s.page)
                         if (page != null && s.points.size >= 2) inkShapeOutline(s.shapeMode, s.points.first(), s.points.last(), page.width, page.height) else null
                     } else if (s.appearance.style == InkStyle.Highlighter) null else s.preview // only a held stroke snaps: handwriting (l, 1, o, 0) is never turned into a shape on lift
                     s.preview = null
-                    if (s.shapeMode != InkShapeMode.Freehand && shape == null) {
+                    if (s.points.size < 2 || (s.shapeMode != InkShapeMode.Freehand && shape == null)) {
                         strokes.remove(s)
-                        edits.remove(DraftInkEdit.Added(s))
+                        return@toolGestures
                     }
                     if (shape != null) {
                         s.points.clear()
@@ -678,6 +695,12 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                         s.pressureSensitive = false
                         s.pressures.clear()
                         s.pressures.addAll(List(shape.size) { 1f })
+                    }
+                    // Cut at the page edge: what is off the page is dropped (#75).
+                    val pieces = clipStrokeToPage(s)
+                    if (pieces.isNotEmpty()) {
+                        edits.add(DraftInkEdit.Added(pieces))
+                        undone.clear()
                     }
                 }
             },
@@ -706,15 +729,18 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
             for (s in strokes) {
                 val pageRect = doc.viewer.pageRectOnScreen(s.page)
                 val lift = if (moving && s in selected) moveOffset else Offset.Zero
-                drawInkStroke(
-                    runs = s.paths.runs(s),
-                    color = Color(s.appearance.argb),
-                    opacity = s.appearance.opacity,
-                    highlighter = s.appearance.style == InkStyle.Highlighter,
-                    origin = doc.viewer.pageToScreen(s.page, lift.x, lift.y),
-                    scale = doc.viewer.pixelsPerPoint(s.page),
-                    pageBoundsOnScreen = pageRect,
-                )
+                // Ink being drawn may run off its page (#75); only the part on the page shows.
+                clipRect(pageRect.left, pageRect.top, pageRect.right, pageRect.bottom) {
+                    drawInkStroke(
+                        runs = s.paths.runs(s),
+                        color = Color(s.appearance.argb),
+                        opacity = s.appearance.opacity,
+                        highlighter = s.appearance.style == InkStyle.Highlighter,
+                        origin = doc.viewer.pageToScreen(s.page, lift.x, lift.y),
+                        scale = doc.viewer.pixelsPerPoint(s.page),
+                        pageBoundsOnScreen = pageRect,
+                    )
+                }
             }
             // A predicted tail on the stroke being drawn (pen only): where the pen will be about
             // one frame from now, from its real speed. Drawn only, never saved; the next real
@@ -725,12 +751,15 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                 val from = doc.viewer.pageToScreen(s.page, last.x, last.y)
                 val width = inkStyleWidthRuns(listOf(s.pressures.lastOrNull() ?: 1f, s.pressures.lastOrNull() ?: 1f), s.appearance.width, true, s.appearance.style)
                     .firstOrNull()?.width ?: s.appearance.width
-                drawLine(
-                    Color(s.appearance.argb).copy(alpha = s.appearance.opacity),
-                    from, Offset(from.x + dx, from.y + dy),
-                    strokeWidth = width * doc.viewer.pixelsPerPoint(s.page),
-                    cap = androidx.compose.ui.graphics.StrokeCap.Round,
-                )
+                val pageRect = doc.viewer.pageRectOnScreen(s.page)
+                clipRect(pageRect.left, pageRect.top, pageRect.right, pageRect.bottom) {
+                    drawLine(
+                        Color(s.appearance.argb).copy(alpha = s.appearance.opacity),
+                        from, Offset(from.x + dx, from.y + dy),
+                        strokeWidth = width * doc.viewer.pixelsPerPoint(s.page),
+                        cap = androidx.compose.ui.graphics.StrokeCap.Round,
+                    )
+                }
             }
             if (doc.controller.lassoMode) {
                 val page = lassoPage

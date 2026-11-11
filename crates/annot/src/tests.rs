@@ -1761,6 +1761,46 @@ fn the_eraser_cuts_strokes_and_removes_empty_drawings() {
     assert!(!list(&doc, 0).iter().any(|d| d.name(b"Subtype") == Some(&b"Ink"[..])));
 }
 
+fn ink_list(doc: &Document, i: usize) -> Vec<Vec<f64>> {
+    let d = &list(doc, 0)[i];
+    let l = doc.resolve(d.get(b"InkList").unwrap()).as_array().cloned().unwrap();
+    l.iter().map(|s| doc.resolve(s).as_array().unwrap().iter().map(|x| doc.resolve(x).as_f64().unwrap()).collect()).collect()
+}
+
+#[test]
+fn the_eraser_leaves_strokes_it_never_reaches_exactly_as_they_were() {
+    let mut doc = fixture();
+    // Two curved strokes far apart; the eraser crosses only the first.
+    let curve = |y: f64| (0..=12).map(|k| [100.0 + k as f64 * 15.0, y + (k as f64 * 0.7).sin() * 12.0]).collect::<Vec<_>>();
+    let i = add_annotation(&mut doc, &new(0, Shape::Ink { strokes: vec![curve(600.0), curve(300.0)] }), &meta("i")).unwrap();
+    let before = ink_list(&doc, i);
+    assert!(erase_ink(&mut doc, 0, i, &[[190.0, 650.0], [190.0, 550.0]], 4.0, &meta("e")).unwrap());
+    let after = ink_list(&doc, i);
+    assert_eq!(after.len(), 3, "the first stroke is cut in two; the second is kept");
+    assert_eq!(after[2], before[1], "the untouched stroke keeps its exact points");
+    // The cut pieces keep the original vertices away from the cut (no chord densification).
+    let original: Vec<[f64; 2]> = before[0].chunks(2).map(|p| [p[0], p[1]]).collect();
+    let left: Vec<[f64; 2]> = after[0].chunks(2).map(|p| [p[0], p[1]]).collect();
+    assert_eq!(left[..4], original[..4], "vertices left of the cut are the originals");
+    assert!(left.len() <= 16, "only the segment the eraser reaches is densified: {}", left.len());
+}
+
+#[test]
+fn the_eraser_cuts_a_wide_stroke_where_it_meets_its_edge() {
+    let mut doc = fixture();
+    let line = (0..=10).map(|k| [100.0 + k as f64 * 20.0, 400.0]).collect::<Vec<_>>();
+    let mut wide = new(0, Shape::Ink { strokes: vec![line] });
+    wide.style.width = 20.0;
+    let i = add_annotation(&mut doc, &wide, &meta("i")).unwrap();
+    // 9 pt from the centreline: inside the 10 pt half-width, though the radius is only 2.
+    assert!(erase_ink(&mut doc, 0, i, &[[200.0, 409.0], [210.0, 409.0]], 2.0, &meta("e")).unwrap());
+    assert_eq!(ink_list(&doc, i).len(), 2, "the stroke is cut where the eraser touches its painted edge");
+    // 14 pt away it is clear of the edge and nothing changes.
+    let mut clear = fixture();
+    let j = add_annotation(&mut clear, &wide, &meta("i")).unwrap();
+    assert!(!erase_ink(&mut clear, 0, j, &[[200.0, 414.0], [210.0, 414.0]], 2.0, &meta("e")).unwrap());
+}
+
 #[test]
 fn freehand_highlight_segments_can_be_erased_without_losing_their_intent() {
     let mut doc = fixture();
