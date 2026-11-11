@@ -802,6 +802,8 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         }
         if (ctl.tool != ViewerTool.None) leaveTool(doc)
         doc.selection.clear()
+        // annotating with the annotations hidden would hide what is being made: show them again
+        if (tool in setOf(ViewerTool.Comment, ViewerTool.Markup, ViewerTool.Draw, ViewerTool.Text) && doc.info.commentsHidden) setCommentsHidden(doc, false)
         ctl.switchTool(tool)
         if (tool == ViewerTool.Draw && toolPrefs.snapToShape && toolPrefs.takeSnapHint()) tell(text(R.string.msg_snap_to_shape_on))
         // the first time the reader comments without a name, ask for one (once)
@@ -1386,6 +1388,21 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             appPrefs.edit().putBoolean("nightMode", false).apply()
         }
         applyReadingColors(doc, colors)
+    }
+
+    /**
+     * Hide or show every annotation on the pages (#155): a view setting in the engine
+     * (comments_hide), so the file isn't changed or marked as edited.
+     */
+    fun setCommentsHidden(doc: OpenDocument, hidden: Boolean) {
+        val eng = engine ?: return
+        if (doc.info.preparing) return
+        viewModelScope.launch {
+            if (runCatching { eng.tool("comments_hide", mapOf("doc" to doc.id, "hidden" to hidden)) }.isFailure) return@launch
+            // the switch reads the engine's state; the pages draw again without waiting for an edit
+            refresh(doc)
+            doc.images.invalidate()
+        }
     }
 
     /** Give a newly opened (and prepared) [doc] the saved reading colours. */

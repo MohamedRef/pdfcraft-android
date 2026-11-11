@@ -557,6 +557,16 @@
     <string name="sheet_two_pages_cover">صفحتان مع الغلاف</string>
     <string name="sheet_reading_mode">وضع القراءة</string>
     <string name="sheet_night_mode">الوضع الليلي</string>
+    <string name="sheet_hide_annotations">إخفاء التعليقات التوضيحية</string>
+    <string name="comments_filter_all">الكل</string>
+    <string name="comments_filter_notes">ملاحظات</string>
+    <string name="comments_filter_highlights">تمييزات</string>
+    <string name="comments_filter_ink">حبر</string>
+    <string name="comments_filter_shapes">أشكال</string>
+    <string name="comments_filter_stamps">أختام</string>
+    <string name="comments_filter_author">الكاتب</string>
+    <string name="comments_filter_anyone">أي شخص</string>
+    <string name="comments_filter_none">لا توجد تعليقات تطابق هذه الفلاتر.</string>
     <string name="sheet_reading_colors">ألوان القراءة</string>
     <string name="sheet_reading_colors_sample">أب</string>
     <string name="sheet_reading_colors_off">إيقاف</string>
