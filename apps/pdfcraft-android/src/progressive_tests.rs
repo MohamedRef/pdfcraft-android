@@ -137,6 +137,10 @@ fn progressive_first_render_starts_from_the_geometry_parse() {
     let ordinary = MobileSession::new();
     let plain = ordinary.open(path, None).unwrap();
     assert_eq!(ordinary.render_page(plain.id, 1, 1.0, None).unwrap().rgba, early.rgba);
+    // completion keeps it while the document still draws the same bytes
+    session.complete_open(id).unwrap();
+    assert!(session.with_doc(id, |d| pdfcraft_cos::same_storage(&d.display, &d.bytes)).unwrap());
+    assert_eq!(session.cache().get(&id).map(|(_, idle)| idle.len()), Some(1));
     // a fallback to the complete open keeps no reading parse
     let fallback = MobileSession::new();
     let full = fallback

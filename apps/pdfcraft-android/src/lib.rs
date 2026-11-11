@@ -782,6 +782,14 @@ impl MobileSession {
         if work.cancelled.load(Ordering::Acquire) || !self.lock().finish_reading(DocId(doc), prepared) {
             return Err(MobileError::NoDocument(doc));
         }
+        // Idle reading-stage renderers (the first one starts from the reading parse) are kept only
+        // while the completed document still draws the same bytes; a display copy supersedes them.
+        if let Ok(display) = self.with_doc(doc, |d| d.display.clone()) {
+            let mut cache = self.cache();
+            if cache.get(&doc).is_some_and(|(bytes, _)| !pdfcraft_cos::same_storage(bytes, &display)) {
+                cache.remove(&doc);
+            }
+        }
         Ok(ProfiledOpen { document: self.document(doc)?, timings: native_stages(&work.trace, start) })
     }
 
