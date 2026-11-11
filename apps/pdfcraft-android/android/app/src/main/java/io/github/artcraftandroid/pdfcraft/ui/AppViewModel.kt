@@ -763,12 +763,12 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
      * own saved ink quietly, but names an edit made before Draw, so it is never lost unseen (#78).
      */
     fun undoDocument(doc: OpenDocument, announce: Boolean) {
-        val label = doc.info.undo ?: return
+        val label = doc.info.undoLabel ?: return
         runTool(doc, "edit_undo") { if (announce) tell(text(R.string.msg_undone, label)) }
     }
 
     fun redoDocument(doc: OpenDocument, announce: Boolean) {
-        val label = doc.info.redo ?: return
+        val label = doc.info.redoLabel ?: return
         runTool(doc, "edit_redo") { if (announce) tell(text(R.string.msg_redone, label)) }
     }
 
