@@ -175,6 +175,8 @@
     <string name="home_about_scan">Scan paper with the camera</string>
     <string name="home_about_combine">Join several files into one PDF</string>
     <string name="home_about_organize">Reorder, rotate, delete and insert pages</string>
+    <string name="home_tool_split">Split PDF</string>
+    <string name="home_about_split">Cut a PDF into several files by pages, bookmarks or size</string>
     <string name="home_about_crop">Trim margins or change page size</string>
     <string name="home_about_edit">Change the text and pictures</string>
     <string name="home_about_compress">Make a PDF smaller</string>
@@ -230,8 +232,6 @@
     <string name="home_extra_body">Optional changes to how PdfCraft looks and works.</string>
     <string name="home_status_bar_in_documents">Show the status bar in documents</string>
     <string name="home_status_bar_in_documents_body">The status bar shows with the toolbars. When you tap to hide them, the page uses the whole screen, around the camera too.</string>
-    <string name="home_search_count">Show the number of search results</string>
-    <string name="home_search_count_body">Find in a document shows which result you\'re on and how many there are, such as 3 of 12.</string>
 
     <!-- Settings: About PdfCraft -->
     <string name="home_section_about">About</string>
@@ -424,6 +424,7 @@
     <string name="viewer_hint_comment">Tap where the comment goes</string>
     <string name="viewer_hint_text">Tap to add text</string>
     <string name="viewer_hint_fill_sign">Tap where you want to fill in text</string>
+    <string name="viewer_hint_fill_sign_form">Tap a blue field to fill it, or tap anywhere else to add the chosen item</string>
 
     <!-- Viewer: Add image sheet -->
     <string name="viewer_add_image">Add image</string>
@@ -440,9 +441,17 @@
     <string name="viewer_go_to_page">Go to page</string>
     <!-- Translator note: the range of page numbers that can be entered; %1$d is the last page. -->
     <string name="viewer_go_to_page_range">1 - %1$d</string>
+    <!-- Translator note: Go to page when the document labels its pages; %1$s and %2$s are the first and last labels. -->
+    <string name="viewer_go_to_page_labels">A page label (%1$s – %2$s) or a number from 1 to %3$d</string>
+    <!-- Translator note: spoken page position when pages have labels; %1$s is the label (e.g. iv), %2$d the page number, %3$d the count. -->
+    <string name="viewer_page_label_of">Page %1$s (%2$d of %3$d)</string>
     <string name="viewer_enter_page_number">Enter page number</string>
     <!-- Translator note: link back to the page the last jump came from; %1$d is its number. -->
     <string name="viewer_back_to_page">Back to page %1$d</string>
+    <string name="viewer_go_to_page_invalid">Enter a page number from 1 to %1$d.</string>
+    <string name="viewer_page_short">Page %1$d</string>
+    <string name="viewer_jump_back">Back to page %1$d</string>
+    <string name="viewer_jump_forward">Forward to page %1$d</string>
 
     <!-- Viewer: the menu by selected text -->
     <string name="viewer_add_comment">Add comment</string>
@@ -454,6 +463,15 @@
     <string name="viewer_zoom_in">Zoom in</string>
     <string name="viewer_zoom_out">Zoom out</string>
     <string name="viewer_search_count">%1$d of %2$d</string>
+    <string name="viewer_search_show_all">Show all results</string>
+    <string name="viewer_search_results_running">%1$d results so far…</string>
+    <plurals name="viewer_search_results">
+        <item quantity="one">%d result</item>
+        <item quantity="other">%d results</item>
+    </plurals>
+    <string name="viewer_search_count_running">%1$d of %2$d…</string>
+    <string name="viewer_searching">Searching…</string>
+    <string name="viewer_search_progress">Searching page %1$d of %2$d</string>
     <string name="viewer_read_from_here">Read from here</string>
     <string name="viewer_copy_text">Copy text</string>
     <!-- Translator note: accessibility labels of the two handles at the ends of selected text. -->
@@ -534,6 +552,45 @@
     <string name="pages_blank_page">Blank page</string>
     <string name="pages_from_file">From another file</string>
     <string name="pages_from_scan">From a scan</string>
+
+    <!-- Pages: more organizing (duplicate, replace, reverse, split, labels) -->
+    <!-- Translator note: make copies of the selected pages. Keep it short. -->
+    <string name="pages_duplicate">Duplicate</string>
+    <!-- Translator note: the overflow item in the organize bar. Keep it short. -->
+    <string name="pages_more">More</string>
+    <string name="pages_replace_with">Replace with…</string>
+    <string name="pages_reverse_order">Reverse order</string>
+    <string name="pages_labels">Page labels…</string>
+    <string name="pages_split">Split…</string>
+    <!-- Translator note: short label under the Split icon in the Pages bar. -->
+    <string name="pages_split_short">Split</string>
+    <string name="pages_replace_title">Replace pages</string>
+    <!-- Translator note: %1$d is how many pages are being replaced. -->
+    <plurals name="pages_replace_explain">
+        <item quantity="one">The selected page takes the content of 1 page of the chosen file. Its comments, links and form fields stay.</item>
+        <item quantity="other">The %1$d selected pages take the content of %1$d pages of the chosen file. Their comments, links and form fields stay.</item>
+    </plurals>
+    <string name="pages_replace_first_page">Start at page of the chosen file</string>
+    <string name="pages_replace_action">Replace</string>
+    <string name="pages_split_title">Split document</string>
+    <string name="pages_split_every">Every N pages</string>
+    <string name="pages_split_every_count">Pages per part</string>
+    <string name="pages_split_before_selected">Before each selected page</string>
+    <string name="pages_split_before_none">Select the pages that start a new part first.</string>
+    <string name="pages_split_bookmarks">At top-level bookmarks</string>
+    <string name="pages_split_size">Maximum file size</string>
+    <string name="pages_split_size_mb">Size in MB</string>
+    <string name="pages_save_to_folder">Save to folder</string>
+    <string name="pages_labels_title">Page labels</string>
+    <string name="pages_labels_from">From page</string>
+    <string name="pages_labels_to">To page</string>
+    <string name="pages_labels_style">Style</string>
+    <string name="pages_labels_style_none">Prefix only</string>
+    <string name="pages_labels_prefix">Prefix (optional)</string>
+    <string name="pages_labels_start">Start at</string>
+    <!-- Translator note: %1$s is how the first labels will read, e.g. "A-1, A-2, A-3". -->
+    <string name="pages_labels_preview">Shows as: %1$s</string>
+    <string name="pages_labels_apply">Apply</string>
 
     <!-- ================================================================== -->
     <!-- The viewer's sheets: More, comments, lists, page menu, digital signatures -->
@@ -726,6 +783,13 @@
     <string name="sheet_single_page">Single page</string>
     <string name="sheet_reading_mode">Reading Mode</string>
     <string name="sheet_night_mode">Night Mode</string>
+    <string name="sheet_reading_colors">Reading colours</string>
+    <string name="sheet_reading_colors_sample">Aa</string>
+    <string name="sheet_reading_colors_off">Off</string>
+    <string name="sheet_reading_colors_black_on_white">Black on white</string>
+    <string name="sheet_reading_colors_white_on_black">White on black</string>
+    <string name="sheet_reading_colors_yellow_on_black">Yellow on black</string>
+    <string name="sheet_reading_colors_green_on_black">Green on black</string>
 
     <!-- Viewer sheets: Bookmarks & Table of Contents -->
     <!-- Translator note: the tab with the document's table of contents -->
@@ -733,6 +797,12 @@
     <!-- Translator note: the tab with the reader's own bookmarks -->
     <string name="sheet_tab_bookmarks">Bookmarks</string>
     <string name="sheet_no_contents">This document has no table of contents.</string>
+    <string name="sheet_contents_manage">Manage contents</string>
+    <string name="sheet_contents_from_headings">Build contents from headings</string>
+    <string name="sheet_contents_copy_from_pdf">Copy contents from another PDF</string>
+    <string name="sheet_contents_backup">Back up contents to a file</string>
+    <string name="sheet_contents_restore">Restore contents from a file</string>
+    <string name="sheet_contents_locked">This PDF is signed or read-only, so its contents can\'t be changed here. Save an editable copy first.</string>
     <string name="sheet_export_embedded_bookmarks">Export embedded PDF bookmarks (JSON)</string>
     <string name="sheet_export_embedded_bookmarks_failed">Could not create the PDF bookmarks export.</string>
     <string name="sheet_import_embedded_bookmarks">Import embedded PDF bookmarks (JSON)</string>
@@ -1043,7 +1113,7 @@
     <string name="fill_tab_image">Image</string>
     <string name="fill_draw_signature_here">Draw your signature here</string>
     <string name="fill_draw_initials_here">Draw your initials here</string>
-    <string name="fill_save_to_device">Save to device</string>
+    <string name="fill_save_to_device">Remember this signature</string>
 
     <!-- Fill & Sign: the menu over a placed element -->
     <string name="fill_smaller">Smaller</string>
@@ -1069,6 +1139,7 @@
     <!-- Messages: undo and redo. %1$s is the name of the edit, as the engine gives it (for example "Add comment"). -->
     <string name="msg_undone">%1$s undone</string>
     <string name="msg_redone">%1$s redone</string>
+    <string name="msg_ink_kept">Ink that wasn\'t saved is kept. Open Draw and tap Done to save it again.</string>
 
     <!-- Messages: viewer tools -->
     <string name="msg_tool_blocked_security">This tool is not available due to the document\'s security settings.</string>
@@ -1078,6 +1149,7 @@
     <!-- Messages: Find. %1$s is the text that was searched for. -->
     <string name="msg_search_image_only">This file\'s words are pictures, so they can\'t be searched yet.</string>
     <string name="msg_search_no_matches">No matches for “%1$s”</string>
+    <string name="msg_search_no_matches_some_images">No matches for “%1$s”. Some pages are images, so their words can\'t be searched yet.</string>
 
     <!-- Messages: share and print -->
     <!-- Subject of the email when a document is shared. %1$s is the document's title. -->
@@ -1196,6 +1268,23 @@
         <item quantity="other">Only the first %1$d files were used.</item>
     </plurals>
     <string name="msg_busy_extracting">Extracting…</string>
+    <plurals name="msg_pages_duplicated">
+        <item quantity="one">%1$d page duplicated</item>
+        <item quantity="other">%1$d pages duplicated</item>
+    </plurals>
+    <string name="msg_pages_reversed">Page order reversed</string>
+    <string name="msg_pages_labelled">Page labels changed</string>
+    <plurals name="msg_pages_replaced">
+        <item quantity="one">%1$d page replaced</item>
+        <item quantity="other">%1$d pages replaced</item>
+    </plurals>
+    <string name="msg_busy_splitting">Splitting…</string>
+    <string name="msg_split_nothing">Nothing to split: the document stays in one part.</string>
+    <string name="msg_busy_saving_files">Saving files…</string>
+    <plurals name="msg_files_saved_folder">
+        <item quantity="one">%1$d file saved to the folder you chose</item>
+        <item quantity="other">%1$d files saved to the folder you chose</item>
+    </plurals>
 
     <!-- Messages: Scan. %1$d is the page being cleaned up, %2$d how many pages there are. -->
     <string name="msg_busy_saving_scan">Saving scan…</string>
@@ -1222,6 +1311,8 @@
     <string name="files_error_share_no_space">Not enough free storage to share. Free up some space and try again.</string>
     <!-- Translator note: Downloads is the phone's Downloads folder -->
     <string name="files_error_save_downloads">The file couldn\'t be saved to Downloads.</string>
+    <!-- Translator note: %1$s is a file name. -->
+    <string name="files_error_save_folder">%1$s couldn\'t be saved to that folder.</string>
     <string name="files_error_save_image">The image couldn\'t be saved.</string>
 
     <!-- Files: where a document is, as the file details show it -->
@@ -1442,4 +1533,13 @@
     <string name="comments_loading">Loading comments…</string>
     <string name="compact_previews">Use less memory for page previews</string>
     <string name="compact_previews_body">Reduces color precision for full pages. Zoomed details retain full quality. Applies when you reopen a document.</string>
+    <string name="updater_err_checksum">The downloaded APK doesn\'t match the published release, so it wasn\'t installed. Try downloading again.</string>
+    <string name="updater_err_invalid_apk">The downloaded file isn\'t a valid signed Android app.</string>
+    <string name="updater_err_wrong_build">The downloaded APK isn\'t the expected PdfCraft update.</string>
+    <string name="updater_err_certificate">The downloaded APK isn\'t signed by PdfCraft, so it can\'t replace the installed app.</string>
+    <string name="updater_err_android_version">This update needs a newer Android version.</string>
+    <string name="updater_err_abi">This APK is not built for your phone\'s processor.</string>
+    <string name="updater_err_storage">The update couldn\'t be saved on this device. Free up some space and try again.</string>
+    <string name="updater_err_untrusted">The update link isn\'t from PdfCraft\'s official GitHub Releases, so it was refused.</string>
+    <string name="updater_err_server">The download server sent an unexpected response. Try again later or download in the browser.</string>
 </resources>

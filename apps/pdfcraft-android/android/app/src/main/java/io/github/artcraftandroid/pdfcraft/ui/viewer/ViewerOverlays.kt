@@ -57,6 +57,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -100,14 +101,15 @@ fun BoxScope.Scrubber(doc: OpenDocument, visible: Boolean, top: Dp, bottom: Dp, 
             val maxScroll = (v.layout.height * v.zoom - v.viewH).coerceAtLeast(1f)
             val fraction = (v.scrollY / maxScroll).coerceIn(0f, 1f)
             val y = fraction * (track - pillH)
-            val label = "${v.currentPage + 1}"
-            val pageOf = stringResource(R.string.viewer_page_of, v.currentPage + 1, doc.pageCount)
+            val shown = pageLabelOf(doc, v.currentPage)
+            val label = shown ?: "${v.currentPage + 1}"
+            val pageOf = if (shown != null) stringResource(R.string.viewer_page_label_of, shown, v.currentPage + 1, doc.pageCount) else stringResource(R.string.viewer_page_of, v.currentPage + 1, doc.pageCount)
             Box(
                 Modifier
                     .align(Alignment.TopEnd)
                     .offset { IntOffset(0, y.roundToInt()) }
                     .height(32.dp)
-                    .widthIn(min = if (label.length >= 3) 52.dp else 40.dp)
+                    .widthIn(min = if (label.length >= 3) 52.dp else 40.dp, max = 140.dp)
                     .shadow(2.dp, RoundedCornerShape(topStart = 16.dp, bottomStart = 16.dp))
                     .background(c.surface, RoundedCornerShape(topStart = 16.dp, bottomStart = 16.dp))
                     .pointerInput(doc) {
@@ -128,13 +130,20 @@ fun BoxScope.Scrubber(doc: OpenDocument, visible: Boolean, top: Dp, bottom: Dp, 
                     .semantics { contentDescription = pageOf },
                 contentAlignment = Alignment.Center,
             ) {
-                Text(label, color = c.text, fontSize = 15.sp, modifier = Modifier.padding(start = 12.dp, end = 10.dp))
+                Text(label, color = c.text, fontSize = 15.sp, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.padding(start = 12.dp, end = 10.dp))
             }
         }
     }
 }
 
-/** Go to page: a page number from 1 to N, and the way back to where the last jump came from. */
+/** The label shown for [page] (0-based) when the document labels its pages other than 1 to N, else null. */
+@Composable
+internal fun pageLabelOf(doc: OpenDocument, page: Int): String? {
+    val custom = androidx.compose.runtime.remember(doc.info.generation) { io.github.artcraftandroid.pdfcraft.ui.hasCustomLabels(doc.info.pages.map { it.label }) }
+    return if (custom) doc.info.pages.getOrNull(page)?.label?.takeIf { it.isNotEmpty() } else null
+}
+
+/** Go to page: a page label or number from 1 to N, and the way back to where the last jump came from. */
 @Composable
 fun GoToPageDialog(doc: OpenDocument, onDismiss: () -> Unit) {
     val c = pdfColors
@@ -142,40 +151,101 @@ fun GoToPageDialog(doc: OpenDocument, onDismiss: () -> Unit) {
     var wrong by remember { mutableStateOf(false) }
     val focus = remember { FocusRequester() }
     LaunchedEffect(Unit) { focus.requestFocus() }
-    val previous = doc.controller.freshPreviousPage(android.os.SystemClock.uptimeMillis())
+    val ctl = doc.controller
+    val previous = remember(ctl.jumpsVersion) { ctl.jumps.backTarget }
+    val labels = remember(doc.info.generation) { doc.info.pages.map { it.label } }
+    val custom = remember(labels) { io.github.artcraftandroid.pdfcraft.ui.hasCustomLabels(labels) }
     fun go() {
-        val n = text.trim().toIntOrNull()
-        if (n == null || n < 1 || n > doc.pageCount) {
+        // a page label first when the document has them (as Acrobat), else the plain number
+        val page = if (custom) io.github.artcraftandroid.pdfcraft.ui.pageForEntry(labels, text) else parsePageNumber(text, doc.pageCount)
+        if (page == null) {
+            // keep what was typed, and say what is allowed
             wrong = true
-            text = ""
             return
         }
-        doc.controller.rememberJump(doc.viewer.currentPage)
-        doc.viewer.goToPage(n - 1)
+        ctl.rememberJump(doc.viewer)
+        doc.viewer.goToPage(page)
         onDismiss()
     }
     io.github.artcraftandroid.pdfcraft.ui.PdfDialog(onDismiss = onDismiss, title = stringResource(R.string.viewer_go_to_page), confirm = stringResource(R.string.common_ok), onConfirm = ::go, confirmEnabled = text.isNotEmpty()) {
             Column {
-                Text(stringResource(R.string.viewer_go_to_page_range, doc.pageCount), color = c.textSecondary, fontSize = 14.sp)
+                Text(
+                    if (custom) stringResource(R.string.viewer_go_to_page_labels, labels.first(), labels.last(), doc.pageCount) else stringResource(R.string.viewer_go_to_page_range, doc.pageCount),
+                    color = c.textSecondary, fontSize = 14.sp,
+                )
                 Spacer(Modifier.height(10.dp))
                 io.github.artcraftandroid.pdfcraft.ui.PdfField(
-                    text, { text = it.filter(Char::isDigit).take(6); wrong = false }, stringResource(R.string.viewer_enter_page_number), error = wrong, focus = focus,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = androidx.compose.ui.text.input.ImeAction.Go),
+                    text, { text = (if (custom) it.filterNot(Char::isISOControl) else it.filter(Char::isDigit)).take(if (custom) 64 else 6); wrong = false }, stringResource(R.string.viewer_enter_page_number), error = wrong, focus = focus,
+                    keyboardOptions = KeyboardOptions(keyboardType = if (custom) KeyboardType.Text else KeyboardType.Number, imeAction = androidx.compose.ui.text.input.ImeAction.Go),
                     keyboardActions = KeyboardActions(onGo = { go() }),
                 )
+                if (wrong) {
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        stringResource(R.string.viewer_go_to_page_invalid, doc.pageCount),
+                        color = c.red, fontSize = 13.sp,
+                        modifier = Modifier.semantics { liveRegion = androidx.compose.ui.semantics.LiveRegionMode.Polite },
+                    )
+                }
                 if (previous != null) {
                     Spacer(Modifier.height(12.dp))
                     Text(
-                        stringResource(R.string.viewer_back_to_page, previous + 1),
+                        stringResource(R.string.viewer_back_to_page, previous.page + 1),
                         color = c.accent,
                         modifier = Modifier.clickable {
-                            doc.viewer.goToPage(previous)
-                            doc.controller.previousPage = null
+                            ctl.jumpBack(doc.viewer)
                             onDismiss()
                         }.padding(vertical = 4.dp),
                     )
                 }
             }
+    }
+}
+
+/**
+ * The way back after a jump: "‹ Page 12" (and "Page 87 ›" once back) above the bottom bar, for a
+ * few seconds after a jump and again when scrolling stops. TalkBack announces it.
+ */
+@Composable
+fun BoxScope.JumpChip(doc: OpenDocument, visible: Boolean, bottom: Dp) {
+    val c = pdfColors
+    val ctl = doc.controller
+    val version = ctl.jumpsVersion
+    val back = remember(version) { ctl.jumps.backTarget }
+    val forward = remember(version) { ctl.jumps.forwardTarget }
+    if (!visible || (back == null && forward == null)) return
+    Row(
+        Modifier.align(Alignment.BottomCenter).padding(bottom = bottom + 12.dp)
+            .shadow(3.dp, RoundedCornerShape(20.dp))
+            .background(c.surface, RoundedCornerShape(20.dp))
+            .semantics { liveRegion = androidx.compose.ui.semantics.LiveRegionMode.Polite },
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (back != null) {
+            val label = stringResource(R.string.viewer_jump_back, back.page + 1)
+            Row(
+                Modifier.clickable(role = androidx.compose.ui.semantics.Role.Button) { ctl.jumpBack(doc.viewer) }
+                    .semantics(mergeDescendants = true) { contentDescription = label }
+                    .heightIn(min = 40.dp).padding(start = 8.dp, end = 14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                androidx.compose.material3.Icon(LucideIcons.ChevronLeft, null, tint = c.accent, modifier = Modifier.size(20.dp))
+                Text(stringResource(R.string.viewer_page_short, back.page + 1), color = c.accent, fontSize = 15.sp)
+            }
+        }
+        if (back != null && forward != null) Box(Modifier.width(1.dp).height(24.dp).background(c.divider))
+        if (forward != null) {
+            val label = stringResource(R.string.viewer_jump_forward, forward.page + 1)
+            Row(
+                Modifier.clickable(role = androidx.compose.ui.semantics.Role.Button) { ctl.jumpForward(doc.viewer) }
+                    .semantics(mergeDescendants = true) { contentDescription = label }
+                    .heightIn(min = 40.dp).padding(start = 14.dp, end = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(stringResource(R.string.viewer_page_short, forward.page + 1), color = c.accent, fontSize = 15.sp)
+                androidx.compose.material3.Icon(LucideIcons.ChevronRight, null, tint = c.accent, modifier = Modifier.size(20.dp))
+            }
+        }
     }
 }
 
@@ -457,7 +527,8 @@ fun BoxScope.HorizontalScrubber(doc: OpenDocument, visible: Boolean, bottom: Dp,
             val pillW = with(density) { 48.dp.toPx() }
             val n = (doc.pageCount - 1).coerceAtLeast(1)
             val x = if (dragging) dragX else v.currentPage.toFloat() / n * (track - pillW)
-            val pageOf = stringResource(R.string.viewer_page_of, v.currentPage + 1, doc.pageCount)
+            val shown = pageLabelOf(doc, v.currentPage)
+            val pageOf = if (shown != null) stringResource(R.string.viewer_page_label_of, shown, v.currentPage + 1, doc.pageCount) else stringResource(R.string.viewer_page_of, v.currentPage + 1, doc.pageCount)
             Box(Modifier.align(Alignment.CenterStart).fillMaxWidth().height(2.dp).background(c.divider))
             Box(
                 Modifier
@@ -482,7 +553,7 @@ fun BoxScope.HorizontalScrubber(doc: OpenDocument, visible: Boolean, bottom: Dp,
                     .semantics { contentDescription = pageOf },
                 contentAlignment = Alignment.Center,
             ) {
-                Text("${v.currentPage + 1}", color = c.text, fontSize = 15.sp)
+                Text(shown ?: "${v.currentPage + 1}", color = c.text, fontSize = 15.sp, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
             }
         }
     }

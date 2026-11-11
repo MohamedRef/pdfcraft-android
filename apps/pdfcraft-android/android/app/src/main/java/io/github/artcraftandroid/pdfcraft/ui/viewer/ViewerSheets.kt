@@ -18,9 +18,12 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
@@ -41,6 +44,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -188,7 +192,54 @@ fun ViewSettingsSheet(vm: AppViewModel, doc: OpenDocument) {
         SheetRow(LucideIcons.Moon, stringResource(R.string.sheet_night_mode), { vm.setNightMode(doc, !ctl.nightMode); ctl.sheet = ViewerSheet.None }) {
             PdfSwitch(ctl.nightMode, { vm.setNightMode(doc, it); ctl.sheet = ViewerSheet.None })
         }
+        ReadingColorsPicker(ctl.readingColors, enabled = !doc.info.preparing) { vm.setReadingColors(doc, it) }
         Spacer(Modifier.height(24.dp))
+    }
+}
+
+/**
+ * Reading colours: off, then text and background pairs drawn as "Aa" swatches. Unlike Night
+ * mode, photos keep their colours (#184).
+ */
+@Composable
+private fun ReadingColorsPicker(current: ReadingColors, enabled: Boolean, onPick: (ReadingColors) -> Unit) {
+    val c = pdfColors
+    Text(stringResource(R.string.sheet_reading_colors), color = c.text, fontSize = 16.sp, modifier = Modifier.padding(start = 16.dp, top = 12.dp, bottom = 8.dp))
+    Row(
+        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        ReadingColors.entries.forEach { rc ->
+            val label = stringResource(
+                when (rc) {
+                    ReadingColors.Off -> R.string.sheet_reading_colors_off
+                    ReadingColors.BlackOnWhite -> R.string.sheet_reading_colors_black_on_white
+                    ReadingColors.WhiteOnBlack -> R.string.sheet_reading_colors_white_on_black
+                    ReadingColors.YellowOnBlack -> R.string.sheet_reading_colors_yellow_on_black
+                    ReadingColors.GreenOnBlack -> R.string.sheet_reading_colors_green_on_black
+                },
+            )
+            val selected = rc == current
+            Column(
+                Modifier.width(64.dp)
+                    .clickable(enabled = enabled, role = Role.RadioButton) { onPick(rc) }
+                    .semantics(mergeDescendants = true) { contentDescription = label; this.selected = selected }
+                    .padding(vertical = 4.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Box(
+                    Modifier.size(44.dp)
+                        .border(if (selected) 3.dp else 1.dp, if (selected) c.accent else c.divider, CircleShape)
+                        .padding(4.dp)
+                        .background(Color(rc.background), CircleShape),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    if (rc == ReadingColors.Off) Icon(LucideIcons.X, null, tint = c.textSecondary, modifier = Modifier.size(18.dp))
+                    else Text(stringResource(R.string.sheet_reading_colors_sample), color = Color(rc.text), fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                }
+                Text(label, color = if (selected) c.accent else c.textSecondary, fontSize = 12.sp, maxLines = 2, textAlign = androidx.compose.ui.text.style.TextAlign.Center, modifier = Modifier.padding(top = 4.dp))
+            }
+        }
     }
 }
 
@@ -205,7 +256,33 @@ fun BookmarksSheet(vm: AppViewModel, doc: OpenDocument) {
     var parent by remember { mutableStateOf(-1) }
     var renaming by remember { mutableStateOf<Int?>(null) }
     PdfSheet(onDismiss = { ctl.sheet = ViewerSheet.None }, maxHeightFraction = 0.69f, fill = true) {
-        SheetBackHeader(stringResource(R.string.sheet_bookmarks_contents), onBack = { ctl.sheet = ViewerSheet.More })
+        // contents tools stay out of the reader's way, in the header's overflow menu (#204)
+        val locked = !doc.writable || doc.info.signed || doc.info.readOnlyReason != null
+        val headingsLocked = locked || !doc.info.allowsCopying || !doc.info.allowsAssembly
+        var manage by remember { mutableStateOf(false) }
+        SheetBackHeader(stringResource(R.string.sheet_bookmarks_contents), onBack = { ctl.sheet = ViewerSheet.More }, trailing = if (tab != 0) null else ({
+            Box {
+                BarIcon(LucideIcons.EllipsisVertical, stringResource(R.string.sheet_contents_manage), { manage = true })
+                androidx.compose.material3.DropdownMenu(expanded = manage, onDismissRequest = { manage = false }, containerColor = c.menu) {
+                    @Composable
+                    fun item(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, enabled: Boolean, onClick: () -> Unit) =
+                        androidx.compose.material3.DropdownMenuItem(
+                            text = { Text(label, color = if (enabled) c.text else c.textTertiary) },
+                            leadingIcon = { Icon(icon, null, tint = if (enabled) c.icon else c.textTertiary) },
+                            enabled = enabled,
+                            onClick = { manage = false; onClick() },
+                        )
+                    item(LucideIcons.ListTree, stringResource(R.string.sheet_contents_from_headings), !headingsLocked) { ctl.sheet = ViewerSheet.TextStyles }
+                    item(LucideIcons.Copy, stringResource(R.string.sheet_contents_copy_from_pdf), !locked) { vm.pickEmbeddedBookmarksCopy(doc) }
+                    if (hasOutline) item(LucideIcons.FileOutput, stringResource(R.string.sheet_contents_backup), true) { vm.exportEmbeddedBookmarks(doc) }
+                    item(LucideIcons.FileInput, stringResource(R.string.sheet_contents_restore), !locked) { vm.pickEmbeddedBookmarksImport(doc) }
+                    if (locked) Text(
+                        stringResource(R.string.sheet_contents_locked), color = c.textSecondary, fontSize = 13.sp,
+                        modifier = Modifier.widthIn(max = 280.dp).padding(horizontal = 16.dp, vertical = 8.dp),
+                    )
+                }
+            }
+        }))
         Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
             listOf(stringResource(R.string.sheet_tab_contents), stringResource(R.string.sheet_tab_bookmarks)).forEachIndexed { i, label ->
                 Column(
@@ -220,31 +297,17 @@ fun BookmarksSheet(vm: AppViewModel, doc: OpenDocument) {
         }
         SheetDivider(inset = 0.dp)
         if (tab == 0) {
-            if (hasOutline) {
-                SheetRow(
-                    LucideIcons.FileOutput,
-                    stringResource(R.string.sheet_export_embedded_bookmarks),
-                    { vm.exportEmbeddedBookmarks(doc) },
-                )
-            }
-            SheetRow(
-                LucideIcons.FileInput,
-                stringResource(R.string.sheet_import_embedded_bookmarks),
-                { vm.pickEmbeddedBookmarksImport(doc) },
-            )
-            SheetRow(
-                LucideIcons.Copy,
-                stringResource(R.string.sheet_copy_embedded_bookmarks),
-                { vm.pickEmbeddedBookmarksCopy(doc) },
-            )
-        }
-        if (tab == 0) {
-            SheetRow(LucideIcons.ListTree, stringResource(R.string.text_styles_title),
-                { ctl.sheet = ViewerSheet.TextStyles }, chevron = true)
             val all = outline
             when {
                 all == null -> Text("…", color = c.textSecondary, modifier = Modifier.padding(20.dp))
-                all.isEmpty() -> Text(stringResource(R.string.sheet_no_contents), color = c.textSecondary, fontSize = 15.sp, modifier = Modifier.padding(20.dp))
+                all.isEmpty() -> Column(Modifier.padding(20.dp)) {
+                    Text(stringResource(R.string.sheet_no_contents), color = c.textSecondary, fontSize = 15.sp)
+                    // with no contents yet, building them is the one useful thing to offer here
+                    if (!headingsLocked) Text(
+                        stringResource(R.string.sheet_contents_from_headings), color = c.accent, fontSize = 15.sp, fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.padding(top = 12.dp).clickable(role = Role.Button) { ctl.sheet = ViewerSheet.TextStyles }.padding(vertical = 8.dp),
+                    )
+                }
                 else -> {
                     val level = if (parent < 0) 0u else all[parent].level + 1u
                     val start = parent + 1
@@ -273,7 +336,7 @@ fun BookmarksSheet(vm: AppViewModel, doc: OpenDocument) {
                             Row(
                                 Modifier.fillMaxWidth().clickable {
                                     e.page?.let { p ->
-                                        ctl.rememberJump(doc.viewer.currentPage)
+                                        ctl.rememberJump(doc.viewer)
                                         doc.viewer.goToPage(p.toInt())
                                         ctl.sheet = ViewerSheet.None
                                     }
@@ -307,7 +370,7 @@ fun BookmarksSheet(vm: AppViewModel, doc: OpenDocument) {
                             page = b.page,
                             renaming = renaming == i,
                             onOpen = {
-                                ctl.rememberJump(doc.viewer.currentPage)
+                                ctl.rememberJump(doc.viewer)
                                 doc.viewer.goToPage(b.page)
                                 ctl.sheet = ViewerSheet.None
                             },

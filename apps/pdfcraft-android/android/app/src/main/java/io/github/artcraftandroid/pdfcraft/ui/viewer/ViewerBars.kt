@@ -203,8 +203,8 @@ private fun ReadAloudSwitch(on: Boolean, onToggle: () -> Unit) {
 
 /**
  * Find in the top bar: collapse, the query field (searched on submit), then clear, Previous and
- * Next, greyed until they can be used. Like the reference, it shows no hit counter, unless Extra
- * Features asks for one: [count], "3 of 12", between the field and the buttons.
+ * Next, greyed until they can be used. [count] ("3 of 12") sits between the field and the buttons,
+ * and [progress] draws a thin line under the bar while a long document is still being searched.
  */
 @Composable
 fun SearchBar(
@@ -217,12 +217,16 @@ fun SearchBar(
     onPrev: () -> Unit,
     onNext: () -> Unit,
     count: String? = null,
+    progress: Float? = null,
+    progressLabel: String? = null,
+    onShowAll: (() -> Unit)? = null,
 ) {
     val c = pdfColors
     val focus = remember { FocusRequester() }
     val keyboard = LocalSoftwareKeyboardController.current
     val findLabel = stringResource(R.string.viewer_find_in_document)
     LaunchedEffect(Unit) { focus.requestFocus() }
+    Box(Modifier.fillMaxWidth()) {
     Row(
         Modifier.fillMaxWidth().height(TopBarHeight).background(c.surface).drawBehind {
             val line = 1.dp.toPx()
@@ -259,9 +263,21 @@ fun SearchBar(
         }
         if (count != null) Text(count, color = c.textSecondary, fontSize = 15.sp, maxLines = 1, modifier = Modifier.padding(horizontal = 4.dp))
         BarIcon(LucideIcons.X, stringResource(R.string.common_clear), onClear, size = 40.dp, enabled = query.isNotEmpty())
+        if (onShowAll != null) BarIcon(LucideIcons.List, stringResource(R.string.viewer_search_show_all), onShowAll, size = 40.dp)
         BarIcon(LucideIcons.ChevronLeft, stringResource(R.string.viewer_find_previous), onPrev, enabled = canStep, size = 40.dp)
         BarIcon(LucideIcons.ChevronRight, stringResource(R.string.viewer_find_next), onNext, enabled = canStep, size = 40.dp)
         Spacer(Modifier.width(6.dp))
+    }
+    // a long document is searched page by page: a thin line under the bar shows how far it got
+    if (progress != null) {
+        androidx.compose.material3.LinearProgressIndicator(
+            progress = { progress.coerceIn(0f, 1f) },
+            modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(2.dp).semantics { if (progressLabel != null) contentDescription = progressLabel },
+            color = c.accent,
+            trackColor = Color.Transparent,
+            drawStopIndicator = {},
+        )
+    }
     }
 }
 

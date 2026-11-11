@@ -505,7 +505,7 @@ fun CombineScreen(vm: AppViewModel) {
 data class PickedFile(val uri: android.net.Uri, val name: String, val size: Long?)
 
 /** What a file picker was opened for. */
-enum class FilePickKind { Combine, Create, Insert, Open, DigitalId }
+enum class FilePickKind { Combine, Create, Insert, Open, DigitalId, Replace }
 
 
 /**

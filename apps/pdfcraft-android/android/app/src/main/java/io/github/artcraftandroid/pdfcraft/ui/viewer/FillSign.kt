@@ -114,6 +114,8 @@ fun FillSignLayer(vm: AppViewModel, doc: OpenDocument) {
                     vm.selectedFill = null
                     return@toolGestures
                 }
+                // a tap on a form field fills the field, as outside Fill & Sign
+                if (vm.tapField(doc, at)) return@toolGestures
                 // read now: the gesture handler outlives the composition it was made in
                 when (val element = vm.fillElement) {
                     FillElement.Text -> vm.fillTextPrompt = TextPrompt(doc, at)
@@ -130,19 +132,20 @@ fun FillSignLayer(vm: AppViewModel, doc: OpenDocument) {
     )
 }
 
-/** Fill & Sign's bar: the elements, then Sign (its own panel). On a form with fields, only Sign. */
+/**
+ * Fill & Sign's bar: the elements, then Sign (its own panel). Forms keep every element too: many
+ * real forms have boxes and lines that were never made fields, and a tap on a field still fills it.
+ */
 @Composable
 fun FillSignToolbar(vm: AppViewModel, doc: OpenDocument) {
     val sel = vm.fillElement
     SubToolbar {
-        if (doc.info.fields == 0u) {
-            SubTextField(stringResource(R.string.fill_add_text), sel == FillElement.Text) { vm.fillElement = FillElement.Text }
-            SubTool(LucideIcons.X, stringResource(R.string.fill_add_cross), sel == FillElement.Cross, { vm.fillElement = FillElement.Cross })
-            SubTool(LucideIcons.Check, stringResource(R.string.fill_add_check), sel == FillElement.Check, { vm.fillElement = FillElement.Check })
-            SubDot(stringResource(R.string.fill_add_dot), sel == FillElement.Dot) { vm.fillElement = FillElement.Dot }
-            SubTool(LucideIcons.RectangleHorizontal, stringResource(R.string.fill_add_box), sel == FillElement.Box, { vm.fillElement = FillElement.Box })
-            SubTool(LucideIcons.Minus, stringResource(R.string.fill_add_line), sel == FillElement.Line, { vm.fillElement = FillElement.Line })
-        }
+        SubTextField(stringResource(R.string.fill_add_text), sel == FillElement.Text) { vm.fillElement = FillElement.Text }
+        SubTool(LucideIcons.X, stringResource(R.string.fill_add_cross), sel == FillElement.Cross, { vm.fillElement = FillElement.Cross })
+        SubTool(LucideIcons.Check, stringResource(R.string.fill_add_check), sel == FillElement.Check, { vm.fillElement = FillElement.Check })
+        SubDot(stringResource(R.string.fill_add_dot), sel == FillElement.Dot) { vm.fillElement = FillElement.Dot }
+        SubTool(LucideIcons.RectangleHorizontal, stringResource(R.string.fill_add_box), sel == FillElement.Box, { vm.fillElement = FillElement.Box })
+        SubTool(LucideIcons.Minus, stringResource(R.string.fill_add_line), sel == FillElement.Line, { vm.fillElement = FillElement.Line })
         SubTool(LucideIcons.Signature, stringResource(R.string.fill_sign_or_initials), sel == FillElement.Signature || sel == FillElement.Initials || doc.controller.signPanel, { doc.controller.signPanel = true })
     }
 }

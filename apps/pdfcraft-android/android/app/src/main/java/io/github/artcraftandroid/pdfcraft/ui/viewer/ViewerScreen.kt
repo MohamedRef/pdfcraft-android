@@ -144,6 +144,11 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
     }
 
     // Reopen where the reader left off.
+    // the reader's saved reading colours, once the engine has the whole document
+    LaunchedEffect(doc, doc.info.preparing) {
+        if (!doc.info.preparing) vm.applySavedReadingColors(doc)
+    }
+
     LaunchedEffect(doc) {
         snapshotFlow { doc.viewer.viewW }.collect { w ->
             if (w > 0f) vm.pendingPage?.let { p ->
@@ -180,6 +185,22 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
         indicatorVisible = true
         delay(ViewerController.INDICATOR_MS)
         indicatorVisible = false
+        // scrolling came to a stop: offer the way back after a recent jump again
+        ctl.showJumpChip()
+    }
+
+    // "‹ Page N" after a jump, for a while; Back goes back through the jumps while it shows.
+    var jumpChipVisible by remember { mutableStateOf(false) }
+    LaunchedEffect(ctl.jumpChipUntil) {
+        val left = ctl.jumpChipUntil - SystemClock.uptimeMillis()
+        jumpChipVisible = left > 0
+        if (left > 0) {
+            delay(left)
+            jumpChipVisible = false
+        }
+    }
+    BackHandler(enabled = jumpChipVisible && ctl.jumpsVersion >= 0 && ctl.jumps.canGoBack) {
+        ctl.jumpBack(doc.viewer)
     }
 
     // The hint a tool shows when it starts.
@@ -329,6 +350,11 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
                 )
             }
 
+            if (!vm.readingMode && !ctl.searching && ctl.tool == ViewerTool.None) JumpChip(
+                doc, visible = jumpChipVisible,
+                bottom = with(density) { doc.viewer.padBottom.toDp() },
+            )
+
             if (desktop && !vm.readingMode) ZoomButtons(
                 doc.viewer,
                 visible = ctl.tool == ViewerTool.None && !ctl.searching && (ctl.barsVisible || zoomButtons.showing),
@@ -396,11 +422,19 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
                             onClose = { closeSearch(doc) },
                             onPrev = { search.step(false)?.let { showHit(doc, it) } },
                             onNext = { search.step(true)?.let { showHit(doc, it) } },
-                            // Extra Features: which result is on screen, of how many (still growing while
+                            // which result is on screen, of how many (still growing, with "…", while
                             // the rest of a long document is searched)
-                            count = if (vm.searchCount && search.hits.isNotEmpty()) {
-                                stringResource(R.string.viewer_search_count, (search.current + 1).coerceAtLeast(1), search.hits.size)
-                            } else null,
+                            count = when {
+                                search.hits.isNotEmpty() -> stringResource(
+                                    if (search.running) R.string.viewer_search_count_running else R.string.viewer_search_count,
+                                    (search.current + 1).coerceAtLeast(1), search.hits.size,
+                                )
+                                search.running -> stringResource(R.string.viewer_searching)
+                                else -> null
+                            },
+                            onShowAll = if (search.hits.isNotEmpty()) ({ ctl.sheet = ViewerSheet.SearchResults }) else null,
+                            progress = if (search.running && doc.pageCount > 1) search.searched.toFloat() / doc.pageCount else null,
+                            progressLabel = if (search.running) stringResource(R.string.viewer_search_progress, search.searched, doc.pageCount) else null,
                         )
                     } else {
                         val fa = vm.fieldActions
@@ -539,6 +573,7 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
                 ViewerSheet.Bookmarks -> BookmarksSheet(vm, doc)
                 ViewerSheet.TextStyles -> TextStylesSheet(vm, doc)
                 ViewerSheet.Attachments -> AttachmentsSheet(vm, doc)
+                ViewerSheet.SearchResults -> SearchResultsSheet(doc, onShow = { showHit(doc, it) })
                 ViewerSheet.Comments -> Unit
                 ViewerSheet.MoreTools -> MoreToolsSheet(vm, doc)
                 ViewerSheet.Signatures -> SignaturesSheet(vm, doc)
@@ -594,7 +629,7 @@ private fun toolHint(tool: ViewerTool, markup: TextMarkup, doc: OpenDocument): S
     ViewerTool.Draw -> text(R.string.viewer_hint_draw)
     ViewerTool.Comment -> if (doc.controller.commentMode == CommentMode.Stamp) text(R.string.viewer_hint_stamp) else text(R.string.viewer_hint_comment)
     ViewerTool.Text -> if (doc.controller.textCallout) text(R.string.viewer_hint_callout) else text(R.string.viewer_hint_text)
-    ViewerTool.FillSign -> if (doc.info.fields > 0u) null else text(R.string.viewer_hint_fill_sign)
+    ViewerTool.FillSign -> text(if (doc.info.fields > 0u) R.string.viewer_hint_fill_sign_form else R.string.viewer_hint_fill_sign)
     else -> null
 }
 

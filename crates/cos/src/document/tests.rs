@@ -2255,6 +2255,42 @@ fn the_editor_cache_charges_a_dictionary_for_the_values_it_holds() {
     assert_eq!(cache.owned(), sum, "the kept total is the cache's own");
 }
 
+/// Android adaptation (#212): opening reads every page annotation in several passes. Under an
+/// `open_passes` guard the editing cache keeps more than its ordinary 32 MB cap, so a second pass
+/// over objects worth ~48 MB parses nothing again; dropping the guard brings it back under the
+/// ordinary cap. Each object reads the same with or without the guard.
+#[test]
+fn open_passes_keep_parsed_objects_between_passes_then_trim() {
+    let entries: String = (0..2000).map(|i| format!("/{i}[{i} 141 3 116.22 -375.993 1.0]")).collect();
+    let dict = format!("<< /PieceInfo << /InDesign << /Map << {entries} >> >> >> >>");
+    let probe = Document::open(Arc::new(build(&["<< /Type /Catalog >>", &dict], "/Root 1 0 R"))).unwrap();
+    let each = held_bytes(&probe.get(crate::ObjRef::new(2, 0)), &probe.data, 0);
+    let count = (48 << 20) / each + 1;
+    assert!(count * each > Document::EDITOR_CACHE_BYTES && count * each < Document::OPEN_PASSES_CACHE_BYTES);
+    let refs: String = (0..count).map(|i| format!("{} 0 R ", i + 2)).collect();
+    let mut bodies = vec![format!("<< /Type /Catalog /Extension [{refs}] >>")];
+    bodies.extend((0..count).map(|_| dict.clone()));
+    let bodies: Vec<&str> = bodies.iter().map(String::as_str).collect();
+    let bytes = Arc::new(build(&bodies, "/Root 1 0 R"));
+    let plain = Document::open(bytes.clone()).unwrap();
+    let doc = Document::open(bytes).unwrap();
+    let read = |d: &Document| (0..count).map(|i| d.get(crate::ObjRef::new(i as u32 + 2, 0))).collect::<Vec<_>>();
+    let passes = doc.open_passes();
+    let nested = doc.clone().open_passes();
+    let first = read(&doc);
+    let kept = |d: &Document| (0..count).all(|i| d.cache.lock().unwrap().contains_key(&(i as u32 + 2)));
+    assert!(kept(&doc), "every object stays parsed for the next pass");
+    let second = read(&doc);
+    assert!(first.iter().zip(&second).all(|(a, b)| Arc::ptr_eq(a, b)), "the second pass parsed nothing again");
+    assert_eq!(first, read(&plain), "objects read the same as without the guard");
+    assert!(plain.cache.lock().unwrap().owned() <= Document::EDITOR_CACHE_BYTES, "without a guard the ordinary cap holds");
+    drop(passes);
+    assert!(kept(&doc), "a clone's guard still covers the shared cache");
+    drop(nested);
+    let cache = doc.cache.lock().unwrap();
+    assert!(cache.owned() <= Document::EDITOR_CACHE_BYTES, "the last guard trims the cache: {} bytes held", cache.owned());
+}
+
 /// The width (`/MediaBox` x1) of each of `pages`, in order.
 fn page_widths(pages: &[Dict]) -> Vec<Option<i64>> {
     pages.iter().map(|p| p.get(b"MediaBox").and_then(Object::as_array).and_then(|b| b.get(2)).and_then(Object::as_int)).collect()
