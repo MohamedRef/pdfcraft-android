@@ -1950,4 +1950,25 @@
         <item quantity="other">Text zu %d Zeichnungen hinzugefügt</item>
     </plurals>
     <string name="toolbar_label_handwriting">Handschrift</string>
+    <string name="lecture_title">Vorlesungsaufnahmen</string>
+    <string name="lecture_record">Vorlesung aufnehmen</string>
+    <string name="lecture_recording">Aufnahme läuft</string>
+    <string name="lecture_paused">Pausiert</string>
+    <string name="lecture_pause">Pausieren</string>
+    <string name="lecture_resume">Aufnahme fortsetzen</string>
+    <string name="lecture_stop">Aufnahme beenden</string>
+    <string name="lecture_play">Abspielen</string>
+    <string name="lecture_back_10">10 Sekunden zurück</string>
+    <string name="lecture_forward_10">10 Sekunden vor</string>
+    <string name="lecture_close_player">Vorlesungsplayer schließen</string>
+    <string name="lecture_body">Während der Aufnahme merkt sich jeder Kommentar, wann er geschrieben wurde. Spiele eine Aufnahme ab und tippe auf einen Kommentar, um zu hören, was dabei gesagt wurde. Aufnahmen bleiben auf diesem Telefon, in PdfCraft.</string>
+    <string name="lecture_delete_title">Diese Aufnahme löschen?</string>
+    <string name="lecture_needs_saved">Speichere dieses Dokument zuerst, um dazu aufzunehmen</string>
+    <string name="lecture_cannot_record">Die Aufnahme konnte nicht erstellt werden</string>
+    <string name="lecture_cannot_play">Diese Aufnahme kann nicht abgespielt werden</string>
+    <string name="lecture_saved">Vorlesung gespeichert (%1$s)</string>
+    <plurals name="lecture_notes">
+        <item quantity="one">%d Notiz</item>
+        <item quantity="other">%d Notizen</item>
+    </plurals>
 </resources>

@@ -26,6 +26,7 @@
     <!-- Read aloud keeps reading with PdfCraft in the background (a media notification) -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
 
     <!-- Focus timer: its countdown notification (asked for when the timer is first started) -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
@@ -88,6 +89,10 @@
             android:name=".ReadAloudService"
             android:exported="false"
             android:foregroundServiceType="mediaPlayback" />
+        <service
+            android:name=".LectureRecordService"
+            android:exported="false"
+            android:foregroundServiceType="microphone" />
 
         <!-- Files of PdfCraft's handed to other apps (share, print, open in) -->
         <provider

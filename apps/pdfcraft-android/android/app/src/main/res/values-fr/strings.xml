@@ -1834,4 +1834,26 @@
         <item quantity="other">Texte ajouté à %d dessins</item>
     </plurals>
     <string name="toolbar_label_handwriting">Écriture</string>
+    <string name="lecture_title">Enregistrements de cours</string>
+    <string name="lecture_record">Enregistrer le cours</string>
+    <string name="lecture_recording">Enregistrement</string>
+    <string name="lecture_paused">En pause</string>
+    <string name="lecture_pause">Pause</string>
+    <string name="lecture_resume">Reprendre l\'enregistrement</string>
+    <string name="lecture_stop">Arrêter l\'enregistrement</string>
+    <string name="lecture_play">Lire</string>
+    <string name="lecture_back_10">Reculer de 10 secondes</string>
+    <string name="lecture_forward_10">Avancer de 10 secondes</string>
+    <string name="lecture_close_player">Fermer le lecteur du cours</string>
+    <string name="lecture_body">Pendant l\'enregistrement, chaque commentaire écrit retient son moment. Lisez un enregistrement et touchez un commentaire pour entendre ce qui se disait quand vous l\'avez écrit. Les enregistrements restent sur ce téléphone, dans PdfCraft.</string>
+    <string name="lecture_delete_title">Supprimer cet enregistrement ?</string>
+    <string name="lecture_needs_saved">Enregistrez d\'abord ce document pour enregistrer à côté</string>
+    <string name="lecture_cannot_record">L\'enregistrement n\'a pas pu être fait</string>
+    <string name="lecture_cannot_play">Cet enregistrement ne peut pas être lu</string>
+    <string name="lecture_saved">Cours enregistré (%1$s)</string>
+    <plurals name="lecture_notes">
+        <item quantity="one">%d note</item>
+        <item quantity="many">%d notes</item>
+        <item quantity="other">%d notes</item>
+    </plurals>
 </resources>
