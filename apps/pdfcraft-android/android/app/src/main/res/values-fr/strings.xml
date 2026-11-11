@@ -1065,6 +1065,9 @@
     <string name="toolbar_ink_lasso">Lasso : sélectionner, déplacer, recolorer ou supprimer l\'encre et les formes</string>
     <string name="attachment_install_refused">%1$s est un paquet d\'application. PdfCraft n\'ouvre pas les applications jointes aux PDF.</string>
     <string name="discard_kept_recovery">Le fichier d\'origine semble endommagé : PdfCraft a donc gardé votre copie modifiée. Rouvrez le fichier pour en enregistrer une copie.</string>
+    <string name="files_error_write_unverified">PdfCraft a enregistré vos modifications, mais l\'app qui contient ce fichier ne les a pas stockées entièrement. Vos modifications sont conservées dans PdfCraft ; réessayez d\'enregistrer ou enregistrez une copie.</string>
+    <string name="msg_copy_request_lost">PdfCraft a été fermé pendant que vous choisissiez où enregistrer la copie, donc rien n\'a été enregistré. Le fichier vide laissé à cet endroit a été supprimé.</string>
+    <string name="msg_copy_request_lost_kept">PdfCraft a été fermé pendant que vous choisissiez où enregistrer la copie, donc rien n\'a été enregistré. Vérifiez s\'il reste un fichier vide à cet endroit.</string>
     <string name="home_section_diagnostics">Diagnostic</string>
     <string name="home_record_open_timings">Enregistrer les temps d’ouverture</string>
     <string name="home_record_open_timings_body">Garde la durée de chaque étape de l’ouverture d’un fichier, pour mesurer une ouverture lente. Seulement les noms d’étapes, durées, tailles et nombres de pages, sans noms de fichiers ni contenu. Le désactiver efface tout.</string>
