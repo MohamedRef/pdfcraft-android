@@ -69,5 +69,64 @@ class SigningTests(unittest.TestCase):
         self.assertFalse(signing.verify("apksigner verify succeeded"))
 
 
+WORKFLOWS = pathlib.Path(".github/workflows")
+
+
+def workflow_texts():
+    return {path.name: path.read_text() for path in sorted(WORKFLOWS.glob("*.yml"))}
+
+
+class WorkflowGateTests(unittest.TestCase):
+    def test_only_the_gated_pipeline_creates_releases(self):
+        # Issue #106: every route to `gh release create` must run the same gates.
+        creators = {name for name, text in workflow_texts().items() if "gh release create" in text}
+        self.assertEqual({"android-update.yml"}, creators)
+        text = (WORKFLOWS / "android-update.yml").read_text()
+        for gate in (
+            "scripts/verify_android_apk_certificate.py",
+            "dump badging",
+            'test "$build" = "$expected_build"',
+            "scripts/verify_android_release_notes.py",
+            '--title "PdfCraft $version ($build)"',
+            "needs: [rust-tests, android-tests]",
+        ):
+            self.assertIn(gate, text)
+
+    def test_no_workflow_runs_on_pushed_tags(self):
+        import re
+        for name, text in workflow_texts().items():
+            self.assertIsNone(re.search(r"^\s*tags:", text, re.MULTILINE), name)
+
+    def test_one_time_release_trigger_matches_its_property_checks(self):
+        # Issue #111: the commit-title trigger must name the version the property checks pin,
+        # and a reused title must stop before the signing key is decoded.
+        import re
+        text = (WORKFLOWS / "android-update.yml").read_text()
+        titles = set(re.findall(r"startsWith\(github\.event\.head_commit\.message, 'chore\(release\): publish ([^ ]+) \((\d+)\)'\)", text))
+        self.assertEqual(1, len(titles), titles)
+        version, build = titles.pop()
+        self.assertIn(f"grep -Fxq 'pdfcraft.version={version}'", text)
+        self.assertIn(f"grep -Fxq 'pdfcraft.versionCode={int(build) // 10}'", text)
+        self.assertEqual(2, int(build) % 10)
+        guard = text.index("Refuse to re-sign a version that is already tagged")
+        self.assertLess(guard, text.index('base64 -d > "$RUNNER_TEMP/release.p12"'))
+
+    def test_third_party_actions_are_pinned_to_commits(self):
+        import re
+        for name, text in workflow_texts().items():
+            for action, ref in re.findall(r"uses:\s*([\w.-]+/[\w./-]+)@(\S+)", text):
+                if action.startswith("actions/"):
+                    continue
+                self.assertRegex(ref, r"^[0-9a-f]{40}$", f"{name}: {action}@{ref}")
+
+    def test_signing_key_is_decoded_after_the_cache_restores(self):
+        # Only android-update.yml may hold the release key; decode it after the third-party cache action.
+        holders = {name for name, text in workflow_texts().items() if "PDFCRAFT_KEYSTORE_BASE64" in text}
+        self.assertEqual({"android-update.yml"}, holders)
+        text = (WORKFLOWS / "android-update.yml").read_text()
+        job = text[text.index("\n  signed-apk:"):text.index("\n  publish-release:")]
+        self.assertLess(job.index("uses: Swatinem/rust-cache"), job.index("base64 -d"))
+
+
 if __name__ == "__main__":
     unittest.main()

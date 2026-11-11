@@ -1,6 +1,8 @@
 package io.github.artcraftandroid.pdfcraft.ui.home
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Assert.assertNull
 import org.junit.Test
 
@@ -43,5 +45,22 @@ class ApkUpdatesTest {
         assertEquals("Preview", updateChannel("1.0.0-preview.1"))
         assertEquals("Preview", updateChannel("1.0.0-rc.1"))
         assertEquals("Stable", updateChannel("1.0.0"))
+    }
+
+    @Test fun onlyArm64ReleaseInstallsAreOfferedUpdates() {
+        val base = updateVersionBase("0.0.24-beta")!!
+        val newer = updateVersionBase("0.0.25-beta")!!
+        assertTrue(receivesGitHubApkUpdates(base * 10 + 2))
+        assertTrue(isUpdateFor(newer, base * 10 + 2))
+        assertFalse(isUpdateFor(base, base * 10 + 2))
+        assertFalse(isUpdateFor(updateVersionBase("0.0.23-beta")!!, base * 10 + 2))
+        for (digit in listOf(0L, 1L, 3L)) {
+            assertFalse(receivesGitHubApkUpdates(base * 10 + digit))
+            // The same version must never look like an update to another ABI's build (#110),
+            // and neither may a newer one, whose arm64-only APK would fail or switch ABI.
+            assertFalse(isUpdateFor(base, base * 10 + digit))
+            assertFalse(isUpdateFor(newer, base * 10 + digit))
+        }
+        assertFalse(receivesGitHubApkUpdates(0L))
     }
 }

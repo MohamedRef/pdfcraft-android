@@ -1341,6 +1341,7 @@
     <string name="updater_title">App updates</string>
     <string name="updater_description">Download updates from published GitHub Releases. Interrupted downloads can resume.</string>
     <string name="updater_no_updates">You\'re up to date. No newer published APK found.</string>
+    <string name="updater_other_build">This build is not the ARM64 release APK, so in-app updates are off. Update it from where you installed it.</string>
     <string name="updater_check_error">Unable to check GitHub Releases. Check your connection and retry.</string>
     <string name="updater_checking">Checking for updates…</string>
     <string name="updater_check">Check for updates</string>

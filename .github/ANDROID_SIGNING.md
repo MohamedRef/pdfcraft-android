@@ -34,15 +34,21 @@ base64 < /path/to/original-release.p12 | tr -d '\n'
 
 Paste this into the `PDFCRAFT_KEYSTORE_BASE64` GitHub secret, not into an issue or chat. Correct the associated password, alias and private-key password secrets in GitHub.
 
-Both the `PdfCraft Custom - tests and APK` and `Release` workflows validate signing passwords and the private key *before* starting an expensive release build. They calculate the certificate fingerprint from that same verified keystore, export it between steps using GitHub Actions' environment file, and check the built APK against the fingerprint; if an optional `PDFCRAFT_CERT_SHA256` pin is configured, it must also match. A failed check must **not** be bypassed by using the debug key or generating a new release identity.
+The signed job in `android-update.yml` (`PdfCraft Android - tests, signed APK and release`) is the only workflow that holds the signing secrets or publishes a release. It validates signing passwords and the private key *before* starting an expensive release build. It calculates the certificate fingerprint from that same verified keystore, export it between steps using GitHub Actions' environment file, and checks the built APK against the fingerprint and against the certificate hard-pinned in `scripts/verify_android_apk_certificate.py`; if an optional `PDFCRAFT_CERT_SHA256` pin is configured, it must also match. A failed check must **not** be bypassed by using the debug key or generating a new release identity.
 
 If the original keystore or password has been lost, GitHub cannot recover them from its encrypted repository secrets. You will need the original signing material from a secure backup to issue a compatible update.
 
 If **no APK has been distributed or installed**, you can rotate to a new signing identity. Generate a fresh PKCS#12 on a trusted local machine, replace all four signing secrets, and replace the optional `PDFCRAFT_CERT_SHA256` Actions variable with its new public fingerprint if one is already set. After the first release, configure the pin so future releases cannot accidentally change signing identity. Back up the PKCS#12 securely for future updates. An exposed keystore and password should not be reused for a public release.
 
-## One-time controlled release after PR #46 (0.0.13-beta only)
+## One-time release trigger (moved for every release)
 
-The `0.0.13-beta (13012)` release preparation PR stages a one-time, exact-squash-commit-title trigger on a `main` push: `chore(release): publish 0.0.13-beta (13012)`. Only this title combined with `refs/heads/main` enables the existing signed job automatically; every other push still runs tests only, and manual `workflow_dispatch` remains available for later releases. The job also checks the release properties match 0.0.13-beta/1301, runs Rust and Android JVM tests, validates the existing original signer, packages arm64 and verifies actual APK certificate, package, build code and digest before creating the tag and public prerelease. This one-time release route does not bypass signing or CI and must not be used on a PR event. If a gate fails, stop and fix it rather than manufacturing a release.
+Each release preparation PR moves a one-time, exact-squash-commit-title trigger in `android-update.yml` to its own title, `chore(release): publish X (N*10+2)`, together with the property checks for `pdfcraft.version=X` and `pdfcraft.versionCode=N`. Only that title on a `main` push, or a manual `workflow_dispatch` on `main`, runs the signed job; every other push runs tests only. `scripts/test_android_release_workflow.py` checks that the title and the property checks name the same version.
+
+Before decoding the signing key, a push run stops if the tag `vX` already exists, so a later commit that reuses an old release title never re-signs a published version. Published releases and APKs are immutable. The job runs after the Rust and Android JVM tests, validates the original signer, and verifies the APK's certificate, package, versionName and versionCode and the curated notes in `docs/releases/X.md` before it creates the tag and the release titled `PdfCraft X (N*10+2)`. If a gate fails, stop and fix it rather than manufacturing a release.
+
+`release.yml` is a manual, debug-signed dry run only. It runs on no tag and holds no signing secret, so a hand-pushed `v*` tag publishes nothing.
+
+Third-party actions in jobs are pinned to full commit SHAs; first-party `actions/*` use major tags.
 
 ## Pull requests and merge protection
 
@@ -51,10 +57,3 @@ Owner policy (2026-11-06): work in batches of three PRs. Each PR must pass `rust
 After a batch is merged, dispatch `android-update.yml` on `main` once to run tests, build the permanent-key signed ARM64 APK, verify certificate/package/manifest, hash and publish the release. No APK smoke packaging per PR and no signed build on ordinary main pushes. Do not skip failed tests. APK/device checks are release gates, not PR evidence.
 
 If branch protection is configured, require `Merge gate (Rust and Android)` and `Conventional title`; retire the legacy `Merge gate (Rust, Android, ABI APKs)` requirement. At policy change, GitHub reported main was not branch-protected. Production signing checks remain required and may never be bypassed.
-
-
-## Planned single beta batch: 0.0.14-beta (14012)
-
-After PRs #48, #49 and #50 have been **merged and individually verified** with exact-head Android JVM and Rust/provenance merge gates, merge the 0.0.14-beta release preparation PR on `main` with the exact squash-commit title `chore(release): publish 0.0.14-beta (14012)`. The signed APK job recognizes **only** this title on `main`, checks `pdfcraft.version=0.0.14-beta` and `pdfcraft.versionCode=1401`, verifies the permanent private signing identity and actual ARM64 manifest build, then publishes `v0.0.14-beta` with digest and curated release notes. A failed gate must block publication; do not use a debug-signed APK or publish a manually assembled artifact.
-
-The earlier 0.0.13-beta release is immutable. VersionCode 14012 supersedes 13012. Once published, confirm the GitHub release and APK digest exist, and test the in-app update/upgrade on actual hardware. The automated workflow cannot prove all device-specific pen or networking behavior.
