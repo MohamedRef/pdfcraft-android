@@ -21,6 +21,68 @@ fn blank_pdf(pages: usize) -> String {
     path.to_string_lossy().into_owned()
 }
 
+thread_local! {
+    /// The engine call that panics next on this test's thread (#114).
+    static PANIC_IN: std::cell::RefCell<Option<String>> = const { std::cell::RefCell::new(None) };
+}
+
+/// Make the next engine call named `what` on this thread panic, as a bug in the engine would.
+fn panic_next(what: &str) {
+    PANIC_IN.with(|p| *p.borrow_mut() = Some(what.to_owned()));
+}
+
+/// Called by `MobileSession::with_auto` before every engine call in tests.
+#[allow(clippy::panic)]
+pub(super) fn inject_panic(what: &str) {
+    if PANIC_IN.with(|p| p.borrow().as_deref() == Some(what)) {
+        PANIC_IN.with(|p| *p.borrow_mut() = None);
+        panic!("injected engine panic in {what}");
+    }
+}
+
+#[test]
+fn a_panicking_tool_fails_with_an_error_and_the_session_keeps_working() {
+    let s = MobileSession::new();
+    let doc = s.open(blank_pdf(2), None).unwrap().id;
+    panic_next("page_rotate");
+    let err = s.execute("page_rotate".into(), format!(r#"{{"doc": {doc}, "degrees": 90}}"#)).unwrap_err();
+    assert!(matches!(&err, MobileError::Command(m) if m.contains("internal error") && m.contains("page_rotate")), "{err:?}");
+    assert!(!s.auto.is_poisoned());
+    // The next calls run as usual on the same document.
+    s.execute("page_rotate".into(), format!(r#"{{"doc": {doc}, "degrees": 90}}"#)).unwrap();
+    let info = s.document(doc).unwrap();
+    assert_eq!(info.pages[0].rotation, 90);
+    assert!(info.dirty);
+    s.close(doc, true).unwrap();
+    assert!(s.documents().is_empty());
+}
+
+#[test]
+fn a_panicking_open_fails_with_an_error_and_leaves_no_document() {
+    let s = MobileSession::new();
+    let path = blank_pdf(1);
+    panic_next("doc_open");
+    assert!(matches!(s.open(path.clone(), None), Err(MobileError::Command(m)) if m.contains("internal error")));
+    assert!(s.documents().is_empty());
+    assert_eq!(s.open(path.clone(), None).unwrap().pages.len(), 1);
+    panic_next("doc_open");
+    assert!(matches!(s.begin_open(path.clone(), None, 0, false), Err(MobileError::Command(_))));
+    assert!(!s.auto.is_poisoned());
+    assert_eq!(s.documents().len(), 1);
+    s.begin_open(path, None, 0, false).unwrap();
+    assert_eq!(s.documents().len(), 2);
+}
+
+#[test]
+fn a_poisoned_session_lock_is_recovered_and_cleared() {
+    let s = MobileSession::new();
+    let doc = s.open(blank_pdf(1), None).unwrap().id;
+    let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| s.with_doc(doc, |_| std::panic::panic_any("a read panicked"))));
+    assert!(s.auto.is_poisoned());
+    assert_eq!(s.document(doc).unwrap().pages.len(), 1);
+    assert!(!s.auto.is_poisoned());
+}
+
 #[test]
 fn opens_a_document_and_describes_its_pages() {
     let s = MobileSession::new();

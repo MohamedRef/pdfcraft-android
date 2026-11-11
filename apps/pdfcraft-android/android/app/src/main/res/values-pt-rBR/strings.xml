@@ -503,6 +503,12 @@
     <string name="comments_line_thickness">Espessura da linha</string>
     <string name="comments_move">Mover comentário</string>
     <string name="comments_resize">Redimensionar comentário</string>
+    <string name="comments_move_up">Mover para cima</string>
+    <string name="comments_move_down">Mover para baixo</string>
+    <string name="comments_move_left">Mover para a esquerda</string>
+    <string name="comments_move_right">Mover para a direita</string>
+    <string name="comments_grow">Aumentar</string>
+    <string name="comments_shrink">Diminuir</string>
     <string name="lists_none">Nenhum</string>
     <string name="page_menu_add_comment">Adicionar comentário</string>
     <string name="page_menu_add_text">Adicionar texto</string>
@@ -771,6 +777,9 @@
     <string name="toolbar_ink_lasso">Laço: selecione, mova, recolora ou exclua tinta e formas</string>
     <string name="attachment_install_refused">%1$s é um pacote de app. O PdfCraft não abre apps anexados a PDFs.</string>
     <string name="discard_kept_recovery">O arquivo original parece danificado, então o PdfCraft manteve sua cópia editada. Abra o arquivo de novo para salvar uma cópia.</string>
+    <string name="files_error_write_unverified">O PdfCraft salvou suas alterações, mas o app que guarda este arquivo não as armazenou por completo. Suas alterações continuam no PdfCraft; tente salvar de novo ou salve uma cópia.</string>
+    <string name="msg_copy_request_lost">O PdfCraft foi fechado enquanto você escolhia onde salvar a cópia, então nada foi salvo. O arquivo vazio deixado lá foi removido.</string>
+    <string name="msg_copy_request_lost_kept">O PdfCraft foi fechado enquanto você escolhia onde salvar a cópia, então nada foi salvo. Verifique se ficou um arquivo vazio nesse local.</string>
     <string name="home_section_diagnostics">Diagnóstico</string>
     <string name="home_record_open_timings">Registrar tempos de abertura</string>
     <string name="home_record_open_timings_body">Guarda quanto tempo cada etapa da abertura de um arquivo leva, para medir uma abertura lenta. Apenas nomes de etapas, tempos, tamanhos e número de páginas; nenhum nome de arquivo ou conteúdo. Desativar apaga tudo.</string>

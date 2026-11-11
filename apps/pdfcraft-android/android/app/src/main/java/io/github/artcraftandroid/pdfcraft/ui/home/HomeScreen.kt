@@ -1,5 +1,6 @@
 package io.github.artcraftandroid.pdfcraft.ui.home
 
+import androidx.compose.material3.minimumInteractiveComponentSize
 import io.github.artcraftandroid.pdfcraft.ui.safeTopPadding
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -176,7 +177,7 @@ private fun HomeTabScreen(vm: AppViewModel, onBrowse: () -> Unit) {
                 Spacer(Modifier.width(10.dp))
                 Text(stringResource(R.string.app_name), color = c.text, fontSize = 20.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
                 Box(
-                    Modifier.size(40.dp).clip(CircleShape).background(c.surfaceRaised).clickable { vm.settingsOpen = true }.semantics { contentDescription = settingsLabel },
+                    Modifier.minimumInteractiveComponentSize().size(40.dp).clip(CircleShape).background(c.surfaceRaised).clickable { vm.settingsOpen = true }.semantics { contentDescription = settingsLabel },
                     contentAlignment = Alignment.Center,
                 ) { Icon(LucideIcons.UserRound, null, tint = c.icon, modifier = Modifier.size(22.dp)) }
             }

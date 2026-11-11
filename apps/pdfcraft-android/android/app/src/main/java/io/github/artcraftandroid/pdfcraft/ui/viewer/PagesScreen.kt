@@ -1,5 +1,6 @@
 package io.github.artcraftandroid.pdfcraft.ui.viewer
 
+import androidx.compose.foundation.selection.selectable
 import io.github.artcraftandroid.pdfcraft.ui.safeTopPadding
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
@@ -302,11 +303,11 @@ fun PagesScreen(vm: AppViewModel, doc: OpenDocument, onClose: () -> Unit) {
                     else -> stringResource(R.string.pages_before_page, first + 1)
                 }
                 Row(
-                    Modifier.fillMaxWidth().clickable(role = Role.RadioButton) { after = option }.padding(horizontal = 12.dp, vertical = 2.dp),
+                    Modifier.fillMaxWidth().selectable(selected = after == option, role = Role.RadioButton) { after = option }.padding(horizontal = 12.dp, vertical = 2.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     androidx.compose.material3.RadioButton(
-                        selected = after == option, onClick = { after = option },
+                        selected = after == option, onClick = null,
                         colors = androidx.compose.material3.RadioButtonDefaults.colors(selectedColor = c.toolAccent, unselectedColor = c.icon),
                     )
                     Text(label, color = c.text, fontSize = 16.sp)

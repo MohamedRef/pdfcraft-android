@@ -38,6 +38,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.ui.draw.clip
@@ -365,11 +367,16 @@ fun androidx.compose.foundation.layout.BoxScope.FillElementMenu(vm: AppViewModel
         if (palette) {
             Row(Modifier.padding(top = 6.dp).background(colors.surface, RoundedCornerShape(8.dp)).padding(8.dp)) {
                 for (col in listOf(Color.Black, Color(0xFF0000FF), Color(0xFFE52237), Color(0xFF6AD928))) {
-                    Box(Modifier.padding(4.dp).size(28.dp).clip(androidx.compose.foundation.shape.CircleShape).background(col).clickable {
-                        palette = false
-                        vm.toolPrefs.setFillColor(col)
-                        vm.recolorComment(doc, c, col)
-                    })
+                    // A 48 dp target around the 28 dp swatch, named after the palette's colour for TalkBack.
+                    val name = stringResource(CommentPalette.first { it.first == col }.second)
+                    Box(
+                        Modifier.size(48.dp).clickable(role = Role.Button) {
+                            palette = false
+                            vm.toolPrefs.setFillColor(col)
+                            vm.recolorComment(doc, c, col)
+                        }.semantics { contentDescription = name },
+                        contentAlignment = Alignment.Center,
+                    ) { Box(Modifier.size(28.dp).clip(androidx.compose.foundation.shape.CircleShape).background(col)) }
                 }
             }
         }

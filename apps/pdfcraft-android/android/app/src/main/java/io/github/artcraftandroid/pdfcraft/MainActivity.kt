@@ -93,7 +93,7 @@ class MainActivity : ComponentActivity() {
         // a document another app opened was closed: back to that app, not Home (#47)
         lifecycleScope.launch { for (u in vm.leave) finish() }
         lifecycleScope.launch { for (job in vm.prints) print(job.file, job.name, job.deleteWhenDone) }
-        lifecycleScope.launch { for (name in vm.saveCopyRequests) launchSafely { saveCopy.launch(name) } }
+        lifecycleScope.launch { for (name in vm.saveCopyRequests) launchSafely(onFail = vm::saveCopyLaunchFailed) { saveCopy.launch(name) } }
         lifecycleScope.launch {
             for (ignored in vm.bookmarkJsonPicks) {
                 launchSafely { pickBookmarkJson.launch(arrayOf("application/json", "text/plain", "application/octet-stream")) }
@@ -169,12 +169,14 @@ class MainActivity : ComponentActivity() {
         lastTouch = System.currentTimeMillis()
     }
 
-    private inline fun launchSafely(block: () -> Unit) {
+    private inline fun launchSafely(onFail: () -> Unit = {}, block: () -> Unit) {
         try {
             block()
         } catch (e: ActivityNotFoundException) {
+            onFail()
             vm.tell(getString(R.string.main_error_no_app))
         } catch (e: SecurityException) {
+            onFail()
             vm.tell(getString(R.string.main_error_not_allowed))
         }
     }

@@ -762,6 +762,12 @@
     <!-- Comment panel: moving a selected comment (accessibility labels) -->
     <string name="comments_move">Mover comentario</string>
     <string name="comments_resize">Cambiar tamaño del comentario</string>
+    <string name="comments_move_up">Mover arriba</string>
+    <string name="comments_move_down">Mover abajo</string>
+    <string name="comments_move_left">Mover a la izquierda</string>
+    <string name="comments_move_right">Mover a la derecha</string>
+    <string name="comments_grow">Agrandar</string>
+    <string name="comments_shrink">Reducir</string>
 
     <!-- Edit PDF: list styles -->
     <!-- Translator note: the list style with no bullets or numbers -->
@@ -1194,6 +1200,9 @@
     <string name="toolbar_ink_lasso">Lazo: selecciona, mueve, cambia de color o elimina tinta y formas</string>
     <string name="attachment_install_refused">%1$s es un paquete de aplicación. PdfCraft no abre aplicaciones adjuntas a PDF.</string>
     <string name="discard_kept_recovery">El archivo original parece dañado, así que PdfCraft conservó tu copia editada. Vuelve a abrir el archivo para guardar una copia.</string>
+    <string name="files_error_write_unverified">PdfCraft guardó tus cambios, pero la app que contiene este archivo no los almacenó por completo. Tus cambios se conservan en PdfCraft; vuelve a guardar o guarda una copia.</string>
+    <string name="msg_copy_request_lost">PdfCraft se cerró mientras elegías dónde guardar la copia, así que no se guardó nada. Se eliminó el archivo vacío que quedó allí.</string>
+    <string name="msg_copy_request_lost_kept">PdfCraft se cerró mientras elegías dónde guardar la copia, así que no se guardó nada. Revisa si quedó un archivo vacío en esa ubicación.</string>
     <string name="home_section_diagnostics">Diagnóstico</string>
     <string name="home_record_open_timings">Registrar tiempos de apertura</string>
     <string name="home_record_open_timings_body">Guarda cuánto tarda cada paso al abrir un archivo, para medir una apertura lenta. Solo nombres de pasos, tiempos, tamaños y número de páginas; ningún nombre de archivo ni contenido. Al desactivarlo se borra.</string>

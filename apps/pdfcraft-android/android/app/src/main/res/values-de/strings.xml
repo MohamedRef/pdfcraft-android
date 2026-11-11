@@ -754,6 +754,12 @@
 <!-- Comment panel: moving a selected comment (accessibility labels) -->
     <string name="comments_move">Kommentar verschieben</string>
     <string name="comments_resize">Kommentargröße ändern</string>
+    <string name="comments_move_up">Nach oben verschieben</string>
+    <string name="comments_move_down">Nach unten verschieben</string>
+    <string name="comments_move_left">Nach links verschieben</string>
+    <string name="comments_move_right">Nach rechts verschieben</string>
+    <string name="comments_grow">Vergrößern</string>
+    <string name="comments_shrink">Verkleinern</string>
 
     <!-- Edit PDF: list styles -->
     <!-- Translator note: the list style with no bullets or numbers -->
@@ -1186,6 +1192,9 @@
     <string name="toolbar_ink_lasso">Lasso: Tinte und Formen auswählen, verschieben, umfärben oder löschen</string>
     <string name="attachment_install_refused">%1$s ist ein App-Paket. PdfCraft öffnet keine an PDFs angehängten Apps.</string>
     <string name="discard_kept_recovery">Die Originaldatei scheint beschädigt zu sein, daher hat PdfCraft deine bearbeitete Kopie behalten. Öffne die Datei erneut, um eine Kopie zu speichern.</string>
+    <string name="files_error_write_unverified">PdfCraft hat deine Änderungen gespeichert, aber die App, in der diese Datei liegt, hat sie nicht vollständig übernommen. Deine Änderungen bleiben in PdfCraft erhalten; speichere erneut oder speichere eine Kopie.</string>
+    <string name="msg_copy_request_lost">PdfCraft wurde geschlossen, während du den Speicherort für die Kopie gewählt hast, daher wurde nichts gespeichert. Die dort angelegte leere Datei wurde entfernt.</string>
+    <string name="msg_copy_request_lost_kept">PdfCraft wurde geschlossen, während du den Speicherort für die Kopie gewählt hast, daher wurde nichts gespeichert. Prüfe diesen Ort auf eine leere Datei.</string>
     <string name="home_section_diagnostics">Diagnose</string>
     <string name="home_record_open_timings">Öffnungszeiten aufzeichnen</string>
     <string name="home_record_open_timings_body">Speichert, wie lange jeder Schritt beim Öffnen einer Datei dauert, um langsames Öffnen zu messen. Nur Schrittnamen, Zeiten, Größen und Seitenzahlen, keine Dateinamen oder Inhalte. Beim Ausschalten wird alles gelöscht.</string>

@@ -1,5 +1,6 @@
 package io.github.artcraftandroid.pdfcraft.ui.viewer
 
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -108,7 +109,7 @@ private fun PageMenuIcon(icon: ImageVector, label: String, enabled: Boolean, onC
 @Composable
 private fun PageMenuRow(icon: ImageVector, label: String, onClick: () -> Unit) {
     val c = pdfColors
-    Row(Modifier.fillMaxWidth().height(41.dp).clickable(onClick = onClick).padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable(onClick = onClick).padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically) {
         Icon(icon, null, tint = c.icon, modifier = Modifier.size(22.dp))
         Spacer(Modifier.width(21.dp))
         Text(label, color = c.text, fontSize = 15.sp)

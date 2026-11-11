@@ -1,9 +1,10 @@
 package io.github.artcraftandroid.pdfcraft.ui.viewer
 
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -141,7 +142,7 @@ internal fun InkPresetsPicker(vm: AppViewModel, onApplied: () -> Unit) {
         // An enabled Pen-only setting makes every finger gesture navigate instead of ink.
         // Keep the state and the escape switch next to the actual pen controls.
         Row(
-            Modifier.fillMaxWidth().clickable { prefs.updateStylusOnly(!prefs.stylusOnly) }
+            Modifier.fillMaxWidth().toggleable(value = prefs.stylusOnly, role = Role.Switch) { prefs.updateStylusOnly(it) }
                 .padding(vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -149,11 +150,11 @@ internal fun InkPresetsPicker(vm: AppViewModel, onApplied: () -> Unit) {
                 Text(stringResource(R.string.toolbar_stylus_only), color = c.text, fontSize = 14.sp)
                 Text(stringResource(R.string.ink_pen_only_explanation), color = c.label, fontSize = 12.sp)
             }
-            PdfSwitch(prefs.stylusOnly, { prefs.updateStylusOnly(it) })
+            PdfSwitch(prefs.stylusOnly, null)
         }
 
         Row(
-            Modifier.fillMaxWidth().clickable { prefs.updateSnapToShape(!prefs.snapToShape) }
+            Modifier.fillMaxWidth().toggleable(value = prefs.snapToShape, role = Role.Switch) { prefs.updateSnapToShape(it) }
                 .padding(vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -161,7 +162,7 @@ internal fun InkPresetsPicker(vm: AppViewModel, onApplied: () -> Unit) {
                 Text(stringResource(R.string.toolbar_snap_to_shape), color = c.text, fontSize = 14.sp)
                 Text(stringResource(R.string.ink_snap_explanation), color = c.label, fontSize = 12.sp)
             }
-            PdfSwitch(prefs.snapToShape, { prefs.updateSnapToShape(it) })
+            PdfSwitch(prefs.snapToShape, null)
         }
 
         Text(stringResource(R.string.ink_styles_title), color = c.text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
@@ -176,7 +177,7 @@ internal fun InkPresetsPicker(vm: AppViewModel, onApplied: () -> Unit) {
                     Modifier.width(104.dp)
                         .border(if (active) 2.dp else 1.dp, if (active) c.accent else c.divider, RoundedCornerShape(12.dp))
                         .background(if (active) c.pressed else c.surface, RoundedCornerShape(12.dp))
-                        .clickable(role = Role.RadioButton) { prefs.updateInkStyle(style); onApplied() }
+                        .selectable(selected = active, role = Role.RadioButton) { prefs.updateInkStyle(style); onApplied() }
                         .semantics { contentDescription = label }
                         .padding(8.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
@@ -197,7 +198,7 @@ internal fun InkPresetsPicker(vm: AppViewModel, onApplied: () -> Unit) {
                     Modifier.weight(1f)
                         .border(if (chosen) 2.dp else 1.dp, if (chosen) c.accent else c.divider, RoundedCornerShape(14.dp))
                         .background(if (chosen) c.pressed else c.surface, RoundedCornerShape(14.dp))
-                        .clickable(role = Role.RadioButton) { if (prefs.applyInkPreset(index)) onApplied() }
+                        .selectable(selected = chosen, role = Role.RadioButton) { if (prefs.applyInkPreset(index)) onApplied() }
                         .semantics { contentDescription = label }
                         .padding(vertical = 10.dp, horizontal = 4.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
