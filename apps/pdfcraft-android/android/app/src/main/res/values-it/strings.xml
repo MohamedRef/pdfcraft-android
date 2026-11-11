@@ -416,6 +416,7 @@
     <string name="viewer_hint_comment">Tocca il punto in cui inserire il commento</string>
     <string name="viewer_hint_text">Tocca per aggiungere testo</string>
     <string name="viewer_hint_fill_sign">Tocca il punto in cui vuoi inserire il testo</string>
+    <string name="viewer_hint_fill_sign_form">Tocca un campo blu per compilarlo, oppure tocca altrove per aggiungere l\'elemento scelto</string>
 
     <!-- Aggiunta di immagini -->
 
@@ -942,7 +943,7 @@
     <string name="fill_tab_image">Immagine</string>
     <string name="fill_draw_signature_here">Disegna qui la tua firma</string>
     <string name="fill_draw_initials_here">Disegna qui le tue iniziali</string>
-    <string name="fill_save_to_device">Salva sul dispositivo</string>
+    <string name="fill_save_to_device">Ricorda questa firma</string>
 
     <!-- Menu degli elementi inseriti -->
 
@@ -973,6 +974,7 @@
 
     <string name="msg_undone">%1$s annullato</string>
     <string name="msg_redone">%1$s ripristinato</string>
+    <string name="msg_ink_kept">L\'inchiostro non salvato è stato conservato. Apri Disegna e tocca Fine per salvarlo di nuovo.</string>
 
     <!-- Strumenti del visualizzatore -->
 
@@ -1453,4 +1455,13 @@
     <string name="notebook_cannot_add_page">Non è possibile aggiungere pagine a questo documento</string>
     <string name="notebook_busy_saving_template">Salvataggio del modello…</string>
     <string name="notebook_template_saved">Modello %1$s salvato</string>
+    <string name="updater_err_checksum">L\'APK scaricato non corrisponde alla versione pubblicata, quindi non è stato installato. Riprova a scaricarlo.</string>
+    <string name="updater_err_invalid_apk">Il file scaricato non è un\'app Android firmata valida.</string>
+    <string name="updater_err_wrong_build">L\'APK scaricato non è l\'aggiornamento di PdfCraft previsto.</string>
+    <string name="updater_err_certificate">L\'APK scaricato non è firmato da PdfCraft, quindi non può sostituire l\'app installata.</string>
+    <string name="updater_err_android_version">Questo aggiornamento richiede una versione di Android più recente.</string>
+    <string name="updater_err_abi">Questo APK non è compilato per il processore del tuo telefono.</string>
+    <string name="updater_err_storage">Impossibile salvare l\'aggiornamento su questo dispositivo. Libera spazio e riprova.</string>
+    <string name="updater_err_untrusted">Il link di aggiornamento non proviene dalle release GitHub ufficiali di PdfCraft, quindi è stato rifiutato.</string>
+    <string name="updater_err_server">Il server di download ha inviato una risposta imprevista. Riprova più tardi o scarica dal browser.</string>
 </resources>

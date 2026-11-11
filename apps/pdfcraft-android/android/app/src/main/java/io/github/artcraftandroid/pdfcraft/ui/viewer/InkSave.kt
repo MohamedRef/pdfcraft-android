@@ -15,12 +15,17 @@ internal data class InkSaveStroke(
 internal const val MAX_PRESSURE_INK_POINTS = 4000
 
 /**
- * The `comment_add` argument maps for [strokes], in paint order. A pen stroke with pressure is
- * saved as **one** Ink annotation with a width per point (`widths`), instead of up to 64
- * annotations of one width each, which split the stroke into fragments for selection and erasing
- * and darkened every join of translucent ink. Adjacent strokes of the same appearance on a page
- * share one annotation, as before; constant-width strokes are unchanged. [hex] formats colours.
+ * The `comment_add` argument maps for [strokes], in paint order, grouped by stroke: entry `i`
+ * holds the commands of `strokes[i]`. Every stroke is its **own** Ink annotation (#72), so each
+ * stroke is one step of the document's undo history whenever it is saved (Done, the eraser, the
+ * app going to the background), as it was one step of the Draw tool's own undo before. A pen
+ * stroke with pressure is saved as one annotation with a width per point (`widths`), split only
+ * past [MAX_PRESSURE_INK_POINTS]; constant-width strokes are unchanged. [hex] formats colours.
  */
+internal fun inkSaveCommandGroups(strokes: List<InkSaveStroke>, hex: (Int) -> String): List<List<Map<String, Any?>>> =
+    strokes.map { inkSaveCommands(listOf(it), hex) }
+
+/** The `comment_add` argument maps of the strokes of one group (see [inkSaveCommandGroups]). */
 internal fun inkSaveCommands(strokes: List<InkSaveStroke>, hex: (Int) -> String): List<Map<String, Any?>> {
     data class Piece(val stroke: InkSaveStroke, val points: List<Offset>, val widths: List<Float>?, val width: Float)
     val pieces = strokes.flatMap { s ->

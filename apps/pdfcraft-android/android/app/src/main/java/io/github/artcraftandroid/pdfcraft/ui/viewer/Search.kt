@@ -117,3 +117,21 @@ fun searchTextSample(pageCount: Int, max: Int = 40): List<Int> {
     if (pageCount <= max) return (0 until pageCount).toList()
     return (0 until max).map { i -> (i.toLong() * (pageCount - 1) / (max - 1)).toInt() }.distinct()
 }
+
+/** The results list's rows: a page heading before the first hit of each page, then the hits. */
+sealed interface SearchRow {
+    data class Page(val page: Int, val count: Int) : SearchRow
+    data class Hit(val index: Int, val page: Int, val context: String) : SearchRow
+}
+
+fun searchRows(hits: List<SearchHit>): List<SearchRow> = buildList {
+    var i = 0
+    while (i < hits.size) {
+        val page = hits[i].range.page.toInt()
+        var j = i
+        while (j < hits.size && hits[j].range.page.toInt() == page) j++
+        add(SearchRow.Page(page, j - i))
+        for (k in i until j) add(SearchRow.Hit(k, page, hits[k].context.trim()))
+        i = j
+    }
+}

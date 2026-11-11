@@ -406,6 +406,7 @@
     <string name="viewer_hint_comment">Touchez là où le commentaire doit aller</string>
     <string name="viewer_hint_text">Touchez pour ajouter du texte</string>
     <string name="viewer_hint_fill_sign">Touchez là où vous voulez saisir du texte</string>
+    <string name="viewer_hint_fill_sign_form">Touchez un champ bleu pour le remplir, ou touchez ailleurs pour ajouter l\'élément choisi</string>
 
     <!-- Viewer: Add image sheet -->
     <string name="viewer_add_image">Ajouter une image</string>
@@ -863,7 +864,7 @@
     <string name="fill_tab_image">Image</string>
     <string name="fill_draw_signature_here">Dessinez votre signature ici</string>
     <string name="fill_draw_initials_here">Dessinez vos initiales ici</string>
-    <string name="fill_save_to_device">Enregistrer sur l\'appareil</string>
+    <string name="fill_save_to_device">Mémoriser cette signature</string>
 
     <!-- Fill & Sign: the menu over a placed element -->
     <string name="fill_smaller">Plus petit</string>
@@ -887,6 +888,7 @@
     <!-- Messages: undo and redo. %1$s is the name of the edit, as the engine gives it (for example "Add comment"). -->
     <string name="msg_undone">%1$s annulé</string>
     <string name="msg_redone">%1$s rétabli</string>
+    <string name="msg_ink_kept">L\'encre non enregistrée a été conservée. Ouvrez Dessiner et touchez OK pour l\'enregistrer à nouveau.</string>
 
     <!-- Messages: viewer tools -->
     <string name="msg_tool_blocked_security">Cet outil n\'est pas disponible en raison des paramètres de sécurité du document.</string>
@@ -1343,4 +1345,13 @@
     <string name="notebook_cannot_add_page">Impossible d\'ajouter des pages à ce document</string>
     <string name="notebook_busy_saving_template">Enregistrement du modèle…</string>
     <string name="notebook_template_saved">Modèle %1$s enregistré</string>
+    <string name="updater_err_checksum">L\'APK téléchargé ne correspond pas à la version publiée et n\'a pas été installé. Téléchargez-le à nouveau.</string>
+    <string name="updater_err_invalid_apk">Le fichier téléchargé n\'est pas une application Android signée valide.</string>
+    <string name="updater_err_wrong_build">L\'APK téléchargé n\'est pas la mise à jour PdfCraft attendue.</string>
+    <string name="updater_err_certificate">L\'APK téléchargé n\'est pas signé par PdfCraft et ne peut pas remplacer l\'application installée.</string>
+    <string name="updater_err_android_version">Cette mise à jour nécessite une version plus récente d\'Android.</string>
+    <string name="updater_err_abi">Cet APK n\'est pas conçu pour le processeur de votre téléphone.</string>
+    <string name="updater_err_storage">Impossible d\'enregistrer la mise à jour sur cet appareil. Libérez de l\'espace et réessayez.</string>
+    <string name="updater_err_untrusted">Le lien de mise à jour ne provient pas des versions GitHub officielles de PdfCraft et a été refusé.</string>
+    <string name="updater_err_server">Le serveur de téléchargement a renvoyé une réponse inattendue. Réessayez plus tard ou téléchargez dans le navigateur.</string>
 </resources>

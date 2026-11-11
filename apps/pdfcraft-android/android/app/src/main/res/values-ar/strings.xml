@@ -302,6 +302,7 @@
     <string name="viewer_hint_comment">اضغط في موضع التعليق</string>
     <string name="viewer_hint_text">اضغط لإضافة نص</string>
     <string name="viewer_hint_fill_sign">اضغط حيث تريد إدخال النص</string>
+    <string name="viewer_hint_fill_sign_form">اضغط على حقل أزرق لملئه، أو اضغط في أي مكان آخر لإضافة العنصر المختار</string>
     <string name="viewer_add_image">إضافة صورة</string>
     <string name="viewer_image_from_photos">من الصور</string>
     <string name="viewer_image_from_camera">من الكاميرا</string>
@@ -321,6 +322,16 @@
     <string name="viewer_zoom_in">تكبير</string>
     <string name="viewer_zoom_out">تصغير</string>
     <string name="viewer_search_count">%1$d من %2$d</string>
+    <string name="viewer_search_show_all">عرض كل النتائج</string>
+    <string name="viewer_search_results_running">%1$d نتيجة حتى الآن…</string>
+    <plurals name="viewer_search_results">
+        <item quantity="zero">لا نتائج</item>
+        <item quantity="one">نتيجة واحدة</item>
+        <item quantity="two">نتيجتان</item>
+        <item quantity="few">%1$d نتائج</item>
+        <item quantity="many">%1$d نتيجة</item>
+        <item quantity="other">%1$d نتيجة</item>
+    </plurals>
     <string name="viewer_search_count_running">%1$d من %2$d…</string>
     <string name="viewer_searching">جارٍ البحث…</string>
     <string name="viewer_search_progress">جارٍ البحث في الصفحة %1$d من %2$d</string>
@@ -521,6 +532,13 @@
     <string name="sheet_single_page">صفحة واحدة</string>
     <string name="sheet_reading_mode">وضع القراءة</string>
     <string name="sheet_night_mode">الوضع الليلي</string>
+    <string name="sheet_reading_colors">ألوان القراءة</string>
+    <string name="sheet_reading_colors_sample">أب</string>
+    <string name="sheet_reading_colors_off">إيقاف</string>
+    <string name="sheet_reading_colors_black_on_white">أسود على أبيض</string>
+    <string name="sheet_reading_colors_white_on_black">أبيض على أسود</string>
+    <string name="sheet_reading_colors_yellow_on_black">أصفر على أسود</string>
+    <string name="sheet_reading_colors_green_on_black">أخضر على أسود</string>
     <string name="sheet_tab_contents">الفهرس</string>
     <string name="sheet_tab_bookmarks">الإشارات المرجعية</string>
     <string name="sheet_no_contents">لا يحتوي هذا المستند على فهرس.</string>
@@ -732,7 +750,7 @@
     <string name="fill_tab_image">صورة</string>
     <string name="fill_draw_signature_here">ارسم توقيعك هنا</string>
     <string name="fill_draw_initials_here">ارسم أحرفك الأولى هنا</string>
-    <string name="fill_save_to_device">حفظ على الجهاز</string>
+    <string name="fill_save_to_device">تذكّر هذا التوقيع</string>
     <string name="fill_smaller">أصغر</string>
     <string name="fill_bigger">أكبر</string>
     <string name="fill_colour">اللون</string>
@@ -745,6 +763,7 @@
     <string name="msg_file_access_lost">تعذّر على PdfCraft فتح هذا الملف. افتحه مجددًا من التطبيق الموجود فيه أو باستخدام «فتح ملف».</string>
     <string name="msg_undone">تم التراجع عن %1$s</string>
     <string name="msg_redone">تمت إعادة %1$s</string>
+    <string name="msg_ink_kept">تم الاحتفاظ بالحبر الذي لم يُحفظ. افتح الرسم واضغط تم لحفظه مرة أخرى.</string>
     <string name="msg_tool_blocked_security">هذه الأداة غير متاحة بسبب إعدادات أمان المستند.</string>
     <string name="msg_snap_to_shape_on">تحويل الرسم إلى شكل: مفعّل</string>
     <string name="msg_search_image_only">نصوص هذا الملف صور؛ لذا لا يمكن البحث فيها بعد.</string>
@@ -1111,4 +1130,13 @@
     <string name="notebook_cannot_add_page">لا يمكن إضافة صفحات إلى هذا المستند</string>
     <string name="notebook_busy_saving_template">جارٍ حفظ القالب…</string>
     <string name="notebook_template_saved">تم حفظ القالب %1$s</string>
+    <string name="updater_err_checksum">ملف APK الذي تم تنزيله لا يطابق الإصدار المنشور، لذلك لم يُثبَّت. حاول التنزيل مرة أخرى.</string>
+    <string name="updater_err_invalid_apk">الملف الذي تم تنزيله ليس تطبيق Android صالحًا وموقّعًا.</string>
+    <string name="updater_err_wrong_build">ملف APK الذي تم تنزيله ليس تحديث PdfCraft المتوقع.</string>
+    <string name="updater_err_certificate">ملف APK الذي تم تنزيله غير موقّع من PdfCraft، لذلك لا يمكنه استبدال التطبيق المثبّت.</string>
+    <string name="updater_err_android_version">يتطلب هذا التحديث إصدارًا أحدث من Android.</string>
+    <string name="updater_err_abi">ملف APK هذا غير مخصص لمعالج هاتفك.</string>
+    <string name="updater_err_storage">تعذّر حفظ التحديث على هذا الجهاز. وفّر بعض المساحة وحاول مرة أخرى.</string>
+    <string name="updater_err_untrusted">رابط التحديث ليس من إصدارات GitHub الرسمية لـ PdfCraft، لذلك تم رفضه.</string>
+    <string name="updater_err_server">أرسل خادم التنزيل ردًا غير متوقع. حاول لاحقًا أو نزّل من المتصفح.</string>
 </resources>
