@@ -3230,6 +3230,15 @@ fn note_margins_through_tools() {
     assert_eq!(r["page_sizes"][2], json!([310.0, 300.0]), "margins add up");
     let r = ok(&mut a, "page_margin", json!({ "doc": doc, "remove": true }));
     assert_eq!(r["page_sizes"][2], json!([190.0, 300.0]), "and come off together");
+    // A rotated page: the margin goes on the side the reader sees, and comes off exactly.
+    ok(&mut a, "page_rotate", json!({ "doc": doc, "pages": [1], "degrees": 90 }));
+    assert_eq!(ok(&mut a, "page_margin", json!({ "doc": doc }))["page_sizes"][0], json!([300.0, 200.0]));
+    let r = ok(&mut a, "page_margin", json!({ "doc": doc, "pages": [1], "add": [0, 0, 100, 0] }));
+    assert_eq!(r["page_sizes"][0], json!([400.0, 200.0]), "right as displayed");
+    let r = ok(&mut a, "page_margin", json!({ "doc": doc, "pages": [1], "add": [0, 40, 0, 0] }));
+    assert_eq!(r["page_sizes"][0], json!([400.0, 240.0]), "bottom as displayed");
+    let r = ok(&mut a, "page_margin", json!({ "doc": doc, "remove": true }));
+    assert_eq!(r["page_sizes"][0], json!([300.0, 200.0]));
     // Nothing to grow, both at once, or a page shrunk to nothing are refused.
     assert!(matches!(a.call("page_margin", &json!({ "doc": doc, "add": [0, 0, 0, 0] })), Err(ToolError::InvalidArgs(_))));
     assert!(matches!(a.call("page_margin", &json!({ "doc": doc, "add": [0, 0, 8000, 0] })), Err(ToolError::InvalidArgs(_))));
