@@ -1,0 +1,16 @@
+[package]
+name = "pdfcraft-android-ffi-bytes"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+description = "Large byte buffers (page pixels) across the UniFFI boundary in one copy, for pdfcraft-android"
+
+# Not the workspace lints: implementing UniFFI's converter traits is `unsafe impl` (#86). This
+# crate holds nothing else.
+[lints.rust]
+unsafe_code = "deny"
+
+[dependencies]
+# The exact release pdfcraft-android and its bindings use.
+uniffi = { version = "=0.32.2", default-features = false }

@@ -164,6 +164,35 @@ fn hiding_comments_is_a_view_setting() {
     assert!(!s.document(doc).unwrap().comments_hidden);
 }
 
+/// Share and Print without annotations (#155): the app opens the saved file a second time,
+/// removes the comments there and saves that copy; the working file keeps its comments.
+#[test]
+fn a_copy_without_annotations_leaves_the_working_file_alone() {
+    let s = MobileSession::new();
+    let path = blank_pdf(1);
+    let doc = s.open(path.clone(), None).unwrap().id;
+    let run = |tool: &str, args: Value| -> Value { serde_json::from_str(&s.execute(tool.into(), args.to_string()).unwrap()).unwrap() };
+    run("comment_add", json!({ "doc": doc, "page": 1, "type": "note", "at": [300, 300], "contents": "mine" }));
+    run("doc_save", json!({ "doc": doc }));
+    let comments = |d: u64| run("comment_list", json!({ "doc": d }))["comments"].as_array().map_or(0, |a| a.len());
+    assert_eq!(comments(doc), 1);
+
+    let copy = run("doc_open", json!({ "path": path }))["doc"].as_u64().unwrap();
+    let found = run("doc_hidden_info", json!({ "doc": copy }));
+    let n = found["categories"].as_array().unwrap().iter().find(|c| c["category"] == "comments").unwrap()["count"].as_u64().unwrap();
+    assert_eq!(n, 1);
+    run("doc_remove_hidden", json!({ "doc": copy, "categories": ["comments"] }));
+    let out = scratch().join("clean.pdf");
+    run("doc_save", json!({ "doc": copy, "path": out, "full": true }));
+    run("doc_close", json!({ "doc": copy, "discard_changes": true }));
+
+    let clean = s.open(out.to_string_lossy().into_owned(), None).unwrap().id;
+    assert_eq!(comments(clean), 0, "the copy has no annotations");
+    assert_eq!(comments(doc), 1, "the open document keeps its annotations");
+    let reopened = s.open(path, None).unwrap().id;
+    assert_eq!(comments(reopened), 1, "the working file keeps its annotations");
+}
+
 #[test]
 fn refuses_bad_render_requests() {
     let s = MobileSession::new();

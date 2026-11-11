@@ -2797,6 +2797,7 @@ version = "0.20.0"
 dependencies = [
  "android_logger",
  "log",
+ "pdfcraft-android-ffi-bytes",
  "pdfcraft-automation",
  "pdfcraft-cos",
  "pdfcraft-engine",
@@ -2808,6 +2809,13 @@ dependencies = [
 
 [[package]]
 name = "pdfcraft-android-bindgen"
+version = "0.20.0"
+dependencies = [
+ "uniffi",
+]
+
+[[package]]
+name = "pdfcraft-android-ffi-bytes"
 version = "0.20.0"
 dependencies = [
  "uniffi",

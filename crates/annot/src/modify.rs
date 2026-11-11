@@ -1172,8 +1172,28 @@ pub fn add_text_replacement(doc: &mut Document, replacement: TextReplacement<'_>
     Ok(s)
 }
 
+/// Distance from `p` to the segment `a`–`b` (a point when `a == b`).
+fn point_segment_distance(p: [f64; 2], a: [f64; 2], b: [f64; 2]) -> f64 {
+    let (dx, dy) = (b[0] - a[0], b[1] - a[1]);
+    let len2 = dx * dx + dy * dy;
+    let t = if len2 > 0.0 { (((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / len2).clamp(0.0, 1.0) } else { 0.0 };
+    (p[0] - (a[0] + t * dx)).hypot(p[1] - (a[1] + t * dy))
+}
+
+/// Shortest distance between segments `a`–`b` and `c`–`d` (zero when they cross).
+fn segment_distance(a: [f64; 2], b: [f64; 2], c: [f64; 2], d: [f64; 2]) -> f64 {
+    let cross = |o: [f64; 2], p: [f64; 2], q: [f64; 2]| (p[0] - o[0]) * (q[1] - o[1]) - (p[1] - o[1]) * (q[0] - o[0]);
+    let (d1, d2, d3, d4) = (cross(c, d, a), cross(c, d, b), cross(a, b, c), cross(a, b, d));
+    if ((d1 > 0.0 && d2 < 0.0) || (d1 < 0.0 && d2 > 0.0)) && ((d3 > 0.0 && d4 < 0.0) || (d3 < 0.0 && d4 > 0.0)) {
+        return 0.0;
+    }
+    point_segment_distance(a, c, d).min(point_segment_distance(b, c, d)).min(point_segment_distance(c, a, b)).min(point_segment_distance(d, a, b))
+}
+
 /// The Eraser (Draw tools): remove the parts of drawing `(page, index)` within `radius` points
-/// of `path`, splitting strokes where they are cut. A drawing with nothing left is deleted.
+/// of `path` (measured to the stroke's painted edge, so half its width is added), splitting
+/// strokes where they are cut. Strokes the eraser does not reach keep their exact points. A
+/// drawing with nothing left is deleted.
 /// Returns whether anything was erased.
 pub fn erase_ink(doc: &mut Document, page: usize, index: usize, path: &[[f64; 2]], radius: f64, meta: &Meta) -> Result<bool, AnnotError> {
     let (_, r) = annot_ref(doc, page, index)?;
@@ -1203,28 +1223,43 @@ pub fn erase_ink(doc: &mut Document, page: usize, index: usize, path: &[[f64; 2]
         .and_then(|l| l.as_array().cloned())
         .map(|l| l.iter().map(|s| doc.resolve(s).as_array().map(|a| a.iter().filter_map(|x| doc.resolve(x).as_f64()).collect()).unwrap_or_default()).collect())
         .filter(|f: &Vec<Vec<f64>>| f.len() == strokes.len() && f.iter().zip(&strokes).all(|(f, s)| f.len() == s.len()));
-    // Distance from a point to the eraser's path (segments, or a single point).
-    let near = |p: [f64; 2]| -> bool {
-        if path.len() == 1 {
-            return (p[0] - path[0][0]).hypot(p[1] - path[0][1]) <= radius;
-        }
-        path.windows(2).any(|w| {
-            let (a, b) = (w[0], w[1]);
-            let (dx, dy) = (b[0] - a[0], b[1] - a[1]);
-            let len2 = dx * dx + dy * dy;
-            let t = if len2 > 0.0 { (((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / len2).clamp(0.0, 1.0) } else { 0.0 };
-            (p[0] - (a[0] + t * dx)).hypot(p[1] - (a[1] + t * dy)) <= radius
-        })
-    };
+    // The eraser's path as segments (a single point is a segment of length zero).
+    let segs: Vec<([f64; 2], [f64; 2])> = if path.len() == 1 { vec![(path[0], path[0])] } else { path.windows(2).map(|w| (w[0], w[1])).collect() };
+    // Ink is cut where the eraser circle meets its painted edge, not only its centreline:
+    // the reach at a point is the radius plus half the stroke's width there (Android #77).
+    let half_width = border_width_of(&d).max(0.0) / 2.0;
+    let reach = |factor: f64| radius + half_width * factor.max(0.0);
     let mut kept: Vec<Vec<[f64; 2]>> = Vec::new();
     let mut kept_factors: Vec<Vec<f64>> = Vec::new();
     let mut erased = false;
     for (si, s) in strokes.iter().enumerate() {
         let f = factors.as_ref().map(|f| &f[si]);
         let factor = |i: usize| f.map_or(1.0, |f| f[i]);
-        // Densify so long segments are cut where the eraser crosses them.
+        // Only the eraser segments that can reach this stroke are tested against it.
+        let widest = (0..s.len()).map(factor).fold(1.0_f64, f64::max);
+        let local: Vec<([f64; 2], [f64; 2])> = match bounds(s.iter().copied()) {
+            Some(b) => {
+                let b = grow(b, reach(widest));
+                segs.iter().copied().filter(|(a, c)| a[0].min(c[0]) <= b[2] && a[0].max(c[0]) >= b[0] && a[1].min(c[1]) <= b[3] && a[1].max(c[1]) >= b[1]).collect()
+            }
+            None => Vec::new(),
+        };
+        // A stroke the eraser never reaches keeps its exact points (and smoothing).
+        if local.is_empty() {
+            kept.push(s.clone());
+            kept_factors.push((0..s.len()).map(factor).collect());
+            continue;
+        }
+        let near = |p: [f64; 2], r: f64| local.iter().any(|(a, b)| point_segment_distance(p, *a, *b) <= r);
+        // Densify only the segments the eraser can reach, so they are cut where it crosses
+        // them; elsewhere the stroke keeps its original vertices.
         let mut pts: Vec<([f64; 2], f64)> = Vec::new();
         for (i, w) in s.windows(2).enumerate() {
+            let r = reach(factor(i).max(factor(i + 1)));
+            if !local.iter().any(|(a, b)| segment_distance(w[0], w[1], *a, *b) <= r) {
+                pts.push((w[0], factor(i)));
+                continue;
+            }
             let n = ((w[1][0] - w[0][0]).hypot(w[1][1] - w[0][1]) / (radius / 2.0)).ceil().clamp(1.0, 2000.0) as usize;
             for k in 0..n {
                 let t = k as f64 / n as f64;
@@ -1235,11 +1270,16 @@ pub fn erase_ink(doc: &mut Document, page: usize, index: usize, path: &[[f64; 2]
         if let Some(last) = s.last() {
             pts.push((*last, factor(s.len() - 1)));
         }
+        if !pts.iter().any(|(p, fw)| near(*p, reach(*fw))) {
+            kept.push(s.clone());
+            kept_factors.push((0..s.len()).map(factor).collect());
+            continue;
+        }
+        erased = true;
         let mut run: Vec<[f64; 2]> = Vec::new();
         let mut run_f: Vec<f64> = Vec::new();
         for (p, fw) in pts {
-            if near(p) {
-                erased = true;
+            if near(p, reach(fw)) {
                 if run.len() >= 2 {
                     kept.push(std::mem::take(&mut run));
                     kept_factors.push(std::mem::take(&mut run_f));

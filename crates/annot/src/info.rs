@@ -2,7 +2,7 @@ use super::create::finite;
 use super::draw::set_appearance;
 use super::lookup::{annot_dict, annot_ref, annotation_flags, annots, drawn_upright, is_fill_sign, page_ref, page_refs};
 use super::modify::{fillable, touch, unlocked};
-use super::types::{BorderShape, FLAG_LOCKED, LineEnding, Meta, NoteIcon, Rgb};
+use super::types::{BorderShape, FLAG_HIDDEN, FLAG_LOCKED, FLAG_NO_VIEW, LineEnding, Meta, NoteIcon, Rgb};
 use super::{AnnotError, Dict, Document, ObjRef, Object, PdfString, appearance};
 
 // ── reading ─────────────────────────────────────────────────────────────────────────────────
@@ -244,6 +244,9 @@ pub struct Props {
     pub fill_opacity: Option<f64>,
     /// How opaque a text box's, typewriter text's or callout's text is drawn.
     pub text_opacity: Option<f64>,
+    /// The Hidden or NoView flag (`/F` bits 2 and 6): viewers do not show it (Android draws
+    /// sticky-note icons itself and skips these, as the renderer does).
+    pub hidden: bool,
 }
 
 /// The current properties of the comment at `(page, index)`.
@@ -296,6 +299,7 @@ fn props_entry(doc: &Document, entry: &Object) -> Option<Props> {
         modified: text_value(doc, d, b"M"),
         restylable: crate::draw::can_draw(doc, raw),
         locked: annotation_flags(doc, d) & FLAG_LOCKED != 0,
+        hidden: annotation_flags(doc, d) & (FLAG_HIDDEN | FLAG_NO_VIEW) != 0,
         fillable: fillable(&subtype),
         fill: fill_of(d),
         font_size: (subtype == "FreeText").then(|| appearance::parse_da(d).1),

@@ -5,6 +5,7 @@ import io.github.artcraftandroid.pdfcraft.ui.home.FileTool
 import io.github.artcraftandroid.pdfcraft.ui.viewer.FillElement
 import androidx.compose.ui.graphics.asImageBitmap
 import io.github.artcraftandroid.pdfcraft.engine.toBitmap
+import io.github.artcraftandroid.pdfcraft.engine.review
 import io.github.artcraftandroid.pdfcraft.engine.UserBookmark
 import io.github.artcraftandroid.pdfcraft.engine.UserBookmarks
 import io.github.artcraftandroid.pdfcraft.ui.viewer.NotePrompt
@@ -908,14 +909,22 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         }
     }
 
-    /** Share a copy of [doc] through the system's share sheet (saved first, with the ink being drawn). */
-    fun share(doc: OpenDocument) {
+    /**
+     * Share a copy of [doc] through the system's share sheet (saved first, with the ink being drawn).
+     * With [clean], the copy has no comments or markups while the working file keeps them (#155).
+     */
+    fun share(doc: OpenDocument, clean: Boolean = false) {
         if (doc.controller.tool == ViewerTool.Draw) doc.commitTool?.invoke()
         handOut {
             // the ink is queued in the engine: reading the document back waits for it, so the save has it
             refresh(doc)
             save(doc)
-            val uri = withContext(Dispatchers.IO) { files.shareable(doc.file, doc.name) }
+            val copy = if (clean) preparedCopy(doc, unlock = false, clean = true) ?: throw IllegalStateException(text(R.string.msg_clean_copy_failed)) else null
+            val uri = try {
+                withContext(Dispatchers.IO) { files.shareable(copy ?: doc.file, doc.name) }
+            } finally {
+                copy?.delete()
+            }
             sendIntent(listOf(uri)).putExtra(Intent.EXTRA_SUBJECT, text(R.string.msg_share_subject, doc.title))
         }
     }
@@ -1066,8 +1075,8 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         return true
     }
 
-    /** Print [doc] through Android's print framework. */
-    fun print(doc: OpenDocument) {
+    /** Print [doc] through Android's print framework; with [clean], without its comments and markups (#155). */
+    fun print(doc: OpenDocument, clean: Boolean = false) {
         if (!doc.info.allowsPrinting) {
             tell(text(R.string.msg_print_disabled))
             return
@@ -1079,10 +1088,14 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             refresh(doc)
             save(doc)
             // the system's printing can't open a password-protected file: print an unlocked copy
-            val unlocked = if (doc.info.encrypted) unlockedCopy(doc) else null
+            val prepared = if (doc.info.encrypted || clean) preparedCopy(doc, unlock = doc.info.encrypted, clean = clean) else null
+            if (clean && prepared == null) {
+                tell(text(R.string.msg_clean_copy_failed))
+                return@launch
+            }
             // a copy, not the working file the app's pause may be saving (#79); either copy is
             // deleted when the print job finishes (the unlocked one has no password, #105)
-            val copy = unlocked ?: printSnapshot(doc)
+            val copy = prepared ?: printSnapshot(doc)
             prints.trySend(PrintJob(copy ?: doc.file, doc.name, deleteWhenDone = copy != null))
         }
     }
@@ -1097,14 +1110,27 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         }
     }
 
-    /** A temporary copy of [doc] without its password, for printing; null if the security can't be removed. */
-    private suspend fun unlockedCopy(doc: OpenDocument): File? {
+    /**
+     * A temporary copy of [doc]'s saved file, opened separately so the open document is untouched:
+     * without its password ([unlock], for printing, #105) and without its comments and markups
+     * ([clean], #155). Null when that can't be done.
+     */
+    private suspend fun preparedCopy(doc: OpenDocument, unlock: Boolean, clean: Boolean): File? {
         val eng = engine ?: return null
         val out = File(getApplication<Application>().cacheDir, "print-${System.nanoTime()}.pdf")
         return runCatching {
-            val copy = eng.tool("doc_open", mapOf("path" to doc.file.absolutePath, "password" to doc.password)).optLong("doc")
+            val copy = saveMutex.withLock {
+                eng.tool("doc_open", mapOf("path" to doc.file.absolutePath, "password" to doc.password)).optLong("doc")
+            }
             try {
-                eng.tool("doc_unprotect", mapOf("doc" to copy))
+                if (unlock) eng.tool("doc_unprotect", mapOf("doc" to copy))
+                if (clean) {
+                    val found = eng.tool("doc_hidden_info", mapOf("doc" to copy)).optJSONArray("categories")
+                    val comments = (0 until (found?.length() ?: 0)).map { found!!.getJSONObject(it) }
+                        .firstOrNull { it.optString("category") == "comments" }?.optInt("count") ?: 0
+                    // the tool fails when there is nothing to remove: a file without comments is already clean
+                    if (comments > 0) eng.tool("doc_remove_hidden", mapOf("doc" to copy, "categories" to listOf("comments")))
+                }
                 eng.tool("doc_save", mapOf("doc" to copy, "path" to out.absolutePath, "full" to true))
             } finally {
                 runCatching { eng.tool("doc_close", mapOf("doc" to copy, "discard_changes" to true)) }
@@ -3714,6 +3740,171 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         deliver(out, "Pages from ${doc.title}.pdf")
     }
 
+    // ---- Flashcards ---------------------------------------------------------------------------
+
+    val flashcards = io.github.artcraftandroid.pdfcraft.engine.Flashcards(File(getApplication<Application>().filesDir, "flashcards.json"))
+    private val fsrs = io.github.artcraftandroid.pdfcraft.engine.Fsrs()
+
+    /** A card being written (from a selection, or by hand in a deck). */
+    var cardDraft by mutableStateOf<CardDraft?>(null)
+
+    /** The review session showing: its deck (a document URI, or null for every deck). */
+    var reviewing by mutableStateOf<ReviewSession?>(null)
+
+    /** Cards due now per deck, for Home and the viewer. */
+    var dueCounts by mutableStateOf<Map<String, Int>>(emptyMap())
+        private set
+
+    fun refreshDue() {
+        viewModelScope.launch { dueCounts = withContext(Dispatchers.IO) { flashcards.dueCounts(System.currentTimeMillis()) } }
+    }
+
+    /**
+     * Selection > Make card: the selected text on the front, linked to its page. With [cloze] the
+     * front is the selection's line with the selected words as the blank to fill in.
+     */
+    fun makeCardFromSelection(doc: OpenDocument, cloze: Boolean) {
+        val uri = doc.source?.toString() ?: run { tell(text(R.string.cards_need_saved_file)); return }
+        val eng = engine ?: return
+        viewModelScope.launch {
+            val sel = doc.selection.selection ?: return@launch
+            val page = sel.range.page.toInt()
+            val picked = doc.selection.text()?.trim()?.replace(Regex("\\s+"), " ") ?: return@launch
+            var front = picked
+            if (cloze) {
+                val first = sel.rects.firstOrNull()
+                val line = first?.let { r ->
+                    runCatching { eng.tool("text_lines", mapOf("doc" to doc.id, "page" to page + 1)) }.getOrNull()?.optJSONArray("lines")?.let { a ->
+                        val cy = (r[1] + r[3]) / 2
+                        (0 until a.length()).mapNotNull { a.optJSONObject(it) }.firstOrNull { l ->
+                            val b = l.optJSONArray("rect") ?: return@firstOrNull false
+                            cy >= b.optDouble(1) && cy <= b.optDouble(3)
+                        }?.optString("text")
+                    }
+                }
+                front = io.github.artcraftandroid.pdfcraft.engine.Flashcards.clozeOf(line, picked)
+            }
+            doc.selection.clear()
+            cardDraft = CardDraft(uri, doc.info.name, page, front, "", null)
+        }
+    }
+
+    fun newCard(deck: String, deckName: String) { cardDraft = CardDraft(deck, deckName, -1, "", "", null) }
+
+    fun editCard(card: io.github.artcraftandroid.pdfcraft.engine.Flashcard) { cardDraft = CardDraft(card.deck, card.deckName, card.page, card.front, card.back, card.id) }
+
+    fun saveCard(d: CardDraft) {
+        cardDraft = null
+        if (d.front.isBlank()) return
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) {
+                val old = d.id?.let { id -> flashcards.all().firstOrNull { it.id == id } }
+                flashcards.put(
+                    old?.copy(front = d.front.trim(), back = d.back.trim())
+                        ?: io.github.artcraftandroid.pdfcraft.engine.Flashcard(
+                            id = java.util.UUID.randomUUID().toString(), deck = d.deck, deckName = d.deckName,
+                            front = d.front.trim(), back = d.back.trim(), page = d.page, created = System.currentTimeMillis(),
+                        ),
+                )
+            }
+            refreshDue()
+            if (d.id == null) tell(text(R.string.cards_saved))
+            reviewing?.let { reload(it) }
+        }
+    }
+
+    fun deleteCard(id: String) {
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) { flashcards.delete(id) }
+            refreshDue()
+            reviewing?.let { reload(it) }
+        }
+    }
+
+    /** Review the cards due in [deck] (every deck when null). */
+    fun startReview(deck: String?, deckName: String) {
+        val r = ReviewSession(deck, deckName)
+        reviewing = r
+        reload(r)
+    }
+
+    private fun reload(r: ReviewSession) {
+        viewModelScope.launch {
+            val (due, all) = withContext(Dispatchers.IO) {
+                flashcards.due(System.currentTimeMillis(), r.deck) to (if (r.deck != null) flashcards.deck(r.deck) else flashcards.all())
+            }
+            if (reviewing === r) { r.queue.clear(); r.queue.addAll(due); r.all = all }
+        }
+    }
+
+    /** The next due dates [card] would get for each rating (for the buttons). */
+    fun previewIntervals(card: io.github.artcraftandroid.pdfcraft.engine.Flashcard): Map<io.github.artcraftandroid.pdfcraft.engine.Rating, Long> {
+        val now = System.currentTimeMillis()
+        return io.github.artcraftandroid.pdfcraft.engine.Rating.entries.associateWith { fsrs.review(card, it, now).due - now }
+    }
+
+    fun rate(r: ReviewSession, card: io.github.artcraftandroid.pdfcraft.engine.Flashcard, rating: io.github.artcraftandroid.pdfcraft.engine.Rating) {
+        val next = fsrs.review(card, rating, System.currentTimeMillis())
+        r.queue.remove(card)
+        // forgotten cards come back at the end of this session
+        if (rating == io.github.artcraftandroid.pdfcraft.engine.Rating.Again) r.queue.add(next)
+        r.reviewed++
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) { flashcards.put(next) }
+            refreshDue()
+        }
+    }
+
+    /** Open a card's source page. */
+    fun openCardSource(card: io.github.artcraftandroid.pdfcraft.engine.Flashcard) {
+        reviewing = null
+        if (document?.source?.toString() == card.deck) { if (card.page >= 0) document?.viewer?.goToPage(card.page); return }
+        pendingSearch = if (card.page >= 0) card.page to "" else null
+        open(Uri.parse(card.deck))
+    }
+
+    /** Export a deck (or every card) as Anki-importable TSV to Downloads. */
+    fun exportCards(deck: String?, deckName: String) = job(text(R.string.cards_busy_export)) { _ ->
+        val cards = withContext(Dispatchers.IO) { if (deck != null) flashcards.deck(deck) else flashcards.all() }
+        if (cards.isEmpty()) { tell(text(R.string.cards_none)); return@job }
+        val out = tempFile("txt")
+        withContext(Dispatchers.IO) { out.writeText(io.github.artcraftandroid.pdfcraft.engine.Flashcards.toAnkiTsv(cards)) }
+        deliver(out, DocumentFiles.safeName(text(R.string.cards_file_name, deckName.removeSuffix(".pdf"))).removeSuffix(".pdf") + ".txt", "text/plain")
+    }
+
+    /** Import cards from a CSV/TSV/TXT file into [deck]. */
+    fun importCards(deck: String, deckName: String) {
+        cardImportDeck = deck to deckName
+        cardImportRequests.trySend(Unit)
+    }
+
+    private var cardImportDeck: Pair<String, String>? = null
+    val cardImportRequests = Channel<Unit>(Channel.CONFLATED)
+
+    fun onCardFilePicked(uri: Uri?) {
+        val (deck, name) = cardImportDeck ?: return
+        cardImportDeck = null
+        uri ?: return
+        viewModelScope.launch {
+            val n = withContext(Dispatchers.IO) {
+                runCatching {
+                    val text = getApplication<Application>().contentResolver.openInputStream(uri)?.use { s ->
+                        String(s.readNBytes(8 * 1024 * 1024), Charsets.UTF_8).removePrefix("\uFEFF")
+                    } ?: return@runCatching 0
+                    val now = System.currentTimeMillis()
+                    val cards = io.github.artcraftandroid.pdfcraft.engine.Flashcards.parseDelimited(text).take(10_000).map { (f, b) ->
+                        io.github.artcraftandroid.pdfcraft.engine.Flashcard(java.util.UUID.randomUUID().toString(), deck, name, f, b, created = now)
+                    }
+                    flashcards.putAll(cards)
+                    cards.size
+                }.getOrDefault(-1)
+            }
+            if (n < 0) tell(text(R.string.msg_that_file_unreadable)) else tell(text(R.string.cards_imported, n))
+            refreshDue()
+            reviewing?.let { reload(it) }
+        }
+    }
+
     // ---- Library ------------------------------------------------------------------------------
 
     val library = io.github.artcraftandroid.pdfcraft.engine.Library(File(getApplication<Application>().filesDir, "library.json"))
@@ -4716,6 +4907,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         refreshStudy()
         refreshLibrary()
         indexLibrary()
+        refreshDue()
         focusTimer = io.github.artcraftandroid.pdfcraft.FocusTimerAlarm.load(getApplication())
     }
 
@@ -5003,7 +5195,8 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     fun tapComment(doc: OpenDocument, at: PagePoint?): Boolean {
         if (at == null) return false
         val hit = doc.comments.lastOrNull { c ->
-            c.page.toInt() == at.page && c.replyTo == null && c.state == null && c.rect.size == 4 &&
+            // A comment the PDF hides (Hidden/NoView) is not drawn, so it cannot be tapped (#115).
+            c.page.toInt() == at.page && !c.hidden && c.replyTo == null && c.state == null && c.rect.size == 4 &&
                 at.x in (c.rect[0] - 4)..(c.rect[2] + 4) && at.y in (c.rect[1] - 4)..(c.rect[3] + 4)
         } ?: return false
         selectedComment = doc to hit
@@ -5221,8 +5414,10 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     }
 
     /** Change a comment's opacity or line width (one undo step each). */
-    fun styleComment(doc: OpenDocument, c: io.github.artcraftandroid.pdfcraft.core.CommentInfo, style: Map<String, Any?>) {
-        runTool(doc, "comment_edit", commentArgs(c) + style) { reselect(doc, c) }
+    /** [reselect] false: the panel is closing or moving on, so the selection is left as it is. */
+    fun styleComment(doc: OpenDocument, c: io.github.artcraftandroid.pdfcraft.core.CommentInfo, style: Map<String, Any?>, reselect: Boolean = true) {
+        if (reselect) runTool(doc, "comment_edit", commentArgs(c) + style) { reselect(doc, c) }
+        else runTool(doc, "comment_edit", commentArgs(c) + style)
     }
 
     fun editCommentText(doc: OpenDocument, c: io.github.artcraftandroid.pdfcraft.core.CommentInfo, text: String) {
@@ -5331,3 +5526,13 @@ enum class DigestFormat(@androidx.annotation.StringRes val label: Int) {
 
 /** Files past this size are not copied for the library index. */
 private const val MAX_INDEX_BYTES = 300L * 1024 * 1024
+
+/** A flashcard being written: its deck (document URI), page, sides, and its id when editing one. */
+data class CardDraft(val deck: String, val deckName: String, val page: Int, val front: String, val back: String, val id: String?)
+
+/** A review session: the cards still due in it, in order, and how many were reviewed. */
+class ReviewSession(val deck: String?, val deckName: String) {
+    val queue = androidx.compose.runtime.mutableStateListOf<io.github.artcraftandroid.pdfcraft.engine.Flashcard>()
+    var all by mutableStateOf<List<io.github.artcraftandroid.pdfcraft.engine.Flashcard>>(emptyList())
+    var reviewed by mutableStateOf(0)
+}
