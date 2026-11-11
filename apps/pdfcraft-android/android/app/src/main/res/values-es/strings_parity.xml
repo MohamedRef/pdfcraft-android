@@ -35,4 +35,23 @@
     <string name="edit_image_crop_handle_right">Borde derecho del recorte</string>
     <string name="edit_image_crop_handle_bottom">Borde inferior del recorte</string>
     <string name="edit_image_crop_handle_left">Borde izquierdo del recorte</string>
+    <string name="sign_certify">Certificar documento</string>
+    <string name="sign_certify_about">Una firma de certificación es la del autor: indica qué cambios posteriores mantienen válido el documento.</string>
+    <string name="sign_certify_no_changes">No se permiten cambios</string>
+    <string name="sign_certify_form_fill">Rellenar formularios y firmar</string>
+    <string name="sign_certify_comments">Rellenar formularios, firmar y comentar</string>
+    <string name="sign_invisible">Firma invisible</string>
+    <string name="sign_invisible_short">Invisible</string>
+    <string name="sign_invisible_about">No se dibuja nada en la página; la firma aparece en el panel Firmas.</string>
+    <string name="sign_show_name">Mostrar nombre</string>
+    <string name="sign_show_date">Mostrar fecha</string>
+    <string name="sign_show_reason">Mostrar motivo</string>
+    <string name="sign_show_location">Mostrar ubicación</string>
+    <string name="sign_show_dn">Mostrar nombre distintivo</string>
+    <string name="sign_show_labels">Mostrar etiquetas</string>
+    <string name="sign_section_contact">Información de contacto (opcional)</string>
+    <string name="sign_contact_hint">Correo o teléfono</string>
+    <string name="sign_view_signed_version">Ver versión firmada</string>
+    <string name="sign_no_signed_version">No se encontró en el archivo la versión que firma esta firma.</string>
+    <string name="sign_signed_version_name">%1$s (firmado, %2$s)</string>
 </resources>

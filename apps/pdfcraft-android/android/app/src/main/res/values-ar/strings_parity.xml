@@ -35,4 +35,23 @@
     <string name="edit_image_crop_handle_right">حافة القص اليمنى</string>
     <string name="edit_image_crop_handle_bottom">حافة القص السفلية</string>
     <string name="edit_image_crop_handle_left">حافة القص اليسرى</string>
+    <string name="sign_certify">اعتماد المستند</string>
+    <string name="sign_certify_about">توقيع الاعتماد هو توقيع المؤلف: يحدد التغييرات اللاحقة التي تُبقي المستند صالحًا.</string>
+    <string name="sign_certify_no_changes">لا يُسمح بأي تغييرات</string>
+    <string name="sign_certify_form_fill">تعبئة النماذج والتوقيع</string>
+    <string name="sign_certify_comments">تعبئة النماذج والتوقيع والتعليق</string>
+    <string name="sign_invisible">توقيع غير مرئي</string>
+    <string name="sign_invisible_short">غير مرئي</string>
+    <string name="sign_invisible_about">لا يُرسم شيء على الصفحة؛ يظهر التوقيع في لوحة التوقيعات.</string>
+    <string name="sign_show_name">إظهار الاسم</string>
+    <string name="sign_show_date">إظهار التاريخ</string>
+    <string name="sign_show_reason">إظهار السبب</string>
+    <string name="sign_show_location">إظهار المكان</string>
+    <string name="sign_show_dn">إظهار الاسم المميز</string>
+    <string name="sign_show_labels">إظهار التسميات</string>
+    <string name="sign_section_contact">معلومات التواصل (اختياري)</string>
+    <string name="sign_contact_hint">البريد أو الهاتف</string>
+    <string name="sign_view_signed_version">عرض النسخة الموقعة</string>
+    <string name="sign_no_signed_version">تعذر العثور في الملف على النسخة التي يوقعها هذا التوقيع.</string>
+    <string name="sign_signed_version_name">%1$s (النسخة الموقعة، %2$s)</string>
 </resources>

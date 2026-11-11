@@ -35,4 +35,23 @@
     <string name="edit_image_crop_handle_right">Zuschnitt, rechte Kante</string>
     <string name="edit_image_crop_handle_bottom">Zuschnitt, untere Kante</string>
     <string name="edit_image_crop_handle_left">Zuschnitt, linke Kante</string>
+    <string name="sign_certify">Dokument zertifizieren</string>
+    <string name="sign_certify_about">Eine Zertifizierungssignatur stammt vom Autor: sie legt fest, welche späteren Änderungen das Dokument gültig lassen.</string>
+    <string name="sign_certify_no_changes">Keine Änderungen erlaubt</string>
+    <string name="sign_certify_form_fill">Formulare ausfüllen und unterschreiben</string>
+    <string name="sign_certify_comments">Formulare ausfüllen, unterschreiben und kommentieren</string>
+    <string name="sign_invisible">Unsichtbare Signatur</string>
+    <string name="sign_invisible_short">Unsichtbar</string>
+    <string name="sign_invisible_about">Auf der Seite wird nichts gezeichnet; die Signatur steht im Bereich Signaturen.</string>
+    <string name="sign_show_name">Name anzeigen</string>
+    <string name="sign_show_date">Datum anzeigen</string>
+    <string name="sign_show_reason">Grund anzeigen</string>
+    <string name="sign_show_location">Ort anzeigen</string>
+    <string name="sign_show_dn">Distinguished Name anzeigen</string>
+    <string name="sign_show_labels">Beschriftungen anzeigen</string>
+    <string name="sign_section_contact">Kontaktdaten (optional)</string>
+    <string name="sign_contact_hint">E-Mail oder Telefon</string>
+    <string name="sign_view_signed_version">Signierte Version anzeigen</string>
+    <string name="sign_no_signed_version">Die von dieser Signatur signierte Version wurde in der Datei nicht gefunden.</string>
+    <string name="sign_signed_version_name">%1$s (signiert, %2$s)</string>
 </resources>

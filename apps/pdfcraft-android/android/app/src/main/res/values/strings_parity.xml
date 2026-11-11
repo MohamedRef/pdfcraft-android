@@ -35,4 +35,23 @@
     <string name="edit_image_crop_handle_right">Crop right edge</string>
     <string name="edit_image_crop_handle_bottom">Crop bottom edge</string>
     <string name="edit_image_crop_handle_left">Crop left edge</string>
+    <string name="sign_certify">Certify document</string>
+    <string name="sign_certify_about">A certifying signature is the author\'s: it says which later changes keep the document valid.</string>
+    <string name="sign_certify_no_changes">No changes allowed</string>
+    <string name="sign_certify_form_fill">Filling in forms and signing</string>
+    <string name="sign_certify_comments">Filling in forms, signing and commenting</string>
+    <string name="sign_invisible">Invisible signature</string>
+    <string name="sign_invisible_short">Invisible</string>
+    <string name="sign_invisible_about">Nothing is drawn on the page; the signature is listed in the Signatures panel.</string>
+    <string name="sign_show_name">Show name</string>
+    <string name="sign_show_date">Show date</string>
+    <string name="sign_show_reason">Show reason</string>
+    <string name="sign_show_location">Show location</string>
+    <string name="sign_show_dn">Show distinguished name</string>
+    <string name="sign_show_labels">Show labels</string>
+    <string name="sign_section_contact">Contact info (optional)</string>
+    <string name="sign_contact_hint">Email or phone</string>
+    <string name="sign_view_signed_version">View signed version</string>
+    <string name="sign_no_signed_version">The version this signature signs couldn\'t be found in the file.</string>
+    <string name="sign_signed_version_name">%1$s (signed version, %2$s)</string>
 </resources>
