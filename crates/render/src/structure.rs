@@ -226,6 +226,7 @@ fn convert(object: &CosObject, depth: usize) -> Result<Object> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Arc;
 
     /// A hostile page-tree /Count must not abort the process: lopdf's own `get_pages`
     /// pre-allocates by it (fuzz finding: /Count 4294967295 -> a 48 GiB allocation),
