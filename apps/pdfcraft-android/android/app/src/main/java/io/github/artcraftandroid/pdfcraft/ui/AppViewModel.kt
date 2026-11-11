@@ -2444,6 +2444,8 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     val compare = io.github.artcraftandroid.pdfcraft.ui.viewer.CompareState()
     /** Accessibility: the last check, figures and auto-tag preview (#182). */
     val accessibility = io.github.artcraftandroid.pdfcraft.ui.viewer.AccessibilityState()
+    /** Prepare form: the document being prepared, the kind to place and the selected field (#164). */
+    val prepareForm = io.github.artcraftandroid.pdfcraft.ui.viewer.PrepareFormState()
 
     /** A finished job's green banner over the viewer's bar, with Undo. */
     var success by mutableStateOf<SuccessBanner?>(null)
@@ -2923,7 +2925,14 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         viewModelScope.launch {
             loadAllWidgets(doc)
             if (document !== doc || !doc.widgetsComplete) return@launch
-            val fillable = doc.widgets.filter { !it.readOnly && (it.kind == "text" || it.kind == "combo" || it.kind == "list") }
+            // the document's own tab order (Prepare form ▸ Tab order) leads; fields it doesn't name keep reading order
+            val order = runCatching {
+                val t = engine?.tool("form_tab_order", mapOf("doc" to doc.id))?.optJSONArray("tab_order")
+                if (t == null) emptyList() else (0 until t.length()).map { t.getString(it) }
+            }.getOrDefault(emptyList())
+            val fillable = io.github.artcraftandroid.pdfcraft.ui.viewer.inTabOrder(
+                doc.widgets.filter { !it.readOnly && (it.kind == "text" || it.kind == "combo" || it.kind == "list") }, order,
+            ) { it.field }
             val i = fillable.indexOfFirst { it.field == from.field && it.page == from.page && it.rect == from.rect }
             val next = fillable.getOrNull(if (forward) i + 1 else i - 1)
             fieldEdit = next?.let {
