@@ -373,10 +373,22 @@
         <item quantity="other">حُدّدت %1$d صفحة</item>
     </plurals>
     <string name="pages_page">الصفحة %1$d</string>
-    <string name="pages_insert_page">إدراج صفحة</string>
-    <string name="pages_extract">استخراج</string>
-    <string name="pages_rotate_left">يسار</string>
-    <string name="pages_rotate_right">يمين</string>
+    <string name="pages_insert_page">إدراج صفحات</string>
+    <string name="pages_select_action">تحديد</string>
+    <string name="pages_select_all">تحديد الكل</string>
+    <string name="pages_select_none">إلغاء التحديد</string>
+    <string name="pages_drag_hint">اضغط مطولًا على صفحة واسحبها لنقلها</string>
+    <plurals name="pages_deleted">
+        <item quantity="zero">لم تُحذف أي صفحة</item>
+        <item quantity="one">حُذفت صفحة واحدة</item>
+        <item quantity="two">حُذفت صفحتان</item>
+        <item quantity="few">حُذفت %1$d صفحات</item>
+        <item quantity="many">حُذفت %1$d صفحة</item>
+        <item quantity="other">حُذفت %1$d صفحة</item>
+    </plurals>
+    <string name="pages_extract">استخراج إلى PDF جديد</string>
+    <string name="pages_rotate_left">تدوير لليسار</string>
+    <string name="pages_rotate_right">تدوير لليمين</string>
     <string name="pages_insert">إدراج</string>
     <string name="pages_at_start">في البداية</string>
     <string name="pages_at_end">في النهاية</string>

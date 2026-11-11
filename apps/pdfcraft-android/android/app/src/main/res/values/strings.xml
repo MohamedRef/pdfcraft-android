@@ -517,19 +517,27 @@
     <!-- Pages: the grid of pages and organizing -->
     <string name="pages_title">Pages</string>
     <string name="pages_select">Select pages</string>
+    <string name="pages_select_action">Select</string>
+    <string name="pages_select_all">Select all</string>
+    <string name="pages_select_none">Select none</string>
+    <string name="pages_drag_hint">Hold a page and drag it to move it</string>
+    <plurals name="pages_deleted">
+        <item quantity="one">Deleted %1$d page</item>
+        <item quantity="other">Deleted %1$d pages</item>
+    </plurals>
     <!-- Translator note: the title while organizing; %1$d is how many pages are ticked. -->
     <plurals name="pages_selected_count">
-        <item quantity="one">Selected %1$d</item>
-        <item quantity="other">Selected %1$d</item>
+        <item quantity="one">%1$d selected</item>
+        <item quantity="other">%1$d selected</item>
     </plurals>
     <!-- Translator note: accessibility label of a page's thumbnail; %1$d is its number. -->
     <string name="pages_page">Page %1$d</string>
-    <string name="pages_insert_page">Insert Page</string>
-    <string name="pages_extract">Extract</string>
+    <string name="pages_insert_page">Insert pages</string>
+    <string name="pages_extract">Extract to new PDF</string>
     <!-- Translator note: rotate the selected pages a quarter turn to the left. Keep it short. -->
-    <string name="pages_rotate_left">Left</string>
+    <string name="pages_rotate_left">Rotate left</string>
     <!-- Translator note: rotate the selected pages a quarter turn to the right. Keep it short. -->
-    <string name="pages_rotate_right">Right</string>
+    <string name="pages_rotate_right">Rotate right</string>
 
     <!-- Pages: Insert sheet (where the new pages go, and what they are) -->
     <string name="pages_insert">Insert</string>
