@@ -413,6 +413,64 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
         documentEdit("comments_edit_many", mapOf("page" to page + 1, "comments" to indices) + extra)
     }
     val prefs = vm.toolPrefs
+    /** Drops a just-drawn draft stroke that turned out to be a gesture, without an undo step of its own. */
+    fun dropGestureStroke(s: InkStroke) {
+        strokes.remove(s)
+        edits.remove(DraftInkEdit.Added(s))
+    }
+    /**
+     * Smart pen gestures (#148), after lift only: a zig-zag deletes the ink under it, a straight
+     * marker stroke over a text line highlights its words, a straight pen stroke just under a
+     * line underlines them. Anything else stays the ink it was drawn as.
+     */
+    fun penGestureAfterLift(s: InkStroke) {
+        val pts = s.points.toList()
+        when (classifyPenGesture(pts)) {
+            PenGesture.ScratchOut -> {
+                val area = strokeBounds(pts).inflate(2f)
+                val victims = strokes.filter { it !== s && it.page == s.page && scratchCovers(area, it.points.toList()) }
+                val saved = doc.comments.filter {
+                    it.page.toInt() == s.page && it.subtype == "Ink" && !it.locked && scratchCoversRect(area, it.rect)
+                }
+                if (victims.isEmpty() && saved.isEmpty()) return
+                dropGestureStroke(s)
+                if (victims.isNotEmpty()) {
+                    val edit = DraftInkEdit.Removed(victims.map { strokes.indexOf(it) to it }.filter { it.first >= 0 })
+                    applyDraftInkEdit(strokes, edit, forward = true)
+                    edits.add(edit)
+                    undone.clear()
+                    steps.drafted()
+                }
+                if (saved.isNotEmpty()) {
+                    documentEdit("comments_edit_many", mapOf("page" to s.page + 1, "comments" to saved.map { it.index.toInt() + 1 }, "delete" to true))
+                }
+                vm.tell(text(R.string.pen_gesture_scratched, victims.size + saved.size))
+            }
+            PenGesture.Line -> {
+                val eng = vm.engine ?: return
+                if (!doc.info.allowsAnnotation) return
+                val marker = s.appearance.style == InkStyle.Highlighter
+                val y = pts.map { it.y }.average().toFloat()
+                // An underline sits below its line: look for words a few points higher up.
+                val probe = if (marker) 0f else 4f
+                val start = PagePoint(s.page, pts.first().x, pts.first().y - probe)
+                val end = PagePoint(s.page, pts.last().x, pts.last().y - probe)
+                val color = Color(s.appearance.argb)
+                val opacity = s.appearance.opacity
+                vm.viewModelScope.launch {
+                    val found = try { resolveMarkup(eng, doc, start, end, 3f, tap = false) } catch (_: MobileException) { null } ?: return@launch
+                    val line = found.rects.firstOrNull { r -> lineGestureMarkup(marker, y, minOf(r[1], r[3]), maxOf(r[1], r[3])) != null } ?: return@launch
+                    val markup = lineGestureMarkup(marker, y, minOf(line[1], line[3]), maxOf(line[1], line[3])) ?: return@launch
+                    // Committed meanwhile (Done): it is ink now, so leave it as drawn.
+                    if (vm.document !== doc || s !in strokes) return@launch
+                    dropGestureStroke(s)
+                    val rects = found.rects.filter { r -> kotlin.math.abs((minOf(r[1], r[3]) + maxOf(r[1], r[3])) / 2f - (minOf(line[1], line[3]) + maxOf(line[1], line[3])) / 2f) < 1f }
+                    vm.addMarkup(doc, markup, s.page, rects, color, if (marker) opacity.coerceAtLeast(0.25f) else opacity)
+                }
+            }
+            PenGesture.None -> Unit
+        }
+    }
     // Capture appearance at pointer down. Every stroke is saved as its own annotation (#72).
     DisposableEffect(doc) {
         doc.commitTool = {
@@ -823,6 +881,8 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                         s.pressureSensitive = false
                         s.pressures.clear()
                         s.pressures.addAll(List(shape.size) { 1f })
+                    } else if (prefs.penGestures && s.shapeMode == InkShapeMode.Freehand && rulerEdge == null && s.points.size >= 2) {
+                        penGestureAfterLift(s)
                     }
                 }
             },

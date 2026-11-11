@@ -271,6 +271,15 @@ class ToolPrefs(context: Context) {
         prefs.edit().putFloat("hand.palmGuardSize", palmGuardSizeDp).apply()
     }
 
+    /** Smart pen gestures (#148): scratch-out, line-to-highlight and underline. Off by default. */
+    var penGestures by mutableStateOf(prefs.getBoolean("ink.gestures", false))
+        private set
+
+    fun updatePenGestures(on: Boolean) {
+        penGestures = on
+        prefs.edit().putBoolean("ink.gestures", on).apply()
+    }
+
     /** Draw: a two-finger tap undoes and a three-finger tap redoes (#189). On by default. */
     var multiFingerUndo by mutableStateOf(prefs.getBoolean("ink.multiFingerUndo", true))
         private set

@@ -33,3 +33,7 @@ Pen settings has **Writing hand** (Right or Left) and **Ignore palm while writin
 ## Ruler (#150)
 
 Draw ▸ **Ruler** shows a screen-space ruler with 5 dp ticks and its angle. One or two fingers on the ruler move it; two fingers also turn it about their centre. The angle snaps to 15° steps within 2° with a haptic tick. A freehand pen or finger stroke that starts within 24 dp of an edge follows that edge for the whole stroke (offset by half the stroke width), so the saved ink is straight. The ruler is only an overlay: it is kept per open document while it stays open and is never written to the PDF, exports or prints. Not done yet: protractor and arcs, and unifying hold-to-straighten with the ruler.
+
+## Smart pen gestures (#148)
+
+**Smart pen gestures** in Pen settings is off by default. When on, a freehand stroke is classified only after lift, so the live stroke gains no latency. A zig-zag with at least four horizontal reversals deletes the unsaved strokes and the saved, unlocked Ink comments mostly (60 %) under it; unsaved strokes come back with one Undo, saved ones with the document's Undo. A straight marker stroke (within 8 % of its length, within 12° of horizontal) over a text line becomes a Highlight of those words in the marker's colour; a straight pen stroke within 4 pt below a line becomes an Underline. Anything else stays ink. Not done yet: circle-then-hold lasso, and the two-step undo back to the raw stroke.

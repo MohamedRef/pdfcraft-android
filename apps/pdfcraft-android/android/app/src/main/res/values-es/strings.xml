@@ -1339,6 +1339,9 @@
     <string name="bates_export_failed">No se pudo guardar esta copia nueva en Descargas.</string>
     <string name="ink_presets_title">Lápices favoritos</string>
     <string name="ink_presets_help">Cada lápiz conserva su propio color, grosor y opacidad. Toca un favorito para recuperar sus ajustes.</string>
+    <string name="pen_gesture_scratched">Se borraron %1$d trazos. Deshacer los recupera.</string>
+    <string name="pen_gestures_explanation">Garabatea sobre la tinta para borrarla. Una línea recta de marcador sobre texto lo resalta; una línea recta de lápiz justo debajo lo subraya. Se reconoce al levantar el lápiz.</string>
+    <string name="pen_gestures">Gestos inteligentes del lápiz</string>
     <string name="ink_ruler">Regla</string>
     <string name="palm_guard_size">Zona de la palma: %1$d dp</string>
     <string name="palm_guard_explanation">Mientras el S Pen está cerca o escribe, los toques junto a él y debajo, del lado de tu mano de escritura, no desplazan, no hacen zoom ni dibujan. La zona se muestra mientras el lápiz está cerca.</string>
