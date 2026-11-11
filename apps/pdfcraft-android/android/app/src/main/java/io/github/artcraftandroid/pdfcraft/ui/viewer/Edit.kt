@@ -305,7 +305,7 @@ private fun FontPanel(current: String?, onFont: (String) -> Unit) {
             val (key, name) = faces[i]
             val chosen = key == current
             Row(
-                Modifier.fillMaxWidth().height(42.dp).clickable(enabled = key != null) { if (key != null) onFont(key) },
+                Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable(enabled = key != null) { if (key != null) onFont(key) },
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
