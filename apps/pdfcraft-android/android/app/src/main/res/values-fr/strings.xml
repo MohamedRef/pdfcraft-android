@@ -1308,4 +1308,13 @@
     <string name="compact_previews">Utiliser moins de mémoire pour les aperçus de pages</string>
     <string name="compact_previews_body">Réduit la précision des couleurs pour les pages entières. Les détails zoomés conservent leur pleine qualité. S\'applique à la réouverture d\'un document.</string>
     <string name="updater_other_build">Cette version n\'est pas l\'APK officiel ARM64, les mises à jour dans l\'application sont donc désactivées. Mettez-la à jour depuis l\'endroit où vous l\'avez installée.</string>
+    <string name="updater_err_checksum">L\'APK téléchargé ne correspond pas à la version publiée et n\'a pas été installé. Téléchargez-le à nouveau.</string>
+    <string name="updater_err_invalid_apk">Le fichier téléchargé n\'est pas une application Android signée valide.</string>
+    <string name="updater_err_wrong_build">L\'APK téléchargé n\'est pas la mise à jour PdfCraft attendue.</string>
+    <string name="updater_err_certificate">L\'APK téléchargé n\'est pas signé par PdfCraft et ne peut pas remplacer l\'application installée.</string>
+    <string name="updater_err_android_version">Cette mise à jour nécessite une version plus récente d\'Android.</string>
+    <string name="updater_err_abi">Cet APK n\'est pas conçu pour le processeur de votre téléphone.</string>
+    <string name="updater_err_storage">Impossible d\'enregistrer la mise à jour sur cet appareil. Libérez de l\'espace et réessayez.</string>
+    <string name="updater_err_untrusted">Le lien de mise à jour ne provient pas des versions GitHub officielles de PdfCraft et a été refusé.</string>
+    <string name="updater_err_server">Le serveur de téléchargement a renvoyé une réponse inattendue. Réessayez plus tard ou téléchargez dans le navigateur.</string>
 </resources>

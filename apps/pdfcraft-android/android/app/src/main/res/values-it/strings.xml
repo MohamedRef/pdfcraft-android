@@ -1418,4 +1418,13 @@
     <string name="compact_previews">Usa meno memoria per le anteprime delle pagine</string>
     <string name="compact_previews_body">Riduce la precisione del colore per le pagine intere. I dettagli ingranditi mantengono la qualità piena. Si applica alla riapertura del documento.</string>
     <string name="updater_other_build">Questa build non è l\'APK ufficiale ARM64, quindi gli aggiornamenti in-app sono disattivati. Aggiornala da dove l\'hai installata.</string>
+    <string name="updater_err_checksum">L\'APK scaricato non corrisponde alla versione pubblicata, quindi non è stato installato. Riprova a scaricarlo.</string>
+    <string name="updater_err_invalid_apk">Il file scaricato non è un\'app Android firmata valida.</string>
+    <string name="updater_err_wrong_build">L\'APK scaricato non è l\'aggiornamento di PdfCraft previsto.</string>
+    <string name="updater_err_certificate">L\'APK scaricato non è firmato da PdfCraft, quindi non può sostituire l\'app installata.</string>
+    <string name="updater_err_android_version">Questo aggiornamento richiede una versione di Android più recente.</string>
+    <string name="updater_err_abi">Questo APK non è compilato per il processore del tuo telefono.</string>
+    <string name="updater_err_storage">Impossibile salvare l\'aggiornamento su questo dispositivo. Libera spazio e riprova.</string>
+    <string name="updater_err_untrusted">Il link di aggiornamento non proviene dalle release GitHub ufficiali di PdfCraft, quindi è stato rifiutato.</string>
+    <string name="updater_err_server">Il server di download ha inviato una risposta imprevista. Riprova più tardi o scarica dal browser.</string>
 </resources>

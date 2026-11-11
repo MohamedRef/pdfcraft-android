@@ -1093,4 +1093,13 @@
     <string name="ocr_review_limited">عرض حتى %1$d كلمة، مع الكلمات غير المؤكدة أولًا.</string>
     <string name="ocr_review_unknown">غير متاح</string>
     <string name="updater_other_build">هذا الإصدار ليس ملف APK الرسمي لمعالجات ARM64، لذلك التحديثات داخل التطبيق متوقفة. حدّثه من المكان الذي ثبّته منه.</string>
+    <string name="updater_err_checksum">ملف APK الذي تم تنزيله لا يطابق الإصدار المنشور، لذلك لم يُثبَّت. حاول التنزيل مرة أخرى.</string>
+    <string name="updater_err_invalid_apk">الملف الذي تم تنزيله ليس تطبيق Android صالحًا وموقّعًا.</string>
+    <string name="updater_err_wrong_build">ملف APK الذي تم تنزيله ليس تحديث PdfCraft المتوقع.</string>
+    <string name="updater_err_certificate">ملف APK الذي تم تنزيله غير موقّع من PdfCraft، لذلك لا يمكنه استبدال التطبيق المثبّت.</string>
+    <string name="updater_err_android_version">يتطلب هذا التحديث إصدارًا أحدث من Android.</string>
+    <string name="updater_err_abi">ملف APK هذا غير مخصص لمعالج هاتفك.</string>
+    <string name="updater_err_storage">تعذّر حفظ التحديث على هذا الجهاز. وفّر بعض المساحة وحاول مرة أخرى.</string>
+    <string name="updater_err_untrusted">رابط التحديث ليس من إصدارات GitHub الرسمية لـ PdfCraft، لذلك تم رفضه.</string>
+    <string name="updater_err_server">أرسل خادم التنزيل ردًا غير متوقع. حاول لاحقًا أو نزّل من المتصفح.</string>
 </resources>
