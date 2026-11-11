@@ -3163,10 +3163,11 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     }
 
     /** Put [file] into Downloads as [name] and say so, with Open. */
-    private suspend fun deliver(file: File, name: String, mime: String = "application/pdf") {
+    private suspend fun deliver(file: File, name: String, mime: String = "application/pdf", lead: String? = null) {
         val uri = withContext(Dispatchers.IO) { files.saveToDownloads(file, name, mime).also { file.delete() } }
         val size = withContext(Dispatchers.IO) { files.size(uri) }
-        val saved = size?.let { text(R.string.msg_saved_downloads_size, name, io.github.artcraftandroid.pdfcraft.ui.viewer.formatSize(it)) } ?: text(R.string.msg_saved_downloads, name)
+        val saved = (size?.let { text(R.string.msg_saved_downloads_size, name, io.github.artcraftandroid.pdfcraft.ui.viewer.formatSize(it)) } ?: text(R.string.msg_saved_downloads, name))
+            .let { if (lead != null) "$lead $it" else it }
         if (mime == "application/pdf") tell(saved, text(R.string.common_open)) { open(uri) }
         else tell(saved, text(R.string.common_open)) {
             intents.trySend(Intent.createChooser(Intent(Intent.ACTION_VIEW).setDataAndType(uri, mime).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION), null))
@@ -3175,27 +3176,57 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
 
     private fun tempFile(ext: String) = File(getApplication<Application>().cacheDir, "out-${System.nanoTime()}.$ext")
 
-    /** Compress PDF at [level] (0 high, 1 medium, 2 low compression). */
-    fun compress(doc: OpenDocument, level: Int) = job(text(R.string.msg_busy_compressing)) { eng ->
-        val (ppi, above, quality) = when (level) {
-            0 -> Triple(72, 108, 40)
-            2 -> Triple(300, 450, 80)
-            else -> Triple(150, 225, 60)
-        }
-        val images = mapOf("downsample" to true, "ppi" to ppi, "above_ppi" to above, "compression" to "jpeg", "quality" to quality)
+    /** Compress ▸ Advanced, as last used (remembered). */
+    var compressOptions by mutableStateOf(loadCompressOptions())
+        private set
+
+    private fun loadCompressOptions(): CompressOptions = CompressOptions(
+        enabled = appPrefs.getBoolean("compress.advanced", false),
+        targetMb = appPrefs.getFloat("compress.targetMb", 0f).toDouble().takeIf { it > 0 },
+        ppi = appPrefs.getInt("compress.ppi", 150),
+        quality = appPrefs.getInt("compress.quality", 60),
+        mobile = appPrefs.getBoolean("compress.mobile", false),
+        removeInvalidLinks = appPrefs.getBoolean("compress.removeInvalidLinks", true),
+        discardFormActions = appPrefs.getBoolean("compress.discardFormActions", false),
+        discardTags = appPrefs.getBoolean("compress.discardTags", false),
+        discardAlternateImages = appPrefs.getBoolean("compress.discardAlternateImages", true),
+    )
+
+    fun updateCompressOptions(o: CompressOptions) {
+        compressOptions = o
+        appPrefs.edit()
+            .putBoolean("compress.advanced", o.enabled).putFloat("compress.targetMb", (o.targetMb ?: 0.0).toFloat())
+            .putInt("compress.ppi", o.ppi).putInt("compress.quality", o.quality).putBoolean("compress.mobile", o.mobile)
+            .putBoolean("compress.removeInvalidLinks", o.removeInvalidLinks).putBoolean("compress.discardFormActions", o.discardFormActions)
+            .putBoolean("compress.discardTags", o.discardTags).putBoolean("compress.discardAlternateImages", o.discardAlternateImages)
+            .apply()
+    }
+
+    /** Compress PDF at [level] (0 high, 1 medium, 2 low compression), or with Advanced [options]. */
+    fun compress(doc: OpenDocument, level: Int, options: CompressOptions = compressOptions) = job(text(R.string.msg_busy_compressing)) { eng ->
         val out = tempFile("pdf")
-        eng.tool("doc_optimize", mapOf(
-            "doc" to doc.id, "path" to out.absolutePath, "color" to images, "gray" to images,
-            "discard_thumbnails" to true, "remove_unreferenced_dests" to true,
-        ))
+        val r = eng.tool("doc_optimize", compressArgs(level, options) + mapOf("doc" to doc.id, "path" to out.absolutePath))
         toolScreen = null
-        if (out.length() >= doc.info.fileSize.toLong()) {
+        val before = doc.info.fileSize.toLong()
+        if (out.length() >= before) {
             // as the reference: nothing is saved when the file can't get any smaller
             out.delete()
             tell(text(R.string.msg_compress_no_gain))
             return@job
         }
-        deliver(out, "${doc.title}_compressed.pdf")
+        val sizes = text(R.string.msg_compressed_sizes, io.github.artcraftandroid.pdfcraft.ui.viewer.formatSize(before), io.github.artcraftandroid.pdfcraft.ui.viewer.formatSize(out.length()))
+        val target = if (r.has("target_reached")) text(if (r.optBoolean("target_reached")) R.string.msg_compress_target_reached else R.string.msg_compress_target_missed) else null
+        deliver(out, "${doc.title}_compressed.pdf", lead = listOfNotNull(sizes, target).joinToString(" "))
+    }
+
+    /** What takes the file's space (`doc_audit_space`): (category, bytes, percent), biggest first. */
+    suspend fun auditSpace(doc: OpenDocument): List<Triple<String, Long, Double>>? {
+        val eng = engine ?: return null
+        return try {
+            val a = eng.tool("doc_audit_space", mapOf("doc" to doc.id)).optJSONArray("categories") ?: return emptyList()
+            (0 until a.length()).map { a.getJSONObject(it).let { o -> Triple(o.optString("category"), o.optLong("bytes"), o.optDouble("percent")) } }
+                .sortedByDescending { it.second }
+        } catch (e: MobileException) { tell(e.userMessage); null }
     }
 
     /** Combine the gathered files, in order, into [name].pdf. */
@@ -3480,9 +3511,12 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     /** Export [doc] as a Word, RTF, Excel or PowerPoint document. */
     fun exportDocument(doc: OpenDocument, ext: String) = job(text(R.string.msg_busy_exporting_to, ext.uppercase())) { eng ->
         val out = tempFile(ext)
-        eng.tool("doc_export_office", mapOf("doc" to doc.id, "path" to out.absolutePath))
+        if (ext == "txt") eng.tool("doc_export_text", mapOf("doc" to doc.id, "path" to out.absolutePath))
+        else eng.tool("doc_export_office", mapOf("doc" to doc.id, "path" to out.absolutePath))
         toolScreen = null
         val mime = when (ext) {
+            "txt" -> "text/plain"
+            "md" -> "text/markdown"
             "docx" -> "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
             "rtf" -> "application/rtf"
             "xlsx" -> "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -3492,7 +3526,6 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         deliver(out, "${doc.title}.$ext", mime)
     }
 
-    /** Every page of [doc] as an image (200 dpi) in Pictures/PdfCraft. */
     /** Export to images: the format chosen, while its pages are being picked in the page grid. */
     var imageExport by mutableStateOf<String?>(null)
 
@@ -3508,44 +3541,84 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         doc.controller.pagesOpen = true
     }
 
-    /** Pictures of [pages] (0-based) at 200 dpi, saved to Pictures/PdfCraft or handed to the share sheet. */
+    /** Export to images: resolution (dpi) and JPEG quality, as last used. */
+    var imageDpi by mutableStateOf(appPrefs.getInt("imageDpi", 150))
+        private set
+    var imageQuality by mutableStateOf(appPrefs.getInt("imageQuality", 85))
+        private set
+
+    fun updateImageSettings(dpi: Int, quality: Int) {
+        imageDpi = dpi
+        imageQuality = quality
+        appPrefs.edit().putInt("imageDpi", dpi).putInt("imageQuality", quality).apply()
+    }
+
+    /**
+     * Pictures of [pages] (0-based) drawn by the engine (`doc_export_images`) at [imageDpi], saved
+     * (PNG and JPEG to Pictures/PdfCraft, TIFF to Downloads) or handed to the share sheet.
+     */
     fun writeImages(doc: OpenDocument, ext: String, pages: List<Int>, share: Boolean) = job(text(R.string.msg_busy_exporting_images)) { eng ->
-        val mime = if (ext == "png") "image/png" else "image/jpeg"
-        val made = mutableListOf<Pair<File, String>>()
-        for ((n, i) in pages.withIndex()) {
-            busy = text(R.string.msg_busy_exporting_page, n + 1, pages.size)
-            val img = withContext(eng.renders) { eng.session.renderPage(doc.id, i.toUInt(), 200f / 72f, null) }
-            val out = tempFile(ext)
-            withContext(Dispatchers.IO) {
-                val bmp = img.toBitmap()
-                // JPEG has no transparency: put the page on white
-                val flat = if (ext == "png") bmp else android.graphics.Bitmap.createBitmap(bmp.width, bmp.height, android.graphics.Bitmap.Config.ARGB_8888).also {
-                    val c = android.graphics.Canvas(it)
-                    c.drawColor(android.graphics.Color.WHITE)
-                    c.drawBitmap(bmp, 0f, 0f, null)
+        val format = when (ext) { "png" -> "png"; "tif", "tiff" -> "tiff"; else -> "jpeg" }
+        val mime = when (format) { "png" -> "image/png"; "tiff" -> "image/tiff"; else -> "image/jpeg" }
+        val dir = File(getApplication<Application>().cacheDir, "images/${System.nanoTime()}").apply { mkdirs() }
+        try {
+            val r = eng.tool("doc_export_images", mapOf(
+                "doc" to doc.id, "folder" to dir.absolutePath, "format" to format, "dpi" to imageDpi, "quality" to imageQuality,
+                "pages" to pages.map { it + 1 },
+            ))
+            val made = exportedFiles(r).map { f -> f to "${doc.title}_${f.name.substringAfterLast("_page_")}" }
+            imageExport = null
+            organizing = false
+            doc.controller.pagesOpen = false
+            val lower = r.optJSONArray("lower_dpi")?.length() ?: 0
+            if (share) {
+                val uris = withContext(Dispatchers.IO) { files.shareableAll(made) }
+                intents.trySend(Intent.createChooser(sendIntent(uris, mime), null))
+            } else {
+                withContext(Dispatchers.IO) {
+                    for ((f, name) in made) if (format == "tiff") files.saveToDownloads(f, name, mime) else files.saveToPictures(f, name, mime)
                 }
-                out.outputStream().use { flat.compress(if (ext == "png") android.graphics.Bitmap.CompressFormat.PNG else android.graphics.Bitmap.CompressFormat.JPEG, 90, it) }
+                tell(plural(if (format == "tiff") R.plurals.msg_images_saved_downloads else R.plurals.msg_images_saved, made.size, made.size))
             }
-            made += out to "${doc.title}_${i + 1}.$ext"
+            if (lower > 0) tell(plural(R.plurals.msg_images_lower_dpi, lower, lower))
+        } finally {
+            withContext(NonCancellable + Dispatchers.IO) { dir.deleteRecursively() }
         }
-        imageExport = null
-        organizing = false
-        doc.controller.pagesOpen = false
-        if (share) {
-            val uris = try {
-                withContext(Dispatchers.IO) { files.shareableAll(made) }
-            } finally {
-                made.forEach { it.first.delete() }
+    }
+
+    /** The files an export reports in `files` (paths, or objects with a `path`), in its order. */
+    private fun exportedFiles(r: JSONObject): List<File> {
+        val a = r.optJSONArray("files") ?: return emptyList()
+        return (0 until a.length()).mapNotNull { i -> (a.optJSONObject(i)?.optString("path") ?: a.optString(i)).takeIf { it.isNotEmpty() }?.let(::File) }.filter { it.isFile }
+    }
+
+    /**
+     * Pictures in the PDF: every image the pages use, once each (`doc_export_all_images`), saved
+     * into a folder the person picks or shared; images under 64 px are skipped when [skipSmall].
+     */
+    fun exportAllImages(doc: OpenDocument, skipSmall: Boolean, share: Boolean) = job(text(R.string.msg_busy_exporting_images)) { eng ->
+        val dir = File(getApplication<Application>().cacheDir, "images/${System.nanoTime()}").apply { mkdirs() }
+        try {
+            val r = eng.tool("doc_export_all_images", mapOf("doc" to doc.id, "folder" to dir.absolutePath, "min_size" to if (skipSmall) 64 else 0))
+            val made = exportedFiles(r).map { it to it.name }
+            val skipped = r.optJSONArray("skipped")
+            val reasons = (0 until (skipped?.length() ?: 0)).mapNotNull { skipped!!.optJSONObject(it)?.optString("reason")?.takeIf(String::isNotBlank) }.distinct()
+            toolScreen = null
+            if (made.isEmpty()) {
+                tell(text(R.string.msg_no_images_found))
+                dir.deleteRecursively()
+                return@job
             }
-            intents.trySend(Intent.createChooser(sendIntent(uris, mime), null))
-        } else {
-            withContext(Dispatchers.IO) {
-                for ((f, name) in made) {
-                    files.saveToPictures(f, name, mime)
-                    f.delete()
-                }
+            if (reasons.isNotEmpty()) tell(plural(R.plurals.msg_images_skipped, skipped!!.length(), skipped.length(), reasons.take(3).joinToString("; ")))
+            if (share) {
+                val uris = try { withContext(Dispatchers.IO) { files.shareableAll(made) } } finally { dir.deleteRecursively() }
+                intents.trySend(Intent.createChooser(sendIntent(uris, "image/*"), null))
+            } else {
+                saveAllToFolder(made, "image/*", cleanup = dir)
             }
-            tell(plural(R.plurals.msg_images_saved, made.size, made.size))
+        } catch (e: Exception) {
+            dir.deleteRecursively()
+            throw e
         }
     }
 
