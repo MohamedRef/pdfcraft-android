@@ -1,5 +1,6 @@
 package io.github.artcraftandroid.pdfcraft.ui
 
+import io.github.artcraftandroid.pdfcraft.ui.viewer.recognizeText
 import io.github.artcraftandroid.pdfcraft.ui.home.FileTool
 import io.github.artcraftandroid.pdfcraft.ui.viewer.FillElement
 import androidx.compose.ui.graphics.asImageBitmap
@@ -1762,68 +1763,8 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         }
     }
 
-    /**
-     * Inspect recognition confidence on exactly one visible page with the upstream v0.19.0
-     * read-only ocr_words tool. Never retains a review handle, mutates PDF bytes or refreshes it.
-     */
-    internal suspend fun inspectOcrConfidence(doc: OpenDocument, page: Int): JSONObject? {
-        if (document !== doc || page !in 1..doc.pageCount || busy != null) return null
-        val eng = engine ?: return null
-        val generation = doc.info.generation
-        withContext(Dispatchers.IO) {
-            try {
-                eng.prepareOcrModels(getApplication())
-            } catch (cancelled: kotlinx.coroutines.CancellationException) {
-                throw cancelled
-            } catch (_: Exception) {
-                // The authoritative ocr_status check below reports unavailable models.
-            }
-        }
-        val status = eng.tool("ocr_status")
-        if (status.optBoolean("available", false) != true) {
-            throw IllegalStateException(text(R.string.msg_ocr_not_installed))
-        }
-        val response = eng.tool("ocr_words", mapOf(
-            "doc" to doc.id,
-            "pages" to listOf(page),
-            "retain_review" to false,
-            "skip_text_pages" to false,
-        ))
-        return response.takeIf {
-            document === doc && page in 1..doc.pageCount && doc.info.generation == generation
-        }
-    }
-
-    /** Recognize text: make scanned pages searchable and selectable. */
-    fun recognizeText(doc: OpenDocument) {
-        val eng = engine ?: return
-        viewModelScope.launch {
-            busy = text(R.string.msg_busy_preparing_ocr)
-            withContext(Dispatchers.IO) { runCatching { eng.prepareOcrModels(getApplication()) } }
-            busy = null
-            val status = runCatching { eng.tool("ocr_status") }.getOrNull()
-            if (status?.optBoolean("available", false) != true) {
-                tell(text(R.string.msg_ocr_not_installed))
-                return@launch
-            }
-            busy = text(R.string.msg_busy_recognizing)
-            try {
-                val r = eng.tool("ocr_recognize", mapOf("doc" to doc.id))
-                refresh(doc)
-                val pages = r.optJSONArray("pages")
-                val n = (0 until (pages?.length() ?: 0)).count { pages?.optJSONObject(it)?.has("skipped") == false }
-                if (n > 0) {
-                    success = SuccessBanner(text(R.string.msg_ocr_done)) { undo(doc) }
-                } else {
-                    tell(text(R.string.msg_ocr_nothing))
-                }
-            } catch (e: MobileException) {
-                tell(e.userMessage)
-            } finally {
-                busy = null
-            }
-        }
-    }
+    /** Recognize text: its options, review and batch state (#166). */
+    val ocr = io.github.artcraftandroid.pdfcraft.ui.viewer.OcrState()
 
     /** A finished job's green banner over the viewer's bar, with Undo. */
     var success by mutableStateOf<SuccessBanner?>(null)

@@ -402,6 +402,7 @@ fun ToolScreenHost(vm: AppViewModel, screen: ToolScreen) {
         is ToolScreen.Crop -> CropScreen(vm, screen.doc)
         is ToolScreen.Export -> ExportScreen(vm, screen.doc)
         ToolScreen.Bates -> BatesScreen(vm)
+        ToolScreen.OcrBatch -> OcrBatchScreen(vm)
         ToolScreen.Scan -> ScanScreen(vm)
         ToolScreen.Create -> CreateSourcesScreen(vm)
     }
