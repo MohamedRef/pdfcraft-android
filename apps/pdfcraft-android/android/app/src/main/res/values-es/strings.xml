@@ -423,6 +423,7 @@
     <string name="viewer_hint_comment">Toca donde va el comentario</string>
     <string name="viewer_hint_text">Toca para añadir texto</string>
     <string name="viewer_hint_fill_sign">Toca donde quieras rellenar texto</string>
+    <string name="viewer_hint_fill_sign_form">Toca un campo azul para rellenarlo, o toca en otro lugar para añadir el elemento elegido</string>
 
     <!-- Viewer: Add image sheet -->
     <string name="viewer_add_image">Añadir imagen</string>
@@ -964,7 +965,7 @@
     <string name="fill_tab_image">Imagen</string>
     <string name="fill_draw_signature_here">Dibuja tu firma aquí</string>
     <string name="fill_draw_initials_here">Dibuja tus iniciales aquí</string>
-    <string name="fill_save_to_device">Guardar en el dispositivo</string>
+    <string name="fill_save_to_device">Recordar esta firma</string>
 
     <!-- Fill & Sign: the menu over a placed element -->
     <string name="fill_smaller">Más pequeño</string>

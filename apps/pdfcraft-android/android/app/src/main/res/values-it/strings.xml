@@ -418,6 +418,7 @@
     <string name="viewer_hint_comment">Tocca il punto in cui inserire il commento</string>
     <string name="viewer_hint_text">Tocca per aggiungere testo</string>
     <string name="viewer_hint_fill_sign">Tocca il punto in cui vuoi inserire il testo</string>
+    <string name="viewer_hint_fill_sign_form">Tocca un campo blu per compilarlo, oppure tocca altrove per aggiungere l\'elemento scelto</string>
 
     <!-- Aggiunta di immagini -->
 
@@ -944,7 +945,7 @@
     <string name="fill_tab_image">Immagine</string>
     <string name="fill_draw_signature_here">Disegna qui la tua firma</string>
     <string name="fill_draw_initials_here">Disegna qui le tue iniziali</string>
-    <string name="fill_save_to_device">Salva sul dispositivo</string>
+    <string name="fill_save_to_device">Ricorda questa firma</string>
 
     <!-- Menu degli elementi inseriti -->
 
