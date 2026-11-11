@@ -1920,4 +1920,42 @@
     <string name="edit_label_recolour_comments">Recolour comments</string>
     <string name="edit_label_delete_comments">Delete comments</string>
     <string name="edit_label_add_text_field_table">Add text field table</string>
+    <!-- Compress: advanced options and the space audit (#172) -->
+    <string name="msg_compressed_sizes">%1$s → %2$s</string>
+    <string name="msg_compress_target_reached">Target size reached.</string>
+    <string name="msg_compress_target_missed">Couldn\'t reach the target size; this is as small as these settings allow.</string>
+    <string name="compress_whats_taking_space">What\'s taking space?</string>
+    <string name="compress_advanced">Advanced settings</string>
+    <string name="compress_target_size">Target file size (MB)</string>
+    <string name="compress_target_hint">Optional, e.g. 2</string>
+    <string name="compress_for_phones">Optimize for phones</string>
+    <string name="compress_resolution">Image resolution: %1$d ppi</string>
+    <string name="compress_quality">Image quality: %1$d</string>
+    <string name="compress_remove_invalid_links">Remove links that go nowhere</string>
+    <string name="compress_discard_form_actions">Discard form submit and reset actions</string>
+    <string name="compress_discard_tags">Discard document tags (structure)</string>
+    <string name="compress_discard_alternate_images">Discard alternate images</string>
+    <!-- Export: more formats (#173) -->
+    <string name="export_format_html">Web page (HTML)</string>
+    <string name="export_format_markdown">Markdown</string>
+    <string name="export_format_text">Plain text</string>
+    <string name="export_format_tiff">TIFF</string>
+    <string name="export_pictures_in_pdf">Pictures</string>
+    <string name="export_resolution">Resolution:</string>
+    <string name="export_dpi">%1$d dpi</string>
+    <string name="export_pictures_explain">Save every picture in this PDF as its own image file, once each.</string>
+    <string name="export_skip_small">Skip small images (icons, bullets)</string>
+    <string name="msg_no_images_found">This PDF has no pictures to export.</string>
+    <plurals name="msg_images_saved_downloads">
+        <item quantity="one">%1$d image saved to Downloads.</item>
+        <item quantity="other">%1$d images saved to Downloads.</item>
+    </plurals>
+    <plurals name="msg_images_lower_dpi">
+        <item quantity="one">%1$d page was too large and was drawn at a lower resolution.</item>
+        <item quantity="other">%1$d pages were too large and were drawn at a lower resolution.</item>
+    </plurals>
+    <plurals name="msg_images_skipped">
+        <item quantity="one">%1$d picture couldn\'t be exported (%2$s).</item>
+        <item quantity="other">%1$d pictures couldn\'t be exported (%2$s).</item>
+    </plurals>
 </resources>
