@@ -367,4 +367,5 @@ dependencies {
     implementation(libs.androidx.exifinterface)
     implementation(libs.jna) { artifact { type = "aar" } }
     testImplementation(libs.junit)
+    testImplementation(libs.org.json)
 }

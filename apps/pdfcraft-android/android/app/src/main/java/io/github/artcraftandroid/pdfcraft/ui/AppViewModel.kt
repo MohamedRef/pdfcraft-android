@@ -88,6 +88,8 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     private val application = app as PdfcraftApplication
     val files = DocumentFiles(app)
     val recents = RecentFiles(File(app.filesDir, "recent.json"))
+    val notebooks = io.github.artcraftandroid.pdfcraft.engine.Notebooks(File(app.filesDir, "notebooks.json"))
+    val notebookTemplates = io.github.artcraftandroid.pdfcraft.engine.NotebookTemplates(File(app.filesDir, "templates"))
 
     var engine by mutableStateOf<Engine?>(null)
         private set
@@ -3472,6 +3474,95 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         deliver(out, "Pages from ${doc.title}.pdf")
     }
 
+    // ---- Notebooks ----------------------------------------------------------------------------
+
+    /** Home's New notebook sheet is showing. */
+    var newNotebookOpen by mutableStateOf(false)
+
+    /** The pages the user saved as templates (file names), refreshed off the main thread. */
+    var userTemplates by mutableStateOf<List<String>>(emptyList())
+        private set
+
+    fun refreshUserTemplates() {
+        viewModelScope.launch { userTemplates = withContext(Dispatchers.IO) { notebookTemplates.list() } }
+    }
+
+    /** A one-page PDF of [page] in the cache, for inserting (the caller deletes it). */
+    private suspend fun notebookPageFile(page: io.github.artcraftandroid.pdfcraft.engine.NotebookPage): File? = withContext(Dispatchers.IO) {
+        when (page) {
+            is io.github.artcraftandroid.pdfcraft.engine.NotebookPage.Builtin ->
+                tempFile("pdf").apply { writeBytes(io.github.artcraftandroid.pdfcraft.engine.NotebookPdf.write(page.template)) }
+            is io.github.artcraftandroid.pdfcraft.engine.NotebookPage.User ->
+                notebookTemplates.file(page.fileName)?.let { src -> tempFile("pdf").also { src.copyTo(it, overwrite = true) } }
+        }
+    }
+
+    /** Make a notebook of [page] called [title] in Downloads and open it in Draw mode. */
+    fun createNotebook(page: io.github.artcraftandroid.pdfcraft.engine.NotebookPage, title: String) {
+        newNotebookOpen = false
+        viewModelScope.launch {
+            busy = text(R.string.notebook_busy_creating)
+            try {
+                val out = notebookPageFile(page) ?: run { tell(text(R.string.notebook_template_missing)); return@launch }
+                val stamp = java.text.SimpleDateFormat("yyyy-MM-dd HH.mm", java.util.Locale.US).format(java.util.Date())
+                val name = DocumentFiles.safeName(title.trim().ifEmpty { text(R.string.notebook_default_name, stamp) })
+                val uri = withContext(Dispatchers.IO) { files.saveToDownloads(out, name).also { out.delete() } }
+                withContext(Dispatchers.IO) { notebooks.put(uri.toString(), page) }
+                pendingTool = io.github.artcraftandroid.pdfcraft.ui.home.FileTool.Draw
+                open(uri)
+            } catch (e: Exception) {
+                tell(e.userMessage)
+            } finally {
+                busy = null
+            }
+        }
+    }
+
+    /** What [doc]'s pages look like, if it was made as a notebook here. */
+    suspend fun notebookPageOf(doc: OpenDocument): io.github.artcraftandroid.pdfcraft.engine.NotebookPage? {
+        val key = doc.source?.toString() ?: return null
+        return withContext(Dispatchers.IO) { notebooks.get(key) }
+    }
+
+    /**
+     * Insert a page of [page] so it becomes page [at] (1-based; default: after the last), then
+     * show it. One undo step removes it. Without a template the page is blank, sized like its
+     * neighbour.
+     */
+    fun insertNotebookPage(doc: OpenDocument, page: io.github.artcraftandroid.pdfcraft.engine.NotebookPage?, at: Int = doc.pageCount + 1) {
+        if (!doc.writable || !doc.info.allowsAnnotation) { tell(text(R.string.notebook_cannot_add_page)); return }
+        viewModelScope.launch {
+            val chosen = page ?: notebookPageOf(doc)
+            val show = { doc.viewer.goToPage(at - 1) }
+            if (chosen == null) {
+                runTool(doc, "page_insert_blank", mapOf("at" to at)) { show() }
+                return@launch
+            }
+            val file = notebookPageFile(chosen) ?: run { tell(text(R.string.notebook_template_missing)); return@launch }
+            runTool(doc, "page_insert_file", mapOf("path" to file.absolutePath, "at" to at), onSettled = { file.delete() }) { show() }
+        }
+    }
+
+    /** Save page [index] (0-based) of [doc] as a template called [title] for new notebooks and pages. */
+    fun savePageAsTemplate(doc: OpenDocument, index: Int, title: String) = job(text(R.string.notebook_busy_saving_template)) { eng ->
+        val out = withContext(Dispatchers.IO) { notebookTemplates.newFile(title) }
+        try {
+            eng.tool("page_extract", mapOf("doc" to doc.id, "pages" to listOf(index + 1), "out" to out.absolutePath))
+        } catch (e: Exception) {
+            out.delete()
+            throw e
+        }
+        refreshUserTemplates()
+        tell(text(R.string.notebook_template_saved, out.nameWithoutExtension))
+    }
+
+    fun deleteUserTemplate(name: String) {
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) { notebookTemplates.delete(name) }
+            refreshUserTemplates()
+        }
+    }
+
     // ---- Organize: duplicate, replace, reverse, split, page labels (#165) ---------------------
 
     /** Copies of [pages] (0-based), placed right after the last of them; one undo step. */
@@ -3988,6 +4079,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             FileTool.Protect -> openProtect(doc)
             FileTool.Crop -> openCrop(doc)
             FileTool.Ocr -> recognizeText(doc)
+            FileTool.Draw -> enterTool(doc, ViewerTool.Draw)
             FileTool.Split -> { organizing = true; doc.controller.pagesOpen = true; splitOpen = true }
         }
     }
