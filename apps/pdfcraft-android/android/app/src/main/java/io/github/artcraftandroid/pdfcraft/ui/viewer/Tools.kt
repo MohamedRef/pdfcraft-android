@@ -572,7 +572,7 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
     /** Drops a just-drawn draft stroke that turned out to be a gesture, without an undo step of its own. */
     fun dropGestureStroke(s: InkStroke) {
         strokes.remove(s)
-        edits.remove(DraftInkEdit.Added(s))
+        edits.removeAll { it is DraftInkEdit.Added && s in it.strokes }
     }
     /**
      * Smart pen gestures (#148), after lift only: a zig-zag deletes the ink under it, a straight
@@ -1172,8 +1172,6 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                         s.pressureSensitive = false
                         s.pressures.clear()
                         s.pressures.addAll(List(shape.size) { 1f })
-                    } else if (prefs.penGestures && s.shapeMode == InkShapeMode.Freehand && rulerEdge == null && protractorSnap == null && s.points.size >= 2) {
-                        penGestureAfterLift(s)
                     }
                     // Cut at the page edge: what is off the page is dropped (#75).
                     val pieces = clipStrokeToPage(s)
@@ -1181,6 +1179,11 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                         edits.add(DraftInkEdit.Added(pieces))
                         undone.clear()
                         steps.drafted()
+                    }
+                    // A pen gesture is a stroke that stayed on its page (it may drop it again).
+                    if (shape == null && pieces.singleOrNull() === s && prefs.penGestures && s.shapeMode == InkShapeMode.Freehand &&
+                        rulerEdge == null && protractorSnap == null && s.points.size >= 2) {
+                        penGestureAfterLift(s)
                     }
                 }
             },
@@ -1427,7 +1430,7 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                         }
                     }
                     if (s.points.size >= 2) {
-                        edits.add(DraftInkEdit.Added(s))
+                        edits.add(DraftInkEdit.Added(listOf(s)))
                         undone.clear()
                         steps.drafted()
                     } else strokes.remove(s)

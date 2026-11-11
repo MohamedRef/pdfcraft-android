@@ -161,7 +161,7 @@ class PageImages(
         synchronized(lock) {
             viewEpoch++
             cache.clear()
-            failed.clear()
+            failures.clear()
             bytes = 0
         }
         signal.trySend(Unit)

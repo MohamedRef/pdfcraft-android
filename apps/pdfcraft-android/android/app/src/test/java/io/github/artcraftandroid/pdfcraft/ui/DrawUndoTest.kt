@@ -124,8 +124,8 @@ class DrawUndoTest {
         val d = InkDrafts()
         val steps = DrawUndoSteps()
         val (a, g) = List(2) { stroke() }
-        d.strokes.add(a); d.edits.add(DraftInkEdit.Added(a))
-        d.strokes.add(g); d.edits.add(DraftInkEdit.Added(g))
+        d.strokes.add(a); d.edits.add(DraftInkEdit.Added(listOf(a)))
+        d.strokes.add(g); d.edits.add(DraftInkEdit.Added(listOf(g)))
         // the gesture: the stroke steps aside and the markup is the session's own step
         d.strokes.remove(g)
         steps.started(); steps.finished(1)
