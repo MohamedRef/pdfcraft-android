@@ -1181,7 +1181,8 @@
     "crates/automation/tests/it/batch_failures.rs": " Adapt byte-source regression fixtures to the shared immutable source contract; preserve byte-content assertions, allocation identity, weak ownership and cache/save behavior.",
     "crates/automation/tests/it/batch_secrets.rs": " Adapt byte-source regression fixtures to the shared immutable source contract; preserve byte-content assertions, allocation identity, weak ownership and cache/save behavior.",
     "crates/automation/tests/it/form_bulk.rs": " Adapt byte-source regression fixtures to the shared immutable source contract; preserve byte-content assertions, allocation identity, weak ownership and cache/save behavior.",
-    "crates/cos/src/document/tests.rs": " Adapt byte-source regression fixtures to the shared immutable source contract; preserve byte-content assertions, allocation identity, weak ownership and cache/save behavior."
+    "crates/cos/src/document/tests.rs": " Adapt byte-source regression fixtures to the shared immutable source contract; preserve byte-content assertions, allocation identity, weak ownership and cache/save behavior.",
+    "crates/render/tests/it/inline_image_ei.rs": " Preserve inline-image regression behavior while letting owned Arc fixtures coerce into the shared PDF input interface before rendering."
   },
   "allowed_local_additions": {
     "crates/render/src/open_trace.rs": "Bounded opt-in request-local diagnostics with fixed static stage names; default no clock/allocation, wasm-safe clock path, cross-thread/cap tests. Add fixed opt-in fallback events sharing the same 64-entry budget and clock-free default.",
