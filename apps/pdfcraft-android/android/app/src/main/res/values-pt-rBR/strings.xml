@@ -917,6 +917,8 @@
     <string name="bates_export_failed">Não foi possível salvar esta nova cópia em Downloads.</string>
     <string name="ink_presets_title">Canetas favoritas</string>
     <string name="ink_presets_help">Cada caneta guarda a própria cor, espessura e opacidade. Toque em uma favorita para restaurar as configurações dela.</string>
+    <string name="ink_multi_finger_undo_explanation">Ao desenhar, toque com dois dedos para desfazer e com três para refazer.</string>
+    <string name="ink_multi_finger_undo">Toque com dois dedos para desfazer</string>
     <string name="ink_pen_settings_title">Configurações da caneta</string>
     <string name="ink_pen_edit_action">mudar cor e espessura</string>
     <string name="ink_preset_save_help">Salvar uma favorita guarda %1$s exatamente como está agora. Toque na caneta selecionada na barra para mudar a cor e a espessura.</string>

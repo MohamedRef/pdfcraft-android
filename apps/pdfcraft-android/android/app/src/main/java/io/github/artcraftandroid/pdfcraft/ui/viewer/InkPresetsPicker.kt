@@ -165,6 +165,18 @@ internal fun InkPresetsPicker(vm: AppViewModel, onApplied: () -> Unit) {
             PdfSwitch(prefs.snapToShape, null)
         }
 
+        Row(
+            Modifier.fillMaxWidth().toggleable(value = prefs.multiFingerUndo, role = Role.Switch) { prefs.updateMultiFingerUndo(it) }
+                .padding(vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text(stringResource(R.string.ink_multi_finger_undo), color = c.text, fontSize = 14.sp)
+                Text(stringResource(R.string.ink_multi_finger_undo_explanation), color = c.label, fontSize = 12.sp)
+            }
+            PdfSwitch(prefs.multiFingerUndo, null)
+        }
+
         // Samsung Notes-inspired presentation, original illustrations, no borrowed assets.
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             prefs.inkPresets.forEachIndexed { index, preset ->

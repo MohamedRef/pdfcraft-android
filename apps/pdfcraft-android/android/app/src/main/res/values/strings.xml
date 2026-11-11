@@ -1409,6 +1409,8 @@
     <string name="bates_export_failed">Could not save this new copy to Downloads.</string>
     <string name="ink_presets_title">Favorite pens</string>
     <string name="ink_presets_help">Each pen keeps its own colour, width and opacity. Tap a favorite to restore its settings.</string>
+    <string name="ink_multi_finger_undo_explanation">While drawing, tap with two fingers to undo and three fingers to redo.</string>
+    <string name="ink_multi_finger_undo">Two-finger tap to undo</string>
     <string name="ink_pen_settings_title">Pen settings</string>
     <string name="ink_pen_edit_action">change colour and width</string>
     <string name="ink_preset_save_help">Saving a favorite stores the %1$s exactly as it is now. Tap the selected pen in the toolbar to change its colour and width.</string>

@@ -1340,6 +1340,8 @@
     <string name="bates_export_failed">No se pudo guardar esta copia nueva en Descargas.</string>
     <string name="ink_presets_title">Lápices favoritos</string>
     <string name="ink_presets_help">Cada lápiz conserva su propio color, grosor y opacidad. Toca un favorito para recuperar sus ajustes.</string>
+    <string name="ink_multi_finger_undo_explanation">Mientras dibujas, toca con dos dedos para deshacer y con tres para rehacer.</string>
+    <string name="ink_multi_finger_undo">Toque con dos dedos para deshacer</string>
     <string name="ink_pen_settings_title">Ajustes del lápiz</string>
     <string name="ink_pen_edit_action">cambiar color y grosor</string>
     <string name="ink_preset_save_help">Guardar un favorito guarda %1$s tal como está ahora. Toca el lápiz seleccionado en la barra para cambiar su color y grosor.</string>

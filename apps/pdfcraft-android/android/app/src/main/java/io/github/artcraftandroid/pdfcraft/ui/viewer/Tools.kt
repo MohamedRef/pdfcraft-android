@@ -164,7 +164,9 @@ fun Modifier.toolGestures(
     onEraserCancel: () -> Unit = {},
     /** A pen button pressed mid-stroke ends the stroke with [onUp] instead of cancelling it (ink, #82). */
     keepStrokeOnPenButton: Boolean = false,
-): Modifier = pointerInput(doc, penOnly, keepStrokeOnPenButton) {
+    /** A quick tap with two or three fingers and no pan or zoom (#189); null turns it off. */
+    onMultiFingerTap: ((fingers: Int) -> Unit)? = null,
+): Modifier = pointerInput(doc, penOnly, keepStrokeOnPenButton, onMultiFingerTap != null) {
     val routing = StylusRouting()
     awaitEachGesture {
         val down = awaitFirstDown(requireUnconsumed = false)
@@ -182,6 +184,10 @@ fun Modifier.toolGestures(
         var moved = false
         var last = down.position
         var lastPressure = down.pressure
+        var maxTouches = 1
+        var touchTravel = 0f
+        var zoomDrift = 0f
+        var endTime = down.uptimeMillis
         if (one) onDown(last, lastPressure, activePen)
         if (eraseOne) onEraserDown(last)
         fun dispatchPenMotion(change: androidx.compose.ui.input.pointer.PointerInputChange) {
@@ -261,6 +267,8 @@ fun Modifier.toolGestures(
                     continue
                 }
                 val pressed = event.changes.filter { it.pressed }
+                maxTouches = maxOf(maxTouches, pressed.size)
+                event.changes.forEach { endTime = maxOf(endTime, it.uptimeMillis) }
                 if (pressed.isEmpty()) {
                     if (active?.isConsumed == true && one) { onCancel(); one = false }
                     break
@@ -268,8 +276,10 @@ fun Modifier.toolGestures(
                 if (navigation || routing.cancelForExtraTouch(false, pressed.size)) {
                     if (one) { one = false; onCancel() }
                     val zoom = event.calculateZoom()
+                    zoomDrift += kotlin.math.abs(zoom - 1f)
                     if (zoom != 1f) doc.viewer.zoomBy(zoom, event.calculateCentroid())
                     val pan = event.calculatePan()
+                    touchTravel += pan.getDistance()
                     if (pan != Offset.Zero) doc.viewer.scrollBy(pan.x, pan.y)
                     event.changes.forEach { if (it.positionChanged()) it.consume() }
                     continue
@@ -284,6 +294,10 @@ fun Modifier.toolGestures(
                 }
             }
             if (eraseOne) onEraserUp(last) else if (one) onUp(last, moved)
+            if (!activePen && onMultiFingerTap != null) {
+                multiFingerTapFingers(maxTouches, endTime - down.uptimeMillis, touchTravel + if (moved) Float.MAX_VALUE else 0f, zoomDrift, viewConfiguration.touchSlop)
+                    ?.let(onMultiFingerTap)
+            }
         } catch (e: kotlinx.coroutines.CancellationException) {
             if (one) onCancel()
             if (eraseOne) onEraserCancel()
@@ -291,6 +305,16 @@ fun Modifier.toolGestures(
         }
     }
 }
+
+/** Longest press that still counts as a two- or three-finger tap. */
+internal const val MULTI_FINGER_TAP_MS = 300L
+
+/**
+ * How many fingers a finished touch gesture tapped with, or null when it was not a tap: one
+ * finger, too long, moved more than [slop] in total, or zoomed noticeably.
+ */
+internal fun multiFingerTapFingers(maxFingers: Int, durationMs: Long, travel: Float, zoomDrift: Float, slop: Float): Int? =
+    maxFingers.takeIf { it in 2..3 && durationMs in 0..MULTI_FINGER_TAP_MS && travel <= slop && zoomDrift <= 0.05f }
 
 /** A tool that acts on a tap (Comment, Text): two fingers scroll, a tap on a page calls [onTap]. */
 @Composable
@@ -563,6 +587,9 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
             .toolGestures(
             doc,
             penOnly = prefs.stylusOnly,
+            onMultiFingerTap = if (prefs.multiFingerUndo) ({ fingers ->
+                if (fingers == 2) vm.undo(doc) else if (fingers == 3) vm.redo(doc)
+            }) else null,
             onDown = { p, pressure, isStylus ->
                 if (doc.controller.lassoMode) {
                     beginLasso(p)

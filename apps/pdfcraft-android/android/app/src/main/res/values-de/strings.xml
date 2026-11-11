@@ -1332,6 +1332,8 @@
     <string name="bates_export_failed">Diese neue Kopie konnte nicht in „Downloads“ gespeichert werden.</string>
     <string name="ink_presets_title">Lieblingsstifte</string>
     <string name="ink_presets_help">Jeder Stift behält seine eigene Farbe, Breite und Deckkraft. Tippe auf einen Favoriten, um seine Einstellungen wiederherzustellen.</string>
+    <string name="ink_multi_finger_undo_explanation">Beim Zeichnen mit zwei Fingern tippen, um rückgängig zu machen, mit drei Fingern, um zu wiederholen.</string>
+    <string name="ink_multi_finger_undo">Mit zwei Fingern tippen zum Rückgängigmachen</string>
     <string name="ink_pen_settings_title">Stifteinstellungen</string>
     <string name="ink_pen_edit_action">Farbe und Breite ändern</string>
     <string name="ink_preset_save_help">Beim Speichern eines Favoriten wird %1$s genau so gespeichert, wie er jetzt ist. Tippe in der Leiste erneut auf den gewählten Stift, um Farbe und Breite zu ändern.</string>

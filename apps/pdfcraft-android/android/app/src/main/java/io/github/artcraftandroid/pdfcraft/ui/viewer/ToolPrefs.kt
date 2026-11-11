@@ -182,6 +182,15 @@ class ToolPrefs(context: Context) {
         prefs.edit().putBoolean("ink.stylusOnly", on).apply()
     }
 
+    /** Draw: a two-finger tap undoes and a three-finger tap redoes (#189). On by default. */
+    var multiFingerUndo by mutableStateOf(prefs.getBoolean("ink.multiFingerUndo", true))
+        private set
+
+    fun updateMultiFingerUndo(on: Boolean) {
+        multiFingerUndo = on
+        prefs.edit().putBoolean("ink.multiFingerUndo", on).apply()
+    }
+
     /** Draw ▸ Snap to shape: strokes that look like a line, box, oval or polygon become one. */
     var snapToShape by mutableStateOf(prefs.getBoolean("ink.snap", true))
         private set
