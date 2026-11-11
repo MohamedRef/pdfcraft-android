@@ -768,6 +768,41 @@
     <string name="file_details_xmp">XMP metadata (raw)</string>
     <string name="sheet_pages">Pages</string>
     <string name="sheet_attachments">Attachments</string>
+    <string name="sheet_layers">Layers</string>
+    <string name="layers_show_all">Show all</string>
+    <string name="layers_reset">Reset</string>
+    <!-- Translator note: a layer without a name; %1$d is its position in the list. -->
+    <string name="layers_unnamed">Layer %1$d</string>
+    <string name="attachments_add">Add file</string>
+    <string name="attachments_attach">Attach</string>
+    <string name="attachments_description">Description (optional)</string>
+    <string name="attachments_empty">No files are attached to this document.</string>
+    <!-- Translator note: accessibility label of an attachment's menu; %1$s is its file name. -->
+    <string name="attachments_options">Options for %1$s</string>
+    <string name="panels_locked_signed">This document is signed: changing it would break the signature.</string>
+    <string name="panels_locked_read_only">This copy is read-only. Save a copy to change it.</string>
+    <string name="contents_edit_title">Edit contents</string>
+    <string name="contents_add_current">Add bookmark for this page</string>
+    <string name="contents_add_child">Add child bookmark</string>
+    <string name="contents_from_tags">From tagged headings</string>
+    <!-- Translator note: %1$d is the page number shown in the viewer now. -->
+    <string name="contents_set_current_page">Go to page %1$d instead</string>
+    <string name="contents_style">Style</string>
+    <string name="contents_bold">Bold</string>
+    <string name="contents_italic">Italic</string>
+    <!-- Translator note: accessibility label of a colour swatch; %1$d is its position. -->
+    <string name="contents_color_n">Colour %1$d</string>
+    <string name="contents_move_up">Move up</string>
+    <string name="contents_move_down">Move down</string>
+    <string name="contents_move_in">Move in (under the one above)</string>
+    <string name="contents_move_out">Move out one level</string>
+    <string name="contents_title_hint">Bookmark title</string>
+    <!-- Translator note: accessibility label of a bookmark's menu; %1$s is its title. -->
+    <string name="contents_options">Options for %1$s</string>
+    <!-- Translator note: default title of a new bookmark; %1$d is a page number. -->
+    <string name="contents_default_title">Page %1$d</string>
+    <!-- Translator note: default title of a new bookmark; %1$s is a page label such as iv. -->
+    <string name="contents_default_title_label">Page %1$s</string>
     <string name="sheet_bookmarks_contents">Bookmarks &amp; Table of Contents</string>
     <string name="sheet_comment_list">Comment List</string>
     <string name="sheet_add_bookmark">Add bookmark</string>
@@ -1273,6 +1308,10 @@
         <item quantity="other">%1$d pages duplicated</item>
     </plurals>
     <string name="msg_pages_reversed">Page order reversed</string>
+    <!-- Translator note: %1$s is a file name. -->
+    <string name="msg_attached">%1$s attached</string>
+    <!-- Translator note: %1$s is a file name. -->
+    <string name="msg_attachment_removed">%1$s removed</string>
     <string name="msg_pages_labelled">Page labels changed</string>
     <plurals name="msg_pages_replaced">
         <item quantity="one">%1$d page replaced</item>

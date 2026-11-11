@@ -778,3 +778,96 @@ fn profiled_open_preserves_document_rendering_and_records_only_stage_durations()
     assert!(matches!(s.open_with_timings("relative.pdf".into(), None), Err(MobileError::Open(_))));
     assert_eq!(s.documents().len(), 2);
 }
+
+/// One 100 x 100 page painted red inside layer "Red" (an optional content group).
+fn layered_pdf() -> String {
+    let content = "1 0 0 rg /OC /L1 BDC 0 0 100 100 re f EMC";
+    let objects = [
+        "<< /Type /Catalog /Pages 2 0 R /OCProperties << /OCGs [5 0 R] /D << /Order [5 0 R] /ON [5 0 R] >> >> >>".to_string(),
+        "<< /Type /Pages /Kids [3 0 R] /Count 1 >>".to_string(),
+        "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 100 100] /Contents 4 0 R /Resources << /Properties << /L1 5 0 R >> >> >>".to_string(),
+        format!("<< /Length {} >>\nstream\n{content}\nendstream", content.len()),
+        "<< /Type /OCG /Name (Red) >>".to_string(),
+    ];
+    let mut pdf = String::from("%PDF-1.7\n");
+    let mut offsets = Vec::new();
+    for (i, body) in objects.iter().enumerate() {
+        offsets.push(pdf.len());
+        pdf.push_str(&format!("{} 0 obj\n{body}\nendobj\n", i + 1));
+    }
+    let xref = pdf.len();
+    pdf.push_str(&format!("xref\n0 {}\n0000000000 65535 f \n", objects.len() + 1));
+    for o in offsets {
+        pdf.push_str(&format!("{o:010} 00000 n \n"));
+    }
+    pdf.push_str(&format!("trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n", objects.len() + 1));
+    let path = scratch().join("layered.pdf");
+    std::fs::write(&path, pdf).unwrap();
+    path.to_string_lossy().into_owned()
+}
+
+#[test]
+fn hiding_a_layer_changes_the_page_render_without_editing() {
+    let s = MobileSession::new();
+    let info = s.open(layered_pdf(), None).unwrap();
+    let doc = info.id;
+    let centre = |img: &RenderedImage| {
+        let i = ((img.height / 2) * img.width + img.width / 2) as usize * 4;
+        [img.rgba[i], img.rgba[i + 1], img.rgba[i + 2]]
+    };
+    // a first render leaves an idle renderer made with the layer shown
+    assert_eq!(centre(&s.render_page(doc, 0, 1.0, None).unwrap()), [255, 0, 0]);
+    let out: Value = serde_json::from_str(&s.execute("layer_set".into(), format!(r#"{{"doc": {doc}, "layer": "Red", "visible": false}}"#)).unwrap()).unwrap();
+    assert_eq!(out["layers"][0]["visible"], json!(false));
+    assert_eq!(centre(&s.render_page(doc, 0, 1.0, None).unwrap()), [255, 255, 255]);
+    let after = s.document(doc).unwrap();
+    // a view setting: nothing to save, nothing to undo, the same generation
+    assert!(!after.dirty);
+    assert_eq!(after.undo, None);
+    assert_eq!(after.generation, info.generation);
+    s.execute("layer_set".into(), format!(r#"{{"doc": {doc}, "layer": 1, "visible": true}}"#)).unwrap();
+    assert_eq!(centre(&s.render_page(doc, 0, 1.0, None).unwrap()), [255, 0, 0]);
+}
+
+#[test]
+fn lists_layers_with_their_visibility() {
+    let s = MobileSession::new();
+    let info = s.open(layered_pdf(), None).unwrap();
+    assert_eq!(info.layers, 1);
+    let layers = s.layers(info.id).unwrap();
+    assert_eq!((layers[0].name.as_str(), layers[0].visible), ("Red", true));
+    s.execute("layer_set".into(), format!(r#"{{"doc": {}, "layer": 1, "visible": false}}"#, info.id)).unwrap();
+    assert!(!s.layers(info.id).unwrap()[0].visible);
+    assert_eq!(s.open(blank_pdf(1), None).unwrap().layers, 0);
+}
+
+/// The bookmark moves the app's Edit contents sends (`outlineMoveArgs` in the Kotlin app).
+#[test]
+fn bookmark_moves_the_app_sends_land_where_expected() {
+    let s = MobileSession::new();
+    let doc = s.open(blank_pdf(5), None).unwrap().id;
+    let run = |name: &str, args: Value| {
+        let mut args = args;
+        args["doc"] = json!(doc);
+        s.execute(name.into(), args.to_string()).unwrap();
+    };
+    let titles = || s.outline(doc).unwrap().iter().map(|e| format!("{}{}", "  ".repeat(e.level as usize), e.title)).collect::<Vec<_>>().join("|");
+    run("bookmark_add", json!({ "title": "A", "page": 1 }));
+    run("bookmark_add", json!({ "title": "A1", "page": 2, "parent": [1] }));
+    run("bookmark_add", json!({ "title": "A2", "page": 3, "parent": [1] }));
+    run("bookmark_add", json!({ "title": "B", "page": 4 }));
+    run("bookmark_add", json!({ "title": "C", "page": 5 }));
+    assert_eq!(titles(), "A|  A1|  A2|B|C");
+    // Down: A1 after A2
+    run("bookmark_move", json!({ "path": [1, 1], "parent": [1], "position": 2 }));
+    assert_eq!(titles(), "A|  A2|  A1|B|C");
+    // Out: A1 (now [1, 2]) to the top level right after A
+    run("bookmark_move", json!({ "path": [1, 2], "position": 2 }));
+    assert_eq!(titles(), "A|  A2|A1|B|C");
+    // In: B ([3]) becomes the last child of A1 ([2])
+    run("bookmark_move", json!({ "path": [3], "parent": [2] }));
+    assert_eq!(titles(), "A|  A2|A1|  B|C");
+    // Up: C ([3]) before A1
+    run("bookmark_move", json!({ "path": [3], "position": 2 }));
+    assert_eq!(titles(), "A|  A2|C|A1|  B");
+}

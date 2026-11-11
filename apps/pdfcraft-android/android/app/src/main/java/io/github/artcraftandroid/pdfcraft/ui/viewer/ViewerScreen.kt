@@ -572,8 +572,10 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
                 ViewerSheet.ViewSettings -> ViewSettingsSheet(vm, doc)
                 ViewerSheet.Bookmarks -> BookmarksSheet(vm, doc)
                 ViewerSheet.TextStyles -> TextStylesSheet(vm, doc)
-                ViewerSheet.Attachments -> AttachmentsSheet(vm, doc)
+                ViewerSheet.Attachments -> AttachmentsPanel(vm, doc)
                 ViewerSheet.SearchResults -> SearchResultsSheet(doc, onShow = { showHit(doc, it) })
+                ViewerSheet.Layers -> LayersSheet(vm, doc)
+                ViewerSheet.EditContents -> EditContentsSheet(vm, doc)
                 ViewerSheet.Comments -> Unit
                 ViewerSheet.MoreTools -> MoreToolsSheet(vm, doc)
                 ViewerSheet.Signatures -> SignaturesSheet(vm, doc)
@@ -583,6 +585,7 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
             }
         }
         if (ctl.sheet == ViewerSheet.Comments) CommentListScreen(vm, doc)
+        vm.attachPrompt?.takeIf { it.doc === doc }?.let { AttachDialog(vm, it) }
         vm.pageMenu?.takeIf { it.doc === doc }?.let { PageMenuView(vm, it) }
         if (vm.imageSource?.first === doc) {
             io.github.artcraftandroid.pdfcraft.ui.PdfSheet(onDismiss = { vm.imageSource = null }, dim = true) {
