@@ -511,7 +511,27 @@ struct PendingOpen {
 
 impl MobileSession {
     fn lock(&self) -> MutexGuard<'_, Automation> {
-        self.auto.lock().unwrap_or_else(PoisonError::into_inner)
+        self.auto.lock().unwrap_or_else(|poisoned| {
+            // Everything that changes the session runs through `with_auto`, which catches a panic
+            // while the lock is still held, so only a read (`with_doc`) or cache bookkeeping can
+            // poison it, and neither leaves the documents half-changed (#114).
+            log::warn!("recovering the engine session after a panic in a read-only call");
+            self.auto.clear_poison();
+            poisoned.into_inner()
+        })
+    }
+
+    /// Run `f` on the session under its lock. A panic in the engine (say on a malformed PDF) is
+    /// caught while the lock is held, so it neither poisons the session nor crosses the FFI as an
+    /// `InternalException` the app does not expect: `what` fails with [`MobileError::Command`]
+    /// instead (#114).
+    fn with_auto<T>(&self, what: &str, f: impl FnOnce(&mut Automation) -> Result<T, MobileError>) -> Result<T, MobileError> {
+        let mut auto = self.lock();
+        catch_panic(what, || {
+            #[cfg(test)]
+            tests::inject_panic(what);
+            f(&mut auto)
+        })
     }
 
     fn cache(&self) -> MutexGuard<'_, RendererCache> {
@@ -520,12 +540,13 @@ impl MobileSession {
 
     /// Run tool `name`; its JSON result (`null` if it gave none).
     fn call(&self, name: &str, args: &Value) -> Result<Value, MobileError> {
-        let mut auto = self.lock();
-        if name != "doc_close" && name != "doc_list" && auto.session().docs().iter().any(Document::preparing) {
-            return Err(MobileError::Command("Document preparation is still running".into()));
-        }
-        let out = auto.call(name, args).map_err(|e| MobileError::Command(e.to_string()))?;
-        Ok(first_json(out))
+        self.with_auto(name, |auto| {
+            if name != "doc_close" && name != "doc_list" && auto.session().docs().iter().any(Document::preparing) {
+                return Err(MobileError::Command("Document preparation is still running".into()));
+            }
+            let out = auto.call(name, args).map_err(|e| MobileError::Command(e.to_string()))?;
+            Ok(first_json(out))
+        })
     }
 
     /// An idle renderer for `bytes`, or a new one.
@@ -618,7 +639,7 @@ impl MobileSession {
         if let (Some(password), Some(args)) = (password, args.as_object_mut()) {
             args.insert("password".into(), Value::String(password));
         }
-        let out = first_json(self.lock().call("doc_open", &args).map_err(open_error)?);
+        let out = first_json(self.with_auto("doc_open", |auto| auto.call("doc_open", &args).map_err(open_error))?);
         let id = out.get("doc").and_then(Value::as_u64).ok_or_else(|| MobileError::Open("the document did not open".into()))?;
         let timings = out
             .get("open_timings")
@@ -754,7 +775,7 @@ impl MobileSession {
             ),
         };
         let parsed = prepared.take_parsed();
-        let id = self.lock().register_prepared(prepared).0;
+        let id = self.with_auto("doc_open", |auto| Ok(auto.register_prepared(prepared)))?.0;
         // The reading stage parsed the file for its page sizes; the first page render starts from
         // that parse instead of making it again (#212).
         if let Some(parsed) = parsed
@@ -788,7 +809,7 @@ impl MobileSession {
             .trace
             .measure("native_background_prepare", || work.context.prepare_open(work.name, Some(work.path), work.bytes, work.password.as_deref()))
             .map_err(open_native_error)?;
-        if work.cancelled.load(Ordering::Acquire) || !self.lock().finish_reading(DocId(doc), prepared) {
+        if work.cancelled.load(Ordering::Acquire) || !self.with_auto("doc_open", |auto| Ok(auto.finish_reading(DocId(doc), prepared)))? {
             return Err(MobileError::NoDocument(doc));
         }
         // Idle reading-stage renderers (the first one starts from the reading parse) are kept only
@@ -1102,6 +1123,16 @@ fn open_native_error(error: OpenError) -> MobileError {
         OpenError::WrongPassword => MobileError::WrongPassword,
         other => MobileError::Open(other.to_string()),
     }
+}
+
+/// Run `f`; a panic in it becomes a [`MobileError::Command`] that says `what` stopped (#114).
+fn catch_panic<T>(what: &str, f: impl FnOnce() -> Result<T, MobileError>) -> Result<T, MobileError> {
+    std::panic::catch_unwind(std::panic::AssertUnwindSafe(f)).unwrap_or_else(|payload| {
+        let detail =
+            payload.downcast_ref::<&str>().map(|s| (*s).to_owned()).or_else(|| payload.downcast_ref::<String>().cloned()).unwrap_or_default();
+        log::error!("internal error in {what}: {detail}");
+        Err(MobileError::Command(format!("An internal error stopped this action ({what}). If the document looks wrong, close it and open it again.")))
+    })
 }
 
 /// A failed `doc_open`, with the password cases told apart so the app can ask for one.
