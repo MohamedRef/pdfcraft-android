@@ -43,6 +43,46 @@ struct DocumentOpenData<'a> {
     password: Option<&'a str>,
     xfa: Option<XfaLayout>,
     reading: Option<ReadingSource>,
+    /// The editing-source work done while the renderer inspected the file, with the bytes it
+    /// read; used only when the document is still those bytes (#212).
+    prework: Option<(Arc<Vec<u8>>, std::thread::Result<OpenPrework>)>,
+}
+
+/// Work complete opening does on the editing source alone (#212): signature discovery, the
+/// comment appearances the display copy needs, and form discovery. It reads nothing the
+/// renderer's inspection produces, so it runs while that inspection does.
+struct OpenPrework {
+    sig_cache: Arc<pdfcraft_sign::DigestCache>,
+    signatures: Vec<pdfcraft_sign::SignatureInfo>,
+    comments: Option<pdfcraft_cos::Document>,
+    fields: pdfcraft_forms::Fields,
+    appearances: AppearanceCache,
+}
+
+/// Android adaptation (#212): the editing-source passes of complete opening. Each read every
+/// page annotation and ran one after the other (seconds on a phone for a file with ~28,000
+/// annotations). Signature discovery runs on its own thread; the appearances and then form
+/// discovery stay on this one, so the second finds the annotations the first parsed in the
+/// editing cache. Every pass reads `cos` only and is the same call the complete path made.
+fn open_prework(context: &OpenContext, cos: &pdfcraft_cos::Document, bytes: &Arc<Vec<u8>>) -> OpenPrework {
+    let sig_cache = Arc::new(pdfcraft_sign::DigestCache::default());
+    let mut appearances = AppearanceCache::default();
+    let find_signatures = || context.trace.measure("native_signatures", || signatures_of(cos, bytes, &context.trust, &sig_cache));
+    let mut display_work = || {
+        let comments = context.trace.measure("native_display_appearances", || pdfcraft_annot::with_missing_appearances_cached(cos, &mut appearances));
+        let fields = context.trace.measure("native_display_form_discovery", || pdfcraft_forms::fields_with_adopted(cos));
+        (comments, fields)
+    };
+    #[cfg(not(target_arch = "wasm32"))]
+    let (signatures, (comments, fields)) = std::thread::scope(|s| {
+        let signatures = s.spawn(find_signatures);
+        let display = display_work();
+        // A panic stays a panic: the open guard reports it as before.
+        (signatures.join().unwrap_or_else(|p| std::panic::resume_unwind(p)), display)
+    });
+    #[cfg(target_arch = "wasm32")]
+    let (signatures, (comments, fields)) = (find_signatures(), display_work());
+    OpenPrework { sig_cache, signatures, comments, fields, appearances }
 }
 
 impl OpenContext {
@@ -131,6 +171,7 @@ impl OpenContext {
                     password,
                     xfa: None,
                     reading: Some(reading),
+                    prework: None,
                 },
             )?;
             Ok(Some(PreparedDocument { document }))
@@ -234,19 +275,27 @@ impl Session {
         // Android adaptation (#212): the editing parser and the renderer's inspection read the
         // same bytes independently, so they run side by side. Each repairs a damaged file on its
         // own, which took seconds one after the other on a 350 MB file.
+        // The editing-source passes of `build_document` start as soon as that parser has the
+        // file, also while the inspection runs (#212). Their result is used only if the document
+        // keeps these bytes; a panic in them is raised only where they are used.
         let open_cos = || {
-            context
+            let cos = context
                 .trace
-                .measure("native_cos_open", || std::panic::catch_unwind(|| pdfcraft_cos::Document::open_with_password(bytes.clone(), password)))
+                .measure("native_cos_open", || std::panic::catch_unwind(|| pdfcraft_cos::Document::open_with_password(bytes.clone(), password)));
+            let prework = match &cos {
+                Ok(Ok(c)) => Some((bytes.clone(), std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| open_prework(context, c, &bytes))))),
+                _ => None,
+            };
+            (cos, prework)
         };
         #[cfg(not(target_arch = "wasm32"))]
-        let (cos, inspected) = std::thread::scope(|s| {
+        let ((cos, prework), inspected) = std::thread::scope(|s| {
             let cos = s.spawn(open_cos);
             let inspected = context.trace.measure("native_inspect", || inspect_with_trace(bytes.clone(), password, &context.trace));
-            (cos.join().unwrap_or_else(Err), inspected)
+            (cos.join().unwrap_or_else(|p| (Err(p), None)), inspected)
         });
         #[cfg(target_arch = "wasm32")]
-        let (cos, inspected) = (open_cos(), inspect_with_trace(bytes.clone(), password, &context.trace));
+        let ((cos, prework), inspected) = (open_cos(), inspect_with_trace(bytes.clone(), password, &context.trace));
         // The renderer authenticates on its own. It cannot use the owner password of R2–R4
         // files, so give it the user password that owner authentication recovers.
         let (info, render_password) = match inspected {
@@ -413,7 +462,7 @@ impl Session {
         let xfa_warnings: Vec<String> = if info.xfa.is_some() { info.warnings.clone() } else { Vec::new() };
         let mut document = Self::build_document(
             context,
-            DocumentOpenData { name, path, bytes, info, structure: Some(cos), render_password, password, xfa, reading: None },
+            DocumentOpenData { name, path, bytes, info, structure: Some(cos), render_password, password, xfa, reading: None, prework },
         )?;
         // A script that ran away on open turns the form's scripts off for this document.
         document.xfa_template = if ran_away { None } else { xfa_template };
@@ -428,7 +477,7 @@ impl Session {
 
     /// The last step of opening: build the document record and register it.
     fn build_document(context: &OpenContext, data: DocumentOpenData<'_>) -> Result<Document, OpenError> {
-        let DocumentOpenData { name, path, bytes, mut info, structure: cos, render_password, password, xfa, reading } = data;
+        let DocumentOpenData { name, path, bytes, mut info, structure: cos, render_password, password, xfa, reading, prework } = data;
         let mut config = RenderConfig { password: render_password.as_deref().map(Arc::from), ..Default::default() };
         let (mut editor, read_only_reason) = match cos {
             Some(Ok(Ok(cos))) => {
@@ -455,34 +504,20 @@ impl Session {
             Some(Err(_)) => (None, Some("the document structure could not be read for editing".into())),
         };
         context.check_cancelled()?;
-        let sig_cache = Arc::new(pdfcraft_sign::DigestCache::default());
-        // Android adaptation (#212): signature discovery, form discovery and the comment
-        // appearances the display copy needs each read every page annotation of the file but
-        // none depends on another, so they run side by side (one after the other they took
-        // seconds on a phone for a file with ~28,000 annotations). Each reads `e.cos` only;
-        // the appearances also fill the editor's appearance cache, as before.
+        let mut sig_cache = Arc::new(pdfcraft_sign::DigestCache::default());
+        // Android adaptation (#212): the editing-source passes, done while the renderer inspected
+        // the file when the document is still the bytes they read ([`open_prework`]).
         let mut open_display = None;
         let mut signatures = match (reading.is_some(), editor.as_mut()) {
             (false, Some(e)) => {
-                let Editor { cos, appearances, .. } = e;
-                let cos: &pdfcraft_cos::Document = cos;
-                let find_signatures = || context.trace.measure("native_signatures", || signatures_of(cos, &bytes, &context.trust, &sig_cache));
-                let find_fields = || context.trace.measure("native_display_form_discovery", || pdfcraft_forms::fields_with_adopted(cos));
-                let mut draw_comments = || context.trace.measure("native_display_appearances", || pdfcraft_annot::with_missing_appearances_cached(cos, appearances));
-                #[cfg(not(target_arch = "wasm32"))]
-                let (signatures, comments, fields) = std::thread::scope(|s| {
-                    let signatures = s.spawn(find_signatures);
-                    let fields = s.spawn(find_fields);
-                    let comments = draw_comments();
-                    // A panic stays a panic: the open guard reports it as before.
-                    let signatures = signatures.join().unwrap_or_else(|p| std::panic::resume_unwind(p));
-                    let fields = fields.join().unwrap_or_else(|p| std::panic::resume_unwind(p));
-                    (signatures, comments, fields)
-                });
-                #[cfg(target_arch = "wasm32")]
-                let (signatures, comments, fields) = (find_signatures(), draw_comments(), find_fields());
-                open_display = Some((comments, fields));
-                signatures
+                let work = match prework.filter(|(read, _)| Arc::ptr_eq(read, &bytes)) {
+                    Some((_, done)) => done.unwrap_or_else(|p| std::panic::resume_unwind(p)),
+                    None => open_prework(context, &e.cos, &bytes),
+                };
+                e.appearances = work.appearances;
+                sig_cache = work.sig_cache;
+                open_display = Some((work.comments, work.fields));
+                work.signatures
             }
             _ => Vec::new(),
         };
