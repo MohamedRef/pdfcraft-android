@@ -6,6 +6,8 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -134,6 +136,7 @@ fun CommentListScreen(vm: AppViewModel, doc: OpenDocument) {
     val folded = remember { mutableStateMapOf<Int, Boolean>() }
     val snippets = remember(doc.info.generation) { mutableStateMapOf<String, ImageBitmap>() }
     var menuFor by remember { mutableStateOf<CommentInfo?>(null) }
+    var exporting by remember { mutableStateOf(false) }
     fun close() {
         ctl.sheet = ViewerSheet.None
     }
@@ -163,8 +166,11 @@ fun CommentListScreen(vm: AppViewModel, doc: OpenDocument) {
             Text(
                 if (list == null) stringResource(R.string.comments_title) else threadsTitle(threads.size, stringResource(R.string.comments_none)) { plural(R.plurals.comments_threads, it, it) },
                 color = c.label, fontSize = 17.sp, fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.weight(1f),
             )
+            if (threads.isNotEmpty()) BarIcon(LucideIcons.FileOutput, stringResource(R.string.digest_title), { exporting = true }, size = 48.dp)
         }
+        if (exporting) ExportNotesSheet(vm, doc) { exporting = false }
         if (list == null) {
             Text(stringResource(R.string.comments_loading), color = c.label, modifier = Modifier.padding(16.dp))
             return@Column
@@ -396,6 +402,55 @@ private fun EmptyComments() {
         Spacer(Modifier.height(8.dp))
         Text(stringResource(R.string.comments_empty_body), color = c.textSecondary, fontSize = 17.sp, textAlign = TextAlign.Center)
         Spacer(Modifier.height(80.dp))
+    }
+}
+
+/** More > Export notes: the digest's format, grouping and which comments, then Export. */
+@Composable
+private fun ExportNotesSheet(vm: AppViewModel, doc: OpenDocument, onDismiss: () -> Unit) {
+    val c = pdfColors
+    var format by remember { mutableStateOf(io.github.artcraftandroid.pdfcraft.ui.DigestFormat.Markdown) }
+    var grouping by remember { mutableStateOf(io.github.artcraftandroid.pdfcraft.engine.DigestGrouping.Page) }
+    var filter by remember { mutableStateOf(io.github.artcraftandroid.pdfcraft.engine.DigestFilter.All) }
+    io.github.artcraftandroid.pdfcraft.ui.PdfSheet(onDismiss = onDismiss, dim = true) {
+        Column(Modifier.verticalScroll(rememberScrollState()).padding(bottom = 16.dp)) {
+            io.github.artcraftandroid.pdfcraft.ui.SheetTitle(stringResource(R.string.digest_title))
+            DigestChoice(R.string.digest_format, io.github.artcraftandroid.pdfcraft.ui.DigestFormat.entries, format, { it.label }) { format = it }
+            if (format != io.github.artcraftandroid.pdfcraft.ui.DigestFormat.Pdf) {
+                DigestChoice(R.string.digest_group_by, io.github.artcraftandroid.pdfcraft.engine.DigestGrouping.entries, grouping, {
+                    if (it == io.github.artcraftandroid.pdfcraft.engine.DigestGrouping.Page) R.string.digest_by_page else R.string.digest_by_color
+                }) { grouping = it }
+                DigestChoice(R.string.digest_include, io.github.artcraftandroid.pdfcraft.engine.DigestFilter.entries, filter, {
+                    when (it) {
+                        io.github.artcraftandroid.pdfcraft.engine.DigestFilter.All -> R.string.digest_all
+                        io.github.artcraftandroid.pdfcraft.engine.DigestFilter.Checked -> R.string.digest_checked
+                        io.github.artcraftandroid.pdfcraft.engine.DigestFilter.Unresolved -> R.string.digest_unresolved
+                    }
+                }) { filter = it }
+            }
+            Spacer(Modifier.height(16.dp))
+            Box(
+                Modifier.padding(horizontal = 16.dp).fillMaxWidth().heightIn(min = 48.dp).clip(RoundedCornerShape(24.dp)).background(Color(0xFF1473E6))
+                    .clickable(role = Role.Button) { onDismiss(); vm.exportNotes(doc, format, grouping, filter) },
+                contentAlignment = Alignment.Center,
+            ) { Text(stringResource(R.string.digest_export), color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.SemiBold) }
+            Text(stringResource(R.string.digest_hint), color = c.textSecondary, fontSize = 13.sp, modifier = Modifier.padding(16.dp))
+        }
+    }
+}
+
+@Composable
+private fun <T> DigestChoice(@androidx.annotation.StringRes title: Int, values: List<T>, selected: T, label: (T) -> Int, onPick: (T) -> Unit) {
+    val c = pdfColors
+    Text(stringResource(title), color = c.textSecondary, fontSize = 13.sp, modifier = Modifier.padding(start = 16.dp, top = 8.dp))
+    for (v in values) {
+        Row(Modifier.fillMaxWidth().clickable(role = Role.RadioButton) { onPick(v) }.padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+            androidx.compose.material3.RadioButton(
+                selected = v == selected, onClick = { onPick(v) },
+                colors = androidx.compose.material3.RadioButtonDefaults.colors(selectedColor = c.toolAccent, unselectedColor = c.icon),
+            )
+            Text(stringResource(label(v)), color = c.text, fontSize = 15.sp)
+        }
     }
 }
 

@@ -934,6 +934,30 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         return send.setType(mime).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
     }
 
+    /** Present [doc]: one page at a time, full screen, with a laser pointer (#157). */
+    fun startPresenting(doc: OpenDocument) {
+        val ctl = doc.controller
+        if (ctl.tool != ViewerTool.None) leaveTool(doc)
+        readingMode = false
+        doc.selection.clear()
+        doc.search.clear()
+        ctl.searching = false
+        ctl.sheet = io.github.artcraftandroid.pdfcraft.ui.viewer.ViewerSheet.None
+        ctl.modeBeforePresenting = doc.viewer.mode
+        doc.viewer.switchMode(io.github.artcraftandroid.pdfcraft.ui.viewer.PageMode.SinglePage)
+        ctl.presenting = true
+        ctl.barsVisible = false
+    }
+
+    fun stopPresenting(doc: OpenDocument) {
+        val ctl = doc.controller
+        if (!ctl.presenting) return
+        ctl.presenting = false
+        ctl.modeBeforePresenting?.let { doc.viewer.switchMode(it) }
+        ctl.modeBeforePresenting = null
+        ctl.barsVisible = true
+    }
+
     /** The keyboard shortcuts list (Ctrl+/). */
     var shortcutsHelp by mutableStateOf(false)
 
@@ -945,12 +969,26 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
      * list. Only keys no text field took reach here.
      */
     fun viewerKey(keyCode: Int, ctrl: Boolean, shift: Boolean = false): Boolean {
-        if (!keyboardShortcuts) return false
         val doc = document ?: return false
+        // a presentation clicker works even with the shortcuts turned off
+        if (!keyboardShortcuts && !doc.controller.presenting) return false
         if (toolScreen != null || readingMode) return false
         val v = doc.viewer
         val ctl = doc.controller
         val center = androidx.compose.ui.geometry.Offset(v.viewW / 2f, v.viewH / 2f)
+        // presenting: a clicker's keys turn pages (arrows, Page Up/Down, Space, Enter) and Esc ends it
+        if (ctl.presenting && !ctrl) {
+            when (keyCode) {
+                android.view.KeyEvent.KEYCODE_ESCAPE -> stopPresenting(doc)
+                android.view.KeyEvent.KEYCODE_DPAD_RIGHT, android.view.KeyEvent.KEYCODE_DPAD_DOWN, android.view.KeyEvent.KEYCODE_PAGE_DOWN,
+                android.view.KeyEvent.KEYCODE_ENTER, android.view.KeyEvent.KEYCODE_N -> v.turnPage(1)
+                android.view.KeyEvent.KEYCODE_SPACE -> v.turnPage(if (shift) -1 else 1)
+                android.view.KeyEvent.KEYCODE_DPAD_LEFT, android.view.KeyEvent.KEYCODE_DPAD_UP, android.view.KeyEvent.KEYCODE_PAGE_UP,
+                android.view.KeyEvent.KEYCODE_P -> v.turnPage(-1)
+                else -> return false
+            }
+            return true
+        }
         val drawing = ctl.tool == ViewerTool.Draw
         if (!ctrl && drawing) io.github.artcraftandroid.pdfcraft.ui.viewer.presetForKey(keyCode)?.let { return toolPrefs.applyInkPreset(it) }
         val shortcut = io.github.artcraftandroid.pdfcraft.ui.viewer.viewerShortcut(keyCode, ctrl, shift) ?: return false
@@ -3604,6 +3642,95 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         deliver(out, "Pages from ${doc.title}.pdf")
     }
 
+    // ---- Study digest -------------------------------------------------------------------------
+
+    /**
+     * Export [doc]'s highlights, notes and drawings as a review sheet: Markdown (with ink drawings
+     * as PNGs beside it in a ZIP), CSV, or the engine's PDF comment summary. Runs off the main
+     * thread on the engine's queue; the file goes to Downloads.
+     */
+    fun exportNotes(doc: OpenDocument, format: DigestFormat, grouping: io.github.artcraftandroid.pdfcraft.engine.DigestGrouping, filter: io.github.artcraftandroid.pdfcraft.engine.DigestFilter) =
+        job(text(R.string.digest_busy)) { eng ->
+            val SD = io.github.artcraftandroid.pdfcraft.engine.StudyDigest
+            val base = doc.title.ifBlank { "Document" }
+            if (format == DigestFormat.Pdf) {
+                val out = tempFile("pdf")
+                eng.tool("comments_summarize", mapOf("doc" to doc.id, "sort" to "page", "out" to out.absolutePath))
+                deliver(out, DocumentFiles.safeName(text(R.string.digest_file_name, base)))
+                return@job
+            }
+            val entries = SD.filter(SD.parse(eng.tool("comment_list", mapOf("doc" to doc.id))), filter)
+            if (entries.isEmpty()) { tell(text(R.string.digest_nothing)); return@job }
+            // the text each highlight marks: its note when the highlight was made from a selection here, else the text under it
+            for (e in entries) {
+                if (!e.isMarkup) continue
+                val under = runCatching {
+                    eng.tool("text_extract", mapOf("doc" to doc.id, "pages" to listOf(e.page), "rect" to e.rect.toList()))
+                        .optJSONArray("pages")?.optJSONObject(0)?.optString("text")?.trim()
+                }.getOrNull()?.takeIf { it.isNotEmpty() }
+                e.marked = under ?: e.note
+            }
+            val stamp = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date())
+            val labels = io.github.artcraftandroid.pdfcraft.engine.DigestLabels(
+                page = text(R.string.digest_page), noColor = text(R.string.digest_no_color),
+                status = text(R.string.digest_status), drawing = text(R.string.digest_drawing),
+                colorNames = mapOf(
+                    "yellow" to text(R.string.digest_yellow), "green" to text(R.string.digest_green), "blue" to text(R.string.digest_blue),
+                    "pink" to text(R.string.digest_pink), "red" to text(R.string.digest_red), "orange" to text(R.string.digest_orange),
+                    "purple" to text(R.string.digest_purple), "black" to text(R.string.digest_black), "grey" to text(R.string.digest_grey),
+                ),
+            )
+            val fileLink = doc.info.name.ifBlank { "$base.pdf" }
+            when (format) {
+                DigestFormat.Csv -> {
+                    val out = tempFile("csv")
+                    withContext(Dispatchers.IO) { out.writeText("\uFEFF" + SD.csv(entries)) }
+                    deliver(out, DocumentFiles.safeName(text(R.string.digest_file_name, base)).removeSuffix(".pdf") + ".csv", "text/csv")
+                }
+                DigestFormat.Markdown -> {
+                    val md = SD.markdown(text(R.string.digest_heading, base, stamp), fileLink, entries, grouping, labels)
+                    val out = tempFile("md")
+                    withContext(Dispatchers.IO) { out.writeText(md) }
+                    deliver(out, DocumentFiles.safeName(text(R.string.digest_file_name, base)).removeSuffix(".pdf") + ".md", "text/markdown")
+                }
+                DigestFormat.MarkdownImages -> {
+                    // each drawing cropped from its page at 2x, beside the notes in one ZIP
+                    val images = LinkedHashMap<String, ByteArray>()
+                    for ((i, e) in entries.withIndex()) {
+                        if (!e.isInk) continue
+                        val page = doc.info.pages.getOrNull(e.page - 1) ?: continue
+                        val scale = 2f
+                        val pad = 6f
+                        val x0 = ((e.rect[0] - pad).coerceAtLeast(0f) * scale).toInt()
+                        val y0 = ((e.rect[1] - pad).coerceAtLeast(0f) * scale).toInt()
+                        val x1 = ((e.rect[2] + pad).coerceAtMost(page.width) * scale).toInt()
+                        val y1 = ((e.rect[3] + pad).coerceAtMost(page.height) * scale).toInt()
+                        if (x1 <= x0 || y1 <= y0 || (x1 - x0).toLong() * (y1 - y0) > 16_000_000L) continue
+                        val png = runCatching {
+                            val bmp = withContext(eng.thumbnails) {
+                                eng.session.renderPage(doc.id, (e.page - 1).toUInt(), scale, io.github.artcraftandroid.pdfcraft.core.TileRect(x0.toUInt(), y0.toUInt(), (x1 - x0).toUInt(), (y1 - y0).toUInt())).toBitmap()
+                            }
+                            java.io.ByteArrayOutputStream().also { bmp.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it); bmp.recycle() }.toByteArray()
+                        }.getOrNull() ?: continue
+                        val name = "images/page-${e.page}-${i + 1}.png"
+                        images[name] = png
+                        e.image = name
+                    }
+                    val md = SD.markdown(text(R.string.digest_heading, base, stamp), fileLink, entries, grouping, labels)
+                    val notesName = DocumentFiles.safeName(text(R.string.digest_file_name, base)).removeSuffix(".pdf")
+                    val out = tempFile("zip")
+                    withContext(Dispatchers.IO) {
+                        java.util.zip.ZipOutputStream(out.outputStream().buffered()).use { zip ->
+                            zip.putNextEntry(java.util.zip.ZipEntry("$notesName.md")); zip.write(md.toByteArray()); zip.closeEntry()
+                            for ((name, bytes) in images) { zip.putNextEntry(java.util.zip.ZipEntry(name)); zip.write(bytes); zip.closeEntry() }
+                        }
+                    }
+                    deliver(out, "$notesName.zip", "application/zip")
+                }
+                DigestFormat.Pdf -> Unit
+            }
+        }
+
     // ---- Notebooks ----------------------------------------------------------------------------
 
     /** Home's New notebook sheet is showing. */
@@ -4561,3 +4688,11 @@ class SuccessBanner(val text: String, val undo: (() -> Unit)?)
 
 /** A file for the activity to print; [deleteWhenDone]: a temporary copy (an unlocked one) the job deletes (#105). */
 data class PrintJob(val file: File, val name: String, val deleteWhenDone: Boolean)
+
+/** What Export notes writes. */
+enum class DigestFormat(@androidx.annotation.StringRes val label: Int) {
+    Markdown(R.string.digest_markdown),
+    MarkdownImages(R.string.digest_markdown_images),
+    Csv(R.string.digest_csv),
+    Pdf(R.string.digest_pdf),
+}
