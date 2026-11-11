@@ -1342,7 +1342,10 @@
     <string name="bates_source_refused">A signed or read-only PDF cannot be numbered by this tool.</string>
     <string name="bates_export_failed">Could not save this new copy to Downloads.</string>
     <string name="ink_presets_title">Favorite pens</string>
-    <string name="ink_presets_help">Choose your pen, then draw. Your color, size and opacity apply immediately to new marks. Tap a favorite to restore its settings.</string>
+    <string name="ink_presets_help">Each pen keeps its own colour, width and opacity. Tap a favorite to restore its settings.</string>
+    <string name="ink_pen_settings_title">Pen settings</string>
+    <string name="ink_pen_edit_action">change colour and width</string>
+    <string name="ink_preset_save_help">Saving a favorite stores the %1$s exactly as it is now. Tap the selected pen in the toolbar to change its colour and width.</string>
     <string name="ink_snap_explanation">Hold a freehand stroke briefly to turn it into a clean shape.</string>
     <string name="ink_pen_only_explanation">On: fingers pan and zoom, only the S Pen draws. Off: use your finger or S Pen.</string>
     <string name="ink_preset_slot">Pen %1$d</string>
@@ -1417,7 +1420,7 @@
     <string name="ink_toolbar_rectangle">Box</string>
     <string name="ink_toolbar_line">Line</string>
     <string name="ink_toolbar_color">Color</string>
-    <string name="ink_toolbar_settings">Pens</string>
+    <string name="ink_toolbar_settings">Settings</string>
     <string name="ink_toolbar_lasso">Lasso</string>
     <string name="ink_toolbar_eraser">Erase</string>
     <string name="ink_eraser_size_title">Eraser size</string>

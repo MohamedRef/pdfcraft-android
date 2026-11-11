@@ -58,6 +58,10 @@ internal fun activateDrawingPen(ctl: ViewerController, prefs: ToolPrefs, style: 
     ctl.inkShapeMode = InkShapeMode.Freehand
 }
 
+/** What tapping a pen button opens: its style popover when it is already the selected pen. */
+internal fun penButtonPicker(penAlreadyActive: Boolean, current: Picker): Picker =
+    if (penAlreadyActive && current != Picker.PenStyle) Picker.PenStyle else Picker.None
+
 internal fun activateDrawingPreset(ctl: ViewerController, prefs: ToolPrefs, index: Int): Boolean {
     if (!prefs.applyInkPreset(index)) return false
     ctl.eraserMode = false
@@ -89,17 +93,19 @@ internal fun DrawToolbar(vm: AppViewModel, doc: OpenDocument) {
                         val label = stringResource(inkStyleLabel(style))
                         val active = !ctl.eraserMode && !ctl.lassoMode &&
                             ctl.inkShapeMode == InkShapeMode.Freehand && prefs.inkStyle == style
+                        val pen = prefs.penSettings(style)
                         DrawToolbarButton(label, active, onClick = {
-                            activateDrawingPen(ctl, prefs, style)
-                            ctl.picker = Picker.None
+                            // Like the eraser: a second tap on the selected pen opens its colour and width.
+                            ctl.picker = penButtonPicker(active, picker)
+                            if (!active) activateDrawingPen(ctl, prefs, style)
                         }, caption = stringResource(when (style) {
                             InkStyle.Ballpoint -> R.string.ink_toolbar_ballpoint
                             InkStyle.Fountain -> R.string.ink_toolbar_fountain
                             InkStyle.Pencil -> R.string.ink_toolbar_pencil
                             InkStyle.Brush -> R.string.ink_toolbar_brush
                             InkStyle.Highlighter -> R.string.ink_toolbar_marker
-                        })) {
-                            PenNibPreview(color, prefs.inkWidth, opacity, style, Modifier.size(29.dp, 31.dp))
+                        }), onClickLabel = if (active) stringResource(R.string.ink_pen_edit_action) else null) {
+                            PenNibPreview(Color(pen.argb), pen.width, pen.opacity, style, Modifier.size(29.dp, 31.dp))
                         }
                     }
                     DrawToolbarButton(
@@ -180,7 +186,7 @@ internal fun DrawToolbar(vm: AppViewModel, doc: OpenDocument) {
                         }
                     }
                     DrawToolbarButton(
-                        label = stringResource(R.string.ink_presets_title),
+                        label = stringResource(R.string.ink_pen_settings_title),
                         active = picker == Picker.Presets,
                         caption = stringResource(R.string.ink_toolbar_settings),
                         onClick = { ctl.picker = if (picker == Picker.Presets) Picker.None else Picker.Presets },
@@ -233,6 +239,7 @@ private fun DrawToolbarButton(
     active: Boolean,
     onClick: () -> Unit,
     caption: String = label,
+    onClickLabel: String? = null,
     icon: @Composable () -> Unit,
 ) {
     val c = pdfColors
@@ -242,7 +249,7 @@ private fun DrawToolbarButton(
         Modifier.width(DrawToolSlot).height(54.dp)
             .background(if (active) c.pressed else Color.Transparent, shape)
             .then(if (active) Modifier.border(1.dp, c.toolAccent.copy(alpha = 0.5f), shape) else Modifier)
-            .clickable(role = Role.RadioButton, onClick = onClick)
+            .clickable(role = Role.RadioButton, onClickLabel = onClickLabel, onClick = onClick)
             .semantics {
                 contentDescription = label
                 selected = active
