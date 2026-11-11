@@ -96,9 +96,15 @@ pub struct DocumentInfo {
     pub allows_assembly: bool,
     /// Edits not saved yet.
     pub dirty: bool,
-    /// What Undo and Redo would take back or redo, if anything.
+    /// What Undo and Redo would take back or redo, if anything, in English.
     pub undo: Option<String>,
     pub redo: Option<String>,
+    /// The same, in parts, for the interface to say in its own language: the engine's English
+    /// wording (one of `EDIT_LABELS`, or `{batch}`) and the value the document fills its hole with.
+    pub undo_wording: Option<String>,
+    pub undo_value: Option<String>,
+    pub redo_wording: Option<String>,
+    pub redo_value: Option<String>,
     /// Interactive form fields.
     pub fields: u32,
     pub has_outline: bool,
@@ -1206,6 +1212,10 @@ fn document_info(d: &Document) -> DocumentInfo {
         dirty: d.dirty,
         undo: d.can_undo().map(str::to_string),
         redo: d.can_redo().map(str::to_string),
+        undo_wording: d.undo_label().map(|l| l.wording.to_string()),
+        undo_value: d.undo_label().and_then(|l| l.value.clone()),
+        redo_wording: d.redo_label().map(|l| l.wording.to_string()),
+        redo_value: d.redo_label().and_then(|l| l.value.clone()),
         fields: u32::try_from(d.form.len()).unwrap_or(u32::MAX),
         has_outline: !info.outline.is_empty(),
         // the document's own files: those on comments are reached through the comment

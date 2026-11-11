@@ -1,5 +1,7 @@
 package io.github.artcraftandroid.pdfcraft.ui.viewer
 
+import io.github.artcraftandroid.pdfcraft.ui.undoLabel
+import io.github.artcraftandroid.pdfcraft.ui.redoLabel
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -147,8 +149,8 @@ fun MoreSheet(vm: AppViewModel, doc: OpenDocument) {
             SheetRow(LucideIcons.FilePlus2, stringResource(R.string.common_tool_create_pdf), { close(); vm.openCreate() })
             if (doc.info.undo != null || doc.info.redo != null) {
                 GroupDivider()
-                doc.info.undo?.let { SheetRow(LucideIcons.Undo2, stringResource(R.string.sheet_undo_action, it), { close(); vm.undo(doc) }) }
-                doc.info.redo?.let { SheetRow(LucideIcons.Redo2, stringResource(R.string.sheet_redo_action, it), { close(); vm.redo(doc) }) }
+                doc.info.undoLabel?.let { SheetRow(LucideIcons.Undo2, stringResource(R.string.sheet_undo_action, it), { close(); vm.undo(doc) }) }
+                doc.info.redoLabel?.let { SheetRow(LucideIcons.Redo2, stringResource(R.string.sheet_redo_action, it), { close(); vm.redo(doc) }) }
             }
             GroupDivider()
             SheetRow(LucideIcons.Copy, stringResource(R.string.common_save_copy), { close(); vm.saveCopyAs(doc) })
