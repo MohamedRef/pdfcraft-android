@@ -242,6 +242,7 @@ fn progressive_unknown_widget_locations_and_invalid_trees_have_fixed_fallback_re
         (vec!["17"], "native_reading_fallback_form_dictionary"),
         (vec!["<< /Fields [8 0 R] >>", "<< /Subtype /Widget /FT /Tx /T (unknown) /Rect [10 10 90 35] >>"], "native_reading_fallback_widget_location"),
         (vec!["<< /Fields [8 0 R] >>", "<< /FT /Tx /T (cycle) /Kids [8 0 R] >>"], "native_reading_fallback_field_tree"),
+        (vec!["<< /Fields [8 0 R] >>", "<< /Subtype /Widget /FT /Tx /T (tiny) /Rect [0 0 0.25 0.25] >>"], "native_reading_fallback_widget_location"),
     ] {
         let session = MobileSession::new();
         let opened = session.begin_open(file(&fixture("/AcroForm 7 0 R", "", "", &objects)), None, 0, true).unwrap();

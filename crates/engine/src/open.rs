@@ -650,7 +650,7 @@ fn reading_field_pages(
     Ok(pages)
 }
 
-/// Match the viewer's Hidden/NoView and finite nondegenerate rectangle rules.
+/// Respect Hidden/NoView and treat every finite nonzero rectangle conservatively.
 /// An invisible signature remains unverified and is still discovered by complete opening.
 fn reading_widget_visible(cos: &pdfcraft_cos::Document, widget: &pdfcraft_cos::Dict) -> Result<bool, &'static str> {
     let flags = widget.get(b"F").and_then(|f| cos.resolve(f).as_int()).unwrap_or(0);
@@ -664,5 +664,5 @@ fn reading_widget_visible(cos: &pdfcraft_cos::Document, widget: &pdfcraft_cos::D
     for (out, value) in numbers.iter_mut().zip(rect) {
         *out = cos.resolve(value).as_f64().filter(|v| v.is_finite()).ok_or("native_reading_fallback_widget_appearance")?;
     }
-    Ok((numbers[0] - numbers[2]).abs() > 0.5 && (numbers[1] - numbers[3]).abs() > 0.5)
+    Ok(numbers[0] != numbers[2] && numbers[1] != numbers[3])
 }
