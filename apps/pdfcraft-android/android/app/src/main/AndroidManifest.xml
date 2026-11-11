@@ -4,6 +4,13 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- User-approved APK installation from verified GitHub Releases. -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <!-- Finding the system's package installer, which alone is handed a verified update (#109) -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:mimeType="application/vnd.android.package-archive" />
+        </intent>
+    </queries>
 
     <!-- No storage permission: files come through the system's pickers (On this device lists the
          folders the user picks), and what the app saves goes to Downloads through the media store -->

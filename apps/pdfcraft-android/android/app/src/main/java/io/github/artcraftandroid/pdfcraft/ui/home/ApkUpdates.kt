@@ -189,6 +189,66 @@ internal fun verifyDownloadedApk(context: Context, apk: File, update: ApkUpdate)
 /** Private persistent storage is not auto-evicted like cacheDir; interrupted APKs can resume later. */
 internal fun apkUpdateDirectory(context: Context): File = File(context.filesDir, "updates")
 
+/**
+ * Where verified APKs go: the only update folder the FileProvider shares (file_paths.xml), so a
+ * partial download is never reachable by another app (#109).
+ */
+internal fun verifiedApkDirectory(context: Context): File = File(apkUpdateDirectory(context), "verified")
+
+/** What start-up cleaning does with one file in the update folders (#109). */
+internal enum class UpdateFileAction { KEEP, DELETE, MOVE_TO_VERIFIED }
+
+/**
+ * The fate of update file [name]: an APK ([archiveVersionCode] read from it, null when
+ * unreadable) is deleted once the installed build ([installed]) is the same or newer, and one in
+ * the old location ([legacy]) moves to the verified folder; a partial download is deleted when
+ * a check found a different release ([keepSha256]: the candidate's digest, "" for no update,
+ * null when no check has run).
+ */
+internal fun updateFileAction(name: String, legacy: Boolean, archiveVersionCode: Long?, installed: Long, keepSha256: String?): UpdateFileAction = when {
+    name.endsWith(".apk") -> when {
+        archiveVersionCode == null || archiveVersionCode <= installed -> UpdateFileAction.DELETE
+        legacy -> UpdateFileAction.MOVE_TO_VERIFIED
+        else -> UpdateFileAction.KEEP
+    }
+    name.startsWith("download-") && name.endsWith(".part") ->
+        if (keepSha256 != null && name != "download-$keepSha256.part") UpdateFileAction.DELETE else UpdateFileAction.KEEP
+    else -> UpdateFileAction.KEEP
+}
+
+/** Remove update files that can no longer be installed or resumed (see [updateFileAction]). */
+internal fun cleanUpdateFiles(context: Context, installed: Long, keepSha256: String?) {
+    val root = apkUpdateDirectory(context)
+    val verified = verifiedApkDirectory(context)
+    fun versionOf(f: File): Long? = runCatching {
+        @Suppress("DEPRECATION")
+        context.packageManager.getPackageArchiveInfo(f.absolutePath, 0)?.longVersionCode
+    }.getOrNull()
+    for ((dir, legacy) in listOf(root to true, verified to false)) {
+        for (f in dir.listFiles().orEmpty()) {
+            if (!f.isFile) continue
+            val version = if (f.name.endsWith(".apk")) versionOf(f) else null
+            when (updateFileAction(f.name, legacy, version, installed, keepSha256)) {
+                UpdateFileAction.DELETE -> f.delete()
+                UpdateFileAction.MOVE_TO_VERIFIED -> if (!(verified.isDirectory || verified.mkdirs()) || !f.renameTo(File(verified, f.name))) f.delete()
+                UpdateFileAction.KEEP -> Unit
+            }
+        }
+    }
+}
+
+/** [update]'s APK when it was already downloaded and still verifies; otherwise null. */
+internal fun verifiedApkIfPresent(context: Context, update: ApkUpdate): File? {
+    val apk = File(verifiedApkDirectory(context), update.assetName)
+    if (!apk.isFile || apk.length() != update.size) return null
+    return try {
+        verifyDownloadedApk(context, apk, update)
+        apk
+    } catch (_: Exception) {
+        null
+    }
+}
+
 internal fun apkCachedBytes(context: Context, update: ApkUpdate): Long {
     val partial = File(apkUpdateDirectory(context), apkPartialFileName(update.sha256))
     return partial.takeIf { it.isFile && it.length() in 1L..update.size }?.length() ?: 0L
@@ -210,7 +270,9 @@ internal suspend fun downloadAndVerifyApk(
     ) throw IOException("Untrusted update metadata.")
 
     val partial = File(dir, apkPartialFileName(update.sha256))
-    val result = File(dir, update.assetName)
+    val verifiedDir = verifiedApkDirectory(context)
+    if (!verifiedDir.isDirectory && !verifiedDir.mkdirs()) throw IOException("Cannot create the update download folder.")
+    val result = File(verifiedDir, update.assetName)
     // A downloaded and verified APK survives activity recreation and process death.
     if (result.isFile) {
         try {
@@ -363,6 +425,15 @@ internal fun openVerifiedApkInstaller(context: Context, apk: File): Boolean {
     val uri = FileProvider.getUriForFile(context, "${context.packageName}.files", apk)
     val intent = Intent(Intent.ACTION_VIEW).setDataAndType(uri, APK_MIME)
         .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION)
-    context.startActivity(intent)
+    // only the system's package installer gets the file, never another app that claims APKs (#109)
+    val installer = systemInstallerPackage(context, intent) ?: throw IOException("Android's package installer is not available.")
+    context.startActivity(intent.setPackage(installer))
     return true
+}
+
+/** The preinstalled app that installs APKs (its package), or null when none is visible. */
+private fun systemInstallerPackage(context: Context, intent: Intent): String? {
+    @Suppress("DEPRECATION")
+    val handlers = context.packageManager.queryIntentActivities(intent, PackageManager.MATCH_DEFAULT_ONLY or PackageManager.MATCH_SYSTEM_ONLY)
+    return handlers.firstOrNull { (it.activityInfo.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_SYSTEM) != 0 }?.activityInfo?.packageName
 }
