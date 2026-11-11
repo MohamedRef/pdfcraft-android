@@ -11,6 +11,13 @@
 
 # PdfCraft Android - development handover
 
+## RELEASE 0.0.22-beta (22012) — 2026-11-11 (owner requested)
+
+- Release PR #229 publishes `0.0.22-beta` / ARM64 build `22012` (`pdfcraft.versionCode=2201`), same package ID and signer. Trigger matches only `chore(release): publish 0.0.22-beta (22012)`.
+- Owner's 0.0.21-beta timings (S24 Ultra, 352 MB / 869 pages): `native_open` 3.1–3.6 s; the reading stage never engaged; `native_inspect_lazy`, `native_signatures` and `native_display` each ~1 s.
+- Included: #225 reading-stage coverage, #226 visible-page overlays, #227 render priority/memory, #228 atomic working-copy replacement, #231 reading stage on annotated pages plus faster complete open (host: prepare 611–729 → 419–442 ms on a 2-core x86 fixture).
+- Not included: #230 shared mapped input (draft). Physical-device measurement of 0.0.22 still needed.
+
 ## RELEASE 0.0.18-beta (18012) — 2026-11-10 (owner requested)
 
 - Release PR stages `0.0.18-beta` / ARM64 build `18012` (`pdfcraft.versionCode=1801`), same package ID and signer. The publish trigger matches only `chore(release): publish 0.0.18-beta (18012)`.
