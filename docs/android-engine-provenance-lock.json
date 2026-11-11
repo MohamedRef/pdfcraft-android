@@ -1186,7 +1186,8 @@
     "crates/render/tests/it/inline_image_ei.rs": " Preserve inline-image regression behavior while letting owned Arc fixtures coerce into the shared PDF input interface before rendering.",
     "crates/sign/src/pdf/listing.rs": "Discover timestamps using unencrypted names/key presence from headers, then fully load and validate every candidate as before. The whole-file timestamp candidate scan runs in contiguous parts on up to four threads and joins candidates in the same ascending order; complete only if every part is (#212). Unit test compares with one scan.",
     "crates/sign/src/pdf_discovery_tests.rs": "Differential encrypted/escaped-name and nonzero/repaired-generation timestamp discovery; unreadable-body validation regressions. Explicitly detach a mutable corruption fixture from its immutable source while retaining repaired/unreadable timestamp-discovery assertions.",
-    "vendor/hayro-interpret/src/interpret/mod.rs": "Android-only /Text annotation appearance filter and interpreter setting."
+    "vendor/hayro-interpret/src/interpret/mod.rs": "Android-only /Text annotation appearance filter and interpreter setting.",
+    "crates/engine/src/session/editing.rs": "Android adaptation (#131): refresh_scoped holds an OpenPasses guard over its display-appearance, form-discovery and comment-list passes, so a refresh after an edit parses the page annotations once instead of once per pass; the cache is trimmed back to its ordinary cap when the guard drops."
   },
   "allowed_local_additions": {
     "crates/automation/tests/native_open_timings.rs": "Opt-in diagnostic output preserves document summary, input bytes and root confinement.",
