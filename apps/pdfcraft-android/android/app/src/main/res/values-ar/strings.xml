@@ -812,7 +812,6 @@
     <string name="msg_busy_preparing_ocr">جارٍ تجهيز التعرّف على النص…</string>
     <string name="msg_ocr_not_installed">التعرّف على النص غير مثبّت في هذه النسخة.</string>
     <string name="msg_busy_recognizing">جارٍ التعرّف على النص…</string>
-    <string name="msg_ocr_done">تم التعرّف على النص الإنجليزي. يمكنك الآن تحديده ونسخه والبحث فيه وتمييزه.</string>
     <string name="msg_ocr_nothing">لا توجد صفحات تحتاج إلى التعرّف على النص</string>
     <string name="msg_place_signature">اضغط في المكان الذي تريد وضع توقيعك فيه</string>
     <string name="msg_place_initials">اضغط في المكان الذي تريد وضع أحرف اسمك الأولى فيه</string>
@@ -1116,4 +1115,34 @@
     <string name="ocr_review_limited">عرض حتى %1$d كلمة، مع الكلمات غير المؤكدة أولًا.</string>
     <string name="ocr_review_unknown">غير متاح</string>
     <string name="updater_other_build">هذا الإصدار ليس ملف APK الرسمي لمعالجات ARM64، لذلك التحديثات داخل التطبيق متوقفة. حدّثه من المكان الذي ثبّته منه.</string>
+    <string name="msg_busy_recognizing_page">التعرّف على النص: الصفحة %1$d من %2$d…</string>
+    <string name="busy_cancelling">جارٍ الإيقاف…</string>
+    <string name="busy_cancel_keeps">يتوقف الإلغاء بعد الصفحة الحالية. تحتفظ الصفحات المقروءة بنصها.</string>
+    <string name="ocr_scope_body">يقرأ النص الإنجليزي في الصفحات الممسوحة ويجعله قابلًا للبحث. تُتخطى الصفحات التي فيها نص بالفعل.</string>
+    <string name="ocr_scope_page">هذه الصفحة (الصفحة %1$d)</string>
+    <string name="msg_ocr_cancelled">توقف التعرّف على النص قبل قراءة أي صفحة.</string>
+    <plurals name="ocr_scope_all">
+        <item quantity="zero">كل الصفحات (%1$d)</item>
+        <item quantity="one">كل الصفحات (%1$d)</item>
+        <item quantity="two">كل الصفحات (%1$d)</item>
+        <item quantity="few">كل الصفحات (%1$d)</item>
+        <item quantity="many">كل الصفحات (%1$d)</item>
+        <item quantity="other">كل الصفحات (%1$d)</item>
+    </plurals>
+    <plurals name="msg_ocr_done_pages">
+        <item quantity="zero">تم التعرّف على النص في %1$d صفحة (الإنجليزية). يمكن الآن تحديده ونسخه والبحث فيه وتمييزه.</item>
+        <item quantity="one">تم التعرّف على النص في %1$d صفحة (الإنجليزية). يمكن الآن تحديده ونسخه والبحث فيه وتمييزه.</item>
+        <item quantity="two">تم التعرّف على النص في %1$d صفحة (الإنجليزية). يمكن الآن تحديده ونسخه والبحث فيه وتمييزه.</item>
+        <item quantity="few">تم التعرّف على النص في %1$d صفحة (الإنجليزية). يمكن الآن تحديده ونسخه والبحث فيه وتمييزه.</item>
+        <item quantity="many">تم التعرّف على النص في %1$d صفحة (الإنجليزية). يمكن الآن تحديده ونسخه والبحث فيه وتمييزه.</item>
+        <item quantity="other">تم التعرّف على النص في %1$d صفحة (الإنجليزية). يمكن الآن تحديده ونسخه والبحث فيه وتمييزه.</item>
+    </plurals>
+    <plurals name="msg_ocr_stopped">
+        <item quantity="zero">توقف. يُحتفظ بالنص المتعرَّف عليه في %1$d صفحة.</item>
+        <item quantity="one">توقف. يُحتفظ بالنص المتعرَّف عليه في %1$d صفحة.</item>
+        <item quantity="two">توقف. يُحتفظ بالنص المتعرَّف عليه في %1$d صفحة.</item>
+        <item quantity="few">توقف. يُحتفظ بالنص المتعرَّف عليه في %1$d صفحة.</item>
+        <item quantity="many">توقف. يُحتفظ بالنص المتعرَّف عليه في %1$d صفحة.</item>
+        <item quantity="other">توقف. يُحتفظ بالنص المتعرَّف عليه في %1$d صفحة.</item>
+    </plurals>
 </resources>

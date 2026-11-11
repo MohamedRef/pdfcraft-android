@@ -666,7 +666,6 @@
     <string name="msg_busy_preparing_ocr">Preparando reconhecimento de texto…</string>
     <string name="msg_ocr_not_installed">O reconhecimento de texto não está instalado nesta versão.</string>
     <string name="msg_busy_recognizing">Reconhecendo texto…</string>
-    <string name="msg_ocr_done">Texto reconhecido (inglês). Agora é possível selecioná-lo, copiá-lo, pesquisá-lo e destacá-lo.</string>
     <string name="msg_ocr_nothing">Nenhuma página precisava de reconhecimento</string>
     <string name="msg_place_signature">Toque onde deseja colocar sua assinatura</string>
     <string name="msg_place_initials">Toque onde deseja colocar sua rubrica</string>
@@ -1031,5 +1030,23 @@
     <plurals name="pages_deleted">
         <item quantity="one">%1$d página excluída</item>
         <item quantity="other">%1$d páginas excluídas</item>
+    </plurals>
+    <string name="msg_busy_recognizing_page">Reconhecendo texto: página %1$d de %2$d…</string>
+    <string name="busy_cancelling">Parando…</string>
+    <string name="busy_cancel_keeps">Cancelar para após a página atual. As páginas já lidas mantêm o texto.</string>
+    <string name="ocr_scope_body">Lê o texto em inglês das páginas digitalizadas e o torna pesquisável. Páginas que já têm texto são ignoradas.</string>
+    <string name="ocr_scope_page">Esta página (página %1$d)</string>
+    <string name="msg_ocr_cancelled">O reconhecimento de texto parou antes de ler qualquer página.</string>
+    <plurals name="ocr_scope_all">
+        <item quantity="one">A página (%1$d)</item>
+        <item quantity="other">Todas as %1$d páginas</item>
+    </plurals>
+    <plurals name="msg_ocr_done_pages">
+        <item quantity="one">Texto reconhecido em %1$d página (inglês). Agora pode ser selecionado, copiado, pesquisado e destacado.</item>
+        <item quantity="other">Texto reconhecido em %1$d páginas (inglês). Agora pode ser selecionado, copiado, pesquisado e destacado.</item>
+    </plurals>
+    <plurals name="msg_ocr_stopped">
+        <item quantity="one">Parado. O texto reconhecido em %1$d página foi mantido.</item>
+        <item quantity="other">Parado. O texto reconhecido em %1$d páginas foi mantido.</item>
     </plurals>
 </resources>

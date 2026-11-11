@@ -1164,7 +1164,6 @@
     <string name="msg_busy_preparing_ocr">Preparing text recognition…</string>
     <string name="msg_ocr_not_installed">Text recognition isn\'t installed in this build.</string>
     <string name="msg_busy_recognizing">Recognizing text…</string>
-    <string name="msg_ocr_done">Text recognized (English). It can now be selected, copied, searched and highlighted.</string>
     <string name="msg_ocr_nothing">No pages needed recognizing</string>
 
     <!-- Messages: Fill & Sign -->
@@ -1490,4 +1489,22 @@
     <string name="comments_loading">Loading comments…</string>
     <string name="compact_previews">Use less memory for page previews</string>
     <string name="compact_previews_body">Reduces color precision for full pages. Zoomed details retain full quality. Applies when you reopen a document.</string>
+    <string name="msg_busy_recognizing_page">Recognizing text: page %1$d of %2$d…</string>
+    <string name="busy_cancelling">Stopping…</string>
+    <string name="busy_cancel_keeps">Cancel stops after the current page. Pages already read keep their text.</string>
+    <string name="ocr_scope_body">Reads English text in scanned pages and makes it searchable. Pages that already have text are skipped.</string>
+    <string name="ocr_scope_page">This page (page %1$d)</string>
+    <string name="msg_ocr_cancelled">Recognize text stopped before any page was read.</string>
+    <plurals name="ocr_scope_all">
+        <item quantity="one">All %1$d page</item>
+        <item quantity="other">All %1$d pages</item>
+    </plurals>
+    <plurals name="msg_ocr_done_pages">
+        <item quantity="one">Text recognized on %1$d page (English). It can now be selected, copied, searched and highlighted.</item>
+        <item quantity="other">Text recognized on %1$d pages (English). They can now be selected, copied, searched and highlighted.</item>
+    </plurals>
+    <plurals name="msg_ocr_stopped">
+        <item quantity="one">Stopped. Text recognized on %1$d page is kept.</item>
+        <item quantity="other">Stopped. Text recognized on %1$d pages is kept.</item>
+    </plurals>
 </resources>

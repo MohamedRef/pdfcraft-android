@@ -927,7 +927,6 @@
     <string name="msg_busy_preparing_ocr">Préparation de la reconnaissance de texte…</string>
     <string name="msg_ocr_not_installed">La reconnaissance de texte n\'est pas installée dans cette version.</string>
     <string name="msg_busy_recognizing">Reconnaissance du texte…</string>
-    <string name="msg_ocr_done">Texte reconnu (anglais). Il peut maintenant être sélectionné, copié, recherché et surligné.</string>
     <string name="msg_ocr_nothing">Aucune page ne nécessitait de reconnaissance</string>
 
     <!-- Messages: Fill & Sign -->
@@ -1326,5 +1325,23 @@
     <plurals name="pages_deleted">
         <item quantity="one">%1$d page supprimée</item>
         <item quantity="other">%1$d pages supprimées</item>
+    </plurals>
+    <string name="msg_busy_recognizing_page">Reconnaissance du texte : page %1$d sur %2$d…</string>
+    <string name="busy_cancelling">Arrêt…</string>
+    <string name="busy_cancel_keeps">Annuler s’arrête après la page en cours. Les pages déjà lues gardent leur texte.</string>
+    <string name="ocr_scope_body">Lit le texte anglais des pages numérisées et le rend consultable. Les pages qui contiennent déjà du texte sont ignorées.</string>
+    <string name="ocr_scope_page">Cette page (page %1$d)</string>
+    <string name="msg_ocr_cancelled">La reconnaissance du texte s’est arrêtée avant de lire une page.</string>
+    <plurals name="ocr_scope_all">
+        <item quantity="one">La page (%1$d)</item>
+        <item quantity="other">Les %1$d pages</item>
+    </plurals>
+    <plurals name="msg_ocr_done_pages">
+        <item quantity="one">Texte reconnu sur %1$d page (anglais). Il peut maintenant être sélectionné, copié, recherché et surligné.</item>
+        <item quantity="other">Texte reconnu sur %1$d pages (anglais). Il peut maintenant être sélectionné, copié, recherché et surligné.</item>
+    </plurals>
+    <plurals name="msg_ocr_stopped">
+        <item quantity="one">Arrêté. Le texte reconnu sur %1$d page est conservé.</item>
+        <item quantity="other">Arrêté. Le texte reconnu sur %1$d pages est conservé.</item>
     </plurals>
 </resources>

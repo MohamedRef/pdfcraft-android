@@ -1025,7 +1025,6 @@
     <string name="msg_busy_preparing_ocr">Texterkennung wird vorbereitet …</string>
     <string name="msg_ocr_not_installed">Die Texterkennung ist in dieser Version nicht installiert.</string>
     <string name="msg_busy_recognizing">Text wird erkannt …</string>
-    <string name="msg_ocr_done">Text erkannt (Englisch). Er kann jetzt ausgewählt, kopiert, gesucht und hervorgehoben werden.</string>
     <string name="msg_ocr_nothing">Auf keiner Seite war eine Texterkennung erforderlich</string>
 
     <!-- Messages: Fill & Sign -->
@@ -1446,5 +1445,23 @@
     <plurals name="pages_deleted">
         <item quantity="one">%1$d Seite gelöscht</item>
         <item quantity="other">%1$d Seiten gelöscht</item>
+    </plurals>
+    <string name="msg_busy_recognizing_page">Text wird erkannt: Seite %1$d von %2$d…</string>
+    <string name="busy_cancelling">Wird beendet…</string>
+    <string name="busy_cancel_keeps">Abbrechen stoppt nach der aktuellen Seite. Bereits gelesene Seiten behalten ihren Text.</string>
+    <string name="ocr_scope_body">Liest englischen Text auf gescannten Seiten und macht ihn durchsuchbar. Seiten mit Text werden übersprungen.</string>
+    <string name="ocr_scope_page">Diese Seite (Seite %1$d)</string>
+    <string name="msg_ocr_cancelled">Die Texterkennung wurde beendet, bevor eine Seite gelesen wurde.</string>
+    <plurals name="ocr_scope_all">
+        <item quantity="one">Alle %1$d Seite</item>
+        <item quantity="other">Alle %1$d Seiten</item>
+    </plurals>
+    <plurals name="msg_ocr_done_pages">
+        <item quantity="one">Text auf %1$d Seite erkannt (Englisch). Er kann jetzt markiert, kopiert, durchsucht und hervorgehoben werden.</item>
+        <item quantity="other">Text auf %1$d Seiten erkannt (Englisch). Er kann jetzt markiert, kopiert, durchsucht und hervorgehoben werden.</item>
+    </plurals>
+    <plurals name="msg_ocr_stopped">
+        <item quantity="one">Beendet. Der auf %1$d Seite erkannte Text bleibt erhalten.</item>
+        <item quantity="other">Beendet. Der auf %1$d Seiten erkannte Text bleibt erhalten.</item>
     </plurals>
 </resources>

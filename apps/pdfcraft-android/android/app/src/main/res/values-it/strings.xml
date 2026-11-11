@@ -1022,7 +1022,6 @@
     <string name="msg_busy_preparing_ocr">Preparazione del riconoscimento del testo…</string>
     <string name="msg_ocr_not_installed">Il riconoscimento del testo non è installato in questa versione.</string>
     <string name="msg_busy_recognizing">Riconoscimento del testo in corso…</string>
-    <string name="msg_ocr_done">Testo riconosciuto (inglese). Ora può essere selezionato, copiato, cercato ed evidenziato.</string>
     <string name="msg_ocr_nothing">Nessuna pagina richiedeva il riconoscimento del testo</string>
 
     <!-- Compila e firma -->
@@ -1436,5 +1435,23 @@
     <plurals name="pages_deleted">
         <item quantity="one">%1$d pagina eliminata</item>
         <item quantity="other">%1$d pagine eliminate</item>
+    </plurals>
+    <string name="msg_busy_recognizing_page">Riconoscimento del testo: pagina %1$d di %2$d…</string>
+    <string name="busy_cancelling">Interruzione…</string>
+    <string name="busy_cancel_keeps">Annulla si ferma dopo la pagina corrente. Le pagine già lette mantengono il testo.</string>
+    <string name="ocr_scope_body">Legge il testo inglese nelle pagine scansionate e lo rende ricercabile. Le pagine che hanno già testo vengono saltate.</string>
+    <string name="ocr_scope_page">Questa pagina (pagina %1$d)</string>
+    <string name="msg_ocr_cancelled">Il riconoscimento del testo si è interrotto prima di leggere una pagina.</string>
+    <plurals name="ocr_scope_all">
+        <item quantity="one">Tutta la pagina (%1$d)</item>
+        <item quantity="other">Tutte le %1$d pagine</item>
+    </plurals>
+    <plurals name="msg_ocr_done_pages">
+        <item quantity="one">Testo riconosciuto su %1$d pagina (inglese). Ora si può selezionare, copiare, cercare ed evidenziare.</item>
+        <item quantity="other">Testo riconosciuto su %1$d pagine (inglese). Ora si può selezionare, copiare, cercare ed evidenziare.</item>
+    </plurals>
+    <plurals name="msg_ocr_stopped">
+        <item quantity="one">Interrotto. Il testo riconosciuto su %1$d pagina viene mantenuto.</item>
+        <item quantity="other">Interrotto. Il testo riconosciuto su %1$d pagine viene mantenuto.</item>
     </plurals>
 </resources>

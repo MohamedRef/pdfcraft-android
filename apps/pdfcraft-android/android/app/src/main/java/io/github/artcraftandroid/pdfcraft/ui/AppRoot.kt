@@ -48,6 +48,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -200,12 +201,42 @@ fun AppRoot(vm: AppViewModel, onBrowse: () -> Unit, onPickSignatureImage: () -> 
                 }
             }
             vm.busy?.let { message ->
-                PdfDialog(onDismiss = {}, title = null, confirm = null, dismiss = null) {
+                // a count and Cancel when the job has them (#200)
+                val cancel = vm.busyCancel
+                var cancelling by remember(cancel) { mutableStateOf(false) }
+                PdfDialog(
+                    onDismiss = {}, title = null, confirm = null,
+                    dismiss = if (cancel != null) stringResource(if (cancelling) R.string.busy_cancelling else R.string.common_cancel) else null,
+                    onDismissButton = { if (cancel != null && !cancelling) { cancelling = true; cancel() } },
+                ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         CircularProgressIndicator(Modifier.size(28.dp), color = c.accent, strokeWidth = 3.dp)
                         Spacer(Modifier.width(20.dp))
                         Text(message, color = c.text)
                     }
+                    vm.busyProgress?.let { (done, total) ->
+                        Spacer(Modifier.height(14.dp))
+                        LinearProgressIndicator(
+                            progress = { if (total > 0) done.toFloat() / total else 0f },
+                            modifier = Modifier.fillMaxWidth(), color = c.accent, trackColor = c.divider,
+                        )
+                    }
+                    if (cancel != null) {
+                        Spacer(Modifier.height(10.dp))
+                        Text(stringResource(R.string.busy_cancel_keeps), color = c.textSecondary, fontSize = 13.sp)
+                    }
+                }
+            }
+            vm.ocrScope?.let { scope ->
+                val all = scope.doc.pageCount
+                PdfDialog(
+                    onDismiss = { vm.ocrScope = null }, title = stringResource(R.string.common_tool_recognize_text),
+                    confirm = null, dismiss = stringResource(R.string.common_cancel),
+                ) {
+                    Text(stringResource(R.string.ocr_scope_body), color = c.text, fontSize = 14.sp)
+                    Spacer(Modifier.height(8.dp))
+                    SheetRow(null, stringResource(R.string.ocr_scope_page, scope.page + 1), { vm.runOcr(scope.doc, listOf(scope.page)) })
+                    if (all > 1) SheetRow(null, pluralStringResource(R.plurals.ocr_scope_all, all, all), { vm.runOcr(scope.doc, (0 until all).toList()) })
                 }
             }
         }

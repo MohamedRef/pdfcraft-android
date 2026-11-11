@@ -1033,7 +1033,6 @@
     <string name="msg_busy_preparing_ocr">Preparando el reconocimiento de texto…</string>
     <string name="msg_ocr_not_installed">El reconocimiento de texto no está instalado en esta compilación.</string>
     <string name="msg_busy_recognizing">Reconociendo texto…</string>
-    <string name="msg_ocr_done">Texto reconocido (inglés). Ya se puede seleccionar, copiar, buscar y resaltar.</string>
     <string name="msg_ocr_nothing">Ninguna página necesitaba reconocimiento</string>
 
     <!-- Messages: Fill & Sign -->
@@ -1454,5 +1453,23 @@
     <plurals name="pages_deleted">
         <item quantity="one">Se eliminó %1$d página</item>
         <item quantity="other">Se eliminaron %1$d páginas</item>
+    </plurals>
+    <string name="msg_busy_recognizing_page">Reconociendo texto: página %1$d de %2$d…</string>
+    <string name="busy_cancelling">Deteniendo…</string>
+    <string name="busy_cancel_keeps">Cancelar se detiene tras la página actual. Las páginas ya leídas conservan su texto.</string>
+    <string name="ocr_scope_body">Lee el texto en inglés de las páginas escaneadas y permite buscarlo. Se omiten las páginas que ya tienen texto.</string>
+    <string name="ocr_scope_page">Esta página (página %1$d)</string>
+    <string name="msg_ocr_cancelled">El reconocimiento de texto se detuvo antes de leer ninguna página.</string>
+    <plurals name="ocr_scope_all">
+        <item quantity="one">Toda la página (%1$d)</item>
+        <item quantity="other">Las %1$d páginas</item>
+    </plurals>
+    <plurals name="msg_ocr_done_pages">
+        <item quantity="one">Texto reconocido en %1$d página (inglés). Ya se puede seleccionar, copiar, buscar y resaltar.</item>
+        <item quantity="other">Texto reconocido en %1$d páginas (inglés). Ya se puede seleccionar, copiar, buscar y resaltar.</item>
+    </plurals>
+    <plurals name="msg_ocr_stopped">
+        <item quantity="one">Detenido. Se conserva el texto reconocido en %1$d página.</item>
+        <item quantity="other">Detenido. Se conserva el texto reconocido en %1$d páginas.</item>
     </plurals>
 </resources>

@@ -1807,8 +1807,22 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     }
 
     /** Recognize text: make scanned pages searchable and selectable. */
-    fun recognizeText(doc: OpenDocument) {
+    fun recognizeText(doc: OpenDocument, page: Int? = null) {
+        // the pages and the language are said before anything starts (#200)
+        ocrScope = OcrScope(doc, page ?: doc.viewer.currentPage)
+    }
+
+    /** Recognize text's question: this page or every page, asked before OCR starts (#200). */
+    var ocrScope by mutableStateOf<OcrScope?>(null)
+
+    /**
+     * Recognize text on [pages] (0-based) one page at a time, so the busy dialog counts pages and
+     * Cancel stops at the next page; the pages finished by then keep their text (#200).
+     */
+    fun runOcr(doc: OpenDocument, pages: List<Int>) {
+        ocrScope = null
         val eng = engine ?: return
+        if (pages.isEmpty()) return
         viewModelScope.launch {
             busy = text(R.string.msg_busy_preparing_ocr)
             withContext(Dispatchers.IO) { runCatching { eng.prepareOcrModels(getApplication()) } }
@@ -1818,24 +1832,60 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 tell(text(R.string.msg_ocr_not_installed))
                 return@launch
             }
-            busy = text(R.string.msg_busy_recognizing)
+            var cancelled = false
+            busyCancel = { cancelled = true }
+            var recognized = 0
+            var steps = 0
             try {
-                val r = eng.tool("ocr_recognize", mapOf("doc" to doc.id))
-                refresh(doc)
-                val pages = r.optJSONArray("pages")
-                val n = (0 until (pages?.length() ?: 0)).count { pages?.optJSONObject(it)?.has("skipped") == false }
-                if (n > 0) {
-                    success = SuccessBanner(text(R.string.msg_ocr_done)) { undo(doc) }
-                } else {
-                    tell(text(R.string.msg_ocr_nothing))
+                for ((k, page) in pages.withIndex()) {
+                    if (cancelled || document !== doc) break
+                    busy = text(R.string.msg_busy_recognizing_page, k + 1, pages.size)
+                    busyProgress = k to pages.size
+                    val r = eng.tool("ocr_recognize", mapOf("doc" to doc.id, "pages" to listOf(page + 1)))
+                    val read = r.optJSONArray("pages")
+                    if ((0 until (read?.length() ?: 0)).any { read?.optJSONObject(it)?.has("skipped") == false }) {
+                        recognized++
+                        steps++
+                    }
                 }
+                refresh(doc)
+                val done = when {
+                    recognized == 0 && cancelled -> null
+                    recognized == 0 -> { tell(text(R.string.msg_ocr_nothing)); null }
+                    cancelled -> plural(R.plurals.msg_ocr_stopped, recognized, recognized)
+                    else -> plural(R.plurals.msg_ocr_done_pages, recognized, recognized)
+                }
+                // one Undo takes back every page this run read
+                if (done != null) success = SuccessBanner(done) { undoSteps(doc, steps) }
+                else if (cancelled) tell(text(R.string.msg_ocr_cancelled))
             } catch (e: MobileException) {
+                refresh(doc)
                 tell(e.userMessage)
             } finally {
                 busy = null
+                busyProgress = null
+                busyCancel = null
             }
         }
     }
+
+    /** Undo [steps] edits of [doc] in a row (a recognition made page by page), then redraw. */
+    private fun undoSteps(doc: OpenDocument, steps: Int) {
+        val eng = engine ?: return
+        viewModelScope.launch {
+            try {
+                repeat(steps) { if (document === doc && doc.info.undo != null) { eng.tool("edit_undo", mapOf("doc" to doc.id)); refresh(doc) } }
+            } catch (e: MobileException) {
+                tell(e.userMessage)
+            }
+        }
+    }
+
+    /** The busy dialog's count (done, total) when the job knows it, for a determinate bar (#200). */
+    var busyProgress by mutableStateOf<Pair<Int, Int>?>(null)
+
+    /** The busy dialog's Cancel, when the job can stop safely (between pages). */
+    var busyCancel by mutableStateOf<(() -> Unit)?>(null)
 
     /** A finished job's green banner over the viewer's bar, with Undo. */
     var success by mutableStateOf<SuccessBanner?>(null)
@@ -3048,6 +3098,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 tell(e.userMessage)
             } finally {
                 busy = null
+                busyProgress = null
             }
         }
     }
@@ -3362,6 +3413,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         val made = mutableListOf<Pair<File, String>>()
         for ((n, i) in pages.withIndex()) {
             busy = text(R.string.msg_busy_exporting_page, n + 1, pages.size)
+            busyProgress = n to pages.size
             val img = withContext(eng.renders) { eng.session.renderPage(doc.id, i.toUInt(), 200f / 72f, null) }
             val out = tempFile(ext)
             withContext(Dispatchers.IO) {
@@ -4041,6 +4093,9 @@ private const val MAX_CREATE_FILES = 12
 
 /** A green banner saying a job worked, with the way to undo it. */
 class SuccessBanner(val text: String, val undo: (() -> Unit)?)
+
+/** Recognize text waiting for its pages: [page] is the one in view (0-based). */
+class OcrScope(val doc: OpenDocument, val page: Int)
 
 /** A file for the activity to print; [deleteWhenDone]: a temporary copy (an unlocked one) the job deletes (#105). */
 data class PrintJob(val file: File, val name: String, val deleteWhenDone: Boolean)
