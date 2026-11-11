@@ -83,6 +83,7 @@ enum class QuickTool(val id: String, @StringRes val label: Int, @StringRes val t
     Protect("protect", R.string.toolbar_label_password, R.string.common_tool_set_password, LucideIcons.FileLock2, ToolHues.protect),
     // a tool that changes the content: More tools, not ⋮ (#195)
     Redact("redact", R.string.redact_title, R.string.redact_title, LucideIcons.SquareDashed, ToolHues.protect),
+    Accessibility("accessibility", R.string.a11y_title, R.string.a11y_title, LucideIcons.Accessibility, ToolHues.protect),
     Organize("organize", R.string.toolbar_label_organize, R.string.common_tool_organize, LucideIcons.LayoutGrid, ToolHues.organize),
     Crop("crop", R.string.toolbar_label_crop, R.string.common_tool_crop, LucideIcons.Crop, ToolHues.crop),
     // room beside the content for notes (#146): changes the pages, so More tools
@@ -204,6 +205,7 @@ fun AppViewModel.runQuickTool(doc: OpenDocument, tool: QuickTool) {
         QuickTool.Ocr -> recognizeText(doc)
         QuickTool.ScanEnhance -> doc.controller.sheet = ViewerSheet.ScanEnhance
         QuickTool.Redact -> openRedact(doc)
+        QuickTool.Accessibility -> doc.controller.sheet = ViewerSheet.Accessibility
         QuickTool.OcrReview -> doc.controller.sheet = ViewerSheet.OcrConfidence
         QuickTool.Create -> openCreate()
         QuickTool.Scan -> startScan()
