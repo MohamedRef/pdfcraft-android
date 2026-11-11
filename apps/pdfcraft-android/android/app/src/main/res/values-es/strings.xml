@@ -1339,6 +1339,14 @@
     <string name="bates_export_failed">No se pudo guardar esta copia nueva en Descargas.</string>
     <string name="ink_presets_title">Lápices favoritos</string>
     <string name="ink_presets_help">Cada lápiz conserva su propio color, grosor y opacidad. Toca un favorito para recuperar sus ajustes.</string>
+    <string name="ink_latency_reset">Restablecer</string>
+    <string name="ink_latency_refresh">Actualizar</string>
+    <string name="ink_latency_none">aún sin medir</string>
+    <string name="ink_latency_value">%1$d ms típico, %2$d ms en el peor caso (95 %%), %3$d muestras</string>
+    <string name="ink_latency_low">Baja latencia</string>
+    <string name="ink_latency_normal">Normal</string>
+    <string name="ink_latency_explanation">Escribe con el lápiz con la tinta de baja latencia desactivada y luego activada, y compara. Se mide desde el evento del lápiz hasta el dibujo de la app; la pantalla añade un poco más.</string>
+    <string name="ink_latency_title">Latencia de la tinta en este dispositivo</string>
     <string name="palm_guard_calibrate_clear">Borrar toques</string>
     <string name="palm_guard_calibrate_help">Acerca el lápiz o escribe con él y apoya la mano como al escribir. Los toques verdes se ignoran; los rojos desplazarían la página o pulsarían botones. Ajusta el tamaño hasta que la mano apoyada quede en verde.</string>
     <string name="palm_guard_calibrate">Comprobar zona de la palma</string>

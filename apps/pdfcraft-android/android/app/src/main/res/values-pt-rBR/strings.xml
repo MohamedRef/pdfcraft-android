@@ -916,6 +916,14 @@
     <string name="bates_export_failed">Não foi possível salvar esta nova cópia em Downloads.</string>
     <string name="ink_presets_title">Canetas favoritas</string>
     <string name="ink_presets_help">Cada caneta guarda a própria cor, espessura e opacidade. Toque em uma favorita para restaurar as configurações dela.</string>
+    <string name="ink_latency_reset">Redefinir</string>
+    <string name="ink_latency_refresh">Atualizar</string>
+    <string name="ink_latency_none">ainda não medida</string>
+    <string name="ink_latency_value">%1$d ms típico, %2$d ms no pior caso (95%%), %3$d amostras</string>
+    <string name="ink_latency_low">Baixa latência</string>
+    <string name="ink_latency_normal">Normal</string>
+    <string name="ink_latency_explanation">Escreva com a caneta com a tinta de baixa latência desligada e depois ligada, e compare. Medido do evento da caneta até o desenho do app; a tela acrescenta um pouco mais.</string>
+    <string name="ink_latency_title">Latência da tinta neste dispositivo</string>
     <string name="palm_guard_calibrate_clear">Limpar toques</string>
     <string name="palm_guard_calibrate_help">Aproxime a caneta ou escreva e apoie a mão como ao escrever. Toques verdes são ignorados; vermelhos rolariam a página ou tocariam botões. Ajuste o tamanho até a mão apoiada cair no verde.</string>
     <string name="palm_guard_calibrate">Verificar área da palma</string>
