@@ -423,6 +423,11 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     /** Remove stale temporary files from the cache (#105). */
     private fun sweepCache() {
         runCatching { io.github.artcraftandroid.pdfcraft.engine.CacheCleanup.sweep(getApplication<Application>().cacheDir) }
+        // update APKs already installed or superseded (#109)
+        runCatching {
+            val app = getApplication<Application>()
+            io.github.artcraftandroid.pdfcraft.ui.home.cleanUpdateFiles(app, io.github.artcraftandroid.pdfcraft.ui.home.installedVersionCode(app), keepSha256 = null)
+        }
     }
 
     /** A document that couldn't be saved back to where it came from, waiting for Save a copy or Discard. */

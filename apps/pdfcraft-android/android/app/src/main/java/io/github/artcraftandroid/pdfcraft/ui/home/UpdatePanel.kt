@@ -111,6 +111,10 @@ internal fun UpdatePanel() {
                         return@launch
                     }
                     val found = fetchApkUpdates(installed).firstOrNull()
+                    // a partial download of a superseded release can never finish: removed (#109)
+                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                        runCatching { cleanUpdateFiles(context, installed, keepSha256 = found?.sha256 ?: "") }
+                    }
                     candidate = found
                     verifiedApk = null
                     showAllNotes = false
