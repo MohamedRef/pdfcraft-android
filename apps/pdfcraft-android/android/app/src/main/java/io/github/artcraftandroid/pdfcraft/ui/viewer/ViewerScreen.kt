@@ -213,6 +213,8 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
     BackHandler(enabled = jumpChipVisible && ctl.jumpsVersion >= 0 && ctl.jumps.canGoBack) {
         ctl.jumpBack(doc.viewer)
     }
+    // Back ends a presentation before anything else
+    BackHandler(enabled = ctl.presenting) { vm.stopPresenting(doc) }
 
     // The hint a tool shows when it starts.
     var hint by remember { mutableStateOf<String?>(null) }
@@ -333,6 +335,9 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
             },
         )
 
+        // Presenting: taps turn pages and a drag is the laser pointer, over the page alone.
+        if (ctl.presenting) PresentationLayer(doc.viewer)
+
         // The active tool takes the touches over the pages.
         ToolLayer(vm, doc)
         if (ctl.tool == ViewerTool.Edit) EditOverlay(vm, doc)
@@ -348,7 +353,7 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
 
         // Scrubber and page pill (continuous, three pages or more).
         Box(Modifier.fillMaxSize().then(cutoutSides)) {
-            if (vm.readingMode) {
+            if (vm.readingMode || ctl.presenting) {
                 Unit
             } else if (doc.pageCount >= 3 && doc.viewer.mode == PageMode.SinglePage) {
                 HorizontalScrubber(

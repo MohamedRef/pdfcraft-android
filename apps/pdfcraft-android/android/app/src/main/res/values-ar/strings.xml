@@ -492,6 +492,7 @@
     <string name="sheet_add_star">تمييز الملف</string>
     <string name="sheet_remove_star">إلغاء التمييز</string>
     <string name="sheet_view_settings">إعدادات العرض</string>
+    <string name="sheet_present">عرض تقديمي</string>
     <string name="file_details_title">تفاصيل الملف</string>
     <string name="file_details_copy_all">نسخ كل التفاصيل</string>
     <string name="file_details_copy_value">نسخ القيمة</string>

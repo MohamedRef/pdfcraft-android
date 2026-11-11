@@ -83,6 +83,12 @@ class ViewerController {
     /** Uptime (ms) of the last scroll or zoom: the scrubber and page pill show for a while after it. */
     var lastMoved by mutableLongStateOf(0L)
 
+    /** Presentation mode (#157): the page alone, taps turn pages, a drag is a laser pointer. */
+    var presenting by mutableStateOf(false)
+
+    /** The page mode to go back to after presenting. */
+    internal var modeBeforePresenting: PageMode? = null
+
     /** The Pages screen (thumbnails, and organizing) covers the viewer. */
     var pagesOpen by mutableStateOf(false)
 
@@ -104,7 +110,7 @@ class ViewerController {
     val barsLocked: Boolean get() = tool != ViewerTool.None || searching || sheet != ViewerSheet.None
 
     fun toggleBars() {
-        if (!barsLocked) barsVisible = !barsVisible
+        if (!barsLocked && !presenting) barsVisible = !barsVisible
     }
 
     /** Switch to [t]; tapping the active tool again goes back to plain viewing. */

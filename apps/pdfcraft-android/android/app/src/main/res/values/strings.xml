@@ -744,6 +744,7 @@
     <string name="sheet_add_star">Add a star</string>
     <string name="sheet_remove_star">Remove the star</string>
     <string name="sheet_view_settings">View settings</string>
+    <string name="sheet_present">Present</string>
     <!-- File details (Issue #55): original file dates and embedded PDF dates are separate. -->
     <string name="file_details_title">File details</string>
     <string name="file_details_copy_all">Copy all details</string>
