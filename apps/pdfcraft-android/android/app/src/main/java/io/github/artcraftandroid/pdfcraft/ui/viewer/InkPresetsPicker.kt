@@ -381,7 +381,12 @@ internal fun PenStylePicker(vm: AppViewModel) {
                 }
             }
         }
-        ColorGrid(color) { prefs.setColor(StyledTool.Ink, it) }
+        InkPaletteSection(vm, pen.argb) { prefs.setColor(StyledTool.Ink, Color(it)) }
+        var custom by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
+        TextButton(onClick = { custom = !custom }) {
+            Text(stringResource(if (custom) R.string.ink_custom_color_hide else R.string.ink_custom_color), color = c.accent)
+        }
+        if (custom) HsvColorPicker(pen.argb) { prefs.setColor(StyledTool.Ink, Color(it)) }
         HexColorField(pen.argb) { prefs.setColor(StyledTool.Ink, Color(it)) }
         TextButton(onClick = {
             // Close the sheet; the next tap on the page samples a stroke's colour.
@@ -399,7 +404,7 @@ internal fun PenStylePicker(vm: AppViewModel) {
 
 /** A single-choice row of small chips, announced as radio buttons. */
 @Composable
-private fun <T> OptionChips(options: List<T>, selected: T, onPick: (T) -> Unit, label: @Composable (T) -> String) {
+internal fun <T> OptionChips(options: List<T>, selected: T, onPick: (T) -> Unit, label: @Composable (T) -> String) {
     val c = pdfColors
     Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         options.forEach { option ->

@@ -213,6 +213,49 @@ class ToolPrefs(context: Context) {
         prefs.edit().putString("ink.recentColors", recentInkColors.joinToString(",") { "%08X".format(it) }).apply()
     }
 
+    /** The user's own named colour palettes (#149). */
+    internal var inkPalettes by mutableStateOf(decodePalettes(runCatching { prefs.getString("ink.palettes.v1", null) }.getOrNull()))
+        private set
+
+    /** Which palette the pen style sheet shows: [PALETTE_STANDARD], [PALETTE_COLOR_BLIND] or a user palette's name. */
+    internal var inkPaletteShown by mutableStateOf(runCatching { prefs.getString("ink.palette.shown", null) }.getOrNull() ?: PALETTE_STANDARD)
+        private set
+
+    internal fun showInkPalette(key: String) {
+        inkPaletteShown = key
+        prefs.edit().putString("ink.palette.shown", key).apply()
+    }
+
+    private fun storePalettes(list: List<InkPalette>) {
+        inkPalettes = list.take(InkPalette.MAX_PALETTES)
+        prefs.edit().putString("ink.palettes.v1", encodePalettes(inkPalettes)).apply()
+    }
+
+    /** Adds a palette under a unique name and shows it; false when the limit is reached. */
+    internal fun addInkPalette(palette: InkPalette): Boolean {
+        if (inkPalettes.size >= InkPalette.MAX_PALETTES) return false
+        val named = palette.copy(name = uniquePaletteName(palette.name, inkPalettes.map { it.name } + RESERVED_PALETTE_KEYS))
+        storePalettes(inkPalettes + named)
+        showInkPalette(named.name)
+        return true
+    }
+
+    internal fun deleteInkPalette(name: String) {
+        storePalettes(inkPalettes.filter { it.name != name })
+        if (inkPaletteShown == name) showInkPalette(PALETTE_STANDARD)
+    }
+
+    /** Adds [argb] to the palette [name] (once); false when it is already there or the palette is full. */
+    internal fun addColorToPalette(name: String, argb: Int): Boolean {
+        val p = inkPalettes.firstOrNull { it.name == name } ?: return false
+        if (p.colors.any { it.argb == argb } || p.colors.size >= InkPalette.MAX_COLORS) return false
+        storePalettes(inkPalettes.map { if (it.name == name) it.copy(colors = it.colors + InkPalette.PaletteColor(argb)) else it })
+        return true
+    }
+
+    internal fun removeColorFromPalette(name: String, argb: Int) =
+        storePalettes(inkPalettes.map { if (it.name == name) it.copy(colors = it.colors.filter { c -> c.argb != argb }) else it })
+
     internal fun currentInkPreset(): InkPreset? = penSettings(inkStyle).let { InkPreset.create(it.argb, it.width, it.opacity, inkStyle) }
 
     internal fun applyInkPreset(index: Int): Boolean {
