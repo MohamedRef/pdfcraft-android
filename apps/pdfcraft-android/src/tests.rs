@@ -796,6 +796,95 @@ fn profiled_open_preserves_document_rendering_and_records_only_stage_durations()
     assert_eq!(s.documents().len(), 2);
 }
 
+/// Comments ▸ Hide all comments: the page is drawn again without them, even by renderers kept
+/// idle from before (they were made with the other setting), and showing them brings them back.
+#[test]
+fn hide_all_comments_redraws_the_page_without_them() {
+    let s = MobileSession::new();
+    let doc = s.open(blank_pdf(1), None).unwrap().id;
+    s.execute(
+        "comment_add".into(),
+        json!({"doc": doc, "page": 1, "type": "rectangle", "rect": [100, 100, 300, 300], "color": "#ff0000", "fill": "#ff0000", "width": 4}).to_string(),
+    )
+    .unwrap();
+    let red = |img: &RenderedImage| img.rgba.chunks(4).filter(|p| p[0] > 200 && p[1] < 80 && p[2] < 80).count();
+    // twice, so an idle renderer drawing comments is cached
+    s.render_page(doc, 0, 0.5, None).unwrap();
+    let shown = s.render_page(doc, 0, 0.5, None).unwrap();
+    assert!(red(&shown) > 1000, "the rectangle is drawn");
+    let before = s.document(doc).unwrap().generation;
+    let undo = s.document(doc).unwrap().undo;
+    s.execute("comments_hide".into(), json!({"doc": doc, "hidden": true}).to_string()).unwrap();
+    let info = s.document(doc).unwrap();
+    assert!(info.comments_hidden);
+    assert!(info.generation > before, "the app renews its page pixels");
+    let hidden = s.render_page(doc, 0, 0.5, None).unwrap();
+    assert_eq!(red(&hidden), 0, "no idle renderer may still draw the comments");
+    s.execute("comments_hide".into(), json!({"doc": doc, "hidden": false}).to_string()).unwrap();
+    assert!(!s.document(doc).unwrap().comments_hidden);
+    let again = s.render_page(doc, 0, 0.5, None).unwrap();
+    assert_eq!(red(&again), red(&shown));
+    // a view setting: no undo step of its own
+    assert_eq!(s.document(doc).unwrap().undo, undo);
+}
+
+/// Share/import comments (XFDF): the file is small, holds the author, and importing the same
+/// file twice replaces the comments it brought instead of adding a second set.
+#[test]
+fn exported_comments_import_once_even_when_imported_twice() {
+    let s = MobileSession::new();
+    let from = s.open(blank_pdf(2), None).unwrap().id;
+    for i in 0..100 {
+        let page = 1 + i % 2;
+        s.execute(
+            "comment_add".into(),
+            json!({"doc": from, "page": page, "type": "note", "at": [20 + (i % 10) * 50, 20 + (i / 10) * 60], "contents": format!("Note {i}"), "author": "Mona"}).to_string(),
+        )
+        .unwrap();
+    }
+    let xfdf = scratch().join("notes.xfdf");
+    s.execute("doc_export_data".into(), json!({"doc": from, "path": xfdf.to_string_lossy(), "what": "comments"}).to_string()).unwrap();
+    let size = std::fs::metadata(&xfdf).unwrap().len();
+    assert!(size < 200 * 1024, "100 notes in {size} bytes");
+
+    let to = s.open(blank_pdf(2), None).unwrap().id;
+    s.execute("comment_add".into(), json!({"doc": to, "page": 1, "type": "note", "at": [500, 700], "contents": "Mine", "author": "Ali"}).to_string()).unwrap();
+    for _ in 0..2 {
+        s.execute("doc_import_data".into(), json!({"doc": to, "path": xfdf.to_string_lossy()}).to_string()).unwrap();
+        let comments = s.comments(to).unwrap();
+        assert_eq!(comments.len(), 101, "imported once, plus the reader's own note");
+        assert_eq!(comments.iter().filter(|c| c.author.as_deref() == Some("Mona")).count(), 100);
+        assert_eq!(comments.iter().filter(|c| c.author.as_deref() == Some("Ali")).count(), 1);
+    }
+    // undoable
+    s.execute("edit_undo".into(), json!({"doc": to}).to_string()).unwrap();
+    assert_eq!(s.comments(to).unwrap().len(), 101);
+    s.execute("edit_undo".into(), json!({"doc": to}).to_string()).unwrap();
+    assert_eq!(s.comments(to).unwrap().len(), 1);
+}
+
+/// Review status and lock, as the comment list sets them, and the summary PDF it shares.
+#[test]
+fn comment_status_lock_and_summary() {
+    let s = MobileSession::new();
+    let doc = s.open(blank_pdf(1), None).unwrap().id;
+    s.execute("comment_add".into(), json!({"doc": doc, "page": 1, "type": "note", "at": [100, 100], "contents": "Check", "author": "Ann"}).to_string()).unwrap();
+    s.execute("comment_set_status".into(), json!({"doc": doc, "page": 1, "index": 1, "status": "accepted", "author": "Bo"}).to_string()).unwrap();
+    let list: Value = serde_json::from_str(&s.execute("comment_list".into(), json!({"doc": doc}).to_string()).unwrap()).unwrap();
+    let roots = list["comments"].as_array().or_else(|| list.as_array()).unwrap();
+    let note = roots.iter().find(|c| c["contents"] == "Check").unwrap();
+    assert_eq!(note["status"], "Accepted", "{note}");
+    // the status reply is a comment of its own, with a state
+    assert!(s.comments(doc).unwrap().iter().any(|c| c.state.as_deref() == Some("Accepted")));
+    s.execute("comment_lock".into(), json!({"doc": doc, "page": 1, "index": 1, "locked": true}).to_string()).unwrap();
+    assert!(s.comments(doc).unwrap()[0].locked);
+    assert!(s.execute("comment_delete".into(), json!({"doc": doc, "page": 1, "index": 1}).to_string()).is_err(), "a locked comment can't be deleted");
+    let out = scratch().join("summary.pdf");
+    s.execute("comments_summarize".into(), json!({"doc": doc, "sort": "author", "out": out.to_string_lossy()}).to_string()).unwrap();
+    let summary = s.open(out.to_string_lossy().into_owned(), None).unwrap();
+    assert!(!summary.pages.is_empty());
+}
+
 /// One 100 x 100 page painted red inside layer "Red" (an optional content group).
 fn layered_pdf() -> String {
     let content = "1 0 0 rg /OC /L1 BDC 0 0 100 100 re f EMC";

@@ -64,3 +64,12 @@ internal fun canProceedWithPdfOpen(
     awaitingSaveChoice: Boolean,
     resolvingSaveChoice: Boolean,
 ): Boolean = requestId == latestRequestId && !awaitingSaveChoice && !resolvingSaveChoice
+
+/** FDF, as Acrobat registers it. */
+internal const val FDF_MIME = "application/vnd.fdf"
+
+/** An incoming file of comments (XFDF or FDF) rather than a PDF to open. */
+internal fun isCommentsType(type: String?): Boolean {
+    val t = type?.substringBefore(';')?.trim()?.lowercase() ?: return false
+    return t == io.github.artcraftandroid.pdfcraft.ui.XFDF_MIME || t == FDF_MIME
+}

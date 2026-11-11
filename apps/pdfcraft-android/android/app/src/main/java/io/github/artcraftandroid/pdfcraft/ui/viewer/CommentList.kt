@@ -25,6 +25,16 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.border
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
@@ -54,9 +64,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.semantics.selected
-import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -121,34 +128,77 @@ internal fun commentDateLabel(raw: String?, today: String, yesterday: String, no
 /** "N comment threads" (replies aren't threads of their own): [none] for none, else [count] of them. */
 internal fun threadsTitle(n: Int, none: String, count: (Int) -> String): String = if (n == 0) none else count(n)
 
+/** The comment list's menus: the list's own ⋮, a comment's ⋮, and their sub-choices. */
+private sealed interface ListMenu {
+    data object Overflow : ListMenu
+    data object Summary : ListMenu
+    data class Comment(val c: CommentInfo) : ListMenu
+    data class Status(val c: CommentInfo) : ListMenu
+}
+
+/** The review statuses a comment can be given, as `comment_set_status` takes them, and their names. */
+private val STATUSES = listOf(
+    "none" to R.string.comments_status_none,
+    "accepted" to R.string.comments_status_accepted,
+    "rejected" to R.string.comments_status_rejected,
+    "cancelled" to R.string.comments_status_cancelled,
+    "completed" to R.string.comments_status_completed,
+)
+
+/** A review status as the engine reports it (`Accepted`, …), in words. */
+@StringRes
+internal fun statusLabel(status: String): Int = when (status.lowercase()) {
+    "accepted" -> R.string.comments_status_accepted
+    "rejected" -> R.string.comments_status_rejected
+    "cancelled" -> R.string.comments_status_cancelled
+    "completed" -> R.string.comments_status_completed
+    else -> R.string.comments_status_none
+}
+
 /**
- * Comment List, full screen as the reference's is on a phone: "N comment threads", the threads
+ * Comments, full screen as the reference's is on a phone: "N comment threads", the threads
  * grouped under "Page N" headers that fold, each comment with its avatar, author, date, what it did
  * (or a picture of the marked text), its text and, under each thread, Reply. A tap goes to the
- * comment on its page.
+ * comment on its page. A search field and chips find comments by text, kind, review status and
+ * author (#196, #169, #158); a page's handwriting folds into one "N drawings" row after its
+ * written comments. The ⋮ menu shares, saves, imports, summarises, copies and hides comments.
  */
 @Composable
 fun CommentListScreen(vm: AppViewModel, doc: OpenDocument) {
     val c = pdfColors
     val ctl = doc.controller
     var list by remember { mutableStateOf<List<CommentInfo>?>(null) }
-    LaunchedEffect(doc.info.generation) { list = vm.comments(doc) }
+    var statuses by remember { mutableStateOf<Map<Pair<Int, Int>, String>>(emptyMap()) }
+    LaunchedEffect(doc.info.generation) {
+        list = vm.comments(doc)
+        statuses = vm.commentStatuses(doc)
+    }
     val folded = remember { mutableStateMapOf<Int, Boolean>() }
+    val drawingsOpen = remember { mutableStateMapOf<Int, Boolean>() }
     val snippets = remember(doc.info.generation) { mutableStateMapOf<String, ImageBitmap>() }
-    var menuFor by remember { mutableStateOf<CommentInfo?>(null) }
+    var menu by remember { mutableStateOf<ListMenu?>(null) }
+    var searching by remember { mutableStateOf(false) }
+    var filters by remember { mutableStateOf(CommentFilters()) }
     var exporting by remember { mutableStateOf(false) }
     fun close() {
         ctl.sheet = ViewerSheet.None
     }
-    BackHandler(onBack = ::close)
+    BackHandler {
+        if (searching) {
+            searching = false
+            filters = filters.copy(query = "")
+        } else close()
+    }
+    val guest = stringResource(R.string.comments_guest)
+    val me = vm.commentAuthor
     val all = list.orEmpty().filter { !it.fillSign }
     val parents = all.filter { it.replyTo == null && it.state == null && it.subtype in LISTED }
     // each thread: its comment, then the replies to it in order
-    val allThreads = parents.map { p -> listOf(p) + all.filter { it.replyTo != null && it.replyTo == p.name && it.state == null } }
-    // filters by kind and author (#155)
-    var kind by remember { mutableStateOf<CommentKind?>(null) }
-    var author by remember { mutableStateOf<String?>(null) }
-    val threads = filterThreads(allThreads, kind, author)
+    val threads = remember(list) { parents.map { p -> listOf(p) + all.filter { it.replyTo != null && it.replyTo == p.name && it.state == null } } }
+    fun statusOf(cm: CommentInfo) = statuses[cm.page.toInt() to cm.index.toInt()]
+    val shown = remember(threads, filters, statuses, me) { filterThreads(threads, filters, me, guest) { statusOf(it) } }
+    val authors = remember(threads) { threads.map { authorKey(it.first(), guest) }.distinct().sorted() }
+    val filtering = filters != CommentFilters()
     Column(
         Modifier.fillMaxSize().background(Color.Black).safeTopPadding()
             .background(c.navBand).navigationBarsPadding().background(c.surface),
@@ -163,29 +213,85 @@ fun CommentListScreen(vm: AppViewModel, doc: OpenDocument) {
             Box(Modifier.width(56.dp), contentAlignment = Alignment.Center) {
                 BarIcon(LucideIcons.ArrowLeft, stringResource(R.string.common_back), ::close, iconSize = 27.dp)
             }
-            Text(
-                if (list == null) stringResource(R.string.comments_title) else threadsTitle(threads.size, stringResource(R.string.comments_none)) { plural(R.plurals.comments_threads, it, it) },
-                color = c.label, fontSize = 17.sp, fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.weight(1f),
-            )
-            if (threads.isNotEmpty()) BarIcon(LucideIcons.FileOutput, stringResource(R.string.digest_title), { exporting = true }, size = 48.dp)
+            if (searching) {
+                val focus = remember { FocusRequester() }
+                LaunchedEffect(Unit) { focus.requestFocus() }
+                BasicTextField(
+                    filters.query, { filters = filters.copy(query = it) },
+                    singleLine = true,
+                    textStyle = TextStyle(color = c.label, fontSize = 17.sp),
+                    cursorBrush = SolidColor(c.accent),
+                    modifier = Modifier.weight(1f).focusRequester(focus),
+                    decorationBox = { inner ->
+                        Box(contentAlignment = Alignment.CenterStart) {
+                            if (filters.query.isEmpty()) Text(stringResource(R.string.comments_search_hint), color = c.textTertiary, fontSize = 17.sp)
+                            inner()
+                        }
+                    },
+                )
+                BarIcon(LucideIcons.X, stringResource(R.string.comments_search_close), {
+                    searching = false
+                    filters = filters.copy(query = "")
+                })
+            } else {
+                Text(
+                    if (list == null) stringResource(R.string.comments_title)
+                    else if (filtering) stringResource(R.string.comments_shown, shown.size, threads.size)
+                    else threadsTitle(threads.size, stringResource(R.string.comments_none)) { plural(R.plurals.comments_threads, it, it) },
+                    color = c.label, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
+                )
+                if (threads.isNotEmpty()) BarIcon(LucideIcons.Search, stringResource(R.string.comments_search), { searching = true })
+            }
+            if (!searching && threads.isNotEmpty()) BarIcon(LucideIcons.FileOutput, stringResource(R.string.digest_title), { exporting = true })
+            BarIcon(LucideIcons.EllipsisVertical, stringResource(R.string.comments_more), { menu = ListMenu.Overflow })
         }
         if (exporting) ExportNotesSheet(vm, doc) { exporting = false }
         if (list == null) {
             Text(stringResource(R.string.comments_loading), color = c.label, modifier = Modifier.padding(16.dp))
             return@Column
         }
-        if (allThreads.isEmpty()) {
-            EmptyComments()
+        if (threads.isEmpty()) {
+            EmptyComments(onAdd = if (doc.info.allowsAnnotation) ({
+                close()
+                vm.enterTool(doc, ViewerTool.Comment)
+            }) else null)
             return@Column
         }
-        CommentFilters(allThreads, kind, { kind = it }, author, { author = it })
-        if (threads.isEmpty()) {
-            Text(stringResource(R.string.comments_filter_none), color = c.textSecondary, fontSize = 15.sp, modifier = Modifier.padding(16.dp))
+        // the chips: kind, then review status and authors when there is a choice
+        ChipRow {
+            FilterChipText(stringResource(R.string.comments_filter_all), filters.kind == CommentKindFilter.All) { filters = filters.copy(kind = CommentKindFilter.All) }
+            FilterChipText(stringResource(R.string.comments_filter_notes), filters.kind == CommentKindFilter.Notes) { filters = filters.copy(kind = CommentKindFilter.Notes) }
+            FilterChipText(stringResource(R.string.comments_filter_highlights), filters.kind == CommentKindFilter.Highlights) { filters = filters.copy(kind = CommentKindFilter.Highlights) }
+            FilterChipText(stringResource(R.string.comments_filter_drawings), filters.kind == CommentKindFilter.Drawings) { filters = filters.copy(kind = CommentKindFilter.Drawings) }
+            if (!me.isNullOrBlank()) FilterChipText(stringResource(R.string.comments_filter_mine), filters.kind == CommentKindFilter.Mine) { filters = filters.copy(kind = CommentKindFilter.Mine) }
+        }
+        if (statuses.isNotEmpty() || filters.status != CommentStatusFilter.Any) ChipRow {
+            for ((f, label) in listOf(
+                CommentStatusFilter.Any to R.string.comments_status_any,
+                CommentStatusFilter.Open to R.string.comments_status_open,
+                CommentStatusFilter.Accepted to R.string.comments_status_accepted,
+                CommentStatusFilter.Rejected to R.string.comments_status_rejected,
+                CommentStatusFilter.Completed to R.string.comments_status_completed,
+            )) FilterChipText(stringResource(label), filters.status == f) { filters = filters.copy(status = f) }
+        }
+        if (authors.size > 1) ChipRow {
+            for (a in authors) {
+                val on = a !in filters.hiddenAuthors
+                FilterChipText(a, on, icon = if (on) LucideIcons.Eye else LucideIcons.EyeOff) {
+                    filters = filters.copy(hiddenAuthors = if (on) filters.hiddenAuthors + a else filters.hiddenAuthors - a)
+                }
+            }
+        }
+        if (shown.isEmpty()) {
+            Text(
+                stringResource(R.string.comments_no_match), color = c.textSecondary, fontSize = 16.sp,
+                modifier = Modifier.fillMaxWidth().padding(24.dp), textAlign = TextAlign.Center,
+            )
             return@Column
         }
         LazyColumn(Modifier.fillMaxSize()) {
-            val pages = threads.groupBy { it.first().page.toInt() }
+            val pages = shown.groupBy { it.first().page.toInt() }
             pages.entries.forEachIndexed { pageIndex, (page, pageThreads) ->
                 item(key = "p$page") {
                     val isFolded = folded[page] == true
@@ -212,28 +318,39 @@ fun CommentListScreen(vm: AppViewModel, doc: OpenDocument) {
                     }
                 }
                 if (folded[page] != true) {
-                    pageThreads.forEachIndexed { threadIndex, thread ->
-                        thread.forEachIndexed { i, cm ->
-                            item(key = "c${cm.page}-${cm.index}") {
-                                CommentRow(
-                                    vm, doc, cm,
-                                    reply = i > 0,
-                                    lineAbove = i > 0,
-                                    lineBelow = i < thread.size - 1,
-                                    replyLink = i == thread.size - 1,
-                                    lastOnPage = threadIndex == pageThreads.size - 1 && i == thread.size - 1,
-                                    snippet = snippets["${cm.page}-${cm.index}"],
-                                    onSnippet = { snippets["${cm.page}-${cm.index}"] = it },
-                                    onOpen = {
-                                        val parent = thread.first()
-                                        close()
-                                        val y = parent.rect.getOrNull(1) ?: 0f
-                                        doc.viewer.goToPage(parent.page.toInt(), (y - 40f).coerceAtLeast(0f))
-                                        vm.selectedComment = doc to parent
-                                    },
-                                    onReply = { vm.replyPrompt = ReplyPrompt(doc, thread.first()) },
-                                    onMenu = { menuFor = cm },
-                                )
+                    // the Drawings chip lists each drawing; elsewhere a page's handwriting folds into one row
+                    val rows = pageRows(page, pageThreads, expanded = drawingsOpen[page] == true || filters.kind == CommentKindFilter.Drawings)
+                    rows.forEachIndexed { rowIndex, row ->
+                        when (row) {
+                            is CommentListRow.Drawings -> item(key = "d$page") {
+                                DrawingsRow(row.threads.size, last = rowIndex == rows.size - 1) { drawingsOpen[page] = true }
+                            }
+                            is CommentListRow.Thread -> {
+                                val thread = row.thread
+                                thread.forEachIndexed { i, cm ->
+                                    item(key = "c${cm.page}-${cm.index}") {
+                                        CommentRow(
+                                            vm, doc, cm,
+                                            reply = i > 0,
+                                            lineAbove = i > 0,
+                                            lineBelow = i < thread.size - 1,
+                                            replyLink = i == thread.size - 1,
+                                            lastOnPage = rowIndex == rows.size - 1 && i == thread.size - 1,
+                                            snippet = snippets["${cm.page}-${cm.index}"],
+                                            onSnippet = { snippets["${cm.page}-${cm.index}"] = it },
+                                            onOpen = {
+                                                val parent = thread.first()
+                                                close()
+                                                val y = parent.rect.getOrNull(1) ?: 0f
+                                                doc.viewer.goToPage(parent.page.toInt(), (y - 40f).coerceAtLeast(0f))
+                                                vm.selectedComment = doc to parent
+                                            },
+                                            onReply = { vm.replyPrompt = ReplyPrompt(doc, thread.first()) },
+                                            onMenu = { menu = ListMenu.Comment(cm) },
+                                            status = if (i == 0) statusOf(cm) else null,
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
@@ -241,29 +358,152 @@ fun CommentListScreen(vm: AppViewModel, doc: OpenDocument) {
             }
         }
     }
-    menuFor?.let { cm ->
-        PdfSheet(onDismiss = { menuFor = null }, dim = true) {
+    when (val m = menu) {
+        null -> Unit
+        ListMenu.Overflow -> PdfSheet(onDismiss = { menu = null }, dim = true) {
+            val canAdd = doc.info.allowsAnnotation && doc.info.readOnlyReason == null
+            fun pick(action: () -> Unit) {
+                menu = null
+                action()
+            }
+            if (threads.isNotEmpty()) {
+                SheetRow(LucideIcons.Share2, stringResource(R.string.comments_share), { pick { vm.exportComments(doc, share = true) } })
+                SheetRow(LucideIcons.FileDown, stringResource(R.string.comments_save), { pick { vm.exportComments(doc, share = false) } })
+            }
+            SheetRow(LucideIcons.FileInput, stringResource(R.string.comments_import), { pick { vm.pickCommentsImport(doc) } }, enabled = canAdd)
+            if (threads.isNotEmpty()) {
+                SheetRow(LucideIcons.FileText, stringResource(R.string.comments_summarize), { menu = ListMenu.Summary }, chevron = true)
+                SheetRow(
+                    LucideIcons.Copy,
+                    stringResource(if (filtering) R.string.comments_copy_shown else R.string.comments_copy_all),
+                    { pick { vm.copyComments(doc, shown.map { it.first() }) } },
+                )
+            }
+            if (vm.copiedComments.isNotEmpty()) {
+                SheetRow(LucideIcons.ClipboardPaste, stringResource(R.string.comments_paste), { pick { vm.pasteComments(doc) } }, enabled = canAdd)
+            }
+            val hidden = doc.info.commentsHidden
+            SheetRow(
+                if (hidden) LucideIcons.Eye else LucideIcons.EyeOff,
+                stringResource(if (hidden) R.string.comments_show_all else R.string.comments_hide_all),
+                { pick { vm.setCommentsHidden(doc, !hidden) } },
+            )
+            Spacer(Modifier.height(8.dp))
+        }
+        ListMenu.Summary -> PdfSheet(onDismiss = { menu = null }, dim = true) {
+            SheetHeaderText(stringResource(R.string.comments_summarize_sort))
+            for ((sort, label) in listOf(
+                "page" to R.string.comments_sort_page, "author" to R.string.comments_sort_author,
+                "date" to R.string.comments_sort_date, "type" to R.string.comments_sort_type,
+            )) SheetRow(null, stringResource(label), {
+                menu = null
+                vm.summarizeComments(doc, sort)
+            })
+            Spacer(Modifier.height(8.dp))
+        }
+        is ListMenu.Comment -> PdfSheet(onDismiss = { menu = null }, dim = true) {
+            val cm = m.c
             val text = cm.contents?.takeIf { it.isNotBlank() }
+            val reply = cm.replyTo != null
             if (text != null) {
                 SheetRow(LucideIcons.Copy, stringResource(R.string.comments_copy_text), {
-                    menuFor = null
+                    menu = null
                     vm.copyText(text)
                 })
             }
             if (text != null && !cm.locked) {
                 SheetRow(LucideIcons.Pencil, stringResource(R.string.comments_edit), {
-                    menuFor = null
+                    menu = null
                     vm.selectedComment = doc to cm
+                })
+            }
+            if (!reply) {
+                SheetRow(LucideIcons.CircleCheck, stringResource(R.string.comments_set_status), { menu = ListMenu.Status(cm) }, chevron = true)
+                SheetRow(if (cm.locked) LucideIcons.LockOpen else LucideIcons.Lock, stringResource(if (cm.locked) R.string.comments_unlock else R.string.comments_lock), {
+                    menu = null
+                    vm.lockComment(doc, cm, !cm.locked)
+                })
+                if (cm.subtype != "Sound") SheetRow(LucideIcons.CopyPlus, stringResource(R.string.comments_copy_comment), {
+                    menu = null
+                    vm.copyComments(doc, listOf(cm))
                 })
             }
             if (!cm.locked) {
                 SheetRow(LucideIcons.Trash2, stringResource(R.string.common_delete), {
-                    menuFor = null
+                    menu = null
                     vm.deleteComment(doc, cm)
                 })
             }
             Spacer(Modifier.height(8.dp))
         }
+        is ListMenu.Status -> PdfSheet(onDismiss = { menu = null }, dim = true) {
+            SheetHeaderText(stringResource(R.string.comments_set_status))
+            val current = statusOf(m.c)?.lowercase() ?: "none"
+            for ((status, label) in STATUSES) SheetRow(null, stringResource(label), {
+                menu = null
+                if (status != current) vm.setCommentStatus(doc, m.c, status)
+            }, checked = status == current)
+            Spacer(Modifier.height(8.dp))
+        }
+    }
+}
+
+/** A sheet's plain heading (for a choice that follows a menu row). */
+@Composable
+private fun SheetHeaderText(text: String) {
+    Text(text, color = pdfColors.text, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 16.dp, top = 12.dp, bottom = 8.dp))
+}
+
+/** A row of chips that scrolls sideways when it doesn't fit. */
+@Composable
+private fun ChipRow(content: @Composable RowScope.() -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        content = content,
+    )
+}
+
+/** One filter chip: outlined, filled with the pressed colour when on. */
+@Composable
+private fun FilterChipText(label: String, selected: Boolean, icon: androidx.compose.ui.graphics.vector.ImageVector? = null, onClick: () -> Unit) {
+    val c = pdfColors
+    Row(
+        Modifier.heightIn(min = 36.dp).clip(RoundedCornerShape(18.dp))
+            .background(if (selected) c.pressed else Color.Transparent)
+            .border(1.dp, if (selected) c.accent else c.divider, RoundedCornerShape(18.dp))
+            .selectable(selected = selected, role = Role.Checkbox, onClick = onClick)
+            .padding(horizontal = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (icon != null) {
+            Icon(icon, null, tint = if (selected) c.accent else c.icon, modifier = Modifier.size(16.dp))
+            Spacer(Modifier.width(6.dp))
+        }
+        Text(
+            label, color = if (selected) c.accent else c.text, fontSize = 14.sp,
+            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal, maxLines = 1,
+            overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 160.dp),
+        )
+    }
+}
+
+/** A page's handwriting folded into one row: "12 drawings", which opens them. */
+@Composable
+private fun DrawingsRow(count: Int, last: Boolean, onExpand: () -> Unit) {
+    val c = pdfColors
+    Row(
+        Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable(role = Role.Button, onClick = onExpand)
+            .padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = if (last) 12.dp else 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(Modifier.size(32.dp).clip(CircleShape).background(c.pressed), contentAlignment = Alignment.Center) {
+            Icon(LucideIcons.PenLine, null, tint = c.icon, modifier = Modifier.size(18.dp))
+        }
+        Spacer(Modifier.width(8.dp))
+        Text(plural(R.plurals.comments_drawings, count, count), color = c.label, fontSize = 15.sp, fontStyle = FontStyle.Italic, modifier = Modifier.weight(1f))
+        Icon(LucideIcons.ChevronDown, stringResource(R.string.comments_expand), tint = c.icon, modifier = Modifier.size(22.dp))
     }
 }
 
@@ -285,6 +525,8 @@ internal fun CommentRow(
     /** In the comment panel: no action line over text, and the ⋮ menu drawn by the caller. */
     panel: Boolean = false,
     menu: @Composable () -> Unit = {},
+    /** Its review status, shown as a badge after the date (the list's first row of a thread). */
+    status: String? = null,
 ) {
     val c = pdfColors
     val density = LocalDensity.current
@@ -310,7 +552,20 @@ internal fun CommentRow(
                         cm.author?.takeIf { it.isNotBlank() } ?: stringResource(R.string.comments_guest), color = c.label, fontSize = 16.sp, fontWeight = FontWeight.SemiBold,
                         maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 200.dp),
                     )
-                    commentDateLabel(cm.modified, stringResource(R.string.common_today), stringResource(R.string.common_yesterday))?.let { Text(it, color = c.textTertiary, fontSize = 16.sp) }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        commentDateLabel(cm.modified, stringResource(R.string.common_today), stringResource(R.string.common_yesterday))?.let { Text(it, color = c.textTertiary, fontSize = 16.sp) }
+                        if (status != null) {
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                stringResource(statusLabel(status)), color = c.accent, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
+                                modifier = Modifier.clip(RoundedCornerShape(10.dp)).background(c.pressed).padding(horizontal = 8.dp, vertical = 2.dp),
+                            )
+                        }
+                        if (cm.locked && !reply) {
+                            Spacer(Modifier.width(6.dp))
+                            Icon(LucideIcons.Lock, stringResource(R.string.comments_locked), tint = c.textTertiary, modifier = Modifier.size(15.dp))
+                        }
+                    }
                 }
                 Box {
                     BarIcon(LucideIcons.EllipsisVertical, stringResource(R.string.comments_options), onMenu, size = 40.dp)
@@ -387,9 +642,9 @@ private fun Avatar(modifier: Modifier) {
     }
 }
 
-/** No comments yet: a heading and a line on how to add one. */
+/** No comments yet: a heading, a line on how to add one, and Add comment (when the document allows it). */
 @Composable
-private fun EmptyComments() {
+private fun EmptyComments(onAdd: (() -> Unit)?) {
     val c = pdfColors
     Column(
         Modifier.fillMaxSize().padding(horizontal = 64.dp),
@@ -401,6 +656,14 @@ private fun EmptyComments() {
         Text(stringResource(R.string.comments_empty_title), color = c.text, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
         Spacer(Modifier.height(8.dp))
         Text(stringResource(R.string.comments_empty_body), color = c.textSecondary, fontSize = 17.sp, textAlign = TextAlign.Center)
+        if (onAdd != null) {
+            Spacer(Modifier.height(20.dp))
+            Text(
+                stringResource(R.string.comments_add), color = c.toolAccent, fontSize = 16.sp, fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.heightIn(min = 48.dp).clip(RoundedCornerShape(24.dp)).border(1.dp, c.toolAccent, RoundedCornerShape(24.dp))
+                    .clickable(role = Role.Button, onClick = onAdd).padding(horizontal = 24.dp, vertical = 12.dp),
+            )
+        }
         Spacer(Modifier.height(80.dp))
     }
 }
@@ -450,59 +713,6 @@ private fun <T> DigestChoice(@androidx.annotation.StringRes title: Int, values: 
                 colors = androidx.compose.material3.RadioButtonDefaults.colors(selectedColor = c.toolAccent, unselectedColor = c.icon),
             )
             Text(stringResource(label(v)), color = c.text, fontSize = 15.sp)
-        }
-    }
-}
-
-/** Chips over the comment list: All, then the kinds present, then the author picker when several wrote. */
-@Composable
-private fun CommentFilters(
-    threads: List<List<CommentInfo>>,
-    kind: CommentKind?, onKind: (CommentKind?) -> Unit,
-    author: String?, onAuthor: (String?) -> Unit,
-) {
-    val c = pdfColors
-    val kinds = remember(threads) { CommentKind.entries.filter { k -> threads.any { commentKind(it.first().subtype) == k } } }
-    val authors = remember(threads) { threadAuthors(threads) }
-    @Composable
-    fun chip(label: String, selected: Boolean, onClick: () -> Unit) {
-        Text(
-            label, color = if (selected) c.onAccent else c.text, fontSize = 14.sp, maxLines = 1,
-            modifier = Modifier.clip(RoundedCornerShape(16.dp))
-                .background(if (selected) c.accent else c.pressed)
-                .clickable(role = Role.RadioButton, onClick = onClick)
-                .semantics { this.selected = selected }
-                .heightIn(min = 32.dp).padding(horizontal = 12.dp, vertical = 6.dp),
-        )
-    }
-    Row(
-        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 8.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically,
-    ) {
-        chip(stringResource(R.string.comments_filter_all), kind == null && author == null) { onKind(null); onAuthor(null) }
-        kinds.forEach { k ->
-            val label = stringResource(
-                when (k) {
-                    CommentKind.Notes -> R.string.comments_filter_notes
-                    CommentKind.Highlights -> R.string.comments_filter_highlights
-                    CommentKind.Ink -> R.string.comments_filter_ink
-                    CommentKind.Shapes -> R.string.comments_filter_shapes
-                    CommentKind.Stamps -> R.string.comments_filter_stamps
-                },
-            )
-            chip(label, kind == k) { onKind(if (kind == k) null else k) }
-        }
-        if (authors.size > 1) {
-            Box {
-                var open by remember { mutableStateOf(false) }
-                chip(author ?: stringResource(R.string.comments_filter_author), author != null) { open = true }
-                androidx.compose.material3.DropdownMenu(expanded = open, onDismissRequest = { open = false }, containerColor = c.menu) {
-                    androidx.compose.material3.DropdownMenuItem(text = { Text(stringResource(R.string.comments_filter_anyone), color = c.text) }, onClick = { open = false; onAuthor(null) })
-                    authors.forEach { a ->
-                        androidx.compose.material3.DropdownMenuItem(text = { Text(a, color = c.text) }, onClick = { open = false; onAuthor(a) })
-                    }
-                }
-            }
         }
     }
 }

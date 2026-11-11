@@ -600,7 +600,7 @@
     <string name="sheet_pages">Pages</string>
     <string name="sheet_attachments">Pièces jointes</string>
     <string name="sheet_bookmarks_contents">Signets et table des matières</string>
-    <string name="sheet_comment_list">Liste des commentaires</string>
+    <string name="sheet_comment_list">Commentaires</string>
     <string name="sheet_add_bookmark">Ajouter un signet</string>
     <string name="sheet_remove_bookmark">Supprimer le signet</string>
     <string name="sheet_export_as">Exporter en...</string>
@@ -656,7 +656,7 @@
     <string name="comments_reply">Répondre</string>
     <string name="comments_reply_hint">Répondre</string>
     <string name="comments_avatar">Avatar</string>
-    <string name="comments_empty_title">Pour commencer</string>
+    <string name="comments_empty_title">Aucun commentaire pour l\'instant</string>
     <string name="comments_empty_body">Les commentaires ajoutés avec les outils de commentaire apparaissent ici.</string>
 
     <!-- Comment List: what a comment did, in italics under its author -->
