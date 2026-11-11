@@ -1,5 +1,7 @@
 package io.github.artcraftandroid.pdfcraft.ui.viewer
 
+import io.github.artcraftandroid.pdfcraft.ui.undoLabel
+import io.github.artcraftandroid.pdfcraft.ui.redoLabel
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -118,13 +120,15 @@ fun MoreSheet(vm: AppViewModel, doc: OpenDocument) {
         Column(Modifier.verticalScroll(scroll).padding(top = 5.dp)) {
             SheetRow(LucideIcons.Info, stringResource(R.string.file_details_title), { ctl.sheet = ViewerSheet.FileDetails }, chevron = true)
             SheetRow(LucideIcons.Glasses, stringResource(R.string.sheet_view_settings), { ctl.sheet = ViewerSheet.ViewSettings }, chevron = true)
+            SheetRow(LucideIcons.Presentation, stringResource(R.string.sheet_present), { close(); vm.startPresenting(doc) })
             SheetRow(LucideIcons.LayoutGrid, stringResource(R.string.sheet_pages), {
                 close()
                 // Draft ink keeps page numbers; add it before pages can move or go away.
                 doc.commitTool?.invoke()
                 ctl.pagesOpen = true
             }, chevron = true)
-            if (doc.info.attachments > 0u) SheetRow(LucideIcons.Paperclip, stringResource(R.string.sheet_attachments), { ctl.sheet = ViewerSheet.Attachments }, chevron = true)
+            SheetRow(LucideIcons.Paperclip, stringResource(R.string.sheet_attachments), { ctl.sheet = ViewerSheet.Attachments }, chevron = true)
+            if (doc.info.layers > 0u) SheetRow(LucideIcons.Layers, stringResource(R.string.sheet_layers), { ctl.sheet = ViewerSheet.Layers }, chevron = true)
             SheetRow(LucideIcons.Bookmark, stringResource(R.string.sheet_bookmarks_contents), { ctl.sheet = ViewerSheet.Bookmarks }, chevron = true)
             SheetRow(LucideIcons.MessagesSquare, stringResource(R.string.sheet_comment_list), { ctl.sheet = ViewerSheet.Comments }, chevron = true)
             SheetRow(LucideIcons.ShieldCheck, stringResource(R.string.sign_signatures), { ctl.sheet = ViewerSheet.Signatures }, chevron = true)
@@ -134,6 +138,7 @@ fun MoreSheet(vm: AppViewModel, doc: OpenDocument) {
                 { close(); vm.toggleBookmark(doc) },
             )
             SheetRow(LucideIcons.Volume2, stringResource(R.string.common_tool_read_aloud), { close(); vm.startReadAloud(doc) })
+            SheetRow(LucideIcons.Clock, stringResource(R.string.focus_timer), { ctl.sheet = ViewerSheet.FocusTimer })
             SheetRow(LucideIcons.FilePenLine, stringResource(R.string.common_tool_edit_pdf), { close(); vm.enterTool(doc, ViewerTool.Edit) })
             GroupDivider()
             SheetRow(LucideIcons.FileOutput, stringResource(R.string.sheet_export_as), { close(); vm.openExport(doc) })
@@ -144,11 +149,13 @@ fun MoreSheet(vm: AppViewModel, doc: OpenDocument) {
                 { ctl.sheet = ViewerSheet.OcrConfidence }, chevron = true)
             SheetRow(LucideIcons.Combine, stringResource(R.string.common_tool_combine), { close(); vm.openCombine(doc) })
             SheetRow(LucideIcons.FileLock2, stringResource(R.string.common_tool_set_password), { close(); vm.openProtect(doc) })
+            SheetRow(LucideIcons.BrushCleaning, stringResource(R.string.hidden_title), { ctl.sheet = ViewerSheet.HiddenInfo }, chevron = true)
+            SheetRow(LucideIcons.Stamp, stringResource(R.string.flatten_title), { close(); vm.flattenPrompt = doc }, enabled = canEditDocument(doc))
             SheetRow(LucideIcons.FilePlus2, stringResource(R.string.common_tool_create_pdf), { close(); vm.openCreate() })
             if (doc.info.undo != null || doc.info.redo != null) {
                 GroupDivider()
-                doc.info.undo?.let { SheetRow(LucideIcons.Undo2, stringResource(R.string.sheet_undo_action, it), { close(); vm.undo(doc) }) }
-                doc.info.redo?.let { SheetRow(LucideIcons.Redo2, stringResource(R.string.sheet_redo_action, it), { close(); vm.redo(doc) }) }
+                doc.info.undoLabel?.let { SheetRow(LucideIcons.Undo2, stringResource(R.string.sheet_undo_action, it), { close(); vm.undo(doc) }) }
+                doc.info.redoLabel?.let { SheetRow(LucideIcons.Redo2, stringResource(R.string.sheet_redo_action, it), { close(); vm.redo(doc) }) }
             }
             GroupDivider()
             SheetRow(LucideIcons.Copy, stringResource(R.string.common_save_copy), { close(); vm.saveCopyAs(doc) })
@@ -205,6 +212,11 @@ fun ViewSettingsSheet(vm: AppViewModel, doc: OpenDocument) {
             PdfSwitch(ctl.nightMode, { vm.setNightMode(doc, it); ctl.sheet = ViewerSheet.None })
         }
         ReadingColorsPicker(ctl.readingColors, enabled = !doc.info.preparing) { vm.setReadingColors(doc, it) }
+        GroupDivider()
+        // a clean look at the page under the annotations; the file doesn't change (#155)
+        SheetRow(LucideIcons.EyeOff, stringResource(R.string.sheet_hide_annotations), { vm.setCommentsHidden(doc, !doc.info.commentsHidden) }, enabled = !doc.info.preparing) {
+            PdfSwitch(doc.info.commentsHidden, { vm.setCommentsHidden(doc, it) })
+        }
         Spacer(Modifier.height(24.dp))
     }
 }
@@ -284,7 +296,9 @@ fun BookmarksSheet(vm: AppViewModel, doc: OpenDocument) {
                             enabled = enabled,
                             onClick = { manage = false; onClick() },
                         )
+                    item(LucideIcons.SquarePen, stringResource(R.string.contents_edit_title), !locked) { ctl.sheet = ViewerSheet.EditContents }
                     item(LucideIcons.ListTree, stringResource(R.string.sheet_contents_from_headings), !headingsLocked) { ctl.sheet = ViewerSheet.TextStyles }
+                    if (doc.info.tagged) item(LucideIcons.Heading, stringResource(R.string.contents_from_tags), !locked) { vm.editBookmark(doc, "bookmark_from_structure", null) }
                     item(LucideIcons.Copy, stringResource(R.string.sheet_contents_copy_from_pdf), !locked) { vm.pickEmbeddedBookmarksCopy(doc) }
                     if (hasOutline) item(LucideIcons.FileOutput, stringResource(R.string.sheet_contents_backup), true) { vm.exportEmbeddedBookmarks(doc) }
                     item(LucideIcons.FileInput, stringResource(R.string.sheet_contents_restore), !locked) { vm.pickEmbeddedBookmarksImport(doc) }
@@ -443,40 +457,6 @@ private fun UserBookmarkRow(name: String, page: Int, renaming: Boolean, onOpen: 
                 androidx.compose.material3.DropdownMenuItem(text = { Text(stringResource(R.string.sheet_delete_all), color = c.text) }, onClick = { menu = false; onDeleteAll() })
             }
         }
-    }
-}
-
-/** Attachments: the embedded files; a PDF opens in the viewer, anything else in another app. */
-@Composable
-fun AttachmentsSheet(vm: AppViewModel, doc: OpenDocument) {
-    val c = pdfColors
-    val ctl = doc.controller
-    var list by remember { mutableStateOf<List<AttachmentInfo>>(emptyList()) }
-    LaunchedEffect(doc.info.generation) { list = vm.attachments(doc) }
-    // the document's own files, as the reference lists them (a comment's file is opened from the comment)
-    val files = list.filter { !it.onPage }
-    PdfSheet(onDismiss = { ctl.sheet = ViewerSheet.None }, maxHeightFraction = 0.7f) {
-        // the reference sets this title up level with the handle and its back arrow below it
-        Box(Modifier.fillMaxWidth().height(44.dp)) {
-            Text(
-                stringResource(R.string.sheet_attachments), color = c.text, fontSize = 17.sp, fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.align(Alignment.TopStart).offset(x = 92.dp, y = (-12).dp),
-            )
-            BarIcon(LucideIcons.ChevronLeft, stringResource(R.string.common_back), { ctl.sheet = ViewerSheet.More }, modifier = Modifier.align(Alignment.TopStart).offset(x = 3.dp, y = (-5).dp))
-        }
-        LazyColumn {
-            items(files) { a ->
-                Row(
-                    Modifier.fillMaxWidth().clickable { ctl.sheet = ViewerSheet.None; vm.openAttachment(doc, a.name) }.padding(start = 24.dp, end = 20.dp, top = 16.dp, bottom = 16.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Icon(LucideIcons.FileText, null, tint = c.icon, modifier = Modifier.size(24.dp))
-                    Spacer(Modifier.width(14.dp))
-                    Text(a.name, color = c.text, fontSize = 16.sp, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-                }
-            }
-        }
-        Spacer(Modifier.height(8.dp))
     }
 }
 

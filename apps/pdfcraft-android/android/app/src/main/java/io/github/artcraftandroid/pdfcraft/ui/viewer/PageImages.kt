@@ -96,6 +96,8 @@ class PageImages(
     private val inFlight = HashSet<ImageKey>()
     private val failures = RenderFailures()
     private var bytes = 0
+    /** Bumped by [invalidate]: a render started before it is of the old view and is dropped. */
+    private var viewEpoch = 0
     private val signal = Channel<Unit>(Channel.CONFLATED)
 
     /** Bumped whenever an image arrives: the canvas reads it to redraw. */
@@ -107,13 +109,32 @@ class PageImages(
 
     init {
         repeat(workers) { scope.launch(job) { work() } }
+        synchronized(live) { live.add(this) }
     }
 
     /** Stop the workers and drop the images (the document closed). */
     fun close() {
+        synchronized(live) { live.remove(this) }
         firstCanvas.cancel()
         job.cancel()
         clear()
+    }
+
+    /** Drop every image the view does not want now (the app went to the background, #92). */
+    fun trimToWanted() {
+        val keep = synchronized(lock) { wanted.mapTo(HashSet()) { it.key } }
+        trim(keep)
+    }
+
+    companion object {
+        /** The documents' image caches, for memory trims. */
+        private val live = java.util.Collections.newSetFromMap(java.util.WeakHashMap<PageImages, Boolean>())
+
+        /** [trimToWanted] on every open document. */
+        fun trimAll() {
+            val all = synchronized(live) { live.toList() }
+            all.forEach { it.trimToWanted() }
+        }
     }
 
     /** The images the view wants now, most wanted first. */
@@ -132,11 +153,40 @@ class PageImages(
 
     fun get(key: ImageKey): PageImage? = synchronized(lock) { cache[key] }
 
+    /**
+     * The same generation now draws differently (a layer was shown or hidden): render what is in
+     * view again. The old pixels stay as the fallback until the new ones replace them.
+     */
+    fun invalidate() {
+        synchronized(lock) {
+            viewEpoch++
+            cache.clear()
+            failed.clear()
+            bytes = 0
+        }
+        signal.trySend(Unit)
+    }
+
     /** The newest whole-page image of [page], whatever its generation. */
     fun latestBase(page: Int): PageImage? = synchronized(lock) { fallback[page] }
 
     /** The newest cached tile [tile] of [page] at [level], whatever its generation. */
     fun latestTile(page: Int, level: Int, tile: Int): PageImage? = synchronized(lock) { tileFallback[Triple(page, level, tile)] }
+
+    /**
+     * One region of a page rendered now and not cached (the zoom box's sharp background, #130).
+     * Null when the render fails or the document closed.
+     */
+    suspend fun renderRegion(page: Int, scale: Float, region: TileRect): ImageBitmap? = try {
+        withContext(engine.renders + job) {
+            engine.session.renderPageCompact(doc, page.toUInt(), scale, region, compact).toBitmap().asImageBitmap()
+        }
+    } catch (e: kotlinx.coroutines.CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        Log.w("PdfCraft", "zoom box render of page $page failed: ${e.message}")
+        null
+    }
 
     /** Forget everything (the document was replaced). */
     fun clear() = synchronized(lock) {
@@ -159,6 +209,7 @@ class PageImages(
         }
         fallback.values.retainAll { it.key in keep }
         tileFallback.values.retainAll { it.key in keep }
+        version++
     }
 
     private fun next(): ImageRequest? = synchronized(lock) {
@@ -174,6 +225,7 @@ class PageImages(
                 signal.receive()
                 continue
             }
+            val epoch = synchronized(lock) { viewEpoch }
             val image = try {
                 withContext(engine.renders) {
                     // #236: name what was drawn, and how many pixels a slow render had, so a report
@@ -204,7 +256,17 @@ class PageImages(
             } finally {
                 synchronized(lock) { inFlight.remove(r.key) }
             }
-            if (image != null) {
+            if (image != null && synchronized(lock) { epoch != viewEpoch }) {
+                // drawn with the view before invalidate(): ask for it again
+                signal.trySend(Unit)
+                continue
+            }
+            // #91: a tile finished after the view moved on (a fling, a pinch through several detail
+            // levels) is not cached, so it cannot push out images about to be needed. Whole pages
+            // are kept: they stand in while their page scrolls back.
+            if (image != null && !r.key.isBase && synchronized(lock) { wanted.none { it.key == r.key } }) {
+                OpenTiming.count("stale_tile_dropped", 1L)
+            } else if (image != null) {
                 synchronized(lock) {
                     failures.succeeded(r.key)
                     cache.put(r.key, image)?.let { bytes -= it.bytes }

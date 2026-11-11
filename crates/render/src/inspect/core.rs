@@ -59,15 +59,22 @@ pub fn inspect_with_trace(bytes: pdfcraft_cos::PdfBytes, password: Option<&str>,
         let lazy = trace
             .measure("native_inspect_lazy", || {
                 catch_unwind(AssertUnwindSafe(|| {
-                    let doc = LazyStructure::new(bytes.clone(), password).ok()?;
+                    let doc = trace.measure("native_inspect_structure", || LazyStructure::new(bytes.clone(), password)).ok()?;
                     let mut t = DocInfo { pages: tmp.pages.clone(), ..Default::default() };
-                    let inspector = Inspector::new(&doc);
+                    let mut inspector = trace.measure("native_inspect_index", || Inspector::new(&doc));
+                    inspector.trace = trace.clone();
                     if inspector.page_index.len() != t.pages.len() {
                         return None;
                     }
                     trace.measure("native_inspect_prefetch", || prefetch_annotations(&doc, &inspector));
                     inspector.fill(&mut t);
-                    (!doc.failed()).then_some(t)
+                    let failed = doc.failed();
+                    drop(inspector);
+                    // Android adaptation (#212): every object inspection read stays converted
+                    // until here; freeing them all took ~50-80 ms of a host open. Nothing reads
+                    // them any more, so they are freed on their own thread and opening goes on.
+                    trace.measure("native_inspect_release", move || release_in_background(doc));
+                    (!failed).then_some(t)
                 }))
             })
             .ok()
@@ -87,6 +94,15 @@ pub fn inspect_with_trace(bytes: pdfcraft_cos::PdfBytes, password: Option<&str>,
         info.warnings.push(UNLINKED_UPDATE.into());
     }
     Ok(info)
+}
+
+/// Drop `value` on a short-lived thread. If no thread can be started, the closure holding it is
+/// dropped right here instead, as it would have been without this.
+fn release_in_background<T: Send + 'static>(value: T) {
+    #[cfg(not(target_arch = "wasm32"))]
+    let _ = std::thread::Builder::new().name("inspect-release".into()).spawn(move || drop(value));
+    #[cfg(target_arch = "wasm32")]
+    drop(value);
 }
 
 /// Exact renderer page geometry without document-wide panel inspection.
@@ -235,13 +251,24 @@ pub(super) struct Inspector<'a> {
     /// The first page widget naming each field as its `/Parent`, built when a field has no widget
     /// among its `/Kids`.
     pub(super) parent_widgets: OnceCell<HashMap<ObjectId, ObjectId>>,
+    /// Android adaptation (#212): opt-in sub-stages of `fill`, recorded only by the lazy
+    /// inspection of an open whose timings are being recorded. Never changes what is read.
+    pub(super) trace: OpenTrace,
 }
 
 impl<'a> Inspector<'a> {
     pub(super) fn new(doc: &'a dyn Structure) -> Self {
         let page_ids = doc.page_ids();
         let page_index = page_ids.iter().copied().enumerate().map(|(index, id)| (id, index)).collect();
-        let mut me = Self { doc, page_ids, page_index, named: HashMap::new(), annotation_pages: OnceCell::new(), parent_widgets: OnceCell::new() };
+        let mut me = Self {
+            doc,
+            page_ids,
+            page_index,
+            named: HashMap::new(),
+            annotation_pages: OnceCell::new(),
+            parent_widgets: OnceCell::new(),
+            trace: OpenTrace::default(),
+        };
         let mut named = HashMap::new();
         if let Some(tree) =
             doc.catalog().ok().and_then(|c| c.get(b"Names").ok()).and_then(|o| me.dict(o)).and_then(|n| n.get(b"Dests").ok()).and_then(|o| me.dict(o))
@@ -300,39 +327,43 @@ impl<'a> Inspector<'a> {
             Err(reason) => info.warnings.push(format!("Page labels were skipped: {reason}; using physical page numbers.")),
         }
         let mut text_budget = MAX_LINK_ATTACHMENT_TEXT_BYTES;
-        if let Some(first) = catalog.get(b"Outlines").ok().and_then(|o| self.dict(o)).and_then(|d| d.get(b"First").ok()) {
-            (info.outline, info.outline_more) = self.outline_window(first, &mut text_budget);
-        }
-        self.annotations(info, &mut text_budget);
+        self.trace.measure("native_inspect_outline", || {
+            if let Some(first) = catalog.get(b"Outlines").ok().and_then(|o| self.dict(o)).and_then(|d| d.get(b"First").ok()) {
+                (info.outline, info.outline_more) = self.outline_window(first, &mut text_budget);
+            }
+        });
+        self.trace.measure("native_inspect_annotations", || self.annotations(info, &mut text_budget));
         self.transitions(info);
-        let mut walk = FieldWalk::default();
-        if let Some(form) = catalog.get(b"AcroForm").ok().and_then(|o| self.dict(o))
-            && let Ok(fields) = form.get(b"Fields").and_then(|o| self.resolve(o).as_array())
-        {
-            walk.roots = fields.iter().filter_map(|f| if let Object::Reference(id) = f { Some(*id) } else { None }).collect();
-            for f in fields {
-                self.field(f, None, &mut info.fields, &mut walk, 0);
-            }
-        }
-        // Widgets no `/Fields` entry reaches are fields too (Acrobat and the browsers fill them);
-        // each is adopted through its topmost unlisted `/Parent`, so a split field stays one.
-        for &pid in &self.page_ids {
-            let Ok(page_dict) = self.doc.get_dictionary(pid) else { continue };
-            let Ok(Object::Array(annots)) = page_dict.get(b"Annots").map(|o| self.resolve(o)) else { continue };
-            for a in annots {
-                let Some(d) = self.dict(a) else { continue };
-                if self.name(d, b"Subtype").as_deref() != Some("Widget")
-                    || (d.get(b"FT").is_err() && d.get(b"T").is_err() && d.get(b"Parent").is_err())
-                {
-                    continue;
-                }
-                if let Object::Reference(id) = a
-                    && let Some(root) = self.unlisted_field(*id, &walk.seen)
-                {
-                    self.field(&Object::Reference(root), None, &mut info.fields, &mut walk, 0);
+        self.trace.measure("native_inspect_fields", || {
+            let mut walk = FieldWalk::default();
+            if let Some(form) = catalog.get(b"AcroForm").ok().and_then(|o| self.dict(o))
+                && let Ok(fields) = form.get(b"Fields").and_then(|o| self.resolve(o).as_array())
+            {
+                walk.roots = fields.iter().filter_map(|f| if let Object::Reference(id) = f { Some(*id) } else { None }).collect();
+                for f in fields {
+                    self.field(f, None, &mut info.fields, &mut walk, 0);
                 }
             }
-        }
+            // Widgets no `/Fields` entry reaches are fields too (Acrobat and the browsers fill them);
+            // each is adopted through its topmost unlisted `/Parent`, so a split field stays one.
+            for &pid in &self.page_ids {
+                let Ok(page_dict) = self.doc.get_dictionary(pid) else { continue };
+                let Ok(Object::Array(annots)) = page_dict.get(b"Annots").map(|o| self.resolve(o)) else { continue };
+                for a in annots {
+                    let Some(d) = self.dict(a) else { continue };
+                    if self.name(d, b"Subtype").as_deref() != Some("Widget")
+                        || (d.get(b"FT").is_err() && d.get(b"T").is_err() && d.get(b"Parent").is_err())
+                    {
+                        continue;
+                    }
+                    if let Object::Reference(id) = a
+                        && let Some(root) = self.unlisted_field(*id, &walk.seen)
+                    {
+                        self.field(&Object::Reference(root), None, &mut info.fields, &mut walk, 0);
+                    }
+                }
+            }
+        });
         info.has_javascript |= info.fields.iter().any(|f| f.has_actions);
         let needs_rendering = catalog.get(b"NeedsRendering").ok().and_then(|o| self.resolve(o).as_bool().ok()).unwrap_or(false);
         if let Some(xfa) = catalog.get(b"AcroForm").ok().and_then(|o| self.dict(o)).and_then(|form| form.get(b"XFA").ok()) {
@@ -344,7 +375,7 @@ impl<'a> Inspector<'a> {
         }
         self.layers(catalog, &mut info.layers);
         info.layer_groups = self.layer_groups(catalog);
-        self.fonts(&mut info.fonts);
+        self.trace.measure("native_inspect_fonts", || self.fonts(&mut info.fonts));
         if let Some(names) = catalog.get(b"Names").ok().and_then(|o| self.dict(o)) {
             if let Some(ef) = names.get(b"EmbeddedFiles").ok().and_then(|o| self.dict(o)) {
                 let mut seen = HashSet::new();

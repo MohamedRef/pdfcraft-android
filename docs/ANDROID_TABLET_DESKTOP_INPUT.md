@@ -50,3 +50,13 @@ Synchronized the reviewed layout branch with main `952cc4a723f8fa3c1194a2312b504
 
 
 Final batch synchronization: main `380b77d6389188516c75810d94a0f2e732270c9e` includes sequentially merged outline export #25, import #26 and copy #28, with staging/native-source cancellation fixes. Current tablet integration includes that complete bookmark stack and requires a fresh exact-head run; the previous f74cb42 run 42285637888 passed before this final synchronization. Keep next-batch #30/#31/#32 drafts out of the current release. No manual Samsung tests have been completed here.
+
+## Keyboard and mouse annotation workflow (#153, 2026-11-11)
+
+- Keyboard shortcuts now default **on** (only a physical keyboard sends these keys). The Preferences switch still turns them off.
+- Tools: P pen, H highlight text, E eraser, L lasso, T text, N note, S shapes (again for the next shape). While drawing: 1-9 pen presets, `[` and `]` pen width.
+- Esc steps back: selection, selected comment, open sheet, Find, then the active tool. Ctrl+Z undo, Ctrl+Shift+Z or Ctrl+Y redo, Ctrl+F find, Ctrl+B bookmark, Delete removes the selected comment, Ctrl+P print, Ctrl and + or − zoom, Ctrl+/ lists them.
+- Page Down / Page Up / Space / Shift+Space turn pages (two at a time with two-page spreads). **N and P no longer turn pages**: they are now Note and Pen.
+- The viewer's shortcuts are offered to the system Meta+/ helper (`onProvideKeyboardShortcuts`).
+- Right click on the page: a comment's menu, else what a long press gives (word selection, picture, page menu). A right-button drag still pans.
+- Keys reach the viewer only through `Activity.onKeyDown`, i.e. when no focused Compose text field consumed them. Not yet verified on a device with a hardware keyboard.

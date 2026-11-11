@@ -251,15 +251,84 @@ private fun ToolChoice(selected: Boolean, name: String, description: String?, on
 fun CompressScreen(vm: AppViewModel, doc: OpenDocument) {
     val c = pdfColors
     var level by remember { mutableStateOf(1) }
+    var o by remember { mutableStateOf(vm.compressOptions) }
+    var target by remember { mutableStateOf(o.targetMb?.let { if (it == Math.floor(it)) it.toLong().toString() else it.toString() } ?: "") }
+    var audit by remember { mutableStateOf(false) }
     val levels = listOf(
         stringResource(R.string.tools_compress_high) to stringResource(R.string.tools_compress_high_desc),
         stringResource(R.string.tools_compress_medium) to stringResource(R.string.tools_compress_medium_desc),
         stringResource(R.string.tools_compress_low) to stringResource(R.string.tools_compress_low_desc),
     )
-    ToolPage(stringResource(R.string.common_tool_compress), { vm.toolScreen = null }, stringResource(R.string.tools_compress_action), true, { vm.compress(doc, level) }) {
-        OutlinedFileCard(vm, doc)
-        Text(stringResource(R.string.tools_compression_level), color = c.label, fontSize = 15.sp, modifier = Modifier.padding(start = 24.dp, top = 28.dp, bottom = 4.dp))
-        levels.forEachIndexed { i, (name, desc) -> ToolChoice(level == i, name, desc) { level = i } }
+    val targetOk = target.isEmpty() || target.toDoubleOrNull()?.let { it > 0 } == true
+    fun options() = o.copy(targetMb = target.toDoubleOrNull()?.takeIf { it > 0 })
+    ToolPage(stringResource(R.string.common_tool_compress), { vm.toolScreen = null }, stringResource(R.string.tools_compress_action), targetOk, {
+        val chosen = options()
+        vm.updateCompressOptions(chosen)
+        vm.compress(doc, level, chosen)
+    }) {
+        Column(Modifier.verticalScroll(rememberScrollState())) {
+            OutlinedFileCard(vm, doc)
+            Text(
+                stringResource(R.string.compress_whats_taking_space), color = c.accent, fontSize = 15.sp, fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.clickable(role = androidx.compose.ui.semantics.Role.Button) { audit = true }.padding(horizontal = 24.dp, vertical = 10.dp),
+            )
+            if (!o.enabled) {
+                Text(stringResource(R.string.tools_compression_level), color = c.label, fontSize = 15.sp, modifier = Modifier.padding(start = 24.dp, top = 18.dp, bottom = 4.dp))
+                levels.forEachIndexed { i, (name, desc) -> ToolChoice(level == i, name, desc) { level = i } }
+            }
+            Spacer(Modifier.height(8.dp))
+            SwitchRow(stringResource(R.string.compress_advanced), o.enabled) { o = o.copy(enabled = it) }
+            if (o.enabled) {
+                Text(stringResource(R.string.compress_target_size), color = c.label, fontSize = 15.sp, modifier = Modifier.padding(start = 24.dp, top = 8.dp, bottom = 4.dp))
+                io.github.artcraftandroid.pdfcraft.ui.PdfField(
+                    target, { v -> target = v.filter { it.isDigit() || it == '.' }.take(7) }, stringResource(R.string.compress_target_hint),
+                    modifier = Modifier.padding(horizontal = 24.dp), error = !targetOk,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                )
+                SwitchRow(stringResource(R.string.compress_for_phones), o.mobile) { o = o.copy(mobile = it) }
+                if (!o.mobile) {
+                    Text(stringResource(R.string.compress_resolution, o.ppi), color = c.text, fontSize = 15.sp, modifier = Modifier.padding(start = 24.dp, top = 8.dp))
+                    androidx.compose.material3.Slider(
+                        value = o.ppi.toFloat(), onValueChange = { o = o.copy(ppi = (it / 6).toInt() * 6) }, valueRange = 36f..600f,
+                        modifier = Modifier.padding(horizontal = 24.dp),
+                    )
+                    Text(stringResource(R.string.compress_quality, o.quality), color = c.text, fontSize = 15.sp, modifier = Modifier.padding(start = 24.dp))
+                    androidx.compose.material3.Slider(
+                        value = o.quality.toFloat(), onValueChange = { o = o.copy(quality = it.toInt()) }, valueRange = 10f..100f,
+                        modifier = Modifier.padding(horizontal = 24.dp),
+                    )
+                }
+                SwitchRow(stringResource(R.string.compress_remove_invalid_links), o.removeInvalidLinks) { o = o.copy(removeInvalidLinks = it) }
+                SwitchRow(stringResource(R.string.compress_discard_form_actions), o.discardFormActions) { o = o.copy(discardFormActions = it) }
+                SwitchRow(stringResource(R.string.compress_discard_tags), o.discardTags) { o = o.copy(discardTags = it) }
+                SwitchRow(stringResource(R.string.compress_discard_alternate_images), o.discardAlternateImages) { o = o.copy(discardAlternateImages = it) }
+            }
+            Spacer(Modifier.height(24.dp))
+        }
+    }
+    if (audit) SpaceAuditDialog(vm, doc) { audit = false }
+}
+
+/** What's taking space: each kind of content as a bar with its size and share (`doc_audit_space`). */
+@Composable
+private fun SpaceAuditDialog(vm: AppViewModel, doc: OpenDocument, onDismiss: () -> Unit) {
+    val c = pdfColors
+    var rows by remember { mutableStateOf<List<Triple<String, Long, Double>>?>(null) }
+    LaunchedEffect(Unit) { rows = vm.auditSpace(doc) ?: emptyList() }
+    PdfDialog(onDismiss = onDismiss, title = stringResource(R.string.compress_whats_taking_space), confirm = stringResource(R.string.common_ok), onConfirm = onDismiss, dismiss = null) {
+        val list = rows
+        if (list == null) { Text("…", color = c.textSecondary); return@PdfDialog }
+        Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState())) {
+            for ((label, bytes, percent) in list.filter { it.second > 0 }) {
+                Row(Modifier.fillMaxWidth().padding(top = 8.dp)) {
+                    Text(label, color = c.text, fontSize = 14.sp, modifier = Modifier.weight(1f))
+                    Text("${io.github.artcraftandroid.pdfcraft.ui.viewer.formatSize(bytes)} · ${"%.1f".format(percent)} %", color = c.textSecondary, fontSize = 13.sp)
+                }
+                Box(Modifier.padding(top = 4.dp).fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)).background(c.divider)) {
+                    Box(Modifier.fillMaxWidth((percent / 100.0).toFloat().coerceIn(0f, 1f)).height(6.dp).clip(RoundedCornerShape(3.dp)).background(c.toolAccent))
+                }
+            }
+        }
     }
 }
 
@@ -295,11 +364,21 @@ fun ProtectScreen(vm: AppViewModel, doc: OpenDocument) {
     var confirm by remember { mutableStateOf("") }
     var visible by remember { mutableStateOf(false) }
     var info by remember { mutableStateOf(false) }
+    // Advanced: a permissions password and what it restricts (#177)
+    var restrict by remember { mutableStateOf(false) }
+    var owner by remember { mutableStateOf("") }
+    var ownerConfirm by remember { mutableStateOf("") }
+    var rules by remember { mutableStateOf(Restrictions()) }
+    var removing by remember { mutableStateOf(false) }
     val focus = remember { androidx.compose.ui.focus.FocusRequester() }
     LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
-    val bad = pw.isNotEmpty() && (pw.length !in 6..128 || pw.any { it < '!' || it > '~' })
+    val bad = pw.isNotEmpty() && !passwordOk(pw)
     val mismatch = confirm.isNotEmpty() && confirm != pw
-    ToolPage(stringResource(R.string.common_tool_set_password), { vm.toolScreen = null }, stringResource(R.string.common_tool_set_password), pw.isNotEmpty() && confirm.isNotEmpty() && !bad && !mismatch, { vm.protect(doc, pw) },
+    val ownerBad = owner.isNotEmpty() && (!passwordOk(owner) || owner == pw)
+    val ownerMismatch = ownerConfirm.isNotEmpty() && ownerConfirm != owner
+    val args = if (mismatch || pw.isNotEmpty() && confirm.isEmpty() || restrict && (ownerMismatch || ownerConfirm.isEmpty())) null
+        else protectArgs(pw, if (restrict) owner else null, rules)
+    ToolPage(stringResource(R.string.common_tool_set_password), { vm.toolScreen = null }, stringResource(R.string.common_tool_set_password), args != null, { args?.let { vm.protect(doc, it) } },
         trailing = { BarIcon(LucideIcons.Info, stringResource(R.string.tools_about_passwords), { info = true }) }) {
         Column(Modifier.verticalScroll(rememberScrollState())) {
             Text(stringResource(R.string.tools_protect_intro), color = c.label, fontSize = 16.sp, modifier = Modifier.padding(horizontal = 24.dp))
@@ -307,6 +386,28 @@ fun ProtectScreen(vm: AppViewModel, doc: OpenDocument) {
             if (bad) Text(stringResource(R.string.tools_password_rule), color = c.red, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 24.dp, vertical = 4.dp))
             PasswordField(stringResource(R.string.tools_repeat_password), confirm, { confirm = it }, visible, { visible = !visible }, mismatch)
             if (mismatch) Text(stringResource(R.string.tools_password_mismatch), color = c.red, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 24.dp, vertical = 4.dp))
+            Spacer(Modifier.height(16.dp))
+            SwitchRow(stringResource(R.string.protect_restrict), restrict) { restrict = it }
+            if (restrict) {
+                Text(stringResource(R.string.protect_restrict_explain), color = c.textSecondary, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 24.dp))
+                PasswordField(stringResource(R.string.protect_permissions_password), owner, { owner = it }, visible, { visible = !visible }, ownerBad)
+                if (ownerBad) Text(stringResource(if (owner == pw) R.string.protect_passwords_differ else R.string.tools_password_rule), color = c.red, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 24.dp, vertical = 4.dp))
+                PasswordField(stringResource(R.string.tools_repeat_password), ownerConfirm, { ownerConfirm = it }, visible, { visible = !visible }, ownerMismatch)
+                if (ownerMismatch) Text(stringResource(R.string.tools_password_mismatch), color = c.red, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 24.dp, vertical = 4.dp))
+                Spacer(Modifier.height(8.dp))
+                SwitchRow(stringResource(R.string.protect_allow_printing), rules.printing) { rules = rules.copy(printing = it) }
+                SwitchRow(stringResource(R.string.protect_allow_changes), rules.changes) { rules = rules.copy(changes = it) }
+                SwitchRow(stringResource(R.string.protect_allow_copying), rules.copy) { rules = rules.copy(copy = it) }
+                SwitchRow(stringResource(R.string.protect_allow_screen_readers), rules.accessibility) { rules = rules.copy(accessibility = it) }
+            }
+            if (doc.info.encrypted) {
+                Spacer(Modifier.height(16.dp))
+                Text(
+                    stringResource(R.string.protect_remove), color = c.accent, fontSize = 16.sp, fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.clickable(role = androidx.compose.ui.semantics.Role.Button) { removing = true }.padding(horizontal = 24.dp, vertical = 12.dp),
+                )
+            }
+            Spacer(Modifier.height(24.dp))
         }
     }
     if (info) {
@@ -314,45 +415,96 @@ fun ProtectScreen(vm: AppViewModel, doc: OpenDocument) {
             Text(stringResource(R.string.tools_about_passwords_body), color = c.text, fontSize = 14.sp)
         }
     }
+    if (removing) {
+        PdfDialog(onDismiss = { removing = false }, title = stringResource(R.string.protect_remove), confirm = stringResource(R.string.protect_remove_action), onConfirm = { removing = false; vm.unprotect(doc) }) {
+            Text(stringResource(R.string.protect_remove_explain), color = c.text, fontSize = 14.sp)
+        }
+    }
 }
 
-/** Export PDF: Document (Word, RTF, Excel, PowerPoint) or Image (JPEG, PNG) of its pages. */
+@Composable
+private fun SwitchRow(label: String, checked: Boolean, onChange: (Boolean) -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().clickable(role = androidx.compose.ui.semantics.Role.Switch) { onChange(!checked) }.padding(horizontal = 24.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(label, color = pdfColors.text, fontSize = 16.sp, modifier = Modifier.weight(1f))
+        PdfSwitch(checked, onChange = onChange)
+    }
+}
+
+/**
+ * Export PDF: Document (Word, RTF, Excel, PowerPoint, web page, Markdown, plain text), Image of its
+ * pages (JPEG, PNG, TIFF at a chosen resolution and quality), or Pictures in the PDF (#173).
+ */
 @Composable
 fun ExportScreen(vm: AppViewModel, doc: OpenDocument) {
     val c = pdfColors
     var tab by remember { mutableStateOf(0) }
     // the image format used last time comes first chosen
-    var format by remember(tab) { mutableStateOf(if (tab == 1 && vm.lastImageFormat == "png") 1 else 0) }
-    val formats = if (tab == 0) {
-        listOf(
+    var format by remember(tab) { mutableStateOf(if (tab == 1) listOf("jpg", "png", "tif").indexOf(vm.lastImageFormat).coerceAtLeast(0) else 0) }
+    var dpi by remember { mutableStateOf(vm.imageDpi) }
+    var quality by remember { mutableStateOf(vm.imageQuality) }
+    var skipSmall by remember { mutableStateOf(true) }
+    val formats = when (tab) {
+        0 -> listOf(
             stringResource(R.string.tools_format_word) to "docx", stringResource(R.string.tools_format_rtf) to "rtf",
             stringResource(R.string.tools_format_excel) to "xlsx", stringResource(R.string.tools_format_powerpoint) to "pptx",
+            stringResource(R.string.export_format_html) to "html", stringResource(R.string.export_format_markdown) to "md",
+            stringResource(R.string.export_format_text) to "txt",
         )
-    } else {
-        listOf(stringResource(R.string.tools_format_jpeg) to "jpg", stringResource(R.string.tools_format_png) to "png")
+        1 -> listOf(stringResource(R.string.tools_format_jpeg) to "jpg", stringResource(R.string.tools_format_png) to "png", stringResource(R.string.export_format_tiff) to "tif")
+        else -> emptyList()
     }
-    ToolPage(stringResource(R.string.common_tool_export), { vm.toolScreen = null }, stringResource(R.string.tools_export_action), true, {
-        val ext = formats[format].second
-        if (tab == 0) vm.exportDocument(doc, ext) else vm.exportImages(doc, ext)
+    val textBlocked = doc.info.encrypted && !doc.info.allowsCopying
+    ToolPage(stringResource(R.string.common_tool_export), { vm.toolScreen = null }, stringResource(if (tab == 2) R.string.pages_save_to_folder else R.string.tools_export_action), !(tab != 1 && textBlocked), {
+        when (tab) {
+            0 -> vm.exportDocument(doc, formats[format].second)
+            1 -> { vm.updateImageSettings(dpi, quality); vm.exportImages(doc, formats[format].second) }
+            else -> vm.exportAllImages(doc, skipSmall, share = false)
+        }
     }) {
         // the tabs sit at the left, each underlined across its own label
         Box(Modifier.fillMaxWidth().padding(horizontal = 8.dp)) {
             Box(Modifier.align(Alignment.BottomStart).fillMaxWidth().height(1.dp).background(c.divider))
-            Row {
-                listOf(R.string.tools_export_document, R.string.tools_export_image).forEachIndexed { i, label ->
+            Row(Modifier.horizontalScroll(rememberScrollState())) {
+                listOf(R.string.tools_export_document, R.string.tools_export_image, R.string.export_pictures_in_pdf).forEachIndexed { i, label ->
                     Column(Modifier.clickable { tab = i }.padding(horizontal = 8.dp).width(androidx.compose.foundation.layout.IntrinsicSize.Max)) {
                         Text(stringResource(label), color = if (tab == i) c.label else c.text, fontSize = 16.sp, modifier = Modifier.padding(vertical = 12.dp))
                         Box(Modifier.fillMaxWidth().height(2.dp).background(if (tab == i) c.label else Color.Transparent))
                     }
-                    if (i == 0) Spacer(Modifier.width(14.dp))
+                    if (i < 2) Spacer(Modifier.width(14.dp))
                 }
             }
         }
         Spacer(Modifier.height(12.dp))
-        if (tab == 0 && doc.info.encrypted && !doc.info.allowsCopying) {
-            Text(stringResource(R.string.tools_export_not_allowed), color = c.red, fontSize = 14.sp, modifier = Modifier.padding(20.dp))
+        Column(Modifier.verticalScroll(rememberScrollState())) {
+            if (tab != 1 && textBlocked) {
+                Text(stringResource(R.string.tools_export_not_allowed), color = c.red, fontSize = 14.sp, modifier = Modifier.padding(20.dp))
+            }
+            formats.forEachIndexed { i, (label, _) -> ToolChoice(format == i, label, null) { format = i } }
+            if (tab == 1) {
+                Text(stringResource(R.string.export_resolution), color = c.label, fontSize = 15.sp, modifier = Modifier.padding(start = 24.dp, top = 16.dp, bottom = 4.dp))
+                for (d in listOf(72, 150, 300, 600)) ToolChoice(dpi == d, stringResource(R.string.export_dpi, d), null) { dpi = d }
+                if (formats.getOrNull(format)?.second == "jpg") {
+                    Text(stringResource(R.string.compress_quality, quality), color = c.text, fontSize = 15.sp, modifier = Modifier.padding(start = 24.dp, top = 12.dp))
+                    androidx.compose.material3.Slider(
+                        value = quality.toFloat(), onValueChange = { quality = it.toInt() }, valueRange = 10f..100f,
+                        modifier = Modifier.padding(horizontal = 24.dp),
+                    )
+                }
+            }
+            if (tab == 2) {
+                Text(stringResource(R.string.export_pictures_explain), color = c.text, fontSize = 15.sp, modifier = Modifier.padding(horizontal = 24.dp))
+                SwitchRow(stringResource(R.string.export_skip_small), skipSmall) { skipSmall = it }
+                Text(
+                    stringResource(R.string.common_share), color = c.accent, fontSize = 16.sp, fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.clickable(enabled = !textBlocked, role = androidx.compose.ui.semantics.Role.Button) { vm.exportAllImages(doc, skipSmall, share = true) }
+                        .padding(horizontal = 24.dp, vertical = 12.dp),
+                )
+            }
+            Spacer(Modifier.height(24.dp))
         }
-        formats.forEachIndexed { i, (label, _) -> ToolChoice(format == i, label, null) { format = i } }
     }
 }
 
@@ -377,6 +529,7 @@ fun CreateSourcesScreen(vm: AppViewModel) {
         Text(stringResource(R.string.tools_or_make_new), color = c.textSecondary, fontSize = 14.sp, modifier = Modifier.padding(start = 20.dp, top = 20.dp, bottom = 6.dp))
         Box(Modifier.padding(horizontal = 16.dp).fillMaxWidth().height(1.dp).background(c.divider))
         SourceRow(LucideIcons.Camera, stringResource(R.string.tools_scan_document)) { vm.toolScreen = null; vm.startScan() }
+        SourceRow(LucideIcons.BookOpen, stringResource(R.string.notebook_new)) { vm.toolScreen = null; vm.newNotebookOpen = true }
     }
 }
 
@@ -402,6 +555,7 @@ fun ToolScreenHost(vm: AppViewModel, screen: ToolScreen) {
         is ToolScreen.Crop -> CropScreen(vm, screen.doc)
         is ToolScreen.Export -> ExportScreen(vm, screen.doc)
         ToolScreen.Bates -> BatesScreen(vm)
+        ToolScreen.OcrBatch -> OcrBatchScreen(vm)
         ToolScreen.Scan -> ScanScreen(vm)
         ToolScreen.Create -> CreateSourcesScreen(vm)
     }
@@ -505,7 +659,7 @@ fun CombineScreen(vm: AppViewModel) {
 data class PickedFile(val uri: android.net.Uri, val name: String, val size: Long?)
 
 /** What a file picker was opened for. */
-enum class FilePickKind { Combine, Create, Insert, Open, DigitalId, Replace }
+enum class FilePickKind { Combine, Create, Insert, Open, DigitalId, Replace, Attach, Library }
 
 
 /**

@@ -1,6 +1,8 @@
 package io.github.artcraftandroid.pdfcraft.ui.viewer
 
 import androidx.compose.foundation.selection.selectable
+import io.github.artcraftandroid.pdfcraft.ui.undoLabel
+import io.github.artcraftandroid.pdfcraft.ui.redoLabel
 import io.github.artcraftandroid.pdfcraft.ui.safeTopPadding
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
@@ -84,12 +86,26 @@ fun PagesScreen(vm: AppViewModel, doc: OpenDocument, onClose: () -> Unit) {
     val selected = remember { mutableStateMapOf<Int, Boolean>() }
     val thumbs = remember(doc.info.generation) { mutableStateMapOf<Int, ImageBitmap>() }
     var insertMenu by remember { mutableStateOf(false) }
+    // the page a template page goes to, while its paper is being chosen
+    var templateAt by remember { mutableStateOf<Int?>(null) }
+    // the page being saved as a template, while it is being named
+    var savingTemplate by remember { mutableStateOf<Int?>(null) }
     var moreMenu by remember { mutableStateOf(false) }
     var labelsOpen by remember { mutableStateOf(false) }
     val customLabels = remember(doc.info.generation) { io.github.artcraftandroid.pdfcraft.ui.hasCustomLabels(doc.info.pages.map { it.label }) }
     val landscape = LocalConfiguration.current.screenWidthDp > LocalConfiguration.current.screenHeightDp
     val columns = if (landscape) 4 else 2
     val grid = rememberLazyGridState(initialFirstVisibleItemIndex = doc.viewer.currentPage)
+    // #95: keep the thumbnails of the pages near the ones in view only, not one bitmap (about
+    // 465 KB) for every page ever scrolled past; pages scrolled back to render again.
+    LaunchedEffect(grid, thumbs) {
+        androidx.compose.runtime.snapshotFlow {
+            grid.layoutInfo.visibleItemsInfo.let { (it.firstOrNull()?.index ?: 0) to (it.lastOrNull()?.index ?: 0) }
+        }.collect { (first, last) ->
+            val window = thumbnailWindow(first, last)
+            thumbs.keys.filter { it !in window }.forEach { thumbs.remove(it) }
+        }
+    }
     // dragging a page: its index and where it would drop
     var dragFrom by remember { mutableStateOf<Int?>(null) }
     var dragTo by remember { mutableStateOf<Int?>(null) }
@@ -142,7 +158,7 @@ fun PagesScreen(vm: AppViewModel, doc: OpenDocument, onClose: () -> Unit) {
                 color = c.label, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f),
             )
             if (organizing && exporting == null) {
-                UndoMenuButton(doc.info.undo != null, doc.info.redo != null, { vm.undo(doc) }, { vm.redo(doc) }, doc.info.undo, doc.info.redo)
+                UndoMenuButton(doc.info.undo != null, doc.info.redo != null, { vm.undo(doc) }, { vm.redo(doc) }, doc.info.undoLabel, doc.info.redoLabel)
                 Spacer(Modifier.width(6.dp))
             }
         }
@@ -336,10 +352,29 @@ fun PagesScreen(vm: AppViewModel, doc: OpenDocument, onClose: () -> Unit) {
             }
             io.github.artcraftandroid.pdfcraft.ui.SheetDivider()
             SheetRow(LucideIcons.File, stringResource(R.string.pages_blank_page), { insertMenu = false; vm.runTool(doc, "page_insert_blank", mapOf("at" to at)) })
+            SheetRow(LucideIcons.BookOpen, stringResource(R.string.notebook_template_page), { insertMenu = false; templateAt = at })
             SheetRow(LucideIcons.FileStack, stringResource(R.string.pages_from_file), { insertMenu = false; vm.pickInsertFile(doc, at) })
             SheetRow(LucideIcons.Camera, stringResource(R.string.pages_from_scan), { insertMenu = false; vm.insertScanAt = doc to at; vm.startScan() })
+            if (first != null && first == last) {
+                io.github.artcraftandroid.pdfcraft.ui.SheetDivider()
+                SheetRow(LucideIcons.BookmarkPlus, stringResource(R.string.notebook_save_as_template, first + 1), { insertMenu = false; savingTemplate = first })
+            }
             Spacer(Modifier.height(12.dp))
         }
+    }
+    templateAt?.let { at ->
+        io.github.artcraftandroid.pdfcraft.ui.home.TemplatePageSheet(vm, io.github.artcraftandroid.pdfcraft.engine.NotebookTemplate(), onDismiss = { templateAt = null }) { page ->
+            templateAt = null
+            vm.insertNotebookPage(doc, page, at)
+        }
+    }
+    savingTemplate?.let { index ->
+        var name by remember { mutableStateOf("") }
+        io.github.artcraftandroid.pdfcraft.ui.PdfDialog(
+            onDismiss = { savingTemplate = null }, title = stringResource(R.string.notebook_save_template_title),
+            confirm = stringResource(R.string.common_save),
+            onConfirm = { savingTemplate = null; vm.savePageAsTemplate(doc, index, name.ifBlank { doc.title }) },
+        ) { io.github.artcraftandroid.pdfcraft.ui.PdfField(name, { name = it.take(60) }, stringResource(R.string.notebook_name_hint)) }
     }
 }
 
@@ -358,3 +393,10 @@ private fun OrganizeItem(icon: ImageVector, label: String, enabled: Boolean, onC
         Text(label, color = if (enabled) c.label else c.label.copy(alpha = 0.35f), fontSize = 10.5.sp, maxLines = 1)
     }
 }
+
+/** Thumbnails kept on each side of the pages in view. */
+internal const val THUMBNAIL_MARGIN = 24
+
+/** The pages whose thumbnails the Pages grid keeps while pages [first]..[last] are in view (#95). */
+internal fun thumbnailWindow(first: Int, last: Int): IntRange =
+    (minOf(first, last) - THUMBNAIL_MARGIN).coerceAtLeast(0)..(maxOf(first, last) + THUMBNAIL_MARGIN)

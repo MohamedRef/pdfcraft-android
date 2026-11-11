@@ -44,7 +44,7 @@ import io.github.artcraftandroid.pdfcraft.ui.SplitMode
 import io.github.artcraftandroid.pdfcraft.ui.pdfColors
 
 @Composable
-private fun Choice(selected: Boolean, label: String, onClick: () -> Unit) {
+internal fun Choice(selected: Boolean, label: String, onClick: () -> Unit) {
     val c = pdfColors
     Row(
         Modifier.fillMaxWidth().clickable(role = Role.RadioButton, onClick = onClick).padding(horizontal = 12.dp, vertical = 2.dp),
@@ -56,7 +56,7 @@ private fun Choice(selected: Boolean, label: String, onClick: () -> Unit) {
 }
 
 @Composable
-private fun NumberField(value: String, onValue: (String) -> Unit, hint: String, decimal: Boolean = false, modifier: Modifier = Modifier) {
+internal fun NumberField(value: String, onValue: (String) -> Unit, hint: String, decimal: Boolean = false, modifier: Modifier = Modifier) {
     PdfField(
         value,
         { v -> onValue(v.filter { it.isDigit() || decimal && it == '.' }.take(6)) },

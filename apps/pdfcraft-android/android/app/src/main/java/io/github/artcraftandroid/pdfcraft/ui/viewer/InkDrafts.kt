@@ -15,6 +15,12 @@ internal sealed class DraftInkEdit {
     data class Moved(val strokes: List<InkStroke>, val offset: Offset) : DraftInkEdit()
     /** Lasso Delete of draft strokes, each restored at its own position in paint order. */
     data class Removed(val strokes: List<Pair<Int, InkStroke>>) : DraftInkEdit()
+    /**
+     * A smart-gesture stroke that became a text highlight or underline (#148): the markup is the
+     * document's own step [ownStep] (the session's step count right after it). Undoing this puts
+     * the raw stroke back and takes the markup back; a second Undo then removes the stroke.
+     */
+    data class BecameMarkup(val index: Int, val stroke: InkStroke, val ownStep: Int) : DraftInkEdit()
 }
 
 internal fun applyDraftInkEdit(strokes: SnapshotStateList<InkStroke>, edit: DraftInkEdit, forward: Boolean) {
@@ -25,6 +31,10 @@ internal fun applyDraftInkEdit(strokes: SnapshotStateList<InkStroke>, edit: Draf
         is DraftInkEdit.Removed -> {
             if (forward) edit.strokes.forEach { (_, s) -> strokes.remove(s) }
             else edit.strokes.sortedBy { it.first }.forEach { (i, s) -> strokes.add(i.coerceIn(0, strokes.size), s) }
+        }
+        is DraftInkEdit.BecameMarkup -> {
+            // Only the stroke's side; the caller undoes or redoes the document's markup step.
+            if (forward) strokes.remove(edit.stroke) else strokes.add(edit.index.coerceIn(0, strokes.size), edit.stroke)
         }
         is DraftInkEdit.Moved -> {
             val d = if (forward) edit.offset else -edit.offset
@@ -131,6 +141,12 @@ internal class DrawUndoSteps {
 
     /** Whether Redo goes to the document first: it undid something since the last draft was undone. */
     fun redoesDocumentFirst(): Boolean = ownUndone + olderUndone > 0
+
+    /** The top own step is taken back as part of a draft edit ([DraftInkEdit.BecameMarkup]), not as a document undo. */
+    fun releaseOwn() { own = (own - 1).coerceAtLeast(0) }
+
+    /** ...and put back by its redo. */
+    fun reclaimOwn() { own++ }
 
     fun canRedoDocument(documentHasRedo: Boolean): Boolean = documentHasRedo && redoKept
 

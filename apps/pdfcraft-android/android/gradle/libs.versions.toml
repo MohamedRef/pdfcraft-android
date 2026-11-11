@@ -9,7 +9,11 @@ kotlinxCoroutines = "1.10.2"
 # UniFFI's Kotlin bindings call the Rust library through JNA (Apache-2.0)
 jna = "5.19.1"
 junit = "4.13.2"
+# Android's org.json for JVM unit tests (the platform's copy is a stub there)
+orgJson = "20250517"
 exifinterface = "1.4.1"
+# Front-buffered wet ink (#128), behind a setting that is off by default
+graphicsCore = "1.0.4"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -23,7 +27,9 @@ androidx-compose-material3 = { group = "androidx.compose.material3", name = "mat
 kotlinx-coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "kotlinxCoroutines" }
 jna = { group = "net.java.dev.jna", name = "jna", version.ref = "jna" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
+org-json = { group = "org.json", name = "json", version.ref = "orgJson" }
 androidx-exifinterface = { group = "androidx.exifinterface", name = "exifinterface", version.ref = "exifinterface" }
+androidx-graphics-core = { group = "androidx.graphics", name = "graphics-core", version.ref = "graphicsCore" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

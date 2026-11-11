@@ -20,8 +20,8 @@ pub mod transition;
 
 pub use inspect::{
     Annotation, Attachment, AttachmentSource, DestView, DocInfo, Field, FieldKind, FontInfo, Layer, LayerOp, Link, LinkTarget, OutlineItem, PageInfo,
-    PageTransition, RemoteDestination, ReviewStates, TransitionStyle, Xfa, attachment_data, check_pages, inspect, inspect_geometry_keeping_parse, inspect_geometry_with_trace, ParsedPdf,
-    inspect_with_trace, link_replies, pretty_date, sound_wav, thread_tops,
+    PageTransition, ParsedPdf, RemoteDestination, ReviewStates, TransitionStyle, Xfa, attachment_data, attachment_data_with_limit, check_pages,
+    inspect, inspect_geometry_keeping_parse, inspect_geometry_with_trace, inspect_with_trace, link_replies, pretty_date, sound_wav, thread_tops,
 };
 pub use open_trace::{OpenStage, OpenTrace};
 pub use pixels::Pixels;

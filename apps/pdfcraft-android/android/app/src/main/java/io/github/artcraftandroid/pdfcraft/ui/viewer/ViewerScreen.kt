@@ -1,5 +1,7 @@
 package io.github.artcraftandroid.pdfcraft.ui.viewer
 
+import io.github.artcraftandroid.pdfcraft.ui.undoLabel
+import io.github.artcraftandroid.pdfcraft.ui.redoLabel
 import android.app.Activity
 import android.os.SystemClock
 import androidx.activity.compose.BackHandler
@@ -21,6 +23,7 @@ import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.absoluteOffset
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.windowInsetsBottomHeight
 import androidx.compose.foundation.layout.windowInsetsTopHeight
@@ -50,6 +53,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.clickable
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -163,6 +169,16 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
                 vm.pendingPage = null
                 vm.pendingSpot = null
             }
+            // a library search hit: its page, with the words found there highlighted
+            if (w > 0f) vm.pendingSearch?.let { (page, query) ->
+                vm.pendingSearch = null
+                doc.viewer.goToPage(page.coerceIn(0, doc.pageCount - 1))
+                if (query.isNotEmpty()) {
+                    doc.search.run(query, doc.pageCount, page.coerceIn(0, doc.pageCount - 1)) { first -> showHit(doc, first) }
+                    vm.whenSearchDone(doc)
+                    doc.controller.searching = true
+                }
+            }
         }
     }
 
@@ -208,6 +224,8 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
     BackHandler(enabled = jumpChipVisible && ctl.jumpsVersion >= 0 && ctl.jumps.canGoBack) {
         ctl.jumpBack(doc.viewer)
     }
+    // Back ends a presentation before anything else
+    BackHandler(enabled = ctl.presenting) { vm.stopPresenting(doc) }
 
     // The hint a tool shows when it starts.
     var hint by remember { mutableStateOf<String?>(null) }
@@ -301,6 +319,14 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
                 if (desktop && corner) zoomButtons.poke()
             },
             onWheelZoom = { if (desktop) zoomButtons.poke() },
+            // a right click: a comment's menu, else what a long press gives (a word, a picture, the page menu)
+            onSecondaryClick = { p, at ->
+                if (at != null && (gesturesForTool && vm.tapComment(doc, at))) Unit
+                else if (at != null && gesturesForTool) scope.launch {
+                    val slop = 12f / doc.viewer.pixelsPerPoint(at.page).coerceAtLeast(0.1f) * density.density
+                    if (!selection.selectWordAt(at, slop) && ctl.tool == ViewerTool.None && !vm.readingMode) vm.longPressPage(doc, at, p)
+                }
+            },
             onLongPress = { p, at ->
                 if (at != null) scope.launch {
                     val slop = 12f / doc.viewer.pixelsPerPoint(at.page).coerceAtLeast(0.1f) * density.density
@@ -320,6 +346,9 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
             },
         )
 
+        // Presenting: taps turn pages and a drag is the laser pointer, over the page alone.
+        if (ctl.presenting) PresentationLayer(doc.viewer)
+
         // The active tool takes the touches over the pages.
         ToolLayer(vm, doc)
         if (ctl.tool == ViewerTool.Edit) EditOverlay(vm, doc)
@@ -335,7 +364,7 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
 
         // Scrubber and page pill (continuous, three pages or more).
         Box(Modifier.fillMaxSize().then(cutoutSides)) {
-            if (vm.readingMode) {
+            if (vm.readingMode || ctl.presenting) {
                 Unit
             } else if (doc.pageCount >= 3 && doc.viewer.mode == PageMode.SinglePage) {
                 HorizontalScrubber(
@@ -360,6 +389,20 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
                 doc, visible = jumpChipVisible,
                 bottom = with(density) { doc.viewer.padBottom.toDp() },
             )
+            if (!vm.readingMode) FocusTimerPill(
+                vm, top = with(density) { doc.viewer.padTop.toDp() },
+                onOpen = { ctl.sheet = ViewerSheet.FocusTimer },
+                modifier = Modifier.align(Alignment.TopStart),
+            )
+
+            // Draw mode on the last page: add a page with the notebook's template (blank otherwise)
+            if (ctl.tool == ViewerTool.Draw && !vm.readingMode && doc.writable && doc.viewer.currentPage == doc.pageCount - 1) {
+                AddPageHandle(
+                    bottom = maxOf(96.dp, with(density) { doc.viewer.padBottom.toDp() } + 12.dp),
+                    onClick = { vm.insertNotebookPage(doc, null) },
+                    modifier = Modifier.align(Alignment.BottomCenter),
+                )
+            }
 
             if (desktop && !vm.readingMode) ZoomButtons(
                 doc.viewer,
@@ -367,7 +410,8 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
                 // above the bottom bar when it shows
                 bottom = maxOf(122.dp, with(density) { doc.viewer.padBottom.toDp() } + 12.dp),
                 onHover = { if (!ctl.barsVisible) zoomButtons.poke() },
-                modifier = Modifier.align(Alignment.BottomEnd),
+                // Left-handed: the physical right corner, away from the writing hand, in any language (#156).
+                modifier = Modifier.align(if (vm.toolPrefs.leftHanded) androidx.compose.ui.AbsoluteAlignment.BottomRight else Alignment.BottomEnd),
             )
         }
 
@@ -465,8 +509,8 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
                             onMore = { ctl.sheet = if (ctl.sheet == ViewerSheet.More) ViewerSheet.None else ViewerSheet.More },
                             moreOpen = ctl.sheet == ViewerSheet.More,
                             title = if (ctl.tool == ViewerTool.Edit) stringResource(R.string.common_tool_edit_pdf) else null,
-                            undoLabel = if (doc.localUndo != null) stringResource(R.string.viewer_undo_drawing) else doc.info.undo,
-                            redoLabel = if (doc.localUndo != null) stringResource(R.string.viewer_undo_drawing) else doc.info.redo,
+                            undoLabel = if (doc.localUndo != null) stringResource(R.string.viewer_undo_drawing) else doc.info.undoLabel,
+                            redoLabel = if (doc.localUndo != null) stringResource(R.string.viewer_undo_drawing) else doc.info.redoLabel,
                         )
                 }
                 }
@@ -494,15 +538,17 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
         AnimatedVisibility(
             visible = railVisible && ctl.barsVisible && !ctl.searching && !vm.readingMode &&
                 vm.readAloud == null && vm.fieldActions == null,
-            modifier = Modifier.align(if (prefsRail.railRight) Alignment.CenterEnd else Alignment.CenterStart)
-                .offset {
+            // Physical sides, not start/end: the rail's side follows the writing hand, which does
+            // not change with an Arabic (right-to-left) interface (#156). Drags are physical too.
+            modifier = Modifier.align(if (prefsRail.railRight) androidx.compose.ui.AbsoluteAlignment.CenterRight else androidx.compose.ui.AbsoluteAlignment.CenterLeft)
+                .absoluteOffset {
                     val initialX = if (prefsRail.railRight) viewportWidthPx - railWidthPx else 0f
                     IntOffset((clampedXpx - initialX).roundToInt(), clampedYpx.roundToInt())
                 }
                 .padding(
                     top = with(density) { doc.viewer.padTop.toDp() },
                     bottom = with(density) { navPx.toDp() + 8.dp },
-                ).then(cutoutSides),
+                ).then(cutoutSides).palmGuardedTaps(ctl, vm.toolPrefs),
         ) {
             VerticalQuickToolbar(
                 tools = vm.quickToolbar.bar,
@@ -578,17 +624,23 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
                 ViewerSheet.ViewSettings -> ViewSettingsSheet(vm, doc)
                 ViewerSheet.Bookmarks -> BookmarksSheet(vm, doc)
                 ViewerSheet.TextStyles -> TextStylesSheet(vm, doc)
-                ViewerSheet.Attachments -> AttachmentsSheet(vm, doc)
+                ViewerSheet.Attachments -> AttachmentsPanel(vm, doc)
                 ViewerSheet.SearchResults -> SearchResultsSheet(doc, onShow = { showHit(doc, it) })
+                ViewerSheet.Layers -> LayersSheet(vm, doc)
+                ViewerSheet.EditContents -> EditContentsSheet(vm, doc)
+                ViewerSheet.HiddenInfo -> HiddenInfoSheet(vm, doc)
                 ViewerSheet.Comments -> Unit
                 ViewerSheet.MoreTools -> MoreToolsSheet(vm, doc)
                 ViewerSheet.Signatures -> SignaturesSheet(vm, doc)
                 ViewerSheet.ScanEnhance -> ScanEnhanceSheet(vm, doc)
                 ViewerSheet.OcrConfidence -> OcrConfidenceReviewSheet(vm, doc)
+                ViewerSheet.FocusTimer -> FocusTimerSheet(vm) { ctl.sheet = ViewerSheet.None }
                 ViewerSheet.None -> Unit
             }
         }
         if (ctl.sheet == ViewerSheet.Comments) CommentListScreen(vm, doc)
+        vm.attachPrompt?.takeIf { it.doc === doc }?.let { AttachDialog(vm, it) }
+        if (vm.flattenPrompt === doc) FlattenDialog(vm, doc)
         vm.pageMenu?.takeIf { it.doc === doc }?.let { PageMenuView(vm, it) }
         if (vm.imageSource?.first === doc) {
             io.github.artcraftandroid.pdfcraft.ui.PdfSheet(onDismiss = { vm.imageSource = null }, dim = true) {
@@ -611,6 +663,7 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
         vm.replyPrompt?.takeIf { it.doc === doc }?.let { ReplySheet(vm, it) }
         vm.readAloud?.let { ReadAloudBar(vm, doc, it) }
         if (ctl.goToPage) GoToPageDialog(doc, onDismiss = { ctl.goToPage = false })
+        if (vm.shortcutsHelp) ShortcutsDialog(onDismiss = { vm.shortcutsHelp = false })
         if (ctl.pagesOpen) PagesScreen(vm, doc, onClose = { ctl.pagesOpen = false })
     }
 }
@@ -670,19 +723,23 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawSearchHits(doc:
     if (s.hits.isEmpty()) return
     val visible = doc.viewer.visiblePages()
     val current = s.currentHit
-    for (hit in s.hits) {
+    // #98: hits are in page order, so a frame walks only those of the pages in view
+    val hits = s.hits
+    for (i in insertionPoint(hits, visible.first - 1) until insertionPoint(hits, visible.last)) {
+        val hit = hits[i]
         val page = hit.range.page.toInt()
-        if (page !in visible) continue
         val isCurrent = hit === current
-        hit.rects.toList().chunked(4).forEach { r ->
-            if (r.size < 4) return@forEach
-            val a = doc.viewer.pageToScreen(page, r[0], r[1])
-            val b = doc.viewer.pageToScreen(page, r[2], r[3])
+        val r = hit.rects
+        var k = 0
+        while (k + 3 < r.size) {
+            val a = doc.viewer.pageToScreen(page, r[k], r[k + 1])
+            val b = doc.viewer.pageToScreen(page, r[k + 2], r[k + 3])
             drawRect(
                 if (isCurrent) Color(0x99E8461E) else Color(0x66FFE24D),
                 topLeft = Offset(a.x - 1f, a.y - 1f),
                 size = Size(b.x - a.x + 2f, b.y - a.y + 2f),
             )
+            k += 4
         }
     }
 }
@@ -763,10 +820,13 @@ private const val NOTE_SELECTED_DP = 19f
 private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawNotes(doc: OpenDocument, night: Boolean, selected: io.github.artcraftandroid.pdfcraft.core.CommentInfo?) {
     val dp = density
     val s = NOTE_ICON_DP * dp
+    // #98: only the notes of the pages in view (and a little round them, for icons on an edge)
+    val visible = doc.viewer.visiblePages(0.1f)
     for (n in doc.comments) {
+        val page = n.page.toInt()
+        if (page !in visible) continue
         // Hidden/NoView notes are skipped, as every viewer and the page renderer do (#115).
         if (n.subtype != "Text" || n.hidden || n.replyTo != null || n.state != null || n.fillSign || n.rect.size < 4) continue
-        val page = n.page.toInt()
         val a = doc.viewer.pageToScreen(page, n.rect[0], n.rect[1])
         val b = doc.viewer.pageToScreen(page, n.rect[2], n.rect[3])
         val cx = (a.x + b.x) / 2f
@@ -832,5 +892,25 @@ private fun SuccessBannerView(b: io.github.artcraftandroid.pdfcraft.ui.SuccessBa
                 modifier = Modifier.align(Alignment.End).clickable { onClose(); undo() }.padding(horizontal = 24.dp, vertical = 12.dp),
             )
         }
+    }
+}
+
+/** The pill under the last page in Draw mode that appends a page like it. */
+@Composable
+private fun AddPageHandle(bottom: androidx.compose.ui.unit.Dp, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    val c = pdfColors
+    val label = stringResource(R.string.notebook_add_page)
+    Row(
+        modifier.padding(bottom = bottom).height(40.dp)
+            .shadow(3.dp, androidx.compose.foundation.shape.RoundedCornerShape(20.dp))
+            .background(c.surface, androidx.compose.foundation.shape.RoundedCornerShape(20.dp))
+            .clickable(role = androidx.compose.ui.semantics.Role.Button, onClick = onClick)
+            .semantics { contentDescription = label }
+            .padding(horizontal = 16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(LucideIcons.Plus, null, tint = c.icon, modifier = Modifier.size(20.dp))
+        Spacer(Modifier.width(6.dp))
+        Text(label, color = c.label, fontSize = 14.sp)
     }
 }

@@ -5,6 +5,9 @@ import java.io.File
 /** Replace with…: [pages] (0-based) of [doc] are to take the content of the picked [file]. */
 class ReplacePrompt(val doc: OpenDocument, val pages: List<Int>, val file: File)
 
+/** Add file to the Attachments: [file] (a picked copy) is to be attached to [doc] as [name]. */
+class AttachPrompt(val doc: OpenDocument, val file: File, val name: String)
+
 /** How Split cuts a document, as `doc_split` takes it. */
 sealed class SplitMode {
     /** A new part every [pages] pages. */

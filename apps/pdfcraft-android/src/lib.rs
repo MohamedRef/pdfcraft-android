@@ -8,15 +8,19 @@
 //! the UI from parsing JSON for what it shows all the time.
 //!
 //! Threading: every method may be called from any thread, and the ones that render block, so the
-//! UI calls them off its main thread. A render holds the session lock only to look up the
-//! document's bytes; the page is drawn unlocked by a renderer of its own, so the UI can keep
-//! running tools (and other renders) while one is in flight.
+//! UI calls them off its main thread. Tools run one at a time under the session lock. Renders and
+//! text queries of a prepared document never wait for that lock: each change made under it
+//! publishes what they need (the bytes, render settings and page sizes) as a [`DocView`], and
+//! pages and text are drawn or extracted by renderers of their own, outside every lock (#90,
+//! #113). A render that starts while a tool runs draws the document as it was before that tool,
+//! which is the version the UI asked for.
 #![forbid(unsafe_code)]
 #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
 
 use std::collections::HashMap;
+use std::collections::VecDeque;
 use std::sync::{
-    Arc, Mutex, MutexGuard, PoisonError,
+    Arc, Mutex, MutexGuard, PoisonError, RwLock,
     atomic::{AtomicBool, Ordering},
 };
 
@@ -96,14 +100,22 @@ pub struct DocumentInfo {
     pub allows_assembly: bool,
     /// Edits not saved yet.
     pub dirty: bool,
-    /// What Undo and Redo would take back or redo, if anything.
+    /// What Undo and Redo would take back or redo, if anything, in English.
     pub undo: Option<String>,
     pub redo: Option<String>,
+    /// The same, in parts, for the interface to say in its own language: the engine's English
+    /// wording (one of `EDIT_LABELS`, or `{batch}`) and the value the document fills its hole with.
+    pub undo_wording: Option<String>,
+    pub undo_value: Option<String>,
+    pub redo_wording: Option<String>,
+    pub redo_value: Option<String>,
     /// Interactive form fields.
     pub fields: u32,
     pub has_outline: bool,
     /// Files attached to the document itself (not to comments).
     pub attachments: u32,
+    /// Layers (optional content groups) the Layers sheet lists.
+    pub layers: u32,
     pub signed: bool,
     pub comments_hidden: bool,
     /// Bumped by every change to the working file: page caches key on it.
@@ -380,6 +392,14 @@ pub struct WidgetInfo {
     pub multi_select: bool,
 }
 
+/// A layer (optional content group) of the document.
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct LayerInfo {
+    pub name: String,
+    /// Shown now (the Layers sheet's choice, else the document's default).
+    pub visible: bool,
+}
+
 /// A file embedded in the document.
 #[derive(Debug, Clone, uniffi::Record)]
 pub struct AttachmentInfo {
@@ -486,7 +506,7 @@ const MAX_MOBILE_TILE_PIXELS: u64 = 1024 * 1024;
 type RendererCache = HashMap<u64, (pdfcraft_cos::PdfBytes, ViewKey, Vec<PageRenderer>)>;
 
 /// The view settings a renderer is built with that can change while a document is open (Hide all
-/// comments, Reading colours, layer visibility). A renderer built for other settings is not reused.
+/// comments, Reading colours, layers). A renderer built for other settings is not reused.
 #[derive(Clone, Debug, PartialEq)]
 struct ViewKey {
     hide_comments: bool,
@@ -500,12 +520,75 @@ impl ViewKey {
     }
 }
 
-/// A document's text layers: the bytes they were taken from, a renderer to extract more, and one
-/// slot per page.
+/// How many pages' text layers a document keeps. Selection, handles and Read Aloud work on the
+/// pages in view; a whole-document search or word count must not keep every page (#87: searching
+/// 1,000 dense pages grew the process by about 380 MB).
+const TEXT_PAGES_PER_DOC: usize = 32;
+
+/// How many idle text extractors a document keeps.
+const TEXT_RENDERERS_PER_DOC: usize = 2;
+
+/// The largest embedded file the phone writes out. A larger one, or a compression bomb, is refused
+/// before it fills memory (#117).
+const MAX_MOBILE_ATTACHMENT: usize = 256 * 1024 * 1024;
+
+/// A document's recent text layers: the bytes they were taken from, idle extractors for more, and
+/// the most recently used pages (oldest first).
 struct TextCache {
     bytes: pdfcraft_cos::PdfBytes,
-    renderer: PageRenderer,
-    pages: Vec<Option<Arc<PageText>>>,
+    idle: Vec<PageRenderer>,
+    pages: VecDeque<(usize, Arc<PageText>)>,
+}
+
+impl TextCache {
+    fn new(bytes: &pdfcraft_cos::PdfBytes) -> Self {
+        TextCache { bytes: bytes.clone(), idle: Vec::new(), pages: VecDeque::new() }
+    }
+
+    /// Page `index`'s layer, now the most recently used, if it is kept.
+    fn get(&mut self, index: usize) -> Option<Arc<PageText>> {
+        let at = self.pages.iter().position(|(p, _)| *p == index)?;
+        let entry = self.pages.remove(at)?;
+        let text = entry.1.clone();
+        self.pages.push_back(entry);
+        Some(text)
+    }
+
+    fn keep(&mut self, index: usize, text: Arc<PageText>) {
+        if self.get(index).is_some() {
+            return;
+        }
+        self.pages.push_back((index, text));
+        while self.pages.len() > TEXT_PAGES_PER_DOC {
+            self.pages.pop_front();
+        }
+    }
+}
+
+/// What renders and text queries need of a prepared document, published by every change made
+/// under the session lock so that they never wait for it (#90).
+#[derive(Clone)]
+struct DocView {
+    /// What pages are drawn from.
+    display: pdfcraft_cos::PdfBytes,
+    /// The document's own bytes (text).
+    bytes: pdfcraft_cos::PdfBytes,
+    password: Option<String>,
+    config: RenderConfig,
+    /// Each page's displayed size in points.
+    sizes: Arc<[(f32, f32)]>,
+}
+
+impl DocView {
+    fn of(session: &pdfcraft_engine::Session, d: &Document, previous: Option<&DocView>) -> Self {
+        let same_pages =
+            |v: &&DocView| v.sizes.len() == d.info.pages.len() && v.sizes.iter().zip(&d.info.pages).all(|(s, p)| *s == (p.width, p.height));
+        let sizes = match previous.filter(same_pages) {
+            Some(v) => v.sizes.clone(),
+            None => d.info.pages.iter().map(|p| (p.width, p.height)).collect(),
+        };
+        DocView { display: d.display.clone(), bytes: d.bytes.clone(), password: d.password.clone(), config: page_render_config(session, d), sizes }
+    }
 }
 
 /// The engine's session: the open documents, their edit history and the tools that act on them.
@@ -514,6 +597,8 @@ pub struct MobileSession {
     auto: Mutex<Automation>,
     renderers: Mutex<RendererCache>,
     texts: Mutex<HashMap<u64, TextCache>>,
+    /// The prepared documents as renders and text queries see them (see [`DocView`]).
+    views: RwLock<HashMap<u64, DocView>>,
     pending_opens: Mutex<HashMap<u64, PendingOpen>>,
     private_input_root: std::sync::OnceLock<std::path::PathBuf>,
 }
@@ -546,11 +631,45 @@ impl MobileSession {
     /// instead (#114).
     fn with_auto<T>(&self, what: &str, f: impl FnOnce(&mut Automation) -> Result<T, MobileError>) -> Result<T, MobileError> {
         let mut auto = self.lock();
-        catch_panic(what, || {
+        let out = catch_panic(what, || {
             #[cfg(test)]
             tests::inject_panic(what);
             f(&mut auto)
-        })
+        });
+        // even a failed change may have changed something (a partial batch, a closed document)
+        self.publish_views(&auto);
+        out
+    }
+
+    /// Publish the documents as they are now for renders and text queries. Called with the
+    /// session lock held, after anything that can change a document.
+    fn publish_views(&self, auto: &Automation) {
+        let mut views = self.views.write().unwrap_or_else(PoisonError::into_inner);
+        let next: HashMap<u64, DocView> =
+            auto.session().docs().iter().filter(|d| !d.preparing()).map(|d| (d.id.0, DocView::of(auto.session(), d, views.get(&d.id.0)))).collect();
+        *views = next;
+    }
+
+    /// Document `doc` as renders see it; `None` while it is in its reading stage.
+    fn view(&self, doc: u64) -> Result<Option<DocView>, MobileError> {
+        if let Some(v) = self.views.read().unwrap_or_else(PoisonError::into_inner).get(&doc) {
+            return Ok(Some(v.clone()));
+        }
+        // not published: a document still being prepared, or none at all
+        self.with_doc(doc, |_| None)
+    }
+
+    /// Whether document `doc` still draws `bytes`.
+    fn draws(&self, doc: u64, bytes: &pdfcraft_cos::PdfBytes) -> bool {
+        if let Some(v) = self.views.read().unwrap_or_else(PoisonError::into_inner).get(&doc) {
+            return pdfcraft_cos::same_storage(&v.display, bytes);
+        }
+        // reading stage: only the session knows
+        self.with_doc(doc, |d| pdfcraft_cos::same_storage(&d.display, bytes)).unwrap_or(false)
+    }
+
+    fn texts(&self) -> MutexGuard<'_, HashMap<u64, TextCache>> {
+        self.texts.lock().unwrap_or_else(PoisonError::into_inner)
     }
 
     fn cache(&self) -> MutexGuard<'_, RendererCache> {
@@ -566,24 +685,32 @@ impl MobileSession {
             let out = auto.call(name, args).map_err(|e| MobileError::Command(e.to_string()))?;
             Ok(first_json(out))
         })
+        .inspect(|_| {
+            // Layer visibility is a view setting, not an edit: the document's bytes stay the same,
+            // so idle renderers (made with the old visibility) and text layers must go explicitly.
+            if name == "layer_set"
+                && let Some(doc) = args.get("doc").and_then(Value::as_u64)
+            {
+                self.cache().remove(&doc);
+                self.texts().remove(&doc);
+            }
+        })
     }
 
-    /// An idle renderer for `bytes`, or a new one.
+    /// An idle renderer for `bytes`, or a new one (parsed outside the cache lock, #113).
     fn take_renderer(&self, doc: u64, bytes: &pdfcraft_cos::PdfBytes, config: RenderConfig) -> PageRenderer {
-        let mut cache = self.cache();
         let key = ViewKey::of(&config);
-        match cache.get_mut(&doc) {
+        let idle = match self.cache().get_mut(&doc) {
             Some((b, k, idle)) if pdfcraft_cos::same_storage(b, bytes) && *k == key => idle.pop(),
             _ => None,
-        }
-        .unwrap_or_else(|| PageRenderer::new(bytes.clone(), config))
+        };
+        idle.unwrap_or_else(|| PageRenderer::new(bytes.clone(), config))
     }
 
     /// Give a renderer back for the next render, unless the document has changed since.
     fn return_renderer(&self, doc: u64, bytes: &pdfcraft_cos::PdfBytes, key: ViewKey, renderer: PageRenderer) {
         // Keep a late reading-stage render from reviving a closed or superseded cache entry.
-        let auto = self.lock();
-        if !auto.session().get(DocId(doc)).is_some_and(|d| pdfcraft_cos::same_storage(&d.display, bytes)) {
+        if !self.draws(doc, bytes) {
             return;
         }
         let mut cache = self.cache();
@@ -607,9 +734,18 @@ impl MobileSession {
             return Err(MobileError::Render(format!("the scale must be a positive number, not {scale}")));
         }
         let index = page as usize;
-        let (bytes, config, pages, size, ready) = self.with_doc_in(doc, |session, d| {
-            (d.display.clone(), page_render_config(session, d), d.info.pages.len(), d.info.pages.get(index).map(|p| (p.width, p.height)), d.reading_page_ready(index))
-        })?;
+        let (bytes, config, pages, size, ready) = match self.view(doc)? {
+            Some(v) => (v.display, v.config, v.sizes.len(), v.sizes.get(index).copied(), true),
+            None => self.with_doc_in(doc, |session, d| {
+                (
+                    d.display.clone(),
+                    page_render_config(session, d),
+                    d.info.pages.len(),
+                    d.info.pages.get(index).map(|p| (p.width, p.height)),
+                    d.reading_page_ready(index),
+                )
+            })?,
+        };
         if !ready {
             return Err(MobileError::Render("This page is waiting for document preparation".into()));
         }
@@ -687,39 +823,48 @@ impl MobileSession {
         Ok(f(d))
     }
 
-    /// The text layer of page `page` of `doc` as it is now (extracted once per document version).
-    fn page_text(&self, doc: u64, page: u32) -> Result<Arc<PageText>, MobileError> {
-        if self.with_doc(doc, Document::preparing)? {
+    /// The text layer of page `page` of `doc` as it is now. The most recently used pages are kept
+    /// per document version; `keep: false` (a whole-document search or word count) reads a page
+    /// without pushing the pages in view out. Extraction runs outside every lock (#113).
+    fn page_text(&self, doc: u64, page: u32, keep: bool) -> Result<Arc<PageText>, MobileError> {
+        let Some(view) = self.view(doc)? else {
             return Err(MobileError::Command("Document preparation is still running".into()));
-        }
-        let (bytes, password, pages) = self.with_doc(doc, |d| (d.bytes.clone(), d.password.clone(), d.info.pages.len()))?;
+        };
+        let (bytes, pages) = (view.bytes, view.sizes.len());
         let index = page as usize;
         if index >= pages {
             return Err(MobileError::Command(format!("page {} is out of range: the document has {pages} pages", index.saturating_add(1))));
         }
-        let mut texts = self.texts.lock().unwrap_or_else(PoisonError::into_inner);
-        let fresh = || TextCache {
-            bytes: bytes.clone(),
-            renderer: PageRenderer::new(bytes.clone(), RenderConfig { password: password.as_deref().map(Arc::from), ..RenderConfig::default() }),
-            pages: vec![None; pages],
+        let idle = {
+            let mut texts = self.texts();
+            let entry = texts.entry(doc).or_insert_with(|| TextCache::new(&bytes));
+            if !pdfcraft_cos::same_storage(&entry.bytes, &bytes) {
+                *entry = TextCache::new(&bytes);
+            }
+            if let Some(t) = entry.get(index) {
+                return Ok(t);
+            }
+            entry.idle.pop()
         };
-        let entry = texts.entry(doc).or_insert_with(fresh);
-        if !pdfcraft_cos::same_storage(&entry.bytes, &bytes) || entry.pages.len() != pages {
-            *entry = fresh();
-        }
-        if let Some(Some(t)) = entry.pages.get(index) {
-            return Ok(t.clone());
-        }
-        let out = entry.renderer.render(RenderRequest { page: index, kind: RequestKind::Text, tile: None, scale: 1.0, tag: 0, preview: false });
+        let mut renderer = idle.unwrap_or_else(|| {
+            PageRenderer::new(bytes.clone(), RenderConfig { password: view.password.as_deref().map(Arc::from), ..RenderConfig::default() })
+        });
+        let out = renderer.render(RenderRequest { page: index, kind: RequestKind::Text, tile: None, scale: 1.0, tag: 0, preview: false });
         let text = match (out.error, out.text) {
-            (None, Some(t)) => t,
-            (Some(e), _) => return Err(MobileError::Command(format!("the text of page {} could not be read: {e}", index.saturating_add(1)))),
-            (None, None) => Arc::new(PageText::default()),
+            (None, Some(t)) => Ok(t),
+            (Some(e), _) => Err(MobileError::Command(format!("the text of page {} could not be read: {e}", index.saturating_add(1)))),
+            (None, None) => Ok(Arc::new(PageText::default())),
         };
-        if let Some(slot) = entry.pages.get_mut(index) {
-            *slot = Some(text.clone());
+        // a document closed or changed meanwhile keeps nothing of this version
+        if let Some(entry) = self.texts().get_mut(&doc).filter(|e| pdfcraft_cos::same_storage(&e.bytes, &bytes)) {
+            if entry.idle.len() < TEXT_RENDERERS_PER_DOC {
+                entry.idle.push(renderer);
+            }
+            if let (true, Ok(t)) = (keep, &text) {
+                entry.keep(index, t.clone());
+            }
         }
-        Ok(text)
+        text
     }
 }
 
@@ -745,6 +890,7 @@ impl MobileSession {
             auto: Mutex::new(Automation::new()),
             renderers: Mutex::new(HashMap::new()),
             texts: Mutex::new(HashMap::new()),
+            views: RwLock::new(HashMap::new()),
             pending_opens: Mutex::new(HashMap::new()),
             private_input_root: std::sync::OnceLock::new(),
         })
@@ -859,7 +1005,7 @@ impl MobileSession {
         self.call("doc_close", &json!({ "doc": doc, "discard_changes": discard_changes }))?;
         self.pending_opens.lock().unwrap_or_else(PoisonError::into_inner).remove(&doc);
         self.cache().remove(&doc);
-        self.texts.lock().unwrap_or_else(PoisonError::into_inner).remove(&doc);
+        self.texts().remove(&doc);
         Ok(())
     }
 
@@ -975,6 +1121,11 @@ impl MobileSession {
     }
 
     /// The files embedded in the document.
+    /// The document's layers in the order `layer_set` numbers them (1-based there).
+    pub fn layers(&self, doc: u64) -> Result<Vec<LayerInfo>, MobileError> {
+        self.with_doc(doc, |d| d.info.layers.iter().map(|l| LayerInfo { name: l.name.clone(), visible: l.visible }).collect())
+    }
+
     pub fn attachments(&self, doc: u64) -> Result<Vec<AttachmentInfo>, MobileError> {
         self.with_doc(doc, |d| {
             d.info
@@ -999,7 +1150,8 @@ impl MobileSession {
         let (bytes, password, att) =
             self.with_doc(doc, |d| (d.bytes.clone(), d.password.clone(), d.info.attachments.get(index as usize).cloned()))?;
         let att = att.ok_or_else(|| MobileError::Command(format!("the document has no attachment {}", index.saturating_add(1))))?;
-        let data = pdfcraft_render::attachment_data(&bytes, password.as_deref(), &att).map_err(MobileError::Command)?;
+        let data =
+            pdfcraft_render::attachment_data_with_limit(&bytes, password.as_deref(), &att, MAX_MOBILE_ATTACHMENT).map_err(MobileError::Command)?;
         self.lock().write_output(&path, &data).map_err(|e| MobileError::Command(e.to_string()))?;
         Ok(att.name)
     }
@@ -1051,13 +1203,13 @@ impl MobileSession {
     /// or text call makes new ones.
     pub fn release_memory(&self) {
         self.cache().clear();
-        self.texts.lock().unwrap_or_else(PoisonError::into_inner).clear();
+        self.texts().clear();
     }
 
     /// The word at point (`x`, `y`) on page `page` (points, top-left origin), or the one nearest it
     /// within `slop` points: what a long press selects.
     pub fn word_at(&self, doc: u64, page: u32, x: f32, y: f32, slop: f32) -> Result<Option<TextRange>, MobileError> {
-        let text = self.page_text(doc, page)?;
+        let text = self.page_text(doc, page, true)?;
         let Some(i) = text.nearest(x, y) else { return Ok(None) };
         let Some(g) = text.glyphs.get(i) else { return Ok(None) };
         let [x0, y0, x1, y1] = g.rect;
@@ -1070,29 +1222,29 @@ impl MobileSession {
 
     /// The glyph nearest point (`x`, `y`) on page `page`: where a selection handle lands.
     pub fn nearest_glyph(&self, doc: u64, page: u32, x: f32, y: f32) -> Result<Option<u32>, MobileError> {
-        Ok(self.page_text(doc, page)?.nearest(x, y).and_then(|i| u32::try_from(i).ok()))
+        Ok(self.page_text(doc, page, true)?.nearest(x, y).and_then(|i| u32::try_from(i).ok()))
     }
 
     /// How many glyphs page `page` has (0: no text, e.g. a scan without OCR).
     pub fn glyph_count(&self, doc: u64, page: u32) -> Result<u32, MobileError> {
-        Ok(u32::try_from(self.page_text(doc, page)?.glyphs.len()).unwrap_or(u32::MAX))
+        Ok(u32::try_from(self.page_text(doc, page, true)?.glyphs.len()).unwrap_or(u32::MAX))
     }
 
     /// The rectangles covering `range`, one per line (flattened `x0, y0, x1, y1`, points).
     pub fn text_rects(&self, doc: u64, range: TextRange) -> Result<Vec<f32>, MobileError> {
-        let text = self.page_text(doc, range.page)?;
+        let text = self.page_text(doc, range.page, true)?;
         Ok(flatten_rects(&text.line_rects(glyph_range(&text, range.start, range.end))))
     }
 
     /// The rectangle of glyph `index` on page `page` (`x0, y0, x1, y1`): where a selection handle sits.
     pub fn glyph_rect(&self, doc: u64, page: u32, index: u32) -> Result<Vec<f32>, MobileError> {
-        let text = self.page_text(doc, page)?;
+        let text = self.page_text(doc, page, true)?;
         Ok(text.glyphs.get(index as usize).map(|g| g.rect.to_vec()).unwrap_or_default())
     }
 
     /// The text of `range`, with spaces and line breaks.
     pub fn text_of(&self, doc: u64, range: TextRange) -> Result<String, MobileError> {
-        let text = self.page_text(doc, range.page)?;
+        let text = self.page_text(doc, range.page, true)?;
         Ok(text.text_of(glyph_range(&text, range.start, range.end)))
     }
 
@@ -1100,13 +1252,13 @@ impl MobileSession {
     /// where a line sits clearly lower than the line before would lead on to (a gap of over half
     /// a line), goes back up (a new column), or is set in a markedly different size.
     pub fn reading_blocks(&self, doc: u64, page: u32) -> Result<Vec<ReadingBlock>, MobileError> {
-        let text = self.page_text(doc, page)?;
+        let text = self.page_text(doc, page, true)?;
         Ok(reading_blocks(&text, page))
     }
 
     /// All of page `page`'s text (Read Aloud, select all).
     pub fn page_plain_text(&self, doc: u64, page: u32) -> Result<String, MobileError> {
-        Ok(self.page_text(doc, page)?.plain_text())
+        Ok(self.page_text(doc, page, false)?.plain_text())
     }
 
     /// Where `query` occurs on page `page`. The app searches page by page so it can show hits as
@@ -1115,7 +1267,7 @@ impl MobileSession {
         if query.trim().is_empty() {
             return Ok(Vec::new());
         }
-        let text = self.page_text(doc, page)?;
+        let text = self.page_text(doc, page, false)?;
         Ok(text
             .find_opts(&query, case_sensitive, whole_words)
             .into_iter()
@@ -1138,14 +1290,14 @@ fn first_json(out: Vec<Content>) -> Value {
 }
 
 /// How pages of `d` are drawn here: the app draws sticky notes itself, as fixed-size icons over
-/// the page, and the reader's Reading colours (a view setting the session keeps) apply.
+/// the page, and the reader's Reading colours and layer choices (view settings the session keeps) apply.
 fn page_render_config(session: &pdfcraft_engine::Session, d: &Document) -> RenderConfig {
     RenderConfig {
         password: d.password.as_deref().map(Arc::from),
         hide_comments: d.comments_hidden(),
         hide_notes: true,
         reading_colors: session.reading_colors(d.id).unwrap_or_default(),
-        // Layer visibility set through the view tools (#122).
+        // the Layers sheet's choices (`layer_set` keeps them in the session's view settings)
         layers: session.render_config(d.id).map(|c| c.layers).unwrap_or_default(),
         ..RenderConfig::default()
     }
@@ -1212,6 +1364,10 @@ fn document_info(d: &Document) -> DocumentInfo {
         dirty: d.dirty,
         undo: d.can_undo().map(str::to_string),
         redo: d.can_redo().map(str::to_string),
+        undo_wording: d.undo_label().map(|l| l.wording.to_string()),
+        undo_value: d.undo_label().and_then(|l| l.value.clone()),
+        redo_wording: d.redo_label().map(|l| l.wording.to_string()),
+        redo_value: d.redo_label().and_then(|l| l.value.clone()),
         fields: u32::try_from(d.form.len()).unwrap_or(u32::MAX),
         has_outline: !info.outline.is_empty(),
         // the document's own files: those on comments are reached through the comment
@@ -1219,6 +1375,7 @@ fn document_info(d: &Document) -> DocumentInfo {
             info.attachments.iter().filter(|a| matches!(a.source, pdfcraft_render::AttachmentSource::Document { .. })).count(),
         )
         .unwrap_or(u32::MAX),
+        layers: u32::try_from(info.layers.len()).unwrap_or(u32::MAX),
         signed: d.is_signed(),
         comments_hidden: d.comments_hidden(),
         generation: d.edit_generation(),

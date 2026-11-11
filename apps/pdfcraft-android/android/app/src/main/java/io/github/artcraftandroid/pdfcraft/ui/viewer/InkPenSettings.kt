@@ -9,8 +9,8 @@ package io.github.artcraftandroid.pdfcraft.ui.viewer
  */
 internal data class InkPenSettings(val argb: Int, val width: Float, val opacity: Float) {
     companion object {
-        const val MIN_WIDTH = 1f
-        const val MAX_WIDTH = 10f
+        const val MIN_WIDTH = 0.1f
+        const val MAX_WIDTH = 20f
         const val MIN_OPACITY = 0.25f
 
         fun sanitized(argb: Int, width: Float, opacity: Float) = InkPenSettings(

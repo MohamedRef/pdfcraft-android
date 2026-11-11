@@ -70,6 +70,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.annotation.StringRes
 import io.github.artcraftandroid.pdfcraft.R
+import io.github.artcraftandroid.pdfcraft.ui.viewer.openOcrBatch
 import io.github.artcraftandroid.pdfcraft.ui.AppViewModel
 import io.github.artcraftandroid.pdfcraft.ui.BarIcon
 import io.github.artcraftandroid.pdfcraft.ui.Inter
@@ -188,6 +189,7 @@ fun ToolsTab(vm: AppViewModel) {
             HubTool(LucideIcons.Camera, "New scan", R.string.home_new_scan, R.string.home_about_scan, ToolHues.scan, setOf("Create")) { vm.startScan() },
             HubTool(LucideIcons.Combine, "Combine files", R.string.common_tool_combine, R.string.home_about_combine, ToolHues.combine, setOf("Create", "Edit")) { vm.pickFiles(io.github.artcraftandroid.pdfcraft.ui.FilePickKind.Combine) },
             HubTool(LucideIcons.FilePenLine, "Bates numbering", R.string.bates_title, R.string.bates_about, ToolHues.edit, setOf("Edit")) { vm.openBates() },
+            HubTool(LucideIcons.ScanText, "Recognize text in files", R.string.ocr_batch_title, R.string.ocr_batch_about, ToolHues.scan, setOf("Convert")) { vm.openOcrBatch() },
             HubTool(LucideIcons.LayoutGrid, "Organize pages", R.string.common_tool_organize, R.string.home_about_organize, ToolHues.organize, setOf("Edit")) { vm.toolForFile(FileTool.Organize) },
             HubTool(LucideIcons.Scissors, "Split PDF", R.string.home_tool_split, R.string.home_about_split, ToolHues.organize, setOf("Edit")) { vm.toolForFile(FileTool.Split) },
             HubTool(LucideIcons.Crop, "Crop pages", R.string.common_tool_crop, R.string.home_about_crop, ToolHues.crop, setOf("Edit")) { vm.toolForFile(FileTool.Crop) },
@@ -369,6 +371,23 @@ private fun Preferences(vm: AppViewModel) {
         PdfSwitch(vm.formSuggestions, { vm.updateFormSuggestions(it) })
     }
     SheetRow(null, stringResource(R.string.home_clear_suggestions), { vm.clearFormSuggestions() })
+
+    Section(stringResource(R.string.library_title))
+    SheetRow(null, stringResource(R.string.library_index_switch), { vm.updateLibraryIndexing(!vm.libraryIndexing) }) {
+        io.github.artcraftandroid.pdfcraft.ui.PdfSwitch(vm.libraryIndexing, null)
+    }
+    SheetRow(null, stringResource(R.string.library_wipe_index), { vm.wipeLibraryIndex() })
+    Text(stringResource(R.string.library_index_body), color = c.textSecondary, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 20.dp))
+
+    Section(stringResource(R.string.study_section))
+    var confirmStudyClear by remember { mutableStateOf(false) }
+    SheetRow(null, stringResource(R.string.study_clear_stats), { confirmStudyClear = true })
+    Text(stringResource(R.string.study_stats_body), color = c.textSecondary, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 20.dp))
+    if (confirmStudyClear) io.github.artcraftandroid.pdfcraft.ui.PdfDialog(
+        onDismiss = { confirmStudyClear = false }, title = stringResource(R.string.study_clear_stats),
+        confirm = stringResource(R.string.common_clear), destructive = true,
+        onConfirm = { confirmStudyClear = false; vm.clearStudyStats() },
+    )
     SheetDivider()
     Section(stringResource(R.string.home_author_title))
     val authorHint = stringResource(R.string.home_author_hint)

@@ -153,6 +153,18 @@ fn reading_colours_reach_cached_page_renderers() {
 }
 
 #[test]
+fn hiding_comments_is_a_view_setting() {
+    let s = MobileSession::new();
+    let doc = s.open(blank_pdf(1), None).unwrap().id;
+    s.execute("comments_hide".into(), format!(r#"{{"doc": {doc}, "hidden": true}}"#)).unwrap();
+    let info = s.document(doc).unwrap();
+    assert!(info.comments_hidden);
+    assert!(!info.dirty, "hiding annotations must not mark the file edited");
+    s.execute("comments_hide".into(), format!(r#"{{"doc": {doc}, "hidden": false}}"#)).unwrap();
+    assert!(!s.document(doc).unwrap().comments_hidden);
+}
+
+#[test]
 fn refuses_bad_render_requests() {
     let s = MobileSession::new();
     let doc = s.open(blank_pdf(2), None).unwrap().id;
@@ -763,6 +775,11 @@ fn profiled_open_preserves_document_rendering_and_records_only_stage_durations()
         "native_render_parse",
         "native_page_geometry",
         "native_inspect_lazy",
+        "native_inspect_structure",
+        "native_inspect_index",
+        "native_inspect_annotations",
+        "native_inspect_fields",
+        "native_inspect_fonts",
         "native_prepare",
         "native_signatures",
         "native_summary",
@@ -777,4 +794,194 @@ fn profiled_open_preserves_document_rendering_and_records_only_stage_durations()
     assert_eq!(std::fs::read(path).unwrap(), original);
     assert!(matches!(s.open_with_timings("relative.pdf".into(), None), Err(MobileError::Open(_))));
     assert_eq!(s.documents().len(), 2);
+}
+
+/// One 100 x 100 page painted red inside layer "Red" (an optional content group).
+fn layered_pdf() -> String {
+    let content = "1 0 0 rg /OC /L1 BDC 0 0 100 100 re f EMC";
+    let objects = [
+        "<< /Type /Catalog /Pages 2 0 R /OCProperties << /OCGs [5 0 R] /D << /Order [5 0 R] /ON [5 0 R] >> >> >>".to_string(),
+        "<< /Type /Pages /Kids [3 0 R] /Count 1 >>".to_string(),
+        "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 100 100] /Contents 4 0 R /Resources << /Properties << /L1 5 0 R >> >> >>".to_string(),
+        format!("<< /Length {} >>\nstream\n{content}\nendstream", content.len()),
+        "<< /Type /OCG /Name (Red) >>".to_string(),
+    ];
+    let mut pdf = String::from("%PDF-1.7\n");
+    let mut offsets = Vec::new();
+    for (i, body) in objects.iter().enumerate() {
+        offsets.push(pdf.len());
+        pdf.push_str(&format!("{} 0 obj\n{body}\nendobj\n", i + 1));
+    }
+    let xref = pdf.len();
+    pdf.push_str(&format!("xref\n0 {}\n0000000000 65535 f \n", objects.len() + 1));
+    for o in offsets {
+        pdf.push_str(&format!("{o:010} 00000 n \n"));
+    }
+    pdf.push_str(&format!("trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n", objects.len() + 1));
+    let path = scratch().join("layered.pdf");
+    std::fs::write(&path, pdf).unwrap();
+    path.to_string_lossy().into_owned()
+}
+
+#[test]
+fn hiding_a_layer_changes_the_page_render_without_editing() {
+    let s = MobileSession::new();
+    let info = s.open(layered_pdf(), None).unwrap();
+    let doc = info.id;
+    let centre = |img: &RenderedImage| {
+        let i = ((img.height / 2) * img.width + img.width / 2) as usize * 4;
+        [img.rgba[i], img.rgba[i + 1], img.rgba[i + 2]]
+    };
+    // a first render leaves an idle renderer made with the layer shown
+    assert_eq!(centre(&s.render_page(doc, 0, 1.0, None).unwrap()), [255, 0, 0]);
+    let out: Value = serde_json::from_str(&s.execute("layer_set".into(), format!(r#"{{"doc": {doc}, "layer": "Red", "visible": false}}"#)).unwrap()).unwrap();
+    assert_eq!(out["layers"][0]["visible"], json!(false));
+    assert_eq!(centre(&s.render_page(doc, 0, 1.0, None).unwrap()), [255, 255, 255]);
+    let after = s.document(doc).unwrap();
+    // a view setting: nothing to save, nothing to undo, the same generation
+    assert!(!after.dirty);
+    assert_eq!(after.undo, None);
+    assert_eq!(after.generation, info.generation);
+    s.execute("layer_set".into(), format!(r#"{{"doc": {doc}, "layer": 1, "visible": true}}"#)).unwrap();
+    assert_eq!(centre(&s.render_page(doc, 0, 1.0, None).unwrap()), [255, 0, 0]);
+}
+
+#[test]
+fn lists_layers_with_their_visibility() {
+    let s = MobileSession::new();
+    let info = s.open(layered_pdf(), None).unwrap();
+    assert_eq!(info.layers, 1);
+    let layers = s.layers(info.id).unwrap();
+    assert_eq!((layers[0].name.as_str(), layers[0].visible), ("Red", true));
+    s.execute("layer_set".into(), format!(r#"{{"doc": {}, "layer": 1, "visible": false}}"#, info.id)).unwrap();
+    assert!(!s.layers(info.id).unwrap()[0].visible);
+    assert_eq!(s.open(blank_pdf(1), None).unwrap().layers, 0);
+}
+
+/// The bookmark moves the app's Edit contents sends (`outlineMoveArgs` in the Kotlin app).
+#[test]
+fn bookmark_moves_the_app_sends_land_where_expected() {
+    let s = MobileSession::new();
+    let doc = s.open(blank_pdf(5), None).unwrap().id;
+    let run = |name: &str, args: Value| {
+        let mut args = args;
+        args["doc"] = json!(doc);
+        s.execute(name.into(), args.to_string()).unwrap();
+    };
+    let titles = || s.outline(doc).unwrap().iter().map(|e| format!("{}{}", "  ".repeat(e.level as usize), e.title)).collect::<Vec<_>>().join("|");
+    run("bookmark_add", json!({ "title": "A", "page": 1 }));
+    run("bookmark_add", json!({ "title": "A1", "page": 2, "parent": [1] }));
+    run("bookmark_add", json!({ "title": "A2", "page": 3, "parent": [1] }));
+    run("bookmark_add", json!({ "title": "B", "page": 4 }));
+    run("bookmark_add", json!({ "title": "C", "page": 5 }));
+    assert_eq!(titles(), "A|  A1|  A2|B|C");
+    // Down: A1 after A2
+    run("bookmark_move", json!({ "path": [1, 1], "parent": [1], "position": 2 }));
+    assert_eq!(titles(), "A|  A2|  A1|B|C");
+    // Out: A1 (now [1, 2]) to the top level right after A
+    run("bookmark_move", json!({ "path": [1, 2], "position": 2 }));
+    assert_eq!(titles(), "A|  A2|A1|B|C");
+    // In: B ([3]) becomes the last child of A1 ([2])
+    run("bookmark_move", json!({ "path": [3], "parent": [2] }));
+    assert_eq!(titles(), "A|  A2|A1|  B|C");
+    // Up: C ([3]) before A1
+    run("bookmark_move", json!({ "path": [3], "position": 2 }));
+    assert_eq!(titles(), "A|  A2|C|A1|  B");
+}
+
+/// The protection Set password's Restrict editing and printing sends (`protectArgs` in the app)
+/// shows in the reopened copy's permissions, and Remove security takes it off again.
+#[test]
+fn restrictions_from_set_password_survive_reopen_and_can_be_removed() {
+    let s = MobileSession::new();
+    let doc = s.open(blank_pdf(1), None).unwrap().id;
+    let dir = scratch();
+    let locked = dir.join("locked.pdf").to_string_lossy().into_owned();
+    s.execute(
+        "doc_protect".into(),
+        json!({ "doc": doc, "open_password": "user123", "permissions_password": "owner12", "printing": "none", "changes": "none", "copy": false, "accessibility": true }).to_string(),
+    )
+    .unwrap();
+    s.execute("doc_save".into(), json!({ "doc": doc, "path": locked, "full": true }).to_string()).unwrap();
+    // opened with the open password: restricted
+    let user = s.open(locked.clone(), Some("user123".into())).unwrap();
+    assert!(user.encrypted && !user.allows_printing && !user.allows_copying && !user.allows_assembly);
+    // a copy opened with the permissions password can have its security removed
+    let owner = s.open(locked, Some("owner12".into())).unwrap().id;
+    let open = dir.join("open.pdf").to_string_lossy().into_owned();
+    s.execute("doc_unprotect".into(), json!({ "doc": owner }).to_string()).unwrap();
+    s.execute("doc_save".into(), json!({ "doc": owner, "path": open, "full": true }).to_string()).unwrap();
+    let plain = s.open(open, None).unwrap();
+    assert!(!plain.encrypted && plain.allows_printing && plain.allows_copying);
+}
+
+/// #90/#113: renders and text queries of a prepared document do not wait for the session lock,
+/// which a long tool (save, OCR, optimize) holds for its whole run.
+#[test]
+fn renders_and_text_do_not_wait_for_a_running_tool() {
+    let s = Arc::new(MobileSession::new());
+    let doc = s.open(text_pdf("Hello brave world\nSecond line here"), None).unwrap().id;
+    let before = s.render_page(doc, 0, 1.0, None).unwrap();
+    // a tool in flight: the session lock is held until the main thread lets go
+    let held = s.lock();
+    let worker = {
+        let s = s.clone();
+        std::thread::spawn(move || {
+            let page = s.render_page(doc, 0, 1.0, None).map(|p| p.rgba);
+            let hits = s.find_in_page(doc, 0, "brave".into(), false, false).map(|h| h.len());
+            (page, hits)
+        })
+    };
+    let started = std::time::Instant::now();
+    while !worker.is_finished() && started.elapsed() < std::time::Duration::from_secs(20) {
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+    let finished = worker.is_finished();
+    drop(held);
+    let (page, hits) = worker.join().unwrap();
+    assert!(finished, "a render waited for the session lock");
+    assert_eq!(page.unwrap(), before.rgba);
+    assert_eq!(hits.unwrap(), 1);
+}
+
+/// After an edit, renders and text come from the new version at once.
+#[test]
+fn renders_follow_each_edit() {
+    let s = MobileSession::new();
+    let doc = s.open(blank_pdf(2), None).unwrap().id;
+    let before = s.render_page(doc, 0, 0.5, None).unwrap();
+    s.execute("page_rotate".into(), format!(r#"{{"doc": {doc}, "degrees": 90}}"#)).unwrap();
+    let after = s.render_page(doc, 0, 0.5, None).unwrap();
+    assert_eq!((after.width, after.height), (before.height, before.width));
+    s.execute("page_delete".into(), format!(r#"{{"doc": {doc}, "pages": [2]}}"#)).unwrap();
+    assert!(matches!(s.render_page(doc, 1, 0.5, None), Err(MobileError::Render(_))));
+    s.close(doc, true).unwrap();
+    assert!(matches!(s.render_page(doc, 0, 0.5, None), Err(MobileError::NoDocument(_))));
+}
+
+/// #87: a whole-document search keeps no text layers, and the pages in view stay bounded.
+#[test]
+fn text_layers_stay_bounded() {
+    let s = MobileSession::new();
+    let text: String = (0..TEXT_PAGES_PER_DOC * 3).map(|i| format!("page {i} words\u{c}")).collect();
+    let doc = s.open(text_pdf(&text), None).unwrap().id;
+    let pages = s.document(doc).unwrap().pages.len() as u32;
+    assert!(pages as usize > TEXT_PAGES_PER_DOC, "{pages} pages");
+    s.glyph_count(doc, 0).unwrap();
+    let kept = |s: &MobileSession| s.texts().get(&doc).map_or(0, |t| t.pages.len());
+    for page in 0..pages {
+        s.find_in_page(doc, page, "words".into(), false, false).unwrap();
+        s.page_plain_text(doc, page).unwrap();
+    }
+    assert_eq!(kept(&s), 1, "search and word counts keep nothing new");
+    assert!(!s.find_in_page(doc, 0, "words".into(), false, false).unwrap().is_empty());
+    for page in 0..pages {
+        s.glyph_count(doc, page).unwrap();
+    }
+    assert_eq!(kept(&s), TEXT_PAGES_PER_DOC);
+    // the most recently used page is still there, the oldest is gone
+    assert!(s.texts().get_mut(&doc).unwrap().get(pages as usize - 1).is_some());
+    assert!(s.texts().get_mut(&doc).unwrap().get(0).is_none());
+    s.release_memory();
+    assert_eq!(kept(&s), 0);
 }

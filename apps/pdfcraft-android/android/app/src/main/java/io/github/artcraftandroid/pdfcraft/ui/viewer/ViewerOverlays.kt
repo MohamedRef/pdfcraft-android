@@ -202,6 +202,27 @@ fun GoToPageDialog(doc: OpenDocument, onDismiss: () -> Unit) {
     }
 }
 
+/** Ctrl+/: the viewer's keyboard shortcuts (#153). */
+@Composable
+fun ShortcutsDialog(onDismiss: () -> Unit) {
+    val c = pdfColors
+    val context = androidx.compose.ui.platform.LocalContext.current
+    io.github.artcraftandroid.pdfcraft.ui.PdfDialog(onDismiss = onDismiss, title = stringResource(R.string.shortcut_help), confirm = stringResource(R.string.common_ok), onConfirm = onDismiss, dismiss = null) {
+        androidx.compose.foundation.lazy.LazyColumn(Modifier.heightIn(max = 420.dp)) {
+            items(SHORTCUTS.size) { i ->
+                val e = SHORTCUTS[i]
+                Row(Modifier.fillMaxWidth().padding(vertical = 6.dp).semantics(mergeDescendants = true) {}, verticalAlignment = Alignment.CenterVertically) {
+                    Text(stringResource(e.label), color = c.text, fontSize = 15.sp, modifier = Modifier.weight(1f))
+                    Text(
+                        keyLabel(context, e), color = c.text, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.background(c.pressed, RoundedCornerShape(6.dp)).padding(horizontal = 8.dp, vertical = 3.dp),
+                    )
+                }
+            }
+        }
+    }
+}
+
 /**
  * The way back after a jump: "‹ Page 12" (and "Page 87 ›" once back) above the bottom bar, for a
  * few seconds after a jump and again when scrolling stops. TalkBack announces it.

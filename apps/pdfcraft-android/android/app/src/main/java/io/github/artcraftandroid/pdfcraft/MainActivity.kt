@@ -55,6 +55,7 @@ class MainActivity : ComponentActivity() {
     private val pickOutputFolder = registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri -> vm.onOutputFolderPicked(uri) }
     private val pickFolder = registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri -> uri?.let(vm::addLocalFolder) }
     private val micPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted -> vm.onMicPermission(granted) }
+    private val notificationPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { vm.updateFocusTimer(vm.focusTimer) }
 
     private val pickBatesPdfs = registerForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { vm.onBatesFilesPicked(it) }
 
@@ -126,6 +127,8 @@ class MainActivity : ComponentActivity() {
                         FilePickKind.Combine -> pickMany.launch(arrayOf("application/pdf", "image/*", "text/plain") + OFFICE_TYPES)
                         FilePickKind.Create -> pickMany.launch(arrayOf("image/*", "text/plain", "application/pdf") + OFFICE_TYPES)
                         FilePickKind.Insert, FilePickKind.Open, FilePickKind.Replace -> pickOne.launch(arrayOf("application/pdf"))
+                        FilePickKind.Attach -> pickOne.launch(arrayOf("*/*"))
+                        FilePickKind.Library -> pickMany.launch(arrayOf("application/pdf"))
                         // .p12 / .pfx: providers type them as PKCS #12, or not at all
                         FilePickKind.DigitalId -> pickOne.launch(arrayOf("application/x-pkcs12", "application/pkcs12", "application/octet-stream"))
                     }
@@ -175,6 +178,9 @@ class MainActivity : ComponentActivity() {
                 else launchSafely { micPermission.launch(android.Manifest.permission.RECORD_AUDIO) }
             }
         }
+        lifecycleScope.launch {
+            for (u in vm.notificationRequests) if (android.os.Build.VERSION.SDK_INT >= 33) launchSafely { notificationPermission.launch(android.Manifest.permission.POST_NOTIFICATIONS) }
+        }
         // keep the screen on while reading, if asked, until half an hour without a touch
         lifecycleScope.launch {
             while (true) {
@@ -189,7 +195,13 @@ class MainActivity : ComponentActivity() {
 
     // a keyboard (or desktop mode): keys the viewer takes when no text field has them
     override fun onKeyDown(keyCode: Int, event: android.view.KeyEvent): Boolean =
-        vm.viewerKey(keyCode, event.isCtrlPressed) || super.onKeyDown(keyCode, event)
+        vm.viewerKey(keyCode, event.isCtrlPressed, event.isShiftPressed) || super.onKeyDown(keyCode, event)
+
+    // the viewer's shortcuts in the system's Meta+/ list (#153)
+    override fun onProvideKeyboardShortcuts(data: MutableList<android.view.KeyboardShortcutGroup>, menu: android.view.Menu?, deviceId: Int) {
+        super.onProvideKeyboardShortcuts(data, menu, deviceId)
+        if (vm.keyboardShortcuts) data.add(io.github.artcraftandroid.pdfcraft.ui.viewer.shortcutGroup(this))
+    }
 
     /** Log raw pen samples (real historical pressure, pen speed) before Compose handles the event. */
     override fun dispatchTouchEvent(ev: android.view.MotionEvent): Boolean {
@@ -200,6 +212,7 @@ class MainActivity : ComponentActivity() {
     override fun onUserInteraction() {
         super.onUserInteraction()
         lastTouch = System.currentTimeMillis()
+        vm.studyActivity()
     }
 
     private inline fun launchSafely(onFail: () -> Unit = {}, block: () -> Unit) {
