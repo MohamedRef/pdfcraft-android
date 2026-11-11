@@ -22,14 +22,43 @@ enum class PageMode {
     SinglePage,
 }
 
+/** How many pages sit side by side (#152). */
+enum class Spread {
+    /** One page per row (continuous) or per screen (single page). */
+    Single,
+
+    /** Pages two by two: 1-2, 3-4, … */
+    TwoUp,
+
+    /** The first page alone, as a book's cover, then 2-3, 4-5, … */
+    TwoUpCover,
+}
+
+/** Two pages side by side need a window this wide (dp): tablets, landscape phones, foldables, desktops. */
+const val SPREAD_MIN_WIDTH_DP = 600
+
+/** Whether a window [widthDp] wide shows two pages side by side. */
+fun spreadFits(widthDp: Int): Boolean = widthDp >= SPREAD_MIN_WIDTH_DP
+
+/** The pages of each spread, in order. */
+fun spreadGroups(count: Int, spread: Spread): List<IntRange> {
+    if (count <= 0) return emptyList()
+    return when (spread) {
+        Spread.Single -> (0 until count).map { it..it }
+        Spread.TwoUp -> (0 until count step 2).map { it..min(it + 1, count - 1) }
+        Spread.TwoUpCover -> listOf(0..0) + (1 until count step 2).map { it..min(it + 1, count - 1) }
+    }
+}
+
 /**
  * Where each page is at zoom 1, in layout pixels, for a viewport of [viewW] × [viewH] pixels.
  * Pure geometry, so it can be tested off the device.
  *
- * Continuous: the pages stack in one column with [gap] between them, scaled together so the
- * widest fills the width less [margin] on each side; [padTop] and [padBottom] keep the first and
- * last pages clear of the bars. SinglePage: each page is fitted into the viewport (less the
- * margins and paddings) and centred in a slot one viewport wide.
+ * Continuous: the rows of pages ([spread]: one page, or two side by side) stack in one column
+ * with [gap] between them, scaled together so the widest row fills the width less [margin] on
+ * each side; [padTop] and [padBottom] keep the first and last pages clear of the bars.
+ * SinglePage: each spread is fitted into the viewport (less the margins and paddings) and
+ * centred in a slot one viewport wide.
  */
 class DocLayout(
     val pages: List<PageSize>,
@@ -40,45 +69,75 @@ class DocLayout(
     val margin: Float,
     val padTop: Float,
     val padBottom: Float,
+    val spread: Spread = Spread.Single,
 ) {
     val rects: List<LRect>
     val width: Float
     val height: Float
 
+    /** The spreads: one row (continuous) or one slot (single page) each. */
+    val groups: List<IntRange> = spreadGroups(pages.size, spread)
+
+    /** The spread each page is in. */
+    private val groupOf = IntArray(pages.size).also { a -> groups.forEachIndexed { g, r -> for (i in r) a[i] = g } }
+
+    /** Each row's top and bottom (continuous). */
+    private val rowTop = FloatArray(groups.size)
+    private val rowBottom = FloatArray(groups.size)
+
     init {
         val out = ArrayList<LRect>(pages.size)
         when (mode) {
             PageMode.Continuous -> {
-                val widest = pages.maxOfOrNull { it.width }?.coerceAtLeast(1f) ?: 1f
-                val scale = max(1f, viewW - 2 * margin) / widest
+                val widestRow = groups.maxOfOrNull { r -> r.sumOf { pages[it].width.coerceAtLeast(1f).toDouble() }.toFloat() }?.coerceAtLeast(1f) ?: 1f
+                val most = groups.maxOfOrNull { it.count() } ?: 1
+                val scale = max(1f, viewW - 2 * margin - (most - 1) * gap) / widestRow
                 var y = padTop
-                for (p in pages) {
-                    val w = p.width.coerceAtLeast(1f) * scale
-                    val h = p.height.coerceAtLeast(1f) * scale
-                    val x = (viewW - w) / 2f
-                    out.add(LRect(x, y, x + w, y + h))
-                    y += h + gap
+                groups.forEachIndexed { g, r ->
+                    val total = r.sumOf { (pages[it].width.coerceAtLeast(1f) * scale).toDouble() }.toFloat() + (r.count() - 1) * gap
+                    var x = (viewW - total) / 2f
+                    var rowH = 0f
+                    for (i in r) {
+                        val p = pages[i]
+                        val w = p.width.coerceAtLeast(1f) * scale
+                        val h = p.height.coerceAtLeast(1f) * scale
+                        out.add(LRect(x, y, x + w, y + h))
+                        x += w + gap
+                        rowH = max(rowH, h)
+                    }
+                    rowTop[g] = y
+                    rowBottom[g] = y + rowH
+                    y += rowH + gap
                 }
                 width = viewW
                 height = if (pages.isEmpty()) viewH else y - gap + padBottom
             }
             PageMode.SinglePage -> {
-                val availW = max(1f, viewW - 2 * margin)
                 val availH = max(1f, viewH - padTop - padBottom - 2 * margin)
-                pages.forEachIndexed { i, p ->
-                    val s = min(availW / p.width.coerceAtLeast(1f), availH / p.height.coerceAtLeast(1f))
-                    val w = p.width.coerceAtLeast(1f) * s
-                    val h = p.height.coerceAtLeast(1f) * s
-                    val x = i * viewW + (viewW - w) / 2f
-                    val y = padTop + margin + (availH - h) / 2f
-                    out.add(LRect(x, y, x + w, y + h))
+                groups.forEachIndexed { g, r ->
+                    val availW = max(1f, viewW - 2 * margin - (r.count() - 1) * gap)
+                    val sumW = r.sumOf { pages[it].width.coerceAtLeast(1f).toDouble() }.toFloat()
+                    val maxH = r.maxOf { pages[it].height.coerceAtLeast(1f) }
+                    val s = min(availW / sumW, availH / maxH)
+                    var x = g * viewW + (viewW - (sumW * s + (r.count() - 1) * gap)) / 2f
+                    for (i in r) {
+                        val p = pages[i]
+                        val w = p.width.coerceAtLeast(1f) * s
+                        val h = p.height.coerceAtLeast(1f) * s
+                        val y = padTop + margin + (availH - h) / 2f
+                        out.add(LRect(x, y, x + w, y + h))
+                        x += w + gap
+                    }
                 }
-                width = max(viewW, pages.size * viewW)
+                width = max(viewW, groups.size * viewW)
                 height = viewH
             }
         }
         rects = out
     }
+
+    /** The spread page [i] is in. */
+    fun groupOf(i: Int): Int = if (groupOf.isEmpty()) 0 else groupOf[i.coerceIn(0, groupOf.lastIndex)]
 
     /** Pixels per PDF point of page [i] at zoom 1. */
     fun scaleOf(i: Int): Float = rects[i].width / pages[i].width.coerceAtLeast(1f)
@@ -88,26 +147,26 @@ class DocLayout(
         if (rects.isEmpty()) return IntRange.EMPTY
         return when (mode) {
             PageMode.Continuous -> {
-                val first = firstAtOrBelow(top)
+                val first = firstRowAtOrBelow(top)
                 var last = first
-                while (last + 1 < rects.size && rects[last + 1].top <= bottom) last++
-                first..last
+                while (last + 1 < groups.size && rowTop[last + 1] <= bottom) last++
+                groups[first].first..groups[last].last
             }
             PageMode.SinglePage -> {
-                val first = (left / viewW).toInt().coerceIn(0, rects.lastIndex)
-                val last = (right / viewW).toInt().coerceIn(0, rects.lastIndex)
-                first..last
+                val first = (left / viewW).toInt().coerceIn(0, groups.lastIndex)
+                val last = (right / viewW).toInt().coerceIn(0, groups.lastIndex)
+                groups[first].first..groups[last].last
             }
         }
     }
 
-    /** The first page whose bottom is at or below layout row [y] (binary search). */
-    private fun firstAtOrBelow(y: Float): Int {
+    /** The first row whose bottom is at or below layout row [y] (binary search). */
+    private fun firstRowAtOrBelow(y: Float): Int {
         var lo = 0
-        var hi = rects.lastIndex
+        var hi = groups.lastIndex
         while (lo < hi) {
             val mid = (lo + hi) / 2
-            if (rects[mid].bottom + gap < y) lo = mid + 1 else hi = mid
+            if (rowBottom[mid] + gap < y) lo = mid + 1 else hi = mid
         }
         return lo
     }
@@ -118,21 +177,28 @@ class DocLayout(
         return range.firstOrNull { rects[it].contains(x, y) }
     }
 
+    /** The page of spread [g] nearest layout column [x] (the first on a tie). */
+    private fun nearestIn(g: Int, x: Float): Int {
+        val r = groups[g]
+        if (r.first == r.last) return r.first
+        return r.minBy { i -> val p = rects[i]; if (x < p.left) p.left - x else if (x > p.right) x - p.right else 0f }
+    }
+
     /** The page nearest layout point ([x], [y]): the one under it, else the closest. */
     fun nearestPage(x: Float, y: Float): Int {
         if (rects.isEmpty()) return 0
         return when (mode) {
             PageMode.Continuous -> {
-                val i = firstAtOrBelow(y)
-                val r = rects[i]
-                when {
-                    // in the gap below page i: whichever edge is closer
-                    y > r.bottom && i + 1 < rects.size -> if (rects[i + 1].top - y < y - r.bottom) i + 1 else i
-                    y < r.top && i > 0 -> if (r.top - y > y - rects[i - 1].bottom) i - 1 else i
-                    else -> i
+                val g = firstRowAtOrBelow(y)
+                val row = when {
+                    // in the gap below row g: whichever edge is closer
+                    y > rowBottom[g] && g + 1 < groups.size -> if (rowTop[g + 1] - y < y - rowBottom[g]) g + 1 else g
+                    y < rowTop[g] && g > 0 -> if (rowTop[g] - y > y - rowBottom[g - 1]) g - 1 else g
+                    else -> g
                 }
+                nearestIn(row, x)
             }
-            PageMode.SinglePage -> (x / viewW).toInt().coerceIn(0, rects.lastIndex)
+            PageMode.SinglePage -> nearestIn((x / viewW).toInt().coerceIn(0, groups.lastIndex), x)
         }
     }
 }

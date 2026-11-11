@@ -944,8 +944,8 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             ctrl && (keyCode == android.view.KeyEvent.KEYCODE_EQUALS || keyCode == android.view.KeyEvent.KEYCODE_PLUS || keyCode == android.view.KeyEvent.KEYCODE_NUMPAD_ADD) -> v.zoomStep(1, center)
             ctrl && (keyCode == android.view.KeyEvent.KEYCODE_MINUS || keyCode == android.view.KeyEvent.KEYCODE_NUMPAD_SUBTRACT) -> v.zoomStep(-1, center)
             ctrl -> return false
-            keyCode == android.view.KeyEvent.KEYCODE_N || keyCode == android.view.KeyEvent.KEYCODE_PAGE_DOWN -> v.goToPage(v.currentPage + 1)
-            keyCode == android.view.KeyEvent.KEYCODE_P || keyCode == android.view.KeyEvent.KEYCODE_PAGE_UP -> v.goToPage(v.currentPage - 1)
+            keyCode == android.view.KeyEvent.KEYCODE_N || keyCode == android.view.KeyEvent.KEYCODE_PAGE_DOWN -> v.turnPage(1)
+            keyCode == android.view.KeyEvent.KEYCODE_P || keyCode == android.view.KeyEvent.KEYCODE_PAGE_UP -> v.turnPage(-1)
             keyCode == android.view.KeyEvent.KEYCODE_DPAD_DOWN -> v.setScroll(v.scrollX, v.scrollY + v.viewH * 0.1f)
             keyCode == android.view.KeyEvent.KEYCODE_DPAD_UP -> v.setScroll(v.scrollX, v.scrollY - v.viewH * 0.1f)
             keyCode == android.view.KeyEvent.KEYCODE_DPAD_RIGHT -> v.setScroll(v.scrollX + v.viewW * 0.1f, v.scrollY)
@@ -1272,6 +1272,31 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         else io.github.artcraftandroid.pdfcraft.ui.viewer.PageMode.Continuous
 
     val savedNightMode: Boolean get() = appPrefs.getBoolean("nightMode", false)
+
+    /**
+     * Two pages side by side (View settings; remembered app-wide). It applies only where the
+     * window is wide enough ([io.github.artcraftandroid.pdfcraft.ui.viewer.spreadFits]); a phone
+     * held upright shows one page.
+     */
+    var spreadPref by mutableStateOf(
+        when (appPrefs.getString("spread", "single")) {
+            "two" -> io.github.artcraftandroid.pdfcraft.ui.viewer.Spread.TwoUp
+            "cover" -> io.github.artcraftandroid.pdfcraft.ui.viewer.Spread.TwoUpCover
+            else -> io.github.artcraftandroid.pdfcraft.ui.viewer.Spread.Single
+        },
+    )
+        private set
+
+    fun setSpread(spread: io.github.artcraftandroid.pdfcraft.ui.viewer.Spread) {
+        // two pages side by side are page views: leave Reading Mode for them
+        readingMode = false
+        spreadPref = spread
+        appPrefs.edit().putString("spread", when (spread) {
+            io.github.artcraftandroid.pdfcraft.ui.viewer.Spread.TwoUp -> "two"
+            io.github.artcraftandroid.pdfcraft.ui.viewer.Spread.TwoUpCover -> "cover"
+            io.github.artcraftandroid.pdfcraft.ui.viewer.Spread.Single -> "single"
+        }).apply()
+    }
 
     fun setPageMode(doc: OpenDocument, mode: io.github.artcraftandroid.pdfcraft.ui.viewer.PageMode) {
         // leaving Reading Mode: a canvas laid out already followed the page read; else it shows it on layout
