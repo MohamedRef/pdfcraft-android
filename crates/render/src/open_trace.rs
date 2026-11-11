@@ -20,7 +20,7 @@ impl OpenTrace {
     }
 
     pub fn measure<T>(&self, name: &'static str, work: impl FnOnce() -> T) -> T {
-        let Some(stages) = &self.0 else { return work() };
+        let Some(_) = &self.0 else { return work() };
         #[cfg(not(target_arch = "wasm32"))]
         let started = std::time::Instant::now();
         let result = work();
@@ -29,11 +29,21 @@ impl OpenTrace {
         // std::time::Instant panics on wasm32. Preserve the existing web open path.
         #[cfg(target_arch = "wasm32")]
         let duration_ms = 0;
+        self.record(name, duration_ms);
+        result
+    }
+
+    /// A fixed diagnostic event, such as a conservative fallback reason, not measured work.
+    pub fn event(&self, name: &'static str) {
+        self.record(name, 0);
+    }
+
+    fn record(&self, name: &'static str, duration_ms: u64) {
+        let Some(stages) = &self.0 else { return };
         let mut stages = stages.lock().unwrap_or_else(PoisonError::into_inner);
         if stages.len() < 64 {
             stages.push(OpenStage { name, duration_ms });
         }
-        result
     }
 
     pub fn snapshot(&self) -> Vec<OpenStage> {
@@ -64,5 +74,19 @@ mod tests {
         }
         assert_eq!(trace.snapshot().len(), 64);
         assert!(OpenTrace::recording().snapshot().is_empty());
+    }
+
+    #[test]
+    fn diagnostic_events_are_opt_in_and_share_the_stage_budget() {
+        let quiet = OpenTrace::default();
+        quiet.event("native_reading_fallback_catalog");
+        assert!(quiet.snapshot().is_empty());
+        let trace = OpenTrace::recording();
+        trace.event("native_reading_fallback_catalog");
+        assert_eq!(trace.snapshot()[0].duration_ms, 0);
+        for _ in 0..100 {
+            trace.event("native_reading_fallback_catalog");
+        }
+        assert_eq!(trace.snapshot().len(), 64);
     }
 }

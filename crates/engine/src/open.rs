@@ -76,42 +76,47 @@ impl OpenContext {
         initial_page: usize,
     ) -> Result<Option<PreparedDocument>, OpenError> {
         self.check_cancelled()?;
+        let fallback = |reason: &'static str| {
+            self.trace.event(reason);
+            Ok(None)
+        };
         guard(|| {
             let Ok(cos) = self.trace.measure("native_preview_cos", || pdfcraft_cos::Document::open_with_password(bytes.clone(), password)) else {
-                return Ok(None);
+                return fallback("native_reading_fallback_parser");
             };
             if !cos.repair_log().is_empty() {
-                return Ok(None);
+                return fallback("native_reading_fallback_repairs");
             }
-            let Some(root) = cos.root() else { return Ok(None) };
+            let Some(root) = cos.root() else { return fallback("native_reading_fallback_catalog") };
             let catalog = cos.get(root);
-            let Some(catalog) = catalog.as_dict() else { return Ok(None) };
-            if let Some(form) = catalog.get(b"AcroForm") {
-                let form = cos.resolve(form);
-                let Some(form) = form.as_dict() else { return Ok(None) };
-                // Tree-listed widgets need not be listed in the page's Annots array. Keep
-                // their values and appearances on the existing complete path too.
-                if form.contains(b"XFA")
-                    || form.get(b"Fields").is_some_and(|fields| cos.resolve(fields).as_array().is_none_or(|fields| !fields.is_empty()))
-                {
-                    return Ok(None);
-                }
-            }
-            let info = match pdfcraft_render::inspect_geometry_with_trace(bytes.clone(), password, &self.trace) {
-                Ok(info) if !info.pages.is_empty() && info.warnings.is_empty() => info,
-                _ => return Ok(None),
+            let Some(catalog) = catalog.as_dict() else { return fallback("native_reading_fallback_catalog") };
+            let field_pages = match reading_field_pages(&cos, catalog) {
+                Ok(pages) => pages,
+                Err(reason) => return fallback(reason),
             };
-            let Ok(pages) = pdfcraft_annot::page_refs(&cos) else { return Ok(None) };
-            if pages.len() != info.pages.len() {
-                return Ok(None);
+            let Ok(pages) = pdfcraft_annot::page_refs(&cos) else { return fallback("native_reading_fallback_page_tree") };
+            if pages.is_empty() {
+                return fallback("native_reading_fallback_page_tree");
             }
+            if field_pages.iter().any(|p| !pages.contains(p)) {
+                return fallback("native_reading_fallback_widget_location");
+            }
+            let initial_page = if initial_page < pages.len() { initial_page } else { 0 };
             let cancelled = self.cancelled.clone().unwrap_or_else(|| Arc::new(AtomicBool::new(false)));
-            let reading = ReadingSource { cos, pages, cancelled };
-            let initial_page = if initial_page < info.pages.len() { initial_page } else { 0 };
-            if !reading.page_ready(initial_page) {
-                return Ok(None);
+            let reading = ReadingSource { cos, pages, field_pages, cancelled };
+            if let Some(reason) = reading.page_block_reason(initial_page) {
+                return fallback(reason);
             }
-            let mut info = info;
+            if !reading.cos.repair_log().is_empty() {
+                return fallback("native_reading_fallback_repairs");
+            }
+            let mut info = match pdfcraft_render::inspect_geometry_with_trace(bytes.clone(), password, &self.trace) {
+                Ok(info) if !info.pages.is_empty() && info.warnings.is_empty() => info,
+                _ => return fallback("native_reading_fallback_geometry"),
+            };
+            if reading.pages.len() != info.pages.len() {
+                return fallback("native_reading_fallback_page_count");
+            }
             info.encrypted = reading.cos.security().is_some();
             self.check_cancelled()?;
             let document = Session::build_document(
@@ -130,7 +135,7 @@ impl OpenContext {
             )?;
             Ok(Some(PreparedDocument { document }))
         })
-        .unwrap_or_else(|_| Ok(None))
+        .unwrap_or_else(|_| fallback("native_reading_fallback_panic"))
     }
 
     /// Prepare a document without mutating the session that supplied this context.
@@ -546,17 +551,118 @@ impl Session {
 pub(crate) struct ReadingSource {
     cos: pdfcraft_cos::Document,
     pages: Vec<pdfcraft_cos::ObjRef>,
+    field_pages: std::collections::HashSet<pdfcraft_cos::ObjRef>,
     pub(crate) cancelled: Arc<AtomicBool>,
 }
 
 impl ReadingSource {
     pub(crate) fn page_ready(&self, page: usize) -> bool {
-        let Some(reference) = self.pages.get(page) else { return false };
-        let object = self.cos.get(*reference);
-        let Some(page) = object.as_dict() else { return false };
-        let Some(annots) = page.get(b"Annots") else { return true };
-        let annots = self.cos.resolve(annots);
-        let Some(annots) = annots.as_array() else { return false };
-        annots.len() <= 4096 && annots.iter().all(|a| self.cos.resolve(a).as_dict().is_some_and(|d| d.name(b"Subtype") == Some(b"Link")))
+        self.page_block_reason(page).is_none()
     }
+
+    fn page_block_reason(&self, page: usize) -> Option<&'static str> {
+        let Some(reference) = self.pages.get(page) else { return Some("native_reading_fallback_page_tree") };
+        if self.field_pages.contains(reference) {
+            return Some("native_reading_fallback_initial_page_form");
+        }
+        let object = self.cos.get(*reference);
+        let Some(page) = object.as_dict() else { return Some("native_reading_fallback_page_tree") };
+        let Some(annots) = page.get(b"Annots") else { return None };
+        let annots = self.cos.resolve(annots);
+        let Some(annots) = annots.as_array() else { return Some("native_reading_fallback_annotations") };
+        if annots.len() > 4096 || !annots.iter().all(|a| self.cos.resolve(a).as_dict().is_some_and(|d| d.name(b"Subtype") == Some(b"Link"))) {
+            return Some("native_reading_fallback_annotations");
+        }
+        None
+    }
+}
+
+/// Classify a small, fully read field tree without visiting every page annotation.
+/// The result only blocks affected pages. It never declares signatures or forms absent.
+fn reading_field_pages(
+    cos: &pdfcraft_cos::Document,
+    catalog: &pdfcraft_cos::Dict,
+) -> Result<std::collections::HashSet<pdfcraft_cos::ObjRef>, &'static str> {
+    use pdfcraft_cos::Object;
+    use std::collections::HashSet;
+    let mut pages = HashSet::new();
+    let Some(form) = catalog.get(b"AcroForm") else { return Ok(pages) };
+    let form = cos.resolve(form);
+    if matches!(&*form, Object::Null) {
+        return Ok(pages);
+    }
+    let Some(form) = form.as_dict() else { return Err("native_reading_fallback_form_dictionary") };
+    if form.contains(b"XFA") {
+        return Err("native_reading_fallback_xfa");
+    }
+    let Some(fields) = form.get(b"Fields") else { return Ok(pages) };
+    let fields = cos.resolve(fields);
+    if matches!(&*fields, Object::Null) {
+        return Ok(pages);
+    }
+    let Some(fields) = fields.as_array() else {
+        return Err("native_reading_fallback_field_tree");
+    };
+    if fields.len() > 512 {
+        return Err("native_reading_fallback_field_budget");
+    }
+    let mut pending: Vec<_> = fields.iter().cloned().map(|f| (f, 0usize)).collect();
+    let mut seen = HashSet::new();
+    let mut remaining = 512usize;
+    while let Some((field, depth)) = pending.pop() {
+        if remaining == 0 || depth > 32 {
+            return Err("native_reading_fallback_field_budget");
+        }
+        remaining -= 1;
+        if let Some(reference) = field.as_ref()
+            && !seen.insert(reference)
+        {
+            return Err("native_reading_fallback_field_tree");
+        }
+        let field = cos.resolve(&field);
+        if matches!(&*field, Object::Null) {
+            continue;
+        }
+        let Some(field) = field.as_dict() else {
+            return Err("native_reading_fallback_field_tree");
+        };
+        // A merged field can be its own widget through Rect even without Subtype Widget.
+        if (field.contains(b"Rect") || field.name(b"Subtype") == Some(b"Widget")) && reading_widget_visible(cos, field)? {
+            let Some(page) = field.reference(b"P") else {
+                return Err("native_reading_fallback_widget_location");
+            };
+            pages.insert(page);
+        }
+        if let Some(kids) = field.get(b"Kids") {
+            let kids = cos.resolve(kids);
+            if matches!(&*kids, Object::Null) {
+                continue;
+            }
+            let Some(kids) = kids.as_array() else {
+                return Err("native_reading_fallback_field_tree");
+            };
+            if kids.len() > remaining.saturating_sub(pending.len()) {
+                return Err("native_reading_fallback_field_budget");
+            }
+            pending.extend(kids.iter().cloned().map(|f| (f, depth + 1)));
+        }
+    }
+    Ok(pages)
+}
+
+/// Match the viewer's Hidden/NoView and finite nondegenerate rectangle rules.
+/// An invisible signature remains unverified and is still discovered by complete opening.
+fn reading_widget_visible(cos: &pdfcraft_cos::Document, widget: &pdfcraft_cos::Dict) -> Result<bool, &'static str> {
+    let flags = widget.get(b"F").and_then(|f| cos.resolve(f).as_int()).unwrap_or(0);
+    if flags & (2 | 32) != 0 {
+        return Ok(false);
+    }
+    let Some(rect) = widget.get(b"Rect") else { return Err("native_reading_fallback_widget_appearance") };
+    let rect = cos.resolve(rect);
+    let Some(rect) = rect.as_array().filter(|r| r.len() == 4) else { return Err("native_reading_fallback_widget_appearance") };
+    let mut numbers = [0.0f64; 4];
+    for (out, value) in numbers.iter_mut().zip(rect) {
+        *out = cos.resolve(value).as_f64().filter(|v| v.is_finite()).ok_or("native_reading_fallback_widget_appearance")?;
+    }
+    Ok((numbers[0] - numbers[2]).abs() > 0.5 && (numbers[1] - numbers[3]).abs() > 0.5)
 }

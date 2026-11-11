@@ -5,8 +5,9 @@ The Android page viewer can publish a read-only reading stage before full docume
 ## Eligibility and appearance safety
 
 - Android chooses this path for inputs of at least 16 MiB, ordinary page viewing, and no pending editing tool. Reopening directly into reflowed Reading Mode retains complete opening.
-- A repaired editing source, renderer recovery warning, XFA entry, nonempty or unreadable form-field tree, unreadable form catalog or mismatched page count falls back to complete opening. Owner-password cases that need the renderer's recovered user password keep the complete path.
+- A repaired editing source, renderer recovery warning, XFA entry, unreadable or over-budget form-field tree, unreadable form catalog or mismatched page count falls back to complete opening. Owner-password cases that need the renderer's recovered user password keep the complete path.
 - The initial page, including a restored page, must have no annotations or only readable Link dictionaries. A page with widgets, comments, unknown annotations or more than 4,096 annotation entries waits for complete preparation. Later pages receive the same check before provisional rendering. This deliberately favors correctness over extending the fast path to every PDF.
+- Explicit null AcroForm/Fields entries are accepted as PDF null, without inferring the absence of standalone timestamps or page-only widgets. A field tree of at most 512 entries and depth 32 can be classified by affected page. Known off-page widgets do not block an unaffected initial page; their own pages remain blocked. Hidden/NoView and finite zero-area widgets remain subject to complete signature validation, but do not block an unrelated reading image. Unknown widget locations retain the complete path.
 - Stored dimensions and rotations are exact for all pages. No approximate page sizes, reduced-color bitmaps or altered annotation artwork are introduced.
 
 ## Pending state and transition
@@ -19,7 +20,7 @@ Closing cancels pending preparation and removes its handle. Cancellation is chec
 
 ## Diagnostics and limits
 
-`native_reading_prepare` and `native_reading_ready` describe the early stage. The existing `native_ready` is emitted after full preparation completes. `first_page_raster_ready` remains the first raster milestone; canvas submission is not proof of GPU presentation. Nested and parallel stage durations still overlap.
+`native_reading_prepare` and `native_reading_ready` describe the early stage. A rejected attempt records one fixed `native_reading_fallback_*` event (parser, repairs, catalog/form, XFA, field tree/budget/location, geometry/page count or page annotations). Its zero duration is an event marker, not a measured operation; it never includes PDF names or data. The existing `native_ready` is emitted after full preparation completes. `first_page_raster_ready` remains the first raster milestone; canvas submission is not proof of GPU presentation. Nested and parallel stage durations still overlap.
 
 Input is read once through the existing confined, size-capped reader and shared using `Arc<Vec<u8>>`. This change does not introduce mmap, eliminate the input copy, reduce total inspection work or guarantee physical-device latency. It does not change the existing complete-open API or publish an APK.
 

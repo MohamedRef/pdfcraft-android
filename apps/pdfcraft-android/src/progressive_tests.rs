@@ -184,3 +184,103 @@ fn progressive_late_renderers_do_not_revive_closed_or_superseded_cache_entries()
     session.return_renderer(opened.document.id, &bytes, late);
     assert!(!session.cache().contains_key(&opened.document.id));
 }
+
+#[test]
+fn progressive_explicit_null_form_entries_do_not_force_complete_open() {
+    for (root, objects) in [
+        ("/AcroForm null", vec![]),
+        ("/AcroForm 7 0 R", vec!["null"]),
+        ("/AcroForm 7 0 R", vec!["<< /Fields null >>"]),
+        ("/AcroForm 7 0 R", vec!["<< /Fields 8 0 R >>", "null"]),
+    ] {
+        let bytes = fixture(root, "", "", &objects);
+        let path = file(&bytes);
+        let session = MobileSession::new();
+        let reading = session.begin_open(path.clone(), None, 0, true).unwrap();
+        assert!(reading.document.preparing, "{root} {objects:?}");
+        assert!(!reading.timings.iter().any(|s| s.stage.starts_with("native_reading_fallback_")));
+        let early = session.render_page(reading.document.id, 0, 1.0, None).unwrap();
+        let ready = session.complete_open(reading.document.id).unwrap();
+        assert_eq!(session.render_page(ready.document.id, 0, 1.0, None).unwrap().rgba, early.rgba);
+        assert_eq!(std::fs::read(path).unwrap(), bytes);
+    }
+}
+
+#[test]
+fn progressive_located_tree_widget_blocks_its_page_without_blocking_unaffected_pages() {
+    let bytes = fixture(
+        "/AcroForm 7 0 R",
+        "",
+        "",
+        &["<< /Fields [8 0 R] >>", "<< /Type /Annot /Subtype /Widget /FT /Tx /T (offpage) /V (kept) /Rect [10 10 90 35] /P 5 0 R >>"],
+    );
+    let path = file(&bytes);
+    let session = MobileSession::new();
+    let reading = session.begin_open(path.clone(), None, 0, true).unwrap();
+    assert!(reading.document.preparing);
+    let early = session.render_page(reading.document.id, 0, 1.0, None).unwrap();
+    assert!(session.render_page(reading.document.id, 1, 1.0, None).is_err());
+    let ready = session.complete_open(reading.document.id).unwrap();
+    assert_eq!(ready.document.fields, 1);
+    assert_eq!(session.with_doc(ready.document.id, |d| d.form[0].value.first().cloned()).unwrap().as_deref(), Some("kept"));
+    // The complete engine locates widgets through page annotations; preserve its behavior
+    // for this tree-only fixture while conservatively blocking its declared preview page.
+    let ordinary = MobileSession::new();
+    let expected = ordinary.open(path.clone(), None).unwrap();
+    let widgets = |s: &MobileSession, id| s.widgets(id).unwrap().into_iter().map(|w| (w.page, w.field, w.rect, w.value)).collect::<Vec<_>>();
+    assert_eq!(widgets(&session, ready.document.id), widgets(&ordinary, expected.id));
+    assert_eq!(session.render_page(ready.document.id, 0, 1.0, None).unwrap().rgba, early.rgba);
+    let restored = MobileSession::new().begin_open(path.clone(), None, 1, true).unwrap();
+    assert!(!restored.document.preparing);
+    assert!(restored.timings.iter().any(|s| s.stage == "native_reading_fallback_initial_page_form"));
+    assert_eq!(std::fs::read(path).unwrap(), bytes);
+}
+
+#[test]
+fn progressive_unknown_widget_locations_and_invalid_trees_have_fixed_fallback_reasons() {
+    for (objects, reason) in [
+        (vec!["17"], "native_reading_fallback_form_dictionary"),
+        (vec!["<< /Fields [8 0 R] >>", "<< /Subtype /Widget /FT /Tx /T (unknown) /Rect [10 10 90 35] >>"], "native_reading_fallback_widget_location"),
+        (vec!["<< /Fields [8 0 R] >>", "<< /FT /Tx /T (cycle) /Kids [8 0 R] >>"], "native_reading_fallback_field_tree"),
+    ] {
+        let session = MobileSession::new();
+        let opened = session.begin_open(file(&fixture("/AcroForm 7 0 R", "", "", &objects)), None, 0, true).unwrap();
+        assert!(!opened.document.preparing);
+        let reasons: Vec<_> = opened.timings.iter().filter(|s| s.stage.starts_with("native_reading_fallback_")).collect();
+        assert_eq!(reasons.len(), 1);
+        assert_eq!(reasons[0].stage, reason);
+        assert_eq!(reasons[0].duration_ms, 0);
+    }
+}
+
+#[test]
+fn progressive_large_field_trees_have_a_bounded_diagnostic_fallback() {
+    let form = format!("<< /Fields [{}] >>", "null ".repeat(513));
+    let session = MobileSession::new();
+    let opened = session.begin_open(file(&fixture("/AcroForm 7 0 R", "", "", &[&form])), None, 0, true).unwrap();
+    assert!(!opened.document.preparing);
+    assert!(opened.timings.iter().any(|s| s.stage == "native_reading_fallback_field_budget"));
+}
+
+#[test]
+fn progressive_invisible_signature_widgets_stay_pending_and_are_validated_on_completion() {
+    for geometry in ["/Rect [0 0 0 0]", "/Rect [10 10 90 35] /F 2", "/Rect [10 10 90 35] /F 32"] {
+        let widget = format!("<< /Subtype /Widget /FT /Sig /T (invisible) /V 9 0 R {geometry} >>");
+        let bytes = fixture(
+            "/AcroForm 7 0 R",
+            "",
+            "",
+            &["<< /Fields [8 0 R] >>", &widget, "<< /Type /Sig /ByteRange [0 1 2 1] /Contents <> /SubFilter /adbe.pkcs7.detached >>"],
+        );
+        let path = file(&bytes);
+        let session = MobileSession::new();
+        let reading = session.begin_open(path.clone(), None, 0, true).unwrap();
+        assert!(reading.document.preparing, "{geometry}");
+        assert!(!reading.document.allows_copying);
+        assert!(session.execute("doc_save".into(), json!({"doc":reading.document.id}).to_string()).is_err());
+        let ready = session.complete_open(reading.document.id).unwrap();
+        assert!(!ready.document.preparing && ready.document.signed);
+        assert!(!session.with_doc(ready.document.id, |d| d.signatures[0].visible).unwrap());
+        assert_eq!(std::fs::read(path).unwrap(), bytes);
+    }
+}

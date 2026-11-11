@@ -1,0 +1,17 @@
+# Large-file opening work plan
+
+The implementation is a sequence of independently tested pull requests. A completed phase does not mean the entire plan is finished. Each phase must pass exact-head Rust/provenance and Android JVM merge gates before the next feature is implemented. Publish one follow-up beta after the remaining batch is integrated and verified.
+
+| Area | Work remaining | State |
+| --- | --- | --- |
+| Reading-stage coverage | Accept explicit null form entries, classify bounded field trees by affected page, preserve invisible-signature validation, and report fixed fallback reasons | In progress |
+| Per-page overlays | Load visible-page comments and widgets first; retain complete lists on demand, with generation checks and refresh behavior | Planned |
+| Rendering and memory | Prioritize visible rendering, limit initial prefetch, request large heap with actual-runtime cache budgets, and provide an opaque RGB565 option with correct native transfer/accounting | Planned |
+| Shared input bytes | Audit managed-file immutability and all save paths, introduce a shared byte source, implement read-only mapping with owned fallback and atomic replacement, and test mapping lifetime through save/close/reopen | Planned |
+| Integration and release | Re-run complete suites, provenance, Android JVM and release gates; document measured results and remaining physical-device limits | Planned |
+
+The already published reading stage is deliberately conservative. Rejected attempts must have diagnostic reason markers instead of silently looking like a successful progressive open.
+
+Signature absence must not be inferred from a missing AcroForm: standalone timestamps and page-only widgets are regression cases. Signature state remains pending until complete discovery and validation. Neither elapsed-time thresholds nor a two-point page-count comparison prove constant-time complexity; use bounded-work counters and behavior checks alongside manual timing measurements.
+
+Memory mapping must retain an immutable underlying file for its entire lifetime. Verify regular-file writes and Android working-copy replacement before enabling it; a read-only file descriptor alone does not establish immutability. Previously published APKs remain unchanged.
