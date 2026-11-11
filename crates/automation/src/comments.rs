@@ -1081,7 +1081,8 @@ mod tests {
     }
 }
 
-/// The most audio a voice comment holds: an hour of 48 kHz stereo 16-bit samples.
+/// The most audio a voice comment holds: 32 MiB of 16-bit samples, about 17 minutes of the app's
+/// 16 kHz mono recordings (or about 3 minutes at 48 kHz stereo).
 const MAX_SOUND_BYTES: usize = 32 * 1024 * 1024;
 
 /// A WAV file's 16-bit PCM samples, big-endian as PDF stores them (§13.3), with the sampling
