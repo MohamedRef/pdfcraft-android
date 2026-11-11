@@ -929,28 +929,85 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         return send.setType(mime).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
     }
 
+    /** The keyboard shortcuts list (Ctrl+/). */
+    var shortcutsHelp by mutableStateOf(false)
+
     /**
-     * Keys in the viewer, as the reference takes them: N or Page Down for the next page, P or Page
-     * Up for the previous one, the arrows to scroll, Ctrl+P to print, Ctrl and + or − to zoom.
+     * Keys in the viewer (#153): tools (P pen, H highlight, E eraser, L lasso, T text, N note, S
+     * shapes), Esc back to reading, Ctrl+Z / Ctrl+Shift+Z undo and redo, Ctrl+F find, Ctrl+B
+     * bookmark, Delete the selected comment, 1-9 pen presets, [ and ] pen width, Page Up/Down and
+     * Space to turn pages, the arrows to scroll, Ctrl+P print, Ctrl and + or − to zoom, Ctrl+/ the
+     * list. Only keys no text field took reach here.
      */
-    fun viewerKey(keyCode: Int, ctrl: Boolean): Boolean {
+    fun viewerKey(keyCode: Int, ctrl: Boolean, shift: Boolean = false): Boolean {
         if (!keyboardShortcuts) return false
         val doc = document ?: return false
         if (toolScreen != null || readingMode) return false
         val v = doc.viewer
+        val ctl = doc.controller
         val center = androidx.compose.ui.geometry.Offset(v.viewW / 2f, v.viewH / 2f)
-        when {
-            ctrl && keyCode == android.view.KeyEvent.KEYCODE_P -> print(doc)
-            ctrl && (keyCode == android.view.KeyEvent.KEYCODE_EQUALS || keyCode == android.view.KeyEvent.KEYCODE_PLUS || keyCode == android.view.KeyEvent.KEYCODE_NUMPAD_ADD) -> v.zoomStep(1, center)
-            ctrl && (keyCode == android.view.KeyEvent.KEYCODE_MINUS || keyCode == android.view.KeyEvent.KEYCODE_NUMPAD_SUBTRACT) -> v.zoomStep(-1, center)
-            ctrl -> return false
-            keyCode == android.view.KeyEvent.KEYCODE_N || keyCode == android.view.KeyEvent.KEYCODE_PAGE_DOWN -> v.turnPage(1)
-            keyCode == android.view.KeyEvent.KEYCODE_P || keyCode == android.view.KeyEvent.KEYCODE_PAGE_UP -> v.turnPage(-1)
-            keyCode == android.view.KeyEvent.KEYCODE_DPAD_DOWN -> v.setScroll(v.scrollX, v.scrollY + v.viewH * 0.1f)
-            keyCode == android.view.KeyEvent.KEYCODE_DPAD_UP -> v.setScroll(v.scrollX, v.scrollY - v.viewH * 0.1f)
-            keyCode == android.view.KeyEvent.KEYCODE_DPAD_RIGHT -> v.setScroll(v.scrollX + v.viewW * 0.1f, v.scrollY)
-            keyCode == android.view.KeyEvent.KEYCODE_DPAD_LEFT -> v.setScroll(v.scrollX - v.viewW * 0.1f, v.scrollY)
-            else -> return false
+        val drawing = ctl.tool == ViewerTool.Draw
+        if (!ctrl && drawing) io.github.artcraftandroid.pdfcraft.ui.viewer.presetForKey(keyCode)?.let { return toolPrefs.applyInkPreset(it) }
+        val shortcut = io.github.artcraftandroid.pdfcraft.ui.viewer.viewerShortcut(keyCode, ctrl, shift) ?: return false
+        fun tool(t: ViewerTool) { if (ctl.tool != t) enterTool(doc, t) }
+        fun draw(eraser: Boolean = false, lasso: Boolean = false, shape: io.github.artcraftandroid.pdfcraft.ui.viewer.InkShapeMode = io.github.artcraftandroid.pdfcraft.ui.viewer.InkShapeMode.Freehand) {
+            tool(ViewerTool.Draw)
+            if (ctl.tool != ViewerTool.Draw) return
+            ctl.eraserMode = eraser
+            ctl.lassoMode = lasso
+            ctl.inkShapeMode = shape
+        }
+        when (shortcut) {
+            io.github.artcraftandroid.pdfcraft.ui.viewer.ViewerShortcut.Pen -> { draw(); toolPrefs.selectWritingPen() }
+            io.github.artcraftandroid.pdfcraft.ui.viewer.ViewerShortcut.Highlighter -> { ctl.markup = io.github.artcraftandroid.pdfcraft.ui.viewer.TextMarkup.Highlight; tool(ViewerTool.Markup) }
+            io.github.artcraftandroid.pdfcraft.ui.viewer.ViewerShortcut.Eraser -> draw(eraser = true)
+            io.github.artcraftandroid.pdfcraft.ui.viewer.ViewerShortcut.Lasso -> draw(lasso = true)
+            io.github.artcraftandroid.pdfcraft.ui.viewer.ViewerShortcut.Text -> tool(ViewerTool.Text)
+            io.github.artcraftandroid.pdfcraft.ui.viewer.ViewerShortcut.Note -> { ctl.commentMode = io.github.artcraftandroid.pdfcraft.ui.viewer.CommentMode.Text; tool(ViewerTool.Comment) }
+            io.github.artcraftandroid.pdfcraft.ui.viewer.ViewerShortcut.Shapes -> {
+                // S again goes on to the next shape: line, rectangle, oval, arrow
+                val shapes = listOf(
+                    io.github.artcraftandroid.pdfcraft.ui.viewer.InkShapeMode.Line, io.github.artcraftandroid.pdfcraft.ui.viewer.InkShapeMode.Rectangle,
+                    io.github.artcraftandroid.pdfcraft.ui.viewer.InkShapeMode.Oval, io.github.artcraftandroid.pdfcraft.ui.viewer.InkShapeMode.Arrow,
+                )
+                val at = if (drawing) shapes.indexOf(ctl.inkShapeMode) else -1
+                draw(shape = shapes[(at + 1) % shapes.size])
+            }
+            io.github.artcraftandroid.pdfcraft.ui.viewer.ViewerShortcut.Leave -> when {
+                doc.selection.selection != null -> doc.selection.clear()
+                selectedComment?.first === doc -> selectedComment = null
+                ctl.sheet != io.github.artcraftandroid.pdfcraft.ui.viewer.ViewerSheet.None -> ctl.sheet = io.github.artcraftandroid.pdfcraft.ui.viewer.ViewerSheet.None
+                ctl.searching -> { doc.search.clear(); ctl.searching = false }
+                ctl.tool != ViewerTool.None -> leaveTool(doc)
+                else -> return false
+            }
+            io.github.artcraftandroid.pdfcraft.ui.viewer.ViewerShortcut.Undo -> undo(doc)
+            io.github.artcraftandroid.pdfcraft.ui.viewer.ViewerShortcut.Redo -> redo(doc)
+            io.github.artcraftandroid.pdfcraft.ui.viewer.ViewerShortcut.Find -> {
+                doc.selection.clear()
+                ctl.searching = true
+                ctl.sheet = io.github.artcraftandroid.pdfcraft.ui.viewer.ViewerSheet.None
+            }
+            io.github.artcraftandroid.pdfcraft.ui.viewer.ViewerShortcut.Bookmark -> toggleBookmark(doc)
+            io.github.artcraftandroid.pdfcraft.ui.viewer.ViewerShortcut.Delete -> {
+                val c = selectedComment?.takeIf { it.first === doc }?.second ?: return false
+                deleteComment(doc, c)
+            }
+            io.github.artcraftandroid.pdfcraft.ui.viewer.ViewerShortcut.Thinner, io.github.artcraftandroid.pdfcraft.ui.viewer.ViewerShortcut.Thicker -> {
+                if (!drawing) return false
+                val dir = if (shortcut == io.github.artcraftandroid.pdfcraft.ui.viewer.ViewerShortcut.Thicker) 1 else -1
+                toolPrefs.updateInkWidth(io.github.artcraftandroid.pdfcraft.ui.viewer.steppedInkWidth(toolPrefs.inkWidth, dir))
+            }
+            io.github.artcraftandroid.pdfcraft.ui.viewer.ViewerShortcut.NextPage -> v.turnPage(1)
+            io.github.artcraftandroid.pdfcraft.ui.viewer.ViewerShortcut.PreviousPage -> v.turnPage(-1)
+            io.github.artcraftandroid.pdfcraft.ui.viewer.ViewerShortcut.ScrollDown -> v.setScroll(v.scrollX, v.scrollY + v.viewH * 0.1f)
+            io.github.artcraftandroid.pdfcraft.ui.viewer.ViewerShortcut.ScrollUp -> v.setScroll(v.scrollX, v.scrollY - v.viewH * 0.1f)
+            io.github.artcraftandroid.pdfcraft.ui.viewer.ViewerShortcut.ScrollRight -> v.setScroll(v.scrollX + v.viewW * 0.1f, v.scrollY)
+            io.github.artcraftandroid.pdfcraft.ui.viewer.ViewerShortcut.ScrollLeft -> v.setScroll(v.scrollX - v.viewW * 0.1f, v.scrollY)
+            io.github.artcraftandroid.pdfcraft.ui.viewer.ViewerShortcut.ZoomIn -> v.zoomStep(1, center)
+            io.github.artcraftandroid.pdfcraft.ui.viewer.ViewerShortcut.ZoomOut -> v.zoomStep(-1, center)
+            io.github.artcraftandroid.pdfcraft.ui.viewer.ViewerShortcut.Print -> print(doc)
+            io.github.artcraftandroid.pdfcraft.ui.viewer.ViewerShortcut.Help -> shortcutsHelp = true
         }
         return true
     }
@@ -1413,8 +1470,8 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         }
     }
 
-    /** The viewer's keyboard shortcuts (Preferences; off until turned on, as the reference has them). */
-    var keyboardShortcuts by mutableStateOf(appPrefs.getBoolean("keyboardShortcuts", false))
+    /** The viewer's keyboard shortcuts (Preferences; on by default: only a keyboard sends them, #153). */
+    var keyboardShortcuts by mutableStateOf(appPrefs.getBoolean("keyboardShortcuts", true))
         private set
 
     fun updateKeyboardShortcuts(on: Boolean) {

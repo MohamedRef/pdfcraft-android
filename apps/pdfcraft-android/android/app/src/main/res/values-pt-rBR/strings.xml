@@ -160,7 +160,6 @@
     <string name="home_keep_screen_on_body">Mantém a tela ligada enquanto você lê, por até 30 minutos sem tocar nela.</string>
     <string name="home_section_keyboard">Teclado</string>
     <string name="home_keyboard_shortcuts">Atalhos do teclado</string>
-    <string name="home_keyboard_shortcuts_body">Com um teclado conectado: N ou Page Down para a próxima página, P ou Page Up para a anterior, as setas para rolar, Ctrl+P para imprimir e Ctrl e + ou − para ampliar ou reduzir.</string>
     <string name="home_section_extra">Recursos extras</string>
     <string name="home_extra_body">Alterações opcionais na aparência e no funcionamento do PdfCraft.</string>
     <string name="home_status_bar_in_documents">Mostrar a barra de status nos documentos</string>

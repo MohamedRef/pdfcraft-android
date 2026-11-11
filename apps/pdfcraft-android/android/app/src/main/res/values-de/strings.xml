@@ -217,7 +217,6 @@
     <string name="home_section_keyboard">Tastatur</string>
     <string name="home_keyboard_shortcuts">Tastenkombinationen</string>
     <!-- N, P, Page Down, Page Up, Ctrl+P, Ctrl, + and − are keys on the keyboard -->
-    <string name="home_keyboard_shortcuts_body">Bei angeschlossener Tastatur: N oder Bild-ab für die nächste Seite, P oder Bild-auf für die vorherige Seite, Pfeiltasten zum Scrollen, Strg+P zum Drucken und Strg zusammen mit + oder − zum Zoomen.</string>
     <string name="home_section_extra">Zusatzfunktionen</string>
     <string name="home_extra_body">Optionale Änderungen am Aussehen und Verhalten von PdfCraft.</string>
     <string name="home_status_bar_in_documents">Statusleiste in Dokumenten anzeigen</string>
