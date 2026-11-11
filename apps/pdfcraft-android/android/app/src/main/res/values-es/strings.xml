@@ -762,6 +762,12 @@
     <!-- Comment panel: moving a selected comment (accessibility labels) -->
     <string name="comments_move">Mover comentario</string>
     <string name="comments_resize">Cambiar tamaño del comentario</string>
+    <string name="comments_move_up">Mover arriba</string>
+    <string name="comments_move_down">Mover abajo</string>
+    <string name="comments_move_left">Mover a la izquierda</string>
+    <string name="comments_move_right">Mover a la derecha</string>
+    <string name="comments_grow">Agrandar</string>
+    <string name="comments_shrink">Reducir</string>
 
     <!-- Edit PDF: list styles -->
     <!-- Translator note: the list style with no bullets or numbers -->

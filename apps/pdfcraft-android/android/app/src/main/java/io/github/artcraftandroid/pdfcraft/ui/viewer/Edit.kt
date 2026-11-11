@@ -1,5 +1,6 @@
 package io.github.artcraftandroid.pdfcraft.ui.viewer
 
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -342,7 +343,7 @@ private fun ListPanel(current: ListStyle, onPick: (ListStyle) -> Unit) {
         for (style in ListStyle.entries) {
             val description = stringResource(listDescription(style))
             Box(
-                Modifier.height(40.dp).widthIn(min = 40.dp).clickable { onPick(style) }.padding(horizontal = 6.dp).semantics { contentDescription = description },
+                Modifier.height(48.dp).widthIn(min = 48.dp).selectable(selected = style == current, role = Role.RadioButton) { onPick(style) }.padding(horizontal = 6.dp).semantics { contentDescription = description },
                 contentAlignment = Alignment.Center,
             ) { Text(style.label, color = if (style == current) c.toolAccent else c.icon, fontSize = 17.sp, fontWeight = if (style == current) FontWeight.SemiBold else FontWeight.Normal) }
         }
@@ -356,7 +357,7 @@ private fun AlignPanel(current: String, onAlign: (String) -> Unit) {
         for (a in listOf("left", "right", "center", "justify")) {
             val description = stringResource(alignDescription(a))
             Box(
-                Modifier.size(40.dp).clickable { onAlign(a) }.semantics { contentDescription = description },
+                Modifier.size(48.dp).selectable(selected = a == current, role = Role.RadioButton) { onAlign(a) }.semantics { contentDescription = description },
                 contentAlignment = Alignment.Center,
             ) { Icon(alignIcon(a), null, tint = if (a == current) c.toolAccent else c.icon, modifier = Modifier.size(24.dp)) }
         }

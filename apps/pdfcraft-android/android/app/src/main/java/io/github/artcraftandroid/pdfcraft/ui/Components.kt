@@ -1,5 +1,6 @@
 package io.github.artcraftandroid.pdfcraft.ui
 
+import androidx.compose.foundation.selection.toggleable
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutLinearInEasing
@@ -77,6 +78,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -114,7 +116,11 @@ fun BarIcon(
             .clip(RoundedCornerShape(6.dp))
             .background(if (selected) pdfColors.pressed else Color.Transparent)
             .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
-            .semantics { contentDescription = description },
+            .semantics {
+                contentDescription = description
+                // Toggles and the active tool are announced as selected, not only shown by the background.
+                if (selected) this.selected = true
+            },
         contentAlignment = Alignment.Center,
     ) {
         Icon(icon, contentDescription = null, tint = if (enabled) tint else tint.copy(alpha = 0.38f), modifier = Modifier.size(iconSize))
@@ -337,9 +343,13 @@ fun BoxScope.HintToast(text: String?, modifier: Modifier = Modifier, alignment: 
     }
 }
 
-/** A switch drawn as the reference's: a pill track with a round thumb. */
+/**
+ * A switch drawn as the reference's: a pill track with a round thumb. It announces its on/off state
+ * to TalkBack. Pass a null [onChange] when the whole row around it is the toggle, so the row is one
+ * focus stop instead of two.
+ */
 @Composable
-fun PdfSwitch(checked: Boolean, onChange: (Boolean) -> Unit, modifier: Modifier = Modifier) {
+fun PdfSwitch(checked: Boolean, onChange: ((Boolean) -> Unit)?, modifier: Modifier = Modifier) {
     val c = pdfColors
     val track = if (checked) c.accent else if (c.dark) Color(0xFF959595) else Color(0xFFB0B0B0)
     Box(
@@ -348,7 +358,7 @@ fun PdfSwitch(checked: Boolean, onChange: (Boolean) -> Unit, modifier: Modifier 
             .clip(CircleShape)
             .background(if (checked) track else Color.Transparent)
             .then(if (checked) Modifier else Modifier.background(Color.Transparent))
-            .clickable(role = Role.Switch) { onChange(!checked) },
+            .then(if (onChange != null) Modifier.toggleable(value = checked, role = Role.Switch, onValueChange = onChange) else Modifier),
     ) {
         if (!checked) {
             Box(Modifier.fillMaxSize().clip(CircleShape).background(track.copy(alpha = 0.0f)))

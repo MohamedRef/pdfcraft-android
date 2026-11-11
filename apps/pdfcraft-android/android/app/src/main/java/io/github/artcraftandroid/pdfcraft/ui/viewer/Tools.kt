@@ -1,6 +1,7 @@
 package io.github.artcraftandroid.pdfcraft.ui.viewer
 
 
+import androidx.compose.foundation.selection.selectable
 import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.collect
 
@@ -1180,7 +1181,7 @@ fun InkWidthRow(color: Color, selected: Float?, onPick: (Float) -> Unit) {
             Box(
                 Modifier.size(48.dp)
                     .then(if (selected == w) Modifier.border(1.5.dp, c.accent, RoundedCornerShape(4.dp)) else Modifier)
-                    .clickable(role = Role.RadioButton) { onPick(w) }
+                    .selectable(selected = selected == w, role = Role.RadioButton) { onPick(w) }
                     .semantics { contentDescription = description },
                 contentAlignment = Alignment.Center,
             ) {
@@ -1218,7 +1219,7 @@ fun ColorGrid(selected: Color, onPick: (Color) -> Unit) {
                             .clip(RoundedCornerShape(3.dp))
                             .background(color)
                             .then(if (outlined) Modifier.border(1.dp, c.divider, RoundedCornerShape(3.dp)) else Modifier)
-                            .clickable(role = Role.RadioButton) { onPick(color) }
+                            .selectable(selected = isSel, role = Role.RadioButton) { onPick(color) }
                             .semantics { contentDescription = label },
                         contentAlignment = Alignment.Center,
                     ) {
@@ -1303,7 +1304,7 @@ private fun StampPicker(ctl: ViewerController, onDismiss: () -> Unit) {
                     fontSize = 16.sp,
                     fontWeight = if (selected) androidx.compose.ui.text.font.FontWeight.SemiBold else null,
                     modifier = Modifier.fillMaxWidth()
-                        .clickable(role = Role.RadioButton) {
+                        .selectable(selected = selected, role = Role.RadioButton) {
                             ctl.stamp = stamp
                             onDismiss()
                         }

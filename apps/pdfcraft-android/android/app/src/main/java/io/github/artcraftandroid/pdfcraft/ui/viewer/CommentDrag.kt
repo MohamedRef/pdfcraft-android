@@ -20,7 +20,9 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
@@ -60,6 +62,28 @@ fun CommentDragOverlay(
     val ppp = doc.viewer.pixelsPerPoint(page).coerceAtLeast(0.01f)
     val moveLabel = stringResource(R.string.comments_move)
     val resizeLabel = stringResource(R.string.comments_resize)
+    // TalkBack and Switch Access can't drag, so moving and resizing are also offered as actions,
+    // each one undo step like a drag.
+    val step = 10f
+    val moveActions = listOf(
+        stringResource(R.string.comments_move_up) to Offset(0f, -step),
+        stringResource(R.string.comments_move_down) to Offset(0f, step),
+        stringResource(R.string.comments_move_left) to Offset(-step, 0f),
+        stringResource(R.string.comments_move_right) to Offset(step, 0f),
+    ).map { (label, d) -> CustomAccessibilityAction(label) { onMove(d.x, d.y); true } }
+    fun resizeBy(points: Float): Boolean {
+        val r = frame.inflate(points * ppp)
+        if (r.width < 12 * density.density || r.height < 12 * density.density) return false
+        val p0 = doc.viewer.screenToPage(r.topLeft, nearest = true)
+        val p1 = doc.viewer.screenToPage(r.bottomRight, nearest = true)
+        if (p0 == null || p1 == null || p0.page != page || p1.page != page) return false
+        onResize(listOf(p0.x, p0.y, p1.x, p1.y))
+        return true
+    }
+    val resizeActions = if (c.subtype in Resizable) listOf(
+        CustomAccessibilityAction(stringResource(R.string.comments_grow)) { resizeBy(step / 2) },
+        CustomAccessibilityAction(stringResource(R.string.comments_shrink)) { resizeBy(-step / 2) },
+    ) else emptyList()
 
     // the frame where the comment will go
     Canvas(Modifier.fillMaxSize()) {
@@ -84,7 +108,10 @@ fun CommentDragOverlay(
                     onDragCancel = { shift = Offset.Zero },
                 )
             }
-            .semantics { contentDescription = moveLabel },
+            .semantics {
+                contentDescription = moveLabel
+                customActions = moveActions + resizeActions
+            },
     )
     if (c.subtype !in Resizable) return
     // corner handles: drag to resize, the opposite corner staying put
