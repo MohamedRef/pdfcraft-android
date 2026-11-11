@@ -329,6 +329,10 @@ impl Session {
     /// Comment and form edits skip the full re-inspection (seconds on very large files): the
     /// comment list and field values are re-read from the object graph instead.
     fn refresh_scoped(doc: &mut Document, scope: Scope) -> Result<(), EditError> {
+        // Android adaptation (#131): a refresh reads every page annotation in several passes
+        // (display appearances, form discovery, the comment list), as opening does; keep the
+        // parsed objects across them under the opening cap instead of parsing each pass again.
+        let _passes = doc.editor.as_ref().map(|e| e.cos.open_passes());
         if scope == Scope::Full || doc.info.encrypted != doc.editor.as_ref().is_some_and(|e| e.cos.output_handler().is_some()) {
             return Self::refresh(doc);
         }
