@@ -95,8 +95,21 @@ fn managed_private_file(path: &Path, root: &Path, opened: &std::fs::Metadata) ->
     }
     let Ok(canonical) = path.canonicalize() else { return false };
     let Ok(relative) = canonical.strip_prefix(&root) else { return false };
-    let Some(first) = relative.components().next() else { return false };
-    if !matches!(first.as_os_str().to_str(), Some("Documents" | "Created")) {
+    // Only the published layouts produced by DocumentFiles qualify. Staged .part/.stage
+    // files can still have a live writer and must always use an owned snapshot.
+    let mut parts = relative.iter();
+    let filename = match parts.next().and_then(|s| s.to_str()) {
+        Some("Documents") => {
+            let Some(source) = parts.next().and_then(|s| s.to_str()) else { return false };
+            if source.len() != 24 || !source.bytes().all(|b| b.is_ascii_hexdigit()) { return false; }
+            parts.next()
+        }
+        Some("Created") => parts.next(),
+        _ => return false,
+    };
+    let Some(filename) = filename.and_then(|s| s.to_str()) else { return false };
+    if parts.next().is_some() || filename.starts_with('.') ||
+       !std::path::Path::new(filename).extension().and_then(|s| s.to_str()).is_some_and(|s| s.eq_ignore_ascii_case("pdf")) {
         return false;
     }
     let (Ok(owner), Ok(root_meta), Ok(current)) = (std::fs::metadata("/proc/self"), root.metadata(), canonical.metadata()) else { return false };
@@ -149,12 +162,19 @@ mod tests {
         fn new() -> Self {
             static NEXT: AtomicUsize = AtomicUsize::new(0);
             let root = std::env::temp_dir().join(format!("pdfcraft-source-{}-{}", std::process::id(), NEXT.fetch_add(1, Ordering::Relaxed)));
-            std::fs::create_dir_all(root.join("Documents")).unwrap();
+            std::fs::create_dir_all(root.join("Documents/0123456789abcdef01234567")).unwrap();
             std::fs::set_permissions(&root, std::fs::Permissions::from_mode(0o700)).unwrap();
             Self(root)
         }
+        fn path(&self, name: &str) -> std::path::PathBuf {
+            match name.strip_prefix("Documents/") {
+                Some(name) => self.0.join("Documents/0123456789abcdef01234567").join(name),
+                None => self.0.join(name),
+            }
+        }
         fn write(&self, name: &str, bytes: &[u8]) -> std::path::PathBuf {
-            let path = self.0.join(name);
+            let path = self.path(name);
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
             std::fs::write(&path, bytes).unwrap();
             std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600)).unwrap();
             path
@@ -195,13 +215,28 @@ mod tests {
         assert_eq!(owned.as_slice(), original);
         assert!(read_private_input(&path, Some(&fixture.0), 4).is_err());
         let outside = fixture.write("outside.pdf", &original);
-        let link = fixture.0.join("Documents/link.pdf");
+        let link = fixture.path("Documents/link.pdf");
         std::os::unix::fs::symlink(&outside, &link).unwrap();
         assert!(!read_private_input(&link, Some(&fixture.0), 2 * 1024 * 1024).unwrap().is_mapped());
         std::fs::remove_file(link).unwrap();
         let path = fixture.write("Documents/input.pdf", &original);
         std::fs::hard_link(&path, fixture.0.join("alias.pdf")).unwrap();
         assert!(!read_private_input(&path, Some(&fixture.0), 2 * 1024 * 1024).unwrap().is_mapped());
+    }
+
+    #[test]
+    fn unpublished_staging_files_remain_owned_during_in_place_writes() {
+        let fixture = Fixture::new();
+        let original = vec![37u8; 1024 * 1024];
+        for name in ["Documents/.draft.pdf", "Documents/draft.pdf.part", "Created/.pending.pdf", "Created/source.pdf.part", "Created/staging/source.pdf"] {
+            let path = fixture.write(name, &original);
+            let source = read_private_input(&path, Some(&fixture.0), 2 * 1024 * 1024).unwrap();
+            assert!(!source.is_mapped(), "{name}");
+            std::fs::write(path, b"writer is still active").unwrap();
+            assert_eq!(source.as_slice(), original);
+        }
+        let created = fixture.write("Created/published.PDF", &original);
+        assert!(read_private_input(&created, Some(&fixture.0), 2 * 1024 * 1024).unwrap().is_mapped());
     }
 
     #[test]

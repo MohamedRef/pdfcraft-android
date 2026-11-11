@@ -8,7 +8,9 @@ without changing the vendored parser. Newly serialized revisions remain owned al
 Android supplies its application files directory once at session initialization. Complete and
 reading-stage opens keep the same path confinement and 512 MiB input cap. A regular source of
 at least 1 MiB is eligible for mapping only inside that application's `Documents` or `Created`
-store. The guard checks canonical containment, process/file/root ownership, restrictive file
+store, with the published hashed-folder or flat-file layout and a nonhidden PDF filename.
+Staging files and unrecognized layouts always remain owned, even within those stores.
+The guard checks canonical containment, process/file/root ownership, restrictive file
 permissions, a single hard link and the opened descriptor's inode/device identity. Arbitrary
 paths, aliases outside those stores, shared files, unsupported mappings and non-Android hosts
 retain the bounded owned reader. Diagnostics record `native_input_mapped` or `native_input_owned`
@@ -42,7 +44,7 @@ this replacement protocol; exposing these files for external writing would inval
 ## Validation and limits
 
 Regression tests cover mapped readers surviving atomic replacement/unlink and owner drop;
-bounded owned fallback, failed mapping, untrusted symlinks/hard links; anonymous mapped input
+bounded owned fallback, failed mapping, actively rewritten staging files, untrusted symlinks/hard links; anonymous mapped input
 through both parsers, pixel equality, reading-stage completion, encryption, editing and saving.
 Source-allocation identity and cache-generation checks are retained. Byte-content assertions
 compare slices so owned and mapped representations have identical semantics.
