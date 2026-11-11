@@ -57,6 +57,13 @@ class MainActivity : ComponentActivity() {
 
     private val pickBatesPdfs = registerForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { vm.onBatesFilesPicked(it) }
 
+    // the editing tools' own pickers (FileRequests): each answer goes back to the tool that asked
+    private val requestCreate = registerForActivityResult(CreateTypedDocument()) { uri -> vm.requests.onCreated(uri) }
+    private val requestOpenOne = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> vm.requests.onOpened(listOfNotNull(uri)) }
+    private val requestOpenMany = registerForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris -> vm.requests.onOpened(uris) }
+    private val requestImage = registerForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri -> vm.requests.onImage(uri) }
+    private val requestFolder = registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri -> vm.requests.onFolder(uri) }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         // transparent system bars with no contrast scrim: every screen paints the bands behind the
         // status bar and the navigation buttons itself, in its own colours (AppRoot)
@@ -128,6 +135,26 @@ class MainActivity : ComponentActivity() {
             for (f in vm.cameraShots) {
                 val uri = FileProvider.getUriForFile(this@MainActivity, "$packageName.files", f)
                 launchSafely { takePhoto.launch(uri) }
+            }
+        }
+        lifecycleScope.launch {
+            for (r in vm.requests.creates) launchSafely {
+                try { requestCreate.launch(r.name to r.mime) } catch (e: Exception) { vm.requests.onCreated(null); throw e }
+            }
+        }
+        lifecycleScope.launch {
+            for (r in vm.requests.opens) launchSafely {
+                try { if (r.many) requestOpenMany.launch(r.mimes) else requestOpenOne.launch(r.mimes) } catch (e: Exception) { vm.requests.onOpened(emptyList()); throw e }
+            }
+        }
+        lifecycleScope.launch {
+            for (u in vm.requests.images) launchSafely {
+                try { requestImage.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) } catch (e: Exception) { vm.requests.onImage(null); throw e }
+            }
+        }
+        lifecycleScope.launch {
+            for (u in vm.requests.folders) launchSafely {
+                try { requestFolder.launch(null) } catch (e: Exception) { vm.requests.onFolder(null); throw e }
             }
         }
         lifecycleScope.launch { for (d in vm.imagePicks) launchSafely { pickImage.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) } }
@@ -298,3 +325,11 @@ private val OFFICE_TYPES = arrayOf(
     "application/msword", "application/vnd.ms-excel", "application/vnd.ms-powerpoint",
     "application/rtf", "text/rtf",
 )
+
+/** Create a document of a type chosen per request: input is (file name, MIME type). */
+private class CreateTypedDocument : androidx.activity.result.contract.ActivityResultContract<Pair<String, String>, Uri?>() {
+    override fun createIntent(context: android.content.Context, input: Pair<String, String>): Intent =
+        Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType(input.second).putExtra(Intent.EXTRA_TITLE, input.first)
+
+    override fun parseResult(resultCode: Int, intent: Intent?): Uri? = intent.takeIf { resultCode == android.app.Activity.RESULT_OK }?.data
+}

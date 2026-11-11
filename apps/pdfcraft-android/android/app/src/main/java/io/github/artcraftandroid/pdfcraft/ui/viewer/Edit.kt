@@ -61,6 +61,7 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
@@ -96,8 +97,19 @@ data class Paragraph(
     val color: String?,
 )
 
-/** A picture Edit PDF has selected: its number on the page and where it sits (points). */
-data class EditImage(val page: Int, val number: Int, val rect: FloatArray)
+/**
+ * A picture Edit PDF has selected: its number on the page and where it sits (points), whether it
+ * is a raster image or grouped Form artwork ([kind] "image" or "form"), whether PdfCraft cropped
+ * it, and the part a crop or clip leaves visible.
+ */
+data class EditImage(
+    val page: Int,
+    val number: Int,
+    val rect: FloatArray,
+    val kind: String = "image",
+    val hasCrop: Boolean = false,
+    val visible: FloatArray? = null,
+)
 
 /** What Edit PDF is doing: picking a paragraph, or placing new text or an image. */
 enum class EditMode { Select, AddText, AddImage }
@@ -391,7 +403,10 @@ fun BoxScope.EditOverlay(vm: AppViewModel, doc: OpenDocument) {
     if (selected != null) {
         if (editing != null && editing.page == selected.page && editing.number == selected.number) InlineEditor(vm, doc, editing) else SelectedParagraph(vm, doc, selected)
     }
-    vm.editImage?.let { SelectedImage(vm, doc, it) }
+    vm.editImage?.let { img ->
+        val crop = vm.imageEdit.crop
+        if (crop != null) CropFrame(vm, doc, img, crop) else SelectedImage(vm, doc, img)
+    }
 }
 
 /** A box on screen for [box] (points) on [page], with the drag offset applied. */
@@ -690,10 +705,160 @@ private fun BoxScope.SelectedImage(vm: AppViewModel, doc: OpenDocument, img: Edi
         )
     }
     if (move == Offset.Zero && scale == 1f) {
-        FloatingMenu(a, b, doc.viewer.padTop) {
-            MenuIconButton(LucideIcons.RotateCcw, stringResource(R.string.edit_turn_left)) { vm.turnImage(doc, img, 3) }
-            MenuIconButton(LucideIcons.RotateCw, stringResource(R.string.edit_turn_right)) { vm.turnImage(doc, img, 1) }
-            MenuIconButton(LucideIcons.Trash2, stringResource(R.string.common_delete)) { vm.deleteImage(doc, img) }
+        FloatingMenu(a, b, doc.viewer.padTop) { ImageMenu(vm, doc, img) }
+    }
+    vm.imageEdit.rotating?.let { RotateImageDialog(vm, doc, it) }
+}
+
+/**
+ * The selected picture's tools (#161), each at most two taps from the selection: Crop; Flip and
+ * Rotate; Arrange (stacking order); More (Replace, Save image, Remove crop, Ungroup); Delete.
+ */
+@Composable
+private fun ImageMenu(vm: AppViewModel, doc: OpenDocument, img: EditImage) {
+    val form = img.kind == "form"
+    if (!form) MenuIconButton(LucideIcons.Crop, stringResource(R.string.edit_image_crop)) { vm.startCrop(img) }
+    MenuDropdown(LucideIcons.FlipHorizontal2, stringResource(R.string.edit_image_flip)) { close ->
+        MenuItem(stringResource(R.string.edit_image_flip_horizontal)) { close(); vm.imageAction(doc, img, "flip_horizontal") }
+        MenuItem(stringResource(R.string.edit_image_flip_vertical)) { close(); vm.imageAction(doc, img, "flip_vertical") }
+    }
+    MenuDropdown(LucideIcons.RotateCw, stringResource(R.string.edit_image_rotate)) { close ->
+        MenuItem(stringResource(R.string.edit_turn_left)) { close(); vm.turnImage(doc, img, 3) }
+        MenuItem(stringResource(R.string.edit_turn_right)) { close(); vm.turnImage(doc, img, 1) }
+        MenuItem(stringResource(R.string.edit_image_rotate_by)) { close(); vm.imageEdit.rotating = img }
+    }
+    MenuDropdown(LucideIcons.Layers, stringResource(R.string.edit_image_arrange)) { close ->
+        for (ar in Arrange.entries) MenuItem(stringResource(ar.label)) { close(); vm.arrangeImage(doc, img, ar) }
+    }
+    MenuDropdown(LucideIcons.Ellipsis, stringResource(R.string.edit_image_more)) { close ->
+        MenuItem(stringResource(R.string.edit_image_replace), enabled = !form) { close(); vm.replaceImage(doc, img) }
+        MenuItem(stringResource(R.string.edit_image_save), enabled = !form) { close(); vm.saveImage(doc, img) }
+        if (img.hasCrop) MenuItem(stringResource(R.string.edit_image_remove_crop)) { close(); vm.imageAction(doc, img, "remove_crop") }
+        if (form) MenuItem(stringResource(R.string.edit_image_ungroup)) { close(); vm.ungroupImage(doc, img) }
+    }
+    MenuIconButton(LucideIcons.Trash2, stringResource(R.string.common_delete)) { vm.deleteImage(doc, img) }
+}
+
+/** A menu button that opens a list under it; [items] gets the function that closes the list. */
+@Composable
+private fun MenuDropdown(icon: ImageVector, label: String, items: @Composable (close: () -> Unit) -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    Box {
+        MenuIconButton(icon, label) { open = true }
+        androidx.compose.material3.DropdownMenu(expanded = open, onDismissRequest = { open = false }) { items { open = false } }
+    }
+}
+
+/**
+ * A list entry. A disabled one (Replace and Save image on grouped artwork) still answers a tap
+ * with the reason, rather than doing nothing.
+ */
+@Composable
+private fun MenuItem(label: String, enabled: Boolean = true, onClick: () -> Unit) {
+    androidx.compose.material3.DropdownMenuItem(
+        text = { Text(label, color = if (enabled) Color.Unspecified else Color.Gray) },
+        onClick = onClick,
+    )
+}
+
+/** Rotate by an angle: a slider that stops every 15°, applied about the picture's visible centre. */
+@Composable
+private fun RotateImageDialog(vm: AppViewModel, doc: OpenDocument, img: EditImage) {
+    var degrees by remember(img) { mutableFloatStateOf(0f) }
+    val snapped = snapDegrees(degrees)
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = { vm.imageEdit.rotating = null },
+        title = { Text(stringResource(R.string.edit_image_rotate_by)) },
+        text = {
+            Column {
+                Text(stringResource(R.string.edit_image_degrees, snapped))
+                val label = stringResource(R.string.edit_image_rotate_by)
+                Slider(
+                    value = degrees, onValueChange = { degrees = snapDegrees(it).toFloat() }, valueRange = -180f..180f, steps = 23,
+                    modifier = Modifier.semantics { contentDescription = label },
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(enabled = snapped != 0, onClick = {
+                vm.imageEdit.rotating = null
+                vm.imageAction(doc, img, "rotate_by", mapOf("degrees" to snapped.toDouble()))
+            }) { Text(stringResource(R.string.edit_image_apply)) }
+        },
+        dismissButton = { TextButton(onClick = { vm.imageEdit.rotating = null }) { Text(stringResource(R.string.common_cancel)) } },
+    )
+}
+
+/** The crop presets: free, or a fixed width:height. */
+private val CropRatios = listOf(null to R.string.edit_image_crop_free, 1f to R.string.edit_image_crop_square, 4f / 3f to R.string.edit_image_crop_4_3, 3f / 4f to R.string.edit_image_crop_3_4, 16f / 9f to R.string.edit_image_crop_16_9)
+
+/**
+ * Framing a crop: the part to keep, outlined over the dimmed rest, with handles at each corner
+ * and edge (48 dp to touch, finger or stylus), aspect presets, and Cancel / Crop.
+ */
+@Composable
+private fun BoxScope.CropFrame(vm: AppViewModel, doc: OpenDocument, img: EditImage, crop: FloatArray) {
+    val density = LocalDensity.current
+    val (fa, fb) = screenBox(doc, img.page, img.rect, 0f)
+    val (a, b) = screenBox(doc, img.page, crop, 0f)
+    val ppp = doc.viewer.pixelsPerPoint(img.page).coerceAtLeast(0.01f)
+    val ratio = vm.imageEdit.cropRatio
+    Canvas(Modifier.fillMaxSize()) {
+        val dim = Color(0x99000000)
+        drawRect(dim, topLeft = fa, size = Size(fb.x - fa.x, (a.y - fa.y).coerceAtLeast(0f)))
+        drawRect(dim, topLeft = Offset(fa.x, b.y), size = Size(fb.x - fa.x, (fb.y - b.y).coerceAtLeast(0f)))
+        drawRect(dim, topLeft = Offset(fa.x, a.y), size = Size((a.x - fa.x).coerceAtLeast(0f), b.y - a.y))
+        drawRect(dim, topLeft = Offset(b.x, a.y), size = Size((fb.x - b.x).coerceAtLeast(0f), b.y - a.y))
+        drawRect(Color.White, topLeft = a, size = Size(b.x - a.x, b.y - a.y), style = Stroke(2.dp.toPx()))
+        for (h in listOf(a, Offset(b.x, a.y), b, Offset(a.x, b.y))) drawCircle(Color.White, 7.dp.toPx(), h)
+    }
+    // (left, top, right, bottom) each handle moves; a fixed shape keeps only the corners
+    val handles = buildList {
+        add(a to booleanArrayOf(true, true, false, false)); add(Offset(b.x, a.y) to booleanArrayOf(false, true, true, false))
+        add(b to booleanArrayOf(false, false, true, true)); add(Offset(a.x, b.y) to booleanArrayOf(true, false, false, true))
+        if (ratio == null) {
+            add(Offset((a.x + b.x) / 2f, a.y) to booleanArrayOf(false, true, false, false)); add(Offset(b.x, (a.y + b.y) / 2f) to booleanArrayOf(false, false, true, false))
+            add(Offset((a.x + b.x) / 2f, b.y) to booleanArrayOf(false, false, false, true)); add(Offset(a.x, (a.y + b.y) / 2f) to booleanArrayOf(true, false, false, false))
+        }
+    }
+    val labels = listOf(R.string.edit_image_crop_handle_top_left, R.string.edit_image_crop_handle_top_right, R.string.edit_image_crop_handle_bottom_right, R.string.edit_image_crop_handle_bottom_left, R.string.edit_image_crop_handle_top, R.string.edit_image_crop_handle_right, R.string.edit_image_crop_handle_bottom, R.string.edit_image_crop_handle_left)
+    for ((i, h) in handles.withIndex()) {
+        val (at, edges) = h
+        val label = stringResource(labels[i])
+        Box(
+            Modifier.offset { IntOffset((at.x - 24.dp.toPx()).roundToInt(), (at.y - 24.dp.toPx()).roundToInt()) }.size(48.dp)
+                .semantics { contentDescription = label }
+                .pointerInput(img, i, ratio) {
+                    detectDragGestures { change, d ->
+                        change.consume()
+                        val now = vm.imageEdit.crop ?: return@detectDragGestures
+                        vm.imageEdit.crop = dragCrop(now, edges, d.x / ppp, d.y / ppp, img.rect, vm.imageEdit.cropRatio)
+                    }
+                },
+        )
+    }
+    // the bar under (or over) the frame: presets, then Cancel and Crop
+    val barTop = with(density) { if (fb.y + 120.dp.toPx() < doc.viewer.viewH - doc.viewer.padBottom) fb.y + 12.dp.toPx() else (fa.y - 112.dp.toPx()).coerceAtLeast(doc.viewer.padTop) }
+    Column(
+        Modifier.offset { IntOffset(8.dp.roundToPx(), barTop.roundToInt()) }.shadow(6.dp, RoundedCornerShape(4.dp))
+            .background(Color(0xFF303030), RoundedCornerShape(4.dp)),
+    ) {
+        Row(Modifier.horizontalScroll(rememberScrollState()).height(48.dp), verticalAlignment = Alignment.CenterVertically) {
+            for ((r, label) in CropRatios) {
+                val on = r == ratio
+                Box(
+                    Modifier.fillMaxHeightRow().clickable {
+                        vm.imageEdit.cropRatio = r
+                        if (r != null) vm.imageEdit.crop = fitRatio(vm.imageEdit.crop ?: crop, r)
+                    }.semantics { selected = on }.padding(horizontal = 12.dp),
+                    contentAlignment = Alignment.Center,
+                ) { Text(stringResource(label), color = if (on) SelectionBlue else Color.White, fontSize = 15.sp) }
+            }
+        }
+        Row(Modifier.height(48.dp), verticalAlignment = Alignment.CenterVertically) {
+            MenuText(stringResource(R.string.common_cancel)) { vm.imageEdit.crop = null }
+            MenuSplit()
+            MenuText(stringResource(R.string.edit_image_crop)) { vm.applyCrop(doc, img) }
         }
     }
 }
