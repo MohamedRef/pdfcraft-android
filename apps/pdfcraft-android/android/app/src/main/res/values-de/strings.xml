@@ -1331,6 +1331,7 @@
     <string name="bates_export_failed">Diese neue Kopie konnte nicht in „Downloads“ gespeichert werden.</string>
     <string name="ink_presets_title">Lieblingsstifte</string>
     <string name="ink_presets_help">Jeder Stift behält seine eigene Farbe, Breite und Deckkraft. Tippe auf einen Favoriten, um seine Einstellungen wiederherzustellen.</string>
+    <string name="ink_protractor">Winkelmesser</string>
     <string name="ink_hsv_hue">Farbton</string>
     <string name="ink_hsv_square">Sättigung %1$d %%, Helligkeit %2$d %%</string>
     <string name="ink_custom_color_hide">Eigene Farbe ausblenden</string>

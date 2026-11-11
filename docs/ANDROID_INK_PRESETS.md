@@ -36,7 +36,9 @@ Pen settings has **Writing hand** (Right or Left) and **Ignore palm while writin
 
 ## Ruler (#150)
 
-Draw ▸ **Ruler** shows a screen-space ruler with 5 dp ticks and its angle. One or two fingers on the ruler move it; two fingers also turn it about their centre. The angle snaps to 15° steps within 2° with a haptic tick. A freehand pen or finger stroke that starts within 24 dp of an edge follows that edge for the whole stroke (offset by half the stroke width), so the saved ink is straight. The ruler is only an overlay: it is kept per open document while it stays open and is never written to the PDF, exports or prints. Not done yet: protractor and arcs, and unifying hold-to-straighten with the ruler.
+Draw ▸ **Ruler** shows a screen-space ruler with 5 dp ticks and its angle. One or two fingers on the ruler move it; two fingers also turn it about their centre. The angle snaps to 15° steps within 2° with a haptic tick. A freehand pen or finger stroke that starts within 24 dp of an edge follows that edge for the whole stroke (offset by half the stroke width), so the saved ink is straight. The ruler is only an overlay: it is kept per open document while it stays open and is never written to the PDF, exports or prints.
+
+**Protractor**: Draw ▸ **Protractor** shows a half disc with 1°, 5° and 10° ticks and labels every 30°; one or two fingers move it, two turn it (snapping to 15° with a haptic tick, like the ruler). A freehand stroke that starts within 24 dp of its arc follows the circle for the whole stroke, so arcs of any length (even a full circle) are exact; a stroke that starts on its centre draws a straight ray whose direction locks to a whole degree once the pen leaves the centre. While drawing, a label beside the pen shows the ray's angle or the angle the arc has swept. A stroke that follows the ruler or the protractor is never changed into another shape by holding at its end, so hold-to-snap and the guides do not fight. Like the ruler, the protractor is viewer-only.
 
 ## Smart pen gestures (#148)
 

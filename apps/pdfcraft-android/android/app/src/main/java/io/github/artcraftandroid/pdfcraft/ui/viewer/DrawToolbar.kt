@@ -205,6 +205,12 @@ internal fun DrawToolbar(vm: AppViewModel, doc: OpenDocument) {
                         onClick = { ctl.rulerOn = !ctl.rulerOn },
                     ) { Icon(LucideIcons.Ruler, null, tint = if (ctl.rulerOn) c.toolAccent else c.icon, modifier = Modifier.size(24.dp)) }
                     DrawToolbarButton(
+                        label = stringResource(R.string.ink_protractor),
+                        active = ctl.protractorOn,
+                        caption = stringResource(R.string.ink_protractor),
+                        onClick = { ctl.protractorOn = !ctl.protractorOn },
+                    ) { Icon(LucideIcons.Gauge, null, tint = if (ctl.protractorOn) c.toolAccent else c.icon, modifier = Modifier.size(24.dp)) }
+                    DrawToolbarButton(
                         label = stringResource(R.string.zoom_box),
                         active = ctl.zoomBoxOn,
                         caption = stringResource(R.string.zoom_box),

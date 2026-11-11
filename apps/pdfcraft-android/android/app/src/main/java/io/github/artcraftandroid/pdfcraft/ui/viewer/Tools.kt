@@ -359,6 +359,33 @@ internal fun androidx.compose.ui.graphics.drawscope.DrawScope.drawRuler(r: Ruler
     }
 }
 
+/** The protractor's half disc with 1°, 5° and 10° ticks, labels every 30° and a centre mark (#150). */
+internal fun androidx.compose.ui.graphics.drawscope.DrawScope.drawProtractor(pr: Protractor, measurer: androidx.compose.ui.text.TextMeasurer, density: Float) {
+    val ink = Color(0xFF5A6270)
+    rotate(pr.angleDeg, pivot = pr.center) {
+        // drawn at angle 0 (half disc above the baseline), then turned
+        val r = pr.radius
+        val tl = Offset(pr.center.x - r, pr.center.y - r)
+        val sz = androidx.compose.ui.geometry.Size(2 * r, 2 * r)
+        drawArc(Color(0xFFF4F1E8).copy(alpha = 0.82f), 180f, 180f, true, tl, sz)
+        drawArc(ink, 180f, 180f, true, tl, sz, style = Stroke(width = 1.2f * density))
+        for (deg in 0..180) {
+            val len = when { deg % 10 == 0 -> 14f; deg % 5 == 0 -> 9f; else -> 5f } * density
+            val a = Math.toRadians(deg.toDouble())
+            val dir = Offset(kotlin.math.cos(a).toFloat(), -kotlin.math.sin(a).toFloat())
+            drawLine(ink, pr.center + dir * r, pr.center + dir * (r - len), strokeWidth = (if (deg % 10 == 0) 1.2f else 0.8f) * density)
+            if (deg % 30 == 0) {
+                val label = measurer.measure("$deg",
+                    style = androidx.compose.ui.text.TextStyle(color = Color(0xFF1F2430), fontSize = androidx.compose.ui.unit.TextUnit(11f, androidx.compose.ui.unit.TextUnitType.Sp)))
+                val at = pr.center + dir * (r - 26f * density)
+                drawText(label, topLeft = Offset(at.x - label.size.width / 2f, at.y - label.size.height / 2f))
+            }
+        }
+        drawCircle(ink, radius = 4f * density, center = pr.center, style = Stroke(width = 1.2f * density))
+        drawLine(ink, pr.center - Offset(8f * density, 0f), pr.center + Offset(8f * density, 0f), strokeWidth = 1f * density)
+    }
+}
+
 /** Height of the zoom writing pad (#130). */
 internal val ZOOM_PAD_HEIGHT = 200.dp
 
@@ -651,12 +678,15 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
     var stillAt by remember { mutableStateOf(Offset.Zero) }
     var movedAt by remember { mutableStateOf(0L) }
     val slop = with(LocalDensity.current) { SNAP_SLOP.toPx() }
+    // A stroke that follows the ruler or protractor is already straight or an arc: holding at
+    // its end does not turn it into another shape (#150).
+    var strokeGuided by remember(doc) { mutableStateOf(false) }
     LaunchedEffect(current) {
         val s = current ?: return@LaunchedEffect
         if (s.shapeMode != InkShapeMode.Freehand || s.appearance.style == InkStyle.Highlighter) return@LaunchedEffect
         while (true) {
             delay(50)
-            if (prefs.snapToShape && s.preview == null && System.currentTimeMillis() - movedAt >= SNAP_HOLD_MS) {
+            if (prefs.snapToShape && !strokeGuided && s.preview == null && System.currentTimeMillis() - movedAt >= SNAP_HOLD_MS) {
                 s.preview = ShapeSnap.recognise(s.points.toList())?.outline()
             }
         }
@@ -684,6 +714,17 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
         )
     }
     val rulerTextMeasurer = androidx.compose.ui.text.rememberTextMeasurer()
+    // The protractor (#150): arcs along its edge, whole-degree rays from its centre.
+    if (doc.controller.protractorOn && doc.controller.protractor == null && layerSize.width > 0f) {
+        doc.controller.protractor = Protractor(
+            Offset(layerSize.width / 2f, layerSize.height * 0.6f), 0f,
+            radius = minOf(with(density) { 150.dp.toPx() }, minOf(layerSize.width, layerSize.height) * 0.38f),
+        )
+    }
+    var protractorSnap by remember(doc) { mutableStateOf<ProtractorSnap?>(null) }
+    var rayDeg by remember(doc) { mutableStateOf<Float?>(null) }
+    var arcStartDeg by remember(doc) { mutableStateOf(0f) }
+    var protractorReadout by remember(doc) { mutableStateOf<Float?>(null) }
     // Low-latency wet ink (#128), only with the setting on.
     val wet = remember(doc) { WetInk() }
     var wetLast by remember(doc) { mutableStateOf<Offset?>(null) }
@@ -709,12 +750,29 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
         return androidx.compose.ui.geometry.Rect(a, b)
     }
     fun activeRuler(): Ruler? = doc.controller.ruler?.takeIf { doc.controller.rulerOn }?.let { it.copy(angleDeg = rulerDisplayAngle(it.angleDeg)) }
-    /** A freehand stroke that starts beside the ruler follows its edge for the whole stroke. */
+    fun activeProtractor(): Protractor? =
+        doc.controller.protractor?.takeIf { doc.controller.protractorOn }?.let { it.copy(angleDeg = rulerDisplayAngle(it.angleDeg)) }
+    /**
+     * A freehand stroke that starts beside the ruler follows its edge for the whole stroke; one
+     * that starts on the protractor's arc follows the circle, and one from its centre is a ray.
+     */
     fun rulerPoint(p: Offset): Offset {
-        val r = activeRuler() ?: return p
-        val edge = rulerEdge ?: return p
         val outset = prefs.inkWidth * doc.viewer.pixelsPerPoint(current?.page ?: 0) / 2f
-        return r.project(p, edge, outset)
+        rulerEdge?.let { edge -> return activeRuler()?.project(p, edge, outset) ?: p }
+        val pr = activeProtractor() ?: return p
+        return when (protractorSnap) {
+            ProtractorSnap.Arc -> {
+                protractorReadout = sweptAngle(arcStartDeg, pr.angleOf(p), protractorReadout ?: 0f)
+                pr.projectArc(p, outset)
+            }
+            ProtractorSnap.Ray -> {
+                // The ray's direction is fixed once the pen is clear of the centre.
+                val deg = rayDeg ?: if ((p - pr.center).getDistance() > rulerReach) protractorRayAngle(pr.angleOf(p)).also { rayDeg = it } else null
+                protractorReadout = deg
+                if (deg == null) pr.center else pr.projectRay(p, deg)
+            }
+            null -> p
+        }
     }
     val guardSizePx = with(LocalDensity.current) { prefs.palmGuardSizeDp.dp.toPx() }
     val buttonClick = remember(doc) { PenButtonClickDetector() }
@@ -913,6 +971,11 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                 }
                 clearSelection()
                 rulerEdge = if (doc.controller.inkShapeMode == InkShapeMode.Freehand) activeRuler()?.snapEdge(p, rulerReach) else null
+                protractorSnap = if (rulerEdge == null && doc.controller.inkShapeMode == InkShapeMode.Freehand) activeProtractor()?.snapAt(p, rulerReach) else null
+                rayDeg = null
+                protractorReadout = null
+                activeProtractor()?.let { arcStartDeg = it.angleOf(p) }
+                strokeGuided = rulerEdge != null || protractorSnap != null
                 val at = doc.viewer.screenToPage(rulerPoint(p)) ?: return@toolGestures
                 stillAt = p
                 movedAt = System.currentTimeMillis()
@@ -1034,7 +1097,7 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                         s.pressureSensitive = false
                         s.pressures.clear()
                         s.pressures.addAll(List(shape.size) { 1f })
-                    } else if (prefs.penGestures && s.shapeMode == InkShapeMode.Freehand && rulerEdge == null && s.points.size >= 2) {
+                    } else if (prefs.penGestures && s.shapeMode == InkShapeMode.Freehand && rulerEdge == null && protractorSnap == null && s.points.size >= 2) {
                         penGestureAfterLift(s)
                     }
                 }
@@ -1061,8 +1124,9 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
             onEraserCancel = { cancelErase() },
             penButtonHold = prefs.penButtonHold,
             ignoreAt = if (doc.controller.zoomBoxOn) ({ p -> p.y >= layerSize.height - padHeightPx }) else null,
-            overlayHit = if (doc.controller.rulerOn || doc.controller.zoomBoxOn) ({ p ->
+            overlayHit = if (doc.controller.rulerOn || doc.controller.zoomBoxOn || doc.controller.protractorOn) ({ p ->
                 when {
+                    doc.controller.protractorOn && doc.controller.protractor?.contains(p) == true -> { overlayTarget = 2; true }
                     doc.controller.rulerOn && doc.controller.ruler?.contains(p) == true -> { overlayTarget = 0; true }
                     zoomFrameOnScreen()?.contains(p) == true -> { overlayTarget = 1; true }
                     else -> false
@@ -1076,6 +1140,16 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                     val ppp = doc.viewer.pixelsPerPoint(zb.page).takeIf { it > 0f } ?: return@toolGestures
                     val moved = zb.movedBy(pan.x / ppp, pan.y / ppp, pg.width, pg.height)
                     doc.controller.zoomBox = moved.copy(lineStart = if (pan.x != 0f) moved.x else moved.lineStart)
+                    return@toolGestures
+                }
+                if (overlayTarget == 2) {
+                    val was = doc.controller.protractor ?: return@toolGestures
+                    val now = was.transformed(pan, rotation, pivot)
+                    val snapped = rulerDisplayAngle(now.angleDeg)
+                    if (snapped != now.angleDeg && rulerDisplayAngle(was.angleDeg) != snapped) {
+                        haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
+                    }
+                    doc.controller.protractor = now
                     return@toolGestures
                 }
                 val before = doc.controller.ruler ?: return@toolGestures
@@ -1168,6 +1242,21 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                 drawRect(Color(0xFF2E7DFF), f.topLeft, f.size, style = Stroke(width = 1.5f * density.density))
             }
             activeRuler()?.let { r -> drawRuler(r, rulerTextMeasurer, density.density) }
+            activeProtractor()?.let { pr ->
+                drawProtractor(pr, rulerTextMeasurer, density.density)
+                // The angle of the ray, or the angle the arc has swept, beside the pen while drawing.
+                val readout = protractorReadout
+                val pen = current?.points?.lastOrNull()?.let { doc.viewer.pageToScreen(current!!.page, it.x, it.y) }
+                if (readout != null && pen != null && protractorSnap != null) {
+                    val label = rulerTextMeasurer.measure("${"%.0f".format(java.util.Locale.ROOT, kotlin.math.abs(readout))}°",
+                        style = androidx.compose.ui.text.TextStyle(color = Color.White, fontSize = androidx.compose.ui.unit.TextUnit(13f, androidx.compose.ui.unit.TextUnitType.Sp)))
+                    val at = pen + Offset(14f * density.density, -14f * density.density - label.size.height)
+                    drawRoundRect(Color(0xE61F2430), at - Offset(6f * density.density, 3f * density.density),
+                        androidx.compose.ui.geometry.Size(label.size.width + 12f * density.density, label.size.height + 6f * density.density),
+                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(6f * density.density))
+                    drawText(label, topLeft = at)
+                }
+            }
             val hovering = hoverPosition
             if (hovering != null && prefs.palmGuard) {
                 // The guard region is visible while the pen hovers, so its size can be judged.
