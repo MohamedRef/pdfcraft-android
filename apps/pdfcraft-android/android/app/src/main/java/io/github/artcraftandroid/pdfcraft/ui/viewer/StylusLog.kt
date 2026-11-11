@@ -1,6 +1,8 @@
 package io.github.artcraftandroid.pdfcraft.ui.viewer
 
 import android.view.MotionEvent
+import io.github.artcraftandroid.pdfcraft.engine.Diag
+import io.github.artcraftandroid.pdfcraft.engine.DiagArea
 import kotlin.math.abs
 import kotlin.math.hypot
 
@@ -80,15 +82,37 @@ internal object StylusLog {
             event.getToolType(it) == MotionEvent.TOOL_TYPE_STYLUS || event.getToolType(it) == MotionEvent.TOOL_TYPE_ERASER
         } ?: return
         when (event.actionMasked) {
-            MotionEvent.ACTION_DOWN, MotionEvent.ACTION_POINTER_DOWN -> pen.setDown(true)
+            MotionEvent.ACTION_DOWN, MotionEvent.ACTION_POINTER_DOWN -> {
+                pen.setDown(true)
+                InkLatency.stroke.down(event.eventTime, event.getToolType(index) == MotionEvent.TOOL_TYPE_ERASER, Diag.enabled())
+            }
+            MotionEvent.ACTION_MOVE -> InkLatency.stroke.move(event.historySize + 1)
         }
         for (h in 0 until event.historySize) {
             pen.add(PenSample(event.getHistoricalEventTime(h), event.getHistoricalX(index, h), event.getHistoricalY(index, h), event.getHistoricalPressure(index, h)))
         }
         pen.add(PenSample(event.eventTime, event.getX(index), event.getY(index), event.getPressure(index)))
         when (event.actionMasked) {
-            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> pen.setDown(false)
-            MotionEvent.ACTION_POINTER_UP -> if (event.actionIndex == index) pen.setDown(false)
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                pen.setDown(false)
+                strokeEnded(event.eventTime, event.actionMasked == MotionEvent.ACTION_CANCEL)
+            }
+            MotionEvent.ACTION_POINTER_UP -> if (event.actionIndex == index) {
+                pen.setDown(false)
+                strokeEnded(event.eventTime, cancelled = false)
+            }
         }
+    }
+
+    /** One line per stroke in the diagnostics log (#128): counts, rate and app-side latency. */
+    private fun strokeEnded(time: Long, cancelled: Boolean) {
+        val t = InkLatency.stroke.up(time, cancelled) ?: return
+        Diag.event(
+            DiagArea.Ink, "stroke",
+            "ms" to t.durationMs, "events" to t.events, "samples" to t.samples, "sample_hz" to t.sampleHz,
+            "eraser" to t.eraser, "cancelled" to t.cancelled,
+            "normal_n" to (t.normal?.count ?: 0), "normal_p50_ms" to t.normal?.medianMs, "normal_p95_ms" to t.normal?.p95Ms, "normal_max_ms" to t.normalMaxMs,
+            "front_n" to (t.front?.count ?: 0), "front_p50_ms" to t.front?.medianMs, "front_p95_ms" to t.front?.p95Ms, "front_max_ms" to t.frontMaxMs,
+        )
     }
 }

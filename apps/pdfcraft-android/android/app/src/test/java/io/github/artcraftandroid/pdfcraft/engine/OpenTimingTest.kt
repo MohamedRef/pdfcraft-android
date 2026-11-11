@@ -1,21 +1,10 @@
 package io.github.artcraftandroid.pdfcraft.engine
 
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.time.LocalDateTime
 
 class OpenTimingTest {
-    @Test
-    fun recorderKeepsTheNewestLinesAndCountsDropped() {
-        val r = TimingRecorder(capacity = 3)
-        (1..5).forEach { r.add("l$it") }
-        assertEquals(listOf("l3", "l4", "l5"), r.snapshot())
-        assertEquals(2, r.droppedCount())
-        r.clear()
-        assertEquals(emptyList<String>(), r.snapshot())
-        assertEquals(0, r.droppedCount())
-    }
-
     @Test
     fun milestoneLineHasOnlyStageTimeAndCounts() {
         assertEquals("native_ready elapsed_ms=1200 bytes=314572800 pages=869", timingLine("native_ready", 1200, 314_572_800, 869))
@@ -23,12 +12,11 @@ class OpenTimingTest {
     }
 
     @Test
-    fun reportHasHeaderThenLinesInOrder() {
-        val text = timingReport(listOf("app" to "0.0.17-beta (17012)"), listOf("a", "b"), dropped = 4)
-        val lines = text.lines()
-        assertEquals("PdfCraft open timings", lines[0])
-        assertEquals("app: 0.0.17-beta (17012)", lines[1])
-        assertTrue("older lines dropped: 4" in lines)
-        assertTrue(lines.indexOf("a") < lines.indexOf("b"))
+    fun openStagesGoToOpenAndRenderStagesToRender() {
+        val at = LocalDateTime.of(2026, 11, 11, 21, 3, 12, 481_000_000)
+        assertEquals("11-11 21:03:12.481 [open] native_open duration_ms=40", openTimingLine(at, "native_open duration_ms=40"))
+        assertEquals("11-11 21:03:12.481 [render] page_render duration_ms=60", openTimingLine(at, "page_render duration_ms=60"))
+        assertEquals("11-11 21:03:12.481 [render] tile_render_prefetch duration_ms=9", openTimingLine(at, "tile_render_prefetch duration_ms=9"))
+        assertEquals("11-11 21:03:12.481 [render] stale_tile_dropped count=1", openTimingLine(at, "stale_tile_dropped count=1"))
     }
 }

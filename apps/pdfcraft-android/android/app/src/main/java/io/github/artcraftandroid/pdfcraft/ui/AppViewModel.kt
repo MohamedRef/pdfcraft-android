@@ -47,6 +47,9 @@ import io.github.artcraftandroid.pdfcraft.plural
 import io.github.artcraftandroid.pdfcraft.text
 import io.github.artcraftandroid.pdfcraft.core.MobileException
 import io.github.artcraftandroid.pdfcraft.engine.DocumentFiles
+import io.github.artcraftandroid.pdfcraft.engine.Diag
+import io.github.artcraftandroid.pdfcraft.engine.DiagArea
+import io.github.artcraftandroid.pdfcraft.engine.Diagnostics
 import io.github.artcraftandroid.pdfcraft.engine.EmbeddedBookmarkJson
 import io.github.artcraftandroid.pdfcraft.engine.SafBoundedCopy
 import io.github.artcraftandroid.pdfcraft.engine.withTemporaryBookmarkSource
@@ -208,6 +211,9 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             // An older request can become obsolete while waiting for the native engine.
             if (!isCurrentOpenRequest(requestId)) return@withLock
             openStartedAt = android.os.SystemClock.elapsedRealtime()
+            diagDoc = Diag.nextDocNumber()
+            // a number per open, never the file's name (#105): the lines after it are about this file
+            Diag.event(DiagArea.Open, "open_start", "doc" to diagDoc, "scheme" to uri.scheme, "from_other_app" to fromOtherApp, "has_password" to (password != null))
             opening = true
             var openStage = "provider_copy"
             try {
@@ -335,6 +341,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 return
             }
             io.github.artcraftandroid.pdfcraft.engine.OpenTiming.milestone(if (info.preparing) "native_reading_ready" else "native_ready", openStartedAt, bytes = file.length(), pages = info.pages.size)
+            Diagnostics.memory(if (info.preparing) "native_reading_ready" else "native_ready")
             // This counts editing-parser repairs only; renderer fallback work has its own trace.
             if (!info.preparing && io.github.artcraftandroid.pdfcraft.engine.OpenTiming.enabled()) {
                 runCatching { eng.command { repairCount(info.id) } }.getOrNull()
@@ -344,6 +351,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             val source = uri.takeIf { it.scheme == "content" || it.scheme == "file" }
             val doc = OpenDocument(info.id, info, source, file, images, password, eng, viewModelScope)
             doc.fromOtherApp = fromOtherApp
+            doc.diagNumber = diagDoc
             doc.writable = withContext(Dispatchers.IO) { source == null || files.canWrite(source) }
             doc.notWrittenBack = source?.let { withContext(Dispatchers.IO) { files.hasPendingWriteBack(it) } } ?: false
             io.github.artcraftandroid.pdfcraft.engine.OpenTiming.milestone("source_access_ready", openStartedAt)
@@ -397,6 +405,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 doc.update(complete.document)
                 loadLinks(eng, doc)
                 io.github.artcraftandroid.pdfcraft.engine.OpenTiming.milestone("overlays_ready", startedAt, pages = doc.pageCount)
+                Diagnostics.memory("overlays_ready")
                 if (io.github.artcraftandroid.pdfcraft.engine.OpenTiming.enabled()) {
                     runCatching { eng.command { repairCount(doc.id) } }.getOrNull()?.let {
                         io.github.artcraftandroid.pdfcraft.engine.OpenTiming.count("native_repairs", it.toLong())
@@ -551,7 +560,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 }
             }
         }
-        if (!save(doc, quiet = true)) return false
+        if (!save(doc, quiet = true, trigger = "close")) return false
         // Recent shows the size the file has now, not the size it had when opened
         withContext(Dispatchers.IO) {
             doc.source?.let { src -> files.size(src)?.let { size -> recents.update(src.toString()) { it.copy(size = size) } } }
@@ -572,12 +581,13 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     fun onPause() {
         pauseStudy()
         val doc = document ?: return
+        if (Diag.enabled()) Diag.event(DiagArea.Save, "pause_with_document", "doc" to doc.diagNumber, "dirty" to doc.info.dirty, "not_written_back" to doc.notWrittenBack, "preparing" to doc.info.preparing, "bytes" to doc.file.length())
         if (doc.controller.tool == ViewerTool.Draw) doc.commitTool?.invoke()
         viewModelScope.launch {
             // A paused Activity must not save a closed/replaced engine document.
             // Use the same lock as Open with and Close before touching native handles.
             openMutex.withLock {
-                if (document === doc && readOnlyPrompt == null && !resolvingReadOnly) save(doc)
+                if (document === doc && readOnlyPrompt == null && !resolvingReadOnly) save(doc, trigger = "pause")
             }
         }
     }
@@ -587,44 +597,61 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
      * valid), then back over the file it came from when the app may write there. Returns
      * whether the changes reached the original; [quiet] leaves a failure's message to the caller.
      */
-    suspend fun save(doc: OpenDocument, quiet: Boolean = false): Boolean = saveMutex.withLock {
+    suspend fun save(doc: OpenDocument, quiet: Boolean = false, trigger: String = "other"): Boolean = saveMutex.withLock {
         val eng = engine ?: return@withLock false
         // A reading stage has no edits; do not write an incompletely checked source back.
         if (doc.info.preparing) return@withLock true
         if (!doc.info.dirty && !doc.notWrittenBack) return@withLock true
+        // #97: what each save costs, and what started it (pause, close, an edit, a tool)
+        val started = android.os.SystemClock.elapsedRealtime()
+        var stage = "mark"
+        var outcome = "saved"
         try {
             val src = doc.source
             // Mark before the working copy changes (#103): a process killed between doc_save and
             // the write-back must reopen the saved working copy, not copy the old original over it.
             markBeforeWorkingCopyChanges(doc)
-            if (doc.info.dirty) eng.tool("doc_save", mapOf("doc" to doc.id))
-            refresh(doc)
+            stage = "doc_save"
+            if (doc.info.dirty) Diag.measure(DiagArea.Save, "doc_save", "doc" to doc.diagNumber) { eng.tool("doc_save", mapOf("doc" to doc.id)) }
+            stage = "refresh"
+            Diag.measure(DiagArea.Save, "refresh", "doc" to doc.diagNumber) { refresh(doc) }
             // a copy for the backup folder, even when writing back fails (#145)
-            snapshotForBackup(eng, doc)
+            stage = "backup"
+            Diag.measure(DiagArea.Save, "backup_snapshot", "doc" to doc.diagNumber) { snapshotForBackup(eng, doc) }
+            stage = "write_back"
             if (src != null && src.scheme == "content") {
                 // The marker set above stays until the provider verifiably holds the new bytes.
                 if (!doc.writable) {
                     doc.notWrittenBack = true
+                    outcome = "read_only"
                     return@withLock false
                 }
-                withContext(Dispatchers.IO) {
-                    files.writeBack(doc.file, src)
-                    files.clearPendingWriteBack(src)
+                Diag.measure(DiagArea.Save, "write_back", "doc" to doc.diagNumber, "bytes" to doc.file.length(), "target" to "provider") {
+                    withContext(Dispatchers.IO) {
+                        files.writeBack(doc.file, src)
+                        files.clearPendingWriteBack(src)
+                    }
                 }
             } else if (src != null && src.scheme == "file") {
                 val target = File(requireNotNull(src.path))
-                if (target.canonicalPath != doc.file.canonicalPath) withContext(Dispatchers.IO) {
-                    doc.file.copyTo(target, overwrite = true)
-                    files.clearPendingWriteBack(src)
+                if (target.canonicalPath != doc.file.canonicalPath) Diag.measure(DiagArea.Save, "write_back", "doc" to doc.diagNumber, "bytes" to doc.file.length(), "target" to "file") {
+                    withContext(Dispatchers.IO) {
+                        doc.file.copyTo(target, overwrite = true)
+                        files.clearPendingWriteBack(src)
+                    }
                 }
             }
             doc.notWrittenBack = false
             true
         } catch (e: Exception) {
+            outcome = "failed"
+            Diag.failure(DiagArea.Save, stage, e)
             doc.writable = false
             doc.notWrittenBack = true
             if (!quiet) tell(e.userMessage)
             false
+        } finally {
+            Diag.event(DiagArea.Save, "save", "doc" to doc.diagNumber, "trigger" to trigger, "outcome" to outcome, "ms" to android.os.SystemClock.elapsedRealtime() - started)
         }
     }
 
@@ -1578,51 +1605,56 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         appPrefs.edit().putBoolean("keepScreenOn", on).apply()
     }
 
-    /** About → Diagnostics: record open timings in memory so they can be shared without adb. */
-    var recordOpenTimings by mutableStateOf(appPrefs.getBoolean("recordOpenTimings", false).also(::applyOpenTimings))
+    /** The diagnostics number of the latest open (#105: lines name a number, never the file). */
+    private var diagDoc = 0
+
+    /**
+     * About → Diagnostics: record the detailed diagnostics log (open and render timings, pen
+     * latency, saves, scans, memory, failures) in app-private files so it can be shared without
+     * adb. See docs/ANDROID_DIAGNOSTICS_LOG.md.
+     */
+    var recordDiagnostics by mutableStateOf(Diag.enabled())
         private set
 
-    fun updateRecordOpenTimings(on: Boolean) {
-        recordOpenTimings = on
-        appPrefs.edit().putBoolean("recordOpenTimings", on).apply()
-        applyOpenTimings(on)
+    fun updateRecordDiagnostics(on: Boolean) {
+        recordDiagnostics = on
+        val app = getApplication<Application>()
+        viewModelScope.launch(Dispatchers.IO) { Diagnostics.setOn(app, on) }
     }
 
-    private fun applyOpenTimings(on: Boolean) {
-        val timing = io.github.artcraftandroid.pdfcraft.engine.OpenTiming
-        // turning it off forgets what was recorded
-        timing.recorder = if (on) timing.recorder ?: io.github.artcraftandroid.pdfcraft.engine.TimingRecorder() else null
-    }
-
-    /** Share the recorded open timings as a text file; only stage names, times and counts. */
-    fun shareOpenTimings() {
-        val recorder = io.github.artcraftandroid.pdfcraft.engine.OpenTiming.recorder
-        val lines = recorder?.snapshot().orEmpty()
-        if (lines.isEmpty()) {
-            tell(text(R.string.home_open_timings_empty))
-            return
+    fun clearDiagnostics() {
+        val app = getApplication<Application>()
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) { Diagnostics.clear(app) }
+            tell(text(R.string.home_diagnostics_cleared))
         }
-        handOut {
-            val app = getApplication<Application>()
-            val am = app.getSystemService(android.content.Context.ACTIVITY_SERVICE) as? android.app.ActivityManager
-            val mem = android.app.ActivityManager.MemoryInfo().also { am?.getMemoryInfo(it) }
-            val facts = listOf(
-                "app" to "$appVersion (${io.github.artcraftandroid.pdfcraft.ui.home.installedVersionCode(app)})",
-                "engine" to io.github.artcraftandroid.pdfcraft.core.engineVersion(),
-                "device" to "${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}",
-                "android" to "${android.os.Build.VERSION.RELEASE} (API ${android.os.Build.VERSION.SDK_INT})",
-                "memory_class_mb" to "${am?.memoryClass ?: 0} (large ${am?.largeMemoryClass ?: 0})",
-                "device_ram_mb" to "${mem.totalMem / (1024 * 1024)}",
-                "max_heap_mb" to "${Runtime.getRuntime().maxMemory() / (1024 * 1024)}",
-            )
-            val report = io.github.artcraftandroid.pdfcraft.engine.timingReport(facts, lines, recorder?.droppedCount() ?: 0)
-            val file = withContext(Dispatchers.IO) {
-                File(File(app.cacheDir, "share").apply { mkdirs() }, "pdfcraft-open-timings.txt").apply { writeText(report) }
+    }
+
+    /** Share the diagnostics log as a text file; only event names, times, counts and sizes. */
+    fun shareDiagnostics() {
+        val app = getApplication<Application>()
+        viewModelScope.launch {
+            // the pen latency so far (#128), as Pen settings shows it
+            listOf("normal" to io.github.artcraftandroid.pdfcraft.ui.viewer.InkLatency.normal, "low_latency" to io.github.artcraftandroid.pdfcraft.ui.viewer.InkLatency.lowLatency).forEach { (path, stats) ->
+                stats.summary()?.let { Diag.event(DiagArea.Ink, "latency_summary", "path" to path, "samples" to it.count, "p50_ms" to it.medianMs, "p95_ms" to it.p95Ms) }
             }
-            val uri = androidx.core.content.FileProvider.getUriForFile(app, "${app.packageName}.files", file)
-            sendIntent(listOf(uri), "text/plain")
-                .putExtra(Intent.EXTRA_SUBJECT, text(R.string.home_open_timings_subject))
-                .putExtra(Intent.EXTRA_TEXT, report)
+            Diagnostics.memory("share")
+            val lines = withContext(Dispatchers.IO) { Diagnostics.lines(app) }
+            if (lines.isEmpty()) {
+                tell(text(R.string.home_diagnostics_empty))
+                return@launch
+            }
+            handOut {
+                val facts = Diagnostics.facts(app, appVersion, io.github.artcraftandroid.pdfcraft.ui.home.installedVersionCode(app), io.github.artcraftandroid.pdfcraft.core.engineVersion())
+                val report = io.github.artcraftandroid.pdfcraft.engine.diagReport(facts, lines)
+                val file = withContext(Dispatchers.IO) {
+                    File(File(app.cacheDir, "share").apply { mkdirs() }, "pdfcraft-diagnostics.txt").apply { writeText(report) }
+                }
+                val uri = androidx.core.content.FileProvider.getUriForFile(app, "${app.packageName}.files", file)
+                // the file only: a long log is too big for a message's text
+                sendIntent(listOf(uri), "text/plain")
+                    .putExtra(Intent.EXTRA_SUBJECT, text(R.string.home_diagnostics_subject))
+            }
         }
     }
 
@@ -4797,9 +4829,11 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             // the document's edges in the photo, shown on the page and moved in Crop; the whole
             // photo is kept when none are found
             // (the engine may still be starting when the app was closed and opened again)
+            val findStarted = android.os.SystemClock.elapsedRealtime()
             val found = (engine ?: application.engine.await().getOrNull())?.let { eng -> runCatching { eng.tool("photo_find_document", mapOf("path" to f.absolutePath)) }.getOrNull() }
                 ?.takeIf { it.optBoolean("found") }?.optJSONArray("corners")?.takeIf { it.length() == 8 }
                 ?.let { a -> FloatArray(8) { a.optDouble(it).toFloat() } }
+            Diag.event(DiagArea.Scan, "photo", "retake" to (r != null), "bytes" to f.length(), "edges_found" to (found != null), "find_ms" to android.os.SystemClock.elapsedRealtime() - findStarted)
             val at = scanPages.indexOfFirst { it.file == f }
             if (found != null && at >= 0) scanPages[at] = scanPages[at].copy(corners = found, found = found)
         }
@@ -4831,6 +4865,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     fun saveScan(filter: ScanFilter) = job(text(R.string.msg_busy_saving_scan)) { eng ->
         val pages = scanPages.toList()
         val paths = pages.map { it.file.absolutePath }
+        val scanStarted = android.os.SystemClock.elapsedRealtime()
         val created = eng.tool("doc_create", mapOf("from" to "images", "paths" to paths, "name" to "Scan"))
         val id = created.optLong("doc")
         try {
@@ -4838,21 +4873,47 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             // photo in Original stays as it was taken
             val sizes = eng.tool("doc_info", mapOf("doc" to id)).optJSONArray("pages")
             for ((i, page) in pages.withIndex()) {
-                if (page.corners.contentEquals(ScanPage.WHOLE) && filter == ScanFilter.Original) continue
-                val size = sizes?.optJSONObject(i) ?: continue
-                val (w, h) = size.optDouble("width") to size.optDouble("height")
+                val size = sizes?.optJSONObject(i)
+                val (w, h) = (size?.optDouble("width") ?: 0.0) to (size?.optDouble("height") ?: 0.0)
+                // the Scan gates (#286): found edges, whether they were moved and how far
+                val stats = scanPageStats(page.corners, page.found, ScanPage.WHOLE, w, h)
+                if (page.corners.contentEquals(ScanPage.WHOLE) && filter == ScanFilter.Original || size == null) {
+                    Diag.event(DiagArea.Scan, "page", "index" to i + 1, "edges_found" to stats.found, "corners_moved" to stats.touched, "max_move_pct" to stats.maxMovePct, "filter" to filter, "enhanced" to false)
+                    continue
+                }
                 val corners = page.corners.mapIndexed { k, v -> v * if (k % 2 == 0) w else h }
                 busy = text(R.string.msg_busy_cleaning_page, i + 1, pages.size)
-                runCatching { eng.tool("page_enhance_camera", mapOf("doc" to id, "page" to i + 1, "corners" to corners, "mode" to filter.mode, "level" to filter.level)) }
+                val enhanceStarted = android.os.SystemClock.elapsedRealtime()
+                val ok = runCatching { eng.tool("page_enhance_camera", mapOf("doc" to id, "page" to i + 1, "corners" to corners, "mode" to filter.mode, "level" to filter.level)) }
+                    .onFailure { Diag.failure(DiagArea.Scan, "page_enhance_camera", it) }.isSuccess
+                Diag.event(
+                    DiagArea.Scan, "page", "index" to i + 1, "edges_found" to stats.found, "corners_moved" to stats.touched, "max_move_pct" to stats.maxMovePct,
+                    "filter" to filter, "enhanced" to ok, "enhance_ms" to android.os.SystemClock.elapsedRealtime() - enhanceStarted,
+                )
+            }
+            if (Diag.enabled()) {
+                // the straightened pages' proportions (A4 is 1.414; the gate is within 2%)
+                eng.tool("doc_info", mapOf("doc" to id)).optJSONArray("pages")?.let { out ->
+                    for (i in 0 until out.length()) {
+                        val p = out.optJSONObject(i) ?: continue
+                        val (pw, ph) = p.optDouble("width") to p.optDouble("height")
+                        if (pw > 0 && ph > 0) Diag.event(DiagArea.Scan, "page_size", "index" to i + 1, "width_pt" to pw, "height_pt" to ph, "ratio" to maxOf(pw, ph) / minOf(pw, ph))
+                    }
+                }
             }
             // the scan's words become text, searchable and selectable, when text recognition is installed
             withContext(Dispatchers.IO) { runCatching { eng.prepareOcrModels(getApplication()) } }
             if (runCatching { eng.tool("ocr_status") }.getOrNull()?.optBoolean("available", false) == true) {
                 busy = text(R.string.msg_busy_recognizing)
-                runCatching { eng.tool("ocr_recognize", mapOf("doc" to id)) }
+                runCatching { Diag.measure(DiagArea.Scan, "ocr", "pages" to pages.size) { eng.tool("ocr_recognize", mapOf("doc" to id)) } }
             }
             val out = tempFile("pdf")
             eng.tool("doc_save", mapOf("doc" to id, "path" to out.absolutePath, "full" to true))
+            Diag.event(
+                DiagArea.Scan, "saved", "pages" to pages.size, "filter" to filter, "bytes" to out.length(),
+                "untouched_pages" to pages.count { it.found != null && it.corners.contentEquals(it.found) },
+                "found_pages" to pages.count { it.found != null }, "ms" to android.os.SystemClock.elapsedRealtime() - scanStarted,
+            )
             val target = insertScanAt
             insertScanAt = null
             val chosen = scanName.trim()

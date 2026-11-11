@@ -245,6 +245,7 @@ class PageImages(
                 // Exceptions and bitmap OutOfMemoryError alike: retried after a back-off (#99).
                 if (e !is Exception && e !is OutOfMemoryError) throw e
                 Log.w("PdfCraft", "render of ${r.key} failed: ${e.message}")
+                io.github.artcraftandroid.pdfcraft.engine.Diag.failure(io.github.artcraftandroid.pdfcraft.engine.DiagArea.Render, "page_render", e)
                 val wait = synchronized(lock) { failures.record(r.key, android.os.SystemClock.elapsedRealtime()) }
                 if (wait != null) {
                     scope.launch(job) {

@@ -6,6 +6,10 @@ This is diagnostic groundwork only. There are **no changes** to direct file acce
 
 ## Enable measurements on the Android device
 
+Without a computer: Settings → About → Diagnostics → Record diagnostics log, then Share diagnostics log. The same stage lines appear under the `[open]` and `[render]` tags (see `docs/ANDROID_DIAGNOSTICS_LOG.md`).
+
+With adb:
+
 ```sh
 adb shell setprop log.tag.PdfCraftOpen DEBUG
 adb logcat -c
