@@ -1176,3 +1176,25 @@ fn link_mode_adds_edits_and_deletes_links() {
     let made: Value = serde_json::from_str(&s.execute("links_from_urls".into(), json!({"doc": text}).to_string()).unwrap()).unwrap();
     assert_eq!(made["created"].as_array().map(Vec::len), Some(1), "{made}");
 }
+
+/// #91: a render the view gave up on stops; an uncancelled one draws what `render_page_compact` does.
+#[test]
+fn cancelled_renders_stop_and_others_draw_the_same() {
+    let s = MobileSession::new();
+    let doc = s.open(blank_pdf(2), None).unwrap().id;
+    let tile = Some(TileRect { x: 8, y: 8, width: 64, height: 48 });
+    for (tile, compact) in [(None, true), (None, false), (tile, false)] {
+        let plain = s.render_page_compact(doc, 1, 1.5, tile, compact).unwrap();
+        let token = RenderCancel::new();
+        let kept = s.render_page_compact_cancellable(doc, 1, 1.5, tile, compact, token.clone()).unwrap();
+        assert!(!token.is_cancelled());
+        assert_eq!((plain.width, plain.height, plain.rgb565), (kept.width, kept.height, kept.rgb565));
+        assert!(*plain.pixels == *kept.pixels, "same pixels for {tile:?}");
+        token.cancel();
+        let stopped = s.render_page_compact_cancellable(doc, 1, 1.5, tile, compact, token);
+        assert!(matches!(&stopped, Err(MobileError::Render(e)) if e.contains(pdfcraft_render::RENDER_STOPPED)), "{:?}", stopped.err());
+    }
+    // the renderer kept for the document still draws
+    assert!(s.render_page_compact(doc, 1, 1.5, None, true).is_ok());
+    s.close(doc, true).unwrap();
+}

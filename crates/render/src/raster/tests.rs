@@ -11163,3 +11163,38 @@ fn render_config_keeps_sticky_notes_separate_from_all_comments() {
     let defaults = super::RenderConfig::default().settings();
     assert!(!defaults.hide_comments && !defaults.hide_notes);
 }
+
+/// #91: with its stop flag unset, `render_until` draws the same pixels as `render`; with it set,
+/// the render answers "cancelled" without pixels, and the renderer draws normally afterwards.
+#[test]
+fn render_until_matches_render_and_stops_when_asked() {
+    use super::*;
+    let content = "1 0 0 rg 0 0 120 80 re f 0 0 1 RG 4 w 10 10 m 110 70 l S";
+    let bytes = format!(
+        "%PDF-1.7\n1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj\n\
+         2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj\n\
+         3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 120 80] /Contents 4 0 R >> endobj\n\
+         4 0 obj << /Length {} >> stream\n{content}\nendstream endobj\n\
+         trailer << /Root 1 0 R >>\n%%EOF",
+        content.len()
+    )
+    .into_bytes();
+    let bytes: pdfcraft_cos::PdfBytes = Arc::new(bytes);
+    let req = |tile| RenderRequest { page: 0, kind: RequestKind::Pixels, tile, scale: 2.0, tag: 0, ..Default::default() };
+    let mut plain = PageRenderer::new(bytes.clone(), RenderConfig::default());
+    let mut stoppable = PageRenderer::new(bytes, RenderConfig::default());
+    let unset = Arc::new(AtomicBool::new(false));
+    for tile in [None, Some(Tile { x: 40, y: 20, w: 64, h: 48 })] {
+        let a = plain.render(req(tile));
+        let b = stoppable.render_until(req(tile), Some(&unset));
+        assert!(a.error.is_none() && b.error.is_none(), "{:?} {:?}", a.error, b.error);
+        assert_eq!((a.width, a.height), (b.width, b.height));
+        assert!(a.rgba == b.rgba, "same pixels for {tile:?}");
+    }
+    let set = Arc::new(AtomicBool::new(true));
+    let stopped = stoppable.render_until(req(None), Some(&set));
+    assert_eq!(stopped.error.as_deref(), Some(RENDER_STOPPED));
+    assert_eq!((stopped.width, stopped.height), (0, 0));
+    let again = stoppable.render_until(req(None), Some(&unset));
+    assert!(again.error.is_none() && again.rgba == plain.render(req(None)).rgba);
+}

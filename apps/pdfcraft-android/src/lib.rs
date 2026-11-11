@@ -732,7 +732,14 @@ impl MobileSession {
         self.with_doc(doc, |d| d.overlay_snapshot(pages))?.ok_or_else(|| MobileError::Command("Document preparation is still running".into()))
     }
 
-    fn render_pixels(&self, doc: u64, page: u32, scale: f32, tile: Option<TileRect>) -> Result<pdfcraft_render::RenderedPage, MobileError> {
+    fn render_pixels(
+        &self,
+        doc: u64,
+        page: u32,
+        scale: f32,
+        tile: Option<TileRect>,
+        stop: Option<&Arc<AtomicBool>>,
+    ) -> Result<pdfcraft_render::RenderedPage, MobileError> {
         if !(scale.is_finite() && scale > 0.0) {
             return Err(MobileError::Render(format!("the scale must be a positive number, not {scale}")));
         }
@@ -776,11 +783,15 @@ impl MobileSession {
         } else {
             scale
         };
+        // a render the view gave up on before it started takes no renderer (#91)
+        if stop.is_some_and(|s| s.load(Ordering::Acquire)) {
+            return Err(MobileError::Render(format!("page {}: {}", index.saturating_add(1), pdfcraft_render::RENDER_STOPPED)));
+        }
         let key = ViewKey::of(&config);
         let mut renderer = self.take_renderer(doc, &bytes, config);
         let raster_tile = tile.map(|t| Tile { x: t.x, y: t.y, w: t.width, h: t.height });
-        let out =
-            renderer.render(RenderRequest { page: index, kind: RequestKind::Pixels, tile: raster_tile, scale: mobile_scale, tag: 0, preview: false });
+        let request = RenderRequest { page: index, kind: RequestKind::Pixels, tile: raster_tile, scale: mobile_scale, tag: 0, preview: false };
+        let out = renderer.render_until(request, stop);
         self.return_renderer(doc, &bytes, key, renderer);
         if let Some(e) = out.error {
             return Err(MobileError::Render(format!("page {} could not be drawn: {e}", index.saturating_add(1))));
@@ -790,6 +801,16 @@ impl MobileSession {
             return Err(MobileError::Render("the renderer returned an invalid or oversized pixel buffer".into()));
         }
         Ok(out)
+    }
+
+    /// `out` as RGB565 when `compact` and fully opaque, else as its own RGBA8 buffer.
+    fn compact_image(&self, out: pdfcraft_render::RenderedPage, compact: bool) -> Result<CompactImage, MobileError> {
+        // an RGBA8 result sends the renderer's own buffer, without another copy (#86)
+        let (rgb565, pixels) = match compact_pixels(&out.rgba, compact) {
+            Some(packed) => (true, pdfcraft_android_ffi_bytes::Bytes::from(packed)),
+            None => (false, pdfcraft_android_ffi_bytes::Bytes::new(out.rgba)),
+        };
+        Ok(CompactImage { width: out.width, height: out.height, rgb565, pixels })
     }
 
     fn open_document(&self, path: String, password: Option<String>, recording: bool) -> Result<ProfiledOpen, MobileError> {
@@ -881,6 +902,28 @@ fn glyph_range(text: &PageText, start: u32, end: u32) -> std::ops::Range<usize> 
 
 fn flatten_rects(rects: &[[f32; 4]]) -> Vec<f32> {
     rects.iter().flat_map(|r| r.iter().copied()).collect()
+}
+
+/// A stop switch for one render (#91): the app cancels it when the view no longer wants the page
+/// or tile, and the engine stops drawing it.
+#[derive(uniffi::Object, Default)]
+pub struct RenderCancel(Arc<AtomicBool>);
+
+#[uniffi::export]
+impl RenderCancel {
+    #[uniffi::constructor]
+    pub fn new() -> Arc<Self> {
+        Arc::new(Self::default())
+    }
+
+    /// Stop the render: one not started yet does not start, one drawing stops soon.
+    pub fn cancel(&self) {
+        self.0.store(true, Ordering::Release);
+    }
+
+    pub fn is_cancelled(&self) -> bool {
+        self.0.load(Ordering::Acquire)
+    }
 }
 
 #[uniffi::export]
@@ -1053,19 +1096,27 @@ impl MobileSession {
     /// result stays within the renderer's size limits. Sticky notes are left out: the app draws
     /// them as icons of its own.
     pub fn render_page(&self, doc: u64, page: u32, scale: f32, tile: Option<TileRect>) -> Result<RenderedImage, MobileError> {
-        let out = self.render_pixels(doc, page, scale, tile)?;
+        let out = self.render_pixels(doc, page, scale, tile, None)?;
         Ok(RenderedImage { width: out.width, height: out.height, rgba: pdfcraft_android_ffi_bytes::Bytes::new(out.rgba) })
     }
 
     /// Optional compact opaque page previews; tiles and translucent pixels retain RGBA8.
     pub fn render_page_compact(&self, doc: u64, page: u32, scale: f32, tile: Option<TileRect>, compact: bool) -> Result<CompactImage, MobileError> {
-        let out = self.render_pixels(doc, page, scale, tile)?;
-        // an RGBA8 result sends the renderer's own buffer, without another copy (#86)
-        let (rgb565, pixels) = match compact_pixels(&out.rgba, compact && tile.is_none()) {
-            Some(packed) => (true, pdfcraft_android_ffi_bytes::Bytes::from(packed)),
-            None => (false, pdfcraft_android_ffi_bytes::Bytes::new(out.rgba)),
-        };
-        Ok(CompactImage { width: out.width, height: out.height, rgb565, pixels })
+        self.compact_image(self.render_pixels(doc, page, scale, tile, None)?, compact && tile.is_none())
+    }
+
+    /// [`Self::render_page_compact`] that stops drawing once `cancel` is cancelled (#91), for a
+    /// page or tile the view may stop wanting while it renders. A stopped render is an error.
+    pub fn render_page_compact_cancellable(
+        &self,
+        doc: u64,
+        page: u32,
+        scale: f32,
+        tile: Option<TileRect>,
+        compact: bool,
+        cancel: Arc<RenderCancel>,
+    ) -> Result<CompactImage, MobileError> {
+        self.compact_image(self.render_pixels(doc, page, scale, tile, Some(&cancel.0))?, compact && tile.is_none())
     }
 
     /// Run tool `name` with JSON arguments (`""` = none) and return its JSON result: the tools and
