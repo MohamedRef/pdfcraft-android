@@ -566,13 +566,14 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         if (doc.info.preparing) return@withLock true
         if (!doc.info.dirty && !doc.notWrittenBack) return@withLock true
         try {
+            val src = doc.source
+            // Mark before the working copy changes (#103): a process killed between doc_save and
+            // the write-back must reopen the saved working copy, not copy the old original over it.
+            markBeforeWorkingCopyChanges(doc)
             if (doc.info.dirty) eng.tool("doc_save", mapOf("doc" to doc.id))
             refresh(doc)
-            val src = doc.source
             if (src != null && src.scheme == "content") {
-                // The provider may truncate its original before writing fails. Mark the
-                // app-owned working copy first, and clear only after the stream closes.
-                withContext(Dispatchers.IO) { files.markPendingWriteBack(src) }
+                // The marker set above stays until the provider verifiably holds the new bytes.
                 if (!doc.writable) {
                     doc.notWrittenBack = true
                     return@withLock false
@@ -584,7 +585,6 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             } else if (src != null && src.scheme == "file") {
                 val target = File(requireNotNull(src.path))
                 if (target.canonicalPath != doc.file.canonicalPath) withContext(Dispatchers.IO) {
-                    files.markPendingWriteBack(src)
                     doc.file.copyTo(target, overwrite = true)
                     files.clearPendingWriteBack(src)
                 }
@@ -597,6 +597,21 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             if (!quiet) tell(e.userMessage)
             false
         }
+    }
+
+    /**
+     * Persist the write-back marker for [doc]'s source before its working copy is changed, so a
+     * reopen after a crash keeps the changed copy (#103). Nothing to protect when the working
+     * copy is the document's own file.
+     */
+    private suspend fun markBeforeWorkingCopyChanges(doc: OpenDocument) {
+        val src = doc.source ?: return
+        val separate = when (src.scheme) {
+            "content" -> true
+            "file" -> File(requireNotNull(src.path)).canonicalPath != doc.file.canonicalPath
+            else -> false
+        }
+        if (separate) withContext(Dispatchers.IO) { files.markPendingWriteBack(src, doc.file) }
     }
 
     /** Read the document's state from the engine again (after an edit, undo or save). */
@@ -932,37 +947,87 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
 
     /** Where Save a copy is asked to write (the activity opens the system's file creator with this name). */
     val saveCopyRequests = Channel<String>(Channel.BUFFERED)
-    private var afterCopy: (() -> Unit)? = null
-    private var copyOf: OpenDocument? = null
+
+    /** What a Save a copy picker was opened for: an open document, or a file row in Home. */
+    private sealed class CopyRequest {
+        class Document(val doc: OpenDocument, val then: (() -> Unit)?) : CopyRequest()
+        class Row(val row: io.github.artcraftandroid.pdfcraft.ui.home.FileRow) : CopyRequest()
+    }
+
+    /** The single Save a copy waiting for its picker (#104). */
+    private val copyRequest = PendingRequest<CopyRequest>()
+
+    private fun startCopyRequest(request: CopyRequest, name: String) {
+        copyRequest.start(request)?.let(::abandonCopyRequest)
+        saveCopyRequests.trySend(name)
+    }
+
+    /**
+     * [request] ends without a copy (cancelled, its picker failed to open, or displaced): an
+     * unsaved document's Save a copy or Discard choice comes back instead of being lost, and new
+     * opens are no longer blocked by it.
+     */
+    private fun abandonCopyRequest(request: CopyRequest) {
+        if (request is CopyRequest.Document && request.then != null && resolvingReadOnly) {
+            readOnlyPrompt = request.doc
+            resolvingReadOnly = false
+        }
+    }
+
+    /** The system file creator could not be opened for the waiting Save a copy. */
+    fun saveCopyLaunchFailed() {
+        copyRequest.take()?.let(::abandonCopyRequest)
+    }
 
     /** Save a copy of [doc] under a name and place the user picks. */
     fun saveCopyAs(doc: OpenDocument, then: (() -> Unit)? = null) {
-        copyOf = doc
-        afterCopy = then
-        saveCopyRequests.trySend(doc.name)
+        startCopyRequest(CopyRequest.Document(doc, then), doc.name)
     }
 
     /** The place chosen for Save a copy (null: cancelled). The document is saved first, then its file copied. */
     fun copyTo(target: Uri?) {
-        if (rowCopyTo(target)) return
-        val doc = copyOf ?: return
-        copyOf = null
-        val then = afterCopy
-        afterCopy = null
-        if (target == null) {
-            // User cancelled Android's file picker: do not lose the unsaved recovery choice.
-            if (then != null && resolvingReadOnly) {
-                readOnlyPrompt = doc
-                resolvingReadOnly = false
-            }
+        val request = copyRequest.take()
+        if (request == null) {
+            // The app was closed while the picker was open, so what to copy is gone; the picker
+            // has already made an empty file there. Remove it rather than leave it behind.
+            if (target != null) viewModelScope.launch { removeOrphanCopy(target) }
             return
         }
+        if (target == null) {
+            // User cancelled Android's file picker: do not lose the unsaved recovery choice.
+            abandonCopyRequest(request)
+            return
+        }
+        when (request) {
+            is CopyRequest.Row -> copyRowTo(request.row, target)
+            is CopyRequest.Document -> copyDocumentTo(request.doc, request.then, target)
+        }
+    }
+
+    /** Delete [target], a file the picker created for a Save a copy that no longer exists, if it is still empty. */
+    private suspend fun removeOrphanCopy(target: Uri) {
+        val removed = withContext(Dispatchers.IO) {
+            runCatching {
+                files.size(target) == 0L &&
+                    android.provider.DocumentsContract.deleteDocument(getApplication<Application>().contentResolver, target)
+            }.getOrDefault(false)
+        }
+        tell(text(if (removed) R.string.msg_copy_request_lost else R.string.msg_copy_request_lost_kept))
+    }
+
+    private fun copyDocumentTo(doc: OpenDocument, then: (() -> Unit)?, target: Uri) {
         viewModelScope.launch {
             try {
                 // The Save a copy picker, onPause and auto-save must never race over
                 // the same local PDF; only the successful copy may clear the marker.
                 saveMutex.withLock {
-                    if (doc.info.dirty) engine?.tool("doc_save", mapOf("doc" to doc.id))
+                    if (doc.info.dirty) {
+                        // The working copy now holds edits its original lacks: mark it first and
+                        // keep it owed to the original, as any save does (#103).
+                        markBeforeWorkingCopyChanges(doc)
+                        engine?.tool("doc_save", mapOf("doc" to doc.id))
+                        if (doc.source != null) doc.notWrittenBack = true
+                    }
                     withContext(Dispatchers.IO) {
                         files.writeBack(doc.file, target)
                         if (then != null) doc.source?.let { files.clearPendingWriteBack(it) }
@@ -1930,13 +1995,33 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                     io.github.artcraftandroid.pdfcraft.ui.viewer.CertLook.Typed -> args["graphic"] = mapOf("text" to id.name)
                     io.github.artcraftandroid.pdfcraft.ui.viewer.CertLook.Drawn -> args["graphic"] = mapOf("image" to signatures.signature.absolutePath)
                 }
-                eng.tool("sign_document", args)
+                // The signer rewrites the working copy: never while a save streams it to the
+                // provider, and only after the marker that keeps it on a crash (#103).
+                saveMutex.withLock {
+                    val src = doc.source
+                    val wasPending = src != null && withContext(Dispatchers.IO) { files.hasPendingWriteBack(src) }
+                    val before = doc.file.length() to doc.file.lastModified()
+                    markBeforeWorkingCopyChanges(doc)
+                    try {
+                        eng.tool("sign_document", args)
+                    } catch (e: Exception) {
+                        // A refused signature (wrong password) leaves the copy as it was: drop the
+                        // marker this attempt added. A changed copy keeps it and is saved later.
+                        val unchanged = (doc.file.length() to doc.file.lastModified()) == before
+                        if (src != null && !wasPending && unchanged) {
+                            withContext(Dispatchers.IO) { runCatching { files.clearPendingWriteBack(src) } }
+                        } else {
+                            doc.notWrittenBack = true
+                        }
+                        throw e
+                    }
+                    doc.notWrittenBack = true
+                }
                 certSign = null
                 certSignError = null
                 if (doc.controller.tool == ViewerTool.FillSign) leaveTool(doc)
                 refresh(doc)
                 // the working copy is signed; the original gets it now, or a copy does
-                doc.notWrittenBack = true
                 if (save(doc, quiet = true)) {
                     tell(text(R.string.msg_signed_saved))
                 } else {
@@ -1945,6 +2030,11 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             } catch (e: MobileException) {
                 val m = toolMessage(e, "sign_document")
                 certSignError = if (m.contains("password is incorrect", ignoreCase = true)) text(R.string.common_wrong_password) else m
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // e.g. the recovery marker could not be written: nothing was signed
+                tell(e.userMessage)
             } finally {
                 busy = null
             }
@@ -3643,24 +3733,17 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         }
     }
 
-    private var copyRow: io.github.artcraftandroid.pdfcraft.ui.home.FileRow? = null
-
     fun saveFileCopy(row: io.github.artcraftandroid.pdfcraft.ui.home.FileRow) {
-        copyRow = row
-        saveCopyRequests.trySend(row.name)
+        startCopyRequest(CopyRequest.Row(row), row.name)
     }
 
     /** The place chosen for a file row's Save a copy. */
-    fun rowCopyTo(target: Uri?): Boolean {
-        val row = copyRow ?: return false
-        copyRow = null
-        if (target == null) return true
+    private fun copyRowTo(row: io.github.artcraftandroid.pdfcraft.ui.home.FileRow, target: Uri) {
         viewModelScope.launch {
             val f = localFileOf(row) ?: return@launch tell(text(R.string.common_file_unreadable))
             runCatching { withContext(Dispatchers.IO) { files.writeBack(f, target) } }
                 .onSuccess { tell(text(R.string.msg_saved_copy)) }.onFailure { tell(it.userMessage) }
         }
-        return true
     }
 
     fun deleteFile(row: io.github.artcraftandroid.pdfcraft.ui.home.FileRow) {
