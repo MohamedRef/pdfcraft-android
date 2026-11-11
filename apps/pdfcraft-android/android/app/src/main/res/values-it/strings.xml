@@ -1832,4 +1832,24 @@
     <string name="cards_busy_export">Esportazione flashcard…</string>
     <string name="cards_file_name">Flashcard %1$s</string>
     <string name="cards_imported">%1$d flashcard importate</string>
+    <string name="backup_section">Backup</string>
+    <string name="backup_choose_folder">Scegli una cartella di backup</string>
+    <string name="backup_folder_is">Cartella di backup: %1$s</string>
+    <string name="backup_keep_label">Versioni conservate per documento</string>
+    <string name="backup_status_last">Ultimo backup %1$s</string>
+    <string name="backup_status_none">Ancora nessun backup. Viene fatta una copia ogni volta che un documento viene salvato.</string>
+    <string name="backup_status_failed">Impossibile scrivere l\'ultimo backup. Verrà ritentato al prossimo salvataggio.</string>
+    <string name="backup_retry">Riprova backup</string>
+    <string name="backup_turn_off">Disattiva i backup</string>
+    <string name="backup_body">Dopo ogni salvataggio, una copia datata del PDF e dei suoi commenti (XFDF) va nella cartella scelta, in una cartella col nome del documento; le versioni più vecchie vengono rimosse. Anche libreria, flashcard e quaderni vengono salvati lì. Il file originale non viene mai modificato.</string>
+    <string name="backup_folder_not_writable">PdfCraft non può scrivere in quella cartella. Scegline un\'altra.</string>
+    <string name="backup_failed">Backup non riuscito. Il documento è salvato.</string>
+    <string name="backup_history">Cronologia versioni</string>
+    <string name="backup_history_body">Apri una copia lascia questo documento com\'è. Ripristina commenti aggiunge qui i commenti di quella versione; Annulla li toglie.</string>
+    <string name="backup_loading">Ricerca nella cartella di backup…</string>
+    <string name="backup_no_versions">Ancora nessun backup di questo documento.</string>
+    <string name="backup_open_copy">Apri una copia</string>
+    <string name="backup_restore_comments">Ripristina i commenti qui</string>
+    <string name="backup_restoring">Ripristino…</string>
+    <string name="backup_comments_restored">Commenti ripristinati</string>
 </resources>
