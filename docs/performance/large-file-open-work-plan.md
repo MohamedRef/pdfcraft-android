@@ -7,6 +7,7 @@ The implementation is a sequence of independently tested pull requests. A comple
 | Reading-stage coverage | Accept explicit null form entries, classify bounded field trees by affected page, preserve invisible-signature validation, and report fixed fallback reasons | Merged in PR #225; exact-head CI passed |
 | Per-page overlays | Load visible-page comments and widgets first; retain complete lists on demand, with generation checks and refresh behavior | In progress |
 | Rendering and memory | Prioritize visible rendering, limit initial prefetch, request large heap with actual-runtime cache budgets, and provide an opaque RGB565 option with correct native transfer/accounting | Implemented on review branch; tests in progress |
+| Complete-open passes and annotated pages | Reading stage accepts pages whose comments carry their own appearance; editing cache keeps a file's annotations within its 32 MB cap; signature discovery and appearance/form discovery overlap the renderer inspection; integer and name parser fast paths | PR from `perf/reading-comments`; host measurements in the PR, no device measurement yet |
 | Shared input bytes | Audit managed-file immutability and all save paths, introduce a shared byte source, implement read-only mapping with owned fallback and atomic replacement, and test mapping lifetime through save/close/reopen | Planned |
 | Integration and release | Re-run complete suites, provenance, Android JVM and release gates; document measured results and remaining physical-device limits | Planned |
 

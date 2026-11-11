@@ -88,6 +88,59 @@ fn progressive_missing_comment_appearance_on_initial_page_uses_full_open() {
     assert_eq!(std::fs::read(path).unwrap(), bytes);
 }
 
+/// #212: a page with saved handwriting and highlights (comments that carry their own normal
+/// appearance) opens in the reading stage, and draws exactly as the complete document does.
+#[test]
+fn progressive_comments_with_their_own_appearance_draw_early_and_identically() {
+    let ink = "q 0 0 1 RG 3 w 1 J 1 j 10 10 m 60 80 l 110 20 l S Q";
+    let mark = "q 1 1 0 rg 0 0 120 14 re f Q";
+    let bytes = fixture(
+        "",
+        "/Annots [7 0 R 9 0 R 11 0 R 12 0 R]",
+        "",
+        &[
+            "<< /Type /Annot /Subtype /Ink /Rect [10 10 120 90] /InkList [[10 10 60 80 110 20]] /C [0 0 1] /AP << /N 8 0 R >> >>",
+            &format!("<< /Type /XObject /Subtype /Form /BBox [10 10 120 90] /Length {} >>\nstream\n{ink}\nendstream", ink.len()),
+            "<< /Type /Annot /Subtype /Highlight /Rect [20 100 140 114] /QuadPoints [20 114 140 114 20 100 140 100] /C [1 1 0] /AP << /N 10 0 R >> >>",
+            &format!("<< /Type /XObject /Subtype /Form /BBox [0 0 120 14] /Matrix [1 0 0 1 20 100] /Length {} >>\nstream\n{mark}\nendstream", mark.len()),
+            "<< /Type /Annot /Subtype /Link /Rect [10 150 90 170] /Dest [5 0 R /Fit] >>",
+            "<< /Type /Annot /Subtype /Popup /Rect [130 150 190 190] /Parent 9 0 R >>",
+        ],
+    );
+    let path = file(&bytes);
+    let session = MobileSession::new();
+    let first = session.begin_open(path.clone(), None, 0, true).unwrap();
+    assert!(first.document.preparing, "{:?}", first.timings.iter().map(|s| &s.stage).collect::<Vec<_>>());
+    assert!(first.timings.iter().all(|s| !s.stage.starts_with("native_reading_fallback_")));
+    let early = session.render_page(first.document.id, 0, 1.0, None).unwrap();
+    let ready = session.complete_open(first.document.id).unwrap();
+    assert!(!ready.document.preparing);
+    assert_eq!(session.render_page(ready.document.id, 0, 1.0, None).unwrap().rgba, early.rgba);
+    let ordinary = MobileSession::new();
+    let plain = ordinary.open(path.clone(), None).unwrap();
+    assert_eq!(ordinary.render_page(plain.id, 0, 1.0, None).unwrap().rgba, early.rgba);
+    assert_eq!(std::fs::read(path).unwrap(), bytes);
+}
+
+/// Sticky notes (painted by the overlay from the complete comment list) and widgets keep their
+/// page on the complete path, with a reason the open timings show.
+#[test]
+fn progressive_notes_widgets_and_missing_appearances_name_their_fallback() {
+    for (annotation, reason) in [
+        ("<< /Type /Annot /Subtype /Text /Rect [10 10 25 25] /Contents (note) >>", "native_reading_fallback_annotation_note"),
+        ("<< /Type /Annot /Subtype /Widget /FT /Btn /Rect [10 10 25 25] /AP << /N 8 0 R >> >>", "native_reading_fallback_annotation_widget"),
+        ("<< /Type /Annot /Subtype /Square /Rect [10 10 90 90] /AP << /D 8 0 R >> >>", "native_reading_fallback_annotation_appearance"),
+        ("<< /Type /Annot /Rect [10 10 90 90] >>", "native_reading_fallback_annotations"),
+    ] {
+        let stream = "<< /Type /XObject /Subtype /Form /BBox [0 0 1 1] /Length 0 >>\nstream\n\nendstream";
+        let session = MobileSession::new();
+        let opened = session.begin_open(file(&fixture("", "/Annots [7 0 R]", "", &[annotation, stream])), None, 0, true).unwrap();
+        assert!(!opened.document.preparing, "{annotation}");
+        let reasons: Vec<_> = opened.timings.iter().filter(|s| s.stage.starts_with("native_reading_fallback_")).map(|s| s.stage.as_str()).collect();
+        assert_eq!(reasons, vec![reason], "{annotation}");
+    }
+}
+
 #[test]
 fn progressive_orphan_widget_is_not_hidden_or_mistaken_for_an_absent_form() {
     let widget = "<< /Type /Annot /Subtype /Widget /FT /Tx /T (orphan) /V (kept) /Rect [10 10 90 35] /P 5 0 R >>";
