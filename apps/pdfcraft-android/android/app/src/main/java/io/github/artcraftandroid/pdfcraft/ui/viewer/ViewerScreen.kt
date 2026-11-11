@@ -703,19 +703,23 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawSearchHits(doc:
     if (s.hits.isEmpty()) return
     val visible = doc.viewer.visiblePages()
     val current = s.currentHit
-    for (hit in s.hits) {
+    // #98: hits are in page order, so a frame walks only those of the pages in view
+    val hits = s.hits
+    for (i in insertionPoint(hits, visible.first - 1) until insertionPoint(hits, visible.last)) {
+        val hit = hits[i]
         val page = hit.range.page.toInt()
-        if (page !in visible) continue
         val isCurrent = hit === current
-        hit.rects.toList().chunked(4).forEach { r ->
-            if (r.size < 4) return@forEach
-            val a = doc.viewer.pageToScreen(page, r[0], r[1])
-            val b = doc.viewer.pageToScreen(page, r[2], r[3])
+        val r = hit.rects
+        var k = 0
+        while (k + 3 < r.size) {
+            val a = doc.viewer.pageToScreen(page, r[k], r[k + 1])
+            val b = doc.viewer.pageToScreen(page, r[k + 2], r[k + 3])
             drawRect(
                 if (isCurrent) Color(0x99E8461E) else Color(0x66FFE24D),
                 topLeft = Offset(a.x - 1f, a.y - 1f),
                 size = Size(b.x - a.x + 2f, b.y - a.y + 2f),
             )
+            k += 4
         }
     }
 }
@@ -796,9 +800,12 @@ private const val NOTE_SELECTED_DP = 19f
 private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawNotes(doc: OpenDocument, night: Boolean, selected: io.github.artcraftandroid.pdfcraft.core.CommentInfo?) {
     val dp = density
     val s = NOTE_ICON_DP * dp
+    // #98: only the notes of the pages in view (and a little round them, for icons on an edge)
+    val visible = doc.viewer.visiblePages(0.1f)
     for (n in doc.comments) {
-        if (n.subtype != "Text" || n.replyTo != null || n.state != null || n.fillSign || n.rect.size < 4) continue
         val page = n.page.toInt()
+        if (page !in visible) continue
+        if (n.subtype != "Text" || n.replyTo != null || n.state != null || n.fillSign || n.rect.size < 4) continue
         val a = doc.viewer.pageToScreen(page, n.rect[0], n.rect[1])
         val b = doc.viewer.pageToScreen(page, n.rect[2], n.rect[3])
         val cx = (a.x + b.x) / 2f

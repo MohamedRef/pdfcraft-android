@@ -147,6 +147,15 @@ class Thumbnails(private val context: Context) {
         override fun sizeOf(key: String, value: Bitmap) = value.byteCount
     }
 
+    /**
+     * File-list thumbnails draw two at a time: each one maps or reads a whole PDF, and a list
+     * of large files must not start one native parse per visible cell (#93).
+     */
+    private val drawing: kotlinx.coroutines.CoroutineDispatcher = kotlinx.coroutines.Dispatchers.IO.limitedParallelism(2)
+
+    /** [of], on the thumbnail queue. */
+    suspend fun load(path: String, maxSide: Int = 160): Bitmap? = kotlinx.coroutines.withContext(drawing) { of(path, maxSide) }
+
     /** The thumbnail of the PDF at [path] or content address (null when it can't be drawn: protected, damaged). Blocking. */
     fun of(path: String, maxSide: Int = 160): Bitmap? {
         if (path.startsWith("content:")) return ofContent(Uri.parse(path), maxSide)
@@ -187,7 +196,15 @@ class Thumbnails(private val context: Context) {
                 return it
             }
         }
-        val bmp = runCatching(draw).getOrNull() ?: return null
+        // A file that could not be drawn (protected, damaged) is not read and parsed again each
+        // time its cell shows; the key changes with the file, so a fixed file is tried again (#93).
+        val failed = File(dir, "$key.failed")
+        if (failed.isFile) return null
+        val bmp = runCatching(draw).getOrNull()
+        if (bmp == null) {
+            runCatching { failed.createNewFile() }
+            return null
+        }
         runCatching { file.outputStream().use { bmp.compress(Bitmap.CompressFormat.PNG, 90, it) } }
         memory.put(key, bmp)
         return bmp

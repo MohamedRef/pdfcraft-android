@@ -146,8 +146,8 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     fun refreshRecents() {
         viewModelScope.launch {
             val open = document?.source?.toString()
-            recentList = withContext(Dispatchers.IO) {
-                recents.list().also { list ->
+            val (list, places) = withContext(Dispatchers.IO) {
+                val list = recents.list().also { list ->
                     val uris = list.map { it.uri }
                     // access to documents that left Recent is given back (#108), before the copies
                     // are pruned, so a document whose grant goes keeps its copy
@@ -155,7 +155,12 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                     // copies of documents that left Recent go too (#42)
                     runCatching { files.pruneCopies(uris, open) }
                 }
+                // each row's thumbnail source lists a folder and its location may ask the package
+                // manager: worked out here, never while Home composes (#94)
+                list to list.associate { it.uri to (thumbPathFor(it.uri) to locationOf(it.uri)) }
             }
+            recentPlaces = places
+            recentList = list
         }
     }
 
@@ -2511,7 +2516,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         val x = (para.box[0] - 4f).coerceAtLeast(0f).toInt().toUInt()
         val y = (para.box[1] - 4f).coerceAtLeast(0f).toInt().toUInt()
         val img = runCatching {
-            withContext(eng.thumbnails) { eng.session.renderPage(doc.id, para.page.toUInt(), 1f, io.github.artcraftandroid.pdfcraft.core.TileRect(x, y, 2u, 2u)) }
+            withContext(eng.interactive) { eng.session.renderPage(doc.id, para.page.toUInt(), 1f, io.github.artcraftandroid.pdfcraft.core.TileRect(x, y, 2u, 2u)) }
         }.getOrNull() ?: return null
         val px = img.rgba
         if (px.size < 4) return null
@@ -4232,8 +4237,12 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         }
     }
 
+    /** Each recent file's thumbnail source and location, found with the list off the main thread (#94). */
+    private var recentPlaces by mutableStateOf<Map<String, Pair<String?, String>>>(emptyMap())
+
     fun recentRows(): List<io.github.artcraftandroid.pdfcraft.ui.home.FileRow> = recentList.map { r ->
-        io.github.artcraftandroid.pdfcraft.ui.home.FileRow(r.uri, r.name, thumbPathFor(r.uri), locationOf(r.uri), r.opened, r.size, r.starred) { open(Uri.parse(r.uri)) }
+        val (thumb, location) = recentPlaces[r.uri] ?: (null to text(R.string.files_location_this_device))
+        io.github.artcraftandroid.pdfcraft.ui.home.FileRow(r.uri, r.name, thumb, location, r.opened, r.size, r.starred) { open(Uri.parse(r.uri)) }
     }
 
     fun starredRows(): List<io.github.artcraftandroid.pdfcraft.ui.home.FileRow> = recentRows().filter { it.starred }.let { l ->

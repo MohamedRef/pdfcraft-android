@@ -109,13 +109,32 @@ class PageImages(
 
     init {
         repeat(workers) { scope.launch(job) { work() } }
+        synchronized(live) { live.add(this) }
     }
 
     /** Stop the workers and drop the images (the document closed). */
     fun close() {
+        synchronized(live) { live.remove(this) }
         firstCanvas.cancel()
         job.cancel()
         clear()
+    }
+
+    /** Drop every image the view does not want now (the app went to the background, #92). */
+    fun trimToWanted() {
+        val keep = synchronized(lock) { wanted.mapTo(HashSet()) { it.key } }
+        trim(keep)
+    }
+
+    companion object {
+        /** The documents' image caches, for memory trims. */
+        private val live = java.util.Collections.newSetFromMap(java.util.WeakHashMap<PageImages, Boolean>())
+
+        /** [trimToWanted] on every open document. */
+        fun trimAll() {
+            val all = synchronized(live) { live.toList() }
+            all.forEach { it.trimToWanted() }
+        }
     }
 
     /** The images the view wants now, most wanted first. */
@@ -172,6 +191,7 @@ class PageImages(
         }
         fallback.values.retainAll { it.key in keep }
         tileFallback.values.retainAll { it.key in keep }
+        version++
     }
 
     private fun next(): ImageRequest? = synchronized(lock) {
@@ -213,7 +233,12 @@ class PageImages(
                 signal.trySend(Unit)
                 continue
             }
-            if (image != null) {
+            // #91: a tile finished after the view moved on (a fling, a pinch through several detail
+            // levels) is not cached, so it cannot push out images about to be needed. Whole pages
+            // are kept: they stand in while their page scrolls back.
+            if (image != null && !r.key.isBase && synchronized(lock) { wanted.none { it.key == r.key } }) {
+                OpenTiming.count("stale_tile_dropped", 1L)
+            } else if (image != null) {
                 synchronized(lock) {
                     cache.put(r.key, image)?.let { bytes -= it.bytes }
                     bytes += image.bytes
