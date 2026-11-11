@@ -110,6 +110,9 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
 
     val messages = Channel<Message>(Channel.BUFFERED)
 
+    /** System pickers the editing tools ask the activity for (a picture, files, a folder, a place to save). */
+    val requests = FileRequests()
+
     /** Avoid overlapping onPause, close, and manual saves to a single provider URI. */
     private val saveMutex = Mutex()
 
@@ -785,6 +788,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             commitInlineEdit(doc)
             editSelection = null
             editImage = null
+            imageEdit.crop = null
             editMode = io.github.artcraftandroid.pdfcraft.ui.viewer.EditMode.Select
         }
         if (certPlacing === doc) certPlacing = null
@@ -2164,6 +2168,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     fun editTap(doc: OpenDocument, at: PagePoint?) {
         editing?.let { commitInlineEdit(doc) }
         editImage = null
+        imageEdit.crop = null
         if (at == null) {
             editSelection = null
             return
@@ -2187,6 +2192,9 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
 
     /** The picture selected in Edit PDF. */
     var editImage by mutableStateOf<io.github.artcraftandroid.pdfcraft.ui.viewer.EditImage?>(null)
+
+    /** The picture tools' state: a crop being framed, the Rotate dialog (#161). */
+    val imageEdit = io.github.artcraftandroid.pdfcraft.ui.viewer.ImageEditState()
 
     /** Formatting the engine doesn't report back, kept per paragraph (page to number) while editing. */
     val editFont = androidx.compose.runtime.mutableStateMapOf<Pair<Int, Int>, String>()
@@ -2331,8 +2339,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             val rect = (o.optJSONArray("visible_rect") ?: o.optJSONArray("rect")) ?: continue
             val box = FloatArray(4) { k -> rect.optDouble(k).toFloat() }
             if (at.x in box[0]..box[2] && at.y in box[1]..box[3]) {
-                val full = o.optJSONArray("rect") ?: rect
-                return io.github.artcraftandroid.pdfcraft.ui.viewer.EditImage(at.page, o.optInt("image"), FloatArray(4) { k -> full.optDouble(k).toFloat() })
+                return io.github.artcraftandroid.pdfcraft.ui.viewer.editImageFrom(at.page, o)
             }
         }
         return null
