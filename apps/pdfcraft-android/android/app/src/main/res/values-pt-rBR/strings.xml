@@ -430,7 +430,7 @@
     <string name="sheet_pages">Páginas</string>
     <string name="sheet_attachments">Anexos</string>
     <string name="sheet_bookmarks_contents">Favoritos e sumário</string>
-    <string name="sheet_comment_list">Lista de comentários</string>
+    <string name="sheet_comment_list">Comentários</string>
     <string name="sheet_add_bookmark">Adicionar favorito</string>
     <string name="sheet_remove_bookmark">Remover favorito</string>
     <string name="sheet_export_as">Exportar como...</string>
@@ -474,7 +474,7 @@
     <string name="comments_reply">Responder</string>
     <string name="comments_reply_hint">Responder</string>
     <string name="comments_avatar">Avatar</string>
-    <string name="comments_empty_title">Comece aqui</string>
+    <string name="comments_empty_title">Nenhum comentário ainda</string>
     <string name="comments_empty_body">Os comentários adicionados com as ferramentas de comentário aparecerão aqui.</string>
     <string name="comments_action_highlighted">Destacou</string>
     <string name="comments_action_underlined">Sublinhou</string>

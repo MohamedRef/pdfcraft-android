@@ -656,7 +656,7 @@
     <string name="sheet_pages">Páginas</string>
     <string name="sheet_attachments">Archivos adjuntos</string>
     <string name="sheet_bookmarks_contents">Marcadores e índice</string>
-    <string name="sheet_comment_list">Lista de comentarios</string>
+    <string name="sheet_comment_list">Comentarios</string>
     <string name="sheet_add_bookmark">Añadir marcador</string>
     <string name="sheet_remove_bookmark">Quitar marcador</string>
     <string name="sheet_export_as">Exportar como...</string>
@@ -726,7 +726,7 @@
     <string name="comments_reply_hint">Responder</string>
     <!-- Translator note: accessibility label of the commenter's picture -->
     <string name="comments_avatar">Avatar</string>
-    <string name="comments_empty_title">Empieza ahora</string>
+    <string name="comments_empty_title">Aún no hay comentarios</string>
     <string name="comments_empty_body">Los comentarios que añadas con las herramientas de comentario aparecen aquí.</string>
 
     <!-- Comment List: what a comment did, in italics under its author -->

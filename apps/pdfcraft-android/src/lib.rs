@@ -478,8 +478,9 @@ pub struct PageOverlays {
 const MAX_MOBILE_PAGE_PIXELS: u64 = 4 * 1024 * 1024;
 const MAX_MOBILE_TILE_PIXELS: u64 = 1024 * 1024;
 
-/// The documents' idle renderers: the bytes they render, and the renderers themselves.
-type RendererCache = HashMap<u64, (pdfcraft_cos::PdfBytes, Vec<PageRenderer>)>;
+/// The documents' idle renderers: the bytes they render, whether they draw comments (Hide all
+/// comments), and the renderers themselves.
+type RendererCache = HashMap<u64, (pdfcraft_cos::PdfBytes, bool, Vec<PageRenderer>)>;
 
 /// A document's text layers: the bytes they were taken from, a renderer to extract more, and one
 /// slot per page.
@@ -553,27 +554,29 @@ impl MobileSession {
     fn take_renderer(&self, doc: u64, bytes: &pdfcraft_cos::PdfBytes, config: RenderConfig) -> PageRenderer {
         let mut cache = self.cache();
         match cache.get_mut(&doc) {
-            Some((b, idle)) if pdfcraft_cos::same_storage(b, bytes) => idle.pop(),
+            // A renderer made before Hide all comments was toggled keeps drawing the old way.
+            Some((b, hidden, idle)) if pdfcraft_cos::same_storage(b, bytes) && *hidden == config.hide_comments => idle.pop(),
             _ => None,
         }
         .unwrap_or_else(|| PageRenderer::new(bytes.clone(), config))
     }
 
     /// Give a renderer back for the next render, unless the document has changed since.
-    fn return_renderer(&self, doc: u64, bytes: &pdfcraft_cos::PdfBytes, renderer: PageRenderer) {
+    fn return_renderer(&self, doc: u64, bytes: &pdfcraft_cos::PdfBytes, hidden: bool, renderer: PageRenderer) {
         // Keep a late reading-stage render from reviving a closed or superseded cache entry.
         let auto = self.lock();
         if !auto.session().get(DocId(doc)).is_some_and(|d| pdfcraft_cos::same_storage(&d.display, bytes)) {
             return;
         }
         let mut cache = self.cache();
-        let entry = cache.entry(doc).or_insert_with(|| (bytes.clone(), Vec::new()));
-        if !pdfcraft_cos::same_storage(&entry.0, bytes) {
-            // the renderers of an older version of the document are no use any more
-            *entry = (bytes.clone(), Vec::new());
+        let entry = cache.entry(doc).or_insert_with(|| (bytes.clone(), hidden, Vec::new()));
+        if !pdfcraft_cos::same_storage(&entry.0, bytes) || entry.1 != hidden {
+            // the renderers of an older version of the document, or of the other comment
+            // visibility, are no use any more
+            *entry = (bytes.clone(), hidden, Vec::new());
         }
-        if entry.1.len() < RENDERERS_PER_DOC {
-            entry.1.push(renderer);
+        if entry.2.len() < RENDERERS_PER_DOC {
+            entry.2.push(renderer);
         }
     }
 
@@ -616,11 +619,12 @@ impl MobileSession {
         } else {
             scale
         };
+        let hidden = config.hide_comments;
         let mut renderer = self.take_renderer(doc, &bytes, config);
         let raster_tile = tile.map(|t| Tile { x: t.x, y: t.y, w: t.width, h: t.height });
         let out =
             renderer.render(RenderRequest { page: index, kind: RequestKind::Pixels, tile: raster_tile, scale: mobile_scale, tag: 0, preview: false });
-        self.return_renderer(doc, &bytes, renderer);
+        self.return_renderer(doc, &bytes, hidden, renderer);
         if let Some(e) = out.error {
             return Err(MobileError::Render(format!("page {} could not be drawn: {e}", index.saturating_add(1))));
         }
@@ -781,7 +785,8 @@ impl MobileSession {
         if let Some(parsed) = parsed
             && let Ok((display, config)) = self.with_doc(id, |d| (d.display.clone(), page_render_config(d)))
         {
-            self.return_renderer(id, &display, PageRenderer::from_parsed(display.clone(), config, parsed));
+            let hidden = config.hide_comments;
+            self.return_renderer(id, &display, hidden, PageRenderer::from_parsed(display.clone(), config, parsed));
         }
         if pending {
             self.pending_opens
@@ -816,7 +821,7 @@ impl MobileSession {
         // while the completed document still draws the same bytes; a display copy supersedes them.
         if let Ok(display) = self.with_doc(doc, |d| d.display.clone()) {
             let mut cache = self.cache();
-            if cache.get(&doc).is_some_and(|(bytes, _)| !pdfcraft_cos::same_storage(bytes, &display)) {
+            if cache.get(&doc).is_some_and(|(bytes, _, _)| !pdfcraft_cos::same_storage(bytes, &display)) {
                 cache.remove(&doc);
             }
         }

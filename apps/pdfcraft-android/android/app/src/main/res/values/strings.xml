@@ -718,7 +718,7 @@
     <string name="sheet_pages">Pages</string>
     <string name="sheet_attachments">Attachments</string>
     <string name="sheet_bookmarks_contents">Bookmarks &amp; Table of Contents</string>
-    <string name="sheet_comment_list">Comment List</string>
+    <string name="sheet_comment_list">Comments</string>
     <string name="sheet_add_bookmark">Add bookmark</string>
     <string name="sheet_remove_bookmark">Remove bookmark</string>
     <string name="sheet_export_as">Export as...</string>
@@ -812,7 +812,7 @@
     <string name="comments_reply_hint">Reply</string>
     <!-- Translator note: accessibility label of the commenter's picture -->
     <string name="comments_avatar">Avatar</string>
-    <string name="comments_empty_title">Get started</string>
+    <string name="comments_empty_title">No comments yet</string>
     <string name="comments_empty_body">Comments you add with the commenting tools show up here.</string>
 
     <!-- Comment List: what a comment did, in italics under its author -->
@@ -1456,4 +1456,70 @@
     <string name="comments_loading">Loading comments…</string>
     <string name="compact_previews">Use less memory for page previews</string>
     <string name="compact_previews_body">Reduces color precision for full pages. Zoomed details retain full quality. Applies when you reopen a document.</string>
+    <!-- Comments list: search, filters, review, sharing and import (#196, #169, #158) -->
+    <string name="comments_more">More comment options</string>
+    <string name="comments_search">Search comments</string>
+    <string name="comments_search_hint">Search text, replies or author</string>
+    <string name="comments_search_close">Close search</string>
+    <string name="comments_shown">%1$d of %2$d threads</string>
+    <string name="comments_no_match">No comments match.</string>
+    <string name="comments_filter_all">All</string>
+    <string name="comments_filter_notes">Notes &amp; text</string>
+    <string name="comments_filter_highlights">Highlights</string>
+    <string name="comments_filter_drawings">Drawings</string>
+    <string name="comments_filter_mine">Mine</string>
+    <string name="comments_status_any">Any status</string>
+    <string name="comments_status_open">Open</string>
+    <string name="comments_status_none">None</string>
+    <string name="comments_status_accepted">Accepted</string>
+    <string name="comments_status_rejected">Rejected</string>
+    <string name="comments_status_cancelled">Cancelled</string>
+    <string name="comments_status_completed">Completed</string>
+    <string name="comments_set_status">Set status</string>
+    <string name="comments_lock">Lock</string>
+    <string name="comments_unlock">Unlock</string>
+    <string name="comments_locked">Locked</string>
+    <string name="comments_locked_msg">Comment locked</string>
+    <string name="comments_unlocked_msg">Comment unlocked</string>
+    <string name="comments_copy_comment">Copy comment</string>
+    <string name="comments_copy_all">Copy all comments</string>
+    <string name="comments_copy_shown">Copy shown comments</string>
+    <string name="comments_copy_none">No comments to copy</string>
+    <string name="comments_paste">Paste comments</string>
+    <string name="comments_pasted">Comments pasted</string>
+    <string name="comments_pasted_some">Comments pasted. %1$d pages were left out because this document is shorter.</string>
+    <string name="comments_share">Share comments (XFDF)</string>
+    <string name="comments_share_subject">Comments on %1$s</string>
+    <string name="comments_save">Save comments to Downloads</string>
+    <string name="comments_export_none">There are no comments to export</string>
+    <string name="comments_exporting">Exporting comments…</string>
+    <string name="comments_import">Import comments…</string>
+    <string name="comments_import_with">Import comments</string>
+    <string name="comments_importing">Importing comments…</string>
+    <string name="comments_import_unavailable">Comments can\'t be added to this document</string>
+    <string name="comments_import_open_pdf_first">Open the PDF these comments belong to, then import them from Comments ▸ ⋮</string>
+    <string name="comments_imported">Comments imported</string>
+    <string name="comments_imported_none_new">Imported. No new comments: the ones in this file were already here.</string>
+    <string name="comments_summarize">Summarize as PDF</string>
+    <string name="comments_summarize_sort">Sort the summary by</string>
+    <string name="comments_sort_page">Page</string>
+    <string name="comments_sort_author">Author</string>
+    <string name="comments_sort_date">Date</string>
+    <string name="comments_sort_type">Type</string>
+    <string name="comments_summarizing">Summarizing comments…</string>
+    <string name="comments_summary_file">Summary of comments on %1$s.pdf</string>
+    <string name="comments_hide_all">Hide all comments</string>
+    <string name="comments_show_all">Show all comments</string>
+    <plurals name="comments_drawings">
+        <item quantity="one">%1$d drawing</item>
+        <item quantity="other">%1$d drawings</item>
+    </plurals>
+    <plurals name="comments_copied">
+        <item quantity="one">%1$d comment copied</item>
+        <item quantity="other">%1$d comments copied</item>
+    </plurals>
+    <plurals name="comments_imported_count">
+        <item quantity="one">%1$d comment imported</item>
+        <item quantity="other">%1$d comments imported</item>
+    </plurals>
 </resources>

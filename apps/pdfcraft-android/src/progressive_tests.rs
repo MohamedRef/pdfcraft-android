@@ -131,7 +131,7 @@ fn progressive_first_render_starts_from_the_geometry_parse() {
     let first = session.begin_open(path.clone(), None, 1, true).unwrap();
     assert!(first.document.preparing);
     let id = first.document.id;
-    assert_eq!(session.cache().get(&id).map(|(_, idle)| idle.len()), Some(1));
+    assert_eq!(session.cache().get(&id).map(|(_, _, idle)| idle.len()), Some(1));
     assert!(first.timings.iter().any(|s| s.stage == "native_reading_pages"));
     let early = session.render_page(id, 1, 1.0, None).unwrap();
     let ordinary = MobileSession::new();
@@ -140,14 +140,14 @@ fn progressive_first_render_starts_from_the_geometry_parse() {
     // completion keeps it while the document still draws the same bytes
     session.complete_open(id).unwrap();
     assert!(session.with_doc(id, |d| pdfcraft_cos::same_storage(&d.display, &d.bytes)).unwrap());
-    assert_eq!(session.cache().get(&id).map(|(_, idle)| idle.len()), Some(1));
+    assert_eq!(session.cache().get(&id).map(|(_, _, idle)| idle.len()), Some(1));
     // a fallback to the complete open keeps no reading parse
     let fallback = MobileSession::new();
     let full = fallback
         .begin_open(file(&fixture("", "/Annots [7 0 R]", "", &["<< /Type /Annot /Subtype /Text /Rect [10 10 25 25] >>"])), None, 0, false)
         .unwrap();
     assert!(!full.document.preparing);
-    assert!(fallback.cache().get(&full.document.id).is_none_or(|(_, idle)| idle.is_empty()));
+    assert!(fallback.cache().get(&full.document.id).is_none_or(|(_, _, idle)| idle.is_empty()));
 }
 
 /// Sticky notes (painted by the overlay from the complete comment list) and widgets keep their
@@ -254,7 +254,7 @@ fn progressive_late_renderers_do_not_revive_closed_or_superseded_cache_entries()
     let bytes = session.with_doc(opened.document.id, |d| d.display.clone()).unwrap();
     let late = session.take_renderer(opened.document.id, &bytes, RenderConfig::default());
     session.close(opened.document.id, true).unwrap();
-    session.return_renderer(opened.document.id, &bytes, late);
+    session.return_renderer(opened.document.id, &bytes, false, late);
     assert!(!session.cache().contains_key(&opened.document.id));
     let widget = "<< /Type /Annot /Subtype /Widget /FT /Tx /T (orphan) /V (kept) /Rect [10 10 90 35] /P 5 0 R >>";
     let opened = session.begin_open(file(&fixture("", "", "/Annots [7 0 R]", &[widget])), None, 0, false).unwrap();
@@ -262,7 +262,7 @@ fn progressive_late_renderers_do_not_revive_closed_or_superseded_cache_entries()
     let late = session.take_renderer(opened.document.id, &bytes, RenderConfig::default());
     session.complete_open(opened.document.id).unwrap();
     assert!(!session.with_doc(opened.document.id, |d| Arc::ptr_eq(&d.display, &bytes)).unwrap());
-    session.return_renderer(opened.document.id, &bytes, late);
+    session.return_renderer(opened.document.id, &bytes, false, late);
     assert!(!session.cache().contains_key(&opened.document.id));
 }
 

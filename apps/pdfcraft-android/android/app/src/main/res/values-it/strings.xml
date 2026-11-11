@@ -644,7 +644,7 @@
     <string name="sheet_pages">Pagine</string>
     <string name="sheet_attachments">Allegati</string>
     <string name="sheet_bookmarks_contents">Segnalibri e indice</string>
-    <string name="sheet_comment_list">Elenco commenti</string>
+    <string name="sheet_comment_list">Commenti</string>
     <string name="sheet_add_bookmark">Aggiungi segnalibro</string>
     <string name="sheet_remove_bookmark">Rimuovi segnalibro</string>
     <string name="sheet_export_as">Esporta come...</string>
@@ -707,7 +707,7 @@
     <string name="comments_reply">Rispondi</string>
     <string name="comments_reply_hint">Rispondi</string>
     <string name="comments_avatar">Avatar</string>
-    <string name="comments_empty_title">Inizia ora</string>
+    <string name="comments_empty_title">Ancora nessun commento</string>
     <string name="comments_empty_body">I commenti che aggiungi con gli strumenti di annotazione verranno visualizzati qui.</string>
 
     <!-- Descrizioni delle azioni nei commenti -->
