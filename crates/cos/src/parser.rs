@@ -4,8 +4,6 @@
 //! never panics on malformed input (every index is bounds-checked). Depth is limited to defend
 //! against pathological nesting.
 
-use std::sync::Arc;
-
 use crate::object::{Dict, ObjRef, Object, PdfString, Stream};
 use crate::{Bytes, CosError};
 
@@ -421,7 +419,7 @@ pub fn parse_indirect(data: &[u8], offset: usize, resolve_length: &dyn Fn(ObjRef
 /// being copied out of it.
 /// `endstreams` is the document's [`EndstreamIndex`] for `data`.
 pub(crate) fn parse_indirect_shared(
-    data: &Arc<Vec<u8>>,
+    data: &crate::PdfBytes,
     offset: usize,
     resolve_length: &dyn Fn(ObjRef) -> Option<i64>,
     endstreams: &EndstreamIndex,
@@ -442,7 +440,7 @@ fn endstream_offsets(data: &[u8]) -> Vec<usize> {
 
 fn parse_indirect_in(
     data: &[u8],
-    shared: Option<&Arc<Vec<u8>>>,
+    shared: Option<&crate::PdfBytes>,
     offset: usize,
     resolve_length: &dyn Fn(ObjRef) -> Option<i64>,
     endstreams: Option<&EndstreamIndex>,

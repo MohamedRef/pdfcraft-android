@@ -6,29 +6,33 @@ use super::{
 
 impl Session {
     /// The page count of another PDF (Replace Pages, Insert Pages dialogs).
-    pub fn page_count_of(&self, name: &str, bytes: &Arc<Vec<u8>>) -> Result<usize, EditError> {
+    pub fn page_count_of(&self, name: &str, bytes: &pdfcraft_cos::PdfBytes) -> Result<usize, EditError> {
         Ok(pdfcraft_organize::page_count(&open_source(name, bytes)?)?)
     }
 
     /// A new blank document (Create ▸ Blank page).
-    pub fn create_blank(&self, width: f64, height: f64, pages: usize) -> Result<Arc<Vec<u8>>, EditError> {
+    pub fn create_blank(&self, width: f64, height: f64, pages: usize) -> Result<pdfcraft_cos::PdfBytes, EditError> {
         self.write_new(&pdfcraft_create::blank(width, height, pages)?)
     }
 
     /// A new document with one page per image (PNG, JPEG).
-    pub fn create_from_images(&self, images: &[(String, Vec<u8>)]) -> Result<Arc<Vec<u8>>, EditError> {
+    pub fn create_from_images(&self, images: &[(String, Vec<u8>)]) -> Result<pdfcraft_cos::PdfBytes, EditError> {
         self.write_new(&pdfcraft_create::from_images(images)?)
     }
 
     /// Create image pages at embedded resolution or a fixed dpi, without resampling.
-    pub fn create_from_images_with_resolution(&self, images: &[(String, Vec<u8>)], resolution: ImageResolution) -> Result<Arc<Vec<u8>>, EditError> {
+    pub fn create_from_images_with_resolution(
+        &self,
+        images: &[(String, Vec<u8>)],
+        resolution: ImageResolution,
+    ) -> Result<pdfcraft_cos::PdfBytes, EditError> {
         self.write_new(&pdfcraft_create::from_images_with_resolution(images, resolution)?)
     }
 
     /// A new document from plain text (US Letter, 11 pt Helvetica, or the bundled Inter face for
     /// text with Latin, Greek or Cyrillic letters Helvetica can't draw). Text neither can draw is
     /// refused, naming the line and the character (never set as `?`).
-    pub fn create_from_text(&self, title: &str, text: &str) -> Result<Arc<Vec<u8>>, EditError> {
+    pub fn create_from_text(&self, title: &str, text: &str) -> Result<pdfcraft_cos::PdfBytes, EditError> {
         self.write_new(&pdfcraft_create::from_text(title, text, pdfcraft_create::LETTER, 11.0)?)
     }
 
@@ -36,14 +40,14 @@ impl Session {
     /// compare reports), which can quote any language: when the bundled Inter face can't draw it
     /// all, characters Helvetica can't draw are written as `[U+XXXX]`, and the report's first line
     /// says so, rather than the report being refused.
-    pub(crate) fn create_report(&self, title: &str, text: &str) -> Result<Arc<Vec<u8>>, EditError> {
+    pub(crate) fn create_report(&self, title: &str, text: &str) -> Result<pdfcraft_cos::PdfBytes, EditError> {
         let (doc, _escaped) = pdfcraft_create::from_text_escaped(title, text, pdfcraft_create::LETTER, 11.0)?;
         self.write_new(&doc)
     }
 
     /// Convert a file Create understands (an image or plain text) to PDF bytes; a PDF is checked
     /// (it must open and allow copying pages) and returned as it is.
-    pub fn convert_to_pdf(&self, name: &str, bytes: &Arc<Vec<u8>>) -> Result<(SourceKind, Arc<Vec<u8>>), EditError> {
+    pub fn convert_to_pdf(&self, name: &str, bytes: &pdfcraft_cos::PdfBytes) -> Result<(SourceKind, pdfcraft_cos::PdfBytes), EditError> {
         let Some(kind) = source_kind(name, bytes) else {
             return Err(EditError::Source(format!("{name}: this file type can't be converted; use a PDF, an image or a .txt file")));
         };
@@ -61,7 +65,7 @@ impl Session {
     /// A file for Combine as PDF bytes: an image or text file is converted; a PDF is returned as
     /// it is, unchecked (Combine reads it itself, with its password), as is a file named .pdf
     /// without a `%PDF-` header, which the reader may still open.
-    pub fn as_pdf(&self, name: &str, bytes: &Arc<Vec<u8>>) -> Result<Arc<Vec<u8>>, EditError> {
+    pub fn as_pdf(&self, name: &str, bytes: &pdfcraft_cos::PdfBytes) -> Result<pdfcraft_cos::PdfBytes, EditError> {
         let pdf = match source_kind(name, bytes) {
             Some(SourceKind::Pdf) => true,
             Some(SourceKind::Image | SourceKind::Text) => false,
@@ -76,7 +80,7 @@ impl Session {
     /// objects dropped, objects packed into compressed object streams. Returns the bytes, how
     /// many objects were merged and how many images stayed as they were, past what one run may
     /// decode. The open document is not changed (Acrobat saves the reduced copy as a new file).
-    pub fn reduced_bytes(&self, id: DocId) -> Result<(Arc<Vec<u8>>, usize, usize), EditError> {
+    pub fn reduced_bytes(&self, id: DocId) -> Result<(pdfcraft_cos::PdfBytes, usize, usize), EditError> {
         let (bytes, report) = self.optimized_bytes(id, &optimize::Settings::default(), &[])?;
         Ok((bytes, report.merged, report.optimize.images_refused))
     }
@@ -85,7 +89,12 @@ impl Session {
     /// Hidden Information's `discard` categories (user data). A full rewrite: signed documents
     /// are refused. The open document is not changed. This is [`Self::optimize_job`] run in
     /// place, without progress.
-    pub fn optimized_bytes(&self, id: DocId, settings: &optimize::Settings, discard: &[Hidden]) -> Result<(Arc<Vec<u8>>, OptimizeReport), EditError> {
+    pub fn optimized_bytes(
+        &self,
+        id: DocId,
+        settings: &optimize::Settings,
+        discard: &[Hidden],
+    ) -> Result<(pdfcraft_cos::PdfBytes, OptimizeReport), EditError> {
         self.optimize_job(id, settings, discard)?.run(|_| true)
     }
 
@@ -215,7 +224,7 @@ impl Session {
     }
 
     /// Combine whole files, in order, into new PDF bytes (one bookmark per file).
-    pub fn combine(&self, sources: &[(String, Arc<Vec<u8>>)]) -> Result<Arc<Vec<u8>>, EditError> {
+    pub fn combine(&self, sources: &[(String, pdfcraft_cos::PdfBytes)]) -> Result<pdfcraft_cos::PdfBytes, EditError> {
         let docs = sources.iter().map(|(n, b)| open_source(n, b)).collect::<Result<Vec<_>, _>>()?;
         let named: Vec<(&str, &pdfcraft_cos::Document)> = sources.iter().map(|(n, _)| n.as_str()).zip(docs.iter()).collect();
         let out = pdfcraft_organize::combine(&named)?;
@@ -223,7 +232,7 @@ impl Session {
     }
 
     /// Combine Files with a page range per file ("1-3, 6"; `None` or empty for all pages).
-    pub fn combine_ranges(&self, sources: &[CombineSource]) -> Result<Arc<Vec<u8>>, EditError> {
+    pub fn combine_ranges(&self, sources: &[CombineSource]) -> Result<pdfcraft_cos::PdfBytes, EditError> {
         self.combine_unlocked(sources, &[])
     }
 
@@ -234,7 +243,7 @@ impl Session {
     /// before the next item is read. So the number of sources is not limited, and one source's
     /// document is held at a time. An item's error stops the combine and is returned as it is.
     /// `Ok(None)` when there are no sources.
-    pub fn combine_each<I, E>(&self, sources: I) -> Result<Option<Arc<Vec<u8>>>, E>
+    pub fn combine_each<I, E>(&self, sources: I) -> Result<Option<pdfcraft_cos::PdfBytes>, E>
     where
         I: IntoIterator<Item = Result<CombineSource, E>>,
         E: From<EditError>,
@@ -266,7 +275,7 @@ impl Session {
 
     /// [`Self::combine_ranges`] with the password each encrypted source is opened with, by
     /// position (missing or `None`: no password). The result is not encrypted.
-    pub fn combine_unlocked(&self, sources: &[CombineSource], passwords: &[Option<&str>]) -> Result<Arc<Vec<u8>>, EditError> {
+    pub fn combine_unlocked(&self, sources: &[CombineSource], passwords: &[Option<&str>]) -> Result<pdfcraft_cos::PdfBytes, EditError> {
         Ok(self.combine_unlocked_reporting(sources, passwords, pdfcraft_organize::FieldConflicts::Rename)?.bytes)
     }
 
@@ -320,7 +329,12 @@ impl Session {
     /// attachments come along when its runs use all of its pages (see
     /// `pdfcraft_organize::combine_grouped`). A group's later sources use its first source's bytes
     /// and password; a source without a key is a file of its own.
-    pub fn combine_grouped(&self, sources: &[CombineSource], groups: &[u64], passwords: &[Option<&str>]) -> Result<Arc<Vec<u8>>, EditError> {
+    pub fn combine_grouped(
+        &self,
+        sources: &[CombineSource],
+        groups: &[u64],
+        passwords: &[Option<&str>],
+    ) -> Result<pdfcraft_cos::PdfBytes, EditError> {
         Ok(self.combine_grouped_reporting(sources, groups, passwords, pdfcraft_organize::FieldConflicts::Rename)?.bytes)
     }
 
@@ -371,7 +385,7 @@ impl Session {
     }
 
     /// New PDF bytes containing copies of `pages` of the document (Extract Pages).
-    pub fn extract(&self, id: DocId, pages: &[usize]) -> Result<Arc<Vec<u8>>, EditError> {
+    pub fn extract(&self, id: DocId, pages: &[usize]) -> Result<pdfcraft_cos::PdfBytes, EditError> {
         let src = self.cos(id)?;
         if src.permissions().is_some_and(|p| !p.assemble()) {
             return Err(EditError::NotPermitted("extracting pages"));
@@ -425,7 +439,7 @@ impl Session {
 
     /// A new file (Combine, Extract, Split, Create) as bytes, checked like a save before anyone
     /// writes it (#1698, #2166): it reopens, and shows the pages it was built from.
-    pub(crate) fn write_new(&self, doc: &pdfcraft_cos::Document) -> Result<Arc<Vec<u8>>, EditError> {
+    pub(crate) fn write_new(&self, doc: &pdfcraft_cos::Document) -> Result<pdfcraft_cos::PdfBytes, EditError> {
         let bytes = self.write_unchecked(doc)?;
         let expected = pdfcraft_organize::page_count(doc)?;
         pdfcraft_cos::Document::open(bytes.clone()).map_err(|e| EditError::Reopen(e.to_string()))?;
@@ -436,9 +450,9 @@ impl Session {
     /// [`Self::write_new`] without the check, for bytes nobody writes: measuring a part's size.
     /// Like a save, a new file never carries a typed Password-field value (#3926): Extract and
     /// Split copy the fields of the pages they take.
-    fn write_unchecked(&self, doc: &pdfcraft_cos::Document) -> Result<Arc<Vec<u8>>, EditError> {
+    fn write_unchecked(&self, doc: &pdfcraft_cos::Document) -> Result<pdfcraft_cos::PdfBytes, EditError> {
         let opts = SaveOptions { mod_date: self.now().map(pdfcraft_cos::pdf_date), ..SaveOptions::default() };
         let doc = writable(doc)?;
-        write_full(&doc, &opts).map(Arc::new).map_err(|e| EditError::Write(e.to_string()))
+        write_full(&doc, &opts).map(|v| Arc::new(v) as pdfcraft_cos::PdfBytes).map_err(|e| EditError::Write(e.to_string()))
     }
 }

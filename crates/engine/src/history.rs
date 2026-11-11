@@ -119,7 +119,7 @@ pub(crate) struct Editor {
     pub(crate) cos: pdfcraft_cos::Document,
     /// The file as last opened or saved. Incremental saves append to it, and Revert opens it.
     /// Undo may restore a snapshot whose own base is an earlier revision; this does not follow it.
-    pub(crate) saved: Arc<Vec<u8>>,
+    pub(crate) saved: pdfcraft_cos::PdfBytes,
     /// Passwords that open [`Self::saved`].
     pub(crate) saved_keys: Keys,
     /// [`Self::saved`] was never written where the document belongs: a new document (combine,

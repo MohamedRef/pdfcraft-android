@@ -14,8 +14,8 @@ use crate::{Document, guard};
 /// Preparing them never changes the working bytes, dirty flag or undo history.
 pub struct StampPreview {
     page: usize,
-    background: Arc<Vec<u8>>,
-    stamp: Arc<Vec<u8>>,
+    background: pdfcraft_cos::PdfBytes,
+    stamp: pdfcraft_cos::PdfBytes,
     config: RenderConfig,
 }
 
@@ -45,7 +45,7 @@ impl StampPreview {
         RenderConfig { transparent: true, ..self.config.clone() }
     }
 
-    fn render(&self, bytes: &Arc<Vec<u8>>, config: RenderConfig, scale: f32) -> Result<RenderedPage, String> {
+    fn render(&self, bytes: &pdfcraft_cos::PdfBytes, config: RenderConfig, scale: f32) -> Result<RenderedPage, String> {
         if !scale.is_finite() || scale <= 0.0 {
             return Err("preview scale must be finite and positive".into());
         }
@@ -89,7 +89,7 @@ impl Document {
 /// [`StampPreview`] is.
 pub struct CommentLayer {
     page: usize,
-    bytes: Arc<Vec<u8>>,
+    bytes: pdfcraft_cos::PdfBytes,
     config: RenderConfig,
 }
 

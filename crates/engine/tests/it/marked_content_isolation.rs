@@ -8,7 +8,7 @@ use pdfcraft_render::{PageRenderer, RenderRequest, RequestKind};
 const VISIBLE: &str = "BT /F1 18 Tf 72 700 Td (Visible text) Tj ET\n";
 const HIDDEN: &str = "BT /F1 18 Tf 72 600 Td (Hidden note) Tj ET\n";
 
-fn fixture(parts: &[String]) -> Arc<Vec<u8>> {
+fn fixture(parts: &[String]) -> pdfcraft_cos::PdfBytes {
     let mut doc = Document::new_empty();
     let pages = doc.get(doc.root().unwrap()).as_dict().unwrap().reference(b"Pages").unwrap();
     let mut font = Dict::new();
@@ -48,7 +48,7 @@ fn fixture(parts: &[String]) -> Arc<Vec<u8>> {
     Arc::new(write_incremental(&doc, &SaveOptions::default()).unwrap())
 }
 
-fn render(bytes: Arc<Vec<u8>>) -> (Vec<u8>, String) {
+fn render(bytes: pdfcraft_cos::PdfBytes) -> (Vec<u8>, String) {
     let mut renderer = PageRenderer::new(bytes, Default::default());
     let pixels = renderer.render(RenderRequest { page: 0, scale: 1.0, ..Default::default() });
     assert!(pixels.error.is_none(), "{:?}", pixels.error);
@@ -80,7 +80,7 @@ fn edit(kind: &str) -> Edit {
     }
 }
 
-fn add_and_save(input: Arc<Vec<u8>>, kind: &str) -> Arc<Vec<u8>> {
+fn add_and_save(input: pdfcraft_cos::PdfBytes, kind: &str) -> pdfcraft_cos::PdfBytes {
     let mut session = Session::new();
     let id = session.open("fixture.pdf", None, input.clone(), None).unwrap();
     session.apply(id, edit(kind)).unwrap();
@@ -133,7 +133,7 @@ fn stream_list(doc: &Document) -> Vec<Object> {
     }
 }
 
-fn assert_original_streams(before: &Arc<Vec<u8>>, after: &Arc<Vec<u8>>) {
+fn assert_original_streams(before: &pdfcraft_cos::PdfBytes, after: &pdfcraft_cos::PdfBytes) {
     let original = Document::open(before.clone()).unwrap();
     let saved = Document::open(after.clone()).unwrap();
     let saved_list = stream_list(&saved);

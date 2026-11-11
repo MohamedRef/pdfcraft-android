@@ -84,10 +84,12 @@ struct OcrReview {
 pub struct Automation {
     session: Session,
     root: Option<PathBuf>,
+    /// Android-owned files only; source validation still checks inode, ownership and containment.
+    private_input_root: Option<PathBuf>,
     /// The read and write folders of `--automation-read-root` / `--automation-write-root`.
     roots: Option<Arc<file_access::AutomationRoots>>,
     /// Synchronous renderers, rebuilt when a document's working bytes change.
-    renderers: HashMap<DocId, (Arc<Vec<u8>>, PageRenderer)>,
+    renderers: HashMap<DocId, (pdfcraft_cos::PdfBytes, PageRenderer)>,
     /// Extracted page text, under one memory budget across all open documents.
     texts: TextCache,
     /// The paragraphs of the last `text_paragraphs` listing of each page, so a paragraph number
@@ -114,6 +116,7 @@ impl Automation {
         Self {
             session: Session::new(),
             root: None,
+            private_input_root: None,
             roots: None,
             renderers: HashMap::new(),
             texts: TextCache::default(),
@@ -141,6 +144,10 @@ impl Automation {
     pub fn with_automation_roots(mut self, roots: Option<Arc<file_access::AutomationRoots>>) -> Self {
         self.roots = roots;
         self
+    }
+
+    pub fn set_private_input_root(&mut self, root: PathBuf) {
+        self.private_input_root = Some(root);
     }
 
     /// Use a fixed clock for saves (deterministic output in tests).

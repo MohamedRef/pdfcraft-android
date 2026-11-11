@@ -15,7 +15,7 @@ use super::{
 const JBIG2_GLOBALS_HELD: usize = 2 * MAX_JBIG2_GLOBALS;
 
 impl Document {
-    pub fn bytes(&self) -> &Arc<Vec<u8>> {
+    pub fn bytes(&self) -> &crate::PdfBytes {
         &self.data
     }
 
@@ -485,7 +485,8 @@ impl Document {
             // Nothing to read for what can't be decoded: the images of a file share its globals.
             let globals = if *work == 0 { None } else { self.jbig2_globals(s, work)? };
             let data = if *work == 0 { Cow::Borrowed(&[][..]) } else { undo(before, work)? };
-            return pdfcraft_filters::decode_jbig2_within(&data, globals.as_deref().map(Vec::as_slice), columns, height, max, work).map_err(filter);
+            return pdfcraft_filters::decode_jbig2_within(&data, globals.as_deref().map(|v| v.as_slice()), columns, height, max, work)
+                .map_err(filter);
         }
         let Some(p) = self.fax_params(s) else {
             // The last filter gives the image's rows: rows without the tags of the PNG predictor
@@ -531,7 +532,7 @@ impl Document {
     /// document and is kept, up to [`JBIG2_GLOBALS_HELD`] in all; others are read each time. That
     /// saves the filters only: the segments it holds are decoded again for every image. Undoing
     /// the filters spends from `work`, so globals read for every image pay every time.
-    fn jbig2_globals(&self, s: &Stream, work: &mut u64) -> Result<Option<Arc<Vec<u8>>>, CosError> {
+    fn jbig2_globals(&self, s: &Stream, work: &mut u64) -> Result<Option<crate::PdfBytes>, CosError> {
         let Some(entry) = self.last_filter_parms(s).get(b"JBIG2Globals").cloned() else { return Ok(None) };
         let held = match entry {
             Object::Ref(r) if !self.overlay.contains_key(&r.num) => Some(r.num),
@@ -1093,7 +1094,7 @@ impl Document {
 
     /// Rebase this document on bytes written by the writer (after a save): edits become part of
     /// the file and the overlay is cleared, so the next incremental save appends only new edits.
-    pub fn reopen_after_save(&self, bytes: Arc<Vec<u8>>) -> Result<Self, CosError> {
+    pub fn reopen_after_save(&self, bytes: crate::PdfBytes) -> Result<Self, CosError> {
         Document::open(bytes)
     }
 

@@ -1,8 +1,6 @@
 //! Action Wizard: named sequences of steps run over files (Acrobat's guided actions), the
 //! built-in actions, and running an action over many files (batch processing).
 
-use std::sync::Arc;
-
 use crate::{DocId, Edit, EditError, Session};
 
 /// One step of an action.
@@ -138,12 +136,18 @@ pub fn builtin() -> Vec<Action> {
 }
 
 /// What running an action on one file did.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug)]
 pub struct FileResult {
     pub name: String,
-    pub bytes: Arc<Vec<u8>>,
+    pub bytes: pdfcraft_cos::PdfBytes,
     /// One line per step.
     pub log: Vec<String>,
+}
+
+impl PartialEq for FileResult {
+    fn eq(&self, other: &Self) -> bool {
+        self.bytes.as_slice() == other.bytes.as_slice() && self.name == other.name && self.log == other.log
+    }
 }
 
 /// What an action's log says of the images a Reduce File Size step left, if there are any.
@@ -210,7 +214,7 @@ fn apply_step(s: &mut Session, id: DocId, step: &Step, log: &mut Vec<String>) ->
 }
 
 /// Run `action` on one file. `progress(step, steps)` is called before each step.
-pub fn run_on(action: &Action, name: &str, bytes: Arc<Vec<u8>>, mut progress: impl FnMut(usize, usize)) -> Result<FileResult, String> {
+pub fn run_on(action: &Action, name: &str, bytes: pdfcraft_cos::PdfBytes, mut progress: impl FnMut(usize, usize)) -> Result<FileResult, String> {
     let mut s = Session::new();
     let mut id = s.open(name, None, bytes, None).map_err(|e| e.to_string())?;
     if let Some(why) = s.get(id).and_then(|d| d.read_only_reason.clone()) {

@@ -512,7 +512,7 @@ impl KeptObjects {
     const BYTES: usize = 64 * 1024 * 1024;
 
     /// Whether `object` still fits the budget; if so it is counted against it.
-    fn admit(&mut self, object: &Object, data: &Arc<Vec<u8>>) -> bool {
+    fn admit(&mut self, object: &Object, data: &crate::PdfBytes) -> bool {
         let bytes = self.bytes.saturating_add(held_bytes(object, data, 0));
         if bytes > Self::BYTES {
             return false;

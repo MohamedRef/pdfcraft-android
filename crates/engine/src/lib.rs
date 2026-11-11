@@ -66,8 +66,6 @@ pub mod word_count;
 pub mod xfa;
 mod xfa_form;
 
-use std::sync::Arc;
-
 pub use links::{
     MAX_REMOTE_DOCUMENT_BYTES, RemoteDocumentPathError, read_remote_document, remote_document_path_is_absolute, resolve_remote_document_path,
 };

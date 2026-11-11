@@ -103,12 +103,12 @@ impl Session {
     }
 
     /// The compare report as a new PDF (not opened).
-    pub fn compare_report(&self, old: DocId, new: DocId) -> Result<Arc<Vec<u8>>, EditError> {
+    pub fn compare_report(&self, old: DocId, new: DocId) -> Result<pdfcraft_cos::PdfBytes, EditError> {
         self.compare_report_of(old, new, &[])
     }
 
     /// [`Session::compare_report`] of the changes on `pages` ([`Session::compare_pages`]).
-    pub fn compare_report_of(&self, old: DocId, new: DocId, pages: &[usize]) -> Result<Arc<Vec<u8>>, EditError> {
+    pub fn compare_report_of(&self, old: DocId, new: DocId, pages: &[usize]) -> Result<pdfcraft_cos::PdfBytes, EditError> {
         let c = self.compare_pages(old, new, pages)?;
         let name = |id| self.get(id).map(|d| d.name.clone()).unwrap_or_default();
         self.create_report("Compare Report", &pdfcraft_compare::report(&c, &name(old), &name(new)))

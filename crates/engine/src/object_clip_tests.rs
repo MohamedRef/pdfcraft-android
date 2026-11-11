@@ -3,7 +3,7 @@ use crate::{ObjectKind, Session};
 
 /// A PDF of 300 × 300 pages, each drawing its `content` with `resources` and objects `extra`
 /// (numbered after the pages' content streams).
-fn pdf(pages: &[(&str, &str)], extra: &[String]) -> Arc<Vec<u8>> {
+fn pdf(pages: &[(&str, &str)], extra: &[String]) -> pdfcraft_cos::PdfBytes {
     let n = pages.len();
     let kids: Vec<String> = (0..n).map(|i| format!("{} 0 R", 3 + i)).collect();
     let mut objs = vec![
@@ -44,7 +44,7 @@ fn picture(data: &str) -> String {
 
 /// A one-page document whose paragraph "Copied" (blue, half opaque, Helvetica /F1 at objects 5)
 /// and picture /Im0 (object 6) are copied; "Left" is not.
-fn source() -> Arc<Vec<u8>> {
+fn source() -> pdfcraft_cos::PdfBytes {
     let content = "0 0 1 rg /GS0 gs BT /F1 24 Tf 20 200 Td (Copied) Tj ET q 60 0 0 40 20 100 cm /Im0 Do Q BT /F1 12 Tf 200 40 Td (Left) Tj ET";
     pdf(
         &[(content, "<< /Font << /F1 5 0 R >> /XObject << /Im0 6 0 R >> /ExtGState << /GS0 << /ca 0.5 >> >> >>")],
@@ -53,7 +53,7 @@ fn source() -> Arc<Vec<u8>> {
 }
 
 /// A one-page document that already draws with Courier as /F1 and has a picture of its own as /Im0.
-fn target() -> Arc<Vec<u8>> {
+fn target() -> pdfcraft_cos::PdfBytes {
     pdf(
         &[("BT /F1 10 Tf 250 280 Td (x) Tj ET q 10 0 0 10 280 5 cm /Im0 Do Q", "<< /Font << /F1 5 0 R >> /XObject << /Im0 6 0 R >> >>")],
         &[COURIER.into(), picture("@@@@@@@@@@@@")],

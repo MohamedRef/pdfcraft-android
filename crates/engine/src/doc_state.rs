@@ -1,4 +1,4 @@
-use super::{Arc, ArrangeOrder, EditError, Hidden, SignatureInfo, TrustStore, optimize};
+use super::{ArrangeOrder, EditError, Hidden, SignatureInfo, TrustStore, optimize};
 
 /// A change to an existing page image.
 #[derive(Clone, Debug, PartialEq)]
@@ -17,7 +17,7 @@ pub enum ImageEdit {
     /// Draw this image file (PNG, JPEG, TIFF, GIF, BMP, JPEG 2000) in its place.
     Replace {
         name: String,
-        bytes: Arc<Vec<u8>>,
+        bytes: pdfcraft_cos::PdfBytes,
     },
     Delete,
     /// Affine transform [a, b, c, d, e, f] applied to the image's matrix.
@@ -40,7 +40,7 @@ pub fn merge_data_files(files: &[(String, Vec<u8>)]) -> Result<String, String> {
 }
 
 /// One file produced by a split: (1-based first page, last page, PDF bytes).
-pub type SplitPart = (usize, usize, Arc<Vec<u8>>);
+pub type SplitPart = (usize, usize, pdfcraft_cos::PdfBytes);
 
 /// Stable identifier of an open document within a session.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -60,7 +60,7 @@ pub struct RecoverySnapshot {
     pub doc: DocId,
     pub name: String,
     pub path: Option<String>,
-    pub bytes: Arc<Vec<u8>>,
+    pub bytes: pdfcraft_cos::PdfBytes,
     /// The snapshot is encrypted (recovering it asks for the password again).
     pub encrypted: bool,
 }

@@ -55,3 +55,5 @@ pub enum CosError {
     #[error("this document was opened read-only with a decode limit and cannot be saved")]
     ReadOnlyLimit,
 }
+
+pub use pdfcraft_bytes::{PdfBytes, PdfSource, PdfView, memory_snapshot, owned_bytes, read_private_input, same_storage};

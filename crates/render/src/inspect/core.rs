@@ -21,8 +21,8 @@ pub(super) fn load_options(password: Option<&str>) -> LoadOptions {
 /// count matches. Content-only edits skip the full [`inspect`] (seconds on very large files)
 /// but must still catch an edit that produced something the viewer cannot display, so the
 /// caller can roll it back. Never panics: parser crashes are caught and reported.
-pub fn check_pages(bytes: Arc<Vec<u8>>, password: Option<&str>, expected: usize) -> Result<(), OpenError> {
-    let pdf = catch_unwind(AssertUnwindSafe(|| Pdf::new_with_password(bytes, password.unwrap_or(""))))
+pub fn check_pages(bytes: pdfcraft_cos::PdfBytes, password: Option<&str>, expected: usize) -> Result<(), OpenError> {
+    let pdf = catch_unwind(AssertUnwindSafe(|| Pdf::new_with_password(Arc::new(pdfcraft_cos::PdfView(bytes)), password.unwrap_or(""))))
         .map_err(|p| OpenError::Invalid(format!("the parser crashed: {}", crate::raster::panic_message(&p))))?
         .map_err(|e| match e {
             LoadPdfError::Decryption(DecryptionError::PasswordProtected) => {
@@ -45,12 +45,12 @@ pub fn check_pages(bytes: Arc<Vec<u8>>, password: Option<&str>, expected: usize)
 
 /// Inspect a document. Fails only if the renderer itself cannot open the file (or needs a
 /// password). Never panics: parser crashes are caught and reported.
-pub fn inspect(bytes: Arc<Vec<u8>>, password: Option<&str>) -> Result<DocInfo, OpenError> {
+pub fn inspect(bytes: pdfcraft_cos::PdfBytes, password: Option<&str>) -> Result<DocInfo, OpenError> {
     inspect_with_trace(bytes, password, &OpenTrace::default())
 }
 
 /// The ordinary inspector, recording fixed stage names only when the caller opts in.
-pub fn inspect_with_trace(bytes: Arc<Vec<u8>>, password: Option<&str>, trace: &OpenTrace) -> Result<DocInfo, OpenError> {
+pub fn inspect_with_trace(bytes: pdfcraft_cos::PdfBytes, password: Option<&str>, trace: &OpenTrace) -> Result<DocInfo, OpenError> {
     let (mut info, unlinked) = inspect_geometry(bytes.clone(), password, trace)?;
     let options = load_options(password);
     inspect_structure(&mut info, |tmp| {
@@ -90,7 +90,7 @@ pub fn inspect_with_trace(bytes: Arc<Vec<u8>>, password: Option<&str>, trace: &O
 
 /// Exact renderer page geometry without document-wide panel inspection.
 /// This is only a reading-stage primitive; it makes no claim about forms or signatures.
-pub fn inspect_geometry_with_trace(bytes: Arc<Vec<u8>>, password: Option<&str>, trace: &OpenTrace) -> Result<DocInfo, OpenError> {
+pub fn inspect_geometry_with_trace(bytes: pdfcraft_cos::PdfBytes, password: Option<&str>, trace: &OpenTrace) -> Result<DocInfo, OpenError> {
     let (mut info, unlinked) = inspect_geometry(bytes, password, trace)?;
     if unlinked {
         info.warnings.push(UNLINKED_UPDATE.into());
@@ -98,9 +98,11 @@ pub fn inspect_geometry_with_trace(bytes: Arc<Vec<u8>>, password: Option<&str>, 
     Ok(info)
 }
 
-fn inspect_geometry(bytes: Arc<Vec<u8>>, password: Option<&str>, trace: &OpenTrace) -> Result<(DocInfo, bool), OpenError> {
+fn inspect_geometry(bytes: pdfcraft_cos::PdfBytes, password: Option<&str>, trace: &OpenTrace) -> Result<(DocInfo, bool), OpenError> {
     let pdf = trace
-        .measure("native_render_parse", || catch_unwind(AssertUnwindSafe(|| Pdf::new_with_password(bytes.clone(), password.unwrap_or("")))))
+        .measure("native_render_parse", || {
+            catch_unwind(AssertUnwindSafe(|| Pdf::new_with_password(Arc::new(pdfcraft_cos::PdfView(bytes.clone())), password.unwrap_or(""))))
+        })
         .map_err(|p| OpenError::Invalid(format!("the parser crashed: {}", crate::raster::panic_message(&p))))?
         .map_err(|e| match e {
             LoadPdfError::Decryption(DecryptionError::PasswordProtected) => {

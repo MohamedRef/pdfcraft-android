@@ -3,7 +3,7 @@ use pdfcraft_engine::{BlockStyle, Edit, Session};
 use pdfcraft_render::{PageRenderer, RenderRequest};
 use std::sync::Arc;
 
-fn pixels(bytes: Arc<Vec<u8>>, page: usize) -> Vec<u8> {
+fn pixels(bytes: pdfcraft_cos::PdfBytes, page: usize) -> Vec<u8> {
     let mut renderer = PageRenderer::new(bytes, Default::default());
     let rendered = renderer.render(RenderRequest { page, scale: 1.5, ..Default::default() });
     assert!(rendered.error.is_none(), "{:?}", rendered.error);

@@ -503,7 +503,7 @@ fn take_warnings(warnings: &Mutex<Vec<RenderWarning>>) -> Vec<RenderWarning> {
 
 /// A single-threaded renderer over one parsed document (used by the CLI and tests).
 pub struct PageRenderer {
-    bytes: Arc<Vec<u8>>,
+    bytes: pdfcraft_cos::PdfBytes,
     config: RenderConfig,
     pdf: Option<Pdf>,
     settings: InterpreterSettings,
@@ -511,7 +511,7 @@ pub struct PageRenderer {
 }
 
 impl PageRenderer {
-    pub fn new(bytes: Arc<Vec<u8>>, config: RenderConfig) -> Self {
+    pub fn new(bytes: pdfcraft_cos::PdfBytes, config: RenderConfig) -> Self {
         let pdf = parse(&bytes, config.password.as_deref());
         let settings = config.settings();
         Self { bytes, config, pdf, settings, stats: RenderStats { parser_builds: 1, ..RenderStats::default() } }
@@ -566,8 +566,10 @@ impl PageRenderer {
     }
 }
 
-fn parse(bytes: &Arc<Vec<u8>>, password: Option<&str>) -> Option<Pdf> {
-    catch_unwind(AssertUnwindSafe(|| Pdf::new_with_password(bytes.clone(), password.unwrap_or("")).ok())).ok().flatten()
+fn parse(bytes: &pdfcraft_cos::PdfBytes, password: Option<&str>) -> Option<Pdf> {
+    catch_unwind(AssertUnwindSafe(|| Pdf::new_with_password(Arc::new(pdfcraft_cos::PdfView(bytes.clone())), password.unwrap_or("")).ok()))
+        .ok()
+        .flatten()
 }
 
 pub(crate) fn panic_message(p: &Box<dyn std::any::Any + Send>) -> String {

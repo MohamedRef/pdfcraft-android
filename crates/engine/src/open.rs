@@ -36,7 +36,7 @@ pub struct PreparedDocument {
 struct DocumentOpenData<'a> {
     name: String,
     path: Option<String>,
-    bytes: Arc<Vec<u8>>,
+    bytes: pdfcraft_cos::PdfBytes,
     info: DocInfo,
     structure: Option<Result<Result<pdfcraft_cos::Document, pdfcraft_cos::CosError>, Box<dyn std::any::Any + Send>>>,
     render_password: Option<String>,
@@ -71,7 +71,7 @@ impl OpenContext {
         &self,
         name: String,
         path: Option<String>,
-        bytes: Arc<Vec<u8>>,
+        bytes: pdfcraft_cos::PdfBytes,
         password: Option<&str>,
         initial_page: usize,
     ) -> Result<Option<PreparedDocument>, OpenError> {
@@ -143,7 +143,7 @@ impl OpenContext {
         &self,
         name: impl Into<String>,
         path: Option<String>,
-        bytes: Arc<Vec<u8>>,
+        bytes: pdfcraft_cos::PdfBytes,
         password: Option<&str>,
     ) -> Result<PreparedDocument, OpenError> {
         self.check_cancelled()?;
@@ -172,7 +172,7 @@ impl Session {
         &self,
         name: impl Into<String>,
         path: Option<String>,
-        bytes: Arc<Vec<u8>>,
+        bytes: pdfcraft_cos::PdfBytes,
         password: Option<&str>,
     ) -> Result<PreparedDocument, OpenError> {
         self.open_context().prepare_open(name, path, bytes, password)
@@ -186,7 +186,7 @@ impl Session {
         document.id = id;
         // Trust or the interface language may have changed while it was prepared on another
         // thread.
-        if !Arc::ptr_eq(&document.trust, &self.trust) {
+        if !pdfcraft_cos::same_storage(&document.trust, &self.trust) {
             document.captions = self.captions.clone();
             Self::revalidate(&mut document, self.trust.clone());
         } else if *document.captions != *self.captions {
@@ -203,12 +203,12 @@ impl Session {
             return false;
         };
         let mut document = prepared.document;
-        if document.preparing() || !Arc::ptr_eq(&document.bytes, &self.docs[index].bytes) {
+        if document.preparing() || !pdfcraft_cos::same_storage(&document.bytes, &self.docs[index].bytes) {
             return false;
         }
         document.id = id;
         document.generation = self.docs[index].generation.wrapping_add(1);
-        if !Arc::ptr_eq(&document.trust, &self.trust) {
+        if !pdfcraft_cos::same_storage(&document.trust, &self.trust) {
             document.captions = self.captions.clone();
             Self::revalidate(&mut document, self.trust.clone());
         } else if *document.captions != *self.captions {
@@ -219,7 +219,13 @@ impl Session {
     }
 
     /// Synchronous convenience API used by the CLI and automation.
-    pub fn open(&mut self, name: impl Into<String>, path: Option<String>, bytes: Arc<Vec<u8>>, password: Option<&str>) -> Result<DocId, OpenError> {
+    pub fn open(
+        &mut self,
+        name: impl Into<String>,
+        path: Option<String>,
+        bytes: pdfcraft_cos::PdfBytes,
+        password: Option<&str>,
+    ) -> Result<DocId, OpenError> {
         let prepared = self.prepare_open(name, path, bytes, password)?;
         Ok(self.commit_open(prepared))
     }
@@ -228,7 +234,7 @@ impl Session {
         context: &OpenContext,
         name: String,
         path: Option<String>,
-        bytes: Arc<Vec<u8>>,
+        bytes: pdfcraft_cos::PdfBytes,
         password: Option<&str>,
     ) -> Result<PreparedDocument, OpenError> {
         // Android adaptation (#212): the editing parser and the renderer's inspection read the
@@ -268,7 +274,7 @@ impl Session {
         let opts = SaveOptions { mod_date: context.now.map(pdfcraft_cos::pdf_date), ..SaveOptions::default() };
         // Write `work` as one more revision and reopen it: what the document then is. The notes
         // about damage repaired while reading the file stay with it (Document Properties), once.
-        let rebase = |work: &pdfcraft_cos::Document| -> Result<(Arc<Vec<u8>>, DocInfo, pdfcraft_cos::Document), String> {
+        let rebase = |work: &pdfcraft_cos::Document| -> Result<(pdfcraft_cos::PdfBytes, DocInfo, pdfcraft_cos::Document), String> {
             let new_bytes = write_incremental(work, &opts).map(Arc::new).map_err(|e| e.to_string())?;
             let new_info = inspect(new_bytes.clone(), render_password.as_deref()).map_err(|e| e.to_string())?;
             let mut new_cos = pdfcraft_cos::Document::open_with_password(new_bytes.clone(), password).map_err(|e| e.to_string())?;

@@ -68,7 +68,7 @@ impl<'a> Recipe<'a> {
         extension == "pdf" || (self.steps.contains(&"convert") && pdfcraft_engine::CONVERTIBLE.contains(&extension.as_str()))
     }
 
-    fn process(&self, path: &Path) -> Result<(Arc<Vec<u8>>, Vec<Value>)> {
+    fn process(&self, path: &Path) -> Result<(pdfcraft_cos::PdfBytes, Vec<Value>)> {
         // A fresh session per file bounds retained document state and never touches caller tabs.
         let mut session = Session::new();
         let mut input = Vec::new();
@@ -77,7 +77,7 @@ impl<'a> Recipe<'a> {
             return Err(failed("input exceeds 512 MiB"));
         }
         let name = path.file_name().and_then(std::ffi::OsStr::to_str).ok_or_else(|| failed("input name is not UTF-8"))?;
-        let mut bytes = Arc::new(input);
+        let mut bytes: pdfcraft_cos::PdfBytes = Arc::new(input);
         let mut log = Vec::new();
         for step in &self.steps {
             let before = bytes.len();

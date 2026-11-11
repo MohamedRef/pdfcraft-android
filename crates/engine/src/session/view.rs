@@ -214,7 +214,7 @@ impl Session {
     }
 
     /// Open freshly created bytes (combine / extract) as a new, unsaved document.
-    pub fn open_new(&mut self, name: impl Into<String>, bytes: Arc<Vec<u8>>) -> Result<DocId, OpenError> {
+    pub fn open_new(&mut self, name: impl Into<String>, bytes: pdfcraft_cos::PdfBytes) -> Result<DocId, OpenError> {
         let id = self.open(name, None, bytes, None)?;
         if let Some(d) = self.docs.iter_mut().find(|d| d.id == id) {
             d.dirty = true;
@@ -309,7 +309,7 @@ impl Session {
 
     /// Acrobat's Summarize Comments ("Comments only" layout): a new PDF listing every comment
     /// with its number, author, type, date, text and replies, grouped by page.
-    pub fn summarize_comments(&self, id: DocId, sort: SummarySort) -> Result<Arc<Vec<u8>>, EditError> {
+    pub fn summarize_comments(&self, id: DocId, sort: SummarySort) -> Result<pdfcraft_cos::PdfBytes, EditError> {
         let doc = self.get(id).ok_or(EditError::NoDocument)?;
         // The summary copies the comments' text out into a new document.
         doc.check_copying()?;

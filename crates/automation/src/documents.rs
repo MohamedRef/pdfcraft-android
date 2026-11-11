@@ -104,9 +104,16 @@ impl Automation {
     }
 
     /// Host two-stage opening uses exactly the same path confinement and bounded reader.
-    pub fn read_open_input(&self, input: &str) -> Result<(std::path::PathBuf, Arc<Vec<u8>>)> {
+    pub fn read_open_input(&self, input: &str) -> Result<(std::path::PathBuf, pdfcraft_cos::PdfBytes)> {
         let path = self.resolve(input, false)?;
         let bytes = Arc::new(read_input(&path)?);
+        Ok((path, bytes))
+    }
+
+    /// Android private working copies can retain a read-only immutable source mapping.
+    pub fn read_open_input_private(&self, input: &str, root: Option<&std::path::Path>) -> Result<(std::path::PathBuf, pdfcraft_cos::PdfBytes)> {
+        let path = self.resolve(input, false)?;
+        let bytes = pdfcraft_cos::read_private_input(&path, root, super::paths::MAX_INPUT).map_err(|e| failed(format!("{}: {e}", path.display())))?;
         Ok((path, bytes))
     }
 
@@ -122,7 +129,11 @@ impl Automation {
         let path = self.resolve(a.str("path")?, false)?;
         let recording = a.opt_bool("open_timings")?.unwrap_or(false);
         let trace = if recording { pdfcraft_render::OpenTrace::recording() } else { pdfcraft_render::OpenTrace::default() };
-        let bytes = trace.measure("native_file_read", || read_input(&path))?;
+        let bytes = trace.measure("native_file_read", || {
+            pdfcraft_cos::read_private_input(&path, self.private_input_root.as_deref(), super::paths::MAX_INPUT)
+                .map_err(|e| failed(format!("{}: {e}", path.display())))
+        })?;
+        trace.event(if bytes.is_mapped() { "native_input_mapped" } else { "native_input_owned" });
         let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
         let password = a.opt_str("password")?;
         let prepared = trace
@@ -130,7 +141,7 @@ impl Automation {
                 self.session.open_context().with_open_trace(trace.clone()).prepare_open(
                     name,
                     Some(path.to_string_lossy().into_owned()),
-                    Arc::new(bytes),
+                    bytes,
                     password,
                 )
             })
@@ -197,7 +208,7 @@ impl Automation {
         &mut self,
         id: DocId,
         target: &Path,
-        bytes: Arc<Vec<u8>>,
+        bytes: pdfcraft_cos::PdfBytes,
         incremental: bool,
         write: impl FnOnce(&Path, &[u8]) -> Result<()>,
     ) -> Result<Value> {

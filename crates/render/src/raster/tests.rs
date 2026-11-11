@@ -58,7 +58,7 @@ fn shared_parser_is_lazy_and_initializes_once_under_contention() {
         .collect();
     let pdfs: Vec<_> = jobs.into_iter().map(|job| job.join().unwrap()).collect();
     assert_eq!(loads.load(Ordering::Relaxed), 1);
-    assert!(pdfs.iter().all(|pdf| Arc::ptr_eq(pdf, &pdfs[0])));
+    assert!(pdfs.iter().all(|pdf| pdfcraft_cos::same_storage(pdf, &pdfs[0])));
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -2005,7 +2005,7 @@ trailer << /Root 1 0 R >>
     assert_eq!((tile.width, tile.height), (32, 32));
 }
 
-fn allocation_budget_page(width: f32, height: f32, content: &str) -> Arc<Vec<u8>> {
+fn allocation_budget_page(width: f32, height: f32, content: &str) -> pdfcraft_cos::PdfBytes {
     Arc::new(format!("%PDF-1.4\n1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj\n2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj\n3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 {width} {height}] /Contents 4 0 R >> endobj\n4 0 obj << /Length {} >> stream\n{content}\nendstream endobj\ntrailer << /Root 1 0 R >>\n%%EOF", content.len()).into_bytes())
 }
 
@@ -2685,7 +2685,7 @@ trailer << /Root 1 0 R >>
     let pool = RenderPool::new(Arc::new(ONE_PAGE.to_vec()), 1, RenderConfig::default());
     let flag = lock(&pool.shared.stop).first().cloned().expect("one worker");
     let settings = worker_settings(&pool.config, &flag);
-    assert!(settings.cancelled.as_ref().is_some_and(|c| Arc::ptr_eq(c, &flag)));
+    assert!(settings.cancelled.as_ref().is_some_and(|c| pdfcraft_cos::same_storage(c, &flag)));
     let shapes = Pdf::new(Arc::new(ONE_PAGE.to_vec())).expect("parses");
     let text = Pdf::new(Arc::new(TEXT.to_vec())).expect("parses");
     let pages = shapes.pages();
@@ -11152,7 +11152,6 @@ fn a_to_unicode_cmap_reads_its_mappings_past_a_token_it_cannot_parse() {
     let unclosed = format!("{body}{}{}", "(".repeat(4096), "x".repeat(1 << 16));
     assert!(CMap::parse(unclosed.as_bytes(), |_| None).is_some_and(|c| c.lookup_bf_string(0x48).is_some()));
 }
-
 
 /// The mobile UI overlays sticky notes but still needs other annotations rasterized.
 #[test]

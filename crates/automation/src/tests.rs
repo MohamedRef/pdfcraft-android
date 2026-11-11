@@ -57,12 +57,12 @@ fn search_cache_stays_bounded_reextracts_and_follows_edits_and_close() {
     let text = a.page_texts(first, &[0]).unwrap().remove(0);
     assert_eq!(text.plain_text(), "Page 1");
     let again = a.page_texts(first, &[0]).unwrap().remove(0);
-    assert!(Arc::ptr_eq(&text, &again), "cache hits reuse glyph storage");
+    assert!(pdfcraft_cos::same_storage(&text, &again), "cache hits reuse glyph storage");
     assert!(a.texts.bytes() <= 16 * 1024);
     json(&mut a, "page_delete", json!({ "doc": first.0, "pages": [1] }));
     let edited = a.page_texts(first, &[0]).unwrap().remove(0);
     assert_eq!(edited.plain_text(), "Page 2");
-    assert!(!Arc::ptr_eq(&text, &edited));
+    assert!(!pdfcraft_cos::same_storage(&text, &edited));
     json(&mut a, "doc_close", json!({ "doc": first.0, "discard_changes": true }));
     json(&mut a, "doc_close", json!({ "doc": second.0 }));
     assert_eq!((a.texts.bytes(), a.texts.len()), (0, 0));
@@ -84,7 +84,7 @@ fn strict_text_collection_refuses_partial_results_but_keeps_successful_pages() {
 fn search_keeps_matches_around_failed_pages_and_continuations() {
     let mut a = Automation::new();
     let id = search_document(&mut a, 16);
-    let mut extract = |bytes: &Arc<Vec<u8>>, password, pages: &[usize]| {
+    let mut extract = |bytes: &pdfcraft_cos::PdfBytes, password, pages: &[usize]| {
         extract_parallel(bytes, password, pages)
             .into_iter()
             .map(|(p, result)| (p, if [2, 6].contains(&p) { Err(format!("synthetic page {} failure", p + 1)) } else { result }))
@@ -153,7 +153,7 @@ fn stop_at_limit_ends_at_a_lone_match_without_reading_the_distant_tail() {
     // #5328: "Page 1" is only on page 1 (every other readable page reads "Page 2"), and the last
     // page fails, so only a search that runs on to the end hears about it.
     let requested = std::cell::RefCell::new(Vec::new());
-    let mut extract = |bytes: &Arc<Vec<u8>>, password: Option<Arc<str>>, pages: &[usize]| {
+    let mut extract = |bytes: &pdfcraft_cos::PdfBytes, password: Option<Arc<str>>, pages: &[usize]| {
         requested.borrow_mut().extend_from_slice(pages);
         let filler = extract_parallel(bytes, password.clone(), &[1]).remove(0).1;
         let first = extract_parallel(bytes, password, &[0]).remove(0).1;

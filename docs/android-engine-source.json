@@ -34,7 +34,8 @@
     "sign",
     "testkit",
     "xfa",
-    "xfdf"
+    "xfdf",
+    "pdf-bytes"
   ],
   "vendors": [
     "hayro",

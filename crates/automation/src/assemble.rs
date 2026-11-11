@@ -167,7 +167,7 @@ impl Automation {
     }
 
     /// Write freshly created bytes to `out` and/or open them as a new document.
-    pub(crate) fn deliver(&mut self, a: &Args, name: &str, bytes: Arc<Vec<u8>>) -> Result<Value> {
+    pub(crate) fn deliver(&mut self, a: &Args, name: &str, bytes: pdfcraft_cos::PdfBytes) -> Result<Value> {
         let mut result = json!({ "bytes": bytes.len() });
         let out = a.opt_str("out")?;
         if let Some(out) = out {
@@ -205,7 +205,7 @@ impl Automation {
             let path = self.resolve(p, false)?;
             let bytes = read_input(&path)?;
             let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
-            let (_, pdf) = self.session.convert_to_pdf(&name, &Arc::new(bytes)).map_err(failed)?;
+            let (_, pdf) = self.session.convert_to_pdf(&name, &(Arc::new(bytes) as pdfcraft_cos::PdfBytes)).map_err(failed)?;
             let title = path.file_stem().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
             Ok((title, pdf, range))
         });
@@ -223,7 +223,7 @@ impl Automation {
                 let bytes = read_input_bytes(&src).map_err(|e| format!("{}: {e}", src.display()))?;
                 let name = src.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
                 let stem = src.file_stem().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "document".into());
-                let (kind, pdf) = self.session.convert_to_pdf(&name, &Arc::new(bytes)).map_err(|e| e.to_string())?;
+                let (kind, pdf) = self.session.convert_to_pdf(&name, &(Arc::new(bytes) as pdfcraft_cos::PdfBytes)).map_err(|e| e.to_string())?;
                 Ok((kind, stem, pdf))
             });
             out.push(match converted {
@@ -324,7 +324,7 @@ impl Automation {
                     if let Some(g) = group {
                         firsts.push((g, path.clone(), sources.len()));
                     }
-                    let bytes = Arc::new(read_input(&path)?);
+                    let bytes: pdfcraft_cos::PdfBytes = Arc::new(read_input(&path)?);
                     // Images and text files are made into PDFs first (#569), as in the Combine files tab.
                     let file_name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
                     self.session.as_pdf(&file_name, &bytes).map_err(failed)?
