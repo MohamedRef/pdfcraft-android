@@ -98,13 +98,13 @@ jobs:
 
   signed-apk:
     name: Build and verify signed ARM64 APK
-    # One-time owner-approved 0.0.21-beta (21012) release on the exact squash-merge commit.
+    # One-time owner-approved 0.0.22-beta (22012) release on the exact squash-merge commit.
     # Keep manual dispatch for all other batches; normal main pushes never sign.
     if: >-
       github.ref == 'refs/heads/main' &&
       (github.event_name == 'workflow_dispatch' ||
       (github.event_name == 'push' &&
-      startsWith(github.event.head_commit.message, 'chore(release): publish 0.0.21-beta (21012)')))
+      startsWith(github.event.head_commit.message, 'chore(release): publish 0.0.22-beta (22012)')))
     needs: [rust-tests, android-tests]
     permissions:
       contents: write  # publish an already signed and verified APK only from main
@@ -117,9 +117,9 @@ jobs:
         run: |
           set -euo pipefail
           prop=apps/pdfcraft-android/android/gradle.properties
-          grep -Fxq 'pdfcraft.version=0.0.21-beta' "$prop"
-          grep -Fxq 'pdfcraft.versionCode=2101' "$prop"
-          echo 'Exact approved 0.0.21-beta (21012) release properties verified.' >> "$GITHUB_STEP_SUMMARY"
+          grep -Fxq 'pdfcraft.version=0.0.22-beta' "$prop"
+          grep -Fxq 'pdfcraft.versionCode=2201' "$prop"
+          echo 'Exact approved 0.0.22-beta (22012) release properties verified.' >> "$GITHUB_STEP_SUMMARY"
       - name: Require permanent personal signing key
         env:
           KEYSTORE_BASE64: ${{ secrets.PDFCRAFT_KEYSTORE_BASE64 }}
@@ -217,7 +217,7 @@ jobs:
       github.ref == 'refs/heads/main' &&
       (github.event_name == 'workflow_dispatch' ||
       (github.event_name == 'push' &&
-      startsWith(github.event.head_commit.message, 'chore(release): publish 0.0.21-beta (21012)')))
+      startsWith(github.event.head_commit.message, 'chore(release): publish 0.0.22-beta (22012)')))
     needs: [signed-apk]
     permissions:
       contents: write

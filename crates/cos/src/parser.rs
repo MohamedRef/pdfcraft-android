@@ -166,6 +166,15 @@ impl<'a> Lexer<'a> {
     }
 
     fn name_body(&mut self) -> Vec<u8> {
+        // Android adaptation (#212): a name without `#` escapes is its run of regular bytes,
+        // copied in one allocation instead of grown byte by byte. Same result as the loop below.
+        let start = self.pos.min(self.data.len());
+        let rest = &self.data[start..];
+        let run = rest.iter().position(|&b| !is_regular(b)).unwrap_or(rest.len());
+        if !rest[..run].contains(&b'#') {
+            self.pos = start + run;
+            return rest[..run].to_vec();
+        }
         let mut out = Vec::new();
         while let Some(b) = self.peek() {
             if !is_regular(b) {
@@ -320,7 +329,10 @@ impl<'a> Lexer<'a> {
                 let gstart = self.pos;
                 let g = self.token();
                 if g.iter().all(u8::is_ascii_digit) && self.eat_keyword(b"R") {
-                    let generation = std::str::from_utf8(g).ok().and_then(|s| s.parse::<u32>().ok()).unwrap_or(0);
+                    let generation = plain_int(g)
+                        .and_then(|v| u32::try_from(v).ok())
+                        .or_else(|| std::str::from_utf8(g).ok().and_then(|s| s.parse::<u32>().ok()))
+                        .unwrap_or(0);
                     if n <= u32::MAX as i64 {
                         return Ok(Object::Ref(ObjRef::new(n as u32, generation.min(u16::MAX as u32) as u16)));
                     }
@@ -336,6 +348,11 @@ impl<'a> Lexer<'a> {
     fn number(&mut self) -> Result<Object, CosError> {
         let start = self.pos;
         let tok = self.token();
+        // Android adaptation (#212): most numbers are plain integers; read them without a UTF-8
+        // check and a string parse. Same value as `parse::<i64>` below for these tokens.
+        if let Some(v) = plain_int(tok) {
+            return Ok(Object::Int(v));
+        }
         let s = std::str::from_utf8(tok).map_err(|_| self.err("bad number"))?;
         if s.contains('.') {
             // Tolerate forms like "--5", "5-" or "1.2.3" by parsing the longest valid prefix.
@@ -358,6 +375,20 @@ impl<'a> Lexer<'a> {
             }
         }
     }
+}
+
+/// A token that is an optional single `-` and 1 to 18 ASCII digits, as an integer (never
+/// overflows `i64`); `None` for anything else, which takes the general path.
+fn plain_int(tok: &[u8]) -> Option<i64> {
+    let (negative, digits) = match tok.split_first() {
+        Some((b'-', rest)) => (true, rest),
+        _ => (false, tok),
+    };
+    if digits.is_empty() || digits.len() > 18 || !digits.iter().all(u8::is_ascii_digit) {
+        return None;
+    }
+    let v = digits.iter().fold(0i64, |v, d| v * 10 + i64::from(d - b'0'));
+    Some(if negative { -v } else { v })
 }
 
 /// Length of the longest prefix of `s` that reads as a decimal number: a sign, digits with at
@@ -935,6 +966,53 @@ mod tests {
     fn reals_read_the_same_with_and_without_a_doubled_sign() {
         for (token, want) in [("1.5", 1.5), ("-375.993", -375.993), ("+2.25", 2.25), ("--5.5", -5.5), ("1.2.3", 1.2), ("-.5", -0.5), ("0.0", 0.0)] {
             assert_eq!(Lexer::new(token.as_bytes(), 0).object().unwrap(), Object::Real(want), "{token}");
+        }
+    }
+
+    /// #212: the integer fast path reads exactly what the string parse reads.
+    #[test]
+    fn plain_integers_read_as_the_general_number_parse_does() {
+        let mut seed: u64 = 0x2545_f491_4f6c_dd1d;
+        let mut tokens: Vec<String> = ["0", "-0", "7", "007", "-42", "123456789012345678", "-999999999999999999", "18446744073709551615", "--5", "+5", "-", "5-", "1e3"]
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
+        for _ in 0..2000 {
+            seed ^= seed << 13;
+            seed ^= seed >> 7;
+            seed ^= seed << 17;
+            let len = 1 + (seed % 20) as usize;
+            let mut s = if seed & 1 == 0 { String::from("-") } else { String::new() };
+            for i in 0..len {
+                s.push(char::from(b'0' + ((seed >> (i * 3)) % 10) as u8));
+            }
+            tokens.push(s);
+        }
+        for token in tokens {
+            let general = token.parse::<i64>().ok();
+            if let Some(fast) = plain_int(token.as_bytes()) {
+                assert_eq!(Some(fast), general, "{token}");
+            }
+            let parsed = Lexer::new(format!("{token} ").as_bytes(), 0).object();
+            if let Some(v) = general.filter(|_| !token.starts_with('+')) {
+                assert_eq!(parsed.unwrap(), Object::Int(v), "{token}");
+            }
+        }
+    }
+
+    /// #212: a name copied in one piece equals the byte-by-byte reading, escapes included.
+    #[test]
+    fn names_read_the_same_with_and_without_escapes() {
+        for (source, want) in [
+            ("/Type ", &b"Type"[..]),
+            ("/A#42C/", b"ABC"),
+            ("/A#4", b"A#4"),
+            ("/#", b"#"),
+            ("/Lime#20Green>>", b"Lime Green"),
+            ("/", b""),
+            ("/x(y)", b"x"),
+        ] {
+            assert_eq!(Lexer::new(source.as_bytes(), 0).object().unwrap(), Object::Name(want.to_vec()), "{source}");
         }
     }
 }

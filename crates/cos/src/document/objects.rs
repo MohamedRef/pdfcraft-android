@@ -610,8 +610,14 @@ impl Document {
     /// after every insertion.
     /// Clones share these caches, so one clone's eviction drops another's hot set;
     /// that only costs re-parsing, never correctness. Eviction keeps just the newcomer:
-    /// file-backed views re-parse cheaply and editor working sets stay far below 1024.
-    pub(super) const EDITOR_CACHE_OBJECTS: usize = 1024;
+    /// file-backed views re-parse cheaply and editor working sets stay far below the cap.
+    ///
+    /// Android adaptation (#212): 65,536 objects instead of 1,024; the 32 MB byte cap is
+    /// unchanged and still bounds what is kept. Opening reads every page annotation in several
+    /// passes (signatures, form discovery, missing appearances); a page of links has dozens,
+    /// so with 1,024 the cache was cleared every few pages and each pass parsed every
+    /// annotation again (a 352 MB, 869-page file with ~28,000 links spent seconds doing so).
+    pub(super) const EDITOR_CACHE_OBJECTS: usize = 65_536;
 
     pub(super) const EDITOR_CACHE_BYTES: usize = 32 * 1024 * 1024;
 

@@ -807,7 +807,45 @@ pub(crate) fn display_bytes_collect_fields(
         }
         None => pdfcraft_forms::with_field_appearances_cached(comments.as_ref().unwrap_or(&e.cos), &mut e.field_appearances),
     };
-    if let Some(mut display) = fields.or(comments) {
+    finish_display(e, bytes, signatures, captions, fields.or(comments))
+}
+
+/// Android adaptation (#212): the display copy from the comment appearances and the field list
+/// that opening computed side by side with signature discovery
+/// ([`with_missing_appearances_cached`](pdfcraft_annot::with_missing_appearances_cached) and
+/// [`fields_with_adopted`](pdfcraft_forms::fields_with_adopted) on `e.cos`). The result, the
+/// marks and `fields_out` are those of [`display_bytes_collect_fields`]; when comments need a
+/// copy, `fields_out` also gets the list, which equals what the form reading would compute again
+/// from the same, unchanged `e.cos`.
+pub(crate) fn display_bytes_from_open(
+    e: &mut Editor,
+    bytes: &pdfcraft_cos::PdfBytes,
+    signatures: &mut [SignatureInfo],
+    captions: &StatusCaptions,
+    comments: Option<pdfcraft_cos::Document>,
+    found: pdfcraft_forms::Fields,
+    fields_out: &mut Option<pdfcraft_forms::Fields>,
+) -> pdfcraft_cos::PdfBytes {
+    for sig in signatures.iter_mut() {
+        sig.verdict_shown = false;
+    }
+    let fields = match &comments {
+        None => pdfcraft_forms::with_field_appearances_from_fields_cached(&e.cos, &mut e.field_appearances, &found.items),
+        Some(copy) => pdfcraft_forms::with_field_appearances_cached(copy, &mut e.field_appearances),
+    };
+    *fields_out = Some(found);
+    finish_display(e, bytes, signatures, captions, fields.or(comments))
+}
+
+/// The display copy from `copy` (comments and fields drawn), or from the signature marks alone.
+fn finish_display(
+    e: &mut Editor,
+    bytes: &pdfcraft_cos::PdfBytes,
+    signatures: &mut [SignatureInfo],
+    captions: &StatusCaptions,
+    copy: Option<pdfcraft_cos::Document>,
+) -> pdfcraft_cos::PdfBytes {
+    if let Some(mut display) = copy {
         // Written whether or not a signature changed: the copy exists for the comments and fields.
         let _ = pdfcraft_sign::show_status_layers(&mut display, signatures, captions);
         return write_display_copy(e, bytes, &display, signatures);
