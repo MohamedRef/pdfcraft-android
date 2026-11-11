@@ -12,6 +12,7 @@ import io.github.artcraftandroid.pdfcraft.ui.viewer.VoicePrompt
 import io.github.artcraftandroid.pdfcraft.ui.viewer.ReplyPrompt
 import io.github.artcraftandroid.pdfcraft.ui.viewer.StyledTool
 import io.github.artcraftandroid.pdfcraft.ui.viewer.TextMarkup
+import io.github.artcraftandroid.pdfcraft.ui.viewer.markupArgs
 import io.github.artcraftandroid.pdfcraft.ui.viewer.PendingMarkupPreview
 import io.github.artcraftandroid.pdfcraft.ui.viewer.TextPrompt
 import io.github.artcraftandroid.pdfcraft.ui.viewer.ToolPrefs
@@ -1644,15 +1645,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
 
     /** Mark text with [markup]: [rects] (points, one per line) on [page]. */
     fun addMarkup(doc: OpenDocument, markup: TextMarkup, page: Int, rects: List<FloatArray>, color: androidx.compose.ui.graphics.Color, opacity: Float, contents: String? = null, onSettled: (() -> Unit)? = null) {
-        val quads = rects.map { r -> listOf(r[0], r[1], r[2], r[1], r[0], r[3], r[2], r[3]).map { it.toDouble() } }
-        runTool(
-            doc, "comment_add",
-            mapOf(
-                "page" to page + 1, "type" to markup.engineType, "quads" to quads,
-                "color" to color.hex(), "opacity" to opacity.toDouble(), "author" to author, "contents" to contents,
-            ),
-            onSettled = onSettled,
-        )
+        runTool(doc, "comment_add", markupArgs(markup, page, rects, color, opacity, author, contents), onSettled = onSettled)
     }
 
     /** Post a note at [at] (or, for a selection, a highlight carrying the note). */

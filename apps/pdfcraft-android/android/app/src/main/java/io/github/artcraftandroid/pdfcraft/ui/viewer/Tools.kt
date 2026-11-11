@@ -611,9 +611,23 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                     val markup = lineGestureMarkup(marker, y, minOf(line[1], line[3]), maxOf(line[1], line[3])) ?: return@launch
                     // Committed meanwhile (Done): it is ink now, so leave it as drawn.
                     if (vm.document !== doc || s !in strokes) return@launch
-                    dropGestureStroke(s)
                     val rects = found.rects.filter { r -> kotlin.math.abs((minOf(r[1], r[3]) + maxOf(r[1], r[3])) / 2f - (minOf(line[1], line[3]) + maxOf(line[1], line[3])) / 2f) < 1f }
-                    vm.addMarkup(doc, markup, s.page, rects, color, if (marker) opacity.coerceAtLeast(0.25f) else opacity)
+                    // The stroke steps aside while the markup is made; it stays in the history,
+                    // so Undo first brings the raw stroke back and a second Undo removes it.
+                    val index = strokes.indexOf(s)
+                    strokes.remove(s)
+                    steps.started()
+                    var made = 0
+                    vm.runTool(doc, "comment_add", markupArgs(markup, s.page, rects, color, if (marker) opacity.coerceAtLeast(0.25f) else opacity, vm.toolPrefs.author.ifBlank { null }),
+                        onSettled = {
+                            steps.finished(made)
+                            if (made > 0) {
+                                edits.add(DraftInkEdit.BecameMarkup(index, s, steps.own))
+                                undone.clear()
+                            } else if (s !in strokes) {
+                                strokes.add(index.coerceIn(0, strokes.size), s)
+                            }
+                        }) { r -> if (r.has("doc")) made = 1 }
                 }
             }
             PenGesture.None -> Unit
@@ -650,6 +664,12 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                 if (edits.isNotEmpty()) {
                     val edit = edits.removeAt(edits.lastIndex)
                     clearSelection()
+                    if (edit is DraftInkEdit.BecameMarkup) {
+                        // The markup must still be this session's newest step; otherwise only forget it.
+                        if (edit.ownStep != steps.own || doc.info.undo == null) return@undo
+                        steps.releaseOwn()
+                        vm.undoDocument(doc, announce = false)
+                    }
                     applyDraftInkEdit(strokes, edit, forward = false)
                     undone.add(edit)
                 } else if (doc.info.undo != null) {
@@ -662,6 +682,11 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                 if (!steps.redoesDocumentFirst() && undone.isNotEmpty()) {
                     val edit = undone.removeAt(undone.lastIndex)
                     clearSelection()
+                    if (edit is DraftInkEdit.BecameMarkup) {
+                        if (doc.info.redo == null) return@redo
+                        steps.reclaimOwn()
+                        vm.redoDocument(doc, announce = false)
+                    }
                     applyDraftInkEdit(strokes, edit, forward = true)
                     edits.add(edit)
                 } else if (steps.canRedoDocument(doc.info.redo != null)) {
@@ -681,12 +706,21 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
     // A stroke that follows the ruler or protractor is already straight or an arc: holding at
     // its end does not turn it into another shape (#150).
     var strokeGuided by remember(doc) { mutableStateOf(false) }
+    // Smart pen gestures (#148): a closed loop held still at its end becomes a lasso on lift.
+    var heldLoop by remember(doc) { mutableStateOf<InkStroke?>(null) }
+    val loopHaptic = androidx.compose.ui.platform.LocalHapticFeedback.current
     LaunchedEffect(current) {
         val s = current ?: return@LaunchedEffect
         if (s.shapeMode != InkShapeMode.Freehand || s.appearance.style == InkStyle.Highlighter) return@LaunchedEffect
         while (true) {
             delay(50)
-            if (prefs.snapToShape && !strokeGuided && s.preview == null && System.currentTimeMillis() - movedAt >= SNAP_HOLD_MS) {
+            val held = System.currentTimeMillis() - movedAt >= SNAP_HOLD_MS
+            if (prefs.penGestures && !strokeGuided && held && heldLoop !== s && isClosedLoop(s.points.toList())) {
+                heldLoop = s
+                s.preview = null
+                loopHaptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+            }
+            if (prefs.snapToShape && !strokeGuided && heldLoop !== s && s.preview == null && held) {
                 s.preview = ShapeSnap.recognise(s.points.toList())?.outline()
             }
         }
@@ -859,6 +893,22 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
         }
     }
 
+    /** Selects the drafts and saved comments [polygon] (page points on [page]) encloses or crosses. */
+    fun selectInLoop(page: Int, polygon: List<Offset>) {
+        selected.clear()
+        savedSelected.clear()
+        if (polygon.size >= 3) {
+            selected.addAll(strokes.filter { it.page == page && inkLassoHitsStroke(polygon, it.points.toList()) })
+            savedSelected.addAll(
+                doc.comments.filter { c ->
+                    c.page.toInt() == page && savedLassoTarget(c.subtype, c.locked, c.fillSign, c.replyTo) && inkLassoHitsRect(polygon, c.rect)
+                },
+            )
+        }
+        if (selected.isEmpty() && savedSelected.isEmpty()) clearSelection()
+        else lassoPoints.clear()
+    }
+
     fun finishLasso(p: Offset) {
         val page = lassoPage ?: return
         moveLasso(p)
@@ -884,20 +934,9 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
             moveOffset = Offset.Zero
             return
         }
-        val polygon = lassoPoints.toList()
-        selected.clear()
-        savedSelected.clear()
-        if (polygon.size >= 3) {
-            selected.addAll(strokes.filter { it.page == page && inkLassoHitsStroke(polygon, it.points.toList()) })
-            savedSelected.addAll(
-                doc.comments.filter { c ->
-                    c.page.toInt() == page && savedLassoTarget(c.subtype, c.locked, c.fillSign, c.replyTo) && inkLassoHitsRect(polygon, c.rect)
-                },
-            )
-        }
-        if (selected.isEmpty() && savedSelected.isEmpty()) clearSelection()
-        else lassoPoints.clear()
+        selectInLoop(page, lassoPoints.toList())
     }
+
 
     Box(
         Modifier.fillMaxSize()
@@ -1010,6 +1049,7 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                     stillAt = p
                     movedAt = System.currentTimeMillis()
                     s.preview = null
+                    if (heldLoop === s) heldLoop = null
                 }
                 val at = doc.viewer.screenToPage(p, nearest = true) ?: return@toolGestures
                 if (at.page == s.page) {
@@ -1044,6 +1084,19 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                 }
                 val s = current
                 current = null
+                if (s != null && heldLoop === s) {
+                    // Circle-then-hold (#148): the loop selects what it encloses, as the lasso would.
+                    heldLoop = null
+                    strokes.remove(s)
+                    s.preview = null
+                    clearSelection()
+                    lassoPage = s.page
+                    s.points.forEach { addInkLassoPoint(lassoPoints, it) }
+                    selectInLoop(s.page, lassoPoints.toList())
+                    if (selected.isNotEmpty() || savedSelected.isNotEmpty()) doc.controller.lassoMode = true
+                    else vm.tell(text(R.string.pen_gesture_lasso_empty))
+                    return@toolGestures
+                }
                 if (s != null) {
                     // A palm/cancelled gesture must not discard a user's redo history.
                     // A tap is an actual dot, not a discarded stroke. Native PDF Ink needs

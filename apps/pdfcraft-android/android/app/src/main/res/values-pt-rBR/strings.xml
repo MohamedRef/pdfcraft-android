@@ -916,6 +916,7 @@
     <string name="bates_export_failed">Não foi possível salvar esta nova cópia em Downloads.</string>
     <string name="ink_presets_title">Canetas favoritas</string>
     <string name="ink_presets_help">Cada caneta guarda a própria cor, espessura e opacidade. Toque em uma favorita para restaurar as configurações dela.</string>
+    <string name="pen_gesture_lasso_empty">Nada para selecionar dentro do laço.</string>
     <string name="ink_protractor">Transferidor</string>
     <string name="ink_hsv_hue">Matiz</string>
     <string name="ink_hsv_square">Saturação %1$d%%, brilho %2$d%%</string>

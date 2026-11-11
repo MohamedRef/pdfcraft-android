@@ -1211,6 +1211,7 @@
     <string name="bates_export_failed">Impossible d\'enregistrer cette nouvelle copie dans Téléchargements.</string>
     <string name="ink_presets_title">Stylos favoris</string>
     <string name="ink_presets_help">Chaque stylo garde sa propre couleur, son épaisseur et son opacité. Touchez un favori pour restaurer ses réglages.</string>
+    <string name="pen_gesture_lasso_empty">Rien à sélectionner dans la boucle.</string>
     <string name="ink_protractor">Rapporteur</string>
     <string name="ink_hsv_hue">Teinte</string>
     <string name="ink_hsv_square">Saturation %1$d %%, luminosité %2$d %%</string>

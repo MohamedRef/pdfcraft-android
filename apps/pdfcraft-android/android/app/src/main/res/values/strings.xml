@@ -1551,6 +1551,7 @@
     <string name="bates_export_failed">Could not save this new copy to Downloads.</string>
     <string name="ink_presets_title">Favorite pens</string>
     <string name="ink_presets_help">Each pen keeps its own colour, width and opacity. Tap a favorite to restore its settings.</string>
+    <string name="pen_gesture_lasso_empty">Nothing to select inside the loop.</string>
     <string name="ink_protractor">Protractor</string>
     <string name="ink_hsv_hue">Hue</string>
     <string name="ink_hsv_square">Saturation %1$d%%, brightness %2$d%%</string>

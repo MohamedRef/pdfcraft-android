@@ -5,6 +5,7 @@ import androidx.compose.ui.geometry.Rect
 import io.github.artcraftandroid.pdfcraft.ui.viewer.PenGesture
 import io.github.artcraftandroid.pdfcraft.ui.viewer.TextMarkup
 import io.github.artcraftandroid.pdfcraft.ui.viewer.classifyPenGesture
+import io.github.artcraftandroid.pdfcraft.ui.viewer.isClosedLoop
 import io.github.artcraftandroid.pdfcraft.ui.viewer.lineGestureMarkup
 import io.github.artcraftandroid.pdfcraft.ui.viewer.scratchCovers
 import io.github.artcraftandroid.pdfcraft.ui.viewer.scratchCoversRect
@@ -15,6 +16,20 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class PenGesturesTest {
+    private fun circle(r: Float, sweepDeg: Float, n: Int = 40) = (0..n).map { k ->
+        val a = Math.toRadians(sweepDeg.toDouble() * k / n)
+        Offset(100f + r * kotlin.math.cos(a).toFloat(), 100f + r * kotlin.math.sin(a).toFloat())
+    }
+
+    @Test
+    fun aClosedLoopIsRecognisedAndAnOpenCurveOrDotIsNot() {
+        assertTrue(isClosedLoop(circle(30f, 360f)))
+        assertTrue(isClosedLoop(circle(30f, 340f)))     // a hand-drawn loop that stops a little short
+        assertFalse(isClosedLoop(circle(30f, 270f)))    // an open arc
+        assertFalse(isClosedLoop(circle(4f, 360f)))     // a dot or a small "o" in handwriting
+        assertFalse(isClosedLoop((0..20).map { Offset(it * 5f, 0f) }))  // a line
+    }
+
     @Test
     fun zigZagWithFourReversalsIsAScratchOut() {
         val zig = (0..8).map { i -> Offset(100f + if (i % 2 == 0) 0f else 30f, 200f + i * 1.5f) }

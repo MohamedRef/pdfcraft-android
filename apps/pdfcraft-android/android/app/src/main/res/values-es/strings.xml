@@ -1339,6 +1339,7 @@
     <string name="bates_export_failed">No se pudo guardar esta copia nueva en Descargas.</string>
     <string name="ink_presets_title">Lápices favoritos</string>
     <string name="ink_presets_help">Cada lápiz conserva su propio color, grosor y opacidad. Toca un favorito para recuperar sus ajustes.</string>
+    <string name="pen_gesture_lasso_empty">No hay nada que seleccionar dentro del lazo.</string>
     <string name="ink_protractor">Transportador</string>
     <string name="ink_hsv_hue">Tono</string>
     <string name="ink_hsv_square">Saturación %1$d %%, brillo %2$d %%</string>
