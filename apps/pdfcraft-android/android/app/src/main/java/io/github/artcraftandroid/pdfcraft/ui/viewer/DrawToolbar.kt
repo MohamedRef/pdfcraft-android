@@ -198,6 +198,18 @@ internal fun DrawToolbar(vm: AppViewModel, doc: OpenDocument) {
                     DrawShapeButton(ctl, prefs, InkShapeMode.Oval, LucideIcons.Circle, stringResource(R.string.toolbar_draw_oval))
                     DrawShapeButton(ctl, prefs, InkShapeMode.Arrow, LucideIcons.ArrowUpRight, stringResource(R.string.toolbar_draw_arrow))
                     DrawShapeButton(ctl, prefs, InkShapeMode.Cloud, LucideIcons.Cloud, stringResource(R.string.toolbar_draw_cloud))
+                    DrawToolbarButton(
+                        label = stringResource(R.string.ink_ruler),
+                        active = ctl.rulerOn,
+                        caption = stringResource(R.string.ink_ruler),
+                        onClick = { ctl.rulerOn = !ctl.rulerOn },
+                    ) { Icon(LucideIcons.Ruler, null, tint = if (ctl.rulerOn) c.toolAccent else c.icon, modifier = Modifier.size(24.dp)) }
+                    DrawToolbarButton(
+                        label = stringResource(R.string.zoom_box),
+                        active = ctl.zoomBoxOn,
+                        caption = stringResource(R.string.zoom_box),
+                        onClick = { ctl.zoomBoxOn = !ctl.zoomBoxOn },
+                    ) { Icon(LucideIcons.ZoomIn, null, tint = if (ctl.zoomBoxOn) c.toolAccent else c.icon, modifier = Modifier.size(24.dp)) }
                 }
             }
         }

@@ -29,3 +29,19 @@ Pen settings has two choices. **While the S Pen button is held**: Eraser (defaul
 ## Writing hand and palm guard (#156)
 
 Pen settings has **Writing hand** (Right or Left) and **Ignore palm while writing** (off by default) with a 60–240 dp area size. Choosing Left moves the quick rail to the right edge (it can still be dragged) and, on desktop layouts, puts the zoom buttons in the physical bottom-right corner in every language. With the guard on, a finger touch that starts inside the area beside and below the pen tip on the writing-hand side, within 1.5 s of the last pen hover or stroke sample, neither draws, scrolls, zooms nor counts as a two-finger tap; a pen arriving during that touch still writes. The area is drawn faintly while the pen hovers. Not done yet: guarding toolbar taps, a separate calibration screen and a toolbar that follows the writing position.
+
+## Ruler (#150)
+
+Draw ▸ **Ruler** shows a screen-space ruler with 5 dp ticks and its angle. One or two fingers on the ruler move it; two fingers also turn it about their centre. The angle snaps to 15° steps within 2° with a haptic tick. A freehand pen or finger stroke that starts within 24 dp of an edge follows that edge for the whole stroke (offset by half the stroke width), so the saved ink is straight. The ruler is only an overlay: it is kept per open document while it stays open and is never written to the PDF, exports or prints. Not done yet: protractor and arcs, and unifying hold-to-straighten with the ruler.
+
+## Smart pen gestures (#148)
+
+**Smart pen gestures** in Pen settings is off by default. When on, a freehand stroke is classified only after lift, so the live stroke gains no latency. A zig-zag with at least four horizontal reversals deletes the unsaved strokes and the saved, unlocked Ink comments mostly (60 %) under it; unsaved strokes come back with one Undo, saved ones with the document's Undo. A straight marker stroke (within 8 % of its length, within 12° of horizontal) over a text line becomes a Highlight of those words in the marker's colour; a straight pen stroke within 4 pt below a line becomes an Underline. Anything else stays ink. Not done yet: circle-then-hold lasso, and the two-step undo back to the raw stroke.
+
+## Zoom writing box (#130)
+
+Draw ▸ **Zoom box** docks a 200 dp writing pad at the bottom of the page area and draws its frame on the page. The pad shows that part of the page (from the page's latest whole-page image) and its ink, magnified to the pad's width. Writing in the pad adds ink at the matching page points with the selected pen. Lifting the pen in the shaded right-hand fifth moves the box 60 % of its width along the line; past the right margin it goes to the start of the next line, and past the bottom to the next page (the view follows). **New line** jumps there directly; dragging the frame on the page with a finger moves it (a horizontal drag also sets where new lines start). The frame and pad are viewer-only. The pad's background can look soft at high magnification because it reuses the whole-page image.
+
+## Low-latency ink (#128, experimental)
+
+**Low-latency ink (experimental)** in Pen settings is off by default. When on, Draw adds a transparent `SurfaceView` driven by `androidx.graphics:graphics-core` `CanvasFrontBufferedRenderer`: each new segment of an opaque, non-marker freehand stroke is drawn straight into the front buffer, while Compose still draws and saves the stroke as before; the front buffer is cleared when the stroke ends or is cancelled. Translucent pens, the marker, shapes and the zoom pad keep the normal path. No latency improvement is claimed: touch-to-photon latency before and after, tearing and the match with the saved stroke still have to be measured on a Galaxy S Pen device before it can be turned on by default.

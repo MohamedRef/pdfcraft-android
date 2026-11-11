@@ -120,6 +120,7 @@ fun MoreSheet(vm: AppViewModel, doc: OpenDocument) {
         Column(Modifier.verticalScroll(scroll).padding(top = 5.dp)) {
             SheetRow(LucideIcons.Info, stringResource(R.string.file_details_title), { ctl.sheet = ViewerSheet.FileDetails }, chevron = true)
             SheetRow(LucideIcons.Glasses, stringResource(R.string.sheet_view_settings), { ctl.sheet = ViewerSheet.ViewSettings }, chevron = true)
+            SheetRow(LucideIcons.Presentation, stringResource(R.string.sheet_present), { close(); vm.startPresenting(doc) })
             SheetRow(LucideIcons.LayoutGrid, stringResource(R.string.sheet_pages), {
                 close()
                 // Draft ink keeps page numbers; add it before pages can move or go away.
@@ -147,6 +148,7 @@ fun MoreSheet(vm: AppViewModel, doc: OpenDocument) {
                 { ctl.sheet = ViewerSheet.OcrConfidence }, chevron = true)
             SheetRow(LucideIcons.Combine, stringResource(R.string.common_tool_combine), { close(); vm.openCombine(doc) })
             SheetRow(LucideIcons.FileLock2, stringResource(R.string.common_tool_set_password), { close(); vm.openProtect(doc) })
+            SheetRow(LucideIcons.BrushCleaning, stringResource(R.string.hidden_title), { ctl.sheet = ViewerSheet.HiddenInfo }, chevron = true)
             SheetRow(LucideIcons.Stamp, stringResource(R.string.flatten_title), { close(); vm.flattenPrompt = doc }, enabled = canEditDocument(doc))
             SheetRow(LucideIcons.FilePlus2, stringResource(R.string.common_tool_create_pdf), { close(); vm.openCreate() })
             if (doc.info.undo != null || doc.info.redo != null) {

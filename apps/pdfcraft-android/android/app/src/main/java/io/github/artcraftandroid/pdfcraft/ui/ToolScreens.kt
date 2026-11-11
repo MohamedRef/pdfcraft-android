@@ -295,11 +295,21 @@ fun ProtectScreen(vm: AppViewModel, doc: OpenDocument) {
     var confirm by remember { mutableStateOf("") }
     var visible by remember { mutableStateOf(false) }
     var info by remember { mutableStateOf(false) }
+    // Advanced: a permissions password and what it restricts (#177)
+    var restrict by remember { mutableStateOf(false) }
+    var owner by remember { mutableStateOf("") }
+    var ownerConfirm by remember { mutableStateOf("") }
+    var rules by remember { mutableStateOf(Restrictions()) }
+    var removing by remember { mutableStateOf(false) }
     val focus = remember { androidx.compose.ui.focus.FocusRequester() }
     LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
-    val bad = pw.isNotEmpty() && (pw.length !in 6..128 || pw.any { it < '!' || it > '~' })
+    val bad = pw.isNotEmpty() && !passwordOk(pw)
     val mismatch = confirm.isNotEmpty() && confirm != pw
-    ToolPage(stringResource(R.string.common_tool_set_password), { vm.toolScreen = null }, stringResource(R.string.common_tool_set_password), pw.isNotEmpty() && confirm.isNotEmpty() && !bad && !mismatch, { vm.protect(doc, pw) },
+    val ownerBad = owner.isNotEmpty() && (!passwordOk(owner) || owner == pw)
+    val ownerMismatch = ownerConfirm.isNotEmpty() && ownerConfirm != owner
+    val args = if (mismatch || pw.isNotEmpty() && confirm.isEmpty() || restrict && (ownerMismatch || ownerConfirm.isEmpty())) null
+        else protectArgs(pw, if (restrict) owner else null, rules)
+    ToolPage(stringResource(R.string.common_tool_set_password), { vm.toolScreen = null }, stringResource(R.string.common_tool_set_password), args != null, { args?.let { vm.protect(doc, it) } },
         trailing = { BarIcon(LucideIcons.Info, stringResource(R.string.tools_about_passwords), { info = true }) }) {
         Column(Modifier.verticalScroll(rememberScrollState())) {
             Text(stringResource(R.string.tools_protect_intro), color = c.label, fontSize = 16.sp, modifier = Modifier.padding(horizontal = 24.dp))
@@ -307,12 +317,50 @@ fun ProtectScreen(vm: AppViewModel, doc: OpenDocument) {
             if (bad) Text(stringResource(R.string.tools_password_rule), color = c.red, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 24.dp, vertical = 4.dp))
             PasswordField(stringResource(R.string.tools_repeat_password), confirm, { confirm = it }, visible, { visible = !visible }, mismatch)
             if (mismatch) Text(stringResource(R.string.tools_password_mismatch), color = c.red, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 24.dp, vertical = 4.dp))
+            Spacer(Modifier.height(16.dp))
+            SwitchRow(stringResource(R.string.protect_restrict), restrict) { restrict = it }
+            if (restrict) {
+                Text(stringResource(R.string.protect_restrict_explain), color = c.textSecondary, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 24.dp))
+                PasswordField(stringResource(R.string.protect_permissions_password), owner, { owner = it }, visible, { visible = !visible }, ownerBad)
+                if (ownerBad) Text(stringResource(if (owner == pw) R.string.protect_passwords_differ else R.string.tools_password_rule), color = c.red, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 24.dp, vertical = 4.dp))
+                PasswordField(stringResource(R.string.tools_repeat_password), ownerConfirm, { ownerConfirm = it }, visible, { visible = !visible }, ownerMismatch)
+                if (ownerMismatch) Text(stringResource(R.string.tools_password_mismatch), color = c.red, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 24.dp, vertical = 4.dp))
+                Spacer(Modifier.height(8.dp))
+                SwitchRow(stringResource(R.string.protect_allow_printing), rules.printing) { rules = rules.copy(printing = it) }
+                SwitchRow(stringResource(R.string.protect_allow_changes), rules.changes) { rules = rules.copy(changes = it) }
+                SwitchRow(stringResource(R.string.protect_allow_copying), rules.copy) { rules = rules.copy(copy = it) }
+                SwitchRow(stringResource(R.string.protect_allow_screen_readers), rules.accessibility) { rules = rules.copy(accessibility = it) }
+            }
+            if (doc.info.encrypted) {
+                Spacer(Modifier.height(16.dp))
+                Text(
+                    stringResource(R.string.protect_remove), color = c.accent, fontSize = 16.sp, fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.clickable(role = androidx.compose.ui.semantics.Role.Button) { removing = true }.padding(horizontal = 24.dp, vertical = 12.dp),
+                )
+            }
+            Spacer(Modifier.height(24.dp))
         }
     }
     if (info) {
         PdfDialog(onDismiss = { info = false }, title = stringResource(R.string.tools_about_passwords), confirm = stringResource(R.string.common_ok), onConfirm = { info = false }, dismiss = null) {
             Text(stringResource(R.string.tools_about_passwords_body), color = c.text, fontSize = 14.sp)
         }
+    }
+    if (removing) {
+        PdfDialog(onDismiss = { removing = false }, title = stringResource(R.string.protect_remove), confirm = stringResource(R.string.protect_remove_action), onConfirm = { removing = false; vm.unprotect(doc) }) {
+            Text(stringResource(R.string.protect_remove_explain), color = c.text, fontSize = 14.sp)
+        }
+    }
+}
+
+@Composable
+private fun SwitchRow(label: String, checked: Boolean, onChange: (Boolean) -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().clickable(role = androidx.compose.ui.semantics.Role.Switch) { onChange(!checked) }.padding(horizontal = 24.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(label, color = pdfColors.text, fontSize = 16.sp, modifier = Modifier.weight(1f))
+        PdfSwitch(checked, onChange = onChange)
     }
 }
 

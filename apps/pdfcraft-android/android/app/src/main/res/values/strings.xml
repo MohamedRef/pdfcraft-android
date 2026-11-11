@@ -744,6 +744,7 @@
     <string name="sheet_add_star">Add a star</string>
     <string name="sheet_remove_star">Remove the star</string>
     <string name="sheet_view_settings">View settings</string>
+    <string name="sheet_present">Present</string>
     <!-- File details (Issue #55): original file dates and embedded PDF dates are separate. -->
     <string name="file_details_title">File details</string>
     <string name="file_details_copy_all">Copy all details</string>
@@ -830,6 +831,32 @@
     <string name="flatten_warning">Flattened comments and form fields become part of the page. They print and show in every viewer, but can\'t be edited any more. You can undo this until the file is saved.</string>
     <string name="flatten_comments">Comments</string>
     <string name="flatten_fields">Form fields</string>
+    <string name="protect_restrict">Restrict editing and printing</string>
+    <string name="protect_restrict_explain">A permissions password is needed to change these restrictions or remove security. It must differ from the open password.</string>
+    <string name="protect_permissions_password">Permissions password</string>
+    <string name="protect_passwords_differ">The permissions password must differ from the open password.</string>
+    <string name="protect_allow_printing">Allow printing</string>
+    <string name="protect_allow_changes">Allow changes</string>
+    <string name="protect_allow_copying">Allow copying text and images</string>
+    <string name="protect_allow_screen_readers">Allow screen readers</string>
+    <string name="protect_remove">Remove security</string>
+    <string name="protect_remove_action">Remove</string>
+    <string name="protect_remove_explain">Saves a copy without passwords or restrictions in Downloads. The document must have been opened with its permissions password, or have none.</string>
+    <string name="hidden_title">Remove hidden information</string>
+    <string name="hidden_explain">Information that may not show on the pages. Ticked categories are removed; you can undo until the file is saved.</string>
+    <string name="hidden_metadata">Metadata</string>
+    <string name="hidden_attachments">Attached files</string>
+    <string name="hidden_comments">Comments</string>
+    <string name="hidden_form_fields">Form fields (values stay visible)</string>
+    <string name="hidden_text">Hidden text</string>
+    <string name="hidden_layers">Hidden layers</string>
+    <string name="hidden_bookmarks">Bookmarks</string>
+    <string name="hidden_scripts">Links, actions and scripts</string>
+    <string name="hidden_private_data">Private application data</string>
+    <!-- Translator note: an unknown category; %1$s is its engine id. -->
+    <string name="hidden_other">%1$s</string>
+    <string name="hidden_remove">Remove</string>
+    <string name="hidden_sanitize">Sanitize everything</string>
     <string name="layers_show_all">Show all</string>
     <string name="layers_reset">Reset</string>
     <!-- Translator note: a layer without a name; %1$d is its position in the list. -->
@@ -1375,6 +1402,8 @@
     <string name="msg_properties_saved">Properties changed</string>
     <string name="msg_initial_view_saved">Opening view changed</string>
     <string name="msg_flattened">Flattened</string>
+    <string name="msg_hidden_removed">Hidden information removed</string>
+    <string name="msg_busy_removing_security">Removing security…</string>
     <!-- Translator note: %1$s is a file name. -->
     <string name="msg_attached">%1$s attached</string>
     <!-- Translator note: %1$s is a file name. -->
@@ -1513,6 +1542,14 @@
     <string name="bates_export_failed">Could not save this new copy to Downloads.</string>
     <string name="ink_presets_title">Favorite pens</string>
     <string name="ink_presets_help">Each pen keeps its own colour, width and opacity. Tap a favorite to restore its settings.</string>
+    <string name="ink_low_latency_explanation">Draws the line you are writing straight to the screen before the app redraws. Opaque pens only.</string>
+    <string name="ink_low_latency">Low-latency ink (experimental)</string>
+    <string name="zoom_box_new_line">New line</string>
+    <string name="zoom_box">Zoom box</string>
+    <string name="pen_gesture_scratched">Scratched out %1$d strokes. Undo restores them.</string>
+    <string name="pen_gestures_explanation">Scribble over ink to delete it. A straight marker line over text highlights it; a straight pen line just under text underlines it. Recognised after you lift the pen.</string>
+    <string name="pen_gestures">Smart pen gestures</string>
+    <string name="ink_ruler">Ruler</string>
     <string name="palm_guard_size">Palm area: %1$d dp</string>
     <string name="palm_guard_explanation">While the S Pen hovers or writes, finger touches beside and below it on your writing-hand side do not scroll, zoom or draw. The area shows while the pen hovers.</string>
     <string name="palm_guard">Ignore palm while writing</string>
@@ -1949,4 +1986,36 @@
     <string name="edit_label_recolour_comments">Recolour comments</string>
     <string name="edit_label_delete_comments">Delete comments</string>
     <string name="edit_label_add_text_field_table">Add text field table</string>
+    <string name="digest_title">Export notes</string>
+    <string name="digest_format">Format</string>
+    <string name="digest_markdown">Markdown (Obsidian links)</string>
+    <string name="digest_markdown_images">Markdown with drawings (ZIP)</string>
+    <string name="digest_csv">CSV spreadsheet</string>
+    <string name="digest_pdf">PDF comment summary</string>
+    <string name="digest_group_by">Group by</string>
+    <string name="digest_by_page">Page</string>
+    <string name="digest_by_color">Colour</string>
+    <string name="digest_include">Include</string>
+    <string name="digest_all">All comments</string>
+    <string name="digest_checked">Only checked</string>
+    <string name="digest_unresolved">Only unresolved</string>
+    <string name="digest_export">Export</string>
+    <string name="digest_hint">Highlights with the text they mark, notes, replies and status, with a link back to each page. Saved to Downloads.</string>
+    <string name="digest_busy">Exporting notes…</string>
+    <string name="digest_nothing">No comments to export</string>
+    <string name="digest_file_name">Notes on %1$s</string>
+    <string name="digest_heading">Notes on %1$s (%2$s)</string>
+    <string name="digest_page">Page %1$d</string>
+    <string name="digest_no_color">No colour</string>
+    <string name="digest_status">Status</string>
+    <string name="digest_drawing">Drawing</string>
+    <string name="digest_yellow">Yellow</string>
+    <string name="digest_green">Green</string>
+    <string name="digest_blue">Blue</string>
+    <string name="digest_pink">Pink</string>
+    <string name="digest_red">Red</string>
+    <string name="digest_orange">Orange</string>
+    <string name="digest_purple">Purple</string>
+    <string name="digest_black">Black</string>
+    <string name="digest_grey">Grey</string>
 </resources>

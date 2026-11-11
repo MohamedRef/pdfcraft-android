@@ -200,3 +200,60 @@ fun FlattenDialog(vm: AppViewModel, doc: OpenDocument) {
         }
     }
 }
+
+/**
+ * Remove hidden information: each category with what it holds, ticked by default when it holds
+ * something; Remove takes the ticked ones out, Sanitize everything takes all. Undoable until saved.
+ */
+@Composable
+fun HiddenInfoSheet(vm: AppViewModel, doc: OpenDocument) {
+    val c = pdfColors
+    val ctl = doc.controller
+    var found by remember { mutableStateOf<List<Pair<String, Int>>?>(null) }
+    val picked = remember { androidx.compose.runtime.mutableStateMapOf<String, Boolean>() }
+    LaunchedEffect(doc.info.generation) {
+        val f = vm.hiddenInfo(doc)
+        found = f
+        picked.clear()
+        f?.forEach { (k, n) -> picked[k] = n > 0 }
+    }
+    val names = mapOf(
+        "metadata" to R.string.hidden_metadata, "attachments" to R.string.hidden_attachments, "comments" to R.string.hidden_comments,
+        "form-fields" to R.string.hidden_form_fields, "hidden-text" to R.string.hidden_text, "hidden-layers" to R.string.hidden_layers,
+        "bookmarks" to R.string.hidden_bookmarks, "links-actions-scripts" to R.string.hidden_scripts, "private-data" to R.string.hidden_private_data,
+    )
+    val editable = canEditDocument(doc)
+    io.github.artcraftandroid.pdfcraft.ui.PdfSheet(onDismiss = { ctl.sheet = ViewerSheet.None }, maxHeightFraction = 0.85f) {
+        io.github.artcraftandroid.pdfcraft.ui.SheetBackHeader(stringResource(R.string.hidden_title), onBack = { ctl.sheet = ViewerSheet.More })
+        Text(stringResource(R.string.hidden_explain), color = c.textSecondary, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 20.dp))
+        val list = found
+        if (list == null) {
+            Text("…", color = c.textSecondary, modifier = Modifier.padding(20.dp))
+        } else {
+            Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState())) {
+                for ((k, n) in list) {
+                    val checked = picked[k] == true
+                    Row(
+                        Modifier.fillMaxWidth().clickable(enabled = n > 0, role = Role.Checkbox) { picked[k] = !checked }.padding(horizontal = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Checkbox(checked, { picked[k] = it }, enabled = n > 0, colors = CheckboxDefaults.colors(checkedColor = c.toolAccent))
+                        Text(stringResource(names[k] ?: R.string.hidden_other, k), color = if (n > 0) c.text else c.textSecondary, fontSize = 16.sp, modifier = Modifier.weight(1f))
+                        Text(n.toString(), color = c.textSecondary, fontSize = 15.sp, modifier = Modifier.padding(end = 12.dp))
+                    }
+                }
+            }
+            val chosen = list.filter { (k, n) -> n > 0 && picked[k] == true }.map { it.first }
+            if (!editable) Text(stringResource(R.string.panels_locked_read_only), color = c.textSecondary, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp))
+            Row(Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(12.dp, Alignment.End)) {
+                androidx.compose.material3.OutlinedButton(onClick = { vm.removeHidden(doc, null) }, enabled = editable && list.any { it.second > 0 }) {
+                    Text(stringResource(R.string.hidden_sanitize), color = c.text)
+                }
+                androidx.compose.material3.Button(
+                    onClick = { vm.removeHidden(doc, chosen) }, enabled = editable && chosen.isNotEmpty(),
+                    colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = c.toolAccent),
+                ) { Text(stringResource(R.string.hidden_remove)) }
+            }
+        }
+    }
+}
