@@ -294,9 +294,15 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 }
                 document = null
             }
+            val recent = withContext(Dispatchers.IO) { recents.list().firstOrNull { it.uri == uri.toString() } }
+            val progressive = file.length() >= 16L * 1024L * 1024L && recent?.reading != true && pendingTool == null
             val info = io.github.artcraftandroid.pdfcraft.engine.OpenTiming.measure("native_open") {
                 eng.command {
-                    if (io.github.artcraftandroid.pdfcraft.engine.OpenTiming.enabled()) {
+                    if (progressive) {
+                        val opened = beginOpen(file.absolutePath, password, (recent?.lastPage ?: 0).coerceAtLeast(0).toUInt(), io.github.artcraftandroid.pdfcraft.engine.OpenTiming.enabled())
+                        opened.timings.forEach { io.github.artcraftandroid.pdfcraft.engine.OpenTiming.duration(it.stage, it.durationMs.toLong()) }
+                        opened.document
+                    } else if (io.github.artcraftandroid.pdfcraft.engine.OpenTiming.enabled()) {
                         val opened = openWithTimings(file.absolutePath, password)
                         // These are completed nested/parallel stages, not a sequential timeline.
                         opened.timings.forEach {
@@ -308,9 +314,13 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                     }
                 }
             }
-            io.github.artcraftandroid.pdfcraft.engine.OpenTiming.milestone("native_ready", openStartedAt, bytes = file.length(), pages = info.pages.size)
+            if (!isCurrentOpenRequest(requestId)) {
+                eng.command { close(info.id, true) }
+                return
+            }
+            io.github.artcraftandroid.pdfcraft.engine.OpenTiming.milestone(if (info.preparing) "native_reading_ready" else "native_ready", openStartedAt, bytes = file.length(), pages = info.pages.size)
             // This counts editing-parser repairs only; renderer fallback work has its own trace.
-            if (io.github.artcraftandroid.pdfcraft.engine.OpenTiming.enabled()) {
+            if (!info.preparing && io.github.artcraftandroid.pdfcraft.engine.OpenTiming.enabled()) {
                 runCatching { eng.command { repairCount(info.id) } }.getOrNull()
                     ?.let { io.github.artcraftandroid.pdfcraft.engine.OpenTiming.count("native_repairs", it.toLong()) }
             }
@@ -318,22 +328,25 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             val source = uri.takeIf { it.scheme == "content" || it.scheme == "file" }
             val doc = OpenDocument(info.id, info, source, file, images, password, eng, viewModelScope)
             doc.fromOtherApp = fromOtherApp
-            val (recent, writable) = withContext(Dispatchers.IO) {
-                recents.list().firstOrNull { it.uri == uri.toString() } to (source == null || files.canWrite(source))
-            }
-            doc.writable = writable
+            doc.writable = withContext(Dispatchers.IO) { source == null || files.canWrite(source) }
             doc.notWrittenBack = source?.let { withContext(Dispatchers.IO) { files.hasPendingWriteBack(it) } } ?: false
             io.github.artcraftandroid.pdfcraft.engine.OpenTiming.milestone("source_access_ready", openStartedAt)
-            loadLinks(eng, doc)
-            io.github.artcraftandroid.pdfcraft.engine.OpenTiming.milestone("overlays_ready", openStartedAt, pages = info.pages.size)
+            if (!info.preparing) {
+                loadLinks(eng, doc)
+                io.github.artcraftandroid.pdfcraft.engine.OpenTiming.milestone("overlays_ready", openStartedAt, pages = info.pages.size)
+            }
             doc.controller.nightMode = savedNightMode
             if (savedPageMode != doc.viewer.mode) doc.viewer.switchMode(savedPageMode)
             // a file left in Reading Mode reopens in it, unless it was opened for a tool
             readingMode = recent?.reading == true && pendingTool == null
             document = doc
             io.github.artcraftandroid.pdfcraft.engine.OpenTiming.milestone("viewer_model_ready", openStartedAt, pages = info.pages.size)
-            if (doc.info.signed) announceSignatures(doc)
-            startPendingTool(doc)
+            if (!info.preparing) {
+                if (doc.info.signed) announceSignatures(doc)
+                startPendingTool(doc)
+            } else {
+                completeReadingOpen(eng, doc, requestId, openStartedAt)
+            }
             pendingPage = recent?.lastPage?.takeIf { it in 0 until info.pages.size }
             pendingSpot = recent?.takeIf { pendingPage != null && it.lastX >= 0f && it.lastY >= 0f }?.let { Triple(it.lastX, it.lastY, it.lastZoom) }
             withContext(Dispatchers.IO) {
@@ -347,6 +360,48 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         } catch (e: MobileException) {
             tell(e.userMessage)
         }
+    }
+
+    /** Finish away from the serial command dispatcher, after the first canvas submission.
+     * Identity checks protect close, replacement and late native results. */
+    private fun completeReadingOpen(eng: Engine, doc: OpenDocument, requestId: Long, startedAt: Long) {
+        viewModelScope.launch {
+            try {
+                doc.images.awaitFirstCanvas()
+                if (document !== doc || !isCurrentOpenRequest(requestId)) return@launch
+                val complete = withContext(Dispatchers.Default) { eng.session.completeOpen(doc.id) }
+                if (document !== doc || !isCurrentOpenRequest(requestId)) return@launch
+                complete.timings.forEach { io.github.artcraftandroid.pdfcraft.engine.OpenTiming.duration(it.stage, it.durationMs.toLong()) }
+                io.github.artcraftandroid.pdfcraft.engine.OpenTiming.milestone("native_ready", startedAt, pages = complete.document.pages.size)
+                loadLinks(eng, doc)
+                doc.update(complete.document)
+                io.github.artcraftandroid.pdfcraft.engine.OpenTiming.milestone("overlays_ready", startedAt, pages = doc.pageCount)
+                if (io.github.artcraftandroid.pdfcraft.engine.OpenTiming.enabled()) {
+                    runCatching { eng.command { repairCount(doc.id) } }.getOrNull()?.let {
+                        io.github.artcraftandroid.pdfcraft.engine.OpenTiming.count("native_repairs", it.toLong())
+                    }
+                }
+                if (doc.info.signed) announceSignatures(doc)
+                startPendingTool(doc)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                if (document === doc && isCurrentOpenRequest(requestId)) {
+                    tell(e.userMessage)
+                    closeQuietly(eng, doc)
+                    document = null
+                    readingMode = false
+                }
+            }
+        }
+    }
+
+    override fun onCleared() {
+        document?.takeIf { it.info.preparing }?.let { doc ->
+            runCatching { engine?.session?.close(doc.id, true) }
+            doc.images.close()
+        }
+        super.onCleared()
     }
 
     /** The page to show once the viewer has laid the document out (reopening where the reader left off). */
@@ -497,6 +552,8 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
      */
     suspend fun save(doc: OpenDocument, quiet: Boolean = false): Boolean = saveMutex.withLock {
         val eng = engine ?: return@withLock false
+        // A reading stage has no edits; do not write an incompletely checked source back.
+        if (doc.info.preparing) return@withLock true
         if (!doc.info.dirty && !doc.notWrittenBack) return@withLock true
         try {
             if (doc.info.dirty) eng.tool("doc_save", mapOf("doc" to doc.id))
@@ -551,7 +608,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
 
     /** Resolve only the displayed PDF pages' links without blocking the opening screen. */
     suspend fun loadVisibleLinks(doc: OpenDocument, visible: IntRange) {
-        if (document !== doc) return
+        if (document !== doc || doc.info.preparing) return
         val eng = engine ?: return
         val generation = doc.info.generation
         while (document === doc && doc.info.generation == generation) {
@@ -1057,6 +1114,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     }
 
     fun openReadingMode(doc: OpenDocument) {
+        if (doc.info.preparing) { tell(text(R.string.document_preparing)); return }
         if (doc.controller.tool != ViewerTool.None) leaveTool(doc)
         readingMode = true
     }

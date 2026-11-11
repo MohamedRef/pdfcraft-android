@@ -190,3 +190,6 @@ fn display_config(config: &pdfcraft_render::RenderConfig) -> pdfcraft_render::Re
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod progressive_tests;

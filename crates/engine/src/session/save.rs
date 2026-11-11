@@ -13,6 +13,9 @@ impl Session {
     /// break its signatures, so with no edits it keeps its bytes, damage and all.
     pub fn save_bytes(&self, id: DocId) -> Result<Arc<Vec<u8>>, EditError> {
         let doc = self.get(id).ok_or(EditError::NoDocument)?;
+        if doc.preparing() {
+            return Err(EditError::ReadOnly("Document preparation is still running".into()));
+        }
         let Some(editor) = doc.editor.as_ref() else { return Ok(doc.bytes.clone()) };
         let on_saved = Arc::ptr_eq(editor.cos.bytes(), &editor.saved);
         if !editor.cos.is_modified() && on_saved && (!editor.cos.reconstructed() || doc.is_signed()) {
@@ -42,6 +45,9 @@ impl Session {
     /// A compact, garbage-collected rewrite (Save As ▸ "Optimized" / Reduce File Size groundwork).
     pub fn save_full_bytes(&self, id: DocId) -> Result<Arc<Vec<u8>>, EditError> {
         let doc = self.get(id).ok_or(EditError::NoDocument)?;
+        if doc.preparing() {
+            return Err(EditError::ReadOnly("Document preparation is still running".into()));
+        }
         if doc.is_signed() {
             return Err(EditError::Signed);
         }
@@ -56,6 +62,9 @@ impl Session {
     /// file has been replaced. Same error as `mark_saved`.
     pub fn check_save(&self, id: DocId, bytes: &Arc<Vec<u8>>) -> Result<(), EditError> {
         let doc = self.get(id).ok_or(EditError::NoDocument)?;
+        if doc.preparing() {
+            return Err(EditError::ReadOnly("Document preparation is still running".into()));
+        }
         let Some(editor) = doc.editor.as_ref() else { return Ok(()) };
         pdfcraft_cos::Document::open_with_password(bytes.clone(), editor.keys.reopen.as_deref()).map_err(|e| EditError::Reopen(e.to_string()))?;
         pdfcraft_render::check_pages(bytes.clone(), doc.password.as_deref(), doc.info.pages.len()).map_err(|e| EditError::Reopen(e.to_string()))

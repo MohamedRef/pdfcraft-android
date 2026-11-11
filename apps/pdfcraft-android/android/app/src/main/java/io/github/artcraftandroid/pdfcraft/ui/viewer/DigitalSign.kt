@@ -484,7 +484,9 @@ fun SignaturesSheet(vm: AppViewModel, doc: OpenDocument) {
         SheetTitle(stringResource(R.string.sign_signatures))
         Column(Modifier.verticalScroll(rememberScrollState())) {
             val list = doc.signatures
-            if (list.isEmpty()) {
+            if (doc.info.preparing) {
+                Text(stringResource(R.string.document_preparing), color = c.text, modifier = Modifier.padding(16.dp))
+            } else if (list.isEmpty()) {
                 Text(stringResource(R.string.sign_none), color = c.textSecondary, fontSize = 15.sp, modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp))
             }
             for (s in list) {

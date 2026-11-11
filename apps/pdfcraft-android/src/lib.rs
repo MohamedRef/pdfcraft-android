@@ -15,7 +15,10 @@
 #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
 
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
+use std::sync::{
+    Arc, Mutex, MutexGuard, PoisonError,
+    atomic::{AtomicBool, Ordering},
+};
 
 use pdfcraft_automation::{Automation, Content, ToolError};
 use pdfcraft_engine::{DocId, Document};
@@ -24,6 +27,8 @@ use serde_json::{Value, json};
 
 uniffi::setup_scaffolding!();
 
+#[cfg(test)]
+mod progressive_tests;
 #[cfg(test)]
 mod tests;
 
@@ -82,6 +87,8 @@ pub struct DocumentInfo {
     pub tagged: bool,
     /// Why the document can't be edited, if it can't.
     pub read_only_reason: Option<String>,
+    /// Reading is available, but editing, metadata and signature status are still being prepared.
+    pub preparing: bool,
     pub allows_printing: bool,
     pub allows_copying: bool,
     pub allows_annotation: bool,
@@ -462,6 +469,17 @@ pub struct MobileSession {
     auto: Mutex<Automation>,
     renderers: Mutex<RendererCache>,
     texts: Mutex<HashMap<u64, TextCache>>,
+    pending_opens: Mutex<HashMap<u64, PendingOpen>>,
+}
+
+struct PendingOpen {
+    context: pdfcraft_engine::OpenContext,
+    name: String,
+    path: String,
+    bytes: Arc<Vec<u8>>,
+    password: Option<String>,
+    trace: pdfcraft_render::OpenTrace,
+    cancelled: Arc<AtomicBool>,
 }
 
 impl MobileSession {
@@ -475,7 +493,11 @@ impl MobileSession {
 
     /// Run tool `name`; its JSON result (`null` if it gave none).
     fn call(&self, name: &str, args: &Value) -> Result<Value, MobileError> {
-        let out = self.lock().call(name, args).map_err(|e| MobileError::Command(e.to_string()))?;
+        let mut auto = self.lock();
+        if name != "doc_close" && name != "doc_list" && auto.session().docs().iter().any(Document::preparing) {
+            return Err(MobileError::Command("Document preparation is still running".into()));
+        }
+        let out = auto.call(name, args).map_err(|e| MobileError::Command(e.to_string()))?;
         Ok(first_json(out))
     }
 
@@ -491,6 +513,11 @@ impl MobileSession {
 
     /// Give a renderer back for the next render, unless the document has changed since.
     fn return_renderer(&self, doc: u64, bytes: &Arc<Vec<u8>>, renderer: PageRenderer) {
+        // Keep a late reading-stage render from reviving a closed or superseded cache entry.
+        let auto = self.lock();
+        if !auto.session().get(DocId(doc)).is_some_and(|d| Arc::ptr_eq(&d.display, bytes)) {
+            return;
+        }
         let mut cache = self.cache();
         let entry = cache.entry(doc).or_insert_with(|| (bytes.clone(), Vec::new()));
         if !Arc::ptr_eq(&entry.0, bytes) {
@@ -530,6 +557,9 @@ impl MobileSession {
 
     /// The text layer of page `page` of `doc` as it is now (extracted once per document version).
     fn page_text(&self, doc: u64, page: u32) -> Result<Arc<PageText>, MobileError> {
+        if self.with_doc(doc, Document::preparing)? {
+            return Err(MobileError::Command("Document preparation is still running".into()));
+        }
         let (bytes, password, pages) = self.with_doc(doc, |d| (d.bytes.clone(), d.password.clone(), d.info.pages.len()))?;
         let index = page as usize;
         if index >= pages {
@@ -579,7 +609,12 @@ impl MobileSession {
     #[uniffi::constructor]
     #[allow(clippy::new_without_default)]
     pub fn new() -> Arc<Self> {
-        Arc::new(MobileSession { auto: Mutex::new(Automation::new()), renderers: Mutex::new(HashMap::new()), texts: Mutex::new(HashMap::new()) })
+        Arc::new(MobileSession {
+            auto: Mutex::new(Automation::new()),
+            renderers: Mutex::new(HashMap::new()),
+            texts: Mutex::new(HashMap::new()),
+            pending_opens: Mutex::new(HashMap::new()),
+        })
     }
 
     /// Open the PDF at absolute path `path` (with `password` if it needs one).
@@ -592,9 +627,74 @@ impl MobileSession {
         self.open_document(path, password, true)
     }
 
+    /// Open a conservative reading stage, or use the existing full path for complex pages.
+    /// File bytes are read once and shared with complete_open; no security decision is skipped.
+    pub fn begin_open(&self, path: String, password: Option<String>, initial_page: u32, recording: bool) -> Result<ProfiledOpen, MobileError> {
+        if !std::path::Path::new(&path).is_absolute() {
+            return Err(MobileError::Open("the path must be absolute".into()));
+        }
+        let trace = if recording { pdfcraft_render::OpenTrace::recording() } else { Default::default() };
+        let (path, bytes, context) = {
+            let auto = self.lock();
+            let (path, bytes) = trace.measure("native_file_read", || auto.read_open_input(&path)).map_err(open_error)?;
+            (path, bytes, auto.session().open_context())
+        };
+        let path = path.to_string_lossy().into_owned();
+        let name = std::path::Path::new(&path).file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+        let cancelled = Arc::new(AtomicBool::new(false));
+        let context = context.with_open_trace(trace.clone()).with_open_cancellation(cancelled.clone());
+        let preview = trace
+            .measure("native_reading_prepare", || {
+                context.prepare_reading(name.clone(), Some(path.clone()), bytes.clone(), password.as_deref(), initial_page as usize)
+            })
+            .map_err(open_native_error)?;
+        let (prepared, pending) = match preview {
+            Some(prepared) => (prepared, true),
+            None => (
+                trace
+                    .measure("native_prepare", || context.prepare_open(name.clone(), Some(path.clone()), bytes.clone(), password.as_deref()))
+                    .map_err(open_native_error)?,
+                false,
+            ),
+        };
+        let id = self.lock().register_prepared(prepared).0;
+        if pending {
+            self.pending_opens
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .insert(id, PendingOpen { context, name, path, bytes, password, trace: trace.clone(), cancelled });
+        }
+        Ok(ProfiledOpen { document: self.document(id)?, timings: native_stages(&trace, 0) })
+    }
+
+    /// Complete preparation away from the session lock. Closing the reading stage cancels it;
+    /// a late result can never register a replacement document or revive a closed handle.
+    pub fn complete_open(&self, doc: u64) -> Result<ProfiledOpen, MobileError> {
+        let work = self
+            .pending_opens
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .remove(&doc)
+            .ok_or_else(|| MobileError::Command("No pending document preparation".into()))?;
+        let start = work.trace.snapshot().len();
+        if work.cancelled.load(Ordering::Acquire) {
+            return Err(MobileError::NoDocument(doc));
+        }
+        let prepared = work
+            .trace
+            .measure("native_background_prepare", || work.context.prepare_open(work.name, Some(work.path), work.bytes, work.password.as_deref()))
+            .map_err(open_native_error)?;
+        if work.cancelled.load(Ordering::Acquire) || !self.lock().finish_reading(DocId(doc), prepared) {
+            return Err(MobileError::NoDocument(doc));
+        }
+        Ok(ProfiledOpen { document: self.document(doc)?, timings: native_stages(&work.trace, start) })
+    }
+
     /// Close document `doc`. Unsaved edits are refused unless `discard_changes` is set.
     pub fn close(&self, doc: u64, discard_changes: bool) -> Result<(), MobileError> {
+        self.with_doc(doc, Document::cancel_preparation)?;
         self.call("doc_close", &json!({ "doc": doc, "discard_changes": discard_changes }))?;
+        self.pending_opens.lock().unwrap_or_else(PoisonError::into_inner).remove(&doc);
         self.cache().remove(&doc);
         self.texts.lock().unwrap_or_else(PoisonError::into_inner).remove(&doc);
         Ok(())
@@ -645,7 +745,7 @@ impl MobileSession {
             return Err(MobileError::Render(format!("the scale must be a positive number, not {scale}")));
         }
         let index = page as usize;
-        let (bytes, config, pages, size) = self.with_doc(doc, |d| {
+        let (bytes, config, pages, size, ready) = self.with_doc(doc, |d| {
             // the app draws sticky notes itself, as fixed-size icons over the page
             let config = RenderConfig {
                 password: d.password.as_deref().map(Arc::from),
@@ -653,8 +753,11 @@ impl MobileSession {
                 hide_notes: true,
                 ..RenderConfig::default()
             };
-            (d.display.clone(), config, d.info.pages.len(), d.info.pages.get(index).map(|p| (p.width, p.height)))
+            (d.display.clone(), config, d.info.pages.len(), d.info.pages.get(index).map(|p| (p.width, p.height)), d.reading_page_ready(index))
         })?;
+        if !ready {
+            return Err(MobileError::Render("This page is waiting for document preparation".into()));
+        }
         let Some((width, height)) = size else {
             return Err(MobileError::Render(format!("page {} is out of range: the document has {pages} pages", index.saturating_add(1))));
         };
@@ -681,7 +784,8 @@ impl MobileSession {
         };
         let mut renderer = self.take_renderer(doc, &bytes, config);
         let raster_tile = tile.map(|t| Tile { x: t.x, y: t.y, w: t.width, h: t.height });
-        let out = renderer.render(RenderRequest { page: index, kind: RequestKind::Pixels, tile: raster_tile, scale: mobile_scale, tag: 0, preview: false });
+        let out =
+            renderer.render(RenderRequest { page: index, kind: RequestKind::Pixels, tile: raster_tile, scale: mobile_scale, tag: 0, preview: false });
         self.return_renderer(doc, &bytes, renderer);
         if let Some(e) = out.error {
             return Err(MobileError::Render(format!("page {} could not be drawn: {e}", index.saturating_add(1))));
@@ -758,23 +862,23 @@ impl MobileSession {
                     // raw /M, alpha and stroke width. Preserve the Android UI record contract.
                     let props = d.comment_props(a.page, a.index);
                     CommentInfo {
-                    page: u32::try_from(a.page).unwrap_or(u32::MAX),
-                    index: u32::try_from(a.index).unwrap_or(u32::MAX),
-                    subtype: a.subtype.clone(),
-                    kind: pdfcraft_engine::comment_kind(a).to_string(),
-                    author: a.author.clone(),
-                    contents: a.contents.clone(),
-                    modified: props.as_ref().and_then(|p| p.modified.clone()).or_else(|| a.modified.clone()),
-                    rect: d.info.pages.get(a.page).map(|p| view_rect(p, a.rect)).unwrap_or_default(),
-                    color: a.color.map(rgb),
-                    name: a.name.clone(),
-                    reply_to: a.in_reply_to.clone(),
-                    state: a.state.clone(),
-                    locked: a.locked,
-                    fill_sign: a.fill_sign,
-                    opacity: props.as_ref().map(|p| p.opacity as f32).filter(|v| v.is_finite()).unwrap_or(1.0).clamp(0.0, 1.0),
-                    width: props.as_ref().and_then(|p| p.width).map(|w| w as f32).filter(|w| w.is_finite() && *w >= 0.0),
-                }
+                        page: u32::try_from(a.page).unwrap_or(u32::MAX),
+                        index: u32::try_from(a.index).unwrap_or(u32::MAX),
+                        subtype: a.subtype.clone(),
+                        kind: pdfcraft_engine::comment_kind(a).to_string(),
+                        author: a.author.clone(),
+                        contents: a.contents.clone(),
+                        modified: props.as_ref().and_then(|p| p.modified.clone()).or_else(|| a.modified.clone()),
+                        rect: d.info.pages.get(a.page).map(|p| view_rect(p, a.rect)).unwrap_or_default(),
+                        color: a.color.map(rgb),
+                        name: a.name.clone(),
+                        reply_to: a.in_reply_to.clone(),
+                        state: a.state.clone(),
+                        locked: a.locked,
+                        fill_sign: a.fill_sign,
+                        opacity: props.as_ref().map(|p| p.opacity as f32).filter(|v| v.is_finite()).unwrap_or(1.0).clamp(0.0, 1.0),
+                        width: props.as_ref().and_then(|p| p.width).map(|w| w as f32).filter(|w| w.is_finite() && *w >= 0.0),
+                    }
                 })
                 .collect()
         })
@@ -965,6 +1069,18 @@ fn first_json(out: Vec<Content>) -> Value {
         .unwrap_or(Value::Null)
 }
 
+fn native_stages(trace: &pdfcraft_render::OpenTrace, start: usize) -> Vec<NativeOpenTiming> {
+    trace.snapshot().into_iter().skip(start).map(|s| NativeOpenTiming { stage: s.name.into(), duration_ms: s.duration_ms }).collect()
+}
+
+fn open_native_error(error: OpenError) -> MobileError {
+    match error {
+        OpenError::NeedsPassword => MobileError::NeedsPassword,
+        OpenError::WrongPassword => MobileError::WrongPassword,
+        other => MobileError::Open(other.to_string()),
+    }
+}
+
 /// A failed `doc_open`, with the password cases told apart so the app can ask for one.
 fn open_error(e: ToolError) -> MobileError {
     let message = e.to_string();
@@ -995,6 +1111,7 @@ fn document_info(d: &Document) -> DocumentInfo {
         encrypted: info.encrypted,
         tagged: info.tagged,
         read_only_reason: d.read_only_reason.clone(),
+        preparing: d.preparing(),
         allows_printing: d.allows_printing(),
         allows_copying: d.allows_copying(),
         allows_annotation: d.allows_annotation(),

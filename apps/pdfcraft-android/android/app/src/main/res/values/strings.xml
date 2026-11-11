@@ -1427,4 +1427,5 @@
     <string name="home_share_open_timings">Share open timings</string>
     <string name="home_open_timings_empty">No open timings yet: turn this on, then open a file.</string>
     <string name="home_open_timings_subject">PdfCraft open timings</string>
+    <string name="document_preparing">Preparing editing and signature status…</string>
 </resources>

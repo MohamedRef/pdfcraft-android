@@ -1,6 +1,9 @@
 //! Opening a document: preparing it away from the session, then registering it.
 
-use std::sync::{Arc, OnceLock};
+use std::sync::{
+    Arc, OnceLock,
+    atomic::{AtomicBool, Ordering},
+};
 
 use pdfcraft_cos::{SaveOptions, write_incremental};
 use pdfcraft_render::{DocInfo, OpenError, OpenTrace, RenderConfig, RenderPool, inspect, inspect_with_trace};
@@ -22,6 +25,7 @@ pub struct OpenContext {
     captions: Arc<StatusCaptions>,
     xfa_time_scale: u32,
     trace: OpenTrace,
+    cancelled: Option<Arc<AtomicBool>>,
 }
 
 /// A fully prepared document that has not yet been registered in a session.
@@ -34,10 +38,11 @@ struct DocumentOpenData<'a> {
     path: Option<String>,
     bytes: Arc<Vec<u8>>,
     info: DocInfo,
-    structure: Result<Result<pdfcraft_cos::Document, pdfcraft_cos::CosError>, Box<dyn std::any::Any + Send>>,
+    structure: Option<Result<Result<pdfcraft_cos::Document, pdfcraft_cos::CosError>, Box<dyn std::any::Any + Send>>>,
     render_password: Option<String>,
     password: Option<&'a str>,
     xfa: Option<XfaLayout>,
+    reading: Option<ReadingSource>,
 }
 
 impl OpenContext {
@@ -45,6 +50,87 @@ impl OpenContext {
     pub fn with_open_trace(mut self, trace: OpenTrace) -> Self {
         self.trace = trace;
         self
+    }
+
+    pub fn with_open_cancellation(mut self, cancelled: Arc<AtomicBool>) -> Self {
+        self.cancelled = Some(cancelled);
+        self
+    }
+
+    fn check_cancelled(&self) -> Result<(), OpenError> {
+        if self.cancelled.as_ref().is_some_and(|c| c.load(Ordering::Acquire)) {
+            Err(OpenError::Invalid("opening was cancelled".into()))
+        } else {
+            Ok(())
+        }
+    }
+
+    /// Try a conservative read-only stage. None means the existing complete open is required.
+    /// Exact geometry is retained; no absence of forms or signatures is inferred from the root.
+    pub fn prepare_reading(
+        &self,
+        name: String,
+        path: Option<String>,
+        bytes: Arc<Vec<u8>>,
+        password: Option<&str>,
+        initial_page: usize,
+    ) -> Result<Option<PreparedDocument>, OpenError> {
+        self.check_cancelled()?;
+        guard(|| {
+            let Ok(cos) = self.trace.measure("native_preview_cos", || pdfcraft_cos::Document::open_with_password(bytes.clone(), password)) else {
+                return Ok(None);
+            };
+            if !cos.repair_log().is_empty() {
+                return Ok(None);
+            }
+            let Some(root) = cos.root() else { return Ok(None) };
+            let catalog = cos.get(root);
+            let Some(catalog) = catalog.as_dict() else { return Ok(None) };
+            if let Some(form) = catalog.get(b"AcroForm") {
+                let form = cos.resolve(form);
+                let Some(form) = form.as_dict() else { return Ok(None) };
+                // Tree-listed widgets need not be listed in the page's Annots array. Keep
+                // their values and appearances on the existing complete path too.
+                if form.contains(b"XFA")
+                    || form.get(b"Fields").is_some_and(|fields| cos.resolve(fields).as_array().is_none_or(|fields| !fields.is_empty()))
+                {
+                    return Ok(None);
+                }
+            }
+            let info = match pdfcraft_render::inspect_geometry_with_trace(bytes.clone(), password, &self.trace) {
+                Ok(info) if !info.pages.is_empty() && info.warnings.is_empty() => info,
+                _ => return Ok(None),
+            };
+            let Ok(pages) = pdfcraft_annot::page_refs(&cos) else { return Ok(None) };
+            if pages.len() != info.pages.len() {
+                return Ok(None);
+            }
+            let cancelled = self.cancelled.clone().unwrap_or_else(|| Arc::new(AtomicBool::new(false)));
+            let reading = ReadingSource { cos, pages, cancelled };
+            let initial_page = if initial_page < info.pages.len() { initial_page } else { 0 };
+            if !reading.page_ready(initial_page) {
+                return Ok(None);
+            }
+            let mut info = info;
+            info.encrypted = reading.cos.security().is_some();
+            self.check_cancelled()?;
+            let document = Session::build_document(
+                self,
+                DocumentOpenData {
+                    name,
+                    path,
+                    bytes,
+                    info,
+                    structure: None,
+                    render_password: password.map(str::to_owned),
+                    password,
+                    xfa: None,
+                    reading: Some(reading),
+                },
+            )?;
+            Ok(Some(PreparedDocument { document }))
+        })
+        .unwrap_or_else(|_| Ok(None))
     }
 
     /// Prepare a document without mutating the session that supplied this context.
@@ -55,6 +141,7 @@ impl OpenContext {
         bytes: Arc<Vec<u8>>,
         password: Option<&str>,
     ) -> Result<PreparedDocument, OpenError> {
+        self.check_cancelled()?;
         let name = name.into();
         guard(|| Session::prepare_open_unguarded(self, name, path, bytes, password))
             .unwrap_or_else(|m| Err(OpenError::Invalid(format!("reading it failed unexpectedly ({m})"))))
@@ -71,6 +158,7 @@ impl Session {
             captions: self.captions.clone(),
             xfa_time_scale: self.xfa_time_scale.unwrap_or(1),
             trace: OpenTrace::default(),
+            cancelled: None,
         }
     }
 
@@ -101,6 +189,28 @@ impl Session {
         }
         self.docs.push(document);
         id
+    }
+
+    /// Replace only this still-open reading stage, keeping its id and viewport identity.
+    pub fn finish_reading(&mut self, id: DocId, prepared: PreparedDocument) -> bool {
+        let Some(index) = self.docs.iter().position(|d| d.id == id && d.reading.as_ref().is_some_and(|r| !r.cancelled.load(Ordering::Acquire)))
+        else {
+            return false;
+        };
+        let mut document = prepared.document;
+        if document.preparing() || !Arc::ptr_eq(&document.bytes, &self.docs[index].bytes) {
+            return false;
+        }
+        document.id = id;
+        document.generation = self.docs[index].generation.wrapping_add(1);
+        if !Arc::ptr_eq(&document.trust, &self.trust) {
+            document.captions = self.captions.clone();
+            Self::revalidate(&mut document, self.trust.clone());
+        } else if *document.captions != *self.captions {
+            Self::draw_captions(&mut document, self.captions.clone());
+        }
+        self.docs[index] = document;
+        true
     }
 
     /// Synchronous convenience API used by the CLI and automation.
@@ -146,6 +256,7 @@ impl Session {
             }
             Err(e) => return Err(e),
         };
+        context.check_cancelled()?;
         // A dynamic XFA form is a shell around an XML template; lay the template out into real
         // pages and fields so the rest of the engine works on it. The original bytes stay: the
         // laid-out form is one appended revision.
@@ -295,8 +406,10 @@ impl Session {
         };
         // XFA notes survive the document being re-read after edits.
         let xfa_warnings: Vec<String> = if info.xfa.is_some() { info.warnings.clone() } else { Vec::new() };
-        let mut document =
-            Self::build_document(context, DocumentOpenData { name, path, bytes, info, structure: cos, render_password, password, xfa });
+        let mut document = Self::build_document(
+            context,
+            DocumentOpenData { name, path, bytes, info, structure: Some(cos), render_password, password, xfa, reading: None },
+        )?;
         // A script that ran away on open turns the form's scripts off for this document.
         document.xfa_template = if ran_away { None } else { xfa_template };
         document.js_output.append(script_output);
@@ -309,11 +422,11 @@ impl Session {
     }
 
     /// The last step of opening: build the document record and register it.
-    fn build_document(context: &OpenContext, data: DocumentOpenData<'_>) -> Document {
-        let DocumentOpenData { name, path, bytes, mut info, structure: cos, render_password, password, xfa } = data;
+    fn build_document(context: &OpenContext, data: DocumentOpenData<'_>) -> Result<Document, OpenError> {
+        let DocumentOpenData { name, path, bytes, mut info, structure: cos, render_password, password, xfa, reading } = data;
         let mut config = RenderConfig { password: render_password.as_deref().map(Arc::from), ..Default::default() };
         let (mut editor, read_only_reason) = match cos {
-            Ok(Ok(cos)) => {
+            Some(Ok(Ok(cos))) => {
                 let keys = Keys { render: render_password.clone(), reopen: password.map(str::to_owned) };
                 let saved = cos.bytes().clone();
                 (
@@ -332,13 +445,20 @@ impl Session {
                     None,
                 )
             }
-            Ok(Err(e)) => (None, Some(e.to_string())),
-            Err(_) => (None, Some("the document structure could not be read for editing".into())),
+            Some(Ok(Err(e))) => (None, Some(e.to_string())),
+            None => (None, Some("Preparing editing and signature status".into())),
+            Some(Err(_)) => (None, Some("the document structure could not be read for editing".into())),
         };
+        context.check_cancelled()?;
         let sig_cache = Arc::new(pdfcraft_sign::DigestCache::default());
-        let mut signatures = context
-            .trace
-            .measure("native_signatures", || editor.as_ref().map(|e| signatures_of(&e.cos, &bytes, &context.trust, &sig_cache)).unwrap_or_default());
+        let mut signatures = if reading.is_some() {
+            Vec::new()
+        } else {
+            context.trace.measure("native_signatures", || {
+                editor.as_ref().map(|e| signatures_of(&e.cos, &bytes, &context.trust, &sig_cache)).unwrap_or_default()
+            })
+        };
+        context.check_cancelled()?;
         // The inspection reads only `/Info`; a file stating its title or author only in XMP still
         // shows them (#2373).
         if let Some(e) = &editor {
@@ -351,9 +471,21 @@ impl Session {
         // The print preview draws the layers as they print.
         config.print_layers = context.trace.measure("native_print_layers", || print_preview_layers(editor.as_ref().map(|e| &e.cos), &info.layers));
         let mut discovered_fields = None;
-        let display = context.trace.measure("native_display", || {
-            display_bytes_collect_fields(editor.as_mut(), &bytes, &mut signatures, &context.captions, Some(&mut discovered_fields), &context.trace)
-        });
+        let display = if reading.is_some() {
+            bytes.clone()
+        } else {
+            context.trace.measure("native_display", || {
+                display_bytes_collect_fields(
+                    editor.as_mut(),
+                    &bytes,
+                    &mut signatures,
+                    &context.captions,
+                    Some(&mut discovered_fields),
+                    &context.trace,
+                )
+            })
+        };
+        context.check_cancelled()?;
         let renderer = context.trace.measure("native_render_pool", || RenderPool::new(display.clone(), render_threads(), display_config(&config)));
         let (form, adopted) = editor
             .as_ref()
@@ -376,13 +508,14 @@ impl Session {
             };
             e.cos.note_repair(line);
         }
-        Document {
+        Ok(Document {
             id: DocId(0),
             name,
             path,
             bytes,
             display,
             info,
+            reading,
             renderer,
             password: render_password,
             dirty: false,
@@ -405,6 +538,25 @@ impl Session {
             fonts_stale: false,
             xfa_warnings: Vec::new(),
             edit_notices: Vec::new(),
-        }
+        })
+    }
+}
+
+/// Immutable source used only to decide whether a requested provisional page is safe to draw.
+pub(crate) struct ReadingSource {
+    cos: pdfcraft_cos::Document,
+    pages: Vec<pdfcraft_cos::ObjRef>,
+    pub(crate) cancelled: Arc<AtomicBool>,
+}
+
+impl ReadingSource {
+    pub(crate) fn page_ready(&self, page: usize) -> bool {
+        let Some(reference) = self.pages.get(page) else { return false };
+        let object = self.cos.get(*reference);
+        let Some(page) = object.as_dict() else { return false };
+        let Some(annots) = page.get(b"Annots") else { return true };
+        let annots = self.cos.resolve(annots);
+        let Some(annots) = annots.as_array() else { return false };
+        annots.len() <= 4096 && annots.iter().all(|a| self.cos.resolve(a).as_dict().is_some_and(|d| d.name(b"Subtype") == Some(b"Link")))
     }
 }

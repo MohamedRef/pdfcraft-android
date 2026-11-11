@@ -25,6 +25,8 @@ pub struct Document {
     /// states of named-layer signatures. Never saved.
     pub display: Arc<Vec<u8>>,
     pub info: DocInfo,
+    /// Reading-stage source. No editing or security result is available until completion.
+    pub(crate) reading: Option<crate::open::ReadingSource>,
     pub renderer: RenderPool,
     /// The password the document was opened with (needed to read attachments, etc.).
     pub password: Option<String>,
@@ -433,6 +435,21 @@ impl Document {
         self.editor.as_ref().and_then(|e| e.redo.last()).map(|(l, ..)| l)
     }
 
+    pub fn preparing(&self) -> bool {
+        self.reading.is_some()
+    }
+
+    /// A reading-stage page is shown only when the stored artwork needs no synthesized overlays.
+    pub fn reading_page_ready(&self, page: usize) -> bool {
+        self.reading.as_ref().is_none_or(|r| r.page_ready(page))
+    }
+
+    pub fn cancel_preparation(&self) {
+        if let Some(r) = &self.reading {
+            r.cancelled.store(true, std::sync::atomic::Ordering::Release);
+        }
+    }
+
     pub fn editable(&self) -> bool {
         self.editor.is_some()
     }
@@ -450,14 +467,14 @@ impl Document {
 
     /// Printing is allowed (Table 22, bit 3).
     pub fn allows_printing(&self) -> bool {
-        !self.permissions_unknown() && self.permissions().is_none_or(|p| p.print())
+        !self.preparing() && !self.permissions_unknown() && self.permissions().is_none_or(|p| p.print())
     }
 
     /// Copying or otherwise extracting text and images is allowed (Table 22, bit 5): copying
     /// selected text, snapshots, Save Image As, exporting. Assistive technology may read the
     /// content regardless (§7.6.4.2), so reading aloud and accessibility tools don't ask.
     pub fn allows_copying(&self) -> bool {
-        !self.permissions_unknown() && self.permissions().is_none_or(|p| p.copy())
+        !self.preparing() && !self.permissions_unknown() && self.permissions().is_none_or(|p| p.copy())
     }
 
     /// [`Self::allows_copying`], as the error to report when it isn't.

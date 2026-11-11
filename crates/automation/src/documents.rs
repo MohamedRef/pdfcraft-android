@@ -103,6 +103,21 @@ impl Automation {
         Ok(doc)
     }
 
+    /// Host two-stage opening uses exactly the same path confinement and bounded reader.
+    pub fn read_open_input(&self, input: &str) -> Result<(std::path::PathBuf, Arc<Vec<u8>>)> {
+        let path = self.resolve(input, false)?;
+        let bytes = Arc::new(read_input(&path)?);
+        Ok((path, bytes))
+    }
+
+    pub fn register_prepared(&mut self, prepared: pdfcraft_engine::PreparedDocument) -> DocId {
+        self.session.commit_open(prepared)
+    }
+
+    pub fn finish_reading(&mut self, id: DocId, prepared: pdfcraft_engine::PreparedDocument) -> bool {
+        self.session.finish_reading(id, prepared)
+    }
+
     pub(crate) fn doc_open(&mut self, a: &Args) -> Result<Value> {
         let path = self.resolve(a.str("path")?, false)?;
         let recording = a.opt_bool("open_timings")?.unwrap_or(false);
