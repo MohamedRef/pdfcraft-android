@@ -1708,4 +1708,11 @@
     <string name="library_remove">Retirer de la bibliothèque</string>
     <string name="viewer_comment_as">Commenter en tant que %1$s · Modifier</string>
     <string name="viewer_comment_as_add">Ajouter votre nom aux commentaires</string>
+    <string name="save_state_saved">Enregistré</string>
+    <string name="save_state_saving">Enregistrement…</string>
+    <string name="save_state_unsaved">Modifications non enregistrées</string>
+    <string name="save_state_kept">Conservé dans PdfCraft</string>
+    <string name="save_state_save_now">Enregistrer maintenant</string>
+    <string name="msg_copy_continues">Enregistré sous %1$s. Vous travaillez maintenant dans la copie ; l’original est tel que vous l’avez ouvert.</string>
+    <string name="msg_copy_continues_saved_before">Enregistré sous %1$s. Vous travaillez maintenant dans la copie. Les modifications enregistrées avant étaient déjà dans l’original.</string>
 </resources>

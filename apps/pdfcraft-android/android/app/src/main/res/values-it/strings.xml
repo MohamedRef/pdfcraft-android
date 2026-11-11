@@ -1818,4 +1818,11 @@
     <string name="library_remove">Rimuovi dalla libreria</string>
     <string name="viewer_comment_as">Commenta come %1$s · Cambia</string>
     <string name="viewer_comment_as_add">Aggiungi il tuo nome ai commenti</string>
+    <string name="save_state_saved">Salvato</string>
+    <string name="save_state_saving">Salvataggio…</string>
+    <string name="save_state_unsaved">Modifiche non salvate</string>
+    <string name="save_state_kept">Conservato in PdfCraft</string>
+    <string name="save_state_save_now">Salva ora</string>
+    <string name="msg_copy_continues">Salvato come %1$s. Ora lavori nella copia; l\'originale è come l\'hai aperto.</string>
+    <string name="msg_copy_continues_saved_before">Salvato come %1$s. Ora lavori nella copia. Le modifiche salvate prima erano già nell\'originale.</string>
 </resources>

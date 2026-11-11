@@ -586,6 +586,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         // A reading stage has no edits; do not write an incompletely checked source back.
         if (doc.info.preparing) return@withLock true
         if (!doc.info.dirty && !doc.notWrittenBack) return@withLock true
+        doc.saving = true
         try {
             val src = doc.source
             // Mark before the working copy changes (#103): a process killed between doc_save and
@@ -595,7 +596,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             refresh(doc)
             if (src != null && src.scheme == "content") {
                 // The marker set above stays until the provider verifiably holds the new bytes.
-                if (!doc.writable) {
+                if (!doc.writable || doc.holdWriteBack) {
                     doc.notWrittenBack = true
                     return@withLock false
                 }
@@ -603,12 +604,21 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                     files.writeBack(doc.file, src)
                     files.clearPendingWriteBack(src)
                 }
+                doc.wroteOriginal = true
             } else if (src != null && src.scheme == "file") {
                 val target = File(requireNotNull(src.path))
-                if (target.canonicalPath != doc.file.canonicalPath) withContext(Dispatchers.IO) {
-                    doc.file.copyTo(target, overwrite = true)
-                    files.clearPendingWriteBack(src)
+                if (target.canonicalPath != doc.file.canonicalPath) {
+                    if (doc.holdWriteBack) {
+                        doc.notWrittenBack = true
+                        return@withLock false
+                    }
+                    withContext(Dispatchers.IO) {
+                        doc.file.copyTo(target, overwrite = true)
+                        files.clearPendingWriteBack(src)
+                    }
                 }
+                // a file edited in place: the save above already changed it
+                doc.wroteOriginal = true
             }
             doc.notWrittenBack = false
             true
@@ -617,6 +627,22 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             doc.notWrittenBack = true
             if (!quiet) tell(e.userMessage)
             false
+        } finally {
+            doc.saving = false
+        }
+    }
+
+    /** The top bar's save state, tapped: save now, or Save a copy when the original can't be written (#190). */
+    fun saveNow(doc: OpenDocument) {
+        if (doc.saving) return
+        if (!doc.writable && doc.source != null) {
+            saveCopyAs(doc)
+            return
+        }
+        viewModelScope.launch {
+            openMutex.withLock {
+                if (document === doc && readOnlyPrompt == null && !resolvingReadOnly && save(doc)) tell(text(R.string.save_state_saved))
+            }
         }
     }
 
@@ -1173,6 +1199,8 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
      * opens are no longer blocked by it.
      */
     private fun abandonCopyRequest(request: CopyRequest) {
+        // changes kept back while the picker was open go to the original again at the next save
+        if (request is CopyRequest.Document) request.doc.holdWriteBack = false
         if (request is CopyRequest.Document && request.then != null && resolvingReadOnly) {
             readOnlyPrompt = request.doc
             resolvingReadOnly = false
@@ -1186,6 +1214,8 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
 
     /** Save a copy of [doc] under a name and place the user picks. */
     fun saveCopyAs(doc: OpenDocument, then: (() -> Unit)? = null) {
+        // Opening the picker pauses the app: that save must not write the original (#190).
+        doc.holdWriteBack = true
         startCopyRequest(CopyRequest.Document(doc, then), doc.name)
     }
 
@@ -1232,6 +1262,9 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                         markBeforeWorkingCopyChanges(doc)
                         engine?.tool("doc_save", mapOf("doc" to doc.id))
                         if (doc.source != null) doc.notWrittenBack = true
+                        // a file edited in place has just been written
+                        doc.source?.takeIf { it.scheme == "file" && File(requireNotNull(it.path)).canonicalPath == doc.file.canonicalPath }
+                            ?.let { doc.wroteOriginal = true }
                     }
                     withContext(Dispatchers.IO) {
                         files.writeBack(doc.file, target)
@@ -1240,9 +1273,17 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                     if (then != null) doc.notWrittenBack = false
                     refresh(doc)
                 }
-                tell(text(R.string.msg_saved_copy))
-                then?.invoke()
+                if (then != null) {
+                    tell(text(R.string.msg_saved_copy))
+                    then()
+                } else if (doc.source != null) {
+                    continueInCopy(doc, target)
+                } else {
+                    doc.holdWriteBack = false
+                    tell(text(R.string.msg_saved_copy))
+                }
             } catch (e: Exception) {
+                doc.holdWriteBack = false
                 if (then != null && resolvingReadOnly) {
                     readOnlyPrompt = doc
                     resolvingReadOnly = false
@@ -1250,6 +1291,34 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 tell(e.userMessage)
             }
         }
+    }
+
+    /**
+     * Save a copy is "save as" (#190): [target] now holds every change, so the viewer goes on in it
+     * and [doc]'s original is left as it was opened, unless an earlier save of this visit already
+     * wrote it (then the message says so).
+     */
+    private suspend fun continueInCopy(doc: OpenDocument, target: Uri) {
+        val eng = engine ?: return
+        val src = doc.source ?: return
+        var left = false
+        openMutex.withLock {
+            if (document !== doc) return@withLock
+            closeQuietly(eng, doc)
+            // the working copy's changes are in the copy: the original keeps its own bytes
+            withContext(Dispatchers.IO) {
+                runCatching {
+                    if (src.scheme == "content") files.discardWorkingCopy(src) else { files.clearPendingWriteBack(src); true }
+                }.getOrDefault(false)
+            }.let { if (!it) tell(text(R.string.discard_kept_recovery)) }
+            document = null
+            refreshRecents()
+            left = true
+        }
+        if (!left) return
+        open(target)
+        val name = withContext(Dispatchers.IO) { runCatching { files.displayName(target) }.getOrDefault("") }
+        tell(text(if (doc.wroteOriginal) R.string.msg_copy_continues_saved_before else R.string.msg_copy_continues, name))
     }
 
     /** Export PDF (to Word, RTF, Excel, PowerPoint, or images of its pages). */

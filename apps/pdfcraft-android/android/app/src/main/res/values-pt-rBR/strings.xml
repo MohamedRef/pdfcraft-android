@@ -1413,4 +1413,11 @@
     <string name="library_remove">Remover da biblioteca</string>
     <string name="viewer_comment_as">Comentar como %1$s · Alterar</string>
     <string name="viewer_comment_as_add">Adicione seu nome aos comentários</string>
+    <string name="save_state_saved">Salvo</string>
+    <string name="save_state_saving">Salvando…</string>
+    <string name="save_state_unsaved">Alterações não salvas</string>
+    <string name="save_state_kept">Mantido no PdfCraft</string>
+    <string name="save_state_save_now">Salvar agora</string>
+    <string name="msg_copy_continues">Salvo como %1$s. Agora você está trabalhando na cópia; o original está como você abriu.</string>
+    <string name="msg_copy_continues_saved_before">Salvo como %1$s. Agora você está trabalhando na cópia. As alterações salvas antes já estavam no original.</string>
 </resources>

@@ -1541,4 +1541,11 @@
     <string name="library_remove">إزالة من المكتبة</string>
     <string name="viewer_comment_as">التعليق باسم %1$s · تغيير</string>
     <string name="viewer_comment_as_add">أضف اسمك إلى التعليقات</string>
+    <string name="save_state_saved">تم الحفظ</string>
+    <string name="save_state_saving">جارٍ الحفظ…</string>
+    <string name="save_state_unsaved">تغييرات غير محفوظة</string>
+    <string name="save_state_kept">محفوظة في PdfCraft</string>
+    <string name="save_state_save_now">احفظ الآن</string>
+    <string name="msg_copy_continues">تم الحفظ باسم %1$s. أنت تعمل الآن في النسخة؛ الأصل كما فتحته.</string>
+    <string name="msg_copy_continues_saved_before">تم الحفظ باسم %1$s. أنت تعمل الآن في النسخة. التغييرات المحفوظة قبل ذلك موجودة بالفعل في الأصل.</string>
 </resources>

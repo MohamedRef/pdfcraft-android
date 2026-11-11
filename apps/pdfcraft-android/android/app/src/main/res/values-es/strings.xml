@@ -1836,4 +1836,11 @@
     <string name="library_remove">Quitar de la biblioteca</string>
     <string name="viewer_comment_as">Comentar como %1$s · Cambiar</string>
     <string name="viewer_comment_as_add">Añade tu nombre a los comentarios</string>
+    <string name="save_state_saved">Guardado</string>
+    <string name="save_state_saving">Guardando…</string>
+    <string name="save_state_unsaved">Cambios sin guardar</string>
+    <string name="save_state_kept">Guardado en PdfCraft</string>
+    <string name="save_state_save_now">Guardar ahora</string>
+    <string name="msg_copy_continues">Guardado como %1$s. Ahora trabajas en la copia; el original queda como lo abriste.</string>
+    <string name="msg_copy_continues_saved_before">Guardado como %1$s. Ahora trabajas en la copia. Los cambios guardados antes ya estaban en el original.</string>
 </resources>

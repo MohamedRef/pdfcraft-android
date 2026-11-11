@@ -2117,4 +2117,11 @@
     <string name="library_remove">Remove from library</string>
     <string name="viewer_comment_as">Comment as %1$s · Change</string>
     <string name="viewer_comment_as_add">Add your name to comments</string>
+    <string name="save_state_saved">Saved</string>
+    <string name="save_state_saving">Saving…</string>
+    <string name="save_state_unsaved">Unsaved changes</string>
+    <string name="save_state_kept">Kept in PdfCraft</string>
+    <string name="save_state_save_now">Save now</string>
+    <string name="msg_copy_continues">Saved as %1$s. You\'re now working in the copy; the original is as you opened it.</string>
+    <string name="msg_copy_continues_saved_before">Saved as %1$s. You\'re now working in the copy. Changes saved before this were already in the original.</string>
 </resources>
