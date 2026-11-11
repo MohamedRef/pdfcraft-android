@@ -1339,6 +1339,12 @@
     <string name="bates_export_failed">No se pudo guardar esta copia nueva en Descargas.</string>
     <string name="ink_presets_title">Lápices favoritos</string>
     <string name="ink_presets_help">Cada lápiz conserva su propio color, grosor y opacidad. Toca un favorito para recuperar sus ajustes.</string>
+    <string name="palm_guard_size">Zona de la palma: %1$d dp</string>
+    <string name="palm_guard_explanation">Mientras el S Pen está cerca o escribe, los toques junto a él y debajo, del lado de tu mano de escritura, no desplazan, no hacen zoom ni dibujan. La zona se muestra mientras el lápiz está cerca.</string>
+    <string name="palm_guard">Ignorar la palma al escribir</string>
+    <string name="hand_left">Izquierda</string>
+    <string name="hand_right">Derecha</string>
+    <string name="hand_title">Mano con la que escribes</string>
     <string name="ink_eyedropper_none">No hay tinta ni comentario de color ahí.</string>
     <string name="ink_eyedropper_picked">Color del lápiz: %1$s.</string>
     <string name="ink_eyedropper_hint">Toca un trazo o comentario para usar su color.</string>

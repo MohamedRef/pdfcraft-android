@@ -182,6 +182,33 @@ internal fun InkPresetsPicker(vm: AppViewModel, onApplied: () -> Unit) {
             PdfSwitch(prefs.multiFingerUndo, null)
         }
 
+        // Writing hand and palm guard (#156).
+        Text(stringResource(R.string.hand_title), color = c.text, fontSize = 14.sp)
+        OptionChips(listOf(false, true), prefs.leftHanded, { left ->
+            prefs.updateLeftHanded(left)
+            // The quick rail moves away from the writing hand; it can still be dragged anywhere.
+            vm.quickToolbar.updateRailRight(left)
+        }) { stringResource(if (it) R.string.hand_left else R.string.hand_right) }
+        Row(
+            Modifier.fillMaxWidth().toggleable(value = prefs.palmGuard, role = Role.Switch) { prefs.updatePalmGuard(it) }
+                .padding(vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text(stringResource(R.string.palm_guard), color = c.text, fontSize = 14.sp)
+                Text(stringResource(R.string.palm_guard_explanation), color = c.label, fontSize = 12.sp)
+            }
+            PdfSwitch(prefs.palmGuard, null)
+        }
+        if (prefs.palmGuard) {
+            Text(stringResource(R.string.palm_guard_size, prefs.palmGuardSizeDp.toInt()), color = c.label, fontSize = 12.sp)
+            Slider(
+                value = prefs.palmGuardSizeDp,
+                onValueChange = { prefs.updatePalmGuardSizeDp(Math.round(it / 10f) * 10f) },
+                valueRange = 60f..240f,
+                colors = SliderDefaults.colors(thumbColor = c.accent, activeTrackColor = c.accent),
+            )
+        }
         // S Pen side button (#144): what holding it while writing does, and what a click while
         // hovering does. The eraser end of a pen always erases.
         Text(stringResource(R.string.pen_button_hold_title), color = c.text, fontSize = 14.sp)

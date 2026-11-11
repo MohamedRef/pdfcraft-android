@@ -1331,6 +1331,12 @@
     <string name="bates_export_failed">Diese neue Kopie konnte nicht in „Downloads“ gespeichert werden.</string>
     <string name="ink_presets_title">Lieblingsstifte</string>
     <string name="ink_presets_help">Jeder Stift behält seine eigene Farbe, Breite und Deckkraft. Tippe auf einen Favoriten, um seine Einstellungen wiederherzustellen.</string>
+    <string name="palm_guard_size">Handballenbereich: %1$d dp</string>
+    <string name="palm_guard_explanation">Während der S Pen schwebt oder schreibt, scrollen, zoomen oder zeichnen Berührungen neben und unter ihm auf der Seite der Schreibhand nicht. Der Bereich wird beim Schweben angezeigt.</string>
+    <string name="palm_guard">Handballen beim Schreiben ignorieren</string>
+    <string name="hand_left">Links</string>
+    <string name="hand_right">Rechts</string>
+    <string name="hand_title">Schreibhand</string>
     <string name="ink_eyedropper_none">Dort ist keine Tinte und kein farbiger Kommentar.</string>
     <string name="ink_eyedropper_picked">Stiftfarbe auf %1$s gesetzt.</string>
     <string name="ink_eyedropper_hint">Tippe auf einen Strich oder Kommentar, um seine Farbe zu übernehmen.</string>

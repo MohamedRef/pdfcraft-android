@@ -246,6 +246,31 @@ class ToolPrefs(context: Context) {
         prefs.edit().putBoolean("ink.stylusOnly", on).apply()
     }
 
+    /** Writing hand (#156): mirrors the default quick rail side, the zoom buttons and the palm guard. */
+    var leftHanded by mutableStateOf(prefs.getBoolean("hand.left", false))
+        private set
+
+    fun updateLeftHanded(on: Boolean) {
+        leftHanded = on
+        prefs.edit().putBoolean("hand.left", on).apply()
+    }
+
+    /** Ignore finger touches beside and below a hovering or writing pen (#156). Off by default. */
+    var palmGuard by mutableStateOf(prefs.getBoolean("hand.palmGuard", false))
+        private set
+    var palmGuardSizeDp by mutableFloatStateOf(prefs.getFloat("hand.palmGuardSize", 120f).coerceIn(60f, 240f))
+        private set
+
+    fun updatePalmGuard(on: Boolean) {
+        palmGuard = on
+        prefs.edit().putBoolean("hand.palmGuard", on).apply()
+    }
+
+    fun updatePalmGuardSizeDp(v: Float) {
+        palmGuardSizeDp = v.coerceIn(60f, 240f)
+        prefs.edit().putFloat("hand.palmGuardSize", palmGuardSizeDp).apply()
+    }
+
     /** Draw: a two-finger tap undoes and a three-finger tap redoes (#189). On by default. */
     var multiFingerUndo by mutableStateOf(prefs.getBoolean("ink.multiFingerUndo", true))
         private set

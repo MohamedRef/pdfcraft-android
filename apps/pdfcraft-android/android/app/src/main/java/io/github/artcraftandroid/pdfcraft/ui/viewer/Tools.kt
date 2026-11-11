@@ -166,9 +166,11 @@ fun Modifier.toolGestures(
     penButtonHold: PenButtonHold = PenButtonHold.Eraser,
     /** Called before [onDown] with whether this stroke is a temporary highlighter (button held). */
     onPenDownMode: (PenDownMode) -> Unit = {},
+    /** True for a finger touch that the writing-hand guard rejects (#156); it then neither draws nor scrolls. */
+    rejectTouch: ((Offset, Long) -> Boolean)? = null,
     /** A quick tap with two or three fingers and no pan or zoom (#189); null turns it off. */
     onMultiFingerTap: ((fingers: Int) -> Unit)? = null,
-): Modifier = pointerInput(doc, penOnly, penButtonHold, onMultiFingerTap != null) {
+): Modifier = pointerInput(doc, penOnly, penButtonHold, onMultiFingerTap != null, rejectTouch != null) {
     val routing = StylusRouting()
     awaitEachGesture {
         val down = awaitFirstDown(requireUnconsumed = false)
@@ -184,9 +186,11 @@ fun Modifier.toolGestures(
         )
         var eraser = downMode == PenDownMode.Erase
         if (activePen) routing.penStarted()
-        var navigation = down.type == PointerType.Touch && routing.fingersNavigate(penOnly)
-        var one = !navigation && !eraser
-        var eraseOne = !navigation && eraser
+        // A palm resting beside a hovering or writing pen is ignored, though a pen may still arrive.
+        val palm = down.type == PointerType.Touch && rejectTouch?.invoke(down.position, down.uptimeMillis) == true
+        var navigation = !palm && down.type == PointerType.Touch && routing.fingersNavigate(penOnly)
+        var one = !palm && !navigation && !eraser
+        var eraseOne = !palm && !navigation && eraser
         var moved = false
         var last = down.position
         var lastPressure = down.pressure
@@ -276,6 +280,10 @@ fun Modifier.toolGestures(
                     if (active?.isConsumed == true && one) { onCancel(); one = false }
                     break
                 }
+                if (palm) {
+                    event.changes.forEach { if (it.type == PointerType.Touch) it.consume() }
+                    continue
+                }
                 if (navigation || routing.cancelForExtraTouch(false, pressed.size)) {
                     if (one) { one = false; onCancel() }
                     val zoom = event.calculateZoom()
@@ -297,7 +305,7 @@ fun Modifier.toolGestures(
                 }
             }
             if (eraseOne) onEraserUp(last) else if (one) onUp(last, moved)
-            if (!activePen && onMultiFingerTap != null) {
+            if (!activePen && !palm && onMultiFingerTap != null) {
                 multiFingerTapFingers(maxTouches, endTime - down.uptimeMillis, touchTravel + if (moved) Float.MAX_VALUE else 0f, zoomDrift, viewConfiguration.touchSlop)
                     ?.let(onMultiFingerTap)
             }
@@ -445,6 +453,8 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
     var hoverPosition by remember(doc) { mutableStateOf<Offset?>(null) }
     var hoverEraser by remember(doc) { mutableStateOf(false) }
     var buttonHighlighter by remember(doc) { mutableStateOf(false) }
+    val penTracker = remember(doc) { PenTracker() }
+    val guardSizePx = with(LocalDensity.current) { prefs.palmGuardSizeDp.dp.toPx() }
     val buttonClick = remember(doc) { PenButtonClickDetector() }
 
     fun beginErase(p: Offset) {
@@ -575,6 +585,8 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                 awaitPointerEventScope {
                     while (true) {
                         val event = awaitPointerEvent(PointerEventPass.Initial)
+                        event.changes.firstOrNull { it.type == PointerType.Stylus || it.type == PointerType.Eraser }
+                            ?.let { penTracker.seen(it.position, it.uptimeMillis) }
                         val hoverPen = event.changes.firstOrNull { !it.pressed && it.type == PointerType.Stylus }
                         if (event.type == PointerEventType.Press || event.type == PointerEventType.Exit || hoverPen == null) {
                             buttonClick.reset()
@@ -772,6 +784,9 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
             onEraserUp = { p -> finishErase(p) },
             onEraserCancel = { cancelErase() },
             penButtonHold = prefs.penButtonHold,
+            rejectTouch = if (prefs.palmGuard) ({ p, t ->
+                palmGuardRejects(penTracker.position, penTracker.timeMs, p, t, prefs.leftHanded, guardSizePx)
+            }) else null,
             onPenDownMode = { mode -> buttonHighlighter = mode == PenDownMode.Highlight },
         ),
     ) {
@@ -845,6 +860,12 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                 )
             }
             val hovering = hoverPosition
+            if (hovering != null && prefs.palmGuard) {
+                // The guard region is visible while the pen hovers, so its size can be judged.
+                val r = palmGuardRegion(hovering, prefs.leftHanded, guardSizePx)
+                drawRect(Color(0xFF2E7DFF).copy(alpha = 0.06f), r.topLeft, r.size)
+                drawRect(Color(0xFF2E7DFF).copy(alpha = 0.35f), r.topLeft, r.size, style = Stroke(width = 1.dp.toPx()))
+            }
             if (hovering != null && current == null && eraserPage == null) {
                 val onPage = doc.viewer.screenToPage(hovering)
                 if (onPage != null) {

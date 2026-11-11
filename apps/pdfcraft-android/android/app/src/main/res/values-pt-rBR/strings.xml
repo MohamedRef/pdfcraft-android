@@ -916,6 +916,12 @@
     <string name="bates_export_failed">Não foi possível salvar esta nova cópia em Downloads.</string>
     <string name="ink_presets_title">Canetas favoritas</string>
     <string name="ink_presets_help">Cada caneta guarda a própria cor, espessura e opacidade. Toque em uma favorita para restaurar as configurações dela.</string>
+    <string name="palm_guard_size">Área da palma: %1$d dp</string>
+    <string name="palm_guard_explanation">Enquanto a S Pen paira ou escreve, toques ao lado e abaixo dela, do lado da mão de escrita, não rolam, não dão zoom nem desenham. A área aparece enquanto a caneta paira.</string>
+    <string name="palm_guard">Ignorar a palma ao escrever</string>
+    <string name="hand_left">Esquerda</string>
+    <string name="hand_right">Direita</string>
+    <string name="hand_title">Mão de escrita</string>
     <string name="ink_eyedropper_none">Não há tinta nem comentário colorido ali.</string>
     <string name="ink_eyedropper_picked">Cor da caneta definida como %1$s.</string>
     <string name="ink_eyedropper_hint">Toque em um traço ou comentário para usar a cor dele.</string>
