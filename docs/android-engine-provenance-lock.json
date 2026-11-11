@@ -1187,6 +1187,7 @@
     "crates/sign/src/pdf/listing.rs": "Discover timestamps using unencrypted names/key presence from headers, then fully load and validate every candidate as before. The whole-file timestamp candidate scan runs in contiguous parts on up to four threads and joins candidates in the same ascending order; complete only if every part is (#212). Unit test compares with one scan.",
     "crates/sign/src/pdf_discovery_tests.rs": "Differential encrypted/escaped-name and nonzero/repaired-generation timestamp discovery; unreadable-body validation regressions. Explicitly detach a mutable corruption fixture from its immutable source while retaining repaired/unreadable timestamp-discovery assertions.",
     "vendor/hayro-interpret/src/interpret/mod.rs": "Android-only /Text annotation appearance filter and interpreter setting.",
+    "crates/engine/src/session/editing.rs": "Android adaptation (#131): refresh_scoped holds an OpenPasses guard over its display-appearance, form-discovery and comment-list passes, so a refresh after an edit parses the page annotations once instead of once per pass; the cache is trimmed back to its ordinary cap when the guard drops.",
     "crates/organize/src/boxes.rs": "Note margins (#146): BoxSpec::Grow grows the media box outward (crop edges on it follow) and records the total as /PdfCraftMargin so it comes off exactly; page_margins reads it.",
     "crates/organize/src/lib.rs": "Re-export page_margins and MARGIN_KEY for note margins (#146)."
   },

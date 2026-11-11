@@ -3,6 +3,7 @@ package io.github.artcraftandroid.pdfcraft.ui
 import androidx.compose.ui.geometry.Offset
 import io.github.artcraftandroid.pdfcraft.ui.viewer.MAX_STYLUS_HISTORY_POINTS
 import io.github.artcraftandroid.pdfcraft.ui.viewer.StylusHistoryPoint
+import io.github.artcraftandroid.pdfcraft.ui.viewer.fingerMotionPoints
 import io.github.artcraftandroid.pdfcraft.ui.viewer.stylusMotionPoints
 import org.junit.Assert.*
 import org.junit.Test
@@ -63,5 +64,20 @@ class StylusHistoryTest {
         assertEquals(1, stylusMotionPoints(
             Offset.Zero, Offset(3f, 4f), 10L, 10L, 1f, 1f, emptyList(),
         ).size)
+    }
+
+    @Test fun fingerMoveKeepsEveryBatchedSampleBeforeTheCurrentPoint() {
+        val history = List(8) { i -> Offset(i + 1f, (i + 1f) * (i + 1f)) }
+        val points = fingerMotionPoints(Offset.Zero, history, Offset(9f, 81f))
+        assertEquals(9, points.size)
+        assertEquals(history + Offset(9f, 81f), points)
+    }
+
+    @Test fun fingerHistoryIsBoundedAndSkipsRepeats() {
+        val history = List(1000) { i -> Offset(i.toFloat(), 0f) }
+        val points = fingerMotionPoints(Offset(-1f, 0f), history, Offset(1000f, 0f))
+        assertTrue(points.size <= MAX_STYLUS_HISTORY_POINTS + 1)
+        assertEquals(Offset(1000f, 0f), points.last())
+        assertEquals(listOf(Offset(2f, 0f)), fingerMotionPoints(Offset(2f, 0f), listOf(Offset(2f, 0f)), Offset(2f, 0f)))
     }
 }
