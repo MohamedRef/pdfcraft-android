@@ -163,6 +163,9 @@ fun MoreSheet(vm: AppViewModel, doc: OpenDocument) {
             }
             GroupDivider()
             SheetRow(LucideIcons.Copy, stringResource(R.string.common_save_copy), { close(); vm.saveCopyAs(doc) })
+            // a clean copy to hand out; the working file keeps its comments (#155)
+            SheetRow(LucideIcons.Share2, stringResource(R.string.sheet_share_clean), { close(); vm.share(doc, clean = true) })
+            SheetRow(LucideIcons.Printer, stringResource(R.string.sheet_print_clean), { close(); vm.print(doc, clean = true) })
             Spacer(Modifier.height(8.dp))
         }
     }

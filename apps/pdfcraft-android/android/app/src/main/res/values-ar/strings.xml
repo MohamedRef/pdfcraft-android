@@ -559,6 +559,9 @@
     <string name="sheet_reading_mode">وضع القراءة</string>
     <string name="sheet_night_mode">الوضع الليلي</string>
     <string name="sheet_hide_annotations">إخفاء التعليقات التوضيحية</string>
+    <string name="sheet_share_clean">مشاركة بدون التعليقات التوضيحية</string>
+    <string name="sheet_print_clean">طباعة بدون التعليقات التوضيحية</string>
+    <string name="msg_clean_copy_failed">تعذّر إنشاء نسخة بدون التعليقات التوضيحية.</string>
     <string name="sheet_reading_colors">ألوان القراءة</string>
     <string name="sheet_reading_colors_sample">أب</string>
     <string name="sheet_reading_colors_off">إيقاف</string>
