@@ -457,6 +457,12 @@
     <string name="viewer_zoom_in">Zoom in</string>
     <string name="viewer_zoom_out">Zoom out</string>
     <string name="viewer_search_count">%1$d of %2$d</string>
+    <string name="viewer_search_show_all">Show all results</string>
+    <string name="viewer_search_results_running">%1$d results so far…</string>
+    <plurals name="viewer_search_results">
+        <item quantity="one">%d result</item>
+        <item quantity="other">%d results</item>
+    </plurals>
     <string name="viewer_search_count_running">%1$d of %2$d…</string>
     <string name="viewer_searching">Searching…</string>
     <string name="viewer_search_progress">Searching page %1$d of %2$d</string>
@@ -732,6 +738,13 @@
     <string name="sheet_single_page">Single page</string>
     <string name="sheet_reading_mode">Reading Mode</string>
     <string name="sheet_night_mode">Night Mode</string>
+    <string name="sheet_reading_colors">Reading colours</string>
+    <string name="sheet_reading_colors_sample">Aa</string>
+    <string name="sheet_reading_colors_off">Off</string>
+    <string name="sheet_reading_colors_black_on_white">Black on white</string>
+    <string name="sheet_reading_colors_white_on_black">White on black</string>
+    <string name="sheet_reading_colors_yellow_on_black">Yellow on black</string>
+    <string name="sheet_reading_colors_green_on_black">Green on black</string>
 
     <!-- Viewer sheets: Bookmarks & Table of Contents -->
     <!-- Translator note: the tab with the document's table of contents -->

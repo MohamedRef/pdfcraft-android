@@ -322,6 +322,16 @@
     <string name="viewer_zoom_in">تكبير</string>
     <string name="viewer_zoom_out">تصغير</string>
     <string name="viewer_search_count">%1$d من %2$d</string>
+    <string name="viewer_search_show_all">عرض كل النتائج</string>
+    <string name="viewer_search_results_running">%1$d نتيجة حتى الآن…</string>
+    <plurals name="viewer_search_results">
+        <item quantity="zero">لا نتائج</item>
+        <item quantity="one">نتيجة واحدة</item>
+        <item quantity="two">نتيجتان</item>
+        <item quantity="few">%1$d نتائج</item>
+        <item quantity="many">%1$d نتيجة</item>
+        <item quantity="other">%1$d نتيجة</item>
+    </plurals>
     <string name="viewer_search_count_running">%1$d من %2$d…</string>
     <string name="viewer_searching">جارٍ البحث…</string>
     <string name="viewer_search_progress">جارٍ البحث في الصفحة %1$d من %2$d</string>
@@ -522,6 +532,13 @@
     <string name="sheet_single_page">صفحة واحدة</string>
     <string name="sheet_reading_mode">وضع القراءة</string>
     <string name="sheet_night_mode">الوضع الليلي</string>
+    <string name="sheet_reading_colors">ألوان القراءة</string>
+    <string name="sheet_reading_colors_sample">أب</string>
+    <string name="sheet_reading_colors_off">إيقاف</string>
+    <string name="sheet_reading_colors_black_on_white">أسود على أبيض</string>
+    <string name="sheet_reading_colors_white_on_black">أبيض على أسود</string>
+    <string name="sheet_reading_colors_yellow_on_black">أصفر على أسود</string>
+    <string name="sheet_reading_colors_green_on_black">أخضر على أسود</string>
     <string name="sheet_tab_contents">الفهرس</string>
     <string name="sheet_tab_bookmarks">الإشارات المرجعية</string>
     <string name="sheet_no_contents">لا يحتوي هذا المستند على فهرس.</string>

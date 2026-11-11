@@ -1280,6 +1280,42 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     fun setNightMode(doc: OpenDocument, on: Boolean) {
         doc.controller.nightMode = on
         appPrefs.edit().putBoolean("nightMode", on).apply()
+        // Night mode inverts the page: on top of reading colours it would undo them
+        if (on && doc.controller.readingColors != io.github.artcraftandroid.pdfcraft.ui.viewer.ReadingColors.Off) {
+            setReadingColors(doc, io.github.artcraftandroid.pdfcraft.ui.viewer.ReadingColors.Off)
+        }
+    }
+
+    /** The reading colours documents open with (View settings; remembered app-wide). */
+    val savedReadingColors: io.github.artcraftandroid.pdfcraft.ui.viewer.ReadingColors
+        get() = io.github.artcraftandroid.pdfcraft.ui.viewer.ReadingColors.fromPref(appPrefs.getString("readingColors", null))
+
+    /** Draw [doc]'s pages in [colors] (a view setting in the engine; the file doesn't change). */
+    fun setReadingColors(doc: OpenDocument, colors: io.github.artcraftandroid.pdfcraft.ui.viewer.ReadingColors) {
+        appPrefs.edit().putString("readingColors", colors.engineMode).apply()
+        if (colors != io.github.artcraftandroid.pdfcraft.ui.viewer.ReadingColors.Off && doc.controller.nightMode) {
+            doc.controller.nightMode = false
+            appPrefs.edit().putBoolean("nightMode", false).apply()
+        }
+        applyReadingColors(doc, colors)
+    }
+
+    /** Give a newly opened (and prepared) [doc] the saved reading colours. */
+    fun applySavedReadingColors(doc: OpenDocument) {
+        val saved = savedReadingColors
+        if (saved != doc.controller.readingColors) applyReadingColors(doc, saved)
+    }
+
+    private fun applyReadingColors(doc: OpenDocument, colors: io.github.artcraftandroid.pdfcraft.ui.viewer.ReadingColors) {
+        val eng = engine ?: return
+        if (doc.info.preparing) return
+        viewModelScope.launch {
+            val ok = runCatching { eng.tool("view_reading_colors", mapOf("doc" to doc.id, "mode" to colors.engineMode)) }.isSuccess
+            if (!ok) return@launch
+            doc.controller.readingColors = colors
+            // the engine's view changed: every page draws again
+            refresh(doc)
+        }
     }
 
     fun openReadingMode(doc: OpenDocument) {

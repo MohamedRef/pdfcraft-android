@@ -36,7 +36,7 @@ enum class TextMarkup { Highlight, Underline, Strikethrough, Squiggly }
 enum class CommentMode { Text, Voice, Stamp }
 
 /** What the bottom sheet over the viewer shows. */
-enum class ViewerSheet { None, More, FileDetails, Backdrops, TextStyles, ViewSettings, Attachments, Bookmarks, Comments, MoreTools, Signatures, ScanEnhance, OcrConfidence }
+enum class ViewerSheet { None, More, FileDetails, Backdrops, TextStyles, ViewSettings, Attachments, Bookmarks, Comments, MoreTools, Signatures, ScanEnhance, OcrConfidence, SearchResults }
 
 /**
  * The viewer's own state for one document, beside the page view ([ViewerState]): whether the
@@ -73,6 +73,9 @@ class ViewerController {
 
     /** Pages drawn as inverted greyscale (View settings ▸ Night Mode). */
     var nightMode by mutableStateOf(false)
+
+    /** View settings ▸ Reading colours, as set in the engine for this document. */
+    var readingColors by mutableStateOf(ReadingColors.Off)
 
     /** Uptime (ms) of the last scroll or zoom: the scrubber and page pill show for a while after it. */
     var lastMoved by mutableLongStateOf(0L)
