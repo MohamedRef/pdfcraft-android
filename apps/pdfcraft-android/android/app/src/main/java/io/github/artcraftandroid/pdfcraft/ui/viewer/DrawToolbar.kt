@@ -79,7 +79,7 @@ internal fun DrawToolbar(vm: AppViewModel, doc: OpenDocument) {
     val opacity = prefs.opacity(StyledTool.Ink)
     val picker = ctl.picker
 
-    Column(Modifier.fillMaxWidth().height(DrawToolbarHeight).barTopLine().background(c.surface)) {
+    Column(Modifier.fillMaxWidth().height(DrawToolbarHeight).barTopLine().background(c.surface).palmGuardedTaps(ctl, prefs)) {
         // Seven primary tools. 7 * 48dp = 336dp; all are directly usable on normal phones.
         BoxWithConstraints(Modifier.fillMaxWidth().height(DrawRowHeight)) {
             val contentWidth = maxOf(maxWidth, DrawToolSlot * 7)

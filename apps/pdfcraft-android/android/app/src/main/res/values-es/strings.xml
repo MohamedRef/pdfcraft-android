@@ -1339,6 +1339,9 @@
     <string name="bates_export_failed">No se pudo guardar esta copia nueva en Descargas.</string>
     <string name="ink_presets_title">Lápices favoritos</string>
     <string name="ink_presets_help">Cada lápiz conserva su propio color, grosor y opacidad. Toca un favorito para recuperar sus ajustes.</string>
+    <string name="palm_guard_calibrate_clear">Borrar toques</string>
+    <string name="palm_guard_calibrate_help">Acerca el lápiz o escribe con él y apoya la mano como al escribir. Los toques verdes se ignoran; los rojos desplazarían la página o pulsarían botones. Ajusta el tamaño hasta que la mano apoyada quede en verde.</string>
+    <string name="palm_guard_calibrate">Comprobar zona de la palma</string>
     <string name="pen_gesture_lasso_empty">No hay nada que seleccionar dentro del lazo.</string>
     <string name="ink_protractor">Transportador</string>
     <string name="ink_hsv_hue">Tono</string>

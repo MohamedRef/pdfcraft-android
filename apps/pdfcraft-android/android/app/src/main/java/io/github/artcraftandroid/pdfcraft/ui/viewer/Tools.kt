@@ -69,6 +69,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.drawscope.clipRect
@@ -735,6 +737,7 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
     var hoverEraser by remember(doc) { mutableStateOf(false) }
     var buttonHighlighter by remember(doc) { mutableStateOf(false) }
     val penTracker = remember(doc) { PenTracker() }
+    var layerOrigin by remember(doc) { mutableStateOf(Offset.Zero) }
     // The ruler (#150): screen-space, kept per document while it is open, never saved.
     val density = LocalDensity.current
     val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
@@ -941,12 +944,16 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
     Box(
         Modifier.fillMaxSize()
             .onSizeChanged { layerSize = androidx.compose.ui.geometry.Size(it.width.toFloat(), it.height.toFloat()) }
+            .onGloballyPositioned { layerOrigin = it.positionInRoot() }
             .pointerInput(doc) {
                 awaitPointerEventScope {
                     while (true) {
                         val event = awaitPointerEvent(PointerEventPass.Initial)
                         event.changes.firstOrNull { it.type == PointerType.Stylus || it.type == PointerType.Eraser }
-                            ?.let { penTracker.seen(it.position, it.uptimeMillis) }
+                            ?.let {
+                                penTracker.seen(it.position, it.uptimeMillis)
+                                doc.controller.penInRoot.seen(layerOrigin + it.position, it.uptimeMillis)
+                            }
                         val hoverPen = event.changes.firstOrNull { !it.pressed && it.type == PointerType.Stylus }
                         if (event.type == PointerEventType.Press || event.type == PointerEventType.Exit || hoverPen == null) {
                             buttonClick.reset()

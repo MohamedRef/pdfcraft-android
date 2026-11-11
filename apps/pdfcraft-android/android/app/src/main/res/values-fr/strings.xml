@@ -1211,6 +1211,9 @@
     <string name="bates_export_failed">Impossible d\'enregistrer cette nouvelle copie dans Téléchargements.</string>
     <string name="ink_presets_title">Stylos favoris</string>
     <string name="ink_presets_help">Chaque stylo garde sa propre couleur, son épaisseur et son opacité. Touchez un favori pour restaurer ses réglages.</string>
+    <string name="palm_guard_calibrate_clear">Effacer les touches</string>
+    <string name="palm_guard_calibrate_help">Approchez le stylet ou écrivez, puis posez la main comme en écrivant. Les touches vertes sont ignorées ; les rouges feraient défiler ou appuieraient sur des boutons. Réglez la taille jusqu\'à ce que la main posée tombe dans le vert.</string>
+    <string name="palm_guard_calibrate">Vérifier la zone de la paume</string>
     <string name="pen_gesture_lasso_empty">Rien à sélectionner dans la boucle.</string>
     <string name="ink_protractor">Rapporteur</string>
     <string name="ink_hsv_hue">Teinte</string>
