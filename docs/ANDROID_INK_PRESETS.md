@@ -1,5 +1,9 @@
 # Favorite pen presets
 
+## Unlimited favorites, recent colours, hex entry, finer widths (#149)
+
+Favorites are one list (`ink.presets.v2`, up to 48 entries) instead of three fixed slots; the three old `ink.preset.v1.N` slots seed the list once. In Pen settings, **Add current pen** appends the selected pen; a long press on a favorite offers Replace with current pen, Move earlier, Move later and Delete. The pen popover shows the last eight ink colours (`ink.recentColors`), each announced by its hex value, and a hex field that accepts `#RRGGBB` or `#AARRGGBB` and rejects anything else with a message. Pen widths now range from 0.1 to 20 pt in 0.1 pt steps. Still open in #149: eyedropper, HSV wheel and named palette import/export.
+
 ## Per-pen settings (#187, #188)
 
 Each of the five pens (Ball, Fountain, Pencil, Brush, Marker) keeps its own colour, width and opacity under `ink.<style>.color`, `ink.<style>.width` and `ink.<style>.opacity`. Switching pens never restyles another pen, and each toolbar nib preview shows its own pen's colour and width. Fresh installs start from per-pen defaults (black ball, blue fountain, grey pencil, red brush, wide yellow marker). On the first launch after the update, the old shared `ink.color`/`ink.width`/`ink.opacity` move to the pen that was last used, so that pen looks the same; the migration is written immediately so it does not move again. A favorite is a full snapshot: using it restyles its own pen type and selects it.

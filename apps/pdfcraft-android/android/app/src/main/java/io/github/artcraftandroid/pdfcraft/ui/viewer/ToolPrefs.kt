@@ -107,7 +107,10 @@ class ToolPrefs(context: Context) {
 
     fun setColor(t: StyledTool, c: Color) {
         val argb = c.toArgbInt()
-        if (t == StyledTool.Ink) return updatePen(inkStyle) { it.copy(argb = argb) }
+        if (t == StyledTool.Ink) {
+            rememberInkColor(argb)
+            return updatePen(inkStyle) { it.copy(argb = argb) }
+        }
         colors.getValue(t).intValue = argb
         prefs.edit().putInt("${t.key}.color", argb).apply()
     }
@@ -143,10 +146,47 @@ class ToolPrefs(context: Context) {
     /** Selecting Pen always switches away from a previously selected highlighter. */
     internal fun selectWritingPen() = updateInkStyle(lastWritingPen)
 
-    internal var inkPresets by mutableStateOf(InkPreset.defaults.mapIndexed { i, fallback ->
-        InkPreset.decode(runCatching { prefs.getString("ink.preset.v1.$i", null) }.getOrNull()) ?: fallback
-    })
+    /** Any number of favorites (#149), one list key; the three old slots are migrated once. */
+    internal var inkPresets by mutableStateOf(
+        InkPreset.decodeList(runCatching { prefs.getString("ink.presets.v2", null) }.getOrNull())
+            ?: InkPreset.defaults.mapIndexed { i, fallback ->
+                InkPreset.decode(runCatching { prefs.getString("ink.preset.v1.$i", null) }.getOrNull()) ?: fallback
+            },
+    )
         private set
+
+    private fun storePresets(list: List<InkPreset>) {
+        inkPresets = list.take(InkPreset.MAX_PRESETS)
+        prefs.edit().putString("ink.presets.v2", InkPreset.encodeList(inkPresets)).apply()
+    }
+
+    /** Adds the selected pen as it is now to the end of the favorites. */
+    internal fun addInkPreset(): Boolean {
+        val preset = currentInkPreset() ?: return false
+        if (inkPresets.size >= InkPreset.MAX_PRESETS) return false
+        storePresets(inkPresets + preset)
+        return true
+    }
+
+    internal fun deleteInkPreset(index: Int): Boolean {
+        if (index !in inkPresets.indices) return false
+        storePresets(inkPresets.filterIndexed { i, _ -> i != index })
+        return true
+    }
+
+    internal fun moveInkPreset(index: Int, delta: Int) = storePresets(inkPresets.movedBy(index, delta))
+
+    /** The last eight ink colours used, most recent first (#149). */
+    internal var recentInkColors by mutableStateOf(
+        runCatching { prefs.getString("ink.recentColors", null) }.getOrNull().orEmpty().split(',')
+            .mapNotNull { parseHexColor(it) }.take(8),
+    )
+        private set
+
+    private fun rememberInkColor(argb: Int) {
+        recentInkColors = withRecentColor(recentInkColors, argb)
+        prefs.edit().putString("ink.recentColors", recentInkColors.joinToString(",") { "%08X".format(it) }).apply()
+    }
 
     internal fun currentInkPreset(): InkPreset? = penSettings(inkStyle).let { InkPreset.create(it.argb, it.width, it.opacity, inkStyle) }
 
@@ -168,8 +208,7 @@ class ToolPrefs(context: Context) {
     internal fun saveInkPreset(index: Int): Boolean {
         if (index !in inkPresets.indices) return false
         val preset = currentInkPreset() ?: return false
-        prefs.edit().putString("ink.preset.v1.$index", preset.encode()).apply()
-        inkPresets = inkPresets.mapIndexed { i, existing -> if (i == index) preset else existing }
+        storePresets(inkPresets.mapIndexed { i, existing -> if (i == index) preset else existing })
         return true
     }
 
@@ -180,6 +219,15 @@ class ToolPrefs(context: Context) {
     fun updateStylusOnly(on: Boolean) {
         stylusOnly = on
         prefs.edit().putBoolean("ink.stylusOnly", on).apply()
+    }
+
+    /** Draw: a two-finger tap undoes and a three-finger tap redoes (#189). On by default. */
+    var multiFingerUndo by mutableStateOf(prefs.getBoolean("ink.multiFingerUndo", true))
+        private set
+
+    fun updateMultiFingerUndo(on: Boolean) {
+        multiFingerUndo = on
+        prefs.edit().putBoolean("ink.multiFingerUndo", on).apply()
     }
 
     /** Draw ▸ Snap to shape: strokes that look like a line, box, oval or polygon become one. */

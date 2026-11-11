@@ -1,5 +1,6 @@
 package io.github.artcraftandroid.pdfcraft.ui
 
+import io.github.artcraftandroid.pdfcraft.ui.viewer.recognizeText
 import io.github.artcraftandroid.pdfcraft.ui.home.FileTool
 import io.github.artcraftandroid.pdfcraft.ui.viewer.FillElement
 import androidx.compose.ui.graphics.asImageBitmap
@@ -802,6 +803,8 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         }
         if (ctl.tool != ViewerTool.None) leaveTool(doc)
         doc.selection.clear()
+        // annotating with the annotations hidden would hide what is being made: show them again
+        if (tool in setOf(ViewerTool.Comment, ViewerTool.Markup, ViewerTool.Draw, ViewerTool.Text) && doc.info.commentsHidden) setCommentsHidden(doc, false)
         ctl.switchTool(tool)
         if (tool == ViewerTool.Draw && toolPrefs.snapToShape && toolPrefs.takeSnapHint()) tell(text(R.string.msg_snap_to_shape_on))
         // the first time the reader comments without a name, ask for one (once)
@@ -1388,6 +1391,21 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         applyReadingColors(doc, colors)
     }
 
+    /**
+     * Hide or show every annotation on the pages (#155): a view setting in the engine
+     * (comments_hide), so the file isn't changed or marked as edited.
+     */
+    fun setCommentsHidden(doc: OpenDocument, hidden: Boolean) {
+        val eng = engine ?: return
+        if (doc.info.preparing) return
+        viewModelScope.launch {
+            if (runCatching { eng.tool("comments_hide", mapOf("doc" to doc.id, "hidden" to hidden)) }.isFailure) return@launch
+            // the switch reads the engine's state; the pages draw again without waiting for an edit
+            refresh(doc)
+            doc.images.invalidate()
+        }
+    }
+
     /** Give a newly opened (and prepared) [doc] the saved reading colours. */
     fun applySavedReadingColors(doc: OpenDocument) {
         val saved = savedReadingColors
@@ -1821,68 +1839,8 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         }
     }
 
-    /**
-     * Inspect recognition confidence on exactly one visible page with the upstream v0.19.0
-     * read-only ocr_words tool. Never retains a review handle, mutates PDF bytes or refreshes it.
-     */
-    internal suspend fun inspectOcrConfidence(doc: OpenDocument, page: Int): JSONObject? {
-        if (document !== doc || page !in 1..doc.pageCount || busy != null) return null
-        val eng = engine ?: return null
-        val generation = doc.info.generation
-        withContext(Dispatchers.IO) {
-            try {
-                eng.prepareOcrModels(getApplication())
-            } catch (cancelled: kotlinx.coroutines.CancellationException) {
-                throw cancelled
-            } catch (_: Exception) {
-                // The authoritative ocr_status check below reports unavailable models.
-            }
-        }
-        val status = eng.tool("ocr_status")
-        if (status.optBoolean("available", false) != true) {
-            throw IllegalStateException(text(R.string.msg_ocr_not_installed))
-        }
-        val response = eng.tool("ocr_words", mapOf(
-            "doc" to doc.id,
-            "pages" to listOf(page),
-            "retain_review" to false,
-            "skip_text_pages" to false,
-        ))
-        return response.takeIf {
-            document === doc && page in 1..doc.pageCount && doc.info.generation == generation
-        }
-    }
-
-    /** Recognize text: make scanned pages searchable and selectable. */
-    fun recognizeText(doc: OpenDocument) {
-        val eng = engine ?: return
-        viewModelScope.launch {
-            busy = text(R.string.msg_busy_preparing_ocr)
-            withContext(Dispatchers.IO) { runCatching { eng.prepareOcrModels(getApplication()) } }
-            busy = null
-            val status = runCatching { eng.tool("ocr_status") }.getOrNull()
-            if (status?.optBoolean("available", false) != true) {
-                tell(text(R.string.msg_ocr_not_installed))
-                return@launch
-            }
-            busy = text(R.string.msg_busy_recognizing)
-            try {
-                val r = eng.tool("ocr_recognize", mapOf("doc" to doc.id))
-                refresh(doc)
-                val pages = r.optJSONArray("pages")
-                val n = (0 until (pages?.length() ?: 0)).count { pages?.optJSONObject(it)?.has("skipped") == false }
-                if (n > 0) {
-                    success = SuccessBanner(text(R.string.msg_ocr_done)) { undo(doc) }
-                } else {
-                    tell(text(R.string.msg_ocr_nothing))
-                }
-            } catch (e: MobileException) {
-                tell(e.userMessage)
-            } finally {
-                busy = null
-            }
-        }
-    }
+    /** Recognize text: its options, review and batch state (#166). */
+    val ocr = io.github.artcraftandroid.pdfcraft.ui.viewer.OcrState()
 
     /** A finished job's green banner over the viewer's bar, with Undo. */
     var success by mutableStateOf<SuccessBanner?>(null)
@@ -3879,6 +3837,53 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     /** Run bookmark tool [name] on the bookmark at [path] (with [args]); one undo step each. */
     fun editBookmark(doc: OpenDocument, name: String, path: List<Int>?, args: Map<String, Any?> = emptyMap()) {
         runTool(doc, name, (if (path != null) mapOf("path" to path) else emptyMap<String, Any?>()) + args)
+    }
+
+    // ---- Document properties, word count, flatten (#183) -------------------------------------
+
+    /** Write metadata [changes] (`doc_set_info` arguments), one refresh for all. */
+    fun setDocInfo(doc: OpenDocument, changes: List<Map<String, Any?>>) {
+        if (changes.isEmpty()) return
+        // each entry its own group: one undo step per changed entry, one refresh for all
+        runToolBatch(doc, "doc_set_info", changes.map { listOf(it) }) { applied ->
+            if (applied == changes.size) tell(text(R.string.msg_properties_saved))
+        }
+    }
+
+    /** How the document opens (`doc_initial_view` with no change), or null when it can't be read. */
+    suspend fun initialView(doc: OpenDocument): JSONObject? {
+        val eng = engine ?: return null
+        return try { eng.tool("doc_initial_view", mapOf("doc" to doc.id)).optJSONObject("initial_view") }
+        catch (e: MobileException) { tell(e.userMessage); null }
+    }
+
+    fun setInitialView(doc: OpenDocument, args: Map<String, Any?>) {
+        if (args.isEmpty()) return
+        runTool(doc, "doc_initial_view", args) { tell(text(R.string.msg_initial_view_saved)) }
+    }
+
+    /** Words and characters on every page (`text_word_count`); the message says why when it can't. */
+    suspend fun wordCount(doc: OpenDocument): JSONObject? {
+        val eng = engine ?: return null
+        return try { eng.tool("text_word_count", mapOf("doc" to doc.id)).optJSONObject("total") }
+        catch (e: MobileException) { tell(e.userMessage); null }
+    }
+
+    fun wordCountLabel(words: Long, characters: Long): String {
+        val f = java.text.NumberFormat.getIntegerInstance()
+        return text(R.string.properties_word_count_value, f.format(words), f.format(characters))
+    }
+
+    /** Flatten: the document asking for confirmation, while the dialog shows. */
+    var flattenPrompt by mutableStateOf<OpenDocument?>(null)
+
+    fun flatten(doc: OpenDocument, comments: Boolean, fields: Boolean) {
+        flattenPrompt = null
+        if (!comments && !fields) return
+        doc.commitTool?.invoke()
+        runTool(doc, "doc_flatten", mapOf("comments" to comments, "fields" to fields)) {
+            tell(text(R.string.msg_flattened), text(R.string.common_undo)) { undo(doc) }
+        }
     }
 
     /** Files waiting for the person to pick the folder they go into, and what to delete afterwards. */

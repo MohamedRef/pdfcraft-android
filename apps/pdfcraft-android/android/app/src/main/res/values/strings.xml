@@ -798,6 +798,38 @@
     <string name="sheet_pages">Pages</string>
     <string name="sheet_attachments">Attachments</string>
     <string name="sheet_layers">Layers</string>
+    <string name="properties_edit">Edit properties</string>
+    <string name="properties_opens_with">Opens with</string>
+    <string name="properties_word_count">Word count</string>
+    <!-- Translator note: %1$s words and %2$s characters, already formatted numbers. -->
+    <string name="properties_word_count_value">%1$s words, %2$s characters</string>
+    <string name="properties_add_custom">Add a custom property</string>
+    <string name="properties_custom_name">Name (no spaces)</string>
+    <string name="properties_custom_value">Value</string>
+    <string name="properties_empty_removes">Leave a value empty to remove it.</string>
+    <string name="properties_open_page">Page</string>
+    <string name="properties_open_layout">Page layout</string>
+    <string name="properties_open_zoom">Magnification</string>
+    <string name="properties_open_panel">Panel</string>
+    <string name="properties_layout_default">Viewer\'s default</string>
+    <string name="properties_layout_single">Single page</string>
+    <string name="properties_layout_continuous">Single page, continuous</string>
+    <string name="properties_layout_two_up">Two pages</string>
+    <string name="properties_layout_two_up_continuous">Two pages, continuous</string>
+    <string name="properties_layout_two_up_cover">Two pages with cover</string>
+    <string name="properties_layout_two_up_continuous_cover">Two pages with cover, continuous</string>
+    <string name="properties_zoom_default">Viewer\'s default</string>
+    <string name="properties_zoom_actual">Actual size</string>
+    <string name="properties_zoom_fit_page">Fit page</string>
+    <string name="properties_zoom_fit_width">Fit width</string>
+    <string name="properties_zoom_fit_height">Fit height</string>
+    <string name="properties_zoom_fit_visible">Fit visible</string>
+    <string name="properties_panel_page">Page only</string>
+    <string name="flatten_title">Flatten…</string>
+    <string name="flatten_action">Flatten</string>
+    <string name="flatten_warning">Flattened comments and form fields become part of the page. They print and show in every viewer, but can\'t be edited any more. You can undo this until the file is saved.</string>
+    <string name="flatten_comments">Comments</string>
+    <string name="flatten_fields">Form fields</string>
     <string name="layers_show_all">Show all</string>
     <string name="layers_reset">Reset</string>
     <!-- Translator note: a layer without a name; %1$d is its position in the list. -->
@@ -849,6 +881,16 @@
     <string name="sheet_two_pages_cover">Two pages with cover</string>
     <string name="sheet_reading_mode">Reading Mode</string>
     <string name="sheet_night_mode">Night Mode</string>
+    <string name="sheet_hide_annotations">Hide annotations</string>
+    <string name="comments_filter_all">All</string>
+    <string name="comments_filter_notes">Notes</string>
+    <string name="comments_filter_highlights">Highlights</string>
+    <string name="comments_filter_ink">Ink</string>
+    <string name="comments_filter_shapes">Shapes</string>
+    <string name="comments_filter_stamps">Stamps</string>
+    <string name="comments_filter_author">Author</string>
+    <string name="comments_filter_anyone">Anyone</string>
+    <string name="comments_filter_none">No comments match these filters.</string>
     <string name="sheet_reading_colors">Reading colours</string>
     <string name="sheet_reading_colors_sample">Aa</string>
     <string name="sheet_reading_colors_off">Off</string>
@@ -1339,6 +1381,9 @@
         <item quantity="other">%1$d pages duplicated</item>
     </plurals>
     <string name="msg_pages_reversed">Page order reversed</string>
+    <string name="msg_properties_saved">Properties changed</string>
+    <string name="msg_initial_view_saved">Opening view changed</string>
+    <string name="msg_flattened">Flattened</string>
     <!-- Translator note: %1$s is a file name. -->
     <string name="msg_attached">%1$s attached</string>
     <!-- Translator note: %1$s is a file name. -->
@@ -1477,9 +1522,21 @@
     <string name="bates_export_failed">Could not save this new copy to Downloads.</string>
     <string name="ink_presets_title">Favorite pens</string>
     <string name="ink_presets_help">Each pen keeps its own colour, width and opacity. Tap a favorite to restore its settings.</string>
+    <string name="ink_hex_invalid">Enter #RRGGBB or #AARRGGBB.</string>
+    <string name="ink_hex_apply">Apply</string>
+    <string name="ink_hex_label">Hex colour</string>
+    <string name="ink_color_hex_name">Colour %1$s</string>
+    <string name="ink_recent_colors">Recent colours</string>
+    <string name="ink_preset_delete">Delete favorite</string>
+    <string name="ink_preset_move_later">Move later</string>
+    <string name="ink_preset_move_earlier">Move earlier</string>
+    <string name="ink_preset_actions">replace, move or delete</string>
+    <string name="ink_preset_add">Add current pen</string>
+    <string name="ink_multi_finger_undo_explanation">While drawing, tap with two fingers to undo and three fingers to redo.</string>
+    <string name="ink_multi_finger_undo">Two-finger tap to undo</string>
     <string name="ink_pen_settings_title">Pen settings</string>
     <string name="ink_pen_edit_action">change colour and width</string>
-    <string name="ink_preset_save_help">Saving a favorite stores the %1$s exactly as it is now. Tap the selected pen in the toolbar to change its colour and width.</string>
+    <string name="ink_preset_save_help">Add current pen saves the %1$s as it is now. Long-press a favorite to replace, move or delete it.</string>
     <string name="ink_snap_explanation">Hold a freehand stroke briefly to turn it into a clean shape.</string>
     <string name="ink_pen_only_explanation">On: fingers pan and zoom, only the S Pen draws. Off: use your finger or S Pen.</string>
     <string name="ink_preset_slot">Pen %1$d</string>
