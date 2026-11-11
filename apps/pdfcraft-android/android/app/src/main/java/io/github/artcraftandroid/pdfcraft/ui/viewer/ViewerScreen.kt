@@ -306,6 +306,14 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
                 if (desktop && corner) zoomButtons.poke()
             },
             onWheelZoom = { if (desktop) zoomButtons.poke() },
+            // a right click: a comment's menu, else what a long press gives (a word, a picture, the page menu)
+            onSecondaryClick = { p, at ->
+                if (at != null && (gesturesForTool && vm.tapComment(doc, at))) Unit
+                else if (at != null && gesturesForTool) scope.launch {
+                    val slop = 12f / doc.viewer.pixelsPerPoint(at.page).coerceAtLeast(0.1f) * density.density
+                    if (!selection.selectWordAt(at, slop) && ctl.tool == ViewerTool.None && !vm.readingMode) vm.longPressPage(doc, at, p)
+                }
+            },
             onLongPress = { p, at ->
                 if (at != null) scope.launch {
                     val slop = 12f / doc.viewer.pixelsPerPoint(at.page).coerceAtLeast(0.1f) * density.density
@@ -627,6 +635,7 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
         vm.replyPrompt?.takeIf { it.doc === doc }?.let { ReplySheet(vm, it) }
         vm.readAloud?.let { ReadAloudBar(vm, doc, it) }
         if (ctl.goToPage) GoToPageDialog(doc, onDismiss = { ctl.goToPage = false })
+        if (vm.shortcutsHelp) ShortcutsDialog(onDismiss = { vm.shortcutsHelp = false })
         if (ctl.pagesOpen) PagesScreen(vm, doc, onClose = { ctl.pagesOpen = false })
     }
 }

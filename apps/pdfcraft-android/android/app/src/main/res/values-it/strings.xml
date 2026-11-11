@@ -223,7 +223,6 @@
     <string name="home_keep_screen_on_body">Mantiene lo schermo acceso durante la lettura, fino a 30 minuti senza interazioni.</string>
     <string name="home_section_keyboard">Tastiera</string>
     <string name="home_keyboard_shortcuts">Scorciatoie da tastiera</string>
-    <string name="home_keyboard_shortcuts_body">Con una tastiera collegata: N o PagGiù per la pagina successiva, P o PagSu per quella precedente, i tasti freccia per scorrere, Ctrl+P per stampare, Ctrl e + o − per modificare lo zoom.</string>
     <string name="home_section_extra">Funzioni extra</string>
     <string name="home_extra_body">Modifiche facoltative all\'aspetto e al funzionamento di PdfCraft.</string>
     <string name="home_status_bar_in_documents">Mostra la barra di stato nei documenti</string>

@@ -217,7 +217,6 @@
     <string name="home_section_keyboard">Clavier</string>
     <string name="home_keyboard_shortcuts">Raccourcis clavier</string>
     <!-- N, P, Page Down, Page Up, Ctrl+P, Ctrl, + and − are keys on the keyboard -->
-    <string name="home_keyboard_shortcuts_body">Avec un clavier connecté : N ou Page suivante pour la page suivante, P ou Page précédente pour la page précédente, les flèches pour faire défiler, Ctrl+P pour imprimer, Ctrl et + ou − pour zoomer.</string>
     <string name="home_section_extra">Fonctionnalités supplémentaires</string>
     <string name="home_extra_body">Modifications facultatives de l\'apparence et du fonctionnement de PdfCraft.</string>
     <string name="home_status_bar_in_documents">Afficher la barre d\'état dans les documents</string>

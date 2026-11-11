@@ -190,7 +190,13 @@ class MainActivity : ComponentActivity() {
 
     // a keyboard (or desktop mode): keys the viewer takes when no text field has them
     override fun onKeyDown(keyCode: Int, event: android.view.KeyEvent): Boolean =
-        vm.viewerKey(keyCode, event.isCtrlPressed) || super.onKeyDown(keyCode, event)
+        vm.viewerKey(keyCode, event.isCtrlPressed, event.isShiftPressed) || super.onKeyDown(keyCode, event)
+
+    // the viewer's shortcuts in the system's Meta+/ list (#153)
+    override fun onProvideKeyboardShortcuts(data: MutableList<android.view.KeyboardShortcutGroup>, menu: android.view.Menu?, deviceId: Int) {
+        super.onProvideKeyboardShortcuts(data, menu, deviceId)
+        if (vm.keyboardShortcuts) data.add(io.github.artcraftandroid.pdfcraft.ui.viewer.shortcutGroup(this))
+    }
 
     /** Log raw pen samples (real historical pressure, pen speed) before Compose handles the event. */
     override fun dispatchTouchEvent(ev: android.view.MotionEvent): Boolean {
