@@ -973,6 +973,7 @@
 
     <string name="msg_undone">%1$s annullato</string>
     <string name="msg_redone">%1$s ripristinato</string>
+    <string name="msg_ink_kept">L\'inchiostro non salvato è stato conservato. Apri Disegna e tocca Fine per salvarlo di nuovo.</string>
 
     <!-- Strumenti del visualizzatore -->
 

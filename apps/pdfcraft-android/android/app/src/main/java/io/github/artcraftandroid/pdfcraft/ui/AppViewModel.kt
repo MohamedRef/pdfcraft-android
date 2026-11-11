@@ -712,22 +712,32 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     }
 
     /**
-     * Apply multiple same-kind edits in submission order with one refresh. Pressure-aware ink may
-     * create several PDF annotations, so one refresh per short segment would stall the viewer.
-     * This remains the existing serial engine queue; do not interleave a subsequent document edit.
+     * Apply [groups] of same-kind edits in submission order with one refresh. Pressure-aware ink
+     * may create several PDF annotations, so one refresh per short segment would stall the viewer.
+     * Each group is all or nothing (see [Engine.toolBatch]); [onSettled] gets how many groups the
+     * document accepted, after the refresh, so the caller keeps the rest (#73). No engine: none.
      */
-    fun runToolBatch(doc: OpenDocument, name: String, argsList: List<Map<String, Any?>>) {
-        if (argsList.isEmpty()) return
-        val eng = engine ?: return
+    fun runToolBatch(doc: OpenDocument, name: String, groups: List<List<Map<String, Any?>>>, onSettled: (applied: Int) -> Unit = {}) {
+        if (groups.isEmpty()) return onSettled(0)
+        val eng = engine ?: return onSettled(0)
+        val all = groups.flatten()
         viewModelScope.launch {
+            var applied = 0
             try {
                 // Keep all adjacent pressure widths contiguous on the engine's serial queue.
-                eng.toolBatch(name, argsList.map { it + ("doc" to doc.id) })
+                applied = eng.toolBatch(name, groups.map { group -> group.map { it + ("doc" to doc.id) } })
+            } catch (e: io.github.artcraftandroid.pdfcraft.engine.ToolBatchException) {
+                applied = e.applied
+                tell(e.cause.userMessage)
             } catch (e: MobileException) {
                 tell(e.userMessage)
             } finally {
-                // A partially accepted batch must be visible even if a later segment is refused.
-                refresh(doc, io.github.artcraftandroid.pdfcraft.ui.viewer.pageTouchedByBatch(name, argsList))
+                // A partially accepted batch must be visible even if a later group is refused.
+                try {
+                    refresh(doc, io.github.artcraftandroid.pdfcraft.ui.viewer.pageTouchedByBatch(name, all))
+                } finally {
+                    onSettled(applied)
+                }
             }
         }
     }
@@ -735,14 +745,31 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     /** Undo: inside a tool that keeps its own history (Draw) only that; else the document's last edit, named in a message. */
     fun undo(doc: OpenDocument) {
         doc.localUndo?.let { it.undo(); return }
-        val label = doc.info.undo ?: return
-        runTool(doc, "edit_undo") { tell(text(R.string.msg_undone, label)) }
+        undoDocument(doc, announce = true)
     }
 
     fun redo(doc: OpenDocument) {
         doc.localUndo?.let { it.redo(); return }
+        redoDocument(doc, announce = true)
+    }
+
+    /**
+     * Undo the document's last edit; [announce] names it in a message. The Draw tool undoes its
+     * own saved ink quietly, but names an edit made before Draw, so it is never lost unseen (#78).
+     */
+    fun undoDocument(doc: OpenDocument, announce: Boolean) {
+        val label = doc.info.undo ?: return
+        runTool(doc, "edit_undo") { if (announce) tell(text(R.string.msg_undone, label)) }
+    }
+
+    fun redoDocument(doc: OpenDocument, announce: Boolean) {
         val label = doc.info.redo ?: return
-        runTool(doc, "edit_redo") { tell(text(R.string.msg_redone, label)) }
+        runTool(doc, "edit_redo") { if (announce) tell(text(R.string.msg_redone, label)) }
+    }
+
+    /** [count] Draw strokes the document refused stay drafts (#73); say where, once Draw is left. */
+    fun inkKept(doc: OpenDocument, count: Int) {
+        if (count > 0 && document === doc && doc.controller.tool != ViewerTool.Draw) tell(text(R.string.msg_ink_kept))
     }
 
     /** Switch the viewer to [tool], unless the document forbids what it does. */
@@ -930,12 +957,28 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             tell(text(R.string.msg_print_disabled))
             return
         }
+        // The ink being drawn is printed too, as Share sends it (#79).
+        if (doc.controller.tool == ViewerTool.Draw) doc.commitTool?.invoke()
         viewModelScope.launch {
+            // the ink is queued in the engine: reading the document back waits for it, so the save has it
+            refresh(doc)
             save(doc)
             // the system's printing can't open a password-protected file: print an unlocked copy
             val unlocked = if (doc.info.encrypted) unlockedCopy(doc) else null
-            // the unlocked copy has no password: the print job deletes it when it finishes (#105)
-            prints.trySend(PrintJob(unlocked ?: doc.file, doc.name, deleteWhenDone = unlocked != null))
+            // a copy, not the working file the app's pause may be saving (#79); either copy is
+            // deleted when the print job finishes (the unlocked one has no password, #105)
+            val copy = unlocked ?: printSnapshot(doc)
+            prints.trySend(PrintJob(copy ?: doc.file, doc.name, deleteWhenDone = copy != null))
+        }
+    }
+
+    /**
+     * A copy of [doc]'s working file for the print framework (#79): it reads its file on the main
+     * thread while the print screen is open, and the app's pause saves the working file then.
+     */
+    private suspend fun printSnapshot(doc: OpenDocument): File? = saveMutex.withLock {
+        withContext(Dispatchers.IO) {
+            runCatching { tempFile("pdf").also { out -> doc.file.copyTo(out, overwrite = true) } }.getOrNull()
         }
     }
 

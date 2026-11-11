@@ -644,6 +644,7 @@
     <string name="msg_file_access_lost">O PdfCraft não consegue mais abrir este arquivo. Abra-o novamente no app em que ele está ou use Abrir arquivo.</string>
     <string name="msg_undone">%1$s desfeito</string>
     <string name="msg_redone">%1$s refeito</string>
+    <string name="msg_ink_kept">A tinta que não foi salva foi mantida. Abra Desenhar e toque em Concluído para salvá-la novamente.</string>
     <string name="msg_tool_blocked_security">Esta ferramenta não está disponível devido às configurações de segurança do documento.</string>
     <string name="msg_snap_to_shape_on">Ajuste à forma ativado</string>
     <string name="msg_search_image_only">As palavras deste arquivo são imagens e ainda não podem ser pesquisadas.</string>
