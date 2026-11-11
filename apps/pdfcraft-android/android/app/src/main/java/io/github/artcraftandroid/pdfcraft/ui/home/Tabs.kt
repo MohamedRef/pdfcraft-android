@@ -326,7 +326,8 @@ fun SearchTab(vm: AppViewModel) {
 @Composable
 fun SettingsScreen(vm: AppViewModel) {
     val c = pdfColors
-    var page by remember { mutableStateOf("root") }
+    var page by remember { mutableStateOf(vm.settingsStartPage) }
+    androidx.compose.runtime.DisposableEffect(Unit) { onDispose { vm.openSettings("root", show = false) } }
     BackHandler { if (page == "root") vm.settingsOpen = false else page = "root" }
     Column(Modifier.fillMaxSize().background(c.surface).safeTopPadding().navigationBarsPadding()) {
         Row(Modifier.fillMaxWidth().height(56.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -428,6 +429,18 @@ private fun Preferences(vm: AppViewModel) {
     }
     Text(
         stringResource(R.string.home_keyboard_shortcuts_body),
+        color = c.textSecondary, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 20.dp),
+    )
+    SheetDivider()
+    Section(stringResource(R.string.updater_title))
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var autoCheck by remember { mutableStateOf(UpdaterState.autoCheckOn(context)) }
+    fun setAutoCheck(on: Boolean) { autoCheck = on; UpdaterState.setAutoCheck(context, on) }
+    SheetRow(null, stringResource(R.string.updater_auto_check), { setAutoCheck(!autoCheck) }) {
+        PdfSwitch(autoCheck, { setAutoCheck(it) })
+    }
+    Text(
+        stringResource(R.string.updater_auto_check_body),
         color = c.textSecondary, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 20.dp),
     )
     Spacer(Modifier.height(24.dp))

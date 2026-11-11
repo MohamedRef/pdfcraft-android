@@ -4688,6 +4688,16 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     var homeTab by mutableStateOf(io.github.artcraftandroid.pdfcraft.ui.home.HomeTab.Home)
     var settingsOpen by mutableStateOf(false)
 
+    /** The Settings page to open on (root, about, prefs, help). */
+    var settingsStartPage = "root"
+        private set
+
+    /** Open Settings at [page]: Home's update card opens About (#193). */
+    fun openSettings(page: String = "root", show: Boolean = true) {
+        settingsStartPage = page
+        if (show) settingsOpen = true
+    }
+
     /** The file whose "..." sheet is open, and whether it was opened from Recent. */
     var fileSheet by mutableStateOf<Pair<io.github.artcraftandroid.pdfcraft.ui.home.FileRow, Boolean>?>(null)
     var showLicences by mutableStateOf(false)

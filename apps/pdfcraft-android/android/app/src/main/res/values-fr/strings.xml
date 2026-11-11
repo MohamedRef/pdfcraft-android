@@ -1048,9 +1048,9 @@
     <string name="service_action_back">Reculer de 15 secondes</string>
     <string name="service_action_forward">Avancer de 15 secondes</string>
     <string name="service_action_stop">Arrêter</string>
-    <string name="updater_download_browser">Télécharger l\'APK dans le navigateur</string>
+    <string name="updater_download_browser">Télécharger dans le navigateur</string>
     <string name="updater_browser_open_error">Impossible d\'ouvrir le téléchargement GitHub officiel dans le navigateur.</string>
-    <string name="updater_browser_notice">Si le téléchargement dans l\'app échoue, essayez le lien GitHub officiel dans le navigateur. Les téléchargements du navigateur s\'installent manuellement et ne sont pas vérifiés par SHA-256 dans PdfCraft.</string>
+    <string name="updater_browser_notice">Si le téléchargement dans PdfCraft échoue, essayez le lien officiel dans votre navigateur. Un téléchargement par le navigateur s’installe à la main et PdfCraft ne peut pas le vérifier.</string>
     <string name="toolbar_squiggly">Ondulé</string>
     <string name="viewer_hint_squiggly">Faites glisser sur le texte pour le souligner d\'une ligne ondulée</string>
     <string name="toolbar_color_squiggly">Couleur du soulignement ondulé</string>
@@ -1306,7 +1306,7 @@
     <string name="toolbar_drag_handle">Faites glisser pour déplacer la barre d\'outils. Relâchez pour l\'ancrer au bord le plus proche.</string>
     <string name="updater_title">Mises à jour de l\'app</string>
     <string name="updater_description">Téléchargez les mises à jour depuis les GitHub Releases publiées. Les téléchargements interrompus peuvent reprendre.</string>
-    <string name="updater_no_updates">Vous êtes à jour. Aucun APK publié plus récent trouvé.</string>
+    <string name="updater_no_updates">Vous êtes à jour.</string>
     <string name="updater_check_error">Impossible de vérifier les GitHub Releases. Vérifiez votre connexion et réessayez.</string>
     <string name="updater_checking">Recherche de mises à jour…</string>
     <string name="updater_check">Rechercher des mises à jour</string>
@@ -1327,14 +1327,14 @@
     <string name="updater_paused">Téléchargement en pause. Votre progression est conservée.</string>
     <string name="updater_interrupted">Téléchargement interrompu. Touchez Reprendre pour réessayer.</string>
     <string name="updater_resume">Reprendre le téléchargement</string>
-    <string name="updater_download">Télécharger l\'APK</string>
+    <string name="updater_download">Télécharger la mise à jour</string>
     <string name="updater_pause">Pause</string>
-    <string name="updater_apk_ready">APK vérifié prêt</string>
+    <string name="updater_apk_ready">Mise à jour téléchargée et vérifiée</string>
     <string name="updater_confirm_install">Confirmez l\'installation dans le programme d\'installation d\'Android.</string>
     <string name="updater_allow_install">Autorisez PdfCraft à installer des mises à jour dans les Paramètres, puis touchez à nouveau Installer.</string>
     <string name="updater_installer_error">Android n\'a pas pu ouvrir le programme d\'installation.</string>
-    <string name="updater_install">Installer l\'APK vérifié</string>
-    <string name="updater_install_notice">L\'installation nécessite toujours votre accord. La signature de l\'APK et le SHA-256 sont vérifiés au préalable.</string>
+    <string name="updater_install">Installer la mise à jour</string>
+    <string name="updater_install_notice">L’installation demande toujours votre accord. PdfCraft vérifie d’abord que la mise à jour est signée par PdfCraft et correspond à la version publiée.</string>
     <string name="ink_styles_title">Styles de stylo</string>
     <string name="ink_width_value">%1$.1f pt</string>
     <string name="ink_style_ballpoint">Bille</string>
@@ -1372,7 +1372,7 @@
     <string name="comments_loading">Chargement des commentaires…</string>
     <string name="compact_previews">Utiliser moins de mémoire pour les aperçus de pages</string>
     <string name="compact_previews_body">Réduit la précision des couleurs pour les pages entières. Les détails zoomés conservent leur pleine qualité. S\'applique à la réouverture d\'un document.</string>
-    <string name="updater_other_build">Cette version n\'est pas l\'APK officiel ARM64, les mises à jour dans l\'application sont donc désactivées. Mettez-la à jour depuis l\'endroit où vous l\'avez installée.</string>
+    <string name="updater_other_build">Les mises à jour dans l’application concernent uniquement la version officielle pour téléphones ARM64. Mettez cette copie à jour depuis l’endroit où vous l’avez installée.</string>
     <string name="viewer_read_only_notice">Les modifications ne peuvent pas être enregistrées dans l\'original. Elles restent dans PdfCraft jusqu\'à ce que vous enregistriez une copie.</string>
     <string name="root_keep_editing">Continuer à modifier</string>
     <string name="root_discard_title">Abandonner les modifications de %1$s ?</string>
@@ -1445,12 +1445,12 @@
     <string name="notebook_cannot_add_page">Impossible d\'ajouter des pages à ce document</string>
     <string name="notebook_busy_saving_template">Enregistrement du modèle…</string>
     <string name="notebook_template_saved">Modèle %1$s enregistré</string>
-    <string name="updater_err_checksum">L\'APK téléchargé ne correspond pas à la version publiée et n\'a pas été installé. Téléchargez-le à nouveau.</string>
+    <string name="updater_err_checksum">La mise à jour téléchargée ne correspond pas à la version publiée, elle n’a donc pas été installée. Réessayez le téléchargement.</string>
     <string name="updater_err_invalid_apk">Le fichier téléchargé n\'est pas une application Android signée valide.</string>
-    <string name="updater_err_wrong_build">L\'APK téléchargé n\'est pas la mise à jour PdfCraft attendue.</string>
-    <string name="updater_err_certificate">L\'APK téléchargé n\'est pas signé par PdfCraft et ne peut pas remplacer l\'application installée.</string>
+    <string name="updater_err_wrong_build">Le fichier téléchargé n’est pas la mise à jour PdfCraft attendue.</string>
+    <string name="updater_err_certificate">La mise à jour téléchargée n’est pas signée par PdfCraft et ne peut donc pas remplacer l’application installée.</string>
     <string name="updater_err_android_version">Cette mise à jour nécessite une version plus récente d\'Android.</string>
-    <string name="updater_err_abi">Cet APK n\'est pas conçu pour le processeur de votre téléphone.</string>
+    <string name="updater_err_abi">Cette mise à jour n’est pas conçue pour le processeur de votre téléphone.</string>
     <string name="updater_err_storage">Impossible d\'enregistrer la mise à jour sur cet appareil. Libérez de l\'espace et réessayez.</string>
     <string name="updater_err_untrusted">Le lien de mise à jour ne provient pas des versions GitHub officielles de PdfCraft et a été refusé.</string>
     <string name="updater_err_server">Le serveur de téléchargement a renvoyé une réponse inattendue. Réessayez plus tard ou téléchargez dans le navigateur.</string>
@@ -1726,4 +1726,9 @@
     <string name="tips_find_body">⋮ contient les commentaires, signets et pages. Touchez la poignée au-dessus de la barre du bas pour afficher ou masquer vos raccourcis.</string>
     <string name="home_open_pdf">Ouvrir un PDF</string>
     <string name="home_or_start_with_tool">Ou commencez par un outil</string>
+    <string name="updater_open_settings">Ouvrir les paramètres</string>
+    <string name="updater_home_ready">La mise à jour %1$s est prête</string>
+    <string name="updater_home_view">Voir</string>
+    <string name="updater_auto_check">Rechercher les mises à jour automatiquement</string>
+    <string name="updater_auto_check_body">Une fois par jour à l’ouverture, PdfCraft demande à GitHub si une version plus récente existe. Aucun fichier ni aucune donnée personnelle n’est envoyé.</string>
 </resources>

@@ -948,9 +948,9 @@
     <string name="service_action_forward">تقديم ١٥ ثانية</string>
     <string name="service_action_stop">إيقاف</string>
     <string name="toolbar_stylus_only">القلم فقط (الإصبع للتمرير)</string>
-    <string name="updater_download_browser">نزّل الـ APK من المتصفح بدلًا من ذلك</string>
+    <string name="updater_download_browser">نزّل من المتصفح بدلًا من ذلك</string>
     <string name="updater_browser_open_error">تعذّر فتح رابط التنزيل الرسمي على GitHub في المتصفح.</string>
-    <string name="updater_browser_notice">إذا فشل التنزيل داخل التطبيق، جرّب رابط GitHub الرسمي في المتصفح. يتطلب التنزيل من المتصفح تثبيتًا يدويًا، ولا يتحقق PdfCraft من بصمة SHA-256 له.</string>
+    <string name="updater_browser_notice">إذا فشل التنزيل في PdfCraft، جرّب الرابط الرسمي في المتصفح. يجب تثبيت ما يُنزَّل من المتصفح يدويًا، ولا يستطيع PdfCraft التحقق منه.</string>
     <string name="toolbar_squiggly">خط متعرج</string>
     <string name="viewer_hint_squiggly">اسحب على النص لتسطيره بخط متموج</string>
     <string name="toolbar_color_squiggly">لون الخط المتعرج</string>
@@ -1158,7 +1158,7 @@
     <string name="toolbar_drag_handle">اسحب لنقل شريط الأدوات. أفلته ليلتصق بأقرب جانب.</string>
     <string name="updater_title">تحديثات التطبيق</string>
     <string name="updater_description">نزّل التحديثات من إصدارات GitHub المنشورة. يمكن استئناف التنزيلات المتقطعة.</string>
-    <string name="updater_no_updates">لديك أحدث إصدار. لم يُعثر على ملف APK أحدث منشور.</string>
+    <string name="updater_no_updates">لديك أحدث إصدار.</string>
     <string name="updater_check_error">تعذّر التحقق من إصدارات GitHub. تحقّق من اتصالك وأعد المحاولة.</string>
     <string name="updater_checking">جارٍ البحث عن تحديثات…</string>
     <string name="updater_check">البحث عن تحديثات</string>
@@ -1179,14 +1179,14 @@
     <string name="updater_paused">توقّف التنزيل مؤقتًا. تم الاحتفاظ بتقدّمك.</string>
     <string name="updater_interrupted">انقطع التنزيل. انقر على استئناف لإعادة المحاولة.</string>
     <string name="updater_resume">استئناف التنزيل</string>
-    <string name="updater_download">تنزيل APK</string>
+    <string name="updater_download">نزّل التحديث</string>
     <string name="updater_pause">إيقاف مؤقت</string>
-    <string name="updater_apk_ready">ملف APK جاهز وتم التحقق منه</string>
+    <string name="updater_apk_ready">تم تنزيل التحديث والتحقق منه</string>
     <string name="updater_confirm_install">أكّد التثبيت في أداة التثبيت في Android.</string>
     <string name="updater_allow_install">اسمح لـ PdfCraft بتثبيت التحديثات من الإعدادات، ثم انقر على تثبيت مرة أخرى.</string>
     <string name="updater_installer_error">تعذّر على Android فتح أداة التثبيت.</string>
-    <string name="updater_install">تثبيت ملف APK الذي تم التحقق منه</string>
-    <string name="updater_install_notice">يتطلب التثبيت موافقتك دائمًا. يتم التحقق من توقيع APK وبصمة SHA-256 أولًا.</string>
+    <string name="updater_install">ثبّت التحديث</string>
+    <string name="updater_install_notice">يطلب التثبيت موافقتك دائمًا. يتحقق PdfCraft أولًا من أن التحديث موقّع من PdfCraft ومطابق للإصدار المنشور.</string>
     <string name="ink_styles_title">أنماط القلم</string>
     <string name="ink_width_value">%1$.1f نقطة</string>
     <string name="ink_style_ballpoint">قلم جاف</string>
@@ -1220,7 +1220,7 @@
     <string name="ocr_review_empty">لم يُعثر على كلمات في هذه الصفحة.</string>
     <string name="ocr_review_limited">عرض حتى %1$d كلمة، مع الكلمات غير المؤكدة أولًا.</string>
     <string name="ocr_review_unknown">غير متاح</string>
-    <string name="updater_other_build">هذا الإصدار ليس ملف APK الرسمي لمعالجات ARM64، لذلك التحديثات داخل التطبيق متوقفة. حدّثه من المكان الذي ثبّته منه.</string>
+    <string name="updater_other_build">التحديثات داخل التطبيق مخصصة فقط للإصدار الرسمي لهواتف ARM64. حدّث هذه النسخة من المكان الذي ثبّتها منه.</string>
     <string name="msg_busy_recognizing_page">التعرّف على النص: الصفحة %1$d من %2$d…</string>
     <string name="busy_cancelling">جارٍ الإيقاف…</string>
     <string name="busy_cancel_keeps">يتوقف الإلغاء بعد الصفحة الحالية. تحتفظ الصفحات المقروءة بنصها.</string>
@@ -1278,12 +1278,12 @@
     <string name="notebook_cannot_add_page">لا يمكن إضافة صفحات إلى هذا المستند</string>
     <string name="notebook_busy_saving_template">جارٍ حفظ القالب…</string>
     <string name="notebook_template_saved">تم حفظ القالب %1$s</string>
-    <string name="updater_err_checksum">ملف APK الذي تم تنزيله لا يطابق الإصدار المنشور، لذلك لم يُثبَّت. حاول التنزيل مرة أخرى.</string>
+    <string name="updater_err_checksum">التحديث الذي نُزّل لا يطابق الإصدار المنشور، لذلك لم يُثبَّت. جرّب التنزيل مرة أخرى.</string>
     <string name="updater_err_invalid_apk">الملف الذي تم تنزيله ليس تطبيق Android صالحًا وموقّعًا.</string>
-    <string name="updater_err_wrong_build">ملف APK الذي تم تنزيله ليس تحديث PdfCraft المتوقع.</string>
-    <string name="updater_err_certificate">ملف APK الذي تم تنزيله غير موقّع من PdfCraft، لذلك لا يمكنه استبدال التطبيق المثبّت.</string>
+    <string name="updater_err_wrong_build">الملف الذي نُزّل ليس تحديث PdfCraft المتوقع.</string>
+    <string name="updater_err_certificate">التحديث الذي نُزّل غير موقّع من PdfCraft، لذلك لا يمكنه استبدال التطبيق المثبّت.</string>
     <string name="updater_err_android_version">يتطلب هذا التحديث إصدارًا أحدث من Android.</string>
-    <string name="updater_err_abi">ملف APK هذا غير مخصص لمعالج هاتفك.</string>
+    <string name="updater_err_abi">هذا التحديث غير مخصص لمعالج هاتفك.</string>
     <string name="updater_err_storage">تعذّر حفظ التحديث على هذا الجهاز. وفّر بعض المساحة وحاول مرة أخرى.</string>
     <string name="updater_err_untrusted">رابط التحديث ليس من إصدارات GitHub الرسمية لـ PdfCraft، لذلك تم رفضه.</string>
     <string name="updater_err_server">أرسل خادم التنزيل ردًا غير متوقع. حاول لاحقًا أو نزّل من المتصفح.</string>
@@ -1559,4 +1559,9 @@
     <string name="tips_find_body">⋮ فيها التعليقات والإشارات المرجعية والصفحات. اضغط على المقبض فوق الشريط السفلي لإظهار اختصاراتك أو إخفائها.</string>
     <string name="home_open_pdf">افتح ملف PDF</string>
     <string name="home_or_start_with_tool">أو ابدأ بأداة</string>
+    <string name="updater_open_settings">افتح الإعدادات</string>
+    <string name="updater_home_ready">التحديث %1$s جاهز</string>
+    <string name="updater_home_view">عرض</string>
+    <string name="updater_auto_check">ابحث عن التحديثات تلقائيًا</string>
+    <string name="updater_auto_check_body">مرة يوميًا عند فتح PdfCraft، يسأل GitHub إن كان هناك إصدار أحدث. لا تُرسَل أي ملفات أو بيانات شخصية.</string>
 </resources>
