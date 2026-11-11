@@ -2146,4 +2146,43 @@
     <string name="library_tags_hint">exam, week 3</string>
     <string name="library_collections">Collections</string>
     <string name="library_remove">Remove from library</string>
+    <plurals name="cards_due">
+        <item quantity="one">%d card due</item>
+        <item quantity="other">%d cards due</item>
+    </plurals>
+    <plurals name="cards_due_review">
+        <item quantity="one">Review %d flashcard due</item>
+        <item quantity="other">Review %d flashcards due</item>
+    </plurals>
+    <string name="cards_title">Flashcards</string>
+    <string name="cards_row_due">Flashcards (%1$d due)</string>
+    <string name="cards_make">Make flashcard</string>
+    <string name="cards_make_cloze">Make fill-in card</string>
+    <string name="cards_new">New flashcard</string>
+    <string name="cards_edit">Edit flashcard</string>
+    <string name="cards_front">Front</string>
+    <string name="cards_back">Back</string>
+    <string name="cards_cloze_hint">Put {{ }} around words to make them a blank to fill in.</string>
+    <string name="cards_from_page">%1$s, page %2$d</string>
+    <string name="cards_saved">Flashcard saved</string>
+    <string name="cards_need_saved_file">Save the document first to make flashcards from it</string>
+    <string name="cards_progress">%1$d left · %2$d in deck</string>
+    <string name="cards_export">Export for Anki (TSV)</string>
+    <string name="cards_import">Import CSV or TSV</string>
+    <string name="cards_none">No flashcards yet</string>
+    <string name="cards_none_body">Select text in a document and choose Make flashcard, or add one with +.</string>
+    <string name="cards_all_done">All caught up</string>
+    <string name="cards_all_done_body">%1$d reviewed. Cards come back when they are due.</string>
+    <string name="cards_show_answer">Show answer</string>
+    <string name="cards_again">Again</string>
+    <string name="cards_hard">Hard</string>
+    <string name="cards_good">Good</string>
+    <string name="cards_easy">Easy</string>
+    <string name="cards_span_minutes">%d min</string>
+    <string name="cards_span_days">%d d</string>
+    <string name="cards_span_months">%d mo</string>
+    <string name="cards_delete_title">Delete this flashcard?</string>
+    <string name="cards_busy_export">Exporting flashcards…</string>
+    <string name="cards_file_name">Flashcards %1$s</string>
+    <string name="cards_imported">Imported %1$d flashcards</string>
 </resources>

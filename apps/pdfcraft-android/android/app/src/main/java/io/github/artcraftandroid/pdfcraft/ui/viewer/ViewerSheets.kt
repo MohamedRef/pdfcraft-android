@@ -139,6 +139,10 @@ fun MoreSheet(vm: AppViewModel, doc: OpenDocument) {
             )
             SheetRow(LucideIcons.Volume2, stringResource(R.string.common_tool_read_aloud), { close(); vm.startReadAloud(doc) })
             SheetRow(LucideIcons.Clock, stringResource(R.string.focus_timer), { ctl.sheet = ViewerSheet.FocusTimer })
+            doc.source?.let { src ->
+                val due = vm.dueCounts[src.toString()] ?: 0
+                SheetRow(LucideIcons.SwatchBook, if (due > 0) stringResource(R.string.cards_row_due, due) else stringResource(R.string.cards_title), { close(); vm.startReview(src.toString(), doc.info.name) })
+            }
             SheetRow(LucideIcons.FilePenLine, stringResource(R.string.common_tool_edit_pdf), { close(); vm.enterTool(doc, ViewerTool.Edit) })
             GroupDivider()
             SheetRow(LucideIcons.FileOutput, stringResource(R.string.sheet_export_as), { close(); vm.openExport(doc) })

@@ -1681,4 +1681,45 @@
     <string name="library_tags_hint">examen, semaine 3</string>
     <string name="library_collections">Collections</string>
     <string name="library_remove">Retirer de la bibliothèque</string>
+    <plurals name="cards_due">
+        <item quantity="one">%d carte à revoir</item>
+        <item quantity="many">%d cartes à revoir</item>
+        <item quantity="other">%d cartes à revoir</item>
+    </plurals>
+    <plurals name="cards_due_review">
+        <item quantity="one">Réviser %d carte</item>
+        <item quantity="many">Réviser %d cartes</item>
+        <item quantity="other">Réviser %d cartes</item>
+    </plurals>
+    <string name="cards_title">Cartes mémoire</string>
+    <string name="cards_row_due">Cartes mémoire (%1$d à revoir)</string>
+    <string name="cards_make">Créer une carte</string>
+    <string name="cards_make_cloze">Créer une carte à trous</string>
+    <string name="cards_new">Nouvelle carte</string>
+    <string name="cards_edit">Modifier la carte</string>
+    <string name="cards_front">Recto</string>
+    <string name="cards_back">Verso</string>
+    <string name="cards_cloze_hint">Entourez des mots de {{ }} pour en faire un trou à compléter.</string>
+    <string name="cards_from_page">%1$s, page %2$d</string>
+    <string name="cards_saved">Carte enregistrée</string>
+    <string name="cards_need_saved_file">Enregistrez d\'abord le document pour en créer des cartes</string>
+    <string name="cards_progress">%1$d restantes · %2$d dans le paquet</string>
+    <string name="cards_export">Exporter pour Anki (TSV)</string>
+    <string name="cards_import">Importer CSV ou TSV</string>
+    <string name="cards_none">Pas encore de cartes</string>
+    <string name="cards_none_body">Sélectionnez du texte puis Créer une carte, ou ajoutez-en une avec +.</string>
+    <string name="cards_all_done">Tout est à jour</string>
+    <string name="cards_all_done_body">%1$d révisées. Les cartes reviennent quand elles sont dues.</string>
+    <string name="cards_show_answer">Afficher la réponse</string>
+    <string name="cards_again">À revoir</string>
+    <string name="cards_hard">Difficile</string>
+    <string name="cards_good">Bien</string>
+    <string name="cards_easy">Facile</string>
+    <string name="cards_span_minutes">%d min</string>
+    <string name="cards_span_days">%d j</string>
+    <string name="cards_span_months">%d mois</string>
+    <string name="cards_delete_title">Supprimer cette carte ?</string>
+    <string name="cards_busy_export">Exportation des cartes…</string>
+    <string name="cards_file_name">Cartes %1$s</string>
+    <string name="cards_imported">%1$d cartes importées</string>
 </resources>
