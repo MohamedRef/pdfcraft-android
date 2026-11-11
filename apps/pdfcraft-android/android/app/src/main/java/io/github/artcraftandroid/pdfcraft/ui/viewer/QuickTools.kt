@@ -91,6 +91,8 @@ enum class QuickTool(val id: String, @StringRes val label: Int, @StringRes val t
     // the scan tools sit with Recognize text, in one place (#195)
     ScanEnhance("enhance", R.string.toolbar_label_enhance, R.string.scan_enhance_title, LucideIcons.WandSparkles, ToolHues.ocr),
     OcrReview("ocrreview", R.string.toolbar_label_review_ocr, R.string.ocr_review_title, LucideIcons.ListChecks, ToolHues.ocr),
+    // ink comments get their handwriting as text (#151), beside the other reading tools
+    Handwriting("handwriting", R.string.toolbar_label_handwriting, R.string.handwriting_read_page, LucideIcons.ScanText, ToolHues.ocr),
     Create("create", R.string.common_tool_create_pdf, R.string.common_tool_create_pdf, LucideIcons.FilePlus2, ToolHues.create),
     Text("text", R.string.toolbar_label_add_text, R.string.toolbar_tool_text, LucideIcons.Type, ToolHues.text),
     Scan("scan", R.string.common_tool_scan, R.string.common_tool_scan, LucideIcons.Camera, ToolHues.scan),
@@ -203,6 +205,7 @@ fun AppViewModel.runQuickTool(doc: OpenDocument, tool: QuickTool) {
         QuickTool.ScanEnhance -> doc.controller.sheet = ViewerSheet.ScanEnhance
         QuickTool.Redact -> openRedact(doc)
         QuickTool.OcrReview -> doc.controller.sheet = ViewerSheet.OcrConfidence
+        QuickTool.Handwriting -> recognizeHandwriting(doc, doc.viewer.currentPage)
         QuickTool.Create -> openCreate()
         QuickTool.Scan -> startScan()
         QuickTool.ReadAloud -> startReadAloud(doc)

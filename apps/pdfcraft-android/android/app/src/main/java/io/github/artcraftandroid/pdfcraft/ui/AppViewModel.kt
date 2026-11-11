@@ -5932,6 +5932,58 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         runTool(doc, "page_margin", args) { tell(text(R.string.margin_removed)) }
     }
 
+    // ---- Handwriting to text (#151) ----
+
+    /**
+     * Read the handwriting on page [page] (0-based): the ink comments with no text of their own
+     * are pasted on a blank page of the same size, read by the engine's OCR there (so printed
+     * text under them is not read too), and each gets the words that lie in it as its text,
+     * which the comment list, search across documents and other PDF readers show.
+     */
+    fun recognizeHandwriting(doc: OpenDocument, page: Int) {
+        val eng = engine ?: return
+        if (!doc.writable) { tell(text(R.string.margin_read_only)); return }
+        doc.commitTool?.invoke()
+        viewModelScope.launch {
+            busy = text(R.string.msg_busy_preparing_ocr)
+            withContext(Dispatchers.IO) { runCatching { eng.prepareOcrModels(getApplication()) } }
+            val status = runCatching { eng.tool("ocr_status") }.getOrNull()
+            if (status?.optBoolean("available", false) != true) {
+                busy = null
+                tell(text(R.string.msg_ocr_not_installed))
+                return@launch
+            }
+            busy = text(R.string.handwriting_busy)
+            val blank = tempFile("pdf")
+            var copy: Long? = null
+            try {
+                val inks = io.github.artcraftandroid.pdfcraft.engine.Handwriting.inksWithoutText(eng.tool("comment_list", mapOf("doc" to doc.id, "page" to page + 1)))
+                if (inks.isEmpty()) { tell(text(R.string.handwriting_none)); return@launch }
+                val xfdf = eng.tool("comments_copy", mapOf("doc" to doc.id, "comments" to inks.map { listOf(page + 1, it.index) })).getString("xfdf")
+                val size = doc.info.pages[page]
+                withContext(Dispatchers.IO) { blank.writeBytes(io.github.artcraftandroid.pdfcraft.engine.Handwriting.blankPdf(size.width.toDouble(), size.height.toDouble())) }
+                copy = eng.tool("doc_open", mapOf("path" to blank.absolutePath)).optLong("doc")
+                // centred where they were, so their boxes on the blank page are the ones listed
+                val cx = (inks.minOf { it.x0 } + inks.maxOf { it.x1 }) / 2
+                val cy = (inks.minOf { it.y0 } + inks.maxOf { it.y1 }) / 2
+                eng.tool("comments_paste", mapOf("doc" to copy, "page" to 1, "xfdf" to xfdf, "at" to listOf(cx, cy)))
+                eng.tool("doc_save", mapOf("doc" to copy))
+                val read = eng.tool("ocr_words", mapOf("doc" to copy, "pages" to listOf(1), "force_ocr" to true, "auto_rotate" to true))
+                val found = io.github.artcraftandroid.pdfcraft.engine.Handwriting.assign(inks, io.github.artcraftandroid.pdfcraft.engine.Handwriting.words(read))
+                if (found.isEmpty()) { tell(text(R.string.handwriting_nothing_read)); return@launch }
+                for ((index, words) in found) eng.tool("comment_edit", mapOf("doc" to doc.id, "page" to page + 1, "index" to index, "contents" to words))
+                refresh(doc)
+                success = SuccessBanner(plural(R.plurals.handwriting_done, found.size, found.size), null)
+            } catch (e: Exception) {
+                tell(e.userMessage)
+            } finally {
+                copy?.let { c -> runCatching { eng.tool("doc_close", mapOf("doc" to c, "discard_changes" to true)) } }
+                withContext(Dispatchers.IO) { blank.delete() }
+                busy = null
+            }
+        }
+    }
+
     // ---- Backups (#145) ----
 
     /** The folder backups go to (a tree the user picked), or null when backups are off. */

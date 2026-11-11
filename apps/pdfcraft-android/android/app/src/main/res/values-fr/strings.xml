@@ -1823,4 +1823,14 @@
         <item quantity="many">%d pages</item>
         <item quantity="other">%d pages</item>
     </plurals>
+    <string name="handwriting_read_page">Lire l\'écriture manuscrite de cette page (bêta)</string>
+    <string name="handwriting_busy">Lecture de l\'écriture manuscrite…</string>
+    <string name="handwriting_none">Aucune écriture manuscrite non lue sur cette page</string>
+    <string name="handwriting_nothing_read">Aucun mot n\'a pu être lu. La reconnaissance fonctionne mieux avec des lettres latines nettes, en script.</string>
+    <plurals name="handwriting_done">
+        <item quantity="one">Texte ajouté à %d dessin</item>
+        <item quantity="many">Texte ajouté à %d dessins</item>
+        <item quantity="other">Texte ajouté à %d dessins</item>
+    </plurals>
+    <string name="toolbar_label_handwriting">Écriture</string>
 </resources>
