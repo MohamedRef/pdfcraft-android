@@ -353,3 +353,12 @@ fn compact_rasters_reduce_transfer_while_tiles_and_opt_out_keep_exact_rgba() {
     assert!(!detailed.rgb565);
     assert_eq!(detailed.pixels, session.render_page(doc.id, 0, 2.0, tile).unwrap().rgba);
 }
+
+#[test]
+fn oversized_file_list_previews_are_refused_before_pdf_parsing() {
+    let path = file(b"%PDF-1.7 deliberately incomplete");
+    std::fs::OpenOptions::new().write(true).open(&path).unwrap().set_len(100 * 1024 * 1024 + 1).unwrap();
+    let error = file_thumbnail(path.clone(), 160).unwrap_err().to_string();
+    assert!(error.contains("input exceeds 100 MiB"), "{error}");
+    assert_eq!(std::fs::metadata(path).unwrap().len(), 100 * 1024 * 1024 + 1);
+}

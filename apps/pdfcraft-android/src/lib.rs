@@ -193,8 +193,10 @@ pub struct ToolInfo {
 /// file is read but not opened in any session; a protected or unreadable file is an error.
 #[uniffi::export]
 pub fn file_thumbnail(path: String, max_side: u32) -> Result<RenderedImage, MobileError> {
-    let bytes = std::fs::read(&path).map_err(|e| MobileError::Open(format!("{path}: {e}")))?;
-    let mut r = PageRenderer::new(Arc::new(bytes), RenderConfig::default());
+    // File-list previews must not allocate another full large-PDF input beside an open viewer.
+    let bytes = pdfcraft_cos::read_private_input(std::path::Path::new(&path), None, 100 * 1024 * 1024)
+        .map_err(|e| MobileError::Open(format!("{path}: {e}")))?;
+    let mut r = PageRenderer::new(bytes, RenderConfig::default());
     if r.page_count() == 0 {
         return Err(MobileError::Open("the file has no pages".into()));
     }

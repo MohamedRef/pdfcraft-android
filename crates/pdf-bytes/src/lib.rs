@@ -65,7 +65,7 @@ fn read_private_with(path: &Path, root: Option<&Path>, cap: u64, map: impl FnOnc
     let file = File::open(path)?;
     let metadata = file.metadata()?;
     if metadata.is_file() && metadata.len() > cap {
-        return Err(io::Error::new(io::ErrorKind::InvalidData, "input exceeds 512 MiB"));
+        return Err(input_limit_error(cap));
     }
     if metadata.len() >= 1024 * 1024 && root.is_some_and(|root| managed_private_file(path, root, &metadata)) {
         if let Ok(mapped) = map(&file) {
@@ -78,7 +78,7 @@ fn read_private_with(path: &Path, root: Option<&Path>, cap: u64, map: impl FnOnc
     }
     file.take(cap + 1).read_to_end(&mut bytes)?;
     if bytes.len() as u64 > cap {
-        return Err(io::Error::new(io::ErrorKind::InvalidData, "input exceeds 512 MiB"));
+        return Err(input_limit_error(cap));
     }
     Ok(Arc::new(bytes))
 }
@@ -115,6 +115,11 @@ fn managed_private_file(path: &Path, root: &Path, opened: &std::fs::Metadata) ->
 #[cfg(not(any(target_os = "android", all(test, target_os = "linux"))))]
 fn managed_private_file(_: &Path, _: &Path, _: &std::fs::Metadata) -> bool {
     false
+}
+
+fn input_limit_error(cap: u64) -> io::Error {
+    let limit = if cap.is_multiple_of(1024 * 1024) { format!("{} MiB", cap / (1024 * 1024)) } else { format!("{cap} bytes") };
+    io::Error::new(io::ErrorKind::InvalidData, format!("input exceeds {limit}"))
 }
 
 /// The only unsafe boundary. Accepted inputs belong to the app's private Documents/Created

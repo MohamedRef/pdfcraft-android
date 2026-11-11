@@ -12,7 +12,9 @@ store. The guard checks canonical containment, process/file/root ownership, rest
 permissions, a single hard link and the opened descriptor's inode/device identity. Arbitrary
 paths, aliases outside those stores, shared files, unsupported mappings and non-Android hosts
 retain the bounded owned reader. Diagnostics record `native_input_mapped` or `native_input_owned`
-as zero-time markers, separately from the enclosing file-input duration.
+as zero-time markers, separately from the enclosing file-input duration. File-list thumbnails
+use a separate 100 MiB input cap, matching the existing provider-preview limit, so listing a
+large local PDF does not allocate another full input copy beside the viewer.
 
 ## Immutability and writers
 
