@@ -1211,6 +1211,7 @@
     <string name="bates_export_failed">Impossible d\'enregistrer cette nouvelle copie dans Téléchargements.</string>
     <string name="ink_presets_title">Stylos favoris</string>
     <string name="ink_presets_help">Chaque stylo garde sa propre couleur, son épaisseur et son opacité. Touchez un favori pour restaurer ses réglages.</string>
+    <string name="ink_ruler">Règle</string>
     <string name="palm_guard_size">Zone de la paume : %1$d dp</string>
     <string name="palm_guard_explanation">Quand le S Pen survole ou écrit, les touchers à côté et en dessous, du côté de la main d\'écriture, ne font ni défiler, ni zoomer, ni dessiner. La zone s\'affiche pendant le survol.</string>
     <string name="palm_guard">Ignorer la paume pendant l\'écriture</string>

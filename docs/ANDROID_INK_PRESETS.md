@@ -29,3 +29,7 @@ Pen settings has two choices. **While the S Pen button is held**: Eraser (defaul
 ## Writing hand and palm guard (#156)
 
 Pen settings has **Writing hand** (Right or Left) and **Ignore palm while writing** (off by default) with a 60–240 dp area size. Choosing Left moves the quick rail to the right edge (it can still be dragged) and, on desktop layouts, puts the zoom buttons in the physical bottom-right corner in every language. With the guard on, a finger touch that starts inside the area beside and below the pen tip on the writing-hand side, within 1.5 s of the last pen hover or stroke sample, neither draws, scrolls, zooms nor counts as a two-finger tap; a pen arriving during that touch still writes. The area is drawn faintly while the pen hovers. Not done yet: guarding toolbar taps, a separate calibration screen and a toolbar that follows the writing position.
+
+## Ruler (#150)
+
+Draw ▸ **Ruler** shows a screen-space ruler with 5 dp ticks and its angle. One or two fingers on the ruler move it; two fingers also turn it about their centre. The angle snaps to 15° steps within 2° with a haptic tick. A freehand pen or finger stroke that starts within 24 dp of an edge follows that edge for the whole stroke (offset by half the stroke width), so the saved ink is straight. The ruler is only an overlay: it is kept per open document while it stays open and is never written to the PDF, exports or prints. Not done yet: protractor and arcs, and unifying hold-to-straighten with the ruler.

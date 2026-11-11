@@ -1522,6 +1522,7 @@
     <string name="bates_export_failed">Could not save this new copy to Downloads.</string>
     <string name="ink_presets_title">Favorite pens</string>
     <string name="ink_presets_help">Each pen keeps its own colour, width and opacity. Tap a favorite to restore its settings.</string>
+    <string name="ink_ruler">Ruler</string>
     <string name="palm_guard_size">Palm area: %1$d dp</string>
     <string name="palm_guard_explanation">While the S Pen hovers or writes, finger touches beside and below it on your writing-hand side do not scroll, zoom or draw. The area shows while the pen hovers.</string>
     <string name="palm_guard">Ignore palm while writing</string>

@@ -63,6 +63,10 @@ class ViewerController {
     /** Select or move still-uncommitted Draw strokes without modifying saved PDF annotations. */
     var lassoMode by mutableStateOf(false)
 
+    /** Draw: the ruler is shown (#150) and where it is, on screen; never saved to the PDF. */
+    var rulerOn by mutableStateOf(false)
+    internal var ruler by mutableStateOf<Ruler?>(null)
+
     /** Draw: the next tap on the page picks the pen colour from the ink or comment there (#149). */
     var inkEyedropper by mutableStateOf(false)
     /** Explicit annotation shape, independent of freehand snap recognition. */
