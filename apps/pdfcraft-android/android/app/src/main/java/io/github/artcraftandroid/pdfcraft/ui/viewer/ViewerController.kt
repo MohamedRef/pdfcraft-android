@@ -114,6 +114,9 @@ class ViewerController {
     /** The laser pointer's trail while presenting, shared with an external display. */
     val laser = LaserTrail()
 
+    /** Temporary ink written while presenting (#327), shared with an external display too. */
+    val tempInk = TempInk()
+
     /** The page mode to go back to after presenting. */
     internal var modeBeforePresenting: PageMode? = null
 

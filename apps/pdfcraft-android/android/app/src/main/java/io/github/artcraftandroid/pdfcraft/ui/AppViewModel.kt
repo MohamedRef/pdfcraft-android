@@ -978,6 +978,9 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         val ctl = doc.controller
         if (!ctl.presenting) return
         ctl.presenting = false
+        // the pointer and temporary ink belong to the presentation
+        ctl.laser.points.clear()
+        ctl.tempInk.strokes.clear()
         ctl.modeBeforePresenting?.let { doc.viewer.switchMode(it) }
         ctl.modeBeforePresenting = null
         ctl.barsVisible = true

@@ -5,6 +5,11 @@ import io.github.artcraftandroid.pdfcraft.ui.viewer.LaserPoint
 import io.github.artcraftandroid.pdfcraft.ui.viewer.LaserTrail
 import io.github.artcraftandroid.pdfcraft.ui.viewer.PageSize
 import io.github.artcraftandroid.pdfcraft.ui.viewer.fitPage
+import io.github.artcraftandroid.pdfcraft.ui.viewer.TEMP_INK_GONE_MS
+import io.github.artcraftandroid.pdfcraft.ui.viewer.TEMP_INK_HOLD_MS
+import io.github.artcraftandroid.pdfcraft.ui.viewer.TempInk
+import io.github.artcraftandroid.pdfcraft.ui.viewer.TempStroke
+import io.github.artcraftandroid.pdfcraft.ui.viewer.tempInkAlpha
 import org.junit.Assert.assertNull
 import io.github.artcraftandroid.pdfcraft.ui.viewer.laserAlpha
 import io.github.artcraftandroid.pdfcraft.ui.viewer.presentationTap
@@ -52,5 +57,21 @@ class PresentationTest {
         assertEquals(listOf(LaserPoint(0, 20f, 20f, 1500L)), t.points.toList())
         t.fade(1500L + LASER_FADE_MS + 1)
         assertTrue(t.points.isEmpty())
+    }
+
+    @Test
+    fun temporaryInkStaysWhileDrawingAndGoesWithinThreeSeconds() {
+        assertEquals(1f, tempInkAlpha(null), 0f)
+        assertEquals(1f, tempInkAlpha(TEMP_INK_HOLD_MS), 0f)
+        assertEquals(0f, tempInkAlpha(TEMP_INK_GONE_MS), 0f)
+        assertTrue(TEMP_INK_GONE_MS <= 3000L)
+        val ink = TempInk()
+        val drawing = TempStroke(0)
+        val done = TempStroke(0).apply { liftedAt = 1000L }
+        ink.strokes.add(drawing)
+        ink.strokes.add(done)
+        ink.fade(1000L + TEMP_INK_GONE_MS)
+        // the lifted stroke is gone; the one still being drawn stays
+        assertEquals(listOf(drawing), ink.strokes.toList())
     }
 }

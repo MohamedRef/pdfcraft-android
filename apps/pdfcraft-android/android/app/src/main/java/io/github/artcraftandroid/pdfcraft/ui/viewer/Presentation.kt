@@ -61,31 +61,50 @@ fun presentationTap(x: Float, width: Float): Int = when {
 }
 
 /**
- * Presentation mode over the page (#157): a tap on the left or right third turns the page, and a
- * drag with a finger or pen is a laser pointer whose trail fades within [LASER_FADE_MS]. Nothing
- * is written to the PDF.
+ * Presentation mode over the page (#157): a tap on the left or right third turns the page, a
+ * finger's drag is a laser pointer whose trail fades within [LASER_FADE_MS], and a pen writes
+ * temporary ink that fades a few seconds after it lifts (#327). Nothing is written to the PDF.
  */
 @Composable
-fun BoxScope.PresentationLayer(viewer: ViewerState, trail: LaserTrail) {
+fun BoxScope.PresentationLayer(viewer: ViewerState, trail: LaserTrail, ink: TempInk) {
     val dot = with(LocalDensity.current) { 7.dp.toPx() }
-    // keep the trail fading while there is one
-    LaunchedEffect(trail, trail.points.isNotEmpty()) {
-        while (trail.points.isNotEmpty()) {
+    val inkWidth = with(LocalDensity.current) { 3.dp.toPx() }
+    // keep the trail and the ink fading while there is any
+    LaunchedEffect(trail, ink, trail.points.isNotEmpty() || ink.strokes.isNotEmpty()) {
+        while (trail.points.isNotEmpty() || ink.strokes.isNotEmpty()) {
             withFrameMillis { }
-            trail.fade(android.os.SystemClock.uptimeMillis())
+            val now = android.os.SystemClock.uptimeMillis()
+            trail.fade(now)
+            ink.fade(now)
         }
     }
     Canvas(
-        Modifier.fillMaxSize().pointerInput(viewer, trail) {
+        Modifier.fillMaxSize().pointerInput(viewer, trail, ink) {
             val slop = viewConfiguration.touchSlop
             awaitEachGesture {
                 val down = awaitFirstDown()
                 var laser = false
                 // the page the drag started on: the trail stays on it, held to its edges
                 val page = viewer.screenToPage(down.position, nearest = true)?.page ?: viewer.currentPage
+                // a pen writes temporary ink from its first touch
+                val pen = down.type == androidx.compose.ui.input.pointer.PointerType.Stylus
+                val stroke = if (pen) TempStroke(page).also { s ->
+                    viewer.screenToPageOf(page, down.position)?.let { s.points.add(Offset(it.x, it.y)) }
+                    ink.strokes.add(s)
+                    down.consume()
+                } else null
                 while (true) {
                     val event = awaitPointerEvent()
                     val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                    if (stroke != null) {
+                        if (!change.pressed) {
+                            stroke.liftedAt = change.uptimeMillis
+                            break
+                        }
+                        viewer.screenToPageOf(page, change.position)?.let { stroke.points.add(Offset(it.x, it.y)) }
+                        change.consume()
+                        continue
+                    }
                     if (!change.pressed) {
                         if (!laser) presentationTap(change.position.x, size.width.toFloat()).takeIf { it != 0 }?.let(viewer::turnPage)
                         break
@@ -97,6 +116,7 @@ fun BoxScope.PresentationLayer(viewer: ViewerState, trail: LaserTrail) {
             }
         },
     ) {
+        drawTempInk(ink, inkWidth) { page, p -> viewer.pageToScreen(page, p.x, p.y) }
         drawLaser(trail, dot) { p -> viewer.pageToScreen(p.page, p.x, p.y) }
     }
 }

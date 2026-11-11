@@ -142,10 +142,13 @@ private fun ExternalPage(doc: OpenDocument) {
                 TileRect(0u, 0u, (size.width * scale).roundToInt().coerceAtLeast(1).toUInt(), (size.height * scale).roundToInt().coerceAtLeast(1).toUInt()),
             ) ?: value
         }
-        LaunchedEffect(trail, trail.points.isNotEmpty()) {
-            while (trail.points.isNotEmpty()) {
+        val ink = doc.controller.tempInk
+        LaunchedEffect(trail, ink, trail.points.isNotEmpty() || ink.strokes.isNotEmpty()) {
+            while (trail.points.isNotEmpty() || ink.strokes.isNotEmpty()) {
                 androidx.compose.runtime.withFrameMillis { }
-                trail.fade(android.os.SystemClock.uptimeMillis())
+                val now = android.os.SystemClock.uptimeMillis()
+                trail.fade(now)
+                ink.fade(now)
             }
         }
         Canvas(Modifier.fillMaxSize()) {
@@ -155,6 +158,7 @@ private fun ExternalPage(doc: OpenDocument) {
                     dstSize = IntSize((size.width * fit.scale).roundToInt(), (size.height * fit.scale).roundToInt()),
                 )
             }
+            drawTempInk(ink, dot * 0.45f) { p, o -> if (p == page) Offset(fit.left + o.x * fit.scale, fit.top + o.y * fit.scale) else null }
             drawLaser(trail, dot) { p -> if (p.page == page) Offset(fit.left + p.x * fit.scale, fit.top + p.y * fit.scale) else null }
         }
     }
