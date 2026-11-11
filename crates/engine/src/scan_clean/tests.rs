@@ -138,7 +138,7 @@ fn a_scan_gets_white_paper_even_edges_dark_strokes_and_no_specks_in_place() {
     // Undo brings the original image, and the original file, back.
     s.undo(id).unwrap();
     assert_eq!(samples(&s, id), before);
-    assert_eq!(s.get(id).unwrap().bytes, original);
+    assert_eq!((s.get(id).unwrap().bytes).as_slice(), (original).as_slice());
     assert_eq!(s.get(id).unwrap().can_undo(), None);
 }
 

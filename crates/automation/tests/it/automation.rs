@@ -128,7 +128,7 @@ fn protected_fixture(password: &str) -> Vec<u8> {
     let mut session = Session::new();
     let id = session.open("target.pdf", None, std::sync::Arc::new(fixture(1)), None).unwrap();
     session.apply(id, Edit::Protect(Protection { open_password: Some(password.into()), ..Default::default() })).unwrap();
-    session.save_bytes(id).unwrap().as_ref().clone()
+    session.save_bytes(id).unwrap().to_vec()
 }
 
 /// A fresh directory with `a.pdf` (3 pages) and `b.pdf` (2 pages).
@@ -10006,7 +10006,7 @@ mod close_argument_tests {
                 assert_eq!(ok(&mut a, "doc_info", json!({ "doc": doc })), info);
                 assert_eq!(ok(&mut a, "text_extract", json!({ "doc": doc })), text);
                 let current = a.session().get(pdfcraft_engine::DocId(doc)).unwrap();
-                assert_eq!(current.bytes, bytes);
+                assert_eq!(current.bytes.as_slice(), bytes.as_slice());
                 assert_eq!(current.dirty, dirty);
                 assert_eq!(std::fs::read(dir.0.join("a.pdf")).unwrap(), source);
                 assert_eq!(std::fs::read(dir.0.join("b.pdf")).unwrap(), other_source);
@@ -10043,7 +10043,7 @@ mod close_argument_tests {
             assert!(matches!(error, ToolError::Failed(ref message) if message.contains("unsaved changes")));
             assert_eq!(ok(&mut a, "doc_list", json!({})), before);
             assert_eq!(ok(&mut a, "doc_info", json!({ "doc": doc })), info);
-            assert_eq!(a.session().get(pdfcraft_engine::DocId(doc)).unwrap().bytes, bytes);
+            assert_eq!(a.session().get(pdfcraft_engine::DocId(doc)).unwrap().bytes.as_slice(), bytes.as_slice());
         }
         assert_eq!(ok(&mut a, "doc_close", json!({ "doc": doc, "discard_changes": true }))["closed"], doc);
         assert!(a.session().get(pdfcraft_engine::DocId(doc)).is_none());
@@ -10114,7 +10114,7 @@ mod combine_argument_tests {
                     assert_eq!(ok(&mut a, "doc_list", json!({})), list);
                     assert_eq!(ok(&mut a, "doc_info", json!({ "doc": doc })), info);
                     assert_eq!(page_text(&mut a, doc), text);
-                    assert_eq!(a.session().get(pdfcraft_engine::DocId(doc)).unwrap().bytes, bytes);
+                    assert_eq!(a.session().get(pdfcraft_engine::DocId(doc)).unwrap().bytes.as_slice(), bytes.as_slice());
                     assert_eq!(std::fs::read(dir.0.join("a.pdf")).unwrap(), first);
                     assert_eq!(std::fs::read(dir.0.join("b.pdf")).unwrap(), second);
                 }

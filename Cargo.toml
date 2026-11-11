@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/a11y", "crates/annot", "crates/audit", "crates/automation", "crates/compare", "crates/content", "crates/cos", "crates/create", "crates/crypt", "crates/edit", "crates/engine", "crates/export", "crates/filters", "crates/fonts", "crates/forms", "crates/geom", "crates/js", "crates/measure", "crates/model", "crates/ocr", "crates/optimize", "crates/oracle", "crates/organize", "crates/platform", "crates/preflight", "crates/print", "crates/redact", "crates/render", "crates/sign", "crates/testkit", "crates/xfa", "crates/xfdf", "apps/pdfcraft-android", "apps/pdfcraft-android/bindgen"]
+members = ["crates/pdf-bytes", "crates/a11y", "crates/annot", "crates/audit", "crates/automation", "crates/compare", "crates/content", "crates/cos", "crates/create", "crates/crypt", "crates/edit", "crates/engine", "crates/export", "crates/filters", "crates/fonts", "crates/forms", "crates/geom", "crates/js", "crates/measure", "crates/model", "crates/ocr", "crates/optimize", "crates/oracle", "crates/organize", "crates/platform", "crates/preflight", "crates/print", "crates/redact", "crates/render", "crates/sign", "crates/testkit", "crates/xfa", "crates/xfdf", "apps/pdfcraft-android", "apps/pdfcraft-android/bindgen"]
 exclude = ["vendor"]
 
 [workspace.package]
@@ -11,6 +11,7 @@ rust-version = "1.95"
 repository = "https://github.com/storytold/pdfcraft"
 
 [workspace.dependencies]
+pdfcraft-bytes = { path = "crates/pdf-bytes", version = "0.20.0" }
 # Android adaptation (#212): fast substring search when repairing large files.
 memchr = "2.8"
 # Shared frontend components; engines remain independent of egui.

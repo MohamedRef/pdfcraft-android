@@ -163,7 +163,7 @@ fn discovery_retains_neither_document_bytes_nor_old_sources() {
 #[test]
 fn reconstructed_and_unreadable_objects_are_not_cached_as_complete() {
     let doc = fixture(&[STAMP]);
-    let mut damaged = doc.bytes().as_ref().clone();
+    let mut damaged = doc.bytes().to_vec();
     damaged[0] = b'!';
     let repaired = Document::open(Arc::new(damaged)).unwrap();
     assert!(!repaired.repair_log().is_empty());

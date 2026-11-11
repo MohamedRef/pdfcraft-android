@@ -48,7 +48,7 @@ impl Drop for StopWorkers<'_> {
 pub struct Exporter {
     renderer: PageRenderer,
     /// What the renderer draws, for the extra renderers [`Exporter::images`] starts.
-    bytes: std::sync::Arc<Vec<u8>>,
+    bytes: pdfcraft_cos::PdfBytes,
     config: pdfcraft_render::RenderConfig,
     pages: usize,
     /// Each page's displayed size in points, for [`Exporter::dpi_used`].
@@ -58,7 +58,7 @@ pub struct Exporter {
 /// What an export needs from a document, as plain values that can move to a worker thread.
 #[derive(Clone)]
 pub struct ExportSource {
-    pub bytes: std::sync::Arc<Vec<u8>>,
+    pub bytes: pdfcraft_cos::PdfBytes,
     pub config: pdfcraft_render::RenderConfig,
     pub pages: usize,
     /// Each page's displayed size in points (after `/Rotate` and `/UserUnit`).

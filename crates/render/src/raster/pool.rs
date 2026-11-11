@@ -241,7 +241,7 @@ pub struct RenderPool {
     wake: Mutex<Vec<SyncSender<()>>>,
     pub(super) results: ResultReceiver,
     pub(super) results_tx: Arc<WorkQueue>,
-    bytes: Arc<Vec<u8>>,
+    bytes: pdfcraft_cos::PdfBytes,
     pub(super) config: RenderConfig,
     pub(super) _workers: Mutex<Vec<JoinHandle<()>>>,
     stuck_after: std::time::Duration,
@@ -253,11 +253,11 @@ pub struct RenderPool {
 }
 
 impl RenderPool {
-    pub fn new(bytes: Arc<Vec<u8>>, threads: usize, config: RenderConfig) -> Self {
+    pub fn new(bytes: pdfcraft_cos::PdfBytes, threads: usize, config: RenderConfig) -> Self {
         Self::with_mode(bytes, threads, config, false)
     }
 
-    fn with_mode(bytes: Arc<Vec<u8>>, threads: usize, config: RenderConfig, inline: bool) -> Self {
+    fn with_mode(bytes: pdfcraft_cos::PdfBytes, threads: usize, config: RenderConfig, inline: bool) -> Self {
         let threads = if inline || cfg!(target_arch = "wasm32") { 0 } else { threads.max(1) };
         let shared = Arc::new(Shared::default());
         let results_tx = shared.queue.clone();
@@ -314,7 +314,7 @@ impl RenderPool {
     }
 
     /// A pool without worker threads: renders inside `try_recv` (the web path; also used in tests).
-    pub fn new_inline(bytes: Arc<Vec<u8>>, config: RenderConfig) -> Self {
+    pub fn new_inline(bytes: pdfcraft_cos::PdfBytes, config: RenderConfig) -> Self {
         Self::with_mode(bytes, 0, config, true)
     }
 
@@ -520,7 +520,7 @@ pub(super) fn worker_settings(config: &RenderConfig, stop: &Arc<std::sync::atomi
 #[cfg(not(target_arch = "wasm32"))]
 pub(super) fn worker(
     id: usize,
-    bytes: Arc<Vec<u8>>,
+    bytes: pdfcraft_cos::PdfBytes,
     config: RenderConfig,
     shared: Arc<Shared>,
     wake: Receiver<()>,

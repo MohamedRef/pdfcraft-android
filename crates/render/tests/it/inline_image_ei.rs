@@ -105,7 +105,7 @@ fn unfiltered_inline_image_samples_containing_ei_are_not_executed_as_content() {
 
     let pdf = Arc::new(build_pdf(&[page_stream(&img1, 1), page_stream(&img2, 2), page_stream(&img3, 3), page_stream(&img4, 4)], &[], ""));
 
-    let mut renderer = PageRenderer::new(Arc::clone(&pdf), RenderConfig::default());
+    let mut renderer = PageRenderer::new(pdf.clone(), RenderConfig::default());
     let mut greys = Vec::new();
     for page_idx in 0..4 {
         let text_page = renderer.render(RenderRequest { page: page_idx, kind: RequestKind::Text, tile: None, scale: 1.0, tag: 0, preview: false });
@@ -146,7 +146,7 @@ fn form_xobject_inline_image_with_ei_in_samples_keeps_all_samples() {
     // 1 page => font is object 5, form XObject is object 6.
     let pdf = Arc::new(build_pdf(&[page_content], &[(6, form_obj)], "/XObject << /Fm1 6 0 R >>"));
 
-    let mut renderer = PageRenderer::new(Arc::clone(&pdf), RenderConfig::default());
+    let mut renderer = PageRenderer::new(pdf.clone(), RenderConfig::default());
     let rendered = renderer.render(RenderRequest { page: 0, kind: RequestKind::Pixels, tile: None, scale: 1.0, tag: 0, preview: false });
     assert!(rendered.error.is_none(), "{:?}", rendered.error);
 
@@ -177,7 +177,7 @@ fn unfiltered_inline_image_layouts_and_mismatched_l_do_not_inject_content() {
     let pages: Vec<Vec<u8>> = cases.iter().enumerate().map(|(i, (params, len))| page_stream(&make_image(params, *len), i + 1)).collect();
 
     let pdf = Arc::new(build_pdf(&pages, &[], ""));
-    let mut renderer = PageRenderer::new(Arc::clone(&pdf), RenderConfig::default());
+    let mut renderer = PageRenderer::new(pdf.clone(), RenderConfig::default());
 
     for (i, (params, _)) in cases.iter().enumerate() {
         let page_idx = i;

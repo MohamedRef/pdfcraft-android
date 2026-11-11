@@ -56,13 +56,13 @@ impl Document {
 
     /// Parse a document. Damaged cross-reference data is reconstructed; see `repair_log`.
     /// Encrypted documents open only if their user password is empty; see `open_with_password`.
-    pub fn open(data: Arc<Vec<u8>>) -> Result<Self, CosError> {
+    pub fn open(data: crate::PdfBytes) -> Result<Self, CosError> {
         Self::open_with_password(data, None)
     }
 
     /// Parse a document, authenticating encrypted ones with `password` (owner or user; `None`
     /// tries the empty password). Fails with `NeedsPassword` / `WrongPassword` as appropriate.
-    pub fn open_with_password(data: Arc<Vec<u8>>, password: Option<&str>) -> Result<Self, CosError> {
+    pub fn open_with_password(data: crate::PdfBytes, password: Option<&str>) -> Result<Self, CosError> {
         Self::open_with_stream_limit(data, password, crate::object::MAX_DECODED)
     }
 
@@ -70,7 +70,7 @@ impl Document {
     /// Inspection can use this without changing the editing reader's default limit. Such a
     /// document is read-only: objects in a larger object stream read as missing, so the
     /// writers refuse to save it ([`CosError::ReadOnlyLimit`]).
-    pub fn open_with_stream_limit(data: Arc<Vec<u8>>, password: Option<&str>, stream_limit: usize) -> Result<Self, CosError> {
+    pub fn open_with_stream_limit(data: crate::PdfBytes, password: Option<&str>, stream_limit: usize) -> Result<Self, CosError> {
         Self::open_as(data, Credentials::Password(password), stream_limit)
     }
 
@@ -79,7 +79,7 @@ impl Document {
     /// `/Encrypt` dictionary and `/ID` as this document, whose file key is then reused, so no
     /// password is needed or kept; unencrypted data opens as [`open`](Self::open) does. Data
     /// encrypted differently fails with `NeedsPassword`.
-    pub fn open_with_same_credentials(&self, data: Arc<Vec<u8>>) -> Result<Self, CosError> {
+    pub fn open_with_same_credentials(&self, data: crate::PdfBytes) -> Result<Self, CosError> {
         let credentials = match &self.security {
             Some(handler) => Credentials::Handler { handler, id0: self.first_id() },
             None => Credentials::Password(None),
@@ -87,7 +87,7 @@ impl Document {
         Self::open_as(data, credentials, self.stream_limit)
     }
 
-    fn open_as(data: Arc<Vec<u8>>, credentials: Credentials<'_>, stream_limit: usize) -> Result<Self, CosError> {
+    fn open_as(data: crate::PdfBytes, credentials: Credentials<'_>, stream_limit: usize) -> Result<Self, CosError> {
         // Viewers accept files whose header is missing or damaged as long as the body looks
         // like PDF; so do we (a note goes to the repair log).
         let header = find(&data, b"%PDF-", 0, 1024);

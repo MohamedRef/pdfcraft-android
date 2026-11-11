@@ -512,7 +512,7 @@ impl KeptObjects {
     const BYTES: usize = 64 * 1024 * 1024;
 
     /// Whether `object` still fits the budget; if so it is counted against it.
-    fn admit(&mut self, object: &Object, data: &Arc<Vec<u8>>) -> bool {
+    fn admit(&mut self, object: &Object, data: &crate::PdfBytes) -> bool {
         let bytes = self.bytes.saturating_add(held_bytes(object, data, 0));
         if bytes > Self::BYTES {
             return false;
@@ -1048,7 +1048,7 @@ mod tests {
 
     #[test]
     fn kept_objects_stop_at_their_byte_budget() {
-        let data = Arc::new(Vec::new());
+        let data: crate::PdfBytes = Arc::new(Vec::new());
         let string = Object::String(PdfString::literal(vec![b'x'; 1000]));
         let array = Object::Array(vec![Object::Int(1), Object::Null]);
         let mut kept = KeptObjects::default();
@@ -1067,7 +1067,7 @@ mod tests {
 
     #[test]
     fn kept_objects_count_names_and_dictionary_keys() {
-        let data = Arc::new(Vec::new());
+        let data: crate::PdfBytes = Arc::new(Vec::new());
         let name = Object::Name(vec![b'n'; KeptObjects::BYTES + 1]);
         let mut kept = KeptObjects::default();
         assert!(!kept.admit(&name, &data), "a name over the byte budget is not kept");

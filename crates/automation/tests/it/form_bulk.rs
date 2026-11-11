@@ -48,7 +48,7 @@ fn setup(test: &str) -> (Automation, u64, std::path::PathBuf) {
 }
 
 fn bytes(a: &Automation, id: u64) -> Vec<u8> {
-    a.session().save_bytes(DocId(id)).unwrap().as_ref().clone()
+    a.session().save_bytes(DocId(id)).unwrap().to_vec()
 }
 
 #[test]

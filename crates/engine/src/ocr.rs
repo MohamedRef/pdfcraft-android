@@ -636,12 +636,12 @@ pub struct OcrGuard {
     pub(crate) revisions: usize,
     /// The document's working bytes when the job started; any edit rewrites them, so a shared
     /// `Arc` pointer means "untouched".
-    pub(crate) bytes: Arc<Vec<u8>>,
+    pub(crate) bytes: pdfcraft_cos::PdfBytes,
 }
 
 /// Everything recognition needs from a document, detached from the session.
 pub struct OcrJob {
-    bytes: Arc<Vec<u8>>,
+    bytes: pdfcraft_cos::PdfBytes,
     password: Option<String>,
     infos: Vec<PageInfo>,
     /// Per page: the render scale (pixels per point) that shows its images at their own
@@ -1022,7 +1022,7 @@ impl Session {
         let Some(doc) = self.get(guard.doc) else {
             return Some("the document is no longer open".into());
         };
-        if !Arc::ptr_eq(&doc.bytes, &guard.bytes) {
+        if !pdfcraft_cos::same_storage(&doc.bytes, &guard.bytes) {
             return Some("the document changed since recognition started".into());
         }
         let now = doc.info.pages.len();
@@ -1063,7 +1063,7 @@ impl Session {
     /// was recognized, each page the displayed size of its source. The open document is never
     /// touched; the caller chooses where the bytes are written. Refuses when there are no
     /// words at all (an empty document would silently lose the scan's content).
-    pub fn editable_ocr_bytes(&self, id: DocId, found: &[OcrPage]) -> Result<Arc<Vec<u8>>, String> {
+    pub fn editable_ocr_bytes(&self, id: DocId, found: &[OcrPage]) -> Result<pdfcraft_cos::PdfBytes, String> {
         let doc = self.get(id).ok_or("no such document")?;
         let words = layer::validate_words(found.iter().flat_map(|p| &p.words)).map_err(|e| e.to_string())?;
         if words == 0 {
@@ -1145,14 +1145,20 @@ impl Session {
 }
 
 /// What [`recognize_file`] did to one file.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug)]
 pub struct FileResult {
     /// The new file (incrementally saved), or the original when nothing was recognised.
-    pub bytes: Arc<Vec<u8>>,
+    pub bytes: pdfcraft_cos::PdfBytes,
     pub pages: Vec<OcrPage>,
     /// Why the whole file was left alone ("Skip files that already contain text"): a skipped
     /// file is its own result bucket, never counted as an OCR success.
     pub file_skipped: Option<String>,
+}
+
+impl PartialEq for FileResult {
+    fn eq(&self, other: &Self) -> bool {
+        self.bytes.as_slice() == other.bytes.as_slice() && self.pages == other.pages && self.file_skipped == other.file_skipped
+    }
 }
 
 impl FileResult {
@@ -1208,7 +1214,7 @@ pub fn low_confidence_pages(pages: &[OcrPage], threshold: f32) -> Option<(usize,
 /// it, but it is never an OCR success.
 pub fn recognize_file(
     name: &str,
-    bytes: Arc<Vec<u8>>,
+    bytes: pdfcraft_cos::PdfBytes,
     password: Option<&str>,
     settings: OcrSettings,
     recognizers: &Recognizers,
@@ -1229,7 +1235,7 @@ pub fn recognize_file(
 pub struct FileJob {
     session: Session,
     id: DocId,
-    bytes: Arc<Vec<u8>>,
+    bytes: pdfcraft_cos::PdfBytes,
     /// The pages to read (taken by the caller).
     pub job: Option<OcrJob>,
 }
@@ -1242,7 +1248,7 @@ pub enum Opened {
 }
 
 impl FileJob {
-    pub fn open(name: &str, bytes: Arc<Vec<u8>>, password: Option<&str>, settings: OcrSettings) -> Result<Opened, String> {
+    pub fn open(name: &str, bytes: pdfcraft_cos::PdfBytes, password: Option<&str>, settings: OcrSettings) -> Result<Opened, String> {
         let mut session = Session::new();
         let id = session.open(name, None, bytes.clone(), password).map_err(|e| e.to_string())?;
         if let Some(why) = session.get(id).and_then(|d| d.read_only_reason.clone()) {
@@ -1286,7 +1292,7 @@ mod tests {
     use crate::export;
 
     /// One 300 × 300 page drawing `content`, with Helvetica as `/F1`.
-    fn page(content: &str) -> Arc<Vec<u8>> {
+    fn page(content: &str) -> pdfcraft_cos::PdfBytes {
         let pdf = format!(
             "%PDF-1.7\n1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj\n2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj\n\
              3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 300 300] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >> endobj\n\
@@ -1630,12 +1636,12 @@ mod tests {
 
         // Applying the now-stale result is refused with its named reason and writes nothing.
         let after_edit = s.get(id).unwrap().bytes.clone();
-        assert!(!Arc::ptr_eq(&after_edit, &guard.bytes), "the edit rewrote the working bytes");
+        assert!(!pdfcraft_cos::same_storage(&after_edit, &guard.bytes), "the edit rewrote the working bytes");
         let revisions = s.get(id).unwrap().revision_ends().len();
         let why = s.apply_ocr_checked(id, &found, &guard).unwrap_err();
         assert_eq!(why, "the document changed since recognition started", "{why}");
         assert_eq!(s.get(id).unwrap().revision_ends().len(), revisions, "the refusal wrote no revision");
-        assert!(Arc::ptr_eq(&s.get(id).unwrap().bytes, &after_edit), "the refused apply wrote nothing");
+        assert!(pdfcraft_cos::same_storage(&s.get(id).unwrap().bytes, &after_edit), "the refused apply wrote nothing");
         assert!(crate::tests::page_texts(&s, id)[0].trim().is_empty(), "no text layer landed");
 
         // A fresh recognition over the current document applies: same flow, valid now.
@@ -1851,7 +1857,7 @@ mod tests {
         assert!(installed.available());
         assert!(available());
         let r = recognizers(&OcrSettings::default()).unwrap();
-        assert!(Arc::ptr_eq(&r.primary, &installed), "the installed recogniser is the one handed out");
+        assert!(pdfcraft_cos::same_storage(&r.primary, &installed), "the installed recogniser is the one handed out");
         assert!(engines_status().iter().any(|e| e.id == "ocrs" && e.available));
     }
 
@@ -1943,7 +1949,7 @@ mod tests {
         let before = s.get(id).unwrap().bytes.clone();
         let bytes = s.editable_ocr_bytes(id, &found).unwrap();
         // The open document was never touched.
-        assert!(Arc::ptr_eq(&s.get(id).unwrap().bytes, &before), "the source bytes are the same allocation");
+        assert!(pdfcraft_cos::same_storage(&s.get(id).unwrap().bytes, &before), "the source bytes are the same allocation");
         let mut out = Session::new();
         let oid = out.open("ocr.pdf", None, bytes, None).unwrap();
         let otext = crate::tests::page_texts(&out, oid)[0].clone().to_lowercase();
@@ -2085,7 +2091,7 @@ mod tests {
             vec![page(0, vec![word.clone(); 32768]), page(1, vec![word; 32769])],
         ] {
             assert!(s.editable_ocr_bytes(id, &found).is_err());
-            assert_eq!(s.save_bytes(id).unwrap(), before);
+            assert_eq!((s.save_bytes(id).unwrap()).as_slice(), (before).as_slice());
         }
     }
 

@@ -3,7 +3,7 @@
 
 use std::collections::{BTreeMap, HashSet};
 use std::sync::{
-    Arc, OnceLock,
+    OnceLock,
     atomic::{AtomicBool, Ordering},
 };
 
@@ -142,7 +142,7 @@ pub(crate) struct LazyStructure {
 }
 
 impl LazyStructure {
-    pub(crate) fn new(bytes: Arc<Vec<u8>>, password: Option<&str>) -> std::result::Result<Self, String> {
+    pub(crate) fn new(bytes: pdfcraft_cos::PdfBytes, password: Option<&str>) -> std::result::Result<Self, String> {
         let source = Document::open_with_stream_limit(bytes, password, 256 << 20).map_err(|e| e.to_string())?;
         // A file rebuilt because its last update has no `/Prev` is read here as rebuilt: the
         // renderer rebuilds it too, and the fallback reader would follow the cut-off chain.
@@ -226,6 +226,7 @@ fn convert(object: &CosObject, depth: usize) -> Result<Object> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Arc;
 
     /// A hostile page-tree /Count must not abort the process: lopdf's own `get_pages`
     /// pre-allocates by it (fuzz finding: /Count 4294967295 -> a 48 GiB allocation),

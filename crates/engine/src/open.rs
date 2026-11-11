@@ -31,12 +31,22 @@ pub struct OpenContext {
 /// A fully prepared document that has not yet been registered in a session.
 pub struct PreparedDocument {
     document: Document,
+    /// The renderer parse the reading stage made for its geometry (#212), for the first page.
+    parsed: Option<pdfcraft_render::ParsedPdf>,
+}
+
+impl PreparedDocument {
+    /// Android adaptation (#212): the reading stage's renderer parse of these bytes, if it kept
+    /// one, so the first page render can start from it ([`pdfcraft_render::PageRenderer::from_parsed`]).
+    pub fn take_parsed(&mut self) -> Option<pdfcraft_render::ParsedPdf> {
+        self.parsed.take()
+    }
 }
 
 struct DocumentOpenData<'a> {
     name: String,
     path: Option<String>,
-    bytes: Arc<Vec<u8>>,
+    bytes: pdfcraft_cos::PdfBytes,
     info: DocInfo,
     structure: Option<Result<Result<pdfcraft_cos::Document, pdfcraft_cos::CosError>, Box<dyn std::any::Any + Send>>>,
     render_password: Option<String>,
@@ -45,7 +55,7 @@ struct DocumentOpenData<'a> {
     reading: Option<ReadingSource>,
     /// The editing-source work done while the renderer inspected the file, with the bytes it
     /// read; used only when the document is still those bytes (#212).
-    prework: Option<(Arc<Vec<u8>>, std::thread::Result<OpenPrework>)>,
+    prework: Option<(pdfcraft_cos::PdfBytes, std::thread::Result<OpenPrework>)>,
 }
 
 /// Work complete opening does on the editing source alone (#212): signature discovery, the
@@ -64,7 +74,7 @@ struct OpenPrework {
 /// annotations). Signature discovery runs on its own thread; the appearances and then form
 /// discovery stay on this one, so the second finds the annotations the first parsed in the
 /// editing cache. Every pass reads `cos` only and is the same call the complete path made.
-fn open_prework(context: &OpenContext, cos: &pdfcraft_cos::Document, bytes: &Arc<Vec<u8>>) -> OpenPrework {
+fn open_prework(context: &OpenContext, cos: &pdfcraft_cos::Document, bytes: &pdfcraft_cos::PdfBytes) -> OpenPrework {
     let sig_cache = Arc::new(pdfcraft_sign::DigestCache::default());
     let mut appearances = AppearanceCache::default();
     let find_signatures = || context.trace.measure("native_signatures", || signatures_of(cos, bytes, &context.trust, &sig_cache));
@@ -111,7 +121,7 @@ impl OpenContext {
         &self,
         name: String,
         path: Option<String>,
-        bytes: Arc<Vec<u8>>,
+        bytes: pdfcraft_cos::PdfBytes,
         password: Option<&str>,
         initial_page: usize,
     ) -> Result<Option<PreparedDocument>, OpenError> {
@@ -121,37 +131,56 @@ impl OpenContext {
             Ok(None)
         };
         guard(|| {
-            let Ok(cos) = self.trace.measure("native_preview_cos", || pdfcraft_cos::Document::open_with_password(bytes.clone(), password)) else {
-                return fallback("native_reading_fallback_parser");
+            // Android adaptation (#212): the renderer's page geometry and the editing parser's
+            // checks read the same bytes independently, so they run side by side. The checks
+            // decide first, in the order they always did; geometry is used only after them.
+            let geometry = || pdfcraft_render::inspect_geometry_keeping_parse(bytes.clone(), password, &self.trace);
+            let source = || -> Result<ReadingSource, &'static str> {
+                let Ok(cos) = self.trace.measure("native_preview_cos", || pdfcraft_cos::Document::open_with_password(bytes.clone(), password)) else {
+                    return Err("native_reading_fallback_parser");
+                };
+                if !cos.repair_log().is_empty() {
+                    return Err("native_reading_fallback_repairs");
+                }
+                let Some(root) = cos.root() else { return Err("native_reading_fallback_catalog") };
+                let catalog = cos.get(root);
+                let Some(catalog) = catalog.as_dict() else { return Err("native_reading_fallback_catalog") };
+                let field_pages = self.trace.measure("native_reading_fields", || reading_field_pages(&cos, catalog))?;
+                let Ok(pages) = self.trace.measure("native_reading_pages", || pdfcraft_annot::page_refs(&cos)) else {
+                    return Err("native_reading_fallback_page_tree");
+                };
+                if pages.is_empty() {
+                    return Err("native_reading_fallback_page_tree");
+                }
+                if field_pages.iter().any(|p| !pages.contains(p)) {
+                    return Err("native_reading_fallback_widget_location");
+                }
+                let initial_page = if initial_page < pages.len() { initial_page } else { 0 };
+                let cancelled = self.cancelled.clone().unwrap_or_else(|| Arc::new(AtomicBool::new(false)));
+                let reading = ReadingSource { cos, pages, field_pages, cancelled };
+                if let Some(reason) = self.trace.measure("native_reading_page_check", || reading.page_block_reason(initial_page)) {
+                    return Err(reason);
+                }
+                if !reading.cos.repair_log().is_empty() {
+                    return Err("native_reading_fallback_repairs");
+                }
+                Ok(reading)
             };
-            if !cos.repair_log().is_empty() {
-                return fallback("native_reading_fallback_repairs");
-            }
-            let Some(root) = cos.root() else { return fallback("native_reading_fallback_catalog") };
-            let catalog = cos.get(root);
-            let Some(catalog) = catalog.as_dict() else { return fallback("native_reading_fallback_catalog") };
-            let field_pages = match reading_field_pages(&cos, catalog) {
-                Ok(pages) => pages,
+            #[cfg(not(target_arch = "wasm32"))]
+            let (reading, geometry) = std::thread::scope(|s| {
+                let geometry = s.spawn(geometry);
+                let reading = source();
+                // A panic stays a panic: the guard turns it into the panic fallback, as before.
+                (reading, geometry.join().unwrap_or_else(|p| std::panic::resume_unwind(p)))
+            });
+            #[cfg(target_arch = "wasm32")]
+            let (reading, geometry) = (source(), geometry());
+            let reading = match reading {
+                Ok(reading) => reading,
                 Err(reason) => return fallback(reason),
             };
-            let Ok(pages) = pdfcraft_annot::page_refs(&cos) else { return fallback("native_reading_fallback_page_tree") };
-            if pages.is_empty() {
-                return fallback("native_reading_fallback_page_tree");
-            }
-            if field_pages.iter().any(|p| !pages.contains(p)) {
-                return fallback("native_reading_fallback_widget_location");
-            }
-            let initial_page = if initial_page < pages.len() { initial_page } else { 0 };
-            let cancelled = self.cancelled.clone().unwrap_or_else(|| Arc::new(AtomicBool::new(false)));
-            let reading = ReadingSource { cos, pages, field_pages, cancelled };
-            if let Some(reason) = reading.page_block_reason(initial_page) {
-                return fallback(reason);
-            }
-            if !reading.cos.repair_log().is_empty() {
-                return fallback("native_reading_fallback_repairs");
-            }
-            let mut info = match pdfcraft_render::inspect_geometry_with_trace(bytes.clone(), password, &self.trace) {
-                Ok(info) if !info.pages.is_empty() && info.warnings.is_empty() => info,
+            let (mut info, parsed) = match geometry {
+                Ok((info, parsed)) if !info.pages.is_empty() && info.warnings.is_empty() => (info, parsed),
                 _ => return fallback("native_reading_fallback_geometry"),
             };
             if reading.pages.len() != info.pages.len() {
@@ -159,7 +188,7 @@ impl OpenContext {
             }
             info.encrypted = reading.cos.security().is_some();
             self.check_cancelled()?;
-            let document = Session::build_document(
+            let document = self.trace.measure("native_reading_build", || Session::build_document(
                 self,
                 DocumentOpenData {
                     name,
@@ -173,8 +202,8 @@ impl OpenContext {
                     reading: Some(reading),
                     prework: None,
                 },
-            )?;
-            Ok(Some(PreparedDocument { document }))
+            ))?;
+            Ok(Some(PreparedDocument { document, parsed: Some(parsed) }))
         })
         .unwrap_or_else(|_| fallback("native_reading_fallback_panic"))
     }
@@ -184,7 +213,7 @@ impl OpenContext {
         &self,
         name: impl Into<String>,
         path: Option<String>,
-        bytes: Arc<Vec<u8>>,
+        bytes: pdfcraft_cos::PdfBytes,
         password: Option<&str>,
     ) -> Result<PreparedDocument, OpenError> {
         self.check_cancelled()?;
@@ -213,7 +242,7 @@ impl Session {
         &self,
         name: impl Into<String>,
         path: Option<String>,
-        bytes: Arc<Vec<u8>>,
+        bytes: pdfcraft_cos::PdfBytes,
         password: Option<&str>,
     ) -> Result<PreparedDocument, OpenError> {
         self.open_context().prepare_open(name, path, bytes, password)
@@ -227,7 +256,7 @@ impl Session {
         document.id = id;
         // Trust or the interface language may have changed while it was prepared on another
         // thread.
-        if !Arc::ptr_eq(&document.trust, &self.trust) {
+        if !pdfcraft_cos::same_storage(&document.trust, &self.trust) {
             document.captions = self.captions.clone();
             Self::revalidate(&mut document, self.trust.clone());
         } else if *document.captions != *self.captions {
@@ -244,12 +273,12 @@ impl Session {
             return false;
         };
         let mut document = prepared.document;
-        if document.preparing() || !Arc::ptr_eq(&document.bytes, &self.docs[index].bytes) {
+        if document.preparing() || !pdfcraft_cos::same_storage(&document.bytes, &self.docs[index].bytes) {
             return false;
         }
         document.id = id;
         document.generation = self.docs[index].generation.wrapping_add(1);
-        if !Arc::ptr_eq(&document.trust, &self.trust) {
+        if !pdfcraft_cos::same_storage(&document.trust, &self.trust) {
             document.captions = self.captions.clone();
             Self::revalidate(&mut document, self.trust.clone());
         } else if *document.captions != *self.captions {
@@ -260,7 +289,13 @@ impl Session {
     }
 
     /// Synchronous convenience API used by the CLI and automation.
-    pub fn open(&mut self, name: impl Into<String>, path: Option<String>, bytes: Arc<Vec<u8>>, password: Option<&str>) -> Result<DocId, OpenError> {
+    pub fn open(
+        &mut self,
+        name: impl Into<String>,
+        path: Option<String>,
+        bytes: pdfcraft_cos::PdfBytes,
+        password: Option<&str>,
+    ) -> Result<DocId, OpenError> {
         let prepared = self.prepare_open(name, path, bytes, password)?;
         Ok(self.commit_open(prepared))
     }
@@ -269,7 +304,7 @@ impl Session {
         context: &OpenContext,
         name: String,
         path: Option<String>,
-        bytes: Arc<Vec<u8>>,
+        bytes: pdfcraft_cos::PdfBytes,
         password: Option<&str>,
     ) -> Result<PreparedDocument, OpenError> {
         // Android adaptation (#212): the editing parser and the renderer's inspection read the
@@ -317,7 +352,7 @@ impl Session {
         let opts = SaveOptions { mod_date: context.now.map(pdfcraft_cos::pdf_date), ..SaveOptions::default() };
         // Write `work` as one more revision and reopen it: what the document then is. The notes
         // about damage repaired while reading the file stay with it (Document Properties), once.
-        let rebase = |work: &pdfcraft_cos::Document| -> Result<(Arc<Vec<u8>>, DocInfo, pdfcraft_cos::Document), String> {
+        let rebase = |work: &pdfcraft_cos::Document| -> Result<(pdfcraft_cos::PdfBytes, DocInfo, pdfcraft_cos::Document), String> {
             let new_bytes = write_incremental(work, &opts).map(Arc::new).map_err(|e| e.to_string())?;
             let new_info = inspect(new_bytes.clone(), render_password.as_deref()).map_err(|e| e.to_string())?;
             let mut new_cos = pdfcraft_cos::Document::open_with_password(new_bytes.clone(), password).map_err(|e| e.to_string())?;
@@ -472,7 +507,7 @@ impl Session {
             document.js_output.errors.push(XFA_SCRIPTS_OFF.into());
         }
         note_warnings(&mut document.xfa_warnings, &xfa_warnings);
-        Ok(PreparedDocument { document })
+        Ok(PreparedDocument { document, parsed: None })
     }
 
     /// The last step of opening: build the document record and register it.

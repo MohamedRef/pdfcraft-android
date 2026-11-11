@@ -50,7 +50,7 @@ pub enum Edit {
     ReplacePages {
         pages: Vec<usize>,
         name: String,
-        bytes: Arc<Vec<u8>>,
+        bytes: pdfcraft_cos::PdfBytes,
         src_pages: Vec<usize>,
     },
     /// Set Page Boxes / Crop: set (or reset) one box on `pages`.
@@ -72,7 +72,7 @@ pub enum Edit {
     /// Insert pages from another PDF (all pages when `pages` is `None`) at position `at`.
     InsertPagesFrom {
         name: String,
-        bytes: Arc<Vec<u8>>,
+        bytes: pdfcraft_cos::PdfBytes,
         pages: Option<Vec<usize>>,
         at: usize,
         /// How a form field whose name the document already uses is kept separate.
@@ -490,7 +490,7 @@ pub enum Edit {
     /// An explicit open-licensed full font program, completing subsets or selected by a user.
     RegisterTextFont {
         page: usize,
-        bytes: Arc<Vec<u8>>,
+        bytes: pdfcraft_cos::PdfBytes,
     },
     /// Order tabs manually: move a field one place earlier or later on its page.
     MoveInTabOrder {
@@ -537,7 +537,7 @@ pub enum Edit {
         page: usize,
         rect: Option<[f64; 4]>,
         name: String,
-        bytes: Arc<Vec<u8>>,
+        bytes: pdfcraft_cos::PdfBytes,
     },
     /// Move, resize, retype or reformat an added item (`index` among the page's added items).
     UpdateContent {
@@ -554,7 +554,7 @@ pub enum Edit {
         page: usize,
         index: usize,
         name: String,
-        bytes: Arc<Vec<u8>>,
+        bytes: pdfcraft_cos::PdfBytes,
     },
     /// Edit ▸ Paste: an added item copied in this document or another, as it was: text with its
     /// style, an image in its box (display space) with its turns, flips and crop. An image's
@@ -611,7 +611,7 @@ pub enum Edit {
     /// comments of another PDF onto the pages with the same numbers.
     ImportData {
         name: String,
-        bytes: Arc<Vec<u8>>,
+        bytes: pdfcraft_cos::PdfBytes,
     },
     /// Paste copied comments (XFDF from [`Session::export_comments`]) onto `page` as new
     /// comments: copies under names of their own, so nothing is replaced and pasting twice

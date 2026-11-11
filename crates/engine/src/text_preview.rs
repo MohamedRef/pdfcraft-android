@@ -9,7 +9,7 @@ use crate::{Document, guard};
 
 pub struct TextEditPreview {
     page: usize,
-    bytes: Arc<Vec<u8>>,
+    bytes: pdfcraft_cos::PdfBytes,
     config: RenderConfig,
 }
 
@@ -25,7 +25,7 @@ impl TextEditPreview {
 
 /// A document's pages without its marks of one kind ([`Document::without_marks`]).
 pub struct UnmarkedPages {
-    bytes: Arc<Vec<u8>>,
+    bytes: pdfcraft_cos::PdfBytes,
     config: RenderConfig,
     /// Parsed on the first [`Self::render_page`], once (a copy that can't be parsed isn't tried
     /// again), and kept: parsing costs about as much as reading the document.
@@ -76,7 +76,7 @@ impl UnmarkedPages {
 }
 
 /// `page` of `bytes` at `scale`, on this thread.
-fn render_one(bytes: &Arc<Vec<u8>>, config: &RenderConfig, page: usize, scale: f32) -> Result<RenderedPage, String> {
+fn render_one(bytes: &pdfcraft_cos::PdfBytes, config: &RenderConfig, page: usize, scale: f32) -> Result<RenderedPage, String> {
     if !scale.is_finite() || scale <= 0.0 {
         return Err("preview scale must be finite and positive".into());
     }

@@ -8,7 +8,7 @@ use skrifa::string::StringId;
 
 /// Compare the real GBK PDF path with explicit Unicode and a known installed face. Unlike an
 /// ink count or extracted text, this fails if drawing chooses another glyph or font family.
-pub(super) fn assert_expected_glyphs(pdf: &Arc<Vec<u8>>, base_font: &str) {
+pub(super) fn assert_expected_glyphs(pdf: &pdfcraft_cos::PdfBytes, base_font: &str) {
     let (expected, file) = match base_font {
         "SimSun" | "ABCDEF+FZSSK--GBK1-0" => ("SimSun", "simsun.ttc"),
         "SimHei" | "ABCDEF+FZHTK--GBK1-0" => ("SimHei", "simhei.ttf"),

@@ -5,7 +5,7 @@ use std::sync::Arc;
 use pdfcraft_engine::{Edit, ImageEdit, Session};
 use pdfcraft_render::{PageRenderer, RenderRequest, RequestKind};
 
-fn pixels(bytes: Arc<Vec<u8>>, page: usize) -> pdfcraft_render::RenderedPage {
+fn pixels(bytes: pdfcraft_cos::PdfBytes, page: usize) -> pdfcraft_render::RenderedPage {
     let mut renderer = PageRenderer::new(bytes, Default::default());
     let rendered = renderer.render(RenderRequest { page, kind: RequestKind::Pixels, scale: 1.5, ..Default::default() });
     assert!(rendered.error.is_none(), "{:?}", rendered.error);

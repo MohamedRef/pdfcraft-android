@@ -34,7 +34,7 @@ pub use xref::{Revision, XrefEntry};
 
 #[derive(Clone)]
 pub struct Document {
-    data: Arc<Vec<u8>>,
+    data: crate::PdfBytes,
     /// Where `endstream` occurs in `data`; see [`EndstreamIndex`].
     endstreams: Arc<EndstreamIndex>,
     source_identity: Arc<()>,
@@ -60,7 +60,7 @@ pub struct Document {
     unreadable: Arc<Mutex<Unreadable>>,
     /// What `/JBIG2Globals` streams of the file decode to, by object number: the images of a scan
     /// share them, and each would otherwise decode them again (see `Document::jbig2_globals`).
-    jbig2_globals: Arc<Mutex<HashMap<u32, Arc<Vec<u8>>>>>,
+    jbig2_globals: Arc<Mutex<HashMap<u32, crate::PdfBytes>>>,
     stream_limit: usize,
     overlay: BTreeMap<u32, Slot>,
     next_num: u32,

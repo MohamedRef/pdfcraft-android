@@ -6,26 +6,26 @@ use std::sync::Arc;
 /// A stream's bytes: a buffer of their own, or a range of a larger shared buffer. Streams read
 /// from a file point into the file's bytes, which the document keeps anyway, so caching a
 /// parsed stream costs its dictionary and not a second copy of its data.
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub struct Bytes {
-    buf: Arc<Vec<u8>>,
+    buf: crate::PdfBytes,
     range: Range<usize>,
 }
 
 impl Bytes {
     /// `range` of `buf`, without copying; `None` when the range is not within `buf`.
-    pub(crate) fn view(buf: &Arc<Vec<u8>>, range: Range<usize>) -> Option<Self> {
+    pub(crate) fn view(buf: &crate::PdfBytes, range: Range<usize>) -> Option<Self> {
         (range.start <= range.end && range.end <= buf.len()).then(|| Self { buf: buf.clone(), range })
     }
 
     /// Whether these bytes keep alive a larger buffer than themselves that isn't `owner`.
-    pub(crate) fn borrows_other_than(&self, owner: &Arc<Vec<u8>>) -> bool {
-        self.range.len() < self.buf.len() && !Arc::ptr_eq(&self.buf, owner)
+    pub(crate) fn borrows_other_than(&self, owner: &crate::PdfBytes) -> bool {
+        self.range.len() < self.buf.len() && !crate::same_storage(&self.buf, owner)
     }
 
     /// Whether these bytes are (a view into) `buf`, holding no memory of their own.
-    pub(crate) fn shares(&self, buf: &Arc<Vec<u8>>) -> bool {
-        Arc::ptr_eq(&self.buf, buf)
+    pub(crate) fn shares(&self, buf: &crate::PdfBytes) -> bool {
+        crate::same_storage(&self.buf, buf)
     }
 
     /// The same bytes, in a buffer of their own.
@@ -41,8 +41,8 @@ impl From<Vec<u8>> for Bytes {
     }
 }
 
-impl From<Arc<Vec<u8>>> for Bytes {
-    fn from(buf: Arc<Vec<u8>>) -> Self {
+impl From<crate::PdfBytes> for Bytes {
+    fn from(buf: crate::PdfBytes) -> Self {
         let range = 0..buf.len();
         Self { buf, range }
     }
@@ -65,7 +65,7 @@ impl AsRef<[u8]> for Bytes {
 
 impl PartialEq for Bytes {
     fn eq(&self, other: &Self) -> bool {
-        (Arc::ptr_eq(&self.buf, &other.buf) && self.range == other.range) || **self == **other
+        (crate::same_storage(&self.buf, &other.buf) && self.range == other.range) || **self == **other
     }
 }
 
@@ -83,16 +83,28 @@ mod tests {
 
     #[test]
     fn views_share_their_buffer_and_compare_by_content() {
-        let file = Arc::new(b"0123456789".to_vec());
+        let file: crate::PdfBytes = Arc::new(b"0123456789".to_vec());
         let view = Bytes::view(&file, 2..5).expect("in range");
         assert_eq!(&*view, b"234");
         assert_eq!(view.as_ptr(), file[2..].as_ptr(), "no copy");
         assert_eq!(view, Bytes::from(b"234".to_vec()));
         assert!(Bytes::view(&file, 5..11).is_none() && Bytes::view(&file, Range { start: 6, end: 5 }).is_none());
-        let other = Arc::new(Vec::new());
+        let other: crate::PdfBytes = Arc::new(Vec::new());
         assert!(view.borrows_other_than(&other) && !view.borrows_other_than(&file));
         let own = view.detached();
         assert!(!own.borrows_other_than(&other) && own == view && own.as_ptr() != view.as_ptr());
         assert!(!Bytes::from(file.clone()).borrows_other_than(&other), "a whole buffer is its own");
+    }
+}
+
+impl Default for Bytes {
+    fn default() -> Self {
+        Self { buf: Arc::new(Vec::new()), range: 0..0 }
+    }
+}
+
+impl From<Arc<Vec<u8>>> for Bytes {
+    fn from(buf: Arc<Vec<u8>>) -> Self {
+        Self::from(buf as crate::PdfBytes)
     }
 }

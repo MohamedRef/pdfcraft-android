@@ -348,7 +348,7 @@ fn two_changed_ocr_words_keep_the_word_between_them() {
     s.apply(id, Edit::EditTextBlock { page: 0, block: 0, text: "Jon Smith Exam".into(), style: Default::default() }).unwrap();
     assert_eq!(scan_and_drawn(&s, id), (vec!["Smith".to_owned()], vec!["Jon".to_owned(), "Exam".to_owned()]));
     s.undo(id).unwrap();
-    assert_eq!(s.get(id).unwrap().bytes, original, "one undo brings the phrase back");
+    assert_eq!((s.get(id).unwrap().bytes).as_slice(), (original).as_slice(), "one undo brings the phrase back");
     s.redo(id).unwrap();
     assert_eq!(scan_and_drawn(&s, id), (vec!["Smith".to_owned()], vec!["Jon".to_owned(), "Exam".to_owned()]));
 }
@@ -454,7 +454,7 @@ fn a_draft_with_the_same_words_changes_nothing() {
     let (bytes, generation) = (s.get(id).unwrap().bytes.clone(), s.get(id).unwrap().edit_generation());
     for draft in ["John Smith Example ", " John Smith Example"] {
         s.apply(id, Edit::EditTextBlock { page: 0, block: 0, text: draft.into(), style: Default::default() }).unwrap();
-        assert_eq!(s.get(id).unwrap().bytes, bytes, "{draft:?} wrote nothing");
+        assert_eq!((s.get(id).unwrap().bytes).as_slice(), (bytes).as_slice(), "{draft:?} wrote nothing");
         assert_eq!(s.get(id).unwrap().edit_generation(), generation, "{draft:?} is no undo step");
         assert_eq!(scan_and_drawn(&s, id).1, Vec::<String>::new(), "{draft:?} drew nothing");
     }

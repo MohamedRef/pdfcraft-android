@@ -12,7 +12,7 @@ const PAGE_BUDGET: usize = 4096;
 type Key = (DocId, usize);
 
 struct Cached {
-    version: Weak<Vec<u8>>,
+    version: Weak<dyn pdfcraft_cos::PdfSource>,
     text: Arc<PageText>,
     bytes: usize,
     stamp: u64,
@@ -37,7 +37,7 @@ impl TextCache {
         Self { pages: HashMap::new(), order: BTreeMap::new(), clock: 0, bytes: 0, budget }
     }
 
-    pub(super) fn prepare(&mut self, id: DocId, bytes: &Arc<Vec<u8>>) {
+    pub(super) fn prepare(&mut self, id: DocId, bytes: &pdfcraft_cos::PdfBytes) {
         let version = Arc::downgrade(bytes);
         // At most PAGE_BUDGET entries, independent of the document's page count. Weak pointers
         // distinguish revisions without keeping an obsolete PDF byte buffer alive.
@@ -81,7 +81,7 @@ impl TextCache {
         Some(entry.text.clone())
     }
 
-    pub(super) fn insert(&mut self, id: DocId, page: usize, version: &Arc<Vec<u8>>, text: Arc<PageText>) {
+    pub(super) fn insert(&mut self, id: DocId, page: usize, version: &pdfcraft_cos::PdfBytes, text: Arc<PageText>) {
         let bytes = retained_bytes(&text);
         self.remove_page((id, page));
         // An oversized page is usable by this call, but never retained by the cache.
@@ -135,17 +135,17 @@ mod tests {
         let cost = retained_bytes(&text);
         assert!(cost >= 32 * std::mem::size_of::<TextGlyph>() + 48 * 4 + 64 + 1000);
         let text = Arc::new(text);
-        let version = Arc::new(vec![1]);
+        let version: pdfcraft_cos::PdfBytes = Arc::new(vec![1]);
         let mut cache = TextCache::new(cost * 2);
         cache.insert(DocId(1), 0, &version, text.clone());
         cache.insert(DocId(2), 0, &version, text.clone());
-        assert!(Arc::ptr_eq(&cache.get(DocId(1), 0).unwrap(), &text));
+        assert!(pdfcraft_cos::same_storage(&cache.get(DocId(1), 0).unwrap(), &text));
         cache.insert(DocId(3), 0, &version, text.clone());
         assert!(cache.get(DocId(2), 0).is_none(), "least recently used page in another document is evicted");
         assert_eq!(cache.bytes, 2 * cost);
         cache.insert(DocId(1), 0, &version, text.clone());
         assert_eq!(cache.bytes, 2 * cost, "replacement does not double-count");
-        let next_version = Arc::new(vec![1]);
+        let next_version: pdfcraft_cos::PdfBytes = Arc::new(vec![1]);
         cache.prepare(DocId(1), &next_version);
         assert!(cache.get(DocId(1), 0).is_none(), "equal bytes in a new Arc are a new version");
         assert_eq!(cache.bytes, cost);
@@ -157,7 +157,7 @@ mod tests {
     #[test]
     fn oversized_pages_bypass_cache_and_empty_pages_have_a_bookkeeping_limit() {
         let text = Arc::new(PageText::default());
-        let version = Arc::new(vec![]);
+        let version: pdfcraft_cos::PdfBytes = Arc::new(vec![]);
         let cost = retained_bytes(&text);
         let mut tiny = TextCache::new(cost - 1);
         tiny.insert(DocId(1), 0, &version, text.clone());

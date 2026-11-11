@@ -63,7 +63,7 @@ impl Automation {
             self.session.render_config(id).unwrap_or_else(|| RenderConfig { password: doc.password.as_deref().map(Arc::from), ..Default::default() });
         let fresh = || (doc.display.clone(), PageRenderer::new(doc.display.clone(), config.clone()));
         let entry = self.renderers.entry(id).or_insert_with(fresh);
-        if !Arc::ptr_eq(&entry.0, &doc.display) {
+        if !pdfcraft_cos::same_storage(&entry.0, &doc.display) {
             *entry = fresh();
         }
         Ok(&mut entry.1)
@@ -150,7 +150,7 @@ impl Automation {
         &mut self,
         id: DocId,
         pages: &[usize],
-        extract: &mut impl FnMut(&Arc<Vec<u8>>, Option<Arc<str>>, &[usize]) -> PageTexts,
+        extract: &mut impl FnMut(&pdfcraft_cos::PdfBytes, Option<Arc<str>>, &[usize]) -> PageTexts,
     ) -> Result<PageTexts> {
         let doc = self.session.get(id).ok_or_else(|| failed("no such document"))?;
         let (bytes, n) = (doc.bytes.clone(), doc.info.pages.len());
@@ -283,7 +283,7 @@ impl Automation {
     pub(crate) fn text_find_with(
         &mut self,
         a: &Args,
-        extract: &mut impl FnMut(&Arc<Vec<u8>>, Option<Arc<str>>, &[usize]) -> PageTexts,
+        extract: &mut impl FnMut(&pdfcraft_cos::PdfBytes, Option<Arc<str>>, &[usize]) -> PageTexts,
     ) -> Result<Value> {
         let doc = self.doc(a)?;
         let (id, n) = (doc.id, doc.info.pages.len());
@@ -419,7 +419,7 @@ fn render_warning_text(warning: pdfcraft_render::RenderWarning) -> &'static str 
 }
 
 /// Extract the text of `pages` (0-based) with one renderer per worker thread.
-pub(crate) fn extract_parallel(bytes: &Arc<Vec<u8>>, password: Option<Arc<str>>, pages: &[usize]) -> PageTexts {
+pub(crate) fn extract_parallel(bytes: &pdfcraft_cos::PdfBytes, password: Option<Arc<str>>, pages: &[usize]) -> PageTexts {
     let extract = |r: &mut PageRenderer, p: usize| {
         let out = r.render(RenderRequest { page: p, kind: RequestKind::Text, tile: None, scale: 1.0, tag: 0, preview: false });
         match out.error {

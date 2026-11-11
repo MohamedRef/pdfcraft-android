@@ -98,7 +98,7 @@ pub(super) fn loading() -> bool {
 pub(super) type Loaded = Result<Arc<Object>, CosError>;
 
 /// The bytes a load result holds of its own ([`held_bytes`]); a failure holds none.
-pub(super) fn loaded_bytes(loaded: &Loaded, data: &Arc<Vec<u8>>) -> usize {
+pub(super) fn loaded_bytes(loaded: &Loaded, data: &crate::PdfBytes) -> usize {
     loaded.as_ref().map_or(0, |o| held_bytes(o, data, 0))
 }
 
@@ -121,7 +121,7 @@ pub(super) struct ObjStm {
     /// position: (object number, byte offset within `data`), or `None` for a member whose number
     /// or offset is unusable ([`objstm_member`]).
     pub(super) index: Vec<Option<(u32, usize)>>,
-    pub(super) data: Arc<Vec<u8>>,
+    pub(super) data: crate::PdfBytes,
 }
 
 /// Where member `num` of an object stream starts: its `offset` past `/First` (`first`), when the
@@ -231,8 +231,8 @@ impl ReadState {
             && self.overlay.iter().zip(&doc.overlay).all(|((a, x), (b, y))| {
                 a == b
                     && match (x, y) {
-                        (Slot::Set(g, o), Slot::Set(h, p)) => g == h && Arc::ptr_eq(o, p),
-                        (Slot::RepairedSet(g, a, o), Slot::RepairedSet(h, b, p)) => g == h && a == b && Arc::ptr_eq(o, p),
+                        (Slot::Set(g, o), Slot::Set(h, p)) => g == h && crate::same_storage(o, p),
+                        (Slot::RepairedSet(g, a, o), Slot::RepairedSet(h, b, p)) => g == h && a == b && crate::same_storage(o, p),
                         (Slot::Freed(g), Slot::Freed(h)) => g == h,
                         _ => false,
                     }
@@ -387,7 +387,7 @@ const OWNED_BYTES_DEPTH: usize = 256;
 /// InDesign's `/PieceInfo` -- thousands of small numeric arrays, parsed into tens of thousands of
 /// values -- weighed nothing, so the caches kept a thousand of them: a 35 MB file held 1.5 GB
 /// (#5873).
-pub(crate) fn held_bytes(object: &Object, data: &Arc<Vec<u8>>, depth: usize) -> usize {
+pub(crate) fn held_bytes(object: &Object, data: &crate::PdfBytes, depth: usize) -> usize {
     if depth > OWNED_BYTES_DEPTH {
         return usize::MAX;
     }

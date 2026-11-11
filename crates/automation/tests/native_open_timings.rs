@@ -31,5 +31,5 @@ fn open_timings_are_opt_in_and_keep_the_same_document_summary() {
     assert_eq!(traced_summary, plain);
     assert!(a.call("doc_open", &json!({"path": "../outside.pdf", "open_timings": true})).is_err());
     assert_eq!(a.session().docs().len(), 2);
-    assert_eq!(std::fs::read(dir.path().join("a.pdf")).unwrap(), *bytes);
+    assert_eq!(std::fs::read(dir.path().join("a.pdf")).unwrap().as_slice(), bytes.as_slice());
 }

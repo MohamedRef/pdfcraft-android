@@ -13,7 +13,7 @@ fn result(auto: &mut Automation, args: Value) -> Value {
 }
 
 fn pdf() -> Vec<u8> {
-    Session::new().create_from_text("Original", "Original text").unwrap().as_ref().clone()
+    Session::new().create_from_text("Original", "Original text").unwrap().to_vec()
 }
 
 /// Sets a folder's permission bits.

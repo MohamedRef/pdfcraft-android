@@ -405,7 +405,7 @@ fn half_red_page() -> Vec<u8> {
     out
 }
 
-fn quadrant_png() -> Arc<Vec<u8>> {
+fn quadrant_png() -> pdfcraft_cos::PdfBytes {
     let colours = [[240, 20, 20, 255], [20, 180, 20, 255], [20, 20, 240, 255], [230, 180, 20, 255]];
     let image = image::RgbaImage::from_fn(80, 40, |x, y| image::Rgba(colours[usize::from(y >= 20) * 2 + usize::from(x >= 40)]));
     let mut png = std::io::Cursor::new(Vec::new());
@@ -808,20 +808,20 @@ fn metadata_edits_and_history_reuse_the_render_pool() {
     let doc = s.get(id).unwrap();
     assert_eq!(doc.info.title.as_deref(), Some("Report"));
     assert_eq!(doc.renderer.stats(), stats);
-    assert!(Arc::ptr_eq(&doc.display, &display));
+    assert!(pdfcraft_cos::same_storage(&doc.display, &display));
     assert_eq!(pixels.as_ref().len(), 200 * 300 * 4);
 
     s.undo(id).unwrap();
     let doc = s.get(id).unwrap();
     assert_eq!(doc.info.title, None);
     assert_eq!(doc.renderer.stats(), stats);
-    assert!(Arc::ptr_eq(&doc.display, &display));
+    assert!(pdfcraft_cos::same_storage(&doc.display, &display));
 
     s.redo(id).unwrap();
     let doc = s.get(id).unwrap();
     assert_eq!(doc.info.title.as_deref(), Some("Report"));
     assert_eq!(doc.renderer.stats(), stats);
-    assert!(Arc::ptr_eq(&doc.display, &display));
+    assert!(pdfcraft_cos::same_storage(&doc.display, &display));
 }
 
 #[test]
@@ -855,7 +855,7 @@ fn undo_and_redo_restore_exact_states() {
     assert_eq!(s.undo(id).unwrap().as_str(), "Rotate page");
     assert_eq!(s.get(id).unwrap().info.pages[0].rotation, 0);
     assert_eq!(s.undo(id).unwrap().as_str(), "Move page");
-    assert_eq!(s.get(id).unwrap().bytes, original, "undoing everything returns the original bytes");
+    assert_eq!((s.get(id).unwrap().bytes).as_slice(), (original).as_slice(), "undoing everything returns the original bytes");
     assert_eq!(s.undo(id), Err(EditError::NothingToUndo));
     assert_eq!(s.redo(id).unwrap().as_str(), "Move page");
     assert_eq!(page_texts(&s, id), ["Page 3", "Page 1", "Page 2"]);
@@ -874,7 +874,7 @@ fn failed_edit_changes_nothing() {
     let doc = s.get(id).unwrap();
     assert!(!doc.dirty);
     assert_eq!(doc.can_undo(), None);
-    assert_eq!(doc.bytes, before);
+    assert_eq!((doc.bytes).as_slice(), (before).as_slice());
 }
 
 #[test]
@@ -893,7 +893,7 @@ fn save_is_incremental_stamps_mod_date_and_rebases() {
     assert_eq!(doc.info_value("Title").as_deref(), Some("Quarterly report"));
     assert_eq!(doc.info.title.as_deref(), Some("Quarterly report"));
     // Saving again without edits writes the same bytes; a later edit appends just one revision.
-    assert_eq!(s.save_bytes(id).unwrap(), saved);
+    assert_eq!((s.save_bytes(id).unwrap()).as_slice(), (saved).as_slice());
     s.apply(id, Edit::RotatePages { pages: vec![1], degrees: -90 }).unwrap();
     let second = s.save_bytes(id).unwrap();
     assert_eq!(&second[..saved.len()], &saved[..]);
@@ -931,7 +931,7 @@ fn a_repaired_file_is_rewritten_by_save_even_without_edits() {
         assert!(doc.repair_log().is_empty(), "{name}: {:?}", doc.repair_log());
         assert_eq!(doc.info.pages.len(), 2, "{name}");
         // Sound now: saving again without edits writes the same bytes.
-        assert_eq!(s.save_bytes(id).unwrap(), saved, "{name}");
+        assert_eq!((s.save_bytes(id).unwrap()).as_slice(), (saved).as_slice(), "{name}");
     }
 }
 
@@ -989,7 +989,7 @@ fn undo_to_the_opened_file_is_not_dirty() {
     session.undo(id).unwrap();
     let document = session.get(id).unwrap();
     assert!(!document.dirty, "the opened bytes are the saved version");
-    assert_eq!(document.bytes, opened);
+    assert_eq!((document.bytes).as_slice(), (opened).as_slice());
     assert_eq!(document.info.pages.len(), 2);
     assert!(session.autosave_snapshots().is_empty(), "nothing unsaved to recover");
 
@@ -1388,13 +1388,13 @@ fn jpeg_bytes() -> Vec<u8> {
 #[test]
 fn mixed_files_convert_and_combine_in_order() {
     let mut s = Session::new();
-    let pdf = Arc::new(fixture(2));
+    let pdf: pdfcraft_cos::PdfBytes = Arc::new(fixture(2));
     let (kind, same) = s.convert_to_pdf("a.pdf", &pdf).unwrap();
     assert_eq!(kind, SourceKind::Pdf);
-    assert!(Arc::ptr_eq(&same, &pdf), "a PDF is passed through untouched");
-    let (kind, image) = s.convert_to_pdf("scan.jpg", &Arc::new(jpeg_bytes())).unwrap();
+    assert!(pdfcraft_cos::same_storage(&same, &pdf), "a PDF is passed through untouched");
+    let (kind, image) = s.convert_to_pdf("scan.jpg", &pdfcraft_cos::owned_bytes(jpeg_bytes())).unwrap();
     assert_eq!(kind, SourceKind::Image);
-    let (kind, text) = s.convert_to_pdf("notes.txt", &Arc::new(b"hello".to_vec())).unwrap();
+    let (kind, text) = s.convert_to_pdf("notes.txt", &pdfcraft_cos::owned_bytes(b"hello".to_vec())).unwrap();
     assert_eq!(kind, SourceKind::Text);
     let combined = s.combine_ranges(&[("notes".into(), text, None), ("a".into(), pdf, Some("2".into())), ("scan".into(), image, None)]).unwrap();
     let id = s.open_new("Combined.pdf", combined).unwrap();
@@ -1408,14 +1408,14 @@ fn utf16_and_code_page_text_files_convert_to_their_text() {
     // Notepad's "Unicode": UTF-16 little endian with a byte order mark.
     let mut utf16 = vec![0xFF, 0xFE];
     utf16.extend("Grüße aus Köln".encode_utf16().flat_map(u16::to_le_bytes));
-    let (_, pdf) = s.convert_to_pdf("notes.txt", &Arc::new(utf16)).unwrap();
+    let (_, pdf) = s.convert_to_pdf("notes.txt", &pdfcraft_cos::owned_bytes(utf16)).unwrap();
     let id = s.open_new("notes.pdf", pdf).unwrap();
     assert_eq!(page_texts(&s, id), ["Grüße aus Köln"]);
     // A UTF-8 byte order mark is not text; Windows-1252 bytes are not replacement characters.
-    let (_, pdf) = s.convert_to_pdf("menu.txt", &Arc::new(b"\xEF\xBB\xBFCaf\xC3\xA9".to_vec())).unwrap();
+    let (_, pdf) = s.convert_to_pdf("menu.txt", &pdfcraft_cos::owned_bytes(b"\xEF\xBB\xBFCaf\xC3\xA9".to_vec())).unwrap();
     let id = s.open_new("menu.pdf", pdf).unwrap();
     assert_eq!(page_texts(&s, id), ["Café"]);
-    let (_, pdf) = s.convert_to_pdf("old.txt", &Arc::new(b"Cr\xE8me br\xFBl\xE9e".to_vec())).unwrap();
+    let (_, pdf) = s.convert_to_pdf("old.txt", &pdfcraft_cos::owned_bytes(b"Cr\xE8me br\xFBl\xE9e".to_vec())).unwrap();
     let id = s.open_new("old.pdf", pdf).unwrap();
     assert_eq!(page_texts(&s, id), ["Crème brûlée"]);
 }
@@ -1427,7 +1427,7 @@ fn utf16_and_code_page_text_files_convert_to_their_text() {
 fn cyrillic_text_files_and_comment_summaries_read_back_as_typed() {
     let mut s = Session::new();
     let text = "Договор № 12\nЖълтата дюля беше щастлива, че пухът, който цъфна, замръзна като гьон.";
-    let (_, pdf) = s.convert_to_pdf("бележки.txt", &Arc::new(text.as_bytes().to_vec())).unwrap();
+    let (_, pdf) = s.convert_to_pdf("бележки.txt", &pdfcraft_cos::owned_bytes(text.as_bytes().to_vec())).unwrap();
     let id = s.open_new("бележки.pdf", pdf).unwrap();
     assert_eq!(page_texts(&s, id), [text]);
     // A sticky note in Russian, summarized.
@@ -1473,12 +1473,12 @@ fn a_file_split_around_another_combines_in_order_with_one_bookmark() {
 #[test]
 fn create_multiple_reads_each_source_only_after_the_previous_one_is_released() {
     let mut s = Session::new();
-    let mut earlier: Vec<std::sync::Weak<Vec<u8>>> = Vec::new();
+    let mut earlier: Vec<std::sync::Weak<dyn pdfcraft_cos::PdfSource>> = Vec::new();
     let texts = ["Alpha", "Beta", "Gamma"];
     let sources = texts.iter().map(|text| {
         // The combine has finished with every earlier source, so their bytes are gone by now.
         assert!(earlier.iter().all(|w| w.upgrade().is_none()), "a source is released before the next is read");
-        let (_, pdf) = s.convert_to_pdf(&format!("{text}.txt"), &Arc::new(text.as_bytes().to_vec())).unwrap();
+        let (_, pdf) = s.convert_to_pdf(&format!("{text}.txt"), &pdfcraft_cos::owned_bytes(text.as_bytes().to_vec())).unwrap();
         earlier.push(Arc::downgrade(&pdf));
         Ok::<CombineSource, EditError>((text.to_string(), pdf, None))
     });
@@ -1571,13 +1571,13 @@ fn a_page_with_a_form_field_shown_twice_keeps_one_field() {
 #[test]
 fn files_that_cannot_be_converted_are_refused_clearly() {
     let s = Session::new();
-    let err = s.convert_to_pdf("report.docx", &Arc::new(b"PK\x03\x04".to_vec())).unwrap_err();
+    let err = s.convert_to_pdf("report.docx", &pdfcraft_cos::owned_bytes(b"PK\x03\x04".to_vec())).unwrap_err();
     assert_eq!(err, EditError::Source("report.docx: this file type can't be converted; use a PDF, an image or a .txt file".into()));
-    assert!(matches!(s.convert_to_pdf("empty", &Arc::new(Vec::new())), Err(EditError::Source(_))));
+    assert!(matches!(s.convert_to_pdf("empty", &pdfcraft_cos::owned_bytes(Vec::new())), Err(EditError::Source(_))));
     // Damaged inputs of a known type fail with an error, not a panic.
-    assert!(s.convert_to_pdf("bad.png", &Arc::new(b"\x89PNG\r\n\x1a\nnope".to_vec())).is_err());
-    assert!(s.convert_to_pdf("bad.jpg", &Arc::new(vec![0xFF, 0xD8, 0xFF])).is_err());
-    assert!(s.convert_to_pdf("bad.pdf", &Arc::new(b"%PDF-1.7 nope".to_vec())).is_err());
+    assert!(s.convert_to_pdf("bad.png", &pdfcraft_cos::owned_bytes(b"\x89PNG\r\n\x1a\nnope".to_vec())).is_err());
+    assert!(s.convert_to_pdf("bad.jpg", &pdfcraft_cos::owned_bytes(vec![0xFF, 0xD8, 0xFF])).is_err());
+    assert!(s.convert_to_pdf("bad.pdf", &pdfcraft_cos::owned_bytes(b"%PDF-1.7 nope".to_vec())).is_err());
     let err = s.convert_to_pdf("locked.pdf", &protected("pw", "o", -1)).unwrap_err();
     assert_eq!(err, EditError::Source("locked.pdf: it is password-protected".into()));
 }
@@ -1588,16 +1588,16 @@ fn files_that_cannot_be_converted_are_refused_clearly() {
 fn files_for_combine_are_made_into_pdfs_and_pdfs_pass_through() {
     let s = Session::new();
     let locked = protected("pw", "o", -1);
-    assert!(Arc::ptr_eq(&s.as_pdf("locked.pdf", &locked).unwrap(), &locked));
-    let headless = Arc::new(b"1 0 obj << >> endobj".to_vec());
-    assert!(Arc::ptr_eq(&s.as_pdf("old.PDF", &headless).unwrap(), &headless));
-    assert!(s.as_pdf("scan.jpg", &Arc::new(jpeg_bytes())).unwrap().starts_with(b"%PDF-"));
-    assert!(s.as_pdf("notes.txt", &Arc::new(b"hello".to_vec())).unwrap().starts_with(b"%PDF-"));
-    let err = s.as_pdf("report.docx", &Arc::new(b"PK\x03\x04".to_vec())).unwrap_err();
+    assert!(pdfcraft_cos::same_storage(&s.as_pdf("locked.pdf", &locked).unwrap(), &locked));
+    let headless: pdfcraft_cos::PdfBytes = Arc::new(b"1 0 obj << >> endobj".to_vec());
+    assert!(pdfcraft_cos::same_storage(&s.as_pdf("old.PDF", &headless).unwrap(), &headless));
+    assert!(s.as_pdf("scan.jpg", &pdfcraft_cos::owned_bytes(jpeg_bytes())).unwrap().starts_with(b"%PDF-"));
+    assert!(s.as_pdf("notes.txt", &pdfcraft_cos::owned_bytes(b"hello".to_vec())).unwrap().starts_with(b"%PDF-"));
+    let err = s.as_pdf("report.docx", &pdfcraft_cos::owned_bytes(b"PK\x03\x04".to_vec())).unwrap_err();
     assert!(matches!(err, EditError::Source(m) if m.starts_with("report.docx: this file type can't be converted")));
 }
 
-fn protected(user: &str, owner: &str, permissions: i32) -> Arc<Vec<u8>> {
+fn protected(user: &str, owner: &str, permissions: i32) -> pdfcraft_cos::PdfBytes {
     let mut doc = pdfcraft_cos::Document::open(Arc::new(fixture(2))).unwrap();
     doc.set_encryption(&pdfcraft_cos::NewEncryption {
         algorithm: pdfcraft_cos::Algorithm::Aes256,
@@ -1994,7 +1994,7 @@ fn autosave_snapshots_only_changed_documents() {
     let snaps = s.autosave_snapshots();
     assert!(!s.has_pending_autosave());
     assert_eq!(snaps.len(), 1);
-    assert_eq!(snaps[0].bytes, s.get(id).unwrap().bytes, "the working file");
+    assert_eq!((snaps[0].bytes).as_slice(), (s.get(id).unwrap().bytes).as_slice(), "the working file");
     assert!(s.autosave_snapshots().is_empty(), "nothing new since the last snapshot");
     s.apply(id, Edit::DeletePages { pages: vec![1] }).unwrap();
     assert_eq!(s.autosave_snapshots().len(), 1);
@@ -2507,7 +2507,7 @@ fn combine_source_check_says_why_a_file_cannot_be_combined() {
     let combined = pdfcraft_cos::Document::open(out).unwrap();
     assert!(combined.permissions().is_none(), "the combined file is not encrypted");
     assert_eq!(pdfcraft_organize::page_count(&combined).unwrap(), 2);
-    assert!(matches!(crate::combine_source_check(&Arc::new(b"not a pdf".to_vec()), None), Err(crate::SourceProblem::Unreadable(_))));
+    assert!(matches!(crate::combine_source_check(&pdfcraft_cos::owned_bytes(b"not a pdf".to_vec()), None), Err(crate::SourceProblem::Unreadable(_))));
 }
 
 #[test]
@@ -2598,12 +2598,12 @@ fn fresh_sessions_protecting_identical_documents_produce_different_salts() {
     // returns zeros. Comparing the stored function with `getrandom::fill` is not reliable:
     // one function can have different addresses in different codegen units.
     let raw = Arc::new(fixture(1));
-    let encrypt_bytes = |saved: Arc<Vec<u8>>, key: &[u8]| -> Vec<u8> {
+    let encrypt_bytes = |saved: pdfcraft_cos::PdfBytes, key: &[u8]| -> Vec<u8> {
         let doc = pdfcraft_cos::Document::open_with_password(saved, Some("secret")).unwrap();
         let enc = doc.trailer().get(b"Encrypt").map(|o| doc.resolve(o)).unwrap();
         enc.as_dict().unwrap().get(key).map(|o| doc.resolve(o)).unwrap().as_string().unwrap().bytes.clone()
     };
-    let protect_once = |p: Protection| -> Arc<Vec<u8>> {
+    let protect_once = |p: Protection| -> pdfcraft_cos::PdfBytes {
         let mut s = Session::new();
         let id = s.open("same.pdf", None, raw.clone(), None).unwrap();
         s.apply(id, Edit::Protect(p)).unwrap();
@@ -2695,7 +2695,7 @@ fn form_fixture() -> Vec<u8> {
 
 /// Whether `needle` appears in `bytes`, or in any stream of the PDF they hold once decoded (so
 /// compressed object streams are searched too), as literal or hex string bytes.
-fn appears_in_pdf(bytes: &Arc<Vec<u8>>, needle: &str) -> bool {
+fn appears_in_pdf(bytes: &pdfcraft_cos::PdfBytes, needle: &str) -> bool {
     let hex: String = needle.bytes().map(|b| format!("{b:02x}")).collect();
     let forms = [needle.as_bytes().to_vec(), hex.clone().into_bytes(), hex.to_uppercase().into_bytes()];
     let found = |hay: &[u8]| forms.iter().any(|f| hay.windows(f.len()).any(|w| w == f.as_slice()));
@@ -3524,7 +3524,7 @@ fn oversized_redaction_overlay_preserves_the_document_and_undo() {
     let before = s.get(id).unwrap().bytes.clone();
     assert!(matches!(s.apply(id, Edit::ApplyRedactions { pages: None }), Err(EditError::Redact(pdfcraft_redact::RedactError::OverlayLimit))));
     let doc = s.get(id).unwrap();
-    assert_eq!(doc.bytes, before);
+    assert_eq!((doc.bytes).as_slice(), (before).as_slice());
     assert_eq!(doc.redaction_marks(), 1);
     assert_eq!(doc.can_undo(), Some("Add redaction mark"));
     assert_eq!(page_texts(&s, id), ["Page 1"]);
@@ -4259,7 +4259,7 @@ fn an_optimize_job_reports_its_stages_and_can_be_cancelled() {
     let before = s.get(id).unwrap().bytes.clone();
     let r = s.optimize_job(id, &settings, &[]).unwrap().run(|st| st != OptimizeStage::Merging);
     assert!(matches!(r, Err(EditError::Cancelled)), "{r:?}");
-    assert_eq!(s.get(id).unwrap().bytes, before);
+    assert_eq!((s.get(id).unwrap().bytes).as_slice(), (before).as_slice());
 }
 
 #[test]
@@ -4464,7 +4464,7 @@ fn flattening_fill_and_sign_is_refused_without_permission_to_change() {
     let id2 = other.open("locked.pdf", None, saved, None).unwrap();
     let before = other.get(id2).unwrap().bytes.clone();
     assert_eq!(other.apply(id2, Edit::FlattenFillSign), Err(EditError::NotPermitted("changes to the document")));
-    assert_eq!(other.get(id2).unwrap().bytes, before);
+    assert_eq!((other.get(id2).unwrap().bytes).as_slice(), (before).as_slice());
     assert!(!other.get(id2).unwrap().dirty);
     assert!(comment_text(&other, id2).contains(&"Hello".to_string()));
 }
@@ -5232,7 +5232,7 @@ fn validated_signatures_without_layers_keep_their_appearance() {
     let display = doc.display.clone();
     assert!(!display.windows(b"Signature valid".len()).any(|w| w == b"Signature valid"));
     // With nothing to draw, the display copy aliases the file exactly as before.
-    assert!(Arc::ptr_eq(&doc.display, &doc.bytes));
+    assert!(pdfcraft_cos::same_storage(&doc.display, &doc.bytes));
 }
 
 #[test]
@@ -5463,7 +5463,7 @@ fn assert_signature_artwork_survives_trust(mut cos: pdfcraft_cos::Document, expe
     assert_eq!(printed_pixels(session.print_pdf(id, &settings).unwrap()), original_raster_print, "Print as Image retains document artwork");
     settings.raster = None;
     assert_eq!(printed_pixels(session.print_pdf(id, &settings).unwrap()), original_vector_print);
-    assert_eq!(session.save_bytes(id).unwrap(), signed, "unchanged saves retain the signed file exactly");
+    assert_eq!((session.save_bytes(id).unwrap()).as_slice(), (signed).as_slice(), "unchanged saves retain the signed file exactly");
     session.apply(id, Edit::SetInfo { key: "Title".into(), value: "Preserved artwork".into() }).unwrap();
     let saved = session.save_bytes(id).unwrap();
     assert!(saved.starts_with(&signed), "a real save appends without replacing signed appearance streams");
@@ -5512,7 +5512,7 @@ fn mixed_signature_caption_details_survive_trust_exports_printing_and_save() {
 
 /// A real layered signature through `Session`: validity, original artwork,
 /// rendering, saving and reopening. `password` opens the signed bytes.
-fn check_layered_round_trip(signed: Arc<Vec<u8>>, password: Option<&str>, anchor: &sign::x509::Certificate) {
+fn check_layered_round_trip(signed: pdfcraft_cos::PdfBytes, password: Option<&str>, anchor: &sign::x509::Certificate) {
     let mut s = Session::new().with_clock(|| 1_800_000_000);
     let vid = s.open("layered.pdf", None, signed.clone(), password).unwrap();
     let doc = s.get(vid).unwrap();
@@ -5524,7 +5524,7 @@ fn check_layered_round_trip(signed: Arc<Vec<u8>>, password: Option<&str>, anchor
     s.set_trusted_certificates(vec![anchor.clone()]);
     let doc = s.get(vid).unwrap();
     assert_eq!(doc.signatures[0].status, SignatureStatus::Valid);
-    assert!(Arc::ptr_eq(&doc.display, &doc.bytes), "trust does not build a signature display copy");
+    assert!(pdfcraft_cos::same_storage(&doc.display, &doc.bytes), "trust does not build a signature display copy");
     assert!(bytes_has(&doc.display, b"Not Verified"));
     assert!(!bytes_has(&doc.display, b"Signature valid"));
     let mut renderer = pdfcraft_render::PageRenderer::new(doc.display.clone(), doc.config.clone());
@@ -5617,7 +5617,7 @@ fn real_layered_signatures_round_trip_behind_a_user_password() {
     s.set_trusted_certificates(vec![anchor.clone()]);
     let doc = s.get(vid).unwrap();
     assert_eq!(doc.signatures[0].status, SignatureStatus::Valid);
-    assert!(Arc::ptr_eq(&doc.display, &doc.bytes), "encrypted signature artwork remains original");
+    assert!(pdfcraft_cos::same_storage(&doc.display, &doc.bytes), "encrypted signature artwork remains original");
     let saved = s.save_bytes(vid).unwrap();
     let mut t = Session::new().with_clock(|| 1_800_000_000);
     t.set_trusted_certificates(vec![anchor.clone()]);
@@ -5716,7 +5716,7 @@ fn test_identity() -> (sign::pkcs12::DigitalId, sign::x509::Certificate) {
 
 /// A named-layer signature through `Session`: the unknown state drawn on opening, the valid one
 /// once trusted, the signed bytes saved unchanged and still valid on reopening.
-fn check_named_layer_states(signed: Arc<Vec<u8>>, password: Option<&str>, anchor: &sign::x509::Certificate) {
+fn check_named_layer_states(signed: pdfcraft_cos::PdfBytes, password: Option<&str>, anchor: &sign::x509::Certificate) {
     let mut s = Session::new().with_clock(|| 1_800_000_000);
     let id = s.open("named.pdf", None, signed.clone(), password).unwrap();
     let sig = &s.get(id).unwrap().signatures[0];
@@ -6002,7 +6002,7 @@ fn a_failed_display_write_drops_the_marks() {
     let unwritable = pdfcraft_cos::Document::open_with_stream_limit(doc.bytes.clone(), None, 1).unwrap();
     let editor = doc.editor.as_mut().unwrap();
     let shown = write_display_copy(editor, &doc.bytes, &unwritable, &mut signatures);
-    assert!(Arc::ptr_eq(&shown, &doc.bytes), "the page falls back to the file's own artwork");
+    assert!(pdfcraft_cos::same_storage(&shown, &doc.bytes), "the page falls back to the file's own artwork");
     assert!(!signatures[0].verdict_shown, "so nothing counts as drawn");
     // Logged once, however many refreshes lose the copy again.
     write_display_copy(editor, &doc.bytes, &unwritable, &mut signatures);
@@ -6698,7 +6698,7 @@ enum Scan {
 }
 
 /// The paper form as an image-only PDF at 150 dpi (the page keeps its 420 × 300 pt).
-fn scanned_form(scan: Scan) -> Arc<Vec<u8>> {
+fn scanned_form(scan: Scan) -> pdfcraft_cos::PdfBytes {
     let mut s = Session::new().with_clock(|| 1_700_000_000);
     let id = s.open("paper.pdf", None, Arc::new(paper_form()), None).unwrap();
     let png = export::Exporter::new(s.get(id).unwrap()).png(0, 150.0).unwrap();
@@ -7078,11 +7078,11 @@ fn measurement_edits_are_transactional_and_honour_annotation_permissions() {
     let mut invalid = m.clone();
     invalid.points[1][0] = f64::INFINITY;
     assert!(session.apply(id, Edit::AddMeasurement(invalid)).is_err());
-    assert_eq!(session.get(id).unwrap().bytes, before);
+    assert_eq!((session.get(id).unwrap().bytes).as_slice(), (before).as_slice());
     session.undo(id).unwrap();
     assert!(session.get(id).unwrap().measurements().unwrap().measurements.is_empty());
     session.redo(id).unwrap();
-    assert_eq!(session.get(id).unwrap().bytes, before);
+    assert_eq!((session.get(id).unwrap().bytes).as_slice(), (before).as_slice());
     let p = pdfcraft_cos::Permissions { bits: 0, owner: false, revision: 3 };
     assert_eq!(check_permission(&Edit::AddMeasurement(m), &p), Err(EditError::NotPermitted("comments")));
     assert_eq!(
@@ -7372,9 +7372,9 @@ fn a_static_xfa_form_takes_many_data_values_as_one_by_one() {
 /// large ones let such a spell fall on the large ones alone.
 #[test]
 fn opening_a_static_xfa_form_grows_linearly_with_its_data_values() {
-    let small = Arc::new(pdfcraft_xfa::fixtures::static_shell_many(100));
-    let large = Arc::new(pdfcraft_xfa::fixtures::static_shell_many(800));
-    let time = |bytes: &Arc<Vec<u8>>| {
+    let small: pdfcraft_cos::PdfBytes = Arc::new(pdfcraft_xfa::fixtures::static_shell_many(100));
+    let large: pdfcraft_cos::PdfBytes = Arc::new(pdfcraft_xfa::fixtures::static_shell_many(800));
+    let time = |bytes: &pdfcraft_cos::PdfBytes| {
         let mut s = Session::new();
         let start = std::time::Instant::now();
         s.open("many.pdf", None, bytes.clone(), None).expect("opens");
@@ -8363,7 +8363,7 @@ fn xfa_scripts_can_remove_rows_twice_and_reset_fields_by_name() {
 }
 
 /// Streams in `bytes` (every revision) that hold an XFA datasets packet.
-fn datasets_streams(bytes: &Arc<Vec<u8>>) -> usize {
+fn datasets_streams(bytes: &pdfcraft_cos::PdfBytes) -> usize {
     let cos = pdfcraft_cos::Document::open(bytes.clone()).unwrap();
     cos.object_numbers()
         .into_iter()
@@ -8527,8 +8527,11 @@ fn comments_without_appearances_are_drawn_but_not_saved() {
     };
     check(&s);
     let doc = s.get(id).unwrap();
-    assert!(Arc::ptr_eq(&doc.bytes, &original), "the working file is the file as opened");
-    assert!(!Arc::ptr_eq(&doc.display, &doc.bytes) && Arc::ptr_eq(&doc.export_source().bytes, &doc.display), "page images show it too");
+    assert!(pdfcraft_cos::same_storage(&doc.bytes, &original), "the working file is the file as opened");
+    assert!(
+        !pdfcraft_cos::same_storage(&doc.display, &doc.bytes) && pdfcraft_cos::same_storage(&doc.export_source().bytes, &doc.display),
+        "page images show it too"
+    );
     // After an edit (a scoped refresh) they are still drawn, and Save writes no appearances.
     s.apply(id, rect_comment(0, [150.0, 270.0, 190.0, 290.0])).unwrap();
     check(&s);
@@ -8582,7 +8585,7 @@ type StampRect = ([f64; 4], char);
 /// without `/Name`, one custom name, and last a Draft stamp with artwork of its own (magenta).
 /// Each sits in a 120 × 60 `/Rect` on a 612 × 792 page; the name and the expected colour family
 /// (`'r'`, `'g'`, `'b'`, or `'n'` for the neutral placeholder) of each, in page order.
-fn stamps_without_appearances() -> (Arc<Vec<u8>>, Vec<StampRect>) {
+fn stamps_without_appearances() -> (pdfcraft_cos::PdfBytes, Vec<StampRect>) {
     let stamps: [(Option<&str>, char); 16] = [
         (Some("Approved"), 'g'),
         (Some("Experimental"), 'b'),
@@ -8683,7 +8686,7 @@ fn stamps_without_appearances_draw_the_stamp_they_name() {
 }
 
 /// A page with a FreeText comment that has no `/AP` stream: the smallest case behind #2371.
-fn free_text_without_appearance() -> Arc<Vec<u8>> {
+fn free_text_without_appearance() -> pdfcraft_cos::PdfBytes {
     let objs: Vec<&[u8]> = vec![
         b"<< /Type /Catalog /Pages 2 0 R >>",
         b"<< /Type /Pages /Kids [3 0 R] /Count 1 /MediaBox [0 0 200 300] >>",
@@ -8716,7 +8719,7 @@ fn cli_display_draws_signature_states_as_the_app_does_without_trust() {
     let mut doc = pdfcraft_cos::Document::open(Arc::new(named_layer_signable_fixture())).unwrap();
     let signed = Arc::new(sign_prepared(&mut doc, &id, "D:20261002120000+01'00'"));
     let display = display_bytes_for(signed.clone(), None);
-    assert!(!Arc::ptr_eq(&display, &signed), "the state is drawn into a copy");
+    assert!(!pdfcraft_cos::same_storage(&display, &signed), "the state is drawn into a copy");
     let mut renderer = pdfcraft_render::PageRenderer::new(display, pdfcraft_render::RenderConfig::default());
     let page = renderer.render(pdfcraft_render::RenderRequest { page: 0, scale: 1.0, ..Default::default() });
     assert!(pixels_near(&page.rgba, UNKNOWN_AMBER) > 500, "the unknown state is drawn");
@@ -8735,7 +8738,7 @@ fn cli_display_makes_no_copy_when_no_state_could_be_drawn() {
     let trust = pdfcraft_sign::TrustStore::default();
     let signatures = crate::doc_state::signatures_of(&cos, &signed, &trust, &pdfcraft_sign::DigestCache::default());
     assert!(pdfcraft_sign::has_status_layers(&cos, &signatures), "the layers are recognised");
-    assert!(Arc::ptr_eq(&display_bytes_for(signed.clone(), None), &signed), "nothing was drawn, so there is no copy");
+    assert!(pdfcraft_cos::same_storage(&display_bytes_for(signed.clone(), None), &signed), "nothing was drawn, so there is no copy");
 }
 
 /// #2371: a comment without an appearance stream is displayed by the app, so the CLI's page image
@@ -8753,9 +8756,9 @@ fn cli_display_adds_missing_appearances_without_changing_the_source() {
     assert!(annot.contains(b"AP"), "the display copy has an appearance stream");
 
     let plain = Arc::new(fixture(1));
-    assert!(Arc::ptr_eq(&display_bytes_for(plain.clone(), None), &plain), "a complete document needs no copy");
+    assert!(pdfcraft_cos::same_storage(&display_bytes_for(plain.clone(), None), &plain), "a complete document needs no copy");
     let damaged = Arc::new(b"not a PDF".to_vec());
-    assert!(Arc::ptr_eq(&display_bytes_for(damaged.clone(), None), &damaged), "an unreadable file falls back to its source");
+    assert!(pdfcraft_cos::same_storage(&display_bytes_for(damaged.clone(), None), &damaged), "an unreadable file falls back to its source");
 }
 
 /// Titles a browser writes for a blank page or a pop-up name no document; real titles stay.
@@ -8883,7 +8886,7 @@ fn failed_group_moves_preserve_generation_dirty_state_and_redo_history() {
     assert_eq!(doc.dirty, dirty);
     assert!(doc.can_undo().is_none());
     assert_eq!(doc.can_redo(), Some("Move object"));
-    assert_eq!(s.save_bytes(id).unwrap(), before);
+    assert_eq!((s.save_bytes(id).unwrap()).as_slice(), (before).as_slice());
     s.redo(id).unwrap();
     assert!(s.get(id).unwrap().dirty);
 }
@@ -9210,8 +9213,8 @@ fn content_edit_keeps_pages_annotations_fields_and_links() {
     assert_eq!(after.form, form, "no field was touched");
     assert_eq!(after.marks(), marks, "no mark was touched");
     assert!(after.added().iter().any(|a| a.page == 1), "the added text is listed");
-    assert_ne!(after.bytes, bytes, "the working file carries the edit");
-    assert_ne!(after.display, bytes, "the display copy carries the edit too");
+    assert_ne!((after.bytes).as_slice(), (bytes).as_slice(), "the working file carries the edit");
+    assert_ne!((after.display).as_slice(), (bytes).as_slice(), "the display copy carries the edit too");
     // The display bytes still open and render the edited page.
     let mut renderer = pdfcraft_render::PageRenderer::new(after.display.clone(), after.config.clone());
     let rendered = renderer.render(pdfcraft_render::RenderRequest { page: 1, scale: 1.0, ..Default::default() });
@@ -9331,9 +9334,9 @@ fn the_working_file_is_let_go_of_before_the_next_is_written() {
     s.apply(id, Edit::RotatePages { pages: vec![1], degrees: 90 }).unwrap();
     let doc = s.doc_mut(id).unwrap();
     let (working, original) = (Arc::downgrade(&doc.bytes), doc.editor.as_ref().unwrap().cos.bytes().clone());
-    assert!(!Arc::ptr_eq(&doc.bytes, &original), "an edited working file is a buffer of its own");
+    assert!(!pdfcraft_cos::same_storage(&doc.bytes, &original), "an edited working file is a buffer of its own");
     Session::release_working(doc);
-    assert!(Arc::ptr_eq(&doc.bytes, &original) && Arc::ptr_eq(&doc.display, &original));
+    assert!(pdfcraft_cos::same_storage(&doc.bytes, &original) && pdfcraft_cos::same_storage(&doc.display, &original));
     // The old renderer's workers let go of the file when they exit, just after.
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
     while working.upgrade().is_some() {
@@ -9627,7 +9630,7 @@ fn a_signed_document_rebuilt_from_object_headers_refuses_edits() {
     s.mark_signed(id, signed, None).unwrap();
     // A broken startxref: the file opens only by rebuilding from object headers, and any save
     // of it is a full rewrite.
-    let mut bytes = s.get(id).unwrap().bytes.as_ref().clone();
+    let mut bytes = s.get(id).unwrap().bytes.to_vec();
     let sx = bytes.windows(10).rposition(|w| w == b"startxref\n").unwrap() + 10;
     let end = sx + bytes[sx..].iter().position(|b| !b.is_ascii_digit()).unwrap();
     bytes.splice(sx..end, b"1".iter().copied());
@@ -10062,13 +10065,13 @@ fn text_blocks_stay_cached_after_an_edit_and_follow_undo_and_redo() {
     session.apply(id, edit).unwrap();
     let edited = blocks(&session);
     assert_eq!(edited[0].editor_text, "Edited");
-    assert!(Arc::ptr_eq(&edited, &blocks(&session)), "the edited page is grouped once");
+    assert!(pdfcraft_cos::same_storage(&edited, &blocks(&session)), "the edited page is grouped once");
     session.undo(id).unwrap();
     assert_eq!(blocks(&session)[0].editor_text, "Page 1");
     session.redo(id).unwrap();
     let redone = blocks(&session);
     assert_eq!(redone[0].editor_text, "Edited");
-    assert!(Arc::ptr_eq(&redone, &blocks(&session)));
+    assert!(pdfcraft_cos::same_storage(&redone, &blocks(&session)));
 }
 
 /// #4199, #3797: the spaces typed into a paragraph are all there after saving and reopening.
@@ -10128,7 +10131,7 @@ fn undo_and_redo_roll_back_on_a_refresh_panic_or_error() {
         let d = s.get(id).unwrap();
         let ed = d.editor.as_ref().unwrap();
         assert_eq!(d.info.pages[0].rotation, 90);
-        assert_eq!(d.bytes, bytes_90);
+        assert_eq!((d.bytes).as_slice(), (bytes_90).as_slice());
         assert_eq!(d.generation, gen_90);
         assert!(d.dirty);
         assert!(ed.cos.is_modified());
@@ -10160,7 +10163,7 @@ fn undo_and_redo_roll_back_on_a_refresh_panic_or_error() {
         let d = s.get(id).unwrap();
         let ed = d.editor.as_ref().unwrap();
         assert_eq!(d.info.pages[0].rotation, 0);
-        assert_eq!(d.bytes, bytes_0);
+        assert_eq!((d.bytes).as_slice(), (bytes_0).as_slice());
         assert_eq!(d.generation, gen_0);
         assert!(!d.dirty);
         assert!(!ed.cos.is_modified());
@@ -11393,7 +11396,7 @@ fn buttons_and_combs_left_to_the_viewer_are_displayed() {
         8 0 obj << /Type /Annot /Subtype /Widget /FT /Tx /Ff 16777216 /MaxLen 4 /T (d) /V (AB) /DA (/Helv 12 Tf 0 g) /MK << /BC [0 0 1] >> /Rect [20 80 220 110] /F 4 /P 3 0 R >> endobj\n\
         trailer << /Root 1 0 R >>\n%%EOF"
         .to_vec();
-    let render = |bytes: Arc<Vec<u8>>| {
+    let render = |bytes: pdfcraft_cos::PdfBytes| {
         let mut r = pdfcraft_render::PageRenderer::new(bytes, pdfcraft_render::RenderConfig::default());
         r.render(pdfcraft_render::RenderRequest { page: 0, scale: 1.0, ..Default::default() })
     };
@@ -11570,7 +11573,7 @@ fn need_appearances_buttons_are_displayed_from_their_captions() {
         )
         .into_bytes()
     };
-    let render = |bytes: Arc<Vec<u8>>| {
+    let render = |bytes: pdfcraft_cos::PdfBytes| {
         let mut r = pdfcraft_render::PageRenderer::new(bytes, pdfcraft_render::RenderConfig::default());
         r.render(pdfcraft_render::RenderRequest { page: 0, scale: 1.0, ..Default::default() })
     };
@@ -11791,7 +11794,7 @@ fn image_transform_engine_refuses_singular_matrices_without_mutation() {
     for matrix in [[0.0, 0.0, 0.0, 1.0, 0.0, 0.0], [1.0, 1.0, 1.0, 1.0 + 1e-12, 0.0, 0.0], [1e308, 0.0, 0.0, 1e308, 0.0, 0.0]] {
         let before = s.get(id).unwrap().bytes.clone();
         assert!(s.apply(id, Edit::EditPageImage { page: 0, index: 0, change: ImageEdit::Transform(matrix) }).is_err());
-        assert_eq!(s.get(id).unwrap().bytes, before);
+        assert_eq!((s.get(id).unwrap().bytes).as_slice(), (before).as_slice());
     }
 }
 
@@ -12062,17 +12065,8 @@ fn a_document_encrypting_only_its_embedded_files_opens_and_saves_without_a_passw
 
 #[test]
 fn open_field_reuse_matches_fresh_display_with_comments_fields_and_orphan_widgets() {
-    for (comment, field, listed) in [
-        (false, true, true),
-        (true, true, true),
-        (true, false, false),
-        (false, true, false),
-    ] {
-        let acro = if listed {
-            "/AcroForm << /Fields [5 0 R] /NeedAppearances true /DA (/Helv 12 Tf 0 g) >>"
-        } else {
-            ""
-        };
+    for (comment, field, listed) in [(false, true, true), (true, true, true), (true, false, false), (false, true, false)] {
+        let acro = if listed { "/AcroForm << /Fields [5 0 R] /NeedAppearances true /DA (/Helv 12 Tf 0 g) >>" } else { "" };
         let objects = [
             format!("<< /Type /Catalog /Pages 2 0 R {acro} >>"),
             "<< /Type /Pages /Kids [3 0 R] /Count 1 >>".into(),
@@ -12097,14 +12091,10 @@ fn open_field_reuse_matches_fresh_display_with_comments_fields_and_orphan_widget
         for offset in offsets {
             bytes.extend_from_slice(format!("{offset:010} 00000 n \n").as_bytes());
         }
-        bytes.extend_from_slice(
-            format!("trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n").as_bytes(),
-        );
-        let source = Arc::new(bytes);
+        bytes.extend_from_slice(format!("trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n").as_bytes());
+        let source: pdfcraft_cos::PdfBytes = Arc::new(bytes);
         let mut session = Session::new();
-        let id = session
-            .open("forms.pdf", None, source.clone(), None)
-            .unwrap();
+        let id = session.open("forms.pdf", None, source.clone(), None).unwrap();
         let doc = session.docs.iter_mut().find(|d| d.id == id).unwrap();
         assert_eq!(doc.form.len(), usize::from(field));
         if field {
@@ -12115,15 +12105,8 @@ fn open_field_reuse_matches_fresh_display_with_comments_fields_and_orphan_widget
         let editor = doc.editor.as_mut().unwrap();
         editor.appearances.clear();
         editor.field_appearances.clear();
-        let expected = crate::document::display_bytes(
-            doc.editor.as_mut(),
-            &source,
-            &mut signatures,
-            &doc.captions,
-        );
-        let mut captured = Some(pdfcraft_forms::fields_with_adopted(
-            &doc.editor.as_ref().unwrap().cos,
-        ));
+        let expected = crate::document::display_bytes(doc.editor.as_mut(), &source, &mut signatures, &doc.captions);
+        let mut captured = Some(pdfcraft_forms::fields_with_adopted(&doc.editor.as_ref().unwrap().cos));
         let shared = crate::document::display_bytes_collect_fields(
             doc.editor.as_mut(),
             &source,
@@ -12132,40 +12115,49 @@ fn open_field_reuse_matches_fresh_display_with_comments_fields_and_orphan_widget
             Some(&mut captured),
             &pdfcraft_render::OpenTrace::default(),
         );
-        assert_eq!(
-            captured.is_some(),
-            !comment,
-            "a changed comment overlay must not publish source fields"
-        );
+        assert_eq!(captured.is_some(), !comment, "a changed comment overlay must not publish source fields");
         if let Some(fields) = captured {
             assert_eq!(fields.items.len(), usize::from(field));
         }
-        let raster = |bytes: Arc<Vec<u8>>| {
-            let mut renderer =
-                pdfcraft_render::PageRenderer::new(bytes, pdfcraft_render::RenderConfig::default());
-            let page = renderer.render(pdfcraft_render::RenderRequest {
-                page: 0,
-                scale: 1.0,
-                ..Default::default()
-            });
+        let raster = |bytes: pdfcraft_cos::PdfBytes| {
+            let mut renderer = pdfcraft_render::PageRenderer::new(bytes, pdfcraft_render::RenderConfig::default());
+            let page = renderer.render(pdfcraft_render::RenderRequest { page: 0, scale: 1.0, ..Default::default() });
             assert!(page.error.is_none(), "{:?}", page.error);
             page.rgba
         };
         let expected = raster(expected);
-        assert_eq!(
-            raster(actual),
-            expected,
-            "comment={comment}, field={field}, listed={listed}"
-        );
-        assert_eq!(
-            raster(shared),
-            expected,
-            "explicit collection preserves the same pixels"
-        );
-        assert_eq!(
-            *session.save_bytes(id).unwrap(),
-            *source,
-            "display appearances never enter the saved file"
-        );
+        assert_eq!(raster(actual), expected, "comment={comment}, field={field}, listed={listed}");
+        assert_eq!(raster(shared), expected, "explicit collection preserves the same pixels");
+        assert_eq!(session.save_bytes(id).unwrap().as_slice(), source.as_slice(), "display appearances never enter the saved file");
+    }
+}
+
+#[test]
+fn mapped_input_matches_owned_through_reading_completion_save_and_encryption() {
+    for (bytes, password) in [(Arc::new(fixture(2)) as pdfcraft_cos::PdfBytes, None), (protected("pw", "owner", -1), Some("pw"))] {
+        let mapped = pdfcraft_cos::memory_snapshot(&bytes).unwrap();
+        assert!(mapped.is_mapped());
+        let mut session = Session::new();
+        let context = session.open_context();
+        let ready = context.prepare_open("mapped.pdf", None, mapped.clone(), password).unwrap();
+        let id = session.commit_open(ready);
+        assert!(pdfcraft_cos::same_storage(&session.get(id).unwrap().bytes, &mapped));
+        let owned = Session::new().prepare_open("owned.pdf", None, bytes.clone(), password).unwrap();
+        let mut reference = Session::new();
+        let expected = reference.commit_open(owned);
+        assert_eq!(session.get(id).unwrap().info.pages.len(), reference.get(expected).unwrap().info.pages.len());
+        assert_eq!(render_page(&session, id).rgba, render_page(&reference, expected).rgba);
+        let reading = context.prepare_reading("reading.pdf".into(), None, mapped.clone(), password, 0).unwrap().unwrap();
+        let reading_id = session.commit_open(reading);
+        assert!(session.get(reading_id).unwrap().preparing());
+        assert!(session.finish_reading(reading_id, context.prepare_open("reading.pdf", None, mapped.clone(), password).unwrap()));
+        assert_eq!(session.get(reading_id).unwrap().info.encrypted, password.is_some());
+        let saved = session.save_bytes(id).unwrap();
+        assert_eq!(saved.as_slice(), mapped.as_slice());
+        session.apply(id, Edit::RotatePages { pages: vec![0], degrees: 90 }).unwrap();
+        let edited = session.save_bytes(id).unwrap();
+        let reopened = pdfcraft_cos::Document::open_with_password(edited, password).unwrap();
+        assert_eq!(reopened.bytes().len() >= mapped.len(), true);
+        assert_eq!(mapped.as_slice(), bytes.as_slice(), "editing never changes the mapped source");
     }
 }

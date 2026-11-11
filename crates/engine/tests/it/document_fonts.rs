@@ -4,7 +4,7 @@ use pdfcraft_cos::{Dict, Document, Object, SaveOptions, Stream};
 use pdfcraft_engine::{BlockStyle, Edit, Session};
 use pdfcraft_render::{PageRenderer, RenderRequest};
 use std::sync::Arc;
-fn document() -> Arc<Vec<u8>> {
+fn document() -> pdfcraft_cos::PdfBytes {
     let mut d = Document::new_empty();
     let pages = d.add(Object::Dict(Dict::new()));
     let contents = d.add(Object::Stream(Stream::flate(Dict::new(), b"BT /F1 18 Tf 30 160 Td (Source) Tj ET")));
@@ -36,7 +36,7 @@ fn document() -> Arc<Vec<u8>> {
     d.trailer_mut().set(b"Root".to_vec(), Object::Ref(root));
     Arc::new(pdfcraft_cos::write_full(&d, &SaveOptions::default()).unwrap())
 }
-fn pixels(bytes: Arc<Vec<u8>>) -> Vec<u8> {
+fn pixels(bytes: pdfcraft_cos::PdfBytes) -> Vec<u8> {
     let mut renderer = PageRenderer::new(bytes, Default::default());
     let p = renderer.render(RenderRequest { page: 0, scale: 2.0, ..Default::default() });
     assert!(p.error.is_none(), "{:?}", p.error);

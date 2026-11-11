@@ -53,7 +53,7 @@ impl OptimizeStage {
 }
 
 /// The optimized copy's bytes and what was done.
-pub type Optimized = (Arc<Vec<u8>>, OptimizeReport);
+pub type Optimized = (pdfcraft_cos::PdfBytes, OptimizeReport);
 
 /// What an optimization needs, independent of the session.
 pub struct OptimizeJob {

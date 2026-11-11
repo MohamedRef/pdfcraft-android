@@ -1,18 +1,22 @@
 //! Pictures placed on pages: added images, and the pictures of watermarks and backgrounds.
 
-use std::sync::Arc;
-
 use image::ImageDecoder;
 
 use crate::EditError;
 
 /// A picture for a watermark or background (Acrobat: Source ▸ File): an image, or `page`
 /// (0-based) of a PDF.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug)]
 pub struct MarkFile {
     pub name: String,
-    pub bytes: Arc<Vec<u8>>,
+    pub bytes: pdfcraft_cos::PdfBytes,
     pub page: usize,
+}
+
+impl PartialEq for MarkFile {
+    fn eq(&self, other: &Self) -> bool {
+        self.name == other.name && self.page == other.page && self.bytes.as_slice() == other.bytes.as_slice()
+    }
 }
 
 /// Embed an image that is placed on a page, turned the way its EXIF Orientation says.

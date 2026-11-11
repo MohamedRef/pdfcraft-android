@@ -14,7 +14,7 @@ class PdfcraftApplication : Application() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     /** The engine, loaded once per process on a background thread and shared by the activities. */
-    val engine: Deferred<Result<Engine>> by lazy { scope.async { runCatching { Engine.open() } } }
+    val engine: Deferred<Result<Engine>> by lazy { scope.async { runCatching { Engine.open(this@PdfcraftApplication) } } }
 
     override fun onCreate() {
         super.onCreate()

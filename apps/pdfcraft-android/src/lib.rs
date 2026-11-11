@@ -193,8 +193,10 @@ pub struct ToolInfo {
 /// file is read but not opened in any session; a protected or unreadable file is an error.
 #[uniffi::export]
 pub fn file_thumbnail(path: String, max_side: u32) -> Result<RenderedImage, MobileError> {
-    let bytes = std::fs::read(&path).map_err(|e| MobileError::Open(format!("{path}: {e}")))?;
-    let mut r = PageRenderer::new(Arc::new(bytes), RenderConfig::default());
+    // File-list previews must not allocate another full large-PDF input beside an open viewer.
+    let bytes = pdfcraft_cos::read_private_input(std::path::Path::new(&path), None, 100 * 1024 * 1024)
+        .map_err(|e| MobileError::Open(format!("{path}: {e}")))?;
+    let mut r = PageRenderer::new(bytes, RenderConfig::default());
     if r.page_count() == 0 {
         return Err(MobileError::Open("the file has no pages".into()));
     }
@@ -470,12 +472,12 @@ const MAX_MOBILE_PAGE_PIXELS: u64 = 4 * 1024 * 1024;
 const MAX_MOBILE_TILE_PIXELS: u64 = 1024 * 1024;
 
 /// The documents' idle renderers: the bytes they render, and the renderers themselves.
-type RendererCache = HashMap<u64, (Arc<Vec<u8>>, Vec<PageRenderer>)>;
+type RendererCache = HashMap<u64, (pdfcraft_cos::PdfBytes, Vec<PageRenderer>)>;
 
 /// A document's text layers: the bytes they were taken from, a renderer to extract more, and one
 /// slot per page.
 struct TextCache {
-    bytes: Arc<Vec<u8>>,
+    bytes: pdfcraft_cos::PdfBytes,
     renderer: PageRenderer,
     pages: Vec<Option<Arc<PageText>>>,
 }
@@ -487,13 +489,14 @@ pub struct MobileSession {
     renderers: Mutex<RendererCache>,
     texts: Mutex<HashMap<u64, TextCache>>,
     pending_opens: Mutex<HashMap<u64, PendingOpen>>,
+    private_input_root: std::sync::OnceLock<std::path::PathBuf>,
 }
 
 struct PendingOpen {
     context: pdfcraft_engine::OpenContext,
     name: String,
     path: String,
-    bytes: Arc<Vec<u8>>,
+    bytes: pdfcraft_cos::PdfBytes,
     password: Option<String>,
     trace: pdfcraft_render::OpenTrace,
     cancelled: Arc<AtomicBool>,
@@ -519,25 +522,25 @@ impl MobileSession {
     }
 
     /// An idle renderer for `bytes`, or a new one.
-    fn take_renderer(&self, doc: u64, bytes: &Arc<Vec<u8>>, config: RenderConfig) -> PageRenderer {
+    fn take_renderer(&self, doc: u64, bytes: &pdfcraft_cos::PdfBytes, config: RenderConfig) -> PageRenderer {
         let mut cache = self.cache();
         match cache.get_mut(&doc) {
-            Some((b, idle)) if Arc::ptr_eq(b, bytes) => idle.pop(),
+            Some((b, idle)) if pdfcraft_cos::same_storage(b, bytes) => idle.pop(),
             _ => None,
         }
         .unwrap_or_else(|| PageRenderer::new(bytes.clone(), config))
     }
 
     /// Give a renderer back for the next render, unless the document has changed since.
-    fn return_renderer(&self, doc: u64, bytes: &Arc<Vec<u8>>, renderer: PageRenderer) {
+    fn return_renderer(&self, doc: u64, bytes: &pdfcraft_cos::PdfBytes, renderer: PageRenderer) {
         // Keep a late reading-stage render from reviving a closed or superseded cache entry.
         let auto = self.lock();
-        if !auto.session().get(DocId(doc)).is_some_and(|d| Arc::ptr_eq(&d.display, bytes)) {
+        if !auto.session().get(DocId(doc)).is_some_and(|d| pdfcraft_cos::same_storage(&d.display, bytes)) {
             return;
         }
         let mut cache = self.cache();
         let entry = cache.entry(doc).or_insert_with(|| (bytes.clone(), Vec::new()));
-        if !Arc::ptr_eq(&entry.0, bytes) {
+        if !pdfcraft_cos::same_storage(&entry.0, bytes) {
             // the renderers of an older version of the document are no use any more
             *entry = (bytes.clone(), Vec::new());
         }
@@ -556,14 +559,7 @@ impl MobileSession {
         }
         let index = page as usize;
         let (bytes, config, pages, size, ready) = self.with_doc(doc, |d| {
-            // the app draws sticky notes itself, as fixed-size icons over the page
-            let config = RenderConfig {
-                password: d.password.as_deref().map(Arc::from),
-                hide_comments: d.comments_hidden(),
-                hide_notes: true,
-                ..RenderConfig::default()
-            };
-            (d.display.clone(), config, d.info.pages.len(), d.info.pages.get(index).map(|p| (p.width, p.height)), d.reading_page_ready(index))
+            (d.display.clone(), page_render_config(d), d.info.pages.len(), d.info.pages.get(index).map(|p| (p.width, p.height)), d.reading_page_ready(index))
         })?;
         if !ready {
             return Err(MobileError::Render("This page is waiting for document preparation".into()));
@@ -650,7 +646,7 @@ impl MobileSession {
             pages: vec![None; pages],
         };
         let entry = texts.entry(doc).or_insert_with(fresh);
-        if !Arc::ptr_eq(&entry.bytes, &bytes) || entry.pages.len() != pages {
+        if !pdfcraft_cos::same_storage(&entry.bytes, &bytes) || entry.pages.len() != pages {
             *entry = fresh();
         }
         if let Some(Some(t)) = entry.pages.get(index) {
@@ -692,6 +688,7 @@ impl MobileSession {
             renderers: Mutex::new(HashMap::new()),
             texts: Mutex::new(HashMap::new()),
             pending_opens: Mutex::new(HashMap::new()),
+            private_input_root: std::sync::OnceLock::new(),
         })
     }
 
@@ -705,8 +702,17 @@ impl MobileSession {
         self.open_document(path, password, true)
     }
 
-    /// Open a conservative reading stage, or use the existing full path for complex pages.
-    /// File bytes are read once and shared with complete_open; no security decision is skipped.
+    /// Set only from the Android application context. The input layer validates private
+    /// ownership and managed-store containment independently before allowing a mapping.
+    pub fn set_private_input_root(&self, root: String) {
+        let path = std::path::PathBuf::from(root);
+        if path.is_absolute() && self.private_input_root.set(path.clone()).is_ok() {
+            self.lock().set_private_input_root(path);
+        }
+    }
+
+    /// Open a conservative reading stage, or retain complete opening for complex pages.
+    /// The same immutable input is retained through background completion.
     pub fn begin_open(&self, path: String, password: Option<String>, initial_page: u32, recording: bool) -> Result<ProfiledOpen, MobileError> {
         if !std::path::Path::new(&path).is_absolute() {
             return Err(MobileError::Open("the path must be absolute".into()));
@@ -714,7 +720,10 @@ impl MobileSession {
         let trace = if recording { pdfcraft_render::OpenTrace::recording() } else { Default::default() };
         let (path, bytes, context) = {
             let auto = self.lock();
-            let (path, bytes) = trace.measure("native_file_read", || auto.read_open_input(&path)).map_err(open_error)?;
+            let (path, bytes) = trace
+                .measure("native_file_read", || auto.read_open_input_private(&path, self.private_input_root.get().map(|p| p.as_path())))
+                .map_err(open_error)?;
+            trace.event(if bytes.is_mapped() { "native_input_mapped" } else { "native_input_owned" });
             (path, bytes, auto.session().open_context())
         };
         let path = path.to_string_lossy().into_owned();
@@ -726,7 +735,7 @@ impl MobileSession {
                 context.prepare_reading(name.clone(), Some(path.clone()), bytes.clone(), password.as_deref(), initial_page as usize)
             })
             .map_err(open_native_error)?;
-        let (prepared, pending) = match preview {
+        let (mut prepared, pending) = match preview {
             Some(prepared) => (prepared, true),
             None => (
                 trace
@@ -735,7 +744,15 @@ impl MobileSession {
                 false,
             ),
         };
+        let parsed = prepared.take_parsed();
         let id = self.lock().register_prepared(prepared).0;
+        // The reading stage parsed the file for its page sizes; the first page render starts from
+        // that parse instead of making it again (#212).
+        if let Some(parsed) = parsed
+            && let Ok((display, config)) = self.with_doc(id, |d| (d.display.clone(), page_render_config(d)))
+        {
+            self.return_renderer(id, &display, PageRenderer::from_parsed(display.clone(), config, parsed));
+        }
         if pending {
             self.pending_opens
                 .lock()
@@ -764,6 +781,14 @@ impl MobileSession {
             .map_err(open_native_error)?;
         if work.cancelled.load(Ordering::Acquire) || !self.lock().finish_reading(DocId(doc), prepared) {
             return Err(MobileError::NoDocument(doc));
+        }
+        // Idle reading-stage renderers (the first one starts from the reading parse) are kept only
+        // while the completed document still draws the same bytes; a display copy supersedes them.
+        if let Ok(display) = self.with_doc(doc, |d| d.display.clone()) {
+            let mut cache = self.cache();
+            if cache.get(&doc).is_some_and(|(bytes, _)| !pdfcraft_cos::same_storage(bytes, &display)) {
+                cache.remove(&doc);
+            }
         }
         Ok(ProfiledOpen { document: self.document(doc)?, timings: native_stages(&work.trace, start) })
     }
@@ -915,7 +940,7 @@ impl MobileSession {
             self.with_doc(doc, |d| (d.bytes.clone(), d.password.clone(), d.info.attachments.get(index as usize).cloned()))?;
         let att = att.ok_or_else(|| MobileError::Command(format!("the document has no attachment {}", index.saturating_add(1))))?;
         let data = pdfcraft_render::attachment_data(&bytes, password.as_deref(), &att).map_err(MobileError::Command)?;
-        std::fs::write(&path, data).map_err(|e| MobileError::Command(format!("{path}: {e}")))?;
+        self.lock().write_output(&path, &data).map_err(|e| MobileError::Command(e.to_string()))?;
         Ok(att.name)
     }
 
@@ -927,7 +952,7 @@ impl MobileSession {
         }
         let (bytes, password) = self.with_doc(doc, |d| (d.bytes.clone(), d.password.clone()))?;
         let wav = pdfcraft_render::sound_wav(&bytes, password.as_deref(), page as usize, index as usize).map_err(MobileError::Command)?;
-        std::fs::write(&path, wav).map_err(|e| MobileError::Command(format!("{path}: {e}")))
+        self.lock().write_output(&path, &wav).map(|_| ()).map_err(|e| MobileError::Command(e.to_string()))
     }
 
     /// The certificate (DER) that signed signature field `field`, if it is signed: what the app
@@ -1050,6 +1075,12 @@ fn first_json(out: Vec<Content>) -> Value {
             Content::Png { .. } => None,
         })
         .unwrap_or(Value::Null)
+}
+
+/// How pages of `d` are drawn here: the app draws sticky notes itself, as fixed-size icons over
+/// the page.
+fn page_render_config(d: &Document) -> RenderConfig {
+    RenderConfig { password: d.password.as_deref().map(Arc::from), hide_comments: d.comments_hidden(), hide_notes: true, ..RenderConfig::default() }
 }
 
 fn native_stages(trace: &pdfcraft_render::OpenTrace, start: usize) -> Vec<NativeOpenTiming> {

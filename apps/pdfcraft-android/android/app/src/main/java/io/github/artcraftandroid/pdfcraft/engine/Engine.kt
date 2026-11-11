@@ -88,9 +88,11 @@ class Engine private constructor(val session: MobileSession) {
     }
 
     companion object {
-        fun open(): Engine {
+        fun open(context: android.content.Context): Engine {
             initLogging()
-            return Engine(MobileSession())
+            val session = MobileSession()
+            session.setPrivateInputRoot(context.filesDir.absolutePath)
+            return Engine(session)
         }
 
         /** Maps, lists, arrays and plain values as JSON (nulls are left out of objects). */

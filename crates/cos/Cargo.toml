@@ -9,6 +9,7 @@ license.workspace = true
 workspace = true
 
 [dependencies]
+pdfcraft-bytes = { workspace = true }
 pdfcraft-crypt = { workspace = true }
 pdfcraft-filters = { workspace = true }
 thiserror = { workspace = true }

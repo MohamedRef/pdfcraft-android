@@ -19,11 +19,11 @@ pub struct Document {
     pub name: String,
     pub path: Option<String>,
     /// The working file: what Save writes.
-    pub bytes: Arc<Vec<u8>>,
+    pub bytes: pdfcraft_cos::PdfBytes,
     /// What is displayed (the page view, `page_render`, page images): `bytes`, plus what is drawn
     /// for display only ([`display_bytes`]): appearances for comments that have none, and the
     /// states of named-layer signatures. Never saved.
-    pub display: Arc<Vec<u8>>,
+    pub display: pdfcraft_cos::PdfBytes,
     pub info: DocInfo,
     /// Reading-stage source. No editing or security result is available until completion.
     pub(crate) reading: Option<crate::open::ReadingSource>,
@@ -734,7 +734,7 @@ impl Document {
 
     /// The file as last opened or saved, without unsaved edits: what an incremental save appends
     /// to. This stays that file when undo has restored an older snapshot.
-    pub fn saved_bytes(&self) -> Arc<Vec<u8>> {
+    pub fn saved_bytes(&self) -> pdfcraft_cos::PdfBytes {
         self.editor.as_ref().map_or_else(|| self.bytes.clone(), |e| e.saved.clone())
     }
 
@@ -773,10 +773,10 @@ pub(crate) fn is_placeholder_title(title: &str) -> bool {
 /// copy that cannot be written takes its marks with it.
 pub(crate) fn display_bytes(
     editor: Option<&mut Editor>,
-    bytes: &Arc<Vec<u8>>,
+    bytes: &pdfcraft_cos::PdfBytes,
     signatures: &mut [SignatureInfo],
     captions: &StatusCaptions,
-) -> Arc<Vec<u8>> {
+) -> pdfcraft_cos::PdfBytes {
     display_bytes_collect_fields(editor, bytes, signatures, captions, None, &pdfcraft_render::OpenTrace::default())
 }
 
@@ -784,12 +784,12 @@ pub(crate) fn display_bytes(
 /// A comment overlay keeps its own fresh discovery, without retaining a second field list.
 pub(crate) fn display_bytes_collect_fields(
     editor: Option<&mut Editor>,
-    bytes: &Arc<Vec<u8>>,
+    bytes: &pdfcraft_cos::PdfBytes,
     signatures: &mut [SignatureInfo],
     captions: &StatusCaptions,
     mut fields_out: Option<&mut Option<pdfcraft_forms::Fields>>,
     trace: &pdfcraft_render::OpenTrace,
-) -> Arc<Vec<u8>> {
+) -> pdfcraft_cos::PdfBytes {
     if let Some(out) = fields_out.as_deref_mut() {
         *out = None;
     }
@@ -819,13 +819,13 @@ pub(crate) fn display_bytes_collect_fields(
 /// from the same, unchanged `e.cos`.
 pub(crate) fn display_bytes_from_open(
     e: &mut Editor,
-    bytes: &Arc<Vec<u8>>,
+    bytes: &pdfcraft_cos::PdfBytes,
     signatures: &mut [SignatureInfo],
     captions: &StatusCaptions,
     comments: Option<pdfcraft_cos::Document>,
     found: pdfcraft_forms::Fields,
     fields_out: &mut Option<pdfcraft_forms::Fields>,
-) -> Arc<Vec<u8>> {
+) -> pdfcraft_cos::PdfBytes {
     for sig in signatures.iter_mut() {
         sig.verdict_shown = false;
     }
@@ -840,11 +840,11 @@ pub(crate) fn display_bytes_from_open(
 /// The display copy from `copy` (comments and fields drawn), or from the signature marks alone.
 fn finish_display(
     e: &mut Editor,
-    bytes: &Arc<Vec<u8>>,
+    bytes: &pdfcraft_cos::PdfBytes,
     signatures: &mut [SignatureInfo],
     captions: &StatusCaptions,
     copy: Option<pdfcraft_cos::Document>,
-) -> Arc<Vec<u8>> {
+) -> pdfcraft_cos::PdfBytes {
     if let Some(mut display) = copy {
         // Written whether or not a signature changed: the copy exists for the comments and fields.
         let _ = pdfcraft_sign::show_status_layers(&mut display, signatures, captions);
@@ -867,10 +867,10 @@ fn finish_display(
 /// logged, once however many refreshes lose it again.
 pub(crate) fn write_display_copy(
     e: &mut Editor,
-    bytes: &Arc<Vec<u8>>,
+    bytes: &pdfcraft_cos::PdfBytes,
     display: &pdfcraft_cos::Document,
     signatures: &mut [SignatureInfo],
-) -> Arc<Vec<u8>> {
+) -> pdfcraft_cos::PdfBytes {
     match write_incremental(display, &SaveOptions::default()) {
         Ok(written) => Arc::new(written),
         Err(err) => {
@@ -940,7 +940,7 @@ pub(crate) fn info_fields<'a>(info: &'a mut DocInfo, cos: &pdfcraft_cos::Documen
 /// Render paths outside the app, such as the CLI, use this so their page images agree with the app
 /// and independent viewers. It never changes the source document: a file with nothing to draw, an
 /// unparseable file, a write failure or a parser panic gives back the original bytes.
-pub fn display_bytes_for(bytes: Arc<Vec<u8>>, password: Option<&str>) -> Arc<Vec<u8>> {
+pub fn display_bytes_for(bytes: pdfcraft_cos::PdfBytes, password: Option<&str>) -> pdfcraft_cos::PdfBytes {
     guard(|| {
         let cos = pdfcraft_cos::Document::open_with_password(bytes.clone(), password).ok()?;
         let mut signatures = signatures_of(&cos, &bytes, &TrustStore::default(), &pdfcraft_sign::DigestCache::default());
@@ -955,7 +955,7 @@ pub fn display_bytes_for(bytes: Arc<Vec<u8>>, password: Option<&str>) -> Arc<Vec
         if !(added || drawn) {
             return None;
         }
-        write_incremental(&display, &SaveOptions::default()).ok().map(Arc::new)
+        write_incremental(&display, &SaveOptions::default()).ok().map(|v| Arc::new(v) as pdfcraft_cos::PdfBytes)
     })
     .ok()
     .flatten()
@@ -968,7 +968,7 @@ pub fn display_bytes_for(bytes: Arc<Vec<u8>>, password: Option<&str>) -> Arc<Vec
 /// `password` itself. Render paths outside a [`Session`](crate::Session), such as the CLI, use this so the owner
 /// password works there as it does in `doc_open`. A file that doesn't open with `password` keeps
 /// it, so the renderer reports the same error it always did.
-pub fn render_password_for(bytes: Arc<Vec<u8>>, password: Option<&str>) -> Option<String> {
+pub fn render_password_for(bytes: pdfcraft_cos::PdfBytes, password: Option<&str>) -> Option<String> {
     let password = password?;
     let recovered =
         guard(|| pdfcraft_cos::Document::open_with_password(bytes, Some(password)).ok().and_then(|d| recovered_render_password(&d))).ok().flatten();

@@ -11,13 +11,13 @@ impl Session {
     /// was edited: its bytes as opened are the damaged file, and this save is how the repair the
     /// user was told about reaches the disk (#1937). Not a signed one: a full rewrite would
     /// break its signatures, so with no edits it keeps its bytes, damage and all.
-    pub fn save_bytes(&self, id: DocId) -> Result<Arc<Vec<u8>>, EditError> {
+    pub fn save_bytes(&self, id: DocId) -> Result<pdfcraft_cos::PdfBytes, EditError> {
         let doc = self.get(id).ok_or(EditError::NoDocument)?;
         if doc.preparing() {
             return Err(EditError::ReadOnly("Document preparation is still running".into()));
         }
         let Some(editor) = doc.editor.as_ref() else { return Ok(doc.bytes.clone()) };
-        let on_saved = Arc::ptr_eq(editor.cos.bytes(), &editor.saved);
+        let on_saved = pdfcraft_cos::same_storage(editor.cos.bytes(), &editor.saved);
         if !editor.cos.is_modified() && on_saved && (!editor.cos.reconstructed() || doc.is_signed()) {
             return Ok(editor.saved.clone());
         }
@@ -38,12 +38,12 @@ impl Session {
             }
         })
         .map_err(EditError::Write)?
-        .map(Arc::new)
+        .map(|v| Arc::new(v) as pdfcraft_cos::PdfBytes)
         .map_err(|e| EditError::Write(e.to_string()))
     }
 
     /// A compact, garbage-collected rewrite (Save As ▸ "Optimized" / Reduce File Size groundwork).
-    pub fn save_full_bytes(&self, id: DocId) -> Result<Arc<Vec<u8>>, EditError> {
+    pub fn save_full_bytes(&self, id: DocId) -> Result<pdfcraft_cos::PdfBytes, EditError> {
         let doc = self.get(id).ok_or(EditError::NoDocument)?;
         if doc.preparing() {
             return Err(EditError::ReadOnly("Document preparation is still running".into()));
@@ -54,13 +54,16 @@ impl Session {
         let editor = doc.editor.as_ref().ok_or_else(|| EditError::ReadOnly(doc.read_only_reason.clone().unwrap_or_default()))?;
         let opts = SaveOptions { mod_date: self.now().map(pdfcraft_cos::pdf_date), ..SaveOptions::default() };
         let cos = writable(&editor.cos)?;
-        guard(|| write_full(&cos, &opts)).map_err(EditError::Write)?.map(Arc::new).map_err(|e| EditError::Write(e.to_string()))
+        guard(|| write_full(&cos, &opts))
+            .map_err(EditError::Write)?
+            .map(|v| Arc::new(v) as pdfcraft_cos::PdfBytes)
+            .map_err(|e| EditError::Write(e.to_string()))
     }
 
     /// Check that `bytes`, from [`Self::save_bytes`] or [`Self::save_full_bytes`], reopen as this
     /// document before they are written (#1698): [`Self::mark_saved`] only finds out after the
     /// file has been replaced. Same error as `mark_saved`.
-    pub fn check_save(&self, id: DocId, bytes: &Arc<Vec<u8>>) -> Result<(), EditError> {
+    pub fn check_save(&self, id: DocId, bytes: &pdfcraft_cos::PdfBytes) -> Result<(), EditError> {
         let doc = self.get(id).ok_or(EditError::NoDocument)?;
         if doc.preparing() {
             return Err(EditError::ReadOnly("Document preparation is still running".into()));
@@ -72,7 +75,7 @@ impl Session {
 
     /// Record a successful save of `bytes` (to `path`, if any): rebase editing on the saved file
     /// so the next save appends only newer edits. Undo history is kept.
-    pub fn mark_saved(&mut self, id: DocId, bytes: Arc<Vec<u8>>, path: Option<String>) -> Result<(), EditError> {
+    pub fn mark_saved(&mut self, id: DocId, bytes: pdfcraft_cos::PdfBytes, path: Option<String>) -> Result<(), EditError> {
         let doc = self.doc_mut(id)?;
         if let Some(editor) = doc.editor.as_mut() {
             // An encrypted file needs the password it is protected with now (the owner
@@ -163,7 +166,7 @@ impl Session {
     /// layout and scripts, signatures, repairs), but the document keeps its id, name and path,
     /// so its tab and view stay with it. Undo history goes, as with Revert. The password it was
     /// opened with is tried; on any failure the document is left as it was.
-    pub fn reload(&mut self, id: DocId, bytes: Arc<Vec<u8>>) -> Result<(), OpenError> {
+    pub fn reload(&mut self, id: DocId, bytes: pdfcraft_cos::PdfBytes) -> Result<(), OpenError> {
         let old = self.docs.iter().position(|d| d.id == id).ok_or_else(|| OpenError::Invalid("the document is not open".into()))?;
         let doc = &self.docs[old];
         let (name, path, generation) = (doc.name.clone(), doc.path.clone(), doc.generation);
@@ -324,7 +327,7 @@ impl Session {
     /// Sign the document's current state with `id` (Use a certificate ▸ Digitally sign). Returns
     /// the signed file; the caller saves it and then calls [`Session::mark_signed`]. An empty
     /// `opts.date` takes the session clock.
-    pub fn sign(&self, doc: DocId, id: &pdfcraft_sign::DigitalId, mut opts: SignOptions) -> Result<Arc<Vec<u8>>, EditError> {
+    pub fn sign(&self, doc: DocId, id: &pdfcraft_sign::DigitalId, mut opts: SignOptions) -> Result<pdfcraft_cos::PdfBytes, EditError> {
         let d = self.get(doc).ok_or(EditError::NoDocument)?;
         // Encrypted documents are signed under their permissions (the signer checks them).
         let editor = d.editor.as_ref().ok_or_else(|| EditError::ReadOnly(d.read_only_reason.clone().unwrap_or_default()))?;
@@ -344,14 +347,14 @@ impl Session {
         id: &pdfcraft_sign::DigitalId,
         mut opts: SignOptions,
         tsa: &dyn pdfcraft_sign::TimestampAuthority,
-    ) -> Result<Arc<Vec<u8>>, EditError> {
+    ) -> Result<pdfcraft_cos::PdfBytes, EditError> {
         let d = self.get(doc).ok_or(EditError::NoDocument)?;
         let editor = d.editor.as_ref().ok_or_else(|| EditError::ReadOnly(d.read_only_reason.clone().unwrap_or_default()))?;
         if opts.date.is_empty() {
             opts.date = self.signing_date();
         }
         let cos = drawn_for_first_signature(writable(&editor.cos)?);
-        let signed = Arc::new(pdfcraft_sign::sign_with_timestamp(&cos, id, &opts, tsa)?);
+        let signed: pdfcraft_cos::PdfBytes = Arc::new(pdfcraft_sign::sign_with_timestamp(&cos, id, &opts, tsa)?);
         // Checked like a save before anyone writes it (#2166).
         self.check_save(doc, &signed)?;
         Ok(signed)
@@ -359,30 +362,35 @@ impl Session {
 
     /// Append a standalone document timestamp (RFC 3161, `/ETSI.RFC3161`) covering the file's
     /// current state. An empty `date` takes the session clock; the transport is the caller's.
-    pub fn timestamp_document(&self, doc: DocId, tsa: &dyn pdfcraft_sign::TimestampAuthority, date: String) -> Result<Arc<Vec<u8>>, EditError> {
+    pub fn timestamp_document(
+        &self,
+        doc: DocId,
+        tsa: &dyn pdfcraft_sign::TimestampAuthority,
+        date: String,
+    ) -> Result<pdfcraft_cos::PdfBytes, EditError> {
         let d = self.get(doc).ok_or(EditError::NoDocument)?;
         let editor = d.editor.as_ref().ok_or_else(|| EditError::ReadOnly(d.read_only_reason.clone().unwrap_or_default()))?;
         let date = if date.is_empty() { self.signing_date() } else { date };
         let cos = writable(&editor.cos)?;
-        let stamped = Arc::new(pdfcraft_sign::timestamp_document(&cos, tsa, &date)?);
+        let stamped: pdfcraft_cos::PdfBytes = Arc::new(pdfcraft_sign::timestamp_document(&cos, tsa, &date)?);
         self.check_save(doc, &stamped)?;
         Ok(stamped)
     }
 
     /// Embed revocation evidence into the catalog's `/DSS` with `/VRI` entries per signature
     /// (PAdES B-LT): an incremental update that never rewrites signed bytes.
-    pub fn embed_ltv(&self, doc: DocId, evidence: &pdfcraft_sign::dss::Evidence) -> Result<Arc<Vec<u8>>, EditError> {
+    pub fn embed_ltv(&self, doc: DocId, evidence: &pdfcraft_sign::dss::Evidence) -> Result<pdfcraft_cos::PdfBytes, EditError> {
         let d = self.get(doc).ok_or(EditError::NoDocument)?;
         let editor = d.editor.as_ref().ok_or_else(|| EditError::ReadOnly(d.read_only_reason.clone().unwrap_or_default()))?;
         let cos = writable(&editor.cos)?;
-        let embedded = Arc::new(pdfcraft_sign::dss::embed(&cos, evidence)?);
+        let embedded: pdfcraft_cos::PdfBytes = Arc::new(pdfcraft_sign::dss::embed(&cos, evidence)?);
         self.check_save(doc, &embedded)?;
         Ok(embedded)
     }
 
     /// Record that the signed file `bytes` was saved (to `path`): like [`Session::mark_saved`],
     /// and the edit history before signing is dropped (signing can't be undone).
-    pub fn mark_signed(&mut self, id: DocId, bytes: Arc<Vec<u8>>, path: Option<String>) -> Result<(), EditError> {
+    pub fn mark_signed(&mut self, id: DocId, bytes: pdfcraft_cos::PdfBytes, path: Option<String>) -> Result<(), EditError> {
         self.mark_saved(id, bytes, path)?;
         let doc = self.doc_mut(id)?;
         if let Some(e) = doc.editor.as_mut() {

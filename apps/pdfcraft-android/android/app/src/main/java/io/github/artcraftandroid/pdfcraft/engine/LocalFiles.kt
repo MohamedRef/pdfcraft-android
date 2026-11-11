@@ -151,7 +151,7 @@ class Thumbnails(private val context: Context) {
     fun of(path: String, maxSide: Int = 160): Bitmap? {
         if (path.startsWith("content:")) return ofContent(Uri.parse(path), maxSide)
         val f = File(path)
-        if (!f.isFile) return null
+        if (!f.isFile || f.length() > MAX_COPY) return null
         return cached(sha("$path|${f.lastModified()}|${f.length()}|$maxSide")) { fileThumbnail(path, maxSide.toUInt()).toBitmap() }
     }
 

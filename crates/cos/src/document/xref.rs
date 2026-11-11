@@ -18,7 +18,7 @@ pub(super) struct XrefRange {
 #[derive(Clone, Debug)]
 pub(super) enum XrefSectionData {
     Table,
-    Stream { bytes: Arc<Vec<u8>>, widths: [usize; 3] },
+    Stream { bytes: crate::PdfBytes, widths: [usize; 3] },
 }
 
 #[derive(Clone, Debug)]
