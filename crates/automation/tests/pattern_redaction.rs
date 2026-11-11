@@ -104,7 +104,7 @@ fn pattern_redaction_tools_remove_or_refuse_without_leaking_or_changing_undo() {
                     assert!(error.to_string().contains("tiling pattern"), "{error}");
                     assert!(!error.to_string().contains("CELLSECRET"));
                     let document = automation.session().get(DocId(id)).unwrap();
-                    assert_eq!(document.bytes, before);
+                    assert_eq!(document.bytes.as_slice(), before.as_slice());
                     assert_eq!(document.redaction_marks(), 1);
                     assert_eq!(document.can_undo(), Some("Add redaction mark"));
                     assert_eq!(automation.render_pixels(id, 1, 1.0).unwrap(), pixels);
