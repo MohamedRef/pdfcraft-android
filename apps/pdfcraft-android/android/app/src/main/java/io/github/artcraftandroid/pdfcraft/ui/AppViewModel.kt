@@ -1447,6 +1447,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     fun setCommentsHidden(doc: OpenDocument, hidden: Boolean) {
         val eng = engine ?: return
         if (doc.info.preparing) return
+        selectedComment = null
         viewModelScope.launch {
             if (runCatching { eng.tool("comments_hide", mapOf("doc" to doc.id, "hidden" to hidden)) }.isFailure) return@launch
             // the switch reads the engine's state; the pages draw again without waiting for an edit
@@ -4949,6 +4950,205 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         runTool(doc, "comment_delete", commentArgs(c))
     }
 
+    // ---- Comments: review, sharing and import (#169, #158) ----------------------------------
+
+    /** The saved author name (what Mine in the Comments list filters by), or null. */
+    val commentAuthor: String? get() = author
+
+    /**
+     * Each comment's review status, by (0-based page, 0-based index), as the engine works it out
+     * (the latest status reply, by reference). Empty when nobody set one.
+     */
+    suspend fun commentStatuses(doc: OpenDocument): Map<Pair<Int, Int>, String> {
+        val eng = engine ?: return emptyMap()
+        if (doc.comments.none { it.state != null }) return emptyMap()
+        val r = runCatching { eng.tool("comment_list", mapOf("doc" to doc.id)) }.getOrNull() ?: return emptyMap()
+        return io.github.artcraftandroid.pdfcraft.ui.viewer.parseCommentStatuses(r)
+    }
+
+    /** Set comment [c]'s review status (`none`, `accepted`, `rejected`, `cancelled`, `completed`). */
+    fun setCommentStatus(doc: OpenDocument, c: io.github.artcraftandroid.pdfcraft.core.CommentInfo, status: String) {
+        runTool(doc, "comment_set_status", commentArgs(c) + mapOf("status" to status, "author" to author))
+    }
+
+    /** Lock or unlock comment [c]: a locked one can't be moved, restyled or deleted. */
+    fun lockComment(doc: OpenDocument, c: io.github.artcraftandroid.pdfcraft.core.CommentInfo, locked: Boolean) {
+        runTool(doc, "comment_lock", commentArgs(c) + ("locked" to locked)) {
+            tell(text(if (locked) R.string.comments_locked_msg else R.string.comments_unlocked_msg))
+        }
+    }
+
+    /**
+     * The comments of [doc] as an XFDF file, handed to the share sheet ([share]) or saved into
+     * Downloads: what a classmate imports into their copy of the same PDF.
+     */
+    fun exportComments(doc: OpenDocument, share: Boolean) {
+        if (doc.comments.none { !it.fillSign } && doc.commentsComplete) {
+            tell(text(R.string.comments_export_none))
+            return
+        }
+        job(text(R.string.comments_exporting)) { eng ->
+            val out = tempFile("xfdf")
+            try {
+                eng.tool("doc_export_data", mapOf("doc" to doc.id, "path" to out.absolutePath, "what" to "comments"))
+                val name = "${doc.title}.xfdf"
+                if (share) {
+                    val uri = withContext(Dispatchers.IO) { files.shareable(out, name) }
+                    intents.trySend(Intent.createChooser(sendIntent(listOf(uri), XFDF_MIME).putExtra(Intent.EXTRA_SUBJECT, text(R.string.comments_share_subject, doc.title)), null))
+                } else {
+                    deliver(out, name, XFDF_MIME)
+                }
+            } finally {
+                out.delete()
+            }
+        }
+    }
+
+    /** Asks the activity for comments to import: XFDF, FDF or another PDF. */
+    val commentImportPicks = Channel<Unit>(Channel.CONFLATED)
+    private var commentImportTarget: OpenDocument? = null
+
+    fun pickCommentsImport(doc: OpenDocument) {
+        if (!canImportComments(doc)) return
+        commentImportTarget = doc
+        commentImportPicks.trySend(Unit)
+    }
+
+    private fun canImportComments(doc: OpenDocument): Boolean {
+        if (document !== doc || !doc.info.allowsAnnotation || doc.info.readOnlyReason != null) {
+            tell(text(R.string.comments_import_unavailable))
+            return false
+        }
+        return true
+    }
+
+    /** The picker's answer (null when cancelled). */
+    fun onCommentsPicked(uri: Uri?) {
+        val doc = commentImportTarget
+        commentImportTarget = null
+        if (uri == null || doc == null) return
+        importComments(doc, uri)
+    }
+
+    /**
+     * Comments shared to the app (an `.xfdf` or `.fdf` from a messaging app) go into the document
+     * open now; with none open, the reader is asked to open the PDF they belong to first.
+     */
+    fun receiveComments(uri: Uri) {
+        val doc = document
+        if (doc == null) {
+            tell(text(R.string.comments_import_open_pdf_first))
+            return
+        }
+        importComments(doc, uri)
+    }
+
+    /**
+     * Import the comments in [uri] into [doc], each onto the page with the same number. A
+     * comment already there under the same name is replaced, so the same file imported twice
+     * doesn't add a second set. One undo step.
+     */
+    private fun importComments(doc: OpenDocument, uri: Uri) {
+        if (!canImportComments(doc)) return
+        job(text(R.string.comments_importing)) { eng ->
+            val name = withContext(Dispatchers.IO) { runCatching { files.displayNameRaw(uri) }.getOrDefault("comments") }
+            val ext = name.substringAfterLast('.', "").lowercase().takeIf { it in setOf("xfdf", "fdf", "pdf", "xml") } ?: "xfdf"
+            val staged = tempFile(ext)
+            try {
+                withContext(Dispatchers.IO) {
+                    val stream = getApplication<Application>().contentResolver.openInputStream(uri)
+                        ?: throw java.io.IOException(text(R.string.msg_that_file_unreadable))
+                    val ctx = currentCoroutineContext()
+                    val limit = if (ext == "pdf") SafBoundedCopy.MAX_BOOKMARK_SOURCE_PDF_BYTES else MAX_COMMENT_FILE_BYTES
+                    stream.use { input -> staged.outputStream().use { SafBoundedCopy.copy(input, it, limit, "Comments") { ctx.ensureActive() } } }
+                }
+                if (document !== doc) return@job
+                val before = commentCount(doc)
+                eng.tool("doc_import_data", mapOf("doc" to doc.id, "path" to staged.absolutePath))
+                refresh(doc)
+                val after = comments(doc)?.count { it.replyTo == null && it.state == null && !it.fillSign }
+                val added = if (after != null && before != null) after - before else null
+                tell(
+                    when {
+                        added == null -> text(R.string.comments_imported)
+                        added > 0 -> plural(R.plurals.comments_imported_count, added, added)
+                        else -> text(R.string.comments_imported_none_new)
+                    },
+                )
+            } finally {
+                staged.delete()
+            }
+        }
+    }
+
+    private suspend fun commentCount(doc: OpenDocument): Int? = comments(doc)?.count { it.replyTo == null && it.state == null && !it.fillSign }
+
+    /** A PDF summarising every comment, sorted by [sort] (`page`, `author`, `date`, `type`), into Downloads with Open. */
+    fun summarizeComments(doc: OpenDocument, sort: String) = job(text(R.string.comments_summarizing)) { eng ->
+        val out = tempFile("pdf")
+        try {
+            eng.tool("comments_summarize", mapOf("doc" to doc.id, "sort" to sort, "out" to out.absolutePath, "open" to false))
+            deliver(out, text(R.string.comments_summary_file, doc.title), "application/pdf")
+        } finally {
+            out.delete()
+        }
+    }
+
+    /**
+     * Comments copied from one document to paste into another (#169): each page's XFDF, by its
+     * 1-based page number. Kept in memory only, never on the system clipboard.
+     */
+    var copiedComments by mutableStateOf<Map<Int, String>>(emptyMap())
+        private set
+
+    /** Copy [list] (comments, not replies) with their replies, page by page. */
+    fun copyComments(doc: OpenDocument, list: List<io.github.artcraftandroid.pdfcraft.core.CommentInfo>) {
+        val eng = engine ?: return
+        val byPage = list.filter { it.replyTo == null && it.state == null && it.subtype != "Sound" && it.subtype != "FileAttachment" }
+            .groupBy { it.page.toInt() + 1 }
+        if (byPage.isEmpty()) {
+            tell(text(R.string.comments_copy_none))
+            return
+        }
+        viewModelScope.launch {
+            try {
+                val out = mutableMapOf<Int, String>()
+                for ((page, cs) in byPage) {
+                    val r = eng.tool("comments_copy", mapOf("doc" to doc.id, "comments" to cs.map { listOf(page, it.index.toInt() + 1) }))
+                    val xfdf = r.optString("xfdf").ifEmpty { r.optString("text") }
+                    if (xfdf.isNotEmpty()) out[page] = xfdf
+                }
+                copiedComments = out
+                val n = byPage.values.sumOf { it.size }
+                tell(plural(R.plurals.comments_copied, n, n))
+            } catch (e: MobileException) {
+                tell(e.userMessage)
+            }
+        }
+    }
+
+    /** Paste the copied comments into [doc], each onto the page with the number it had (one undo step per page). */
+    fun pasteComments(doc: OpenDocument) {
+        val copied = copiedComments
+        if (copied.isEmpty()) return
+        if (!canImportComments(doc)) return
+        val eng = engine ?: return
+        viewModelScope.launch {
+            var skipped = 0
+            try {
+                for ((page, xfdf) in copied.toSortedMap()) {
+                    if (page > doc.pageCount) { skipped++; continue }
+                    eng.tool("comments_paste", mapOf("doc" to doc.id, "page" to page, "xfdf" to xfdf))
+                }
+            } catch (e: MobileException) {
+                tell(e.userMessage)
+            } finally {
+                refresh(doc)
+            }
+            tell(if (skipped > 0) text(R.string.comments_pasted_some, skipped) else text(R.string.comments_pasted))
+        }
+    }
+
     fun recolorComment(doc: OpenDocument, c: io.github.artcraftandroid.pdfcraft.core.CommentInfo, color: androidx.compose.ui.graphics.Color) {
         runTool(doc, "comment_edit", commentArgs(c) + ("color" to color.hex())) { reselect(doc, c) }
     }
@@ -5047,6 +5247,12 @@ class SuccessBanner(val text: String, val undo: (() -> Unit)?)
 
 /** A file for the activity to print; [deleteWhenDone]: a temporary copy (an unlocked one) the job deletes (#105). */
 data class PrintJob(val file: File, val name: String, val deleteWhenDone: Boolean)
+
+/** XFDF, as Acrobat registers it: what shared comment files are sent as. */
+const val XFDF_MIME = "application/vnd.adobe.xfdf"
+
+/** The largest XFDF or FDF file imported (a PDF to take comments from may be larger). */
+private const val MAX_COMMENT_FILE_BYTES = 64L * 1024 * 1024
 
 /** What Export notes writes. */
 enum class DigestFormat(@androidx.annotation.StringRes val label: Int) {
