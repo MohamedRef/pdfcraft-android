@@ -136,7 +136,7 @@ internal fun InkPresetsPicker(vm: AppViewModel, onApplied: () -> Unit) {
         Modifier.fillMaxWidth().heightIn(max = 520.dp).verticalScroll(rememberScrollState()).padding(horizontal = 18.dp, vertical = 14.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text(stringResource(R.string.ink_presets_title), color = c.text, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+        Text(stringResource(R.string.ink_pen_settings_title), color = c.text, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
         Text(stringResource(R.string.ink_presets_help), color = c.label, fontSize = 13.sp)
 
         // An enabled Pen-only setting makes every finger gesture navigate instead of ink.
@@ -165,30 +165,6 @@ internal fun InkPresetsPicker(vm: AppViewModel, onApplied: () -> Unit) {
             PdfSwitch(prefs.snapToShape, null)
         }
 
-        Text(stringResource(R.string.ink_styles_title), color = c.text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-        Row(
-            Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            InkStyle.entries.forEach { style ->
-                val active = prefs.inkStyle == style
-                val label = stringResource(inkStyleLabel(style))
-                Column(
-                    Modifier.width(104.dp)
-                        .border(if (active) 2.dp else 1.dp, if (active) c.accent else c.divider, RoundedCornerShape(12.dp))
-                        .background(if (active) c.pressed else c.surface, RoundedCornerShape(12.dp))
-                        .selectable(selected = active, role = Role.RadioButton) { prefs.updateInkStyle(style); onApplied() }
-                        .semantics { contentDescription = label }
-                        .padding(8.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(4.dp),
-                ) {
-                    PenNibPreview(prefs.color(StyledTool.Ink), prefs.inkWidth, prefs.opacity(StyledTool.Ink), style,
-                        Modifier.size(width = 54.dp, height = 72.dp))
-                    Text(label, color = c.text, fontSize = 11.sp, maxLines = 1)
-                }
-            }
-        }
         // Samsung Notes-inspired presentation, original illustrations, no borrowed assets.
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             prefs.inkPresets.forEachIndexed { index, preset ->
@@ -212,31 +188,8 @@ internal fun InkPresetsPicker(vm: AppViewModel, onApplied: () -> Unit) {
                 }
             }
         }
-        // Large visual size preview and an adjustable slider instead of seven cramped bars.
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text(stringResource(R.string.toolbar_line_thickness), color = c.text, fontSize = 14.sp, modifier = Modifier.weight(1f))
-            Text(stringResource(R.string.ink_width_value, prefs.inkWidth), color = c.text, fontSize = 14.sp)
-        }
-        Slider(
-            value = prefs.inkWidth.coerceIn(1f, 10f),
-            onValueChange = { prefs.updateInkWidth((it * 2f).toInt().coerceIn(2, 20) / 2f) },
-            valueRange = 1f..10f,
-            colors = SliderDefaults.colors(thumbColor = c.accent, activeTrackColor = c.accent),
-        )
-        Canvas(Modifier.fillMaxWidth().height(26.dp).padding(horizontal = 12.dp)) {
-            val lineWidth = inkStyleWidthRuns(listOf(1f, 1f), prefs.inkWidth, false, prefs.inkStyle).firstOrNull()?.width ?: prefs.inkWidth
-            drawLine(prefs.color(StyledTool.Ink).copy(alpha = inkStyleOpacity(prefs.opacity(StyledTool.Ink), prefs.inkStyle)),
-                Offset(0f, size.height / 2), Offset(size.width, size.height / 2),
-                strokeWidth = lineWidth.dp.toPx(), cap = StrokeCap.Round)
-        }
-        Text(stringResource(R.string.toolbar_color_drawing), color = c.text, fontSize = 14.sp)
-        // Reuse the exact existing swatches and state; no second colour system.
-        ColorGrid(prefs.color(StyledTool.Ink)) { prefs.setColor(StyledTool.Ink, it) }
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text(stringResource(R.string.toolbar_opacity), color = c.text, fontSize = 14.sp, modifier = Modifier.weight(1f))
-            Text("${(prefs.opacity(StyledTool.Ink) * 100).toInt()}%", color = c.text, fontSize = 13.sp)
-        }
-        OpacitySlider(prefs.color(StyledTool.Ink), prefs.opacity(StyledTool.Ink)) { prefs.setOpacity(StyledTool.Ink, it) }
+        // Saving stores the selected pen exactly as it is now (its colour, width and opacity).
+        Text(stringResource(R.string.ink_preset_save_help, stringResource(inkStyleLabel(prefs.inkStyle))), color = c.label, fontSize = 12.sp)
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             prefs.inkPresets.indices.forEach { index ->
                 TextButton(modifier = Modifier.weight(1f), onClick = {
@@ -246,6 +199,51 @@ internal fun InkPresetsPicker(vm: AppViewModel, onApplied: () -> Unit) {
                 }
             }
         }
+    }
+}
+
+/**
+ * The selected pen's own colour, width and opacity (#188), opened by tapping the already selected
+ * pen. Changes apply only to that pen and only to strokes drawn afterwards.
+ */
+@Composable
+internal fun PenStylePicker(vm: AppViewModel) {
+    val prefs = vm.toolPrefs
+    val c = pdfColors
+    val style = prefs.inkStyle
+    val pen = prefs.penSettings(style)
+    val color = Color(pen.argb)
+    Column(
+        Modifier.fillMaxWidth().heightIn(max = 520.dp).verticalScroll(rememberScrollState()).padding(horizontal = 18.dp, vertical = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Text(stringResource(inkStyleLabel(style)), color = c.text, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text(stringResource(R.string.toolbar_line_thickness), color = c.text, fontSize = 14.sp, modifier = Modifier.weight(1f))
+            Text(stringResource(R.string.ink_width_value, pen.width), color = c.text, fontSize = 14.sp)
+        }
+        // Quick width chips, then a fine slider in half-point steps.
+        InkWidthRow(color, pen.width) { prefs.updateInkWidth(it) }
+        Slider(
+            value = pen.width.coerceIn(InkPenSettings.MIN_WIDTH, InkPenSettings.MAX_WIDTH),
+            onValueChange = { prefs.updateInkWidth((it * 2f).toInt().coerceIn(2, 20) / 2f) },
+            valueRange = InkPenSettings.MIN_WIDTH..InkPenSettings.MAX_WIDTH,
+            colors = SliderDefaults.colors(thumbColor = c.accent, activeTrackColor = c.accent),
+        )
+        Canvas(Modifier.fillMaxWidth().height(26.dp).padding(horizontal = 12.dp)) {
+            val lineWidth = inkStyleWidthRuns(listOf(1f, 1f), pen.width, false, style).firstOrNull()?.width ?: pen.width
+            drawLine(color.copy(alpha = inkStyleOpacity(pen.opacity, style)),
+                Offset(0f, size.height / 2), Offset(size.width, size.height / 2),
+                strokeWidth = lineWidth.dp.toPx(), cap = if (style == InkStyle.Highlighter) StrokeCap.Square else StrokeCap.Round)
+        }
+        Text(stringResource(R.string.toolbar_color_drawing), color = c.text, fontSize = 14.sp)
+        ColorGrid(color) { prefs.setColor(StyledTool.Ink, it) }
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text(stringResource(R.string.toolbar_opacity), color = c.text, fontSize = 14.sp, modifier = Modifier.weight(1f))
+            Text("${(pen.opacity * 100).toInt()}%", color = c.text, fontSize = 13.sp)
+        }
+        OpacitySlider(color, pen.opacity) { prefs.setOpacity(StyledTool.Ink, it) }
+        Spacer(Modifier.height(8.dp))
     }
 }
 

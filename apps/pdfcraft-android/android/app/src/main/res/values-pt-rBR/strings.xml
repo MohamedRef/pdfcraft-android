@@ -916,7 +916,10 @@
     <string name="bates_source_refused">Esta ferramenta não pode numerar um PDF assinado ou somente leitura.</string>
     <string name="bates_export_failed">Não foi possível salvar esta nova cópia em Downloads.</string>
     <string name="ink_presets_title">Canetas favoritas</string>
-    <string name="ink_presets_help">Escolha sua caneta e desenhe. A cor, o tamanho e a opacidade se aplicam na hora às novas marcas. Toque em uma favorita para restaurar as configurações dela.</string>
+    <string name="ink_presets_help">Cada caneta guarda a própria cor, espessura e opacidade. Toque em uma favorita para restaurar as configurações dela.</string>
+    <string name="ink_pen_settings_title">Configurações da caneta</string>
+    <string name="ink_pen_edit_action">mudar cor e espessura</string>
+    <string name="ink_preset_save_help">Salvar uma favorita guarda %1$s exatamente como está agora. Toque na caneta selecionada na barra para mudar a cor e a espessura.</string>
     <string name="ink_snap_explanation">Segure um traço à mão livre por um instante para transformá-lo em uma forma limpa.</string>
     <string name="ink_pen_only_explanation">Ativado: os dedos movem e ampliam, só a S Pen desenha. Desativado: use o dedo ou a S Pen.</string>
     <string name="ink_preset_slot">Caneta %1$d</string>
@@ -986,7 +989,7 @@
     <string name="ink_toolbar_rectangle">Caixa</string>
     <string name="ink_toolbar_line">Linha</string>
     <string name="ink_toolbar_color">Cor</string>
-    <string name="ink_toolbar_settings">Canetas</string>
+    <string name="ink_toolbar_settings">Ajustes</string>
     <string name="ink_toolbar_lasso">Laço</string>
     <string name="ink_toolbar_eraser">Apagar</string>
     <string name="ink_eraser_size_title">Tamanho da borracha</string>
