@@ -128,7 +128,7 @@ fn protected_fixture(password: &str) -> Vec<u8> {
     let mut session = Session::new();
     let id = session.open("target.pdf", None, std::sync::Arc::new(fixture(1)), None).unwrap();
     session.apply(id, Edit::Protect(Protection { open_password: Some(password.into()), ..Default::default() })).unwrap();
-    session.save_bytes(id).unwrap().as_ref().clone()
+    session.save_bytes(id).unwrap().to_vec()
 }
 
 /// A fresh directory with `a.pdf` (3 pages) and `b.pdf` (2 pages).

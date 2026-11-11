@@ -9,7 +9,7 @@ use pdfcraft_engine::actions::{Action, Step, run_on};
 use serde_json::json;
 
 fn pdf() -> Vec<u8> {
-    Session::new().create_from_text("Original", "Original text").unwrap().as_ref().clone()
+    Session::new().create_from_text("Original", "Original text").unwrap().to_vec()
 }
 
 fn one_step(step: Step) -> Action {

@@ -2212,7 +2212,7 @@ fn a_restored_revision_keeps_what_the_saved_file_held_in_object_streams() {
 /// to measure the cache again on every read (#5873).
 #[test]
 fn the_object_cache_keeps_its_total_as_objects_come_and_go() {
-    let data = Arc::new(Vec::new());
+    let data: crate::PdfBytes = Arc::new(Vec::new());
     let one = Arc::new(Object::String(crate::PdfString::literal(vec![b'x'; 100])));
     let two = Arc::new(Object::Array(vec![Object::Int(1); 10]));
     let (a, b) = (held_bytes(&one, &data, 0), held_bytes(&two, &data, 0));

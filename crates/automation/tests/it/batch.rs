@@ -14,7 +14,7 @@ fn pdf() -> Vec<u8> {
     // Reuse one synthetic document so byte comparisons cannot straddle the
     // writer's modification-time clock. Each caller gets an independent buffer.
     static PDF: std::sync::OnceLock<Vec<u8>> = std::sync::OnceLock::new();
-    PDF.get_or_init(|| Session::new().create_from_text("Original", "Original text").unwrap().as_ref().clone()).clone()
+    PDF.get_or_init(|| Session::new().create_from_text("Original", "Original text").unwrap().to_vec()).clone()
 }
 
 #[test]

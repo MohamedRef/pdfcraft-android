@@ -135,7 +135,7 @@ mod tests {
         let cost = retained_bytes(&text);
         assert!(cost >= 32 * std::mem::size_of::<TextGlyph>() + 48 * 4 + 64 + 1000);
         let text = Arc::new(text);
-        let version = Arc::new(vec![1]);
+        let version: pdfcraft_cos::PdfBytes = Arc::new(vec![1]);
         let mut cache = TextCache::new(cost * 2);
         cache.insert(DocId(1), 0, &version, text.clone());
         cache.insert(DocId(2), 0, &version, text.clone());
@@ -145,7 +145,7 @@ mod tests {
         assert_eq!(cache.bytes, 2 * cost);
         cache.insert(DocId(1), 0, &version, text.clone());
         assert_eq!(cache.bytes, 2 * cost, "replacement does not double-count");
-        let next_version = Arc::new(vec![1]);
+        let next_version: pdfcraft_cos::PdfBytes = Arc::new(vec![1]);
         cache.prepare(DocId(1), &next_version);
         assert!(cache.get(DocId(1), 0).is_none(), "equal bytes in a new Arc are a new version");
         assert_eq!(cache.bytes, cost);
@@ -157,7 +157,7 @@ mod tests {
     #[test]
     fn oversized_pages_bypass_cache_and_empty_pages_have_a_bookkeeping_limit() {
         let text = Arc::new(PageText::default());
-        let version = Arc::new(vec![]);
+        let version: pdfcraft_cos::PdfBytes = Arc::new(vec![]);
         let cost = retained_bytes(&text);
         let mut tiny = TextCache::new(cost - 1);
         tiny.insert(DocId(1), 0, &version, text.clone());

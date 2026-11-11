@@ -83,7 +83,7 @@ fn read_private_with(path: &Path, root: Option<&Path>, cap: u64, map: impl FnOnc
     Ok(Arc::new(bytes))
 }
 
-#[cfg(any(target_os = "android", all(test, unix)))]
+#[cfg(any(target_os = "android", all(test, target_os = "linux")))]
 fn managed_private_file(path: &Path, root: &Path, opened: &std::fs::Metadata) -> bool {
     use std::os::unix::fs::MetadataExt;
     let Ok(root) = root.canonicalize() else { return false };
@@ -112,7 +112,7 @@ fn managed_private_file(path: &Path, root: &Path, opened: &std::fs::Metadata) ->
         && opened.dev() == current.dev()
 }
 
-#[cfg(not(any(target_os = "android", all(test, unix))))]
+#[cfg(not(any(target_os = "android", all(test, target_os = "linux"))))]
 fn managed_private_file(_: &Path, _: &Path, _: &std::fs::Metadata) -> bool {
     false
 }
@@ -134,7 +134,7 @@ impl PartialEq for dyn PdfSource {
 }
 impl Eq for dyn PdfSource {}
 
-#[cfg(all(test, unix))]
+#[cfg(all(test, target_os = "linux"))]
 mod tests {
     use super::*;
     use std::os::unix::fs::PermissionsExt;

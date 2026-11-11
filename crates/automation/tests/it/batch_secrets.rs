@@ -31,7 +31,7 @@ fn protected_pdf() -> Vec<u8> {
             }),
         )
         .unwrap();
-    session.save_bytes(id).unwrap().as_ref().clone()
+    session.save_bytes(id).unwrap().to_vec()
 }
 
 fn json_result(a: &mut Automation, tool: &str, args: Value) -> Value {
