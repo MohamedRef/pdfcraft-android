@@ -70,3 +70,26 @@ internal fun lineGestureMarkup(marker: Boolean, strokeY: Float, lineTop: Float, 
     !marker && strokeY - lineBottom in -1f..4f -> TextMarkup.Underline
     else -> null
 }
+
+/** The `comment_add` arguments of a text markup over [rects] (page points, one rectangle per line part). */
+internal fun markupArgs(
+    markup: TextMarkup, page: Int, rects: List<FloatArray>, color: androidx.compose.ui.graphics.Color, opacity: Float,
+    author: String?, contents: String? = null,
+): Map<String, Any?> = mapOf(
+    "page" to page + 1, "type" to markup.engineType,
+    "quads" to rects.map { r -> listOf(r[0], r[1], r[2], r[1], r[0], r[3], r[2], r[3]).map { it.toDouble() } },
+    "color" to color.hex(), "opacity" to opacity.toDouble(), "author" to author, "contents" to contents,
+)
+
+/**
+ * Whether a freehand stroke (page points) is a closed loop for circle-then-hold (#148): at least
+ * 12 pt across both ways, and ending within a fifth of its size (at least 6 pt) of its start.
+ */
+internal fun isClosedLoop(points: List<Offset>): Boolean {
+    if (points.size < 8) return false
+    val box = strokeBounds(points)
+    if (box.width < 12f || box.height < 12f) return false
+    val gap = (points.last() - points.first()).getDistance()
+    val size = kotlin.math.hypot(box.width, box.height)
+    return gap <= maxOf(6f, size * 0.2f)
+}

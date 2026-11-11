@@ -67,6 +67,13 @@ class ViewerController {
     var rulerOn by mutableStateOf(false)
     internal var ruler by mutableStateOf<Ruler?>(null)
 
+    /** Draw: the protractor is shown (#150) and where it is, on screen; never saved to the PDF. */
+    /** The pen's last position in root coordinates, for the toolbars' palm guard (#156). */
+    internal val penInRoot = PenTracker()
+
+    var protractorOn by mutableStateOf(false)
+    internal var protractor by mutableStateOf<Protractor?>(null)
+
     /** Draw: the zoom writing box (#130) and its frame on the page; viewer-only. */
     var zoomBoxOn by mutableStateOf(false)
     internal var zoomBox by mutableStateOf<ZoomBox?>(null)

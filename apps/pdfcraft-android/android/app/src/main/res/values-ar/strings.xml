@@ -1037,6 +1037,11 @@
     <string name="bates_export_failed">تعذّر حفظ هذه النسخة الجديدة في التنزيلات.</string>
     <string name="ink_presets_title">الأقلام المفضّلة</string>
     <string name="ink_presets_help">كل قلم يحتفظ بلونه وسُمكه وشفافيته. انقر على قلم مفضّل لاستعادة إعداداته.</string>
+    <string name="palm_guard_calibrate_clear">مسح اللمسات</string>
+    <string name="palm_guard_calibrate_help">قرّب القلم من الشاشة أو اكتب به، ثم أرح يدك كما تفعل أثناء الكتابة. اللمسات الخضراء يتم تجاهلها، والحمراء قد تمرّر الصفحة أو تضغط الأزرار. غيّر الحجم حتى تقع يدك في المنطقة الخضراء.</string>
+    <string name="palm_guard_calibrate">ضبط منطقة الكف</string>
+    <string name="pen_gesture_lasso_empty">لا يوجد شيء لتحديده داخل الدائرة.</string>
+    <string name="ink_protractor">منقلة</string>
     <string name="ink_hsv_hue">درجة اللون</string>
     <string name="ink_hsv_square">التشبع %1$d%%، السطوع %2$d%%</string>
     <string name="ink_custom_color_hide">إخفاء اللون المخصص</string>

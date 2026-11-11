@@ -118,4 +118,50 @@ class DrawUndoTest {
         assertEquals(2, s.own)
         assertTrue(s.canRedoDocument(documentHasRedo = true))
     }
+
+    /** #148: a gesture stroke that became a highlight comes back on the first Undo and goes on the second. */
+    @Test fun aStrokeThatBecameMarkupIsUndoneInTwoSteps() {
+        val d = InkDrafts()
+        val steps = DrawUndoSteps()
+        val (a, g) = List(2) { stroke() }
+        d.strokes.add(a); d.edits.add(DraftInkEdit.Added(a))
+        d.strokes.add(g); d.edits.add(DraftInkEdit.Added(g))
+        // the gesture: the stroke steps aside and the markup is the session's own step
+        d.strokes.remove(g)
+        steps.started(); steps.finished(1)
+        val became = DraftInkEdit.BecameMarkup(1, g, steps.own)
+        d.edits.add(became)
+        assertEquals(listOf(a), d.strokes.toList())
+        // Undo 1: the raw stroke is back where it was, and the markup step is no longer counted as own
+        val e1 = d.edits.removeAt(d.edits.lastIndex)
+        assertEquals(became, e1)
+        assertEquals(steps.own, (e1 as DraftInkEdit.BecameMarkup).ownStep)
+        steps.releaseOwn()
+        io.github.artcraftandroid.pdfcraft.ui.viewer.applyDraftInkEdit(d.strokes, e1, forward = false)
+        assertEquals(listOf(a, g), d.strokes.toList())
+        assertEquals(0, steps.own)
+        assertFalse(steps.redoesDocumentFirst())
+        // Undo 2: the stroke itself goes
+        val e2 = d.edits.removeAt(d.edits.lastIndex)
+        io.github.artcraftandroid.pdfcraft.ui.viewer.applyDraftInkEdit(d.strokes, e2, forward = false)
+        assertEquals(listOf(a), d.strokes.toList())
+        // Redo twice: stroke, then markup again (stroke steps aside, the step is own again)
+        io.github.artcraftandroid.pdfcraft.ui.viewer.applyDraftInkEdit(d.strokes, e2, forward = true)
+        steps.reclaimOwn()
+        io.github.artcraftandroid.pdfcraft.ui.viewer.applyDraftInkEdit(d.strokes, e1, forward = true)
+        assertEquals(listOf(a), d.strokes.toList())
+        assertEquals(e1.ownStep, steps.own)
+    }
+
+    @Test fun markupArgumentsCarryOneQuadPerRectangle() {
+        val args = io.github.artcraftandroid.pdfcraft.ui.viewer.markupArgs(
+            io.github.artcraftandroid.pdfcraft.ui.viewer.TextMarkup.Underline, 2, listOf(floatArrayOf(10f, 20f, 50f, 30f)),
+            androidx.compose.ui.graphics.Color(0xFF0072B2), 0.5f, "Mo",
+        )
+        assertEquals(3, args["page"])
+        assertEquals(listOf(listOf(10.0, 20.0, 50.0, 20.0, 10.0, 30.0, 50.0, 30.0)), args["quads"])
+        assertEquals("#0072B2", args["color"])
+        assertEquals(0.5, args["opacity"])
+        assertEquals("Mo", args["author"])
+    }
 }
