@@ -144,4 +144,21 @@
         <item quantity="one">%1$d possibile oscuramento falso:</item>
         <item quantity="other">%1$d possibili oscuramenti falsi:</item>
     </plurals>
+    <string name="compare_title">Confronta file</string>
+    <string name="compare_about">Scopri cosa è cambiato tra due versioni di un PDF</string>
+    <string name="compare_with_older">Confronta con una versione precedente</string>
+    <string name="compare_busy">Confronto in corso…</string>
+    <string name="compare_against">Modifiche rispetto a %1$s</string>
+    <string name="compare_identical">Il testo è uguale in entrambi</string>
+    <string name="compare_counts">%1$d sostituiti · %2$d inseriti · %3$d eliminati</string>
+    <string name="compare_mark">Aggiungi come commenti</string>
+    <string name="compare_marked">Aggiunti %1$d commenti</string>
+    <string name="compare_report">Salva report PDF</string>
+    <string name="compare_report_saved">Report salvato</string>
+    <string name="compare_visual">Confronta l’aspetto delle pagine</string>
+    <string name="compare_kind_replaced">Sostituito</string>
+    <string name="compare_kind_inserted">Inserito</string>
+    <string name="compare_kind_deleted">Eliminato</string>
+    <string name="compare_kind_visual">Aspetto diverso</string>
+    <string name="compare_page">pagina %1$d</string>
 </resources>

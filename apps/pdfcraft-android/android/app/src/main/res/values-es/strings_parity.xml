@@ -144,4 +144,21 @@
         <item quantity="one">%1$d posible censura falsa:</item>
         <item quantity="other">%1$d posibles censuras falsas:</item>
     </plurals>
+    <string name="compare_title">Comparar archivos</string>
+    <string name="compare_about">Vea qué cambió entre dos versiones de un PDF</string>
+    <string name="compare_with_older">Comparar con una versión anterior</string>
+    <string name="compare_busy">Comparando…</string>
+    <string name="compare_against">Cambios desde %1$s</string>
+    <string name="compare_identical">El texto es igual en ambos</string>
+    <string name="compare_counts">%1$d reemplazados · %2$d insertados · %3$d eliminados</string>
+    <string name="compare_mark">Añadir como comentarios</string>
+    <string name="compare_marked">Se añadieron %1$d comentarios</string>
+    <string name="compare_report">Guardar informe PDF</string>
+    <string name="compare_report_saved">Informe guardado</string>
+    <string name="compare_visual">Comparar el aspecto de las páginas</string>
+    <string name="compare_kind_replaced">Reemplazado</string>
+    <string name="compare_kind_inserted">Insertado</string>
+    <string name="compare_kind_deleted">Eliminado</string>
+    <string name="compare_kind_visual">Aspecto distinto</string>
+    <string name="compare_page">página %1$d</string>
 </resources>
