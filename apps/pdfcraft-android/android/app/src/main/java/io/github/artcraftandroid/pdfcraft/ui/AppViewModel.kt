@@ -794,7 +794,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         val uri = link.uri
         when {
             page != null -> {
-                doc.controller.rememberJump(doc.viewer.currentPage)
+                doc.controller.rememberJump(doc.viewer)
                 doc.viewer.goToPage(page.toInt(), link.top)
             }
             uri != null -> {
@@ -824,13 +824,18 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             snapshotFlow { doc.search.running }.first { !it }
             if (doc.search.hits.isEmpty() && doc.search.query.isNotEmpty()) {
                 val eng = engine
-                val textless = eng != null && (0 until minOf(doc.pageCount, 5)).all { p ->
+                // pages spread over the whole document, not just its first few: a scan can start
+                // with a typed cover, and a typed document can have scanned pages further on
+                val sample = io.github.artcraftandroid.pdfcraft.ui.viewer.searchTextSample(doc.pageCount)
+                val imagePages = if (eng == null) 0 else sample.count { p ->
                     runCatching { withContext(eng.commands) { eng.session.glyphCount(doc.id, p.toUInt()) } }.getOrDefault(1u) == 0u
                 }
-                if (textless) {
-                    tell(text(R.string.msg_search_image_only), text(R.string.common_tool_recognize_text)) { recognizeText(doc) }
-                } else {
-                    tell(text(R.string.msg_search_no_matches, doc.search.query))
+                when {
+                    sample.isNotEmpty() && imagePages == sample.size ->
+                        tell(text(R.string.msg_search_image_only), text(R.string.common_tool_recognize_text)) { recognizeText(doc) }
+                    imagePages > 0 ->
+                        tell(text(R.string.msg_search_no_matches_some_images, doc.search.query), text(R.string.common_tool_recognize_text)) { recognizeText(doc) }
+                    else -> tell(text(R.string.msg_search_no_matches, doc.search.query))
                 }
             }
         }
@@ -1258,18 +1263,6 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     fun updateStatusBarInDocuments(on: Boolean) {
         statusBarInDocuments = on
         appPrefs.edit().putBoolean("statusBarInDocuments", on).apply()
-    }
-
-    /**
-     * Extra Features ▸ the number of search results: Find shows which result is on screen and how
-     * many there are, "3 of 12" (#39; the reference's page view shows no count).
-     */
-    var searchCount by mutableStateOf(appPrefs.getBoolean("searchCount", false))
-        private set
-
-    fun updateSearchCount(on: Boolean) {
-        searchCount = on
-        appPrefs.edit().putBoolean("searchCount", on).apply()
     }
 
     // ---- Reading the document ---------------------------------------------------------------

@@ -107,3 +107,13 @@ class SearchState(private val engine: Engine, private val doc: ULong, private va
 
     val currentHit: SearchHit? get() = hits.getOrNull(current)
 }
+
+/**
+ * The pages checked for text when a search finds nothing: every page of a short document, else
+ * [max] pages spread evenly from the first to the last.
+ */
+fun searchTextSample(pageCount: Int, max: Int = 40): List<Int> {
+    if (pageCount <= 0) return emptyList()
+    if (pageCount <= max) return (0 until pageCount).toList()
+    return (0 until max).map { i -> (i.toLong() * (pageCount - 1) / (max - 1)).toInt() }.distinct()
+}

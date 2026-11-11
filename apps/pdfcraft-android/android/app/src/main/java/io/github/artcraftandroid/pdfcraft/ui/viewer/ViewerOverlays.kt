@@ -57,6 +57,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -142,16 +143,17 @@ fun GoToPageDialog(doc: OpenDocument, onDismiss: () -> Unit) {
     var wrong by remember { mutableStateOf(false) }
     val focus = remember { FocusRequester() }
     LaunchedEffect(Unit) { focus.requestFocus() }
-    val previous = doc.controller.freshPreviousPage(android.os.SystemClock.uptimeMillis())
+    val ctl = doc.controller
+    val previous = remember(ctl.jumpsVersion) { ctl.jumps.backTarget }
     fun go() {
-        val n = text.trim().toIntOrNull()
-        if (n == null || n < 1 || n > doc.pageCount) {
+        val page = parsePageNumber(text, doc.pageCount)
+        if (page == null) {
+            // keep what was typed, and say what is allowed
             wrong = true
-            text = ""
             return
         }
-        doc.controller.rememberJump(doc.viewer.currentPage)
-        doc.viewer.goToPage(n - 1)
+        ctl.rememberJump(doc.viewer)
+        doc.viewer.goToPage(page)
         onDismiss()
     }
     io.github.artcraftandroid.pdfcraft.ui.PdfDialog(onDismiss = onDismiss, title = stringResource(R.string.viewer_go_to_page), confirm = stringResource(R.string.common_ok), onConfirm = ::go, confirmEnabled = text.isNotEmpty()) {
@@ -163,19 +165,73 @@ fun GoToPageDialog(doc: OpenDocument, onDismiss: () -> Unit) {
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = androidx.compose.ui.text.input.ImeAction.Go),
                     keyboardActions = KeyboardActions(onGo = { go() }),
                 )
+                if (wrong) {
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        stringResource(R.string.viewer_go_to_page_invalid, doc.pageCount),
+                        color = c.red, fontSize = 13.sp,
+                        modifier = Modifier.semantics { liveRegion = androidx.compose.ui.semantics.LiveRegionMode.Polite },
+                    )
+                }
                 if (previous != null) {
                     Spacer(Modifier.height(12.dp))
                     Text(
-                        stringResource(R.string.viewer_back_to_page, previous + 1),
+                        stringResource(R.string.viewer_back_to_page, previous.page + 1),
                         color = c.accent,
                         modifier = Modifier.clickable {
-                            doc.viewer.goToPage(previous)
-                            doc.controller.previousPage = null
+                            ctl.jumpBack(doc.viewer)
                             onDismiss()
                         }.padding(vertical = 4.dp),
                     )
                 }
             }
+    }
+}
+
+/**
+ * The way back after a jump: "‹ Page 12" (and "Page 87 ›" once back) above the bottom bar, for a
+ * few seconds after a jump and again when scrolling stops. TalkBack announces it.
+ */
+@Composable
+fun BoxScope.JumpChip(doc: OpenDocument, visible: Boolean, bottom: Dp) {
+    val c = pdfColors
+    val ctl = doc.controller
+    val version = ctl.jumpsVersion
+    val back = remember(version) { ctl.jumps.backTarget }
+    val forward = remember(version) { ctl.jumps.forwardTarget }
+    if (!visible || (back == null && forward == null)) return
+    Row(
+        Modifier.align(Alignment.BottomCenter).padding(bottom = bottom + 12.dp)
+            .shadow(3.dp, RoundedCornerShape(20.dp))
+            .background(c.surface, RoundedCornerShape(20.dp))
+            .semantics { liveRegion = androidx.compose.ui.semantics.LiveRegionMode.Polite },
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (back != null) {
+            val label = stringResource(R.string.viewer_jump_back, back.page + 1)
+            Row(
+                Modifier.clickable(role = androidx.compose.ui.semantics.Role.Button) { ctl.jumpBack(doc.viewer) }
+                    .semantics(mergeDescendants = true) { contentDescription = label }
+                    .heightIn(min = 40.dp).padding(start = 8.dp, end = 14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                androidx.compose.material3.Icon(LucideIcons.ChevronLeft, null, tint = c.accent, modifier = Modifier.size(20.dp))
+                Text(stringResource(R.string.viewer_page_short, back.page + 1), color = c.accent, fontSize = 15.sp)
+            }
+        }
+        if (back != null && forward != null) Box(Modifier.width(1.dp).height(24.dp).background(c.divider))
+        if (forward != null) {
+            val label = stringResource(R.string.viewer_jump_forward, forward.page + 1)
+            Row(
+                Modifier.clickable(role = androidx.compose.ui.semantics.Role.Button) { ctl.jumpForward(doc.viewer) }
+                    .semantics(mergeDescendants = true) { contentDescription = label }
+                    .heightIn(min = 40.dp).padding(start = 14.dp, end = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(stringResource(R.string.viewer_page_short, forward.page + 1), color = c.accent, fontSize = 15.sp)
+                androidx.compose.material3.Icon(LucideIcons.ChevronRight, null, tint = c.accent, modifier = Modifier.size(20.dp))
+            }
+        }
     }
 }
 

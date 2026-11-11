@@ -222,8 +222,6 @@
     <string name="home_extra_body">Modifications facultatives de l\'apparence et du fonctionnement de PdfCraft.</string>
     <string name="home_status_bar_in_documents">Afficher la barre d\'état dans les documents</string>
     <string name="home_status_bar_in_documents_body">La barre d\'état s\'affiche avec les barres d\'outils. Quand vous touchez l\'écran pour les masquer, la page occupe tout l\'écran, y compris autour de la caméra.</string>
-    <string name="home_search_count">Afficher le nombre de résultats de recherche</string>
-    <string name="home_search_count_body">La recherche dans un document indique à quel résultat vous êtes et combien il y en a, par exemple 3 sur 12.</string>
 
     <!-- Settings: About PdfCraft -->
     <string name="home_section_about">À propos</string>
