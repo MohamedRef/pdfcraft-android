@@ -818,11 +818,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         if (tool in setOf(ViewerTool.Comment, ViewerTool.Markup, ViewerTool.Draw, ViewerTool.Text) && doc.info.commentsHidden) setCommentsHidden(doc, false)
         ctl.switchTool(tool)
         if (tool == ViewerTool.Draw && toolPrefs.snapToShape && toolPrefs.takeSnapHint()) tell(text(R.string.msg_snap_to_shape_on))
-        // the first time the reader comments without a name, ask for one (once)
-        if (tool in setOf(ViewerTool.Comment, ViewerTool.Markup, ViewerTool.Draw, ViewerTool.Text) && toolPrefs.author.isBlank() && !toolPrefs.authorAsked) {
-            toolPrefs.authorAsked = true
-            authorPrompt = true
-        }
+        // no name dialog before the first mark (#202): the comment box offers "Comment as" instead
     }
 
     /** Asking for the name comments are signed with. */

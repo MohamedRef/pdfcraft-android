@@ -2115,4 +2115,6 @@
     <string name="library_tags_hint">exam, week 3</string>
     <string name="library_collections">Collections</string>
     <string name="library_remove">Remove from library</string>
+    <string name="viewer_comment_as">Comment as %1$s · Change</string>
+    <string name="viewer_comment_as_add">Add your name to comments</string>
 </resources>

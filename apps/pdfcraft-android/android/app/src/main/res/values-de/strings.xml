@@ -1826,4 +1826,6 @@
     <string name="library_tags_hint">Prüfung, Woche 3</string>
     <string name="library_collections">Sammlungen</string>
     <string name="library_remove">Aus Bibliothek entfernen</string>
+    <string name="viewer_comment_as">Kommentieren als %1$s · Ändern</string>
+    <string name="viewer_comment_as_add">Deinen Namen zu Kommentaren hinzufügen</string>
 </resources>

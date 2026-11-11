@@ -1539,4 +1539,6 @@
     <string name="library_tags_hint">امتحان، أسبوع 3</string>
     <string name="library_collections">المجموعات</string>
     <string name="library_remove">إزالة من المكتبة</string>
+    <string name="viewer_comment_as">التعليق باسم %1$s · تغيير</string>
+    <string name="viewer_comment_as_add">أضف اسمك إلى التعليقات</string>
 </resources>

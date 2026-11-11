@@ -1411,4 +1411,6 @@
     <string name="library_tags_hint">prova, semana 3</string>
     <string name="library_collections">Coleções</string>
     <string name="library_remove">Remover da biblioteca</string>
+    <string name="viewer_comment_as">Comentar como %1$s · Alterar</string>
+    <string name="viewer_comment_as_add">Adicione seu nome aos comentários</string>
 </resources>

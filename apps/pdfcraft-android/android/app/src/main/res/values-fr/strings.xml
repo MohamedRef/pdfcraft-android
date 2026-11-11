@@ -1706,4 +1706,6 @@
     <string name="library_tags_hint">examen, semaine 3</string>
     <string name="library_collections">Collections</string>
     <string name="library_remove">Retirer de la bibliothèque</string>
+    <string name="viewer_comment_as">Commenter en tant que %1$s · Modifier</string>
+    <string name="viewer_comment_as_add">Ajouter votre nom aux commentaires</string>
 </resources>

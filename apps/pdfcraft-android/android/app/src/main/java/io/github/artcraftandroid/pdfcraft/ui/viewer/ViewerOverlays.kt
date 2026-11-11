@@ -359,13 +359,14 @@ fun NoteSheet(vm: AppViewModel, prompt: NotePrompt) {
         onDismiss = { vm.notePrompt = null },
         onPost = { vm.postNote(prompt, it) },
         onVoice = if (at != null && prompt.selection == null) ({ vm.notePrompt = null; vm.startVoice(prompt.doc, at) }) else null,
+        author = vm.prefsChanged.let { vm.toolPrefs.author }, onAuthor = { vm.authorPrompt = true },
     )
 }
 
 /** A reply being typed: the same bar, under the comment it answers. */
 @Composable
 fun ReplySheet(vm: AppViewModel, prompt: ReplyPrompt) {
-    InlineNoteBar(hint = stringResource(R.string.viewer_write_reply), onDismiss = { vm.replyPrompt = null }, onPost = { vm.postReply(prompt, it) }, onVoice = null)
+    InlineNoteBar(hint = stringResource(R.string.viewer_write_reply), onDismiss = { vm.replyPrompt = null }, onPost = { vm.postReply(prompt, it) }, onVoice = null, author = vm.prefsChanged.let { vm.toolPrefs.author }, onAuthor = { vm.authorPrompt = true })
 }
 
 /**
@@ -374,7 +375,7 @@ fun ReplySheet(vm: AppViewModel, prompt: ReplyPrompt) {
  * divider, the send arrow, blue once there is text. Back or a tap above it cancels.
  */
 @Composable
-private fun InlineNoteBar(hint: String, onDismiss: () -> Unit, onPost: (String) -> Unit, onVoice: (() -> Unit)?) {
+private fun InlineNoteBar(hint: String, onDismiss: () -> Unit, onPost: (String) -> Unit, onVoice: (() -> Unit)?, author: String = "", onAuthor: (() -> Unit)? = null) {
     val c = pdfColors
     var text by remember { mutableStateOf("") }
     val focus = remember { FocusRequester() }
@@ -386,6 +387,15 @@ private fun InlineNoteBar(hint: String, onDismiss: () -> Unit, onPost: (String) 
             Modifier.align(Alignment.BottomCenter).fillMaxWidth().imePadding()
                 .clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)).background(c.surface),
         ) {
+            // whose name the comment carries, changed here when it's typed rather than in a dialog
+            // before the first mark (#202)
+            if (onAuthor != null) {
+                Text(
+                    if (author.isBlank()) stringResource(R.string.viewer_comment_as_add) else stringResource(R.string.viewer_comment_as, author),
+                    color = if (author.isBlank()) c.toolAccent else c.textSecondary, fontSize = 13.sp, maxLines = 1,
+                    modifier = Modifier.fillMaxWidth().clickable(role = Role.Button, onClick = onAuthor).padding(start = 16.dp, end = 16.dp, top = 10.dp),
+                )
+            }
             BasicTextField(
                 value = text, onValueChange = { text = it }, maxLines = 3,
                 textStyle = androidx.compose.ui.text.TextStyle(color = c.text, fontSize = 17.sp),
