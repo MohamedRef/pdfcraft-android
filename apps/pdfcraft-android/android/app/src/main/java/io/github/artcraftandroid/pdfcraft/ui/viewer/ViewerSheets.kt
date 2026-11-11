@@ -184,6 +184,18 @@ fun ViewSettingsSheet(vm: AppViewModel, doc: OpenDocument) {
             vm.setPageMode(doc, PageMode.SinglePage)
             ctl.sheet = ViewerSheet.None
         }, checked = doc.viewer.mode == PageMode.SinglePage && !vm.readingMode)
+        // two pages side by side: only where the window has room for them (#152)
+        if (spreadFits(androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp)) {
+            GroupDivider()
+            SheetRow(LucideIcons.Columns2, stringResource(R.string.sheet_two_pages), {
+                vm.setSpread(if (vm.spreadPref == Spread.TwoUp) Spread.Single else Spread.TwoUp)
+                ctl.sheet = ViewerSheet.None
+            }, checked = vm.spreadPref == Spread.TwoUp && !vm.readingMode)
+            SheetRow(LucideIcons.BookOpen, stringResource(R.string.sheet_two_pages_cover), {
+                vm.setSpread(if (vm.spreadPref == Spread.TwoUpCover) Spread.Single else Spread.TwoUpCover)
+                ctl.sheet = ViewerSheet.None
+            }, checked = vm.spreadPref == Spread.TwoUpCover && !vm.readingMode)
+        }
         SheetRow(LucideIcons.BookOpenText, stringResource(R.string.sheet_reading_mode), {
             ctl.sheet = ViewerSheet.None
             vm.openReadingMode(doc)

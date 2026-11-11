@@ -736,6 +736,8 @@
     <!-- Viewer sheets: View settings -->
     <string name="sheet_continuous">Continuous</string>
     <string name="sheet_single_page">Single page</string>
+    <string name="sheet_two_pages">Two pages</string>
+    <string name="sheet_two_pages_cover">Two pages with cover</string>
     <string name="sheet_reading_mode">Reading Mode</string>
     <string name="sheet_night_mode">Night Mode</string>
     <string name="sheet_reading_colors">Reading colours</string>
