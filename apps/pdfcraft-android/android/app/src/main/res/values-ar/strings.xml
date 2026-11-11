@@ -1667,4 +1667,34 @@
     <string name="backup_restore_comments">استعادة التعليقات هنا</string>
     <string name="backup_restoring">جارٍ الاستعادة…</string>
     <string name="backup_comments_restored">تمت استعادة التعليقات</string>
+    <!-- Link authoring (#179, #159) -->
+    <string name="edit_link">رابط</string>
+    <string name="link_drag_hint">اسحب مربعًا فوق ما تريد جعله رابطًا، أو اضغط على رابط لتغييره.</string>
+    <string name="link_not_editable">لا يمكن تغيير هذا الرابط هنا.</string>
+    <string name="link_new">رابط جديد</string>
+    <string name="link_edit">تعديل الرابط</string>
+    <string name="link_to_page">صفحة في هذا المستند</string>
+    <string name="link_to_web">عنوان ويب أو بريد إلكتروني</string>
+    <string name="link_page_hint">رقم الصفحة (1–%1$d)</string>
+    <string name="link_web_hint">https://example.com</string>
+    <string name="link_page_wrong">أدخل رقم صفحة في هذا المستند.</string>
+    <string name="link_web_wrong">أدخل عنوان ويب (https://…) أو بريدًا إلكترونيًا.</string>
+    <string name="link_save">حفظ</string>
+    <string name="link_added">تمت إضافة الرابط. اضغط عليه أثناء القراءة للانتقال.</string>
+    <string name="link_deleted">تم حذف الرابط</string>
+    <string name="link_from_urls">اجعل عناوين الويب قابلة للنقر</string>
+    <string name="link_from_urls_none">لم يتم العثور على عناوين ويب جديدة</string>
+    <string name="link_remove_all">إزالة كل الروابط</string>
+    <string name="link_remove_all_title">إزالة كل الروابط؟</string>
+    <string name="link_remove_all_body">ستُزال كل روابط هذا المستند. يمكنك التراجع.</string>
+    <string name="link_removed_all">تمت إزالة كل الروابط</string>
+    <string name="ink_lasso_link">إضافة رابط</string>
+    <plurals name="link_from_urls_done">
+        <item quantity="zero">لم يتحول أي عنوان إلى رابط</item>
+        <item quantity="one">تحول عنوان واحد إلى رابط</item>
+        <item quantity="two">تحول عنوانان إلى رابطين</item>
+        <item quantity="few">تحولت %1$d عناوين إلى روابط</item>
+        <item quantity="many">تحول %1$d عنوانًا إلى روابط</item>
+        <item quantity="other">تحول %1$d عنوان إلى روابط</item>
+    </plurals>
 </resources>
