@@ -8,7 +8,7 @@ use std::sync::{
 use pdfcraft_cos::{SaveOptions, write_incremental};
 use pdfcraft_render::{DocInfo, OpenError, OpenTrace, RenderConfig, RenderPool, inspect, inspect_with_trace};
 
-use crate::document::display_bytes_collect_fields;
+use crate::document::{display_bytes_collect_fields, display_bytes_from_open};
 use crate::history::{Editor, Keys, TextBlocksCache};
 use crate::{
     AppearanceCache, DocId, Document, Session, StatusCaptions, TrustStore, XFA_SCRIPTS_OFF, XfaLayout, display_config, guard, info_fields, js,
@@ -456,12 +456,35 @@ impl Session {
         };
         context.check_cancelled()?;
         let sig_cache = Arc::new(pdfcraft_sign::DigestCache::default());
-        let mut signatures = if reading.is_some() {
-            Vec::new()
-        } else {
-            context.trace.measure("native_signatures", || {
-                editor.as_ref().map(|e| signatures_of(&e.cos, &bytes, &context.trust, &sig_cache)).unwrap_or_default()
-            })
+        // Android adaptation (#212): signature discovery, form discovery and the comment
+        // appearances the display copy needs each read every page annotation of the file but
+        // none depends on another, so they run side by side (one after the other they took
+        // seconds on a phone for a file with ~28,000 annotations). Each reads `e.cos` only;
+        // the appearances also fill the editor's appearance cache, as before.
+        let mut open_display = None;
+        let mut signatures = match (reading.is_some(), editor.as_mut()) {
+            (false, Some(e)) => {
+                let Editor { cos, appearances, .. } = e;
+                let cos: &pdfcraft_cos::Document = cos;
+                let find_signatures = || context.trace.measure("native_signatures", || signatures_of(cos, &bytes, &context.trust, &sig_cache));
+                let find_fields = || context.trace.measure("native_display_form_discovery", || pdfcraft_forms::fields_with_adopted(cos));
+                let mut draw_comments = || context.trace.measure("native_display_appearances", || pdfcraft_annot::with_missing_appearances_cached(cos, appearances));
+                #[cfg(not(target_arch = "wasm32"))]
+                let (signatures, comments, fields) = std::thread::scope(|s| {
+                    let signatures = s.spawn(find_signatures);
+                    let fields = s.spawn(find_fields);
+                    let comments = draw_comments();
+                    // A panic stays a panic: the open guard reports it as before.
+                    let signatures = signatures.join().unwrap_or_else(|p| std::panic::resume_unwind(p));
+                    let fields = fields.join().unwrap_or_else(|p| std::panic::resume_unwind(p));
+                    (signatures, comments, fields)
+                });
+                #[cfg(target_arch = "wasm32")]
+                let (signatures, comments, fields) = (find_signatures(), draw_comments(), find_fields());
+                open_display = Some((comments, fields));
+                signatures
+            }
+            _ => Vec::new(),
         };
         context.check_cancelled()?;
         // The inspection reads only `/Info`; a file stating its title or author only in XMP still
@@ -479,15 +502,11 @@ impl Session {
         let display = if reading.is_some() {
             bytes.clone()
         } else {
-            context.trace.measure("native_display", || {
-                display_bytes_collect_fields(
-                    editor.as_mut(),
-                    &bytes,
-                    &mut signatures,
-                    &context.captions,
-                    Some(&mut discovered_fields),
-                    &context.trace,
-                )
+            context.trace.measure("native_display", || match (editor.as_mut(), open_display.take()) {
+                (Some(e), Some((comments, fields))) => {
+                    display_bytes_from_open(e, &bytes, &mut signatures, &context.captions, comments, fields, &mut discovered_fields)
+                }
+                (editor, _) => display_bytes_collect_fields(editor, &bytes, &mut signatures, &context.captions, Some(&mut discovered_fields), &context.trace),
             })
         };
         context.check_cancelled()?;
