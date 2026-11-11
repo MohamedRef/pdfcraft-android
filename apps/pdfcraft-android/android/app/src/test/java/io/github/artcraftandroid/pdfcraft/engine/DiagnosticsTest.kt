@@ -112,7 +112,7 @@ class DiagnosticsTest {
         assertEquals("PdfCraft diagnostics log", text.lines()[0])
         assertTrue("app: 0.0.24-beta (24012)" in text.lines())
         assertTrue("  [open] 2 · #211 #212 #234 #235 #317" in text.lines())
-        assertTrue("  [ink] 1 · #128" in text.lines())
+        assertTrue("  [ink] 1 · #74 #75 #76 #81 #84 #85 #128" in text.lines())
         assertTrue(text.lines().indexOf(lines[0]) < text.lines().indexOf(lines[2]))
     }
 
