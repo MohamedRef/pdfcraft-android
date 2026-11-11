@@ -916,6 +916,14 @@
     <string name="bates_export_failed">Não foi possível salvar esta nova cópia em Downloads.</string>
     <string name="ink_presets_title">Canetas favoritas</string>
     <string name="ink_presets_help">Cada caneta guarda a própria cor, espessura e opacidade. Toque em uma favorita para restaurar as configurações dela.</string>
+    <string name="ink_low_latency_explanation">Desenha a linha que você escreve direto na tela antes de o app redesenhar. Só canetas opacas.</string>
+    <string name="ink_low_latency">Tinta de baixa latência (experimental)</string>
+    <string name="zoom_box_new_line">Nova linha</string>
+    <string name="zoom_box">Lupa</string>
+    <string name="pen_gesture_scratched">%1$d traços apagados. Desfazer os restaura.</string>
+    <string name="pen_gestures_explanation">Rabisque sobre a tinta para apagá-la. Uma linha reta de marca-texto sobre o texto o destaca; uma linha reta de caneta logo abaixo o sublinha. Reconhecido ao levantar a caneta.</string>
+    <string name="pen_gestures">Gestos inteligentes da caneta</string>
+    <string name="ink_ruler">Régua</string>
     <string name="palm_guard_size">Área da palma: %1$d dp</string>
     <string name="palm_guard_explanation">Enquanto a S Pen paira ou escreve, toques ao lado e abaixo dela, do lado da mão de escrita, não rolam, não dão zoom nem desenham. A área aparece enquanto a caneta paira.</string>
     <string name="palm_guard">Ignorar a palma ao escrever</string>

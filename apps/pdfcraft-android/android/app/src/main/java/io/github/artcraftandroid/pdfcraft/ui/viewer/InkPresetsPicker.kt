@@ -182,6 +182,28 @@ internal fun InkPresetsPicker(vm: AppViewModel, onApplied: () -> Unit) {
             PdfSwitch(prefs.multiFingerUndo, null)
         }
 
+        Row(
+            Modifier.fillMaxWidth().toggleable(value = prefs.penGestures, role = Role.Switch) { prefs.updatePenGestures(it) }
+                .padding(vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text(stringResource(R.string.pen_gestures), color = c.text, fontSize = 14.sp)
+                Text(stringResource(R.string.pen_gestures_explanation), color = c.label, fontSize = 12.sp)
+            }
+            PdfSwitch(prefs.penGestures, null)
+        }
+        Row(
+            Modifier.fillMaxWidth().toggleable(value = prefs.lowLatencyInk, role = Role.Switch) { prefs.updateLowLatencyInk(it) }
+                .padding(vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text(stringResource(R.string.ink_low_latency), color = c.text, fontSize = 14.sp)
+                Text(stringResource(R.string.ink_low_latency_explanation), color = c.label, fontSize = 12.sp)
+            }
+            PdfSwitch(prefs.lowLatencyInk, null)
+        }
         // Writing hand and palm guard (#156).
         Text(stringResource(R.string.hand_title), color = c.text, fontSize = 14.sp)
         OptionChips(listOf(false, true), prefs.leftHanded, { left ->

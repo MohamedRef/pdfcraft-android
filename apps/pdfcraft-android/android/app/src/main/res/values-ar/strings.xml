@@ -1037,6 +1037,14 @@
     <string name="bates_export_failed">تعذّر حفظ هذه النسخة الجديدة في التنزيلات.</string>
     <string name="ink_presets_title">الأقلام المفضّلة</string>
     <string name="ink_presets_help">كل قلم يحتفظ بلونه وسُمكه وشفافيته. انقر على قلم مفضّل لاستعادة إعداداته.</string>
+    <string name="ink_low_latency_explanation">يرسم الخط الذي تكتبه على الشاشة مباشرة قبل أن يعيد التطبيق الرسم. للأقلام غير الشفافة فقط.</string>
+    <string name="ink_low_latency">حبر سريع الاستجابة (تجريبي)</string>
+    <string name="zoom_box_new_line">سطر جديد</string>
+    <string name="zoom_box">نافذة التكبير</string>
+    <string name="pen_gesture_scratched">تم حذف %1$d خطوط بالشخبطة. التراجع يعيدها.</string>
+    <string name="pen_gestures_explanation">اشخبط فوق الحبر لحذفه. خط مستقيم بقلم التحديد فوق نص يظلّله، وخط مستقيم بالقلم تحت النص مباشرة يضع تحته خطًا. يتم التعرّف بعد رفع القلم.</string>
+    <string name="pen_gestures">إيماءات القلم الذكية</string>
+    <string name="ink_ruler">مسطرة</string>
     <string name="palm_guard_size">منطقة راحة اليد: %1$d dp</string>
     <string name="palm_guard_explanation">أثناء تحويم القلم S Pen أو الكتابة به، اللمسات بجانبه وتحته من جهة يد الكتابة لا تمرّر ولا تكبّر ولا ترسم. تظهر المنطقة أثناء تحويم القلم.</string>
     <string name="palm_guard">تجاهل راحة اليد أثناء الكتابة</string>

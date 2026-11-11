@@ -68,9 +68,14 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.text.drawText
+import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.input.pointer.PointerType
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.foundation.gestures.calculateRotation
 import androidx.compose.ui.input.pointer.isPrimaryPressed
 import androidx.compose.ui.input.pointer.isSecondaryPressed
 import androidx.compose.ui.input.pointer.pointerInput
@@ -166,14 +171,20 @@ fun Modifier.toolGestures(
     penButtonHold: PenButtonHold = PenButtonHold.Eraser,
     /** Called before [onDown] with whether this stroke is a temporary highlighter (button held). */
     onPenDownMode: (PenDownMode) -> Unit = {},
+    /** A gesture that starts here belongs to another control on top (the zoom writing pad, #130). */
+    ignoreAt: ((Offset) -> Boolean)? = null,
+    /** A finger gesture that starts on an overlay (the ruler, #150) moves and turns it instead. */
+    overlayHit: ((Offset) -> Boolean)? = null,
+    onOverlayTransform: (pan: Offset, rotationDeg: Float, pivot: Offset) -> Unit = { _, _, _ -> },
     /** True for a finger touch that the writing-hand guard rejects (#156); it then neither draws nor scrolls. */
     rejectTouch: ((Offset, Long) -> Boolean)? = null,
     /** A quick tap with two or three fingers and no pan or zoom (#189); null turns it off. */
     onMultiFingerTap: ((fingers: Int) -> Unit)? = null,
-): Modifier = pointerInput(doc, penOnly, penButtonHold, onMultiFingerTap != null, rejectTouch != null) {
+): Modifier = pointerInput(doc, penOnly, penButtonHold, onMultiFingerTap != null, rejectTouch != null, overlayHit != null, ignoreAt != null) {
     val routing = StylusRouting()
     awaitEachGesture {
         val down = awaitFirstDown(requireUnconsumed = false)
+        if (ignoreAt?.invoke(down.position) == true) return@awaitEachGesture
         val stylus = down.type == PointerType.Stylus
         var activePen = stylus || down.type == PointerType.Eraser
         var activeId = down.id
@@ -187,10 +198,11 @@ fun Modifier.toolGestures(
         var eraser = downMode == PenDownMode.Erase
         if (activePen) routing.penStarted()
         // A palm resting beside a hovering or writing pen is ignored, though a pen may still arrive.
-        val palm = down.type == PointerType.Touch && rejectTouch?.invoke(down.position, down.uptimeMillis) == true
-        var navigation = !palm && down.type == PointerType.Touch && routing.fingersNavigate(penOnly)
-        var one = !palm && !navigation && !eraser
-        var eraseOne = !palm && !navigation && eraser
+        val overlay = down.type == PointerType.Touch && overlayHit?.invoke(down.position) == true
+        val palm = !overlay && down.type == PointerType.Touch && rejectTouch?.invoke(down.position, down.uptimeMillis) == true
+        var navigation = !overlay && !palm && down.type == PointerType.Touch && routing.fingersNavigate(penOnly)
+        var one = !overlay && !palm && !navigation && !eraser
+        var eraseOne = !overlay && !palm && !navigation && eraser
         var moved = false
         var last = down.position
         var lastPressure = down.pressure
@@ -280,6 +292,13 @@ fun Modifier.toolGestures(
                     if (active?.isConsumed == true && one) { onCancel(); one = false }
                     break
                 }
+                if (overlay) {
+                    val pan = event.calculatePan()
+                    val rotation = event.calculateRotation()
+                    if (pan != Offset.Zero || rotation != 0f) onOverlayTransform(pan, rotation, event.calculateCentroid())
+                    event.changes.forEach { if (it.type == PointerType.Touch) it.consume() }
+                    continue
+                }
                 if (palm) {
                     event.changes.forEach { if (it.type == PointerType.Touch) it.consume() }
                     continue
@@ -305,7 +324,7 @@ fun Modifier.toolGestures(
                 }
             }
             if (eraseOne) onEraserUp(last) else if (one) onUp(last, moved)
-            if (!activePen && !palm && onMultiFingerTap != null) {
+            if (!activePen && !palm && !overlay && onMultiFingerTap != null) {
                 multiFingerTapFingers(maxTouches, endTime - down.uptimeMillis, touchTravel + if (moved) Float.MAX_VALUE else 0f, zoomDrift, viewConfiguration.touchSlop)
                     ?.let(onMultiFingerTap)
             }
@@ -313,6 +332,123 @@ fun Modifier.toolGestures(
             if (one) onCancel()
             if (eraseOne) onEraserCancel()
             throw e
+        }
+    }
+}
+
+/** The ruler band with ticks every 5 dp (longer every 25 dp) and its angle readout (#150). */
+internal fun androidx.compose.ui.graphics.drawscope.DrawScope.drawRuler(r: Ruler, measurer: androidx.compose.ui.text.TextMeasurer, density: Float) {
+    rotate(r.angleDeg, pivot = r.center) {
+        val top = r.center.y - r.halfWidth
+        val left = r.center.x - r.halfLength
+        drawRect(Color(0xFFF4F1E8).copy(alpha = 0.82f), Offset(left, top), androidx.compose.ui.geometry.Size(r.halfLength * 2f, r.halfWidth * 2f))
+        drawRect(Color(0xFF5A6270), Offset(left, top), androidx.compose.ui.geometry.Size(r.halfLength * 2f, r.halfWidth * 2f), style = Stroke(width = 1.2f * density))
+        val step = 5f * density
+        var x = r.center.x - (r.halfLength / step).toInt() * step
+        var i = -(r.halfLength / step).toInt()
+        while (x <= r.center.x + r.halfLength) {
+            val len = (if (i % 5 == 0) 12f else 6f) * density
+            drawLine(Color(0xFF5A6270), Offset(x, top), Offset(x, top + len), strokeWidth = 1f * density)
+            drawLine(Color(0xFF5A6270), Offset(x, r.center.y + r.halfWidth), Offset(x, r.center.y + r.halfWidth - len), strokeWidth = 1f * density)
+            x += step
+            i++
+        }
+        val label = measurer.measure("${"%.0f".format(java.util.Locale.ROOT, kotlin.math.abs(r.angleDeg))}°",
+            style = androidx.compose.ui.text.TextStyle(color = Color(0xFF1F2430), fontSize = androidx.compose.ui.unit.TextUnit(13f, androidx.compose.ui.unit.TextUnitType.Sp)))
+        drawText(label, topLeft = Offset(r.center.x - label.size.width / 2f, r.center.y - label.size.height / 2f))
+    }
+}
+
+/** Height of the zoom writing pad (#130). */
+internal val ZOOM_PAD_HEIGHT = 200.dp
+
+/**
+ * The docked zoom writing pad (#130): the zoom box's part of the page, magnified, with the ink
+ * on it. Writing here adds ink at the matching page points; lifting the pen in the right-hand
+ * zone moves the box along the line, then to the next line and page.
+ */
+@Composable
+private fun ZoomWritingPad(
+    doc: OpenDocument,
+    prefs: ToolPrefs,
+    modifier: Modifier,
+    padSize: androidx.compose.ui.geometry.Size,
+    drafts: List<InkStroke>,
+    newStroke: (page: Int, pressure: Float, isStylus: Boolean, at: Offset) -> InkStroke,
+    finishStroke: (InkStroke) -> Unit,
+) {
+    val c = pdfColors
+    val ctl = doc.controller
+    Box(
+        modifier.background(Color.White).drawBehind {
+            drawLine(c.divider, Offset(0f, 0f), Offset(size.width, 0f), strokeWidth = 2f)
+        }.pointerInput(doc) {
+            awaitEachGesture {
+                val down = awaitFirstDown(requireUnconsumed = false)
+                down.consume()
+                val stylus = down.type == PointerType.Stylus
+                if (down.type == PointerType.Eraser || (!stylus && prefs.stylusOnly)) return@awaitEachGesture
+                val zb = ctl.zoomBox ?: return@awaitEachGesture
+                val pad = androidx.compose.ui.geometry.Size(size.width.toFloat(), size.height.toFloat())
+                val s = newStroke(zb.page, down.pressure, stylus, zb.toPage(down.position, pad))
+                var lastPressure = down.pressure
+                while (true) {
+                    val event = awaitPointerEvent()
+                    val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                    change.historical.forEach { h ->
+                        s.points.add(zb.toPage(h.position, pad))
+                        s.pressures.add(lastPressure)
+                    }
+                    if (change.positionChanged()) {
+                        lastPressure = change.pressure.takeIf { it.isFinite() && it > 0f } ?: lastPressure
+                        s.points.add(zb.toPage(change.position, pad))
+                        s.pressures.add(lastPressure)
+                    }
+                    event.changes.forEach { it.consume() }
+                    if (!change.pressed) break
+                }
+                finishStroke(s)
+                val last = s.points.lastOrNull() ?: return@awaitEachGesture
+                val page = doc.viewer.pages.getOrNull(zb.page) ?: return@awaitEachGesture
+                if (ctl.zoomBox == zb && zb.inAdvanceZone(last.x)) {
+                    val next = zb.advanced(page.width, page.height, doc.viewer.pages.size)
+                    ctl.zoomBox = next
+                    if (next.page != zb.page) doc.viewer.goToPage(next.page, next.y)
+                }
+            }
+        },
+    ) {
+        Canvas(Modifier.fillMaxSize()) {
+            val zb = ctl.zoomBox ?: return@Canvas
+            val page = doc.viewer.pages.getOrNull(zb.page) ?: return@Canvas
+            val m = zb.magnification(size)
+            val origin = zb.pageOriginInPad(size)
+            val pageRect = androidx.compose.ui.geometry.Rect(origin, androidx.compose.ui.geometry.Size(page.width * m, page.height * m))
+            clipRect {
+                // The rendered page behind the box, from the page's latest whole-page image.
+                doc.images.latestBase(zb.page)?.let { img ->
+                    drawImage(
+                        img.bitmap,
+                        dstOffset = androidx.compose.ui.unit.IntOffset(pageRect.left.toInt(), pageRect.top.toInt()),
+                        dstSize = androidx.compose.ui.unit.IntSize(pageRect.width.toInt(), pageRect.height.toInt()),
+                    )
+                }
+                for (s in drafts) if (s.page == zb.page) {
+                    drawInkStroke(s.paths.runs(s), Color(s.appearance.argb), s.appearance.opacity, s.appearance.style == InkStyle.Highlighter, origin, m, pageRect)
+                }
+                // The advance zone: lifting the pen here moves the box on.
+                drawRect(Color(0xFF2E7DFF).copy(alpha = 0.07f), Offset(size.width * 0.8f, 0f), androidx.compose.ui.geometry.Size(size.width * 0.2f, size.height))
+            }
+        }
+        Row(Modifier.align(Alignment.TopEnd).padding(4.dp)) {
+            SubTool(LucideIcons.ChevronsLeft, stringResource(R.string.zoom_box_new_line), false, {
+                val zb = ctl.zoomBox ?: return@SubTool
+                val page = doc.viewer.pages.getOrNull(zb.page) ?: return@SubTool
+                val next = zb.nextLine(page.width, page.height, doc.viewer.pages.size)
+                ctl.zoomBox = next
+                if (next.page != zb.page) doc.viewer.goToPage(next.page, next.y)
+            })
+            SubTool(LucideIcons.X, stringResource(R.string.common_done), false, { ctl.zoomBoxOn = false })
         }
     }
 }
@@ -375,6 +511,64 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
         documentEdit("comments_edit_many", mapOf("page" to page + 1, "comments" to indices) + extra)
     }
     val prefs = vm.toolPrefs
+    /** Drops a just-drawn draft stroke that turned out to be a gesture, without an undo step of its own. */
+    fun dropGestureStroke(s: InkStroke) {
+        strokes.remove(s)
+        edits.remove(DraftInkEdit.Added(s))
+    }
+    /**
+     * Smart pen gestures (#148), after lift only: a zig-zag deletes the ink under it, a straight
+     * marker stroke over a text line highlights its words, a straight pen stroke just under a
+     * line underlines them. Anything else stays the ink it was drawn as.
+     */
+    fun penGestureAfterLift(s: InkStroke) {
+        val pts = s.points.toList()
+        when (classifyPenGesture(pts)) {
+            PenGesture.ScratchOut -> {
+                val area = strokeBounds(pts).inflate(2f)
+                val victims = strokes.filter { it !== s && it.page == s.page && scratchCovers(area, it.points.toList()) }
+                val saved = doc.comments.filter {
+                    it.page.toInt() == s.page && it.subtype == "Ink" && !it.locked && scratchCoversRect(area, it.rect)
+                }
+                if (victims.isEmpty() && saved.isEmpty()) return
+                dropGestureStroke(s)
+                if (victims.isNotEmpty()) {
+                    val edit = DraftInkEdit.Removed(victims.map { strokes.indexOf(it) to it }.filter { it.first >= 0 })
+                    applyDraftInkEdit(strokes, edit, forward = true)
+                    edits.add(edit)
+                    undone.clear()
+                    steps.drafted()
+                }
+                if (saved.isNotEmpty()) {
+                    documentEdit("comments_edit_many", mapOf("page" to s.page + 1, "comments" to saved.map { it.index.toInt() + 1 }, "delete" to true))
+                }
+                vm.tell(text(R.string.pen_gesture_scratched, victims.size + saved.size))
+            }
+            PenGesture.Line -> {
+                val eng = vm.engine ?: return
+                if (!doc.info.allowsAnnotation) return
+                val marker = s.appearance.style == InkStyle.Highlighter
+                val y = pts.map { it.y }.average().toFloat()
+                // An underline sits below its line: look for words a few points higher up.
+                val probe = if (marker) 0f else 4f
+                val start = PagePoint(s.page, pts.first().x, pts.first().y - probe)
+                val end = PagePoint(s.page, pts.last().x, pts.last().y - probe)
+                val color = Color(s.appearance.argb)
+                val opacity = s.appearance.opacity
+                vm.viewModelScope.launch {
+                    val found = try { resolveMarkup(eng, doc, start, end, 3f, tap = false) } catch (_: MobileException) { null } ?: return@launch
+                    val line = found.rects.firstOrNull { r -> lineGestureMarkup(marker, y, minOf(r[1], r[3]), maxOf(r[1], r[3])) != null } ?: return@launch
+                    val markup = lineGestureMarkup(marker, y, minOf(line[1], line[3]), maxOf(line[1], line[3])) ?: return@launch
+                    // Committed meanwhile (Done): it is ink now, so leave it as drawn.
+                    if (vm.document !== doc || s !in strokes) return@launch
+                    dropGestureStroke(s)
+                    val rects = found.rects.filter { r -> kotlin.math.abs((minOf(r[1], r[3]) + maxOf(r[1], r[3])) / 2f - (minOf(line[1], line[3]) + maxOf(line[1], line[3])) / 2f) < 1f }
+                    vm.addMarkup(doc, markup, s.page, rects, color, if (marker) opacity.coerceAtLeast(0.25f) else opacity)
+                }
+            }
+            PenGesture.None -> Unit
+        }
+    }
     // Capture appearance at pointer down. Every stroke is saved as its own annotation (#72).
     DisposableEffect(doc) {
         doc.commitTool = {
@@ -454,6 +648,51 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
     var hoverEraser by remember(doc) { mutableStateOf(false) }
     var buttonHighlighter by remember(doc) { mutableStateOf(false) }
     val penTracker = remember(doc) { PenTracker() }
+    // The ruler (#150): screen-space, kept per document while it is open, never saved.
+    val density = LocalDensity.current
+    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
+    val rulerReach = with(density) { 24.dp.toPx() }
+    var rulerEdge by remember(doc) { mutableStateOf<Int?>(null) }
+    var layerSize by remember(doc) { mutableStateOf(androidx.compose.ui.geometry.Size.Zero) }
+    if (doc.controller.rulerOn && doc.controller.ruler == null && layerSize.width > 0f) {
+        doc.controller.ruler = Ruler(
+            Offset(layerSize.width / 2f, layerSize.height / 2f), 0f,
+            halfWidth = with(density) { 34.dp.toPx() }, halfLength = maxOf(layerSize.width, layerSize.height) * 1.5f,
+        )
+    }
+    val rulerTextMeasurer = androidx.compose.ui.text.rememberTextMeasurer()
+    // Low-latency wet ink (#128), only with the setting on.
+    val wet = remember(doc) { WetInk() }
+    var wetLast by remember(doc) { mutableStateOf<Offset?>(null) }
+    fun endWet() {
+        if (wetLast != null) wet.clear()
+        wetLast = null
+    }
+    // The zoom writing box (#130): a frame on the page, written in through a magnified pad.
+    var padSize by remember(doc) { mutableStateOf(androidx.compose.ui.geometry.Size.Zero) }
+    var overlayTarget by remember(doc) { mutableStateOf(0) }
+    val padHeightPx = with(density) { ZOOM_PAD_HEIGHT.toPx() }
+    if (doc.controller.zoomBoxOn && doc.controller.zoomBox == null && padSize.width > 0f) {
+        doc.viewer.screenToPage(Offset(layerSize.width / 2f, layerSize.height / 4f), nearest = true)?.let { at ->
+            doc.viewer.pages.getOrNull(at.page)?.let { pg ->
+                doc.controller.zoomBox = ZoomBox.start(at.page, pg.width, pg.height, at.y, padSize)
+            }
+        }
+    }
+    fun zoomFrameOnScreen(): androidx.compose.ui.geometry.Rect? {
+        val zb = doc.controller.zoomBox?.takeIf { doc.controller.zoomBoxOn } ?: return null
+        val a = doc.viewer.pageToScreen(zb.page, zb.x, zb.y)
+        val b = doc.viewer.pageToScreen(zb.page, zb.x + zb.width, zb.y + zb.height)
+        return androidx.compose.ui.geometry.Rect(a, b)
+    }
+    fun activeRuler(): Ruler? = doc.controller.ruler?.takeIf { doc.controller.rulerOn }?.let { it.copy(angleDeg = rulerDisplayAngle(it.angleDeg)) }
+    /** A freehand stroke that starts beside the ruler follows its edge for the whole stroke. */
+    fun rulerPoint(p: Offset): Offset {
+        val r = activeRuler() ?: return p
+        val edge = rulerEdge ?: return p
+        val outset = prefs.inkWidth * doc.viewer.pixelsPerPoint(current?.page ?: 0) / 2f
+        return r.project(p, edge, outset)
+    }
     val guardSizePx = with(LocalDensity.current) { prefs.palmGuardSizeDp.dp.toPx() }
     val buttonClick = remember(doc) { PenButtonClickDetector() }
 
@@ -581,6 +820,7 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
 
     Box(
         Modifier.fillMaxSize()
+            .onSizeChanged { layerSize = androidx.compose.ui.geometry.Size(it.width.toFloat(), it.height.toFloat()) }
             .pointerInput(doc) {
                 awaitPointerEventScope {
                     while (true) {
@@ -649,7 +889,8 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                     return@toolGestures
                 }
                 clearSelection()
-                val at = doc.viewer.screenToPage(p) ?: return@toolGestures
+                rulerEdge = if (doc.controller.inkShapeMode == InkShapeMode.Freehand) activeRuler()?.snapEdge(p, rulerReach) else null
+                val at = doc.viewer.screenToPage(rulerPoint(p)) ?: return@toolGestures
                 stillAt = p
                 movedAt = System.currentTimeMillis()
                 // Holding the side button can draw with the highlighter for this stroke only (#144).
@@ -665,8 +906,11 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                     it.pressures.add(pressure)
                     strokes.add(it)
                 }
+                wetLast = if (prefs.lowLatencyInk && doc.controller.inkShapeMode == InkShapeMode.Freehand &&
+                    wetInkEligible(inkStyle, appearance.opacity)) rulerPoint(p) else null
             },
-            onMove = { p, pressure, _ ->
+            onMove = { raw, pressure, _ ->
+                val p = if (current != null) rulerPoint(raw) else raw
                 if (doc.controller.lassoMode) {
                     moveLasso(p)
                     return@toolGestures
@@ -687,6 +931,11 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                     if (s.shapeMode == InkShapeMode.Freehand) {
                         s.points.add(pos)
                         s.pressures.add(pressure)
+                        wetLast?.let { from ->
+                            val w = inkStylePointWidths(listOf(if (s.pressureSensitive) pressure else 1f), s.appearance.width, s.appearance.style).first()
+                            wet.segment(WetSegment(from, p, w * doc.viewer.pixelsPerPoint(s.page), s.appearance.argb or 0xFF000000.toInt()))
+                            wetLast = p
+                        }
                     } else {
                         // Keep only endpoints in Compose state while dragging; native ink gets a
                         // densified outline after lift. A temporary preview never reaches the engine.
@@ -698,6 +947,7 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                 }
             },
             onUp = { p, _ ->
+                endWet()
                 if (doc.controller.lassoMode) {
                     finishLasso(p)
                     return@toolGestures
@@ -761,10 +1011,13 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                         s.pressureSensitive = false
                         s.pressures.clear()
                         s.pressures.addAll(List(shape.size) { 1f })
+                    } else if (prefs.penGestures && s.shapeMode == InkShapeMode.Freehand && rulerEdge == null && s.points.size >= 2) {
+                        penGestureAfterLift(s)
                     }
                 }
             },
             onCancel = {
+                endWet()
                 if (doc.controller.lassoMode) {
                     if (moving) {
                         moving = false
@@ -784,6 +1037,34 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
             onEraserUp = { p -> finishErase(p) },
             onEraserCancel = { cancelErase() },
             penButtonHold = prefs.penButtonHold,
+            ignoreAt = if (doc.controller.zoomBoxOn) ({ p -> p.y >= layerSize.height - padHeightPx }) else null,
+            overlayHit = if (doc.controller.rulerOn || doc.controller.zoomBoxOn) ({ p ->
+                when {
+                    doc.controller.rulerOn && doc.controller.ruler?.contains(p) == true -> { overlayTarget = 0; true }
+                    zoomFrameOnScreen()?.contains(p) == true -> { overlayTarget = 1; true }
+                    else -> false
+                }
+            }) else null,
+            onOverlayTransform = { pan, rotation, pivot ->
+                if (overlayTarget == 1) {
+                    // Dragging the frame moves where the pad writes on the page.
+                    val zb = doc.controller.zoomBox ?: return@toolGestures
+                    val pg = doc.viewer.pages.getOrNull(zb.page) ?: return@toolGestures
+                    val ppp = doc.viewer.pixelsPerPoint(zb.page).takeIf { it > 0f } ?: return@toolGestures
+                    val moved = zb.movedBy(pan.x / ppp, pan.y / ppp, pg.width, pg.height)
+                    doc.controller.zoomBox = moved.copy(lineStart = if (pan.x != 0f) moved.x else moved.lineStart)
+                    return@toolGestures
+                }
+                val before = doc.controller.ruler ?: return@toolGestures
+                val after = before.transformed(pan, rotation, pivot)
+                // A haptic tick each time the angle settles on a 15° step.
+                val wasSnapped = rulerDisplayAngle(before.angleDeg) != before.angleDeg
+                val snapped = rulerDisplayAngle(after.angleDeg)
+                if (snapped != after.angleDeg && (!wasSnapped || rulerDisplayAngle(before.angleDeg) != snapped)) {
+                    haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
+                }
+                doc.controller.ruler = after
+            },
             rejectTouch = if (prefs.palmGuard) ({ p, t ->
                 palmGuardRejects(penTracker.position, penTracker.timeMs, p, t, prefs.leftHanded, guardSizePx)
             }) else null,
@@ -859,6 +1140,11 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                     style = Stroke(width = 1.5.dp.toPx()),
                 )
             }
+            zoomFrameOnScreen()?.let { f ->
+                drawRect(Color(0xFF2E7DFF).copy(alpha = 0.08f), f.topLeft, f.size)
+                drawRect(Color(0xFF2E7DFF), f.topLeft, f.size, style = Stroke(width = 1.5f * density.density))
+            }
+            activeRuler()?.let { r -> drawRuler(r, rulerTextMeasurer, density.density) }
             val hovering = hoverPosition
             if (hovering != null && prefs.palmGuard) {
                 // The guard region is visible while the pen hovers, so its size can be judged.
@@ -914,6 +1200,39 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                     }
                 }
             }
+        }
+        if (prefs.lowLatencyInk) FrontBufferedInkOverlay(wet, Modifier.fillMaxSize())
+        if (doc.controller.zoomBoxOn) {
+            ZoomWritingPad(
+                doc, prefs,
+                modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(ZOOM_PAD_HEIGHT)
+                    .onSizeChanged { padSize = androidx.compose.ui.geometry.Size(it.width.toFloat(), it.height.toFloat()) },
+                padSize = padSize,
+                drafts = strokes,
+                newStroke = { page, pressure, isStylus, at ->
+                    val pen = prefs.penSettings(prefs.inkStyle)
+                    val appearance = InkAppearance(pen.argb, inkStyleOpacity(pen.opacity, prefs.inkStyle), pen.width, prefs.author.ifBlank { null }, prefs.inkStyle)
+                    InkStroke(page, appearance, isStylus, InkShapeMode.Freehand).also {
+                        it.points.add(at)
+                        it.pressures.add(pressure)
+                        strokes.add(it)
+                    }
+                },
+                finishStroke = { s ->
+                    if (s.points.size == 1) {
+                        val persisted = persistedInkTapPoints(s.points.toList())
+                        if (persisted.size == 2) {
+                            s.points.add(persisted.last())
+                            s.pressures.add(s.pressures.firstOrNull() ?: 1f)
+                        }
+                    }
+                    if (s.points.size >= 2) {
+                        edits.add(DraftInkEdit.Added(s))
+                        undone.clear()
+                        steps.drafted()
+                    } else strokes.remove(s)
+                },
+            )
         }
     }
 }
