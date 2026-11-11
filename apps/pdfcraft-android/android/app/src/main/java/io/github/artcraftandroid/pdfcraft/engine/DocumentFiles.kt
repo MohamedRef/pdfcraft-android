@@ -288,16 +288,40 @@ class DocumentFiles(private val context: Context) {
             .recoverCatching { resolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) }
     }
 
+    /**
+     * Give back the lasting access taken by [keepAccess] for documents that left Recent, and keep
+     * the rest within [MAX_DOCUMENT_GRANTS], so document grants never push the user's folder
+     * grants out of Android's per-app limit (#108). Folder (tree) grants are never released here.
+     */
+    fun releaseUnusedAccess(recent: Collection<String>, open: String?) {
+        val grants = runCatching { resolver.persistedUriPermissions }.getOrDefault(emptyList())
+        if (grants.isEmpty()) return
+        val release = documentGrantsToRelease(
+            grants.map { UriGrant(it.uri.toString(), runCatching { DocumentsContract.isTreeUri(it.uri) }.getOrDefault(false), it.persistedTime) },
+            recent = recent.toSet(),
+            open = open,
+            cap = MAX_DOCUMENT_GRANTS,
+        )
+        if (release.isEmpty()) return
+        for (g in grants) {
+            if (g.uri.toString() !in release) continue
+            val flags = (if (g.isReadPermission) Intent.FLAG_GRANT_READ_URI_PERMISSION else 0) or
+                (if (g.isWritePermission) Intent.FLAG_GRANT_WRITE_URI_PERMISSION else 0)
+            if (flags != 0) runCatching { resolver.releasePersistableUriPermission(g.uri, flags) }
+        }
+    }
+
     /** A copy of [file] under [name] that other apps may read, and its URI. */
     fun shareable(file: File, name: String = file.name): Uri = shareableAll(listOf(file to safeName(name))).first()
 
     /**
      * Copies of [files] that other apps may read (a document, pictures of pages), each under its
-     * own name, and their URIs. The last ones handed out are cleared first. When the copies can't
-     * be made (a full phone has no room for them), the error says so in words.
+     * own name, and their URIs. Copies handed out more than [CacheCleanup.SHARE_KEEP_MS] ago are
+     * cleared first; newer ones stay, since the app that received them may still be reading (#105).
+     * When the copies can't be made (a full phone has no room for them), the error says so in words.
      */
     fun shareableAll(files: List<Pair<File, String>>): List<Uri> {
-        shareDir.listFiles()?.forEach { it.deleteRecursively() }
+        CacheCleanup.removeOlderThan(shareDir, System.currentTimeMillis() - CacheCleanup.SHARE_KEEP_MS, directoriesOnly = true)
         val dir = File(shareDir, System.nanoTime().toString())
         try {
             if (!dir.mkdirs()) throw IOException("can't make $dir")
@@ -406,6 +430,12 @@ class DocumentFiles(private val context: Context) {
     }
 
     companion object {
+        /**
+         * At most this many document grants are kept. Recent holds up to [RecentFiles.MAX]; the
+         * oldest Android releases allow 128 grants per app, so this leaves room for folders.
+         */
+        const val MAX_DOCUMENT_GRANTS = 96
+
         /** A file name without path separators or control characters, ending in `.pdf`. */
         fun safeName(name: String): String {
             val clean = name.replace(Regex("[\\\\/:*?\"<>|\\p{Cntrl}]"), "_").trim().trimStart('.').ifEmpty { "Document" }
