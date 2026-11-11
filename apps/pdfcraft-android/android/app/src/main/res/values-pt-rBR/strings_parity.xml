@@ -35,4 +35,23 @@
     <string name="edit_image_crop_handle_right">Borda direita do corte</string>
     <string name="edit_image_crop_handle_bottom">Borda inferior do corte</string>
     <string name="edit_image_crop_handle_left">Borda esquerda do corte</string>
+    <string name="sign_certify">Certificar documento</string>
+    <string name="sign_certify_about">Uma assinatura de certificação é do autor: indica quais alterações posteriores mantêm o documento válido.</string>
+    <string name="sign_certify_no_changes">Nenhuma alteração permitida</string>
+    <string name="sign_certify_form_fill">Preencher formulários e assinar</string>
+    <string name="sign_certify_comments">Preencher formulários, assinar e comentar</string>
+    <string name="sign_invisible">Assinatura invisível</string>
+    <string name="sign_invisible_short">Invisível</string>
+    <string name="sign_invisible_about">Nada é desenhado na página; a assinatura aparece no painel Assinaturas.</string>
+    <string name="sign_show_name">Mostrar nome</string>
+    <string name="sign_show_date">Mostrar data</string>
+    <string name="sign_show_reason">Mostrar motivo</string>
+    <string name="sign_show_location">Mostrar local</string>
+    <string name="sign_show_dn">Mostrar nome distinto</string>
+    <string name="sign_show_labels">Mostrar rótulos</string>
+    <string name="sign_section_contact">Contato (opcional)</string>
+    <string name="sign_contact_hint">E-mail ou telefone</string>
+    <string name="sign_view_signed_version">Ver versão assinada</string>
+    <string name="sign_no_signed_version">A versão assinada por esta assinatura não foi encontrada no arquivo.</string>
+    <string name="sign_signed_version_name">%1$s (assinado, %2$s)</string>
 </resources>
