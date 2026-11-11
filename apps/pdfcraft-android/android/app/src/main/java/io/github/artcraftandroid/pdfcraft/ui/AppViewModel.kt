@@ -1,6 +1,5 @@
 package io.github.artcraftandroid.pdfcraft.ui
 
-import android.app.ActivityManager
 import io.github.artcraftandroid.pdfcraft.ui.home.FileTool
 import io.github.artcraftandroid.pdfcraft.ui.viewer.FillElement
 import androidx.compose.ui.graphics.asImageBitmap
@@ -113,12 +112,8 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     /** Avoid overlapping onPause, close, and manual saves to a single provider URI. */
     private val saveMutex = Mutex()
 
-    /** How many bytes of page images to keep: an eighth of the app's heap, between 32 and 192 MB. */
-    private val imageBudget: Int = run {
-        val am = app.getSystemService(ActivityManager::class.java)
-        val heapMb = (am?.largeMemoryClass ?: 256).coerceAtLeast(64)
-        (heapMb / 4).coerceIn(32, 192) * 1024 * 1024
-    }
+    /** Cache a bounded fraction of the actual VM heap, including on large-heap devices. */
+    private val imageBudget = runtimeImageBudget(Runtime.getRuntime().maxMemory())
 
     init {
         viewModelScope.launch {
@@ -324,7 +319,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 runCatching { eng.command { repairCount(info.id) } }.getOrNull()
                     ?.let { io.github.artcraftandroid.pdfcraft.engine.OpenTiming.count("native_repairs", it.toLong()) }
             }
-            val images = PageImages(eng, info.id, viewModelScope, imageBudget, openedAt = openStartedAt)
+            val images = PageImages(eng, info.id, viewModelScope, imageBudget, openedAt = openStartedAt, compact = compactPreviews)
             val source = uri.takeIf { it.scheme == "content" || it.scheme == "file" }
             val doc = OpenDocument(info.id, info, source, file, images, password, eng, viewModelScope)
             doc.fromOtherApp = fromOtherApp
@@ -371,7 +366,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             try {
                 doc.images.awaitFirstCanvas()
                 if (document !== doc || !isCurrentOpenRequest(requestId)) return@launch
-                val complete = withContext(Dispatchers.Default) { eng.session.completeOpen(doc.id) }
+                val complete = eng.completeOpen(doc.id)
                 if (document !== doc || !isCurrentOpenRequest(requestId)) return@launch
                 complete.timings.forEach { io.github.artcraftandroid.pdfcraft.engine.OpenTiming.duration(it.stage, it.durationMs.toLong()) }
                 io.github.artcraftandroid.pdfcraft.engine.OpenTiming.milestone("native_ready", startedAt, pages = complete.document.pages.size)
@@ -1055,6 +1050,12 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     /** The viewer's bottom toolbar as the user arranged it (More tools ▸ Customize toolbar). */
     val quickToolbar = io.github.artcraftandroid.pdfcraft.ui.viewer.QuickToolbarPrefs(app)
     private val appPrefs = app.getSharedPreferences("app", android.content.Context.MODE_PRIVATE)
+    var compactPreviews by mutableStateOf(appPrefs.getBoolean("compactPreviews", false))
+        private set
+    fun updateCompactPreviews(on: Boolean) {
+        compactPreviews = on
+        appPrefs.edit().putBoolean("compactPreviews", on).apply()
+    }
     private val bookmarkStore = UserBookmarks(File(app.filesDir, "bookmarks.json"))
 
     /** The Search tab's last searches, newest first (kept on the phone, as the reference keeps them). */

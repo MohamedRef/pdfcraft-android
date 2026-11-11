@@ -388,6 +388,10 @@ private fun Preferences(vm: AppViewModel) {
         color = c.textSecondary, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 20.dp),
     )
     SheetDivider()
+    SheetRow(null, stringResource(R.string.compact_previews), { vm.updateCompactPreviews(!vm.compactPreviews) }) {
+        PdfSwitch(vm.compactPreviews, { vm.updateCompactPreviews(it) })
+    }
+    Text(stringResource(R.string.compact_previews_body), color = c.textSecondary, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 20.dp))
     // what PdfCraft does differently from the reference, each by choice
     Section(stringResource(R.string.home_section_extra))
     Text(stringResource(R.string.home_extra_body), color = c.textSecondary, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 20.dp))

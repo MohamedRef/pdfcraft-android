@@ -28,12 +28,12 @@ data class ImageKey(val page: Int, val gen: Long, val level: Int, val tile: Int 
 }
 
 /** A rendered image and where it goes: a page, or a tile's rectangle in device pixels at its scale. */
-class PageImage(val key: ImageKey, val bitmap: ImageBitmap, val scale: Float, val x: Int, val y: Int) {
-    val bytes: Int get() = bitmap.width * bitmap.height * 4
+class PageImage(val key: ImageKey, val bitmap: ImageBitmap, val scale: Float, val x: Int, val y: Int, val allocationBytes: Int = bitmap.width * bitmap.height * 4) {
+    val bytes: Int get() = allocationBytes
 }
 
 /** A request: the key, and how to render it (page, scale, tile). */
-data class ImageRequest(val key: ImageKey, val scale: Float, val tile: TileRect?)
+data class ImageRequest(val key: ImageKey, val scale: Float, val tile: TileRect?, val prefetch: Boolean = false)
 
 /**
  * The rendered pages and tiles of one document, and the workers that render what the view asks
@@ -49,6 +49,7 @@ class PageImages(
     private val budgetBytes: Int,
     workers: Int = 2,
     private val openedAt: Long = android.os.SystemClock.elapsedRealtime(),
+    private val compact: Boolean = false,
 ) {
     fun elapsedOpenMs(): Long = android.os.SystemClock.elapsedRealtime() - openedAt
     private val firstCanvas = CompletableDeferred<Unit>()
@@ -63,6 +64,11 @@ class PageImages(
         if (!firstDrawReported) {
             firstDrawReported = true
             firstCanvas.complete(Unit)
+            scope.launch(job) {
+                kotlinx.coroutines.delay(120L)
+                synchronized(lock) { allowPrefetch = true }
+                signal.trySend(Unit)
+            }
             if (Log.isLoggable("PdfCraftOpen", Log.DEBUG)) Log.d("PdfCraftOpen", "first_page_canvas_ms=${android.os.SystemClock.elapsedRealtime() - openedAt}")
         }
     }
@@ -72,6 +78,7 @@ class PageImages(
     private val fallback = HashMap<Int, PageImage>()
     /** The newest cached tile at each (page, level, tile), whatever its generation. */
     private val tileFallback = HashMap<Triple<Int, Int, Int>, PageImage>()
+    private var allowPrefetch = false
     private var wanted: List<ImageRequest> = emptyList()
     private val inFlight = HashSet<ImageKey>()
     private val failed = HashSet<ImageKey>()
@@ -139,7 +146,7 @@ class PageImages(
     }
 
     private fun next(): ImageRequest? = synchronized(lock) {
-        val r = wanted.firstOrNull { it.key !in cache && it.key !in inFlight && it.key !in failed } ?: return null
+        val r = nextRenderRequest(wanted, cache.keys, inFlight, failed, allowPrefetch) ?: return null
         inFlight.add(r.key)
         r
     }
@@ -153,8 +160,9 @@ class PageImages(
             }
             val image = try {
                 withContext(engine.renders) {
-                    val img = io.github.artcraftandroid.pdfcraft.engine.OpenTiming.measure("page_render") { engine.session.renderPage(doc, r.key.page.toUInt(), r.scale, r.tile) }
-                    PageImage(r.key, img.toBitmap().asImageBitmap(), r.scale, r.tile?.x?.toInt() ?: 0, r.tile?.y?.toInt() ?: 0)
+                    val img = io.github.artcraftandroid.pdfcraft.engine.OpenTiming.measure("page_render") { engine.session.renderPageCompact(doc, r.key.page.toUInt(), r.scale, r.tile, compact) }
+                    val bitmap = img.toBitmap()
+                    PageImage(r.key, bitmap.asImageBitmap(), r.scale, r.tile?.x?.toInt() ?: 0, r.tile?.y?.toInt() ?: 0, bitmap.allocationByteCount)
                 }
             } catch (e: Exception) {
                 Log.w("PdfCraft", "render of ${r.key} failed: ${e.message}")
