@@ -1256,6 +1256,7 @@
     <string name="comments_search_hint">ابحث في النص أو الردود أو الكاتب</string>
     <string name="comments_search_close">أغلق البحث</string>
     <string name="comments_shown">%1$d من %2$d سلسلة</string>
+    <string name="comments_filtered_on_page">التعليقات مُصفّاة</string>
     <string name="comments_no_match">لا توجد تعليقات مطابقة.</string>
     <string name="comments_filter_all">الكل</string>
     <string name="comments_filter_notes">الملاحظات والنصوص</string>

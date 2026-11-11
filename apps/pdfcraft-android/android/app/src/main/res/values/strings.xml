@@ -1805,6 +1805,7 @@
     <string name="comments_search_hint">Search text, replies or author</string>
     <string name="comments_search_close">Close search</string>
     <string name="comments_shown">%1$d of %2$d threads</string>
+    <string name="comments_filtered_on_page">Comments filtered</string>
     <string name="comments_no_match">No comments match.</string>
     <string name="comments_filter_all">All</string>
     <string name="comments_filter_notes">Notes &amp; text</string>

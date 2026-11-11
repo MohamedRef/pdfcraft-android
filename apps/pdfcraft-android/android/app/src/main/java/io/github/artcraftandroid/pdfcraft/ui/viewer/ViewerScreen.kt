@@ -341,6 +341,8 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
                 vm.selectedComment?.takeIf { it.first === doc }?.second?.let { drawCommentSelection(doc, it) }
                 vm.readAloud?.let { drawReadAloud(doc, it) }
                 drawSearchHits(doc)
+                // the comment list's filters leave these out: veiled so the rest stand out (#155)
+                if (!doc.info.commentsHidden && ctl.sheet != ViewerSheet.Comments && ctl.dimmedGeneration == doc.info.generation.toLong()) drawDimmedComments(doc.viewer, ctl.dimmedComments, ctl.nightMode)
                 drawSelection(doc)
                 vm.pendingMarkupPreview?.takeIf { it.doc === doc }?.let { drawPendingMarkup(it) }
                 drawLinkFlash(doc)
@@ -393,6 +395,7 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
                 doc, visible = jumpChipVisible,
                 bottom = with(density) { doc.viewer.padBottom.toDp() },
             )
+            if (!vm.readingMode && !ctl.searching && ctl.sheet != ViewerSheet.Comments) CommentFilterChip(doc, top = with(density) { doc.viewer.padTop.toDp() })
             if (!vm.readingMode) FocusTimerPill(
                 vm, top = with(density) { doc.viewer.padTop.toDp() },
                 onOpen = { ctl.sheet = ViewerSheet.FocusTimer },
