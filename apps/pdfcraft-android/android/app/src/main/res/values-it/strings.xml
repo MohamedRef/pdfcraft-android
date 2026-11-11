@@ -514,10 +514,10 @@
         <item quantity="other">%1$d pagine selezionate</item>
     </plurals>
     <string name="pages_page">Pagina %1$d</string>
-    <string name="pages_insert_page">Inserisci pagina</string>
-    <string name="pages_extract">Estrai</string>
-    <string name="pages_rotate_left">Sinistra</string>
-    <string name="pages_rotate_right">Destra</string>
+    <string name="pages_insert_page">Inserisci pagine</string>
+    <string name="pages_extract">Estrai in un nuovo PDF</string>
+    <string name="pages_rotate_left">Ruota a sinistra</string>
+    <string name="pages_rotate_right">Ruota a destra</string>
 
     <!-- Inserimento di pagine -->
 
@@ -966,7 +966,7 @@
 
     <string name="msg_engine_not_started">Impossibile avviare PdfCraft.</string>
     <string name="msg_file_moved">Questo file è stato spostato o eliminato.</string>
-    <string name="msg_opened_own_copy">È stata aperta la copia di PdfCraft. Per modificare l\'originale, aprilo nuovamente dall\'app in cui si trova.</string>
+    <string name="msg_opened_own_copy">Questa è la copia salvata da PdfCraft. L\'originale non è raggiungibile.</string>
     <string name="msg_file_access_lost">PdfCraft non può più aprire questo file. Aprilo nuovamente dall\'app in cui si trova oppure utilizzando Apri file.</string>
 
     <!-- Annulla e ripristina -->
@@ -1415,4 +1415,27 @@
     <string name="compact_previews">Usa meno memoria per le anteprime delle pagine</string>
     <string name="compact_previews_body">Riduce la precisione del colore per le pagine intere. I dettagli ingranditi mantengono la qualità piena. Si applica alla riapertura del documento.</string>
     <string name="updater_other_build">Questa build non è l\'APK ufficiale ARM64, quindi gli aggiornamenti in-app sono disattivati. Aggiornala da dove l\'hai installata.</string>
+    <string name="viewer_read_only_notice">Le modifiche non possono essere salvate nell\'originale. Restano in PdfCraft finché non salvi una copia.</string>
+    <string name="root_keep_editing">Continua a modificare</string>
+    <string name="root_discard_title">Ignorare le modifiche a %1$s?</string>
+    <string name="root_discard_body">Le modifiche andranno perse. L\'operazione non può essere annullata.</string>
+    <string name="toolbar_label_enhance">Migliora</string>
+    <string name="toolbar_label_review_ocr">Rivedi OCR</string>
+    <string name="sheet_group_view">Visualizza</string>
+    <string name="sheet_group_navigate">Naviga</string>
+    <string name="sheet_group_file">File</string>
+    <string name="pages_select_action">Seleziona</string>
+    <string name="pages_select_all">Seleziona tutto</string>
+    <string name="pages_select_none">Deseleziona tutto</string>
+    <string name="pages_drag_hint">Tieni premuta una pagina e trascinala per spostarla</string>
+    <string name="share_choice_pdf">Condividi PDF</string>
+    <string name="share_choice_flattened">Condividi copia appiattita (commenti e campi non modificabili)</string>
+    <string name="share_choice_page">Condividi questa pagina</string>
+    <string name="share_choice_images">Condividi le pagine come immagini</string>
+    <string name="share_name_flattened">%1$s (appiattito).pdf</string>
+    <string name="share_name_page">%1$s (pagina %2$d).pdf</string>
+    <plurals name="pages_deleted">
+        <item quantity="one">%1$d pagina eliminata</item>
+        <item quantity="other">%1$d pagine eliminate</item>
+    </plurals>
 </resources>

@@ -236,7 +236,7 @@
     <string name="root_skip">Pular</string>
     <string name="root_author_prompt_body">Adicione um nome para mostrar quem fez cada comentário. Você pode alterá-lo depois em Preferências.</string>
     <string name="root_read_only_title">Arquivo somente leitura</string>
-    <string name="root_discard">Descartar</string>
+    <string name="root_discard">Descartar alterações</string>
     <string name="root_read_only_body">Não é possível salvar suas alterações em %1$s no local atual do arquivo. Salve uma cópia para mantê-las.</string>
     <string name="root_open_link_title">Abrir página da Web</string>
     <string name="root_open_link_body">Deseja abrir a página em %1$s?</string>
@@ -338,10 +338,10 @@
         <item quantity="other">%1$d selecionadas</item>
     </plurals>
     <string name="pages_page">Página %1$d</string>
-    <string name="pages_insert_page">Inserir página</string>
-    <string name="pages_extract">Extrair</string>
-    <string name="pages_rotate_left">Esquerda</string>
-    <string name="pages_rotate_right">Direita</string>
+    <string name="pages_insert_page">Inserir páginas</string>
+    <string name="pages_extract">Extrair para novo PDF</string>
+    <string name="pages_rotate_left">Girar para a esquerda</string>
+    <string name="pages_rotate_right">Girar para a direita</string>
     <string name="pages_insert">Inserir</string>
     <string name="pages_at_start">No início</string>
     <string name="pages_at_end">No final</string>
@@ -640,7 +640,7 @@
     <string name="forms_next_field">Próximo campo</string>
     <string name="msg_engine_not_started">Não foi possível iniciar o PdfCraft.</string>
     <string name="msg_file_moved">Este arquivo foi movido ou excluído.</string>
-    <string name="msg_opened_own_copy">Cópia do PdfCraft aberta. Para alterar o original, abra-o novamente no app em que ele está.</string>
+    <string name="msg_opened_own_copy">Esta é a cópia salva pelo PdfCraft. Não é possível acessar o original.</string>
     <string name="msg_file_access_lost">O PdfCraft não consegue mais abrir este arquivo. Abra-o novamente no app em que ele está ou use Abrir arquivo.</string>
     <string name="msg_undone">%1$s desfeito</string>
     <string name="msg_redone">%1$s refeito</string>
@@ -1010,4 +1010,27 @@
     <string name="compact_previews">Usar menos memória nas prévias de página</string>
     <string name="compact_previews_body">Reduz a precisão de cor das páginas inteiras. Os detalhes ampliados mantêm a qualidade total. Aplica-se ao reabrir um documento.</string>
     <string name="updater_other_build">Esta versão não é o APK oficial para ARM64, então as atualizações no app estão desativadas. Atualize-a de onde você a instalou.</string>
+    <string name="viewer_read_only_notice">Não é possível salvar as alterações no original. Elas ficam no PdfCraft até você salvar uma cópia.</string>
+    <string name="root_keep_editing">Continuar editando</string>
+    <string name="root_discard_title">Descartar as alterações em %1$s?</string>
+    <string name="root_discard_body">Suas alterações serão perdidas. Não é possível desfazer.</string>
+    <string name="toolbar_label_enhance">Melhorar</string>
+    <string name="toolbar_label_review_ocr">Revisar OCR</string>
+    <string name="sheet_group_view">Visualizar</string>
+    <string name="sheet_group_navigate">Navegar</string>
+    <string name="sheet_group_file">Arquivo</string>
+    <string name="pages_select_action">Selecionar</string>
+    <string name="pages_select_all">Selecionar tudo</string>
+    <string name="pages_select_none">Desmarcar tudo</string>
+    <string name="pages_drag_hint">Toque e segure uma página e arraste para movê-la</string>
+    <string name="share_choice_pdf">Compartilhar PDF</string>
+    <string name="share_choice_flattened">Compartilhar cópia achatada (comentários e campos não podem ser alterados)</string>
+    <string name="share_choice_page">Compartilhar esta página</string>
+    <string name="share_choice_images">Compartilhar páginas como imagens</string>
+    <string name="share_name_flattened">%1$s (achatado).pdf</string>
+    <string name="share_name_page">%1$s (página %2$d).pdf</string>
+    <plurals name="pages_deleted">
+        <item quantity="one">%1$d página excluída</item>
+        <item quantity="other">%1$d páginas excluídas</item>
+    </plurals>
 </resources>

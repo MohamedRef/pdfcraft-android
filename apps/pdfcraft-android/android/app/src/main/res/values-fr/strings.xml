@@ -333,7 +333,7 @@
     <!-- App dialogs: a file that can't be written back -->
     <string name="root_read_only_title">Fichier en lecture seule</string>
     <!-- Verb: throw the changes away -->
-    <string name="root_discard">Abandonner</string>
+    <string name="root_discard">Abandonner les modifications</string>
     <!-- %1$s is the file name -->
     <string name="root_read_only_body">Vos modifications de %1$s ne peuvent pas être enregistrées à son emplacement. Enregistrez une copie pour les conserver.</string>
 
@@ -485,10 +485,10 @@
         <item quantity="other">%1$d sélectionnées</item>
     </plurals>
     <string name="pages_page">Page %1$d</string>
-    <string name="pages_insert_page">Insérer une page</string>
-    <string name="pages_extract">Extraire</string>
-    <string name="pages_rotate_left">Gauche</string>
-    <string name="pages_rotate_right">Droite</string>
+    <string name="pages_insert_page">Insérer des pages</string>
+    <string name="pages_extract">Extraire dans un nouveau PDF</string>
+    <string name="pages_rotate_left">Pivoter à gauche</string>
+    <string name="pages_rotate_right">Pivoter à droite</string>
 
     <!-- Pages: Insert sheet (where the new pages go, and what they are) -->
     <string name="pages_insert">Insérer</string>
@@ -881,7 +881,7 @@
     <!-- Messages: opening documents -->
     <string name="msg_engine_not_started">PdfCraft n\'a pas pu démarrer.</string>
     <string name="msg_file_moved">Ce fichier a été déplacé ou supprimé.</string>
-    <string name="msg_opened_own_copy">Copie de PdfCraft ouverte. Pour modifier l\'original, rouvrez-le depuis l\'application où il se trouve.</string>
+    <string name="msg_opened_own_copy">Ceci est la copie enregistrée par PdfCraft. L\'original est inaccessible.</string>
     <string name="msg_file_access_lost">PdfCraft ne peut plus ouvrir ce fichier. Rouvrez-le depuis l\'application où il se trouve, ou avec Ouvrir un fichier.</string>
 
     <!-- Messages: undo and redo. %1$s is the name of the edit, as the engine gives it (for example "Add comment"). -->
@@ -1305,4 +1305,27 @@
     <string name="compact_previews">Utiliser moins de mémoire pour les aperçus de pages</string>
     <string name="compact_previews_body">Réduit la précision des couleurs pour les pages entières. Les détails zoomés conservent leur pleine qualité. S\'applique à la réouverture d\'un document.</string>
     <string name="updater_other_build">Cette version n\'est pas l\'APK officiel ARM64, les mises à jour dans l\'application sont donc désactivées. Mettez-la à jour depuis l\'endroit où vous l\'avez installée.</string>
+    <string name="viewer_read_only_notice">Les modifications ne peuvent pas être enregistrées dans l\'original. Elles restent dans PdfCraft jusqu\'à ce que vous enregistriez une copie.</string>
+    <string name="root_keep_editing">Continuer à modifier</string>
+    <string name="root_discard_title">Abandonner les modifications de %1$s ?</string>
+    <string name="root_discard_body">Vos modifications seront perdues. Cette action est irréversible.</string>
+    <string name="toolbar_label_enhance">Améliorer</string>
+    <string name="toolbar_label_review_ocr">Vérifier l\'OCR</string>
+    <string name="sheet_group_view">Affichage</string>
+    <string name="sheet_group_navigate">Navigation</string>
+    <string name="sheet_group_file">Fichier</string>
+    <string name="pages_select_action">Sélectionner</string>
+    <string name="pages_select_all">Tout sélectionner</string>
+    <string name="pages_select_none">Ne rien sélectionner</string>
+    <string name="pages_drag_hint">Maintenez une page et faites-la glisser pour la déplacer</string>
+    <string name="share_choice_pdf">Partager le PDF</string>
+    <string name="share_choice_flattened">Partager une copie aplatie (commentaires et champs non modifiables)</string>
+    <string name="share_choice_page">Partager cette page</string>
+    <string name="share_choice_images">Partager les pages en images</string>
+    <string name="share_name_flattened">%1$s (aplati).pdf</string>
+    <string name="share_name_page">%1$s (page %2$d).pdf</string>
+    <plurals name="pages_deleted">
+        <item quantity="one">%1$d page supprimée</item>
+        <item quantity="other">%1$d pages supprimées</item>
+    </plurals>
 </resources>

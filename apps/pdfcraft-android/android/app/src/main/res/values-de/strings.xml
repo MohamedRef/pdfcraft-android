@@ -333,7 +333,7 @@
     <!-- App dialogs: a file that can't be written back -->
     <string name="root_read_only_title">Datei ist schreibgeschützt</string>
     <!-- Verb: throw the changes away -->
-    <string name="root_discard">Verwerfen</string>
+    <string name="root_discard">Änderungen verwerfen</string>
     <!-- %1$s is the file name -->
     <string name="root_read_only_body">Deine Änderungen an %1$s können nicht am ursprünglichen Speicherort gespeichert werden. Speichere eine Kopie, um sie zu behalten.</string>
 
@@ -503,12 +503,12 @@
     </plurals>
     <!-- Translator note: accessibility label of a page's thumbnail; %1$d is its number. -->
     <string name="pages_page">Seite %1$d</string>
-    <string name="pages_insert_page">Seite einfügen</string>
-    <string name="pages_extract">Extrahieren</string>
+    <string name="pages_insert_page">Seiten einfügen</string>
+    <string name="pages_extract">In neues PDF extrahieren</string>
     <!-- Translator note: rotate the selected pages a quarter turn to the left. Keep it short. -->
-    <string name="pages_rotate_left">Links</string>
+    <string name="pages_rotate_left">Nach links drehen</string>
     <!-- Translator note: rotate the selected pages a quarter turn to the right. Keep it short. -->
-    <string name="pages_rotate_right">Rechts</string>
+    <string name="pages_rotate_right">Nach rechts drehen</string>
 
     <!-- Pages: Insert sheet (where the new pages go, and what they are) -->
     <string name="pages_insert">Einfügen</string>
@@ -973,7 +973,7 @@
     <!-- Messages: opening documents -->
     <string name="msg_engine_not_started">PdfCraft konnte nicht gestartet werden.</string>
     <string name="msg_file_moved">Diese Datei wurde verschoben oder gelöscht.</string>
-    <string name="msg_opened_own_copy">Die Kopie von PdfCraft wurde geöffnet. Um das Original zu ändern, öffne es erneut in der App, in der es sich befindet.</string>
+    <string name="msg_opened_own_copy">Das ist die gespeicherte Kopie von PdfCraft. Das Original ist nicht erreichbar.</string>
     <!-- "Open file" is the name of the button on Home that picks a file. -->
     <string name="msg_file_access_lost">PdfCraft kann diese Datei nicht mehr öffnen. Öffne sie erneut in der App, in der sie sich befindet, oder über „Datei öffnen“.</string>
 
@@ -1425,4 +1425,27 @@
     <string name="compact_previews">Weniger Speicher für Seitenvorschauen verwenden</string>
     <string name="compact_previews_body">Verringert die Farbgenauigkeit ganzer Seiten. Vergrößerte Details behalten die volle Qualität. Gilt beim erneuten Öffnen eines Dokuments.</string>
     <string name="updater_other_build">Dieser Build ist nicht die ARM64-Release-APK, daher sind In-App-Updates deaktiviert. Aktualisiere ihn dort, wo du ihn installiert hast.</string>
+    <string name="viewer_read_only_notice">Änderungen können nicht im Original gespeichert werden. Sie bleiben in PdfCraft, bis du eine Kopie speicherst.</string>
+    <string name="root_keep_editing">Weiter bearbeiten</string>
+    <string name="root_discard_title">Änderungen an %1$s verwerfen?</string>
+    <string name="root_discard_body">Deine Änderungen gehen verloren. Das lässt sich nicht rückgängig machen.</string>
+    <string name="toolbar_label_enhance">Verbessern</string>
+    <string name="toolbar_label_review_ocr">OCR prüfen</string>
+    <string name="sheet_group_view">Ansicht</string>
+    <string name="sheet_group_navigate">Navigieren</string>
+    <string name="sheet_group_file">Datei</string>
+    <string name="pages_select_action">Auswählen</string>
+    <string name="pages_select_all">Alle auswählen</string>
+    <string name="pages_select_none">Auswahl aufheben</string>
+    <string name="pages_drag_hint">Halte eine Seite gedrückt und ziehe sie, um sie zu verschieben</string>
+    <string name="share_choice_pdf">PDF teilen</string>
+    <string name="share_choice_flattened">Reduzierte Kopie teilen (Kommentare und Felder unveränderbar)</string>
+    <string name="share_choice_page">Diese Seite teilen</string>
+    <string name="share_choice_images">Seiten als Bilder teilen</string>
+    <string name="share_name_flattened">%1$s (reduziert).pdf</string>
+    <string name="share_name_page">%1$s (Seite %2$d).pdf</string>
+    <plurals name="pages_deleted">
+        <item quantity="one">%1$d Seite gelöscht</item>
+        <item quantity="other">%1$d Seiten gelöscht</item>
+    </plurals>
 </resources>
