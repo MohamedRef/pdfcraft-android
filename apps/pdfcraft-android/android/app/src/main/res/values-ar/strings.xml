@@ -461,6 +461,9 @@
     <string name="sheet_add_star">تمييز الملف</string>
     <string name="sheet_remove_star">إلغاء التمييز</string>
     <string name="sheet_view_settings">إعدادات العرض</string>
+    <string name="sheet_group_view">العرض</string>
+    <string name="sheet_group_navigate">التنقل</string>
+    <string name="sheet_group_file">الملف</string>
     <string name="file_details_title">تفاصيل الملف</string>
     <string name="file_details_copy_all">نسخ كل التفاصيل</string>
     <string name="file_details_copy_value">نسخ القيمة</string>
@@ -616,6 +619,8 @@
     <string name="toolbar_label_organize">تنظيم</string>
     <string name="toolbar_label_crop">اقتصاص</string>
     <string name="toolbar_label_recognize">التعرّف</string>
+    <string name="toolbar_label_enhance">تحسين</string>
+    <string name="toolbar_label_review_ocr">مراجعة OCR</string>
     <string name="toolbar_label_add_text">إضافة نص</string>
     <string name="toolbar_tool_text">نص</string>
     <string name="toolbar_customize">تخصيص شريط الأدوات</string>

@@ -666,6 +666,9 @@
     <string name="sheet_add_star">Add a star</string>
     <string name="sheet_remove_star">Remove the star</string>
     <string name="sheet_view_settings">View settings</string>
+    <string name="sheet_group_view">View</string>
+    <string name="sheet_group_navigate">Navigate</string>
+    <string name="sheet_group_file">File</string>
     <!-- File details (Issue #55): original file dates and embedded PDF dates are separate. -->
     <string name="file_details_title">File details</string>
     <string name="file_details_copy_all">Copy all details</string>
@@ -877,6 +880,8 @@
     <string name="toolbar_label_crop">Crop</string>
     <!-- Note: the Recognize text tool's short name on the toolbar -->
     <string name="toolbar_label_recognize">Recognize</string>
+    <string name="toolbar_label_enhance">Enhance</string>
+    <string name="toolbar_label_review_ocr">Review OCR</string>
     <!-- Note: the tool that types text onto the page, as named on the toolbar -->
     <string name="toolbar_label_add_text">Add text</string>
     <!-- Note: the same tool's name in More tools, and its one sub-tool (text typed onto the page) -->

@@ -84,6 +84,9 @@ enum class QuickTool(val id: String, @StringRes val label: Int, @StringRes val t
     Organize("organize", R.string.toolbar_label_organize, R.string.common_tool_organize, LucideIcons.LayoutGrid, ToolHues.organize),
     Crop("crop", R.string.toolbar_label_crop, R.string.common_tool_crop, LucideIcons.Crop, ToolHues.crop),
     Ocr("ocr", R.string.toolbar_label_recognize, R.string.common_tool_recognize_text, LucideIcons.ScanText, ToolHues.ocr),
+    // the scan tools sit with Recognize text, in one place (#195)
+    ScanEnhance("enhance", R.string.toolbar_label_enhance, R.string.scan_enhance_title, LucideIcons.WandSparkles, ToolHues.ocr),
+    OcrReview("ocrreview", R.string.toolbar_label_review_ocr, R.string.ocr_review_title, LucideIcons.ListChecks, ToolHues.ocr),
     Create("create", R.string.common_tool_create_pdf, R.string.common_tool_create_pdf, LucideIcons.FilePlus2, ToolHues.create),
     Text("text", R.string.toolbar_label_add_text, R.string.toolbar_tool_text, LucideIcons.Type, ToolHues.text),
     Scan("scan", R.string.common_tool_scan, R.string.common_tool_scan, LucideIcons.Camera, ToolHues.scan),
@@ -152,10 +155,19 @@ class QuickToolbarPrefs(context: Context) {
     }
 
     companion object {
-        /** [order] without the bar's tools, followed by any tool it is missing. */
+        /**
+         * [order] without the bar's tools, plus any tool it is missing: placed after the tool
+         * before it in [QuickTool]'s order when that one is there (a new tool lands beside its
+         * kin, as Enhance beside Recognize text), else at the end.
+         */
         fun complete(order: List<QuickTool>, bar: List<QuickTool>): List<QuickTool> {
-            val g = order.filter { it !in bar }.distinct()
-            return g + QuickTool.entries.filter { it !in bar && it !in g }
+            val g = order.filter { it !in bar }.distinct().toMutableList()
+            for (t in QuickTool.entries) {
+                if (t in bar || t in g) continue
+                val before = QuickTool.entries.subList(0, t.ordinal).lastOrNull { it in g }
+                if (before == null) g.add(t) else g.add(g.indexOf(before) + 1, t)
+            }
+            return g
         }
     }
 }
@@ -179,6 +191,8 @@ fun AppViewModel.runQuickTool(doc: OpenDocument, tool: QuickTool) {
         }
         QuickTool.Crop -> openCrop(doc)
         QuickTool.Ocr -> recognizeText(doc)
+        QuickTool.ScanEnhance -> doc.controller.sheet = ViewerSheet.ScanEnhance
+        QuickTool.OcrReview -> doc.controller.sheet = ViewerSheet.OcrConfidence
         QuickTool.Create -> openCreate()
         QuickTool.Scan -> startScan()
         QuickTool.ReadAloud -> startReadAloud(doc)
