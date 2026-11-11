@@ -84,7 +84,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 /** The tabs along the bottom of the app. */
-enum class HomeTab(@StringRes val label: Int) { Home(R.string.home_tab_home), Files(R.string.home_tab_files), Tools(R.string.home_tab_tools), Search(R.string.home_tab_search) }
+enum class HomeTab(@StringRes val label: Int) { Home(R.string.home_tab_home), Files(R.string.home_tab_files), Library(R.string.library_title), Tools(R.string.home_tab_tools), Search(R.string.home_tab_search) }
 
 /** A file as the lists show it, wherever it comes from (recent, starred, on this device). */
 data class FileRow(
@@ -109,6 +109,7 @@ fun HomeRoot(vm: AppViewModel, onBrowse: () -> Unit) {
             when (vm.homeTab) {
                 HomeTab.Home -> HomeTabScreen(vm, onBrowse)
                 HomeTab.Files -> FilesTab(vm, onBrowse)
+                HomeTab.Library -> LibraryTab(vm)
                 HomeTab.Tools -> ToolsTab(vm)
                 HomeTab.Search -> SearchTab(vm)
             }
@@ -127,6 +128,7 @@ private fun BottomNav(selected: HomeTab, onSelect: (HomeTab) -> Unit) {
                 val icon = when (t) {
                     HomeTab.Home -> LucideIcons.House
                     HomeTab.Files -> LucideIcons.Folder
+                    HomeTab.Library -> LucideIcons.Layers
                     HomeTab.Tools -> LucideIcons.LayoutGrid
                     HomeTab.Search -> LucideIcons.Search
                 }
@@ -470,6 +472,7 @@ fun FileSheet(vm: AppViewModel, r: FileRow, recent: Boolean, onDismiss: () -> Un
             SheetRow(LucideIcons.Printer, stringResource(R.string.home_print), { act { vm.printFile(r) } })
             SheetRow(LucideIcons.ExternalLink, stringResource(R.string.home_open_with), { act { vm.openWith(r) } })
             SheetRow(LucideIcons.Star, stringResource(if (r.starred) R.string.home_unstar else R.string.home_star), { act { vm.setStarred(r.key, !r.starred) } })
+            if (vm.libraryData.item(r.key) == null) SheetRow(LucideIcons.Layers, stringResource(R.string.library_add_to), { act { vm.addToLibrary(r.key, r.name) } })
             SheetRow(LucideIcons.Pencil, stringResource(R.string.common_rename), { renaming = true })
             SheetRow(LucideIcons.Copy, stringResource(R.string.home_duplicate), { act { vm.duplicateFile(r) } })
             SheetRow(LucideIcons.FileDown, stringResource(R.string.common_save_copy), { act { vm.saveFileCopy(r) } })
