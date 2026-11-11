@@ -1026,6 +1026,12 @@
     <string name="bates_export_failed">تعذّر حفظ هذه النسخة الجديدة في التنزيلات.</string>
     <string name="ink_presets_title">الأقلام المفضّلة</string>
     <string name="ink_presets_help">كل قلم يحتفظ بلونه وسُمكه وشفافيته. انقر على قلم مفضّل لاستعادة إعداداته.</string>
+    <string name="pen_button_click_toggle">التبديل للقلم السابق</string>
+    <string name="pen_button_click_title">ضغطة زر القلم S Pen وهو فوق الشاشة</string>
+    <string name="pen_button_none">لا شيء</string>
+    <string name="pen_button_hold_highlighter">قلم تحديد</string>
+    <string name="pen_button_hold_eraser">ممحاة</string>
+    <string name="pen_button_hold_title">أثناء الضغط على زر القلم S Pen</string>
     <string name="ink_hex_invalid">اكتب ‎#RRGGBB أو ‎#AARRGGBB.</string>
     <string name="ink_hex_apply">تطبيق</string>
     <string name="ink_hex_label">لون Hex</string>

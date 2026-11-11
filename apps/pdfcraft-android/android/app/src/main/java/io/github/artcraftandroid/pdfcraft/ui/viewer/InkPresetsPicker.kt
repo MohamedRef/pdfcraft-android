@@ -182,6 +182,25 @@ internal fun InkPresetsPicker(vm: AppViewModel, onApplied: () -> Unit) {
             PdfSwitch(prefs.multiFingerUndo, null)
         }
 
+        // S Pen side button (#144): what holding it while writing does, and what a click while
+        // hovering does. The eraser end of a pen always erases.
+        Text(stringResource(R.string.pen_button_hold_title), color = c.text, fontSize = 14.sp)
+        OptionChips(
+            PenButtonHold.entries, prefs.penButtonHold, { prefs.updatePenButtonHold(it) },
+        ) { stringResource(when (it) {
+            PenButtonHold.Eraser -> R.string.pen_button_hold_eraser
+            PenButtonHold.Highlighter -> R.string.pen_button_hold_highlighter
+            PenButtonHold.None -> R.string.pen_button_none
+        }) }
+        Text(stringResource(R.string.pen_button_click_title), color = c.text, fontSize = 14.sp)
+        OptionChips(
+            PenButtonClick.entries, prefs.penButtonClick, { prefs.updatePenButtonClick(it) },
+        ) { stringResource(when (it) {
+            PenButtonClick.None -> R.string.pen_button_none
+            PenButtonClick.Undo -> R.string.common_undo
+            PenButtonClick.TogglePens -> R.string.pen_button_click_toggle
+        }) }
+
         // Any number of favorites (#149): tap uses one, long press replaces, moves or deletes it.
         Row(
             Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
@@ -321,6 +340,25 @@ internal fun PenStylePicker(vm: AppViewModel) {
         }
         OpacitySlider(color, pen.opacity) { prefs.setOpacity(StyledTool.Ink, it) }
         Spacer(Modifier.height(8.dp))
+    }
+}
+
+/** A single-choice row of small chips, announced as radio buttons. */
+@Composable
+private fun <T> OptionChips(options: List<T>, selected: T, onPick: (T) -> Unit, label: @Composable (T) -> String) {
+    val c = pdfColors
+    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        options.forEach { option ->
+            val isSel = option == selected
+            Box(
+                Modifier.heightIn(min = 48.dp)
+                    .border(if (isSel) 2.dp else 1.dp, if (isSel) c.accent else c.divider, RoundedCornerShape(18.dp))
+                    .background(if (isSel) c.pressed else c.surface, RoundedCornerShape(18.dp))
+                    .selectable(selected = isSel, role = Role.RadioButton) { onPick(option) }
+                    .padding(horizontal = 14.dp, vertical = 8.dp),
+                contentAlignment = Alignment.Center,
+            ) { Text(label(option), color = c.text, fontSize = 13.sp, fontWeight = if (isSel) FontWeight.SemiBold else FontWeight.Normal) }
+        }
     }
 }
 

@@ -1477,6 +1477,12 @@
     <string name="bates_export_failed">Could not save this new copy to Downloads.</string>
     <string name="ink_presets_title">Favorite pens</string>
     <string name="ink_presets_help">Each pen keeps its own colour, width and opacity. Tap a favorite to restore its settings.</string>
+    <string name="pen_button_click_toggle">Switch to previous pen</string>
+    <string name="pen_button_click_title">S Pen button click while hovering</string>
+    <string name="pen_button_none">Nothing</string>
+    <string name="pen_button_hold_highlighter">Marker</string>
+    <string name="pen_button_hold_eraser">Eraser</string>
+    <string name="pen_button_hold_title">While the S Pen button is held</string>
     <string name="ink_hex_invalid">Enter #RRGGBB or #AARRGGBB.</string>
     <string name="ink_hex_apply">Apply</string>
     <string name="ink_hex_label">Hex colour</string>

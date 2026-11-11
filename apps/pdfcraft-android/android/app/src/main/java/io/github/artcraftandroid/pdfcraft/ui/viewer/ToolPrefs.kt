@@ -135,7 +135,32 @@ class ToolPrefs(context: Context) {
     )
         private set
 
+    /** The pen selected before the current one, for the side-button "toggle last two pens" (#144). */
+    internal var previousInkStyle by mutableStateOf(InkStyle.fromKey(prefs.getString("ink.previousStyle", null)) ?: InkStyle.Highlighter)
+        private set
+
+    internal fun togglePreviousPen() = updateInkStyle(previousInkStyle)
+
+    internal var penButtonHold by mutableStateOf(PenButtonHold.fromKey(prefs.getString("pen.button.hold", null)))
+        private set
+    internal var penButtonClick by mutableStateOf(PenButtonClick.fromKey(prefs.getString("pen.button.click", null)))
+        private set
+
+    internal fun updatePenButtonHold(v: PenButtonHold) {
+        penButtonHold = v
+        prefs.edit().putString("pen.button.hold", v.key).apply()
+    }
+
+    internal fun updatePenButtonClick(v: PenButtonClick) {
+        penButtonClick = v
+        prefs.edit().putString("pen.button.click", v.key).apply()
+    }
+
     internal fun updateInkStyle(style: InkStyle) {
+        if (style != inkStyle) {
+            previousInkStyle = inkStyle
+            prefs.edit().putString("ink.previousStyle", inkStyle.key).apply()
+        }
         inkStyle = style
         if (style != InkStyle.Highlighter) lastWritingPen = style
         prefs.edit().putString("ink.style", style.key).also {

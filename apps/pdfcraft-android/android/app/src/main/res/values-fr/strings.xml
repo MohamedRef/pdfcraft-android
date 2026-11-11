@@ -1211,6 +1211,12 @@
     <string name="bates_export_failed">Impossible d\'enregistrer cette nouvelle copie dans Téléchargements.</string>
     <string name="ink_presets_title">Stylos favoris</string>
     <string name="ink_presets_help">Chaque stylo garde sa propre couleur, son épaisseur et son opacité. Touchez un favori pour restaurer ses réglages.</string>
+    <string name="pen_button_click_toggle">Revenir au stylo précédent</string>
+    <string name="pen_button_click_title">Clic du bouton du S Pen en survol</string>
+    <string name="pen_button_none">Rien</string>
+    <string name="pen_button_hold_highlighter">Surligneur</string>
+    <string name="pen_button_hold_eraser">Gomme</string>
+    <string name="pen_button_hold_title">Pendant l\'appui sur le bouton du S Pen</string>
     <string name="ink_hex_invalid">Saisissez #RRGGBB ou #AARRGGBB.</string>
     <string name="ink_hex_apply">Appliquer</string>
     <string name="ink_hex_label">Couleur hex</string>

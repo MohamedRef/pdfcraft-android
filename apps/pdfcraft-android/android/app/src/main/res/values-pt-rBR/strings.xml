@@ -916,6 +916,12 @@
     <string name="bates_export_failed">Não foi possível salvar esta nova cópia em Downloads.</string>
     <string name="ink_presets_title">Canetas favoritas</string>
     <string name="ink_presets_help">Cada caneta guarda a própria cor, espessura e opacidade. Toque em uma favorita para restaurar as configurações dela.</string>
+    <string name="pen_button_click_toggle">Trocar para a caneta anterior</string>
+    <string name="pen_button_click_title">Clique no botão da S Pen sem tocar na tela</string>
+    <string name="pen_button_none">Nada</string>
+    <string name="pen_button_hold_highlighter">Marca-texto</string>
+    <string name="pen_button_hold_eraser">Borracha</string>
+    <string name="pen_button_hold_title">Enquanto o botão da S Pen estiver pressionado</string>
     <string name="ink_hex_invalid">Digite #RRGGBB ou #AARRGGBB.</string>
     <string name="ink_hex_apply">Aplicar</string>
     <string name="ink_hex_label">Cor hex</string>

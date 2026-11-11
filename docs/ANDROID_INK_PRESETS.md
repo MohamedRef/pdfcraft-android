@@ -21,3 +21,7 @@ The Draw layer's existing immutable appearance snapshot at stroke start is uncha
 ## Verification
 
 JVM cases cover ARGB/width/opacity round-trips, corrupted/future/oversized/non-finite data and locale-independent storage. Existing ink appearance, pressure, stylus routing/history and eraser regressions remain intact. Current-head Rust/provenance, Android JVM/ARM64 bindings, title and aggregate gate are required before merge. Physical S Pen behavior, app restart, RTL/accessibility, DeX/landscape and switching favorites during drawing still need device QA. These presets are one part of the larger stylus backlog, not full Xodo parity.
+
+## S Pen side button (#144)
+
+Pen settings has two choices. **While the S Pen button is held**: Eraser (default, the earlier behaviour), Marker (that stroke uses the highlighter's own settings, then the selected pen is back) or Nothing. **S Pen button click while hovering**: Nothing (default), Undo, or Switch to previous pen. The mode of a stroke is decided at contact: pressing the button mid-stroke never cancels, splits or erases the stroke being written. The hardware eraser end always erases. A click is a press and release within 600 ms while the pen hovers without touching. Hover-click behaviour depends on the device reporting the button during hover and still needs checking on a Galaxy S Pen device.
