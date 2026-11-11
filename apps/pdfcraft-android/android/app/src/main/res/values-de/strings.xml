@@ -1331,6 +1331,8 @@
     <string name="bates_export_failed">Diese neue Kopie konnte nicht in „Downloads“ gespeichert werden.</string>
     <string name="ink_presets_title">Lieblingsstifte</string>
     <string name="ink_presets_help">Jeder Stift behält seine eigene Farbe, Breite und Deckkraft. Tippe auf einen Favoriten, um seine Einstellungen wiederherzustellen.</string>
+    <string name="ink_low_latency_explanation">Zeichnet die Linie, die du schreibst, direkt auf den Bildschirm, bevor die App neu zeichnet. Nur deckende Stifte.</string>
+    <string name="ink_low_latency">Tinte mit geringer Latenz (experimentell)</string>
     <string name="zoom_box_new_line">Neue Zeile</string>
     <string name="zoom_box">Zoomfenster</string>
     <string name="pen_gesture_scratched">%1$d Striche weggekritzelt. Rückgängig stellt sie wieder her.</string>

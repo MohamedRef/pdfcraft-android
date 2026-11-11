@@ -661,6 +661,13 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
         )
     }
     val rulerTextMeasurer = androidx.compose.ui.text.rememberTextMeasurer()
+    // Low-latency wet ink (#128), only with the setting on.
+    val wet = remember(doc) { WetInk() }
+    var wetLast by remember(doc) { mutableStateOf<Offset?>(null) }
+    fun endWet() {
+        if (wetLast != null) wet.clear()
+        wetLast = null
+    }
     // The zoom writing box (#130): a frame on the page, written in through a magnified pad.
     var padSize by remember(doc) { mutableStateOf(androidx.compose.ui.geometry.Size.Zero) }
     var overlayTarget by remember(doc) { mutableStateOf(0) }
@@ -899,6 +906,8 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                     it.pressures.add(pressure)
                     strokes.add(it)
                 }
+                wetLast = if (prefs.lowLatencyInk && doc.controller.inkShapeMode == InkShapeMode.Freehand &&
+                    wetInkEligible(inkStyle, appearance.opacity)) rulerPoint(p) else null
             },
             onMove = { raw, pressure, _ ->
                 val p = if (current != null) rulerPoint(raw) else raw
@@ -922,6 +931,11 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                     if (s.shapeMode == InkShapeMode.Freehand) {
                         s.points.add(pos)
                         s.pressures.add(pressure)
+                        wetLast?.let { from ->
+                            val w = inkStylePointWidths(listOf(if (s.pressureSensitive) pressure else 1f), s.appearance.width, s.appearance.style).first()
+                            wet.segment(WetSegment(from, p, w * doc.viewer.pixelsPerPoint(s.page), s.appearance.argb or 0xFF000000.toInt()))
+                            wetLast = p
+                        }
                     } else {
                         // Keep only endpoints in Compose state while dragging; native ink gets a
                         // densified outline after lift. A temporary preview never reaches the engine.
@@ -933,6 +947,7 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                 }
             },
             onUp = { p, _ ->
+                endWet()
                 if (doc.controller.lassoMode) {
                     finishLasso(p)
                     return@toolGestures
@@ -1002,6 +1017,7 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                 }
             },
             onCancel = {
+                endWet()
                 if (doc.controller.lassoMode) {
                     if (moving) {
                         moving = false
@@ -1185,6 +1201,7 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                 }
             }
         }
+        if (prefs.lowLatencyInk) FrontBufferedInkOverlay(wet, Modifier.fillMaxSize())
         if (doc.controller.zoomBoxOn) {
             ZoomWritingPad(
                 doc, prefs,

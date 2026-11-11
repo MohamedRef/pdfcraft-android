@@ -1211,6 +1211,8 @@
     <string name="bates_export_failed">Impossible d\'enregistrer cette nouvelle copie dans Téléchargements.</string>
     <string name="ink_presets_title">Stylos favoris</string>
     <string name="ink_presets_help">Chaque stylo garde sa propre couleur, son épaisseur et son opacité. Touchez un favori pour restaurer ses réglages.</string>
+    <string name="ink_low_latency_explanation">Dessine le trait en cours directement à l\'écran avant que l\'appli ne le redessine. Stylos opaques uniquement.</string>
+    <string name="ink_low_latency">Encre à faible latence (expérimental)</string>
     <string name="zoom_box_new_line">Nouvelle ligne</string>
     <string name="zoom_box">Loupe</string>
     <string name="pen_gesture_scratched">%1$d traits effacés. Annuler les restaure.</string>

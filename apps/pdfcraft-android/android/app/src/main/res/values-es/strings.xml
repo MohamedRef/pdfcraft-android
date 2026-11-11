@@ -1339,6 +1339,8 @@
     <string name="bates_export_failed">No se pudo guardar esta copia nueva en Descargas.</string>
     <string name="ink_presets_title">Lápices favoritos</string>
     <string name="ink_presets_help">Cada lápiz conserva su propio color, grosor y opacidad. Toca un favorito para recuperar sus ajustes.</string>
+    <string name="ink_low_latency_explanation">Dibuja la línea que escribes directamente en la pantalla antes de que la app la redibuje. Solo lápices opacos.</string>
+    <string name="ink_low_latency">Tinta de baja latencia (experimental)</string>
     <string name="zoom_box_new_line">Nueva línea</string>
     <string name="zoom_box">Lupa</string>
     <string name="pen_gesture_scratched">Se borraron %1$d trazos. Deshacer los recupera.</string>

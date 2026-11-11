@@ -52,3 +52,14 @@ class PenGesturesTest {
         assertFalse(scratchCoversRect(area, listOf(150f, 105f, 400f, 135f)))
     }
 }
+
+class WetInkTest {
+    @Test
+    fun onlyOpaqueNonMarkerInkUsesTheFrontBuffer() {
+        assertTrue(io.github.artcraftandroid.pdfcraft.ui.viewer.wetInkEligible(io.github.artcraftandroid.pdfcraft.ui.viewer.InkStyle.Ballpoint, 1f))
+        assertFalse(io.github.artcraftandroid.pdfcraft.ui.viewer.wetInkEligible(io.github.artcraftandroid.pdfcraft.ui.viewer.InkStyle.Ballpoint, 0.6f))
+        assertFalse(io.github.artcraftandroid.pdfcraft.ui.viewer.wetInkEligible(io.github.artcraftandroid.pdfcraft.ui.viewer.InkStyle.Highlighter, 1f))
+        // Pencil draws at 80 % of its opacity, so it never qualifies.
+        assertFalse(io.github.artcraftandroid.pdfcraft.ui.viewer.wetInkEligible(io.github.artcraftandroid.pdfcraft.ui.viewer.InkStyle.Pencil, io.github.artcraftandroid.pdfcraft.ui.viewer.inkStyleOpacity(1f, io.github.artcraftandroid.pdfcraft.ui.viewer.InkStyle.Pencil)))
+    }
+}
