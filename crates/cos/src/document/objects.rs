@@ -7,7 +7,8 @@ use super::state::{
 };
 use super::xref::{Revision, XrefEntry, XrefIndex};
 use super::{
-    Arc, CosError, Cow, Dict, Document, Lexer, MAX_DECODED, MAX_JBIG2_GLOBALS, ObjRef, Object, Stream, is_whitespace, parse_indirect_shared,
+    Arc, CosError, Cow, Dict, Document, Lexer, MAX_DECODED, MAX_JBIG2_GLOBALS, ObjRef, Object, OpenPasses, Stream, is_whitespace,
+    parse_indirect_shared,
 };
 
 /// The most decoded `/JBIG2Globals` a document keeps for its images to share (see
@@ -621,6 +622,25 @@ impl Document {
 
     pub(super) const EDITOR_CACHE_BYTES: usize = 32 * 1024 * 1024;
 
+    /// Android adaptation (#212): the byte cap while an [`OpenPasses`] guard lives. Opening
+    /// reads every page annotation in up to three passes (signatures, missing appearances, form
+    /// discovery). The ~28,000 link annotations of a 352 MB, 869-page file count over 50 MB
+    /// here, so under the 32 MB cap the cache was cleared twice in each pass and every pass
+    /// parsed every annotation again. The guard's drop brings the cache back under
+    /// [`Self::EDITOR_CACHE_BYTES`], so this is a peak during opening, not a lasting cost.
+    pub(super) const OPEN_PASSES_CACHE_BYTES: usize = 96 * 1024 * 1024;
+
+    /// Android adaptation (#212): keep parsed objects for the passes that opening makes over
+    /// the same annotations, up to [`Self::OPEN_PASSES_CACHE_BYTES`], until the guard is
+    /// dropped. Clones share the cache, so a guard on one covers them all. Reading is
+    /// unchanged: a cached object is the one a fresh load gives, and eviction only costs parsing.
+    pub fn open_passes(&self) -> OpenPasses {
+        if let Ok(mut cache) = self.cache.lock() {
+            cache.open_passes = cache.open_passes.saturating_add(1);
+        }
+        OpenPasses { cache: self.cache.clone() }
+    }
+
     /// Object streams decode to megabytes each, so fewer are kept than plain objects.
     const EDITOR_OBJSTM_OBJECTS: usize = 256;
 
@@ -628,7 +648,8 @@ impl Document {
 
     fn evict_editor_cache_if_over_budget(&self, fresh_num: u32) -> Result<(), CosError> {
         let mut cache = self.cache.lock().map_err(|_| CosError::Poisoned)?;
-        if cache.len() <= Self::EDITOR_CACHE_OBJECTS && cache.owned() <= Self::EDITOR_CACHE_BYTES {
+        let bytes = if cache.open_passes > 0 { Self::OPEN_PASSES_CACHE_BYTES } else { Self::EDITOR_CACHE_BYTES };
+        if cache.len() <= Self::EDITOR_CACHE_OBJECTS && cache.owned() <= bytes {
             return Ok(());
         }
         // Eviction keeps just the newcomer: file-backed views re-parse cheaply.
