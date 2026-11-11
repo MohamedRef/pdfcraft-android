@@ -37,7 +37,11 @@ Only fixed stage names, monotonic elapsed milliseconds, byte counts and page cou
 | `overlays_ready elapsed_ms` | Cumulative elapsed time after overlay metadata | Compare with `native_ready` to identify blocking overlay work |
 | `viewer_model_ready elapsed_ms` | First state publication of `OpenDocument` to Compose | **Not** the first visible page |
 | `first_page_requested elapsed_ms` | First nonempty visible-page raster request sent by Compose | Layout and scheduling may delay this after model publication |
-| `page_render duration_ms` | Individual native page render | Some requests are tiles / subsequent pages |
+| `page_render duration_ms` | A whole page at the zoom-1 scale, for a visible page | Before 0.0.25 this name covered tiles, low-resolution pages and prefetches too |
+| `page_render_lowres duration_ms` | A whole page at half scale, while zoomed far out | Many fit on screen; cheaper per page |
+| `tile_render duration_ms` | One tile of a visible page at a deeper zoom level | Several per page when zoomed in |
+| `*_prefetch duration_ms` | The same kinds, for pages just outside the view | Do not delay what is on screen unless the workers are busy |
+| `slow_render_pixels count` | Pixels of the render just above it, when it took 250 ms or more | Tells a large tile or page from a slow small one (#236) |
 | `first_page_raster_ready elapsed_ms` | First whole-page bitmap becomes available in image cache | Includes bitmap conversion, not GPU display |
 | `first_page_canvas_ms` | First raster submitted to Compose Canvas | **Not** a guaranteed on-screen/GPU frame |
  

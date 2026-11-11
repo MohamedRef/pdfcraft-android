@@ -35,6 +35,19 @@ class PageImage(val key: ImageKey, val bitmap: ImageBitmap, val scale: Float, va
 /** A request: the key, and how to render it (page, scale, tile). */
 data class ImageRequest(val key: ImageKey, val scale: Float, val tile: TileRect?, val prefetch: Boolean = false)
 
+/** Renders at least this long also report their size in the open timings (#236). */
+internal const val SLOW_RENDER_MS = 250L
+
+/** The open-timings stage of a render: whole page or tile, zoom-1 or low-resolution base, prefetch. */
+internal fun renderStage(r: ImageRequest): String {
+    val kind = when {
+        r.tile != null -> "tile_render"
+        r.key.level != 0 -> "page_render_lowres"
+        else -> "page_render"
+    }
+    return if (r.prefetch) "${kind}_prefetch" else kind
+}
+
 /**
  * The rendered pages and tiles of one document, and the workers that render what the view asks
  * for, most wanted first. The view calls [want] with every frame's list; whatever is no longer
@@ -160,7 +173,14 @@ class PageImages(
             }
             val image = try {
                 withContext(engine.renders) {
-                    val img = io.github.artcraftandroid.pdfcraft.engine.OpenTiming.measure("page_render") { engine.session.renderPageCompact(doc, r.key.page.toUInt(), r.scale, r.tile, compact) }
+                    // #236: name what was drawn, and how many pixels a slow render had, so a report
+                    // tells a deep-zoom tile from a page or a prefetch.
+                    val stage = renderStage(r)
+                    val started = android.os.SystemClock.elapsedRealtime()
+                    val img = io.github.artcraftandroid.pdfcraft.engine.OpenTiming.measure(stage) { engine.session.renderPageCompact(doc, r.key.page.toUInt(), r.scale, r.tile, compact) }
+                    if (android.os.SystemClock.elapsedRealtime() - started >= SLOW_RENDER_MS) {
+                        io.github.artcraftandroid.pdfcraft.engine.OpenTiming.count("slow_render_pixels", img.width.toLong() * img.height.toLong())
+                    }
                     val bitmap = img.toBitmap()
                     PageImage(r.key, bitmap.asImageBitmap(), r.scale, r.tile?.x?.toInt() ?: 0, r.tile?.y?.toInt() ?: 0, bitmap.allocationByteCount)
                 }
