@@ -603,6 +603,7 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
                 ViewerSheet.SearchResults -> SearchResultsSheet(doc, onShow = { showHit(doc, it) })
                 ViewerSheet.Layers -> LayersSheet(vm, doc)
                 ViewerSheet.EditContents -> EditContentsSheet(vm, doc)
+                ViewerSheet.HiddenInfo -> HiddenInfoSheet(vm, doc)
                 ViewerSheet.Comments -> Unit
                 ViewerSheet.MoreTools -> MoreToolsSheet(vm, doc)
                 ViewerSheet.Signatures -> SignaturesSheet(vm, doc)

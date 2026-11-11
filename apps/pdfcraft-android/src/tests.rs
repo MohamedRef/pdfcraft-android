@@ -871,3 +871,29 @@ fn bookmark_moves_the_app_sends_land_where_expected() {
     run("bookmark_move", json!({ "path": [3], "position": 2 }));
     assert_eq!(titles(), "A|  A2|C|A1|  B");
 }
+
+/// The protection Set password's Restrict editing and printing sends (`protectArgs` in the app)
+/// shows in the reopened copy's permissions, and Remove security takes it off again.
+#[test]
+fn restrictions_from_set_password_survive_reopen_and_can_be_removed() {
+    let s = MobileSession::new();
+    let doc = s.open(blank_pdf(1), None).unwrap().id;
+    let dir = scratch();
+    let locked = dir.join("locked.pdf").to_string_lossy().into_owned();
+    s.execute(
+        "doc_protect".into(),
+        json!({ "doc": doc, "open_password": "user123", "permissions_password": "owner12", "printing": "none", "changes": "none", "copy": false, "accessibility": true }).to_string(),
+    )
+    .unwrap();
+    s.execute("doc_save".into(), json!({ "doc": doc, "path": locked, "full": true }).to_string()).unwrap();
+    // opened with the open password: restricted
+    let user = s.open(locked.clone(), Some("user123".into())).unwrap();
+    assert!(user.encrypted && !user.allows_printing && !user.allows_copying && !user.allows_assembly);
+    // a copy opened with the permissions password can have its security removed
+    let owner = s.open(locked, Some("owner12".into())).unwrap().id;
+    let open = dir.join("open.pdf").to_string_lossy().into_owned();
+    s.execute("doc_unprotect".into(), json!({ "doc": owner }).to_string()).unwrap();
+    s.execute("doc_save".into(), json!({ "doc": owner, "path": open, "full": true }).to_string()).unwrap();
+    let plain = s.open(open, None).unwrap();
+    assert!(!plain.encrypted && plain.allows_printing && plain.allows_copying);
+}

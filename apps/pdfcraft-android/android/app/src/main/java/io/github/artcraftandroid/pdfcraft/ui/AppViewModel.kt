@@ -3156,18 +3156,60 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
      * A protected copy of [doc] with [password] as its open password. The copy is made from a
      * second, temporary engine document, so the open one keeps its file and history.
      */
-    fun protect(doc: OpenDocument, password: String) = job(text(R.string.msg_busy_setting_password)) { eng ->
+    fun protect(doc: OpenDocument, protection: Map<String, Any?>) = job(text(R.string.msg_busy_setting_password)) { eng ->
         save(doc)
         val out = tempFile("pdf")
         val copy = eng.tool("doc_open", mapOf("path" to doc.file.absolutePath, "password" to doc.password)).optLong("doc")
         try {
-            eng.tool("doc_protect", mapOf("doc" to copy, "open_password" to password))
+            eng.tool("doc_protect", protection + ("doc" to copy))
             eng.tool("doc_save", mapOf("doc" to copy, "path" to out.absolutePath, "full" to true))
         } finally {
             runCatching { eng.tool("doc_close", mapOf("doc" to copy, "discard_changes" to true)) }
         }
         toolScreen = null
         deliver(out, "${doc.title}_protected.pdf")
+    }
+
+    /**
+     * An unprotected copy of [doc] (`doc_unprotect` on a second, temporary engine document, as
+     * [protect] does), in Downloads. The document must have been opened with its permissions
+     * password, or have none; the engine says so otherwise.
+     */
+    fun unprotect(doc: OpenDocument) = job(text(R.string.msg_busy_removing_security)) { eng ->
+        save(doc)
+        val out = tempFile("pdf")
+        val copy = eng.tool("doc_open", mapOf("path" to doc.file.absolutePath, "password" to doc.password)).optLong("doc")
+        try {
+            eng.tool("doc_unprotect", mapOf("doc" to copy))
+            eng.tool("doc_save", mapOf("doc" to copy, "path" to out.absolutePath, "full" to true))
+        } catch (e: Exception) {
+            out.delete()
+            throw e
+        } finally {
+            runCatching { eng.tool("doc_close", mapOf("doc" to copy, "discard_changes" to true)) }
+        }
+        toolScreen = null
+        deliver(out, "${doc.title}_unprotected.pdf")
+    }
+
+    // ---- Remove hidden information (#177) ------------------------------------------------------
+
+    /** Categories of hidden information with their counts (`doc_hidden_info`), or null. */
+    suspend fun hiddenInfo(doc: OpenDocument): List<Pair<String, Int>>? {
+        val eng = engine ?: return null
+        return try {
+            val a = eng.tool("doc_hidden_info", mapOf("doc" to doc.id)).optJSONArray("categories") ?: return emptyList()
+            (0 until a.length()).map { a.getJSONObject(it).let { o -> o.optString("category") to o.optInt("count") } }
+        } catch (e: MobileException) { tell(e.userMessage); null }
+    }
+
+    /** Remove [categories] (all of them, Sanitize, when null); undoable until saved. */
+    fun removeHidden(doc: OpenDocument, categories: List<String>?) {
+        doc.commitTool?.invoke()
+        runTool(doc, "doc_remove_hidden", if (categories == null) emptyMap() else mapOf("categories" to categories)) {
+            doc.controller.sheet = io.github.artcraftandroid.pdfcraft.ui.viewer.ViewerSheet.None
+            tell(text(R.string.msg_hidden_removed), text(R.string.common_undo)) { undo(doc) }
+        }
     }
 
     /** Crop [page] (or every page) to [rect] (points from the page's top-left). */
