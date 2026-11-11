@@ -443,3 +443,49 @@ fn oversized_file_list_previews_are_refused_before_pdf_parsing() {
     assert!(error.contains("input exceeds 100 MiB"), "{error}");
     assert_eq!(std::fs::metadata(path).unwrap().len(), 100 * 1024 * 1024 + 1);
 }
+
+/// #122: a renderer kept from before "Hide all comments" is not reused after it.
+#[test]
+fn renderers_built_before_a_view_change_are_not_reused_after_it() {
+    let ink = "q 0 0 1 RG 3 w 1 J 1 j 10 10 m 60 80 l 110 20 l S Q";
+    let bytes = fixture(
+        "",
+        "/Annots [7 0 R]",
+        "",
+        &[
+            "<< /Type /Annot /Subtype /Ink /Rect [10 10 120 90] /InkList [[10 10 60 80 110 20]] /C [0 0 1] /AP << /N 8 0 R >> >>",
+            &format!("<< /Type /XObject /Subtype /Form /BBox [10 10 120 90] /Length {} >>\nstream\n{ink}\nendstream", ink.len()),
+        ],
+    );
+    let session = MobileSession::new();
+    let doc = session.open(file(&bytes), None).unwrap().id;
+    let shown = session.render_page(doc, 0, 1.0, None).unwrap().rgba;
+    session.execute("comments_hide".into(), json!({ "doc": doc, "hidden": true }).to_string()).unwrap();
+    let hidden = session.render_page(doc, 0, 1.0, None).unwrap().rgba;
+    assert_ne!(hidden, shown, "the hidden drawing is no longer drawn");
+    session.execute("comments_hide".into(), json!({ "doc": doc, "hidden": false }).to_string()).unwrap();
+    assert_eq!(session.render_page(doc, 0, 1.0, None).unwrap().rgba, shown);
+}
+
+/// #115: notes the PDF marks Hidden or NoView are reported as hidden for the app's overlay.
+#[test]
+fn hidden_and_no_view_notes_are_reported_hidden() {
+    let bytes = fixture(
+        "",
+        "/Annots [7 0 R 8 0 R 9 0 R]",
+        "",
+        &[
+            "<< /Type /Annot /Subtype /Text /Rect [10 10 30 30] /F 2 /Contents (hidden) >>",
+            "<< /Type /Annot /Subtype /Text /Rect [40 10 60 30] /F 32 /Contents (no view) >>",
+            "<< /Type /Annot /Subtype /Text /Rect [70 10 90 30] /F 4 /Contents (shown) >>",
+        ],
+    );
+    let session = MobileSession::new();
+    let doc = session.open(file(&bytes), None).unwrap().id;
+    let notes = session.comments(doc).unwrap();
+    assert_eq!(notes.iter().map(|c| (c.contents.clone().unwrap_or_default(), c.hidden)).collect::<Vec<_>>(), [
+        ("hidden".to_string(), true),
+        ("no view".to_string(), true),
+        ("shown".to_string(), false)
+    ]);
+}

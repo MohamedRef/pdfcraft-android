@@ -362,6 +362,9 @@ pub struct CommentInfo {
     pub opacity: f32,
     /// Its line width in points, when it draws a line (ink, shapes, lines).
     pub width: Option<f32>,
+    /// The PDF hides it (`/F` Hidden or NoView): the page raster leaves it out, and so must the
+    /// app's own sticky-note overlay (#115).
+    pub hidden: bool,
 }
 
 /// A form field's widget on a page: what a tap there fills.
@@ -1433,6 +1436,7 @@ fn comment_records(snapshot: &pdfcraft_engine::OverlaySnapshot) -> Vec<CommentIn
                 fill_sign: a.fill_sign,
                 opacity: props.as_ref().map(|p| p.opacity as f32).filter(|v| v.is_finite()).unwrap_or(1.0).clamp(0.0, 1.0),
                 width: props.as_ref().and_then(|p| p.width).map(|w| w as f32).filter(|w| w.is_finite() && *w >= 0.0),
+                hidden: props.as_ref().is_some_and(|p| p.hidden),
             }
         })
         .collect()

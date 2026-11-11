@@ -59,19 +59,19 @@ class DrawUndoTest {
         val d = InkDrafts()
         val (a, b, c) = List(3) { stroke() }
         d.strokes.addAll(listOf(a, b, c))
-        d.edits.addAll(listOf(a, b, c).map { DraftInkEdit.Added(it) })
+        d.edits.addAll(listOf(a, b, c).map { DraftInkEdit.Added(listOf(it)) })
         val taken = d.takeForSaving()
         assertEquals(listOf(a, b, c), d.saving.toList())
         assertTrue(d.strokes.isEmpty() && d.edits.isEmpty())
         // drawn while the save runs
         val newer = stroke()
         d.strokes.add(newer)
-        d.edits.add(DraftInkEdit.Added(newer))
+        d.edits.add(DraftInkEdit.Added(listOf(newer)))
         // the engine took only the first
         assertEquals(2, d.settle(taken, applied = 1))
         assertTrue(d.saving.isEmpty())
         assertEquals(listOf(b, c, newer), d.strokes.toList())
-        assertEquals(listOf(b, c, newer).map { DraftInkEdit.Added(it) }, d.edits.toList())
+        assertEquals(listOf(b, c, newer).map { DraftInkEdit.Added(listOf(it)) }, d.edits.toList())
     }
 
     @Test fun acceptedDraftsLeaveNothingBehind() {
@@ -124,8 +124,8 @@ class DrawUndoTest {
         val d = InkDrafts()
         val steps = DrawUndoSteps()
         val (a, g) = List(2) { stroke() }
-        d.strokes.add(a); d.edits.add(DraftInkEdit.Added(a))
-        d.strokes.add(g); d.edits.add(DraftInkEdit.Added(g))
+        d.strokes.add(a); d.edits.add(DraftInkEdit.Added(listOf(a)))
+        d.strokes.add(g); d.edits.add(DraftInkEdit.Added(listOf(g)))
         // the gesture: the stroke steps aside and the markup is the session's own step
         d.strokes.remove(g)
         steps.started(); steps.finished(1)
