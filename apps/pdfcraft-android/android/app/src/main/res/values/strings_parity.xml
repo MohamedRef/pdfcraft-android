@@ -14,14 +14,14 @@
     <string name="edit_image_bring_forward">Bring forward</string>
     <string name="edit_image_send_backward">Send backward</string>
     <string name="edit_image_send_to_back">Send to back</string>
-    <string name="edit_image_more">More picture tools</string>
+    <string name="edit_image_more">More image tools</string>
     <string name="edit_image_replace">Replace</string>
     <string name="edit_image_save">Save image</string>
     <string name="edit_image_saved">Image saved</string>
     <string name="edit_image_remove_crop">Remove crop</string>
     <string name="edit_image_ungroup">Ungroup</string>
     <string name="edit_image_ungrouped">Ungrouped: its text can now be edited</string>
-    <string name="edit_image_form_no_replace">This is grouped artwork, not a picture: only pictures can be replaced or saved. Ungroup it to edit its parts.</string>
+    <string name="edit_image_form_no_replace">This is grouped artwork, not an image: only images can be replaced or saved. Ungroup it to edit its parts.</string>
     <string name="edit_image_crop_free">Free</string>
     <string name="edit_image_crop_square">1:1</string>
     <string name="edit_image_crop_4_3">4:3</string>
