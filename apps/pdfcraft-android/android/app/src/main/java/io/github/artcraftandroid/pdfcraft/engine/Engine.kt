@@ -2,6 +2,7 @@ package io.github.artcraftandroid.pdfcraft.engine
 
 import android.graphics.Bitmap
 import io.github.artcraftandroid.pdfcraft.R
+import io.github.artcraftandroid.pdfcraft.core.InternalException
 import io.github.artcraftandroid.pdfcraft.core.MobileException
 import io.github.artcraftandroid.pdfcraft.core.MobileSession
 import io.github.artcraftandroid.pdfcraft.core.RenderedImage
@@ -38,13 +39,17 @@ class Engine private constructor(val session: MobileSession) {
         },
     ).asCoroutineDispatcher()
 
-    suspend fun completeOpen(doc: ULong) = withContext(preparation) { session.completeOpen(doc) }
+    suspend fun completeOpen(doc: ULong) = withContext(preparation) { engineFailuresAsMobile { session.completeOpen(doc) } }
 
     /** Thumbnails (page grids, recent files). */
     val thumbnails: CoroutineDispatcher = Dispatchers.Default.limitedParallelism(1)
 
-    /** Run [block] on the session, after the commands issued before it. */
-    suspend fun <T> command(block: MobileSession.() -> T): T = withContext(commands) { session.block() }
+    /**
+     * Run [block] on the session, after the commands issued before it. A panic in the engine
+     * reaches here as [InternalException]; it is turned into a [MobileException] so that every
+     * caller's existing error handling shows it instead of the app crashing (#114).
+     */
+    suspend fun <T> command(block: MobileSession.() -> T): T = withContext(commands) { engineFailuresAsMobile { session.block() } }
 
     /**
      * Run the engine tool [name] (the tools of `pdfcraft-cli run` and MCP; pages are 1-based)
@@ -110,6 +115,16 @@ class Engine private constructor(val session: MobileSession) {
             else -> value
         }
     }
+}
+
+/**
+ * Run [block], turning an engine panic ([InternalException], which UniFFI throws when Rust
+ * panics) into [MobileException.Command] with a message for the user (#114).
+ */
+internal inline fun <T> engineFailuresAsMobile(block: () -> T): T = try {
+    block()
+} catch (_: InternalException) {
+    throw MobileException.Command("An internal error stopped this action. If the document looks wrong, close it and open it again.")
 }
 
 /** Reject invalid native buffers *before* allocating a Bitmap on the Java heap. */

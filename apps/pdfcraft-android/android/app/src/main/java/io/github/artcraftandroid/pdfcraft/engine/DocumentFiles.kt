@@ -216,9 +216,11 @@ class DocumentFiles(private val context: Context) {
         } ?: false
     }.getOrDefault(false)
 
-    /** The working copy made earlier for [uri], if there is one (for thumbnails). */
-    fun existingCopy(uri: Uri): File? =
-        File(workDir, sha(uri.toString())).listFiles()?.firstOrNull { it.isFile && !it.name.startsWith(".") }
+    /**
+     * The working copy made earlier for [uri], if there is one: the copy a pending write-back
+     * recorded, else the most recently written one, chosen the same way every time (#101).
+     */
+    fun existingCopy(uri: Uri): File? = PendingWorkingCopy.recoveryCopy(File(workDir, sha(uri.toString())))
 
     /** The file name another app gives [uri], ending in `.pdf`. */
     fun displayName(uri: Uri): String {
@@ -265,9 +267,14 @@ class DocumentFiles(private val context: Context) {
     fun hasPendingWriteBack(uri: Uri): Boolean =
         PendingWorkingCopy.isPending(File(workDir, sha(uri.toString())))
 
-    /** Persist a marker before asking a content provider to truncate its source. */
-    fun markPendingWriteBack(uri: Uri) {
-        PendingWorkingCopy.mark(File(workDir, sha(uri.toString())))
+    /**
+     * Persist a marker before the working copy [copy] changes or a content provider is asked to
+     * truncate its source: from then on, a reopen keeps [copy] instead of copying the original
+     * in again over it (#103). [copy] is recorded so recovery opens that exact file (#101).
+     */
+    fun markPendingWriteBack(uri: Uri, copy: File? = null) {
+        val dir = File(workDir, sha(uri.toString()))
+        PendingWorkingCopy.mark(dir, copy?.takeIf { it.parentFile?.canonicalFile == dir.canonicalFile }?.name)
     }
 
     /** Clear only after a successful provider write or explicit completed Save a copy. */
@@ -275,11 +282,80 @@ class DocumentFiles(private val context: Context) {
         PendingWorkingCopy.clear(File(workDir, sha(uri.toString())))
     }
 
-    /** Write [file] over [uri] (truncating it). The caller keeps a durable recovery copy. */
+    /**
+     * Write [file] over [uri] (truncating it), then check that the provider holds exactly those
+     * bytes; throws when it does not, so the caller keeps its recovery marker (#102). The caller
+     * keeps a durable recovery copy.
+     */
     fun writeBack(file: File, uri: Uri) {
-        val out = resolver.openOutputStream(uri, "wt") ?: error(context.getString(R.string.files_error_write))
-        out.use { o -> file.inputStream().use { it.copyTo(o) } }
+        if (!writeThroughDescriptor(file, uri)) {
+            val out = resolver.openOutputStream(uri, "wt") ?: error(context.getString(R.string.files_error_write))
+            out.use { o -> file.inputStream().use { it.copyTo(o, PdfSnapshotCopy.BUFFER_BYTES) } }
+        }
+        val tail = tailOf(file)
+        if (!writeBackMatches(file.length(), tail, readBack(uri, tail.size))) {
+            throw IOException(context.getString(R.string.files_error_write_unverified))
+        }
     }
+
+    /**
+     * Write [file] through a read-write descriptor, so that a regular file can be truncated to
+     * the new length explicitly (some providers ignore the `t` mode) and synced to storage.
+     * Returns false, having written nothing, when the provider offers no such descriptor.
+     */
+    private fun writeThroughDescriptor(file: File, uri: Uri): Boolean {
+        val pfd = try {
+            resolver.openFileDescriptor(uri, "rwt")
+        } catch (e: java.io.FileNotFoundException) {
+            null
+        } catch (e: IllegalArgumentException) {
+            null
+        } catch (e: UnsupportedOperationException) {
+            null
+        } catch (e: SecurityException) {
+            null
+        } ?: return false
+        pfd.use {
+            val out = java.io.FileOutputStream(pfd.fileDescriptor)
+            file.inputStream().use { it.copyTo(out, PdfSnapshotCopy.BUFFER_BYTES) }
+            out.flush()
+            val regular = runCatching { android.system.OsConstants.S_ISREG(android.system.Os.fstat(pfd.fileDescriptor).st_mode) }.getOrDefault(false)
+            if (regular) {
+                out.channel.truncate(file.length())
+                out.fd.sync()
+            }
+        }
+        return true
+    }
+
+    /** The last bytes of [file] that a write-back compares. */
+    private fun tailOf(file: File): ByteArray = java.io.RandomAccessFile(file, "r").use { raf ->
+        val n = minOf(raf.length(), WRITE_BACK_TAIL_BYTES.toLong()).toInt()
+        raf.seek(raf.length() - n)
+        ByteArray(n).also { raf.readFully(it) }
+    }
+
+    /** What [uri] holds now, read through a fresh descriptor; null when it can't be read back. */
+    private fun readBack(uri: Uri, tailBytes: Int): WrittenBack? = runCatching {
+        resolver.openAssetFileDescriptor(uri, "r")?.use { afd ->
+            val stat = afd.parcelFileDescriptor.statSize
+            val length = when {
+                afd.declaredLength >= 0 -> afd.declaredLength
+                stat >= 0 -> stat - afd.startOffset
+                else -> return@use WrittenBack(null, null)
+            }
+            val tail = runCatching {
+                java.io.FileInputStream(afd.fileDescriptor).use { input ->
+                    val n = minOf(length, tailBytes.toLong()).toInt()
+                    input.channel.position(afd.startOffset + length - n)
+                    val buf = java.nio.ByteBuffer.allocate(n)
+                    while (buf.hasRemaining()) if (input.channel.read(buf) < 0) break
+                    buf.array().copyOf(buf.position())
+                }
+            }.getOrNull()
+            WrittenBack(length, tail)
+        }
+    }.getOrNull()
 
     /** Keep access to [uri] across restarts, for Recent files (when the provider allows it). */
     fun keepAccess(uri: Uri) {

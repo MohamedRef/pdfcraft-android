@@ -95,3 +95,21 @@ impl std::fmt::Debug for Document {
 
 #[cfg(test)]
 mod tests;
+
+/// Android adaptation (#212): returned by [`Document::open_passes`]. While any lives, the shared
+/// editing cache keeps up to its larger opening cap; when the last is dropped, a cache above the
+/// ordinary cap is emptied, as eviction always did.
+pub struct OpenPasses {
+    cache: Arc<Mutex<state::ObjectCache>>,
+}
+
+impl Drop for OpenPasses {
+    fn drop(&mut self) {
+        if let Ok(mut cache) = self.cache.lock() {
+            cache.open_passes = cache.open_passes.saturating_sub(1);
+            if cache.open_passes == 0 && cache.owned() > Document::EDITOR_CACHE_BYTES {
+                cache.clear();
+            }
+        }
+    }
+}

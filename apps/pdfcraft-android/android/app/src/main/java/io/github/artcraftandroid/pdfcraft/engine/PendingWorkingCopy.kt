@@ -14,13 +14,43 @@ internal object PendingWorkingCopy {
 
     fun isPending(dir: File): Boolean = File(dir, MARKER).isFile
 
-    fun mark(dir: File) {
+    /**
+     * Mark [dir]'s working copy as holding changes the original may not have. [copy] names the
+     * working copy the changes are in, so recovery reopens exactly that file (#101).
+     */
+    fun mark(dir: File, copy: String? = null) {
         if (!dir.isDirectory && !dir.mkdirs()) throw IOException("Cannot create PDF recovery directory")
+        val name = copy?.takeIf { validCopyName(it) }
+        // Keep the name an earlier mark recorded when this one does not know it.
+        val recorded = name ?: recordedCopy(dir)
         FileOutputStream(File(dir, MARKER)).use { stream ->
-            stream.write(1)
+            if (recorded != null) stream.write(recorded.toByteArray(Charsets.UTF_8)) else stream.write(1)
             stream.fd.sync()
         }
     }
+
+    /** The working copy's name recorded with the marker, if a valid one was. */
+    fun recordedCopy(dir: File): String? {
+        val marker = File(dir, MARKER)
+        if (!marker.isFile) return null
+        val name = runCatching { marker.readText(Charsets.UTF_8) }.getOrNull() ?: return null
+        return name.takeIf { validCopyName(it) }
+    }
+
+    /**
+     * The working copy in [dir] that recovery must open: the one the marker names, else the most
+     * recently written PDF (ties by name), never an arbitrary directory-order pick (#101).
+     */
+    fun recoveryCopy(dir: File): File? {
+        recordedCopy(dir)?.let { name -> File(dir, name).takeIf { it.isFile } }?.let { return it }
+        return dir.listFiles()
+            ?.filter { it.isFile && !it.name.startsWith(".") }
+            ?.sortedWith(compareByDescending<File> { it.lastModified() }.thenBy { it.name })
+            ?.firstOrNull()
+    }
+
+    private fun validCopyName(name: String): Boolean =
+        name.isNotEmpty() && name.length <= 255 && !name.startsWith(".") && name.none { it == '/' || it == '\\' || it.isISOControl() }
 
     fun clear(dir: File) {
         val marker = File(dir, MARKER)

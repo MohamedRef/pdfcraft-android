@@ -83,9 +83,16 @@ class ViewerController {
     /** The Go to page dialog. */
     var goToPage by mutableStateOf(false)
 
-    /** Where a jump (link, bookmark, scrubber, Go to page) came from, for "back to page N". */
-    var previousPage by mutableStateOf<Int?>(null)
-    var previousAt by mutableLongStateOf(0L)
+    /** Where jumps (link, bookmark, contents, Go to page) came from, for Back and the "‹ Page N" chip. */
+    val jumps = JumpHistory()
+
+    /** Bumped when [jumps] changes, so the chip recomposes. */
+    var jumpsVersion by mutableLongStateOf(0L)
+        private set
+
+    /** Uptime (ms) until which the jump chip shows. */
+    var jumpChipUntil by mutableLongStateOf(0L)
+        private set
 
     /** Bars can't hide while a tool, search or sheet is up (as the reference's). */
     val barsLocked: Boolean get() = tool != ViewerTool.None || searching || sheet != ViewerSheet.None
@@ -108,17 +115,53 @@ class ViewerController {
         sheet = ViewerSheet.None
     }
 
-    fun rememberJump(fromPage: Int) {
-        previousPage = fromPage
-        previousAt = android.os.SystemClock.uptimeMillis()
+    /** A jump is about to leave where [viewer] is: remember it and show the way back for a while. */
+    fun rememberJump(viewer: ViewerState) {
+        jumps.push(viewer.spot())
+        jumpsChanged()
     }
 
-    /** The "back to page N" link, while it is fresh (half an hour). */
-    fun freshPreviousPage(now: Long): Int? = previousPage?.takeIf { now - previousAt < PREVIOUS_PAGE_MS }
+    /** Back to where the last jump came from; false when there is nowhere to go back to. */
+    fun jumpBack(viewer: ViewerState): Boolean {
+        val to = jumps.goBack(viewer.spot()) ?: return false
+        viewer.goTo(to)
+        jumpsChanged()
+        return true
+    }
+
+    /** Forward again to where [jumpBack] came from. */
+    fun jumpForward(viewer: ViewerState): Boolean {
+        val to = jumps.goForward(viewer.spot()) ?: return false
+        viewer.goTo(to)
+        jumpsChanged()
+        return true
+    }
+
+    /** Show the chip again for a while (the reader stopped scrolling). */
+    fun showJumpChip() {
+        val now = android.os.SystemClock.uptimeMillis()
+        if ((jumps.canGoBack || jumps.canGoForward) && now - lastJumpAt < JUMP_RESHOW_MS) jumpChipUntil = android.os.SystemClock.uptimeMillis() + JUMP_CHIP_MS
+    }
+
+    fun hideJumpChip() {
+        jumpChipUntil = 0L
+    }
+
+    private var lastJumpAt = 0L
+
+    private fun jumpsChanged() {
+        jumpsVersion++
+        lastJumpAt = android.os.SystemClock.uptimeMillis()
+        jumpChipUntil = android.os.SystemClock.uptimeMillis() + JUMP_CHIP_MS
+    }
 
     companion object {
         /** How long the scrubber and page pill stay after the last scroll or zoom. */
         const val INDICATOR_MS = 2000L
-        const val PREVIOUS_PAGE_MS = 30L * 60 * 1000
+        /** How long the "‹ Page N" chip shows after a jump. */
+        const val JUMP_CHIP_MS = 10_000L
+
+        /** Scrolling to a stop shows the chip again for this long after the last jump. */
+        const val JUMP_RESHOW_MS = 2L * 60 * 1000
     }
 }
