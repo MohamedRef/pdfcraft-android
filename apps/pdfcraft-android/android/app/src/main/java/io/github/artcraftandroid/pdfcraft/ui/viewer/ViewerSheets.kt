@@ -145,6 +145,7 @@ fun MoreSheet(vm: AppViewModel, doc: OpenDocument) {
                 SheetRow(LucideIcons.SwatchBook, if (due > 0) stringResource(R.string.cards_row_due, due) else stringResource(R.string.cards_title), { close(); vm.startReview(src.toString(), doc.info.name) })
             }
             SheetRow(LucideIcons.FilePenLine, stringResource(R.string.common_tool_edit_pdf), { close(); vm.enterTool(doc, ViewerTool.Edit) })
+            SheetRow(LucideIcons.Ruler, stringResource(R.string.measure_tool), { close(); vm.enterTool(doc, ViewerTool.Measure) })
             GroupDivider()
             SheetRow(LucideIcons.FileOutput, stringResource(R.string.sheet_export_as), { close(); vm.openExport(doc) })
             SheetRow(LucideIcons.FileArchive, stringResource(R.string.common_tool_compress), { close(); vm.openCompress(doc) })

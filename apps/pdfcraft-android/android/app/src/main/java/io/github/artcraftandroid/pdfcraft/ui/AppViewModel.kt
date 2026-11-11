@@ -839,7 +839,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         }
         val info = doc.info
         val blocked = when (tool) {
-            ViewerTool.Comment, ViewerTool.Markup, ViewerTool.Draw, ViewerTool.Text -> !info.allowsAnnotation
+            ViewerTool.Comment, ViewerTool.Markup, ViewerTool.Draw, ViewerTool.Text, ViewerTool.Measure -> !info.allowsAnnotation
             ViewerTool.FillSign -> !info.allowsFormFilling && !info.allowsAnnotation
             ViewerTool.Edit -> info.readOnlyReason != null || !info.allowsAssembly && info.encrypted
             ViewerTool.None -> false
@@ -876,6 +876,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             editMode = io.github.artcraftandroid.pdfcraft.ui.viewer.EditMode.Select
         }
         if (certPlacing === doc) certPlacing = null
+        if (measure?.doc === doc) measure = null
         doc.controller.tool = ViewerTool.None
     }
 
@@ -974,6 +975,120 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     /** Remove every link in the document (one undo step). */
     fun removeAllLinks(doc: OpenDocument) {
         runTool(doc, "links_remove") { tell(text(R.string.link_removed_all)) }
+    }
+
+    // ---- Measure (#135, #180) ------------------------------------------------------------------
+
+    private var measure: io.github.artcraftandroid.pdfcraft.ui.viewer.MeasureSession? = null
+
+    /** The measurement being placed on [doc] (one per document, kept while the tool is open). */
+    fun measureSession(doc: OpenDocument): io.github.artcraftandroid.pdfcraft.ui.viewer.MeasureSession =
+        measure?.takeIf { it.doc === doc } ?: io.github.artcraftandroid.pdfcraft.ui.viewer.MeasureSession(doc).also { measure = it }
+
+    fun setMeasureMode(m: io.github.artcraftandroid.pdfcraft.ui.viewer.MeasureSession, mode: io.github.artcraftandroid.pdfcraft.ui.viewer.MeasureMode) {
+        m.calibrating = false
+        if (m.mode != mode) m.clear()
+        m.mode = mode
+    }
+
+    /**
+     * A tap in Measure at [at]: the point snaps to the drawing's nearest endpoint, midpoint,
+     * intersection or line (within about 8 dp), then the reading updates. A distance is saved
+     * at its second point; a perimeter or area with Done.
+     */
+    fun measureTap(m: io.github.artcraftandroid.pdfcraft.ui.viewer.MeasureSession, at: PagePoint) {
+        val doc = m.doc
+        if (m.page != null && m.page != at.page) return
+        val eng = engine ?: return
+        viewModelScope.launch {
+            val tolerance = (8f * getApplication<Application>().resources.displayMetrics.density / doc.viewer.pixelsPerPoint(at.page).coerceAtLeast(0.01f)).toDouble()
+            val snapped = runCatching {
+                eng.tool("measure_snap", mapOf("doc" to doc.id, "page" to at.page + 1, "at" to listOf(at.x.toDouble(), at.y.toDouble()), "tolerance" to tolerance))
+            }.getOrNull()?.optJSONObject("snap")?.optJSONArray("point")
+            val point = if (snapped != null && snapped.length() == 2) androidx.compose.ui.geometry.Offset(snapped.optDouble(0).toFloat(), snapped.optDouble(1).toFloat())
+            else androidx.compose.ui.geometry.Offset(at.x, at.y)
+            m.page = at.page
+            m.points.add(point)
+            if (m.calibrating) {
+                if (m.points.size == 2) {
+                    m.calibration = m.points[0] to m.points[1]
+                }
+                return@launch
+            }
+            updateReading(m)
+            if (m.mode == io.github.artcraftandroid.pdfcraft.ui.viewer.MeasureMode.Distance && m.points.size >= 2) finishMeasurement(m)
+        }
+    }
+
+    private suspend fun updateReading(m: io.github.artcraftandroid.pdfcraft.ui.viewer.MeasureSession) {
+        val eng = engine ?: return
+        val page = m.page ?: return
+        if (m.points.size < 2) {
+            m.reading = null
+            return
+        }
+        val r = runCatching {
+            eng.tool("measure_info", mapOf("doc" to m.doc.id, "page" to page + 1, "type" to m.mode.kind, "points" to m.points.map { listOf(it.x.toDouble(), it.y.toDouble()) }))
+        }.getOrNull()
+        m.reading = r?.optJSONObject("reading")?.optString("label")?.takeIf { it.isNotBlank() }
+    }
+
+    fun undoMeasurePoint(m: io.github.artcraftandroid.pdfcraft.ui.viewer.MeasureSession) {
+        if (m.points.isEmpty()) return
+        m.points.removeAt(m.points.lastIndex)
+        if (m.points.isEmpty()) m.clear()
+        viewModelScope.launch { updateReading(m) }
+    }
+
+    /** Save the measurement as a measurement annotation (readable on desktop), then start a new one. */
+    fun finishMeasurement(m: io.github.artcraftandroid.pdfcraft.ui.viewer.MeasureSession) {
+        val page = m.page ?: return
+        if (m.points.size < m.mode.minPoints) return
+        val label = m.reading
+        val args = mapOf(
+            "page" to page + 1, "points" to m.points.map { listOf(it.x.toDouble(), it.y.toDouble()) }, "author" to author,
+        )
+        m.clear()
+        runTool(m.doc, m.mode.tool, args) { if (label != null) tell(text(R.string.measure_saved, label)) }
+    }
+
+    /** Set the page's scale to "1 : [ratio]" in [unit]. */
+    fun setMeasureRatio(m: io.github.artcraftandroid.pdfcraft.ui.viewer.MeasureSession, ratio: Double, unit: String) {
+        val page = m.page ?: m.doc.viewer.currentPage
+        val args = io.github.artcraftandroid.pdfcraft.ui.viewer.ratioScaleArgs(page, ratio, unit) ?: return
+        runTool(m.doc, "measure_scale", args) { tell(text(R.string.measure_scale_set, page + 1)) }
+    }
+
+    /** The next two taps mark a length of known size. */
+    fun startCalibration(m: io.github.artcraftandroid.pdfcraft.ui.viewer.MeasureSession) {
+        m.clear()
+        m.calibrating = true
+        tell(text(R.string.measure_calibrate_tap))
+    }
+
+    fun finishCalibration(m: io.github.artcraftandroid.pdfcraft.ui.viewer.MeasureSession, pts: Pair<androidx.compose.ui.geometry.Offset, androidx.compose.ui.geometry.Offset>, distance: Double, unit: String) {
+        val page = m.page ?: return
+        m.calibration = null
+        m.calibrating = false
+        m.clear()
+        val args = io.github.artcraftandroid.pdfcraft.ui.viewer.calibrationScaleArgs(page, pts.first, pts.second, distance, unit) ?: return
+        runTool(m.doc, "measure_scale", args) { tell(text(R.string.measure_scale_set, page + 1)) }
+    }
+
+    /** Every saved measurement as CSV (values, labels, authors and scales), through the share sheet. */
+    fun exportMeasurements(doc: OpenDocument) = job(text(R.string.measure_exporting)) { eng ->
+        val out = tempFile("csv")
+        try {
+            val r = eng.tool("measure_export", mapOf("doc" to doc.id, "out" to out.absolutePath))
+            if (r.optInt("count", 0) == 0) {
+                tell(text(R.string.measure_export_none))
+                return@job
+            }
+            val uri = withContext(Dispatchers.IO) { files.shareable(out, "${doc.title} measurements.csv") }
+            intents.trySend(Intent.createChooser(sendIntent(listOf(uri), "text/csv"), null))
+        } finally {
+            out.delete()
+        }
     }
 
     /** A web address waiting for "Open web page?". */
