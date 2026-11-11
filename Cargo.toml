@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/pdf-bytes", "crates/a11y", "crates/annot", "crates/audit", "crates/automation", "crates/compare", "crates/content", "crates/cos", "crates/create", "crates/crypt", "crates/edit", "crates/engine", "crates/export", "crates/filters", "crates/fonts", "crates/forms", "crates/geom", "crates/js", "crates/measure", "crates/model", "crates/ocr", "crates/optimize", "crates/oracle", "crates/organize", "crates/platform", "crates/preflight", "crates/print", "crates/redact", "crates/render", "crates/sign", "crates/testkit", "crates/xfa", "crates/xfdf", "apps/pdfcraft-android", "apps/pdfcraft-android/bindgen"]
+members = ["crates/pdf-bytes", "crates/a11y", "crates/annot", "crates/audit", "crates/automation", "crates/compare", "crates/content", "crates/cos", "crates/create", "crates/crypt", "crates/edit", "crates/engine", "crates/export", "crates/filters", "crates/fonts", "crates/forms", "crates/geom", "crates/js", "crates/measure", "crates/model", "crates/ocr", "crates/optimize", "crates/oracle", "crates/organize", "crates/platform", "crates/preflight", "crates/print", "crates/redact", "crates/render", "crates/sign", "crates/testkit", "crates/xfa", "crates/xfdf", "apps/pdfcraft-android", "apps/pdfcraft-android/bindgen", "apps/pdfcraft-android/ffi-bytes"]
 exclude = ["vendor"]
 
 [workspace.package]
