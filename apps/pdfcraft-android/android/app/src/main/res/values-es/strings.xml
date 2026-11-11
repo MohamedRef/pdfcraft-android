@@ -492,6 +492,7 @@
     <!-- Voice comments: playing one back in its panel -->
     <string name="voice_cannot_play">No se puede reproducir esta grabación.</string>
     <string name="voice_play_audio">Reproducir audio</string>
+    <string name="voice_seek">Posición de reproducción</string>
     <!-- Translator note: the type of a comment as comment lists name it. -->
     <string name="voice_comment_kind">Comentario de voz</string>
 

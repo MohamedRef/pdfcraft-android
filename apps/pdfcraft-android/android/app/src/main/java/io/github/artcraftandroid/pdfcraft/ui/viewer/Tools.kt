@@ -1248,7 +1248,9 @@ fun OpacitySlider(color: Color, value: Float, onChange: (Float) -> Unit) {
             .pointerInput(Unit) {
                 detectHorizontalDragGestures { change, _ -> onChange((min + (change.position.x / size.width).coerceIn(0f, 1f) * (1f - min))) }
             }
-            .semantics { contentDescription = description },
+            .semantics { contentDescription = description }
+            // 5% steps from 25% to 100%: TalkBack's swipe up/down and Switch Access can change it.
+            .rangeSemantics(value, min..1f, steps = 14, state = description, onChange = onChange),
     ) {
         Canvas(Modifier.fillMaxSize()) {
             val sq = 12.dp.toPx()

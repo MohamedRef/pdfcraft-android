@@ -348,6 +348,7 @@
     <string name="voice_record_again">تسجيل مجددًا</string>
     <string name="voice_cannot_play">تعذّر تشغيل هذا التسجيل.</string>
     <string name="voice_play_audio">تشغيل الصوت</string>
+    <string name="voice_seek">موضع التشغيل</string>
     <string name="voice_comment_kind">تعليق صوتي</string>
     <string name="voice_mic_title">السماح باستخدام الميكروفون؟</string>
     <string name="voice_mic_rationale">يحتاج PdfCraft إلى الميكروفون لتسجيل التعليقات الصوتية. يمكنك السماح بذلك من إعدادات التطبيق.</string>
