@@ -240,13 +240,31 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    /** When the app last started one of its own screens (a picker, the share sheet, the camera). */
+    private var ownLaunchAt = 0L
+
+    // every picker, chooser and permission-free launch passes through here (#97: tell a pause for
+    // the app's own picker from leaving the app)
+    @Deprecated("Deprecated in Java")
+    override fun startActivityForResult(intent: Intent, requestCode: Int, options: Bundle?) {
+        ownLaunchAt = android.os.SystemClock.elapsedRealtime()
+        @Suppress("DEPRECATION")
+        super.startActivityForResult(intent, requestCode, options)
+    }
+
     override fun onPause() {
         super.onPause()
+        io.github.artcraftandroid.pdfcraft.engine.Diag.event(
+            io.github.artcraftandroid.pdfcraft.engine.DiagArea.App, "pause",
+            "own_screen" to (android.os.SystemClock.elapsedRealtime() - ownLaunchAt < 2_000),
+            "changing_config" to isChangingConfigurations, "finishing" to isFinishing,
+        )
         vm.onPause()
     }
 
     override fun onResume() {
         super.onResume()
+        io.github.artcraftandroid.pdfcraft.engine.Diag.event(io.github.artcraftandroid.pdfcraft.engine.DiagArea.App, "resume")
         vm.onResumed()
     }
 
