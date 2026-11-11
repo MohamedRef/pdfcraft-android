@@ -15,7 +15,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.graphics.lowlatency.CanvasFrontBufferedRenderer
 
 /** One wet-ink segment in screen pixels. */
-internal data class WetSegment(val from: Offset, val to: Offset, val width: Float, val argb: Int)
+internal data class WetSegment(val from: Offset, val to: Offset, val width: Float, val argb: Int, val inputAt: Long = 0L)
 
 /**
  * Low-latency wet ink (#128): the segment being written is drawn straight into the display's
@@ -67,6 +67,7 @@ internal fun FrontBufferedInkOverlay(wet: WetInk, modifier: Modifier = Modifier)
                             paint.color = param.argb
                             paint.strokeWidth = param.width
                             canvas.drawLine(param.from.x, param.from.y, param.to.x, param.to.y, paint)
+                            if (param.inputAt > 0L) InkLatency.lowLatency.add(android.os.SystemClock.uptimeMillis() - param.inputAt)
                         }
 
                         override fun onDrawMultiBufferedLayer(canvas: Canvas, bufferWidth: Int, bufferHeight: Int, params: Collection<WetSegment>) {

@@ -1028,6 +1028,14 @@
     <string name="bates_export_failed">تعذّر حفظ هذه النسخة الجديدة في التنزيلات.</string>
     <string name="ink_presets_title">الأقلام المفضّلة</string>
     <string name="ink_presets_help">كل قلم يحتفظ بلونه وسُمكه وشفافيته. انقر على قلم مفضّل لاستعادة إعداداته.</string>
+    <string name="ink_latency_reset">إعادة ضبط</string>
+    <string name="ink_latency_refresh">تحديث</string>
+    <string name="ink_latency_none">لم يُقَس بعد</string>
+    <string name="ink_latency_value">%1$d مللي ثانية عادةً، %2$d مللي ثانية في الأسوأ (95%%)، %3$d عينة</string>
+    <string name="ink_latency_low">الحبر السريع</string>
+    <string name="ink_latency_normal">عادي</string>
+    <string name="ink_latency_explanation">اكتب بالقلم والحبر السريع مقفول، ثم وهو مفعّل، وقارن. يتم القياس من حدث القلم حتى رسم التطبيق، والشاشة تضيف وقتاً بسيطاً بعدها.</string>
+    <string name="ink_latency_title">تأخر الحبر على هذا الجهاز</string>
     <string name="palm_guard_calibrate_clear">مسح اللمسات</string>
     <string name="palm_guard_calibrate_help">قرّب القلم من الشاشة أو اكتب به، ثم أرح يدك كما تفعل أثناء الكتابة. اللمسات الخضراء يتم تجاهلها، والحمراء قد تمرّر الصفحة أو تضغط الأزرار. غيّر الحجم حتى تقع يدك في المنطقة الخضراء.</string>
     <string name="palm_guard_calibrate">ضبط منطقة الكف</string>
