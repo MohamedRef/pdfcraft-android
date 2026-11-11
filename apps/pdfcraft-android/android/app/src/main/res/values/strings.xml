@@ -2185,4 +2185,24 @@
     <string name="cards_busy_export">Exporting flashcards…</string>
     <string name="cards_file_name">Flashcards %1$s</string>
     <string name="cards_imported">Imported %1$d flashcards</string>
+    <string name="backup_section">Backup</string>
+    <string name="backup_choose_folder">Choose a backup folder</string>
+    <string name="backup_folder_is">Backup folder: %1$s</string>
+    <string name="backup_keep_label">Versions kept per document</string>
+    <string name="backup_status_last">Last backup %1$s</string>
+    <string name="backup_status_none">Nothing backed up yet. A copy is made each time a document is saved.</string>
+    <string name="backup_status_failed">The last backup could not be written. It will be tried again at the next save.</string>
+    <string name="backup_retry">Retry backup</string>
+    <string name="backup_turn_off">Turn off backups</string>
+    <string name="backup_body">After each save, a dated copy of the PDF and its comments (XFDF) goes to the folder you choose, in a folder named after the document; older versions are removed. Your library, flashcards and notebooks are saved there too. The original file is never changed.</string>
+    <string name="backup_folder_not_writable">PdfCraft can\'t write to that folder. Choose another one.</string>
+    <string name="backup_failed">Backup failed. Your document is saved.</string>
+    <string name="backup_history">Version history</string>
+    <string name="backup_history_body">Open a copy leaves this document as it is. Restore comments adds that version\'s comments here; Undo takes them back.</string>
+    <string name="backup_loading">Looking in the backup folder…</string>
+    <string name="backup_no_versions">No backups of this document yet.</string>
+    <string name="backup_open_copy">Open a copy</string>
+    <string name="backup_restore_comments">Restore comments here</string>
+    <string name="backup_restoring">Restoring…</string>
+    <string name="backup_comments_restored">Comments restored</string>
 </resources>

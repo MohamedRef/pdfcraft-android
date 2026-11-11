@@ -1619,4 +1619,24 @@
     <string name="cards_busy_export">جارٍ تصدير البطاقات…</string>
     <string name="cards_file_name">بطاقات %1$s</string>
     <string name="cards_imported">تم استيراد %1$d بطاقة</string>
+    <string name="backup_section">النسخ الاحتياطي</string>
+    <string name="backup_choose_folder">اختر مجلد النسخ الاحتياطي</string>
+    <string name="backup_folder_is">مجلد النسخ الاحتياطي: %1$s</string>
+    <string name="backup_keep_label">عدد النسخ المحفوظة لكل مستند</string>
+    <string name="backup_status_last">آخر نسخة احتياطية %1$s</string>
+    <string name="backup_status_none">لم يتم نسخ أي شيء بعد. تُنشأ نسخة في كل مرة يُحفظ فيها مستند.</string>
+    <string name="backup_status_failed">تعذّرت كتابة آخر نسخة احتياطية. ستُعاد المحاولة عند الحفظ التالي.</string>
+    <string name="backup_retry">إعادة محاولة النسخ</string>
+    <string name="backup_turn_off">إيقاف النسخ الاحتياطي</string>
+    <string name="backup_body">بعد كل حفظ، تذهب نسخة مؤرّخة من ملف PDF وتعليقاته (XFDF) إلى المجلد الذي تختاره، داخل مجلد باسم المستند، وتُحذف النسخ الأقدم. وتُحفظ هناك أيضًا مكتبتك وبطاقاتك ودفاترك. لا يتغير الملف الأصلي أبدًا.</string>
+    <string name="backup_folder_not_writable">لا يمكن لـ PdfCraft الكتابة في هذا المجلد. اختر مجلدًا آخر.</string>
+    <string name="backup_failed">فشل النسخ الاحتياطي. مستندك محفوظ.</string>
+    <string name="backup_history">سجلّ النسخ</string>
+    <string name="backup_history_body">«فتح نسخة» يترك هذا المستند كما هو. «استعادة التعليقات» يضيف تعليقات تلك النسخة هنا، ويمكنك التراجع عنها.</string>
+    <string name="backup_loading">جارٍ البحث في مجلد النسخ الاحتياطي…</string>
+    <string name="backup_no_versions">لا توجد نسخ احتياطية لهذا المستند بعد.</string>
+    <string name="backup_open_copy">فتح نسخة</string>
+    <string name="backup_restore_comments">استعادة التعليقات هنا</string>
+    <string name="backup_restoring">جارٍ الاستعادة…</string>
+    <string name="backup_comments_restored">تمت استعادة التعليقات</string>
 </resources>

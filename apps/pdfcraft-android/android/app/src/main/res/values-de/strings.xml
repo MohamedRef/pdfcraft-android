@@ -1840,4 +1840,24 @@
     <string name="cards_busy_export">Lernkarten werden exportiert …</string>
     <string name="cards_file_name">Lernkarten %1$s</string>
     <string name="cards_imported">%1$d Lernkarten importiert</string>
+    <string name="backup_section">Sicherung</string>
+    <string name="backup_choose_folder">Sicherungsordner wählen</string>
+    <string name="backup_folder_is">Sicherungsordner: %1$s</string>
+    <string name="backup_keep_label">Versionen pro Dokument</string>
+    <string name="backup_status_last">Letzte Sicherung %1$s</string>
+    <string name="backup_status_none">Noch nichts gesichert. Bei jedem Speichern eines Dokuments wird eine Kopie angelegt.</string>
+    <string name="backup_status_failed">Die letzte Sicherung konnte nicht geschrieben werden. Beim nächsten Speichern wird es erneut versucht.</string>
+    <string name="backup_retry">Sicherung wiederholen</string>
+    <string name="backup_turn_off">Sicherungen ausschalten</string>
+    <string name="backup_body">Nach jedem Speichern landet eine datierte Kopie der PDF und ihrer Kommentare (XFDF) im gewählten Ordner, in einem Ordner mit dem Namen des Dokuments; ältere Versionen werden entfernt. Bibliothek, Lernkarten und Notizbücher werden dort ebenfalls gesichert. Die Originaldatei wird nie verändert.</string>
+    <string name="backup_folder_not_writable">PdfCraft kann nicht in diesen Ordner schreiben. Wähle einen anderen.</string>
+    <string name="backup_failed">Sicherung fehlgeschlagen. Dein Dokument ist gespeichert.</string>
+    <string name="backup_history">Versionsverlauf</string>
+    <string name="backup_history_body">Kopie öffnen lässt dieses Dokument unverändert. Kommentare wiederherstellen fügt die Kommentare dieser Version hier hinzu; Rückgängig nimmt sie zurück.</string>
+    <string name="backup_loading">Sicherungsordner wird durchsucht…</string>
+    <string name="backup_no_versions">Noch keine Sicherungen dieses Dokuments.</string>
+    <string name="backup_open_copy">Kopie öffnen</string>
+    <string name="backup_restore_comments">Kommentare hier wiederherstellen</string>
+    <string name="backup_restoring">Wird wiederhergestellt…</string>
+    <string name="backup_comments_restored">Kommentare wiederhergestellt</string>
 </resources>
