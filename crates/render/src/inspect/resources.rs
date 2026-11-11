@@ -235,6 +235,24 @@ impl<'a> Inspector<'a> {
 /// document opened without the password its embedded files need (`/AuthEvent /EFOpen`, ISO
 /// 32000-2 §7.6.6) holds them encrypted: asking for one is an error, never its encrypted bytes.
 pub fn attachment_data(bytes: &[u8], password: Option<&str>, att: &Attachment) -> Result<Vec<u8>, String> {
+    attachment_data_bounded(bytes, password, att, 1 << 30, None)
+}
+
+/// [`attachment_data`] for a device with less memory (Android, #117): a file that is, or decodes
+/// to, more than `limit` bytes is refused before it is all held in memory. The desktop result is
+/// unchanged: [`attachment_data`] keeps its 1 GiB decode bound and no bound on unfiltered files.
+pub fn attachment_data_with_limit(bytes: &[u8], password: Option<&str>, att: &Attachment, limit: usize) -> Result<Vec<u8>, String> {
+    attachment_data_bounded(bytes, password, att, limit, Some(limit))
+}
+
+fn attachment_data_bounded(
+    bytes: &[u8],
+    password: Option<&str>,
+    att: &Attachment,
+    decoded_limit: usize,
+    raw_limit: Option<usize>,
+) -> Result<Vec<u8>, String> {
+    let too_large = || format!("the attachment is larger than {} MB, too large to open here", decoded_limit / (1024 * 1024));
     let run = || -> Result<Vec<u8>, String> {
         // Read through lopdf, which can't read a document opened without its key at all.
         if pdfcraft_cos::Document::open_with_password(std::sync::Arc::new(bytes.to_vec()), password).is_ok_and(|d| d.embedded_files_locked()) {
@@ -261,7 +279,12 @@ pub fn attachment_data(bytes: &[u8], password: Option<&str>, att: &Attachment) -
         let stream = ef.get(b"UF").ok().or_else(|| ef.get(b"F").ok()).map(|o| insp.resolve(o)).ok_or("no embedded stream")?;
         let stream = stream.as_stream().map_err(|e| e.to_string())?;
         if stream.dict.get(b"Filter").is_ok() {
-            stream.decompressed_content_with_limit(1 << 30).map_err(|e| e.to_string())
+            stream.decompressed_content_with_limit(decoded_limit).map_err(|e| match (raw_limit, &e) {
+                (Some(_), lopdf::Error::Decompress(lopdf::DecompressError::MemoryLimitExceeded { .. })) => too_large(),
+                _ => e.to_string(),
+            })
+        } else if raw_limit.is_some_and(|l| stream.content.len() > l) {
+            Err(too_large())
         } else {
             Ok(stream.content.clone())
         }
@@ -472,7 +495,6 @@ trailer << /Size 7 /Root 1 0 R >>
         assert_eq!((f.substitute.as_deref(), f.substitution.as_deref()), (None, None), "the document's own glyphs are shown");
     }
 }
-
 
 // Android/mobile audio compatibility (restored from this fork's previous stable render API).
 // Stream bytes are capped to avoid allocating unbounded WAV/PCM buffers on phones.
