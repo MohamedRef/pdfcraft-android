@@ -11,6 +11,7 @@ import java.nio.ByteBuffer
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.asCoroutineDispatcher
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -25,6 +26,19 @@ class Engine private constructor(val session: MobileSession) {
 
     /** Page renders: the view's pages and tiles. */
     val renders: CoroutineDispatcher = Dispatchers.Default.limitedParallelism(2)
+
+    private val preparation = java.util.concurrent.ThreadPoolExecutor(
+        0, 1, 15L, java.util.concurrent.TimeUnit.SECONDS,
+        java.util.concurrent.LinkedBlockingQueue<Runnable>(),
+        java.util.concurrent.ThreadFactory { task ->
+            Thread({
+                android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_BACKGROUND)
+                task.run()
+            }, "PdfCraft preparation").apply { isDaemon = true }
+        },
+    ).asCoroutineDispatcher()
+
+    suspend fun completeOpen(doc: ULong) = withContext(preparation) { session.completeOpen(doc) }
 
     /** Thumbnails (page grids, recent files). */
     val thumbnails: CoroutineDispatcher = Dispatchers.Default.limitedParallelism(1)
@@ -119,3 +133,24 @@ val Throwable.userMessage: String
         is MobileException.WrongPassword -> text(R.string.common_wrong_password)
         else -> message?.takeIf { it.isNotBlank() } ?: text(R.string.files_error_generic)
     }
+
+/** Native compact rasters stay packed across JNI. Android may align RGB565 rows to four bytes. */
+fun io.github.artcraftandroid.pdfcraft.core.CompactImage.toBitmap(): Bitmap {
+    val bpp = if (rgb565) 2 else 4
+    val expected = expectedBitmapByteCount(width.toLong(), height.toLong())
+    require(expected != null && pixels.size == expected / 4 * bpp) { "Invalid native PDF raster" }
+    val bitmap = Bitmap.createBitmap(width.toInt(), height.toInt(), if (rgb565) Bitmap.Config.RGB_565 else Bitmap.Config.ARGB_8888)
+    val packedRow = width.toInt() * bpp
+    val buffer = paddedRasterRows(pixels, packedRow, bitmap.rowBytes, height.toInt())
+    bitmap.copyPixelsFromBuffer(ByteBuffer.wrap(buffer))
+    return bitmap
+}
+
+internal fun paddedRasterRows(pixels: ByteArray, packedRow: Int, rowBytes: Int, height: Int): ByteArray {
+    require(packedRow > 0 && height > 0 && rowBytes >= packedRow && pixels.size.toLong() == packedRow.toLong() * height)
+    if (packedRow == rowBytes) return pixels
+    require(rowBytes.toLong() * height <= 32L * 1024 * 1024)
+    return ByteArray(rowBytes * height).also { out ->
+        repeat(height) { row -> pixels.copyInto(out, row * rowBytes, row * packedRow, (row + 1) * packedRow) }
+    }
+}

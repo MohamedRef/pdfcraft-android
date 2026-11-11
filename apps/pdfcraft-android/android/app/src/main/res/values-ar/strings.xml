@@ -878,4 +878,6 @@
     <string name="home_open_timings_subject">أوقات فتح PdfCraft</string>
     <string name="document_preparing">جارٍ تجهيز التحرير والتحقق من التوقيعات…</string>
     <string name="comments_loading">جارٍ تحميل التعليقات…</string>
+    <string name="compact_previews">تقليل ذاكرة معاينات الصفحات</string>
+    <string name="compact_previews_body">يقلل دقة ألوان الصفحة الكاملة مع الحفاظ على جودة التفاصيل عند التكبير. يُطبق عند إعادة فتح المستند.</string>
 </resources>

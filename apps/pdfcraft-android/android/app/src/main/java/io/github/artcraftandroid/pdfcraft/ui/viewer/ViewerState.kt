@@ -282,7 +282,7 @@ class ViewerState(pages: List<PageSize>) {
             for (i in visible) tilesFor(i, gens.of(i), level, maxScale, out)
         }
         val around = visiblePages(if (zoom < LOWRES_BELOW) 0.5f else 1.5f)
-        for (i in around) if (i !in visible) out.add(baseRequest(i, gens.of(i), maxScale))
+        for (i in around) if (i !in visible) out.add(baseRequest(i, gens.of(i), maxScale).copy(prefetch = true))
         return out
     }
 

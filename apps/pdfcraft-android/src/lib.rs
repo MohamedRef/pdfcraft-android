@@ -169,6 +169,15 @@ pub struct RenderedImage {
     pub rgba: Vec<u8>,
 }
 
+/// Packed native-endian RGB565 or premultiplied RGBA8, without row padding.
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct CompactImage {
+    pub width: u32,
+    pub height: u32,
+    pub rgb565: bool,
+    pub pixels: Vec<u8>,
+}
+
 /// A tool of the headless tool table, for the UI's "run anything" paths and diagnostics.
 #[derive(Debug, Clone, uniffi::Record)]
 pub struct ToolInfo {
@@ -541,6 +550,63 @@ impl MobileSession {
         self.with_doc(doc, |d| d.overlay_snapshot(pages))?.ok_or_else(|| MobileError::Command("Document preparation is still running".into()))
     }
 
+    fn render_pixels(&self, doc: u64, page: u32, scale: f32, tile: Option<TileRect>) -> Result<pdfcraft_render::RenderedPage, MobileError> {
+        if !(scale.is_finite() && scale > 0.0) {
+            return Err(MobileError::Render(format!("the scale must be a positive number, not {scale}")));
+        }
+        let index = page as usize;
+        let (bytes, config, pages, size, ready) = self.with_doc(doc, |d| {
+            // the app draws sticky notes itself, as fixed-size icons over the page
+            let config = RenderConfig {
+                password: d.password.as_deref().map(Arc::from),
+                hide_comments: d.comments_hidden(),
+                hide_notes: true,
+                ..RenderConfig::default()
+            };
+            (d.display.clone(), config, d.info.pages.len(), d.info.pages.get(index).map(|p| (p.width, p.height)), d.reading_page_ready(index))
+        })?;
+        if !ready {
+            return Err(MobileError::Render("This page is waiting for document preparation".into()));
+        }
+        let Some((width, height)) = size else {
+            return Err(MobileError::Render(format!("page {} is out of range: the document has {pages} pages", index.saturating_add(1))));
+        };
+        let max_pixels = if let Some(t) = tile.as_ref() {
+            let count = u64::from(t.width).saturating_mul(u64::from(t.height));
+            if count == 0 || count > MAX_MOBILE_TILE_PIXELS {
+                return Err(MobileError::Render("the requested tile is empty or too large for mobile rendering".into()));
+            }
+            MAX_MOBILE_TILE_PIXELS
+        } else {
+            MAX_MOBILE_PAGE_PIXELS
+        };
+        let mobile_scale = if tile.is_none() {
+            // Keep two concurrent page rasters comfortably below the Android heap budget.
+            // The 2% headroom accounts for ceil-to-pixel rounding on both axes.
+            let area = width.max(1.0) * height.max(1.0);
+            let cap = ((MAX_MOBILE_PAGE_PIXELS as f32 * 0.98) / area).sqrt();
+            if !cap.is_finite() || cap <= 0.0 {
+                return Err(MobileError::Render("the page's dimensions exceed mobile rendering limits".into()));
+            }
+            scale.min(cap)
+        } else {
+            scale
+        };
+        let mut renderer = self.take_renderer(doc, &bytes, config);
+        let raster_tile = tile.map(|t| Tile { x: t.x, y: t.y, w: t.width, h: t.height });
+        let out =
+            renderer.render(RenderRequest { page: index, kind: RequestKind::Pixels, tile: raster_tile, scale: mobile_scale, tag: 0, preview: false });
+        self.return_renderer(doc, &bytes, renderer);
+        if let Some(e) = out.error {
+            return Err(MobileError::Render(format!("page {} could not be drawn: {e}", index.saturating_add(1))));
+        }
+        let pixels = u64::from(out.width).saturating_mul(u64::from(out.height));
+        if pixels == 0 || pixels > max_pixels || (out.rgba.len() as u64) != pixels.saturating_mul(4) {
+            return Err(MobileError::Render("the renderer returned an invalid or oversized pixel buffer".into()));
+        }
+        Ok(out)
+    }
+
     fn open_document(&self, path: String, password: Option<String>, recording: bool) -> Result<ProfiledOpen, MobileError> {
         if !std::path::Path::new(&path).is_absolute() {
             return Err(MobileError::Open(format!("the path must be absolute, not `{path}`")));
@@ -753,60 +819,15 @@ impl MobileSession {
     /// result stays within the renderer's size limits. Sticky notes are left out: the app draws
     /// them as icons of its own.
     pub fn render_page(&self, doc: u64, page: u32, scale: f32, tile: Option<TileRect>) -> Result<RenderedImage, MobileError> {
-        if !(scale.is_finite() && scale > 0.0) {
-            return Err(MobileError::Render(format!("the scale must be a positive number, not {scale}")));
-        }
-        let index = page as usize;
-        let (bytes, config, pages, size, ready) = self.with_doc(doc, |d| {
-            // the app draws sticky notes itself, as fixed-size icons over the page
-            let config = RenderConfig {
-                password: d.password.as_deref().map(Arc::from),
-                hide_comments: d.comments_hidden(),
-                hide_notes: true,
-                ..RenderConfig::default()
-            };
-            (d.display.clone(), config, d.info.pages.len(), d.info.pages.get(index).map(|p| (p.width, p.height)), d.reading_page_ready(index))
-        })?;
-        if !ready {
-            return Err(MobileError::Render("This page is waiting for document preparation".into()));
-        }
-        let Some((width, height)) = size else {
-            return Err(MobileError::Render(format!("page {} is out of range: the document has {pages} pages", index.saturating_add(1))));
-        };
-        let max_pixels = if let Some(t) = tile.as_ref() {
-            let count = u64::from(t.width).saturating_mul(u64::from(t.height));
-            if count == 0 || count > MAX_MOBILE_TILE_PIXELS {
-                return Err(MobileError::Render("the requested tile is empty or too large for mobile rendering".into()));
-            }
-            MAX_MOBILE_TILE_PIXELS
-        } else {
-            MAX_MOBILE_PAGE_PIXELS
-        };
-        let mobile_scale = if tile.is_none() {
-            // Keep two concurrent page rasters comfortably below the Android heap budget.
-            // The 2% headroom accounts for ceil-to-pixel rounding on both axes.
-            let area = width.max(1.0) * height.max(1.0);
-            let cap = ((MAX_MOBILE_PAGE_PIXELS as f32 * 0.98) / area).sqrt();
-            if !cap.is_finite() || cap <= 0.0 {
-                return Err(MobileError::Render("the page's dimensions exceed mobile rendering limits".into()));
-            }
-            scale.min(cap)
-        } else {
-            scale
-        };
-        let mut renderer = self.take_renderer(doc, &bytes, config);
-        let raster_tile = tile.map(|t| Tile { x: t.x, y: t.y, w: t.width, h: t.height });
-        let out =
-            renderer.render(RenderRequest { page: index, kind: RequestKind::Pixels, tile: raster_tile, scale: mobile_scale, tag: 0, preview: false });
-        self.return_renderer(doc, &bytes, renderer);
-        if let Some(e) = out.error {
-            return Err(MobileError::Render(format!("page {} could not be drawn: {e}", index.saturating_add(1))));
-        }
-        let pixels = u64::from(out.width).saturating_mul(u64::from(out.height));
-        if pixels == 0 || pixels > max_pixels || (out.rgba.len() as u64) != pixels.saturating_mul(4) {
-            return Err(MobileError::Render("the renderer returned an invalid or oversized pixel buffer".into()));
-        }
+        let out = self.render_pixels(doc, page, scale, tile)?;
         Ok(RenderedImage { width: out.width, height: out.height, rgba: out.rgba.to_vec() })
+    }
+
+    /// Optional compact opaque page previews; tiles and translucent pixels retain RGBA8.
+    pub fn render_page_compact(&self, doc: u64, page: u32, scale: f32, tile: Option<TileRect>, compact: bool) -> Result<CompactImage, MobileError> {
+        let out = self.render_pixels(doc, page, scale, tile)?;
+        let (rgb565, pixels) = compact_pixels(&out.rgba, compact && tile.is_none());
+        Ok(CompactImage { width: out.width, height: out.height, rgb565, pixels })
     }
 
     /// Run tool `name` with JSON arguments (`""` = none) and return its JSON result: the tools and
@@ -1195,4 +1216,31 @@ fn widget_records(snapshot: &pdfcraft_engine::OverlaySnapshot, selected: Option<
         }
     }
     out
+}
+
+fn compact_pixels(rgba: &[u8], requested: bool) -> (bool, Vec<u8>) {
+    if !requested || !rgba.len().is_multiple_of(4) || rgba.chunks_exact(4).any(|p| p[3] != 255) {
+        return (false, rgba.to_vec());
+    }
+    let mut pixels = Vec::with_capacity(rgba.len() / 2);
+    for p in rgba.chunks_exact(4) {
+        let value = (u16::from(p[0] >> 3) << 11) | (u16::from(p[1] >> 2) << 5) | u16::from(p[2] >> 3);
+        pixels.extend_from_slice(&value.to_ne_bytes());
+    }
+    (true, pixels)
+}
+
+#[cfg(test)]
+mod compact_tests {
+    use super::*;
+    #[test]
+    fn compact_pages_pack_primary_colors_and_preserve_transparency_and_opt_out() {
+        let rgba = [255, 0, 0, 255, 0, 255, 0, 255, 0, 0, 255, 255];
+        let (compact, pixels) = compact_pixels(&rgba, true);
+        assert!(compact);
+        assert_eq!(pixels, [0xf800u16, 0x07e0, 0x001f].into_iter().flat_map(u16::to_ne_bytes).collect::<Vec<_>>());
+        assert_eq!(compact_pixels(&rgba, false), (false, rgba.to_vec()));
+        let alpha = [127, 0, 0, 127];
+        assert_eq!(compact_pixels(&alpha, true), (false, alpha.to_vec()));
+    }
 }

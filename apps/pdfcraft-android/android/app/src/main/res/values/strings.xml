@@ -1429,4 +1429,6 @@
     <string name="home_open_timings_subject">PdfCraft open timings</string>
     <string name="document_preparing">Preparing editing and signature status…</string>
     <string name="comments_loading">Loading comments…</string>
+    <string name="compact_previews">Use less memory for page previews</string>
+    <string name="compact_previews_body">Reduces color precision for full pages. Zoomed details retain full quality. Applies when you reopen a document.</string>
 </resources>

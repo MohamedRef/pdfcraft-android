@@ -329,3 +329,27 @@ fn visible_overlays_match_complete_lists_and_reject_pending_closed_and_unbounded
     let pending = session.begin_open(file(&fixture("", "", "", &[])), None, 0, false).unwrap();
     assert!(session.page_overlays(pending.document.id, vec![0]).is_err());
 }
+
+#[test]
+fn compact_rasters_reduce_transfer_while_tiles_and_opt_out_keep_exact_rgba() {
+    let session = MobileSession::new();
+    let doc = session.open(file(&fixture("", "", "", &[])), None).unwrap();
+    let original = session.render_page(doc.id, 0, 1.0, None).unwrap();
+    let compact = session.render_page_compact(doc.id, 0, 1.0, None, true).unwrap();
+    assert!(compact.rgb565);
+    assert_eq!((compact.width, compact.height), (original.width, original.height));
+    assert_eq!(compact.pixels.len() * 2, original.rgba.len());
+    for (packed, rgba) in compact.pixels.chunks_exact(2).zip(original.rgba.chunks_exact(4)) {
+        let pixel = u16::from_ne_bytes([packed[0], packed[1]]);
+        assert_eq!((pixel >> 11) as u8, rgba[0] >> 3);
+        assert_eq!(((pixel >> 5) & 63) as u8, rgba[1] >> 2);
+        assert_eq!((pixel & 31) as u8, rgba[2] >> 3);
+    }
+    let exact = session.render_page_compact(doc.id, 0, 1.0, None, false).unwrap();
+    assert!(!exact.rgb565);
+    assert_eq!(exact.pixels, original.rgba);
+    let tile = Some(TileRect { x: 0, y: 0, width: 64, height: 64 });
+    let detailed = session.render_page_compact(doc.id, 0, 2.0, tile, true).unwrap();
+    assert!(!detailed.rgb565);
+    assert_eq!(detailed.pixels, session.render_page(doc.id, 0, 2.0, tile).unwrap().rgba);
+}
