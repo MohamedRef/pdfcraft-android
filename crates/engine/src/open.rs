@@ -570,10 +570,33 @@ impl ReadingSource {
         let Some(annots) = page.get(b"Annots") else { return None };
         let annots = self.cos.resolve(annots);
         let Some(annots) = annots.as_array() else { return Some("native_reading_fallback_annotations") };
-        if annots.len() > 4096 || !annots.iter().all(|a| self.cos.resolve(a).as_dict().is_some_and(|d| d.name(b"Subtype") == Some(b"Link"))) {
+        if annots.len() > 4096 {
             return Some("native_reading_fallback_annotations");
         }
-        None
+        annots.iter().find_map(|a| reading_annotation_block(&self.cos, &self.cos.resolve(a)))
+    }
+}
+
+/// Why one page annotation keeps its page out of the reading stage, if it does.
+///
+/// Android adaptation (#212): the reading stage draws the original bytes, while the complete
+/// document draws its display copy. An annotation may be drawn early only when that copy
+/// cannot change it: `pdfcraft_annot::with_missing_appearances` leaves links, pop-ups and any
+/// annotation that already has a normal appearance (`/AP /N`) alone. Widgets get form values
+/// and signature marks, and sticky notes are painted by the Android overlay from the comment
+/// list, which only the complete document provides, so both still wait for it.
+fn reading_annotation_block(cos: &pdfcraft_cos::Document, annotation: &pdfcraft_cos::Object) -> Option<&'static str> {
+    let Some(d) = annotation.as_dict() else { return Some("native_reading_fallback_annotations") };
+    match d.name(b"Subtype") {
+        Some(b"Link" | b"Popup") => None,
+        Some(b"Widget") => Some("native_reading_fallback_annotation_widget"),
+        Some(b"Text") => Some("native_reading_fallback_annotation_note"),
+        Some(_) => {
+            // The same test as `with_missing_appearances`: a dictionary `/AP` holding `/N`.
+            let has_normal = d.get(b"AP").is_some_and(|ap| cos.resolve(ap).as_dict().is_some_and(|ap| ap.contains(b"N")));
+            (!has_normal).then_some("native_reading_fallback_annotation_appearance")
+        }
+        None => Some("native_reading_fallback_annotations"),
     }
 }
 
