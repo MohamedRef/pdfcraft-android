@@ -203,23 +203,20 @@
     <string name="home_leaving_body">Dadurch wird eine Webseite in deinem Browser geöffnet.</string>
 
     <!-- Settings: Preferences -->
-    <string name="home_section_notifications">Benachrichtigungen</string>
-    <string name="home_no_notifications">PdfCraft sendet keine Benachrichtigungen.</string>
-    <string name="home_section_suggestions">Automatische Vorschläge</string>
     <string name="home_offer_suggestions">Beim Ausfüllen von Formularen zuvor verwendete Wörter vorschlagen</string>
     <string name="home_clear_suggestions">Vorschläge löschen</string>
     <!-- Section heading and dialog title (also asked the first time a comment is made) -->
     <string name="home_author_title">Dein Name bei Kommentaren</string>
     <string name="home_author_hint">Tippe hier, um deinen Namen einzugeben, der bei deinen Kommentaren angezeigt wird.</string>
-    <string name="home_section_screen">Bildschirmeinstellung</string>
     <string name="home_keep_screen_on">Bildschirm eingeschaltet lassen</string>
     <string name="home_keep_screen_on_body">Der Bildschirm bleibt beim Lesen bis zu 30 Minuten ohne Berührung eingeschaltet.</string>
+    <string name="home_section_reading">Lesen</string>
+    <string name="home_section_pen">Stift und Anmerkungen</string>
+    <string name="home_section_forms">Formulare</string>
     <string name="home_section_keyboard">Tastatur</string>
     <string name="home_keyboard_shortcuts">Tastenkombinationen</string>
     <!-- N, P, Page Down, Page Up, Ctrl+P, Ctrl, + and − are keys on the keyboard -->
     <string name="home_keyboard_shortcuts_body">Bei angeschlossener Tastatur: N oder Bild-ab für die nächste Seite, P oder Bild-auf für die vorherige Seite, Pfeiltasten zum Scrollen, Strg+P zum Drucken und Strg zusammen mit + oder − zum Zoomen.</string>
-    <string name="home_section_extra">Zusatzfunktionen</string>
-    <string name="home_extra_body">Optionale Änderungen am Aussehen und Verhalten von PdfCraft.</string>
     <string name="home_status_bar_in_documents">Statusleiste in Dokumenten anzeigen</string>
     <string name="home_status_bar_in_documents_body">Die Statusleiste wird zusammen mit den Symbolleisten angezeigt. Wenn du sie durch Tippen ausblendest, nutzt die Seite den gesamten Bildschirm, auch den Bereich um die Kamera.</string>
 

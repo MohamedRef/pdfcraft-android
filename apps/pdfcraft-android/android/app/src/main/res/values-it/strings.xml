@@ -211,21 +211,18 @@
 
     <!-- Preferenze -->
 
-    <string name="home_section_notifications">Notifiche</string>
-    <string name="home_no_notifications">PdfCraft non invia notifiche.</string>
-    <string name="home_section_suggestions">Suggerimenti automatici</string>
     <string name="home_offer_suggestions">Suggerisci le parole utilizzate in precedenza durante la compilazione dei moduli</string>
     <string name="home_clear_suggestions">Cancella suggerimenti</string>
     <string name="home_author_title">Il tuo nome nei commenti</string>
     <string name="home_author_hint">Tocca per inserire il nome da mostrare nei tuoi commenti</string>
-    <string name="home_section_screen">Impostazioni schermo</string>
     <string name="home_keep_screen_on">Mantieni lo schermo acceso</string>
     <string name="home_keep_screen_on_body">Mantiene lo schermo acceso durante la lettura, fino a 30 minuti senza interazioni.</string>
+    <string name="home_section_reading">Lettura</string>
+    <string name="home_section_pen">Penna e annotazioni</string>
+    <string name="home_section_forms">Moduli</string>
     <string name="home_section_keyboard">Tastiera</string>
     <string name="home_keyboard_shortcuts">Scorciatoie da tastiera</string>
     <string name="home_keyboard_shortcuts_body">Con una tastiera collegata: N o PagGiù per la pagina successiva, P o PagSu per quella precedente, i tasti freccia per scorrere, Ctrl+P per stampare, Ctrl e + o − per modificare lo zoom.</string>
-    <string name="home_section_extra">Funzioni extra</string>
-    <string name="home_extra_body">Modifiche facoltative all\'aspetto e al funzionamento di PdfCraft.</string>
     <string name="home_status_bar_in_documents">Mostra la barra di stato nei documenti</string>
     <string name="home_status_bar_in_documents_body">La barra di stato appare insieme alle barre degli strumenti. Quando tocchi per nasconderle, la pagina usa tutto lo schermo, anche intorno alla fotocamera.</string>
 

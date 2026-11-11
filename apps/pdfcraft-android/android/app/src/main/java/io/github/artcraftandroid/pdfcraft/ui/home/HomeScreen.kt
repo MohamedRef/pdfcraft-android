@@ -179,7 +179,7 @@ private fun HomeTabScreen(vm: AppViewModel, onBrowse: () -> Unit) {
                 Box(
                     Modifier.minimumInteractiveComponentSize().size(40.dp).clip(CircleShape).background(c.surfaceRaised).clickable { vm.settingsOpen = true }.semantics { contentDescription = settingsLabel },
                     contentAlignment = Alignment.Center,
-                ) { Icon(LucideIcons.UserRound, null, tint = c.icon, modifier = Modifier.size(22.dp)) }
+                ) { Icon(LucideIcons.Settings, null, tint = c.icon, modifier = Modifier.size(22.dp)) } // a gear: PdfCraft has no accounts (#194)
             }
             LazyColumn(Modifier.weight(1f)) {
                 item {

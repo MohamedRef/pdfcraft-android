@@ -203,23 +203,20 @@
     <string name="home_leaving_body">Une page web va s\'ouvrir dans votre navigateur.</string>
 
     <!-- Settings: Preferences -->
-    <string name="home_section_notifications">Notifications</string>
-    <string name="home_no_notifications">PdfCraft n\'envoie pas de notifications.</string>
-    <string name="home_section_suggestions">Suggestions automatiques</string>
     <string name="home_offer_suggestions">Proposer les mots déjà utilisés pour remplir les formulaires</string>
     <string name="home_clear_suggestions">Effacer les suggestions</string>
     <!-- Section heading and dialog title (also asked the first time a comment is made) -->
     <string name="home_author_title">Votre nom sur les commentaires</string>
     <string name="home_author_hint">Touchez pour saisir votre nom, affiché sur vos commentaires</string>
-    <string name="home_section_screen">Réglage de l\'écran</string>
     <string name="home_keep_screen_on">Garder l\'écran allumé</string>
     <string name="home_keep_screen_on_body">Garde l\'écran allumé pendant la lecture, jusqu\'à 30 minutes sans toucher l\'écran.</string>
+    <string name="home_section_reading">Lecture</string>
+    <string name="home_section_pen">Stylet et annotations</string>
+    <string name="home_section_forms">Formulaires</string>
     <string name="home_section_keyboard">Clavier</string>
     <string name="home_keyboard_shortcuts">Raccourcis clavier</string>
     <!-- N, P, Page Down, Page Up, Ctrl+P, Ctrl, + and − are keys on the keyboard -->
     <string name="home_keyboard_shortcuts_body">Avec un clavier connecté : N ou Page suivante pour la page suivante, P ou Page précédente pour la page précédente, les flèches pour faire défiler, Ctrl+P pour imprimer, Ctrl et + ou − pour zoomer.</string>
-    <string name="home_section_extra">Fonctionnalités supplémentaires</string>
-    <string name="home_extra_body">Modifications facultatives de l\'apparence et du fonctionnement de PdfCraft.</string>
     <string name="home_status_bar_in_documents">Afficher la barre d\'état dans les documents</string>
     <string name="home_status_bar_in_documents_body">La barre d\'état s\'affiche avec les barres d\'outils. Quand vous touchez l\'écran pour les masquer, la page occupe tout l\'écran, y compris autour de la caméra.</string>
 

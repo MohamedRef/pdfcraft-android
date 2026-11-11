@@ -210,23 +210,20 @@
     <string name="home_leaving_body">Esto abre una página web en tu navegador.</string>
 
     <!-- Settings: Preferences -->
-    <string name="home_section_notifications">Notificaciones</string>
-    <string name="home_no_notifications">PdfCraft no envía notificaciones.</string>
-    <string name="home_section_suggestions">Sugerencias automáticas</string>
     <string name="home_offer_suggestions">Sugerir palabras que ya usaste al rellenar formularios</string>
     <string name="home_clear_suggestions">Borrar sugerencias</string>
     <!-- Section heading and dialog title (also asked the first time a comment is made) -->
     <string name="home_author_title">Tu nombre en los comentarios</string>
     <string name="home_author_hint">Toca para escribir tu nombre y mostrarlo en tus comentarios</string>
-    <string name="home_section_screen">Ajuste de pantalla</string>
     <string name="home_keep_screen_on">Mantener la pantalla encendida</string>
     <string name="home_keep_screen_on_body">Mantiene la pantalla encendida mientras lees, hasta 30 minutos sin tocarla.</string>
+    <string name="home_section_reading">Lectura</string>
+    <string name="home_section_pen">Lápiz y anotaciones</string>
+    <string name="home_section_forms">Formularios</string>
     <string name="home_section_keyboard">Teclado</string>
     <string name="home_keyboard_shortcuts">Atajos de teclado</string>
     <!-- N, P, Page Down, Page Up, Ctrl+P, Ctrl, + and − are keys on the keyboard -->
     <string name="home_keyboard_shortcuts_body">Con un teclado conectado: N o Av Pág para la página siguiente, P o Re Pág para la anterior, las flechas para desplazarte, Ctrl+P para imprimir y Ctrl y + o − para ampliar.</string>
-    <string name="home_section_extra">Funciones extra</string>
-    <string name="home_extra_body">Cambios opcionales en el aspecto y el funcionamiento de PdfCraft.</string>
     <string name="home_status_bar_in_documents">Mostrar la barra de estado en los documentos</string>
     <string name="home_status_bar_in_documents_body">La barra de estado se muestra con las barras de herramientas. Al tocar para ocultarlas, la página ocupa toda la pantalla, también alrededor de la cámara.</string>
 
