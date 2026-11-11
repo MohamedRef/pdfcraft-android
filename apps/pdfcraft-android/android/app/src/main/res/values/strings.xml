@@ -745,6 +745,9 @@
     <string name="sheet_remove_star">Remove the star</string>
     <string name="sheet_view_settings">View settings</string>
     <string name="sheet_present">Present</string>
+    <!-- Presenting with a second screen attached: %1$s is that screen's name, such as "HDMI Screen" -->
+    <string name="present_on_display">Showing on %1$s</string>
+    <string name="present_next_page">Next: page %1$d</string>
     <!-- File details (Issue #55): original file dates and embedded PDF dates are separate. -->
     <string name="file_details_title">File details</string>
     <string name="file_details_copy_all">Copy all details</string>
@@ -906,6 +909,9 @@
     <string name="sheet_single_page">Single page</string>
     <string name="sheet_two_pages">Two pages</string>
     <string name="sheet_two_pages_cover">Two pages with cover</string>
+    <string name="sheet_horizontal">Pages in a row</string>
+    <string name="sheet_two_pages_auto">Two pages on wide screens</string>
+    <string name="sheet_layout_initial_view">Open this way in other apps</string>
     <string name="sheet_reading_mode">Reading Mode</string>
     <string name="sheet_night_mode">Night Mode</string>
     <string name="sheet_hide_annotations">Hide annotations</string>
@@ -1799,6 +1805,7 @@
     <string name="comments_search_hint">Search text, replies or author</string>
     <string name="comments_search_close">Close search</string>
     <string name="comments_shown">%1$d of %2$d threads</string>
+    <string name="comments_filtered_on_page">Comments filtered</string>
     <string name="comments_no_match">No comments match.</string>
     <string name="comments_filter_all">All</string>
     <string name="comments_filter_notes">Notes &amp; text</string>

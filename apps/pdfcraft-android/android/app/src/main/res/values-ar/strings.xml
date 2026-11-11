@@ -493,6 +493,8 @@
     <string name="sheet_remove_star">إلغاء التمييز</string>
     <string name="sheet_view_settings">إعدادات العرض</string>
     <string name="sheet_present">عرض تقديمي</string>
+    <string name="present_on_display">يُعرض على %1$s</string>
+    <string name="present_next_page">التالية: صفحة %1$d</string>
     <string name="file_details_title">تفاصيل الملف</string>
     <string name="file_details_copy_all">نسخ كل التفاصيل</string>
     <string name="file_details_copy_value">نسخ القيمة</string>
@@ -556,6 +558,9 @@
     <string name="sheet_single_page">صفحة واحدة</string>
     <string name="sheet_two_pages">صفحتان</string>
     <string name="sheet_two_pages_cover">صفحتان مع الغلاف</string>
+    <string name="sheet_horizontal">الصفحات في صف</string>
+    <string name="sheet_two_pages_auto">صفحتان على الشاشات العريضة</string>
+    <string name="sheet_layout_initial_view">الفتح بهذا الشكل في التطبيقات الأخرى</string>
     <string name="sheet_reading_mode">وضع القراءة</string>
     <string name="sheet_night_mode">الوضع الليلي</string>
     <string name="sheet_hide_annotations">إخفاء التعليقات التوضيحية</string>
@@ -1251,6 +1256,7 @@
     <string name="comments_search_hint">ابحث في النص أو الردود أو الكاتب</string>
     <string name="comments_search_close">أغلق البحث</string>
     <string name="comments_shown">%1$d من %2$d سلسلة</string>
+    <string name="comments_filtered_on_page">التعليقات مُصفّاة</string>
     <string name="comments_no_match">لا توجد تعليقات مطابقة.</string>
     <string name="comments_filter_all">الكل</string>
     <string name="comments_filter_notes">الملاحظات والنصوص</string>

@@ -152,8 +152,9 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
     // Reopen where the reader left off.
     // two pages side by side where the window is wide enough; one page on a narrow one (#152)
     val windowWidthDp = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp
-    LaunchedEffect(doc, vm.spreadPref, windowWidthDp) {
-        doc.viewer.showSpread(if (spreadFits(windowWidthDp)) vm.spreadPref else Spread.Single)
+    val windowHeightDp = androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp
+    LaunchedEffect(doc, vm.spreadPref, vm.spreadAuto, windowWidthDp, windowHeightDp) {
+        doc.viewer.showSpread(shownSpread(vm.spreadPref, vm.spreadAuto, windowWidthDp, windowHeightDp))
     }
 
     // the reader's saved reading colours, once the engine has the whole document
@@ -340,6 +341,8 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
                 vm.selectedComment?.takeIf { it.first === doc }?.second?.let { drawCommentSelection(doc, it) }
                 vm.readAloud?.let { drawReadAloud(doc, it) }
                 drawSearchHits(doc)
+                // the comment list's filters leave these out: veiled so the rest stand out (#155)
+                if (!doc.info.commentsHidden && ctl.sheet != ViewerSheet.Comments && ctl.dimmedGeneration == doc.info.generation.toLong()) drawDimmedComments(doc.viewer, ctl.dimmedComments, ctl.nightMode)
                 drawSelection(doc)
                 vm.pendingMarkupPreview?.takeIf { it.doc === doc }?.let { drawPendingMarkup(it) }
                 drawLinkFlash(doc)
@@ -347,7 +350,10 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
         )
 
         // Presenting: taps turn pages and a drag is the laser pointer, over the page alone.
-        if (ctl.presenting) PresentationLayer(doc.viewer)
+        if (ctl.presenting) {
+            PresentationLayer(doc.viewer, ctl.laser, ctl.tempInk)
+            ExternalPresentation(doc)
+        }
 
         // The active tool takes the touches over the pages.
         ToolLayer(vm, doc)
@@ -389,6 +395,7 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
                 doc, visible = jumpChipVisible,
                 bottom = with(density) { doc.viewer.padBottom.toDp() },
             )
+            if (!vm.readingMode && !ctl.searching && ctl.sheet != ViewerSheet.Comments) CommentFilterChip(doc, top = with(density) { doc.viewer.padTop.toDp() })
             if (!vm.readingMode) FocusTimerPill(
                 vm, top = with(density) { doc.viewer.padTop.toDp() },
                 onOpen = { ctl.sheet = ViewerSheet.FocusTimer },
