@@ -50,6 +50,88 @@ pub enum BoxSpec {
     Rect([f64; 4]),
     /// Margins inward from the media box: left, bottom, right, top (points).
     Margins([f64; 4]),
+    /// Media box only: grow it outward by left, bottom, right, top (points; negative shrinks it
+    /// back), for a note margin. Crop box edges lying on the media box move with it, so the new
+    /// area shows, and the running total is kept on the page as [`MARGIN_KEY`] so taking the
+    /// margin off restores the original box.
+    Grow([f64; 4]),
+}
+
+/// The page key holding the note margin added with [`BoxSpec::Grow`] (left, bottom, right, top
+/// in default user space). A private key, ignored by other readers.
+pub const MARGIN_KEY: &[u8] = b"PdfCraftMargin";
+
+/// The note margin recorded on each page (zeros where none).
+pub fn page_margins(doc: &Document) -> Result<Vec<[f64; 4]>, OrganizeError> {
+    Ok(walk(doc)?.iter().map(|(page, _)| margin_of(doc, doc.get(*page).as_dict().and_then(|d| d.get(MARGIN_KEY)))).collect())
+}
+
+fn margin_of(doc: &Document, o: Option<&Object>) -> [f64; 4] {
+    let mut out = [0.0; 4];
+    let Some(o) = o else { return out };
+    let o = doc.resolve(o);
+    let v: Vec<f64> = o.as_array().map(|a| a.iter().map(|x| doc.resolve(x).as_f64().filter(|v| v.is_finite()).unwrap_or(0.0)).collect()).unwrap_or_default();
+    if v.len() == 4 {
+        out.copy_from_slice(&v);
+    }
+    out
+}
+
+/// [`BoxSpec::Grow`] on `pages`: validated for every page before any changes.
+fn grow_pages(doc: &mut Document, pages: &[usize], g: [f64; 4]) -> Result<(), OrganizeError> {
+    let bad = |m: &str| OrganizeError::InvalidBox(m.to_string());
+    if !g.iter().all(|x| x.is_finite()) {
+        return Err(bad("the margin is not a number"));
+    }
+    let all = walk(doc)?;
+    check(pages, all.len())?;
+    let boxes = page_boxes(doc)?;
+    let on = |a: f64, b: f64| (a - b).abs() < 1e-6;
+    let mut plan = Vec::new();
+    for &i in pages {
+        let (page, inherited) = &all[i];
+        let [media, crop, ..] = boxes[i];
+        let d = doc.get(*page).as_dict().cloned().unwrap_or_default();
+        let grown = [media[0] - g[0], media[1] - g[1], media[2] + g[2], media[3] + g[3]];
+        let (w, h) = (grown[2] - grown[0], grown[3] - grown[1]);
+        if !w.is_finite() || !h.is_finite() || w < 1.0 || h < 1.0 {
+            return Err(bad(&format!("page {} would be smaller than a point", i + 1)));
+        }
+        if w > 14_400.0 || h > 14_400.0 {
+            return Err(bad(&format!("page {} would be larger than 14400 points", i + 1)));
+        }
+        // a crop box (the page's own or inherited) follows the media box on the sides it touches
+        let has_crop = d.get(b"CropBox").or_else(|| inherited.get(b"CropBox")).is_some();
+        let new_crop = has_crop.then(|| {
+            let c = [
+                if on(crop[0], media[0]) { grown[0] } else { crop[0] },
+                if on(crop[1], media[1]) { grown[1] } else { crop[1] },
+                if on(crop[2], media[2]) { grown[2] } else { crop[2] },
+                if on(crop[3], media[3]) { grown[3] } else { crop[3] },
+            ];
+            clip(c, grown).unwrap_or(grown)
+        });
+        let before = margin_of(doc, d.get(MARGIN_KEY));
+        let total = [before[0] + g[0], before[1] + g[1], before[2] + g[2], before[3] + g[3]];
+        let total = total.iter().any(|v| v.abs() > 1e-6).then_some(total.map(|v| if v.abs() > 1e-6 { v } else { 0.0 }));
+        plan.push((*page, grown, new_crop, total));
+    }
+    let real = |r: &[f64; 4]| Object::Array(r.iter().map(|v| Object::Real(*v)).collect());
+    for (page, grown, crop, total) in plan {
+        doc.update_dict(page, |d| {
+            d.set(b"MediaBox".to_vec(), real(&grown));
+            if let Some(c) = crop {
+                d.set(b"CropBox".to_vec(), real(&c));
+            }
+            match total {
+                Some(t) => d.set(MARGIN_KEY.to_vec(), real(&t)),
+                None => {
+                    d.remove(MARGIN_KEY);
+                }
+            }
+        })?;
+    }
+    Ok(())
 }
 
 /// Parses a 4-number PDF rectangle `[x0, y0, x1, y1]` into `[xmin, ymin, xmax, ymax]` when it has
@@ -94,6 +176,12 @@ pub fn page_boxes(doc: &Document) -> Result<Vec<[[f64; 4]; 5]>, OrganizeError> {
 
 /// Set a box on `pages` (0-based). Margins apply to each page's own media box.
 pub fn set_page_box(doc: &mut Document, pages: &[usize], which: PageBox, spec: BoxSpec) -> Result<(), OrganizeError> {
+    if let BoxSpec::Grow(g) = spec {
+        if which != PageBox::Media {
+            return Err(OrganizeError::InvalidBox("only the media box grows".to_string()));
+        }
+        return grow_pages(doc, pages, g);
+    }
     let all = walk(doc)?;
     check(pages, all.len())?;
     let boxes = page_boxes(doc)?;
@@ -114,6 +202,7 @@ pub fn set_page_box(doc: &mut Document, pages: &[usize], which: PageBox, spec: B
                 let r = [r[0].min(r[2]), r[1].min(r[3]), r[0].max(r[2]), r[1].max(r[3])];
                 Some(if which == PageBox::Media { r } else { intersect(r, media) })
             }
+            BoxSpec::Grow(_) => return Err(bad("only the media box grows")),
             BoxSpec::Margins(m) => {
                 if !m.iter().all(|x| x.is_finite() && *x >= 0.0) {
                     return Err(bad("margins must be zero or more"));

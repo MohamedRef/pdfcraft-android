@@ -3203,6 +3203,40 @@ fn duplicating_and_cropping_through_tools() {
 }
 
 #[test]
+fn note_margins_through_tools() {
+    let dir = workdir("margins");
+    let mut a = auto(&dir);
+    let doc = ok(&mut a, "doc_open", json!({ "path": "a.pdf" }))["doc"].as_u64().unwrap();
+    // Half the width on the right and 50 points below, on every page, in one undo step.
+    let r = ok(&mut a, "page_margin", json!({ "doc": doc, "add": [0, 50, 100, 0] }));
+    assert_eq!(r["page_sizes"][0], json!([300.0, 350.0]));
+    assert_eq!(r["margins"], json!([true, true, true]));
+    assert_eq!(page_text(&mut a, doc), ["Page 1", "Page 2", "Page 3"], "the content keeps its place");
+    assert_eq!(ok(&mut a, "edit_undo", json!({ "doc": doc }))["undone"], "Add note margin");
+    assert_eq!(ok(&mut a, "page_margin", json!({ "doc": doc }))["margins"], json!([false, false, false]));
+    // One page, then off again: the original size comes back exactly.
+    let r = ok(&mut a, "page_margin", json!({ "doc": doc, "pages": [2], "add": [0, 0, 100, 0] }));
+    assert_eq!(r["page_sizes"][1], json!([300.0, 300.0]));
+    assert_eq!(r["margins"], json!([false, true, false]));
+    let r = ok(&mut a, "page_margin", json!({ "doc": doc, "remove": true }));
+    assert_eq!(r["page_sizes"][1], json!([200.0, 300.0]));
+    assert_eq!(r["margins"], json!([false, false, false]));
+    assert_eq!(ok(&mut a, "page_margin", json!({ "doc": doc, "remove": true }))["changed"], false);
+    // A cropped page: crop edges on the media box move with it, an inset edge stays.
+    ok(&mut a, "page_set_box", json!({ "doc": doc, "pages": [3], "margins": [10, 0, 0, 0] }));
+    let r = ok(&mut a, "page_margin", json!({ "doc": doc, "pages": [3], "add": [0, 0, 100, 0] }));
+    assert_eq!(r["page_sizes"][2], json!([290.0, 300.0]));
+    let r = ok(&mut a, "page_margin", json!({ "doc": doc, "pages": [3], "add": [0, 0, 20, 0] }));
+    assert_eq!(r["page_sizes"][2], json!([310.0, 300.0]), "margins add up");
+    let r = ok(&mut a, "page_margin", json!({ "doc": doc, "remove": true }));
+    assert_eq!(r["page_sizes"][2], json!([190.0, 300.0]), "and come off together");
+    // Nothing to grow, both at once, or a page shrunk to nothing are refused.
+    assert!(matches!(a.call("page_margin", &json!({ "doc": doc, "add": [0, 0, 0, 0] })), Err(ToolError::InvalidArgs(_))));
+    assert!(matches!(a.call("page_margin", &json!({ "doc": doc, "add": [0, 0, 8000, 0] })), Err(ToolError::InvalidArgs(_))));
+    assert!(matches!(a.call("page_margin", &json!({ "doc": doc, "add": [0, 0, 10, 0], "remove": true })), Err(ToolError::InvalidArgs(_))));
+}
+
+#[test]
 fn headers_watermarks_and_backgrounds_through_tools() {
     let dir = workdir("marks");
     let mut a = auto(&dir);
