@@ -286,4 +286,19 @@
         <item quantity="many">أُضيف %1$d حقلًا</item>
         <item quantity="other">أُضيف %1$d حقل</item>
     </plurals>
+    <string name="edit_grouped_text">هذا النص داخل رسم مُجمَّع</string>
+    <string name="edit_grouped_make_editable">اجعله قابلًا للتعديل</string>
+    <string name="edit_grouped_ready">أصبح بالإمكان تعديل النص في هذه الصفحة</string>
+    <string name="edit_grouped_refused">تُركت بعض المجموعات كما هي: %1$s</string>
+    <string name="edit_fonts_in_document">في هذا المستند</string>
+    <string name="edit_fonts_none">لا توجد خطوط مضمّنة في هذه الصفحة يمكن استخدامها</string>
+    <string name="edit_font_from_file">إضافة خط من ملف…</string>
+    <string name="edit_font_imported">تم التنسيق بخط %1$s</string>
+    <string name="edit_spacing">المسافات</string>
+    <string name="edit_line_spacing">تباعد الأسطر</string>
+    <string name="edit_letter_spacing">تباعد الحروف</string>
+    <string name="edit_points">%1$s نقطة</string>
+    <string name="edit_spacing_less">تقليل %1$s</string>
+    <string name="edit_spacing_more">زيادة %1$s</string>
+    <string name="edit_overflow">لم يعد هذا النص يتسع في مكانه</string>
 </resources>
