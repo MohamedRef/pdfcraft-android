@@ -57,6 +57,7 @@ fun androidx.compose.foundation.layout.BoxScope.CommentFilterChip(doc: io.github
             .shadow(3.dp, RoundedCornerShape(20.dp))
             .background(c.surface, RoundedCornerShape(20.dp))
             .clickable(role = androidx.compose.ui.semantics.Role.Button) {
+                io.github.artcraftandroid.pdfcraft.engine.Diag.event(io.github.artcraftandroid.pdfcraft.engine.DiagArea.Viewer, "comment_filter_cleared", "doc" to doc.diagNumber, "dimmed" to ctl.dimmedComments.size)
                 ctl.commentFilters = CommentFilters()
                 ctl.dimmedComments = emptyList()
             }

@@ -204,6 +204,11 @@ fun CommentListScreen(vm: AppViewModel, doc: OpenDocument) {
         if (list == null) return@LaunchedEffect
         ctl.dimmedGeneration = doc.info.generation.toLong()
         ctl.dimmedComments = if (filtering) dimmedComments(threads, shown, { it.page.toInt() }, { it.rect }) else emptyList()
+        // the list's filters: how many threads they show and how many the page dims (#155); never the search text
+        io.github.artcraftandroid.pdfcraft.engine.Diag.event(
+            io.github.artcraftandroid.pdfcraft.engine.DiagArea.Viewer, "comment_filter", "doc" to doc.diagNumber, "kind" to filters.kind, "status" to filters.status, "search" to filters.query.isNotBlank(),
+            "hidden_authors" to filters.hiddenAuthors.size, "shown" to shown.size, "total" to threads.size, "dimmed" to ctl.dimmedComments.size,
+        )
     }
     Column(
         Modifier.fillMaxSize().background(Color.Black).safeTopPadding()

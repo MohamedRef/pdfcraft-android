@@ -358,8 +358,8 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             doc.controller.nightMode = savedNightMode
             // the layout this file was left in, else the one the file asks for, else the app's (#152)
             val remembered = ViewLayout.decode(recent?.layout)
-                ?: if (recent?.layout == null && !info.preparing) fileLayout(eng, info.id) else null
-            applyLayout(doc, remembered)
+            val fromFile = if (remembered == null && recent?.layout == null && !info.preparing) fileLayout(eng, info.id) else null
+            applyLayout(doc, remembered ?: fromFile, if (remembered != null) "remembered" else "file")
             // a file left in Reading Mode reopens in it, unless it was opened for a tool
             readingMode = recent?.reading == true && pendingTool == null
             document = doc
@@ -1000,6 +1000,10 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         ctl.modeBeforePresenting = doc.viewer.mode
         doc.viewer.switchMode(io.github.artcraftandroid.pdfcraft.ui.viewer.PageMode.SinglePage)
         ctl.presenting = true
+        ctl.presentingSince = android.os.SystemClock.uptimeMillis()
+        ctl.laserStrokes = 0
+        ctl.inkStrokes = 0
+        io.github.artcraftandroid.pdfcraft.engine.Diag.event(io.github.artcraftandroid.pdfcraft.engine.DiagArea.Viewer, "present_start", "doc" to doc.diagNumber, "page" to doc.viewer.currentPage + 1, "pages" to doc.pageCount, "mode_before" to ctl.modeBeforePresenting)
         ctl.barsVisible = false
     }
 
@@ -1007,6 +1011,10 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         val ctl = doc.controller
         if (!ctl.presenting) return
         ctl.presenting = false
+        io.github.artcraftandroid.pdfcraft.engine.Diag.event(
+            io.github.artcraftandroid.pdfcraft.engine.DiagArea.Viewer, "present_end", "doc" to doc.diagNumber, "s" to (android.os.SystemClock.uptimeMillis() - ctl.presentingSince) / 1000,
+            "laser_strokes" to ctl.laserStrokes, "ink_strokes" to ctl.inkStrokes, "page" to doc.viewer.currentPage + 1,
+        )
         // the pointer and temporary ink belong to the presentation
         ctl.laser.points.clear()
         ctl.tempInk.strokes.clear()
@@ -1035,6 +1043,8 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         val center = androidx.compose.ui.geometry.Offset(v.viewW / 2f, v.viewH / 2f)
         // presenting: a clicker's keys turn pages (arrows, Page Up/Down, Space, Enter) and Esc ends it
         if (ctl.presenting && !ctrl) {
+            // a clicker's key while presenting (#157): the key code is a number, never text
+            io.github.artcraftandroid.pdfcraft.engine.Diag.event(io.github.artcraftandroid.pdfcraft.engine.DiagArea.Viewer, "present_key", "doc" to doc.diagNumber, "key" to keyCode, "shift" to shift)
             when (keyCode) {
                 android.view.KeyEvent.KEYCODE_ESCAPE -> stopPresenting(doc)
                 android.view.KeyEvent.KEYCODE_DPAD_RIGHT, android.view.KeyEvent.KEYCODE_DPAD_DOWN, android.view.KeyEvent.KEYCODE_PAGE_DOWN,
@@ -1049,6 +1059,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         val drawing = ctl.tool == ViewerTool.Draw
         if (!ctrl && drawing) io.github.artcraftandroid.pdfcraft.ui.viewer.presetForKey(keyCode)?.let { return toolPrefs.applyInkPreset(it) }
         val shortcut = io.github.artcraftandroid.pdfcraft.ui.viewer.viewerShortcut(keyCode, ctrl, shift) ?: return false
+        io.github.artcraftandroid.pdfcraft.engine.Diag.event(io.github.artcraftandroid.pdfcraft.engine.DiagArea.Viewer, "shortcut", "doc" to doc.diagNumber, "action" to shortcut, "ctrl" to ctrl, "shift" to shift, "tool" to ctl.tool)
         fun tool(t: ViewerTool) { if (ctl.tool != t) enterTool(doc, t) }
         fun draw(eraser: Boolean = false, lasso: Boolean = false, shape: io.github.artcraftandroid.pdfcraft.ui.viewer.InkShapeMode = io.github.artcraftandroid.pdfcraft.ui.viewer.InkShapeMode.Freehand) {
             tool(ViewerTool.Draw)
@@ -1155,6 +1166,8 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     private suspend fun preparedCopy(doc: OpenDocument, unlock: Boolean, clean: Boolean): File? {
         val eng = engine ?: return null
         val out = File(getApplication<Application>().cacheDir, "print-${System.nanoTime()}.pdf")
+        val start = System.nanoTime()
+        var removed = 0
         return runCatching {
             val copy = saveMutex.withLock {
                 eng.tool("doc_open", mapOf("path" to doc.file.absolutePath, "password" to doc.password)).optLong("doc")
@@ -1167,13 +1180,23 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                         .firstOrNull { it.optString("category") == "comments" }?.optInt("count") ?: 0
                     // the tool fails when there is nothing to remove: a file without comments is already clean
                     if (comments > 0) eng.tool("doc_remove_hidden", mapOf("doc" to copy, "categories" to listOf("comments")))
+                    removed = comments
                 }
                 eng.tool("doc_save", mapOf("doc" to copy, "path" to out.absolutePath, "full" to true))
             } finally {
                 runCatching { eng.tool("doc_close", mapOf("doc" to copy, "discard_changes" to true)) }
             }
             out
-        }.onFailure { out.delete() }.getOrNull()
+        }.onFailure {
+            out.delete()
+            io.github.artcraftandroid.pdfcraft.engine.Diag.failure(io.github.artcraftandroid.pdfcraft.engine.DiagArea.Viewer, if (clean) "clean_copy" else "unlocked_copy", it)
+        }.also { r ->
+            // a copy without comments (#155) or without its password: how long it took, how many comments went, how big it is
+            io.github.artcraftandroid.pdfcraft.engine.Diag.event(
+                io.github.artcraftandroid.pdfcraft.engine.DiagArea.Viewer, "prepared_copy", "doc" to doc.diagNumber, "clean" to clean, "unlock" to unlock, "ok" to r.isSuccess,
+                "ms" to (System.nanoTime() - start) / 1_000_000, "comments_removed" to removed, "bytes" to (r.getOrNull()?.length() ?: 0L),
+            )
+        }.getOrNull()
     }
 
     /** Where Save a copy is asked to write (the activity opens the system's file creator with this name). */
@@ -1457,8 +1480,10 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         }
 
     /** Lay [doc] out as [layout] remembered for it, or as the app's View settings when null (#152). */
-    private fun applyLayout(doc: OpenDocument, layout: ViewLayout?) {
+    private fun applyLayout(doc: OpenDocument, layout: ViewLayout?, source: String) {
         val l = layout ?: ViewLayout(savedPageMode, savedSpread, appPrefs.getBoolean("spreadAuto", false))
+        // where the layout a file opened in came from: remembered for it, its initial view, or the app's (#152)
+        io.github.artcraftandroid.pdfcraft.engine.Diag.event(io.github.artcraftandroid.pdfcraft.engine.DiagArea.Viewer, "layout_open", "doc" to doc.diagNumber, "source" to (if (layout == null) "app" else source), "mode" to l.mode, "spread" to l.spread, "auto" to l.autoSpread)
         if (l.mode != doc.viewer.mode) doc.viewer.switchMode(l.mode)
         spreadPref = l.spread
         spreadAuto = l.autoSpread
@@ -1480,6 +1505,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
      */
     fun saveLayoutAsInitialView(doc: OpenDocument) {
         val open = currentLayout(doc).openLayout() ?: return
+        io.github.artcraftandroid.pdfcraft.engine.Diag.event(io.github.artcraftandroid.pdfcraft.engine.DiagArea.Viewer, "layout_initial_view", "doc" to doc.diagNumber, "layout" to open)
         setInitialView(doc, mapOf("layout" to open.arg))
     }
 
@@ -1503,6 +1529,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     fun chooseSpreadAuto(on: Boolean) {
         readingMode = false
         spreadAuto = on
+        io.github.artcraftandroid.pdfcraft.engine.Diag.event(io.github.artcraftandroid.pdfcraft.engine.DiagArea.Viewer, "spread_auto", "on" to on)
         appPrefs.edit().putBoolean("spreadAuto", on).apply()
     }
 
@@ -1511,6 +1538,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         readingMode = false
         spreadPref = spread
         spreadAuto = false
+        io.github.artcraftandroid.pdfcraft.engine.Diag.event(io.github.artcraftandroid.pdfcraft.engine.DiagArea.Viewer, "spread", "spread" to spread)
         appPrefs.edit().putBoolean("spreadAuto", false).putString("spread", when (spread) {
             io.github.artcraftandroid.pdfcraft.ui.viewer.Spread.TwoUp -> "two"
             io.github.artcraftandroid.pdfcraft.ui.viewer.Spread.TwoUpCover -> "cover"
@@ -1522,6 +1550,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         // leaving Reading Mode: a canvas laid out already followed the page read; else it shows it on layout
         if (readingMode && doc.viewer.viewW > 0f) pendingPage = null
         readingMode = false
+        io.github.artcraftandroid.pdfcraft.engine.Diag.event(io.github.artcraftandroid.pdfcraft.engine.DiagArea.Viewer, "page_mode", "doc" to doc.diagNumber, "from" to doc.viewer.mode, "to" to mode, "page" to doc.viewer.currentPage + 1)
         doc.viewer.switchMode(mode)
         appPrefs.edit().putString("pageMode", when (mode) {
             io.github.artcraftandroid.pdfcraft.ui.viewer.PageMode.SinglePage -> "single"
@@ -1562,7 +1591,10 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         if (doc.info.preparing) return
         selectedComment = null
         viewModelScope.launch {
-            if (runCatching { eng.tool("comments_hide", mapOf("doc" to doc.id, "hidden" to hidden)) }.isFailure) return@launch
+            val ok = runCatching {
+                io.github.artcraftandroid.pdfcraft.engine.Diag.measure(io.github.artcraftandroid.pdfcraft.engine.DiagArea.Viewer, "comments_hide", "doc" to doc.diagNumber, "hidden" to hidden) { eng.tool("comments_hide", mapOf("doc" to doc.id, "hidden" to hidden)) }
+            }.onFailure { io.github.artcraftandroid.pdfcraft.engine.Diag.failure(io.github.artcraftandroid.pdfcraft.engine.DiagArea.Viewer, "comments_hide", it) }.isSuccess
+            if (!ok) return@launch
             // the switch reads the engine's state; the pages draw again without waiting for an edit
             refresh(doc)
             doc.images.invalidate()
@@ -1579,7 +1611,9 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         val eng = engine ?: return
         if (doc.info.preparing) return
         viewModelScope.launch {
-            val ok = runCatching { eng.tool("view_reading_colors", mapOf("doc" to doc.id, "mode" to colors.engineMode)) }.isSuccess
+            val ok = runCatching {
+                io.github.artcraftandroid.pdfcraft.engine.Diag.measure(io.github.artcraftandroid.pdfcraft.engine.DiagArea.Viewer, "reading_colors", "doc" to doc.diagNumber, "colors" to colors) { eng.tool("view_reading_colors", mapOf("doc" to doc.id, "mode" to colors.engineMode)) }
+            }.onFailure { io.github.artcraftandroid.pdfcraft.engine.Diag.failure(io.github.artcraftandroid.pdfcraft.engine.DiagArea.Viewer, "reading_colors", it) }.isSuccess
             if (!ok) return@launch
             doc.controller.readingColors = colors
             // the engine's view changed: every page draws again
