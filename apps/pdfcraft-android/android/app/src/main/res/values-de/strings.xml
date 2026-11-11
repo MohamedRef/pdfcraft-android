@@ -1331,6 +1331,8 @@
     <string name="bates_export_failed">Diese neue Kopie konnte nicht in „Downloads“ gespeichert werden.</string>
     <string name="ink_presets_title">Lieblingsstifte</string>
     <string name="ink_presets_help">Jeder Stift behält seine eigene Farbe, Breite und Deckkraft. Tippe auf einen Favoriten, um seine Einstellungen wiederherzustellen.</string>
+    <string name="zoom_box_new_line">Neue Zeile</string>
+    <string name="zoom_box">Zoomfenster</string>
     <string name="pen_gesture_scratched">%1$d Striche weggekritzelt. Rückgängig stellt sie wieder her.</string>
     <string name="pen_gestures_explanation">Über Tinte kritzeln löscht sie. Eine gerade Markerlinie über Text markiert ihn; eine gerade Stiftlinie direkt unter Text unterstreicht ihn. Erkannt nach dem Absetzen.</string>
     <string name="pen_gestures">Intelligente Stiftgesten</string>

@@ -67,6 +67,10 @@ class ViewerController {
     var rulerOn by mutableStateOf(false)
     internal var ruler by mutableStateOf<Ruler?>(null)
 
+    /** Draw: the zoom writing box (#130) and its frame on the page; viewer-only. */
+    var zoomBoxOn by mutableStateOf(false)
+    internal var zoomBox by mutableStateOf<ZoomBox?>(null)
+
     /** Draw: the next tap on the page picks the pen colour from the ink or comment there (#149). */
     var inkEyedropper by mutableStateOf(false)
     /** Explicit annotation shape, independent of freehand snap recognition. */

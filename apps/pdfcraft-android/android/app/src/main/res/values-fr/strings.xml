@@ -1211,6 +1211,8 @@
     <string name="bates_export_failed">Impossible d\'enregistrer cette nouvelle copie dans Téléchargements.</string>
     <string name="ink_presets_title">Stylos favoris</string>
     <string name="ink_presets_help">Chaque stylo garde sa propre couleur, son épaisseur et son opacité. Touchez un favori pour restaurer ses réglages.</string>
+    <string name="zoom_box_new_line">Nouvelle ligne</string>
+    <string name="zoom_box">Loupe</string>
     <string name="pen_gesture_scratched">%1$d traits effacés. Annuler les restaure.</string>
     <string name="pen_gestures_explanation">Gribouillez sur l\'encre pour l\'effacer. Un trait droit de surligneur sur du texte le surligne ; un trait droit de stylo juste dessous le souligne. Reconnu quand vous levez le stylo.</string>
     <string name="pen_gestures">Gestes intelligents du stylo</string>

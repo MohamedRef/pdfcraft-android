@@ -1339,6 +1339,8 @@
     <string name="bates_export_failed">No se pudo guardar esta copia nueva en Descargas.</string>
     <string name="ink_presets_title">Lápices favoritos</string>
     <string name="ink_presets_help">Cada lápiz conserva su propio color, grosor y opacidad. Toca un favorito para recuperar sus ajustes.</string>
+    <string name="zoom_box_new_line">Nueva línea</string>
+    <string name="zoom_box">Lupa</string>
     <string name="pen_gesture_scratched">Se borraron %1$d trazos. Deshacer los recupera.</string>
     <string name="pen_gestures_explanation">Garabatea sobre la tinta para borrarla. Una línea recta de marcador sobre texto lo resalta; una línea recta de lápiz justo debajo lo subraya. Se reconoce al levantar el lápiz.</string>
     <string name="pen_gestures">Gestos inteligentes del lápiz</string>
