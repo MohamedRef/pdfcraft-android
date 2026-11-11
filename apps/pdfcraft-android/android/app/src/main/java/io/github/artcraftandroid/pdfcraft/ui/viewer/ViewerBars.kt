@@ -219,6 +219,7 @@ fun SearchBar(
     count: String? = null,
     progress: Float? = null,
     progressLabel: String? = null,
+    onShowAll: (() -> Unit)? = null,
 ) {
     val c = pdfColors
     val focus = remember { FocusRequester() }
@@ -262,6 +263,7 @@ fun SearchBar(
         }
         if (count != null) Text(count, color = c.textSecondary, fontSize = 15.sp, maxLines = 1, modifier = Modifier.padding(horizontal = 4.dp))
         BarIcon(LucideIcons.X, stringResource(R.string.common_clear), onClear, size = 40.dp, enabled = query.isNotEmpty())
+        if (onShowAll != null) BarIcon(LucideIcons.List, stringResource(R.string.viewer_search_show_all), onShowAll, size = 40.dp)
         BarIcon(LucideIcons.ChevronLeft, stringResource(R.string.viewer_find_previous), onPrev, enabled = canStep, size = 40.dp)
         BarIcon(LucideIcons.ChevronRight, stringResource(R.string.viewer_find_next), onNext, enabled = canStep, size = 40.dp)
         Spacer(Modifier.width(6.dp))

@@ -22,6 +22,8 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
@@ -42,6 +44,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -189,7 +192,54 @@ fun ViewSettingsSheet(vm: AppViewModel, doc: OpenDocument) {
         SheetRow(LucideIcons.Moon, stringResource(R.string.sheet_night_mode), { vm.setNightMode(doc, !ctl.nightMode); ctl.sheet = ViewerSheet.None }) {
             PdfSwitch(ctl.nightMode, { vm.setNightMode(doc, it); ctl.sheet = ViewerSheet.None })
         }
+        ReadingColorsPicker(ctl.readingColors, enabled = !doc.info.preparing) { vm.setReadingColors(doc, it) }
         Spacer(Modifier.height(24.dp))
+    }
+}
+
+/**
+ * Reading colours: off, then text and background pairs drawn as "Aa" swatches. Unlike Night
+ * mode, photos keep their colours (#184).
+ */
+@Composable
+private fun ReadingColorsPicker(current: ReadingColors, enabled: Boolean, onPick: (ReadingColors) -> Unit) {
+    val c = pdfColors
+    Text(stringResource(R.string.sheet_reading_colors), color = c.text, fontSize = 16.sp, modifier = Modifier.padding(start = 16.dp, top = 12.dp, bottom = 8.dp))
+    Row(
+        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        ReadingColors.entries.forEach { rc ->
+            val label = stringResource(
+                when (rc) {
+                    ReadingColors.Off -> R.string.sheet_reading_colors_off
+                    ReadingColors.BlackOnWhite -> R.string.sheet_reading_colors_black_on_white
+                    ReadingColors.WhiteOnBlack -> R.string.sheet_reading_colors_white_on_black
+                    ReadingColors.YellowOnBlack -> R.string.sheet_reading_colors_yellow_on_black
+                    ReadingColors.GreenOnBlack -> R.string.sheet_reading_colors_green_on_black
+                },
+            )
+            val selected = rc == current
+            Column(
+                Modifier.width(64.dp)
+                    .clickable(enabled = enabled, role = Role.RadioButton) { onPick(rc) }
+                    .semantics(mergeDescendants = true) { contentDescription = label; this.selected = selected }
+                    .padding(vertical = 4.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Box(
+                    Modifier.size(44.dp)
+                        .border(if (selected) 3.dp else 1.dp, if (selected) c.accent else c.divider, CircleShape)
+                        .padding(4.dp)
+                        .background(Color(rc.background), CircleShape),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    if (rc == ReadingColors.Off) Icon(LucideIcons.X, null, tint = c.textSecondary, modifier = Modifier.size(18.dp))
+                    else Text(stringResource(R.string.sheet_reading_colors_sample), color = Color(rc.text), fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                }
+                Text(label, color = if (selected) c.accent else c.textSecondary, fontSize = 12.sp, maxLines = 2, textAlign = androidx.compose.ui.text.style.TextAlign.Center, modifier = Modifier.padding(top = 4.dp))
+            }
+        }
     }
 }
 
