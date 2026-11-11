@@ -909,6 +909,9 @@
     <string name="sheet_reading_mode">Reading Mode</string>
     <string name="sheet_night_mode">Night Mode</string>
     <string name="sheet_hide_annotations">Hide annotations</string>
+    <string name="sheet_share_clean">Share without annotations</string>
+    <string name="sheet_print_clean">Print without annotations</string>
+    <string name="msg_clean_copy_failed">Couldn\'t make a copy without annotations.</string>
     <string name="sheet_reading_colors">Reading colours</string>
     <string name="sheet_reading_colors_sample">Aa</string>
     <string name="sheet_reading_colors_off">Off</string>

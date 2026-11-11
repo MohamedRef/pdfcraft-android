@@ -908,14 +908,22 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         }
     }
 
-    /** Share a copy of [doc] through the system's share sheet (saved first, with the ink being drawn). */
-    fun share(doc: OpenDocument) {
+    /**
+     * Share a copy of [doc] through the system's share sheet (saved first, with the ink being drawn).
+     * With [clean], the copy has no comments or markups while the working file keeps them (#155).
+     */
+    fun share(doc: OpenDocument, clean: Boolean = false) {
         if (doc.controller.tool == ViewerTool.Draw) doc.commitTool?.invoke()
         handOut {
             // the ink is queued in the engine: reading the document back waits for it, so the save has it
             refresh(doc)
             save(doc)
-            val uri = withContext(Dispatchers.IO) { files.shareable(doc.file, doc.name) }
+            val copy = if (clean) preparedCopy(doc, unlock = false, clean = true) ?: throw IllegalStateException(text(R.string.msg_clean_copy_failed)) else null
+            val uri = try {
+                withContext(Dispatchers.IO) { files.shareable(copy ?: doc.file, doc.name) }
+            } finally {
+                copy?.delete()
+            }
             sendIntent(listOf(uri)).putExtra(Intent.EXTRA_SUBJECT, text(R.string.msg_share_subject, doc.title))
         }
     }
@@ -1066,8 +1074,8 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         return true
     }
 
-    /** Print [doc] through Android's print framework. */
-    fun print(doc: OpenDocument) {
+    /** Print [doc] through Android's print framework; with [clean], without its comments and markups (#155). */
+    fun print(doc: OpenDocument, clean: Boolean = false) {
         if (!doc.info.allowsPrinting) {
             tell(text(R.string.msg_print_disabled))
             return
@@ -1079,10 +1087,14 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             refresh(doc)
             save(doc)
             // the system's printing can't open a password-protected file: print an unlocked copy
-            val unlocked = if (doc.info.encrypted) unlockedCopy(doc) else null
+            val prepared = if (doc.info.encrypted || clean) preparedCopy(doc, unlock = doc.info.encrypted, clean = clean) else null
+            if (clean && prepared == null) {
+                tell(text(R.string.msg_clean_copy_failed))
+                return@launch
+            }
             // a copy, not the working file the app's pause may be saving (#79); either copy is
             // deleted when the print job finishes (the unlocked one has no password, #105)
-            val copy = unlocked ?: printSnapshot(doc)
+            val copy = prepared ?: printSnapshot(doc)
             prints.trySend(PrintJob(copy ?: doc.file, doc.name, deleteWhenDone = copy != null))
         }
     }
@@ -1097,14 +1109,27 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         }
     }
 
-    /** A temporary copy of [doc] without its password, for printing; null if the security can't be removed. */
-    private suspend fun unlockedCopy(doc: OpenDocument): File? {
+    /**
+     * A temporary copy of [doc]'s saved file, opened separately so the open document is untouched:
+     * without its password ([unlock], for printing, #105) and without its comments and markups
+     * ([clean], #155). Null when that can't be done.
+     */
+    private suspend fun preparedCopy(doc: OpenDocument, unlock: Boolean, clean: Boolean): File? {
         val eng = engine ?: return null
         val out = File(getApplication<Application>().cacheDir, "print-${System.nanoTime()}.pdf")
         return runCatching {
-            val copy = eng.tool("doc_open", mapOf("path" to doc.file.absolutePath, "password" to doc.password)).optLong("doc")
+            val copy = saveMutex.withLock {
+                eng.tool("doc_open", mapOf("path" to doc.file.absolutePath, "password" to doc.password)).optLong("doc")
+            }
             try {
-                eng.tool("doc_unprotect", mapOf("doc" to copy))
+                if (unlock) eng.tool("doc_unprotect", mapOf("doc" to copy))
+                if (clean) {
+                    val found = eng.tool("doc_hidden_info", mapOf("doc" to copy)).optJSONArray("categories")
+                    val comments = (0 until (found?.length() ?: 0)).map { found!!.getJSONObject(it) }
+                        .firstOrNull { it.optString("category") == "comments" }?.optInt("count") ?: 0
+                    // the tool fails when there is nothing to remove: a file without comments is already clean
+                    if (comments > 0) eng.tool("doc_remove_hidden", mapOf("doc" to copy, "categories" to listOf("comments")))
+                }
                 eng.tool("doc_save", mapOf("doc" to copy, "path" to out.absolutePath, "full" to true))
             } finally {
                 runCatching { eng.tool("doc_close", mapOf("doc" to copy, "discard_changes" to true)) }
