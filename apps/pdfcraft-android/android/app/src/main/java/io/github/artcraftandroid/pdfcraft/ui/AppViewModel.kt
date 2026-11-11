@@ -1,5 +1,6 @@
 package io.github.artcraftandroid.pdfcraft.ui
 
+import io.github.artcraftandroid.pdfcraft.ui.viewer.ViewLayout
 import io.github.artcraftandroid.pdfcraft.ui.viewer.recognizeText
 import io.github.artcraftandroid.pdfcraft.ui.home.FileTool
 import io.github.artcraftandroid.pdfcraft.ui.viewer.FillElement
@@ -347,7 +348,10 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             doc.notWrittenBack = source?.let { withContext(Dispatchers.IO) { files.hasPendingWriteBack(it) } } ?: false
             io.github.artcraftandroid.pdfcraft.engine.OpenTiming.milestone("source_access_ready", openStartedAt)
             doc.controller.nightMode = savedNightMode
-            if (savedPageMode != doc.viewer.mode) doc.viewer.switchMode(savedPageMode)
+            // the layout this file was left in, else the one the file asks for, else the app's (#152)
+            val remembered = ViewLayout.decode(recent?.layout)
+                ?: if (recent?.layout == null && !info.preparing) fileLayout(eng, info.id) else null
+            applyLayout(doc, remembered)
             // a file left in Reading Mode reopens in it, unless it was opened for a tool
             readingMode = recent?.reading == true && pendingTool == null
             document = doc
@@ -537,12 +541,13 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         val v = doc.viewer
         val spot = if (pending == null && v.mode == io.github.artcraftandroid.pdfcraft.ui.viewer.PageMode.Continuous) v.screenToPage(androidx.compose.ui.geometry.Offset(0f, v.padTop), nearest = true) else null
         val zoom = v.zoom
+        val layout = currentLayout(doc).encode()
         withContext(Dispatchers.IO) {
             // in Reading Mode the page canvas has no layout: the page read is the pending one
             val page = pending ?: spot?.page ?: v.currentPage
             doc.source?.let { src ->
                 recents.update(src.toString()) {
-                    it.copy(lastPage = page, reading = reading, lastX = spot?.x ?: -1f, lastY = spot?.y ?: -1f, lastZoom = if (spot != null) zoom else 1f)
+                    it.copy(lastPage = page, reading = reading, lastX = spot?.x ?: -1f, lastY = spot?.y ?: -1f, lastZoom = if (spot != null) zoom else 1f, layout = layout)
                 }
             }
         }
@@ -1403,10 +1408,51 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     var readingMode by mutableStateOf(false)
         private set
 
-    /** The page mode documents open in (View settings; remembered app-wide). */
+    /** The page mode documents open in (View settings; the app's default, and each file's own once changed). */
     val savedPageMode: io.github.artcraftandroid.pdfcraft.ui.viewer.PageMode
-        get() = if (appPrefs.getString("pageMode", "continuous") == "single") io.github.artcraftandroid.pdfcraft.ui.viewer.PageMode.SinglePage
-        else io.github.artcraftandroid.pdfcraft.ui.viewer.PageMode.Continuous
+        get() = when (appPrefs.getString("pageMode", "continuous")) {
+            "single" -> io.github.artcraftandroid.pdfcraft.ui.viewer.PageMode.SinglePage
+            "horizontal" -> io.github.artcraftandroid.pdfcraft.ui.viewer.PageMode.Horizontal
+            else -> io.github.artcraftandroid.pdfcraft.ui.viewer.PageMode.Continuous
+        }
+
+    /** The app's spread: View settings' last choice, for files that have none of their own. */
+    private val savedSpread: io.github.artcraftandroid.pdfcraft.ui.viewer.Spread
+        get() = when (appPrefs.getString("spread", "single")) {
+            "two" -> io.github.artcraftandroid.pdfcraft.ui.viewer.Spread.TwoUp
+            "cover" -> io.github.artcraftandroid.pdfcraft.ui.viewer.Spread.TwoUpCover
+            else -> io.github.artcraftandroid.pdfcraft.ui.viewer.Spread.Single
+        }
+
+    /** Lay [doc] out as [layout] remembered for it, or as the app's View settings when null (#152). */
+    private fun applyLayout(doc: OpenDocument, layout: ViewLayout?) {
+        val l = layout ?: ViewLayout(savedPageMode, savedSpread, appPrefs.getBoolean("spreadAuto", false))
+        if (l.mode != doc.viewer.mode) doc.viewer.switchMode(l.mode)
+        spreadPref = l.spread
+        spreadAuto = l.autoSpread
+    }
+
+    /** The layout [doc]'s initial view asks for, or null when it leaves it to the reader or can't be read. */
+    private suspend fun fileLayout(eng: io.github.artcraftandroid.pdfcraft.engine.Engine, doc: ULong): ViewLayout? = runCatching {
+        val view = eng.tool("doc_initial_view", mapOf("doc" to doc.toLong())).optJSONObject("initial_view")
+        ViewLayout.of(OpenLayout.fromReply(view?.optString("layout")))
+    }.getOrNull()
+
+    /** How [doc] is laid out now, to remember for it (the layout it had before presenting, if presenting). */
+    private fun currentLayout(doc: OpenDocument) =
+        ViewLayout(doc.controller.modeBeforePresenting ?: doc.viewer.mode, spreadPref, spreadAuto)
+
+    /**
+     * Write [doc]'s layout into the file as its initial view, so other readers open it the same
+     * way (#152). Pages in a row and automatic two pages have no PDF equivalent.
+     */
+    fun saveLayoutAsInitialView(doc: OpenDocument) {
+        val open = currentLayout(doc).openLayout() ?: return
+        setInitialView(doc, mapOf("layout" to open.arg))
+    }
+
+    /** Whether [doc]'s layout can be written as its initial view. */
+    fun layoutHasInitialView(doc: OpenDocument): Boolean = currentLayout(doc).openLayout() != null
 
     val savedNightMode: Boolean get() = appPrefs.getBoolean("nightMode", false)
 
@@ -1415,20 +1461,25 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
      * window is wide enough ([io.github.artcraftandroid.pdfcraft.ui.viewer.spreadFits]); a phone
      * held upright shows one page.
      */
-    var spreadPref by mutableStateOf(
-        when (appPrefs.getString("spread", "single")) {
-            "two" -> io.github.artcraftandroid.pdfcraft.ui.viewer.Spread.TwoUp
-            "cover" -> io.github.artcraftandroid.pdfcraft.ui.viewer.Spread.TwoUpCover
-            else -> io.github.artcraftandroid.pdfcraft.ui.viewer.Spread.Single
-        },
-    )
+    var spreadPref by mutableStateOf(savedSpread)
         private set
+
+    /** Two pages side by side when the window is wide and landscape, one otherwise (#152). */
+    var spreadAuto by mutableStateOf(appPrefs.getBoolean("spreadAuto", false))
+        private set
+
+    fun chooseSpreadAuto(on: Boolean) {
+        readingMode = false
+        spreadAuto = on
+        appPrefs.edit().putBoolean("spreadAuto", on).apply()
+    }
 
     fun setSpread(spread: io.github.artcraftandroid.pdfcraft.ui.viewer.Spread) {
         // two pages side by side are page views: leave Reading Mode for them
         readingMode = false
         spreadPref = spread
-        appPrefs.edit().putString("spread", when (spread) {
+        spreadAuto = false
+        appPrefs.edit().putBoolean("spreadAuto", false).putString("spread", when (spread) {
             io.github.artcraftandroid.pdfcraft.ui.viewer.Spread.TwoUp -> "two"
             io.github.artcraftandroid.pdfcraft.ui.viewer.Spread.TwoUpCover -> "cover"
             io.github.artcraftandroid.pdfcraft.ui.viewer.Spread.Single -> "single"
@@ -1440,7 +1491,11 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         if (readingMode && doc.viewer.viewW > 0f) pendingPage = null
         readingMode = false
         doc.viewer.switchMode(mode)
-        appPrefs.edit().putString("pageMode", if (mode == io.github.artcraftandroid.pdfcraft.ui.viewer.PageMode.SinglePage) "single" else "continuous").apply()
+        appPrefs.edit().putString("pageMode", when (mode) {
+            io.github.artcraftandroid.pdfcraft.ui.viewer.PageMode.SinglePage -> "single"
+            io.github.artcraftandroid.pdfcraft.ui.viewer.PageMode.Horizontal -> "horizontal"
+            io.github.artcraftandroid.pdfcraft.ui.viewer.PageMode.Continuous -> "continuous"
+        }).apply()
     }
 
     fun setNightMode(doc: OpenDocument, on: Boolean) {

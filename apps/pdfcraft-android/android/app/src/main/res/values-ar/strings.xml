@@ -558,6 +558,9 @@
     <string name="sheet_single_page">صفحة واحدة</string>
     <string name="sheet_two_pages">صفحتان</string>
     <string name="sheet_two_pages_cover">صفحتان مع الغلاف</string>
+    <string name="sheet_horizontal">الصفحات في صف</string>
+    <string name="sheet_two_pages_auto">صفحتان على الشاشات العريضة</string>
+    <string name="sheet_layout_initial_view">الفتح بهذا الشكل في التطبيقات الأخرى</string>
     <string name="sheet_reading_mode">وضع القراءة</string>
     <string name="sheet_night_mode">الوضع الليلي</string>
     <string name="sheet_hide_annotations">إخفاء التعليقات التوضيحية</string>

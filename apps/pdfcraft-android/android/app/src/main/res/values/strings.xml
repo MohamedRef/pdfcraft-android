@@ -909,6 +909,9 @@
     <string name="sheet_single_page">Single page</string>
     <string name="sheet_two_pages">Two pages</string>
     <string name="sheet_two_pages_cover">Two pages with cover</string>
+    <string name="sheet_horizontal">Pages in a row</string>
+    <string name="sheet_two_pages_auto">Two pages on wide screens</string>
+    <string name="sheet_layout_initial_view">Open this way in other apps</string>
     <string name="sheet_reading_mode">Reading Mode</string>
     <string name="sheet_night_mode">Night Mode</string>
     <string name="sheet_hide_annotations">Hide annotations</string>
