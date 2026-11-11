@@ -341,7 +341,10 @@
     <!-- App dialogs: a file that can't be written back -->
     <string name="root_read_only_title">File is read-only</string>
     <!-- Verb: throw the changes away -->
-    <string name="root_discard">Discard</string>
+    <string name="root_discard">Discard changes</string>
+    <string name="root_keep_editing">Keep editing</string>
+    <string name="root_discard_title">Discard changes to %1$s?</string>
+    <string name="root_discard_body">Your changes will be lost. This can\'t be undone.</string>
     <!-- %1$s is the file name -->
     <string name="root_read_only_body">Your changes to %1$s can\'t be saved where the file is. Save a copy to keep them.</string>
 
@@ -1073,7 +1076,8 @@
     <!-- Messages: opening documents -->
     <string name="msg_engine_not_started">PdfCraft couldn\'t start.</string>
     <string name="msg_file_moved">This file has been moved or deleted.</string>
-    <string name="msg_opened_own_copy">Opened PdfCraft\'s copy. To change the original, open it again from the app it\'s in.</string>
+    <string name="msg_opened_own_copy">This is PdfCraft\'s saved copy. The original can\'t be reached.</string>
+    <string name="viewer_read_only_notice">Changes can\'t be saved to the original. They\'re kept in PdfCraft until you save a copy.</string>
     <!-- "Open file" is the name of the button on Home that picks a file. -->
     <string name="msg_file_access_lost">PdfCraft can\'t open this file any more. Open it again from the app it\'s in, or with Open file.</string>
 

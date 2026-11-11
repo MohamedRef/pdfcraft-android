@@ -218,7 +218,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 if (!isCurrentOpenRequest(requestId)) return@withLock
                 if (copy != null) {
                     openFile(eng, uri, copy, password, fromOtherApp, requestId)
-                    tell(text(R.string.msg_opened_own_copy))
+                    tell(text(R.string.msg_opened_own_copy), text(R.string.common_save_copy)) { document?.let { saveCopyAs(it) } }
                 } else {
                     withContext(Dispatchers.IO) { recents.remove(setOf(uri.toString())) }
                     refreshRecents()
@@ -236,7 +236,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 if (!isCurrentOpenRequest(requestId)) return@withLock
                 if (copy != null) {
                     openFile(eng, uri, copy, password, fromOtherApp, requestId)
-                    tell(text(R.string.msg_opened_own_copy))
+                    tell(text(R.string.msg_opened_own_copy), text(R.string.common_save_copy)) { document?.let { saveCopyAs(it) } }
                 } else {
                     tell(text(R.string.msg_file_access_lost))
                 }

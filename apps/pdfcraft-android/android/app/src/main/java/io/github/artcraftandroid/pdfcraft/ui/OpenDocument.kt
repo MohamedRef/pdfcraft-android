@@ -57,7 +57,10 @@ class OpenDocument(
     var writable by mutableStateOf(true)
 
     /** Changes saved into [file] that [source] doesn't have (it couldn't be written): closing offers a copy. */
-    var notWrittenBack = false
+    var notWrittenBack by mutableStateOf(false)
+
+    /** The "can't save to the original" banner was closed for this visit (#191). */
+    var readOnlyNoticeClosed by mutableStateOf(false)
 
     /** The links of each page (0-based), refreshed when the document changes. */
     var links by mutableStateOf<Map<Int, List<io.github.artcraftandroid.pdfcraft.core.LinkInfo>>>(emptyMap())

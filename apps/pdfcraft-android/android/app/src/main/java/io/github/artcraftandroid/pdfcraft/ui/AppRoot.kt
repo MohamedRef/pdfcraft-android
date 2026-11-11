@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -151,11 +152,29 @@ fun AppRoot(vm: AppViewModel, onBrowse: () -> Unit, onPickSignatureImage: () -> 
                 }
             }
             vm.readOnlyPrompt?.let { d ->
-                PdfDialog(
-                    onDismiss = { vm.answerReadOnly(null) }, title = stringResource(R.string.root_read_only_title),
-                    confirm = stringResource(R.string.common_save_copy), onConfirm = { vm.answerReadOnly(true) },
-                    dismiss = stringResource(R.string.root_discard), onDismissButton = { vm.answerReadOnly(false) },
-                ) { Text(stringResource(R.string.root_read_only_body, d.name), color = c.text, fontSize = 14.sp) }
+                // Save a copy is the main choice; Keep editing goes back; discarding is a separate,
+                // confirmed step rather than a button next to the safe one (#191)
+                var confirmDiscard by remember(d) { mutableStateOf(false) }
+                if (confirmDiscard) {
+                    PdfDialog(
+                        onDismiss = { confirmDiscard = false }, title = stringResource(R.string.root_discard_title, d.name),
+                        confirm = stringResource(R.string.root_discard), onConfirm = { vm.answerReadOnly(false) }, destructive = true,
+                        dismiss = stringResource(R.string.common_cancel), onDismissButton = { confirmDiscard = false },
+                    ) { Text(stringResource(R.string.root_discard_body), color = c.text, fontSize = 14.sp) }
+                } else {
+                    PdfDialog(
+                        onDismiss = { vm.answerReadOnly(null) }, title = stringResource(R.string.root_read_only_title),
+                        confirm = stringResource(R.string.common_save_copy), onConfirm = { vm.answerReadOnly(true) },
+                        dismiss = stringResource(R.string.root_keep_editing), onDismissButton = { vm.answerReadOnly(null) },
+                    ) {
+                        Text(stringResource(R.string.root_read_only_body, d.name), color = c.text, fontSize = 14.sp)
+                        Spacer(Modifier.height(12.dp))
+                        Text(
+                            stringResource(R.string.root_discard), color = c.red, fontSize = 14.sp, fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.clickable(role = androidx.compose.ui.semantics.Role.Button) { confirmDiscard = true }.padding(vertical = 8.dp),
+                        )
+                    }
+                }
             }
             vm.linkPrompt?.let { url ->
                 val shown = runCatching { android.net.Uri.parse(url).let { u -> "${u.scheme}://${u.host}${if (u.port > 0) ":${u.port}" else ""}" } }.getOrDefault(url)

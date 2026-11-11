@@ -257,7 +257,10 @@
     <string name="root_skip">تخطي</string>
     <string name="root_author_prompt_body">أضف اسمًا يوضح صاحب كل تعليق. يمكنك تغييره لاحقًا في التفضيلات.</string>
     <string name="root_read_only_title">الملف للقراءة فقط</string>
-    <string name="root_discard">تجاهل</string>
+    <string name="root_discard">تجاهل التغييرات</string>
+    <string name="root_keep_editing">متابعة التعديل</string>
+    <string name="root_discard_title">تجاهل التغييرات على %1$s؟</string>
+    <string name="root_discard_body">ستضيع تغييراتك. لا يمكن التراجع عن ذلك.</string>
     <string name="root_read_only_body">تعذّر حفظ تغييراتك على %1$s في موقع الملف. احفظ نسخة للاحتفاظ بها.</string>
     <string name="root_open_link_title">فتح صفحة ويب</string>
     <string name="root_open_link_body">هل تريد فتح الصفحة على %1$s؟</string>
@@ -741,7 +744,8 @@
     <string name="forms_next_field">الحقل التالي</string>
     <string name="msg_engine_not_started">تعذّر بدء PdfCraft.</string>
     <string name="msg_file_moved">نُقل هذا الملف أو حُذف.</string>
-    <string name="msg_opened_own_copy">تم فتح نسخة PdfCraft. لتعديل الأصل، افتحه مجددًا من التطبيق الموجود فيه.</string>
+    <string name="msg_opened_own_copy">هذه نسخة PdfCraft المحفوظة. لا يمكن الوصول إلى الملف الأصلي.</string>
+    <string name="viewer_read_only_notice">لا يمكن حفظ التغييرات في الملف الأصلي. ستبقى في PdfCraft إلى أن تحفظ نسخة.</string>
     <string name="msg_file_access_lost">تعذّر على PdfCraft فتح هذا الملف. افتحه مجددًا من التطبيق الموجود فيه أو باستخدام «فتح ملف».</string>
     <string name="msg_undone">تم التراجع عن %1$s</string>
     <string name="msg_redone">تمت إعادة %1$s</string>

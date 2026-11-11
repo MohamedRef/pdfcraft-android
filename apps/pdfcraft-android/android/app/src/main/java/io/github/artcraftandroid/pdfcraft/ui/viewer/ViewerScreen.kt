@@ -518,6 +518,10 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
         // while typing on the page, the bar (with its formatting) rides above the keyboard
         if (vm.readAloud == null && vm.fieldActions == null) Column(Modifier.fillMaxWidth().align(Alignment.BottomCenter).then(if (vm.editing != null) Modifier.imePadding() else Modifier)) {
             vm.success?.let { SuccessBannerView(it, onClose = { vm.success = null }) }
+            // edits that can't reach the original: said as soon as there are any, not only on leaving (#191)
+            if (showReadOnlyNotice(doc.writable, doc.source != null, doc.info.dirty || doc.notWrittenBack, doc.readOnlyNoticeClosed)) {
+                ReadOnlyNotice(onSaveCopy = { vm.saveCopyAs(doc) }, onClose = { doc.readOnlyNoticeClosed = true })
+            }
             AnimatedVisibility(
                 ctl.barsVisible && !ctl.searching && !vm.readingMode && (!railVisible || ctl.tool != ViewerTool.None),
                 enter = slideInVertically(tween(PdfMotion.BARS_MS)) { it } + fadeIn(tween(PdfMotion.BARS_MS)),
@@ -818,5 +822,27 @@ private fun SuccessBannerView(b: io.github.artcraftandroid.pdfcraft.ui.SuccessBa
                 modifier = Modifier.align(Alignment.End).clickable { onClose(); undo() }.padding(horizontal = 24.dp, vertical = 12.dp),
             )
         }
+    }
+}
+
+/** Whether the viewer says that changes can't be saved to the original (#191). */
+internal fun showReadOnlyNotice(writable: Boolean, hasSource: Boolean, edited: Boolean, closed: Boolean): Boolean =
+    !writable && hasSource && edited && !closed
+
+/** Over the bar: changes stay in PdfCraft because the original can't be written; Save a copy keeps them. */
+@Composable
+private fun ReadOnlyNotice(onSaveCopy: () -> Unit, onClose: () -> Unit) {
+    val c = pdfColors
+    Column(Modifier.fillMaxWidth().background(c.surfaceRaised).padding(start = 16.dp, end = 8.dp, top = 12.dp, bottom = 4.dp)) {
+        Row(verticalAlignment = Alignment.Top) {
+            Icon(LucideIcons.TriangleAlert, null, tint = c.icon, modifier = Modifier.padding(top = 2.dp).size(22.dp))
+            Spacer(Modifier.width(14.dp))
+            Text(stringResource(R.string.viewer_read_only_notice), color = c.text, fontSize = 15.sp, lineHeight = 20.sp, modifier = Modifier.weight(1f))
+            BarIcon(LucideIcons.X, stringResource(R.string.viewer_close), onClose, size = 40.dp)
+        }
+        Text(
+            stringResource(R.string.common_save_copy), color = c.accent, fontSize = 15.sp, fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.align(Alignment.End).clickable(role = androidx.compose.ui.semantics.Role.Button, onClick = onSaveCopy).padding(horizontal = 24.dp, vertical = 12.dp),
+        )
     }
 }
