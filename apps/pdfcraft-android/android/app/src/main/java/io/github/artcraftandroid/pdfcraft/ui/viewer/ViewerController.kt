@@ -104,6 +104,9 @@ class ViewerController {
     /** Presentation mode (#157): the page alone, taps turn pages, a drag is a laser pointer. */
     var presenting by mutableStateOf(false)
 
+    /** The laser pointer's trail while presenting, shared with an external display. */
+    val laser = LaserTrail()
+
     /** The page mode to go back to after presenting. */
     internal var modeBeforePresenting: PageMode? = null
 

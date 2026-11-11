@@ -745,6 +745,9 @@
     <string name="sheet_remove_star">Remove the star</string>
     <string name="sheet_view_settings">View settings</string>
     <string name="sheet_present">Present</string>
+    <!-- Presenting with a second screen attached: %1$s is that screen's name, such as "HDMI Screen" -->
+    <string name="present_on_display">Showing on %1$s</string>
+    <string name="present_next_page">Next: page %1$d</string>
     <!-- File details (Issue #55): original file dates and embedded PDF dates are separate. -->
     <string name="file_details_title">File details</string>
     <string name="file_details_copy_all">Copy all details</string>

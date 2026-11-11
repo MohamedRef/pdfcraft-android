@@ -493,6 +493,8 @@
     <string name="sheet_remove_star">إلغاء التمييز</string>
     <string name="sheet_view_settings">إعدادات العرض</string>
     <string name="sheet_present">عرض تقديمي</string>
+    <string name="present_on_display">يُعرض على %1$s</string>
+    <string name="present_next_page">التالية: صفحة %1$d</string>
     <string name="file_details_title">تفاصيل الملف</string>
     <string name="file_details_copy_all">نسخ كل التفاصيل</string>
     <string name="file_details_copy_value">نسخ القيمة</string>

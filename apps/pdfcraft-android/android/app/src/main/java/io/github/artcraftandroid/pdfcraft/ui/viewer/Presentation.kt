@@ -10,7 +10,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateListOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameMillis
 import androidx.compose.ui.Modifier
@@ -21,8 +20,31 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 
-/** A point of the laser pointer's trail: where, and when (uptime ms). */
-data class LaserPoint(val at: Offset, val time: Long)
+/** A point of the laser pointer's trail: on which page, where in its points, and when (uptime ms). */
+data class LaserPoint(val page: Int, val x: Float, val y: Float, val time: Long)
+
+/**
+ * The laser pointer's trail while presenting, kept in page points so the device's screen and an
+ * external display (#157) draw the same trail, each at its own size.
+ */
+class LaserTrail {
+    val points = mutableStateListOf<LaserPoint>()
+
+    /** The uptime (ms) the trail is drawn at. */
+    var now by mutableLongStateOf(0L)
+        private set
+
+    fun add(p: LaserPoint) {
+        points.add(p)
+        now = p.time
+    }
+
+    /** Move the clock to [time] and drop what has faded. */
+    fun fade(time: Long) {
+        now = time
+        points.removeAll { time - it.time > LASER_FADE_MS }
+    }
+}
 
 /** How long a bit of the laser's trail takes to fade away. */
 const val LASER_FADE_MS = 800L
@@ -44,24 +66,23 @@ fun presentationTap(x: Float, width: Float): Int = when {
  * is written to the PDF.
  */
 @Composable
-fun BoxScope.PresentationLayer(viewer: ViewerState) {
-    val trail = remember { mutableStateListOf<LaserPoint>() }
-    var now by remember { mutableLongStateOf(0L) }
+fun BoxScope.PresentationLayer(viewer: ViewerState, trail: LaserTrail) {
     val dot = with(LocalDensity.current) { 7.dp.toPx() }
     // keep the trail fading while there is one
-    LaunchedEffect(trail.isNotEmpty()) {
-        while (trail.isNotEmpty()) {
+    LaunchedEffect(trail, trail.points.isNotEmpty()) {
+        while (trail.points.isNotEmpty()) {
             withFrameMillis { }
-            now = android.os.SystemClock.uptimeMillis()
-            trail.removeAll { now - it.time > LASER_FADE_MS }
+            trail.fade(android.os.SystemClock.uptimeMillis())
         }
     }
     Canvas(
-        Modifier.fillMaxSize().pointerInput(viewer) {
+        Modifier.fillMaxSize().pointerInput(viewer, trail) {
             val slop = viewConfiguration.touchSlop
             awaitEachGesture {
                 val down = awaitFirstDown()
                 var laser = false
+                // the page the drag started on: the trail stays on it, held to its edges
+                val page = viewer.screenToPage(down.position, nearest = true)?.page ?: viewer.currentPage
                 while (true) {
                     val event = awaitPointerEvent()
                     val change = event.changes.firstOrNull { it.id == down.id } ?: break
@@ -70,26 +91,34 @@ fun BoxScope.PresentationLayer(viewer: ViewerState) {
                         break
                     }
                     if (!laser && (change.position - down.position).getDistance() > slop) laser = true
-                    if (laser) {
-                        trail.add(LaserPoint(change.position, change.uptimeMillis))
-                        now = change.uptimeMillis
-                    }
+                    if (laser) viewer.screenToPageOf(page, change.position)?.let { trail.add(LaserPoint(page, it.x, it.y, change.uptimeMillis)) }
                     change.consume()
                 }
             }
         },
     ) {
-        val red = Color(0xFFFF2D2D)
-        for (i in 1 until trail.size) {
-            val a = trail[i - 1]
-            val b = trail[i]
-            val alpha = laserAlpha(now - b.time)
-            if (alpha > 0f) drawLine(red.copy(alpha = alpha * 0.6f), a.at, b.at, strokeWidth = dot, cap = StrokeCap.Round)
-        }
-        trail.lastOrNull()?.let { p ->
-            val alpha = laserAlpha(now - p.time)
-            drawCircle(red.copy(alpha = alpha * 0.35f), dot * 2.2f, p.at)
-            drawCircle(red.copy(alpha = alpha), dot, p.at)
-        }
+        drawLaser(trail, dot) { p -> viewer.pageToScreen(p.page, p.x, p.y) }
+    }
+}
+
+/** Draw [trail] fading, with [at] placing a point on this canvas (null: not shown here). */
+fun androidx.compose.ui.graphics.drawscope.DrawScope.drawLaser(trail: LaserTrail, dot: Float, at: (LaserPoint) -> Offset?) {
+    val red = Color(0xFFFF2D2D)
+    val now = trail.now
+    val points = trail.points
+    for (i in 1 until points.size) {
+        val a = points[i - 1]
+        val b = points[i]
+        if (a.page != b.page) continue
+        val alpha = laserAlpha(now - b.time)
+        val pa = at(a) ?: continue
+        val pb = at(b) ?: continue
+        if (alpha > 0f) drawLine(red.copy(alpha = alpha * 0.6f), pa, pb, strokeWidth = dot, cap = StrokeCap.Round)
+    }
+    points.lastOrNull()?.let { p ->
+        val o = at(p) ?: return@let
+        val alpha = laserAlpha(now - p.time)
+        drawCircle(red.copy(alpha = alpha * 0.35f), dot * 2.2f, o)
+        drawCircle(red.copy(alpha = alpha), dot, o)
     }
 }

@@ -347,7 +347,10 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
         )
 
         // Presenting: taps turn pages and a drag is the laser pointer, over the page alone.
-        if (ctl.presenting) PresentationLayer(doc.viewer)
+        if (ctl.presenting) {
+            PresentationLayer(doc.viewer, ctl.laser)
+            ExternalPresentation(doc)
+        }
 
         // The active tool takes the touches over the pages.
         ToolLayer(vm, doc)
