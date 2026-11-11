@@ -91,14 +91,33 @@ pub fn inspect_with_trace(bytes: pdfcraft_cos::PdfBytes, password: Option<&str>,
 /// Exact renderer page geometry without document-wide panel inspection.
 /// This is only a reading-stage primitive; it makes no claim about forms or signatures.
 pub fn inspect_geometry_with_trace(bytes: pdfcraft_cos::PdfBytes, password: Option<&str>, trace: &OpenTrace) -> Result<DocInfo, OpenError> {
-    let (mut info, unlinked) = inspect_geometry(bytes, password, trace)?;
+    inspect_geometry_keeping_parse(bytes, password, trace).map(|(info, _)| info)
+}
+
+/// The renderer's parse of a document, kept from the reading stage's geometry so the first page
+/// render does not parse the file again (#212). [`PageRenderer::from_parsed`] takes it for the
+/// same bytes and password only.
+///
+/// [`PageRenderer::from_parsed`]: crate::PageRenderer::from_parsed
+pub struct ParsedPdf(pub(crate) Pdf);
+
+/// Android adaptation (#212): [`inspect_geometry_with_trace`], also returning the renderer parse
+/// it made. A phone spent ~60 ms parsing the same file again for the first page.
+pub fn inspect_geometry_keeping_parse(bytes: pdfcraft_cos::PdfBytes, password: Option<&str>, trace: &OpenTrace) -> Result<(DocInfo, ParsedPdf), OpenError> {
+    let (mut info, unlinked, pdf) = inspect_geometry_parsed(bytes, password, trace)?;
     if unlinked {
         info.warnings.push(UNLINKED_UPDATE.into());
     }
-    Ok(info)
+    Ok((info, ParsedPdf(pdf)))
 }
 
 fn inspect_geometry(bytes: pdfcraft_cos::PdfBytes, password: Option<&str>, trace: &OpenTrace) -> Result<(DocInfo, bool), OpenError> {
+    // Geometry no longer needs the renderer parser. Do not overlap its allocations with
+    // structural inspection, including the compatibility fallback for damaged files.
+    inspect_geometry_parsed(bytes, password, trace).map(|(info, unlinked, _)| (info, unlinked))
+}
+
+fn inspect_geometry_parsed(bytes: pdfcraft_cos::PdfBytes, password: Option<&str>, trace: &OpenTrace) -> Result<(DocInfo, bool, Pdf), OpenError> {
     let pdf = trace
         .measure("native_render_parse", || {
             catch_unwind(AssertUnwindSafe(|| Pdf::new_with_password(Arc::new(pdfcraft_cos::PdfView(bytes.clone())), password.unwrap_or(""))))
@@ -143,10 +162,7 @@ fn inspect_geometry(bytes: pdfcraft_cos::PdfBytes, password: Option<&str>, trace
     // Never silent: the pages of a file whose last update has no `/Prev` were found by rebuilding
     // its cross-reference data (`pdfcraft-cos` rebuilds it under the same conditions and logs it).
     let unlinked = pdf.rebuilt_unlinked_update();
-    // Geometry no longer needs the renderer parser. Do not overlap its allocations with
-    // structural inspection, including the compatibility fallback for damaged files.
-    drop(pdf);
-    Ok((info, unlinked))
+    Ok((info, unlinked, pdf))
 }
 
 /// The warning for a file whose pages were found by rebuilding its cross-reference data because its

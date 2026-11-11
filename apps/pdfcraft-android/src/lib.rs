@@ -559,14 +559,7 @@ impl MobileSession {
         }
         let index = page as usize;
         let (bytes, config, pages, size, ready) = self.with_doc(doc, |d| {
-            // the app draws sticky notes itself, as fixed-size icons over the page
-            let config = RenderConfig {
-                password: d.password.as_deref().map(Arc::from),
-                hide_comments: d.comments_hidden(),
-                hide_notes: true,
-                ..RenderConfig::default()
-            };
-            (d.display.clone(), config, d.info.pages.len(), d.info.pages.get(index).map(|p| (p.width, p.height)), d.reading_page_ready(index))
+            (d.display.clone(), page_render_config(d), d.info.pages.len(), d.info.pages.get(index).map(|p| (p.width, p.height)), d.reading_page_ready(index))
         })?;
         if !ready {
             return Err(MobileError::Render("This page is waiting for document preparation".into()));
@@ -742,7 +735,7 @@ impl MobileSession {
                 context.prepare_reading(name.clone(), Some(path.clone()), bytes.clone(), password.as_deref(), initial_page as usize)
             })
             .map_err(open_native_error)?;
-        let (prepared, pending) = match preview {
+        let (mut prepared, pending) = match preview {
             Some(prepared) => (prepared, true),
             None => (
                 trace
@@ -751,7 +744,15 @@ impl MobileSession {
                 false,
             ),
         };
+        let parsed = prepared.take_parsed();
         let id = self.lock().register_prepared(prepared).0;
+        // The reading stage parsed the file for its page sizes; the first page render starts from
+        // that parse instead of making it again (#212).
+        if let Some(parsed) = parsed
+            && let Ok((display, config)) = self.with_doc(id, |d| (d.display.clone(), page_render_config(d)))
+        {
+            self.return_renderer(id, &display, PageRenderer::from_parsed(display.clone(), config, parsed));
+        }
         if pending {
             self.pending_opens
                 .lock()
@@ -1066,6 +1067,12 @@ fn first_json(out: Vec<Content>) -> Value {
             Content::Png { .. } => None,
         })
         .unwrap_or(Value::Null)
+}
+
+/// How pages of `d` are drawn here: the app draws sticky notes itself, as fixed-size icons over
+/// the page.
+fn page_render_config(d: &Document) -> RenderConfig {
+    RenderConfig { password: d.password.as_deref().map(Arc::from), hide_comments: d.comments_hidden(), hide_notes: true, ..RenderConfig::default() }
 }
 
 fn native_stages(trace: &pdfcraft_render::OpenTrace, start: usize) -> Vec<NativeOpenTiming> {

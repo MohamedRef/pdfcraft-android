@@ -31,6 +31,16 @@ pub struct OpenContext {
 /// A fully prepared document that has not yet been registered in a session.
 pub struct PreparedDocument {
     document: Document,
+    /// The renderer parse the reading stage made for its geometry (#212), for the first page.
+    parsed: Option<pdfcraft_render::ParsedPdf>,
+}
+
+impl PreparedDocument {
+    /// Android adaptation (#212): the reading stage's renderer parse of these bytes, if it kept
+    /// one, so the first page render can start from it ([`pdfcraft_render::PageRenderer::from_parsed`]).
+    pub fn take_parsed(&mut self) -> Option<pdfcraft_render::ParsedPdf> {
+        self.parsed.take()
+    }
 }
 
 struct DocumentOpenData<'a> {
@@ -121,37 +131,56 @@ impl OpenContext {
             Ok(None)
         };
         guard(|| {
-            let Ok(cos) = self.trace.measure("native_preview_cos", || pdfcraft_cos::Document::open_with_password(bytes.clone(), password)) else {
-                return fallback("native_reading_fallback_parser");
+            // Android adaptation (#212): the renderer's page geometry and the editing parser's
+            // checks read the same bytes independently, so they run side by side. The checks
+            // decide first, in the order they always did; geometry is used only after them.
+            let geometry = || pdfcraft_render::inspect_geometry_keeping_parse(bytes.clone(), password, &self.trace);
+            let source = || -> Result<ReadingSource, &'static str> {
+                let Ok(cos) = self.trace.measure("native_preview_cos", || pdfcraft_cos::Document::open_with_password(bytes.clone(), password)) else {
+                    return Err("native_reading_fallback_parser");
+                };
+                if !cos.repair_log().is_empty() {
+                    return Err("native_reading_fallback_repairs");
+                }
+                let Some(root) = cos.root() else { return Err("native_reading_fallback_catalog") };
+                let catalog = cos.get(root);
+                let Some(catalog) = catalog.as_dict() else { return Err("native_reading_fallback_catalog") };
+                let field_pages = self.trace.measure("native_reading_fields", || reading_field_pages(&cos, catalog))?;
+                let Ok(pages) = self.trace.measure("native_reading_pages", || pdfcraft_annot::page_refs(&cos)) else {
+                    return Err("native_reading_fallback_page_tree");
+                };
+                if pages.is_empty() {
+                    return Err("native_reading_fallback_page_tree");
+                }
+                if field_pages.iter().any(|p| !pages.contains(p)) {
+                    return Err("native_reading_fallback_widget_location");
+                }
+                let initial_page = if initial_page < pages.len() { initial_page } else { 0 };
+                let cancelled = self.cancelled.clone().unwrap_or_else(|| Arc::new(AtomicBool::new(false)));
+                let reading = ReadingSource { cos, pages, field_pages, cancelled };
+                if let Some(reason) = self.trace.measure("native_reading_page_check", || reading.page_block_reason(initial_page)) {
+                    return Err(reason);
+                }
+                if !reading.cos.repair_log().is_empty() {
+                    return Err("native_reading_fallback_repairs");
+                }
+                Ok(reading)
             };
-            if !cos.repair_log().is_empty() {
-                return fallback("native_reading_fallback_repairs");
-            }
-            let Some(root) = cos.root() else { return fallback("native_reading_fallback_catalog") };
-            let catalog = cos.get(root);
-            let Some(catalog) = catalog.as_dict() else { return fallback("native_reading_fallback_catalog") };
-            let field_pages = match reading_field_pages(&cos, catalog) {
-                Ok(pages) => pages,
+            #[cfg(not(target_arch = "wasm32"))]
+            let (reading, geometry) = std::thread::scope(|s| {
+                let geometry = s.spawn(geometry);
+                let reading = source();
+                // A panic stays a panic: the guard turns it into the panic fallback, as before.
+                (reading, geometry.join().unwrap_or_else(|p| std::panic::resume_unwind(p)))
+            });
+            #[cfg(target_arch = "wasm32")]
+            let (reading, geometry) = (source(), geometry());
+            let reading = match reading {
+                Ok(reading) => reading,
                 Err(reason) => return fallback(reason),
             };
-            let Ok(pages) = pdfcraft_annot::page_refs(&cos) else { return fallback("native_reading_fallback_page_tree") };
-            if pages.is_empty() {
-                return fallback("native_reading_fallback_page_tree");
-            }
-            if field_pages.iter().any(|p| !pages.contains(p)) {
-                return fallback("native_reading_fallback_widget_location");
-            }
-            let initial_page = if initial_page < pages.len() { initial_page } else { 0 };
-            let cancelled = self.cancelled.clone().unwrap_or_else(|| Arc::new(AtomicBool::new(false)));
-            let reading = ReadingSource { cos, pages, field_pages, cancelled };
-            if let Some(reason) = reading.page_block_reason(initial_page) {
-                return fallback(reason);
-            }
-            if !reading.cos.repair_log().is_empty() {
-                return fallback("native_reading_fallback_repairs");
-            }
-            let mut info = match pdfcraft_render::inspect_geometry_with_trace(bytes.clone(), password, &self.trace) {
-                Ok(info) if !info.pages.is_empty() && info.warnings.is_empty() => info,
+            let (mut info, parsed) = match geometry {
+                Ok((info, parsed)) if !info.pages.is_empty() && info.warnings.is_empty() => (info, parsed),
                 _ => return fallback("native_reading_fallback_geometry"),
             };
             if reading.pages.len() != info.pages.len() {
@@ -159,7 +188,7 @@ impl OpenContext {
             }
             info.encrypted = reading.cos.security().is_some();
             self.check_cancelled()?;
-            let document = Session::build_document(
+            let document = self.trace.measure("native_reading_build", || Session::build_document(
                 self,
                 DocumentOpenData {
                     name,
@@ -173,8 +202,8 @@ impl OpenContext {
                     reading: Some(reading),
                     prework: None,
                 },
-            )?;
-            Ok(Some(PreparedDocument { document }))
+            ))?;
+            Ok(Some(PreparedDocument { document, parsed: Some(parsed) }))
         })
         .unwrap_or_else(|_| fallback("native_reading_fallback_panic"))
     }
@@ -478,7 +507,7 @@ impl Session {
             document.js_output.errors.push(XFA_SCRIPTS_OFF.into());
         }
         note_warnings(&mut document.xfa_warnings, &xfa_warnings);
-        Ok(PreparedDocument { document })
+        Ok(PreparedDocument { document, parsed: None })
     }
 
     /// The last step of opening: build the document record and register it.

@@ -122,6 +122,30 @@ fn progressive_comments_with_their_own_appearance_draw_early_and_identically() {
     assert_eq!(std::fs::read(path).unwrap(), bytes);
 }
 
+/// #212: the parse the reading stage made for its page sizes waits as the first renderer, and
+/// draws the same pixels as a renderer that parses the file itself.
+#[test]
+fn progressive_first_render_starts_from_the_geometry_parse() {
+    let path = file(&fixture("", "", "", &[]));
+    let session = MobileSession::new();
+    let first = session.begin_open(path.clone(), None, 1, true).unwrap();
+    assert!(first.document.preparing);
+    let id = first.document.id;
+    assert_eq!(session.cache().get(&id).map(|(_, idle)| idle.len()), Some(1));
+    assert!(first.timings.iter().any(|s| s.stage == "native_reading_pages"));
+    let early = session.render_page(id, 1, 1.0, None).unwrap();
+    let ordinary = MobileSession::new();
+    let plain = ordinary.open(path, None).unwrap();
+    assert_eq!(ordinary.render_page(plain.id, 1, 1.0, None).unwrap().rgba, early.rgba);
+    // a fallback to the complete open keeps no reading parse
+    let fallback = MobileSession::new();
+    let full = fallback
+        .begin_open(file(&fixture("", "/Annots [7 0 R]", "", &["<< /Type /Annot /Subtype /Text /Rect [10 10 25 25] >>"])), None, 0, false)
+        .unwrap();
+    assert!(!full.document.preparing);
+    assert!(fallback.cache().get(&full.document.id).is_none_or(|(_, idle)| idle.is_empty()));
+}
+
 /// Sticky notes (painted by the overlay from the complete comment list) and widgets keep their
 /// page on the complete path, with a reason the open timings show.
 #[test]

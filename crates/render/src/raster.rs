@@ -517,6 +517,14 @@ impl PageRenderer {
         Self { bytes, config, pdf, settings, stats: RenderStats { parser_builds: 1, ..RenderStats::default() } }
     }
 
+    /// Android adaptation (#212): a renderer over a parse already made of `bytes` with
+    /// `config.password` ([`crate::inspect_geometry_keeping_parse`]), the same parse [`Self::new`]
+    /// would make, without making it again.
+    pub fn from_parsed(bytes: pdfcraft_cos::PdfBytes, config: RenderConfig, parsed: crate::ParsedPdf) -> Self {
+        let settings = config.settings();
+        Self { bytes, config, pdf: Some(parsed.0), settings, stats: RenderStats { parser_builds: 1, ..RenderStats::default() } }
+    }
+
     pub fn page_count(&self) -> usize {
         self.pdf.as_ref().map(|p| p.pages().len()).unwrap_or(0)
     }
