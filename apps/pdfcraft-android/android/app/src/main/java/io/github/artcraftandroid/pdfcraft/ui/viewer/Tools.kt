@@ -162,25 +162,35 @@ fun Modifier.toolGestures(
     onEraserMove: (Offset) -> Unit = {},
     onEraserUp: (Offset) -> Unit = {},
     onEraserCancel: () -> Unit = {},
-    /** A pen button pressed mid-stroke ends the stroke with [onUp] instead of cancelling it (ink, #82). */
-    keepStrokeOnPenButton: Boolean = false,
+    /** What a pen-down with the side button held does (#144); the eraser tip always erases. */
+    penButtonHold: PenButtonHold = PenButtonHold.Eraser,
+    /** Called before [onDown] with whether this stroke is a temporary highlighter (button held). */
+    onPenDownMode: (PenDownMode) -> Unit = {},
+    /** True for a finger touch that the writing-hand guard rejects (#156); it then neither draws nor scrolls. */
+    rejectTouch: ((Offset, Long) -> Boolean)? = null,
     /** A quick tap with two or three fingers and no pan or zoom (#189); null turns it off. */
     onMultiFingerTap: ((fingers: Int) -> Unit)? = null,
-): Modifier = pointerInput(doc, penOnly, keepStrokeOnPenButton, onMultiFingerTap != null) {
+): Modifier = pointerInput(doc, penOnly, penButtonHold, onMultiFingerTap != null, rejectTouch != null) {
     val routing = StylusRouting()
     awaitEachGesture {
         val down = awaitFirstDown(requireUnconsumed = false)
         val stylus = down.type == PointerType.Stylus
         var activePen = stylus || down.type == PointerType.Eraser
         var activeId = down.id
-        // Some pens report an eraser tip; other Android devices expose a stylus button.
-        // A button stays in eraser mode until lift even when the button is released mid-stroke.
-        var eraser = down.type == PointerType.Eraser ||
-            (stylus && (currentEvent.buttons.isPrimaryPressed || currentEvent.buttons.isSecondaryPressed))
+        // Some pens report an eraser tip; other Android devices expose a stylus button. The mode
+        // is decided at contact and kept until lift, whatever the button does mid-stroke (#82, #144).
+        var downMode = penDownMode(
+            down.type == PointerType.Eraser,
+            stylus && (currentEvent.buttons.isPrimaryPressed || currentEvent.buttons.isSecondaryPressed),
+            penButtonHold,
+        )
+        var eraser = downMode == PenDownMode.Erase
         if (activePen) routing.penStarted()
-        var navigation = down.type == PointerType.Touch && routing.fingersNavigate(penOnly)
-        var one = !navigation && !eraser
-        var eraseOne = !navigation && eraser
+        // A palm resting beside a hovering or writing pen is ignored, though a pen may still arrive.
+        val palm = down.type == PointerType.Touch && rejectTouch?.invoke(down.position, down.uptimeMillis) == true
+        var navigation = !palm && down.type == PointerType.Touch && routing.fingersNavigate(penOnly)
+        var one = !palm && !navigation && !eraser
+        var eraseOne = !palm && !navigation && eraser
         var moved = false
         var last = down.position
         var lastPressure = down.pressure
@@ -188,7 +198,7 @@ fun Modifier.toolGestures(
         var touchTravel = 0f
         var zoomDrift = 0f
         var endTime = down.uptimeMillis
-        if (one) onDown(last, lastPressure, activePen)
+        if (one) { onPenDownMode(downMode); onDown(last, lastPressure, activePen) }
         if (eraseOne) onEraserDown(last)
         fun dispatchPenMotion(change: androidx.compose.ui.input.pointer.PointerInputChange) {
             val nextPressure = change.pressure.takeIf { it.isFinite() && it > 0f } ?: lastPressure
@@ -224,27 +234,24 @@ fun Modifier.toolGestures(
                     if (eraseOne) onEraserCancel()
                     activeId = arrivingPen.id
                     activePen = true
-                    eraser = arrivingPen.type == PointerType.Eraser ||
-                        (event.buttons.isPrimaryPressed || event.buttons.isSecondaryPressed)
+                    downMode = penDownMode(
+                        arrivingPen.type == PointerType.Eraser,
+                        event.buttons.isPrimaryPressed || event.buttons.isSecondaryPressed,
+                        penButtonHold,
+                    )
+                    eraser = downMode == PenDownMode.Erase
                     navigation = false
                     one = !eraser
                     eraseOne = eraser
                     last = arrivingPen.position
                     lastPressure = arrivingPen.pressure
                     routing.penStarted()
-                    if (one) onDown(last, lastPressure, true)
+                    if (one) { onPenDownMode(downMode); onDown(last, lastPressure, true) }
                     if (eraseOne) onEraserDown(last)
                 }
                 val active = event.changes.firstOrNull { it.id == activeId }
-                // A pen button pressed during a stroke switches to erasing. Ink keeps what was
-                // already written (#82), as other note apps do; a stroke that never moved is dropped.
-                if (activePen && !eraser && (event.buttons.isPrimaryPressed || event.buttons.isSecondaryPressed)) {
-                    if (one) { if (keepStrokeOnPenButton && moved) onUp(last, true) else onCancel() }
-                    one = false
-                    eraser = true
-                    eraseOne = true
-                    onEraserDown(last)
-                }
+                // The side button is read only at contact: pressing it mid-stroke never cancels,
+                // splits or erases the stroke being written (#82, #144).
                 // Touch/palm pointers do not replace or interrupt an active pen or eraser tip.
                 if (activePen) {
                     if (active == null || !active.pressed) {
@@ -273,6 +280,10 @@ fun Modifier.toolGestures(
                     if (active?.isConsumed == true && one) { onCancel(); one = false }
                     break
                 }
+                if (palm) {
+                    event.changes.forEach { if (it.type == PointerType.Touch) it.consume() }
+                    continue
+                }
                 if (navigation || routing.cancelForExtraTouch(false, pressed.size)) {
                     if (one) { one = false; onCancel() }
                     val zoom = event.calculateZoom()
@@ -294,7 +305,7 @@ fun Modifier.toolGestures(
                 }
             }
             if (eraseOne) onEraserUp(last) else if (one) onUp(last, moved)
-            if (!activePen && onMultiFingerTap != null) {
+            if (!activePen && !palm && onMultiFingerTap != null) {
                 multiFingerTapFingers(maxTouches, endTime - down.uptimeMillis, touchTravel + if (moved) Float.MAX_VALUE else 0f, zoomDrift, viewConfiguration.touchSlop)
                     ?.let(onMultiFingerTap)
             }
@@ -441,6 +452,10 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
     // Preview only: hovering never inserts annotation points or touches document history.
     var hoverPosition by remember(doc) { mutableStateOf<Offset?>(null) }
     var hoverEraser by remember(doc) { mutableStateOf(false) }
+    var buttonHighlighter by remember(doc) { mutableStateOf(false) }
+    val penTracker = remember(doc) { PenTracker() }
+    val guardSizePx = with(LocalDensity.current) { prefs.palmGuardSizeDp.dp.toPx() }
+    val buttonClick = remember(doc) { PenButtonClickDetector() }
 
     fun beginErase(p: Offset) {
         clearSelection()
@@ -570,6 +585,23 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                 awaitPointerEventScope {
                     while (true) {
                         val event = awaitPointerEvent(PointerEventPass.Initial)
+                        event.changes.firstOrNull { it.type == PointerType.Stylus || it.type == PointerType.Eraser }
+                            ?.let { penTracker.seen(it.position, it.uptimeMillis) }
+                        val hoverPen = event.changes.firstOrNull { !it.pressed && it.type == PointerType.Stylus }
+                        if (event.type == PointerEventType.Press || event.type == PointerEventType.Exit || hoverPen == null) {
+                            buttonClick.reset()
+                        } else if (buttonClick.hover(event.buttons.isPrimaryPressed || event.buttons.isSecondaryPressed, hoverPen.uptimeMillis)) {
+                            // A side-button click while hovering, with no stroke (#144).
+                            when (prefs.penButtonClick) {
+                                PenButtonClick.Undo -> vm.undo(doc)
+                                PenButtonClick.TogglePens -> {
+                                    prefs.togglePreviousPen()
+                                    doc.controller.eraserMode = false
+                                    doc.controller.lassoMode = false
+                                }
+                                PenButtonClick.None -> Unit
+                            }
+                        }
                         when (event.type) {
                             PointerEventType.Exit, PointerEventType.Press, PointerEventType.Release -> hoverPosition = null
                             PointerEventType.Enter, PointerEventType.Move -> {
@@ -591,6 +623,23 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                 if (fingers == 2) vm.undo(doc) else if (fingers == 3) vm.redo(doc)
             }) else null,
             onDown = { p, pressure, isStylus ->
+                if (doc.controller.inkEyedropper) {
+                    doc.controller.inkEyedropper = false
+                    val at = doc.viewer.screenToPage(p) ?: return@toolGestures
+                    val scale = doc.viewer.pixelsPerPoint(at.page).takeIf { it.isFinite() && it > 0f } ?: 1f
+                    val picked = eyedropperColor(
+                        strokes.filter { it.page == at.page }.map { EyedropperStroke(it.points.toList(), it.appearance.width / 2f, it.appearance.argb or 0xFF000000.toInt()) },
+                        doc.comments.filter { it.page.toInt() == at.page && it.color != null }
+                            .map { EyedropperTarget(it.rect, it.color!!.toInt(), it.subtype == "Ink") },
+                        Offset(at.x, at.y),
+                        tolerance = 12f / scale,
+                    )
+                    if (picked != null) {
+                        prefs.setColor(StyledTool.Ink, Color(picked))
+                        vm.tell(text(R.string.ink_eyedropper_picked, "#%06X".format(picked and 0xFFFFFF)))
+                    } else vm.tell(text(R.string.ink_eyedropper_none))
+                    return@toolGestures
+                }
                 if (doc.controller.lassoMode) {
                     beginLasso(p)
                     return@toolGestures
@@ -603,11 +652,13 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                 val at = doc.viewer.screenToPage(p) ?: return@toolGestures
                 stillAt = p
                 movedAt = System.currentTimeMillis()
-                val inkStyle = prefs.inkStyle
+                // Holding the side button can draw with the highlighter for this stroke only (#144).
+                val inkStyle = if (buttonHighlighter) InkStyle.Highlighter else prefs.inkStyle
+                val pen = prefs.penSettings(inkStyle)
                 val appearance = InkAppearance(
-                    prefs.color(StyledTool.Ink).toArgbInt(),
-                    inkStyleOpacity(prefs.opacity(StyledTool.Ink), inkStyle),
-                    prefs.inkWidth, prefs.author.ifBlank { null }, inkStyle,
+                    pen.argb,
+                    inkStyleOpacity(pen.opacity, inkStyle),
+                    pen.width, prefs.author.ifBlank { null }, inkStyle,
                 )
                 current = InkStroke(at.page, appearance, isStylus && doc.controller.inkShapeMode == InkShapeMode.Freehand, doc.controller.inkShapeMode).also {
                     it.points.add(Offset(at.x, at.y))
@@ -732,7 +783,11 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
             onEraserMove = { p -> moveErase(p) },
             onEraserUp = { p -> finishErase(p) },
             onEraserCancel = { cancelErase() },
-            keepStrokeOnPenButton = true,
+            penButtonHold = prefs.penButtonHold,
+            rejectTouch = if (prefs.palmGuard) ({ p, t ->
+                palmGuardRejects(penTracker.position, penTracker.timeMs, p, t, prefs.leftHanded, guardSizePx)
+            }) else null,
+            onPenDownMode = { mode -> buttonHighlighter = mode == PenDownMode.Highlight },
         ),
     ) {
         Canvas(Modifier.fillMaxSize()) {
@@ -805,6 +860,12 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                 )
             }
             val hovering = hoverPosition
+            if (hovering != null && prefs.palmGuard) {
+                // The guard region is visible while the pen hovers, so its size can be judged.
+                val r = palmGuardRegion(hovering, prefs.leftHanded, guardSizePx)
+                drawRect(Color(0xFF2E7DFF).copy(alpha = 0.06f), r.topLeft, r.size)
+                drawRect(Color(0xFF2E7DFF).copy(alpha = 0.35f), r.topLeft, r.size, style = Stroke(width = 1.dp.toPx()))
+            }
             if (hovering != null && current == null && eraserPage == null) {
                 val onPage = doc.viewer.screenToPage(hovering)
                 if (onPage != null) {

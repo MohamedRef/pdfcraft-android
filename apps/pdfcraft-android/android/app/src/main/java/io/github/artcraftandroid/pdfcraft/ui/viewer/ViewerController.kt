@@ -62,6 +62,9 @@ class ViewerController {
     var eraserMode by mutableStateOf(false)
     /** Select or move still-uncommitted Draw strokes without modifying saved PDF annotations. */
     var lassoMode by mutableStateOf(false)
+
+    /** Draw: the next tap on the page picks the pen colour from the ink or comment there (#149). */
+    var inkEyedropper by mutableStateOf(false)
     /** Explicit annotation shape, independent of freehand snap recognition. */
     internal var inkShapeMode by mutableStateOf(InkShapeMode.Freehand)
 

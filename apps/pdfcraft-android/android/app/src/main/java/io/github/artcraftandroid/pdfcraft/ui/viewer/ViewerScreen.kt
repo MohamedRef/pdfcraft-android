@@ -388,7 +388,8 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
                 // above the bottom bar when it shows
                 bottom = maxOf(122.dp, with(density) { doc.viewer.padBottom.toDp() } + 12.dp),
                 onHover = { if (!ctl.barsVisible) zoomButtons.poke() },
-                modifier = Modifier.align(Alignment.BottomEnd),
+                // Left-handed: the physical right corner, away from the writing hand, in any language (#156).
+                modifier = Modifier.align(if (vm.toolPrefs.leftHanded) androidx.compose.ui.AbsoluteAlignment.BottomRight else Alignment.BottomEnd),
             )
         }
 
@@ -613,6 +614,7 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
         }
         if (ctl.sheet == ViewerSheet.Comments) CommentListScreen(vm, doc)
         vm.attachPrompt?.takeIf { it.doc === doc }?.let { AttachDialog(vm, it) }
+        if (vm.flattenPrompt === doc) FlattenDialog(vm, doc)
         vm.pageMenu?.takeIf { it.doc === doc }?.let { PageMenuView(vm, it) }
         if (vm.imageSource?.first === doc) {
             io.github.artcraftandroid.pdfcraft.ui.PdfSheet(onDismiss = { vm.imageSource = null }, dim = true) {

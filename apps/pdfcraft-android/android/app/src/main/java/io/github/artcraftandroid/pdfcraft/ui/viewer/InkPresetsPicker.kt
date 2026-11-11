@@ -182,6 +182,52 @@ internal fun InkPresetsPicker(vm: AppViewModel, onApplied: () -> Unit) {
             PdfSwitch(prefs.multiFingerUndo, null)
         }
 
+        // Writing hand and palm guard (#156).
+        Text(stringResource(R.string.hand_title), color = c.text, fontSize = 14.sp)
+        OptionChips(listOf(false, true), prefs.leftHanded, { left ->
+            prefs.updateLeftHanded(left)
+            // The quick rail moves away from the writing hand; it can still be dragged anywhere.
+            vm.quickToolbar.updateRailRight(left)
+        }) { stringResource(if (it) R.string.hand_left else R.string.hand_right) }
+        Row(
+            Modifier.fillMaxWidth().toggleable(value = prefs.palmGuard, role = Role.Switch) { prefs.updatePalmGuard(it) }
+                .padding(vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text(stringResource(R.string.palm_guard), color = c.text, fontSize = 14.sp)
+                Text(stringResource(R.string.palm_guard_explanation), color = c.label, fontSize = 12.sp)
+            }
+            PdfSwitch(prefs.palmGuard, null)
+        }
+        if (prefs.palmGuard) {
+            Text(stringResource(R.string.palm_guard_size, prefs.palmGuardSizeDp.toInt()), color = c.label, fontSize = 12.sp)
+            Slider(
+                value = prefs.palmGuardSizeDp,
+                onValueChange = { prefs.updatePalmGuardSizeDp(Math.round(it / 10f) * 10f) },
+                valueRange = 60f..240f,
+                colors = SliderDefaults.colors(thumbColor = c.accent, activeTrackColor = c.accent),
+            )
+        }
+        // S Pen side button (#144): what holding it while writing does, and what a click while
+        // hovering does. The eraser end of a pen always erases.
+        Text(stringResource(R.string.pen_button_hold_title), color = c.text, fontSize = 14.sp)
+        OptionChips(
+            PenButtonHold.entries, prefs.penButtonHold, { prefs.updatePenButtonHold(it) },
+        ) { stringResource(when (it) {
+            PenButtonHold.Eraser -> R.string.pen_button_hold_eraser
+            PenButtonHold.Highlighter -> R.string.pen_button_hold_highlighter
+            PenButtonHold.None -> R.string.pen_button_none
+        }) }
+        Text(stringResource(R.string.pen_button_click_title), color = c.text, fontSize = 14.sp)
+        OptionChips(
+            PenButtonClick.entries, prefs.penButtonClick, { prefs.updatePenButtonClick(it) },
+        ) { stringResource(when (it) {
+            PenButtonClick.None -> R.string.pen_button_none
+            PenButtonClick.Undo -> R.string.common_undo
+            PenButtonClick.TogglePens -> R.string.pen_button_click_toggle
+        }) }
+
         // Any number of favorites (#149): tap uses one, long press replaces, moves or deletes it.
         Row(
             Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
@@ -315,12 +361,36 @@ internal fun PenStylePicker(vm: AppViewModel) {
         }
         ColorGrid(color) { prefs.setColor(StyledTool.Ink, it) }
         HexColorField(pen.argb) { prefs.setColor(StyledTool.Ink, Color(it)) }
+        TextButton(onClick = {
+            // Close the sheet; the next tap on the page samples a stroke's colour.
+            vm.document?.controller?.let { it.inkEyedropper = true; it.picker = Picker.None }
+            vm.tell(text(R.string.ink_eyedropper_hint))
+        }) { Text(stringResource(R.string.ink_eyedropper), color = c.accent) }
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text(stringResource(R.string.toolbar_opacity), color = c.text, fontSize = 14.sp, modifier = Modifier.weight(1f))
             Text("${(pen.opacity * 100).toInt()}%", color = c.text, fontSize = 13.sp)
         }
         OpacitySlider(color, pen.opacity) { prefs.setOpacity(StyledTool.Ink, it) }
         Spacer(Modifier.height(8.dp))
+    }
+}
+
+/** A single-choice row of small chips, announced as radio buttons. */
+@Composable
+private fun <T> OptionChips(options: List<T>, selected: T, onPick: (T) -> Unit, label: @Composable (T) -> String) {
+    val c = pdfColors
+    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        options.forEach { option ->
+            val isSel = option == selected
+            Box(
+                Modifier.heightIn(min = 48.dp)
+                    .border(if (isSel) 2.dp else 1.dp, if (isSel) c.accent else c.divider, RoundedCornerShape(18.dp))
+                    .background(if (isSel) c.pressed else c.surface, RoundedCornerShape(18.dp))
+                    .selectable(selected = isSel, role = Role.RadioButton) { onPick(option) }
+                    .padding(horizontal = 14.dp, vertical = 8.dp),
+                contentAlignment = Alignment.Center,
+            ) { Text(label(option), color = c.text, fontSize = 13.sp, fontWeight = if (isSel) FontWeight.SemiBold else FontWeight.Normal) }
+        }
     }
 }
 

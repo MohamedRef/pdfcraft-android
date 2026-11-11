@@ -798,6 +798,38 @@
     <string name="sheet_pages">Pages</string>
     <string name="sheet_attachments">Attachments</string>
     <string name="sheet_layers">Layers</string>
+    <string name="properties_edit">Edit properties</string>
+    <string name="properties_opens_with">Opens with</string>
+    <string name="properties_word_count">Word count</string>
+    <!-- Translator note: %1$s words and %2$s characters, already formatted numbers. -->
+    <string name="properties_word_count_value">%1$s words, %2$s characters</string>
+    <string name="properties_add_custom">Add a custom property</string>
+    <string name="properties_custom_name">Name (no spaces)</string>
+    <string name="properties_custom_value">Value</string>
+    <string name="properties_empty_removes">Leave a value empty to remove it.</string>
+    <string name="properties_open_page">Page</string>
+    <string name="properties_open_layout">Page layout</string>
+    <string name="properties_open_zoom">Magnification</string>
+    <string name="properties_open_panel">Panel</string>
+    <string name="properties_layout_default">Viewer\'s default</string>
+    <string name="properties_layout_single">Single page</string>
+    <string name="properties_layout_continuous">Single page, continuous</string>
+    <string name="properties_layout_two_up">Two pages</string>
+    <string name="properties_layout_two_up_continuous">Two pages, continuous</string>
+    <string name="properties_layout_two_up_cover">Two pages with cover</string>
+    <string name="properties_layout_two_up_continuous_cover">Two pages with cover, continuous</string>
+    <string name="properties_zoom_default">Viewer\'s default</string>
+    <string name="properties_zoom_actual">Actual size</string>
+    <string name="properties_zoom_fit_page">Fit page</string>
+    <string name="properties_zoom_fit_width">Fit width</string>
+    <string name="properties_zoom_fit_height">Fit height</string>
+    <string name="properties_zoom_fit_visible">Fit visible</string>
+    <string name="properties_panel_page">Page only</string>
+    <string name="flatten_title">Flatten…</string>
+    <string name="flatten_action">Flatten</string>
+    <string name="flatten_warning">Flattened comments and form fields become part of the page. They print and show in every viewer, but can\'t be edited any more. You can undo this until the file is saved.</string>
+    <string name="flatten_comments">Comments</string>
+    <string name="flatten_fields">Form fields</string>
     <string name="layers_show_all">Show all</string>
     <string name="layers_reset">Reset</string>
     <!-- Translator note: a layer without a name; %1$d is its position in the list. -->
@@ -849,6 +881,7 @@
     <string name="sheet_two_pages_cover">Two pages with cover</string>
     <string name="sheet_reading_mode">Reading Mode</string>
     <string name="sheet_night_mode">Night Mode</string>
+    <string name="sheet_hide_annotations">Hide annotations</string>
     <string name="sheet_reading_colors">Reading colours</string>
     <string name="sheet_reading_colors_sample">Aa</string>
     <string name="sheet_reading_colors_off">Off</string>
@@ -1339,6 +1372,9 @@
         <item quantity="other">%1$d pages duplicated</item>
     </plurals>
     <string name="msg_pages_reversed">Page order reversed</string>
+    <string name="msg_properties_saved">Properties changed</string>
+    <string name="msg_initial_view_saved">Opening view changed</string>
+    <string name="msg_flattened">Flattened</string>
     <!-- Translator note: %1$s is a file name. -->
     <string name="msg_attached">%1$s attached</string>
     <!-- Translator note: %1$s is a file name. -->
@@ -1477,6 +1513,22 @@
     <string name="bates_export_failed">Could not save this new copy to Downloads.</string>
     <string name="ink_presets_title">Favorite pens</string>
     <string name="ink_presets_help">Each pen keeps its own colour, width and opacity. Tap a favorite to restore its settings.</string>
+    <string name="palm_guard_size">Palm area: %1$d dp</string>
+    <string name="palm_guard_explanation">While the S Pen hovers or writes, finger touches beside and below it on your writing-hand side do not scroll, zoom or draw. The area shows while the pen hovers.</string>
+    <string name="palm_guard">Ignore palm while writing</string>
+    <string name="hand_left">Left</string>
+    <string name="hand_right">Right</string>
+    <string name="hand_title">Writing hand</string>
+    <string name="ink_eyedropper_none">No ink or coloured comment there.</string>
+    <string name="ink_eyedropper_picked">Pen colour set to %1$s.</string>
+    <string name="ink_eyedropper_hint">Tap a stroke or comment to use its colour.</string>
+    <string name="ink_eyedropper">Pick colour from page</string>
+    <string name="pen_button_click_toggle">Switch to previous pen</string>
+    <string name="pen_button_click_title">S Pen button click while hovering</string>
+    <string name="pen_button_none">Nothing</string>
+    <string name="pen_button_hold_highlighter">Marker</string>
+    <string name="pen_button_hold_eraser">Eraser</string>
+    <string name="pen_button_hold_title">While the S Pen button is held</string>
     <string name="ink_hex_invalid">Enter #RRGGBB or #AARRGGBB.</string>
     <string name="ink_hex_apply">Apply</string>
     <string name="ink_hex_label">Hex colour</string>

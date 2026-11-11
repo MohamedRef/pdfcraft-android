@@ -153,6 +153,18 @@ fn reading_colours_reach_cached_page_renderers() {
 }
 
 #[test]
+fn hiding_comments_is_a_view_setting() {
+    let s = MobileSession::new();
+    let doc = s.open(blank_pdf(1), None).unwrap().id;
+    s.execute("comments_hide".into(), format!(r#"{{"doc": {doc}, "hidden": true}}"#)).unwrap();
+    let info = s.document(doc).unwrap();
+    assert!(info.comments_hidden);
+    assert!(!info.dirty, "hiding annotations must not mark the file edited");
+    s.execute("comments_hide".into(), format!(r#"{{"doc": {doc}, "hidden": false}}"#)).unwrap();
+    assert!(!s.document(doc).unwrap().comments_hidden);
+}
+
+#[test]
 fn refuses_bad_render_requests() {
     let s = MobileSession::new();
     let doc = s.open(blank_pdf(2), None).unwrap().id;

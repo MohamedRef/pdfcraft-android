@@ -803,6 +803,8 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         }
         if (ctl.tool != ViewerTool.None) leaveTool(doc)
         doc.selection.clear()
+        // annotating with the annotations hidden would hide what is being made: show them again
+        if (tool in setOf(ViewerTool.Comment, ViewerTool.Markup, ViewerTool.Draw, ViewerTool.Text) && doc.info.commentsHidden) setCommentsHidden(doc, false)
         ctl.switchTool(tool)
         if (tool == ViewerTool.Draw && toolPrefs.snapToShape && toolPrefs.takeSnapHint()) tell(text(R.string.msg_snap_to_shape_on))
         // the first time the reader comments without a name, ask for one (once)
@@ -1387,6 +1389,22 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             appPrefs.edit().putBoolean("nightMode", false).apply()
         }
         applyReadingColors(doc, colors)
+    }
+
+    /**
+     * Hide or show every annotation on the pages (#155): a view setting in the engine
+     * (comments_hide), so the file isn't changed or marked as edited.
+     */
+    fun setCommentsHidden(doc: OpenDocument, hidden: Boolean) {
+        val eng = engine ?: return
+        if (doc.info.preparing) return
+        selectedComment = null
+        viewModelScope.launch {
+            if (runCatching { eng.tool("comments_hide", mapOf("doc" to doc.id, "hidden" to hidden)) }.isFailure) return@launch
+            // the switch reads the engine's state; the pages draw again without waiting for an edit
+            refresh(doc)
+            doc.images.invalidate()
+        }
     }
 
     /** Give a newly opened (and prepared) [doc] the saved reading colours. */
@@ -3733,6 +3751,53 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         runTool(doc, name, (if (path != null) mapOf("path" to path) else emptyMap<String, Any?>()) + args)
     }
 
+    // ---- Document properties, word count, flatten (#183) -------------------------------------
+
+    /** Write metadata [changes] (`doc_set_info` arguments), one refresh for all. */
+    fun setDocInfo(doc: OpenDocument, changes: List<Map<String, Any?>>) {
+        if (changes.isEmpty()) return
+        // each entry its own group: one undo step per changed entry, one refresh for all
+        runToolBatch(doc, "doc_set_info", changes.map { listOf(it) }) { applied ->
+            if (applied == changes.size) tell(text(R.string.msg_properties_saved))
+        }
+    }
+
+    /** How the document opens (`doc_initial_view` with no change), or null when it can't be read. */
+    suspend fun initialView(doc: OpenDocument): JSONObject? {
+        val eng = engine ?: return null
+        return try { eng.tool("doc_initial_view", mapOf("doc" to doc.id)).optJSONObject("initial_view") }
+        catch (e: MobileException) { tell(e.userMessage); null }
+    }
+
+    fun setInitialView(doc: OpenDocument, args: Map<String, Any?>) {
+        if (args.isEmpty()) return
+        runTool(doc, "doc_initial_view", args) { tell(text(R.string.msg_initial_view_saved)) }
+    }
+
+    /** Words and characters on every page (`text_word_count`); the message says why when it can't. */
+    suspend fun wordCount(doc: OpenDocument): JSONObject? {
+        val eng = engine ?: return null
+        return try { eng.tool("text_word_count", mapOf("doc" to doc.id)).optJSONObject("total") }
+        catch (e: MobileException) { tell(e.userMessage); null }
+    }
+
+    fun wordCountLabel(words: Long, characters: Long): String {
+        val f = java.text.NumberFormat.getIntegerInstance()
+        return text(R.string.properties_word_count_value, f.format(words), f.format(characters))
+    }
+
+    /** Flatten: the document asking for confirmation, while the dialog shows. */
+    var flattenPrompt by mutableStateOf<OpenDocument?>(null)
+
+    fun flatten(doc: OpenDocument, comments: Boolean, fields: Boolean) {
+        flattenPrompt = null
+        if (!comments && !fields) return
+        doc.commitTool?.invoke()
+        runTool(doc, "doc_flatten", mapOf("comments" to comments, "fields" to fields)) {
+            tell(text(R.string.msg_flattened), text(R.string.common_undo)) { undo(doc) }
+        }
+    }
+
     /** Files waiting for the person to pick the folder they go into, and what to delete afterwards. */
     private var folderOutput: FolderOutput? = null
     val outputFolderRequests = Channel<Unit>(Channel.CONFLATED)
@@ -4310,12 +4375,6 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         runTool(doc, "comment_lock", commentArgs(c) + ("locked" to locked)) {
             tell(text(if (locked) R.string.comments_locked_msg else R.string.comments_unlocked_msg))
         }
-    }
-
-    /** Hide or show every comment on the pages (a view setting: the file doesn't change). */
-    fun setCommentsHidden(doc: OpenDocument, hidden: Boolean) {
-        selectedComment = null
-        runTool(doc, "comments_hide", mapOf("hidden" to hidden))
     }
 
     /**

@@ -147,6 +147,7 @@ fun MoreSheet(vm: AppViewModel, doc: OpenDocument) {
                 { ctl.sheet = ViewerSheet.OcrConfidence }, chevron = true)
             SheetRow(LucideIcons.Combine, stringResource(R.string.common_tool_combine), { close(); vm.openCombine(doc) })
             SheetRow(LucideIcons.FileLock2, stringResource(R.string.common_tool_set_password), { close(); vm.openProtect(doc) })
+            SheetRow(LucideIcons.Stamp, stringResource(R.string.flatten_title), { close(); vm.flattenPrompt = doc }, enabled = canEditDocument(doc))
             SheetRow(LucideIcons.FilePlus2, stringResource(R.string.common_tool_create_pdf), { close(); vm.openCreate() })
             if (doc.info.undo != null || doc.info.redo != null) {
                 GroupDivider()
@@ -208,6 +209,11 @@ fun ViewSettingsSheet(vm: AppViewModel, doc: OpenDocument) {
             PdfSwitch(ctl.nightMode, { vm.setNightMode(doc, it); ctl.sheet = ViewerSheet.None })
         }
         ReadingColorsPicker(ctl.readingColors, enabled = !doc.info.preparing) { vm.setReadingColors(doc, it) }
+        GroupDivider()
+        // a clean look at the page under the annotations; the file doesn't change (#155)
+        SheetRow(LucideIcons.EyeOff, stringResource(R.string.sheet_hide_annotations), { vm.setCommentsHidden(doc, !doc.info.commentsHidden) }, enabled = !doc.info.preparing) {
+            PdfSwitch(doc.info.commentsHidden, { vm.setCommentsHidden(doc, it) })
+        }
         Spacer(Modifier.height(24.dp))
     }
 }
