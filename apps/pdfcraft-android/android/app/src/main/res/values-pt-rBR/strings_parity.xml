@@ -91,4 +91,57 @@
     <string name="ocr_batch_finished">Concluído</string>
     <string name="ocr_batch_cancelled">Cancelado</string>
     <string name="ocr_batch_folder_gone">Não é possível gravar na pasta; escolha-a novamente.</string>
+    <string name="redact_title">Ocultar (redigir)</string>
+    <string name="redact_about">Marque o que remover e toque em Aplicar: o conteúdo sob as marcas é apagado de vez ao salvar.</string>
+    <string name="redact_mark_area">Marcar uma área</string>
+    <string name="redact_mark_page">Marcar a página %1$d</string>
+    <string name="redact_find">Localizar e marcar</string>
+    <string name="redact_find_hint">Texto, ou vários separados por vírgulas</string>
+    <string name="redact_regex_hint">Expressão regular</string>
+    <string name="redact_whole_words">Somente palavras inteiras</string>
+    <string name="redact_match_case">Diferenciar maiúsculas</string>
+    <string name="redact_use_regex">Usar expressão regular</string>
+    <string name="redact_patterns">Ou cada ocorrência de um padrão</string>
+    <string name="redact_pattern_phone">Telefones</string>
+    <string name="redact_pattern_email">E-mails</string>
+    <string name="redact_pattern_card">Cartões de crédito</string>
+    <string name="redact_pattern_ssn">SSN dos EUA</string>
+    <string name="redact_pattern_date">Datas</string>
+    <string name="redact_pattern_iban">IBANs</string>
+    <string name="redact_mark_all">Marcar tudo</string>
+    <string name="redact_no_matches">Nada encontrado</string>
+    <string name="redact_look">Cor da caixa e texto exibido</string>
+    <string name="redact_overlay_hint">Texto na caixa (opcional)</string>
+    <string name="redact_mark_on_page">Marca na página %1$d</string>
+    <string name="redact_delete_mark">Excluir a marca da página %1$d</string>
+    <string name="redact_clear">Limpar tudo</string>
+    <string name="redact_apply">Aplicar</string>
+    <string name="redact_apply_title">Aplicar a ocultação?</string>
+    <string name="redact_apply_body">Texto, imagens, desenhos, comentários e campos sob as marcas são removidos e substituídos por caixas. Você pode desfazer até salvar; depois, o conteúdo some do arquivo.</string>
+    <string name="redact_hidden_title">Informações ocultas</string>
+    <string name="redact_hidden_body">O documento ainda contém estas informações. Remova o que não quer compartilhar:</string>
+    <string name="redact_hidden_none">Nenhuma informação oculta encontrada.</string>
+    <string name="redact_hidden_remove">Remover</string>
+    <string name="redact_hidden_removed">Informações ocultas removidas</string>
+    <string name="redact_audit_title">Verificar ocultações falsas</string>
+    <string name="redact_audit_none">Nenhuma ocultação falsa: nenhuma caixa esconde texto legível e nenhuma marca aguarda aplicação.</string>
+    <string name="redact_audit_covered">Página %1$d: o texto coberto ainda pode ser lido</string>
+    <string name="redact_audit_unapplied">Página %1$d: marca de ocultação não aplicada</string>
+    <string name="redact_place_hint">Arraste sobre o que remover</string>
+    <plurals name="redact_marked">
+        <item quantity="one">%1$d marca adicionada</item>
+        <item quantity="other">%1$d marcas adicionadas</item>
+    </plurals>
+    <plurals name="redact_applied">
+        <item quantity="one">%1$d ocultação aplicada</item>
+        <item quantity="other">%1$d ocultações aplicadas</item>
+    </plurals>
+    <plurals name="redact_marks_count">
+        <item quantity="one">%1$d marca pendente</item>
+        <item quantity="other">%1$d marcas pendentes</item>
+    </plurals>
+    <plurals name="redact_audit_found">
+        <item quantity="one">%1$d possível ocultação falsa:</item>
+        <item quantity="other">%1$d possíveis ocultações falsas:</item>
+    </plurals>
 </resources>

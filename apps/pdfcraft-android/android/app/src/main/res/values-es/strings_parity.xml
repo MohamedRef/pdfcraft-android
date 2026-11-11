@@ -91,4 +91,57 @@
     <string name="ocr_batch_finished">Terminado</string>
     <string name="ocr_batch_cancelled">Cancelado</string>
     <string name="ocr_batch_folder_gone">No se puede escribir en la carpeta; elíjala de nuevo.</string>
+    <string name="redact_title">Censurar</string>
+    <string name="redact_about">Marque lo que quiere quitar y pulse Aplicar: el contenido bajo las marcas se elimina para siempre al guardar.</string>
+    <string name="redact_mark_area">Marcar un área</string>
+    <string name="redact_mark_page">Marcar la página %1$d</string>
+    <string name="redact_find">Buscar y marcar</string>
+    <string name="redact_find_hint">Texto, o varios separados por comas</string>
+    <string name="redact_regex_hint">Expresión regular</string>
+    <string name="redact_whole_words">Solo palabras completas</string>
+    <string name="redact_match_case">Coincidir mayúsculas</string>
+    <string name="redact_use_regex">Usar expresión regular</string>
+    <string name="redact_patterns">O cada coincidencia de un patrón</string>
+    <string name="redact_pattern_phone">Teléfonos</string>
+    <string name="redact_pattern_email">Correos</string>
+    <string name="redact_pattern_card">Tarjetas de crédito</string>
+    <string name="redact_pattern_ssn">SSN de EE. UU.</string>
+    <string name="redact_pattern_date">Fechas</string>
+    <string name="redact_pattern_iban">IBAN</string>
+    <string name="redact_mark_all">Marcar todo</string>
+    <string name="redact_no_matches">No hubo coincidencias</string>
+    <string name="redact_look">Color del cuadro y texto que muestra</string>
+    <string name="redact_overlay_hint">Texto en el cuadro (opcional)</string>
+    <string name="redact_mark_on_page">Marca en la página %1$d</string>
+    <string name="redact_delete_mark">Eliminar la marca de la página %1$d</string>
+    <string name="redact_clear">Borrar todas</string>
+    <string name="redact_apply">Aplicar</string>
+    <string name="redact_apply_title">¿Aplicar la censura?</string>
+    <string name="redact_apply_body">Se eliminan el texto, imágenes, dibujos, comentarios y campos bajo las marcas y se dibujan cuadros en su lugar. Puede deshacerlo hasta guardar; después, el contenido desaparece del archivo.</string>
+    <string name="redact_hidden_title">Información oculta</string>
+    <string name="redact_hidden_body">El documento aún contiene esta información. Quite lo que no quiera compartir:</string>
+    <string name="redact_hidden_none">No se encontró información oculta.</string>
+    <string name="redact_hidden_remove">Quitar</string>
+    <string name="redact_hidden_removed">Información oculta eliminada</string>
+    <string name="redact_audit_title">Buscar censuras falsas</string>
+    <string name="redact_audit_none">No hay censuras falsas: ningún cuadro tapa texto legible y no hay marcas pendientes.</string>
+    <string name="redact_audit_covered">Página %1$d: el texto tapado aún se puede leer</string>
+    <string name="redact_audit_unapplied">Página %1$d: marca de censura sin aplicar</string>
+    <string name="redact_place_hint">Arrastre sobre lo que quiere quitar</string>
+    <plurals name="redact_marked">
+        <item quantity="one">%1$d marca añadida</item>
+        <item quantity="other">%1$d marcas añadidas</item>
+    </plurals>
+    <plurals name="redact_applied">
+        <item quantity="one">%1$d censura aplicada</item>
+        <item quantity="other">%1$d censuras aplicadas</item>
+    </plurals>
+    <plurals name="redact_marks_count">
+        <item quantity="one">%1$d marca pendiente</item>
+        <item quantity="other">%1$d marcas pendientes</item>
+    </plurals>
+    <plurals name="redact_audit_found">
+        <item quantity="one">%1$d posible censura falsa:</item>
+        <item quantity="other">%1$d posibles censuras falsas:</item>
+    </plurals>
 </resources>

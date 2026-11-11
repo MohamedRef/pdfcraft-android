@@ -227,6 +227,7 @@ fun FileDetailsSheet(vm: AppViewModel, doc: OpenDocument) {
         SheetDivider()
         FileDetailsTools(vm, doc, properties)
         SheetRow(LucideIcons.Layers, stringResource(R.string.backdrops_title), { ctl.sheet = ViewerSheet.Backdrops }, chevron = true)
+        SheetRow(LucideIcons.SquareDashed, stringResource(R.string.redact_audit_title), { vm.auditRedactions(doc) })
         SheetRow(LucideIcons.Copy, stringResource(R.string.file_details_copy_all), {
             clipboard.setText(AnnotatedString(copyText))
             vm.tell(context.getString(R.string.file_details_copied))
