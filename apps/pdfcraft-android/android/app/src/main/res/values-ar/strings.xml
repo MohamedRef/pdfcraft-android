@@ -586,6 +586,12 @@
     <string name="comments_line_thickness">سُمك الخط</string>
     <string name="comments_move">نقل التعليق</string>
     <string name="comments_resize">تغيير حجم التعليق</string>
+    <string name="comments_move_up">تحريك لأعلى</string>
+    <string name="comments_move_down">تحريك لأسفل</string>
+    <string name="comments_move_left">تحريك لليسار</string>
+    <string name="comments_move_right">تحريك لليمين</string>
+    <string name="comments_grow">تكبير</string>
+    <string name="comments_shrink">تصغير</string>
     <string name="lists_none">بلا</string>
     <string name="page_menu_add_comment">إضافة تعليق</string>
     <string name="page_menu_add_text">إضافة نص</string>

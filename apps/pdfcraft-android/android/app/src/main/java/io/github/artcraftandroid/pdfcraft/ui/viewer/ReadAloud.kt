@@ -1,5 +1,6 @@
 package io.github.artcraftandroid.pdfcraft.ui.viewer
 
+import androidx.compose.material3.minimumInteractiveComponentSize
 import android.content.Context
 import android.content.Intent
 import android.speech.tts.TextToSpeech
@@ -461,7 +462,7 @@ fun BoxScope.ReadAloudBar(vm: io.github.artcraftandroid.pdfcraft.ui.AppViewModel
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Box(
-                Modifier.size(40.dp).clip(CircleShape).background(c.pageCard).clickable(role = Role.Button) { expanded = true }
+                Modifier.minimumInteractiveComponentSize().size(40.dp).clip(CircleShape).background(c.pageCard).clickable(role = Role.Button) { expanded = true }
                     .semantics { contentDescription = openPlayer },
                 contentAlignment = Alignment.Center,
             ) { Icon(LucideIcons.ChevronUp, null, tint = c.label, modifier = Modifier.size(24.dp)) }
@@ -567,7 +568,7 @@ private fun ReadAloudFull(vm: io.github.artcraftandroid.pdfcraft.ui.AppViewModel
         Column(Modifier.fillMaxSize().padding(horizontal = 20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             Box(Modifier.fillMaxWidth()) {
                 Box(
-                    Modifier.size(40.dp).clip(CircleShape).background(c.pageCard).clickable(role = Role.Button, onClick = onClose)
+                    Modifier.minimumInteractiveComponentSize().size(40.dp).clip(CircleShape).background(c.pageCard).clickable(role = Role.Button, onClick = onClose)
                         .semantics { contentDescription = closePlayer },
                     contentAlignment = Alignment.Center,
                 ) { Icon(LucideIcons.ChevronDown, null, tint = c.label, modifier = Modifier.size(22.dp)) }

@@ -835,6 +835,12 @@
     <!-- Comment panel: moving a selected comment (accessibility labels) -->
     <string name="comments_move">Move comment</string>
     <string name="comments_resize">Resize comment</string>
+    <string name="comments_move_up">Move up</string>
+    <string name="comments_move_down">Move down</string>
+    <string name="comments_move_left">Move left</string>
+    <string name="comments_move_right">Move right</string>
+    <string name="comments_grow">Make bigger</string>
+    <string name="comments_shrink">Make smaller</string>
 
     <!-- Edit PDF: list styles -->
     <!-- Translator note: the list style with no bullets or numbers -->

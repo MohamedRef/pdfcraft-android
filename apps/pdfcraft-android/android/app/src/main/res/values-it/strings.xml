@@ -742,6 +742,12 @@
     <string name="comments_line_thickness">Spessore linea</string>
     <string name="comments_move">Sposta commento</string>
     <string name="comments_resize">Ridimensiona commento</string>
+    <string name="comments_move_up">Sposta in alto</string>
+    <string name="comments_move_down">Sposta in basso</string>
+    <string name="comments_move_left">Sposta a sinistra</string>
+    <string name="comments_move_right">Sposta a destra</string>
+    <string name="comments_grow">Ingrandisci</string>
+    <string name="comments_shrink">Riduci</string>
 
     <!-- Stili degli elenchi -->
 

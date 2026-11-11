@@ -503,6 +503,12 @@
     <string name="comments_line_thickness">Espessura da linha</string>
     <string name="comments_move">Mover comentário</string>
     <string name="comments_resize">Redimensionar comentário</string>
+    <string name="comments_move_up">Mover para cima</string>
+    <string name="comments_move_down">Mover para baixo</string>
+    <string name="comments_move_left">Mover para a esquerda</string>
+    <string name="comments_move_right">Mover para a direita</string>
+    <string name="comments_grow">Aumentar</string>
+    <string name="comments_shrink">Diminuir</string>
     <string name="lists_none">Nenhum</string>
     <string name="page_menu_add_comment">Adicionar comentário</string>
     <string name="page_menu_add_text">Adicionar texto</string>
