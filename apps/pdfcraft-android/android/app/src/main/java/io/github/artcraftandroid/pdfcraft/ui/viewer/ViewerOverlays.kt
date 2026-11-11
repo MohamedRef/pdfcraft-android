@@ -5,6 +5,10 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.selected
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -76,7 +80,29 @@ import io.github.artcraftandroid.pdfcraft.ui.pdfColors
 import kotlin.math.roundToInt
 
 /** A note waiting for its text: at a point (Comment tool) or on selected text (Add comment). */
-class NotePrompt(val doc: OpenDocument, val at: PagePoint?, val selection: Selection? = null)
+class NotePrompt(
+    val doc: OpenDocument,
+    val at: PagePoint?,
+    val selection: Selection? = null,
+    /** A note written onto the markup just added (its text), instead of a new comment (#197). */
+    val edit: MarkupFollowUp? = null,
+    /** Replace Text: the selection is struck through and this note is its replacement (#170). */
+    val replace: Selection? = null,
+    /** Insert Text: a caret after the selection carries this note (#170). */
+    val insert: Selection? = null,
+)
+
+/**
+ * A text markup just added from the selection menu: [page] and [index] (0-based) as the comment
+ * tools number it, [bounds] (points) to place its bar by, and its [color] (#197).
+ */
+data class MarkupFollowUp(val doc: OpenDocument, val page: Int, val index: Int, val bounds: FloatArray, val color: androidx.compose.ui.graphics.Color) {
+    override fun equals(other: Any?) = other is MarkupFollowUp && other.doc === doc && other.page == page && other.index == index && other.color == color
+    override fun hashCode() = (page * 31 + index) * 31 + color.hashCode()
+}
+
+/** The follow-up bar's colours: the markup palette's five most used. */
+internal val FOLLOW_UP_COLORS = listOf(0xFFFFD100, 0xFF7ED957, 0xFF6EC6FF, 0xFFFF8AD8, 0xFFFF6B6B).map { androidx.compose.ui.graphics.Color(it) }
 
 /** Free text waiting to be typed at a point (Text tool). */
 class TextPrompt(val doc: OpenDocument, val at: PagePoint, val callout: Boolean = false)
@@ -301,23 +327,32 @@ fun BoxScope.SelectionMenu(vm: AppViewModel, doc: OpenDocument, sel: Selection) 
         Modifier
             .offset { IntOffset(x.roundToInt(), y.roundToInt()) }
             .onSizeChanged { menuSize = it }
-            .width(209.dp)
+            .width(252.dp)
             .shadow(6.dp, RoundedCornerShape(4.dp))
             .background(c.menu, RoundedCornerShape(4.dp)),
     ) {
-        Row(Modifier.fillMaxWidth().height(61.dp), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
-            MenuIcon(LucideIcons.MessageSquarePlus, stringResource(R.string.viewer_add_comment), allowed) { vm.notePrompt = NotePrompt(doc, null, sel) }
-            MenuIcon(LucideIcons.Highlighter, stringResource(R.string.common_tool_highlight), allowed) { markup(TextMarkup.Highlight) }
-            MenuIcon(LucideIcons.Underline, stringResource(R.string.common_tool_underline), allowed) { markup(TextMarkup.Underline) }
-            MenuIcon(LucideIcons.Strikethrough, stringResource(R.string.viewer_strikethrough), allowed) { markup(TextMarkup.Strikethrough) }
-            MenuIcon(LucideIcons.Spline, stringResource(R.string.toolbar_squiggly), allowed) { markup(TextMarkup.Squiggly) }
+        // each icon has a short label under it, and Highlight a dot of the colour it will use (#197)
+        Row(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.Top) {
+            MenuIcon(LucideIcons.MessageSquarePlus, stringResource(R.string.viewer_add_comment), allowed, short = stringResource(R.string.viewer_menu_note)) { vm.notePrompt = NotePrompt(doc, null, sel) }
+            MenuIcon(LucideIcons.Highlighter, stringResource(R.string.common_tool_highlight), allowed, short = stringResource(R.string.viewer_menu_highlight), dot = prefs.color(TextMarkup.Highlight.styled)) { markup(TextMarkup.Highlight) }
+            MenuIcon(LucideIcons.Underline, stringResource(R.string.common_tool_underline), allowed, short = stringResource(R.string.viewer_menu_underline)) { markup(TextMarkup.Underline) }
+            MenuIcon(LucideIcons.Strikethrough, stringResource(R.string.viewer_strikethrough), allowed, short = stringResource(R.string.viewer_menu_strike)) { markup(TextMarkup.Strikethrough) }
+            MenuIcon(LucideIcons.Spline, stringResource(R.string.toolbar_squiggly), allowed, short = stringResource(R.string.viewer_menu_squiggly)) { markup(TextMarkup.Squiggly) }
         }
         // an inset divider, then the rows with 8 dp above and below, as the reference's menu
         Box(Modifier.fillMaxWidth().padding(horizontal = 4.dp).height(1.dp).background(c.divider))
         Spacer(Modifier.height(8.dp))
+        if (allowed) {
+            MenuRow(LucideIcons.Replace, stringResource(R.string.viewer_replace_text)) { vm.notePrompt = NotePrompt(doc, null, replace = sel) }
+            MenuRow(LucideIcons.TextCursorInput, stringResource(R.string.viewer_insert_text)) { vm.notePrompt = NotePrompt(doc, null, insert = sel) }
+        }
         if (doc.writable || doc.source == null) MenuRow(LucideIcons.FilePenLine, stringResource(R.string.viewer_edit_text)) {
+            // Edit PDF opens on the paragraph the selection is in, not in general (#197)
+            val r = sel.rects.first()
+            val at = PagePoint(page, (r[0] + r[2]) / 2f, (r[1] + r[3]) / 2f)
             doc.selection.clear()
             vm.enterTool(doc, ViewerTool.Edit)
+            if (doc.controller.tool == ViewerTool.Edit) vm.editTap(doc, at)
         }
         if (doc.info.allowsCopying) MenuRow(LucideIcons.Copy, stringResource(R.string.viewer_copy_text)) { vm.copySelection(doc) }
         // while reading aloud, the reading moves to the selection (the reference's "from here")
@@ -330,13 +365,58 @@ fun BoxScope.SelectionMenu(vm: AppViewModel, doc: OpenDocument, sel: Selection) 
 }
 
 @Composable
-private fun MenuIcon(icon: ImageVector, label: String, enabled: Boolean, onClick: () -> Unit) {
+private fun MenuIcon(icon: ImageVector, label: String, enabled: Boolean, short: String? = null, dot: androidx.compose.ui.graphics.Color? = null, onClick: () -> Unit) {
     val c = pdfColors
-    Box(
-        Modifier.size(48.dp).clickable(enabled = enabled, role = Role.Button, onClick = onClick).semantics { contentDescription = label },
-        contentAlignment = Alignment.Center,
+    val tint = if (enabled) c.icon else c.icon.copy(alpha = 0.35f)
+    Column(
+        Modifier.widthIn(min = 40.dp).clickable(enabled = enabled, role = Role.Button, onClick = onClick).semantics(mergeDescendants = true) { contentDescription = label }
+            .padding(vertical = 6.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Icon(icon, null, tint = if (enabled) c.icon else c.icon.copy(alpha = 0.35f), modifier = Modifier.size(24.dp))
+        Box(Modifier.size(32.dp), contentAlignment = Alignment.Center) {
+            Icon(icon, null, tint = tint, modifier = Modifier.size(24.dp))
+            if (dot != null) Box(Modifier.align(Alignment.BottomEnd).size(9.dp).background(c.menu, CircleShape).padding(1.5.dp).background(dot, CircleShape))
+        }
+        if (short != null) Text(short, color = tint, fontSize = 10.sp, maxLines = 1, modifier = Modifier.clearAndSetSemantics {})
+    }
+}
+
+/**
+ * After a text markup from the selection menu: five colours, Add note and Delete, by the new
+ * markup (#197). Any other tap on the page dismisses it.
+ */
+@Composable
+fun BoxScope.MarkupFollowUpBar(vm: AppViewModel, f: MarkupFollowUp) {
+    val c = pdfColors
+    val density = LocalDensity.current
+    val doc = f.doc
+    var size by remember { mutableStateOf(androidx.compose.ui.unit.IntSize.Zero) }
+    val a = doc.viewer.pageToScreen(f.page, f.bounds[0], f.bounds[1])
+    val b = doc.viewer.pageToScreen(f.page, f.bounds[2], f.bounds[3])
+    val margin = with(density) { 12.dp.toPx() }
+    val below = b.y + margin
+    val maxBottom = doc.viewer.viewH - doc.viewer.padBottom
+    val y = if (below + size.height < maxBottom) below else (a.y - margin - size.height).coerceAtLeast(doc.viewer.padTop)
+    val x = ((a.x + b.x) / 2f - size.width / 2f).coerceIn(with(density) { 8.dp.toPx() }, (doc.viewer.viewW - size.width - with(density) { 8.dp.toPx() }).coerceAtLeast(0f))
+    Row(
+        Modifier.offset { IntOffset(x.roundToInt(), y.roundToInt()) }.onSizeChanged { size = it }
+            .shadow(6.dp, RoundedCornerShape(24.dp)).background(c.menu, RoundedCornerShape(24.dp)).padding(horizontal = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        val colorLabel = stringResource(R.string.viewer_markup_color)
+        for (color in FOLLOW_UP_COLORS) {
+            val on = color == f.color
+            Box(
+                Modifier.size(40.dp).clickable(role = Role.RadioButton) { vm.recolorFollowUp(f, color) }
+                    .semantics { contentDescription = colorLabel; selected = on },
+                contentAlignment = Alignment.Center,
+            ) {
+                Box(Modifier.size(if (on) 26.dp else 22.dp).background(color, CircleShape).then(if (on) Modifier.border(2.dp, c.accent, CircleShape) else Modifier))
+            }
+        }
+        Box(Modifier.padding(horizontal = 4.dp).size(width = 1.dp, height = 24.dp).background(c.divider))
+        MenuIcon(LucideIcons.MessageSquarePlus, stringResource(R.string.viewer_add_note), true, short = stringResource(R.string.viewer_menu_note)) { vm.noteFollowUp(f) }
+        MenuIcon(LucideIcons.Trash2, stringResource(R.string.common_delete), true, short = stringResource(R.string.common_delete)) { vm.deleteFollowUp(f) }
     }
 }
 
@@ -355,10 +435,16 @@ private fun MenuRow(icon: ImageVector, label: String, onClick: () -> Unit) {
 fun NoteSheet(vm: AppViewModel, prompt: NotePrompt) {
     val at = prompt.at
     InlineNoteBar(
-        hint = stringResource(R.string.viewer_write_note),
+        hint = stringResource(
+            when {
+                prompt.replace != null -> R.string.viewer_replacement_hint
+                prompt.insert != null -> R.string.viewer_insertion_hint
+                else -> R.string.viewer_write_note
+            },
+        ),
         onDismiss = { vm.notePrompt = null },
         onPost = { vm.postNote(prompt, it) },
-        onVoice = if (at != null && prompt.selection == null) ({ vm.notePrompt = null; vm.startVoice(prompt.doc, at) }) else null,
+        onVoice = if (at != null && prompt.selection == null && prompt.edit == null) ({ vm.notePrompt = null; vm.startVoice(prompt.doc, at) }) else null,
     )
 }
 

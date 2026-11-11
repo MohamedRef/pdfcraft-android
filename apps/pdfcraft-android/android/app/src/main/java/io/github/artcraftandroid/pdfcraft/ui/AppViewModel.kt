@@ -1651,18 +1651,85 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         pendingMarkupPreview = preview
         addMarkup(doc, markup, page, rects, color, opacity, onSettled = {
             if (pendingMarkupPreview === preview) pendingMarkupPreview = null
+        }, onDone = { r ->
+            // the new markup stays in hand: recolour it, add a note to it or delete it (#197)
+            val added = r.optJSONObject("comment")
+            val index = added?.optInt("index", 0) ?: 0
+            if (index > 0 && document === doc) {
+                val bounds = floatArrayOf(rects.minOf { it[0] }, rects.minOf { it[1] }, rects.maxOf { it[2] }, rects.maxOf { it[3] })
+                markupFollowUp = io.github.artcraftandroid.pdfcraft.ui.viewer.MarkupFollowUp(doc, page, index - 1, bounds, color)
+            }
         })
     }
 
+    /** The text markup just added from the selection menu, with its follow-up bar (#197). */
+    var markupFollowUp by mutableStateOf<io.github.artcraftandroid.pdfcraft.ui.viewer.MarkupFollowUp?>(null)
+
+    private fun followUpArgs(f: io.github.artcraftandroid.pdfcraft.ui.viewer.MarkupFollowUp) = mapOf("page" to f.page + 1, "index" to f.index + 1)
+
+    /** Give the new markup another colour (the bar stays, showing it). */
+    fun recolorFollowUp(f: io.github.artcraftandroid.pdfcraft.ui.viewer.MarkupFollowUp, color: androidx.compose.ui.graphics.Color) {
+        markupFollowUp = f.copy(color = color)
+        runTool(f.doc, "comment_edit", followUpArgs(f) + ("color" to color.hex()))
+    }
+
+    /** Write a note on the new markup: its text, as a highlight carrying a note has. */
+    fun noteFollowUp(f: io.github.artcraftandroid.pdfcraft.ui.viewer.MarkupFollowUp) {
+        markupFollowUp = null
+        notePrompt = NotePrompt(f.doc, null, edit = f)
+    }
+
+    fun deleteFollowUp(f: io.github.artcraftandroid.pdfcraft.ui.viewer.MarkupFollowUp) {
+        markupFollowUp = null
+        runTool(f.doc, "comment_delete", followUpArgs(f))
+    }
+
+    /**
+     * Replace Text (#170): strike the selection through and suggest [replacement] for it, as
+     * Acrobat's Replace Text does (a StrikeOut grouped with a Caret carrying the new text).
+     */
+    fun replaceSelection(doc: OpenDocument, page: Int, rects: List<FloatArray>, replacement: String) {
+        if (document !== doc || !doc.info.allowsAnnotation || rects.isEmpty() || replacement.isBlank()) return
+        val quads = rects.map { r -> listOf(r[0], r[1], r[2], r[1], r[0], r[3], r[2], r[3]).map { it.toDouble() } }
+        runTool(doc, "comment_add", mapOf(
+            "page" to page + 1, "type" to "replace", "quads" to quads, "contents" to replacement,
+            "color" to toolPrefs.color(StyledTool.Strikethrough).hex(), "author" to author,
+        ))
+    }
+
+    /** Insert Text (#170): a caret after the selection's last character, carrying [inserted]. */
+    fun insertAfterSelection(doc: OpenDocument, page: Int, rects: List<FloatArray>, inserted: String) {
+        val last = rects.lastOrNull() ?: return
+        if (document !== doc || !doc.info.allowsAnnotation || inserted.isBlank()) return
+        runTool(doc, "comment_add", mapOf(
+            "page" to page + 1, "type" to "caret", "at" to listOf(last[2].toDouble(), last[3].toDouble()), "contents" to inserted,
+            "color" to toolPrefs.color(StyledTool.Note).hex(), "author" to author,
+        ))
+    }
+
     /** Mark text with [markup]: [rects] (points, one per line) on [page]. */
-    fun addMarkup(doc: OpenDocument, markup: TextMarkup, page: Int, rects: List<FloatArray>, color: androidx.compose.ui.graphics.Color, opacity: Float, contents: String? = null, onSettled: (() -> Unit)? = null) {
-        runTool(doc, "comment_add", markupArgs(markup, page, rects, color, opacity, author, contents), onSettled = onSettled)
+    fun addMarkup(doc: OpenDocument, markup: TextMarkup, page: Int, rects: List<FloatArray>, color: androidx.compose.ui.graphics.Color, opacity: Float, contents: String? = null, onSettled: (() -> Unit)? = null, onDone: (JSONObject) -> Unit = {}) {
+        runTool(doc, "comment_add", markupArgs(markup, page, rects, color, opacity, author, contents), onSettled = onSettled, onDone = onDone)
     }
 
     /** Post a note at [at] (or, for a selection, a highlight carrying the note). */
     fun postNote(prompt: NotePrompt, text: String) {
         notePrompt = null
         val doc = prompt.doc
+        prompt.edit?.let { f ->
+            if (text.isNotBlank()) runTool(doc, "comment_edit", followUpArgs(f) + ("contents" to text))
+            return
+        }
+        prompt.replace?.let { sel ->
+            replaceSelection(doc, sel.range.page.toInt(), sel.rects, text)
+            doc.selection.clear()
+            return
+        }
+        prompt.insert?.let { sel ->
+            insertAfterSelection(doc, sel.range.page.toInt(), sel.rects, text)
+            doc.selection.clear()
+            return
+        }
         val sel = prompt.selection
         if (sel != null) {
             addMarkup(doc, TextMarkup.Highlight, sel.range.page.toInt(), sel.rects, toolPrefs.color(StyledTool.Highlight), toolPrefs.opacity(StyledTool.Highlight), text)

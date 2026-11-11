@@ -674,7 +674,7 @@
     <string name="toolbar_tool_on_bar">%1$s، في شريط الأدوات</string>
     <string name="toolbar_tool_in_more_tools">%1$s، في المزيد من الأدوات</string>
     <string name="toolbar_strikethrough">شطب</string>
-    <string name="toolbar_no_text_to_mark">لا يوجد نص قابل للتحديد في هذه الصفحة. استخدم التعرّف على النص أولًا من «المزيد من الأدوات».</string>
+    <string name="toolbar_no_text_to_mark">لا يوجد نص قابل للتحديد هنا. اسحب لتظليل منطقة، أو تعرّف على النص أولًا.</string>
     <string name="toolbar_draw_freeform">رسم حر</string>
     <string name="toolbar_eraser">ممحاة</string>
     <string name="toolbar_line_thickness">سُمك الخط</string>
@@ -1564,4 +1564,23 @@
     <string name="library_tags_hint">امتحان، أسبوع 3</string>
     <string name="library_collections">المجموعات</string>
     <string name="library_remove">إزالة من المكتبة</string>
+    <!-- Selection menu labels, markup follow-up bar, replace/insert text (#197, #170) -->
+    <string name="viewer_menu_note">ملاحظة</string>
+    <string name="viewer_menu_highlight">تظليل</string>
+    <string name="viewer_menu_underline">تسطير</string>
+    <string name="viewer_menu_strike">شطب</string>
+    <string name="viewer_menu_squiggly">متعرج</string>
+    <string name="viewer_replace_text">استبدال النص</string>
+    <string name="viewer_insert_text">إدراج نص بعده</string>
+    <string name="viewer_replacement_hint">النص البديل</string>
+    <string name="viewer_insertion_hint">النص المراد إدراجه</string>
+    <string name="viewer_markup_color">لون التعليم</string>
+    <string name="viewer_add_note">إضافة ملاحظة</string>
+    <!-- Polygon and connected lines in Draw (#133) -->
+    <string name="toolbar_draw_polygon">مضلع: اضغط على كل زاوية ثم على الأولى مرة أخرى</string>
+    <string name="toolbar_draw_polyline">خطوط متصلة: اضغط على كل نقطة ثم على الأخيرة مرة أخرى</string>
+    <string name="ink_toolbar_polygon">مضلع</string>
+    <string name="ink_toolbar_polyline">خطوط</string>
+    <string name="viewer_hint_polygon">اضغط على كل زاوية. اضغط على الزاوية الأولى مرة أخرى للإنهاء.</string>
+    <string name="viewer_hint_polyline">اضغط على كل نقطة. اضغط على النقطة الأخيرة مرة أخرى للإنهاء.</string>
 </resources>

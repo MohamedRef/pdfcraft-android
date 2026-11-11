@@ -1082,7 +1082,7 @@
     <!-- Highlight tool: marking text -->
     <string name="toolbar_strikethrough">Strikethrough</string>
     <!-- Note: "More tools" and "Recognize text" are the names of the menu and the tool -->
-    <string name="toolbar_no_text_to_mark">This page has no text to mark. Recognize text first (More tools ▸ Recognize text).</string>
+    <string name="toolbar_no_text_to_mark">No selectable text here. Drag to highlight an area, or recognize the text first.</string>
 
     <!-- Draw tool -->
     <string name="toolbar_draw_freeform">Draw freeform</string>
@@ -2138,4 +2138,23 @@
     <string name="library_tags_hint">exam, week 3</string>
     <string name="library_collections">Collections</string>
     <string name="library_remove">Remove from library</string>
+    <!-- Selection menu labels, markup follow-up bar, replace/insert text (#197, #170) -->
+    <string name="viewer_menu_note">Note</string>
+    <string name="viewer_menu_highlight">Highlight</string>
+    <string name="viewer_menu_underline">Underline</string>
+    <string name="viewer_menu_strike">Strike</string>
+    <string name="viewer_menu_squiggly">Squiggly</string>
+    <string name="viewer_replace_text">Replace text</string>
+    <string name="viewer_insert_text">Insert text after</string>
+    <string name="viewer_replacement_hint">Replacement text</string>
+    <string name="viewer_insertion_hint">Text to insert</string>
+    <string name="viewer_markup_color">Markup colour</string>
+    <string name="viewer_add_note">Add note</string>
+    <!-- Polygon and connected lines in Draw (#133) -->
+    <string name="toolbar_draw_polygon">Polygon: tap each corner, then the first one again</string>
+    <string name="toolbar_draw_polyline">Connected lines: tap each point, then the last one again</string>
+    <string name="ink_toolbar_polygon">Polygon</string>
+    <string name="ink_toolbar_polyline">Lines</string>
+    <string name="viewer_hint_polygon">Tap each corner. Tap the first corner again to finish.</string>
+    <string name="viewer_hint_polyline">Tap each point. Tap the last point again to finish.</string>
 </resources>

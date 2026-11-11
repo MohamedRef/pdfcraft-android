@@ -198,6 +198,8 @@ internal fun DrawToolbar(vm: AppViewModel, doc: OpenDocument) {
                     DrawShapeButton(ctl, prefs, InkShapeMode.Oval, LucideIcons.Circle, stringResource(R.string.toolbar_draw_oval))
                     DrawShapeButton(ctl, prefs, InkShapeMode.Arrow, LucideIcons.ArrowUpRight, stringResource(R.string.toolbar_draw_arrow))
                     DrawShapeButton(ctl, prefs, InkShapeMode.Cloud, LucideIcons.Cloud, stringResource(R.string.toolbar_draw_cloud))
+                    DrawShapeButton(ctl, prefs, InkShapeMode.Polygon, LucideIcons.Pentagon, stringResource(R.string.toolbar_draw_polygon))
+                    DrawShapeButton(ctl, prefs, InkShapeMode.Polyline, LucideIcons.Spline, stringResource(R.string.toolbar_draw_polyline))
                     DrawToolbarButton(
                         label = stringResource(R.string.ink_ruler),
                         active = ctl.rulerOn,
@@ -238,6 +240,8 @@ private fun DrawShapeButton(
         InkShapeMode.Oval -> R.string.ink_toolbar_oval
         InkShapeMode.Arrow -> R.string.ink_toolbar_arrow
         InkShapeMode.Cloud -> R.string.ink_toolbar_cloud
+        InkShapeMode.Polygon -> R.string.ink_toolbar_polygon
+        InkShapeMode.Polyline -> R.string.ink_toolbar_polyline
         InkShapeMode.Freehand -> R.string.toolbar_draw_freeform
     })
     DrawToolbarButton(label, selected, caption = shortLabel, onClick = {

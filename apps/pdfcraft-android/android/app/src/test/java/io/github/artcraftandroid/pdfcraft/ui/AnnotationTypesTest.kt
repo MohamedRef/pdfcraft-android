@@ -8,6 +8,10 @@ import io.github.artcraftandroid.pdfcraft.ui.viewer.arrowPreview
 import io.github.artcraftandroid.pdfcraft.ui.viewer.calloutBox
 import io.github.artcraftandroid.pdfcraft.ui.viewer.inkShapeGeometry
 import io.github.artcraftandroid.pdfcraft.ui.viewer.isAnnotation
+import io.github.artcraftandroid.pdfcraft.ui.viewer.PolyTap
+import io.github.artcraftandroid.pdfcraft.ui.viewer.polyTap
+import io.github.artcraftandroid.pdfcraft.ui.viewer.polyAnnotationArgs
+import io.github.artcraftandroid.pdfcraft.ui.viewer.areaHighlightRect
 import io.github.artcraftandroid.pdfcraft.ui.viewer.shapeAnnotationArgs
 import io.github.artcraftandroid.pdfcraft.ui.viewer.squigglePoints
 import io.github.artcraftandroid.pdfcraft.ui.viewer.stampLabel
@@ -19,11 +23,52 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class AnnotationTypesTest {
-    @Test fun arrowAndCloudAreRealAnnotations() {
-        assertTrue(InkShapeMode.Arrow.isAnnotation)
-        assertTrue(InkShapeMode.Cloud.isAnnotation)
-        assertFalse(InkShapeMode.Line.isAnnotation)
+    @Test fun everyShapeToolMakesARealAnnotation() {
+        // #170: lines, rectangles and ovals are PDF shape annotations, as arrows and clouds are
+        for (m in listOf(InkShapeMode.Arrow, InkShapeMode.Cloud, InkShapeMode.Line, InkShapeMode.Rectangle, InkShapeMode.Oval, InkShapeMode.Polygon, InkShapeMode.Polyline)) {
+            assertTrue(m.name, m.isAnnotation)
+        }
         assertFalse(InkShapeMode.Freehand.isAnnotation)
+    }
+
+    @Test fun lineRectangleAndOvalArgs() {
+        val line = inkShapeGeometry(InkShapeMode.Line, Offset(10f, 20f), Offset(60f, 20f), 200f, 200f)!!
+        val l = shapeAnnotationArgs(InkShapeMode.Line, line, 0, "#000000", 1f, 2f, null)!!
+        assertEquals("line", l["type"])
+        assertEquals(listOf(10.0, 20.0), l["from"])
+        assertEquals(listOf(60.0, 20.0), l["to"])
+        val rect = inkShapeGeometry(InkShapeMode.Rectangle, Offset(50f, 40f), Offset(10f, 90f), 200f, 200f)!!
+        val r = shapeAnnotationArgs(InkShapeMode.Rectangle, rect, 1, "#FF0000", 1f, 2f, "me")!!
+        assertEquals("rectangle", r["type"])
+        assertEquals(listOf(10.0, 40.0, 50.0, 90.0), r["rect"])
+        val oval = inkShapeGeometry(InkShapeMode.Oval, Offset(10f, 40f), Offset(50f, 90f), 200f, 200f)!!
+        assertEquals("oval", shapeAnnotationArgs(InkShapeMode.Oval, oval, 1, "#FF0000", 1f, 2f, "me")!!["type"])
+    }
+
+    @Test fun tappedPolygonsFinishOnTheFirstOrLastPoint() {
+        val pts = mutableListOf<Offset>()
+        fun tap(x: Float, y: Float, closed: Boolean = true) = polyTap(pts, Offset(x, y), 6f, closed)
+        assertEquals(PolyTap.Add, tap(10f, 10f)); pts.add(Offset(10f, 10f))
+        // the same point again is not a corner (and too few points to finish)
+        assertEquals(PolyTap.Ignore, tap(12f, 11f))
+        assertEquals(PolyTap.Add, tap(100f, 10f)); pts.add(Offset(100f, 10f))
+        // a polygon needs three corners; connected lines finish on the last point with two
+        assertEquals(PolyTap.Ignore, tap(100f, 12f))
+        assertEquals(PolyTap.Finish, tap(100f, 12f, closed = false))
+        assertEquals(PolyTap.Add, tap(100f, 100f)); pts.add(Offset(100f, 100f))
+        assertEquals(PolyTap.Finish, tap(11f, 9f))
+        assertEquals(PolyTap.Finish, tap(99f, 101f))
+        val args = polyAnnotationArgs(true, pts, 0, "#000000", 1f, 1f, null)!!
+        assertEquals("polygon", args["type"])
+        assertEquals(3, (args["points"] as List<*>).size)
+        assertEquals("polyline", polyAnnotationArgs(false, pts.take(2), 0, "#000000", 1f, 1f, null)!!["type"])
+        assertNull(polyAnnotationArgs(true, pts.take(2), 0, "#000000", 1f, 1f, null))
+    }
+
+    @Test fun areaHighlightNeedsARealDrag() {
+        assertArrayEquals(floatArrayOf(10f, 20f, 60f, 80f), areaHighlightRect(60f, 80f, 10f, 20f), 0f)
+        assertNull(areaHighlightRect(10f, 20f, 12f, 80f))
+        assertNull(areaHighlightRect(10f, 20f, Float.NaN, 80f))
     }
 
     @Test fun anArrowKeepsItsDirectionAndPage() {
@@ -48,7 +93,7 @@ class AnnotationTypesTest {
         assertNull(inkShapeGeometry(InkShapeMode.Arrow, Offset(1f, 1f), Offset(1.5f, 1.5f), 100f, 100f))
         val line = SnappedShape.Line(Offset(0f, 0f), Offset(10f, 10f))
         assertNull(shapeAnnotationArgs(InkShapeMode.Cloud, line, 0, "#000000", 1f, 1f, null))
-        assertNull(shapeAnnotationArgs(InkShapeMode.Line, line, 0, "#000000", 1f, 1f, null))
+        assertNull(shapeAnnotationArgs(InkShapeMode.Rectangle, line, 0, "#000000", 1f, 1f, null))
     }
 
     @Test fun theArrowPreviewEndsInAnOpenHeadAtTheTip() {
