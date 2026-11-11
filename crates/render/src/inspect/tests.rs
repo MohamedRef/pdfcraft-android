@@ -2302,6 +2302,50 @@ fn efopen_filters_named_by_the_file_open_and_older_handlers_do_not() {
 /// the one-by-one read makes it.
 #[test]
 fn annotation_read_ahead_keeps_inspection_identical() {
+    let bytes = links_and_notes_pdf();
+    let pages_info = inspect(Arc::new(bytes.clone()), None).unwrap().pages;
+    let fill = |prefetch: bool| {
+        let lazy = LazyStructure::new(Arc::new(bytes.clone()), None).unwrap();
+        let inspector = Inspector::new(&lazy);
+        if prefetch {
+            core::prefetch_annotations(&lazy, &inspector);
+        }
+        let mut info = DocInfo { pages: pages_info.clone(), ..Default::default() };
+        inspector.fill(&mut info);
+        (format!("{info:?}"), lazy.failed(), info.links.len())
+    };
+    let (plain, plain_failed, links) = fill(false);
+    assert!(links > 64, "{links} links");
+    assert_eq!(fill(true), (plain, plain_failed, links));
+}
+
+/// Android adaptation (#212): recording inspection sub-stages changes nothing inspection reads
+/// or reports, and names each sub-stage with a fixed code constant.
+#[test]
+fn recorded_inspection_stages_keep_the_result_identical() {
+    let bytes = links_and_notes_pdf();
+    let plain = inspect(Arc::new(bytes.clone()), None).unwrap();
+    let trace = crate::OpenTrace::recording();
+    let traced = core::inspect_with_trace(Arc::new(bytes), None, &trace).unwrap();
+    assert_eq!(format!("{traced:?}"), format!("{plain:?}"));
+    let names: Vec<_> = trace.snapshot().iter().map(|s| s.name).collect();
+    for stage in [
+        "native_inspect_structure",
+        "native_inspect_index",
+        "native_inspect_prefetch",
+        "native_inspect_outline",
+        "native_inspect_annotations",
+        "native_inspect_fields",
+        "native_inspect_fonts",
+        "native_inspect_release",
+        "native_inspect_lazy",
+    ] {
+        assert!(names.contains(&stage), "missing {stage}: {names:?}");
+    }
+}
+
+/// Six pages of 40 annotations each: links to other pages, URI links and notes.
+fn links_and_notes_pdf() -> Vec<u8> {
     let pages = 6usize;
     let per_page = 40usize;
     let mut objects: Vec<String> = vec!["<< /Type /Catalog /Pages 2 0 R >>".into()];
@@ -2339,20 +2383,7 @@ fn annotation_read_ahead_keeps_inspection_identical() {
         bytes.extend_from_slice(format!("{o:010} 00000 n \n").as_bytes());
     }
     bytes.extend_from_slice(format!("trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n", objects.len() + 1).as_bytes());
-    let pages_info = inspect(Arc::new(bytes.clone()), None).unwrap().pages;
-    let fill = |prefetch: bool| {
-        let lazy = LazyStructure::new(Arc::new(bytes.clone()), None).unwrap();
-        let inspector = Inspector::new(&lazy);
-        if prefetch {
-            core::prefetch_annotations(&lazy, &inspector);
-        }
-        let mut info = DocInfo { pages: pages_info.clone(), ..Default::default() };
-        inspector.fill(&mut info);
-        (format!("{info:?}"), lazy.failed(), info.links.len())
-    };
-    let (plain, plain_failed, links) = fill(false);
-    assert!(links > 64, "{links} links");
-    assert_eq!(fill(true), (plain, plain_failed, links));
+    bytes
 }
 
 /// A PDF whose one embedded file is `data`, stored deflated when `deflate` is set.
