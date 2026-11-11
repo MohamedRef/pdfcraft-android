@@ -181,6 +181,7 @@ fun AppRoot(vm: AppViewModel, onBrowse: () -> Unit, onPickSignatureImage: () -> 
                     Text(stringResource(R.string.root_reading_mode_body), color = c.text, fontSize = 14.sp)
                 }
             }
+            io.github.artcraftandroid.pdfcraft.ui.viewer.ToolDialogs(vm)
             vm.busy?.let { message ->
                 PdfDialog(onDismiss = {}, title = null, confirm = null, dismiss = null) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
