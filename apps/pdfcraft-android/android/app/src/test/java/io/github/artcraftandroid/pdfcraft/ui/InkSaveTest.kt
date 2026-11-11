@@ -5,6 +5,7 @@ import io.github.artcraftandroid.pdfcraft.ui.viewer.InkAppearance
 import io.github.artcraftandroid.pdfcraft.ui.viewer.InkSaveStroke
 import io.github.artcraftandroid.pdfcraft.ui.viewer.InkStyle
 import io.github.artcraftandroid.pdfcraft.ui.viewer.MAX_PRESSURE_INK_POINTS
+import io.github.artcraftandroid.pdfcraft.ui.viewer.inkSaveCommandGroups
 import io.github.artcraftandroid.pdfcraft.ui.viewer.inkSaveCommands
 import io.github.artcraftandroid.pdfcraft.ui.viewer.inkStylePointWidths
 import org.junit.Assert.assertEquals
@@ -77,5 +78,26 @@ class InkSaveTest {
     @Test fun invalidPressureNeverMakesAZeroWidth() {
         val w = inkStylePointWidths(listOf(Float.NaN, 0f, -1f, 2f), 4f, InkStyle.Fountain)
         assertTrue(w.all { it.isFinite() && it > 0f })
+    }
+
+    /** #72: one undo step per stroke, however the drafts are saved (eraser, pause, Done). */
+    @Test fun everyStrokeIsSavedAsItsOwnGroupOfCommands() {
+        val a = InkSaveStroke(0, pen, line(3), listOf(0.2f, 0.5f, 1f), true)
+        val b = InkSaveStroke(0, pen, line(3), listOf(1f, 0.5f, 0.2f), true)
+        val c = InkSaveStroke(0, pen, line(3), List(3) { 1f }, false)
+        val groups = inkSaveCommandGroups(listOf(a, b, c), ::hex)
+        assertEquals(3, groups.size)
+        assertTrue(groups.all { it.size == 1 })
+        @Suppress("UNCHECKED_CAST")
+        assertTrue(groups.all { g -> (g[0]["strokes"] as List<*>).size == 1 })
+        // The commands themselves are what saving these strokes one at a time always gave.
+        assertEquals(listOf(a, b, c).map { inkSaveCommands(listOf(it), ::hex) }, groups)
+    }
+
+    @Test fun aVeryLongStrokeStaysOneGroup() {
+        val n = MAX_PRESSURE_INK_POINTS * 2 + 10
+        val groups = inkSaveCommandGroups(listOf(InkSaveStroke(0, pen, line(n), List(n) { 0.5f }, true)), ::hex)
+        assertEquals(1, groups.size)
+        assertEquals(1, groups[0].size)
     }
 }

@@ -144,6 +144,11 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
     }
 
     // Reopen where the reader left off.
+    // the reader's saved reading colours, once the engine has the whole document
+    LaunchedEffect(doc, doc.info.preparing) {
+        if (!doc.info.preparing) vm.applySavedReadingColors(doc)
+    }
+
     LaunchedEffect(doc) {
         snapshotFlow { doc.viewer.viewW }.collect { w ->
             if (w > 0f) vm.pendingPage?.let { p ->
@@ -427,6 +432,7 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
                                 search.running -> stringResource(R.string.viewer_searching)
                                 else -> null
                             },
+                            onShowAll = if (search.hits.isNotEmpty()) ({ ctl.sheet = ViewerSheet.SearchResults }) else null,
                             progress = if (search.running && doc.pageCount > 1) search.searched.toFloat() / doc.pageCount else null,
                             progressLabel = if (search.running) stringResource(R.string.viewer_search_progress, search.searched, doc.pageCount) else null,
                         )
@@ -571,6 +577,7 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
                 ViewerSheet.Bookmarks -> BookmarksSheet(vm, doc)
                 ViewerSheet.TextStyles -> TextStylesSheet(vm, doc)
                 ViewerSheet.Attachments -> AttachmentsSheet(vm, doc)
+                ViewerSheet.SearchResults -> SearchResultsSheet(doc, onShow = { showHit(doc, it) })
                 ViewerSheet.Comments -> Unit
                 ViewerSheet.MoreTools -> MoreToolsSheet(vm, doc)
                 ViewerSheet.Signatures -> SignaturesSheet(vm, doc)
@@ -627,7 +634,7 @@ private fun toolHint(tool: ViewerTool, markup: TextMarkup, doc: OpenDocument): S
     ViewerTool.Draw -> text(R.string.viewer_hint_draw)
     ViewerTool.Comment -> if (doc.controller.commentMode == CommentMode.Stamp) text(R.string.viewer_hint_stamp) else text(R.string.viewer_hint_comment)
     ViewerTool.Text -> if (doc.controller.textCallout) text(R.string.viewer_hint_callout) else text(R.string.viewer_hint_text)
-    ViewerTool.FillSign -> if (doc.info.fields > 0u) null else text(R.string.viewer_hint_fill_sign)
+    ViewerTool.FillSign -> text(if (doc.info.fields > 0u) R.string.viewer_hint_fill_sign_form else R.string.viewer_hint_fill_sign)
     else -> null
 }
 

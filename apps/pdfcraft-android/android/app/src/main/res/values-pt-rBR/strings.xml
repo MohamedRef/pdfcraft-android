@@ -281,6 +281,7 @@
     <string name="viewer_hint_comment">Toque no local do comentário</string>
     <string name="viewer_hint_text">Toque para adicionar texto</string>
     <string name="viewer_hint_fill_sign">Toque onde deseja preencher o texto</string>
+    <string name="viewer_hint_fill_sign_form">Toque em um campo azul para preenchê-lo ou toque em outro lugar para adicionar o item escolhido</string>
     <string name="viewer_add_image">Adicionar imagem</string>
     <string name="viewer_image_from_photos">Das fotos</string>
     <string name="viewer_image_from_camera">Da câmera</string>
@@ -631,7 +632,7 @@
     <string name="fill_tab_image">Imagem</string>
     <string name="fill_draw_signature_here">Desenhe sua assinatura aqui</string>
     <string name="fill_draw_initials_here">Desenhe sua rubrica aqui</string>
-    <string name="fill_save_to_device">Salvar no dispositivo</string>
+    <string name="fill_save_to_device">Lembrar esta assinatura</string>
     <string name="fill_smaller">Menor</string>
     <string name="fill_bigger">Maior</string>
     <string name="fill_colour">Cor</string>
@@ -644,6 +645,7 @@
     <string name="msg_file_access_lost">O PdfCraft não consegue mais abrir este arquivo. Abra-o novamente no app em que ele está ou use Abrir arquivo.</string>
     <string name="msg_undone">%1$s desfeito</string>
     <string name="msg_redone">%1$s refeito</string>
+    <string name="msg_ink_kept">A tinta que não foi salva foi mantida. Abra Desenhar e toque em Concluído para salvá-la novamente.</string>
     <string name="msg_tool_blocked_security">Esta ferramenta não está disponível devido às configurações de segurança do documento.</string>
     <string name="msg_snap_to_shape_on">Ajuste à forma ativado</string>
     <string name="msg_search_image_only">As palavras deste arquivo são imagens e ainda não podem ser pesquisadas.</string>

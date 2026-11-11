@@ -82,6 +82,9 @@ class OpenDocument(
     /** What the active tool still holds (ink being drawn), to add when the tool is left. */
     var commitTool: (() -> Unit)? = null
 
+    /** The Draw tool's ink the document does not have yet (see [InkDrafts]). */
+    internal val ink = io.github.artcraftandroid.pdfcraft.ui.viewer.InkDrafts()
+
     /**
      * Undo and redo inside the active tool (strokes drawn but not yet added): while it is set the
      * top bar's undo and redo act on it and never reach the document, as the reference's do.

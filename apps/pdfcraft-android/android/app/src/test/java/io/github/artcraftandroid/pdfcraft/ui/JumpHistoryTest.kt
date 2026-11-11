@@ -98,3 +98,31 @@ class JumpHistoryTest {
         assertTrue(searchTextSample(0).isEmpty())
     }
 }
+
+class SearchRowsTest {
+    private fun hit(page: Int, context: String) = io.github.artcraftandroid.pdfcraft.core.SearchHit(
+        io.github.artcraftandroid.pdfcraft.core.TextRange(page.toUInt(), 0u, 1u), emptyList(), context,
+    )
+
+    @Test
+    fun hitsAreGroupedUnderTheirPage() {
+        val rows = io.github.artcraftandroid.pdfcraft.ui.viewer.searchRows(listOf(hit(0, " a "), hit(0, "b"), hit(4, "c")))
+        assertEquals(
+            listOf(
+                io.github.artcraftandroid.pdfcraft.ui.viewer.SearchRow.Page(0, 2),
+                io.github.artcraftandroid.pdfcraft.ui.viewer.SearchRow.Hit(0, 0, "a"),
+                io.github.artcraftandroid.pdfcraft.ui.viewer.SearchRow.Hit(1, 0, "b"),
+                io.github.artcraftandroid.pdfcraft.ui.viewer.SearchRow.Page(4, 1),
+                io.github.artcraftandroid.pdfcraft.ui.viewer.SearchRow.Hit(2, 4, "c"),
+            ),
+            rows,
+        )
+    }
+
+    @Test
+    fun readingColoursFallBackToOff() {
+        assertEquals(io.github.artcraftandroid.pdfcraft.ui.viewer.ReadingColors.Off, io.github.artcraftandroid.pdfcraft.ui.viewer.ReadingColors.fromPref(null))
+        assertEquals(io.github.artcraftandroid.pdfcraft.ui.viewer.ReadingColors.YellowOnBlack, io.github.artcraftandroid.pdfcraft.ui.viewer.ReadingColors.fromPref("yellow-on-black"))
+        assertEquals(io.github.artcraftandroid.pdfcraft.ui.viewer.ReadingColors.Off, io.github.artcraftandroid.pdfcraft.ui.viewer.ReadingColors.fromPref("bogus"))
+    }
+}
