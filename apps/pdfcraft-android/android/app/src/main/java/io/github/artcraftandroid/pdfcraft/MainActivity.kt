@@ -92,7 +92,7 @@ class MainActivity : ComponentActivity() {
         lifecycleScope.launch { for (i in vm.intents) launchSafely { startActivity(i) } }
         // a document another app opened was closed: back to that app, not Home (#47)
         lifecycleScope.launch { for (u in vm.leave) finish() }
-        lifecycleScope.launch { for ((file, name) in vm.prints) print(file, name) }
+        lifecycleScope.launch { for (job in vm.prints) print(job.file, job.name, job.deleteWhenDone) }
         lifecycleScope.launch { for (name in vm.saveCopyRequests) launchSafely { saveCopy.launch(name) } }
         lifecycleScope.launch {
             for (ignored in vm.bookmarkJsonPicks) {
@@ -250,9 +250,12 @@ class MainActivity : ComponentActivity() {
         vm.open(uri, fromOtherApp = true)
     }
 
-    /** Hand [file] to Android's print framework. */
-    private fun print(file: File, name: String) {
-        val pm = getSystemService(PrintManager::class.java) ?: return
+    /**
+     * Hand [file] to Android's print framework. [deleteWhenDone]: [file] is a temporary copy (an
+     * unlocked one, without its password) that goes when the print job finishes or fails (#105).
+     */
+    private fun print(file: File, name: String, deleteWhenDone: Boolean = false) {
+        val pm = getSystemService(PrintManager::class.java) ?: run { if (deleteWhenDone) file.delete(); return }
         val adapter = object : PrintDocumentAdapter() {
             override fun onLayout(old: PrintAttributes?, new: PrintAttributes?, cancel: CancellationSignal?, callback: LayoutResultCallback, extras: Bundle?) {
                 if (cancel?.isCanceled == true) {
@@ -270,8 +273,15 @@ class MainActivity : ComponentActivity() {
                     callback.onWriteFailed(e.message)
                 }
             }
+
+            override fun onFinish() {
+                if (deleteWhenDone) file.delete()
+            }
         }
-        runCatching { pm.print(name, adapter, null) }.onFailure { vm.tell(getString(R.string.main_error_print_not_allowed)) }
+        runCatching { pm.print(name, adapter, null) }.onFailure {
+            if (deleteWhenDone) file.delete()
+            vm.tell(getString(R.string.main_error_print_not_allowed))
+        }
     }
 }
 

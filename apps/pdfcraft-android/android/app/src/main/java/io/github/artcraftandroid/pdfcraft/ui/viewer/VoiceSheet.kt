@@ -219,6 +219,8 @@ fun VoiceCommentPlayer(vm: AppViewModel, doc: OpenDocument, comment: CommentInfo
     LaunchedEffect(comment.page, comment.index, doc.info.generation) {
         val f = vm.voiceRecording(doc, comment)
         ready = f != null && player.load(f)
+        // the player keeps the file open once loaded; the decoded copy needn't stay on disk (#105)
+        f?.delete()
     }
     DisposableEffect(comment.page, comment.index) { onDispose { player.release() } }
     val playLabel = stringResource(if (player.playing) R.string.common_pause else R.string.voice_play_audio)

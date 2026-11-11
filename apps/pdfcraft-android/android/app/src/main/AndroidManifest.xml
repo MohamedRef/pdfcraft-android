@@ -20,9 +20,12 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
 
+    <!-- No app data leaves the phone through backup or device transfer (#107). -->
     <application
         android:name=".PdfcraftApplication"
         android:allowBackup="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="@xml/backup_rules"
         android:largeHeap="true"
         android:enableOnBackInvokedCallback="true"
         android:icon="@mipmap/ic_launcher"

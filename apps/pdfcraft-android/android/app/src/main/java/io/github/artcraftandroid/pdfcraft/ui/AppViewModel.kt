@@ -55,6 +55,7 @@ import java.io.File
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -116,6 +117,8 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     private val imageBudget = runtimeImageBudget(Runtime.getRuntime().maxMemory())
 
     init {
+        // temporary files a crash or a killed process left in the cache (#105)
+        viewModelScope.launch(Dispatchers.IO) { sweepCache() }
         viewModelScope.launch {
             application.engine.await().onSuccess { engine = it }.onFailure { engineProblem = it.userMessage }
             refreshRecents()
@@ -139,8 +142,12 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             val open = document?.source?.toString()
             recentList = withContext(Dispatchers.IO) {
                 recents.list().also { list ->
+                    val uris = list.map { it.uri }
+                    // access to documents that left Recent is given back (#108), before the copies
+                    // are pruned, so a document whose grant goes keeps its copy
+                    runCatching { files.releaseUnusedAccess(uris, open) }
                     // copies of documents that left Recent go too (#42)
-                    runCatching { files.pruneCopies(list.map { it.uri }, open) }
+                    runCatching { files.pruneCopies(uris, open) }
                 }
             }
         }
@@ -410,8 +417,13 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     /** Intents for the activity to start (share, open a link): the view model has no activity. */
     val intents = Channel<Intent>(Channel.BUFFERED)
 
-    /** Print jobs for the activity: the file and its name. */
-    val prints = Channel<Pair<File, String>>(Channel.BUFFERED)
+    /** Print jobs for the activity. */
+    val prints = Channel<PrintJob>(Channel.BUFFERED)
+
+    /** Remove stale temporary files from the cache (#105). */
+    private fun sweepCache() {
+        runCatching { io.github.artcraftandroid.pdfcraft.engine.CacheCleanup.sweep(getApplication<Application>().cacheDir) }
+    }
 
     /** A document that couldn't be saved back to where it came from, waiting for Save a copy or Discard. */
     var readOnlyPrompt by mutableStateOf<OpenDocument?>(null)
@@ -436,6 +448,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 document = null
                 readingMode = false
                 refreshRecents()
+                withContext(Dispatchers.IO) { sweepCache() }
                 if (doc.fromOtherApp) leave.trySend(Unit)
             }
         }
@@ -895,16 +908,17 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         viewModelScope.launch {
             save(doc)
             // the system's printing can't open a password-protected file: print an unlocked copy
-            val file = if (doc.info.encrypted) unlockedCopy(doc) ?: doc.file else doc.file
-            prints.trySend(file to doc.name)
+            val unlocked = if (doc.info.encrypted) unlockedCopy(doc) else null
+            // the unlocked copy has no password: the print job deletes it when it finishes (#105)
+            prints.trySend(PrintJob(unlocked ?: doc.file, doc.name, deleteWhenDone = unlocked != null))
         }
     }
 
     /** A temporary copy of [doc] without its password, for printing; null if the security can't be removed. */
     private suspend fun unlockedCopy(doc: OpenDocument): File? {
         val eng = engine ?: return null
+        val out = File(getApplication<Application>().cacheDir, "print-${System.nanoTime()}.pdf")
         return runCatching {
-            val out = tempFile("pdf")
             val copy = eng.tool("doc_open", mapOf("path" to doc.file.absolutePath, "password" to doc.password)).optLong("doc")
             try {
                 eng.tool("doc_unprotect", mapOf("doc" to copy))
@@ -913,7 +927,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 runCatching { eng.tool("doc_close", mapOf("doc" to copy, "discard_changes" to true)) }
             }
             out
-        }.getOrNull()
+        }.onFailure { out.delete() }.getOrNull()
     }
 
     /** Where Save a copy is asked to write (the activity opens the system's file creator with this name). */
@@ -1294,11 +1308,16 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                     val type = android.webkit.MimeTypeMap.getSingleton().getMimeTypeFromExtension(out.extension.lowercase())
                     if (io.github.artcraftandroid.pdfcraft.ui.viewer.installableAttachment(out.name, type)) {
                         // An app package inside a PDF is never handed to the installer.
-                        out.delete()
+                        dir.deleteRecursively()
                         tell(text(R.string.attachment_install_refused, out.name))
                         return@launch
                     }
-                    val uri = files.shareable(out, out.name)
+                    val uri = try {
+                        withContext(Dispatchers.IO) { files.shareable(out, out.name) }
+                    } finally {
+                        // the other app reads the share copy; the extracted file is not needed (#105)
+                        withContext(NonCancellable + Dispatchers.IO) { dir.deleteRecursively() }
+                    }
                     intents.trySend(Intent.createChooser(Intent(Intent.ACTION_VIEW).setDataAndType(uri, type ?: "*/*").addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION), null))
                 }
             } catch (e: Exception) {
@@ -1473,9 +1492,10 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     /** Voice comment [c]'s recording as a WAV file to play, or null when it can't be read. */
     suspend fun voiceRecording(doc: OpenDocument, c: io.github.artcraftandroid.pdfcraft.core.CommentInfo): File? {
         val eng = engine ?: return null
-        val f = File(getApplication<Application>().cacheDir, "voice-play.wav")
+        // one file per playback: the player deletes it once it has loaded it (#105)
+        val f = File(getApplication<Application>().cacheDir, "voice-play-${System.nanoTime()}.wav")
         return withContext(eng.commands) {
-            runCatching { eng.session.saveSound(doc.id, c.page, c.index, f.absolutePath); f }.getOrNull()
+            runCatching { eng.session.saveSound(doc.id, c.page, c.index, f.absolutePath); f }.onFailure { f.delete() }.getOrNull()
         }
     }
 
@@ -2774,7 +2794,8 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 insertFileAt = null
                 viewModelScope.launch {
                     val f = withContext(Dispatchers.IO) { copyIn(uris.first()) }
-                    runTool(doc, "page_insert_file", mapOf("path" to f.absolutePath, "at" to at))
+                    // the picked copy goes once the pages are in (#105)
+                    runTool(doc, "page_insert_file", mapOf("path" to f.absolutePath, "at" to at), onSettled = { dropPicked(listOf(f)) })
                 }
             }
             FilePickKind.Open -> open(uris.first())
@@ -2790,6 +2811,11 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     fun pickInsertFile(doc: OpenDocument, at: Int) {
         insertFileAt = doc to at
         pickFiles(FilePickKind.Insert)
+    }
+
+    /** Delete picked copies made by [copyIn] (each in its own folder). */
+    private fun dropPicked(picked: List<File>) {
+        viewModelScope.launch(NonCancellable + Dispatchers.IO) { picked.forEach { it.parentFile?.deleteRecursively() } }
     }
 
     /** A copy of a picked file in the app's cache, under its own name. */
@@ -2856,9 +2882,17 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
 
     /** Combine the gathered files, in order, into [name].pdf. */
     fun combine(name: String) = job(text(R.string.msg_busy_combining)) { eng ->
-        val paths = withContext(Dispatchers.IO) { combineFiles.map { copyIn(it.uri).absolutePath } }
+        val copies = mutableListOf<File>()
         val out = tempFile("pdf")
-        eng.tool("doc_combine", mapOf("paths" to paths, "out" to out.absolutePath))
+        try {
+            val paths = withContext(Dispatchers.IO) { combineFiles.map { copyIn(it.uri).also(copies::add).absolutePath } }
+            eng.tool("doc_combine", mapOf("paths" to paths, "out" to out.absolutePath))
+        } catch (e: Exception) {
+            out.delete()
+            throw e
+        } finally {
+            dropPicked(copies)
+        }
         toolScreen = null
         combineFiles.clear()
         deliver(out, DocumentFiles.safeName(name))
@@ -3160,9 +3194,17 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         // at most 12 files at once, as the reference allows
         if (picked.size > MAX_CREATE_FILES) tell(plural(R.plurals.msg_create_first_files, MAX_CREATE_FILES, MAX_CREATE_FILES))
         val uris = picked.take(MAX_CREATE_FILES)
-        val paths = withContext(Dispatchers.IO) { uris.map { copyIn(it).absolutePath } }
+        val copies = mutableListOf<File>()
         val out = tempFile("pdf")
-        eng.tool("doc_create_multiple", mapOf("paths" to paths, "out" to out.absolutePath, "mode" to "combine"))
+        try {
+            val paths = withContext(Dispatchers.IO) { uris.map { copyIn(it).also(copies::add).absolutePath } }
+            eng.tool("doc_create_multiple", mapOf("paths" to paths, "out" to out.absolutePath, "mode" to "combine"))
+        } catch (e: Exception) {
+            out.delete()
+            throw e
+        } finally {
+            dropPicked(copies)
+        }
         val name = files.displayNameRaw(uris.first()).substringBeforeLast('.') + ".pdf"
         val uri = withContext(Dispatchers.IO) { files.saveToDownloads(out, DocumentFiles.safeName(name)).also { out.delete() } }
         tell(text(R.string.msg_saved_downloads, name))
@@ -3540,7 +3582,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     fun printFile(row: io.github.artcraftandroid.pdfcraft.ui.home.FileRow) {
         viewModelScope.launch {
             val f = localFileOf(row) ?: return@launch tell(text(R.string.common_file_unreadable))
-            prints.trySend(f to row.name)
+            prints.trySend(PrintJob(f, row.name, deleteWhenDone = false))
         }
     }
 
@@ -3798,3 +3840,6 @@ private const val MAX_CREATE_FILES = 12
 
 /** A green banner saying a job worked, with the way to undo it. */
 class SuccessBanner(val text: String, val undo: (() -> Unit)?)
+
+/** A file for the activity to print; [deleteWhenDone]: a temporary copy (an unlocked one) the job deletes (#105). */
+data class PrintJob(val file: File, val name: String, val deleteWhenDone: Boolean)
