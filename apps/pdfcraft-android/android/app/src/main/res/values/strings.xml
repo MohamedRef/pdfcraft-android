@@ -1542,6 +1542,14 @@
     <string name="bates_export_failed">Could not save this new copy to Downloads.</string>
     <string name="ink_presets_title">Favorite pens</string>
     <string name="ink_presets_help">Each pen keeps its own colour, width and opacity. Tap a favorite to restore its settings.</string>
+    <string name="ink_latency_reset">Reset</string>
+    <string name="ink_latency_refresh">Update</string>
+    <string name="ink_latency_none">not measured yet</string>
+    <string name="ink_latency_value">%1$d ms typical, %2$d ms at worst (95%%), %3$d samples</string>
+    <string name="ink_latency_low">Low-latency</string>
+    <string name="ink_latency_normal">Normal</string>
+    <string name="ink_latency_explanation">Write with the pen with Low-latency ink off, then on, and compare. Measured from the pen event to the app\'s drawing; the screen adds a little more.</string>
+    <string name="ink_latency_title">Ink latency on this device</string>
     <string name="palm_guard_calibrate_clear">Clear touches</string>
     <string name="palm_guard_calibrate_help">Hover or write with the pen, then rest your hand as you do when writing. Green touches are ignored; red ones would scroll or press buttons. Adjust the size until your resting hand lands in green.</string>
     <string name="palm_guard_calibrate">Check palm area</string>

@@ -744,6 +744,8 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
     var buttonHighlighter by remember(doc) { mutableStateOf(false) }
     val penTracker = remember(doc) { PenTracker() }
     var layerOrigin by remember(doc) { mutableStateOf(Offset.Zero) }
+    // Ink latency (#128): the newest pen sample a Compose draw has not shown yet.
+    val pendingInput = remember(doc) { PendingInput() }
     // The ruler (#150): screen-space, kept per document while it is open, never saved.
     val density = LocalDensity.current
     val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
@@ -1083,9 +1085,11 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                     val at = doc.viewer.screenToPageUnclamped(s.page, p) ?: return@toolGestures
                     s.points.add(Offset(at.x, at.y))
                     s.pressures.add(pressure)
+                    val inputAt = if (s.pressureSensitive) penTracker.timeMs else 0L
+                    if (wetLast == null) pendingInput.at = inputAt
                     wetLast?.let { from ->
                         val w = inkStylePointWidths(listOf(if (s.pressureSensitive) pressure else 1f), s.appearance.width, s.appearance.style).first()
-                        wet.segment(WetSegment(from, p, w * doc.viewer.pixelsPerPoint(s.page), s.appearance.argb or 0xFF000000.toInt()))
+                        wet.segment(WetSegment(from, p, w * doc.viewer.pixelsPerPoint(s.page), s.appearance.argb or 0xFF000000.toInt(), inputAt))
                         wetLast = p
                     }
                     return@toolGestures
@@ -1254,6 +1258,7 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
         ),
     ) {
         Canvas(Modifier.fillMaxSize()) {
+            if (current != null) pendingInput.drawn(android.os.SystemClock.uptimeMillis(), InkLatency.normal)
             // Strokes being saved stay drawn until the document has them, under the newer drafts.
             for (s in drafts.saving + strokes) {
                 val pageRect = doc.viewer.pageRectOnScreen(s.page)

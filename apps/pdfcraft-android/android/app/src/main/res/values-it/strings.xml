@@ -1321,6 +1321,14 @@
     <string name="bates_export_failed">Impossibile salvare questa nuova copia in Download.</string>
     <string name="ink_presets_title">Penne preferite</string>
     <string name="ink_presets_help">Ogni penna mantiene colore, spessore e opacità propri. Tocca un preferito per ripristinarne le impostazioni.</string>
+    <string name="ink_latency_reset">Azzera</string>
+    <string name="ink_latency_refresh">Aggiorna</string>
+    <string name="ink_latency_none">non ancora misurata</string>
+    <string name="ink_latency_value">%1$d ms tipici, %2$d ms nel caso peggiore (95%%), %3$d campioni</string>
+    <string name="ink_latency_low">Bassa latenza</string>
+    <string name="ink_latency_normal">Normale</string>
+    <string name="ink_latency_explanation">Scrivi con la penna con l\'inchiostro a bassa latenza disattivato, poi attivato, e confronta. Misurata dall\'evento della penna al disegno dell\'app; lo schermo aggiunge ancora un po\'.</string>
+    <string name="ink_latency_title">Latenza dell\'inchiostro su questo dispositivo</string>
     <string name="palm_guard_calibrate_clear">Cancella tocchi</string>
     <string name="palm_guard_calibrate_help">Avvicina la penna o scrivi, poi appoggia la mano come quando scrivi. I tocchi verdi vengono ignorati, quelli rossi scorrerebbero o premerebbero pulsanti. Regola la dimensione finché la mano appoggiata cade nel verde.</string>
     <string name="palm_guard_calibrate">Verifica area del palmo</string>
