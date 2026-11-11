@@ -1311,4 +1311,9 @@
     <string name="edit_label_recolour_comments">إعادة تلوين التعليقات</string>
     <string name="edit_label_delete_comments">حذف التعليقات</string>
     <string name="edit_label_add_text_field_table">إضافة جدول حقول نصية</string>
+    <string name="error_engine_command">تعذّر إكمال هذا الإجراء.</string>
+    <string name="error_engine_open">تعذّر فتح هذا الملف كملف PDF.</string>
+    <string name="error_engine_render">تعذّر عرض هذه الصفحة.</string>
+    <string name="error_engine_no_document">هذا المستند لم يعد مفتوحًا.</string>
+    <string name="error_engine_internal">أوقف خطأ داخلي هذا الإجراء. إذا بدا المستند غير سليم، فأغلقه ثم افتحه مرة أخرى.</string>
 </resources>

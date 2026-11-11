@@ -7,6 +7,7 @@ import io.github.artcraftandroid.pdfcraft.core.MobileException
 import io.github.artcraftandroid.pdfcraft.core.MobileSession
 import io.github.artcraftandroid.pdfcraft.core.RenderedImage
 import io.github.artcraftandroid.pdfcraft.core.initLogging
+import io.github.artcraftandroid.pdfcraft.appLanguage
 import io.github.artcraftandroid.pdfcraft.text
 import java.nio.ByteBuffer
 import kotlinx.coroutines.CoroutineDispatcher
@@ -155,8 +156,11 @@ internal fun runToolBatch(
 internal inline fun <T> engineFailuresAsMobile(block: () -> T): T = try {
     block()
 } catch (_: InternalException) {
-    throw MobileException.Command("An internal error stopped this action. If the document looks wrong, close it and open it again.")
+    throw MobileException.Command(INTERNAL_ERROR)
 }
+
+/** The English text of a mapped engine panic; [userMessage] says it in the app's language. */
+internal const val INTERNAL_ERROR = "An internal error stopped this action. If the document looks wrong, close it and open it again."
 
 /** Reject invalid native buffers *before* allocating a Bitmap on the Java heap. */
 internal fun expectedBitmapByteCount(width: Long, height: Long): Int? {
@@ -176,11 +180,42 @@ fun RenderedImage.toBitmap(): Bitmap {
 
 /** The user-facing message of an engine failure. */
 val Throwable.userMessage: String
-    get() = when (this) {
+    get() = userMessage { it }
+
+/**
+ * The user-facing message of a failure, its English detail first passed through [tidy].
+ *
+ * The engine words its refusals in English (#118). Outside English the message leads with a
+ * translated summary of what failed, and keeps the engine's reason on the next line, so nothing
+ * it says is lost. Failures from the app itself already carry text in the app's language.
+ */
+fun Throwable.userMessage(tidy: (String) -> String): String {
+    val detail = message?.takeIf { it.isNotBlank() }?.let(tidy)
+    return when (this) {
         is MobileException.NeedsPassword -> text(R.string.files_error_needs_password)
         is MobileException.WrongPassword -> text(R.string.common_wrong_password)
-        else -> message?.takeIf { it.isNotBlank() } ?: text(R.string.files_error_generic)
+        is MobileException -> if (message == INTERNAL_ERROR) text(R.string.error_engine_internal) else engineFailure(
+            detail,
+            english = appLanguage() == "en",
+            summary = text(
+                when (this) {
+                    is MobileException.Open -> R.string.error_engine_open
+                    is MobileException.Render -> R.string.error_engine_render
+                    is MobileException.NoDocument -> R.string.error_engine_no_document
+                    else -> R.string.error_engine_command
+                },
+            ),
+        )
+        else -> detail ?: text(R.string.files_error_generic)
     }
+}
+
+/** An engine failure's message: its English [detail] as is in English, else after the translated [summary]. */
+internal fun engineFailure(detail: String?, english: Boolean, summary: String): String = when {
+    detail == null -> summary
+    english -> detail
+    else -> "$summary\n$detail"
+}
 
 /** Native compact rasters stay packed across JNI. Android may align RGB565 rows to four bytes. */
 fun io.github.artcraftandroid.pdfcraft.core.CompactImage.toBitmap(): Bitmap {

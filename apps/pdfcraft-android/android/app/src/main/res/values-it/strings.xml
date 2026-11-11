@@ -1634,4 +1634,9 @@
     <string name="edit_label_recolour_comments">Ricolora commenti</string>
     <string name="edit_label_delete_comments">Elimina commenti</string>
     <string name="edit_label_add_text_field_table">Aggiungi tabella di campi di testo</string>
+    <string name="error_engine_command">Non è stato possibile completare questa azione.</string>
+    <string name="error_engine_open">Non è stato possibile aprire questo file come PDF.</string>
+    <string name="error_engine_render">Non è stato possibile mostrare questa pagina.</string>
+    <string name="error_engine_no_document">Questo documento non è più aperto.</string>
+    <string name="error_engine_internal">Un errore interno ha interrotto questa azione. Se il documento sembra errato, chiudilo e riaprilo.</string>
 </resources>

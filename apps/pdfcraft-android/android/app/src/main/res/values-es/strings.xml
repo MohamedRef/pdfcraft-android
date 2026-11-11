@@ -1652,4 +1652,9 @@
     <string name="edit_label_recolour_comments">Cambiar color de comentarios</string>
     <string name="edit_label_delete_comments">Eliminar comentarios</string>
     <string name="edit_label_add_text_field_table">Añadir tabla de campos de texto</string>
+    <string name="error_engine_command">No se pudo completar esta acción.</string>
+    <string name="error_engine_open">No se pudo abrir este archivo como PDF.</string>
+    <string name="error_engine_render">No se pudo mostrar esta página.</string>
+    <string name="error_engine_no_document">Este documento ya no está abierto.</string>
+    <string name="error_engine_internal">Un error interno detuvo esta acción. Si el documento se ve mal, ciérralo y vuelve a abrirlo.</string>
 </resources>

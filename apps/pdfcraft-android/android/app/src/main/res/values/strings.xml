@@ -1790,4 +1790,9 @@
     <string name="edit_label_recolour_comments">Recolour comments</string>
     <string name="edit_label_delete_comments">Delete comments</string>
     <string name="edit_label_add_text_field_table">Add text field table</string>
+    <string name="error_engine_command">This action couldn\'t be completed.</string>
+    <string name="error_engine_open">This file couldn\'t be opened as a PDF.</string>
+    <string name="error_engine_render">This page couldn\'t be drawn.</string>
+    <string name="error_engine_no_document">This document is no longer open.</string>
+    <string name="error_engine_internal">An internal error stopped this action. If the document looks wrong, close it and open it again.</string>
 </resources>

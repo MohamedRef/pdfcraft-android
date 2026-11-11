@@ -20,3 +20,6 @@ fun text(@StringRes id: Int, vararg args: Any): String = appContext.getString(id
 
 /** The plural string [id] for [count], formatted with [args]. */
 fun plural(@PluralsRes id: Int, count: Int, vararg args: Any): String = appContext.resources.getQuantityString(id, count, *args)
+
+/** The language the app runs in, such as "en" or "ar". */
+fun appLanguage(): String = appContext.resources.configuration.locales[0].language

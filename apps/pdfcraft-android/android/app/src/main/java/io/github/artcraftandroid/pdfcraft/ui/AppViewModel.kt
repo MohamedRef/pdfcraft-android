@@ -2187,7 +2187,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
 
     /** A tool's refusal without the tool's name in front, as a sentence. */
     private fun toolMessage(e: Throwable, tool: String): String =
-        e.userMessage.removePrefix("$tool: ").replaceFirstChar { it.uppercase() }.let { if (it.lastOrNull()?.isLetterOrDigit() == true) "$it." else it }
+        e.userMessage { m -> m.removePrefix("$tool: ").replaceFirstChar { it.uppercase() }.let { if (it.lastOrNull()?.isLetterOrDigit() == true) "$it." else it } }
 
     /** What the document's signatures say (only asked for when it has signatures or signature fields). */
     private suspend fun loadSignatures(eng: Engine, doc: OpenDocument) {
