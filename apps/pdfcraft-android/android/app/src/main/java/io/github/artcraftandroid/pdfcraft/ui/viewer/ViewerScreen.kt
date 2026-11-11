@@ -1,5 +1,7 @@
 package io.github.artcraftandroid.pdfcraft.ui.viewer
 
+import io.github.artcraftandroid.pdfcraft.ui.undoLabel
+import io.github.artcraftandroid.pdfcraft.ui.redoLabel
 import android.app.Activity
 import android.os.SystemClock
 import androidx.activity.compose.BackHandler
@@ -50,6 +52,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.clickable
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -301,6 +306,14 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
                 if (desktop && corner) zoomButtons.poke()
             },
             onWheelZoom = { if (desktop) zoomButtons.poke() },
+            // a right click: a comment's menu, else what a long press gives (a word, a picture, the page menu)
+            onSecondaryClick = { p, at ->
+                if (at != null && (gesturesForTool && vm.tapComment(doc, at))) Unit
+                else if (at != null && gesturesForTool) scope.launch {
+                    val slop = 12f / doc.viewer.pixelsPerPoint(at.page).coerceAtLeast(0.1f) * density.density
+                    if (!selection.selectWordAt(at, slop) && ctl.tool == ViewerTool.None && !vm.readingMode) vm.longPressPage(doc, at, p)
+                }
+            },
             onLongPress = { p, at ->
                 if (at != null) scope.launch {
                     val slop = 12f / doc.viewer.pixelsPerPoint(at.page).coerceAtLeast(0.1f) * density.density
@@ -360,6 +373,14 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
                 doc, visible = jumpChipVisible,
                 bottom = with(density) { doc.viewer.padBottom.toDp() },
             )
+            // Draw mode on the last page: add a page with the notebook's template (blank otherwise)
+            if (ctl.tool == ViewerTool.Draw && !vm.readingMode && doc.writable && doc.viewer.currentPage == doc.pageCount - 1) {
+                AddPageHandle(
+                    bottom = maxOf(96.dp, with(density) { doc.viewer.padBottom.toDp() } + 12.dp),
+                    onClick = { vm.insertNotebookPage(doc, null) },
+                    modifier = Modifier.align(Alignment.BottomCenter),
+                )
+            }
 
             if (desktop && !vm.readingMode) ZoomButtons(
                 doc.viewer,
@@ -465,8 +486,8 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
                             onMore = { ctl.sheet = if (ctl.sheet == ViewerSheet.More) ViewerSheet.None else ViewerSheet.More },
                             moreOpen = ctl.sheet == ViewerSheet.More,
                             title = if (ctl.tool == ViewerTool.Edit) stringResource(R.string.common_tool_edit_pdf) else null,
-                            undoLabel = if (doc.localUndo != null) stringResource(R.string.viewer_undo_drawing) else doc.info.undo,
-                            redoLabel = if (doc.localUndo != null) stringResource(R.string.viewer_undo_drawing) else doc.info.redo,
+                            undoLabel = if (doc.localUndo != null) stringResource(R.string.viewer_undo_drawing) else doc.info.undoLabel,
+                            redoLabel = if (doc.localUndo != null) stringResource(R.string.viewer_undo_drawing) else doc.info.redoLabel,
                         )
                 }
                 }
@@ -578,8 +599,10 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
                 ViewerSheet.ViewSettings -> ViewSettingsSheet(vm, doc)
                 ViewerSheet.Bookmarks -> BookmarksSheet(vm, doc)
                 ViewerSheet.TextStyles -> TextStylesSheet(vm, doc)
-                ViewerSheet.Attachments -> AttachmentsSheet(vm, doc)
+                ViewerSheet.Attachments -> AttachmentsPanel(vm, doc)
                 ViewerSheet.SearchResults -> SearchResultsSheet(doc, onShow = { showHit(doc, it) })
+                ViewerSheet.Layers -> LayersSheet(vm, doc)
+                ViewerSheet.EditContents -> EditContentsSheet(vm, doc)
                 ViewerSheet.Comments -> Unit
                 ViewerSheet.MoreTools -> MoreToolsSheet(vm, doc)
                 ViewerSheet.Signatures -> SignaturesSheet(vm, doc)
@@ -589,6 +612,7 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
             }
         }
         if (ctl.sheet == ViewerSheet.Comments) CommentListScreen(vm, doc)
+        vm.attachPrompt?.takeIf { it.doc === doc }?.let { AttachDialog(vm, it) }
         vm.pageMenu?.takeIf { it.doc === doc }?.let { PageMenuView(vm, it) }
         if (vm.imageSource?.first === doc) {
             io.github.artcraftandroid.pdfcraft.ui.PdfSheet(onDismiss = { vm.imageSource = null }, dim = true) {
@@ -611,6 +635,7 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
         vm.replyPrompt?.takeIf { it.doc === doc }?.let { ReplySheet(vm, it) }
         vm.readAloud?.let { ReadAloudBar(vm, doc, it) }
         if (ctl.goToPage) GoToPageDialog(doc, onDismiss = { ctl.goToPage = false })
+        if (vm.shortcutsHelp) ShortcutsDialog(onDismiss = { vm.shortcutsHelp = false })
         if (ctl.pagesOpen) PagesScreen(vm, doc, onClose = { ctl.pagesOpen = false })
     }
 }
@@ -831,5 +856,25 @@ private fun SuccessBannerView(b: io.github.artcraftandroid.pdfcraft.ui.SuccessBa
                 modifier = Modifier.align(Alignment.End).clickable { onClose(); undo() }.padding(horizontal = 24.dp, vertical = 12.dp),
             )
         }
+    }
+}
+
+/** The pill under the last page in Draw mode that appends a page like it. */
+@Composable
+private fun AddPageHandle(bottom: androidx.compose.ui.unit.Dp, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    val c = pdfColors
+    val label = stringResource(R.string.notebook_add_page)
+    Row(
+        modifier.padding(bottom = bottom).height(40.dp)
+            .shadow(3.dp, androidx.compose.foundation.shape.RoundedCornerShape(20.dp))
+            .background(c.surface, androidx.compose.foundation.shape.RoundedCornerShape(20.dp))
+            .clickable(role = androidx.compose.ui.semantics.Role.Button, onClick = onClick)
+            .semantics { contentDescription = label }
+            .padding(horizontal = 16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(LucideIcons.Plus, null, tint = c.icon, modifier = Modifier.size(20.dp))
+        Spacer(Modifier.width(6.dp))
+        Text(label, color = c.label, fontSize = 14.sp)
     }
 }

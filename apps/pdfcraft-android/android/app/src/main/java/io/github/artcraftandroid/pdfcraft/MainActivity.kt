@@ -135,6 +135,7 @@ class MainActivity : ComponentActivity() {
                         FilePickKind.Combine -> pickMany.launch(arrayOf("application/pdf", "image/*", "text/plain") + OFFICE_TYPES)
                         FilePickKind.Create -> pickMany.launch(arrayOf("image/*", "text/plain", "application/pdf") + OFFICE_TYPES)
                         FilePickKind.Insert, FilePickKind.Open, FilePickKind.Replace -> pickOne.launch(arrayOf("application/pdf"))
+                        FilePickKind.Attach -> pickOne.launch(arrayOf("*/*"))
                         // .p12 / .pfx: providers type them as PKCS #12, or not at all
                         FilePickKind.DigitalId -> pickOne.launch(arrayOf("application/x-pkcs12", "application/pkcs12", "application/octet-stream"))
                     }
@@ -198,7 +199,13 @@ class MainActivity : ComponentActivity() {
 
     // a keyboard (or desktop mode): keys the viewer takes when no text field has them
     override fun onKeyDown(keyCode: Int, event: android.view.KeyEvent): Boolean =
-        vm.viewerKey(keyCode, event.isCtrlPressed) || super.onKeyDown(keyCode, event)
+        vm.viewerKey(keyCode, event.isCtrlPressed, event.isShiftPressed) || super.onKeyDown(keyCode, event)
+
+    // the viewer's shortcuts in the system's Meta+/ list (#153)
+    override fun onProvideKeyboardShortcuts(data: MutableList<android.view.KeyboardShortcutGroup>, menu: android.view.Menu?, deviceId: Int) {
+        super.onProvideKeyboardShortcuts(data, menu, deviceId)
+        if (vm.keyboardShortcuts) data.add(io.github.artcraftandroid.pdfcraft.ui.viewer.shortcutGroup(this))
+    }
 
     /** Log raw pen samples (real historical pressure, pen speed) before Compose handles the event. */
     override fun dispatchTouchEvent(ev: android.view.MotionEvent): Boolean {

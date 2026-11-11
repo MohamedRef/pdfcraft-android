@@ -1,5 +1,6 @@
 package io.github.artcraftandroid.pdfcraft.ui
 
+import io.github.artcraftandroid.pdfcraft.ui.viewer.recognizeText
 import io.github.artcraftandroid.pdfcraft.ui.home.FileTool
 import io.github.artcraftandroid.pdfcraft.ui.viewer.FillElement
 import androidx.compose.ui.graphics.asImageBitmap
@@ -88,6 +89,8 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     private val application = app as PdfcraftApplication
     val files = DocumentFiles(app)
     val recents = RecentFiles(File(app.filesDir, "recent.json"))
+    val notebooks = io.github.artcraftandroid.pdfcraft.engine.Notebooks(File(app.filesDir, "notebooks.json"))
+    val notebookTemplates = io.github.artcraftandroid.pdfcraft.engine.NotebookTemplates(File(app.filesDir, "templates"))
 
     var engine by mutableStateOf<Engine?>(null)
         private set
@@ -761,12 +764,12 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
      * own saved ink quietly, but names an edit made before Draw, so it is never lost unseen (#78).
      */
     fun undoDocument(doc: OpenDocument, announce: Boolean) {
-        val label = doc.info.undo ?: return
+        val label = doc.info.undoLabel ?: return
         runTool(doc, "edit_undo") { if (announce) tell(text(R.string.msg_undone, label)) }
     }
 
     fun redoDocument(doc: OpenDocument, announce: Boolean) {
-        val label = doc.info.redo ?: return
+        val label = doc.info.redoLabel ?: return
         runTool(doc, "edit_redo") { if (announce) tell(text(R.string.msg_redone, label)) }
     }
 
@@ -929,28 +932,85 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         return send.setType(mime).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
     }
 
+    /** The keyboard shortcuts list (Ctrl+/). */
+    var shortcutsHelp by mutableStateOf(false)
+
     /**
-     * Keys in the viewer, as the reference takes them: N or Page Down for the next page, P or Page
-     * Up for the previous one, the arrows to scroll, Ctrl+P to print, Ctrl and + or − to zoom.
+     * Keys in the viewer (#153): tools (P pen, H highlight, E eraser, L lasso, T text, N note, S
+     * shapes), Esc back to reading, Ctrl+Z / Ctrl+Shift+Z undo and redo, Ctrl+F find, Ctrl+B
+     * bookmark, Delete the selected comment, 1-9 pen presets, [ and ] pen width, Page Up/Down and
+     * Space to turn pages, the arrows to scroll, Ctrl+P print, Ctrl and + or − to zoom, Ctrl+/ the
+     * list. Only keys no text field took reach here.
      */
-    fun viewerKey(keyCode: Int, ctrl: Boolean): Boolean {
+    fun viewerKey(keyCode: Int, ctrl: Boolean, shift: Boolean = false): Boolean {
         if (!keyboardShortcuts) return false
         val doc = document ?: return false
         if (toolScreen != null || readingMode) return false
         val v = doc.viewer
+        val ctl = doc.controller
         val center = androidx.compose.ui.geometry.Offset(v.viewW / 2f, v.viewH / 2f)
-        when {
-            ctrl && keyCode == android.view.KeyEvent.KEYCODE_P -> print(doc)
-            ctrl && (keyCode == android.view.KeyEvent.KEYCODE_EQUALS || keyCode == android.view.KeyEvent.KEYCODE_PLUS || keyCode == android.view.KeyEvent.KEYCODE_NUMPAD_ADD) -> v.zoomStep(1, center)
-            ctrl && (keyCode == android.view.KeyEvent.KEYCODE_MINUS || keyCode == android.view.KeyEvent.KEYCODE_NUMPAD_SUBTRACT) -> v.zoomStep(-1, center)
-            ctrl -> return false
-            keyCode == android.view.KeyEvent.KEYCODE_N || keyCode == android.view.KeyEvent.KEYCODE_PAGE_DOWN -> v.turnPage(1)
-            keyCode == android.view.KeyEvent.KEYCODE_P || keyCode == android.view.KeyEvent.KEYCODE_PAGE_UP -> v.turnPage(-1)
-            keyCode == android.view.KeyEvent.KEYCODE_DPAD_DOWN -> v.setScroll(v.scrollX, v.scrollY + v.viewH * 0.1f)
-            keyCode == android.view.KeyEvent.KEYCODE_DPAD_UP -> v.setScroll(v.scrollX, v.scrollY - v.viewH * 0.1f)
-            keyCode == android.view.KeyEvent.KEYCODE_DPAD_RIGHT -> v.setScroll(v.scrollX + v.viewW * 0.1f, v.scrollY)
-            keyCode == android.view.KeyEvent.KEYCODE_DPAD_LEFT -> v.setScroll(v.scrollX - v.viewW * 0.1f, v.scrollY)
-            else -> return false
+        val drawing = ctl.tool == ViewerTool.Draw
+        if (!ctrl && drawing) io.github.artcraftandroid.pdfcraft.ui.viewer.presetForKey(keyCode)?.let { return toolPrefs.applyInkPreset(it) }
+        val shortcut = io.github.artcraftandroid.pdfcraft.ui.viewer.viewerShortcut(keyCode, ctrl, shift) ?: return false
+        fun tool(t: ViewerTool) { if (ctl.tool != t) enterTool(doc, t) }
+        fun draw(eraser: Boolean = false, lasso: Boolean = false, shape: io.github.artcraftandroid.pdfcraft.ui.viewer.InkShapeMode = io.github.artcraftandroid.pdfcraft.ui.viewer.InkShapeMode.Freehand) {
+            tool(ViewerTool.Draw)
+            if (ctl.tool != ViewerTool.Draw) return
+            ctl.eraserMode = eraser
+            ctl.lassoMode = lasso
+            ctl.inkShapeMode = shape
+        }
+        when (shortcut) {
+            io.github.artcraftandroid.pdfcraft.ui.viewer.ViewerShortcut.Pen -> { draw(); toolPrefs.selectWritingPen() }
+            io.github.artcraftandroid.pdfcraft.ui.viewer.ViewerShortcut.Highlighter -> { ctl.markup = io.github.artcraftandroid.pdfcraft.ui.viewer.TextMarkup.Highlight; tool(ViewerTool.Markup) }
+            io.github.artcraftandroid.pdfcraft.ui.viewer.ViewerShortcut.Eraser -> draw(eraser = true)
+            io.github.artcraftandroid.pdfcraft.ui.viewer.ViewerShortcut.Lasso -> draw(lasso = true)
+            io.github.artcraftandroid.pdfcraft.ui.viewer.ViewerShortcut.Text -> tool(ViewerTool.Text)
+            io.github.artcraftandroid.pdfcraft.ui.viewer.ViewerShortcut.Note -> { ctl.commentMode = io.github.artcraftandroid.pdfcraft.ui.viewer.CommentMode.Text; tool(ViewerTool.Comment) }
+            io.github.artcraftandroid.pdfcraft.ui.viewer.ViewerShortcut.Shapes -> {
+                // S again goes on to the next shape: line, rectangle, oval, arrow
+                val shapes = listOf(
+                    io.github.artcraftandroid.pdfcraft.ui.viewer.InkShapeMode.Line, io.github.artcraftandroid.pdfcraft.ui.viewer.InkShapeMode.Rectangle,
+                    io.github.artcraftandroid.pdfcraft.ui.viewer.InkShapeMode.Oval, io.github.artcraftandroid.pdfcraft.ui.viewer.InkShapeMode.Arrow,
+                )
+                val at = if (drawing) shapes.indexOf(ctl.inkShapeMode) else -1
+                draw(shape = shapes[(at + 1) % shapes.size])
+            }
+            io.github.artcraftandroid.pdfcraft.ui.viewer.ViewerShortcut.Leave -> when {
+                doc.selection.selection != null -> doc.selection.clear()
+                selectedComment?.first === doc -> selectedComment = null
+                ctl.sheet != io.github.artcraftandroid.pdfcraft.ui.viewer.ViewerSheet.None -> ctl.sheet = io.github.artcraftandroid.pdfcraft.ui.viewer.ViewerSheet.None
+                ctl.searching -> { doc.search.clear(); ctl.searching = false }
+                ctl.tool != ViewerTool.None -> leaveTool(doc)
+                else -> return false
+            }
+            io.github.artcraftandroid.pdfcraft.ui.viewer.ViewerShortcut.Undo -> undo(doc)
+            io.github.artcraftandroid.pdfcraft.ui.viewer.ViewerShortcut.Redo -> redo(doc)
+            io.github.artcraftandroid.pdfcraft.ui.viewer.ViewerShortcut.Find -> {
+                doc.selection.clear()
+                ctl.searching = true
+                ctl.sheet = io.github.artcraftandroid.pdfcraft.ui.viewer.ViewerSheet.None
+            }
+            io.github.artcraftandroid.pdfcraft.ui.viewer.ViewerShortcut.Bookmark -> toggleBookmark(doc)
+            io.github.artcraftandroid.pdfcraft.ui.viewer.ViewerShortcut.Delete -> {
+                val c = selectedComment?.takeIf { it.first === doc }?.second ?: return false
+                deleteComment(doc, c)
+            }
+            io.github.artcraftandroid.pdfcraft.ui.viewer.ViewerShortcut.Thinner, io.github.artcraftandroid.pdfcraft.ui.viewer.ViewerShortcut.Thicker -> {
+                if (!drawing) return false
+                val dir = if (shortcut == io.github.artcraftandroid.pdfcraft.ui.viewer.ViewerShortcut.Thicker) 1 else -1
+                toolPrefs.updateInkWidth(io.github.artcraftandroid.pdfcraft.ui.viewer.steppedInkWidth(toolPrefs.inkWidth, dir))
+            }
+            io.github.artcraftandroid.pdfcraft.ui.viewer.ViewerShortcut.NextPage -> v.turnPage(1)
+            io.github.artcraftandroid.pdfcraft.ui.viewer.ViewerShortcut.PreviousPage -> v.turnPage(-1)
+            io.github.artcraftandroid.pdfcraft.ui.viewer.ViewerShortcut.ScrollDown -> v.setScroll(v.scrollX, v.scrollY + v.viewH * 0.1f)
+            io.github.artcraftandroid.pdfcraft.ui.viewer.ViewerShortcut.ScrollUp -> v.setScroll(v.scrollX, v.scrollY - v.viewH * 0.1f)
+            io.github.artcraftandroid.pdfcraft.ui.viewer.ViewerShortcut.ScrollRight -> v.setScroll(v.scrollX + v.viewW * 0.1f, v.scrollY)
+            io.github.artcraftandroid.pdfcraft.ui.viewer.ViewerShortcut.ScrollLeft -> v.setScroll(v.scrollX - v.viewW * 0.1f, v.scrollY)
+            io.github.artcraftandroid.pdfcraft.ui.viewer.ViewerShortcut.ZoomIn -> v.zoomStep(1, center)
+            io.github.artcraftandroid.pdfcraft.ui.viewer.ViewerShortcut.ZoomOut -> v.zoomStep(-1, center)
+            io.github.artcraftandroid.pdfcraft.ui.viewer.ViewerShortcut.Print -> print(doc)
+            io.github.artcraftandroid.pdfcraft.ui.viewer.ViewerShortcut.Help -> shortcutsHelp = true
         }
         return true
     }
@@ -1413,8 +1473,8 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         }
     }
 
-    /** The viewer's keyboard shortcuts (Preferences; off until turned on, as the reference has them). */
-    var keyboardShortcuts by mutableStateOf(appPrefs.getBoolean("keyboardShortcuts", false))
+    /** The viewer's keyboard shortcuts (Preferences; on by default: only a keyboard sends them, #153). */
+    var keyboardShortcuts by mutableStateOf(appPrefs.getBoolean("keyboardShortcuts", true))
         private set
 
     fun updateKeyboardShortcuts(on: Boolean) {
@@ -1762,68 +1822,8 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         }
     }
 
-    /**
-     * Inspect recognition confidence on exactly one visible page with the upstream v0.19.0
-     * read-only ocr_words tool. Never retains a review handle, mutates PDF bytes or refreshes it.
-     */
-    internal suspend fun inspectOcrConfidence(doc: OpenDocument, page: Int): JSONObject? {
-        if (document !== doc || page !in 1..doc.pageCount || busy != null) return null
-        val eng = engine ?: return null
-        val generation = doc.info.generation
-        withContext(Dispatchers.IO) {
-            try {
-                eng.prepareOcrModels(getApplication())
-            } catch (cancelled: kotlinx.coroutines.CancellationException) {
-                throw cancelled
-            } catch (_: Exception) {
-                // The authoritative ocr_status check below reports unavailable models.
-            }
-        }
-        val status = eng.tool("ocr_status")
-        if (status.optBoolean("available", false) != true) {
-            throw IllegalStateException(text(R.string.msg_ocr_not_installed))
-        }
-        val response = eng.tool("ocr_words", mapOf(
-            "doc" to doc.id,
-            "pages" to listOf(page),
-            "retain_review" to false,
-            "skip_text_pages" to false,
-        ))
-        return response.takeIf {
-            document === doc && page in 1..doc.pageCount && doc.info.generation == generation
-        }
-    }
-
-    /** Recognize text: make scanned pages searchable and selectable. */
-    fun recognizeText(doc: OpenDocument) {
-        val eng = engine ?: return
-        viewModelScope.launch {
-            busy = text(R.string.msg_busy_preparing_ocr)
-            withContext(Dispatchers.IO) { runCatching { eng.prepareOcrModels(getApplication()) } }
-            busy = null
-            val status = runCatching { eng.tool("ocr_status") }.getOrNull()
-            if (status?.optBoolean("available", false) != true) {
-                tell(text(R.string.msg_ocr_not_installed))
-                return@launch
-            }
-            busy = text(R.string.msg_busy_recognizing)
-            try {
-                val r = eng.tool("ocr_recognize", mapOf("doc" to doc.id))
-                refresh(doc)
-                val pages = r.optJSONArray("pages")
-                val n = (0 until (pages?.length() ?: 0)).count { pages?.optJSONObject(it)?.has("skipped") == false }
-                if (n > 0) {
-                    success = SuccessBanner(text(R.string.msg_ocr_done)) { undo(doc) }
-                } else {
-                    tell(text(R.string.msg_ocr_nothing))
-                }
-            } catch (e: MobileException) {
-                tell(e.userMessage)
-            } finally {
-                busy = null
-            }
-        }
-    }
+    /** Recognize text: its options, review and batch state (#166). */
+    val ocr = io.github.artcraftandroid.pdfcraft.ui.viewer.OcrState()
 
     /** A finished job's green banner over the viewer's bar, with Undo. */
     var success by mutableStateOf<SuccessBanner?>(null)
@@ -3034,6 +3034,16 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 }
             }
             FilePickKind.Open -> open(uris.first())
+            FilePickKind.Attach -> {
+                val doc = attachTo ?: return
+                attachTo = null
+                viewModelScope.launch {
+                    val uri = uris.first()
+                    val f = withContext(Dispatchers.IO) { runCatching { copyIn(uri) }.getOrNull() }
+                    if (f == null) tell(text(R.string.msg_that_file_unreadable))
+                    else attachPrompt = AttachPrompt(doc, f, f.name)
+                }
+            }
             FilePickKind.Replace -> {
                 val (doc, pages) = replaceTarget ?: return
                 replaceTarget = null
@@ -3462,6 +3472,95 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         deliver(out, "Pages from ${doc.title}.pdf")
     }
 
+    // ---- Notebooks ----------------------------------------------------------------------------
+
+    /** Home's New notebook sheet is showing. */
+    var newNotebookOpen by mutableStateOf(false)
+
+    /** The pages the user saved as templates (file names), refreshed off the main thread. */
+    var userTemplates by mutableStateOf<List<String>>(emptyList())
+        private set
+
+    fun refreshUserTemplates() {
+        viewModelScope.launch { userTemplates = withContext(Dispatchers.IO) { notebookTemplates.list() } }
+    }
+
+    /** A one-page PDF of [page] in the cache, for inserting (the caller deletes it). */
+    private suspend fun notebookPageFile(page: io.github.artcraftandroid.pdfcraft.engine.NotebookPage): File? = withContext(Dispatchers.IO) {
+        when (page) {
+            is io.github.artcraftandroid.pdfcraft.engine.NotebookPage.Builtin ->
+                tempFile("pdf").apply { writeBytes(io.github.artcraftandroid.pdfcraft.engine.NotebookPdf.write(page.template)) }
+            is io.github.artcraftandroid.pdfcraft.engine.NotebookPage.User ->
+                notebookTemplates.file(page.fileName)?.let { src -> tempFile("pdf").also { src.copyTo(it, overwrite = true) } }
+        }
+    }
+
+    /** Make a notebook of [page] called [title] in Downloads and open it in Draw mode. */
+    fun createNotebook(page: io.github.artcraftandroid.pdfcraft.engine.NotebookPage, title: String) {
+        newNotebookOpen = false
+        viewModelScope.launch {
+            busy = text(R.string.notebook_busy_creating)
+            try {
+                val out = notebookPageFile(page) ?: run { tell(text(R.string.notebook_template_missing)); return@launch }
+                val stamp = java.text.SimpleDateFormat("yyyy-MM-dd HH.mm", java.util.Locale.US).format(java.util.Date())
+                val name = DocumentFiles.safeName(title.trim().ifEmpty { text(R.string.notebook_default_name, stamp) })
+                val uri = withContext(Dispatchers.IO) { files.saveToDownloads(out, name).also { out.delete() } }
+                withContext(Dispatchers.IO) { notebooks.put(uri.toString(), page) }
+                pendingTool = io.github.artcraftandroid.pdfcraft.ui.home.FileTool.Draw
+                open(uri)
+            } catch (e: Exception) {
+                tell(e.userMessage)
+            } finally {
+                busy = null
+            }
+        }
+    }
+
+    /** What [doc]'s pages look like, if it was made as a notebook here. */
+    suspend fun notebookPageOf(doc: OpenDocument): io.github.artcraftandroid.pdfcraft.engine.NotebookPage? {
+        val key = doc.source?.toString() ?: return null
+        return withContext(Dispatchers.IO) { notebooks.get(key) }
+    }
+
+    /**
+     * Insert a page of [page] so it becomes page [at] (1-based; default: after the last), then
+     * show it. One undo step removes it. Without a template the page is blank, sized like its
+     * neighbour.
+     */
+    fun insertNotebookPage(doc: OpenDocument, page: io.github.artcraftandroid.pdfcraft.engine.NotebookPage?, at: Int = doc.pageCount + 1) {
+        if (!doc.writable || !doc.info.allowsAnnotation) { tell(text(R.string.notebook_cannot_add_page)); return }
+        viewModelScope.launch {
+            val chosen = page ?: notebookPageOf(doc)
+            val show = { doc.viewer.goToPage(at - 1) }
+            if (chosen == null) {
+                runTool(doc, "page_insert_blank", mapOf("at" to at)) { show() }
+                return@launch
+            }
+            val file = notebookPageFile(chosen) ?: run { tell(text(R.string.notebook_template_missing)); return@launch }
+            runTool(doc, "page_insert_file", mapOf("path" to file.absolutePath, "at" to at), onSettled = { file.delete() }) { show() }
+        }
+    }
+
+    /** Save page [index] (0-based) of [doc] as a template called [title] for new notebooks and pages. */
+    fun savePageAsTemplate(doc: OpenDocument, index: Int, title: String) = job(text(R.string.notebook_busy_saving_template)) { eng ->
+        val out = withContext(Dispatchers.IO) { notebookTemplates.newFile(title) }
+        try {
+            eng.tool("page_extract", mapOf("doc" to doc.id, "pages" to listOf(index + 1), "out" to out.absolutePath))
+        } catch (e: Exception) {
+            out.delete()
+            throw e
+        }
+        refreshUserTemplates()
+        tell(text(R.string.notebook_template_saved, out.nameWithoutExtension))
+    }
+
+    fun deleteUserTemplate(name: String) {
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) { notebookTemplates.delete(name) }
+            refreshUserTemplates()
+        }
+    }
+
     // ---- Organize: duplicate, replace, reverse, split, page labels (#165) ---------------------
 
     /** Copies of [pages] (0-based), placed right after the last of them; one undo step. */
@@ -3544,6 +3643,94 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             dir.deleteRecursively()
             throw e
         }
+    }
+
+    // ---- Layers, attachments and the PDF's own bookmarks (#174, #175, #176) ------------------
+
+    suspend fun layers(doc: OpenDocument) = engine?.let { e -> runCatching { e.command { layers(doc.id) } }.getOrNull() }.orEmpty()
+
+    /**
+     * Show or hide layer [position] (1-based, as [layers] lists them). A view setting: the file is
+     * not changed, so only the pages are drawn again. [onDone] runs either way.
+     */
+    fun setLayer(doc: OpenDocument, position: Int, visible: Boolean, onDone: () -> Unit) {
+        val eng = engine ?: return
+        viewModelScope.launch {
+            try {
+                eng.tool("layer_set", mapOf("doc" to doc.id, "layer" to position, "visible" to visible))
+                doc.images.invalidate()
+            } catch (e: MobileException) {
+                tell(e.userMessage)
+            } finally {
+                onDone()
+            }
+        }
+    }
+
+    /** Add file: the picked file, waiting for its description. */
+    var attachPrompt by mutableStateOf<AttachPrompt?>(null)
+    private var attachTo: OpenDocument? = null
+
+    fun pickAttachment(doc: OpenDocument) {
+        attachTo = doc
+        pickFiles(FilePickKind.Attach)
+    }
+
+    /** Attach [AttachPrompt.file] to the document with [description] (may be blank); one undo step. */
+    fun attach(prompt: AttachPrompt, description: String) {
+        attachPrompt = null
+        val args = mutableMapOf<String, Any?>("path" to prompt.file.absolutePath, "name" to prompt.name)
+        if (description.isNotBlank()) args["description"] = description.trim()
+        runTool(prompt.doc, "attachment_add", args, onSettled = { dropPicked(listOf(prompt.file)) }) {
+            tell(text(R.string.msg_attached, prompt.name), text(R.string.common_undo)) { undo(prompt.doc) }
+        }
+    }
+
+    fun cancelAttach() {
+        attachPrompt?.let { dropPicked(listOf(it.file)) }
+        attachPrompt = null
+    }
+
+    /** Remove the document-level attachment [name]; Undo in the snackbar brings it back. */
+    fun deleteAttachment(doc: OpenDocument, name: String) {
+        runTool(doc, "attachment_delete", mapOf("name" to name)) {
+            tell(text(R.string.msg_attachment_removed, name), text(R.string.common_undo)) { undo(doc) }
+        }
+    }
+
+    /** Every embedded bookmark with its path and style (`bookmark_list`, page by page; at most [cap]). */
+    suspend fun outlineRows(doc: OpenDocument, cap: Int = 5000): List<OutlineRow>? {
+        val eng = engine ?: return null
+        return try {
+            val out = mutableListOf<OutlineRow>()
+            var offset = 0
+            while (out.size < cap) {
+                val r = eng.tool("bookmark_list", mapOf("doc" to doc.id, "offset" to offset, "limit" to 1000))
+                fun walk(a: org.json.JSONArray?) {
+                    if (a == null) return
+                    for (i in 0 until a.length()) {
+                        val o = a.getJSONObject(i)
+                        val path = o.getJSONArray("path").let { p -> (0 until p.length()).map { p.getInt(it) } }
+                        val color = o.optJSONArray("color")?.let { c -> (0 until c.length()).map { c.getDouble(it).toFloat() } }
+                        val page = if (o.isNull("page")) null else o.optInt("page", 0).takeIf { it > 0 }?.minus(1)
+                        out += OutlineRow(path, o.optString("title"), page, color, o.optBoolean("bold"), o.optBoolean("italic"))
+                        walk(o.optJSONArray("children"))
+                    }
+                }
+                walk(r.optJSONArray("bookmarks"))
+                if (r.isNull("next")) break
+                offset = r.optInt("next", -1).takeIf { it > offset } ?: break
+            }
+            out
+        } catch (e: MobileException) {
+            tell(e.userMessage)
+            null
+        }
+    }
+
+    /** Run bookmark tool [name] on the bookmark at [path] (with [args]); one undo step each. */
+    fun editBookmark(doc: OpenDocument, name: String, path: List<Int>?, args: Map<String, Any?> = emptyMap()) {
+        runTool(doc, name, (if (path != null) mapOf("path" to path) else emptyMap<String, Any?>()) + args)
     }
 
     /** Files waiting for the person to pick the folder they go into, and what to delete afterwards. */
@@ -3890,6 +4077,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             FileTool.Protect -> openProtect(doc)
             FileTool.Crop -> openCrop(doc)
             FileTool.Ocr -> recognizeText(doc)
+            FileTool.Draw -> enterTool(doc, ViewerTool.Draw)
             FileTool.Split -> { organizing = true; doc.controller.pagesOpen = true; splitOpen = true }
         }
     }

@@ -96,14 +96,22 @@ pub struct DocumentInfo {
     pub allows_assembly: bool,
     /// Edits not saved yet.
     pub dirty: bool,
-    /// What Undo and Redo would take back or redo, if anything.
+    /// What Undo and Redo would take back or redo, if anything, in English.
     pub undo: Option<String>,
     pub redo: Option<String>,
+    /// The same, in parts, for the interface to say in its own language: the engine's English
+    /// wording (one of `EDIT_LABELS`, or `{batch}`) and the value the document fills its hole with.
+    pub undo_wording: Option<String>,
+    pub undo_value: Option<String>,
+    pub redo_wording: Option<String>,
+    pub redo_value: Option<String>,
     /// Interactive form fields.
     pub fields: u32,
     pub has_outline: bool,
     /// Files attached to the document itself (not to comments).
     pub attachments: u32,
+    /// Layers (optional content groups) the Layers sheet lists.
+    pub layers: u32,
     pub signed: bool,
     pub comments_hidden: bool,
     /// Bumped by every change to the working file: page caches key on it.
@@ -377,6 +385,14 @@ pub struct WidgetInfo {
     pub multi_select: bool,
 }
 
+/// A layer (optional content group) of the document.
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct LayerInfo {
+    pub name: String,
+    /// Shown now (the Layers sheet's choice, else the document's default).
+    pub visible: bool,
+}
+
 /// A file embedded in the document.
 #[derive(Debug, Clone, uniffi::Record)]
 pub struct AttachmentInfo {
@@ -483,16 +499,17 @@ const MAX_MOBILE_TILE_PIXELS: u64 = 1024 * 1024;
 type RendererCache = HashMap<u64, (pdfcraft_cos::PdfBytes, ViewKey, Vec<PageRenderer>)>;
 
 /// The view settings a renderer is built with that can change while a document is open (Hide all
-/// comments, Reading colours). A renderer built for other settings is not reused.
+/// comments, Reading colours, layers). A renderer built for other settings is not reused.
 #[derive(Clone, Debug, PartialEq)]
 struct ViewKey {
     hide_comments: bool,
     reading_colors: pdfcraft_render::ReadingColors,
+    layers: Arc<Vec<(i32, i32, bool)>>,
 }
 
 impl ViewKey {
     fn of(config: &RenderConfig) -> Self {
-        Self { hide_comments: config.hide_comments, reading_colors: config.reading_colors }
+        Self { hide_comments: config.hide_comments, reading_colors: config.reading_colors, layers: config.layers.clone() }
     }
 }
 
@@ -561,6 +578,16 @@ impl MobileSession {
             }
             let out = auto.call(name, args).map_err(|e| MobileError::Command(e.to_string()))?;
             Ok(first_json(out))
+        })
+        .inspect(|_| {
+            // Layer visibility is a view setting, not an edit: the document's bytes stay the same,
+            // so idle renderers (made with the old visibility) and text layers must go explicitly.
+            if name == "layer_set"
+                && let Some(doc) = args.get("doc").and_then(Value::as_u64)
+            {
+                self.cache().remove(&doc);
+                self.texts.lock().unwrap_or_else(PoisonError::into_inner).remove(&doc);
+            }
         })
     }
 
@@ -971,6 +998,11 @@ impl MobileSession {
     }
 
     /// The files embedded in the document.
+    /// The document's layers in the order `layer_set` numbers them (1-based there).
+    pub fn layers(&self, doc: u64) -> Result<Vec<LayerInfo>, MobileError> {
+        self.with_doc(doc, |d| d.info.layers.iter().map(|l| LayerInfo { name: l.name.clone(), visible: l.visible }).collect())
+    }
+
     pub fn attachments(&self, doc: u64) -> Result<Vec<AttachmentInfo>, MobileError> {
         self.with_doc(doc, |d| {
             d.info
@@ -1134,13 +1166,15 @@ fn first_json(out: Vec<Content>) -> Value {
 }
 
 /// How pages of `d` are drawn here: the app draws sticky notes itself, as fixed-size icons over
-/// the page, and the reader's Reading colours (a view setting the session keeps) apply.
+/// the page, and the reader's Reading colours and layer choices (view settings the session keeps) apply.
 fn page_render_config(session: &pdfcraft_engine::Session, d: &Document) -> RenderConfig {
     RenderConfig {
         password: d.password.as_deref().map(Arc::from),
         hide_comments: d.comments_hidden(),
         hide_notes: true,
         reading_colors: session.reading_colors(d.id).unwrap_or_default(),
+        // the Layers sheet's choices (`layer_set` keeps them in the session's view settings)
+        layers: session.render_config(d.id).map(|c| c.layers).unwrap_or_default(),
         ..RenderConfig::default()
     }
 }
@@ -1206,6 +1240,10 @@ fn document_info(d: &Document) -> DocumentInfo {
         dirty: d.dirty,
         undo: d.can_undo().map(str::to_string),
         redo: d.can_redo().map(str::to_string),
+        undo_wording: d.undo_label().map(|l| l.wording.to_string()),
+        undo_value: d.undo_label().and_then(|l| l.value.clone()),
+        redo_wording: d.redo_label().map(|l| l.wording.to_string()),
+        redo_value: d.redo_label().and_then(|l| l.value.clone()),
         fields: u32::try_from(d.form.len()).unwrap_or(u32::MAX),
         has_outline: !info.outline.is_empty(),
         // the document's own files: those on comments are reached through the comment
@@ -1213,6 +1251,7 @@ fn document_info(d: &Document) -> DocumentInfo {
             info.attachments.iter().filter(|a| matches!(a.source, pdfcraft_render::AttachmentSource::Document { .. })).count(),
         )
         .unwrap_or(u32::MAX),
+        layers: u32::try_from(info.layers.len()).unwrap_or(u32::MAX),
         signed: d.is_signed(),
         comments_hidden: d.comments_hidden(),
         generation: d.edit_generation(),

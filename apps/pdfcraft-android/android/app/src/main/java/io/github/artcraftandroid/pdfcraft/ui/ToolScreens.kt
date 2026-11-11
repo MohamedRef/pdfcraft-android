@@ -377,6 +377,7 @@ fun CreateSourcesScreen(vm: AppViewModel) {
         Text(stringResource(R.string.tools_or_make_new), color = c.textSecondary, fontSize = 14.sp, modifier = Modifier.padding(start = 20.dp, top = 20.dp, bottom = 6.dp))
         Box(Modifier.padding(horizontal = 16.dp).fillMaxWidth().height(1.dp).background(c.divider))
         SourceRow(LucideIcons.Camera, stringResource(R.string.tools_scan_document)) { vm.toolScreen = null; vm.startScan() }
+        SourceRow(LucideIcons.BookOpen, stringResource(R.string.notebook_new)) { vm.toolScreen = null; vm.newNotebookOpen = true }
     }
 }
 
@@ -402,6 +403,7 @@ fun ToolScreenHost(vm: AppViewModel, screen: ToolScreen) {
         is ToolScreen.Crop -> CropScreen(vm, screen.doc)
         is ToolScreen.Export -> ExportScreen(vm, screen.doc)
         ToolScreen.Bates -> BatesScreen(vm)
+        ToolScreen.OcrBatch -> OcrBatchScreen(vm)
         ToolScreen.Scan -> ScanScreen(vm)
         ToolScreen.Create -> CreateSourcesScreen(vm)
     }
@@ -505,7 +507,7 @@ fun CombineScreen(vm: AppViewModel) {
 data class PickedFile(val uri: android.net.Uri, val name: String, val size: Long?)
 
 /** What a file picker was opened for. */
-enum class FilePickKind { Combine, Create, Insert, Open, DigitalId, Replace }
+enum class FilePickKind { Combine, Create, Insert, Open, DigitalId, Replace, Attach }
 
 
 /**

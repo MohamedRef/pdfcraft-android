@@ -253,6 +253,7 @@ private fun HomeTabScreen(vm: AppViewModel, onBrowse: () -> Unit) {
         PdfSheet(onDismiss = { fabMenu = false }, dim = true) {
             SheetRow(LucideIcons.FolderOpen, stringResource(R.string.home_open_file), { fabMenu = false; onBrowse() })
             SheetRow(LucideIcons.Camera, stringResource(R.string.home_new_scan), { fabMenu = false; vm.startScan() })
+            SheetRow(LucideIcons.BookOpen, stringResource(R.string.notebook_new), { fabMenu = false; vm.newNotebookOpen = true })
             SheetDivider()
             SheetRow(LucideIcons.FilePenLine, stringResource(R.string.common_tool_edit_pdf), { fabMenu = false; vm.toolForFile(FileTool.Edit) })
             SheetRow(LucideIcons.FilePlus2, stringResource(R.string.common_tool_create_pdf), { fabMenu = false; vm.openCreate() })
@@ -269,7 +270,7 @@ private fun HomeTabScreen(vm: AppViewModel, onBrowse: () -> Unit) {
 }
 
 /** A tool that starts by choosing a PDF. */
-enum class FileTool { Edit, ReadAloud, FillSign, Organize, Compress, Export, Protect, Comment, Crop, Ocr, Split }
+enum class FileTool { Edit, ReadAloud, FillSign, Organize, Compress, Export, Protect, Comment, Crop, Ocr, Draw, Split }
 
 /** The row of tools under "Start with a tool". */
 @Composable
