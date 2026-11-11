@@ -209,6 +209,11 @@ fun ViewSettingsSheet(vm: AppViewModel, doc: OpenDocument) {
             PdfSwitch(ctl.nightMode, { vm.setNightMode(doc, it); ctl.sheet = ViewerSheet.None })
         }
         ReadingColorsPicker(ctl.readingColors, enabled = !doc.info.preparing) { vm.setReadingColors(doc, it) }
+        GroupDivider()
+        // a clean look at the page under the annotations; the file doesn't change (#155)
+        SheetRow(LucideIcons.EyeOff, stringResource(R.string.sheet_hide_annotations), { vm.setCommentsHidden(doc, !doc.info.commentsHidden) }, enabled = !doc.info.preparing) {
+            PdfSwitch(doc.info.commentsHidden, { vm.setCommentsHidden(doc, it) })
+        }
         Spacer(Modifier.height(24.dp))
     }
 }

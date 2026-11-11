@@ -52,6 +52,9 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.selected
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -138,7 +141,11 @@ fun CommentListScreen(vm: AppViewModel, doc: OpenDocument) {
     val all = list.orEmpty().filter { !it.fillSign }
     val parents = all.filter { it.replyTo == null && it.state == null && it.subtype in LISTED }
     // each thread: its comment, then the replies to it in order
-    val threads = parents.map { p -> listOf(p) + all.filter { it.replyTo != null && it.replyTo == p.name && it.state == null } }
+    val allThreads = parents.map { p -> listOf(p) + all.filter { it.replyTo != null && it.replyTo == p.name && it.state == null } }
+    // filters by kind and author (#155)
+    var kind by remember { mutableStateOf<CommentKind?>(null) }
+    var author by remember { mutableStateOf<String?>(null) }
+    val threads = filterThreads(allThreads, kind, author)
     Column(
         Modifier.fillMaxSize().background(Color.Black).safeTopPadding()
             .background(c.navBand).navigationBarsPadding().background(c.surface),
@@ -162,8 +169,13 @@ fun CommentListScreen(vm: AppViewModel, doc: OpenDocument) {
             Text(stringResource(R.string.comments_loading), color = c.label, modifier = Modifier.padding(16.dp))
             return@Column
         }
-        if (threads.isEmpty()) {
+        if (allThreads.isEmpty()) {
             EmptyComments()
+            return@Column
+        }
+        CommentFilters(allThreads, kind, { kind = it }, author, { author = it })
+        if (threads.isEmpty()) {
+            Text(stringResource(R.string.comments_filter_none), color = c.textSecondary, fontSize = 15.sp, modifier = Modifier.padding(16.dp))
             return@Column
         }
         LazyColumn(Modifier.fillMaxSize()) {
@@ -384,5 +396,58 @@ private fun EmptyComments() {
         Spacer(Modifier.height(8.dp))
         Text(stringResource(R.string.comments_empty_body), color = c.textSecondary, fontSize = 17.sp, textAlign = TextAlign.Center)
         Spacer(Modifier.height(80.dp))
+    }
+}
+
+/** Chips over the comment list: All, then the kinds present, then the author picker when several wrote. */
+@Composable
+private fun CommentFilters(
+    threads: List<List<CommentInfo>>,
+    kind: CommentKind?, onKind: (CommentKind?) -> Unit,
+    author: String?, onAuthor: (String?) -> Unit,
+) {
+    val c = pdfColors
+    val kinds = remember(threads) { CommentKind.entries.filter { k -> threads.any { commentKind(it.first().subtype) == k } } }
+    val authors = remember(threads) { threadAuthors(threads) }
+    @Composable
+    fun chip(label: String, selected: Boolean, onClick: () -> Unit) {
+        Text(
+            label, color = if (selected) c.onAccent else c.text, fontSize = 14.sp, maxLines = 1,
+            modifier = Modifier.clip(RoundedCornerShape(16.dp))
+                .background(if (selected) c.accent else c.pressed)
+                .clickable(role = Role.RadioButton, onClick = onClick)
+                .semantics { this.selected = selected }
+                .heightIn(min = 32.dp).padding(horizontal = 12.dp, vertical = 6.dp),
+        )
+    }
+    Row(
+        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically,
+    ) {
+        chip(stringResource(R.string.comments_filter_all), kind == null && author == null) { onKind(null); onAuthor(null) }
+        kinds.forEach { k ->
+            val label = stringResource(
+                when (k) {
+                    CommentKind.Notes -> R.string.comments_filter_notes
+                    CommentKind.Highlights -> R.string.comments_filter_highlights
+                    CommentKind.Ink -> R.string.comments_filter_ink
+                    CommentKind.Shapes -> R.string.comments_filter_shapes
+                    CommentKind.Stamps -> R.string.comments_filter_stamps
+                },
+            )
+            chip(label, kind == k) { onKind(if (kind == k) null else k) }
+        }
+        if (authors.size > 1) {
+            Box {
+                var open by remember { mutableStateOf(false) }
+                chip(author ?: stringResource(R.string.comments_filter_author), author != null) { open = true }
+                androidx.compose.material3.DropdownMenu(expanded = open, onDismissRequest = { open = false }, containerColor = c.menu) {
+                    androidx.compose.material3.DropdownMenuItem(text = { Text(stringResource(R.string.comments_filter_anyone), color = c.text) }, onClick = { open = false; onAuthor(null) })
+                    authors.forEach { a ->
+                        androidx.compose.material3.DropdownMenuItem(text = { Text(a, color = c.text) }, onClick = { open = false; onAuthor(a) })
+                    }
+                }
+            }
+        }
     }
 }

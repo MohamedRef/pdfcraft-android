@@ -881,6 +881,16 @@
     <string name="sheet_two_pages_cover">Two pages with cover</string>
     <string name="sheet_reading_mode">Reading Mode</string>
     <string name="sheet_night_mode">Night Mode</string>
+    <string name="sheet_hide_annotations">Hide annotations</string>
+    <string name="comments_filter_all">All</string>
+    <string name="comments_filter_notes">Notes</string>
+    <string name="comments_filter_highlights">Highlights</string>
+    <string name="comments_filter_ink">Ink</string>
+    <string name="comments_filter_shapes">Shapes</string>
+    <string name="comments_filter_stamps">Stamps</string>
+    <string name="comments_filter_author">Author</string>
+    <string name="comments_filter_anyone">Anyone</string>
+    <string name="comments_filter_none">No comments match these filters.</string>
     <string name="sheet_reading_colors">Reading colours</string>
     <string name="sheet_reading_colors_sample">Aa</string>
     <string name="sheet_reading_colors_off">Off</string>
