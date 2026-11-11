@@ -50,6 +50,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.clickable
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -326,6 +329,15 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
                     bottom = with(density) { (doc.viewer.padBottom).toDp() },
                     onDrag = { ctl.lastMoved = SystemClock.uptimeMillis() },
                     onTap = { ctl.goToPage = true },
+                )
+            }
+
+            // Draw mode on the last page: add a page with the notebook's template (blank otherwise)
+            if (ctl.tool == ViewerTool.Draw && !vm.readingMode && doc.writable && doc.viewer.currentPage == doc.pageCount - 1) {
+                AddPageHandle(
+                    bottom = maxOf(96.dp, with(density) { doc.viewer.padBottom.toDp() } + 12.dp),
+                    onClick = { vm.insertNotebookPage(doc, null) },
+                    modifier = Modifier.align(Alignment.BottomCenter),
                 )
             }
 
@@ -790,5 +802,25 @@ private fun SuccessBannerView(b: io.github.artcraftandroid.pdfcraft.ui.SuccessBa
                 modifier = Modifier.align(Alignment.End).clickable { onClose(); undo() }.padding(horizontal = 24.dp, vertical = 12.dp),
             )
         }
+    }
+}
+
+/** The pill under the last page in Draw mode that appends a page like it. */
+@Composable
+private fun AddPageHandle(bottom: androidx.compose.ui.unit.Dp, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    val c = pdfColors
+    val label = stringResource(R.string.notebook_add_page)
+    Row(
+        modifier.padding(bottom = bottom).height(40.dp)
+            .shadow(3.dp, androidx.compose.foundation.shape.RoundedCornerShape(20.dp))
+            .background(c.surface, androidx.compose.foundation.shape.RoundedCornerShape(20.dp))
+            .clickable(role = androidx.compose.ui.semantics.Role.Button, onClick = onClick)
+            .semantics { contentDescription = label }
+            .padding(horizontal = 16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(LucideIcons.Plus, null, tint = c.icon, modifier = Modifier.size(20.dp))
+        Spacer(Modifier.width(6.dp))
+        Text(label, color = c.label, fontSize = 14.sp)
     }
 }

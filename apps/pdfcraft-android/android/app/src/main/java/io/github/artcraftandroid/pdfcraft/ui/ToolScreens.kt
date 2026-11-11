@@ -377,6 +377,7 @@ fun CreateSourcesScreen(vm: AppViewModel) {
         Text(stringResource(R.string.tools_or_make_new), color = c.textSecondary, fontSize = 14.sp, modifier = Modifier.padding(start = 20.dp, top = 20.dp, bottom = 6.dp))
         Box(Modifier.padding(horizontal = 16.dp).fillMaxWidth().height(1.dp).background(c.divider))
         SourceRow(LucideIcons.Camera, stringResource(R.string.tools_scan_document)) { vm.toolScreen = null; vm.startScan() }
+        SourceRow(LucideIcons.BookOpen, stringResource(R.string.notebook_new)) { vm.toolScreen = null; vm.newNotebookOpen = true }
     }
 }
 
