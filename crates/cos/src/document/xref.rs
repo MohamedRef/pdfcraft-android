@@ -110,15 +110,18 @@ impl XrefSection {
                 let kind = lexer.token();
                 match kind {
                     b"n" => {
-                        let object_offset = std::str::from_utf8(object_offset).ok()?.parse::<u64>().ok()?;
+                        let object_offset = match plain_digits(object_offset) {
+                            Some(offset) => offset,
+                            None => std::str::from_utf8(object_offset).ok()?.parse::<u64>().ok()?,
+                        };
                         if object_offset == 0 {
                             return None;
                         }
-                        let generation = std::str::from_utf8(generation).ok()?.parse::<u32>().unwrap_or(0).min(u16::MAX as u32) as u16;
+                        let generation = table_generation(generation)?;
                         Some(XrefEntry::InFile { offset: object_offset, generation })
                     }
                     b"f" => {
-                        let generation = std::str::from_utf8(generation).ok()?.parse::<u32>().unwrap_or(0).min(u16::MAX as u32) as u16;
+                        let generation = table_generation(generation)?;
                         Some(XrefEntry::Free { next_generation: generation })
                     }
                     _ => None,
@@ -165,6 +168,26 @@ impl XrefSection {
     pub(super) fn extend_numbers(&self, numbers: &mut Vec<u32>) {
         numbers.extend(self.numbers());
     }
+}
+
+/// Android adaptation (#235): a table entry's field written as 1 to 19 ASCII digits (as tables
+/// write them), read without a UTF-8 check and string parse; `None` for anything else, which
+/// keeps the general parse. Every object read looks up its entry, so this runs for each one.
+fn plain_digits(token: &[u8]) -> Option<u64> {
+    if token.is_empty() || token.len() > 19 || !token.iter().all(u8::is_ascii_digit) {
+        return None;
+    }
+    Some(token.iter().fold(0u64, |value, digit| value * 10 + u64::from(digit - b'0')))
+}
+
+/// A table entry's generation, as the general parse reads it: `None` when it is not UTF-8,
+/// 0 when it is not a `u32`, and at most `u16::MAX`.
+fn table_generation(token: &[u8]) -> Option<u16> {
+    let generation = match plain_digits(token) {
+        Some(value) => u32::try_from(value).unwrap_or(0),
+        None => std::str::from_utf8(token).ok()?.parse::<u32>().unwrap_or(0),
+    };
+    Some(generation.min(u16::MAX as u32) as u16)
 }
 
 impl XrefRevisionSection {
@@ -272,4 +295,39 @@ pub struct Revision {
     /// file. The two differ only in a file with bytes before its header, and an update appended
     /// to such a file must count the same way as the section it points back to.
     pub header_relative: bool,
+}
+
+#[cfg(test)]
+mod plain_digit_tests {
+    use super::{plain_digits, table_generation};
+
+    /// #235: table fields read without a string parse give what the string parse gave.
+    #[test]
+    fn table_fields_read_as_the_string_parse_does() {
+        let mut tokens: Vec<Vec<u8>> = [
+            &b"0"[..], b"0000000017", b"18446744073709551615", b"18446744073709551616", b"9999999999999999999",
+            b"4294967295", b"4294967296", b"65535", b"65536", b"+12", b"+", b"-1", b"", b"12a", b"\xff1", b"1\xff",
+        ]
+        .iter()
+        .map(|t| t.to_vec())
+        .collect();
+        let mut seed: u64 = 0x9e37_79b9_7f4a_7c15;
+        for _ in 0..2000 {
+            seed ^= seed << 13;
+            seed ^= seed >> 7;
+            seed ^= seed << 17;
+            let len = 1 + (seed % 21) as usize;
+            tokens.push((0..len).map(|i| b'0' + ((seed >> (i * 3)) % 10) as u8).collect());
+        }
+        for token in tokens {
+            let text = std::str::from_utf8(&token).ok();
+            let offset = text.and_then(|t| t.parse::<u64>().ok());
+            assert_eq!(plain_digits(&token).or(offset), offset, "{token:?}");
+            if let Some(fast) = plain_digits(&token) {
+                assert_eq!(Some(fast), offset, "{token:?}");
+            }
+            let generation = text.map(|t| t.parse::<u32>().unwrap_or(0).min(u16::MAX as u32) as u16);
+            assert_eq!(table_generation(&token), generation, "{token:?}");
+        }
+    }
 }
