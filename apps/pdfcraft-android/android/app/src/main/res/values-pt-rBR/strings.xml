@@ -648,7 +648,6 @@
     <string name="msg_snap_to_shape_on">Ajuste à forma ativado</string>
     <string name="msg_search_image_only">As palavras deste arquivo são imagens e ainda não podem ser pesquisadas.</string>
     <string name="msg_search_no_matches">Nenhuma ocorrência de “%1$s”</string>
-    <string name="msg_share_subject">Enviando %1$s por e-mail</string>
     <string name="msg_print_disabled">Impressão indisponível: a pessoa autora desativou a impressão deste documento.</string>
     <string name="msg_saved_copy">Cópia salva</string>
     <string name="msg_saved_downloads">Salvo como %1$s em Downloads</string>

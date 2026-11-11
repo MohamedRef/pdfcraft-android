@@ -992,7 +992,6 @@
 
     <!-- Messages: share and print -->
     <!-- Subject of the email when a document is shared. %1$s is the document's title. -->
-    <string name="msg_share_subject">%1$s wird per E-Mail gesendet</string>
     <string name="msg_print_disabled">Drucken nicht verfügbar: Der Autor hat das Drucken für dieses Dokument deaktiviert.</string>
 
     <!-- Messages: saving. %1$s is a file name; %2$s is its size (for example "1.2 MB"). -->

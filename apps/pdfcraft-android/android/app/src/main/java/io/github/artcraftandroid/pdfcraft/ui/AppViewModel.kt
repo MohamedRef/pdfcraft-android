@@ -862,14 +862,55 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     }
 
     /** Share a copy of [doc] through the system's share sheet (saved first, with the ink being drawn). */
-    fun share(doc: OpenDocument) {
+    /** The Share sheet's choice last used, marked next time (#205). */
+    val lastShareChoice: io.github.artcraftandroid.pdfcraft.ui.viewer.ShareChoice
+        get() = io.github.artcraftandroid.pdfcraft.ui.viewer.ShareChoice.of(appPrefs.getString("shareChoice", null))
+
+    /**
+     * Share [doc] as [choice] picks (#205): the PDF as it is, a flattened copy (comments and
+     * fields baked into the pages), the page in view as its own PDF, or pictures of pages (picked
+     * in the page grid). The subject is the document's title only.
+     */
+    fun share(doc: OpenDocument, choice: io.github.artcraftandroid.pdfcraft.ui.viewer.ShareChoice = io.github.artcraftandroid.pdfcraft.ui.viewer.ShareChoice.Pdf) {
+        appPrefs.edit().putString("shareChoice", choice.id).apply()
         if (doc.controller.tool == ViewerTool.Draw) doc.commitTool?.invoke()
+        if (choice == io.github.artcraftandroid.pdfcraft.ui.viewer.ShareChoice.Images) {
+            exportImages(doc, lastImageFormat)
+            return
+        }
+        val eng = engine ?: return
+        val page = doc.viewer.currentPage
         handOut {
             // the ink is queued in the engine: reading the document back waits for it, so the save has it
             refresh(doc)
             save(doc)
-            val uri = withContext(Dispatchers.IO) { files.shareable(doc.file, doc.name) }
-            sendIntent(listOf(uri)).putExtra(Intent.EXTRA_SUBJECT, text(R.string.msg_share_subject, doc.title))
+            val (file, name) = when (choice) {
+                io.github.artcraftandroid.pdfcraft.ui.viewer.ShareChoice.Flattened -> {
+                    // from a second, temporary engine document: the open one keeps its comments and fields
+                    val out = tempFile("pdf")
+                    val copy = eng.tool("doc_open", mapOf("path" to doc.file.absolutePath, "password" to doc.password)).optLong("doc")
+                    try {
+                        eng.tool("doc_flatten", mapOf("doc" to copy))
+                        eng.tool("doc_save", mapOf("doc" to copy, "path" to out.absolutePath, "full" to true))
+                    } finally {
+                        runCatching { eng.tool("doc_close", mapOf("doc" to copy, "discard_changes" to true)) }
+                    }
+                    out to text(R.string.share_name_flattened, doc.title)
+                }
+                io.github.artcraftandroid.pdfcraft.ui.viewer.ShareChoice.Page -> {
+                    val out = tempFile("pdf")
+                    eng.tool("page_extract", mapOf("doc" to doc.id, "pages" to listOf(page + 1), "out" to out.absolutePath))
+                    out to text(R.string.share_name_page, doc.title, page + 1)
+                }
+                else -> doc.file to doc.name
+            }
+            val uri = try {
+                withContext(Dispatchers.IO) { files.shareable(file, name) }
+            } finally {
+                // the share folder holds its own copy; a temporary file goes now (#105)
+                if (file != doc.file) file.delete()
+            }
+            sendIntent(listOf(uri)).putExtra(Intent.EXTRA_SUBJECT, doc.title)
         }
     }
 

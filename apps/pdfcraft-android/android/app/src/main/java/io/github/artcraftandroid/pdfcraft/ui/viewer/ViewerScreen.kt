@@ -449,7 +449,7 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
                                 ctl.searching = true
                                 ctl.sheet = ViewerSheet.None
                             }),
-                            onShare = { vm.share(doc) },
+                            onShare = { selection.clear(); ctl.sheet = ViewerSheet.Share },
                             onMore = { ctl.sheet = if (ctl.sheet == ViewerSheet.More) ViewerSheet.None else ViewerSheet.More },
                             moreOpen = ctl.sheet == ViewerSheet.More,
                             title = if (ctl.tool == ViewerTool.Edit) stringResource(R.string.common_tool_edit_pdf) else null,
@@ -576,6 +576,7 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
                 ViewerSheet.Signatures -> SignaturesSheet(vm, doc)
                 ViewerSheet.ScanEnhance -> ScanEnhanceSheet(vm, doc)
                 ViewerSheet.OcrConfidence -> OcrConfidenceReviewSheet(vm, doc)
+                ViewerSheet.Share -> ShareSheet(vm, doc)
                 ViewerSheet.None -> Unit
             }
         }

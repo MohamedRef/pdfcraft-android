@@ -897,7 +897,6 @@
     <string name="msg_search_no_matches">Aucun résultat pour « %1$s »</string>
 
     <!-- Messages: share and print -->
-    <string name="msg_share_subject">Envoi de %1$s par e-mail</string>
     <string name="msg_print_disabled">Impression indisponible : l\'auteur a désactivé l\'impression de ce document.</string>
 
     <!-- Messages: saving. %1$s is a file name; %2$s is its size (for example "1.2 MB"). -->

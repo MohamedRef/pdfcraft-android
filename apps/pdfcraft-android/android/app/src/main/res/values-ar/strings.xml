@@ -14,6 +14,12 @@
     <string name="common_delete">حذف</string>
     <string name="common_back">رجوع</string>
     <string name="common_share">مشاركة</string>
+    <string name="share_choice_pdf">مشاركة PDF</string>
+    <string name="share_choice_flattened">مشاركة نسخة مدمجة (لا يمكن تغيير التعليقات والحقول)</string>
+    <string name="share_choice_page">مشاركة هذه الصفحة</string>
+    <string name="share_choice_images">مشاركة الصفحات كصور</string>
+    <string name="share_name_flattened">%1$s (مدمج).pdf</string>
+    <string name="share_name_page">%1$s (صفحة %2$d).pdf</string>
     <string name="common_open">فتح</string>
     <string name="common_create">إنشاء</string>
     <string name="common_clear">مسح</string>
@@ -771,7 +777,6 @@
     <string name="msg_search_image_only">نصوص هذا الملف صور؛ لذا لا يمكن البحث فيها بعد.</string>
     <string name="msg_search_no_matches">لا توجد نتائج تطابق «%1$s»</string>
     <string name="msg_search_no_matches_some_images">لا توجد نتائج تطابق «%1$s». بعض الصفحات صور، لذلك لا يمكن البحث في كلماتها بعد.</string>
-    <string name="msg_share_subject">إرسال %1$s بالبريد الإلكتروني</string>
     <string name="msg_print_disabled">الطباعة غير متاحة؛ عطّل المؤلف طباعة هذا المستند.</string>
     <string name="msg_saved_copy">تم حفظ نسخة</string>
     <string name="msg_saved_downloads">تم الحفظ باسم %1$s في التنزيلات</string>

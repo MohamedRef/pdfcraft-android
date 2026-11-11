@@ -1000,7 +1000,6 @@
 
     <!-- Messages: share and print -->
     <!-- Subject of the email when a document is shared. %1$s is the document's title. -->
-    <string name="msg_share_subject">Enviando %1$s por correo</string>
     <string name="msg_print_disabled">Impresión no disponible: el autor ha desactivado la impresión de este documento.</string>
 
     <!-- Messages: saving. %1$s is a file name; %2$s is its size (for example "1.2 MB"). -->

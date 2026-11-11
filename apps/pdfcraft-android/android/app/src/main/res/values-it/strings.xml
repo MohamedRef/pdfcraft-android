@@ -986,7 +986,6 @@
 
     <!-- Condivisione e stampa -->
 
-    <string name="msg_share_subject">Invio di %1$s tramite email</string>
     <string name="msg_print_disabled">Stampa non disponibile: l\'autore ha disabilitato la stampa per questo documento.</string>
 
     <!-- Salvataggio -->

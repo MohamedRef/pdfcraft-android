@@ -22,6 +22,14 @@
     <string name="common_delete">Delete</string>
     <string name="common_back">Back</string>
     <string name="common_share">Share</string>
+    <string name="share_choice_pdf">Share PDF</string>
+    <string name="share_choice_flattened">Share flattened copy (comments and fields can\'t be changed)</string>
+    <string name="share_choice_page">Share this page</string>
+    <string name="share_choice_images">Share pages as images</string>
+    <!-- Translator note: file name of a shared flattened copy; %1$s is the document's title. -->
+    <string name="share_name_flattened">%1$s (flattened).pdf</string>
+    <!-- Translator note: file name of one shared page; %1$s is the title, %2$d the page number. -->
+    <string name="share_name_page">%1$s (page %2$d).pdf</string>
     <string name="common_open">Open</string>
     <string name="common_create">Create</string>
     <string name="common_clear">Clear</string>
@@ -1110,7 +1118,6 @@
 
     <!-- Messages: share and print -->
     <!-- Subject of the email when a document is shared. %1$s is the document's title. -->
-    <string name="msg_share_subject">Emailing %1$s</string>
     <string name="msg_print_disabled">Print unavailable: the author has disabled printing for this document.</string>
 
     <!-- Messages: saving. %1$s is a file name; %2$s is its size (for example "1.2 MB"). -->
