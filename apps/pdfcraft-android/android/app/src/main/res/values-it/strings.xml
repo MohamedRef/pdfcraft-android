@@ -1783,4 +1783,45 @@
     <string name="library_tags_hint">esame, settimana 3</string>
     <string name="library_collections">Raccolte</string>
     <string name="library_remove">Rimuovi dalla libreria</string>
+    <plurals name="cards_due">
+        <item quantity="one">%d scheda da ripassare</item>
+        <item quantity="many">%d schede da ripassare</item>
+        <item quantity="other">%d schede da ripassare</item>
+    </plurals>
+    <plurals name="cards_due_review">
+        <item quantity="one">Ripassa %d scheda</item>
+        <item quantity="many">Ripassa %d schede</item>
+        <item quantity="other">Ripassa %d schede</item>
+    </plurals>
+    <string name="cards_title">Flashcard</string>
+    <string name="cards_row_due">Flashcard (%1$d da ripassare)</string>
+    <string name="cards_make">Crea flashcard</string>
+    <string name="cards_make_cloze">Crea scheda a completamento</string>
+    <string name="cards_new">Nuova flashcard</string>
+    <string name="cards_edit">Modifica flashcard</string>
+    <string name="cards_front">Fronte</string>
+    <string name="cards_back">Retro</string>
+    <string name="cards_cloze_hint">Metti {{ }} attorno alle parole per trasformarle in uno spazio da completare.</string>
+    <string name="cards_from_page">%1$s, pagina %2$d</string>
+    <string name="cards_saved">Flashcard salvata</string>
+    <string name="cards_need_saved_file">Salva prima il documento per crearne flashcard</string>
+    <string name="cards_progress">%1$d rimaste · %2$d nel mazzo</string>
+    <string name="cards_export">Esporta per Anki (TSV)</string>
+    <string name="cards_import">Importa CSV o TSV</string>
+    <string name="cards_none">Ancora nessuna flashcard</string>
+    <string name="cards_none_body">Seleziona del testo e scegli Crea flashcard, oppure aggiungine una con +.</string>
+    <string name="cards_all_done">Tutto in pari</string>
+    <string name="cards_all_done_body">%1$d ripassate. Le schede tornano quando è il momento.</string>
+    <string name="cards_show_answer">Mostra risposta</string>
+    <string name="cards_again">Di nuovo</string>
+    <string name="cards_hard">Difficile</string>
+    <string name="cards_good">Bene</string>
+    <string name="cards_easy">Facile</string>
+    <string name="cards_span_minutes">%d min</string>
+    <string name="cards_span_days">%d g</string>
+    <string name="cards_span_months">%d mesi</string>
+    <string name="cards_delete_title">Eliminare questa flashcard?</string>
+    <string name="cards_busy_export">Esportazione flashcard…</string>
+    <string name="cards_file_name">Flashcard %1$s</string>
+    <string name="cards_imported">%1$d flashcard importate</string>
 </resources>
