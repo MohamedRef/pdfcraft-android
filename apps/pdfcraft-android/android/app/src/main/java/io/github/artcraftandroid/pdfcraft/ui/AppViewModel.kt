@@ -331,10 +331,6 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             doc.writable = withContext(Dispatchers.IO) { source == null || files.canWrite(source) }
             doc.notWrittenBack = source?.let { withContext(Dispatchers.IO) { files.hasPendingWriteBack(it) } } ?: false
             io.github.artcraftandroid.pdfcraft.engine.OpenTiming.milestone("source_access_ready", openStartedAt)
-            if (!info.preparing) {
-                loadLinks(eng, doc)
-                io.github.artcraftandroid.pdfcraft.engine.OpenTiming.milestone("overlays_ready", openStartedAt, pages = info.pages.size)
-            }
             doc.controller.nightMode = savedNightMode
             if (savedPageMode != doc.viewer.mode) doc.viewer.switchMode(savedPageMode)
             // a file left in Reading Mode reopens in it, unless it was opened for a tool
@@ -342,8 +338,14 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             document = doc
             io.github.artcraftandroid.pdfcraft.engine.OpenTiming.milestone("viewer_model_ready", openStartedAt, pages = info.pages.size)
             if (!info.preparing) {
-                if (doc.info.signed) announceSignatures(doc)
-                startPendingTool(doc)
+                viewModelScope.launch {
+                    doc.images.awaitFirstCanvas()
+                    if (document === doc) {
+                        loadLinks(eng, doc)
+                        if (doc.info.signed) announceSignatures(doc)
+                        startPendingTool(doc)
+                    }
+                }
             } else {
                 completeReadingOpen(eng, doc, requestId, openStartedAt)
             }
@@ -373,8 +375,8 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 if (document !== doc || !isCurrentOpenRequest(requestId)) return@launch
                 complete.timings.forEach { io.github.artcraftandroid.pdfcraft.engine.OpenTiming.duration(it.stage, it.durationMs.toLong()) }
                 io.github.artcraftandroid.pdfcraft.engine.OpenTiming.milestone("native_ready", startedAt, pages = complete.document.pages.size)
-                loadLinks(eng, doc)
                 doc.update(complete.document)
+                loadLinks(eng, doc)
                 io.github.artcraftandroid.pdfcraft.engine.OpenTiming.milestone("overlays_ready", startedAt, pages = doc.pageCount)
                 if (io.github.artcraftandroid.pdfcraft.engine.OpenTiming.enabled()) {
                     runCatching { eng.command { repairCount(doc.id) } }.getOrNull()?.let {
@@ -599,11 +601,44 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     }
 
     private suspend fun loadLinks(eng: Engine, doc: OpenDocument) {
-        doc.widgets = runCatching { io.github.artcraftandroid.pdfcraft.engine.OpenTiming.measure("widgets") { eng.command { widgets(doc.id) } } }.getOrDefault(emptyList())
-        doc.comments = runCatching { io.github.artcraftandroid.pdfcraft.engine.OpenTiming.measure("comments") { eng.command { comments(doc.id) } } }.getOrDefault(emptyList())
-        // Do not scan every link on every page before showing a large document.
-        // The viewer loads only its visible pages after the first frame.
+        if (document !== doc || doc.info.preparing) return
+        val generation = doc.info.generation
+        loadVisibleLinks(doc, doc.viewer.visiblePages())
+        // Keep global field navigation complete, but only after the first page is available.
+        loadAllWidgets(doc)
+        if (document !== doc || generation != doc.info.generation) return
         io.github.artcraftandroid.pdfcraft.engine.OpenTiming.measure("signatures") { loadSignatures(eng, doc) }
+    }
+
+    suspend fun loadAllWidgets(doc: OpenDocument) {
+        if (document !== doc || doc.info.preparing || doc.widgetsComplete) return
+        val eng = engine ?: return
+        val generation = doc.info.generation
+        val result = try { eng.command { widgets(doc.id) } }
+        catch (e: kotlinx.coroutines.CancellationException) { throw e }
+        catch (_: Exception) { return }
+        if (document !== doc || generation != doc.info.generation) return
+        doc.widgets = result
+        doc.widgetsComplete = true
+    }
+
+    private suspend fun loadVisibleOverlays(doc: OpenDocument, visible: IntRange) {
+        if (document !== doc || doc.info.preparing) return
+        val eng = engine ?: return
+        val generation = doc.info.generation
+        while (document === doc && generation == doc.info.generation) {
+            val missing = missingVisibleLinkPages(visible, doc.pageCount, doc.overlayPagesLoaded)
+            if (missing.isEmpty()) return
+            val result = io.github.artcraftandroid.pdfcraft.engine.OpenTiming.measure("visible_overlays") {
+                eng.command { pageOverlays(doc.id, missing.map { it.toUInt() }) }
+            }
+            if (document !== doc || generation != doc.info.generation || result.generation != generation) return
+            val pages = result.pages.toSet()
+            if (!doc.commentsComplete) doc.comments = (doc.comments.filter { it.page !in pages } + result.comments).sortedWith(compareBy({ it.page }, { it.index }))
+            if (!doc.widgetsComplete) doc.widgets = doc.widgets.filter { it.page !in pages } + result.widgets
+            doc.overlayPagesLoaded.addAll(missing)
+            kotlinx.coroutines.yield()
+        }
     }
 
     /** Resolve only the displayed PDF pages' links without blocking the opening screen. */
@@ -611,6 +646,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         if (document !== doc || doc.info.preparing) return
         val eng = engine ?: return
         val generation = doc.info.generation
+        try { loadVisibleOverlays(doc, visible) } catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (_: Exception) { return }
         while (document === doc && doc.info.generation == generation) {
             val missing = missingVisibleLinkPages(visible, doc.pageCount, doc.linkPagesLoaded)
             if (missing.isEmpty()) return
@@ -1227,7 +1263,19 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
 
     suspend fun attachments(doc: OpenDocument) = engine?.let { e -> runCatching { e.command { attachments(doc.id) } }.getOrNull() }.orEmpty()
 
-    suspend fun comments(doc: OpenDocument) = engine?.let { e -> runCatching { e.command { comments(doc.id) } }.getOrNull() }.orEmpty()
+    suspend fun comments(doc: OpenDocument): List<io.github.artcraftandroid.pdfcraft.core.CommentInfo>? {
+        if (document !== doc || doc.info.preparing) return null
+        if (doc.commentsComplete) return doc.comments
+        val generation = doc.info.generation
+        val eng = engine ?: return null
+        val result = try { eng.command { comments(doc.id) } }
+        catch (e: kotlinx.coroutines.CancellationException) { throw e }
+        catch (e: Exception) { if (document === doc) tell(e.userMessage); return null }
+        if (document !== doc || generation != doc.info.generation) return null
+        doc.comments = result
+        doc.commentsComplete = true
+        return result
+    }
 
     /** Open an embedded file: a PDF in the viewer, anything else in another app. */
     fun openAttachment(doc: OpenDocument, name: String) {
@@ -1888,11 +1936,15 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
 
     /** What the document's signatures say (only asked for when it has signatures or signature fields). */
     private suspend fun loadSignatures(eng: Engine, doc: OpenDocument) {
-        if (!doc.info.signed && doc.widgets.none { it.kind == "signature" }) {
+        if (!doc.info.signed && doc.info.fields == 0u) {
             doc.signatures = emptyList()
             return
         }
-        doc.signatures = runCatching { io.github.artcraftandroid.pdfcraft.ui.viewer.parseSignatures(eng.tool("sign_list", mapOf("doc" to doc.id))) }.getOrDefault(emptyList())
+        val generation = doc.info.generation
+        val result = try { io.github.artcraftandroid.pdfcraft.ui.viewer.parseSignatures(eng.tool("sign_list", mapOf("doc" to doc.id))) }
+        catch (e: kotlinx.coroutines.CancellationException) { throw e }
+        catch (_: Exception) { return }
+        if (document === doc && generation == doc.info.generation) doc.signatures = result
     }
 
     /** On opening a signed document: whether its signatures hold, with the details a tap away. */
@@ -2422,12 +2474,16 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
 
     /** Move to the next (or previous) fillable text or choice field in reading order. */
     fun nextField(doc: OpenDocument, from: io.github.artcraftandroid.pdfcraft.core.WidgetInfo, forward: Boolean) {
-        val fillable = doc.widgets.filter { !it.readOnly && (it.kind == "text" || it.kind == "combo" || it.kind == "list") }
-        val i = fillable.indexOfFirst { it.field == from.field && it.page == from.page && it.rect == from.rect }
-        val next = fillable.getOrNull(if (forward) i + 1 else i - 1)
-        fieldEdit = next?.let {
-            if (it.page.toInt() != doc.viewer.currentPage) doc.viewer.goToPage(it.page.toInt(), (it.rect[1] - 60f).coerceAtLeast(0f))
-            io.github.artcraftandroid.pdfcraft.ui.viewer.FieldEdit(doc, it)
+        viewModelScope.launch {
+            loadAllWidgets(doc)
+            if (document !== doc || !doc.widgetsComplete) return@launch
+            val fillable = doc.widgets.filter { !it.readOnly && (it.kind == "text" || it.kind == "combo" || it.kind == "list") }
+            val i = fillable.indexOfFirst { it.field == from.field && it.page == from.page && it.rect == from.rect }
+            val next = fillable.getOrNull(if (forward) i + 1 else i - 1)
+            fieldEdit = next?.let {
+                if (it.page.toInt() != doc.viewer.currentPage) doc.viewer.goToPage(it.page.toInt(), (it.rect[1] - 60f).coerceAtLeast(0f))
+                io.github.artcraftandroid.pdfcraft.ui.viewer.FieldEdit(doc, it)
+            }
         }
     }
 

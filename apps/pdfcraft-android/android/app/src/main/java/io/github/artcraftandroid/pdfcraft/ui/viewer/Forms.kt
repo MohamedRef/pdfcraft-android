@@ -72,6 +72,7 @@ fun BoxScope.FieldEditor(vm: AppViewModel, edit: FieldEdit) {
     val c = pdfColors
     val w = edit.widget
     val doc = edit.doc
+    LaunchedEffect(doc.id, doc.info.generation) { vm.loadAllWidgets(doc) }
     if (w.kind == "combo" || w.kind == "list") {
         // as the reference: a dialog of radio choices that closes on a pick
         val options = w.options.chunked(2).filter { it.size == 2 }

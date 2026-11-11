@@ -65,13 +65,16 @@ class OpenDocument(
     val linkPagesLoaded = HashSet<Int>()
 
     /** The comments, refreshed when the document changes (tapping one selects it). */
-    var comments: List<io.github.artcraftandroid.pdfcraft.core.CommentInfo> = emptyList()
+    var comments by mutableStateOf<List<io.github.artcraftandroid.pdfcraft.core.CommentInfo>>(emptyList())
+    var commentsComplete by mutableStateOf(false)
+    val overlayPagesLoaded = HashSet<Int>()
 
     /** Its signatures and signature fields with what validating them found, refreshed when the document changes. */
     var signatures by mutableStateOf<List<io.github.artcraftandroid.pdfcraft.ui.viewer.SignatureEntry>>(emptyList())
 
     /** The form fields' widgets, refreshed when the document changes. */
-    var widgets: List<io.github.artcraftandroid.pdfcraft.core.WidgetInfo> = emptyList()
+    var widgets by mutableStateOf<List<io.github.artcraftandroid.pdfcraft.core.WidgetInfo>>(emptyList())
+    var widgetsComplete by mutableStateOf(false)
 
     /** What the active tool still holds (ink being drawn), to add when the tool is left. */
     var commitTool: (() -> Unit)? = null
@@ -94,6 +97,11 @@ class OpenDocument(
         if (pagesChanged || newInfo.generation != info.generation) {
             links = emptyMap()
             linkPagesLoaded.clear()
+            comments = emptyList()
+            widgets = emptyList()
+            commentsComplete = false
+            widgetsComplete = false
+            overlayPagesLoaded.clear()
         }
         pageGenerations = pageGenerations.next(newInfo.generation.toLong(), touchedPage, newInfo.pages.size, pagesChanged)
         info = newInfo

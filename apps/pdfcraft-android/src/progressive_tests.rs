@@ -285,3 +285,47 @@ fn progressive_invisible_signature_widgets_stay_pending_and_are_validated_on_com
         assert_eq!(std::fs::read(path).unwrap(), bytes);
     }
 }
+
+#[test]
+fn visible_overlays_match_complete_lists_and_reject_pending_closed_and_unbounded_requests() {
+    let bytes = fixture(
+        "",
+        "/Annots [7 0 R]",
+        "/Annots [8 0 R 9 0 R]",
+        &[
+            "<< /Type /Annot /Subtype /Text /Rect [10 10 25 25] /NM (root) /Contents (first) /CA 0.6 >>",
+            "<< /Type /Annot /Subtype /Text /Rect [30 30 45 45] /IRT 7 0 R /Contents (reply) >>",
+            "<< /Type /Annot /Subtype /Widget /FT /Tx /T (value) /V (kept) /P 5 0 R /Rect [20 20 90 45] >>",
+        ],
+    );
+    let path = file(&bytes);
+    let session = MobileSession::new();
+    let info = session.open(path.clone(), None).unwrap();
+    let all = session.comments(info.id).unwrap();
+    let first = session.page_overlays(info.id, vec![0, 0]).unwrap();
+    assert_eq!(first.pages, vec![0]);
+    assert_eq!(first.generation, info.generation);
+    assert_eq!(first.comments.len(), 1);
+    assert!(first.widgets.is_empty());
+    let second = session.page_overlays(info.id, vec![1]).unwrap();
+    assert_eq!(second.comments.len(), 1);
+    assert_eq!(second.widgets.len(), session.widgets(info.id).unwrap().len());
+    let mut combined = first.comments;
+    combined.extend(second.comments);
+    for (actual, expected) in combined.iter().zip(all.iter()) {
+        assert_eq!(
+            (actual.page, actual.index, &actual.contents, actual.opacity, &actual.reply_to),
+            (expected.page, expected.index, &expected.contents, expected.opacity, &expected.reply_to)
+        );
+    }
+    assert!(session.page_overlays(info.id, vec![2]).is_err());
+    assert!(session.page_overlays(info.id, vec![0; 17]).is_err());
+    let snapshot = session.overlay_snapshot(info.id, Some(&[0])).unwrap();
+    let before = snapshot.comment_properties();
+    session.close(info.id, true).unwrap();
+    assert!(session.page_overlays(info.id, vec![0]).is_err());
+    assert_eq!(snapshot.comment_properties(), before, "snapshot outlives its session entry");
+    assert_eq!(std::fs::read(path).unwrap(), bytes);
+    let pending = session.begin_open(file(&fixture("", "", "", &[])), None, 0, false).unwrap();
+    assert!(session.page_overlays(pending.document.id, vec![0]).is_err());
+}

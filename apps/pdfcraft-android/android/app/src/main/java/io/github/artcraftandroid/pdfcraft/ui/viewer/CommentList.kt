@@ -158,7 +158,11 @@ fun CommentListScreen(vm: AppViewModel, doc: OpenDocument) {
                 color = c.label, fontSize = 17.sp, fontWeight = FontWeight.SemiBold,
             )
         }
-        if (list != null && threads.isEmpty()) {
+        if (list == null) {
+            Text(stringResource(R.string.comments_loading), color = c.label, modifier = Modifier.padding(16.dp))
+            return@Column
+        }
+        if (threads.isEmpty()) {
             EmptyComments()
             return@Column
         }

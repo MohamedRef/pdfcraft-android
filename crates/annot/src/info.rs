@@ -250,6 +250,28 @@ pub struct Props {
 pub fn props(doc: &Document, page: usize, index: usize) -> Option<Props> {
     let p = page_ref(doc, page).ok()?;
     let entry = annots(doc, p).get(index).cloned()?;
+    props_entry(doc, &entry)
+}
+
+/// Read properties for selected annotations, walking the page tree once and each selected
+/// page's annotation array once. Results retain request order, including missing entries.
+pub fn props_batch(doc: &Document, selected: &[(usize, usize)]) -> Vec<Option<Props>> {
+    if selected.is_empty() {
+        return Vec::new();
+    }
+    let pages = super::page_refs(doc).unwrap_or_default();
+    let mut entries = std::collections::HashMap::new();
+    selected
+        .iter()
+        .map(|&(page, index)| {
+            let page = *pages.get(page)?;
+            let list = entries.entry(page).or_insert_with(|| annots(doc, page));
+            props_entry(doc, list.get(index)?)
+        })
+        .collect()
+}
+
+fn props_entry(doc: &Document, entry: &Object) -> Option<Props> {
     let obj = doc.resolve(&entry);
     // Values given by reference (`/C 7 0 R`, `/BS 5 0 R`, ISO 32000-2 §7.3.10) read as the display draws them.
     let raw = obj.as_dict()?;
