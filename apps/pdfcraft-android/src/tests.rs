@@ -998,3 +998,74 @@ fn restrictions_from_set_password_survive_reopen_and_can_be_removed() {
     let plain = s.open(open, None).unwrap();
     assert!(!plain.encrypted && plain.allows_printing && plain.allows_copying);
 }
+
+/// #90/#113: renders and text queries of a prepared document do not wait for the session lock,
+/// which a long tool (save, OCR, optimize) holds for its whole run.
+#[test]
+fn renders_and_text_do_not_wait_for_a_running_tool() {
+    let s = Arc::new(MobileSession::new());
+    let doc = s.open(text_pdf("Hello brave world\nSecond line here"), None).unwrap().id;
+    let before = s.render_page(doc, 0, 1.0, None).unwrap();
+    // a tool in flight: the session lock is held until the main thread lets go
+    let held = s.lock();
+    let worker = {
+        let s = s.clone();
+        std::thread::spawn(move || {
+            let page = s.render_page(doc, 0, 1.0, None).map(|p| p.rgba);
+            let hits = s.find_in_page(doc, 0, "brave".into(), false, false).map(|h| h.len());
+            (page, hits)
+        })
+    };
+    let started = std::time::Instant::now();
+    while !worker.is_finished() && started.elapsed() < std::time::Duration::from_secs(20) {
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+    let finished = worker.is_finished();
+    drop(held);
+    let (page, hits) = worker.join().unwrap();
+    assert!(finished, "a render waited for the session lock");
+    assert_eq!(page.unwrap(), before.rgba);
+    assert_eq!(hits.unwrap(), 1);
+}
+
+/// After an edit, renders and text come from the new version at once.
+#[test]
+fn renders_follow_each_edit() {
+    let s = MobileSession::new();
+    let doc = s.open(blank_pdf(2), None).unwrap().id;
+    let before = s.render_page(doc, 0, 0.5, None).unwrap();
+    s.execute("page_rotate".into(), format!(r#"{{"doc": {doc}, "degrees": 90}}"#)).unwrap();
+    let after = s.render_page(doc, 0, 0.5, None).unwrap();
+    assert_eq!((after.width, after.height), (before.height, before.width));
+    s.execute("page_delete".into(), format!(r#"{{"doc": {doc}, "pages": [2]}}"#)).unwrap();
+    assert!(matches!(s.render_page(doc, 1, 0.5, None), Err(MobileError::Render(_))));
+    s.close(doc, true).unwrap();
+    assert!(matches!(s.render_page(doc, 0, 0.5, None), Err(MobileError::NoDocument(_))));
+}
+
+/// #87: a whole-document search keeps no text layers, and the pages in view stay bounded.
+#[test]
+fn text_layers_stay_bounded() {
+    let s = MobileSession::new();
+    let text: String = (0..TEXT_PAGES_PER_DOC * 3).map(|i| format!("page {i} words\u{c}")).collect();
+    let doc = s.open(text_pdf(&text), None).unwrap().id;
+    let pages = s.document(doc).unwrap().pages.len() as u32;
+    assert!(pages as usize > TEXT_PAGES_PER_DOC, "{pages} pages");
+    s.glyph_count(doc, 0).unwrap();
+    let kept = |s: &MobileSession| s.texts().get(&doc).map_or(0, |t| t.pages.len());
+    for page in 0..pages {
+        s.find_in_page(doc, page, "words".into(), false, false).unwrap();
+        s.page_plain_text(doc, page).unwrap();
+    }
+    assert_eq!(kept(&s), 1, "search and word counts keep nothing new");
+    assert!(!s.find_in_page(doc, 0, "words".into(), false, false).unwrap().is_empty());
+    for page in 0..pages {
+        s.glyph_count(doc, page).unwrap();
+    }
+    assert_eq!(kept(&s), TEXT_PAGES_PER_DOC);
+    // the most recently used page is still there, the oldest is gone
+    assert!(s.texts().get_mut(&doc).unwrap().get(pages as usize - 1).is_some());
+    assert!(s.texts().get_mut(&doc).unwrap().get(0).is_none());
+    s.release_memory();
+    assert_eq!(kept(&s), 0);
+}

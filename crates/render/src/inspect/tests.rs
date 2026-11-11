@@ -2354,3 +2354,44 @@ fn annotation_read_ahead_keeps_inspection_identical() {
     assert!(links > 64, "{links} links");
     assert_eq!(fill(true), (plain, plain_failed, links));
 }
+
+/// A PDF whose one embedded file is `data`, stored deflated when `deflate` is set.
+fn one_attachment_pdf(data: &[u8], deflate: bool) -> Vec<u8> {
+    use std::io::Write;
+    let (stream, filter) = if deflate {
+        let mut z = flate2::write::ZlibEncoder::new(Vec::new(), flate2::Compression::best());
+        z.write_all(data).expect("deflates");
+        (z.finish().expect("deflates"), "/Filter /FlateDecode ")
+    } else {
+        (data.to_vec(), "")
+    };
+    let mut pdf = format!(
+        "%PDF-1.7\n1 0 obj << /Type /Catalog /Pages 2 0 R /Names << /EmbeddedFiles << /Names [(f.bin) 4 0 R] >> >> >> endobj\n\
+         2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj\n\
+         3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] >> endobj\n\
+         4 0 obj << /Type /Filespec /F (f.bin) /EF << /F 5 0 R >> >> endobj\n\
+         5 0 obj << /Type /EmbeddedFile {filter}/Length {} >> stream\n",
+        stream.len()
+    )
+    .into_bytes();
+    pdf.extend_from_slice(&stream);
+    pdf.extend_from_slice(b"\nendstream endobj\ntrailer << /Root 1 0 R >>\n%%EOF");
+    pdf
+}
+
+/// #117: the mobile bound refuses a file that decodes (or is stored) past it, and below it reads
+/// exactly what the unbounded desktop call reads.
+#[test]
+fn bounded_attachment_reads_match_and_refuse_past_the_limit() {
+    let data: Vec<u8> = (0..256 * 1024u32).map(|i| (i % 7) as u8).collect();
+    for deflate in [true, false] {
+        let bytes = Arc::new(one_attachment_pdf(&data, deflate));
+        let info = inspect(bytes.clone(), None).expect("opens");
+        let att = info.attachments.iter().find(|a| a.name == "f.bin").expect("listed");
+        let desktop = attachment_data(&bytes, None, att).expect("extracts");
+        assert_eq!(desktop, data);
+        assert_eq!(attachment_data_with_limit(&bytes, None, att, 1 << 20), Ok(desktop), "deflate={deflate}");
+        let refused = attachment_data_with_limit(&bytes, None, att, 64 * 1024).expect_err("past the limit");
+        assert!(refused.contains("too large"), "deflate={deflate}: {refused}");
+    }
+}
