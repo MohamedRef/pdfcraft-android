@@ -52,6 +52,7 @@ class MainActivity : ComponentActivity() {
     private val pickImage = registerForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri -> vm.addImage(uri) }
     private val pickSignature = registerForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri -> vm.importSignatureImage(uri) }
     private val pickPhotos = registerForActivityResult(ActivityResultContracts.PickMultipleVisualMedia()) { uris -> vm.onPhotosPicked(uris) }
+    private val pickOutputFolder = registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri -> vm.onOutputFolderPicked(uri) }
     private val pickFolder = registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri -> uri?.let(vm::addLocalFolder) }
     private val micPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted -> vm.onMicPermission(granted) }
 
@@ -124,7 +125,7 @@ class MainActivity : ComponentActivity() {
                     when (kind) {
                         FilePickKind.Combine -> pickMany.launch(arrayOf("application/pdf", "image/*", "text/plain") + OFFICE_TYPES)
                         FilePickKind.Create -> pickMany.launch(arrayOf("image/*", "text/plain", "application/pdf") + OFFICE_TYPES)
-                        FilePickKind.Insert, FilePickKind.Open -> pickOne.launch(arrayOf("application/pdf"))
+                        FilePickKind.Insert, FilePickKind.Open, FilePickKind.Replace -> pickOne.launch(arrayOf("application/pdf"))
                         // .p12 / .pfx: providers type them as PKCS #12, or not at all
                         FilePickKind.DigitalId -> pickOne.launch(arrayOf("application/x-pkcs12", "application/pkcs12", "application/octet-stream"))
                     }
@@ -161,6 +162,11 @@ class MainActivity : ComponentActivity() {
         lifecycleScope.launch { for (u in vm.photoPicks) launchSafely { pickPhotos.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) } }
         // the folder picker opens at Documents, where PDFs usually are (Download itself can't be chosen)
         val documents = android.provider.DocumentsContract.buildDocumentUri("com.android.externalstorage.documents", "primary:Documents")
+        lifecycleScope.launch {
+            for (u in vm.outputFolderRequests) {
+                try { pickOutputFolder.launch(null) } catch (e: ActivityNotFoundException) { vm.onOutputFolderPicked(null); vm.tell(getString(R.string.main_error_no_app)) }
+            }
+        }
         lifecycleScope.launch { for (u in vm.accessRequests) launchSafely { pickFolder.launch(documents) } }
         lifecycleScope.launch {
             for (u in vm.micRequests) {

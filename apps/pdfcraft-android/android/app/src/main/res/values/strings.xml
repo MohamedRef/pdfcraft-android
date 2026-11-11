@@ -175,6 +175,8 @@
     <string name="home_about_scan">Scan paper with the camera</string>
     <string name="home_about_combine">Join several files into one PDF</string>
     <string name="home_about_organize">Reorder, rotate, delete and insert pages</string>
+    <string name="home_tool_split">Split PDF</string>
+    <string name="home_about_split">Cut a PDF into several files by pages, bookmarks or size</string>
     <string name="home_about_crop">Trim margins or change page size</string>
     <string name="home_about_edit">Change the text and pictures</string>
     <string name="home_about_compress">Make a PDF smaller</string>
@@ -439,6 +441,10 @@
     <string name="viewer_go_to_page">Go to page</string>
     <!-- Translator note: the range of page numbers that can be entered; %1$d is the last page. -->
     <string name="viewer_go_to_page_range">1 - %1$d</string>
+    <!-- Translator note: Go to page when the document labels its pages; %1$s and %2$s are the first and last labels. -->
+    <string name="viewer_go_to_page_labels">A page label (%1$s – %2$s) or a number from 1 to %3$d</string>
+    <!-- Translator note: spoken page position when pages have labels; %1$s is the label (e.g. iv), %2$d the page number, %3$d the count. -->
+    <string name="viewer_page_label_of">Page %1$s (%2$d of %3$d)</string>
     <string name="viewer_enter_page_number">Enter page number</string>
     <!-- Translator note: link back to the page the last jump came from; %1$d is its number. -->
     <string name="viewer_back_to_page">Back to page %1$d</string>
@@ -546,6 +552,45 @@
     <string name="pages_blank_page">Blank page</string>
     <string name="pages_from_file">From another file</string>
     <string name="pages_from_scan">From a scan</string>
+
+    <!-- Pages: more organizing (duplicate, replace, reverse, split, labels) -->
+    <!-- Translator note: make copies of the selected pages. Keep it short. -->
+    <string name="pages_duplicate">Duplicate</string>
+    <!-- Translator note: the overflow item in the organize bar. Keep it short. -->
+    <string name="pages_more">More</string>
+    <string name="pages_replace_with">Replace with…</string>
+    <string name="pages_reverse_order">Reverse order</string>
+    <string name="pages_labels">Page labels…</string>
+    <string name="pages_split">Split…</string>
+    <!-- Translator note: short label under the Split icon in the Pages bar. -->
+    <string name="pages_split_short">Split</string>
+    <string name="pages_replace_title">Replace pages</string>
+    <!-- Translator note: %1$d is how many pages are being replaced. -->
+    <plurals name="pages_replace_explain">
+        <item quantity="one">The selected page takes the content of 1 page of the chosen file. Its comments, links and form fields stay.</item>
+        <item quantity="other">The %1$d selected pages take the content of %1$d pages of the chosen file. Their comments, links and form fields stay.</item>
+    </plurals>
+    <string name="pages_replace_first_page">Start at page of the chosen file</string>
+    <string name="pages_replace_action">Replace</string>
+    <string name="pages_split_title">Split document</string>
+    <string name="pages_split_every">Every N pages</string>
+    <string name="pages_split_every_count">Pages per part</string>
+    <string name="pages_split_before_selected">Before each selected page</string>
+    <string name="pages_split_before_none">Select the pages that start a new part first.</string>
+    <string name="pages_split_bookmarks">At top-level bookmarks</string>
+    <string name="pages_split_size">Maximum file size</string>
+    <string name="pages_split_size_mb">Size in MB</string>
+    <string name="pages_save_to_folder">Save to folder</string>
+    <string name="pages_labels_title">Page labels</string>
+    <string name="pages_labels_from">From page</string>
+    <string name="pages_labels_to">To page</string>
+    <string name="pages_labels_style">Style</string>
+    <string name="pages_labels_style_none">Prefix only</string>
+    <string name="pages_labels_prefix">Prefix (optional)</string>
+    <string name="pages_labels_start">Start at</string>
+    <!-- Translator note: %1$s is how the first labels will read, e.g. "A-1, A-2, A-3". -->
+    <string name="pages_labels_preview">Shows as: %1$s</string>
+    <string name="pages_labels_apply">Apply</string>
 
     <!-- ================================================================== -->
     <!-- The viewer's sheets: More, comments, lists, page menu, digital signatures -->
@@ -1223,6 +1268,23 @@
         <item quantity="other">Only the first %1$d files were used.</item>
     </plurals>
     <string name="msg_busy_extracting">Extracting…</string>
+    <plurals name="msg_pages_duplicated">
+        <item quantity="one">%1$d page duplicated</item>
+        <item quantity="other">%1$d pages duplicated</item>
+    </plurals>
+    <string name="msg_pages_reversed">Page order reversed</string>
+    <string name="msg_pages_labelled">Page labels changed</string>
+    <plurals name="msg_pages_replaced">
+        <item quantity="one">%1$d page replaced</item>
+        <item quantity="other">%1$d pages replaced</item>
+    </plurals>
+    <string name="msg_busy_splitting">Splitting…</string>
+    <string name="msg_split_nothing">Nothing to split: the document stays in one part.</string>
+    <string name="msg_busy_saving_files">Saving files…</string>
+    <plurals name="msg_files_saved_folder">
+        <item quantity="one">%1$d file saved to the folder you chose</item>
+        <item quantity="other">%1$d files saved to the folder you chose</item>
+    </plurals>
 
     <!-- Messages: Scan. %1$d is the page being cleaned up, %2$d how many pages there are. -->
     <string name="msg_busy_saving_scan">Saving scan…</string>
@@ -1249,6 +1311,8 @@
     <string name="files_error_share_no_space">Not enough free storage to share. Free up some space and try again.</string>
     <!-- Translator note: Downloads is the phone's Downloads folder -->
     <string name="files_error_save_downloads">The file couldn\'t be saved to Downloads.</string>
+    <!-- Translator note: %1$s is a file name. -->
+    <string name="files_error_save_folder">%1$s couldn\'t be saved to that folder.</string>
     <string name="files_error_save_image">The image couldn\'t be saved.</string>
 
     <!-- Files: where a document is, as the file details show it -->

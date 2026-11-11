@@ -189,6 +189,7 @@ fun ToolsTab(vm: AppViewModel) {
             HubTool(LucideIcons.Combine, "Combine files", R.string.common_tool_combine, R.string.home_about_combine, ToolHues.combine, setOf("Create", "Edit")) { vm.pickFiles(io.github.artcraftandroid.pdfcraft.ui.FilePickKind.Combine) },
             HubTool(LucideIcons.FilePenLine, "Bates numbering", R.string.bates_title, R.string.bates_about, ToolHues.edit, setOf("Edit")) { vm.openBates() },
             HubTool(LucideIcons.LayoutGrid, "Organize pages", R.string.common_tool_organize, R.string.home_about_organize, ToolHues.organize, setOf("Edit")) { vm.toolForFile(FileTool.Organize) },
+            HubTool(LucideIcons.Scissors, "Split PDF", R.string.home_tool_split, R.string.home_about_split, ToolHues.organize, setOf("Edit")) { vm.toolForFile(FileTool.Split) },
             HubTool(LucideIcons.Crop, "Crop pages", R.string.common_tool_crop, R.string.home_about_crop, ToolHues.crop, setOf("Edit")) { vm.toolForFile(FileTool.Crop) },
             HubTool(LucideIcons.FilePenLine, "Edit PDF", R.string.common_tool_edit_pdf, R.string.home_about_edit, ToolHues.edit, setOf("Edit")) { vm.toolForFile(FileTool.Edit) },
             HubTool(LucideIcons.FileArchive, "Compress PDF", R.string.common_tool_compress, R.string.home_about_compress, ToolHues.compress, setOf("Convert")) { vm.toolForFile(FileTool.Compress) },

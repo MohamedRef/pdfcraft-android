@@ -2973,6 +2973,15 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 }
             }
             FilePickKind.Open -> open(uris.first())
+            FilePickKind.Replace -> {
+                val (doc, pages) = replaceTarget ?: return
+                replaceTarget = null
+                viewModelScope.launch {
+                    val f = withContext(Dispatchers.IO) { runCatching { copyIn(uris.first()) }.getOrNull() }
+                    if (f == null) tell(text(R.string.msg_that_file_unreadable))
+                    else replacePrompt = ReplacePrompt(doc, pages, f)
+                }
+            }
             FilePickKind.DigitalId -> viewModelScope.launch {
                 val uri = uris.first()
                 val picked = withContext(Dispatchers.IO) { runCatching { copyIn(uri) }.getOrNull() }
@@ -3392,6 +3401,119 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         deliver(out, "Pages from ${doc.title}.pdf")
     }
 
+    // ---- Organize: duplicate, replace, reverse, split, page labels (#165) ---------------------
+
+    /** Copies of [pages] (0-based), placed right after the last of them; one undo step. */
+    fun duplicatePages(doc: OpenDocument, pages: List<Int>) {
+        if (pages.isEmpty()) return
+        runTool(doc, "page_duplicate", mapOf("pages" to pages.map { it + 1 })) {
+            tell(plural(R.plurals.msg_pages_duplicated, pages.size, pages.size))
+        }
+    }
+
+    /** Reverse the order of [pages] (0-based) among their positions, or of every page when fewer than two are picked. */
+    fun reversePages(doc: OpenDocument, pages: List<Int>) {
+        val args = if (pages.size >= 2) mapOf("pages" to pages.map { it + 1 }) else emptyMap()
+        runTool(doc, "page_reverse", args) { tell(text(R.string.msg_pages_reversed)) }
+    }
+
+    /** Label pages [from]..[to] (0-based, inclusive) as the viewer's page indicator then shows them. */
+    fun labelPages(doc: OpenDocument, from: Int, to: Int, style: String, prefix: String, start: Int) {
+        runTool(doc, "page_number", mapOf(
+            "from" to from + 1, "to" to to + 1, "style" to style, "prefix" to prefix, "start" to start.coerceAtLeast(1),
+        )) { tell(text(R.string.msg_pages_labelled)) }
+    }
+
+    /** Replace with: the pages being replaced, then the picked PDF and its first page to use. */
+    var replacePrompt by mutableStateOf<ReplacePrompt?>(null)
+    private var replaceTarget: Pair<OpenDocument, List<Int>>? = null
+
+    /** Pick a PDF whose pages take the place of [pages] (0-based). */
+    fun pickReplaceFile(doc: OpenDocument, pages: List<Int>) {
+        if (pages.isEmpty()) return
+        replaceTarget = doc to pages
+        pickFiles(FilePickKind.Replace)
+    }
+
+    /** Replace [ReplacePrompt.pages] with the picked file's pages from [firstPage] (1-based) on. */
+    fun replacePages(prompt: ReplacePrompt, firstPage: Int) {
+        replacePrompt = null
+        val from = (0 until prompt.pages.size).map { firstPage.coerceAtLeast(1) + it }
+        runTool(prompt.doc, "page_replace", mapOf(
+            "pages" to prompt.pages.map { it + 1 }, "path" to prompt.file.absolutePath, "from_pages" to from,
+        ), onSettled = { dropPicked(listOf(prompt.file)) }) {
+            tell(plural(R.plurals.msg_pages_replaced, prompt.pages.size, prompt.pages.size))
+        }
+    }
+
+    fun cancelReplace() {
+        replacePrompt?.let { dropPicked(listOf(it.file)) }
+        replacePrompt = null
+    }
+
+    /** The Split sheet, open over the page grid. */
+    var splitOpen by mutableStateOf(false)
+
+    /**
+     * Split [doc] by [mode] into parts, then save them to a folder the person picks (or share them).
+     * Parts keep the engine's names: `<name>-partK.pdf`, or the bookmark titles.
+     */
+    fun split(doc: OpenDocument, mode: SplitMode, share: Boolean) = job(text(R.string.msg_busy_splitting)) { eng ->
+        val dir = File(getApplication<Application>().cacheDir, "split/${System.nanoTime()}").apply { mkdirs() }
+        try {
+            val args = mutableMapOf<String, Any?>("doc" to doc.id, "out_dir" to dir.absolutePath)
+            args += mode.args()
+            val r = eng.tool("doc_split", args)
+            val list = r.optJSONArray("files")
+            val parts = (0 until (list?.length() ?: 0)).map { File(list!!.getJSONObject(it).getString("path")) }.filter { it.isFile }
+            if (parts.isEmpty()) {
+                tell(text(R.string.msg_split_nothing))
+                dir.deleteRecursively()
+                return@job
+            }
+            splitOpen = false
+            val named = parts.map { it to it.name }
+            if (share) {
+                val uris = try { withContext(Dispatchers.IO) { files.shareableAll(named) } } finally { dir.deleteRecursively() }
+                intents.trySend(Intent.createChooser(sendIntent(uris), null))
+            } else {
+                saveAllToFolder(named, "application/pdf", cleanup = dir)
+            }
+        } catch (e: Exception) {
+            dir.deleteRecursively()
+            throw e
+        }
+    }
+
+    /** Files waiting for the person to pick the folder they go into, and what to delete afterwards. */
+    private var folderOutput: FolderOutput? = null
+    val outputFolderRequests = Channel<Unit>(Channel.CONFLATED)
+
+    /** Ask for a folder (Storage Access Framework), then write [named] files into it. */
+    internal fun saveAllToFolder(named: List<Pair<File, String>>, mime: String, cleanup: File? = null) {
+        folderOutput?.let { old -> viewModelScope.launch(NonCancellable + Dispatchers.IO) { old.discard() } }
+        folderOutput = FolderOutput(named, mime, cleanup)
+        outputFolderRequests.trySend(Unit)
+    }
+
+    /** The folder picked for [folderOutput] (null: cancelled, the files are dropped). */
+    fun onOutputFolderPicked(tree: Uri?) {
+        val out = folderOutput ?: return
+        folderOutput = null
+        if (tree == null) {
+            viewModelScope.launch(NonCancellable + Dispatchers.IO) { out.discard() }
+            return
+        }
+        job(text(R.string.msg_busy_saving_files)) {
+            try {
+                val saved = withContext(Dispatchers.IO) { files.saveAllToTree(tree, out.files, out.mime) }
+                tell(plural(R.plurals.msg_files_saved_folder, saved, saved))
+            } finally {
+                withContext(NonCancellable + Dispatchers.IO) { out.discard() }
+            }
+        }
+    }
+
     // ---- Scan ---------------------------------------------------------------------------------
 
     fun takeScanPhoto(retake: Int? = null) {
@@ -3707,6 +3829,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             FileTool.Protect -> openProtect(doc)
             FileTool.Crop -> openCrop(doc)
             FileTool.Ocr -> recognizeText(doc)
+            FileTool.Split -> { organizing = true; doc.controller.pagesOpen = true; splitOpen = true }
         }
     }
 
