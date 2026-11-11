@@ -101,7 +101,17 @@ internal fun boundedInkLassoMove(
     pageWidth: Float,
     pageHeight: Float,
 ): Offset {
-    val b = inkLassoBounds(paths) ?: return Offset.Zero
+    return boundedInkLassoMove(inkLassoBounds(paths), requested, pageWidth, pageHeight)
+}
+
+/** [boundedInkLassoMove] for a selection whose bounds [b] are already known (#85: no per-frame copy). */
+internal fun boundedInkLassoMove(
+    b: InkLassoBounds?,
+    requested: Offset,
+    pageWidth: Float,
+    pageHeight: Float,
+): Offset {
+    if (b == null) return Offset.Zero
     if (!valid(requested) || !pageWidth.isFinite() || !pageHeight.isFinite() || pageWidth <= 0f || pageHeight <= 0f)
         return Offset.Zero
     if (b.left < 0f || b.top < 0f || b.right > pageWidth || b.bottom > pageHeight) return Offset.Zero

@@ -55,3 +55,23 @@ internal fun stylusMotionPoints(
     }
     return points
 }
+
+/**
+ * The positions of one finger move, in order: the batched historical samples a 120–240 Hz
+ * digitiser delivers between frames (at most [MAX_STYLUS_HISTORY_POINTS], evenly kept), then
+ * [current]. Without them a fast finger stroke becomes a polygon of one point per frame (#84).
+ * Repeats of the previous point are left out.
+ */
+internal fun fingerMotionPoints(previous: Offset, history: List<Offset>, current: Offset): List<Offset> {
+    val stride = ((history.size + MAX_STYLUS_HISTORY_POINTS - 1) / MAX_STYLUS_HISTORY_POINTS).coerceAtLeast(1)
+    val out = ArrayList<Offset>(minOf(history.size, MAX_STYLUS_HISTORY_POINTS) + 1)
+    var last = previous
+    history.forEachIndexed { i, p ->
+        if (i % stride == 0 && p.x.isFinite() && p.y.isFinite() && p != last) {
+            out.add(p)
+            last = p
+        }
+    }
+    if (current != last || out.isEmpty()) out.add(current)
+    return out
+}
