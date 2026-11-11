@@ -27,7 +27,7 @@ jobs:
       - uses: actions/checkout@v7
       - name: Install pinned Rust
         run: rustup toolchain install
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           key: issue55-rust-tests
       - name: Verify pinned upstream engine source
@@ -62,7 +62,7 @@ jobs:
           rustup toolchain install
           cargo install cargo-ndk --version 4.1.2 --locked
           yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;29.0.14206865" >/dev/null
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           key: issue55-android-tests
       - name: Run Android JVM unit tests
@@ -120,6 +120,30 @@ jobs:
           grep -Fxq 'pdfcraft.version=0.0.24-beta' "$prop"
           grep -Fxq 'pdfcraft.versionCode=2401' "$prop"
           echo 'Exact approved 0.0.24-beta (24012) release properties verified.' >> "$GITHUB_STEP_SUMMARY"
+      - name: Refuse to re-sign a version that is already tagged
+        if: github.event_name == 'push'
+        run: |
+          set -euo pipefail
+          version="$(sed -n 's/^pdfcraft\.version=//p' apps/pdfcraft-android/android/gradle.properties)"
+          # Published APKs are immutable. A later commit that reuses the one-time release title must
+          # not decode the signing key or rebuild with production secrets (issue #111).
+          if git ls-remote --exit-code --tags origin "refs/tags/v$version" >/dev/null; then
+            echo "::error::v$version is already tagged. Bump pdfcraft.version and move the one-time release trigger before publishing again."
+            exit 1
+          fi
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Install Rust, cargo-ndk, Android SDK and NDK
+        run: |
+          rustup toolchain install
+          cargo install cargo-ndk --version 4.1.2 --locked
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;29.0.14206865" >/dev/null
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          key: issue55-android-release
+      # The key is decoded only after the third-party cache action has restored, so it never sees it.
       - name: Require permanent personal signing key
         env:
           KEYSTORE_BASE64: ${{ secrets.PDFCRAFT_KEYSTORE_BASE64 }}
@@ -137,10 +161,6 @@ jobs:
           test -s "$RUNNER_TEMP/release.p12"
           chmod 600 "$RUNNER_TEMP/release.p12"
           echo "PDFCRAFT_KEYSTORE=$RUNNER_TEMP/release.p12" >> "$GITHUB_ENV"
-      - uses: actions/setup-java@v6
-        with:
-          distribution: temurin
-          java-version: '21'
       - name: Verify signing passwords, alias and certificate before building
         env:
           PDFCRAFT_KEYSTORE_PASSWORD: ${{ secrets.PDFCRAFT_KEYSTORE_PASSWORD }}
@@ -148,14 +168,6 @@ jobs:
           PDFCRAFT_KEY_PASSWORD: ${{ secrets.PDFCRAFT_KEY_PASSWORD }}
           PDFCRAFT_CERT_SHA256: ${{ vars.PDFCRAFT_CERT_SHA256 }}
         run: java .github/scripts/VerifyAndroidSigning.java
-      - name: Install Rust, cargo-ndk, Android SDK and NDK
-        run: |
-          rustup toolchain install
-          cargo install cargo-ndk --version 4.1.2 --locked
-          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;29.0.14206865" >/dev/null
-      - uses: Swatinem/rust-cache@v2
-        with:
-          key: issue55-android-release
       - name: Build signed arm64 APK for owner devices
         working-directory: apps/pdfcraft-android/android
         env:
@@ -180,6 +192,8 @@ jobs:
               exit 1
             fi
             grep -qiF "$expected_cert" "$RUNNER_TEMP/certs.txt" || { echo '::error::APK certificate does not match the validated PKCS12 keystore'; exit 1; }
+            # Hard pin, also when vars.PDFCRAFT_CERT_SHA256 is unset (issue #106).
+            python3 scripts/verify_android_apk_certificate.py "$RUNNER_TEMP/certs.txt"
             "$aapt" dump badging "$apk" | grep -q "name='io.github.mohamedref.pdfcraft'" || { echo '::error::Wrong application ID'; exit 1; }
             "$aapt" dump badging "$apk" | grep -q "versionCode='[1-9][0-9]*'" || { echo '::error::Invalid version code'; exit 1; }
           done

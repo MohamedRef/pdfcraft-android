@@ -81,7 +81,20 @@ internal fun releaseSha256(digest: String?): String? {
     return raw.lowercase()
 }
 
+/**
+ * Published release APKs are single-ABI arm64-v8a builds, whose versionCode ends in 2. A build for
+ * another ABI (1, 3) or a multi-ABI build (0), such as one made with -Ppdfcraft.abis, must not be
+ * offered them: the same version would look newer, and installing it fails or switches ABI (#110).
+ */
+internal fun receivesGitHubApkUpdates(installedVersionCode: Long): Boolean =
+    installedVersionCode > 0L && installedVersionCode % 10L == 2L
+
+/** Compare version bases, not raw codes, so the ABI digit never makes a release look newer. */
+internal fun isUpdateFor(releaseBase: Long, installedVersionCode: Long): Boolean =
+    receivesGitHubApkUpdates(installedVersionCode) && releaseBase > installedVersionCode / 10L
+
 internal fun parseUpdates(json: String, installedVersionCode: Long): List<ApkUpdate> {
+    if (!receivesGitHubApkUpdates(installedVersionCode)) return emptyList()
     val releases = JSONArray(json)
     val candidates = mutableListOf<ApkUpdate>()
     for (i in 0 until releases.length()) {
@@ -90,8 +103,7 @@ internal fun parseUpdates(json: String, installedVersionCode: Long): List<ApkUpd
         val tag = release.optString("tag_name")
         val version = tag.removePrefix("v")
         val base = updateVersionBase(version) ?: continue
-        val versionCode = base * 10L + 2L
-        if (versionCode <= installedVersionCode) continue
+        if (!isUpdateFor(base, installedVersionCode)) continue
         val assets = release.optJSONArray("assets") ?: continue
         for (j in 0 until assets.length()) {
             val asset = assets.optJSONObject(j) ?: continue

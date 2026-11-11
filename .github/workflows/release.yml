@@ -1,25 +1,26 @@
-# Release pipeline: pushing a version tag builds one signed arm64-v8a APK for Samsung Galaxy S24 Ultra
-# and Galaxy Tab S11, then makes a
-# draft GitHub release named after the tag, with an empty "What's Changed" section. Fill that in on
-# GitHub and publish the draft: it becomes the latest release (betas too: while the app is in beta,
-# every release is one).
+# Release dry run: a manual run (Actions › Release dry run › Run workflow) builds the arm64-v8a APK
+# at the version in gradle.properties, signed with the debug key, and keeps it as the run's artifact.
+# It holds no signing secrets and releases nothing.
 #
-# A manual run (Actions › Release › Run workflow) is a dry run: it builds the APK at the version in
-# gradle.properties and keeps them as the run's artifact, and releases nothing.
-name: Release
+# Publishing has exactly one route: android-update.yml (signed-apk, then publish-release). That route
+# runs the Rust and Android tests, pins the signing certificate, checks the manifest versionName and
+# versionCode, validates docs/releases/<version>.md and titles the release "PdfCraft <version> (<build>)".
+# This workflow used to draft a release on any pushed v* tag and skipped all of that (issue #106), so it
+# no longer runs on tags. A hand-pushed tag publishes nothing.
+#
+# docs/fdroid reads the cargo-ndk version from the "cargo install cargo-ndk" line below: keep it in sync
+# with android-update.yml.
+name: Release dry run
 
 on:
-  push:
-    tags: ['v*']
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: release-${{ github.ref }}
-  # never cancel a release halfway; a newer push waits its turn
-  cancel-in-progress: false
+  group: release-dry-run-${{ github.ref }}
+  cancel-in-progress: true
 
 env:
   CARGO_TERM_COLOR: always
@@ -27,7 +28,7 @@ env:
 
 jobs:
   apk:
-    name: APK
+    name: APK (debug-signed dry run)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -35,55 +36,24 @@ jobs:
       - id: v
         name: Resolve version
         run: |
-          listed="$(sed -n 's/^pdfcraft\.version=//p' apps/pdfcraft-android/android/gradle.properties)"
-          if [ "$GITHUB_REF_TYPE" = tag ]; then v="${GITHUB_REF_NAME#v}"; else v="$listed"; fi
+          v="$(sed -n 's/^pdfcraft\.version=//p' apps/pdfcraft-android/android/gradle.properties)"
           if ! printf '%s' "$v" | grep -Eq '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$'; then
             echo "::error::'$v' is not a version like 1.2.3 or 1.2.3-beta"
             exit 1
           fi
-          # the tag must be the version gradle.properties names (F-Droid builds from that file)
-          if [ "$v" != "$listed" ]; then
-            echo "::error::the tag is v$v but gradle.properties says pdfcraft.version=$listed: set it (and pdfcraft.versionCode) before tagging"
-            exit 1
-          fi
           echo "version=$v" >>"$GITHUB_OUTPUT"
-          echo "### v$v (\`${GITHUB_SHA::9}\`)" >>"$GITHUB_STEP_SUMMARY"
+          echo "### $v dry run (\`${GITHUB_SHA::9}\`), debug-signed, not for release" >>"$GITHUB_STEP_SUMMARY"
 
       - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: '21'
 
-      - name: Release key
-        env:
-          KEYSTORE_BASE64: ${{ secrets.PDFCRAFT_KEYSTORE_BASE64 }}
-        run: |
-          if [ -n "$KEYSTORE_BASE64" ]; then
-            printf '%s' "$KEYSTORE_BASE64" | base64 -d >"$RUNNER_TEMP/release.p12"
-            echo "PDFCRAFT_KEYSTORE=$RUNNER_TEMP/release.p12" >>"$GITHUB_ENV"
-          elif [ "$GITHUB_REF_TYPE" = tag ]; then
-            echo "::error::No release key: a release is never signed with the debug key"
-            exit 1
-          else
-            echo "::warning::No release key: this dry run is signed with the debug key"
-          fi
-
-      - name: Verify signing passwords, alias and certificate before building
-        env:
-          PDFCRAFT_KEYSTORE_PASSWORD: ${{ secrets.PDFCRAFT_KEYSTORE_PASSWORD }}
-          PDFCRAFT_KEY_ALIAS: ${{ secrets.PDFCRAFT_KEY_ALIAS }}
-          PDFCRAFT_KEY_PASSWORD: ${{ secrets.PDFCRAFT_KEY_PASSWORD }}
-          PDFCRAFT_CERT_SHA256: ${{ vars.PDFCRAFT_CERT_SHA256 }}
-        run: |
-          if [ -n "${PDFCRAFT_KEYSTORE:-}" ]; then
-            java .github/scripts/VerifyAndroidSigning.java
-          fi
-
       # the Rust release and targets rust-toolchain.toml names
       - name: Install Rust
         run: rustup toolchain install
 
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           key: release-android
 
@@ -92,74 +62,29 @@ jobs:
           cargo install cargo-ndk --version 4.1.2 --locked
           yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;29.0.14206865" >/dev/null
 
-      # One arm64-v8a APK for the two supported Samsung devices.
-      # The file name matches the About-screen GitHub Release update checker.
       - name: Build
         working-directory: apps/pdfcraft-android/android
         env:
           VERSION: ${{ steps.v.outputs.version }}
-          PDFCRAFT_KEYSTORE_PASSWORD: ${{ secrets.PDFCRAFT_KEYSTORE_PASSWORD }}
-          PDFCRAFT_KEY_ALIAS: ${{ secrets.PDFCRAFT_KEY_ALIAS }}
-          PDFCRAFT_KEY_PASSWORD: ${{ secrets.PDFCRAFT_KEY_PASSWORD }}
         run: |
           mkdir -p "$GITHUB_WORKSPACE/dist"
-          ./gradlew assembleRelease "-Ppdfcraft.abis=arm64-v8a" "-Ppdfcraft.version=$VERSION" --no-daemon
-          cp app/build/outputs/apk/release/app-release.apk "$GITHUB_WORKSPACE/dist/pdfcraft-android-$VERSION.apk"
+          ./gradlew assembleRelease "-Ppdfcraft.abis=arm64-v8a" --no-daemon
+          cp app/build/outputs/apk/release/app-release.apk "$GITHUB_WORKSPACE/dist/pdfcraft-android-$VERSION-dry-run-debug-signed.apk"
 
       - name: APK
         run: |
-          apksigner="$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -n 1)apksigner"
+          tools="$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -n 1)"
           echo >>"$GITHUB_STEP_SUMMARY"
           for apk in dist/*.apk; do
-            certs="$("$apksigner" verify --print-certs "$apk")"
-            if [ -n "${PDFCRAFT_KEYSTORE:-}" ]; then
-              expected_cert="${PDFCRAFT_SIGNING_CERT_SHA256:-}"
-              if ! [[ "$expected_cert" =~ ^[0-9a-f]{64}$ ]]; then
-                echo "::error::Signing preflight did not export a valid certificate fingerprint"
-                exit 1
-              fi
-              grep -qiF "$expected_cert" <<<"$certs" || {
-                echo "::error::Release APK was signed with a certificate different from the validated keystore"
-                exit 1
-              }
-            fi
-            if [ "$GITHUB_REF_TYPE" = tag ] && grep -q "CN=Android Debug" <<<"$certs"; then
-              echo "::error::$apk is signed with the debug key"
-              exit 1
-            fi
+            build="$("${tools}aapt" dump badging "$apk" | awk -F"'" '/^package:/ {print $4; exit}')"
             {
-              echo "    $(basename "$apk")"
-              grep "certificate SHA-256" <<<"$certs" | sed 's/^/      /'
+              echo "    $(basename "$apk") ($build)"
+              "${tools}apksigner" verify --print-certs "$apk" | grep "certificate SHA-256" | sed 's/^/      /'
             } >>"$GITHUB_STEP_SUMMARY"
           done
 
       - uses: actions/upload-artifact@v7
         with:
-          name: release-apk
+          name: release-dry-run-apk
           path: dist/*
           if-no-files-found: error
-
-      - name: Remove the release key
-        if: always()
-        run: rm -f "$RUNNER_TEMP/release.p12"
-
-  release:
-    name: GitHub Release
-    needs: apk
-    if: github.ref_type == 'tag'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    env:
-      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      GH_REPO: ${{ github.repository }}
-    steps:
-      - uses: actions/download-artifact@v8
-        with:
-          name: release-apk
-          path: dist
-
-      - name: Draft the release
-        run: |
-          gh release create "$GITHUB_REF_NAME" --draft --verify-tag --title "$GITHUB_REF_NAME" --notes "## What's Changed" -- dist/*
-          echo "Draft **$GITHUB_REF_NAME** is ready: fill in What's Changed and publish it." >>"$GITHUB_STEP_SUMMARY"

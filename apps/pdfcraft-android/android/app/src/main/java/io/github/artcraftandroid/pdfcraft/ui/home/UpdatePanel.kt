@@ -103,7 +103,14 @@ internal fun UpdatePanel() {
             message = null
             scope.launch {
                 try {
-                    val found = fetchApkUpdates(installedVersionCode(context)).firstOrNull()
+                    val installed = installedVersionCode(context)
+                    if (!receivesGitHubApkUpdates(installed)) {
+                        candidate = null
+                        verifiedApk = null
+                        message = context.getString(R.string.updater_other_build)
+                        return@launch
+                    }
+                    val found = fetchApkUpdates(installed).firstOrNull()
                     candidate = found
                     verifiedApk = null
                     showAllNotes = false
