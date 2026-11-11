@@ -284,6 +284,7 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
                 // Fields, comments, edits and selection must remain immediate; no link
                 // hydration is allowed to delay those higher-priority interactions.
                 when {
+                    vm.markupFollowUp != null -> vm.markupFollowUp = null
                     selection.selection != null -> selection.clear()
                     ctl.tool == ViewerTool.Edit -> vm.editTap(doc, at)
                     vm.tapField(doc, at) -> Unit
@@ -621,6 +622,8 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
             // out of the way while a handle is dragged; back where the selection ends
             if (selection.magnifierAt == null) SelectionMenu(vm, doc, sel)
         }
+        // the markup just added from that menu: colours, Add note, Delete (#197)
+        if (selection.selection == null) vm.markupFollowUp?.takeIf { it.doc === doc && ctl.tool == ViewerTool.None }?.let { MarkupFollowUpBar(vm, it) }
 
         // Sheets and dialogs.
         SheetHost(ctl.sheet.takeIf { it != ViewerSheet.None }) { sheet ->
@@ -693,7 +696,11 @@ private fun toolHint(tool: ViewerTool, markup: TextMarkup, doc: OpenDocument): S
         TextMarkup.Strikethrough -> text(R.string.viewer_hint_strikethrough)
         TextMarkup.Squiggly -> text(R.string.viewer_hint_squiggly)
     }
-    ViewerTool.Draw -> text(R.string.viewer_hint_draw)
+    ViewerTool.Draw -> when (doc.controller.inkShapeMode) {
+        InkShapeMode.Polygon -> text(R.string.viewer_hint_polygon)
+        InkShapeMode.Polyline -> text(R.string.viewer_hint_polyline)
+        else -> text(R.string.viewer_hint_draw)
+    }
     ViewerTool.Comment -> if (doc.controller.commentMode == CommentMode.Stamp) text(R.string.viewer_hint_stamp) else text(R.string.viewer_hint_comment)
     ViewerTool.Text -> if (doc.controller.textCallout) text(R.string.viewer_hint_callout) else text(R.string.viewer_hint_text)
     ViewerTool.FillSign -> text(if (doc.info.fields > 0u) R.string.viewer_hint_fill_sign_form else R.string.viewer_hint_fill_sign)
