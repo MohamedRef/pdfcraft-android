@@ -984,6 +984,7 @@
     <!-- Messages: undo and redo. %1$s is the name of the edit, as the engine gives it (for example "Add comment"). -->
     <string name="msg_undone">%1$s deshecho</string>
     <string name="msg_redone">%1$s rehecho</string>
+    <string name="msg_ink_kept">Se conservó la tinta que no se guardó. Abre Dibujar y toca Listo para guardarla de nuevo.</string>
 
     <!-- Messages: viewer tools -->
     <string name="msg_tool_blocked_security">Esta herramienta no está disponible por la configuración de seguridad del documento.</string>

@@ -883,6 +883,7 @@
     <!-- Messages: undo and redo. %1$s is the name of the edit, as the engine gives it (for example "Add comment"). -->
     <string name="msg_undone">%1$s annulé</string>
     <string name="msg_redone">%1$s rétabli</string>
+    <string name="msg_ink_kept">L\'encre non enregistrée a été conservée. Ouvrez Dessiner et touchez OK pour l\'enregistrer à nouveau.</string>
 
     <!-- Messages: viewer tools -->
     <string name="msg_tool_blocked_security">Cet outil n\'est pas disponible en raison des paramètres de sécurité du document.</string>

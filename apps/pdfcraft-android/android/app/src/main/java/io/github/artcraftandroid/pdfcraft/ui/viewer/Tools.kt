@@ -109,33 +109,6 @@ internal class InkStroke(val page: Int, val appearance: InkAppearance, stylus: B
     val paths = InkPathCache()
 }
 
-/** Reversible changes to the uncommitted Draw layer, in actual gesture order. */
-private sealed class DraftInkEdit {
-    data class Added(val stroke: InkStroke) : DraftInkEdit()
-    data class Moved(val strokes: List<InkStroke>, val offset: Offset) : DraftInkEdit()
-    /** Lasso Delete of draft strokes, each restored at its own position in paint order. */
-    data class Removed(val strokes: List<Pair<Int, InkStroke>>) : DraftInkEdit()
-}
-
-private fun applyDraftInkEdit(strokes: androidx.compose.runtime.snapshots.SnapshotStateList<InkStroke>, edit: DraftInkEdit, forward: Boolean) {
-    when (edit) {
-        is DraftInkEdit.Added -> {
-            if (forward) strokes.add(edit.stroke) else strokes.remove(edit.stroke)
-        }
-        is DraftInkEdit.Removed -> {
-            if (forward) edit.strokes.forEach { (_, s) -> strokes.remove(s) }
-            else edit.strokes.sortedBy { it.first }.forEach { (i, s) -> strokes.add(i.coerceIn(0, strokes.size), s) }
-        }
-        is DraftInkEdit.Moved -> {
-            val d = if (forward) edit.offset else -edit.offset
-            edit.strokes.forEach { stroke ->
-                for (i in stroke.points.indices) stroke.points[i] = stroke.points[i] + d
-                stroke.preview = null
-            }
-        }
-    }
-}
-
 /** How long the finger stays still to snap a stroke to a shape, and how far it may wander. */
 private const val SNAP_HOLD_MS = 500L
 private val SNAP_SLOP = 8.dp
@@ -188,7 +161,9 @@ fun Modifier.toolGestures(
     onEraserMove: (Offset) -> Unit = {},
     onEraserUp: (Offset) -> Unit = {},
     onEraserCancel: () -> Unit = {},
-): Modifier = pointerInput(doc, penOnly) {
+    /** A pen button pressed mid-stroke ends the stroke with [onUp] instead of cancelling it (ink, #82). */
+    keepStrokeOnPenButton: Boolean = false,
+): Modifier = pointerInput(doc, penOnly, keepStrokeOnPenButton) {
     val routing = StylusRouting()
     awaitEachGesture {
         val down = awaitFirstDown(requireUnconsumed = false)
@@ -254,9 +229,10 @@ fun Modifier.toolGestures(
                     if (eraseOne) onEraserDown(last)
                 }
                 val active = event.changes.firstOrNull { it.id == activeId }
-                // A pen button pressed during ink cancels the provisional stroke before erasing.
+                // A pen button pressed during a stroke switches to erasing. Ink keeps what was
+                // already written (#82), as other note apps do; a stroke that never moved is dropped.
                 if (activePen && !eraser && (event.buttons.isPrimaryPressed || event.buttons.isSecondaryPressed)) {
-                    if (one) onCancel()
+                    if (one) { if (keepStrokeOnPenButton && moved) onUp(last, true) else onCancel() }
                     one = false
                     eraser = true
                     eraseOne = true
@@ -331,10 +307,13 @@ private fun TapLayer(doc: OpenDocument, onTap: (PagePoint) -> Unit) {
 
 @Composable
 private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
-    val strokes = remember { mutableStateListOf<InkStroke>() }
-    // A single ordered history keeps mixed draw/lasso/transform gestures undoable in the right order.
-    val edits = remember { mutableStateListOf<DraftInkEdit>() }
-    val undone = remember { mutableStateListOf<DraftInkEdit>() }
+    // Drafts live with the document (#73): a save refused after Draw was left keeps them there.
+    val drafts = doc.ink
+    val strokes = drafts.strokes
+    val edits = drafts.edits
+    val undone = drafts.undone
+    // Which of the document's undo steps this Draw session made (#78).
+    val steps = remember(doc) { DrawUndoSteps() }
     var current by remember { mutableStateOf<InkStroke?>(null) }
     var lassoPage by remember { mutableStateOf<Int?>(null) }
     val lassoPoints = remember { mutableStateListOf<Offset>() }
@@ -347,44 +326,68 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
     fun clearSelection() { selected.clear(); savedSelected.clear(); lassoPage = null; lassoPoints.clear(); moving = false; moveAnchor = null; moveOffset = Offset.Zero }
     /** Every selected outline in page points: draft stroke points and saved comments' rectangles. */
     fun selectionPaths(): List<List<Offset>> = selected.map { it.points.toList() } + savedSelected.mapNotNull { lassoRectOutline(it.rect) }
+    /** A Draw edit of the document; [steps] learns whether it became an undo step. */
+    fun documentEdit(name: String, args: Map<String, Any?>) {
+        steps.started()
+        var made = 0
+        // A refused edit or a no-op (an eraser that met no ink) answers without the document summary.
+        vm.runTool(doc, name, args, onSettled = { steps.finished(made) }) { r -> if (r.has("doc")) made = 1 }
+    }
     fun savedEdit(page: Int, extra: Map<String, Any?>) {
         val indices = savedSelected.map { it.index.toInt() + 1 }
         if (indices.isEmpty()) return
-        vm.runTool(doc, "comments_edit_many", mapOf("page" to page + 1, "comments" to indices) + extra)
+        documentEdit("comments_edit_many", mapOf("page" to page + 1, "comments" to indices) + extra)
     }
     val prefs = vm.toolPrefs
-    // Capture appearance at pointer down. Adjacent matching strokes may share an annotation.
+    // Capture appearance at pointer down. Every stroke is saved as its own annotation (#72).
     DisposableEffect(doc) {
         doc.commitTool = {
-            val commands = inkSaveCommands(
-                strokes.map { s -> InkSaveStroke(s.page, s.appearance, s.points.toList(), s.pressures.toList(), s.pressureSensitive) },
-            ) { argb -> Color(argb).hex() }
-            vm.runToolBatch(doc, "comment_add", commands)
-            strokes.clear()
-            edits.clear()
-            undone.clear()
+            val taken = drafts.takeForSaving()
             clearSelection()
+            if (taken.isNotEmpty()) {
+                val groups = inkSaveCommandGroups(
+                    taken.map { s -> InkSaveStroke(s.page, s.appearance, s.points.toList(), s.pressures.toList(), s.pressureSensitive) },
+                ) { argb -> Color(argb).hex() }
+                steps.started()
+                // The drafts stay drawn until the engine has them; the ones it refuses stay drafts (#73).
+                vm.runToolBatch(doc, "comment_add", groups) { applied ->
+                    val kept = drafts.settle(taken, applied)
+                    steps.finished(groups.take(applied).sumOf { it.size })
+                    if (kept > 0) vm.inkKept(doc, kept)
+                }
+            }
         }
         doc.localUndo = LocalUndo(
-            // Draw edits are local until committed. The eraser commits them first and then
-            // relies on the native document's undo/redo for its one-gesture ink edit.
-            canUndo = { edits.isNotEmpty() || doc.info.undo != null },
-            canRedo = { undone.isNotEmpty() || doc.info.redo != null },
-            undo = {
+            // Draw edits are local until committed. Then Undo goes on to the document's steps,
+            // quietly for this session's own and announced for an older one (#78). A Draw edit
+            // still running holds both until it is known whether it became a step.
+            canUndo = { steps.idle && (edits.isNotEmpty() || doc.info.undo != null) },
+            canRedo = {
+                steps.idle && (undone.isNotEmpty() || steps.canRedoDocument(doc.info.redo != null))
+            },
+            undo = undo@{
+                if (!steps.idle) return@undo
                 if (edits.isNotEmpty()) {
                     val edit = edits.removeAt(edits.lastIndex)
                     clearSelection()
                     applyDraftInkEdit(strokes, edit, forward = false)
                     undone.add(edit)
-                } else if (doc.info.undo != null) vm.runTool(doc, "edit_undo")
+                } else if (doc.info.undo != null) {
+                    clearSelection()
+                    vm.undoDocument(doc, announce = steps.undo() == DrawUndoSteps.Route.Announced)
+                }
             },
-            redo = {
-                if (undone.isNotEmpty()) {
+            redo = redo@{
+                if (!steps.idle) return@redo
+                if (!steps.redoesDocumentFirst() && undone.isNotEmpty()) {
                     val edit = undone.removeAt(undone.lastIndex)
                     clearSelection()
                     applyDraftInkEdit(strokes, edit, forward = true)
                     edits.add(edit)
-                } else if (doc.info.redo != null) vm.runTool(doc, "edit_redo")
+                } else if (steps.canRedoDocument(doc.info.redo != null)) {
+                    clearSelection()
+                    vm.redoDocument(doc, announce = steps.redo() == DrawUndoSteps.Route.Announced)
+                }
             },
         )
         onDispose {
@@ -457,7 +460,7 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
         cancelErase()
         if (path.isNotEmpty()) {
             // One native Edit::Batch per gesture, including freehand marker Ink.
-            vm.runTool(doc, "comment_erase", inkEraseCommand(page, path, activeEraserRadius.toDouble()))
+            documentEdit("comment_erase", inkEraseCommand(page, path, activeEraserRadius.toDouble()))
         }
     }
 
@@ -506,6 +509,7 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                     applyDraftInkEdit(strokes, edit, forward = true)
                     edits.add(edit)
                     undone.clear()
+                    steps.drafted()
                 }
                 // Saved comments move natively, all in one undo step; their rectangles refresh
                 // with the document, so the saved part of the selection ends here.
@@ -650,13 +654,14 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                         }
                         if (args != null) {
                             doc.commitTool?.invoke()
-                            vm.runTool(doc, "comment_add", args)
+                            documentEdit("comment_add", args)
                         }
                         return@toolGestures
                     }
                     if (s.points.size >= 2) {
                         edits.add(DraftInkEdit.Added(s))
                         undone.clear()
+                        steps.drafted()
                     } else {
                         strokes.remove(s)
                     }
@@ -699,10 +704,12 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
             onEraserMove = { p -> moveErase(p) },
             onEraserUp = { p -> finishErase(p) },
             onEraserCancel = { cancelErase() },
+            keepStrokeOnPenButton = true,
         ),
     ) {
         Canvas(Modifier.fillMaxSize()) {
-            for (s in strokes) {
+            // Strokes being saved stay drawn until the document has them, under the newer drafts.
+            for (s in drafts.saving + strokes) {
                 val pageRect = doc.viewer.pageRectOnScreen(s.page)
                 val lift = if (moving && s in selected) moveOffset else Offset.Zero
                 drawInkStroke(
@@ -805,6 +812,7 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                             applyDraftInkEdit(strokes, edit, forward = true)
                             edits.add(edit)
                             undone.clear()
+                            steps.drafted()
                         }
                         savedEdit(selPage, mapOf("delete" to true))
                         clearSelection()

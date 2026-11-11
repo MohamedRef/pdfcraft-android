@@ -57,13 +57,15 @@ class Engine private constructor(val session: MobileSession) {
     }
 
     /**
-     * Run related edit commands on the same serial dispatcher without another UI command
-     * interleaving between pressure-width fragments. This is not a PDF rollback transaction.
+     * Run [groups] of related edit commands on the same serial dispatcher, with no other UI
+     * command between them. A group is all or nothing: when one of its commands fails, the ones
+     * of that group already applied are undone again, and the groups after it are not run. The
+     * groups before it stay applied. Throws [ToolBatchException] with how many groups were applied.
      */
-    suspend fun toolBatch(name: String, argsList: List<Map<String, Any?>>) {
-        command {
-            for (args in argsList) execute(name, toJson(args).toString())
-        }
+    suspend fun toolBatch(name: String, groups: List<List<Map<String, Any?>>>): Int = command {
+        runToolBatch(groups, execute = { args -> execute(name, toJson(args).toString()) }, undo = { args ->
+            execute("edit_undo", toJson(mapOf("doc" to args["doc"])).toString())
+        })
     }
 
     fun trimMemory() = session.releaseMemory()
@@ -110,6 +112,34 @@ class Engine private constructor(val session: MobileSession) {
             else -> value
         }
     }
+}
+
+/** A [Engine.toolBatch] stopped at a failing group: [applied] groups before it were applied. */
+class ToolBatchException(val applied: Int, val rolledBack: Boolean, override val cause: Throwable) : Exception(cause.message, cause)
+
+/**
+ * [Engine.toolBatch] without the engine, so the all-or-nothing rule is unit-testable: [execute]
+ * applies one command (one undo step), [undo] takes back the last one of a document.
+ */
+internal fun runToolBatch(
+    groups: List<List<Map<String, Any?>>>,
+    execute: (Map<String, Any?>) -> Unit,
+    undo: (Map<String, Any?>) -> Unit,
+): Int {
+    groups.forEachIndexed { index, group ->
+        val done = ArrayList<Map<String, Any?>>()
+        try {
+            for (args in group) {
+                execute(args)
+                done.add(args)
+            }
+        } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            val rolledBack = runCatching { done.asReversed().forEach(undo) }.isSuccess
+            throw ToolBatchException(index, rolledBack, e)
+        }
+    }
+    return groups.size
 }
 
 /** Reject invalid native buffers *before* allocating a Bitmap on the Java heap. */

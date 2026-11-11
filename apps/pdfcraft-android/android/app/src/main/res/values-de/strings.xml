@@ -976,6 +976,7 @@
     <!-- Messages: undo and redo. %1$s is the name of the edit, as the engine gives it (for example "Add comment"). -->
     <string name="msg_undone">%1$s rückgängig gemacht</string>
     <string name="msg_redone">%1$s wiederhergestellt</string>
+    <string name="msg_ink_kept">Nicht gespeicherte Tinte wurde behalten. Öffne Zeichnen und tippe auf Fertig, um sie erneut zu speichern.</string>
 
     <!-- Messages: viewer tools -->
     <string name="msg_tool_blocked_security">Dieses Werkzeug ist aufgrund der Sicherheitseinstellungen des Dokuments nicht verfügbar.</string>
