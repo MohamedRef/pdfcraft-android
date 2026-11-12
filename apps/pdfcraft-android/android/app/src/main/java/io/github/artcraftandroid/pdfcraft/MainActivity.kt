@@ -24,6 +24,8 @@ import androidx.activity.viewModels
 import androidx.core.content.FileProvider
 import androidx.core.content.IntentCompat
 import androidx.lifecycle.lifecycleScope
+import io.github.artcraftandroid.pdfcraft.engine.Diag
+import io.github.artcraftandroid.pdfcraft.engine.DiagArea
 import io.github.artcraftandroid.pdfcraft.ui.AppRoot
 import io.github.artcraftandroid.pdfcraft.ui.AppViewModel
 import io.github.artcraftandroid.pdfcraft.ui.FilePickKind
@@ -348,19 +350,24 @@ class MainActivity : ComponentActivity() {
             }
 
             override fun onWrite(pages: Array<out PageRange>?, destination: ParcelFileDescriptor, cancel: CancellationSignal?, callback: WriteResultCallback) {
+                val start = System.nanoTime()
                 try {
                     file.inputStream().use { input -> FileOutputStream(destination.fileDescriptor).use { input.copyTo(it) } }
                     callback.onWriteFinished(arrayOf(PageRange.ALL_PAGES))
+                    Diag.event(DiagArea.Pages, "print_write", "bytes" to file.length(), "ms" to (System.nanoTime() - start) / 1_000_000, "temporary" to deleteWhenDone)
                 } catch (e: Exception) {
+                    Diag.failure(DiagArea.Pages, "print_write", e)
                     callback.onWriteFailed(e.message)
                 }
             }
 
             override fun onFinish() {
+                Diag.event(DiagArea.Pages, "print_finished", "temporary" to deleteWhenDone)
                 if (deleteWhenDone) file.delete()
             }
         }
         runCatching { pm.print(name, adapter, null) }.onFailure {
+            Diag.failure(DiagArea.Pages, "print_start", it)
             if (deleteWhenDone) file.delete()
             vm.tell(getString(R.string.main_error_print_not_allowed))
         }
