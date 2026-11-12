@@ -9,6 +9,11 @@ description = "PdfCraft Android's document scanner: one pass from a camera photo
 [lints]
 workspace = true
 
+[features]
+# Drawn test photos with exact answers (#288): for the scan-eval runner and the CI gate, never in
+# the app. The crate's own tests turn it on by themselves.
+synth = []
+
 [dependencies]
 image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
 # the page's resolution goes into the PNG (pHYs), which the image crate's encoder cannot write

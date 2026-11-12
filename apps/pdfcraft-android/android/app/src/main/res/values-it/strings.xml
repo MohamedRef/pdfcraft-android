@@ -1225,6 +1225,7 @@
     <string name="scan_lab_denoise">Attenua la grana nelle foto scure (Scansione pulita)</string>
     <string name="scan_lab_preview">Mostra le pagine come verranno salvate</string>
     <string name="scan_lab_crop">Ritaglia con lente e aggancio ai bordi</string>
+    <string name="scan_lab_flatten_auto">Appiattisci le pagine automaticamente quando le loro righe diventano più dritte</string>
     <string name="scan_lab_strength">Intensità del filtro</string>
     <string name="scan_lab_strength_own">Predefinita</string>
     <string name="scan_lab_options_body">Queste opzioni spengono parti dello scanner o le sostituiscono con ciò che avevano rimpiazzato, per capire da quale parte viene un problema. Il log registra che cosa era attivo per ogni pagina.</string>
