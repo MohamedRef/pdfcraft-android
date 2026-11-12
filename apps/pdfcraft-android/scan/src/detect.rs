@@ -313,6 +313,21 @@ fn with_model(model: &rten::Model, photo: &Photo) -> Option<Detection> {
     Some(best)
 }
 
+/// The network's answer from one look at the photo as it is, with no turned looks when it is
+/// unsure: for a camera frame (#295), where the next frame is the next try. Under the same least
+/// confidence as [`detect`] nothing was found. `None` when the model cannot be run.
+pub(crate) fn one_look(model: &rten::Model, photo: &Photo) -> Option<Detection> {
+    if photo.width < 16 || photo.height < 16 {
+        return Some(Detection::NOTHING);
+    }
+    let (small, scale) = shrink(photo, SIDE);
+    let (quad, confidence) = pass(model, photo, &small, scale, 0)?;
+    if confidence < LEAST {
+        return Some(Detection { passes: 1, confidence, ..Detection::NOTHING });
+    }
+    Some(Detection { quad, confidence, source: QuadSource::Model, angle: 0, passes: 1 })
+}
+
 /// The engine's line detector on a copy of the photo.
 pub(crate) fn with_lines(photo: &Photo) -> Detection {
     let (small, scale) = shrink(photo, LINES_SIDE);
