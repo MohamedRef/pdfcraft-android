@@ -17,6 +17,7 @@
 pub mod aspect;
 pub mod book;
 pub mod capture;
+pub mod defects;
 pub mod detect;
 pub mod encode;
 pub mod enhance;
@@ -68,6 +69,8 @@ mod tests;
 mod tests_book;
 #[cfg(test)]
 mod tests_capture;
+#[cfg(test)]
+mod tests_defects;
 #[cfg(test)]
 mod tests_detect;
 #[cfg(test)]
