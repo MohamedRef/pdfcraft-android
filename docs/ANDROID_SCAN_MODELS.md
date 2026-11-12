@@ -70,10 +70,48 @@ above, so it shows what the next scan will find. The states come from the native
   phone, an update from a build before this one (the "unrecorded" path, which copies all five
   files once, about 38 MB), the Settings list on screen.
 
+## Optional models (packs)
+
+The owner decided on 12 November 2026 to keep every model in the app for now (the three add
+25.9 MB, 0.9 MB over the issue's limit of about 25 MB). The code a pack needs is in, and nothing
+uses it yet: no model is marked optional and no models release is published.
+
+- **Registry**: `ModelSpec` has `bundled` and `url`. A pack has `bundled: false` and a `url` that
+  starts with `PACK_URL_PREFIX`, an asset of a release of this repository whose tag starts with
+  `scan-models-`, named as the file. A Rust test checks every entry; `scan_model_states()` gives
+  the app each model's `sha256` and `url`.
+- **Download** (`engine/ModelDownload.kt`): it reuses the in-app updater's rules and pieces
+  (`apkResumeAction`, `apkRetryable`, the retry delays and the retry budget that resets when
+  bytes are saved). HTTPS only, from that address, redirected only to `github.com` or
+  `*.githubusercontent.com`. Bytes go to `<file>.part` in `filesDir/models`; an interrupted or
+  cancelled download keeps them and resumes with an HTTP Range that must match exactly (a server
+  that ignores the Range starts over, never appends). The whole file must have the pinned size
+  and SHA-256 before it is renamed to the model's name; one that does not is deleted. The engine
+  checks the same hash again before it loads the file.
+- **Models list**: an optional model shows **Not downloaded** and **Download (size)**; while it
+  downloads, a progress bar, the percent and **Cancel download**; once in, **Remove** (which also
+  drops a loaded copy). A failed download says so; what was saved is kept. The download belongs
+  to the Settings screen: leaving it cancels, and the next Download resumes.
+- **Log**: `[scan] model_download id outcome reason bytes resumed retries ms` (`outcome` is
+  `done`, `cancelled` or `failed`; `reason` one of `ok`, `cancelled`, `untrusted`, `network`,
+  `server`, `mismatch`, `storage`), and `model_removed id ok`.
+- **Testing option**: none beyond Remove, which puts a pack back to not downloaded. A switch would
+  have nothing to switch until a model is optional.
+
+To make a model a pack later: publish it as an asset of a `scan-models-N` release, set `bundled:
+false` and its `url` in `MODELS`, take the file out of `assets/models` (keep its notice and
+licence), and check that its feature says plainly when the model is missing.
+
+### Measured, and not (packs)
+
+- `ModelDownloadTest` (desktop JVM, a fake server in the test): a full download, a resume from
+  saved bytes with a 206, a server that ignores the Range, a timeout half-way that is retried, a
+  file whose hash does not match, a cancel that keeps its bytes, the address and redirect checks,
+  Remove, and the log line.
+- **Not verified**: no real download has been made (there is no pack to fetch), nothing ran on a
+  phone, and the list's download rows have not been seen on a screen.
+
 ## Not done yet (#289)
 
-- Optional model packs (section 4 of the issue): `bundled` is in `ModelSpec` and in
-  `scan_model_states`, all three models are still bundled, and nothing downloads.
-  The three add 25.9 MB to the APK, just over the issue's limit of about 25 MB; the flattening
-  model (15.8 MB) is the candidate for a pack.
+- Moving a model to a pack, which waits on the owner.
 - `tensor.rs` (section 2) and renaming the Gradle task.

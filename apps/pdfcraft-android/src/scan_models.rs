@@ -26,6 +26,10 @@ pub struct ScanModelInfo {
     pub licence: String,
     /// Shipped in the app, or an optional download.
     pub bundled: bool,
+    /// Its pinned SHA-256 (lowercase hex): a download is kept only when it matches.
+    pub sha256: String,
+    /// Where an optional download comes from; empty for a bundled model.
+    pub url: String,
     pub state: ScanModelState,
 }
 
@@ -36,6 +40,8 @@ fn info(spec: &models::ModelSpec, state: ModelState) -> ScanModelInfo {
         bytes: spec.bytes,
         licence: spec.licence.to_owned(),
         bundled: spec.bundled,
+        sha256: spec.sha256.to_owned(),
+        url: spec.url.to_owned(),
         state: match state {
             ModelState::Ready => ScanModelState::Ready,
             ModelState::Missing => ScanModelState::Missing,
@@ -64,6 +70,23 @@ mod tests {
             assert_eq!(m.state, ScanModelState::Ready, "{} should be found in assets/models", m.file);
             assert!(m.bytes > 0 && !m.licence.is_empty() && m.file.ends_with(".onnx"));
         }
+    }
+
+    #[test]
+    fn a_download_comes_only_from_this_repositorys_model_releases() {
+        for m in models::MODELS {
+            if m.bundled {
+                assert!(m.url.is_empty(), "{} is bundled and has a download address", m.id);
+            } else {
+                assert!(m.url.starts_with(models::PACK_URL_PREFIX), "{}: {}", m.id, m.url);
+                let rest = &m.url[models::PACK_URL_PREFIX.len()..];
+                assert_eq!(rest.split('/').nth(1), Some(m.file), "{}: the asset must be named as the file", m.id);
+            }
+            assert_eq!(m.sha256.len(), 64);
+        }
+        let first = &scan_model_states()[0];
+        assert_eq!(first.sha256, models::MODELS[0].sha256);
+        assert!(first.url.is_empty());
     }
 
     #[test]
