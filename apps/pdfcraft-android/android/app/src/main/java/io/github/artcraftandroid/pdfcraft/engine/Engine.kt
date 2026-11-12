@@ -102,25 +102,50 @@ class Engine private constructor(val session: MobileSession) {
     fun trimMemory() = session.releaseMemory()
 
     /**
-     * Unpack the text-recognition models shipped in the app's assets (once) and point the engine
-     * at them. Returns false when this build has no models. Blocking: call off the main thread.
+     * Unpack the models shipped in the app's assets (text recognition and the scanner) and point
+     * the engine at them. Returns false when this build has no text-recognition models. Blocking:
+     * call off the main thread. See [prepareModels].
      */
-    fun prepareOcrModels(context: android.content.Context): Boolean {
-        val names = runCatching { context.assets.list("models")?.toList() }.getOrNull().orEmpty()
-        if (names.none { it.endsWith(".rten") }) return false
-        val dir = java.io.File(context.filesDir, "models").apply { mkdirs() }
-        for (name in names) {
-            val target = java.io.File(dir, name)
-            if (target.isFile && target.length() > 0) continue
-            val tmp = java.io.File(dir, "$name.part")
-            context.assets.open("models/$name").use { input -> tmp.outputStream().use { input.copyTo(it) } }
-            tmp.renameTo(target)
-        }
+    fun prepareOcrModels(context: android.content.Context): Boolean = prepareModels(context).ocr
+
+    /**
+     * Bring `filesDir/models` up to date with the models in the app (#289): a file is copied when
+     * it is new, when an update replaced it under the same name, or when the copy on disk is not
+     * its size ([ModelFiles]). The check runs once per process; [force] copies every file again
+     * (the scanner's testing option). Blocking: call off the main thread.
+     */
+    internal fun prepareModels(context: android.content.Context, force: Boolean = false): PreparedModels = synchronized(MODELS_LOCK) {
+        prepared?.takeIf { !force }?.let { return it }
+        val assets = context.assets
+        val names = runCatching { assets.list("models")?.toList() }.getOrNull().orEmpty()
+        val dir = java.io.File(context.filesDir, "models")
+        if (names.none { it.endsWith(".rten") || it.endsWith(".onnx") }) return PreparedModels(false, null).also { prepared = it }
+        val open = { name: String -> assets.open("models/$name") }
+        val listed = runCatching { assets.open("models/${ModelFiles.INDEX}").bufferedReader().use { ModelFiles.parseIndex(it.readText()) } }.getOrNull()
+        val bundled = listed?.takeIf { it.isNotEmpty() } ?: ModelFiles.indexFromFiles(names, open)
+        val report = ModelFiles.install(dir, bundled, open, force)
         android.system.Os.setenv("PDFCRAFT_MODELS", dir.absolutePath, true)
-        return true
+        Diag.event(DiagArea.Scan, "model_files", *report.diag(), "listed" to (listed != null), "force" to force)
+        if (Diag.enabled()) {
+            // which models the engine will accept, read and hashed only while the log is recorded
+            runCatching { io.github.artcraftandroid.pdfcraft.core.scanModelStates() }.getOrNull()?.let { states ->
+                Diag.event(DiagArea.Scan, "model_states", *states.map { it.id to it.state.name.lowercase() }.toTypedArray())
+            }
+        }
+        // a model that was loaded before it was replaced is loaded again from the new file
+        if (report.copied.isNotEmpty()) runCatching { session.releaseMemory() }
+        PreparedModels(bundled.any { it.name.endsWith(".rten") }, report).also { prepared = if (report.failed.isEmpty()) it else null }
     }
 
+    /** What [prepareModels] found: whether text recognition has its models, and what was copied (null: no models in this build). */
+    internal data class PreparedModels(val ocr: Boolean, val report: ModelInstallReport?)
+
     companion object {
+        private val MODELS_LOCK = Any()
+
+        /** What the models check found in this process; null until it ran (or when a copy failed, to try again). */
+        @Volatile private var prepared: PreparedModels? = null
+
         fun open(context: android.content.Context): Engine {
             initLogging()
             val session = MobileSession()

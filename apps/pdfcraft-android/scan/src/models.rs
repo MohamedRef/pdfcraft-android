@@ -21,6 +21,8 @@ pub struct ModelSpec {
     pub bytes: u64,
     /// SPDX identifier of the licence the file is distributed under.
     pub licence: &'static str,
+    /// Shipped in the app (`true`), or an optional download (#289, section 4).
+    pub bundled: bool,
 }
 
 /// The document detector (#290): DocQuadNet-256 from MakeACopy.
@@ -40,6 +42,7 @@ pub static MODELS: &[ModelSpec] = &[
         sha256: "f5bf500c0ab7482ebd9e949c7cfcd3c9f43dcef619baa8e41e0f83e88a3f9880",
         bytes: 6_700_744,
         licence: "Apache-2.0",
+        bundled: true,
     },
     ModelSpec {
         id: FLATTEN,
@@ -47,6 +50,7 @@ pub static MODELS: &[ModelSpec] = &[
         sha256: "13fc4e8322de53f2d8b74ed43d996ba8e70e3b875fc5e88766c30943ada2fb1b",
         bytes: 15_803_619,
         licence: "MIT",
+        bundled: true,
     },
     ModelSpec {
         id: UPRIGHT,
@@ -54,6 +58,7 @@ pub static MODELS: &[ModelSpec] = &[
         sha256: "96b65002cc0388d4c0e0c07ac6f3aea045ce8d46c1e3fb9e0242624ad75033fd",
         bytes: 3_439_151,
         licence: "Apache-2.0",
+        bundled: true,
     },
 ];
 
@@ -124,6 +129,13 @@ pub fn load(id: &str) -> Option<Arc<rten::Model>> {
     let model = Arc::new(rten::Model::load(read(spec).ok()?).ok()?);
     models.insert(spec.id, Arc::clone(&model));
     Some(model)
+}
+
+/// Every model with whether it can be used, in the order of [`MODELS`] (for the app's Models list
+/// and the diagnostics log). Each file that is not loaded yet is read and hashed: call it off the
+/// main thread.
+pub fn states() -> Vec<(&'static ModelSpec, ModelState)> {
+    MODELS.iter().map(|m| (m, state(m.id))).collect()
 }
 
 /// Drop the loaded models (when memory is short); they load again when next needed.
