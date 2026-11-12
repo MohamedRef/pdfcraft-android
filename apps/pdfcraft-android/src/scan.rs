@@ -69,6 +69,12 @@ pub struct ScanPageRequest {
     /// (#339). A whole photo in the Original look is never turned.
     #[uniffi(default = true)]
     pub upright: bool,
+    /// How much the Auto look sharpens print, 0–100; 0 for none (#299).
+    #[uniffi(default = 30)]
+    pub sharpen: u8,
+    /// Whether the Auto look smooths the grain of a page that has a lot of it (#299).
+    #[uniffi(default = true)]
+    pub denoise: bool,
 }
 
 /// The standard paper a page was matched to.
@@ -123,6 +129,9 @@ pub struct ScanPageResult {
     /// What the orientation classifier made of the page; `None` when it was not asked or its
     /// model file is not installed.
     pub orientation: Option<ScanOrientation>,
+    /// The page's grain as the Auto look measured it (#299): the standard deviation of its noise
+    /// on blank paper, in grey levels of 255. `None` for the other looks.
+    pub noise: Option<f32>,
     pub timings: Vec<ScanTiming>,
 }
 
@@ -424,6 +433,8 @@ pub(crate) fn process_in(root: &Path, request: &ScanPageRequest) -> Result<ScanP
         flatten: request.flatten,
         side_proportions: request.side_proportions,
         upright: request.upright,
+        sharpen: request.sharpen,
+        denoise: request.denoise,
         ..PageRequest::new(&bytes, corners)
     })
     .map_err(|e| MobileError::Command(e.to_string()))?;
@@ -468,6 +479,7 @@ pub(crate) fn process_in(root: &Path, request: &ScanPageRequest) -> Result<ScanP
             tiles: found.tiles,
             sure: found.sure,
         }),
+        noise: page.noise,
         timings: page.timings.into_iter().map(|(stage, ms)| ScanTiming { stage: stage.into(), ms }).collect(),
     })
 }
@@ -495,6 +507,8 @@ mod tests {
             flatten: false,
             side_proportions: false,
             upright: false,
+            sharpen: 30,
+            denoise: true,
         }
     }
 

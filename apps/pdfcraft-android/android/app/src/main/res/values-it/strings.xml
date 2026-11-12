@@ -1207,6 +1207,9 @@
     <string name="scan_lab_perspective">Proporzioni dalla prospettiva</string>
     <string name="scan_lab_snap_paper">Adatta ai formati di carta standard</string>
     <string name="scan_lab_upright">Raddrizza le pagine</string>
+    <string name="scan_lab_sharpen">Rendi più nitido il testo (Scansione pulita)</string>
+    <string name="scan_lab_off">No</string>
+    <string name="scan_lab_denoise">Attenua la grana nelle foto scure (Scansione pulita)</string>
     <string name="scan_lab_strength">Intensità del filtro</string>
     <string name="scan_lab_strength_own">Predefinita</string>
     <string name="scan_lab_options_body">Queste opzioni spengono parti dello scanner o le sostituiscono con ciò che avevano rimpiazzato, per capire da quale parte viene un problema. Il log registra che cosa era attivo per ogni pagina.</string>

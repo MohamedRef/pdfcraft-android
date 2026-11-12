@@ -5,9 +5,10 @@ use std::time::Instant;
 
 use crate::aspect::{AspectSource, Focal, Paper, dpi_without_paper, proportions, proportions_by_sides};
 use crate::encode::{Format, JPEG_QUALITY, Raster, encode_jpeg, encode_png_bilevel, stamp_jpeg_density};
+use crate::enhance::DEFAULT_SHARPEN;
 use crate::enhance::enlargement;
 use crate::flatten::{predict_grid, unwarp};
-use crate::look::{Look, LookParams, Pixels, apply_with};
+use crate::look::{Look, LookParams, Pixels, apply_full};
 use crate::upright::{Upright, turned, upright};
 use crate::warp::rectify_with_threads;
 use crate::{Photo, Quad, ScanError};
@@ -53,6 +54,10 @@ pub struct PageRequest<'a> {
     /// corners gave it. A whole photo in the Original look is the camera's file and is never
     /// turned.
     pub upright: bool,
+    /// How much the Auto look sharpens print, 0–100; 0 for none (#299).
+    pub sharpen: u8,
+    /// Whether the Auto look smooths the grain of a page that has a lot of it (#299).
+    pub denoise: bool,
 }
 
 impl<'a> PageRequest<'a> {
@@ -70,6 +75,8 @@ impl<'a> PageRequest<'a> {
             side_proportions: false,
             flatten: false,
             upright: false,
+            sharpen: DEFAULT_SHARPEN,
+            denoise: true,
         }
     }
 }
@@ -102,6 +109,9 @@ pub struct PageResult {
     pub quarter_turns: u8,
     /// What the orientation classifier found (`None` when it was not asked or has no model file).
     pub orientation: Option<Upright>,
+    /// The page's grain as the Auto look measured it: the standard deviation of its noise on
+    /// blank paper, in grey levels of 255 (`None` for the other looks).
+    pub noise: Option<f32>,
     /// (stage, milliseconds), in pipeline order.
     pub timings: Vec<(&'static str, u32)>,
 }
@@ -141,6 +151,7 @@ fn untouched(request: &PageRequest<'_>) -> Option<Result<PageResult, ScanError>>
         bend: 0.0,
         quarter_turns: 0,
         orientation: None,
+        noise: None,
         timings,
     }))
 }
@@ -210,8 +221,10 @@ pub fn process_page(request: &PageRequest<'_>) -> Result<PageResult, ScanError> 
         lap(STAGE_UPRIGHT, &mut timings);
     }
 
-    let pixels = apply_with(&page, request.look, &LookParams { strength: request.strength, threads: request.threads, dpi: f32::from(dpi) })
-        .ok_or(ScanError::Encode)?;
+    let params =
+        LookParams { strength: request.strength, threads: request.threads, dpi: f32::from(dpi), sharpen: request.sharpen, denoise: request.denoise };
+    let applied = apply_full(&page, request.look, &params).ok_or(ScanError::Encode)?;
+    let (pixels, noise) = (applied.pixels, applied.noise);
     drop(page);
     lap(STAGE_LOOK, &mut timings);
 
@@ -236,6 +249,7 @@ pub fn process_page(request: &PageRequest<'_>) -> Result<PageResult, ScanError> 
         bend: grid.map_or(0.0, |g| g.bend() as f32),
         quarter_turns,
         orientation,
+        noise,
         timings,
     })
 }

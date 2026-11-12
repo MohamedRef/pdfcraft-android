@@ -1097,6 +1097,9 @@
     <string name="scan_lab_perspective">Proportions d\'après la perspective</string>
     <string name="scan_lab_snap_paper">Ajuster aux formats de papier standard</string>
     <string name="scan_lab_upright">Remettre les pages à l\'endroit</string>
+    <string name="scan_lab_sharpen">Accentuer le texte (Scan net)</string>
+    <string name="scan_lab_off">Non</string>
+    <string name="scan_lab_denoise">Lisser le grain des photos sombres (Scan net)</string>
     <string name="scan_lab_strength">Intensité du filtre</string>
     <string name="scan_lab_strength_own">Par défaut</string>
     <string name="scan_lab_options_body">Ces options désactivent des parties du scanner ou les remplacent par ce qu\'elles ont remplacé, pour savoir de quelle partie vient un problème. Le journal note ce qui était en vigueur pour chaque page.</string>

@@ -6,7 +6,7 @@
 use pdfcraft_engine::camera_clean;
 
 use crate::Rgb;
-use crate::enhance::{AutoParams, Bitmap1, BwParams, PaperMode, auto, black_white};
+use crate::enhance::{AutoParams, Bitmap1, BwParams, DEFAULT_SHARPEN, PaperMode, auto, black_white};
 
 /// A page's look.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
@@ -54,25 +54,49 @@ pub struct LookParams {
     pub threads: usize,
     /// The page's resolution, for the looks that measure in millimetres.
     pub dpi: f32,
+    /// How much Auto sharpens print, 0–100 (#299); 0 for none.
+    pub sharpen: u8,
+    /// Whether Auto smooths the grain of a page that has a lot of it (#299).
+    pub denoise: bool,
+}
+
+/// A page with its look, and what the look found out about the page on the way.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Applied {
+    pub pixels: Pixels,
+    /// The page's grain in grey levels (Auto measures it, #299); `None` for the other looks.
+    pub noise: Option<f32>,
 }
 
 /// Give `page` the `look` at `strength` (0–100), taking it to be at 300 dpi. `None` when the
 /// page's buffer doesn't match its size.
 pub fn apply(page: &Rgb, look: Look, strength: u8) -> Option<Pixels> {
-    apply_with(page, look, &LookParams { strength, threads: 1, dpi: 300.0 })
+    apply_with(page, look, &LookParams { strength, threads: 1, dpi: 300.0, sharpen: DEFAULT_SHARPEN, denoise: true })
 }
 
 /// Give `page` the `look`.
 pub fn apply_with(page: &Rgb, look: Look, params: &LookParams) -> Option<Pixels> {
-    let LookParams { strength, threads, dpi } = *params;
+    apply_full(page, look, params).map(|applied| applied.pixels)
+}
+
+/// Give `page` the `look`, and say what the look measured.
+pub fn apply_full(page: &Rgb, look: Look, params: &LookParams) -> Option<Applied> {
+    let LookParams { strength, threads, dpi, sharpen, denoise } = *params;
     let Some(engine) = look.engine() else {
         return Some(match look {
-            Look::BlackWhite => Pixels::Bilevel(black_white(page, &BwParams { strength, dither_photos: true, dpi, threads })?),
-            _ => Pixels::Rgb(auto(page, &AutoParams { strength, paper: PaperMode::White, threads })?.rgb.data),
+            Look::BlackWhite => {
+                Applied { pixels: Pixels::Bilevel(black_white(page, &BwParams { strength, dither_photos: true, dpi, threads })?), noise: None }
+            }
+            _ => {
+                let dpi = if dpi.is_finite() { dpi.clamp(1.0, 2400.0) as u16 } else { 300 };
+                let made = auto(page, &AutoParams { strength, paper: PaperMode::White, threads, sharpen, denoise, dpi })?;
+                Applied { pixels: Pixels::Rgb(made.rgb.data), noise: Some(made.noise) }
+            }
         });
     };
-    Some(match camera_clean::apply(&page.data, page.width, page.height, engine, strength.min(camera_clean::MAX_LEVEL))? {
+    let pixels = match camera_clean::apply(&page.data, page.width, page.height, engine, strength.min(camera_clean::MAX_LEVEL))? {
         camera_clean::Pixels::Rgb(v) => Pixels::Rgb(v),
         camera_clean::Pixels::Grey(v) => Pixels::Grey(v),
-    })
+    };
+    Some(Applied { pixels, noise: None })
 }
