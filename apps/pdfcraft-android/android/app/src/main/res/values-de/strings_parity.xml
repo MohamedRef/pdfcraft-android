@@ -91,4 +91,57 @@
     <string name="ocr_batch_finished">Fertig</string>
     <string name="ocr_batch_cancelled">Abgebrochen</string>
     <string name="ocr_batch_folder_gone">In den Ordner kann nicht geschrieben werden; wählen Sie ihn erneut.</string>
+    <string name="redact_title">Schwärzen</string>
+    <string name="redact_about">Markieren Sie, was entfernt werden soll, dann Anwenden: der Inhalt unter den Markierungen wird beim Speichern endgültig gelöscht.</string>
+    <string name="redact_mark_area">Bereich markieren</string>
+    <string name="redact_mark_page">Seite %1$d markieren</string>
+    <string name="redact_find">Suchen und markieren</string>
+    <string name="redact_find_hint">Text, oder mehrere durch Kommas getrennt</string>
+    <string name="redact_regex_hint">Regulärer Ausdruck</string>
+    <string name="redact_whole_words">Nur ganze Wörter</string>
+    <string name="redact_match_case">Groß-/Kleinschreibung beachten</string>
+    <string name="redact_use_regex">Regulären Ausdruck verwenden</string>
+    <string name="redact_patterns">Oder jeden Treffer eines Musters</string>
+    <string name="redact_pattern_phone">Telefonnummern</string>
+    <string name="redact_pattern_email">E-Mail-Adressen</string>
+    <string name="redact_pattern_card">Kreditkarten</string>
+    <string name="redact_pattern_ssn">US-Sozialversicherungsnr.</string>
+    <string name="redact_pattern_date">Datumsangaben</string>
+    <string name="redact_pattern_iban">IBANs</string>
+    <string name="redact_mark_all">Alle markieren</string>
+    <string name="redact_no_matches">Keine Treffer</string>
+    <string name="redact_look">Farbe des Kastens und Text darauf</string>
+    <string name="redact_overlay_hint">Text auf dem Kasten (optional)</string>
+    <string name="redact_mark_on_page">Markierung auf Seite %1$d</string>
+    <string name="redact_delete_mark">Markierung auf Seite %1$d löschen</string>
+    <string name="redact_clear">Alle entfernen</string>
+    <string name="redact_apply">Anwenden</string>
+    <string name="redact_apply_title">Schwärzungen anwenden?</string>
+    <string name="redact_apply_body">Text, Bilder, Zeichnungen, Kommentare und Formularfelder unter den Markierungen werden entfernt und durch Kästen ersetzt. Bis zum Speichern können Sie es rückgängig machen; danach ist der Inhalt aus der Datei verschwunden.</string>
+    <string name="redact_hidden_title">Ausgeblendete Informationen</string>
+    <string name="redact_hidden_body">Das Dokument enthält noch diese Informationen. Entfernen Sie, was Sie nicht teilen möchten:</string>
+    <string name="redact_hidden_none">Keine ausgeblendeten Informationen gefunden.</string>
+    <string name="redact_hidden_remove">Entfernen</string>
+    <string name="redact_hidden_removed">Ausgeblendete Informationen entfernt</string>
+    <string name="redact_audit_title">Auf Schein-Schwärzungen prüfen</string>
+    <string name="redact_audit_none">Keine Schein-Schwärzungen: kein Kasten verdeckt noch lesbaren Text, und keine Markierung wartet auf Anwendung.</string>
+    <string name="redact_audit_covered">Seite %1$d: verdeckter Text ist noch lesbar</string>
+    <string name="redact_audit_unapplied">Seite %1$d: Schwärzung nicht angewendet</string>
+    <string name="redact_place_hint">Ziehen Sie über das, was entfernt werden soll</string>
+    <plurals name="redact_marked">
+        <item quantity="one">%1$d Markierung hinzugefügt</item>
+        <item quantity="other">%1$d Markierungen hinzugefügt</item>
+    </plurals>
+    <plurals name="redact_applied">
+        <item quantity="one">%1$d Schwärzung angewendet</item>
+        <item quantity="other">%1$d Schwärzungen angewendet</item>
+    </plurals>
+    <plurals name="redact_marks_count">
+        <item quantity="one">%1$d Markierung wartet</item>
+        <item quantity="other">%1$d Markierungen warten</item>
+    </plurals>
+    <plurals name="redact_audit_found">
+        <item quantity="one">%1$d mögliche Schein-Schwärzung:</item>
+        <item quantity="other">%1$d mögliche Schein-Schwärzungen:</item>
+    </plurals>
 </resources>

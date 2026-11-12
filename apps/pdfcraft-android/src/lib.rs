@@ -178,7 +178,8 @@ pub struct TileRect {
 pub struct RenderedImage {
     pub width: u32,
     pub height: u32,
-    pub rgba: Vec<u8>,
+    /// The renderer's own buffer, sent to Kotlin as a `ByteArray` in one copy (#86).
+    pub rgba: pdfcraft_android_ffi_bytes::Bytes,
 }
 
 /// Packed native-endian RGB565 or premultiplied RGBA8, without row padding.
@@ -187,7 +188,7 @@ pub struct CompactImage {
     pub width: u32,
     pub height: u32,
     pub rgb565: bool,
-    pub pixels: Vec<u8>,
+    pub pixels: pdfcraft_android_ffi_bytes::Bytes,
 }
 
 /// A tool of the headless tool table, for the UI's "run anything" paths and diagnostics.
@@ -230,7 +231,7 @@ pub fn file_thumbnail(path: String, max_side: u32) -> Result<RenderedImage, Mobi
     if let Some(e) = out.error {
         return Err(MobileError::Render(e));
     }
-    Ok(RenderedImage { width: out.width, height: out.height, rgba: out.rgba.to_vec() })
+    Ok(RenderedImage { width: out.width, height: out.height, rgba: pdfcraft_android_ffi_bytes::Bytes::new(out.rgba) })
 }
 
 /// A digital ID file's certificate, as the app lists the IDs it can sign with.
@@ -361,6 +362,9 @@ pub struct CommentInfo {
     pub opacity: f32,
     /// Its line width in points, when it draws a line (ink, shapes, lines).
     pub width: Option<f32>,
+    /// The PDF hides it (`/F` Hidden or NoView): the page raster leaves it out, and so must the
+    /// app's own sticky-note overlay (#115).
+    pub hidden: bool,
 }
 
 /// A form field's widget on a page: what a tap there fills.
@@ -1048,13 +1052,17 @@ impl MobileSession {
     /// them as icons of its own.
     pub fn render_page(&self, doc: u64, page: u32, scale: f32, tile: Option<TileRect>) -> Result<RenderedImage, MobileError> {
         let out = self.render_pixels(doc, page, scale, tile)?;
-        Ok(RenderedImage { width: out.width, height: out.height, rgba: out.rgba.to_vec() })
+        Ok(RenderedImage { width: out.width, height: out.height, rgba: pdfcraft_android_ffi_bytes::Bytes::new(out.rgba) })
     }
 
     /// Optional compact opaque page previews; tiles and translucent pixels retain RGBA8.
     pub fn render_page_compact(&self, doc: u64, page: u32, scale: f32, tile: Option<TileRect>, compact: bool) -> Result<CompactImage, MobileError> {
         let out = self.render_pixels(doc, page, scale, tile)?;
-        let (rgb565, pixels) = compact_pixels(&out.rgba, compact && tile.is_none());
+        // an RGBA8 result sends the renderer's own buffer, without another copy (#86)
+        let (rgb565, pixels) = match compact_pixels(&out.rgba, compact && tile.is_none()) {
+            Some(packed) => (true, pdfcraft_android_ffi_bytes::Bytes::from(packed)),
+            None => (false, pdfcraft_android_ffi_bytes::Bytes::new(out.rgba)),
+        };
         Ok(CompactImage { width: out.width, height: out.height, rgb565, pixels })
     }
 
@@ -1445,6 +1453,7 @@ fn comment_records(snapshot: &pdfcraft_engine::OverlaySnapshot) -> Vec<CommentIn
                 fill_sign: a.fill_sign,
                 opacity: props.as_ref().map(|p| p.opacity as f32).filter(|v| v.is_finite()).unwrap_or(1.0).clamp(0.0, 1.0),
                 width: props.as_ref().and_then(|p| p.width).map(|w| w as f32).filter(|w| w.is_finite() && *w >= 0.0),
+                hidden: props.as_ref().is_some_and(|p| p.hidden),
             }
         })
         .collect()
@@ -1498,16 +1507,17 @@ fn widget_records(snapshot: &pdfcraft_engine::OverlaySnapshot, selected: Option<
     out
 }
 
-fn compact_pixels(rgba: &[u8], requested: bool) -> (bool, Vec<u8>) {
+/// `rgba` packed as RGB565 when that was asked for and every pixel is opaque; `None` keeps RGBA8.
+fn compact_pixels(rgba: &[u8], requested: bool) -> Option<Vec<u8>> {
     if !requested || !rgba.len().is_multiple_of(4) || rgba.chunks_exact(4).any(|p| p[3] != 255) {
-        return (false, rgba.to_vec());
+        return None;
     }
     let mut pixels = Vec::with_capacity(rgba.len() / 2);
     for p in rgba.chunks_exact(4) {
         let value = (u16::from(p[0] >> 3) << 11) | (u16::from(p[1] >> 2) << 5) | u16::from(p[2] >> 3);
         pixels.extend_from_slice(&value.to_ne_bytes());
     }
-    (true, pixels)
+    Some(pixels)
 }
 
 #[cfg(test)]
@@ -1516,11 +1526,10 @@ mod compact_tests {
     #[test]
     fn compact_pages_pack_primary_colors_and_preserve_transparency_and_opt_out() {
         let rgba = [255, 0, 0, 255, 0, 255, 0, 255, 0, 0, 255, 255];
-        let (compact, pixels) = compact_pixels(&rgba, true);
-        assert!(compact);
+        let pixels = compact_pixels(&rgba, true).unwrap();
         assert_eq!(pixels, [0xf800u16, 0x07e0, 0x001f].into_iter().flat_map(u16::to_ne_bytes).collect::<Vec<_>>());
-        assert_eq!(compact_pixels(&rgba, false), (false, rgba.to_vec()));
+        assert_eq!(compact_pixels(&rgba, false), None);
         let alpha = [127, 0, 0, 127];
-        assert_eq!(compact_pixels(&alpha, true), (false, alpha.to_vec()));
+        assert_eq!(compact_pixels(&alpha, true), None);
     }
 }

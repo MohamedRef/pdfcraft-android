@@ -745,6 +745,9 @@
     <string name="sheet_remove_star">Remove the star</string>
     <string name="sheet_view_settings">View settings</string>
     <string name="sheet_present">Present</string>
+    <!-- Presenting with a second screen attached: %1$s is that screen's name, such as "HDMI Screen" -->
+    <string name="present_on_display">Showing on %1$s</string>
+    <string name="present_next_page">Next: page %1$d</string>
     <!-- File details (Issue #55): original file dates and embedded PDF dates are separate. -->
     <string name="file_details_title">File details</string>
     <string name="file_details_copy_all">Copy all details</string>
@@ -906,9 +909,15 @@
     <string name="sheet_single_page">Single page</string>
     <string name="sheet_two_pages">Two pages</string>
     <string name="sheet_two_pages_cover">Two pages with cover</string>
+    <string name="sheet_horizontal">Pages in a row</string>
+    <string name="sheet_two_pages_auto">Two pages on wide screens</string>
+    <string name="sheet_layout_initial_view">Open this way in other apps</string>
     <string name="sheet_reading_mode">Reading Mode</string>
     <string name="sheet_night_mode">Night Mode</string>
     <string name="sheet_hide_annotations">Hide annotations</string>
+    <string name="sheet_share_clean">Share without annotations</string>
+    <string name="sheet_print_clean">Print without annotations</string>
+    <string name="msg_clean_copy_failed">Couldn\'t make a copy without annotations.</string>
     <string name="sheet_reading_colors">Reading colours</string>
     <string name="sheet_reading_colors_sample">Aa</string>
     <string name="sheet_reading_colors_off">Off</string>
@@ -1082,7 +1091,7 @@
     <!-- Highlight tool: marking text -->
     <string name="toolbar_strikethrough">Strikethrough</string>
     <!-- Note: "More tools" and "Recognize text" are the names of the menu and the tool -->
-    <string name="toolbar_no_text_to_mark">This page has no text to mark. Recognize text first (More tools ▸ Recognize text).</string>
+    <string name="toolbar_no_text_to_mark">No selectable text here. Drag to highlight an area, or recognize the text first.</string>
 
     <!-- Draw tool -->
     <string name="toolbar_draw_freeform">Draw freeform</string>
@@ -1542,6 +1551,14 @@
     <string name="bates_export_failed">Could not save this new copy to Downloads.</string>
     <string name="ink_presets_title">Favorite pens</string>
     <string name="ink_presets_help">Each pen keeps its own colour, width and opacity. Tap a favorite to restore its settings.</string>
+    <string name="ink_latency_reset">Reset</string>
+    <string name="ink_latency_refresh">Update</string>
+    <string name="ink_latency_none">not measured yet</string>
+    <string name="ink_latency_value">%1$d ms typical, %2$d ms at worst (95%%), %3$d samples</string>
+    <string name="ink_latency_low">Low-latency</string>
+    <string name="ink_latency_normal">Normal</string>
+    <string name="ink_latency_explanation">Write with the pen with Low-latency ink off, then on, and compare. Measured from the pen event to the app\'s drawing; the screen adds a little more.</string>
+    <string name="ink_latency_title">Ink latency on this device</string>
     <string name="palm_guard_calibrate_clear">Clear touches</string>
     <string name="palm_guard_calibrate_help">Hover or write with the pen, then rest your hand as you do when writing. Green touches are ignored; red ones would scroll or press buttons. Adjust the size until your resting hand lands in green.</string>
     <string name="palm_guard_calibrate">Check palm area</string>
@@ -1727,11 +1744,13 @@
     <string name="msg_copy_request_lost">PdfCraft was closed while you chose where to save the copy, so nothing was saved. The empty file it left there was removed.</string>
     <string name="msg_copy_request_lost_kept">PdfCraft was closed while you chose where to save the copy, so nothing was saved. Check that location for an empty file.</string>
     <string name="home_section_diagnostics">Diagnostics</string>
-    <string name="home_record_open_timings">Record open timings</string>
-    <string name="home_record_open_timings_body">Keeps how long each step of opening a file takes, so a slow open can be measured. Only step names, times, sizes and page counts; no file names or contents. Turning it off clears it.</string>
-    <string name="home_share_open_timings">Share open timings</string>
-    <string name="home_open_timings_empty">No open timings yet: turn this on, then open a file.</string>
-    <string name="home_open_timings_subject">PdfCraft open timings</string>
+    <string name="home_record_diagnostics">Record diagnostics log</string>
+    <string name="home_record_diagnostics_body">Keeps a detailed log of opening and drawing files, pen latency, saves, scans, memory and errors, so a problem can be checked from your phone. Only event names, times, counts and sizes; no file names, paths or contents. Turning it off deletes it.</string>
+    <string name="home_share_diagnostics">Share diagnostics log</string>
+    <string name="home_clear_diagnostics">Clear diagnostics log</string>
+    <string name="home_diagnostics_empty">No diagnostics yet: turn this on, then use the app.</string>
+    <string name="home_diagnostics_subject">PdfCraft diagnostics log</string>
+    <string name="home_diagnostics_cleared">Diagnostics log cleared</string>
     <string name="document_preparing">Preparing editing and signature status…</string>
     <string name="comments_loading">Loading comments…</string>
     <string name="compact_previews">Use less memory for page previews</string>
@@ -1788,6 +1807,7 @@
     <string name="comments_search_hint">Search text, replies or author</string>
     <string name="comments_search_close">Close search</string>
     <string name="comments_shown">%1$d of %2$d threads</string>
+    <string name="comments_filtered_on_page">Comments filtered</string>
     <string name="comments_no_match">No comments match.</string>
     <string name="comments_filter_all">All</string>
     <string name="comments_filter_notes">Notes &amp; text</string>
@@ -2192,4 +2212,82 @@
     <string name="library_tags_hint">exam, week 3</string>
     <string name="library_collections">Collections</string>
     <string name="library_remove">Remove from library</string>
+    <!-- Selection menu labels, markup follow-up bar, replace/insert text (#197, #170) -->
+    <string name="viewer_menu_note">Note</string>
+    <string name="viewer_menu_highlight">Highlight</string>
+    <string name="viewer_menu_underline">Underline</string>
+    <string name="viewer_menu_strike">Strike</string>
+    <string name="viewer_menu_squiggly">Squiggly</string>
+    <string name="viewer_replace_text">Replace text</string>
+    <string name="viewer_insert_text">Insert text after</string>
+    <string name="viewer_replacement_hint">Replacement text</string>
+    <string name="viewer_insertion_hint">Text to insert</string>
+    <string name="viewer_markup_color">Markup colour</string>
+    <string name="viewer_add_note">Add note</string>
+    <!-- Polygon and connected lines in Draw (#133) -->
+    <string name="toolbar_draw_polygon">Polygon: tap each corner, then the first one again</string>
+    <string name="toolbar_draw_polyline">Connected lines: tap each point, then the last one again</string>
+    <string name="ink_toolbar_polygon">Polygon</string>
+    <string name="ink_toolbar_polyline">Lines</string>
+    <string name="viewer_hint_polygon">Tap each corner. Tap the first corner again to finish.</string>
+    <string name="viewer_hint_polyline">Tap each point. Tap the last point again to finish.</string>
+    <plurals name="cards_due">
+        <item quantity="one">%d card due</item>
+        <item quantity="other">%d cards due</item>
+    </plurals>
+    <plurals name="cards_due_review">
+        <item quantity="one">Review %d flashcard due</item>
+        <item quantity="other">Review %d flashcards due</item>
+    </plurals>
+    <string name="cards_title">Flashcards</string>
+    <string name="cards_row_due">Flashcards (%1$d due)</string>
+    <string name="cards_make">Make flashcard</string>
+    <string name="cards_make_cloze">Make fill-in card</string>
+    <string name="cards_new">New flashcard</string>
+    <string name="cards_edit">Edit flashcard</string>
+    <string name="cards_front">Front</string>
+    <string name="cards_back">Back</string>
+    <string name="cards_cloze_hint">Put {{ }} around words to make them a blank to fill in.</string>
+    <string name="cards_from_page">%1$s, page %2$d</string>
+    <string name="cards_saved">Flashcard saved</string>
+    <string name="cards_need_saved_file">Save the document first to make flashcards from it</string>
+    <string name="cards_progress">%1$d left · %2$d in deck</string>
+    <string name="cards_export">Export for Anki (TSV)</string>
+    <string name="cards_import">Import CSV or TSV</string>
+    <string name="cards_none">No flashcards yet</string>
+    <string name="cards_none_body">Select text in a document and choose Make flashcard, or add one with +.</string>
+    <string name="cards_all_done">All caught up</string>
+    <string name="cards_all_done_body">%1$d reviewed. Cards come back when they are due.</string>
+    <string name="cards_show_answer">Show answer</string>
+    <string name="cards_again">Again</string>
+    <string name="cards_hard">Hard</string>
+    <string name="cards_good">Good</string>
+    <string name="cards_easy">Easy</string>
+    <string name="cards_span_minutes">%d min</string>
+    <string name="cards_span_days">%d d</string>
+    <string name="cards_span_months">%d mo</string>
+    <string name="cards_delete_title">Delete this flashcard?</string>
+    <string name="cards_busy_export">Exporting flashcards…</string>
+    <string name="cards_file_name">Flashcards %1$s</string>
+    <string name="cards_imported">Imported %1$d flashcards</string>
+    <string name="backup_section">Backup</string>
+    <string name="backup_choose_folder">Choose a backup folder</string>
+    <string name="backup_folder_is">Backup folder: %1$s</string>
+    <string name="backup_keep_label">Versions kept per document</string>
+    <string name="backup_status_last">Last backup %1$s</string>
+    <string name="backup_status_none">Nothing backed up yet. A copy is made each time a document is saved.</string>
+    <string name="backup_status_failed">The last backup could not be written. It will be tried again at the next save.</string>
+    <string name="backup_retry">Retry backup</string>
+    <string name="backup_turn_off">Turn off backups</string>
+    <string name="backup_body">After each save, a dated copy of the PDF and its comments (XFDF) goes to the folder you choose, in a folder named after the document; older versions are removed. Your library, flashcards and notebooks are saved there too. The original file is never changed.</string>
+    <string name="backup_folder_not_writable">PdfCraft can\'t write to that folder. Choose another one.</string>
+    <string name="backup_failed">Backup failed. Your document is saved.</string>
+    <string name="backup_history">Version history</string>
+    <string name="backup_history_body">Open a copy leaves this document as it is. Restore comments adds that version\'s comments here; Undo takes them back.</string>
+    <string name="backup_loading">Looking in the backup folder…</string>
+    <string name="backup_no_versions">No backups of this document yet.</string>
+    <string name="backup_open_copy">Open a copy</string>
+    <string name="backup_restore_comments">Restore comments here</string>
+    <string name="backup_restoring">Restoring…</string>
+    <string name="backup_comments_restored">Comments restored</string>
 </resources>

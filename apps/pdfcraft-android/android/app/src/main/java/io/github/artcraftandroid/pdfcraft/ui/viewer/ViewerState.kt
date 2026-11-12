@@ -60,7 +60,7 @@ class ViewerState(pages: List<PageSize>) {
         }
 
     /** Continuous pages zoom out past fit-width; single-page mode rests on one page filling the width. */
-    val minZoom: Float get() = if (mode == PageMode.Continuous) ZOOM_OUT_LIMIT else MIN_ZOOM
+    val minZoom: Float get() = if (mode == PageMode.SinglePage) MIN_ZOOM else ZOOM_OUT_LIMIT
     val maxZoom: Float get() = MAX_ZOOM
 
     /**
@@ -81,6 +81,8 @@ class ViewerState(pages: List<PageSize>) {
                     l.nearestPage((scrollX + viewW / 2f) / zoom, y)
                 }
                 PageMode.SinglePage -> l.nearestPage((scrollX + viewW / 2f) / zoom, 0f)
+                // the page under the left third, as the eye reads along the row
+                PageMode.Horizontal -> l.nearestPage((scrollX + viewW * 0.33f) / zoom, (scrollY + viewH / 2f) / zoom)
             }
         }
 
@@ -101,6 +103,8 @@ class ViewerState(pages: List<PageSize>) {
             when (mode) {
                 PageMode.Continuous -> { scrollY = (r.top + within * r.height) * zoom; scrollX = scrollX }
                 PageMode.SinglePage -> { zoom = 1f; scrollX = layout.groupOf(anchorPage) * viewW; scrollY = 0f }
+                // the pages are sized to the height: a new size starts the page again from its left
+                PageMode.Horizontal -> { zoom = 1f; goToPage(anchorPage) }
             }
         }
         clamp()
@@ -192,6 +196,10 @@ class ViewerState(pages: List<PageSize>) {
                 scrollX = l.groupOf(i) * viewW
                 scrollY = 0f
             }
+            PageMode.Horizontal -> {
+                // the spread's first page at the left, a margin in
+                scrollX = (l.rects[l.groups[l.groupOf(i)].first].left - margin) * zoom
+            }
         }
         clamp()
     }
@@ -270,14 +278,25 @@ class ViewerState(pages: List<PageSize>) {
 
     /** Screen point [p] in page [page]'s points, held to the page (a drag that leaves the page). */
     fun screenToPageOf(page: Int, p: Offset): PagePoint? {
+        val at = screenToPageUnclamped(page, p) ?: return null
+        val size = pages.getOrNull(page) ?: return null
+        return PagePoint(page, at.x.coerceIn(0f, size.width), at.y.coerceIn(0f, size.height))
+    }
+
+    /**
+     * Screen point [p] in page [page]'s points, **not** held to the page: off the page it is
+     * outside `0..width` × `0..height`. Ink and the eraser use it, so a pen that leaves the page
+     * keeps its real path instead of sliding along the edge.
+     */
+    fun screenToPageUnclamped(page: Int, p: Offset): PagePoint? {
         val l = layout
         val r = l.rects.getOrNull(page) ?: return null
-        val size = pages.getOrNull(page) ?: return null
+        if (pages.getOrNull(page) == null) return null
         val s = l.scaleOf(page)
         if (s <= 0f) return null
         val lx = (p.x + scrollX) / zoom
         val ly = (p.y + scrollY) / zoom
-        return PagePoint(page, ((lx - r.left) / s).coerceIn(0f, size.width), ((ly - r.top) / s).coerceIn(0f, size.height))
+        return PagePoint(page, (lx - r.left) / s, (ly - r.top) / s)
     }
 
     /** Screen position of a point on page [page] given in its points. */

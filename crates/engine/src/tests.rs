@@ -12106,6 +12106,13 @@ fn open_field_reuse_matches_fresh_display_with_comments_fields_and_orphan_widget
         editor.appearances.clear();
         editor.field_appearances.clear();
         let expected = crate::document::display_bytes(doc.editor.as_mut(), &source, &mut signatures, &doc.captions);
+        // The open passes draw the display copy beside the inspection (#284): the same bytes and
+        // marks as drawing it afterwards on the editor.
+        assert_eq!(actual.as_slice(), expected.as_slice(), "comment={comment}, field={field}, listed={listed}");
+        assert_eq!(
+            signatures.iter().map(|s| s.verdict_shown).collect::<Vec<_>>(),
+            doc.signatures.iter().map(|s| s.verdict_shown).collect::<Vec<_>>()
+        );
         let mut captured = Some(pdfcraft_forms::fields_with_adopted(&doc.editor.as_ref().unwrap().cos));
         let shared = crate::document::display_bytes_collect_fields(
             doc.editor.as_mut(),

@@ -28,10 +28,12 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -134,10 +136,24 @@ fun CommentPanel(vm: AppViewModel, doc: OpenDocument, c: CommentInfo) {
                 ColorGrid(shown) { vm.recolorComment(doc, c, it) }
                 if (c.subtype != "FreeText") {
                     var opacity by remember(c.page, c.index) { mutableStateOf(c.opacity) }
+                    // The opacity last sent. A drag is applied 300 ms after it stops; a change still
+                    // waiting when the panel closes or moves to another comment is sent then (#83).
+                    var sent by remember(c.page, c.index) { mutableStateOf(c.opacity) }
+                    val pending by rememberUpdatedState(opacity)
+                    val target by rememberUpdatedState(c)
                     LaunchedEffect(opacity) {
-                        if (opacity == c.opacity) return@LaunchedEffect
+                        if (opacity == sent) return@LaunchedEffect
                         kotlinx.coroutines.delay(300)
+                        sent = opacity
                         vm.styleComment(doc, c, mapOf("opacity" to opacity.toDouble()))
+                    }
+                    DisposableEffect(c.page, c.index) {
+                        onDispose {
+                            if (pending != sent) {
+                                sent = pending
+                                vm.styleComment(doc, target, mapOf("opacity" to pending.toDouble()), reselect = false)
+                            }
+                        }
                     }
                     Text(stringResource(R.string.comments_opacity), color = colors.text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 78.dp, top = 16.dp, bottom = 8.dp))
                     OpacitySlider(shown, opacity) { opacity = it }

@@ -53,6 +53,9 @@ class OpenDocument(
     /** Opened by another app (a file manager's Open with, a share): closing it goes back there. */
     var fromOtherApp = false
 
+    /** Its number in the diagnostics log, which never names the file. */
+    var diagNumber = 0
+
     /** Whether saving can write back to [source] (else changes need Save a copy). */
     var writable by mutableStateOf(true)
 

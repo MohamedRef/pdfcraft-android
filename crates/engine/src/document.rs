@@ -2,7 +2,7 @@
 
 use std::sync::{Arc, OnceLock};
 
-use pdfcraft_cos::{SaveOptions, write_incremental};
+use pdfcraft_cos::{SaveOptions, write_incremental, write_incremental_shared};
 use pdfcraft_render::{DocInfo, RenderConfig, RenderPool};
 
 use crate::history::Editor;
@@ -813,28 +813,27 @@ pub(crate) fn display_bytes_collect_fields(
 /// Android adaptation (#212): the display copy from the comment appearances and the field list
 /// that opening computed side by side with signature discovery
 /// ([`with_missing_appearances_cached`](pdfcraft_annot::with_missing_appearances_cached) and
-/// [`fields_with_adopted`](pdfcraft_forms::fields_with_adopted) on `e.cos`). The result, the
-/// marks and `fields_out` are those of [`display_bytes_collect_fields`]; when comments need a
-/// copy, `fields_out` also gets the list, which equals what the form reading would compute again
-/// from the same, unchanged `e.cos`.
-pub(crate) fn display_bytes_from_open(
-    e: &mut Editor,
+/// [`fields_with_adopted`](pdfcraft_forms::fields_with_adopted) on `cos`). The bytes and marks are
+/// those of [`display_bytes_collect_fields`] on an editor over the same, unchanged `cos`. It needs
+/// no editor, so opening draws it beside the renderer's inspection (#284). Returns the bytes and,
+/// when the copy could not be written, the repair line the editor must log.
+pub(crate) fn display_parts_from_open(
+    cos: &pdfcraft_cos::Document,
+    field_appearances: &mut pdfcraft_forms::FieldAppearanceCache,
     bytes: &pdfcraft_cos::PdfBytes,
     signatures: &mut [SignatureInfo],
     captions: &StatusCaptions,
     comments: Option<pdfcraft_cos::Document>,
-    found: pdfcraft_forms::Fields,
-    fields_out: &mut Option<pdfcraft_forms::Fields>,
-) -> pdfcraft_cos::PdfBytes {
+    found: &pdfcraft_forms::Fields,
+) -> (pdfcraft_cos::PdfBytes, Option<String>) {
     for sig in signatures.iter_mut() {
         sig.verdict_shown = false;
     }
     let fields = match &comments {
-        None => pdfcraft_forms::with_field_appearances_from_fields_cached(&e.cos, &mut e.field_appearances, &found.items),
-        Some(copy) => pdfcraft_forms::with_field_appearances_cached(copy, &mut e.field_appearances),
+        None => pdfcraft_forms::with_field_appearances_from_fields_cached(cos, field_appearances, &found.items),
+        Some(copy) => pdfcraft_forms::with_field_appearances_cached(copy, field_appearances),
     };
-    *fields_out = Some(found);
-    finish_display(e, bytes, signatures, captions, fields.or(comments))
+    finish_display_parts(cos, bytes, signatures, captions, fields.or(comments))
 }
 
 /// The display copy from `copy` (comments and fields drawn), or from the signature marks alone.
@@ -845,44 +844,73 @@ fn finish_display(
     captions: &StatusCaptions,
     copy: Option<pdfcraft_cos::Document>,
 ) -> pdfcraft_cos::PdfBytes {
+    let (display, lost) = finish_display_parts(&e.cos, bytes, signatures, captions, copy);
+    note_lost_display(e, lost);
+    display
+}
+
+fn finish_display_parts(
+    cos: &pdfcraft_cos::Document,
+    bytes: &pdfcraft_cos::PdfBytes,
+    signatures: &mut [SignatureInfo],
+    captions: &StatusCaptions,
+    copy: Option<pdfcraft_cos::Document>,
+) -> (pdfcraft_cos::PdfBytes, Option<String>) {
     if let Some(mut display) = copy {
         // Written whether or not a signature changed: the copy exists for the comments and fields.
         let _ = pdfcraft_sign::show_status_layers(&mut display, signatures, captions);
-        return write_display_copy(e, bytes, &display, signatures);
+        return write_display_parts(bytes, &display, signatures);
     }
     // No comment or field needed an appearance, so there is no copy yet: build one only when a
     // signature's state would change it.
-    if !pdfcraft_sign::has_status_layers(&e.cos, signatures) {
-        return bytes.clone();
+    if !pdfcraft_sign::has_status_layers(cos, signatures) {
+        return (bytes.clone(), None);
     }
-    let mut display = e.cos.clone();
+    let mut display = cos.clone();
     if !pdfcraft_sign::show_status_layers(&mut display, signatures, captions) {
-        return bytes.clone();
+        return (bytes.clone(), None);
     }
-    write_display_copy(e, bytes, &display, signatures)
+    write_display_parts(bytes, &display, signatures)
 }
 
 /// Write the display copy, or keep the working file when it cannot be written. The page then
 /// shows the file's own artwork, so the marks are cleared. Losing the copy is a repair, so it is
 /// logged, once however many refreshes lose it again.
+#[cfg(test)]
 pub(crate) fn write_display_copy(
     e: &mut Editor,
     bytes: &pdfcraft_cos::PdfBytes,
     display: &pdfcraft_cos::Document,
     signatures: &mut [SignatureInfo],
 ) -> pdfcraft_cos::PdfBytes {
-    match write_incremental(display, &SaveOptions::default()) {
-        Ok(written) => Arc::new(written),
+    let (written, lost) = write_display_parts(bytes, display, signatures);
+    note_lost_display(e, lost);
+    written
+}
+
+fn write_display_parts(
+    bytes: &pdfcraft_cos::PdfBytes,
+    display: &pdfcraft_cos::Document,
+    signatures: &mut [SignatureInfo],
+) -> (pdfcraft_cos::PdfBytes, Option<String>) {
+    // Shared, not copied (#234): a mapped working copy is extended by the display revision.
+    match write_incremental_shared(display, &SaveOptions::default()) {
+        Ok(written) => (written, None),
         Err(err) => {
             for sig in signatures.iter_mut() {
                 sig.verdict_shown = false;
             }
-            let line = format!("the display copy could not be written, so pages show the file as stored ({err})");
-            if !e.cos.repair_log().contains(&line) {
-                e.cos.note_repair(line);
-            }
-            bytes.clone()
+            (bytes.clone(), Some(format!("the display copy could not be written, so pages show the file as stored ({err})")))
         }
+    }
+}
+
+/// Log a lost display copy as a repair, once however many refreshes lose it again.
+pub(crate) fn note_lost_display(e: &mut Editor, lost: Option<String>) {
+    if let Some(line) = lost
+        && !e.cos.repair_log().contains(&line)
+    {
+        e.cos.note_repair(line);
     }
 }
 
@@ -955,7 +983,7 @@ pub fn display_bytes_for(bytes: pdfcraft_cos::PdfBytes, password: Option<&str>) 
         if !(added || drawn) {
             return None;
         }
-        write_incremental(&display, &SaveOptions::default()).ok().map(|v| Arc::new(v) as pdfcraft_cos::PdfBytes)
+        write_incremental_shared(&display, &SaveOptions::default()).ok()
     })
     .ok()
     .flatten()
