@@ -6,7 +6,9 @@
 use std::path::{Path, PathBuf};
 use std::sync::RwLock;
 
-use pdfcraft_scan::{AspectSource, Format, Look, PageRequest, Paper, Photo, Pyramid, Quad, QuadSource, RefineOptions, detect, process_page, refine};
+use pdfcraft_scan::{
+    AspectSource, Finder, Format, Look, PageRequest, Paper, Photo, Pyramid, Quad, QuadSource, RefineOptions, detect_with, process_page, refine,
+};
 
 use crate::MobileError;
 
@@ -59,6 +61,10 @@ pub struct ScanPageRequest {
     /// the perspective warp. Off unless asked for; see [`scan_can_flatten`].
     #[uniffi(default = false)]
     pub flatten: bool,
+    /// Take the page's proportions from the lengths of its sides alone, as before #293. A testing
+    /// choice (#288).
+    #[uniffi(default = false)]
+    pub side_proportions: bool,
 }
 
 /// The standard paper a page was matched to.
@@ -217,18 +223,54 @@ pub fn scan_can_flatten() -> bool {
     pdfcraft_scan::models::state(pdfcraft_scan::models::FLATTEN) == pdfcraft_scan::models::ModelState::Ready
 }
 
+/// Which detector finds the page (#288). The scanner's own choice is `Auto`; the others are for
+/// testing, so a page found badly can be pinned on the detector that found it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
+pub enum ScanFinder {
+    /// The network when its model file is there, else the line detector.
+    Auto,
+    /// The network alone (#290).
+    Network,
+    /// The line detector alone, as before the network.
+    Lines,
+    /// Nothing is looked for: the page is the whole photo.
+    Off,
+}
+
+/// How a photo is searched for its page (#288). `ScanFindOptions::default()` is what
+/// [`scan_find_document`] does.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Record)]
+pub struct ScanFindOptions {
+    pub finder: ScanFinder,
+    /// Move the corners found onto the paper's edges at full size (#291).
+    pub refine: bool,
+}
+
+impl Default for ScanFindOptions {
+    fn default() -> Self {
+        ScanFindOptions { finder: ScanFinder::Auto, refine: true }
+    }
+}
+
 /// Find the page in a photo and move its corners onto the paper's edges: the photo is decoded
 /// once, the detector looks at a small copy of it (#290), and each side is then looked at again
 /// at full size (#291). When nothing convincing is found, `found` is false and the corners are
 /// the whole photo.
 #[uniffi::export]
 pub fn scan_find_document(photo_path: String) -> Result<ScanDocument, MobileError> {
-    let root = SCAN_ROOT.read().unwrap_or_else(std::sync::PoisonError::into_inner).clone();
-    let root = root.ok_or_else(|| MobileError::Command("scanning is not ready yet".into()))?;
-    find_in(&root, &photo_path)
+    scan_find_document_with(photo_path, ScanFindOptions::default())
 }
 
-pub(crate) fn find_in(root: &Path, photo_path: &str) -> Result<ScanDocument, MobileError> {
+/// [`scan_find_document`] with the detector named and the closer look at the edges on or off:
+/// the scanner's testing options (#288).
+#[uniffi::export]
+pub fn scan_find_document_with(photo_path: String, options: ScanFindOptions) -> Result<ScanDocument, MobileError> {
+    let root = SCAN_ROOT.read().unwrap_or_else(std::sync::PoisonError::into_inner).clone();
+    let root = root.ok_or_else(|| MobileError::Command("scanning is not ready yet".into()))?;
+    find_in(&root, &photo_path, options)
+}
+
+pub(crate) fn find_in(root: &Path, photo_path: &str, options: ScanFindOptions) -> Result<ScanDocument, MobileError> {
     let bytes = read_photo(root, photo_path)?;
     let mut timings = Vec::with_capacity(3);
     let mut clock = std::time::Instant::now();
@@ -239,7 +281,15 @@ pub(crate) fn find_in(root: &Path, photo_path: &str) -> Result<ScanDocument, Mob
     let photo = Photo::decode(&bytes).map_err(|e| MobileError::Command(e.to_string()))?;
     drop(bytes);
     lap("scan_decode", &mut timings);
-    let found = detect(&photo);
+    let found = detect_with(
+        &photo,
+        match options.finder {
+            ScanFinder::Auto => Finder::Auto,
+            ScanFinder::Network => Finder::Network,
+            ScanFinder::Lines => Finder::Lines,
+            ScanFinder::Off => Finder::Off,
+        },
+    );
     lap("scan_detect", &mut timings);
     let source = match found.source {
         QuadSource::Model => ScanQuadSource::Model,
@@ -261,6 +311,20 @@ pub(crate) fn find_in(root: &Path, photo_path: &str) -> Result<ScanDocument, Mob
             timings,
         });
     };
+    if !options.refine {
+        // the detector's own corners, as it saw them on its small copy of the photo
+        return Ok(ScanDocument {
+            found: true,
+            corners: quad.to_shares(width, height).to_vec(),
+            confidence: found.confidence,
+            source,
+            angle: found.angle,
+            passes: found.passes,
+            refined: vec![false; 4],
+            curved: vec![false; 4],
+            timings,
+        });
+    }
     let pyramid = Pyramid::new(photo.luma());
     drop(photo);
     let refined = refine(&pyramid, &quad, &RefineOptions::default());
@@ -333,6 +397,7 @@ pub(crate) fn process_in(root: &Path, request: &ScanPageRequest) -> Result<ScanP
         focal_35mm: request.focal_35mm,
         snap_paper: request.snap_paper,
         flatten: request.flatten,
+        side_proportions: request.side_proportions,
         ..PageRequest::new(&bytes, corners)
     })
     .map_err(|e| MobileError::Command(e.to_string()))?;
@@ -394,6 +459,7 @@ mod tests {
             focal_35mm: None,
             snap_paper: true,
             flatten: false,
+            side_proportions: false,
         }
     }
 
@@ -453,6 +519,19 @@ mod tests {
         )
         .unwrap();
         assert_eq!((a4.paper, letter.paper, whole.paper), (ScanPaper::A4, ScanPaper::Letter, ScanPaper::Custom));
+        // the testing choices (#288): the side lengths alone, and no matching to a paper
+        let plain = process_in(
+            &root,
+            &ScanPageRequest {
+                corners: vec![0.1, 0.1, 0.5375, 0.1, 0.5375, 0.925, 0.1, 0.925],
+                side_proportions: true,
+                snap_paper: false,
+                ..request(&shot, &root.join("page-3"))
+            },
+        )
+        .unwrap();
+        assert_eq!((plain.paper, plain.aspect_source, (plain.width, plain.height)), (ScanPaper::Custom, ScanAspectSource::SideLengths, (700, 990)));
+        assert_ne!(a4.aspect_source, ScanAspectSource::SideLengths);
         assert_eq!((letter.format, whole.format), (ScanFormat::Png, ScanFormat::Jpeg));
         // the whole photo is the camera's file with a resolution, not a second encoding
         assert_eq!(std::fs::read(&whole.path).unwrap()[20..], std::fs::read(&shot).unwrap()[20..]);
@@ -563,7 +642,7 @@ mod tests {
         })
         .save(&shot)
         .unwrap();
-        let found = find_in(&root, &shot.to_string_lossy()).unwrap();
+        let found = find_in(&root, &shot.to_string_lossy(), ScanFindOptions::default()).unwrap();
         assert!(found.found && found.source == ScanQuadSource::Model && found.confidence >= 0.5, "{found:?}");
         let truth = [(-380.0, -540.0), (380.0, -540.0), (380.0, 540.0), (-380.0, 540.0)]
             .map(|(u, v): (f64, f64)| [600.0 + u * cos - v * sin, 800.0 + u * sin + v * cos]);
@@ -573,14 +652,34 @@ mod tests {
         }
         assert_eq!(found.refined, [true; 4]);
         assert_eq!(found.timings.iter().map(|t| t.stage.as_str()).collect::<Vec<_>>(), ["scan_decode", "scan_detect", "scan_refine"]);
+
+        // the testing options (#288): each detector alone, the closer look off, and nothing at all
+        let with = |finder, refine| find_in(&root, &shot.to_string_lossy(), ScanFindOptions { finder, refine }).unwrap();
+        assert_eq!(with(ScanFinder::Auto, true).corners, found.corners);
+        assert_eq!(with(ScanFinder::Network, true).corners, found.corners);
+        let lines = with(ScanFinder::Lines, true);
+        assert!(lines.found && lines.source == ScanQuadSource::Lines, "{lines:?}");
+        let coarse = with(ScanFinder::Network, false);
+        assert!(coarse.found && coarse.refined == [false; 4] && coarse.corners != found.corners, "{coarse:?}");
+        assert_eq!(coarse.timings.iter().map(|t| t.stage.as_str()).collect::<Vec<_>>(), ["scan_decode", "scan_detect"]);
+        for (i, corner) in truth.iter().enumerate() {
+            // the network's own corners: within a few percent of the photo, not on the edge
+            let (x, y) = (f64::from(coarse.corners[2 * i]) * f64::from(w), f64::from(coarse.corners[2 * i + 1]) * f64::from(h));
+            assert!((x - corner[0]).hypot(y - corner[1]) < 0.03 * 2000.0, "corner {i}: ({x:.1}, {y:.1}) against {corner:?}");
+        }
+        let off = with(ScanFinder::Off, true);
+        assert!(
+            !off.found && off.source == ScanQuadSource::None && off.passes == 0 && off.corners == [0.0, 0.0, 1.0, 0.0, 1.0, 1.0, 0.0, 1.0],
+            "{off:?}"
+        );
         // nothing to find: the whole photo, and said so
         let blank = root.join("blank.png");
         image::RgbImage::from_fn(640, 480, |x, y| image::Rgb([90 + (x % 3) as u8, 90 + (y % 3) as u8, 90])).save(&blank).unwrap();
-        let none = find_in(&root, &blank.to_string_lossy()).unwrap();
+        let none = find_in(&root, &blank.to_string_lossy(), ScanFindOptions::default()).unwrap();
         assert!(!none.found && none.source == ScanQuadSource::None && none.corners == [0.0, 0.0, 1.0, 0.0, 1.0, 1.0, 0.0, 1.0], "{none:?}");
         // outside the root: refused
         let other = temp("find-other");
-        assert!(find_in(&other, &shot.to_string_lossy()).is_err());
+        assert!(find_in(&other, &shot.to_string_lossy(), ScanFindOptions::default()).is_err());
         std::fs::remove_dir_all(root).unwrap();
         std::fs::remove_dir_all(other).unwrap();
     }

@@ -33,6 +33,21 @@ pub enum QuadSource {
     None,
 }
 
+/// Which detector is asked (#288). The scanner's own choice is [`Finder::Auto`]; the others
+/// are for testing, so a page found badly can be pinned on the detector that found it.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Finder {
+    /// The network when its model file is there, else the line detector.
+    #[default]
+    Auto,
+    /// The network alone: nothing is found without its model file.
+    Network,
+    /// The engine's line detector alone, as before the network (#290).
+    Lines,
+    /// Nothing is looked for: the page is the whole photo.
+    Off,
+}
+
 /// The page found in a photo.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Detection {
@@ -310,11 +325,19 @@ pub(crate) fn with_lines(photo: &Photo) -> Detection {
 /// Find the page in `photo`. With the model file in place the network decides, and says so when
 /// it finds nothing convincing; without it the engine's line detector is asked.
 pub fn detect(photo: &Photo) -> Detection {
+    detect_with(photo, Finder::Auto)
+}
+
+/// Find the page in `photo` with the detector `finder` names.
+pub fn detect_with(photo: &Photo, finder: Finder) -> Detection {
     if photo.width < 16 || photo.height < 16 {
         return Detection::NOTHING;
     }
-    match load(EDGES).and_then(|model| with_model(&model, photo)) {
-        Some(found) => found,
-        None => with_lines(photo),
+    let network = || load(EDGES).and_then(|model| with_model(&model, photo));
+    match finder {
+        Finder::Auto => network().unwrap_or_else(|| with_lines(photo)),
+        Finder::Network => network().unwrap_or(Detection::NOTHING),
+        Finder::Lines => with_lines(photo),
+        Finder::Off => Detection::NOTHING,
     }
 }

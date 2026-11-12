@@ -520,6 +520,8 @@ private fun About(vm: AppViewModel) {
     if (vm.recordDiagnostics) {
         SheetRow(null, stringResource(R.string.home_share_diagnostics), { vm.shareDiagnostics() })
         SheetRow(null, stringResource(R.string.home_clear_diagnostics), { vm.clearDiagnostics() })
+        // the scanner's testing options and the scans kept for testing (#288)
+        ScanLabSettings(vm)
     }
     SheetDivider()
     Section(stringResource(R.string.home_section_legal))

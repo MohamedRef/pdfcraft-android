@@ -4248,10 +4248,12 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             // One native call decodes the photo once, has the detector network find the page on a
             // small copy (#290) and moves each side onto the paper's edge at full size (#291). The
             // network's model is unpacked from the app's assets the first time; without it the
-            // line detector is asked instead.
+            // line detector is asked instead. The testing options (#288) can name the detector
+            // and leave the closer look out.
+            val lab = scanLab.options
             val doc = eng?.let {
                 withContext(Dispatchers.IO) { runCatching { it.prepareOcrModels(getApplication()) } }
-                withContext(Dispatchers.Default) { runCatching { io.github.artcraftandroid.pdfcraft.core.scanFindDocument(f.absolutePath) } }
+                withContext(Dispatchers.Default) { runCatching { io.github.artcraftandroid.pdfcraft.core.scanFindDocumentWith(f.absolutePath, lab.findOptions()) } }
                     .onFailure { e -> Diag.failure(DiagArea.Scan, "scan_find_document", e) }.getOrNull()
             }
             val edges = doc?.takeIf { it.found }?.corners?.takeIf { it.size == 8 }?.toFloatArray()
@@ -4266,9 +4268,13 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 "angle" to (doc?.angle?.toInt() ?: 0), "passes" to (doc?.passes?.toInt() ?: 0),
                 *(doc?.timings.orEmpty().map<io.github.artcraftandroid.pdfcraft.core.ScanTiming, Pair<String, Any?>> { it.stage.removePrefix("scan_") + "_ms" to it.ms.toLong() }.toTypedArray()),
                 "refined_sides" to (doc?.refined?.count { it } ?: 0), "curved_sides" to (doc?.curved?.count { it } ?: 0),
+                "finder" to ScanLab.finderId(lab.finder), "refine" to lab.refine,
             )
+            val finding = doc?.let { d ->
+                ScanFinding(d.source.name.lowercase(), d.confidence.toDouble(), d.angle.toInt(), d.passes.toInt(), d.refined.count { it }, d.curved.count { it })
+            }
             val at = scanPages.indexOfFirst { it.file == f }
-            if (edges != null && at >= 0) scanPages[at] = scanPages[at].copy(corners = edges, found = edges)
+            if (at >= 0) scanPages[at] = if (edges != null) scanPages[at].copy(corners = edges, found = edges, finding = finding) else scanPages[at].copy(finding = finding)
         }
     }
 
@@ -4287,7 +4293,19 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     }
 
     fun discardScan() {
-        scanPages.forEach { it.file.delete() }
+        val discarded = scanPages.toList()
+        if (scanLab.options.keep && discarded.isNotEmpty()) {
+            // kept for testing first (#288): a scan given up on is often the one worth looking at
+            viewModelScope.launch {
+                withContext(Dispatchers.IO) {
+                    scanLab.keepDiscarded(discarded)
+                    discarded.forEach { it.file.delete() }
+                }
+                scanLab.refreshKept()
+            }
+        } else {
+            discarded.forEach { it.file.delete() }
+        }
         scanPageDir().listFiles()?.forEach { it.delete() }
         scanPages.clear()
         scanName = ""
@@ -4310,6 +4328,10 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         val scanStarted = android.os.SystemClock.elapsedRealtime()
         val dir = scanPageDir().apply { mkdirs() }
         val saved = ArrayList<ScanSavedPage>(pages.size)
+        // the testing options in force (#288), and where this scan is kept when scans are kept
+        val lab = scanLab.options
+        val strength = lab.strengthFor(filter.level)
+        val keepIn = withContext(Dispatchers.IO) { scanLab.begin() }
         for ((i, page) in pages.withIndex()) {
             // the Scan gates (#286): found edges, whether they were moved and how far (in % of the
             // photo's diagonal, so the thumbnail's proportions are enough)
@@ -4322,9 +4344,11 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 photoPath = page.file.absolutePath,
                 corners = page.corners.toList(),
                 look = scanLookOf(filter.mode),
-                strength = filter.level.coerceIn(0, 100).toUByte(),
+                strength = strength.toUByte(),
                 outputPath = File(dir, "page-$i").absolutePath,
+                snapPaper = lab.snapPaper,
                 flatten = flatten,
+                sideProportions = !lab.perspective,
             )
             val enhanceStarted = android.os.SystemClock.elapsedRealtime()
             val result = withContext(Dispatchers.Default) { runCatching { io.github.artcraftandroid.pdfcraft.core.scanProcessPage(request) } }
@@ -4341,8 +4365,22 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 "paper" to (r?.paper?.name?.lowercase() ?: "none"), "aspect" to (r?.aspectSource?.name?.lowercase() ?: "none"),
                 "focal_mismatch" to (r?.focalMismatch ?: false),
                 "flatten" to flatten, "flattened" to (r?.flattened ?: false), "bend_pct" to ((r?.bend ?: 0f) * 100.0),
+                "strength" to strength, "side_proportions" to !lab.perspective, "snap_paper" to lab.snapPaper,
             )
+            if (keepIn != null) {
+                val made = r?.let {
+                    ScanTestResult(
+                        it.width.toLong(), it.height.toLong(), it.format.name.lowercase(), it.dpi.toDouble(), it.paper.name.lowercase(),
+                        it.aspectSource.name.lowercase(), it.focalMismatch, it.flattened, it.bend * 100.0,
+                    )
+                }
+                withContext(Dispatchers.IO) { scanLab.keepPage(keepIn, i, page, true, filter.mode, strength, flatten, r?.path?.let(::File), made) }
+            }
             saved += scanSavedPage(page.file.absolutePath, r?.let { it.path to it.dpi })
+        }
+        if (keepIn != null) {
+            withContext(Dispatchers.IO) { scanLab.end(keepIn) }
+            scanLab.refreshKept()
         }
         val created = try {
             eng.tool("doc_create", scanCreateArgs(saved))
@@ -5406,6 +5444,10 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     // ---- Backups (#145) and version history: see BackupController ----
 
     val backups = BackupController(this)
+
+    // ---- The scanner's testing options and scans kept for testing (#288): see ScanLabController ----
+
+    internal val scanLab = ScanLabController(this)
 }
 
 /** The most files Create PDF converts at once. */

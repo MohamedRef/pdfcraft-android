@@ -3,7 +3,7 @@
 
 use std::time::Instant;
 
-use crate::aspect::{AspectSource, Focal, Paper, dpi_without_paper, proportions};
+use crate::aspect::{AspectSource, Focal, Paper, dpi_without_paper, proportions, proportions_by_sides};
 use crate::encode::{Format, JPEG_QUALITY, Raster, encode_jpeg, encode_png_bilevel, stamp_jpeg_density};
 use crate::enhance::enlargement;
 use crate::flatten::{predict_grid, unwarp};
@@ -37,6 +37,9 @@ pub struct PageRequest<'a> {
     pub focal_35mm: Option<f32>,
     /// Match the page to standard paper sizes (A4, Letter, …) when its shape is within 3 %.
     pub snap_paper: bool,
+    /// Take the page's proportions from the lengths of its sides alone, as before #293 (a testing
+    /// choice, #288).
+    pub side_proportions: bool,
     /// Flatten the page with the flattening network instead of the perspective warp (#302): for
     /// pages that curl, sag or were folded. Off by default: on a flat page the network's answer is
     /// a little less exact than the perspective warp, and it cannot tell which kind it is looking
@@ -48,7 +51,17 @@ impl<'a> PageRequest<'a> {
     /// A request with the defaults: the colour look at strength 50, one thread, the photo's own
     /// lens data, paper sizes matched.
     pub fn new(photo: &'a [u8], corners: [f32; 8]) -> Self {
-        PageRequest { photo, corners, look: Look::default(), strength: 50, threads: 1, focal_35mm: None, snap_paper: true, flatten: false }
+        PageRequest {
+            photo,
+            corners,
+            look: Look::default(),
+            strength: 50,
+            threads: 1,
+            focal_35mm: None,
+            snap_paper: true,
+            side_proportions: false,
+            flatten: false,
+        }
     }
 }
 
@@ -138,7 +151,10 @@ pub fn process_page(request: &PageRequest<'_>) -> Result<PageResult, ScanError> 
         Some(f) => Focal::from_35mm(Some(f), None, photo.width, photo.height),
         None => Focal::from_35mm(lens.focal_35mm, lens.digital_zoom, photo.width, photo.height),
     };
-    let shape = proportions(&quad, photo.width, photo.height, camera, request.snap_paper);
+    let shape = match request.side_proportions {
+        true => proportions_by_sides(&quad, photo.width, photo.height, request.snap_paper),
+        false => proportions(&quad, photo.width, photo.height, camera, request.snap_paper),
+    };
     let scale = match request.look {
         // Auto enlarges a small page in this same resampling pass, before its tone curve (#298, step 0)
         Look::Auto => enlargement(shape.width, shape.height),
