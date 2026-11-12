@@ -36,6 +36,7 @@ on one part. While any is changed, the scan screen says so.
 | Show pages as they will be saved (#301) | On | Off: the scan screen shows the camera's photo with its outline, as before; nothing is previewed |
 | Crop with magnifier and snapping to edges (#292) | On | Off: the crop screen before #292, four corner handles on the thumbnail |
 | Flatten pages automatically when it makes their lines straighter (#302) | Off | On: every page is flattened by the network and kept only when its lines of text come out at least 10 % straighter (the Flatten switch still flattens without the check) |
+| Book mode: cut at the gutter found in the photo (#303) | On | Off: in book mode every spread is cut at its centre line, whatever the photo shows |
 | Turn pages upright (#339) | On | Off: a page stays as its corners gave it (Rotate still works) |
 | Unsure pages follow their neighbors (#339) | On | Off: in a scan of several pages each page is turned by its own answer only |
 | Sharpen text, in Clean scan (#299) | 30 | Off, 60 or 100 |
@@ -72,7 +73,7 @@ The zip also holds `diagnostics.txt`, the diagnostics log as **Share diagnostics
  "finding": {"source": "model", "confidence": 0.835, "angle": 0, "passes": 1, "refined_sides": 4, "curved_sides": 0},
  "look": "auto", "strength": 60, "flatten": false,
  "options": {"finder": "auto", "refine": true, "side_proportions": false, "snap_paper": true, "strength_override": null, "upright": true,
-             "sharpen": 30, "denoise": true, "preview": true, "crop_tools": true, "flatten_auto": false, "settle_turns": true, "presets": true},
+             "sharpen": 30, "denoise": true, "preview": true, "crop_tools": true, "flatten_auto": false, "settle_turns": true, "presets": true, "book_gutter": true},
  "document_type": {"preset": "receipt", "chosen": false, "strength": 80, "sharpen": 35, "keep_paper": false, "suggest_flatten": false,
                    "suggest_greyscale": true, "ratio": 3.0, "ink_share": 0.043, "colour_ink_share": 0.0, "photo_share": 0.0,
                    "stroke_mm": 0.339, "glare_share": 0.0, "gutter_band": false, "whole_photo": false},
@@ -85,6 +86,7 @@ The zip also holds `diagnostics.txt`, the diagnostics log as **Share diagnostics
           "snap_ms_max": 85, "nudges": 0, "detects": 0, "detects_found": 0, "whole_photo": 0, "resets": 0,
           "loupe_decodes": 6, "snap": true, "ms": 9100, "moved_pct": 1.235,
           "corners_off": 0},
+ "book": {"half": "right", "gutter_found": true, "gutter_top": 0.4712, "gutter_bottom": 0.4790, "confidence": 0.62, "order": "rtl"},
  "result": {"file": "page-01.out.jpg", "width": 1654, "height": 2339, "format": "jpeg", "dpi": 200.0,
             "paper": "a4", "aspect": "known_focal", "focal_mismatch": false, "flattened": false, "bend_pct": 0.0,
             "quarter_turns": 3,
@@ -121,7 +123,7 @@ ordinary setting "Turn pages upright automatically", `total` the turn the page w
 answer, also for a page that then followed its neighbours. `document_type` is the kind Clean scan
 took the page for (#299), whether the person chose it, the kind's settings and what the page
 measured as (`stroke_mm` -1 when there is no ink); `null` for the other filters or with the option
-off. `scan_replay` keeps a chosen kind and works an automatic one out again.
+off. `scan_replay` keeps a chosen kind and works an automatic one out again. `book` is set on a page that is half of a photographed book spread (#303): which `half`, whether a dark gutter was found (`gutter_found`; false means the cut is the centre line), where the cut crosses the straightened spread's top and bottom edges as shares of its width, the gutter's `confidence`, and the page `order` in force (`ltr` or `rtl`). It is `null` for a page of its own. The two halves of a spread are kept as two pages, each with its own copy of the one photo, and their `corners` and `found` are the half's own outline.
 
 ## On the desktop
 
@@ -141,7 +143,10 @@ photo collected so far.
 ## In the diagnostics log
 
 Besides what `docs/ANDROID_DIAGNOSTICS_LOG.md` lists for `scan`: every `photo` line carries the
-`finder` and `refine` in force, every `page` line the `strength` used, `side_proportions`,
+`finder` and `refine` in force and what book mode did (#303: `book`, and when it is on
+`book_order`, `book_gutter_search`, `book_split`, `gutter_found`, `gutter_top`, `gutter_bottom`,
+`gutter_confidence`, `book_ms`), every `page` line which `book_half` it is (`left`, `right` or
+`none`), every `page` line the `strength` used, `side_proportions`,
 `snap_paper`, `upright`, `sharpen` and `denoise`, and how its turn was decided (#339:
 `auto_upright`, `turns_manual` (-1 for none), `turns`, `turn_source`, `settle_turns`, `followed`);
 every press of Rotate or of Undo on the "Turned upright" chip is a `turn` line (`index`, `action`
