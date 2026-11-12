@@ -11,4 +11,5 @@ sealed class ToolScreen {
     data object Bates : ToolScreen()
     data object OcrBatch : ToolScreen()
     data object Scan : ToolScreen()
+    class PageMarks(val doc: OpenDocument) : ToolScreen()
 }
