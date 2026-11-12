@@ -378,7 +378,7 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
         ToolLayer(vm, doc)
         if (ctl.tool == ViewerTool.Edit) EditOverlay(vm, doc)
         if (ctl.tool == ViewerTool.Edit && vm.editor.editMode == EditMode.Link) LinkLayer(vm, doc)
-        vm.linkEdit?.takeIf { it.doc === doc }?.let { LinkSheet(vm, it) }
+        vm.linksAndMeasure.linkEdit?.takeIf { it.doc === doc }?.let { LinkSheet(vm, it) }
         vm.commenting.textPrompt?.takeIf { it.doc === doc }?.let { TextEntry(vm, it, onDone = vm.commenting::postText) }
         vm.signing.fillTextPrompt?.takeIf { it.doc === doc }?.let { TextEntry(vm, it, onDone = vm.signing::postFillText) }
         vm.editor.addTextPrompt?.takeIf { it.doc === doc }?.let { TextEntry(vm, it, onDone = vm.editor::postAddText) }

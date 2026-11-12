@@ -188,7 +188,7 @@ fun LinkCommandsRow(vm: AppViewModel, doc: OpenDocument) {
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        androidx.compose.material3.TextButton(onClick = { vm.linksFromUrls(doc) }) {
+        androidx.compose.material3.TextButton(onClick = { vm.linksAndMeasure.linksFromUrls(doc) }) {
             Text(stringResource(R.string.link_from_urls), color = c.accent, fontSize = 14.sp)
         }
         androidx.compose.material3.TextButton(onClick = { confirmRemove = true }) {
@@ -203,7 +203,7 @@ fun LinkCommandsRow(vm: AppViewModel, doc: OpenDocument) {
             destructive = true,
             onConfirm = {
                 confirmRemove = false
-                vm.removeAllLinks(doc)
+                vm.linksAndMeasure.removeAllLinks(doc)
             },
         ) { Text(stringResource(R.string.link_remove_all_body), color = c.textSecondary, fontSize = 15.sp) }
     }
