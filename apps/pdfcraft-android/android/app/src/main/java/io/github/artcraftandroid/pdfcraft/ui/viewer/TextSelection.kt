@@ -5,6 +5,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import io.github.artcraftandroid.pdfcraft.core.TextRange
+import io.github.artcraftandroid.pdfcraft.engine.Diag
+import io.github.artcraftandroid.pdfcraft.engine.DiagArea
 import io.github.artcraftandroid.pdfcraft.engine.Engine
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -32,7 +34,7 @@ class TextSelectionState(private val engine: Engine, private val doc: ULong, pri
     /** Select the word at [p]; false if no text lies within [slopPoints]. */
     suspend fun selectWordAt(p: PagePoint, slopPoints: Float): Boolean {
         val id = ++revision
-        val range = withContext(engine.interactive) {
+        val range = timed("word_at") {
             engine.session.wordAt(doc, p.page.toUInt(), p.x, p.y, slopPoints)
         } ?: return false
         if (id != revision) return false
@@ -54,7 +56,7 @@ class TextSelectionState(private val engine: Engine, private val doc: ULong, pri
                 val (a, b) = span ?: break
                 span = null
                 val page = a.page.toUInt()
-                val (ga, gb) = withContext(engine.interactive) {
+                val (ga, gb) = timed("drag") {
                     engine.session.nearestGlyph(doc, page, a.x, a.y) to
                         engine.session.nearestGlyph(doc, page, b.x, b.y)
                 }
@@ -68,7 +70,7 @@ class TextSelectionState(private val engine: Engine, private val doc: ULong, pri
     fun selectPage(page: Int) {
         val id = ++revision
         scope.launch {
-            val n = withContext(engine.interactive) { engine.session.glyphCount(doc, page.toUInt()) }
+            val n = timed("select_all") { engine.session.glyphCount(doc, page.toUInt()) }
             if (n == 0u || id != revision) return@launch
             show(TextRange(page.toUInt(), 0u, n), id)
         }
@@ -111,7 +113,7 @@ class TextSelectionState(private val engine: Engine, private val doc: ULong, pri
             while (true) {
                 val request = handlePending ?: break
                 handlePending = null
-                val g = withContext(engine.interactive) {
+                val g = timed("handle") {
                     engine.session.nearestGlyph(doc, request.point.page.toUInt(), request.point.x, request.point.y)
                 } ?: continue
                 if (id != revision) break
@@ -125,7 +127,7 @@ class TextSelectionState(private val engine: Engine, private val doc: ULong, pri
 
     /** Native text/geometry is validated before it becomes visible on screen. */
     private suspend fun show(range: TextRange, id: Int) {
-        val (rects, start, end) = withContext(engine.interactive) {
+        val (rects, start, end) = timed("show") {
             Triple(
                 engine.session.textRects(doc, range),
                 engine.session.glyphRect(doc, range.page, range.start),
@@ -140,7 +142,7 @@ class TextSelectionState(private val engine: Engine, private val doc: ULong, pri
 
     suspend fun text(): String? {
         val sel = selection ?: return null
-        return withContext(engine.interactive) { engine.session.textOf(doc, sel.range) }
+        return timed("copy") { engine.session.textOf(doc, sel.range) }
     }
 
     fun clear() {
@@ -155,5 +157,21 @@ class TextSelectionState(private val engine: Engine, private val doc: ULong, pri
         handleJob = null
         handleStart = null
         fixedGlyph = null
+    }
+
+    /**
+     * A text query on the interactive queue. One taking 100 ms or more, waiting included, is
+     * logged (#88): a long press or a handle drag that waits behind other work shows up there.
+     */
+    private suspend fun <T> timed(kind: String, block: suspend kotlinx.coroutines.CoroutineScope.() -> T): T {
+        val started = android.os.SystemClock.elapsedRealtime()
+        val result = withContext(engine.interactive, block)
+        val ms = android.os.SystemClock.elapsedRealtime() - started
+        if (ms >= SLOW_QUERY_MS) Diag.event(DiagArea.Text, "slow_selection", "kind" to kind, "ms" to ms)
+        return result
+    }
+
+    private companion object {
+        const val SLOW_QUERY_MS = 100L
     }
 }
