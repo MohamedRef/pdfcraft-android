@@ -27,7 +27,7 @@ a phone yet.** Every number in the scanner's documents was measured on a desktop
 | #296 | Auto-capture, blur check | Native call only, in #389 | | `scan_sharpness` exists (`docs/ANDROID_SCAN_CAPTURE.md`); its `blurred_unverified` is for logs only (motion blur not detected, threshold from drawn pages). Everything else needs #295 |
 | #297 | Multi-frame merge | Native call only, in #389 | | `scan_merge_frames` exists (`docs/ANDROID_SCAN_CAPTURE.md`), measured on drawn frames only. The burst, the setting and the phone measurements need #294 |
 | #298 | Auto look, part 1 | Core done | #346 | Phone time; the paper White / Keep control has no screen (#301) |
-| #299 | Auto look, part 2 | Part | #373 | The block photo mask, document-type presets and `scan_classify`, the recognition-error check |
+| #299 | Auto look, part 2 | Part | #373, #391, #427's PR | Document types are in; the book page's gutter rule is strict since #427 (checked on drawn pages only). Left: #421 (kind tone, photo sharpening, suggestions); the confusion table on the owner's kept scans |
 | #300 | Black and white, 1 bit | Core done | #359 | Speckle on textured grey fills; photographs wider than a quarter of the page are not dithered; 0.85 s for 12 megapixels on a desktop |
 | #301 | Filter screen | Preview on the scan screen | #376, #380 | A look per page, strength, looks strip, compare, apply to all, the session's new fields, cancel. Preview speed and sharpness on a phone |
 | #302 | Flatten curved pages | Switch, and automatic mode with its quality guard as a testing option | #365, #385 | Choosing the automatic mode's default from real photos; border trim; a switch per page; phone timings |

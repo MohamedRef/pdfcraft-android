@@ -44,6 +44,7 @@ fn base(page: Rgb, dpi: u16, paper: Paper) -> PageBase {
         trim: None,
         line_flatten: None,
         timings: Vec::new(),
+        measured: std::sync::OnceLock::new(),
     }
 }
 
@@ -183,4 +184,65 @@ fn a_page_too_small_or_malformed_has_no_kind() {
     assert!(page_kind(&bad, 200, Paper::Custom, 0, PresetChoice::Auto).is_none());
     let empty = Rgb { width: 0, height: 0, data: Vec::new() };
     assert!(page_kind(&empty, 200, Paper::Custom, 0, PresetChoice::Auto).is_none());
+}
+
+/// The drawn A4 page with a flat dark band down its left side: what the first gutter rule took
+/// for a book's gutter (#427).
+fn english_with_band() -> (Rgb, u16) {
+    let mut page = drawn(include_bytes!("../tests/data/upright-english.png"));
+    let dpi = (f64::from(page.width.min(page.height)) / 210.0 * 25.4).round() as u16;
+    let band = (f64::from(page.width) * 0.06).round() as u32;
+    for y in 0..page.height {
+        for x in 0..band {
+            let i = ((y * page.width + x) * 3) as usize;
+            page.data[i..i + 3].copy_from_slice(&[120, 120, 120]);
+        }
+    }
+    (page, dpi)
+}
+
+#[test]
+fn a_flat_dark_band_is_a_book_page_only_under_the_first_gutter_rule() {
+    let (page, dpi) = english_with_band();
+    let page = base(page, dpi, Paper::A4);
+    let strict = request(PresetChoice::Auto);
+    let loose = PageRequest { strict_gutter: false, ..request(PresetChoice::Auto) };
+    let (_, with_strict) = page_look_kind(&page, &strict).unwrap();
+    let (_, with_loose) = page_look_kind(&page, &loose).unwrap();
+    let (with_strict, with_loose) = (with_strict.unwrap(), with_loose.unwrap());
+    println!("strict: {:?} {:?}\nloose: {:?}", with_strict.preset, with_strict.features, with_loose.preset);
+    assert_eq!(with_strict.preset, Preset::Document);
+    assert_eq!(with_loose.preset, Preset::BookPage);
+    // both rules' readings are in the features, whichever is in force
+    assert!(with_strict.features.gutter_loose && !with_strict.features.gutter_band);
+    assert!(with_loose.features.gutter_loose && with_loose.features.gutter_band);
+    // a curved side still makes it a book page under the strict rule
+    let curved = PageRequest { curved_sides: 1, ..request(PresetChoice::Auto) };
+    assert_eq!(page_look_kind(&page, &curved).unwrap().1.unwrap().preset, Preset::BookPage);
+}
+
+#[test]
+fn a_page_base_measures_its_page_once_and_every_look_gets_the_same_kind() {
+    let (page, dpi) = english_with_band();
+    let fresh = base(page.clone(), dpi, Paper::A4);
+    assert!(fresh.measured.get().is_none());
+    let (first, kind) = page_look_kind(&fresh, &request(PresetChoice::Auto)).unwrap();
+    // kept after the first look
+    assert!(fresh.measured.get().is_some_and(|m| m.is_some()));
+    let kept = fresh.measured.get().cloned();
+    // a second look, a strength change and the other rule reuse it
+    let (again, kind_again) = page_look_kind(&fresh, &request(PresetChoice::Auto)).unwrap();
+    let _ = page_look_kind(&fresh, &PageRequest { strength: 20, strict_gutter: false, ..request(PresetChoice::Auto) }).unwrap();
+    assert_eq!(fresh.measured.get().cloned(), kept);
+    assert_eq!(rgb(first.pixels), rgb(again.pixels.clone()));
+    assert_eq!(kind, kind_again);
+    // and what it kept is what a page measured afresh gives
+    assert_eq!(kind.unwrap(), page_kind(&page, dpi, Paper::A4, 0, PresetChoice::Auto).unwrap());
+    let unmeasured = base(page, dpi, Paper::A4);
+    assert_eq!(rgb(page_look_kind(&unmeasured, &request(PresetChoice::Auto)).unwrap().0.pixels), rgb(again.pixels));
+    // presets off and the other looks do not measure at all
+    let off = base(Rgb { width: 4, height: 4, data: vec![200; 48] }, 200, Paper::Custom);
+    let _ = page_look_kind(&off, &request(PresetChoice::Off)).unwrap();
+    let _ = page_look_kind(&off, &PageRequest { look: Look::Colour, ..request(PresetChoice::Auto) }).unwrap();
+    assert!(off.measured.get().is_none());
 }

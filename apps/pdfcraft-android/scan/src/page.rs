@@ -11,7 +11,7 @@ use crate::flatten::{predict_grid, unwarp, unwarp_trimmed};
 use crate::flatten_guard::{Kept, Trim, border_trim, guard};
 use crate::flatten_lines::{LineFit, fit_page};
 use crate::look::{Applied, Look, LookParams, Pixels, apply_full};
-use crate::page_kind::{PageKind, PresetChoice, page_kind};
+use crate::page_kind::{Measured, PageKind, PresetChoice, kind_of, measure};
 use crate::straightness::{Straightness, line_straightness};
 use crate::upright::{Upright, turned, upright};
 use crate::upright_pages::total_turn;
@@ -95,6 +95,9 @@ pub struct PageRequest<'a> {
     pub preset: PresetChoice,
     /// How many sides of the page its edge detection found curved (0–4): a book page's sign (#299).
     pub curved_sides: u8,
+    /// A dark band down one long side counts as a book's gutter only when it runs the whole
+    /// length, stays narrow and fades inward (#427); false is the first rule (#299), a testing choice.
+    pub strict_gutter: bool,
     /// The strength was set by hand (a testing option): a document type does not change it.
     pub fixed_strength: bool,
     /// For a preview (#301): the page shrunk so its longer side is this many pixels at most,
@@ -129,6 +132,7 @@ impl<'a> PageRequest<'a> {
             denoise: true,
             preset: PresetChoice::Off,
             curved_sides: 0,
+            strict_gutter: true,
             fixed_strength: false,
             max_side: None,
             keep_paper: None,
@@ -235,6 +239,17 @@ pub struct PageBase {
     pub line_flatten: Option<LineFlatten>,
     /// (stage, milliseconds) of the stages so far.
     pub timings: Vec<(&'static str, u32)>,
+    /// What the page measures as for the document types (#299), taken the first time a look asks
+    /// and kept (#427): every later look of the same base (the preview's looks and strengths)
+    /// reuses it. Empty until then; `None` inside when the page could not be measured.
+    pub measured: std::sync::OnceLock<Option<Measured>>,
+}
+
+impl PageBase {
+    /// The page's measurements for the document types, taken once (see `measured`).
+    pub fn measured(&self) -> Option<&Measured> {
+        self.measured.get_or_init(|| measure(&self.page, self.dpi, self.paper)).as_ref()
+    }
 }
 
 /// A black-and-white page under this resolution is made at twice the size.
@@ -312,6 +327,7 @@ pub fn process_page(request: &PageRequest<'_>) -> Result<PageResult, ScanError> 
         trim,
         line_flatten,
         mut timings,
+        measured: _,
     } = base;
     let (w, h) = (page.width, page.height);
     drop(page);
@@ -359,7 +375,9 @@ pub fn page_look(base: &PageBase, request: &PageRequest<'_>) -> Result<Applied, 
 /// and its paper colour replace the request's.
 pub fn page_look_kind(base: &PageBase, request: &PageRequest<'_>) -> Result<(Applied, Option<PageKind>), ScanError> {
     let kind = match request.look {
-        Look::Auto => page_kind(&base.page, base.dpi, base.paper, request.curved_sides, request.preset),
+        Look::Auto if request.preset != PresetChoice::Off => {
+            base.measured().and_then(|m| kind_of(m, request.curved_sides, request.preset, request.strict_gutter))
+        }
         _ => None,
     };
     let mut params = LookParams {
@@ -505,6 +523,7 @@ pub fn page_base(request: &PageRequest<'_>) -> Result<PageBase, ScanError> {
         trim,
         line_flatten,
         timings,
+        measured: std::sync::OnceLock::new(),
     })
 }
 
