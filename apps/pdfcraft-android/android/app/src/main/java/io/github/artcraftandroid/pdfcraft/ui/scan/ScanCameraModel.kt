@@ -35,6 +35,27 @@ internal class ScanCameraModel(app: Application) : AndroidViewModel(app) {
         Diag.event(DiagArea.Scan, "camera_live_option", "live_outline" to on)
     }
 
+    /** Whether the camera shoots by itself when the page is ready (#296): a setting, on by default. */
+    var autoCapture by mutableStateOf(prefs.getBoolean(PREF_AUTO, true))
+        private set
+
+    fun updateAutoCapture(on: Boolean) {
+        if (on == autoCapture) return
+        autoCapture = on
+        prefs.edit().putBoolean(PREF_AUTO, on).apply()
+        Diag.event(DiagArea.Scan, "camera_auto_option", "auto_capture" to on)
+    }
+
+    /** Whether the one-line tip about auto-capture has been shown (once). */
+    var autoTipShown by mutableStateOf(prefs.getBoolean(PREF_AUTO_TIP, false))
+        private set
+
+    fun markAutoTipShown() {
+        if (autoTipShown) return
+        autoTipShown = true
+        prefs.edit().putBoolean(PREF_AUTO_TIP, true).apply()
+    }
+
     /** The file the next photo is written into, while the camera screen shows; null when it is closed. */
     var target by mutableStateOf<File?>(null)
         private set
@@ -78,5 +99,7 @@ internal class ScanCameraModel(app: Application) : AndroidViewModel(app) {
     private companion object {
         const val PREF_CHOICE = "scanCamera"
         const val PREF_LIVE = "scanLiveOutline"
+        const val PREF_AUTO = "scanAutoCapture"
+        const val PREF_AUTO_TIP = "scanAutoTip"
     }
 }
