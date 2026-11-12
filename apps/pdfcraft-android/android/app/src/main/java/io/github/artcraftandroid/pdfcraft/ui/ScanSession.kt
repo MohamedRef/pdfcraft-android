@@ -15,7 +15,8 @@ data class ScanSession(
     val pages: List<Page>,
 ) {
     /** [turns] is the person's own turn of the page (#339), null while the classifier decides. */
-    class Page(val path: String, val corners: FloatArray, val found: FloatArray?, val turns: Int? = null)
+    /** [preset] is the kind of document the person chose for the page (#299), null while Clean scan works it out. */
+    class Page(val path: String, val corners: FloatArray, val found: FloatArray?, val turns: Int? = null, val preset: String? = null)
 
     fun encode(): String = buildString {
         append(HEADER).append('\n')
@@ -26,7 +27,8 @@ data class ScanSession(
         for (p in pages) {
             append("page\t").append(p.path).append('\t').append(p.corners.joinToString(","))
             append('\t').append(p.found?.joinToString(",").orEmpty())
-            append('\t').append(p.turns?.toString().orEmpty()).append('\n')
+            append('\t').append(p.turns?.toString().orEmpty())
+            append('\t').append(p.preset?.takeIf(::isWord).orEmpty()).append('\n')
         }
     }
 
@@ -56,12 +58,16 @@ data class ScanSession(
                     "page" -> {
                         val corners = corners(parts.getOrNull(2)) ?: continue
                         val turns = parts.getOrNull(4)?.toIntOrNull()?.takeIf { it in 0..3 }
-                        if (value.isNotEmpty()) pages += Page(value, corners, corners(parts.getOrNull(3)), turns)
+                        val preset = parts.getOrNull(5)?.takeIf { it.isNotEmpty() && isWord(it) }
+                        if (value.isNotEmpty()) pages += Page(value, corners, corners(parts.getOrNull(3)), turns, preset)
                     }
                 }
             }
             return ScanSession(shot, retake, forImage, name, pages)
         }
+
+        // a kind of document's word: lowercase letters and underscores, nothing that could break a line
+        private fun isWord(text: String) = text.isNotEmpty() && text.length <= 32 && text.all { it in 'a'..'z' || it == '_' }
 
         // eight shares of the photo (x1, y1 … x4, y4), or null
         private fun corners(text: String?): FloatArray? {

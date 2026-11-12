@@ -6,10 +6,12 @@
 use std::path::{Path, PathBuf};
 use std::sync::RwLock;
 
+use pdfcraft_scan::page::page_look_kind;
+use pdfcraft_scan::page_kind::{PageKind, PresetChoice, preset_from_id};
 use pdfcraft_scan::upright_pages::{PageTurn, followed, settle};
 use pdfcraft_scan::{
     AspectSource, Finder, Format, Look, PageBase, PageRequest, Paper, Photo, Pyramid, Quad, QuadSource, RefineOptions, detect_with, page_base,
-    page_look, process_page, refine,
+    process_page, refine,
 };
 
 use crate::MobileError;
@@ -86,6 +88,70 @@ pub struct ScanPageRequest {
     /// Whether the Auto look smooths the grain of a page that has a lot of it (#299).
     #[uniffi(default = true)]
     pub denoise: bool,
+    /// How the Auto look picks its settings by the kind of document (#299): "off" (the look's own
+    /// strength and `sharpen`, as before), "auto" (worked out from the page), or the word of the
+    /// kind the person chose ("receipt", "id_card", …). Anything else is "off".
+    #[uniffi(default = "off")]
+    pub preset: String,
+    /// How many sides of the page its edge detection found curved (0–4), a book page's sign (#299).
+    #[uniffi(default = 0)]
+    pub curved_sides: u8,
+    /// The strength was set by hand (a testing option): a document type does not change it.
+    #[uniffi(default = false)]
+    pub fixed_strength: bool,
+}
+
+/// The kind of document the Auto look took a page for, its settings, and what the page measured
+/// as (#299). Numbers and short words only: it goes into the diagnostics log as it is.
+#[derive(Debug, Clone, PartialEq, uniffi::Record)]
+pub struct ScanPageKind {
+    /// "photo", "id_card", "receipt", "whiteboard", "book_page", "coloured_form", "photo_rich" or "document".
+    pub preset: String,
+    /// The person chose it; false when it was worked out from the page.
+    pub chosen: bool,
+    pub strength: u8,
+    pub sharpen: u8,
+    pub keep_paper: bool,
+    pub suggest_flatten: bool,
+    pub suggest_greyscale: bool,
+    /// Longer side over shorter.
+    pub ratio: f32,
+    pub ink_share: f32,
+    pub colour_ink_share: f32,
+    pub photo_share: f32,
+    /// Median stroke width in millimetres; -1 when there is no ink.
+    pub stroke_mm: f32,
+    pub glare_share: f32,
+    pub gutter_band: bool,
+    pub whole_photo: bool,
+}
+
+fn kind_of(kind: &PageKind) -> ScanPageKind {
+    let f = &kind.features;
+    ScanPageKind {
+        preset: kind.preset.id().into(),
+        chosen: kind.chosen,
+        strength: kind.params.strength,
+        sharpen: kind.params.sharpen,
+        keep_paper: kind.params.keep_paper,
+        suggest_flatten: kind.params.suggest_flatten,
+        suggest_greyscale: kind.params.suggest_greyscale,
+        ratio: f.ratio as f32,
+        ink_share: f.ink_share as f32,
+        colour_ink_share: f.colour_ink_share as f32,
+        photo_share: f.photo_share as f32,
+        stroke_mm: f.stroke_mm.map_or(-1.0, |v| v as f32),
+        glare_share: f.glare_share as f32,
+        gutter_band: f.gutter_band,
+        whole_photo: kind.whole_photo,
+    }
+}
+
+fn preset_choice(word: &str) -> PresetChoice {
+    match word {
+        "auto" => PresetChoice::Auto,
+        other => preset_from_id(other).map_or(PresetChoice::Off, PresetChoice::Fixed),
+    }
 }
 
 /// The standard paper a page was matched to.
@@ -148,6 +214,9 @@ pub struct ScanPageResult {
     /// The page's grain as the Auto look measured it (#299): the standard deviation of its noise
     /// on blank paper, in grey levels of 255. `None` for the other looks.
     pub noise: Option<f32>,
+    /// The kind of document the Auto look took the page for (#299); `None` for the other looks or
+    /// with document types off.
+    pub kind: Option<ScanPageKind>,
     pub timings: Vec<ScanTiming>,
 }
 
@@ -444,6 +513,9 @@ fn page_request<'a>(request: &ScanPageRequest, photo: &'a [u8], corners: [f32; 8
         turns: request.turns,
         sharpen: request.sharpen,
         denoise: request.denoise,
+        preset: preset_choice(&request.preset),
+        curved_sides: request.curved_sides.min(4),
+        fixed_strength: request.fixed_strength,
         max_side,
         ..PageRequest::new(photo, corners)
     }
@@ -494,6 +566,8 @@ pub struct ScanPreview {
     pub turns: u8,
     /// The page was flattened by the network (#302).
     pub flattened: bool,
+    /// The kind of document the Auto look took the page for (#299).
+    pub kind: Option<ScanPageKind>,
     /// How the flattened and the straightened page compared, when that was asked (#302).
     pub flatten_check: Option<ScanFlattenCheck>,
     /// The straightened page was still at hand from an earlier preview: only its look was made.
@@ -604,7 +678,8 @@ pub(crate) fn preview_in(root: &Path, request: &ScanPageRequest, max_side: u32) 
         timings.insert(0, ScanTiming { stage: "scan_preview_base".into(), ms: ms(clock) });
     }
     let clock = std::time::Instant::now();
-    let applied = page_look(&base, &page_request(request, &[], corners, Some(max_side))).map_err(|e| MobileError::Command(e.to_string()))?;
+    let (applied, kind) =
+        page_look_kind(&base, &page_request(request, &[], corners, Some(max_side))).map_err(|e| MobileError::Command(e.to_string()))?;
     let (width, height) = (base.page.width, base.page.height);
     let pixels = width as usize * height as usize;
     let mut rgba = Vec::with_capacity(pixels * 4);
@@ -625,6 +700,7 @@ pub(crate) fn preview_in(root: &Path, request: &ScanPageRequest, max_side: u32) 
         orientation: base.orientation.map(orientation_of),
         turns: base.turns,
         flattened: base.flattened,
+        kind: kind.as_ref().map(kind_of),
         flatten_check: base.flatten_check.map(Into::into),
         reused,
         timings,
@@ -712,6 +788,7 @@ pub(crate) fn process_in(root: &Path, request: &ScanPageRequest) -> Result<ScanP
         orientation: page.orientation.map(orientation_of),
         turns: page.turns,
         noise: page.noise,
+        kind: page.kind.as_ref().map(kind_of),
         timings: page.timings.into_iter().map(|(stage, ms)| ScanTiming { stage: stage.into(), ms }).collect(),
     })
 }
@@ -907,6 +984,9 @@ mod tests {
             turns: 0,
             sharpen: 30,
             denoise: true,
+            preset: "off".into(),
+            curved_sides: 0,
+            fixed_strength: false,
         }
     }
 
@@ -1282,6 +1362,42 @@ mod tests {
         let (kept, turned) = (ask(0, "kept"), ask(3, "turned"));
         assert_eq!((kept.width, kept.height, kept.turns), (64, 48, 0));
         assert_eq!((turned.width, turned.height, turned.turns), (48, 64, 3));
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    /// Document types through the app's calls (#299): the preview and the saved page say which
+    /// kind the Clean scan look took the page for, and "off" or an unknown word is as before.
+    #[test]
+    fn the_clean_scan_look_says_which_kind_of_document_it_took_the_page_for() {
+        let _store = PREVIEWS_TEST_LOCK.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let root = temp("kinds");
+        // a slip three times as long as wide, with rows of print, filling the photo
+        let shot = root.join("slip.png");
+        image::RgbImage::from_fn(300, 900, |x, y| {
+            let print = (y % 30) < 3 && (30..270).contains(&x) && (x / 5) % 3 != 0;
+            if print { image::Rgb([90, 90, 90]) } else { image::Rgb([238, 238, 232]) }
+        })
+        .save(&shot)
+        .unwrap();
+        let whole = vec![0.0, 0.0, 1.0, 0.0, 1.0, 1.0, 0.0, 1.0];
+        let ask = |preset: &str| ScanPageRequest {
+            corners: whole.clone(),
+            look: ScanLook::Auto,
+            snap_paper: false,
+            preset: preset.into(),
+            ..request(&shot, &root.join("slip-out"))
+        };
+        let saved = process_in(&root, &ask("auto")).unwrap().kind.expect("a kind for Clean scan");
+        assert_eq!((saved.preset.as_str(), saved.chosen, saved.strength, saved.sharpen), ("receipt", false, 80, 35));
+        assert!((saved.ratio - 3.0).abs() < 0.01 && saved.suggest_greyscale && !saved.keep_paper, "{saved:?}");
+        let shown = preview_in(&root, &ask("auto"), 600).unwrap().kind.expect("a kind in the preview");
+        assert_eq!(shown.preset, "receipt");
+        let chosen = process_in(&root, &ask("coloured_form")).unwrap().kind.unwrap();
+        assert_eq!((chosen.preset.as_str(), chosen.chosen, chosen.keep_paper), ("coloured_form", true, true));
+        assert!(process_in(&root, &ask("off")).unwrap().kind.is_none());
+        assert!(process_in(&root, &ask("magic")).unwrap().kind.is_none());
+        // only Clean scan has kinds
+        assert!(process_in(&root, &ScanPageRequest { look: ScanLook::Colour, ..ask("auto") }).unwrap().kind.is_none());
         std::fs::remove_dir_all(root).unwrap();
     }
 

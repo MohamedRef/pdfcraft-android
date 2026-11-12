@@ -63,6 +63,10 @@ internal fun scanPageRequest(
     turns: Int? = null,
     /** Settings ▸ Preferences ▸ Scan: turn pages upright automatically (#339). */
     autoUpright: Boolean = true,
+    /** The kind of document the person chose for the page (#299), or null for Clean scan to work it out. */
+    preset: String? = null,
+    /** How many sides of the page its edge detection found curved (#291): a book page's sign (#299). */
+    curvedSides: Int = 0,
 ): io.github.artcraftandroid.pdfcraft.core.ScanPageRequest = scanTurnAsk(turns, autoUpright, lab.upright).let { ask ->
     io.github.artcraftandroid.pdfcraft.core.ScanPageRequest(
     photoPath = photoPath,
@@ -80,8 +84,21 @@ internal fun scanPageRequest(
     turns = ask.turns.toUByte(),
     sharpen = lab.sharpen.coerceIn(0, 100).toUByte(),
     denoise = lab.denoise,
+    preset = scanPresetAsk(preset, lab.presets),
+    curvedSides = curvedSides.coerceIn(0, 4).toUByte(),
+    fixedStrength = lab.strength != null,
 )
 }
+
+/** The native request's document type (#299): "off" with the testing option off, the person's kind, or "auto". */
+internal fun scanPresetAsk(preset: String?, presets: Boolean): String = when {
+    !presets -> "off"
+    preset != null && preset in SCAN_PRESETS -> preset
+    else -> "auto"
+}
+
+/** The kinds of document the chip offers (#299), as the native words, in the order shown. */
+internal val SCAN_PRESETS = listOf("document", "receipt", "whiteboard", "book_page", "photo_rich", "photo", "id_card", "coloured_form")
 
 /** The longer side, in pixels, of the page preview the scan screen asks for (#301). */
 internal const val SCAN_PREVIEW_SIDE = 1280
@@ -99,10 +116,12 @@ internal data class ScanPreviewKey(
     /** The person's turn of the page and the automatic-turn setting (#339): either changes the page shown. */
     val turns: Int? = null,
     val autoUpright: Boolean = true,
+    /** The kind of document the person chose for the page (#299). */
+    val preset: String? = null,
 ) {
     companion object {
         fun of(page: ScanPage, filter: ScanFilter, flatten: Boolean, lab: ScanLab, autoUpright: Boolean = true) =
-            ScanPreviewKey(page.file.absolutePath, page.corners.toList(), filter, flatten, lab.copy(keep = false), page.turns, autoUpright)
+            ScanPreviewKey(page.file.absolutePath, page.corners.toList(), filter, flatten, lab.copy(keep = false), page.turns, autoUpright, page.preset)
     }
 }
 

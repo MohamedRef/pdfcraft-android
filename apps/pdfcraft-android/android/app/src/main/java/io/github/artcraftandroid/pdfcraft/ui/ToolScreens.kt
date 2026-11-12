@@ -824,9 +824,11 @@ fun CropScreen(vm: AppViewModel, doc: OpenDocument) {
  * whole photo when No crop was chosen or no edges were found. [found] is what Auto-detect found,
  * and [finding] how it went about it (for the diagnostics and scans kept for testing, #288).
  * [turns] is the person's own turn of the page (0–3 quarter turns clockwise, from Rotate or the
- * chip's Undo), or null while the orientation classifier decides (#339).
+ * chip's Undo), or null while the orientation classifier decides (#339). [preset] is the kind of
+ * document the person chose for the page ("receipt", "id_card", …), or null while Clean scan
+ * works it out (#299).
  */
-data class ScanPage(val file: java.io.File, val thumb: ImageBitmap, val corners: FloatArray = WHOLE, val found: FloatArray? = null, val finding: ScanFinding? = null, val crop: io.github.artcraftandroid.pdfcraft.ui.scan.ScanCropStats? = null, val turns: Int? = null) {
+data class ScanPage(val file: java.io.File, val thumb: ImageBitmap, val corners: FloatArray = WHOLE, val found: FloatArray? = null, val finding: ScanFinding? = null, val crop: io.github.artcraftandroid.pdfcraft.ui.scan.ScanCropStats? = null, val turns: Int? = null, val preset: String? = null) {
     companion object {
         val WHOLE = floatArrayOf(0f, 0f, 1f, 0f, 1f, 1f, 0f, 1f)
     }
@@ -918,7 +920,7 @@ fun ScanScreen(vm: AppViewModel) {
         // Settings ▸ Preferences ▸ Scan (#339); read each time, so a change there shows here
         val autoUpright = io.github.artcraftandroid.pdfcraft.ui.scan.ScanUprightSetting.get(vm.settings.appPrefs)
         if (page != null && lab.preview) {
-            LaunchedEffect(page.file, page.corners.toList(), page.turns, filter, flattening, lab, autoUpright) { vm.requestScanPreview(shownAt, page, filter, flattening) }
+            LaunchedEffect(page.file, page.corners.toList(), page.turns, page.preset, filter, flattening, lab, autoUpright) { vm.requestScanPreview(shownAt, page, filter, flattening) }
         }
         val wanted = page?.let { ScanPreviewKey.of(it, filter, flattening, lab, autoUpright) }
         val preview = vm.scanPreview?.takeIf { wanted != null && it.key == wanted }
@@ -961,6 +963,12 @@ fun ScanScreen(vm: AppViewModel) {
                             .selectable(selected = v == view, role = Role.Tab) { view = v }.padding(horizontal = 16.dp, vertical = 6.dp),
                     )
                 }
+            }
+        }
+        // the kind of document Clean scan took the page for, and a way to choose another (#299)
+        if (page != null && filter == ScanFilter.CleanScan && lab.presets) {
+            Row(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.Center) {
+                io.github.artcraftandroid.pdfcraft.ui.scan.ScanPresetChip(vm, shownAt, page.preset, preview?.kind?.preset)
             }
         }
         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {

@@ -10,10 +10,11 @@ use crate::enhance::enlargement;
 use crate::flatten::{predict_grid, unwarp};
 use crate::flatten_guard::{Kept, guard};
 use crate::look::{Applied, Look, LookParams, Pixels, apply_full};
+use crate::page_kind::{PageKind, PresetChoice, page_kind};
+use crate::straightness::{Straightness, line_straightness};
 use crate::upright::{Upright, turned, upright};
 use crate::upright_pages::total_turn;
 use crate::warp::{Rgb, rectify_with_threads};
-use crate::straightness::{Straightness, line_straightness};
 use crate::{Luma, Photo, Quad, ScanError};
 
 /// The stage names timings are recorded under (fixed: diagnostics never hold document data).
@@ -73,6 +74,14 @@ pub struct PageRequest<'a> {
     pub sharpen: u8,
     /// Whether the Auto look smooths the grain of a page that has a lot of it (#299).
     pub denoise: bool,
+    /// How the Auto look picks its settings by the kind of document (#299): off (the look's own
+    /// strength and `sharpen`), worked out from the page, or the person's choice. Other looks
+    /// ignore it.
+    pub preset: PresetChoice,
+    /// How many sides of the page its edge detection found curved (0–4): a book page's sign (#299).
+    pub curved_sides: u8,
+    /// The strength was set by hand (a testing option): a document type does not change it.
+    pub fixed_strength: bool,
     /// For a preview (#301): the page shrunk so its longer side is this many pixels at most,
     /// whatever its look. `None` for the page at the size it is saved at.
     pub max_side: Option<u32>,
@@ -97,6 +106,9 @@ impl<'a> PageRequest<'a> {
             turns: 0,
             sharpen: DEFAULT_SHARPEN,
             denoise: true,
+            preset: PresetChoice::Off,
+            curved_sides: 0,
+            fixed_strength: false,
             max_side: None,
         }
     }
@@ -138,6 +150,9 @@ pub struct PageResult {
     /// The page's grain as the Auto look measured it: the standard deviation of its noise on
     /// blank paper, in grey levels of 255 (`None` for the other looks).
     pub noise: Option<f32>,
+    /// The kind of document the Auto look took the page for, and its settings (#299); `None` for
+    /// the other looks or with document types off.
+    pub kind: Option<PageKind>,
     /// (stage, milliseconds), in pipeline order.
     pub timings: Vec<(&'static str, u32)>,
 }
@@ -218,6 +233,7 @@ fn untouched(request: &PageRequest<'_>) -> Option<Result<PageResult, ScanError>>
         turns: 0,
         flatten_check: None,
         noise: None,
+        kind: None,
         timings,
     }))
 }
@@ -234,7 +250,7 @@ pub fn process_page(request: &PageRequest<'_>) -> Result<PageResult, ScanError> 
         timings.push((stage, ms));
         clock = Instant::now();
     };
-    let applied = page_look(&base, request)?;
+    let (applied, kind) = page_look_kind(&base, request)?;
     let (pixels, noise) = (applied.pixels, applied.noise);
     let PageBase { page, dpi, paper, aspect, focal_mismatch, flattened, bend, quarter_turns, orientation, turns, flatten_check, mut timings } = base;
     let (w, h) = (page.width, page.height);
@@ -265,6 +281,7 @@ pub fn process_page(request: &PageRequest<'_>) -> Result<PageResult, ScanError> 
         turns,
         flatten_check,
         noise,
+        kind,
         timings,
     })
 }
@@ -272,14 +289,36 @@ pub fn process_page(request: &PageRequest<'_>) -> Result<PageResult, ScanError> 
 /// `base` with the look `request` asks for, at its strength, sharpening and smoothing (the
 /// request's photo and corners are not looked at: `base` is what was made of them).
 pub fn page_look(base: &PageBase, request: &PageRequest<'_>) -> Result<Applied, ScanError> {
-    let params = LookParams {
+    page_look_kind(base, request).map(|(applied, _)| applied)
+}
+
+/// `page_look`, and the kind of document the Auto look took the page for (#299). With a kind,
+/// its strength (unless the strength was set by hand), its sharpening (unless sharpening is off)
+/// and its paper colour replace the request's.
+pub fn page_look_kind(base: &PageBase, request: &PageRequest<'_>) -> Result<(Applied, Option<PageKind>), ScanError> {
+    let kind = match request.look {
+        Look::Auto => page_kind(&base.page, base.dpi, base.paper, request.curved_sides, request.preset),
+        _ => None,
+    };
+    let mut params = LookParams {
         strength: request.strength,
         threads: request.threads,
         dpi: f32::from(base.dpi),
         sharpen: request.sharpen,
         denoise: request.denoise,
+        keep_paper: false,
     };
-    apply_full(&base.page, request.look, &params).ok_or(ScanError::Encode)
+    if let Some(kind) = &kind {
+        if !request.fixed_strength {
+            params.strength = kind.params.strength;
+        }
+        if request.sharpen > 0 {
+            params.sharpen = kind.params.sharpen;
+        }
+        params.keep_paper = kind.params.keep_paper;
+    }
+    let applied = apply_full(&base.page, request.look, &params).ok_or(ScanError::Encode)?;
+    Ok((applied, kind))
 }
 
 /// The page of `request` before its look: decoded, straightened to its proportions (or
