@@ -8,7 +8,7 @@ use crate::encode::{Format, JPEG_QUALITY, Raster, encode_jpeg, encode_png_bileve
 use crate::enhance::DEFAULT_SHARPEN;
 use crate::enhance::enlargement;
 use crate::flatten::{predict_grid, unwarp, unwarp_trimmed};
-use crate::flatten_guard::{Kept, Trim, border_trim, guard};
+use crate::flatten_guard::{Kept, MIN_LINES, Trim, border_trim, guard_with_floor};
 use crate::flatten_lines::{LineFit, fit_page};
 use crate::look::{Applied, Look, LookParams, Pixels, apply_full};
 use crate::page_kind::{Measured, PageKind, PresetChoice, kind_of, measure};
@@ -75,6 +75,10 @@ pub struct PageRequest<'a> {
     /// a curled-page model to the page's lines of text and keep that page when the guard finds it
     /// straighter (#303, part B). The guard is always applied to it.
     pub line_flatten: bool,
+    /// The guard keeps a flattened page (the network's with `flatten_check`, or the text lines')
+    /// only when at least this many lines of text were followed on both pages (#302); 0 for no
+    /// floor, the guard as before.
+    pub flatten_min_lines: u32,
     /// Turn the page the right way up when the orientation classifier is sure which way that is
     /// (#339). Without the model file, and on a page it is not sure of, the page stays as the
     /// corners gave it. A whole photo in the Original look is the camera's file and is never
@@ -127,6 +131,7 @@ impl<'a> PageRequest<'a> {
             flatten_check: false,
             flatten_trim: false,
             line_flatten: false,
+            flatten_min_lines: MIN_LINES,
             upright: false,
             turns: 0,
             sharpen: DEFAULT_SHARPEN,
@@ -195,7 +200,9 @@ pub struct PageResult {
 pub struct FlattenCheck {
     /// The flattened page was kept.
     pub kept: bool,
-    /// Why: `straighter`, `notbetter`, `unmeasured` or `straight` (see [`crate::flatten_guard::Why`]).
+    /// Why: `straighter`, `notbetter`, `unmeasured`, `straight` or `fewlines` (see [`crate::flatten_guard::Why`]).
+    /// The floor on the lines followed that was in force (0 for none, #302).
+    pub min_lines: u32,
     pub why: &'static str,
     /// The two pages' line measures, in pixels of this page; `None` when too few lines of text
     /// could be followed.
@@ -463,7 +470,7 @@ pub fn page_base(request: &PageRequest<'_>) -> Result<PageBase, ScanError> {
         Some(flat) if request.flatten_check => {
             lap(STAGE_RECTIFY, &mut timings);
             let plain = rectify_with_threads(&photo, &quad, w, h, request.threads)?;
-            let check = compare_flattened(&plain, &flat);
+            let check = compare_flattened(&plain, &flat, request.flatten_min_lines);
             lap(STAGE_FLATTEN_CHECK, &mut timings);
             let kept = check.kept;
             (if kept { flat } else { plain }, Some(check), kept)
@@ -490,7 +497,7 @@ pub fn page_base(request: &PageRequest<'_>) -> Result<PageBase, ScanError> {
     // the network was not there or not kept: the page's lines of text may still flatten it
     let (page, flattened, line_flatten) = match request.flatten && request.line_flatten && !flattened {
         true => {
-            let (lined, outcome) = flatten_by_lines(&photo, &quad, &page, request.threads);
+            let (lined, outcome) = flatten_by_lines(&photo, &quad, &page, request.threads, request.flatten_min_lines);
             lap(STAGE_FLATTEN_LINES, &mut timings);
             match lined {
                 Some(lined) => (lined, true, Some(outcome)),
@@ -552,7 +559,7 @@ fn trim_flattened(photo: &Photo, grid: &crate::flatten::FlattenGrid, page: Rgb, 
 
 /// The text-line fallback on `plain`, the page straightened by `quad` (#303, part B): the page
 /// flattened from its lines when the guard keeps it, and what was found either way.
-pub(crate) fn flatten_by_lines(photo: &Photo, quad: &Quad, plain: &Rgb, threads: usize) -> (Option<Rgb>, LineFlatten) {
+pub(crate) fn flatten_by_lines(photo: &Photo, quad: &Quad, plain: &Rgb, threads: usize, min_lines: u32) -> (Option<Rgb>, LineFlatten) {
     let fit = match fit_page(&grey(plain)) {
         Ok(fit) => fit,
         Err(why) => return (None, LineFlatten { gave_up: Some(why.id()), fit: None, check: None }),
@@ -564,17 +571,18 @@ pub(crate) fn flatten_by_lines(photo: &Photo, quad: &Quad, plain: &Rgb, threads:
     let Ok(lined) = unwarp(photo, &grid, plain.width, plain.height, threads) else {
         return (None, LineFlatten { gave_up: Some(crate::flatten_lines::GaveUp::NoFit.id()), fit: Some(fit), check: None });
     };
-    let check = compare_flattened(plain, &lined);
+    let check = compare_flattened(plain, &lined, min_lines);
     let outcome = LineFlatten { gave_up: None, fit: Some(fit), check: Some(check) };
     (check.kept.then_some(lined), outcome)
 }
 
 /// Measures the lines of text on the page straightened by its corners and on the flattened one,
-/// and keeps the flattened page only when it is clearly straighter (#302, the quality guard).
-pub fn compare_flattened(straightened: &Rgb, flattened: &Rgb) -> FlattenCheck {
+/// and keeps the flattened page only when it is clearly straighter (#302, the quality guard) and
+/// at least `min_lines` lines were followed on both (0: no floor).
+pub fn compare_flattened(straightened: &Rgb, flattened: &Rgb, min_lines: u32) -> FlattenCheck {
     let (s, f) = (line_straightness(&grey(straightened)), line_straightness(&grey(flattened)));
-    let decision = guard(s.map(|m| m.px), f.map(|m| m.px));
-    FlattenCheck { kept: decision.kept == Kept::Flattened, why: decision.why.id(), straightened: s, flattened: f }
+    let decision = guard_with_floor(s.map(|m| m.px), f.map(|m| m.px), (s.map(|m| m.lines), f.map(|m| m.lines)), min_lines);
+    FlattenCheck { kept: decision.kept == Kept::Flattened, why: decision.why.id(), min_lines, straightened: s, flattened: f }
 }
 
 /// The page in shades of grey, for measuring.

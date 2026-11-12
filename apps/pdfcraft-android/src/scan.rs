@@ -75,6 +75,10 @@ pub struct ScanPageRequest {
     /// of a side at most) and draw the page again without it, at the same size (#302).
     #[uniffi(default = false)]
     pub flatten_trim: bool,
+    /// The flattening guard keeps a flattened page only when at least this many lines of text
+    /// were followed on both pages (#302); 0 for no floor.
+    #[uniffi(default = 8)]
+    pub flatten_min_lines: u8,
     /// With `flatten`: when the network is not installed or its page was not kept, fit a
     /// curled-page model to the page's lines of text and keep that page when it is at least 10 %
     /// straighter (#303, part B).
@@ -582,6 +586,7 @@ fn page_request<'a>(request: &ScanPageRequest, photo: &'a [u8], corners: [f32; 8
         flatten: request.flatten,
         flatten_check: request.flatten_check,
         flatten_trim: request.flatten_trim,
+        flatten_min_lines: u32::from(request.flatten_min_lines),
         line_flatten: request.line_flatten,
         side_proportions: request.side_proportions,
         upright: request.upright,
@@ -635,7 +640,7 @@ fn before_turn(width: u32, height: u32, turns: u8) -> (u32, u32) {
 pub struct ScanFlattenCheck {
     /// The flattened page was kept.
     pub kept: bool,
-    /// Why, as a short word: `straighter`, `notbetter`, `unmeasured` or `straight`.
+    /// Why, as a short word: `straighter`, `notbetter`, `unmeasured`, `straight` or `fewlines` (#302).
     pub why: String,
     /// How far the lines of text are from straight and level, in pixels of the page, on each;
     /// `None` when too few lines could be followed.
@@ -741,6 +746,7 @@ struct PreviewKey {
     flatten: bool,
     flatten_check: bool,
     flatten_trim: bool,
+    flatten_min_lines: u8,
     line_flatten: bool,
     upright: bool,
     turns: u8,
@@ -847,6 +853,7 @@ pub(crate) fn preview_stoppable(
         flatten: request.flatten,
         flatten_check: request.flatten_check,
         flatten_trim: request.flatten_trim,
+        flatten_min_lines: request.flatten_min_lines,
         line_flatten: request.line_flatten,
         upright: request.upright,
         turns: request.turns % 4,
@@ -1196,6 +1203,7 @@ mod tests {
             flatten: false,
             flatten_check: false,
             flatten_trim: false,
+            flatten_min_lines: 8,
             line_flatten: false,
             side_proportions: false,
             upright: false,
