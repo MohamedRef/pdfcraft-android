@@ -120,11 +120,11 @@ fun AppRoot(vm: AppViewModel, onBrowse: () -> Unit, onPickSignatureImage: () -> 
                 else -> HomeRoot(vm, onBrowse)
             }
             // documents still open in tabs (#138): back to them from Home
-            if (doc == null && vm.tabs.tabs.isNotEmpty() && vm.tools.toolScreen == null && !vm.settingsOpen) {
+            if (doc == null && vm.tabs.tabs.isNotEmpty() && vm.tools.toolScreen == null && !vm.home.settingsOpen) {
                 io.github.artcraftandroid.pdfcraft.ui.viewer.OpenTabsBar(vm, Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = 72.dp, start = 16.dp, end = 16.dp))
             }
             // here rather than in the file's row: a sheet inside a scrolling list has no height to fill
-            if (doc == null) vm.fileSheet?.let { (r, recent) -> io.github.artcraftandroid.pdfcraft.ui.home.FileSheet(vm, r, recent) { vm.fileSheet = null } }
+            if (doc == null) vm.home.fileSheet?.let { (r, recent) -> io.github.artcraftandroid.pdfcraft.ui.home.FileSheet(vm, r, recent) { vm.home.fileSheet = null } }
             vm.tools.toolScreen?.let { ToolScreenHost(vm, it) }
             vm.study.reviewing?.let { ReviewScreen(vm, it) }
             vm.study.cardDraft?.let { CardEditor(vm, it) }
@@ -132,8 +132,8 @@ fun AppRoot(vm: AppViewModel, onBrowse: () -> Unit, onPickSignatureImage: () -> 
             vm.signing.signaturePad?.let { SignaturePadScreen(vm, it, onPickSignatureImage) }
             vm.signing.certSign?.let { CertSignScreen(vm, it) }
             if (vm.signing.idCreate) CreateIdScreen(vm)
-            if (vm.settingsOpen) SettingsScreen(vm)
-            if (vm.showLicences) LicencesScreen(vm)
+            if (vm.home.settingsOpen) SettingsScreen(vm)
+            if (vm.home.showLicences) LicencesScreen(vm)
 
             if (vm.opening && doc == null) CircularProgressIndicator(Modifier.align(Alignment.Center), color = c.accent)
             if (doc?.info?.preparing == true) {
@@ -153,7 +153,7 @@ fun AppRoot(vm: AppViewModel, onBrowse: () -> Unit, onPickSignatureImage: () -> 
                 var name by remember { mutableStateOf("") }
                 PdfDialog(
                     onDismiss = { vm.authorPrompt = false }, title = stringResource(R.string.home_author_title),
-                    confirm = stringResource(R.string.common_save), onConfirm = { vm.settings.toolPrefs.author = name.trim(); vm.authorPrompt = false; vm.prefsChanged++ },
+                    confirm = stringResource(R.string.common_save), onConfirm = { vm.settings.toolPrefs.author = name.trim(); vm.authorPrompt = false; vm.home.prefsChanged++ },
                     dismiss = stringResource(R.string.root_skip),
                 ) {
                     Text(stringResource(R.string.root_author_prompt_body), color = c.text, fontSize = 14.sp)
@@ -275,7 +275,7 @@ private fun PasswordDialog(vm: AppViewModel, req: PasswordRequest) {
 private fun LicencesScreen(vm: AppViewModel) {
     val c = pdfColors
     val context = LocalContext.current
-    androidx.activity.compose.BackHandler { vm.showLicences = false }
+    androidx.activity.compose.BackHandler { vm.home.showLicences = false }
     // the full texts of the bundled notices, in the order of the entries below
     val texts = remember {
         listOf("LICENSE-lucide.txt", "OFL-Inter.txt", "OFL-DancingScript.txt", "LICENSE-foxit.txt", "LICENSE-adobe-cmaps.txt").map { name ->
@@ -284,7 +284,7 @@ private fun LicencesScreen(vm: AppViewModel) {
     }
     Column(Modifier.fillMaxSize().background(c.surface).safeTopPadding().navigationBarsPadding()) {
         Row(Modifier.fillMaxWidth().height(56.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.width(56.dp), contentAlignment = Alignment.Center) { BarIcon(LucideIcons.ArrowLeft, stringResource(R.string.common_back), { vm.showLicences = false }) }
+            Box(Modifier.width(56.dp), contentAlignment = Alignment.Center) { BarIcon(LucideIcons.ArrowLeft, stringResource(R.string.common_back), { vm.home.showLicences = false }) }
             Text(stringResource(R.string.home_licences), color = c.text, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
         }
         Column(Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 20.dp)) {

@@ -330,7 +330,7 @@ class SettingsController internal constructor(private val vm: AppViewModel) {
                 return@launch
             }
             vm.handOut {
-                val facts = Diagnostics.facts(app, vm.appVersion, io.github.artcraftandroid.pdfcraft.ui.home.installedVersionCode(app), io.github.artcraftandroid.pdfcraft.core.engineVersion())
+                val facts = Diagnostics.facts(app, vm.home.appVersion, io.github.artcraftandroid.pdfcraft.ui.home.installedVersionCode(app), io.github.artcraftandroid.pdfcraft.core.engineVersion())
                 val report = io.github.artcraftandroid.pdfcraft.engine.diagReport(facts, lines)
                 val file = withContext(Dispatchers.IO) {
                     File(File(app.cacheDir, "share").apply { mkdirs() }, "pdfcraft-diagnostics.txt").apply { writeText(report) }

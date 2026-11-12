@@ -59,9 +59,9 @@ class MainActivity : ComponentActivity() {
     private val scanCamera = ScanCameraRouter(this, { vm }, { scanCameraModel })
     private val pickImage = registerForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri -> vm.editor.addImage(uri) }
     private val pickSignature = registerForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri -> vm.signing.importSignatureImage(uri) }
-    private val pickPhotos = registerForActivityResult(ActivityResultContracts.PickMultipleVisualMedia()) { uris -> vm.onPhotosPicked(uris) }
+    private val pickPhotos = registerForActivityResult(ActivityResultContracts.PickMultipleVisualMedia()) { uris -> vm.home.onPhotosPicked(uris) }
     private val pickOutputFolder = registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri -> vm.docTools.onOutputFolderPicked(uri) }
-    private val pickFolder = registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri -> uri?.let(vm::addLocalFolder) }
+    private val pickFolder = registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri -> uri?.let(vm.home::addLocalFolder) }
     private val micPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted -> vm.commenting.onMicPermission(granted) }
     private val pickBackupFolder = registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { vm.backups.onBackupFolderPicked(it) }
     private val pickCardFile = registerForActivityResult(ActivityResultContracts.OpenDocument()) { vm.study.onCardFilePicked(it) }
@@ -180,7 +180,7 @@ class MainActivity : ComponentActivity() {
             }
         }
         lifecycleScope.launch { for (d in vm.editor.imagePicks) launchSafely { pickImage.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) } }
-        lifecycleScope.launch { for (u in vm.photoPicks) launchSafely { pickPhotos.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) } }
+        lifecycleScope.launch { for (u in vm.home.photoPicks) launchSafely { pickPhotos.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) } }
         // the folder picker opens at Documents, where PDFs usually are (Download itself can't be chosen)
         val documents = android.provider.DocumentsContract.buildDocumentUri("com.android.externalstorage.documents", "primary:Documents")
         lifecycleScope.launch {
@@ -188,7 +188,7 @@ class MainActivity : ComponentActivity() {
                 try { pickOutputFolder.launch(null) } catch (e: ActivityNotFoundException) { vm.docTools.onOutputFolderPicked(null); vm.tell(getString(R.string.main_error_no_app)) }
             }
         }
-        lifecycleScope.launch { for (u in vm.accessRequests) launchSafely { pickFolder.launch(documents) } }
+        lifecycleScope.launch { for (u in vm.home.accessRequests) launchSafely { pickFolder.launch(documents) } }
         lifecycleScope.launch {
             for (u in vm.commenting.micRequests) {
                 // refused before: explain first (the reference's order); otherwise Android's own prompt
@@ -281,7 +281,7 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         io.github.artcraftandroid.pdfcraft.engine.Diag.event(io.github.artcraftandroid.pdfcraft.engine.DiagArea.App, "resume")
-        vm.onResumed()
+        vm.home.onResumed()
     }
 
     override fun onNewIntent(intent: Intent) {

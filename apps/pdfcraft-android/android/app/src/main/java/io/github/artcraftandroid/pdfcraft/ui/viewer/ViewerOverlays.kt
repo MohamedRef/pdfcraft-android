@@ -449,14 +449,14 @@ fun NoteSheet(vm: AppViewModel, prompt: NotePrompt) {
         onDismiss = { vm.commenting.notePrompt = null },
         onPost = { vm.commenting.postNote(prompt, it) },
         onVoice = if (at != null && prompt.selection == null && prompt.edit == null) ({ vm.commenting.notePrompt = null; vm.commenting.startVoice(prompt.doc, at) }) else null,
-        author = vm.prefsChanged.let { vm.settings.toolPrefs.author }, onAuthor = { vm.authorPrompt = true },
+        author = vm.home.prefsChanged.let { vm.settings.toolPrefs.author }, onAuthor = { vm.authorPrompt = true },
     )
 }
 
 /** A reply being typed: the same bar, under the comment it answers. */
 @Composable
 fun ReplySheet(vm: AppViewModel, prompt: ReplyPrompt) {
-    InlineNoteBar(hint = stringResource(R.string.viewer_write_reply), onDismiss = { vm.commenting.replyPrompt = null }, onPost = { vm.commenting.postReply(prompt, it) }, onVoice = null, author = vm.prefsChanged.let { vm.settings.toolPrefs.author }, onAuthor = { vm.authorPrompt = true })
+    InlineNoteBar(hint = stringResource(R.string.viewer_write_reply), onDismiss = { vm.commenting.replyPrompt = null }, onPost = { vm.commenting.postReply(prompt, it) }, onVoice = null, author = vm.home.prefsChanged.let { vm.settings.toolPrefs.author }, onAuthor = { vm.authorPrompt = true })
 }
 
 /**
