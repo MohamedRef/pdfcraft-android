@@ -32,4 +32,36 @@ class CopyConsistencyTest {
         }
         assertEquals(emptyList<String>(), found)
     }
+
+    /** Every English string, comments removed, as key to text (#345). */
+    private fun english(): List<Pair<String, String>> =
+        File("src/main/res/values").listFiles { f -> f.name.startsWith("strings") && f.name.endsWith(".xml") }.orEmpty().flatMap { file ->
+            val text = file.readText().replace(Regex("<!--.*?-->", RegexOption.DOT_MATCHES_ALL), "")
+            Regex("<string name=\"([^\"]+)\"[^>]*>(.*?)</string>", RegexOption.DOT_MATCHES_ALL).findAll(text)
+                .map { it.groupValues[1] to it.groupValues[2].replace("\\'", "'").replace("\\\"", "\"") }.toList()
+        }
+
+    /** Long explanations get cut on phones and are hard to translate; keep each to 160 characters (#345). */
+    @Test
+    fun englishStringsStayShort() {
+        val long = english().filter { it.second.length > 160 }.map { "${it.first}: ${it.second.length}" }
+        assertEquals(emptyList<String>(), long)
+    }
+
+    /** Names that are capitalized on purpose: the app, keys, formats and abbreviations. */
+    private val titleCaseOnPurpose = setOf(
+        "app_name", "home_sort_name_az", "home_sort_name_za", "home_about_app", "home_leaving_title", "key_page_up",
+        "key_page_down", "tools_format_rtf", "msg_busy_creating_pdf", "edit_label_run_javascript", "redact_pattern_ssn",
+    )
+
+    /** Labels use sentence case: "Bulleted list", not "Bulleted List" (#345). */
+    @Test
+    fun labelsUseSentenceCase() {
+        val titleCase = english().filter { (key, text) ->
+            val words = text.replace(Regex("\\(.*?\\)"), "").trim().split(Regex("\\s+")).filter { it.isNotEmpty() }
+            key !in titleCaseOnPurpose && words.size >= 2 && words.all { it.first().isUpperCase() } &&
+                words.drop(1).none { Regex("[A-Z0-9]{2,}").matches(it) }
+        }.map { it.first }
+        assertEquals(emptyList<String>(), titleCase)
+    }
 }

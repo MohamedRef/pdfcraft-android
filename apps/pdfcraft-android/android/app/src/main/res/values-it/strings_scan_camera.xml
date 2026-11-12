@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Scan: the in-app camera (#294), kept apart from strings.xml so parallel scanner work merges cleanly. -->
+<resources>
+    <string name="scan_camera_rationale">PdfCraft usa la fotocamera per scansionare le pagine. Le foto restano su questo dispositivo.</string>
+    <string name="scan_camera_continue">Continua</string>
+    <string name="scan_camera_no_camera">Questo dispositivo non ha una fotocamera. Importa foto per scansionarle.</string>
+    <string name="scan_camera_denied">PdfCraft non ha il permesso di usare la fotocamera. Importa foto oppure consenti la fotocamera nelle impostazioni.</string>
+    <string name="scan_camera_import">Importa foto</string>
+    <string name="scan_camera_open_settings">Apri impostazioni</string>
+    <string name="scan_camera_phone_app">Fotocamera del telefono</string>
+    <string name="scan_camera_torch_on">Accendi la luce</string>
+    <string name="scan_camera_torch_off">Spegni la luce</string>
+    <string name="scan_camera_viewfinder">Mirino. Tocca per mettere a fuoco.</string>
+    <string name="scan_camera_shutter">Scatta foto</string>
+    <string name="scan_camera_done">Fine (%1$d)</string>
+    <string name="scan_camera_last_page">Ultima pagina scattata, %1$d in tutto</string>
+    <string name="scan_camera_failed">Impossibile scattare la foto. Riprova.</string>
+    <string name="scan_camera_unavailable">Impossibile avviare la fotocamera. Usa invece l\'app fotocamera del telefono.</string>
+    <string name="scan_camera_image_unavailable">PdfCraft ha bisogno del permesso della fotocamera per scattare una foto.</string>
+    <string name="scan_camera_setting">Scansiona con</string>
+    <string name="scan_camera_setting_in_app">Fotocamera di PdfCraft</string>
+    <string name="scan_camera_setting_phone">App fotocamera del telefono</string>
+    <string name="scan_camera_setting_body">L\'app fotocamera del telefono funziona solo se PdfCraft ha il permesso di usare la fotocamera.</string>
+</resources>

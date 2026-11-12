@@ -246,7 +246,7 @@ private fun HomeTabScreen(vm: AppViewModel, onBrowse: () -> Unit) {
                     item {
                         when (tab) {
                             // Open a PDF is the button at the top
-                            0 -> EmptyState(LucideIcons.Clock, stringResource(R.string.home_no_recent_title), stringResource(R.string.home_no_recent_body))
+                            0 -> EmptyState(LucideIcons.Clock, stringResource(R.string.home_no_recent_title), stringResource(R.string.home_no_recent_body), stringResource(R.string.home_try_sample)) { vm.openSample() }
                             1 -> EmptyState(LucideIcons.Star, stringResource(R.string.home_no_starred_title), stringResource(R.string.home_no_starred_body))
                             else -> if (!vm.hasFileAccess) EmptyState(LucideIcons.Smartphone, stringResource(R.string.home_device_files_title), stringResource(R.string.home_device_files_body), stringResource(R.string.home_add_folder)) { vm.requestFileAccess() }
                             else EmptyState(LucideIcons.Smartphone, stringResource(R.string.home_no_pdfs_title), stringResource(R.string.home_no_pdfs_body), stringResource(R.string.home_add_folder)) { vm.requestFileAccess() }

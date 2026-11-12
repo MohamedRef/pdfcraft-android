@@ -16,13 +16,13 @@ a phone yet.** Every number in the scanner's documents was measured on a desktop
 | Issue | What | State | Merged in | What is left |
 |---|---|---|---|---|
 | #287 | `pdfcraft-scan` crate, one pass from photo to page | Done, closed | #331, #346 | |
-| #288 | Measuring: harness, drawn pages, test set | Part | #346, #367, #382, #386, #394 | The CI gate, the SmartDoc script. The drawn photos (`synth`), the metrics blocks and the `scan-eval` runner are in; see [ANDROID_SCAN_MEASURING.md](ANDROID_SCAN_MEASURING.md) |
+| #288 | Measuring: harness, drawn pages, test set | Part | #346, #367, #382, #386, #394, #404 | The SmartDoc script. The drawn photos (`synth`), the metrics blocks, the `scan-eval` runner and the CI gate are in; see [ANDROID_SCAN_MEASURING.md](ANDROID_SCAN_MEASURING.md) |
 | #289 | Model files: pinned, loaded, exported | Part | #360, #365, #370 | `scan_model_states`, a Models list in settings, optional packs, copying a *changed* model on update (section 6) |
 | #290 | Page found by a network | Core done | #360 | Figures on the owner's set; phone time. Known: wrong and accepted on 2 of the 10 reference photos, nothing found on 2 |
 | #291 | Edges refined at full size | Core done | #356, #291 PR | Corners off the photo (up to 15%) checked on drawn pages only; the owner's set; phone time |
 | #292 | Crop screen: magnifier, side handles, snap, rotate | Screen done, rotate left | #381 | Rotate (with #339's user turns and `ScanSession` 2); all of it on a phone (`docs/ANDROID_SCAN_CROP.md`) |
 | #293 | True proportions, paper sizes | Core done | #353 | The focal length from the in-app camera (#294, section 7 there) |
-| #294 | In-app camera (CameraX) | **Not started** | | All of it |
+| #294 | In-app camera (CameraX) | Core done, not run on a phone | #390 | Everything on the owner's phone (`ANDROID_SCAN_CAMERA.md`); the focal length from the camera's calibration for #293 |
 | #295 | Live page outline, hints | **Not started** | | Needs #294 |
 | #296 | Auto-capture, blur check | Native call only, in #389 | | `scan_sharpness` exists (`docs/ANDROID_SCAN_CAPTURE.md`); its `blurred_unverified` is for logs only (motion blur not detected, threshold from drawn pages). Everything else needs #295 |
 | #297 | Multi-frame merge | Native call only, in #389 | | `scan_merge_frames` exists (`docs/ANDROID_SCAN_CAPTURE.md`), measured on drawn frames only. The burst, the setting and the phone measurements need #294 |
@@ -34,7 +34,7 @@ a phone yet.** Every number in the scanner's documents was measured on a desktop
 | #303 | Book mode | **Not started** | | All of it |
 | #304 | "Max quality" (DocRes) | Groundwork | #402 | DocRes's two prompts ported (checked against its Python) and the correction map, called by nothing ([ANDROID_SCAN_MAX_QUALITY.md](ANDROID_SCAN_MAX_QUALITY.md)). Left: the weights (no licence stated by the authors; their hosts were not reachable), the ONNX export, the phone gate, then step 2 |
 | #305, #306 | Research: moiré; fingers, glare | **Not started** | | |
-| #307 | ML Kit as a second engine | **Not started** | | Cannot be tried without a phone with Google Play services |
+| #307 | ML Kit as a second engine | **Dropped** | | The owner decided on 12 November 2026: nothing from Google in the app or in the scanner's work, so the app keeps no proprietary dependency and stays buildable by F-Droid. Do not add ML Kit or compare against Google's scanner |
 | #339 | Pages turned upright | Core done | #370 | The "Turned upright · Undo" chip, a rotate button, the multi-page rule, a switch in ordinary settings |
 
 "Core done" means the code and its tests are merged and the issue's acceptance items that need
@@ -62,15 +62,16 @@ These came from one run of separate workers on 12 November that the owner stoppe
 Every threshold in them is the issue's starting value or was set on pages drawn in code.
 
 One document per feature says how it works, what was measured and what was not:
-`ANDROID_SCAN_AUTO_LOOK.md`, `_BLACK_WHITE.md`, `_CAPTURE.md`, `_DETAIL.md`, `_DETECTOR.md`,
-`_EDGES.md`, `_FLATTEN.md`, `_MAX_QUALITY.md`, `_MEASURING.md`, `_PREVIEW.md`, `_PROPORTIONS.md`,
-`_TESTING.md`, `_UPRIGHT.md` (all `docs/ANDROID_SCAN_…`). Read the one for a feature before
-changing it.
+`ANDROID_SCAN_AUTO_LOOK.md`, `_BLACK_WHITE.md`, `_CAMERA.md`, `_CAPTURE.md`, `_DETAIL.md`,
+`_DETECTOR.md`, `_EDGES.md`, `_FLATTEN.md`, `_MAX_QUALITY.md`, `_MEASURING.md`, `_PREVIEW.md`,
+`_PROPORTIONS.md`, `_TESTING.md`, `_UPRIGHT.md` (all `docs/ANDROID_SCAN_…`). Read the one for a
+feature before changing it.
 
 ## 2. How a scan goes through the code today
 
 ```
-MainActivity (TakePicture: the phone's camera app)  ->  cacheDir/camera/scan-*.jpg
+ScanCameraRouter: PdfCraft's camera screen (ui/scan, #294) or the phone's camera app
+                                                     ->  cacheDir/camera/scan-*.jpg
 AppViewModel.onScanPhoto
     prepareOcrModels            unpack assets/models into filesDir/models, set PDFCRAFT_MODELS
     scan_find_document_with     decode, detect (detect.rs), refine edges (refine.rs)
@@ -150,10 +151,10 @@ The order in #286 stands. Within it, this is what unblocks the most:
    changes how the existing path behaves (the manifest's comment explains it), and none of it
    can be tried without a phone. Keep the phone's camera app reachable as a setting, as the
    issue says, so a fault in the new screen cannot leave him unable to scan.
-6. #304 to #307.
+6. #304 to #306. (#307 was dropped: nothing from Google.)
 
 Parallel work is possible where the files do not overlap: #292 (new file), #294 (new files,
-manifest, Gradle), #307 (new files) and the Rust-only items can each go on their own branch.
+manifest, Gradle) and the Rust-only items can each go on their own branch.
 What conflicts in practice: `ScanLab.kt` and `ScanLabTest.kt` (every feature adds a field),
 `AppViewModel.saveScan`, `ScanScreen`, the seven `strings.xml`, `page.rs` and `src/scan.rs`.
 Merge main into a branch before its last push, not after.
@@ -188,8 +189,9 @@ The list in #286 ("Rules for every scan PR") is the reference. The ones that hav
 
 ## 6. Building, testing, measuring
 
-- Rust: `cargo test --locked -p pdfcraft-scan -p pdfcraft-android` (about 90 tests each; a
-  minute and a half). `cargo clippy -p pdfcraft-scan --all-targets --no-deps` must add no
+- Rust: `cargo test --locked -p pdfcraft-scan -p pdfcraft-android` (about 300 and 90 tests;
+  the scan crate's take a little over a minute, most of it the CI gate of #288, which fails a
+  change that makes the scanner worse on 40 drawn photos: see `ANDROID_SCAN_MEASURING.md`). `cargo clippy -p pdfcraft-scan --all-targets --no-deps` must add no
   warning; CI runs neither clippy nor rustfmt, so run both. `cargo fmt -p pdfcraft-scan
   -p pdfcraft-android` also reformats files this work does not own (`src/eraser_tests.rs`,
   `pressure_ink_tests.rs`, `progressive_tests.rs`, `tests.rs`, `scan/src/tests.rs`,
