@@ -44,3 +44,12 @@ internal fun ScanCameraSetting() {
     }
     Text(stringResource(R.string.scan_camera_setting_body), color = c.textSecondary, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 20.dp))
 }
+
+/** The live page outline in the camera (#295), a testing option: off, the camera is as it was before it. */
+@Composable
+internal fun ScanLiveSetting() {
+    val model: ScanCameraModel = viewModel()
+    io.github.artcraftandroid.pdfcraft.ui.SheetRow(null, stringResource(R.string.scan_live_setting), { model.updateLiveOutline(!model.liveOutline) }) {
+        io.github.artcraftandroid.pdfcraft.ui.PdfSwitch(model.liveOutline, { model.updateLiveOutline(it) })
+    }
+}

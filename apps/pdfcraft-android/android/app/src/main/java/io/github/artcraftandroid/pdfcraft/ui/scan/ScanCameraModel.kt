@@ -24,6 +24,17 @@ internal class ScanCameraModel(app: Application) : AndroidViewModel(app) {
     var choice by mutableStateOf(ScanCameraChoice.decode(prefs.getString(PREF_CHOICE, null)))
         private set
 
+    /** Whether the viewfinder shows the page's outline and advice (#295): a testing option, on by default. */
+    var liveOutline by mutableStateOf(prefs.getBoolean(PREF_LIVE, true))
+        private set
+
+    fun updateLiveOutline(on: Boolean) {
+        if (on == liveOutline) return
+        liveOutline = on
+        prefs.edit().putBoolean(PREF_LIVE, on).apply()
+        Diag.event(DiagArea.Scan, "camera_live_option", "live_outline" to on)
+    }
+
     /** The file the next photo is written into, while the camera screen shows; null when it is closed. */
     var target by mutableStateOf<File?>(null)
         private set
@@ -66,5 +77,6 @@ internal class ScanCameraModel(app: Application) : AndroidViewModel(app) {
 
     private companion object {
         const val PREF_CHOICE = "scanCamera"
+        const val PREF_LIVE = "scanLiveOutline"
     }
 }

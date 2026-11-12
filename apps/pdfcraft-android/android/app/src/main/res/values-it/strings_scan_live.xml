@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Scan: the live page outline in the in-app camera (#295), kept apart from strings.xml so parallel scanner work merges cleanly. -->
+<resources>
+    <string name="scan_live_point">Inquadra il documento</string>
+    <string name="scan_live_light">Serve più luce</string>
+    <string name="scan_live_fit">Inquadra tutta la pagina</string>
+    <string name="scan_live_closer">Avvicinati</string>
+    <string name="scan_live_flatter">Tieni il telefono più parallelo alla pagina</string>
+    <string name="scan_live_still">Stai fermo</string>
+    <string name="scan_live_ready">Pronto</string>
+    <string name="scan_live_setting">Contorno della pagina nella fotocamera</string>
+</resources>
