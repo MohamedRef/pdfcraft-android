@@ -7,4 +7,7 @@
     <string name="tools_scan_book_left_page">الصفحة اليسرى من صفحتين متقابلتين</string>
     <string name="tools_scan_book_right_page">الصفحة اليمنى من صفحتين متقابلتين</string>
     <string name="scan_lab_book_gutter">وضع الكتاب: القص عند ثنية الكتاب الظاهرة في الصورة</string>
+    <string name="scan_crop_book_left">الصفحة اليسرى من صفحتين متقابلتين: جانبها الأيمن هو القطع عند ثنية الكتاب، وليس حافة الورقة.</string>
+    <string name="scan_crop_book_right">الصفحة اليمنى من صفحتين متقابلتين: جانبها الأيسر هو القطع عند ثنية الكتاب، وليس حافة الورقة.</string>
+    <string name="scan_camera_book_hint">اجعل كعب الكتاب على الخط</string>
 </resources>

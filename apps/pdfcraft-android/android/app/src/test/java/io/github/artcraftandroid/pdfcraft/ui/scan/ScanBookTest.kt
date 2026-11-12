@@ -148,4 +148,17 @@ class ScanBookTest {
         assertEquals(0.8, book.getDouble("confidence"), 1e-6)
         assertTrue(JSONObject(scanTestPageJson("1.0 (1)", true, spread, spread, null, "auto", 60, false, ScanLab(), null, null)).isNull("book"))
     }
+
+    @Test
+    fun autoDetectOnAHalfKeepsTheSameHalfOfTheSpreadFoundAgain() {
+        val pages = scanBookPages(spread, cut, ScanBookOrder.RightToLeft)
+        val right = pages[0].second!!
+        val leftHalf = pages[1].second!!
+        val again = cut.copy(left = floatArrayOf(0.12f, 0.1f, 0.46f, 0.1f, 0.46f, 0.9f, 0.12f, 0.9f))
+        assertArrayEquals(again.right, scanBookRecut(right, again)!!, 0f)
+        assertArrayEquals(again.left, scanBookRecut(leftHalf, again)!!, 0f)
+        // the spread found is not two pages: the corners stay
+        assertNull(scanBookRecut(right, null))
+        assertNull(scanBookRecut(right, again.copy(split = false)))
+    }
 }
