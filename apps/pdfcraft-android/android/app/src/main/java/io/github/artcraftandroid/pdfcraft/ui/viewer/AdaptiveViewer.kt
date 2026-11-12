@@ -66,7 +66,7 @@ fun AdaptiveViewer(vm: AppViewModel, doc: OpenDocument) {
         isDesktop(context, configuration),
     )
     var railOpen by remember(doc) { mutableStateOf(true) }
-    val showRail = wide && doc.pageCount >= 2 && !vm.settings.readingMode && !doc.controller.pagesOpen
+    val showRail = wide && vm.tabs.splitWith == null && doc.pageCount >= 2 && !vm.settings.readingMode && !doc.controller.pagesOpen
     // Keep ViewerScreen at one composition call site across breakpoint changes. Moving it
     // between compact/expanded branches discards remembered uncommitted ink and tool state.
     Row(Modifier.fillMaxSize()) {
@@ -87,7 +87,8 @@ fun AdaptiveViewer(vm: AppViewModel, doc: OpenDocument) {
             }
             Box(Modifier.width(1.dp).fillMaxHeight().background(pdfColors.divider))
         }
-        Box(Modifier.weight(1f).fillMaxHeight()) { ViewerScreen(vm, doc) }
+        // split view (#139) keeps ViewerScreen at the same call site, the second pane beside it
+        Box(Modifier.weight(1f).fillMaxHeight()) { SplitLayout(vm, doc) { ViewerScreen(vm, doc) } }
     }
 }
 

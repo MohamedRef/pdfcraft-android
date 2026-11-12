@@ -10,6 +10,8 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.viewModelScope
 import io.github.artcraftandroid.pdfcraft.R
 import io.github.artcraftandroid.pdfcraft.core.MobileException
+import io.github.artcraftandroid.pdfcraft.engine.Diag
+import io.github.artcraftandroid.pdfcraft.engine.DiagArea
 import io.github.artcraftandroid.pdfcraft.engine.SafBoundedCopy
 import io.github.artcraftandroid.pdfcraft.engine.review
 import io.github.artcraftandroid.pdfcraft.engine.userMessage
@@ -235,6 +237,7 @@ class CommentsController internal constructor(private val vm: AppViewModel) {
     fun onMicPermission(granted: Boolean) {
         vm.pendingLecture?.let { d ->
             vm.pendingLecture = null
+            Diag.event(DiagArea.Study, "lecture_mic", "granted" to granted)
             if (granted) vm.startLecture(d) else vm.tell(text(R.string.msg_voice_no_mic))
             return
         }

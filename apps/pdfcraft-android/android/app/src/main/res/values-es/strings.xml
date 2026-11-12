@@ -336,6 +336,15 @@
     <string name="tools_scan_view_photo">Foto</string>
     <string name="tools_scan_preparing">Preparando la página</string>
     <string name="tools_scan_result_description">Página %1$d tal como se guardará</string>
+    <string name="tools_crop_snap">Ajustar</string>
+    <string name="tools_crop_top_left">Esquina superior izquierda</string>
+    <string name="tools_crop_top_right">Esquina superior derecha</string>
+    <string name="tools_crop_bottom_right">Esquina inferior derecha</string>
+    <string name="tools_crop_bottom_left">Esquina inferior izquierda</string>
+    <string name="tools_crop_top_side">Lado superior</string>
+    <string name="tools_crop_right_side">Lado derecho</string>
+    <string name="tools_crop_bottom_side">Lado inferior</string>
+    <string name="tools_crop_left_side">Lado izquierdo</string>
 
     <!-- App dialogs: the first comment's name prompt -->
     <!-- Verb: go on without entering a name -->
@@ -1233,6 +1242,8 @@
     <string name="scan_lab_off">No</string>
     <string name="scan_lab_denoise">Suavizar el grano en fotos oscuras (Escaneo limpio)</string>
     <string name="scan_lab_preview">Mostrar las páginas como se guardarán</string>
+    <string name="scan_lab_crop">Recortar con lupa y ajuste a los bordes</string>
+    <string name="scan_lab_flatten_auto">Aplanar las páginas automáticamente cuando sus líneas quedan más rectas</string>
     <string name="scan_lab_strength">Intensidad del filtro</string>
     <string name="scan_lab_strength_own">Predeterminada</string>
     <string name="scan_lab_options_body">Estas opciones apagan partes del escáner o las cambian por lo que sustituyeron, para saber de qué parte viene un problema. El registro anota lo que estaba activo en cada página.</string>

@@ -385,6 +385,15 @@
     <string name="tools_scan_view_photo">Photo</string>
     <string name="tools_scan_preparing">Preparing the page</string>
     <string name="tools_scan_result_description">Page %1$d as it will be saved</string>
+    <string name="tools_crop_snap">Snap</string>
+    <string name="tools_crop_top_left">Top-left corner</string>
+    <string name="tools_crop_top_right">Top-right corner</string>
+    <string name="tools_crop_bottom_right">Bottom-right corner</string>
+    <string name="tools_crop_bottom_left">Bottom-left corner</string>
+    <string name="tools_crop_top_side">Top side</string>
+    <string name="tools_crop_right_side">Right side</string>
+    <string name="tools_crop_bottom_side">Bottom side</string>
+    <string name="tools_crop_left_side">Left side</string>
 
     <!-- App dialogs: the first comment's name prompt -->
     <!-- Verb: go on without entering a name -->
@@ -1808,6 +1817,8 @@
     <string name="scan_lab_off">Off</string>
     <string name="scan_lab_denoise">Smooth grain in dim photos (Clean scan)</string>
     <string name="scan_lab_preview">Show pages as they will be saved</string>
+    <string name="scan_lab_crop">Crop with magnifier and snapping to edges</string>
+    <string name="scan_lab_flatten_auto">Flatten pages automatically when it makes their lines straighter</string>
     <string name="scan_lab_strength">Filter strength</string>
     <string name="scan_lab_strength_own">Default</string>
     <string name="scan_lab_options_body">These switch parts of the scanner off, or swap them for what they replaced, to find which part a problem comes from. The log records what was in force for every page.</string>

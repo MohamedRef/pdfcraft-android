@@ -34,7 +34,7 @@ class SettingsController internal constructor(private val vm: AppViewModel) {
     val quickToolbar = io.github.artcraftandroid.pdfcraft.ui.viewer.QuickToolbarPrefs(app)
     internal val appPrefs = app.getSharedPreferences("app", android.content.Context.MODE_PRIVATE)
     var compactPreviews by mutableStateOf(appPrefs.getBoolean("compactPreviews", false))
-        private set
+        internal set
     fun updateCompactPreviews(on: Boolean) {
         compactPreviews = on
         appPrefs.edit().putBoolean("compactPreviews", on).apply()
@@ -43,7 +43,7 @@ class SettingsController internal constructor(private val vm: AppViewModel) {
 
     /** The Search tab's last searches, newest first (kept on the phone, as the reference keeps them). */
     var recentSearches by mutableStateOf(appPrefs.getString("recentSearches", null)?.split('\n')?.filter { it.isNotBlank() } ?: emptyList())
-        private set
+        internal set
 
     fun addRecentSearch(q: String) {
         val t = q.trim()
@@ -170,11 +170,11 @@ class SettingsController internal constructor(private val vm: AppViewModel) {
      * held upright shows one page.
      */
     var spreadPref by mutableStateOf(savedSpread)
-        private set
+        internal set
 
     /** Two pages side by side when the window is wide and landscape, one otherwise (#152). */
     var spreadAuto by mutableStateOf(appPrefs.getBoolean("spreadAuto", false))
-        private set
+        internal set
 
     fun chooseSpreadAuto(on: Boolean) {
         readingMode = false
@@ -282,7 +282,7 @@ class SettingsController internal constructor(private val vm: AppViewModel) {
 
     /** Keep the screen on while reading (Preferences; released after half an hour without a touch). */
     var keepScreenOn by mutableStateOf(appPrefs.getBoolean("keepScreenOn", false))
-        private set
+        internal set
 
     fun updateKeepScreenOn(on: Boolean) {
         keepScreenOn = on
@@ -298,7 +298,7 @@ class SettingsController internal constructor(private val vm: AppViewModel) {
      * adb. See docs/ANDROID_DIAGNOSTICS_LOG.md.
      */
     var recordDiagnostics by mutableStateOf(Diag.enabled())
-        private set
+        internal set
 
     fun updateRecordDiagnostics(on: Boolean) {
         recordDiagnostics = on
@@ -345,7 +345,7 @@ class SettingsController internal constructor(private val vm: AppViewModel) {
 
     /** The viewer's keyboard shortcuts (Preferences; on by default: only a keyboard sends them, #153). */
     var keyboardShortcuts by mutableStateOf(appPrefs.getBoolean("keyboardShortcuts", true))
-        private set
+        internal set
 
     fun updateKeyboardShortcuts(on: Boolean) {
         keyboardShortcuts = on
@@ -354,7 +354,7 @@ class SettingsController internal constructor(private val vm: AppViewModel) {
 
     /** The app's theme (Preferences ▸ Theme): the system's, or always light or dark. */
     var theme by mutableStateOf(runCatching { ThemeChoice.valueOf(appPrefs.getString("theme", "System") ?: "System") }.getOrDefault(ThemeChoice.System))
-        private set
+        internal set
 
     fun setThemeChoice(t: ThemeChoice) {
         theme = t
@@ -366,7 +366,7 @@ class SettingsController internal constructor(private val vm: AppViewModel) {
      * whole screen when they hide (off: the reference's black band where the camera is).
      */
     var statusBarInDocuments by mutableStateOf(appPrefs.getBoolean("statusBarInDocuments", false))
-        private set
+        internal set
 
     fun updateStatusBarInDocuments(on: Boolean) {
         statusBarInDocuments = on

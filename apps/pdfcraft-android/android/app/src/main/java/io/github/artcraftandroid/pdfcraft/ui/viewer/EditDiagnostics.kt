@@ -6,7 +6,7 @@ import io.github.artcraftandroid.pdfcraft.ui.OpenDocument
 
 /**
  * One `[edit]` line in the diagnostics log about [doc]: a fixed event name with counts, kinds and
- * times from the content-editing tools (#161 #162 #163 #164 #166 #167 #171 #182). Never the words,
+ * times from the content-editing tools (#161 #162 #163 #164 #166 #167 #171 #178 #182). Never the words,
  * names or text the user typed or the document holds; see docs/ANDROID_DIAGNOSTICS_LOG.md.
  */
 internal fun editEvent(doc: OpenDocument, name: String, vararg fields: Pair<String, Any?>) {
