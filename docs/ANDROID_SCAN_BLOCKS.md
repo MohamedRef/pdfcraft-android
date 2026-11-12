@@ -27,6 +27,11 @@ phone**, and every threshold below is the issue's starting value or was set on d
 | #296 | `sharpness` | `sharpness(luma, quad) -> Sharpness { score, blurred }`, `BLURRED_BELOW = 1.0` | sharp drawn pages 1.49–1.93; Gaussian blur σ 2.5 and 4: 0.15–0.48; σ 1.5: 0.61–0.83; a dim copy scores the same; 12 MP in 0.7 s (debug) | **motion blur is not told apart**: 7 and 13 px streaks score 0.90–1.60, across the sharp range. The threshold was set on drawn pages. Do not show a "take it again" prompt from it before it is set from real sharp and shaken photos |
 | #339 | `upright_pages` | `settle(pages)`, `followed(pages)`: an unsure page follows two sure neighbours (≥ 0.95) that agree; `turn_corners`, `turn_back`, `total_turn`: a quarter turn by reordering the corners, for Rotate and its undo | direction checked with a homography: a point at (x, y) lands at (h − y, x) after one clockwise turn | not wired into `page.rs` or the app |
 
+**Wired in since:** `sharpness` (#296) and `merge` (#297) are called by `capture.rs` and reachable
+as the UniFFI calls `scan_sharpness` and `scan_merge_frames` (native side only, no screen yet,
+the modules unchanged): see [ANDROID_SCAN_CAPTURE.md](ANDROID_SCAN_CAPTURE.md). The motion-blur
+gap above still holds; the call's field is named `blurred_unverified` for that reason.
+
 ## What was started and not finished
 
 The same run was stopped by the owner before these were done. Nothing of them is in the crate:

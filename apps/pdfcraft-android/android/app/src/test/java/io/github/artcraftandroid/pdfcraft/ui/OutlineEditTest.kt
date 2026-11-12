@@ -40,4 +40,34 @@ class OutlineEditTest {
         assertEquals(mapOf("path" to listOf(1, 2), "position" to 2), outlineMoveArgs(rows, listOf(1, 2), OutlineMove.Out))
         assertNull(outlineMoveArgs(rows, listOf(3), OutlineMove.Out))
     }
+
+    @Test fun dragMovesToTheSlotAndLevel() {
+        // C to the top
+        assertEquals(mapOf("path" to listOf(3), "position" to 1), outlineDropArgs(rows, listOf(3), 0, 0))
+        // B dragged right under A2: the last child of A
+        assertEquals(mapOf("path" to listOf(2), "parent" to listOf(1), "position" to 3), outlineDropArgs(rows, listOf(2), 3, 1))
+        // A1 dragged left out of A, before B
+        assertEquals(mapOf("path" to listOf(1, 1), "position" to 2), outlineDropArgs(rows, listOf(1, 1), 2, 0))
+        // A with its children to the end, as far right as it goes: under C
+        assertEquals(mapOf("path" to listOf(1), "parent" to listOf(3), "position" to 1), outlineDropArgs(rows, listOf(1), 2, 5))
+    }
+
+    @Test fun dragLevelIsKeptValid() {
+        val rest = outlineRowsWithout(rows, listOf(3))
+        assertEquals(listOf("A", "A1", "A2", "B"), rest.map { it.title })
+        // between A and A1 only a child of A keeps A1 under A
+        assertEquals(1..1, outlineDropDepths(rest, 1))
+        assertEquals(mapOf("path" to listOf(3), "parent" to listOf(1), "position" to 1), outlineDropArgs(rows, listOf(3), 1, 0))
+        // after A2: a child of A2, a child of A, or the top level
+        assertEquals(0..2, outlineDropDepths(rest, 3))
+        assertEquals(0..0, outlineDropDepths(rest, 0))
+        // the children go along: none of A's are left to drop among
+        assertEquals(listOf("B", "C"), outlineRowsWithout(rows, listOf(1)).map { it.title })
+    }
+
+    @Test fun dropInPlaceDoesNothing() {
+        assertNull(outlineDropArgs(rows, listOf(2), 3, 0))
+        assertNull(outlineDropArgs(rows, listOf(1, 2), 2, 1))
+        assertNull(outlineDropArgs(rows, listOf(9), 0, 0))
+    }
 }

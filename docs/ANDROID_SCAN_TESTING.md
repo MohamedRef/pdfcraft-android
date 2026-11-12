@@ -70,7 +70,8 @@ The zip also holds `diagnostics.txt`, the diagnostics log as **Share diagnostics
  "preview": {"shown": true, "reused": true, "ms": 412, "width": 905, "height": 1280, "look": "auto"},
  "crop": {"visits": 1, "corner_drags": 2, "side_drags": 1, "snaps_asked": 3, "snaps_taken": 2, "snaps_held": 0, "snaps_failed": 0,
           "snap_ms_max": 85, "nudges": 0, "detects": 0, "detects_found": 0, "whole_photo": 0, "resets": 0,
-          "loupe_decodes": 6, "snap": true, "ms": 9100, "moved_pct": 1.235},
+          "loupe_decodes": 6, "snap": true, "ms": 9100, "moved_pct": 1.235,
+          "corners_off": 0},
  "book": {"half": "right", "gutter_found": true, "gutter_top": 0.4712, "gutter_bottom": 0.4790, "confidence": 0.62, "order": "rtl"},
  "result": {"file": "page-01.out.jpg", "width": 1654, "height": 2339, "format": "jpeg", "dpi": 200.0,
             "paper": "a4", "aspect": "known_focal", "focal_mismatch": false, "flattened": false, "bend_pct": 0.0,
@@ -93,7 +94,8 @@ screen (#292), added up over every time the page was cropped with Done, or `null
 was: drags of corners and of sides, snaps asked for, taken, skipped by holding still and failed,
 the longest snap, keyboard and TalkBack moves, Auto-detect, No crop and Reset, magnifier regions
 decoded, whether Snap was on, the time spent, and `moved_pct`, the largest corner move from where
-the screen opened in % of the photo's diagonal. It is not kept if the app is closed by Android
+the screen opened in % of the photo's diagonal, and `corners_off`, how many corners were left off
+the photo the last time (#291). It is not kept if the app is closed by Android
 before the scan is saved. `book` is set on a page that is half of a photographed book spread (#303): which `half`, whether a dark gutter was found (`gutter_found`; false means the cut is the centre line), where the cut crosses the straightened spread's top and bottom edges as shares of its width, the gutter's `confidence`, and the page `order` in force (`ltr` or `rtl`). It is `null` for a page of its own. The two halves of a spread are kept as two pages, each with its own copy of the one photo, and their `corners` and `found` are the half's own outline.
 
 ## On the desktop

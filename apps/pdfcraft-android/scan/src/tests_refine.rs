@@ -339,7 +339,29 @@ fn a_side_running_out_of_the_photo_is_fitted_from_what_is_visible() {
     let found = refine(&pyramid, &Quad(start), &RefineOptions::default());
     let e = errors(&found, truth);
     assert!(e[0] < 0.8 && e[1] < 0.8 && e[3] < 0.8, "the corners in the photo: {e:?}");
-    // the fourth is below the photo: it is kept on the photo's border, as near as that allows
+    // the fourth is below the photo, where the two sides meet (#291)
     let [x, y] = found.quad.0[2];
-    assert!(y <= 1500.0 && e[2] < 45.0, "({x}, {y}), {} px from the corner outside", e[2]);
+    assert!(y > 1500.0 && e[2] < 3.0, "({x}, {y}), {} px from the corner outside", e[2]);
+}
+
+/// A corner 5 % outside the frame, put on the border by the detector, is found from the two sides
+/// that run to it (#291's table: "recovered within 3 px from the two side fits").
+#[test]
+fn a_corner_outside_the_frame_is_where_its_sides_meet() {
+    let (w, h) = (2000, 1500);
+    // the top-right corner is 100 px (5 %) right of the photo and 30 px above it
+    let truth = [[300.0, 160.0], [2100.0, -30.0], [1700.0, 1320.0], [260.0, 1290.0]];
+    let pyramid = Pyramid::new(photo(w, h, &inside_quad(truth), &|_, _| PAPER, &|_, _| DESK, 0.6, 2.0));
+    let mut start = truth;
+    start[1] = [2000.0, 0.0];
+    let found = refine(&pyramid, &Quad(start), &RefineOptions::default());
+    let e = errors(&found, truth);
+    assert!(e.iter().all(|v| *v < 3.0), "{e:?}: {:?}", found.quad.0);
+    // never farther out than 15 % of the photo
+    let far = [[300.0, 160.0], [2600.0, -400.0], [1700.0, 1320.0], [260.0, 1290.0]];
+    let pyramid = Pyramid::new(photo(w, h, &inside_quad(far), &|_, _| PAPER, &|_, _| DESK, 0.0, 0.0));
+    let found = refine(&pyramid, &Quad([[300.0, 160.0], [2000.0, 0.0], [1700.0, 1320.0], [260.0, 1290.0]]), &RefineOptions::default());
+    for [x, y] in found.quad.0 {
+        assert!((-300.0..=2300.0).contains(&x) && (-225.0..=1725.0).contains(&y), "({x}, {y})");
+    }
 }

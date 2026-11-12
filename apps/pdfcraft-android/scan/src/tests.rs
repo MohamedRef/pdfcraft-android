@@ -235,6 +235,16 @@ fn limits_are_errors_not_panics_or_huge_allocations() {
     let dart = [0.0, 0.0, 1.0, 0.0, 0.3, 0.3, 0.0, 1.0];
     assert_eq!(Quad::from_shares(&dart, 100, 100), Err(ScanError::BadCorners));
     assert_eq!(Quad::from_shares(&[f32::NAN, 0.0, 1.0, 0.0, 1.0, 1.0, 0.0, 1.0], 100, 100), Err(ScanError::BadCorners));
+    // a corner the frame cut off may be up to 15 % outside the photo, and is kept there (#291)
+    let cut = Quad::from_shares(&[0.0, 0.0, 1.12, -0.1, 1.0, 1.0, 0.0, 1.0], 100, 100).unwrap();
+    assert!((cut.0[1][0] - 112.0).abs() < 1e-3 && (cut.0[1][1] + 10.0).abs() < 1e-3, "{:?}", cut.0);
+    assert_eq!(Quad::from_shares(&[0.0, 0.0, 1.2, 0.0, 1.0, 1.0, 0.0, 1.0], 100, 100), Err(ScanError::BadCorners));
+    assert_eq!(Quad::from_shares(&[-0.17, 0.0, 1.0, 0.0, 1.0, 1.0, 0.0, 1.0], 100, 100), Err(ScanError::BadCorners));
+    // what of the page lies outside the photo comes out white
+    let grey = Photo { width: 100, height: 100, rgb: vec![90; 100 * 100 * 3] };
+    let page = rectify_with_threads(&grey, &cut, 100, 100, 1).unwrap();
+    assert_eq!(&page.data[3 * (2 * 100 + 97)..3 * (2 * 100 + 97) + 3], &[255, 255, 255], "the cut-off corner's part");
+    assert_eq!(&page.data[3 * (50 * 100 + 50)..3 * (50 * 100 + 50) + 3], &[90, 90, 90], "the middle");
     // The output never exceeds 40 MP, even for a whole 64 MP photo.
     let whole = Quad::from_shares(&[0.0, 0.0, 1.0, 0.0, 1.0, 1.0, 0.0, 1.0], 8000, 8000).unwrap();
     let (w, h) = output_size(&whole).unwrap();
