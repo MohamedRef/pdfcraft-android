@@ -4408,3 +4408,60 @@ fn batched_comment_properties_preserve_order_and_copy_each_selected_array_once()
     assert!(props_batch(&doc, &[]).is_empty());
     assert_eq!(ANNOTS_ENTRIES_COPIED.with(std::cell::Cell::get), 0);
 }
+
+/// #322: the cache is kept across comment edits, and each pass draws exactly what a pass without
+/// a cache draws: an edit to one comment, to a value it references, or to the page's list
+/// redraws only what it changed, and the display copies are byte-identical.
+#[test]
+fn cached_appearances_match_a_fresh_pass_after_every_edit() {
+    let mut doc = document_of(&[
+        b"<< /Type /Catalog /Pages 2 0 R >>",
+        b"<< /Type /Pages /Kids [3 0 R] /Count 1 /MediaBox [0 0 612 792] >>",
+        b"<< /Type /Page /Parent 2 0 R /Annots [5 0 R 6 0 R 7 0 R 8 0 R 9 0 R 10 0 R 11 0 R 12 0 R] >>",
+        b"[0 0 1]",
+        b"<< /Type /Annot /Subtype /Square /Rect [10 10 60 60] /C 4 0 R /BS << /W 2 >> >>",
+        b"<< /Type /Annot /Subtype /Circle /Rect [70 10 120 60] /C [1 0 0] >>",
+        b"<< /Type /Annot /Subtype /Ink /Rect [10 100 200 200] /InkList [[10 110 50 150 90 120 200 190]] /C [0 0.5 0] >>",
+        b"<< /Type /Annot /Subtype /Highlight /Rect [10 300 200 320] /QuadPoints 13 0 R /C [1 1 0] >>",
+        b"<< /Type /Annot /Subtype /FreeText /Rect [300 300 500 340] /DA (/Helv 12 Tf 0 g) /Contents (hello) >>",
+        b"<< /Type /Annot /Subtype /Line /Rect [300 400 500 420] /L [300 410 500 410] /C [0 0 0] >>",
+        b"<< /Type /Annot /Subtype /Text /Rect [550 700 570 720] /Contents (note) >>",
+        b"<< /Type /Annot /Subtype /Polygon /Rect [300 500 400 600] /Vertices [300 500 400 500 350 600] /C [0 0 0] >>",
+        b"[10 320 200 320 10 300 200 300]",
+    ]);
+    let r = |n: u32| ObjRef::new(n, 0);
+    let mut cache = AppearanceCache::default();
+    let check = |doc: &Document, cache: &mut AppearanceCache, step: &str| {
+        let cached = with_missing_appearances_cached(doc, cache).expect("comments need appearances");
+        let fresh = with_missing_appearances(doc).expect("comments need appearances");
+        let bytes = |d: &Document| write_incremental(d, &SaveOptions::default()).expect("writes");
+        assert!(bytes(&cached) == bytes(&fresh), "{step}: the cached pass draws what a fresh pass draws");
+    };
+    check(&doc, &mut cache, "first pass");
+    assert_eq!((cache.builds(), cache.hits()), (8, 0));
+    check(&doc, &mut cache, "nothing changed");
+    assert_eq!((cache.builds(), cache.hits()), (8, 8), "nothing is redrawn");
+
+    doc.update_dict(r(6), |d| d.set(b"C".to_vec(), Object::Array(vec![Object::Int(0), Object::Int(1), Object::Int(0)]))).unwrap();
+    check(&doc, &mut cache, "one comment's colour");
+    assert_eq!((cache.builds(), cache.hits()), (9, 15), "only the changed circle is redrawn");
+
+    doc.set(r(4), Object::Array(vec![Object::Int(1), Object::Int(0), Object::Int(1)]));
+    check(&doc, &mut cache, "a colour the square references");
+    assert_eq!((cache.builds(), cache.hits()), (10, 22), "the square follows the referenced colour");
+
+    doc.set(r(13), Object::Array([10, 340, 220, 340, 10, 300, 220, 300].into_iter().map(Object::Int).collect()));
+    check(&doc, &mut cache, "the highlight's referenced quads");
+    assert_eq!((cache.builds(), cache.hits()), (11, 29), "the highlight is drawn over its new quads");
+
+    doc.update_dict(r(3), |d| d.set(b"MediaBox".to_vec(), Object::Array([0, 0, 300, 300].into_iter().map(Object::Int).collect()))).unwrap();
+    check(&doc, &mut cache, "a smaller page");
+
+    doc.update_dict(r(3), |d| {
+        d.set(b"Annots".to_vec(), Object::Array([5, 7, 9, 12].into_iter().map(|n| Object::Ref(ObjRef::new(n, 0))).collect()));
+    })
+    .unwrap();
+    check(&doc, &mut cache, "comments removed from the page");
+    doc.update_dict(r(9), |d| d.set(b"Contents".to_vec(), Object::String(pdfcraft_cos::PdfString::literal(b"changed".to_vec())))).unwrap();
+    check(&doc, &mut cache, "a text box's words");
+}
