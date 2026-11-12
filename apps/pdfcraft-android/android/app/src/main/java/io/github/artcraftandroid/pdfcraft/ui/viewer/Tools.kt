@@ -1820,7 +1820,7 @@ fun ToolSubToolbar(vm: AppViewModel, doc: OpenDocument) {
         }
         ViewerTool.FillSign -> FillSignToolbar(vm, doc)
         ViewerTool.Edit -> androidx.compose.foundation.layout.Column {
-            if (vm.editMode == EditMode.Link && vm.editSelection == null) LinkCommandsRow(vm, doc)
+            if (vm.editor.editMode == EditMode.Link && vm.editor.editSelection == null) LinkCommandsRow(vm, doc)
             EditToolbar(vm, doc)
         }
         ViewerTool.Measure -> MeasureToolbar(vm, doc)

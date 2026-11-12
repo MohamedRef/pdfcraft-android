@@ -115,7 +115,7 @@ fun FillSignLayer(vm: AppViewModel, doc: OpenDocument) {
                     return@toolGestures
                 }
                 // a tap on a form field fills the field, as outside Fill & Sign
-                if (vm.tapField(doc, at)) return@toolGestures
+                if (vm.editor.tapField(doc, at)) return@toolGestures
                 // read now: the gesture handler outlives the composition it was made in
                 when (val element = vm.signing.fillElement) {
                     FillElement.Text -> vm.signing.fillTextPrompt = TextPrompt(doc, at)

@@ -187,8 +187,8 @@ fun AppRoot(vm: AppViewModel, onBrowse: () -> Unit, onPickSignatureImage: () -> 
                 }
             }
             // a form script's alert, as the form words it
-            vm.scriptAlerts.firstOrNull()?.let { message ->
-                PdfDialog(onDismiss = vm::dismissScriptAlert, title = null, confirm = stringResource(R.string.common_ok), onConfirm = vm::dismissScriptAlert, dismiss = null) {
+            vm.editor.scriptAlerts.firstOrNull()?.let { message ->
+                PdfDialog(onDismiss = vm.editor::dismissScriptAlert, title = null, confirm = stringResource(R.string.common_ok), onConfirm = vm.editor::dismissScriptAlert, dismiss = null) {
                     Text(message, color = c.text, fontSize = 14.sp)
                 }
             }

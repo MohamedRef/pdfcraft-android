@@ -139,7 +139,7 @@ private enum class FormatPanel { None, Size, Font, Color, Align, List, Script }
  */
 @Composable
 fun EditToolbar(vm: AppViewModel, doc: OpenDocument) {
-    val para = vm.editSelection
+    val para = vm.editor.editSelection
     if (para != null) EditFormatBar(vm, doc, para) else EditToolsBar(vm, doc)
 }
 
@@ -158,20 +158,20 @@ private fun EditToolsBar(vm: AppViewModel, doc: OpenDocument) {
             doc.controller.pagesOpen = true
         }
         BarDividerLine()
-        EditBarItem(LucideIcons.Type, stringResource(R.string.edit_add_text), vm.editMode == EditMode.AddText, 70.dp) {
-            vm.editMode = if (vm.editMode == EditMode.AddText) EditMode.Select else EditMode.AddText
-            if (vm.editMode == EditMode.AddText) vm.tell(textHint)
+        EditBarItem(LucideIcons.Type, stringResource(R.string.edit_add_text), vm.editor.editMode == EditMode.AddText, 70.dp) {
+            vm.editor.editMode = if (vm.editor.editMode == EditMode.AddText) EditMode.Select else EditMode.AddText
+            if (vm.editor.editMode == EditMode.AddText) vm.tell(textHint)
         }
         // as Add text: a mode, then a tap places the picture there
-        EditBarItem(LucideIcons.ImagePlus, stringResource(R.string.edit_add_image), vm.editMode == EditMode.AddImage, 78.dp) {
-            vm.editMode = if (vm.editMode == EditMode.AddImage) EditMode.Select else EditMode.AddImage
-            if (vm.editMode == EditMode.AddImage) vm.tell(imageHint)
+        EditBarItem(LucideIcons.ImagePlus, stringResource(R.string.edit_add_image), vm.editor.editMode == EditMode.AddImage, 78.dp) {
+            vm.editor.editMode = if (vm.editor.editMode == EditMode.AddImage) EditMode.Select else EditMode.AddImage
+            if (vm.editor.editMode == EditMode.AddImage) vm.tell(imageHint)
         }
         val linkHint = stringResource(R.string.link_drag_hint)
-        EditBarItem(LucideIcons.Link, stringResource(R.string.edit_link), vm.editMode == EditMode.Link, 64.dp) {
-            vm.editMode = if (vm.editMode == EditMode.Link) EditMode.Select else EditMode.Link
-            if (vm.editMode == EditMode.Link) {
-                vm.editTap(doc, null)
+        EditBarItem(LucideIcons.Link, stringResource(R.string.edit_link), vm.editor.editMode == EditMode.Link, 64.dp) {
+            vm.editor.editMode = if (vm.editor.editMode == EditMode.Link) EditMode.Select else EditMode.Link
+            if (vm.editor.editMode == EditMode.Link) {
+                vm.editor.editTap(doc, null)
                 vm.tell(linkHint)
             }
         }
@@ -237,25 +237,25 @@ private fun EditFormatBar(vm: AppViewModel, doc: OpenDocument, para: Paragraph) 
     }
     Column(Modifier.fillMaxWidth().background(c.surface)) {
         when (panel) {
-            FormatPanel.Size -> SizePanel(para) { vm.styleParagraph(doc, para, mapOf("size" to it.toDouble())) }
-            FormatPanel.Font -> FontPanel(vm.editFont[para.page to para.number]) { f ->
-                vm.editFont[para.page to para.number] = f
-                vm.styleParagraph(doc, para, mapOf("font" to f, "bold" to para.bold, "italic" to para.italic))
+            FormatPanel.Size -> SizePanel(para) { vm.editor.styleParagraph(doc, para, mapOf("size" to it.toDouble())) }
+            FormatPanel.Font -> FontPanel(vm.editor.editFont[para.page to para.number]) { f ->
+                vm.editor.editFont[para.page to para.number] = f
+                vm.editor.styleParagraph(doc, para, mapOf("font" to f, "bold" to para.bold, "italic" to para.italic))
             }
-            FormatPanel.Color -> ColorPanel(para.color) { vm.styleParagraph(doc, para, mapOf("color" to it)) }
-            FormatPanel.Align -> AlignPanel(vm.editAlign[para.page to para.number] ?: "left") { a ->
-                vm.editAlign[para.page to para.number] = a
-                vm.styleParagraph(doc, para, mapOf("align" to a))
+            FormatPanel.Color -> ColorPanel(para.color) { vm.editor.styleParagraph(doc, para, mapOf("color" to it)) }
+            FormatPanel.Align -> AlignPanel(vm.editor.editAlign[para.page to para.number] ?: "left") { a ->
+                vm.editor.editAlign[para.page to para.number] = a
+                vm.editor.styleParagraph(doc, para, mapOf("align" to a))
             }
-            FormatPanel.List -> ListPanel(ListStyle.of(vm.editDraft?.takeIf { vm.editing != null } ?: para.text)) { vm.listParagraph(doc, para, it) }
+            FormatPanel.List -> ListPanel(ListStyle.of(vm.editor.editDraft?.takeIf { vm.editor.editing != null } ?: para.text)) { vm.editor.listParagraph(doc, para, it) }
             FormatPanel.Script -> Column(Modifier.fillMaxWidth().padding(12.dp)) {
                 Text(stringResource(R.string.edit_script_scope), color = c.textSecondary)
                 Row {
-                    val enabled = (vm.editing == null || (vm.editDraft == para.text && !vm.editComposing)) && vm.busy == null
-                    TextButton(enabled = enabled, onClick = { vm.scriptParagraph(doc, para, "superscript") }) {
+                    val enabled = (vm.editor.editing == null || (vm.editor.editDraft == para.text && !vm.editor.editComposing)) && vm.busy == null
+                    TextButton(enabled = enabled, onClick = { vm.editor.scriptParagraph(doc, para, "superscript") }) {
                         Text(stringResource(R.string.edit_superscript))
                     }
-                    TextButton(enabled = enabled, onClick = { vm.scriptParagraph(doc, para, "subscript") }) {
+                    TextButton(enabled = enabled, onClick = { vm.editor.scriptParagraph(doc, para, "subscript") }) {
                         Text(stringResource(R.string.edit_subscript))
                     }
                 }
@@ -267,13 +267,13 @@ private fun EditFormatBar(vm: AppViewModel, doc: OpenDocument, para: Paragraph) 
             horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            val underline = vm.editUnderline[para.page to para.number] == true
+            val underline = vm.editor.editUnderline[para.page to para.number] == true
             // the reference draws these as serif T's: heavy, slanted, underlined, and a small t beside a big one
-            LetterButton("T", stringResource(R.string.edit_bold), para.bold, weight = FontWeight.Black) { vm.styleParagraph(doc, para, mapOf("bold" to !para.bold)) }
-            LetterButton("T", stringResource(R.string.edit_italic), para.italic, italic = true) { vm.styleParagraph(doc, para, mapOf("italic" to !para.italic)) }
+            LetterButton("T", stringResource(R.string.edit_bold), para.bold, weight = FontWeight.Black) { vm.editor.styleParagraph(doc, para, mapOf("bold" to !para.bold)) }
+            LetterButton("T", stringResource(R.string.edit_italic), para.italic, italic = true) { vm.editor.styleParagraph(doc, para, mapOf("italic" to !para.italic)) }
             LetterButton("T", stringResource(R.string.edit_underline), underline, underline = true) {
-                vm.editUnderline[para.page to para.number] = !underline
-                vm.styleParagraph(doc, para, mapOf("underline" to !underline))
+                vm.editor.editUnderline[para.page to para.number] = !underline
+                vm.editor.styleParagraph(doc, para, mapOf("underline" to !underline))
             }
             LetterButton("tT", stringResource(R.string.edit_text_size), panel == FormatPanel.Size, small = true) { toggle(FormatPanel.Size) }
             val fontLabel = stringResource(R.string.edit_font)
@@ -291,7 +291,7 @@ private fun EditFormatBar(vm: AppViewModel, doc: OpenDocument, para: Paragraph) 
                         .then(if (panel == FormatPanel.Color) Modifier.drawBehind { drawCircle(c.toolAccent, size.minDimension / 2 + 3.dp.toPx(), style = Stroke(2.dp.toPx())) } else Modifier),
                 )
             }
-            FormatButton(alignIcon(vm.editAlign[para.page to para.number] ?: "left"), stringResource(R.string.edit_align_text), true, tintSelected = panel == FormatPanel.Align || true) { toggle(FormatPanel.Align) }
+            FormatButton(alignIcon(vm.editor.editAlign[para.page to para.number] ?: "left"), stringResource(R.string.edit_align_text), true, tintSelected = panel == FormatPanel.Align || true) { toggle(FormatPanel.Align) }
             // bulleted and numbered lists, as the reference's phone toolbar offers
             FormatButton(LucideIcons.List, stringResource(R.string.edit_list), true, tintSelected = true) { toggle(FormatPanel.List) }
             FormatButton(LucideIcons.Superscript, stringResource(R.string.edit_script_title), true, tintSelected = panel == FormatPanel.Script) { toggle(FormatPanel.Script) }
@@ -429,15 +429,15 @@ private fun AlignPanel(current: String, onAlign: (String) -> Unit) {
 @Composable
 fun BoxScope.EditOverlay(vm: AppViewModel, doc: OpenDocument) {
     val pages = doc.viewer.visiblePages()
-    LaunchedEffect(pages, doc.info.generation) { for (p in pages) vm.loadParagraphs(doc, p) }
+    LaunchedEffect(pages, doc.info.generation) { for (p in pages) vm.editor.loadParagraphs(doc, p) }
     val accent = pdfColors.accent
-    val selected = vm.editSelection
-    val editing = vm.editing
+    val selected = vm.editor.editSelection
+    val editing = vm.editor.editing
     Canvas(Modifier.fillMaxSize()) {
         val dash = PathEffect.dashPathEffect(floatArrayOf(8f, 6f))
         // with a paragraph or picture selected, the reference shows only that one's outline
-        if (selected == null && vm.editImage == null) for (p in pages) {
-            for (para in vm.paragraphs[p].orEmpty()) {
+        if (selected == null && vm.editor.editImage == null) for (p in pages) {
+            for (para in vm.editor.paragraphs[p].orEmpty()) {
                 val a = doc.viewer.pageToScreen(p, para.box[0], para.box[1])
                 val b = doc.viewer.pageToScreen(p, para.box[2], para.box[3])
                 drawRect(accent.copy(alpha = 0.6f), topLeft = Offset(a.x - 3f, a.y - 3f), size = Size(b.x - a.x + 6f, b.y - a.y + 6f), style = Stroke(width = 1.dp.toPx(), pathEffect = dash))
@@ -447,8 +447,8 @@ fun BoxScope.EditOverlay(vm: AppViewModel, doc: OpenDocument) {
     if (selected != null) {
         if (editing != null && editing.page == selected.page && editing.number == selected.number) InlineEditor(vm, doc, editing) else SelectedParagraph(vm, doc, selected)
     }
-    vm.editImage?.let { img ->
-        val crop = vm.imageEdit.crop
+    vm.editor.editImage?.let { img ->
+        val crop = vm.editor.imageEdit.crop
         if (crop != null) CropFrame(vm, doc, img, crop) else SelectedImage(vm, doc, img)
     }
 }
@@ -483,13 +483,13 @@ private fun BoxScope.SelectedParagraph(vm: AppViewModel, doc: OpenDocument, para
     with(density) {
         Box(
             Modifier.offset { IntOffset(a.x.roundToInt(), a.y.roundToInt()) }.size((b.x - a.x).toDp(), (b.y - a.y).toDp())
-                .pointerInput(para) { detectTapGestures { vm.startInlineEdit(para, selectAll = false) } }
+                .pointerInput(para) { detectTapGestures { vm.editor.startInlineEdit(para, selectAll = false) } }
                 .pointerInput(para) {
                     detectDragGestures(
                         onDragEnd = {
                             val m = move
                             move = Offset.Zero
-                            if (m.getDistance() > 2f) vm.moveParagraph(doc, para, m.x / ppp, m.y / ppp)
+                            if (m.getDistance() > 2f) vm.editor.moveParagraph(doc, para, m.x / ppp, m.y / ppp)
                         },
                         onDragCancel = { move = Offset.Zero },
                     ) { change, d ->
@@ -509,7 +509,7 @@ private fun BoxScope.SelectedParagraph(vm: AppViewModel, doc: OpenDocument, para
                                 val g = grow
                                 grow = 0f
                                 val w = (para.box[2] - para.box[0]) + (if (left) -g else g) / ppp
-                                if (kotlin.math.abs(g) > 2f && w > 12f) vm.resizeParagraph(doc, para, w, if (left) g / ppp else 0f)
+                                if (kotlin.math.abs(g) > 2f && w > 12f) vm.editor.resizeParagraph(doc, para, w, if (left) g / ppp else 0f)
                             },
                             onDragCancel = { grow = 0f },
                         ) { change, d ->
@@ -522,11 +522,11 @@ private fun BoxScope.SelectedParagraph(vm: AppViewModel, doc: OpenDocument, para
     }
     if (move == Offset.Zero && grow == 0f) {
         FloatingMenu(a, b, doc.viewer.padTop) {
-            MenuText(stringResource(R.string.edit_edit_text)) { vm.startInlineEdit(para, selectAll = false) }
+            MenuText(stringResource(R.string.edit_edit_text)) { vm.editor.startInlineEdit(para, selectAll = false) }
             MenuSplit()
-            MenuText(stringResource(R.string.edit_select_all)) { vm.startInlineEdit(para, selectAll = true) }
+            MenuText(stringResource(R.string.edit_select_all)) { vm.editor.startInlineEdit(para, selectAll = true) }
             MenuSplit()
-            MenuText(stringResource(R.string.common_delete)) { vm.deleteParagraph(doc, para) }
+            MenuText(stringResource(R.string.common_delete)) { vm.editor.deleteParagraph(doc, para) }
         }
     }
 }
@@ -579,7 +579,7 @@ private fun BoxScope.InlineEditor(vm: AppViewModel, doc: OpenDocument, para: Par
     val ppp = doc.viewer.pixelsPerPoint(para.page)
     val focus = remember { FocusRequester() }
     var value by remember(para) {
-        mutableStateOf(TextFieldValue(para.text, if (vm.editSelectAll) TextRange(0, para.text.length) else TextRange(para.text.length)))
+        mutableStateOf(TextFieldValue(para.text, if (vm.editor.editSelectAll) TextRange(0, para.text.length) else TextRange(para.text.length)))
     }
     LaunchedEffect(para) { runCatching { focus.requestFocus() } }
     val ime = androidx.compose.foundation.layout.WindowInsets.ime.getBottom(density)
@@ -590,7 +590,7 @@ private fun BoxScope.InlineEditor(vm: AppViewModel, doc: OpenDocument, para: Par
         val clear = v.viewH - ime - with(density) { (BottomBarHeight + 64.dp).toPx() }
         if (b.y > clear) v.setScroll(v.scrollX, v.scrollY + (b.y - clear))
     }
-    LaunchedEffect(value.text) { vm.editDraft = value.text }
+    LaunchedEffect(value.text) { vm.editor.editDraft = value.text }
     // misspelled words, checked a moment after typing stops, underlined in red (as the reference does)
     val context = androidx.compose.ui.platform.LocalContext.current
     val speller = remember { SpellCheck(context) }
@@ -601,11 +601,11 @@ private fun BoxScope.InlineEditor(vm: AppViewModel, doc: OpenDocument, para: Par
         typos = speller.check(value.text)
     }
     var paper by remember(para) { mutableStateOf<Color?>(null) }
-    LaunchedEffect(para) { paper = vm.paperColor(doc, para) }
+    LaunchedEffect(para) { paper = vm.editor.paperColor(doc, para) }
     val paragraphLabel = stringResource(R.string.edit_paragraph_text)
     val fontPx = para.size * ppp
     val sp = with(density) { (fontPx / fontScale).toSp() }
-    val family = when (vm.editFont[para.page to para.number] ?: baseFont(para.font)) {
+    val family = when (vm.editor.editFont[para.page to para.number] ?: baseFont(para.font)) {
         "times" -> FontFamily.Serif
         "courier" -> FontFamily.Monospace
         else -> FontFamily.SansSerif
@@ -620,15 +620,15 @@ private fun BoxScope.InlineEditor(vm: AppViewModel, doc: OpenDocument, para: Par
                 value = value,
                 onValueChange = {
                     value = it
-                    vm.editDraft = it.text
-                    vm.editTextSelection = it.selection.start to it.selection.end
-                    vm.editComposing = it.composition != null
+                    vm.editor.editDraft = it.text
+                    vm.editor.editTextSelection = it.selection.start to it.selection.end
+                    vm.editor.editComposing = it.composition != null
                 },
                 textStyle = TextStyle(
                     color = parseHex(para.color ?: "#000000"), fontSize = sp, lineHeight = sp * 1.2f, fontFamily = family,
                     fontWeight = if (para.bold) FontWeight.Bold else FontWeight.Normal,
                     fontStyle = if (para.italic) FontStyle.Italic else FontStyle.Normal,
-                    textDecoration = if (vm.editUnderline[para.page to para.number] == true) TextDecoration.Underline else null,
+                    textDecoration = if (vm.editor.editUnderline[para.page to para.number] == true) TextDecoration.Underline else null,
                 ),
                 cursorBrush = SolidColor(SelectionBlue),
                 onTextLayout = { layout = it },
@@ -716,7 +716,7 @@ private fun BoxScope.SelectedImage(vm: AppViewModel, doc: OpenDocument, img: Edi
                             if (m.getDistance() > 2f) {
                                 val dx = m.x / ppp
                                 val dy = m.y / ppp
-                                vm.placeImage(doc, img, floatArrayOf(img.rect[0] + dx, img.rect[1] + dy, img.rect[2] + dx, img.rect[3] + dy))
+                                vm.editor.placeImage(doc, img, floatArrayOf(img.rect[0] + dx, img.rect[1] + dy, img.rect[2] + dx, img.rect[3] + dy))
                             }
                         },
                         onDragCancel = { move = Offset.Zero },
@@ -737,7 +737,7 @@ private fun BoxScope.SelectedImage(vm: AppViewModel, doc: OpenDocument, img: Edi
                             if (kotlin.math.abs(s - 1f) > 0.02f) {
                                 val w = (img.rect[2] - img.rect[0]) * s
                                 val h = (img.rect[3] - img.rect[1]) * s
-                                vm.placeImage(doc, img, floatArrayOf(img.rect[0], img.rect[1], img.rect[0] + w, img.rect[1] + h))
+                                vm.editor.placeImage(doc, img, floatArrayOf(img.rect[0], img.rect[1], img.rect[0] + w, img.rect[1] + h))
                             }
                         },
                         onDragCancel = { scale = 1f },
@@ -751,7 +751,7 @@ private fun BoxScope.SelectedImage(vm: AppViewModel, doc: OpenDocument, img: Edi
     if (move == Offset.Zero && scale == 1f) {
         FloatingMenu(a, b, doc.viewer.padTop) { ImageMenu(vm, doc, img) }
     }
-    vm.imageEdit.rotating?.let { RotateImageDialog(vm, doc, it) }
+    vm.editor.imageEdit.rotating?.let { RotateImageDialog(vm, doc, it) }
 }
 
 /**
@@ -767,9 +767,9 @@ private fun ImageMenu(vm: AppViewModel, doc: OpenDocument, img: EditImage) {
         MenuItem(stringResource(R.string.edit_image_flip_vertical)) { close(); vm.imageAction(doc, img, "flip_vertical") }
     }
     MenuDropdown(LucideIcons.RotateCw, stringResource(R.string.edit_image_rotate)) { close ->
-        MenuItem(stringResource(R.string.edit_turn_left)) { close(); vm.turnImage(doc, img, 3) }
-        MenuItem(stringResource(R.string.edit_turn_right)) { close(); vm.turnImage(doc, img, 1) }
-        MenuItem(stringResource(R.string.edit_image_rotate_by)) { close(); vm.imageEdit.rotating = img }
+        MenuItem(stringResource(R.string.edit_turn_left)) { close(); vm.editor.turnImage(doc, img, 3) }
+        MenuItem(stringResource(R.string.edit_turn_right)) { close(); vm.editor.turnImage(doc, img, 1) }
+        MenuItem(stringResource(R.string.edit_image_rotate_by)) { close(); vm.editor.imageEdit.rotating = img }
     }
     MenuDropdown(LucideIcons.Layers, stringResource(R.string.edit_image_arrange)) { close ->
         for (ar in Arrange.entries) MenuItem(stringResource(ar.label)) { close(); vm.arrangeImage(doc, img, ar) }
@@ -780,7 +780,7 @@ private fun ImageMenu(vm: AppViewModel, doc: OpenDocument, img: EditImage) {
         if (img.hasCrop) MenuItem(stringResource(R.string.edit_image_remove_crop)) { close(); vm.imageAction(doc, img, "remove_crop") }
         if (form) MenuItem(stringResource(R.string.edit_image_ungroup)) { close(); vm.ungroupImage(doc, img) }
     }
-    MenuIconButton(LucideIcons.Trash2, stringResource(R.string.common_delete)) { vm.deleteImage(doc, img) }
+    MenuIconButton(LucideIcons.Trash2, stringResource(R.string.common_delete)) { vm.editor.deleteImage(doc, img) }
 }
 
 /** A menu button that opens a list under it; [items] gets the function that closes the list. */
@@ -811,7 +811,7 @@ private fun RotateImageDialog(vm: AppViewModel, doc: OpenDocument, img: EditImag
     var degrees by remember(img) { mutableFloatStateOf(0f) }
     val snapped = snapDegrees(degrees)
     androidx.compose.material3.AlertDialog(
-        onDismissRequest = { vm.imageEdit.rotating = null },
+        onDismissRequest = { vm.editor.imageEdit.rotating = null },
         title = { Text(stringResource(R.string.edit_image_rotate_by)) },
         text = {
             Column {
@@ -825,11 +825,11 @@ private fun RotateImageDialog(vm: AppViewModel, doc: OpenDocument, img: EditImag
         },
         confirmButton = {
             TextButton(enabled = snapped != 0, onClick = {
-                vm.imageEdit.rotating = null
+                vm.editor.imageEdit.rotating = null
                 vm.imageAction(doc, img, "rotate_by", mapOf("degrees" to snapped.toDouble()))
             }) { Text(stringResource(R.string.edit_image_apply)) }
         },
-        dismissButton = { TextButton(onClick = { vm.imageEdit.rotating = null }) { Text(stringResource(R.string.common_cancel)) } },
+        dismissButton = { TextButton(onClick = { vm.editor.imageEdit.rotating = null }) { Text(stringResource(R.string.common_cancel)) } },
     )
 }
 
@@ -846,7 +846,7 @@ private fun BoxScope.CropFrame(vm: AppViewModel, doc: OpenDocument, img: EditIma
     val (fa, fb) = screenBox(doc, img.page, img.rect, 0f)
     val (a, b) = screenBox(doc, img.page, crop, 0f)
     val ppp = doc.viewer.pixelsPerPoint(img.page).coerceAtLeast(0.01f)
-    val ratio = vm.imageEdit.cropRatio
+    val ratio = vm.editor.imageEdit.cropRatio
     Canvas(Modifier.fillMaxSize()) {
         val dim = Color(0x99000000)
         drawRect(dim, topLeft = fa, size = Size(fb.x - fa.x, (a.y - fa.y).coerceAtLeast(0f)))
@@ -875,8 +875,8 @@ private fun BoxScope.CropFrame(vm: AppViewModel, doc: OpenDocument, img: EditIma
                 .pointerInput(img, i, ratio) {
                     detectDragGestures { change, d ->
                         change.consume()
-                        val now = vm.imageEdit.crop ?: return@detectDragGestures
-                        vm.imageEdit.crop = dragCrop(now, edges, d.x / ppp, d.y / ppp, img.rect, vm.imageEdit.cropRatio)
+                        val now = vm.editor.imageEdit.crop ?: return@detectDragGestures
+                        vm.editor.imageEdit.crop = dragCrop(now, edges, d.x / ppp, d.y / ppp, img.rect, vm.editor.imageEdit.cropRatio)
                     }
                 },
         )
@@ -892,15 +892,15 @@ private fun BoxScope.CropFrame(vm: AppViewModel, doc: OpenDocument, img: EditIma
                 val on = r == ratio
                 Box(
                     Modifier.fillMaxHeightRow().clickable {
-                        vm.imageEdit.cropRatio = r
-                        if (r != null) vm.imageEdit.crop = fitRatio(vm.imageEdit.crop ?: crop, r)
+                        vm.editor.imageEdit.cropRatio = r
+                        if (r != null) vm.editor.imageEdit.crop = fitRatio(vm.editor.imageEdit.crop ?: crop, r)
                     }.semantics { selected = on }.padding(horizontal = 12.dp),
                     contentAlignment = Alignment.Center,
                 ) { Text(stringResource(label), color = if (on) SelectionBlue else Color.White, fontSize = 15.sp) }
             }
         }
         Row(Modifier.height(48.dp), verticalAlignment = Alignment.CenterVertically) {
-            MenuText(stringResource(R.string.common_cancel)) { vm.imageEdit.crop = null }
+            MenuText(stringResource(R.string.common_cancel)) { vm.editor.imageEdit.crop = null }
             MenuSplit()
             MenuText(stringResource(R.string.edit_image_crop)) { vm.applyCrop(doc, img) }
         }

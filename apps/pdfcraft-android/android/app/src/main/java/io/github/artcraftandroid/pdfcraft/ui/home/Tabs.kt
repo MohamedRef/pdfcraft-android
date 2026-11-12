@@ -403,10 +403,10 @@ private fun Preferences(vm: AppViewModel) {
     }
     SheetDivider()
     Section(stringResource(R.string.home_section_forms))
-    SheetRow(null, stringResource(R.string.home_offer_suggestions), { vm.updateFormSuggestions(!vm.formSuggestions) }) {
-        PdfSwitch(vm.formSuggestions, { vm.updateFormSuggestions(it) })
+    SheetRow(null, stringResource(R.string.home_offer_suggestions), { vm.editor.updateFormSuggestions(!vm.editor.formSuggestions) }) {
+        PdfSwitch(vm.editor.formSuggestions, { vm.editor.updateFormSuggestions(it) })
     }
-    SheetRow(null, stringResource(R.string.home_clear_suggestions), { vm.clearFormSuggestions() })
+    SheetRow(null, stringResource(R.string.home_clear_suggestions), { vm.editor.clearFormSuggestions() })
     SheetDivider()
     Section(stringResource(R.string.library_title))
     SheetRow(null, stringResource(R.string.library_index_switch), { vm.study.updateLibraryIndexing(!vm.study.libraryIndexing) }) {
