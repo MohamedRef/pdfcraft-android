@@ -386,6 +386,43 @@ mod tests {
         std::fs::remove_dir_all(other).unwrap();
     }
 
+    /// A black-and-white page (#300) stays one bit per pixel all the way into the saved PDF.
+    #[test]
+    fn a_black_and_white_page_is_one_bit_in_the_saved_pdf() {
+        let root = temp("bw");
+        // an A4 page at 200 dpi with rows of small dark marks
+        let shot = root.join("page.png");
+        image::GrayImage::from_fn(1654, 2339, |x, y| {
+            let mark = (200..2100).contains(&y)
+                && (150..1500).contains(&x)
+                && (y / 20) % 2 == 0
+                && ((x / 7) * 7 + (y / 40) * 13) % 5 != 0
+                && x % 7 < 4
+                && y % 40 > 6;
+            image::Luma([if mark { 30 } else { 232 }])
+        })
+        .save(&shot)
+        .unwrap();
+        let whole = vec![0.0, 0.0, 1.0, 0.0, 1.0, 1.0, 0.0, 1.0];
+        let page =
+            process_in(&root, &ScanPageRequest { corners: whole, look: ScanLook::BlackWhite, strength: 55, ..request(&shot, &root.join("page-0")) })
+                .unwrap();
+        assert_eq!((page.format, page.paper, page.width, page.height, page.dpi), (ScanFormat::Png, ScanPaper::A4, 1654, 2339, 200.0));
+        let png = std::fs::read(&page.path).unwrap();
+        // the PNG header: bit depth 1, colour type 0 (grey)
+        assert_eq!(&png[24..26], [1, 0]);
+        let session = crate::MobileSession::new();
+        let args = serde_json::json!({ "from": "images", "paths": [page.path], "name": "Scan" });
+        let created: serde_json::Value = serde_json::from_str(&session.execute("doc_create".into(), args.to_string()).unwrap()).unwrap();
+        let out = root.join("scan.pdf");
+        session.execute("doc_save".into(), serde_json::json!({ "doc": created["doc"], "path": out.to_string_lossy() }).to_string()).unwrap();
+        let pdf = std::fs::read(&out).unwrap();
+        let text = String::from_utf8_lossy(&pdf);
+        assert!(text.contains("/BitsPerComponent 1") && !text.contains("/BitsPerComponent 8"), "the page image is not 1 bit per pixel in the PDF");
+        assert!(pdf.len() < 2 * png.len() + 4096, "PDF {} bytes for a PNG of {}", pdf.len(), png.len());
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
     #[test]
     fn paths_outside_the_root_are_refused() {
         let root = temp("root");

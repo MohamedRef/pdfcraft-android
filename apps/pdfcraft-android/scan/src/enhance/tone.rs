@@ -152,22 +152,44 @@ impl<'a> Renderer<'a> {
         }
     }
 
-    /// The whole page on `threads` threads (row bands; the bytes are the same for any number).
-    pub fn render(&self, threads: usize) -> Vec<u8> {
+    /// `channels` bytes per pixel for the whole page, each row written by `fill`, on `threads`
+    /// threads (row bands; the bytes are the same for any number).
+    fn rows(&self, threads: usize, channels: usize, fill: impl Fn(usize, &mut [u8], &mut [f32]) + Sync) -> Vec<u8> {
         let (w, h) = (self.page.width as usize, self.page.height as usize);
-        let mut data = vec![0u8; w * h * 3];
+        let mut data = vec![0u8; w * h * channels];
         let band = h.div_ceil(threads.clamp(1, 8)).max(1);
+        let fill = &fill;
         std::thread::scope(|scope| {
-            for (b, chunk) in data.chunks_mut(band * w * 3).enumerate() {
+            for (b, chunk) in data.chunks_mut(band * w * channels).enumerate() {
                 scope.spawn(move || {
                     let mut light = vec![0f32; self.gain[0].w * 3];
-                    for (i, row) in chunk.chunks_mut(w * 3).enumerate() {
-                        self.row(b * band + i, row, &mut light);
+                    for (i, row) in chunk.chunks_mut(w * channels).enumerate() {
+                        fill(b * band + i, row, &mut light);
                     }
                 });
             }
         });
         data
+    }
+
+    /// The whole page with the look, RGB8.
+    pub fn render(&self, threads: usize) -> Vec<u8> {
+        self.rows(threads, 3, |y, out, light| self.row(y, out, light))
+    }
+
+    /// The luminance of the page with the look, for the pixels marked in `wanted` (0 for the
+    /// others; rows with none are skipped).
+    pub fn toned_luma(&self, wanted: &[bool]) -> Vec<u8> {
+        let (w, h) = (self.page.width as usize, self.page.height as usize);
+        let mut out = vec![0u8; w * h];
+        let (mut rgb, mut light) = (vec![0u8; w * 3], vec![0f32; self.gain[0].w * 3]);
+        for y in (0..h).filter(|y| wanted[y * w..(y + 1) * w].contains(&true)) {
+            self.row(y, &mut rgb, &mut light);
+            for (x, px) in rgb.chunks_exact(3).enumerate().filter(|(x, _)| wanted[y * w + x]) {
+                out[y * w + x] = crate::luma([px[0], px[1], px[2]]);
+            }
+        }
+        out
     }
 }
 
