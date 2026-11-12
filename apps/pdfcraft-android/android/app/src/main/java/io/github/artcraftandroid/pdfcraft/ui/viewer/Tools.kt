@@ -154,7 +154,7 @@ fun ToolLayer(vm: AppViewModel, doc: OpenDocument) {
             }
         }
         ViewerTool.Text -> TapLayer(doc) { p -> vm.textPrompt = TextPrompt(doc, p, callout = doc.controller.textCallout) }
-        ViewerTool.FillSign -> if (vm.certPlacing === doc) CertPlaceLayer(vm, doc) else FillSignLayer(vm, doc)
+        ViewerTool.FillSign -> if (vm.signing.certPlacing === doc) CertPlaceLayer(vm, doc) else FillSignLayer(vm, doc)
         ViewerTool.Measure -> MeasureLayer(vm, doc)
         else -> Unit
     }
