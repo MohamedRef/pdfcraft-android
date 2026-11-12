@@ -51,10 +51,10 @@ fun CardEditor(vm: AppViewModel, draft: CardDraft) {
     var front by remember(draft) { mutableStateOf(draft.front) }
     var back by remember(draft) { mutableStateOf(draft.back) }
     PdfDialog(
-        onDismiss = { vm.cardDraft = null },
+        onDismiss = { vm.study.cardDraft = null },
         title = stringResource(if (draft.id == null) R.string.cards_new else R.string.cards_edit),
         confirm = stringResource(R.string.common_save), confirmEnabled = front.isNotBlank(),
-        onConfirm = { vm.saveCard(draft.copy(front = front, back = back)) },
+        onConfirm = { vm.study.saveCard(draft.copy(front = front, back = back)) },
     ) {
         Text(stringResource(R.string.cards_front), color = c.textSecondary, fontSize = 13.sp)
         MultiField(front, { front = it.take(2000) })
@@ -93,26 +93,26 @@ private fun spanLabel(ms: Long, minutes: String, days: String, months: String): 
 @Composable
 fun ReviewScreen(vm: AppViewModel, session: ReviewSession) {
     val c = pdfColors
-    BackHandler { vm.reviewing = null }
+    BackHandler { vm.study.reviewing = null }
     var shown by remember { mutableStateOf(false) }
     var menu by remember { mutableStateOf(false) }
     var deleting by remember { mutableStateOf<Flashcard?>(null) }
     val card = session.queue.firstOrNull()
     Column(Modifier.fillMaxSize().background(c.surface).safeTopPadding().navigationBarsPadding()) {
         Row(Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            BarIcon(LucideIcons.ArrowLeft, stringResource(R.string.common_back), { vm.reviewing = null })
+            BarIcon(LucideIcons.ArrowLeft, stringResource(R.string.common_back), { vm.study.reviewing = null })
             Column(Modifier.weight(1f).padding(start = 4.dp)) {
                 Text(stringResource(R.string.cards_title), color = c.label, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
                 Text(stringResource(R.string.cards_progress, session.queue.size, session.all.size), color = c.textSecondary, fontSize = 12.sp)
             }
-            if (session.deck != null) BarIcon(LucideIcons.Plus, stringResource(R.string.cards_new), { vm.newCard(session.deck, session.deckName) })
+            if (session.deck != null) BarIcon(LucideIcons.Plus, stringResource(R.string.cards_new), { vm.study.newCard(session.deck, session.deckName) })
             Box {
                 BarIcon(LucideIcons.EllipsisVertical, stringResource(R.string.common_more_options), { menu = true })
                 DropdownMenu(expanded = menu, onDismissRequest = { menu = false }, containerColor = c.surface) {
-                    DropdownMenuItem(text = { Text(stringResource(R.string.cards_export)) }, onClick = { menu = false; vm.exportCards(session.deck, session.deckName) })
-                    if (session.deck != null) DropdownMenuItem(text = { Text(stringResource(R.string.cards_import)) }, onClick = { menu = false; vm.importCards(session.deck, session.deckName) })
+                    DropdownMenuItem(text = { Text(stringResource(R.string.cards_export)) }, onClick = { menu = false; vm.study.exportCards(session.deck, session.deckName) })
+                    if (session.deck != null) DropdownMenuItem(text = { Text(stringResource(R.string.cards_import)) }, onClick = { menu = false; vm.study.importCards(session.deck, session.deckName) })
                     if (card != null) {
-                        DropdownMenuItem(text = { Text(stringResource(R.string.cards_edit)) }, onClick = { menu = false; vm.editCard(card) })
+                        DropdownMenuItem(text = { Text(stringResource(R.string.cards_edit)) }, onClick = { menu = false; vm.study.editCard(card) })
                         DropdownMenuItem(text = { Text(stringResource(R.string.common_delete)) }, onClick = { menu = false; deleting = card })
                     }
                 }
@@ -138,13 +138,13 @@ fun ReviewScreen(vm: AppViewModel, session: ReviewSession) {
             Spacer(Modifier.height(20.dp))
             if (card.page >= 0) Text(
                 stringResource(R.string.cards_from_page, card.deckName.removeSuffix(".pdf"), card.page + 1),
-                color = c.accent, fontSize = 13.sp, modifier = Modifier.clickable { vm.openCardSource(card) }.padding(vertical = 8.dp),
+                color = c.accent, fontSize = 13.sp, modifier = Modifier.clickable { vm.study.openCardSource(card) }.padding(vertical = 8.dp),
             )
         }
         if (!shown) {
             Pill(stringResource(R.string.cards_show_answer), Color(0xFF1473E6), Modifier.padding(16.dp).fillMaxWidth()) { shown = true }
         } else {
-            val previews = remember(card) { vm.previewIntervals(card) }
+            val previews = remember(card) { vm.study.previewIntervals(card) }
             val min = stringResource(R.string.cards_span_minutes)
             val day = stringResource(R.string.cards_span_days)
             val mon = stringResource(R.string.cards_span_months)
@@ -157,7 +157,7 @@ fun ReviewScreen(vm: AppViewModel, session: ReviewSession) {
                 )) {
                     Pill(stringResource(label) + "\n" + spanLabel(previews[rating] ?: 0, min, day, mon), color, Modifier.weight(1f)) {
                         shown = false
-                        vm.rate(session, card, rating)
+                        vm.study.rate(session, card, rating)
                     }
                 }
             }
@@ -167,7 +167,7 @@ fun ReviewScreen(vm: AppViewModel, session: ReviewSession) {
         PdfDialog(
             onDismiss = { deleting = null }, title = stringResource(R.string.cards_delete_title),
             confirm = stringResource(R.string.common_delete), destructive = true,
-            onConfirm = { deleting = null; vm.deleteCard(d.id) },
+            onConfirm = { deleting = null; vm.study.deleteCard(d.id) },
         )
     }
 }

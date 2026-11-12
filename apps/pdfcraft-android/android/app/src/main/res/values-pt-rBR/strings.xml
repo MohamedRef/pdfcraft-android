@@ -228,6 +228,7 @@
     <string name="tools_add_page">Adicionar página</string>
     <string name="tools_retake">Tirar novamente</string>
     <string name="tools_filter_original">Original</string>
+    <string name="tools_filter_clean_scan">Digitalização limpa</string>
     <string name="tools_filter_auto_colour">Cor automática</string>
     <string name="tools_filter_grayscale">Escala de cinza</string>
     <string name="tools_filter_whiteboard">Quadro branco</string>

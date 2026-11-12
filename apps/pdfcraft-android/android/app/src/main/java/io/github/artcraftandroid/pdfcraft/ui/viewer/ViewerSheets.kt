@@ -132,6 +132,7 @@ fun MoreSheet(vm: AppViewModel, doc: OpenDocument) {
                 ctl.pagesOpen = true
             }, chevron = true)
             SheetRow(LucideIcons.Clock, stringResource(R.string.focus_timer), { ctl.sheet = ViewerSheet.FocusTimer })
+            SheetRow(LucideIcons.Bandage, stringResource(R.string.study_title), { ctl.sheet = ViewerSheet.Study }, chevron = true)
             GroupDivider()
             MoreHeading(stringResource(R.string.sheet_group_navigate))
             SheetRow(LucideIcons.Bookmark, stringResource(R.string.sheet_bookmarks_contents), { ctl.sheet = ViewerSheet.Bookmarks }, chevron = true)
@@ -145,8 +146,8 @@ fun MoreSheet(vm: AppViewModel, doc: OpenDocument) {
             SheetRow(LucideIcons.ShieldCheck, stringResource(R.string.sign_signatures), { ctl.sheet = ViewerSheet.Signatures }, chevron = true)
             if (doc.info.layers > 0u) SheetRow(LucideIcons.Layers, stringResource(R.string.sheet_layers), { ctl.sheet = ViewerSheet.Layers }, chevron = true)
             doc.source?.let { src ->
-                val due = vm.dueCounts[src.toString()] ?: 0
-                SheetRow(LucideIcons.SwatchBook, if (due > 0) stringResource(R.string.cards_row_due, due) else stringResource(R.string.cards_title), { close(); vm.startReview(src.toString(), doc.info.name) })
+                val due = vm.study.dueCounts[src.toString()] ?: 0
+                SheetRow(LucideIcons.SwatchBook, if (due > 0) stringResource(R.string.cards_row_due, due) else stringResource(R.string.cards_title), { close(); vm.study.startReview(src.toString(), doc.info.name) })
             }
             if (doc.info.undo != null || doc.info.redo != null) {
                 GroupDivider()
@@ -156,7 +157,7 @@ fun MoreSheet(vm: AppViewModel, doc: OpenDocument) {
             GroupDivider()
             MoreHeading(stringResource(R.string.sheet_group_file))
             SheetRow(LucideIcons.Copy, stringResource(R.string.common_save_copy), { close(); vm.saveCopyAs(doc) })
-            if (vm.backupTree != null) SheetRow(LucideIcons.RotateCcw, stringResource(R.string.backup_history), { ctl.sheet = ViewerSheet.Backups }, chevron = true)
+            if (vm.backups.backupTree != null) SheetRow(LucideIcons.RotateCcw, stringResource(R.string.backup_history), { ctl.sheet = ViewerSheet.Backups }, chevron = true)
             SheetRow(LucideIcons.GitCompare, stringResource(R.string.compare_with_older), { close(); vm.startCompare(doc) })
             SheetRow(LucideIcons.FileOutput, stringResource(R.string.sheet_export_as), { close(); vm.openExport(doc) })
             SheetRow(LucideIcons.BrushCleaning, stringResource(R.string.hidden_title), { ctl.sheet = ViewerSheet.HiddenInfo }, chevron = true)

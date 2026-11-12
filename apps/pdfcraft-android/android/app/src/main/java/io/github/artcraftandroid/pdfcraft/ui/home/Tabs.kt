@@ -409,37 +409,37 @@ private fun Preferences(vm: AppViewModel) {
     SheetRow(null, stringResource(R.string.home_clear_suggestions), { vm.clearFormSuggestions() })
     SheetDivider()
     Section(stringResource(R.string.library_title))
-    SheetRow(null, stringResource(R.string.library_index_switch), { vm.updateLibraryIndexing(!vm.libraryIndexing) }) {
-        io.github.artcraftandroid.pdfcraft.ui.PdfSwitch(vm.libraryIndexing, null)
+    SheetRow(null, stringResource(R.string.library_index_switch), { vm.study.updateLibraryIndexing(!vm.study.libraryIndexing) }) {
+        io.github.artcraftandroid.pdfcraft.ui.PdfSwitch(vm.study.libraryIndexing, null)
     }
-    SheetRow(null, stringResource(R.string.library_wipe_index), { vm.wipeLibraryIndex() })
+    SheetRow(null, stringResource(R.string.library_wipe_index), { vm.study.wipeLibraryIndex() })
     Text(stringResource(R.string.library_index_body), color = c.textSecondary, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 20.dp))
 
     Section(stringResource(R.string.backup_section))
-    val backupName = remember(vm.backupTree) { vm.backupFolderName() }
-    SheetRow(null, if (backupName == null) stringResource(R.string.backup_choose_folder) else stringResource(R.string.backup_folder_is, backupName), { vm.chooseBackupFolder() })
-    if (vm.backupTree != null) {
+    val backupName = remember(vm.backups.backupTree) { vm.backups.backupFolderName() }
+    SheetRow(null, if (backupName == null) stringResource(R.string.backup_choose_folder) else stringResource(R.string.backup_folder_is, backupName), { vm.backups.chooseBackupFolder() })
+    if (vm.backups.backupTree != null) {
         SheetRow(null, stringResource(R.string.backup_keep_label), {}) {
             Row(horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(4.dp)) {
                 for (n in listOf(5, 10, 20, 50)) {
-                    val on = vm.backupKeep == n
+                    val on = vm.backups.backupKeep == n
                     Text(
                         n.toString(), color = if (on) Color.White else c.text, fontSize = 14.sp,
                         modifier = Modifier.clip(androidx.compose.foundation.shape.RoundedCornerShape(14.dp))
                             .background(if (on) c.accent else c.surface)
-                            .clickable { vm.updateBackupKeep(n) }.padding(horizontal = 10.dp, vertical = 4.dp),
+                            .clickable { vm.backups.updateBackupKeep(n) }.padding(horizontal = 10.dp, vertical = 4.dp),
                     )
                 }
             }
         }
         val status = when {
-            vm.backupFailed -> stringResource(R.string.backup_status_failed)
-            vm.backupLast > 0 -> stringResource(R.string.backup_status_last, android.text.format.DateUtils.getRelativeTimeSpanString(vm.backupLast).toString())
+            vm.backups.backupFailed -> stringResource(R.string.backup_status_failed)
+            vm.backups.backupLast > 0 -> stringResource(R.string.backup_status_last, android.text.format.DateUtils.getRelativeTimeSpanString(vm.backups.backupLast).toString())
             else -> stringResource(R.string.backup_status_none)
         }
-        Text(status, color = if (vm.backupFailed) Color(0xFFD7373F) else c.textSecondary, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 20.dp, vertical = 2.dp))
-        if (vm.backupFailed) SheetRow(null, stringResource(R.string.backup_retry), { vm.flushBackups() })
-        SheetRow(null, stringResource(R.string.backup_turn_off), { vm.turnOffBackups() })
+        Text(status, color = if (vm.backups.backupFailed) Color(0xFFD7373F) else c.textSecondary, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 20.dp, vertical = 2.dp))
+        if (vm.backups.backupFailed) SheetRow(null, stringResource(R.string.backup_retry), { vm.backups.flushBackups() })
+        SheetRow(null, stringResource(R.string.backup_turn_off), { vm.backups.turnOffBackups() })
     }
     Text(stringResource(R.string.backup_body), color = c.textSecondary, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 20.dp))
 
@@ -450,7 +450,7 @@ private fun Preferences(vm: AppViewModel) {
     if (confirmStudyClear) io.github.artcraftandroid.pdfcraft.ui.PdfDialog(
         onDismiss = { confirmStudyClear = false }, title = stringResource(R.string.study_clear_stats),
         confirm = stringResource(R.string.common_clear), destructive = true,
-        onConfirm = { confirmStudyClear = false; vm.clearStudyStats() },
+        onConfirm = { confirmStudyClear = false; vm.study.clearStudyStats() },
     )
     SheetDivider()
     Section(stringResource(R.string.home_section_keyboard))

@@ -373,6 +373,7 @@
     <string name="tools_retake">Retake</string>
     <!-- Looks a scanned page can have -->
     <string name="tools_filter_original">Original</string>
+    <string name="tools_filter_clean_scan">Clean scan</string>
     <string name="tools_filter_auto_colour">Auto color</string>
     <string name="tools_filter_grayscale">Grayscale</string>
     <string name="tools_filter_whiteboard">Whiteboard</string>
@@ -2433,4 +2434,43 @@
     <string name="measure_exporting">Exporting measurements…</string>
     <string name="measure_export_none">There are no measurements to export</string>
     <string name="viewer_hint_measure">Tap points to measure. They snap to the drawing\'s lines. Set the scale first for real units.</string>
+    <!-- Study: masking tape and quiz mode (#143) -->
+    <string name="study_title">Study: tape and quiz</string>
+    <string name="study_explain">Cover answers with tape and tap to check yourself, or let a quiz cover your highlights. Lifting tape and quizzes don\'t change the file; other apps show the page without tape.</string>
+    <string name="study_draw_tape">Draw tape</string>
+    <string name="study_tape_hint">Drag over what to cover</string>
+    <string name="study_color_amber">Amber tape</string>
+    <string name="study_color_blue">Blue tape</string>
+    <string name="study_color_lilac">Lilac tape</string>
+    <string name="study_color_green">Green tape</string>
+    <string name="study_reveal_all">Reveal all tape</string>
+    <string name="study_cover_all">Cover all tape again</string>
+    <string name="study_remove_tape">Remove all tape</string>
+    <string name="study_tape_none">There is no tape in this document</string>
+    <string name="study_tape_removed">Tape removed. Undo brings it back.</string>
+    <string name="study_tape_read_only">Tape can\'t be added to this document</string>
+    <string name="study_hidden_answer">Hidden answer, double-tap to reveal</string>
+    <string name="study_shown_answer">Revealed answer, double-tap to cover</string>
+    <string name="study_reveal">Reveal</string>
+    <string name="study_cover">Cover</string>
+    <string name="study_quiz_page">Quiz me on this page\'s highlights</string>
+    <string name="study_quiz_document">Quiz me on all highlights</string>
+    <string name="study_quiz_none_page">This page has no highlights to quiz you on</string>
+    <string name="study_quiz_none_document">This document has no highlights to quiz you on</string>
+    <string name="study_quiz_progress">Quiz: %1$d of %2$d answered</string>
+    <string name="study_quiz_hint">Tap a covered highlight to reveal it.</string>
+    <string name="study_quiz_did_you_know">Did you know it?</string>
+    <string name="study_quiz_knew">Knew it</string>
+    <string name="study_quiz_didnt">Didn\'t know</string>
+    <string name="study_quiz_next">Next</string>
+    <string name="study_quiz_end">End quiz</string>
+    <string name="study_results_title">Quiz results</string>
+    <string name="study_results_score">You knew %1$d of %2$d.</string>
+    <plurals name="study_results_unknown">
+        <item quantity="one">%1$d to review: tap it to go back to it</item>
+        <item quantity="other">%1$d to review: tap one to go back to it</item>
+    </plurals>
+    <string name="study_results_item">Page %1$d: %2$s</string>
+    <string name="study_results_highlight">Highlight</string>
+    <string name="study_results_retry">Quiz the ones I missed</string>
 </resources>

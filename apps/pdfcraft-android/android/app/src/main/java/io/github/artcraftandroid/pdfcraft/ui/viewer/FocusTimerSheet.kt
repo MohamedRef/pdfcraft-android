@@ -55,10 +55,10 @@ internal fun timerClock(ms: Long): String {
 @Composable
 private fun rememberNow(vm: AppViewModel): Long {
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
-    LaunchedEffect(vm.focusTimer.running) {
-        while (vm.focusTimer.running) {
+    LaunchedEffect(vm.study.focusTimer.running) {
+        while (vm.study.focusTimer.running) {
             now = System.currentTimeMillis()
-            vm.tickFocusTimer()
+            vm.study.tickFocusTimer()
             delay(1000L - now % 1000L)
         }
         now = System.currentTimeMillis()
@@ -69,7 +69,7 @@ private fun rememberNow(vm: AppViewModel): Long {
 /** The focus timer's pill over the page while it runs or is paused; a tap opens its sheet. */
 @Composable
 fun FocusTimerPill(vm: AppViewModel, top: Dp, onOpen: () -> Unit, modifier: Modifier = Modifier) {
-    val t = vm.focusTimer
+    val t = vm.study.focusTimer
     if (!t.active) return
     val c = pdfColors
     val now = rememberNow(vm)
@@ -92,7 +92,7 @@ private val PRESETS = listOf(25 to 5, 50 to 10, 15 to 3)
 @Composable
 fun FocusTimerSheet(vm: AppViewModel, onDismiss: () -> Unit) {
     val c = pdfColors
-    val t = vm.focusTimer
+    val t = vm.study.focusTimer
     val now = rememberNow(vm)
     PdfSheet(onDismiss = onDismiss, dim = true) {
         Column(Modifier.padding(bottom = 16.dp)) {
@@ -110,7 +110,7 @@ fun FocusTimerSheet(vm: AppViewModel, onDismiss: () -> Unit) {
                         Box(
                             Modifier.heightIn(min = 36.dp).clip(shape)
                                 .then(if (selected) Modifier.background(Color(0xFF1473E6)) else Modifier.border(1.dp, c.textSecondary, shape))
-                                .clickable(role = Role.RadioButton) { vm.updateFocusTimer(t.copy(workMs = work * 60_000L, breakMs = rest * 60_000L)) }
+                                .clickable(role = Role.RadioButton) { vm.study.updateFocusTimer(t.copy(workMs = work * 60_000L, breakMs = rest * 60_000L)) }
                                 .semantics { this.selected = selected }.padding(horizontal = 14.dp),
                             contentAlignment = Alignment.Center,
                         ) { Text(stringResource(R.string.focus_preset, work, rest), color = if (selected) Color.White else c.label, fontSize = 14.sp) }
@@ -120,11 +120,11 @@ fun FocusTimerSheet(vm: AppViewModel, onDismiss: () -> Unit) {
             }
             Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 when {
-                    !t.active -> TimerButton(stringResource(R.string.focus_start), true, Modifier.weight(1f)) { vm.updateFocusTimer(t.start(System.currentTimeMillis())) }
-                    t.running -> TimerButton(stringResource(R.string.focus_pause), true, Modifier.weight(1f)) { vm.updateFocusTimer(t.pause(System.currentTimeMillis())) }
-                    else -> TimerButton(stringResource(R.string.focus_resume), true, Modifier.weight(1f)) { vm.updateFocusTimer(t.resume(System.currentTimeMillis())) }
+                    !t.active -> TimerButton(stringResource(R.string.focus_start), true, Modifier.weight(1f)) { vm.study.updateFocusTimer(t.start(System.currentTimeMillis())) }
+                    t.running -> TimerButton(stringResource(R.string.focus_pause), true, Modifier.weight(1f)) { vm.study.updateFocusTimer(t.pause(System.currentTimeMillis())) }
+                    else -> TimerButton(stringResource(R.string.focus_resume), true, Modifier.weight(1f)) { vm.study.updateFocusTimer(t.resume(System.currentTimeMillis())) }
                 }
-                if (t.active) TimerButton(stringResource(R.string.focus_stop), false, Modifier.weight(1f)) { vm.updateFocusTimer(t.stop()) }
+                if (t.active) TimerButton(stringResource(R.string.focus_stop), false, Modifier.weight(1f)) { vm.study.updateFocusTimer(t.stop()) }
             }
             Text(stringResource(R.string.focus_hint), color = c.textSecondary, fontSize = 13.sp, modifier = Modifier.padding(16.dp))
         }

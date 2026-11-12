@@ -85,7 +85,7 @@ private sealed interface Smart {
 @Composable
 fun LibraryTab(vm: AppViewModel) {
     val c = pdfColors
-    val data = vm.libraryData
+    val data = vm.study.libraryData
     var current by remember { mutableStateOf<String?>(null) }
     var smart by remember { mutableStateOf<Smart?>(null) }
     var query by remember { mutableStateOf("") }
@@ -94,11 +94,11 @@ fun LibraryTab(vm: AppViewModel) {
     var naming by remember { mutableStateOf<Pair<String?, String>?>(null) }
     var collectionMenu by remember { mutableStateOf<String?>(null) }
     var itemSheet by remember { mutableStateOf<String?>(null) }
-    LaunchedEffect(Unit) { vm.refreshLibrary(); vm.indexLibrary() }
-    LaunchedEffect(query, vm.indexingName) {
+    LaunchedEffect(Unit) { vm.study.refreshLibrary(); vm.study.indexLibrary() }
+    LaunchedEffect(query, vm.study.indexingName) {
         if (query.trim().length < 2) { results = null; return@LaunchedEffect }
         delay(250)
-        results = vm.searchLibrary(query, current?.let { id -> data.itemsIn(id).map { it.uri } })
+        results = vm.study.searchLibrary(query, current?.let { id -> data.itemsIn(id).map { it.uri } })
     }
     if (current != null && data.collection(current!!) == null) current = null
     BackHandler(enabled = current != null || smart != null) {
@@ -121,19 +121,19 @@ fun LibraryTab(vm: AppViewModel) {
                 BarIcon(LucideIcons.Plus, stringResource(R.string.library_add), { menu = true })
                 DropdownMenu(expanded = menu, onDismissRequest = { menu = false }, containerColor = c.surface) {
                     DropdownMenuItem(text = { Text(stringResource(R.string.library_new_collection)) }, onClick = { menu = false; naming = null to "" })
-                    DropdownMenuItem(text = { Text(stringResource(R.string.library_add_files)) }, onClick = { menu = false; vm.pickLibraryFiles(current) })
+                    DropdownMenuItem(text = { Text(stringResource(R.string.library_add_files)) }, onClick = { menu = false; vm.study.pickLibraryFiles(current) })
                 }
             }
         }
         PdfField(query, { query = it.take(100) }, stringResource(R.string.library_search_hint), Modifier.padding(horizontal = 16.dp))
-        vm.indexingName?.let {
+        vm.study.indexingName?.let {
             Text(stringResource(R.string.library_indexing, it.removeSuffix(".pdf")), color = c.textSecondary, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp), maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         val shown = results
         LazyColumn(Modifier.weight(1f).padding(top = 8.dp)) {
             if (shown != null) {
                 if (shown.isEmpty()) item {
-                    EmptyState(LucideIcons.Search, stringResource(R.string.library_no_results), stringResource(if (vm.libraryIndexing) R.string.library_no_results_body else R.string.library_no_results_names_only))
+                    EmptyState(LucideIcons.Search, stringResource(R.string.library_no_results), stringResource(if (vm.study.libraryIndexing) R.string.library_no_results_body else R.string.library_no_results_names_only))
                 }
                 items(shown, key = { "${it.uri}|${it.page}|${it.kind}|${it.start}|${it.snippet.hashCode()}" }) { hit -> HitRow(vm, hit, query) }
                 return@LazyColumn
@@ -149,7 +149,7 @@ fun LibraryTab(vm: AppViewModel) {
                 }
             }
             val files: List<LibraryItem> = when (val s = smart) {
-                Smart.Unresolved -> data.items.filter { it.uri in vm.libraryUnresolved }
+                Smart.Unresolved -> data.items.filter { it.uri in vm.study.libraryUnresolved }
                 Smart.ThisWeek -> {
                     val since = System.currentTimeMillis() - 7L * 24 * 3600 * 1000
                     val opened = vm.recentList.filter { it.opened >= since }.map { it.uri }.toSet()
@@ -177,7 +177,7 @@ fun LibraryTab(vm: AppViewModel) {
             items(files, key = { "f" + it.uri }) { item -> ItemRow(vm, item, onMenu = { itemSheet = item.uri }) }
             if (files.isEmpty() && (smart != null || data.children(current).isEmpty())) item {
                 if (data.items.isEmpty() && current == null && smart == null) {
-                    EmptyState(LucideIcons.Layers, stringResource(R.string.library_empty_title), stringResource(R.string.library_empty_body), stringResource(R.string.library_add_files)) { vm.pickLibraryFiles(null) }
+                    EmptyState(LucideIcons.Layers, stringResource(R.string.library_empty_title), stringResource(R.string.library_empty_body), stringResource(R.string.library_add_files)) { vm.study.pickLibraryFiles(null) }
                 } else {
                     EmptyState(LucideIcons.Layers, stringResource(R.string.library_collection_empty), stringResource(R.string.library_collection_empty_body))
                 }
@@ -192,7 +192,7 @@ fun LibraryTab(vm: AppViewModel) {
             title = stringResource(if (id == null) R.string.library_new_collection else R.string.common_rename),
             confirm = stringResource(if (id == null) R.string.notebook_create else R.string.common_save),
             confirmEnabled = name.isNotBlank(),
-            onConfirm = { naming = null; if (id == null) vm.addCollection(name, current) else vm.renameCollection(id, name) },
+            onConfirm = { naming = null; if (id == null) vm.study.addCollection(name, current) else vm.study.renameCollection(id, name) },
         ) { PdfField(name, { name = it.take(80) }, stringResource(R.string.notebook_name_hint)) }
     }
     collectionMenu?.let { id ->
@@ -205,7 +205,7 @@ fun LibraryTab(vm: AppViewModel) {
         if (confirmDelete) PdfDialog(
             onDismiss = { confirmDelete = false }, title = stringResource(R.string.library_delete_collection),
             confirm = stringResource(R.string.common_delete), destructive = true,
-            onConfirm = { confirmDelete = false; collectionMenu = null; vm.deleteCollection(id) },
+            onConfirm = { confirmDelete = false; collectionMenu = null; vm.study.deleteCollection(id) },
         ) { Text(stringResource(R.string.library_delete_collection_body), color = c.text, fontSize = 14.sp) }
     }
     itemSheet?.let { uri -> data.item(uri)?.let { LibraryItemSheet(vm, it) { itemSheet = null } } ?: run { itemSheet = null } }
@@ -215,9 +215,9 @@ fun LibraryTab(vm: AppViewModel) {
 private fun IndexSwitch(vm: AppViewModel) {
     val c = pdfColors
     Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) {
-        Row(Modifier.fillMaxWidth().clickable(role = Role.Switch) { vm.updateLibraryIndexing(!vm.libraryIndexing) }.padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.fillMaxWidth().clickable(role = Role.Switch) { vm.study.updateLibraryIndexing(!vm.study.libraryIndexing) }.padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(stringResource(R.string.library_index_switch), color = c.text, fontSize = 15.sp, modifier = Modifier.weight(1f))
-            PdfSwitch(vm.libraryIndexing, null)
+            PdfSwitch(vm.study.libraryIndexing, null)
         }
         Text(stringResource(R.string.library_index_body), color = c.textSecondary, fontSize = 12.sp)
     }
@@ -237,7 +237,7 @@ private fun SmartChip(label: String, onClick: () -> Unit) {
 @Composable
 private fun ItemRow(vm: AppViewModel, item: LibraryItem, onMenu: () -> Unit) {
     val c = pdfColors
-    val unavailable = item.uri in vm.libraryUnavailable
+    val unavailable = item.uri in vm.study.libraryUnavailable
     val unavailableText = stringResource(R.string.library_unavailable)
     Row(
         Modifier.fillMaxWidth().combinedClickable(
@@ -271,7 +271,7 @@ private fun HitRow(vm: AppViewModel, hit: SearchHit, query: String) {
         HitKind.Comment -> stringResource(R.string.library_hit_comment, hit.page + 1)
         HitKind.Outline -> stringResource(R.string.library_hit_bookmark, hit.page + 1)
     }
-    Column(Modifier.fillMaxWidth().clickable { vm.openHit(hit, query) }.padding(horizontal = 16.dp, vertical = 10.dp)) {
+    Column(Modifier.fillMaxWidth().clickable { vm.study.openHit(hit, query) }.padding(horizontal = 16.dp, vertical = 10.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(hit.name.removeSuffix(".pdf"), color = c.text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(where, color = c.accent, fontSize = 12.sp)
@@ -295,9 +295,9 @@ private fun HitRow(vm: AppViewModel, hit: SearchHit, query: String) {
 @Composable
 private fun LibraryItemSheet(vm: AppViewModel, item: LibraryItem, onDismiss: () -> Unit) {
     val c = pdfColors
-    val data = vm.libraryData
+    val data = vm.study.libraryData
     var tags by remember(item.uri) { mutableStateOf(item.tags.sorted().joinToString(", ")) }
-    PdfSheet(onDismiss = { vm.setItemTags(item.uri, tags.split(',', '،').toSet()); onDismiss() }, dim = true, maxHeightFraction = 0.85f) {
+    PdfSheet(onDismiss = { vm.study.setItemTags(item.uri, tags.split(',', '،').toSet()); onDismiss() }, dim = true, maxHeightFraction = 0.85f) {
         Column(Modifier.verticalScroll(rememberScrollState()).padding(bottom = 16.dp)) {
             Text(item.name.removeSuffix(".pdf"), color = c.text, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(16.dp), maxLines = 2, overflow = TextOverflow.Ellipsis)
             Text(stringResource(R.string.library_label), color = c.textSecondary, fontSize = 13.sp, modifier = Modifier.padding(start = 16.dp))
@@ -305,14 +305,14 @@ private fun LibraryItemSheet(vm: AppViewModel, item: LibraryItem, onDismiss: () 
                 val none = stringResource(R.string.library_no_label)
                 Box(
                     Modifier.size(36.dp).clip(CircleShape).border(2.dp, if (item.color == null) c.accent else c.divider, CircleShape)
-                        .clickable(role = Role.RadioButton) { vm.setItemColor(item.uri, null) }.semantics { contentDescription = none },
+                        .clickable(role = Role.RadioButton) { vm.study.setItemColor(item.uri, null) }.semantics { contentDescription = none },
                     contentAlignment = Alignment.Center,
                 ) { Icon(LucideIcons.X, null, tint = c.icon, modifier = Modifier.size(16.dp)) }
                 for (col in LABEL_COLORS) {
                     Box(
                         Modifier.size(36.dp).clip(CircleShape).background(Color(0xFF000000 or col.toLong()))
                             .border(3.dp, if (item.color == col) c.text else Color.Transparent, CircleShape)
-                            .clickable(role = Role.RadioButton) { vm.setItemColor(item.uri, col) }
+                            .clickable(role = Role.RadioButton) { vm.study.setItemColor(item.uri, col) }
                             .semantics { contentDescription = "#%06X".format(col) },
                     )
                 }
@@ -324,17 +324,17 @@ private fun LibraryItemSheet(vm: AppViewModel, item: LibraryItem, onDismiss: () 
                 for (col in data.collections.sortedBy { data.path(it.id).joinToString("/") { p -> p.name.lowercase() } }) {
                     val inIt = col.id in item.collections
                     Row(
-                        Modifier.fillMaxWidth().clickable(role = Role.Checkbox) { vm.setItemCollections(item.uri, if (inIt) item.collections - col.id else item.collections + col.id) }
+                        Modifier.fillMaxWidth().clickable(role = Role.Checkbox) { vm.study.setItemCollections(item.uri, if (inIt) item.collections - col.id else item.collections + col.id) }
                             .padding(horizontal = 12.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        androidx.compose.material3.Checkbox(checked = inIt, onCheckedChange = { vm.setItemCollections(item.uri, if (inIt) item.collections - col.id else item.collections + col.id) })
+                        androidx.compose.material3.Checkbox(checked = inIt, onCheckedChange = { vm.study.setItemCollections(item.uri, if (inIt) item.collections - col.id else item.collections + col.id) })
                         Text(data.path(col.id).joinToString(" / ") { it.name }, color = c.text, fontSize = 15.sp)
                     }
                 }
             }
             SheetDivider()
-            SheetRow(LucideIcons.X, stringResource(R.string.library_remove), { vm.removeFromLibrary(item.uri); onDismiss() }, tint = c.red)
+            SheetRow(LucideIcons.X, stringResource(R.string.library_remove), { vm.study.removeFromLibrary(item.uri); onDismiss() }, tint = c.red)
         }
     }
 }

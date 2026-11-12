@@ -158,7 +158,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                     val uris = list.map { it.uri }
                     // access to documents that left Recent is given back (#108), before the copies
                     // are pruned, so a document whose grant goes keeps its copy
-                    runCatching { files.releaseUnusedAccess(uris + library.load().items.map { it.uri }, open) }
+                    runCatching { files.releaseUnusedAccess(uris + study.library.load().items.map { it.uri }, open) }
                     // copies of documents that left Recent go too (#42)
                     runCatching { files.pruneCopies(uris, open) }
                 }
@@ -467,8 +467,8 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     /** Leave the viewer: changes are saved first, as the reference does (no prompt). */
     fun closeDocument() {
         val doc = document ?: return
-        pauseStudy()
-        studyDoc = null
+        study.pauseStudy()
+        study.studyDoc = null
         val eng = engine ?: return
         if (doc.controller.tool != ViewerTool.None) leaveTool(doc)
         viewModelScope.launch {
@@ -482,7 +482,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 document = null
                 readingMode = false
                 refreshRecents()
-                indexLibrary()
+                study.indexLibrary()
                 withContext(Dispatchers.IO) { sweepCache() }
                 if (doc.fromOtherApp) leave.trySend(Unit)
             }
@@ -580,7 +580,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
 
     /** The app went to the background: save the open document, as the reference does. */
     fun onPause() {
-        pauseStudy()
+        study.pauseStudy()
         val doc = document ?: return
         if (Diag.enabled()) Diag.event(DiagArea.Save, "pause_with_document", "doc" to doc.diagNumber, "dirty" to doc.info.dirty, "not_written_back" to doc.notWrittenBack, "preparing" to doc.info.preparing, "bytes" to doc.file.length())
         if (doc.controller.tool == ViewerTool.Draw) doc.commitTool?.invoke()
@@ -619,7 +619,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             Diag.measure(DiagArea.Save, "refresh", "doc" to doc.diagNumber) { refresh(doc) }
             // a copy for the backup folder, even when writing back fails (#145)
             stage = "backup"
-            Diag.measure(DiagArea.Save, "backup_snapshot", "doc" to doc.diagNumber) { snapshotForBackup(eng, doc) }
+            Diag.measure(DiagArea.Save, "backup_snapshot", "doc" to doc.diagNumber) { backups.snapshotForBackup(eng, doc) }
             stage = "write_back"
             if (src != null && src.scheme == "content") {
                 // The marker set above stays until the provider verifiably holds the new bytes.
@@ -779,7 +779,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         viewModelScope.launch {
             try {
                 val r = eng.tool(name, args + ("doc" to doc.id))
-                if (name == "comment_add") studyNote(doc)
+                if (name == "comment_add") study.studyNote(doc)
                 refresh(doc, io.github.artcraftandroid.pdfcraft.ui.viewer.pageTouchedBy(name, args))
                 onDone(r)
             } catch (e: MobileException) {
@@ -1678,7 +1678,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
 
     /** The viewer's bottom toolbar as the user arranged it (More tools ▸ Customize toolbar). */
     val quickToolbar = io.github.artcraftandroid.pdfcraft.ui.viewer.QuickToolbarPrefs(app)
-    private val appPrefs = app.getSharedPreferences("app", android.content.Context.MODE_PRIVATE)
+    internal val appPrefs = app.getSharedPreferences("app", android.content.Context.MODE_PRIVATE)
     var compactPreviews by mutableStateOf(appPrefs.getBoolean("compactPreviews", false))
         private set
     fun updateCompactPreviews(on: Boolean) {
@@ -3657,7 +3657,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                     else replacePrompt = ReplacePrompt(doc, pages, f)
                 }
             }
-            FilePickKind.Library -> onLibraryPicked(uris)
+            FilePickKind.Library -> study.onLibraryPicked(uris)
             FilePickKind.DigitalId -> viewModelScope.launch {
                 val uri = uris.first()
                 val picked = withContext(Dispatchers.IO) { runCatching { copyIn(uri) }.getOrNull() }
@@ -3689,7 +3689,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     }
 
     /** Run [block] with the busy dialog showing [message]; failures are told in a snackbar. */
-    private fun job(message: String, block: suspend (Engine) -> Unit) {
+    internal fun job(message: String, block: suspend (Engine) -> Unit) {
         val eng = engine ?: return
         viewModelScope.launch {
             busy = message
@@ -3705,7 +3705,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     }
 
     /** Put [file] into Downloads as [name] and say so, with Open. */
-    private suspend fun deliver(file: File, name: String, mime: String = "application/pdf", lead: String? = null) {
+    internal suspend fun deliver(file: File, name: String, mime: String = "application/pdf", lead: String? = null) {
         val uri = withContext(Dispatchers.IO) { files.saveToDownloads(file, name, mime).also { file.delete() } }
         val size = withContext(Dispatchers.IO) { files.size(uri) }
         val saved = (size?.let { text(R.string.msg_saved_downloads_size, name, io.github.artcraftandroid.pdfcraft.ui.viewer.formatSize(it)) } ?: text(R.string.msg_saved_downloads, name))
@@ -3716,7 +3716,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         }
     }
 
-    private fun tempFile(ext: String) = File(getApplication<Application>().cacheDir, "out-${System.nanoTime()}.$ext")
+    internal fun tempFile(ext: String) = File(getApplication<Application>().cacheDir, "out-${System.nanoTime()}.$ext")
 
     /** Compress ▸ Advanced, as last used (remembered). */
     var compressOptions by mutableStateOf(loadCompressOptions())
@@ -4193,695 +4193,9 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         deliver(out, "Pages from ${doc.title}.pdf")
     }
 
-    // ---- Flashcards ---------------------------------------------------------------------------
+    // ---- Flashcards, Library, Study sessions, Study digest, Notebooks: see StudyController ----
 
-    val flashcards = io.github.artcraftandroid.pdfcraft.engine.Flashcards(File(getApplication<Application>().filesDir, "flashcards.json"))
-    private val fsrs = io.github.artcraftandroid.pdfcraft.engine.Fsrs()
-
-    /** A card being written (from a selection, or by hand in a deck). */
-    var cardDraft by mutableStateOf<CardDraft?>(null)
-
-    /** The review session showing: its deck (a document URI, or null for every deck). */
-    var reviewing by mutableStateOf<ReviewSession?>(null)
-
-    /** Cards due now per deck, for Home and the viewer. */
-    var dueCounts by mutableStateOf<Map<String, Int>>(emptyMap())
-        private set
-
-    fun refreshDue() {
-        viewModelScope.launch { dueCounts = withContext(Dispatchers.IO) { flashcards.dueCounts(System.currentTimeMillis()) } }
-    }
-
-    /**
-     * Selection > Make card: the selected text on the front, linked to its page. With [cloze] the
-     * front is the selection's line with the selected words as the blank to fill in.
-     */
-    fun makeCardFromSelection(doc: OpenDocument, cloze: Boolean) {
-        val uri = doc.source?.toString() ?: run { tell(text(R.string.cards_need_saved_file)); return }
-        val eng = engine ?: return
-        viewModelScope.launch {
-            val sel = doc.selection.selection ?: return@launch
-            val page = sel.range.page.toInt()
-            val picked = doc.selection.text()?.trim()?.replace(Regex("\\s+"), " ") ?: return@launch
-            var front = picked
-            if (cloze) {
-                val first = sel.rects.firstOrNull()
-                val line = first?.let { r ->
-                    runCatching { eng.tool("text_lines", mapOf("doc" to doc.id, "page" to page + 1)) }.getOrNull()?.optJSONArray("lines")?.let { a ->
-                        val cy = (r[1] + r[3]) / 2
-                        (0 until a.length()).mapNotNull { a.optJSONObject(it) }.firstOrNull { l ->
-                            val b = l.optJSONArray("rect") ?: return@firstOrNull false
-                            cy >= b.optDouble(1) && cy <= b.optDouble(3)
-                        }?.optString("text")
-                    }
-                }
-                front = io.github.artcraftandroid.pdfcraft.engine.Flashcards.clozeOf(line, picked)
-            }
-            doc.selection.clear()
-            cardDraft = CardDraft(uri, doc.info.name, page, front, "", null)
-        }
-    }
-
-    fun newCard(deck: String, deckName: String) { cardDraft = CardDraft(deck, deckName, -1, "", "", null) }
-
-    fun editCard(card: io.github.artcraftandroid.pdfcraft.engine.Flashcard) { cardDraft = CardDraft(card.deck, card.deckName, card.page, card.front, card.back, card.id) }
-
-    fun saveCard(d: CardDraft) {
-        cardDraft = null
-        if (d.front.isBlank()) return
-        viewModelScope.launch {
-            withContext(Dispatchers.IO) {
-                val old = d.id?.let { id -> flashcards.all().firstOrNull { it.id == id } }
-                flashcards.put(
-                    old?.copy(front = d.front.trim(), back = d.back.trim())
-                        ?: io.github.artcraftandroid.pdfcraft.engine.Flashcard(
-                            id = java.util.UUID.randomUUID().toString(), deck = d.deck, deckName = d.deckName,
-                            front = d.front.trim(), back = d.back.trim(), page = d.page, created = System.currentTimeMillis(),
-                        ),
-                )
-            }
-            refreshDue()
-            if (d.id == null) tell(text(R.string.cards_saved))
-            reviewing?.let { reload(it) }
-        }
-    }
-
-    fun deleteCard(id: String) {
-        viewModelScope.launch {
-            withContext(Dispatchers.IO) { flashcards.delete(id) }
-            refreshDue()
-            reviewing?.let { reload(it) }
-        }
-    }
-
-    /** Review the cards due in [deck] (every deck when null). */
-    fun startReview(deck: String?, deckName: String) {
-        val r = ReviewSession(deck, deckName)
-        reviewing = r
-        reload(r)
-    }
-
-    private fun reload(r: ReviewSession) {
-        viewModelScope.launch {
-            val (due, all) = withContext(Dispatchers.IO) {
-                flashcards.due(System.currentTimeMillis(), r.deck) to (if (r.deck != null) flashcards.deck(r.deck) else flashcards.all())
-            }
-            if (reviewing === r) { r.queue.clear(); r.queue.addAll(due); r.all = all }
-        }
-    }
-
-    /** The next due dates [card] would get for each rating (for the buttons). */
-    fun previewIntervals(card: io.github.artcraftandroid.pdfcraft.engine.Flashcard): Map<io.github.artcraftandroid.pdfcraft.engine.Rating, Long> {
-        val now = System.currentTimeMillis()
-        return io.github.artcraftandroid.pdfcraft.engine.Rating.entries.associateWith { fsrs.review(card, it, now).due - now }
-    }
-
-    fun rate(r: ReviewSession, card: io.github.artcraftandroid.pdfcraft.engine.Flashcard, rating: io.github.artcraftandroid.pdfcraft.engine.Rating) {
-        val next = fsrs.review(card, rating, System.currentTimeMillis())
-        r.queue.remove(card)
-        // forgotten cards come back at the end of this session
-        if (rating == io.github.artcraftandroid.pdfcraft.engine.Rating.Again) r.queue.add(next)
-        r.reviewed++
-        viewModelScope.launch {
-            withContext(Dispatchers.IO) { flashcards.put(next) }
-            refreshDue()
-        }
-    }
-
-    /** Open a card's source page. */
-    fun openCardSource(card: io.github.artcraftandroid.pdfcraft.engine.Flashcard) {
-        reviewing = null
-        if (document?.source?.toString() == card.deck) { if (card.page >= 0) document?.viewer?.goToPage(card.page); return }
-        pendingSearch = if (card.page >= 0) card.page to "" else null
-        open(Uri.parse(card.deck))
-    }
-
-    /** Export a deck (or every card) as Anki-importable TSV to Downloads. */
-    fun exportCards(deck: String?, deckName: String) = job(text(R.string.cards_busy_export)) { _ ->
-        val cards = withContext(Dispatchers.IO) { if (deck != null) flashcards.deck(deck) else flashcards.all() }
-        if (cards.isEmpty()) { tell(text(R.string.cards_none)); return@job }
-        val out = tempFile("txt")
-        withContext(Dispatchers.IO) { out.writeText(io.github.artcraftandroid.pdfcraft.engine.Flashcards.toAnkiTsv(cards)) }
-        deliver(out, DocumentFiles.safeName(text(R.string.cards_file_name, deckName.removeSuffix(".pdf"))).removeSuffix(".pdf") + ".txt", "text/plain")
-    }
-
-    /** Import cards from a CSV/TSV/TXT file into [deck]. */
-    fun importCards(deck: String, deckName: String) {
-        cardImportDeck = deck to deckName
-        cardImportRequests.trySend(Unit)
-    }
-
-    private var cardImportDeck: Pair<String, String>? = null
-    val cardImportRequests = Channel<Unit>(Channel.CONFLATED)
-
-    fun onCardFilePicked(uri: Uri?) {
-        val (deck, name) = cardImportDeck ?: return
-        cardImportDeck = null
-        uri ?: return
-        viewModelScope.launch {
-            val n = withContext(Dispatchers.IO) {
-                runCatching {
-                    val text = getApplication<Application>().contentResolver.openInputStream(uri)?.use { s ->
-                        String(s.readNBytes(8 * 1024 * 1024), Charsets.UTF_8).removePrefix("\uFEFF")
-                    } ?: return@runCatching 0
-                    val now = System.currentTimeMillis()
-                    val cards = io.github.artcraftandroid.pdfcraft.engine.Flashcards.parseDelimited(text).take(10_000).map { (f, b) ->
-                        io.github.artcraftandroid.pdfcraft.engine.Flashcard(java.util.UUID.randomUUID().toString(), deck, name, f, b, created = now)
-                    }
-                    flashcards.putAll(cards)
-                    cards.size
-                }.getOrDefault(-1)
-            }
-            if (n < 0) tell(text(R.string.msg_that_file_unreadable)) else tell(text(R.string.cards_imported, n))
-            refreshDue()
-            reviewing?.let { reload(it) }
-        }
-    }
-
-    // ---- Library ------------------------------------------------------------------------------
-
-    val library = io.github.artcraftandroid.pdfcraft.engine.Library(File(getApplication<Application>().filesDir, "library.json"))
-    val libraryIndex = io.github.artcraftandroid.pdfcraft.engine.LibraryIndex(File(getApplication<Application>().filesDir, "library-index"))
-
-    var libraryData by mutableStateOf(io.github.artcraftandroid.pdfcraft.engine.LibraryData())
-        private set
-
-    /** Library items whose file can no longer be read (permission revoked, file gone). */
-    var libraryUnavailable by mutableStateOf<Set<String>>(emptySet())
-        private set
-
-    /** Items with unresolved comments (from the index), for the smart collection. */
-    var libraryUnresolved by mutableStateOf<Set<String>>(emptySet())
-        private set
-
-    /** The collection Add files puts new files into. */
-    var libraryAddTo: String? = null
-
-    /** Searching inside library documents is on (it builds an index in the background). */
-    var libraryIndexing by mutableStateOf(appPrefs.getBoolean("libraryIndex", false))
-        private set
-
-    /** The document being indexed now, if any. */
-    var indexingName by mutableStateOf<String?>(null)
-        private set
-
-    private var indexJob: kotlinx.coroutines.Job? = null
-
-    fun refreshLibrary() {
-        viewModelScope.launch {
-            val (data, gone, unresolved) = withContext(Dispatchers.IO) {
-                val d = library.load()
-                val granted = runCatching { getApplication<Application>().contentResolver.persistedUriPermissions.map { it.uri.toString() }.toSet() }.getOrDefault(emptySet())
-                val gone = d.items.filter { i ->
-                    val u = Uri.parse(i.uri)
-                    when (u.scheme) {
-                        "file" -> !File(u.path ?: "").canRead()
-                        "content" -> i.uri !in granted && files.size(u) == null
-                        else -> true
-                    }
-                }.map { it.uri }.toSet()
-                val unresolved = d.items.filter { (libraryIndex.get(it.uri)?.unresolvedComments ?: 0) > 0 }.map { it.uri }.toSet()
-                Triple(d, gone, unresolved)
-            }
-            libraryData = data
-            libraryUnavailable = gone
-            libraryUnresolved = unresolved
-        }
-    }
-
-    private fun libraryEdit(f: (io.github.artcraftandroid.pdfcraft.engine.Library) -> Unit) {
-        viewModelScope.launch {
-            withContext(Dispatchers.IO) { f(library) }
-            refreshLibrary()
-        }
-    }
-
-    fun addCollection(name: String, parent: String?) = libraryEdit { it.addCollection(name, parent) }
-    fun renameCollection(id: String, name: String) = libraryEdit { it.renameCollection(id, name) }
-    fun deleteCollection(id: String) = libraryEdit { it.deleteCollection(id) }
-    fun setItemCollections(uri: String, ids: Set<String>) = libraryEdit { it.setItem(uri) { i -> i.copy(collections = ids) } }
-    fun setItemTags(uri: String, tags: Set<String>) = libraryEdit { l -> l.setItem(uri) { i -> i.copy(tags = tags.map(io.github.artcraftandroid.pdfcraft.engine.Library::cleanTag).filter { it.isNotEmpty() }.toSet()) } }
-    fun setItemColor(uri: String, color: Int?) = libraryEdit { it.setItem(uri) { i -> i.copy(color = color) } }
-
-    fun removeFromLibrary(uri: String) = libraryEdit { l ->
-        l.removeItem(uri)
-        libraryIndex.remove(uri)
-    }
-
-    /** Add a file that is already open or in Recent (its grant is kept) to the library. */
-    fun addToLibrary(uri: String, name: String, collection: String? = null) = libraryEdit { l ->
-        runCatching { files.keepAccess(Uri.parse(uri)) }
-        l.addItem(uri, name, System.currentTimeMillis(), collection)
-    }
-
-    /** Library > Add files: pick PDFs; they stay where they are (only lasting read access is taken). */
-    fun pickLibraryFiles(collection: String?) {
-        libraryAddTo = collection
-        pickFiles(FilePickKind.Library)
-    }
-
-    private fun onLibraryPicked(uris: List<Uri>) {
-        val to = libraryAddTo
-        libraryAddTo = null
-        libraryEdit { l ->
-            for (u in uris) {
-                runCatching { files.keepAccess(u) }
-                l.addItem(u.toString(), runCatching { files.displayNameRaw(u) }.getOrNull() ?: u.lastPathSegment.orEmpty(), System.currentTimeMillis(), to)
-            }
-        }
-        indexLibrary()
-    }
-
-    fun updateLibraryIndexing(on: Boolean) {
-        libraryIndexing = on
-        appPrefs.edit().putBoolean("libraryIndex", on).apply()
-        if (on) indexLibrary() else indexJob?.cancel()
-    }
-
-    /** Settings: delete the search index (the library itself stays). */
-    fun wipeLibraryIndex() {
-        indexJob?.cancel()
-        viewModelScope.launch {
-            withContext(Dispatchers.IO) { libraryIndex.wipe() }
-            refreshLibrary()
-            tell(text(R.string.library_index_wiped))
-        }
-    }
-
-    /** Whether the battery allows indexing now: charging, or at least 20 %. */
-    private fun batteryAllowsIndexing(): Boolean {
-        val bm = getApplication<Application>().getSystemService(android.os.BatteryManager::class.java) ?: return true
-        val level = bm.getIntProperty(android.os.BatteryManager.BATTERY_PROPERTY_CAPACITY)
-        return bm.isCharging || level !in 0 until 20
-    }
-
-    /**
-     * Index the library's documents that changed since they were indexed: their text, outline and
-     * comments, one document at a time on the engine's queue, only while no document is open (so
-     * reading is never slowed) and the battery allows it. Each document is read from a private
-     * copy that is deleted afterwards.
-     */
-    fun indexLibrary() {
-        if (!libraryIndexing || indexJob?.isActive == true || document != null) return
-        val eng = engine ?: return
-        indexJob = viewModelScope.launch {
-            try {
-                val items = withContext(Dispatchers.IO) { library.load().items }
-                for (item in items) {
-                    if (document != null || opening || !batteryAllowsIndexing()) break
-                    val uri = Uri.parse(item.uri)
-                    val signature = withContext(Dispatchers.IO) {
-                        val size = runCatching { files.size(uri) }.getOrNull() ?: return@withContext null
-                        "$size:${runCatching { files.lastModified(uri) }.getOrNull() ?: 0}"
-                    } ?: continue
-                    if (withContext(Dispatchers.IO) { libraryIndex.has(item.uri, signature) }) continue
-                    indexingName = item.name
-                    val copy = File(getApplication<Application>().cacheDir, "index-${System.nanoTime()}.pdf")
-                    try {
-                        val ok = withContext(Dispatchers.IO) {
-                            runCatching {
-                                getApplication<Application>().contentResolver.openInputStream(uri)?.use { input ->
-                                    copy.outputStream().use { out ->
-                                        val buf = ByteArray(64 * 1024)
-                                        var total = 0L
-                                        while (true) {
-                                            val n = input.read(buf)
-                                            if (n < 0) break
-                                            total += n
-                                            // very large files are left out of the index
-                                            if (total > MAX_INDEX_BYTES) return@runCatching false
-                                            out.write(buf, 0, n)
-                                        }
-                                    }
-                                    true
-                                } ?: false
-                            }.getOrDefault(false)
-                        }
-                        if (!ok || document != null) continue
-                        val id = runCatching { eng.tool("doc_open", mapOf("path" to copy.absolutePath)).optLong("doc") }.getOrNull() ?: continue
-                        try {
-                            val text = runCatching { eng.tool("text_extract", mapOf("doc" to id)) }.getOrNull()
-                            val pages = text?.optJSONArray("pages")?.let { a -> (0 until a.length()).map { a.optJSONObject(it)?.optString("text").orEmpty() } } ?: emptyList()
-                            val outline = runCatching { eng.tool("bookmark_list", mapOf("doc" to id)) }.getOrNull()?.let(::flattenOutline) ?: emptyList()
-                            val comments = runCatching { eng.tool("comment_list", mapOf("doc" to id)) }.getOrNull()?.let(::flattenComments) ?: emptyList()
-                            withContext(Dispatchers.IO) {
-                                libraryIndex.put(io.github.artcraftandroid.pdfcraft.engine.IndexedDoc(item.uri, item.name, signature, pages, outline, comments))
-                            }
-                        } finally {
-                            runCatching { eng.tool("doc_close", mapOf("doc" to id, "discard_changes" to true)) }
-                        }
-                    } finally {
-                        withContext(kotlinx.coroutines.NonCancellable + Dispatchers.IO) { copy.delete() }
-                    }
-                }
-                withContext(Dispatchers.IO) { libraryIndex.retain(library.load().items.map { it.uri }.toSet()) }
-            } finally {
-                indexingName = null
-                refreshLibrary()
-            }
-        }
-    }
-
-    private fun flattenOutline(o: org.json.JSONObject): List<Pair<Int, String>> {
-        val out = ArrayList<Pair<Int, String>>()
-        fun walk(a: org.json.JSONArray?) {
-            a ?: return
-            for (i in 0 until a.length()) {
-                val b = a.optJSONObject(i) ?: continue
-                val title = b.optString("title")
-                if (title.isNotEmpty()) out += (b.optInt("page", 1) - 1).coerceAtLeast(0) to title
-                walk(b.optJSONArray("children"))
-            }
-        }
-        walk(o.optJSONArray("bookmarks"))
-        return out
-    }
-
-    private fun flattenComments(o: org.json.JSONObject): List<Triple<Int, String, Boolean>> {
-        val out = ArrayList<Triple<Int, String, Boolean>>()
-        val arr = o.optJSONArray("comments") ?: return out
-        val done = setOf("Accepted", "Completed", "Cancelled", "Rejected")
-        for (i in 0 until arr.length()) {
-            val c = arr.optJSONObject(i) ?: continue
-            val page = (c.optInt("page", 1) - 1).coerceAtLeast(0)
-            val unresolved = c.isNull("status") || c.optString("status") !in done
-            c.optString("contents").takeIf { !c.isNull("contents") && it.isNotBlank() }?.let { out += Triple(page, it, unresolved) }
-            val replies = c.optJSONArray("replies") ?: continue
-            for (k in 0 until replies.length()) {
-                val r = replies.optJSONObject(k) ?: continue
-                r.optString("contents").takeIf { !r.isNull("contents") && it.isNotBlank() }?.let { out += Triple(page, it, false) }
-            }
-        }
-        return out
-    }
-
-    /** Library search results for the query, off the main thread. */
-    suspend fun searchLibrary(query: String, uris: Collection<String>?): List<io.github.artcraftandroid.pdfcraft.engine.SearchHit> = withContext(Dispatchers.IO) {
-        val q = io.github.artcraftandroid.pdfcraft.engine.LibraryIndex.fold(query.trim())
-        val data = library.load()
-        val scope = uris?.toSet()
-        // names of every library file (indexed or not), then the index
-        val names = data.items.filter { (scope == null || it.uri in scope) && q.length >= 2 && io.github.artcraftandroid.pdfcraft.engine.LibraryIndex.fold(it.name).contains(q) }
-            .map { io.github.artcraftandroid.pdfcraft.engine.SearchHit(it.uri, it.name, -1, io.github.artcraftandroid.pdfcraft.engine.HitKind.Name, it.name, io.github.artcraftandroid.pdfcraft.engine.LibraryIndex.fold(it.name).indexOf(q), q.length) }
-        val inside = if (libraryIndexing) libraryIndex.search(query, scope ?: data.items.map { it.uri }) else emptyList()
-        names + inside.filter { it.kind != io.github.artcraftandroid.pdfcraft.engine.HitKind.Name }
-    }
-
-    /** After opening, go to this page and search this text (a library search hit). */
-    var pendingSearch: Pair<Int, String>? = null
-
-    fun openHit(hit: io.github.artcraftandroid.pdfcraft.engine.SearchHit, query: String) {
-        pendingSearch = if (hit.page >= 0 && hit.kind == io.github.artcraftandroid.pdfcraft.engine.HitKind.Text) hit.page to query.trim() else null
-        if (hit.page >= 0 && hit.kind != io.github.artcraftandroid.pdfcraft.engine.HitKind.Text) pendingSearch = hit.page to ""
-        open(Uri.parse(hit.uri))
-    }
-
-    // ---- Study sessions -------------------------------------------------------------------------
-
-    val studyStats = io.github.artcraftandroid.pdfcraft.engine.StudyStats(File(getApplication<Application>().filesDir, "study.json"))
-    private val studyClock = io.github.artcraftandroid.pdfcraft.engine.StudyClock()
-    private var studyDoc: OpenDocument? = null
-    private var studyPendingMs = 0L
-    private var studyPendingNotes = 0
-    private val studyPendingPages = HashSet<Int>()
-    private var studyLastFlush = 0L
-
-    /** Home's Continue studying card: the documents studied most recently, and this week's minutes. */
-    var studyRecent by mutableStateOf<List<io.github.artcraftandroid.pdfcraft.engine.DocStudy>>(emptyList())
-        private set
-    var studyWeek by mutableStateOf<List<Long>>(emptyList())
-        private set
-
-    fun refreshStudy() {
-        viewModelScope.launch {
-            val (recent, week) = withContext(Dispatchers.IO) {
-                studyStats.all().filter { it.activeMs > 0 }.take(3) to studyStats.week(java.time.LocalDate.now())
-            }
-            studyRecent = recent
-            studyWeek = week
-        }
-    }
-
-    /**
-     * The reader touched the screen: count the time since their last touch (at most two minutes,
-     * so a phone left open stops counting) toward the open document, and note the page.
-     */
-    fun studyActivity() {
-        val doc = document ?: return
-        if (doc.info.preparing) return
-        val now = android.os.SystemClock.uptimeMillis()
-        if (studyDoc !== doc) { flushStudy(); studyClock.pause(now); studyDoc = doc }
-        studyPendingMs += studyClock.activity(now)
-        studyPendingPages += doc.viewer.currentPage
-        if (now - studyLastFlush > 30_000) flushStudy()
-    }
-
-    /** An annotation was added to the open document (counted in its study record). */
-    private fun studyNote(doc: OpenDocument) { if (studyDoc === doc) studyPendingNotes++ }
-
-    /** The viewer left the front (or the document closed): stop the clock and save what was counted. */
-    fun pauseStudy() {
-        studyPendingMs += studyClock.pause(android.os.SystemClock.uptimeMillis())
-        flushStudy()
-    }
-
-    private fun flushStudy() {
-        val doc = studyDoc ?: return
-        val uri = doc.source?.toString() ?: return
-        studyLastFlush = android.os.SystemClock.uptimeMillis()
-        if (studyPendingMs == 0L && studyPendingPages.isEmpty() && studyPendingNotes == 0) return
-        val ms = studyPendingMs
-        val pages = studyPendingPages.toSet()
-        val notes = studyPendingNotes
-        studyPendingMs = 0
-        studyPendingNotes = 0
-        studyPendingPages.clear()
-        val name = doc.info.name
-        val count = doc.pageCount
-        val last = doc.viewer.currentPage
-        viewModelScope.launch(Dispatchers.IO) { runCatching { studyStats.record(uri, name, count, pages, last, ms, System.currentTimeMillis(), notes) } }
-    }
-
-    /** Settings: forget every study statistic. */
-    fun clearStudyStats() {
-        studyPendingMs = 0
-        studyPendingPages.clear()
-        studyPendingNotes = 0
-        viewModelScope.launch {
-            withContext(Dispatchers.IO) { studyStats.clear() }
-            refreshStudy()
-            tell(text(R.string.study_stats_cleared))
-        }
-    }
-
-    /** The focus timer (Pomodoro), wall-clock based so it outlives rotation and the process. */
-    var focusTimer by mutableStateOf(io.github.artcraftandroid.pdfcraft.FocusTimerAlarm.load(getApplication()))
-        private set
-
-    /** Asks the activity for permission to show the timer's notification (Android 13+). */
-    val notificationRequests = Channel<Unit>(Channel.CONFLATED)
-
-    fun updateFocusTimer(t: io.github.artcraftandroid.pdfcraft.engine.FocusTimer) {
-        val app = getApplication<Application>()
-        if (t.running && !focusTimer.active && android.os.Build.VERSION.SDK_INT >= 33 &&
-            androidx.core.content.ContextCompat.checkSelfPermission(app, android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED &&
-            !appPrefs.getBoolean("focusNotificationAsked", false)
-        ) {
-            appPrefs.edit().putBoolean("focusNotificationAsked", true).apply()
-            notificationRequests.trySend(Unit)
-        }
-        focusTimer = t
-        io.github.artcraftandroid.pdfcraft.FocusTimerAlarm.apply(app, t)
-    }
-
-    /** Called every second while the timer shows: move to the next phase when one ends. */
-    fun tickFocusTimer() {
-        val now = System.currentTimeMillis()
-        val next = focusTimer.tick(now)
-        if (next != focusTimer) {
-            focusTimer = next
-            io.github.artcraftandroid.pdfcraft.FocusTimerAlarm.apply(getApplication(), next, now, alert = true)
-            tell(text(if (next.onBreak) R.string.focus_break_started else R.string.focus_work_started))
-        }
-    }
-
-    // ---- Study digest -------------------------------------------------------------------------
-
-    /**
-     * Export [doc]'s highlights, notes and drawings as a review sheet: Markdown (with ink drawings
-     * as PNGs beside it in a ZIP), CSV, or the engine's PDF comment summary. Runs off the main
-     * thread on the engine's queue; the file goes to Downloads.
-     */
-    fun exportNotes(doc: OpenDocument, format: DigestFormat, grouping: io.github.artcraftandroid.pdfcraft.engine.DigestGrouping, filter: io.github.artcraftandroid.pdfcraft.engine.DigestFilter) =
-        job(text(R.string.digest_busy)) { eng ->
-            val SD = io.github.artcraftandroid.pdfcraft.engine.StudyDigest
-            val base = doc.title.ifBlank { "Document" }
-            if (format == DigestFormat.Pdf) {
-                val out = tempFile("pdf")
-                eng.tool("comments_summarize", mapOf("doc" to doc.id, "sort" to "page", "out" to out.absolutePath))
-                deliver(out, DocumentFiles.safeName(text(R.string.digest_file_name, base)))
-                return@job
-            }
-            val entries = SD.filter(SD.parse(eng.tool("comment_list", mapOf("doc" to doc.id))), filter)
-            if (entries.isEmpty()) { tell(text(R.string.digest_nothing)); return@job }
-            // the text each highlight marks: its note when the highlight was made from a selection here, else the text under it
-            for (e in entries) {
-                if (!e.isMarkup) continue
-                val under = runCatching {
-                    eng.tool("text_extract", mapOf("doc" to doc.id, "pages" to listOf(e.page), "rect" to e.rect.toList()))
-                        .optJSONArray("pages")?.optJSONObject(0)?.optString("text")?.trim()
-                }.getOrNull()?.takeIf { it.isNotEmpty() }
-                e.marked = under ?: e.note
-            }
-            val stamp = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date())
-            val labels = io.github.artcraftandroid.pdfcraft.engine.DigestLabels(
-                page = text(R.string.digest_page), noColor = text(R.string.digest_no_color),
-                status = text(R.string.digest_status), drawing = text(R.string.digest_drawing),
-                colorNames = mapOf(
-                    "yellow" to text(R.string.digest_yellow), "green" to text(R.string.digest_green), "blue" to text(R.string.digest_blue),
-                    "pink" to text(R.string.digest_pink), "red" to text(R.string.digest_red), "orange" to text(R.string.digest_orange),
-                    "purple" to text(R.string.digest_purple), "black" to text(R.string.digest_black), "grey" to text(R.string.digest_grey),
-                ),
-            )
-            val fileLink = doc.info.name.ifBlank { "$base.pdf" }
-            when (format) {
-                DigestFormat.Csv -> {
-                    val out = tempFile("csv")
-                    withContext(Dispatchers.IO) { out.writeText("\uFEFF" + SD.csv(entries)) }
-                    deliver(out, DocumentFiles.safeName(text(R.string.digest_file_name, base)).removeSuffix(".pdf") + ".csv", "text/csv")
-                }
-                DigestFormat.Markdown -> {
-                    val md = SD.markdown(text(R.string.digest_heading, base, stamp), fileLink, entries, grouping, labels)
-                    val out = tempFile("md")
-                    withContext(Dispatchers.IO) { out.writeText(md) }
-                    deliver(out, DocumentFiles.safeName(text(R.string.digest_file_name, base)).removeSuffix(".pdf") + ".md", "text/markdown")
-                }
-                DigestFormat.MarkdownImages -> {
-                    // each drawing cropped from its page at 2x, beside the notes in one ZIP
-                    val images = LinkedHashMap<String, ByteArray>()
-                    for ((i, e) in entries.withIndex()) {
-                        if (!e.isInk) continue
-                        val page = doc.info.pages.getOrNull(e.page - 1) ?: continue
-                        val scale = 2f
-                        val pad = 6f
-                        val x0 = ((e.rect[0] - pad).coerceAtLeast(0f) * scale).toInt()
-                        val y0 = ((e.rect[1] - pad).coerceAtLeast(0f) * scale).toInt()
-                        val x1 = ((e.rect[2] + pad).coerceAtMost(page.width) * scale).toInt()
-                        val y1 = ((e.rect[3] + pad).coerceAtMost(page.height) * scale).toInt()
-                        if (x1 <= x0 || y1 <= y0 || (x1 - x0).toLong() * (y1 - y0) > 16_000_000L) continue
-                        val png = runCatching {
-                            val bmp = withContext(eng.thumbnails) {
-                                eng.session.renderPage(doc.id, (e.page - 1).toUInt(), scale, io.github.artcraftandroid.pdfcraft.core.TileRect(x0.toUInt(), y0.toUInt(), (x1 - x0).toUInt(), (y1 - y0).toUInt())).toBitmap()
-                            }
-                            java.io.ByteArrayOutputStream().also { bmp.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it); bmp.recycle() }.toByteArray()
-                        }.getOrNull() ?: continue
-                        val name = "images/page-${e.page}-${i + 1}.png"
-                        images[name] = png
-                        e.image = name
-                    }
-                    val md = SD.markdown(text(R.string.digest_heading, base, stamp), fileLink, entries, grouping, labels)
-                    val notesName = DocumentFiles.safeName(text(R.string.digest_file_name, base)).removeSuffix(".pdf")
-                    val out = tempFile("zip")
-                    withContext(Dispatchers.IO) {
-                        java.util.zip.ZipOutputStream(out.outputStream().buffered()).use { zip ->
-                            zip.putNextEntry(java.util.zip.ZipEntry("$notesName.md")); zip.write(md.toByteArray()); zip.closeEntry()
-                            for ((name, bytes) in images) { zip.putNextEntry(java.util.zip.ZipEntry(name)); zip.write(bytes); zip.closeEntry() }
-                        }
-                    }
-                    deliver(out, "$notesName.zip", "application/zip")
-                }
-                DigestFormat.Pdf -> Unit
-            }
-        }
-
-    // ---- Notebooks ----------------------------------------------------------------------------
-
-    /** Home's New notebook sheet is showing. */
-    var newNotebookOpen by mutableStateOf(false)
-
-    /** The pages the user saved as templates (file names), refreshed off the main thread. */
-    var userTemplates by mutableStateOf<List<String>>(emptyList())
-        private set
-
-    fun refreshUserTemplates() {
-        viewModelScope.launch { userTemplates = withContext(Dispatchers.IO) { notebookTemplates.list() } }
-    }
-
-    /** A one-page PDF of [page] in the cache, for inserting (the caller deletes it). */
-    private suspend fun notebookPageFile(page: io.github.artcraftandroid.pdfcraft.engine.NotebookPage): File? = withContext(Dispatchers.IO) {
-        when (page) {
-            is io.github.artcraftandroid.pdfcraft.engine.NotebookPage.Builtin ->
-                tempFile("pdf").apply { writeBytes(io.github.artcraftandroid.pdfcraft.engine.NotebookPdf.write(page.template)) }
-            is io.github.artcraftandroid.pdfcraft.engine.NotebookPage.User ->
-                notebookTemplates.file(page.fileName)?.let { src -> tempFile("pdf").also { src.copyTo(it, overwrite = true) } }
-        }
-    }
-
-    /** Make a notebook of [page] called [title] in Downloads and open it in Draw mode. */
-    fun createNotebook(page: io.github.artcraftandroid.pdfcraft.engine.NotebookPage, title: String) {
-        newNotebookOpen = false
-        viewModelScope.launch {
-            busy = text(R.string.notebook_busy_creating)
-            try {
-                val out = notebookPageFile(page) ?: run { tell(text(R.string.notebook_template_missing)); return@launch }
-                val stamp = java.text.SimpleDateFormat("yyyy-MM-dd HH.mm", java.util.Locale.US).format(java.util.Date())
-                val name = DocumentFiles.safeName(title.trim().ifEmpty { text(R.string.notebook_default_name, stamp) })
-                val uri = withContext(Dispatchers.IO) { files.saveToDownloads(out, name).also { out.delete() } }
-                withContext(Dispatchers.IO) { notebooks.put(uri.toString(), page) }
-                pendingTool = io.github.artcraftandroid.pdfcraft.ui.home.FileTool.Draw
-                open(uri)
-            } catch (e: Exception) {
-                tell(e.userMessage)
-            } finally {
-                busy = null
-            }
-        }
-    }
-
-    /** What [doc]'s pages look like, if it was made as a notebook here. */
-    suspend fun notebookPageOf(doc: OpenDocument): io.github.artcraftandroid.pdfcraft.engine.NotebookPage? {
-        val key = doc.source?.toString() ?: return null
-        return withContext(Dispatchers.IO) { notebooks.get(key) }
-    }
-
-    /**
-     * Insert a page of [page] so it becomes page [at] (1-based; default: after the last), then
-     * show it. One undo step removes it. Without a template the page is blank, sized like its
-     * neighbour.
-     */
-    fun insertNotebookPage(doc: OpenDocument, page: io.github.artcraftandroid.pdfcraft.engine.NotebookPage?, at: Int = doc.pageCount + 1) {
-        if (!doc.writable || !doc.info.allowsAnnotation) { tell(text(R.string.notebook_cannot_add_page)); return }
-        viewModelScope.launch {
-            val chosen = page ?: notebookPageOf(doc)
-            val show = { doc.viewer.goToPage(at - 1) }
-            if (chosen == null) {
-                runTool(doc, "page_insert_blank", mapOf("at" to at)) { show() }
-                return@launch
-            }
-            val file = notebookPageFile(chosen) ?: run { tell(text(R.string.notebook_template_missing)); return@launch }
-            runTool(doc, "page_insert_file", mapOf("path" to file.absolutePath, "at" to at), onSettled = { file.delete() }) { show() }
-        }
-    }
-
-    /** Save page [index] (0-based) of [doc] as a template called [title] for new notebooks and pages. */
-    fun savePageAsTemplate(doc: OpenDocument, index: Int, title: String) = job(text(R.string.notebook_busy_saving_template)) { eng ->
-        val out = withContext(Dispatchers.IO) { notebookTemplates.newFile(title) }
-        try {
-            eng.tool("page_extract", mapOf("doc" to doc.id, "pages" to listOf(index + 1), "out" to out.absolutePath))
-        } catch (e: Exception) {
-            out.delete()
-            throw e
-        }
-        refreshUserTemplates()
-        tell(text(R.string.notebook_template_saved, out.nameWithoutExtension))
-    }
-
-    fun deleteUserTemplate(name: String) {
-        viewModelScope.launch {
-            withContext(Dispatchers.IO) { notebookTemplates.delete(name) }
-            refreshUserTemplates()
-        }
-    }
+    val study = StudyController(this)
 
     // ---- Organize: duplicate, replace, reverse, split, page labels (#165) ---------------------
 
@@ -5262,42 +4576,65 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
 
     fun discardScan() {
         scanPages.forEach { it.file.delete() }
+        scanPageDir().listFiles()?.forEach { it.delete() }
         scanPages.clear()
         scanName = ""
         insertScanAt = null
         toolScreen = null
     }
 
-    /** Save the scanned pages as a PDF with [filter]'s look (or insert them where Organize asked). */
+    /** Where Save writes each scanned page's straightened image (removed when the scan ends). */
+    private fun scanPageDir() = File(getApplication<Application>().cacheDir, "scan")
+
+    /**
+     * Save the scanned pages as a PDF with [filter]'s look (or insert them where Organize asked).
+     * Each photo is decoded once, straightened, given the look and encoded once natively (#287);
+     * a page that can't be processed goes in as the camera took it.
+     */
     fun saveScan(filter: ScanFilter) = job(text(R.string.msg_busy_saving_scan)) { eng ->
         val pages = scanPages.toList()
-        val paths = pages.map { it.file.absolutePath }
         val scanStarted = android.os.SystemClock.elapsedRealtime()
-        val created = eng.tool("doc_create", mapOf("from" to "images", "paths" to paths, "name" to "Scan"))
+        val dir = scanPageDir().apply { mkdirs() }
+        val saved = ArrayList<ScanSavedPage>(pages.size)
+        for ((i, page) in pages.withIndex()) {
+            // the Scan gates (#286): found edges, whether they were moved and how far (in % of the
+            // photo's diagonal, so the thumbnail's proportions are enough)
+            val stats = scanPageStats(page.corners, page.found, ScanPage.WHOLE, page.thumb.width.toDouble(), page.thumb.height.toDouble())
+            if (!scanNeedsProcessing(page.corners.contentEquals(ScanPage.WHOLE), filter.mode)) {
+                Diag.event(DiagArea.Scan, "page", "index" to i + 1, "edges_found" to stats.found, "corners_moved" to stats.touched, "max_move_pct" to stats.maxMovePct, "filter" to filter, "enhanced" to false)
+                saved += scanSavedPage(page.file.absolutePath, null)
+                continue
+            }
+            busy = text(R.string.msg_busy_cleaning_page, i + 1, pages.size)
+            val request = io.github.artcraftandroid.pdfcraft.core.ScanPageRequest(
+                photoPath = page.file.absolutePath,
+                corners = page.corners.toList(),
+                look = scanLookOf(filter.mode),
+                strength = filter.level.coerceIn(0, 100).toUByte(),
+                outputPath = File(dir, "page-$i").absolutePath,
+            )
+            val enhanceStarted = android.os.SystemClock.elapsedRealtime()
+            val result = withContext(Dispatchers.Default) { runCatching { io.github.artcraftandroid.pdfcraft.core.scanProcessPage(request) } }
+            result.onFailure { Diag.failure(DiagArea.Scan, "scan_process_page", it) }
+            val r = result.getOrNull()
+            // decode, straighten, look and encode times (#287), and the page's pixels and proportions
+            Diag.event(
+                DiagArea.Scan, "page", "index" to i + 1, "edges_found" to stats.found, "corners_moved" to stats.touched, "max_move_pct" to stats.maxMovePct,
+                "filter" to filter, "enhanced" to (r != null), "enhance_ms" to android.os.SystemClock.elapsedRealtime() - enhanceStarted,
+                *(r?.timings.orEmpty().map<io.github.artcraftandroid.pdfcraft.core.ScanTiming, Pair<String, Any?>> { it.stage.removePrefix("scan_") + "_ms" to it.ms.toLong() }.toTypedArray()),
+                "out_width" to (r?.width?.toLong() ?: 0L), "out_height" to (r?.height?.toLong() ?: 0L),
+                "out_format" to (r?.format?.name?.lowercase() ?: "none"), "dpi" to (r?.dpi?.toDouble() ?: 0.0),
+            )
+            saved += scanSavedPage(page.file.absolutePath, r?.let { it.path to it.dpi })
+        }
+        val created = try {
+            eng.tool("doc_create", scanCreateArgs(saved))
+        } finally {
+            // the PDF holds the pages now
+            dir.listFiles()?.forEach { it.delete() }
+        }
         val id = created.optLong("doc")
         try {
-            // each page keeps the part inside its corners, straightened, with the look; a whole
-            // photo in Original stays as it was taken
-            val sizes = eng.tool("doc_info", mapOf("doc" to id)).optJSONArray("pages")
-            for ((i, page) in pages.withIndex()) {
-                val size = sizes?.optJSONObject(i)
-                val (w, h) = (size?.optDouble("width") ?: 0.0) to (size?.optDouble("height") ?: 0.0)
-                // the Scan gates (#286): found edges, whether they were moved and how far
-                val stats = scanPageStats(page.corners, page.found, ScanPage.WHOLE, w, h)
-                if (page.corners.contentEquals(ScanPage.WHOLE) && filter == ScanFilter.Original || size == null) {
-                    Diag.event(DiagArea.Scan, "page", "index" to i + 1, "edges_found" to stats.found, "corners_moved" to stats.touched, "max_move_pct" to stats.maxMovePct, "filter" to filter, "enhanced" to false)
-                    continue
-                }
-                val corners = page.corners.mapIndexed { k, v -> v * if (k % 2 == 0) w else h }
-                busy = text(R.string.msg_busy_cleaning_page, i + 1, pages.size)
-                val enhanceStarted = android.os.SystemClock.elapsedRealtime()
-                val ok = runCatching { eng.tool("page_enhance_camera", mapOf("doc" to id, "page" to i + 1, "corners" to corners, "mode" to filter.mode, "level" to filter.level)) }
-                    .onFailure { Diag.failure(DiagArea.Scan, "page_enhance_camera", it) }.isSuccess
-                Diag.event(
-                    DiagArea.Scan, "page", "index" to i + 1, "edges_found" to stats.found, "corners_moved" to stats.touched, "max_move_pct" to stats.maxMovePct,
-                    "filter" to filter, "enhanced" to ok, "enhance_ms" to android.os.SystemClock.elapsedRealtime() - enhanceStarted,
-                )
-            }
             if (Diag.enabled()) {
                 // the straightened pages' proportions (A4 is 1.414; the gate is within 2%)
                 eng.tool("doc_info", mapOf("doc" to id)).optJSONArray("pages")?.let { out ->
@@ -5442,11 +4779,11 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         hasFileAccess = io.github.artcraftandroid.pdfcraft.engine.LocalFiles.hasAccess(getApplication())
         if (hasFileAccess && !had) scanLocal(force = true)
         refreshRecents()
-        refreshStudy()
-        refreshLibrary()
-        indexLibrary()
-        refreshDue()
-        focusTimer = io.github.artcraftandroid.pdfcraft.FocusTimerAlarm.load(getApplication())
+        study.refreshStudy()
+        study.refreshLibrary()
+        study.indexLibrary()
+        study.refreshDue()
+        study.focusTimer = io.github.artcraftandroid.pdfcraft.FocusTimerAlarm.load(getApplication())
     }
 
     /** What [uri]'s thumbnail is drawn from: the file itself, the app's working copy, or the document. */
@@ -5511,7 +4848,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     }
 
     /** What to do with the next PDF opened from a tool tile (Home, Tools). */
-    private var pendingTool: io.github.artcraftandroid.pdfcraft.ui.home.FileTool? = null
+    internal var pendingTool: io.github.artcraftandroid.pdfcraft.ui.home.FileTool? = null
 
     /** A tool that starts by choosing a PDF: pick one, open it, then start the tool. */
     fun toolForFile(tool: io.github.artcraftandroid.pdfcraft.ui.home.FileTool) {
@@ -6130,202 +5467,9 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         }
     }
 
-    // ---- Backups (#145) ----
+    // ---- Backups (#145) and version history: see BackupController ----
 
-    /** The folder backups go to (a tree the user picked), or null when backups are off. */
-    var backupTree by mutableStateOf(appPrefs.getString("backupTree", null)?.let(Uri::parse))
-        private set
-    /** How many versions of each document are kept. */
-    var backupKeep by mutableStateOf(appPrefs.getInt("backupKeep", 10))
-        private set
-    /** When the last backup was written, and whether the last attempt failed. */
-    var backupLast by mutableStateOf(appPrefs.getLong("backupLast", 0L))
-        private set
-    var backupFailed by mutableStateOf(false)
-        private set
-    val backupFolderRequests = Channel<Unit>(Channel.CONFLATED)
-    private val backupMutex = Mutex()
-    /** Snapshots saved but not yet copied out, by document folder name: the newest wins. */
-    private val pendingBackups = java.util.concurrent.ConcurrentHashMap<String, PendingBackup>()
-    private class PendingBackup(val base: String, val time: Long, val pdf: File, val xfdf: File?)
-
-    fun chooseBackupFolder() { backupFolderRequests.trySend(Unit) }
-
-    fun onBackupFolderPicked(tree: Uri?) {
-        tree ?: return
-        val resolver = getApplication<Application>().contentResolver
-        val ok = runCatching { resolver.takePersistableUriPermission(tree, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION or android.content.Intent.FLAG_GRANT_WRITE_URI_PERMISSION) }.isSuccess
-        if (!ok) { tell(text(R.string.backup_folder_not_writable)); return }
-        backupTree?.takeIf { it != tree }?.let { old -> releaseBackupGrant(old) }
-        backupTree = tree
-        appPrefs.edit().putString("backupTree", tree.toString()).apply()
-        backupFailed = false
-        backupAppData()
-    }
-
-    fun turnOffBackups() {
-        backupTree?.let(::releaseBackupGrant)
-        backupTree = null
-        backupFailed = false
-        appPrefs.edit().remove("backupTree").apply()
-        pendingBackups.values.forEach { it.pdf.delete(); it.xfdf?.delete() }
-        pendingBackups.clear()
-    }
-
-    private fun releaseBackupGrant(tree: Uri) {
-        // the folder stays listed under On this device when the user also added it there
-        val resolver = getApplication<Application>().contentResolver
-        runCatching { resolver.releasePersistableUriPermission(tree, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION or android.content.Intent.FLAG_GRANT_WRITE_URI_PERMISSION) }
-    }
-
-    fun updateBackupKeep(n: Int) {
-        backupKeep = n.coerceIn(1, 100)
-        appPrefs.edit().putInt("backupKeep", backupKeep).apply()
-    }
-
-    fun backupFolderName(): String? = backupTree?.let { io.github.artcraftandroid.pdfcraft.engine.LocalFiles.folderName(getApplication(), it) }
-
-    private fun backupFolder(): io.github.artcraftandroid.pdfcraft.engine.BackupFolder? =
-        backupTree?.let { io.github.artcraftandroid.pdfcraft.engine.BackupFolder(getApplication<Application>().contentResolver, it) }
-
-    private fun backupDir(): File = File(getApplication<Application>().cacheDir, "backup").apply { mkdirs() }
-
-    /**
-     * After a save wrote [doc]'s changes: snapshot the saved file and its comments (XFDF) now,
-     * while nothing else writes them, then copy them out in the background. Never blocks the save
-     * or the app going to the background (#97); failures are told and retried at the next save.
-     */
-    private suspend fun snapshotForBackup(eng: Engine, doc: OpenDocument) {
-        backupTree ?: return
-        if (doc.info.preparing) return
-        val base = io.github.artcraftandroid.pdfcraft.engine.BackupNames.base(doc.info.name)
-        val time = System.currentTimeMillis()
-        val dir = backupDir()
-        val pdf = File(dir, "${time}-${base.hashCode()}.pdf")
-        val xfdf = File(dir, "${time}-${base.hashCode()}.xfdf")
-        try {
-            withContext(Dispatchers.IO) { doc.file.copyTo(pdf, overwrite = true) }
-        } catch (e: Exception) {
-            pdf.delete()
-            backupFailed = true
-            return
-        }
-        // the comments alone; a document whose comments cannot be exported still gets its PDF copy
-        val hasXfdf = runCatching { eng.tool("doc_export_data", mapOf("doc" to doc.id, "path" to xfdf.absolutePath, "what" to "comments")) }.isSuccess && xfdf.isFile
-        if (!hasXfdf) xfdf.delete()
-        pendingBackups.put(base, PendingBackup(base, time, pdf, xfdf.takeIf { hasXfdf }))?.let { old -> old.pdf.delete(); old.xfdf?.delete() }
-        flushBackups()
-    }
-
-    /** Copy every waiting snapshot to the backup folder and prune old versions. */
-    fun flushBackups() {
-        viewModelScope.launch(Dispatchers.IO) {
-            backupMutex.withLock {
-                val folder = backupFolder() ?: return@withLock
-                var failed = false
-                for (base in pendingBackups.keys.toList()) {
-                    val p = pendingBackups[base] ?: continue
-                    val ok = runCatching {
-                        folder.write(base, io.github.artcraftandroid.pdfcraft.engine.BackupNames.pdfName(base, p.time), "application/pdf", p.pdf)
-                        p.xfdf?.let { folder.write(base, io.github.artcraftandroid.pdfcraft.engine.BackupNames.xfdfName(base, p.time), "application/vnd.adobe.xfdf", it) }
-                        val prune = io.github.artcraftandroid.pdfcraft.engine.BackupNames.toPrune(base, folder.list(base), backupKeep)
-                        if (prune.isNotEmpty()) folder.delete(base, prune)
-                    }.isSuccess
-                    if (ok) {
-                        // a newer snapshot may have arrived meanwhile; only this one is done
-                        if (pendingBackups.remove(base, p)) { p.pdf.delete(); p.xfdf?.delete() }
-                    } else failed = true
-                }
-                if (!failed) runCatching { writeAppData(folder) }
-                withContext(Dispatchers.Main) {
-                    if (failed && !backupFailed) tell(text(R.string.backup_failed), text(R.string.backup_retry)) { flushBackups() }
-                    backupFailed = failed
-                    if (!failed) {
-                        backupLast = System.currentTimeMillis()
-                        appPrefs.edit().putLong("backupLast", backupLast).apply()
-                    }
-                }
-            }
-        }
-    }
-
-    private fun backupAppData() {
-        viewModelScope.launch(Dispatchers.IO) { backupMutex.withLock { backupFolder()?.let { runCatching { writeAppData(it) } } } }
-    }
-
-    /** Library, flashcards, notebooks and study statistics as one JSON file beside the backups. */
-    private fun writeAppData(folder: io.github.artcraftandroid.pdfcraft.engine.BackupFolder) {
-        val filesDir = getApplication<Application>().filesDir
-        val out = org.json.JSONObject().put("app", "PdfCraft").put("version", 1).put("time", System.currentTimeMillis())
-        for ((key, name) in listOf("library" to "library.json", "flashcards" to "flashcards.json", "notebooks" to "notebooks.json", "study" to "study.json")) {
-            val f = File(filesDir, name)
-            if (f.isFile) runCatching { org.json.JSONObject(f.readText()) }.getOrNull()?.let { out.put(key, it) }
-        }
-        val tmp = File(backupDir(), "app-data.json")
-        tmp.writeText(out.toString(1))
-        try {
-            folder.write(io.github.artcraftandroid.pdfcraft.engine.BackupNames.APP_DATA_FOLDER, "app-data.json", "application/json", tmp)
-        } finally {
-            tmp.delete()
-        }
-    }
-
-    // ---- Version history ----
-
-    var backupVersions by mutableStateOf<List<io.github.artcraftandroid.pdfcraft.engine.BackupVersion>?>(null)
-        private set
-
-    fun loadBackupVersions(doc: OpenDocument) {
-        backupVersions = null
-        viewModelScope.launch {
-            val base = io.github.artcraftandroid.pdfcraft.engine.BackupNames.base(doc.info.name)
-            backupVersions = withContext(Dispatchers.IO) {
-                runCatching { backupFolder()?.let { io.github.artcraftandroid.pdfcraft.engine.BackupNames.versions(base, it.list(base)) } }.getOrNull().orEmpty()
-            }
-        }
-    }
-
-    /** Open version [v] as a new copy in Downloads; the document and the backup stay as they are. */
-    fun restoreBackupCopy(doc: OpenDocument, v: io.github.artcraftandroid.pdfcraft.engine.BackupVersion) {
-        val folder = backupFolder() ?: return
-        val base = io.github.artcraftandroid.pdfcraft.engine.BackupNames.base(doc.info.name)
-        viewModelScope.launch {
-            busy = text(R.string.backup_restoring)
-            try {
-                val tmp = File(backupDir(), "restore-${System.nanoTime()}.pdf")
-                val uri = withContext(Dispatchers.IO) {
-                    folder.read(base, v.pdf, tmp)
-                    try { files.saveToDownloads(tmp, DocumentFiles.safeName(v.pdf)) } finally { tmp.delete() }
-                }
-                busy = null
-                open(uri)
-            } catch (e: Exception) {
-                busy = null
-                tell(e.userMessage)
-            }
-        }
-    }
-
-    /** Add version [v]'s comments (its XFDF) to the open document; one undo takes them away. */
-    fun restoreBackupComments(doc: OpenDocument, v: io.github.artcraftandroid.pdfcraft.engine.BackupVersion) {
-        val name = v.xfdf ?: return
-        val folder = backupFolder() ?: return
-        val base = io.github.artcraftandroid.pdfcraft.engine.BackupNames.base(doc.info.name)
-        val eng = engine ?: return
-        viewModelScope.launch {
-            val tmp = File(backupDir(), "restore-${System.nanoTime()}.xfdf")
-            try {
-                withContext(Dispatchers.IO) { folder.read(base, name, tmp) }
-                eng.tool("doc_import_data", mapOf("doc" to doc.id, "path" to tmp.absolutePath))
-                refresh(doc)
-                tell(text(R.string.backup_comments_restored))
-            } catch (e: Exception) {
-                tell(e.userMessage)
-            } finally {
-                withContext(Dispatchers.IO) { tmp.delete() }
-            }
-        }
-    }
+    val backups = BackupController(this)
 }
 
 /** The most files Create PDF converts at once. */
@@ -6354,7 +5498,7 @@ enum class DigestFormat(@androidx.annotation.StringRes val label: Int) {
 }
 
 /** Files past this size are not copied for the library index. */
-private const val MAX_INDEX_BYTES = 300L * 1024 * 1024
+internal const val MAX_INDEX_BYTES = 300L * 1024 * 1024
 
 /** A flashcard being written: its deck (document URI), page, sides, and its id when editing one. */
 data class CardDraft(val deck: String, val deckName: String, val page: Int, val front: String, val back: String, val id: String?)

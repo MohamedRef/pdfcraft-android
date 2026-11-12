@@ -319,6 +319,7 @@
     <string name="tools_add_page">Aggiungi pagina</string>
     <string name="tools_retake">Scatta di nuovo</string>
     <string name="tools_filter_original">Originale</string>
+    <string name="tools_filter_clean_scan">Scansione pulita</string>
     <string name="tools_filter_auto_colour">Colore automatico</string>
     <string name="tools_filter_grayscale">Scala di grigi</string>
     <string name="tools_filter_whiteboard">Lavagna bianca</string>
