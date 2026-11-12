@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Scan: auto-capture in the in-app camera (#296), kept apart from strings.xml so parallel scanner work merges cleanly. -->
+<resources>
+    <string name="scan_auto_next">Nächste Seite</string>
+    <string name="scan_auto_tip">Automatische Aufnahme ist an: Halte das Handy ruhig über die Seite, dann nimmt es das Foto auf.</string>
+    <string name="scan_auto_setting">Automatische Aufnahme</string>
+    <string name="scan_auto_skip">Foto wird aufgenommen. Hier tippen, um diese Seite zu überspringen.</string>
+</resources>

@@ -46,6 +46,7 @@ on one part. While any is changed, the scan screen says so.
 | Flatten page (#302) | Off | On, with the switch on the scan screen itself |
 | Scan with (#294) | PdfCraft camera | Phone's camera app (also in Settings → Scan; the same setting) |
 | Page outline in the camera (#295) | On | Off: no frames are analysed, the camera is as in #294 |
+| Auto-capture (#296) | On | Off: only the shutter takes photos. Needs the page outline; also switched in the camera's top bar |
 
 Settings → **Scanner models** (#289) lists each model with its state; while the log is
 recorded it also has **Copy the models again**, which copies every model out of the app anew
@@ -85,7 +86,8 @@ The zip also holds `diagnostics.txt`, the diagnostics log as **Share diagnostics
  "turns": {"manual": null, "auto": true, "total": 3, "followed": false, "source": "classifier"},
  "capture": {"source": "in_app", "mp10": 499, "width": 8160, "height": 6120, "exposure_index": -1, "exposure_step_milli": 333,
              "torch": false, "focused": true, "rotation": 0, "capture_ms": 640, "live": true, "live_found": true,
-             "live_stable": true, "live_hint": "ready", "preview_quad": [0.11, 0.08, 0.93, 0.10, 0.95, 0.90, 0.07, 0.89]},
+             "live_stable": true, "live_hint": "ready", "preview_quad": [0.11, 0.08, 0.93, 0.10, 0.95, 0.90, 0.07, 0.89],
+             "auto_on": true, "auto_shot": true, "sharpness": 1.235, "sharpness_blurred_unverified": false, "sharpness_ms": 85},
  "preview": {"shown": true, "reused": true, "ms": 412, "width": 905, "height": 1280, "look": "auto"},
  "models": {"edges": "ready", "flatten": "ready", "upright": "ready"},
  "crop": {"visits": 1, "corner_drags": 2, "side_drags": 1, "snaps_asked": 3, "snaps_taken": 2, "snaps_held": 0, "snaps_failed": 0,
@@ -124,6 +126,10 @@ before the scan is saved.
 From #295 it also holds the live outline at the shutter (`ANDROID_SCAN_LIVE.md`): whether it was
 on (`live`), showed a page, was steady, the advice shown (`live_hint`) and the outline itself
 (`preview_quad`, 8 shares of the upright frame, or `null`).
+From #296 (`ANDROID_SCAN_AUTO.md`): whether auto-capture was on (`auto_on`) and took this photo
+(`auto_shot`), and the photo's `sharpness` score inside the outline (`null` until measured or when
+it failed), `sharpness_blurred_unverified` and `sharpness_ms`. The blur flag is recorded only: it
+does not detect motion blur and its threshold comes from drawn pages, so nothing acts on it.
 `turns` says which way up the page was saved (#339): `manual` is the
 person's own turn from Rotate or Undo (0–3 clockwise, `null` when they gave none), `auto` the
 ordinary setting "Turn pages upright automatically", `total` the turn the page was saved with,

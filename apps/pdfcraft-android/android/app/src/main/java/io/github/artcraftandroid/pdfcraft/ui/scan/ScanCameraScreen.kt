@@ -72,6 +72,7 @@ import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -128,7 +129,7 @@ internal fun ScanCameraScreen(model: ScanCameraModel, pages: List<ImageBitmap>, 
     }
     Box(Modifier.fillMaxSize().background(Color.Black).windowInsetsPadding(WindowInsets.safeDrawing)) {
         when (model.route) {
-            ScanCaptureRoute.InApp -> CameraView(file, model.retaking, pages, actions, model.liveOutline, book)
+            ScanCaptureRoute.InApp -> CameraView(file, model.retaking, pages, actions, model.liveOutline, model, book)
             else -> NoCameraView(model.route, actions)
         }
     }
@@ -158,7 +159,7 @@ private fun NoCameraView(route: ScanCaptureRoute, actions: ScanCameraActions) {
 
 /** The camera, once allowed. */
 @Composable
-private fun CameraView(file: File, retaking: Boolean, pages: List<ImageBitmap>, actions: ScanCameraActions, live: Boolean, book: ScanBookController?) {
+private fun CameraView(file: File, retaking: Boolean, pages: List<ImageBitmap>, actions: ScanCameraActions, live: Boolean, model: ScanCameraModel, book: ScanBookController?) {
     val context = LocalContext.current
     val owner = LocalLifecycleOwner.current
     val scope = rememberCoroutineScope()
@@ -186,6 +187,28 @@ private fun CameraView(file: File, retaking: Boolean, pages: List<ImageBitmap>, 
     var hint by remember { mutableStateOf<ScanLiveHint?>(null) }
     var lastLuma by remember { mutableStateOf(255f) }
     var lastCutOff by remember { mutableStateOf(false) }
+    // auto-capture (#296): needs the live outline; the gyroscope says whether the phone is still
+    val autoOn = live && model.autoCapture
+    var auto by remember { mutableStateOf(ScanAutoState()) }
+    var lastSignature by remember { mutableStateOf<FloatArray?>(null) }
+    var tick by remember { mutableStateOf(0L) }
+    val stillness = remember { ScanStillness() }
+    // turned off mid-countdown: no ring left behind (a photo in progress ends as usual)
+    LaunchedEffect(autoOn) { if (!autoOn && auto.phase != ScanAutoPhase.Capturing) auto = ScanAutoState() }
+    DisposableEffect(autoOn) {
+        val sensors = context.getSystemService(android.hardware.SensorManager::class.java)
+        val gyro = sensors?.getDefaultSensor(android.hardware.Sensor.TYPE_GYROSCOPE)
+        val listener = object : android.hardware.SensorEventListener {
+            override fun onSensorChanged(e: android.hardware.SensorEvent) {
+                stillness.add(SystemClock.elapsedRealtime(), e.values[0], e.values[1], e.values[2])
+            }
+
+            override fun onAccuracyChanged(sensor: android.hardware.Sensor?, accuracy: Int) = Unit
+        }
+        if (autoOn && gyro != null) sensors.registerListener(listener, gyro, android.hardware.SensorManager.SENSOR_DELAY_GAME)
+        if (autoOn) Diag.event(DiagArea.Scan, "camera_auto", "gyroscope" to (gyro != null))
+        onDispose { sensors?.unregisterListener(listener) }
+    }
     val openedAt = remember { SystemClock.elapsedRealtime() }
     val analysisExecutor = remember { java.util.concurrent.Executors.newSingleThreadExecutor() }
     val analyzer = remember {
@@ -195,6 +218,7 @@ private fun CameraView(file: File, retaking: Boolean, pages: List<ImageBitmap>, 
                 outline = tracker.update(d)
                 lastLuma = d.meanLuma
                 lastCutOff = d.found && d.cutOff
+                if (d.found) lastSignature = d.signature
             }
         }
     }
@@ -314,12 +338,16 @@ private fun CameraView(file: File, retaking: Boolean, pages: List<ImageBitmap>, 
                             rotation = turn, captureMs = SystemClock.elapsedRealtime() - (if (shutterAt > 0) shutterAt else started),
                             live = live, liveFound = outline?.points != null, liveStable = outline?.stable == true,
                             liveHint = hint?.id ?: "none", previewQuad = outline?.points,
+                            autoOn = autoOn, autoShot = auto.phase == ScanAutoPhase.Capturing && auto.auto,
                         )
+                        auto = auto.reduce(ScanAutoEvent.CaptureEnded(true, lastSignature, SystemClock.elapsedRealtime())).first
+                        view.performHapticFeedback(android.view.HapticFeedbackConstants.CONFIRM)
                         // the photo goes to the scan before Done (if pressed meanwhile) closes the screen
                         actions.onCaptured(file, facts, !retaking && !state.doneQueued)
                         dispatch(ScanCameraEvent.CaptureEnded(true, SystemClock.elapsedRealtime()))
                     } else {
                         file.delete()
+                        auto = auto.reduce(ScanAutoEvent.CaptureEnded(false, null, SystemClock.elapsedRealtime())).first
                         dispatch(ScanCameraEvent.CaptureEnded(false, SystemClock.elapsedRealtime()))
                     }
                 }
@@ -327,6 +355,7 @@ private fun CameraView(file: File, retaking: Boolean, pages: List<ImageBitmap>, 
                 override fun onError(exception: ImageCaptureException) {
                     file.delete()
                     Diag.event(DiagArea.Scan, "camera_capture_failed", "code" to exception.imageCaptureError)
+                    auto = auto.reduce(ScanAutoEvent.CaptureEnded(false, null, SystemClock.elapsedRealtime())).first
                     dispatch(ScanCameraEvent.CaptureEnded(false, SystemClock.elapsedRealtime()))
                 }
             },
@@ -362,11 +391,24 @@ private fun CameraView(file: File, retaking: Boolean, pages: List<ImageBitmap>, 
         if (!live) return@LaunchedEffect
         while (true) {
             val now = SystemClock.elapsedRealtime()
+            tick = now
             val shown = tracker.at(now).also { if (it.points == null) outline = null }
             val missing = if (shown.points != null) 0L else now - (tracker.lastFoundAt ?: openedAt)
             val wanted = scanLiveHintFor(ScanLiveScene(shown.points, outline?.stable == true, lastLuma, lastCutOff, missing))
             hint = holder.update(wanted, now)
-            delay(100)
+            if (autoOn) {
+                val before = auto.phase
+                val (next, shoot) = auto.reduce(ScanAutoEvent.Seen(ScanAutoInputs(now, hint == ScanLiveHint.Ready, stillness.still(now), shown.points != null, lastSignature)))
+                auto = next
+                if (next.phase != before) Diag.event(DiagArea.Scan, "camera_auto_phase", "phase" to next.phase.id)
+                if (shoot && state.shutterReady && camera != null) {
+                    shutterAt = now
+                    dispatch(ScanCameraEvent.Shutter(now))
+                } else if (shoot) {
+                    auto = ScanAutoState()
+                }
+            }
+            delay(if (auto.phase == ScanAutoPhase.Arming) 33 else 100)
         }
     }
     LaunchedEffect(error) {
@@ -383,6 +425,12 @@ private fun CameraView(file: File, retaking: Boolean, pages: List<ImageBitmap>, 
         Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             BarIcon(LucideIcons.X, stringResource(R.string.common_cancel), actions.onClose, tint = Color.White)
             Spacer(Modifier.weight(1f))
+            if (live) {
+                // auto-capture on or off, remembered (#296)
+                TextButton(onClick = { model.updateAutoCapture(!model.autoCapture) }, modifier = Modifier.semantics { this.selected = model.autoCapture }) {
+                    Text(stringResource(R.string.scan_auto_setting), color = if (model.autoCapture) Color(0xFF81C784) else Color.White, fontSize = 14.sp)
+                }
+            }
             TextButton(onClick = actions.onPhoneApp) { Text(stringResource(R.string.scan_camera_phone_app), color = Color.White, fontSize = 14.sp) }
             // book mode (#303): the same switch as on the scan screen
             if (book != null) ScanBookCameraToggle(book)
@@ -445,6 +493,23 @@ private fun CameraView(file: File, retaking: Boolean, pages: List<ImageBitmap>, 
             val h = hint
             if (error) {
                 Text(stringResource(R.string.scan_camera_failed), color = Color.White, fontSize = 14.sp)
+            } else if (autoOn && auto.phase == ScanAutoPhase.Arming) {
+                // the countdown can be skipped: this page is then left until a new one is in view
+                Text(
+                    stringResource(R.string.scan_auto_skip), color = Color.White, fontSize = 14.sp, textAlign = TextAlign.Center,
+                    modifier = Modifier.clickable(role = Role.Button) {
+                        auto = auto.reduce(ScanAutoEvent.Cancel(lastSignature, SystemClock.elapsedRealtime())).first
+                        Diag.event(DiagArea.Scan, "camera_auto_phase", "phase" to auto.phase.id, "skipped" to true)
+                    }.padding(vertical = 8.dp),
+                )
+            } else if (autoOn && auto.phase == ScanAutoPhase.WaitingForNewPage) {
+                Text(stringResource(R.string.scan_auto_next), color = Color.White, fontSize = 14.sp)
+            } else if (autoOn && !model.autoTipShown) {
+                Text(stringResource(R.string.scan_auto_tip), color = Color.White, fontSize = 13.sp, textAlign = TextAlign.Center)
+                LaunchedEffect(Unit) {
+                    delay(4_000)
+                    model.markAutoTipShown()
+                }
             } else if (live && h != null) {
                 Text(stringResource(scanLiveHintText(h)), color = if (h == ScanLiveHint.Ready) Color(0xFF81C784) else Color.White, fontSize = 14.sp)
             }
@@ -462,17 +527,25 @@ private fun CameraView(file: File, retaking: Boolean, pages: List<ImageBitmap>, 
             }
             val shutterLabel = stringResource(R.string.scan_camera_shutter)
             val ready = state.shutterReady && camera != null && !failed
-            Box(
-                Modifier.size(72.dp).clip(CircleShape).border(4.dp, Color.White, CircleShape).padding(6.dp).clip(CircleShape)
-                    .background(if (ready) Color.White else Color.Gray)
-                    .clickable(enabled = ready, role = Role.Button) {
-                        shutterAt = SystemClock.elapsedRealtime()
-                        dispatch(ScanCameraEvent.Shutter(shutterAt))
-                    }
-                    .semantics { contentDescription = shutterLabel },
-                contentAlignment = Alignment.Center,
-            ) {
-                if (state.phase == ScanCameraPhase.Capturing || state.captureQueued) CircularProgressIndicator(Modifier.size(32.dp), color = Color.Black, strokeWidth = 3.dp)
+            Box(Modifier.size(84.dp), contentAlignment = Alignment.Center) {
+                // the countdown before an automatic shot, around the shutter
+                if (autoOn && auto.phase == ScanAutoPhase.Arming) {
+                    CircularProgressIndicator(progress = { auto.armProgress(tick) }, modifier = Modifier.size(84.dp), color = Color(0xFF81C784), strokeWidth = 4.dp)
+                }
+                Box(
+                    Modifier.size(72.dp).clip(CircleShape).border(4.dp, Color.White, CircleShape).padding(6.dp).clip(CircleShape)
+                        .background(if (ready) Color.White else Color.Gray)
+                        .clickable(enabled = ready, role = Role.Button) {
+                            shutterAt = SystemClock.elapsedRealtime()
+                            // by hand: one photo, and auto-capture waits for the next page afterwards
+                            auto = auto.reduce(ScanAutoEvent.Shutter(shutterAt)).first
+                            dispatch(ScanCameraEvent.Shutter(shutterAt))
+                        }
+                        .semantics { contentDescription = shutterLabel },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    if (state.phase == ScanCameraPhase.Capturing || state.captureQueued) CircularProgressIndicator(Modifier.size(32.dp), color = Color.Black, strokeWidth = 3.dp)
+                }
             }
             Box(Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) {
                 if (!retaking && pages.isNotEmpty()) {
