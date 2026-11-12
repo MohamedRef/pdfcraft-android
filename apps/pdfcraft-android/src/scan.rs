@@ -199,7 +199,7 @@ pub struct ScanDocument {
 }
 
 /// The one directory scan functions read from and write to.
-static SCAN_ROOT: RwLock<Option<PathBuf>> = RwLock::new(None);
+pub(crate) static SCAN_ROOT: RwLock<Option<PathBuf>> = RwLock::new(None);
 
 /// Set the directory scan functions may use (the app's cache directory). Ignored unless it is an
 /// existing absolute directory.
@@ -228,7 +228,7 @@ pub fn scan_process_page(request: ScanPageRequest) -> Result<ScanPageResult, Mob
 const MAX_PHOTO_BYTES: u64 = 256 << 20;
 
 /// The bytes of the photo at `path`, which must be inside `root`.
-fn read_photo(root: &Path, path: &str) -> Result<Vec<u8>, MobileError> {
+pub(crate) fn read_photo(root: &Path, path: &str) -> Result<Vec<u8>, MobileError> {
     let unreadable = || MobileError::Command("the photo could not be read".into());
     let photo_path = Path::new(path).canonicalize().map_err(|_| unreadable())?;
     if !photo_path.starts_with(root) {

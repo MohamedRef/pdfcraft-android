@@ -106,6 +106,39 @@ impl Pyramid {
     pub fn bytes(&self) -> usize {
         self.levels.iter().map(|l| l.data.len()).sum()
     }
+
+    /// The part of the photo inside `quad` (full-size pixels) straightened to `out_w` × `out_h`
+    /// grey pixels, sampled from the smallest level that still has at least as many pixels
+    /// across the quad as the output, so a small output is not aliased from the full size.
+    /// Outside the photo is white. `None` for an empty output or corners no homography maps.
+    pub fn straighten(&self, quad: &Quad, out_w: u32, out_h: u32) -> Option<Luma> {
+        if out_w == 0 || out_h == 0 {
+            return None;
+        }
+        let [top, right, bottom, left] = quad.side_lengths();
+        let need = (top.max(bottom) / f64::from(out_w)).min(left.max(right) / f64::from(out_h));
+        // level k is 2^k times smaller; take the deepest one still at least as fine as the output
+        let mut level = 0;
+        while level + 1 < self.levels.len() && need >= f64::from(1u32 << (level + 1)) {
+            level += 1;
+        }
+        let img = &self.levels[level];
+        let (sx, sy) = (f64::from(img.width) / f64::from(self.levels[0].width), f64::from(img.height) / f64::from(self.levels[0].height));
+        let target = [[0.0, 0.0], [f64::from(out_w), 0.0], [f64::from(out_w), f64::from(out_h)], [0.0, f64::from(out_h)]];
+        let scaled = quad.0.map(|[x, y]| [x * sx, y * sy]);
+        let map = pdfcraft_geom::perspective::Homography::from_points(target, scaled)?;
+        let mut data = Vec::with_capacity(out_w as usize * out_h as usize);
+        for row in 0..out_h {
+            for col in 0..out_w {
+                let v = map
+                    .apply([f64::from(col) + 0.5, f64::from(row) + 0.5])
+                    .and_then(|[x, y]| sample(img, x, y))
+                    .unwrap_or(255.0);
+                data.push(v.round().clamp(0.0, 255.0) as u8);
+            }
+        }
+        Some(Luma { width: out_w, height: out_h, data })
+    }
 }
 
 /// Each pixel the mean of a 2 × 2 block.

@@ -58,6 +58,8 @@ mod tests;
 #[cfg(test)]
 mod tests_book;
 #[cfg(test)]
+mod tests_book_photo;
+#[cfg(test)]
 mod tests_detect;
 #[cfg(test)]
 mod tests_flatten;
