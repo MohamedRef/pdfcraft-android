@@ -59,8 +59,8 @@ class MainActivity : ComponentActivity() {
     private val pickFolder = registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri -> uri?.let(vm::addLocalFolder) }
     private val micPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted -> vm.onMicPermission(granted) }
     private val pickBackupFolder = registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { vm.backups.onBackupFolderPicked(it) }
-    private val pickCardFile = registerForActivityResult(ActivityResultContracts.OpenDocument()) { vm.onCardFilePicked(it) }
-    private val notificationPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { vm.updateFocusTimer(vm.focusTimer) }
+    private val pickCardFile = registerForActivityResult(ActivityResultContracts.OpenDocument()) { vm.study.onCardFilePicked(it) }
+    private val notificationPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { vm.study.updateFocusTimer(vm.study.focusTimer) }
 
     private val pickBatesPdfs = registerForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { vm.onBatesFilesPicked(it) }
 
@@ -191,9 +191,9 @@ class MainActivity : ComponentActivity() {
             }
         }
         lifecycleScope.launch { for (u in vm.backups.backupFolderRequests) launchSafely { pickBackupFolder.launch(null) } }
-        lifecycleScope.launch { for (u in vm.cardImportRequests) launchSafely { pickCardFile.launch(arrayOf("text/plain", "text/csv", "text/comma-separated-values", "text/tab-separated-values")) } }
+        lifecycleScope.launch { for (u in vm.study.cardImportRequests) launchSafely { pickCardFile.launch(arrayOf("text/plain", "text/csv", "text/comma-separated-values", "text/tab-separated-values")) } }
         lifecycleScope.launch {
-            for (u in vm.notificationRequests) if (android.os.Build.VERSION.SDK_INT >= 33) launchSafely { notificationPermission.launch(android.Manifest.permission.POST_NOTIFICATIONS) }
+            for (u in vm.study.notificationRequests) if (android.os.Build.VERSION.SDK_INT >= 33) launchSafely { notificationPermission.launch(android.Manifest.permission.POST_NOTIFICATIONS) }
         }
         // keep the screen on while reading, if asked, until half an hour without a touch
         lifecycleScope.launch {
@@ -226,7 +226,7 @@ class MainActivity : ComponentActivity() {
     override fun onUserInteraction() {
         super.onUserInteraction()
         lastTouch = System.currentTimeMillis()
-        vm.studyActivity()
+        vm.study.studyActivity()
     }
 
     private inline fun launchSafely(onFail: () -> Unit = {}, block: () -> Unit) {

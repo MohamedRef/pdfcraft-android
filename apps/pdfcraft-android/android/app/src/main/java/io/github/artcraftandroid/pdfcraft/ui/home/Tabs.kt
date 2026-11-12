@@ -409,10 +409,10 @@ private fun Preferences(vm: AppViewModel) {
     SheetRow(null, stringResource(R.string.home_clear_suggestions), { vm.clearFormSuggestions() })
     SheetDivider()
     Section(stringResource(R.string.library_title))
-    SheetRow(null, stringResource(R.string.library_index_switch), { vm.updateLibraryIndexing(!vm.libraryIndexing) }) {
-        io.github.artcraftandroid.pdfcraft.ui.PdfSwitch(vm.libraryIndexing, null)
+    SheetRow(null, stringResource(R.string.library_index_switch), { vm.study.updateLibraryIndexing(!vm.study.libraryIndexing) }) {
+        io.github.artcraftandroid.pdfcraft.ui.PdfSwitch(vm.study.libraryIndexing, null)
     }
-    SheetRow(null, stringResource(R.string.library_wipe_index), { vm.wipeLibraryIndex() })
+    SheetRow(null, stringResource(R.string.library_wipe_index), { vm.study.wipeLibraryIndex() })
     Text(stringResource(R.string.library_index_body), color = c.textSecondary, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 20.dp))
 
     Section(stringResource(R.string.backup_section))
@@ -450,7 +450,7 @@ private fun Preferences(vm: AppViewModel) {
     if (confirmStudyClear) io.github.artcraftandroid.pdfcraft.ui.PdfDialog(
         onDismiss = { confirmStudyClear = false }, title = stringResource(R.string.study_clear_stats),
         confirm = stringResource(R.string.common_clear), destructive = true,
-        onConfirm = { confirmStudyClear = false; vm.clearStudyStats() },
+        onConfirm = { confirmStudyClear = false; vm.study.clearStudyStats() },
     )
     SheetDivider()
     Section(stringResource(R.string.home_section_keyboard))
