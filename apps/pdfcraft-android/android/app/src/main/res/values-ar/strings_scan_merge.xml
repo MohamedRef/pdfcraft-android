@@ -5,6 +5,6 @@
     <string name="scan_merge_auto">تلقائي</string>
     <string name="scan_merge_always">دائمًا</string>
     <string name="scan_merge_off">إيقاف</string>
-    <string name="scan_merge_body">في الإضاءة الخافتة تلتقط الكاميرا أربع صور للصفحة وتدمجها في صفحة واحدة أنظف. يستغرق الالتقاط ثانية تقريبًا أطول.</string>
+    <string name="scan_merge_body">في الإضاءة الخافتة تلتقط الكاميرا أربع صور للصفحة وتدمجها في صفحة واحدة أنظف. يستغرق الالتقاط ثانية تقريبًا أطول. مُطفأ افتراضيًا. الصفحة المدمجة تكون مقصوصة بالفعل ولا تُحفظ الصور، فلا يمكن توسيعها من شاشة القص.</string>
     <string name="scan_merge_working">ثبّت الهاتف: جارٍ دمج أربع صور</string>
 </resources>

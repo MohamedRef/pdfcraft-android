@@ -5,6 +5,6 @@
     <string name="scan_merge_auto">Auto</string>
     <string name="scan_merge_always">Toujours</string>
     <string name="scan_merge_off">Désactivée</string>
-    <string name="scan_merge_body">En faible lumière, l’appareil prend quatre photos de la page et les fusionne en une page plus nette. La prise dure environ une seconde de plus.</string>
+    <string name="scan_merge_body">En faible lumière, l’appareil prend quatre photos de la page et les fusionne en une page plus nette. La prise dure environ une seconde de plus. Désactivé par défaut. La page fusionnée est déjà recadrée et les photos ne sont pas conservées, donc Recadrer ne peut pas l’agrandir.</string>
     <string name="scan_merge_working">Ne bougez pas : fusion de quatre photos</string>
 </resources>

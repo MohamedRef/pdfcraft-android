@@ -5,6 +5,6 @@
     <string name="scan_merge_auto">Automática</string>
     <string name="scan_merge_always">Sempre</string>
     <string name="scan_merge_off">Desativada</string>
-    <string name="scan_merge_body">Com pouca luz, a câmera tira quatro fotos da página e as mescla em uma página mais limpa. A captura leva cerca de um segundo a mais.</string>
+    <string name="scan_merge_body">Com pouca luz, a câmera tira quatro fotos da página e as mescla em uma página mais limpa. A captura leva cerca de um segundo a mais. Desativado por padrão. A página mesclada já vem recortada e as fotos não são mantidas, então Recortar não consegue ampliá-la.</string>
     <string name="scan_merge_working">Segure firme: mesclando quatro fotos</string>
 </resources>

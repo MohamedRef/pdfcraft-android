@@ -5,6 +5,6 @@
     <string name="scan_merge_auto">Automatisch</string>
     <string name="scan_merge_always">Immer</string>
     <string name="scan_merge_off">Aus</string>
-    <string name="scan_merge_body">Bei wenig Licht nimmt die Kamera vier Fotos der Seite auf und führt sie zu einer saubereren Seite zusammen. Die Aufnahme dauert etwa eine Sekunde länger.</string>
+    <string name="scan_merge_body">Bei wenig Licht nimmt die Kamera vier Fotos der Seite auf und führt sie zu einer saubereren Seite zusammen. Die Aufnahme dauert etwa eine Sekunde länger. Standardmäßig aus. Die zusammengeführte Seite ist bereits zugeschnitten und die Fotos werden nicht behalten, daher kann Zuschneiden sie nicht erweitern.</string>
     <string name="scan_merge_working">Still halten: vier Fotos werden zusammengeführt</string>
 </resources>

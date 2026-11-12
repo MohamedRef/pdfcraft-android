@@ -10,7 +10,11 @@ import org.json.JSONObject
  * corners, aligns what is left and averages robustly.
  */
 
-/** The setting: merge when the scene is dark (Auto), every time (Always), or never (Off). */
+/**
+ * The setting: merge when the scene is dark (Auto), every time (Always), or never (Off). [DEFAULT]
+ * is Off (#426): a merged page enters the scan already cropped by the detector's outlines, with
+ * the photos deleted, so Crop cannot widen it. Reason in `docs/ANDROID_SCAN_MERGE.md`.
+ */
 internal enum class ScanMergeSetting(val id: String) {
     Auto("auto"),
     Always("always"),
@@ -18,7 +22,10 @@ internal enum class ScanMergeSetting(val id: String) {
     ;
 
     companion object {
-        fun decode(id: String?): ScanMergeSetting = entries.firstOrNull { it.id == id } ?: Auto
+        /** Off until the merge has been tried on the owner's phone (#426). */
+        val DEFAULT = Off
+
+        fun decode(id: String?): ScanMergeSetting = entries.firstOrNull { it.id == id } ?: DEFAULT
     }
 }
 
