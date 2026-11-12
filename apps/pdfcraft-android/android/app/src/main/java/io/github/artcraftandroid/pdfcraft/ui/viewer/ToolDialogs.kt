@@ -7,11 +7,11 @@ import io.github.artcraftandroid.pdfcraft.ui.AppViewModel
 /** The editing tools' dialogs that can open over any screen (Recognize text's options, …). */
 @Composable
 fun ToolDialogs(vm: AppViewModel) {
-    vm.ocr.optionsFor?.let { doc ->
+    vm.tools.ocr.optionsFor?.let { doc ->
         val context = LocalContext.current
         OcrOptionsDialog(
-            initial = OcrOptions.load(context), languages = vm.ocr.languages, pageCount = doc.pageCount,
-            onDismiss = { vm.ocr.optionsFor = null }, onRun = { vm.runOcr(doc, it) },
+            initial = OcrOptions.load(context), languages = vm.tools.ocr.languages, pageCount = doc.pageCount,
+            onDismiss = { vm.tools.ocr.optionsFor = null }, onRun = { vm.runOcr(doc, it) },
         )
     }
 }

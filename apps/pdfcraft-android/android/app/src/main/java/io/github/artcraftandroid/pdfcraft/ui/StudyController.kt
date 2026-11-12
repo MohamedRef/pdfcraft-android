@@ -219,7 +219,7 @@ class StudyController internal constructor(private val vm: AppViewModel) {
     var libraryAddTo: String? = null
 
     /** Searching inside library documents is on (it builds an index in the background). */
-    var libraryIndexing by mutableStateOf(vm.appPrefs.getBoolean("libraryIndex", false))
+    var libraryIndexing by mutableStateOf(vm.settings.appPrefs.getBoolean("libraryIndex", false))
         private set
 
     /** The document being indexed now, if any. */
@@ -295,7 +295,7 @@ class StudyController internal constructor(private val vm: AppViewModel) {
 
     fun updateLibraryIndexing(on: Boolean) {
         libraryIndexing = on
-        vm.appPrefs.edit().putBoolean("libraryIndex", on).apply()
+        vm.settings.appPrefs.edit().putBoolean("libraryIndex", on).apply()
         if (on) indexLibrary() else indexJob?.cancel()
     }
 
@@ -557,9 +557,9 @@ class StudyController internal constructor(private val vm: AppViewModel) {
         val app = app
         if (t.running && !focusTimer.active && android.os.Build.VERSION.SDK_INT >= 33 &&
             androidx.core.content.ContextCompat.checkSelfPermission(app, android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED &&
-            !vm.appPrefs.getBoolean("focusNotificationAsked", false)
+            !vm.settings.appPrefs.getBoolean("focusNotificationAsked", false)
         ) {
-            vm.appPrefs.edit().putBoolean("focusNotificationAsked", true).apply()
+            vm.settings.appPrefs.edit().putBoolean("focusNotificationAsked", true).apply()
             notificationRequests.trySend(Unit)
         }
         Diag.event(
@@ -710,7 +710,7 @@ class StudyController internal constructor(private val vm: AppViewModel) {
     fun createNotebook(page: io.github.artcraftandroid.pdfcraft.engine.NotebookPage, title: String) {
         newNotebookOpen = false
         vm.viewModelScope.launch {
-            vm.busy = text(R.string.notebook_busy_creating)
+            vm.tools.busy = text(R.string.notebook_busy_creating)
             try {
                 val out = notebookPageFile(page) ?: run { vm.tell(text(R.string.notebook_template_missing)); return@launch }
                 val stamp = java.text.SimpleDateFormat("yyyy-MM-dd HH.mm", java.util.Locale.US).format(java.util.Date())
@@ -724,7 +724,7 @@ class StudyController internal constructor(private val vm: AppViewModel) {
                 Diag.failure(DiagArea.Study, "notebook_create", e)
                 vm.tell(e.userMessage)
             } finally {
-                vm.busy = null
+                vm.tools.busy = null
             }
         }
     }

@@ -34,13 +34,13 @@ class BackupController internal constructor(private val vm: AppViewModel) {
     private val app: Application get() = vm.getApplication()
 
     /** The folder backups go to (a tree the user picked), or null when backups are off. */
-    var backupTree by mutableStateOf(vm.appPrefs.getString("backupTree", null)?.let(Uri::parse))
+    var backupTree by mutableStateOf(vm.settings.appPrefs.getString("backupTree", null)?.let(Uri::parse))
         private set
     /** How many versions of each document are kept. */
-    var backupKeep by mutableStateOf(vm.appPrefs.getInt("backupKeep", 10))
+    var backupKeep by mutableStateOf(vm.settings.appPrefs.getInt("backupKeep", 10))
         private set
     /** When the last backup was written, and whether the last attempt failed. */
-    var backupLast by mutableStateOf(vm.appPrefs.getLong("backupLast", 0L))
+    var backupLast by mutableStateOf(vm.settings.appPrefs.getLong("backupLast", 0L))
         private set
     var backupFailed by mutableStateOf(false)
         private set
@@ -59,7 +59,7 @@ class BackupController internal constructor(private val vm: AppViewModel) {
         if (!ok) { vm.tell(text(R.string.backup_folder_not_writable)); return }
         backupTree?.takeIf { it != tree }?.let { old -> releaseBackupGrant(old) }
         backupTree = tree
-        vm.appPrefs.edit().putString("backupTree", tree.toString()).apply()
+        vm.settings.appPrefs.edit().putString("backupTree", tree.toString()).apply()
         backupFailed = false
         backupAppData()
     }
@@ -68,7 +68,7 @@ class BackupController internal constructor(private val vm: AppViewModel) {
         backupTree?.let(::releaseBackupGrant)
         backupTree = null
         backupFailed = false
-        vm.appPrefs.edit().remove("backupTree").apply()
+        vm.settings.appPrefs.edit().remove("backupTree").apply()
         pendingBackups.values.forEach { it.pdf.delete(); it.xfdf?.delete() }
         pendingBackups.clear()
     }
@@ -81,7 +81,7 @@ class BackupController internal constructor(private val vm: AppViewModel) {
 
     fun updateBackupKeep(n: Int) {
         backupKeep = n.coerceIn(1, 100)
-        vm.appPrefs.edit().putInt("backupKeep", backupKeep).apply()
+        vm.settings.appPrefs.edit().putInt("backupKeep", backupKeep).apply()
     }
 
     fun backupFolderName(): String? = backupTree?.let { LocalFiles.folderName(app, it) }
@@ -159,7 +159,7 @@ class BackupController internal constructor(private val vm: AppViewModel) {
                     backupFailed = failed
                     if (!failed) {
                         backupLast = System.currentTimeMillis()
-                        vm.appPrefs.edit().putLong("backupLast", backupLast).apply()
+                        vm.settings.appPrefs.edit().putLong("backupLast", backupLast).apply()
                     }
                 }
             }
@@ -211,7 +211,7 @@ class BackupController internal constructor(private val vm: AppViewModel) {
         val folder = backupFolder() ?: return
         val base = BackupNames.base(doc.info.name)
         vm.viewModelScope.launch {
-            vm.busy = text(R.string.backup_restoring)
+            vm.tools.busy = text(R.string.backup_restoring)
             try {
                 val tmp = File(backupDir(), "restore-${System.nanoTime()}.pdf")
                 val uri = withContext(Dispatchers.IO) {
@@ -219,11 +219,11 @@ class BackupController internal constructor(private val vm: AppViewModel) {
                     try { vm.files.saveToDownloads(tmp, DocumentFiles.safeName(v.pdf)) } finally { tmp.delete() }
                 }
                 Diag.event(DiagArea.Study, "backup_restore", "what" to "copy", "ok" to true, "age_ms" to System.currentTimeMillis() - v.time, "bytes" to v.size)
-                vm.busy = null
+                vm.tools.busy = null
                 vm.open(uri)
             } catch (e: Exception) {
                 Diag.failure(DiagArea.Study, "backup_restore_copy", e)
-                vm.busy = null
+                vm.tools.busy = null
                 vm.tell(e.userMessage)
             }
         }

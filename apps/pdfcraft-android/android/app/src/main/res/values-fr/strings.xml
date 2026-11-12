@@ -1902,4 +1902,15 @@
         <item quantity="many">%d notes</item>
         <item quantity="other">%d notes</item>
     </plurals>
+    <string name="scan_models_section">Modèles du scanner</string>
+    <string name="scan_model_edges">Détection de la page</string>
+    <string name="scan_model_flatten">Aplanissement de la page</string>
+    <string name="scan_model_upright">Redressement des pages</string>
+    <string name="scan_model_ready">Installé</string>
+    <string name="scan_model_missing">Non installé</string>
+    <string name="scan_model_corrupt">Endommagé, non utilisé</string>
+    <string name="scan_model_line">%1$s · %2$s · %3$s</string>
+    <string name="scan_models_body">Ces modèles sont fournis avec l’app et s’exécutent sur cet appareil. Un modèle endommagé n’est pas utilisé et sa fonction reste désactivée jusqu’à ce que l’app le copie à nouveau.</string>
+    <string name="scan_models_copy_again">Copier à nouveau les modèles</string>
+    <string name="scan_models_copied">Modèles copiés : %1$d</string>
 </resources>
