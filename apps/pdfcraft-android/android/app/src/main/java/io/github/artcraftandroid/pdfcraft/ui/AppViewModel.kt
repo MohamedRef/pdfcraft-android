@@ -1853,6 +1853,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             listOf("normal" to io.github.artcraftandroid.pdfcraft.ui.viewer.InkLatency.normal, "low_latency" to io.github.artcraftandroid.pdfcraft.ui.viewer.InkLatency.lowLatency).forEach { (path, stats) ->
                 stats.summary()?.let { Diag.event(DiagArea.Ink, "latency_summary", "path" to path, "samples" to it.count, "p50_ms" to it.medianMs, "p95_ms" to it.p95Ms) }
             }
+            io.github.artcraftandroid.pdfcraft.ui.viewer.PenDiag.flushPalm()
             Diagnostics.memory("share")
             val lines = withContext(Dispatchers.IO) { Diagnostics.lines(app) }
             if (lines.isEmpty()) {
