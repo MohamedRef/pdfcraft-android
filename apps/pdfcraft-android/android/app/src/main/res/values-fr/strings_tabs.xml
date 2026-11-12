@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Document tabs and split view (#138 #139), kept apart from strings.xml so parallel work merges cleanly. -->
+<resources>
+    <string name="tabs_open_another">Ouvrir un autre document</string>
+    <string name="tabs_parked">%1$s, fermé pour économiser la mémoire</string>
+    <string name="tabs_close">Fermer %1$s</string>
+    <string name="tabs_split">Vue partagée</string>
+    <string name="tabs_split_close">Fermer la vue partagée</string>
+    <string name="tabs_split_choose">Afficher à côté de ce document</string>
+    <string name="tabs_split_read_only">Lecture seule · page %1$d sur %2$d</string>
+    <string name="tabs_split_swap">Échanger</string>
+    <string name="tabs_close_all">Tout fermer</string>
+    <string name="tabs_resume">Retour aux documents</string>
+    <plurals name="tabs_open_count">
+        <item quantity="one">%1$d document ouvert</item>
+        <item quantity="many">%1$d documents ouverts</item>
+        <item quantity="other">%1$d documents ouverts</item>
+    </plurals>
+</resources>
