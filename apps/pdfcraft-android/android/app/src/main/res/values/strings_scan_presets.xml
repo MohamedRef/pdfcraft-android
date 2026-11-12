@@ -17,5 +17,5 @@
     <string name="scan_lab_photo_sharpen">Sharpen photos on the page gently</string>
     <string name="scan_lab_suggestions">Suggest Flatten page or Grayscale for a document type</string>
     <string name="scan_suggest_flatten">Flatten this page?</string>
-    <string name="scan_suggest_greyscale">Try Grayscale</string>
+    <string name="scan_suggest_greyscale">Try grayscale</string>
 </resources>
