@@ -214,6 +214,15 @@ class MainActivity : ComponentActivity() {
     private var lastTouch = System.currentTimeMillis()
 
     // a keyboard (or desktop mode): keys the viewer takes when no text field has them
+    // Ctrl+Tab switches tabs (#138) before Compose takes Tab to move focus
+    override fun dispatchKeyEvent(event: android.view.KeyEvent): Boolean {
+        if (event.keyCode == android.view.KeyEvent.KEYCODE_TAB && event.isCtrlPressed && vm.document != null && vm.tabs.tabs.size > 1) {
+            if (event.action == android.view.KeyEvent.ACTION_DOWN) vm.viewerKey(event.keyCode, ctrl = true, shift = event.isShiftPressed)
+            return true
+        }
+        return super.dispatchKeyEvent(event)
+    }
+
     override fun onKeyDown(keyCode: Int, event: android.view.KeyEvent): Boolean =
         vm.viewerKey(keyCode, event.isCtrlPressed, event.isShiftPressed) || super.onKeyDown(keyCode, event)
 

@@ -105,9 +105,12 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     var engineProblem by mutableStateOf<String?>(null)
         private set
 
-    /** The document in the viewer, if one is open. */
+    /** The document in the viewer, if one is open (the tab in front, see [tabs]). */
     var document by mutableStateOf<OpenDocument?>(null)
-        private set
+        internal set
+
+    /** Other documents open in tabs, and split view (#138 #139). */
+    val tabs: TabsController by lazy { TabsController(this) }
 
     var recentList by mutableStateOf<List<RecentFile>>(emptyList())
         private set
@@ -155,14 +158,16 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         viewModelScope.launch {
             val open = document?.source?.toString()
             val started = android.os.SystemClock.elapsedRealtime()
+            // documents open in other tabs keep their access and working copies (#138)
+            val tabUris = tabs.sources()
             val (list, places) = withContext(Dispatchers.IO) {
                 val list = recents.list().also { list ->
                     val uris = list.map { it.uri }
                     // access to documents that left Recent is given back (#108), before the copies
                     // are pruned, so a document whose grant goes keeps its copy
-                    runCatching { files.releaseUnusedAccess(uris + study.library.load().items.map { it.uri }, open) }
+                    runCatching { files.releaseUnusedAccess(uris + tabUris + study.library.load().items.map { it.uri }, open) }
                     // copies of documents that left Recent go too (#42)
-                    runCatching { files.pruneCopies(uris, open) }
+                    runCatching { files.pruneCopies(uris, open, tabUris) }
                 }
                 // each row's thumbnail source lists a folder and its location may ask the package
                 // manager: worked out here, never while Home composes (#94)
@@ -176,7 +181,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     }
 
     /** Opening is serial: multiple ACTION_VIEW deliveries must not share a working file or engine document. */
-    private val openMutex = Mutex()
+    internal val openMutex = Mutex()
     private var lastOpenRequest = 0L
     private var openStartedAt = 0L
 
@@ -201,6 +206,12 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         // over its live Rust working file before those edits can be saved.
         if (document?.source == uri) {
             if (fromOtherApp) document?.fromOtherApp = true
+            return
+        }
+        // already open in another tab (#138): bring that tab to the front instead
+        tabs.tabs.firstOrNull { it.doc != null && it.doc?.source == uri }?.let { tab ->
+            if (fromOtherApp) tab.doc?.fromOtherApp = true
+            tabs.switchTo(tab)
             return
         }
         // Never replace the document while its unsaved write-back choice is unresolved.
@@ -313,12 +324,9 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         if (!isCurrentOpenRequest(requestId)) return
         try {
             document?.let { current ->
-                val previousSaved = saveAndClose(eng, current)
+                // the document in front stays open in its tab, saved first (#138)
+                tabs.stash(eng, current)
                 io.github.artcraftandroid.pdfcraft.engine.OpenTiming.milestone("previous_document_closed", openStartedAt)
-                if (!previousSaved) {
-                    readOnlyPrompt = current
-                    return
-                }
                 document = null
             }
             val recent = withContext(Dispatchers.IO) { recents.list().firstOrNull { it.uri == uri.toString() } }
@@ -368,6 +376,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             // a file left in Reading Mode reopens in it, unless it was opened for a tool
             readingMode = recent?.reading == true && pendingTool == null
             document = doc
+            tabs.opened(doc, doc.title)
             io.github.artcraftandroid.pdfcraft.engine.OpenTiming.milestone("viewer_model_ready", openStartedAt, pages = info.pages.size)
             if (!info.preparing) {
                 viewModelScope.launch {
@@ -384,7 +393,14 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             // a link from another PDF names the page to open on (#334)
             val linkPage = linkOpenPage?.takeIf { it.first == uri.toString() }?.second?.takeIf { it in 0 until info.pages.size }
             linkOpenPage = null
+            val linkArea = linkOpenArea.takeIf { linkPage != null }
+            linkOpenArea = null
             pendingPage = linkPage ?: recent?.lastPage?.takeIf { it in 0 until info.pages.size }
+            // a back-link to an area (#379): scroll there and flash it once the pages are laid out
+            if (linkPage != null && linkArea != null) viewModelScope.launch {
+                doc.images.awaitFirstCanvas()
+                if (document === doc) tabs.showArea(doc, linkPage, linkArea)
+            }
             pendingSpot = recent?.takeIf { linkPage == null && pendingPage != null && it.lastX >= 0f && it.lastY >= 0f }?.let { Triple(it.lastX, it.lastY, it.lastZoom) }
             withContext(Dispatchers.IO) {
                 recents.touch(RecentFile(uri.toString(), info.name, System.currentTimeMillis(), info.pages.size, file.length(), recent?.lastPage ?: 0))
@@ -429,6 +445,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                     closeQuietly(eng, doc)
                     document = null
                     readingMode = false
+                    tabs.closed(doc)
                 }
             }
         }
@@ -491,10 +508,11 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 }
                 document = null
                 readingMode = false
+                val next = tabs.closed(doc)
                 refreshRecents()
                 study.indexLibrary()
                 withContext(Dispatchers.IO) { sweepCache() }
-                if (doc.fromOtherApp) leave.trySend(Unit)
+                if (doc.fromOtherApp) leave.trySend(Unit) else showTab(next)
             }
         }
     }
@@ -518,8 +536,9 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                             if (document !== doc) return@withLock
                             closeQuietly(eng, doc)
                             document = null
+                            val next = tabs.closed(doc)
                             refreshRecents()
-                            if (doc.fromOtherApp) leave.trySend(Unit)
+                            if (doc.fromOtherApp) leave.trySend(Unit) else showTab(next)
                         }
                     } finally {
                         resolvingReadOnly = false
@@ -544,8 +563,9 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                             if (!discarded) tell(text(R.string.discard_kept_recovery))
                         }
                         document = null
+                        val next = tabs.closed(doc)
                         refreshRecents()
-                        if (doc.fromOtherApp) leave.trySend(Unit)
+                        if (doc.fromOtherApp) leave.trySend(Unit) else showTab(next)
                     }
                 } finally {
                     resolvingReadOnly = false
@@ -554,9 +574,15 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         }
     }
 
-    private suspend fun saveAndClose(eng: Engine, doc: OpenDocument): Boolean {
-        val reading = readingMode
-        val pending = pendingPage
+    /** After the document in front closed: the next tab comes to the front (a parked one opens again). */
+    private fun showTab(next: DocTab?) {
+        next ?: return
+        val d = next.doc
+        if (d != null) tabs.front(next, d) else open(Uri.parse(next.key))
+    }
+
+    /** [reading] and [pending] are the front document's unless a background tab is closed (#138). */
+    internal suspend fun saveAndClose(eng: Engine, doc: OpenDocument, reading: Boolean = readingMode, pending: Int? = pendingPage): Boolean {
         // the spot at the screen's top-left and the zoom, to reopen there (as the reference does)
         val v = doc.viewer
         val spot = if (pending == null && v.mode == io.github.artcraftandroid.pdfcraft.ui.viewer.PageMode.Continuous) v.screenToPage(androidx.compose.ui.geometry.Offset(0f, v.padTop), nearest = true) else null
@@ -916,10 +942,15 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             editor.editSelection = null
             editor.editImage = null
             editor.imageEdit.crop = null
+            if (editor.objectSelect.doc === doc) {
+                editor.objectSelect.doc = null
+                editor.objectSelect.objects = emptyList()
+                editor.objectSelect.selected = emptySet()
+            }
             editor.editMode = io.github.artcraftandroid.pdfcraft.ui.viewer.EditMode.Select
         }
         if (signing.certPlacing === doc) signing.certPlacing = null
-        if (measure?.doc === doc) measure = null
+        if (linksAndMeasure.measure?.doc === doc) linksAndMeasure.measure = null
         doc.controller.tool = ViewerTool.None
     }
 
@@ -941,7 +972,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         val uri = link.uri
         val file = link.file
         when {
-            file != null -> openLinkedFile(doc, file, link.filePage.toInt())
+            file != null -> openLinkedFile(doc, file, link.filePage.toInt(), link.fileRect)
             page != null -> {
                 doc.controller.rememberJump(doc.viewer)
                 doc.viewer.goToPage(page.toInt(), link.top)
@@ -960,6 +991,9 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     /** The page a link from another PDF asked for, kept until that file ([first], its URI) opens (#334). */
     private var linkOpenPage: Pair<String, Int>? = null
 
+    /** With [linkOpenPage]: the area of that page a back-link fits (#379), shown once the file opens. */
+    private var linkOpenArea: List<Float>? = null
+
     /**
      * PDFs a link can go to: the Library's files and the recent ones (not [exclude]), by their
      * names. Reads small files: call off the main thread.
@@ -971,7 +1005,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             .filter { it.uri != exclude?.toString() && io.github.artcraftandroid.pdfcraft.ui.viewer.linkFileName(it.name) != null }
 
     /** Follow a link to page [page] (0-based) of the PDF named [file]: found by name among [linkableFiles]. */
-    fun openLinkedFile(doc: OpenDocument, file: String, page: Int) {
+    fun openLinkedFile(doc: OpenDocument, file: String, page: Int, area: List<Float>? = null) {
         viewModelScope.launch {
             val target = withContext(Dispatchers.IO) { io.github.artcraftandroid.pdfcraft.ui.viewer.linkedFileFor(file, linkableFiles(doc.source)) }
             io.github.artcraftandroid.pdfcraft.ui.viewer.MarkupDiag.linkFollow(doc, found = target != null, page = page)
@@ -979,213 +1013,19 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 tell(text(R.string.link_file_missing, io.github.artcraftandroid.pdfcraft.ui.viewer.linkFileBaseName(file)))
                 return@launch
             }
+            // open in the other pane or another tab (#139 back-links): go there, nothing reopens
+            if (tabs.followLink(target.uri, page, area)) return@launch
             linkOpenPage = target.uri to page
+            linkOpenArea = area
             open(Uri.parse(target.uri))
         }
     }
 
-    // ---- Link authoring (#179, #159) ---------------------------------------------------------
+    // ---- Link authoring, Measure: see LinkMeasureController ----
 
-    /** A link being made or changed in its sheet. */
-    var linkEdit by mutableStateOf<io.github.artcraftandroid.pdfcraft.ui.viewer.LinkEdit?>(null)
+    val linksAndMeasure = LinkMeasureController(this)
 
-    /** In Link mode, a tap on an existing link opens it to change or delete; returns whether there was one. */
-    fun editLinkAt(doc: OpenDocument, at: PagePoint) {
-        val link = doc.links[at.page]?.lastOrNull { l -> l.rect.size == 4 && at.x in l.rect[0]..l.rect[2] && at.y in l.rect[1]..l.rect[3] }
-        if (link == null) {
-            tell(text(R.string.link_drag_hint))
-            return
-        }
-        val eng = engine ?: return
-        viewModelScope.launch {
-            val listed = runCatching { eng.tool("link_list", mapOf("doc" to doc.id)) }.getOrNull()?.optJSONArray("links")
-            val rows = (0 until (listed?.length() ?: 0)).mapNotNull { i ->
-                val o = listed!!.optJSONObject(i) ?: return@mapNotNull null
-                val r = o.optJSONArray("rect") ?: return@mapNotNull null
-                Triple(o.optInt("page"), o.optInt("index"), (0 until r.length()).map { r.optDouble(it).toFloat() })
-            }
-            val index = io.github.artcraftandroid.pdfcraft.ui.viewer.linkIndexFor(rows, at.page, link.rect)
-            if (index == null || document !== doc) {
-                tell(text(R.string.link_not_editable))
-                return@launch
-            }
-            linkEdit = io.github.artcraftandroid.pdfcraft.ui.viewer.LinkEdit(
-                doc, at.page, link.rect.toFloatArray(), index, link.uri, link.page?.toInt() ?: link.file?.let { link.filePage.toInt() }, file = link.file,
-            )
-        }
-    }
-
-    /**
-     * Make the link in [e] go to [url], page [toPage] (0-based), or page [toPage] of the PDF named
-     * [file] (#334): a new link, or a change to it.
-     */
-    fun saveLink(e: io.github.artcraftandroid.pdfcraft.ui.viewer.LinkEdit, url: String?, toPage: Int?, file: String? = null) {
-        linkEdit = null
-        val target: Map<String, Any?> = when {
-            url != null -> mapOf("url" to url)
-            file != null -> mapOf("file" to file, "to_page" to (toPage ?: 0) + 1)
-            else -> mapOf("to_page" to (toPage ?: return) + 1)
-        }
-        val kind = if (file != null) "file" else if (url == null) "page" else if (url.startsWith("mailto:")) "mail" else "web"
-        // a link to another PDF opens its page fitted: the engine takes no zoom with it
-        val zoom: Map<String, Any?> = if (file == null) mapOf("zoom" to "inherit") else emptyMap()
-        if (e.index == null) {
-            runTool(e.doc, "link_add", mapOf("page" to e.page + 1, "rect" to e.rect.map { it.toDouble() }) + zoom + target) {
-                io.github.artcraftandroid.pdfcraft.ui.viewer.MarkupDiag.link(e.doc, "add", kind, e.from)
-                tell(text(R.string.link_added))
-            }
-        } else {
-            runTool(e.doc, "link_edit", mapOf("page" to e.page + 1, "index" to e.index) + target) { io.github.artcraftandroid.pdfcraft.ui.viewer.MarkupDiag.link(e.doc, "edit", kind, e.from) }
-        }
-    }
-
-    fun deleteLink(e: io.github.artcraftandroid.pdfcraft.ui.viewer.LinkEdit) {
-        linkEdit = null
-        val index = e.index ?: return
-        runTool(e.doc, "link_delete", mapOf("page" to e.page + 1, "index" to index)) { io.github.artcraftandroid.pdfcraft.ui.viewer.MarkupDiag.link(e.doc, "delete", null, e.from); tell(text(R.string.link_deleted)) }
-    }
-
-    /** Make every web address written on the pages a link, and say how many (one undo step). */
-    fun linksFromUrls(doc: OpenDocument) {
-        val eng = engine ?: return
-        viewModelScope.launch {
-            // the engine refuses when there is nothing to link: that is an answer, not a failure
-            val start = android.os.SystemClock.elapsedRealtime()
-            val r = try { eng.tool("links_from_urls", mapOf("doc" to doc.id)) } catch (e: MobileException) { null }
-            refresh(doc)
-            val n = r?.optJSONArray("created")?.length() ?: 0
-            io.github.artcraftandroid.pdfcraft.ui.viewer.MarkupDiag.linksFromUrls(doc, n, android.os.SystemClock.elapsedRealtime() - start)
-            tell(if (n == 0) text(R.string.link_from_urls_none) else plural(R.plurals.link_from_urls_done, n, n))
-        }
-    }
-
-    /** Remove every link in the document (one undo step). */
-    fun removeAllLinks(doc: OpenDocument) {
-        runTool(doc, "links_remove") { io.github.artcraftandroid.pdfcraft.ui.viewer.MarkupDiag.linksRemoved(doc); tell(text(R.string.link_removed_all)) }
-    }
-
-    // ---- Measure (#135, #180) ------------------------------------------------------------------
-
-    private var measure: io.github.artcraftandroid.pdfcraft.ui.viewer.MeasureSession? = null
-
-    /** The measurement being placed on [doc] (one per document, kept while the tool is open). */
-    fun measureSession(doc: OpenDocument): io.github.artcraftandroid.pdfcraft.ui.viewer.MeasureSession =
-        measure?.takeIf { it.doc === doc } ?: io.github.artcraftandroid.pdfcraft.ui.viewer.MeasureSession(doc).also { measure = it }
-
-    fun setMeasureMode(m: io.github.artcraftandroid.pdfcraft.ui.viewer.MeasureSession, mode: io.github.artcraftandroid.pdfcraft.ui.viewer.MeasureMode) {
-        m.calibrating = false
-        if (m.mode != mode) m.clear()
-        m.mode = mode
-    }
-
-    /**
-     * A tap in Measure at [at]: the point snaps to the drawing's nearest endpoint, midpoint,
-     * intersection or line (within about 8 dp), then the reading updates. A distance is saved
-     * at its second point; a perimeter or area with Done.
-     */
-    fun measureTap(m: io.github.artcraftandroid.pdfcraft.ui.viewer.MeasureSession, at: PagePoint) {
-        val doc = m.doc
-        if (m.page != null && m.page != at.page) return
-        val eng = engine ?: return
-        viewModelScope.launch {
-            val tolerance = (8f * getApplication<Application>().resources.displayMetrics.density / doc.viewer.pixelsPerPoint(at.page).coerceAtLeast(0.01f)).toDouble()
-            val snapStart = android.os.SystemClock.elapsedRealtime()
-            val snapped = runCatching {
-                eng.tool("measure_snap", mapOf("doc" to doc.id, "page" to at.page + 1, "at" to listOf(at.x.toDouble(), at.y.toDouble()), "tolerance" to tolerance))
-            }.getOrNull()?.optJSONObject("snap")?.optJSONArray("point")
-            val point = if (snapped != null && snapped.length() == 2) androidx.compose.ui.geometry.Offset(snapped.optDouble(0).toFloat(), snapped.optDouble(1).toFloat())
-            else androidx.compose.ui.geometry.Offset(at.x, at.y)
-            m.page = at.page
-            m.points.add(point)
-            io.github.artcraftandroid.pdfcraft.ui.viewer.MarkupDiag.measurePoint(doc, if (m.calibrating) "calibrate" else m.mode.kind, snapped != null && snapped.length() == 2, m.points.size, android.os.SystemClock.elapsedRealtime() - snapStart)
-            if (m.calibrating) {
-                if (m.points.size == 2) {
-                    m.calibration = m.points[0] to m.points[1]
-                }
-                return@launch
-            }
-            updateReading(m)
-            if (m.mode == io.github.artcraftandroid.pdfcraft.ui.viewer.MeasureMode.Distance && m.points.size >= 2) finishMeasurement(m)
-        }
-    }
-
-    private suspend fun updateReading(m: io.github.artcraftandroid.pdfcraft.ui.viewer.MeasureSession) {
-        val eng = engine ?: return
-        val page = m.page ?: return
-        if (m.points.size < 2) {
-            m.reading = null
-            return
-        }
-        val r = runCatching {
-            eng.tool("measure_info", mapOf("doc" to m.doc.id, "page" to page + 1, "type" to m.mode.kind, "points" to m.points.map { listOf(it.x.toDouble(), it.y.toDouble()) }))
-        }.getOrNull()
-        m.reading = r?.optJSONObject("reading")?.optString("label")?.takeIf { it.isNotBlank() }
-    }
-
-    fun undoMeasurePoint(m: io.github.artcraftandroid.pdfcraft.ui.viewer.MeasureSession) {
-        if (m.points.isEmpty()) return
-        m.points.removeAt(m.points.lastIndex)
-        if (m.points.isEmpty()) m.clear()
-        viewModelScope.launch { updateReading(m) }
-    }
-
-    /** Save the measurement as a measurement annotation (readable on desktop), then start a new one. */
-    fun finishMeasurement(m: io.github.artcraftandroid.pdfcraft.ui.viewer.MeasureSession) {
-        val page = m.page ?: return
-        if (m.points.size < m.mode.minPoints) return
-        val label = m.reading
-        val args = mapOf(
-            "page" to page + 1, "points" to m.points.map { listOf(it.x.toDouble(), it.y.toDouble()) }, "author" to commenting.author,
-        )
-        val kind = m.mode.kind
-        val points = m.points.size
-        m.clear()
-        runTool(m.doc, m.mode.tool, args) {
-            io.github.artcraftandroid.pdfcraft.ui.viewer.MarkupDiag.measureSaved(m.doc, kind, points)
-            if (label != null) tell(text(R.string.measure_saved, label))
-        }
-    }
-
-    /** Set the page's scale to "1 : [ratio]" in [unit]. */
-    fun setMeasureRatio(m: io.github.artcraftandroid.pdfcraft.ui.viewer.MeasureSession, ratio: Double, unit: String) {
-        val page = m.page ?: m.doc.viewer.currentPage
-        val args = io.github.artcraftandroid.pdfcraft.ui.viewer.ratioScaleArgs(page, ratio, unit) ?: return
-        runTool(m.doc, "measure_scale", args) { io.github.artcraftandroid.pdfcraft.ui.viewer.MarkupDiag.measureScale(m.doc, "ratio", unit); tell(text(R.string.measure_scale_set, page + 1)) }
-    }
-
-    /** The next two taps mark a length of known size. */
-    fun startCalibration(m: io.github.artcraftandroid.pdfcraft.ui.viewer.MeasureSession) {
-        m.clear()
-        m.calibrating = true
-        tell(text(R.string.measure_calibrate_tap))
-    }
-
-    fun finishCalibration(m: io.github.artcraftandroid.pdfcraft.ui.viewer.MeasureSession, pts: Pair<androidx.compose.ui.geometry.Offset, androidx.compose.ui.geometry.Offset>, distance: Double, unit: String) {
-        val page = m.page ?: return
-        m.calibration = null
-        m.calibrating = false
-        m.clear()
-        val args = io.github.artcraftandroid.pdfcraft.ui.viewer.calibrationScaleArgs(page, pts.first, pts.second, distance, unit) ?: return
-        runTool(m.doc, "measure_scale", args) { io.github.artcraftandroid.pdfcraft.ui.viewer.MarkupDiag.measureScale(m.doc, "calibrate", unit); tell(text(R.string.measure_scale_set, page + 1)) }
-    }
-
-    /** Every saved measurement as CSV (values, labels, authors and scales), through the share sheet. */
-    fun exportMeasurements(doc: OpenDocument) = job(text(R.string.measure_exporting)) { eng ->
-        val out = tempFile("csv")
-        try {
-            val r = eng.tool("measure_export", mapOf("doc" to doc.id, "out" to out.absolutePath))
-            io.github.artcraftandroid.pdfcraft.ui.viewer.MarkupDiag.measureExport(doc, r.optInt("count", 0))
-            if (r.optInt("count", 0) == 0) {
-                tell(text(R.string.measure_export_none))
-                return@job
-            }
-            val uri = withContext(Dispatchers.IO) { files.shareable(out, "${doc.title} measurements.csv") }
-            intents.trySend(Intent.createChooser(sendIntent(listOf(uri), "text/csv"), null))
-        } finally {
-            out.delete()
-        }
-    }
-
+    // ---- Opening links, sharing, presenting, keyboard, printing, copies, read aloud --------
     /** A web address waiting for "Open web page?". */
     var linkPrompt by mutableStateOf<String?>(null)
         internal set
@@ -1366,7 +1206,10 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         val doc = document ?: return false
         // a presentation clicker works even with the shortcuts turned off
         if (!keyboardShortcuts && !doc.controller.presenting) return false
-        if (toolScreen != null || readingMode) return false
+        if (toolScreen != null) return false
+        // tabs (#138): Ctrl+Tab, Ctrl+Shift+Tab and Ctrl+W, in Reading Mode too
+        if (ctrl && !doc.controller.presenting) tabs.key(keyCode, shift)?.let { return it }
+        if (readingMode) return false
         val v = doc.viewer
         val ctl = doc.controller
         val center = androidx.compose.ui.geometry.Offset(v.viewW / 2f, v.viewH / 2f)
@@ -1841,7 +1684,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
 
     /** Reading Mode (text reflowed to the screen) is showing. Remembered for each file, as the reference does. */
     var readingMode by mutableStateOf(false)
-        private set
+        internal set
 
     /** The page mode documents open in (View settings; the app's default, and each file's own once changed). */
     val savedPageMode: io.github.artcraftandroid.pdfcraft.ui.viewer.PageMode
@@ -3680,6 +3523,90 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     /** Where Save writes each scanned page's straightened image (removed when the scan ends). */
     private fun scanPageDir() = File(getApplication<Application>().cacheDir, "scan")
 
+    // ---- Scan: the page as it will be saved (#301) ---------------------------------------------
+
+    /** The latest page preview made for the scan screen, and the request it answers. */
+    internal class ScanPreviewShown(val key: ScanPreviewKey, val image: androidx.compose.ui.graphics.ImageBitmap, val quarterTurns: Int, val flattened: Boolean)
+
+    internal var scanPreview by mutableStateOf<ScanPreviewShown?>(null)
+        private set
+
+    /** The request whose preview could not be made (the screen then shows the photo, without waiting). */
+    internal var scanPreviewFailed by mutableStateOf<ScanPreviewKey?>(null)
+        private set
+
+    /** Previews run one at a time, off the main thread and away from saving; the latest asked for wins. */
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    private val scanPreviewDispatcher = Dispatchers.Default.limitedParallelism(1)
+    private var scanPreviewJob: kotlinx.coroutines.Job? = null
+    /** The request asked for last: a preview of anything else is out of date when it arrives. */
+    private var scanPreviewWanted: ScanPreviewKey? = null
+
+    /** What the last preview of each photo was, for a kept scan's page file. */
+    private val scanPreviewStats = java.util.concurrent.ConcurrentHashMap<String, ScanTestPreview>()
+
+    /**
+     * Make the preview of [page] with [filter] and [flatten] (#301), replacing any still waiting.
+     * The native call can't be stopped once it starts, so an older one finishes and its result is
+     * dropped when a newer request has come in meanwhile.
+     */
+    internal fun requestScanPreview(index: Int, page: ScanPage, filter: ScanFilter, flatten: Boolean) {
+        val lab = scanLab.options
+        val key = ScanPreviewKey.of(page, filter, flatten, lab)
+        if (scanPreview?.key == key || scanPreviewWanted == key) return
+        scanPreviewWanted = key
+        scanPreviewJob?.cancel()
+        scanPreviewJob = viewModelScope.launch(scanPreviewDispatcher) {
+            val request = scanPageRequest(page.file.absolutePath, page.corners, filter, flatten, lab, "")
+            val started = android.os.SystemClock.elapsedRealtime()
+            val made = runCatching { io.github.artcraftandroid.pdfcraft.core.scanPreviewPage(request, SCAN_PREVIEW_SIDE.toUInt()) }
+            val ms = android.os.SystemClock.elapsedRealtime() - started
+            val p = made.getOrNull()
+            val image = p?.let {
+                runCatching {
+                    val bmp = android.graphics.Bitmap.createBitmap(it.width.toInt(), it.height.toInt(), android.graphics.Bitmap.Config.ARGB_8888)
+                    // ARGB_8888 keeps its bytes in R, G, B, A order: the preview's own
+                    bmp.copyPixelsFromBuffer(java.nio.ByteBuffer.wrap(it.rgba))
+                    bmp.asImageBitmap()
+                }.getOrNull()
+            }
+            made.exceptionOrNull()?.let { Diag.failure(DiagArea.Scan, "scan_preview_page", it) }
+            // what the preview took and whether it reused the straightened page (#301)
+            Diag.event(
+                DiagArea.Scan, "preview", "index" to index + 1, "filter" to filter, "flatten" to flatten, "made" to (image != null),
+                "reused" to (p?.reused ?: false), "ms" to ms,
+                *(p?.timings.orEmpty().map<io.github.artcraftandroid.pdfcraft.core.ScanTiming, Pair<String, Any?>> { it.stage.removePrefix("scan_") + "_ms" to it.ms.toLong() }.toTypedArray()),
+                "width" to (p?.width?.toLong() ?: 0L), "height" to (p?.height?.toLong() ?: 0L),
+                "quarter_turns" to (p?.quarterTurns?.toInt() ?: 0), "flattened" to (p?.flattened ?: false),
+            )
+            withContext(Dispatchers.Main) {
+                // a newer request may have come in while this one ran: only the wanted one is shown
+                if (scanPreviewWanted != key) return@withContext
+                if (p != null && image != null) {
+                    scanPreview = ScanPreviewShown(key, image, p.quarterTurns.toInt(), p.flattened)
+                    scanPreviewStats[page.file.absolutePath] = ScanTestPreview(true, p.reused, ms, p.width.toInt(), p.height.toInt(), filter.mode)
+                } else {
+                    scanPreviewFailed = key
+                }
+            }
+        }
+    }
+
+    /** A page's last preview for a kept scan, or "none shown" (#301). */
+    private fun scanPreviewRecord(page: ScanPage): ScanTestPreview =
+        scanPreviewStats[page.file.absolutePath] ?: ScanTestPreview(false, false, 0, 0, 0, null)
+
+    /** The scan is over: forget the previews and the straightened pages kept for them. */
+    private fun releaseScanPreviews() {
+        scanPreviewJob?.cancel()
+        scanPreviewJob = null
+        scanPreviewWanted = null
+        scanPreview = null
+        scanPreviewFailed = null
+        scanPreviewStats.clear()
+        runCatching { io.github.artcraftandroid.pdfcraft.core.scanReleasePreviews() }
+    }
+
     /**
      * Save the scanned pages as a PDF with [filter]'s look (or insert them where Organize asked).
      * Each photo is decoded once, straightened to the page's true proportions (#293), given the
@@ -3704,19 +3631,8 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             // resolution written in, so its PDF page has a size like the others (#293)
             val untouched = !flatten && !scanNeedsProcessing(page.corners.contentEquals(ScanPage.WHOLE), filter.mode)
             busy = text(R.string.msg_busy_cleaning_page, i + 1, pages.size)
-            val request = io.github.artcraftandroid.pdfcraft.core.ScanPageRequest(
-                photoPath = page.file.absolutePath,
-                corners = page.corners.toList(),
-                look = scanLookOf(filter.mode),
-                strength = strength.toUByte(),
-                outputPath = File(dir, "page-$i").absolutePath,
-                snapPaper = lab.snapPaper,
-                flatten = flatten,
-                sideProportions = !lab.perspective,
-                upright = lab.upright,
-                sharpen = lab.sharpen.coerceIn(0, 100).toUByte(),
-                denoise = lab.denoise,
-            )
+            // the same request the screen's preview was made from (#301)
+            val request = scanPageRequest(page.file.absolutePath, page.corners, filter, flatten, lab, File(dir, "page-$i").absolutePath)
             val enhanceStarted = android.os.SystemClock.elapsedRealtime()
             val result = withContext(Dispatchers.Default) { runCatching { io.github.artcraftandroid.pdfcraft.core.scanProcessPage(request) } }
             result.onFailure { Diag.failure(DiagArea.Scan, "scan_process_page", it) }
@@ -3749,7 +3665,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                         it.noise?.toDouble(),
                     )
                 }
-                withContext(Dispatchers.IO) { scanLab.keepPage(keepIn, i, page, true, filter.mode, strength, flatten, r?.path?.let(::File), made) }
+                withContext(Dispatchers.IO) { scanLab.keepPage(keepIn, i, page, true, filter.mode, strength, flatten, r?.path?.let(::File), made, scanPreviewRecord(page)) }
             }
             saved += scanSavedPage(page.file.absolutePath, r?.let { it.path to it.dpi })
         }
@@ -3792,6 +3708,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             insertScanAt = null
             val chosen = scanName.trim()
             scanPages.forEach { it.file.delete() }
+            releaseScanPreviews()
             scanPages.clear()
             scanName = ""
             toolScreen = null

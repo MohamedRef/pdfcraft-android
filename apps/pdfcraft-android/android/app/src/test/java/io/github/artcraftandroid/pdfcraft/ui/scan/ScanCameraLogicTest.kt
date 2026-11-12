@@ -215,7 +215,7 @@ class ScanCameraLogicTest {
         // only numbers, booleans and short lowercase words reach the log
         for ((_, v) in diag) assertTrue(v is Number || v is Boolean || (v is String && v.matches(Regex("[a-z_]+"))))
 
-        val page = JSONObject(scanTestPageJson("1 (2)", true, floatArrayOf(0f, 0f, 1f, 0f, 1f, 1f, 0f, 1f), null, null, "auto", 60, false, ScanLab(), null, null, c.json()))
+        val page = JSONObject(scanTestPageJson("1 (2)", true, floatArrayOf(0f, 0f, 1f, 0f, 1f, 1f, 0f, 1f), null, null, "auto", 60, false, ScanLab(), null, null, capture = c.json()))
         val capture = page.getJSONObject("capture")
         assertEquals("in_app", capture.getString("source"))
         assertEquals(8160, capture.getInt("width"))
