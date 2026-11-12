@@ -699,12 +699,12 @@ fn paragraph_script_uses_native_unicode_toggle_and_survives_reopen() {
 }
 
 #[test]
-fn upgraded_tool_table_preserves_mobile_tools_and_adds_stable_020_schemas() {
+fn upgraded_tool_table_preserves_mobile_tools_and_adds_stable_021_schemas() {
     let session = MobileSession::new();
     let tools = session.tools();
     let names: std::collections::HashSet<_> = tools.iter().map(|t| t.name.as_str()).collect();
     assert_eq!(names.len(), tools.len(), "tool names must remain unique");
-    assert_eq!(names.len(), 203);
+    assert_eq!(names.len(), 208);
     for name in [
         "photo_find_document",
         "page_margin",
@@ -731,6 +731,12 @@ fn upgraded_tool_table_preserves_mobile_tools_and_adds_stable_020_schemas() {
         "text_prepare",
         "comments_edit_many",
         "comments_to_layer",
+        // Upstream 0.21 tools.
+        "attachment_edit",
+        "comment_popup",
+        "doc_convert_colours",
+        "doc_printer_marks",
+        "text_replace",
     ] {
         assert!(names.contains(name), "missing mobile/stable tool: {name}");
     }

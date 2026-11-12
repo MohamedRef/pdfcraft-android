@@ -9,6 +9,7 @@
 #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
 
 mod inspect;
+mod link_area;
 mod open_trace;
 mod pixels;
 mod raster;
@@ -19,10 +20,12 @@ pub mod text;
 pub mod transition;
 
 pub use inspect::{
-    Annotation, Attachment, AttachmentSource, DestView, DocInfo, Field, FieldKind, FontInfo, Layer, LayerOp, Link, LinkTarget, OutlineItem, PageInfo,
-    PageTransition, ParsedPdf, RemoteDestination, ReviewStates, TransitionStyle, Xfa, attachment_data, attachment_data_with_limit, check_pages,
-    inspect, inspect_geometry_keeping_parse, inspect_geometry_with_trace, inspect_with_trace, link_replies, pretty_date, sound_wav, thread_tops,
+    Annotation, Attachment, AttachmentSource, DestView, DocInfo, Field, FieldKind, FontInfo, Layer, LayerItem, LayerOp, LayerRow, Link, LinkTarget,
+    MAX_GROUP_DEPTH, OutlineItem, PageInfo, PageTransition, ParsedPdf, Popup, Portfolio, PortfolioView, RemoteDestination, ReviewStates, TransitionStyle,
+    Xfa, attachment_data, attachment_data_with_limit, check_pages, fill_group_text, group_primaries, inspect, inspect_geometry_keeping_parse,
+    inspect_geometry_with_trace, inspect_with_trace, link_replies, named_destination, pretty_date, sound_wav, thread_tops,
 };
+pub use link_area::{MAX_LINK_QUADS, MAX_URI_BASE_BYTES, link_quads, quad_contains, resolve_uri};
 pub use open_trace::{OpenStage, OpenTrace};
 pub use pixels::Pixels;
 pub use raster::{
