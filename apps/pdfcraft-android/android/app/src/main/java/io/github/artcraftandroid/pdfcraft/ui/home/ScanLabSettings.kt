@@ -67,6 +67,7 @@ internal fun ScanLabSettings(vm: AppViewModel) {
     io.github.artcraftandroid.pdfcraft.ui.scan.ScanCameraSetting()
     io.github.artcraftandroid.pdfcraft.ui.scan.ScanLiveSetting()
     io.github.artcraftandroid.pdfcraft.ui.scan.ScanAutoSetting()
+    io.github.artcraftandroid.pdfcraft.ui.scan.ScanMergeSettingRow()
     Choice(
         stringResource(R.string.scan_lab_finder),
         listOf(
