@@ -2,7 +2,7 @@
 //! real scan (a 3 by 3 blur), so that the edges of print carry mid-tone pixels as they do on paper.
 
 use crate::Rgb;
-use crate::photo_mask::{PhotoMask, is_photo, measure_blocks, photo_mask};
+use crate::photo_mask::{PhotoMask, is_photo, is_photo_loose, measure_blocks, photo_mask, photo_masks};
 
 /// A white page of `w` by `h` pixels.
 fn blank(w: u32, h: u32) -> Rgb {
@@ -328,11 +328,111 @@ fn at_is_one_inside_a_photograph_zero_far_away_and_between_at_its_edge() {
 #[test]
 fn the_photo_rule_follows_the_thresholds_of_the_spec() {
     use crate::photo_mask::Measures;
-    let m = |mid: f32, chroma: f32, ori: f32| Measures { mid, chroma, ori };
+    let m = |mid: f32, chroma: f32, ori: f32| Measures { mid, paper: 0.0, edges: 0.0, chroma, ori };
     assert!(is_photo(m(0.50, 0.0, 0.0)), "mid above 0.45 alone");
     assert!(!is_photo(m(0.44, 0.0, 0.0)), "mid 0.44 alone is not enough");
     assert!(is_photo(m(0.35, 0.20, 0.0)), "coloured and textured enough");
     assert!(is_photo(m(0.35, 0.0, 2.7)), "spread of directions");
     assert!(!is_photo(m(0.29, 0.50, 2.9)), "mid at or under 0.30 never gets the second clause");
     assert!(!is_photo(m(0.35, 0.10, 2.6)), "both limits are strict");
+    // print on paper (#427): blank paper showing between many edges is not a photograph
+    let print = |paper: f32, edges: f32| Measures { mid: 0.50, paper, edges, chroma: 0.0, ori: 0.0 };
+    assert!(is_photo_loose(print(0.40, 0.50)) && !is_photo(print(0.40, 0.50)), "a barcode: half paper, half its pixels on an edge");
+    assert!(is_photo(print(0.40, 0.05)), "the bright, smooth part of a photograph");
+    assert!(is_photo(print(0.10, 0.50)), "a textured photograph that covers its paper");
+    assert!(is_photo(print(0.24, 0.50)) && is_photo(print(0.40, 0.19)), "under either limit it stays a photograph");
+    assert!(!is_photo(print(0.25, 0.20)), "both limits are reached");
+}
+
+/// A barcode as a small photo shows it: bars one or two pixels wide whose ink the blur lifts to
+/// grey, with a few pixels of paper between them.
+fn paint_barcode(p: &mut Rgb, rect: (usize, usize, usize, usize), seed: u64) {
+    let (x0, y0, x1, y1) = rect;
+    let mut rng = Lcg(seed);
+    let mut x = x0;
+    while x < x1 {
+        let bar = 1 + (rng.next() * 2.0) as usize;
+        fill(p, x, y0, (x + bar).min(x1), y1, [40, 40, 40]);
+        x += bar + 4 + (rng.next() * 3.0) as usize;
+    }
+}
+
+/// Soft print: lines of small words in grey ink, as thin strokes come out of a small photo.
+fn paint_soft_print(p: &mut Rgb, rect: (usize, usize, usize, usize), seed: u64) {
+    let (x0, y0, x1, y1) = rect;
+    let mut rng = Lcg(seed);
+    let mut y = y0;
+    while y + 3 <= y1 {
+        let mut x = x0;
+        while x < x1 {
+            let len = 3 + (rng.next() * 5.0) as usize;
+            fill(p, x, y, (x + len).min(x1), y + 3, [110, 110, 110]);
+            x += len + 3 + (rng.next() * 2.0) as usize;
+        }
+        y += 7;
+    }
+}
+
+/// What the first rule took for photographs on real pages (#427): on the reference photos a
+/// label's barcode and a stamped sheet read as 15 % and 13 % photograph. Print on paper is not
+/// one, and the first rule's reading is still there to compare.
+#[test]
+fn a_barcode_and_soft_print_are_not_photographs() {
+    for (name, paint) in [("barcode", paint_barcode as fn(&mut Rgb, (usize, usize, usize, usize), u64)), ("soft print", paint_soft_print)] {
+        let mut page = blank(720, 960);
+        paint_text(&mut page, (48, 48, 672, 240), 11);
+        // 16 by 8 blocks of it: 128 of the page's 1200 blocks
+        let rect = (168, 384, 552, 576);
+        paint(&mut page, rect, 5);
+        finish(&mut page);
+        let masks = photo_masks(&page).unwrap();
+        let (cols, _, measures) = measure_blocks(&page).unwrap();
+        let (c0, c1, r0, r1) = blocks_of(rect);
+        let inside: Vec<_> = (r0..=r1).flat_map(|r| (c0..=c1).map(move |c| (c, r))).map(|(c, r)| measures[r * cols + c]).collect();
+        let mean = |f: fn(&crate::photo_mask::Measures) -> f32| inside.iter().map(f).sum::<f32>() / inside.len() as f32;
+        println!(
+            "{name}: first rule {:.4}, rule in force {:.4}; its blocks: mid {:.2}, paper {:.2}, edges {:.2}",
+            masks.loose.share,
+            masks.strict.share,
+            mean(|m| m.mid),
+            mean(|m| m.paper),
+            mean(|m| m.edges)
+        );
+        assert!(masks.loose.share > 0.08, "{name}: the first rule takes it for a photograph ({})", masks.loose.share);
+        assert_eq!(masks.strict.share, 0.0, "{name}");
+        assert!(masks.strict.weight.iter().all(|&w| w == 0.0), "{name}");
+        assert_eq!(photo_mask(&page).unwrap(), masks.strict);
+    }
+}
+
+/// The light is evened before the mask is made, which turns a photograph's bright parts white.
+/// They are smooth, so they stay part of the photograph: both rules read the same.
+#[test]
+fn a_photograph_with_bright_smooth_parts_is_read_alike_by_both_rules() {
+    let mut page = blank(720, 960);
+    let rect = (120, 240, 600, 720);
+    // from white at its top down to dark, with the picture's own smooth tones over it
+    paint_photo(&mut page, rect, 9, [150.0; 3], [255.0; 3]);
+    let w = page.width as usize;
+    for y in rect.1..rect.3 {
+        let fade = 1.0 - 0.6 * (y - rect.1) as f32 / (rect.3 - rect.1) as f32;
+        for x in rect.0..rect.2 {
+            let i = (y * w + x) * 3;
+            for c in 0..3 {
+                page.data[i + c] = (f32::from(page.data[i + c]) * fade).round() as u8;
+            }
+        }
+    }
+    finish(&mut page);
+    let masks = photo_masks(&page).unwrap();
+    let (cols, _, measures) = measure_blocks(&page).unwrap();
+    let (c0, c1, r0, r1) = blocks_of(rect);
+    let papery = (r0..=r1).flat_map(|r| (c0..=c1).map(move |c| (c, r))).filter(|&(c, r)| measures[r * cols + c].paper >= 0.25).count();
+    println!(
+        "bright photograph: first rule {:.4}, rule in force {:.4}, blocks a quarter white or more {papery}",
+        masks.loose.share, masks.strict.share
+    );
+    assert!(papery >= 10, "the picture has bright blocks ({papery})");
+    assert!(masks.strict.share > 0.15, "{}", masks.strict.share);
+    assert_eq!(masks.strict, masks.loose);
 }

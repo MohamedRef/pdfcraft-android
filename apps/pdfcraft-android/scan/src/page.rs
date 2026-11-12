@@ -11,7 +11,7 @@ use crate::flatten::{predict_grid, unwarp, unwarp_trimmed};
 use crate::flatten_guard::{Kept, Trim, border_trim, guard};
 use crate::flatten_lines::{LineFit, fit_page};
 use crate::look::{Applied, Look, LookParams, Pixels, apply_full};
-use crate::page_kind::{Measured, PageKind, PresetChoice, kind_of, measure};
+use crate::page_kind::{Measured, PageKind, PresetChoice, Rules, kind_of, measure};
 use crate::straightness::{Straightness, line_straightness};
 use crate::upright::{Upright, turned, upright};
 use crate::upright_pages::total_turn;
@@ -98,6 +98,10 @@ pub struct PageRequest<'a> {
     /// A dark band down one long side counts as a book's gutter only when it runs the whole
     /// length, stays narrow and fades inward (#427); false is the first rule (#299), a testing choice.
     pub strict_gutter: bool,
+    /// A block of the page counts as a photograph only where little paper shows, so barcodes,
+    /// stamps and soft print are not photographs (#427); false is the first rule (#299), a testing
+    /// choice.
+    pub strict_photo: bool,
     /// The strength was set by hand (the page's slider or a testing option, #424): a document
     /// type does not change it.
     pub fixed_strength: bool,
@@ -134,6 +138,7 @@ impl<'a> PageRequest<'a> {
             preset: PresetChoice::Off,
             curved_sides: 0,
             strict_gutter: true,
+            strict_photo: true,
             fixed_strength: false,
             max_side: None,
             keep_paper: None,
@@ -385,7 +390,8 @@ pub fn kind_sharpen(kind: u8, asked: u8) -> u8 {
 pub fn page_look_kind(base: &PageBase, request: &PageRequest<'_>) -> Result<(Applied, Option<PageKind>), ScanError> {
     let kind = match request.look {
         Look::Auto if request.preset != PresetChoice::Off => {
-            base.measured().and_then(|m| kind_of(m, request.curved_sides, request.preset, request.strict_gutter))
+            let rules = Rules { strict_gutter: request.strict_gutter, strict_photo: request.strict_photo };
+            base.measured().and_then(|m| kind_of(m, request.curved_sides, request.preset, rules))
         }
         _ => None,
     };

@@ -151,6 +151,48 @@ patch of shade or a band of dark surround left by the crop is enough.
   rule misses real books is for the owner's kept scans (their `kind` labels) to show, through the
   confusion table #299 asks for.
 
+### The photograph rule (#427)
+
+With the gutter rule fixed, the flat label of the review came out as a **photo-rich document**:
+its photo share read 0.151 against the rule's 0.15, and it has no photograph. Run on the ten
+reference photos, the photo mask's first rule (S13 section 4: mid tones, colour, spread of
+gradient directions) read 13 % of a stamped sheet, 15 % of that label, 10 % of a shipping label
+and 6 % of a letterhead page as photograph. Looking at what it marked: **barcodes, ink stamps and
+soft print.** In a small photo their thin strokes never get as dark as ink, so a block of them is
+about half grey and half blank paper, which is what the first rule calls mid tone.
+
+- **What gives print away**: blank paper showing between many edges. Of the blocks the first rule
+  marked on those pages, the ones a quarter paper or more had a median of 45 to 68 % of their
+  pixels on a strong gradient. The light evening also turns a photograph's bright parts white,
+  so paper alone is not enough of a sign (a first try with paper alone took the drawn photograph
+  page from 64 % to 6 %): those parts are smooth, under 5 % of their pixels on an edge.
+- **The rule in force** (`photo_mask::is_photo`): the first rule, unless the block is at least a
+  quarter paper (`PRINT_PAPER`, luminance above 0.85) **and** has at least a fifth of its pixels
+  on a strong gradient (`PRINT_EDGES`). Both readings are made from one measuring of the blocks
+  (`photo_masks`) and kept with the page (`Measured`), so the rule can be swapped and compared.
+- **On the ten reference photos** (photo share by the first rule → by the rule in force):
+  0.130 → 0.058, 0.151 → 0.000, 0.105 → 0.035, 0.057 → 0.000, 0.021 → 0.000, 0.014 → 0.014, and
+  0 on the other four. What is left on the three pages that keep some is not print and not
+  paper: a hand at the page's edge, an object lying on a corner, and the surroundings showing
+  where the crop cut past the sheet. All ten are now Document, with the same bytes as with
+  document types off; with the first rule put back, the label is Photo-rich again. The nearest
+  page is at 0.058, against 0.15 for photo-rich.
+- **Testing**: option "Barcodes, stamps and soft print are not photographs"
+  (`ScanLab.strictPhoto`, `strict_photo`, on); off is the first rule. `page` log fields
+  `strict_photo` (the option), `photo_share` (the rule in force) and `photo_loose` (what the first
+  rule reads; -1 when there is no kind); `photo_loose` in the kept scan's `document_type` and
+  `strict_photo` in its `options`.
+- **Checked on drawn pages** (`tests_photo_mask.rs`, `tests_page_kind.rs`): a drawn barcode and
+  drawn soft print are photographs by the first rule only (0.093 each → 0); a photograph whose
+  top fades to white reads the same by both; a drawn label with a barcode over a quarter of it is
+  a Document under the rule in force and Photo-rich under the first; the page that is mostly a
+  photograph is a Photo under both.
+- **Not known**: how a real printed photograph reads. None of the ten reference photos has one,
+  so the rule's safety for photographs rests on drawn ones, which are smooth. A photograph with
+  fine texture in its bright parts (foliage against sky, a halftone screen) could lose those
+  blocks; its darker parts stay, and holes inside a region are closed. The owner's kept scans
+  will show it: `photo_share` against `photo_loose` on pages with photographs.
+
 **One finding:** the same picture covering four fifths of the page measured 0.595 photo share through the light evening, just under the 0.6 rule, so it came out as Photo-rich. The block's own test of an 80 % picture, on a page already white, gives over 0.6. Whether real photographs land on either side is for the owner's scans to show.
 
 Not verified: the issue's acceptance items (the confusion matrix on the owner's labelled photos, the reference-pair numbers, halo crops). None of this has run on a phone, and no timing was taken. The measuring adds one light map and one pass over a copy about 1000 pixels long for each Clean scan page and preview.

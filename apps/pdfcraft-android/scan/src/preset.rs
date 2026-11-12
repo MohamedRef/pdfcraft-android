@@ -43,8 +43,13 @@ pub struct PageFeatures {
     pub ink_share: f64,
     /// Share of ink pixels whose chroma is over `COLOUR_CHROMA`.
     pub colour_ink_share: f64,
-    /// Share of the page inside the photo mask.
+    /// Share of the page inside the photo mask, by the rule in force: the mask that leaves out
+    /// blocks that are mostly paper (#427), or the first rule's when that testing option is off.
+    /// This is the one `classify` reads.
     pub photo_share: f64,
+    /// What the first photo rule (#299) says, kept for the log whichever rule is in force: it
+    /// also counts barcodes, stamps and soft print.
+    pub photo_loose: f64,
     /// Median stroke width of the ink, in millimetres, when there is any ink.
     pub stroke_mm: Option<f64>,
     /// How many of the four sides are curved (from the page's edge detection).

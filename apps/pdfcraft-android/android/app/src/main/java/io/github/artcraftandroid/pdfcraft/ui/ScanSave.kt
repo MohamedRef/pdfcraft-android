@@ -111,6 +111,8 @@ internal fun scanPageRequest(
     curvedSides = curvedSides.coerceIn(0, 4).toUByte(),
     // a book's gutter must run the whole side, stay narrow and fade inward (#427)
     strictGutter = lab.strictGutter,
+    // barcodes, stamps and soft print are not photographs (#427)
+    strictPhoto = lab.strictPhoto,
     fixedStrength = scanFixedStrength(lab, strength),
 )
 }

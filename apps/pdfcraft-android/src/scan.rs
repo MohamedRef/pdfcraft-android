@@ -111,6 +111,10 @@ pub struct ScanPageRequest {
     /// length, stays narrow and fades inward (#427); false is the first rule (#299, a testing choice).
     #[uniffi(default = true)]
     pub strict_gutter: bool,
+    /// A block of the page counts as a photograph only where little paper shows, so barcodes,
+    /// stamps and soft print are not photographs (#427); false is the first rule (#299, a testing choice).
+    #[uniffi(default = true)]
+    pub strict_photo: bool,
     /// The strength was set by hand (a testing option): a document type does not change it.
     #[uniffi(default = false)]
     pub fixed_strength: bool,
@@ -138,7 +142,11 @@ pub struct ScanPageKind {
     pub ratio: f32,
     pub ink_share: f32,
     pub colour_ink_share: f32,
+    /// Share of the page the photo rule in force takes for photographs.
     pub photo_share: f32,
+    /// What the first photo rule (#299) says, whichever rule is in force (#427): it also counts
+    /// barcodes, stamps and soft print.
+    pub photo_loose: f32,
     /// Median stroke width in millimetres; -1 when there is no ink.
     pub stroke_mm: f32,
     /// Share of near-white pixels before the light is evened (not glare: white paper reaches it, #427).
@@ -166,6 +174,7 @@ fn kind_of(kind: &PageKind) -> ScanPageKind {
         ink_share: f.ink_share as f32,
         colour_ink_share: f.colour_ink_share as f32,
         photo_share: f.photo_share as f32,
+        photo_loose: f.photo_loose as f32,
         stroke_mm: f.stroke_mm.map_or(-1.0, |v| v as f32),
         bright_share: f.bright_share as f32,
         gutter_band: f.gutter_band,
@@ -591,6 +600,7 @@ fn page_request<'a>(request: &ScanPageRequest, photo: &'a [u8], corners: [f32; 8
         preset: preset_choice(&request.preset),
         curved_sides: request.curved_sides.min(4),
         strict_gutter: request.strict_gutter,
+        strict_photo: request.strict_photo,
         fixed_strength: request.fixed_strength,
         max_side,
         keep_paper: match request.paper.as_str() {
@@ -1205,6 +1215,7 @@ mod tests {
             preset: "off".into(),
             curved_sides: 0,
             strict_gutter: true,
+            strict_photo: true,
             fixed_strength: false,
             paper: "auto".into(),
         }

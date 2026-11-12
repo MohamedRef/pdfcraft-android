@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Scanner document types: the book-page gutter rule (#427), kept apart from strings.xml so parallel scanner work merges cleanly. -->
+<!-- Scanner document types: the book-page gutter rule and the photograph rule (#427), kept apart from strings.xml so parallel scanner work merges cleanly. -->
 <resources>
     <string name="scan_lab_strict_gutter">Página de livro só quando uma sombra percorre todo o lado da lombada e se atenua para dentro</string>
+    <string name="scan_lab_strict_photo">Códigos de barras, carimbos e impressão suave não são fotografias</string>
 </resources>
