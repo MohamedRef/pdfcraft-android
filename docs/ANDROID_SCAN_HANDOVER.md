@@ -29,7 +29,7 @@ a phone yet.** Every number in the scanner's documents was measured on a desktop
 | #298 | Auto look, part 1 | Core done | #346 | Phone time; the paper White / Keep control has no screen (#301) |
 | #299 | Auto look, part 2 | Part | #373 | The block photo mask, document-type presets and `scan_classify`, the recognition-error check |
 | #300 | Black and white, 1 bit | Core done | #359 | Speckle on textured grey fills; photographs wider than a quarter of the page are not dithered; 0.85 s for 12 megapixels on a desktop |
-| #301 | Filter screen | Native preview only | #376 | The whole screen: show the preview, a look per page, strength, looks strip, compare, apply to all, the session's new fields, cancel |
+| #301 | Filter screen | Preview on the scan screen | #376, #380 | A look per page, strength, looks strip, compare, apply to all, the session's new fields, cancel. Preview speed and sharpness on a phone |
 | #302 | Flatten curved pages | Switch only | #365 | The automatic mode and its quality guard (need #288's `line_straightness`), border trim, a switch per page |
 | #303 | Book mode | **Not started** | | All of it |
 | #304 | "Max quality" (DocRes) | **Not started** | | Feasibility first, as the issue says |
@@ -105,7 +105,9 @@ that can be pulled out of the app. So **every new scanner feature needs three th
 
 The order in #286 stands. Within it, this is what unblocks the most:
 
-1. **#301, the screen for the preview.** The native call exists (#376,
+1. **#301, the screen for the preview.** Done in #380: the scan screen shows the preview, with
+   Result and Photo to switch. What follows is how it was meant; the rest of #301 is still to do.
+   The native call exists (#376,
    `docs/ANDROID_SCAN_PREVIEW.md`). Show its result on the scan screen in place of the
    thumbnail, with a way back to the photo and its outline (he needs to see the detected edges
    too). Build the request with the one function `saveScan` uses, so preview and save cannot
