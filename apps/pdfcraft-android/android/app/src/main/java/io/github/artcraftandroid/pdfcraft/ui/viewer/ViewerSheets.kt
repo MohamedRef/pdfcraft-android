@@ -604,8 +604,8 @@ fun MoreToolsSheet(vm: AppViewModel, doc: OpenDocument) {
         }
         // Customize toolbar: an outlined pill across the sheet
         Box(
-            Modifier.padding(horizontal = 36.dp).fillMaxWidth().height(41.dp).clip(RoundedCornerShape(20.5.dp))
-                .border(2.dp, pdfColors.divider, RoundedCornerShape(20.5.dp))
+            Modifier.padding(horizontal = 36.dp).fillMaxWidth().heightIn(min = 48.dp).clip(RoundedCornerShape(24.dp))
+                .border(2.dp, pdfColors.divider, RoundedCornerShape(24.dp))
                 .clickable(role = Role.Button) { customizing = true },
             contentAlignment = Alignment.Center,
         ) {

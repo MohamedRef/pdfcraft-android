@@ -78,6 +78,7 @@ import io.github.artcraftandroid.pdfcraft.ui.OpenDocument
 import io.github.artcraftandroid.pdfcraft.ui.PdfSheet
 import io.github.artcraftandroid.pdfcraft.ui.pdfColors
 import kotlin.math.roundToInt
+import androidx.compose.material3.minimumInteractiveComponentSize
 
 /** A note waiting for its text: at a point (Comment tool) or on selected text (Add comment). */
 class NotePrompt(
@@ -411,7 +412,7 @@ fun BoxScope.MarkupFollowUpBar(vm: AppViewModel, f: MarkupFollowUp) {
         for (color in FOLLOW_UP_COLORS) {
             val on = color == f.color
             Box(
-                Modifier.size(40.dp).clickable(role = Role.RadioButton) { vm.commenting.recolorFollowUp(f, color) }
+                Modifier.minimumInteractiveComponentSize().size(40.dp).clickable(role = Role.RadioButton) { vm.commenting.recolorFollowUp(f, color) }
                     .semantics { contentDescription = colorLabel; selected = on },
                 contentAlignment = Alignment.Center,
             ) {
