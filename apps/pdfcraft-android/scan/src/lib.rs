@@ -14,6 +14,7 @@
 
 pub mod aspect;
 pub mod book;
+pub mod defects;
 pub mod detect;
 pub mod encode;
 pub mod enhance;
@@ -57,6 +58,8 @@ pub use warp::{Rgb, rectify};
 mod tests;
 #[cfg(test)]
 mod tests_book;
+#[cfg(test)]
+mod tests_defects;
 #[cfg(test)]
 mod tests_detect;
 #[cfg(test)]
