@@ -40,6 +40,12 @@ internal data class ScanCapture(
     val sharpnessMs: Long = 0L,
     /** Low-light merge (#297): the burst's facts, or null when one photo was taken. */
     val merge: ScanMergeFacts? = null,
+    /**
+     * The low-light merge setting when the photo was taken (#426): `auto`, `always` or `off`, and
+     * whether the person chose it (false: the default, Off). Null for the phone's camera app and imports.
+     */
+    val mergeSetting: String? = null,
+    val mergeChosen: Boolean = false,
 ) {
     /** The photo is a page the merge already straightened: its edges are not searched for again. */
     val straightened: Boolean get() = merge?.merged == true
@@ -51,6 +57,7 @@ internal data class ScanCapture(
         "focused" to focused, "rotation" to rotation, "capture_ms" to captureMs,
         "live" to live, "live_found" to liveFound, "live_stable" to liveStable, "live_hint" to liveHint,
         "auto_on" to autoOn, "auto_shot" to autoShot, "burst" to (merge != null), "merged" to straightened,
+        "merge_setting" to (mergeSetting ?: "none"), "merge_chosen" to mergeChosen,
     )
 
     /** The facts as JSON, for a kept scan's page file. */
@@ -63,6 +70,9 @@ internal data class ScanCapture(
         .put("sharpness", if (sharpness >= 0 && sharpness.isFinite()) Math.round(sharpness * 1000.0) / 1000.0 else JSONObject.NULL)
         .put("sharpness_blurred_unverified", sharpnessBlurredUnverified).put("sharpness_ms", sharpnessMs)
         .put("merge", merge?.json() ?: JSONObject.NULL)
+        .put("merge_setting", mergeSetting ?: JSONObject.NULL).put("merge_chosen", mergeChosen)
+        // a merged page is already cropped by the detector and its photos were deleted (#426): not raw ground truth
+        .put("photos_kept", !straightened)
         .put(
             "preview_quad",
             previewQuad?.takeIf { it.size == 8 }?.let { q -> org.json.JSONArray().also { a -> q.forEach { v -> a.put(if (v.isFinite()) Math.round(v * 100000.0) / 100000.0 else 0.0) } } } ?: JSONObject.NULL,

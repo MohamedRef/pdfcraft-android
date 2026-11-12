@@ -46,9 +46,10 @@ on one part. While any is changed, the scan screen says so.
 | Flatten from the lines of text when the network gives nothing better (#303) | On | Off: a flattened page whose network result was missing or not kept stays straightened by its corners, as before |
 | Turn pages upright (#339) | On | Off: a page stays as its corners gave it (Rotate still works) |
 | Unsure pages follow their neighbors (#339) | On | Off: in a scan of several pages each page is turned by its own answer only |
-| Sharpen text, in Clean scan (#299) | 30 | Off, 60 or 100 |
+| Sharpen text, in Clean scan (#299) | 30 | Off, 60 or 100. With document types on, the type's own sharpening is scaled by this level over 30 (#424): 60 is twice the type's, 100 three and a third times it, at most 100 |
 | Smooth grain in dim photos, in Clean scan (#299) | On | Off |
 | Document types in Clean scan (#299) | On | Off: the filter's own strength and the sharpening above, as before |
+| Page strength wins over the document type (#424) | On | Off: the document type's strength replaces the slider's, and every sharpening level but Off gives the type's own, as before #424 |
 | Filter strength | Each filter's own | 20, 40, 60, 80 or 100 for every filter |
 | Flatten page (#302) | Off | On, with the switch on the scan screen itself |
 | Report moiré, fingers, glare and stains in kept scans (#305, #306) | Off | On: each kept page is also run through the two research detectors, and what they see goes to the log (`inspect`) and the page file (`inspect`). No page changes |
@@ -107,6 +108,7 @@ The zip also holds `diagnostics.txt`, the diagnostics log as **Share diagnostics
           "loupe_decodes": 6, "snap": true, "ms": 9100, "moved_pct": 1.235,
           "corners_off": 0},
  "page_look": {"id": "clean", "strength": null, "level": 60, "per_page": true, "paper": "auto"},
+ "strength_applied": {"strength": 80, "source": "kind", "fixed": false},
  "book": {"half": "right", "gutter_found": true, "gutter_top": 0.4712, "gutter_bottom": 0.4790, "confidence": 0.62, "order": "rtl"},
  "result": {"file": "page-01.out.jpg", "width": 1654, "height": 2339, "format": "jpeg", "dpi": 200.0,
             "paper": "a4", "aspect": "known_focal", "focal_mismatch": false, "flattened": false, "bend_pct": 0.0,
@@ -131,7 +133,10 @@ as the scan screen left it (#301): `id` (`original`, `clean`, `colour`, `greysca
 or `bw`; Auto color and Whiteboard share the native `colour` look, so `look` alone can't tell
 them apart), `strength` set with the slider (`null` for the look's own), the `level` it was made
 at before any testing option, whether each page had its own (`per_page`), and the `paper`
-chosen for Clean scan and Whiteboard (`auto`, `white` or `keep`). `crop` is what happened on the crop
+chosen for Clean scan and Whiteboard (`auto`, `white` or `keep`). `strength_applied` is the
+strength the saved page was really made at (#424): `source` is `lab` (the testing option),
+`page` (the slider), `kind` (the document type's, while the slider was not moved) or `look`;
+`fixed` says the document type did not replace it; `null` when no page was made. `crop` is what happened on the crop
 screen (#292), added up over every time the page was cropped with Done, or `null` when it never
 was: drags of corners and of sides, snaps asked for, taken, skipped by holding still and failed,
 the longest snap, keyboard and TalkBack moves, Auto-detect, No crop and Reset, magnifier regions

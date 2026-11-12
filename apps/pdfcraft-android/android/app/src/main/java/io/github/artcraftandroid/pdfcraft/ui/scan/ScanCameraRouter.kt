@@ -183,7 +183,7 @@ internal class ScanCameraRouter(private val activity: ComponentActivity, private
                 },
             )
             val kept = facts.copy(merge = mergeFacts, previewQuad = if (outcome.merged) null else facts.previewQuad)
-            Diag.event(DiagArea.Scan, "camera_merge", *mergeFacts.diag(), *(result?.timings.orEmpty().map { it.stage.removePrefix("scan_") + "_ms" to it.ms.toLong() }.toTypedArray()))
+            Diag.event(DiagArea.Scan, "camera_merge", *mergeFacts.diag(), "setting" to (facts.mergeSetting ?: "none"), "chosen" to facts.mergeChosen, *(result?.timings.orEmpty().map { it.stage.removePrefix("scan_") + "_ms" to it.ms.toLong() }.toTypedArray()))
             outcome.delete.filter { it != outcome.keep }.forEach { it.delete() }
             ScanCaptures.put(outcome.keep.path, kept)
             Diag.event(DiagArea.Scan, "camera", *kept.diag())

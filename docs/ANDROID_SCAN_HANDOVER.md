@@ -25,16 +25,17 @@ a phone yet.** Every number in the scanner's documents was measured on a desktop
 | #294 | In-app camera (CameraX) | Core done, not run on a phone | #390 | Everything on the owner's phone (`ANDROID_SCAN_CAMERA.md`); the focal length from the camera's calibration for #293 |
 | #295 | Live page outline, hints | **Not started** | | Needs #294 |
 | #296 | Auto-capture, blur check | Native call only, in #389 | | `scan_sharpness` exists (`docs/ANDROID_SCAN_CAPTURE.md`); its `blurred_unverified` is for logs only (motion blur not detected, threshold from drawn pages). Everything else needs #295 |
-| #297 | Multi-frame merge | Native call only, in #389 | | `scan_merge_frames` exists (`docs/ANDROID_SCAN_CAPTURE.md`), measured on drawn frames only. The burst, the setting and the phone measurements need #294 |
+| #297 | Multi-frame merge | Core done, **off by default** (#426), not run on a phone | #389, #408, #426 PR | The setting is Off unless the person picks Auto or Always: a merged page enters the scan already cropped by the detector, with its photos deleted, so Crop cannot widen it (reason in `docs/ANDROID_SCAN_MERGE.md`). Left: keep the reference photo as the page and merge when the page is made, then decide the default on the owner's phone |
 | #298 | Auto look, part 1 | Core done | #346 | Phone time; the paper White / Keep control has no screen (#301) |
 | #299 | Auto look, part 2 | Part | #373 | The block photo mask, document-type presets and `scan_classify`, the recognition-error check |
 | #300 | Black and white, 1 bit | Core done | #359 | Speckle on textured grey fills; photographs wider than a quarter of the page are not dithered; 0.85 s for 12 megapixels on a desktop |
 | #301 | Filter screen | Preview on the scan screen | #376, #380 | A look per page, strength, looks strip, compare, apply to all, the session's new fields, cancel. Preview speed and sharpness on a phone |
 | #302 | Flatten curved pages | Switch, and automatic mode with its quality guard as a testing option | #365, #385 | Choosing the automatic mode's default from real photos; border trim; a switch per page; phone timings |
 | #303 | Book mode | **Not started** | | All of it |
-| #304 | "Max quality" (DocRes) | **Not started** | | Feasibility first, as the issue says |
+| #304 | "Max quality" (DocRes) | **Not started** | | Feasibility first, as the issue says. The testing option that times a picked model file (`scan_time_model`) reads only files inside the app's own folder, as every other scan call does (#429) |
 | #305, #306 | Research: moiré; fingers, glare | **Not started** | | |
 | #307 | ML Kit as a second engine | **Dropped** | | The owner decided on 12 November 2026: nothing from Google in the app or in the scanner's work, so the app keeps no proprietary dependency and stays buildable by F-Droid. Do not add ML Kit or compare against Google's scanner |
+| #424 | Strength slider in Clean scan with document types on | Fixed in code, not run on a phone | #432 | The slider's strength now wins over the document type's, the slider starts from the type's, and the sharpening option scales the type's. Testing option `pageStrength` (off is the old rule). How it looks on the owner's photos and phone |
 | #339 | Pages turned upright | Core done | #370 | The "Turned upright · Undo" chip, a rotate button, the multi-page rule, a switch in ordinary settings |
 
 "Core done" means the code and its tests are merged and the issue's acceptance items that need
