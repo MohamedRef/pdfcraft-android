@@ -52,6 +52,7 @@ on one part. While any is changed, the scan screen says so.
 | Document types shape Clean scan's tone (#299) | On | Off: a type sets only strength, sharpening and paper color (no receipt gamma, no whiteboard S-curve) |
 | Sharpen photos on the page gently (#299) | On | Off: only the objects the look finds itself are sharpened gently, as before |
 | Suggest Flatten page or Grayscale for a document type (#299) | On | Off: no suggestion chips |
+| Barcodes, stamps and soft print are not photographs (#427) | On | Off: the first photograph rule, which also reads those as photographs, so a label with a large barcode becomes a document with photographs |
 | Page strength wins over the document type (#424) | On | Off: the document type's strength replaces the slider's, and every sharpening level but Off gives the type's own, as before #424 |
 | Filter strength | Each filter's own | 20, 40, 60, 80 or 100 for every filter |
 | Flatten page (#302) | Off | On, with the switch on the scan screen itself |
@@ -92,13 +93,13 @@ The zip also holds `diagnostics.txt`, the diagnostics log as **Share diagnostics
  "finding": {"source": "model", "confidence": 0.835, "angle": 0, "passes": 1, "refined_sides": 4, "curved_sides": 0},
  "look": "auto", "strength": 60, "flatten": false, "flatten_chosen": null,
  "options": {"finder": "auto", "refine": true, "side_proportions": false, "snap_paper": true, "strength_override": null, "upright": true,
-             "sharpen": 30, "denoise": true, "preview": true, "crop_tools": true, "flatten_auto": false, "flatten_trim": true, "settle_turns": true, "presets": true, "strict_gutter": true, "book_gutter": true, "line_flatten": true,
+             "sharpen": 30, "denoise": true, "preview": true, "crop_tools": true, "flatten_auto": false, "flatten_trim": true, "flatten_line_floor": true, "settle_turns": true, "presets": true, "strict_gutter": true, "strict_photo": true, "book_gutter": true, "line_flatten": true,
              "look_per_page": true, "look_strip": true, "whiteboard_look": true, "preview_stop": true,
              "preview_zoom": true},
  "document_type": {"preset": "receipt", "chosen": false, "strength": 80, "sharpen": 35, "keep_paper": false, "suggest_flatten": false,
                    "suggest_greyscale": true, "ratio": 3.0, "ink_share": 0.043, "colour_ink_share": 0.0, "photo_share": 0.0,
                    "stroke_mm": 0.339, "bright_share": 0.0, "gutter_band": false, "gutter_loose": false, "gutter_cover": 0.0,
-                   "whole_photo": false},
+                   "photo_loose": 0.0, "whole_photo": false},
  "turns": {"manual": null, "auto": true, "total": 3, "followed": false, "source": "classifier"},
  "capture": {"source": "in_app", "mp10": 499, "width": 8160, "height": 6120, "exposure_index": -1, "exposure_step_milli": 333,
              "torch": false, "focused": true, "rotation": 0, "capture_ms": 640, "live": true, "live_found": true,

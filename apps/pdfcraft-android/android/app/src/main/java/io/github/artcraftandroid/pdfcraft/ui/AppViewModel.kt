@@ -1951,7 +1951,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 "flatten_auto" to lab.flattenAuto, *scanFlattenCheckDiag(p?.flattenCheck),
                 // the person's own choice for the page, and the strip of table trimmed from a flattened one (#302)
                 "flatten_page" to io.github.artcraftandroid.pdfcraft.ui.scan.scanFlattenChoiceId(page.flatten),
-                "flatten_trim" to lab.flattenTrim, *io.github.artcraftandroid.pdfcraft.ui.scan.scanTrimDiag(p?.trim),
+                "flatten_trim" to lab.flattenTrim, "flatten_line_floor" to lab.flattenLineFloor, *io.github.artcraftandroid.pdfcraft.ui.scan.scanTrimDiag(p?.trim),
                 // flattened from its lines of text when the network gave nothing better (#303)
                 *scanLineFlattenDiag(lab.lineFlatten, p?.lineFlatten),
                 // the kind of document Clean scan took the page for (#299)
@@ -2221,7 +2221,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 "flatten_auto" to lab.flattenAuto, *scanFlattenCheckDiag(r?.flattenCheck),
                 // the person's own choice for the page, and the strip of table trimmed from a flattened one (#302)
                 "flatten_page" to io.github.artcraftandroid.pdfcraft.ui.scan.scanFlattenChoiceId(page.flatten),
-                "flatten_trim" to lab.flattenTrim, *io.github.artcraftandroid.pdfcraft.ui.scan.scanTrimDiag(r?.trim),
+                "flatten_trim" to lab.flattenTrim, "flatten_line_floor" to lab.flattenLineFloor, *io.github.artcraftandroid.pdfcraft.ui.scan.scanTrimDiag(r?.trim),
                 *scanLineFlattenDiag(lab.lineFlatten, r?.lineFlatten),
                 "strength" to strength, "side_proportions" to !lab.perspective, "snap_paper" to lab.snapPaper,
                 // the strength the page was really made at, and whether the slider's counts as set by hand (#424)
@@ -2246,6 +2246,8 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 // the book-page gutter rule (#427): the option, what the first rule says, and how much of the side was dark
                 "strict_gutter" to lab.strictGutter, "gutter_loose" to (r?.kind?.gutterLoose ?: false),
                 "gutter_cover" to (r?.kind?.gutterCover?.toDouble() ?: -1.0),
+                // the photo rule (#427): the option, and what the first rule reads as photograph
+                "strict_photo" to lab.strictPhoto, "photo_loose" to (r?.kind?.photoLoose?.toDouble() ?: -1.0),
                 "whole_photo" to (r?.kind?.wholePhoto ?: false),
                 // the kind's own tone and whether it was used, and the photo mask in sharpening (#299)
                 "kind_tone" to lab.kindTone, "kind_gamma" to (r?.kind?.extraGamma?.toDouble() ?: 0.0),
@@ -2269,7 +2271,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                     ScanTestKind(
                         k.preset, k.chosen, k.strength.toInt(), k.sharpen.toInt(), k.keepPaper, k.suggestFlatten, k.suggestGreyscale, k.ratio.toDouble(),
                         k.inkShare.toDouble(), k.colourInkShare.toDouble(), k.photoShare.toDouble(), k.strokeMm.toDouble(), k.brightShare.toDouble(), k.gutterBand, k.wholePhoto,
-                        k.gutterLoose, k.gutterCover.toDouble(),
+                        k.gutterLoose, k.gutterCover.toDouble(), k.photoLoose.toDouble(),
                         k.extraGamma.toDouble(), k.sCurve, k.colourFactor.toDouble(),
                     )
                 }

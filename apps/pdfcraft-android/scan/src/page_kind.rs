@@ -17,7 +17,7 @@ use crate::Rgb;
 use crate::aspect::Paper;
 use crate::enhance::evened;
 use crate::photo::Luma;
-use crate::photo_mask::{PhotoMask, photo_mask};
+use crate::photo_mask::{PhotoMask, PhotoMasks, photo_masks};
 use crate::preset::{PageFeatures, Preset, PresetParams, classify, gutter_reading, ink_features, params};
 
 /// The working copy's longer side is shrunk to this many pixels or a little more (whole steps).
@@ -103,21 +103,34 @@ pub struct Measured {
     pub features: PageFeatures,
     /// The gutter's strict reading (`gutter_band` holds it too; kept so the rule can be swapped).
     pub gutter_strict: bool,
-    /// The photo mask found the whole page to be a picture.
+    /// The photo mask in force found the whole page to be a picture.
     pub whole_photo: bool,
-    /// Where the page has photographs (#299, section 4), for gentle sharpening; `None` when none.
-    pub photos: Option<PhotoMask>,
+    /// The photo share by the mask in force (`photo_share` holds it too; kept so the rule can be
+    /// swapped, #427).
+    pub photo_strict: f64,
+    /// The first photo rule found the whole page to be a picture.
+    pub whole_photo_loose: bool,
+    /// Where the page has photographs by both rules (#299 section 4, #427), for gentle sharpening;
+    /// `None` when the page is too small for a mask.
+    pub photos: Option<PhotoMasks>,
 }
 
 impl Measured {
     /// The features for a page whose edge detection found `curved_sides` curved sides, under the
-    /// strict gutter rule (`strict_gutter`) or the first one.
-    pub fn features(&self, curved_sides: u8, strict_gutter: bool) -> PageFeatures {
+    /// strict gutter rule (`strict_gutter`) or the first one, and the photo mask that leaves out
+    /// blocks that are mostly paper (`strict_photo`) or the first one.
+    pub fn features(&self, curved_sides: u8, strict_gutter: bool, strict_photo: bool) -> PageFeatures {
         PageFeatures {
             curved_sides: curved_sides.min(4),
             gutter_band: if strict_gutter { self.gutter_strict } else { self.features.gutter_loose },
+            photo_share: if strict_photo { self.photo_strict } else { self.features.photo_loose },
             ..self.features.clone()
         }
+    }
+
+    /// Whether the whole page is a picture, by the photo mask in force or the first one.
+    pub fn whole_photo(&self, strict_photo: bool) -> bool {
+        if strict_photo { self.whole_photo } else { self.whole_photo_loose }
     }
 }
 
@@ -126,7 +139,7 @@ impl Measured {
 /// strict rule's (#427). `None` for a page too small or malformed to measure.
 pub fn page_features(page: &Rgb, dpi: u16, paper: Paper, curved_sides: u8) -> Option<(PageFeatures, bool)> {
     let measured = measure(page, dpi, paper)?;
-    Some((measured.features(curved_sides, true), measured.whole_photo))
+    Some((measured.features(curved_sides, true, true), measured.whole_photo))
 }
 
 /// Takes the measurements of `page` (see `page_features`).
@@ -138,7 +151,8 @@ pub fn measure(page: &Rgb, dpi: u16, paper: Paper) -> Option<Measured> {
     let gutter = gutter_reading(&luma_of(&small));
     let lit = evened(&small)?;
     let ink = ink_features(&lit, small_dpi)?;
-    let mask = photo_mask(&lit);
+    let masks = photo_masks(&lit);
+    let photo_strict = masks.as_ref().map_or(0.0, |m| m.strict.share);
     let (long, short) = (page.width.max(page.height), page.width.min(page.height));
     let short_mm = match paper {
         Paper::Custom => None,
@@ -150,7 +164,8 @@ pub fn measure(page: &Rgb, dpi: u16, paper: Paper) -> Option<Measured> {
         id_card: paper == Paper::IdCard,
         ink_share: ink.ink_share,
         colour_ink_share: ink.colour_ink_share,
-        photo_share: mask.as_ref().map_or(0.0, |m| m.share),
+        photo_share: photo_strict,
+        photo_loose: masks.as_ref().map_or(0.0, |m| m.loose.share),
         stroke_mm: ink.stroke_mm,
         curved_sides: 0,
         gutter_band: gutter.strict,
@@ -158,8 +173,14 @@ pub fn measure(page: &Rgb, dpi: u16, paper: Paper) -> Option<Measured> {
         gutter_cover: gutter.cover,
         bright_share,
     };
-    let whole_photo = mask.as_ref().is_some_and(|m| m.whole_page);
-    Some(Measured { features, gutter_strict: gutter.strict, whole_photo, photos: mask })
+    Some(Measured {
+        features,
+        gutter_strict: gutter.strict,
+        whole_photo: masks.as_ref().is_some_and(|m| m.strict.whole_page),
+        photo_strict,
+        whole_photo_loose: masks.as_ref().is_some_and(|m| m.loose.whole_page),
+        photos: masks,
+    })
 }
 
 /// The kind of `page` and its settings under `choice`, with the strict gutter rule (#427); `None`
@@ -168,19 +189,35 @@ pub fn page_kind(page: &Rgb, dpi: u16, paper: Paper, curved_sides: u8, choice: P
     if choice == PresetChoice::Off {
         return None;
     }
-    kind_of(&measure(page, dpi, paper)?, curved_sides, choice, true)
+    kind_of(&measure(page, dpi, paper)?, curved_sides, choice, Rules::default())
+}
+
+/// Which of each pair of rules reads a page (#427): the ones in force, or the first ones (testing
+/// choices).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Rules {
+    /// A book's gutter must run the whole side, stay narrow and fade inward.
+    pub strict_gutter: bool,
+    /// A photograph is where little paper shows: barcodes, stamps and soft print are not one.
+    pub strict_photo: bool,
+}
+
+impl Default for Rules {
+    /// The rules in force.
+    fn default() -> Self {
+        Rules { strict_gutter: true, strict_photo: true }
+    }
 }
 
 /// The kind under `choice` of a page measured as `measured` whose edge detection found
-/// `curved_sides` curved sides, by the strict gutter rule or the first one; `None` when presets
-/// are off.
-pub fn kind_of(measured: &Measured, curved_sides: u8, choice: PresetChoice, strict_gutter: bool) -> Option<PageKind> {
+/// `curved_sides` curved sides, read by `rules`; `None` when presets are off.
+pub fn kind_of(measured: &Measured, curved_sides: u8, choice: PresetChoice, rules: Rules) -> Option<PageKind> {
     if choice == PresetChoice::Off {
         return None;
     }
-    let features = measured.features(curved_sides, strict_gutter);
-    let whole_photo = measured.whole_photo;
-    let photos = measured.photos.clone();
+    let features = measured.features(curved_sides, rules.strict_gutter, rules.strict_photo);
+    let whole_photo = measured.whole_photo(rules.strict_photo);
+    let photos: Option<PhotoMask> = measured.photos.as_ref().map(|m| if rules.strict_photo { m.strict.clone() } else { m.loose.clone() });
     let (preset, chosen) = match choice {
         PresetChoice::Fixed(p) => (p, true),
         _ => (classify(&features), false),

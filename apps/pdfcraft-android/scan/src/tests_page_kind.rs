@@ -327,6 +327,76 @@ fn a_flat_dark_band_is_a_book_page_only_under_the_first_gutter_rule() {
     assert_eq!(page_look_kind(&page, &curved).unwrap().1.unwrap().preset, Preset::BookPage);
 }
 
+/// A label as a small photo shows it: a few lines of print and a large barcode whose thin bars
+/// have gone grey, with paper between them (#427: on the reference photos the first photo rule
+/// read such a label as 15 % photograph, a hair over the photo-rich limit).
+fn label_with_barcode() -> Rgb {
+    let (w, h) = (720usize, 960usize);
+    let mut data = vec![245u8; w * h * 3];
+    let mut put = |x: usize, y: usize, v: u8| data[(y * w + x) * 3..(y * w + x) * 3 + 3].copy_from_slice(&[v, v, v]);
+    // print: lines of words
+    for y in (60..300).filter(|y| y % 24 < 6) {
+        for x in (60..660).filter(|x| (x / 11) % 4 != 0) {
+            put(x, y, 30);
+        }
+    }
+    // the barcode, a quarter of the page: bars 1 or 2 pixels wide, 5 to 7 apart
+    let mut x = 120usize;
+    let mut k = 0usize;
+    while x < 600 {
+        let bar = 1 + k % 2;
+        for y in 400..800 {
+            for dx in 0..bar {
+                put(x + dx, y, 60);
+            }
+        }
+        x += bar + 5 + (k * 7) % 3;
+        k += 1;
+    }
+    // the photo's softness: a 3 by 3 mean
+    let src = data.clone();
+    for y in 1..h - 1 {
+        for x in 1..w - 1 {
+            let mut sum = 0u32;
+            for dy in 0..3 {
+                for dx in 0..3 {
+                    sum += u32::from(src[((y + dy - 1) * w + x + dx - 1) * 3]);
+                }
+            }
+            let v = (sum / 9) as u8;
+            data[(y * w + x) * 3..(y * w + x) * 3 + 3].copy_from_slice(&[v, v, v]);
+        }
+    }
+    Rgb { width: w as u32, height: h as u32, data }
+}
+
+#[test]
+fn a_label_with_a_barcode_is_photo_rich_only_under_the_first_photo_rule() {
+    let page = base(label_with_barcode(), 150, Paper::Custom);
+    let strict = request(PresetChoice::Auto);
+    let loose = PageRequest { strict_photo: false, ..request(PresetChoice::Auto) };
+    let (_, with_strict) = page_look_kind(&page, &strict).unwrap();
+    let (_, with_loose) = page_look_kind(&page, &loose).unwrap();
+    let (with_strict, with_loose) = (with_strict.unwrap(), with_loose.unwrap());
+    println!("in force: {:?} {:?}\nfirst rule: {:?} {:?}", with_strict.preset, with_strict.features, with_loose.preset, with_loose.features);
+    assert_eq!(with_strict.preset, Preset::Document);
+    assert_eq!(with_loose.preset, Preset::PhotoRich);
+    // both rules' readings are in the features, whichever is in force
+    assert!(with_strict.features.photo_share < 0.01 && with_strict.features.photo_loose > 0.15, "{:?}", with_strict.features);
+    assert_eq!(with_loose.features.photo_share, with_loose.features.photo_loose);
+    assert_eq!(with_strict.features.photo_loose, with_loose.features.photo_loose);
+    // the page was measured once for both
+    assert!(page.measured.get().is_some_and(|m| m.is_some()));
+    // and a page that is a photograph is one under both rules
+    let picture = base(picture_page(), 150, Paper::Custom);
+    for rule in [true, false] {
+        let (_, kind) = page_look_kind(&picture, &PageRequest { strict_photo: rule, ..request(PresetChoice::Auto) }).unwrap();
+        let kind = kind.unwrap();
+        assert_eq!(kind.preset, Preset::Photo, "{:?}", kind.features);
+        assert!(kind.whole_photo);
+    }
+}
+
 #[test]
 fn a_page_base_measures_its_page_once_and_every_look_gets_the_same_kind() {
     let (page, dpi) = english_with_band();
