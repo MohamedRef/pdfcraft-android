@@ -16,11 +16,11 @@ a phone yet.** Every number in the scanner's documents was measured on a desktop
 | Issue | What | State | Merged in | What is left |
 |---|---|---|---|---|
 | #287 | `pdfcraft-scan` crate, one pass from photo to page | Done, closed | #331, #346 | |
-| #288 | Measuring: harness, drawn pages, test set | Part | #346, #367, #382, this PR | The `scan-eval` runner, the CI gate, the SmartDoc script. The drawn photos (`synth`) and the metrics blocks are in; see [ANDROID_SCAN_MEASURING.md](ANDROID_SCAN_MEASURING.md) |
+| #288 | Measuring: harness, drawn pages, test set | Part | #346, #367, #382, #386 | The `scan-eval` runner, the CI gate, the SmartDoc script. The drawn photos (`synth`) and the metrics blocks are in; see [ANDROID_SCAN_MEASURING.md](ANDROID_SCAN_MEASURING.md) |
 | #289 | Model files: pinned, loaded, exported | Part | #360, #365, #370 | `scan_model_states`, a Models list in settings, optional packs, copying a *changed* model on update (section 6) |
 | #290 | Page found by a network | Core done | #360 | Figures on the owner's set; phone time. Known: wrong and accepted on 2 of the 10 reference photos, nothing found on 2 |
 | #291 | Edges refined at full size | Core done | #356 | A corner outside the photo is not accepted; the owner's set; phone time |
-| #292 | Crop screen: magnifier, side handles, snap, rotate | **Not started** | | All of it. `scan_refine_quad` is the native half of "snap" and exists |
+| #292 | Crop screen: magnifier, side handles, snap, rotate | Screen done, rotate left | #381 | Rotate (with #339's user turns and `ScanSession` 2); all of it on a phone (`docs/ANDROID_SCAN_CROP.md`) |
 | #293 | True proportions, paper sizes | Core done | #353 | The focal length from the in-app camera (#294, section 7 there) |
 | #294 | In-app camera (CameraX) | **Not started** | | All of it |
 | #295 | Live page outline, hints | **Not started** | | Needs #294 |
@@ -29,7 +29,7 @@ a phone yet.** Every number in the scanner's documents was measured on a desktop
 | #298 | Auto look, part 1 | Core done | #346 | Phone time; the paper White / Keep control has no screen (#301) |
 | #299 | Auto look, part 2 | Part | #373 | The block photo mask, document-type presets and `scan_classify`, the recognition-error check |
 | #300 | Black and white, 1 bit | Core done | #359 | Speckle on textured grey fills; photographs wider than a quarter of the page are not dithered; 0.85 s for 12 megapixels on a desktop |
-| #301 | Filter screen | Native preview only | #376 | The whole screen: show the preview, a look per page, strength, looks strip, compare, apply to all, the session's new fields, cancel |
+| #301 | Filter screen | Preview on the scan screen | #376, #380 | A look per page, strength, looks strip, compare, apply to all, the session's new fields, cancel. Preview speed and sharpness on a phone |
 | #302 | Flatten curved pages | Switch only | #365 | The automatic mode and its quality guard (need #288's `line_straightness`), border trim, a switch per page |
 | #303 | Book mode | **Not started** | | All of it |
 | #304 | "Max quality" (DocRes) | **Not started** | | Feasibility first, as the issue says |
@@ -126,7 +126,9 @@ that can be pulled out of the app. So **every new scanner feature needs three th
 
 The order in #286 stands. Within it, this is what unblocks the most:
 
-1. **#301, the screen for the preview.** The native call exists (#376,
+1. **#301, the screen for the preview.** Done in #380: the scan screen shows the preview, with
+   Result and Photo to switch. What follows is how it was meant; the rest of #301 is still to do.
+   The native call exists (#376,
    `docs/ANDROID_SCAN_PREVIEW.md`). Show its result on the scan screen in place of the
    thumbnail, with a way back to the photo and its outline (he needs to see the detected edges
    too). Build the request with the one function `saveScan` uses, so preview and save cannot

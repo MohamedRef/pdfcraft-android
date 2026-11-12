@@ -112,6 +112,7 @@ fun editImageFrom(page: Int, o: org.json.JSONObject): EditImage? {
 /** Run `image_edit` [action] on [img], then select it again as [number] (null: leave the selection). */
 fun AppViewModel.imageAction(doc: OpenDocument, img: EditImage, action: String, extra: Map<String, Any?> = emptyMap(), number: Int? = img.number) {
     runTool(doc, "image_edit", mapOf("page" to img.page + 1, "image" to img.number, "action" to action) + extra) {
+        editEvent(doc, "image_edit", "action" to action)
         if (number == null) {
             editor.editImage = null
         } else {
@@ -205,6 +206,7 @@ fun AppViewModel.saveImage(doc: OpenDocument, img: EditImage) {
 /** Ungroup Form artwork: its text becomes editable paragraphs, so the page's paragraphs are read again. */
 fun AppViewModel.ungroupImage(doc: OpenDocument, img: EditImage) {
     runTool(doc, "image_edit", mapOf("page" to img.page + 1, "image" to img.number, "action" to "ungroup")) {
+        editEvent(doc, "image_edit", "action" to "ungroup")
         editor.editImage = null
         editor.paragraphs.remove(img.page)
         viewModelScope.launch { editor.loadParagraphs(doc, img.page) }

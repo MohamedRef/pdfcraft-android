@@ -117,6 +117,7 @@ fun AppViewModel.importFont(doc: OpenDocument, para: Paragraph) {
                 val r = eng.tool("text_font_import", mapOf("doc" to doc.id, "page" to para.page + 1, "path" to file.absolutePath))
                 val res = r.optString("resource")
                 val face = r.optString("font").ifEmpty { name ?: res }
+                editEvent(doc, "font_import", "ok" to res.isNotEmpty(), "otf" to (suffix == ".otf"))
                 if (res.isEmpty()) {
                     refresh(doc, para.page)
                     return@launch
@@ -141,6 +142,7 @@ private fun displayName(ctx: Application, uri: Uri): String? = runCatching {
 /** Set [para]'s line and letter spacing. */
 fun AppViewModel.spaceParagraph(doc: OpenDocument, para: Paragraph, s: Spacing) {
     editor.textFormat.spacing[para.page to para.number] = s
+    editEvent(doc, "text_spacing", "line" to s.line, "letter" to s.letter)
     editor.styleParagraph(doc, para, mapOf("line_spacing" to s.line.toDouble(), "char_spacing" to s.letter.toDouble()))
 }
 
@@ -156,6 +158,7 @@ fun AppViewModel.measureDraft(doc: OpenDocument, para: Paragraph, text: String) 
     editor.textFormat.measuring = viewModelScope.launch {
         delay(500)
         val r = runCatching { eng.tool("text_edit_layout", mapOf("doc" to doc.id, "page" to para.page + 1, "paragraph" to para.number, "text" to text)) }.getOrNull() ?: return@launch
+        if (r.optBoolean("overflow") && editor.textFormat.overflow != key) editEvent(doc, "text_overflow", "page" to para.page + 1)
         editor.textFormat.overflow = if (r.optBoolean("overflow")) key else editor.textFormat.overflow.takeIf { it != key }
     }
 }
@@ -169,6 +172,7 @@ fun AppViewModel.prepareGroupedText(doc: OpenDocument, at: PagePoint) {
     runTool(doc, "text_prepare", mapOf("page" to at.page + 1)) { r ->
         val refused = refusedGroups(r)
         val prepared = r.optInt("prepared_groups")
+        editEvent(doc, "text_prepare", "prepared" to prepared, "refused" to refused.size)
         editor.paragraphs.remove(at.page)
         viewModelScope.launch {
             editor.loadParagraphs(doc, at.page)

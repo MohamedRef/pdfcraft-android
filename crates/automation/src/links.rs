@@ -25,6 +25,21 @@ impl Automation {
         Ok(Some([u0[0].min(u1[0]) as f64, u0[1].min(u1[1]) as f64, u0[0].max(u1[0]) as f64, u0[1].max(u1[1]) as f64]))
     }
 
+    /// Android adaptation (#379): `to_rect` (points from the top-left of the linked PDF's
+    /// displayed page) in that page's user space, read from `to_doc`, the linked PDF open now
+    /// (its page geometry), so the GoToR destination fits that area.
+    fn remote_area(&self, a: &Args, page: usize) -> Result<Option<[f64; 4]>> {
+        let Some(v) = a.get("to_rect") else { return Ok(None) };
+        let r: Vec<f64> = v.as_array().map(|x| x.iter().filter_map(Value::as_f64).collect()).unwrap_or_default();
+        let r = <[f64; 4]>::try_from(r).map_err(|_| bad("to_rect must be 4 numbers"))?;
+        let id = a.opt_int("to_doc")?.ok_or_else(|| bad("to_rect needs to_doc, the linked PDF open now, for its page geometry"))?;
+        let id = u64::try_from(id).map_err(|_| bad("to_doc must be positive"))?;
+        let target = self.session.get(pdfcraft_engine::DocId(id)).ok_or_else(|| failed(format!("no open document with id {id} (see doc_list)")))?;
+        let p = target.info.pages.get(page).ok_or_else(|| bad(format!("to_page must be 1–{} for to_doc", target.info.pages.len())))?;
+        let (u0, u1) = (p.view_to_user(r[0] as f32, r[1] as f32), p.view_to_user(r[2] as f32, r[3] as f32));
+        Ok(Some([u0[0].min(u1[0]) as f64, u0[1].min(u1[1]) as f64, u0[0].max(u1[0]) as f64, u0[1].max(u1[1]) as f64]))
+    }
+
     /// The action `url`, `to_page` and `zoom` ask for, if any. `current` is the link's action now
     /// (link_edit): a new page keeps the link's zoom, and a zoom alone keeps its page.
     fn link_action(&self, a: &Args, current: Option<&LinkAction>) -> Result<Option<LinkAction>> {
@@ -45,7 +60,8 @@ impl Automation {
             if page < 1 {
                 return Err(bad("to_page must be 1 or more"));
             }
-            return Ok(Some(LinkAction::Remote { file: remote_link_file(file)?, page: (page - 1) as usize }));
+            let area = self.remote_area(a, (page - 1) as usize)?;
+            return Ok(Some(LinkAction::Remote { file: remote_link_file(file)?, page: (page - 1) as usize, area }));
         }
         match (a.opt_str("url")?, a.opt_int("to_page")?) {
             (Some(_), Some(_)) => Err(bad("pass url or to_page, not both")),
@@ -122,7 +138,7 @@ impl Automation {
                         v["to_page"] = json!(page + 1);
                         v["zoom"] = zoom_value(*zoom);
                     }
-                    (LinkAction::Remote { file, page }, None) => {
+                    (LinkAction::Remote { file, page, .. }, None) => {
                         v["file"] = json!(file);
                         v["file_page"] = json!(page + 1);
                     }

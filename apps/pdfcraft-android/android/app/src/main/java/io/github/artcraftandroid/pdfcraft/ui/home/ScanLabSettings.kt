@@ -80,6 +80,12 @@ internal fun ScanLabSettings(vm: AppViewModel) {
     SheetRow(null, stringResource(R.string.scan_lab_snap_paper), { lab.update(o.copy(snapPaper = !o.snapPaper)) }) {
         PdfSwitch(o.snapPaper, { lab.update(o.copy(snapPaper = it)) })
     }
+    SheetRow(null, stringResource(R.string.scan_lab_preview), { lab.update(o.copy(preview = !o.preview)) }) {
+        PdfSwitch(o.preview, { lab.update(o.copy(preview = it)) })
+    }
+    SheetRow(null, stringResource(R.string.scan_lab_crop), { lab.update(o.copy(cropTools = !o.cropTools)) }) {
+        PdfSwitch(o.cropTools, { lab.update(o.copy(cropTools = it)) })
+    }
     SheetRow(null, stringResource(R.string.scan_lab_upright), { lab.update(o.copy(upright = !o.upright)) }) {
         PdfSwitch(o.upright, { lab.update(o.copy(upright = it)) })
     }
