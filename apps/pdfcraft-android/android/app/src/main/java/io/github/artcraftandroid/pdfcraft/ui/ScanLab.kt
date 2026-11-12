@@ -40,6 +40,7 @@ internal data class ScanLab(
      * of its two neighbours when both are sure and agree (#339). Off saves each page by its own answer.
      */
     val settleTurns: Boolean = true,
+    /**
      * Flatten every page with the network and keep the flattened page only when its lines of text
      * come out at least 10 % straighter (#302's automatic mode). Off: a page is flattened only when
      * the scan screen's switch asks for it. Off by default until real photos have shown it helps.
