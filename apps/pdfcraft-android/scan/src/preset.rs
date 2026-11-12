@@ -1,0 +1,399 @@
+//! Document-type presets (issue #299, spec S13 section 5).
+//!
+//! A receipt, a whiteboard, an ID card and a printed letter want different clean-up. This module
+//! names the kind of a scanned page from a few cheap measurements, and gives the settings for
+//! that kind. The rules are checked in the spec's order and the first match wins. A value that is
+//! not finite never matches a rule. Nothing here reads a clock or a random source, so the same
+//! input always gives the same answer.
+
+use crate::{Luma, Rgb, luma};
+
+/// A kind of document page. Each kind has its own clean-up settings (see `params`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Preset {
+    /// A photograph: keep its tones and sharpen little.
+    Photo,
+    /// An ID card, matched to the card's size: keep the card's own colours.
+    IdCard,
+    /// A till receipt or other long, narrow slip: lift its faint print and make it grey.
+    Receipt,
+    /// A whiteboard: thick marker strokes on a pale board, with a curve that lifts the board.
+    Whiteboard,
+    /// A page of a book: curved or with a gutter shadow, so it should be flattened.
+    BookPage,
+    /// A form printed or filled on coloured paper. Never chosen by `classify`: only a person
+    /// picks it, because white paper under coloured light also looks coloured.
+    ColouredForm,
+    /// A page of text with a large photograph on it.
+    PhotoRich,
+    /// Any other page: the default.
+    Document,
+}
+
+/// The measurements `classify` reads. All are cheap and come from maps the scanner already has.
+#[derive(Clone, Debug, PartialEq)]
+pub struct PageFeatures {
+    /// Longer side over shorter side.
+    pub ratio: f64,
+    /// Shorter side in millimetres when the paper's real size is known.
+    pub short_mm: Option<f64>,
+    /// The page was matched to an ID card's size.
+    pub id_card: bool,
+    /// Share of pixels darker than half white, after lighting correction.
+    pub ink_share: f64,
+    /// Share of ink pixels whose chroma is over `COLOUR_CHROMA`.
+    pub colour_ink_share: f64,
+    /// Share of the page inside the photo mask.
+    pub photo_share: f64,
+    /// Median stroke width of the ink, in millimetres, when there is any ink.
+    pub stroke_mm: Option<f64>,
+    /// How many of the four sides are curved (from the page's edge detection).
+    pub curved_sides: u8,
+    /// A dark band runs down one long side (a book's gutter), see `gutter_band`.
+    pub gutter_band: bool,
+    /// Share of pixels with all three channels at `GLARE_LEVEL` or more.
+    pub glare_share: f64,
+}
+
+/// The clean-up settings for one preset.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct PresetParams {
+    /// How strongly the clean-up works, as the scanner's strength scale (0 to 100).
+    pub strength: u8,
+    /// Sharpening amount, 0 to 100 (the spec's 0.30 is 30).
+    pub sharpen: u8,
+    /// Keep the paper's own colour instead of whitening it.
+    pub keep_paper: bool,
+    /// Suggest flattening the page (the flatten step of spec S16).
+    pub suggest_flatten: bool,
+    /// Suggest a grey, not colour, result.
+    pub suggest_greyscale: bool,
+    /// Leave photographs alone: sharpen them only a little, see the photo mask.
+    pub photo_mask: bool,
+    /// Extra gamma added to the tone curve; positive lifts faint print.
+    pub extra_gamma: f32,
+    /// Use the S-curve `0.5 − 0.5·cos(Y^0.75·π)` instead of the gamma curve.
+    pub s_curve: bool,
+    /// Multiplier on the colour saturation of the result.
+    pub colour_factor: f32,
+}
+
+// Thresholds of the rules, from the spec's rule table (section 5).
+
+/// Photo: a page whose photo share is over this is a photograph.
+const PHOTO_SHARE_PHOTO: f64 = 0.6;
+/// Receipt: the long side over the short side must be over this.
+const RECEIPT_RATIO: f64 = 2.2;
+/// Receipt: or the short side must be under this many millimetres (when the size is known).
+const RECEIPT_SHORT_MM: f64 = 90.0;
+/// Whiteboard: the median stroke must be over this many millimetres.
+const WHITEBOARD_STROKE_MM: f64 = 1.2;
+/// Whiteboard: and the ink share must be under this.
+const WHITEBOARD_INK_SHARE: f64 = 0.06;
+/// Photo-rich document: a photo share over this makes the page photo-rich.
+const PHOTO_RICH_SHARE: f64 = 0.15;
+
+// Settings of each preset, from the spec's parameter column (section 5). A value the spec does
+// not give for a preset is the Document preset's value (see `DOCUMENT`).
+
+const PHOTO_STRENGTH: u8 = 25;
+const PHOTO_SHARPEN: u8 = 15;
+const ID_STRENGTH: u8 = 30;
+const ID_SHARPEN: u8 = 25;
+const RECEIPT_STRENGTH: u8 = 80;
+const RECEIPT_GAMMA: f32 = 0.3;
+const RECEIPT_SHARPEN: u8 = 35;
+const WHITEBOARD_STRENGTH: u8 = 90;
+const WHITEBOARD_COLOUR_FACTOR: f32 = 1.5;
+const WHITEBOARD_SHARPEN: u8 = 20;
+const BOOK_STRENGTH: u8 = 60;
+const COLOURED_STRENGTH: u8 = 55;
+const PHOTO_RICH_STRENGTH: u8 = 50;
+const DOCUMENT_STRENGTH: u8 = 60;
+const DOCUMENT_SHARPEN: u8 = 30;
+/// Neutral values for the settings the spec's table does not name: no extra gamma, no change of
+/// colour, and no flatten, grey or photo-mask suggestion.
+const DOCUMENT_GAMMA: f32 = 0.0;
+const DOCUMENT_COLOUR_FACTOR: f32 = 1.0;
+
+/// The Document preset: the default, and the base that every other preset starts from.
+const DOCUMENT: PresetParams = PresetParams {
+    strength: DOCUMENT_STRENGTH,
+    sharpen: DOCUMENT_SHARPEN,
+    keep_paper: false,
+    suggest_flatten: false,
+    suggest_greyscale: false,
+    photo_mask: false,
+    extra_gamma: DOCUMENT_GAMMA,
+    s_curve: false,
+    colour_factor: DOCUMENT_COLOUR_FACTOR,
+};
+
+// Ink measurements (issue #299).
+
+/// The white level of an 8-bit channel.
+const WHITE: f64 = 255.0;
+/// Ink is a pixel whose luminance is under this (half of white).
+const INK_LUMA: f64 = 0.5 * WHITE;
+/// A coloured ink pixel has (max − min) / 255 over this.
+const COLOUR_CHROMA: f64 = 0.15;
+/// Glare: a pixel with all three channels at this level or more is saturated.
+const GLARE_LEVEL: u8 = 250;
+/// Millimetres in an inch: converts pixels to millimetres at a dpi.
+const MM_PER_INCH: f64 = 25.4;
+
+// Gutter band (issue #299).
+
+/// The strip along a long side is this share of the short side's length.
+const GUTTER_STRIP_SHARE: f64 = 0.06;
+/// The strip's mean must be this share under the page's median luminance.
+const GUTTER_DARK_SHARE: f64 = 0.12;
+/// Grey levels in one byte: the size of the luminance histogram.
+const LUMA_LEVELS: usize = 256;
+
+/// The spec's rules in the spec's order; the first that matches wins. `ColouredForm` is never
+/// returned, because the spec says so (white paper under coloured light looked coloured on four
+/// of the owner's ten reference photos): only a person can choose it.
+pub fn classify(features: &PageFeatures) -> Preset {
+    if above(features.photo_share, PHOTO_SHARE_PHOTO) {
+        Preset::Photo
+    } else if features.id_card {
+        Preset::IdCard
+    } else if is_receipt(features) {
+        Preset::Receipt
+    } else if is_whiteboard(features) {
+        Preset::Whiteboard
+    } else if features.curved_sides >= 1 || features.gutter_band {
+        Preset::BookPage
+    } else if above(features.photo_share, PHOTO_RICH_SHARE) {
+        Preset::PhotoRich
+    } else {
+        Preset::Document
+    }
+}
+
+/// Receipt: a long, narrow page, or a short side under `RECEIPT_SHORT_MM` when the size is known.
+fn is_receipt(features: &PageFeatures) -> bool {
+    above(features.ratio, RECEIPT_RATIO) || features.short_mm.is_some_and(|s| below(s, RECEIPT_SHORT_MM))
+}
+
+/// Whiteboard: thick strokes and little ink.
+fn is_whiteboard(features: &PageFeatures) -> bool {
+    features.stroke_mm.is_some_and(|s| above(s, WHITEBOARD_STROKE_MM)) && below(features.ink_share, WHITEBOARD_INK_SHARE)
+}
+
+/// True when `value` is finite and over `limit`.
+fn above(value: f64, limit: f64) -> bool {
+    value.is_finite() && value > limit
+}
+
+/// True when `value` is finite and under `limit`.
+fn below(value: f64, limit: f64) -> bool {
+    value.is_finite() && value < limit
+}
+
+/// The clean-up settings for `preset`, from the spec's table (section 5).
+pub fn params(preset: Preset) -> PresetParams {
+    match preset {
+        Preset::Photo => PresetParams { strength: PHOTO_STRENGTH, sharpen: PHOTO_SHARPEN, keep_paper: true, ..DOCUMENT },
+        Preset::IdCard => PresetParams { strength: ID_STRENGTH, sharpen: ID_SHARPEN, keep_paper: true, ..DOCUMENT },
+        Preset::Receipt => {
+            PresetParams { strength: RECEIPT_STRENGTH, sharpen: RECEIPT_SHARPEN, extra_gamma: RECEIPT_GAMMA, suggest_greyscale: true, ..DOCUMENT }
+        }
+        Preset::Whiteboard => PresetParams {
+            strength: WHITEBOARD_STRENGTH,
+            sharpen: WHITEBOARD_SHARPEN,
+            s_curve: true,
+            colour_factor: WHITEBOARD_COLOUR_FACTOR,
+            ..DOCUMENT
+        },
+        Preset::BookPage => PresetParams { strength: BOOK_STRENGTH, suggest_flatten: true, ..DOCUMENT },
+        Preset::ColouredForm => PresetParams { strength: COLOURED_STRENGTH, keep_paper: true, ..DOCUMENT },
+        Preset::PhotoRich => PresetParams { strength: PHOTO_RICH_STRENGTH, photo_mask: true, ..DOCUMENT },
+        Preset::Document => DOCUMENT,
+    }
+}
+
+impl Preset {
+    /// Every preset, in the order of the enum. Used by tests and by the chip's list.
+    pub const ALL: [Preset; 8] = [
+        Preset::Photo,
+        Preset::IdCard,
+        Preset::Receipt,
+        Preset::Whiteboard,
+        Preset::BookPage,
+        Preset::ColouredForm,
+        Preset::PhotoRich,
+        Preset::Document,
+    ];
+
+    /// A short lowercase word for the diagnostics log, with no space: "photo", "id_card", ….
+    pub fn id(self) -> &'static str {
+        match self {
+            Preset::Photo => "photo",
+            Preset::IdCard => "id_card",
+            Preset::Receipt => "receipt",
+            Preset::Whiteboard => "whiteboard",
+            Preset::BookPage => "book_page",
+            Preset::ColouredForm => "coloured_form",
+            Preset::PhotoRich => "photo_rich",
+            Preset::Document => "document",
+        }
+    }
+}
+
+/// Ink measurements of one straightened page.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct InkFeatures {
+    /// Share of all pixels with luminance under `INK_LUMA`.
+    pub ink_share: f64,
+    /// Share of the ink pixels whose chroma is over `COLOUR_CHROMA` (0 when there is no ink).
+    pub colour_ink_share: f64,
+    /// Median stroke width in millimetres, `None` when there is no ink.
+    pub stroke_mm: Option<f64>,
+    /// Share of all pixels with all three channels at `GLARE_LEVEL` or more. This is the plain
+    /// share: the caller must measure it before the paper is whitened, because whitened paper
+    /// would count as glare.
+    pub glare_share: f64,
+}
+
+/// Measures the ink of a page, from the page after lighting correction. Ink: luminance under
+/// half of white. Coloured ink: ink whose (max − min) / 255 is over `COLOUR_CHROMA`. Stroke: the
+/// median run length of ink along the rows and along the columns, in millimetres at `dpi`; the
+/// smaller of the two medians is the stroke, because a run along the stroke is its length and a
+/// run across it is its width. `None` for an empty page, a page whose data length does not match
+/// its size, or a `dpi` that is not a positive finite number.
+pub fn ink_features(page: &Rgb, dpi: f32) -> Option<InkFeatures> {
+    let (w, h, n) = dims(page.width, page.height)?;
+    if page.data.len() != n.checked_mul(3)? || !(dpi.is_finite() && dpi > 0.0) {
+        return None;
+    }
+    let (ink, tally) = scan_pixels(&page.data);
+    let total = n as f64;
+    let colour_ink_share = if tally.ink == 0 { 0.0 } else { tally.coloured as f64 / tally.ink as f64 };
+    Some(InkFeatures {
+        ink_share: tally.ink as f64 / total,
+        colour_ink_share,
+        stroke_mm: stroke_mm(&ink, w, h, dpi),
+        glare_share: tally.glare as f64 / total,
+    })
+}
+
+/// Counts from one pass over the pixels.
+#[derive(Default)]
+struct Tally {
+    ink: usize,
+    coloured: usize,
+    glare: usize,
+}
+
+/// One pass over the RGB bytes: the ink mask (one flag per pixel) and the counts.
+fn scan_pixels(data: &[u8]) -> (Vec<bool>, Tally) {
+    let mut tally = Tally::default();
+    let mut ink = Vec::with_capacity(data.len() / 3);
+    for px in data.chunks_exact(3) {
+        let [r, g, b] = [px[0], px[1], px[2]];
+        let is_ink = f64::from(luma([r, g, b])) < INK_LUMA;
+        ink.push(is_ink);
+        if is_ink {
+            tally.ink += 1;
+            let chroma = f64::from(r.max(g).max(b) - r.min(g).min(b)) / WHITE;
+            if chroma > COLOUR_CHROMA {
+                tally.coloured += 1;
+            }
+        }
+        if r >= GLARE_LEVEL && g >= GLARE_LEVEL && b >= GLARE_LEVEL {
+            tally.glare += 1;
+        }
+    }
+    (ink, tally)
+}
+
+/// Width and height and pixel count of a page, `None` when empty or too large to count.
+fn dims(width: u32, height: u32) -> Option<(usize, usize, usize)> {
+    let w = usize::try_from(width).ok()?;
+    let h = usize::try_from(height).ok()?;
+    let n = w.checked_mul(h)?;
+    (n > 0).then_some((w, h, n))
+}
+
+/// The median stroke width of the ink mask, in millimetres at `dpi`.
+fn stroke_mm(ink: &[bool], w: usize, h: usize, dpi: f32) -> Option<f64> {
+    let mut row_runs = Vec::new();
+    for row in ink.chunks_exact(w) {
+        row_runs.extend(run_lengths(row.iter().copied()));
+    }
+    let mut col_runs = Vec::new();
+    for x in 0..w {
+        col_runs.extend(run_lengths((0..h).map(|y| ink.get(y * w + x).copied().unwrap_or(false))));
+    }
+    let pixels = median(row_runs)?.min(median(col_runs)?);
+    Some(pixels as f64 * MM_PER_INCH / f64::from(dpi))
+}
+
+/// The lengths of the runs of `true` in a line of flags.
+fn run_lengths(line: impl Iterator<Item = bool>) -> Vec<usize> {
+    let mut runs = Vec::new();
+    let mut current = 0usize;
+    for flag in line {
+        if flag {
+            current += 1;
+        } else if current > 0 {
+            runs.push(current);
+            current = 0;
+        }
+    }
+    if current > 0 {
+        runs.push(current);
+    }
+    runs
+}
+
+/// The median of a list of run lengths (the upper middle one for an even count), `None` when empty.
+fn median(mut values: Vec<usize>) -> Option<usize> {
+    values.sort_unstable();
+    values.get(values.len() / 2).copied()
+}
+
+/// A dark band along one of the long sides (a book's gutter). The mean luminance of the outer
+/// `GUTTER_STRIP_SHARE` strip along a long side must be at least `GUTTER_DARK_SHARE` under the
+/// page's median, and the other long side's strip must not be. A square page has no long side,
+/// so it is never a gutter. A page whose data does not match its size is never a gutter.
+pub fn gutter_band(page: &Luma) -> bool {
+    let Some((w, h, n)) = dims(page.width, page.height) else { return false };
+    if w == h || page.data.len() != n {
+        return false;
+    }
+    let landscape = w > h;
+    let (long, short) = if landscape { (w, h) } else { (h, w) };
+    let strip = ((short as f64 * GUTTER_STRIP_SHARE).round() as usize).clamp(1, short);
+    let pixel = |along: usize, across: usize| {
+        let (x, y) = if landscape { (along, across) } else { (across, along) };
+        page.data.get(y * w + x).copied().unwrap_or(0)
+    };
+    let mean = |across: std::ops::Range<usize>| {
+        let sum: u64 = (0..long).flat_map(|a| across.clone().map(move |c| (a, c))).map(|(a, c)| u64::from(pixel(a, c))).sum();
+        sum as f64 / (long * strip) as f64
+    };
+    let limit = median_level(&page.data) * (1.0 - GUTTER_DARK_SHARE);
+    let first_dark = mean(0..strip) <= limit;
+    let second_dark = mean(short - strip..short) <= limit;
+    first_dark != second_dark
+}
+
+/// The median grey level of the bytes, from a 256-bin histogram (the lower median).
+fn median_level(data: &[u8]) -> f64 {
+    let mut hist = [0usize; LUMA_LEVELS];
+    for &v in data {
+        hist[usize::from(v)] += 1;
+    }
+    let half = data.len().div_ceil(2);
+    let mut seen = 0usize;
+    for (level, count) in hist.iter().enumerate() {
+        seen += count;
+        if seen >= half {
+            return level as f64;
+        }
+    }
+    0.0
+}
