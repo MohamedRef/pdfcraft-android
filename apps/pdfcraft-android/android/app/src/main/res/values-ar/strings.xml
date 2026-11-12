@@ -278,6 +278,7 @@
     <string name="tools_add_page">إضافة صفحة</string>
     <string name="tools_retake">إعادة الالتقاط</string>
     <string name="tools_filter_original">الأصل</string>
+    <string name="tools_filter_clean_scan">مسح نظيف</string>
     <string name="tools_filter_auto_colour">ألوان تلقائية</string>
     <string name="tools_filter_grayscale">تدرّج رمادي</string>
     <string name="tools_filter_whiteboard">سبورة بيضاء</string>

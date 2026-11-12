@@ -17,6 +17,8 @@ pub enum ScanLook {
     Colour,
     Greyscale,
     BlackWhite,
+    /// Like a flatbed scan in one step (#298).
+    Auto,
 }
 
 /// The format a page image was written in.
@@ -113,6 +115,7 @@ pub(crate) fn process_in(root: &Path, request: &ScanPageRequest) -> Result<ScanP
         ScanLook::Colour => Look::Colour,
         ScanLook::Greyscale => Look::Greyscale,
         ScanLook::BlackWhite => Look::BlackWhite,
+        ScanLook::Auto => Look::Auto,
     };
     let threads = std::thread::available_parallelism().map_or(1, usize::from).min(pdfcraft_scan::warp::MAX_THREADS);
     let page = process_page(&PageRequest { photo: &bytes, corners, look, strength: request.strength, threads })

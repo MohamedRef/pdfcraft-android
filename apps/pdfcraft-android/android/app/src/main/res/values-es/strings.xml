@@ -326,6 +326,7 @@
     <string name="tools_retake">Repetir</string>
     <!-- Looks a scanned page can have -->
     <string name="tools_filter_original">Original</string>
+    <string name="tools_filter_clean_scan">Escaneo limpio</string>
     <string name="tools_filter_auto_colour">Color automático</string>
     <string name="tools_filter_grayscale">Escala de grises</string>
     <string name="tools_filter_whiteboard">Pizarra</string>

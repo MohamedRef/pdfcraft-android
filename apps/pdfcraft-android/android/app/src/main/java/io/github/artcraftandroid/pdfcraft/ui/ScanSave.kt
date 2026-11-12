@@ -15,6 +15,7 @@ internal fun scanNeedsProcessing(whole: Boolean, mode: String): Boolean = !(whol
 /** The native look for a [ScanFilter.mode]. */
 internal fun scanLookOf(mode: String): ScanLook = when (mode) {
     "original" -> ScanLook.ORIGINAL
+    "auto" -> ScanLook.AUTO
     "greyscale" -> ScanLook.GREYSCALE
     "bw" -> ScanLook.BLACK_WHITE
     else -> ScanLook.COLOUR

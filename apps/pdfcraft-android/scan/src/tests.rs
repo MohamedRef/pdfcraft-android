@@ -263,7 +263,7 @@ const SAMPLE_CORNERS: [f32; 8] = [80.0 / 600.0, 60.0 / 800.0, 530.0 / 600.0, 90.
 #[test]
 fn the_same_photo_gives_the_same_bytes_on_any_number_of_threads() {
     let photo = sample_photo();
-    for look in [Look::Original, Look::Colour, Look::Greyscale, Look::BlackWhite] {
+    for look in [Look::Original, Look::Colour, Look::Greyscale, Look::BlackWhite, Look::Auto] {
         let run = |threads| process_page(&PageRequest { photo: &photo, corners: SAMPLE_CORNERS, look, strength: 60, threads }).unwrap();
         let (a, b, c) = (run(1), run(1), run(4));
         assert_eq!(a.bytes, b.bytes, "{look:?}: twice");

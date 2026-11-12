@@ -4,7 +4,8 @@
 use std::time::Instant;
 
 use crate::encode::{Format, JPEG_QUALITY, encode_jpeg, encode_png_grey};
-use crate::look::{Look, Pixels, apply};
+use crate::enhance::enlargement;
+use crate::look::{Look, Pixels, apply_with_threads};
 use crate::warp::{output_size, rectify_with_threads};
 use crate::{Photo, Quad, ScanError};
 
@@ -60,11 +61,13 @@ pub fn process_page(request: &PageRequest<'_>) -> Result<PageResult, ScanError> 
 
     let quad = Quad::from_shares(&request.corners, photo.width, photo.height)?;
     let (w, h) = output_size(&quad)?;
+    // Auto enlarges a small page in this same resampling pass, before its tone curve (#298, step 0)
+    let (w, h) = if request.look == Look::Auto { enlarged(w, h) } else { (w, h) };
     let page = rectify_with_threads(&photo, &quad, w, h, request.threads)?;
     drop(photo);
     lap(STAGE_RECTIFY, &mut timings);
 
-    let pixels = apply(&page, request.look, request.strength).ok_or(ScanError::Encode)?;
+    let pixels = apply_with_threads(&page, request.look, request.strength, request.threads).ok_or(ScanError::Encode)?;
     drop(page);
     lap(STAGE_LOOK, &mut timings);
 
@@ -81,4 +84,11 @@ pub fn process_page(request: &PageRequest<'_>) -> Result<PageResult, ScanError> 
 /// The resolution at which a `w` × `h` page's long side is 297 mm, clamped to 72–600 dpi.
 pub fn page_dpi(w: u32, h: u32) -> f32 {
     (f64::from(w.max(h)) * 25.4 / LONG_SIDE_MM).clamp(72.0, 600.0) as f32
+}
+
+/// A page's size after Auto's enlargement of small sources: at least 3.6 MP, at most 4× per side.
+fn enlarged(w: u32, h: u32) -> (u32, u32) {
+    let u = enlargement(f64::from(w), f64::from(h));
+    let side = |v: u32| (f64::from(v) * u).round().max(1.0) as u32;
+    (side(w), side(h))
 }

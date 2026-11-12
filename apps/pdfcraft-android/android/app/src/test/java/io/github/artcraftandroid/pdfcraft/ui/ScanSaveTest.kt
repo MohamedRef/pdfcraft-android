@@ -18,6 +18,7 @@ class ScanSaveTest {
     @Test
     fun everyFilterModeHasALook() {
         assertEquals(ScanLook.ORIGINAL, scanLookOf("original"))
+        assertEquals(ScanLook.AUTO, scanLookOf("auto"))
         assertEquals(ScanLook.COLOUR, scanLookOf("colour"))
         assertEquals(ScanLook.GREYSCALE, scanLookOf("greyscale"))
         assertEquals(ScanLook.BLACK_WHITE, scanLookOf("bw"))
