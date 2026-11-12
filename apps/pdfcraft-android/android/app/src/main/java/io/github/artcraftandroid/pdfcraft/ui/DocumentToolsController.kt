@@ -103,7 +103,7 @@ class DocumentToolsController internal constructor(private val vm: AppViewModel)
             val named = parts.map { it to it.name }
             if (share) {
                 val uris = try { withContext(Dispatchers.IO) { vm.files.shareableAll(named) } } finally { dir.deleteRecursively() }
-                vm.intents.trySend(Intent.createChooser(vm.sendIntent(uris), null))
+                vm.intents.trySend(Intent.createChooser(vm.sharing.sendIntent(uris), null))
             } else {
                 saveAllToFolder(named, "application/pdf", cleanup = dir)
             }
@@ -307,7 +307,7 @@ class DocumentToolsController internal constructor(private val vm: AppViewModel)
     fun printWithOptions(doc: OpenDocument, options: PrintOptions, save: Boolean) {
         if (options.isDefault && !save) {
             vm.tools.toolScreen = null
-            vm.print(doc)
+            vm.sharing.print(doc)
             return
         }
         if (doc.controller.tool == ViewerTool.Draw) doc.commitTool?.invoke()

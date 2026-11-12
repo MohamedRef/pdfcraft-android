@@ -86,7 +86,7 @@ import io.github.artcraftandroid.pdfcraft.ui.viewer.ToolHues
 @Composable
 fun FilesTab(vm: AppViewModel, onBrowse: () -> Unit) {
     val c = pdfColors
-    if (vm.filesShowLocal) {
+    if (vm.home.filesShowLocal) {
         OnThisDevice(vm)
         return
     }
@@ -95,8 +95,8 @@ fun FilesTab(vm: AppViewModel, onBrowse: () -> Unit) {
         Box(Modifier.fillMaxWidth().height(128.dp), contentAlignment = Alignment.BottomStart) {
             Text(stringResource(R.string.home_tab_files), color = c.label, fontSize = 24.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 16.dp, bottom = 40.dp))
         }
-        LocationRow(LucideIcons.Smartphone, stringResource(R.string.home_on_this_device)) { vm.filesShowLocal = true }
-        LocationRow(LucideIcons.Image, stringResource(R.string.home_photos)) { vm.pickPhotosToPdf() }
+        LocationRow(LucideIcons.Smartphone, stringResource(R.string.home_on_this_device)) { vm.home.filesShowLocal = true }
+        LocationRow(LucideIcons.Image, stringResource(R.string.home_photos)) { vm.home.pickPhotosToPdf() }
         LocationRow(LucideIcons.FolderOpen, stringResource(R.string.home_look_in_other_folders), onBrowse)
     }
 }
@@ -115,38 +115,38 @@ private fun LocationRow(icon: ImageVector, label: String, onClick: () -> Unit) {
 @Composable
 private fun OnThisDevice(vm: AppViewModel) {
     val c = pdfColors
-    BackHandler { vm.filesShowLocal = false }
-    LaunchedEffect(Unit) { vm.scanLocal() }
+    BackHandler { vm.home.filesShowLocal = false }
+    LaunchedEffect(Unit) { vm.home.scanLocal() }
     var sort by remember { mutableStateOf(0) }
     var menu by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxSize().safeTopPadding()) {
         Row(Modifier.fillMaxWidth().height(56.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.width(56.dp), contentAlignment = Alignment.Center) { BarIcon(LucideIcons.ArrowLeft, stringResource(R.string.common_back), { vm.filesShowLocal = false }) }
+            Box(Modifier.width(56.dp), contentAlignment = Alignment.Center) { BarIcon(LucideIcons.ArrowLeft, stringResource(R.string.common_back), { vm.home.filesShowLocal = false }) }
             Text(stringResource(R.string.home_on_this_device), color = c.text, fontSize = 18.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-            BarIcon(LucideIcons.RotateCw, stringResource(R.string.home_refresh), { vm.scanLocal(force = true) })
+            BarIcon(LucideIcons.RotateCw, stringResource(R.string.home_refresh), { vm.home.scanLocal(force = true) })
             Box {
                 BarIcon(LucideIcons.EllipsisVertical, stringResource(R.string.common_more_options), { menu = true })
                 DropdownMenu(expanded = menu, onDismissRequest = { menu = false }, containerColor = c.surface) {
                     DropdownMenuItem(text = { Text(stringResource(R.string.home_sort_by_name)) }, onClick = { sort = 1; menu = false }, trailingIcon = { if (sort == 1) Icon(LucideIcons.Check, null, tint = c.accent) })
                     DropdownMenuItem(text = { Text(stringResource(R.string.home_sort_by_date)) }, onClick = { sort = 0; menu = false }, trailingIcon = { if (sort == 0) Icon(LucideIcons.Check, null, tint = c.accent) })
                     HorizontalDivider(color = c.divider)
-                    DropdownMenuItem(text = { Text(stringResource(R.string.home_add_folder)) }, onClick = { menu = false; vm.requestFileAccess() }, leadingIcon = { Icon(LucideIcons.FolderPlus, null, tint = c.icon) })
+                    DropdownMenuItem(text = { Text(stringResource(R.string.home_add_folder)) }, onClick = { menu = false; vm.home.requestFileAccess() }, leadingIcon = { Icon(LucideIcons.FolderPlus, null, tint = c.icon) })
                     // the folders listed here, each with a way to stop listing it
-                    for ((tree, name) in vm.localFolders()) {
-                        DropdownMenuItem(text = { Text(stringResource(R.string.home_stop_listing, name)) }, onClick = { menu = false; vm.removeLocalFolder(tree) }, leadingIcon = { Icon(LucideIcons.Folder, null, tint = c.icon) })
+                    for ((tree, name) in vm.home.localFolders()) {
+                        DropdownMenuItem(text = { Text(stringResource(R.string.home_stop_listing, name)) }, onClick = { menu = false; vm.home.removeLocalFolder(tree) }, leadingIcon = { Icon(LucideIcons.Folder, null, tint = c.icon) })
                     }
                 }
             }
         }
-        val rows = vm.localRows().let { if (sort == 1) it.sortedBy { r -> r.name.lowercase() } else it }
+        val rows = vm.home.localRows().let { if (sort == 1) it.sortedBy { r -> r.name.lowercase() } else it }
         // what PdfCraft saved itself shows before any folder is added
-        if (!vm.hasFileAccess && rows.isEmpty()) {
-            EmptyState(LucideIcons.Smartphone, stringResource(R.string.home_device_files_title), stringResource(R.string.home_device_files_body_long), stringResource(R.string.home_add_folder)) { vm.requestFileAccess() }
+        if (!vm.home.hasFileAccess && rows.isEmpty()) {
+            EmptyState(LucideIcons.Smartphone, stringResource(R.string.home_device_files_title), stringResource(R.string.home_device_files_body_long), stringResource(R.string.home_add_folder)) { vm.home.requestFileAccess() }
             return@Column
         }
         if (rows.isEmpty()) {
-            if (vm.scanning) EmptyState(LucideIcons.FileText, stringResource(R.string.home_looking_for_pdfs), "")
-            else EmptyState(LucideIcons.FileText, stringResource(R.string.home_no_pdfs_title), stringResource(R.string.home_no_pdfs_body), stringResource(R.string.home_add_folder)) { vm.requestFileAccess() }
+            if (vm.home.scanning) EmptyState(LucideIcons.FileText, stringResource(R.string.home_looking_for_pdfs), "")
+            else EmptyState(LucideIcons.FileText, stringResource(R.string.home_no_pdfs_title), stringResource(R.string.home_no_pdfs_body), stringResource(R.string.home_add_folder)) { vm.home.requestFileAccess() }
             return@Column
         }
         LazyColumn(Modifier.weight(1f)) {
@@ -183,23 +183,23 @@ fun ToolsTab(vm: AppViewModel) {
     var cat by remember { mutableStateOf("All") }
     val tools = remember {
         listOf(
-            HubTool(LucideIcons.Signature, "Fill & Sign", R.string.common_tool_fill_sign, R.string.home_about_fill_sign, ToolHues.sign, emptySet()) { vm.toolForFile(FileTool.FillSign) },
-            HubTool(LucideIcons.MessageSquareText, "Add comment", R.string.home_tool_add_comment, R.string.home_about_comment, ToolHues.comment, emptySet()) { vm.toolForFile(FileTool.Comment) },
-            HubTool(LucideIcons.Volume2, "Read aloud", R.string.common_tool_read_aloud, R.string.home_about_read_aloud, ToolHues.read, setOf("Read")) { vm.toolForFile(FileTool.ReadAloud) },
+            HubTool(LucideIcons.Signature, "Fill & Sign", R.string.common_tool_fill_sign, R.string.home_about_fill_sign, ToolHues.sign, emptySet()) { vm.home.toolForFile(FileTool.FillSign) },
+            HubTool(LucideIcons.MessageSquareText, "Add comment", R.string.home_tool_add_comment, R.string.home_about_comment, ToolHues.comment, emptySet()) { vm.home.toolForFile(FileTool.Comment) },
+            HubTool(LucideIcons.Volume2, "Read aloud", R.string.common_tool_read_aloud, R.string.home_about_read_aloud, ToolHues.read, setOf("Read")) { vm.home.toolForFile(FileTool.ReadAloud) },
             HubTool(LucideIcons.FilePlus2, "Create PDF", R.string.common_tool_create_pdf, R.string.home_about_create, ToolHues.create, setOf("Create")) { vm.tools.openCreate() },
             HubTool(LucideIcons.Camera, "New scan", R.string.home_new_scan, R.string.home_about_scan, ToolHues.scan, setOf("Create")) { vm.startScan() },
             HubTool(LucideIcons.Combine, "Combine files", R.string.common_tool_combine, R.string.home_about_combine, ToolHues.combine, setOf("Create", "Edit")) { vm.pickFiles(io.github.artcraftandroid.pdfcraft.ui.FilePickKind.Combine) },
-            HubTool(LucideIcons.GitCompare, "Compare files", R.string.compare_title, R.string.compare_about, ToolHues.read, setOf("Read")) { vm.toolForFile(FileTool.Compare) },
+            HubTool(LucideIcons.GitCompare, "Compare files", R.string.compare_title, R.string.compare_about, ToolHues.read, setOf("Read")) { vm.home.toolForFile(FileTool.Compare) },
             HubTool(LucideIcons.FilePenLine, "Bates numbering", R.string.bates_title, R.string.bates_about, ToolHues.edit, setOf("Edit")) { vm.openBates() },
             HubTool(LucideIcons.ScanText, "Recognize text in files", R.string.ocr_batch_title, R.string.ocr_batch_about, ToolHues.scan, setOf("Convert")) { vm.openOcrBatch() },
-            HubTool(LucideIcons.LayoutGrid, "Organize pages", R.string.common_tool_organize, R.string.home_about_organize, ToolHues.organize, setOf("Edit")) { vm.toolForFile(FileTool.Organize) },
-            HubTool(LucideIcons.Scissors, "Split PDF", R.string.home_tool_split, R.string.home_about_split, ToolHues.organize, setOf("Edit")) { vm.toolForFile(FileTool.Split) },
-            HubTool(LucideIcons.Heading, "Page marks", R.string.marks_title, R.string.marks_about, ToolHues.edit, setOf("Edit")) { vm.toolForFile(FileTool.PageMarks) },
-            HubTool(LucideIcons.Crop, "Crop pages", R.string.common_tool_crop, R.string.home_about_crop, ToolHues.crop, setOf("Edit")) { vm.toolForFile(FileTool.Crop) },
-            HubTool(LucideIcons.FilePenLine, "Edit PDF", R.string.common_tool_edit_pdf, R.string.home_about_edit, ToolHues.edit, setOf("Edit")) { vm.toolForFile(FileTool.Edit) },
-            HubTool(LucideIcons.FileArchive, "Compress PDF", R.string.common_tool_compress, R.string.home_about_compress, ToolHues.compress, setOf("Convert")) { vm.toolForFile(FileTool.Compress) },
-            HubTool(LucideIcons.FileOutput, "Export PDF", R.string.common_tool_export, R.string.home_about_export, ToolHues.export, setOf("Convert")) { vm.toolForFile(FileTool.Export) },
-            HubTool(LucideIcons.FileLock2, "Set password", R.string.common_tool_set_password, R.string.home_about_protect, ToolHues.protect, setOf("Edit")) { vm.toolForFile(FileTool.Protect) },
+            HubTool(LucideIcons.LayoutGrid, "Organize pages", R.string.common_tool_organize, R.string.home_about_organize, ToolHues.organize, setOf("Edit")) { vm.home.toolForFile(FileTool.Organize) },
+            HubTool(LucideIcons.Scissors, "Split PDF", R.string.home_tool_split, R.string.home_about_split, ToolHues.organize, setOf("Edit")) { vm.home.toolForFile(FileTool.Split) },
+            HubTool(LucideIcons.Heading, "Page marks", R.string.marks_title, R.string.marks_about, ToolHues.edit, setOf("Edit")) { vm.home.toolForFile(FileTool.PageMarks) },
+            HubTool(LucideIcons.Crop, "Crop pages", R.string.common_tool_crop, R.string.home_about_crop, ToolHues.crop, setOf("Edit")) { vm.home.toolForFile(FileTool.Crop) },
+            HubTool(LucideIcons.FilePenLine, "Edit PDF", R.string.common_tool_edit_pdf, R.string.home_about_edit, ToolHues.edit, setOf("Edit")) { vm.home.toolForFile(FileTool.Edit) },
+            HubTool(LucideIcons.FileArchive, "Compress PDF", R.string.common_tool_compress, R.string.home_about_compress, ToolHues.compress, setOf("Convert")) { vm.home.toolForFile(FileTool.Compress) },
+            HubTool(LucideIcons.FileOutput, "Export PDF", R.string.common_tool_export, R.string.home_about_export, ToolHues.export, setOf("Convert")) { vm.home.toolForFile(FileTool.Export) },
+            HubTool(LucideIcons.FileLock2, "Set password", R.string.common_tool_set_password, R.string.home_about_protect, ToolHues.protect, setOf("Edit")) { vm.home.toolForFile(FileTool.Protect) },
         )
     }
     Column(Modifier.fillMaxSize().safeTopPadding()) {
@@ -245,7 +245,7 @@ fun SearchTab(vm: AppViewModel) {
     var query by remember { mutableStateOf("") }
     var sort by remember { mutableStateOf(0) }
     var menu by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) { vm.scanLocal() }
+    LaunchedEffect(Unit) { vm.home.scanLocal() }
     val searchHint = stringResource(R.string.home_search_your_files)
     // the orders results can be sorted in, by [sort]
     val sorts = listOf(R.string.home_sort_relevant, R.string.home_sort_name_az, R.string.home_sort_name_za, R.string.home_sort_oldest, R.string.home_sort_newest)
@@ -289,9 +289,9 @@ fun SearchTab(vm: AppViewModel) {
         // a search left in place for a moment counts as one made
         LaunchedEffect(query) {
             kotlinx.coroutines.delay(2000)
-            if (vm.searchFiles(query).isNotEmpty()) vm.settings.addRecentSearch(query)
+            if (vm.home.searchFiles(query).isNotEmpty()) vm.settings.addRecentSearch(query)
         }
-        val results = vm.searchFiles(query).let { list ->
+        val results = vm.home.searchFiles(query).let { list ->
             when (sort) {
                 1 -> list.sortedBy { it.name.lowercase() }
                 2 -> list.sortedByDescending { it.name.lowercase() }
@@ -328,13 +328,13 @@ fun SearchTab(vm: AppViewModel) {
 @Composable
 fun SettingsScreen(vm: AppViewModel) {
     val c = pdfColors
-    var page by remember { mutableStateOf(vm.settingsStartPage) }
-    androidx.compose.runtime.DisposableEffect(Unit) { onDispose { vm.openSettings("root", show = false) } }
-    BackHandler { if (page == "root") vm.settingsOpen = false else page = "root" }
+    var page by remember { mutableStateOf(vm.home.settingsStartPage) }
+    androidx.compose.runtime.DisposableEffect(Unit) { onDispose { vm.home.openSettings("root", show = false) } }
+    BackHandler { if (page == "root") vm.home.settingsOpen = false else page = "root" }
     Column(Modifier.fillMaxSize().background(c.surface).safeTopPadding().navigationBarsPadding()) {
         Row(Modifier.fillMaxWidth().height(56.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.width(56.dp), contentAlignment = Alignment.Center) {
-                BarIcon(LucideIcons.ArrowLeft, stringResource(R.string.common_back), { if (page == "root") vm.settingsOpen = false else page = "root" })
+                BarIcon(LucideIcons.ArrowLeft, stringResource(R.string.common_back), { if (page == "root") vm.home.settingsOpen = false else page = "root" })
             }
             Text(stringResource(when (page) { "about" -> R.string.home_about_app; "prefs" -> R.string.home_preferences; "help" -> R.string.home_help_support; else -> R.string.home_settings }), color = c.text, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
         }
@@ -411,6 +411,12 @@ private fun Preferences(vm: AppViewModel) {
     // which camera Scan uses (#294): the phone's camera app stays one tap away
     Section(stringResource(R.string.common_tool_scan))
     io.github.artcraftandroid.pdfcraft.ui.scan.ScanCameraSetting()
+    var autoUpright by remember { mutableStateOf(io.github.artcraftandroid.pdfcraft.ui.scan.ScanUprightSetting.get(vm.settings.appPrefs)) }
+    val setAutoUpright = { on: Boolean -> autoUpright = on; io.github.artcraftandroid.pdfcraft.ui.scan.ScanUprightSetting.set(vm.settings.appPrefs, on) }
+    SheetRow(null, stringResource(R.string.settings_scan_upright), { setAutoUpright(!autoUpright) }) {
+        PdfSwitch(autoUpright, { setAutoUpright(it) })
+    }
+    Text(stringResource(R.string.settings_scan_upright_body), color = c.textSecondary, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 20.dp))
     SheetDivider()
     Section(stringResource(R.string.library_title))
     SheetRow(null, stringResource(R.string.library_index_switch), { vm.study.updateLibraryIndexing(!vm.study.libraryIndexing) }) {
@@ -485,7 +491,7 @@ private fun Preferences(vm: AppViewModel) {
         var name by remember { mutableStateOf(vm.settings.toolPrefs.author) }
         io.github.artcraftandroid.pdfcraft.ui.PdfDialog(
             onDismiss = { authorDialog = false }, title = stringResource(R.string.home_author_title),
-            confirm = stringResource(R.string.common_ok), onConfirm = { vm.settings.toolPrefs.author = name.trim(); authorDialog = false; vm.prefsChanged++ },
+            confirm = stringResource(R.string.common_ok), onConfirm = { vm.settings.toolPrefs.author = name.trim(); authorDialog = false; vm.home.prefsChanged++ },
         ) { io.github.artcraftandroid.pdfcraft.ui.PdfField(name, { name = it }, stringResource(R.string.common_your_name)) }
     }
 }
@@ -505,7 +511,7 @@ private fun About(vm: AppViewModel) {
     val clipboard = LocalClipboardManager.current
     val uri = LocalUriHandler.current
     Section(stringResource(R.string.home_section_about))
-    val version = stringResource(R.string.home_version, "${vm.appVersion} (${installedVersionCode(context)})", io.github.artcraftandroid.pdfcraft.core.engineVersion())
+    val version = stringResource(R.string.home_version, "${vm.home.appVersion} (${installedVersionCode(context)})", io.github.artcraftandroid.pdfcraft.core.engineVersion())
     val copied = stringResource(R.string.home_version_copied)
     Text(
         version, color = c.text, fontSize = 16.sp,
@@ -532,7 +538,7 @@ private fun About(vm: AppViewModel) {
     }
     SheetDivider()
     Section(stringResource(R.string.home_section_legal))
-    SheetRow(null, stringResource(R.string.home_licences), { vm.showLicences = true })
+    SheetRow(null, stringResource(R.string.home_licences), { vm.home.showLicences = true })
     SheetRow(null, stringResource(R.string.home_source_code), { uri.openUri(APP_REPO) })
     SheetRow(null, stringResource(R.string.home_engine), { uri.openUri("https://github.com/storytold/pdfcraft") })
     Text(

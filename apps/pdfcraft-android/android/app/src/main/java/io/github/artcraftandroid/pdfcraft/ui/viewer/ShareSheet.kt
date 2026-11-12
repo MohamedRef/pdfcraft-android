@@ -56,7 +56,7 @@ enum class ShareChoice(val id: String, @StringRes val label: Int) {
 @Composable
 fun ShareSheet(vm: AppViewModel, doc: OpenDocument) {
     val ctl = doc.controller
-    val last = vm.lastShareChoice
+    val last = vm.sharing.lastShareChoice
     PdfSheet(onDismiss = { ctl.sheet = ViewerSheet.None }) {
         SheetTitle(stringResource(R.string.common_share))
         val hasTape = tapes(doc).isNotEmpty()
@@ -64,7 +64,7 @@ fun ShareSheet(vm: AppViewModel, doc: OpenDocument) {
             if (choice == ShareChoice.Tape && !hasTape) continue
             SheetRow(choice.icon, stringResource(choice.label), {
                 ctl.sheet = ViewerSheet.None
-                vm.share(doc, choice)
+                vm.sharing.share(doc, choice)
             }, checked = choice == last)
         }
         Spacer(Modifier.height(8.dp))

@@ -36,11 +36,22 @@ internal data class ScanLab(
     /** Crop with the magnifier, side handles and snapping to the paper's edge (#292); off is the old four-handle screen. */
     val cropTools: Boolean = true,
     /**
+     * In a scan of several pages, a page the orientation classifier was not sure of takes the turn
+     * of its two neighbours when both are sure and agree (#339). Off saves each page by its own answer.
+     */
+    val settleTurns: Boolean = true,
+    /**
      * Flatten every page with the network and keep the flattened page only when its lines of text
      * come out at least 10 % straighter (#302's automatic mode). Off: a page is flattened only when
      * the scan screen's switch asks for it. Off by default until real photos have shown it helps.
      */
     val flattenAuto: Boolean = false,
+    /**
+     * Clean scan takes each page for a kind of document (receipt, whiteboard, book page, …) and
+     * uses that kind's strength, sharpening and paper colour (#299). Off uses the filter's own
+     * strength and the sharpening above, as before.
+     */
+    val presets: Boolean = true,
     /** In book mode, cut a spread along the gutter found in the photo (#303); off cuts every spread at its centre line. */
     val bookGutter: Boolean = true,
 ) {
@@ -56,20 +67,21 @@ internal data class ScanLab(
     fun diag(): Array<Pair<String, Any?>> = arrayOf<Pair<String, Any?>>(
         "finder" to finderId(finder), "refine" to refine, "side_proportions" to !perspective,
         "snap_paper" to snapPaper, "strength_override" to (strength ?: -1), "upright" to upright, "sharpen" to sharpen,
-        "denoise" to denoise, "preview" to preview, "crop_tools" to cropTools, "flatten_auto" to flattenAuto, "book_gutter" to bookGutter, "keep" to keep,
+        "denoise" to denoise, "preview" to preview, "crop_tools" to cropTools, "flatten_auto" to flattenAuto, "settle_turns" to settleTurns, "presets" to presets, "book_gutter" to bookGutter, "keep" to keep,
     )
 
     /** The options as JSON, for a kept scan's page file. */
     fun json(): JSONObject = JSONObject()
         .put("finder", finderId(finder)).put("refine", refine).put("side_proportions", !perspective)
         .put("snap_paper", snapPaper).put("strength_override", strength ?: JSONObject.NULL).put("upright", upright)
-        .put("sharpen", sharpen).put("denoise", denoise).put("preview", preview).put("crop_tools", cropTools).put("flatten_auto", flattenAuto).put("book_gutter", bookGutter)
+        .put("sharpen", sharpen).put("denoise", denoise).put("preview", preview).put("crop_tools", cropTools).put("flatten_auto", flattenAuto).put("settle_turns", settleTurns).put("presets", presets).put("book_gutter", bookGutter)
 
     /** One line of text for the app's preferences. */
     fun encode(): String = listOf(
         "keep" to flag(keep), "finder" to finderId(finder), "refine" to flag(refine),
         "perspective" to flag(perspective), "snap" to flag(snapPaper), "strength" to (strength?.toString() ?: ""),
-        "upright" to flag(upright), "sharpen" to sharpen.toString(), "denoise" to flag(denoise), "preview" to flag(preview), "crop" to flag(cropTools), "flatten_auto" to flag(flattenAuto), "gutter" to flag(bookGutter),
+        "upright" to flag(upright), "sharpen" to sharpen.toString(), "denoise" to flag(denoise), "preview" to flag(preview), "crop" to flag(cropTools), "flatten_auto" to flag(flattenAuto),
+        "settle" to flag(settleTurns), "presets" to flag(presets), "gutter" to flag(bookGutter),
     ).joinToString(";") { (k, v) -> "$k=$v" }
 
     companion object {
@@ -109,7 +121,9 @@ internal data class ScanLab(
                 denoise = on("denoise", default.denoise),
                 preview = on("preview", default.preview),
                 cropTools = on("crop", default.cropTools),
+                settleTurns = on("settle", default.settleTurns),
                 flattenAuto = on("flatten_auto", default.flattenAuto),
+                presets = on("presets", default.presets),
                 bookGutter = on("gutter", default.bookGutter),
             )
         }
@@ -138,6 +152,36 @@ internal data class ScanTestResult(
     val noise: Double? = null,
     /** How the flattened and the straightened page compared, when flattening was checked (#302). */
     val flattenCheck: io.github.artcraftandroid.pdfcraft.core.ScanFlattenCheck? = null,
+)
+
+/**
+ * How a saved page's turn was decided (#339): the person's own turn ([manual], null when there is
+ * none), the automatic-turn setting, the turn the page was saved with ([total], 0–3 clockwise),
+ * whether that turn came from its neighbours, and a short word for where it came from.
+ */
+internal data class ScanTestTurn(val manual: Int?, val auto: Boolean, val total: Int, val followed: Boolean, val source: String)
+
+/**
+ * The kind of document Clean scan took a saved page for (#299), its settings and what the page
+ * measured as: the native `ScanPageKind`, for a kept scan's page file.
+ */
+internal data class ScanTestKind(
+    val preset: String,
+    val chosen: Boolean,
+    val strength: Int,
+    val sharpen: Int,
+    val keepPaper: Boolean,
+    val suggestFlatten: Boolean,
+    val suggestGreyscale: Boolean,
+    val ratio: Double,
+    val inkShare: Double,
+    val colourInkShare: Double,
+    val photoShare: Double,
+    /** -1 when the page has no ink. */
+    val strokeMm: Double,
+    val glareShare: Double,
+    val gutterBand: Boolean,
+    val wholePhoto: Boolean,
 )
 
 /** The orientation classifier's answer for a page (#339): the turn it would give, and how sure it was. */
@@ -181,6 +225,8 @@ internal fun scanTestPageJson(
     /** How the photo was taken (#294): which camera and with what; null when not known. */
     capture: JSONObject? = null,
     models: JSONObject? = null,
+    turn: ScanTestTurn? = null,
+    kind: ScanTestKind? = null,
     /** Which half of a book spread the page is, and how the spread was cut (#303); null for a page of its own. */
     book: io.github.artcraftandroid.pdfcraft.ui.scan.ScanBookHalf? = null,
 ): String {
@@ -197,6 +243,24 @@ internal fun scanTestPageJson(
         )
         .put("look", look ?: JSONObject.NULL).put("strength", strength ?: JSONObject.NULL).put("flatten", flatten)
         .put("options", lab.json())
+        .put(
+            "document_type",
+            kind?.let {
+                fun r(v: Double, places: Double = 1000.0) = if (v.isFinite()) Math.round(v * places) / places else 0.0
+                JSONObject().put("preset", it.preset).put("chosen", it.chosen).put("strength", it.strength).put("sharpen", it.sharpen)
+                    .put("keep_paper", it.keepPaper).put("suggest_flatten", it.suggestFlatten).put("suggest_greyscale", it.suggestGreyscale)
+                    .put("ratio", r(it.ratio)).put("ink_share", r(it.inkShare)).put("colour_ink_share", r(it.colourInkShare))
+                    .put("photo_share", r(it.photoShare)).put("stroke_mm", r(it.strokeMm)).put("glare_share", r(it.glareShare))
+                    .put("gutter_band", it.gutterBand).put("whole_photo", it.wholePhoto)
+            } ?: JSONObject.NULL,
+        )
+        .put(
+            "turns",
+            turn?.let {
+                JSONObject().put("manual", it.manual ?: JSONObject.NULL).put("auto", it.auto).put("total", it.total)
+                    .put("followed", it.followed).put("source", it.source)
+            } ?: JSONObject.NULL,
+        )
         .put(
             "preview",
             preview?.let {

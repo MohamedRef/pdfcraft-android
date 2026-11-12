@@ -64,14 +64,14 @@ internal class ScanLabController(private val vm: AppViewModel) {
      * Keep page [index] of the scan in [scan]: its photo, its facts and, when it was saved, the
      * page made of it ([output], [result]). Blocking.
      */
-    fun keepPage(scan: File, index: Int, page: ScanPage, saved: Boolean, look: String?, strength: Int?, flatten: Boolean, output: File?, result: ScanTestResult?, preview: ScanTestPreview? = null) {
+    fun keepPage(scan: File, index: Int, page: ScanPage, saved: Boolean, look: String?, strength: Int?, flatten: Boolean, output: File?, result: ScanTestResult?, preview: ScanTestPreview? = null, turn: ScanTestTurn? = null, kind: ScanTestKind? = null) {
         val lab = options
-        val version = "${vm.appVersion} (${versionCode()})"
+        val version = "${vm.home.appVersion} (${versionCode()})"
         // which models the engine accepted (#289); a loaded model is not hashed again
         val models = io.github.artcraftandroid.pdfcraft.ui.scan.scanModelsJson(runCatching { io.github.artcraftandroid.pdfcraft.core.scanModelStates() }.getOrNull())
         val capture = io.github.artcraftandroid.pdfcraft.ui.scan.ScanCaptures.of(page.file.path)?.json()
         store.addPage(scan, index, page.file, output) { keptOutput ->
-            scanTestPageJson(version, saved, page.corners, page.found, page.finding, look, strength, flatten, lab, keptOutput, result, preview, page.crop, capture, models, page.book)
+            scanTestPageJson(version, saved, page.corners, page.found, page.finding, look, strength, flatten, lab, keptOutput, result, preview, page.crop, capture, models, turn, kind, page.book)
         }
     }
 
@@ -94,7 +94,7 @@ internal class ScanLabController(private val vm: AppViewModel) {
             // a folder of its own under share/: the cache sweep removes it an hour after it was handed out
             val file = File(File(app.cacheDir, "share/scan-tests"), "pdfcraft-scan-tests.zip")
             val pages = withContext(Dispatchers.IO) {
-                val facts = Diagnostics.facts(app, vm.appVersion, versionCode(), io.github.artcraftandroid.pdfcraft.core.engineVersion())
+                val facts = Diagnostics.facts(app, vm.home.appVersion, versionCode(), io.github.artcraftandroid.pdfcraft.core.engineVersion())
                 store.zip(file, mapOf("diagnostics.txt" to diagReport(facts, Diagnostics.lines(app)), "README.txt" to README))
             }
             if (pages == 0) {

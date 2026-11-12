@@ -132,3 +132,32 @@ pub fn auto(page: &Rgb, params: &AutoParams) -> Option<AutoOutput> {
     }
     Some(AutoOutput { rgb: Rgb { width: page.width, height: page.height, data }, objects: bg.objects, closing_radius: bg.radius as u8, noise })
 }
+
+/// `page` with its light evened out and nothing else: each channel divided by the paper's colour
+/// under the local light, so paper is near white and ink keeps its depth (#299: the "lighting
+/// correction" the photo mask and the ink measures of the document types read). No tone curve, so
+/// a photograph keeps its middle tones. `None` for a malformed or tiny page.
+pub(crate) fn evened(page: &Rgb) -> Option<Rgb> {
+    let (w, h) = (page.width as usize, page.height as usize);
+    if page.data.len() != w.checked_mul(h)?.checked_mul(3)? || w < MIN_SIDE || h < MIN_SIDE {
+        return None;
+    }
+    let bg = background::background(page, false);
+    let (lw, lh) = (bg.light[0].w, bg.light[0].h);
+    if lw == 0 || lh == 0 {
+        return None;
+    }
+    let mut data = Vec::with_capacity(page.data.len());
+    for y in 0..h {
+        let ly = (y * lh / h).min(lh - 1);
+        for x in 0..w {
+            let lx = (x * lw / w).min(lw - 1);
+            let i = (y * w + x) * 3;
+            for c in 0..3 {
+                let light = bg.light[c].d[ly * lw + lx].max(0.02);
+                data.push((f32::from(page.data[i + c]) / light).round().clamp(0.0, 255.0) as u8);
+            }
+        }
+    }
+    Some(Rgb { width: page.width, height: page.height, data })
+}

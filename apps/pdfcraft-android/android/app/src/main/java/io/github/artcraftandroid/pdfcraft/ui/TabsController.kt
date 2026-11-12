@@ -441,8 +441,8 @@ class TabsController internal constructor(private val vm: AppViewModel) {
     private fun leaveFront(doc: OpenDocument, tab: DocTab) {
         tab.reading = vm.settings.readingMode
         tab.tool = doc.controller.tool
-        vm.closeLecturePlayback()
-        vm.readAloud?.stop()
+        vm.noteTaking.closeLecturePlayback()
+        vm.sharing.readAloud?.stop()
         vm.study.pauseStudy()
         vm.study.studyDoc = null
         if (doc.controller.tool != ViewerTool.None) vm.leaveTool(doc)

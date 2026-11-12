@@ -62,13 +62,13 @@ import kotlinx.coroutines.delay
 @Composable
 fun LectureBar(vm: AppViewModel, doc: OpenDocument, bottom: Dp, modifier: Modifier = Modifier) {
     val c = pdfColors
-    val rec = vm.lectureRecording
-    val play = vm.lecturePlayback?.takeIf { it.uri == doc.source?.toString() }
+    val rec = vm.noteTaking.lectureRecording
+    val play = vm.noteTaking.lecturePlayback?.takeIf { it.uri == doc.source?.toString() }
     if (rec == null && play == null) return
     var now by remember { mutableLongStateOf(0L) }
-    LaunchedEffect(rec, play, vm.lecturePlaying, vm.lecturePaused) {
+    LaunchedEffect(rec, play, vm.noteTaking.lecturePlaying, vm.noteTaking.lecturePaused) {
         while (true) {
-            now = if (rec != null) rec.clock.elapsed() else vm.lecturePosition()
+            now = if (rec != null) rec.clock.elapsed() else vm.noteTaking.lecturePosition()
             delay(250)
         }
     }
@@ -78,31 +78,31 @@ fun LectureBar(vm: AppViewModel, doc: OpenDocument, bottom: Dp, modifier: Modifi
         ) {
             if (rec != null) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.padding(start = 8.dp).size(10.dp).clip(CircleShape).background(if (vm.lecturePaused) c.textSecondary else Color(0xFFD7373F)))
+                    Box(Modifier.padding(start = 8.dp).size(10.dp).clip(CircleShape).background(if (vm.noteTaking.lecturePaused) c.textSecondary else Color(0xFFD7373F)))
                     Spacer(Modifier.width(8.dp))
                     Text(
-                        stringResource(if (vm.lecturePaused) R.string.lecture_paused else R.string.lecture_recording) + " " + timerClock(now),
+                        stringResource(if (vm.noteTaking.lecturePaused) R.string.lecture_paused else R.string.lecture_recording) + " " + timerClock(now),
                         color = c.label, fontSize = 14.sp, modifier = Modifier.weight(1f),
                     )
-                    if (vm.lecturePaused) BarIcon(LucideIcons.Mic, stringResource(R.string.lecture_resume), { vm.resumeLecture() })
-                    else BarIcon(LucideIcons.Pause, stringResource(R.string.lecture_pause), { vm.pauseLecture() })
-                    BarIcon(LucideIcons.Square, stringResource(R.string.lecture_stop), { vm.stopLecture() })
+                    if (vm.noteTaking.lecturePaused) BarIcon(LucideIcons.Mic, stringResource(R.string.lecture_resume), { vm.noteTaking.resumeLecture() })
+                    else BarIcon(LucideIcons.Pause, stringResource(R.string.lecture_pause), { vm.noteTaking.pauseLecture() })
+                    BarIcon(LucideIcons.Square, stringResource(R.string.lecture_stop), { vm.noteTaking.stopLecture() })
                 }
             } else if (play != null) {
                 val duration = play.lecture.durationMs.coerceAtLeast(runCatching { play.player.duration.toLong() }.getOrDefault(0)).coerceAtLeast(1)
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    BarIcon(LucideIcons.RotateCcw, stringResource(R.string.lecture_back_10), { vm.skipLecture(-10_000) })
-                    BarIcon(if (vm.lecturePlaying) LucideIcons.Pause else LucideIcons.Play, stringResource(if (vm.lecturePlaying) R.string.lecture_pause else R.string.lecture_play), { vm.toggleLecturePlay() })
-                    BarIcon(LucideIcons.RotateCw, stringResource(R.string.lecture_forward_10), { vm.skipLecture(10_000) })
+                    BarIcon(LucideIcons.RotateCcw, stringResource(R.string.lecture_back_10), { vm.noteTaking.skipLecture(-10_000) })
+                    BarIcon(if (vm.noteTaking.lecturePlaying) LucideIcons.Pause else LucideIcons.Play, stringResource(if (vm.noteTaking.lecturePlaying) R.string.lecture_pause else R.string.lecture_play), { vm.noteTaking.toggleLecturePlay() })
+                    BarIcon(LucideIcons.RotateCw, stringResource(R.string.lecture_forward_10), { vm.noteTaking.skipLecture(10_000) })
                     Text(timerClock(now) + " / " + timerClock(duration), color = c.label, fontSize = 13.sp, modifier = Modifier.weight(1f).padding(start = 4.dp))
                     Text(
-                        "${vm.lectureSpeed}×".replace(".0×", "×"), color = c.label, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier.clip(RoundedCornerShape(12.dp)).clickable(role = Role.Button) { vm.cycleLectureSpeed() }.heightIn(min = 40.dp).padding(horizontal = 10.dp, vertical = 10.dp),
+                        "${vm.noteTaking.lectureSpeed}×".replace(".0×", "×"), color = c.label, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.clip(RoundedCornerShape(12.dp)).clickable(role = Role.Button) { vm.noteTaking.cycleLectureSpeed() }.heightIn(min = 40.dp).padding(horizontal = 10.dp, vertical = 10.dp),
                     )
-                    BarIcon(LucideIcons.X, stringResource(R.string.lecture_close_player), { vm.closeLecturePlayback() })
+                    BarIcon(LucideIcons.X, stringResource(R.string.lecture_close_player), { vm.noteTaking.closeLecturePlayback() })
                 }
                 Slider(
-                    value = (now.toFloat() / duration).coerceIn(0f, 1f), onValueChange = { vm.seekLecture((it * duration).toLong()) },
+                    value = (now.toFloat() / duration).coerceIn(0f, 1f), onValueChange = { vm.noteTaking.seekLecture((it * duration).toLong()) },
                     colors = SliderDefaults.colors(thumbColor = c.accent, activeTrackColor = c.accent),
                     modifier = Modifier.fillMaxWidth().height(28.dp).padding(horizontal = 8.dp),
                 )
@@ -118,20 +118,20 @@ fun LecturesSheet(vm: AppViewModel, doc: OpenDocument, onDismiss: () -> Unit) {
     val context = LocalContext.current
     var list by remember { mutableStateOf<List<Lecture>?>(null) }
     var deleting by remember { mutableStateOf<Lecture?>(null) }
-    LaunchedEffect(doc, vm.lectureRecording) { list = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { vm.lecturesOf(doc) } }
+    LaunchedEffect(doc, vm.noteTaking.lectureRecording) { list = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { vm.noteTaking.lecturesOf(doc) } }
     PdfSheet(onDismiss = onDismiss, dim = true) {
         Column(Modifier.verticalScroll(rememberScrollState()).padding(bottom = 16.dp)) {
             SheetTitle(stringResource(R.string.lecture_title))
-            if (vm.lectureRecording == null) {
-                SheetRow(LucideIcons.Mic, stringResource(R.string.lecture_record), { onDismiss(); vm.startLecture(doc) })
+            if (vm.noteTaking.lectureRecording == null) {
+                SheetRow(LucideIcons.Mic, stringResource(R.string.lecture_record), { onDismiss(); vm.noteTaking.startLecture(doc) })
             } else {
-                SheetRow(LucideIcons.Square, stringResource(R.string.lecture_stop), { vm.stopLecture() })
+                SheetRow(LucideIcons.Square, stringResource(R.string.lecture_stop), { vm.noteTaking.stopLecture() })
             }
-            for (l in list.orEmpty().filter { it.id != vm.lectureRecording?.id }) {
+            for (l in list.orEmpty().filter { it.id != vm.noteTaking.lectureRecording?.id }) {
                 val label = DateUtils.formatDateTime(context, l.started, DateUtils.FORMAT_SHOW_DATE or DateUtils.FORMAT_SHOW_TIME) + " • " + timerClock(l.durationMs) +
                     if (l.marks.isNotEmpty()) " • " + androidx.compose.ui.res.pluralStringResource(R.plurals.lecture_notes, l.marks.size, l.marks.size) else ""
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.weight(1f)) { SheetRow(LucideIcons.Play, label, { onDismiss(); vm.playLecture(doc, l) }) }
+                    Box(Modifier.weight(1f)) { SheetRow(LucideIcons.Play, label, { onDismiss(); vm.noteTaking.playLecture(doc, l) }) }
                     BarIcon(LucideIcons.Trash2, stringResource(R.string.common_delete), { deleting = l })
                 }
             }
@@ -142,7 +142,7 @@ fun LecturesSheet(vm: AppViewModel, doc: OpenDocument, onDismiss: () -> Unit) {
         PdfDialog(
             onDismiss = { deleting = null }, title = stringResource(R.string.lecture_delete_title),
             confirm = stringResource(R.string.common_delete), destructive = true,
-            onConfirm = { deleting = null; vm.deleteLecture(doc, l); list = list?.filter { it.id != l.id } },
+            onConfirm = { deleting = null; vm.noteTaking.deleteLecture(doc, l); list = list?.filter { it.id != l.id } },
         )
     }
 }

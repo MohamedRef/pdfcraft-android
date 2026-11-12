@@ -3,6 +3,8 @@ package io.github.artcraftandroid.pdfcraft.ui
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.selection.selectable
+import io.github.artcraftandroid.pdfcraft.ui.scan.rotateScanPage
+import io.github.artcraftandroid.pdfcraft.ui.scan.undoScanTurn
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -527,7 +529,7 @@ fun CreateSourcesScreen(vm: AppViewModel) {
             Text(stringResource(R.string.tools_create_title), color = c.label, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
         }
         Spacer(Modifier.height(8.dp))
-        SourceRow(LucideIcons.Images, stringResource(R.string.home_photos)) { vm.tools.toolScreen = null; vm.pickPhotosToPdf() }
+        SourceRow(LucideIcons.Images, stringResource(R.string.home_photos)) { vm.tools.toolScreen = null; vm.home.pickPhotosToPdf() }
         SourceRow(LucideIcons.FolderOpen, stringResource(R.string.tools_browse_files)) { vm.tools.toolScreen = null; vm.pickFiles(FilePickKind.Create) }
         Text(stringResource(R.string.tools_or_make_new), color = c.textSecondary, fontSize = 14.sp, modifier = Modifier.padding(start = 20.dp, top = 20.dp, bottom = 6.dp))
         Box(Modifier.padding(horizontal = 16.dp).fillMaxWidth().height(1.dp).background(c.divider))
@@ -821,6 +823,10 @@ fun CropScreen(vm: AppViewModel, doc: OpenDocument) {
  * as shares of the photo's width and height (x1, y1 … x4, y4 from the top left, clockwise), the
  * whole photo when No crop was chosen or no edges were found. [found] is what Auto-detect found,
  * and [finding] how it went about it (for the diagnostics and scans kept for testing, #288).
+ * [turns] is the person's own turn of the page (0–3 quarter turns clockwise, from Rotate or the
+ * chip's Undo), or null while the orientation classifier decides (#339). [preset] is the kind of
+ * document the person chose for the page ("receipt", "id_card", …), or null while Clean scan
+ * works it out (#299).
  */
 data class ScanPage(
     val file: java.io.File,
@@ -829,6 +835,8 @@ data class ScanPage(
     val found: FloatArray? = null,
     val finding: ScanFinding? = null,
     val crop: io.github.artcraftandroid.pdfcraft.ui.scan.ScanCropStats? = null,
+    val turns: Int? = null,
+    val preset: String? = null,
     /** Which half of a photographed book spread this page is (#303); null for a page of its own. */
     val book: io.github.artcraftandroid.pdfcraft.ui.scan.ScanBookHalf? = null,
 ) {
@@ -923,10 +931,12 @@ fun ScanScreen(vm: AppViewModel) {
         val page = pages.getOrNull(shownAt)
         val lab = vm.scanLab.options
         val flattening = flatten && vm.scanCanFlatten
+        // Settings ▸ Preferences ▸ Scan (#339); read each time, so a change there shows here
+        val autoUpright = io.github.artcraftandroid.pdfcraft.ui.scan.ScanUprightSetting.get(vm.settings.appPrefs)
         if (page != null && lab.preview) {
-            LaunchedEffect(page.file, page.corners.toList(), filter, flattening, lab) { vm.requestScanPreview(shownAt, page, filter, flattening) }
+            LaunchedEffect(page.file, page.corners.toList(), page.turns, page.preset, filter, flattening, lab, autoUpright) { vm.requestScanPreview(shownAt, page, filter, flattening) }
         }
-        val wanted = page?.let { ScanPreviewKey.of(it, filter, flattening, lab) }
+        val wanted = page?.let { ScanPreviewKey.of(it, filter, flattening, lab, autoUpright) }
         val preview = vm.scanPreview?.takeIf { wanted != null && it.key == wanted }
         val shown = scanShown(lab.preview, view, preview != null, wanted != null && vm.scanPreviewFailed == wanted)
         Box(Modifier.weight(1f).fillMaxWidth().background(c.desk), contentAlignment = Alignment.Center) {
@@ -939,7 +949,16 @@ fun ScanScreen(vm: AppViewModel) {
                 } else {
                     ScanPhoto(page.thumb, page.corners, Modifier.fillMaxSize())
                 }
-                page.book?.let { io.github.artcraftandroid.pdfcraft.ui.scan.ScanBookLabel(it, Modifier.align(Alignment.TopCenter)) }
+                page.book?.let { io.github.artcraftandroid.pdfcraft.ui.scan.ScanBookLabel(it, Modifier.align(Alignment.TopStart)) }
+                // the classifier turned this page and the person has not: say so, with a way back (#339)
+                if (shown.view == ScanView.Result && preview != null && io.github.artcraftandroid.pdfcraft.ui.scan.scanShowsTurnedChip(page.turns, preview.quarterTurns)) {
+                    val undoLabel = stringResource(R.string.scan_turn_undo_description)
+                    Text(
+                        stringResource(R.string.scan_turned_upright_undo), color = Color.White, fontSize = 13.sp,
+                        modifier = Modifier.align(Alignment.TopCenter).padding(12.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.6f))
+                            .clickable(role = Role.Button, onClickLabel = undoLabel) { vm.undoScanTurn(shownAt) }.padding(horizontal = 12.dp, vertical = 6.dp),
+                    )
+                }
                 if (shown.waiting) {
                     Text(
                         stringResource(R.string.tools_scan_preparing), color = Color.White, fontSize = 13.sp,
@@ -959,6 +978,12 @@ fun ScanScreen(vm: AppViewModel) {
                             .selectable(selected = v == view, role = Role.Tab) { view = v }.padding(horizontal = 16.dp, vertical = 6.dp),
                     )
                 }
+            }
+        }
+        // the kind of document Clean scan took the page for, and a way to choose another (#299)
+        if (page != null && filter == ScanFilter.CleanScan && lab.presets) {
+            Row(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.Center) {
+                io.github.artcraftandroid.pdfcraft.ui.scan.ScanPresetChip(vm, shownAt, page.preset, preview?.kind?.preset)
             }
         }
         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -990,6 +1015,8 @@ fun ScanScreen(vm: AppViewModel) {
         Row(Modifier.fillMaxWidth().padding(8.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
             TextButton(onClick = { vm.retakeScan(current) }, enabled = pages.isNotEmpty()) { Text(stringResource(R.string.tools_retake), color = c.accent) }
             TextButton(onClick = { cropping = pages.getOrNull(current.coerceAtMost(pages.lastIndex))?.key }, enabled = pages.isNotEmpty()) { Text(stringResource(R.string.tools_crop), color = c.accent) }
+            // a quarter turn clockwise, the person's from then on (#339)
+            TextButton(onClick = { vm.rotateScanPage(current.coerceAtMost(pages.lastIndex)) }, enabled = pages.isNotEmpty()) { Text(stringResource(R.string.scan_rotate), color = c.accent) }
             TextButton(onClick = { if (pages.isNotEmpty()) { vm.deleteScanPage(current.coerceAtMost(pages.lastIndex)); current = (current - 1).coerceAtLeast(0) } }, enabled = pages.isNotEmpty()) { Text(stringResource(R.string.common_delete), color = c.accent) }
         }
     }

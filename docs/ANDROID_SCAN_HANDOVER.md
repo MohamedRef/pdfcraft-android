@@ -143,9 +143,9 @@ The order in #286 stands. Within it, this is what unblocks the most:
 3. **#288, the metrics module**, `line_straightness` first, then **#302's automatic mode**.
    The measures and the guard are written (`straightness`, `flatten_guard`, `metrics_*`): what
    is left is the runner, the gate, and making both versions of the page at preview size.
-4. **#299's presets**, **#339's undo and rotate** (`upright_pages::turn_corners` turns a page by
-   reordering its corners; `upright.rs` has `turned`), **#303**. The blocks exist for all
-   three (section 1).
+4. **#303** (its block exists, section 1). #299's document types are in (#391:
+   `ScanPageRequest.preset`, `page_kind.rs`) and #339's undo and rotate (#387:
+   `ScanPageRequest.turns`, added with `upright_pages::total_turn`).
 5. **#294 to #297, the camera.** The largest and riskiest part: declaring the CAMERA permission
    changes how the existing path behaves (the manifest's comment explains it), and none of it
    can be tried without a phone. Keep the phone's camera app reachable as a setting, as the

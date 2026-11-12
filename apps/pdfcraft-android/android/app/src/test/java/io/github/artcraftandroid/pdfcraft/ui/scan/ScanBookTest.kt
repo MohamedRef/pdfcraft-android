@@ -84,7 +84,7 @@ class ScanBookTest {
         val halves = scanBookPages(spread, cut, ScanBookOrder.RightToLeft)
         val session = ScanSession(
             null, null, false, "Book",
-            halves.map { (corners, half) -> ScanSession.Page("/cache/camera/scan-1.jpg", corners, corners, half?.encode()) } +
+            halves.map { (corners, half) -> ScanSession.Page("/cache/camera/scan-1.jpg", corners, corners, book = half?.encode()) } +
                 ScanSession.Page("/cache/camera/scan-2.jpg", ScanPage.WHOLE, null),
         )
         val back = ScanSession.decode(session.encode())!!

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Document types in Clean scan (#299), kept apart from strings.xml so parallel scanner work merges cleanly. -->
+<resources>
+    <string name="scan_preset_document">Documento</string>
+    <string name="scan_preset_receipt">Scontrino</string>
+    <string name="scan_preset_whiteboard">Lavagna</string>
+    <string name="scan_preset_book_page">Pagina di libro</string>
+    <string name="scan_preset_photo_rich">Documento con foto</string>
+    <string name="scan_preset_photo">Foto</string>
+    <string name="scan_preset_id_card">Carta d’identità</string>
+    <string name="scan_preset_coloured_form">Modulo colorato</string>
+    <string name="scan_preset_auto_is">Auto: %1$s</string>
+    <string name="scan_preset_title">Tipo di documento</string>
+    <string name="scan_preset_automatic">Automatico</string>
+    <string name="scan_lab_presets">Tipi di documento in Scansione pulita</string>
+</resources>

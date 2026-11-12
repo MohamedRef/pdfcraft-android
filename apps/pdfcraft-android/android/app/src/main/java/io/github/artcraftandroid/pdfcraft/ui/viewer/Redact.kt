@@ -199,7 +199,7 @@ fun AppViewModel.applyRedactions(doc: OpenDocument) {
     runTool(doc, "redact_apply") { r ->
         tools.redact.marks = emptyList()
         editEvent(doc, "redact_apply", "applied" to r.optInt("applied"))
-        tell(plural(R.plurals.redact_applied, r.optInt("applied"), r.optInt("applied")), appText(R.string.common_save_copy)) { saveCopyAs(doc) }
+        tell(plural(R.plurals.redact_applied, r.optInt("applied"), r.optInt("applied")), appText(R.string.common_save_copy)) { sharing.saveCopyAs(doc) }
         checkHiddenInfo(doc)
     }
 }
