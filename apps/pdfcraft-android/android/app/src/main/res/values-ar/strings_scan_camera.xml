@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Scan: the in-app camera (#294), kept apart from strings.xml so parallel scanner work merges cleanly. -->
+<resources>
+    <string name="scan_camera_rationale">يستخدم PdfCraft الكاميرا لمسح الصفحات ضوئيًا. تبقى الصور على هذا الجهاز.</string>
+    <string name="scan_camera_continue">متابعة</string>
+    <string name="scan_camera_no_camera">لا توجد كاميرا في هذا الجهاز. استورد صورًا لمسحها.</string>
+    <string name="scan_camera_denied">غير مسموح لـ PdfCraft باستخدام الكاميرا. استورد صورًا بدلًا من ذلك، أو اسمح بالكاميرا من الإعدادات.</string>
+    <string name="scan_camera_import">استيراد صور</string>
+    <string name="scan_camera_open_settings">فتح الإعدادات</string>
+    <string name="scan_camera_phone_app">كاميرا الهاتف</string>
+    <string name="scan_camera_torch_on">تشغيل الضوء</string>
+    <string name="scan_camera_torch_off">إطفاء الضوء</string>
+    <string name="scan_camera_viewfinder">عدسة الكاميرا. انقر للتركيز.</string>
+    <string name="scan_camera_shutter">التقاط صورة</string>
+    <string name="scan_camera_done">تم (%1$d)</string>
+    <string name="scan_camera_last_page">آخر صفحة ملتقطة، %1$d في المجموع</string>
+    <string name="scan_camera_failed">تعذّر التقاط الصورة. حاول مرة أخرى.</string>
+    <string name="scan_camera_unavailable">تعذّر تشغيل الكاميرا. استخدم تطبيق الكاميرا في الهاتف بدلًا منها.</string>
+    <string name="scan_camera_image_unavailable">يحتاج PdfCraft إلى إذن الكاميرا لالتقاط صورة.</string>
+    <string name="scan_camera_setting">المسح باستخدام</string>
+    <string name="scan_camera_setting_in_app">كاميرا PdfCraft</string>
+    <string name="scan_camera_setting_phone">تطبيق الكاميرا في الهاتف</string>
+    <string name="scan_camera_setting_body">يعمل تطبيق الكاميرا في الهاتف فقط عندما يكون مسموحًا لـ PdfCraft باستخدام الكاميرا.</string>
+</resources>
