@@ -46,6 +46,8 @@ jobs:
         run: cargo build --locked --tests --keep-going -p pdfcraft-bytes -p pdfcraft-automation -p pdfcraft-cos -p pdfcraft-create -p pdfcraft-sign -p pdfcraft-js -p pdfcraft-forms -p pdfcraft-xfa -p pdfcraft-engine -p pdfcraft-render -p pdfcraft-android -p pdfcraft-scan
       - name: Run Rust tests
         run: cargo test --locked --no-fail-fast -p pdfcraft-bytes -p pdfcraft-automation -p pdfcraft-cos -p pdfcraft-create -p pdfcraft-sign -p pdfcraft-js -p pdfcraft-forms -p pdfcraft-xfa -p pdfcraft-engine -p pdfcraft-render -p pdfcraft-android -p pdfcraft-scan
+      - name: Run the scanner's measuring runner on drawn photos (#288)
+        run: cargo run --locked -p pdfcraft-scan --features synth --bin scan-eval -- --synthetic 6 --size 600x800
       - name: Verify native open diagnostics and bounded input reads
         run: |
           cargo test --locked -p pdfcraft-automation --lib input_read_preserves_bytes_and_rejects_oversized_regular_files

@@ -260,13 +260,14 @@ class ScanLabTest {
 
     @Test
     fun aKeptPageSaysWhatHappenedOnTheCropScreen() {
-        val stats = io.github.artcraftandroid.pdfcraft.ui.scan.ScanCropStats(visits = 1, cornerDrags = 2, sideDrags = 1, snapsAsked = 3, snapsTaken = 2, snapMsMax = 85, snapOn = true, ms = 9100, movedPct = 1.23456)
+        val stats = io.github.artcraftandroid.pdfcraft.ui.scan.ScanCropStats(visits = 1, cornerDrags = 2, sideDrags = 1, snapsAsked = 3, snapsTaken = 2, snapMsMax = 85, snapOn = true, ms = 9100, movedPct = 1.23456, cornersOff = 1)
         val json = JSONObject(scanTestPageJson("1.0 (1)", false, crop, crop, null, null, null, false, ScanLab(), null, null, null, stats)).getJSONObject("crop")
         assertEquals(1, json.getInt("visits"))
         assertEquals(2, json.getInt("corner_drags"))
         assertEquals(2, json.getInt("snaps_taken"))
         assertEquals(85, json.getInt("snap_ms_max"))
         assertEquals(1.235, json.getDouble("moved_pct"), 1e-9)
+        assertEquals(1, json.getInt("corners_off"))
         assertTrue(json.getBoolean("snap"))
     }
 

@@ -44,10 +44,18 @@ old screen (`ScanCrop` in `ui/ToolScreens.kt`) is still there for the testing op
   Auto-detect (`docs/ANDROID_SCAN_TESTING.md`). They hold counts, times and booleans only.
 - Kept scans: a `crop` object in each page file, added up over every visit.
 
+## Corners off the photo (#291)
+
+A page the frame cut off has a corner outside the picture. A handle can go up to 15% of the
+photo's side past each edge (−0.15 to 1.15, `QUAD_MIN` and `QUAD_MAX`), the same limit as
+`quad::OUTSIDE` in the page function, which paints the part with no photo white. When a corner is
+off the photo, the view widens to show it (`quadSpan`, `fitSpan`). The view does not change while
+a finger is down, so the photo does not slide under it; it widens when the finger lifts. A snap
+may also place a corner off the photo, where the edge finder found the sides meet.
+
 ## Not as the issue described it
 
-- **Corners stay on the photo (0 to 1).** The issue allowed −0.15 to 1.15. But `Quad::from_shares`
-  refuses corners beyond −0.01 to 1.01, so a corner off the photo would make the page fail to save.
+
 - **Rotate is not here.** It needs a turn in `ScanPageRequest` and a `rotation` in `ScanPage` and
   `ScanSession` (version 2), and #339's remaining part is the same change. Both will be done
   together.
