@@ -52,6 +52,10 @@ Settings → **Scanner models** (#289) lists each model with its state; while th
 recorded it also has **Copy the models again**, which copies every model out of the app anew
 (see `docs/ANDROID_SCAN_MODELS.md`).
 
+**Time a document model from a file (testing only)** (#304) times a model file picked on the phone
+and writes the times to the log; it changes no page and keeps no file (see
+`docs/ANDROID_SCAN_MAX_QUALITY.md`).
+
 **Reset scanner testing options** puts them back. Keeping scans is not one of them: it changes
 no page.
 
@@ -174,7 +178,8 @@ its `source` and `ms`; every `page` and `preview` line `flatten_auto` and, from
 (tenths of a pixel, -1 when not measured), `straight_lines` and `straight_flat_lines`; every `model_files` line (#289) what the models check copied and why
 (`copied`, `kept`, `failed`, `new`, `changed`, `size`, `unrecorded`, `forced`, `ms`), and while
 the log is recorded a `model_states` line with each model's state; a `model_download` or
-`model_removed` line for an optional model (none yet); `test_options` is written when an option is changed, `tests_shared` (pages, bytes)
+`model_removed` line for an optional model (none yet); a `model_timing` line (#304) when a picked model file is timed (fields in
+`docs/ANDROID_SCAN_MAX_QUALITY.md`); `test_options` is written when an option is changed, `tests_shared` (pages, bytes)
 when the zip is handed out, and `tests_cleared` when the kept scans are deleted. The log itself
 still holds no file name, path or document content.
 
