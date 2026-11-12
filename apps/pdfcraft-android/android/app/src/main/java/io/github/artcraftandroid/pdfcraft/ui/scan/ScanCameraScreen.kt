@@ -359,8 +359,14 @@ private fun CameraView(file: File, retaking: Boolean, pages: List<ImageBitmap>, 
                 liveHint = hint?.id ?: "none", previewQuad = outline?.points,
                 autoOn = autoOn, autoShot = auto.phase == ScanAutoPhase.Capturing && auto.auto,
                 merge = if (why.burst) ScanMergeFacts(why.id, frames = saved.size, burstMs = now - started) else null,
+                mergeSetting = model.merge.id, mergeChosen = model.mergeChosen,
             )
-            if (!why.burst) Diag.event(DiagArea.Scan, "camera_merge", "why" to why.id, "iso" to iso.get(), "luma" to (if (lumaSeen) lastLuma.toDouble() else -1.0))
+            if (!why.burst) {
+                Diag.event(
+                    DiagArea.Scan, "camera_merge", "why" to why.id, "iso" to iso.get(), "luma" to (if (lumaSeen) lastLuma.toDouble() else -1.0),
+                    "setting" to model.merge.id, "chosen" to model.mergeChosen,
+                )
+            }
             auto = auto.reduce(ScanAutoEvent.CaptureEnded(true, lastSignature, now)).first
             view.performHapticFeedback(android.view.HapticFeedbackConstants.CONFIRM)
             // the photo goes to the scan before Done (if pressed meanwhile) closes the screen

@@ -65,7 +65,7 @@ internal class ScanLabController(private val vm: AppViewModel) {
      * Keep page [index] of the scan in [scan]: its photo, its facts and, when it was saved, the
      * page made of it ([output], [result]). Blocking.
      */
-    fun keepPage(scan: File, index: Int, page: ScanPage, saved: Boolean, look: String?, strength: Int?, flatten: Boolean, output: File?, result: ScanTestResult?, preview: ScanTestPreview? = null, turn: ScanTestTurn? = null, kind: ScanTestKind? = null) {
+    fun keepPage(scan: File, index: Int, page: ScanPage, saved: Boolean, look: String?, strength: Int?, flatten: Boolean, output: File?, result: ScanTestResult?, preview: ScanTestPreview? = null, turn: ScanTestTurn? = null, kind: ScanTestKind? = null, applied: ScanAppliedStrength? = null) {
         val lab = options
         val version = "${vm.home.appVersion} (${versionCode()})"
         // which models the engine accepted (#289); a loaded model is not hashed again
@@ -73,7 +73,7 @@ internal class ScanLabController(private val vm: AppViewModel) {
         val capture = io.github.artcraftandroid.pdfcraft.ui.scan.ScanCaptures.of(page.file.path)?.json()
         val inspection = if (lab.inspect) inspect(index, page) else null
         store.addPage(scan, index, page.file, output) { keptOutput ->
-            scanTestPageJson(version, saved, page.corners, page.found, page.finding, look, strength, flatten, lab, keptOutput, result, preview, page.crop, capture, models, turn, kind, page.book, flattenChosen = page.flatten, pageLook = page.look.json(lab.lookPerPage), inspection = inspection)
+            scanTestPageJson(version, saved, page.corners, page.found, page.finding, look, strength, flatten, lab, keptOutput, result, preview, page.crop, capture, models, turn, kind, page.book, flattenChosen = page.flatten, pageLook = page.look.json(lab.lookPerPage), inspection = inspection, applied = applied)
         }
     }
 

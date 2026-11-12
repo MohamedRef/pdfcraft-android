@@ -4,7 +4,7 @@
 
 use crate::aspect::{AspectSource, Paper};
 use crate::look::{Look, Pixels};
-use crate::page::{PageBase, PageRequest, page_look, page_look_kind};
+use crate::page::{PageBase, PageRequest, kind_sharpen, page_look, page_look_kind};
 use crate::page_kind::{PresetChoice, page_features, page_kind, preset_from_id};
 use crate::preset::{Preset, params};
 use crate::warp::Rgb;
@@ -183,4 +183,39 @@ fn a_page_too_small_or_malformed_has_no_kind() {
     assert!(page_kind(&bad, 200, Paper::Custom, 0, PresetChoice::Auto).is_none());
     let empty = Rgb { width: 0, height: 0, data: Vec::new() };
     assert!(page_kind(&empty, 200, Paper::Custom, 0, PresetChoice::Auto).is_none());
+}
+
+#[test]
+fn with_document_types_on_a_strength_set_on_the_page_changes_the_page() {
+    // #424: the slider's strength counts as set by hand, so 20 and 100 give different pages
+    let page = base(receipt(), 200, Paper::Custom);
+    let at = |strength: u8, fixed_strength: bool| {
+        let (made, found) = page_look_kind(&page, &PageRequest { strength, fixed_strength, ..request(PresetChoice::Auto) }).unwrap();
+        assert_eq!(found.map(|k| k.preset), Some(Preset::Receipt));
+        rgb(made.pixels)
+    };
+    assert!(at(20, true) != at(100, true), "the page's strength did nothing with document types on");
+    // a page with no strength of its own still gets its kind's, whatever the look's own level is
+    assert!(at(20, false) == at(100, false));
+    let receipt = params(Preset::Receipt);
+    let by_hand = page_look(&page, &PageRequest { strength: receipt.strength, sharpen: receipt.sharpen, ..request(PresetChoice::Off) }).unwrap();
+    assert!(at(20, false) == rgb(by_hand.pixels));
+}
+
+#[test]
+fn the_sharpening_option_scales_the_kinds_sharpening() {
+    // #424: before, 30, 60 and 100 all gave the kind's own sharpening
+    assert_eq!(kind_sharpen(40, 30), 40);
+    assert_eq!(kind_sharpen(40, 0), 0);
+    assert_eq!(kind_sharpen(40, 60), 80);
+    assert_eq!(kind_sharpen(40, 100), 100);
+    assert_eq!(kind_sharpen(100, 100), 100);
+    // a printed page, whose letters' edges sharpening can move
+    let english = drawn(include_bytes!("../tests/data/upright-english.png"));
+    let dpi = (f64::from(english.width.min(english.height)) / 210.0 * 25.4).round() as u16;
+    let page = base(english, dpi, Paper::A4);
+    let at = |sharpen: u8| rgb(page_look_kind(&page, &PageRequest { sharpen, ..request(PresetChoice::Auto) }).unwrap().0.pixels);
+    let (none, default, more) = (at(0), at(30), at(60));
+    assert!(none != default, "sharpening did nothing on this page");
+    assert!(default != more, "sharpening 60 made the same page as 30");
 }

@@ -13,4 +13,5 @@
     <string name="scan_preset_title">Tipo de documento</string>
     <string name="scan_preset_automatic">Automático</string>
     <string name="scan_lab_presets">Tipos de documento en Escaneo limpio</string>
+    <string name="scan_lab_page_strength">La intensidad de la página prevalece sobre el tipo de documento</string>
 </resources>

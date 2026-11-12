@@ -95,7 +95,8 @@ pub struct PageRequest<'a> {
     pub preset: PresetChoice,
     /// How many sides of the page its edge detection found curved (0–4): a book page's sign (#299).
     pub curved_sides: u8,
-    /// The strength was set by hand (a testing option): a document type does not change it.
+    /// The strength was set by hand (the page's slider or a testing option, #424): a document
+    /// type does not change it.
     pub fixed_strength: bool,
     /// For a preview (#301): the page shrunk so its longer side is this many pixels at most,
     /// whatever its look. `None` for the page at the size it is saved at.
@@ -354,9 +355,17 @@ pub fn page_look(base: &PageBase, request: &PageRequest<'_>) -> Result<Applied, 
     page_look_kind(base, request).map(|(applied, _)| applied)
 }
 
+/// The sharpening a page of a kind whose own is `kind` gets when the request asks for `asked`
+/// (#424): the kind's scaled by `asked` over the default, so the default gives the kind's own and
+/// 0 gives none. At most 100.
+pub fn kind_sharpen(kind: u8, asked: u8) -> u8 {
+    let scaled = u32::from(kind) * u32::from(asked) / u32::from(DEFAULT_SHARPEN);
+    u8::try_from(scaled.min(100)).unwrap_or(100)
+}
+
 /// `page_look`, and the kind of document the Auto look took the page for (#299). With a kind,
-/// its strength (unless the strength was set by hand), its sharpening (unless sharpening is off)
-/// and its paper colour replace the request's.
+/// its strength (unless the strength was set by hand: the slider or the testing option), its
+/// sharpening (scaled by the request's, #424) and its paper colour replace the request's.
 pub fn page_look_kind(base: &PageBase, request: &PageRequest<'_>) -> Result<(Applied, Option<PageKind>), ScanError> {
     let kind = match request.look {
         Look::Auto => page_kind(&base.page, base.dpi, base.paper, request.curved_sides, request.preset),
@@ -374,9 +383,9 @@ pub fn page_look_kind(base: &PageBase, request: &PageRequest<'_>) -> Result<(App
         if !request.fixed_strength {
             params.strength = kind.params.strength;
         }
-        if request.sharpen > 0 {
-            params.sharpen = kind.params.sharpen;
-        }
+        // the request's sharpening scales the kind's (#424): the default (30) gives the kind's
+        // own, 0 none, 60 twice the kind's, so each level of the testing option does something
+        params.sharpen = kind_sharpen(kind.params.sharpen, request.sharpen);
         params.keep_paper = kind.params.keep_paper;
     }
     // the person's choice of paper wins over the document type's (#301)

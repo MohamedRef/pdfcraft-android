@@ -39,8 +39,11 @@ class ScanLowLightTest {
 
     @Test
     fun settingDecodes() {
-        assertEquals(ScanMergeSetting.Auto, ScanMergeSetting.decode(null))
-        assertEquals(ScanMergeSetting.Auto, ScanMergeSetting.decode("nonsense"))
+        // #426: off until tried on a phone, so a person who never chose keeps the photos and Crop
+        assertEquals(ScanMergeSetting.Off, ScanMergeSetting.DEFAULT)
+        assertEquals(ScanMergeSetting.Off, ScanMergeSetting.decode(null))
+        assertEquals(ScanMergeSetting.Off, ScanMergeSetting.decode("nonsense"))
+        assertEquals(ScanBurstWhy.Off, scanBurstWhy(ScanMergeSetting.decode(null), 512, 10f, 3_200))
         for (s in ScanMergeSetting.entries) assertEquals(s, ScanMergeSetting.decode(s.id))
     }
 
@@ -99,5 +102,22 @@ class ScanLowLightTest {
         assertFalse(ScanCapture("in_app", merge = f.copy(merged = false, fallback = "few_found")).straightened)
         assertTrue(ScanCapture("in_app").json().isNull("merge"))
         assertFalse(ScanCapture("in_app").straightened)
+    }
+
+    @Test
+    fun settingAndKeptPhotosAreRecorded() {
+        // #426: the log and a kept scan say which setting was in force, whether it was chosen, and whether the photos were kept
+        val one = ScanCapture("in_app", mergeSetting = "off", mergeChosen = false)
+        assertEquals("off", one.diag().toMap()["merge_setting"])
+        assertEquals(false, one.diag().toMap()["merge_chosen"])
+        assertEquals("off", one.json().getString("merge_setting"))
+        assertFalse(one.json().getBoolean("merge_chosen"))
+        assertTrue(one.json().getBoolean("photos_kept"))
+        val merged = ScanCapture("in_app", merge = ScanMergeFacts("always", frames = 4, found = 4, merged = true), mergeSetting = "always", mergeChosen = true)
+        assertFalse(merged.json().getBoolean("photos_kept"))
+        assertTrue(merged.json().getBoolean("merge_chosen"))
+        val imported = ScanCapture("import")
+        assertTrue(imported.json().isNull("merge_setting"))
+        assertEquals("none", imported.diag().toMap()["merge_setting"])
     }
 }

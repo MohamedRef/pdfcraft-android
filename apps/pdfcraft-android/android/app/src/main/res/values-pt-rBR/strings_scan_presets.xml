@@ -13,4 +13,5 @@
     <string name="scan_preset_title">Tipo de documento</string>
     <string name="scan_preset_automatic">Automático</string>
     <string name="scan_lab_presets">Tipos de documento em Digitalização limpa</string>
+    <string name="scan_lab_page_strength">A intensidade da página prevalece sobre o tipo de documento</string>
 </resources>
