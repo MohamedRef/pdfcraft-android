@@ -1792,4 +1792,26 @@
         <item quantity="many">تحول %1$d عنوانًا إلى روابط</item>
         <item quantity="other">تحول %1$d عنوان إلى روابط</item>
     </plurals>
+    <!-- Measure tool (#135, #180) -->
+    <string name="measure_tool">القياس</string>
+    <string name="measure_distance">المسافة</string>
+    <string name="measure_perimeter">المحيط</string>
+    <string name="measure_area">المساحة</string>
+    <string name="measure_undo_point">إزالة آخر نقطة</string>
+    <string name="measure_done">إنهاء القياس</string>
+    <string name="measure_scale">المقياس</string>
+    <string name="measure_export">تصدير القياسات (CSV)</string>
+    <string name="measure_scale_title">مقياس الصفحة</string>
+    <string name="measure_scale_ratio">مقياس الرسم (وحدة واحدة على الورق = N وحدة في الواقع)</string>
+    <string name="measure_number_wrong">أدخل رقمًا أكبر من 0.</string>
+    <string name="measure_scale_apply">تطبيق</string>
+    <string name="measure_calibrate">معايرة: اضغط على نقطتين بطول معروف</string>
+    <string name="measure_calibrate_title">كم يبلغ هذا الطول في الواقع؟</string>
+    <string name="measure_calibrate_hint">الطول</string>
+    <string name="measure_saved">تم القياس: %1$s</string>
+    <string name="measure_scale_set">تم ضبط المقياس للصفحة %1$d</string>
+    <string name="measure_calibrate_tap">اضغط على طرفي طول تعرفه.</string>
+    <string name="measure_exporting">جارٍ تصدير القياسات…</string>
+    <string name="measure_export_none">لا توجد قياسات للتصدير</string>
+    <string name="viewer_hint_measure">اضغط على النقاط للقياس. تلتصق النقاط بخطوط الرسم. اضبط المقياس أولًا للحصول على وحدات حقيقية.</string>
 </resources>

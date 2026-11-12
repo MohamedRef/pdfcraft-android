@@ -2402,4 +2402,26 @@
         <item quantity="one">%1$d web address became a link</item>
         <item quantity="other">%1$d web addresses became links</item>
     </plurals>
+    <!-- Measure tool (#135, #180) -->
+    <string name="measure_tool">Measure</string>
+    <string name="measure_distance">Distance</string>
+    <string name="measure_perimeter">Perimeter</string>
+    <string name="measure_area">Area</string>
+    <string name="measure_undo_point">Remove last point</string>
+    <string name="measure_done">Finish measurement</string>
+    <string name="measure_scale">Scale</string>
+    <string name="measure_export">Export measurements (CSV)</string>
+    <string name="measure_scale_title">Page scale</string>
+    <string name="measure_scale_ratio">Plan scale (1 unit on paper = N units in reality)</string>
+    <string name="measure_number_wrong">Enter a number greater than 0.</string>
+    <string name="measure_scale_apply">Apply</string>
+    <string name="measure_calibrate">Calibrate: tap two points of a known length</string>
+    <string name="measure_calibrate_title">How long is that in reality?</string>
+    <string name="measure_calibrate_hint">Length</string>
+    <string name="measure_saved">Measured %1$s</string>
+    <string name="measure_scale_set">Scale set for page %1$d</string>
+    <string name="measure_calibrate_tap">Tap both ends of a length you know.</string>
+    <string name="measure_exporting">Exporting measurements…</string>
+    <string name="measure_export_none">There are no measurements to export</string>
+    <string name="viewer_hint_measure">Tap points to measure. They snap to the drawing\'s lines. Set the scale first for real units.</string>
 </resources>

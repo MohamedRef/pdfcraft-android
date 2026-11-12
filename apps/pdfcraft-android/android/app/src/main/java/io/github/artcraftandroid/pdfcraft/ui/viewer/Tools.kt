@@ -155,6 +155,7 @@ fun ToolLayer(vm: AppViewModel, doc: OpenDocument) {
         }
         ViewerTool.Text -> TapLayer(doc) { p -> vm.textPrompt = TextPrompt(doc, p, callout = doc.controller.textCallout) }
         ViewerTool.FillSign -> if (vm.certPlacing === doc) CertPlaceLayer(vm, doc) else FillSignLayer(vm, doc)
+        ViewerTool.Measure -> MeasureLayer(vm, doc)
         else -> Unit
     }
 }
@@ -1816,6 +1817,7 @@ fun ToolSubToolbar(vm: AppViewModel, doc: OpenDocument) {
             if (vm.editMode == EditMode.Link && vm.editSelection == null) LinkCommandsRow(vm, doc)
             EditToolbar(vm, doc)
         }
+        ViewerTool.Measure -> MeasureToolbar(vm, doc)
         ViewerTool.None -> Unit
     }
 }

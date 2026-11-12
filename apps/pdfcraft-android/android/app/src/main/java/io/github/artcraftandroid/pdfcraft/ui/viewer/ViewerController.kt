@@ -29,6 +29,9 @@ enum class ViewerTool {
 
     /** Edit PDF: the page's own text and images. */
     Edit,
+
+    /** Measure distances, perimeters and areas on plans and drawings (#135, #180). */
+    Measure,
 }
 
 /** The text-markup sub-tools, in the sub-toolbar's order. */
