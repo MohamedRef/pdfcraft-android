@@ -5,8 +5,9 @@
 //! photo on the reference's pixel grid) and `<name>.ref.json` (the reference's crop).
 //!
 //! ```text
-//! cargo run -p pdfcraft-scan --example scan_reference -- look <dir> <out_dir> [strength]
-//!     the Auto look on every <dir>/<name>.aligned.png  ->  <out_dir>/<name>.png
+//! cargo run -p pdfcraft-scan --example scan_reference -- look <dir> <out_dir> [strength] [sharpen]
+//!     the Auto look on every <dir>/<name>.aligned.png  ->  <out_dir>/<name>.png (sharpen 0-100,
+//!     #299; the default when left out)
 //!     then: python3 tools/scan-eval/reference_pairs.py compare <dir> <out_dir>
 //!
 //! cargo run -p pdfcraft-scan --example scan_reference -- page <dir> <out_dir> [strength]
@@ -62,16 +63,23 @@ fn corners(json: &str) -> Option<[f32; 8]> {
     v.try_into().ok()
 }
 
-fn look(dir: &Path, out: &Path, strength: u8, threads: usize) {
+fn look(dir: &Path, out: &Path, strength: u8, sharpen: u8, threads: usize) {
     for path in files(dir, ".aligned.png") {
         let name = name_of(&path, ".aligned.png");
         let img = image::open(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display())).to_rgb8();
         let page = Rgb { width: img.width(), height: img.height(), data: img.into_raw() };
         let clock = Instant::now();
-        let Some(result) = auto(&page, &AutoParams { strength, paper: PaperMode::White, threads }) else { continue };
+        let Some(result) = auto(&page, &AutoParams { strength, paper: PaperMode::White, threads, sharpen, denoise: true, dpi: 300 }) else {
+            continue;
+        };
         let ms = clock.elapsed().as_millis();
         let megapixels = f64::from(page.width) * f64::from(page.height) / 1e6;
-        println!("{name}: {megapixels:.1} MP, {ms} ms, closing radius {}, objects {:.1} %", result.closing_radius, result.objects.share() * 100.0);
+        println!(
+            "{name}: {megapixels:.1} MP, {ms} ms, closing radius {}, objects {:.1} %, grain {:.2}",
+            result.closing_radius,
+            result.objects.share() * 100.0,
+            result.noise
+        );
         let picture = image::RgbImage::from_raw(result.rgb.width, result.rgb.height, result.rgb.data).expect("the look keeps the page's size");
         picture.save(out.join(format!("{name}.png"))).unwrap_or_else(|e| panic!("{name}: {e}"));
     }
@@ -216,10 +224,11 @@ fn main() {
         std::process::exit(2);
     };
     let strength = args.get(4).and_then(|v| v.parse().ok()).unwrap_or(if mode == "bw" { 55 } else { 60 });
+    let sharpen = args.get(5).and_then(|v| v.parse().ok()).unwrap_or(pdfcraft_scan::DEFAULT_SHARPEN);
     let threads = std::thread::available_parallelism().map_or(1, usize::from).min(4);
     std::fs::create_dir_all(out).unwrap_or_else(|e| panic!("{out}: {e}"));
     match mode.as_str() {
-        "look" => look(Path::new(dir), Path::new(out), strength, threads),
+        "look" => look(Path::new(dir), Path::new(out), strength, sharpen, threads),
         "page" => page(Path::new(dir), Path::new(out), Look::Auto, strength, threads),
         "bw" => page(Path::new(dir), Path::new(out), Look::BlackWhite, strength, threads),
         "detect" => find(Path::new(dir)),

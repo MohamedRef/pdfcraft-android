@@ -27,7 +27,7 @@ pub mod warp;
 pub use aspect::{AspectSource, Focal, Paper, Proportions, proportions, proportions_by_sides};
 pub use detect::{Detection, Finder, QuadSource, detect, detect_with};
 pub use encode::Format;
-pub use enhance::{AutoOutput, AutoParams, PaperMode, auto};
+pub use enhance::{AutoOutput, AutoParams, DEFAULT_SHARPEN, PaperMode, auto};
 pub use error::ScanError;
 pub use flatten::{FlattenGrid, flat_grid, predict_grid, unwarp};
 pub use look::Look;

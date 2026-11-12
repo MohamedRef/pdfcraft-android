@@ -3697,6 +3697,8 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 flatten = flatten,
                 sideProportions = !lab.perspective,
                 upright = lab.upright,
+                sharpen = lab.sharpen.coerceIn(0, 100).toUByte(),
+                denoise = lab.denoise,
             )
             val enhanceStarted = android.os.SystemClock.elapsedRealtime()
             val result = withContext(Dispatchers.Default) { runCatching { io.github.artcraftandroid.pdfcraft.core.scanProcessPage(request) } }
@@ -3718,6 +3720,8 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 "upright" to lab.upright, "quarter_turns" to (r?.quarterTurns?.toInt() ?: 0), "upright_sure" to (r?.orientation?.sure ?: false),
                 "upright_confidence" to (r?.orientation?.confidence?.toDouble() ?: 0.0), "upright_agreement" to (r?.orientation?.agreement?.toDouble() ?: 0.0),
                 "upright_tiles" to (r?.orientation?.tiles?.toInt() ?: 0),
+                // sharpening and smoothing asked of the Clean scan filter, and the grain it measured (#299)
+                "sharpen" to lab.sharpen, "denoise" to lab.denoise, "noise_sigma" to (r?.noise?.toDouble() ?: -1.0),
             )
             if (keepIn != null) {
                 val made = r?.let {
@@ -3725,6 +3729,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                         it.width.toLong(), it.height.toLong(), it.format.name.lowercase(), it.dpi.toDouble(), it.paper.name.lowercase(),
                         it.aspectSource.name.lowercase(), it.focalMismatch, it.flattened, it.bend * 100.0, it.quarterTurns.toInt(),
                         it.orientation?.let { o -> ScanTestOrientation(o.quarterTurns.toInt(), o.confidence.toDouble(), o.agreement.toDouble(), o.tiles.toInt(), o.sure) },
+                        it.noise?.toDouble(),
                     )
                 }
                 withContext(Dispatchers.IO) { scanLab.keepPage(keepIn, i, page, true, filter.mode, strength, flatten, r?.path?.let(::File), made) }

@@ -27,6 +27,10 @@ internal data class ScanLab(
     val strength: Int? = null,
     /** Turn each page the right way up when the orientation classifier is sure which way that is (#339). */
     val upright: Boolean = true,
+    /** How much the Clean scan filter sharpens print, 0–100; 0 for none (#299). */
+    val sharpen: Int = 30,
+    /** Whether the Clean scan filter smooths the grain of a page that has a lot of it (#299). */
+    val denoise: Boolean = true,
 ) {
     /** Nothing differs from the scanner as it is meant to be used (keeping scans changes no page). */
     val asDesigned: Boolean get() = copy(keep = false) == ScanLab()
@@ -39,24 +43,29 @@ internal data class ScanLab(
     /** The options as diagnostics fields: short lowercase words, booleans and numbers only. */
     fun diag(): Array<Pair<String, Any?>> = arrayOf<Pair<String, Any?>>(
         "finder" to finderId(finder), "refine" to refine, "side_proportions" to !perspective,
-        "snap_paper" to snapPaper, "strength_override" to (strength ?: -1), "upright" to upright, "keep" to keep,
+        "snap_paper" to snapPaper, "strength_override" to (strength ?: -1), "upright" to upright, "sharpen" to sharpen,
+        "denoise" to denoise, "keep" to keep,
     )
 
     /** The options as JSON, for a kept scan's page file. */
     fun json(): JSONObject = JSONObject()
         .put("finder", finderId(finder)).put("refine", refine).put("side_proportions", !perspective)
         .put("snap_paper", snapPaper).put("strength_override", strength ?: JSONObject.NULL).put("upright", upright)
+        .put("sharpen", sharpen).put("denoise", denoise)
 
     /** One line of text for the app's preferences. */
     fun encode(): String = listOf(
         "keep" to flag(keep), "finder" to finderId(finder), "refine" to flag(refine),
         "perspective" to flag(perspective), "snap" to flag(snapPaper), "strength" to (strength?.toString() ?: ""),
-        "upright" to flag(upright),
+        "upright" to flag(upright), "sharpen" to sharpen.toString(), "denoise" to flag(denoise),
     ).joinToString(";") { (k, v) -> "$k=$v" }
 
     companion object {
         /** The strengths offered: null is each look's own. */
         val STRENGTHS: List<Int?> = listOf(null, 20, 40, 60, 80, 100)
+
+        /** How much sharpening is offered: none, the default, and two steps more. */
+        val SHARPENING: List<Int> = listOf(0, 30, 60, 100)
 
         private fun flag(on: Boolean) = if (on) "1" else "0"
 
@@ -84,6 +93,8 @@ internal data class ScanLab(
                 snapPaper = on("snap", default.snapPaper),
                 strength = values["strength"]?.toIntOrNull()?.takeIf { it in 0..100 },
                 upright = on("upright", default.upright),
+                sharpen = values["sharpen"]?.toIntOrNull()?.takeIf { it in 0..100 } ?: default.sharpen,
+                denoise = on("denoise", default.denoise),
             )
         }
     }
@@ -107,6 +118,8 @@ internal data class ScanTestResult(
     val quarterTurns: Int = 0,
     /** What the orientation classifier made of the page, or null when it was not asked. */
     val orientation: ScanTestOrientation? = null,
+    /** The page's grain in grey levels, as the Clean scan filter measured it (#299); null for the other filters. */
+    val noise: Double? = null,
 )
 
 /** The orientation classifier's answer for a page (#339): the turn it would give, and how sure it was. */
@@ -159,6 +172,7 @@ internal fun scanTestPageJson(
                 .put("dpi", if (it.dpi.isFinite()) it.dpi else 0.0).put("paper", it.paper).put("aspect", it.aspect)
                 .put("focal_mismatch", it.focalMismatch).put("flattened", it.flattened).put("bend_pct", if (it.bendPct.isFinite()) Math.round(it.bendPct * 1000.0) / 1000.0 else 0.0)
                 .put("quarter_turns", it.quarterTurns)
+                .put("noise", it.noise?.takeIf { n -> n.isFinite() }?.let { n -> Math.round(n * 100.0) / 100.0 } ?: JSONObject.NULL)
                 .put(
                     "orientation",
                     it.orientation?.let { o ->

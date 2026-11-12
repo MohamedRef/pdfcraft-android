@@ -996,6 +996,9 @@
     <string name="scan_lab_perspective">النسب من المنظور</string>
     <string name="scan_lab_snap_paper">مطابقة مقاسات الورق القياسية</string>
     <string name="scan_lab_upright">ضبط اتجاه الصفحات تلقائيًا</string>
+    <string name="scan_lab_sharpen">توضيح النص (مسح نظيف)</string>
+    <string name="scan_lab_off">إيقاف</string>
+    <string name="scan_lab_denoise">تنعيم التحبّب في الصور المعتمة (مسح نظيف)</string>
     <string name="scan_lab_strength">شدة الفلتر</string>
     <string name="scan_lab_strength_own">الافتراضي</string>
     <string name="scan_lab_options_body">توقف هذه الخيارات أجزاء من الماسح الضوئي أو تستبدل بها ما كان قبلها، لمعرفة الجزء الذي تأتي منه المشكلة. يسجّل السجل ما كان مفعّلًا لكل صفحة.</string>
