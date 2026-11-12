@@ -79,4 +79,58 @@ class ScanSessionTest {
         assertEquals(1, odd.pages.size)
         assertNull(odd.pages[0].preset)
     }
+
+    @Test
+    fun eachPagesLookAndTheFlattenSwitchComeBack() {
+        val clean = io.github.artcraftandroid.pdfcraft.ui.scan.ScanPageLook()
+        val bw = io.github.artcraftandroid.pdfcraft.ui.scan.ScanPageLook(ScanFilter.LightText, 90)
+        val board = io.github.artcraftandroid.pdfcraft.ui.scan.ScanPageLook(ScanFilter.Whiteboard, null)
+        val s = ScanSession(
+            null, null, false, "Scan",
+            listOf(
+                ScanSession.Page("/c/a.jpg", crop, null, look = clean),
+                ScanSession.Page("/c/b.jpg", crop, null, 1, "receipt", look = bw),
+                ScanSession.Page("/c/c.jpg", crop, null, look = board),
+                ScanSession.Page("/c/d.jpg", crop, null),
+            ),
+            flatten = true,
+        )
+        val back = ScanSession.decode(s.encode())!!
+        assertEquals(listOf(clean, bw, board, null), back.pages.map { it.look })
+        assertTrue(back.flatten)
+        // the other columns are untouched by the look lines
+        assertEquals(listOf(null, 1, null, null), back.pages.map { it.turns })
+        assertEquals("receipt", back.pages[1].preset)
+        assertEquals(false, ScanSession.decode(s.copy(flatten = false).encode())!!.flatten)
+    }
+
+    @Test
+    fun aBuildFromBeforeLooksPerPageReadsANewSessionAndANewBuildReadsAnOldOne() {
+        val s = ScanSession(null, null, false, "Scan", listOf(ScanSession.Page("/c/a.jpg", crop, crop, 2, look = io.github.artcraftandroid.pdfcraft.ui.scan.ScanPageLook(ScanFilter.Grayscale, 10))), flatten = true)
+        val text = s.encode()
+        // the version did not change, so an older build accepts it, and it ignores lines it doesn't know:
+        // with the look and flatten lines taken out the pages are what it reads
+        assertTrue(text.startsWith("pdfcraft-scan 2\n"))
+        val stripped = text.lines().filterNot { it.startsWith("look\t") || it.startsWith("flatten\t") }.joinToString("\n")
+        val old = ScanSession.decode(stripped)!!
+        assertEquals(listOf("/c/a.jpg"), old.pages.map { it.path })
+        assertEquals(2, old.pages[0].turns)
+        // and a session written before #301 has no looks (the default look) and Flatten off
+        assertNull(old.pages[0].look)
+        assertEquals(false, old.flatten)
+    }
+
+    @Test
+    fun aLookLineBelongsOnlyToThePageJustBeforeIt() {
+        val good = "0,0,1,0,1,1,0,1"
+        val text = "pdfcraft-scan 2\nlook\tbw\t50\npage\t/a.jpg\t1,2\t\nlook\tgreyscale\t\npage\t/b.jpg\t$good\t\nlook\tmoon\t\npage\t/c.jpg\t$good\t\nlook\tcolour\t300\npage\t/d.jpg\t$good\t\nlook\toriginal\t\nlook\tbw\t5\n"
+        val back = ScanSession.decode(text)!!
+        // the first look has no page before it; /a.jpg is malformed, so the look after it goes nowhere
+        assertEquals(listOf("/b.jpg", "/c.jpg", "/d.jpg"), back.pages.map { it.path })
+        // a look that is not one (/b.jpg), or a strength out of range (/c.jpg), is no look
+        assertNull(back.pages[0].look)
+        assertNull(back.pages[1].look)
+        // one look line per page: the second is ignored
+        assertEquals(io.github.artcraftandroid.pdfcraft.ui.scan.ScanPageLook(ScanFilter.Original), back.pages[2].look)
+    }
 }

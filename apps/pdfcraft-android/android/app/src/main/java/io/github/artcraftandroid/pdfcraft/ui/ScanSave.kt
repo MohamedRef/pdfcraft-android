@@ -67,12 +67,14 @@ internal fun scanPageRequest(
     preset: String? = null,
     /** How many sides of the page its edge detection found curved (#291): a book page's sign (#299). */
     curvedSides: Int = 0,
+    /** The page's strength from the scan screen's slider (#301), or null for the look's own. */
+    strength: Int? = null,
 ): io.github.artcraftandroid.pdfcraft.core.ScanPageRequest = scanTurnAsk(turns, autoUpright, lab.upright).let { ask ->
     io.github.artcraftandroid.pdfcraft.core.ScanPageRequest(
     photoPath = photoPath,
     corners = corners.toList(),
     look = scanLookOf(filter.mode),
-    strength = lab.strengthFor(filter.level).toUByte(),
+    strength = lab.strengthFor(strength ?: filter.level).toUByte(),
     outputPath = outputPath,
     snapPaper = lab.snapPaper,
     // the scan screen's switch flattens the page as asked; the testing option flattens every page
@@ -118,10 +120,22 @@ internal data class ScanPreviewKey(
     val autoUpright: Boolean = true,
     /** The kind of document the person chose for the page (#299). */
     val preset: String? = null,
+    /** The page's strength from the slider (#301), null for the look's own. */
+    val strength: Int? = null,
 ) {
+    /** The look this preview shows, as the page keeps it. */
+    val look: io.github.artcraftandroid.pdfcraft.ui.scan.ScanPageLook get() = io.github.artcraftandroid.pdfcraft.ui.scan.ScanPageLook(filter, strength)
+
+    /**
+     * Whether this preview and [other] show the same page apart from its look: while the preview
+     * of a new look or strength is made, the old one stays on screen instead of the photo (#301).
+     */
+    fun samePage(other: ScanPreviewKey?): Boolean = other != null && copy(filter = other.filter, strength = other.strength) == other
+
     companion object {
-        fun of(page: ScanPage, filter: ScanFilter, flatten: Boolean, lab: ScanLab, autoUpright: Boolean = true) =
-            ScanPreviewKey(page.file.absolutePath, page.corners.toList(), filter, flatten, lab.copy(keep = false), page.turns, autoUpright, page.preset)
+        /** The preview of [page] in [look] (by default the page's own). */
+        fun of(page: ScanPage, flatten: Boolean, lab: ScanLab, autoUpright: Boolean = true, look: io.github.artcraftandroid.pdfcraft.ui.scan.ScanPageLook = page.look) =
+            ScanPreviewKey(page.file.absolutePath, page.corners.toList(), look.filter, flatten, lab.copy(keep = false), page.turns, autoUpright, page.preset, look.strength)
     }
 }
 
@@ -139,9 +153,11 @@ internal enum class ScanView {
  */
 internal data class ScanShown(val view: ScanView, val waiting: Boolean)
 
-internal fun scanShown(previews: Boolean, chosen: ScanView, haveWanted: Boolean, failed: Boolean): ScanShown = when {
+internal fun scanShown(previews: Boolean, chosen: ScanView, haveWanted: Boolean, failed: Boolean, haveSamePage: Boolean = false): ScanShown = when {
     !previews || chosen == ScanView.Photo -> ScanShown(ScanView.Photo, false)
     haveWanted -> ScanShown(ScanView.Result, false)
+    // the same page in its previous look stays up while the new look is made (#301), not the photo
+    haveSamePage && !failed -> ScanShown(ScanView.Result, true)
     else -> ScanShown(ScanView.Photo, !failed)
 }
 
@@ -155,3 +171,12 @@ internal fun scanFlattenCheckDiag(c: io.github.artcraftandroid.pdfcraft.core.Sca
     "straight_flat_px" to (c?.flattenedPx?.let { Math.round(it * 10.0) / 10.0 } ?: -1.0),
     "straight_lines" to (c?.straightenedLines?.toLong() ?: 0L), "straight_flat_lines" to (c?.flattenedLines?.toLong() ?: 0L),
 )
+
+/**
+ * How long a preview of the same page in another look or strength waits before it starts (#301),
+ * so a slider moved quickly makes the value it stops on rather than every value on the way.
+ */
+internal const val SCAN_PREVIEW_SETTLE_MS = 30L
+
+/** The longer side, in dp, of a tile in the scan screen's looks strip (#301). */
+internal const val SCAN_TILE_SIDE_DP = 96

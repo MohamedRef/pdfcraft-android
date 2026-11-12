@@ -85,6 +85,13 @@ internal fun ScanLabSettings(vm: AppViewModel) {
     SheetRow(null, stringResource(R.string.scan_lab_preview), { lab.update(o.copy(preview = !o.preview)) }) {
         PdfSwitch(o.preview, { lab.update(o.copy(preview = it)) })
     }
+    // a look per page and the looks strip's small previews (#301)
+    SheetRow(null, stringResource(R.string.scan_lab_look_per_page), { lab.update(o.copy(lookPerPage = !o.lookPerPage)) }) {
+        PdfSwitch(o.lookPerPage, { lab.update(o.copy(lookPerPage = it)) })
+    }
+    SheetRow(null, stringResource(R.string.scan_lab_look_strip), { lab.update(o.copy(lookStrip = !o.lookStrip)) }) {
+        PdfSwitch(o.lookStrip, { lab.update(o.copy(lookStrip = it)) })
+    }
     SheetRow(null, stringResource(R.string.scan_lab_crop), { lab.update(o.copy(cropTools = !o.cropTools)) }) {
         PdfSwitch(o.cropTools, { lab.update(o.copy(cropTools = it)) })
     }

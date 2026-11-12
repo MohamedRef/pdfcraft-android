@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The scan screen's looks: a look per page, strength, the looks strip, compare, apply to all (#301). -->
+<resources>
+    <string name="scan_look_strength">Strength: %1$d</string>
+    <string name="scan_look_strength_label">Strength</string>
+    <string name="scan_look_strength_fixed">Strength is set by a testing option</string>
+    <string name="scan_compare_hint">Hold to see the original</string>
+    <string name="scan_compare_action">Show the original</string>
+    <string name="scan_apply_look_all">Apply to all</string>
+    <string name="scan_apply_look_title">Apply this look to every page?</string>
+    <string name="scan_apply_look_body">Pages with a look of their own will change to %1$s.</string>
+    <string name="scan_apply_look_confirm">Apply</string>
+    <string name="scan_reset_look">Reset look</string>
+    <string name="scan_page_own_look">Page %1$d, with a look of its own</string>
+    <string name="scan_look_tile_waiting">%1$s, preview not ready</string>
+    <string name="msg_scan_save_cancelled">Saving stopped. Your pages are still here.</string>
+    <string name="msg_scan_unenhanced">Pages saved as photographed, without clean-up: %1$d</string>
+    <string name="scan_lab_look_per_page">A look for each page</string>
+    <string name="scan_lab_look_strip">Show the looks as small previews of the page</string>
+</resources>
