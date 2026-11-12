@@ -138,6 +138,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             snap_paper: false,
             flatten: false,
             flatten_check: false,
+            line_flatten: false,
             side_proportions: false,
             upright: false,
             turns: 0,

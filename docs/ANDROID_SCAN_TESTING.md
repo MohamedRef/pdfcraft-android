@@ -37,6 +37,7 @@ on one part. While any is changed, the scan screen says so.
 | Crop with magnifier and snapping to edges (#292) | On | Off: the crop screen before #292, four corner handles on the thumbnail |
 | Flatten pages automatically when it makes their lines straighter (#302) | Off | On: every page is flattened by the network and kept only when its lines of text come out at least 10 % straighter (the Flatten switch still flattens without the check) |
 | Book mode: cut at the gutter found in the photo (#303) | On | Off: in book mode every spread is cut at its centre line, whatever the photo shows |
+| Flatten from the lines of text when the network gives nothing better (#303) | On | Off: a flattened page whose network result was missing or not kept stays straightened by its corners, as before |
 | Turn pages upright (#339) | On | Off: a page stays as its corners gave it (Rotate still works) |
 | Unsure pages follow their neighbors (#339) | On | Off: in a scan of several pages each page is turned by its own answer only |
 | Sharpen text, in Clean scan (#299) | 30 | Off, 60 or 100 |
@@ -80,7 +81,7 @@ The zip also holds `diagnostics.txt`, the diagnostics log as **Share diagnostics
  "finding": {"source": "model", "confidence": 0.835, "angle": 0, "passes": 1, "refined_sides": 4, "curved_sides": 0},
  "look": "auto", "strength": 60, "flatten": false,
  "options": {"finder": "auto", "refine": true, "side_proportions": false, "snap_paper": true, "strength_override": null, "upright": true,
-             "sharpen": 30, "denoise": true, "preview": true, "crop_tools": true, "flatten_auto": false, "settle_turns": true, "presets": true, "book_gutter": true},
+             "sharpen": 30, "denoise": true, "preview": true, "crop_tools": true, "flatten_auto": false, "settle_turns": true, "presets": true, "book_gutter": true, "line_flatten": true},
  "document_type": {"preset": "receipt", "chosen": false, "strength": 80, "sharpen": 35, "keep_paper": false, "suggest_flatten": false,
                    "suggest_greyscale": true, "ratio": 3.0, "ink_share": 0.043, "colour_ink_share": 0.0, "photo_share": 0.0,
                    "stroke_mm": 0.339, "glare_share": 0.0, "gutter_band": false, "whole_photo": false},
@@ -101,7 +102,7 @@ The zip also holds `diagnostics.txt`, the diagnostics log as **Share diagnostics
             "paper": "a4", "aspect": "known_focal", "focal_mismatch": false, "flattened": false, "bend_pct": 0.0,
             "quarter_turns": 3,
             "orientation": {"quarter_turns": 3, "confidence": 0.81, "agreement": 1.0, "tiles": 4, "sure": true},
-            "noise": 0.33, "flatten_check": null}
+            "noise": 0.33, "flatten_check": null, "line_flatten": null}
 }
 ```
 
@@ -181,7 +182,10 @@ how many were `refined` or `curved`, whether the snap was `taken`, `stale` (anot
 started) or `failed`, and its `ms`; every `crop_detect` line whether Auto-detect `found` a page,
 its `source` and `ms`; every `page` and `preview` line `flatten_auto` and, from
 #302's check, `flatten_checked`, `flatten_kept`, `flatten_why`, `straight_px`, `straight_flat_px`
-(tenths of a pixel, -1 when not measured), `straight_lines` and `straight_flat_lines`; every `model_files` line (#289) what the models check copied and why
+(tenths of a pixel, -1 when not measured), `straight_lines` and `straight_flat_lines`, and from
+#303's text-line fallback `line_flatten`, `line_ran`, `line_gave_up`, `line_kept`, `line_why`,
+`line_lines`, `line_points`, `line_steps`, `line_alpha`, `line_beta`, `line_rms_before`,
+`line_rms_after`, `line_px` and `line_flat_px` (see `docs/ANDROID_SCAN_FLATTEN_LINES.md`); every `model_files` line (#289) what the models check copied and why
 (`copied`, `kept`, `failed`, `new`, `changed`, `size`, `unrecorded`, `forced`, `ms`), and while
 the log is recorded a `model_states` line with each model's state; a `model_download` or
 `model_removed` line for an optional model (none yet); a `model_timing` line (#304) when a picked model file is timed (fields in

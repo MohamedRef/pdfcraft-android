@@ -10,4 +10,5 @@
     <string name="scan_crop_book_left">Página esquerda de uma página dupla: o lado direito é o corte na dobra do livro, não uma borda do papel.</string>
     <string name="scan_crop_book_right">Página direita de uma página dupla: o lado esquerdo é o corte na dobra do livro, não uma borda do papel.</string>
     <string name="scan_camera_book_hint">Alinhe a lombada do livro com a linha</string>
+    <string name="scan_lab_line_flatten">Aplanar pelas linhas de texto quando a rede não dá nada melhor</string>
 </resources>
