@@ -6,11 +6,53 @@ straightened page with less noise, which goes to the scan in place of the single
 here has run on a phone**: it was compiled, its decisions tested on the JVM, and the merge itself
 measured on drawn frames only (#389).
 
+**It is Off by default** (#426, 12 November 2026). See [the default](#the-default-off-426).
+
+## The default: Off (#426)
+
+The setting starts at **Off**. Auto and Always are still there, in Settings ▸ Scan and among the
+testing options, for anyone who picks them.
+
+**Why.** A merge throws away the two things that make a wrong page recoverable:
+
+- **The crop is baked in.** The page is found on each photo by the detector alone, with nobody
+  checking the outline, and `scan_merge_frames` writes a page already straightened and cropped by
+  those outlines. The scan gets that page with whole-picture corners, so the Crop screen (#381)
+  only has the cropped page to work on. If the outline cut part of the page off or took in the
+  table, the page has to be taken again. The detector's own figure on the ten reference photos is
+  wrong and accepted on 2, nothing found on 2 (#290). Nothing found falls back to the first photo;
+  wrong and accepted does not, because all four frames get the same wrong outline and the merge
+  succeeds. Dim light, where Auto merges, is where detection is weakest.
+- **The photos are deleted.** All four burst photos go after a merge, so a kept scan holds only
+  the cropped page. The test set the owner is about to collect would lose its dim-light photos,
+  and those pages would mislead `scan-eval` (#425) as ground truth.
+
+The owner's first priority is precise edges with Crop as the safety net, so the safe choice is to
+keep the net: one photo, found and cropped like any other page, until the merge has been tried on
+the owner's phone. Of the two fixes #426 offers, Off is the one that changes nothing else; the
+other, below, is a larger change to how a merged page is made.
+
+**Chosen over keeping the reference photo as the page** (the page enters the scan as the
+sharpest photo with its found corners, and the merge runs when the page is made, with the corners
+the person left, from frames kept until the scan is saved or discarded). That is the better design
+and is the way to turn the merge back on, but it moves the merge into the page pipeline, keeps
+four 12 MP photos per page for the life of the scan and changes the session's files. It is left for
+a later pull request, and has not been started.
+
+**What a person who turns it on gets** is the behaviour below, unchanged; the setting's text now
+says it is off by default and that the merged page comes already cropped.
+
+**Existing installs.** The setting is stored only when someone picks a value. An install where
+nobody picked one moves from Auto to Off; one where someone picked Auto or Always keeps it.
+
+**To change the default** after phone tests: `ScanMergeSetting.DEFAULT` in `ui/scan/ScanLowLight.kt`,
+the test `settingDecodes`, this section and the handover's row for #297.
+
 ## How it works
 
 1. **When** (`scanBurstWhy`, `ui/scan/ScanLowLight.kt`):
    - The setting *Low-light merge*, in Settings ▸ Scan and among the scanner's testing options, is
-     **Auto** (the default), **Always** or **Off**.
+     **Auto**, **Always** or **Off** (the default since #426).
    - Off, or a phone whose memory class is under 256 MB, takes one photo.
    - Always takes a burst.
    - Auto takes a burst when the live frame's mean brightness is under 70 (#295) or the preview
@@ -46,7 +88,7 @@ The thresholds are the issue's starting values (`ScanMergeRules`).
 ## Testing and what is recorded (handover, section 3)
 
 1. **Testing option**: *Low-light merge* Auto / Always / Off (the same setting as in Settings).
-   *Always* lets the merge be tried in any light. *Off* is the camera as in #296.
+   *Always* lets the merge be tried in any light. *Off*, the default, is the camera as in #296.
 2. **Diagnostics log** (`scan`):
    - `camera_merge` for every in-app photo:
      - `why`: `off`, `memory`, `bright`, `unknown`, `always`, `dark_luma` or `dark_iso`.
@@ -54,11 +96,16 @@ The thresholds are the issue's starting values (`ScanMergeRules`).
      - For a burst, also `frames`, `found`, `merged`, `used`, `rejected_blur`, `rejected_align`,
        `psnr_gain_tenths_db`, `burst_ms`, `find_ms`, `merge_ms`, `fallback` (`none`,
        `few_found`, `failed`), `slow_burst` (over 2.5 s), and the native stages as `*_ms`.
-   - `camera_merge_option` (`merge`) when the setting changes.
-   - `burst` and `merged` on each `camera` line.
+   - `setting` (`auto`, `always`, `off`) and `chosen` (false while it is the default) on every
+     `camera_merge` line (#426).
+   - `camera_merge_option` (`merge`, and `default`: `off`) when the setting changes.
+   - `burst`, `merged`, `merge_setting` and `merge_chosen` on each `camera` line.
    - `straightened` on the `photo` line.
 3. **Kept scans**: `capture` in the page file adds `merge` (the burst's facts above, or `null` for
-   one photo).
+   one photo), and since #426:
+   - `merge_setting` and `merge_chosen` (`null` and `false` for the phone's camera app and imports);
+   - `photos_kept`: false for a merged page, whose photos were deleted and whose crop is the
+     detector's. Such a page is not a raw photo and should not be used as ground truth (#425).
 
 ## What was verified, and what was not
 
@@ -74,7 +121,9 @@ The thresholds are the issue's starting values (`ScanMergeRules`).
   - leaving out frames with no page or bad corners;
   - fewer than two left;
   - what is kept and deleted after a merge and after a failure;
-  - the recorded fields.
+  - the recorded fields;
+  - the default is Off, also for a stored value it does not know, and Off takes one photo (#426);
+  - `merge_setting`, `merge_chosen` and `photos_kept` in the log and the page file (#426).
 - The merge's own measurements on drawn frames are in #389: 3.9 to 4.1 dB less noise, and blurred
   and shifted frames are rejected.
 
