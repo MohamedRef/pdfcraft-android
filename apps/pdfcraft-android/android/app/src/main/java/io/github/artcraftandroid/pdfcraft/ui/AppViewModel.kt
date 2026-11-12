@@ -5894,6 +5894,44 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         return out
     }
 
+    // ---- Note margins (#146) ----
+
+    /** Which pages have a note margin (one per page), from the engine. */
+    suspend fun pageMargins(doc: OpenDocument): List<Boolean> {
+        val eng = engine ?: return emptyList()
+        return runCatching {
+            val r = eng.tool("page_margin", mapOf("doc" to doc.id))
+            val a = r.getJSONArray("margins")
+            List(a.length()) { a.getBoolean(it) }
+        }.getOrDefault(emptyList())
+    }
+
+    /**
+     * Room for notes on [side] of [pages] (0-based; every page when empty), [fraction] of the
+     * first page's width (or height, below). One undo step; the content keeps its place.
+     */
+    fun addNoteMargin(doc: OpenDocument, pages: List<Int>, side: MarginSide, fraction: Float) {
+        if (!doc.writable) { tell(text(R.string.margin_read_only)); return }
+        val first = doc.info.pages.getOrNull(pages.firstOrNull() ?: 0) ?: return
+        val right = if (side != MarginSide.Bottom) (first.width * fraction).toDouble() else 0.0
+        val bottom = if (side != MarginSide.Right) (first.height * fraction).toDouble() else 0.0
+        val args = buildMap<String, Any?> {
+            put("add", listOf(0.0, bottom, right, 0.0))
+            if (pages.isNotEmpty()) put("pages", pages.map { it + 1 })
+        }
+        runTool(doc, "page_margin", args) { tell(text(R.string.margin_added)) }
+    }
+
+    /** Take off the note margins of [pages] (every page when empty), back to the original size. */
+    fun removeNoteMargins(doc: OpenDocument, pages: List<Int>) {
+        if (!doc.writable) { tell(text(R.string.margin_read_only)); return }
+        val args = buildMap<String, Any?> {
+            put("remove", true)
+            if (pages.isNotEmpty()) put("pages", pages.map { it + 1 })
+        }
+        runTool(doc, "page_margin", args) { tell(text(R.string.margin_removed)) }
+    }
+
     // ---- Backups (#145) ----
 
     /** The folder backups go to (a tree the user picked), or null when backups are off. */
@@ -6129,3 +6167,6 @@ class ReviewSession(val deck: String?, val deckName: String) {
     var all by mutableStateOf<List<io.github.artcraftandroid.pdfcraft.engine.Flashcard>>(emptyList())
     var reviewed by mutableStateOf(0)
 }
+
+/** Where a note margin goes. */
+enum class MarginSide { Right, Bottom, Both }

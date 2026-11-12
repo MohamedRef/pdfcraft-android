@@ -1507,4 +1507,25 @@
     <string name="backup_restore_comments">Restaurar comentários aqui</string>
     <string name="backup_restoring">Restaurando…</string>
     <string name="backup_comments_restored">Comentários restaurados</string>
+    <string name="margin_title">Margem para notas</string>
+    <string name="margin_add">Adicionar</string>
+    <string name="margin_side">Onde</string>
+    <string name="margin_right">Direita</string>
+    <string name="margin_bottom">Abaixo</string>
+    <string name="margin_both">Ambos</string>
+    <string name="margin_size">Tamanho, em relação à página</string>
+    <string name="margin_pages">Páginas</string>
+    <string name="margin_all_pages">Todas as páginas</string>
+    <string name="margin_body">A página fica maior e o conteúdo continua no lugar, para você escrever ao lado. Desfazer remove a margem.</string>
+    <string name="margin_remove">Remover margens para notas</string>
+    <string name="margin_remove_confirm">Remover</string>
+    <string name="margin_remove_body">As páginas voltam ao tamanho original. O que foi escrito na margem continua no arquivo, mas fica fora da página.</string>
+    <string name="margin_added">Margem para notas adicionada</string>
+    <string name="margin_removed">Margens para notas removidas</string>
+    <string name="margin_read_only">Este documento não pode ser alterado</string>
+    <plurals name="margin_selected_pages">
+        <item quantity="one">Esta página</item>
+        <item quantity="many">%d páginas</item>
+        <item quantity="other">%d páginas</item>
+    </plurals>
 </resources>

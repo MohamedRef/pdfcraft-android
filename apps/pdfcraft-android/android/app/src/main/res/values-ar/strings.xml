@@ -1738,6 +1738,30 @@
     <string name="backup_restore_comments">استعادة التعليقات هنا</string>
     <string name="backup_restoring">جارٍ الاستعادة…</string>
     <string name="backup_comments_restored">تمت استعادة التعليقات</string>
+    <string name="margin_title">هامش للملاحظات</string>
+    <string name="margin_add">إضافة</string>
+    <string name="margin_side">المكان</string>
+    <string name="margin_right">يمين</string>
+    <string name="margin_bottom">أسفل</string>
+    <string name="margin_both">الاثنان</string>
+    <string name="margin_size">الحجم، من الصفحة</string>
+    <string name="margin_pages">الصفحات</string>
+    <string name="margin_all_pages">كل الصفحات</string>
+    <string name="margin_body">تكبر الصفحة ويبقى محتواها في مكانه، فتكتب بجانبه. التراجع يزيل الهامش.</string>
+    <string name="margin_remove">إزالة هوامش الملاحظات</string>
+    <string name="margin_remove_confirm">إزالة</string>
+    <string name="margin_remove_body">ترجع الصفحات إلى حجمها الأصلي. ما كُتب في الهامش يبقى في الملف لكنه لن يظهر على الصفحة.</string>
+    <string name="margin_added">أُضيف هامش للملاحظات</string>
+    <string name="margin_removed">أُزيلت هوامش الملاحظات</string>
+    <string name="margin_read_only">لا يمكن تعديل هذا المستند</string>
+    <plurals name="margin_selected_pages">
+        <item quantity="zero">%d صفحة</item>
+        <item quantity="one">هذه الصفحة</item>
+        <item quantity="two">صفحتان</item>
+        <item quantity="few">%d صفحات</item>
+        <item quantity="many">%d صفحة</item>
+        <item quantity="other">%d صفحة</item>
+    </plurals>
     <!-- Link authoring (#179, #159) -->
     <string name="edit_link">رابط</string>
     <string name="link_drag_hint">اسحب مربعًا فوق ما تريد جعله رابطًا، أو اضغط على رابط لتغييره.</string>

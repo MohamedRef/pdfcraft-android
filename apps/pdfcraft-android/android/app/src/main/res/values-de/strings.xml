@@ -1920,4 +1920,24 @@
     <string name="backup_restore_comments">Kommentare hier wiederherstellen</string>
     <string name="backup_restoring">Wird wiederhergestellt…</string>
     <string name="backup_comments_restored">Kommentare wiederhergestellt</string>
+    <string name="margin_title">Notizrand</string>
+    <string name="margin_add">Hinzufügen</string>
+    <string name="margin_side">Wo</string>
+    <string name="margin_right">Rechts</string>
+    <string name="margin_bottom">Unten</string>
+    <string name="margin_both">Beides</string>
+    <string name="margin_size">Größe, im Verhältnis zur Seite</string>
+    <string name="margin_pages">Seiten</string>
+    <string name="margin_all_pages">Alle Seiten</string>
+    <string name="margin_body">Die Seite wird größer und ihr Inhalt bleibt, wo er ist, damit du daneben schreiben kannst. Rückgängig entfernt den Rand.</string>
+    <string name="margin_remove">Notizränder entfernen</string>
+    <string name="margin_remove_confirm">Entfernen</string>
+    <string name="margin_remove_body">Die Seiten erhalten wieder ihre ursprüngliche Größe. Was im Rand steht, bleibt in der Datei, liegt aber nicht mehr auf der Seite.</string>
+    <string name="margin_added">Notizrand hinzugefügt</string>
+    <string name="margin_removed">Notizränder entfernt</string>
+    <string name="margin_read_only">Dieses Dokument kann nicht geändert werden</string>
+    <plurals name="margin_selected_pages">
+        <item quantity="one">Diese Seite</item>
+        <item quantity="other">%d Seiten</item>
+    </plurals>
 </resources>

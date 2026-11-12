@@ -85,6 +85,8 @@ enum class QuickTool(val id: String, @StringRes val label: Int, @StringRes val t
     Redact("redact", R.string.redact_title, R.string.redact_title, LucideIcons.SquareDashed, ToolHues.protect),
     Organize("organize", R.string.toolbar_label_organize, R.string.common_tool_organize, LucideIcons.LayoutGrid, ToolHues.organize),
     Crop("crop", R.string.toolbar_label_crop, R.string.common_tool_crop, LucideIcons.Crop, ToolHues.crop),
+    // room beside the content for notes (#146): changes the pages, so More tools
+    NoteMargin("margin", R.string.margin_title, R.string.margin_title, LucideIcons.PanelRight, ToolHues.crop),
     Ocr("ocr", R.string.toolbar_label_recognize, R.string.common_tool_recognize_text, LucideIcons.ScanText, ToolHues.ocr),
     // the scan tools sit with Recognize text, in one place (#195)
     ScanEnhance("enhance", R.string.toolbar_label_enhance, R.string.scan_enhance_title, LucideIcons.WandSparkles, ToolHues.ocr),
@@ -192,6 +194,11 @@ fun AppViewModel.runQuickTool(doc: OpenDocument, tool: QuickTool) {
             organizing = true
         }
         QuickTool.Crop -> openCrop(doc)
+        QuickTool.NoteMargin -> {
+            // Draft ink keeps page sizes; add it before the pages grow.
+            doc.commitTool?.invoke()
+            doc.controller.sheet = ViewerSheet.NoteMargin
+        }
         QuickTool.Ocr -> recognizeText(doc)
         QuickTool.ScanEnhance -> doc.controller.sheet = ViewerSheet.ScanEnhance
         QuickTool.Redact -> openRedact(doc)

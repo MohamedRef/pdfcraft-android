@@ -1151,6 +1151,21 @@ pub fn tools() -> Vec<ToolDef> {
             &["doc"],
         )),
         t(
+            "page_margin",
+            "Add or remove a note margin",
+            "Add room for notes beside the content: `add` [left, bottom, right, top] in points on the displayed page grows each page outward on those sides (the content stays where it is, so text, links and comments still line up), or `remove` takes off the margins added this way, restoring the original page size. Comments in a removed margin stay in the file but fall outside the page. Without either it only reports which pages have a margin (`margins`, one true/false per page). All pages change in one undo step. Undoable.",
+        )
+        .cmd("page.boxes")
+        .with(schema(
+            json!({
+                "doc": doc(),
+                "pages": pages("to change (default: all)"),
+                "add": { "type": "array", "items": { "type": "number", "minimum": 0, "maximum": 7200 }, "minItems": 4, "maxItems": 4 },
+                "remove": { "type": "boolean" },
+            }),
+            &["doc"],
+        )),
+        t(
             "doc_header_footer",
             "Add header and footer",
             "Add a header and/or footer to pages. Text boxes: header_left/center/right, footer_left/center/right. Tokens: <<1>> page number, <<n>> page count, <<1 of n>>, <<Page 1 of n>>, <<1/n>>, dates <<m/d/yyyy>> <<yyyy-mm-dd>> <<mmmm d, yyyy>> <<dd.mm.yyyy>> (and more), Bates <<Bates Number#6#1#PREFIX#SUFFIX>>. shrink: true scales the page content down evenly into the room the header and footer leave free, so they don't cover it. font: Helvetica (default), Times or Courier; Thai is drawn from PdfCraft's built-in Thai face beside it (a build without one refuses it). replace: true swaps out existing ones (Update). Undoable.",

@@ -2302,6 +2302,26 @@
     <string name="backup_restore_comments">Restore comments here</string>
     <string name="backup_restoring">Restoring…</string>
     <string name="backup_comments_restored">Comments restored</string>
+    <string name="margin_title">Note margin</string>
+    <string name="margin_add">Add</string>
+    <string name="margin_side">Where</string>
+    <string name="margin_right">Right</string>
+    <string name="margin_bottom">Below</string>
+    <string name="margin_both">Both</string>
+    <string name="margin_size">Size, of the page</string>
+    <string name="margin_pages">Pages</string>
+    <string name="margin_all_pages">All pages</string>
+    <string name="margin_body">The page gets bigger and its content stays where it is, so you can write beside it. Undo takes the margin away.</string>
+    <string name="margin_remove">Remove note margins</string>
+    <string name="margin_remove_confirm">Remove</string>
+    <string name="margin_remove_body">Pages go back to their original size. Anything written in the margin stays in the file but is no longer on the page.</string>
+    <string name="margin_added">Note margin added</string>
+    <string name="margin_removed">Note margins removed</string>
+    <string name="margin_read_only">This document can\'t be changed</string>
+    <plurals name="margin_selected_pages">
+        <item quantity="one">This page</item>
+        <item quantity="other">%d pages</item>
+    </plurals>
     <!-- Link authoring (#179, #159) -->
     <string name="edit_link">Link</string>
     <string name="link_drag_hint">Drag a box over what should be a link, or tap a link to change it.</string>
