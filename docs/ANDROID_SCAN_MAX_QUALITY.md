@@ -60,7 +60,7 @@ authors' weights (pinned by SHA-256 there). Code: `scan/src/model_timing.rs` (te
 `tests_model_timing.rs`, on the bundled page detector, the one model file the tests can count on),
 `src/scan_model_timing.rs`, `ui/ScanLabController.kt` (`timeModel`) and `ui/scan/ScanModelTiming.kt`.
 
-The log line is `model_timing`: `bytes`, `sha` (`h` and the first 16 hex digits of the file's
+Before the run a `model_timing_start` line (`bytes`) is written to the file, so a model that gets the app closed still leaves a trace. After it, the log line is `model_timing`: `bytes`, `sha` (`h` and the first 16 hex digits of the file's
 SHA-256), `inputs`, `input_dims` and `input_0`… (the shape run), `output_dims` and `output_0`…,
 `output_finite`, `threads` (0: the runtime's own pool, one thread per core), `cores`, `load_ms`,
 `run_1_ms`, `run_2_ms`, `peak_mb_before` and `peak_mb_after` (the process's peak resident memory,

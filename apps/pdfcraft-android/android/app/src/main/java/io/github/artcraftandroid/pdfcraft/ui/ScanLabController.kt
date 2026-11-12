@@ -127,6 +127,9 @@ internal class ScanLabController(private val vm: AppViewModel) {
             try {
                 val t = withContext(Dispatchers.IO) {
                     copyCapped(uri, file)
+                    // before the run: if a large model gets the app closed, this line is the last one
+                    Diag.event(DiagArea.Scan, "model_timing_start", "bytes" to file.length())
+                    Diag.sink?.flush()
                     io.github.artcraftandroid.pdfcraft.core.scanTimeModel(file.path, MODEL_RUNS, 0u)
                 }
                 Diag.event(DiagArea.Scan, "model_timing", *io.github.artcraftandroid.pdfcraft.ui.scan.scanModelTimingDiag(t))
