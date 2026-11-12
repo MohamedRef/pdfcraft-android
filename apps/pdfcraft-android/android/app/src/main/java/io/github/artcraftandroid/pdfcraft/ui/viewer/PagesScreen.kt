@@ -389,7 +389,7 @@ fun PagesScreen(vm: AppViewModel, doc: OpenDocument, onClose: () -> Unit) {
     templateAt?.let { at ->
         io.github.artcraftandroid.pdfcraft.ui.home.TemplatePageSheet(vm, io.github.artcraftandroid.pdfcraft.engine.NotebookTemplate(), onDismiss = { templateAt = null }) { page ->
             templateAt = null
-            vm.insertNotebookPage(doc, page, at)
+            vm.study.insertNotebookPage(doc, page, at)
         }
     }
     savingTemplate?.let { index ->
@@ -397,7 +397,7 @@ fun PagesScreen(vm: AppViewModel, doc: OpenDocument, onClose: () -> Unit) {
         io.github.artcraftandroid.pdfcraft.ui.PdfDialog(
             onDismiss = { savingTemplate = null }, title = stringResource(R.string.notebook_save_template_title),
             confirm = stringResource(R.string.common_save),
-            onConfirm = { savingTemplate = null; vm.savePageAsTemplate(doc, index, name.ifBlank { doc.title }) },
+            onConfirm = { savingTemplate = null; vm.study.savePageAsTemplate(doc, index, name.ifBlank { doc.title }) },
         ) { io.github.artcraftandroid.pdfcraft.ui.PdfField(name, { name = it.take(60) }, stringResource(R.string.notebook_name_hint)) }
     }
 }

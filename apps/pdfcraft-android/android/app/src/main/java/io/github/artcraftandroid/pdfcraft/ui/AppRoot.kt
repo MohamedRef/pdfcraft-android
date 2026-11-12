@@ -120,9 +120,9 @@ fun AppRoot(vm: AppViewModel, onBrowse: () -> Unit, onPickSignatureImage: () -> 
             // here rather than in the file's row: a sheet inside a scrolling list has no height to fill
             if (doc == null) vm.fileSheet?.let { (r, recent) -> io.github.artcraftandroid.pdfcraft.ui.home.FileSheet(vm, r, recent) { vm.fileSheet = null } }
             vm.toolScreen?.let { ToolScreenHost(vm, it) }
-            vm.reviewing?.let { ReviewScreen(vm, it) }
-            vm.cardDraft?.let { CardEditor(vm, it) }
-            if (vm.newNotebookOpen) io.github.artcraftandroid.pdfcraft.ui.home.NewNotebookSheet(vm) { vm.newNotebookOpen = false }
+            vm.study.reviewing?.let { ReviewScreen(vm, it) }
+            vm.study.cardDraft?.let { CardEditor(vm, it) }
+            if (vm.study.newNotebookOpen) io.github.artcraftandroid.pdfcraft.ui.home.NewNotebookSheet(vm) { vm.study.newNotebookOpen = false }
             vm.signaturePad?.let { SignaturePadScreen(vm, it, onPickSignatureImage) }
             vm.certSign?.let { CertSignScreen(vm, it) }
             if (vm.idCreate) CreateIdScreen(vm)

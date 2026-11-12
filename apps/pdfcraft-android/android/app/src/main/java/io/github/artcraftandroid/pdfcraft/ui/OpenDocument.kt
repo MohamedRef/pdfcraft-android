@@ -85,6 +85,9 @@ class OpenDocument(
     /** The comments, refreshed when the document changes (tapping one selects it). */
     var comments by mutableStateOf<List<io.github.artcraftandroid.pdfcraft.core.CommentInfo>>(emptyList())
     var commentsComplete by mutableStateOf(false)
+
+    /** Tape lifted, tape drawing and a quiz (#143): the viewer's alone, never saved. */
+    val study = io.github.artcraftandroid.pdfcraft.ui.viewer.StudyState()
     val overlayPagesLoaded = HashSet<Int>()
 
     /** Its signatures and signature fields with what validating them found, refreshed when the document changes. */

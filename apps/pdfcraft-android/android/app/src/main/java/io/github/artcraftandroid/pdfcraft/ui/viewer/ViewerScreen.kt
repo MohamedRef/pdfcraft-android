@@ -174,8 +174,8 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
                 vm.pendingSpot = null
             }
             // a library search hit: its page, with the words found there highlighted
-            if (w > 0f) vm.pendingSearch?.let { (page, query) ->
-                vm.pendingSearch = null
+            if (w > 0f) vm.study.pendingSearch?.let { (page, query) ->
+                vm.study.pendingSearch = null
                 doc.viewer.goToPage(page.coerceIn(0, doc.pageCount - 1))
                 if (query.isNotEmpty()) {
                     doc.search.run(query, doc.pageCount, page.coerceIn(0, doc.pageCount - 1)) { first -> showHit(doc, first) }
@@ -290,6 +290,8 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
                     vm.markupFollowUp != null -> vm.markupFollowUp = null
                     selection.selection != null -> selection.clear()
                     ctl.tool == ViewerTool.Edit -> vm.editTap(doc, at)
+                    // tape and quiz masks lift with a tap (#143)
+                    vm.tapStudyMask(doc, at) -> Unit
                     vm.tapField(doc, at) -> Unit
                     vm.tapComment(doc, at) -> Unit
                     else -> scope.launch {
@@ -342,6 +344,7 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
             overlay = {
                 if (ctl.tool == ViewerTool.None || ctl.tool == ViewerTool.FillSign) drawFieldTints(doc)
                 if (!doc.info.commentsHidden) drawNotes(doc, ctl.nightMode, vm.selectedComment?.takeIf { it.first === doc }?.second)
+                drawStudyMasks(doc)
                 vm.selectedComment?.takeIf { it.first === doc }?.second?.let { drawCommentSelection(doc, it) }
                 vm.readAloud?.let { drawReadAloud(doc, it) }
                 drawSearchHits(doc)
@@ -364,6 +367,9 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
             }
             ExternalPresentation(doc)
         }
+
+        // Tape and quiz (#143): what covers the pages, for TalkBack, and their bars.
+        if (!vm.readingMode) StudyLayer(vm, doc)
 
         // The active tool takes the touches over the pages.
         ToolLayer(vm, doc)
@@ -418,7 +424,7 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
             if (ctl.tool == ViewerTool.Draw && !vm.readingMode && doc.writable && doc.viewer.currentPage == doc.pageCount - 1) {
                 AddPageHandle(
                     bottom = maxOf(96.dp, with(density) { doc.viewer.padBottom.toDp() } + 12.dp),
-                    onClick = { vm.insertNotebookPage(doc, null) },
+                    onClick = { vm.study.insertNotebookPage(doc, null) },
                     modifier = Modifier.align(Alignment.BottomCenter),
                 )
             }
@@ -661,6 +667,7 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
                 ViewerSheet.Layers -> LayersSheet(vm, doc)
                 ViewerSheet.EditContents -> EditContentsSheet(vm, doc)
                 ViewerSheet.HiddenInfo -> HiddenInfoSheet(vm, doc)
+                ViewerSheet.Study -> StudySheet(vm, doc)
                 ViewerSheet.Comments -> Unit
                 ViewerSheet.MoreTools -> MoreToolsSheet(vm, doc)
                 ViewerSheet.Signatures -> SignaturesSheet(vm, doc)
