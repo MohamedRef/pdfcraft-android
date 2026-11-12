@@ -408,6 +408,15 @@ private fun Preferences(vm: AppViewModel) {
     }
     SheetRow(null, stringResource(R.string.home_clear_suggestions), { vm.editor.clearFormSuggestions() })
     SheetDivider()
+    // which way up scanned pages are saved (#339)
+    Section(stringResource(R.string.common_tool_scan))
+    var autoUpright by remember { mutableStateOf(io.github.artcraftandroid.pdfcraft.ui.scan.ScanUprightSetting.get(vm.appPrefs)) }
+    val setAutoUpright = { on: Boolean -> autoUpright = on; io.github.artcraftandroid.pdfcraft.ui.scan.ScanUprightSetting.set(vm.appPrefs, on) }
+    SheetRow(null, stringResource(R.string.settings_scan_upright), { setAutoUpright(!autoUpright) }) {
+        PdfSwitch(autoUpright, { setAutoUpright(it) })
+    }
+    Text(stringResource(R.string.settings_scan_upright_body), color = c.textSecondary, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 20.dp))
+    SheetDivider()
     Section(stringResource(R.string.library_title))
     SheetRow(null, stringResource(R.string.library_index_switch), { vm.study.updateLibraryIndexing(!vm.study.libraryIndexing) }) {
         io.github.artcraftandroid.pdfcraft.ui.PdfSwitch(vm.study.libraryIndexing, null)

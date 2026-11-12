@@ -87,6 +87,20 @@ class ScanSaveTest {
     }
 
     @Test
+    fun aPagesOwnTurnGoesIntoTheRequestAndStopsTheClassifier() {
+        val corners = floatArrayOf(0.1f, 0.1f, 0.9f, 0.1f, 0.9f, 0.9f, 0.1f, 0.9f)
+        val auto = scanPageRequest("/a", corners, ScanFilter.CleanScan, false, ScanLab(), "")
+        assertTrue(auto.upright)
+        assertEquals(0, auto.turns.toInt())
+        // Rotate (#339): the person's turn, and the classifier no longer asked about the page
+        val turned = scanPageRequest("/a", corners, ScanFilter.CleanScan, false, ScanLab(), "", turns = 3)
+        assertFalse(turned.upright)
+        assertEquals(3, turned.turns.toInt())
+        // the ordinary setting off stops the classifier too
+        assertFalse(scanPageRequest("/a", corners, ScanFilter.CleanScan, false, ScanLab(), "", autoUpright = false).upright)
+    }
+
+    @Test
     fun aPreviewIsOutOfDateWhenAnythingThatChangesThePageChanges() {
         val corners = listOf(0f, 0f, 1f, 0f, 1f, 1f, 0f, 1f)
         val key = ScanPreviewKey("/c/shot.jpg", corners, ScanFilter.CleanScan, false, ScanLab())
@@ -96,6 +110,10 @@ class ScanSaveTest {
         assertFalse(key == key.copy(corners = corners.mapIndexed { i, v -> if (i == 0) 0.01f else v }))
         assertFalse(key == key.copy(lab = ScanLab(sharpen = 0)))
         assertFalse(key == key.copy(photoPath = "/c/other.jpg"))
+        // a turn by hand, or the automatic turn switched off, changes the page shown (#339)
+        assertFalse(key == key.copy(turns = 1))
+        assertFalse(key == key.copy(turns = 0))
+        assertFalse(key == key.copy(autoUpright = false))
     }
 
     @Test

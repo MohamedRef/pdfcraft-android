@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Turning scanned pages (#339), kept apart from strings.xml so parallel scanner work merges cleanly. -->
+<resources>
+    <string name="scan_rotate">Pivoter</string>
+    <string name="scan_turned_upright_undo">Redressée · Annuler</string>
+    <string name="scan_turn_undo_description">Annuler la rotation</string>
+    <string name="settings_scan_upright">Redresser les pages automatiquement</string>
+    <string name="settings_scan_upright_body">Les pages numérisées sont remises à l’endroit quand l’app est sûre du bon sens. Pivoter sur l’écran de numérisation fonctionne toujours.</string>
+    <string name="scan_lab_settle_turns">Les pages incertaines suivent leurs voisines</string>
+</resources>

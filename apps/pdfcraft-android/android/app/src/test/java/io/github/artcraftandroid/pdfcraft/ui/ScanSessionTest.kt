@@ -52,4 +52,18 @@ class ScanSessionTest {
         assertEquals(listOf("/b.jpg"), back.pages.map { it.path })
         assertNull(back.pages[0].found)
     }
+
+    @Test
+    fun aPagesOwnTurnComesBackAndAnOlderSessionStillDoes() {
+        val s = ScanSession(null, null, false, "Scan", listOf(ScanSession.Page("/c/a.jpg", crop, null, 3), ScanSession.Page("/c/b.jpg", crop, crop, null), ScanSession.Page("/c/c.jpg", crop, null, 0)))
+        val back = ScanSession.decode(s.encode())!!
+        assertEquals(listOf(3, null, 0), back.pages.map { it.turns })
+        // a session written before pages could be turned by hand (#339) comes back, with no turns
+        val old = "pdfcraft-scan 1\nshot\t\nretake\t\nimage\t0\nname\tScan\npage\t/c/a.jpg\t" + crop.joinToString(",") + "\t\n"
+        val older = ScanSession.decode(old)!!
+        assertEquals(listOf("/c/a.jpg"), older.pages.map { it.path })
+        assertNull(older.pages[0].turns)
+        // a turn that is not 0 to 3 is no turn
+        assertNull(ScanSession.decode(s.encode().replace("\t3\n", "\t7\n"))!!.pages[0].turns)
+    }
 }

@@ -64,11 +64,11 @@ internal class ScanLabController(private val vm: AppViewModel) {
      * Keep page [index] of the scan in [scan]: its photo, its facts and, when it was saved, the
      * page made of it ([output], [result]). Blocking.
      */
-    fun keepPage(scan: File, index: Int, page: ScanPage, saved: Boolean, look: String?, strength: Int?, flatten: Boolean, output: File?, result: ScanTestResult?, preview: ScanTestPreview? = null) {
+    fun keepPage(scan: File, index: Int, page: ScanPage, saved: Boolean, look: String?, strength: Int?, flatten: Boolean, output: File?, result: ScanTestResult?, preview: ScanTestPreview? = null, turn: ScanTestTurn? = null) {
         val lab = options
         val version = "${vm.appVersion} (${versionCode()})"
         store.addPage(scan, index, page.file, output) { keptOutput ->
-            scanTestPageJson(version, saved, page.corners, page.found, page.finding, look, strength, flatten, lab, keptOutput, result, preview)
+            scanTestPageJson(version, saved, page.corners, page.found, page.finding, look, strength, flatten, lab, keptOutput, result, preview, turn)
         }
     }
 

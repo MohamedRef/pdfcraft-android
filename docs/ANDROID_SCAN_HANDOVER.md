@@ -35,7 +35,7 @@ a phone yet.** Every number in the scanner's documents was measured on a desktop
 | #304 | "Max quality" (DocRes) | **Not started** | | Feasibility first, as the issue says |
 | #305, #306 | Research: moiré; fingers, glare | **Not started** | | |
 | #307 | ML Kit as a second engine | **Not started** | | Cannot be tried without a phone with Google Play services |
-| #339 | Pages turned upright | Core done | #370 | The "Turned upright · Undo" chip, a rotate button, the multi-page rule, a switch in ordinary settings |
+| #339 | Pages turned upright | Core done | #370, this PR | Acceptance on the owner's set (per script), phone timing. The chip, Rotate, the multi-page rule and the ordinary setting are in (not yet run on a phone) |
 
 "Core done" means the code and its tests are merged and the issue's acceptance items that need
 the owner's phone or his test set are open. Each issue has a comment saying the same in detail.
@@ -118,8 +118,7 @@ The order in #286 stands. Within it, this is what unblocks the most:
    whole experience. Put it in a file of its own (`ui/scan/`) and leave `ScanPhoto` as
    `ScanScreen` uses it.
 3. **#288, the metrics module**, `line_straightness` first, then **#302's automatic mode**.
-4. **#299's presets**, **#339's undo and rotate** (a rotate needs a turn in `ScanPageRequest`;
-   `upright.rs` has `turned`), **#303**.
+4. **#299's presets**, **#303**. (#339's undo and rotate are in: `ScanPageRequest.turns`.)
 5. **#294 to #297, the camera.** The largest and riskiest part: declaring the CAMERA permission
    changes how the existing path behaves (the manifest's comment explains it), and none of it
    can be tried without a phone. Keep the phone's camera app reachable as a setting, as the

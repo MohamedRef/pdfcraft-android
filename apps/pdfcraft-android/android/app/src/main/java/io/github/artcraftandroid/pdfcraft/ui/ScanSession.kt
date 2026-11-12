@@ -14,7 +14,8 @@ data class ScanSession(
     val name: String,
     val pages: List<Page>,
 ) {
-    class Page(val path: String, val corners: FloatArray, val found: FloatArray?)
+    /** [turns] is the person's own turn of the page (#339), null while the classifier decides. */
+    class Page(val path: String, val corners: FloatArray, val found: FloatArray?, val turns: Int? = null)
 
     fun encode(): String = buildString {
         append(HEADER).append('\n')
@@ -24,17 +25,21 @@ data class ScanSession(
         append("name\t").append(name.replace('\n', ' ').replace('\t', ' ')).append('\n')
         for (p in pages) {
             append("page\t").append(p.path).append('\t').append(p.corners.joinToString(","))
-            append('\t').append(p.found?.joinToString(",").orEmpty()).append('\n')
+            append('\t').append(p.found?.joinToString(",").orEmpty())
+            append('\t').append(p.turns?.toString().orEmpty()).append('\n')
         }
     }
 
     companion object {
-        private const val HEADER = "pdfcraft-scan 1"
+        // 2: a page line may end with the person's turn of the page (#339); a session written as
+        // 1 (before an update) still comes back, its pages with no turn
+        private const val HEADER = "pdfcraft-scan 2"
+        private const val HEADER_V1 = "pdfcraft-scan 1"
 
         /** The session in [text]; null when there is none or it isn't one. A malformed page is left out. */
         fun decode(text: String?): ScanSession? {
             val lines = text?.lines() ?: return null
-            if (lines.firstOrNull() != HEADER) return null
+            if (lines.firstOrNull() != HEADER && lines.firstOrNull() != HEADER_V1) return null
             var shot: String? = null
             var retake: Int? = null
             var forImage = false
@@ -50,7 +55,8 @@ data class ScanSession(
                     "name" -> name = value
                     "page" -> {
                         val corners = corners(parts.getOrNull(2)) ?: continue
-                        if (value.isNotEmpty()) pages += Page(value, corners, corners(parts.getOrNull(3)))
+                        val turns = parts.getOrNull(4)?.toIntOrNull()?.takeIf { it in 0..3 }
+                        if (value.isNotEmpty()) pages += Page(value, corners, corners(parts.getOrNull(3)), turns)
                     }
                 }
             }
