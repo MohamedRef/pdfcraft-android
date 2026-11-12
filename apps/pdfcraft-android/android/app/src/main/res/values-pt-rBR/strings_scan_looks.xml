@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The scan screen's looks: a look per page, strength, the looks strip, compare, apply to all (#301). -->
+<resources>
+    <string name="scan_look_strength">Intensidade: %1$d</string>
+    <string name="scan_look_strength_label">Intensidade</string>
+    <string name="scan_look_strength_fixed">A intensidade é definida por uma opção de teste</string>
+    <string name="scan_compare_hint">Mantenha pressionado para ver o original</string>
+    <string name="scan_compare_action">Mostrar o original</string>
+    <string name="scan_apply_look_all">Aplicar a todas</string>
+    <string name="scan_apply_look_title">Aplicar este estilo a todas as páginas?</string>
+    <string name="scan_apply_look_body">As páginas com estilo próprio mudarão para %1$s.</string>
+    <string name="scan_apply_look_confirm">Aplicar</string>
+    <string name="scan_reset_look">Redefinir estilo</string>
+    <string name="scan_page_own_look">Página %1$d, com estilo próprio</string>
+    <string name="scan_look_tile_waiting">%1$s, prévia não pronta</string>
+    <string name="msg_scan_save_cancelled">O salvamento parou. Suas páginas continuam aqui.</string>
+    <string name="msg_scan_unenhanced">Páginas salvas como fotografadas, sem limpeza: %1$d</string>
+    <string name="scan_lab_look_per_page">Um estilo para cada página</string>
+    <string name="scan_lab_look_strip">Mostrar os estilos como pequenas prévias da página</string>
+</resources>
