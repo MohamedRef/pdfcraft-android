@@ -16,12 +16,17 @@ fn drawn(png: &[u8]) -> Rgb {
 
 /// A slip of paper three times as long as it is wide, with rows of thin grey print.
 fn receipt() -> Rgb {
+    receipt_printed(90)
+}
+
+/// A receipt whose print has the grey level `ink`.
+fn receipt_printed(ink: u8) -> Rgb {
     let (w, h) = (400u32, 1200u32);
     let mut data = Vec::with_capacity((w * h * 3) as usize);
     for y in 0..h {
         for x in 0..w {
             let print = (y % 40) < 4 && (40..360).contains(&x) && (x / 6) % 3 != 0;
-            let v: u8 = if print { 90 } else { 238 };
+            let v: u8 = if print { ink } else { 238 };
             data.extend([v, v, v.saturating_sub(6)]);
         }
     }
@@ -44,6 +49,7 @@ fn base(page: Rgb, dpi: u16, paper: Paper) -> PageBase {
         trim: None,
         line_flatten: None,
         timings: Vec::new(),
+        measured: std::sync::OnceLock::new(),
     }
 }
 
@@ -183,6 +189,238 @@ fn a_page_too_small_or_malformed_has_no_kind() {
     assert!(page_kind(&bad, 200, Paper::Custom, 0, PresetChoice::Auto).is_none());
     let empty = Rgb { width: 0, height: 0, data: Vec::new() };
     assert!(page_kind(&empty, 200, Paper::Custom, 0, PresetChoice::Auto).is_none());
+}
+
+/// The mean luminance of `pixels` where `print` marks the page's print.
+fn ink_level(pixels: &[u8], print: &[bool]) -> f64 {
+    let (sum, n) = pixels
+        .as_chunks::<3>()
+        .0
+        .iter()
+        .zip(print)
+        .filter(|(_, p)| **p)
+        .fold((0.0, 0usize), |(s, n), (px, _)| (s + f64::from(crate::luma(*px)), n + 1));
+    sum / n.max(1) as f64
+}
+
+#[test]
+fn a_receipts_extra_gamma_darkens_its_faint_print_when_the_kinds_tone_is_asked_for() {
+    // #299, section 5: a receipt's thermal print is faint, and its kind adds 0.3 to the gamma
+    let page = base(receipt_printed(170), 200, Paper::Custom);
+    let print: Vec<bool> = page.page.data.as_chunks::<3>().0.iter().map(|p| p[0] < 200).collect();
+    let (plain, kind) = page_look_kind(&page, &request(PresetChoice::Auto)).unwrap();
+    assert_eq!(kind.map(|k| k.preset), Some(Preset::Receipt));
+    let (toned, _) = page_look_kind(&page, &PageRequest { kind_tone: true, ..request(PresetChoice::Auto) }).unwrap();
+    let (plain, toned) = (rgb(plain.pixels), rgb(toned.pixels));
+    let (before, after) = (ink_level(&plain, &print), ink_level(&toned, &print));
+    println!("receipt print: {before:.1} without the kind's tone, {after:.1} with it");
+    assert!(after < before - 2.0, "{before} -> {after}");
+    // a document's shape changes nothing: the kind's tone is the same page as before
+    let english = drawn(include_bytes!("../tests/data/upright-english.png"));
+    let doc = base(english, 81, Paper::A4);
+    let a = page_look(&doc, &request(PresetChoice::Auto)).unwrap();
+    let b = page_look(&doc, &PageRequest { kind_tone: true, ..request(PresetChoice::Auto) }).unwrap();
+    assert!(rgb(a.pixels) == rgb(b.pixels), "a document has no tone of its own");
+}
+
+#[test]
+fn a_whiteboard_gets_its_s_curve_and_stronger_marker_colour() {
+    // the S-curve (Zhang and He) keeps 0 and 1, rises steadily, and is steeper than the line
+    // in the middle
+    let s = crate::enhance::s_curve_for_tests;
+    assert!(s(0.0).abs() < 1e-6 && (s(1.0) - 1.0).abs() < 1e-6);
+    assert!((0..100).all(|i| s(i as f32 / 100.0) <= s((i + 1) as f32 / 100.0)));
+    assert!(s(0.6) - s(0.4) > 0.2);
+    // a pale board with thick blue marker
+    let (w, h) = (600u32, 450u32);
+    let mut data = Vec::with_capacity((w * h * 3) as usize);
+    for y in 0..h {
+        for x in 0..w {
+            let stroke = (y % 60) < 10 && (60..540).contains(&x) && (x / 30) % 4 != 0;
+            data.extend(if stroke { [70, 90, 190] } else { [225, 228, 226] });
+        }
+    }
+    let page = base(Rgb { width: w, height: h, data }, 100, Paper::Custom);
+    let print: Vec<bool> = page.page.data.as_chunks::<3>().0.iter().map(|p| i32::from(p[2]) > i32::from(p[0]) + 50).collect();
+    let ask = request(PresetChoice::Fixed(Preset::Whiteboard));
+    let plain = rgb(page_look(&page, &ask).unwrap().pixels);
+    let toned = rgb(page_look(&page, &PageRequest { kind_tone: true, ..ask }).unwrap().pixels);
+    let chroma = |v: &[u8]| {
+        let (s, n) = v
+            .as_chunks::<3>()
+            .0
+            .iter()
+            .zip(&print)
+            .filter(|(_, p)| **p)
+            .fold((0.0, 0usize), |(s, n), (px, _)| (s + f64::from(px.iter().max().unwrap() - px.iter().min().unwrap()), n + 1));
+        s / n.max(1) as f64
+    };
+    println!("marker colour: {:.1} without the kind's tone, {:.1} with it", chroma(&plain), chroma(&toned));
+    assert!(plain != toned);
+    assert!(chroma(&toned) > chroma(&plain) + 5.0);
+}
+
+#[test]
+fn photographs_on_a_page_are_sharpened_gently_and_print_as_before() {
+    // #299, section 4: inside the block photo mask, sharpening is 30 % of what print gets
+    // the picture over the top 40 % of the page, rows of print under it
+    let mut drawn = picture_page();
+    let w = drawn.width as usize;
+    for y in 384..960 {
+        for x in 0..w {
+            let print = y >= 420 && (y % 24) < 7 && (60..660).contains(&x) && (x / 9) % 4 != 0;
+            let v = if print { 25 } else { 245 };
+            drawn.data[(y * w + x) * 3..(y * w + x) * 3 + 3].copy_from_slice(&[v, v, v]);
+        }
+    }
+    let page = base(drawn, 150, Paper::Custom);
+    let ask = PageRequest { sharpen: 100, preset: PresetChoice::Fixed(Preset::PhotoRich), fixed_strength: true, ..request(PresetChoice::Off) };
+    let (sharp, kind) = page_look_kind(&page, &ask).unwrap();
+    let photos = kind.as_ref().and_then(|k| k.photos.as_ref()).expect("the page has a photo mask");
+    println!("photo share {:.2}, whole page {}", photos.share, photos.whole_page);
+    assert!(!photos.whole_page && photos.share > 0.2, "{} {}", photos.share, photos.whole_page);
+    let (gentle, _) = page_look_kind(&page, &PageRequest { photo_sharpen: true, ..ask }).unwrap();
+    let unsharp = rgb(page_look(&page, &PageRequest { sharpen: 0, ..ask }).unwrap().pixels);
+    let (sharp, gentle) = (rgb(sharp.pixels), rgb(gentle.pixels));
+    // how far sharpening moved the picture (rows 40..300) and the print under it (rows 500..950, clear of the mask's soft edge)
+    let moved = |v: &[u8], rows: std::ops::Range<usize>| {
+        rows.flat_map(|y| (0..w * 3).map(move |i| y * w * 3 + i)).map(|i| f64::from(v[i].abs_diff(unsharp[i]))).sum::<f64>()
+    };
+    let (picture_full, picture_gentle) = (moved(&sharp, 40..300), moved(&gentle, 40..300));
+    println!("sharpening moved the picture by {picture_full:.0} without the mask, {picture_gentle:.0} with it");
+    assert!(picture_gentle < picture_full * 0.6, "{picture_gentle} against {picture_full}");
+    assert_eq!(moved(&sharp, 500..950), moved(&gentle, 500..950), "the print is sharpened as before");
+}
+
+/// The drawn A4 page with a flat dark band down its left side: what the first gutter rule took
+/// for a book's gutter (#427).
+fn english_with_band() -> (Rgb, u16) {
+    let mut page = drawn(include_bytes!("../tests/data/upright-english.png"));
+    let dpi = (f64::from(page.width.min(page.height)) / 210.0 * 25.4).round() as u16;
+    let band = (f64::from(page.width) * 0.06).round() as u32;
+    for y in 0..page.height {
+        for x in 0..band {
+            let i = ((y * page.width + x) * 3) as usize;
+            page.data[i..i + 3].copy_from_slice(&[120, 120, 120]);
+        }
+    }
+    (page, dpi)
+}
+
+#[test]
+fn a_flat_dark_band_is_a_book_page_only_under_the_first_gutter_rule() {
+    let (page, dpi) = english_with_band();
+    let page = base(page, dpi, Paper::A4);
+    let strict = request(PresetChoice::Auto);
+    let loose = PageRequest { strict_gutter: false, ..request(PresetChoice::Auto) };
+    let (_, with_strict) = page_look_kind(&page, &strict).unwrap();
+    let (_, with_loose) = page_look_kind(&page, &loose).unwrap();
+    let (with_strict, with_loose) = (with_strict.unwrap(), with_loose.unwrap());
+    println!("strict: {:?} {:?}\nloose: {:?}", with_strict.preset, with_strict.features, with_loose.preset);
+    assert_eq!(with_strict.preset, Preset::Document);
+    assert_eq!(with_loose.preset, Preset::BookPage);
+    // both rules' readings are in the features, whichever is in force
+    assert!(with_strict.features.gutter_loose && !with_strict.features.gutter_band);
+    assert!(with_loose.features.gutter_loose && with_loose.features.gutter_band);
+    // a curved side still makes it a book page under the strict rule
+    let curved = PageRequest { curved_sides: 1, ..request(PresetChoice::Auto) };
+    assert_eq!(page_look_kind(&page, &curved).unwrap().1.unwrap().preset, Preset::BookPage);
+}
+
+/// A label as a small photo shows it: a few lines of print and a large barcode whose thin bars
+/// have gone grey, with paper between them (#427: on the reference photos the first photo rule
+/// read such a label as 15 % photograph, a hair over the photo-rich limit).
+fn label_with_barcode() -> Rgb {
+    let (w, h) = (720usize, 960usize);
+    let mut data = vec![245u8; w * h * 3];
+    let mut put = |x: usize, y: usize, v: u8| data[(y * w + x) * 3..(y * w + x) * 3 + 3].copy_from_slice(&[v, v, v]);
+    // print: lines of words
+    for y in (60..300).filter(|y| y % 24 < 6) {
+        for x in (60..660).filter(|x| (x / 11) % 4 != 0) {
+            put(x, y, 30);
+        }
+    }
+    // the barcode, a quarter of the page: bars 1 or 2 pixels wide, 5 to 7 apart
+    let mut x = 120usize;
+    let mut k = 0usize;
+    while x < 600 {
+        let bar = 1 + k % 2;
+        for y in 400..800 {
+            for dx in 0..bar {
+                put(x + dx, y, 60);
+            }
+        }
+        x += bar + 5 + (k * 7) % 3;
+        k += 1;
+    }
+    // the photo's softness: a 3 by 3 mean
+    let src = data.clone();
+    for y in 1..h - 1 {
+        for x in 1..w - 1 {
+            let mut sum = 0u32;
+            for dy in 0..3 {
+                for dx in 0..3 {
+                    sum += u32::from(src[((y + dy - 1) * w + x + dx - 1) * 3]);
+                }
+            }
+            let v = (sum / 9) as u8;
+            data[(y * w + x) * 3..(y * w + x) * 3 + 3].copy_from_slice(&[v, v, v]);
+        }
+    }
+    Rgb { width: w as u32, height: h as u32, data }
+}
+
+#[test]
+fn a_label_with_a_barcode_is_photo_rich_only_under_the_first_photo_rule() {
+    let page = base(label_with_barcode(), 150, Paper::Custom);
+    let strict = request(PresetChoice::Auto);
+    let loose = PageRequest { strict_photo: false, ..request(PresetChoice::Auto) };
+    let (_, with_strict) = page_look_kind(&page, &strict).unwrap();
+    let (_, with_loose) = page_look_kind(&page, &loose).unwrap();
+    let (with_strict, with_loose) = (with_strict.unwrap(), with_loose.unwrap());
+    println!("in force: {:?} {:?}\nfirst rule: {:?} {:?}", with_strict.preset, with_strict.features, with_loose.preset, with_loose.features);
+    assert_eq!(with_strict.preset, Preset::Document);
+    assert_eq!(with_loose.preset, Preset::PhotoRich);
+    // both rules' readings are in the features, whichever is in force
+    assert!(with_strict.features.photo_share < 0.01 && with_strict.features.photo_loose > 0.15, "{:?}", with_strict.features);
+    assert_eq!(with_loose.features.photo_share, with_loose.features.photo_loose);
+    assert_eq!(with_strict.features.photo_loose, with_loose.features.photo_loose);
+    // the page was measured once for both
+    assert!(page.measured.get().is_some_and(|m| m.is_some()));
+    // and a page that is a photograph is one under both rules
+    let picture = base(picture_page(), 150, Paper::Custom);
+    for rule in [true, false] {
+        let (_, kind) = page_look_kind(&picture, &PageRequest { strict_photo: rule, ..request(PresetChoice::Auto) }).unwrap();
+        let kind = kind.unwrap();
+        assert_eq!(kind.preset, Preset::Photo, "{:?}", kind.features);
+        assert!(kind.whole_photo);
+    }
+}
+
+#[test]
+fn a_page_base_measures_its_page_once_and_every_look_gets_the_same_kind() {
+    let (page, dpi) = english_with_band();
+    let fresh = base(page.clone(), dpi, Paper::A4);
+    assert!(fresh.measured.get().is_none());
+    let (first, kind) = page_look_kind(&fresh, &request(PresetChoice::Auto)).unwrap();
+    // kept after the first look
+    assert!(fresh.measured.get().is_some_and(|m| m.is_some()));
+    let kept = fresh.measured.get().cloned();
+    // a second look, a strength change and the other rule reuse it
+    let (again, kind_again) = page_look_kind(&fresh, &request(PresetChoice::Auto)).unwrap();
+    let _ = page_look_kind(&fresh, &PageRequest { strength: 20, strict_gutter: false, ..request(PresetChoice::Auto) }).unwrap();
+    assert_eq!(fresh.measured.get().cloned(), kept);
+    assert_eq!(rgb(first.pixels), rgb(again.pixels.clone()));
+    assert_eq!(kind, kind_again);
+    // and what it kept is what a page measured afresh gives
+    assert_eq!(kind.unwrap(), page_kind(&page, dpi, Paper::A4, 0, PresetChoice::Auto).unwrap());
+    let unmeasured = base(page, dpi, Paper::A4);
+    assert_eq!(rgb(page_look_kind(&unmeasured, &request(PresetChoice::Auto)).unwrap().0.pixels), rgb(again.pixels));
+    // presets off and the other looks do not measure at all
+    let off = base(Rgb { width: 4, height: 4, data: vec![200; 48] }, 200, Paper::Custom);
+    let _ = page_look_kind(&off, &request(PresetChoice::Off)).unwrap();
+    let _ = page_look_kind(&off, &PageRequest { look: Look::Colour, ..request(PresetChoice::Auto) }).unwrap();
+    assert!(off.measured.get().is_none());
 }
 
 #[test]

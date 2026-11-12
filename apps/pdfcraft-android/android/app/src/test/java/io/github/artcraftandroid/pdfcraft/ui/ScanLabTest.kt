@@ -48,6 +48,11 @@ class ScanLabTest {
         // document types are on as designed (#299)
         assertTrue(lab.presets)
         assertFalse(lab.copy(presets = false).asDesigned)
+        // a type's own tone, gentle sharpening of photographs and the suggestions are as designed (#299)
+        assertTrue(lab.kindTone && lab.photoSharpen && lab.suggestions)
+        assertFalse(lab.copy(kindTone = false).asDesigned)
+        assertFalse(lab.copy(photoSharpen = false).asDesigned)
+        assertFalse(lab.copy(suggestions = false).asDesigned)
         // the crop screen with magnifier and snapping is as designed; the old one is a testing option (#292)
         assertTrue(lab.cropTools)
         assertFalse(lab.copy(cropTools = false).asDesigned)
@@ -87,6 +92,8 @@ class ScanLabTest {
             ScanLab(preview = false),
             ScanLab(settleTurns = false),
             ScanLab(presets = false),
+            ScanLab(kindTone = false, photoSharpen = false, suggestions = false),
+            ScanLab(photoSharpen = false),
             ScanLab(cropTools = false),
             ScanLab(flattenAuto = true),
             ScanLab(flattenTrim = false),
@@ -139,6 +146,8 @@ class ScanLabTest {
     fun aKeptPageSaysWhatTheTestSetNeedsAndHowTheAppGotThere() {
         val finding = ScanFinding("model", 0.8349, 0, 1, 4, 0)
         val json = JSONObject(scanTestPageJson("0.0.26-beta (26001)", true, crop, crop, finding, "auto", 60, true, ScanLab(strength = 60), "page-01.out.jpg", result, ScanTestPreview(true, true, 412, 905, 1280, "auto")))
+        // #425: nobody has checked the corners yet, so scan-eval leaves the page out until someone sets this
+        assertFalse(json.getBoolean("checked"))
         // the last preview shown before saving (#301)
         val shown = json.getJSONObject("preview")
         assertTrue(shown.getBoolean("shown") && shown.getBoolean("reused"))
@@ -211,7 +220,7 @@ class ScanLabTest {
 
     @Test
     fun aKeptPageSaysWhichKindOfDocumentItWasTakenFor() {
-        val kind = ScanTestKind("receipt", false, 80, 35, false, false, true, 3.0004, 0.04321, 0.0, 0.0, 0.3387, 0.0, false, false)
+        val kind = ScanTestKind("receipt", false, 80, 35, false, false, true, 3.0004, 0.04321, 0.0, 0.0, 0.3387, 0.0, false, false, gutterLoose = true, gutterCover = 0.61234)
         val json = JSONObject(scanTestPageJson("1.0 (1)", true, crop, null, null, "auto", 60, false, ScanLab(), null, result, null, kind = kind))
         val type = json.getJSONObject("document_type")
         assertEquals("receipt", type.getString("preset"))
@@ -227,6 +236,13 @@ class ScanLabTest {
         assertEquals("other", json.getString("kind"))
         assertTrue(JSONObject(scanTestPageJson("1.0 (1)", true, crop, null, null, "bw", 75, false, ScanLab(), null, result)).isNull("document_type"))
         assertEquals(true, ScanLab().diag().toMap()["presets"])
+        // the kind's own tone (#299): a receipt's added gamma, no S-curve, colour as it was
+        assertEquals(0.3, JSONObject(scanTestPageJson("1.0 (1)", true, crop, null, null, "auto", 60, false, ScanLab(), null, result, null, kind = kind.copy(extraGamma = 0.3)))
+            .getJSONObject("document_type").getDouble("extra_gamma"), 1e-9)
+        assertFalse(type.getBoolean("s_curve"))
+        assertEquals(1.0, type.getDouble("colour_factor"), 1e-9)
+        val options = json.getJSONObject("options")
+        assertTrue(options.getBoolean("kind_tone") && options.getBoolean("photo_sharpen") && options.getBoolean("suggestions"))
     }
 
     @Test

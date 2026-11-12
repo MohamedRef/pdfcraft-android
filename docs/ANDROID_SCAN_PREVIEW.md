@@ -137,7 +137,7 @@ Added after the preview, in the same issue. All of it is Kotlin; the native side
   `page` or `lab`) and `settled`; `page` lines gain `look`, `look_per_page`, `strength_source` and
   `look_differs`; the `saved` line gains `looks_mixed` and `unenhanced`. New lines: `looks_strip`
   (`index`, `look_strip`, `asked`, `made`, `reused`, `ms`, `slowest_ms`), `look_chosen` (`index`,
-  `why` = `look`, `strength` or `reset`, `look`, `strength`, `strength_source`, `look_per_page`,
+  `why` = `look`, `strength`, `reset` or `suggestion` (the Grayscale chip, #299), `look`, `strength`, `strength_source`, `look_per_page`,
   `pages`; the slider writes one when let go), `look_applied_all` (`index`, `look`, `strength`,
   `pages`, `changed`) and `save_cancelled` (`pages`, `made`, `ms`).
 - **Kept scans.** Each page file gains `page_look` (`id`, `strength`, `level`, `per_page`); `look`

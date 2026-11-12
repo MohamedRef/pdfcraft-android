@@ -10,6 +10,14 @@
 //! few, a photograph has all of them). The photo blocks are then cleaned up into regions with a
 //! soft edge. The thresholds are the starting values of S13 section 4; the tests print the
 //! measured values. Not done here: the union with the object mask of #298, which the caller does.
+//!
+//! One thing was added from real photos (#427): a block where blank paper shows between many
+//! edges is print, not a photograph. Barcodes, ink stamps and soft print photographed small are
+//! about half paper and half grey, with hardly a pixel as dark as ink, so the three measures
+//! above took them for photographs (15 % of a flat label, 13 % of a stamped sheet). What gives
+//! them away is that a third to two thirds of their pixels sit on an edge. A photograph's bright
+//! parts also read as paper once the light is evened, but they are smooth. Both readings are
+//! kept ([`PhotoMasks`]), so the first rule can be put back and the two compared.
 
 use crate::{Rgb, luma};
 use std::f32::consts::PI;
@@ -44,6 +52,15 @@ const MIN_STRONG_PIXELS: usize = 16;
 const WHOLE_PAGE_SHARE: f64 = 0.60;
 /// A group of photo blocks is kept only when its bounding box is this many blocks wide and high.
 const MIN_COMPONENT_BLOCKS: usize = 3;
+/// Print on paper, not a photograph (#427): a block with at least this share of paper-white
+/// pixels (luminance above `MID_HIGH`) and at least `PRINT_EDGES` of its pixels on an edge. On the
+/// ten reference photos the blocks the first rule took for photographs were barcodes, stamps and
+/// soft print, a third to a half paper each; limits from 0.15 to 0.35 remove them alike.
+const PRINT_PAPER: f32 = 0.25;
+/// The share of a block's pixels with a strong gradient from which it is strokes or bars. Among
+/// the paper-showing blocks the first rule took for photographs on the reference photos the
+/// median was 0.45 to 0.68 a page; in the bright part of a drawn photograph it is under 0.05.
+const PRINT_EDGES: f32 = 0.20;
 
 /// Where the photographs are on a page, one weight per block (#299, S13 section 4).
 #[derive(Clone, Debug, PartialEq)]
@@ -62,11 +79,25 @@ pub struct PhotoMask {
     pub whole_page: bool,
 }
 
-/// The three measures of one block (#299, S13 section 4). Crate-visible for the tests.
+/// A page's photographs by the rule in force and by the first rule (#427): the same blocks and
+/// measures, cleaned up twice.
+#[derive(Clone, Debug, PartialEq)]
+pub struct PhotoMasks {
+    /// The first rule, without the blocks that are print on paper (`PRINT_PAPER`, `PRINT_EDGES`).
+    pub strict: PhotoMask,
+    /// The first rule alone (S13 section 4), which also takes barcodes, stamps and soft print.
+    pub loose: PhotoMask,
+}
+
+/// The measures of one block (#299, S13 section 4; `paper` since #427). Crate-visible for the tests.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct Measures {
     /// Share of pixels with corrected luminance between `MID_LOW` and `MID_HIGH`.
     pub mid: f32,
+    /// Share of pixels with corrected luminance above `MID_HIGH`: blank paper showing.
+    pub paper: f32,
+    /// Share of pixels with a strong gradient (`STRONG_GRADIENT`): the edges of strokes and bars.
+    pub edges: f32,
     /// Mean chroma of the block's pixels, 0–1.
     pub chroma: f32,
     /// Entropy of the gradient-direction histogram, in bits.
@@ -82,20 +113,30 @@ struct Span {
     y1: usize,
 }
 
-/// Finds the photographs on a straightened page (#299, S13 section 4).
+/// Finds the photographs on a straightened page (#299, S13 section 4), by the rule in force
+/// (#427: a block that is mostly paper is not one).
 ///
 /// `page` is the page after lighting correction (paper near white), at working size (longer side
 /// about 1000 pixels). Returns `None` when the page is smaller than 3 by 3 blocks, or when its
 /// buffer does not hold `width * height * 3` bytes. The mask is deterministic for the same bytes.
 pub fn photo_mask(page: &Rgb) -> Option<PhotoMask> {
+    photo_masks(page).map(|masks| masks.strict)
+}
+
+/// [`photo_mask`] and the same page by the first rule alone. The blocks are measured once; only
+/// the clean-up, a few thousand blocks, is done twice.
+pub fn photo_masks(page: &Rgb) -> Option<PhotoMasks> {
     let (cols, rows, measures) = measure_blocks(page)?;
-    let photo: Vec<bool> = measures.iter().map(|&m| is_photo(m)).collect();
-    let core = close_holes(&keep_large(&photo, cols, rows), cols, rows);
-    let n = cols * rows;
-    let share = core.iter().filter(|&&b| b).count() as f64 / n as f64;
-    let whole_page = share > WHOLE_PAGE_SHARE;
-    let weight = if whole_page { vec![1.0; n] } else { soft_edge(&core, cols, rows) };
-    Some(PhotoMask { cols, rows, block: BLOCK as u32, weight, share, whole_page })
+    let mask = |rule: fn(Measures) -> bool| {
+        let photo: Vec<bool> = measures.iter().map(|&m| rule(m)).collect();
+        let core = close_holes(&keep_large(&photo, cols, rows), cols, rows);
+        let n = cols * rows;
+        let share = core.iter().filter(|&&b| b).count() as f64 / n as f64;
+        let whole_page = share > WHOLE_PAGE_SHARE;
+        let weight = if whole_page { vec![1.0; n] } else { soft_edge(&core, cols, rows) };
+        PhotoMask { cols, rows, block: BLOCK as u32, weight, share, whole_page }
+    };
+    Some(PhotoMasks { strict: mask(is_photo), loose: mask(is_photo_loose) })
 }
 
 impl PhotoMask {
@@ -148,10 +189,10 @@ pub(crate) fn measure_blocks(page: &Rgb) -> Option<(usize, usize, Vec<Measures>)
     Some((cols, rows, out))
 }
 
-/// The three measures over the pixels of one block.
+/// The measures over the pixels of one block.
 fn block_measures(page: &Rgb, lum: &[u8], bins: &[Option<u8>], span: Span) -> Measures {
     let w = page.width as usize;
-    let (mut pixels, mut mid, mut chroma) = (0usize, 0usize, 0.0f32);
+    let (mut pixels, mut mid, mut paper, mut chroma) = (0usize, 0usize, 0usize, 0.0f32);
     let mut hist = [0usize; ORI_BINS];
     for y in span.y0..span.y1 {
         for x in span.x0..span.x1 {
@@ -160,6 +201,8 @@ fn block_measures(page: &Rgb, lum: &[u8], bins: &[Option<u8>], span: Span) -> Me
             let l = f32::from(lum[i]) / 255.0;
             if (MID_LOW..=MID_HIGH).contains(&l) {
                 mid += 1;
+            } else if l > MID_HIGH {
+                paper += 1;
             }
             let p = &page.data[3 * i..3 * i + 3];
             chroma += chroma_of(p[0], p[1], p[2]);
@@ -169,7 +212,8 @@ fn block_measures(page: &Rgb, lum: &[u8], bins: &[Option<u8>], span: Span) -> Me
         }
     }
     let n = pixels.max(1) as f32;
-    Measures { mid: mid as f32 / n, chroma: chroma / n, ori: entropy_bits(&hist) }
+    let edges = hist.iter().sum::<usize>() as f32 / n;
+    Measures { mid: mid as f32 / n, paper: paper as f32 / n, edges, chroma: chroma / n, ori: entropy_bits(&hist) }
 }
 
 /// Chroma of one pixel: the spread of its three channels, as a share of 255.
@@ -221,9 +265,15 @@ fn strong_bin(lum: &[u8], w: usize, x: usize, y: usize) -> Option<u8> {
     Some(bin.min(ORI_BINS - 1) as u8)
 }
 
-/// The photo test of S13 section 4, on one block's measures.
-pub(crate) fn is_photo(m: Measures) -> bool {
+/// The photo test of S13 section 4 on one block's measures: the first rule (#299).
+pub(crate) fn is_photo_loose(m: Measures) -> bool {
     m.mid > MID_PHOTO || (m.mid > MID_TEXTURED && (m.chroma > CHROMA_PHOTO || m.ori > ORI_PHOTO))
+}
+
+/// The photo test in force (#427): the first rule, unless the block is print on paper (blank
+/// paper showing between many edges).
+pub(crate) fn is_photo(m: Measures) -> bool {
+    is_photo_loose(m) && !(m.paper >= PRINT_PAPER && m.edges >= PRINT_EDGES)
 }
 
 /// The cells next to cell `i` in a `cols` by `rows` grid: 8 neighbours when `diagonal`, else 4.

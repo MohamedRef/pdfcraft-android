@@ -49,6 +49,10 @@ on one part. While any is changed, the scan screen says so.
 | Sharpen text, in Clean scan (#299) | 30 | Off, 60 or 100. With document types on, the type's own sharpening is scaled by this level over 30 (#424): 60 is twice the type's, 100 three and a third times it, at most 100 |
 | Smooth grain in dim photos, in Clean scan (#299) | On | Off |
 | Document types in Clean scan (#299) | On | Off: the filter's own strength and the sharpening above, as before |
+| Document types shape Clean scan's tone (#299) | On | Off: a type sets only strength, sharpening and paper color (no receipt gamma, no whiteboard S-curve) |
+| Sharpen photos on the page gently (#299) | On | Off: only the objects the look finds itself are sharpened gently, as before |
+| Suggest Flatten page or Grayscale for a document type (#299) | On | Off: no suggestion chips |
+| Barcodes, stamps and soft print are not photographs (#427) | On | Off: the first photograph rule, which also reads those as photographs, so a label with a large barcode becomes a document with photographs |
 | Page strength wins over the document type (#424) | On | Off: the document type's strength replaces the slider's, and every sharpening level but Off gives the type's own, as before #424 |
 | Filter strength | Each filter's own | 20, 40, 60, 80 or 100 for every filter |
 | Flatten page (#302) | Off | On, with the switch on the scan screen itself |
@@ -82,19 +86,20 @@ The zip also holds `diagnostics.txt`, the diagnostics log as **Share diagnostics
 ```json
 {
  "corners": [0.11, 0.08, 0.93, 0.10, 0.95, 0.91, 0.07, 0.89],
- "kind": "other", "paper": "unknown", "curved": false, "notes": "",
+ "kind": "other", "paper": "unknown", "curved": false, "notes": "", "checked": false,
  "app": "0.0.26-beta (26001)",
  "outcome": "saved",
  "found": [0.11, 0.08, 0.93, 0.10, 0.95, 0.90, 0.07, 0.89],
  "finding": {"source": "model", "confidence": 0.835, "angle": 0, "passes": 1, "refined_sides": 4, "curved_sides": 0},
  "look": "auto", "strength": 60, "flatten": false, "flatten_chosen": null,
  "options": {"finder": "auto", "refine": true, "side_proportions": false, "snap_paper": true, "strength_override": null, "upright": true,
-             "sharpen": 30, "denoise": true, "preview": true, "crop_tools": true, "flatten_auto": false, "flatten_trim": true, "settle_turns": true, "presets": true, "book_gutter": true, "line_flatten": true,
+             "sharpen": 30, "denoise": true, "preview": true, "crop_tools": true, "flatten_auto": false, "flatten_trim": true, "flatten_line_floor": true, "settle_turns": true, "presets": true, "strict_gutter": true, "strict_photo": true, "book_gutter": true, "line_flatten": true,
              "look_per_page": true, "look_strip": true, "whiteboard_look": true, "preview_stop": true,
              "preview_zoom": true},
  "document_type": {"preset": "receipt", "chosen": false, "strength": 80, "sharpen": 35, "keep_paper": false, "suggest_flatten": false,
                    "suggest_greyscale": true, "ratio": 3.0, "ink_share": 0.043, "colour_ink_share": 0.0, "photo_share": 0.0,
-                   "stroke_mm": 0.339, "glare_share": 0.0, "gutter_band": false, "whole_photo": false},
+                   "stroke_mm": 0.339, "bright_share": 0.0, "gutter_band": false, "gutter_loose": false, "gutter_cover": 0.0,
+                   "photo_loose": 0.0, "whole_photo": false},
  "turns": {"manual": null, "auto": true, "total": 3, "followed": false, "source": "classifier"},
  "capture": {"source": "in_app", "mp10": 499, "width": 8160, "height": 6120, "exposure_index": -1, "exposure_step_milli": 333,
              "torch": false, "focused": true, "rotation": 0, "capture_ms": 640, "live": true, "live_found": true,
@@ -120,7 +125,9 @@ The zip also holds `diagnostics.txt`, the diagnostics log as **Share diagnostics
 
 The first five keys are the scan test set's format (#288, section 1), so a kept scan is a test
 set entry as it stands. `corners` are where the person left the corners: 8 shares of the upright
-photo, top-left, top-right, bottom-right, bottom-left. `found` is what the app found by itself,
+photo, top-left, top-right, bottom-right, bottom-left. `checked` is always written `false`: the
+corners become ground truth only once someone has looked at them on the photo and set it to `true`
+(#425), and `scan-eval` leaves the page out of its measures until then. `found` is what the app found by itself,
 or `null`. `outcome` is `saved` or `discarded`; a discarded page has no `look`, `strength` or
 `result`. `preview` is the last preview the scan screen made of the page before it was saved
 (#301): `shown` is false when none was (the option off, or Save tapped before it was ready),

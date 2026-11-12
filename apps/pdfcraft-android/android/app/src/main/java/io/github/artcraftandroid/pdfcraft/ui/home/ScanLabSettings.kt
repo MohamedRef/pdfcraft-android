@@ -115,6 +115,9 @@ internal fun ScanLabSettings(vm: AppViewModel) {
     SheetRow(null, stringResource(R.string.scan_lab_flatten_trim), { lab.update(o.copy(flattenTrim = !o.flattenTrim)) }) {
         PdfSwitch(o.flattenTrim, { lab.update(o.copy(flattenTrim = it)) })
     }
+    SheetRow(null, stringResource(R.string.scan_lab_flatten_line_floor), { lab.update(o.copy(flattenLineFloor = !o.flattenLineFloor)) }) {
+        PdfSwitch(o.flattenLineFloor, { lab.update(o.copy(flattenLineFloor = it)) })
+    }
     SheetRow(null, stringResource(R.string.scan_lab_line_flatten), { lab.update(o.copy(lineFlatten = !o.lineFlatten)) }) {
         PdfSwitch(o.lineFlatten, { lab.update(o.copy(lineFlatten = it)) })
     }
@@ -134,6 +137,21 @@ internal fun ScanLabSettings(vm: AppViewModel) {
     }
     SheetRow(null, stringResource(R.string.scan_lab_presets), { lab.update(o.copy(presets = !o.presets)) }) {
         PdfSwitch(o.presets, { lab.update(o.copy(presets = it)) })
+    }
+    SheetRow(null, stringResource(R.string.scan_lab_kind_tone), { lab.update(o.copy(kindTone = !o.kindTone)) }) {
+        PdfSwitch(o.kindTone, { lab.update(o.copy(kindTone = it)) })
+    }
+    SheetRow(null, stringResource(R.string.scan_lab_photo_sharpen), { lab.update(o.copy(photoSharpen = !o.photoSharpen)) }) {
+        PdfSwitch(o.photoSharpen, { lab.update(o.copy(photoSharpen = it)) })
+    }
+    SheetRow(null, stringResource(R.string.scan_lab_suggestions), { lab.update(o.copy(suggestions = !o.suggestions)) }) {
+        PdfSwitch(o.suggestions, { lab.update(o.copy(suggestions = it)) })
+    }
+    SheetRow(null, stringResource(R.string.scan_lab_strict_gutter), { lab.update(o.copy(strictGutter = !o.strictGutter)) }) {
+        PdfSwitch(o.strictGutter, { lab.update(o.copy(strictGutter = it)) })
+    }
+    SheetRow(null, stringResource(R.string.scan_lab_strict_photo), { lab.update(o.copy(strictPhoto = !o.strictPhoto)) }) {
+        PdfSwitch(o.strictPhoto, { lab.update(o.copy(strictPhoto = it)) })
     }
     // the slider's strength counts as set by hand, and sharpening scales the type's (#424)
     SheetRow(null, stringResource(R.string.scan_lab_page_strength), { lab.update(o.copy(pageStrength = !o.pageStrength)) }) {

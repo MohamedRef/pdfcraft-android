@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Scanner document types: the book-page gutter rule and the photograph rule (#427), kept apart from strings.xml so parallel scanner work merges cleanly. -->
+<resources>
+    <string name="scan_lab_strict_gutter">صفحة كتاب فقط عندما يمتد ظل على طول جانب التجليد كله ويخفت نحو الداخل</string>
+    <string name="scan_lab_strict_photo">الباركود والأختام والطباعة الباهتة ليست صورًا فوتوغرافية</string>
+</resources>

@@ -13,5 +13,10 @@
     <string name="scan_preset_title">Tipo de documento</string>
     <string name="scan_preset_automatic">Automático</string>
     <string name="scan_lab_presets">Tipos de documento en Escaneo limpio</string>
+    <string name="scan_lab_kind_tone">Los tipos de documento ajustan los tonos del escaneo limpio (recibos más oscuros, pizarras más claras)</string>
+    <string name="scan_lab_photo_sharpen">Enfocar con suavidad las fotos de la página</string>
+    <string name="scan_lab_suggestions">Sugerir Aplanar página o Escala de grises según el tipo de documento</string>
+    <string name="scan_suggest_flatten">¿Aplanar esta página?</string>
+    <string name="scan_suggest_greyscale">Probar escala de grises</string>
     <string name="scan_lab_page_strength">La intensidad de la página prevalece sobre el tipo de documento</string>
 </resources>

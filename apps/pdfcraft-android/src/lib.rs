@@ -40,6 +40,8 @@ pub mod scan_models;
 #[cfg(test)]
 mod progressive_tests;
 #[cfg(test)]
+mod scan_cer_tests;
+#[cfg(test)]
 mod tests;
 
 /// What went wrong, as a message the user can act on.

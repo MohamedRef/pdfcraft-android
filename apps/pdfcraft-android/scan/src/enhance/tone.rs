@@ -12,6 +12,8 @@ pub(crate) struct Tone {
     pub white: f32,
     pub gamma: f32,
     pub colour: f32,
+    /// Use the S-curve `0.5 − 0.5·cos(t^0.75·π)` in place of the gamma curve (a whiteboard, #299).
+    pub s_curve: bool,
 }
 
 impl Tone {
@@ -19,8 +21,26 @@ impl Tone {
     /// gamma 1.4, colour 1.2 (#298).
     pub fn at(strength: u8) -> Tone {
         let k = f32::from(strength.min(100)) / 100.0;
-        Tone { black: 0.42 * k, white: 1.0 - 0.05 * k, gamma: 1.0 + 0.67 * k, colour: 1.0 + 0.33 * k }
+        Tone { black: 0.42 * k, white: 1.0 - 0.05 * k, gamma: 1.0 + 0.67 * k, colour: 1.0 + 0.33 * k, s_curve: false }
     }
+
+    /// This tone with a kind of document's shape on top (#299): its extra gamma added (a positive
+    /// one darkens faint print), its colour factor multiplied in, and its S-curve if it has one.
+    pub fn shaped(self, shape: super::Shape) -> Tone {
+        let extra = if shape.extra_gamma.is_finite() { shape.extra_gamma } else { 0.0 };
+        let factor = if shape.colour_factor.is_finite() { shape.colour_factor.clamp(0.0, 3.0) } else { 1.0 };
+        Tone { gamma: (self.gamma + extra).clamp(MIN_GAMMA, MAX_GAMMA), colour: self.colour * factor, s_curve: shape.s_curve, ..self }
+    }
+}
+
+/// The gamma a kind's extra gamma can take the curve to, at the least and the most.
+const MIN_GAMMA: f32 = 0.3;
+const MAX_GAMMA: f32 = 4.0;
+
+/// The S-curve of a whiteboard (#299, from Zhang and He): lifts the board and darkens the marker
+/// more steeply in the middle than a gamma curve.
+pub(crate) fn s_curve(t: f32) -> f32 {
+    0.5 - 0.5 * (t.clamp(0.0, 1.0).powf(0.75) * std::f32::consts::PI).cos()
 }
 
 /// Black ink's colour may be at most this far from grey per channel before it is taken for
@@ -64,7 +84,8 @@ pub(crate) struct Renderer<'a> {
 impl<'a> Renderer<'a> {
     pub fn new(page: &'a Rgb, light: &[Plane; 3], tone: Tone, keep_paper: bool) -> Renderer<'a> {
         let (w, h) = (page.width as usize, page.height as usize);
-        let curve = (0..=CURVE_STEPS).map(|i| (i as f32 / CURVE_STEPS as f32).powf(tone.gamma)).collect();
+        let curve =
+            (0..=CURVE_STEPS).map(|i| i as f32 / CURVE_STEPS as f32).map(|t| if tone.s_curve { s_curve(t) } else { t.powf(tone.gamma) }).collect();
         let tint = if keep_paper { paper_tint(light) } else { [1.0; 3] };
         let gain = [0, 1, 2].map(|c| light[c].map(|l| tint[c] / (255.0 * l.max(0.02))));
         let mut r = Renderer {

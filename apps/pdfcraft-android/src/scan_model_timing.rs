@@ -2,7 +2,10 @@
 //! whether a learned clean-up model is fast enough. **Measurement only**: the file is read, run on
 //! a fixed pattern and dropped; see `pdfcraft_scan::model_timing`.
 
+use std::path::Path;
+
 use crate::MobileError;
+use crate::scan::SCAN_ROOT;
 
 /// What timing a model found. Times in milliseconds, memory in kB (`None` where the system does
 /// not say).
@@ -26,14 +29,27 @@ pub struct ScanModelTiming {
 
 /// Load the model file at `path` and time `runs` runs (1 to 5) of it on `threads` threads (0: one
 /// per core), on a fixed input of the size the model declares. Blocking, and heavy: a large model
-/// takes its own size in memory and more.
+/// takes its own size in memory and more. Like every other scan call that takes a path (#429), the
+/// file must be inside the scan root (the app's cache directory, see `scan_set_root`).
 #[uniffi::export]
 pub fn scan_time_model(path: String, runs: u32, threads: u32) -> Result<ScanModelTiming, MobileError> {
-    let size = std::fs::metadata(&path).map_err(|_| MobileError::Command("the model file could not be read".into()))?.len();
+    let root = SCAN_ROOT.read().unwrap_or_else(std::sync::PoisonError::into_inner).clone();
+    let root = root.ok_or_else(|| MobileError::Command("scanning is not ready yet".into()))?;
+    time_model_in(&root, &path, runs, threads)
+}
+
+pub(crate) fn time_model_in(root: &Path, path: &str, runs: u32, threads: u32) -> Result<ScanModelTiming, MobileError> {
+    let unreadable = || MobileError::Command("the model file could not be read".into());
+    // resolved first, so `..` and links cannot lead out of the root
+    let model_path = Path::new(path).canonicalize().map_err(|_| unreadable())?;
+    if !model_path.starts_with(root) {
+        return Err(MobileError::Command("the scan's files must be in the app's own folder".into()));
+    }
+    let size = std::fs::metadata(&model_path).map_err(|_| unreadable())?.len();
     if size > pdfcraft_scan::model_timing::MAX_BYTES {
         return Err(MobileError::Command(pdfcraft_scan::model_timing::TimingError::TooLarge.to_string()));
     }
-    let bytes = std::fs::read(&path).map_err(|_| MobileError::Command("the model file could not be read".into()))?;
+    let bytes = std::fs::read(&model_path).map_err(|_| unreadable())?;
     let n = |v: usize| u32::try_from(v).unwrap_or(u32::MAX);
     let t = pdfcraft_scan::model_timing::time_model(bytes, runs as usize, threads as usize).map_err(|e| MobileError::Command(e.to_string()))?;
     Ok(ScanModelTiming {
@@ -54,22 +70,51 @@ pub fn scan_time_model(path: String, runs: u32, threads: u32) -> Result<ScanMode
 
 #[cfg(test)]
 mod tests {
-    use super::scan_time_model;
+    use super::time_model_in;
 
-    /// Through the file: the bundled detector is timed; a missing file and a file that is not a
-    /// model are errors.
+    fn temp_dir(name: &str) -> std::path::PathBuf {
+        let dir = std::env::temp_dir().join(format!("pdfcraft-model-timing-{name}-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        dir.canonicalize().unwrap()
+    }
+
+    /// Through the file: the bundled detector, copied into the root, is timed; a missing file and a
+    /// file that is not a model are errors.
     #[test]
     fn a_model_file_is_timed_and_bad_files_refused() {
+        let root = temp_dir("root");
         let edges = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../assets/models/scan-edges.onnx");
-        let t = scan_time_model(edges.to_string_lossy().into_owned(), 1, 1).unwrap();
+        let model = root.join("model.onnx");
+        std::fs::copy(&edges, &model).unwrap();
+        let t = time_model_in(&root, &model.to_string_lossy(), 1, 1).unwrap();
         assert_eq!((t.bytes, t.runs_ms.len(), t.threads), (6_700_744, 1, 1));
         assert!(t.output_finite);
-        let dir = std::env::temp_dir().join(format!("pdfcraft-model-timing-{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let junk = dir.join("junk.onnx");
+        let junk = root.join("junk.onnx");
         std::fs::write(&junk, b"not a model").unwrap();
-        assert!(scan_time_model(junk.to_string_lossy().into_owned(), 1, 1).is_err());
-        assert!(scan_time_model(dir.join("missing.onnx").to_string_lossy().into_owned(), 1, 1).is_err());
-        std::fs::remove_dir_all(dir).unwrap();
+        assert!(time_model_in(&root, &junk.to_string_lossy(), 1, 1).is_err());
+        assert!(time_model_in(&root, &root.join("missing.onnx").to_string_lossy(), 1, 1).is_err());
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    /// #429: a model outside the root is refused before it is read, also when the path only looks
+    /// as if it were inside (`..`), as `read_photo` refuses a photo.
+    #[test]
+    fn a_model_outside_the_root_is_refused() {
+        let root = temp_dir("inside");
+        let outside = temp_dir("outside");
+        let edges = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../assets/models/scan-edges.onnx");
+        let model = outside.join("model.onnx");
+        std::fs::copy(&edges, &model).unwrap();
+        let refused = |path: &std::path::Path| match time_model_in(&root, &path.to_string_lossy(), 1, 1) {
+            Err(crate::MobileError::Command(m)) => m.contains("app's own folder"),
+            _ => false,
+        };
+        assert!(refused(&model));
+        let dotted = root.join("..").join(outside.file_name().unwrap()).join("model.onnx");
+        assert!(refused(&dotted));
+        // the bundled asset itself is outside the root too
+        assert!(refused(&edges));
+        std::fs::remove_dir_all(root).unwrap();
+        std::fs::remove_dir_all(outside).unwrap();
     }
 }

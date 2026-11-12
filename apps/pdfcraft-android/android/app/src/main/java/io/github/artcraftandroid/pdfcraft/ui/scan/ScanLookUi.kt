@@ -56,7 +56,7 @@ private fun AppViewModel.setScanLooks(next: List<ScanPageLook>) {
 
 /**
  * The person chose [look] for page [index] (#301): that page alone, or every page with the
- * testing option for a look per page off. [why] is "look", "strength" or "reset", for the log;
+ * testing option for a look per page off. [why] is "look", "strength", "reset" or "suggestion", for the log;
  * the slider logs once, when it is let go ([log] false while it moves).
  */
 internal fun AppViewModel.chooseScanLook(index: Int, look: ScanPageLook, why: String, log: Boolean = true) {

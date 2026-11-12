@@ -251,7 +251,7 @@ fn a_curled_page_comes_out_with_lines_at_least_70_percent_straighter() {
         let after = line_straightness(&grey(&flat)).unwrap().px;
         println!("alpha {alpha} beta {beta} turn {turn:?}: fit alpha {:.3} beta {:.3}, {before:.2} px -> {after:.2} px", fit.alpha, fit.beta);
         assert!(after <= 0.3 * before, "{before:.2} px -> {after:.2} px (alpha {:.3}, beta {:.3})", fit.alpha, fit.beta);
-        assert!(compare_flattened(&plain, &flat).kept);
+        assert!(compare_flattened(&plain, &flat, crate::flatten_guard::MIN_LINES).kept);
     }
 }
 
@@ -259,7 +259,7 @@ fn a_curled_page_comes_out_with_lines_at_least_70_percent_straighter() {
 fn a_flat_page_is_left_to_the_perspective_warp_by_the_guard() {
     let (plain, flat) = both(&curled(0.0, 0.0, [0.3, 0.15, 0.0]), 18);
     let (flat, fit) = flat.unwrap();
-    let check = compare_flattened(&plain, &flat);
+    let check = compare_flattened(&plain, &flat, crate::flatten_guard::MIN_LINES);
     println!("flat page: alpha {:.3} beta {:.3}, {:?} -> {:?}", fit.alpha, fit.beta, check.straightened.map(|m| m.px), check.flattened.map(|m| m.px));
     assert!(fit.alpha.abs() < 0.05 && fit.beta.abs() < 0.05, "alpha {} beta {}", fit.alpha, fit.beta);
     assert!(!check.kept);
@@ -300,7 +300,7 @@ fn the_fallback_keeps_a_curled_page_flattened_from_its_lines() {
     let photo = scene.photograph(&text(18));
     let quad = scene.corners();
     let plain = rectify_with_threads(&photo, &quad, 700, 980, 1).unwrap();
-    let (kept, outcome) = crate::page::flatten_by_lines(&photo, &quad, &plain, 1);
+    let (kept, outcome) = crate::page::flatten_by_lines(&photo, &quad, &plain, 1, crate::flatten_guard::MIN_LINES);
     assert!(kept.is_some() && outcome.gave_up.is_none());
     assert!(outcome.check.is_some_and(|c| c.kept && c.why == "straighter"), "{outcome:?}");
     assert!(outcome.fit.is_some_and(|f| f.lines >= 15 && f.rms_after < f.rms_before));

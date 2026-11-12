@@ -1,6 +1,6 @@
 //! Tests for the document-type presets (issue #299). Pages and features are built in code.
 
-use super::preset::{InkFeatures, PageFeatures, Preset, PresetParams, classify, gutter_band, ink_features, params};
+use super::preset::{InkFeatures, PageFeatures, Preset, PresetParams, classify, gutter_band, gutter_reading, ink_features, params};
 use crate::{Luma, Rgb};
 
 /// A plain A4 page with nothing on it: every rule's measurement at its neutral value.
@@ -12,10 +12,13 @@ fn a4_document() -> PageFeatures {
         ink_share: 0.10,
         colour_ink_share: 0.0,
         photo_share: 0.02,
+        photo_loose: 0.02,
         stroke_mm: Some(0.5),
         curved_sides: 0,
         gutter_band: false,
-        glare_share: 0.0,
+        gutter_loose: false,
+        gutter_cover: 0.0,
+        bright_share: 0.0,
     }
 }
 
@@ -241,10 +244,13 @@ fn coloured_form_never_comes_out_of_classify_for_10000_seeded_pages() {
             ink_share: rng.unit(),
             colour_ink_share: rng.unit(),
             photo_share: rng.unit() * 1.2,
+            photo_loose: rng.unit() * 1.2,
             stroke_mm: if rng.flag() { Some(rng.unit() * 3.0) } else { None },
             curved_sides: (rng.next() % 4) as u8,
             gutter_band: rng.flag(),
-            glare_share: rng.unit(),
+            gutter_loose: rng.flag(),
+            gutter_cover: rng.unit(),
+            bright_share: rng.unit(),
         };
         if rng.next().is_multiple_of(50) {
             f.photo_share = f64::NAN;
@@ -369,7 +375,7 @@ fn a_page_of_only_blue_ink_has_a_colour_ink_share_of_one() {
 fn a_blank_page_has_no_stroke_and_no_ink() {
     let page = white_page(150, 150);
     let ink: InkFeatures = ink_features(&page, 300.0).unwrap();
-    println!("blank: ink {} colour {} stroke {:?} glare {}", ink.ink_share, ink.colour_ink_share, ink.stroke_mm, ink.glare_share);
+    println!("blank: ink {} colour {} stroke {:?} bright {}", ink.ink_share, ink.colour_ink_share, ink.stroke_mm, ink.bright_share);
     assert_eq!(ink.stroke_mm, None);
     assert_eq!(ink.ink_share, 0.0);
     assert_eq!(ink.colour_ink_share, 0.0);
@@ -379,7 +385,7 @@ fn a_blank_page_has_no_stroke_and_no_ink() {
 fn glare_is_the_plain_share_of_saturated_pixels() {
     let mut page = Rgb { width: 100, height: 100, data: vec![128; 100 * 100 * 3] };
     paint(&mut page, (0, 0, 100, 50), [255, 255, 255]);
-    let glare = ink_features(&page, 300.0).unwrap().glare_share;
+    let glare = ink_features(&page, 300.0).unwrap().bright_share;
     println!("half white, half grey: glare {glare}");
     assert!((glare - 0.5).abs() < 1e-9);
 }
@@ -469,4 +475,94 @@ fn gutter_band_refuses_a_square_page_and_a_mismatched_page() {
     println!("square with shadow: {}, mismatched: {}", gutter_band(&square), gutter_band(&mismatched));
     assert!(!gutter_band(&square));
     assert!(!gutter_band(&mismatched));
+}
+
+// The strict gutter rule (#427). Portrait 200 × 300 pages at 230: the strip is 12 px, the limit
+// 230 × 0.88 = 202.4.
+
+/// Paints a shadow down the left side from `y0` to `y1`: `edge` at x = 0, rising evenly to the
+/// page's 230 at x = `width`.
+fn shadow(page: &mut Luma, width: u32, edge: u8, (y0, y1): (u32, u32)) {
+    for y in y0..y1 {
+        for x in 0..width {
+            let v = f64::from(edge) + (230.0 - f64::from(edge)) * f64::from(x) / f64::from(width);
+            page.data[(y * page.width + x) as usize] = v.round() as u8;
+        }
+    }
+}
+
+#[test]
+fn a_gutter_shadow_down_the_whole_side_that_fades_inward_passes_both_rules() {
+    let mut page = grey_page(200, 300, 230);
+    shadow(&mut page, 18, 120, (0, 300));
+    let reading = gutter_reading(&page);
+    println!("gutter shadow: {reading:?}");
+    assert!(reading.loose && reading.strict, "{reading:?}");
+    assert_eq!(reading.cover, 1.0);
+    assert_eq!(reading.loose, gutter_band(&page));
+    // the same on the right side and along the bottom of a landscape page
+    let mirrored = Luma { data: page.data.chunks_exact(200).flat_map(|row| row.iter().rev().copied()).collect(), ..page.clone() };
+    assert!(gutter_reading(&mirrored).strict);
+    let mut landscape = grey_page(300, 200, 230);
+    for y in 0..200u32 {
+        for x in 0..300u32 {
+            landscape.data[(y * 300 + x) as usize] = page.data[(x * 200 + (199 - y)) as usize];
+        }
+    }
+    assert!(gutter_reading(&landscape).strict, "{:?}", gutter_reading(&landscape));
+}
+
+#[test]
+fn a_flat_band_of_dark_surround_passes_the_first_rule_only() {
+    // what the first rule fired on: a strip of dark table left along one side by the crop
+    let mut page = grey_page(200, 300, 230);
+    paint_grey(&mut page, (0, 0, 12, 300), 150);
+    let reading = gutter_reading(&page);
+    println!("flat band: {reading:?}");
+    assert!(reading.loose && !reading.strict, "{reading:?}");
+    assert_eq!(reading.loose, gutter_band(&page));
+}
+
+#[test]
+fn a_thin_black_surround_passes_the_first_rule_only() {
+    let mut page = grey_page(200, 300, 230);
+    paint_grey(&mut page, (0, 0, 4, 300), 10);
+    let reading = gutter_reading(&page);
+    println!("thin surround: {reading:?}");
+    assert!(reading.loose && !reading.strict, "{reading:?}");
+}
+
+#[test]
+fn a_patch_of_shade_down_part_of_the_side_passes_the_first_rule_only() {
+    // dappled shade: a deep shadow that fades inward, but over the top 40 % of the side only
+    let mut page = grey_page(200, 300, 230);
+    shadow(&mut page, 18, 0, (0, 120));
+    let reading = gutter_reading(&page);
+    println!("patch of shade: {reading:?}");
+    assert!(reading.loose && !reading.strict, "{reading:?}");
+    assert!((reading.cover - 0.4).abs() < 1e-9, "{reading:?}");
+}
+
+#[test]
+fn a_broad_shadow_over_a_third_of_the_page_passes_the_first_rule_only() {
+    let mut page = grey_page(200, 300, 230);
+    shadow(&mut page, 60, 120, (0, 300));
+    let reading = gutter_reading(&page);
+    println!("broad shadow: {reading:?}");
+    assert!(reading.loose && !reading.strict, "{reading:?}");
+}
+
+#[test]
+fn the_strict_rule_reads_nothing_on_an_even_a_square_or_a_mismatched_page() {
+    assert_eq!(gutter_reading(&grey_page(200, 300, 230)).strict, false);
+    let mut square = grey_page(200, 200, 230);
+    shadow(&mut square, 18, 120, (0, 200));
+    assert!(!gutter_reading(&square).loose && !gutter_reading(&square).strict);
+    let mismatched = Luma { width: 20, height: 20, data: vec![0; 10] };
+    assert!(!gutter_reading(&mismatched).strict);
+    // a shadow on both long sides is no gutter by either rule
+    let mut both = grey_page(200, 300, 230);
+    shadow(&mut both, 18, 120, (0, 300));
+    paint_grey(&mut both, (188, 0, 200, 300), 150);
+    assert!(!gutter_reading(&both).loose && !gutter_reading(&both).strict);
 }

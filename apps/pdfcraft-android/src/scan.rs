@@ -75,6 +75,10 @@ pub struct ScanPageRequest {
     /// of a side at most) and draw the page again without it, at the same size (#302).
     #[uniffi(default = false)]
     pub flatten_trim: bool,
+    /// The flattening guard keeps a flattened page only when at least this many lines of text
+    /// were followed on both pages (#302); 0 for no floor.
+    #[uniffi(default = 8)]
+    pub flatten_min_lines: u8,
     /// With `flatten`: when the network is not installed or its page was not kept, fit a
     /// curled-page model to the page's lines of text and keep that page when it is at least 10 %
     /// straighter (#303, part B).
@@ -107,9 +111,24 @@ pub struct ScanPageRequest {
     /// How many sides of the page its edge detection found curved (0–4), a book page's sign (#299).
     #[uniffi(default = 0)]
     pub curved_sides: u8,
+    /// A dark band down one long side counts as a book's gutter only when it runs the whole
+    /// length, stays narrow and fades inward (#427); false is the first rule (#299, a testing choice).
+    #[uniffi(default = true)]
+    pub strict_gutter: bool,
+    /// A block of the page counts as a photograph only where little paper shows, so barcodes,
+    /// stamps and soft print are not photographs (#427); false is the first rule (#299, a testing choice).
+    #[uniffi(default = true)]
+    pub strict_photo: bool,
     /// The strength was set by hand (a testing option): a document type does not change it.
     #[uniffi(default = false)]
     pub fixed_strength: bool,
+    /// A document type also changes Clean scan's tone curve: a receipt's extra gamma, a
+    /// whiteboard's S-curve and colour (#299).
+    #[uniffi(default = false)]
+    pub kind_tone: bool,
+    /// Sharpen the photographs found on the page as gently as the look's own objects (#299).
+    #[uniffi(default = false)]
+    pub photo_sharpen: bool,
     /// The paper's colour in Auto and Whiteboard, as the person chose it (#301): "white", "keep"
     /// (the paper's own colour), or "auto" (the document type decides; white unless it keeps it).
     /// Anything else is "auto".
@@ -134,12 +153,27 @@ pub struct ScanPageKind {
     pub ratio: f32,
     pub ink_share: f32,
     pub colour_ink_share: f32,
+    /// Share of the page the photo rule in force takes for photographs.
     pub photo_share: f32,
+    /// What the first photo rule (#299) says, whichever rule is in force (#427): it also counts
+    /// barcodes, stamps and soft print.
+    pub photo_loose: f32,
     /// Median stroke width in millimetres; -1 when there is no ink.
     pub stroke_mm: f32,
-    pub glare_share: f32,
+    /// Share of near-white pixels before the light is evened (not glare: white paper reaches it, #427).
+    pub bright_share: f32,
+    /// The gutter rule in force said this page has a gutter's dark band.
     pub gutter_band: bool,
+    /// What the first gutter rule (#299) says, whichever rule is in force (#427).
+    pub gutter_loose: bool,
+    /// Share of the darker long side's length along which its strip is dark (0–1, #427).
+    pub gutter_cover: f32,
     pub whole_photo: bool,
+    /// The kind's change to the tone curve (#299): added gamma, the S-curve, the colour factor.
+    /// Used only when the request's `kind_tone` asked for it.
+    pub extra_gamma: f32,
+    pub s_curve: bool,
+    pub colour_factor: f32,
 }
 
 fn kind_of(kind: &PageKind) -> ScanPageKind {
@@ -156,10 +190,16 @@ fn kind_of(kind: &PageKind) -> ScanPageKind {
         ink_share: f.ink_share as f32,
         colour_ink_share: f.colour_ink_share as f32,
         photo_share: f.photo_share as f32,
+        photo_loose: f.photo_loose as f32,
         stroke_mm: f.stroke_mm.map_or(-1.0, |v| v as f32),
-        glare_share: f.glare_share as f32,
+        bright_share: f.bright_share as f32,
         gutter_band: f.gutter_band,
+        gutter_loose: f.gutter_loose,
+        gutter_cover: f.gutter_cover as f32,
         whole_photo: kind.whole_photo,
+        extra_gamma: kind.params.extra_gamma,
+        s_curve: kind.params.s_curve,
+        colour_factor: kind.params.colour_factor,
     }
 }
 
@@ -570,6 +610,7 @@ fn page_request<'a>(request: &ScanPageRequest, photo: &'a [u8], corners: [f32; 8
         flatten: request.flatten,
         flatten_check: request.flatten_check,
         flatten_trim: request.flatten_trim,
+        flatten_min_lines: u32::from(request.flatten_min_lines),
         line_flatten: request.line_flatten,
         side_proportions: request.side_proportions,
         upright: request.upright,
@@ -578,7 +619,11 @@ fn page_request<'a>(request: &ScanPageRequest, photo: &'a [u8], corners: [f32; 8
         denoise: request.denoise,
         preset: preset_choice(&request.preset),
         curved_sides: request.curved_sides.min(4),
+        strict_gutter: request.strict_gutter,
+        strict_photo: request.strict_photo,
         fixed_strength: request.fixed_strength,
+        kind_tone: request.kind_tone,
+        photo_sharpen: request.photo_sharpen,
         max_side,
         keep_paper: match request.paper.as_str() {
             "keep" => Some(true),
@@ -622,7 +667,7 @@ fn before_turn(width: u32, height: u32, turns: u8) -> (u32, u32) {
 pub struct ScanFlattenCheck {
     /// The flattened page was kept.
     pub kept: bool,
-    /// Why, as a short word: `straighter`, `notbetter`, `unmeasured` or `straight`.
+    /// Why, as a short word: `straighter`, `notbetter`, `unmeasured`, `straight` or `fewlines` (#302).
     pub why: String,
     /// How far the lines of text are from straight and level, in pixels of the page, on each;
     /// `None` when too few lines could be followed.
@@ -728,6 +773,7 @@ struct PreviewKey {
     flatten: bool,
     flatten_check: bool,
     flatten_trim: bool,
+    flatten_min_lines: u8,
     line_flatten: bool,
     upright: bool,
     turns: u8,
@@ -834,6 +880,7 @@ pub(crate) fn preview_stoppable(
         flatten: request.flatten,
         flatten_check: request.flatten_check,
         flatten_trim: request.flatten_trim,
+        flatten_min_lines: request.flatten_min_lines,
         line_flatten: request.line_flatten,
         upright: request.upright,
         turns: request.turns % 4,
@@ -1183,6 +1230,7 @@ mod tests {
             flatten: false,
             flatten_check: false,
             flatten_trim: false,
+            flatten_min_lines: 8,
             line_flatten: false,
             side_proportions: false,
             upright: false,
@@ -1191,7 +1239,11 @@ mod tests {
             denoise: true,
             preset: "off".into(),
             curved_sides: 0,
+            strict_gutter: true,
+            strict_photo: true,
             fixed_strength: false,
+            kind_tone: false,
+            photo_sharpen: false,
             paper: "auto".into(),
         }
     }

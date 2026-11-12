@@ -139,6 +139,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             flatten: false,
             flatten_check: false,
             flatten_trim: false,
+            flatten_min_lines: 8,
             line_flatten: false,
             side_proportions: false,
             upright: false,
@@ -147,7 +148,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             denoise: true,
             preset: "off".into(),
             curved_sides: 0,
+            strict_gutter: true,
+            strict_photo: true,
             fixed_strength: false,
+            kind_tone: false,
+            photo_sharpen: false,
             paper: "auto".into(),
         })?;
         let new = run(&s, "doc_create", json!({ "from": "images", "paths": [r.path], "dpi": r.dpi }))?;
