@@ -157,7 +157,14 @@ class Thumbnails(private val context: Context) {
     private val drawing: kotlinx.coroutines.CoroutineDispatcher = kotlinx.coroutines.Dispatchers.IO.limitedParallelism(2)
 
     /** [of], on the thumbnail queue. */
-    suspend fun load(path: String, maxSide: Int = 160): Bitmap? = kotlinx.coroutines.withContext(drawing) { of(path, maxSide) }
+    suspend fun load(path: String, maxSide: Int = 160): Bitmap? {
+        val started = android.os.SystemClock.elapsedRealtime()
+        val bitmap = kotlinx.coroutines.withContext(drawing) { of(path, maxSide) }
+        // #93: a file card whose preview took 100 ms or more, waiting for a drawing slot included
+        val ms = android.os.SystemClock.elapsedRealtime() - started
+        if (ms >= 100) Diag.event(DiagArea.Home, "slow_thumbnail", "ms" to ms, "drawn" to (bitmap != null), "content" to path.startsWith("content:"))
+        return bitmap
+    }
 
     /** The thumbnail of the PDF at [path] or content address (null when it can't be drawn: protected, damaged). Blocking. */
     fun of(path: String, maxSide: Int = 160): Bitmap? {

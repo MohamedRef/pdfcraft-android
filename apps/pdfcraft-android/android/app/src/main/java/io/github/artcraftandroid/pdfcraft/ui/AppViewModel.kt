@@ -153,6 +153,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     fun refreshRecents() {
         viewModelScope.launch {
             val open = document?.source?.toString()
+            val started = android.os.SystemClock.elapsedRealtime()
             val (list, places) = withContext(Dispatchers.IO) {
                 val list = recents.list().also { list ->
                     val uris = list.map { it.uri }
@@ -168,6 +169,8 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             }
             recentPlaces = places
             recentList = list
+            // #94: the Home list's sources and locations, worked out off the main thread
+            Diag.event(DiagArea.Home, "recents", "files" to list.size, "ms" to android.os.SystemClock.elapsedRealtime() - started)
         }
     }
 

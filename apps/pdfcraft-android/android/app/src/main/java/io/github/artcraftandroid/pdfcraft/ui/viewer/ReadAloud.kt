@@ -70,6 +70,8 @@ import androidx.compose.ui.window.PopupProperties
 import io.github.artcraftandroid.pdfcraft.R
 import io.github.artcraftandroid.pdfcraft.core.ReadingBlock
 import io.github.artcraftandroid.pdfcraft.core.TextRange
+import io.github.artcraftandroid.pdfcraft.engine.Diag
+import io.github.artcraftandroid.pdfcraft.engine.DiagArea
 import io.github.artcraftandroid.pdfcraft.engine.Engine
 import io.github.artcraftandroid.pdfcraft.engine.toBitmap
 import io.github.artcraftandroid.pdfcraft.text
@@ -173,12 +175,25 @@ class ReadAloud(
      */
     private val wordCount = scope.launch {
         var words = 0
-        for (p in 0 until doc.pageCount) {
-            words += withContext(engine.documentText) {
-                countWords(runCatching { engine.session.pagePlainText(doc.id, p.toUInt()) }.getOrDefault(""))
+        var pages = 0
+        val started = android.os.SystemClock.elapsedRealtime()
+        try {
+            for (p in 0 until doc.pageCount) {
+                words += withContext(engine.documentText) {
+                    countWords(runCatching { engine.session.pagePlainText(doc.id, p.toUInt()) }.getOrDefault(""))
+                }
+                pages = p + 1
+            }
+            totalWords = words
+        } finally {
+            // #88: how long the count held the text queue, and whether Read Aloud stopped it first
+            if (Diag.enabled()) {
+                Diag.event(
+                    DiagArea.Text, "word_count", "pages" to doc.pageCount, "counted" to pages,
+                    "ms" to android.os.SystemClock.elapsedRealtime() - started, "finished" to (pages == doc.pageCount),
+                )
             }
         }
-        totalWords = words
     }
 
     init {
