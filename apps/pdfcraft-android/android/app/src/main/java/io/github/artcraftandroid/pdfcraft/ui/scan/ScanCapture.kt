@@ -31,6 +31,13 @@ internal data class ScanCapture(
     val liveStable: Boolean = false,
     val liveHint: String = "none",
     val previewQuad: FloatArray? = null,
+    /** Auto-capture (#296): whether it was on, and whether it took this photo (not the shutter). */
+    val autoOn: Boolean = false,
+    val autoShot: Boolean = false,
+    /** The photo's sharpness (#389), measured after the shot; -1 until measured or when it failed. Its "blurred" is unverified and only recorded. */
+    val sharpness: Double = -1.0,
+    val sharpnessBlurredUnverified: Boolean = false,
+    val sharpnessMs: Long = 0L,
 ) {
     /** The facts as diagnostics fields: short lowercase words, booleans and numbers only. */
     fun diag(): Array<Pair<String, Any?>> = arrayOf(
@@ -38,6 +45,7 @@ internal data class ScanCapture(
         "exposure_index" to exposureIndex, "exposure_step_milli" to exposureStepMilli, "torch" to torch,
         "focused" to focused, "rotation" to rotation, "capture_ms" to captureMs,
         "live" to live, "live_found" to liveFound, "live_stable" to liveStable, "live_hint" to liveHint,
+        "auto_on" to autoOn, "auto_shot" to autoShot,
     )
 
     /** The facts as JSON, for a kept scan's page file. */
@@ -46,6 +54,9 @@ internal data class ScanCapture(
         .put("exposure_index", exposureIndex).put("exposure_step_milli", exposureStepMilli).put("torch", torch)
         .put("focused", focused).put("rotation", rotation).put("capture_ms", captureMs)
         .put("live", live).put("live_found", liveFound).put("live_stable", liveStable).put("live_hint", liveHint)
+        .put("auto_on", autoOn).put("auto_shot", autoShot)
+        .put("sharpness", if (sharpness >= 0 && sharpness.isFinite()) Math.round(sharpness * 1000.0) / 1000.0 else JSONObject.NULL)
+        .put("sharpness_blurred_unverified", sharpnessBlurredUnverified).put("sharpness_ms", sharpnessMs)
         .put(
             "preview_quad",
             previewQuad?.takeIf { it.size == 8 }?.let { q -> org.json.JSONArray().also { a -> q.forEach { v -> a.put(if (v.isFinite()) Math.round(v * 100000.0) / 100000.0 else 0.0) } } } ?: JSONObject.NULL,
