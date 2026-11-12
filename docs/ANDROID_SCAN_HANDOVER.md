@@ -25,7 +25,7 @@ a phone yet.** Every number in the scanner's documents was measured on a desktop
 | #294 | In-app camera (CameraX) | Core done, not run on a phone | #390 | Everything on the owner's phone (`ANDROID_SCAN_CAMERA.md`); the focal length from the camera's calibration for #293 |
 | #295 | Live page outline, hints | Core done, not run on a phone | #398 (native), #405 | Everything on the owner's phone (`ANDROID_SCAN_LIVE.md`): detection rate, lag, flicker, the hint thresholds; handing the outline to the still (section 6) |
 | #296 | Auto-capture, blur check | #389 (native), this PR | | Auto-capture in the in-app camera (`docs/ANDROID_SCAN_AUTO.md`). The blur check is measured and recorded only, no retake prompt: `scan_sharpness` does not detect motion blur and its threshold comes from drawn pages. Nothing ran on a phone |
-| #297 | Multi-frame merge | Native call only, in #389 | | `scan_merge_frames` exists (`docs/ANDROID_SCAN_CAPTURE.md`), measured on drawn frames only. The burst, the setting and the phone measurements need #294 |
+| #297 | Multi-frame merge | #389 (native), this PR | | Low-light burst of 4 in the in-app camera, merged into the scan's page (`docs/ANDROID_SCAN_MERGE.md`). Nothing ran on a phone: noise in a dim room, the recognition check, 4 s per page, burst time and memory are all unmeasured; glare mode left out |
 | #298 | Auto look, part 1 | Core done | #346 | Phone time; the paper White / Keep control has no screen (#301) |
 | #299 | Auto look, part 2 | Part | #373 | The block photo mask, document-type presets and `scan_classify`, the recognition-error check |
 | #300 | Black and white, 1 bit | Core done | #359 | Speckle on textured grey fills; photographs wider than a quarter of the page are not dithered; 0.85 s for 12 megapixels on a desktop |
@@ -63,7 +63,7 @@ Every threshold in them is the issue's starting value or was set on pages drawn 
 
 One document per feature says how it works, what was measured and what was not:
 `ANDROID_SCAN_AUTO.md`, `_AUTO_LOOK.md`, `_BLACK_WHITE.md`, `_CAPTURE.md`, `_DETAIL.md`, `_DETECTOR.md`, `_EDGES.md`,
-`_CAMERA.md`, `_FLATTEN.md`, `_LIVE.md`, `_MEASURING.md`, `_PREVIEW.md`, `_PROPORTIONS.md`, `_TESTING.md`, `_UPRIGHT.md` (all
+`_CAMERA.md`, `_FLATTEN.md`, `_LIVE.md`, `_MEASURING.md`, `_MERGE.md`, `_PREVIEW.md`, `_PROPORTIONS.md`, `_TESTING.md`, `_UPRIGHT.md` (all
 `docs/ANDROID_SCAN_…`). Read the one for a feature before changing it.
 
 ## 2. How a scan goes through the code today

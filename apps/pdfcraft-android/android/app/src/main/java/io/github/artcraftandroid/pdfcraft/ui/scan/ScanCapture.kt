@@ -38,14 +38,19 @@ internal data class ScanCapture(
     val sharpness: Double = -1.0,
     val sharpnessBlurredUnverified: Boolean = false,
     val sharpnessMs: Long = 0L,
+    /** Low-light merge (#297): the burst's facts, or null when one photo was taken. */
+    val merge: ScanMergeFacts? = null,
 ) {
+    /** The photo is a page the merge already straightened: its edges are not searched for again. */
+    val straightened: Boolean get() = merge?.merged == true
+
     /** The facts as diagnostics fields: short lowercase words, booleans and numbers only. */
     fun diag(): Array<Pair<String, Any?>> = arrayOf(
         "source" to source, "mp10" to megapixelsTenths, "width" to width, "height" to height,
         "exposure_index" to exposureIndex, "exposure_step_milli" to exposureStepMilli, "torch" to torch,
         "focused" to focused, "rotation" to rotation, "capture_ms" to captureMs,
         "live" to live, "live_found" to liveFound, "live_stable" to liveStable, "live_hint" to liveHint,
-        "auto_on" to autoOn, "auto_shot" to autoShot,
+        "auto_on" to autoOn, "auto_shot" to autoShot, "burst" to (merge != null), "merged" to straightened,
     )
 
     /** The facts as JSON, for a kept scan's page file. */
@@ -57,6 +62,7 @@ internal data class ScanCapture(
         .put("auto_on", autoOn).put("auto_shot", autoShot)
         .put("sharpness", if (sharpness >= 0 && sharpness.isFinite()) Math.round(sharpness * 1000.0) / 1000.0 else JSONObject.NULL)
         .put("sharpness_blurred_unverified", sharpnessBlurredUnverified).put("sharpness_ms", sharpnessMs)
+        .put("merge", merge?.json() ?: JSONObject.NULL)
         .put(
             "preview_quad",
             previewQuad?.takeIf { it.size == 8 }?.let { q -> org.json.JSONArray().also { a -> q.forEach { v -> a.put(if (v.isFinite()) Math.round(v * 100000.0) / 100000.0 else 0.0) } } } ?: JSONObject.NULL,

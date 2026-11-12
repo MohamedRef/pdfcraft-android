@@ -95,8 +95,11 @@ import kotlinx.coroutines.withTimeoutOrNull
 
 /** What the camera screen hands back to the activity. */
 internal class ScanCameraActions(
-    /** A photo was written to the target file; [more] when the camera stays open for the next page. */
-    val onCaptured: (file: File, capture: ScanCapture, more: Boolean) -> Unit,
+    /**
+     * A photo was written to the target file; [more] when the camera stays open for the next page.
+     * [burst] holds every photo of a low-light burst (#297), the target first; empty for one photo.
+     */
+    val onCaptured: (file: File, capture: ScanCapture, more: Boolean, burst: List<File>) -> Unit,
     /** Done or Close: back to the scan (or out of it, when no page was taken). */
     val onClose: () -> Unit,
     /** Take this photo with the phone's camera app instead. */
@@ -186,6 +189,7 @@ private fun CameraView(file: File, retaking: Boolean, pages: List<ImageBitmap>, 
     var outline by remember { mutableStateOf<ScanLiveOutline?>(null) }
     var hint by remember { mutableStateOf<ScanLiveHint?>(null) }
     var lastLuma by remember { mutableStateOf(255f) }
+    var lumaSeen by remember { mutableStateOf(false) }
     var lastCutOff by remember { mutableStateOf(false) }
     // auto-capture (#296): needs the live outline; the gyroscope says whether the phone is still
     val autoOn = live && model.autoCapture
@@ -217,6 +221,7 @@ private fun CameraView(file: File, retaking: Boolean, pages: List<ImageBitmap>, 
             main.execute {
                 outline = tracker.update(d)
                 lastLuma = d.meanLuma
+                lumaSeen = true
                 lastCutOff = d.found && d.cutOff
                 if (d.found) lastSignature = d.signature
             }
@@ -235,7 +240,10 @@ private fun CameraView(file: File, retaking: Boolean, pages: List<ImageBitmap>, 
     DisposableEffect(sound) { onDispose { sound.release() } }
 
     val ratio = ResolutionSelector.Builder().setAspectRatioStrategy(AspectRatioStrategy.RATIO_4_3_FALLBACK_AUTO_STRATEGY)
-    val preview = remember { Preview.Builder().setResolutionSelector(ratio.build()).build().apply { setSurfaceProvider { surfaceRequest = it } } }
+    // the sensor's sensitivity from the preview's capture results, for low-light merge (#297); -1 when not reported
+    val iso = remember { java.util.concurrent.atomic.AtomicInteger(-1) }
+    val preview = remember { scanPreviewWithIso(ratio.build(), iso).apply { setSurfaceProvider { surfaceRequest = it } } }
+    var bursting by remember { mutableStateOf(false) }
     val capture = remember {
         ImageCapture.Builder()
             .setCaptureMode(ImageCapture.CAPTURE_MODE_MAXIMIZE_QUALITY)
@@ -320,47 +328,68 @@ private fun CameraView(file: File, retaking: Boolean, pages: List<ImageBitmap>, 
 
     lateinit var dispatch: (ScanCameraEvent) -> Unit
 
+    /** One photo, or a burst of [ScanMergeRules.FRAMES] in a row when the scene is dark (#297); the burst counts as one capture. */
     fun takePicture() {
         val started = SystemClock.elapsedRealtime()
-        val options = ImageCapture.OutputFileOptions.Builder(file).build()
-        capture.takePicture(
-            options, ContextCompat.getMainExecutor(context),
-            object : ImageCapture.OnImageSavedCallback {
-                override fun onImageSaved(output: ImageCapture.OutputFileResults) {
-                    val ok = scanCaptureUsable(file.isFile, file.length())
-                    if (ok) {
-                        val size = capture.resolutionInfo?.resolution
-                        val w = size?.width ?: 0
-                        val h = size?.height ?: 0
-                        val facts = ScanCapture(
-                            source = ScanCaptureRoute.InApp.id, megapixelsTenths = scanMegapixelsTenths(w, h), width = w, height = h,
-                            exposureIndex = exposure.first, exposureStepMilli = exposure.second, torch = torch, focused = state.lastFocusOk,
-                            rotation = turn, captureMs = SystemClock.elapsedRealtime() - (if (shutterAt > 0) shutterAt else started),
-                            live = live, liveFound = outline?.points != null, liveStable = outline?.stable == true,
-                            liveHint = hint?.id ?: "none", previewQuad = outline?.points,
-                            autoOn = autoOn, autoShot = auto.phase == ScanAutoPhase.Capturing && auto.auto,
-                        )
-                        auto = auto.reduce(ScanAutoEvent.CaptureEnded(true, lastSignature, SystemClock.elapsedRealtime())).first
-                        view.performHapticFeedback(android.view.HapticFeedbackConstants.CONFIRM)
-                        // the photo goes to the scan before Done (if pressed meanwhile) closes the screen
-                        actions.onCaptured(file, facts, !retaking && !state.doneQueued)
-                        dispatch(ScanCameraEvent.CaptureEnded(true, SystemClock.elapsedRealtime()))
-                    } else {
-                        file.delete()
-                        auto = auto.reduce(ScanAutoEvent.CaptureEnded(false, null, SystemClock.elapsedRealtime())).first
-                        dispatch(ScanCameraEvent.CaptureEnded(false, SystemClock.elapsedRealtime()))
-                    }
-                }
+        val why = scanBurstWhy(model.merge, model.memoryClassMb, if (live && lumaSeen) lastLuma else null, iso.get().takeIf { it > 0 })
+        val files = if (why.burst) scanBurstFiles(file) else listOf(file)
+        // the focus and metering of the shutter's focus step hold for the whole burst (4 s auto-cancel)
+        bursting = why.burst
+        val saved = mutableListOf<File>()
 
-                override fun onError(exception: ImageCaptureException) {
-                    file.delete()
-                    Diag.event(DiagArea.Scan, "camera_capture_failed", "code" to exception.imageCaptureError)
-                    auto = auto.reduce(ScanAutoEvent.CaptureEnded(false, null, SystemClock.elapsedRealtime())).first
-                    dispatch(ScanCameraEvent.CaptureEnded(false, SystemClock.elapsedRealtime()))
-                }
-            },
-        )
-        playShutter(context, sound)
+        fun ended() {
+            bursting = false
+            val ok = saved.isNotEmpty() && saved.first() == file && scanCaptureUsable(file.isFile, file.length())
+            if (!ok) {
+                files.forEach { it.delete() }
+                auto = auto.reduce(ScanAutoEvent.CaptureEnded(false, null, SystemClock.elapsedRealtime())).first
+                dispatch(ScanCameraEvent.CaptureEnded(false, SystemClock.elapsedRealtime()))
+                return
+            }
+            (files - saved.toSet()).forEach { it.delete() }
+            val size = capture.resolutionInfo?.resolution
+            val w = size?.width ?: 0
+            val h = size?.height ?: 0
+            val now = SystemClock.elapsedRealtime()
+            val facts = ScanCapture(
+                source = ScanCaptureRoute.InApp.id, megapixelsTenths = scanMegapixelsTenths(w, h), width = w, height = h,
+                exposureIndex = exposure.first, exposureStepMilli = exposure.second, torch = torch, focused = state.lastFocusOk,
+                rotation = turn, captureMs = now - (if (shutterAt > 0) shutterAt else started),
+                live = live, liveFound = outline?.points != null, liveStable = outline?.stable == true,
+                liveHint = hint?.id ?: "none", previewQuad = outline?.points,
+                autoOn = autoOn, autoShot = auto.phase == ScanAutoPhase.Capturing && auto.auto,
+                merge = if (why.burst) ScanMergeFacts(why.id, frames = saved.size, burstMs = now - started) else null,
+            )
+            if (!why.burst) Diag.event(DiagArea.Scan, "camera_merge", "why" to why.id, "iso" to iso.get(), "luma" to (if (lumaSeen) lastLuma.toDouble() else -1.0))
+            auto = auto.reduce(ScanAutoEvent.CaptureEnded(true, lastSignature, now)).first
+            view.performHapticFeedback(android.view.HapticFeedbackConstants.CONFIRM)
+            // the photo goes to the scan before Done (if pressed meanwhile) closes the screen
+            actions.onCaptured(file, facts, !retaking && !state.doneQueued, if (why.burst) saved.toList() else emptyList())
+            dispatch(ScanCameraEvent.CaptureEnded(true, SystemClock.elapsedRealtime()))
+        }
+
+        fun shoot(i: Int) {
+            val target = files[i]
+            capture.takePicture(
+                ImageCapture.OutputFileOptions.Builder(target).build(), ContextCompat.getMainExecutor(context),
+                object : ImageCapture.OnImageSavedCallback {
+                    override fun onImageSaved(output: ImageCapture.OutputFileResults) {
+                        if (scanCaptureUsable(target.isFile, target.length())) saved += target else target.delete()
+                        if (i == 0 && saved.isEmpty()) return ended()
+                        if (i + 1 < files.size) shoot(i + 1) else ended()
+                    }
+
+                    override fun onError(exception: ImageCaptureException) {
+                        target.delete()
+                        Diag.event(DiagArea.Scan, "camera_capture_failed", "code" to exception.imageCaptureError, "frame" to i)
+                        // a later frame of a burst failing keeps the frames already taken
+                        ended()
+                    }
+                },
+            )
+            if (i == 0) playShutter(context, sound)
+        }
+        shoot(0)
     }
 
     dispatch = { event ->
@@ -401,7 +430,7 @@ private fun CameraView(file: File, retaking: Boolean, pages: List<ImageBitmap>, 
                 val (next, shoot) = auto.reduce(ScanAutoEvent.Seen(ScanAutoInputs(now, hint == ScanLiveHint.Ready, stillness.still(now), shown.points != null, lastSignature)))
                 auto = next
                 if (next.phase != before) Diag.event(DiagArea.Scan, "camera_auto_phase", "phase" to next.phase.id)
-                if (shoot && state.shutterReady && camera != null) {
+                if (shoot && state.shutterReady && camera != null && !model.merging) {
                     shutterAt = now
                     dispatch(ScanCameraEvent.Shutter(now))
                 } else if (shoot) {
@@ -489,6 +518,8 @@ private fun CameraView(file: File, retaking: Boolean, pages: List<ImageBitmap>, 
             val h = hint
             if (error) {
                 Text(stringResource(R.string.scan_camera_failed), color = Color.White, fontSize = 14.sp)
+            } else if (bursting || model.merging) {
+                Text(stringResource(R.string.scan_merge_working), color = Color.White, fontSize = 14.sp)
             } else if (autoOn && auto.phase == ScanAutoPhase.Arming) {
                 // the countdown can be skipped: this page is then left until a new one is in view
                 Text(
@@ -522,7 +553,7 @@ private fun CameraView(file: File, retaking: Boolean, pages: List<ImageBitmap>, 
                 }
             }
             val shutterLabel = stringResource(R.string.scan_camera_shutter)
-            val ready = state.shutterReady && camera != null && !failed
+            val ready = state.shutterReady && camera != null && !failed && !bursting && !model.merging
             Box(Modifier.size(84.dp), contentAlignment = Alignment.Center) {
                 // the countdown before an automatic shot, around the shutter
                 if (autoOn && auto.phase == ScanAutoPhase.Arming) {
@@ -540,7 +571,7 @@ private fun CameraView(file: File, retaking: Boolean, pages: List<ImageBitmap>, 
                         .semantics { contentDescription = shutterLabel },
                     contentAlignment = Alignment.Center,
                 ) {
-                    if (state.phase == ScanCameraPhase.Capturing || state.captureQueued) CircularProgressIndicator(Modifier.size(32.dp), color = Color.Black, strokeWidth = 3.dp)
+                    if (state.phase == ScanCameraPhase.Capturing || state.captureQueued || bursting || model.merging) CircularProgressIndicator(Modifier.size(32.dp), color = Color.Black, strokeWidth = 3.dp)
                 }
             }
             Box(Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) {
@@ -565,3 +596,21 @@ private fun playShutter(context: Context, sound: MediaActionSound) {
 
 /** The still's JPEG quality: high enough that the scan's own encode, not this one, sets the file size. */
 private const val JPEG_QUALITY = 97
+
+/** The preview, reporting the sensor's sensitivity of each frame into [iso] through Camera2 interop (#297). */
+@androidx.annotation.OptIn(androidx.camera.camera2.interop.ExperimentalCamera2Interop::class)
+private fun scanPreviewWithIso(selector: ResolutionSelector, iso: java.util.concurrent.atomic.AtomicInteger): Preview {
+    val builder = Preview.Builder().setResolutionSelector(selector)
+    androidx.camera.camera2.interop.Camera2Interop.Extender(builder).setSessionCaptureCallback(
+        object : android.hardware.camera2.CameraCaptureSession.CaptureCallback() {
+            override fun onCaptureCompleted(
+                session: android.hardware.camera2.CameraCaptureSession,
+                request: android.hardware.camera2.CaptureRequest,
+                result: android.hardware.camera2.TotalCaptureResult,
+            ) {
+                result.get(android.hardware.camera2.CaptureResult.SENSOR_SENSITIVITY)?.let { iso.set(it) }
+            }
+        },
+    )
+    return builder.build()
+}

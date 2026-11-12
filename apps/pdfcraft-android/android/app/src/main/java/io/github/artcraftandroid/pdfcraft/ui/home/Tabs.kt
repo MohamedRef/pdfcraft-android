@@ -411,6 +411,7 @@ private fun Preferences(vm: AppViewModel) {
     // which camera Scan uses (#294): the phone's camera app stays one tap away
     Section(stringResource(R.string.common_tool_scan))
     io.github.artcraftandroid.pdfcraft.ui.scan.ScanCameraSetting()
+    io.github.artcraftandroid.pdfcraft.ui.scan.ScanMergeSettingRow()
     SheetDivider()
     Section(stringResource(R.string.library_title))
     SheetRow(null, stringResource(R.string.library_index_switch), { vm.study.updateLibraryIndexing(!vm.study.libraryIndexing) }) {

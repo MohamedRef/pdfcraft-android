@@ -79,19 +79,22 @@ internal class ScanCameraRouter(private val activity: ComponentActivity, private
 
     /** The camera screen's actions. */
     val actions = ScanCameraActions(
-        onCaptured = { file, facts, more ->
-            ScanCaptures.put(file.path, facts)
-            Diag.event(DiagArea.Scan, "camera", *facts.diag())
-            measureSharpness(file, facts)
-            val v = vm()
-            v.onScanPhoto(true)
-            // the camera stays open for the next page, in a file of its own
-            if (more) v.takeScanPhoto() else model().hide()
+        onCaptured = { file, facts, more, burst ->
+            if (burst.size >= 2) {
+                merged(file, facts, more, burst)
+            } else {
+                ScanCaptures.put(file.path, facts)
+                Diag.event(DiagArea.Scan, "camera", *facts.diag())
+                measureSharpness(file, facts)
+                toScan(more)
+            }
         },
         onClose = {
-            model().hide()
-            // the photo not taken: with no page yet, the scan ends
-            vm().onScanPhoto(false)
+            val m = model()
+            val merging = m.merging
+            m.hide()
+            // the photo not taken: with no page yet, the scan ends (a burst being merged still goes to the scan)
+            if (!merging) vm().onScanPhoto(false)
         },
         onPhoneApp = {
             val f = model().target
@@ -118,6 +121,79 @@ internal class ScanCameraRouter(private val activity: ComponentActivity, private
     private fun launchPhoneCamera(file: File) {
         val uri = FileProvider.getUriForFile(activity, "${activity.packageName}.files", file)
         launch(onFail = { vm().onScanPhoto(false) }) { phoneCamera.launch(uri) }
+    }
+
+    /** The photo (at the target file the scan asked for) goes to the scan, then the next photo or the camera closes. */
+    private fun toScan(more: Boolean) {
+        val v = vm()
+        v.onScanPhoto(true)
+        // the camera stays open for the next page, in a file of its own
+        if (more) v.takeScanPhoto() else model().hide()
+    }
+
+    /**
+     * A low-light burst (#297): the page is found on each photo with the still detector, the
+     * photos are merged by `scan_merge_frames` (#389) into one straightened page, and that page
+     * goes to the scan in place of the first photo, marked so its edges are not searched for again.
+     * When too few pages are found or the merge fails, the first photo goes to the scan as usual.
+     * The camera holds its shutter meanwhile, so the scan's next target is not asked for early.
+     */
+    private fun merged(file: File, facts: ScanCapture, more: Boolean, burst: List<File>) {
+        val m = model()
+        m.merging = true
+        val lab = vm().scanLab.options
+        activity.lifecycleScope.launch {
+            val findStarted = android.os.SystemClock.elapsedRealtime()
+            val corners = withContext(Dispatchers.Default) {
+                burst.map { f ->
+                    runCatching { io.github.artcraftandroid.pdfcraft.core.scanFindDocumentWith(f.path, lab.findOptions()) }.getOrNull()
+                        ?.takeIf { it.found }?.corners?.takeIf { it.size == 8 }?.toFloatArray()
+                }
+            }
+            val findMs = android.os.SystemClock.elapsedRealtime() - findStarted
+            val frames = scanMergeFrames(burst, corners)
+            val out = scanMergedFile(file)
+            val mergeStarted = android.os.SystemClock.elapsedRealtime()
+            val result = frames?.let { fr ->
+                withContext(Dispatchers.Default) {
+                    runCatching {
+                        io.github.artcraftandroid.pdfcraft.core.scanMergeFrames(
+                            io.github.artcraftandroid.pdfcraft.core.ScanMergeRequest(
+                                fr.map { (f, c) -> io.github.artcraftandroid.pdfcraft.core.ScanMergeFrame(f.path, c.toList()) },
+                                out.path, io.github.artcraftandroid.pdfcraft.core.ScanFormat.JPEG, null, lab.snapPaper,
+                            ),
+                        )
+                    }.onFailure { e -> Diag.failure(DiagArea.Scan, "scan_merge_frames", e) }.getOrNull()
+                }
+            }
+            val mergeMs = android.os.SystemClock.elapsedRealtime() - mergeStarted
+            val written = result?.let { File(it.path) }?.takeIf { scanCaptureUsable(it.isFile, it.length()) }
+            if (written == null) out.delete()
+            val outcome = scanBurstOutcome(burst, written)
+            val base = facts.merge ?: ScanMergeFacts("always")
+            val mergeFacts = base.copy(
+                found = corners.count { it != null }, merged = outcome.merged,
+                used = result?.used?.toInt() ?: 0, rejectedBlur = result?.rejectedBlur?.toInt() ?: 0,
+                rejectedAlign = result?.rejectedAlign?.toInt() ?: 0, psnrGainTenthsDb = result?.psnrGainTenthsDb?.toInt() ?: 0,
+                findMs = findMs, mergeMs = mergeMs,
+                fallback = when {
+                    outcome.merged -> "none"
+                    frames == null -> "few_found"
+                    else -> "failed"
+                },
+            )
+            val kept = facts.copy(merge = mergeFacts, previewQuad = if (outcome.merged) null else facts.previewQuad)
+            Diag.event(DiagArea.Scan, "camera_merge", *mergeFacts.diag(), *(result?.timings.orEmpty().map { it.stage.removePrefix("scan_") + "_ms" to it.ms.toLong() }.toTypedArray()))
+            outcome.delete.filter { it != outcome.keep }.forEach { it.delete() }
+            ScanCaptures.put(outcome.keep.path, kept)
+            Diag.event(DiagArea.Scan, "camera", *kept.diag())
+            m.merging = false
+            // the screen may have been closed meanwhile: the page still goes to the scan
+            val v = vm()
+            v.shotFile = outcome.keep
+            if (!outcome.merged) measureSharpness(outcome.keep, kept)
+            toScan(more && m.target != null)
+        }
     }
 
     /**
