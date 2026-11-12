@@ -26,14 +26,26 @@ pub struct ModelSpec {
 /// The document detector (#290): DocQuadNet-256 from MakeACopy.
 pub const EDGES: &str = "edges";
 
+/// The page flattener (#302): UVDoc.
+pub const FLATTEN: &str = "flatten";
+
 /// Every model the scanner can use. `assets/models/ATTRIBUTION.txt` says where each is from.
-pub static MODELS: &[ModelSpec] = &[ModelSpec {
-    id: EDGES,
-    file: "scan-edges.onnx",
-    sha256: "f5bf500c0ab7482ebd9e949c7cfcd3c9f43dcef619baa8e41e0f83e88a3f9880",
-    bytes: 6_700_744,
-    licence: "Apache-2.0",
-}];
+pub static MODELS: &[ModelSpec] = &[
+    ModelSpec {
+        id: EDGES,
+        file: "scan-edges.onnx",
+        sha256: "f5bf500c0ab7482ebd9e949c7cfcd3c9f43dcef619baa8e41e0f83e88a3f9880",
+        bytes: 6_700_744,
+        licence: "Apache-2.0",
+    },
+    ModelSpec {
+        id: FLATTEN,
+        file: "scan-flatten.onnx",
+        sha256: "13fc4e8322de53f2d8b74ed43d996ba8e70e3b875fc5e88766c30943ada2fb1b",
+        bytes: 15_803_619,
+        licence: "MIT",
+    },
+];
 
 /// Whether a model can be used.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

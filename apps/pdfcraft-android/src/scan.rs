@@ -55,6 +55,10 @@ pub struct ScanPageRequest {
     /// Match the page to standard paper sizes (A4, Letter, …) when its shape is within 3 %.
     #[uniffi(default = true)]
     pub snap_paper: bool,
+    /// Flatten a curled, sagging or folded page with the flattening network (#302) instead of
+    /// the perspective warp. Off unless asked for; see [`scan_can_flatten`].
+    #[uniffi(default = false)]
+    pub flatten: bool,
 }
 
 /// The standard paper a page was matched to.
@@ -98,6 +102,11 @@ pub struct ScanPageResult {
     pub aspect_source: ScanAspectSource,
     /// The camera's focal length and the one the corners imply disagree.
     pub focal_mismatch: bool,
+    /// The page was flattened by the network.
+    pub flattened: bool,
+    /// How far from flat the network found the page, as a share of its diagonal (0 when it was
+    /// not asked).
+    pub bend: f32,
     pub timings: Vec<ScanTiming>,
 }
 
@@ -200,6 +209,12 @@ pub fn scan_refine_quad(photo_path: String, corners: Vec<f32>, sides: Vec<bool>,
     let root = SCAN_ROOT.read().unwrap_or_else(std::sync::PoisonError::into_inner).clone();
     let root = root.ok_or_else(|| MobileError::Command("scanning is not ready yet".into()))?;
     refine_in(&root, &photo_path, &corners, &sides, search_share)
+}
+
+/// Whether pages can be flattened (#302): the flattening network's model file is installed.
+#[uniffi::export]
+pub fn scan_can_flatten() -> bool {
+    pdfcraft_scan::models::state(pdfcraft_scan::models::FLATTEN) == pdfcraft_scan::models::ModelState::Ready
 }
 
 /// Find the page in a photo and move its corners onto the paper's edges: the photo is decoded
@@ -317,6 +332,7 @@ pub(crate) fn process_in(root: &Path, request: &ScanPageRequest) -> Result<ScanP
         threads,
         focal_35mm: request.focal_35mm,
         snap_paper: request.snap_paper,
+        flatten: request.flatten,
         ..PageRequest::new(&bytes, corners)
     })
     .map_err(|e| MobileError::Command(e.to_string()))?;
@@ -351,6 +367,8 @@ pub(crate) fn process_in(root: &Path, request: &ScanPageRequest) -> Result<ScanP
             AspectSource::SideLengths => ScanAspectSource::SideLengths,
         },
         focal_mismatch: page.focal_mismatch,
+        flattened: page.flattened,
+        bend: page.bend,
         timings: page.timings.into_iter().map(|(stage, ms)| ScanTiming { stage: stage.into(), ms }).collect(),
     })
 }
@@ -375,6 +393,7 @@ mod tests {
             output_path: out.to_string_lossy().into_owned(),
             focal_35mm: None,
             snap_paper: true,
+            flatten: false,
         }
     }
 
@@ -564,6 +583,52 @@ mod tests {
         assert!(find_in(&other, &shot.to_string_lossy()).is_err());
         std::fs::remove_dir_all(root).unwrap();
         std::fs::remove_dir_all(other).unwrap();
+    }
+
+    /// A page asked to be flattened goes through the flattening network (#302).
+    #[test]
+    fn a_page_is_flattened_when_asked() {
+        let root = temp("flatten");
+        let shot = root.join("page.png");
+        // a sheet whose top and bottom edges bow by 24 pixels, on a dark table
+        image::RgbImage::from_fn(900, 1200, |x, y| {
+            let bow = 24.0 * (std::f64::consts::PI * (f64::from(x) - 150.0) / 600.0).sin();
+            let (level, sheet) = (f64::from(y) + bow, (150..750).contains(&x));
+            let sheet = sheet && level > 180.0 && level < 1020.0;
+            let print = sheet && (200..700).contains(&x) && level > 240.0 && level < 960.0 && (level as i64 - 240).rem_euclid(30) < 9;
+            image::Rgb(if print {
+                [40, 40, 46]
+            } else if sheet {
+                [236, 233, 226]
+            } else {
+                [66, 54, 46]
+            })
+        })
+        .save(&shot)
+        .unwrap();
+        assert!(scan_can_flatten(), "assets/models/scan-flatten.onnx is missing or is not the pinned file");
+        let corners =
+            vec![150.0 / 900.0, 180.0 / 1200.0, 750.0 / 900.0, 180.0 / 1200.0, 750.0 / 900.0, 1020.0 / 1200.0, 150.0 / 900.0, 1020.0 / 1200.0];
+        let plain = process_in(&root, &ScanPageRequest { corners: corners.clone(), look: ScanLook::Original, ..request(&shot, &root.join("plain")) })
+            .unwrap();
+        assert!(!plain.flattened && plain.bend == 0.0);
+        let flat =
+            process_in(&root, &ScanPageRequest { corners, look: ScanLook::Original, flatten: true, ..request(&shot, &root.join("flat")) }).unwrap();
+        assert!(flat.flattened && flat.bend > 0.003, "{flat:?}");
+        assert_eq!((flat.width, flat.height), (plain.width, plain.height));
+        let stages: Vec<_> = flat.timings.iter().map(|t| t.stage.as_str()).collect();
+        assert_eq!(stages, ["scan_decode", "scan_flatten", "scan_rectify", "scan_look", "scan_encode"]);
+        // the rows of print are level in the flattened page and arched in the other: how much
+        // the first row's top edge moves between the page's sides and its middle
+        let arch = |path: &str| {
+            let page = image::open(path).unwrap().to_luma8();
+            let top = |x: u32| (page.height() / 30..page.height() / 4).find(|&y| page.get_pixel(x, y).0[0] < 110).map_or(0.0, f64::from);
+            let (w, scale) = (page.width(), f64::from(page.height()) / 840.0);
+            ((top(w / 2) - top(w / 6)).abs() + (top(w / 2) - top(w * 5 / 6)).abs()) / 2.0 / scale
+        };
+        let (was, now) = (arch(&plain.path), arch(&flat.path));
+        assert!(was > 8.0 && now < was / 3.0, "arched by {was:.1} px before and {now:.1} px after");
+        std::fs::remove_dir_all(root).unwrap();
     }
 
     #[test]

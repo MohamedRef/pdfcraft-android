@@ -378,6 +378,7 @@
     <string name="tools_filter_grayscale">Grayscale</string>
     <string name="tools_filter_whiteboard">Whiteboard</string>
     <string name="tools_filter_light_text">Light text</string>
+    <string name="tools_scan_flatten">Flatten page</string>
 
     <!-- App dialogs: the first comment's name prompt -->
     <!-- Verb: go on without entering a name -->

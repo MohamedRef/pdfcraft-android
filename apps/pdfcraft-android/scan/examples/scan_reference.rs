@@ -20,6 +20,10 @@
 //!     where the page is found in every <dir>/<name>.before.jpg (#290) and after the edges are
 //!     refined (#291), against the reference's crop: the largest corner distance in % of the
 //!     photo's diagonal. Nothing is written.
+//!
+//! cargo run -p pdfcraft-scan --example scan_reference -- flatten <dir> <out_dir>
+//!     how bent the flattening network finds each page (#302), and the page flattened
+//!     (<name>.png) and by perspective alone (<name>.plain.png), both without a look
 //! ```
 //!
 //! The pairs are someone's documents: keep the folders outside the repository.
@@ -132,10 +136,43 @@ fn find(dir: &Path) {
     }
 }
 
+/// How bent the flattening network finds each page, and the page flattened (as the camera took
+/// it otherwise) for looking at.
+fn flatten(dir: &Path, out: &Path) {
+    for path in files(dir, ".before.jpg") {
+        let name = name_of(&path, ".before.jpg");
+        let Some(corners) = std::fs::read_to_string(dir.join(format!("{name}.ref.json"))).ok().as_deref().and_then(corners) else { continue };
+        let Ok(photo) = Photo::decode(&std::fs::read(&path).unwrap_or_default()) else { continue };
+        let Ok(quad) = pdfcraft_scan::Quad::from_shares(&corners, photo.width, photo.height) else { continue };
+        let clock = Instant::now();
+        let Some(grid) = pdfcraft_scan::predict_grid(&photo, &quad) else {
+            println!("{name}: the flattening model is not installed");
+            continue;
+        };
+        let model_ms = clock.elapsed().as_millis();
+        let [top, right, bottom, left] = quad.side_lengths();
+        let (w, h) = (top.max(bottom).round() as u32, left.max(right).round() as u32);
+        let clock = Instant::now();
+        let Ok(page) = pdfcraft_scan::unwarp(&photo, &grid, w, h, 4) else { continue };
+        println!(
+            "{name}: bend {:.2} %, {} folds, model {model_ms} ms, unwarp {} ms at {w} x {h}",
+            100.0 * grid.bend(),
+            grid.folds(),
+            clock.elapsed().as_millis()
+        );
+        let picture = image::RgbImage::from_raw(page.width, page.height, page.data).expect("the page has its size");
+        picture.save(out.join(format!("{name}.png"))).unwrap_or_else(|e| panic!("{name}: {e}"));
+        if let Ok(plain) = pdfcraft_scan::rectify(&photo, &quad, w, h) {
+            let picture = image::RgbImage::from_raw(plain.width, plain.height, plain.data).expect("the page has its size");
+            picture.save(out.join(format!("{name}.plain.png"))).unwrap_or_else(|e| panic!("{name}: {e}"));
+        }
+    }
+}
+
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     let (Some(mode), Some(dir), Some(out)) = (args.get(1), args.get(2), args.get(3)) else {
-        eprintln!("usage: scan_reference look|page|bw|detect <dir> <out_dir> [strength]");
+        eprintln!("usage: scan_reference look|page|bw|detect|flatten <dir> <out_dir> [strength]");
         std::process::exit(2);
     };
     let strength = args.get(4).and_then(|v| v.parse().ok()).unwrap_or(if mode == "bw" { 55 } else { 60 });
@@ -146,6 +183,7 @@ fn main() {
         "page" => page(Path::new(dir), Path::new(out), Look::Auto, strength, threads),
         "bw" => page(Path::new(dir), Path::new(out), Look::BlackWhite, strength, threads),
         "detect" => find(Path::new(dir)),
-        other => eprintln!("unknown mode {other}: use look, page, bw or detect"),
+        "flatten" => flatten(Path::new(dir), Path::new(out)),
+        other => eprintln!("unknown mode {other}: use look, page, bw, detect or flatten"),
     }
 }
