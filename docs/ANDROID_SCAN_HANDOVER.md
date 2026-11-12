@@ -23,7 +23,7 @@ a phone yet.** Every number in the scanner's documents was measured on a desktop
 | #292 | Crop screen: magnifier, side handles, snap, rotate | **Not started** | | All of it. `scan_refine_quad` is the native half of "snap" and exists |
 | #293 | True proportions, paper sizes | Core done | #353 | The focal length from the in-app camera (#294, section 7 there) |
 | #294 | In-app camera (CameraX) | **Not started** | | All of it |
-| #295 | Live page outline, hints | **Not started** | | Needs #294 |
+| #295 | Live page outline, hints | Native call only (this PR); the viewfinder overlay, tracker and hints are left | | `scan_detect_frame` (docs/ANDROID_SCAN_DETECTOR.md, "Live frames"); the app side needs #294 |
 | #296 | Auto-capture, blur check | **Not started** | | Needs #295 |
 | #297 | Multi-frame merge | **Not started** | | Needs #294 |
 | #298 | Auto look, part 1 | Core done | #346 | Phone time; the paper White / Keep control has no screen (#301) |
