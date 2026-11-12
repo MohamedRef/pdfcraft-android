@@ -3576,6 +3576,8 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 *(p?.timings.orEmpty().map<io.github.artcraftandroid.pdfcraft.core.ScanTiming, Pair<String, Any?>> { it.stage.removePrefix("scan_") + "_ms" to it.ms.toLong() }.toTypedArray()),
                 "width" to (p?.width?.toLong() ?: 0L), "height" to (p?.height?.toLong() ?: 0L),
                 "quarter_turns" to (p?.quarterTurns?.toInt() ?: 0), "flattened" to (p?.flattened ?: false),
+                // flattened and straightened compared (#302)
+                "flatten_auto" to lab.flattenAuto, *scanFlattenCheckDiag(p?.flattenCheck),
             )
             withContext(Dispatchers.Main) {
                 // a newer request may have come in while this one ran: only the wanted one is shown
@@ -3654,7 +3656,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             val stats = scanPageStats(page.corners, page.found, ScanPage.WHOLE, page.thumb.width.toDouble(), page.thumb.height.toDouble())
             // a whole photo in Original stays the camera's own file: natively it only gets its
             // resolution written in, so its PDF page has a size like the others (#293)
-            val untouched = !flatten && !scanNeedsProcessing(page.corners.contentEquals(ScanPage.WHOLE), filter.mode)
+            val untouched = !(flatten || lab.flattenAuto) && !scanNeedsProcessing(page.corners.contentEquals(ScanPage.WHOLE), filter.mode)
             val r = made[i]
             val followed = i in redo
             val turnSource = io.github.artcraftandroid.pdfcraft.ui.scan.scanTurnSource(page.turns, followed, page.turns == null && autoUpright && lab.upright)
@@ -3669,6 +3671,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 "paper" to (r?.paper?.name?.lowercase() ?: "none"), "aspect" to (r?.aspectSource?.name?.lowercase() ?: "none"),
                 "focal_mismatch" to (r?.focalMismatch ?: false),
                 "flatten" to flatten, "flattened" to (r?.flattened ?: false), "bend_pct" to ((r?.bend ?: 0f) * 100.0),
+                "flatten_auto" to lab.flattenAuto, *scanFlattenCheckDiag(r?.flattenCheck),
                 "strength" to strength, "side_proportions" to !lab.perspective, "snap_paper" to lab.snapPaper,
                 // which way up the page was found to be and whether it was turned (#339)
                 "upright" to lab.upright, "quarter_turns" to classifierTurns[i], "upright_sure" to (found[i]?.sure ?: false),
@@ -3687,6 +3690,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                         it.aspectSource.name.lowercase(), it.focalMismatch, it.flattened, it.bend * 100.0, classifierTurns[i],
                         found[i]?.let { o -> ScanTestOrientation(o.quarterTurns.toInt(), o.confidence.toDouble(), o.agreement.toDouble(), o.tiles.toInt(), o.sure) },
                         it.noise?.toDouble(),
+                        it.flattenCheck,
                     )
                 }
                 val turn = ScanTestTurn(page.turns, autoUpright, r?.turns?.toInt() ?: 0, followed, turnSource)

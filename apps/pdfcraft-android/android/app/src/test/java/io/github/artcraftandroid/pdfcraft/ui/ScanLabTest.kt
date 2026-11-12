@@ -44,6 +44,9 @@ class ScanLabTest {
         // the crop screen with magnifier and snapping is as designed; the old one is a testing option (#292)
         assertTrue(lab.cropTools)
         assertFalse(lab.copy(cropTools = false).asDesigned)
+        // automatic flattening is a testing option, off as designed until real photos show it helps (#302)
+        assertFalse(lab.flattenAuto)
+        assertFalse(lab.copy(flattenAuto = true).asDesigned)
         assertEquals(30, lab.sharpen)
         assertTrue(lab.denoise && lab.sharpen in ScanLab.SHARPENING && 0 in ScanLab.SHARPENING)
     }
@@ -65,6 +68,7 @@ class ScanLabTest {
             ScanLab(preview = false),
             ScanLab(settleTurns = false),
             ScanLab(cropTools = false),
+            ScanLab(flattenAuto = true),
             ScanLab(finder = ScanFinder.LINES, strength = 100),
             ScanLab(finder = ScanFinder.OFF),
         )
@@ -286,5 +290,23 @@ class ScanLabTest {
         assertEquals(85, json.getInt("snap_ms_max"))
         assertEquals(1.235, json.getDouble("moved_pct"), 1e-9)
         assertTrue(json.getBoolean("snap"))
+    }
+
+    @Test
+    fun aKeptPageSaysHowFlatteningWasChecked() {
+        val check = io.github.artcraftandroid.pdfcraft.core.ScanFlattenCheck(false, "notbetter", 3.0f, 2.9f, 12u, 12u)
+        val json = JSONObject(scanTestPageJson("1.0 (1)", true, crop, crop, null, "auto", 60, false, ScanLab(flattenAuto = true), "page-01.out.jpg", result.copy(flattenCheck = check)))
+        val c = json.getJSONObject("result").getJSONObject("flatten_check")
+        assertFalse(c.getBoolean("kept"))
+        assertEquals("notbetter", c.getString("why"))
+        assertEquals(3.0, c.getDouble("straightened_px"), 1e-9)
+        assertEquals(2.9, c.getDouble("flattened_px"), 1e-6)
+        assertEquals(12, c.getInt("flattened_lines"))
+        assertTrue(json.getJSONObject("options").getBoolean("flatten_auto"))
+        // not checked: null
+        val plain = JSONObject(scanTestPageJson("1.0 (1)", true, crop, crop, null, "auto", 60, false, ScanLab(), "page-01.out.jpg", result))
+        assertTrue(plain.getJSONObject("result").isNull("flatten_check"))
+        val unmeasured = scanFlattenCheckJson(io.github.artcraftandroid.pdfcraft.core.ScanFlattenCheck(false, "unmeasured", null, Float.NaN, 0u, 0u))
+        assertTrue(unmeasured.isNull("straightened_px") && unmeasured.isNull("flattened_px"))
     }
 }
