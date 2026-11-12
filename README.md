@@ -56,6 +56,8 @@
 
 **Engine baseline:** the Android project includes the reviewed mobile-suitable [upstream PdfCraft v0.20.0 integration](docs/ANDROID_ENGINE_0.20.0_UPGRADE.md) ([PR #65](https://github.com/MohamedRef/pdfcraft-android/pull/65); previously [v0.19.0](docs/ANDROID_ENGINE_0.19.0_UPGRADE.md), PR #37). Published APKs up to 0.0.15-beta (15012) use v0.19.0; 0.0.16-beta (16012) and later use v0.20.0. The desktop and Android interfaces are not fully equivalent; 3D/PRC workflows and some advanced UIs remain excluded or unverified. Native command availability is **not** measured mobile UX parity. See the [development handover](docs/ANDROID_HANDOVER.md) and [annotation parity notes](docs/ANDROID_ANNOTATION_TOOL_PARITY.md) for remaining work.
 
+**Document scanner:** the scanner is being rebuilt (tracking issue [#286](https://github.com/MohamedRef/pdfcraft-android/issues/286)). Where each part stands, what is left and how to continue is in the [scanner handover](docs/ANDROID_SCAN_HANDOVER.md); how to test it on a phone is in [scanner testing](docs/ANDROID_SCAN_TESTING.md). None of the new scanner has been verified on a device yet.
+
 | Area | Available source behavior | Remaining limitations |
 | --- | --- | --- |
 | S Pen / annotations | Pressure-aware PDF ink; five pen profiles, drawing shapes, draft lasso and native Ink eraser | On-device handwriting latency, palm rejection, exported appearance and edit/reopen parity need physical Samsung checks |

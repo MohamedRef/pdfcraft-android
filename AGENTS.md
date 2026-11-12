@@ -19,3 +19,12 @@ For pull requests and signing requirements, follow `.github/ANDROID_SIGNING.md` 
 ## Release notes (owner requirement)
 
 Every public release must clearly describe new features, fixes, improvements and known/unverified behavior. Use categorized generated PR notes (`.github/release.yml`) and supplement them with concise user-facing behavior and validation limits. Do not claim a measured speed-up, full feature parity or device success unless evidenced. Include actual `versionName (versionCode)` and source/CI links. Keep published APKs immutable; correct notes without silently replacing an existing build.
+
+## Document scanner (owner requirement)
+
+Before working on anything under `apps/pdfcraft-android/scan`, the Scan screens or a `Scan S…` issue, read `docs/ANDROID_SCAN_HANDOVER.md` (state, remaining work, rules, what was learned) and the tracking issue #286. In particular:
+
+- Every scanner feature ships with a testing option (`ScanLab`), its decisions in the diagnostics log, and the same in a kept scan's page file. The owner tests on his phone with these.
+- The owner's photos, and anything made from them, never go into the repository, an issue or a pull request.
+- Say in each pull request what was measured and on what, and what was not verified. Nothing in the scanner has run on a phone unless a document says so.
+- Update `docs/ANDROID_SCAN_HANDOVER.md` in the same pull request that changes the scanner's state.
