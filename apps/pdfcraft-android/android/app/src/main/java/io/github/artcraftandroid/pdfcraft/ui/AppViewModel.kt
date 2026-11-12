@@ -619,7 +619,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             Diag.measure(DiagArea.Save, "refresh", "doc" to doc.diagNumber) { refresh(doc) }
             // a copy for the backup folder, even when writing back fails (#145)
             stage = "backup"
-            Diag.measure(DiagArea.Save, "backup_snapshot", "doc" to doc.diagNumber) { snapshotForBackup(eng, doc) }
+            Diag.measure(DiagArea.Save, "backup_snapshot", "doc" to doc.diagNumber) { backups.snapshotForBackup(eng, doc) }
             stage = "write_back"
             if (src != null && src.scheme == "content") {
                 // The marker set above stays until the provider verifiably holds the new bytes.
@@ -1678,7 +1678,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
 
     /** The viewer's bottom toolbar as the user arranged it (More tools ▸ Customize toolbar). */
     val quickToolbar = io.github.artcraftandroid.pdfcraft.ui.viewer.QuickToolbarPrefs(app)
-    private val appPrefs = app.getSharedPreferences("app", android.content.Context.MODE_PRIVATE)
+    internal val appPrefs = app.getSharedPreferences("app", android.content.Context.MODE_PRIVATE)
     var compactPreviews by mutableStateOf(appPrefs.getBoolean("compactPreviews", false))
         private set
     fun updateCompactPreviews(on: Boolean) {
@@ -6101,202 +6101,9 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         runTool(doc, "page_margin", args) { tell(text(R.string.margin_removed)) }
     }
 
-    // ---- Backups (#145) ----
+    // ---- Backups (#145) and version history: see BackupController ----
 
-    /** The folder backups go to (a tree the user picked), or null when backups are off. */
-    var backupTree by mutableStateOf(appPrefs.getString("backupTree", null)?.let(Uri::parse))
-        private set
-    /** How many versions of each document are kept. */
-    var backupKeep by mutableStateOf(appPrefs.getInt("backupKeep", 10))
-        private set
-    /** When the last backup was written, and whether the last attempt failed. */
-    var backupLast by mutableStateOf(appPrefs.getLong("backupLast", 0L))
-        private set
-    var backupFailed by mutableStateOf(false)
-        private set
-    val backupFolderRequests = Channel<Unit>(Channel.CONFLATED)
-    private val backupMutex = Mutex()
-    /** Snapshots saved but not yet copied out, by document folder name: the newest wins. */
-    private val pendingBackups = java.util.concurrent.ConcurrentHashMap<String, PendingBackup>()
-    private class PendingBackup(val base: String, val time: Long, val pdf: File, val xfdf: File?)
-
-    fun chooseBackupFolder() { backupFolderRequests.trySend(Unit) }
-
-    fun onBackupFolderPicked(tree: Uri?) {
-        tree ?: return
-        val resolver = getApplication<Application>().contentResolver
-        val ok = runCatching { resolver.takePersistableUriPermission(tree, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION or android.content.Intent.FLAG_GRANT_WRITE_URI_PERMISSION) }.isSuccess
-        if (!ok) { tell(text(R.string.backup_folder_not_writable)); return }
-        backupTree?.takeIf { it != tree }?.let { old -> releaseBackupGrant(old) }
-        backupTree = tree
-        appPrefs.edit().putString("backupTree", tree.toString()).apply()
-        backupFailed = false
-        backupAppData()
-    }
-
-    fun turnOffBackups() {
-        backupTree?.let(::releaseBackupGrant)
-        backupTree = null
-        backupFailed = false
-        appPrefs.edit().remove("backupTree").apply()
-        pendingBackups.values.forEach { it.pdf.delete(); it.xfdf?.delete() }
-        pendingBackups.clear()
-    }
-
-    private fun releaseBackupGrant(tree: Uri) {
-        // the folder stays listed under On this device when the user also added it there
-        val resolver = getApplication<Application>().contentResolver
-        runCatching { resolver.releasePersistableUriPermission(tree, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION or android.content.Intent.FLAG_GRANT_WRITE_URI_PERMISSION) }
-    }
-
-    fun updateBackupKeep(n: Int) {
-        backupKeep = n.coerceIn(1, 100)
-        appPrefs.edit().putInt("backupKeep", backupKeep).apply()
-    }
-
-    fun backupFolderName(): String? = backupTree?.let { io.github.artcraftandroid.pdfcraft.engine.LocalFiles.folderName(getApplication(), it) }
-
-    private fun backupFolder(): io.github.artcraftandroid.pdfcraft.engine.BackupFolder? =
-        backupTree?.let { io.github.artcraftandroid.pdfcraft.engine.BackupFolder(getApplication<Application>().contentResolver, it) }
-
-    private fun backupDir(): File = File(getApplication<Application>().cacheDir, "backup").apply { mkdirs() }
-
-    /**
-     * After a save wrote [doc]'s changes: snapshot the saved file and its comments (XFDF) now,
-     * while nothing else writes them, then copy them out in the background. Never blocks the save
-     * or the app going to the background (#97); failures are told and retried at the next save.
-     */
-    private suspend fun snapshotForBackup(eng: Engine, doc: OpenDocument) {
-        backupTree ?: return
-        if (doc.info.preparing) return
-        val base = io.github.artcraftandroid.pdfcraft.engine.BackupNames.base(doc.info.name)
-        val time = System.currentTimeMillis()
-        val dir = backupDir()
-        val pdf = File(dir, "${time}-${base.hashCode()}.pdf")
-        val xfdf = File(dir, "${time}-${base.hashCode()}.xfdf")
-        try {
-            withContext(Dispatchers.IO) { doc.file.copyTo(pdf, overwrite = true) }
-        } catch (e: Exception) {
-            pdf.delete()
-            backupFailed = true
-            return
-        }
-        // the comments alone; a document whose comments cannot be exported still gets its PDF copy
-        val hasXfdf = runCatching { eng.tool("doc_export_data", mapOf("doc" to doc.id, "path" to xfdf.absolutePath, "what" to "comments")) }.isSuccess && xfdf.isFile
-        if (!hasXfdf) xfdf.delete()
-        pendingBackups.put(base, PendingBackup(base, time, pdf, xfdf.takeIf { hasXfdf }))?.let { old -> old.pdf.delete(); old.xfdf?.delete() }
-        flushBackups()
-    }
-
-    /** Copy every waiting snapshot to the backup folder and prune old versions. */
-    fun flushBackups() {
-        viewModelScope.launch(Dispatchers.IO) {
-            backupMutex.withLock {
-                val folder = backupFolder() ?: return@withLock
-                var failed = false
-                for (base in pendingBackups.keys.toList()) {
-                    val p = pendingBackups[base] ?: continue
-                    val ok = runCatching {
-                        folder.write(base, io.github.artcraftandroid.pdfcraft.engine.BackupNames.pdfName(base, p.time), "application/pdf", p.pdf)
-                        p.xfdf?.let { folder.write(base, io.github.artcraftandroid.pdfcraft.engine.BackupNames.xfdfName(base, p.time), "application/vnd.adobe.xfdf", it) }
-                        val prune = io.github.artcraftandroid.pdfcraft.engine.BackupNames.toPrune(base, folder.list(base), backupKeep)
-                        if (prune.isNotEmpty()) folder.delete(base, prune)
-                    }.isSuccess
-                    if (ok) {
-                        // a newer snapshot may have arrived meanwhile; only this one is done
-                        if (pendingBackups.remove(base, p)) { p.pdf.delete(); p.xfdf?.delete() }
-                    } else failed = true
-                }
-                if (!failed) runCatching { writeAppData(folder) }
-                withContext(Dispatchers.Main) {
-                    if (failed && !backupFailed) tell(text(R.string.backup_failed), text(R.string.backup_retry)) { flushBackups() }
-                    backupFailed = failed
-                    if (!failed) {
-                        backupLast = System.currentTimeMillis()
-                        appPrefs.edit().putLong("backupLast", backupLast).apply()
-                    }
-                }
-            }
-        }
-    }
-
-    private fun backupAppData() {
-        viewModelScope.launch(Dispatchers.IO) { backupMutex.withLock { backupFolder()?.let { runCatching { writeAppData(it) } } } }
-    }
-
-    /** Library, flashcards, notebooks and study statistics as one JSON file beside the backups. */
-    private fun writeAppData(folder: io.github.artcraftandroid.pdfcraft.engine.BackupFolder) {
-        val filesDir = getApplication<Application>().filesDir
-        val out = org.json.JSONObject().put("app", "PdfCraft").put("version", 1).put("time", System.currentTimeMillis())
-        for ((key, name) in listOf("library" to "library.json", "flashcards" to "flashcards.json", "notebooks" to "notebooks.json", "study" to "study.json")) {
-            val f = File(filesDir, name)
-            if (f.isFile) runCatching { org.json.JSONObject(f.readText()) }.getOrNull()?.let { out.put(key, it) }
-        }
-        val tmp = File(backupDir(), "app-data.json")
-        tmp.writeText(out.toString(1))
-        try {
-            folder.write(io.github.artcraftandroid.pdfcraft.engine.BackupNames.APP_DATA_FOLDER, "app-data.json", "application/json", tmp)
-        } finally {
-            tmp.delete()
-        }
-    }
-
-    // ---- Version history ----
-
-    var backupVersions by mutableStateOf<List<io.github.artcraftandroid.pdfcraft.engine.BackupVersion>?>(null)
-        private set
-
-    fun loadBackupVersions(doc: OpenDocument) {
-        backupVersions = null
-        viewModelScope.launch {
-            val base = io.github.artcraftandroid.pdfcraft.engine.BackupNames.base(doc.info.name)
-            backupVersions = withContext(Dispatchers.IO) {
-                runCatching { backupFolder()?.let { io.github.artcraftandroid.pdfcraft.engine.BackupNames.versions(base, it.list(base)) } }.getOrNull().orEmpty()
-            }
-        }
-    }
-
-    /** Open version [v] as a new copy in Downloads; the document and the backup stay as they are. */
-    fun restoreBackupCopy(doc: OpenDocument, v: io.github.artcraftandroid.pdfcraft.engine.BackupVersion) {
-        val folder = backupFolder() ?: return
-        val base = io.github.artcraftandroid.pdfcraft.engine.BackupNames.base(doc.info.name)
-        viewModelScope.launch {
-            busy = text(R.string.backup_restoring)
-            try {
-                val tmp = File(backupDir(), "restore-${System.nanoTime()}.pdf")
-                val uri = withContext(Dispatchers.IO) {
-                    folder.read(base, v.pdf, tmp)
-                    try { files.saveToDownloads(tmp, DocumentFiles.safeName(v.pdf)) } finally { tmp.delete() }
-                }
-                busy = null
-                open(uri)
-            } catch (e: Exception) {
-                busy = null
-                tell(e.userMessage)
-            }
-        }
-    }
-
-    /** Add version [v]'s comments (its XFDF) to the open document; one undo takes them away. */
-    fun restoreBackupComments(doc: OpenDocument, v: io.github.artcraftandroid.pdfcraft.engine.BackupVersion) {
-        val name = v.xfdf ?: return
-        val folder = backupFolder() ?: return
-        val base = io.github.artcraftandroid.pdfcraft.engine.BackupNames.base(doc.info.name)
-        val eng = engine ?: return
-        viewModelScope.launch {
-            val tmp = File(backupDir(), "restore-${System.nanoTime()}.xfdf")
-            try {
-                withContext(Dispatchers.IO) { folder.read(base, name, tmp) }
-                eng.tool("doc_import_data", mapOf("doc" to doc.id, "path" to tmp.absolutePath))
-                refresh(doc)
-                tell(text(R.string.backup_comments_restored))
-            } catch (e: Exception) {
-                tell(e.userMessage)
-            } finally {
-                withContext(Dispatchers.IO) { tmp.delete() }
-            }
-        }
-    }
+    val backups = BackupController(this)
 }
 
 /** The most files Create PDF converts at once. */

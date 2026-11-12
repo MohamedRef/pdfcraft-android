@@ -43,17 +43,17 @@ import io.github.artcraftandroid.pdfcraft.ui.pdfColors
 fun VersionHistorySheet(vm: AppViewModel, doc: OpenDocument, onDismiss: () -> Unit) {
     val c = pdfColors
     val context = LocalContext.current
-    LaunchedEffect(doc) { vm.loadBackupVersions(doc) }
+    LaunchedEffect(doc) { vm.backups.loadBackupVersions(doc) }
     PdfSheet(onDismiss = onDismiss) {
         SheetTitle(stringResource(R.string.backup_history))
-        val versions = vm.backupVersions
+        val versions = vm.backups.backupVersions
         when {
             versions == null -> Text(stringResource(R.string.backup_loading), color = c.textSecondary, fontSize = 14.sp, modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp))
             versions.isEmpty() -> Text(stringResource(R.string.backup_no_versions), color = c.textSecondary, fontSize = 14.sp, modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp))
             else -> Column(Modifier.verticalScroll(rememberScrollState())) {
                 for (v in versions) VersionRow(v, context) { action ->
                     onDismiss()
-                    if (action == 0) vm.restoreBackupCopy(doc, v) else vm.restoreBackupComments(doc, v)
+                    if (action == 0) vm.backups.restoreBackupCopy(doc, v) else vm.backups.restoreBackupComments(doc, v)
                 }
             }
         }
