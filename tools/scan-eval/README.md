@@ -1,7 +1,7 @@
 # Scan evaluation tools
 
 Developer-machine tools for the document scanner (`apps/pdfcraft-android/scan`, tracking issue #286).
-Nothing here is built into the app or run by CI.
+Nothing here is built into the app. CI runs only the tests (`test_*.py`) of these tools.
 
 ## Reference pairs (`reference_pairs.py`)
 
@@ -65,3 +65,11 @@ Known differences from the Rust code, none of which moved the numbers: the worki
 enlarges a small page; the two wide averaging scales run on a quarter-size copy; wide blurs are
 three box passes instead of an exact Gaussian; the gain (1 / light) is interpolated instead of the
 light.
+
+## SmartDoc 2015 as a test set (`scan_dataset_smartdoc.py`)
+
+Turns a local copy of the public SmartDoc 2015 Challenge 1 videos (CC BY 4.0) into `scan-eval`'s
+test-set format: every 30th frame as `<background>-<document>-<frame>.jpg` with its `.json`
+(corners, `kind`, `paper: a4`). It downloads nothing; `--list` shows what it would write without
+OpenCV. See [ANDROID_SCAN_MEASURING.md](../../docs/ANDROID_SCAN_MEASURING.md) for the commands and
+what has not been verified. Tests: `python3 -m unittest discover -s tools/scan-eval -p 'test_*.py'`.

@@ -42,6 +42,8 @@ jobs:
         run: python3 scripts/verify_android_release_notes.py
       - name: Verify release workflow regression tests
         run: python3 -m unittest discover -s scripts -p 'test_android_release_workflow.py'
+      - name: Scan evaluation tool tests
+        run: python3 -m unittest discover -s tools/scan-eval -p 'test_*.py'
       - name: Compile all Rust test targets
         run: cargo build --locked --tests --keep-going -p pdfcraft-bytes -p pdfcraft-automation -p pdfcraft-cos -p pdfcraft-create -p pdfcraft-sign -p pdfcraft-js -p pdfcraft-forms -p pdfcraft-xfa -p pdfcraft-engine -p pdfcraft-render -p pdfcraft-android -p pdfcraft-scan
       - name: Run Rust tests

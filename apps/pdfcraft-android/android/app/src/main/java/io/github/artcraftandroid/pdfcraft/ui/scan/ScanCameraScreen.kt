@@ -116,7 +116,7 @@ internal class ScanCameraActions(
  * so everything after the shot is as it was with the phone's camera app.
  */
 @Composable
-internal fun ScanCameraScreen(model: ScanCameraModel, pages: List<ImageBitmap>, actions: ScanCameraActions) {
+internal fun ScanCameraScreen(model: ScanCameraModel, pages: List<ImageBitmap>, actions: ScanCameraActions, book: ScanBookController? = null) {
     val file = model.target ?: return
     BackHandler { actions.onClose() }
     // the permission may have been granted in the system settings meanwhile
@@ -128,7 +128,7 @@ internal fun ScanCameraScreen(model: ScanCameraModel, pages: List<ImageBitmap>, 
     }
     Box(Modifier.fillMaxSize().background(Color.Black).windowInsetsPadding(WindowInsets.safeDrawing)) {
         when (model.route) {
-            ScanCaptureRoute.InApp -> CameraView(file, model.retaking, pages, actions)
+            ScanCaptureRoute.InApp -> CameraView(file, model.retaking, pages, actions, book)
             else -> NoCameraView(model.route, actions)
         }
     }
@@ -158,7 +158,7 @@ private fun NoCameraView(route: ScanCaptureRoute, actions: ScanCameraActions) {
 
 /** The camera, once allowed. */
 @Composable
-private fun CameraView(file: File, retaking: Boolean, pages: List<ImageBitmap>, actions: ScanCameraActions) {
+private fun CameraView(file: File, retaking: Boolean, pages: List<ImageBitmap>, actions: ScanCameraActions, book: ScanBookController?) {
     val context = LocalContext.current
     val owner = LocalLifecycleOwner.current
     val scope = rememberCoroutineScope()
@@ -336,6 +336,8 @@ private fun CameraView(file: File, retaking: Boolean, pages: List<ImageBitmap>, 
             BarIcon(LucideIcons.X, stringResource(R.string.common_cancel), actions.onClose, tint = Color.White)
             Spacer(Modifier.weight(1f))
             TextButton(onClick = actions.onPhoneApp) { Text(stringResource(R.string.scan_camera_phone_app), color = Color.White, fontSize = 14.sp) }
+            // book mode (#303): the same switch as on the scan screen
+            if (book != null) ScanBookCameraToggle(book)
             if (camera?.cameraInfo?.hasFlashUnit() == true) {
                 BarIcon(
                     LucideIcons.Sun, stringResource(if (torch) R.string.scan_camera_torch_off else R.string.scan_camera_torch_on),
@@ -379,6 +381,8 @@ private fun CameraView(file: File, retaking: Boolean, pages: List<ImageBitmap>, 
                         )
                     }
                 }
+                // book mode (#303): a line down the middle of the frame for the book's spine
+                if (book?.on == true && !failed) ScanBookSpineGuide()
                 if (failed) {
                     Column(Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(stringResource(R.string.scan_camera_unavailable), color = Color.White, fontSize = 16.sp, textAlign = TextAlign.Center)

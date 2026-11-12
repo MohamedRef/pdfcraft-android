@@ -80,11 +80,56 @@ at most 0.042 pixels of the 256-pixel input (0.26 pixels of the photo) and the p
 change by at most 0.004. In `rten` only the stored weights are rounded, so the difference there is
 no larger.
 
+## Live frames (#295)
+
+The native half of the viewfinder outline: `scan_detect_frame(rgba, width, height,
+rotation_degrees) -> ScanLiveQuad` (UniFFI, `apps/pdfcraft-android/src/scan.rs`), on
+`pdfcraft_scan::detect_frame` (`scan/src/live.rs`). The app side (the `ImageAnalysis` use case,
+smoothing, hints, the overlay, its `ScanLab` option and log fields) is not written yet.
+
+- **Input**: one RGBA camera analysis frame, rows packed (`width × 4` bytes each), and CameraX's
+  `rotationDegrees` (the clockwise turn that makes it upright: 0, 90, 180 or 270). Refused with
+  an error, never a crash: a width or height of 0, over 2 MP, fewer bytes than
+  `width × height × 4`, any other turn.
+- **Upright first**: the frame is copied into an upright RGB picture (the turn is a change of
+  pixel order, no resampling), so everything after works in upright-frame coordinates.
+- **One look** of the network at angle 0, with the same least confidence as the photo search
+  (0.45). None of the turned looks of step 3 above: the next frame is the next try, and seven
+  looks would cost seven times as much. `detect` and `scan_find_document` are unchanged.
+- **Light refinement** (#291) on the frame itself, one pyramid level (a 640-pixel frame is under
+  the 1000-pixel coarsest level), band asked for 6 pixels; `refine` never looks less than 8
+  pixels away, so 8 in effect.
+- When the network answers nothing, `found` is false and the points are the whole frame. The
+  line detector is asked only when the model file is not installed (or cannot be run).
+- **Out**: the four corners as shares of the upright frame (top-left, top-right, bottom-right,
+  bottom-left), the confidence, the frame's mean BT.601 luma (0–255), `found`, `cut_off` (a
+  corner within 1.5 % of the frame's width or height from its edge) and the call's time in ms.
+
+**Measured, on drawn frames only** (`cargo test -p pdfcraft-scan tests_live -- --nocapture`): a
+sheet with rows of print on a dark grainy table in a 640 × 480 frame, delivered at each of the
+four turns, is found at confidence 0.88–0.92 with all four sides refined and every corner within
+0.1 pixel of the truth. A frame of table alone, and a uniform grey frame, give nothing. A sheet
+with a corner 4 pixels from the frame's edge is found and marked `cut_off`; but in other drawn
+frames with a corner within a few pixels of the edge the single look found **nothing** (confidence
+0.02–0.38), so the "fit the whole page" hint cannot rely on `cut_off` alone: losing the quad near
+the edge is as likely.
+
+**Time, on a desktop, not a phone**: 4-core x86-64 (Xeon, 2.3 GHz), release build, one
+640 × 480 frame turned 90°: median 46–58 ms over 10 calls (in four runs), fastest 36 ms, slowest
+67–91 ms; the first call, which loads the model, 62–101 ms. Almost all of it is the network's one
+look (44–79 ms above). `cargo test --release -p pdfcraft-scan time_of_one_frame -- --nocapture`
+prints it.
+
+**Not measured**: anything on a phone (the issue's budget is 50 ms per frame for copy, call and
+result on the owner's phone; on this desktop the call alone is about that), real camera frames
+(sensor noise, motion blur, auto-exposure, a page at the frame's edge), and how steady the
+outline is from frame to frame.
+
 ## Not done here
 
 - The page map alone as a rescue when the corners fail (the issue's step 9).
 - A corner outside the photo: the network cannot place one, and the crop screen cannot show one
   yet (#292).
-- Detection on preview frames (#295), optional model downloads and a Models screen in Settings
-  (#289): the one model there is ships in the APK.
+- The app side of detection on preview frames (#295; the native call is above), optional model
+  downloads and a Models screen in Settings (#289): the one model there is ships in the APK.
 - Comparing other published detectors (LDRNet, DocAligner).

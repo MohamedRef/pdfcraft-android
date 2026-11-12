@@ -7,4 +7,7 @@
     <string name="tools_scan_book_left_page">Página izquierda de una doble página</string>
     <string name="tools_scan_book_right_page">Página derecha de una doble página</string>
     <string name="scan_lab_book_gutter">Modo libro: cortar por el lomo encontrado en la foto</string>
+    <string name="scan_crop_book_left">Página izquierda de una doble página: su lado derecho es el corte por el lomo, no un borde del papel.</string>
+    <string name="scan_crop_book_right">Página derecha de una doble página: su lado izquierdo es el corte por el lomo, no un borde del papel.</string>
+    <string name="scan_camera_book_hint">Alinea el lomo del libro con la línea</string>
 </resources>
