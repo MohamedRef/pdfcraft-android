@@ -42,6 +42,7 @@ on one part. While any is changed, the scan screen says so.
 | Filter strength | Each filter's own | 20, 40, 60, 80 or 100 for every filter |
 | Flatten page (#302) | Off | On, with the switch on the scan screen itself |
 | Scan with (#294) | PdfCraft camera | Phone's camera app (also in Settings → Scan; the same setting) |
+| Page outline in the camera (#295) | On | Off: no frames are analysed, the camera is as in #294 |
 
 **Reset scanner testing options** puts them back. Keeping scans is not one of them: it changes
 no page.
@@ -68,7 +69,8 @@ The zip also holds `diagnostics.txt`, the diagnostics log as **Share diagnostics
  "options": {"finder": "auto", "refine": true, "side_proportions": false, "snap_paper": true, "strength_override": null, "upright": true,
              "sharpen": 30, "denoise": true, "preview": true, "crop_tools": true, "flatten_auto": false},
  "capture": {"source": "in_app", "mp10": 499, "width": 8160, "height": 6120, "exposure_index": -1, "exposure_step_milli": 333,
-             "torch": false, "focused": true, "rotation": 0, "capture_ms": 640},
+             "torch": false, "focused": true, "rotation": 0, "capture_ms": 640, "live": true, "live_found": true,
+             "live_stable": true, "live_hint": "ready", "preview_quad": [0.11, 0.08, 0.93, 0.10, 0.95, 0.90, 0.07, 0.89]},
  "preview": {"shown": true, "reused": true, "ms": 412, "width": 905, "height": 1280, "look": "auto"},
  "crop": {"visits": 1, "corner_drags": 2, "side_drags": 1, "snaps_asked": 3, "snaps_taken": 2, "snaps_held": 0, "snaps_failed": 0,
           "snap_ms_max": 85, "nudges": 0, "detects": 0, "detects_found": 0, "whole_photo": 0, "resets": 0,
@@ -99,6 +101,9 @@ before the scan is saved.
 `capture` says how the photo was taken (#294, `docs/ANDROID_SCAN_CAMERA.md`): `source` is
 `in_app`, `phone_app` or `import`; the still's size and exposure are known for `in_app` only. It is
 `null` when the capture is not known, as for a scan Android restored after closing the app.
+From #295 it also holds the live outline at the shutter (`ANDROID_SCAN_LIVE.md`): whether it was
+on (`live`), showed a page, was steady, the advice shown (`live_hint`) and the outline itself
+(`preview_quad`, 8 shares of the upright frame, or `null`).
 
 ## On the desktop
 

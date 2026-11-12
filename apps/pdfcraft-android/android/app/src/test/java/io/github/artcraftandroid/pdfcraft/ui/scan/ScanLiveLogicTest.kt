@@ -173,4 +173,20 @@ class ScanLiveLogicTest {
         assertEquals(ScanLiveHint.HoldStill, h.update(ScanLiveHint.Ready, 900L))
         assertEquals(ScanLiveHint.Ready, h.update(ScanLiveHint.Ready, 1_300L))
     }
+
+    // ---- what is recorded ----
+
+    @Test
+    fun theOutlineAtTheShutterIsRecorded() {
+        val c = ScanCapture("in_app", live = true, liveFound = true, liveStable = true, liveHint = ScanLiveHint.Ready.id, previewQuad = page)
+        val diag = c.diag().toMap()
+        assertEquals(true, diag["live_stable"])
+        assertEquals("ready", diag["live_hint"])
+        for ((_, v) in diag) assertTrue(v is Number || v is Boolean || (v is String && v.matches(Regex("[a-z_]+"))))
+        val json = c.json()
+        assertEquals(0.8, json.getJSONArray("preview_quad").getDouble(2), 1e-9)
+        assertTrue(ScanCapture("phone_app").json().isNull("preview_quad"))
+        // every hint's id is a short lowercase word, as the log allows
+        for (h in ScanLiveHint.entries) assertTrue(h.id.matches(Regex("[a-z]+")))
+    }
 }
