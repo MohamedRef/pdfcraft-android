@@ -438,6 +438,8 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
 
         // the file's name in a translucent white chip under the top bar for a moment after it opens
         // (80 % white: grey over the desk, near-white over a page, as the reference's)
+        // the first document opened shows the first-run tips once (#202)
+        LaunchedEffect(doc) { if (vm.toolPrefs.takeFirstRunTips()) vm.tipsOpen = true }
         var nameChip by remember(doc) { mutableStateOf(false) }
         LaunchedEffect(doc) {
             delay(900)
@@ -524,12 +526,17 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
                                 ctl.searching = true
                                 ctl.sheet = ViewerSheet.None
                             }),
-                            onShare = { vm.share(doc) },
+                            onShare = { selection.clear(); ctl.sheet = ViewerSheet.Share },
                             onMore = { ctl.sheet = if (ctl.sheet == ViewerSheet.More) ViewerSheet.None else ViewerSheet.More },
                             moreOpen = ctl.sheet == ViewerSheet.More,
                             title = if (ctl.tool == ViewerTool.Edit) stringResource(R.string.common_tool_edit_pdf) else null,
                             undoLabel = if (doc.localUndo != null) stringResource(R.string.viewer_undo_drawing) else doc.info.undoLabel,
                             redoLabel = if (doc.localUndo != null) stringResource(R.string.viewer_undo_drawing) else doc.info.redoLabel,
+                            saveState = saveState(
+                                edited = doc.info.undo != null || doc.wroteOriginal, saving = doc.saving, dirty = doc.info.dirty,
+                                notWrittenBack = doc.notWrittenBack, writable = doc.writable, hasSource = doc.source != null,
+                            ),
+                            onSaveState = { vm.saveNow(doc) },
                         )
                 }
                 }
@@ -595,6 +602,10 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
         // while typing on the page, the bar (with its formatting) rides above the keyboard
         if (vm.readAloud == null && vm.fieldActions == null) Column(Modifier.fillMaxWidth().align(Alignment.BottomCenter).then(if (vm.editing != null) Modifier.imePadding() else Modifier)) {
             vm.success?.let { SuccessBannerView(it, onClose = { vm.success = null }) }
+            // edits that can't reach the original: said as soon as there are any, not only on leaving (#191)
+            if (showReadOnlyNotice(doc.writable, doc.source != null, doc.info.dirty || doc.notWrittenBack, doc.readOnlyNoticeClosed)) {
+                ReadOnlyNotice(onSaveCopy = { vm.saveCopyAs(doc) }, onClose = { doc.readOnlyNoticeClosed = true })
+            }
             AnimatedVisibility(
                 ctl.barsVisible && !ctl.searching && !vm.readingMode && (!railVisible || ctl.tool != ViewerTool.None),
                 enter = slideInVertically(tween(PdfMotion.BARS_MS)) { it } + fadeIn(tween(PdfMotion.BARS_MS)),
@@ -655,6 +666,7 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
                 ViewerSheet.Signatures -> SignaturesSheet(vm, doc)
                 ViewerSheet.ScanEnhance -> ScanEnhanceSheet(vm, doc)
                 ViewerSheet.OcrConfidence -> OcrConfidenceReviewSheet(vm, doc)
+                ViewerSheet.Share -> ShareSheet(vm, doc)
                 ViewerSheet.FocusTimer -> FocusTimerSheet(vm) { ctl.sheet = ViewerSheet.None }
                 ViewerSheet.Backups -> VersionHistorySheet(vm, doc) { ctl.sheet = ViewerSheet.None }
                 ViewerSheet.NoteMargin -> NoteMarginSheet(vm, doc, listOf(doc.viewer.currentPage)) { ctl.sheet = ViewerSheet.None }
@@ -922,6 +934,28 @@ private fun SuccessBannerView(b: io.github.artcraftandroid.pdfcraft.ui.SuccessBa
                 modifier = Modifier.align(Alignment.End).clickable { onClose(); undo() }.padding(horizontal = 24.dp, vertical = 12.dp),
             )
         }
+    }
+}
+
+/** Whether the viewer says that changes can't be saved to the original (#191). */
+internal fun showReadOnlyNotice(writable: Boolean, hasSource: Boolean, edited: Boolean, closed: Boolean): Boolean =
+    !writable && hasSource && edited && !closed
+
+/** Over the bar: changes stay in PdfCraft because the original can't be written; Save a copy keeps them. */
+@Composable
+private fun ReadOnlyNotice(onSaveCopy: () -> Unit, onClose: () -> Unit) {
+    val c = pdfColors
+    Column(Modifier.fillMaxWidth().background(c.surfaceRaised).padding(start = 16.dp, end = 8.dp, top = 12.dp, bottom = 4.dp)) {
+        Row(verticalAlignment = Alignment.Top) {
+            Icon(LucideIcons.TriangleAlert, null, tint = c.icon, modifier = Modifier.padding(top = 2.dp).size(22.dp))
+            Spacer(Modifier.width(14.dp))
+            Text(stringResource(R.string.viewer_read_only_notice), color = c.text, fontSize = 15.sp, lineHeight = 20.sp, modifier = Modifier.weight(1f))
+            BarIcon(LucideIcons.X, stringResource(R.string.viewer_close), onClose, size = 40.dp)
+        }
+        Text(
+            stringResource(R.string.common_save_copy), color = c.accent, fontSize = 15.sp, fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.align(Alignment.End).clickable(role = androidx.compose.ui.semantics.Role.Button, onClick = onSaveCopy).padding(horizontal = 24.dp, vertical = 12.dp),
+        )
     }
 }
 

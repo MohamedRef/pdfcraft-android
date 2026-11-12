@@ -182,7 +182,9 @@ class Thumbnails(private val context: Context) {
         return cached(sha("$uri|$modified|$size|$maxSide")) {
             val tmp = File.createTempFile("thumb", ".pdf", context.cacheDir)
             try {
-                resolver.openInputStream(uri)?.use { input -> tmp.outputStream().use { input.copyTo(it) } } ?: error("unreadable")
+                // a provider that reports no size is still held to the limit while copying (#116)
+                // (a larger stream throws, and the partial copy is deleted below)
+                resolver.openInputStream(uri)?.use { input -> tmp.outputStream().use { SafBoundedCopy.copy(input, it, MAX_COPY, "PDF") } } ?: error("unreadable")
                 fileThumbnail(tmp.absolutePath, maxSide.toUInt()).toBitmap()
             } finally {
                 tmp.delete()

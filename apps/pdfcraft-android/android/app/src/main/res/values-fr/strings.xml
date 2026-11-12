@@ -203,20 +203,20 @@
     <string name="home_leaving_body">Une page web va s\'ouvrir dans votre navigateur.</string>
 
     <!-- Settings: Preferences -->
-    <string name="home_section_notifications">Notifications</string>
-    <string name="home_no_notifications">PdfCraft n\'envoie pas de notifications.</string>
-    <string name="home_section_suggestions">Suggestions automatiques</string>
     <string name="home_offer_suggestions">Proposer les mots déjà utilisés pour remplir les formulaires</string>
     <string name="home_clear_suggestions">Effacer les suggestions</string>
     <!-- Section heading and dialog title (also asked the first time a comment is made) -->
     <string name="home_author_title">Votre nom sur les commentaires</string>
     <string name="home_author_hint">Touchez pour saisir votre nom, affiché sur vos commentaires</string>
-    <string name="home_section_screen">Réglage de l\'écran</string>
     <string name="home_keep_screen_on">Garder l\'écran allumé</string>
     <string name="home_keep_screen_on_body">Garde l\'écran allumé pendant la lecture, jusqu\'à 30 minutes sans toucher l\'écran.</string>
+    <string name="home_section_reading">Lecture</string>
+    <string name="home_section_pen">Stylet et annotations</string>
+    <string name="home_section_forms">Formulaires</string>
     <string name="home_section_keyboard">Clavier</string>
     <string name="home_keyboard_shortcuts">Raccourcis clavier</string>
     <!-- N, P, Page Down, Page Up, Ctrl+P, Ctrl, + and − are keys on the keyboard -->
+    <string name="home_keyboard_shortcuts_body">Avec un clavier connecté : N ou Page suivante pour la page suivante, P ou Page précédente pour la page précédente, les flèches pour faire défiler, Ctrl+P pour imprimer, Ctrl et + ou − pour zoomer.</string>
     <string name="home_section_extra">Fonctionnalités supplémentaires</string>
     <string name="home_extra_body">Modifications facultatives de l\'apparence et du fonctionnement de PdfCraft.</string>
     <string name="home_status_bar_in_documents">Afficher la barre d\'état dans les documents</string>
@@ -332,7 +332,7 @@
     <!-- App dialogs: a file that can't be written back -->
     <string name="root_read_only_title">Fichier en lecture seule</string>
     <!-- Verb: throw the changes away -->
-    <string name="root_discard">Abandonner</string>
+    <string name="root_discard">Abandonner les modifications</string>
     <!-- %1$s is the file name -->
     <string name="root_read_only_body">Vos modifications de %1$s ne peuvent pas être enregistrées à son emplacement. Enregistrez une copie pour les conserver.</string>
 
@@ -485,10 +485,10 @@
         <item quantity="other">%1$d sélectionnées</item>
     </plurals>
     <string name="pages_page">Page %1$d</string>
-    <string name="pages_insert_page">Insérer une page</string>
-    <string name="pages_extract">Extraire</string>
-    <string name="pages_rotate_left">Gauche</string>
-    <string name="pages_rotate_right">Droite</string>
+    <string name="pages_insert_page">Insérer des pages</string>
+    <string name="pages_extract">Extraire dans un nouveau PDF</string>
+    <string name="pages_rotate_left">Pivoter à gauche</string>
+    <string name="pages_rotate_right">Pivoter à droite</string>
 
     <!-- Pages: Insert sheet (where the new pages go, and what they are) -->
     <string name="pages_insert">Insérer</string>
@@ -881,7 +881,7 @@
     <!-- Messages: opening documents -->
     <string name="msg_engine_not_started">PdfCraft n\'a pas pu démarrer.</string>
     <string name="msg_file_moved">Ce fichier a été déplacé ou supprimé.</string>
-    <string name="msg_opened_own_copy">Copie de PdfCraft ouverte. Pour modifier l\'original, rouvrez-le depuis l\'application où il se trouve.</string>
+    <string name="msg_opened_own_copy">Ceci est la copie enregistrée par PdfCraft. L\'original est inaccessible.</string>
     <string name="msg_file_access_lost">PdfCraft ne peut plus ouvrir ce fichier. Rouvrez-le depuis l\'application où il se trouve, ou avec Ouvrir un fichier.</string>
 
     <!-- Messages: undo and redo. %1$s is the name of the edit, as the engine gives it (for example "Add comment"). -->
@@ -898,7 +898,6 @@
     <string name="msg_search_no_matches">Aucun résultat pour « %1$s »</string>
 
     <!-- Messages: share and print -->
-    <string name="msg_share_subject">Envoi de %1$s par e-mail</string>
     <string name="msg_print_disabled">Impression indisponible : l\'auteur a désactivé l\'impression de ce document.</string>
 
     <!-- Messages: saving. %1$s is a file name; %2$s is its size (for example "1.2 MB"). -->
@@ -930,7 +929,6 @@
     <string name="msg_busy_preparing_ocr">Préparation de la reconnaissance de texte…</string>
     <string name="msg_ocr_not_installed">La reconnaissance de texte n\'est pas installée dans cette version.</string>
     <string name="msg_busy_recognizing">Reconnaissance du texte…</string>
-    <string name="msg_ocr_done">Texte reconnu (anglais). Il peut maintenant être sélectionné, copié, recherché et surligné.</string>
     <string name="msg_ocr_nothing">Aucune page ne nécessitait de reconnaissance</string>
 
     <!-- Messages: Fill & Sign -->
@@ -1050,9 +1048,9 @@
     <string name="service_action_back">Reculer de 15 secondes</string>
     <string name="service_action_forward">Avancer de 15 secondes</string>
     <string name="service_action_stop">Arrêter</string>
-    <string name="updater_download_browser">Télécharger l\'APK dans le navigateur</string>
+    <string name="updater_download_browser">Télécharger dans le navigateur</string>
     <string name="updater_browser_open_error">Impossible d\'ouvrir le téléchargement GitHub officiel dans le navigateur.</string>
-    <string name="updater_browser_notice">Si le téléchargement dans l\'app échoue, essayez le lien GitHub officiel dans le navigateur. Les téléchargements du navigateur s\'installent manuellement et ne sont pas vérifiés par SHA-256 dans PdfCraft.</string>
+    <string name="updater_browser_notice">Si le téléchargement dans PdfCraft échoue, essayez le lien officiel dans votre navigateur. Un téléchargement par le navigateur s’installe à la main et PdfCraft ne peut pas le vérifier.</string>
     <string name="toolbar_squiggly">Ondulé</string>
     <string name="viewer_hint_squiggly">Faites glisser sur le texte pour le souligner d\'une ligne ondulée</string>
     <string name="toolbar_color_squiggly">Couleur du soulignement ondulé</string>
@@ -1098,7 +1096,7 @@
     <string name="file_details_name">Nom de fichier complet</string>
     <string name="file_details_type">Type de fichier</string>
     <string name="file_details_size">Taille du fichier</string>
-    <string name="file_details_location">Emplacement / URI du document</string>
+    <string name="file_details_location">Emplacement</string>
     <string name="file_details_fs_created">Fichier créé le</string>
     <string name="file_details_fs_modified">Fichier modifié le</string>
     <string name="file_details_pdf_title">Titre</string>
@@ -1133,20 +1131,20 @@
     <string name="file_details_signature_present">Présentes (validité non vérifiée)</string>
     <string name="file_details_signature_none">Aucune détectée</string>
     <string name="file_details_custom_fields">Champs de métadonnées personnalisés</string>
-    <string name="file_details_xmp">Métadonnées XMP (brutes)</string>
-    <string name="sheet_export_embedded_bookmarks">Exporter les signets PDF intégrés (JSON)</string>
+    <string name="file_details_xmp">Métadonnées XMP</string>
+    <string name="sheet_export_embedded_bookmarks">Exporter les signets du PDF dans un fichier</string>
     <string name="sheet_export_embedded_bookmarks_failed">Impossible de créer l\'export des signets PDF.</string>
-    <string name="sheet_import_embedded_bookmarks">Importer des signets PDF intégrés (JSON)</string>
+    <string name="sheet_import_embedded_bookmarks">Importer les signets du PDF depuis un fichier</string>
     <string name="sheet_import_embedded_bookmarks_unavailable">Impossible d\'importer des signets dans un PDF fermé, en lecture seule ou signé. Utilisez plutôt une copie modifiable.</string>
     <string name="sheet_import_embedded_bookmarks_unreadable">Impossible de lire le fichier de signets sélectionné.</string>
     <string name="sheet_import_embedded_bookmarks_done">Signets PDF ajoutés. Cette modification peut être annulée.</string>
     <string name="sheet_import_embedded_bookmarks_unmapped">%1$d destinations de signets importées ne correspondent à aucune page de ce PDF.</string>
-    <string name="sheet_import_embedded_bookmarks_truncated">Ce JSON provient d\'une table des matières avec des signets plus profondément imbriqués. Certaines branches peuvent manquer.</string>
+    <string name="sheet_import_embedded_bookmarks_truncated">Ce fichier provient de signets imbriqués plus profondément que ce que PdfCraft lit. Certaines branches peuvent manquer.</string>
     <string name="sheet_copy_embedded_bookmarks">Copier les signets intégrés d\'un autre PDF</string>
     <string name="sheet_copy_embedded_bookmarks_busy">Copie des signets PDF intégrés…</string>
     <string name="sheet_copy_embedded_bookmarks_unavailable">Impossible d\'ajouter des signets à un PDF fermé, signé ou en lecture seule. Utilisez plutôt une copie modifiable.</string>
     <string name="sheet_copy_embedded_bookmarks_same_source">Choisissez un autre PDF comme source.</string>
-    <string name="sheet_copy_embedded_bookmarks_too_large">Le PDF source dépasse la limite de copie de 512 Mio.</string>
+    <string name="sheet_copy_embedded_bookmarks_too_large">Le PDF source dépasse la limite de copie de 512 Mo.</string>
     <string name="sheet_copy_embedded_bookmarks_unreadable">Impossible de lire ou d\'ouvrir le PDF sélectionné.</string>
     <string name="sheet_copy_embedded_bookmarks_copy_restricted">Le PDF source n\'autorise pas la copie de son contenu.</string>
     <string name="sheet_copy_embedded_bookmarks_empty">Le PDF sélectionné n\'a aucun signet intégré.</string>
@@ -1160,13 +1158,13 @@
     <string name="edit_script_title">Exposant et indice</string>
     <string name="edit_superscript">Exposant (x²)</string>
     <string name="edit_subscript">Indice (H₂O)</string>
-    <string name="edit_script_scope">S\'applique au texte sélectionné dans l\'éditeur intégré, ou à tout le paragraphe si aucun texte n\'est sélectionné. Utilise les formes Unicode prises en charge par la police ; les autres caractères restent inchangés. Terminez d\'abord vos modifications de saisie. Utilisez Annuler pour restaurer le texte d\'origine.</string>
+    <string name="edit_script_scope">Modifie le texte sélectionné, ou tout le paragraphe si rien n’est sélectionné. Les caractères absents de la police restent inchangés.</string>
     <string name="edit_script_applying">Mise en forme du paragraphe…</string>
     <string name="edit_script_unavailable">Terminez la saisie et sélectionnez un paragraphe dans un PDF modifiable et non signé. Si le document a changé, sélectionnez-le à nouveau.</string>
     <string name="text_styles_title">Créer un sommaire à partir des titres</string>
     <string name="text_styles_explanation">Analysez les styles de texte, puis choisissez-en jusqu\'à neuf dans l\'ordre des titres. Le premier style correspond au niveau 1, le suivant au niveau 2, et ainsi de suite. Les nouvelles entrées sont ajoutées sous un signet « Sans titre » ; le sommaire existant reste en place. Vous pouvez annuler la modification.</string>
     <string name="text_styles_scan">Analyser les styles de texte</string>
-    <string name="text_styles_scope">Liste sur demande les 200 plus grands styles du moteur natif dans les 5 000 premières pages. Les documents volumineux peuvent prendre du temps.</string>
+    <string name="text_styles_scope">Les grands documents peuvent prendre un moment.</string>
     <string name="text_styles_loading">Analyse des styles de texte…</string>
     <string name="text_styles_failed">Impossible d\'analyser les styles de texte. Le document restreint peut-être la copie, ou il a changé pendant l\'analyse. Réessayez.</string>
     <string name="text_styles_empty">Aucun style de texte trouvé. Les pages composées uniquement d\'images nécessitent d\'abord une reconnaissance de texte.</string>
@@ -1189,8 +1187,8 @@
     <string name="backdrops_next">Pages suivantes</string>
     <string name="bates_title">Numérotation Bates</string>
     <string name="bates_about">Numérotez les PDF enregistrés de façon consécutive dans l\'ordre ci-dessous. Les nouvelles copies vont dans Téléchargements ; les originaux restent intacts.</string>
-    <string name="bates_limits">Jusqu\'à 20 PDF, 512 Mio au total en entrée. Enregistrez les modifications en cours avant de sélectionner leurs fichiers.</string>
-    <string name="bates_passwords">Les demandes de mot de passe ne sont pas encore prises en charge. Les PDF signés ou en lecture seule sont refusés ; les fichiers chiffrés doivent s\'ouvrir sans mot de passe. Annuler arrête avant les exports suivants ; l\'opération de numérotation en cours peut devoir se terminer d\'abord.</string>
+    <string name="bates_limits">Jusqu’à 20 PDF, 512 Mo au total. Enregistrez les modifications ouvertes avant de choisir leurs fichiers.</string>
+    <string name="bates_passwords">Les PDF signés, en lecture seule ou protégés par mot de passe ne peuvent pas être numérotés. Annuler s’arrête avant le fichier suivant.</string>
     <string name="bates_start">Numéro de départ (1–999999999999)</string>
     <string name="bates_digits">Nombre minimal de chiffres (1–12)</string>
     <string name="bates_prefix">Préfixe</string>
@@ -1299,7 +1297,7 @@
     <string name="ink_preset_saved">Stylo favori %1$d enregistré.</string>
     <string name="ink_preset_invalid">Choisissez d\'abord une épaisseur et une opacité valides.</string>
     <string name="scan_enhance_title">Améliorer les pages numérisées</string>
-    <string name="scan_enhance_explanation">Nettoie le fond du papier numérisé et améliore la lisibilité. Les objets image d\'origine du PDF sont modifiés, tandis que le texte OCR, les liens et les commentaires existants sont conservés par le moteur. Vous pouvez annuler avant d\'enregistrer.</string>
+    <string name="scan_enhance_explanation">Nettoie le fond du papier numérisé pour rendre le texte plus lisible. Le texte, les liens et les commentaires sont conservés. Vous pouvez annuler.</string>
     <string name="scan_enhance_current">Page actuelle uniquement, page %1$d</string>
     <string name="scan_enhance_batch">De la page %1$d à %2$d (12 pages max.)</string>
     <string name="scan_enhance_level">Nettoyage du fond : %1$d%%</string>
@@ -1318,7 +1316,7 @@
     <string name="toolbar_drag_handle">Faites glisser pour déplacer la barre d\'outils. Relâchez pour l\'ancrer au bord le plus proche.</string>
     <string name="updater_title">Mises à jour de l\'app</string>
     <string name="updater_description">Téléchargez les mises à jour depuis les GitHub Releases publiées. Les téléchargements interrompus peuvent reprendre.</string>
-    <string name="updater_no_updates">Vous êtes à jour. Aucun APK publié plus récent trouvé.</string>
+    <string name="updater_no_updates">Vous êtes à jour.</string>
     <string name="updater_check_error">Impossible de vérifier les GitHub Releases. Vérifiez votre connexion et réessayez.</string>
     <string name="updater_checking">Recherche de mises à jour…</string>
     <string name="updater_check">Rechercher des mises à jour</string>
@@ -1339,14 +1337,14 @@
     <string name="updater_paused">Téléchargement en pause. Votre progression est conservée.</string>
     <string name="updater_interrupted">Téléchargement interrompu. Touchez Reprendre pour réessayer.</string>
     <string name="updater_resume">Reprendre le téléchargement</string>
-    <string name="updater_download">Télécharger l\'APK</string>
+    <string name="updater_download">Télécharger la mise à jour</string>
     <string name="updater_pause">Pause</string>
-    <string name="updater_apk_ready">APK vérifié prêt</string>
+    <string name="updater_apk_ready">Mise à jour téléchargée et vérifiée</string>
     <string name="updater_confirm_install">Confirmez l\'installation dans le programme d\'installation d\'Android.</string>
     <string name="updater_allow_install">Autorisez PdfCraft à installer des mises à jour dans les Paramètres, puis touchez à nouveau Installer.</string>
     <string name="updater_installer_error">Android n\'a pas pu ouvrir le programme d\'installation.</string>
-    <string name="updater_install">Installer l\'APK vérifié</string>
-    <string name="updater_install_notice">L\'installation nécessite toujours votre accord. La signature de l\'APK et le SHA-256 sont vérifiés au préalable.</string>
+    <string name="updater_install">Installer la mise à jour</string>
+    <string name="updater_install_notice">L’installation demande toujours votre accord. PdfCraft vérifie d’abord que la mise à jour est signée par PdfCraft et correspond à la version publiée.</string>
     <string name="ink_styles_title">Styles de stylo</string>
     <string name="ink_width_value">%1$.1f pt</string>
     <string name="ink_style_ballpoint">Bille</string>
@@ -1364,27 +1362,62 @@
     <string name="ink_eraser_size_title">Taille de la gomme</string>
     <string name="ink_eraser_size_short">%1$d pt</string>
     <string name="ink_eraser_diameter">Diamètre %1$d pt</string>
-    <string name="ink_eraser_size_help">La taille de la gomme est mesurée en points PDF. Son contour suit le zoom actuel de la page et correspond à la zone d\'effacement native.</string>
+    <string name="ink_eraser_size_help">Le cercle montre exactement ce qui sera effacé.</string>
     <string name="ink_toolbar_marker">Marqueur</string>
     <string name="ink_toolbar_brush">Pinceau</string>
     <string name="ink_toolbar_pencil">Crayon</string>
     <string name="ink_toolbar_fountain">Plume</string>
     <string name="ink_toolbar_ballpoint">Bille</string>
-    <string name="ocr_review_title">Vérifier la confiance OCR</string>
+    <string name="ocr_review_title">Vérifier le texte reconnu</string>
     <string name="ocr_review_scope">Page actuelle : %1$d</string>
     <string name="ocr_review_read_only">Vérifiez les mots dont la reconnaissance est peu fiable. Cette vérification ne modifie pas votre PDF.</string>
     <string name="ocr_review_loading">Vérification de la fiabilité de la reconnaissance…</string>
-    <string name="ocr_review_error">La vérification OCR n\'est pas disponible pour cette page. Vérifiez que la reconnaissance de texte est installée et que la copie est autorisée.</string>
+    <string name="ocr_review_error">La vérification du texte reconnu n’est pas disponible pour cette page. Vérifiez que la reconnaissance de texte est installée et que la copie est autorisée.</string>
     <string name="ocr_review_counts">%1$d mots reconnus · %2$d à vérifier</string>
     <string name="ocr_review_skipped">Page ignorée : %1$s</string>
     <string name="ocr_review_empty">Aucun mot trouvé sur cette page.</string>
     <string name="ocr_review_limited">Affichage de %1$d mots maximum, les moins sûrs en premier.</string>
-    <string name="ocr_review_unknown">n/d</string>
+    <string name="ocr_review_unknown">Inconnu</string>
     <string name="document_preparing">Préparation de la modification et de l\'état des signatures…</string>
     <string name="comments_loading">Chargement des commentaires…</string>
     <string name="compact_previews">Utiliser moins de mémoire pour les aperçus de pages</string>
     <string name="compact_previews_body">Réduit la précision des couleurs pour les pages entières. Les détails zoomés conservent leur pleine qualité. S\'applique à la réouverture d\'un document.</string>
-    <string name="updater_other_build">Cette version n\'est pas l\'APK officiel ARM64, les mises à jour dans l\'application sont donc désactivées. Mettez-la à jour depuis l\'endroit où vous l\'avez installée.</string>
+    <string name="updater_other_build">Les mises à jour dans l’application concernent uniquement la version officielle pour téléphones ARM64. Mettez cette copie à jour depuis l’endroit où vous l’avez installée.</string>
+    <string name="viewer_read_only_notice">Les modifications ne peuvent pas être enregistrées dans l\'original. Elles restent dans PdfCraft jusqu\'à ce que vous enregistriez une copie.</string>
+    <string name="root_keep_editing">Continuer à modifier</string>
+    <string name="root_discard_title">Abandonner les modifications de %1$s ?</string>
+    <string name="root_discard_body">Vos modifications seront perdues. Cette action est irréversible.</string>
+    <string name="toolbar_label_enhance">Améliorer</string>
+    <string name="toolbar_label_review_ocr">Vérifier le texte</string>
+    <string name="sheet_group_view">Affichage</string>
+    <string name="sheet_group_navigate">Navigation</string>
+    <string name="sheet_group_file">Fichier</string>
+    <string name="pages_select_action">Sélectionner</string>
+    <string name="pages_select_all">Tout sélectionner</string>
+    <string name="pages_select_none">Ne rien sélectionner</string>
+    <string name="pages_drag_hint">Maintenez une page et faites-la glisser pour la déplacer</string>
+    <string name="share_choice_pdf">Partager le PDF</string>
+    <string name="share_choice_flattened">Partager une copie aplatie (commentaires et champs non modifiables)</string>
+    <string name="share_choice_page">Partager cette page</string>
+    <string name="share_choice_images">Partager les pages en images</string>
+    <string name="share_name_flattened">%1$s (aplati).pdf</string>
+    <string name="share_name_page">%1$s (page %2$d).pdf</string>
+    <plurals name="pages_deleted">
+        <item quantity="one">%1$d page supprimée</item>
+        <item quantity="other">%1$d pages supprimées</item>
+    </plurals>
+    <string name="msg_busy_recognizing_page">Reconnaissance du texte : page %1$d sur %2$d…</string>
+    <string name="busy_cancelling">Arrêt…</string>
+    <string name="busy_cancel_keeps">Annuler s’arrête après la page en cours. Les pages déjà lues gardent leur texte.</string>
+    <string name="msg_ocr_cancelled">La reconnaissance du texte s’est arrêtée avant de lire une page.</string>
+    <plurals name="msg_ocr_done_pages">
+        <item quantity="one">Texte reconnu sur %1$d page. Il peut maintenant être sélectionné, copié, recherché et surligné.</item>
+        <item quantity="other">Texte reconnu sur %1$d pages. Il peut maintenant être sélectionné, copié, recherché et surligné.</item>
+    </plurals>
+    <plurals name="msg_ocr_stopped">
+        <item quantity="one">Arrêté. Le texte reconnu sur %1$d page est conservé.</item>
+        <item quantity="other">Arrêté. Le texte reconnu sur %1$d pages est conservé.</item>
+    </plurals>
     <string name="notebook_new">Nouveau carnet</string>
     <string name="notebook_title">Papier du carnet</string>
     <string name="notebook_size">Format</string>
@@ -1422,12 +1455,12 @@
     <string name="notebook_cannot_add_page">Impossible d\'ajouter des pages à ce document</string>
     <string name="notebook_busy_saving_template">Enregistrement du modèle…</string>
     <string name="notebook_template_saved">Modèle %1$s enregistré</string>
-    <string name="updater_err_checksum">L\'APK téléchargé ne correspond pas à la version publiée et n\'a pas été installé. Téléchargez-le à nouveau.</string>
+    <string name="updater_err_checksum">La mise à jour téléchargée ne correspond pas à la version publiée, elle n’a donc pas été installée. Réessayez le téléchargement.</string>
     <string name="updater_err_invalid_apk">Le fichier téléchargé n\'est pas une application Android signée valide.</string>
-    <string name="updater_err_wrong_build">L\'APK téléchargé n\'est pas la mise à jour PdfCraft attendue.</string>
-    <string name="updater_err_certificate">L\'APK téléchargé n\'est pas signé par PdfCraft et ne peut pas remplacer l\'application installée.</string>
+    <string name="updater_err_wrong_build">Le fichier téléchargé n’est pas la mise à jour PdfCraft attendue.</string>
+    <string name="updater_err_certificate">La mise à jour téléchargée n’est pas signée par PdfCraft et ne peut donc pas remplacer l’application installée.</string>
     <string name="updater_err_android_version">Cette mise à jour nécessite une version plus récente d\'Android.</string>
-    <string name="updater_err_abi">Cet APK n\'est pas conçu pour le processeur de votre téléphone.</string>
+    <string name="updater_err_abi">Cette mise à jour n’est pas conçue pour le processeur de votre téléphone.</string>
     <string name="updater_err_storage">Impossible d\'enregistrer la mise à jour sur cet appareil. Libérez de l\'espace et réessayez.</string>
     <string name="updater_err_untrusted">Le lien de mise à jour ne provient pas des versions GitHub officielles de PdfCraft et a été refusé.</string>
     <string name="updater_err_server">Le serveur de téléchargement a renvoyé une réponse inattendue. Réessayez plus tard ou téléchargez dans le navigateur.</string>
@@ -1683,6 +1716,31 @@
     <string name="library_tags_hint">examen, semaine 3</string>
     <string name="library_collections">Collections</string>
     <string name="library_remove">Retirer de la bibliothèque</string>
+    <string name="viewer_comment_as">Commenter en tant que %1$s · Modifier</string>
+    <string name="viewer_comment_as_add">Ajouter votre nom aux commentaires</string>
+    <string name="save_state_saved">Enregistré</string>
+    <string name="save_state_saving">Enregistrement…</string>
+    <string name="save_state_unsaved">Modifications non enregistrées</string>
+    <string name="save_state_kept">Conservé dans PdfCraft</string>
+    <string name="save_state_save_now">Enregistrer maintenant</string>
+    <string name="msg_copy_continues">Enregistré sous %1$s. Vous travaillez maintenant dans la copie ; l’original est tel que vous l’avez ouvert.</string>
+    <string name="msg_copy_continues_saved_before">Enregistré sous %1$s. Vous travaillez maintenant dans la copie. Les modifications enregistrées avant étaient déjà dans l’original.</string>
+    <string name="tips_title">Astuces</string>
+    <string name="tips_next">Suivant</string>
+    <string name="tips_skip">Passer</string>
+    <string name="tips_draw_title">Dessiner et défiler</string>
+    <string name="tips_draw_body">Dans Dessiner, un doigt dessine et deux doigts font défiler et zoomer. Touchez la page pour masquer ou afficher les barres.</string>
+    <string name="tips_pen_title">Avec un stylet ?</string>
+    <string name="tips_pen_body">Activez Stylet uniquement dans les réglages du stylo de Dessiner ou dans les Préférences : seul le stylet dessine et la main ne laisse aucune trace.</string>
+    <string name="tips_find_title">S’y retrouver</string>
+    <string name="tips_find_body">⋮ contient les commentaires, signets et pages. Touchez la poignée au-dessus de la barre du bas pour afficher ou masquer vos raccourcis.</string>
+    <string name="home_open_pdf">Ouvrir un PDF</string>
+    <string name="home_or_start_with_tool">Ou commencez par un outil</string>
+    <string name="updater_open_settings">Ouvrir les paramètres</string>
+    <string name="updater_home_ready">La mise à jour %1$s est prête</string>
+    <string name="updater_home_view">Voir</string>
+    <string name="updater_auto_check">Rechercher les mises à jour automatiquement</string>
+    <string name="updater_auto_check_body">Une fois par jour à l’ouverture, PdfCraft demande à GitHub si une version plus récente existe. Aucun fichier ni aucune donnée personnelle n’est envoyé.</string>
     <plurals name="cards_due">
         <item quantity="one">%d carte à revoir</item>
         <item quantity="many">%d cartes à revoir</item>

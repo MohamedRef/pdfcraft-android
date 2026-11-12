@@ -20,6 +20,8 @@ internal enum class DiagArea(val tag: String, val issues: String) {
     Memory("memory", "#212 #92"),
     Tool("tool", "#96 #113, slow or failed engine tools"),
     Error("error", "#114, any failure"),
+    Share("share", "#205 #155"),
+    Update("update", "#193"),
     Viewer("viewer", "#152 #153 #155 #157 #184 #198 #203 #204 #327"),
 }
 
