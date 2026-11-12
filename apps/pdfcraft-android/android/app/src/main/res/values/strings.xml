@@ -2302,4 +2302,30 @@
     <string name="backup_restore_comments">Restore comments here</string>
     <string name="backup_restoring">Restoring…</string>
     <string name="backup_comments_restored">Comments restored</string>
+    <!-- Link authoring (#179, #159) -->
+    <string name="edit_link">Link</string>
+    <string name="link_drag_hint">Drag a box over what should be a link, or tap a link to change it.</string>
+    <string name="link_not_editable">This link can\'t be changed here.</string>
+    <string name="link_new">New link</string>
+    <string name="link_edit">Edit link</string>
+    <string name="link_to_page">Page in this document</string>
+    <string name="link_to_web">Web or email address</string>
+    <string name="link_page_hint">Page number (1–%1$d)</string>
+    <string name="link_web_hint">https://example.com</string>
+    <string name="link_page_wrong">Enter a page number in this document.</string>
+    <string name="link_web_wrong">Enter a web address (https://…) or an email address.</string>
+    <string name="link_save">Save</string>
+    <string name="link_added">Link added. Tap it while reading to follow it.</string>
+    <string name="link_deleted">Link deleted</string>
+    <string name="link_from_urls">Make web addresses clickable</string>
+    <string name="link_from_urls_none">No new web addresses found</string>
+    <string name="link_remove_all">Remove all links</string>
+    <string name="link_remove_all_title">Remove all links?</string>
+    <string name="link_remove_all_body">Every link in this document is removed. You can undo it.</string>
+    <string name="link_removed_all">All links removed</string>
+    <string name="ink_lasso_link">Add link</string>
+    <plurals name="link_from_urls_done">
+        <item quantity="one">%1$d web address became a link</item>
+        <item quantity="other">%1$d web addresses became links</item>
+    </plurals>
 </resources>

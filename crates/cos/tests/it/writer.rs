@@ -3,7 +3,7 @@
 
 use std::sync::Arc;
 
-use pdfcraft_cos::{Dict, Document, ObjRef, Object, SaveOptions, Stream, write_full, write_incremental};
+use pdfcraft_cos::{Dict, Document, ObjRef, Object, SaveOptions, Stream, write_full, write_incremental, write_incremental_shared};
 use pdfcraft_testkit::Pdf;
 
 /// Four pages, a shared font, document info with a non-ASCII title.
@@ -614,4 +614,30 @@ fn document_parts_and_structure_namespaces_survive_full_and_incremental_saves() 
     let reopened = Document::open(Arc::new(updated)).unwrap();
     assert!(reopened.repair_log().is_empty(), "{:?}", reopened.repair_log());
     assert_dpart_and_namespaces(&reopened);
+}
+
+/// #234: the shared display write gives the same bytes as the copied one, for an original that
+/// ends with a line break and one that does not (the revision then starts with one), and for a
+/// document that has to be saved in full.
+#[test]
+fn shared_incremental_write_matches_the_copied_one() {
+    let with_break = fixture();
+    assert!(with_break.ends_with(b"\n"));
+    let mut without_break = with_break.clone();
+    while without_break.last().is_some_and(|b| b.is_ascii_whitespace()) {
+        without_break.pop();
+    }
+    for original in [with_break, without_break] {
+        let mut doc = Document::open(Arc::new(original.clone())).unwrap();
+        let info = doc.trailer().get(b"Info").and_then(|o| o.as_ref()).unwrap();
+        doc.update_dict(info, |d| d.set(b"Title".to_vec(), Object::String(pdfcraft_cos::PdfString::literal(b"Shown".to_vec())))).unwrap();
+        let copied = write_incremental(&doc, &SaveOptions::default()).unwrap();
+        let shared = write_incremental_shared(&doc, &SaveOptions::default()).unwrap();
+        assert_eq!(shared.as_slice(), copied.as_slice());
+        assert!(copied.starts_with(&original) && copied.len() > original.len());
+    }
+    let mut doc = Document::open(Arc::new(fixture())).unwrap();
+    doc.require_full_save();
+    let copied = write_incremental(&doc, &SaveOptions::default()).unwrap();
+    assert_eq!(write_incremental_shared(&doc, &SaveOptions::default()).unwrap().as_slice(), copied.as_slice());
 }

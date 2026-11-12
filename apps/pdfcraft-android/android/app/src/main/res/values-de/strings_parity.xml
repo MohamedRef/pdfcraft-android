@@ -144,4 +144,21 @@
         <item quantity="one">%1$d mögliche Schein-Schwärzung:</item>
         <item quantity="other">%1$d mögliche Schein-Schwärzungen:</item>
     </plurals>
+    <string name="compare_title">Dateien vergleichen</string>
+    <string name="compare_about">Sehen, was sich zwischen zwei Versionen einer PDF geändert hat</string>
+    <string name="compare_with_older">Mit einer älteren Version vergleichen</string>
+    <string name="compare_busy">Wird verglichen…</string>
+    <string name="compare_against">Änderungen seit %1$s</string>
+    <string name="compare_identical">Der Text ist in beiden gleich</string>
+    <string name="compare_counts">%1$d ersetzt · %2$d eingefügt · %3$d gelöscht</string>
+    <string name="compare_mark">Als Kommentare hinzufügen</string>
+    <string name="compare_marked">%1$d Kommentare hinzugefügt</string>
+    <string name="compare_report">Bericht als PDF speichern</string>
+    <string name="compare_report_saved">Bericht gespeichert</string>
+    <string name="compare_visual">Seitenaussehen vergleichen</string>
+    <string name="compare_kind_replaced">Ersetzt</string>
+    <string name="compare_kind_inserted">Eingefügt</string>
+    <string name="compare_kind_deleted">Gelöscht</string>
+    <string name="compare_kind_visual">Sieht anders aus</string>
+    <string name="compare_page">Seite %1$d</string>
 </resources>

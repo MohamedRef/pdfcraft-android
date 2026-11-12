@@ -144,4 +144,21 @@
         <item quantity="one">%1$d possible fake redaction:</item>
         <item quantity="other">%1$d possible fake redactions:</item>
     </plurals>
+    <string name="compare_title">Compare files</string>
+    <string name="compare_about">See what changed between two versions of a PDF</string>
+    <string name="compare_with_older">Compare with an older version</string>
+    <string name="compare_busy">Comparing…</string>
+    <string name="compare_against">Changes since %1$s</string>
+    <string name="compare_identical">The text is the same in both</string>
+    <string name="compare_counts">%1$d replaced · %2$d inserted · %3$d deleted</string>
+    <string name="compare_mark">Add as comments</string>
+    <string name="compare_marked">Added %1$d comments</string>
+    <string name="compare_report">Save report PDF</string>
+    <string name="compare_report_saved">Report saved</string>
+    <string name="compare_visual">Compare page appearance</string>
+    <string name="compare_kind_replaced">Replaced</string>
+    <string name="compare_kind_inserted">Inserted</string>
+    <string name="compare_kind_deleted">Deleted</string>
+    <string name="compare_kind_visual">Looks different</string>
+    <string name="compare_page">page %1$d</string>
 </resources>
