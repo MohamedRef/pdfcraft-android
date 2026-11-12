@@ -34,7 +34,7 @@ a phone yet.** Every number in the scanner's documents was measured on a desktop
 | #303 | Book mode | **Not started** | | All of it |
 | #304 | "Max quality" (DocRes) | **Not started** | | Feasibility first, as the issue says |
 | #305, #306 | Research: moiré; fingers, glare | **Not started** | | |
-| #307 | ML Kit as a second engine | Protocol only | #406 | The comparison protocol and its blind-ranking script ([ANDROID_SCAN_COMPARISON.md](ANDROID_SCAN_COMPARISON.md)); Google's scanner is used from the Drive app. Not in the app: the library would end the F-Droid build, and the owner was asked whether to add it anyway. No comparison has been run |
+| #307 | ML Kit as a second engine | **Dropped** | | The owner decided on 12 November 2026: nothing from Google in the app or in the scanner's work, so the app keeps no proprietary dependency and stays buildable by F-Droid. Do not add ML Kit or compare against Google's scanner |
 | #339 | Pages turned upright | Core done | #370 | The "Turned upright · Undo" chip, a rotate button, the multi-page rule, a switch in ordinary settings |
 
 "Core done" means the code and its tests are merged and the issue's acceptance items that need
@@ -62,7 +62,7 @@ These came from one run of separate workers on 12 November that the owner stoppe
 Every threshold in them is the issue's starting value or was set on pages drawn in code.
 
 One document per feature says how it works, what was measured and what was not:
-`ANDROID_SCAN_AUTO_LOOK.md`, `_BLACK_WHITE.md`, `_COMPARISON.md`, `_DETAIL.md`, `_DETECTOR.md`, `_EDGES.md`,
+`ANDROID_SCAN_AUTO_LOOK.md`, `_BLACK_WHITE.md`, `_DETAIL.md`, `_DETECTOR.md`, `_EDGES.md`,
 `_FLATTEN.md`, `_MEASURING.md`, `_PREVIEW.md`, `_PROPORTIONS.md`, `_TESTING.md`, `_UPRIGHT.md` (all
 `docs/ANDROID_SCAN_…`). Read the one for a feature before changing it.
 
@@ -148,10 +148,10 @@ The order in #286 stands. Within it, this is what unblocks the most:
    changes how the existing path behaves (the manifest's comment explains it), and none of it
    can be tried without a phone. Keep the phone's camera app reachable as a setting, as the
    issue says, so a fault in the new screen cannot leave him unable to scan.
-6. #304 to #307.
+6. #304 to #306. (#307 was dropped: nothing from Google.)
 
 Parallel work is possible where the files do not overlap: #292 (new file), #294 (new files,
-manifest, Gradle), #307 (new files) and the Rust-only items can each go on their own branch.
+manifest, Gradle) and the Rust-only items can each go on their own branch.
 What conflicts in practice: `ScanLab.kt` and `ScanLabTest.kt` (every feature adds a field),
 `AppViewModel.saveScan`, `ScanScreen`, the seven `strings.xml`, `page.rs` and `src/scan.rs`.
 Merge main into a branch before its last push, not after.
