@@ -62,3 +62,51 @@ The numpy/OpenCV prototype in `tools/scan-eval/auto_reference.py` gives the same
 shadow, dappled shade, coloured light, pencil, pen and stamp, a finger at the edge, a warm soft
 shadow, printed dark areas, yellow paper kept or whitened, blank and black pages, thread counts)
 and each filter against its definition (disk dilation, 3×3 median, area shrink, wide blur, masks).
+
+## Document types (#299, section 5)
+
+Clean scan takes each page for a kind of document and uses that kind's strength, sharpening and
+paper colour. This wires in two blocks from #382 rather than writing them again: `preset`
+(`classify`, `params`, `ink_features`, `gutter_band`) and `photo_mask`. The glue is
+`scan/src/page_kind.rs`.
+
+- **Measured on**: a working copy of the straightened page, about 1000 pixels long. Its light is
+  evened out by the Auto look's own light map (`enhance::evened`): each channel is divided by the
+  paper's colour under the local light, with no tone curve. Both blocks expect "the page after
+  lighting correction". Glare and the gutter's dark band are measured before that correction, as
+  their blocks say (whitened paper would count as glare, and the correction removes the gutter).
+  `ratio` and `short_mm` come from the page's size and the matched paper. `curved_sides` comes
+  from the edge detection (#291), passed in by the app.
+- **Kinds and settings**: as in the issue's table (Photo, ID card, Receipt, Whiteboard, Book page,
+  Photo-rich document, Document; Coloured form only when a person picks it).
+- **What a kind changes** (`page_look_kind`):
+  - the look's strength, unless the strength testing option is set (`fixed_strength`);
+  - the sharpening, unless sharpening is off in the testing options;
+  - paper Keep for Photo, ID card and Coloured form.
+- **Not used yet**: the kinds' `extra_gamma`, `s_curve` and `colour_factor` (Receipt's lift for
+  faint thermal print, Whiteboard's S-curve and colour boost). The tone step has no such inputs
+  yet. The photo-mask weight is also not used inside sharpening: sharpening still uses #298's
+  object mask. The suggestions (`suggest_flatten`, `suggest_greyscale`) are logged and not acted on.
+- **App**: under the page preview, in Clean scan, a chip says "Auto: Receipt" (or the kind the
+  person chose). Tapping it lists the kinds and "Automatic". The choice is kept per page in the
+  scan session. There is no separate `scan_classify` call: the preview and the saved page both
+  report the kind (`ScanPreview.kind`, `ScanPageResult.kind`).
+- **Testing**:
+  - option "Document types in Clean scan" (`ScanLab.presets`, on); off is the look as before;
+  - `page` log fields `presets`, `preset`, `preset_chosen`, `preset_strength`, `preset_sharpen`, `keep_paper`, `suggest_flatten`, `suggest_greyscale`, `page_ratio`, `ink_share`, `colour_ink_share`, `photo_share`, `stroke_mm`, `glare_share`, `gutter_band`, `whole_photo`;
+  - `preview` lines carry `preset`; a `preset_chosen` line for each choice;
+  - `document_type` in a kept scan's page file. The test set's own `kind` key stays the person's label.
+
+What was checked, and on what (all drawn in code or from `scan/tests/data/`, nothing real):
+
+- a slip three times as long as wide is a Receipt, and its page is byte-identical to the look made with the Receipt's strength (80) and sharpening (35) by hand;
+- the drawn English A4 page is a Document, a Book page with two curved sides, and an ID card when matched to that size;
+- a white page nine tenths covered by a smooth picture is a Photo;
+- a strength set by hand and sharpening off are kept;
+- a chosen kind is used and marked as chosen;
+- Coloured form keeps a yellow paper;
+- only Clean scan has kinds.
+
+**One finding:** the same picture covering four fifths of the page measured 0.595 photo share through the light evening, just under the 0.6 rule, so it came out as Photo-rich. The block's own test of an 80 % picture, on a page already white, gives over 0.6. Whether real photographs land on either side is for the owner's scans to show.
+
+Not verified: the issue's acceptance items (the confusion matrix on the owner's labelled photos, the reference-pair numbers, halo crops). None of this has run on a phone, and no timing was taken. The measuring adds one light map and one pass over a copy about 1000 pixels long for each Clean scan page and preview.

@@ -2514,7 +2514,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     /** The scan in progress (or the Add image photo being taken); null when there is none. */
     private fun scanSession(): ScanSession? {
         if (shotFile == null && scanPages.isEmpty()) return null
-        return ScanSession(shotFile?.path, retakeIndex, editor.imageShot, scanName, scanPages.map { ScanSession.Page(it.file.path, it.corners, it.found, it.turns) })
+        return ScanSession(shotFile?.path, retakeIndex, editor.imageShot, scanName, scanPages.map { ScanSession.Page(it.file.path, it.corners, it.found, it.turns, it.preset) })
     }
 
     private fun restoreScan(text: String, session: ScanSession): kotlinx.coroutines.Job {
@@ -2525,7 +2525,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         scanName = session.name
         return viewModelScope.launch {
             val pages = withContext(Dispatchers.IO) {
-                session.pages.mapNotNull { p -> File(p.path).let { f -> scanThumb(f)?.let { ScanPage(f, it, p.corners, p.found, turns = p.turns) } } }
+                session.pages.mapNotNull { p -> File(p.path).let { f -> scanThumb(f)?.let { ScanPage(f, it, p.corners, p.found, turns = p.turns, preset = p.preset) } } }
             }
             scanPages.addAll(pages)
             scanRestoring = null
@@ -3685,7 +3685,14 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     // ---- Scan: the page as it will be saved (#301) ---------------------------------------------
 
     /** The latest page preview made for the scan screen, and the request it answers. */
-    internal class ScanPreviewShown(val key: ScanPreviewKey, val image: androidx.compose.ui.graphics.ImageBitmap, val quarterTurns: Int, val flattened: Boolean)
+    internal class ScanPreviewShown(
+        val key: ScanPreviewKey,
+        val image: androidx.compose.ui.graphics.ImageBitmap,
+        val quarterTurns: Int,
+        val flattened: Boolean,
+        /** The kind of document Clean scan took the page for (#299); null for the other filters or with the option off. */
+        val kind: io.github.artcraftandroid.pdfcraft.core.ScanPageKind? = null,
+    )
 
     internal var scanPreview by mutableStateOf<ScanPreviewShown?>(null)
         private set
@@ -3717,7 +3724,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         scanPreviewWanted = key
         scanPreviewJob?.cancel()
         scanPreviewJob = viewModelScope.launch(scanPreviewDispatcher) {
-            val request = scanPageRequest(page.file.absolutePath, page.corners, filter, flatten, lab, "", page.turns, autoUpright)
+            val request = scanPageRequest(page.file.absolutePath, page.corners, filter, flatten, lab, "", page.turns, autoUpright, page.preset, page.finding?.curvedSides ?: 0)
             val started = android.os.SystemClock.elapsedRealtime()
             val made = runCatching { io.github.artcraftandroid.pdfcraft.core.scanPreviewPage(request, SCAN_PREVIEW_SIDE.toUInt()) }
             val ms = android.os.SystemClock.elapsedRealtime() - started
@@ -3738,12 +3745,14 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 *(p?.timings.orEmpty().map<io.github.artcraftandroid.pdfcraft.core.ScanTiming, Pair<String, Any?>> { it.stage.removePrefix("scan_") + "_ms" to it.ms.toLong() }.toTypedArray()),
                 "width" to (p?.width?.toLong() ?: 0L), "height" to (p?.height?.toLong() ?: 0L),
                 "quarter_turns" to (p?.quarterTurns?.toInt() ?: 0), "flattened" to (p?.flattened ?: false),
+                // the kind of document Clean scan took the page for (#299)
+                "preset" to (p?.kind?.preset ?: "none"), "preset_chosen" to (p?.kind?.chosen ?: false),
             )
             withContext(Dispatchers.Main) {
                 // a newer request may have come in while this one ran: only the wanted one is shown
                 if (scanPreviewWanted != key) return@withContext
                 if (p != null && image != null) {
-                    scanPreview = ScanPreviewShown(key, image, p.quarterTurns.toInt(), p.flattened)
+                    scanPreview = ScanPreviewShown(key, image, p.quarterTurns.toInt(), p.flattened, p.kind)
                     scanPreviewStats[page.file.absolutePath] = ScanTestPreview(true, p.reused, ms, p.width.toInt(), p.height.toInt(), filter.mode)
                 } else {
                     scanPreviewFailed = key
@@ -3791,7 +3800,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         suspend fun make(i: Int, turns: Int?) {
             val page = pages[i]
             busy = text(R.string.msg_busy_cleaning_page, i + 1, pages.size)
-            val request = scanPageRequest(page.file.absolutePath, page.corners, filter, flatten, lab, File(dir, "page-$i").absolutePath, turns, autoUpright)
+            val request = scanPageRequest(page.file.absolutePath, page.corners, filter, flatten, lab, File(dir, "page-$i").absolutePath, turns, autoUpright, page.preset, page.finding?.curvedSides ?: 0)
             val started = android.os.SystemClock.elapsedRealtime()
             val result = withContext(Dispatchers.Default) { runCatching { io.github.artcraftandroid.pdfcraft.core.scanProcessPage(request) } }
             result.onFailure { Diag.failure(DiagArea.Scan, "scan_process_page", it) }
@@ -3841,6 +3850,15 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 "turn_source" to turnSource, "settle_turns" to lab.settleTurns, "followed" to followed,
                 // sharpening and smoothing asked of the Clean scan filter, and the grain it measured (#299)
                 "sharpen" to lab.sharpen, "denoise" to lab.denoise, "noise_sigma" to (r?.noise?.toDouble() ?: -1.0),
+                // the kind of document Clean scan took the page for, its settings and what it read (#299)
+                "presets" to lab.presets, "preset" to (r?.kind?.preset ?: "none"), "preset_chosen" to (r?.kind?.chosen ?: false),
+                "preset_strength" to (r?.kind?.strength?.toInt() ?: -1), "preset_sharpen" to (r?.kind?.sharpen?.toInt() ?: -1),
+                "keep_paper" to (r?.kind?.keepPaper ?: false), "suggest_flatten" to (r?.kind?.suggestFlatten ?: false),
+                "suggest_greyscale" to (r?.kind?.suggestGreyscale ?: false), "page_ratio" to (r?.kind?.ratio?.toDouble() ?: 0.0),
+                "ink_share" to (r?.kind?.inkShare?.toDouble() ?: -1.0), "colour_ink_share" to (r?.kind?.colourInkShare?.toDouble() ?: -1.0),
+                "photo_share" to (r?.kind?.photoShare?.toDouble() ?: -1.0), "stroke_mm" to (r?.kind?.strokeMm?.toDouble() ?: -1.0),
+                "glare_share" to (r?.kind?.glareShare?.toDouble() ?: -1.0), "gutter_band" to (r?.kind?.gutterBand ?: false),
+                "whole_photo" to (r?.kind?.wholePhoto ?: false),
             )
             if (keepIn != null) {
                 val kept = r?.let {
@@ -3852,7 +3870,13 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                     )
                 }
                 val turn = ScanTestTurn(page.turns, autoUpright, r?.turns?.toInt() ?: 0, followed, turnSource)
-                withContext(Dispatchers.IO) { scanLab.keepPage(keepIn, i, page, true, filter.mode, strength, flatten, r?.path?.let(::File), kept, scanPreviewRecord(page), turn) }
+                val kind = r?.kind?.let { k ->
+                    ScanTestKind(
+                        k.preset, k.chosen, k.strength.toInt(), k.sharpen.toInt(), k.keepPaper, k.suggestFlatten, k.suggestGreyscale, k.ratio.toDouble(),
+                        k.inkShare.toDouble(), k.colourInkShare.toDouble(), k.photoShare.toDouble(), k.strokeMm.toDouble(), k.glareShare.toDouble(), k.gutterBand, k.wholePhoto,
+                    )
+                }
+                withContext(Dispatchers.IO) { scanLab.keepPage(keepIn, i, page, true, filter.mode, strength, flatten, r?.path?.let(::File), kept, scanPreviewRecord(page), turn, kind) }
             }
             saved += scanSavedPage(page.file.absolutePath, r?.let { it.path to it.dpi })
         }

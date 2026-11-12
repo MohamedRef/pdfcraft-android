@@ -38,6 +38,7 @@ on one part. While any is changed, the scan screen says so.
 | Unsure pages follow their neighbors (#339) | On | Off: in a scan of several pages each page is turned by its own answer only |
 | Sharpen text, in Clean scan (#299) | 30 | Off, 60 or 100 |
 | Smooth grain in dim photos, in Clean scan (#299) | On | Off |
+| Document types in Clean scan (#299) | On | Off: the filter's own strength and the sharpening above, as before |
 | Filter strength | Each filter's own | 20, 40, 60, 80 or 100 for every filter |
 | Flatten page (#302) | Off | On, with the switch on the scan screen itself |
 
@@ -64,7 +65,10 @@ The zip also holds `diagnostics.txt`, the diagnostics log as **Share diagnostics
  "finding": {"source": "model", "confidence": 0.835, "angle": 0, "passes": 1, "refined_sides": 4, "curved_sides": 0},
  "look": "auto", "strength": 60, "flatten": false,
  "options": {"finder": "auto", "refine": true, "side_proportions": false, "snap_paper": true, "strength_override": null, "upright": true,
-             "sharpen": 30, "denoise": true, "preview": true, "settle_turns": true},
+             "sharpen": 30, "denoise": true, "preview": true, "settle_turns": true, "presets": true},
+ "document_type": {"preset": "receipt", "chosen": false, "strength": 80, "sharpen": 35, "keep_paper": false, "suggest_flatten": false,
+                   "suggest_greyscale": true, "ratio": 3.0, "ink_share": 0.043, "colour_ink_share": 0.0, "photo_share": 0.0,
+                   "stroke_mm": 0.339, "glare_share": 0.0, "gutter_band": false, "whole_photo": false},
  "turns": {"manual": null, "auto": true, "total": 3, "followed": false, "source": "classifier"},
  "preview": {"shown": true, "reused": true, "ms": 412, "width": 905, "height": 1280, "look": "auto"},
  "result": {"file": "page-01.out.jpg", "width": 1654, "height": 2339, "format": "jpeg", "dpi": 200.0,
@@ -88,7 +92,10 @@ was saved (#339): `manual` is the person's own turn from Rotate or Undo (0–3 c
 when they gave none), `auto` the ordinary setting "Turn pages upright automatically", `total` the
 turn the page was saved with, `followed` whether it took its neighbours' turn, and `source` one of
 `manual`, `neighbours`, `classifier` or `off`. `result.quarter_turns` and `result.orientation` stay
-the classifier's own answer, also for a page that then followed its neighbours.
+the classifier's own answer, also for a page that then followed its neighbours. `document_type` is
+the kind Clean scan took the page for (#299), whether the person chose it, the kind's settings and
+what the page measured as (`stroke_mm` -1 when there is no ink); `null` for the other filters or
+with the option off. `scan_replay` keeps a chosen kind and works an automatic one out again.
 
 ## On the desktop
 

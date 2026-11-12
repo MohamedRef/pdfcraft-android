@@ -66,4 +66,16 @@ class ScanSessionTest {
         // a turn that is not 0 to 3 is no turn
         assertNull(ScanSession.decode(s.encode().replace("\t3\n", "\t7\n"))!!.pages[0].turns)
     }
+
+    @Test
+    fun aKindOfDocumentChosenForAPageComesBack() {
+        val s = ScanSession(null, null, false, "Scan", listOf(ScanSession.Page("/c/a.jpg", crop, null, null, "receipt"), ScanSession.Page("/c/b.jpg", crop, null, 1, null)))
+        val back = ScanSession.decode(s.encode())!!
+        assertEquals(listOf("receipt", null), back.pages.map { it.preset })
+        assertEquals(listOf(null, 1), back.pages.map { it.turns })
+        // a word that could break the line, or is not one, is left out
+        val odd = ScanSession.decode(ScanSession(null, null, false, "Scan", listOf(ScanSession.Page("/c/a.jpg", crop, null, null, "Re\tceipt"))).encode())!!
+        assertEquals(1, odd.pages.size)
+        assertNull(odd.pages[0].preset)
+    }
 }

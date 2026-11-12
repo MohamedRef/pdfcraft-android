@@ -41,6 +41,9 @@ class ScanLabTest {
         // unsure pages follow their neighbours as designed (#339)
         assertTrue(lab.settleTurns)
         assertFalse(lab.copy(settleTurns = false).asDesigned)
+        // document types are on as designed (#299)
+        assertTrue(lab.presets)
+        assertFalse(lab.copy(presets = false).asDesigned)
         assertEquals(30, lab.sharpen)
         assertTrue(lab.denoise && lab.sharpen in ScanLab.SHARPENING && 0 in ScanLab.SHARPENING)
     }
@@ -61,6 +64,7 @@ class ScanLabTest {
             ScanLab(sharpen = 100),
             ScanLab(preview = false),
             ScanLab(settleTurns = false),
+            ScanLab(presets = false),
             ScanLab(finder = ScanFinder.LINES, strength = 100),
             ScanLab(finder = ScanFinder.OFF),
         )
@@ -169,6 +173,26 @@ class ScanLabTest {
         assertFalse(manual.getJSONObject("options").getBoolean("settle_turns"))
         // and in the log, as a word
         assertEquals(true, ScanLab().diag().toMap()["settle_turns"])
+    }
+
+    @Test
+    fun aKeptPageSaysWhichKindOfDocumentItWasTakenFor() {
+        val kind = ScanTestKind("receipt", false, 80, 35, false, false, true, 3.0004, 0.04321, 0.0, 0.0, 0.3387, 0.0, false, false)
+        val json = JSONObject(scanTestPageJson("1.0 (1)", true, crop, null, null, "auto", 60, false, ScanLab(), null, result, null, null, kind))
+        val type = json.getJSONObject("document_type")
+        assertEquals("receipt", type.getString("preset"))
+        assertFalse(type.getBoolean("chosen"))
+        assertEquals(80, type.getInt("strength"))
+        assertEquals(35, type.getInt("sharpen"))
+        assertTrue(type.getBoolean("suggest_greyscale"))
+        assertEquals(3.0, type.getDouble("ratio"), 1e-9)
+        assertEquals(0.043, type.getDouble("ink_share"), 1e-9)
+        assertEquals(0.339, type.getDouble("stroke_mm"), 1e-9)
+        assertTrue(json.getJSONObject("options").getBoolean("presets"))
+        // the test set's own label stays the person's to fill in (#288)
+        assertEquals("other", json.getString("kind"))
+        assertTrue(JSONObject(scanTestPageJson("1.0 (1)", true, crop, null, null, "bw", 75, false, ScanLab(), null, result)).isNull("document_type"))
+        assertEquals(true, ScanLab().diag().toMap()["presets"])
     }
 
     @Test

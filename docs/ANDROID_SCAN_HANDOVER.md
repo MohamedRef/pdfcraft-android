@@ -27,7 +27,7 @@ a phone yet.** Every number in the scanner's documents was measured on a desktop
 | #296 | Auto-capture, blur check | **Not started** | | Needs #295 |
 | #297 | Multi-frame merge | **Not started** | | Needs #294 |
 | #298 | Auto look, part 1 | Core done | #346 | Phone time; the paper White / Keep control has no screen (#301) |
-| #299 | Auto look, part 2 | Part | #373 | The block photo mask, document-type presets and `scan_classify`, the recognition-error check |
+| #299 | Auto look, part 2 | Part | #373, this PR | The kinds' gamma, S-curve and colour settings in the tone step, the photo mask inside sharpening, the recognition-error check, the confusion matrix on the owner's photos. Kinds, the chip and the testing fields are in (not yet run on a phone) |
 | #300 | Black and white, 1 bit | Core done | #359 | Speckle on textured grey fills; photographs wider than a quarter of the page are not dithered; 0.85 s for 12 megapixels on a desktop |
 | #301 | Filter screen | Preview on the scan screen | #376, #380 | A look per page, strength, looks strip, compare, apply to all, the session's new fields, cancel. Preview speed and sharpness on a phone |
 | #302 | Flatten curved pages | Switch only | #365 | The automatic mode and its quality guard (need #288's `line_straightness`), border trim, a switch per page |
@@ -118,7 +118,7 @@ The order in #286 stands. Within it, this is what unblocks the most:
    whole experience. Put it in a file of its own (`ui/scan/`) and leave `ScanPhoto` as
    `ScanScreen` uses it.
 3. **#288, the metrics module**, `line_straightness` first, then **#302's automatic mode**.
-4. **#299's presets**, **#303**. (#339's undo and rotate are in: `ScanPageRequest.turns`.)
+4. **#303**. (#299's document types and #339's undo and rotate are in: `ScanPageRequest.preset` and `turns`.)
 5. **#294 to #297, the camera.** The largest and riskiest part: declaring the CAMERA permission
    changes how the existing path behaves (the manifest's comment explains it), and none of it
    can be tried without a phone. Keep the phone's camera app reachable as a setting, as the
