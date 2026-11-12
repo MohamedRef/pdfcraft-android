@@ -22,7 +22,7 @@ a phone yet.** Every number in the scanner's documents was measured on a desktop
 | #291 | Edges refined at full size | Core done | #356 | A corner outside the photo is not accepted; the owner's set; phone time |
 | #292 | Crop screen: magnifier, side handles, snap, rotate | **Not started** | | All of it. `scan_refine_quad` is the native half of "snap" and exists |
 | #293 | True proportions, paper sizes | Core done | #353 | The focal length from the in-app camera (#294, section 7 there) |
-| #294 | In-app camera (CameraX) | Core done, not run on a phone | this PR | Everything on the owner's phone (`ANDROID_SCAN_CAMERA.md`); the focal length from the camera's calibration for #293 |
+| #294 | In-app camera (CameraX) | Core done, not run on a phone | #390 | Everything on the owner's phone (`ANDROID_SCAN_CAMERA.md`); the focal length from the camera's calibration for #293 |
 | #295 | Live page outline, hints | **Not started** | | Needs #294 |
 | #296 | Auto-capture, blur check | **Not started** | | Needs #295 |
 | #297 | Multi-frame merge | **Not started** | | Needs #294 |
