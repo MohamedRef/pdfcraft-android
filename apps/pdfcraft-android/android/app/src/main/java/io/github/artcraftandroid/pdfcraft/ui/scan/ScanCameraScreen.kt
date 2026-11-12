@@ -128,7 +128,7 @@ internal fun ScanCameraScreen(model: ScanCameraModel, pages: List<ImageBitmap>, 
     }
     Box(Modifier.fillMaxSize().background(Color.Black).windowInsetsPadding(WindowInsets.safeDrawing)) {
         when (model.route) {
-            ScanCaptureRoute.InApp -> CameraView(file, model.retaking, pages, actions, book)
+            ScanCaptureRoute.InApp -> CameraView(file, model.retaking, pages, actions, model.liveOutline, book)
             else -> NoCameraView(model.route, actions)
         }
     }
@@ -158,7 +158,7 @@ private fun NoCameraView(route: ScanCaptureRoute, actions: ScanCameraActions) {
 
 /** The camera, once allowed. */
 @Composable
-private fun CameraView(file: File, retaking: Boolean, pages: List<ImageBitmap>, actions: ScanCameraActions, book: ScanBookController?) {
+private fun CameraView(file: File, retaking: Boolean, pages: List<ImageBitmap>, actions: ScanCameraActions, live: Boolean, book: ScanBookController?) {
     val context = LocalContext.current
     val owner = LocalLifecycleOwner.current
     val scope = rememberCoroutineScope()
@@ -179,6 +179,33 @@ private fun CameraView(file: File, retaking: Boolean, pages: List<ImageBitmap>, 
     var exposure by remember { mutableStateOf(0 to 0) }
     var shutterAt by remember { mutableStateOf(0L) }
     val transformer = remember { MutableCoordinateTransformer() }
+    // the live outline (#295): the analyzer's answers, smoothed, and the advice under the viewfinder
+    val tracker = remember { ScanLiveTracker() }
+    val holder = remember { ScanLiveHintHolder() }
+    var outline by remember { mutableStateOf<ScanLiveOutline?>(null) }
+    var hint by remember { mutableStateOf<ScanLiveHint?>(null) }
+    var lastLuma by remember { mutableStateOf(255f) }
+    var lastCutOff by remember { mutableStateOf(false) }
+    val openedAt = remember { SystemClock.elapsedRealtime() }
+    val analysisExecutor = remember { java.util.concurrent.Executors.newSingleThreadExecutor() }
+    val analyzer = remember {
+        val main = ContextCompat.getMainExecutor(context)
+        ScanLiveAnalyzer { d ->
+            main.execute {
+                outline = tracker.update(d)
+                lastLuma = d.meanLuma
+                lastCutOff = d.found && d.cutOff
+            }
+        }
+    }
+    val analysis = remember { scanLiveAnalysis() }
+    DisposableEffect(analyzer) {
+        onDispose {
+            analysis.clearAnalyzer()
+            analysisExecutor.shutdown()
+            analyzer.logSummary(SystemClock.elapsedRealtime() - openedAt)
+        }
+    }
     val density = androidx.compose.ui.platform.LocalDensity.current
     val sound = remember { MediaActionSound().apply { load(MediaActionSound.SHUTTER_CLICK) } }
     DisposableEffect(sound) { onDispose { sound.release() } }
@@ -204,7 +231,14 @@ private fun CameraView(file: File, retaking: Boolean, pages: List<ImageBitmap>, 
         }
         val group = UseCaseGroup.Builder()
             .setViewPort(ViewPort.Builder(android.util.Rational(3, 4), android.view.Surface.ROTATION_0).setScaleType(ViewPort.FIT).build())
-            .addUseCase(preview).addUseCase(capture).build()
+            .addUseCase(preview).addUseCase(capture)
+            .apply {
+                if (live) {
+                    analysis.setAnalyzer(analysisExecutor, analyzer)
+                    addUseCase(analysis)
+                }
+            }
+            .build()
         try {
             val bound = provider.bindToLifecycle(owner, CameraSelector.DEFAULT_BACK_CAMERA, group)
             camera = bound
@@ -230,7 +264,7 @@ private fun CameraView(file: File, retaking: Boolean, pages: List<ImageBitmap>, 
         try {
             awaitCancellation()
         } finally {
-            provider.unbind(preview, capture)
+            provider.unbind(preview, capture, analysis)
             camera = null
         }
     }
@@ -278,6 +312,8 @@ private fun CameraView(file: File, retaking: Boolean, pages: List<ImageBitmap>, 
                             source = ScanCaptureRoute.InApp.id, megapixelsTenths = scanMegapixelsTenths(w, h), width = w, height = h,
                             exposureIndex = exposure.first, exposureStepMilli = exposure.second, torch = torch, focused = state.lastFocusOk,
                             rotation = turn, captureMs = SystemClock.elapsedRealtime() - (if (shutterAt > 0) shutterAt else started),
+                            live = live, liveFound = outline?.points != null, liveStable = outline?.stable == true,
+                            liveHint = hint?.id ?: "none", previewQuad = outline?.points,
                         )
                         // the photo goes to the scan before Done (if pressed meanwhile) closes the screen
                         actions.onCaptured(file, facts, !retaking && !state.doneQueued)
@@ -319,6 +355,18 @@ private fun CameraView(file: File, retaking: Boolean, pages: List<ImageBitmap>, 
                     dispatch(ScanCameraEvent.Tick(SystemClock.elapsedRealtime()))
                 }
             }
+        }
+    }
+    // the advice, re-chosen ten times a second (the outline itself follows the frames)
+    LaunchedEffect(live) {
+        if (!live) return@LaunchedEffect
+        while (true) {
+            val now = SystemClock.elapsedRealtime()
+            val shown = tracker.at(now).also { if (it.points == null) outline = null }
+            val missing = if (shown.points != null) 0L else now - (tracker.lastFoundAt ?: openedAt)
+            val wanted = scanLiveHintFor(ScanLiveScene(shown.points, outline?.stable == true, lastLuma, lastCutOff, missing))
+            hint = holder.update(wanted, now)
+            delay(100)
         }
     }
     LaunchedEffect(error) {
@@ -374,6 +422,7 @@ private fun CameraView(file: File, retaking: Boolean, pages: List<ImageBitmap>, 
                         coordinateTransformer = transformer,
                         contentScale = ContentScale.Fit,
                     )
+                    if (live) ScanLiveOverlay(outline, androidx.compose.ui.graphics.Color(0xFF64B5F6), Modifier.fillMaxSize())
                     ring?.let { at ->
                         Box(
                             Modifier.padding(start = with(density) { (at.x - 28.dp.toPx()).coerceAtLeast(0f).toDp() }, top = with(density) { (at.y - 28.dp.toPx()).coerceAtLeast(0f).toDp() })
@@ -391,9 +440,14 @@ private fun CameraView(file: File, retaking: Boolean, pages: List<ImageBitmap>, 
                 }
             }
         }
-        // a line kept for the page outline's advice (#295); the error shows here meanwhile
+        // the page outline's advice (#295), or the error of a failed capture
         Box(Modifier.fillMaxWidth().height(32.dp).semantics { liveRegion = LiveRegionMode.Polite }, contentAlignment = Alignment.Center) {
-            if (error) Text(stringResource(R.string.scan_camera_failed), color = Color.White, fontSize = 14.sp)
+            val h = hint
+            if (error) {
+                Text(stringResource(R.string.scan_camera_failed), color = Color.White, fontSize = 14.sp)
+            } else if (live && h != null) {
+                Text(stringResource(scanLiveHintText(h)), color = if (h == ScanLiveHint.Ready) Color(0xFF81C784) else Color.White, fontSize = 14.sp)
+            }
         }
         // bottom: the last page and Import, the shutter, Done
         Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {

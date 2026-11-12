@@ -216,7 +216,7 @@ abstract class LucideIconsTask : DefaultTask() {
  * with `models.index` listing each file's size and SHA-256. Without them the app still
  * builds; Recognize text then says it isn't installed.
  */
-abstract class OcrModels : DefaultTask() {
+abstract class ScanAndOcrModels : DefaultTask() {
     @get:Internal abstract val modelsDir: DirectoryProperty
     @get:OutputDirectory abstract val outputDir: DirectoryProperty
 
@@ -357,11 +357,11 @@ androidComponents {
             iconsDir.set(File(assetsDir, "icons"))
         }
         variant.sources.java?.addGeneratedSourceDirectory(icons, LucideIconsTask::outputDir)
-        val models = tasks.register<OcrModels>("ocrModels$name") {
+        val models = tasks.register<ScanAndOcrModels>("scanAndOcrModels$name") {
             modelsDir.set(File(assetsDir, "models"))
             outputs.upToDateWhen { false }
         }
-        variant.sources.assets?.addGeneratedSourceDirectory(models, OcrModels::outputDir)
+        variant.sources.assets?.addGeneratedSourceDirectory(models, ScanAndOcrModels::outputDir)
         variant.sources.jniLibs?.addGeneratedSourceDirectory(cargoBuild, CargoNdkBuild::outputDir)
         variant.sources.java?.addGeneratedSourceDirectory(bindgen, UniffiBindgen::outputDir)
         variant.sources.res?.addGeneratedSourceDirectory(res, PdfcraftAssets::outputDir)
