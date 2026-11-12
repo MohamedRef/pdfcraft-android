@@ -828,6 +828,7 @@ data class ScanPage(
     val corners: FloatArray = WHOLE,
     val found: FloatArray? = null,
     val finding: ScanFinding? = null,
+    val crop: io.github.artcraftandroid.pdfcraft.ui.scan.ScanCropStats? = null,
     /** Which half of a photographed book spread this page is (#303); null for a page of its own. */
     val book: io.github.artcraftandroid.pdfcraft.ui.scan.ScanBookHalf? = null,
 ) {
@@ -875,7 +876,21 @@ fun ScanScreen(vm: AppViewModel) {
     }
     val croppingAt = pages.indexOfFirst { it.key == cropping }
     if (croppingAt >= 0) {
-        ScanCrop(pages[croppingAt], onDone = { pages[croppingAt] = pages[croppingAt].copy(corners = it); cropping = null }, onCancel = { cropping = null })
+        val lab = vm.scanLab.options
+        if (lab.cropTools) {
+            // magnifier, side handles and snapping to the paper's edge (#292)
+            io.github.artcraftandroid.pdfcraft.ui.scan.ScanCropScreen(
+                pages[croppingAt], croppingAt, lab,
+                onDone = { q, stats ->
+                    val p = pages[croppingAt]
+                    pages[croppingAt] = p.copy(corners = q, crop = p.crop?.plus(stats) ?: stats)
+                    cropping = null
+                },
+                onCancel = { cropping = null },
+            )
+        } else {
+            ScanCrop(pages[croppingAt], onDone = { pages[croppingAt] = pages[croppingAt].copy(corners = it); cropping = null }, onCancel = { cropping = null })
+        }
         return
     }
     val addPageLabel = stringResource(R.string.tools_add_page)

@@ -1,0 +1,72 @@
+package io.github.artcraftandroid.pdfcraft.ui.scan
+
+import kotlin.math.hypot
+import kotlin.math.max
+import kotlin.math.sqrt
+import org.json.JSONObject
+
+/**
+ * What happened on the crop screen for one page (#292), for the diagnostics log and a kept scan's
+ * page file: counts and times only. A page cropped more than once adds the visits up ([plus]).
+ */
+data class ScanCropStats(
+    /** How many times the screen was left with Done. */
+    val visits: Int = 0,
+    val cornerDrags: Int = 0,
+    val sideDrags: Int = 0,
+    /** Releases that asked the edge finder to snap. */
+    val snapsAsked: Int = 0,
+    /** Of those, how many it moved onto an edge. */
+    val snapsTaken: Int = 0,
+    /** Releases after holding still, so not snapped. */
+    val snapsHeld: Int = 0,
+    /** Snaps that failed in the native call. */
+    val snapsFailed: Int = 0,
+    /** The longest snap, in milliseconds. */
+    val snapMsMax: Long = 0,
+    /** Keyboard and accessibility moves. */
+    val nudges: Int = 0,
+    val detects: Int = 0,
+    /** Of those, how many found a page. */
+    val detectsFound: Int = 0,
+    val wholePhoto: Int = 0,
+    val resets: Int = 0,
+    /** Regions of the full photo decoded for the magnifier. */
+    val loupeDecodes: Int = 0,
+    /** Whether Snap was on when the screen was left. */
+    val snapOn: Boolean = true,
+    /** Time on the screen, in milliseconds. */
+    val ms: Long = 0,
+    /** The largest corner move from where the screen opened, in % of the photo's diagonal. */
+    val movedPct: Double = 0.0,
+) {
+    operator fun plus(o: ScanCropStats) = ScanCropStats(
+        visits + o.visits, cornerDrags + o.cornerDrags, sideDrags + o.sideDrags, snapsAsked + o.snapsAsked,
+        snapsTaken + o.snapsTaken, snapsHeld + o.snapsHeld, snapsFailed + o.snapsFailed, max(snapMsMax, o.snapMsMax),
+        nudges + o.nudges, detects + o.detects, detectsFound + o.detectsFound, wholePhoto + o.wholePhoto, resets + o.resets,
+        loupeDecodes + o.loupeDecodes, o.snapOn, ms + o.ms, max(movedPct, o.movedPct),
+    )
+
+    /** As diagnostics fields: numbers and booleans only. */
+    fun diag(): Array<Pair<String, Any?>> = arrayOf(
+        "corner_drags" to cornerDrags, "side_drags" to sideDrags, "snaps_asked" to snapsAsked, "snaps_taken" to snapsTaken,
+        "snaps_held" to snapsHeld, "snaps_failed" to snapsFailed, "snap_ms_max" to snapMsMax, "nudges" to nudges,
+        "detects" to detects, "detects_found" to detectsFound, "whole_photo" to wholePhoto, "resets" to resets,
+        "loupe_decodes" to loupeDecodes, "snap" to snapOn, "ms" to ms, "moved_pct" to round3(movedPct),
+    )
+
+    /** As JSON, for a kept scan's page file. */
+    fun json(): JSONObject = JSONObject().apply { diag().forEach { (k, v) -> put(k, v) } }.put("visits", visits)
+
+    private fun round3(v: Double) = if (v.isFinite()) Math.round(v * 1000.0) / 1000.0 else 0.0
+}
+
+/**
+ * The largest distance between a corner of [a] and the same corner of [b], in % of the photo's
+ * diagonal, for a photo [aspect] (width over height) wide.
+ */
+internal fun maxCornerMovePct(a: FloatArray, b: FloatArray, aspect: Float): Double {
+    if (a.size != 8 || b.size != 8) return 0.0
+    val diagonal = sqrt(aspect.toDouble() * aspect + 1.0)
+    return (0..3).maxOf { i -> hypot((a[2 * i] - b[2 * i]).toDouble() * aspect, (a[2 * i + 1] - b[2 * i + 1]).toDouble()) } / diagonal * 100.0
+}

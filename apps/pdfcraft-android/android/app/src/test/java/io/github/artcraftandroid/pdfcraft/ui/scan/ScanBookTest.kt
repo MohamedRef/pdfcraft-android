@@ -138,7 +138,7 @@ class ScanBookTest {
     @Test
     fun aKeptPageSaysWhichHalfOfASpreadItIs() {
         val half = scanBookPages(spread, cut, ScanBookOrder.RightToLeft)[0].second
-        val json = JSONObject(scanTestPageJson("1.0 (1)", true, right, right, null, "auto", 60, false, ScanLab(), null, null, null, half))
+        val json = JSONObject(scanTestPageJson("1.0 (1)", true, right, right, null, "auto", 60, false, ScanLab(), null, null, book = half))
         val book = json.getJSONObject("book")
         assertEquals("right", book.getString("half"))
         assertEquals("rtl", book.getString("order"))

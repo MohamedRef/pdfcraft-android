@@ -34,6 +34,7 @@ on one part. While any is changed, the scan screen says so.
 | Proportions from perspective (#293) | On | Off: from the lengths of the page's sides, as before |
 | Match standard paper sizes (#293) | On | Off: the page keeps the shape worked out for it |
 | Show pages as they will be saved (#301) | On | Off: the scan screen shows the camera's photo with its outline, as before; nothing is previewed |
+| Crop with magnifier and snapping to edges (#292) | On | Off: the crop screen before #292, four corner handles on the thumbnail |
 | Book mode: cut at the gutter found in the photo (#303) | On | Off: in book mode every spread is cut at its centre line, whatever the photo shows |
 | Turn pages upright (#339) | On | Off: a page stays as its corners gave it |
 | Sharpen text, in Clean scan (#299) | 30 | Off, 60 or 100 |
@@ -64,8 +65,11 @@ The zip also holds `diagnostics.txt`, the diagnostics log as **Share diagnostics
  "finding": {"source": "model", "confidence": 0.835, "angle": 0, "passes": 1, "refined_sides": 4, "curved_sides": 0},
  "look": "auto", "strength": 60, "flatten": false,
  "options": {"finder": "auto", "refine": true, "side_proportions": false, "snap_paper": true, "strength_override": null, "upright": true,
-             "sharpen": 30, "denoise": true, "preview": true, "book_gutter": true},
+             "sharpen": 30, "denoise": true, "preview": true, "crop_tools": true, "book_gutter": true},
  "preview": {"shown": true, "reused": true, "ms": 412, "width": 905, "height": 1280, "look": "auto"},
+ "crop": {"visits": 1, "corner_drags": 2, "side_drags": 1, "snaps_asked": 3, "snaps_taken": 2, "snaps_held": 0, "snaps_failed": 0,
+          "snap_ms_max": 85, "nudges": 0, "detects": 0, "detects_found": 0, "whole_photo": 0, "resets": 0,
+          "loupe_decodes": 6, "snap": true, "ms": 9100, "moved_pct": 1.235},
  "book": {"half": "right", "gutter_found": true, "gutter_top": 0.4712, "gutter_bottom": 0.4790, "confidence": 0.62, "order": "rtl"},
  "result": {"file": "page-01.out.jpg", "width": 1654, "height": 2339, "format": "jpeg", "dpi": 200.0,
             "paper": "a4", "aspect": "known_focal", "focal_mismatch": false, "flattened": false, "bend_pct": 0.0,
@@ -83,13 +87,13 @@ or `null`. `outcome` is `saved` or `discarded`; a discarded page has no `look`, 
 (#301): `shown` is false when none was (the option off, or Save tapped before it was ready),
 `reused` whether its straightened page was kept from an earlier preview, `ms` the time from the
 request to the result, and `look` the filter it showed, which can differ from the one saved when
-the filter was changed and saved before the new preview came. `book` is set on a page that is
-half of a photographed book spread (#303): which `half`, whether a dark gutter was found
-(`gutter_found`; false means the cut is the centre line), where the cut crosses the straightened
-spread's top and bottom edges as shares of its width, the gutter's `confidence`, and the page
-`order` in force (`ltr` or `rtl`). It is `null` for a page of its own. The two halves of a
-spread are kept as two pages, each with its own copy of the one photo, and their `corners` and
-`found` are the half's own outline.
+the filter was changed and saved before the new preview came. `crop` is what happened on the crop
+screen (#292), added up over every time the page was cropped with Done, or `null` when it never
+was: drags of corners and of sides, snaps asked for, taken, skipped by holding still and failed,
+the longest snap, keyboard and TalkBack moves, Auto-detect, No crop and Reset, magnifier regions
+decoded, whether Snap was on, the time spent, and `moved_pct`, the largest corner move from where
+the screen opened in % of the photo's diagonal. It is not kept if the app is closed by Android
+before the scan is saved. `book` is set on a page that is half of a photographed book spread (#303): which `half`, whether a dark gutter was found (`gutter_found`; false means the cut is the centre line), where the cut crosses the straightened spread's top and bottom edges as shares of its width, the gutter's `confidence`, and the page `order` in force (`ltr` or `rtl`). It is `null` for a page of its own. The two halves of a spread are kept as two pages, each with its own copy of the one photo, and their `corners` and `found` are the half's own outline.
 
 ## On the desktop
 
@@ -116,7 +120,12 @@ Besides what `docs/ANDROID_DIAGNOSTICS_LOG.md` lists for `scan`: every `photo` l
 `snap_paper`, `upright`, `sharpen` and `denoise`; every `preview` line (#301) says which page and
 filter, whether the preview was `made`, whether the straightened page was `reused`, the total `ms`
 and the native stages (`preview_base_ms`, `decode_ms`, `rectify_ms`, `preview_look_ms`, and the others
-the page needed), its `width` and `height`, `quarter_turns` and `flattened`; `test_options` is written when an option is changed, `tests_shared` (pages, bytes)
+the page needed), its `width` and `height`, `quarter_turns` and `flattened`; every `crop` line
+(#292) the page's `index`, whether it was left with Done, and the counts of its `crop` object;
+every `crop_snap` line whether a `corner` or `side` was let go, how many `sides` were asked for and
+how many were `refined` or `curved`, whether the snap was `taken`, `stale` (another drag had
+started) or `failed`, and its `ms`; every `crop_detect` line whether Auto-detect `found` a page,
+its `source` and `ms`; `test_options` is written when an option is changed, `tests_shared` (pages, bytes)
 when the zip is handed out, and `tests_cleared` when the kept scans are deleted. The log itself
 still holds no file name, path or document content.
 
