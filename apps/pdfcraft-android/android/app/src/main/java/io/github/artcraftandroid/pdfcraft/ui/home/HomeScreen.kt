@@ -213,7 +213,7 @@ private fun HomeTabScreen(vm: AppViewModel, onBrowse: () -> Unit) {
                     }
                     Text(stringResource(if (vm.recentList.isEmpty()) R.string.home_or_start_with_tool else R.string.home_start_with_tool), color = c.text, fontSize = 15.sp, lineHeight = 22.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(start = 16.dp, bottom = 8.dp))
                     ToolsCarousel(vm, onBrowse)
-                    if (vm.studyRecent.isNotEmpty() || vm.dueCounts.isNotEmpty()) ContinueStudying(vm)
+                    if (vm.study.studyRecent.isNotEmpty() || vm.study.dueCounts.isNotEmpty()) ContinueStudying(vm)
                     Spacer(Modifier.height(16.dp))
                     Row(Modifier.fillMaxWidth().padding(start = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                         listOf(R.string.home_list_recent, R.string.home_list_starred, R.string.home_list_on_device).forEachIndexed { i, label ->
@@ -282,7 +282,7 @@ private fun HomeTabScreen(vm: AppViewModel, onBrowse: () -> Unit) {
         PdfSheet(onDismiss = { fabMenu = false }, dim = true) {
             SheetRow(LucideIcons.FolderOpen, stringResource(R.string.home_open_file), { fabMenu = false; onBrowse() })
             SheetRow(LucideIcons.Camera, stringResource(R.string.home_new_scan), { fabMenu = false; vm.startScan() })
-            SheetRow(LucideIcons.BookOpen, stringResource(R.string.notebook_new), { fabMenu = false; vm.newNotebookOpen = true })
+            SheetRow(LucideIcons.BookOpen, stringResource(R.string.notebook_new), { fabMenu = false; vm.study.newNotebookOpen = true })
             SheetDivider()
             SheetRow(LucideIcons.FilePenLine, stringResource(R.string.common_tool_edit_pdf), { fabMenu = false; vm.toolForFile(FileTool.Edit) })
             SheetRow(LucideIcons.FilePlus2, stringResource(R.string.common_tool_create_pdf), { fabMenu = false; vm.openCreate() })
@@ -498,7 +498,7 @@ fun FileSheet(vm: AppViewModel, r: FileRow, recent: Boolean, onDismiss: () -> Un
             SheetRow(LucideIcons.Printer, stringResource(R.string.home_print), { act { vm.printFile(r) } })
             SheetRow(LucideIcons.ExternalLink, stringResource(R.string.home_open_with), { act { vm.openWith(r) } })
             SheetRow(LucideIcons.Star, stringResource(if (r.starred) R.string.home_unstar else R.string.home_star), { act { vm.setStarred(r.key, !r.starred) } })
-            if (vm.libraryData.item(r.key) == null) SheetRow(LucideIcons.Layers, stringResource(R.string.library_add_to), { act { vm.addToLibrary(r.key, r.name) } })
+            if (vm.study.libraryData.item(r.key) == null) SheetRow(LucideIcons.Layers, stringResource(R.string.library_add_to), { act { vm.study.addToLibrary(r.key, r.name) } })
             SheetRow(LucideIcons.Pencil, stringResource(R.string.common_rename), { renaming = true })
             SheetRow(LucideIcons.Copy, stringResource(R.string.home_duplicate), { act { vm.duplicateFile(r) } })
             SheetRow(LucideIcons.FileDown, stringResource(R.string.common_save_copy), { act { vm.saveFileCopy(r) } })
@@ -527,30 +527,30 @@ fun FileSheet(vm: AppViewModel, r: FileRow, recent: Boolean, onDismiss: () -> Un
 @Composable
 private fun ContinueStudying(vm: AppViewModel) {
     val c = pdfColors
-    LaunchedEffect(Unit) { vm.refreshStudy() }
+    LaunchedEffect(Unit) { vm.study.refreshStudy() }
     Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp).clip(RoundedCornerShape(8.dp)).background(c.surfaceRaised).padding(12.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(stringResource(R.string.study_continue), color = c.text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-            val week = vm.studyWeek.sum() / 60_000
+            val week = vm.study.studyWeek.sum() / 60_000
             Text(stringResource(R.string.study_week_minutes, week / 60, week % 60), color = c.textSecondary, fontSize = 12.sp)
         }
-        if (vm.studyWeek.isNotEmpty()) {
+        if (vm.study.studyWeek.isNotEmpty()) {
             // this week's days, oldest first, as small bars
-            val max = (vm.studyWeek.maxOrNull() ?: 0L).coerceAtLeast(1L)
+            val max = (vm.study.studyWeek.maxOrNull() ?: 0L).coerceAtLeast(1L)
             Row(Modifier.fillMaxWidth().height(24.dp).padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.Bottom) {
-                for (d in vm.studyWeek) Box(Modifier.weight(1f).height((2 + 16 * d / max).toInt().dp).background(c.accent.copy(alpha = if (d > 0) 0.8f else 0.2f), RoundedCornerShape(2.dp)))
+                for (d in vm.study.studyWeek) Box(Modifier.weight(1f).height((2 + 16 * d / max).toInt().dp).background(c.accent.copy(alpha = if (d > 0) 0.8f else 0.2f), RoundedCornerShape(2.dp)))
             }
         }
-        val due = vm.dueCounts.values.sum()
+        val due = vm.study.dueCounts.values.sum()
         if (due > 0) Text(
             pluralStringResource(R.plurals.cards_due_review, due, due), color = c.accent, fontSize = 14.sp, fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.fillMaxWidth().clickable(role = Role.Button) { vm.startReview(null, "") }.padding(vertical = 8.dp),
+            modifier = Modifier.fillMaxWidth().clickable(role = Role.Button) { vm.study.startReview(null, "") }.padding(vertical = 8.dp),
         )
-        for (d in vm.studyRecent) {
+        for (d in vm.study.studyRecent) {
             val label = stringResource(R.string.study_resume_row, d.name.removeSuffix(".pdf"), d.lastPage + 1, (d.progress * 100).toInt())
             Column(Modifier.fillMaxWidth().clickable(role = Role.Button) { vm.open(android.net.Uri.parse(d.uri)) }.semantics { contentDescription = label }.padding(vertical = 8.dp)) {
                 Text(d.name.removeSuffix(".pdf"), color = c.text, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                val docDue = vm.dueCounts[d.uri] ?: 0
+                val docDue = vm.study.dueCounts[d.uri] ?: 0
                 Text(stringResource(R.string.study_page_progress, d.lastPage + 1, (d.progress * 100).toInt(), d.activeMs / 60_000) +
                     if (docDue > 0) " · " + pluralStringResource(R.plurals.cards_due, docDue, docDue) else "", color = c.textSecondary, fontSize = 12.sp)
                 Box(Modifier.padding(top = 4.dp).fillMaxWidth().height(3.dp).background(c.divider, RoundedCornerShape(2.dp))) {

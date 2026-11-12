@@ -705,7 +705,7 @@ private fun ExportNotesSheet(vm: AppViewModel, doc: OpenDocument, onDismiss: () 
             Spacer(Modifier.height(16.dp))
             Box(
                 Modifier.padding(horizontal = 16.dp).fillMaxWidth().heightIn(min = 48.dp).clip(RoundedCornerShape(24.dp)).background(Color(0xFF1473E6))
-                    .clickable(role = Role.Button) { onDismiss(); vm.exportNotes(doc, format, grouping, filter) },
+                    .clickable(role = Role.Button) { onDismiss(); vm.study.exportNotes(doc, format, grouping, filter) },
                 contentAlignment = Alignment.Center,
             ) { Text(stringResource(R.string.digest_export), color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.SemiBold) }
             Text(stringResource(R.string.digest_hint), color = c.textSecondary, fontSize = 13.sp, modifier = Modifier.padding(16.dp))

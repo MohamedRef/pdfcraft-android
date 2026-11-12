@@ -174,8 +174,8 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
                 vm.pendingSpot = null
             }
             // a library search hit: its page, with the words found there highlighted
-            if (w > 0f) vm.pendingSearch?.let { (page, query) ->
-                vm.pendingSearch = null
+            if (w > 0f) vm.study.pendingSearch?.let { (page, query) ->
+                vm.study.pendingSearch = null
                 doc.viewer.goToPage(page.coerceIn(0, doc.pageCount - 1))
                 if (query.isNotEmpty()) {
                     doc.search.run(query, doc.pageCount, page.coerceIn(0, doc.pageCount - 1)) { first -> showHit(doc, first) }
@@ -424,7 +424,7 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
             if (ctl.tool == ViewerTool.Draw && !vm.readingMode && doc.writable && doc.viewer.currentPage == doc.pageCount - 1) {
                 AddPageHandle(
                     bottom = maxOf(96.dp, with(density) { doc.viewer.padBottom.toDp() } + 12.dp),
-                    onClick = { vm.insertNotebookPage(doc, null) },
+                    onClick = { vm.study.insertNotebookPage(doc, null) },
                     modifier = Modifier.align(Alignment.BottomCenter),
                 )
             }

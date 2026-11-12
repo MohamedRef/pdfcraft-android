@@ -85,21 +85,21 @@ fun NotebookColor.label(): Int = when (this) {
  */
 @Composable
 fun NewNotebookSheet(vm: AppViewModel, onDismiss: () -> Unit) {
-    LaunchedEffect(Unit) { vm.refreshUserTemplates() }
+    LaunchedEffect(Unit) { vm.study.refreshUserTemplates() }
     var picked by remember { mutableStateOf(NotebookTemplate()) }
     var user by remember { mutableStateOf<String?>(null) }
     var title by remember { mutableStateOf("") }
     var deleting by remember { mutableStateOf<String?>(null) }
     PdfSheet(onDismiss = onDismiss, dim = true) {
         Column(Modifier.verticalScroll(rememberScrollState()).padding(bottom = 16.dp)) {
-            NotebookTemplatePicker(picked, user, vm.userTemplates, onPick = { picked = it; user = null }, onUser = { user = it }, onDeleteUser = { deleting = it })
+            NotebookTemplatePicker(picked, user, vm.study.userTemplates, onPick = { picked = it; user = null }, onUser = { user = it }, onDeleteUser = { deleting = it })
             Spacer(Modifier.height(12.dp))
             PdfField(title, { title = it.take(80) }, stringResource(R.string.notebook_name_hint), Modifier.padding(horizontal = 16.dp))
             Spacer(Modifier.height(16.dp))
             val create = stringResource(R.string.notebook_create)
             Box(
                 Modifier.padding(horizontal = 16.dp).fillMaxWidth().heightIn(min = 48.dp).clip(RoundedCornerShape(24.dp)).background(Color(0xFF1473E6))
-                    .combinedClickable(role = Role.Button, onClick = { vm.createNotebook(user?.let(NotebookPage::User) ?: NotebookPage.Builtin(picked), title) }),
+                    .combinedClickable(role = Role.Button, onClick = { vm.study.createNotebook(user?.let(NotebookPage::User) ?: NotebookPage.Builtin(picked), title) }),
                 contentAlignment = Alignment.Center,
             ) { Text(create, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.SemiBold) }
         }
@@ -108,7 +108,7 @@ fun NewNotebookSheet(vm: AppViewModel, onDismiss: () -> Unit) {
         PdfDialog(
             onDismiss = { deleting = null }, title = stringResource(R.string.notebook_delete_template_title, name.removeSuffix(".pdf")),
             confirm = stringResource(R.string.common_delete), destructive = true,
-            onConfirm = { deleting = null; if (user == name) user = null; vm.deleteUserTemplate(name) },
+            onConfirm = { deleting = null; if (user == name) user = null; vm.study.deleteUserTemplate(name) },
         )
     }
 }
@@ -225,12 +225,12 @@ private fun NotebookPreview(t: NotebookTemplate, dimmed: Boolean) {
 /** Pick a paper (or a saved template) for one new page and insert it at [onInsert]. */
 @Composable
 fun TemplatePageSheet(vm: AppViewModel, initial: NotebookTemplate, onDismiss: () -> Unit, onInsert: (NotebookPage) -> Unit) {
-    LaunchedEffect(Unit) { vm.refreshUserTemplates() }
+    LaunchedEffect(Unit) { vm.study.refreshUserTemplates() }
     var picked by remember { mutableStateOf(initial) }
     var user by remember { mutableStateOf<String?>(null) }
     PdfSheet(onDismiss = onDismiss, dim = true) {
         Column(Modifier.verticalScroll(rememberScrollState()).padding(bottom = 16.dp)) {
-            NotebookTemplatePicker(picked, user, vm.userTemplates, onPick = { picked = it; user = null }, onUser = { user = it })
+            NotebookTemplatePicker(picked, user, vm.study.userTemplates, onPick = { picked = it; user = null }, onUser = { user = it })
             Spacer(Modifier.height(16.dp))
             Box(
                 Modifier.padding(horizontal = 16.dp).fillMaxWidth().heightIn(min = 48.dp).clip(RoundedCornerShape(24.dp)).background(Color(0xFF1473E6))
