@@ -177,14 +177,41 @@ private fun HomeTabScreen(vm: AppViewModel, onBrowse: () -> Unit) {
                 Spacer(Modifier.width(10.dp))
                 Text(stringResource(R.string.app_name), color = c.text, fontSize = 20.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
                 Box(
-                    Modifier.minimumInteractiveComponentSize().size(40.dp).clip(CircleShape).background(c.surfaceRaised).clickable { vm.settingsOpen = true }.semantics { contentDescription = settingsLabel },
+                    Modifier.minimumInteractiveComponentSize().size(40.dp).clip(CircleShape).background(c.surfaceRaised).clickable { vm.openSettings() }.semantics { contentDescription = settingsLabel },
                     contentAlignment = Alignment.Center,
-                ) { Icon(LucideIcons.UserRound, null, tint = c.icon, modifier = Modifier.size(22.dp)) }
+                ) {
+                    Icon(LucideIcons.Settings, null, tint = c.icon, modifier = Modifier.size(22.dp)) // a gear: PdfCraft has no accounts (#194)
+                    // an update is waiting (#193)
+                    if (UpdaterState.candidate != null) Box(Modifier.align(Alignment.TopEnd).padding(top = 6.dp, end = 6.dp).size(9.dp).background(c.red, CircleShape))
+                }
             }
+            val context = androidx.compose.ui.platform.LocalContext.current
+            LaunchedEffect(Unit) { UpdaterState.autoCheck(context) }
             LazyColumn(Modifier.weight(1f)) {
                 item {
+                    UpdaterState.candidate?.let { update ->
+                        Row(
+                            Modifier.padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 8.dp).fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp)).background(c.surfaceRaised)
+                                .clickable(role = Role.Button) { vm.openSettings("about") }.padding(horizontal = 14.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Icon(LucideIcons.Sparkles, null, tint = c.accent, modifier = Modifier.size(20.dp))
+                            Spacer(Modifier.width(10.dp))
+                            Text(stringResource(R.string.updater_home_ready, "${update.version} (${update.apkVersionCode})"), color = c.text, fontSize = 14.sp, modifier = Modifier.weight(1f))
+                            Text(stringResource(R.string.updater_home_view), color = c.accent, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                        }
+                    }
                     Text(stringResource(if (vm.recentList.isEmpty()) R.string.home_welcome else R.string.home_welcome_back), color = c.text, fontSize = 24.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 16.dp, top = 8.dp, bottom = 16.dp))
-                    Text(stringResource(R.string.home_start_with_tool), color = c.text, fontSize = 15.sp, lineHeight = 22.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(start = 16.dp, bottom = 8.dp))
+                    if (vm.recentList.isEmpty()) {
+                        // a first visit: one primary action (#202)
+                        Box(
+                            Modifier.padding(start = 16.dp, end = 16.dp, bottom = 20.dp).fillMaxWidth().height(48.dp)
+                                .clip(RoundedCornerShape(24.dp)).background(c.accent).clickable(role = Role.Button, onClick = onBrowse),
+                            contentAlignment = Alignment.Center,
+                        ) { Text(stringResource(R.string.home_open_pdf), color = c.onAccent, fontSize = 16.sp, fontWeight = FontWeight.SemiBold) }
+                    }
+                    Text(stringResource(if (vm.recentList.isEmpty()) R.string.home_or_start_with_tool else R.string.home_start_with_tool), color = c.text, fontSize = 15.sp, lineHeight = 22.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(start = 16.dp, bottom = 8.dp))
                     ToolsCarousel(vm, onBrowse)
                     if (vm.studyRecent.isNotEmpty() || vm.dueCounts.isNotEmpty()) ContinueStudying(vm)
                     Spacer(Modifier.height(16.dp))
@@ -218,7 +245,8 @@ private fun HomeTabScreen(vm: AppViewModel, onBrowse: () -> Unit) {
                 if (rows.isEmpty()) {
                     item {
                         when (tab) {
-                            0 -> EmptyState(LucideIcons.Clock, stringResource(R.string.home_no_recent_title), stringResource(R.string.home_no_recent_body), stringResource(R.string.home_open_file), onBrowse)
+                            // Open a PDF is the button at the top
+                            0 -> EmptyState(LucideIcons.Clock, stringResource(R.string.home_no_recent_title), stringResource(R.string.home_no_recent_body))
                             1 -> EmptyState(LucideIcons.Star, stringResource(R.string.home_no_starred_title), stringResource(R.string.home_no_starred_body))
                             else -> if (!vm.hasFileAccess) EmptyState(LucideIcons.Smartphone, stringResource(R.string.home_device_files_title), stringResource(R.string.home_device_files_body), stringResource(R.string.home_add_folder)) { vm.requestFileAccess() }
                             else EmptyState(LucideIcons.Smartphone, stringResource(R.string.home_no_pdfs_title), stringResource(R.string.home_no_pdfs_body), stringResource(R.string.home_add_folder)) { vm.requestFileAccess() }

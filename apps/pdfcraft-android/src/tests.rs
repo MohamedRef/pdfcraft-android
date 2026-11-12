@@ -825,6 +825,20 @@ fn profiled_open_preserves_document_rendering_and_records_only_stage_durations()
     assert_eq!(s.documents().len(), 2);
 }
 
+/// #234: the open timings say how the display copy was made. A file whose comment has no
+/// appearance gets one drawn into a copy (an owned input on the host, so `copied`); a file with
+/// nothing to draw is shown as stored and records neither marker.
+#[test]
+fn profiled_open_records_how_the_display_copy_was_made() {
+    let s = MobileSession::new();
+    let names = |path: String| -> Vec<String> { s.open_with_timings(path, None).unwrap().timings.into_iter().map(|t| t.stage).collect() };
+    let drawn = names(attachments_pdf());
+    assert!(drawn.iter().any(|n| n == "native_display_copied"), "{drawn:?}");
+    assert!(!drawn.iter().any(|n| n == "native_display_spliced"));
+    let plain = names(blank_pdf(1));
+    assert!(!plain.iter().any(|n| n.starts_with("native_display_spliced") || n.starts_with("native_display_copied")), "{plain:?}");
+}
+
 /// Comments ▸ Hide all comments: the page is drawn again without them, even by renderers kept
 /// idle from before (they were made with the other setting), and showing them brings them back.
 #[test]
@@ -1140,4 +1154,39 @@ fn android_markup_and_shape_tools_make_real_annotation_types() {
     let comments = s.comments(doc).unwrap();
     let caret = comments.iter().find(|c| c.subtype == "Caret" && c.contents.as_deref() == Some("inserted"));
     assert!(caret.is_some(), "insert text keeps its words");
+}
+
+/// Link authoring as the Android Link mode drives it (#179, #159): add a page link over a box
+/// (keeping the reader's zoom), find it again by rectangle in link_list, change it to a web
+/// address, delete it; and the bulk commands.
+#[test]
+fn link_mode_adds_edits_and_deletes_links() {
+    let s = MobileSession::new();
+    let doc = s.open(blank_pdf(3), None).unwrap().id;
+    let run = |name: &str, args: Value| -> Value { serde_json::from_str(&s.execute(name.into(), args.to_string()).unwrap()).unwrap() };
+    run("link_add", json!({"doc": doc, "page": 1, "rect": [40, 50, 140, 90], "to_page": 3, "zoom": "inherit"}));
+    let shown = s.links(doc, 0).unwrap();
+    assert_eq!(shown.len(), 1);
+    assert_eq!(shown[0].page, Some(2));
+    let listed = run("link_list", json!({"doc": doc}));
+    let first = &listed["links"][0];
+    assert_eq!((first["page"].as_u64(), first["index"].as_u64()), (Some(1), Some(1)));
+    let rect: Vec<f32> = first["rect"].as_array().unwrap().iter().map(|v| v.as_f64().unwrap() as f32).collect();
+    for (a, b) in rect.iter().zip(&shown[0].rect) {
+        assert!((a - b).abs() <= 1.0, "link_list {rect:?} vs links {:?}", shown[0].rect);
+    }
+    run("link_edit", json!({"doc": doc, "page": 1, "index": 1, "url": "https://example.org/notes"}));
+    assert_eq!(s.links(doc, 0).unwrap()[0].uri.as_deref(), Some("https://example.org/notes"));
+    run("link_delete", json!({"doc": doc, "page": 1, "index": 1}));
+    assert!(s.links(doc, 0).unwrap().is_empty());
+    run("edit_undo", json!({"doc": doc}));
+    assert_eq!(s.links(doc, 0).unwrap().len(), 1, "deleting is undoable");
+    run("link_add", json!({"doc": doc, "page": 2, "rect": [40, 50, 140, 90], "url": "https://example.org"}));
+    run("links_remove", json!({"doc": doc}));
+    assert!(s.links(doc, 0).unwrap().is_empty() && s.links(doc, 1).unwrap().is_empty());
+    // nothing to make clickable is an error the app words itself
+    assert!(s.execute("links_from_urls".into(), json!({"doc": doc}).to_string()).is_err());
+    let text = s.open(text_pdf("Read https://example.org/notes today"), None).unwrap().id;
+    let made: Value = serde_json::from_str(&s.execute("links_from_urls".into(), json!({"doc": text}).to_string()).unwrap()).unwrap();
+    assert_eq!(made["created"].as_array().map(Vec::len), Some(1), "{made}");
 }

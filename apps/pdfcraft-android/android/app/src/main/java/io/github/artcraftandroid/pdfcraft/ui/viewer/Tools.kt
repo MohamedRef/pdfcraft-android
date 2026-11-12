@@ -1505,6 +1505,12 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                         savedEdit(selPage, mapOf("delete" to true))
                         clearSelection()
                     })
+                    // link the selected handwriting to a page or web address (#159)
+                    if (doc.info.allowsAnnotation) SubTool(LucideIcons.Link, stringResource(R.string.ink_lasso_link), false, {
+                        doc.commitTool?.invoke()
+                        vm.linkEdit = LinkEdit(doc, selPage, floatArrayOf(b.left - 2f, b.top - 2f, b.right + 2f, b.bottom + 2f))
+                        clearSelection()
+                    })
                     if (savedSelected.isNotEmpty()) {
                         SubTool(LucideIcons.Palette, stringResource(R.string.ink_lasso_recolor), false, {
                             savedEdit(selPage, mapOf("color" to prefs.color(StyledTool.Ink).hex()))
@@ -1806,7 +1812,10 @@ fun ToolSubToolbar(vm: AppViewModel, doc: OpenDocument) {
             ColorDot(prefs.color(StyledTool.FreeText), picker == Picker.Color) { toggle(Picker.Color) }
         }
         ViewerTool.FillSign -> FillSignToolbar(vm, doc)
-        ViewerTool.Edit -> EditToolbar(vm, doc)
+        ViewerTool.Edit -> androidx.compose.foundation.layout.Column {
+            if (vm.editMode == EditMode.Link && vm.editSelection == null) LinkCommandsRow(vm, doc)
+            EditToolbar(vm, doc)
+        }
         ViewerTool.None -> Unit
     }
 }

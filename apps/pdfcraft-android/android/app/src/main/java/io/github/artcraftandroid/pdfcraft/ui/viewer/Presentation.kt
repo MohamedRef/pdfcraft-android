@@ -20,6 +20,9 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 
+/** What a gesture did while presenting, for the diagnostics log. */
+enum class PresentGesture { Laser, Ink, TapNext, TapPrevious }
+
 /** A point of the laser pointer's trail: on which page, where in its points, and when (uptime ms). */
 data class LaserPoint(val page: Int, val x: Float, val y: Float, val time: Long)
 
@@ -66,7 +69,7 @@ fun presentationTap(x: Float, width: Float): Int = when {
  * temporary ink that fades a few seconds after it lifts (#327). Nothing is written to the PDF.
  */
 @Composable
-fun BoxScope.PresentationLayer(viewer: ViewerState, trail: LaserTrail, ink: TempInk) {
+fun BoxScope.PresentationLayer(viewer: ViewerState, trail: LaserTrail, ink: TempInk, onGesture: (PresentGesture) -> Unit = {}) {
     val dot = with(LocalDensity.current) { 7.dp.toPx() }
     val inkWidth = with(LocalDensity.current) { 3.dp.toPx() }
     // keep the trail and the ink fading while there is any
@@ -99,6 +102,7 @@ fun BoxScope.PresentationLayer(viewer: ViewerState, trail: LaserTrail, ink: Temp
                     if (stroke != null) {
                         if (!change.pressed) {
                             stroke.liftedAt = change.uptimeMillis
+                            onGesture(PresentGesture.Ink)
                             break
                         }
                         viewer.screenToPageOf(page, change.position)?.let { stroke.points.add(Offset(it.x, it.y)) }
@@ -106,7 +110,10 @@ fun BoxScope.PresentationLayer(viewer: ViewerState, trail: LaserTrail, ink: Temp
                         continue
                     }
                     if (!change.pressed) {
-                        if (!laser) presentationTap(change.position.x, size.width.toFloat()).takeIf { it != 0 }?.let(viewer::turnPage)
+                        if (!laser) presentationTap(change.position.x, size.width.toFloat()).takeIf { it != 0 }?.let {
+                            viewer.turnPage(it)
+                            onGesture(if (it > 0) PresentGesture.TapNext else PresentGesture.TapPrevious)
+                        } else onGesture(PresentGesture.Laser)
                         break
                     }
                     if (!laser && (change.position - down.position).getDistance() > slop) laser = true

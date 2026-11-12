@@ -239,7 +239,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 if (!isCurrentOpenRequest(requestId)) return@withLock
                 if (copy != null) {
                     openFile(eng, uri, copy, password, fromOtherApp, requestId)
-                    tell(text(R.string.msg_opened_own_copy))
+                    tell(text(R.string.msg_opened_own_copy), text(R.string.common_save_copy)) { document?.let { saveCopyAs(it) } }
                 } else {
                     withContext(Dispatchers.IO) { recents.remove(setOf(uri.toString())) }
                     refreshRecents()
@@ -257,7 +257,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 if (!isCurrentOpenRequest(requestId)) return@withLock
                 if (copy != null) {
                     openFile(eng, uri, copy, password, fromOtherApp, requestId)
-                    tell(text(R.string.msg_opened_own_copy))
+                    tell(text(R.string.msg_opened_own_copy), text(R.string.common_save_copy)) { document?.let { saveCopyAs(it) } }
                 } else {
                     tell(text(R.string.msg_file_access_lost))
                 }
@@ -359,8 +359,8 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             doc.controller.nightMode = savedNightMode
             // the layout this file was left in, else the one the file asks for, else the app's (#152)
             val remembered = ViewLayout.decode(recent?.layout)
-                ?: if (recent?.layout == null && !info.preparing) fileLayout(eng, info.id) else null
-            applyLayout(doc, remembered)
+            val fromFile = if (remembered == null && recent?.layout == null && !info.preparing) fileLayout(eng, info.id) else null
+            applyLayout(doc, remembered ?: fromFile, if (remembered != null) "remembered" else "file")
             // a file left in Reading Mode reopens in it, unless it was opened for a tool
             readingMode = recent?.reading == true && pendingTool == null
             document = doc
@@ -603,6 +603,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         // A reading stage has no edits; do not write an incompletely checked source back.
         if (doc.info.preparing) return@withLock true
         if (!doc.info.dirty && !doc.notWrittenBack) return@withLock true
+        doc.saving = true
         // #97: what each save costs, and what started it (pause, close, an edit, a tool)
         val started = android.os.SystemClock.elapsedRealtime()
         var stage = "mark"
@@ -622,9 +623,9 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             stage = "write_back"
             if (src != null && src.scheme == "content") {
                 // The marker set above stays until the provider verifiably holds the new bytes.
-                if (!doc.writable) {
+                if (!doc.writable || doc.holdWriteBack) {
                     doc.notWrittenBack = true
-                    outcome = "read_only"
+                    outcome = if (doc.writable) "held" else "read_only"
                     return@withLock false
                 }
                 Diag.measure(DiagArea.Save, "write_back", "doc" to doc.diagNumber, "bytes" to doc.file.length(), "target" to "provider") {
@@ -633,14 +634,24 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                         files.clearPendingWriteBack(src)
                     }
                 }
+                doc.wroteOriginal = true
             } else if (src != null && src.scheme == "file") {
                 val target = File(requireNotNull(src.path))
-                if (target.canonicalPath != doc.file.canonicalPath) Diag.measure(DiagArea.Save, "write_back", "doc" to doc.diagNumber, "bytes" to doc.file.length(), "target" to "file") {
-                    withContext(Dispatchers.IO) {
-                        doc.file.copyTo(target, overwrite = true)
-                        files.clearPendingWriteBack(src)
+                if (target.canonicalPath != doc.file.canonicalPath) {
+                    if (doc.holdWriteBack) {
+                        doc.notWrittenBack = true
+                        outcome = "held"
+                        return@withLock false
+                    }
+                    Diag.measure(DiagArea.Save, "write_back", "doc" to doc.diagNumber, "bytes" to doc.file.length(), "target" to "file") {
+                        withContext(Dispatchers.IO) {
+                            doc.file.copyTo(target, overwrite = true)
+                            files.clearPendingWriteBack(src)
+                        }
                     }
                 }
+                // a file edited in place: the save above already changed it
+                doc.wroteOriginal = true
             }
             doc.notWrittenBack = false
             true
@@ -652,7 +663,22 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             if (!quiet) tell(e.userMessage)
             false
         } finally {
+            doc.saving = false
             Diag.event(DiagArea.Save, "save", "doc" to doc.diagNumber, "trigger" to trigger, "outcome" to outcome, "ms" to android.os.SystemClock.elapsedRealtime() - started)
+        }
+    }
+
+    /** The top bar's save state, tapped: save now, or Save a copy when the original can't be written (#190). */
+    fun saveNow(doc: OpenDocument) {
+        if (doc.saving) return
+        if (!doc.writable && doc.source != null) {
+            saveCopyAs(doc)
+            return
+        }
+        viewModelScope.launch {
+            openMutex.withLock {
+                if (document === doc && readOnlyPrompt == null && !resolvingReadOnly && save(doc, trigger = "save_now")) tell(text(R.string.save_state_saved))
+            }
         }
     }
 
@@ -854,15 +880,14 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         if (tool in setOf(ViewerTool.Comment, ViewerTool.Markup, ViewerTool.Draw, ViewerTool.Text) && doc.info.commentsHidden) setCommentsHidden(doc, false)
         ctl.switchTool(tool)
         if (tool == ViewerTool.Draw && toolPrefs.snapToShape && toolPrefs.takeSnapHint()) tell(text(R.string.msg_snap_to_shape_on))
-        // the first time the reader comments without a name, ask for one (once)
-        if (tool in setOf(ViewerTool.Comment, ViewerTool.Markup, ViewerTool.Draw, ViewerTool.Text) && toolPrefs.author.isBlank() && !toolPrefs.authorAsked) {
-            toolPrefs.authorAsked = true
-            authorPrompt = true
-        }
+        // no name dialog before the first mark (#202): the comment box offers "Comment as" instead
     }
 
     /** Asking for the name comments are signed with. */
     var authorPrompt by mutableStateOf(false)
+
+    /** The first-run tips are showing (the first document, or Help ▸ Tips) (#202). */
+    var tipsOpen by mutableStateOf(false)
 
     /** Leave the active tool: whatever it holds (ink being drawn) is added first. */
     fun leaveTool(doc: OpenDocument) {
@@ -911,6 +936,71 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         return true
     }
 
+    // ---- Link authoring (#179, #159) ---------------------------------------------------------
+
+    /** A link being made or changed in its sheet. */
+    var linkEdit by mutableStateOf<io.github.artcraftandroid.pdfcraft.ui.viewer.LinkEdit?>(null)
+
+    /** In Link mode, a tap on an existing link opens it to change or delete; returns whether there was one. */
+    fun editLinkAt(doc: OpenDocument, at: PagePoint) {
+        val link = doc.links[at.page]?.lastOrNull { l -> l.rect.size == 4 && at.x in l.rect[0]..l.rect[2] && at.y in l.rect[1]..l.rect[3] }
+        if (link == null) {
+            tell(text(R.string.link_drag_hint))
+            return
+        }
+        val eng = engine ?: return
+        viewModelScope.launch {
+            val listed = runCatching { eng.tool("link_list", mapOf("doc" to doc.id)) }.getOrNull()?.optJSONArray("links")
+            val rows = (0 until (listed?.length() ?: 0)).mapNotNull { i ->
+                val o = listed!!.optJSONObject(i) ?: return@mapNotNull null
+                val r = o.optJSONArray("rect") ?: return@mapNotNull null
+                Triple(o.optInt("page"), o.optInt("index"), (0 until r.length()).map { r.optDouble(it).toFloat() })
+            }
+            val index = io.github.artcraftandroid.pdfcraft.ui.viewer.linkIndexFor(rows, at.page, link.rect)
+            if (index == null || document !== doc) {
+                tell(text(R.string.link_not_editable))
+                return@launch
+            }
+            linkEdit = io.github.artcraftandroid.pdfcraft.ui.viewer.LinkEdit(doc, at.page, link.rect.toFloatArray(), index, link.uri, link.page?.toInt())
+        }
+    }
+
+    /** Make the link in [e] go to [url] or page [toPage] (0-based): a new link, or a change to it. */
+    fun saveLink(e: io.github.artcraftandroid.pdfcraft.ui.viewer.LinkEdit, url: String?, toPage: Int?) {
+        linkEdit = null
+        val target: Map<String, Any?> = if (url != null) mapOf("url" to url) else mapOf("to_page" to (toPage ?: return) + 1)
+        if (e.index == null) {
+            runTool(e.doc, "link_add", mapOf("page" to e.page + 1, "rect" to e.rect.map { it.toDouble() }, "zoom" to "inherit") + target) {
+                tell(text(R.string.link_added))
+            }
+        } else {
+            runTool(e.doc, "link_edit", mapOf("page" to e.page + 1, "index" to e.index) + target)
+        }
+    }
+
+    fun deleteLink(e: io.github.artcraftandroid.pdfcraft.ui.viewer.LinkEdit) {
+        linkEdit = null
+        val index = e.index ?: return
+        runTool(e.doc, "link_delete", mapOf("page" to e.page + 1, "index" to index)) { tell(text(R.string.link_deleted)) }
+    }
+
+    /** Make every web address written on the pages a link, and say how many (one undo step). */
+    fun linksFromUrls(doc: OpenDocument) {
+        val eng = engine ?: return
+        viewModelScope.launch {
+            // the engine refuses when there is nothing to link: that is an answer, not a failure
+            val r = try { eng.tool("links_from_urls", mapOf("doc" to doc.id)) } catch (e: MobileException) { null }
+            refresh(doc)
+            val n = r?.optJSONArray("created")?.length() ?: 0
+            tell(if (n == 0) text(R.string.link_from_urls_none) else plural(R.plurals.link_from_urls_done, n, n))
+        }
+    }
+
+    /** Remove every link in the document (one undo step). */
+    fun removeAllLinks(doc: OpenDocument) {
+        runTool(doc, "links_remove") { tell(text(R.string.link_removed_all)) }
+    }
+
     /** A web address waiting for "Open web page?". */
     var linkPrompt by mutableStateOf<String?>(null)
         private set
@@ -944,23 +1034,62 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         }
     }
 
+    /** The Share sheet's choice last used, marked next time (#205). */
+    val lastShareChoice: io.github.artcraftandroid.pdfcraft.ui.viewer.ShareChoice
+        get() = io.github.artcraftandroid.pdfcraft.ui.viewer.ShareChoice.of(appPrefs.getString("shareChoice", null))
+
     /**
-     * Share a copy of [doc] through the system's share sheet (saved first, with the ink being drawn).
-     * With [clean], the copy has no comments or markups while the working file keeps them (#155).
+     * Share [doc] as [choice] picks (#205): the PDF as it is, a flattened copy (comments and
+     * fields baked into the pages), the page in view as its own PDF, or pictures of pages (picked
+     * in the page grid). The subject is the document's title only.
      */
-    fun share(doc: OpenDocument, clean: Boolean = false) {
+    fun share(doc: OpenDocument, choice: io.github.artcraftandroid.pdfcraft.ui.viewer.ShareChoice = io.github.artcraftandroid.pdfcraft.ui.viewer.ShareChoice.Pdf) {
+        appPrefs.edit().putString("shareChoice", choice.id).apply()
+        Diag.event(DiagArea.Share, "share", "doc" to doc.diagNumber, "choice" to choice.id, "page" to doc.viewer.currentPage + 1, "pages" to doc.pageCount)
         if (doc.controller.tool == ViewerTool.Draw) doc.commitTool?.invoke()
+        if (choice == io.github.artcraftandroid.pdfcraft.ui.viewer.ShareChoice.Images) {
+            exportImages(doc, lastImageFormat)
+            return
+        }
+        val eng = engine ?: return
+        val page = doc.viewer.currentPage
         handOut {
             // the ink is queued in the engine: reading the document back waits for it, so the save has it
             refresh(doc)
             save(doc)
-            val copy = if (clean) preparedCopy(doc, unlock = false, clean = true) ?: throw IllegalStateException(text(R.string.msg_clean_copy_failed)) else null
-            val uri = try {
-                withContext(Dispatchers.IO) { files.shareable(copy ?: doc.file, doc.name) }
-            } finally {
-                copy?.delete()
+            val (file, name) = when (choice) {
+                io.github.artcraftandroid.pdfcraft.ui.viewer.ShareChoice.Flattened -> {
+                    // from a second, temporary engine document: the open one keeps its comments and fields
+                    val out = tempFile("pdf")
+                    val copy = eng.tool("doc_open", mapOf("path" to doc.file.absolutePath, "password" to doc.password)).optLong("doc")
+                    try {
+                        eng.tool("doc_flatten", mapOf("doc" to copy))
+                        eng.tool("doc_save", mapOf("doc" to copy, "path" to out.absolutePath, "full" to true))
+                    } finally {
+                        runCatching { eng.tool("doc_close", mapOf("doc" to copy, "discard_changes" to true)) }
+                    }
+                    out to text(R.string.share_name_flattened, doc.title)
+                }
+                io.github.artcraftandroid.pdfcraft.ui.viewer.ShareChoice.Clean -> {
+                    // the saved file opened again without comments and markups; this one keeps them (#155)
+                    val copy = preparedCopy(doc, unlock = false, clean = true) ?: throw IllegalStateException(text(R.string.msg_clean_copy_failed))
+                    copy to doc.name
+                }
+                io.github.artcraftandroid.pdfcraft.ui.viewer.ShareChoice.Page -> {
+                    val out = tempFile("pdf")
+                    eng.tool("page_extract", mapOf("doc" to doc.id, "pages" to listOf(page + 1), "out" to out.absolutePath))
+                    out to text(R.string.share_name_page, doc.title, page + 1)
+                }
+                else -> doc.file to doc.name
             }
-            sendIntent(listOf(uri)).putExtra(Intent.EXTRA_SUBJECT, text(R.string.msg_share_subject, doc.title))
+            Diag.event(DiagArea.Share, "share_file", "doc" to doc.diagNumber, "choice" to choice.id, "bytes" to file.length())
+            val uri = try {
+                withContext(Dispatchers.IO) { files.shareable(file, name) }
+            } finally {
+                // the share folder holds its own copy; a temporary file goes now (#105)
+                if (file != doc.file) file.delete()
+            }
+            sendIntent(listOf(uri)).putExtra(Intent.EXTRA_SUBJECT, doc.title)
         }
     }
 
@@ -1001,6 +1130,10 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         ctl.modeBeforePresenting = doc.viewer.mode
         doc.viewer.switchMode(io.github.artcraftandroid.pdfcraft.ui.viewer.PageMode.SinglePage)
         ctl.presenting = true
+        ctl.presentingSince = android.os.SystemClock.uptimeMillis()
+        ctl.laserStrokes = 0
+        ctl.inkStrokes = 0
+        io.github.artcraftandroid.pdfcraft.engine.Diag.event(io.github.artcraftandroid.pdfcraft.engine.DiagArea.Viewer, "present_start", "doc" to doc.diagNumber, "page" to doc.viewer.currentPage + 1, "pages" to doc.pageCount, "mode_before" to ctl.modeBeforePresenting)
         ctl.barsVisible = false
     }
 
@@ -1008,6 +1141,10 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         val ctl = doc.controller
         if (!ctl.presenting) return
         ctl.presenting = false
+        io.github.artcraftandroid.pdfcraft.engine.Diag.event(
+            io.github.artcraftandroid.pdfcraft.engine.DiagArea.Viewer, "present_end", "doc" to doc.diagNumber, "s" to (android.os.SystemClock.uptimeMillis() - ctl.presentingSince) / 1000,
+            "laser_strokes" to ctl.laserStrokes, "ink_strokes" to ctl.inkStrokes, "page" to doc.viewer.currentPage + 1,
+        )
         // the pointer and temporary ink belong to the presentation
         ctl.laser.points.clear()
         ctl.tempInk.strokes.clear()
@@ -1036,6 +1173,8 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         val center = androidx.compose.ui.geometry.Offset(v.viewW / 2f, v.viewH / 2f)
         // presenting: a clicker's keys turn pages (arrows, Page Up/Down, Space, Enter) and Esc ends it
         if (ctl.presenting && !ctrl) {
+            // a clicker's key while presenting (#157): the key code is a number, never text
+            io.github.artcraftandroid.pdfcraft.engine.Diag.event(io.github.artcraftandroid.pdfcraft.engine.DiagArea.Viewer, "present_key", "doc" to doc.diagNumber, "key" to keyCode, "shift" to shift)
             when (keyCode) {
                 android.view.KeyEvent.KEYCODE_ESCAPE -> stopPresenting(doc)
                 android.view.KeyEvent.KEYCODE_DPAD_RIGHT, android.view.KeyEvent.KEYCODE_DPAD_DOWN, android.view.KeyEvent.KEYCODE_PAGE_DOWN,
@@ -1050,6 +1189,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         val drawing = ctl.tool == ViewerTool.Draw
         if (!ctrl && drawing) io.github.artcraftandroid.pdfcraft.ui.viewer.presetForKey(keyCode)?.let { return toolPrefs.applyInkPreset(it) }
         val shortcut = io.github.artcraftandroid.pdfcraft.ui.viewer.viewerShortcut(keyCode, ctrl, shift) ?: return false
+        io.github.artcraftandroid.pdfcraft.engine.Diag.event(io.github.artcraftandroid.pdfcraft.engine.DiagArea.Viewer, "shortcut", "doc" to doc.diagNumber, "action" to shortcut, "ctrl" to ctrl, "shift" to shift, "tool" to ctl.tool)
         fun tool(t: ViewerTool) { if (ctl.tool != t) enterTool(doc, t) }
         fun draw(eraser: Boolean = false, lasso: Boolean = false, shape: io.github.artcraftandroid.pdfcraft.ui.viewer.InkShapeMode = io.github.artcraftandroid.pdfcraft.ui.viewer.InkShapeMode.Freehand) {
             tool(ViewerTool.Draw)
@@ -1156,6 +1296,8 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     private suspend fun preparedCopy(doc: OpenDocument, unlock: Boolean, clean: Boolean): File? {
         val eng = engine ?: return null
         val out = File(getApplication<Application>().cacheDir, "print-${System.nanoTime()}.pdf")
+        val start = System.nanoTime()
+        var removed = 0
         return runCatching {
             val copy = saveMutex.withLock {
                 eng.tool("doc_open", mapOf("path" to doc.file.absolutePath, "password" to doc.password)).optLong("doc")
@@ -1168,13 +1310,23 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                         .firstOrNull { it.optString("category") == "comments" }?.optInt("count") ?: 0
                     // the tool fails when there is nothing to remove: a file without comments is already clean
                     if (comments > 0) eng.tool("doc_remove_hidden", mapOf("doc" to copy, "categories" to listOf("comments")))
+                    removed = comments
                 }
                 eng.tool("doc_save", mapOf("doc" to copy, "path" to out.absolutePath, "full" to true))
             } finally {
                 runCatching { eng.tool("doc_close", mapOf("doc" to copy, "discard_changes" to true)) }
             }
             out
-        }.onFailure { out.delete() }.getOrNull()
+        }.onFailure {
+            out.delete()
+            io.github.artcraftandroid.pdfcraft.engine.Diag.failure(io.github.artcraftandroid.pdfcraft.engine.DiagArea.Viewer, if (clean) "clean_copy" else "unlocked_copy", it)
+        }.also { r ->
+            // a copy without comments (#155) or without its password: how long it took, how many comments went, how big it is
+            io.github.artcraftandroid.pdfcraft.engine.Diag.event(
+                io.github.artcraftandroid.pdfcraft.engine.DiagArea.Viewer, "prepared_copy", "doc" to doc.diagNumber, "clean" to clean, "unlock" to unlock, "ok" to r.isSuccess,
+                "ms" to (System.nanoTime() - start) / 1_000_000, "comments_removed" to removed, "bytes" to (r.getOrNull()?.length() ?: 0L),
+            )
+        }.getOrNull()
     }
 
     /** Where Save a copy is asked to write (the activity opens the system's file creator with this name). */
@@ -1200,6 +1352,11 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
      * opens are no longer blocked by it.
      */
     private fun abandonCopyRequest(request: CopyRequest) {
+        // changes kept back while the picker was open go to the original again at the next save
+        if (request is CopyRequest.Document) {
+            request.doc.holdWriteBack = false
+            Diag.event(DiagArea.Save, "copy_cancel", "doc" to request.doc.diagNumber, "not_written_back" to request.doc.notWrittenBack)
+        }
         if (request is CopyRequest.Document && request.then != null && resolvingReadOnly) {
             readOnlyPrompt = request.doc
             resolvingReadOnly = false
@@ -1213,6 +1370,9 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
 
     /** Save a copy of [doc] under a name and place the user picks. */
     fun saveCopyAs(doc: OpenDocument, then: (() -> Unit)? = null) {
+        // Opening the picker pauses the app: that save must not write the original (#190).
+        doc.holdWriteBack = true
+        Diag.event(DiagArea.Save, "copy_start", "doc" to doc.diagNumber, "dirty" to doc.info.dirty, "wrote_original" to doc.wroteOriginal, "resolving" to (then != null))
         startCopyRequest(CopyRequest.Document(doc, then), doc.name)
     }
 
@@ -1259,6 +1419,9 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                         markBeforeWorkingCopyChanges(doc)
                         engine?.tool("doc_save", mapOf("doc" to doc.id))
                         if (doc.source != null) doc.notWrittenBack = true
+                        // a file edited in place has just been written
+                        doc.source?.takeIf { it.scheme == "file" && File(requireNotNull(it.path)).canonicalPath == doc.file.canonicalPath }
+                            ?.let { doc.wroteOriginal = true }
                     }
                     withContext(Dispatchers.IO) {
                         files.writeBack(doc.file, target)
@@ -1267,9 +1430,18 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                     if (then != null) doc.notWrittenBack = false
                     refresh(doc)
                 }
-                tell(text(R.string.msg_saved_copy))
-                then?.invoke()
+                if (then != null) {
+                    tell(text(R.string.msg_saved_copy))
+                    then()
+                } else if (doc.source != null) {
+                    continueInCopy(doc, target)
+                } else {
+                    doc.holdWriteBack = false
+                    tell(text(R.string.msg_saved_copy))
+                }
             } catch (e: Exception) {
+                doc.holdWriteBack = false
+                Diag.failure(DiagArea.Save, "copy", e)
                 if (then != null && resolvingReadOnly) {
                     readOnlyPrompt = doc
                     resolvingReadOnly = false
@@ -1277,6 +1449,37 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 tell(e.userMessage)
             }
         }
+    }
+
+    /**
+     * Save a copy is "save as" (#190): [target] now holds every change, so the viewer goes on in it
+     * and [doc]'s original is left as it was opened, unless an earlier save of this visit already
+     * wrote it (then the message says so).
+     */
+    private suspend fun continueInCopy(doc: OpenDocument, target: Uri) {
+        val eng = engine ?: return
+        val src = doc.source ?: return
+        var left = false
+        openMutex.withLock {
+            if (document !== doc) return@withLock
+            closeQuietly(eng, doc)
+            // the working copy's changes are in the copy: the original keeps its own bytes
+            withContext(Dispatchers.IO) {
+                runCatching {
+                    if (src.scheme == "content") files.discardWorkingCopy(src) else { files.clearPendingWriteBack(src); true }
+                }.getOrDefault(false)
+            }.let { discarded ->
+                Diag.event(DiagArea.Save, "copy_continue", "doc" to doc.diagNumber, "wrote_original" to doc.wroteOriginal, "working_copy_discarded" to discarded, "scheme" to src.scheme)
+                if (!discarded) tell(text(R.string.discard_kept_recovery))
+            }
+            document = null
+            refreshRecents()
+            left = true
+        }
+        if (!left) return
+        open(target)
+        val name = withContext(Dispatchers.IO) { runCatching { files.displayName(target) }.getOrDefault("") }
+        tell(text(if (doc.wroteOriginal) R.string.msg_copy_continues_saved_before else R.string.msg_copy_continues, name))
     }
 
     /** Export PDF (to Word, RTF, Excel, PowerPoint, or images of its pages). */
@@ -1458,8 +1661,10 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         }
 
     /** Lay [doc] out as [layout] remembered for it, or as the app's View settings when null (#152). */
-    private fun applyLayout(doc: OpenDocument, layout: ViewLayout?) {
+    private fun applyLayout(doc: OpenDocument, layout: ViewLayout?, source: String) {
         val l = layout ?: ViewLayout(savedPageMode, savedSpread, appPrefs.getBoolean("spreadAuto", false))
+        // where the layout a file opened in came from: remembered for it, its initial view, or the app's (#152)
+        io.github.artcraftandroid.pdfcraft.engine.Diag.event(io.github.artcraftandroid.pdfcraft.engine.DiagArea.Viewer, "layout_open", "doc" to doc.diagNumber, "source" to (if (layout == null) "app" else source), "mode" to l.mode, "spread" to l.spread, "auto" to l.autoSpread)
         if (l.mode != doc.viewer.mode) doc.viewer.switchMode(l.mode)
         spreadPref = l.spread
         spreadAuto = l.autoSpread
@@ -1481,6 +1686,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
      */
     fun saveLayoutAsInitialView(doc: OpenDocument) {
         val open = currentLayout(doc).openLayout() ?: return
+        io.github.artcraftandroid.pdfcraft.engine.Diag.event(io.github.artcraftandroid.pdfcraft.engine.DiagArea.Viewer, "layout_initial_view", "doc" to doc.diagNumber, "layout" to open)
         setInitialView(doc, mapOf("layout" to open.arg))
     }
 
@@ -1504,6 +1710,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     fun chooseSpreadAuto(on: Boolean) {
         readingMode = false
         spreadAuto = on
+        io.github.artcraftandroid.pdfcraft.engine.Diag.event(io.github.artcraftandroid.pdfcraft.engine.DiagArea.Viewer, "spread_auto", "on" to on)
         appPrefs.edit().putBoolean("spreadAuto", on).apply()
     }
 
@@ -1512,6 +1719,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         readingMode = false
         spreadPref = spread
         spreadAuto = false
+        io.github.artcraftandroid.pdfcraft.engine.Diag.event(io.github.artcraftandroid.pdfcraft.engine.DiagArea.Viewer, "spread", "spread" to spread)
         appPrefs.edit().putBoolean("spreadAuto", false).putString("spread", when (spread) {
             io.github.artcraftandroid.pdfcraft.ui.viewer.Spread.TwoUp -> "two"
             io.github.artcraftandroid.pdfcraft.ui.viewer.Spread.TwoUpCover -> "cover"
@@ -1523,6 +1731,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         // leaving Reading Mode: a canvas laid out already followed the page read; else it shows it on layout
         if (readingMode && doc.viewer.viewW > 0f) pendingPage = null
         readingMode = false
+        io.github.artcraftandroid.pdfcraft.engine.Diag.event(io.github.artcraftandroid.pdfcraft.engine.DiagArea.Viewer, "page_mode", "doc" to doc.diagNumber, "from" to doc.viewer.mode, "to" to mode, "page" to doc.viewer.currentPage + 1)
         doc.viewer.switchMode(mode)
         appPrefs.edit().putString("pageMode", when (mode) {
             io.github.artcraftandroid.pdfcraft.ui.viewer.PageMode.SinglePage -> "single"
@@ -1563,7 +1772,10 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         if (doc.info.preparing) return
         selectedComment = null
         viewModelScope.launch {
-            if (runCatching { eng.tool("comments_hide", mapOf("doc" to doc.id, "hidden" to hidden)) }.isFailure) return@launch
+            val ok = runCatching {
+                io.github.artcraftandroid.pdfcraft.engine.Diag.measure(io.github.artcraftandroid.pdfcraft.engine.DiagArea.Viewer, "comments_hide", "doc" to doc.diagNumber, "hidden" to hidden) { eng.tool("comments_hide", mapOf("doc" to doc.id, "hidden" to hidden)) }
+            }.onFailure { io.github.artcraftandroid.pdfcraft.engine.Diag.failure(io.github.artcraftandroid.pdfcraft.engine.DiagArea.Viewer, "comments_hide", it) }.isSuccess
+            if (!ok) return@launch
             // the switch reads the engine's state; the pages draw again without waiting for an edit
             refresh(doc)
             doc.images.invalidate()
@@ -1580,7 +1792,9 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         val eng = engine ?: return
         if (doc.info.preparing) return
         viewModelScope.launch {
-            val ok = runCatching { eng.tool("view_reading_colors", mapOf("doc" to doc.id, "mode" to colors.engineMode)) }.isSuccess
+            val ok = runCatching {
+                io.github.artcraftandroid.pdfcraft.engine.Diag.measure(io.github.artcraftandroid.pdfcraft.engine.DiagArea.Viewer, "reading_colors", "doc" to doc.diagNumber, "colors" to colors) { eng.tool("view_reading_colors", mapOf("doc" to doc.id, "mode" to colors.engineMode)) }
+            }.onFailure { io.github.artcraftandroid.pdfcraft.engine.Diag.failure(io.github.artcraftandroid.pdfcraft.engine.DiagArea.Viewer, "reading_colors", it) }.isSuccess
             if (!ok) return@launch
             doc.controller.readingColors = colors
             // the engine's view changed: every page draws again
@@ -2070,6 +2284,24 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
 
     /** Recognize text: its options, review and batch state (#166). */
     val ocr = io.github.artcraftandroid.pdfcraft.ui.viewer.OcrState()
+
+    /** Undo [steps] edits of [doc] in a row (a recognition made page by page), then redraw. */
+    internal fun undoSteps(doc: OpenDocument, steps: Int) {
+        val eng = engine ?: return
+        viewModelScope.launch {
+            try {
+                repeat(steps) { if (document === doc && doc.info.undo != null) { eng.tool("edit_undo", mapOf("doc" to doc.id)); refresh(doc) } }
+            } catch (e: MobileException) {
+                tell(e.userMessage)
+            }
+        }
+    }
+
+    /** The busy dialog's count (done, total) when the job knows it, for a determinate bar (#200). */
+    var busyProgress by mutableStateOf<Pair<Int, Int>?>(null)
+
+    /** The busy dialog's Cancel, when the job can stop safely (between pages). */
+    var busyCancel by mutableStateOf<(() -> Unit)?>(null)
 
     /** Redact: marks, the box being drawn, the look, and the checks after applying (#163). */
     val redact = io.github.artcraftandroid.pdfcraft.ui.viewer.RedactState()
@@ -3346,6 +3578,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 tell(e.userMessage)
             } finally {
                 busy = null
+                busyProgress = null
             }
         }
     }
@@ -4862,42 +5095,65 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
 
     fun discardScan() {
         scanPages.forEach { it.file.delete() }
+        scanPageDir().listFiles()?.forEach { it.delete() }
         scanPages.clear()
         scanName = ""
         insertScanAt = null
         toolScreen = null
     }
 
-    /** Save the scanned pages as a PDF with [filter]'s look (or insert them where Organize asked). */
+    /** Where Save writes each scanned page's straightened image (removed when the scan ends). */
+    private fun scanPageDir() = File(getApplication<Application>().cacheDir, "scan")
+
+    /**
+     * Save the scanned pages as a PDF with [filter]'s look (or insert them where Organize asked).
+     * Each photo is decoded once, straightened, given the look and encoded once natively (#287);
+     * a page that can't be processed goes in as the camera took it.
+     */
     fun saveScan(filter: ScanFilter) = job(text(R.string.msg_busy_saving_scan)) { eng ->
         val pages = scanPages.toList()
-        val paths = pages.map { it.file.absolutePath }
         val scanStarted = android.os.SystemClock.elapsedRealtime()
-        val created = eng.tool("doc_create", mapOf("from" to "images", "paths" to paths, "name" to "Scan"))
+        val dir = scanPageDir().apply { mkdirs() }
+        val saved = ArrayList<ScanSavedPage>(pages.size)
+        for ((i, page) in pages.withIndex()) {
+            // the Scan gates (#286): found edges, whether they were moved and how far (in % of the
+            // photo's diagonal, so the thumbnail's proportions are enough)
+            val stats = scanPageStats(page.corners, page.found, ScanPage.WHOLE, page.thumb.width.toDouble(), page.thumb.height.toDouble())
+            if (!scanNeedsProcessing(page.corners.contentEquals(ScanPage.WHOLE), filter.mode)) {
+                Diag.event(DiagArea.Scan, "page", "index" to i + 1, "edges_found" to stats.found, "corners_moved" to stats.touched, "max_move_pct" to stats.maxMovePct, "filter" to filter, "enhanced" to false)
+                saved += scanSavedPage(page.file.absolutePath, null)
+                continue
+            }
+            busy = text(R.string.msg_busy_cleaning_page, i + 1, pages.size)
+            val request = io.github.artcraftandroid.pdfcraft.core.ScanPageRequest(
+                photoPath = page.file.absolutePath,
+                corners = page.corners.toList(),
+                look = scanLookOf(filter.mode),
+                strength = filter.level.coerceIn(0, 100).toUByte(),
+                outputPath = File(dir, "page-$i").absolutePath,
+            )
+            val enhanceStarted = android.os.SystemClock.elapsedRealtime()
+            val result = withContext(Dispatchers.Default) { runCatching { io.github.artcraftandroid.pdfcraft.core.scanProcessPage(request) } }
+            result.onFailure { Diag.failure(DiagArea.Scan, "scan_process_page", it) }
+            val r = result.getOrNull()
+            // decode, straighten, look and encode times (#287), and the page's pixels and proportions
+            Diag.event(
+                DiagArea.Scan, "page", "index" to i + 1, "edges_found" to stats.found, "corners_moved" to stats.touched, "max_move_pct" to stats.maxMovePct,
+                "filter" to filter, "enhanced" to (r != null), "enhance_ms" to android.os.SystemClock.elapsedRealtime() - enhanceStarted,
+                *(r?.timings.orEmpty().map<io.github.artcraftandroid.pdfcraft.core.ScanTiming, Pair<String, Any?>> { it.stage.removePrefix("scan_") + "_ms" to it.ms.toLong() }.toTypedArray()),
+                "out_width" to (r?.width?.toLong() ?: 0L), "out_height" to (r?.height?.toLong() ?: 0L),
+                "out_format" to (r?.format?.name?.lowercase() ?: "none"), "dpi" to (r?.dpi?.toDouble() ?: 0.0),
+            )
+            saved += scanSavedPage(page.file.absolutePath, r?.let { it.path to it.dpi })
+        }
+        val created = try {
+            eng.tool("doc_create", scanCreateArgs(saved))
+        } finally {
+            // the PDF holds the pages now
+            dir.listFiles()?.forEach { it.delete() }
+        }
         val id = created.optLong("doc")
         try {
-            // each page keeps the part inside its corners, straightened, with the look; a whole
-            // photo in Original stays as it was taken
-            val sizes = eng.tool("doc_info", mapOf("doc" to id)).optJSONArray("pages")
-            for ((i, page) in pages.withIndex()) {
-                val size = sizes?.optJSONObject(i)
-                val (w, h) = (size?.optDouble("width") ?: 0.0) to (size?.optDouble("height") ?: 0.0)
-                // the Scan gates (#286): found edges, whether they were moved and how far
-                val stats = scanPageStats(page.corners, page.found, ScanPage.WHOLE, w, h)
-                if (page.corners.contentEquals(ScanPage.WHOLE) && filter == ScanFilter.Original || size == null) {
-                    Diag.event(DiagArea.Scan, "page", "index" to i + 1, "edges_found" to stats.found, "corners_moved" to stats.touched, "max_move_pct" to stats.maxMovePct, "filter" to filter, "enhanced" to false)
-                    continue
-                }
-                val corners = page.corners.mapIndexed { k, v -> v * if (k % 2 == 0) w else h }
-                busy = text(R.string.msg_busy_cleaning_page, i + 1, pages.size)
-                val enhanceStarted = android.os.SystemClock.elapsedRealtime()
-                val ok = runCatching { eng.tool("page_enhance_camera", mapOf("doc" to id, "page" to i + 1, "corners" to corners, "mode" to filter.mode, "level" to filter.level)) }
-                    .onFailure { Diag.failure(DiagArea.Scan, "page_enhance_camera", it) }.isSuccess
-                Diag.event(
-                    DiagArea.Scan, "page", "index" to i + 1, "edges_found" to stats.found, "corners_moved" to stats.touched, "max_move_pct" to stats.maxMovePct,
-                    "filter" to filter, "enhanced" to ok, "enhance_ms" to android.os.SystemClock.elapsedRealtime() - enhanceStarted,
-                )
-            }
             if (Diag.enabled()) {
                 // the straightened pages' proportions (A4 is 1.414; the gate is within 2%)
                 eng.tool("doc_info", mapOf("doc" to id)).optJSONArray("pages")?.let { out ->
@@ -4946,6 +5202,16 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
 
     var homeTab by mutableStateOf(io.github.artcraftandroid.pdfcraft.ui.home.HomeTab.Home)
     var settingsOpen by mutableStateOf(false)
+
+    /** The Settings page to open on (root, about, prefs, help). */
+    var settingsStartPage = "root"
+        private set
+
+    /** Open Settings at [page]: Home's update card opens About (#193). */
+    fun openSettings(page: String = "root", show: Boolean = true) {
+        settingsStartPage = page
+        if (show) settingsOpen = true
+    }
 
     /** The file whose "..." sheet is open, and whether it was opened from Recent. */
     var fileSheet by mutableStateOf<Pair<io.github.artcraftandroid.pdfcraft.ui.home.FileRow, Boolean>?>(null)
@@ -5832,6 +6098,8 @@ private const val MAX_CREATE_FILES = 12
 
 /** A green banner saying a job worked, with the way to undo it. */
 class SuccessBanner(val text: String, val undo: (() -> Unit)?)
+
+/** Recognize text waiting for its pages: [page] is the one in view (0-based). */
 
 /** A file for the activity to print; [deleteWhenDone]: a temporary copy (an unlocked one) the job deletes (#105). */
 data class PrintJob(val file: File, val name: String, val deleteWhenDone: Boolean)

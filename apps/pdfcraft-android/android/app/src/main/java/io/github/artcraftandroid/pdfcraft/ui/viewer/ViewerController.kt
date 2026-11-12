@@ -1,5 +1,7 @@
 package io.github.artcraftandroid.pdfcraft.ui.viewer
 
+import io.github.artcraftandroid.pdfcraft.engine.Diag as DIAG
+import io.github.artcraftandroid.pdfcraft.engine.DiagArea.Viewer as VIEWER
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
@@ -36,7 +38,7 @@ enum class TextMarkup { Highlight, Underline, Strikethrough, Squiggly }
 enum class CommentMode { Text, Voice, Stamp }
 
 /** What the bottom sheet over the viewer shows. */
-enum class ViewerSheet { None, More, FileDetails, Backdrops, TextStyles, ViewSettings, Attachments, Bookmarks, Comments, MoreTools, Signatures, ScanEnhance, OcrConfidence, SearchResults, Layers, EditContents, HiddenInfo, FocusTimer, Backups, Redact, Compare }
+enum class ViewerSheet { None, More, FileDetails, Backdrops, TextStyles, ViewSettings, Attachments, Bookmarks, Comments, MoreTools, Signatures, ScanEnhance, OcrConfidence, SearchResults, Layers, EditContents, HiddenInfo, FocusTimer, Backups, Redact, Compare, Share }
 
 /**
  * The viewer's own state for one document, beside the page view ([ViewerState]): whether the
@@ -117,6 +119,11 @@ class ViewerController {
     /** Temporary ink written while presenting (#327), shared with an external display too. */
     val tempInk = TempInk()
 
+    /** When the presentation started (uptime ms) and what was drawn in it, for the diagnostics log. */
+    internal var presentingSince = 0L
+    internal var laserStrokes = 0
+    internal var inkStrokes = 0
+
     /** The page mode to go back to after presenting. */
     internal var modeBeforePresenting: PageMode? = null
 
@@ -160,13 +167,16 @@ class ViewerController {
 
     /** A jump is about to leave where [viewer] is: remember it and show the way back for a while. */
     fun rememberJump(viewer: ViewerState) {
-        jumps.push(viewer.spot())
+        val from = viewer.spot()
+        jumps.push(from)
+        DIAG.event(VIEWER, "jump", "from_page" to from.page + 1, "mode" to viewer.mode)
         jumpsChanged()
     }
 
     /** Back to where the last jump came from; false when there is nowhere to go back to. */
     fun jumpBack(viewer: ViewerState): Boolean {
         val to = jumps.goBack(viewer.spot()) ?: return false
+        DIAG.event(VIEWER, "jump_back", "from_page" to viewer.currentPage + 1, "to_page" to to.page + 1, "can_forward" to true)
         viewer.goTo(to)
         jumpsChanged()
         return true
@@ -175,6 +185,7 @@ class ViewerController {
     /** Forward again to where [jumpBack] came from. */
     fun jumpForward(viewer: ViewerState): Boolean {
         val to = jumps.goForward(viewer.spot()) ?: return false
+        DIAG.event(VIEWER, "jump_forward", "from_page" to viewer.currentPage + 1, "to_page" to to.page + 1)
         viewer.goTo(to)
         jumpsChanged()
         return true
