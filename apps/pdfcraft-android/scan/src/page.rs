@@ -10,6 +10,7 @@ use crate::enhance::enlargement;
 use crate::flatten::{predict_grid, unwarp};
 use crate::look::{Applied, Look, LookParams, Pixels, apply_full};
 use crate::upright::{Upright, turned, upright};
+use crate::upright_pages::total_turn;
 use crate::warp::{Rgb, rectify_with_threads};
 use crate::{Photo, Quad, ScanError};
 
@@ -54,6 +55,11 @@ pub struct PageRequest<'a> {
     /// corners gave it. A whole photo in the Original look is the camera's file and is never
     /// turned.
     pub upright: bool,
+    /// The person's own quarter turns clockwise (the Rotate button, #339), added to the turn the
+    /// classifier gave (`upright_pages::total_turn`). The app asks for the classifier's turn or the
+    /// person's, not both: a press of Rotate switches `upright` off for that page and puts the
+    /// page's whole turn here, so the classifier never fights the person.
+    pub turns: u8,
     /// How much the Auto look sharpens print, 0–100; 0 for none (#299).
     pub sharpen: u8,
     /// Whether the Auto look smooths the grain of a page that has a lot of it (#299).
@@ -78,6 +84,7 @@ impl<'a> PageRequest<'a> {
             side_proportions: false,
             flatten: false,
             upright: false,
+            turns: 0,
             sharpen: DEFAULT_SHARPEN,
             denoise: true,
             max_side: None,
@@ -113,6 +120,9 @@ pub struct PageResult {
     pub quarter_turns: u8,
     /// What the orientation classifier found (`None` when it was not asked or has no model file).
     pub orientation: Option<Upright>,
+    /// The quarter turns clockwise the page was given in all: the classifier's (`quarter_turns`)
+    /// and the person's (`PageRequest::turns`) together, 0–3 (#339).
+    pub turns: u8,
     /// The page's grain as the Auto look measured it: the standard deviation of its noise on
     /// blank paper, in grey levels of 255 (`None` for the other looks).
     pub noise: Option<f32>,
@@ -134,6 +144,8 @@ pub struct PageBase {
     pub bend: f32,
     pub quarter_turns: u8,
     pub orientation: Option<Upright>,
+    /// The classifier's turn and the person's together (#339).
+    pub turns: u8,
     /// (stage, milliseconds) of the stages so far.
     pub timings: Vec<(&'static str, u32)>,
 }
@@ -149,7 +161,8 @@ pub const WHOLE_PHOTO: [f32; 8] = [0.0, 0.0, 1.0, 0.0, 1.0, 1.0, 0.0, 1.0];
 /// other pages. `None` when the request asks for more than that.
 fn untouched(request: &PageRequest<'_>) -> Option<Result<PageResult, ScanError>> {
     let whole = request.corners.iter().zip(WHOLE_PHOTO).all(|(a, b)| (a - b).abs() < 1e-6);
-    if request.look != Look::Original || !whole || request.flatten || request.max_side.is_some() {
+    let turned_by_hand = !request.turns.is_multiple_of(4);
+    if request.look != Look::Original || !whole || request.flatten || turned_by_hand || request.max_side.is_some() {
         return None;
     }
     let (width, height) = match Photo::upright_size(request.photo) {
@@ -173,6 +186,7 @@ fn untouched(request: &PageRequest<'_>) -> Option<Result<PageResult, ScanError>>
         bend: 0.0,
         quarter_turns: 0,
         orientation: None,
+        turns: 0,
         noise: None,
         timings,
     }))
@@ -192,7 +206,7 @@ pub fn process_page(request: &PageRequest<'_>) -> Result<PageResult, ScanError> 
     };
     let applied = page_look(&base, request)?;
     let (pixels, noise) = (applied.pixels, applied.noise);
-    let PageBase { page, dpi, paper, aspect, focal_mismatch, flattened, bend, quarter_turns, orientation, mut timings } = base;
+    let PageBase { page, dpi, paper, aspect, focal_mismatch, flattened, bend, quarter_turns, orientation, turns, mut timings } = base;
     let (w, h) = (page.width, page.height);
     drop(page);
     lap(STAGE_LOOK, &mut timings);
@@ -218,6 +232,7 @@ pub fn process_page(request: &PageRequest<'_>) -> Result<PageResult, ScanError> 
         bend,
         quarter_turns,
         orientation,
+        turns,
         noise,
         timings,
     })
@@ -293,10 +308,12 @@ pub fn page_base(request: &PageRequest<'_>) -> Result<PageBase, ScanError> {
     // is still resampled once (#339)
     let orientation = if request.upright { upright(&page) } else { None };
     let quarter_turns = orientation.filter(|found| found.sure).map_or(0, |found| found.quarter_turns);
-    let page = if quarter_turns == 0 {
+    // and the person's own turn on top (the Rotate button): still the same pixels moved
+    let turns = total_turn(quarter_turns, i32::from(request.turns));
+    let page = if turns == 0 {
         page
     } else {
-        let upright = turned(&page, quarter_turns);
+        let upright = turned(&page, turns);
         drop(page);
         upright
     };
@@ -313,6 +330,7 @@ pub fn page_base(request: &PageRequest<'_>) -> Result<PageBase, ScanError> {
         bend: grid.map_or(0.0, |g| g.bend() as f32),
         quarter_turns,
         orientation,
+        turns,
         timings,
     })
 }

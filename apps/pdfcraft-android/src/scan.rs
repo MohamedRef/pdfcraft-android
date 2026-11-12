@@ -6,6 +6,7 @@
 use std::path::{Path, PathBuf};
 use std::sync::RwLock;
 
+use pdfcraft_scan::upright_pages::{PageTurn, followed, settle};
 use pdfcraft_scan::{
     AspectSource, Finder, Format, Look, PageBase, PageRequest, Paper, Photo, Pyramid, Quad, QuadSource, RefineOptions, detect_with, page_base,
     page_look, process_page, refine,
@@ -70,6 +71,11 @@ pub struct ScanPageRequest {
     /// (#339). A whole photo in the Original look is never turned.
     #[uniffi(default = true)]
     pub upright: bool,
+    /// The person's own quarter turns clockwise (the Rotate button, #339), added to the
+    /// classifier's turn. A press of Rotate switches `upright` off for that page and puts its
+    /// whole turn here.
+    #[uniffi(default = 0)]
+    pub turns: u8,
     /// How much the Auto look sharpens print, 0–100; 0 for none (#299).
     #[uniffi(default = 30)]
     pub sharpen: u8,
@@ -130,6 +136,9 @@ pub struct ScanPageResult {
     /// What the orientation classifier made of the page; `None` when it was not asked or its
     /// model file is not installed.
     pub orientation: Option<ScanOrientation>,
+    /// The quarter turns clockwise the page was given in all: the classifier's and the person's
+    /// together, 0–3 (#339).
+    pub turns: u8,
     /// The page's grain as the Auto look measured it (#299): the standard deviation of its noise
     /// on blank paper, in grey levels of 255. `None` for the other looks.
     pub noise: Option<f32>,
@@ -425,6 +434,7 @@ fn page_request<'a>(request: &ScanPageRequest, photo: &'a [u8], corners: [f32; 8
         flatten: request.flatten,
         side_proportions: request.side_proportions,
         upright: request.upright,
+        turns: request.turns,
         sharpen: request.sharpen,
         denoise: request.denoise,
         max_side,
@@ -441,6 +451,11 @@ pub struct ScanPreview {
     pub rgba: Vec<u8>,
     /// The quarter turns clockwise the page was given to stand upright (#339).
     pub quarter_turns: u8,
+    /// What the orientation classifier made of the page (#339); `None` when it was not asked or
+    /// its model file is not installed.
+    pub orientation: Option<ScanOrientation>,
+    /// The classifier's turn and the person's together, 0–3 (#339).
+    pub turns: u8,
     /// The page was flattened by the network (#302).
     pub flattened: bool,
     /// The straightened page was still at hand from an earlier preview: only its look was made.
@@ -461,6 +476,7 @@ struct PreviewKey {
     side_proportions: bool,
     flatten: bool,
     upright: bool,
+    turns: u8,
     max_side: u32,
 }
 
@@ -511,6 +527,7 @@ pub(crate) fn preview_in(root: &Path, request: &ScanPageRequest, max_side: u32) 
         side_proportions: request.side_proportions,
         flatten: request.flatten,
         upright: request.upright,
+        turns: request.turns % 4,
         max_side,
     };
     let kept = {
@@ -560,7 +577,48 @@ pub(crate) fn preview_in(root: &Path, request: &ScanPageRequest, max_side: u32) 
         return Err(MobileError::Command("the page could not be drawn".into()));
     }
     timings.push(ScanTiming { stage: "scan_preview_look".into(), ms: ms(clock) });
-    Ok(ScanPreview { width, height, rgba, quarter_turns: base.quarter_turns, flattened: base.flattened, reused, timings })
+    Ok(ScanPreview {
+        width,
+        height,
+        rgba,
+        quarter_turns: base.quarter_turns,
+        orientation: base.orientation.map(orientation_of),
+        turns: base.turns,
+        flattened: base.flattened,
+        reused,
+        timings,
+    })
+}
+
+fn orientation_of(found: pdfcraft_scan::Upright) -> ScanOrientation {
+    ScanOrientation {
+        quarter_turns: found.quarter_turns,
+        confidence: found.confidence,
+        agreement: found.agreement,
+        tiles: found.tiles,
+        sure: found.sure,
+    }
+}
+
+/// The turn the multi-page rule gives one page of a scan (#339).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Record)]
+pub struct ScanSettledTurn {
+    /// Quarter turns clockwise that stand the page upright (0–3).
+    pub quarter_turns: u8,
+    /// The page was not sure by itself and took the turn of its two neighbours.
+    pub followed: bool,
+}
+
+/// The turn each page of a scan gets when the classifier's answers are read together (#339, the
+/// multi-page rule): a page it was not sure of takes the turn of its two neighbours when both are
+/// sure at 0.95 or more and agree; every other page keeps its own sure turn, or none. `None` in
+/// `pages` is a page the classifier was not asked about (the person turned it, or turning is
+/// off): it keeps no turn and is nobody's neighbour. Same length and order as `pages`.
+#[uniffi::export]
+pub fn scan_settle_turns(pages: Vec<Option<ScanOrientation>>) -> Vec<ScanSettledTurn> {
+    let pages: Vec<Option<PageTurn>> =
+        pages.into_iter().map(|found| found.map(|o| PageTurn { quarter_turns: o.quarter_turns, confidence: o.confidence, sure: o.sure })).collect();
+    settle(&pages).into_iter().zip(followed(&pages)).map(|(quarter_turns, followed)| ScanSettledTurn { quarter_turns, followed }).collect()
 }
 
 pub(crate) fn process_in(root: &Path, request: &ScanPageRequest) -> Result<ScanPageResult, MobileError> {
@@ -609,13 +667,8 @@ pub(crate) fn process_in(root: &Path, request: &ScanPageRequest) -> Result<ScanP
         flattened: page.flattened,
         bend: page.bend,
         quarter_turns: page.quarter_turns,
-        orientation: page.orientation.map(|found| ScanOrientation {
-            quarter_turns: found.quarter_turns,
-            confidence: found.confidence,
-            agreement: found.agreement,
-            tiles: found.tiles,
-            sure: found.sure,
-        }),
+        orientation: page.orientation.map(orientation_of),
+        turns: page.turns,
         noise: page.noise,
         timings: page.timings.into_iter().map(|(stage, ms)| ScanTiming { stage: stage.into(), ms }).collect(),
     })
@@ -644,6 +697,7 @@ mod tests {
             flatten: false,
             side_proportions: false,
             upright: false,
+            turns: 0,
             sharpen: 30,
             denoise: true,
         }
@@ -970,7 +1024,71 @@ mod tests {
         assert_eq!((turned.width, turned.height), (kept.height, kept.width));
         let stages: Vec<_> = turned.timings.iter().map(|t| t.stage.as_str()).collect();
         assert_eq!(stages, ["scan_decode", "scan_rectify", "scan_upright", "scan_look", "scan_encode"]);
+        assert_eq!(turned.turns, 3);
+        // the person's turn adds to the classifier's: one more press undoes it (#339)
+        let back = process_in(
+            &root,
+            &ScanPageRequest { corners: whole.clone(), snap_paper: false, upright: true, turns: 1, ..request(&shot, &root.join("back")) },
+        )
+        .unwrap();
+        assert_eq!((back.quarter_turns, back.turns, back.width, back.height), (3, 0, kept.width, kept.height));
         std::fs::remove_dir_all(root).unwrap();
+    }
+
+    /// The Rotate button (#339): the person's turns move the page's pixels, on top of the
+    /// classifier's turn or in place of it, and a preview with another turn is made afresh.
+    #[test]
+    fn a_page_is_turned_by_the_persons_turns() {
+        let _store = PREVIEWS_TEST_LOCK.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let root = temp("turns");
+        let shot = photo(&root);
+        // the Original look, so only the turn differs (a look reads its page in blocks, which turn too)
+        let ask = |turns| ScanPageRequest { turns, look: ScanLook::Original, ..request(&shot, &root.join("turned")) };
+        let straight = preview_in(&root, &ask(0), 256).unwrap();
+        let rgb = |rgba: &[u8]| rgba.as_chunks::<4>().0.iter().flat_map(|p| [p[0], p[1], p[2]]).collect::<Vec<u8>>();
+        let straight = pdfcraft_scan::Rgb { width: straight.width, height: straight.height, data: rgb(&straight.rgba) };
+        for turns in 1..4u8 {
+            let made = preview_in(&root, &ask(turns), 256).unwrap();
+            assert!(!made.reused, "a preview kept for another turn was shown for {turns}");
+            assert_eq!((made.turns, made.quarter_turns, made.orientation), (turns, 0, None));
+            let expected = pdfcraft_scan::turned(&straight, turns);
+            assert_eq!((made.width, made.height), (expected.width, expected.height));
+            assert!(rgb(&made.rgba) == expected.data, "{turns} quarter turns are not the page turned clockwise {turns} times");
+        }
+        // a full turn is no turn, and the saved page agrees with its preview
+        assert_eq!(preview_in(&root, &ask(4), 256).unwrap().turns, 0);
+        let saved = process_in(&root, &ask(1)).unwrap();
+        let unturned = process_in(&root, &ask(0)).unwrap();
+        assert_eq!((saved.turns, saved.width, saved.height), (1, unturned.height, unturned.width));
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    /// A whole photo in Original that the person turned is no longer the camera's own file (#339).
+    #[test]
+    fn a_whole_original_photo_turned_by_hand_is_turned() {
+        let root = temp("turns-whole");
+        let shot = photo(&root);
+        let ask = |turns, out: &str| {
+            let whole = vec![0.0, 0.0, 1.0, 0.0, 1.0, 1.0, 0.0, 1.0];
+            process_in(&root, &ScanPageRequest { corners: whole, look: ScanLook::Original, turns, ..request(&shot, &root.join(out)) }).unwrap()
+        };
+        let (kept, turned) = (ask(0, "kept"), ask(3, "turned"));
+        assert_eq!((kept.width, kept.height, kept.turns), (64, 48, 0));
+        assert_eq!((turned.width, turned.height, turned.turns), (48, 64, 3));
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    /// The multi-page rule through the app's call (#339).
+    #[test]
+    fn unsure_pages_follow_two_sure_neighbours() {
+        let found = |quarter_turns, confidence, sure| Some(ScanOrientation { quarter_turns, confidence, agreement: 1.0, tiles: 9, sure });
+        let settled = scan_settle_turns(vec![found(1, 0.97, true), found(0, 0.4, false), found(1, 0.99, true), None, found(2, 0.3, false)]);
+        let turns: Vec<_> = settled.iter().map(|s| (s.quarter_turns, s.followed)).collect();
+        assert_eq!(turns, [(1, false), (1, true), (1, false), (0, false), (0, false)]);
+        // a neighbour under 0.95 is not followed
+        let settled = scan_settle_turns(vec![found(1, 0.9, true), found(0, 0.4, false), found(1, 0.99, true)]);
+        assert_eq!(settled[1], ScanSettledTurn { quarter_turns: 0, followed: false });
+        assert!(scan_settle_turns(Vec::new()).is_empty());
     }
 
     /// A page asked to be flattened goes through the flattening network (#302).
