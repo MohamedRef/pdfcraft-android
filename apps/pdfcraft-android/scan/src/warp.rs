@@ -63,6 +63,41 @@ pub fn rectify_with_threads(photo: &Photo, quad: &Quad, out_w: u32, out_h: u32, 
     let (ow, oh) = (f64::from(out_w), f64::from(out_h));
     let rect = [[0.0, 0.0], [ow, 0.0], [ow, oh], [0.0, oh]];
     let to_photo = Homography::from_points(rect, quad.0).ok_or(ScanError::BadCorners)?;
+    Ok(resample(photo, &Plane(to_photo), out_w, out_h, threads))
+}
+
+/// Where each point of the output page is in the photo.
+pub(crate) trait ToPhoto: Sync {
+    /// The photo point for an output point (pixel edges at integers), or `None` for no point.
+    fn apply(&self, p: [f64; 2]) -> Option<[f64; 2]>;
+
+    /// How many photo pixels one output pixel covers along each side at `p`.
+    fn shrink(&self, p: [f64; 2]) -> f64;
+}
+
+/// A flat page seen in perspective.
+struct Plane(Homography);
+
+impl ToPhoto for Plane {
+    fn apply(&self, p: [f64; 2]) -> Option<[f64; 2]> {
+        self.0.apply(p)
+    }
+
+    /// The square root of the Jacobian's determinant.
+    fn shrink(&self, [x, y]: [f64; 2]) -> f64 {
+        let h = &self.0.0;
+        let w = h[6] * x + h[7] * y + h[8];
+        let Some([u, v]) = self.0.apply([x, y]) else { return 1.0 };
+        let (dux, duy) = ((h[0] - u * h[6]) / w, (h[1] - u * h[7]) / w);
+        let (dvx, dvy) = ((h[3] - v * h[6]) / w, (h[4] - v * h[7]) / w);
+        let s = (dux * dvy - duy * dvx).abs().sqrt();
+        if s.is_finite() { s } else { 1.0 }
+    }
+}
+
+/// An `out_w` × `out_h` page (both at least 1, the photo's buffer matching its size), each pixel
+/// sampled from the photo where `to_photo` says it is. Outside the photo is white.
+pub(crate) fn resample(photo: &Photo, to_photo: &dyn ToPhoto, out_w: u32, out_h: u32, threads: usize) -> Rgb {
     let row_len = out_w as usize * 3;
     let mut data = vec![0u8; row_len * out_h as usize];
     let sampler = Sampler { photo, to_photo, out_w };
@@ -78,12 +113,12 @@ pub fn rectify_with_threads(photo: &Photo, quad: &Quad, out_w: u32, out_h: u32, 
             });
         }
     });
-    Ok(Rgb { width: out_w, height: out_h, data })
+    Rgb { width: out_w, height: out_h, data }
 }
 
 struct Sampler<'a> {
     photo: &'a Photo,
-    to_photo: Homography,
+    to_photo: &'a dyn ToPhoto,
     out_w: u32,
 }
 
@@ -91,7 +126,7 @@ impl Sampler<'_> {
     /// Output row `y` into `out` (RGB8).
     fn row(&self, y: usize, out: &mut [u8]) {
         let yc = y as f64 + 0.5;
-        let shrink = self.shrink([f64::from(self.out_w) / 2.0, yc]);
+        let shrink = self.to_photo.shrink([f64::from(self.out_w) / 2.0, yc]);
         let grid = if shrink < SUPERSAMPLE_FROM { 1 } else { ((2.0 * shrink).ceil() as usize).clamp(2, MAX_GRID) };
         for (x, px) in out.chunks_exact_mut(3).enumerate() {
             let c = if grid == 1 { self.bicubic_at([x as f64 + 0.5, yc]) } else { self.grid_at(x as f64, y as f64, grid) };
@@ -99,18 +134,6 @@ impl Sampler<'_> {
                 *o = v.round().clamp(0.0, 255.0) as u8;
             }
         }
-    }
-
-    /// How many photo pixels one output pixel covers along each side at `p` (the square root of
-    /// the Jacobian's determinant).
-    fn shrink(&self, [x, y]: [f64; 2]) -> f64 {
-        let h = &self.to_photo.0;
-        let w = h[6] * x + h[7] * y + h[8];
-        let Some([u, v]) = self.to_photo.apply([x, y]) else { return 1.0 };
-        let (dux, duy) = ((h[0] - u * h[6]) / w, (h[1] - u * h[7]) / w);
-        let (dvx, dvy) = ((h[3] - v * h[6]) / w, (h[4] - v * h[7]) / w);
-        let s = (dux * dvy - duy * dvx).abs().sqrt();
-        if s.is_finite() { s } else { 1.0 }
     }
 
     /// The mean of `n` × `n` bilinear samples spread evenly over output pixel (`x`, `y`).

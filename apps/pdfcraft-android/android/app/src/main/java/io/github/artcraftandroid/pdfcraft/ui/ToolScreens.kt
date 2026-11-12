@@ -27,6 +27,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -70,6 +71,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -842,6 +844,10 @@ fun ScanScreen(vm: AppViewModel) {
     val c = pdfColors
     val pages = vm.scanPages
     var filter by remember { mutableStateOf(ScanFilter.CleanScan) }
+    // curled, sagging or folded pages drawn flat (#302): the person's choice and off to begin
+    // with, because nothing measured tells a bent page from a flat one, and on a flat page the
+    // network is a little less exact than the plain straightening
+    var flatten by remember { mutableStateOf(false) }
     var current by remember { mutableStateOf(0) }
     var cropping by remember { mutableStateOf<java.io.File?>(null) }
     var naming by remember { mutableStateOf(false) }
@@ -861,7 +867,7 @@ fun ScanScreen(vm: AppViewModel) {
     ToolScaffold(
         if (pages.isEmpty()) stringResource(R.string.common_tool_scan) else stringResource(R.string.tools_page_of, current.coerceAtMost(pages.lastIndex) + 1, pages.size),
         { vm.discardScan() },
-        stringResource(R.string.tools_save_pdf), pages.isNotEmpty(), { vm.saveScan(filter) },
+        stringResource(R.string.tools_save_pdf), pages.isNotEmpty(), { vm.saveScan(filter, flatten && vm.scanCanFlatten) },
     ) {
         // the new file's name, changeable before it's saved (not when the pages go into an open document)
         if (vm.insertScanAt == null && vm.scanName.isNotBlank()) {
@@ -898,6 +904,14 @@ fun ScanScreen(vm: AppViewModel) {
                 Text(
                     stringResource(f.label), color = if (f == filter) c.accent else c.text, fontSize = 14.sp,
                     modifier = Modifier.clip(CircleShape).background(if (f == filter) c.pressed else Color.Transparent).clickable { filter = f }.padding(horizontal = 14.dp, vertical = 8.dp),
+                )
+            }
+            if (vm.scanCanFlatten) {
+                // a switch beside the looks, not one of them: outlined, and filled when it is on
+                Text(
+                    stringResource(R.string.tools_scan_flatten), color = if (flatten) c.accent else c.text, fontSize = 14.sp,
+                    modifier = Modifier.clip(CircleShape).background(if (flatten) c.pressed else Color.Transparent).border(1.dp, if (flatten) c.accent else c.textSecondary, CircleShape)
+                        .toggleable(value = flatten, role = Role.Switch) { flatten = it }.padding(horizontal = 14.dp, vertical = 8.dp),
                 )
             }
         }

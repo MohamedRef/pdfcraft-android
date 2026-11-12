@@ -331,6 +331,7 @@
     <string name="tools_filter_grayscale">Escala de grises</string>
     <string name="tools_filter_whiteboard">Pizarra</string>
     <string name="tools_filter_light_text">Texto claro</string>
+    <string name="tools_scan_flatten">Aplanar página</string>
 
     <!-- App dialogs: the first comment's name prompt -->
     <!-- Verb: go on without entering a name -->

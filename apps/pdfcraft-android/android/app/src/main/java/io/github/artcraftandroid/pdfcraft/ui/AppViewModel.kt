@@ -3581,6 +3581,10 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
 
     /** The scan's file name (without .pdf), set when its first page is taken and changeable before saving. */
     var scanName by mutableStateOf("")
+
+    /** Whether this build can flatten curled pages (#302): its flattening model is installed. */
+    var scanCanFlatten by mutableStateOf(false)
+        private set
     private var shotFile: File? = null
     private var retakeIndex: Int? = null
 
@@ -4662,6 +4666,10 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                     .onFailure { e -> Diag.failure(DiagArea.Scan, "scan_find_document", e) }.getOrNull()
             }
             val edges = doc?.takeIf { it.found }?.corners?.takeIf { it.size == 8 }?.toFloatArray()
+            // the models are unpacked by now: whether the flattening one is among them (#302)
+            if (!scanCanFlatten && eng != null) {
+                scanCanFlatten = withContext(Dispatchers.Default) { runCatching { io.github.artcraftandroid.pdfcraft.core.scanCanFlatten() }.getOrDefault(false) }
+            }
             Diag.event(
                 DiagArea.Scan, "photo", "retake" to (r != null), "bytes" to f.length(), "edges_found" to (edges != null),
                 "find_ms" to android.os.SystemClock.elapsedRealtime() - findStarted,
@@ -4705,9 +4713,10 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
      * Save the scanned pages as a PDF with [filter]'s look (or insert them where Organize asked).
      * Each photo is decoded once, straightened to the page's true proportions (#293), given the
      * look and encoded once natively (#287); a page that can't be processed goes in as the camera
-     * took it.
+     * took it. With [flatten], a curled, sagging or folded page is drawn flat by the flattening
+     * network first (#302); that is the person's choice, never made for them.
      */
-    fun saveScan(filter: ScanFilter) = job(text(R.string.msg_busy_saving_scan)) { eng ->
+    fun saveScan(filter: ScanFilter, flatten: Boolean = false) = job(text(R.string.msg_busy_saving_scan)) { eng ->
         val pages = scanPages.toList()
         val scanStarted = android.os.SystemClock.elapsedRealtime()
         val dir = scanPageDir().apply { mkdirs() }
@@ -4718,7 +4727,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             val stats = scanPageStats(page.corners, page.found, ScanPage.WHOLE, page.thumb.width.toDouble(), page.thumb.height.toDouble())
             // a whole photo in Original stays the camera's own file: natively it only gets its
             // resolution written in, so its PDF page has a size like the others (#293)
-            val untouched = !scanNeedsProcessing(page.corners.contentEquals(ScanPage.WHOLE), filter.mode)
+            val untouched = !flatten && !scanNeedsProcessing(page.corners.contentEquals(ScanPage.WHOLE), filter.mode)
             busy = text(R.string.msg_busy_cleaning_page, i + 1, pages.size)
             val request = io.github.artcraftandroid.pdfcraft.core.ScanPageRequest(
                 photoPath = page.file.absolutePath,
@@ -4726,6 +4735,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 look = scanLookOf(filter.mode),
                 strength = filter.level.coerceIn(0, 100).toUByte(),
                 outputPath = File(dir, "page-$i").absolutePath,
+                flatten = flatten,
             )
             val enhanceStarted = android.os.SystemClock.elapsedRealtime()
             val result = withContext(Dispatchers.Default) { runCatching { io.github.artcraftandroid.pdfcraft.core.scanProcessPage(request) } }
@@ -4741,6 +4751,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 "out_format" to (r?.format?.name?.lowercase() ?: "none"), "dpi" to (r?.dpi?.toDouble() ?: 0.0),
                 "paper" to (r?.paper?.name?.lowercase() ?: "none"), "aspect" to (r?.aspectSource?.name?.lowercase() ?: "none"),
                 "focal_mismatch" to (r?.focalMismatch ?: false),
+                "flatten" to flatten, "flattened" to (r?.flattened ?: false), "bend_pct" to ((r?.bend ?: 0f) * 100.0),
             )
             saved += scanSavedPage(page.file.absolutePath, r?.let { it.path to it.dpi })
         }

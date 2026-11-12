@@ -14,6 +14,7 @@ pub mod encode;
 pub mod enhance;
 mod error;
 pub mod exif;
+pub mod flatten;
 pub mod look;
 pub mod models;
 pub mod page;
@@ -27,6 +28,7 @@ pub use detect::{Detection, QuadSource, detect};
 pub use encode::Format;
 pub use enhance::{AutoOutput, AutoParams, PaperMode, auto};
 pub use error::ScanError;
+pub use flatten::{FlattenGrid, flat_grid, predict_grid, unwarp};
 pub use look::Look;
 pub use page::{PageRequest, PageResult, process_page};
 pub use photo::{Luma, MAX_PHOTO_PIXELS, Photo, luma};
@@ -38,6 +40,8 @@ pub use warp::{Rgb, rectify};
 mod tests;
 #[cfg(test)]
 mod tests_detect;
+#[cfg(test)]
+mod tests_flatten;
 #[cfg(test)]
 mod tests_proportions;
 #[cfg(test)]

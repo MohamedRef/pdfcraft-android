@@ -283,6 +283,7 @@
     <string name="tools_filter_grayscale">تدرّج رمادي</string>
     <string name="tools_filter_whiteboard">سبورة بيضاء</string>
     <string name="tools_filter_light_text">نص فاتح</string>
+    <string name="tools_scan_flatten">فرد الصفحة</string>
     <string name="root_skip">تخطي</string>
     <string name="root_author_prompt_body">أضف اسمًا يوضح صاحب كل تعليق. يمكنك تغييره لاحقًا في التفضيلات.</string>
     <string name="root_read_only_title">الملف للقراءة فقط</string>

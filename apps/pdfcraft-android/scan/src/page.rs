@@ -6,12 +6,15 @@ use std::time::Instant;
 use crate::aspect::{AspectSource, Focal, Paper, dpi_without_paper, proportions};
 use crate::encode::{Format, JPEG_QUALITY, Raster, encode_jpeg, encode_png_bilevel, stamp_jpeg_density};
 use crate::enhance::enlargement;
+use crate::flatten::{predict_grid, unwarp};
 use crate::look::{Look, LookParams, Pixels, apply_with};
 use crate::warp::rectify_with_threads;
 use crate::{Photo, Quad, ScanError};
 
 /// The stage names timings are recorded under (fixed: diagnostics never hold document data).
 pub const STAGE_DECODE: &str = "scan_decode";
+/// The flattening network's run; only there when flattening was asked for.
+pub const STAGE_FLATTEN: &str = "scan_flatten";
 pub const STAGE_RECTIFY: &str = "scan_rectify";
 pub const STAGE_LOOK: &str = "scan_look";
 pub const STAGE_ENCODE: &str = "scan_encode";
@@ -34,13 +37,18 @@ pub struct PageRequest<'a> {
     pub focal_35mm: Option<f32>,
     /// Match the page to standard paper sizes (A4, Letter, …) when its shape is within 3 %.
     pub snap_paper: bool,
+    /// Flatten the page with the flattening network instead of the perspective warp (#302): for
+    /// pages that curl, sag or were folded. Off by default: on a flat page the network's answer is
+    /// a little less exact than the perspective warp, and it cannot tell which kind it is looking
+    /// at. Without the model file the perspective warp is used.
+    pub flatten: bool,
 }
 
 impl<'a> PageRequest<'a> {
     /// A request with the defaults: the colour look at strength 50, one thread, the photo's own
     /// lens data, paper sizes matched.
     pub fn new(photo: &'a [u8], corners: [f32; 8]) -> Self {
-        PageRequest { photo, corners, look: Look::default(), strength: 50, threads: 1, focal_35mm: None, snap_paper: true }
+        PageRequest { photo, corners, look: Look::default(), strength: 50, threads: 1, focal_35mm: None, snap_paper: true, flatten: false }
     }
 }
 
@@ -62,6 +70,11 @@ pub struct PageResult {
     /// The camera's focal length and the one the corners imply disagree (a cropped photo, a page
     /// that is not flat, or wrong corners).
     pub focal_mismatch: bool,
+    /// The page was flattened by the network (asked for, and the model was there).
+    pub flattened: bool,
+    /// How far the network found the page from flat, as a share of its diagonal (0 when it was
+    /// not asked).
+    pub bend: f32,
     /// (stage, milliseconds), in pipeline order.
     pub timings: Vec<(&'static str, u32)>,
 }
@@ -77,7 +90,7 @@ pub const WHOLE_PHOTO: [f32; 8] = [0.0, 0.0, 1.0, 0.0, 1.0, 1.0, 0.0, 1.0];
 /// other pages. `None` when the request asks for more than that.
 fn untouched(request: &PageRequest<'_>) -> Option<Result<PageResult, ScanError>> {
     let whole = request.corners.iter().zip(WHOLE_PHOTO).all(|(a, b)| (a - b).abs() < 1e-6);
-    if request.look != Look::Original || !whole {
+    if request.look != Look::Original || !whole || request.flatten {
         return None;
     }
     let (width, height) = match Photo::upright_size(request.photo) {
@@ -97,6 +110,8 @@ fn untouched(request: &PageRequest<'_>) -> Option<Result<PageResult, ScanError>>
         paper: Paper::Custom,
         aspect: AspectSource::SideLengths,
         focal_mismatch: false,
+        flattened: false,
+        bend: 0.0,
         timings,
     }))
 }
@@ -133,7 +148,17 @@ pub fn process_page(request: &PageRequest<'_>) -> Result<PageResult, ScanError> 
         _ => 1.0,
     };
     let (w, h, dpi) = shape.output(scale)?;
-    let page = rectify_with_threads(&photo, &quad, w, h, request.threads)?;
+    let grid = if request.flatten { predict_grid(&photo, &quad) } else { None };
+    if request.flatten {
+        lap(STAGE_FLATTEN, &mut timings);
+    }
+    // a grid that cannot be used leaves the page straightened by its corners, as without the switch
+    let flat = grid.as_ref().and_then(|grid| unwarp(&photo, grid, w, h, request.threads).ok());
+    let flattened = flat.is_some();
+    let page = match flat {
+        Some(page) => page,
+        None => rectify_with_threads(&photo, &quad, w, h, request.threads)?,
+    };
     drop(photo);
     lap(STAGE_RECTIFY, &mut timings);
 
@@ -159,6 +184,8 @@ pub fn process_page(request: &PageRequest<'_>) -> Result<PageResult, ScanError> 
         paper: shape.paper,
         aspect: shape.source,
         focal_mismatch: shape.focal_mismatch,
+        flattened,
+        bend: grid.map_or(0.0, |g| g.bend() as f32),
         timings,
     })
 }

@@ -324,6 +324,7 @@
     <string name="tools_filter_grayscale">Niveaux de gris</string>
     <string name="tools_filter_whiteboard">Tableau blanc</string>
     <string name="tools_filter_light_text">Texte clair</string>
+    <string name="tools_scan_flatten">Aplatir la page</string>
 
     <!-- App dialogs: the first comment's name prompt -->
     <!-- Verb: go on without entering a name -->

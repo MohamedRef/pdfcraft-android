@@ -324,6 +324,7 @@
     <string name="tools_filter_grayscale">Graustufen</string>
     <string name="tools_filter_whiteboard">Whiteboard</string>
     <string name="tools_filter_light_text">Heller Text</string>
+    <string name="tools_scan_flatten">Seite glätten</string>
 
     <!-- App dialogs: the first comment's name prompt -->
     <!-- Verb: go on without entering a name -->

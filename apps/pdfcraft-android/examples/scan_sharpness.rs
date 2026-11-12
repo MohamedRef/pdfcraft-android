@@ -134,6 +134,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             output_path: dir.join(format!("page-{n}")).to_string_lossy().into_owned(),
             focal_35mm: None,
             snap_paper: false,
+            flatten: false,
         })?;
         let new = run(&s, "doc_create", json!({ "from": "images", "paths": [r.path], "dpi": r.dpi }))?;
         let nid = new["doc"].as_u64().ok_or("no doc")?;

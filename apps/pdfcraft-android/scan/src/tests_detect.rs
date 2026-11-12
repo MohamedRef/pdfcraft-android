@@ -130,9 +130,17 @@ fn the_pinned_model_is_there_and_loads_once() {
     assert!(load("no-such-model").is_none());
     let (a, b) = (load(EDGES).unwrap(), load(EDGES).unwrap());
     assert!(std::sync::Arc::ptr_eq(&a, &b));
-    // the file is what assets/models/ATTRIBUTION.txt says it is
+    // every model file is there, is the pinned one, and is what assets/models/ATTRIBUTION.txt
+    // says it is
     let notice = include_str!("../../../../assets/models/ATTRIBUTION.txt");
-    assert!(notice.contains(MODELS[0].file) && notice.contains(MODELS[0].sha256) && notice.contains(MODELS[0].licence));
+    for model in MODELS {
+        assert_eq!(state(model.id), ModelState::Ready, "assets/models/{} is missing or is not the pinned file", model.file);
+        assert!(
+            notice.contains(model.file) && notice.contains(model.sha256) && notice.contains(model.licence),
+            "{} is not in ATTRIBUTION.txt",
+            model.file
+        );
+    }
 }
 
 /// A sheet on a table, seen upright, tilted and on its side: the network finds it to a few
