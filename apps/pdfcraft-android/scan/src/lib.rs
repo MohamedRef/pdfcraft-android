@@ -9,6 +9,7 @@
 #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
 
 pub mod encode;
+pub mod enhance;
 mod error;
 pub mod look;
 pub mod page;
@@ -17,6 +18,7 @@ mod quad;
 pub mod warp;
 
 pub use encode::Format;
+pub use enhance::{AutoOutput, AutoParams, PaperMode, auto};
 pub use error::ScanError;
 pub use look::Look;
 pub use page::{PageRequest, PageResult, process_page};

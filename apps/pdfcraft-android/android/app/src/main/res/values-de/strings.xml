@@ -319,6 +319,7 @@
     <string name="tools_retake">Erneut aufnehmen</string>
     <!-- Looks a scanned page can have -->
     <string name="tools_filter_original">Original</string>
+    <string name="tools_filter_clean_scan">Sauberer Scan</string>
     <string name="tools_filter_auto_colour">Automatische Farbe</string>
     <string name="tools_filter_grayscale">Graustufen</string>
     <string name="tools_filter_whiteboard">Whiteboard</string>

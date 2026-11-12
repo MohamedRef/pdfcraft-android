@@ -106,13 +106,16 @@ internal object StylusLog {
 
     /** One line per stroke in the diagnostics log (#128): counts, rate and app-side latency. */
     private fun strokeEnded(time: Long, cancelled: Boolean) {
-        val t = InkLatency.stroke.up(time, cancelled) ?: return
-        Diag.event(
+        val t = InkLatency.stroke.up(time, cancelled)
+        val mode = PenDiag.takePenMode()
+        if (t != null) Diag.event(
             DiagArea.Ink, "stroke",
             "ms" to t.durationMs, "events" to t.events, "samples" to t.samples, "sample_hz" to t.sampleHz,
-            "eraser" to t.eraser, "cancelled" to t.cancelled,
+            "eraser" to t.eraser, "cancelled" to t.cancelled, "mode" to mode,
             "normal_n" to (t.normal?.count ?: 0), "normal_p50_ms" to t.normal?.medianMs, "normal_p95_ms" to t.normal?.p95Ms, "normal_max_ms" to t.normalMaxMs,
             "front_n" to (t.front?.count ?: 0), "front_p50_ms" to t.front?.medianMs, "front_p95_ms" to t.front?.p95Ms, "front_max_ms" to t.frontMaxMs,
         )
+        // the palm guard's ignored touches around this stroke (#156)
+        PenDiag.flushPalm()
     }
 }

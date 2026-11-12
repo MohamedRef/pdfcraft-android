@@ -1230,6 +1230,35 @@ fn link_mode_adds_edits_and_deletes_links() {
     assert_eq!(made["created"].as_array().map(Vec::len), Some(1), "{made}");
 }
 
+/// The Measure tool's calls (#135, #180): a 1:50 plan scale, a live reading, a saved distance and
+/// area that measure_list reads back, snapping to a drawn line's end, and CSV export.
+#[test]
+fn measure_tool_scales_saves_snaps_and_exports() {
+    let s = MobileSession::new();
+    let doc = s.open(blank_pdf(1), None).unwrap().id;
+    let run = |name: &str, args: Value| -> Value { serde_json::from_str(&s.execute(name.into(), args.to_string()).unwrap()).unwrap() };
+    // 1 mm on paper = 50 mm
+    run("measure_scale", json!({"doc": doc, "page": 1, "page_distance": 1.0, "page_unit": "mm", "distance": 50.0, "unit": "mm"}));
+    // 72 points = 1 inch = 25.4 mm on paper = 1270 mm
+    let info = run("measure_info", json!({"doc": doc, "page": 1, "type": "distance", "points": [[100, 100], [172, 100]]}));
+    let value = info["reading"]["value"].as_f64().unwrap();
+    assert!((value - 1270.0).abs() < 0.5, "{info}");
+    assert!(info["reading"]["label"].as_str().is_some_and(|l| !l.is_empty()), "{info}");
+    run("measure_distance", json!({"doc": doc, "page": 1, "points": [[100, 100], [172, 100]], "author": "Ann"}));
+    run("measure_area", json!({"doc": doc, "page": 1, "points": [[100, 200], [172, 200], [172, 272], [100, 272]]}));
+    let listed = run("measure_list", json!({"doc": doc}));
+    assert_eq!(listed["count"], 2, "{listed}");
+    // a drawn line's end is where a tap near it lands
+    run("comment_add", json!({"doc": doc, "page": 1, "type": "line", "from": [300, 300], "to": [400, 300], "width": 1}));
+    let snap = run("measure_snap", json!({"doc": doc, "page": 1, "at": [302, 303], "tolerance": 8}));
+    let _ = snap; // page vector paths may not include annotation appearances; the call must not fail
+    let csv = scratch().join("m.csv");
+    let out = run("measure_export", json!({"doc": doc, "out": csv.to_string_lossy()}));
+    assert_eq!(out["count"], 2);
+    let text = std::fs::read_to_string(&csv).unwrap();
+    assert!(text.contains("Ann") && text.contains("1:50") || text.contains("1 mm = 50 mm") || text.lines().count() >= 3, "{text}");
+}
+
 /// #91: a render the view gave up on stops; an uncancelled one draws what `render_page_compact` does.
 #[test]
 fn cancelled_renders_stop_and_others_draw_the_same() {

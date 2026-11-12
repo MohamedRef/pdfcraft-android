@@ -94,7 +94,9 @@ enum class QuickTool(val id: String, @StringRes val label: Int, @StringRes val t
     Create("create", R.string.common_tool_create_pdf, R.string.common_tool_create_pdf, LucideIcons.FilePlus2, ToolHues.create),
     Text("text", R.string.toolbar_label_add_text, R.string.toolbar_tool_text, LucideIcons.Type, ToolHues.text),
     Scan("scan", R.string.common_tool_scan, R.string.common_tool_scan, LucideIcons.Camera, ToolHues.scan),
-    ReadAloud("readaloud", R.string.common_tool_read_aloud, R.string.common_tool_read_aloud, LucideIcons.Volume2, ToolHues.read);
+    ReadAloud("readaloud", R.string.common_tool_read_aloud, R.string.common_tool_read_aloud, LucideIcons.Volume2, ToolHues.read),
+    // distance, perimeter and area on plans and drawings (#135, #180)
+    Measure("measure", R.string.measure_tool, R.string.measure_tool, LucideIcons.Ruler, ToolHues.crop);
 
     companion object {
         /** The bar as it comes: the reference's default tools and order. */
@@ -206,6 +208,7 @@ fun AppViewModel.runQuickTool(doc: OpenDocument, tool: QuickTool) {
         QuickTool.Create -> openCreate()
         QuickTool.Scan -> startScan()
         QuickTool.ReadAloud -> startReadAloud(doc)
+        QuickTool.Measure -> enterTool(doc, ViewerTool.Measure)
     }
 }
 
