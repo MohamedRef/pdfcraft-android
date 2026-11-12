@@ -64,10 +64,145 @@ photo's resolution, so the finest print is lost in the photo and cannot come bac
   three pages with real print in `scan/tests/data/` are for that.
 - No glare, no fingers, no folds, no moiré, no page cut by the frame.
 
+## The runner (`scan-eval`)
+
+```sh
+# drawn photos (800 × 1066 unless --size says otherwise; the kinds in turn, seeds from --seed)
+cargo run --release -p pdfcraft-scan --features synth --bin scan-eval -- --synthetic 200 --json now.json
+# a test set: <name>.jpg with <name>.json, in any subfolder (an unzipped kept-scans export is one)
+cargo run --release -p pdfcraft-scan --features synth --bin scan-eval -- ~/kept-scans
+# options: --finder auto|network|lines|off, --no-refine, --md report.md, --contact-sheet <folder>
+```
+
+Each photo goes through the app's own stages (`eval.rs`): decode, find the page
+(`detect_with`, the testing option's finder), refine the edges, straighten (`page_base`, with
+paper matching on and turning upright off), Clean scan at strength 50 (`page_look`), and the
+encoder. It prints a table per kind and for all photos (median, mean and 95th percentile of each
+measure, and how many photos had it) and the time of each stage.
+
+| Measure | Block | Taken on |
+|---|---|---|
+| `iou`, `corner_err_mean`, `corner_err_max` (shares of the photo's diagonal), `no_touch` | `metrics_geometry` | the corners the app ended with, against the true ones |
+| `aspect_err` | `metrics_geometry` | the page made from the found corners |
+| `line_straightness` (`px`), `bowed_px` | `straightness` | the page made from the found corners, before its look |
+| `sharpness` | `metrics_tone` | the same page after its look |
+| `paper_white`, `illum_spread`, `ink_contrast`, `hue_shift` | `metrics_tone` | the page made from the **true** corners after its look, with the drawn page's labels (a pixel within two of another label counts as neither paper nor ink) |
+| `psnr`, `ssim` | `metrics_compare` | the same, against the drawn clean page |
+
+A test set entry has no clean page, so it gets the geometry measures, the proportions (from its
+`paper`, when not `unknown`), the straightness and the sharpness. `cer` is not taken: the scan
+crate does not run text recognition, and drawn word bars are not letters.
+
+**Comparing two builds.** Run the same command on the old build with `--json base.json`, then on
+the new one with `--baseline base.json`: it prints each measure whose mean got worse by more than
+its tolerance (`eval::METRICS`; for example 0.01 of `iou`, 0.002 of `corner_err_max`, 0.5 dB of
+`psnr`) and exits with 1. Times are left out of the comparison: they depend on the machine.
+
+**Contact sheets** are the photos with the true outline in green and the found one in red. Never
+make them from someone's own documents for the repository or a pull request.
+
+CI runs the runner on six drawn photos on every pull request, so it keeps building and running.
+
+### Baseline: the pipeline as of this runner
+
+`scan-eval --synthetic 200` (800 × 1066, seeds 0–199, the six kinds in turn), release build,
+on the x86_64 Linux desktop this was written on, 12 November 2026. The detector found a page in
+194 of 200 photos (the network; its model file is in the repository).
+
+| measure | median | mean | p95 | n |
+|---|---|---|---|---|
+| iou | 0.9999 | 0.9792 | 1.0000 | 200 |
+| corner_err_mean | 0.0000 | 0.0066 | 0.0088 | 200 |
+| corner_err_max | 0.0001 | 0.0114 | 0.0278 | 200 |
+| no_touch | 1.000 | 0.8250 | 1.000 | 200 |
+| aspect_err | 0.0001 | 0.0233 | 0.0568 | 200 |
+| sharpness | 21.289 | 21.808 | 41.356 | 200 |
+| paper_white | 0.9108 | 0.8537 | 0.9903 | 200 |
+| illum_spread | 0.0359 | 0.1109 | 0.5322 | 200 |
+| ink_contrast | 255.0 | 252.8 | 255.0 | 200 |
+| hue_shift | 6.516 | 6.817 | 10.767 | 200 |
+| psnr | 18.429 | 16.801 | 20.874 | 200 |
+| ssim | 0.7654 | 0.7025 | 0.8393 | 200 |
+| line_straightness | 3.390 | 6.426 | 28.553 | 197 |
+| bowed_px | 2.318 | 4.561 | 17.779 | 197 |
+
+| kind | photos | iou median | no_touch share | corner_err_max p95 | line_straightness median (px) |
+|---|---|---|---|---|---|
+| desk | 34 | 1.0000 | 0.912 | 0.0435 | 3.74 |
+| light | 34 | 0.9999 | 1.000 | 0.0001 | 2.78 |
+| receipt | 33 | 0.9999 | 0.879 | 0.3031 | 0.11 |
+| book | 33 | 0.9883 | 0.242 | 0.0242 | 12.75 |
+| shadow | 33 | 0.9999 | 0.939 | 0.0314 | 2.02 |
+| lowlight | 33 | 0.9988 | 0.970 | 0.0015 | 0.52 |
+
+Time per stage in milliseconds (`threads: 4`; a desktop, not a phone):
+
+| stage | median | mean | p95 |
+|---|---|---|---|
+| decode | 6.2 | 7.4 | 13.5 |
+| detect | 37.2 | 49.0 | 184.2 |
+| refine | 3.7 | 3.9 | 5.1 |
+| scan_rectify | 108.0 | 108.8 | 129.0 |
+| scan_look | 303.2 | 302.6 | 388.9 |
+| scan_encode | 87.0 | 96.6 | 142.9 |
+
+How to read it:
+
+- **Drawn photos are easy for the edges.** Their page edges are straight, hard and unbroken, so
+  on flat pages the found corners are within a hundredth of a per cent of the diagonal. That says
+  the pipeline is not broken, not that it is this exact on photos. Book pages miss `no_touch`
+  most often because their edges bow. The misses that are left are whole pages not found or
+  found wrongly (6 photos with no page found; the receipts' 95th percentile is 30 % of the
+  diagonal): those photos are where a detector change will show first.
+- `ink_contrast` sits at 255 because Clean scan takes paper to white and print to black on
+  these pages. PSNR and SSIM against the drawn page are low (about 18 dB) for the same reason:
+  the drawn page's paper is not pure white and its ink not pure black, and Clean scan changes
+  both on purpose. Compare them between builds, not with a target.
+- `line_straightness` is 2–4 px on flat drawn pages: the block follows the ruled table and the
+  picture region as lines too (its known gap in [ANDROID_SCAN_BLOCKS.md](ANDROID_SCAN_BLOCKS.md)).
+  Book pages are at about 13 px.
+
+## The CI gate (`tests_gate.rs`)
+
+A test of the scan crate, so it runs in CI's "Rust engine and provenance" job with the others:
+40 drawn photos (seeds 288–327, the six kinds in turn) go through the pipeline, and a summary of
+each gated measure must stay within its limit. Each limit is a little looser than what the
+pipeline measured on these photos when the gate was set. A change that makes a measure better
+should tighten its limit in the same pull request; one that makes it worse fails the gate.
+
+| Measure | Over the 40 photos | Limit | Measured when set |
+|---|---|---|---|
+| `iou` | median | ≥ 0.995 | 0.99976 |
+| `no_touch` | share | ≥ 0.80 | 0.900 (36 of 40) |
+| `corner_err_max` | median | ≤ 0.002 | 0.00010 |
+| `aspect_err` | median | ≤ 0.005 | 0.00009 |
+| `paper_white` | mean | ≥ 0.79 | 0.820 |
+| `illum_spread` | mean | ≤ 0.15 | 0.133 |
+| `ink_contrast` | mean | ≥ 240 | 250.0 |
+| `hue_shift` | mean | ≤ 8.0° | 6.17° |
+| `psnr` | mean | ≥ 15.3 dB | 15.90 dB |
+| `ssim` | mean | ≥ 0.66 | 0.679 |
+| `line_straightness` | median | ≤ 3.5 px | 2.66 px |
+
+A measure taken on fewer than 36 of the 40 photos fails too. A second test runs the same photos
+with the detector switched off (the page is the whole photo) and checks that `iou`, `no_touch`,
+`corner_err_max` and `aspect_err` all fail: with nothing found, they were 0.41, 0, 0.27 and 0.06.
+
+Where it departs from the issue (#288, section 5):
+
+- The photos are 600 × 800, not 800 × 1066. The time goes into the page the app makes, whose
+  size comes from the paper size and not from the photo, so a bigger photo adds little but
+  drawing time; 600 × 800 keeps the drawing short.
+- The found page is not given its look (`Options::look_found_page`): the clean-up measures come
+  from the page made with the true corners either way, and the look is the slowest stage.
+- The scan crate is built at `opt-level = 2` in the dev profile (root `Cargo.toml`), as its
+  dependencies already were. At 1, the gate took over a minute on four cores.
+
+Time: the two gate tests took 39 s together on the 4-core desktop this was written on, with no
+other test running; the whole scan crate's tests 73 s. CI's runner also has four cores, and runs
+the gate beside the crate's other tests.
+
 ## Still to do in #288
 
-- The `scan-eval` runner: the pipeline stage by stage on drawn photos or a kept-scans folder,
-  with the `metrics_*` and `straightness` blocks, a table per kind, timings, a JSON report and a
-  comparison with a saved one.
-- The CI gate on 40 drawn photos.
 - The SmartDoc script.
+- `scan-eval --reference` (section 8): `scan_reference look` does that job and stays.
