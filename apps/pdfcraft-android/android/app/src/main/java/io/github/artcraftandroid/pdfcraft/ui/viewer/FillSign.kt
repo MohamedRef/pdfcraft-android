@@ -107,11 +107,11 @@ fun FillSignLayer(vm: AppViewModel, doc: OpenDocument) {
                         at.x in (c.rect[0] - 6)..(c.rect[2] + 6) && at.y in (c.rect[1] - 6)..(c.rect[3] + 6)
                 }
                 if (placed != null) {
-                    vm.selectedFill = placed
+                    vm.commenting.selectedFill = placed
                     return@toolGestures
                 }
-                if (vm.selectedFill != null) {
-                    vm.selectedFill = null
+                if (vm.commenting.selectedFill != null) {
+                    vm.commenting.selectedFill = null
                     return@toolGestures
                 }
                 // a tap on a form field fills the field, as outside Fill & Sign
@@ -362,10 +362,10 @@ fun androidx.compose.foundation.layout.BoxScope.FillElementMenu(vm: AppViewModel
             Modifier.background(colors.surface, RoundedCornerShape(8.dp)).padding(horizontal = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            BarIcon(LucideIcons.AArrowDown, stringResource(R.string.fill_smaller), { vm.scaleFill(doc, c, 1f / 1.2f) })
-            BarIcon(LucideIcons.AArrowUp, stringResource(R.string.fill_bigger), { vm.scaleFill(doc, c, 1.2f) })
+            BarIcon(LucideIcons.AArrowDown, stringResource(R.string.fill_smaller), { vm.commenting.scaleFill(doc, c, 1f / 1.2f) })
+            BarIcon(LucideIcons.AArrowUp, stringResource(R.string.fill_bigger), { vm.commenting.scaleFill(doc, c, 1.2f) })
             BarIcon(LucideIcons.Palette, stringResource(R.string.fill_colour), { palette = !palette }, selected = palette)
-            BarIcon(LucideIcons.Trash2, stringResource(R.string.common_delete), { vm.selectedFill = null; vm.deleteComment(doc, c) }, tint = colors.red)
+            BarIcon(LucideIcons.Trash2, stringResource(R.string.common_delete), { vm.commenting.selectedFill = null; vm.commenting.deleteComment(doc, c) }, tint = colors.red)
         }
         if (palette) {
             Row(Modifier.padding(top = 6.dp).background(colors.surface, RoundedCornerShape(8.dp)).padding(8.dp)) {
@@ -376,7 +376,7 @@ fun androidx.compose.foundation.layout.BoxScope.FillElementMenu(vm: AppViewModel
                         Modifier.size(48.dp).clickable(role = Role.Button) {
                             palette = false
                             vm.toolPrefs.setFillColor(col)
-                            vm.recolorComment(doc, c, col)
+                            vm.commenting.recolorComment(doc, c, col)
                         }.semantics { contentDescription = name },
                         contentAlignment = Alignment.Center,
                     ) { Box(Modifier.size(28.dp).clip(androidx.compose.foundation.shape.CircleShape).background(col)) }
