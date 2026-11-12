@@ -211,7 +211,7 @@ fun AppViewModel.runQuickTool(doc: OpenDocument, tool: QuickTool) {
         QuickTool.Accessibility -> doc.controller.sheet = ViewerSheet.Accessibility
         QuickTool.PrepareForm -> openPrepareForm(doc)
         QuickTool.OcrReview -> doc.controller.sheet = ViewerSheet.OcrConfidence
-        QuickTool.Handwriting -> recognizeHandwriting(doc, doc.viewer.currentPage)
+        QuickTool.Handwriting -> noteTaking.recognizeHandwriting(doc, doc.viewer.currentPage)
         QuickTool.Create -> tools.openCreate()
         QuickTool.Scan -> startScan()
         QuickTool.ReadAloud -> startReadAloud(doc)

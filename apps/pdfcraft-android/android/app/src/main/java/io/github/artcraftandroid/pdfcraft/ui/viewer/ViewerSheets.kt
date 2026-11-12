@@ -135,7 +135,7 @@ fun MoreSheet(vm: AppViewModel, doc: OpenDocument) {
             }, chevron = true)
             SheetRow(LucideIcons.Clock, stringResource(R.string.focus_timer), { ctl.sheet = ViewerSheet.FocusTimer })
             SheetRow(LucideIcons.Bandage, stringResource(R.string.study_title), { ctl.sheet = ViewerSheet.Study }, chevron = true)
-            if (doc.source != null) SheetRow(LucideIcons.Mic, stringResource(if (vm.lectureRecording != null) R.string.lecture_recording else R.string.lecture_title), { ctl.sheet = ViewerSheet.Lectures }, chevron = true)
+            if (doc.source != null) SheetRow(LucideIcons.Mic, stringResource(if (vm.noteTaking.lectureRecording != null) R.string.lecture_recording else R.string.lecture_title), { ctl.sheet = ViewerSheet.Lectures }, chevron = true)
             GroupDivider()
             MoreHeading(stringResource(R.string.sheet_group_navigate))
             SheetRow(LucideIcons.Bookmark, stringResource(R.string.sheet_bookmarks_contents), { ctl.sheet = ViewerSheet.Bookmarks }, chevron = true)

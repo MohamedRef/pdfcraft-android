@@ -235,10 +235,10 @@ class CommentsController internal constructor(private val vm: AppViewModel) {
 
     /** The answer to the microphone request. */
     fun onMicPermission(granted: Boolean) {
-        vm.pendingLecture?.let { d ->
-            vm.pendingLecture = null
+        vm.noteTaking.pendingLecture?.let { d ->
+            vm.noteTaking.pendingLecture = null
             Diag.event(DiagArea.Study, "lecture_mic", "granted" to granted)
-            if (granted) vm.startLecture(d) else vm.tell(text(R.string.msg_voice_no_mic))
+            if (granted) vm.noteTaking.startLecture(d) else vm.tell(text(R.string.msg_voice_no_mic))
             return
         }
         val p = pendingVoice
@@ -326,7 +326,7 @@ class CommentsController internal constructor(private val vm: AppViewModel) {
                 at.x in (c.rect[0] - 4)..(c.rect[2] + 4) && at.y in (c.rect[1] - 4)..(c.rect[3] + 4)
         } ?: return false
         selectedComment = doc to hit
-        vm.lectureSeekToComment(doc, hit)
+        vm.noteTaking.lectureSeekToComment(doc, hit)
         return true
     }
 
