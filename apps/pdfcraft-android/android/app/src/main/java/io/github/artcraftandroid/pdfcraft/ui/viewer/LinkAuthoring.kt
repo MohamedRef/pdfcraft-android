@@ -48,6 +48,7 @@ class LinkEdit(
     val index: Int? = null,
     val url: String? = null,
     val toPage: Int? = null,
+    val from: String = "box",
 )
 
 /**

@@ -973,19 +973,21 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     fun saveLink(e: io.github.artcraftandroid.pdfcraft.ui.viewer.LinkEdit, url: String?, toPage: Int?) {
         linkEdit = null
         val target: Map<String, Any?> = if (url != null) mapOf("url" to url) else mapOf("to_page" to (toPage ?: return) + 1)
+        val kind = if (url == null) "page" else if (url.startsWith("mailto:")) "mail" else "web"
         if (e.index == null) {
             runTool(e.doc, "link_add", mapOf("page" to e.page + 1, "rect" to e.rect.map { it.toDouble() }, "zoom" to "inherit") + target) {
+                io.github.artcraftandroid.pdfcraft.ui.viewer.MarkupDiag.link(e.doc, "add", kind, e.from)
                 tell(text(R.string.link_added))
             }
         } else {
-            runTool(e.doc, "link_edit", mapOf("page" to e.page + 1, "index" to e.index) + target)
+            runTool(e.doc, "link_edit", mapOf("page" to e.page + 1, "index" to e.index) + target) { io.github.artcraftandroid.pdfcraft.ui.viewer.MarkupDiag.link(e.doc, "edit", kind, e.from) }
         }
     }
 
     fun deleteLink(e: io.github.artcraftandroid.pdfcraft.ui.viewer.LinkEdit) {
         linkEdit = null
         val index = e.index ?: return
-        runTool(e.doc, "link_delete", mapOf("page" to e.page + 1, "index" to index)) { tell(text(R.string.link_deleted)) }
+        runTool(e.doc, "link_delete", mapOf("page" to e.page + 1, "index" to index)) { io.github.artcraftandroid.pdfcraft.ui.viewer.MarkupDiag.link(e.doc, "delete", null, e.from); tell(text(R.string.link_deleted)) }
     }
 
     /** Make every web address written on the pages a link, and say how many (one undo step). */
@@ -993,16 +995,18 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         val eng = engine ?: return
         viewModelScope.launch {
             // the engine refuses when there is nothing to link: that is an answer, not a failure
+            val start = android.os.SystemClock.elapsedRealtime()
             val r = try { eng.tool("links_from_urls", mapOf("doc" to doc.id)) } catch (e: MobileException) { null }
             refresh(doc)
             val n = r?.optJSONArray("created")?.length() ?: 0
+            io.github.artcraftandroid.pdfcraft.ui.viewer.MarkupDiag.linksFromUrls(doc, n, android.os.SystemClock.elapsedRealtime() - start)
             tell(if (n == 0) text(R.string.link_from_urls_none) else plural(R.plurals.link_from_urls_done, n, n))
         }
     }
 
     /** Remove every link in the document (one undo step). */
     fun removeAllLinks(doc: OpenDocument) {
-        runTool(doc, "links_remove") { tell(text(R.string.link_removed_all)) }
+        runTool(doc, "links_remove") { io.github.artcraftandroid.pdfcraft.ui.viewer.MarkupDiag.linksRemoved(doc); tell(text(R.string.link_removed_all)) }
     }
 
     // ---- Measure (#135, #180) ------------------------------------------------------------------
@@ -1030,6 +1034,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         val eng = engine ?: return
         viewModelScope.launch {
             val tolerance = (8f * getApplication<Application>().resources.displayMetrics.density / doc.viewer.pixelsPerPoint(at.page).coerceAtLeast(0.01f)).toDouble()
+            val snapStart = android.os.SystemClock.elapsedRealtime()
             val snapped = runCatching {
                 eng.tool("measure_snap", mapOf("doc" to doc.id, "page" to at.page + 1, "at" to listOf(at.x.toDouble(), at.y.toDouble()), "tolerance" to tolerance))
             }.getOrNull()?.optJSONObject("snap")?.optJSONArray("point")
@@ -1037,6 +1042,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             else androidx.compose.ui.geometry.Offset(at.x, at.y)
             m.page = at.page
             m.points.add(point)
+            io.github.artcraftandroid.pdfcraft.ui.viewer.MarkupDiag.measurePoint(doc, if (m.calibrating) "calibrate" else m.mode.kind, snapped != null && snapped.length() == 2, m.points.size, android.os.SystemClock.elapsedRealtime() - snapStart)
             if (m.calibrating) {
                 if (m.points.size == 2) {
                     m.calibration = m.points[0] to m.points[1]
@@ -1076,15 +1082,20 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         val args = mapOf(
             "page" to page + 1, "points" to m.points.map { listOf(it.x.toDouble(), it.y.toDouble()) }, "author" to author,
         )
+        val kind = m.mode.kind
+        val points = m.points.size
         m.clear()
-        runTool(m.doc, m.mode.tool, args) { if (label != null) tell(text(R.string.measure_saved, label)) }
+        runTool(m.doc, m.mode.tool, args) {
+            io.github.artcraftandroid.pdfcraft.ui.viewer.MarkupDiag.measureSaved(m.doc, kind, points)
+            if (label != null) tell(text(R.string.measure_saved, label))
+        }
     }
 
     /** Set the page's scale to "1 : [ratio]" in [unit]. */
     fun setMeasureRatio(m: io.github.artcraftandroid.pdfcraft.ui.viewer.MeasureSession, ratio: Double, unit: String) {
         val page = m.page ?: m.doc.viewer.currentPage
         val args = io.github.artcraftandroid.pdfcraft.ui.viewer.ratioScaleArgs(page, ratio, unit) ?: return
-        runTool(m.doc, "measure_scale", args) { tell(text(R.string.measure_scale_set, page + 1)) }
+        runTool(m.doc, "measure_scale", args) { io.github.artcraftandroid.pdfcraft.ui.viewer.MarkupDiag.measureScale(m.doc, "ratio", unit); tell(text(R.string.measure_scale_set, page + 1)) }
     }
 
     /** The next two taps mark a length of known size. */
@@ -1100,7 +1111,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         m.calibrating = false
         m.clear()
         val args = io.github.artcraftandroid.pdfcraft.ui.viewer.calibrationScaleArgs(page, pts.first, pts.second, distance, unit) ?: return
-        runTool(m.doc, "measure_scale", args) { tell(text(R.string.measure_scale_set, page + 1)) }
+        runTool(m.doc, "measure_scale", args) { io.github.artcraftandroid.pdfcraft.ui.viewer.MarkupDiag.measureScale(m.doc, "calibrate", unit); tell(text(R.string.measure_scale_set, page + 1)) }
     }
 
     /** Every saved measurement as CSV (values, labels, authors and scales), through the share sheet. */
@@ -1108,6 +1119,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         val out = tempFile("csv")
         try {
             val r = eng.tool("measure_export", mapOf("doc" to doc.id, "out" to out.absolutePath))
+            io.github.artcraftandroid.pdfcraft.ui.viewer.MarkupDiag.measureExport(doc, r.optInt("count", 0))
             if (r.optInt("count", 0) == 0) {
                 tell(text(R.string.measure_export_none))
                 return@job
@@ -2122,17 +2134,20 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     /** Give the new markup another colour (the bar stays, showing it). */
     fun recolorFollowUp(f: io.github.artcraftandroid.pdfcraft.ui.viewer.MarkupFollowUp, color: androidx.compose.ui.graphics.Color) {
         markupFollowUp = f.copy(color = color)
+        io.github.artcraftandroid.pdfcraft.ui.viewer.MarkupDiag.followUp(f.doc, "recolor")
         runTool(f.doc, "comment_edit", followUpArgs(f) + ("color" to color.hex()))
     }
 
     /** Write a note on the new markup: its text, as a highlight carrying a note has. */
     fun noteFollowUp(f: io.github.artcraftandroid.pdfcraft.ui.viewer.MarkupFollowUp) {
         markupFollowUp = null
+        io.github.artcraftandroid.pdfcraft.ui.viewer.MarkupDiag.followUp(f.doc, "note")
         notePrompt = NotePrompt(f.doc, null, edit = f)
     }
 
     fun deleteFollowUp(f: io.github.artcraftandroid.pdfcraft.ui.viewer.MarkupFollowUp) {
         markupFollowUp = null
+        io.github.artcraftandroid.pdfcraft.ui.viewer.MarkupDiag.followUp(f.doc, "delete")
         runTool(f.doc, "comment_delete", followUpArgs(f))
     }
 
@@ -2143,6 +2158,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     fun replaceSelection(doc: OpenDocument, page: Int, rects: List<FloatArray>, replacement: String) {
         if (document !== doc || !doc.info.allowsAnnotation || rects.isEmpty() || replacement.isBlank()) return
         val quads = rects.map { r -> listOf(r[0], r[1], r[2], r[1], r[0], r[3], r[2], r[3]).map { it.toDouble() } }
+        io.github.artcraftandroid.pdfcraft.ui.viewer.MarkupDiag.textEdit(doc, "replace", rects.size)
         runTool(doc, "comment_add", mapOf(
             "page" to page + 1, "type" to "replace", "quads" to quads, "contents" to replacement,
             "color" to toolPrefs.color(StyledTool.Strikethrough).hex(), "author" to author,
@@ -2153,6 +2169,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     fun insertAfterSelection(doc: OpenDocument, page: Int, rects: List<FloatArray>, inserted: String) {
         val last = rects.lastOrNull() ?: return
         if (document !== doc || !doc.info.allowsAnnotation || inserted.isBlank()) return
+        io.github.artcraftandroid.pdfcraft.ui.viewer.MarkupDiag.textEdit(doc, "insert", rects.size)
         runTool(doc, "comment_add", mapOf(
             "page" to page + 1, "type" to "caret", "at" to listOf(last[2].toDouble(), last[3].toDouble()), "contents" to inserted,
             "color" to toolPrefs.color(StyledTool.Note).hex(), "author" to author,
@@ -5204,12 +5221,13 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
 
     /** Set comment [c]'s review status (`none`, `accepted`, `rejected`, `cancelled`, `completed`). */
     fun setCommentStatus(doc: OpenDocument, c: io.github.artcraftandroid.pdfcraft.core.CommentInfo, status: String) {
-        runTool(doc, "comment_set_status", commentArgs(c) + mapOf("status" to status, "author" to author))
+        runTool(doc, "comment_set_status", commentArgs(c) + mapOf("status" to status, "author" to author)) { io.github.artcraftandroid.pdfcraft.ui.viewer.MarkupDiag.commentStatus(doc, status) }
     }
 
     /** Lock or unlock comment [c]: a locked one can't be moved, restyled or deleted. */
     fun lockComment(doc: OpenDocument, c: io.github.artcraftandroid.pdfcraft.core.CommentInfo, locked: Boolean) {
         runTool(doc, "comment_lock", commentArgs(c) + ("locked" to locked)) {
+            io.github.artcraftandroid.pdfcraft.ui.viewer.MarkupDiag.commentLock(doc, locked)
             tell(text(if (locked) R.string.comments_locked_msg else R.string.comments_unlocked_msg))
         }
     }
@@ -5226,7 +5244,9 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         job(text(R.string.comments_exporting)) { eng ->
             val out = tempFile("xfdf")
             try {
+                val start = android.os.SystemClock.elapsedRealtime()
                 eng.tool("doc_export_data", mapOf("doc" to doc.id, "path" to out.absolutePath, "what" to "comments"))
+                io.github.artcraftandroid.pdfcraft.ui.viewer.MarkupDiag.commentsExport(doc, share, out.length(), android.os.SystemClock.elapsedRealtime() - start)
                 val name = "${doc.title}.xfdf"
                 if (share) {
                     val uri = withContext(Dispatchers.IO) { files.shareable(out, name) }
@@ -5300,10 +5320,12 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 }
                 if (document !== doc) return@job
                 val before = commentCount(doc)
+                val start = android.os.SystemClock.elapsedRealtime()
                 eng.tool("doc_import_data", mapOf("doc" to doc.id, "path" to staged.absolutePath))
                 refresh(doc)
                 val after = comments(doc)?.count { it.replyTo == null && it.state == null && !it.fillSign }
                 val added = if (after != null && before != null) after - before else null
+                io.github.artcraftandroid.pdfcraft.ui.viewer.MarkupDiag.commentsImport(doc, ext, staged.length(), added, android.os.SystemClock.elapsedRealtime() - start)
                 tell(
                     when {
                         added == null -> text(R.string.comments_imported)
@@ -5323,7 +5345,9 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     fun summarizeComments(doc: OpenDocument, sort: String) = job(text(R.string.comments_summarizing)) { eng ->
         val out = tempFile("pdf")
         try {
+            val start = android.os.SystemClock.elapsedRealtime()
             eng.tool("comments_summarize", mapOf("doc" to doc.id, "sort" to sort, "out" to out.absolutePath, "open" to false))
+            io.github.artcraftandroid.pdfcraft.ui.viewer.MarkupDiag.commentsSummary(doc, sort, android.os.SystemClock.elapsedRealtime() - start)
             deliver(out, text(R.string.comments_summary_file, doc.title), "application/pdf")
         } finally {
             out.delete()
@@ -5356,6 +5380,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 }
                 copiedComments = out
                 val n = byPage.values.sumOf { it.size }
+                io.github.artcraftandroid.pdfcraft.ui.viewer.MarkupDiag.commentsCopy(doc, n, out.size)
                 tell(plural(R.plurals.comments_copied, n, n))
             } catch (e: MobileException) {
                 tell(e.userMessage)
@@ -5381,6 +5406,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             } finally {
                 refresh(doc)
             }
+            io.github.artcraftandroid.pdfcraft.ui.viewer.MarkupDiag.commentsPaste(doc, copied.size - skipped, skipped)
             tell(if (skipped > 0) text(R.string.comments_pasted_some, skipped) else text(R.string.comments_pasted))
         }
     }
