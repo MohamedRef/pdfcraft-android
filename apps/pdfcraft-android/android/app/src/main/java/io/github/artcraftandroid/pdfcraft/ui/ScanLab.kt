@@ -70,6 +70,12 @@ internal data class ScanLab(
     val suggestions: Boolean = true,
     /** In book mode, cut a spread along the gutter found in the photo (#303); off cuts every spread at its centre line. */
     val bookGutter: Boolean = true,
+    /**
+     * When a page is flattened and the network is not installed or its page was not straighter,
+     * flatten it from its lines of text instead, and keep that only when it is straighter (#303,
+     * part B). Off: such a page stays straightened by its corners, as before.
+     */
+    val lineFlatten: Boolean = true,
 ) {
     /** Nothing differs from the scanner as it is meant to be used (keeping scans changes no page). */
     val asDesigned: Boolean get() = copy(keep = false) == ScanLab()
@@ -83,21 +89,21 @@ internal data class ScanLab(
     fun diag(): Array<Pair<String, Any?>> = arrayOf<Pair<String, Any?>>(
         "finder" to finderId(finder), "refine" to refine, "side_proportions" to !perspective,
         "snap_paper" to snapPaper, "strength_override" to (strength ?: -1), "upright" to upright, "sharpen" to sharpen,
-        "denoise" to denoise, "preview" to preview, "crop_tools" to cropTools, "flatten_auto" to flattenAuto, "flatten_trim" to flattenTrim, "settle_turns" to settleTurns, "presets" to presets, "kind_tone" to kindTone, "photo_sharpen" to photoSharpen, "suggestions" to suggestions, "book_gutter" to bookGutter, "keep" to keep,
+        "denoise" to denoise, "preview" to preview, "crop_tools" to cropTools, "flatten_auto" to flattenAuto, "flatten_trim" to flattenTrim, "settle_turns" to settleTurns, "presets" to presets, "kind_tone" to kindTone, "photo_sharpen" to photoSharpen, "suggestions" to suggestions, "book_gutter" to bookGutter, "line_flatten" to lineFlatten, "keep" to keep,
     )
 
     /** The options as JSON, for a kept scan's page file. */
     fun json(): JSONObject = JSONObject()
         .put("finder", finderId(finder)).put("refine", refine).put("side_proportions", !perspective)
         .put("snap_paper", snapPaper).put("strength_override", strength ?: JSONObject.NULL).put("upright", upright)
-        .put("sharpen", sharpen).put("denoise", denoise).put("preview", preview).put("crop_tools", cropTools).put("flatten_auto", flattenAuto).put("flatten_trim", flattenTrim).put("settle_turns", settleTurns).put("presets", presets).put("kind_tone", kindTone).put("photo_sharpen", photoSharpen).put("suggestions", suggestions).put("book_gutter", bookGutter)
+        .put("sharpen", sharpen).put("denoise", denoise).put("preview", preview).put("crop_tools", cropTools).put("flatten_auto", flattenAuto).put("flatten_trim", flattenTrim).put("settle_turns", settleTurns).put("presets", presets).put("kind_tone", kindTone).put("photo_sharpen", photoSharpen).put("suggestions", suggestions).put("book_gutter", bookGutter).put("line_flatten", lineFlatten)
 
     /** One line of text for the app's preferences. */
     fun encode(): String = listOf(
         "keep" to flag(keep), "finder" to finderId(finder), "refine" to flag(refine),
         "perspective" to flag(perspective), "snap" to flag(snapPaper), "strength" to (strength?.toString() ?: ""),
         "upright" to flag(upright), "sharpen" to sharpen.toString(), "denoise" to flag(denoise), "preview" to flag(preview), "crop" to flag(cropTools), "flatten_auto" to flag(flattenAuto), "flatten_trim" to flag(flattenTrim),
-        "settle" to flag(settleTurns), "presets" to flag(presets), "kind_tone" to flag(kindTone), "photo_sharpen" to flag(photoSharpen), "suggest" to flag(suggestions), "gutter" to flag(bookGutter),
+        "settle" to flag(settleTurns), "presets" to flag(presets), "kind_tone" to flag(kindTone), "photo_sharpen" to flag(photoSharpen), "suggest" to flag(suggestions), "gutter" to flag(bookGutter), "line_flatten" to flag(lineFlatten),
     ).joinToString(";") { (k, v) -> "$k=$v" }
 
     companion object {
@@ -145,6 +151,7 @@ internal data class ScanLab(
                 photoSharpen = on("photo_sharpen", default.photoSharpen),
                 suggestions = on("suggest", default.suggestions),
                 bookGutter = on("gutter", default.bookGutter),
+                lineFlatten = on("line_flatten", default.lineFlatten),
             )
         }
     }
@@ -174,6 +181,8 @@ internal data class ScanTestResult(
     val flattenCheck: io.github.artcraftandroid.pdfcraft.core.ScanFlattenCheck? = null,
     /** The strips of background trimmed from a flattened page (#302), or null when none was looked for. */
     val trim: io.github.artcraftandroid.pdfcraft.core.ScanTrim? = null,
+    /** What flattening from the lines of text did, when it ran (#303, part B). */
+    val lineFlatten: io.github.artcraftandroid.pdfcraft.core.ScanLineFlatten? = null,
 )
 
 /**
@@ -313,6 +322,7 @@ internal fun scanTestPageJson(
                 .put("noise", it.noise?.takeIf { n -> n.isFinite() }?.let { n -> Math.round(n * 100.0) / 100.0 } ?: JSONObject.NULL)
                 .put("flatten_check", it.flattenCheck?.let(::scanFlattenCheckJson) ?: JSONObject.NULL)
                 .put("flatten_trim", it.trim?.let(::scanTrimJson) ?: JSONObject.NULL)
+                .put("line_flatten", it.lineFlatten?.let(::scanLineFlattenJson) ?: JSONObject.NULL)
                 .put(
                     "orientation",
                     it.orientation?.let { o ->

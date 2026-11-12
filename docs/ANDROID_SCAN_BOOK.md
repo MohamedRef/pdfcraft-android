@@ -1,7 +1,7 @@
 # Scanner: book mode (#303, part A)
 
 One photo of an open book becomes two pages, in the reading order chosen. This is part A of
-#303. Part B, flattening from text lines, is not started.
+#303. Part B, flattening from text lines, is in `docs/ANDROID_SCAN_FLATTEN_LINES.md`.
 
 **Nothing here has run on a phone.** The figures below come from pages drawn in code, on a
 desktop.
@@ -112,4 +112,4 @@ time (after the outline search), which is most of its cost. The log's `book_ms` 
 - Snap on the crop screen treats the gutter side like any side and may move it onto the edge of
   the gutter's shadow. Not changed: the person decides, and Reset puts the cut back.
 - A portrait spread (two pages above each other) has no centre-line fallback.
-- Part B (text-line flattening) is not started.
+- Part B (text-line flattening) is described in `docs/ANDROID_SCAN_FLATTEN_LINES.md`.

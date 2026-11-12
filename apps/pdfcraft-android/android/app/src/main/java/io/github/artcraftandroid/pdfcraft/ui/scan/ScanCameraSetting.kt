@@ -62,3 +62,29 @@ internal fun ScanAutoSetting() {
         io.github.artcraftandroid.pdfcraft.ui.PdfSwitch(model.autoCapture, { model.updateAutoCapture(it) })
     }
 }
+
+/** Low-light merge (#297): Auto, Always or Off; in the ordinary settings and among the testing options. */
+@Composable
+internal fun ScanMergeSettingRow() {
+    val model: ScanCameraModel = viewModel()
+    val c = pdfColors
+    Text(stringResource(R.string.scan_merge_setting), color = c.text, fontSize = 16.sp, modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp))
+    Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        for (s in ScanMergeSetting.entries) {
+            val on = s == model.merge
+            val name = stringResource(
+                when (s) {
+                    ScanMergeSetting.Auto -> R.string.scan_merge_auto
+                    ScanMergeSetting.Always -> R.string.scan_merge_always
+                    ScanMergeSetting.Off -> R.string.scan_merge_off
+                },
+            )
+            Text(
+                name, color = if (on) Color.White else c.text, fontSize = 14.sp,
+                modifier = Modifier.clip(RoundedCornerShape(14.dp)).background(if (on) c.accent else c.surface)
+                    .clickable(role = Role.RadioButton) { model.updateMerge(s) }.padding(horizontal = 12.dp, vertical = 6.dp),
+            )
+        }
+    }
+    Text(stringResource(R.string.scan_merge_body), color = c.textSecondary, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 20.dp))
+}

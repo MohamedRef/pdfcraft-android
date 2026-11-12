@@ -1736,7 +1736,9 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             // line detector is asked instead. The testing options (#288) can name the detector
             // and leave the closer look out.
             val lab = scanLab.options
-            val doc = eng?.let {
+            // a low-light merge (#297) gave a page already straightened: its edges are the whole picture
+            val straightened = io.github.artcraftandroid.pdfcraft.ui.scan.ScanCaptures.of(f.path)?.straightened == true
+            val doc = eng?.takeUnless { straightened }?.let {
                 withContext(Dispatchers.IO) { runCatching { it.prepareOcrModels(getApplication()) } }
                 withContext(Dispatchers.Default) { runCatching { io.github.artcraftandroid.pdfcraft.core.scanFindDocumentWith(f.absolutePath, lab.findOptions()) } }
                     .onFailure { e -> Diag.failure(DiagArea.Scan, "scan_find_document", e) }.getOrNull()
@@ -1759,7 +1761,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 "angle" to (doc?.angle?.toInt() ?: 0), "passes" to (doc?.passes?.toInt() ?: 0),
                 *(doc?.timings.orEmpty().map<io.github.artcraftandroid.pdfcraft.core.ScanTiming, Pair<String, Any?>> { it.stage.removePrefix("scan_") + "_ms" to it.ms.toLong() }.toTypedArray()),
                 "refined_sides" to (doc?.refined?.count { it } ?: 0), "curved_sides" to (doc?.curved?.count { it } ?: 0),
-                "finder" to ScanLab.finderId(lab.finder), "refine" to lab.refine,
+                "finder" to ScanLab.finderId(lab.finder), "refine" to lab.refine, "straightened" to straightened,
                 *io.github.artcraftandroid.pdfcraft.ui.scan.scanBookDiag(book, lab.bookGutter, bookOrder, cut, bookMs),
             )
             val finding = doc?.let { d ->
@@ -1926,6 +1928,8 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 // the person's own choice for the page, and the strip of table trimmed from a flattened one (#302)
                 "flatten_page" to io.github.artcraftandroid.pdfcraft.ui.scan.scanFlattenChoiceId(page.flatten),
                 "flatten_trim" to lab.flattenTrim, *io.github.artcraftandroid.pdfcraft.ui.scan.scanTrimDiag(p?.trim),
+                // flattened from its lines of text when the network gave nothing better (#303)
+                *scanLineFlattenDiag(lab.lineFlatten, p?.lineFlatten),
                 // the kind of document Clean scan took the page for (#299)
                 "preset" to (p?.kind?.preset ?: "none"), "preset_chosen" to (p?.kind?.chosen ?: false),
             )
@@ -2027,6 +2031,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 // the person's own choice for the page, and the strip of table trimmed from a flattened one (#302)
                 "flatten_page" to io.github.artcraftandroid.pdfcraft.ui.scan.scanFlattenChoiceId(page.flatten),
                 "flatten_trim" to lab.flattenTrim, *io.github.artcraftandroid.pdfcraft.ui.scan.scanTrimDiag(r?.trim),
+                *scanLineFlattenDiag(lab.lineFlatten, r?.lineFlatten),
                 "strength" to strength, "side_proportions" to !lab.perspective, "snap_paper" to lab.snapPaper,
                 // which way up the page was found to be and whether it was turned (#339)
                 "upright" to lab.upright, "quarter_turns" to classifierTurns[i], "upright_sure" to (found[i]?.sure ?: false),
@@ -2060,6 +2065,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                         it.noise?.toDouble(),
                         it.flattenCheck,
                         it.trim,
+                        it.lineFlatten,
                     )
                 }
                 val turn = ScanTestTurn(page.turns, autoUpright, r?.turns?.toInt() ?: 0, followed, turnSource)

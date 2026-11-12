@@ -10,6 +10,7 @@ use crate::enhance::Shape;
 use crate::enhance::enlargement;
 use crate::flatten::{predict_grid, unwarp, unwarp_trimmed};
 use crate::flatten_guard::{Kept, Trim, border_trim, guard};
+use crate::flatten_lines::{LineFit, fit_page};
 use crate::look::{Applied, Look, LookParams, Pixels, apply_with_photos};
 use crate::page_kind::{PageKind, PresetChoice, page_kind};
 use crate::straightness::{Straightness, line_straightness};
@@ -29,6 +30,9 @@ pub const STAGE_FLATTEN_CHECK: &str = "scan_flatten_check";
 /// Looking for a strip of background along a flattened page's edges, and drawing the page again
 /// without it (#302).
 pub const STAGE_FLATTEN_TRIM: &str = "scan_flatten_trim";
+/// The page flattened from its lines of text and checked (#303, part B); only there when that
+/// fallback ran.
+pub const STAGE_FLATTEN_LINES: &str = "scan_flatten_lines";
 /// The orientation classifier's run and the turn; only there when turning upright was asked for.
 pub const STAGE_UPRIGHT: &str = "scan_upright";
 pub const STAGE_LOOK: &str = "scan_look";
@@ -68,6 +72,10 @@ pub struct PageRequest<'a> {
     /// (2 % of a side at most) and draw the page again without it, at the same size (#302's
     /// border trim). Off: the flattened page as the network's grid gives it.
     pub flatten_trim: bool,
+    /// With `flatten`: when the network is not installed or the guard did not keep its page, fit
+    /// a curled-page model to the page's lines of text and keep that page when the guard finds it
+    /// straighter (#303, part B). The guard is always applied to it.
+    pub line_flatten: bool,
     /// Turn the page the right way up when the orientation classifier is sure which way that is
     /// (#339). Without the model file, and on a page it is not sure of, the page stays as the
     /// corners gave it. A whole photo in the Original look is the camera's file and is never
@@ -118,6 +126,7 @@ impl<'a> PageRequest<'a> {
             flatten: false,
             flatten_check: false,
             flatten_trim: false,
+            line_flatten: false,
             upright: false,
             turns: 0,
             sharpen: DEFAULT_SHARPEN,
@@ -168,6 +177,8 @@ pub struct PageResult {
     /// The strips of background trimmed from a flattened page's edges, in pixels of this page
     /// (#302); `None` when no trim was looked for (not asked, or the page was not flattened).
     pub trim: Option<Trim>,
+    /// What the text-line fallback did (#303, part B), when it ran.
+    pub line_flatten: Option<LineFlatten>,
     /// The page's grain as the Auto look measured it: the standard deviation of its noise on
     /// blank paper, in grey levels of 255 (`None` for the other looks).
     pub noise: Option<f32>,
@@ -192,6 +203,18 @@ pub struct FlattenCheck {
     pub flattened: Option<Straightness>,
 }
 
+/// What the text-line fallback did with a page (#303, part B).
+#[derive(Clone, Debug, PartialEq)]
+pub struct LineFlatten {
+    /// Why no surface was fitted (`few_lines`, `no_fit`, `folds`); `None` when one was.
+    pub gave_up: Option<&'static str>,
+    /// The fitted surface.
+    pub fit: Option<LineFit>,
+    /// The guard's comparison of the page flattened from the fit with the page straightened by its
+    /// corners; `kept` says which one the page is.
+    pub check: Option<FlattenCheck>,
+}
+
 /// A page straightened (and flattened and turned upright, when that was asked): everything before
 /// its look. A preview keeps one of these and gives it each look in turn (#301).
 #[derive(Clone, Debug, PartialEq)]
@@ -213,6 +236,8 @@ pub struct PageBase {
     pub flatten_check: Option<FlattenCheck>,
     /// The border trimmed from a flattened page (#302), when one was looked for.
     pub trim: Option<Trim>,
+    /// What the text-line fallback did (#303, part B), when it ran.
+    pub line_flatten: Option<LineFlatten>,
     /// (stage, milliseconds) of the stages so far.
     pub timings: Vec<(&'static str, u32)>,
 }
@@ -256,6 +281,7 @@ fn untouched(request: &PageRequest<'_>) -> Option<Result<PageResult, ScanError>>
         turns: 0,
         flatten_check: None,
         trim: None,
+        line_flatten: None,
         noise: None,
         kind: None,
         timings,
@@ -276,8 +302,22 @@ pub fn process_page(request: &PageRequest<'_>) -> Result<PageResult, ScanError> 
     };
     let (applied, kind) = page_look_kind(&base, request)?;
     let (pixels, noise) = (applied.pixels, applied.noise);
-    let PageBase { page, dpi, paper, aspect, focal_mismatch, flattened, bend, quarter_turns, orientation, turns, flatten_check, trim, mut timings } =
-        base;
+    let PageBase {
+        page,
+        dpi,
+        paper,
+        aspect,
+        focal_mismatch,
+        flattened,
+        bend,
+        quarter_turns,
+        orientation,
+        turns,
+        flatten_check,
+        trim,
+        line_flatten,
+        mut timings,
+    } = base;
     let (w, h) = (page.width, page.height);
     drop(page);
     lap(STAGE_LOOK, &mut timings);
@@ -306,6 +346,7 @@ pub fn process_page(request: &PageRequest<'_>) -> Result<PageResult, ScanError> 
         turns,
         flatten_check,
         trim,
+        line_flatten,
         noise,
         kind,
         timings,
@@ -430,6 +471,18 @@ pub fn page_base(request: &PageRequest<'_>) -> Result<PageBase, ScanError> {
         }
         _ => (page, None),
     };
+    // the network was not there or not kept: the page's lines of text may still flatten it
+    let (page, flattened, line_flatten) = match request.flatten && request.line_flatten && !flattened {
+        true => {
+            let (lined, outcome) = flatten_by_lines(&photo, &quad, &page, request.threads);
+            lap(STAGE_FLATTEN_LINES, &mut timings);
+            match lined {
+                Some(lined) => (lined, true, Some(outcome)),
+                None => (page, false, Some(outcome)),
+            }
+        }
+        false => (page, flattened, None),
+    };
     drop(photo);
 
     // the right way up, when the classifier is sure: the same pixels in new places, so the page
@@ -461,6 +514,7 @@ pub fn page_base(request: &PageRequest<'_>) -> Result<PageBase, ScanError> {
         turns,
         flatten_check,
         trim,
+        line_flatten,
         timings,
     })
 }
@@ -477,6 +531,25 @@ fn trim_flattened(photo: &Photo, grid: &crate::flatten::FlattenGrid, page: Rgb, 
         Ok(again) => (again, trim),
         Err(_) => (page, Trim::default()),
     }
+}
+
+/// The text-line fallback on `plain`, the page straightened by `quad` (#303, part B): the page
+/// flattened from its lines when the guard keeps it, and what was found either way.
+pub(crate) fn flatten_by_lines(photo: &Photo, quad: &Quad, plain: &Rgb, threads: usize) -> (Option<Rgb>, LineFlatten) {
+    let fit = match fit_page(&grey(plain)) {
+        Ok(fit) => fit,
+        Err(why) => return (None, LineFlatten { gave_up: Some(why.id()), fit: None, check: None }),
+    };
+    let grid = match fit.grid(quad) {
+        Ok(grid) => grid,
+        Err(why) => return (None, LineFlatten { gave_up: Some(why.id()), fit: Some(fit), check: None }),
+    };
+    let Ok(lined) = unwarp(photo, &grid, plain.width, plain.height, threads) else {
+        return (None, LineFlatten { gave_up: Some(crate::flatten_lines::GaveUp::NoFit.id()), fit: Some(fit), check: None });
+    };
+    let check = compare_flattened(plain, &lined);
+    let outcome = LineFlatten { gave_up: None, fit: Some(fit), check: Some(check) };
+    (check.kept.then_some(lined), outcome)
 }
 
 /// Measures the lines of text on the page straightened by its corners and on the flattened one,

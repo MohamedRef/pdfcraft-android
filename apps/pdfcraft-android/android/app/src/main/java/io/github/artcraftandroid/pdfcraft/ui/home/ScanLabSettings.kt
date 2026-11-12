@@ -1,5 +1,7 @@
 package io.github.artcraftandroid.pdfcraft.ui.home
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -65,6 +67,7 @@ internal fun ScanLabSettings(vm: AppViewModel) {
     io.github.artcraftandroid.pdfcraft.ui.scan.ScanCameraSetting()
     io.github.artcraftandroid.pdfcraft.ui.scan.ScanLiveSetting()
     io.github.artcraftandroid.pdfcraft.ui.scan.ScanAutoSetting()
+    io.github.artcraftandroid.pdfcraft.ui.scan.ScanMergeSettingRow()
     Choice(
         stringResource(R.string.scan_lab_finder),
         listOf(
@@ -95,6 +98,8 @@ internal fun ScanLabSettings(vm: AppViewModel) {
     }
     SheetRow(null, stringResource(R.string.scan_lab_flatten_trim), { lab.update(o.copy(flattenTrim = !o.flattenTrim)) }) {
         PdfSwitch(o.flattenTrim, { lab.update(o.copy(flattenTrim = it)) })
+    SheetRow(null, stringResource(R.string.scan_lab_line_flatten), { lab.update(o.copy(lineFlatten = !o.lineFlatten)) }) {
+        PdfSwitch(o.lineFlatten, { lab.update(o.copy(lineFlatten = it)) })
     }
     SheetRow(null, stringResource(R.string.scan_lab_book_gutter), { lab.update(o.copy(bookGutter = !o.bookGutter)) }) {
         PdfSwitch(o.bookGutter, { lab.update(o.copy(bookGutter = it)) })
@@ -126,6 +131,11 @@ internal fun ScanLabSettings(vm: AppViewModel) {
     Choice(stringResource(R.string.scan_lab_strength), ScanLab.STRENGTHS.map { it to (it?.toString() ?: own) }, o.strength) { lab.update(o.copy(strength = it)) }
     Text(stringResource(R.string.scan_lab_options_body), color = c.textSecondary, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 20.dp))
     if (!o.asDesigned) SheetRow(null, stringResource(R.string.scan_lab_reset), { lab.reset() })
+
+    // timing a learned clean-up model the person picks (#304): measurement only, nothing kept
+    val pickModel = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> uri?.let(lab::timeModel) }
+    SheetRow(null, stringResource(if (lab.timingModel) R.string.scan_lab_time_model_running else R.string.scan_lab_time_model), { if (!lab.timingModel) pickModel.launch(arrayOf("*/*")) })
+    Text(stringResource(R.string.scan_lab_time_model_body), color = c.textSecondary, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 20.dp))
 
     if (confirmShare) {
         PdfDialog(

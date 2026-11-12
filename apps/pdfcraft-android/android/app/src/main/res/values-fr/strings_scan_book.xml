@@ -10,4 +10,5 @@
     <string name="scan_crop_book_left">Page de gauche d’une double page : son côté droit est la coupe au pli du livre, pas un bord du papier.</string>
     <string name="scan_crop_book_right">Page de droite d’une double page : son côté gauche est la coupe au pli du livre, pas un bord du papier.</string>
     <string name="scan_camera_book_hint">Alignez le dos du livre sur la ligne</string>
+    <string name="scan_lab_line_flatten">Aplatir d’après les lignes de texte quand le réseau ne fait pas mieux</string>
 </resources>
