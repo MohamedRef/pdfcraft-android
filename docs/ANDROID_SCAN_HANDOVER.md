@@ -24,8 +24,8 @@ a phone yet.** Every number in the scanner's documents was measured on a desktop
 | #293 | True proportions, paper sizes | Core done | #353 | The focal length from the in-app camera (#294, section 7 there) |
 | #294 | In-app camera (CameraX) | **Not started** | | All of it |
 | #295 | Live page outline, hints | **Not started** | | Needs #294 |
-| #296 | Auto-capture, blur check | **Not started** | | Needs #295 |
-| #297 | Multi-frame merge | **Not started** | | Needs #294 |
+| #296 | Auto-capture, blur check | Native call only, in #389 | | `scan_sharpness` exists (`docs/ANDROID_SCAN_CAPTURE.md`); its `blurred_unverified` is for logs only (motion blur not detected, threshold from drawn pages). Everything else needs #295 |
+| #297 | Multi-frame merge | Native call only, in #389 | | `scan_merge_frames` exists (`docs/ANDROID_SCAN_CAPTURE.md`), measured on drawn frames only. The burst, the setting and the phone measurements need #294 |
 | #298 | Auto look, part 1 | Core done | #346 | Phone time; the paper White / Keep control has no screen (#301) |
 | #299 | Auto look, part 2 | Part | #373 | The block photo mask, document-type presets and `scan_classify`, the recognition-error check |
 | #300 | Black and white, 1 bit | Core done | #359 | Speckle on textured grey fills; photographs wider than a quarter of the page are not dithered; 0.85 s for 12 megapixels on a desktop |
@@ -62,7 +62,7 @@ These came from one run of separate workers on 12 November that the owner stoppe
 Every threshold in them is the issue's starting value or was set on pages drawn in code.
 
 One document per feature says how it works, what was measured and what was not:
-`ANDROID_SCAN_AUTO_LOOK.md`, `_BLACK_WHITE.md`, `_DETAIL.md`, `_DETECTOR.md`, `_EDGES.md`,
+`ANDROID_SCAN_AUTO_LOOK.md`, `_BLACK_WHITE.md`, `_CAPTURE.md`, `_DETAIL.md`, `_DETECTOR.md`, `_EDGES.md`,
 `_FLATTEN.md`, `_MEASURING.md`, `_PREVIEW.md`, `_PROPORTIONS.md`, `_TESTING.md`, `_UPRIGHT.md` (all
 `docs/ANDROID_SCAN_…`). Read the one for a feature before changing it.
 
@@ -86,7 +86,8 @@ AppViewModel.saveScan, per page
 - **Native code**: `apps/pdfcraft-android/scan` (crate `pdfcraft-scan`, about 7 900 lines with
   tests) and its UniFFI layer `apps/pdfcraft-android/src/scan.rs`: `scan_set_root`,
   `scan_find_document`, `scan_find_document_with`, `scan_refine_quad`, `scan_process_page`,
-  `scan_preview_page`, `scan_release_previews`, `scan_can_flatten`. Kotlin bindings are generated
+  `scan_preview_page`, `scan_release_previews`, `scan_can_flatten`, `scan_sharpness`,
+  `scan_merge_frames` (no screen calls the last two yet). Kotlin bindings are generated
   at build time; nothing generated is committed.
 - **Kotlin**: `ui/AppViewModel.kt` (`onScanPhoto`, `saveScan`, `discardScan`),
   `ui/ToolScreens.kt` (`ScanScreen`, `ScanCrop`, `ScanPage`, `ScanFilter`), `ui/ScanSession.kt`,
