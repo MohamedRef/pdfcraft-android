@@ -1115,6 +1115,7 @@
     <string name="scan_lab_denoise">Lisser le grain des photos sombres (Scan net)</string>
     <string name="scan_lab_preview">Afficher les pages telles qu’elles seront enregistrées</string>
     <string name="scan_lab_crop">Recadrer avec loupe et aimantation aux bords</string>
+    <string name="scan_lab_flatten_auto">Aplatir les pages automatiquement quand leurs lignes deviennent plus droites</string>
     <string name="scan_lab_strength">Intensité du filtre</string>
     <string name="scan_lab_strength_own">Par défaut</string>
     <string name="scan_lab_options_body">Ces options désactivent des parties du scanner ou les remplacent par ce qu\'elles ont remplacé, pour savoir de quelle partie vient un problème. Le journal note ce qui était en vigueur pour chaque page.</string>

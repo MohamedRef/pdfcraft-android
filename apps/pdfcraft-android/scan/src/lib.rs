@@ -6,8 +6,9 @@
 //! bytes for the same input, on any number of threads), bounded by the input, and never panics on
 //! bad input.
 //!
-//! Some modules are building blocks the pipeline does not call yet (`book`, `flatten_guard`,
-//! `merge`, `metrics_*`, `photo_mask`, `preset`, `sharpness`, `straightness`, `upright_pages`):
+//! Some modules are building blocks the pipeline does not call yet (`book`, `merge`, `metrics_*`,
+//! `photo_mask`, `preset`, `sharpness`, `upright_pages`); `flatten_guard` and `straightness`
+//! choose between a flattened page and a straightened one when that is asked (#302):
 //! `docs/ANDROID_SCAN_BLOCKS.md` says what each gives and what is left to wire in.
 #![forbid(unsafe_code)]
 #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
@@ -46,7 +47,7 @@ pub use enhance::{AutoOutput, AutoParams, DEFAULT_SHARPEN, PaperMode, auto};
 pub use error::ScanError;
 pub use flatten::{FlattenGrid, flat_grid, predict_grid, unwarp};
 pub use look::Look;
-pub use page::{PageBase, PageRequest, PageResult, page_base, page_look, process_page};
+pub use page::{FlattenCheck, PageBase, PageRequest, PageResult, compare_flattened, page_base, page_look, process_page};
 pub use photo::{Luma, MAX_PHOTO_PIXELS, Photo, luma};
 pub use quad::Quad;
 pub use refine::{Pyramid, RefineOptions, Refined, SideFit, refine};
