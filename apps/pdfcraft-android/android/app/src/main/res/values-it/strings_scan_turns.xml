@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Turning scanned pages (#339), kept apart from strings.xml so parallel scanner work merges cleanly. -->
+<resources>
+    <string name="scan_rotate">Ruota</string>
+    <string name="scan_turned_upright_undo">Raddrizzata · Annulla</string>
+    <string name="scan_turn_undo_description">Annulla la rotazione</string>
+    <string name="settings_scan_upright">Raddrizza le pagine automaticamente</string>
+    <string name="settings_scan_upright_body">Le pagine scansionate vengono ruotate nel verso giusto quando l’app ne è sicura. Ruota nella schermata di scansione funziona sempre.</string>
+    <string name="scan_lab_settle_turns">Le pagine incerte seguono le vicine</string>
+</resources>

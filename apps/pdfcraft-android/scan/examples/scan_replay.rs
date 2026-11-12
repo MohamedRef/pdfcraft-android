@@ -19,6 +19,7 @@
 
 use std::path::{Path, PathBuf};
 
+use pdfcraft_scan::page_kind::{PresetChoice, preset_from_id};
 use pdfcraft_scan::{Finder, Look, PageRequest, Photo, Pyramid, Quad, RefineOptions, detect_with, process_page, refine};
 use serde_json::Value;
 
@@ -142,6 +143,10 @@ fn main() {
             println!("    made again: the corners left make no page");
             continue;
         }
+        // the page's turn as the phone settled it (#339): the person's own turn, or the one it took
+        // from its neighbours, stands in for the classifier; files from before then have neither
+        let turned = &facts["turns"];
+        let fixed = turned["manual"].as_u64().or_else(|| turned["followed"].as_bool().filter(|f| *f).and(turned["total"].as_u64()));
         let request = PageRequest {
             look: look_of(facts["look"].as_str().unwrap_or("auto")),
             strength: facts["strength"].as_u64().map_or(60, |v| v.min(100) as u8),
@@ -152,10 +157,20 @@ fn main() {
             flatten: facts["flatten"].as_bool().unwrap_or(false) || (options["flatten_auto"].as_bool().unwrap_or(false)),
             flatten_check: !facts["flatten"].as_bool().unwrap_or(false) && options["flatten_auto"].as_bool().unwrap_or(false),
             // a file from before pages were turned upright (#339) has no such option
-            upright: options["upright"].as_bool().unwrap_or(false),
+            upright: fixed.is_none() && options["upright"].as_bool().unwrap_or(false) && turned["auto"].as_bool().unwrap_or(true),
+            turns: fixed.map_or(0, |t| (t % 4) as u8),
             // nor one from before the Auto look sharpened and smoothed (#299)
             sharpen: options["sharpen"].as_u64().map_or(0, |v| v.min(100) as u8),
             denoise: options["denoise"].as_bool().unwrap_or(false),
+            // the kind of document (#299): one the person chose is kept; one the phone worked out
+            // is worked out again by this build; files from before then have none
+            preset: match (facts["document_type"]["preset"].as_str().and_then(preset_from_id), facts["document_type"]["chosen"].as_bool()) {
+                (Some(p), Some(true)) => PresetChoice::Fixed(p),
+                (Some(_), _) => PresetChoice::Auto,
+                (None, _) => PresetChoice::Off,
+            },
+            curved_sides: facts["finding"]["curved_sides"].as_u64().map_or(0, |v| v.min(4) as u8),
+            fixed_strength: !options["strength_override"].is_null(),
             ..PageRequest::new(&bytes, left)
         };
         match process_page(&request) {

@@ -6,19 +6,24 @@
 //! bytes for the same input, on any number of threads), bounded by the input, and never panics on
 //! bad input.
 //!
-//! Some modules are building blocks the pipeline does not call yet (`book`, `merge`, `metrics_*`,
-//! `photo_mask`, `preset`, `sharpness`, `upright_pages`); `flatten_guard` and `straightness`
-//! choose between a flattened page and a straightened one when that is asked (#302):
+//! Some modules are building blocks the pipeline does not call yet (`book`, `metrics_*`,
+//! `photo_mask`, `preset`, `upright_pages`); `flatten_guard` and `straightness` choose between a
+//! flattened page and a straightened one when that is asked (#302); `sharpness` and `merge` are
+//! called by `capture` (#296, #297), which no screen calls yet:
 //! `docs/ANDROID_SCAN_BLOCKS.md` says what each gives and what is left to wire in.
 #![forbid(unsafe_code)]
 #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
 
 pub mod aspect;
 pub mod book;
+pub mod capture;
+pub mod defects;
 pub mod detect;
 pub mod encode;
 pub mod enhance;
 mod error;
+#[cfg(any(test, feature = "synth"))]
+pub mod eval;
 pub mod exif;
 pub mod flatten;
 pub mod flatten_guard;
@@ -29,7 +34,9 @@ pub mod metrics_compare;
 pub mod metrics_geometry;
 pub mod metrics_tone;
 pub mod models;
+pub mod moire;
 pub mod page;
+pub mod page_kind;
 mod photo;
 pub mod photo_mask;
 pub mod preset;
@@ -44,6 +51,7 @@ pub mod upright_pages;
 pub mod warp;
 
 pub use aspect::{AspectSource, Focal, Paper, Proportions, proportions, proportions_by_sides};
+pub use capture::{MergeFrame, MergeOutcome, MergeRequest, PhotoSharpness, merge_frames, photo_sharpness};
 pub use detect::{Detection, Finder, QuadSource, detect, detect_with};
 pub use encode::Format;
 pub use enhance::{AutoOutput, AutoParams, DEFAULT_SHARPEN, PaperMode, auto};
@@ -63,9 +71,19 @@ mod tests;
 #[cfg(test)]
 mod tests_book;
 #[cfg(test)]
+mod tests_book_photo;
+#[cfg(test)]
+mod tests_capture;
+#[cfg(test)]
+mod tests_defects;
+#[cfg(test)]
 mod tests_detect;
 #[cfg(test)]
+mod tests_eval;
+#[cfg(test)]
 mod tests_flatten;
+#[cfg(test)]
+mod tests_gate;
 #[cfg(test)]
 mod tests_flatten_guard;
 #[cfg(test)]
@@ -76,6 +94,10 @@ mod tests_metrics_compare;
 mod tests_metrics_geometry;
 #[cfg(test)]
 mod tests_metrics_tone;
+#[cfg(test)]
+mod tests_page_kind;
+#[cfg(test)]
+mod tests_moire;
 #[cfg(test)]
 mod tests_photo_mask;
 #[cfg(test)]

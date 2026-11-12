@@ -88,6 +88,39 @@ class ScanSaveTest {
     }
 
     @Test
+    fun aPagesOwnTurnGoesIntoTheRequestAndStopsTheClassifier() {
+        val corners = floatArrayOf(0.1f, 0.1f, 0.9f, 0.1f, 0.9f, 0.9f, 0.1f, 0.9f)
+        val auto = scanPageRequest("/a", corners, ScanFilter.CleanScan, false, ScanLab(), "")
+        assertTrue(auto.upright)
+        assertEquals(0, auto.turns.toInt())
+        // Rotate (#339): the person's turn, and the classifier no longer asked about the page
+        val turned = scanPageRequest("/a", corners, ScanFilter.CleanScan, false, ScanLab(), "", turns = 3)
+        assertFalse(turned.upright)
+        assertEquals(3, turned.turns.toInt())
+        // the ordinary setting off stops the classifier too
+        assertFalse(scanPageRequest("/a", corners, ScanFilter.CleanScan, false, ScanLab(), "", autoUpright = false).upright)
+    }
+
+    @Test
+    fun theDocumentTypeGoesIntoTheRequest() {
+        val corners = floatArrayOf(0.1f, 0.1f, 0.9f, 0.1f, 0.9f, 0.9f, 0.1f, 0.9f)
+        val plain = scanPageRequest("/a", corners, ScanFilter.CleanScan, false, ScanLab(), "")
+        // worked out from the page unless the person chose one (#299)
+        assertEquals("auto", plain.preset)
+        assertFalse(plain.fixedStrength)
+        assertEquals(0, plain.curvedSides.toInt())
+        assertEquals("receipt", scanPageRequest("/a", corners, ScanFilter.CleanScan, false, ScanLab(), "", preset = "receipt", curvedSides = 2).preset)
+        assertEquals(2, scanPageRequest("/a", corners, ScanFilter.CleanScan, false, ScanLab(), "", curvedSides = 2).curvedSides.toInt())
+        assertEquals(4, scanPageRequest("/a", corners, ScanFilter.CleanScan, false, ScanLab(), "", curvedSides = 9).curvedSides.toInt())
+        // the testing option off is as before, whatever was chosen
+        assertEquals("off", scanPageRequest("/a", corners, ScanFilter.CleanScan, false, ScanLab(presets = false), "", preset = "receipt").preset)
+        // a word that is no kind is worked out
+        assertEquals("auto", scanPresetAsk("magic", true))
+        // a strength set by hand is not changed by the kind
+        assertTrue(scanPageRequest("/a", corners, ScanFilter.CleanScan, false, ScanLab(strength = 40), "").fixedStrength)
+    }
+
+    @Test
     fun aPreviewIsOutOfDateWhenAnythingThatChangesThePageChanges() {
         val corners = listOf(0f, 0f, 1f, 0f, 1f, 1f, 0f, 1f)
         val key = ScanPreviewKey("/c/shot.jpg", corners, ScanFilter.CleanScan, false, ScanLab())
@@ -97,6 +130,12 @@ class ScanSaveTest {
         assertFalse(key == key.copy(corners = corners.mapIndexed { i, v -> if (i == 0) 0.01f else v }))
         assertFalse(key == key.copy(lab = ScanLab(sharpen = 0)))
         assertFalse(key == key.copy(photoPath = "/c/other.jpg"))
+        // a turn by hand, or the automatic turn switched off, changes the page shown (#339)
+        assertFalse(key == key.copy(turns = 1))
+        assertFalse(key == key.copy(turns = 0))
+        assertFalse(key == key.copy(autoUpright = false))
+        // and a kind of document chosen for the page (#299)
+        assertFalse(key == key.copy(preset = "receipt"))
     }
 
     @Test

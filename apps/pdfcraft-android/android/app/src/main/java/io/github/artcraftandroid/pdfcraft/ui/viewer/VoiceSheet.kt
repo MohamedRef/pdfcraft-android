@@ -52,6 +52,7 @@ import io.github.artcraftandroid.pdfcraft.ui.OpenDocument
 import io.github.artcraftandroid.pdfcraft.ui.PdfSheet
 import io.github.artcraftandroid.pdfcraft.ui.pdfColors
 import kotlinx.coroutines.launch
+import androidx.compose.material3.minimumInteractiveComponentSize
 
 /** A voice comment to record at [at]. */
 class VoicePrompt(val doc: OpenDocument, val at: PagePoint)
@@ -239,7 +240,7 @@ fun VoiceCommentPlayer(vm: AppViewModel, doc: OpenDocument, comment: CommentInfo
             return@Row
         }
         Box(
-            Modifier.size(40.dp).clip(CircleShape).background(c.accent).clickable(enabled = ready == true, role = Role.Button) { player.toggle() }
+            Modifier.minimumInteractiveComponentSize().size(40.dp).clip(CircleShape).background(c.accent).clickable(enabled = ready == true, role = Role.Button) { player.toggle() }
                 .semantics { contentDescription = playLabel },
             contentAlignment = Alignment.Center,
         ) { Icon(if (player.playing) LucideIcons.Pause else LucideIcons.Play, null, tint = Color.White, modifier = Modifier.size(20.dp)) }

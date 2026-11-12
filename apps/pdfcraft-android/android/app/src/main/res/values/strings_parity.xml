@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Desktop-parity editing tools (#161 #162 #163 #164 #166 #167 #171 #178 #182), kept apart from strings.xml so parallel work merges cleanly. -->
 <resources>
+    <!-- Translator note: Image editing: crop, flip, rotate and replace images placed on a page. -->
     <string name="edit_image_crop">Crop</string>
     <string name="edit_image_flip">Flip</string>
     <string name="edit_image_flip_horizontal">Flip horizontally</string>
@@ -35,6 +36,7 @@
     <string name="edit_image_crop_handle_right">Crop right edge</string>
     <string name="edit_image_crop_handle_bottom">Crop bottom edge</string>
     <string name="edit_image_crop_handle_left">Crop left edge</string>
+    <!-- Translator note: Digital signatures: certifying a document and choosing which later changes keep the signature valid. -->
     <string name="sign_certify">Certify document</string>
     <string name="sign_certify_about">A certifying signature is the author\'s: it says which later changes keep the document valid.</string>
     <string name="sign_certify_no_changes">No changes allowed</string>
@@ -54,6 +56,7 @@
     <string name="sign_view_signed_version">View signed version</string>
     <string name="sign_no_signed_version">The version this signature signs couldn\'t be found in the file.</string>
     <string name="sign_signed_version_name">%1$s (signed version, %2$s)</string>
+    <!-- Translator note: Recognize text: reading text from page images so it can be selected, copied and searched. -->
     <string name="ocr_run">Recognize</string>
     <string name="ocr_language">Language</string>
     <string name="ocr_pages">Pages</string>
@@ -91,6 +94,7 @@
     <string name="ocr_batch_finished">Finished</string>
     <string name="ocr_batch_cancelled">Cancelled</string>
     <string name="ocr_batch_folder_gone">The folder can\'t be written to; choose it again.</string>
+    <!-- Translator note: Redact: permanently removing text, images or areas from a document. Redacted content can't be recovered. -->
     <string name="redact_title">Redact</string>
     <string name="redact_about">Mark what to remove, then Apply: the content under the marks is deleted for good once the document is saved.</string>
     <string name="redact_mark_area">Mark an area</string>
@@ -117,7 +121,7 @@
     <string name="redact_clear">Clear all</string>
     <string name="redact_apply">Apply</string>
     <string name="redact_apply_title">Apply redactions?</string>
-    <string name="redact_apply_body">Text, images, drawings, comments and form fields under the marks are removed and boxes drawn in their place. You can undo until you save; after saving, the content is gone from the file. Consider Save a copy to keep the original.</string>
+    <string name="redact_apply_body">Everything under the marks is removed and covered with boxes. You can undo until you save; then it\'s gone. Save a copy first to keep the original.</string>
     <string name="redact_hidden_title">Hidden information</string>
     <string name="redact_hidden_body">The document still holds this information. Remove what you don\'t want to share:</string>
     <string name="redact_hidden_none">No hidden information was found.</string>
@@ -144,6 +148,7 @@
         <item quantity="one">%1$d possible fake redaction:</item>
         <item quantity="other">%1$d possible fake redactions:</item>
     </plurals>
+    <!-- Translator note: Compare files: showing what changed between two versions of a PDF. -->
     <string name="compare_title">Compare files</string>
     <string name="compare_about">See what changed between two versions of a PDF</string>
     <string name="compare_with_older">Compare with an older version</string>
@@ -213,6 +218,7 @@
         <item quantity="one">%1$d image on this page won\'t be tagged</item>
         <item quantity="other">%1$d images on this page won\'t be tagged</item>
     </plurals>
+    <!-- Translator note: Prepare form: adding and changing fillable form fields such as text boxes and check boxes. -->
     <string name="form_prepare">Prepare form</string>
     <string name="form_prepare_hint">Pick a field below, or tap a field to change it</string>
     <string name="form_place_hint">Tap to place a %1$s field, or drag out its box</string>
@@ -262,6 +268,7 @@
         <item quantity="one">%1$d field added</item>
         <item quantity="other">%1$d fields added</item>
     </plurals>
+    <!-- Translator note: Grouped artwork: text that is part of a drawing and must be separated before it can be edited. -->
     <string name="edit_grouped_text">This text is inside grouped artwork</string>
     <string name="edit_grouped_make_editable">Make editable</string>
     <string name="edit_grouped_ready">The text on this page can now be edited</string>
@@ -277,6 +284,7 @@
     <string name="edit_spacing_less">Less %1$s</string>
     <string name="edit_spacing_more">More %1$s</string>
     <string name="edit_overflow">This text no longer fits where it was</string>
+    <!-- Translator note: Select objects: picking text, images and drawings on a page to move, copy or delete them. -->
     <string name="objects_select">Select</string>
     <string name="objects_hint">Tap objects to select them, or drag a box around them</string>
     <string name="objects_select_all">Select all</string>

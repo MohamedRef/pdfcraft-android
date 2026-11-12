@@ -38,10 +38,10 @@ fun NoteMarginSheet(vm: AppViewModel, doc: OpenDocument, pages: List<Int>, onDis
     var all by remember { mutableStateOf(pages.isEmpty()) }
     var hasMargins by remember { mutableStateOf(false) }
     var confirmRemove by remember { mutableStateOf(false) }
-    LaunchedEffect(doc.info.generation) { hasMargins = vm.pageMargins(doc).any { it } }
+    LaunchedEffect(doc.info.generation) { hasMargins = vm.noteTaking.pageMargins(doc).any { it } }
     PdfDialog(
         onDismiss = onDismiss, title = stringResource(R.string.margin_title), confirm = stringResource(R.string.margin_add),
-        onConfirm = { onDismiss(); vm.addNoteMargin(doc, if (all) emptyList() else pages, side, fraction) },
+        onConfirm = { onDismiss(); vm.noteTaking.addNoteMargin(doc, if (all) emptyList() else pages, side, fraction) },
     ) {
         Text(stringResource(R.string.margin_side), color = c.textSecondary, fontSize = 13.sp)
         Row(Modifier.padding(vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -73,6 +73,6 @@ fun NoteMarginSheet(vm: AppViewModel, doc: OpenDocument, pages: List<Int>, onDis
     if (confirmRemove) PdfDialog(
         onDismiss = { confirmRemove = false }, title = stringResource(R.string.margin_remove),
         confirm = stringResource(R.string.margin_remove_confirm), destructive = true,
-        onConfirm = { confirmRemove = false; onDismiss(); vm.removeNoteMargins(doc, if (all) emptyList() else pages) },
+        onConfirm = { confirmRemove = false; onDismiss(); vm.noteTaking.removeNoteMargins(doc, if (all) emptyList() else pages) },
     ) { Text(stringResource(R.string.margin_remove_body), color = c.text, fontSize = 14.sp) }
 }

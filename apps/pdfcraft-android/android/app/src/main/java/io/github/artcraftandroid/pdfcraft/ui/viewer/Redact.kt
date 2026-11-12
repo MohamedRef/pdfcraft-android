@@ -161,7 +161,7 @@ fun AppViewModel.openRedact(doc: OpenDocument) {
 fun AppViewModel.loadRedactMarks(doc: OpenDocument) {
     val eng = engine ?: return
     viewModelScope.launch {
-        redact.marks = runCatching { parseRedactMarks(eng.tool("comment_list", mapOf("doc" to doc.id))) }.getOrDefault(emptyList())
+        tools.redact.marks = runCatching { parseRedactMarks(eng.tool("comment_list", mapOf("doc" to doc.id))) }.getOrDefault(emptyList())
     }
 }
 
@@ -176,13 +176,13 @@ fun AppViewModel.markRedaction(doc: OpenDocument, args: Map<String, Any?>) {
 }
 
 fun AppViewModel.markArea(doc: OpenDocument, page: Int, rect: FloatArray) {
-    redact.placing = null
+    tools.redact.placing = null
     doc.controller.sheet = ViewerSheet.Redact
-    markRedaction(doc, mapOf("page" to page + 1, "rect" to rect.map { it.toDouble() }) + lookArgs(redact.look))
+    markRedaction(doc, mapOf("page" to page + 1, "rect" to rect.map { it.toDouble() }) + lookArgs(tools.redact.look))
 }
 
 fun AppViewModel.markPage(doc: OpenDocument, page: Int) {
-    markRedaction(doc, mapOf("page" to page + 1, "whole_pages" to true) + lookArgs(redact.look))
+    markRedaction(doc, mapOf("page" to page + 1, "whole_pages" to true) + lookArgs(tools.redact.look))
 }
 
 fun AppViewModel.deleteRedactMark(doc: OpenDocument, m: RedactMark) {
@@ -195,11 +195,11 @@ fun AppViewModel.clearRedactMarks(doc: OpenDocument) {
 
 /** Apply every mark: the content under them goes for good once saved; then offer Save a copy and the hidden-information check. */
 fun AppViewModel.applyRedactions(doc: OpenDocument) {
-    redact.confirmApply = false
+    tools.redact.confirmApply = false
     runTool(doc, "redact_apply") { r ->
-        redact.marks = emptyList()
+        tools.redact.marks = emptyList()
         editEvent(doc, "redact_apply", "applied" to r.optInt("applied"))
-        tell(plural(R.plurals.redact_applied, r.optInt("applied"), r.optInt("applied")), appText(R.string.common_save_copy)) { saveCopyAs(doc) }
+        tell(plural(R.plurals.redact_applied, r.optInt("applied"), r.optInt("applied")), appText(R.string.common_save_copy)) { sharing.saveCopyAs(doc) }
         checkHiddenInfo(doc)
     }
 }
@@ -211,11 +211,11 @@ fun AppViewModel.checkHiddenInfo(doc: OpenDocument) {
         try {
             val o = eng.tool("doc_hidden_info", mapOf("doc" to doc.id))
             val cats = o.optJSONArray("categories")
-            redact.hidden = (0 until (cats?.length() ?: 0)).mapNotNull { i ->
+            tools.redact.hidden = (0 until (cats?.length() ?: 0)).mapNotNull { i ->
                 val c = cats?.optJSONObject(i) ?: return@mapNotNull null
                 HiddenCategory(c.optString("category"), c.optString("label"), c.optInt("count"))
             }.filter { it.count > 0 }
-            editEvent(doc, "hidden_info", "categories" to redact.hidden?.size)
+            editEvent(doc, "hidden_info", "categories" to tools.redact.hidden?.size)
         } catch (e: Exception) {
             tell(e.userMessage)
         }
@@ -223,7 +223,7 @@ fun AppViewModel.checkHiddenInfo(doc: OpenDocument) {
 }
 
 fun AppViewModel.removeHidden(doc: OpenDocument, categories: List<String>) {
-    redact.hidden = null
+    tools.redact.hidden = null
     if (categories.isEmpty()) return
     runTool(doc, "doc_remove_hidden", mapOf("categories" to categories)) {
         editEvent(doc, "hidden_removed", "categories" to categories.size)
@@ -235,8 +235,8 @@ fun AppViewModel.auditRedactions(doc: OpenDocument) {
     val eng = engine ?: return
     viewModelScope.launch {
         try {
-            redact.findings = editMeasure(doc, "redact_audit") { parseRedactFindings(eng.tool("doc_audit_redactions", mapOf("doc" to doc.id))) }
-            editEvent(doc, "redact_audit_found", "findings" to redact.findings?.size)
+            tools.redact.findings = editMeasure(doc, "redact_audit") { parseRedactFindings(eng.tool("doc_audit_redactions", mapOf("doc" to doc.id))) }
+            editEvent(doc, "redact_audit_found", "findings" to tools.redact.findings?.size)
         } catch (e: Exception) {
             tell(e.userMessage)
         }
@@ -269,12 +269,12 @@ fun RedactSheet(vm: AppViewModel, doc: OpenDocument) {
         SheetBackHeader(stringResource(R.string.redact_title), onBack = { ctl.sheet = ViewerSheet.More })
         Column(Modifier.verticalScroll(rememberScrollState())) {
             Text(stringResource(R.string.redact_about), color = c.textSecondary, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp))
-            SheetRow(LucideIcons.SquareDashed, stringResource(R.string.redact_mark_area), { ctl.sheet = ViewerSheet.None; vm.redact.placing = doc })
+            SheetRow(LucideIcons.SquareDashed, stringResource(R.string.redact_mark_area), { ctl.sheet = ViewerSheet.None; vm.tools.redact.placing = doc })
             SheetRow(LucideIcons.File, stringResource(R.string.redact_mark_page, doc.viewer.currentPage + 1), { vm.markPage(doc, doc.viewer.currentPage) })
             SheetRow(LucideIcons.Search, stringResource(R.string.redact_find), { find = true })
             LookRow(vm)
             SheetDivider(vertical = 6.dp)
-            val marks = vm.redact.marks
+            val marks = vm.tools.redact.marks
             Text(
                 androidx.compose.ui.res.pluralStringResource(R.plurals.redact_marks_count, marks.size, marks.size), color = c.text, fontWeight = FontWeight.SemiBold,
                 modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
@@ -290,26 +290,26 @@ fun RedactSheet(vm: AppViewModel, doc: OpenDocument) {
             }
             Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp), horizontalArrangement = Arrangement.End) {
                 TextButton(enabled = marks.isNotEmpty(), onClick = { vm.clearRedactMarks(doc) }) { Text(stringResource(R.string.redact_clear), color = if (marks.isNotEmpty()) c.accent else c.textSecondary) }
-                TextButton(enabled = marks.isNotEmpty(), onClick = { vm.redact.confirmApply = true }) { Text(stringResource(R.string.redact_apply), color = if (marks.isNotEmpty()) c.red else c.textSecondary, fontWeight = FontWeight.SemiBold) }
+                TextButton(enabled = marks.isNotEmpty(), onClick = { vm.tools.redact.confirmApply = true }) { Text(stringResource(R.string.redact_apply), color = if (marks.isNotEmpty()) c.red else c.textSecondary, fontWeight = FontWeight.SemiBold) }
             }
             Spacer(Modifier.height(8.dp))
         }
     }
     if (find) FindAndMarkDialog(vm, doc) { find = false }
-    if (vm.redact.confirmApply) {
+    if (vm.tools.redact.confirmApply) {
         PdfDialog(
-            onDismiss = { vm.redact.confirmApply = false }, title = stringResource(R.string.redact_apply_title),
+            onDismiss = { vm.tools.redact.confirmApply = false }, title = stringResource(R.string.redact_apply_title),
             confirm = stringResource(R.string.redact_apply), onConfirm = { vm.applyRedactions(doc) }, destructive = true,
         ) { Text(stringResource(R.string.redact_apply_body), color = c.text, fontSize = 14.sp) }
     }
-    vm.redact.hidden?.let { HiddenInfoDialog(vm, doc, it) }
+    vm.tools.redact.hidden?.let { HiddenInfoDialog(vm, doc, it) }
 }
 
 /** The boxes' colour (black, white, red) and the words shown on them once applied. */
 @Composable
 private fun LookRow(vm: AppViewModel) {
     val c = pdfColors
-    val look = vm.redact.look
+    val look = vm.tools.redact.look
     Column(Modifier.padding(horizontal = 20.dp, vertical = 6.dp)) {
         Text(stringResource(R.string.redact_look), color = c.textSecondary, fontSize = 13.sp)
         Row(Modifier.padding(vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -318,14 +318,14 @@ private fun LookRow(vm: AppViewModel) {
                 val name = stringResource(label)
                 Box(
                     Modifier.size(36.dp).clip(RoundedCornerShape(18.dp)).background(parseHex(hex))
-                        .toggleable(value = on, role = Role.RadioButton) { vm.redact.look = look.copy(fill = hex) }
+                        .toggleable(value = on, role = Role.RadioButton) { vm.tools.redact.look = look.copy(fill = hex) }
                         .semantics { contentDescription = name },
                 ) {
                     Canvas(Modifier.fillMaxSize()) { drawCircle(if (on) c.accent else c.textSecondary, style = Stroke((if (on) 3 else 1).dp.toPx())) }
                 }
             }
         }
-        PdfField(look.overlay, { vm.redact.look = look.copy(overlay = it) }, stringResource(R.string.redact_overlay_hint))
+        PdfField(look.overlay, { vm.tools.redact.look = look.copy(overlay = it) }, stringResource(R.string.redact_overlay_hint))
     }
 }
 
@@ -343,7 +343,7 @@ private fun FindAndMarkDialog(vm: AppViewModel, doc: OpenDocument, onClose: () -
         regex -> RedactSearch.Regex(text)
         else -> RedactSearch.Text(text, whole, case)
     }
-    val args = redactSearchArgs(search, vm.redact.look)
+    val args = redactSearchArgs(search, vm.tools.redact.look)
     PdfDialog(
         onDismiss = onClose, title = stringResource(R.string.redact_find), confirm = stringResource(R.string.redact_mark_all),
         confirmEnabled = args != null, onConfirm = { onClose(); args?.let { vm.markRedaction(doc, it) } },
@@ -388,10 +388,10 @@ private fun HiddenInfoDialog(vm: AppViewModel, doc: OpenDocument, categories: Li
     val c = pdfColors
     val chosen = remember(categories) { androidx.compose.runtime.mutableStateListOf<String>().apply { addAll(categories.map { it.id }) } }
     PdfDialog(
-        onDismiss = { vm.redact.hidden = null }, title = stringResource(R.string.redact_hidden_title),
+        onDismiss = { vm.tools.redact.hidden = null }, title = stringResource(R.string.redact_hidden_title),
         confirm = if (categories.isEmpty()) stringResource(R.string.common_ok) else stringResource(R.string.redact_hidden_remove),
         confirmEnabled = categories.isEmpty() || chosen.isNotEmpty(),
-        onConfirm = { vm.removeHidden(doc, chosen.toList()) },
+        onConfirm = { vm.tools.removeHidden(doc, chosen.toList()) },
         dismiss = if (categories.isEmpty()) null else stringResource(R.string.common_cancel),
     ) {
         if (categories.isEmpty()) {
@@ -413,8 +413,8 @@ private fun HiddenInfoDialog(vm: AppViewModel, doc: OpenDocument, categories: Li
 fun RedactionAuditDialog(vm: AppViewModel, doc: OpenDocument, findings: List<RedactFinding>) {
     val c = pdfColors
     PdfDialog(
-        onDismiss = { vm.redact.findings = null }, title = stringResource(R.string.redact_audit_title),
-        confirm = stringResource(R.string.common_ok), onConfirm = { vm.redact.findings = null }, dismiss = null,
+        onDismiss = { vm.tools.redact.findings = null }, title = stringResource(R.string.redact_audit_title),
+        confirm = stringResource(R.string.common_ok), onConfirm = { vm.tools.redact.findings = null }, dismiss = null,
     ) {
         if (findings.isEmpty()) {
             Text(stringResource(R.string.redact_audit_none), color = c.text, fontSize = 14.sp)
@@ -424,7 +424,7 @@ fun RedactionAuditDialog(vm: AppViewModel, doc: OpenDocument, findings: List<Red
                 for (f in findings) {
                     Column(
                         Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable {
-                            vm.redact.findings = null
+                            vm.tools.redact.findings = null
                             doc.controller.sheet = ViewerSheet.None
                             vm.flashRegion(doc, f.page, f.rect)
                         }.padding(vertical = 6.dp),
@@ -459,7 +459,7 @@ fun RedactPlaceLayer(vm: AppViewModel, doc: OpenDocument) {
                 val s = start
                 start = null
                 end = null
-                if (vm.redact.placing !== doc || !moved || s == null) return@toolGestures
+                if (vm.tools.redact.placing !== doc || !moved || s == null) return@toolGestures
                 val at = doc.viewer.screenToPage(s) ?: return@toolGestures
                 val page = doc.info.pages.getOrNull(at.page) ?: return@toolGestures
                 val ppp = doc.viewer.pixelsPerPoint(at.page).coerceAtLeast(0.01f)
@@ -490,7 +490,7 @@ fun RedactPlaceLayer(vm: AppViewModel, doc: OpenDocument) {
             Icon(LucideIcons.SquareDashed, null, tint = c.icon, modifier = Modifier.size(20.dp))
             Spacer(Modifier.width(8.dp))
             Text(stringResource(R.string.redact_place_hint), color = c.text, fontSize = 14.sp, modifier = Modifier.weight(1f, fill = false))
-            TextButton(onClick = { vm.redact.placing = null; doc.controller.sheet = ViewerSheet.Redact }) { Text(stringResource(R.string.common_done), color = c.accent) }
+            TextButton(onClick = { vm.tools.redact.placing = null; doc.controller.sheet = ViewerSheet.Redact }) { Text(stringResource(R.string.common_done), color = c.accent) }
         }
     }
 }

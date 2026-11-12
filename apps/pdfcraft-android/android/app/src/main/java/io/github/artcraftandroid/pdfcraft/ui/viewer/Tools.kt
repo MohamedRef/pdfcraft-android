@@ -104,6 +104,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import androidx.compose.material3.minimumInteractiveComponentSize
 
 /** A stroke being drawn: its page and points (in the page's points). */
 internal class InkStroke(val page: Int, val appearance: InkAppearance, stylus: Boolean = false, val shapeMode: InkShapeMode = InkShapeMode.Freehand) {
@@ -132,11 +133,11 @@ data class MarkupDrag(val range: TextRange, val rects: List<FloatArray>)
 @Composable
 fun ToolLayer(vm: AppViewModel, doc: OpenDocument) {
     val tool = doc.controller.tool
-    if (vm.prepareForm.doc === doc) {
+    if (vm.tools.prepareForm.doc === doc) {
         PrepareFormLayer(vm, doc)
         return
     }
-    if (vm.redact.placing === doc) {
+    if (vm.tools.redact.placing === doc) {
         RedactPlaceLayer(vm, doc)
         return
     }
@@ -151,7 +152,7 @@ fun ToolLayer(vm: AppViewModel, doc: OpenDocument) {
                     doc, "comment_add",
                     mapOf(
                         "page" to p.page + 1, "type" to "stamp", "at" to listOf(p.x.toDouble(), p.y.toDouble()),
-                        "stamp" to doc.controller.stamp, "author" to vm.toolPrefs.author.ifBlank { null },
+                        "stamp" to doc.controller.stamp, "author" to vm.settings.toolPrefs.author.ifBlank { null },
                     ),
                 )
                 CommentMode.Text -> vm.commenting.notePrompt = NotePrompt(doc, p)
@@ -590,7 +591,7 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
         if (indices.isEmpty()) return
         documentEdit("comments_edit_many", mapOf("page" to page + 1, "comments" to indices) + extra)
     }
-    val prefs = vm.toolPrefs
+    val prefs = vm.settings.toolPrefs
     /** Drops a just-drawn draft stroke that turned out to be a gesture, without an undo step of its own. */
     fun dropGestureStroke(s: InkStroke) {
         strokes.remove(s)
@@ -656,7 +657,7 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                     strokes.remove(s)
                     steps.started()
                     var made = 0
-                    vm.runTool(doc, "comment_add", markupArgs(markup, s.page, rects, color, if (marker) opacity.coerceAtLeast(0.25f) else opacity, vm.toolPrefs.author.ifBlank { null }),
+                    vm.runTool(doc, "comment_add", markupArgs(markup, s.page, rects, color, if (marker) opacity.coerceAtLeast(0.25f) else opacity, vm.settings.toolPrefs.author.ifBlank { null }),
                         onSettled = {
                             steps.finished(made)
                             PenDiag.gesture(if (marker) "line_highlight" else "line_underline", if (made > 0) "markup" else "failed")
@@ -1622,8 +1623,8 @@ private fun MarkupLayer(vm: AppViewModel, doc: OpenDocument) {
     var pendingTap by remember(doc) { mutableStateOf<Offset?>(null) }
     var requestSerial by remember(doc) { androidx.compose.runtime.mutableIntStateOf(0) }
     val marker = doc.controller.markup
-    val color = vm.toolPrefs.color(marker.styled)
-    val opacity = vm.toolPrefs.opacity(marker.styled)
+    val color = vm.settings.toolPrefs.color(marker.styled)
+    val opacity = vm.settings.toolPrefs.opacity(marker.styled)
     val moveThresholdPx = with(LocalDensity.current) { 8.dp.toPx() }
     val hitRadiusPx = with(LocalDensity.current) { 14.dp.toPx() }
 
@@ -1673,8 +1674,8 @@ private fun MarkupLayer(vm: AppViewModel, doc: OpenDocument) {
                 val page = gesture.start.page
                 val radius = (hitRadiusPx / doc.viewer.pixelsPerPoint(page).coerceAtLeast(0.1f)).coerceIn(0.1f, 24f)
                 val selectedMarkup = doc.controller.markup
-                val selectedColor = vm.toolPrefs.color(selectedMarkup.styled)
-                val selectedOpacity = vm.toolPrefs.opacity(selectedMarkup.styled)
+                val selectedColor = vm.settings.toolPrefs.color(selectedMarkup.styled)
+                val selectedOpacity = vm.settings.toolPrefs.opacity(selectedMarkup.styled)
                 val serial = requestSerial
                 active = null
                 previewJob?.cancel()
@@ -1784,7 +1785,7 @@ enum class Picker { None, Color, Width, TextSize, Presets, PenStyle, EraserSize,
 @Composable
 fun ToolSubToolbar(vm: AppViewModel, doc: OpenDocument) {
     val ctl = doc.controller
-    val prefs = vm.toolPrefs
+    val prefs = vm.settings.toolPrefs
     val picker = ctl.picker
     fun toggle(p: Picker) {
         ctl.picker = if (ctl.picker == p) Picker.None else p
@@ -1859,7 +1860,7 @@ fun ToolSheets(vm: AppViewModel, doc: OpenDocument) {
 /** The colour, thickness or text-size picker of a tool, as a sheet above its sub-toolbar. */
 @Composable
 fun PropertyPicker(vm: AppViewModel, tool: StyledTool, picker: Picker, markup: TextMarkup, onDismiss: () -> Unit) {
-    val prefs = vm.toolPrefs
+    val prefs = vm.settings.toolPrefs
     val c = pdfColors
     // over the tool's bar, which stays in view with the picker's button shaded
     PdfSheet(onDismiss = onDismiss, modifier = Modifier.padding(bottom = (if (tool == StyledTool.Ink) DrawToolbarHeight else BottomBarHeight) + 1.dp).navigationBarsPadding(), bottomBand = false) {
@@ -1984,7 +1985,7 @@ fun ColorGrid(selected: Color, onPick: (Color) -> Unit) {
                     // only a swatch the colour of the sheet itself needs an outline to be seen
                     val outlined = kotlin.math.abs(color.luminance() - c.surface.luminance()) < 0.08f
                     Box(
-                        Modifier.size(32.dp)
+                        Modifier.minimumInteractiveComponentSize().size(32.dp)
                             .drawBehind {
                                 if (isSel) {
                                     val w = 2.dp.toPx()

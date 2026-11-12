@@ -62,6 +62,21 @@ pub fn encode_png_grey(page: &Raster<'_>) -> Result<Vec<u8>, ScanError> {
     Ok(out)
 }
 
+/// A colour page as a PNG, its resolution in the `pHYs` chunk (a merged burst written losslessly,
+/// #297).
+pub fn encode_png_rgb(page: &Raster<'_>) -> Result<Vec<u8>, ScanError> {
+    let mut out = Vec::new();
+    let mut encoder = png::Encoder::new(&mut out, page.width, page.height);
+    encoder.set_color(png::ColorType::Rgb);
+    encoder.set_depth(png::BitDepth::Eight);
+    let per_metre = (f64::from(page.dpi.max(1)) / 0.0254).round() as u32;
+    encoder.set_pixel_dims(Some(png::PixelDimensions { xppu: per_metre, yppu: per_metre, unit: png::Unit::Meter }));
+    let mut writer = encoder.write_header().map_err(|_| ScanError::Encode)?;
+    writer.write_image_data(page.pixels).map_err(|_| ScanError::Encode)?;
+    writer.finish().map_err(|_| ScanError::Encode)?;
+    Ok(out)
+}
+
 /// A black-and-white page as a 1-bit PNG, its resolution in the `pHYs` chunk. One bit per pixel
 /// before compression, and no filter: on two-level rows a filter only gets in the compressor's
 /// way.

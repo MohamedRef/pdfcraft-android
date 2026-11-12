@@ -61,6 +61,8 @@ internal fun ScanLabSettings(vm: AppViewModel) {
     }
 
     // one row per scanner feature
+    // the in-app camera (#294), or the phone's camera app it replaced (the same setting as in Settings)
+    io.github.artcraftandroid.pdfcraft.ui.scan.ScanCameraSetting()
     Choice(
         stringResource(R.string.scan_lab_finder),
         listOf(
@@ -89,13 +91,22 @@ internal fun ScanLabSettings(vm: AppViewModel) {
     SheetRow(null, stringResource(R.string.scan_lab_flatten_auto), { lab.update(o.copy(flattenAuto = !o.flattenAuto)) }) {
         PdfSwitch(o.flattenAuto, { lab.update(o.copy(flattenAuto = it)) })
     }
+    SheetRow(null, stringResource(R.string.scan_lab_book_gutter), { lab.update(o.copy(bookGutter = !o.bookGutter)) }) {
+        PdfSwitch(o.bookGutter, { lab.update(o.copy(bookGutter = it)) })
+    }
     SheetRow(null, stringResource(R.string.scan_lab_upright), { lab.update(o.copy(upright = !o.upright)) }) {
         PdfSwitch(o.upright, { lab.update(o.copy(upright = it)) })
+    }
+    SheetRow(null, stringResource(R.string.scan_lab_settle_turns), { lab.update(o.copy(settleTurns = !o.settleTurns)) }) {
+        PdfSwitch(o.settleTurns, { lab.update(o.copy(settleTurns = it)) })
     }
     val off = stringResource(R.string.scan_lab_off)
     Choice(stringResource(R.string.scan_lab_sharpen), ScanLab.SHARPENING.map { it to (if (it == 0) off else it.toString()) }, o.sharpen) { lab.update(o.copy(sharpen = it)) }
     SheetRow(null, stringResource(R.string.scan_lab_denoise), { lab.update(o.copy(denoise = !o.denoise)) }) {
         PdfSwitch(o.denoise, { lab.update(o.copy(denoise = it)) })
+    }
+    SheetRow(null, stringResource(R.string.scan_lab_presets), { lab.update(o.copy(presets = !o.presets)) }) {
+        PdfSwitch(o.presets, { lab.update(o.copy(presets = it)) })
     }
     val own = stringResource(R.string.scan_lab_strength_own)
     Choice(stringResource(R.string.scan_lab_strength), ScanLab.STRENGTHS.map { it to (it?.toString() ?: own) }, o.strength) { lab.update(o.copy(strength = it)) }

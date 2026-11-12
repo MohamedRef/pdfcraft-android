@@ -106,6 +106,36 @@ impl Pyramid {
     pub fn bytes(&self) -> usize {
         self.levels.iter().map(|l| l.data.len()).sum()
     }
+
+    /// The part of the photo inside `quad` (full-size pixels) straightened to `out_w` × `out_h`
+    /// grey pixels, sampled from the smallest level that still has at least as many pixels
+    /// across the quad as the output, so a small output is not aliased from the full size.
+    /// Outside the photo is white. `None` for an empty output or corners no homography maps.
+    pub fn straighten(&self, quad: &Quad, out_w: u32, out_h: u32) -> Option<Luma> {
+        if out_w == 0 || out_h == 0 {
+            return None;
+        }
+        let [top, right, bottom, left] = quad.side_lengths();
+        let need = (top.max(bottom) / f64::from(out_w)).min(left.max(right) / f64::from(out_h));
+        // level k is 2^k times smaller; take the deepest one still at least as fine as the output
+        let mut level = 0;
+        while level + 1 < self.levels.len() && need >= f64::from(1u32 << (level + 1)) {
+            level += 1;
+        }
+        let img = &self.levels[level];
+        let (sx, sy) = (f64::from(img.width) / f64::from(self.levels[0].width), f64::from(img.height) / f64::from(self.levels[0].height));
+        let target = [[0.0, 0.0], [f64::from(out_w), 0.0], [f64::from(out_w), f64::from(out_h)], [0.0, f64::from(out_h)]];
+        let scaled = quad.0.map(|[x, y]| [x * sx, y * sy]);
+        let map = pdfcraft_geom::perspective::Homography::from_points(target, scaled)?;
+        let mut data = Vec::with_capacity(out_w as usize * out_h as usize);
+        for row in 0..out_h {
+            for col in 0..out_w {
+                let v = map.apply([f64::from(col) + 0.5, f64::from(row) + 0.5]).and_then(|[x, y]| sample(img, x, y)).unwrap_or(255.0);
+                data.push(v.round().clamp(0.0, 255.0) as u8);
+            }
+        }
+        Some(Luma { width: out_w, height: out_h, data })
+    }
 }
 
 /// Each pixel the mean of a 2 × 2 block.
@@ -500,9 +530,15 @@ pub fn refine(pyramid: &Pyramid, quad: &Quad, options: &RefineOptions) -> Refine
     if sides.iter().all(|s| !s.refined) {
         return Refined { sides, ..unchanged };
     }
-    // inside the photo, as every corner of a page is taken to be
-    let corners = corners.map(|[x, y]| [x.clamp(0.0, f64::from(width)), y.clamp(0.0, f64::from(height))]);
-    let moved_far = corners.iter().zip(&quad.0).any(|(p, q)| (p[0] - q[0]).hypot(p[1] - q[1]) > 2.0 * search);
+    // a corner the frame cut off is where its two sides meet, outside the photo, but not more
+    // than 15 % of the photo beyond it (#291)
+    let (w, h) = (f64::from(width), f64::from(height));
+    let out = f64::from(crate::quad::OUTSIDE);
+    let corners = corners.map(|[x, y]| [x.clamp(-out * w, (1.0 + out) * w), y.clamp(-out * h, (1.0 + out) * h)]);
+    // a corner on the photo may not move farther than twice the search distance; one outside it
+    // was never seen, so where it was given says little (the detector puts it on the border)
+    let on_photo = |p: &[f64; 2]| (0.0..=w).contains(&p[0]) && (0.0..=h).contains(&p[1]);
+    let moved_far = corners.iter().zip(&quad.0).any(|(p, q)| on_photo(p) && (p[0] - q[0]).hypot(p[1] - q[1]) > 2.0 * search);
     let refined = Quad(corners);
     let area = refined.area() / quad.area().max(1e-9);
     if moved_far || !refined.is_convex() || !(0.8..=1.25).contains(&area) || corners.iter().flatten().any(|v| !v.is_finite()) {

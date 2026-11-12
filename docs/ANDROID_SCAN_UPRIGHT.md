@@ -80,14 +80,57 @@ turned back to exactly the page that was drawn, each settled by four tiles at a 
   instead of a preview pass and corners shifted for a second straightening. The pixels are the
   same.
 
+## Turning by hand, Undo, and the multi-page rule
+
+Added after the classifier, in the pull request that closes the rest of #339:
+
+- **Rotate** on the scan screen turns the page shown a quarter turn clockwise. From then on the
+  page's turn is the person's: the request carries it as `turns` (`ScanPageRequest.turns`,
+  `PageRequest::turns`) with `upright` off, so the classifier is not asked about that page again
+  and cannot fight the person. The turn is added natively after the straightening, by moving the
+  same pixels (`upright_pages::total_turn`, then `turned`), so the page is still resampled once.
+- **"Turned upright · Undo"** is shown over the page preview when the classifier turned the page
+  and the person has not. Undo gives the page a turn of 0 by hand: the page as its corners give it.
+- The person's turn is kept in the scan session (`ScanSession` version 2, a fifth field on each
+  page line; a version 1 session from before an update still comes back), so it survives Android
+  closing the app while the camera is in front.
+- **Settings ▸ Preferences ▸ Scan ▸ Turn pages upright automatically**, on by default. Off, no
+  page is given to the classifier; Rotate still works. The testing option "Turn pages upright"
+  stays, and either one off stops the classifier.
+- **The multi-page rule** (`upright_pages::settle` and `followed`, through `scan_settle_turns`):
+  in a scan of three pages or more, a page the classifier was not sure of takes the turn of its
+  two neighbours when both are sure at a confidence of 0.95 or more and agree. Save makes every
+  page once, reads the classifier's answers together, and makes again only a page that followed
+  its neighbours into another turn. A page the person turned is nobody's neighbour. The testing
+  option "Unsure pages follow their neighbors" switches the rule off.
+- What each page's turn came from is in the `page` line of the diagnostics log
+  (`auto_upright`, `turns_manual`, `turns`, `turn_source`: `manual`, `neighbours`, `classifier` or
+  `off`, `settle_turns`, `followed`), every press of Rotate or Undo is a `turn` line, and a kept
+  scan's page file has the same in `turns` (see `ANDROID_SCAN_TESTING.md`). `scan_replay` repeats
+  a page with the person's turn or the neighbours' turn in place of the classifier.
+
+What was checked, and on what: the Rust tests in `apps/pdfcraft-android/src/scan.rs` (a drawn
+photo turned by hand one, two and three times is exactly the unturned page turned that many
+times, in the preview and in the saved page; the person's turn adds to the classifier's on the
+drawn Arabic page; a whole photo in Original turned by hand is no longer left as the camera file;
+the multi-page rule's cases through the app's call), and the JVM tests in
+`ui/scan/ScanTurnsTest.kt`, `ScanSessionTest`, `ScanSaveTest` and `ScanLabTest`. **None of it has
+run on a phone**, and the screen itself (where the button and the chip sit, whether the chip is
+noticed) has not been seen by anyone.
+
+Departures:
+
+- The chip is shown on the scan screen's page preview, not on a separate review screen (there
+  is none); with previews switched off (a testing option) there is no chip, and Rotate works from
+  the photo without knowing the classifier's turn.
+- The multi-page rule is applied when the scan is saved. The preview shows each page by its own
+  answer, so a page that will follow its neighbours is shown unturned until it is saved.
+- The rule's 0.95 is the issue's figure. With this network's confidences (0.53–0.87 on the
+  reference pages, section above) a neighbour at 0.95 will be rare, so the rule may seldom act.
+  That is a reason to look at the logged confidences on the owner's scans, not to lower it blind.
+
 ## Not done
 
-- No "Turned upright · Undo" chip and no rotate button on the scan screen; a page turned wrongly
-  is put right in the saved PDF (Organize pages), or by scanning again with the option off.
-- The option is among the scanner's testing options, not in the ordinary settings.
-- No rule that lets a page the classifier is unsure of follow its neighbours in a multi-page
-  scan.
-- The page shown before saving is not turned.
 - No test set beyond the ten photos; no separate figures for Arabic, Latin and handwriting.
 - No phone timings; nothing has run on a device.
 

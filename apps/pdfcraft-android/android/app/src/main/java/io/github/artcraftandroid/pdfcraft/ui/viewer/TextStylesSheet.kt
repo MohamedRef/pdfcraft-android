@@ -115,9 +115,9 @@ internal fun TextStylesSheet(vm: AppViewModel, doc: OpenDocument) {
                 }
             }
         }
-        TextButton(enabled = canEdit && !loading && vm.busy == null && selected.isNotEmpty() && loadedGeneration == generation, onClick = {
+        TextButton(enabled = canEdit && !loading && vm.tools.busy == null && selected.isNotEmpty() && loadedGeneration == generation, onClick = {
             val chosen = styles ?: return@TextButton
-            vm.createStyleBookmarks(doc, generation, selected.map { chosen[it] })
+            vm.tools.createStyleBookmarks(doc, generation, selected.map { chosen[it] })
         }) { Text(stringResource(R.string.text_styles_create)) }
     }
 }

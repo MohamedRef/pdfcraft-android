@@ -1,3 +1,4 @@
+import java.security.MessageDigest
 import javax.inject.Inject
 import org.gradle.process.ExecOperations
 
@@ -211,7 +212,8 @@ abstract class LucideIconsTask : DefaultTask() {
 
 /**
  * The text-recognition models (`cargo xtask models` fetches them into assets/models, listed in
- * ATTRIBUTION.toml), copied into the app's assets when they are there. Without them the app still
+ * ATTRIBUTION.toml) and the scanner's models, copied into the app's assets when they are there,
+ * with `models.index` listing each file's size and SHA-256. Without them the app still
  * builds; Recognize text then says it isn't installed.
  */
 abstract class OcrModels : DefaultTask() {
@@ -224,9 +226,27 @@ abstract class OcrModels : DefaultTask() {
         out.deleteRecursively()
         val src = modelsDir.get().asFile
         val files = src.listFiles { f -> f.isFile }.orEmpty()
-        if (files.none { it.extension == "rten" }) return
+        if (files.none { it.extension == "rten" || it.extension == "onnx" }) return
         out.mkdirs()
-        for (f in files) f.copyTo(File(out, f.name), overwrite = true)
+        // models.index: name, size and SHA-256 of every file, so the app copies a file again when
+        // an update replaces it under the same name (#289, ModelFiles.kt)
+        val index = StringBuilder()
+        for (f in files.sortedBy { it.name }) {
+            if (f.name == "models.index") continue
+            f.copyTo(File(out, f.name), overwrite = true)
+            val digest = MessageDigest.getInstance("SHA-256")
+            f.inputStream().use { input ->
+                val buffer = ByteArray(1 shl 16)
+                while (true) {
+                    val n = input.read(buffer)
+                    if (n < 0) break
+                    digest.update(buffer, 0, n)
+                }
+            }
+            index.append(f.name).append('\t').append(f.length()).append('\t')
+                .append(digest.digest().joinToString("") { "%02x".format(it) }).append('\n')
+        }
+        File(out, "models.index").writeText(index.toString())
     }
 }
 
@@ -366,6 +386,11 @@ dependencies {
     implementation(libs.androidx.compose.material3)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.androidx.exifinterface)
+    // Scan: the in-app camera (#294), Apache-2.0 like the other AndroidX libraries
+    implementation(libs.androidx.camera.core)
+    implementation(libs.androidx.camera.camera2)
+    implementation(libs.androidx.camera.lifecycle)
+    implementation(libs.androidx.camera.compose)
     implementation(libs.jna) { artifact { type = "aar" } }
     testImplementation(libs.junit)
     testImplementation(libs.org.json)

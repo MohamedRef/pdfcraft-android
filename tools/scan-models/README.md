@@ -118,3 +118,15 @@ file's `character` entry): how far the picture is turned clockwise.
 are put together.
 
 The pages the scanner's orientation tests use are drawn by `tools/scan-eval/text_pages.py`.
+
+## DocRes prompts (#304): fixtures only, no model
+
+`docres_prompts.py` makes the fixtures that `scan/src/enhance/learned.rs` is checked against:
+three drawn pages under a drawn shadow, and DocRes's own deshadowing and appearance prompts for
+them, computed by the two functions copied from DocRes's `inference.py` (MIT). No model file is
+made or shipped; `docs/ANDROID_SCAN_MAX_QUALITY.md` says why.
+
+```sh
+pip install opencv-python-headless numpy     # OpenCV 5.0.0, NumPy 2.5.4 when the fixtures were made
+python3 tools/scan-models/docres_prompts.py apps/pdfcraft-android/scan/tests/data
+```
