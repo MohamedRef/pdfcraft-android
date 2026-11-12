@@ -237,7 +237,7 @@ fun AppViewModel.addTape(doc: OpenDocument, page: Int, rect: FloatArray) {
         tell(text(R.string.study_tape_read_only))
         return
     }
-    runTool(doc, "comment_add", tapeArgs(page, rect, doc.study.tapeColor, commentAuthor))
+    runTool(doc, "comment_add", tapeArgs(page, rect, doc.study.tapeColor, commenting.commentAuthor))
     MarkupDiag.tapeAdd(doc, doc.study.tapeColor)
 }
 

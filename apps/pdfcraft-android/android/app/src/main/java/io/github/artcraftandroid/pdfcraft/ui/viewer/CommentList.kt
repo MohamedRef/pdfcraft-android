@@ -171,7 +171,7 @@ fun CommentListScreen(vm: AppViewModel, doc: OpenDocument) {
     var statuses by remember { mutableStateOf<Map<Pair<Int, Int>, String>>(emptyMap()) }
     LaunchedEffect(doc.info.generation) {
         list = vm.comments(doc)
-        statuses = vm.commentStatuses(doc)
+        statuses = vm.commenting.commentStatuses(doc)
     }
     val folded = remember { mutableStateMapOf<Int, Boolean>() }
     val drawingsOpen = remember { mutableStateMapOf<Int, Boolean>() }
@@ -190,7 +190,7 @@ fun CommentListScreen(vm: AppViewModel, doc: OpenDocument) {
         } else close()
     }
     val guest = stringResource(R.string.comments_guest)
-    val me = vm.commentAuthor
+    val me = vm.commenting.commentAuthor
     val all = list.orEmpty().filter { !it.fillSign }
     val parents = all.filter { it.replyTo == null && it.state == null && it.subtype in LISTED && !it.isTape() }
     // each thread: its comment, then the replies to it in order
@@ -354,9 +354,9 @@ fun CommentListScreen(vm: AppViewModel, doc: OpenDocument) {
                                                 close()
                                                 val y = parent.rect.getOrNull(1) ?: 0f
                                                 doc.viewer.goToPage(parent.page.toInt(), (y - 40f).coerceAtLeast(0f))
-                                                vm.selectedComment = doc to parent
+                                                vm.commenting.selectedComment = doc to parent
                                             },
-                                            onReply = { vm.replyPrompt = ReplyPrompt(doc, thread.first()) },
+                                            onReply = { vm.commenting.replyPrompt = ReplyPrompt(doc, thread.first()) },
                                             onMenu = { menu = ListMenu.Comment(cm) },
                                             status = if (i == 0) statusOf(cm) else null,
                                         )
@@ -378,20 +378,20 @@ fun CommentListScreen(vm: AppViewModel, doc: OpenDocument) {
                 action()
             }
             if (threads.isNotEmpty()) {
-                SheetRow(LucideIcons.Share2, stringResource(R.string.comments_share), { pick { vm.exportComments(doc, share = true) } })
-                SheetRow(LucideIcons.FileDown, stringResource(R.string.comments_save), { pick { vm.exportComments(doc, share = false) } })
+                SheetRow(LucideIcons.Share2, stringResource(R.string.comments_share), { pick { vm.commenting.exportComments(doc, share = true) } })
+                SheetRow(LucideIcons.FileDown, stringResource(R.string.comments_save), { pick { vm.commenting.exportComments(doc, share = false) } })
             }
-            SheetRow(LucideIcons.FileInput, stringResource(R.string.comments_import), { pick { vm.pickCommentsImport(doc) } }, enabled = canAdd)
+            SheetRow(LucideIcons.FileInput, stringResource(R.string.comments_import), { pick { vm.commenting.pickCommentsImport(doc) } }, enabled = canAdd)
             if (threads.isNotEmpty()) {
                 SheetRow(LucideIcons.FileText, stringResource(R.string.comments_summarize), { menu = ListMenu.Summary }, chevron = true)
                 SheetRow(
                     LucideIcons.Copy,
                     stringResource(if (filtering) R.string.comments_copy_shown else R.string.comments_copy_all),
-                    { pick { vm.copyComments(doc, shown.map { it.first() }) } },
+                    { pick { vm.commenting.copyComments(doc, shown.map { it.first() }) } },
                 )
             }
-            if (vm.copiedComments.isNotEmpty()) {
-                SheetRow(LucideIcons.ClipboardPaste, stringResource(R.string.comments_paste), { pick { vm.pasteComments(doc) } }, enabled = canAdd)
+            if (vm.commenting.copiedComments.isNotEmpty()) {
+                SheetRow(LucideIcons.ClipboardPaste, stringResource(R.string.comments_paste), { pick { vm.commenting.pasteComments(doc) } }, enabled = canAdd)
             }
             val hidden = doc.info.commentsHidden
             SheetRow(
@@ -408,7 +408,7 @@ fun CommentListScreen(vm: AppViewModel, doc: OpenDocument) {
                 "date" to R.string.comments_sort_date, "type" to R.string.comments_sort_type,
             )) SheetRow(null, stringResource(label), {
                 menu = null
-                vm.summarizeComments(doc, sort)
+                vm.commenting.summarizeComments(doc, sort)
             })
             Spacer(Modifier.height(8.dp))
         }
@@ -419,30 +419,30 @@ fun CommentListScreen(vm: AppViewModel, doc: OpenDocument) {
             if (text != null) {
                 SheetRow(LucideIcons.Copy, stringResource(R.string.comments_copy_text), {
                     menu = null
-                    vm.copyText(text)
+                    vm.commenting.copyText(text)
                 })
             }
             if (text != null && !cm.locked) {
                 SheetRow(LucideIcons.Pencil, stringResource(R.string.comments_edit), {
                     menu = null
-                    vm.selectedComment = doc to cm
+                    vm.commenting.selectedComment = doc to cm
                 })
             }
             if (!reply) {
                 SheetRow(LucideIcons.CircleCheck, stringResource(R.string.comments_set_status), { menu = ListMenu.Status(cm) }, chevron = true)
                 SheetRow(if (cm.locked) LucideIcons.LockOpen else LucideIcons.Lock, stringResource(if (cm.locked) R.string.comments_unlock else R.string.comments_lock), {
                     menu = null
-                    vm.lockComment(doc, cm, !cm.locked)
+                    vm.commenting.lockComment(doc, cm, !cm.locked)
                 })
                 if (cm.subtype != "Sound") SheetRow(LucideIcons.CopyPlus, stringResource(R.string.comments_copy_comment), {
                     menu = null
-                    vm.copyComments(doc, listOf(cm))
+                    vm.commenting.copyComments(doc, listOf(cm))
                 })
             }
             if (!cm.locked) {
                 SheetRow(LucideIcons.Trash2, stringResource(R.string.common_delete), {
                     menu = null
-                    vm.deleteComment(doc, cm)
+                    vm.commenting.deleteComment(doc, cm)
                 })
             }
             Spacer(Modifier.height(8.dp))
@@ -452,7 +452,7 @@ fun CommentListScreen(vm: AppViewModel, doc: OpenDocument) {
             val current = statusOf(m.c)?.lowercase() ?: "none"
             for ((status, label) in STATUSES) SheetRow(null, stringResource(label), {
                 menu = null
-                if (status != current) vm.setCommentStatus(doc, m.c, status)
+                if (status != current) vm.commenting.setCommentStatus(doc, m.c, status)
             }, checked = status == current)
             Spacer(Modifier.height(8.dp))
         }
