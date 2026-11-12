@@ -27,6 +27,7 @@ internal enum class DiagArea(val tag: String, val issues: String) {
     Update("update", "#193"),
     Viewer("viewer", "#152 #153 #155 #157 #184 #198 #203 #204 #327"),
     Markup("markup", "#133 #134 #135 #143 #158 #159 #169 #170 #179 #180 #196 #197"),
+    Edit("edit", "#161 #162 #163 #164 #166 #167 #171 #182"),
 }
 
 /**
