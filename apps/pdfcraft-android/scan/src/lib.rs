@@ -6,10 +6,11 @@
 //! bytes for the same input, on any number of threads), bounded by the input, and never panics on
 //! bad input.
 //!
-//! Some modules are building blocks the pipeline does not call yet (`book`, `flatten_guard`,
-//! `metrics_*`, `photo_mask`, `preset`, `straightness`, `upright_pages`):
-//! `docs/ANDROID_SCAN_BLOCKS.md` says what each gives and what is left to wire in. `sharpness`
-//! and `merge` are called by `capture` (#296, #297), which no screen calls yet.
+//! Some modules are building blocks the pipeline does not call yet (`book`, `metrics_*`,
+//! `photo_mask`, `preset`, `upright_pages`); `flatten_guard` and `straightness` choose between a
+//! flattened page and a straightened one when that is asked (#302); `sharpness` and `merge` are
+//! called by `capture` (#296, #297), which no screen calls yet:
+//! `docs/ANDROID_SCAN_BLOCKS.md` says what each gives and what is left to wire in.
 #![forbid(unsafe_code)]
 #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
 
@@ -37,6 +38,8 @@ mod quad;
 pub mod refine;
 pub mod sharpness;
 pub mod straightness;
+#[cfg(any(test, feature = "synth"))]
+pub mod synth;
 pub mod upright;
 pub mod upright_pages;
 pub mod warp;
@@ -49,7 +52,7 @@ pub use enhance::{AutoOutput, AutoParams, DEFAULT_SHARPEN, PaperMode, auto};
 pub use error::ScanError;
 pub use flatten::{FlattenGrid, flat_grid, predict_grid, unwarp};
 pub use look::Look;
-pub use page::{PageBase, PageRequest, PageResult, page_base, page_look, process_page};
+pub use page::{FlattenCheck, PageBase, PageRequest, PageResult, compare_flattened, page_base, page_look, process_page};
 pub use photo::{Luma, MAX_PHOTO_PIXELS, Photo, luma};
 pub use quad::Quad;
 pub use refine::{Pyramid, RefineOptions, Refined, SideFit, refine};
@@ -88,6 +91,8 @@ mod tests_refine;
 mod tests_sharpness;
 #[cfg(test)]
 mod tests_straightness;
+#[cfg(test)]
+mod tests_synth;
 #[cfg(test)]
 mod tests_upright;
 #[cfg(test)]

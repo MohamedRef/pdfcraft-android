@@ -62,6 +62,10 @@ pub struct ScanPageRequest {
     /// the perspective warp. Off unless asked for; see [`scan_can_flatten`].
     #[uniffi(default = false)]
     pub flatten: bool,
+    /// With `flatten`: make the page straightened by its corners as well, and keep the flattened
+    /// page only when its lines of text are at least 10 % straighter (#302's automatic mode).
+    #[uniffi(default = false)]
+    pub flatten_check: bool,
     /// Take the page's proportions from the lengths of its sides alone, as before #293. A testing
     /// choice (#288).
     #[uniffi(default = false)]
@@ -124,6 +128,8 @@ pub struct ScanPageResult {
     /// How far from flat the network found the page, as a share of its diagonal (0 when it was
     /// not asked).
     pub bend: f32,
+    /// How the flattened and the straightened page compared, when that was asked (#302).
+    pub flatten_check: Option<ScanFlattenCheck>,
     /// The quarter turns clockwise the page was given to stand upright (#339): 0 when it was not
     /// asked, already upright, or the classifier was not sure.
     pub quarter_turns: u8,
@@ -423,12 +429,42 @@ fn page_request<'a>(request: &ScanPageRequest, photo: &'a [u8], corners: [f32; 8
         focal_35mm: request.focal_35mm,
         snap_paper: request.snap_paper,
         flatten: request.flatten,
+        flatten_check: request.flatten_check,
         side_proportions: request.side_proportions,
         upright: request.upright,
         sharpen: request.sharpen,
         denoise: request.denoise,
         max_side,
         ..PageRequest::new(photo, corners)
+    }
+}
+
+/// How the flattened page and the page straightened by its corners compared (#302).
+#[derive(Debug, Clone, PartialEq, uniffi::Record)]
+pub struct ScanFlattenCheck {
+    /// The flattened page was kept.
+    pub kept: bool,
+    /// Why, as a short word: `straighter`, `notbetter`, `unmeasured` or `straight`.
+    pub why: String,
+    /// How far the lines of text are from straight and level, in pixels of the page, on each;
+    /// `None` when too few lines could be followed.
+    pub straightened_px: Option<f32>,
+    pub flattened_px: Option<f32>,
+    /// The lines of text followed on each.
+    pub straightened_lines: u32,
+    pub flattened_lines: u32,
+}
+
+impl From<pdfcraft_scan::page::FlattenCheck> for ScanFlattenCheck {
+    fn from(c: pdfcraft_scan::page::FlattenCheck) -> Self {
+        ScanFlattenCheck {
+            kept: c.kept,
+            why: c.why.into(),
+            straightened_px: c.straightened.map(|m| m.px as f32),
+            flattened_px: c.flattened.map(|m| m.px as f32),
+            straightened_lines: c.straightened.map_or(0, |m| m.lines),
+            flattened_lines: c.flattened.map_or(0, |m| m.lines),
+        }
     }
 }
 
@@ -443,6 +479,8 @@ pub struct ScanPreview {
     pub quarter_turns: u8,
     /// The page was flattened by the network (#302).
     pub flattened: bool,
+    /// How the flattened and the straightened page compared, when that was asked (#302).
+    pub flatten_check: Option<ScanFlattenCheck>,
     /// The straightened page was still at hand from an earlier preview: only its look was made.
     pub reused: bool,
     pub timings: Vec<ScanTiming>,
@@ -460,6 +498,7 @@ struct PreviewKey {
     snap_paper: bool,
     side_proportions: bool,
     flatten: bool,
+    flatten_check: bool,
     upright: bool,
     max_side: u32,
 }
@@ -510,6 +549,7 @@ pub(crate) fn preview_in(root: &Path, request: &ScanPageRequest, max_side: u32) 
         snap_paper: request.snap_paper,
         side_proportions: request.side_proportions,
         flatten: request.flatten,
+        flatten_check: request.flatten_check,
         upright: request.upright,
         max_side,
     };
@@ -560,7 +600,7 @@ pub(crate) fn preview_in(root: &Path, request: &ScanPageRequest, max_side: u32) 
         return Err(MobileError::Command("the page could not be drawn".into()));
     }
     timings.push(ScanTiming { stage: "scan_preview_look".into(), ms: ms(clock) });
-    Ok(ScanPreview { width, height, rgba, quarter_turns: base.quarter_turns, flattened: base.flattened, reused, timings })
+    Ok(ScanPreview { width, height, rgba, quarter_turns: base.quarter_turns, flattened: base.flattened, flatten_check: base.flatten_check.map(Into::into), reused, timings })
 }
 
 pub(crate) fn process_in(root: &Path, request: &ScanPageRequest) -> Result<ScanPageResult, MobileError> {
@@ -608,6 +648,7 @@ pub(crate) fn process_in(root: &Path, request: &ScanPageRequest) -> Result<ScanP
         focal_mismatch: page.focal_mismatch,
         flattened: page.flattened,
         bend: page.bend,
+        flatten_check: page.flatten_check.map(Into::into),
         quarter_turns: page.quarter_turns,
         orientation: page.orientation.map(|found| ScanOrientation {
             quarter_turns: found.quarter_turns,
@@ -806,6 +847,7 @@ mod tests {
             focal_35mm: None,
             snap_paper: true,
             flatten: false,
+            flatten_check: false,
             side_proportions: false,
             upright: false,
             sharpen: 30,
@@ -1180,6 +1222,59 @@ mod tests {
         };
         let (was, now) = (arch(&plain.path), arch(&flat.path));
         assert!(was > 8.0 && now < was / 3.0, "arched by {was:.1} px before and {now:.1} px after");
+        assert_eq!(flat.flatten_check, None, "checked only when asked");
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    /// Flattening checked (#302's automatic mode): a bowed page keeps the flattened version, a flat
+    /// one keeps the page straightened by its corners, and each says why with both measures.
+    #[test]
+    fn a_checked_flattening_is_kept_only_when_the_lines_come_out_straighter() {
+        let root = temp("flatten-check");
+        assert!(scan_can_flatten(), "assets/models/scan-flatten.onnx is missing or is not the pinned file");
+        let corners =
+            vec![150.0 / 900.0, 180.0 / 1200.0, 750.0 / 900.0, 180.0 / 1200.0, 750.0 / 900.0, 1020.0 / 1200.0, 150.0 / 900.0, 1020.0 / 1200.0];
+        // the same sheet as above, bowed by `bow` pixels, with lines of words on it
+        let sheet = |name: &str, bow: f64| {
+            let shot = root.join(name);
+            image::RgbImage::from_fn(900, 1200, |x, y| {
+                let bend = bow * (std::f64::consts::PI * (f64::from(x) - 150.0) / 600.0).sin();
+                let (level, sheet) = (f64::from(y) + bend, (150..750).contains(&x));
+                let sheet = sheet && level > 180.0 && level < 1020.0;
+                let word = x.wrapping_sub(200) % 50 < 38;
+                let print = sheet && word && (200..700).contains(&x) && level > 240.0 && level < 960.0 && (level as i64 - 240).rem_euclid(30) < 9;
+                image::Rgb(if print {
+                    [40, 40, 46]
+                } else if sheet {
+                    [236, 233, 226]
+                } else {
+                    [66, 54, 46]
+                })
+            })
+            .save(&shot)
+            .unwrap();
+            shot
+        };
+        let ask = |shot: &Path, out: &str| ScanPageRequest {
+            corners: corners.clone(),
+            look: ScanLook::Original,
+            flatten: true,
+            flatten_check: true,
+            ..request(shot, &root.join(out))
+        };
+        let bowed = process_in(&root, &ask(&sheet("bowed.png", 24.0), "bowed")).unwrap();
+        let check = bowed.flatten_check.clone().expect("checked");
+        let (s, f) = (check.straightened_px.unwrap(), check.flattened_px.unwrap());
+        assert!(check.kept && bowed.flattened && check.why == "straighter", "{check:?}");
+        assert!(f <= s * 0.9 && check.straightened_lines >= 3 && check.flattened_lines >= 3, "{check:?}");
+        let stages: Vec<_> = bowed.timings.iter().map(|t| t.stage.as_str()).collect();
+        assert_eq!(stages, ["scan_decode", "scan_flatten", "scan_rectify", "scan_flatten_check", "scan_look", "scan_encode"]);
+        let level = process_in(&root, &ask(&sheet("level.png", 0.0), "level")).unwrap();
+        let check = level.flatten_check.clone().expect("checked");
+        assert!(!check.kept && !level.flattened && check.why != "straighter", "{check:?}");
+        // the preview makes the same choice
+        let preview = preview_in(&root, &ask(&root.join("bowed.png"), "unused"), 1280).unwrap();
+        assert!(preview.flattened && preview.flatten_check.is_some_and(|c| c.kept));
         std::fs::remove_dir_all(root).unwrap();
     }
 
