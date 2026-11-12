@@ -19,11 +19,12 @@ internal class ScanBookController(private val prefs: SharedPreferences, private 
     var order by mutableStateOf(ScanBookOrder.of(prefs.getString(PREF_ORDER, null)) ?: ScanBookOrder.default(rtl()))
         private set
 
-    fun turn(value: Boolean) {
+    /** [from] is where it was switched, for the log: `screen` or `camera`. */
+    fun turn(value: Boolean, from: String = "screen") {
         if (value == on) return
         on = value
         prefs.edit().putBoolean(PREF_ON, value).apply()
-        Diag.event(DiagArea.Scan, "book_mode", "on" to value, "book_order" to order.id)
+        Diag.event(DiagArea.Scan, "book_mode", "on" to value, "book_order" to order.id, "from" to from)
     }
 
     fun flipOrder() {
