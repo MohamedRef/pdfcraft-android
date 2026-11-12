@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -141,6 +142,7 @@ fun AppRoot(vm: AppViewModel, onBrowse: () -> Unit, onPickSignatureImage: () -> 
             vm.passwordRequest?.let { PasswordDialog(vm, it) }
             vm.idImport?.let { IdPasswordDialog(vm, it) }
             vm.signFieldChoice?.let { (d, w) -> SignFieldChoiceDialog(vm, d, w) }
+            if (vm.tipsOpen) FirstRunTipsDialog(onClose = { vm.tipsOpen = false })
             if (vm.authorPrompt) {
                 var name by remember { mutableStateOf("") }
                 PdfDialog(
@@ -154,11 +156,29 @@ fun AppRoot(vm: AppViewModel, onBrowse: () -> Unit, onPickSignatureImage: () -> 
                 }
             }
             vm.readOnlyPrompt?.let { d ->
-                PdfDialog(
-                    onDismiss = { vm.answerReadOnly(null) }, title = stringResource(R.string.root_read_only_title),
-                    confirm = stringResource(R.string.common_save_copy), onConfirm = { vm.answerReadOnly(true) },
-                    dismiss = stringResource(R.string.root_discard), onDismissButton = { vm.answerReadOnly(false) },
-                ) { Text(stringResource(R.string.root_read_only_body, d.name), color = c.text, fontSize = 14.sp) }
+                // Save a copy is the main choice; Keep editing goes back; discarding is a separate,
+                // confirmed step rather than a button next to the safe one (#191)
+                var confirmDiscard by remember(d) { mutableStateOf(false) }
+                if (confirmDiscard) {
+                    PdfDialog(
+                        onDismiss = { confirmDiscard = false }, title = stringResource(R.string.root_discard_title, d.name),
+                        confirm = stringResource(R.string.root_discard), onConfirm = { vm.answerReadOnly(false) }, destructive = true,
+                        dismiss = stringResource(R.string.common_cancel), onDismissButton = { confirmDiscard = false },
+                    ) { Text(stringResource(R.string.root_discard_body), color = c.text, fontSize = 14.sp) }
+                } else {
+                    PdfDialog(
+                        onDismiss = { vm.answerReadOnly(null) }, title = stringResource(R.string.root_read_only_title),
+                        confirm = stringResource(R.string.common_save_copy), onConfirm = { vm.answerReadOnly(true) },
+                        dismiss = stringResource(R.string.root_keep_editing), onDismissButton = { vm.answerReadOnly(null) },
+                    ) {
+                        Text(stringResource(R.string.root_read_only_body, d.name), color = c.text, fontSize = 14.sp)
+                        Spacer(Modifier.height(12.dp))
+                        Text(
+                            stringResource(R.string.root_discard), color = c.red, fontSize = 14.sp, fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.clickable(role = androidx.compose.ui.semantics.Role.Button) { confirmDiscard = true }.padding(vertical = 8.dp),
+                        )
+                    }
+                }
             }
             vm.linkPrompt?.let { url ->
                 val shown = runCatching { android.net.Uri.parse(url).let { u -> "${u.scheme}://${u.host}${if (u.port > 0) ":${u.port}" else ""}" } }.getOrDefault(url)
@@ -185,11 +205,29 @@ fun AppRoot(vm: AppViewModel, onBrowse: () -> Unit, onPickSignatureImage: () -> 
             }
             io.github.artcraftandroid.pdfcraft.ui.viewer.ToolDialogs(vm)
             vm.busy?.let { message ->
-                PdfDialog(onDismiss = {}, title = null, confirm = null, dismiss = null) {
+                // a count and Cancel when the job has them (#200)
+                val cancel = vm.busyCancel
+                var cancelling by remember(cancel) { mutableStateOf(false) }
+                PdfDialog(
+                    onDismiss = {}, title = null, confirm = null,
+                    dismiss = if (cancel != null) stringResource(if (cancelling) R.string.busy_cancelling else R.string.common_cancel) else null,
+                    onDismissButton = { if (cancel != null && !cancelling) { cancelling = true; cancel() } },
+                ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         CircularProgressIndicator(Modifier.size(28.dp), color = c.accent, strokeWidth = 3.dp)
                         Spacer(Modifier.width(20.dp))
                         Text(message, color = c.text)
+                    }
+                    vm.busyProgress?.let { (done, total) ->
+                        Spacer(Modifier.height(14.dp))
+                        LinearProgressIndicator(
+                            progress = { if (total > 0) done.toFloat() / total else 0f },
+                            modifier = Modifier.fillMaxWidth(), color = c.accent, trackColor = c.divider,
+                        )
+                    }
+                    if (cancel != null) {
+                        Spacer(Modifier.height(10.dp))
+                        Text(stringResource(R.string.busy_cancel_keeps), color = c.textSecondary, fontSize = 13.sp)
                     }
                 }
             }

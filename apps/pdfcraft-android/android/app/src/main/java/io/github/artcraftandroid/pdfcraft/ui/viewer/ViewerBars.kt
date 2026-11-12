@@ -99,6 +99,9 @@ fun ViewerTopBar(
     /** What Undo and Redo would take back or bring back, for their menu. */
     undoLabel: String? = null,
     redoLabel: String? = null,
+    /** Saved, Saving…, Unsaved changes or Kept in PdfCraft, between the switch and Undo (#190). */
+    saveState: SaveState? = null,
+    onSaveState: () -> Unit = {},
 ) {
     val c = pdfColors
     Row(
@@ -128,7 +131,9 @@ fun ViewerTopBar(
             // The switch keeps its size after the first edit so nothing in the bar moves (#189).
             ReadAloudSwitch(readingAloud, onReadAloud)
         }
-        Spacer(Modifier.weight(1f))
+        Box(Modifier.weight(1f).padding(horizontal = 6.dp), contentAlignment = Alignment.CenterStart) {
+            if (saveState != null && !toolActive && !readingAloud) SaveStateLabel(saveState, onSaveState)
+        }
         // while reading aloud the bar holds only back and the switch, as the reference's
         if (readingAloud && !toolActive) {
             Spacer(Modifier.width(10.dp))
@@ -553,5 +558,44 @@ fun ColorDot(color: androidx.compose.ui.graphics.Color, selected: Boolean, onCli
     ) {
         if (selected) Box(Modifier.requiredSize(40.dp).background(c.pressed, androidx.compose.foundation.shape.RoundedCornerShape(5.dp)))
         Box(Modifier.size(20.dp).background(color, androidx.compose.foundation.shape.CircleShape))
+    }
+}
+
+/** Whether the open document's changes are in its file (#190). */
+enum class SaveState { Saved, Saving, Unsaved, KeptInApp }
+
+/**
+ * The top bar's save state: nothing until the document is edited in this visit, then Saving…,
+ * Saved, Unsaved changes (saved when you leave, or now with a tap), or Kept in PdfCraft when the
+ * original can't be written.
+ */
+internal fun saveState(edited: Boolean, saving: Boolean, dirty: Boolean, notWrittenBack: Boolean, writable: Boolean, hasSource: Boolean): SaveState? = when {
+    saving -> SaveState.Saving
+    !edited && !dirty && !notWrittenBack -> null
+    !dirty && !notWrittenBack -> SaveState.Saved
+    hasSource && !writable -> SaveState.KeptInApp
+    else -> SaveState.Unsaved
+}
+
+@Composable
+private fun SaveStateLabel(state: SaveState, onClick: () -> Unit) {
+    val c = pdfColors
+    val (icon, label) = when (state) {
+        SaveState.Saved -> LucideIcons.Check to R.string.save_state_saved
+        SaveState.Saving -> LucideIcons.CircleDashed to R.string.save_state_saving
+        SaveState.Unsaved -> LucideIcons.Save to R.string.save_state_unsaved
+        SaveState.KeptInApp -> LucideIcons.TriangleAlert to R.string.save_state_kept
+    }
+    val tappable = state == SaveState.Unsaved || state == SaveState.KeptInApp
+    val action = stringResource(if (state == SaveState.KeptInApp) R.string.common_save_copy else R.string.save_state_save_now)
+    Row(
+        Modifier.clip(androidx.compose.foundation.shape.RoundedCornerShape(6.dp))
+            .then(if (tappable) Modifier.clickable(onClickLabel = action, role = Role.Button, onClick = onClick) else Modifier)
+            .padding(horizontal = 4.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(icon, null, tint = c.textSecondary, modifier = Modifier.size(14.dp))
+        Spacer(Modifier.width(4.dp))
+        Text(stringResource(label), color = c.textSecondary, fontSize = 12.sp, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
     }
 }

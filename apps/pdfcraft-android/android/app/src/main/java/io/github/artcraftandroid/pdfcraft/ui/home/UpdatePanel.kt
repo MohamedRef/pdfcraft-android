@@ -1,5 +1,6 @@
 package io.github.artcraftandroid.pdfcraft.ui.home
 
+import android.content.Context
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -32,6 +33,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.github.artcraftandroid.pdfcraft.R
+import io.github.artcraftandroid.pdfcraft.engine.Diag
+import io.github.artcraftandroid.pdfcraft.engine.DiagArea
 import io.github.artcraftandroid.pdfcraft.ui.pdfColors
 import java.io.File
 import kotlinx.coroutines.CancellationException
@@ -90,8 +93,8 @@ internal fun UpdatePanel() {
     var cachedBytes by UpdaterState::cachedBytes
     var verifiedApk by UpdaterState::verifiedApk
     var downloadJob by UpdaterState::downloadJob
-    var showAllNotes by remember { mutableStateOf(false) }
-    var showKnownLimits by remember { mutableStateOf(false) }
+    var showAllNotes by remember(candidate) { mutableStateOf(false) }
+    var showKnownLimits by remember(candidate) { mutableStateOf(false) }
 
     Text(stringResource(R.string.updater_title), color = colors.accent, fontWeight = FontWeight.SemiBold,
         fontSize = 13.sp, modifier = Modifier.padding(start = 20.dp, top = 16.dp, bottom = 8.dp))
@@ -102,37 +105,7 @@ internal fun UpdatePanel() {
     TextButton(
         enabled = !checking && !downloading,
         modifier = Modifier.padding(horizontal = 12.dp),
-        onClick = {
-            checking = true
-            message = null
-            scope.launch {
-                try {
-                    val installed = installedVersionCode(appContext)
-                    if (!receivesGitHubApkUpdates(installed)) {
-                        candidate = null
-                        verifiedApk = null
-                        message = appContext.getString(R.string.updater_other_build)
-                        return@launch
-                    }
-                    val found = fetchApkUpdates(installed).firstOrNull()
-                    // a partial download of a superseded release can never finish: removed (#109)
-                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                        runCatching { cleanUpdateFiles(context, installed, keepSha256 = found?.sha256 ?: "") }
-                    }
-                    candidate = found
-                    verifiedApk = null
-                    showAllNotes = false
-                    showKnownLimits = false
-                    cachedBytes = found?.let { apkCachedBytes(appContext, it) } ?: 0L
-                    progress = if (found == null) 0 else (cachedBytes * 100L / found.size).toInt()
-                    message = if (found == null) appContext.getString(R.string.updater_no_updates) else null
-                } catch (e: Exception) {
-                    message = appContext.getString(R.string.updater_check_error)
-                } finally {
-                    checking = false
-                }
-            }
-        },
+        onClick = { UpdaterState.check(appContext) },
     ) { Text(stringResource(if (checking) R.string.updater_checking else R.string.updater_check), color = colors.accent) }
 
     candidate?.let { update ->
@@ -204,7 +177,7 @@ internal fun UpdatePanel() {
                     )
                 }
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    TextButton(
+                    PrimaryButton(
                         enabled = !downloading && !checking,
                         onClick = {
                             downloading = true
@@ -216,11 +189,14 @@ internal fun UpdatePanel() {
                                     }
                                     cachedBytes = update.size
                                     message = appContext.getString(R.string.updater_download_verified)
+                                    Diag.event(DiagArea.Update, "download", "outcome" to "verified", "bytes" to update.size)
                                 } catch (_: CancellationException) {
+                                    Diag.event(DiagArea.Update, "download", "outcome" to "paused", "progress" to progress)
                                     cachedBytes = apkCachedBytes(appContext, update)
                                     progress = (cachedBytes * 100L / update.size).toInt()
                                     message = appContext.getString(R.string.updater_paused)
                                 } catch (e: Exception) {
+                                    Diag.failure(DiagArea.Update, "download", e)
                                     cachedBytes = apkCachedBytes(appContext, update)
                                     progress = (cachedBytes * 100L / update.size).toInt()
                                     message = e.updaterMessage(appContext, R.string.updater_interrupted)
@@ -230,9 +206,8 @@ internal fun UpdatePanel() {
                                 }
                             }
                         },
-                    ) {
-                        Text(stringResource(if (cachedBytes > 0L) R.string.updater_resume else R.string.updater_download), color = colors.accent)
-                    }
+                        label = stringResource(if (cachedBytes > 0L) R.string.updater_resume else R.string.updater_download),
+                    )
                     if (downloading) {
                         Spacer(Modifier.width(8.dp))
                         TextButton(onClick = { downloadJob?.cancel() }) {
@@ -261,15 +236,27 @@ internal fun UpdatePanel() {
                 )
             } else {
                 Text(stringResource(R.string.updater_apk_ready), color = colors.accent, fontWeight = FontWeight.SemiBold)
-                TextButton(onClick = {
+                PrimaryButton(label = stringResource(R.string.updater_install), onClick = {
                     try {
                         val launched = openVerifiedApkInstaller(context, verifiedApk!!)
+                        UpdaterState.needsInstallPermission = !launched
+                        Diag.event(DiagArea.Update, "install", "launched" to launched)
                         message = context.getString(if (launched) R.string.updater_confirm_install else R.string.updater_allow_install)
                     } catch (e: Exception) {
+                        Diag.failure(DiagArea.Update, "install", e)
                         message = e.updaterMessage(context, R.string.updater_installer_error)
                     }
-                }) {
-                    Text(stringResource(R.string.updater_install), color = colors.accent, fontWeight = FontWeight.SemiBold)
+                })
+                // Android's "Install unknown apps" page for PdfCraft, in one tap (#193)
+                if (UpdaterState.needsInstallPermission && !context.packageManager.canRequestPackageInstalls()) {
+                    TextButton(onClick = {
+                        runCatching {
+                            context.startActivity(
+                                android.content.Intent(android.provider.Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, android.net.Uri.parse("package:${context.packageName}"))
+                                    .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK),
+                            )
+                        }
+                    }) { Text(stringResource(R.string.updater_open_settings), color = colors.accent) }
                 }
             }
         }
@@ -298,6 +285,60 @@ private fun updaterSectionTitle(name: String): Int = when (name) {
  */
 internal object UpdaterState {
     val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    var needsInstallPermission by mutableStateOf(false)
+
+    private fun prefs(context: Context) = context.getSharedPreferences("updater", Context.MODE_PRIVATE)
+
+    /** Whether PdfCraft looks for an update once a day when it opens (#193); on unless turned off. */
+    fun autoCheckOn(context: Context) = prefs(context).getBoolean("autoCheck", true)
+
+    fun setAutoCheck(context: Context, on: Boolean) = prefs(context).edit().putBoolean("autoCheck", on).apply()
+
+    /** At most once a day, and only when the switch is on: a quiet check whose only sign is an update found. */
+    fun autoCheck(context: Context, now: Long = System.currentTimeMillis()) {
+        val app = context.applicationContext
+        if (!autoCheckOn(app) || candidate != null || !autoCheckDue(prefs(app).getLong("lastCheck", 0L), now)) return
+        check(app, quiet = true)
+    }
+
+    /** Look for a newer release; [quiet] (the daily check) leaves the message alone. */
+    fun check(context: Context, quiet: Boolean = false) {
+        if (checking || downloading) return
+        val app = context.applicationContext
+        checking = true
+        if (!quiet) message = null
+        prefs(app).edit().putLong("lastCheck", System.currentTimeMillis()).apply()
+        val started = android.os.SystemClock.elapsedRealtime()
+        scope.launch {
+            try {
+                val installed = installedVersionCode(app)
+                if (!receivesGitHubApkUpdates(installed)) {
+                    Diag.event(DiagArea.Update, "check", "auto" to quiet, "other_build" to true)
+                    candidate = null
+                    verifiedApk = null
+                    if (!quiet) message = app.getString(R.string.updater_other_build)
+                    return@launch
+                }
+                val found = fetchApkUpdates(installed).firstOrNull()
+                // a partial download of a superseded release can never finish: removed (#109)
+                kotlinx.coroutines.withContext(Dispatchers.IO) {
+                    runCatching { cleanUpdateFiles(app, installed, keepSha256 = found?.sha256 ?: "") }
+                }
+                candidate = found
+                verifiedApk = null
+                cachedBytes = found?.let { apkCachedBytes(app, it) } ?: 0L
+                progress = if (found == null) 0 else (cachedBytes * 100L / found.size).toInt()
+                if (!quiet) message = if (found == null) app.getString(R.string.updater_no_updates) else null
+                Diag.event(DiagArea.Update, "check", "auto" to quiet, "found" to (found != null), "cached_bytes" to cachedBytes, "ms" to android.os.SystemClock.elapsedRealtime() - started)
+            } catch (e: Exception) {
+                Diag.failure(DiagArea.Update, "check", e)
+                if (!quiet) message = app.getString(R.string.updater_check_error)
+            } finally {
+                checking = false
+            }
+        }
+    }
+
     var checking by mutableStateOf(false)
     var candidate by mutableStateOf<ApkUpdate?>(null)
     var message by mutableStateOf<String?>(null)
@@ -306,4 +347,21 @@ internal object UpdaterState {
     var cachedBytes by mutableLongStateOf(0L)
     var verifiedApk by mutableStateOf<File?>(null)
     var downloadJob by mutableStateOf<Job?>(null)
+}
+
+/** The daily check is due when the last one was a day ago or more, or the clock went back. */
+internal fun autoCheckDue(lastCheck: Long, now: Long): Boolean =
+    now < lastCheck || now - lastCheck >= 24L * 60 * 60 * 1000
+
+/** The updater's filled button: the one next step (Download update, Install update) (#193). */
+@Composable
+private fun PrimaryButton(label: String, enabled: Boolean = true, onClick: () -> Unit) {
+    val c = pdfColors
+    Box(
+        Modifier.padding(vertical = 4.dp).height(44.dp).clip(RoundedCornerShape(22.dp))
+            .background(if (enabled) c.accent else c.divider)
+            .clickable(enabled = enabled, role = androidx.compose.ui.semantics.Role.Button, onClick = onClick)
+            .padding(horizontal = 20.dp),
+        contentAlignment = Alignment.Center,
+    ) { Text(label, color = if (enabled) c.onAccent else c.textSecondary, fontSize = 15.sp, fontWeight = FontWeight.SemiBold) }
 }

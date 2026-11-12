@@ -63,6 +63,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.github.artcraftandroid.pdfcraft.R
+import io.github.artcraftandroid.pdfcraft.plural
+import io.github.artcraftandroid.pdfcraft.text
 import io.github.artcraftandroid.pdfcraft.engine.toBitmap
 import io.github.artcraftandroid.pdfcraft.ui.AppViewModel
 import io.github.artcraftandroid.pdfcraft.ui.BarIcon
@@ -129,6 +131,10 @@ fun PagesScreen(vm: AppViewModel, doc: OpenDocument, onClose: () -> Unit) {
         }
     }
     BackHandler(onBack = ::back)
+    // holding and dragging moves pages, which nothing on screen shows: said the first few times (#199)
+    LaunchedEffect(Unit) {
+        if (exporting == null && doc.info.allowsAssembly && doc.pageCount > 1 && vm.toolPrefs.takeToolHint("pages.drag")) vm.tell(text(R.string.pages_drag_hint))
+    }
     // organizing starts with the page being read ticked, as the reference's does
     LaunchedEffect(organizing) { if (organizing && selected.isEmpty()) selected[doc.viewer.currentPage] = true }
     val picked = selected.filterValues { it }.keys.sorted()
@@ -157,6 +163,20 @@ fun PagesScreen(vm: AppViewModel, doc: OpenDocument, onClose: () -> Unit) {
                 if (organizing && picked.isNotEmpty()) pluralStringResource(R.plurals.pages_selected_count, picked.size, picked.size) else if (organizing) stringResource(R.string.pages_select) else stringResource(R.string.pages_title),
                 color = c.label, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f),
             )
+            // Select starts organizing in place (#199); organizing, Select all / Select none
+            if (!organizing && exporting == null && doc.info.allowsAssembly) {
+                androidx.compose.material3.TextButton(onClick = { vm.organizing = true }) {
+                    Text(stringResource(R.string.pages_select_action), color = c.toolAccent, fontWeight = FontWeight.SemiBold)
+                }
+                Spacer(Modifier.width(6.dp))
+            }
+            if (organizing || exporting != null) {
+                val all = picked.size == doc.pageCount
+                androidx.compose.material3.TextButton(onClick = {
+                    selected.clear()
+                    if (!all) for (i in 0 until doc.pageCount) selected[i] = true
+                }) { Text(stringResource(if (all) R.string.pages_select_none else R.string.pages_select_all), color = c.toolAccent) }
+            }
             if (organizing && exporting == null) {
                 UndoMenuButton(doc.info.undo != null, doc.info.redo != null, { vm.undo(doc) }, { vm.redo(doc) }, doc.info.undoLabel, doc.info.redoLabel)
                 Spacer(Modifier.width(6.dp))
@@ -286,7 +306,11 @@ fun PagesScreen(vm: AppViewModel, doc: OpenDocument, onClose: () -> Unit) {
                 OrganizeItem(LucideIcons.FilePlus, stringResource(R.string.pages_insert_page), true) { insertMenu = true }
                 OrganizeItem(LucideIcons.CopyPlus, stringResource(R.string.pages_duplicate), enabled && doc.info.allowsAssembly) { vm.duplicatePages(doc, picked) }
                 OrganizeItem(LucideIcons.Trash2, stringResource(R.string.common_delete), enabled && picked.size < doc.pageCount) {
-                    vm.runTool(doc, "page_delete", mapOf("pages" to picked.map { it + 1 }))
+                    // no confirmation step: the deletion says what it did and offers Undo at once (#199)
+                    val count = picked.size
+                    vm.runTool(doc, "page_delete", mapOf("pages" to picked.map { it + 1 })) {
+                        vm.tell(plural(R.plurals.pages_deleted, count, count), text(R.string.common_undo)) { vm.undo(doc) }
+                    }
                     selected.clear()
                 }
                 OrganizeItem(LucideIcons.RotateCcw, stringResource(R.string.pages_rotate_left), enabled) { vm.runTool(doc, "page_rotate", mapOf("pages" to picked.map { it + 1 }, "degrees" to -90)) }

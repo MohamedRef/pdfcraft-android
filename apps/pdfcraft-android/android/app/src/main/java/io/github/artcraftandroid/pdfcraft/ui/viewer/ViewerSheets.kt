@@ -117,7 +117,11 @@ fun MoreSheet(vm: AppViewModel, doc: OpenDocument) {
                 tint = if (starred) Color(0xFFF5B800) else c.icon, size = 40.dp)
         }
         SheetDivider()
+        // ⋮ is about this file: view, find your way, keep it. Tools that change the content
+        // (Edit, Compress, Combine, Set password, Read aloud, Create PDF, the scan tools) are in
+        // More tools only (#195).
         Column(Modifier.verticalScroll(scroll).padding(top = 5.dp)) {
+            MoreHeading(stringResource(R.string.sheet_group_view))
             SheetRow(LucideIcons.Info, stringResource(R.string.file_details_title), { ctl.sheet = ViewerSheet.FileDetails }, chevron = true)
             SheetRow(LucideIcons.Glasses, stringResource(R.string.sheet_view_settings), { ctl.sheet = ViewerSheet.ViewSettings }, chevron = true)
             SheetRow(LucideIcons.Presentation, stringResource(R.string.sheet_present), { close(); vm.startPresenting(doc) })
@@ -127,48 +131,37 @@ fun MoreSheet(vm: AppViewModel, doc: OpenDocument) {
                 doc.commitTool?.invoke()
                 ctl.pagesOpen = true
             }, chevron = true)
-            SheetRow(LucideIcons.Paperclip, stringResource(R.string.sheet_attachments), { ctl.sheet = ViewerSheet.Attachments }, chevron = true)
-            if (doc.info.layers > 0u) SheetRow(LucideIcons.Layers, stringResource(R.string.sheet_layers), { ctl.sheet = ViewerSheet.Layers }, chevron = true)
+            SheetRow(LucideIcons.Clock, stringResource(R.string.focus_timer), { ctl.sheet = ViewerSheet.FocusTimer })
+            GroupDivider()
+            MoreHeading(stringResource(R.string.sheet_group_navigate))
             SheetRow(LucideIcons.Bookmark, stringResource(R.string.sheet_bookmarks_contents), { ctl.sheet = ViewerSheet.Bookmarks }, chevron = true)
-            SheetRow(LucideIcons.MessagesSquare, stringResource(R.string.sheet_comment_list), { ctl.sheet = ViewerSheet.Comments }, chevron = true)
-            SheetRow(LucideIcons.ShieldCheck, stringResource(R.string.sign_signatures), { ctl.sheet = ViewerSheet.Signatures }, chevron = true)
             SheetRow(
                 if (bookmarked) LucideIcons.BookmarkMinus else LucideIcons.BookmarkPlus,
                 stringResource(if (bookmarked) R.string.sheet_remove_bookmark else R.string.sheet_add_bookmark),
                 { close(); vm.toggleBookmark(doc) },
             )
-            SheetRow(LucideIcons.Volume2, stringResource(R.string.common_tool_read_aloud), { close(); vm.startReadAloud(doc) })
-            SheetRow(LucideIcons.Clock, stringResource(R.string.focus_timer), { ctl.sheet = ViewerSheet.FocusTimer })
-            if (vm.backupTree != null) SheetRow(LucideIcons.RotateCcw, stringResource(R.string.backup_history), { ctl.sheet = ViewerSheet.Backups }, chevron = true)
+            SheetRow(LucideIcons.MessagesSquare, stringResource(R.string.sheet_comment_list), { ctl.sheet = ViewerSheet.Comments }, chevron = true)
+            if (doc.info.attachments > 0u) SheetRow(LucideIcons.Paperclip, stringResource(R.string.sheet_attachments), { ctl.sheet = ViewerSheet.Attachments }, chevron = true)
+            SheetRow(LucideIcons.ShieldCheck, stringResource(R.string.sign_signatures), { ctl.sheet = ViewerSheet.Signatures }, chevron = true)
+            if (doc.info.layers > 0u) SheetRow(LucideIcons.Layers, stringResource(R.string.sheet_layers), { ctl.sheet = ViewerSheet.Layers }, chevron = true)
             doc.source?.let { src ->
                 val due = vm.dueCounts[src.toString()] ?: 0
                 SheetRow(LucideIcons.SwatchBook, if (due > 0) stringResource(R.string.cards_row_due, due) else stringResource(R.string.cards_title), { close(); vm.startReview(src.toString(), doc.info.name) })
             }
-            SheetRow(LucideIcons.FilePenLine, stringResource(R.string.common_tool_edit_pdf), { close(); vm.enterTool(doc, ViewerTool.Edit) })
-            SheetRow(LucideIcons.Ruler, stringResource(R.string.measure_tool), { close(); vm.enterTool(doc, ViewerTool.Measure) })
-            GroupDivider()
-            SheetRow(LucideIcons.FileOutput, stringResource(R.string.sheet_export_as), { close(); vm.openExport(doc) })
-            SheetRow(LucideIcons.FileArchive, stringResource(R.string.common_tool_compress), { close(); vm.openCompress(doc) })
-            SheetRow(LucideIcons.WandSparkles, stringResource(R.string.scan_enhance_title),
-                { ctl.sheet = ViewerSheet.ScanEnhance }, chevron = true)
-            SheetRow(LucideIcons.Glasses, stringResource(R.string.ocr_review_title),
-                { ctl.sheet = ViewerSheet.OcrConfidence }, chevron = true)
-            SheetRow(LucideIcons.SquareDashed, stringResource(R.string.redact_title), { vm.openRedact(doc) }, chevron = true)
-            SheetRow(LucideIcons.GitCompare, stringResource(R.string.compare_with_older), { close(); vm.startCompare(doc) })
-            SheetRow(LucideIcons.Combine, stringResource(R.string.common_tool_combine), { close(); vm.openCombine(doc) })
-            SheetRow(LucideIcons.FileLock2, stringResource(R.string.common_tool_set_password), { close(); vm.openProtect(doc) })
-            SheetRow(LucideIcons.BrushCleaning, stringResource(R.string.hidden_title), { ctl.sheet = ViewerSheet.HiddenInfo }, chevron = true)
-            SheetRow(LucideIcons.Stamp, stringResource(R.string.flatten_title), { close(); vm.flattenPrompt = doc }, enabled = canEditDocument(doc))
-            SheetRow(LucideIcons.FilePlus2, stringResource(R.string.common_tool_create_pdf), { close(); vm.openCreate() })
             if (doc.info.undo != null || doc.info.redo != null) {
                 GroupDivider()
                 doc.info.undoLabel?.let { SheetRow(LucideIcons.Undo2, stringResource(R.string.sheet_undo_action, it), { close(); vm.undo(doc) }) }
                 doc.info.redoLabel?.let { SheetRow(LucideIcons.Redo2, stringResource(R.string.sheet_redo_action, it), { close(); vm.redo(doc) }) }
             }
             GroupDivider()
+            MoreHeading(stringResource(R.string.sheet_group_file))
             SheetRow(LucideIcons.Copy, stringResource(R.string.common_save_copy), { close(); vm.saveCopyAs(doc) })
-            // a clean copy to hand out; the working file keeps its comments (#155)
-            SheetRow(LucideIcons.Share2, stringResource(R.string.sheet_share_clean), { close(); vm.share(doc, clean = true) })
+            if (vm.backupTree != null) SheetRow(LucideIcons.RotateCcw, stringResource(R.string.backup_history), { ctl.sheet = ViewerSheet.Backups }, chevron = true)
+            SheetRow(LucideIcons.GitCompare, stringResource(R.string.compare_with_older), { close(); vm.startCompare(doc) })
+            SheetRow(LucideIcons.FileOutput, stringResource(R.string.sheet_export_as), { close(); vm.openExport(doc) })
+            SheetRow(LucideIcons.BrushCleaning, stringResource(R.string.hidden_title), { ctl.sheet = ViewerSheet.HiddenInfo }, chevron = true)
+            SheetRow(LucideIcons.Stamp, stringResource(R.string.flatten_title), { close(); vm.flattenPrompt = doc }, enabled = canEditDocument(doc))
+            // a clean copy to print; the working file keeps its comments (#155). Sharing one is in Share.
             SheetRow(LucideIcons.Printer, stringResource(R.string.sheet_print_clean), { close(); vm.print(doc, clean = true) })
             Spacer(Modifier.height(8.dp))
         }
@@ -613,4 +606,10 @@ fun MoreToolsSheet(vm: AppViewModel, doc: OpenDocument) {
         }
         Spacer(Modifier.height(16.dp))
     }
+}
+
+/** A group's name in the ⋮ sheet (View, Navigate, File). */
+@Composable
+private fun MoreHeading(text: String) {
+    Text(text, color = pdfColors.accent, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 16.dp, top = 8.dp, bottom = 4.dp))
 }

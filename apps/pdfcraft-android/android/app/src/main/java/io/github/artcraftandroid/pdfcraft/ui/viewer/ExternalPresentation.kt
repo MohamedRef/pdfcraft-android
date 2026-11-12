@@ -72,7 +72,17 @@ fun BoxScope.ExternalPresentation(doc: OpenDocument) {
     var display by remember { mutableStateOf<Display?>(null) }
     DisposableEffect(displays) {
         fun pick() {
-            display = displays?.getDisplays(DisplayManager.DISPLAY_CATEGORY_PRESENTATION)?.firstOrNull()
+            val all = displays?.getDisplays(DisplayManager.DISPLAY_CATEGORY_PRESENTATION).orEmpty()
+            val found = all.firstOrNull()
+            // which second screens there are while presenting (#157): counts and sizes, never names
+            if (found?.displayId != display?.displayId || (found == null) != (display == null)) {
+                val m = android.util.DisplayMetrics().also { found?.getRealMetrics(it) }
+                io.github.artcraftandroid.pdfcraft.engine.Diag.event(
+                    io.github.artcraftandroid.pdfcraft.engine.DiagArea.Viewer, "external_display", "doc" to doc.diagNumber, "attached" to (found != null), "screens" to all.size,
+                    "width_px" to m.widthPixels, "height_px" to m.heightPixels, "secure" to (((found?.flags ?: 0) and Display.FLAG_SECURE) != 0),
+                )
+            }
+            display = found
         }
         val listener = object : DisplayManager.DisplayListener {
             override fun onDisplayAdded(id: Int) = pick()
@@ -88,7 +98,8 @@ fun BoxScope.ExternalPresentation(doc: OpenDocument) {
     DisposableEffect(shown) {
         val screen = PagePresentation(context, shown, host) { ExternalPage(current) }
         // a screen that can't be shown on (gone again, or not allowed) leaves the device presenting alone
-        val ok = runCatching { screen.show() }.isSuccess
+        val ok = runCatching { screen.show() }.onFailure { io.github.artcraftandroid.pdfcraft.engine.Diag.failure(io.github.artcraftandroid.pdfcraft.engine.DiagArea.Viewer, "external_show", it) }.isSuccess
+        io.github.artcraftandroid.pdfcraft.engine.Diag.event(io.github.artcraftandroid.pdfcraft.engine.DiagArea.Viewer, "external_show", "doc" to doc.diagNumber, "ok" to ok)
         onDispose { if (ok) runCatching { screen.dismiss() } }
     }
     // the device says where the page is, and what comes next
@@ -137,10 +148,13 @@ private fun ExternalPage(doc: OpenDocument) {
         val scale = min(fit.scale, EXTERNAL_MAX_SIDE / maxOf(size.width, size.height))
         val gen = doc.pageGenerations.of(page)
         val image by produceState<ImageBitmap?>(null, page, scale, gen) {
-            value = doc.images.renderRegion(
-                page, scale,
-                TileRect(0u, 0u, (size.width * scale).roundToInt().coerceAtLeast(1).toUInt(), (size.height * scale).roundToInt().coerceAtLeast(1).toUInt()),
-            ) ?: value
+            val w = (size.width * scale).roundToInt().coerceAtLeast(1)
+            val h = (size.height * scale).roundToInt().coerceAtLeast(1)
+            val start = System.nanoTime()
+            val got = doc.images.renderRegion(page, scale, TileRect(0u, 0u, w.toUInt(), h.toUInt()))
+            // each page drawn for the second screen: its pixels and how long it took (#157)
+            io.github.artcraftandroid.pdfcraft.engine.Diag.event(io.github.artcraftandroid.pdfcraft.engine.DiagArea.Viewer, "external_page", "doc" to doc.diagNumber, "page" to page + 1, "width_px" to w, "height_px" to h, "ms" to (System.nanoTime() - start) / 1_000_000, "ok" to (got != null))
+            value = got ?: value
         }
         val ink = doc.controller.tempInk
         LaunchedEffect(trail, ink, trail.points.isNotEmpty() || ink.strokes.isNotEmpty()) {
