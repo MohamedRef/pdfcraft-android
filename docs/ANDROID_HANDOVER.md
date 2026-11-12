@@ -20,7 +20,14 @@
 
 - The scanner is being rebuilt under tracking issue #286 (`Scan S01`–`S22`). Its own handover is [`ANDROID_SCAN_HANDOVER.md`](ANDROID_SCAN_HANDOVER.md): the state of every issue, the remaining work in order, the rules, and what was learned. Read that file for scanner work; this one does not repeat it.
 - Merged so far: the `pdfcraft-scan` crate and single-pass pipeline (#331, #346), the Auto look (#346), true proportions (#353), edge refinement (#356), 1-bit black and white (#359), the detector network (#360), Flatten page (#365), testing options and kept scans (#367), upright pages (#370), grain and sharpening (#373), the native preview (#376).
-- **Nothing in the scanner has run on a phone.** The owner will test with the options and kept scans described in [`ANDROID_SCAN_TESTING.md`](ANDROID_SCAN_TESTING.md). The latest release, 0.0.24-beta (24012), was built before any of it; no release contains it.
+- **Nothing in the scanner has run on a phone.** The owner will test with the options and kept scans described in [`ANDROID_SCAN_TESTING.md`](ANDROID_SCAN_TESTING.md). Release 0.0.25-beta (25012) is the first to contain it.
+
+## RELEASE 0.0.25-beta (25012) — 2026-11-12 (owner requested)
+
+- Release PR publishes `0.0.25-beta` / ARM64 build `25012` (`pdfcraft.versionCode=2501`), same package ID and signer. Trigger matches only `chore(release): publish 0.0.25-beta (25012)`.
+- Owner approved it on 2026-11-12, to go out once the scanner review fixes and the queued scanner PRs had merged.
+- Included: everything merged since 0.0.24-beta, with the rebuilt in-app scanner (testing), study tools, viewer and editing features, the engine sync to v0.21.1 and the diagnostics log; see [`releases/0.0.25-beta.md`](releases/0.0.25-beta.md).
+- Open: nothing in it has run on a phone. The owner's diagnostics log from this build is needed for #97, #211, #212 and #236.
 
 ## RELEASE 0.0.24-beta (24012) — 2026-11-11 (owner requested)
 
