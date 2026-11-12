@@ -20,6 +20,8 @@ use rten_tensor::NdTensor;
 use rten_tensor::prelude::*;
 
 use crate::models::{EDGES, load};
+pub(crate) use crate::tensor::{Picture, shrink_rgb};
+use crate::tensor::{argmax_2d, sigmoid, soft_argmax_window};
 use crate::{Photo, Quad};
 
 /// What found the page.
@@ -69,7 +71,7 @@ impl Detection {
 
 /// The network's input side, and the side of its maps.
 pub(crate) const SIDE: usize = 256;
-const CELLS: usize = 64;
+pub(crate) const CELLS: usize = 64;
 /// An unturned answer this sure is taken as it is.
 const ACCEPT: f32 = 0.5;
 /// Any answer this sure ends the search.
@@ -87,61 +89,10 @@ const ANGLES: [i16; 6] = [90, -90, -30, 30, -60, 60];
 /// The line detector looks at a copy this long (as the engine's own photo search does).
 const LINES_SIDE: usize = 1200;
 
-/// An RGB picture as floats 0–1, interleaved.
-pub(crate) struct Picture {
-    pub w: usize,
-    pub h: usize,
-    pub rgb: Vec<f32>,
-}
-
-/// For each of `n_out` cells along an axis of `n_in`: the first source index and the weight of
-/// each source value in the cell's average (exact area coverage).
-pub(crate) fn area_weights(n_in: usize, n_out: usize) -> Vec<(usize, Vec<f32>)> {
-    let step = n_in as f64 / n_out as f64;
-    (0..n_out)
-        .map(|o| {
-            let (a, b) = (o as f64 * step, (o as f64 + 1.0) * step);
-            let first = a.floor() as usize;
-            let last = (b.ceil() as usize).min(n_in);
-            let weights = (first..last).map(|i| ((b.min(i as f64 + 1.0) - a.max(i as f64)) / step) as f32).collect();
-            (first, weights)
-        })
-        .collect()
-}
-
 /// `photo` shrunk so its longer side is `side` at most (each pixel the average of what it
 /// covers), and the scale it was shrunk by.
 pub(crate) fn shrink(photo: &Photo, side: usize) -> (Picture, f64) {
     shrink_rgb(&photo.rgb, photo.width as usize, photo.height as usize, side)
-}
-
-/// [`shrink`] for any `w` × `h` picture of RGB bytes.
-pub(crate) fn shrink_rgb(pixels: &[u8], w: usize, h: usize, side: usize) -> (Picture, f64) {
-    let scale = (side as f64 / w.max(h) as f64).min(1.0);
-    let (ow, oh) = (((w as f64 * scale).round() as usize).max(1), ((h as f64 * scale).round() as usize).max(1));
-    let (xs, ys) = (area_weights(w, ow), area_weights(h, oh));
-    // rows first: h × ow
-    let mut rows = vec![0f32; h * ow * 3];
-    for (source, out) in pixels.chunks_exact(w * 3).zip(rows.chunks_exact_mut(ow * 3)) {
-        for ((first, weights), px) in xs.iter().zip(out.chunks_exact_mut(3)) {
-            for (i, weight) in weights.iter().enumerate() {
-                let s = &source[(first + i) * 3..(first + i) * 3 + 3];
-                for c in 0..3 {
-                    px[c] += weight * f32::from(s[c]);
-                }
-            }
-        }
-    }
-    let mut rgb = vec![0f32; oh * ow * 3];
-    for ((first, weights), out) in ys.iter().zip(rgb.chunks_exact_mut(ow * 3)) {
-        for (i, weight) in weights.iter().enumerate() {
-            let source = &rows[(first + i) * ow * 3..(first + i + 1) * ow * 3];
-            for (o, s) in out.iter_mut().zip(source) {
-                *o += weight * s / 255.0;
-            }
-        }
-    }
-    (Picture { w: ow, h: oh, rgb }, scale)
 }
 
 /// How the small picture sits in the network's square: turned by an angle about its centre and
@@ -196,10 +147,6 @@ pub(crate) fn square(small: &Picture, place: &Placement) -> Vec<f32> {
     planes
 }
 
-fn sigmoid(x: f32) -> f32 {
-    1.0 / (1.0 + (-x).exp())
-}
-
 /// What the network's maps say: the four corners in square pixels, how sure the least sure of
 /// them is, and how well the quad they make and the page map agree (0 for corners that make no
 /// convex quad).
@@ -234,20 +181,11 @@ pub(crate) fn read(heat: &[f32], page: &[f32]) -> Reading {
     let mut corners = [[0.0; 2]; 4];
     let mut surest_less = 1.0f32;
     for (k, map) in heat.chunks_exact(CELLS * CELLS).enumerate().take(4) {
-        let peak = map.iter().enumerate().max_by(|a, b| a.1.total_cmp(b.1)).map_or(0, |(i, _)| i);
-        let (px, py) = (peak % CELLS, peak / CELLS);
-        surest_less = surest_less.min(sigmoid(map[peak]));
+        let (px, py) = argmax_2d(map, CELLS);
+        surest_less = surest_less.min(sigmoid(map[py * CELLS + px]));
         // the centre of the probability within two cells of the peak
-        let (mut sum, mut sx, mut sy) = (0.0f64, 0.0f64, 0.0f64);
-        for y in py.saturating_sub(2)..=(py + 2).min(CELLS - 1) {
-            for x in px.saturating_sub(2)..=(px + 2).min(CELLS - 1) {
-                let p = f64::from(sigmoid(map[y * CELLS + x]));
-                sum += p;
-                sx += p * x as f64;
-                sy += p * y as f64;
-            }
-        }
-        corners[k] = [(sx / sum.max(1e-12) + 0.5) * cell, (sy / sum.max(1e-12) + 0.5) * cell];
+        let [cx, cy] = soft_argmax_window(map, CELLS, CELLS, (px, py), 2);
+        corners[k] = [(cx + 0.5) * cell, (cy + 0.5) * cell];
     }
     let mut agreement = 0.0;
     if convex(&corners) {
