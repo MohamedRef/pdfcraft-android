@@ -1735,7 +1735,9 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             // line detector is asked instead. The testing options (#288) can name the detector
             // and leave the closer look out.
             val lab = scanLab.options
-            val doc = eng?.let {
+            // a low-light merge (#297) gave a page already straightened: its edges are the whole picture
+            val straightened = io.github.artcraftandroid.pdfcraft.ui.scan.ScanCaptures.of(f.path)?.straightened == true
+            val doc = eng?.takeUnless { straightened }?.let {
                 withContext(Dispatchers.IO) { runCatching { it.prepareOcrModels(getApplication()) } }
                 withContext(Dispatchers.Default) { runCatching { io.github.artcraftandroid.pdfcraft.core.scanFindDocumentWith(f.absolutePath, lab.findOptions()) } }
                     .onFailure { e -> Diag.failure(DiagArea.Scan, "scan_find_document", e) }.getOrNull()
@@ -1758,7 +1760,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 "angle" to (doc?.angle?.toInt() ?: 0), "passes" to (doc?.passes?.toInt() ?: 0),
                 *(doc?.timings.orEmpty().map<io.github.artcraftandroid.pdfcraft.core.ScanTiming, Pair<String, Any?>> { it.stage.removePrefix("scan_") + "_ms" to it.ms.toLong() }.toTypedArray()),
                 "refined_sides" to (doc?.refined?.count { it } ?: 0), "curved_sides" to (doc?.curved?.count { it } ?: 0),
-                "finder" to ScanLab.finderId(lab.finder), "refine" to lab.refine,
+                "finder" to ScanLab.finderId(lab.finder), "refine" to lab.refine, "straightened" to straightened,
                 *io.github.artcraftandroid.pdfcraft.ui.scan.scanBookDiag(book, lab.bookGutter, bookOrder, cut, bookMs),
             )
             val finding = doc?.let { d ->

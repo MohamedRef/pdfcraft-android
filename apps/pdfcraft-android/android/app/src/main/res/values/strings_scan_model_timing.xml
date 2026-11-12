@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Scanner testing: timing a picked model file (#304), kept apart from strings.xml so parallel scanner work merges cleanly. -->
+<resources>
+    <string name="scan_lab_time_model">Time a document model from a file (testing only)</string>
+    <string name="scan_lab_time_model_body">Pick a model file (ONNX) on this phone. It is run twice on a made-up page and timed, and the times go to the log. The file is not kept and no page is changed.</string>
+    <string name="scan_lab_time_model_running">Timing the model…</string>
+    <string name="scan_lab_time_model_done">Model: load %1$d ms, runs %2$s ms, peak memory %3$s MB</string>
+    <string name="scan_lab_time_model_failed">The model could not be timed: %1$s</string>
+</resources>

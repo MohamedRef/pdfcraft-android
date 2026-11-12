@@ -35,6 +35,7 @@ pub mod metrics_compare;
 pub mod metrics_geometry;
 pub mod metrics_tone;
 pub mod models;
+pub mod model_timing;
 pub mod moire;
 pub mod page;
 pub mod page_kind;
@@ -92,6 +93,8 @@ mod tests_gate;
 mod tests_flatten_guard;
 #[cfg(test)]
 mod tests_merge;
+#[cfg(test)]
+mod tests_model_timing;
 #[cfg(test)]
 mod tests_metrics_compare;
 #[cfg(test)]
