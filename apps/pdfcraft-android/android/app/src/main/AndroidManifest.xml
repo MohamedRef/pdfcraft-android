@@ -19,8 +19,12 @@
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-feature android:name="android.hardware.microphone" android:required="false" />
 
-    <!-- Scan: the phone's camera app takes the pages. No CAMERA permission: declaring it without
-         granting it makes Android refuse IMAGE_CAPTURE. -->
+    <!-- Scan: PdfCraft's own camera screen takes the pages (#294), or the phone's camera app when
+         the person picks it (Settings, Scan with). Declaring CAMERA has a consequence for the
+         camera app too: Android refuses IMAGE_CAPTURE to an app that declares CAMERA without
+         having it granted, so the app asks for the permission before either camera is used
+         (ui/scan/ScanCameraRouter.kt). Refused, Scan still imports photos from the gallery. -->
+    <uses-permission android:name="android.permission.CAMERA" />
     <uses-feature android:name="android.hardware.camera.any" android:required="false" />
 
     <!-- Read aloud keeps reading with PdfCraft in the background (a media notification) -->

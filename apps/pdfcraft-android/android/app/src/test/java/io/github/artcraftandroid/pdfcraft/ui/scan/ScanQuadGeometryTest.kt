@@ -65,18 +65,21 @@ class ScanQuadGeometryTest {
     }
 
     @Test
-    fun aSideMoveThatFoldsTheShapeOrLeavesThePhotoIsRefused() {
+    fun aSideMoveThatFoldsTheShapeOrGoesTooFarOffThePhotoIsRefused() {
         // the top side pushed past the bottom one
         assertNull(moveSide(rect, 0, 0f, 0.7f, aspect = 1f))
-        // the left side off the photo
-        assertNull(moveSide(rect, 3, -0.3f, 0f, aspect = 1f))
+        // the left side further off the photo than a corner may go (#291 allows 15%)
+        assertNull(moveSide(rect, 3, -0.4f, 0f, aspect = 1f))
+        near(floatArrayOf(-0.1f, 0.2f, 0.8f, 0.2f, 0.8f, 0.8f, -0.1f, 0.8f), moveSide(rect, 3, -0.3f, 0f, aspect = 1f))
         // the top of the trapezoid moved down until its corners would cross
         assertNull(moveSide(trapezoid, 0, 0f, 0.9f, aspect = 1f))
     }
 
     @Test
-    fun aCornerStaysOnThePhotoAndTheShapeStaysConvex() {
-        near(floatArrayOf(0f, 0f, 0.8f, 0.2f, 0.8f, 0.8f, 0.2f, 0.8f), moveCorner(rect, 0, -0.5f, -0.5f))
+    fun aCornerGoesAsFarOffThePhotoAsThePageFunctionTakesAndTheShapeStaysConvex() {
+        // #291: a corner the frame cut off can sit up to 15% past the edge, no further
+        near(floatArrayOf(-0.15f, -0.15f, 0.8f, 0.2f, 0.8f, 0.8f, 0.2f, 0.8f), moveCorner(rect, 0, -0.5f, -0.5f))
+        near(floatArrayOf(-0.1f, 0.2f, 0.8f, 0.2f, 0.8f, 0.8f, 0.2f, 0.8f), moveCorner(rect, 0, -0.3f, 0f))
         // top-left dragged past the bottom-right
         assertNull(moveCorner(rect, 0, 0.7f, 0.7f))
         assertFalse(convexQuad(floatArrayOf(0f, 0f, 1f, 0f, 0f, 1f, 1f, 1f)))
@@ -86,11 +89,11 @@ class ScanQuadGeometryTest {
     @Test
     fun aFastDragStopsAtTheLastGoodPlace() {
         val moved = moveTowards(rect, QuadHandle.Side(3), -0.5f, 0f, aspect = 1f)
-        // the left side went as far as the photo's edge, and no further
-        assertEquals(0f, moved[0], 1e-3f)
-        assertEquals(0f, moved[6], 1e-3f)
+        // the left side went as far as a corner may go off the photo, and no further
+        assertEquals(QUAD_MIN, moved[0], 1e-3f)
+        assertEquals(QUAD_MIN, moved[6], 1e-3f)
         // a move that is not allowed at all leaves the shape as it was
-        val squashed = floatArrayOf(0f, 0f, 1f, 0f, 1f, 1f, 0f, 1f)
+        val squashed = floatArrayOf(QUAD_MIN, QUAD_MIN, QUAD_MAX, QUAD_MIN, QUAD_MAX, QUAD_MAX, QUAD_MIN, QUAD_MAX)
         assertArrayEquals(squashed, moveTowards(squashed, QuadHandle.Side(0), 0f, -0.2f, 1f), 0f)
     }
 
@@ -137,6 +140,26 @@ class ScanQuadGeometryTest {
         // a broken answer is not taken
         assertNull(snapped(asked, listOf(true, false, false, false), floatArrayOf(0f, 0f, 1f, 0f, 0f, 1f, 1f, 1f)))
         assertNull(snapped(asked, listOf(true, false, false, false), floatArrayOf(0f, 0f)))
+        // #291: the edge finder put the top-right corner where its sides meet, off the photo
+        val cutOff = floatArrayOf(0.2f, 0.05f, 1.08f, -0.04f, 0.8f, 0.8f, 0.2f, 0.8f)
+        near(cutOff, snapped(asked, listOf(true, false, false, false), cutOff))
+        // further off than the page function takes is not taken
+        assertNull(snapped(asked, listOf(true, false, false, false), floatArrayOf(0.2f, 0.05f, 1.3f, -0.04f, 0.8f, 0.8f, 0.2f, 0.8f)))
+    }
+
+    @Test
+    fun theViewWidensToShowACornerOffThePhoto() {
+        assertArrayEquals(floatArrayOf(0f, 0f, 1f, 1f), quadSpan(rect), 0f)
+        assertArrayEquals(floatArrayOf(0f, -0.1f, 1.12f, 1f), quadSpan(floatArrayOf(0f, 0f, 1.12f, -0.1f, 1f, 1f, 0f, 1f)), 1e-6f)
+        // a photo 100 x 200 in a 400 x 400 view with no pad: the photo alone is drawn 200 x 400, centred
+        val plain = fitSpan(quadSpan(rect), 100f, 200f, 400f, 400f, 0f)
+        assertEquals(QuadFit(100f, 0f, 200f, 400f), plain)
+        // with the top 10% past the edge as well, the photo shrinks to fit 1.1 heights and moves down
+        val wide = fitSpan(floatArrayOf(0f, -0.1f, 1f, 1f), 100f, 200f, 400f, 400f, 0f)
+        assertEquals(400f, wide.height * 1.1f, 1e-3f)
+        assertEquals(0f, wide.y(-0.1f), 1e-3f)
+        assertEquals(400f, wide.y(1f), 1e-3f)
+        assertEquals(200f, (wide.x(0f) + wide.x(1f)) / 2f, 1e-3f)
     }
 
     @Test
