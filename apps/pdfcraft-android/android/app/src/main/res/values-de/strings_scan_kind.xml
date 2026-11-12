@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Scanner document types: the book-page gutter rule (#427), kept apart from strings.xml so parallel scanner work merges cleanly. -->
+<resources>
+    <string name="scan_lab_strict_gutter">Buchseite nur, wenn ein Schatten die ganze Bindeseite entlang läuft und nach innen verblasst</string>
+</resources>

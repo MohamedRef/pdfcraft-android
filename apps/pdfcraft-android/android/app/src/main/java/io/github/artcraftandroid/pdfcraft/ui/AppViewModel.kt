@@ -2242,7 +2242,10 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 "suggest_greyscale" to (r?.kind?.suggestGreyscale ?: false), "page_ratio" to (r?.kind?.ratio?.toDouble() ?: 0.0),
                 "ink_share" to (r?.kind?.inkShare?.toDouble() ?: -1.0), "colour_ink_share" to (r?.kind?.colourInkShare?.toDouble() ?: -1.0),
                 "photo_share" to (r?.kind?.photoShare?.toDouble() ?: -1.0), "stroke_mm" to (r?.kind?.strokeMm?.toDouble() ?: -1.0),
-                "glare_share" to (r?.kind?.glareShare?.toDouble() ?: -1.0), "gutter_band" to (r?.kind?.gutterBand ?: false),
+                "bright_share" to (r?.kind?.brightShare?.toDouble() ?: -1.0), "gutter_band" to (r?.kind?.gutterBand ?: false),
+                // the book-page gutter rule (#427): the option, what the first rule says, and how much of the side was dark
+                "strict_gutter" to lab.strictGutter, "gutter_loose" to (r?.kind?.gutterLoose ?: false),
+                "gutter_cover" to (r?.kind?.gutterCover?.toDouble() ?: -1.0),
                 "whole_photo" to (r?.kind?.wholePhoto ?: false),
             )
             if (keepIn != null) {
@@ -2261,7 +2264,8 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 val kind = r?.kind?.let { k ->
                     ScanTestKind(
                         k.preset, k.chosen, k.strength.toInt(), k.sharpen.toInt(), k.keepPaper, k.suggestFlatten, k.suggestGreyscale, k.ratio.toDouble(),
-                        k.inkShare.toDouble(), k.colourInkShare.toDouble(), k.photoShare.toDouble(), k.strokeMm.toDouble(), k.glareShare.toDouble(), k.gutterBand, k.wholePhoto,
+                        k.inkShare.toDouble(), k.colourInkShare.toDouble(), k.photoShare.toDouble(), k.strokeMm.toDouble(), k.brightShare.toDouble(), k.gutterBand, k.wholePhoto,
+                        k.gutterLoose, k.gutterCover.toDouble(),
                     )
                 }
                 withContext(Dispatchers.IO) { scanLab.keepPage(keepIn, i, page, true, scanLookWord(filter, lab), strength, flatten, r?.path?.let(::File), kept, scanPreviewRecord(page), turn, kind, r?.let { scanAppliedStrength(page.look, lab, it.kind?.strength?.toInt()) }) }
