@@ -31,7 +31,7 @@ a phone yet.** Every number in the scanner's documents was measured on a desktop
 | #300 | Black and white, 1 bit | Core done | #359 | Speckle on textured grey fills; photographs wider than a quarter of the page are not dithered; 0.85 s for 12 megapixels on a desktop |
 | #301 | Filter screen | Preview on the scan screen | #376, #380 | A look per page, strength, looks strip, compare, apply to all, the session's new fields, cancel. Preview speed and sharpness on a phone |
 | #302 | Flatten curved pages | Switch only | #365 | The automatic mode and its quality guard (need #288's `line_straightness`), border trim, a switch per page |
-| #303 | Book mode | Part A core done | this PR | Phone checks (10 spreads in both orders); the switch in the in-app camera with a guide (#294); a note on the crop screen; `even_edges` only if photos show a gutter band; part B (text-line flattening) |
+| #303 | Book mode | Part A core done | #393 | Phone checks (10 spreads in both orders); the switch in the in-app camera with a guide (#294); a note on the crop screen; `even_edges` only if photos show a gutter band; part B (text-line flattening) |
 | #304 | "Max quality" (DocRes) | **Not started** | | Feasibility first, as the issue says |
 | #305, #306 | Research: moiré; fingers, glare | **Not started** | | |
 | #307 | ML Kit as a second engine | **Not started** | | Cannot be tried without a phone with Google Play services |
