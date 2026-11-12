@@ -13,4 +13,5 @@
     <string name="scan_preset_title">Document type</string>
     <string name="scan_preset_automatic">Automatic</string>
     <string name="scan_lab_presets">Document types in Clean scan</string>
+    <string name="scan_lab_page_strength">Page strength wins over the document type</string>
 </resources>

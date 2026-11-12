@@ -1940,6 +1940,8 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 // the page's own look and strength (#301)
                 "look" to io.github.artcraftandroid.pdfcraft.ui.scan.scanFilterId(filter), "strength" to scanLookStrength(look, lab), "paper" to look.paper.word, "whiteboard_look" to lab.whiteboardLook,
                 "strength_source" to (if (lab.strength != null) "lab" else look.strengthSource), "settled" to settle,
+                // the strength the page was really made at, and whether the slider's counts as set by hand (#424)
+                *scanAppliedStrengthDiag(scanAppliedStrength(look, lab, p?.kind?.strength?.toInt()), lab),
                 "flatten" to flatten, "made" to (image != null),
                 "reused" to (p?.reused ?: false), "ms" to ms,
                 *(p?.timings.orEmpty().map<io.github.artcraftandroid.pdfcraft.core.ScanTiming, Pair<String, Any?>> { it.stage.removePrefix("scan_") + "_ms" to it.ms.toLong() }.toTypedArray()),
@@ -2222,6 +2224,8 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 "flatten_trim" to lab.flattenTrim, "flatten_line_floor" to lab.flattenLineFloor, *io.github.artcraftandroid.pdfcraft.ui.scan.scanTrimDiag(r?.trim),
                 *scanLineFlattenDiag(lab.lineFlatten, r?.lineFlatten),
                 "strength" to strength, "side_proportions" to !lab.perspective, "snap_paper" to lab.snapPaper,
+                // the strength the page was really made at, and whether the slider's counts as set by hand (#424)
+                *scanAppliedStrengthDiag(scanAppliedStrength(page.look, lab, r?.kind?.strength?.toInt()), lab),
                 // which way up the page was found to be and whether it was turned (#339)
                 "upright" to lab.upright, "quarter_turns" to classifierTurns[i], "upright_sure" to (found[i]?.sure ?: false),
                 "upright_confidence" to (found[i]?.confidence?.toDouble() ?: 0.0), "upright_agreement" to (found[i]?.agreement?.toDouble() ?: 0.0),
@@ -2260,7 +2264,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                         k.inkShare.toDouble(), k.colourInkShare.toDouble(), k.photoShare.toDouble(), k.strokeMm.toDouble(), k.glareShare.toDouble(), k.gutterBand, k.wholePhoto,
                     )
                 }
-                withContext(Dispatchers.IO) { scanLab.keepPage(keepIn, i, page, true, scanLookWord(filter, lab), strength, flatten, r?.path?.let(::File), kept, scanPreviewRecord(page), turn, kind) }
+                withContext(Dispatchers.IO) { scanLab.keepPage(keepIn, i, page, true, scanLookWord(filter, lab), strength, flatten, r?.path?.let(::File), kept, scanPreviewRecord(page), turn, kind, r?.let { scanAppliedStrength(page.look, lab, it.kind?.strength?.toInt()) }) }
             }
             saved += scanSavedPage(page.file.absolutePath, r?.let { it.path to it.dpi })
         }
