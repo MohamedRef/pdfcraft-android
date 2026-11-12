@@ -32,7 +32,7 @@ a phone yet.** Every number in the scanner's documents was measured on a desktop
 | #301 | Filter screen | Preview on the scan screen | #376, #380 | A look per page, strength, looks strip, compare, apply to all, the session's new fields, cancel. Preview speed and sharpness on a phone |
 | #302 | Flatten curved pages | Switch only | #365 | The automatic mode and its quality guard (need #288's `line_straightness`), border trim, a switch per page |
 | #303 | Book mode | **Not started** | | All of it |
-| #304 | "Max quality" (DocRes) | Groundwork | this PR | DocRes's two prompts ported (checked against its Python) and the correction map, called by nothing ([ANDROID_SCAN_MAX_QUALITY.md](ANDROID_SCAN_MAX_QUALITY.md)). Left: the weights (no licence stated by the authors; their hosts were not reachable), the ONNX export, the phone gate, then step 2 |
+| #304 | "Max quality" (DocRes) | Groundwork | #402 | DocRes's two prompts ported (checked against its Python) and the correction map, called by nothing ([ANDROID_SCAN_MAX_QUALITY.md](ANDROID_SCAN_MAX_QUALITY.md)). Left: the weights (no licence stated by the authors; their hosts were not reachable), the ONNX export, the phone gate, then step 2 |
 | #305, #306 | Research: moiré; fingers, glare | **Not started** | | |
 | #307 | ML Kit as a second engine | **Not started** | | Cannot be tried without a phone with Google Play services |
 | #339 | Pages turned upright | Core done | #370 | The "Turned upright · Undo" chip, a rotate button, the multi-page rule, a switch in ordinary settings |
