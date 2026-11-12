@@ -1,11 +1,12 @@
-# Scanner building blocks: written and tested, not yet used
+# Scanner building blocks: written and tested, now wired in
 
 Eleven modules of the scan crate (`apps/pdfcraft-android/scan/src`) that the remaining scanner
 issues need. Each is a file of its own with its tests, uses only the crate's own types, and is
-declared in `lib.rs`. **Nothing calls them yet**: no page the app makes changes with this, there
-is no setting, and nothing is logged. Wiring each one in (the function that calls it, its
-testing option, its log fields, its kept-scan fields: the three requirements in
-[ANDROID_SCAN_HANDOVER.md](ANDROID_SCAN_HANDOVER.md)) is the work that is left.
+declared in `lib.rs`. When they were written nothing called them. **Since then every one has
+been wired in** with its testing option, log fields and kept-scan fields (the three
+requirements in [ANDROID_SCAN_HANDOVER.md](ANDROID_SCAN_HANDOVER.md)); the list under
+"Where each block is called" says where. The table below is what each block's own tests
+measured when it was written.
 
 They were written by separate workers from the issue texts, each against a stand-in for the
 crate, then built and tested here in the real crate: `cargo test -p pdfcraft-scan --lib` runs
@@ -27,10 +28,22 @@ phone**, and every threshold below is the issue's starting value or was set on d
 | #296 | `sharpness` | `sharpness(luma, quad) -> Sharpness { score, blurred }`, `BLURRED_BELOW = 1.0` | sharp drawn pages 1.49–1.93; Gaussian blur σ 2.5 and 4: 0.15–0.48; σ 1.5: 0.61–0.83; a dim copy scores the same; 12 MP in 0.7 s (debug) | **motion blur is not told apart**: 7 and 13 px streaks score 0.90–1.60, across the sharp range. The threshold was set on drawn pages. Do not show a "take it again" prompt from it before it is set from real sharp and shaken photos |
 | #339 | `upright_pages` | `settle(pages)`, `followed(pages)`: an unsure page follows two sure neighbours (≥ 0.95) that agree; `turn_corners`, `turn_back`, `total_turn`: a quarter turn by reordering the corners, for Rotate and its undo | direction checked with a homography: a point at (x, y) lands at (h − y, x) after one clockwise turn | not wired into `page.rs` or the app |
 
-**Wired in since:** `sharpness` (#296) and `merge` (#297) are called by `capture.rs` and reachable
-as the UniFFI calls `scan_sharpness` and `scan_merge_frames` (native side only, no screen yet,
-the modules unchanged): see [ANDROID_SCAN_CAPTURE.md](ANDROID_SCAN_CAPTURE.md). The motion-blur
-gap above still holds; the call's field is named `blurred_unverified` for that reason.
+## Where each block is called
+
+| Module | Called by | Merged in |
+|---|---|---|
+| `metrics_geometry`, `metrics_tone`, `metrics_compare` | `eval.rs`: the `scan-eval` runner and the CI gate on drawn photos. Not by the app | #394, #404 |
+| `straightness` | `page.rs` (#302's automatic mode), `flatten_lines.rs` (text-line flattening), `eval.rs` | #385, #419 |
+| `flatten_guard` | `page.rs`: `compare_flattened` (the guard) and `trim_flattened` (border trim) | #385, #417 |
+| `preset`, `photo_mask` | `page_kind.rs`: the document types. The mask is also used inside sharpening (`enhance::auto_with_photos`) | #391, #421 |
+| `book` | `src/scan_book.rs` (`book::split_photo`, `scan_split_spread`), the Book switch | #393, #413 |
+| `sharpness`, `merge` | `capture.rs` (`scan_sharpness`, `scan_merge_frames`), called by the in-app camera's auto-capture and low-light burst | #389, #407, #408 |
+| `upright_pages` | `page.rs` (`total_turn`, Rotate and its undo) and `src/scan.rs` (`settle`, `followed`, the multi-page rule) | #387 |
+
+The motion-blur gap of `sharpness` still holds; the call's field is named `blurred_unverified`
+for that reason, and the camera records the score without prompting a retake. The gaps in the
+table above are the blocks' own and were not re-measured when they were wired in. None of this
+has run on a phone.
 
 ## What was started and not finished
 

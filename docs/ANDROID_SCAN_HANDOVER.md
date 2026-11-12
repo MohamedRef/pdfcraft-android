@@ -16,27 +16,27 @@ a phone yet.** Every number in the scanner's documents was measured on a desktop
 | Issue | What | State | Merged in | What is left |
 |---|---|---|---|---|
 | #287 | `pdfcraft-scan` crate, one pass from photo to page | Done, closed | #331, #346 | |
-| #288 | Measuring: harness, drawn pages, test set | Part | #346, #367, #382, #386, #394, #404 | The SmartDoc script. The drawn photos (`synth`), the metrics blocks, the `scan-eval` runner and the CI gate are in; see [ANDROID_SCAN_MEASURING.md](ANDROID_SCAN_MEASURING.md). On a kept-scans export, `scan-eval` leaves out merged pages, book halves, discarded scans and pages whose corners nobody checked (`"checked": true` in the page file), and counts them in its report (#425) |
+| #288 | Measuring: harness, drawn pages, test set | Done in code | #346, #367, #382, #386, #394, #404, #414, #434 | The SmartDoc 2015 script is in (#414) but has never been run on the real dataset; the owner's own test set. On a kept-scans export, `scan-eval` leaves out merged pages, book halves, discarded scans and pages whose corners nobody checked (`"checked": true` in the page file), and counts them in its report (#425, fixed in #434). See [ANDROID_SCAN_MEASURING.md](ANDROID_SCAN_MEASURING.md) |
 | #289 | Model files: pinned, loaded, exported, copied again when changed, packs ready, tensor helpers | Done | #360, #365, #370, #403, #410, #415 | Nothing. All three models stay in the app by the owner's choice; `docs/ANDROID_SCAN_MODELS.md` says how to make one a download |
 | #290 | Page found by a network | Core done | #360 | Figures on the owner's set; phone time. Known: wrong and accepted on 2 of the 10 reference photos, nothing found on 2 |
 | #291 | Edges refined at full size | Core done | #356, #291 PR | Corners off the photo (up to 15%) checked on drawn pages only; the owner's set; phone time |
-| #292 | Crop screen: magnifier, side handles, snap, rotate | Screen done, rotate left | #381 | Rotate (with #339's user turns and `ScanSession` 2); all of it on a phone (`docs/ANDROID_SCAN_CROP.md`) |
+| #292 | Crop screen: magnifier, side handles, snap, rotate | Done in code, not run on a phone | #381, #400 | Rotate is on the scan screen (#387, with #339's turns in `ScanSession` 2); the crop screen itself has no Rotate button, so the issue's bottom-row Rotate is not built. All of it on a phone (`docs/ANDROID_SCAN_CROP.md`) |
 | #293 | True proportions, paper sizes | Core done | #353 | The focal length from the in-app camera (#294, section 7 there) |
-| #294 | In-app camera (CameraX) | Core done, not run on a phone | #390 | Everything on the owner's phone (`ANDROID_SCAN_CAMERA.md`); the focal length from the camera's calibration for #293 |
-| #295 | Live page outline, hints | **Not started** | | Needs #294 |
-| #296 | Auto-capture, blur check | Native call only, in #389 | | `scan_sharpness` exists (`docs/ANDROID_SCAN_CAPTURE.md`); its `blurred_unverified` is for logs only (motion blur not detected, threshold from drawn pages). Everything else needs #295 |
-| #297 | Multi-frame merge | Core done, **off by default** (#426), not run on a phone | #389, #408, #426 PR | The setting is Off unless the person picks Auto or Always: a merged page enters the scan already cropped by the detector, with its photos deleted, so Crop cannot widen it (reason in `docs/ANDROID_SCAN_MERGE.md`). Left: keep the reference photo as the page and merge when the page is made, then decide the default on the owner's phone |
-| #298 | Auto look, part 1 | Core done | #346 | Phone time; the paper White / Keep control has no screen (#301) |
-| #299 | Auto look, part 2 | Part | #373, #391, #435 | Document types are in; the book page's gutter rule is strict since #427 (checked on drawn pages only). Left: #421 (kind tone, photo sharpening, suggestions); the confusion table on the owner's kept scans |
+| #294 | In-app camera (CameraX) | Done in code, not run on a phone | #390; #398, #405, #407, #408 and #413 build on it | Everything on the owner's phone (`ANDROID_SCAN_CAMERA.md`); the focal length from the camera's calibration for #293 |
+| #295 | Live page outline, hints | Done in code, not run on a phone | #398, #405 | Detection rate, lag, flicker, heat and the hint thresholds on the phone; using the live outline when the still's detection fails (section 6 of the issue; `preview_quad` is recorded first so the gain can be judged). See `ANDROID_SCAN_LIVE.md` |
+| #296 | Auto-capture, blur check | Done in code except the retake prompt, not run on a phone | #389, #407 | The retake prompt for blurred photos, left out on purpose: `scan_sharpness` does not detect motion blur and its threshold is from drawn pages, so real photos' recorded scores must set it first. Timings, thresholds and the issue's acceptance items on the phone (`docs/ANDROID_SCAN_CAPTURE.md`) |
+| #297 | Multi-frame merge | Done in code, **off by default** (#426), not run on a phone | #389, #408, #431 | The setting is Off unless the person picks Auto or Always: a merged page enters the scan already cropped by the detector, with its photos deleted, so Crop cannot widen it (reason in `docs/ANDROID_SCAN_MERGE.md`). Left: keep the reference photo as the page and merge when the page is made, then decide the default on the owner's phone; noise, recognition and time per page on the phone. The experimental glare mode is left out |
+| #298 | Auto look, part 1 | Core done | #346, #423 | Phone time. The paper White / Keep control is in since #423 |
+| #299 | Auto look, part 2 | Done in code, not run on a phone | #373, #391, #421, #435, #437 | Document types and their chip (#391); each kind's own tone, gentle sharpening inside the photo mask, the Flatten/Grayscale suggestion chips and the recognition-error check (#421). The book page's gutter rule is strict and the page measurements are kept with the straightened page (#435, for #427); barcodes, stamps and soft print are no longer taken for photographs (#437). All checked on drawn pages only. Left: the default sharpening is 0.13 point worse in character error rate on drawn pages, so whether it stays at 30 is the owner's call; the acceptance items on his photos (reference pairs, per-kind figures, halo crops, the confusion table from his kept scans) |
 | #300 | Black and white, 1 bit | Core done | #359 | Speckle on textured grey fills; photographs wider than a quarter of the page are not dithered; 0.85 s for 12 megapixels on a desktop |
-| #301 | Filter screen | Preview on the scan screen | #376, #380 | A look per page, strength, looks strip, compare, apply to all, the session's new fields, cancel. Preview speed and sharpness on a phone |
-| #302 | Flatten curved pages | Switch, automatic mode with its quality guard as a testing option (off by default), border trim, a switch per page, floor of 8 lines followed before the guard keeps a flattened page | #365, #385, #417, #436 | Choosing the automatic mode's default from the owner's kept scans; phone timings |
-| #303 | Book mode | **Not started** | | All of it |
-| #304 | "Max quality" (DocRes) | **Not started** | | Feasibility first, as the issue says. The testing option that times a picked model file (`scan_time_model`) reads only files inside the app's own folder, as every other scan call does (#429) |
-| #305, #306 | Research: moiré; fingers, glare | **Not started** | | |
+| #301 | Filter screen | Done in code, not run on a phone | #376, #380, #416, #423, #432 | Preview speed and sharpness, and save timings, on the phone. The strength slider in Clean scan with document types on was fixed in #432 (#424) |
+| #302 | Flatten curved pages | Switch per page; automatic mode (off by default), its quality guard and border trim as testing options | #365, #385, #417, #436 | The guard keeps a flattened page only when at least 8 lines were followed on both pages (#436). Left: choosing the automatic mode's default from the owner's kept scans; phone timings |
+| #303 | Book mode | Parts A and B done in code, not run on a phone | #393, #413, #419 | Phone checks: 10 spreads in both orders; for part B, how many pages the network's guard rejects get flattened from their lines, and the time per page; `even_edges` only if photos show a gutter band (`ANDROID_SCAN_BOOK.md`, `ANDROID_SCAN_FLATTEN_LINES.md`) |
+| #304 | "Max quality" (DocRes) | Feasibility in progress | #402, #420, #433 | The phone gate: time the DocRes file on the owner's phone with the testing option from #420 and share the log. That option (`scan_time_model`) reads only files inside the app's own folder, as every other scan call does (#429, fixed in #433). The authors' weights carry no licence, so nothing is bundled (`ANDROID_SCAN_MAX_QUALITY.md`) |
+| #305, #306 | Research: moiré; fingers, glare | Detection only, reported in kept scans | #395, #397, #418 | Nothing acts on the reports: no page changes. Real moiré, fingers, glare and stains, and the cost on a 12 MP photo, are not measured (`ANDROID_SCAN_MOIRE.md`, `ANDROID_SCAN_DEFECTS.md`) |
 | #307 | ML Kit as a second engine | **Dropped** | | The owner decided on 12 November 2026: nothing from Google in the app or in the scanner's work, so the app keeps no proprietary dependency and stays buildable by F-Droid. Do not add ML Kit or compare against Google's scanner |
 | #424 | Strength slider in Clean scan with document types on | Fixed in code, not run on a phone | #432 | The slider's strength now wins over the document type's, the slider starts from the type's, and the sharpening option scales the type's. Testing option `pageStrength` (off is the old rule). How it looks on the owner's photos and phone |
-| #339 | Pages turned upright | Core done | #370 | The "Turned upright · Undo" chip, a rotate button, the multi-page rule, a switch in ordinary settings |
+| #339 | Pages turned upright | Done in code, not run on a phone | #370, #387 | The chip, Rotate, the multi-page rule and the setting are in. Acceptance on the owner's test set per script, and phone timing; the neighbour rule's 0.95 bar may seldom act with this network's confidences (`ANDROID_SCAN_UPRIGHT.md`) |
 
 "Core done" means the code and its tests are merged and the issue's acceptance items that need
 the owner's phone or his test set are open. Each issue has a comment saying the same in detail.
@@ -45,14 +45,22 @@ the owner's phone or his test set are open. Each issue has a comment saying the 
 
 Before starting an item in the table, look here: part of it may exist.
 
-- **In the crate, tested, called by nothing yet** ([ANDROID_SCAN_BLOCKS.md](ANDROID_SCAN_BLOCKS.md),
-  one row per module with what its tests measured and its known gaps): `metrics_geometry`,
-  `metrics_tone`, `metrics_compare` and `straightness` for #288; `flatten_guard` for #302;
-  `photo_mask` and `preset` for #299; `book` for #303 (part A's Rust); `merge` for #297;
-  `sharpness` for #296; `upright_pages` for #339 (the multi-page rule, and a quarter turn by
-  reordering the corners, which gives Rotate without a new field in `ScanPageRequest`). Wire a
-  block in instead of writing it again; its issue stays open until it has its testing option,
-  its log fields and its kept-scan fields (section 3).
+- **In the crate, tested, and now wired in** ([ANDROID_SCAN_BLOCKS.md](ANDROID_SCAN_BLOCKS.md),
+  one row per module with what its tests measured and its known gaps). All eleven blocks from
+  #382 are called today:
+  - `metrics_geometry`, `metrics_tone`, `metrics_compare`: by `eval.rs`, the `scan-eval` runner
+    and the CI gate (#394, #404). Not by the app.
+  - `straightness`: by `page.rs` for #302's automatic mode (#385) and by `flatten_lines.rs`
+    (#419); also by `eval.rs`.
+  - `flatten_guard`: by `page.rs` (`compare_flattened`, #385; `trim_flattened`, #417).
+  - `preset` and `photo_mask`: by `page_kind.rs`, the document types (#391). The mask is also
+    used inside sharpening, in `enhance::auto_with_photos` (#421).
+  - `book`: by `src/scan_book.rs` (`book::split_photo`, #393).
+  - `sharpness` and `merge`: by `capture.rs` (#389), called from the in-app camera (#407, #408).
+  - `upright_pages`: by `page.rs` (`total_turn`) and `src/scan.rs` (`settle`, `followed`), #387.
+
+  Outside those eleven: the research modules `moire` and `defects` only report in kept scans
+  (#418) and change no page; the DocRes groundwork (`enhance/learned.rs`, #402) is called by nothing.
 - **Parked, never compiled or reviewed** (branch `draft/scan-app-blocks`, folder
   `docs/scan-blocks/`, whose README says what state each file is in): Kotlin drafts for #301,
   #295, #307 and the pure half of #294, a second drawn-photo generator for #288 (superseded by
@@ -89,7 +97,7 @@ AppViewModel.saveScan, per page
   tests) and its UniFFI layer `apps/pdfcraft-android/src/scan.rs`: `scan_set_root`,
   `scan_find_document`, `scan_find_document_with`, `scan_refine_quad`, `scan_process_page`,
   `scan_preview_page`, `scan_release_previews`, `scan_can_flatten`, `scan_sharpness`,
-  `scan_merge_frames` (no screen calls the last two yet). Kotlin bindings are generated
+  `scan_merge_frames` (the in-app camera calls the last two, #407 and #408). Kotlin bindings are generated
   at build time; nothing generated is committed.
 - **Kotlin**: `ui/AppViewModel.kt` (`onScanPhoto`, `saveScan`, `discardScan`),
   `ui/ToolScreens.kt` (`ScanScreen`, `ScanCrop`, `ScanPage`, `ScanFilter`), `ui/ScanSession.kt`,
