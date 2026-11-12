@@ -1116,7 +1116,11 @@ fn text_layers_stay_bounded() {
     // the most recently used page is still there, the oldest is gone
     assert!(s.texts().get_mut(&doc).unwrap().get(pages as usize - 1).is_some());
     assert!(s.texts().get_mut(&doc).unwrap().get(0).is_none());
-    s.release_memory();
+    {
+        // it also empties the scanner's preview store, which another test counts
+        let _store = crate::scan::PREVIEWS_TEST_LOCK.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        s.release_memory();
+    }
     assert_eq!(kept(&s), 0);
 }
 
