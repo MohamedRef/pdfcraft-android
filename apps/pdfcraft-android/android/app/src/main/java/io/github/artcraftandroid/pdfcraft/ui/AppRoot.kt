@@ -97,7 +97,8 @@ fun AppRoot(vm: AppViewModel, onBrowse: () -> Unit, onPickSignatureImage: () -> 
         }
     }
     // Back in the viewer closes the document (saving it) and returns to Home
-    androidx.activity.compose.BackHandler(enabled = doc != null && vm.toolScreen == null) { vm.closeDocument() }
+    // (with other tabs open it goes Home and keeps them, #138)
+    androidx.activity.compose.BackHandler(enabled = doc != null && vm.toolScreen == null) { vm.tabs.back() }
     // sideways, the camera cutout and the navigation bar sit at the sides: content stays between
     // them, on black, as the reference's does. With Extra Features' status bar in documents the
     // page goes under the camera too, as it does upright (#45): the viewer is laid out full width
@@ -105,7 +106,7 @@ fun AppRoot(vm: AppViewModel, onBrowse: () -> Unit, onPickSignatureImage: () -> 
     val fullWidthViewer = doc != null && vm.statusBarInDocuments
     Box(Modifier.fillMaxSize().background(Color.Black)) {
         if (fullWidthViewer && doc != null) {
-            Box(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.navigationBars.only(WindowInsetsSides.Horizontal))) { AdaptiveViewer(vm, doc) }
+            Box(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.navigationBars.only(WindowInsetsSides.Horizontal))) { androidx.compose.runtime.key(doc) { AdaptiveViewer(vm, doc) } }
         }
         Box(
             Modifier.fillMaxSize()
@@ -114,8 +115,13 @@ fun AppRoot(vm: AppViewModel, onBrowse: () -> Unit, onPickSignatureImage: () -> 
         ) {
             when {
                 fullWidthViewer -> Unit
-                doc != null -> AdaptiveViewer(vm, doc)
+                // keyed on the document: another tab brings a fresh viewer, never this one's remembered state (#138)
+                doc != null -> androidx.compose.runtime.key(doc) { AdaptiveViewer(vm, doc) }
                 else -> HomeRoot(vm, onBrowse)
+            }
+            // documents still open in tabs (#138): back to them from Home
+            if (doc == null && vm.tabs.tabs.isNotEmpty() && vm.toolScreen == null && !vm.settingsOpen) {
+                io.github.artcraftandroid.pdfcraft.ui.viewer.OpenTabsBar(vm, Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = 72.dp, start = 16.dp, end = 16.dp))
             }
             // here rather than in the file's row: a sheet inside a scrolling list has no height to fill
             if (doc == null) vm.fileSheet?.let { (r, recent) -> io.github.artcraftandroid.pdfcraft.ui.home.FileSheet(vm, r, recent) { vm.fileSheet = null } }

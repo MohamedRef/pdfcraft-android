@@ -70,9 +70,9 @@ Areas (lines · issues):
 | `home` | `recents` (files on Home, time to work out their sources and locations) and `slow_thumbnail` for a file card preview that took 100 ms or more | `AppViewModel.refreshRecents`, `Thumbnails.load` | #93 #94 |
 | `pages` | Page and document tools. Organize: one `page_edit` per page edit (tool, pages touched, page count, ms to the redrawn view). `layer_set` time. `mark_applied` / `marks_removed` (kind, update or add, picture, pages). `compress_run` (level, advanced, ms) and `compress_result` (bytes before and after, target). `export_pages_render` / `_result` / `_save` and `export_all_images` / `_result` (format, dpi, files, bytes, skipped). `split` / `split_result`, `extract_pages`. `protect_copy`, `unprotect_copy`, `hidden_removed`, `flattened`. `pdfa_convert` (level, compliant, issues left), `fix_hairlines` (strokes fixed). `print_layout` / `_result` (layout, per sheet, subset, sheets, bytes), then `print_write` (bytes, ms) and `print_finished` from the print framework. `save_to_downloads` (bytes, ms, ok), `save_to_folder` / `_result` (files, saved). Failures of saving and printing go to `error` with `area=pages` | `AppViewModel` page tools, `MainActivity.print` | #165 #168 #172 #173 #174-#177 #181 #183 #185 |
 | `error` | Failures with their stage and exception class, engine panics caught, and crashes with the exception classes and code locations | `Diag.failure`, `Engine`, crash handler | #114 |
-| `viewer` | Reading and presenting: jumps back and forward, Go to page, the layout a file opens in and why, page mode and spread changes, the spread a window shows, reading colours, keyboard shortcuts, hiding annotations, comment-list filters and dimming, copies without annotations, presentation start and end, clicker keys, the second screen and the pages drawn for it (see below) | `ViewerController`, `AppViewModel`, `ViewerScreen`, `CommentList`, `ExternalPresentation` | #152 #153 #155 #157 #184 #198 #203 #204 #327 |
+| `viewer` | Document tabs and split view (`tab_*`, `split_*`), reading and presenting: jumps back and forward, Go to page, the layout a file opens in and why, page mode and spread changes, the spread a window shows, reading colours, keyboard shortcuts, hiding annotations, comment-list filters and dimming, copies without annotations, presentation start and end, clicker keys, the second screen and the pages drawn for it (see below) | `ViewerController`, `AppViewModel`, `TabsController`, `TabStrip`, `ViewerScreen`, `CommentList`, `ExternalPresentation` | #138 #139 #152 #153 #155 #157 #184 #198 #203 #204 #327 |
 | `markup` | Comments, markup, links, measuring and study: comment export, import, summary, copy and paste, status and lock; markup follow-up actions, area highlights, replace and insert suggestions, shape annotations; links added, edited, deleted, made from addresses and removed; measure points, saved measurements, scales and exports; masking tape and quizzes (see below). Never a comment's text, a link's address or a measurement's label | `MarkupDiag`, `AppViewModel`, `Tools`, `Study` | #133 #134 #135 #143 #158 #159 #169 #170 #179 #180 #196 #197 |
-| `edit` | Content editing: image edits, redaction marks and apply, the hidden-information and fake-redaction checks, OCR runs, reviews and batches, Compare, the accessibility check and its fixes, Prepare form, imported fonts, spacing, overflow warnings, grouped text made editable, and moving, copying and pasting objects (see below) | `EditDiagnostics.kt` with `ImageTools`, `Redact`, `OcrTools`, `Compare`, `Accessibility`, `PrepareForm`, `TextTools`, `ObjectSelect` | #161 #162 #163 #164 #166 #167 #171 #182 |
+| `edit` | Content editing: image edits, redaction marks and apply, the hidden-information and fake-redaction checks, OCR runs, reviews and batches, Compare, the accessibility check and its fixes, Prepare form, imported fonts, spacing, overflow warnings, grouped text made editable, moving, copying and pasting objects, and Fill & Sign with digital signatures (see below) | `EditDiagnostics.kt` with `ImageTools`, `Redact`, `OcrTools`, `Compare`, `Accessibility`, `PrepareForm`, `TextTools`, `ObjectSelect`, `SigningController` | #161 #162 #163 #164 #166 #167 #171 #178 #182 |
 
 ### `viewer` lines
 
@@ -97,6 +97,15 @@ Areas (lines · issues):
 | `external_display` | `doc`, `attached`, `screens`, `width_px`, `height_px`, `secure` | A second screen came or went while presenting; never its name (#157) |
 | `external_show` | `doc`, `ok` | The page window opened on the second screen, or could not (#157) |
 | `external_page` | `doc`, `page`, `width_px`, `height_px`, `ms`, `ok` | Each page drawn for the second screen, its size and time (#157) |
+| `tab_stash` | `doc`, `tabs`, `dirty`, `not_written_back` | The document in front moved to a tab because another opened or came to the front, after its save (#138) |
+| `tab_switch` | `doc`, `parked`, `tabs`, `ms` | A tab came to the front; `parked=true` means it opened again from its file, else `ms` is the switch time (#138) |
+| `tab_park` | `doc`, `hot` | A tab was saved and closed in the engine to keep at most four documents open (#138) |
+| `tab_close` | `doc`, `tabs`, `background`, `parked` | A tab closed: the one in front, one behind it, or a parked one (#138) |
+| `tab_home`, `tab_key` | `doc`, `tabs`; `action` (`cycle`, `close`) | Home was opened with tabs kept; Ctrl+Tab or Ctrl+W was pressed (#138) |
+| `split_open`, `split_close`, `split_swap` | `doc`, `other`, `tabs` | Split view started, ended or swapped its panes (#139) |
+| `split_shown`, `split_resize` | `doc`, `other`, `side_by_side`, `width_dp`, `height_dp`; `percent` | How split view was laid out for the window, and the main pane's share after dragging the divider (#139) |
+| `split_snip`, `split_drop` | `doc`, `page`; `other`, `kind` (`ink`, `text`, `image`, `cancelled`, `failed`), `linked`, `ms` | An area was marked in the other pane, and what dropping it on the document in front made, whether it got a back-link, and how long it took (#139) |
+| `split_link` | `doc`, `other`, `pane`, `area` | A back-link to a document already open went to the other pane (`pane=true`) or its tab, without reopening it (#139) |
 
 Failures in these steps also write an `[error] failed area=viewer stage=…` line (`comments_hide`,
 `reading_colors`, `clean_copy`, `unlocked_copy`, `external_show`).
@@ -161,7 +170,20 @@ Every line has `doc`. None holds a word, name, expression, field name or alterna
 | `text_prepare` | `prepared`, `refused` | Text inside grouped artwork was made editable, and groups the engine left alone (#167) |
 | `objects_move`, `objects_copy`, `objects_paste` | `count`; `cut`, `count`; `pasted`, `same_doc` | Several objects were moved, copied or cut, and pasted (#162) |
 
-Signing (#178) is not logged here yet: its code lives in `AppViewModel`, which is being split; the `tool` and `error` lines cover its engine calls until then.
+Signing (#178) adds these lines. They never hold a name, email, organization, password, reason, location or certificate:
+
+| Name | Fields | Meaning |
+|---|---|---|
+| `sign_fill_place` | `element` (`text`, `cross`, `check`, `dot`, `box`, `line`, `signature`, `initials`, ...) | A Fill & Sign element was placed |
+| `sign_drawn` | `initials`, `saved`, `placed`, `imported` | A signature or initials was finished on the pad, saved for later or not, placed on a page or not, from an image or drawn |
+| `sign_cert_target` | `placement` (`box`, `field`, `invisible`, `read_only`) | A digital signature was started: a drawn box, a signature field, no box, or refused on a read-only file |
+| `sign_document` | `placement`, `look` (`name`, `typed`, `drawn`), `reason`, `location`, `ms`, `result` (`signed`, `wrong_password`, `refused`, `error`), `saved` | A document was signed with a digital ID, or the attempt was refused. `reason` and `location` say only whether they were filled in |
+| `sign_id_import` | `result` (`added`, `cancelled`, `wrong_password`, `cannot_sign`, `unusable`), `ids` | A digital ID file was added, or why not |
+| `sign_id_create` | `ok`, `ms` | A self-signed digital ID was made |
+| `sign_id_remove` | `ids` | A digital ID was removed, and how many are left |
+| `sign_list` | `fields`, `signed`, `valid`, `unknown`, `invalid` | The document's signature fields and how their signatures checked out |
+| `sign_trust` | `trusted`, `count` | A signer was trusted or no longer trusted, and how many are trusted now |
+| `sign_signed_version` | `revisions`, `found` | View signed version: the revisions, and whether the signed one was found |
 
 ## Privacy rules
 

@@ -140,11 +140,14 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
         if (railVisible) 0f else if (ctl.tool == ViewerTool.None) QuickBarHeight.toPx() + quickExtraPx else if (ctl.tool == ViewerTool.Draw) DrawToolbarHeight.toPx() else BottomBarHeight.toPx()
     }
     // keyed on the document too: one opened over another (Create, Combine) has a fresh page view
-    LaunchedEffect(doc, ctl.barsVisible, statusPx, navPx, ctl.searching, ctl.tool, vm.readingMode, bottomPx, statusBar) {
+    // the tab strip under the top bar while two or more documents are open (#138)
+    val stripShown = showTabStrip(vm) && !ctl.searching
+    val stripPx = if (stripShown) with(density) { TabStripHeight.toPx() } else 0f
+    LaunchedEffect(doc, ctl.barsVisible, statusPx, navPx, ctl.searching, ctl.tool, vm.readingMode, bottomPx, statusBar, stripPx) {
         val bottomShown = ctl.barsVisible && !ctl.searching && !vm.readingMode
         doc.viewer.setPadding(
             // with the status bar in documents, the page goes up to the top edge once the bars hide
-            top = if (ctl.barsVisible) statusPx + topPx else if (statusBar) 0f else statusPx,
+            top = if (ctl.barsVisible) statusPx + topPx + stripPx else if (statusBar) 0f else statusPx,
             bottom = if (bottomShown) bottomPx + navPx else navPx,
         )
     }
@@ -378,7 +381,7 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
         ToolLayer(vm, doc)
         if (ctl.tool == ViewerTool.Edit) EditOverlay(vm, doc)
         if (ctl.tool == ViewerTool.Edit && vm.editor.editMode == EditMode.Link) LinkLayer(vm, doc)
-        vm.linkEdit?.takeIf { it.doc === doc }?.let { LinkSheet(vm, it) }
+        vm.linksAndMeasure.linkEdit?.takeIf { it.doc === doc }?.let { LinkSheet(vm, it) }
         vm.commenting.textPrompt?.takeIf { it.doc === doc }?.let { TextEntry(vm, it, onDone = vm.commenting::postText) }
         vm.signing.fillTextPrompt?.takeIf { it.doc === doc }?.let { TextEntry(vm, it, onDone = vm.signing::postFillText) }
         vm.editor.addTextPrompt?.takeIf { it.doc === doc }?.let { TextEntry(vm, it, onDone = vm.editor::postAddText) }
@@ -485,6 +488,7 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
                 enter = slideInVertically(tween(PdfMotion.BARS_MS)) { -it } + fadeIn(tween(PdfMotion.BARS_MS)),
                 exit = slideOutVertically(tween(PdfMotion.BARS_MS)) { -it } + fadeOut(tween(PdfMotion.BARS_MS)),
             ) {
+              Column {
                 Box(barSides) {
                     if (ctl.searching) {
                         var query by remember { mutableStateOf(search.query) }
@@ -525,7 +529,7 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
                             // while drawing, the strokes not yet added have their own undo and redo
                             canUndo = doc.localUndo?.canUndo?.invoke() ?: (doc.info.undo != null),
                             canRedo = doc.localUndo?.canRedo?.invoke() ?: (doc.info.redo != null),
-                            onBack = { if (ctl.tool != ViewerTool.None) vm.leaveTool(doc) else vm.closeDocument() },
+                            onBack = { if (ctl.tool != ViewerTool.None) vm.leaveTool(doc) else vm.tabs.back() },
                             onUndo = { vm.undo(doc) },
                             onRedo = { vm.redo(doc) },
                             readingAloud = vm.readAloud != null,
@@ -550,13 +554,16 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
                         )
                 }
                 }
+                if (stripShown) Box(barSides) { TabStrip(vm, doc) }
+              }
             }
         }
         // Drag a dedicated handle; snap to nearest edge, remember its vertical position.
         // No drag listener is attached to tool buttons or the PDF canvas.
         var railDragX by remember(doc) { mutableFloatStateOf(0f) }
         var railDragY by remember(doc) { mutableFloatStateOf(0f) }
-        val viewportWidthPx = with(density) { config.screenWidthDp.dp.toPx() }
+        // the page area's width, not the screen's: split view (#139) gives the viewer part of it
+        val viewportWidthPx = doc.viewer.viewW.takeIf { it > 0f } ?: with(density) { config.screenWidthDp.dp.toPx() }
         val railWidthPx = with(density) { 58.dp.toPx() }
         val maxRailShiftPx = with(density) {
             ((config.screenHeightDp.dp.toPx() - doc.viewer.padTop -

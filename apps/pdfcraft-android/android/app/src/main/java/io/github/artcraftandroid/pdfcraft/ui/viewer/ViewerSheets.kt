@@ -125,6 +125,8 @@ fun MoreSheet(vm: AppViewModel, doc: OpenDocument) {
             SheetRow(LucideIcons.Info, stringResource(R.string.file_details_title), { ctl.sheet = ViewerSheet.FileDetails }, chevron = true)
             SheetRow(LucideIcons.Glasses, stringResource(R.string.sheet_view_settings), { ctl.sheet = ViewerSheet.ViewSettings }, chevron = true)
             SheetRow(LucideIcons.Presentation, stringResource(R.string.sheet_present), { close(); vm.startPresenting(doc) })
+            // tabs (#138): keep this document open and open another beside it
+            SheetRow(LucideIcons.FilePlus, stringResource(R.string.tabs_open_another), { close(); vm.tabs.openAnother() })
             SheetRow(LucideIcons.LayoutGrid, stringResource(R.string.sheet_pages), {
                 close()
                 // Draft ink keeps page numbers; add it before pages can move or go away.
