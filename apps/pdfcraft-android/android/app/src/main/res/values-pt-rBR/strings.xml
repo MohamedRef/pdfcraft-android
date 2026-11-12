@@ -238,6 +238,15 @@
     <string name="tools_scan_view_photo">Foto</string>
     <string name="tools_scan_preparing">Preparando a página</string>
     <string name="tools_scan_result_description">Página %1$d como será salva</string>
+    <string name="tools_crop_snap">Encaixar</string>
+    <string name="tools_crop_top_left">Canto superior esquerdo</string>
+    <string name="tools_crop_top_right">Canto superior direito</string>
+    <string name="tools_crop_bottom_right">Canto inferior direito</string>
+    <string name="tools_crop_bottom_left">Canto inferior esquerdo</string>
+    <string name="tools_crop_top_side">Lado superior</string>
+    <string name="tools_crop_right_side">Lado direito</string>
+    <string name="tools_crop_bottom_side">Lado inferior</string>
+    <string name="tools_crop_left_side">Lado esquerdo</string>
     <string name="root_skip">Pular</string>
     <string name="root_author_prompt_body">Adicione um nome para mostrar quem fez cada comentário. Você pode alterá-lo depois em Preferências.</string>
     <string name="root_read_only_title">Arquivo somente leitura</string>
@@ -810,6 +819,7 @@
     <string name="scan_lab_off">Não</string>
     <string name="scan_lab_denoise">Suavizar o granulado em fotos escuras (Digitalização limpa)</string>
     <string name="scan_lab_preview">Mostrar as páginas como serão salvas</string>
+    <string name="scan_lab_crop">Cortar com lupa e encaixe nas bordas</string>
     <string name="scan_lab_strength">Intensidade do filtro</string>
     <string name="scan_lab_strength_own">Padrão</string>
     <string name="scan_lab_options_body">Estas opções desligam partes do scanner ou as trocam pelo que substituíram, para descobrir de qual parte vem um problema. O log registra o que estava em vigor em cada página.</string>
