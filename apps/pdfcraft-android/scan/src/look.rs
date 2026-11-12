@@ -6,7 +6,7 @@
 use pdfcraft_engine::camera_clean;
 
 use crate::Rgb;
-use crate::enhance::{AutoParams, Bitmap1, BwParams, DEFAULT_SHARPEN, PaperMode, auto, black_white};
+use crate::enhance::{AutoParams, Bitmap1, BwParams, DEFAULT_SHARPEN, PaperMode, WHITEBOARD_COLOUR_FACTOR, auto, black_white, whiteboard_tone};
 
 /// A page's look.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
@@ -22,6 +22,8 @@ pub enum Look {
     BlackWhite,
     /// Like a flatbed scan in one step: no shadows, white paper, dark ink, real colours (#298).
     Auto,
+    /// Auto's light steps, then an S-curve on brightness and stronger colour, for boards (#301).
+    Whiteboard,
 }
 
 impl Look {
@@ -31,7 +33,7 @@ impl Look {
             Look::Original => Some(camera_clean::Look::Original),
             Look::Colour => Some(camera_clean::Look::Colour),
             Look::Greyscale => Some(camera_clean::Look::Greyscale),
-            Look::BlackWhite | Look::Auto => None,
+            Look::BlackWhite | Look::Auto | Look::Whiteboard => None,
         }
     }
 }
@@ -95,7 +97,11 @@ pub fn apply_full(page: &Rgb, look: Look, params: &LookParams) -> Option<Applied
                     page,
                     &AutoParams { strength, paper: if keep_paper { PaperMode::Keep } else { PaperMode::White }, threads, sharpen, denoise, dpi },
                 )?;
-                Applied { pixels: Pixels::Rgb(made.rgb.data), noise: Some(made.noise) }
+                let mut rgb = made.rgb.data;
+                if look == Look::Whiteboard {
+                    whiteboard_tone(&mut rgb, WHITEBOARD_COLOUR_FACTOR);
+                }
+                Applied { pixels: Pixels::Rgb(rgb), noise: Some(made.noise) }
             }
         });
     };

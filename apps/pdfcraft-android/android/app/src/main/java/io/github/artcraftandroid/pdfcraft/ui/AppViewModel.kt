@@ -1890,6 +1890,8 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
     private val scanPreviewDispatcher = Dispatchers.Default.limitedParallelism(1)
     private var scanPreviewJob: kotlinx.coroutines.Job? = null
+    /** Tells the native preview running now to stop when a newer one is asked for (#301). */
+    private var scanPreviewStop: io.github.artcraftandroid.pdfcraft.core.ScanCancel? = null
     /** The request asked for last: a preview of anything else is out of date when it arrives. */
     private var scanPreviewWanted: ScanPreviewKey? = null
 
@@ -1897,9 +1899,9 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     private val scanPreviewStats = java.util.concurrent.ConcurrentHashMap<String, ScanTestPreview>()
 
     /**
-     * Make the preview of [page] with [filter] and [flatten] (#301), replacing any still waiting.
-     * The native call can't be stopped once it starts, so an older one finishes and its result is
-     * dropped when a newer request has come in meanwhile.
+     * Make the preview of [page] in its look with [flatten] (#301), replacing any still waiting.
+     * One already running is told to stop at its next stage (testing option on); a result that
+     * comes anyway is dropped when a newer request has come in meanwhile.
      */
     internal fun requestScanPreview(index: Int, page: ScanPage, flatten: Boolean) {
         val lab = scanLab.options
@@ -1908,6 +1910,10 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         if (scanPreview?.key == key || scanPreviewWanted == key) return
         scanPreviewWanted = key
         scanPreviewJob?.cancel()
+        // the native preview still running for an older request stops at its next stage (#301)
+        if (lab.previewStop) scanPreviewStop?.cancel()
+        val stop = io.github.artcraftandroid.pdfcraft.core.ScanCancel()
+        scanPreviewStop = stop
         val look = page.look
         val filter = look.filter
         // the same page in another look or strength: the slider sends many in a row, and only the
@@ -1915,10 +1921,15 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         val settle = key.samePage(scanPreview?.key)
         scanPreviewJob = viewModelScope.launch(scanPreviewDispatcher) {
             if (settle) delay(SCAN_PREVIEW_SETTLE_MS)
-            val request = scanPageRequest(page.file.absolutePath, page.corners, filter, flatten, lab, "", page.turns, autoUpright, page.preset, page.finding?.curvedSides ?: 0, look.strength)
+            val request = scanPageRequest(page.file.absolutePath, page.corners, filter, flatten, lab, "", page.turns, autoUpright, page.preset, page.finding?.curvedSides ?: 0, look.strength, look.paper)
             val started = android.os.SystemClock.elapsedRealtime()
-            val made = runCatching { io.github.artcraftandroid.pdfcraft.core.scanPreviewPage(request, SCAN_PREVIEW_SIDE.toUInt()) }
+            val made = runCatching { io.github.artcraftandroid.pdfcraft.core.scanPreviewPageWith(request, SCAN_PREVIEW_SIDE.toUInt(), stop) }
             val ms = android.os.SystemClock.elapsedRealtime() - started
+            if (made.isFailure && stop.isCancelled()) {
+                // stopped for a newer request: not a failure, and nothing to show
+                Diag.event(DiagArea.Scan, "preview_stopped", "index" to index + 1, "ms" to ms)
+                return@launch
+            }
             val p = made.getOrNull()
             val image = p?.let { scanPreviewBitmap(it)?.asImageBitmap() }
             made.exceptionOrNull()?.let { Diag.failure(DiagArea.Scan, "scan_preview_page", it) }
@@ -1926,7 +1937,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             Diag.event(
                 DiagArea.Scan, "preview", "index" to index + 1, "filter" to filter,
                 // the page's own look and strength (#301)
-                "look" to io.github.artcraftandroid.pdfcraft.ui.scan.scanFilterId(filter), "strength" to lab.strengthFor(look.level),
+                "look" to io.github.artcraftandroid.pdfcraft.ui.scan.scanFilterId(filter), "strength" to scanLookStrength(look, lab), "paper" to look.paper.word, "whiteboard_look" to lab.whiteboardLook,
                 "strength_source" to (if (lab.strength != null) "lab" else look.strengthSource), "settled" to settle,
                 "flatten" to flatten, "made" to (image != null),
                 "reused" to (p?.reused ?: false), "ms" to ms,
@@ -1977,6 +1988,45 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         private set
 
     private var scanTilesJob: kotlinx.coroutines.Job? = null
+    private var scanTilesStop: io.github.artcraftandroid.pdfcraft.core.ScanCancel? = null
+
+    // ---- Scan: a sharper page while zoomed in (#301) -------------------------------------------
+
+    /** The page shown at [SCAN_DETAIL_SIDE], for looking closer; the key says which page and look it is. */
+    internal var scanDetail by mutableStateOf<Pair<ScanPreviewKey, androidx.compose.ui.graphics.ImageBitmap>?>(null)
+        private set
+    private var scanDetailJob: kotlinx.coroutines.Job? = null
+    private var scanDetailWanted: ScanPreviewKey? = null
+
+    /**
+     * Make [page] in its look at [SCAN_DETAIL_SIDE] once the person has zoomed in (#301), on the
+     * preview's thread, so the text can be read at 100 %. It is a second straightened page, kept
+     * natively beside the preview's.
+     */
+    internal fun requestScanDetail(index: Int, page: ScanPage, flatten: Boolean) {
+        val lab = scanLab.options
+        val autoUpright = io.github.artcraftandroid.pdfcraft.ui.scan.ScanUprightSetting.get(settings.appPrefs)
+        val key = ScanPreviewKey.of(page, flatten, lab, autoUpright)
+        if (scanDetail?.first == key || scanDetailWanted == key) return
+        scanDetailWanted = key
+        scanDetailJob?.cancel()
+        val look = page.look
+        scanDetailJob = viewModelScope.launch(scanPreviewDispatcher) {
+            val request = scanPageRequest(page.file.absolutePath, page.corners, look.filter, flatten, lab, "", page.turns, autoUpright, page.preset, page.finding?.curvedSides ?: 0, look.strength, look.paper)
+            val started = android.os.SystemClock.elapsedRealtime()
+            val made = runCatching { io.github.artcraftandroid.pdfcraft.core.scanPreviewPage(request, SCAN_DETAIL_SIDE.toUInt()) }
+            made.exceptionOrNull()?.let { Diag.failure(DiagArea.Scan, "scan_preview_detail", it) }
+            val p = made.getOrNull()
+            val image = p?.let { scanPreviewBitmap(it)?.asImageBitmap() }
+            Diag.event(
+                DiagArea.Scan, "preview_detail", "index" to index + 1, "made" to (image != null), "reused" to (p?.reused ?: false),
+                "ms" to android.os.SystemClock.elapsedRealtime() - started, "width" to (p?.width?.toLong() ?: 0L), "height" to (p?.height?.toLong() ?: 0L),
+            )
+            withContext(Dispatchers.Main) {
+                if (scanDetailWanted == key && image != null) scanDetail = key to image
+            }
+        }
+    }
 
     /**
      * Make what the strip and the comparison need for [page]: Original first (for comparing), then
@@ -1990,6 +2040,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         val base = ScanPreviewKey.of(page, flatten, lab, autoUpright, io.github.artcraftandroid.pdfcraft.ui.scan.ScanPageLook(ScanFilter.Original))
         if (base != scanTilesFor) {
             scanTilesJob?.cancel()
+            if (lab.previewStop) scanTilesStop?.cancel()
             scanTilesJob = null
             scanTiles.clear()
             scanCompare = null
@@ -1998,6 +2049,8 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         val order = if (lab.lookStrip) io.github.artcraftandroid.pdfcraft.ui.scan.scanTileOrder(page.look.filter) else listOf(ScanFilter.Original)
         val todo = order.filter { it !in scanTiles || (it == ScanFilter.Original && scanCompare == null) }
         if (todo.isEmpty() || scanTilesJob?.isActive == true) return
+        val stop = io.github.artcraftandroid.pdfcraft.core.ScanCancel()
+        scanTilesStop = stop
         val tileSide = (SCAN_TILE_SIDE_DP * getApplication<Application>().resources.displayMetrics.density).toInt().coerceAtLeast(48)
         scanTilesJob = viewModelScope.launch(scanPreviewDispatcher) {
             val started = android.os.SystemClock.elapsedRealtime()
@@ -2009,8 +2062,8 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 kotlinx.coroutines.yield()
                 val request = scanPageRequest(page.file.absolutePath, page.corners, f, flatten, lab, "", page.turns, autoUpright, page.preset, page.finding?.curvedSides ?: 0)
                 val one = android.os.SystemClock.elapsedRealtime()
-                val p = runCatching { io.github.artcraftandroid.pdfcraft.core.scanPreviewPage(request, SCAN_PREVIEW_SIDE.toUInt()) }
-                    .onFailure { Diag.failure(DiagArea.Scan, "scan_look_tile", it) }.getOrNull() ?: continue
+                val p = runCatching { io.github.artcraftandroid.pdfcraft.core.scanPreviewPageWith(request, SCAN_PREVIEW_SIDE.toUInt(), stop) }
+                    .onFailure { if (!stop.isCancelled()) Diag.failure(DiagArea.Scan, "scan_look_tile", it) }.getOrNull() ?: continue
                 slowest = maxOf(slowest, android.os.SystemClock.elapsedRealtime() - one)
                 if (p.reused) reused++
                 val full = scanPreviewBitmap(p) ?: continue
@@ -2045,9 +2098,15 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         scanPreviewStats.clear()
         scanTilesJob?.cancel()
         scanTilesJob = null
+        scanPreviewStop?.cancel()
+        scanTilesStop?.cancel()
         scanTiles.clear()
         scanTilesFor = null
         scanCompare = null
+        scanDetailJob?.cancel()
+        scanDetailJob = null
+        scanDetailWanted = null
+        scanDetail = null
         runCatching { io.github.artcraftandroid.pdfcraft.core.scanReleasePreviews() }
     }
 
@@ -2084,7 +2143,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             val page = pages[i]
             tools.busy = text(R.string.msg_busy_cleaning_page, i + 1, pages.size)
             tools.busyProgress = i to pages.size
-            val request = scanPageRequest(page.file.absolutePath, page.corners, page.look.filter, flatten, lab, File(dir, "page-$i").absolutePath, turns, autoUpright, page.preset, page.finding?.curvedSides ?: 0, page.look.strength)
+            val request = scanPageRequest(page.file.absolutePath, page.corners, page.look.filter, flatten, lab, File(dir, "page-$i").absolutePath, turns, autoUpright, page.preset, page.finding?.curvedSides ?: 0, page.look.strength, page.look.paper)
             val started = android.os.SystemClock.elapsedRealtime()
             val result = withContext(Dispatchers.Default) { runCatching { io.github.artcraftandroid.pdfcraft.core.scanProcessPage(request) } }
             result.onFailure { Diag.failure(DiagArea.Scan, "scan_process_page", it) }
@@ -2130,7 +2189,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             // a whole photo in Original stays the camera's own file: natively it only gets its
             // resolution written in, so its PDF page has a size like the others (#293)
             val filter = page.look.filter
-            val strength = lab.strengthFor(page.look.level)
+            val strength = scanLookStrength(page.look, lab)
             val untouched = !(flatten || lab.flattenAuto) && !scanNeedsProcessing(page.corners.contentEquals(ScanPage.WHOLE), filter.mode)
             val r = made[i]
             val followed = i in redo
@@ -2142,6 +2201,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 "filter" to filter, "enhanced" to (r != null && !untouched), "enhance_ms" to madeMs[i],
                 // the page's own look and where its strength came from (#301)
                 "look" to io.github.artcraftandroid.pdfcraft.ui.scan.scanFilterId(filter), "look_per_page" to lab.lookPerPage,
+                "paper" to page.look.paper.word, "whiteboard_look" to lab.whiteboardLook,
                 "strength_source" to (if (lab.strength != null) "lab" else page.look.strengthSource),
                 "look_differs" to io.github.artcraftandroid.pdfcraft.ui.scan.scanLookDiffers(pages.map { it.look }, i),
                 *(r?.timings.orEmpty().map<io.github.artcraftandroid.pdfcraft.core.ScanTiming, Pair<String, Any?>> { it.stage.removePrefix("scan_") + "_ms" to it.ms.toLong() }.toTypedArray()),
@@ -2190,7 +2250,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                         k.inkShare.toDouble(), k.colourInkShare.toDouble(), k.photoShare.toDouble(), k.strokeMm.toDouble(), k.glareShare.toDouble(), k.gutterBand, k.wholePhoto,
                     )
                 }
-                withContext(Dispatchers.IO) { scanLab.keepPage(keepIn, i, page, true, filter.mode, strength, flatten, r?.path?.let(::File), kept, scanPreviewRecord(page), turn, kind) }
+                withContext(Dispatchers.IO) { scanLab.keepPage(keepIn, i, page, true, scanLookWord(filter, lab), strength, flatten, r?.path?.let(::File), kept, scanPreviewRecord(page), turn, kind) }
             }
             saved += scanSavedPage(page.file.absolutePath, r?.let { it.path to it.dpi })
         }

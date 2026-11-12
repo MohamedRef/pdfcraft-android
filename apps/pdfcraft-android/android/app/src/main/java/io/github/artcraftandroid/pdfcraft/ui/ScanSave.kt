@@ -22,8 +22,22 @@ internal fun scanLookOf(mode: String): ScanLook = when (mode) {
     "auto" -> ScanLook.AUTO
     "greyscale" -> ScanLook.GREYSCALE
     "bw" -> ScanLook.BLACK_WHITE
+    "whiteboard" -> ScanLook.WHITEBOARD
     else -> ScanLook.COLOUR
 }
+
+/** Whiteboard as it was before #301 (Auto color at 85): with its testing option off. */
+private fun scanOldWhiteboard(filter: ScanFilter, lab: ScanLab) = filter == ScanFilter.Whiteboard && !lab.whiteboardLook
+
+/** The native look's word for [filter] under the testing options, as a kept page file writes it. */
+internal fun scanLookWord(filter: ScanFilter, lab: ScanLab): String = if (scanOldWhiteboard(filter, lab)) "colour" else filter.mode
+
+/** The strength a page in [look] is made at: the testing option's, the slider's, or the look's own. */
+internal fun scanLookStrength(look: io.github.artcraftandroid.pdfcraft.ui.scan.ScanPageLook, lab: ScanLab): Int =
+    lab.strengthFor(look.strength ?: if (scanOldWhiteboard(look.filter, lab)) OLD_WHITEBOARD_LEVEL else look.filter.level)
+
+/** Whiteboard's strength before #301, when it was Auto color's settings. */
+private const val OLD_WHITEBOARD_LEVEL = 85
 
 /** The page that goes into the PDF: the processed image when there is one, else the camera file. */
 internal fun scanSavedPage(cameraPath: String, processed: Pair<String, Float>?): ScanSavedPage =
@@ -69,12 +83,15 @@ internal fun scanPageRequest(
     curvedSides: Int = 0,
     /** The page's strength from the scan screen's slider (#301), or null for the look's own. */
     strength: Int? = null,
+    /** The paper's colour the person chose for the page (#301). */
+    paper: io.github.artcraftandroid.pdfcraft.ui.scan.ScanPaperChoice = io.github.artcraftandroid.pdfcraft.ui.scan.ScanPaperChoice.Auto,
 ): io.github.artcraftandroid.pdfcraft.core.ScanPageRequest = scanTurnAsk(turns, autoUpright, lab.upright).let { ask ->
     io.github.artcraftandroid.pdfcraft.core.ScanPageRequest(
     photoPath = photoPath,
     corners = corners.toList(),
-    look = scanLookOf(filter.mode),
-    strength = lab.strengthFor(strength ?: filter.level).toUByte(),
+    look = scanLookOf(scanLookWord(filter, lab)),
+    strength = scanLookStrength(io.github.artcraftandroid.pdfcraft.ui.scan.ScanPageLook(filter, strength), lab).toUByte(),
+    paper = paper.word,
     outputPath = outputPath,
     snapPaper = lab.snapPaper,
     // the scan screen's switch flattens the page as asked; the testing option flattens every page
@@ -124,20 +141,22 @@ internal data class ScanPreviewKey(
     val preset: String? = null,
     /** The page's strength from the slider (#301), null for the look's own. */
     val strength: Int? = null,
+    /** The paper's colour chosen for the page (#301). */
+    val paper: io.github.artcraftandroid.pdfcraft.ui.scan.ScanPaperChoice = io.github.artcraftandroid.pdfcraft.ui.scan.ScanPaperChoice.Auto,
 ) {
     /** The look this preview shows, as the page keeps it. */
-    val look: io.github.artcraftandroid.pdfcraft.ui.scan.ScanPageLook get() = io.github.artcraftandroid.pdfcraft.ui.scan.ScanPageLook(filter, strength)
+    val look: io.github.artcraftandroid.pdfcraft.ui.scan.ScanPageLook get() = io.github.artcraftandroid.pdfcraft.ui.scan.ScanPageLook(filter, strength, paper)
 
     /**
      * Whether this preview and [other] show the same page apart from its look: while the preview
      * of a new look or strength is made, the old one stays on screen instead of the photo (#301).
      */
-    fun samePage(other: ScanPreviewKey?): Boolean = other != null && copy(filter = other.filter, strength = other.strength) == other
+    fun samePage(other: ScanPreviewKey?): Boolean = other != null && copy(filter = other.filter, strength = other.strength, paper = other.paper) == other
 
     companion object {
         /** The preview of [page] in [look] (by default the page's own). */
         fun of(page: ScanPage, flatten: Boolean, lab: ScanLab, autoUpright: Boolean = true, look: io.github.artcraftandroid.pdfcraft.ui.scan.ScanPageLook = page.look) =
-            ScanPreviewKey(page.file.absolutePath, page.corners.toList(), look.filter, flatten, lab.copy(keep = false), page.turns, autoUpright, page.preset, look.strength)
+            ScanPreviewKey(page.file.absolutePath, page.corners.toList(), look.filter, flatten, lab.copy(keep = false), page.turns, autoUpright, page.preset, look.strength, look.paper)
     }
 }
 
@@ -182,3 +201,13 @@ internal const val SCAN_PREVIEW_SETTLE_MS = 30L
 
 /** The longer side, in dp, of a tile in the scan screen's looks strip (#301). */
 internal const val SCAN_TILE_SIDE_DP = 96
+
+/** The longer side, in pixels, of the sharper page made once the preview is zoomed in (#301). */
+internal const val SCAN_DETAIL_SIDE = 2560
+
+/** How far the preview zooms: a double-tap goes to [SCAN_ZOOM_TAP], a pinch up to [SCAN_ZOOM_MAX]. */
+internal const val SCAN_ZOOM_TAP = 2.5f
+internal const val SCAN_ZOOM_MAX = 5f
+
+/** From this zoom on, the sharper page is asked for. */
+internal const val SCAN_ZOOM_DETAIL = 1.5f
