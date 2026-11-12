@@ -30,6 +30,7 @@ class PdfcraftApplication : Application() {
     override fun onCreate() {
         super.onCreate()
         initText(this)
+        io.github.artcraftandroid.pdfcraft.engine.Diagnostics.start(this)
     }
 
     /**
@@ -42,6 +43,11 @@ class PdfcraftApplication : Application() {
     override fun onTrimMemory(level: Int) {
         super.onTrimMemory(level)
         val trim = trimFor(level)
+        io.github.artcraftandroid.pdfcraft.engine.Diag.event(
+            io.github.artcraftandroid.pdfcraft.engine.DiagArea.Memory, "trim_memory",
+            "level" to level, "drop_images" to trim.images, "drop_native" to trim.native,
+        )
+        io.github.artcraftandroid.pdfcraft.engine.Diagnostics.memory("trim_memory")
         if (trim.images) io.github.artcraftandroid.pdfcraft.ui.viewer.PageImages.trimAll()
         if (trim.native && engine.isCompleted) {
             val eng = engine.getCompleted().getOrNull() ?: return

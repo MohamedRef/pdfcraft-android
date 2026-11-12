@@ -91,4 +91,57 @@
     <string name="ocr_batch_finished">Completato</string>
     <string name="ocr_batch_cancelled">Annullato</string>
     <string name="ocr_batch_folder_gone">Impossibile scrivere nella cartella; sceglila di nuovo.</string>
+    <string name="redact_title">Oscura</string>
+    <string name="redact_about">Segna cosa rimuovere, poi Applica: il contenuto sotto i segni viene eliminato per sempre al salvataggio.</string>
+    <string name="redact_mark_area">Segna un’area</string>
+    <string name="redact_mark_page">Segna la pagina %1$d</string>
+    <string name="redact_find">Trova e segna</string>
+    <string name="redact_find_hint">Testo, o più testi separati da virgole</string>
+    <string name="redact_regex_hint">Espressione regolare</string>
+    <string name="redact_whole_words">Solo parole intere</string>
+    <string name="redact_match_case">Maiuscole/minuscole</string>
+    <string name="redact_use_regex">Usa un’espressione regolare</string>
+    <string name="redact_patterns">O ogni corrispondenza di un modello</string>
+    <string name="redact_pattern_phone">Telefoni</string>
+    <string name="redact_pattern_email">Indirizzi email</string>
+    <string name="redact_pattern_card">Carte di credito</string>
+    <string name="redact_pattern_ssn">SSN USA</string>
+    <string name="redact_pattern_date">Date</string>
+    <string name="redact_pattern_iban">IBAN</string>
+    <string name="redact_mark_all">Segna tutto</string>
+    <string name="redact_no_matches">Nessuna corrispondenza</string>
+    <string name="redact_look">Colore del riquadro e testo mostrato</string>
+    <string name="redact_overlay_hint">Testo sul riquadro (facoltativo)</string>
+    <string name="redact_mark_on_page">Segno a pagina %1$d</string>
+    <string name="redact_delete_mark">Elimina il segno a pagina %1$d</string>
+    <string name="redact_clear">Cancella tutto</string>
+    <string name="redact_apply">Applica</string>
+    <string name="redact_apply_title">Applicare l’oscuramento?</string>
+    <string name="redact_apply_body">Testo, immagini, disegni, commenti e campi sotto i segni vengono rimossi e sostituiti da riquadri. Puoi annullare fino al salvataggio; dopo, il contenuto sparisce dal file.</string>
+    <string name="redact_hidden_title">Informazioni nascoste</string>
+    <string name="redact_hidden_body">Il documento contiene ancora queste informazioni. Rimuovi ciò che non vuoi condividere:</string>
+    <string name="redact_hidden_none">Nessuna informazione nascosta trovata.</string>
+    <string name="redact_hidden_remove">Rimuovi</string>
+    <string name="redact_hidden_removed">Informazioni nascoste rimosse</string>
+    <string name="redact_audit_title">Cerca oscuramenti falsi</string>
+    <string name="redact_audit_none">Nessun oscuramento falso: nessun riquadro nasconde testo leggibile e nessun segno attende di essere applicato.</string>
+    <string name="redact_audit_covered">Pagina %1$d: il testo coperto è ancora leggibile</string>
+    <string name="redact_audit_unapplied">Pagina %1$d: segno di oscuramento non applicato</string>
+    <string name="redact_place_hint">Trascina su ciò che vuoi rimuovere</string>
+    <plurals name="redact_marked">
+        <item quantity="one">%1$d segno aggiunto</item>
+        <item quantity="other">%1$d segni aggiunti</item>
+    </plurals>
+    <plurals name="redact_applied">
+        <item quantity="one">%1$d oscuramento applicato</item>
+        <item quantity="other">%1$d oscuramenti applicati</item>
+    </plurals>
+    <plurals name="redact_marks_count">
+        <item quantity="one">%1$d segno in attesa</item>
+        <item quantity="other">%1$d segni in attesa</item>
+    </plurals>
+    <plurals name="redact_audit_found">
+        <item quantity="one">%1$d possibile oscuramento falso:</item>
+        <item quantity="other">%1$d possibili oscuramenti falsi:</item>
+    </plurals>
 </resources>

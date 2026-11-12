@@ -152,8 +152,9 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
     // Reopen where the reader left off.
     // two pages side by side where the window is wide enough; one page on a narrow one (#152)
     val windowWidthDp = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp
-    LaunchedEffect(doc, vm.spreadPref, windowWidthDp) {
-        doc.viewer.showSpread(if (spreadFits(windowWidthDp)) vm.spreadPref else Spread.Single)
+    val windowHeightDp = androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp
+    LaunchedEffect(doc, vm.spreadPref, vm.spreadAuto, windowWidthDp, windowHeightDp) {
+        doc.viewer.showSpread(shownSpread(vm.spreadPref, vm.spreadAuto, windowWidthDp, windowHeightDp))
     }
 
     // the reader's saved reading colours, once the engine has the whole document
@@ -283,6 +284,7 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
                 // Fields, comments, edits and selection must remain immediate; no link
                 // hydration is allowed to delay those higher-priority interactions.
                 when {
+                    vm.markupFollowUp != null -> vm.markupFollowUp = null
                     selection.selection != null -> selection.clear()
                     ctl.tool == ViewerTool.Edit -> vm.editTap(doc, at)
                     vm.tapField(doc, at) -> Unit
@@ -340,6 +342,8 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
                 vm.selectedComment?.takeIf { it.first === doc }?.second?.let { drawCommentSelection(doc, it) }
                 vm.readAloud?.let { drawReadAloud(doc, it) }
                 drawSearchHits(doc)
+                // the comment list's filters leave these out: veiled so the rest stand out (#155)
+                if (!doc.info.commentsHidden && ctl.sheet != ViewerSheet.Comments && ctl.dimmedGeneration == doc.info.generation.toLong()) drawDimmedComments(doc.viewer, ctl.dimmedComments, ctl.nightMode)
                 drawSelection(doc)
                 vm.pendingMarkupPreview?.takeIf { it.doc === doc }?.let { drawPendingMarkup(it) }
                 drawLinkFlash(doc)
@@ -347,7 +351,10 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
         )
 
         // Presenting: taps turn pages and a drag is the laser pointer, over the page alone.
-        if (ctl.presenting) PresentationLayer(doc.viewer)
+        if (ctl.presenting) {
+            PresentationLayer(doc.viewer, ctl.laser, ctl.tempInk)
+            ExternalPresentation(doc)
+        }
 
         // The active tool takes the touches over the pages.
         ToolLayer(vm, doc)
@@ -389,6 +396,7 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
                 doc, visible = jumpChipVisible,
                 bottom = with(density) { doc.viewer.padBottom.toDp() },
             )
+            if (!vm.readingMode && !ctl.searching && ctl.sheet != ViewerSheet.Comments) CommentFilterChip(doc, top = with(density) { doc.viewer.padTop.toDp() })
             if (!vm.readingMode) FocusTimerPill(
                 vm, top = with(density) { doc.viewer.padTop.toDp() },
                 onOpen = { ctl.sheet = ViewerSheet.FocusTimer },
@@ -614,6 +622,8 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
             // out of the way while a handle is dragged; back where the selection ends
             if (selection.magnifierAt == null) SelectionMenu(vm, doc, sel)
         }
+        // the markup just added from that menu: colours, Add note, Delete (#197)
+        if (selection.selection == null) vm.markupFollowUp?.takeIf { it.doc === doc && ctl.tool == ViewerTool.None }?.let { MarkupFollowUpBar(vm, it) }
 
         // Sheets and dialogs.
         SheetHost(ctl.sheet.takeIf { it != ViewerSheet.None }) { sheet ->
@@ -637,12 +647,14 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
                 ViewerSheet.FocusTimer -> FocusTimerSheet(vm) { ctl.sheet = ViewerSheet.None }
                 ViewerSheet.Backups -> VersionHistorySheet(vm, doc) { ctl.sheet = ViewerSheet.None }
                 ViewerSheet.NoteMargin -> NoteMarginSheet(vm, doc, listOf(doc.viewer.currentPage)) { ctl.sheet = ViewerSheet.None }
+                ViewerSheet.Redact -> RedactSheet(vm, doc)
                 ViewerSheet.None -> Unit
             }
         }
         if (ctl.sheet == ViewerSheet.Comments) CommentListScreen(vm, doc)
         vm.attachPrompt?.takeIf { it.doc === doc }?.let { AttachDialog(vm, it) }
         if (vm.flattenPrompt === doc) FlattenDialog(vm, doc)
+        vm.redact.findings?.let { RedactionAuditDialog(vm, doc, it) }
         vm.pageMenu?.takeIf { it.doc === doc }?.let { PageMenuView(vm, it) }
         if (vm.imageSource?.first === doc) {
             io.github.artcraftandroid.pdfcraft.ui.PdfSheet(onDismiss = { vm.imageSource = null }, dim = true) {
@@ -687,7 +699,11 @@ private fun toolHint(tool: ViewerTool, markup: TextMarkup, doc: OpenDocument): S
         TextMarkup.Strikethrough -> text(R.string.viewer_hint_strikethrough)
         TextMarkup.Squiggly -> text(R.string.viewer_hint_squiggly)
     }
-    ViewerTool.Draw -> text(R.string.viewer_hint_draw)
+    ViewerTool.Draw -> when (doc.controller.inkShapeMode) {
+        InkShapeMode.Polygon -> text(R.string.viewer_hint_polygon)
+        InkShapeMode.Polyline -> text(R.string.viewer_hint_polyline)
+        else -> text(R.string.viewer_hint_draw)
+    }
     ViewerTool.Comment -> if (doc.controller.commentMode == CommentMode.Stamp) text(R.string.viewer_hint_stamp) else text(R.string.viewer_hint_comment)
     ViewerTool.Text -> if (doc.controller.textCallout) text(R.string.viewer_hint_callout) else text(R.string.viewer_hint_text)
     ViewerTool.FillSign -> text(if (doc.info.fields > 0u) R.string.viewer_hint_fill_sign_form else R.string.viewer_hint_fill_sign)

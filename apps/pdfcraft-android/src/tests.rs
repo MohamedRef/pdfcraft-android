@@ -1104,3 +1104,41 @@ fn text_layers_stay_bounded() {
     s.release_memory();
     assert_eq!(kept(&s), 0);
 }
+
+/// The markup and shape arguments the Android tools send (#133, #134, #170) make the PDF
+/// annotation types other readers edit, not ink.
+#[test]
+fn android_markup_and_shape_tools_make_real_annotation_types() {
+    let s = MobileSession::new();
+    let doc = s.open(blank_pdf(1), None).unwrap().id;
+    let quad = json!([[100, 100, 200, 100, 100, 112, 200, 112]]);
+    for args in [
+        // area highlight on a page without text: a rectangle quad
+        json!({"type": "highlight", "quads": quad, "color": "#FFD100", "opacity": 1.0}),
+        json!({"type": "replace", "quads": quad, "contents": "new words", "color": "#E52237"}),
+        json!({"type": "caret", "at": [200, 112], "contents": "inserted", "color": "#2680EB"}),
+        json!({"type": "line", "from": [10, 300], "to": [200, 300], "color": "#000000", "width": 2}),
+        json!({"type": "rectangle", "rect": [10, 320, 100, 380], "color": "#000000", "width": 2}),
+        json!({"type": "oval", "rect": [110, 320, 200, 380], "color": "#000000", "width": 2}),
+        json!({"type": "polygon", "points": [[10, 400], [100, 400], [60, 460]], "color": "#000000", "width": 2}),
+        json!({"type": "polyline", "points": [[110, 400], [200, 400], [160, 460]], "color": "#000000", "width": 2}),
+    ] {
+        let mut a = args.clone();
+        a["doc"] = json!(doc);
+        a["page"] = json!(1);
+        let out: Value = serde_json::from_str(&s.execute("comment_add".into(), a.to_string()).unwrap()).unwrap();
+        assert_eq!(out["comment"]["page"], 1, "{args}: {out}");
+        // the selection menu's follow-up bar finds a new highlight by its index
+        if args["type"] == "highlight" {
+            assert!(out["comment"]["index"].as_u64().unwrap_or(0) >= 1, "{out}");
+        }
+    }
+    let subtypes: Vec<String> = s.comments(doc).unwrap().iter().map(|c| c.subtype.clone()).collect();
+    for want in ["Highlight", "StrikeOut", "Caret", "Line", "Square", "Circle", "Polygon", "PolyLine"] {
+        assert!(subtypes.iter().any(|t| t == want), "{want} missing from {subtypes:?}");
+    }
+    assert!(!subtypes.iter().any(|t| t == "Ink"));
+    let comments = s.comments(doc).unwrap();
+    let caret = comments.iter().find(|c| c.subtype == "Caret" && c.contents.as_deref() == Some("inserted"));
+    assert!(caret.is_some(), "insert text keeps its words");
+}

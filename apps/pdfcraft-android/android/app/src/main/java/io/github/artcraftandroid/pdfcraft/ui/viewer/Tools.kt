@@ -132,6 +132,10 @@ data class MarkupDrag(val range: TextRange, val rects: List<FloatArray>)
 @Composable
 fun ToolLayer(vm: AppViewModel, doc: OpenDocument) {
     val tool = doc.controller.tool
+    if (vm.redact.placing === doc) {
+        RedactPlaceLayer(vm, doc)
+        return
+    }
     if (tool == ViewerTool.None || tool == ViewerTool.Edit) return
     when (tool) {
         ViewerTool.Draw -> DrawLayer(vm, doc)
@@ -536,6 +540,13 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
     // Which of the document's undo steps this Draw session made (#78).
     val steps = remember(doc) { DrawUndoSteps() }
     var current by remember { mutableStateOf<InkStroke?>(null) }
+    // a polygon or connected lines being placed point by point (#133), on one page
+    val polyPoints = remember(doc) { mutableStateListOf<Offset>() }
+    var polyPage by remember(doc) { mutableStateOf<Int?>(null) }
+    LaunchedEffect(doc.controller.inkShapeMode) {
+        polyPoints.clear()
+        polyPage = null
+    }
     var lassoPage by remember { mutableStateOf<Int?>(null) }
     val lassoPoints = remember { mutableStateListOf<Offset>() }
     val selected = remember { mutableStateListOf<InkStroke>() }
@@ -1032,6 +1043,8 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                     return@toolGestures
                 }
                 clearSelection()
+                // a polygon's points are placed on lift, one tap each
+                if (doc.controller.inkShapeMode.isTapped) return@toolGestures
                 rulerEdge = if (doc.controller.inkShapeMode == InkShapeMode.Freehand) activeRuler()?.snapEdge(p, rulerReach) else null
                 protractorSnap = if (rulerEdge == null && doc.controller.inkShapeMode == InkShapeMode.Freehand) activeProtractor()?.snapAt(p, rulerReach) else null
                 rayDeg = null
@@ -1108,6 +1121,33 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                 }
                 if (eraserPage != null) {
                     finishErase(p)
+                    return@toolGestures
+                }
+                val mode = doc.controller.inkShapeMode
+                if (mode.isTapped) {
+                    val at = doc.viewer.screenToPage(p) ?: return@toolGestures
+                    if (polyPage != null && polyPage != at.page) return@toolGestures
+                    val point = Offset(at.x, at.y)
+                    val radius = slop / doc.viewer.pixelsPerPoint(at.page).coerceAtLeast(0.1f) * 2f
+                    when (polyTap(polyPoints, point, radius, closed = mode == InkShapeMode.Polygon)) {
+                        PolyTap.Add -> {
+                            polyPage = at.page
+                            polyPoints.add(point)
+                        }
+                        PolyTap.Ignore -> Unit
+                        PolyTap.Finish -> {
+                            val args = polyAnnotationArgs(
+                                mode == InkShapeMode.Polygon, polyPoints.toList(), at.page,
+                                prefs.color(StyledTool.Ink).hex(), prefs.opacity(StyledTool.Ink), prefs.inkWidth.coerceAtLeast(0.5f), prefs.author.ifBlank { null },
+                            )
+                            polyPoints.clear()
+                            polyPage = null
+                            if (args != null) {
+                                doc.commitTool?.invoke()
+                                vm.runTool(doc, "comment_add", args)
+                            }
+                        }
+                    }
                     return@toolGestures
                 }
                 val s = current
@@ -1290,6 +1330,16 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                     )
                 }
             }
+            // the polygon or connected lines placed so far, with a dot on each point
+            polyPage?.let { page ->
+                val pts = polyPoints.map { doc.viewer.pageToScreen(page, it.x, it.y) }
+                val ink = prefs.color(StyledTool.Ink)
+                for (i in 1 until pts.size) drawLine(ink, pts[i - 1], pts[i], strokeWidth = (prefs.inkWidth * doc.viewer.pixelsPerPoint(page)).coerceAtLeast(1.dp.toPx()))
+                pts.forEachIndexed { i, o ->
+                    drawCircle(Color.White, (if (i == 0) 6 else 4).dp.toPx(), o)
+                    drawCircle(Color(0xFF1A85CA), (if (i == 0) 6 else 4).dp.toPx(), o, style = Stroke(width = 1.5.dp.toPx()))
+                }
+            }
             if (doc.controller.lassoMode) {
                 val page = lassoPage
                 if (page != null) {
@@ -1441,6 +1491,16 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
 }
 
 /** A gesture only holds coordinates; no native query runs on pointer down. */
+/**
+ * Area highlight (#134): the rectangle a Highlight drag covers where the page has no text under
+ * it, as [x0, y0, x1, y1] in points, or null when it is too thin to be meant (under 4 points).
+ */
+internal fun areaHighlightRect(x0: Float, y0: Float, x1: Float, y1: Float): FloatArray? {
+    if (!(x0.isFinite() && y0.isFinite() && x1.isFinite() && y1.isFinite())) return null
+    val r = floatArrayOf(minOf(x0, x1), minOf(y0, y1), maxOf(x0, x1), maxOf(y0, y1))
+    return r.takeIf { it[2] - it[0] >= 4f && it[3] - it[1] >= 4f }
+}
+
 private class MarkupGesture(val start: PagePoint, val downScreen: Offset) {
     var latest by mutableStateOf(start)
     var moved by mutableStateOf(false)
@@ -1576,9 +1636,23 @@ private fun MarkupLayer(vm: AppViewModel, doc: OpenDocument) {
                                     }
                                 },
                             )
+                        } else if (!tap && selectedMarkup == TextMarkup.Highlight) {
+                            // no text under the drag (a scan, a picture): highlight the area itself (#134)
+                            val area = areaHighlightRect(gesture.start.x, gesture.start.y, end.x, end.y)
+                            if (area != null) {
+                                queued = true
+                                vm.addMarkup(doc, TextMarkup.Highlight, page, listOf(area), selectedColor, selectedOpacity, onSettled = {
+                                    if (requestSerial == serial) {
+                                        pendingTap = null
+                                        drag = null
+                                    }
+                                })
+                            }
                         } else if (tap) {
                             val count = withContext(eng.commands) { eng.session.glyphCount(doc.id, page.toUInt()) }
-                            if (count == 0u && vm.document === doc) vm.tell(text(R.string.toolbar_no_text_to_mark))
+                            if (count == 0u && vm.document === doc) {
+                                vm.tell(text(R.string.toolbar_no_text_to_mark), text(R.string.common_tool_recognize_text)) { vm.recognizeText(doc) }
+                            }
                         }
                     } catch (e: MobileException) {
                         if (vm.document === doc) vm.tell(e.userMessage)
@@ -1604,6 +1678,15 @@ private fun MarkupLayer(vm: AppViewModel, doc: OpenDocument) {
                     radius = 10.dp.toPx(), center = point,
                     style = Stroke(width = 1.5.dp.toPx()),
                 )
+            }
+            // a Highlight drag that found no text previews the area it will highlight
+            val g = active
+            if (drag == null && g != null && g.moved && marker == TextMarkup.Highlight) {
+                areaHighlightRect(g.start.x, g.start.y, g.latest.x, g.latest.y)?.let { r ->
+                    val a = doc.viewer.pageToScreen(g.start.page, r[0], r[1])
+                    val b = doc.viewer.pageToScreen(g.start.page, r[2], r[3])
+                    drawRect(color.copy(alpha = 0.4f * opacity), a, Size(b.x - a.x, b.y - a.y))
+                }
             }
             val d = drag ?: return@Canvas
             val page = d.range.page.toInt()

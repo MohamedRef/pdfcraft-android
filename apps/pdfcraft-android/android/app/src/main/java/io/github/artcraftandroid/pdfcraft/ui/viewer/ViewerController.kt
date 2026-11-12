@@ -36,7 +36,7 @@ enum class TextMarkup { Highlight, Underline, Strikethrough, Squiggly }
 enum class CommentMode { Text, Voice, Stamp }
 
 /** What the bottom sheet over the viewer shows. */
-enum class ViewerSheet { None, More, FileDetails, Backdrops, TextStyles, ViewSettings, Attachments, Bookmarks, Comments, MoreTools, Signatures, ScanEnhance, OcrConfidence, SearchResults, Layers, EditContents, HiddenInfo, FocusTimer, Backups, NoteMargin }
+enum class ViewerSheet { None, More, FileDetails, Backdrops, TextStyles, ViewSettings, Attachments, Bookmarks, Comments, MoreTools, Signatures, ScanEnhance, OcrConfidence, SearchResults, Layers, EditContents, HiddenInfo, FocusTimer, Backups, NoteMargin, Redact }
 
 /**
  * The viewer's own state for one document, beside the page view ([ViewerState]): whether the
@@ -103,6 +103,19 @@ class ViewerController {
 
     /** Presentation mode (#157): the page alone, taps turn pages, a drag is a laser pointer. */
     var presenting by mutableStateOf(false)
+
+    /** The comment list's filters: kept while the list is closed, so the page can dim what they leave out (#155). */
+    var commentFilters by mutableStateOf(CommentFilters())
+
+    /** The comments the filters leave out, dimmed on the page, and the document generation they are of. */
+    var dimmedComments by mutableStateOf<List<DimmedComment>>(emptyList())
+    var dimmedGeneration = -1L
+
+    /** The laser pointer's trail while presenting, shared with an external display. */
+    val laser = LaserTrail()
+
+    /** Temporary ink written while presenting (#327), shared with an external display too. */
+    val tempInk = TempInk()
 
     /** The page mode to go back to after presenting. */
     internal var modeBeforePresenting: PageMode? = null

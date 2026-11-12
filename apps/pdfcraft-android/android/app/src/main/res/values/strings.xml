@@ -745,6 +745,9 @@
     <string name="sheet_remove_star">Remove the star</string>
     <string name="sheet_view_settings">View settings</string>
     <string name="sheet_present">Present</string>
+    <!-- Presenting with a second screen attached: %1$s is that screen's name, such as "HDMI Screen" -->
+    <string name="present_on_display">Showing on %1$s</string>
+    <string name="present_next_page">Next: page %1$d</string>
     <!-- File details (Issue #55): original file dates and embedded PDF dates are separate. -->
     <string name="file_details_title">File details</string>
     <string name="file_details_copy_all">Copy all details</string>
@@ -906,6 +909,9 @@
     <string name="sheet_single_page">Single page</string>
     <string name="sheet_two_pages">Two pages</string>
     <string name="sheet_two_pages_cover">Two pages with cover</string>
+    <string name="sheet_horizontal">Pages in a row</string>
+    <string name="sheet_two_pages_auto">Two pages on wide screens</string>
+    <string name="sheet_layout_initial_view">Open this way in other apps</string>
     <string name="sheet_reading_mode">Reading Mode</string>
     <string name="sheet_night_mode">Night Mode</string>
     <string name="sheet_hide_annotations">Hide annotations</string>
@@ -1085,7 +1091,7 @@
     <!-- Highlight tool: marking text -->
     <string name="toolbar_strikethrough">Strikethrough</string>
     <!-- Note: "More tools" and "Recognize text" are the names of the menu and the tool -->
-    <string name="toolbar_no_text_to_mark">This page has no text to mark. Recognize text first (More tools ▸ Recognize text).</string>
+    <string name="toolbar_no_text_to_mark">No selectable text here. Drag to highlight an area, or recognize the text first.</string>
 
     <!-- Draw tool -->
     <string name="toolbar_draw_freeform">Draw freeform</string>
@@ -1738,11 +1744,13 @@
     <string name="msg_copy_request_lost">PdfCraft was closed while you chose where to save the copy, so nothing was saved. The empty file it left there was removed.</string>
     <string name="msg_copy_request_lost_kept">PdfCraft was closed while you chose where to save the copy, so nothing was saved. Check that location for an empty file.</string>
     <string name="home_section_diagnostics">Diagnostics</string>
-    <string name="home_record_open_timings">Record open timings</string>
-    <string name="home_record_open_timings_body">Keeps how long each step of opening a file takes, so a slow open can be measured. Only step names, times, sizes and page counts; no file names or contents. Turning it off clears it.</string>
-    <string name="home_share_open_timings">Share open timings</string>
-    <string name="home_open_timings_empty">No open timings yet: turn this on, then open a file.</string>
-    <string name="home_open_timings_subject">PdfCraft open timings</string>
+    <string name="home_record_diagnostics">Record diagnostics log</string>
+    <string name="home_record_diagnostics_body">Keeps a detailed log of opening and drawing files, pen latency, saves, scans, memory and errors, so a problem can be checked from your phone. Only event names, times, counts and sizes; no file names, paths or contents. Turning it off deletes it.</string>
+    <string name="home_share_diagnostics">Share diagnostics log</string>
+    <string name="home_clear_diagnostics">Clear diagnostics log</string>
+    <string name="home_diagnostics_empty">No diagnostics yet: turn this on, then use the app.</string>
+    <string name="home_diagnostics_subject">PdfCraft diagnostics log</string>
+    <string name="home_diagnostics_cleared">Diagnostics log cleared</string>
     <string name="document_preparing">Preparing editing and signature status…</string>
     <string name="comments_loading">Loading comments…</string>
     <string name="compact_previews">Use less memory for page previews</string>
@@ -1799,6 +1807,7 @@
     <string name="comments_search_hint">Search text, replies or author</string>
     <string name="comments_search_close">Close search</string>
     <string name="comments_shown">%1$d of %2$d threads</string>
+    <string name="comments_filtered_on_page">Comments filtered</string>
     <string name="comments_no_match">No comments match.</string>
     <string name="comments_filter_all">All</string>
     <string name="comments_filter_notes">Notes &amp; text</string>
@@ -2149,6 +2158,25 @@
     <string name="library_tags_hint">exam, week 3</string>
     <string name="library_collections">Collections</string>
     <string name="library_remove">Remove from library</string>
+    <!-- Selection menu labels, markup follow-up bar, replace/insert text (#197, #170) -->
+    <string name="viewer_menu_note">Note</string>
+    <string name="viewer_menu_highlight">Highlight</string>
+    <string name="viewer_menu_underline">Underline</string>
+    <string name="viewer_menu_strike">Strike</string>
+    <string name="viewer_menu_squiggly">Squiggly</string>
+    <string name="viewer_replace_text">Replace text</string>
+    <string name="viewer_insert_text">Insert text after</string>
+    <string name="viewer_replacement_hint">Replacement text</string>
+    <string name="viewer_insertion_hint">Text to insert</string>
+    <string name="viewer_markup_color">Markup colour</string>
+    <string name="viewer_add_note">Add note</string>
+    <!-- Polygon and connected lines in Draw (#133) -->
+    <string name="toolbar_draw_polygon">Polygon: tap each corner, then the first one again</string>
+    <string name="toolbar_draw_polyline">Connected lines: tap each point, then the last one again</string>
+    <string name="ink_toolbar_polygon">Polygon</string>
+    <string name="ink_toolbar_polyline">Lines</string>
+    <string name="viewer_hint_polygon">Tap each corner. Tap the first corner again to finish.</string>
+    <string name="viewer_hint_polyline">Tap each point. Tap the last point again to finish.</string>
     <plurals name="cards_due">
         <item quantity="one">%d card due</item>
         <item quantity="other">%d cards due</item>
