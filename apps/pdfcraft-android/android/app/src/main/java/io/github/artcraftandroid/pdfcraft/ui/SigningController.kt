@@ -58,11 +58,11 @@ class SigningController internal constructor(private val vm: AppViewModel) {
         editEvent(doc, "sign_fill_place", "element" to element.engineType)
         if (element == FillElement.Box) {
             // a rounded box around what was tapped, in the Fill & Sign colour: drawn as one ink stroke
-            val r = vm.toolPrefs.fillTextSize
+            val r = vm.settings.toolPrefs.fillTextSize
             vm.runTool(doc, "comment_add", mapOf(
                 "page" to at.page + 1, "type" to "ink",
                 "strokes" to listOf(roundedBox(at.x, at.y, r * 4f, r * 2f, r * 0.6f)),
-                "color" to androidx.compose.ui.graphics.Color(vm.toolPrefs.fillColor).hex(), "width" to 1.5, "author" to vm.commenting.author,
+                "color" to androidx.compose.ui.graphics.Color(vm.settings.toolPrefs.fillColor).hex(), "width" to 1.5, "author" to vm.commenting.author,
             ))
             return
         }
@@ -299,7 +299,7 @@ class SigningController internal constructor(private val vm: AppViewModel) {
     fun createDigitalId(name: String, email: String, organization: String, password: String) {
         val eng = vm.engine ?: return
         vm.viewModelScope.launch {
-            vm.busy = text(R.string.msg_busy_creating_id)
+            vm.tools.busy = text(R.string.msg_busy_creating_id)
             val tmp = File(app.cacheDir, "new-id-${System.nanoTime()}.p12")
             val started = System.nanoTime()
             try {
@@ -317,7 +317,7 @@ class SigningController internal constructor(private val vm: AppViewModel) {
                 vm.tell(toolMessage(e, "sign_id_create"))
             } finally {
                 tmp.delete()
-                vm.busy = null
+                vm.tools.busy = null
             }
         }
     }
@@ -344,7 +344,7 @@ class SigningController internal constructor(private val vm: AppViewModel) {
         val eng = vm.engine ?: return
         val doc = t.doc
         vm.viewModelScope.launch {
-            vm.busy = text(R.string.msg_busy_signing)
+            vm.tools.busy = text(R.string.msg_busy_signing)
             val started = System.nanoTime()
             val placement = when { t.field != null -> "field"; t.rect != null -> "box"; else -> "invisible" }
             fun signEvent(result: String, vararg more: Pair<String, Any?>) = editEvent(
@@ -396,7 +396,7 @@ class SigningController internal constructor(private val vm: AppViewModel) {
                 if (saved) {
                     vm.tell(text(R.string.msg_signed_saved))
                 } else {
-                    vm.tell(text(R.string.msg_signed_not_saved, doc.name), text(R.string.common_save_copy)) { vm.saveCopyAs(doc) }
+                    vm.tell(text(R.string.msg_signed_not_saved, doc.name), text(R.string.common_save_copy)) { vm.sharing.saveCopyAs(doc) }
                 }
             } catch (e: MobileException) {
                 val m = toolMessage(e, "sign_document")
@@ -409,7 +409,7 @@ class SigningController internal constructor(private val vm: AppViewModel) {
                 signEvent("error")
                 vm.tell(e.userMessage)
             } finally {
-                vm.busy = null
+                vm.tools.busy = null
             }
         }
     }

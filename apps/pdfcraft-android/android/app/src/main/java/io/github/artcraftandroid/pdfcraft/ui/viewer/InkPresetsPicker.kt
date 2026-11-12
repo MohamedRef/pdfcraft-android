@@ -135,7 +135,7 @@ internal fun PenNibPreview(color: Color, width: Float, opacity: Float, style: In
 
 @Composable
 internal fun InkPresetsPicker(vm: AppViewModel, onApplied: () -> Unit) {
-    val prefs = vm.toolPrefs
+    val prefs = vm.settings.toolPrefs
     val c = pdfColors
     Column(
         Modifier.fillMaxWidth().heightIn(max = 520.dp).verticalScroll(rememberScrollState()).padding(horizontal = 18.dp, vertical = 14.dp),
@@ -210,7 +210,7 @@ internal fun InkPresetsPicker(vm: AppViewModel, onApplied: () -> Unit) {
         OptionChips(listOf(false, true), prefs.leftHanded, { left ->
             prefs.updateLeftHanded(left)
             // The quick rail moves away from the writing hand; it can still be dragged anywhere.
-            vm.quickToolbar.updateRailRight(left)
+            vm.settings.quickToolbar.updateRailRight(left)
         }) { stringResource(if (it) R.string.hand_left else R.string.hand_right) }
         Row(
             Modifier.fillMaxWidth().toggleable(value = prefs.palmGuard, role = Role.Switch) { prefs.updatePalmGuard(it) }
@@ -235,7 +235,7 @@ internal fun InkPresetsPicker(vm: AppViewModel, onApplied: () -> Unit) {
             TextButton(onClick = { calibrating = true }) { Text(stringResource(R.string.palm_guard_calibrate), color = c.accent) }
             if (calibrating) PalmGuardCalibration(prefs) {
                 calibrating = false
-                vm.quickToolbar.updateRailRight(prefs.leftHanded)
+                vm.settings.quickToolbar.updateRailRight(prefs.leftHanded)
             }
         }
         // S Pen side button (#144): what holding it while writing does, and what a click while
@@ -288,7 +288,7 @@ internal fun InkPresetsPicker(vm: AppViewModel, onApplied: () -> Unit) {
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 private fun FavoritePenCard(vm: AppViewModel, index: Int, preset: InkPreset, onApplied: () -> Unit) {
-    val prefs = vm.toolPrefs
+    val prefs = vm.settings.toolPrefs
     val c = pdfColors
     val chosen = prefs.currentInkPreset() == preset
     val label = stringResource(R.string.ink_preset_slot, index + 1)
@@ -342,7 +342,7 @@ private fun FavoritePenCard(vm: AppViewModel, index: Int, preset: InkPreset, onA
  */
 @Composable
 internal fun PenStylePicker(vm: AppViewModel) {
-    val prefs = vm.toolPrefs
+    val prefs = vm.settings.toolPrefs
     val c = pdfColors
     val style = prefs.inkStyle
     val pen = prefs.penSettings(style)

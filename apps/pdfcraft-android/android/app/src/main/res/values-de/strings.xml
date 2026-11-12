@@ -2017,4 +2017,21 @@
         <item quantity="one">%d Notiz</item>
         <item quantity="other">%d Notizen</item>
     </plurals>
+    <string name="scan_models_section">Scanner-Modelle</string>
+    <string name="scan_model_edges">Seitenerkennung</string>
+    <string name="scan_model_flatten">Seite glätten</string>
+    <string name="scan_model_upright">Seiten aufrichten</string>
+    <string name="scan_model_ready">Installiert</string>
+    <string name="scan_model_missing">Nicht installiert</string>
+    <string name="scan_model_corrupt">Beschädigt, nicht verwendet</string>
+    <string name="scan_model_line">%1$s · %2$s · %3$s</string>
+    <string name="scan_models_body">Diese Modelle gehören zur App und laufen auf diesem Gerät. Ein beschädigtes Modell wird nicht verwendet; seine Funktion bleibt aus, bis die App es neu kopiert.</string>
+    <string name="scan_models_copy_again">Modelle neu kopieren</string>
+    <string name="scan_models_copied">Kopierte Modelle: %1$d</string>
+    <string name="scan_model_not_downloaded">Nicht heruntergeladen</string>
+    <string name="scan_model_download">Herunterladen (%1$s)</string>
+    <string name="scan_model_downloading">Wird heruntergeladen: %1$d%%</string>
+    <string name="scan_model_cancel">Download abbrechen</string>
+    <string name="scan_model_remove">Entfernen</string>
+    <string name="scan_model_download_failed">Der Download wurde nicht abgeschlossen. Tippe auf Herunterladen, um es erneut zu versuchen; Gespeichertes bleibt erhalten.</string>
 </resources>

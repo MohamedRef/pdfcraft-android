@@ -78,6 +78,7 @@ import io.github.artcraftandroid.pdfcraft.ui.OpenDocument
 import io.github.artcraftandroid.pdfcraft.ui.PdfSheet
 import io.github.artcraftandroid.pdfcraft.ui.pdfColors
 import kotlin.math.roundToInt
+import androidx.compose.material3.minimumInteractiveComponentSize
 
 /** A note waiting for its text: at a point (Comment tool) or on selected text (Add comment). */
 class NotePrompt(
@@ -319,7 +320,7 @@ fun BoxScope.SelectionMenu(vm: AppViewModel, doc: OpenDocument, sel: Selection) 
     val y = if (below + menuSize.height < maxBottom) below else (top.y - margin - menuSize.height).coerceAtLeast(doc.viewer.padTop)
     val x = ((top.x + bottom.x) / 2f - menuSize.width / 2f).coerceIn(with(density) { 8.dp.toPx() }, (doc.viewer.viewW - menuSize.width - with(density) { 8.dp.toPx() }).coerceAtLeast(0f))
     val allowed = doc.info.allowsAnnotation
-    val prefs = vm.toolPrefs
+    val prefs = vm.settings.toolPrefs
     fun markup(m: TextMarkup) {
         if (!allowed) return
         vm.commenting.addSelectedMarkup(doc, m, page, sel.rects, prefs.color(m.styled), prefs.opacity(m.styled))
@@ -360,8 +361,8 @@ fun BoxScope.SelectionMenu(vm: AppViewModel, doc: OpenDocument, sel: Selection) 
         MenuRow(LucideIcons.SwatchBook, stringResource(R.string.cards_make)) { vm.study.makeCardFromSelection(doc, cloze = false) }
         MenuRow(LucideIcons.SwatchBook, stringResource(R.string.cards_make_cloze)) { vm.study.makeCardFromSelection(doc, cloze = true) }
         // while reading aloud, the reading moves to the selection (the reference's "from here")
-        MenuRow(LucideIcons.Volume2, stringResource(if (vm.readAloud != null) R.string.viewer_read_from_here else R.string.common_tool_read_aloud)) {
-            vm.startReadAloud(doc, fromSelection = true)
+        MenuRow(LucideIcons.Volume2, stringResource(if (vm.sharing.readAloud != null) R.string.viewer_read_from_here else R.string.common_tool_read_aloud)) {
+            vm.sharing.startReadAloud(doc, fromSelection = true)
             doc.selection.clear()
         }
         Spacer(Modifier.height(8.dp))
@@ -411,7 +412,7 @@ fun BoxScope.MarkupFollowUpBar(vm: AppViewModel, f: MarkupFollowUp) {
         for (color in FOLLOW_UP_COLORS) {
             val on = color == f.color
             Box(
-                Modifier.size(40.dp).clickable(role = Role.RadioButton) { vm.commenting.recolorFollowUp(f, color) }
+                Modifier.minimumInteractiveComponentSize().size(40.dp).clickable(role = Role.RadioButton) { vm.commenting.recolorFollowUp(f, color) }
                     .semantics { contentDescription = colorLabel; selected = on },
                 contentAlignment = Alignment.Center,
             ) {
@@ -449,14 +450,14 @@ fun NoteSheet(vm: AppViewModel, prompt: NotePrompt) {
         onDismiss = { vm.commenting.notePrompt = null },
         onPost = { vm.commenting.postNote(prompt, it) },
         onVoice = if (at != null && prompt.selection == null && prompt.edit == null) ({ vm.commenting.notePrompt = null; vm.commenting.startVoice(prompt.doc, at) }) else null,
-        author = vm.prefsChanged.let { vm.toolPrefs.author }, onAuthor = { vm.authorPrompt = true },
+        author = vm.home.prefsChanged.let { vm.settings.toolPrefs.author }, onAuthor = { vm.authorPrompt = true },
     )
 }
 
 /** A reply being typed: the same bar, under the comment it answers. */
 @Composable
 fun ReplySheet(vm: AppViewModel, prompt: ReplyPrompt) {
-    InlineNoteBar(hint = stringResource(R.string.viewer_write_reply), onDismiss = { vm.commenting.replyPrompt = null }, onPost = { vm.commenting.postReply(prompt, it) }, onVoice = null, author = vm.prefsChanged.let { vm.toolPrefs.author }, onAuthor = { vm.authorPrompt = true })
+    InlineNoteBar(hint = stringResource(R.string.viewer_write_reply), onDismiss = { vm.commenting.replyPrompt = null }, onPost = { vm.commenting.postReply(prompt, it) }, onVoice = null, author = vm.home.prefsChanged.let { vm.settings.toolPrefs.author }, onAuthor = { vm.authorPrompt = true })
 }
 
 /**
@@ -520,8 +521,8 @@ fun BoxScope.TextEntry(vm: AppViewModel, prompt: TextPrompt, onDone: (TextPrompt
     val doc = prompt.doc
     val at = doc.viewer.pageToScreen(prompt.at.page, prompt.at.x, prompt.at.y)
     val density = LocalDensity.current
-    val color = vm.toolPrefs.color(StyledTool.FreeText)
-    val sizeSp = with(density) { (vm.toolPrefs.textSize * doc.viewer.pixelsPerPoint(prompt.at.page)).toSp() }
+    val color = vm.settings.toolPrefs.color(StyledTool.FreeText)
+    val sizeSp = with(density) { (vm.settings.toolPrefs.textSize * doc.viewer.pixelsPerPoint(prompt.at.page)).toSp() }
     val keyboard = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
     val currentText = androidx.compose.runtime.rememberUpdatedState(text)
     val placeholder = stringResource(R.string.viewer_add_text)
