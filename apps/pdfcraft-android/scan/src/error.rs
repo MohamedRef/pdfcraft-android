@@ -12,6 +12,9 @@ pub enum ScanError {
     /// The four corners don't enclose a page.
     #[error("the four corners must enclose an area (a convex quadrilateral inside the photo)")]
     BadCorners,
+    /// A camera frame that cannot be looked at (#295): its size, its bytes or its turn.
+    #[error("the camera frame is not usable: {0}")]
+    BadFrame(&'static str),
     /// The page could not be written as a picture.
     #[error("the page could not be saved as a picture")]
     Encode,
