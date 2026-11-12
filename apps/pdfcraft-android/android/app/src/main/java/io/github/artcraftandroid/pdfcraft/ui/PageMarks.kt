@@ -101,6 +101,17 @@ fun markArgs(spec: Any, pages: List<Int>?, replace: Boolean): Map<String, Any?> 
 }
 
 /**
+ * The arguments for the engine-drawn preview (#314) of [spec] on the page at place [index] among
+ * the marked ones, in a document of [count] pages: the preview marks a copy of that one page, so
+ * a header's or footer's tokens are filled in here as the engine fills them on that page, and
+ * every page of the copy is marked. [replace] as Update sends it.
+ */
+fun markPreviewArgs(spec: Any, index: Int, count: Int, replace: Boolean, date: LocalDate = LocalDate.now()): Map<String, Any?> {
+    val filled = if (spec is HeaderFooterSpec) spec.copy(slots = spec.slots.map { if (it.isBlank()) it else expandMarkTokens(it, index, count, spec.startNumber, date) }) else spec
+    return markArgs(filled, null, replace)
+}
+
+/**
  * Pages written as "1-3, 5, 8-" (1-based, in the order written, each once) for a document of
  * [count] pages; null when anything is out of range or not understood, or nothing is listed.
  */

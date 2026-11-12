@@ -528,29 +528,29 @@ class EditController internal constructor(private val vm: AppViewModel) {
 
     // ---- Form auto-suggestions -----------------------------------------------------------------
 
-    var formSuggestions by mutableStateOf(vm.appPrefs.getBoolean("formSuggestions", true))
+    var formSuggestions by mutableStateOf(vm.settings.appPrefs.getBoolean("formSuggestions", true))
         private set
 
     fun updateFormSuggestions(on: Boolean) {
         formSuggestions = on
-        vm.appPrefs.edit().putBoolean("formSuggestions", on).apply()
+        vm.settings.appPrefs.edit().putBoolean("formSuggestions", on).apply()
     }
 
     /** Words typed into form fields before, newest first. */
     fun suggestionsFor(prefix: String): List<String> {
         if (!formSuggestions || prefix.isBlank()) return emptyList()
-        val all = vm.appPrefs.getString("suggestions", "").orEmpty().split('\n').filter { it.isNotBlank() }
+        val all = vm.settings.appPrefs.getString("suggestions", "").orEmpty().split('\n').filter { it.isNotBlank() }
         return all.filter { it.startsWith(prefix, ignoreCase = true) && !it.equals(prefix, ignoreCase = true) }.take(3)
     }
 
     fun rememberSuggestion(value: String) {
         if (!formSuggestions || value.isBlank() || value.length > 200) return
-        val all = vm.appPrefs.getString("suggestions", "").orEmpty().split('\n').filter { it.isNotBlank() && it != value }
-        vm.appPrefs.edit().putString("suggestions", (listOf(value) + all).take(200).joinToString("\n")).apply()
+        val all = vm.settings.appPrefs.getString("suggestions", "").orEmpty().split('\n').filter { it.isNotBlank() && it != value }
+        vm.settings.appPrefs.edit().putString("suggestions", (listOf(value) + all).take(200).joinToString("\n")).apply()
     }
 
     fun clearFormSuggestions() {
-        vm.appPrefs.edit().remove("suggestions").apply()
+        vm.settings.appPrefs.edit().remove("suggestions").apply()
         vm.tell(text(R.string.msg_suggestions_cleared))
     }
 }

@@ -21,7 +21,6 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
-import androidx.core.content.FileProvider
 import androidx.core.content.IntentCompat
 import androidx.lifecycle.lifecycleScope
 import io.github.artcraftandroid.pdfcraft.engine.Diag
@@ -31,6 +30,8 @@ import io.github.artcraftandroid.pdfcraft.ui.AppViewModel
 import io.github.artcraftandroid.pdfcraft.ui.FilePickKind
 import io.github.artcraftandroid.pdfcraft.ui.PdfcraftTheme
 import io.github.artcraftandroid.pdfcraft.ui.XFDF_MIME
+import io.github.artcraftandroid.pdfcraft.ui.scan.ScanCameraModel
+import io.github.artcraftandroid.pdfcraft.ui.scan.ScanCameraRouter
 import java.io.File
 import java.io.FileOutputStream
 import kotlinx.coroutines.delay
@@ -47,17 +48,19 @@ class MainActivity : ComponentActivity() {
     private val pickOne = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> vm.onFilesPicked(pickKind, listOfNotNull(uri)) }
     // Separate picker/result from the regular file pick kind, so a stale PDF selection cannot
     // accidentally feed untrusted bookmark JSON into another tool or document.
-    private val pickBookmarkJson = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> vm.onBookmarkJsonPicked(uri) }
-    private val pickBookmarkPdf = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> vm.onBookmarkPdfPicked(uri) }
+    private val pickBookmarkJson = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> vm.tools.onBookmarkJsonPicked(uri) }
+    private val pickBookmarkPdf = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> vm.tools.onBookmarkPdfPicked(uri) }
     // Comments to import (XFDF, FDF or another PDF's): a picker of their own, like the bookmarks'.
     private val pickComments = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> vm.commenting.onCommentsPicked(uri) }
 
     private val saveCopy = registerForActivityResult(ActivityResultContracts.CreateDocument("application/pdf")) { uri -> vm.copyTo(uri) }
-    private val takePhoto = registerForActivityResult(ActivityResultContracts.TakePicture()) { ok -> vm.onScanPhoto(ok) }
+    // Scan's photos: PdfCraft's camera screen or the phone's camera app (#294)
+    private val scanCameraModel: ScanCameraModel by viewModels()
+    private val scanCamera = ScanCameraRouter(this, { vm }, { scanCameraModel })
     private val pickImage = registerForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri -> vm.editor.addImage(uri) }
     private val pickSignature = registerForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri -> vm.signing.importSignatureImage(uri) }
     private val pickPhotos = registerForActivityResult(ActivityResultContracts.PickMultipleVisualMedia()) { uris -> vm.onPhotosPicked(uris) }
-    private val pickOutputFolder = registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri -> vm.onOutputFolderPicked(uri) }
+    private val pickOutputFolder = registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri -> vm.docTools.onOutputFolderPicked(uri) }
     private val pickFolder = registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri -> uri?.let(vm::addLocalFolder) }
     private val micPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted -> vm.commenting.onMicPermission(granted) }
     private val pickBackupFolder = registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { vm.backups.onBackupFolderPicked(it) }
@@ -94,11 +97,15 @@ class MainActivity : ComponentActivity() {
         collectRequests()
         setContent {
             PdfcraftTheme {
-                AppRoot(
-                    vm,
-                    onBrowse = { launchSafely { pickPdf.launch(arrayOf("application/pdf")) } },
-                    onPickSignatureImage = { launchSafely { pickSignature.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) } },
-                )
+                androidx.compose.foundation.layout.Box {
+                    AppRoot(
+                        vm,
+                        onBrowse = { launchSafely { pickPdf.launch(arrayOf("application/pdf")) } },
+                        onPickSignatureImage = { launchSafely { pickSignature.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) } },
+                    )
+                    // the in-app scan camera, over everything while a photo is wanted (#294)
+                    scanCamera.Screen()
+                }
             }
         }
     }
@@ -111,12 +118,12 @@ class MainActivity : ComponentActivity() {
         lifecycleScope.launch { for (job in vm.prints) print(job.file, job.name, job.deleteWhenDone) }
         lifecycleScope.launch { for (name in vm.saveCopyRequests) launchSafely(onFail = vm::saveCopyLaunchFailed) { saveCopy.launch(name) } }
         lifecycleScope.launch {
-            for (ignored in vm.bookmarkJsonPicks) {
+            for (ignored in vm.tools.bookmarkJsonPicks) {
                 launchSafely { pickBookmarkJson.launch(arrayOf("application/json", "text/plain", "application/octet-stream")) }
             }
         }
         lifecycleScope.launch {
-            for (ignored in vm.bookmarkPdfPicks) {
+            for (ignored in vm.tools.bookmarkPdfPicks) {
                 launchSafely { pickBookmarkPdf.launch(arrayOf("application/pdf")) }
             }
         }
@@ -150,10 +157,7 @@ class MainActivity : ComponentActivity() {
             }
         }
         lifecycleScope.launch {
-            for (f in vm.cameraShots) {
-                val uri = FileProvider.getUriForFile(this@MainActivity, "$packageName.files", f)
-                launchSafely { takePhoto.launch(uri) }
-            }
+            for (f in vm.cameraShots) scanCamera.route(f)
         }
         lifecycleScope.launch {
             for (r in vm.requests.creates) launchSafely {
@@ -180,8 +184,8 @@ class MainActivity : ComponentActivity() {
         // the folder picker opens at Documents, where PDFs usually are (Download itself can't be chosen)
         val documents = android.provider.DocumentsContract.buildDocumentUri("com.android.externalstorage.documents", "primary:Documents")
         lifecycleScope.launch {
-            for (u in vm.outputFolderRequests) {
-                try { pickOutputFolder.launch(null) } catch (e: ActivityNotFoundException) { vm.onOutputFolderPicked(null); vm.tell(getString(R.string.main_error_no_app)) }
+            for (u in vm.docTools.outputFolderRequests) {
+                try { pickOutputFolder.launch(null) } catch (e: ActivityNotFoundException) { vm.docTools.onOutputFolderPicked(null); vm.tell(getString(R.string.main_error_no_app)) }
             }
         }
         lifecycleScope.launch { for (u in vm.accessRequests) launchSafely { pickFolder.launch(documents) } }
@@ -200,7 +204,7 @@ class MainActivity : ComponentActivity() {
         // keep the screen on while reading, if asked, until half an hour without a touch
         lifecycleScope.launch {
             while (true) {
-                val on = vm.keepScreenOn && vm.document != null && System.currentTimeMillis() - lastTouch < 30L * 60 * 1000
+                val on = vm.settings.keepScreenOn && vm.document != null && System.currentTimeMillis() - lastTouch < 30L * 60 * 1000
                 if (on) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) else window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
                 delay(5_000)
             }
@@ -225,7 +229,7 @@ class MainActivity : ComponentActivity() {
     // the viewer's shortcuts in the system's Meta+/ list (#153)
     override fun onProvideKeyboardShortcuts(data: MutableList<android.view.KeyboardShortcutGroup>, menu: android.view.Menu?, deviceId: Int) {
         super.onProvideKeyboardShortcuts(data, menu, deviceId)
-        if (vm.keyboardShortcuts) data.add(io.github.artcraftandroid.pdfcraft.ui.viewer.shortcutGroup(this))
+        if (vm.settings.keyboardShortcuts) data.add(io.github.artcraftandroid.pdfcraft.ui.viewer.shortcutGroup(this))
     }
 
     /** Log raw pen samples (real historical pressure, pen speed) before Compose handles the event. */

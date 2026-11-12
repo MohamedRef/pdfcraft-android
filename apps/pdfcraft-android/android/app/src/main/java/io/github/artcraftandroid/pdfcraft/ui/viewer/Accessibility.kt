@@ -120,19 +120,19 @@ class AccessibilityState {
 /** Run the full check and list the figures. */
 fun AppViewModel.checkAccessibility(doc: OpenDocument) {
     val eng = engine ?: return
-    accessibility.checking = true
+    tools.accessibility.checking = true
     viewModelScope.launch {
         try {
             val t0 = System.nanoTime()
             val r = eng.tool("accessibility_check", mapOf("doc" to doc.id))
-            accessibility.rules = sortA11yRules(parseA11yRules(r))
-            accessibility.counts = Triple(r.optInt("failed"), r.optInt("manual"), r.optInt("passed"))
-            accessibility.figures = parseA11yFigures(eng.tool("accessibility_figures", mapOf("doc" to doc.id)))
-            editEvent(doc, "a11y_check", "failed" to r.optInt("failed"), "manual" to r.optInt("manual"), "passed" to r.optInt("passed"), "figures" to accessibility.figures.size, "ms" to (System.nanoTime() - t0) / 1_000_000)
+            tools.accessibility.rules = sortA11yRules(parseA11yRules(r))
+            tools.accessibility.counts = Triple(r.optInt("failed"), r.optInt("manual"), r.optInt("passed"))
+            tools.accessibility.figures = parseA11yFigures(eng.tool("accessibility_figures", mapOf("doc" to doc.id)))
+            editEvent(doc, "a11y_check", "failed" to r.optInt("failed"), "manual" to r.optInt("manual"), "passed" to r.optInt("passed"), "figures" to tools.accessibility.figures.size, "ms" to (System.nanoTime() - t0) / 1_000_000)
         } catch (e: Exception) {
             tell(e.userMessage)
         } finally {
-            accessibility.checking = false
+            tools.accessibility.checking = false
         }
     }
 }
@@ -155,7 +155,7 @@ fun AppViewModel.setAltText(doc: OpenDocument, figure: A11yFigure, alt: String, 
     val args = if (decorative) mapOf("figure" to figure.figure, "decorative" to true) else mapOf("figure" to figure.figure, "alt" to alt.trim())
     runTool(doc, "accessibility_set_alt", args) { r ->
         editEvent(doc, "a11y_alt", "decorative" to decorative)
-        accessibility.figures = parseA11yFigures(r)
+        tools.accessibility.figures = parseA11yFigures(r)
         tell(appText(if (decorative) R.string.a11y_marked_decorative else R.string.a11y_alt_saved))
         checkAccessibility(doc)
     }
@@ -168,7 +168,7 @@ fun AppViewModel.previewAutotag(doc: OpenDocument, page: Int) {
         try {
             val r = eng.tool("accessibility_autotag_preview", mapOf("doc" to doc.id, "page" to page + 1))
             val cs = r.optJSONArray("candidates") ?: JSONArray()
-            accessibility.preview = A11yPreview(
+            tools.accessibility.preview = A11yPreview(
                 page,
                 (0 until cs.length()).map { cs.getJSONObject(it).let { c -> c.optString("type") to c.optString("text") } },
                 r.optInt("unclassified_images"),
@@ -181,7 +181,7 @@ fun AppViewModel.previewAutotag(doc: OpenDocument, page: Int) {
 }
 
 fun AppViewModel.applyAutotag(doc: OpenDocument) {
-    accessibility.preview = null
+    tools.accessibility.preview = null
     runTool(doc, "accessibility_autotag_apply") { editEvent(doc, "a11y_autotag_apply"); tell(appText(R.string.a11y_tagged)); checkAccessibility(doc) }
 }
 
@@ -239,7 +239,7 @@ private fun categoryLabel(id: String): Int? = when (id) {
 fun AccessibilitySheet(vm: AppViewModel, doc: OpenDocument) {
     val c = pdfColors
     val ctl = doc.controller
-    val st = vm.accessibility
+    val st = vm.tools.accessibility
     var fixing by remember { mutableStateOf<String?>(null) }
     var editing by remember { mutableStateOf<A11yFigure?>(null) }
     var showPassed by remember { mutableStateOf(false) }
@@ -411,7 +411,7 @@ private fun AltTextDialog(vm: AppViewModel, doc: OpenDocument, f: A11yFigure, on
 private fun AutotagDialog(vm: AppViewModel, doc: OpenDocument, p: A11yPreview) {
     val c = pdfColors
     PdfDialog(
-        onDismiss = { vm.accessibility.preview = null },
+        onDismiss = { vm.tools.accessibility.preview = null },
         title = stringResource(R.string.a11y_autotag),
         confirm = stringResource(R.string.a11y_autotag_apply),
         confirmEnabled = p.roles.isNotEmpty(),

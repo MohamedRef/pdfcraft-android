@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Scan: the in-app camera (#294), kept apart from strings.xml so parallel scanner work merges cleanly. -->
+<resources>
+    <string name="scan_camera_rationale">PdfCraft utilise l\'appareil photo pour numériser les pages. Les photos restent sur cet appareil.</string>
+    <string name="scan_camera_continue">Continuer</string>
+    <string name="scan_camera_no_camera">Cet appareil n\'a pas d\'appareil photo. Importez des photos pour les numériser.</string>
+    <string name="scan_camera_denied">PdfCraft n\'est pas autorisé à utiliser l\'appareil photo. Importez des photos ou autorisez l\'appareil photo dans les paramètres.</string>
+    <string name="scan_camera_import">Importer des photos</string>
+    <string name="scan_camera_open_settings">Ouvrir les paramètres</string>
+    <string name="scan_camera_phone_app">Appareil photo du téléphone</string>
+    <string name="scan_camera_torch_on">Allumer la lumière</string>
+    <string name="scan_camera_torch_off">Éteindre la lumière</string>
+    <string name="scan_camera_viewfinder">Viseur. Touchez pour faire la mise au point.</string>
+    <string name="scan_camera_shutter">Prendre une photo</string>
+    <string name="scan_camera_done">Terminé (%1$d)</string>
+    <string name="scan_camera_last_page">Dernière page prise, %1$d au total</string>
+    <string name="scan_camera_failed">Impossible de prendre la photo. Réessayez.</string>
+    <string name="scan_camera_unavailable">Impossible de démarrer l\'appareil photo. Utilisez plutôt l\'application photo du téléphone.</string>
+    <string name="scan_camera_image_unavailable">PdfCraft a besoin de l\'autorisation d\'appareil photo pour prendre une photo.</string>
+    <string name="scan_camera_setting">Numériser avec</string>
+    <string name="scan_camera_setting_in_app">Appareil photo PdfCraft</string>
+    <string name="scan_camera_setting_phone">Application photo du téléphone</string>
+    <string name="scan_camera_setting_body">L\'application photo du téléphone ne fonctionne que si PdfCraft est autorisé à utiliser l\'appareil photo.</string>
+</resources>
