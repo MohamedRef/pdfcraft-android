@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Scan: low-light merge in the in-app camera (#297), kept apart from strings.xml so parallel scanner work merges cleanly. -->
+<resources>
+    <string name="scan_merge_setting">دمج الصور في الإضاءة الضعيفة</string>
+    <string name="scan_merge_auto">تلقائي</string>
+    <string name="scan_merge_always">دائمًا</string>
+    <string name="scan_merge_off">إيقاف</string>
+    <string name="scan_merge_body">في الإضاءة الخافتة تلتقط الكاميرا أربع صور للصفحة وتدمجها في صفحة واحدة أنظف. يستغرق الالتقاط ثانية تقريبًا أطول.</string>
+    <string name="scan_merge_working">ثبّت الهاتف: جارٍ دمج أربع صور</string>
+</resources>
