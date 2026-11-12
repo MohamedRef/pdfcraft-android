@@ -7,13 +7,15 @@
 //! bad input.
 //!
 //! Some modules are building blocks the pipeline does not call yet (`book`, `flatten_guard`,
-//! `merge`, `metrics_*`, `photo_mask`, `preset`, `sharpness`, `straightness`, `upright_pages`):
-//! `docs/ANDROID_SCAN_BLOCKS.md` says what each gives and what is left to wire in.
+//! `metrics_*`, `photo_mask`, `preset`, `straightness`, `upright_pages`):
+//! `docs/ANDROID_SCAN_BLOCKS.md` says what each gives and what is left to wire in. `sharpness`
+//! and `merge` are called by `capture` (#296, #297), which no screen calls yet.
 #![forbid(unsafe_code)]
 #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
 
 pub mod aspect;
 pub mod book;
+pub mod capture;
 pub mod detect;
 pub mod encode;
 pub mod enhance;
@@ -40,6 +42,7 @@ pub mod upright_pages;
 pub mod warp;
 
 pub use aspect::{AspectSource, Focal, Paper, Proportions, proportions, proportions_by_sides};
+pub use capture::{MergeFrame, MergeOutcome, MergeRequest, PhotoSharpness, merge_frames, photo_sharpness};
 pub use detect::{Detection, Finder, QuadSource, detect, detect_with};
 pub use encode::Format;
 pub use enhance::{AutoOutput, AutoParams, DEFAULT_SHARPEN, PaperMode, auto};
@@ -57,6 +60,8 @@ pub use warp::{Rgb, rectify};
 mod tests;
 #[cfg(test)]
 mod tests_book;
+#[cfg(test)]
+mod tests_capture;
 #[cfg(test)]
 mod tests_detect;
 #[cfg(test)]
