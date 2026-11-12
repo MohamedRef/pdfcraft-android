@@ -71,10 +71,25 @@ internal class ScanLabController(private val vm: AppViewModel) {
         // which models the engine accepted (#289); a loaded model is not hashed again
         val models = io.github.artcraftandroid.pdfcraft.ui.scan.scanModelsJson(runCatching { io.github.artcraftandroid.pdfcraft.core.scanModelStates() }.getOrNull())
         val capture = io.github.artcraftandroid.pdfcraft.ui.scan.ScanCaptures.of(page.file.path)?.json()
+        val inspection = if (lab.inspect) inspect(index, page) else null
         store.addPage(scan, index, page.file, output) { keptOutput ->
-            scanTestPageJson(version, saved, page.corners, page.found, page.finding, look, strength, flatten, lab, keptOutput, result, preview, page.crop, capture, models, turn, kind, page.book, flattenChosen = page.flatten, pageLook = page.look.json(lab.lookPerPage))
+            scanTestPageJson(version, saved, page.corners, page.found, page.finding, look, strength, flatten, lab, keptOutput, result, preview, page.crop, capture, models, turn, kind, page.book, flattenChosen = page.flatten, pageLook = page.look.json(lab.lookPerPage), inspection = inspection)
         }
     }
+
+    /**
+     * Run the research detectors (#305 moiré, #306 fingers, glare and stains) on page [index] and
+     * log what they see; null when they could not run. Detection only: the page is not changed.
+     * Blocking.
+     */
+    private fun inspect(index: Int, page: ScanPage): org.json.JSONObject? =
+        runCatching { io.github.artcraftandroid.pdfcraft.core.scanInspectPage(page.file.absolutePath, page.corners.toList()) }
+            .onFailure { e -> Diag.failure(DiagArea.Scan, "scan_inspect_page", e) }
+            .getOrNull()
+            ?.let { seen ->
+                Diag.event(DiagArea.Scan, "inspect", "page" to index, *io.github.artcraftandroid.pdfcraft.ui.scan.scanInspectDiag(seen))
+                io.github.artcraftandroid.pdfcraft.ui.scan.scanInspectJson(seen)
+            }
 
     /** The scan in [scan] is complete: older scans make room when too much is kept. Blocking. */
     fun end(scan: File) {
@@ -196,7 +211,8 @@ internal class ScanLabController(private val vm: AppViewModel) {
               page-NN.json      the page's corners as they were left (8 shares of the upright photo: top-left,
                                 top-right, bottom-right, bottom-left), what the app found by itself, the look and
                                 testing options in force, the size of the page it made, and how the photo was
-                                taken (capture: which camera, still size, exposure, light, focus, time)
+                                taken (capture: which camera, still size, exposure, light, focus, time); with the
+                                detectors' report on, what they saw (inspect: moire, fingers, glare, stains)
               page-NN.out.jpg   the page as the app made it (.png for black and white); saved scans only
             diagnostics.txt     the diagnostics log at the time of sharing
 

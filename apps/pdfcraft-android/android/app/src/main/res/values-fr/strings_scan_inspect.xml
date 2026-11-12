@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Scanner testing option: the research detectors' report (#305, #306), kept apart from strings.xml so parallel scanner work merges cleanly. -->
+<resources>
+    <string name="scan_lab_inspect">Signaler le moiré, les doigts, les reflets et les taches dans les numérisations conservées (aucune page n\'est modifiée)</string>
+</resources>

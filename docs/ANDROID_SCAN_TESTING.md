@@ -54,6 +54,7 @@ on one part. While any is changed, the scan screen says so.
 | Suggest Flatten page or Grayscale for a document type (#299) | On | Off: no suggestion chips |
 | Filter strength | Each filter's own | 20, 40, 60, 80 or 100 for every filter |
 | Flatten page (#302) | Off | On, with the switch on the scan screen itself |
+| Report moiré, fingers, glare and stains in kept scans (#305, #306) | Off | On: each kept page is also run through the two research detectors, and what they see goes to the log (`inspect`) and the page file (`inspect`). No page changes |
 | Scan with (#294) | PdfCraft camera | Phone's camera app (also in Settings → Scan; the same setting) |
 | Page outline in the camera (#295) | On | Off: no frames are analysed, the camera is as in #294 |
 | Auto-capture (#296) | On | Off: only the shutter takes photos. Needs the page outline; also switched in the camera's top bar |
@@ -67,8 +68,8 @@ recorded it also has **Copy the models again**, which copies every model out of 
 and writes the times to the log; it changes no page and keeps no file (see
 `docs/ANDROID_SCAN_MAX_QUALITY.md`).
 
-**Reset scanner testing options** puts them back. Keeping scans is not one of them: it changes
-no page.
+**Reset scanner testing options** puts them back. Keeping scans and the detectors' report are
+not among them: they change no page.
 
 ## What a kept scan is
 
@@ -154,6 +155,12 @@ From #297 (`ANDROID_SCAN_MERGE.md`): `merge` is `null` for one photo, or the low
 facts: `why`, `frames`, `found`, `merged`, `used`, `rejected_blur`, `rejected_align`,
 `psnr_gain_tenths_db`, `burst_ms`, `find_ms`, `merge_ms` and `fallback`. A merged page's
 `preview_quad` is `null`: the page is already straightened.
+
+`inspect` is what the research detectors saw on the page when their report is on (#305, #306):
+`moire` (`kind`, `period`, `tiles`, `busy_tiles`, `periodic_tiles`), `fingers`, `glare` and
+`stains` (`count`, `over_print`, `area`; `null` when the search could not run), `flagged` and
+`timings_ms`; `null` when the report is off. Every `inspect` line in the log has the same, flat.
+
 `turns` says which way up the page was saved (#339): `manual` is the
 person's own turn from Rotate or Undo (0–3 clockwise, `null` when they gave none), `auto` the
 ordinary setting "Turn pages upright automatically", `total` the turn the page was saved with,

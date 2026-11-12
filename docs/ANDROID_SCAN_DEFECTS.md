@@ -1,6 +1,7 @@
 # Scanner: fingers, glare spots and stains (#306)
 
-**State: research prototype. Nothing in the app calls it, and no page the app makes changes.**
+**State: research prototype. No page the app makes changes. A testing option reports what it
+finds in kept scans (below); nothing else calls it.**
 The issue asks for a prototype, measurements on the owner's photos and a recommendation; only
 the prototype and its tests on drawn pages exist.
 
@@ -67,6 +68,20 @@ and no phone.**
 
 The issue's false-positive rate ("under 2 % on the synthetic set") needs a set of drawn pages
 larger than these few; it was not measured.
+
+## The report in kept scans
+
+A testing option, **Report moiré, fingers, glare and stains in kept scans** (Settings → About →
+Diagnostics, off by default), runs the moiré detector and this one on each page a kept scan keeps
+(`scan/src/inspect.rs`, called through `scan_inspect_page`). It straightens the page as Save
+would (no flattening, no turn) and changes nothing: what it finds goes to the log's `inspect`
+line and to the page file's `inspect` key. It runs only while **Keep scans for testing** is on,
+and adds the time of one more straightening and the detectors to each kept page.
+
+Here the page `find` reads is the straightened page in the Auto look at strength 60, and
+`before` is the same page before the look, for glare. Log fields, per kind (`fingers`, `glare`,
+`stains`): the count, `_over_print` and `_area` (a share of the page), -1 when the search could
+not run; `flagged` (fingers and glare over print); `inspect_look_ms`, `defects_ms`.
 
 ## Not done
 

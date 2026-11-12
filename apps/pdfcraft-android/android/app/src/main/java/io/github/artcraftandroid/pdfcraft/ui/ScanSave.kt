@@ -161,7 +161,7 @@ internal data class ScanPreviewKey(
     companion object {
         /** The preview of [page] in [look] (by default the page's own). */
         fun of(page: ScanPage, flatten: Boolean, lab: ScanLab, autoUpright: Boolean = true, look: io.github.artcraftandroid.pdfcraft.ui.scan.ScanPageLook = page.look) =
-            ScanPreviewKey(page.file.absolutePath, page.corners.toList(), look.filter, flatten, lab.copy(keep = false), page.turns, autoUpright, page.preset, look.strength, look.paper)
+            ScanPreviewKey(page.file.absolutePath, page.corners.toList(), look.filter, flatten, lab.copy(keep = false, inspect = false), page.turns, autoUpright, page.preset, look.strength, look.paper)
     }
 }
 

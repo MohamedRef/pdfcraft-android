@@ -86,9 +86,15 @@ internal data class ScanLab(
     val previewStop: Boolean = true,
     /** Double-tap or pinch the preview to look closer, with a sharper page once zoomed in (#301); off, the preview doesn't zoom. */
     val previewZoom: Boolean = true,
+    /**
+     * With keeping scans on, run the research detectors on each kept page and report what they see
+     * (#305 moiré, #306 fingers, glare and stains) in the log and the page file. Detection only:
+     * no page changes, so this does not count as a changed option.
+     */
+    val inspect: Boolean = false,
 ) {
-    /** Nothing differs from the scanner as it is meant to be used (keeping scans changes no page). */
-    val asDesigned: Boolean get() = copy(keep = false) == ScanLab()
+    /** Nothing differs from the scanner as it is meant to be used (keeping scans and reporting what the detectors see change no page). */
+    val asDesigned: Boolean get() = copy(keep = false, inspect = false) == ScanLab()
 
     fun findOptions() = ScanFindOptions(finder, refine)
 
@@ -101,7 +107,7 @@ internal data class ScanLab(
         "snap_paper" to snapPaper, "strength_override" to (strength ?: -1), "upright" to upright, "sharpen" to sharpen,
         "denoise" to denoise, "preview" to preview, "crop_tools" to cropTools, "flatten_auto" to flattenAuto, "flatten_trim" to flattenTrim, "settle_turns" to settleTurns, "presets" to presets, "kind_tone" to kindTone, "photo_sharpen" to photoSharpen, "suggestions" to suggestions, "book_gutter" to bookGutter, "line_flatten" to lineFlatten,
         "look_per_page" to lookPerPage, "look_strip" to lookStrip,
-        "whiteboard_look" to whiteboardLook, "preview_stop" to previewStop, "preview_zoom" to previewZoom, "keep" to keep,
+        "whiteboard_look" to whiteboardLook, "preview_stop" to previewStop, "preview_zoom" to previewZoom, "keep" to keep, "inspect" to inspect,
     )
 
     /** The options as JSON, for a kept scan's page file. */
@@ -110,7 +116,7 @@ internal data class ScanLab(
         .put("snap_paper", snapPaper).put("strength_override", strength ?: JSONObject.NULL).put("upright", upright)
         .put("sharpen", sharpen).put("denoise", denoise).put("preview", preview).put("crop_tools", cropTools).put("flatten_auto", flattenAuto).put("flatten_trim", flattenTrim).put("settle_turns", settleTurns).put("presets", presets).put("kind_tone", kindTone).put("photo_sharpen", photoSharpen).put("suggestions", suggestions).put("book_gutter", bookGutter).put("line_flatten", lineFlatten)
         .put("look_per_page", lookPerPage).put("look_strip", lookStrip)
-        .put("whiteboard_look", whiteboardLook).put("preview_stop", previewStop).put("preview_zoom", previewZoom)
+        .put("whiteboard_look", whiteboardLook).put("preview_stop", previewStop).put("preview_zoom", previewZoom).put("inspect", inspect)
 
     /** One line of text for the app's preferences. */
     fun encode(): String = listOf(
@@ -119,7 +125,7 @@ internal data class ScanLab(
         "upright" to flag(upright), "sharpen" to sharpen.toString(), "denoise" to flag(denoise), "preview" to flag(preview), "crop" to flag(cropTools), "flatten_auto" to flag(flattenAuto), "flatten_trim" to flag(flattenTrim),
         "settle" to flag(settleTurns), "presets" to flag(presets), "kind_tone" to flag(kindTone), "photo_sharpen" to flag(photoSharpen), "suggest" to flag(suggestions), "gutter" to flag(bookGutter), "line_flatten" to flag(lineFlatten),
         "look_page" to flag(lookPerPage), "look_strip" to flag(lookStrip),
-        "board" to flag(whiteboardLook), "stop" to flag(previewStop), "zoom" to flag(previewZoom),
+        "board" to flag(whiteboardLook), "stop" to flag(previewStop), "zoom" to flag(previewZoom), "inspect" to flag(inspect),
     ).joinToString(";") { (k, v) -> "$k=$v" }
 
     companion object {
@@ -173,6 +179,7 @@ internal data class ScanLab(
                 whiteboardLook = on("board", default.whiteboardLook),
                 previewStop = on("stop", default.previewStop),
                 previewZoom = on("zoom", default.previewZoom),
+                inspect = on("inspect", default.inspect),
             )
         }
     }
@@ -289,6 +296,8 @@ internal fun scanTestPageJson(
     flattenChosen: Boolean? = null,
     /** The page's own look and strength as the scan screen left them (#301); null for a page discarded or from before it. */
     pageLook: JSONObject? = null,
+    /** What the research detectors saw on the page (#305, #306); null when they were not asked. */
+    inspection: JSONObject? = null,
 ): String {
     val page = JSONObject()
         .put("corners", shares(corners)).put("kind", "other").put("paper", "unknown").put("curved", false).put("notes", "")
@@ -336,6 +345,7 @@ internal fun scanTestPageJson(
         .put("models", models ?: JSONObject.NULL)
         .put("book", book?.json() ?: JSONObject.NULL)
         .put("page_look", pageLook ?: JSONObject.NULL)
+        .put("inspect", inspection ?: JSONObject.NULL)
     page.put(
         "result",
         result?.let {
