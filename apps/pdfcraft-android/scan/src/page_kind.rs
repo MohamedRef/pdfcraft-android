@@ -5,8 +5,11 @@
 //! working copy about 1000 pixels long, lit evenly by the Auto look's own light map (each channel
 //! divided by the paper's colour under the local light, with no tone curve), because both blocks
 //! expect "the page after lighting correction". Two measurements are taken before that correction, as their blocks ask:
-//! glare (whitened paper would count as glare) and the gutter's dark band (the correction exists
-//! to remove it).
+//! the share of bright pixels (whitened paper would all count) and the gutter's dark band (the
+//! correction exists to remove it).
+//!
+//! The measurements depend only on the straightened page, so a `PageBase` keeps them once taken
+//! (`Measured`, #427): the preview's looks and strengths reuse them instead of measuring again.
 //!
 //! Pure Rust and deterministic: the same page gives the same answer on any number of threads.
 
@@ -15,7 +18,7 @@ use crate::aspect::Paper;
 use crate::enhance::evened;
 use crate::photo::Luma;
 use crate::photo_mask::photo_mask;
-use crate::preset::{PageFeatures, Preset, PresetParams, classify, gutter_band, ink_features, params};
+use crate::preset::{PageFeatures, Preset, PresetParams, classify, gutter_reading, ink_features, params};
 
 /// The working copy's longer side is shrunk to this many pixels or a little more (whole steps).
 const WORKING_SIDE: u32 = 1000;
@@ -89,15 +92,45 @@ fn luma_of(page: &Rgb) -> Luma {
     Luma { width: page.width, height: page.height, data }
 }
 
+/// What a straightened page measures as, before the request's own inputs (the curved sides and
+/// the gutter rule) are put in: what a `PageBase` keeps (#427).
+#[derive(Clone, Debug, PartialEq)]
+pub struct Measured {
+    /// The features with no curved side, and `gutter_band` by the strict rule.
+    pub features: PageFeatures,
+    /// The gutter's strict reading (`gutter_band` holds it too; kept so the rule can be swapped).
+    pub gutter_strict: bool,
+    /// The photo mask found the whole page to be a picture.
+    pub whole_photo: bool,
+}
+
+impl Measured {
+    /// The features for a page whose edge detection found `curved_sides` curved sides, under the
+    /// strict gutter rule (`strict_gutter`) or the first one.
+    pub fn features(&self, curved_sides: u8, strict_gutter: bool) -> PageFeatures {
+        PageFeatures {
+            curved_sides: curved_sides.min(4),
+            gutter_band: if strict_gutter { self.gutter_strict } else { self.features.gutter_loose },
+            ..self.features.clone()
+        }
+    }
+}
+
 /// What `page` (straightened, before its look, at `dpi`, matched to `paper`) measures as. The
-/// page's edge detection said `curved_sides` of its four sides are curved. `None` for a page too
-/// small or malformed to measure.
+/// page's edge detection said `curved_sides` of its four sides are curved. `gutter_band` is the
+/// strict rule's (#427). `None` for a page too small or malformed to measure.
 pub fn page_features(page: &Rgb, dpi: u16, paper: Paper, curved_sides: u8) -> Option<(PageFeatures, bool)> {
+    let measured = measure(page, dpi, paper)?;
+    Some((measured.features(curved_sides, true), measured.whole_photo))
+}
+
+/// Takes the measurements of `page` (see `page_features`).
+pub fn measure(page: &Rgb, dpi: u16, paper: Paper) -> Option<Measured> {
     let (small, step) = working_copy(page)?;
     let small_dpi = f32::from(dpi.max(1)) / step as f32;
-    // glare and the gutter before the light is evened out (see the module's comment)
-    let glare_share = ink_features(&small, small_dpi)?.glare_share;
-    let gutter = gutter_band(&luma_of(&small));
+    // bright pixels and the gutter before the light is evened out (see the module's comment)
+    let bright_share = ink_features(&small, small_dpi)?.bright_share;
+    let gutter = gutter_reading(&luma_of(&small));
     let lit = evened(&small)?;
     let ink = ink_features(&lit, small_dpi)?;
     let mask = photo_mask(&lit);
@@ -114,20 +147,33 @@ pub fn page_features(page: &Rgb, dpi: u16, paper: Paper, curved_sides: u8) -> Op
         colour_ink_share: ink.colour_ink_share,
         photo_share: mask.as_ref().map_or(0.0, |m| m.share),
         stroke_mm: ink.stroke_mm,
-        curved_sides: curved_sides.min(4),
-        gutter_band: gutter,
-        glare_share,
+        curved_sides: 0,
+        gutter_band: gutter.strict,
+        gutter_loose: gutter.loose,
+        gutter_cover: gutter.cover,
+        bright_share,
     };
-    Some((features, mask.is_some_and(|m| m.whole_page)))
+    Some(Measured { features, gutter_strict: gutter.strict, whole_photo: mask.is_some_and(|m| m.whole_page) })
 }
 
-/// The kind of `page` and its settings under `choice`; `None` when presets are off or the page
-/// cannot be measured.
+/// The kind of `page` and its settings under `choice`, with the strict gutter rule (#427); `None`
+/// when presets are off or the page cannot be measured.
 pub fn page_kind(page: &Rgb, dpi: u16, paper: Paper, curved_sides: u8, choice: PresetChoice) -> Option<PageKind> {
     if choice == PresetChoice::Off {
         return None;
     }
-    let (features, whole_photo) = page_features(page, dpi, paper, curved_sides)?;
+    kind_of(&measure(page, dpi, paper)?, curved_sides, choice, true)
+}
+
+/// The kind under `choice` of a page measured as `measured` whose edge detection found
+/// `curved_sides` curved sides, by the strict gutter rule or the first one; `None` when presets
+/// are off.
+pub fn kind_of(measured: &Measured, curved_sides: u8, choice: PresetChoice, strict_gutter: bool) -> Option<PageKind> {
+    if choice == PresetChoice::Off {
+        return None;
+    }
+    let features = measured.features(curved_sides, strict_gutter);
+    let whole_photo = measured.whole_photo;
     let (preset, chosen) = match choice {
         PresetChoice::Fixed(p) => (p, true),
         _ => (classify(&features), false),
