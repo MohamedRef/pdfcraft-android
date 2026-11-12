@@ -70,6 +70,8 @@ mod tests;
 #[cfg(test)]
 mod tests_book;
 #[cfg(test)]
+mod tests_book_photo;
+#[cfg(test)]
 mod tests_capture;
 #[cfg(test)]
 mod tests_defects;

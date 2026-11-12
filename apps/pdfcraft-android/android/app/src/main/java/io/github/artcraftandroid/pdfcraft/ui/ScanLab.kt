@@ -52,6 +52,8 @@ internal data class ScanLab(
      * strength and the sharpening above, as before.
      */
     val presets: Boolean = true,
+    /** In book mode, cut a spread along the gutter found in the photo (#303); off cuts every spread at its centre line. */
+    val bookGutter: Boolean = true,
     /**
      * With keeping scans on, run the research detectors on each kept page and report what they see
      * (#305 moiré, #306 fingers, glare and stains) in the log and the page file. Detection only:
@@ -71,21 +73,21 @@ internal data class ScanLab(
     fun diag(): Array<Pair<String, Any?>> = arrayOf<Pair<String, Any?>>(
         "finder" to finderId(finder), "refine" to refine, "side_proportions" to !perspective,
         "snap_paper" to snapPaper, "strength_override" to (strength ?: -1), "upright" to upright, "sharpen" to sharpen,
-        "denoise" to denoise, "preview" to preview, "crop_tools" to cropTools, "flatten_auto" to flattenAuto, "settle_turns" to settleTurns, "presets" to presets, "keep" to keep, "inspect" to inspect,
+        "denoise" to denoise, "preview" to preview, "crop_tools" to cropTools, "flatten_auto" to flattenAuto, "settle_turns" to settleTurns, "presets" to presets, "book_gutter" to bookGutter, "keep" to keep, "inspect" to inspect,
     )
 
     /** The options as JSON, for a kept scan's page file. */
     fun json(): JSONObject = JSONObject()
         .put("finder", finderId(finder)).put("refine", refine).put("side_proportions", !perspective)
         .put("snap_paper", snapPaper).put("strength_override", strength ?: JSONObject.NULL).put("upright", upright)
-        .put("sharpen", sharpen).put("denoise", denoise).put("preview", preview).put("crop_tools", cropTools).put("flatten_auto", flattenAuto).put("settle_turns", settleTurns).put("presets", presets).put("inspect", inspect)
+        .put("sharpen", sharpen).put("denoise", denoise).put("preview", preview).put("crop_tools", cropTools).put("flatten_auto", flattenAuto).put("settle_turns", settleTurns).put("presets", presets).put("book_gutter", bookGutter).put("inspect", inspect)
 
     /** One line of text for the app's preferences. */
     fun encode(): String = listOf(
         "keep" to flag(keep), "finder" to finderId(finder), "refine" to flag(refine),
         "perspective" to flag(perspective), "snap" to flag(snapPaper), "strength" to (strength?.toString() ?: ""),
         "upright" to flag(upright), "sharpen" to sharpen.toString(), "denoise" to flag(denoise), "preview" to flag(preview), "crop" to flag(cropTools), "flatten_auto" to flag(flattenAuto),
-        "settle" to flag(settleTurns), "presets" to flag(presets), "inspect" to flag(inspect),
+        "settle" to flag(settleTurns), "presets" to flag(presets), "gutter" to flag(bookGutter), "inspect" to flag(inspect),
     ).joinToString(";") { (k, v) -> "$k=$v" }
 
     companion object {
@@ -128,6 +130,7 @@ internal data class ScanLab(
                 settleTurns = on("settle", default.settleTurns),
                 flattenAuto = on("flatten_auto", default.flattenAuto),
                 presets = on("presets", default.presets),
+                bookGutter = on("gutter", default.bookGutter),
                 inspect = on("inspect", default.inspect),
             )
         }
@@ -231,6 +234,8 @@ internal fun scanTestPageJson(
     models: JSONObject? = null,
     turn: ScanTestTurn? = null,
     kind: ScanTestKind? = null,
+    /** Which half of a book spread the page is, and how the spread was cut (#303); null for a page of its own. */
+    book: io.github.artcraftandroid.pdfcraft.ui.scan.ScanBookHalf? = null,
     /** What the research detectors saw on the page (#305, #306); null when they were not asked. */
     inspection: JSONObject? = null,
 ): String {
@@ -275,6 +280,7 @@ internal fun scanTestPageJson(
         .put("crop", crop?.json() ?: JSONObject.NULL)
         .put("capture", capture ?: JSONObject.NULL)
         .put("models", models ?: JSONObject.NULL)
+        .put("book", book?.json() ?: JSONObject.NULL)
         .put("inspect", inspection ?: JSONObject.NULL)
     page.put(
         "result",

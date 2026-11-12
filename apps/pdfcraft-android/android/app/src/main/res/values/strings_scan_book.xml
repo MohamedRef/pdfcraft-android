@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Scanner book mode (#303), kept apart from strings.xml so parallel scanner work merges cleanly. -->
+<resources>
+    <string name="tools_scan_book">Book</string>
+    <string name="tools_scan_book_ltr">Left to right</string>
+    <string name="tools_scan_book_rtl">Right to left</string>
+    <string name="tools_scan_book_left_page">Left page of a spread</string>
+    <string name="tools_scan_book_right_page">Right page of a spread</string>
+    <string name="scan_lab_book_gutter">Book mode: cut at the gutter found in the photo</string>
+</resources>

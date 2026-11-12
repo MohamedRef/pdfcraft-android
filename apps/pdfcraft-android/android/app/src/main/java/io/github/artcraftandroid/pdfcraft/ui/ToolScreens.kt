@@ -828,7 +828,21 @@ fun CropScreen(vm: AppViewModel, doc: OpenDocument) {
  * document the person chose for the page ("receipt", "id_card", …), or null while Clean scan
  * works it out (#299).
  */
-data class ScanPage(val file: java.io.File, val thumb: ImageBitmap, val corners: FloatArray = WHOLE, val found: FloatArray? = null, val finding: ScanFinding? = null, val crop: io.github.artcraftandroid.pdfcraft.ui.scan.ScanCropStats? = null, val turns: Int? = null, val preset: String? = null) {
+data class ScanPage(
+    val file: java.io.File,
+    val thumb: ImageBitmap,
+    val corners: FloatArray = WHOLE,
+    val found: FloatArray? = null,
+    val finding: ScanFinding? = null,
+    val crop: io.github.artcraftandroid.pdfcraft.ui.scan.ScanCropStats? = null,
+    val turns: Int? = null,
+    val preset: String? = null,
+    /** Which half of a photographed book spread this page is (#303); null for a page of its own. */
+    val book: io.github.artcraftandroid.pdfcraft.ui.scan.ScanBookHalf? = null,
+) {
+    /** The page among the scan's pages: the two halves of a spread share one photo [file]. */
+    val key: String get() = book?.let { "${file.absolutePath}#${it.side}" } ?: file.absolutePath
+
     companion object {
         val WHOLE = floatArrayOf(0f, 0f, 1f, 0f, 1f, 1f, 0f, 1f)
     }
@@ -857,7 +871,7 @@ fun ScanScreen(vm: AppViewModel) {
     // network is a little less exact than the plain straightening
     var flatten by remember { mutableStateOf(false) }
     var current by remember { mutableStateOf(0) }
-    var cropping by remember { mutableStateOf<java.io.File?>(null) }
+    var cropping by remember { mutableStateOf<String?>(null) }
     var naming by remember { mutableStateOf(false) }
     // the page as it will be saved, or the photo it is made from (#301)
     var view by remember { mutableStateOf(ScanView.Result) }
@@ -868,7 +882,7 @@ fun ScanScreen(vm: AppViewModel) {
         if (pages.size > seen) current = pages.lastIndex
         seen = pages.size
     }
-    val croppingAt = pages.indexOfFirst { it.file == cropping }
+    val croppingAt = pages.indexOfFirst { it.key == cropping }
     if (croppingAt >= 0) {
         val lab = vm.scanLab.options
         if (lab.cropTools) {
@@ -935,6 +949,7 @@ fun ScanScreen(vm: AppViewModel) {
                 } else {
                     ScanPhoto(page.thumb, page.corners, Modifier.fillMaxSize())
                 }
+                page.book?.let { io.github.artcraftandroid.pdfcraft.ui.scan.ScanBookLabel(it, Modifier.align(Alignment.TopStart)) }
                 // the classifier turned this page and the person has not: say so, with a way back (#339)
                 if (shown.view == ScanView.Result && preview != null && io.github.artcraftandroid.pdfcraft.ui.scan.scanShowsTurnedChip(page.turns, preview.quarterTurns)) {
                     val undoLabel = stringResource(R.string.scan_turn_undo_description)
@@ -994,13 +1009,15 @@ fun ScanScreen(vm: AppViewModel) {
                         .toggleable(value = flatten, role = Role.Switch) { flatten = it }.padding(horizontal = 14.dp, vertical = 8.dp),
                 )
             }
+            // book mode (#303): photos taken from now on become a spread's two pages
+            io.github.artcraftandroid.pdfcraft.ui.scan.ScanBookChips(vm.scanBook)
         }
         Row(Modifier.fillMaxWidth().padding(8.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
             TextButton(onClick = { vm.retakeScan(current) }, enabled = pages.isNotEmpty()) { Text(stringResource(R.string.tools_retake), color = c.accent) }
-            TextButton(onClick = { cropping = pages.getOrNull(current.coerceAtMost(pages.lastIndex))?.file }, enabled = pages.isNotEmpty()) { Text(stringResource(R.string.tools_crop), color = c.accent) }
+            TextButton(onClick = { cropping = pages.getOrNull(current.coerceAtMost(pages.lastIndex))?.key }, enabled = pages.isNotEmpty()) { Text(stringResource(R.string.tools_crop), color = c.accent) }
             // a quarter turn clockwise, the person's from then on (#339)
             TextButton(onClick = { vm.rotateScanPage(current.coerceAtMost(pages.lastIndex)) }, enabled = pages.isNotEmpty()) { Text(stringResource(R.string.scan_rotate), color = c.accent) }
-            TextButton(onClick = { if (pages.isNotEmpty()) { pages.removeAt(current.coerceAtMost(pages.lastIndex)); current = (current - 1).coerceAtLeast(0) } }, enabled = pages.isNotEmpty()) { Text(stringResource(R.string.common_delete), color = c.accent) }
+            TextButton(onClick = { if (pages.isNotEmpty()) { vm.deleteScanPage(current.coerceAtMost(pages.lastIndex)); current = (current - 1).coerceAtLeast(0) } }, enabled = pages.isNotEmpty()) { Text(stringResource(R.string.common_delete), color = c.accent) }
         }
     }
     if (naming) {
