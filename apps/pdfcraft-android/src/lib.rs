@@ -31,8 +31,6 @@ use serde_json::{Value, json};
 
 uniffi::setup_scaffolding!();
 
-pub mod scan;
-
 #[cfg(test)]
 mod progressive_tests;
 #[cfg(test)]

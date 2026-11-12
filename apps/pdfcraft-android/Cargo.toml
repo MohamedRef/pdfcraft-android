@@ -20,8 +20,6 @@ pdfcraft-engine = { workspace = true }
 pdfcraft-render = { workspace = true }
 # the headless tool table (the same tools as the CLI and MCP), without the MCP server
 pdfcraft-automation = { workspace = true }
-# Scan (#287): photo → straightened, cleaned page in one pass, owned by the Android app
-pdfcraft-scan = { path = "scan" }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 log = { workspace = true }
@@ -30,11 +28,6 @@ log = { workspace = true }
 uniffi = { version = "=0.32.2", default-features = false }
 # Page pixels across the FFI in one copy (#86); the only crate here with `unsafe impl`.
 pdfcraft-android-ffi-bytes = { path = "ffi-bytes" }
-
-[dev-dependencies]
-# test photos for the scan functions
-image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
-pdfcraft-geom = { workspace = true }
 
 # the engine's log in logcat (pure Rust; links the system's liblog)
 [target.'cfg(target_os = "android")'.dependencies]
