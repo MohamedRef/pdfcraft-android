@@ -7,7 +7,8 @@ use std::path::{Path, PathBuf};
 use std::sync::RwLock;
 
 use pdfcraft_scan::{
-    AspectSource, Finder, Format, Look, PageRequest, Paper, Photo, Pyramid, Quad, QuadSource, RefineOptions, detect_with, process_page, refine,
+    AspectSource, Finder, Format, Look, PageBase, PageRequest, Paper, Photo, Pyramid, Quad, QuadSource, RefineOptions, detect_with, page_base,
+    page_look, process_page, refine,
 };
 
 use crate::MobileError;
@@ -405,6 +406,159 @@ pub(crate) fn refine_in(root: &Path, photo_path: &str, corners: &[f32], sides: &
     })
 }
 
+/// The page a request asks for, as the scan crate takes it: the same for a saved page and for
+/// its preview, so the preview shows what will be saved.
+fn page_request<'a>(request: &ScanPageRequest, photo: &'a [u8], corners: [f32; 8], max_side: Option<u32>) -> PageRequest<'a> {
+    let look = match request.look {
+        ScanLook::Original => Look::Original,
+        ScanLook::Colour => Look::Colour,
+        ScanLook::Greyscale => Look::Greyscale,
+        ScanLook::BlackWhite => Look::BlackWhite,
+        ScanLook::Auto => Look::Auto,
+    };
+    PageRequest {
+        look,
+        strength: request.strength,
+        threads: std::thread::available_parallelism().map_or(1, usize::from).min(pdfcraft_scan::warp::MAX_THREADS),
+        focal_35mm: request.focal_35mm,
+        snap_paper: request.snap_paper,
+        flatten: request.flatten,
+        side_proportions: request.side_proportions,
+        upright: request.upright,
+        sharpen: request.sharpen,
+        denoise: request.denoise,
+        max_side,
+        ..PageRequest::new(photo, corners)
+    }
+}
+
+/// A page as it will be saved, small enough to show (#301).
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct ScanPreview {
+    pub width: u32,
+    pub height: u32,
+    /// `width` × `height` pixels, four bytes each: red, green, blue and 255.
+    pub rgba: Vec<u8>,
+    /// The quarter turns clockwise the page was given to stand upright (#339).
+    pub quarter_turns: u8,
+    /// The page was flattened by the network (#302).
+    pub flattened: bool,
+    /// The straightened page was still at hand from an earlier preview: only its look was made.
+    pub reused: bool,
+    pub timings: Vec<ScanTiming>,
+}
+
+/// What a straightened preview page depends on: the photo as it is on disk, the corners, and
+/// everything that changes the page before its look. The look and its strength are not part of it.
+#[derive(Clone, Debug, PartialEq)]
+struct PreviewKey {
+    photo: PathBuf,
+    bytes: u64,
+    modified: Option<std::time::SystemTime>,
+    corners: [u32; 8],
+    focal: Option<u32>,
+    snap_paper: bool,
+    side_proportions: bool,
+    flatten: bool,
+    upright: bool,
+    max_side: u32,
+}
+
+/// The straightened pages of the last few previews, newest last. A page 1280 pixels long is
+/// under 5 MB, so four of them are under 20 MB.
+static PREVIEWS: std::sync::Mutex<Vec<(PreviewKey, std::sync::Arc<PageBase>)>> = std::sync::Mutex::new(Vec::new());
+const PREVIEWS_KEPT: usize = 4;
+
+/// Forget the straightened preview pages (when memory is short, or the scan is over).
+#[uniffi::export]
+pub fn scan_release_previews() {
+    PREVIEWS.lock().unwrap_or_else(std::sync::PoisonError::into_inner).clear();
+}
+
+/// The page `request` describes, as it will be saved, shrunk so its longer side is `max_side`
+/// pixels at most (64 to 4096): what the scan screen shows before saving (#301). The request's
+/// `output_path` is not used; nothing is written.
+///
+/// The straightened page is kept for the next call, so changing only the look, its strength or
+/// the sharpening costs one look on a small page and no decoding.
+#[uniffi::export]
+pub fn scan_preview_page(request: ScanPageRequest, max_side: u32) -> Result<ScanPreview, MobileError> {
+    let root = SCAN_ROOT.read().unwrap_or_else(std::sync::PoisonError::into_inner).clone();
+    let root = root.ok_or_else(|| MobileError::Command("scanning is not ready yet".into()))?;
+    preview_in(&root, &request, max_side)
+}
+
+pub(crate) fn preview_in(root: &Path, request: &ScanPageRequest, max_side: u32) -> Result<ScanPreview, MobileError> {
+    let unreadable = || MobileError::Command("the photo could not be read".into());
+    let corners: [f32; 8] = request.corners.as_slice().try_into().map_err(|_| MobileError::Command("a page needs four corners".into()))?;
+    let max_side = max_side.clamp(64, 4096);
+    let photo = Path::new(&request.photo_path).canonicalize().map_err(|_| unreadable())?;
+    if !photo.starts_with(root) {
+        return Err(MobileError::Command("the scan's files must be in the app's own folder".into()));
+    }
+    let on_disk = std::fs::metadata(&photo).map_err(|_| unreadable())?;
+    let key = PreviewKey {
+        photo,
+        bytes: on_disk.len(),
+        modified: on_disk.modified().ok(),
+        corners: corners.map(f32::to_bits),
+        focal: request.focal_35mm.map(f32::to_bits),
+        snap_paper: request.snap_paper,
+        side_proportions: request.side_proportions,
+        flatten: request.flatten,
+        upright: request.upright,
+        max_side,
+    };
+    let kept = {
+        let mut previews = PREVIEWS.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        // the one asked for becomes the newest
+        previews.iter().position(|(k, _)| *k == key).map(|at| {
+            let entry = previews.remove(at);
+            let base = std::sync::Arc::clone(&entry.1);
+            previews.push(entry);
+            base
+        })
+    };
+    let clock = std::time::Instant::now();
+    let (base, reused) = match kept {
+        Some(base) => (base, true),
+        None => {
+            let bytes = read_photo(root, &request.photo_path)?;
+            let made = page_base(&page_request(request, &bytes, corners, Some(max_side))).map_err(|e| MobileError::Command(e.to_string()))?;
+            let base = std::sync::Arc::new(made);
+            let mut previews = PREVIEWS.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+            previews.push((key, std::sync::Arc::clone(&base)));
+            let extra = previews.len().saturating_sub(PREVIEWS_KEPT);
+            previews.drain(..extra);
+            (base, false)
+        }
+    };
+    let mut timings: Vec<ScanTiming> = match reused {
+        true => Vec::new(),
+        false => base.timings.iter().map(|&(stage, ms)| ScanTiming { stage: stage.into(), ms }).collect(),
+    };
+    let ms = |clock: std::time::Instant| u32::try_from(clock.elapsed().as_millis()).unwrap_or(u32::MAX);
+    if !reused {
+        // decoding, straightening and the rest, as one figure before its parts
+        timings.insert(0, ScanTiming { stage: "scan_preview_base".into(), ms: ms(clock) });
+    }
+    let clock = std::time::Instant::now();
+    let applied = page_look(&base, &page_request(request, &[], corners, Some(max_side))).map_err(|e| MobileError::Command(e.to_string()))?;
+    let (width, height) = (base.page.width, base.page.height);
+    let pixels = width as usize * height as usize;
+    let mut rgba = Vec::with_capacity(pixels * 4);
+    match &applied.pixels {
+        pdfcraft_scan::look::Pixels::Rgb(rgb) => rgb.chunks_exact(3).for_each(|p| rgba.extend([p[0], p[1], p[2], 255])),
+        pdfcraft_scan::look::Pixels::Grey(grey) => grey.iter().for_each(|&v| rgba.extend([v, v, v, 255])),
+        pdfcraft_scan::look::Pixels::Bilevel(bits) => bits.to_grey().iter().for_each(|&v| rgba.extend([v, v, v, 255])),
+    }
+    if rgba.len() != pixels * 4 {
+        return Err(MobileError::Command("the page could not be drawn".into()));
+    }
+    timings.push(ScanTiming { stage: "scan_preview_look".into(), ms: ms(clock) });
+    Ok(ScanPreview { width, height, rgba, quarter_turns: base.quarter_turns, flattened: base.flattened, reused, timings })
+}
+
 pub(crate) fn process_in(root: &Path, request: &ScanPageRequest) -> Result<ScanPageResult, MobileError> {
     let outside = || MobileError::Command("the scan's files must be in the app's own folder".into());
     let corners: [f32; 8] = request.corners.as_slice().try_into().map_err(|_| MobileError::Command("a page needs four corners".into()))?;
@@ -416,28 +570,7 @@ pub(crate) fn process_in(root: &Path, request: &ScanPageRequest) -> Result<ScanP
         return Err(outside());
     }
     let bytes = read_photo(root, &request.photo_path)?;
-    let look = match request.look {
-        ScanLook::Original => Look::Original,
-        ScanLook::Colour => Look::Colour,
-        ScanLook::Greyscale => Look::Greyscale,
-        ScanLook::BlackWhite => Look::BlackWhite,
-        ScanLook::Auto => Look::Auto,
-    };
-    let threads = std::thread::available_parallelism().map_or(1, usize::from).min(pdfcraft_scan::warp::MAX_THREADS);
-    let page = process_page(&PageRequest {
-        look,
-        strength: request.strength,
-        threads,
-        focal_35mm: request.focal_35mm,
-        snap_paper: request.snap_paper,
-        flatten: request.flatten,
-        side_proportions: request.side_proportions,
-        upright: request.upright,
-        sharpen: request.sharpen,
-        denoise: request.denoise,
-        ..PageRequest::new(&bytes, corners)
-    })
-    .map_err(|e| MobileError::Command(e.to_string()))?;
+    let page = process_page(&page_request(request, &bytes, corners, None)).map_err(|e| MobileError::Command(e.to_string()))?;
     drop(bytes);
     let mut file_name = name.to_os_string();
     file_name.push(".");
@@ -729,6 +862,82 @@ mod tests {
         // outside the root: refused
         let other = temp("find-other");
         assert!(find_in(&other, &shot.to_string_lossy(), ScanFindOptions::default()).is_err());
+        std::fs::remove_dir_all(root).unwrap();
+        std::fs::remove_dir_all(other).unwrap();
+    }
+
+    /// The preview is the page that will be saved, only smaller (#301): for every look it is
+    /// within a few grey levels of the saved page shrunk to its size (black and white, which has
+    /// two levels and is saved at twice the size, is the roughest). The straightened page is kept
+    /// between calls, so a second look costs no decoding.
+    #[test]
+    fn a_preview_shows_what_will_be_saved() {
+        let root = temp("preview");
+        let shot = root.join("page.png");
+        // a page of print, photographed whole on a table a little larger than it
+        let drawn = image::load_from_memory(include_bytes!("../scan/tests/data/upright-english.png")).unwrap().to_rgb8();
+        let mut photo = image::RgbImage::from_pixel(1400, 1900, image::Rgb([70, 60, 52]));
+        let large = image::imageops::resize(&drawn, 1260, 1680, image::imageops::FilterType::CatmullRom);
+        image::imageops::overlay(&mut photo, &large, 70, 110);
+        photo.save(&shot).unwrap();
+        let corners =
+            vec![70.0 / 1400.0, 110.0 / 1900.0, 1330.0 / 1400.0, 110.0 / 1900.0, 1330.0 / 1400.0, 1790.0 / 1900.0, 70.0 / 1400.0, 1790.0 / 1900.0];
+        let ask = |look, strength| ScanPageRequest { corners: corners.clone(), look, strength, ..request(&shot, &root.join("saved")) };
+        scan_release_previews();
+        let mut first = true;
+        for (look, strength, within) in [
+            (ScanLook::Original, 0, 3.0),
+            (ScanLook::Auto, 60, 3.0),
+            (ScanLook::Colour, 50, 3.0),
+            (ScanLook::Greyscale, 40, 3.0),
+            (ScanLook::BlackWhite, 75, 8.0),
+        ] {
+            let preview = preview_in(&root, &ask(look, strength), 1280).unwrap();
+            assert_eq!(preview.rgba.len(), (preview.width * preview.height * 4) as usize);
+            assert_eq!((preview.width.max(preview.height), preview.quarter_turns, preview.flattened), (1280, 0, false), "{look:?}");
+            // the first call straightens the page; every other look finds it at hand
+            assert_eq!(preview.reused, !first, "{look:?}");
+            let stages: Vec<_> = preview.timings.iter().map(|t| t.stage.as_str()).collect();
+            match first {
+                true => assert_eq!(stages, ["scan_preview_base", "scan_decode", "scan_rectify", "scan_preview_look"]),
+                false => assert_eq!(stages, ["scan_preview_look"]),
+            }
+            first = false;
+            // the saved page, shrunk to the preview's size
+            let saved = process_in(&root, &ask(look, strength)).unwrap();
+            let full = image::open(&saved.path).unwrap().to_rgb8();
+            let small = image::imageops::resize(&full, preview.width, preview.height, image::imageops::FilterType::Triangle);
+            let luma = |p: &[u8]| 0.299 * f64::from(p[0]) + 0.587 * f64::from(p[1]) + 0.114 * f64::from(p[2]);
+            let apart: f64 = preview.rgba.chunks_exact(4).zip(small.as_raw().chunks_exact(3)).map(|(a, b)| (luma(a) - luma(b)).abs()).sum();
+            let mean = apart / f64::from(preview.width * preview.height);
+            println!(
+                "{look:?}: the preview is {mean:.2} grey levels from the saved page ({} x {} against {} x {})",
+                preview.width, preview.height, saved.width, saved.height
+            );
+            assert!(mean <= within, "{look:?}: {mean}");
+            assert!(preview.rgba.chunks_exact(4).all(|p| p[3] == 255));
+        }
+        // what changes the page before its look asks for a new one: other corners, another size
+        let moved = ScanPageRequest { corners: corners.iter().map(|v| v * 0.999 + 0.0005).collect(), ..ask(ScanLook::Auto, 60) };
+        assert!(!preview_in(&root, &moved, 1280).unwrap().reused);
+        assert!(!preview_in(&root, &ask(ScanLook::Auto, 60), 640).unwrap().reused);
+        assert!(!preview_in(&root, &ScanPageRequest { snap_paper: false, ..ask(ScanLook::Auto, 60) }, 1280).unwrap().reused);
+        // four are kept: the first of five is straightened again, the last is at hand
+        assert!(preview_in(&root, &ScanPageRequest { side_proportions: true, ..ask(ScanLook::Auto, 60) }, 1280).is_ok());
+        assert!(preview_in(&root, &ScanPageRequest { side_proportions: true, ..ask(ScanLook::Original, 0) }, 1280).unwrap().reused);
+        assert!(!preview_in(&root, &ask(ScanLook::Auto, 60), 1280).unwrap().reused);
+        // a photo that changed on disk is another photo
+        photo.put_pixel(0, 0, image::Rgb([1, 2, 3]));
+        photo.save(&shot).unwrap();
+        assert!(!preview_in(&root, &ask(ScanLook::Auto, 60), 1280).unwrap().reused);
+        // forgotten when memory is short
+        scan_release_previews();
+        assert!(!preview_in(&root, &ask(ScanLook::Auto, 60), 1280).unwrap().reused);
+        // sizes out of range are brought into it; bad requests are refused
+        assert_eq!(preview_in(&root, &ask(ScanLook::Original, 0), 3).unwrap().height, 64);
+        assert!(preview_in(&root, &ScanPageRequest { corners: vec![0.0; 6], ..ask(ScanLook::Auto, 60) }, 1280).is_err());
+        let other = temp("preview-other");
+        assert!(preview_in(&other, &ask(ScanLook::Auto, 60), 1280).is_err());
         std::fs::remove_dir_all(root).unwrap();
         std::fs::remove_dir_all(other).unwrap();
     }

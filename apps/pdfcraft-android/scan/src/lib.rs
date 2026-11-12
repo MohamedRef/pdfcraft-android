@@ -31,7 +31,7 @@ pub use enhance::{AutoOutput, AutoParams, DEFAULT_SHARPEN, PaperMode, auto};
 pub use error::ScanError;
 pub use flatten::{FlattenGrid, flat_grid, predict_grid, unwarp};
 pub use look::Look;
-pub use page::{PageRequest, PageResult, process_page};
+pub use page::{PageBase, PageRequest, PageResult, page_base, page_look, process_page};
 pub use photo::{Luma, MAX_PHOTO_PIXELS, Photo, luma};
 pub use quad::Quad;
 pub use refine::{Pyramid, RefineOptions, Refined, SideFit, refine};
