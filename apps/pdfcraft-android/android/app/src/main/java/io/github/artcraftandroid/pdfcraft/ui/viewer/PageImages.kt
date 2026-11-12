@@ -6,6 +6,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
+import io.github.artcraftandroid.pdfcraft.core.RenderCancel
 import io.github.artcraftandroid.pdfcraft.core.TileRect
 import io.github.artcraftandroid.pdfcraft.engine.Engine
 import io.github.artcraftandroid.pdfcraft.engine.OpenTiming
@@ -95,6 +96,8 @@ class PageImages(
     private var wanted: List<ImageRequest> = emptyList()
     private val inFlight = HashSet<ImageKey>()
     private val failures = RenderFailures()
+    /** The stop switches of the tiles rendering now (#91), cancelled once the view stops wanting them. */
+    private val stops = HashMap<ImageKey, RenderCancel>()
     private var bytes = 0
     /** Bumped by [invalidate]: a render started before it is of the old view and is dropped. */
     private var viewEpoch = 0
@@ -147,6 +150,11 @@ class PageImages(
         synchronized(lock) {
             wanted = requests
             requests.maxOfOrNull { it.key.gen }?.let(failures::generationWanted)
+            // #91: a tile the view stopped wanting stops drawing, so the workers get to the ones in
+            // view sooner. Whole pages finish: they stand in while their page scrolls back.
+            for ((key, stop) in stops) {
+                if (requests.none { it.key == key }) stop.cancel()
+            }
         }
         signal.trySend(Unit)
     }
@@ -225,14 +233,21 @@ class PageImages(
                 signal.receive()
                 continue
             }
-            val epoch = synchronized(lock) { viewEpoch }
+            val stop = if (r.key.isBase) null else RenderCancel()
+            val epoch = synchronized(lock) {
+                if (stop != null) stops[r.key] = stop
+                viewEpoch
+            }
             val image = try {
                 withContext(engine.renders) {
                     // #236: name what was drawn, and how many pixels a slow render had, so a report
                     // tells a deep-zoom tile from a page or a prefetch.
                     val stage = renderStage(r)
                     val started = android.os.SystemClock.elapsedRealtime()
-                    val img = io.github.artcraftandroid.pdfcraft.engine.OpenTiming.measure(stage) { engine.session.renderPageCompact(doc, r.key.page.toUInt(), r.scale, r.tile, compact) }
+                    val img = io.github.artcraftandroid.pdfcraft.engine.OpenTiming.measure(stage) {
+                        if (stop == null) engine.session.renderPageCompact(doc, r.key.page.toUInt(), r.scale, r.tile, compact)
+                        else engine.session.renderPageCompactCancellable(doc, r.key.page.toUInt(), r.scale, r.tile, compact, stop)
+                    }
                     if (android.os.SystemClock.elapsedRealtime() - started >= SLOW_RENDER_MS) {
                         io.github.artcraftandroid.pdfcraft.engine.OpenTiming.count("slow_render_pixels", img.width.toLong() * img.height.toLong())
                     }
@@ -244,24 +259,34 @@ class PageImages(
             } catch (e: Throwable) {
                 // Exceptions and bitmap OutOfMemoryError alike: retried after a back-off (#99).
                 if (e !is Exception && e !is OutOfMemoryError) throw e
-                Log.w("PdfCraft", "render of ${r.key} failed: ${e.message}")
-                io.github.artcraftandroid.pdfcraft.engine.Diag.failure(io.github.artcraftandroid.pdfcraft.engine.DiagArea.Render, "page_render", e)
-                val wait = synchronized(lock) { failures.record(r.key, android.os.SystemClock.elapsedRealtime()) }
-                // Retried after wait_ms, or left out until the next edit when gave_up (#99).
-                io.github.artcraftandroid.pdfcraft.engine.Diag.event(
-                    io.github.artcraftandroid.pdfcraft.engine.DiagArea.Render, "render_retry",
-                    "page" to r.key.page, "base" to r.key.isBase, "level" to r.key.level,
-                    "oom" to (e is OutOfMemoryError), "wait_ms" to wait, "gave_up" to (wait == null),
-                )
-                if (wait != null) {
-                    scope.launch(job) {
-                        kotlinx.coroutines.delay(wait)
-                        signal.trySend(Unit)
+                if (stop?.isCancelled() == true) {
+                    // not a failure: asked for again, it renders again
+                    OpenTiming.count("tile_render_cancelled", 1L)
+                } else {
+                    Log.w("PdfCraft", "render of ${r.key} failed: ${e.message}")
+                    io.github.artcraftandroid.pdfcraft.engine.Diag.failure(io.github.artcraftandroid.pdfcraft.engine.DiagArea.Render, "page_render", e)
+                    val wait = synchronized(lock) { failures.record(r.key, android.os.SystemClock.elapsedRealtime()) }
+                    // Retried after wait_ms, or left out until the next edit when gave_up (#99).
+                    io.github.artcraftandroid.pdfcraft.engine.Diag.event(
+                        io.github.artcraftandroid.pdfcraft.engine.DiagArea.Render, "render_retry",
+                        "page" to r.key.page, "base" to r.key.isBase, "level" to r.key.level,
+                        "oom" to (e is OutOfMemoryError), "wait_ms" to wait, "gave_up" to (wait == null),
+                    )
+                    if (wait != null) {
+                        scope.launch(job) {
+                            kotlinx.coroutines.delay(wait)
+                            signal.trySend(Unit)
+                        }
                     }
                 }
                 null
             } finally {
-                synchronized(lock) { inFlight.remove(r.key) }
+                synchronized(lock) {
+                    inFlight.remove(r.key)
+                    stops.remove(r.key)
+                }
+                // out of the map first, so want() never cancels a destroyed switch
+                stop?.destroy()
             }
             if (image != null && synchronized(lock) { epoch != viewEpoch }) {
                 // drawn with the view before invalidate(): ask for it again

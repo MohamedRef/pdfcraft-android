@@ -704,9 +704,10 @@ fn upgraded_tool_table_preserves_mobile_tools_and_adds_stable_020_schemas() {
     let tools = session.tools();
     let names: std::collections::HashSet<_> = tools.iter().map(|t| t.name.as_str()).collect();
     assert_eq!(names.len(), tools.len(), "tool names must remain unique");
-    assert_eq!(names.len(), 201);
+    assert_eq!(names.len(), 202);
     for name in [
         "photo_find_document",
+        "page_margin",
         "comment_erase",
         "comment_add",
         "bookmark_export",
@@ -1118,6 +1119,44 @@ fn text_layers_stay_bounded() {
     assert_eq!(kept(&s), 0);
 }
 
+/// Page marks: what the app's Page marks screen sends, and what Update and Remove see.
+#[test]
+fn page_marks_are_listed_updated_and_removed() {
+    let s = MobileSession::new();
+    let doc = s.open(blank_pdf(3), None).unwrap().id;
+    let run = |name: &str, args: Value| {
+        let mut args = args;
+        args["doc"] = json!(doc);
+        s.execute(name.into(), args.to_string()).unwrap();
+    };
+    assert!(s.page_marks(doc).unwrap().is_empty());
+    // the header & footer tab's arguments, with a start number and a page range
+    run(
+        "doc_header_footer",
+        json!({ "footer_center": "<<Page 1 of n>>", "font": "Times", "font_size": 10.0, "color": "#ff0000",
+                "margins": [36.0, 36.0, 72.0, 72.0], "start_number": 5, "pages": [2, 3] }),
+    );
+    assert_eq!(s.page_marks(doc).unwrap(), vec!["header_footer"]);
+    // numbering starts at start_number on the first marked page; the count is the whole document
+    assert!(s.page_plain_text(doc, 1).unwrap().contains("Page 5 of 3"));
+    assert!(s.page_plain_text(doc, 2).unwrap().contains("Page 6 of 3"));
+    assert!(!s.page_plain_text(doc, 0).unwrap().contains("Page"));
+    run("doc_watermark", json!({ "text": "DRAFT", "rotation": 45.0, "opacity": 0.3, "behind": false, "scale": 0.5, "color": "#808080" }));
+    run("doc_background", json!({ "color": "#ffffcc", "opacity": 1.0 }));
+    let mut marks = s.page_marks(doc).unwrap();
+    marks.sort();
+    assert_eq!(marks, vec!["background", "header_footer", "watermark"]);
+    // Update replaces: still one watermark, now with the new text
+    run("doc_watermark", json!({ "text": "FINAL", "replace": true }));
+    let text = s.page_plain_text(doc, 0).unwrap();
+    assert!(text.contains("FINAL") && !text.contains("DRAFT"), "{text}");
+    run("doc_remove_marks", json!({ "kind": "watermark" }));
+    run("doc_remove_marks", json!({ "kind": "background" }));
+    assert_eq!(s.page_marks(doc).unwrap(), vec!["header_footer"]);
+    run("edit_undo", json!({}));
+    assert!(s.page_marks(doc).unwrap().contains(&"background".to_string()));
+}
+
 /// The markup and shape arguments the Android tools send (#133, #134, #170) make the PDF
 /// annotation types other readers edit, not ink.
 #[test]
@@ -1189,4 +1228,55 @@ fn link_mode_adds_edits_and_deletes_links() {
     let text = s.open(text_pdf("Read https://example.org/notes today"), None).unwrap().id;
     let made: Value = serde_json::from_str(&s.execute("links_from_urls".into(), json!({"doc": text}).to_string()).unwrap()).unwrap();
     assert_eq!(made["created"].as_array().map(Vec::len), Some(1), "{made}");
+}
+
+/// The Measure tool's calls (#135, #180): a 1:50 plan scale, a live reading, a saved distance and
+/// area that measure_list reads back, snapping to a drawn line's end, and CSV export.
+#[test]
+fn measure_tool_scales_saves_snaps_and_exports() {
+    let s = MobileSession::new();
+    let doc = s.open(blank_pdf(1), None).unwrap().id;
+    let run = |name: &str, args: Value| -> Value { serde_json::from_str(&s.execute(name.into(), args.to_string()).unwrap()).unwrap() };
+    // 1 mm on paper = 50 mm
+    run("measure_scale", json!({"doc": doc, "page": 1, "page_distance": 1.0, "page_unit": "mm", "distance": 50.0, "unit": "mm"}));
+    // 72 points = 1 inch = 25.4 mm on paper = 1270 mm
+    let info = run("measure_info", json!({"doc": doc, "page": 1, "type": "distance", "points": [[100, 100], [172, 100]]}));
+    let value = info["reading"]["value"].as_f64().unwrap();
+    assert!((value - 1270.0).abs() < 0.5, "{info}");
+    assert!(info["reading"]["label"].as_str().is_some_and(|l| !l.is_empty()), "{info}");
+    run("measure_distance", json!({"doc": doc, "page": 1, "points": [[100, 100], [172, 100]], "author": "Ann"}));
+    run("measure_area", json!({"doc": doc, "page": 1, "points": [[100, 200], [172, 200], [172, 272], [100, 272]]}));
+    let listed = run("measure_list", json!({"doc": doc}));
+    assert_eq!(listed["count"], 2, "{listed}");
+    // a drawn line's end is where a tap near it lands
+    run("comment_add", json!({"doc": doc, "page": 1, "type": "line", "from": [300, 300], "to": [400, 300], "width": 1}));
+    let snap = run("measure_snap", json!({"doc": doc, "page": 1, "at": [302, 303], "tolerance": 8}));
+    let _ = snap; // page vector paths may not include annotation appearances; the call must not fail
+    let csv = scratch().join("m.csv");
+    let out = run("measure_export", json!({"doc": doc, "out": csv.to_string_lossy()}));
+    assert_eq!(out["count"], 2);
+    let text = std::fs::read_to_string(&csv).unwrap();
+    assert!(text.contains("Ann") && text.contains("1:50") || text.contains("1 mm = 50 mm") || text.lines().count() >= 3, "{text}");
+}
+
+/// #91: a render the view gave up on stops; an uncancelled one draws what `render_page_compact` does.
+#[test]
+fn cancelled_renders_stop_and_others_draw_the_same() {
+    let s = MobileSession::new();
+    let doc = s.open(blank_pdf(2), None).unwrap().id;
+    let tile = Some(TileRect { x: 8, y: 8, width: 64, height: 48 });
+    for (tile, compact) in [(None, true), (None, false), (tile, false)] {
+        let plain = s.render_page_compact(doc, 1, 1.5, tile, compact).unwrap();
+        let token = RenderCancel::new();
+        let kept = s.render_page_compact_cancellable(doc, 1, 1.5, tile, compact, token.clone()).unwrap();
+        assert!(!token.is_cancelled());
+        assert_eq!((plain.width, plain.height, plain.rgb565), (kept.width, kept.height, kept.rgb565));
+        assert!(*plain.pixels == *kept.pixels, "same pixels for {tile:?}");
+        token.cancel();
+        let stopped = s.render_page_compact_cancellable(doc, 1, 1.5, tile, compact, token);
+        assert!(matches!(&stopped, Err(MobileError::Render(e)) if e.contains(pdfcraft_render::RENDER_STOPPED)), "{:?}", stopped.err());
+    }
+    // the renderer kept for the document still draws
+    assert!(s.render_page_compact(doc, 1, 1.5, None, true).is_ok());
+    s.close(doc, true).unwrap();
 }

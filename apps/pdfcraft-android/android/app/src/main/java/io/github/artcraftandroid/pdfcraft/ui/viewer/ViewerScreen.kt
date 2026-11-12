@@ -669,6 +669,7 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
                 ViewerSheet.Share -> ShareSheet(vm, doc)
                 ViewerSheet.FocusTimer -> FocusTimerSheet(vm) { ctl.sheet = ViewerSheet.None }
                 ViewerSheet.Backups -> VersionHistorySheet(vm, doc) { ctl.sheet = ViewerSheet.None }
+                ViewerSheet.NoteMargin -> NoteMarginSheet(vm, doc, listOf(doc.viewer.currentPage)) { ctl.sheet = ViewerSheet.None }
                 ViewerSheet.Redact -> RedactSheet(vm, doc)
                 ViewerSheet.Compare -> CompareSheet(vm, doc)
                 ViewerSheet.None -> Unit
@@ -729,6 +730,7 @@ private fun toolHint(tool: ViewerTool, markup: TextMarkup, doc: OpenDocument): S
     }
     ViewerTool.Comment -> if (doc.controller.commentMode == CommentMode.Stamp) text(R.string.viewer_hint_stamp) else text(R.string.viewer_hint_comment)
     ViewerTool.Text -> if (doc.controller.textCallout) text(R.string.viewer_hint_callout) else text(R.string.viewer_hint_text)
+    ViewerTool.Measure -> text(R.string.viewer_hint_measure)
     ViewerTool.FillSign -> text(if (doc.info.fields > 0u) R.string.viewer_hint_fill_sign_form else R.string.viewer_hint_fill_sign)
     else -> null
 }

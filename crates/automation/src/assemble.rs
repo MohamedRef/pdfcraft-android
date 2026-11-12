@@ -143,6 +143,70 @@ impl Automation {
         Ok(out)
     }
 
+    /// A note margin: add room beside the content on the displayed sides, or take it off again.
+    /// Every page changes in one undo step; the original content keeps its coordinates.
+    pub(crate) fn page_margin(&mut self, a: &Args) -> Result<Value> {
+        use pdfcraft_engine::{BoxSpec, PageBox};
+        let doc = self.doc(a)?;
+        let n = doc.info.pages.len();
+        let pages = match a.opt_ints("pages")? {
+            Some(_) => self.pages(a, "pages")?,
+            None => (0..n).collect(),
+        };
+        let add = match a.get("add") {
+            None => None,
+            Some(v) => {
+                let v: Vec<f64> = v.as_array().map(|x| x.iter().filter_map(Value::as_f64).collect()).unwrap_or_default();
+                let m = <[f64; 4]>::try_from(v).map_err(|_| ToolError::InvalidArgs("add must be 4 numbers".into()))?;
+                if !m.iter().all(|x| x.is_finite() && (0.0..=7200.0).contains(x)) || m.iter().all(|x| *x == 0.0) {
+                    return Err(ToolError::InvalidArgs("add: margins between 0 and 7200 points, not all zero".into()));
+                }
+                Some(m)
+            }
+        };
+        let remove = a.opt_bool("remove")?.unwrap_or(false);
+        if add.is_some() && remove {
+            return Err(ToolError::InvalidArgs("pass add or remove, not both".into()));
+        }
+        let margins = doc.page_margins();
+        let mut edits = Vec::new();
+        for &i in &pages {
+            let grow = match add {
+                // displayed sides (left, bottom, right, top) to the unrotated page's sides
+                Some([l, b, r, t]) => match doc.info.pages[i].rotation {
+                    90 => [t, l, b, r],
+                    180 => [r, t, l, b],
+                    270 => [b, r, t, l],
+                    _ => [l, b, r, t],
+                },
+                None if remove => {
+                    let m = margins.get(i).copied().unwrap_or_default();
+                    if m.iter().all(|v| *v == 0.0) {
+                        continue;
+                    }
+                    m.map(|v| -v)
+                }
+                None => continue,
+            };
+            edits.push(Edit::SetPageBox { pages: vec![i], which: PageBox::Media, spec: BoxSpec::Grow(grow) });
+        }
+        let mut out = if edits.is_empty() {
+            if add.is_some() || remove {
+                json!({ "changed": false })
+            } else {
+                json!({})
+            }
+        } else {
+            let label = if remove { "Remove note margin" } else { "Add note margin" };
+            let edit = if edits.len() == 1 { edits.remove(0) } else { Edit::Batch { label: label.into(), edits } };
+            self.apply(a, edit)?
+        };
+        let doc = self.doc(a)?;
+        out["margins"] = json!(doc.page_margins().iter().map(|m| m.iter().any(|v| *v != 0.0)).collect::<Vec<_>>());
+        out["page_sizes"] = json!(doc.info.pages.iter().map(|p| [p.width, p.height]).collect::<Vec<_>>());
+        Ok(out)
+    }
+
     pub(crate) fn insert_blank(&mut self, a: &Args) -> Result<Value> {
         let doc = self.doc(a)?;
         let at = self.position(a, "at")?;

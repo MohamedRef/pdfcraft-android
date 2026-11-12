@@ -29,6 +29,9 @@ enum class ViewerTool {
 
     /** Edit PDF: the page's own text and images. */
     Edit,
+
+    /** Measure distances, perimeters and areas on plans and drawings (#135, #180). */
+    Measure,
 }
 
 /** The text-markup sub-tools, in the sub-toolbar's order. */
@@ -38,7 +41,7 @@ enum class TextMarkup { Highlight, Underline, Strikethrough, Squiggly }
 enum class CommentMode { Text, Voice, Stamp }
 
 /** What the bottom sheet over the viewer shows. */
-enum class ViewerSheet { None, More, FileDetails, Backdrops, TextStyles, ViewSettings, Attachments, Bookmarks, Comments, MoreTools, Signatures, ScanEnhance, OcrConfidence, SearchResults, Layers, EditContents, HiddenInfo, FocusTimer, Backups, Redact, Compare, Share }
+enum class ViewerSheet { None, More, FileDetails, Backdrops, TextStyles, ViewSettings, Attachments, Bookmarks, Comments, MoreTools, Signatures, ScanEnhance, OcrConfidence, SearchResults, Layers, EditContents, HiddenInfo, FocusTimer, Backups, NoteMargin, Redact, Compare, Share }
 
 /**
  * The viewer's own state for one document, beside the page view ([ViewerState]): whether the

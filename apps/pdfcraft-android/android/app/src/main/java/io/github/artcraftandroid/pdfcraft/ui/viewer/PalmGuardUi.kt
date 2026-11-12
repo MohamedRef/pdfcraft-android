@@ -60,7 +60,10 @@ internal fun Modifier.palmGuardedTaps(ctl: ViewerController, prefs: ToolPrefs): 
                 for (change in event.changes) {
                     if (change.changedToDown() && change.type == PointerType.Touch &&
                         palmGuardRejects(ctl.penInRoot.position, ctl.penInRoot.timeMs, origin + change.position, change.uptimeMillis, left, size)
-                    ) blocked += change.id
+                    ) {
+                        blocked += change.id
+                        PenDiag.palmRejected(PalmSpot.Toolbar, prefs.palmGuardSizeDp, left)
+                    }
                     if (change.id in blocked) {
                         change.consume()
                         if (!change.pressed) blocked -= change.id

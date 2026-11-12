@@ -1803,4 +1803,25 @@
     <string name="backup_restore_comments">Restaurer les commentaires ici</string>
     <string name="backup_restoring">Restauration…</string>
     <string name="backup_comments_restored">Commentaires restaurés</string>
+    <string name="margin_title">Marge de notes</string>
+    <string name="margin_add">Ajouter</string>
+    <string name="margin_side">Où</string>
+    <string name="margin_right">Droite</string>
+    <string name="margin_bottom">En bas</string>
+    <string name="margin_both">Les deux</string>
+    <string name="margin_size">Taille, par rapport à la page</string>
+    <string name="margin_pages">Pages</string>
+    <string name="margin_all_pages">Toutes les pages</string>
+    <string name="margin_body">La page s\'agrandit et son contenu reste en place, pour écrire à côté. Annuler retire la marge.</string>
+    <string name="margin_remove">Retirer les marges de notes</string>
+    <string name="margin_remove_confirm">Retirer</string>
+    <string name="margin_remove_body">Les pages reprennent leur taille d\'origine. Ce qui est écrit dans la marge reste dans le fichier mais n\'est plus sur la page.</string>
+    <string name="margin_added">Marge de notes ajoutée</string>
+    <string name="margin_removed">Marges de notes retirées</string>
+    <string name="margin_read_only">Ce document ne peut pas être modifié</string>
+    <plurals name="margin_selected_pages">
+        <item quantity="one">Cette page</item>
+        <item quantity="many">%d pages</item>
+        <item quantity="other">%d pages</item>
+    </plurals>
 </resources>
