@@ -10,8 +10,8 @@ use pdfcraft_scan::page::page_look_kind;
 use pdfcraft_scan::page_kind::{PageKind, PresetChoice, preset_from_id};
 use pdfcraft_scan::upright_pages::{PageTurn, followed, settle};
 use pdfcraft_scan::{
-    AspectSource, Finder, Format, Look, PageBase, PageRequest, Paper, Photo, Pyramid, Quad, QuadSource, RefineOptions, detect_with, page_base,
-    process_page, refine,
+    AspectSource, Finder, Format, Look, PageBase, PageRequest, Paper, Photo, Pyramid, Quad, QuadSource, RefineOptions, detect_frame, detect_with,
+    page_base, process_page, refine,
 };
 
 use crate::MobileError;
@@ -347,6 +347,45 @@ pub fn scan_refine_quad(photo_path: String, corners: Vec<f32>, sides: Vec<bool>,
 #[uniffi::export]
 pub fn scan_can_flatten() -> bool {
     pdfcraft_scan::models::state(pdfcraft_scan::models::FLATTEN) == pdfcraft_scan::models::ModelState::Ready
+}
+
+/// The page in one camera analysis frame (#295).
+#[derive(Debug, Clone, PartialEq, uniffi::Record)]
+pub struct ScanLiveQuad {
+    /// x1, y1 … x4, y4 as shares (0–1) of the upright frame: top-left, top-right, bottom-right,
+    /// bottom-left. The whole frame when nothing was found.
+    pub points: Vec<f32>,
+    /// 0–1, how sure the detector was.
+    pub confidence: f32,
+    /// The frame's mean brightness (BT.601 luma), 0–255.
+    pub mean_luma: f32,
+    pub found: bool,
+    /// A corner lies within 1.5 % of the frame's edge (only when something was found).
+    pub cut_off: bool,
+    /// How long the call took, in milliseconds.
+    pub ms: u32,
+}
+
+/// Find the page in one camera analysis frame, for the outline in the viewfinder (#295).
+/// `rgba` holds `width × height` RGBA pixels, rows packed (`width × 4` bytes each);
+/// `rotation_degrees` is the clockwise turn that makes the frame upright (CameraX's
+/// `imageInfo.rotationDegrees`: 0, 90, 180 or 270), and the corners come back in shares of the
+/// upright frame. The detector network looks once and the sides are refined lightly on the frame
+/// itself; when the network finds nothing, `found` is false (the line detector is asked only when
+/// the model file is not installed). A frame of no pixels, over 2 MP, with too few bytes or
+/// another turn is refused.
+#[uniffi::export]
+pub fn scan_detect_frame(rgba: Vec<u8>, width: u32, height: u32, rotation_degrees: u32) -> Result<ScanLiveQuad, MobileError> {
+    let clock = std::time::Instant::now();
+    let found = detect_frame(&rgba, width, height, rotation_degrees).map_err(|e| MobileError::Command(e.to_string()))?;
+    Ok(ScanLiveQuad {
+        points: found.points.to_vec(),
+        confidence: found.confidence,
+        mean_luma: found.mean_luma,
+        found: found.found,
+        cut_off: found.cut_off,
+        ms: u32::try_from(clock.elapsed().as_millis()).unwrap_or(u32::MAX),
+    })
 }
 
 /// Which detector finds the page (#288). The scanner's own choice is `Auto`; the others are for
@@ -1194,6 +1233,50 @@ mod tests {
         assert!(text.contains("/BitsPerComponent 1") && !text.contains("/BitsPerComponent 8"), "the page image is not 1 bit per pixel in the PDF");
         assert!(pdf.len() < 2 * png.len() + 4096, "PDF {} bytes for a PNG of {}", pdf.len(), png.len());
         std::fs::remove_dir_all(root).unwrap();
+    }
+
+    /// A camera frame held sideways (#295): the sheet comes back in shares of the upright frame,
+    /// and a frame that cannot be looked at is refused.
+    #[test]
+    fn a_sheet_is_found_in_a_sideways_camera_frame() {
+        // upright the frame is 480 x 640 with a light sheet of print in it, a little turned; the
+        // sensor holds it a quarter turn counter-clockwise, so sensor pixel (x, y) shows upright
+        // pixel (479 - y, x)
+        let (sin, cos) = 3f64.to_radians().sin_cos();
+        let mut rgba = Vec::with_capacity(640 * 480 * 4);
+        for y in 0..480u32 {
+            for x in 0..640u32 {
+                let (ux, uy) = (f64::from(479 - y) + 0.5, f64::from(x) + 0.5);
+                let (dx, dy) = (ux - 240.0, uy - 330.0);
+                let (u, v) = (dx * cos + dy * sin, -dx * sin + dy * cos);
+                let sheet = u.abs() < 150.0 && v.abs() < 210.0;
+                let print = sheet && u.abs() < 125.0 && v.abs() < 185.0 && (v as i64).rem_euclid(12) < 4;
+                let [r, g, b] = if print {
+                    [45, 45, 50]
+                } else if sheet {
+                    [236, 234, 228]
+                } else {
+                    [62 + (x % 7) as u8, 50 + (y % 5) as u8, 44]
+                };
+                rgba.extend_from_slice(&[r, g, b, 255]);
+            }
+        }
+        let found = scan_detect_frame(rgba.clone(), 640, 480, 90).unwrap();
+        assert!(found.found && found.confidence >= 0.45 && !found.cut_off && found.points.len() == 8, "{found:?}");
+        let truth = [(-150.0, -210.0), (150.0, -210.0), (150.0, 210.0), (-150.0, 210.0)]
+            .map(|(u, v): (f64, f64)| [240.0 + u * cos - v * sin, 330.0 + u * sin + v * cos]);
+        for (i, corner) in truth.iter().enumerate() {
+            let (x, y) = (f64::from(found.points[2 * i]) * 480.0, f64::from(found.points[2 * i + 1]) * 640.0);
+            assert!((x - corner[0]).hypot(y - corner[1]) < 6.0, "corner {i}: ({x:.1}, {y:.1}) against {corner:?}");
+        }
+        assert!(found.mean_luma > 60.0 && found.mean_luma < 200.0, "{found:?}");
+        // refused, never a panic
+        assert!(scan_detect_frame(rgba.clone(), 640, 480, 45).is_err());
+        assert!(scan_detect_frame(rgba[..100].to_vec(), 640, 480, 0).is_err());
+        assert!(scan_detect_frame(Vec::new(), 0, 0, 0).is_err());
+        // a grey frame: nothing, and its brightness
+        let grey = scan_detect_frame([120u8, 130, 140, 255].repeat(640 * 480), 640, 480, 270).unwrap();
+        assert!(!grey.found && grey.mean_luma == 128.0 && grey.points == [0.0, 0.0, 1.0, 0.0, 1.0, 1.0, 0.0, 1.0], "{grey:?}");
     }
 
     /// A sheet on a table: found by the network and put on its edges, in one call.
