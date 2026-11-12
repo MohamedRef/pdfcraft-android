@@ -1230,6 +1230,7 @@ impl MobileSession {
                     MarkKind::HeaderFooter => "header_footer",
                     MarkKind::Watermark => "watermark",
                     MarkKind::Background => "background",
+                    MarkKind::PrinterMarks => "printer_marks",
                 })
                 .map(str::to_owned)
                 .collect()

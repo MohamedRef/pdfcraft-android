@@ -9,7 +9,7 @@ use std::collections::BTreeSet;
 use crate::{Args, Automation, Result, ToolError, child, failed, write_atomic};
 
 mod documents;
-mod form_tools;
+pub(crate) mod form_tools;
 pub(crate) use form_tools::{alert_json, request_json};
 mod ocr;
 
