@@ -33,4 +33,15 @@ class QuickToolbarTest {
         assertEquals(QuickTool.entries.size, QuickTool.entries.map { it.id }.toSet().size)
         for (t in QuickTool.entries) assertEquals(t, QuickTool.of(t.id))
     }
+
+    @Test
+    fun aNewToolJoinsItsKinInAnOlderSavedOrder() {
+        // a grid saved before Enhance and Review OCR existed (#195)
+        val saved = QuickTool.entries.filter { it != QuickTool.ScanEnhance && it != QuickTool.OcrReview }.reversed()
+        val grid = QuickToolbarPrefs.complete(saved, emptyList())
+        val ocr = grid.indexOf(QuickTool.Ocr)
+        assertEquals(QuickTool.ScanEnhance, grid[ocr + 1])
+        assertEquals(QuickTool.OcrReview, grid[ocr + 2])
+        assertEquals(QuickTool.entries.size, grid.size)
+    }
 }

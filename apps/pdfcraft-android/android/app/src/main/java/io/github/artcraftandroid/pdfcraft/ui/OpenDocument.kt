@@ -60,7 +60,22 @@ class OpenDocument(
     var writable by mutableStateOf(true)
 
     /** Changes saved into [file] that [source] doesn't have (it couldn't be written): closing offers a copy. */
-    var notWrittenBack = false
+    var notWrittenBack by mutableStateOf(false)
+
+    /** A save is running now: the top bar says Saving… (#190). */
+    var saving by mutableStateOf(false)
+
+    /** Some save of this visit reached [source]: Save a copy can't leave the original as it was opened (#190). */
+    var wroteOriginal = false
+
+    /**
+     * Save a copy's picker is open: saves keep the changes in [file] (with its recovery marker)
+     * and don't write them over [source], so the original can stay as it was (#190).
+     */
+    var holdWriteBack = false
+
+    /** The "can't save to the original" banner was closed for this visit (#191). */
+    var readOnlyNoticeClosed by mutableStateOf(false)
 
     /** The links of each page (0-based), refreshed when the document changes. */
     var links by mutableStateOf<Map<Int, List<io.github.artcraftandroid.pdfcraft.core.LinkInfo>>>(emptyMap())

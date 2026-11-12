@@ -11,6 +11,7 @@ import io.github.artcraftandroid.pdfcraft.R
 import io.github.artcraftandroid.pdfcraft.engine.DocumentFiles
 import io.github.artcraftandroid.pdfcraft.engine.Engine
 import io.github.artcraftandroid.pdfcraft.engine.userMessage
+import io.github.artcraftandroid.pdfcraft.plural
 import io.github.artcraftandroid.pdfcraft.text
 import io.github.artcraftandroid.pdfcraft.ui.AppViewModel
 import io.github.artcraftandroid.pdfcraft.ui.OpenDocument
@@ -85,13 +86,10 @@ fun AppViewModel.runOcr(doc: OpenDocument, o: OcrOptions) {
         val args = o.recognizeArgs(doc.viewer.currentPage, doc.pageCount, out?.absolutePath) ?: return@launch
         busy = text(R.string.msg_busy_recognizing)
         try {
-            val r = eng.tool("ocr_recognize", args + ("doc" to doc.id))
             if (out == null) {
-                refresh(doc)
-                val pages = r.optJSONArray("pages")
-                val n = (0 until (pages?.length() ?: 0)).count { pages?.optJSONObject(it)?.has("skipped") == false }
-                if (n > 0) success = SuccessBanner(text(R.string.msg_ocr_done)) { undo(doc) } else tell(text(R.string.msg_ocr_nothing))
+                recognizeByPage(eng, doc, args)
             } else {
+                val r = eng.tool("ocr_recognize", args + ("doc" to doc.id))
                 busy = null
                 requests.create("${doc.name.removeSuffix(".pdf")}_ocr.pdf", "application/pdf") { uri ->
                     viewModelScope.launch {
@@ -114,6 +112,40 @@ fun AppViewModel.runOcr(doc: OpenDocument, o: OcrOptions) {
         } finally {
             busy = null
         }
+    }
+}
+
+
+/**
+ * Searchable text one page at a time (#200), so the busy dialog counts pages and Cancel stops at
+ * the next page; the pages read by then keep their text, and one Undo takes back the whole run.
+ */
+private suspend fun AppViewModel.recognizeByPage(eng: Engine, doc: OpenDocument, args: Map<String, Any?>) {
+    @Suppress("UNCHECKED_CAST")
+    val pages = (args["pages"] as? List<Int>) ?: (1..doc.pageCount).toList()
+    var cancelled = false
+    busyCancel = { cancelled = true }
+    var recognized = 0
+    try {
+        for ((k, page) in pages.withIndex()) {
+            if (cancelled || document !== doc) break
+            busy = text(R.string.msg_busy_recognizing_page, k + 1, pages.size)
+            busyProgress = k to pages.size
+            val r = eng.tool("ocr_recognize", args + mapOf("doc" to doc.id, "pages" to listOf(page)))
+            val read = r.optJSONArray("pages")
+            if ((0 until (read?.length() ?: 0)).any { read?.optJSONObject(it)?.has("skipped") == false }) recognized++
+        }
+    } finally {
+        busyProgress = null
+        busyCancel = null
+        refresh(doc)
+    }
+    when {
+        recognized == 0 && cancelled -> tell(text(R.string.msg_ocr_cancelled))
+        recognized == 0 -> tell(text(R.string.msg_ocr_nothing))
+        else -> success = SuccessBanner(
+            plural(if (cancelled) R.plurals.msg_ocr_stopped else R.plurals.msg_ocr_done_pages, recognized, recognized),
+        ) { undoSteps(doc, recognized) }
     }
 }
 

@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -327,7 +328,8 @@ fun SearchTab(vm: AppViewModel) {
 @Composable
 fun SettingsScreen(vm: AppViewModel) {
     val c = pdfColors
-    var page by remember { mutableStateOf("root") }
+    var page by remember { mutableStateOf(vm.settingsStartPage) }
+    androidx.compose.runtime.DisposableEffect(Unit) { onDispose { vm.openSettings("root", show = false) } }
     BackHandler { if (page == "root") vm.settingsOpen = false else page = "root" }
     Column(Modifier.fillMaxSize().background(c.surface).safeTopPadding().navigationBarsPadding()) {
         Row(Modifier.fillMaxWidth().height(56.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -340,7 +342,7 @@ fun SettingsScreen(vm: AppViewModel) {
             when (page) {
                 "root" -> {
                     SheetRow(LucideIcons.Info, stringResource(R.string.home_about_app), { page = "about" }, chevron = true)
-                    SheetRow(LucideIcons.Settings, stringResource(R.string.home_preferences), { page = "prefs" }, chevron = true)
+                    SheetRow(LucideIcons.SlidersHorizontal, stringResource(R.string.home_preferences), { page = "prefs" }, chevron = true)
                     SheetRow(LucideIcons.CircleHelp, stringResource(R.string.home_help_support), { page = "help" }, chevron = true)
                 }
                 "prefs" -> Preferences(vm)
@@ -348,6 +350,7 @@ fun SettingsScreen(vm: AppViewModel) {
                 "help" -> {
                     val uri = LocalUriHandler.current
                     var leaving by remember { mutableStateOf<String?>(null) }
+                    SheetRow(LucideIcons.Sparkles, stringResource(R.string.tips_title), { vm.tipsOpen = true })
                     SheetRow(LucideIcons.CircleHelp, stringResource(R.string.home_help), { leaving = "$APP_REPO#readme" })
                     SheetRow(LucideIcons.MessageSquare, stringResource(R.string.home_report_problem), { leaving = "$APP_REPO/issues" })
                     leaving?.let { url ->
@@ -365,15 +368,46 @@ fun SettingsScreen(vm: AppViewModel) {
 private fun Preferences(vm: AppViewModel) {
     val c = pdfColors
     var authorDialog by remember { mutableStateOf(false) }
-    Section(stringResource(R.string.home_section_notifications))
-    Text(stringResource(R.string.home_no_notifications), color = c.textSecondary, fontSize = 14.sp, modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp))
+    // grouped by what they change (#194); no section says something the app doesn't do
+    Section(stringResource(R.string.home_section_reading))
+    SheetRow(null, stringResource(R.string.home_keep_screen_on), { vm.updateKeepScreenOn(!vm.keepScreenOn) }) {
+        PdfSwitch(vm.keepScreenOn, { vm.updateKeepScreenOn(it) })
+    }
+    Text(stringResource(R.string.home_keep_screen_on_body), color = c.textSecondary, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 20.dp))
+    Spacer(Modifier.height(8.dp))
+    SheetRow(null, stringResource(R.string.home_status_bar_in_documents), { vm.updateStatusBarInDocuments(!vm.statusBarInDocuments) }) {
+        PdfSwitch(vm.statusBarInDocuments, { vm.updateStatusBarInDocuments(it) })
+    }
+    Text(stringResource(R.string.home_status_bar_in_documents_body), color = c.textSecondary, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 20.dp))
+    Spacer(Modifier.height(8.dp))
+    SheetRow(null, stringResource(R.string.compact_previews), { vm.updateCompactPreviews(!vm.compactPreviews) }) {
+        PdfSwitch(vm.compactPreviews, { vm.updateCompactPreviews(it) })
+    }
+    Text(stringResource(R.string.compact_previews_body), color = c.textSecondary, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 20.dp))
     SheetDivider()
-    Section(stringResource(R.string.home_section_suggestions))
+    // the same settings as Draw's Pens sheet: one state, so both places stay in step
+    Section(stringResource(R.string.home_section_pen))
+    val prefs = vm.toolPrefs
+    SheetRow(null, stringResource(R.string.toolbar_stylus_only), { prefs.updateStylusOnly(!prefs.stylusOnly) }) {
+        PdfSwitch(prefs.stylusOnly, { prefs.updateStylusOnly(it) })
+    }
+    Text(stringResource(R.string.ink_pen_only_explanation), color = c.textSecondary, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 20.dp))
+    Spacer(Modifier.height(8.dp))
+    SheetRow(null, stringResource(R.string.toolbar_snap_to_shape), { prefs.updateSnapToShape(!prefs.snapToShape) }) {
+        PdfSwitch(prefs.snapToShape, { prefs.updateSnapToShape(it) })
+    }
+    val authorHint = stringResource(R.string.home_author_hint)
+    SheetRow(null, stringResource(R.string.home_author_title), { authorDialog = true }) {
+        Text(prefs.author.ifBlank { authorHint }, color = c.textSecondary, fontSize = 14.sp, maxLines = 1,
+            modifier = Modifier.padding(start = 8.dp).widthIn(max = 160.dp))
+    }
+    SheetDivider()
+    Section(stringResource(R.string.home_section_forms))
     SheetRow(null, stringResource(R.string.home_offer_suggestions), { vm.updateFormSuggestions(!vm.formSuggestions) }) {
         PdfSwitch(vm.formSuggestions, { vm.updateFormSuggestions(it) })
     }
     SheetRow(null, stringResource(R.string.home_clear_suggestions), { vm.clearFormSuggestions() })
-
+    SheetDivider()
     Section(stringResource(R.string.library_title))
     SheetRow(null, stringResource(R.string.library_index_switch), { vm.updateLibraryIndexing(!vm.libraryIndexing) }) {
         io.github.artcraftandroid.pdfcraft.ui.PdfSwitch(vm.libraryIndexing, null)
@@ -419,16 +453,6 @@ private fun Preferences(vm: AppViewModel) {
         onConfirm = { confirmStudyClear = false; vm.clearStudyStats() },
     )
     SheetDivider()
-    Section(stringResource(R.string.home_author_title))
-    val authorHint = stringResource(R.string.home_author_hint)
-    SheetRow(null, vm.toolPrefs.author.ifBlank { authorHint }, { authorDialog = true })
-    SheetDivider()
-    Section(stringResource(R.string.home_section_screen))
-    SheetRow(null, stringResource(R.string.home_keep_screen_on), { vm.updateKeepScreenOn(!vm.keepScreenOn) }) {
-        PdfSwitch(vm.keepScreenOn, { vm.updateKeepScreenOn(it) })
-    }
-    Text(stringResource(R.string.home_keep_screen_on_body), color = c.textSecondary, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 20.dp))
-    SheetDivider()
     Section(stringResource(R.string.home_section_keyboard))
     SheetRow(null, stringResource(R.string.home_keyboard_shortcuts), { vm.updateKeyboardShortcuts(!vm.keyboardShortcuts) }) {
         PdfSwitch(vm.keyboardShortcuts, { vm.updateKeyboardShortcuts(it) })
@@ -438,17 +462,17 @@ private fun Preferences(vm: AppViewModel) {
         color = c.textSecondary, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 20.dp),
     )
     SheetDivider()
-    SheetRow(null, stringResource(R.string.compact_previews), { vm.updateCompactPreviews(!vm.compactPreviews) }) {
-        PdfSwitch(vm.compactPreviews, { vm.updateCompactPreviews(it) })
+    Section(stringResource(R.string.updater_title))
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var autoCheck by remember { mutableStateOf(UpdaterState.autoCheckOn(context)) }
+    fun setAutoCheck(on: Boolean) { autoCheck = on; UpdaterState.setAutoCheck(context, on) }
+    SheetRow(null, stringResource(R.string.updater_auto_check), { setAutoCheck(!autoCheck) }) {
+        PdfSwitch(autoCheck, { setAutoCheck(it) })
     }
-    Text(stringResource(R.string.compact_previews_body), color = c.textSecondary, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 20.dp))
-    // what PdfCraft does differently from the reference, each by choice
-    Section(stringResource(R.string.home_section_extra))
-    Text(stringResource(R.string.home_extra_body), color = c.textSecondary, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 20.dp))
-    SheetRow(null, stringResource(R.string.home_status_bar_in_documents), { vm.updateStatusBarInDocuments(!vm.statusBarInDocuments) }) {
-        PdfSwitch(vm.statusBarInDocuments, { vm.updateStatusBarInDocuments(it) })
-    }
-    Text(stringResource(R.string.home_status_bar_in_documents_body), color = c.textSecondary, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 20.dp))
+    Text(
+        stringResource(R.string.updater_auto_check_body),
+        color = c.textSecondary, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 20.dp),
+    )
     Spacer(Modifier.height(24.dp))
     if (authorDialog) {
         var name by remember { mutableStateOf(vm.toolPrefs.author) }
