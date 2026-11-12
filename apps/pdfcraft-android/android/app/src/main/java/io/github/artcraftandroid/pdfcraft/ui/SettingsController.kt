@@ -329,15 +329,15 @@ class SettingsController internal constructor(private val vm: AppViewModel) {
                 vm.tell(text(R.string.home_diagnostics_empty))
                 return@launch
             }
-            vm.handOut {
-                val facts = Diagnostics.facts(app, vm.appVersion, io.github.artcraftandroid.pdfcraft.ui.home.installedVersionCode(app), io.github.artcraftandroid.pdfcraft.core.engineVersion())
+            vm.sharing.handOut {
+                val facts = Diagnostics.facts(app, vm.home.appVersion, io.github.artcraftandroid.pdfcraft.ui.home.installedVersionCode(app), io.github.artcraftandroid.pdfcraft.core.engineVersion())
                 val report = io.github.artcraftandroid.pdfcraft.engine.diagReport(facts, lines)
                 val file = withContext(Dispatchers.IO) {
                     File(File(app.cacheDir, "share").apply { mkdirs() }, "pdfcraft-diagnostics.txt").apply { writeText(report) }
                 }
                 val uri = androidx.core.content.FileProvider.getUriForFile(app, "${app.packageName}.files", file)
                 // the file only: a long log is too big for a message's text
-                vm.sendIntent(listOf(uri), "text/plain")
+                vm.sharing.sendIntent(listOf(uri), "text/plain")
                     .putExtra(Intent.EXTRA_SUBJECT, text(R.string.home_diagnostics_subject))
             }
         }

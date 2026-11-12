@@ -66,7 +66,7 @@ internal class ScanLabController(private val vm: AppViewModel) {
      */
     fun keepPage(scan: File, index: Int, page: ScanPage, saved: Boolean, look: String?, strength: Int?, flatten: Boolean, output: File?, result: ScanTestResult?, preview: ScanTestPreview? = null) {
         val lab = options
-        val version = "${vm.appVersion} (${versionCode()})"
+        val version = "${vm.home.appVersion} (${versionCode()})"
         // which models the engine accepted (#289); a loaded model is not hashed again
         val models = io.github.artcraftandroid.pdfcraft.ui.scan.scanModelsJson(runCatching { io.github.artcraftandroid.pdfcraft.core.scanModelStates() }.getOrNull())
         val capture = io.github.artcraftandroid.pdfcraft.ui.scan.ScanCaptures.of(page.file.path)?.json()
@@ -94,7 +94,7 @@ internal class ScanLabController(private val vm: AppViewModel) {
             // a folder of its own under share/: the cache sweep removes it an hour after it was handed out
             val file = File(File(app.cacheDir, "share/scan-tests"), "pdfcraft-scan-tests.zip")
             val pages = withContext(Dispatchers.IO) {
-                val facts = Diagnostics.facts(app, vm.appVersion, versionCode(), io.github.artcraftandroid.pdfcraft.core.engineVersion())
+                val facts = Diagnostics.facts(app, vm.home.appVersion, versionCode(), io.github.artcraftandroid.pdfcraft.core.engineVersion())
                 store.zip(file, mapOf("diagnostics.txt" to diagReport(facts, Diagnostics.lines(app)), "README.txt" to README))
             }
             if (pages == 0) {

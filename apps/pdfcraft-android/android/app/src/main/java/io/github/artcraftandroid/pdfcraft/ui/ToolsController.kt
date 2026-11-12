@@ -384,7 +384,7 @@ class ToolsController internal constructor(private val vm: AppViewModel) {
             val lower = r.optJSONArray("lower_dpi")?.length() ?: 0
             if (share) {
                 val uris = withContext(Dispatchers.IO) { vm.files.shareableAll(made) }
-                vm.intents.trySend(Intent.createChooser(vm.sendIntent(uris, mime), null))
+                vm.intents.trySend(Intent.createChooser(vm.sharing.sendIntent(uris, mime), null))
             } else {
                 Diag.measure(DiagArea.Pages, "export_pages_save", "files" to made.size, "to_downloads" to (format == "tiff")) {
                     withContext(Dispatchers.IO) {
@@ -429,7 +429,7 @@ class ToolsController internal constructor(private val vm: AppViewModel) {
             if (reasons.isNotEmpty()) vm.tell(plural(R.plurals.msg_images_skipped, skipped!!.length(), skipped.length(), reasons.take(3).joinToString("; ")))
             if (share) {
                 val uris = try { withContext(Dispatchers.IO) { vm.files.shareableAll(made) } } finally { dir.deleteRecursively() }
-                vm.intents.trySend(Intent.createChooser(vm.sendIntent(uris, "image/*"), null))
+                vm.intents.trySend(Intent.createChooser(vm.sharing.sendIntent(uris, "image/*"), null))
             } else {
                 vm.docTools.saveAllToFolder(made, "image/*", cleanup = dir)
             }

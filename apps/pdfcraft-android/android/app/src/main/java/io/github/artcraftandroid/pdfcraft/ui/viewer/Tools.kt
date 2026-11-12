@@ -104,6 +104,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import androidx.compose.material3.minimumInteractiveComponentSize
 
 /** A stroke being drawn: its page and points (in the page's points). */
 internal class InkStroke(val page: Int, val appearance: InkAppearance, stylus: Boolean = false, val shapeMode: InkShapeMode = InkShapeMode.Freehand) {
@@ -1984,7 +1985,7 @@ fun ColorGrid(selected: Color, onPick: (Color) -> Unit) {
                     // only a swatch the colour of the sheet itself needs an outline to be seen
                     val outlined = kotlin.math.abs(color.luminance() - c.surface.luminance()) < 0.08f
                     Box(
-                        Modifier.size(32.dp)
+                        Modifier.minimumInteractiveComponentSize().size(32.dp)
                             .drawBehind {
                                 if (isSel) {
                                     val w = 2.dp.toPx()
