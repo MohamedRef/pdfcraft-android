@@ -81,3 +81,40 @@ Input: one RGB picture 488 wide and 712 high, values 0–1, planar (`[1, 3, 712,
 `grid` `[1, 2, 45, 31]`, for each of 45 × 31 points of the flat page (rows top to bottom, columns
 left to right) where that point is in the picture: x then y, from -1 (left, top) to 1 (right,
 bottom). `apps/pdfcraft-android/scan/src/flatten.rs` says what picture the network is shown.
+
+## `scan-upright.onnx`: which way up a page is (#339)
+
+PP-LCNet x1.0 as PaddleClas trained it to tell the orientation of an image with text in it
+(["PULC" text image orientation](https://github.com/PaddlePaddle/PaddleClas/blob/177e4be74639c0960efeae2c5166d3226c9a02eb/docs/zh_CN/models/PULC/PULC_text_image_orientation.md),
+Apache-2.0, the PaddlePaddle Authors). Issue #339 names PaddlePaddle's own ONNX export on
+Hugging Face; that host could not be reached from the machine this was built on. The file used
+is the ONNX conversion of the same PaddleClas model that RapidAI ships inside the
+`rapid-orientation` package on PyPI (Apache-2.0), which names that model as its source. Whether
+the two ONNX files hold the same weights was not checked.
+
+```sh
+pip download --no-deps rapid-orientation==0.0.4
+sha256sum rapid_orientation-0.0.4-py3-none-any.whl
+# a46b22f90090bd70d11f8a24124f64e182683c0b36c62f5e1e3d7bcd6ab41eea
+unzip rapid_orientation-0.0.4-py3-none-any.whl rapid_orientation/models/rapid_orientation.onnx
+sha256sum rapid_orientation/models/rapid_orientation.onnx
+# 9c84a1041b98fc74132d11edada7f5afc8c911fae355cde7d04c628d34af1d8a   (6,792,721 bytes)
+
+python3 to_fp16.py rapid_orientation/models/rapid_orientation.onnx scan-upright.onnx
+# largest difference: 3.27e-02 (of a likelihood, when ONNX Runtime runs it in half precision)
+# 96b65002cc0388d4c0e0c07ac6f3aea045ce8d46c1e3fb9e0242624ad75033fd   (3,439,151 bytes)
+```
+
+Only the model file is taken from the package; none of its code is used or copied. Made with
+onnx 1.23.2, onnxruntime 1.29.0 and onnxconverter-common 1.16.0.
+
+Input `x`: any number of RGB pictures 224 × 224, each value over 255, less the mean
+`[0.485, 0.456, 0.406]`, over `[0.229, 0.224, 0.225]`, planar (`[n, 3, 224, 224]`); this is the
+package's `config.yaml`, which is PaddleClas's inference configuration for the model. The package
+itself hands the network OpenCV's blue-green-red order; PaddleClas decodes to red-green-blue, and
+that is what the scanner uses. Output: `[n, 4]` likelihoods of `0`, `90`, `180`, `270` (the
+file's `character` entry): how far the picture is turned clockwise.
+`apps/pdfcraft-android/scan/src/upright.rs` says what the network is shown and how its answers
+are put together.
+
+The pages the scanner's orientation tests use are drawn by `tools/scan-eval/text_pages.py`.

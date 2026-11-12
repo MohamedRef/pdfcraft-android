@@ -1799,6 +1799,7 @@
     <string name="scan_lab_refine">Refine edges on the full photo</string>
     <string name="scan_lab_perspective">Proportions from perspective</string>
     <string name="scan_lab_snap_paper">Match standard paper sizes</string>
+    <string name="scan_lab_upright">Turn pages upright</string>
     <string name="scan_lab_strength">Filter strength</string>
     <string name="scan_lab_strength_own">Default</string>
     <string name="scan_lab_options_body">These switch parts of the scanner off, or swap them for what they replaced, to find which part a problem comes from. The log records what was in force for every page.</string>

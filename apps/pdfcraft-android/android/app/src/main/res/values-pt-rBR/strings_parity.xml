@@ -262,4 +262,19 @@
         <item quantity="one">%1$d campo adicionado</item>
         <item quantity="other">%1$d campos adicionados</item>
     </plurals>
+    <string name="edit_grouped_text">Este texto está dentro de uma arte agrupada</string>
+    <string name="edit_grouped_make_editable">Tornar editável</string>
+    <string name="edit_grouped_ready">Agora o texto desta página pode ser editado</string>
+    <string name="edit_grouped_refused">Alguns grupos ficaram como estavam: %1$s</string>
+    <string name="edit_fonts_in_document">Neste documento</string>
+    <string name="edit_fonts_none">Nenhuma fonte incorporada reutilizável nesta página</string>
+    <string name="edit_font_from_file">Adicionar fonte de arquivo…</string>
+    <string name="edit_font_imported">Aplicada %1$s</string>
+    <string name="edit_spacing">Espaçamento</string>
+    <string name="edit_line_spacing">Espaçamento entre linhas</string>
+    <string name="edit_letter_spacing">Espaçamento entre letras</string>
+    <string name="edit_points">%1$s pt</string>
+    <string name="edit_spacing_less">Diminuir %1$s</string>
+    <string name="edit_spacing_more">Aumentar %1$s</string>
+    <string name="edit_overflow">Este texto não cabe mais onde estava</string>
 </resources>

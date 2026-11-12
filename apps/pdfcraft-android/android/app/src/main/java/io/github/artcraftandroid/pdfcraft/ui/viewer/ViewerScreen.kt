@@ -289,13 +289,13 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
                 // Fields, comments, edits and selection must remain immediate; no link
                 // hydration is allowed to delay those higher-priority interactions.
                 when {
-                    vm.markupFollowUp != null -> vm.markupFollowUp = null
+                    vm.commenting.markupFollowUp != null -> vm.commenting.markupFollowUp = null
                     selection.selection != null -> selection.clear()
                     ctl.tool == ViewerTool.Edit -> vm.editor.editTap(doc, at)
                     // tape and quiz masks lift with a tap (#143)
                     vm.tapStudyMask(doc, at) -> Unit
                     vm.editor.tapField(doc, at) -> Unit
-                    vm.tapComment(doc, at) -> Unit
+                    vm.commenting.tapComment(doc, at) -> Unit
                     else -> scope.launch {
                         val generation = doc.info.generation
                         // Only unresolved link taps wait for their one page's link table.
@@ -330,7 +330,7 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
             onWheelZoom = { if (desktop) zoomButtons.poke() },
             // a right click: a comment's menu, else what a long press gives (a word, a picture, the page menu)
             onSecondaryClick = { p, at ->
-                if (at != null && (gesturesForTool && vm.tapComment(doc, at))) Unit
+                if (at != null && (gesturesForTool && vm.commenting.tapComment(doc, at))) Unit
                 else if (at != null && gesturesForTool) scope.launch {
                     val slop = 12f / doc.viewer.pixelsPerPoint(at.page).coerceAtLeast(0.1f) * density.density
                     if (!selection.selectWordAt(at, slop) && ctl.tool == ViewerTool.None && !vm.readingMode) vm.editor.longPressPage(doc, at, p)
@@ -345,16 +345,16 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
             },
             overlay = {
                 if (ctl.tool == ViewerTool.None || ctl.tool == ViewerTool.FillSign) drawFieldTints(doc)
-                if (!doc.info.commentsHidden) drawNotes(doc, ctl.nightMode, vm.selectedComment?.takeIf { it.first === doc }?.second)
+                if (!doc.info.commentsHidden) drawNotes(doc, ctl.nightMode, vm.commenting.selectedComment?.takeIf { it.first === doc }?.second)
                 drawStudyMasks(doc)
                 if (!doc.info.commentsHidden) drawLinkBadges(doc, linkBadges)
-                vm.selectedComment?.takeIf { it.first === doc }?.second?.let { drawCommentSelection(doc, it) }
+                vm.commenting.selectedComment?.takeIf { it.first === doc }?.second?.let { drawCommentSelection(doc, it) }
                 vm.readAloud?.let { drawReadAloud(doc, it) }
                 drawSearchHits(doc)
                 // the comment list's filters leave these out: veiled so the rest stand out (#155)
                 if (!doc.info.commentsHidden && ctl.sheet != ViewerSheet.Comments && ctl.dimmedGeneration == doc.info.generation.toLong()) drawDimmedComments(doc.viewer, ctl.dimmedComments, ctl.nightMode)
                 drawSelection(doc)
-                vm.pendingMarkupPreview?.takeIf { it.doc === doc }?.let { drawPendingMarkup(it) }
+                vm.commenting.pendingMarkupPreview?.takeIf { it.doc === doc }?.let { drawPendingMarkup(it) }
                 drawLinkFlash(doc)
             },
         )
@@ -379,15 +379,15 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
         if (ctl.tool == ViewerTool.Edit) EditOverlay(vm, doc)
         if (ctl.tool == ViewerTool.Edit && vm.editor.editMode == EditMode.Link) LinkLayer(vm, doc)
         vm.linkEdit?.takeIf { it.doc === doc }?.let { LinkSheet(vm, it) }
-        vm.textPrompt?.takeIf { it.doc === doc }?.let { TextEntry(vm, it, onDone = vm::postText) }
+        vm.commenting.textPrompt?.takeIf { it.doc === doc }?.let { TextEntry(vm, it, onDone = vm.commenting::postText) }
         vm.signing.fillTextPrompt?.takeIf { it.doc === doc }?.let { TextEntry(vm, it, onDone = vm.signing::postFillText) }
         vm.editor.addTextPrompt?.takeIf { it.doc === doc }?.let { TextEntry(vm, it, onDone = vm.editor::postAddText) }
         vm.editor.fieldEdit?.takeIf { it.doc === doc }?.let { FieldEditor(vm, it) }
         // a Fill & Sign element can be dragged and, for boxes, resized (a comment's: over its panel, below)
-        if (ctl.tool == ViewerTool.FillSign) vm.selectedFill?.let { c ->
-            CommentDragOverlay(doc, c, onMove = { dx, dy -> vm.moveFill(doc, c, dx, dy) }, onResize = { vm.resizeFill(doc, c, it) })
+        if (ctl.tool == ViewerTool.FillSign) vm.commenting.selectedFill?.let { c ->
+            CommentDragOverlay(doc, c, onMove = { dx, dy -> vm.commenting.moveFill(doc, c, dx, dy) }, onResize = { vm.commenting.resizeFill(doc, c, it) })
         }
-        if (ctl.tool == ViewerTool.FillSign) vm.selectedFill?.let { FillElementMenu(vm, doc, it) }
+        if (ctl.tool == ViewerTool.FillSign) vm.commenting.selectedFill?.let { FillElementMenu(vm, doc, it) }
 
         // Scrubber and page pill (continuous, three pages or more).
         Box(Modifier.fillMaxSize().then(cutoutSides)) {
@@ -655,7 +655,7 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
             if (selection.magnifierAt == null) SelectionMenu(vm, doc, sel)
         }
         // the markup just added from that menu: colours, Add note, Delete (#197)
-        if (selection.selection == null) vm.markupFollowUp?.takeIf { it.doc === doc && ctl.tool == ViewerTool.None }?.let { MarkupFollowUpBar(vm, it) }
+        if (selection.selection == null) vm.commenting.markupFollowUp?.takeIf { it.doc === doc && ctl.tool == ViewerTool.None }?.let { MarkupFollowUpBar(vm, it) }
 
         // Sheets and dialogs.
         SheetHost(ctl.sheet.takeIf { it != ViewerSheet.None }) { sheet ->
@@ -701,17 +701,17 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
                 Spacer(Modifier.height(12.dp))
             }
         }
-        vm.notePrompt?.takeIf { it.doc === doc }?.let { NoteSheet(vm, it) }
-        vm.voicePrompt?.takeIf { it.doc === doc }?.let { VoiceSheet(vm, it) }
-        if (vm.micRationale) MicRationaleDialog(vm)
-        vm.selectedComment?.takeIf { it.first === doc }?.let { (_, cm) -> CommentPanel(vm, doc, cm) }
+        vm.commenting.notePrompt?.takeIf { it.doc === doc }?.let { NoteSheet(vm, it) }
+        vm.commenting.voicePrompt?.takeIf { it.doc === doc }?.let { VoiceSheet(vm, it) }
+        if (vm.commenting.micRationale) MicRationaleDialog(vm)
+        vm.commenting.selectedComment?.takeIf { it.first === doc }?.let { (_, cm) -> CommentPanel(vm, doc, cm) }
         // over the panel's tap-to-close area, but only where the comment is: drag it to move, corners to resize
         if (ctl.tool == ViewerTool.None && doc.info.allowsAnnotation) {
-            vm.selectedComment?.takeIf { it.first === doc }?.second?.let { c ->
-                CommentDragOverlay(doc, c, onMove = { dx, dy -> vm.moveComment(doc, c, dx, dy) }, onResize = { vm.resizeComment(doc, c, it) })
+            vm.commenting.selectedComment?.takeIf { it.first === doc }?.second?.let { c ->
+                CommentDragOverlay(doc, c, onMove = { dx, dy -> vm.commenting.moveComment(doc, c, dx, dy) }, onResize = { vm.commenting.resizeComment(doc, c, it) })
             }
         }
-        vm.replyPrompt?.takeIf { it.doc === doc }?.let { ReplySheet(vm, it) }
+        vm.commenting.replyPrompt?.takeIf { it.doc === doc }?.let { ReplySheet(vm, it) }
         vm.readAloud?.let { ReadAloudBar(vm, doc, it) }
         if (ctl.goToPage) GoToPageDialog(doc, onDismiss = { ctl.goToPage = false })
         if (vm.shortcutsHelp) ShortcutsDialog(onDismiss = { vm.shortcutsHelp = false })

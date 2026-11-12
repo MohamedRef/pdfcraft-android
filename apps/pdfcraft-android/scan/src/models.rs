@@ -29,6 +29,9 @@ pub const EDGES: &str = "edges";
 /// The page flattener (#302): UVDoc.
 pub const FLATTEN: &str = "flatten";
 
+/// The orientation classifier (#339): PP-LCNet x1.0, text image orientation.
+pub const UPRIGHT: &str = "upright";
+
 /// Every model the scanner can use. `assets/models/ATTRIBUTION.txt` says where each is from.
 pub static MODELS: &[ModelSpec] = &[
     ModelSpec {
@@ -44,6 +47,13 @@ pub static MODELS: &[ModelSpec] = &[
         sha256: "13fc4e8322de53f2d8b74ed43d996ba8e70e3b875fc5e88766c30943ada2fb1b",
         bytes: 15_803_619,
         licence: "MIT",
+    },
+    ModelSpec {
+        id: UPRIGHT,
+        file: "scan-upright.onnx",
+        sha256: "96b65002cc0388d4c0e0c07ac6f3aea045ce8d46c1e3fb9e0242624ad75033fd",
+        bytes: 3_439_151,
+        licence: "Apache-2.0",
     },
 ];
 

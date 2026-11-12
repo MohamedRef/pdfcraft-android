@@ -301,6 +301,8 @@ private fun LicencesScreen(vm: AppViewModel) {
             entry("DocQuadNet-256 (MakeACopy)", "Apache-2.0, Christian Kierdorf")
             // the scanner's page flattener (#302)
             entry("UVDoc", "MIT, Tanguy Magne")
+            // the scanner's orientation classifier (#339)
+            entry("PP-LCNet (PaddleClas)", "Apache-2.0, PaddlePaddle Authors")
             entry(stringResource(R.string.root_licence_rust), stringResource(R.string.root_licence_rust_terms))
             for (licence in texts.filter { it.isNotBlank() }) {
                 Spacer(Modifier.height(20.dp))

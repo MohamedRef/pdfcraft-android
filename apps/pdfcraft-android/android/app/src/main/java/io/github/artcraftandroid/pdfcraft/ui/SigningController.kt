@@ -58,12 +58,12 @@ class SigningController internal constructor(private val vm: AppViewModel) {
             vm.runTool(doc, "comment_add", mapOf(
                 "page" to at.page + 1, "type" to "ink",
                 "strokes" to listOf(roundedBox(at.x, at.y, r * 4f, r * 2f, r * 0.6f)),
-                "color" to androidx.compose.ui.graphics.Color(vm.toolPrefs.fillColor).hex(), "width" to 1.5, "author" to vm.author,
+                "color" to androidx.compose.ui.graphics.Color(vm.toolPrefs.fillColor).hex(), "width" to 1.5, "author" to vm.commenting.author,
             ))
             return
         }
         val args = mutableMapOf<String, Any?>(
-            "page" to at.page + 1, "type" to element.engineType, "at" to listOf(at.x.toDouble(), at.y.toDouble()), "author" to vm.author,
+            "page" to at.page + 1, "type" to element.engineType, "at" to listOf(at.x.toDouble(), at.y.toDouble()), "author" to vm.commenting.author,
         )
         when (element) {
             FillElement.Text -> args["text"] = text ?: return
@@ -109,7 +109,7 @@ class SigningController internal constructor(private val vm: AppViewModel) {
             if (doc != null && at != null) {
                 vm.runTool(doc, "fill_sign_add", mapOf(
                     "page" to at.page + 1, "type" to if (pad.initials) "initials" else "signature",
-                    "at" to listOf(at.x.toDouble(), at.y.toDouble()), "path" to target.absolutePath, "author" to vm.author,
+                    "at" to listOf(at.x.toDouble(), at.y.toDouble()), "path" to target.absolutePath, "author" to vm.commenting.author,
                 ))
             } else {
                 vm.tell(text(if (pad.initials) R.string.msg_place_initials else R.string.msg_place_signature))
@@ -182,7 +182,7 @@ class SigningController internal constructor(private val vm: AppViewModel) {
         }
         if (doc.controller.tool != ViewerTool.FillSign) vm.enterTool(doc, ViewerTool.FillSign)
         doc.controller.signPanel = false
-        vm.selectedFill = null
+        vm.commenting.selectedFill = null
         certPlacing = doc
     }
 

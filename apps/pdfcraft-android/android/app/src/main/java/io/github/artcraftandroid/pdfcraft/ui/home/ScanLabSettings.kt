@@ -80,6 +80,9 @@ internal fun ScanLabSettings(vm: AppViewModel) {
     SheetRow(null, stringResource(R.string.scan_lab_snap_paper), { lab.update(o.copy(snapPaper = !o.snapPaper)) }) {
         PdfSwitch(o.snapPaper, { lab.update(o.copy(snapPaper = it)) })
     }
+    SheetRow(null, stringResource(R.string.scan_lab_upright), { lab.update(o.copy(upright = !o.upright)) }) {
+        PdfSwitch(o.upright, { lab.update(o.copy(upright = it)) })
+    }
     val own = stringResource(R.string.scan_lab_strength_own)
     Choice(stringResource(R.string.scan_lab_strength), ScanLab.STRENGTHS.map { it to (it?.toString() ?: own) }, o.strength) { lab.update(o.copy(strength = it)) }
     Text(stringResource(R.string.scan_lab_options_body), color = c.textSecondary, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 20.dp))

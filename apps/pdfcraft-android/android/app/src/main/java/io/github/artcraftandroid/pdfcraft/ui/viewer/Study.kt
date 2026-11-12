@@ -357,7 +357,7 @@ fun AppViewModel.addTape(doc: OpenDocument, page: Int, rect: FloatArray) {
         tell(text(R.string.study_tape_read_only))
         return
     }
-    runTool(doc, "comment_add", tapeArgs(page, rect, doc.study.tapeColor, commentAuthor, doc.study.tapePattern))
+    runTool(doc, "comment_add", tapeArgs(page, rect, doc.study.tapeColor, commenting.commentAuthor, doc.study.tapePattern))
     MarkupDiag.tapeAdd(doc, doc.study.tapeColor, doc.study.tapePattern, freehand = false)
 }
 
@@ -367,7 +367,7 @@ fun AppViewModel.addFreehandTape(doc: OpenDocument, page: Int, outline: FloatArr
         tell(text(R.string.study_tape_read_only))
         return
     }
-    runTool(doc, "comment_add", freehandTapeArgs(page, outline, doc.study.tapeColor, commentAuthor, doc.study.tapePattern))
+    runTool(doc, "comment_add", freehandTapeArgs(page, outline, doc.study.tapeColor, commenting.commentAuthor, doc.study.tapePattern))
     MarkupDiag.tapeAdd(doc, doc.study.tapeColor, doc.study.tapePattern, freehand = true)
 }
 

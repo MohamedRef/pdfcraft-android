@@ -8,6 +8,7 @@ use crate::encode::{Format, JPEG_QUALITY, Raster, encode_jpeg, encode_png_bileve
 use crate::enhance::enlargement;
 use crate::flatten::{predict_grid, unwarp};
 use crate::look::{Look, LookParams, Pixels, apply_with};
+use crate::upright::{Upright, turned, upright};
 use crate::warp::rectify_with_threads;
 use crate::{Photo, Quad, ScanError};
 
@@ -16,6 +17,8 @@ pub const STAGE_DECODE: &str = "scan_decode";
 /// The flattening network's run; only there when flattening was asked for.
 pub const STAGE_FLATTEN: &str = "scan_flatten";
 pub const STAGE_RECTIFY: &str = "scan_rectify";
+/// The orientation classifier's run and the turn; only there when turning upright was asked for.
+pub const STAGE_UPRIGHT: &str = "scan_upright";
 pub const STAGE_LOOK: &str = "scan_look";
 pub const STAGE_ENCODE: &str = "scan_encode";
 
@@ -45,6 +48,11 @@ pub struct PageRequest<'a> {
     /// a little less exact than the perspective warp, and it cannot tell which kind it is looking
     /// at. Without the model file the perspective warp is used.
     pub flatten: bool,
+    /// Turn the page the right way up when the orientation classifier is sure which way that is
+    /// (#339). Without the model file, and on a page it is not sure of, the page stays as the
+    /// corners gave it. A whole photo in the Original look is the camera's file and is never
+    /// turned.
+    pub upright: bool,
 }
 
 impl<'a> PageRequest<'a> {
@@ -61,6 +69,7 @@ impl<'a> PageRequest<'a> {
             snap_paper: true,
             side_proportions: false,
             flatten: false,
+            upright: false,
         }
     }
 }
@@ -88,6 +97,11 @@ pub struct PageResult {
     /// How far the network found the page from flat, as a share of its diagonal (0 when it was
     /// not asked).
     pub bend: f32,
+    /// The quarter turns clockwise the page was given to stand upright (0 when it was not asked,
+    /// already upright, or the classifier was not sure).
+    pub quarter_turns: u8,
+    /// What the orientation classifier found (`None` when it was not asked or has no model file).
+    pub orientation: Option<Upright>,
     /// (stage, milliseconds), in pipeline order.
     pub timings: Vec<(&'static str, u32)>,
 }
@@ -125,6 +139,8 @@ fn untouched(request: &PageRequest<'_>) -> Option<Result<PageResult, ScanError>>
         focal_mismatch: false,
         flattened: false,
         bend: 0.0,
+        quarter_turns: 0,
+        orientation: None,
         timings,
     }))
 }
@@ -178,6 +194,22 @@ pub fn process_page(request: &PageRequest<'_>) -> Result<PageResult, ScanError> 
     drop(photo);
     lap(STAGE_RECTIFY, &mut timings);
 
+    // the right way up, when the classifier is sure: the same pixels in new places, so the page
+    // is still resampled once (#339)
+    let orientation = if request.upright { upright(&page) } else { None };
+    let quarter_turns = orientation.filter(|found| found.sure).map_or(0, |found| found.quarter_turns);
+    let page = if quarter_turns == 0 {
+        page
+    } else {
+        let upright = turned(&page, quarter_turns);
+        drop(page);
+        upright
+    };
+    let (w, h) = (page.width, page.height);
+    if request.upright {
+        lap(STAGE_UPRIGHT, &mut timings);
+    }
+
     let pixels = apply_with(&page, request.look, &LookParams { strength: request.strength, threads: request.threads, dpi: f32::from(dpi) })
         .ok_or(ScanError::Encode)?;
     drop(page);
@@ -202,6 +234,8 @@ pub fn process_page(request: &PageRequest<'_>) -> Result<PageResult, ScanError> 
         focal_mismatch: shape.focal_mismatch,
         flattened,
         bend: grid.map_or(0.0, |g| g.bend() as f32),
+        quarter_turns,
+        orientation,
         timings,
     })
 }

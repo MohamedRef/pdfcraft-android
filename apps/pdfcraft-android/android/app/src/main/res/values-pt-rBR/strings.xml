@@ -801,6 +801,7 @@
     <string name="scan_lab_refine">Refinar as bordas na foto inteira</string>
     <string name="scan_lab_perspective">Proporções a partir da perspectiva</string>
     <string name="scan_lab_snap_paper">Ajustar a tamanhos de papel padrão</string>
+    <string name="scan_lab_upright">Colocar as páginas na posição correta</string>
     <string name="scan_lab_strength">Intensidade do filtro</string>
     <string name="scan_lab_strength_own">Padrão</string>
     <string name="scan_lab_options_body">Estas opções desligam partes do scanner ou as trocam pelo que substituíram, para descobrir de qual parte vem um problema. O log registra o que estava em vigor em cada página.</string>

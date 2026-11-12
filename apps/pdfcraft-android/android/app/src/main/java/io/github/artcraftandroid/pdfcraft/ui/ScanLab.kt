@@ -25,6 +25,8 @@ internal data class ScanLab(
     val snapPaper: Boolean = true,
     /** A strength (0–100) for every look in place of each look's own; null for the look's own. */
     val strength: Int? = null,
+    /** Turn each page the right way up when the orientation classifier is sure which way that is (#339). */
+    val upright: Boolean = true,
 ) {
     /** Nothing differs from the scanner as it is meant to be used (keeping scans changes no page). */
     val asDesigned: Boolean get() = copy(keep = false) == ScanLab()
@@ -37,18 +39,19 @@ internal data class ScanLab(
     /** The options as diagnostics fields: short lowercase words, booleans and numbers only. */
     fun diag(): Array<Pair<String, Any?>> = arrayOf<Pair<String, Any?>>(
         "finder" to finderId(finder), "refine" to refine, "side_proportions" to !perspective,
-        "snap_paper" to snapPaper, "strength_override" to (strength ?: -1), "keep" to keep,
+        "snap_paper" to snapPaper, "strength_override" to (strength ?: -1), "upright" to upright, "keep" to keep,
     )
 
     /** The options as JSON, for a kept scan's page file. */
     fun json(): JSONObject = JSONObject()
         .put("finder", finderId(finder)).put("refine", refine).put("side_proportions", !perspective)
-        .put("snap_paper", snapPaper).put("strength_override", strength ?: JSONObject.NULL)
+        .put("snap_paper", snapPaper).put("strength_override", strength ?: JSONObject.NULL).put("upright", upright)
 
     /** One line of text for the app's preferences. */
     fun encode(): String = listOf(
         "keep" to flag(keep), "finder" to finderId(finder), "refine" to flag(refine),
         "perspective" to flag(perspective), "snap" to flag(snapPaper), "strength" to (strength?.toString() ?: ""),
+        "upright" to flag(upright),
     ).joinToString(";") { (k, v) -> "$k=$v" }
 
     companion object {
@@ -80,6 +83,7 @@ internal data class ScanLab(
                 perspective = on("perspective", default.perspective),
                 snapPaper = on("snap", default.snapPaper),
                 strength = values["strength"]?.toIntOrNull()?.takeIf { it in 0..100 },
+                upright = on("upright", default.upright),
             )
         }
     }
@@ -99,7 +103,14 @@ internal data class ScanTestResult(
     val focalMismatch: Boolean,
     val flattened: Boolean,
     val bendPct: Double,
+    /** The quarter turns clockwise the page was given to stand upright (#339). */
+    val quarterTurns: Int = 0,
+    /** What the orientation classifier made of the page, or null when it was not asked. */
+    val orientation: ScanTestOrientation? = null,
 )
+
+/** The orientation classifier's answer for a page (#339): the turn it would give, and how sure it was. */
+internal data class ScanTestOrientation(val quarterTurns: Int, val confidence: Double, val agreement: Double, val tiles: Int, val sure: Boolean)
 
 /** The name, without an extension, of page [index] (from 0) of a kept scan. */
 internal fun scanTestName(index: Int): String = String.format(Locale.US, "page-%02d", index + 1)
@@ -147,6 +158,14 @@ internal fun scanTestPageJson(
             JSONObject().put("file", output ?: JSONObject.NULL).put("width", it.width).put("height", it.height).put("format", it.format)
                 .put("dpi", if (it.dpi.isFinite()) it.dpi else 0.0).put("paper", it.paper).put("aspect", it.aspect)
                 .put("focal_mismatch", it.focalMismatch).put("flattened", it.flattened).put("bend_pct", if (it.bendPct.isFinite()) Math.round(it.bendPct * 1000.0) / 1000.0 else 0.0)
+                .put("quarter_turns", it.quarterTurns)
+                .put(
+                    "orientation",
+                    it.orientation?.let { o ->
+                        JSONObject().put("quarter_turns", o.quarterTurns).put("confidence", if (o.confidence.isFinite()) Math.round(o.confidence * 1000.0) / 1000.0 else 0.0)
+                            .put("agreement", if (o.agreement.isFinite()) Math.round(o.agreement * 1000.0) / 1000.0 else 0.0).put("tiles", o.tiles).put("sure", o.sure)
+                    } ?: JSONObject.NULL,
+                )
         } ?: JSONObject.NULL,
     )
     return page.toString(1)

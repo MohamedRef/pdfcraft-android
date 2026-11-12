@@ -33,6 +33,7 @@ on one part. While any is changed, the scan screen says so.
 | Refine edges on the full photo (#291) | On | Off: the corners are the detector's own, from its small copy of the photo |
 | Proportions from perspective (#293) | On | Off: from the lengths of the page's sides, as before |
 | Match standard paper sizes (#293) | On | Off: the page keeps the shape worked out for it |
+| Turn pages upright (#339) | On | Off: a page stays as its corners gave it |
 | Filter strength | Each filter's own | 20, 40, 60, 80 or 100 for every filter |
 | Flatten page (#302) | Off | On, with the switch on the scan screen itself |
 
@@ -58,9 +59,11 @@ The zip also holds `diagnostics.txt`, the diagnostics log as **Share diagnostics
  "found": [0.11, 0.08, 0.93, 0.10, 0.95, 0.90, 0.07, 0.89],
  "finding": {"source": "model", "confidence": 0.835, "angle": 0, "passes": 1, "refined_sides": 4, "curved_sides": 0},
  "look": "auto", "strength": 60, "flatten": false,
- "options": {"finder": "auto", "refine": true, "side_proportions": false, "snap_paper": true, "strength_override": null},
+ "options": {"finder": "auto", "refine": true, "side_proportions": false, "snap_paper": true, "strength_override": null, "upright": true},
  "result": {"file": "page-01.out.jpg", "width": 1654, "height": 2339, "format": "jpeg", "dpi": 200.0,
-            "paper": "a4", "aspect": "known_focal", "focal_mismatch": false, "flattened": false, "bend_pct": 0.0}
+            "paper": "a4", "aspect": "known_focal", "focal_mismatch": false, "flattened": false, "bend_pct": 0.0,
+            "quarter_turns": 3,
+            "orientation": {"quarter_turns": 3, "confidence": 0.81, "agreement": 1.0, "tiles": 4, "sure": true}}
 }
 ```
 
@@ -88,8 +91,8 @@ photo collected so far.
 ## In the diagnostics log
 
 Besides what `docs/ANDROID_DIAGNOSTICS_LOG.md` lists for `scan`: every `photo` line carries the
-`finder` and `refine` in force, every `page` line the `strength` used, `side_proportions` and
-`snap_paper`; `test_options` is written when an option is changed, `tests_shared` (pages, bytes)
+`finder` and `refine` in force, every `page` line the `strength` used, `side_proportions`,
+`snap_paper` and `upright`; `test_options` is written when an option is changed, `tests_shared` (pages, bytes)
 when the zip is handed out, and `tests_cleared` when the kept scans are deleted. The log itself
 still holds no file name, path or document content.
 

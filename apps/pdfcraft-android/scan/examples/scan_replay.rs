@@ -149,14 +149,28 @@ fn main() {
             snap_paper: options["snap_paper"].as_bool().unwrap_or(true),
             side_proportions: options["side_proportions"].as_bool().unwrap_or(false),
             flatten: facts["flatten"].as_bool().unwrap_or(false),
+            // a file from before pages were turned upright (#339) has no such option
+            upright: options["upright"].as_bool().unwrap_or(false),
             ..PageRequest::new(&bytes, left)
         };
         match process_page(&request) {
             Ok(page) => {
                 let recorded = (facts["result"]["width"].as_u64(), facts["result"]["height"].as_u64());
                 let same = recorded == (Some(u64::from(page.width)), Some(u64::from(page.height)));
+                let turn = match (page.orientation, facts["result"]["quarter_turns"].as_u64()) {
+                    (Some(found), Some(phone)) => {
+                        format!(
+                            "; turned {} (confidence {:.2}, agreement {:.2}), the phone turned {phone}",
+                            page.quarter_turns, found.confidence, found.agreement
+                        )
+                    }
+                    (Some(found), None) => {
+                        format!("; turned {} (confidence {:.2}, agreement {:.2})", page.quarter_turns, found.confidence, found.agreement)
+                    }
+                    _ => String::new(),
+                };
                 println!(
-                    "    made again: {} x {} at {} dpi{}",
+                    "    made again: {} x {} at {} dpi{}{turn}",
                     page.width,
                     page.height,
                     page.dpi,
