@@ -85,7 +85,8 @@ gives 18 % less at the strongest setting, and that is what the test asserts.
 
 Desktop processor, two cores, a 12-megapixel page: measuring the grain is part of working out
 the light (unchanged); sharpening 0.27 s on one thread; smoothing 1.1 s on one thread, when it
-runs. On the ten reference pages (3.7 megapixels) the whole look went from 360 to 369 ms a page.
+runs. On the ten reference pages (3.7 megapixels) the whole look went from about 360 ms a page
+to 370–400 ms (two runs).
 **No phone has been timed.**
 
 ## Not done (the rest of #299)
