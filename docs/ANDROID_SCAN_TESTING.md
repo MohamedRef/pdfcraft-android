@@ -71,7 +71,8 @@ The zip also holds `diagnostics.txt`, the diagnostics log as **Share diagnostics
  "preview": {"shown": true, "reused": true, "ms": 412, "width": 905, "height": 1280, "look": "auto"},
  "crop": {"visits": 1, "corner_drags": 2, "side_drags": 1, "snaps_asked": 3, "snaps_taken": 2, "snaps_held": 0, "snaps_failed": 0,
           "snap_ms_max": 85, "nudges": 0, "detects": 0, "detects_found": 0, "whole_photo": 0, "resets": 0,
-          "loupe_decodes": 6, "snap": true, "ms": 9100, "moved_pct": 1.235},
+          "loupe_decodes": 6, "snap": true, "ms": 9100, "moved_pct": 1.235,
+          "corners_off": 0},
  "result": {"file": "page-01.out.jpg", "width": 1654, "height": 2339, "format": "jpeg", "dpi": 200.0,
             "paper": "a4", "aspect": "known_focal", "focal_mismatch": false, "flattened": false, "bend_pct": 0.0,
             "quarter_turns": 3,
@@ -93,7 +94,8 @@ screen (#292), added up over every time the page was cropped with Done, or `null
 was: drags of corners and of sides, snaps asked for, taken, skipped by holding still and failed,
 the longest snap, keyboard and TalkBack moves, Auto-detect, No crop and Reset, magnifier regions
 decoded, whether Snap was on, the time spent, and `moved_pct`, the largest corner move from where
-the screen opened in % of the photo's diagonal. It is not kept if the app is closed by Android
+the screen opened in % of the photo's diagonal, and `corners_off`, how many corners were left off
+the photo the last time (#291). It is not kept if the app is closed by Android
 before the scan is saved. `turns` says which way up the page was saved (#339): `manual` is the
 person's own turn from Rotate or Undo (0–3 clockwise, `null` when they gave none), `auto` the
 ordinary setting "Turn pages upright automatically", `total` the turn the page was saved with,
