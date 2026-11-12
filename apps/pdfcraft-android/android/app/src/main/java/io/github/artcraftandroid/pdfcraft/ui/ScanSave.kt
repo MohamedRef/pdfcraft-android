@@ -75,7 +75,10 @@ internal fun scanPageRequest(
     strength = lab.strengthFor(filter.level).toUByte(),
     outputPath = outputPath,
     snapPaper = lab.snapPaper,
-    flatten = flatten,
+    // the scan screen's switch flattens the page as asked; the testing option flattens every page
+    // and keeps the result only when it is straighter (#302)
+    flatten = flatten || lab.flattenAuto,
+    flattenCheck = !flatten && lab.flattenAuto,
     sideProportions = !lab.perspective,
     upright = ask.upright,
     turns = ask.turns.toUByte(),
@@ -141,3 +144,14 @@ internal fun scanShown(previews: Boolean, chosen: ScanView, haveWanted: Boolean,
     haveWanted -> ScanShown(ScanView.Result, false)
     else -> ScanShown(ScanView.Photo, !failed)
 }
+
+/**
+ * A flattening check (#302) as diagnostics fields: whether one was made, whether the flattened
+ * page was kept and why, and both pages' line measures in pixels (-1 when not measured).
+ */
+internal fun scanFlattenCheckDiag(c: io.github.artcraftandroid.pdfcraft.core.ScanFlattenCheck?): Array<Pair<String, Any?>> = arrayOf(
+    "flatten_checked" to (c != null), "flatten_kept" to (c?.kept ?: false), "flatten_why" to (c?.why ?: "none"),
+    "straight_px" to (c?.straightenedPx?.let { Math.round(it * 10.0) / 10.0 } ?: -1.0),
+    "straight_flat_px" to (c?.flattenedPx?.let { Math.round(it * 10.0) / 10.0 } ?: -1.0),
+    "straight_lines" to (c?.straightenedLines?.toLong() ?: 0L), "straight_flat_lines" to (c?.flattenedLines?.toLong() ?: 0L),
+)

@@ -40,6 +40,7 @@ fn base(page: Rgb, dpi: u16, paper: Paper) -> PageBase {
         quarter_turns: 0,
         orientation: None,
         turns: 0,
+        flatten_check: None,
         timings: Vec::new(),
     }
 }

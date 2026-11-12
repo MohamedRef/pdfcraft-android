@@ -80,6 +80,7 @@ class ScanSaveTest {
         assertEquals(corners.toList(), saved.corners)
         assertFalse(saved.snapPaper)
         assertTrue(saved.flatten && saved.sideProportions)
+        assertFalse(saved.flattenCheck)
         assertFalse(saved.upright || saved.denoise)
         assertEquals(60, saved.sharpen.toInt())
         // a look's own strength without the override
@@ -148,5 +149,43 @@ class ScanSaveTest {
         // the person asked for the photo, or previews are off for testing
         assertEquals(ScanShown(ScanView.Photo, false), scanShown(true, ScanView.Photo, haveWanted = true, failed = false))
         assertEquals(ScanShown(ScanView.Photo, false), scanShown(previews = false, chosen = ScanView.Result, haveWanted = true, failed = false))
+    }
+
+    @Test
+    fun automaticFlatteningFlattensEveryPageAndChecksItUnlessTheSwitchAsks() {
+        val corners = floatArrayOf(0.1f, 0.1f, 0.9f, 0.1f, 0.9f, 0.9f, 0.1f, 0.9f)
+        val auto = ScanLab(flattenAuto = true)
+        // the testing option off: flattened only when asked, never checked
+        val plain = scanPageRequest("/a", corners, ScanFilter.CleanScan, false, ScanLab(), "")
+        assertFalse(plain.flatten || plain.flattenCheck)
+        // on: every page goes through the network, and is kept only when straighter (#302)
+        val checked = scanPageRequest("/a", corners, ScanFilter.CleanScan, false, auto, "")
+        assertTrue(checked.flatten && checked.flattenCheck)
+        // the scan screen's switch asks for it: flattened as asked, without the check
+        val asked = scanPageRequest("/a", corners, ScanFilter.CleanScan, true, auto, "")
+        assertTrue(asked.flatten)
+        assertFalse(asked.flattenCheck)
+        // a preview made with the option is not the one made without it
+        val page = ScanPreviewKey("/a", corners.toList(), ScanFilter.CleanScan, false, ScanLab())
+        assertFalse(page == page.copy(lab = auto))
+    }
+
+    @Test
+    fun aFlatteningCheckIsLoggedAsNumbersAndShortWords() {
+        val check = io.github.artcraftandroid.pdfcraft.core.ScanFlattenCheck(true, "straighter", 5.583f, 1.588f, 25u, 24u)
+        val fields = scanFlattenCheckDiag(check).toMap()
+        assertEquals(true, fields["flatten_checked"])
+        assertEquals(true, fields["flatten_kept"])
+        assertEquals("straighter", fields["flatten_why"])
+        assertEquals(5.6, fields["straight_px"])
+        assertEquals(1.6, fields["straight_flat_px"])
+        assertEquals(25L, fields["straight_lines"])
+        val none = scanFlattenCheckDiag(null).toMap()
+        assertEquals(false, none["flatten_checked"])
+        assertEquals("none", none["flatten_why"])
+        assertEquals(-1.0, none["straight_px"])
+        // an unmeasured page
+        val unmeasured = scanFlattenCheckDiag(io.github.artcraftandroid.pdfcraft.core.ScanFlattenCheck(false, "unmeasured", null, 2f, 0u, 5u)).toMap()
+        assertEquals(-1.0, unmeasured["straight_px"])
     }
 }
