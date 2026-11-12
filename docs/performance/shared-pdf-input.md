@@ -36,10 +36,33 @@ application ownership of these stores and the following audited writer protocol:
   bytes. Replacing or unlinking a pathname leaves the old mapped inode alive until its final
   parser, stream view, history or render-cache owner is released.
 
-`crates/pdf-bytes` is an Android-owned adapter, not an upstream engine change. Its only unsafe
-operation is the private file-map constructor after the ownership/store checks. The rest of the
+`crates/pdf-bytes` is an Android-owned adapter, not an upstream engine change. Its unsafe
+operations are the private file-map constructor after the ownership/store checks and, on Linux
+and Android, the display-copy splice below. The rest of the
 workspace retains its unsafe-code prohibition. Future writers to managed stores must preserve
 this replacement protocol; exposing these files for external writing would invalidate it.
+
+## Display copy without a second full copy (#234)
+
+The reader's display copy is the source followed by an incremental revision holding drawn
+comment and field appearances and signature marks. A mapped managed source keeps its descriptor
+(`ManagedMap`), and `pdfcraft_bytes::joined` builds that copy without copying the file:
+
+1. reserve one private anonymous region the size of the copy, rounded up to whole pages;
+2. map the same descriptor privately with `MAP_FIXED` over the start of that region;
+3. write the revision right after the file's last byte (the file's last partial page becomes a
+   private copy; the file is never written);
+4. make the whole region read-only.
+
+The file's pages stay shared with the page cache, so the copy costs the revision plus at most one
+page. The descriptor's length must still equal the mapping's; otherwise, and on any failed call,
+on other platforms and for owned or anonymous sources, the copy is made as before. The same
+replacement-only writer protocol keeps the spliced pages identical to the mapped ones; a
+replaced or unlinked file stays readable through the region, as through the mapping.
+
+Host measurement (4-core x86, 356 MB working copy): copying the file into the display copy took
+210–232 ms; the splice takes about 0.2 ms, and touching every page of the result 9–11 ms.
+No phone timing is claimed until a build with this change is measured on a device.
 
 ## Validation and limits
 

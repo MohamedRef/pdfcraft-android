@@ -257,6 +257,46 @@ enum Row {
 /// incrementally — other readers would follow the broken chain — so it is rewritten in full,
 /// which also repairs the file (what users expect after "the file was damaged and repaired").
 pub fn write_incremental(doc: &Document, opts: &SaveOptions) -> Result<Vec<u8>, CosError> {
+    match incremental_parts(doc, opts)? {
+        Incremental::Full(file) => Ok(file),
+        Incremental::Appended { original, newline, revision } => {
+            let mut file = Vec::with_capacity(original.len() + usize::from(newline) + revision.len());
+            // Android adaptation (#212): a mapped original is read ahead for this full copy.
+            original.will_read_all();
+            file.extend_from_slice(&original);
+            if newline {
+                file.push(b'\n');
+            }
+            file.extend_from_slice(&revision);
+            Ok(file)
+        }
+    }
+}
+
+/// [`write_incremental`] as a shared source, for a copy that is only read (the reader's display
+/// copy). Android adaptation (#234): the bytes are the same, but a mapped managed original is
+/// extended by the new revision instead of copied ([`pdfcraft_bytes::joined`]).
+pub fn write_incremental_shared(doc: &Document, opts: &SaveOptions) -> Result<crate::PdfBytes, CosError> {
+    Ok(match incremental_parts(doc, opts)? {
+        Incremental::Full(file) => std::sync::Arc::new(file),
+        Incremental::Appended { original, newline, revision } if newline => {
+            let mut tail = Vec::with_capacity(1 + revision.len());
+            tail.push(b'\n');
+            tail.extend_from_slice(&revision);
+            pdfcraft_bytes::joined(&original, &tail)
+        }
+        Incremental::Appended { original, revision, .. } => pdfcraft_bytes::joined(&original, &revision),
+    })
+}
+
+/// What [`write_incremental`] writes: a whole new file, or the original followed by a line break
+/// where it ends without one and then the new revision.
+enum Incremental {
+    Full(Vec<u8>),
+    Appended { original: crate::PdfBytes, newline: bool, revision: Vec<u8> },
+}
+
+fn incremental_parts(doc: &Document, opts: &SaveOptions) -> Result<Incremental, CosError> {
     if doc.stream_limited() {
         return Err(CosError::ReadOnlyLimit);
     }
@@ -264,7 +304,7 @@ pub fn write_incremental(doc: &Document, opts: &SaveOptions) -> Result<Vec<u8>, 
     // Reconstructed files have no chain to append to; added or removed encryption must
     // rewrite every object; redaction must not leave the old revision behind. All need a full save.
     if doc.reconstructed() || doc.encryption_changed() || doc.full_save_required() {
-        return write_full(doc, opts);
+        return write_full(doc, opts).map(Incremental::Full);
     }
     let mut doc = doc.clone();
     stamp_mod_date(&mut doc, opts);
@@ -318,15 +358,7 @@ pub fn write_incremental(doc: &Document, opts: &SaveOptions) -> Result<Vec<u8>, 
         write_dict(&trailer, &mut out);
         let _ = write!(out, "\nstartxref\n{xref_at}\n%%EOF\n");
     }
-    let mut file = Vec::with_capacity(original.len() + usize::from(newline) + out.len());
-    // Android adaptation (#212): a mapped original is read ahead for this full copy.
-    original.will_read_all();
-    file.extend_from_slice(&original);
-    if newline {
-        file.push(b'\n');
-    }
-    file.extend_from_slice(&out);
-    Ok(file)
+    Ok(Incremental::Appended { original, newline, revision: out })
 }
 
 /// The objects [`write_full`] writes: everything reachable from the trailer's /Root, /Info and
