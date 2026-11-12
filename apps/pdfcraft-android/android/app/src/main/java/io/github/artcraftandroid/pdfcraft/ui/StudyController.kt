@@ -9,6 +9,8 @@ import androidx.lifecycle.viewModelScope
 import io.github.artcraftandroid.pdfcraft.R
 import io.github.artcraftandroid.pdfcraft.plural
 import io.github.artcraftandroid.pdfcraft.text
+import io.github.artcraftandroid.pdfcraft.engine.Diag
+import io.github.artcraftandroid.pdfcraft.engine.DiagArea
 import io.github.artcraftandroid.pdfcraft.engine.DocumentFiles
 import io.github.artcraftandroid.pdfcraft.engine.Engine
 import io.github.artcraftandroid.pdfcraft.engine.review
@@ -68,6 +70,7 @@ class StudyController internal constructor(private val vm: AppViewModel) {
                 front = io.github.artcraftandroid.pdfcraft.engine.Flashcards.clozeOf(line, picked)
             }
             doc.selection.clear()
+            Diag.event(DiagArea.Study, "card_from_selection", "doc" to doc.diagNumber, "cloze" to cloze, "chars" to picked.length)
             cardDraft = CardDraft(uri, doc.info.name, page, front, "", null)
         }
     }
@@ -127,7 +130,13 @@ class StudyController internal constructor(private val vm: AppViewModel) {
     }
 
     fun rate(r: ReviewSession, card: io.github.artcraftandroid.pdfcraft.engine.Flashcard, rating: io.github.artcraftandroid.pdfcraft.engine.Rating) {
-        val next = fsrs.review(card, rating, System.currentTimeMillis())
+        val now = System.currentTimeMillis()
+        val next = fsrs.review(card, rating, now)
+        Diag.event(
+            DiagArea.Study, "card_review", "rating" to rating, "new" to card.isNew, "cloze" to card.isCloze,
+            "reps" to next.reps, "lapses" to next.lapses, "interval_days" to (next.due - now) / 86_400_000.0,
+            "stability" to next.memory?.stability, "difficulty" to next.memory?.difficulty, "left" to r.queue.size - 1,
+        )
         r.queue.remove(card)
         // forgotten cards come back at the end of this session
         if (rating == io.github.artcraftandroid.pdfcraft.engine.Rating.Again) r.queue.add(next)
@@ -152,6 +161,7 @@ class StudyController internal constructor(private val vm: AppViewModel) {
         if (cards.isEmpty()) { vm.tell(text(R.string.cards_none)); return@job }
         val out = vm.tempFile("txt")
         withContext(Dispatchers.IO) { out.writeText(io.github.artcraftandroid.pdfcraft.engine.Flashcards.toAnkiTsv(cards)) }
+        Diag.event(DiagArea.Study, "cards_export", "cards" to cards.size, "one_deck" to (deck != null), "bytes" to out.length())
         vm.deliver(out, DocumentFiles.safeName(text(R.string.cards_file_name, deckName.removeSuffix(".pdf"))).removeSuffix(".pdf") + ".txt", "text/plain")
     }
 
@@ -182,6 +192,7 @@ class StudyController internal constructor(private val vm: AppViewModel) {
                     cards.size
                 }.getOrDefault(-1)
             }
+            Diag.event(DiagArea.Study, "cards_import", "cards" to n.coerceAtLeast(0), "ok" to (n >= 0))
             if (n < 0) vm.tell(text(R.string.msg_that_file_unreadable)) else vm.tell(text(R.string.cards_imported, n))
             refreshDue()
             reviewing?.let { reload(it) }
@@ -315,18 +326,23 @@ class StudyController internal constructor(private val vm: AppViewModel) {
         if (!libraryIndexing || indexJob?.isActive == true || vm.document != null) return
         val eng = vm.engine ?: return
         indexJob = vm.viewModelScope.launch {
+            val started = System.nanoTime()
+            var indexed = 0; var unchanged = 0; var tooLarge = 0; var unreadable = 0
+            var stopped = "done"
             try {
                 val items = withContext(Dispatchers.IO) { library.load().items }
                 for (item in items) {
-                    if (vm.document != null || vm.opening || !batteryAllowsIndexing()) break
+                    if (vm.document != null || vm.opening) { stopped = "document_open"; break }
+                    if (!batteryAllowsIndexing()) { stopped = "battery"; break }
                     val uri = Uri.parse(item.uri)
                     val signature = withContext(Dispatchers.IO) {
                         val size = runCatching { vm.files.size(uri) }.getOrNull() ?: return@withContext null
                         "$size:${runCatching { vm.files.lastModified(uri) }.getOrNull() ?: 0}"
                     } ?: continue
-                    if (withContext(Dispatchers.IO) { libraryIndex.has(item.uri, signature) }) continue
+                    if (withContext(Dispatchers.IO) { libraryIndex.has(item.uri, signature) }) { unchanged++; continue }
                     indexingName = item.name
                     val copy = File(app.cacheDir, "index-${System.nanoTime()}.pdf")
+                    var big = false
                     try {
                         val ok = withContext(Dispatchers.IO) {
                             runCatching {
@@ -339,7 +355,7 @@ class StudyController internal constructor(private val vm: AppViewModel) {
                                             if (n < 0) break
                                             total += n
                                             // very large files are left out of the index
-                                            if (total > MAX_INDEX_BYTES) return@runCatching false
+                                            if (total > MAX_INDEX_BYTES) { big = true; return@runCatching false }
                                             out.write(buf, 0, n)
                                         }
                                     }
@@ -347,8 +363,11 @@ class StudyController internal constructor(private val vm: AppViewModel) {
                                 } ?: false
                             }.getOrDefault(false)
                         }
-                        if (!ok || vm.document != null) continue
-                        val id = runCatching { eng.tool("doc_open", mapOf("path" to copy.absolutePath)).optLong("doc") }.getOrNull() ?: continue
+                        if (!ok) { if (big) tooLarge++ else unreadable++; continue }
+                        if (vm.document != null) continue
+                        val docStart = System.nanoTime()
+                        val id = runCatching { eng.tool("doc_open", mapOf("path" to copy.absolutePath)).optLong("doc") }.getOrNull()
+                        if (id == null) { unreadable++; continue }
                         try {
                             val text = runCatching { eng.tool("text_extract", mapOf("doc" to id)) }.getOrNull()
                             val pages = text?.optJSONArray("pages")?.let { a -> (0 until a.length()).map { a.optJSONObject(it)?.optString("text").orEmpty() } } ?: emptyList()
@@ -357,6 +376,12 @@ class StudyController internal constructor(private val vm: AppViewModel) {
                             withContext(Dispatchers.IO) {
                                 libraryIndex.put(io.github.artcraftandroid.pdfcraft.engine.IndexedDoc(item.uri, item.name, signature, pages, outline, comments))
                             }
+                            indexed++
+                            Diag.event(
+                                DiagArea.Study, "library_index_doc", "ms" to (System.nanoTime() - docStart) / 1_000_000,
+                                "bytes" to copy.length(), "pages" to pages.size, "chars" to pages.sumOf { it.length },
+                                "bookmarks" to outline.size, "comments" to comments.size,
+                            )
                         } finally {
                             runCatching { eng.tool("doc_close", mapOf("doc" to id, "discard_changes" to true)) }
                         }
@@ -365,7 +390,14 @@ class StudyController internal constructor(private val vm: AppViewModel) {
                     }
                 }
                 withContext(Dispatchers.IO) { libraryIndex.retain(library.load().items.map { it.uri }.toSet()) }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                stopped = "cancelled"
+                throw e
             } finally {
+                Diag.event(
+                    DiagArea.Study, "library_index", "ms" to (System.nanoTime() - started) / 1_000_000, "stopped" to stopped,
+                    "indexed" to indexed, "unchanged" to unchanged, "too_large" to tooLarge, "unreadable" to unreadable,
+                )
                 indexingName = null
                 refreshLibrary()
             }
@@ -413,8 +445,14 @@ class StudyController internal constructor(private val vm: AppViewModel) {
         // names of every library file (indexed or not), then the index
         val names = data.items.filter { (scope == null || it.uri in scope) && q.length >= 2 && io.github.artcraftandroid.pdfcraft.engine.LibraryIndex.fold(it.name).contains(q) }
             .map { io.github.artcraftandroid.pdfcraft.engine.SearchHit(it.uri, it.name, -1, io.github.artcraftandroid.pdfcraft.engine.HitKind.Name, it.name, io.github.artcraftandroid.pdfcraft.engine.LibraryIndex.fold(it.name).indexOf(q), q.length) }
+        val started = System.nanoTime()
         val inside = if (libraryIndexing) libraryIndex.search(query, scope ?: data.items.map { it.uri }) else emptyList()
-        names + inside.filter { it.kind != io.github.artcraftandroid.pdfcraft.engine.HitKind.Name }
+        (names + inside.filter { it.kind != io.github.artcraftandroid.pdfcraft.engine.HitKind.Name }).also { hits ->
+            Diag.event(
+                DiagArea.Study, "library_search", "ms" to (System.nanoTime() - started) / 1_000_000, "query_chars" to q.length,
+                "files" to (scope?.size ?: data.items.size), "indexing" to libraryIndexing, "hits" to hits.size, "name_hits" to names.size,
+            )
+        }
     }
 
     /** After opening, go to this page and search this text (a library search hit). */
@@ -489,7 +527,11 @@ class StudyController internal constructor(private val vm: AppViewModel) {
         val name = doc.info.name
         val count = doc.pageCount
         val last = doc.viewer.currentPage
-        vm.viewModelScope.launch(Dispatchers.IO) { runCatching { studyStats.record(uri, name, count, pages, last, ms, System.currentTimeMillis(), notes) } }
+        Diag.event(DiagArea.Study, "study_time", "doc" to doc.diagNumber, "active_ms" to ms, "pages_seen" to pages.size, "notes" to notes, "page_count" to count)
+        vm.viewModelScope.launch(Dispatchers.IO) {
+            runCatching { studyStats.record(uri, name, count, pages, last, ms, System.currentTimeMillis(), notes) }
+                .onFailure { Diag.failure(DiagArea.Study, "study_time_save", it) }
+        }
     }
 
     /** Settings: forget every study statistic. */
@@ -520,6 +562,10 @@ class StudyController internal constructor(private val vm: AppViewModel) {
             vm.appPrefs.edit().putBoolean("focusNotificationAsked", true).apply()
             notificationRequests.trySend(Unit)
         }
+        Diag.event(
+            DiagArea.Study, "focus_timer", "running" to t.running, "paused" to (t.pausedLeft >= 0), "on_break" to t.onBreak,
+            "work_min" to t.workMs / 60_000, "break_min" to t.breakMs / 60_000,
+        )
         focusTimer = t
         io.github.artcraftandroid.pdfcraft.FocusTimerAlarm.apply(app, t)
     }
@@ -529,6 +575,8 @@ class StudyController internal constructor(private val vm: AppViewModel) {
         val now = System.currentTimeMillis()
         val next = focusTimer.tick(now)
         if (next != focusTimer) {
+            // how late the phase change was noticed (a stalled tick would show here)
+            Diag.event(DiagArea.Study, "focus_phase", "on_break" to next.onBreak, "late_ms" to (now - focusTimer.endsAt).coerceAtLeast(0))
             focusTimer = next
             io.github.artcraftandroid.pdfcraft.FocusTimerAlarm.apply(app, next, now, alert = true)
             vm.tell(text(if (next.onBreak) R.string.focus_break_started else R.string.focus_work_started))
@@ -546,9 +594,11 @@ class StudyController internal constructor(private val vm: AppViewModel) {
         vm.job(text(R.string.digest_busy)) { eng ->
             val SD = io.github.artcraftandroid.pdfcraft.engine.StudyDigest
             val base = doc.title.ifBlank { "Document" }
+            val started = System.nanoTime()
             if (format == DigestFormat.Pdf) {
                 val out = vm.tempFile("pdf")
                 eng.tool("comments_summarize", mapOf("doc" to doc.id, "sort" to "page", "out" to out.absolutePath))
+                Diag.event(DiagArea.Study, "digest_export", "doc" to doc.diagNumber, "format" to format, "ms" to (System.nanoTime() - started) / 1_000_000, "bytes" to out.length())
                 vm.deliver(out, DocumentFiles.safeName(text(R.string.digest_file_name, base)))
                 return@job
             }
@@ -563,6 +613,11 @@ class StudyController internal constructor(private val vm: AppViewModel) {
                 }.getOrNull()?.takeIf { it.isNotEmpty() }
                 e.marked = under ?: e.note
             }
+            Diag.event(
+                DiagArea.Study, "digest_entries", "doc" to doc.diagNumber, "format" to format, "grouping" to grouping,
+                "entries" to entries.size, "highlights" to entries.count { it.isMarkup }, "drawings" to entries.count { it.isInk },
+                "highlight_text_ms" to (System.nanoTime() - started) / 1_000_000,
+            )
             val stamp = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date())
             val labels = io.github.artcraftandroid.pdfcraft.engine.DigestLabels(
                 page = text(R.string.digest_page), noColor = text(R.string.digest_no_color),
@@ -618,6 +673,10 @@ class StudyController internal constructor(private val vm: AppViewModel) {
                             for ((name, bytes) in images) { zip.putNextEntry(java.util.zip.ZipEntry(name)); zip.write(bytes); zip.closeEntry() }
                         }
                     }
+                    Diag.event(
+                        DiagArea.Study, "digest_images", "doc" to doc.diagNumber, "images" to images.size,
+                        "skipped" to entries.count { it.isInk } - images.size, "bytes" to out.length(), "ms" to (System.nanoTime() - started) / 1_000_000,
+                    )
                     vm.deliver(out, "$notesName.zip", "application/zip")
                 }
                 DigestFormat.Pdf -> Unit
@@ -658,14 +717,23 @@ class StudyController internal constructor(private val vm: AppViewModel) {
                 val name = DocumentFiles.safeName(title.trim().ifEmpty { text(R.string.notebook_default_name, stamp) })
                 val uri = withContext(Dispatchers.IO) { vm.files.saveToDownloads(out, name).also { out.delete() } }
                 withContext(Dispatchers.IO) { vm.notebooks.put(uri.toString(), page) }
+                Diag.event(DiagArea.Study, "notebook_create", "template" to notebookTemplateWord(page))
                 vm.pendingTool = io.github.artcraftandroid.pdfcraft.ui.home.FileTool.Draw
                 vm.open(uri)
             } catch (e: Exception) {
+                Diag.failure(DiagArea.Study, "notebook_create", e)
                 vm.tell(e.userMessage)
             } finally {
                 vm.busy = null
             }
         }
+    }
+
+    /** A notebook page for the log: the built-in paper (dots, lines...), or "user" (its file name is the user's). */
+    private fun notebookTemplateWord(page: io.github.artcraftandroid.pdfcraft.engine.NotebookPage?): Any = when (page) {
+        is io.github.artcraftandroid.pdfcraft.engine.NotebookPage.Builtin -> page.template.paper
+        is io.github.artcraftandroid.pdfcraft.engine.NotebookPage.User -> "user"
+        null -> "blank"
     }
 
     /** What [doc]'s pages look like, if it was made as a notebook here. */
@@ -683,6 +751,7 @@ class StudyController internal constructor(private val vm: AppViewModel) {
         if (!doc.writable || !doc.info.allowsAnnotation) { vm.tell(text(R.string.notebook_cannot_add_page)); return }
         vm.viewModelScope.launch {
             val chosen = page ?: notebookPageOf(doc)
+            Diag.event(DiagArea.Study, "notebook_add_page", "doc" to doc.diagNumber, "template" to notebookTemplateWord(chosen), "at_end" to (at == doc.pageCount + 1))
             val show = { doc.viewer.goToPage(at - 1) }
             if (chosen == null) {
                 vm.runTool(doc, "page_insert_blank", mapOf("at" to at)) { show() }
