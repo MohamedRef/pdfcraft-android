@@ -156,6 +156,7 @@ fun MoreSheet(vm: AppViewModel, doc: OpenDocument) {
             GroupDivider()
             MoreHeading(stringResource(R.string.sheet_group_file))
             SheetRow(LucideIcons.Copy, stringResource(R.string.common_save_copy), { close(); vm.saveCopyAs(doc) })
+            if (vm.backupTree != null) SheetRow(LucideIcons.RotateCcw, stringResource(R.string.backup_history), { ctl.sheet = ViewerSheet.Backups }, chevron = true)
             SheetRow(LucideIcons.FileOutput, stringResource(R.string.sheet_export_as), { close(); vm.openExport(doc) })
             SheetRow(LucideIcons.BrushCleaning, stringResource(R.string.hidden_title), { ctl.sheet = ViewerSheet.HiddenInfo }, chevron = true)
             SheetRow(LucideIcons.Stamp, stringResource(R.string.flatten_title), { close(); vm.flattenPrompt = doc }, enabled = canEditDocument(doc))
@@ -193,17 +194,30 @@ fun ViewSettingsSheet(vm: AppViewModel, doc: OpenDocument) {
             vm.setPageMode(doc, PageMode.SinglePage)
             ctl.sheet = ViewerSheet.None
         }, checked = doc.viewer.mode == PageMode.SinglePage && !vm.readingMode)
+        // pages in a row, scrolled sideways (#152)
+        SheetRow(LucideIcons.Columns3, stringResource(R.string.sheet_horizontal), {
+            vm.setPageMode(doc, PageMode.Horizontal)
+            ctl.sheet = ViewerSheet.None
+        }, checked = doc.viewer.mode == PageMode.Horizontal && !vm.readingMode)
         // two pages side by side: only where the window has room for them (#152)
         if (spreadFits(androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp)) {
             GroupDivider()
             SheetRow(LucideIcons.Columns2, stringResource(R.string.sheet_two_pages), {
-                vm.setSpread(if (vm.spreadPref == Spread.TwoUp) Spread.Single else Spread.TwoUp)
+                vm.setSpread(if (vm.spreadPref == Spread.TwoUp && !vm.spreadAuto) Spread.Single else Spread.TwoUp)
                 ctl.sheet = ViewerSheet.None
-            }, checked = vm.spreadPref == Spread.TwoUp && !vm.readingMode)
+            }, checked = vm.spreadPref == Spread.TwoUp && !vm.spreadAuto && !vm.readingMode)
             SheetRow(LucideIcons.BookOpen, stringResource(R.string.sheet_two_pages_cover), {
-                vm.setSpread(if (vm.spreadPref == Spread.TwoUpCover) Spread.Single else Spread.TwoUpCover)
+                vm.setSpread(if (vm.spreadPref == Spread.TwoUpCover && !vm.spreadAuto) Spread.Single else Spread.TwoUpCover)
                 ctl.sheet = ViewerSheet.None
-            }, checked = vm.spreadPref == Spread.TwoUpCover && !vm.readingMode)
+            }, checked = vm.spreadPref == Spread.TwoUpCover && !vm.spreadAuto && !vm.readingMode)
+        }
+        // two pages whenever the window is wide and landscape, one otherwise
+        SheetRow(LucideIcons.Columns2, stringResource(R.string.sheet_two_pages_auto), { vm.chooseSpreadAuto(!vm.spreadAuto) }) {
+            PdfSwitch(vm.spreadAuto, { vm.chooseSpreadAuto(it) })
+        }
+        // other readers open the file the same way (its initial view)
+        if (canEditDocument(doc) && !vm.readingMode && vm.layoutHasInitialView(doc)) {
+            SheetRow(LucideIcons.Save, stringResource(R.string.sheet_layout_initial_view), { ctl.sheet = ViewerSheet.None; vm.saveLayoutAsInitialView(doc) })
         }
         SheetRow(LucideIcons.BookOpenText, stringResource(R.string.sheet_reading_mode), {
             ctl.sheet = ViewerSheet.None

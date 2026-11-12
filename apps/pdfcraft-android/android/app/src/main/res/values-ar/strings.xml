@@ -516,6 +516,8 @@
     <string name="sheet_group_navigate">التنقل</string>
     <string name="sheet_group_file">الملف</string>
     <string name="sheet_present">عرض تقديمي</string>
+    <string name="present_on_display">يُعرض على %1$s</string>
+    <string name="present_next_page">التالية: صفحة %1$d</string>
     <string name="file_details_title">تفاصيل الملف</string>
     <string name="file_details_copy_all">نسخ كل التفاصيل</string>
     <string name="file_details_copy_value">نسخ القيمة</string>
@@ -579,6 +581,9 @@
     <string name="sheet_single_page">صفحة واحدة</string>
     <string name="sheet_two_pages">صفحتان</string>
     <string name="sheet_two_pages_cover">صفحتان مع الغلاف</string>
+    <string name="sheet_horizontal">الصفحات في صف</string>
+    <string name="sheet_two_pages_auto">صفحتان على الشاشات العريضة</string>
+    <string name="sheet_layout_initial_view">الفتح بهذا الشكل في التطبيقات الأخرى</string>
     <string name="sheet_reading_mode">وضع القراءة</string>
     <string name="sheet_night_mode">الوضع الليلي</string>
     <string name="sheet_hide_annotations">إخفاء التعليقات التوضيحية</string>
@@ -702,7 +707,7 @@
     <string name="toolbar_tool_on_bar">%1$s، في شريط الأدوات</string>
     <string name="toolbar_tool_in_more_tools">%1$s، في المزيد من الأدوات</string>
     <string name="toolbar_strikethrough">شطب</string>
-    <string name="toolbar_no_text_to_mark">لا يوجد نص قابل للتحديد في هذه الصفحة. استخدم التعرّف على النص أولًا من «المزيد من الأدوات».</string>
+    <string name="toolbar_no_text_to_mark">لا يوجد نص قابل للتحديد هنا. اسحب لتظليل منطقة، أو تعرّف على النص أولًا.</string>
     <string name="toolbar_draw_freeform">رسم حر</string>
     <string name="toolbar_eraser">ممحاة</string>
     <string name="toolbar_line_thickness">سُمك الخط</string>
@@ -966,11 +971,13 @@
     <string name="msg_copy_request_lost">أُغلق PdfCraft أثناء اختيارك مكان حفظ النسخة، فلم يُحفظ شيء. حُذف الملف الفارغ الذي تُرك هناك.</string>
     <string name="msg_copy_request_lost_kept">أُغلق PdfCraft أثناء اختيارك مكان حفظ النسخة، فلم يُحفظ شيء. تحقّق من وجود ملف فارغ في ذلك المكان.</string>
     <string name="home_section_diagnostics">التشخيص</string>
-    <string name="home_record_open_timings">تسجيل أوقات فتح الملفات</string>
-    <string name="home_record_open_timings_body">يحفظ الوقت الذي تستغرقه كل خطوة في فتح الملف لقياس الفتح البطيء. يحفظ أسماء الخطوات والأوقات والأحجام وعدد الصفحات فقط، دون أسماء الملفات أو محتواها. إيقافه يمسح ما سُجّل.</string>
-    <string name="home_share_open_timings">مشاركة أوقات الفتح</string>
-    <string name="home_open_timings_empty">لا توجد أوقات فتح بعد: فعّل التسجيل ثم افتح ملفًا.</string>
-    <string name="home_open_timings_subject">أوقات فتح PdfCraft</string>
+    <string name="home_record_diagnostics">تسجيل سجل التشخيص</string>
+    <string name="home_record_diagnostics_body">يحفظ سجلًا مفصلًا لفتح الملفات ورسمها وتأخر القلم والحفظ والمسح الضوئي والذاكرة والأخطاء، حتى يمكن فحص أي مشكلة من هاتفك. أسماء الأحداث والأوقات والأعداد والأحجام فقط، دون أسماء الملفات أو مساراتها أو محتواها. إيقافه يحذفه.</string>
+    <string name="home_share_diagnostics">مشاركة سجل التشخيص</string>
+    <string name="home_clear_diagnostics">مسح سجل التشخيص</string>
+    <string name="home_diagnostics_empty">لا يوجد تشخيص بعد: فعّل التسجيل ثم استخدم التطبيق.</string>
+    <string name="home_diagnostics_subject">سجل تشخيص PdfCraft</string>
+    <string name="home_diagnostics_cleared">تم مسح سجل التشخيص</string>
     <string name="document_preparing">جارٍ تجهيز التحرير والتحقق من التوقيعات…</string>
     <string name="comments_loading">جارٍ تحميل التعليقات…</string>
     <string name="compact_previews">تقليل ذاكرة معاينات الصفحات</string>
@@ -1295,6 +1302,7 @@
     <string name="comments_search_hint">ابحث في النص أو الردود أو الكاتب</string>
     <string name="comments_search_close">أغلق البحث</string>
     <string name="comments_shown">%1$d من %2$d سلسلة</string>
+    <string name="comments_filtered_on_page">التعليقات مُصفّاة</string>
     <string name="comments_no_match">لا توجد تعليقات مطابقة.</string>
     <string name="comments_filter_all">الكل</string>
     <string name="comments_filter_notes">الملاحظات والنصوص</string>
@@ -1644,6 +1652,25 @@
     <string name="updater_home_view">عرض</string>
     <string name="updater_auto_check">ابحث عن التحديثات تلقائيًا</string>
     <string name="updater_auto_check_body">مرة يوميًا عند فتح PdfCraft، يسأل GitHub إن كان هناك إصدار أحدث. لا تُرسَل أي ملفات أو بيانات شخصية.</string>
+    <!-- Selection menu labels, markup follow-up bar, replace/insert text (#197, #170) -->
+    <string name="viewer_menu_note">ملاحظة</string>
+    <string name="viewer_menu_highlight">تظليل</string>
+    <string name="viewer_menu_underline">تسطير</string>
+    <string name="viewer_menu_strike">شطب</string>
+    <string name="viewer_menu_squiggly">متعرج</string>
+    <string name="viewer_replace_text">استبدال النص</string>
+    <string name="viewer_insert_text">إدراج نص بعده</string>
+    <string name="viewer_replacement_hint">النص البديل</string>
+    <string name="viewer_insertion_hint">النص المراد إدراجه</string>
+    <string name="viewer_markup_color">لون التعليم</string>
+    <string name="viewer_add_note">إضافة ملاحظة</string>
+    <!-- Polygon and connected lines in Draw (#133) -->
+    <string name="toolbar_draw_polygon">مضلع: اضغط على كل زاوية ثم على الأولى مرة أخرى</string>
+    <string name="toolbar_draw_polyline">خطوط متصلة: اضغط على كل نقطة ثم على الأخيرة مرة أخرى</string>
+    <string name="ink_toolbar_polygon">مضلع</string>
+    <string name="ink_toolbar_polyline">خطوط</string>
+    <string name="viewer_hint_polygon">اضغط على كل زاوية. اضغط على الزاوية الأولى مرة أخرى للإنهاء.</string>
+    <string name="viewer_hint_polyline">اضغط على كل نقطة. اضغط على النقطة الأخيرة مرة أخرى للإنهاء.</string>
     <plurals name="cards_due">
         <item quantity="zero">لا بطاقات مستحقة</item>
         <item quantity="one">بطاقة واحدة مستحقة</item>
@@ -1691,4 +1718,24 @@
     <string name="cards_busy_export">جارٍ تصدير البطاقات…</string>
     <string name="cards_file_name">بطاقات %1$s</string>
     <string name="cards_imported">تم استيراد %1$d بطاقة</string>
+    <string name="backup_section">النسخ الاحتياطي</string>
+    <string name="backup_choose_folder">اختر مجلد النسخ الاحتياطي</string>
+    <string name="backup_folder_is">مجلد النسخ الاحتياطي: %1$s</string>
+    <string name="backup_keep_label">عدد النسخ المحفوظة لكل مستند</string>
+    <string name="backup_status_last">آخر نسخة احتياطية %1$s</string>
+    <string name="backup_status_none">لم يتم نسخ أي شيء بعد. تُنشأ نسخة في كل مرة يُحفظ فيها مستند.</string>
+    <string name="backup_status_failed">تعذّرت كتابة آخر نسخة احتياطية. ستُعاد المحاولة عند الحفظ التالي.</string>
+    <string name="backup_retry">إعادة محاولة النسخ</string>
+    <string name="backup_turn_off">إيقاف النسخ الاحتياطي</string>
+    <string name="backup_body">بعد كل حفظ، تذهب نسخة مؤرّخة من ملف PDF وتعليقاته (XFDF) إلى المجلد الذي تختاره، داخل مجلد باسم المستند، وتُحذف النسخ الأقدم. وتُحفظ هناك أيضًا مكتبتك وبطاقاتك ودفاترك. لا يتغير الملف الأصلي أبدًا.</string>
+    <string name="backup_folder_not_writable">لا يمكن لـ PdfCraft الكتابة في هذا المجلد. اختر مجلدًا آخر.</string>
+    <string name="backup_failed">فشل النسخ الاحتياطي. مستندك محفوظ.</string>
+    <string name="backup_history">سجلّ النسخ</string>
+    <string name="backup_history_body">«فتح نسخة» يترك هذا المستند كما هو. «استعادة التعليقات» يضيف تعليقات تلك النسخة هنا، ويمكنك التراجع عنها.</string>
+    <string name="backup_loading">جارٍ البحث في مجلد النسخ الاحتياطي…</string>
+    <string name="backup_no_versions">لا توجد نسخ احتياطية لهذا المستند بعد.</string>
+    <string name="backup_open_copy">فتح نسخة</string>
+    <string name="backup_restore_comments">استعادة التعليقات هنا</string>
+    <string name="backup_restoring">جارٍ الاستعادة…</string>
+    <string name="backup_comments_restored">تمت استعادة التعليقات</string>
 </resources>

@@ -33,6 +33,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.github.artcraftandroid.pdfcraft.R
+import io.github.artcraftandroid.pdfcraft.engine.Diag
+import io.github.artcraftandroid.pdfcraft.engine.DiagArea
 import io.github.artcraftandroid.pdfcraft.ui.pdfColors
 import java.io.File
 import kotlinx.coroutines.CancellationException
@@ -187,11 +189,14 @@ internal fun UpdatePanel() {
                                     }
                                     cachedBytes = update.size
                                     message = appContext.getString(R.string.updater_download_verified)
+                                    Diag.event(DiagArea.Update, "download", "outcome" to "verified", "bytes" to update.size)
                                 } catch (_: CancellationException) {
+                                    Diag.event(DiagArea.Update, "download", "outcome" to "paused", "progress" to progress)
                                     cachedBytes = apkCachedBytes(appContext, update)
                                     progress = (cachedBytes * 100L / update.size).toInt()
                                     message = appContext.getString(R.string.updater_paused)
                                 } catch (e: Exception) {
+                                    Diag.failure(DiagArea.Update, "download", e)
                                     cachedBytes = apkCachedBytes(appContext, update)
                                     progress = (cachedBytes * 100L / update.size).toInt()
                                     message = e.updaterMessage(appContext, R.string.updater_interrupted)
@@ -235,8 +240,10 @@ internal fun UpdatePanel() {
                     try {
                         val launched = openVerifiedApkInstaller(context, verifiedApk!!)
                         UpdaterState.needsInstallPermission = !launched
+                        Diag.event(DiagArea.Update, "install", "launched" to launched)
                         message = context.getString(if (launched) R.string.updater_confirm_install else R.string.updater_allow_install)
                     } catch (e: Exception) {
+                        Diag.failure(DiagArea.Update, "install", e)
                         message = e.updaterMessage(context, R.string.updater_installer_error)
                     }
                 })
@@ -301,10 +308,12 @@ internal object UpdaterState {
         checking = true
         if (!quiet) message = null
         prefs(app).edit().putLong("lastCheck", System.currentTimeMillis()).apply()
+        val started = android.os.SystemClock.elapsedRealtime()
         scope.launch {
             try {
                 val installed = installedVersionCode(app)
                 if (!receivesGitHubApkUpdates(installed)) {
+                    Diag.event(DiagArea.Update, "check", "auto" to quiet, "other_build" to true)
                     candidate = null
                     verifiedApk = null
                     if (!quiet) message = app.getString(R.string.updater_other_build)
@@ -320,7 +329,9 @@ internal object UpdaterState {
                 cachedBytes = found?.let { apkCachedBytes(app, it) } ?: 0L
                 progress = if (found == null) 0 else (cachedBytes * 100L / found.size).toInt()
                 if (!quiet) message = if (found == null) app.getString(R.string.updater_no_updates) else null
+                Diag.event(DiagArea.Update, "check", "auto" to quiet, "found" to (found != null), "cached_bytes" to cachedBytes, "ms" to android.os.SystemClock.elapsedRealtime() - started)
             } catch (e: Exception) {
+                Diag.failure(DiagArea.Update, "check", e)
                 if (!quiet) message = app.getString(R.string.updater_check_error)
             } finally {
                 checking = false

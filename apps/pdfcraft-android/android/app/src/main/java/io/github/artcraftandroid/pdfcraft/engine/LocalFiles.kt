@@ -30,10 +30,13 @@ object LocalFiles {
     private const val MAX_DEPTH = 8
 
     /** The folders the user has added (the lasting grants that are folders). */
-    fun folders(context: Context): List<Uri> =
-        runCatching { context.contentResolver.persistedUriPermissions }.getOrDefault(emptyList())
-            .filter { it.isReadPermission && runCatching { DocumentsContract.isTreeUri(it.uri) }.getOrDefault(false) }
+    fun folders(context: Context): List<Uri> {
+        // the backup folder (#145) is the app's own, not a folder of documents to list
+        val backup = context.getSharedPreferences("app", Context.MODE_PRIVATE).getString("backupTree", null)
+        return runCatching { context.contentResolver.persistedUriPermissions }.getOrDefault(emptyList())
+            .filter { it.isReadPermission && it.uri.toString() != backup && runCatching { DocumentsContract.isTreeUri(it.uri) }.getOrDefault(false) }
             .map { it.uri }
+    }
 
     /** Whether any folder has been added. */
     fun hasAccess(context: Context): Boolean = folders(context).isNotEmpty()

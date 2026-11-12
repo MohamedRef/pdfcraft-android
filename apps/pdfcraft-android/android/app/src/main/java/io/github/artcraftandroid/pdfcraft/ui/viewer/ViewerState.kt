@@ -60,7 +60,7 @@ class ViewerState(pages: List<PageSize>) {
         }
 
     /** Continuous pages zoom out past fit-width; single-page mode rests on one page filling the width. */
-    val minZoom: Float get() = if (mode == PageMode.Continuous) ZOOM_OUT_LIMIT else MIN_ZOOM
+    val minZoom: Float get() = if (mode == PageMode.SinglePage) MIN_ZOOM else ZOOM_OUT_LIMIT
     val maxZoom: Float get() = MAX_ZOOM
 
     /**
@@ -81,6 +81,8 @@ class ViewerState(pages: List<PageSize>) {
                     l.nearestPage((scrollX + viewW / 2f) / zoom, y)
                 }
                 PageMode.SinglePage -> l.nearestPage((scrollX + viewW / 2f) / zoom, 0f)
+                // the page under the left third, as the eye reads along the row
+                PageMode.Horizontal -> l.nearestPage((scrollX + viewW * 0.33f) / zoom, (scrollY + viewH / 2f) / zoom)
             }
         }
 
@@ -101,6 +103,8 @@ class ViewerState(pages: List<PageSize>) {
             when (mode) {
                 PageMode.Continuous -> { scrollY = (r.top + within * r.height) * zoom; scrollX = scrollX }
                 PageMode.SinglePage -> { zoom = 1f; scrollX = layout.groupOf(anchorPage) * viewW; scrollY = 0f }
+                // the pages are sized to the height: a new size starts the page again from its left
+                PageMode.Horizontal -> { zoom = 1f; goToPage(anchorPage) }
             }
         }
         clamp()
@@ -191,6 +195,10 @@ class ViewerState(pages: List<PageSize>) {
                 zoom = 1f
                 scrollX = l.groupOf(i) * viewW
                 scrollY = 0f
+            }
+            PageMode.Horizontal -> {
+                // the spread's first page at the left, a margin in
+                scrollX = (l.rects[l.groups[l.groupOf(i)].first].left - margin) * zoom
             }
         }
         clamp()

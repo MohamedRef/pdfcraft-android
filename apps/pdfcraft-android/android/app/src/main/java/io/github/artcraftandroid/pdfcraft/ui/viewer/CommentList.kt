@@ -178,7 +178,7 @@ fun CommentListScreen(vm: AppViewModel, doc: OpenDocument) {
     val snippets = remember(doc.info.generation) { mutableStateMapOf<String, ImageBitmap>() }
     var menu by remember { mutableStateOf<ListMenu?>(null) }
     var searching by remember { mutableStateOf(false) }
-    var filters by remember { mutableStateOf(CommentFilters()) }
+    var filters by ctl::commentFilters
     var exporting by remember { mutableStateOf(false) }
     fun close() {
         ctl.sheet = ViewerSheet.None
@@ -199,6 +199,12 @@ fun CommentListScreen(vm: AppViewModel, doc: OpenDocument) {
     val shown = remember(threads, filters, statuses, me) { filterThreads(threads, filters, me, guest) { statusOf(it) } }
     val authors = remember(threads) { threads.map { authorKey(it.first(), guest) }.distinct().sorted() }
     val filtering = filters != CommentFilters()
+    // the page dims what the filters leave out, once the list is closed (#155)
+    LaunchedEffect(shown, filtering, list) {
+        if (list == null) return@LaunchedEffect
+        ctl.dimmedGeneration = doc.info.generation.toLong()
+        ctl.dimmedComments = if (filtering) dimmedComments(threads, shown, { it.page.toInt() }, { it.rect }) else emptyList()
+    }
     Column(
         Modifier.fillMaxSize().background(Color.Black).safeTopPadding()
             .background(c.navBand).navigationBarsPadding().background(c.surface),

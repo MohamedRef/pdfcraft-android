@@ -176,6 +176,8 @@ fun PageCanvas(
                                     state.turnPage(if (d.y > 0f) 1 else -1)
                                 }
                             }
+                            // a row of pages: an up-and-down wheel moves along it
+                            state.mode == PageMode.Horizontal && d.x == 0f -> state.scrollBy(-d.y * WHEEL_STEP, 0f)
                             else -> state.scrollBy(-d.x * WHEEL_STEP, -d.y * WHEEL_STEP)
                         }
                         change.consume()

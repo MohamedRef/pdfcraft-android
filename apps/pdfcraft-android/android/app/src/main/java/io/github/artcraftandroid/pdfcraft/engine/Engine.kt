@@ -73,8 +73,16 @@ class Engine private constructor(val session: MobileSession) {
      * for the user when the tool refuses or fails.
      */
     suspend fun tool(name: String, args: Map<String, Any?> = emptyMap()): JSONObject = command {
-        val out = execute(name, toJson(args).toString())
-        if (out.trimStart().startsWith("{")) JSONObject(out) else JSONObject().put("result", out)
+        val started = System.nanoTime()
+        var ok = false
+        try {
+            val out = execute(name, toJson(args).toString())
+            (if (out.trimStart().startsWith("{")) JSONObject(out) else JSONObject().put("result", out)).also { ok = true }
+        } finally {
+            // the diagnostics log keeps failed and slow tools only: an edit is a tool call too
+            val ms = (System.nanoTime() - started) / 1_000_000
+            if (!ok || ms >= SLOW_TOOL_MS) Diag.event(DiagArea.Tool, "tool", "name" to name, "ms" to ms, "ok" to ok)
+        }
     }
 
     /**
@@ -171,9 +179,14 @@ internal fun runToolBatch(
  */
 internal inline fun <T> engineFailuresAsMobile(block: () -> T): T = try {
     block()
-} catch (_: InternalException) {
+} catch (e: InternalException) {
+    // #114: an engine panic, caught; the log keeps only that it happened, never its message
+    Diag.event(DiagArea.Error, "engine_panic", "error_class" to DiagClass(e))
     throw MobileException.Command("An internal error stopped this action. If the document looks wrong, close it and open it again.")
 }
+
+/** A tool call this slow is logged in the diagnostics log (faster ones only when they fail). */
+internal const val SLOW_TOOL_MS = 100L
 
 /** Reject invalid native buffers *before* allocating a Bitmap on the Java heap. */
 internal fun expectedBitmapByteCount(width: Long, height: Long): Int? {

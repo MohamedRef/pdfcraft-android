@@ -132,6 +132,10 @@ data class MarkupDrag(val range: TextRange, val rects: List<FloatArray>)
 @Composable
 fun ToolLayer(vm: AppViewModel, doc: OpenDocument) {
     val tool = doc.controller.tool
+    if (vm.redact.placing === doc) {
+        RedactPlaceLayer(vm, doc)
+        return
+    }
     if (tool == ViewerTool.None || tool == ViewerTool.Edit) return
     when (tool) {
         ViewerTool.Draw -> DrawLayer(vm, doc)
@@ -188,35 +192,29 @@ fun Modifier.toolGestures(
     awaitEachGesture {
         val down = awaitFirstDown(requireUnconsumed = false)
         if (ignoreAt?.invoke(down.position) == true) return@awaitEachGesture
-        val stylus = down.type == PointerType.Stylus
-        var activePen = stylus || down.type == PointerType.Eraser
+        // The routing decisions live in GestureRoute (unit-tested, #81). Some pens report an
+        // eraser tip; other Android devices expose a stylus button. The mode is decided at
+        // contact and kept until lift, whatever the button does mid-stroke (#82, #144).
+        val route = GestureRoute(viewConfiguration.touchSlop, routing)
         var activeId = down.id
-        // Some pens report an eraser tip; other Android devices expose a stylus button. The mode
-        // is decided at contact and kept until lift, whatever the button does mid-stroke (#82, #144).
-        var downMode = penDownMode(
-            down.type == PointerType.Eraser,
-            stylus && (currentEvent.buttons.isPrimaryPressed || currentEvent.buttons.isSecondaryPressed),
-            penButtonHold,
-        )
-        var eraser = downMode == PenDownMode.Erase
-        if (activePen) routing.penStarted()
         // A palm resting beside a hovering or writing pen is ignored, though a pen may still arrive.
         val overlay = down.type == PointerType.Touch && overlayHit?.invoke(down.position) == true
         val palm = !overlay && down.type == PointerType.Touch && rejectTouch?.invoke(down.position, down.uptimeMillis) == true
-        var navigation = !overlay && !palm && down.type == PointerType.Touch && routing.fingersNavigate(penOnly)
-        var one = !overlay && !palm && !navigation && !eraser
-        var eraseOne = !overlay && !palm && !navigation && eraser
-        var moved = false
-        // Where the active pointer went down: a tap is a gesture that never leaves touch slop,
-        // for a pen as for a finger (pens report sub-pixel jitter between down and up, #74).
-        var origin = down.position
+        route.start(
+            down.type.toolPointer(), down.position,
+            buttonHeld = currentEvent.buttons.isPrimaryPressed || currentEvent.buttons.isSecondaryPressed,
+            hold = penButtonHold, penOnly = penOnly, overlay = overlay, palm = palm,
+        )
+        var navigation = route.role == GestureRole.Navigate
+        var one = route.role == GestureRole.Draw
+        var eraseOne = route.role == GestureRole.Erase
         var last = down.position
         var lastPressure = down.pressure
         var maxTouches = 1
         var touchTravel = 0f
         var zoomDrift = 0f
         var endTime = down.uptimeMillis
-        if (one) { onPenDownMode(downMode); onDown(last, lastPressure, activePen) }
+        if (one) { onPenDownMode(route.mode); onDown(last, lastPressure, route.activePen) }
         if (eraseOne) onEraserDown(last)
         fun dispatchPenMotion(change: androidx.compose.ui.input.pointer.PointerInputChange) {
             val nextPressure = change.pressure.takeIf { it.isFinite() && it > 0f } ?: lastPressure
@@ -237,7 +235,7 @@ fun Modifier.toolGestures(
                 pressureAt = { time -> StylusLog.pen.pressureAt(time) },
             )
             for (sample in samples) {
-                if ((sample.position - origin).getDistance() > viewConfiguration.touchSlop) moved = true
+                route.motion(sample.position)
                 last = sample.position
                 if (eraseOne) onEraserMove(last) else if (one) onMove(last, sample.pressure, true)
             }
@@ -247,33 +245,27 @@ fun Modifier.toolGestures(
             while (true) {
                 val event = awaitPointerEvent()
                 val arrivingPen = event.changes.firstOrNull { it.pressed && (it.type == PointerType.Stylus || it.type == PointerType.Eraser) }
-                if (!activePen && arrivingPen != null) {
+                if (!route.activePen && arrivingPen != null) {
                     if (one) onCancel()
                     if (eraseOne) onEraserCancel()
                     activeId = arrivingPen.id
-                    activePen = true
-                    downMode = penDownMode(
-                        arrivingPen.type == PointerType.Eraser,
-                        event.buttons.isPrimaryPressed || event.buttons.isSecondaryPressed,
-                        penButtonHold,
+                    val role = route.penArrives(
+                        arrivingPen.type.toolPointer(), arrivingPen.position,
+                        event.buttons.isPrimaryPressed || event.buttons.isSecondaryPressed, penButtonHold,
                     )
-                    eraser = downMode == PenDownMode.Erase
                     navigation = false
-                    one = !eraser
-                    eraseOne = eraser
+                    one = role == GestureRole.Draw
+                    eraseOne = role == GestureRole.Erase
                     last = arrivingPen.position
-                    origin = arrivingPen.position
-                    moved = false
                     lastPressure = arrivingPen.pressure
-                    routing.penStarted()
-                    if (one) { onPenDownMode(downMode); onDown(last, lastPressure, true) }
+                    if (one) { onPenDownMode(route.mode); onDown(last, lastPressure, true) }
                     if (eraseOne) onEraserDown(last)
                 }
                 val active = event.changes.firstOrNull { it.id == activeId }
                 // The side button is read only at contact: pressing it mid-stroke never cancels,
                 // splits or erases the stroke being written (#82, #144).
                 // Touch/palm pointers do not replace or interrupt an active pen or eraser tip.
-                if (activePen) {
+                if (route.activePen) {
                     if (active == null || !active.pressed) {
                         if (active?.isConsumed == true) {
                             if (one) onCancel()
@@ -311,7 +303,7 @@ fun Modifier.toolGestures(
                     event.changes.forEach { if (it.type == PointerType.Touch) it.consume() }
                     continue
                 }
-                if (navigation || routing.cancelForExtraTouch(false, pressed.size)) {
+                if (navigation || route.touches(pressed.size)) {
                     if (one) { one = false; onCancel() }
                     val zoom = event.calculateZoom()
                     zoomDrift += kotlin.math.abs(zoom - 1f)
@@ -325,15 +317,18 @@ fun Modifier.toolGestures(
                 if (!one) continue
                 if (active == null || !active.pressed) { onCancel(); one = false; continue }
                 if (active.positionChanged()) {
-                    if ((active.position - origin).getDistance() > viewConfiguration.touchSlop) moved = true
-                    last = active.position
-                    onMove(last, active.pressure, false)
+                    // Every batched sample of a fast finger, not one point per frame (#84).
+                    for (point in fingerMotionPoints(last, active.historical.map { it.position }, active.position)) {
+                        route.motion(point)
+                        last = point
+                        onMove(point, active.pressure, false)
+                    }
                     active.consume()
                 }
             }
-            if (eraseOne) onEraserUp(last) else if (one) onUp(last, moved)
-            if (!activePen && !palm && !overlay && onMultiFingerTap != null) {
-                multiFingerTapFingers(maxTouches, endTime - down.uptimeMillis, touchTravel + if (moved) Float.MAX_VALUE else 0f, zoomDrift, viewConfiguration.touchSlop)
+            if (eraseOne) onEraserUp(last) else if (one) onUp(last, route.moved)
+            if (!route.activePen && !palm && !overlay && onMultiFingerTap != null) {
+                multiFingerTapFingers(maxTouches, endTime - down.uptimeMillis, touchTravel + if (route.moved) Float.MAX_VALUE else 0f, zoomDrift, viewConfiguration.touchSlop)
                     ?.let(onMultiFingerTap)
             }
         } catch (e: kotlinx.coroutines.CancellationException) {
@@ -545,6 +540,13 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
     // Which of the document's undo steps this Draw session made (#78).
     val steps = remember(doc) { DrawUndoSteps() }
     var current by remember { mutableStateOf<InkStroke?>(null) }
+    // a polygon or connected lines being placed point by point (#133), on one page
+    val polyPoints = remember(doc) { mutableStateListOf<Offset>() }
+    var polyPage by remember(doc) { mutableStateOf<Int?>(null) }
+    LaunchedEffect(doc.controller.inkShapeMode) {
+        polyPoints.clear()
+        polyPage = null
+    }
     var lassoPage by remember { mutableStateOf<Int?>(null) }
     val lassoPoints = remember { mutableStateListOf<Offset>() }
     val selected = remember { mutableStateListOf<InkStroke>() }
@@ -556,6 +558,10 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
     fun clearSelection() { selected.clear(); savedSelected.clear(); lassoPage = null; lassoPoints.clear(); moving = false; moveAnchor = null; moveOffset = Offset.Zero }
     /** Every selected outline in page points: draft stroke points and saved comments' rectangles. */
     fun selectionPaths(): List<List<Offset>> = selected.map { it.points.toList() } + savedSelected.mapNotNull { lassoRectOutline(it.rect) }
+    // Worked out once per selection, not on every frame of a drag (#85): the points do not change
+    // while the selection follows the pen, only moveOffset does.
+    val selectionBounds by remember { androidx.compose.runtime.derivedStateOf { inkLassoBounds(selectionPaths()) } }
+    val selectedSet by remember { androidx.compose.runtime.derivedStateOf { selected.toHashSet() } }
     /** A Draw edit of the document; [steps] learns whether it became an undo step. */
     fun documentEdit(name: String, args: Map<String, Any?>) {
         steps.started()
@@ -886,7 +892,7 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
         val at = doc.viewer.screenToPage(p) ?: run { clearSelection(); return }
         val existing = lassoPage
         if (existing == at.page && (selected.isNotEmpty() || savedSelected.isNotEmpty())) {
-            val b = inkLassoBounds(selectionPaths())
+            val b = selectionBounds
             if (b?.contains(Offset(at.x, at.y), 6f) == true) {
                 moving = true
                 moveAnchor = Offset(at.x, at.y)
@@ -907,7 +913,7 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
             val anchor = moveAnchor ?: return
             val pageSize = doc.viewer.pages.getOrNull(page) ?: return
             moveOffset = boundedInkLassoMove(
-                selectionPaths(),
+                selectionBounds,
                 point - anchor,
                 pageSize.width,
                 pageSize.height,
@@ -1037,6 +1043,8 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                     return@toolGestures
                 }
                 clearSelection()
+                // a polygon's points are placed on lift, one tap each
+                if (doc.controller.inkShapeMode.isTapped) return@toolGestures
                 rulerEdge = if (doc.controller.inkShapeMode == InkShapeMode.Freehand) activeRuler()?.snapEdge(p, rulerReach) else null
                 protractorSnap = if (rulerEdge == null && doc.controller.inkShapeMode == InkShapeMode.Freehand) activeProtractor()?.snapAt(p, rulerReach) else null
                 rayDeg = null
@@ -1113,6 +1121,33 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                 }
                 if (eraserPage != null) {
                     finishErase(p)
+                    return@toolGestures
+                }
+                val mode = doc.controller.inkShapeMode
+                if (mode.isTapped) {
+                    val at = doc.viewer.screenToPage(p) ?: return@toolGestures
+                    if (polyPage != null && polyPage != at.page) return@toolGestures
+                    val point = Offset(at.x, at.y)
+                    val radius = slop / doc.viewer.pixelsPerPoint(at.page).coerceAtLeast(0.1f) * 2f
+                    when (polyTap(polyPoints, point, radius, closed = mode == InkShapeMode.Polygon)) {
+                        PolyTap.Add -> {
+                            polyPage = at.page
+                            polyPoints.add(point)
+                        }
+                        PolyTap.Ignore -> Unit
+                        PolyTap.Finish -> {
+                            val args = polyAnnotationArgs(
+                                mode == InkShapeMode.Polygon, polyPoints.toList(), at.page,
+                                prefs.color(StyledTool.Ink).hex(), prefs.opacity(StyledTool.Ink), prefs.inkWidth.coerceAtLeast(0.5f), prefs.author.ifBlank { null },
+                            )
+                            polyPoints.clear()
+                            polyPage = null
+                            if (args != null) {
+                                doc.commitTool?.invoke()
+                                vm.runTool(doc, "comment_add", args)
+                            }
+                        }
+                    }
                     return@toolGestures
                 }
                 val s = current
@@ -1262,7 +1297,7 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
             // Strokes being saved stay drawn until the document has them, under the newer drafts.
             for (s in drafts.saving + strokes) {
                 val pageRect = doc.viewer.pageRectOnScreen(s.page)
-                val lift = if (moving && s in selected) moveOffset else Offset.Zero
+                val lift = if (moving && s in selectedSet) moveOffset else Offset.Zero
                 // Ink being drawn may run off its page (#75); only the part on the page shows.
                 clipRect(pageRect.left, pageRect.top, pageRect.right, pageRect.bottom) {
                     drawInkStroke(
@@ -1295,6 +1330,16 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                     )
                 }
             }
+            // the polygon or connected lines placed so far, with a dot on each point
+            polyPage?.let { page ->
+                val pts = polyPoints.map { doc.viewer.pageToScreen(page, it.x, it.y) }
+                val ink = prefs.color(StyledTool.Ink)
+                for (i in 1 until pts.size) drawLine(ink, pts[i - 1], pts[i], strokeWidth = (prefs.inkWidth * doc.viewer.pixelsPerPoint(page)).coerceAtLeast(1.dp.toPx()))
+                pts.forEachIndexed { i, o ->
+                    drawCircle(Color.White, (if (i == 0) 6 else 4).dp.toPx(), o)
+                    drawCircle(Color(0xFF1A85CA), (if (i == 0) 6 else 4).dp.toPx(), o, style = Stroke(width = 1.5.dp.toPx()))
+                }
+            }
             if (doc.controller.lassoMode) {
                 val page = lassoPage
                 if (page != null) {
@@ -1314,7 +1359,7 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                         val b = doc.viewer.pageToScreen(page, o[2].x + moveOffset.x, o[2].y + moveOffset.y)
                         drawRect(Color(0xFF1A85CA).copy(alpha = 0.6f), a, Size(b.x - a.x, b.y - a.y), style = Stroke(width = 1.dp.toPx()))
                     }
-                    val bounds = inkLassoBounds(selectionPaths())
+                    val bounds = selectionBounds
                     if (bounds != null) {
                         val a = doc.viewer.pageToScreen(page, bounds.left + moveOffset.x, bounds.top + moveOffset.y)
                         val b = doc.viewer.pageToScreen(page, bounds.right + moveOffset.x, bounds.bottom + moveOffset.y)
@@ -1377,7 +1422,7 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
         // comments with the current pen colour. Saved edits are one native undo step each.
         val selPage = lassoPage
         if (doc.controller.lassoMode && selPage != null && !moving && (selected.isNotEmpty() || savedSelected.isNotEmpty())) {
-            val b = inkLassoBounds(selectionPaths())
+            val b = selectionBounds
             if (b != null) {
                 val anchor = doc.viewer.pageToScreen(selPage, b.left, b.bottom)
                 val density = LocalDensity.current
@@ -1446,6 +1491,16 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
 }
 
 /** A gesture only holds coordinates; no native query runs on pointer down. */
+/**
+ * Area highlight (#134): the rectangle a Highlight drag covers where the page has no text under
+ * it, as [x0, y0, x1, y1] in points, or null when it is too thin to be meant (under 4 points).
+ */
+internal fun areaHighlightRect(x0: Float, y0: Float, x1: Float, y1: Float): FloatArray? {
+    if (!(x0.isFinite() && y0.isFinite() && x1.isFinite() && y1.isFinite())) return null
+    val r = floatArrayOf(minOf(x0, x1), minOf(y0, y1), maxOf(x0, x1), maxOf(y0, y1))
+    return r.takeIf { it[2] - it[0] >= 4f && it[3] - it[1] >= 4f }
+}
+
 private class MarkupGesture(val start: PagePoint, val downScreen: Offset) {
     var latest by mutableStateOf(start)
     var moved by mutableStateOf(false)
@@ -1581,9 +1636,23 @@ private fun MarkupLayer(vm: AppViewModel, doc: OpenDocument) {
                                     }
                                 },
                             )
+                        } else if (!tap && selectedMarkup == TextMarkup.Highlight) {
+                            // no text under the drag (a scan, a picture): highlight the area itself (#134)
+                            val area = areaHighlightRect(gesture.start.x, gesture.start.y, end.x, end.y)
+                            if (area != null) {
+                                queued = true
+                                vm.addMarkup(doc, TextMarkup.Highlight, page, listOf(area), selectedColor, selectedOpacity, onSettled = {
+                                    if (requestSerial == serial) {
+                                        pendingTap = null
+                                        drag = null
+                                    }
+                                })
+                            }
                         } else if (tap) {
                             val count = withContext(eng.commands) { eng.session.glyphCount(doc.id, page.toUInt()) }
-                            if (count == 0u && vm.document === doc) vm.tell(text(R.string.toolbar_no_text_to_mark))
+                            if (count == 0u && vm.document === doc) {
+                                vm.tell(text(R.string.toolbar_no_text_to_mark), text(R.string.common_tool_recognize_text)) { vm.recognizeText(doc) }
+                            }
                         }
                     } catch (e: MobileException) {
                         if (vm.document === doc) vm.tell(e.userMessage)
@@ -1609,6 +1678,15 @@ private fun MarkupLayer(vm: AppViewModel, doc: OpenDocument) {
                     radius = 10.dp.toPx(), center = point,
                     style = Stroke(width = 1.5.dp.toPx()),
                 )
+            }
+            // a Highlight drag that found no text previews the area it will highlight
+            val g = active
+            if (drag == null && g != null && g.moved && marker == TextMarkup.Highlight) {
+                areaHighlightRect(g.start.x, g.start.y, g.latest.x, g.latest.y)?.let { r ->
+                    val a = doc.viewer.pageToScreen(g.start.page, r[0], r[1])
+                    val b = doc.viewer.pageToScreen(g.start.page, r[2], r[3])
+                    drawRect(color.copy(alpha = 0.4f * opacity), a, Size(b.x - a.x, b.y - a.y))
+                }
             }
             val d = drag ?: return@Canvas
             val page = d.range.page.toInt()
@@ -1938,4 +2016,10 @@ private fun StampPicker(ctl: ViewerController, onDismiss: () -> Unit) {
             Spacer(Modifier.height(12.dp))
         }
     }
+}
+
+private fun PointerType.toolPointer(): ToolPointer = when (this) {
+    PointerType.Stylus -> ToolPointer.Stylus
+    PointerType.Eraser -> ToolPointer.Eraser
+    else -> ToolPointer.Touch
 }

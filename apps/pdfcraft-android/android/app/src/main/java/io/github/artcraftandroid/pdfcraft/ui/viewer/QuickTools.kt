@@ -81,6 +81,8 @@ enum class QuickTool(val id: String, @StringRes val label: Int, @StringRes val t
     Combine("combine", R.string.toolbar_label_combine, R.string.common_tool_combine, LucideIcons.Combine, ToolHues.combine),
     Compress("compress", R.string.toolbar_label_compress, R.string.common_tool_compress, LucideIcons.FileArchive, ToolHues.compress),
     Protect("protect", R.string.toolbar_label_password, R.string.common_tool_set_password, LucideIcons.FileLock2, ToolHues.protect),
+    // a tool that changes the content: More tools, not ⋮ (#195)
+    Redact("redact", R.string.redact_title, R.string.redact_title, LucideIcons.SquareDashed, ToolHues.protect),
     Organize("organize", R.string.toolbar_label_organize, R.string.common_tool_organize, LucideIcons.LayoutGrid, ToolHues.organize),
     Crop("crop", R.string.toolbar_label_crop, R.string.common_tool_crop, LucideIcons.Crop, ToolHues.crop),
     Ocr("ocr", R.string.toolbar_label_recognize, R.string.common_tool_recognize_text, LucideIcons.ScanText, ToolHues.ocr),
@@ -192,6 +194,7 @@ fun AppViewModel.runQuickTool(doc: OpenDocument, tool: QuickTool) {
         QuickTool.Crop -> openCrop(doc)
         QuickTool.Ocr -> recognizeText(doc)
         QuickTool.ScanEnhance -> doc.controller.sheet = ViewerSheet.ScanEnhance
+        QuickTool.Redact -> openRedact(doc)
         QuickTool.OcrReview -> doc.controller.sheet = ViewerSheet.OcrConfidence
         QuickTool.Create -> openCreate()
         QuickTool.Scan -> startScan()

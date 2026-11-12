@@ -413,6 +413,34 @@ private fun Preferences(vm: AppViewModel) {
     SheetRow(null, stringResource(R.string.library_wipe_index), { vm.wipeLibraryIndex() })
     Text(stringResource(R.string.library_index_body), color = c.textSecondary, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 20.dp))
 
+    Section(stringResource(R.string.backup_section))
+    val backupName = remember(vm.backupTree) { vm.backupFolderName() }
+    SheetRow(null, if (backupName == null) stringResource(R.string.backup_choose_folder) else stringResource(R.string.backup_folder_is, backupName), { vm.chooseBackupFolder() })
+    if (vm.backupTree != null) {
+        SheetRow(null, stringResource(R.string.backup_keep_label), {}) {
+            Row(horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(4.dp)) {
+                for (n in listOf(5, 10, 20, 50)) {
+                    val on = vm.backupKeep == n
+                    Text(
+                        n.toString(), color = if (on) Color.White else c.text, fontSize = 14.sp,
+                        modifier = Modifier.clip(androidx.compose.foundation.shape.RoundedCornerShape(14.dp))
+                            .background(if (on) c.accent else c.surface)
+                            .clickable { vm.updateBackupKeep(n) }.padding(horizontal = 10.dp, vertical = 4.dp),
+                    )
+                }
+            }
+        }
+        val status = when {
+            vm.backupFailed -> stringResource(R.string.backup_status_failed)
+            vm.backupLast > 0 -> stringResource(R.string.backup_status_last, android.text.format.DateUtils.getRelativeTimeSpanString(vm.backupLast).toString())
+            else -> stringResource(R.string.backup_status_none)
+        }
+        Text(status, color = if (vm.backupFailed) Color(0xFFD7373F) else c.textSecondary, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 20.dp, vertical = 2.dp))
+        if (vm.backupFailed) SheetRow(null, stringResource(R.string.backup_retry), { vm.flushBackups() })
+        SheetRow(null, stringResource(R.string.backup_turn_off), { vm.turnOffBackups() })
+    }
+    Text(stringResource(R.string.backup_body), color = c.textSecondary, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 20.dp))
+
     Section(stringResource(R.string.study_section))
     var confirmStudyClear by remember { mutableStateOf(false) }
     SheetRow(null, stringResource(R.string.study_clear_stats), { confirmStudyClear = true })
@@ -480,14 +508,17 @@ private fun About(vm: AppViewModel) {
     UpdatePanel()
     SheetDivider()
     Section(stringResource(R.string.home_section_diagnostics))
-    SheetRow(null, stringResource(R.string.home_record_open_timings), { vm.updateRecordOpenTimings(!vm.recordOpenTimings) }) {
-        PdfSwitch(vm.recordOpenTimings, { vm.updateRecordOpenTimings(it) })
+    SheetRow(null, stringResource(R.string.home_record_diagnostics), { vm.updateRecordDiagnostics(!vm.recordDiagnostics) }) {
+        PdfSwitch(vm.recordDiagnostics, { vm.updateRecordDiagnostics(it) })
     }
     Text(
-        stringResource(R.string.home_record_open_timings_body),
+        stringResource(R.string.home_record_diagnostics_body),
         color = c.textSecondary, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 20.dp),
     )
-    if (vm.recordOpenTimings) SheetRow(null, stringResource(R.string.home_share_open_timings), { vm.shareOpenTimings() })
+    if (vm.recordDiagnostics) {
+        SheetRow(null, stringResource(R.string.home_share_diagnostics), { vm.shareDiagnostics() })
+        SheetRow(null, stringResource(R.string.home_clear_diagnostics), { vm.clearDiagnostics() })
+    }
     SheetDivider()
     Section(stringResource(R.string.home_section_legal))
     SheetRow(null, stringResource(R.string.home_licences), { vm.showLicences = true })

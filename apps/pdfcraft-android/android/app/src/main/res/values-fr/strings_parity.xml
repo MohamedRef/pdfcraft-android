@@ -91,4 +91,57 @@
     <string name="ocr_batch_finished">Terminé</string>
     <string name="ocr_batch_cancelled">Annulé</string>
     <string name="ocr_batch_folder_gone">Impossible d’écrire dans le dossier ; choisissez-le à nouveau.</string>
+    <string name="redact_title">Biffer</string>
+    <string name="redact_about">Marquez ce qu’il faut supprimer, puis Appliquer : le contenu sous les marques est supprimé définitivement à l’enregistrement.</string>
+    <string name="redact_mark_area">Marquer une zone</string>
+    <string name="redact_mark_page">Marquer la page %1$d</string>
+    <string name="redact_find">Rechercher et marquer</string>
+    <string name="redact_find_hint">Texte, ou plusieurs séparés par des virgules</string>
+    <string name="redact_regex_hint">Expression régulière</string>
+    <string name="redact_whole_words">Mots entiers uniquement</string>
+    <string name="redact_match_case">Respecter la casse</string>
+    <string name="redact_use_regex">Utiliser une expression régulière</string>
+    <string name="redact_patterns">Ou chaque occurrence d’un motif</string>
+    <string name="redact_pattern_phone">Téléphones</string>
+    <string name="redact_pattern_email">Adresses e-mail</string>
+    <string name="redact_pattern_card">Cartes bancaires</string>
+    <string name="redact_pattern_ssn">N° de sécurité sociale US</string>
+    <string name="redact_pattern_date">Dates</string>
+    <string name="redact_pattern_iban">IBAN</string>
+    <string name="redact_mark_all">Tout marquer</string>
+    <string name="redact_no_matches">Aucune occurrence</string>
+    <string name="redact_look">Couleur de la case et texte affiché</string>
+    <string name="redact_overlay_hint">Texte sur la case (facultatif)</string>
+    <string name="redact_mark_on_page">Marque page %1$d</string>
+    <string name="redact_delete_mark">Supprimer la marque page %1$d</string>
+    <string name="redact_clear">Tout effacer</string>
+    <string name="redact_apply">Appliquer</string>
+    <string name="redact_apply_title">Appliquer les biffures ?</string>
+    <string name="redact_apply_body">Le texte, les images, dessins, commentaires et champs sous les marques sont supprimés et remplacés par des cases. Vous pouvez annuler jusqu’à l’enregistrement ; ensuite, le contenu disparaît du fichier.</string>
+    <string name="redact_hidden_title">Informations masquées</string>
+    <string name="redact_hidden_body">Le document contient encore ces informations. Supprimez ce que vous ne voulez pas partager :</string>
+    <string name="redact_hidden_none">Aucune information masquée trouvée.</string>
+    <string name="redact_hidden_remove">Supprimer</string>
+    <string name="redact_hidden_removed">Informations masquées supprimées</string>
+    <string name="redact_audit_title">Rechercher les fausses biffures</string>
+    <string name="redact_audit_none">Aucune fausse biffure : aucune case ne cache de texte encore lisible et aucune marque n’attend d’être appliquée.</string>
+    <string name="redact_audit_covered">Page %1$d : le texte masqué reste lisible</string>
+    <string name="redact_audit_unapplied">Page %1$d : marque de biffure non appliquée</string>
+    <string name="redact_place_hint">Faites glisser sur ce qu’il faut supprimer</string>
+    <plurals name="redact_marked">
+        <item quantity="one">%1$d marque ajoutée</item>
+        <item quantity="other">%1$d marques ajoutées</item>
+    </plurals>
+    <plurals name="redact_applied">
+        <item quantity="one">%1$d biffure appliquée</item>
+        <item quantity="other">%1$d biffures appliquées</item>
+    </plurals>
+    <plurals name="redact_marks_count">
+        <item quantity="one">%1$d marque en attente</item>
+        <item quantity="other">%1$d marques en attente</item>
+    </plurals>
+    <plurals name="redact_audit_found">
+        <item quantity="one">%1$d fausse biffure possible :</item>
+        <item quantity="other">%1$d fausses biffures possibles :</item>
+    </plurals>
 </resources>

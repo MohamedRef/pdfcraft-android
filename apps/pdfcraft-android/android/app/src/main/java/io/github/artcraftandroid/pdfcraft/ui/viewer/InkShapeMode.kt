@@ -14,10 +14,49 @@ internal enum class InkShapeMode {
 
     /** A revision cloud (`Polygon` with a cloudy border) around the dragged rectangle. */
     Cloud,
+
+    /** A closed `Polygon`: tap its corners, then the first one again (#133). */
+    Polygon,
+
+    /** Connected lines (`PolyLine`): tap its points, then the last one again (#133). */
+    Polyline,
 }
 
-/** Shapes saved as their own PDF annotation, not as ink drafts. */
-internal val InkShapeMode.isAnnotation: Boolean get() = this == InkShapeMode.Arrow || this == InkShapeMode.Cloud
+/**
+ * Shapes saved as their own PDF annotation (a real Line, Square, Circle, Polygon or PolyLine that
+ * other readers can edit, #170), not as ink drafts. Freehand strokes that snap to a shape stay ink.
+ */
+internal val InkShapeMode.isAnnotation: Boolean get() = this != InkShapeMode.Freehand
+
+/** Shapes placed by tapping their points one by one rather than with one drag. */
+internal val InkShapeMode.isTapped: Boolean get() = this == InkShapeMode.Polygon || this == InkShapeMode.Polyline
+
+/** What a tap does to a polygon or connected lines being placed. */
+internal enum class PolyTap { Add, Finish, Ignore }
+
+/**
+ * A tap at [at] while [points] (page points) are placed: on the first point (three or more
+ * placed) or on the last one (two or more, three for a polygon) it finishes the shape; a tap on
+ * another existing point is ignored; anywhere else adds a point. [radius] is how near counts.
+ */
+internal fun polyTap(points: List<Offset>, at: Offset, radius: Float, closed: Boolean): PolyTap {
+    if (!at.x.isFinite() || !at.y.isFinite()) return PolyTap.Ignore
+    val min = if (closed) 3 else 2
+    if (points.size >= 3 && (points.first() - at).getDistance() <= radius) return PolyTap.Finish
+    if (points.size >= min && (points.last() - at).getDistance() <= radius) return PolyTap.Finish
+    if (points.any { (it - at).getDistance() <= radius }) return PolyTap.Ignore
+    return PolyTap.Add
+}
+
+/** `comment_add` arguments for a tapped polygon or connected lines, or null with too few points. */
+internal fun polyAnnotationArgs(closed: Boolean, points: List<Offset>, page: Int, color: String, opacity: Float, width: Float, author: String?): Map<String, Any?>? {
+    if (points.size < (if (closed) 3 else 2)) return null
+    return mapOf(
+        "page" to page + 1, "type" to if (closed) "polygon" else "polyline",
+        "points" to points.map { listOf(it.x.toDouble(), it.y.toDouble()) },
+        "color" to color, "opacity" to opacity.toDouble(), "width" to width.toDouble(), "author" to author,
+    )
+}
 
 /**
  * Computes an exact shape within its source page, from the down and current/up points.
@@ -44,7 +83,7 @@ internal fun inkShapeGeometry(
     val width = abs(a.x - b.x)
     val height = abs(a.y - b.y)
     return when (mode) {
-        InkShapeMode.Freehand -> null
+        InkShapeMode.Freehand, InkShapeMode.Polygon, InkShapeMode.Polyline -> null
         InkShapeMode.Line, InkShapeMode.Arrow -> if ((a - b).getDistance() >= 2f) SnappedShape.Line(a, b) else null
         InkShapeMode.Rectangle, InkShapeMode.Cloud -> if (width >= 2f && height >= 2f) SnappedShape.Rectangle(left, top, right, bottom) else null
         InkShapeMode.Oval -> if (width >= 2f && height >= 2f) SnappedShape.Oval(left, top, right, bottom) else null
@@ -91,6 +130,17 @@ internal fun shapeAnnotationArgs(mode: InkShapeMode, shape: SnappedShape, page: 
             "type" to "arrow",
             "from" to listOf(shape.from.x.toDouble(), shape.from.y.toDouble()),
             "to" to listOf(shape.to.x.toDouble(), shape.to.y.toDouble()),
+        )
+        mode == InkShapeMode.Line && shape is SnappedShape.Line -> common + mapOf(
+            "type" to "line",
+            "from" to listOf(shape.from.x.toDouble(), shape.from.y.toDouble()),
+            "to" to listOf(shape.to.x.toDouble(), shape.to.y.toDouble()),
+        )
+        mode == InkShapeMode.Rectangle && shape is SnappedShape.Rectangle -> common + mapOf(
+            "type" to "rectangle", "rect" to listOf(shape.left, shape.top, shape.right, shape.bottom).map { it.toDouble() },
+        )
+        mode == InkShapeMode.Oval && shape is SnappedShape.Oval -> common + mapOf(
+            "type" to "oval", "rect" to listOf(shape.left, shape.top, shape.right, shape.bottom).map { it.toDouble() },
         )
         mode == InkShapeMode.Cloud && shape is SnappedShape.Rectangle -> common + mapOf(
             "type" to "cloud",

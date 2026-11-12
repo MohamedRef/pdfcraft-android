@@ -88,4 +88,14 @@ class SavedLassoTest {
         org.junit.Assert.assertFalse(t("Ink", false, true, null))
         org.junit.Assert.assertFalse(t("FreeText", false, false, "parent"))
     }
+
+    @Test fun moveFromKnownBoundsMatchesMoveFromPaths() {
+        // #85: a drag uses the selection's bounds worked out once, with the same result.
+        val paths = List(300) { i -> List(200) { k -> Offset(10f + (i % 30) + k * 0.1f, 20f + i * 0.2f + (k % 7)) } }
+        val bounds = inkLassoBounds(paths)
+        for (req in listOf(Offset(25f, 30f), Offset(-99f, -99f), Offset(0f, 0f), Offset(500f, -3f))) {
+            assertEquals(boundedInkLassoMove(paths, req, 600f, 800f), boundedInkLassoMove(bounds, req, 600f, 800f))
+        }
+        assertEquals(Offset.Zero, boundedInkLassoMove(null, Offset(5f, 5f), 600f, 800f))
+    }
 }

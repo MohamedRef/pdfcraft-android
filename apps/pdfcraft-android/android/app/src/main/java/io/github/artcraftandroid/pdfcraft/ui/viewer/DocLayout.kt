@@ -20,6 +20,9 @@ enum class PageMode {
 
     /** One page at a time, side by side, each fitted to the screen; swipes go page to page. */
     SinglePage,
+
+    /** One row, scrolled sideways; every page as tall as the tallest fits the screen (#152). */
+    Horizontal,
 }
 
 /** How many pages sit side by side (#152). */
@@ -59,6 +62,8 @@ fun spreadGroups(count: Int, spread: Spread): List<IntRange> {
  * each side; [padTop] and [padBottom] keep the first and last pages clear of the bars.
  * SinglePage: each spread is fitted into the viewport (less the margins and paddings) and
  * centred in a slot one viewport wide.
+ * Horizontal: the spreads follow each other left to right with [gap] between them, scaled
+ * together so the tallest fits the height less the paddings and [margin] above and below.
  */
 class DocLayout(
     val pages: List<PageSize>,
@@ -81,7 +86,7 @@ class DocLayout(
     /** The spread each page is in. */
     private val groupOf = IntArray(pages.size).also { a -> groups.forEachIndexed { g, r -> for (i in r) a[i] = g } }
 
-    /** Each row's top and bottom (continuous). */
+    /** Each row's top and bottom (continuous), or each column's left and right (horizontal). */
     private val rowTop = FloatArray(groups.size)
     private val rowBottom = FloatArray(groups.size)
 
@@ -132,6 +137,26 @@ class DocLayout(
                 width = max(viewW, groups.size * viewW)
                 height = viewH
             }
+            PageMode.Horizontal -> {
+                val availH = max(1f, viewH - padTop - padBottom - 2 * margin)
+                val tallest = pages.maxOfOrNull { it.height.coerceAtLeast(1f) } ?: 1f
+                val scale = availH / tallest
+                var x = margin
+                groups.forEachIndexed { g, r ->
+                    rowTop[g] = x
+                    for (i in r) {
+                        val p = pages[i]
+                        val w = p.width.coerceAtLeast(1f) * scale
+                        val h = p.height.coerceAtLeast(1f) * scale
+                        val y = padTop + margin + (availH - h) / 2f
+                        out.add(LRect(x, y, x + w, y + h))
+                        x += w + gap
+                    }
+                    rowBottom[g] = x - gap
+                }
+                width = if (pages.isEmpty()) viewW else x - gap + margin
+                height = viewH
+            }
         }
         rects = out
     }
@@ -152,6 +177,12 @@ class DocLayout(
                 while (last + 1 < groups.size && rowTop[last + 1] <= bottom) last++
                 groups[first].first..groups[last].last
             }
+            PageMode.Horizontal -> {
+                val first = firstRowAtOrBelow(left)
+                var last = first
+                while (last + 1 < groups.size && rowTop[last + 1] <= right) last++
+                groups[first].first..groups[last].last
+            }
             PageMode.SinglePage -> {
                 val first = (left / viewW).toInt().coerceIn(0, groups.lastIndex)
                 val last = (right / viewW).toInt().coerceIn(0, groups.lastIndex)
@@ -160,7 +191,7 @@ class DocLayout(
         }
     }
 
-    /** The first row whose bottom is at or below layout row [y] (binary search). */
+    /** The first row (column, horizontally) whose far edge is at or past layout [y] (or x; binary search). */
     private fun firstRowAtOrBelow(y: Float): Int {
         var lo = 0
         var hi = groups.lastIndex
@@ -199,6 +230,16 @@ class DocLayout(
                 nearestIn(row, x)
             }
             PageMode.SinglePage -> nearestIn((x / viewW).toInt().coerceIn(0, groups.lastIndex), x)
+            PageMode.Horizontal -> {
+                val g = firstRowAtOrBelow(x)
+                val col = when {
+                    // in the gap after column g: whichever edge is closer
+                    x > rowBottom[g] && g + 1 < groups.size -> if (rowTop[g + 1] - x < x - rowBottom[g]) g + 1 else g
+                    x < rowTop[g] && g > 0 -> if (rowTop[g] - x > x - rowBottom[g - 1]) g - 1 else g
+                    else -> g
+                }
+                nearestIn(col, x)
+            }
         }
     }
 }
