@@ -15,7 +15,9 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.DropdownMenu
@@ -27,11 +29,21 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.Role
@@ -43,7 +55,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
 import io.github.artcraftandroid.pdfcraft.R
+import io.github.artcraftandroid.pdfcraft.engine.Diag
+import io.github.artcraftandroid.pdfcraft.engine.DiagArea
 import io.github.artcraftandroid.pdfcraft.core.AttachmentInfo
 import io.github.artcraftandroid.pdfcraft.core.LayerInfo
 import io.github.artcraftandroid.pdfcraft.ui.AppViewModel
@@ -61,7 +76,10 @@ import io.github.artcraftandroid.pdfcraft.ui.PdfSwitch
 import io.github.artcraftandroid.pdfcraft.ui.SheetBackHeader
 import io.github.artcraftandroid.pdfcraft.ui.SheetDivider
 import io.github.artcraftandroid.pdfcraft.ui.SheetRow
+import io.github.artcraftandroid.pdfcraft.ui.outlineDropArgs
+import io.github.artcraftandroid.pdfcraft.ui.outlineDropDepths
 import io.github.artcraftandroid.pdfcraft.ui.outlineMoveArgs
+import io.github.artcraftandroid.pdfcraft.ui.outlineRowsWithout
 import io.github.artcraftandroid.pdfcraft.ui.pdfColors
 
 /** Why the document can't take edits to its attachments or bookmarks, or null when it can. */
@@ -233,7 +251,9 @@ private sealed class OutlinePrompt {
 /**
  * Edit contents: every embedded bookmark, indented by level and in its own colour and style. Each
  * has a menu: Rename, Go to current page, Style, Add child, Move up / down / in / out (also
- * TalkBack actions), Delete. Each change is one undo step and the list follows it.
+ * TalkBack actions), Delete, and a grip to drag it (with its children) to another place: up or
+ * down picks the place, right or left a deeper or shallower level (#266). Each change is one undo
+ * step and the list follows it.
  */
 @Composable
 fun EditContentsSheet(vm: AppViewModel, doc: OpenDocument) {
@@ -259,9 +279,38 @@ fun EditContentsSheet(vm: AppViewModel, doc: OpenDocument) {
         when {
             all == null -> Text("…", color = c.textSecondary, modifier = Modifier.padding(20.dp))
             all.isEmpty() -> Text(stringResource(R.string.sheet_no_contents), color = c.textSecondary, fontSize = 15.sp, modifier = Modifier.padding(20.dp))
-            else -> LazyColumn(Modifier.weight(1f)) {
-                items(all, key = { it.path.joinToString(".") }) { row ->
-                    OutlineEditRow(vm, doc, all, row, enabled = locked == null) { prompt = it }
+            else -> {
+                val list = rememberLazyListState()
+                val step = with(LocalDensity.current) { OUTLINE_LEVEL_DP.dp.toPx() }
+                var drag by remember(all) { mutableStateOf<OutlineDrag?>(null) }
+                // where the dragged row would land: the slot among the other rows, and its level
+                val target = drag?.let { d -> outlineDropTarget(all, d, list.layoutInfo.visibleItemsInfo.map { Triple(it.index, it.offset, it.size) }, step) }
+                val dragPath = drag?.path
+                // the other rows' places, worked out once per drag
+                val places = remember(all, dragPath) { dragPath?.let { p -> outlineRowsWithout(all, p).withIndex().associate { (i, r) -> r.path to i } }.orEmpty() }
+                LazyColumn(Modifier.weight(1f), state = list) {
+                    items(all, key = { it.path.joinToString(".") }) { row ->
+                        val d = drag
+                        val moving = d != null && row.path.size >= d.path.size && row.path.subList(0, d.path.size) == d.path
+                        val restIndex = places[row.path] ?: -1
+                        OutlineEditRow(
+                            vm, doc, all, row, enabled = locked == null,
+                            dragOffset = if (d != null && row.path == d.path) d.dy else null,
+                            faded = moving && row.path != d?.path,
+                            dropLineDepth = target?.takeIf { restIndex >= 0 && it.first == restIndex }?.second,
+                            dropLineAfterDepth = target?.takeIf { restIndex >= 0 && it.first == restIndex + 1 && restIndex == places.size - 1 }?.second,
+                            onDragStart = { drag = OutlineDrag(row.path, all.indexOf(row), 0f, 0f) },
+                            onDrag = { dx, dy -> drag = drag?.let { it.copy(dx = it.dx + dx, dy = it.dy + dy) } },
+                            onDragEnd = {
+                                val t = target
+                                drag = null
+                                val args = t?.let { outlineDropArgs(all, row.path, it.first, it.second) }
+                                Diag.event(DiagArea.Pages, "outline_drag", "doc" to doc.diagNumber, "moved" to (args != null), "levels" to ((t?.second ?: row.depth) - row.depth), "rows" to all.size)
+                                if (args != null) vm.editBookmark(doc, "bookmark_move", null, args)
+                            },
+                            onDragCancel = { drag = null },
+                        ) { prompt = it }
+                    }
                 }
             }
         }
@@ -294,8 +343,14 @@ private fun rowColor(row: OutlineRow, fallback: Color): Color =
     row.color?.takeIf { it.size == 3 && it.any { v -> v > 0f } }?.let { Color(it[0], it[1], it[2]) } ?: fallback
 
 @Composable
-private fun OutlineEditRow(vm: AppViewModel, doc: OpenDocument, all: List<OutlineRow>, row: OutlineRow, enabled: Boolean, onPrompt: (OutlinePrompt) -> Unit) {
+private fun OutlineEditRow(
+    vm: AppViewModel, doc: OpenDocument, all: List<OutlineRow>, row: OutlineRow, enabled: Boolean,
+    dragOffset: Float?, faded: Boolean, dropLineDepth: Int?, dropLineAfterDepth: Int?,
+    onDragStart: () -> Unit, onDrag: (Float, Float) -> Unit, onDragEnd: () -> Unit, onDragCancel: () -> Unit,
+    onPrompt: (OutlinePrompt) -> Unit,
+) {
     val c = pdfColors
+    val haptics = LocalHapticFeedback.current
     var menu by remember { mutableStateOf(false) }
     val moves = OutlineMove.entries.mapNotNull { m -> outlineMoveArgs(all, row.path, m)?.let { m to it } }
     val moveLabels = mapOf(
@@ -304,8 +359,29 @@ private fun OutlineEditRow(vm: AppViewModel, doc: OpenDocument, all: List<Outlin
         OutlineMove.In to stringResource(R.string.contents_move_in),
         OutlineMove.Out to stringResource(R.string.contents_move_out),
     )
+    val start by rememberUpdatedState(onDragStart)
+    val move by rememberUpdatedState(onDrag)
+    val end by rememberUpdatedState(onDragEnd)
+    val cancel by rememberUpdatedState(onDragCancel)
+    val accent = c.accent
     Row(
-        Modifier.fillMaxWidth().heightIn(min = 52.dp)
+        Modifier.zIndex(if (dragOffset != null) 1f else 0f).fillMaxWidth().heightIn(min = 52.dp)
+            .graphicsLayer {
+                if (dragOffset != null) { translationY = dragOffset; shadowElevation = 8f }
+                alpha = if (faded) 0.35f else 1f
+            }
+            .background(if (dragOffset != null) c.menu else Color.Transparent)
+            .drawWithContent {
+                drawContent()
+                // where a dragged bookmark will go: a line above (or below the last row), at its level
+                val depth = dropLineDepth ?: dropLineAfterDepth
+                if (depth != null) {
+                    val x = (16 + depth.coerceAtMost(8) * OUTLINE_LEVEL_DP).dp.toPx()
+                    val h = 2.dp.toPx()
+                    val y = if (dropLineDepth != null) 0f else size.height - h
+                    drawRect(accent, topLeft = Offset(x, y), size = Size((size.width - x - 16.dp.toPx()).coerceAtLeast(0f), h))
+                }
+            }
             .clickable {
                 row.page?.let { p ->
                     doc.controller.rememberJump(doc.viewer)
@@ -315,7 +391,7 @@ private fun OutlineEditRow(vm: AppViewModel, doc: OpenDocument, all: List<Outlin
             .semantics {
                 if (enabled) customActions = moves.map { (m, args) -> CustomAccessibilityAction(moveLabels.getValue(m)) { vm.editBookmark(doc, "bookmark_move", null, args); true } }
             }
-            .padding(start = 16.dp + (row.depth.coerceAtMost(8) * 16).dp, end = 4.dp),
+            .padding(start = 16.dp + (row.depth.coerceAtMost(8) * OUTLINE_LEVEL_DP).dp, end = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f).padding(vertical = 8.dp)) {
@@ -325,6 +401,17 @@ private fun OutlineEditRow(vm: AppViewModel, doc: OpenDocument, all: List<Outlin
             )
             row.page?.let { Text(stringResource(R.string.sheet_page, it + 1), color = c.textSecondary, fontSize = 13.sp) }
         }
+        if (enabled) Box(
+            // the grip: TalkBack users have Move up / down / in / out instead
+            Modifier.size(44.dp).clearAndSetSemantics {}.pointerInput(row.path) {
+                detectDragGestures(
+                    onDragStart = { haptics.performHapticFeedback(HapticFeedbackType.LongPress); start() },
+                    onDragEnd = { end() },
+                    onDragCancel = { cancel() },
+                ) { change, amount -> change.consume(); move(amount.x, amount.y) }
+            },
+            contentAlignment = Alignment.Center,
+        ) { Icon(LucideIcons.GripVertical, null, tint = c.icon, modifier = Modifier.size(20.dp)) }
         if (enabled) Box {
             BarIcon(LucideIcons.EllipsisVertical, stringResource(R.string.contents_options, row.title), { menu = true })
             DropdownMenu(expanded = menu, onDismissRequest = { menu = false }, containerColor = c.menu) {
@@ -341,6 +428,35 @@ private fun OutlineEditRow(vm: AppViewModel, doc: OpenDocument, all: List<Outlin
             }
         }
     }
+}
+
+/** Indent of one bookmark level in Edit contents, and how far a drag goes sideways per level. */
+private const val OUTLINE_LEVEL_DP = 16
+
+/** A drag in progress: the bookmark, its row index when it started, and how far it has moved. */
+private data class OutlineDrag(val path: List<Int>, val startIndex: Int, val dx: Float, val dy: Float)
+
+/**
+ * Where [drag] would drop: (slot among the other rows, level). The slot counts the rows (without
+ * the dragged one and its children) whose middle is above the dragged row's middle; rows scrolled
+ * out of view count by their side. The level is the starting level plus one per [step] dragged
+ * sideways, kept to what the slot allows. [visible] is (row index, top, height) of the rows shown.
+ */
+private fun outlineDropTarget(all: List<OutlineRow>, drag: OutlineDrag, visible: List<Triple<Int, Int, Int>>, step: Float): Pair<Int, Int>? {
+    val me = visible.firstOrNull { it.first == drag.startIndex } ?: return null
+    val middle = me.second + drag.dy + me.third / 2f
+    val first = visible.minOf { it.first }
+    val byIndex = visible.associateBy { it.first }
+    var slot = 0
+    all.forEachIndexed { i, r ->
+        if (r.path.size >= drag.path.size && r.path.subList(0, drag.path.size) == drag.path) return@forEachIndexed
+        val v = byIndex[i]
+        val above = if (v != null) v.second + v.third / 2f < middle else i < first
+        if (above) slot++
+    }
+    val rest = outlineRowsWithout(all, drag.path)
+    val depth = (drag.path.size - 1 + kotlin.math.round(drag.dx / step).toInt()).coerceIn(outlineDropDepths(rest, slot))
+    return slot to depth
 }
 
 @Composable

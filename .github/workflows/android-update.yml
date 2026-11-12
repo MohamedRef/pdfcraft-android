@@ -9,9 +9,15 @@ on:
 permissions:
   contents: read
 
+# Issue #206: every main commit must finish its own checks. With one group per ref, GitHub keeps
+# only one pending run per group and cancels the older pending run when a newer push lands, even
+# with cancel-in-progress off, so quick back-to-back merges left commits unverified. Main pushes and
+# manual runs therefore get a group per commit; only a pull request's superseded runs are cancelled.
+# Signing and publishing are serialised separately by the job-level android-publish group below.
 concurrency:
-  group: android-update-${{ github.ref }}
-  # Do not cancel an in-progress signed publication when another main push lands.
+  group: >-
+    android-update-${{ github.event_name == 'pull_request' && github.ref
+    || format('{0}-{1}', github.ref, github.sha) }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
@@ -108,6 +114,10 @@ jobs:
       (github.event_name == 'push' &&
       startsWith(github.event.head_commit.message, 'chore(release): publish 0.0.24-beta (24012)')))
     needs: [rust-tests, android-tests]
+    concurrency:
+      # One signed publication at a time across runs; never cancel one in progress.
+      group: android-publish
+      cancel-in-progress: false
     permissions:
       contents: write  # publish an already signed and verified APK only from main
     runs-on: ubuntu-latest
@@ -235,6 +245,10 @@ jobs:
       (github.event_name == 'push' &&
       startsWith(github.event.head_commit.message, 'chore(release): publish 0.0.24-beta (24012)')))
     needs: [signed-apk]
+    concurrency:
+      # One signed publication at a time across runs; never cancel one in progress.
+      group: android-publish
+      cancel-in-progress: false
     permissions:
       contents: write
       actions: read

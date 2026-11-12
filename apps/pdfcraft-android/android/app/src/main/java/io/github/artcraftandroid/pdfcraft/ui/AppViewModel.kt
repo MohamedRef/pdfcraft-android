@@ -3575,6 +3575,8 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 *(p?.timings.orEmpty().map<io.github.artcraftandroid.pdfcraft.core.ScanTiming, Pair<String, Any?>> { it.stage.removePrefix("scan_") + "_ms" to it.ms.toLong() }.toTypedArray()),
                 "width" to (p?.width?.toLong() ?: 0L), "height" to (p?.height?.toLong() ?: 0L),
                 "quarter_turns" to (p?.quarterTurns?.toInt() ?: 0), "flattened" to (p?.flattened ?: false),
+                // flattened and straightened compared (#302)
+                "flatten_auto" to lab.flattenAuto, *scanFlattenCheckDiag(p?.flattenCheck),
             )
             withContext(Dispatchers.Main) {
                 // a newer request may have come in while this one ran: only the wanted one is shown
@@ -3626,10 +3628,10 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             val stats = scanPageStats(page.corners, page.found, ScanPage.WHOLE, page.thumb.width.toDouble(), page.thumb.height.toDouble())
             // a whole photo in Original stays the camera's own file: natively it only gets its
             // resolution written in, so its PDF page has a size like the others (#293)
-            val untouched = !flatten && !scanNeedsProcessing(page.corners.contentEquals(ScanPage.WHOLE), filter.mode)
             busy = text(R.string.msg_busy_cleaning_page, i + 1, pages.size)
             // the same request the screen's preview was made from (#301)
             val request = scanPageRequest(page.file.absolutePath, page.corners, filter, flatten, lab, File(dir, "page-$i").absolutePath)
+            val untouched = !request.flatten && !scanNeedsProcessing(page.corners.contentEquals(ScanPage.WHOLE), filter.mode)
             val enhanceStarted = android.os.SystemClock.elapsedRealtime()
             val result = withContext(Dispatchers.Default) { runCatching { io.github.artcraftandroid.pdfcraft.core.scanProcessPage(request) } }
             result.onFailure { Diag.failure(DiagArea.Scan, "scan_process_page", it) }
@@ -3645,6 +3647,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 "paper" to (r?.paper?.name?.lowercase() ?: "none"), "aspect" to (r?.aspectSource?.name?.lowercase() ?: "none"),
                 "focal_mismatch" to (r?.focalMismatch ?: false),
                 "flatten" to flatten, "flattened" to (r?.flattened ?: false), "bend_pct" to ((r?.bend ?: 0f) * 100.0),
+                "flatten_auto" to lab.flattenAuto, *scanFlattenCheckDiag(r?.flattenCheck),
                 "strength" to strength, "side_proportions" to !lab.perspective, "snap_paper" to lab.snapPaper,
                 // which way up the page was found to be and whether it was turned (#339)
                 "upright" to lab.upright, "quarter_turns" to (r?.quarterTurns?.toInt() ?: 0), "upright_sure" to (r?.orientation?.sure ?: false),
@@ -3660,6 +3663,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                         it.aspectSource.name.lowercase(), it.focalMismatch, it.flattened, it.bend * 100.0, it.quarterTurns.toInt(),
                         it.orientation?.let { o -> ScanTestOrientation(o.quarterTurns.toInt(), o.confidence.toDouble(), o.agreement.toDouble(), o.tiles.toInt(), o.sure) },
                         it.noise?.toDouble(),
+                        it.flattenCheck,
                     )
                 }
                 withContext(Dispatchers.IO) { scanLab.keepPage(keepIn, i, page, true, filter.mode, strength, flatten, r?.path?.let(::File), made, scanPreviewRecord(page)) }
@@ -4104,7 +4108,13 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             put("add", listOf(0.0, bottom, right, 0.0))
             if (pages.isNotEmpty()) put("pages", pages.map { it + 1 })
         }
-        runTool(doc, "page_margin", args) { tell(text(R.string.margin_added)) }
+        runTool(doc, "page_margin", args) { r ->
+            Diag.event(
+                DiagArea.Study, "margin_add", "doc" to doc.diagNumber, "side" to side, "size_pct" to (fraction * 100).toInt(),
+                "pages" to (if (pages.isEmpty()) doc.pageCount else pages.size), "with_margin" to r.optJSONArray("margins")?.let { a -> (0 until a.length()).count { a.optBoolean(it) } },
+            )
+            tell(text(R.string.margin_added))
+        }
     }
 
     /** Take off the note margins of [pages] (every page when empty), back to the original size. */
@@ -4114,7 +4124,13 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             put("remove", true)
             if (pages.isNotEmpty()) put("pages", pages.map { it + 1 })
         }
-        runTool(doc, "page_margin", args) { tell(text(R.string.margin_removed)) }
+        runTool(doc, "page_margin", args) { r ->
+            Diag.event(
+                DiagArea.Study, "margin_remove", "doc" to doc.diagNumber, "pages" to (if (pages.isEmpty()) doc.pageCount else pages.size),
+                "changed" to r.optBoolean("changed", true),
+            )
+            tell(text(R.string.margin_removed))
+        }
     }
 
     // ---- Handwriting to text (#151) ----
@@ -4134,6 +4150,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             withContext(Dispatchers.IO) { runCatching { eng.prepareOcrModels(getApplication()) } }
             val status = runCatching { eng.tool("ocr_status") }.getOrNull()
             if (status?.optBoolean("available", false) != true) {
+                Diag.event(DiagArea.Study, "handwriting", "doc" to doc.diagNumber, "outcome" to "ocr_missing")
                 busy = null
                 tell(text(R.string.msg_ocr_not_installed))
                 return@launch
@@ -4143,7 +4160,10 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             var copy: Long? = null
             try {
                 val inks = io.github.artcraftandroid.pdfcraft.engine.Handwriting.inksWithoutText(eng.tool("comment_list", mapOf("doc" to doc.id, "page" to page + 1)))
-                if (inks.isEmpty()) { tell(text(R.string.handwriting_none)); return@launch }
+                if (inks.isEmpty()) {
+                    Diag.event(DiagArea.Study, "handwriting", "doc" to doc.diagNumber, "outcome" to "no_new_ink")
+                    tell(text(R.string.handwriting_none)); return@launch
+                }
                 val xfdf = eng.tool("comments_copy", mapOf("doc" to doc.id, "comments" to inks.map { listOf(page + 1, it.index) })).getString("xfdf")
                 val size = doc.info.pages[page]
                 withContext(Dispatchers.IO) { blank.writeBytes(io.github.artcraftandroid.pdfcraft.engine.Handwriting.blankPdf(size.width.toDouble(), size.height.toDouble())) }
@@ -4153,13 +4173,22 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 val cy = (inks.minOf { it.y0 } + inks.maxOf { it.y1 }) / 2
                 eng.tool("comments_paste", mapOf("doc" to copy, "page" to 1, "xfdf" to xfdf, "at" to listOf(cx, cy)))
                 eng.tool("doc_save", mapOf("doc" to copy))
+                val ocrStart = System.nanoTime()
                 val read = eng.tool("ocr_words", mapOf("doc" to copy, "pages" to listOf(1), "force_ocr" to true, "auto_rotate" to true))
-                val found = io.github.artcraftandroid.pdfcraft.engine.Handwriting.assign(inks, io.github.artcraftandroid.pdfcraft.engine.Handwriting.words(read))
+                val ocrMs = (System.nanoTime() - ocrStart) / 1_000_000
+                val words = io.github.artcraftandroid.pdfcraft.engine.Handwriting.words(read)
+                val found = io.github.artcraftandroid.pdfcraft.engine.Handwriting.assign(inks, words)
+                Diag.event(
+                    DiagArea.Study, "handwriting", "doc" to doc.diagNumber, "outcome" to (if (found.isEmpty()) "nothing_read" else "read"),
+                    "inks" to inks.size, "words" to words.size, "low_confidence" to words.count { (it.confidence ?: 100f) <= io.github.artcraftandroid.pdfcraft.engine.Handwriting.MIN_CONFIDENCE },
+                    "inks_with_text" to found.size, "ocr_ms" to ocrMs,
+                )
                 if (found.isEmpty()) { tell(text(R.string.handwriting_nothing_read)); return@launch }
                 for ((index, words) in found) eng.tool("comment_edit", mapOf("doc" to doc.id, "page" to page + 1, "index" to index, "contents" to words))
                 refresh(doc)
                 success = SuccessBanner(plural(R.plurals.handwriting_done, found.size, found.size), null)
             } catch (e: Exception) {
+                Diag.failure(DiagArea.Study, "handwriting", e)
                 tell(e.userMessage)
             } finally {
                 copy?.let { c -> runCatching { eng.tool("doc_close", mapOf("doc" to c, "discard_changes" to true)) } }
@@ -4215,6 +4244,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 recorder.prepare()
                 recorder.start()
             } catch (e: Exception) {
+                Diag.failure(DiagArea.Study, "lecture_start", e)
                 recorder.release()
                 file.delete()
                 tell(text(R.string.lecture_cannot_record))
@@ -4225,6 +4255,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             val session = LectureSession(uri, doc.title, id, file, now, recorder, clock)
             // the comments already there are not marked as written during the lecture
             comments(doc)?.mapNotNullTo(session.known) { it.name }
+            Diag.event(DiagArea.Study, "lecture_start", "doc" to doc.diagNumber, "comments_before" to session.known.size, "free_mb" to app.filesDir.usableSpace / (1024 * 1024))
             lectureRecording = session
             lecturePaused = false
             withContext(Dispatchers.IO) { lectures.put(uri, io.github.artcraftandroid.pdfcraft.engine.Lecture(id, now, 0, emptyList())) }
@@ -4237,12 +4268,13 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         val s = lectureRecording ?: return
         if (lecturePaused) return
         runCatching { s.recorder.pause() }.onSuccess { s.clock.pause(); lecturePaused = true }
+            .also { Diag.event(DiagArea.Study, "lecture_pause", "ok" to it.isSuccess, "at_ms" to s.clock.elapsed()) }
     }
 
     fun resumeLecture() {
         val s = lectureRecording ?: return
         if (!lecturePaused) return
-        runCatching { s.recorder.resume() }.onSuccess {
+        runCatching { s.recorder.resume() }.also { Diag.event(DiagArea.Study, "lecture_resume", "ok" to it.isSuccess, "at_ms" to s.clock.elapsed()) }.onSuccess {
             s.clock.start()
             lecturePaused = false
             io.github.artcraftandroid.pdfcraft.LectureRecordService.show(getApplication(), s.title, System.currentTimeMillis() - s.clock.elapsed())
@@ -4261,6 +4293,11 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         val ok = runCatching { s.recorder.stop() }.isSuccess
         s.recorder.release()
         viewModelScope.launch(Dispatchers.IO) {
+            val bytes = s.file.length()
+            Diag.event(
+                DiagArea.Study, "lecture_stop", "ok" to ok, "duration_ms" to duration, "bytes" to bytes, "marks" to s.marks.size,
+                "kbps" to (if (duration > 0) bytes * 8 / duration else 0L), "wall_ms" to System.currentTimeMillis() - s.started,
+            )
             if (ok && s.file.length() > 0) {
                 lectures.put(s.uri, io.github.artcraftandroid.pdfcraft.engine.Lecture(s.id, s.started, duration, s.marks))
                 withContext(Dispatchers.Main) { tell(text(R.string.lecture_saved, io.github.artcraftandroid.pdfcraft.ui.viewer.timerClock(duration))) }
@@ -4280,6 +4317,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             val added = comments(doc)?.filter { c -> c.name?.let { it !in s.known } == true && c.replyTo == null }.orEmpty()
             if (added.isEmpty()) return@launch
             added.forEach { s.known += it.name!! }
+            Diag.event(DiagArea.Study, "lecture_mark", "doc" to doc.diagNumber, "at_ms" to at, "added" to added.size, "marks" to s.marks.size + added.size)
             s.marks = s.marks + added.map { io.github.artcraftandroid.pdfcraft.engine.LectureMark(it.name!!, it.page.toInt(), at) }
             if (lectureRecording === s) withContext(Dispatchers.IO) {
                 lectures.put(s.uri, io.github.artcraftandroid.pdfcraft.engine.Lecture(s.id, s.started, at, s.marks))
@@ -4316,10 +4354,12 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             player.setDataSource(lectures.audio(l).absolutePath)
             player.prepare()
         } catch (e: Exception) {
+            Diag.failure(DiagArea.Study, "lecture_play", e)
             player.release()
             tell(text(R.string.lecture_cannot_play))
             return
         }
+        Diag.event(DiagArea.Study, "lecture_play", "doc" to doc.diagNumber, "from_ms" to fromMs, "duration_ms" to player.duration, "marks" to l.marks.size)
         player.setOnCompletionListener { lecturePlaying = false }
         lecturePlayback = LecturePlayback(uri, l, player)
         applySpeed(player)
@@ -4348,6 +4388,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     fun cycleLectureSpeed() {
         val speeds = listOf(0.75f, 1f, 1.25f, 1.5f, 2f)
         lectureSpeed = speeds[(speeds.indexOf(lectureSpeed) + 1) % speeds.size]
+        Diag.event(DiagArea.Study, "lecture_speed", "speed" to lectureSpeed)
         lecturePlayback?.player?.let(::applySpeed)
     }
 
@@ -4373,7 +4414,9 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         val p = lecturePlayback ?: return
         if (doc.source?.toString() != p.uri) return
         val name = c.name ?: return
-        val (_, at) = io.github.artcraftandroid.pdfcraft.engine.Lectures.seekFor(listOf(p.lecture), name) ?: return
+        val (_, at) = io.github.artcraftandroid.pdfcraft.engine.Lectures.seekFor(listOf(p.lecture), name)
+            ?: run { Diag.event(DiagArea.Study, "lecture_seek_comment", "doc" to doc.diagNumber, "found" to false); return }
+        Diag.event(DiagArea.Study, "lecture_seek_comment", "doc" to doc.diagNumber, "found" to true, "at_ms" to at)
         seekLecture(at)
         if (!lecturePlaying) toggleLecturePlay()
     }
