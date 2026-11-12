@@ -325,6 +325,19 @@
     <string name="tools_filter_whiteboard">Tableau blanc</string>
     <string name="tools_filter_light_text">Texte clair</string>
     <string name="tools_scan_flatten">Aplatir la page</string>
+    <string name="tools_scan_view_result">Résultat</string>
+    <string name="tools_scan_view_photo">Photo</string>
+    <string name="tools_scan_preparing">Préparation de la page</string>
+    <string name="tools_scan_result_description">Page %1$d telle qu’elle sera enregistrée</string>
+    <string name="tools_crop_snap">Aimanter</string>
+    <string name="tools_crop_top_left">Coin supérieur gauche</string>
+    <string name="tools_crop_top_right">Coin supérieur droit</string>
+    <string name="tools_crop_bottom_right">Coin inférieur droit</string>
+    <string name="tools_crop_bottom_left">Coin inférieur gauche</string>
+    <string name="tools_crop_top_side">Côté supérieur</string>
+    <string name="tools_crop_right_side">Côté droit</string>
+    <string name="tools_crop_bottom_side">Côté inférieur</string>
+    <string name="tools_crop_left_side">Côté gauche</string>
 
     <!-- App dialogs: the first comment's name prompt -->
     <!-- Verb: go on without entering a name -->
@@ -1100,6 +1113,8 @@
     <string name="scan_lab_sharpen">Accentuer le texte (Scan net)</string>
     <string name="scan_lab_off">Non</string>
     <string name="scan_lab_denoise">Lisser le grain des photos sombres (Scan net)</string>
+    <string name="scan_lab_preview">Afficher les pages telles qu’elles seront enregistrées</string>
+    <string name="scan_lab_crop">Recadrer avec loupe et aimantation aux bords</string>
     <string name="scan_lab_strength">Intensité du filtre</string>
     <string name="scan_lab_strength_own">Par défaut</string>
     <string name="scan_lab_options_body">Ces options désactivent des parties du scanner ou les remplacent par ce qu\'elles ont remplacé, pour savoir de quelle partie vient un problème. Le journal note ce qui était en vigueur pour chaque page.</string>

@@ -140,7 +140,11 @@ private enum class FormatPanel { None, Size, Font, Color, Align, List, Script, S
 @Composable
 fun EditToolbar(vm: AppViewModel, doc: OpenDocument) {
     val para = vm.editor.editSelection
-    if (para != null) EditFormatBar(vm, doc, para) else EditToolsBar(vm, doc)
+    when {
+        vm.editor.objectSelect.doc === doc -> ObjectSelectBar(vm, doc)
+        para != null -> EditFormatBar(vm, doc, para)
+        else -> EditToolsBar(vm, doc)
+    }
 }
 
 @Composable
@@ -156,6 +160,11 @@ private fun EditToolsBar(vm: AppViewModel, doc: OpenDocument) {
         EditBarItem(LucideIcons.LayoutGrid, stringResource(R.string.common_tool_organize), false, 96.dp) {
             vm.organizing = true
             doc.controller.pagesOpen = true
+        }
+        // several objects at once: select, move, copy, cut and paste (#162)
+        EditBarItem(LucideIcons.SquareDashedMousePointer, stringResource(R.string.objects_select), false, 78.dp) { vm.startObjectSelect(doc) }
+        if (vm.editor.objectSelect.copied > 0) {
+            EditBarItem(LucideIcons.ClipboardPaste, stringResource(R.string.objects_paste), false, 70.dp) { vm.pasteObjects(doc, doc.viewer.currentPage) }
         }
         BarDividerLine()
         EditBarItem(LucideIcons.Type, stringResource(R.string.edit_add_text), vm.editor.editMode == EditMode.AddText, 70.dp) {
@@ -188,7 +197,7 @@ fun LinkCommandsRow(vm: AppViewModel, doc: OpenDocument) {
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        androidx.compose.material3.TextButton(onClick = { vm.linksFromUrls(doc) }) {
+        androidx.compose.material3.TextButton(onClick = { vm.linksAndMeasure.linksFromUrls(doc) }) {
             Text(stringResource(R.string.link_from_urls), color = c.accent, fontSize = 14.sp)
         }
         androidx.compose.material3.TextButton(onClick = { confirmRemove = true }) {
@@ -203,7 +212,7 @@ fun LinkCommandsRow(vm: AppViewModel, doc: OpenDocument) {
             destructive = true,
             onConfirm = {
                 confirmRemove = false
-                vm.removeAllLinks(doc)
+                vm.linksAndMeasure.removeAllLinks(doc)
             },
         ) { Text(stringResource(R.string.link_remove_all_body), color = c.textSecondary, fontSize = 15.sp) }
     }
@@ -439,6 +448,10 @@ private fun AlignPanel(current: String, onAlign: (String) -> Unit) {
  */
 @Composable
 fun BoxScope.EditOverlay(vm: AppViewModel, doc: OpenDocument) {
+    if (vm.editor.objectSelect.doc === doc) {
+        ObjectSelectLayer(vm, doc)
+        return
+    }
     val pages = doc.viewer.visiblePages()
     LaunchedEffect(pages, doc.info.generation) { for (p in pages) vm.editor.loadParagraphs(doc, p) }
     val accent = pdfColors.accent

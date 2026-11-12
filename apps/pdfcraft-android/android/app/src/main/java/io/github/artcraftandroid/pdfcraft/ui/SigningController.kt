@@ -9,6 +9,8 @@ import androidx.lifecycle.viewModelScope
 import io.github.artcraftandroid.pdfcraft.R
 import io.github.artcraftandroid.pdfcraft.core.MobileException
 import io.github.artcraftandroid.pdfcraft.engine.DocumentFiles
+import io.github.artcraftandroid.pdfcraft.engine.Diag
+import io.github.artcraftandroid.pdfcraft.engine.DiagArea
 import io.github.artcraftandroid.pdfcraft.engine.Engine
 import io.github.artcraftandroid.pdfcraft.engine.userMessage
 import io.github.artcraftandroid.pdfcraft.plural
@@ -18,6 +20,7 @@ import io.github.artcraftandroid.pdfcraft.ui.viewer.LinkFlash
 import io.github.artcraftandroid.pdfcraft.ui.viewer.PagePoint
 import io.github.artcraftandroid.pdfcraft.ui.viewer.TextPrompt
 import io.github.artcraftandroid.pdfcraft.ui.viewer.ViewerTool
+import io.github.artcraftandroid.pdfcraft.ui.viewer.editEvent
 import io.github.artcraftandroid.pdfcraft.ui.viewer.engineType
 import io.github.artcraftandroid.pdfcraft.ui.viewer.hex
 import java.io.File
@@ -52,6 +55,7 @@ class SigningController internal constructor(private val vm: AppViewModel) {
 
     /** Place [element] at [at] on its page. */
     fun placeFill(doc: OpenDocument, element: io.github.artcraftandroid.pdfcraft.ui.viewer.FillElement, at: PagePoint, text: String? = null) {
+        editEvent(doc, "sign_fill_place", "element" to element.engineType)
         if (element == FillElement.Box) {
             // a rounded box around what was tapped, in the Fill & Sign colour: drawn as one ink stroke
             val r = vm.toolPrefs.fillTextSize
@@ -98,6 +102,7 @@ class SigningController internal constructor(private val vm: AppViewModel) {
     /** A signature or initials was made: save it (if asked) and place it where the page was tapped. */
     fun finishSignature(pad: io.github.artcraftandroid.pdfcraft.ui.viewer.SignaturePad, bitmap: android.graphics.Bitmap, save: Boolean) {
         signaturePad = null
+        val imported = importedSignature != null
         importedSignature = null
         vm.viewModelScope.launch {
             val target = if (save) signatures.fileFor(pad.initials) else File(app.cacheDir, "sign-${System.nanoTime()}.png")
@@ -106,6 +111,7 @@ class SigningController internal constructor(private val vm: AppViewModel) {
                 fillElement = if (pad.initials) FillElement.Initials else FillElement.Signature
             val doc = pad.doc
             val at = pad.at
+            if (doc != null) editEvent(doc, "sign_drawn", "initials" to pad.initials, "saved" to save, "placed" to (at != null), "imported" to imported)
             if (doc != null && at != null) {
                 vm.runTool(doc, "fill_sign_add", mapOf(
                     "page" to at.page + 1, "type" to if (pad.initials) "initials" else "signature",
@@ -177,6 +183,7 @@ class SigningController internal constructor(private val vm: AppViewModel) {
     /** Draw the box for a new digital signature on [doc], in Fill & Sign. */
     fun startCertPlacing(doc: OpenDocument) {
         if (!doc.info.readOnlyReason.isNullOrEmpty()) {
+            editEvent(doc, "sign_cert_target", "placement" to "read_only")
             vm.tell(text(R.string.msg_sign_read_only))
             return
         }
@@ -189,6 +196,7 @@ class SigningController internal constructor(private val vm: AppViewModel) {
     /** Sign with no box on the page (an invisible signature, on the current page): on to choosing the ID. */
     fun signInvisibly(doc: OpenDocument) {
         certPlacing = null
+        editEvent(doc, "sign_cert_target", "placement" to "invisible")
         openCertSign(io.github.artcraftandroid.pdfcraft.ui.viewer.CertTarget(doc, null, doc.viewer.currentPage, null))
     }
 
@@ -208,6 +216,7 @@ class SigningController internal constructor(private val vm: AppViewModel) {
                     o.optInt("revision") to (0 until (by?.length() ?: 0)).map { by!!.optString(it) }
                 }
                 val revision = io.github.artcraftandroid.pdfcraft.ui.viewer.signedRevision(s.field, revisions)
+                editEvent(doc, "sign_signed_version", "revisions" to revisions.size, "found" to (revision != null))
                 if (revision == null) {
                     vm.tell(text(R.string.sign_no_signed_version))
                     return@launch
@@ -228,10 +237,12 @@ class SigningController internal constructor(private val vm: AppViewModel) {
     /** The box was drawn: on to choosing the ID. */
     fun placeCert(doc: OpenDocument, page: Int, rect: FloatArray) {
         certPlacing = null
+        editEvent(doc, "sign_cert_target", "placement" to "box")
         openCertSign(io.github.artcraftandroid.pdfcraft.ui.viewer.CertTarget(doc, null, page, rect))
     }
 
     fun signFieldWithId(doc: OpenDocument, w: io.github.artcraftandroid.pdfcraft.core.WidgetInfo) {
+        editEvent(doc, "sign_cert_target", "placement" to "field")
         openCertSign(io.github.artcraftandroid.pdfcraft.ui.viewer.CertTarget(doc, w.field, w.page.toInt(), null))
     }
 
@@ -255,6 +266,7 @@ class SigningController internal constructor(private val vm: AppViewModel) {
         idImport = null
         if (password == null) {
             imp.file.delete()
+            idEvent("sign_id_import", "result" to "cancelled")
             return
         }
         vm.viewModelScope.launch {
@@ -263,17 +275,21 @@ class SigningController internal constructor(private val vm: AppViewModel) {
                 val problem = info.problem
                 if (problem != null) {
                     imp.file.delete()
+                    idEvent("sign_id_import", "result" to "cannot_sign")
                     vm.tell(text(R.string.msg_id_cannot_sign, problem))
                     return@launch
                 }
                 val id = withContext(Dispatchers.IO) { digitalIds.add(imp.file, info) }
                 imp.file.delete()
                 chosenId = id
+                idEvent("sign_id_import", "result" to "added", "ids" to digitalIds.all.size)
                 vm.tell(text(R.string.msg_id_added, id.name))
             } catch (e: MobileException.WrongPassword) {
+                idEvent("sign_id_import", "result" to "wrong_password")
                 idImport = io.github.artcraftandroid.pdfcraft.ui.viewer.IdImport(imp.file, imp.name, wrong = true)
             } catch (e: MobileException) {
                 imp.file.delete()
+                idEvent("sign_id_import", "result" to "unusable")
                 vm.tell(text(R.string.msg_id_unusable, e.userMessage))
             }
         }
@@ -285,6 +301,7 @@ class SigningController internal constructor(private val vm: AppViewModel) {
         vm.viewModelScope.launch {
             vm.busy = text(R.string.msg_busy_creating_id)
             val tmp = File(app.cacheDir, "new-id-${System.nanoTime()}.p12")
+            val started = System.nanoTime()
             try {
                 eng.tool("sign_id_create", mapOf(
                     "name" to name.trim(), "email" to email.trim().ifEmpty { null }, "organization" to organization.trim().ifEmpty { null },
@@ -293,8 +310,10 @@ class SigningController internal constructor(private val vm: AppViewModel) {
                 val info = withContext(Dispatchers.IO) { io.github.artcraftandroid.pdfcraft.core.digitalIdInfo(tmp.absolutePath, password) }
                 chosenId = withContext(Dispatchers.IO) { digitalIds.add(tmp, info) }
                 idCreate = false
+                idEvent("sign_id_create", "ok" to true, "ms" to (System.nanoTime() - started) / 1_000_000)
                 vm.tell(text(R.string.msg_id_created))
             } catch (e: MobileException) {
+                idEvent("sign_id_create", "ok" to false, "ms" to (System.nanoTime() - started) / 1_000_000)
                 vm.tell(toolMessage(e, "sign_id_create"))
             } finally {
                 tmp.delete()
@@ -305,6 +324,7 @@ class SigningController internal constructor(private val vm: AppViewModel) {
 
     fun removeDigitalId(id: io.github.artcraftandroid.pdfcraft.engine.DigitalId) {
         digitalIds.remove(id)
+        idEvent("sign_id_remove", "ids" to digitalIds.all.size)
         if (chosenId == id) chosenId = digitalIds.all.lastOrNull()
     }
 
@@ -325,6 +345,13 @@ class SigningController internal constructor(private val vm: AppViewModel) {
         val doc = t.doc
         vm.viewModelScope.launch {
             vm.busy = text(R.string.msg_busy_signing)
+            val started = System.nanoTime()
+            val placement = when { t.field != null -> "field"; t.rect != null -> "box"; else -> "invisible" }
+            fun signEvent(result: String, vararg more: Pair<String, Any?>) = editEvent(
+                doc, "sign_document", "placement" to placement, "look" to look.name.lowercase(),
+                "reason" to reason.isNotBlank(), "location" to location.isNotBlank(),
+                "ms" to (System.nanoTime() - started) / 1_000_000, "result" to result, *more,
+            )
             try {
                 val args = mutableMapOf<String, Any?>(
                     "doc" to doc.id, "id" to id.file.absolutePath, "password" to password, "out" to doc.file.absolutePath,
@@ -364,23 +391,32 @@ class SigningController internal constructor(private val vm: AppViewModel) {
                 if (doc.controller.tool == ViewerTool.FillSign) vm.leaveTool(doc)
                 vm.refresh(doc)
                 // the working copy is signed; the original gets it now, or a copy does
-                if (vm.save(doc, quiet = true)) {
+                val saved = vm.save(doc, quiet = true)
+                signEvent("signed", "saved" to saved)
+                if (saved) {
                     vm.tell(text(R.string.msg_signed_saved))
                 } else {
                     vm.tell(text(R.string.msg_signed_not_saved, doc.name), text(R.string.common_save_copy)) { vm.saveCopyAs(doc) }
                 }
             } catch (e: MobileException) {
                 val m = toolMessage(e, "sign_document")
+                signEvent(if (m.contains("password is incorrect", ignoreCase = true)) "wrong_password" else "refused")
                 certSignError = if (m.contains("password is incorrect", ignoreCase = true)) text(R.string.common_wrong_password) else m
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
             } catch (e: Exception) {
                 // e.g. the recovery marker could not be written: nothing was signed
+                signEvent("error")
                 vm.tell(e.userMessage)
             } finally {
                 vm.busy = null
             }
         }
+    }
+
+    /** An `[edit]` line about the digital IDs, not about one document: counts and results only. */
+    private fun idEvent(name: String, vararg fields: Pair<String, Any?>) {
+        if (Diag.enabled()) Diag.event(DiagArea.Edit, name, *fields)
     }
 
     /** A tool's refusal without the tool's name in front, as a sentence. */
@@ -398,6 +434,12 @@ class SigningController internal constructor(private val vm: AppViewModel) {
         catch (e: kotlinx.coroutines.CancellationException) { throw e }
         catch (_: Exception) { return }
         if (vm.document === doc && generation == doc.info.generation) doc.signatures = result
+        val signed = result.filter { it.signed }
+        editEvent(
+            doc, "sign_list", "fields" to result.size, "signed" to signed.size,
+            "valid" to signed.count { it.status == "valid" }, "unknown" to signed.count { it.status == "unknown" },
+            "invalid" to signed.count { it.status == "invalid" },
+        )
     }
 
     /** On opening a signed document: whether its signatures hold, with the details a tap away. */
@@ -441,6 +483,7 @@ class SigningController internal constructor(private val vm: AppViewModel) {
                 val der = eng.command { signerCertificate(doc.id, s.field) } ?: return@launch
                 withContext(Dispatchers.IO) { trustedCerts.add(der, sha) }
                 applyTrust(eng)
+                editEvent(doc, "sign_trust", "trusted" to true, "count" to withContext(Dispatchers.IO) { trustedCerts.files().size })
                 loadSignatures(eng, doc)
                 vm.tell(s.signer?.let { text(R.string.msg_signer_trusted, it) } ?: text(R.string.msg_signer_trusted_unknown))
             } catch (e: MobileException) {
@@ -455,6 +498,7 @@ class SigningController internal constructor(private val vm: AppViewModel) {
         vm.viewModelScope.launch {
             withContext(Dispatchers.IO) { trustedCerts.remove(sha) }
             runCatching { applyTrust(eng) }
+            editEvent(doc, "sign_trust", "trusted" to false, "count" to withContext(Dispatchers.IO) { trustedCerts.files().size })
             loadSignatures(eng, doc)
         }
     }

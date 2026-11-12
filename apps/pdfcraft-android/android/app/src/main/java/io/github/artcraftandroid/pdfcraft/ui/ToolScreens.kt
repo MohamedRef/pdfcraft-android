@@ -2,6 +2,7 @@ package io.github.artcraftandroid.pdfcraft.ui
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -821,7 +822,7 @@ fun CropScreen(vm: AppViewModel, doc: OpenDocument) {
  * whole photo when No crop was chosen or no edges were found. [found] is what Auto-detect found,
  * and [finding] how it went about it (for the diagnostics and scans kept for testing, #288).
  */
-data class ScanPage(val file: java.io.File, val thumb: ImageBitmap, val corners: FloatArray = WHOLE, val found: FloatArray? = null, val finding: ScanFinding? = null) {
+data class ScanPage(val file: java.io.File, val thumb: ImageBitmap, val corners: FloatArray = WHOLE, val found: FloatArray? = null, val finding: ScanFinding? = null, val crop: io.github.artcraftandroid.pdfcraft.ui.scan.ScanCropStats? = null) {
     companion object {
         val WHOLE = floatArrayOf(0f, 0f, 1f, 0f, 1f, 1f, 0f, 1f)
     }
@@ -852,6 +853,8 @@ fun ScanScreen(vm: AppViewModel) {
     var current by remember { mutableStateOf(0) }
     var cropping by remember { mutableStateOf<java.io.File?>(null) }
     var naming by remember { mutableStateOf(false) }
+    // the page as it will be saved, or the photo it is made from (#301)
+    var view by remember { mutableStateOf(ScanView.Result) }
     LaunchedEffect(Unit) { if (pages.isEmpty()) vm.takeScanPhoto() }
     // a page just taken is the one shown
     var seen by remember { mutableStateOf(pages.size) }
@@ -861,7 +864,21 @@ fun ScanScreen(vm: AppViewModel) {
     }
     val croppingAt = pages.indexOfFirst { it.file == cropping }
     if (croppingAt >= 0) {
-        ScanCrop(pages[croppingAt], onDone = { pages[croppingAt] = pages[croppingAt].copy(corners = it); cropping = null }, onCancel = { cropping = null })
+        val lab = vm.scanLab.options
+        if (lab.cropTools) {
+            // magnifier, side handles and snapping to the paper's edge (#292)
+            io.github.artcraftandroid.pdfcraft.ui.scan.ScanCropScreen(
+                pages[croppingAt], croppingAt, lab,
+                onDone = { q, stats ->
+                    val p = pages[croppingAt]
+                    pages[croppingAt] = p.copy(corners = q, crop = p.crop?.plus(stats) ?: stats)
+                    cropping = null
+                },
+                onCancel = { cropping = null },
+            )
+        } else {
+            ScanCrop(pages[croppingAt], onDone = { pages[croppingAt] = pages[croppingAt].copy(corners = it); cropping = null }, onCancel = { cropping = null })
+        }
         return
     }
     val addPageLabel = stringResource(R.string.tools_add_page)
@@ -888,12 +905,47 @@ fun ScanScreen(vm: AppViewModel) {
                 Icon(LucideIcons.Pencil, null, tint = c.icon, modifier = Modifier.size(20.dp))
             }
         }
+        // the page as it will be saved (#301), made natively from the same request Save uses;
+        // the photo with its outline stays a tap away, and is shown until the preview is ready
+        val shownAt = current.coerceAtMost(pages.lastIndex)
+        val page = pages.getOrNull(shownAt)
+        val lab = vm.scanLab.options
+        val flattening = flatten && vm.scanCanFlatten
+        if (page != null && lab.preview) {
+            LaunchedEffect(page.file, page.corners.toList(), filter, flattening, lab) { vm.requestScanPreview(shownAt, page, filter, flattening) }
+        }
+        val wanted = page?.let { ScanPreviewKey.of(it, filter, flattening, lab) }
+        val preview = vm.scanPreview?.takeIf { wanted != null && it.key == wanted }
+        val shown = scanShown(lab.preview, view, preview != null, wanted != null && vm.scanPreviewFailed == wanted)
         Box(Modifier.weight(1f).fillMaxWidth().background(c.desk), contentAlignment = Alignment.Center) {
-            val page = pages.getOrNull(current.coerceAtMost(pages.lastIndex))
             if (page != null) {
-                ScanPhoto(page.thumb, page.corners, Modifier.fillMaxSize())
+                if (shown.view == ScanView.Result && preview != null) {
+                    Image(
+                        preview.image, stringResource(R.string.tools_scan_result_description, shownAt + 1),
+                        modifier = Modifier.fillMaxSize().padding(16.dp), contentScale = ContentScale.Fit,
+                    )
+                } else {
+                    ScanPhoto(page.thumb, page.corners, Modifier.fillMaxSize())
+                }
+                if (shown.waiting) {
+                    Text(
+                        stringResource(R.string.tools_scan_preparing), color = Color.White, fontSize = 13.sp,
+                        modifier = Modifier.align(Alignment.BottomCenter).padding(12.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.6f)).padding(horizontal = 12.dp, vertical = 6.dp),
+                    )
+                }
             } else {
                 Text(stringResource(R.string.tools_scan_empty), color = c.textSecondary)
+            }
+        }
+        if (page != null && lab.preview) {
+            Row(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.Center) {
+                for ((v, label) in listOf(ScanView.Result to R.string.tools_scan_view_result, ScanView.Photo to R.string.tools_scan_view_photo)) {
+                    Text(
+                        stringResource(label), color = if (v == view) c.accent else c.text, fontSize = 14.sp,
+                        modifier = Modifier.clip(CircleShape).background(if (v == view) c.pressed else Color.Transparent)
+                            .selectable(selected = v == view, role = Role.Tab) { view = v }.padding(horizontal = 16.dp, vertical = 6.dp),
+                    )
+                }
             }
         }
         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {

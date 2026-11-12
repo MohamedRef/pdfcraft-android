@@ -31,6 +31,10 @@ internal data class ScanLab(
     val sharpen: Int = 30,
     /** Whether the Clean scan filter smooths the grain of a page that has a lot of it (#299). */
     val denoise: Boolean = true,
+    /** Show each page as it will be saved on the scan screen (#301); off shows the camera's photo, as before. */
+    val preview: Boolean = true,
+    /** Crop with the magnifier, side handles and snapping to the paper's edge (#292); off is the old four-handle screen. */
+    val cropTools: Boolean = true,
 ) {
     /** Nothing differs from the scanner as it is meant to be used (keeping scans changes no page). */
     val asDesigned: Boolean get() = copy(keep = false) == ScanLab()
@@ -44,20 +48,20 @@ internal data class ScanLab(
     fun diag(): Array<Pair<String, Any?>> = arrayOf<Pair<String, Any?>>(
         "finder" to finderId(finder), "refine" to refine, "side_proportions" to !perspective,
         "snap_paper" to snapPaper, "strength_override" to (strength ?: -1), "upright" to upright, "sharpen" to sharpen,
-        "denoise" to denoise, "keep" to keep,
+        "denoise" to denoise, "preview" to preview, "crop_tools" to cropTools, "keep" to keep,
     )
 
     /** The options as JSON, for a kept scan's page file. */
     fun json(): JSONObject = JSONObject()
         .put("finder", finderId(finder)).put("refine", refine).put("side_proportions", !perspective)
         .put("snap_paper", snapPaper).put("strength_override", strength ?: JSONObject.NULL).put("upright", upright)
-        .put("sharpen", sharpen).put("denoise", denoise)
+        .put("sharpen", sharpen).put("denoise", denoise).put("preview", preview).put("crop_tools", cropTools)
 
     /** One line of text for the app's preferences. */
     fun encode(): String = listOf(
         "keep" to flag(keep), "finder" to finderId(finder), "refine" to flag(refine),
         "perspective" to flag(perspective), "snap" to flag(snapPaper), "strength" to (strength?.toString() ?: ""),
-        "upright" to flag(upright), "sharpen" to sharpen.toString(), "denoise" to flag(denoise),
+        "upright" to flag(upright), "sharpen" to sharpen.toString(), "denoise" to flag(denoise), "preview" to flag(preview), "crop" to flag(cropTools),
     ).joinToString(";") { (k, v) -> "$k=$v" }
 
     companion object {
@@ -95,6 +99,8 @@ internal data class ScanLab(
                 upright = on("upright", default.upright),
                 sharpen = values["sharpen"]?.toIntOrNull()?.takeIf { it in 0..100 } ?: default.sharpen,
                 denoise = on("denoise", default.denoise),
+                preview = on("preview", default.preview),
+                cropTools = on("crop", default.cropTools),
             )
         }
     }
@@ -125,6 +131,13 @@ internal data class ScanTestResult(
 /** The orientation classifier's answer for a page (#339): the turn it would give, and how sure it was. */
 internal data class ScanTestOrientation(val quarterTurns: Int, val confidence: Double, val agreement: Double, val tiles: Int, val sure: Boolean)
 
+/**
+ * The last preview the scan screen showed of a page before it was saved (#301): whether one was
+ * shown at all, whether its straightened page was reused, how long it took and its size. A page
+ * saved without one (the option off, or saved before the preview came) has [shown] false.
+ */
+internal data class ScanTestPreview(val shown: Boolean, val reused: Boolean, val ms: Long, val width: Int, val height: Int, val look: String?)
+
 /** The name, without an extension, of page [index] (from 0) of a kept scan. */
 internal fun scanTestName(index: Int): String = String.format(Locale.US, "page-%02d", index + 1)
 
@@ -151,6 +164,8 @@ internal fun scanTestPageJson(
     lab: ScanLab,
     output: String?,
     result: ScanTestResult?,
+    preview: ScanTestPreview? = null,
+    crop: io.github.artcraftandroid.pdfcraft.ui.scan.ScanCropStats? = null,
 ): String {
     val page = JSONObject()
         .put("corners", shares(corners)).put("kind", "other").put("paper", "unknown").put("curved", false).put("notes", "")
@@ -165,6 +180,14 @@ internal fun scanTestPageJson(
         )
         .put("look", look ?: JSONObject.NULL).put("strength", strength ?: JSONObject.NULL).put("flatten", flatten)
         .put("options", lab.json())
+        .put(
+            "preview",
+            preview?.let {
+                JSONObject().put("shown", it.shown).put("reused", it.reused).put("ms", it.ms).put("width", it.width).put("height", it.height)
+                    .put("look", it.look ?: JSONObject.NULL)
+            } ?: JSONObject.NULL,
+        )
+        .put("crop", crop?.json() ?: JSONObject.NULL)
     page.put(
         "result",
         result?.let {

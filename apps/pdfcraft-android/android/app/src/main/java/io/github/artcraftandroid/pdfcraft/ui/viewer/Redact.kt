@@ -169,6 +169,7 @@ fun AppViewModel.loadRedactMarks(doc: OpenDocument) {
 fun AppViewModel.markRedaction(doc: OpenDocument, args: Map<String, Any?>) {
     runTool(doc, "redact_mark", args) { r ->
         val n = r.optInt("marked")
+        editEvent(doc, "redact_mark", "how" to redactHow(args), "marked" to n)
         if (n == 0) tell(appText(R.string.redact_no_matches)) else tell(plural(R.plurals.redact_marked, n, n), appText(R.string.common_undo)) { undo(doc) }
         loadRedactMarks(doc)
     }
@@ -197,6 +198,7 @@ fun AppViewModel.applyRedactions(doc: OpenDocument) {
     redact.confirmApply = false
     runTool(doc, "redact_apply") { r ->
         redact.marks = emptyList()
+        editEvent(doc, "redact_apply", "applied" to r.optInt("applied"))
         tell(plural(R.plurals.redact_applied, r.optInt("applied"), r.optInt("applied")), appText(R.string.common_save_copy)) { saveCopyAs(doc) }
         checkHiddenInfo(doc)
     }
@@ -213,6 +215,7 @@ fun AppViewModel.checkHiddenInfo(doc: OpenDocument) {
                 val c = cats?.optJSONObject(i) ?: return@mapNotNull null
                 HiddenCategory(c.optString("category"), c.optString("label"), c.optInt("count"))
             }.filter { it.count > 0 }
+            editEvent(doc, "hidden_info", "categories" to redact.hidden?.size)
         } catch (e: Exception) {
             tell(e.userMessage)
         }
@@ -222,7 +225,9 @@ fun AppViewModel.checkHiddenInfo(doc: OpenDocument) {
 fun AppViewModel.removeHidden(doc: OpenDocument, categories: List<String>) {
     redact.hidden = null
     if (categories.isEmpty()) return
-    runTool(doc, "doc_remove_hidden", mapOf("categories" to categories)) { tell(appText(R.string.redact_hidden_removed), appText(R.string.common_undo)) { undo(doc) } }
+    runTool(doc, "doc_remove_hidden", mapOf("categories" to categories)) {
+        editEvent(doc, "hidden_removed", "categories" to categories.size)
+        tell(appText(R.string.redact_hidden_removed), appText(R.string.common_undo)) { undo(doc) } }
 }
 
 /** Check for fake redactions: boxes over text that can still be read, and marks never applied. */
@@ -230,7 +235,8 @@ fun AppViewModel.auditRedactions(doc: OpenDocument) {
     val eng = engine ?: return
     viewModelScope.launch {
         try {
-            redact.findings = parseRedactFindings(eng.tool("doc_audit_redactions", mapOf("doc" to doc.id)))
+            redact.findings = editMeasure(doc, "redact_audit") { parseRedactFindings(eng.tool("doc_audit_redactions", mapOf("doc" to doc.id))) }
+            editEvent(doc, "redact_audit_found", "findings" to redact.findings?.size)
         } catch (e: Exception) {
             tell(e.userMessage)
         }
