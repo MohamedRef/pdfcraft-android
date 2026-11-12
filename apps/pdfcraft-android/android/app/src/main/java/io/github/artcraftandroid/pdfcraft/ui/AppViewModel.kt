@@ -911,6 +911,71 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         return true
     }
 
+    // ---- Link authoring (#179, #159) ---------------------------------------------------------
+
+    /** A link being made or changed in its sheet. */
+    var linkEdit by mutableStateOf<io.github.artcraftandroid.pdfcraft.ui.viewer.LinkEdit?>(null)
+
+    /** In Link mode, a tap on an existing link opens it to change or delete; returns whether there was one. */
+    fun editLinkAt(doc: OpenDocument, at: PagePoint) {
+        val link = doc.links[at.page]?.lastOrNull { l -> l.rect.size == 4 && at.x in l.rect[0]..l.rect[2] && at.y in l.rect[1]..l.rect[3] }
+        if (link == null) {
+            tell(text(R.string.link_drag_hint))
+            return
+        }
+        val eng = engine ?: return
+        viewModelScope.launch {
+            val listed = runCatching { eng.tool("link_list", mapOf("doc" to doc.id)) }.getOrNull()?.optJSONArray("links")
+            val rows = (0 until (listed?.length() ?: 0)).mapNotNull { i ->
+                val o = listed!!.optJSONObject(i) ?: return@mapNotNull null
+                val r = o.optJSONArray("rect") ?: return@mapNotNull null
+                Triple(o.optInt("page"), o.optInt("index"), (0 until r.length()).map { r.optDouble(it).toFloat() })
+            }
+            val index = io.github.artcraftandroid.pdfcraft.ui.viewer.linkIndexFor(rows, at.page, link.rect)
+            if (index == null || document !== doc) {
+                tell(text(R.string.link_not_editable))
+                return@launch
+            }
+            linkEdit = io.github.artcraftandroid.pdfcraft.ui.viewer.LinkEdit(doc, at.page, link.rect.toFloatArray(), index, link.uri, link.page?.toInt())
+        }
+    }
+
+    /** Make the link in [e] go to [url] or page [toPage] (0-based): a new link, or a change to it. */
+    fun saveLink(e: io.github.artcraftandroid.pdfcraft.ui.viewer.LinkEdit, url: String?, toPage: Int?) {
+        linkEdit = null
+        val target: Map<String, Any?> = if (url != null) mapOf("url" to url) else mapOf("to_page" to (toPage ?: return) + 1)
+        if (e.index == null) {
+            runTool(e.doc, "link_add", mapOf("page" to e.page + 1, "rect" to e.rect.map { it.toDouble() }, "zoom" to "inherit") + target) {
+                tell(text(R.string.link_added))
+            }
+        } else {
+            runTool(e.doc, "link_edit", mapOf("page" to e.page + 1, "index" to e.index) + target)
+        }
+    }
+
+    fun deleteLink(e: io.github.artcraftandroid.pdfcraft.ui.viewer.LinkEdit) {
+        linkEdit = null
+        val index = e.index ?: return
+        runTool(e.doc, "link_delete", mapOf("page" to e.page + 1, "index" to index)) { tell(text(R.string.link_deleted)) }
+    }
+
+    /** Make every web address written on the pages a link, and say how many (one undo step). */
+    fun linksFromUrls(doc: OpenDocument) {
+        val eng = engine ?: return
+        viewModelScope.launch {
+            // the engine refuses when there is nothing to link: that is an answer, not a failure
+            val r = try { eng.tool("links_from_urls", mapOf("doc" to doc.id)) } catch (e: MobileException) { null }
+            refresh(doc)
+            val n = r?.optJSONArray("created")?.length() ?: 0
+            tell(if (n == 0) text(R.string.link_from_urls_none) else plural(R.plurals.link_from_urls_done, n, n))
+        }
+    }
+
+    /** Remove every link in the document (one undo step). */
+    fun removeAllLinks(doc: OpenDocument) {
+        runTool(doc, "links_remove") { tell(text(R.string.link_removed_all)) }
+    }
+
     /** A web address waiting for "Open web page?". */
     var linkPrompt by mutableStateOf<String?>(null)
         private set
