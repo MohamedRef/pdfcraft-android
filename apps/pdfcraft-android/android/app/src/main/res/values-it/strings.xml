@@ -325,6 +325,10 @@
     <string name="tools_filter_whiteboard">Lavagna bianca</string>
     <string name="tools_filter_light_text">Testo chiaro</string>
     <string name="tools_scan_flatten">Appiattisci pagina</string>
+    <string name="tools_scan_view_result">Risultato</string>
+    <string name="tools_scan_view_photo">Foto</string>
+    <string name="tools_scan_preparing">Preparazione della pagina</string>
+    <string name="tools_scan_result_description">Pagina %1$d come verrà salvata</string>
 
     <!-- ================================================================ -->
     <!-- Finestre di dialogo dell'app -->
@@ -1210,6 +1214,7 @@
     <string name="scan_lab_sharpen">Rendi più nitido il testo (Scansione pulita)</string>
     <string name="scan_lab_off">No</string>
     <string name="scan_lab_denoise">Attenua la grana nelle foto scure (Scansione pulita)</string>
+    <string name="scan_lab_preview">Mostra le pagine come verranno salvate</string>
     <string name="scan_lab_strength">Intensità del filtro</string>
     <string name="scan_lab_strength_own">Predefinita</string>
     <string name="scan_lab_options_body">Queste opzioni spengono parti dello scanner o le sostituiscono con ciò che avevano rimpiazzato, per capire da quale parte viene un problema. Il log registra che cosa era attivo per ogni pagina.</string>

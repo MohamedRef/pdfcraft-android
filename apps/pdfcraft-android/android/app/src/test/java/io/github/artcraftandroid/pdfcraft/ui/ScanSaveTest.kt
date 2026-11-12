@@ -66,4 +66,48 @@ class ScanSaveTest {
         assertFalse(args.containsKey("dpi"))
         assertEquals(listOf("/c/shot.jpg"), args["paths"])
     }
+
+    @Test
+    fun theRequestIsOneDescriptionForThePreviewAndTheSave() {
+        val corners = floatArrayOf(0.1f, 0.1f, 0.9f, 0.1f, 0.9f, 0.9f, 0.1f, 0.9f)
+        val lab = ScanLab(snapPaper = false, perspective = false, upright = false, sharpen = 60, denoise = false, strength = 80)
+        val saved = scanPageRequest("/c/shot.jpg", corners, ScanFilter.CleanScan, true, lab, "/c/scan/page-0")
+        val preview = scanPageRequest("/c/shot.jpg", corners, ScanFilter.CleanScan, true, lab, "")
+        // only where the page is written differs
+        assertEquals(saved.copy(outputPath = ""), preview)
+        assertEquals(ScanLook.AUTO, saved.look)
+        assertEquals(80, saved.strength.toInt())
+        assertEquals(corners.toList(), saved.corners)
+        assertFalse(saved.snapPaper)
+        assertTrue(saved.flatten && saved.sideProportions)
+        assertFalse(saved.upright || saved.denoise)
+        assertEquals(60, saved.sharpen.toInt())
+        // a look's own strength without the override
+        assertEquals(ScanFilter.LightText.level, scanPageRequest("/a", corners, ScanFilter.LightText, false, ScanLab(), "").strength.toInt())
+    }
+
+    @Test
+    fun aPreviewIsOutOfDateWhenAnythingThatChangesThePageChanges() {
+        val corners = listOf(0f, 0f, 1f, 0f, 1f, 1f, 0f, 1f)
+        val key = ScanPreviewKey("/c/shot.jpg", corners, ScanFilter.CleanScan, false, ScanLab())
+        assertEquals(key, ScanPreviewKey("/c/shot.jpg", corners.toList(), ScanFilter.CleanScan, false, ScanLab()))
+        assertFalse(key == key.copy(filter = ScanFilter.Grayscale))
+        assertFalse(key == key.copy(flatten = true))
+        assertFalse(key == key.copy(corners = corners.mapIndexed { i, v -> if (i == 0) 0.01f else v }))
+        assertFalse(key == key.copy(lab = ScanLab(sharpen = 0)))
+        assertFalse(key == key.copy(photoPath = "/c/other.jpg"))
+    }
+
+    @Test
+    fun theScreenShowsTheResultOnlyWhenItIsWantedAndReady() {
+        // ready: the page as it will be saved
+        assertEquals(ScanShown(ScanView.Result, false), scanShown(previews = true, chosen = ScanView.Result, haveWanted = true, failed = false))
+        // not yet: the photo, with a note that the page is being prepared
+        assertEquals(ScanShown(ScanView.Photo, true), scanShown(true, ScanView.Result, haveWanted = false, failed = false))
+        // it could not be made: the photo, without the note
+        assertEquals(ScanShown(ScanView.Photo, false), scanShown(true, ScanView.Result, haveWanted = false, failed = true))
+        // the person asked for the photo, or previews are off for testing
+        assertEquals(ScanShown(ScanView.Photo, false), scanShown(true, ScanView.Photo, haveWanted = true, failed = false))
+        assertEquals(ScanShown(ScanView.Photo, false), scanShown(previews = false, chosen = ScanView.Result, haveWanted = true, failed = false))
+    }
 }
