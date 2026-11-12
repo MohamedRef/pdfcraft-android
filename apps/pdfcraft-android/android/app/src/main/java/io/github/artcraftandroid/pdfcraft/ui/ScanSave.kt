@@ -9,7 +9,10 @@ import io.github.artcraftandroid.pdfcraft.core.ScanLook
  */
 internal data class ScanSavedPage(val path: String, val dpi: Float?)
 
-/** Whether a page needs straightening or a look: a whole photo in Original stays as it was taken. */
+/**
+ * Whether a page needs straightening or a look: a whole photo in Original stays as it was taken
+ * (natively it is copied with its resolution written in, not decoded and encoded again).
+ */
 internal fun scanNeedsProcessing(whole: Boolean, mode: String): Boolean = !(whole && mode == "original")
 
 /** The native look for a [ScanFilter.mode]. */
@@ -26,14 +29,16 @@ internal fun scanSavedPage(cameraPath: String, processed: Pair<String, Float>?):
     processed?.let { (path, dpi) -> ScanSavedPage(path, dpi) } ?: ScanSavedPage(cameraPath, null)
 
 /**
- * The `doc_create` arguments for the scanned pages: one call, the pages in order, and one
- * resolution for the document (the median of the processed pages', 72–600 dpi). With no processed
- * page each image keeps its own resolution, as before.
+ * The `doc_create` arguments for the scanned pages: one call, the pages in order. Every processed
+ * page carries its own resolution in its file, so each PDF page gets its paper's exact size (#293)
+ * and no resolution is passed. Only when a camera file had to stand in for a page that failed is
+ * one resolution given to the whole document (the median of the processed pages', 72–600 dpi), so
+ * that page is not several times the size of the others.
  */
 internal fun scanCreateArgs(pages: List<ScanSavedPage>): Map<String, Any?> {
     val dpis = pages.mapNotNull { it.dpi }.filter { it.isFinite() }.sorted()
     val args = linkedMapOf<String, Any?>("from" to "images", "paths" to pages.map { it.path }, "name" to "Scan")
-    if (dpis.isNotEmpty()) {
+    if (dpis.isNotEmpty() && dpis.size < pages.size) {
         val mid = dpis.size / 2
         val median = if (dpis.size % 2 == 1) dpis[mid] else (dpis[mid - 1] + dpis[mid]) / 2f
         args["dpi"] = median.coerceIn(72f, 600f).toDouble()

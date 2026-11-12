@@ -3208,6 +3208,7 @@ dependencies = [
  "image",
  "pdfcraft-engine",
  "pdfcraft-geom",
+ "png",
  "thiserror",
 ]
 

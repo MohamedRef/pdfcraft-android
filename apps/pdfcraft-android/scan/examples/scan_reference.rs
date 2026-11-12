@@ -67,7 +67,7 @@ fn page(dir: &Path, out: &Path, strength: u8, threads: usize) {
             continue;
         };
         let photo = std::fs::read(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
-        match process_page(&PageRequest { photo: &photo, corners, look: Look::Auto, strength, threads }) {
+        match process_page(&PageRequest { look: Look::Auto, strength, threads, ..PageRequest::new(&photo, corners) }) {
             Ok(result) => {
                 let stages: Vec<String> = result.timings.iter().map(|(stage, ms)| format!("{stage} {ms} ms")).collect();
                 println!("{name}: {} x {}, {}", result.width, result.height, stages.join(", "));
