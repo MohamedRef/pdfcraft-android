@@ -70,6 +70,12 @@ internal data class ScanLab(
     val lookPerPage: Boolean = true,
     /** The looks strip shows each look as a small picture of the page (#301); off, the looks are words, as before. */
     val lookStrip: Boolean = true,
+    /** Whiteboard is Auto's light steps with an S-curve and stronger colour (#301); off, it is Auto color at 85, as before. */
+    val whiteboardLook: Boolean = true,
+    /** A preview no longer wanted is stopped at its next stage (#301); off, it runs to the end and is dropped, as before. */
+    val previewStop: Boolean = true,
+    /** Double-tap or pinch the preview to look closer, with a sharper page once zoomed in (#301); off, the preview doesn't zoom. */
+    val previewZoom: Boolean = true,
     /**
      * With keeping scans on, run the research detectors on each kept page and report what they see
      * (#305 moiré, #306 fingers, glare and stains) in the log and the page file. Detection only:
@@ -90,7 +96,8 @@ internal data class ScanLab(
         "finder" to finderId(finder), "refine" to refine, "side_proportions" to !perspective,
         "snap_paper" to snapPaper, "strength_override" to (strength ?: -1), "upright" to upright, "sharpen" to sharpen,
         "denoise" to denoise, "preview" to preview, "crop_tools" to cropTools, "flatten_auto" to flattenAuto, "flatten_trim" to flattenTrim, "settle_turns" to settleTurns, "presets" to presets, "book_gutter" to bookGutter, "line_flatten" to lineFlatten,
-        "look_per_page" to lookPerPage, "look_strip" to lookStrip, "keep" to keep, "inspect" to inspect,
+        "look_per_page" to lookPerPage, "look_strip" to lookStrip,
+        "whiteboard_look" to whiteboardLook, "preview_stop" to previewStop, "preview_zoom" to previewZoom, "keep" to keep, "inspect" to inspect,
     )
 
     /** The options as JSON, for a kept scan's page file. */
@@ -98,7 +105,8 @@ internal data class ScanLab(
         .put("finder", finderId(finder)).put("refine", refine).put("side_proportions", !perspective)
         .put("snap_paper", snapPaper).put("strength_override", strength ?: JSONObject.NULL).put("upright", upright)
         .put("sharpen", sharpen).put("denoise", denoise).put("preview", preview).put("crop_tools", cropTools).put("flatten_auto", flattenAuto).put("flatten_trim", flattenTrim).put("settle_turns", settleTurns).put("presets", presets).put("book_gutter", bookGutter).put("line_flatten", lineFlatten)
-        .put("look_per_page", lookPerPage).put("look_strip", lookStrip).put("inspect", inspect)
+        .put("look_per_page", lookPerPage).put("look_strip", lookStrip)
+        .put("whiteboard_look", whiteboardLook).put("preview_stop", previewStop).put("preview_zoom", previewZoom).put("inspect", inspect)
 
     /** One line of text for the app's preferences. */
     fun encode(): String = listOf(
@@ -106,7 +114,8 @@ internal data class ScanLab(
         "perspective" to flag(perspective), "snap" to flag(snapPaper), "strength" to (strength?.toString() ?: ""),
         "upright" to flag(upright), "sharpen" to sharpen.toString(), "denoise" to flag(denoise), "preview" to flag(preview), "crop" to flag(cropTools), "flatten_auto" to flag(flattenAuto), "flatten_trim" to flag(flattenTrim),
         "settle" to flag(settleTurns), "presets" to flag(presets), "gutter" to flag(bookGutter), "line_flatten" to flag(lineFlatten),
-        "look_page" to flag(lookPerPage), "look_strip" to flag(lookStrip), "inspect" to flag(inspect),
+        "look_page" to flag(lookPerPage), "look_strip" to flag(lookStrip),
+        "board" to flag(whiteboardLook), "stop" to flag(previewStop), "zoom" to flag(previewZoom), "inspect" to flag(inspect),
     ).joinToString(";") { (k, v) -> "$k=$v" }
 
     companion object {
@@ -154,6 +163,9 @@ internal data class ScanLab(
                 lineFlatten = on("line_flatten", default.lineFlatten),
                 lookPerPage = on("look_page", default.lookPerPage),
                 lookStrip = on("look_strip", default.lookStrip),
+                whiteboardLook = on("board", default.whiteboardLook),
+                previewStop = on("stop", default.previewStop),
+                previewZoom = on("zoom", default.previewZoom),
                 inspect = on("inspect", default.inspect),
             )
         }

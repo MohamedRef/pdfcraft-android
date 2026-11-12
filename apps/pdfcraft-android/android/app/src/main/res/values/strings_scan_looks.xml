@@ -17,4 +17,11 @@
     <string name="msg_scan_unenhanced">Pages saved as photographed, without clean-up: %1$d</string>
     <string name="scan_lab_look_per_page">A look for each page</string>
     <string name="scan_lab_look_strip">Show the looks as small previews of the page</string>
+    <string name="scan_paper_label">Paper</string>
+    <string name="scan_paper_auto">Automatic</string>
+    <string name="scan_paper_white">White</string>
+    <string name="scan_paper_keep">Keep color</string>
+    <string name="scan_lab_whiteboard_look">Whiteboard: brighter board and stronger marker colors</string>
+    <string name="scan_lab_preview_stop">Stop previews that are no longer needed</string>
+    <string name="scan_lab_preview_zoom">Zoom the page preview</string>
 </resources>

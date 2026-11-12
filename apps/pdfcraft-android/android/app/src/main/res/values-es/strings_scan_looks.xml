@@ -17,4 +17,11 @@
     <string name="msg_scan_unenhanced">Páginas guardadas tal como se fotografiaron, sin limpieza: %1$d</string>
     <string name="scan_lab_look_per_page">Un estilo por página</string>
     <string name="scan_lab_look_strip">Mostrar los estilos como vistas previas pequeñas de la página</string>
+    <string name="scan_paper_label">Papel</string>
+    <string name="scan_paper_auto">Automático</string>
+    <string name="scan_paper_white">Blanco</string>
+    <string name="scan_paper_keep">Mantener el color</string>
+    <string name="scan_lab_whiteboard_look">Pizarra: fondo más claro y colores de rotulador más intensos</string>
+    <string name="scan_lab_preview_stop">Detener las vistas previas que ya no se necesitan</string>
+    <string name="scan_lab_preview_zoom">Ampliar la vista previa de la página</string>
 </resources>

@@ -17,4 +17,11 @@
     <string name="msg_scan_unenhanced">Pages enregistrées telles que photographiées, sans nettoyage : %1$d</string>
     <string name="scan_lab_look_per_page">Un style par page</string>
     <string name="scan_lab_look_strip">Afficher les styles en petits aperçus de la page</string>
+    <string name="scan_paper_label">Papier</string>
+    <string name="scan_paper_auto">Automatique</string>
+    <string name="scan_paper_white">Blanc</string>
+    <string name="scan_paper_keep">Garder la couleur</string>
+    <string name="scan_lab_whiteboard_look">Tableau blanc : fond plus clair et couleurs de feutre plus vives</string>
+    <string name="scan_lab_preview_stop">Arrêter les aperçus qui ne sont plus utiles</string>
+    <string name="scan_lab_preview_zoom">Zoomer sur l’aperçu de la page</string>
 </resources>

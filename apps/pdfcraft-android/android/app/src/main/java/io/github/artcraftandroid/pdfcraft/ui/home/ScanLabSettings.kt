@@ -97,6 +97,15 @@ internal fun ScanLabSettings(vm: AppViewModel) {
     SheetRow(null, stringResource(R.string.scan_lab_look_strip), { lab.update(o.copy(lookStrip = !o.lookStrip)) }) {
         PdfSwitch(o.lookStrip, { lab.update(o.copy(lookStrip = it)) })
     }
+    SheetRow(null, stringResource(R.string.scan_lab_whiteboard_look), { lab.update(o.copy(whiteboardLook = !o.whiteboardLook)) }) {
+        PdfSwitch(o.whiteboardLook, { lab.update(o.copy(whiteboardLook = it)) })
+    }
+    SheetRow(null, stringResource(R.string.scan_lab_preview_stop), { lab.update(o.copy(previewStop = !o.previewStop)) }) {
+        PdfSwitch(o.previewStop, { lab.update(o.copy(previewStop = it)) })
+    }
+    SheetRow(null, stringResource(R.string.scan_lab_preview_zoom), { lab.update(o.copy(previewZoom = !o.previewZoom)) }) {
+        PdfSwitch(o.previewZoom, { lab.update(o.copy(previewZoom = it)) })
+    }
     SheetRow(null, stringResource(R.string.scan_lab_crop), { lab.update(o.copy(cropTools = !o.cropTools)) }) {
         PdfSwitch(o.cropTools, { lab.update(o.copy(cropTools = it)) })
     }
