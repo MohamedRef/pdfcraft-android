@@ -324,6 +324,7 @@
     <string name="tools_filter_grayscale">Scala di grigi</string>
     <string name="tools_filter_whiteboard">Lavagna bianca</string>
     <string name="tools_filter_light_text">Testo chiaro</string>
+    <string name="tools_scan_flatten">Appiattisci pagina</string>
 
     <!-- ================================================================ -->
     <!-- Finestre di dialogo dell'app -->
@@ -1187,6 +1188,29 @@
     <string name="home_record_diagnostics_body">Conserva un log dettagliato di apertura e disegno dei file, latenza della penna, salvataggi, scansioni, memoria ed errori, per controllare un problema dal telefono. Solo nomi degli eventi, tempi, conteggi e dimensioni; nessun nome di file, percorso o contenuto. Disattivandolo si cancella.</string>
     <string name="home_share_diagnostics">Condividi il log di diagnostica</string>
     <string name="home_clear_diagnostics">Cancella il log di diagnostica</string>
+    <string name="scan_lab_section">Test dello scanner</string>
+    <string name="scan_lab_keep">Conserva le scansioni per i test</string>
+    <string name="scan_lab_keep_body">Conserva la foto di ogni pagina scansionata, salvata o scartata, con angoli, impostazioni e risultato. Restano su questo dispositivo finché non le condividi o le elimini. Si conservano al massimo 600 MB; le scansioni più vecchie fanno posto alle nuove.</string>
+    <string name="scan_lab_share">Condividi le scansioni conservate (%1$d pagine, %2$s)</string>
+    <string name="scan_lab_clear">Elimina le scansioni conservate</string>
+    <string name="scan_lab_share_title">Condividere le scansioni conservate?</string>
+    <string name="scan_lab_share_body">Il file contiene le foto dei documenti scansionati e il log di diagnostica. Condividilo solo con chi ti fidi di affidare quei documenti.</string>
+    <string name="scan_lab_clear_title">Eliminare le scansioni conservate?</string>
+    <string name="scan_lab_nothing_kept">Nessuna scansione conservata per ora</string>
+    <string name="scan_lab_subject">Scansioni PdfCraft per i test</string>
+    <string name="scan_lab_finder">Trova la pagina con</string>
+    <string name="scan_lab_finder_auto">Automatico</string>
+    <string name="scan_lab_finder_network">Rete neurale</string>
+    <string name="scan_lab_finder_lines">Linee</string>
+    <string name="scan_lab_finder_off">Niente</string>
+    <string name="scan_lab_refine">Rifinisci i bordi sulla foto intera</string>
+    <string name="scan_lab_perspective">Proporzioni dalla prospettiva</string>
+    <string name="scan_lab_snap_paper">Adatta ai formati di carta standard</string>
+    <string name="scan_lab_strength">Intensità del filtro</string>
+    <string name="scan_lab_strength_own">Predefinita</string>
+    <string name="scan_lab_options_body">Queste opzioni spengono parti dello scanner o le sostituiscono con ciò che avevano rimpiazzato, per capire da quale parte viene un problema. Il log registra che cosa era attivo per ogni pagina.</string>
+    <string name="scan_lab_reset">Ripristina le opzioni di test dello scanner</string>
+    <string name="scan_lab_active">Un\'opzione di test dello scanner è attiva (Impostazioni, Informazioni, Diagnostica)</string>
     <string name="home_diagnostics_empty">Ancora nessuna diagnostica: attiva l’opzione e usa l’app.</string>
     <string name="home_diagnostics_subject">Log di diagnostica di PdfCraft</string>
     <string name="home_diagnostics_cleared">Log di diagnostica cancellato</string>
@@ -1944,4 +1968,26 @@
         <item quantity="other">Testo aggiunto a %d disegni</item>
     </plurals>
     <string name="toolbar_label_handwriting">Scrittura</string>
+    <string name="lecture_title">Registrazioni della lezione</string>
+    <string name="lecture_record">Registra la lezione</string>
+    <string name="lecture_recording">Registrazione</string>
+    <string name="lecture_paused">In pausa</string>
+    <string name="lecture_pause">Pausa</string>
+    <string name="lecture_resume">Riprendi la registrazione</string>
+    <string name="lecture_stop">Ferma la registrazione</string>
+    <string name="lecture_play">Riproduci</string>
+    <string name="lecture_back_10">Indietro di 10 secondi</string>
+    <string name="lecture_forward_10">Avanti di 10 secondi</string>
+    <string name="lecture_close_player">Chiudi il lettore della lezione</string>
+    <string name="lecture_body">Durante la registrazione, ogni commento che scrivi ricorda quando. Riproduci una registrazione e tocca un commento per sentire cosa si diceva mentre lo scrivevi. Le registrazioni restano su questo telefono, in PdfCraft.</string>
+    <string name="lecture_delete_title">Eliminare questa registrazione?</string>
+    <string name="lecture_needs_saved">Salva prima questo documento per registrare accanto</string>
+    <string name="lecture_cannot_record">Impossibile effettuare la registrazione</string>
+    <string name="lecture_cannot_play">Impossibile riprodurre questa registrazione</string>
+    <string name="lecture_saved">Lezione salvata (%1$s)</string>
+    <plurals name="lecture_notes">
+        <item quantity="one">%d nota</item>
+        <item quantity="many">%d note</item>
+        <item quantity="other">%d note</item>
+    </plurals>
 </resources>

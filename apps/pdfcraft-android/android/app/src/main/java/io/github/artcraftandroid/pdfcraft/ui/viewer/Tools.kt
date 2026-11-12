@@ -132,6 +132,10 @@ data class MarkupDrag(val range: TextRange, val rects: List<FloatArray>)
 @Composable
 fun ToolLayer(vm: AppViewModel, doc: OpenDocument) {
     val tool = doc.controller.tool
+    if (vm.prepareForm.doc === doc) {
+        PrepareFormLayer(vm, doc)
+        return
+    }
     if (vm.redact.placing === doc) {
         RedactPlaceLayer(vm, doc)
         return
@@ -154,7 +158,7 @@ fun ToolLayer(vm: AppViewModel, doc: OpenDocument) {
             }
         }
         ViewerTool.Text -> TapLayer(doc) { p -> vm.textPrompt = TextPrompt(doc, p, callout = doc.controller.textCallout) }
-        ViewerTool.FillSign -> if (vm.certPlacing === doc) CertPlaceLayer(vm, doc) else FillSignLayer(vm, doc)
+        ViewerTool.FillSign -> if (vm.signing.certPlacing === doc) CertPlaceLayer(vm, doc) else FillSignLayer(vm, doc)
         ViewerTool.Measure -> MeasureLayer(vm, doc)
         else -> Unit
     }
@@ -1816,7 +1820,7 @@ fun ToolSubToolbar(vm: AppViewModel, doc: OpenDocument) {
         }
         ViewerTool.FillSign -> FillSignToolbar(vm, doc)
         ViewerTool.Edit -> androidx.compose.foundation.layout.Column {
-            if (vm.editMode == EditMode.Link && vm.editSelection == null) LinkCommandsRow(vm, doc)
+            if (vm.editor.editMode == EditMode.Link && vm.editor.editSelection == null) LinkCommandsRow(vm, doc)
             EditToolbar(vm, doc)
         }
         ViewerTool.Measure -> MeasureToolbar(vm, doc)

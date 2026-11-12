@@ -291,10 +291,10 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
                 when {
                     vm.markupFollowUp != null -> vm.markupFollowUp = null
                     selection.selection != null -> selection.clear()
-                    ctl.tool == ViewerTool.Edit -> vm.editTap(doc, at)
+                    ctl.tool == ViewerTool.Edit -> vm.editor.editTap(doc, at)
                     // tape and quiz masks lift with a tap (#143)
                     vm.tapStudyMask(doc, at) -> Unit
-                    vm.tapField(doc, at) -> Unit
+                    vm.editor.tapField(doc, at) -> Unit
                     vm.tapComment(doc, at) -> Unit
                     else -> scope.launch {
                         val generation = doc.info.generation
@@ -333,14 +333,14 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
                 if (at != null && (gesturesForTool && vm.tapComment(doc, at))) Unit
                 else if (at != null && gesturesForTool) scope.launch {
                     val slop = 12f / doc.viewer.pixelsPerPoint(at.page).coerceAtLeast(0.1f) * density.density
-                    if (!selection.selectWordAt(at, slop) && ctl.tool == ViewerTool.None && !vm.readingMode) vm.longPressPage(doc, at, p)
+                    if (!selection.selectWordAt(at, slop) && ctl.tool == ViewerTool.None && !vm.readingMode) vm.editor.longPressPage(doc, at, p)
                 }
             },
             onLongPress = { p, at ->
                 if (at != null) scope.launch {
                     val slop = 12f / doc.viewer.pixelsPerPoint(at.page).coerceAtLeast(0.1f) * density.density
                     // no word there: a picture, or the page menu, as the reference's long press
-                    if (!selection.selectWordAt(at, slop) && ctl.tool == ViewerTool.None && !vm.readingMode) vm.longPressPage(doc, at, p)
+                    if (!selection.selectWordAt(at, slop) && ctl.tool == ViewerTool.None && !vm.readingMode) vm.editor.longPressPage(doc, at, p)
                 }
             },
             overlay = {
@@ -377,12 +377,12 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
         // The active tool takes the touches over the pages.
         ToolLayer(vm, doc)
         if (ctl.tool == ViewerTool.Edit) EditOverlay(vm, doc)
-        if (ctl.tool == ViewerTool.Edit && vm.editMode == EditMode.Link) LinkLayer(vm, doc)
+        if (ctl.tool == ViewerTool.Edit && vm.editor.editMode == EditMode.Link) LinkLayer(vm, doc)
         vm.linkEdit?.takeIf { it.doc === doc }?.let { LinkSheet(vm, it) }
         vm.textPrompt?.takeIf { it.doc === doc }?.let { TextEntry(vm, it, onDone = vm::postText) }
-        vm.fillTextPrompt?.takeIf { it.doc === doc }?.let { TextEntry(vm, it, onDone = vm::postFillText) }
-        vm.addTextPrompt?.takeIf { it.doc === doc }?.let { TextEntry(vm, it, onDone = vm::postAddText) }
-        vm.fieldEdit?.takeIf { it.doc === doc }?.let { FieldEditor(vm, it) }
+        vm.signing.fillTextPrompt?.takeIf { it.doc === doc }?.let { TextEntry(vm, it, onDone = vm.signing::postFillText) }
+        vm.editor.addTextPrompt?.takeIf { it.doc === doc }?.let { TextEntry(vm, it, onDone = vm.editor::postAddText) }
+        vm.editor.fieldEdit?.takeIf { it.doc === doc }?.let { FieldEditor(vm, it) }
         // a Fill & Sign element can be dragged and, for boxes, resized (a comment's: over its panel, below)
         if (ctl.tool == ViewerTool.FillSign) vm.selectedFill?.let { c ->
             CommentDragOverlay(doc, c, onMove = { dx, dy -> vm.moveFill(doc, c, dx, dy) }, onResize = { vm.resizeFill(doc, c, it) })
@@ -417,6 +417,7 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
                 bottom = with(density) { doc.viewer.padBottom.toDp() },
             )
             if (!vm.readingMode && !ctl.searching && ctl.sheet != ViewerSheet.Comments) CommentFilterChip(doc, top = with(density) { doc.viewer.padTop.toDp() })
+            LectureBar(vm, doc, bottom = with(density) { doc.viewer.padBottom.toDp() }, modifier = Modifier.align(Alignment.BottomCenter))
             if (!vm.readingMode) FocusTimerPill(
                 vm, top = with(density) { doc.viewer.padTop.toDp() },
                 onOpen = { ctl.sheet = ViewerSheet.FocusTimer },
@@ -517,7 +518,7 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
                             progressLabel = if (search.running) stringResource(R.string.viewer_search_progress, search.searched, doc.pageCount) else null,
                         )
                     } else {
-                        val fa = vm.fieldActions
+                        val fa = vm.editor.fieldActions
                         if (fa != null) FieldTopBar(fa) else ViewerTopBar(
                             toolActive = ctl.tool != ViewerTool.None,
                             doneIsCheck = ctl.tool != ViewerTool.Comment,
@@ -572,7 +573,7 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
         // The normal bottom sub-toolbar remains available for active tools.
         AnimatedVisibility(
             visible = railVisible && ctl.barsVisible && !ctl.searching && !vm.readingMode &&
-                vm.readAloud == null && vm.fieldActions == null,
+                vm.readAloud == null && vm.editor.fieldActions == null,
             // Physical sides, not start/end: the rail's side follows the writing hand, which does
             // not change with an Arabic (right-to-left) interface (#156). Drags are physical too.
             modifier = Modifier.align(if (prefsRail.railRight) androidx.compose.ui.AbsoluteAlignment.CenterRight else androidx.compose.ui.AbsoluteAlignment.CenterLeft)
@@ -609,7 +610,7 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
 
         // the Read Aloud player takes the bottom bar's place
         // while typing on the page, the bar (with its formatting) rides above the keyboard
-        if (vm.readAloud == null && vm.fieldActions == null) Column(Modifier.fillMaxWidth().align(Alignment.BottomCenter).then(if (vm.editing != null) Modifier.imePadding() else Modifier)) {
+        if (vm.readAloud == null && vm.editor.fieldActions == null) Column(Modifier.fillMaxWidth().align(Alignment.BottomCenter).then(if (vm.editor.editing != null) Modifier.imePadding() else Modifier)) {
             vm.success?.let { SuccessBannerView(it, onClose = { vm.success = null }) }
             // edits that can't reach the original: said as soon as there are any, not only on leaving (#191)
             if (showReadOnlyNotice(doc.writable, doc.source != null, doc.info.dirty || doc.notWrittenBack, doc.readOnlyNoticeClosed)) {
@@ -679,6 +680,7 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
                 ViewerSheet.Share -> ShareSheet(vm, doc)
                 ViewerSheet.FocusTimer -> FocusTimerSheet(vm) { ctl.sheet = ViewerSheet.None }
                 ViewerSheet.Backups -> VersionHistorySheet(vm, doc) { ctl.sheet = ViewerSheet.None }
+                ViewerSheet.Lectures -> LecturesSheet(vm, doc) { ctl.sheet = ViewerSheet.None }
                 ViewerSheet.NoteMargin -> NoteMarginSheet(vm, doc, listOf(doc.viewer.currentPage)) { ctl.sheet = ViewerSheet.None }
                 ViewerSheet.Redact -> RedactSheet(vm, doc)
                 ViewerSheet.Compare -> CompareSheet(vm, doc)
@@ -690,12 +692,12 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
         vm.attachPrompt?.takeIf { it.doc === doc }?.let { AttachDialog(vm, it) }
         if (vm.flattenPrompt === doc) FlattenDialog(vm, doc)
         vm.redact.findings?.let { RedactionAuditDialog(vm, doc, it) }
-        vm.pageMenu?.takeIf { it.doc === doc }?.let { PageMenuView(vm, it) }
-        if (vm.imageSource?.first === doc) {
-            io.github.artcraftandroid.pdfcraft.ui.PdfSheet(onDismiss = { vm.imageSource = null }, dim = true) {
+        vm.editor.pageMenu?.takeIf { it.doc === doc }?.let { PageMenuView(vm, it) }
+        if (vm.editor.imageSource?.first === doc) {
+            io.github.artcraftandroid.pdfcraft.ui.PdfSheet(onDismiss = { vm.editor.imageSource = null }, dim = true) {
                 io.github.artcraftandroid.pdfcraft.ui.SheetTitle(stringResource(R.string.viewer_add_image))
-                io.github.artcraftandroid.pdfcraft.ui.SheetRow(LucideIcons.Images, stringResource(R.string.viewer_image_from_photos), { vm.addImageFrom(camera = false) })
-                io.github.artcraftandroid.pdfcraft.ui.SheetRow(LucideIcons.Camera, stringResource(R.string.viewer_image_from_camera), { vm.addImageFrom(camera = true) })
+                io.github.artcraftandroid.pdfcraft.ui.SheetRow(LucideIcons.Images, stringResource(R.string.viewer_image_from_photos), { vm.editor.addImageFrom(camera = false) })
+                io.github.artcraftandroid.pdfcraft.ui.SheetRow(LucideIcons.Camera, stringResource(R.string.viewer_image_from_camera), { vm.editor.addImageFrom(camera = true) })
                 Spacer(Modifier.height(12.dp))
             }
         }

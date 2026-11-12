@@ -17,3 +17,12 @@ pdfcraft-geom = { workspace = true }
 # camera_clean (the looks) stays in the engine until the scan issues replace it (#298, #300)
 pdfcraft-engine = { workspace = true }
 thiserror = { workspace = true }
+# the document detector's model (#290) runs on rten, as the text-recognition models do; the same
+# versions as crates/ocr, so nothing new is compiled
+rten = { version = "0.26.0", default-features = false, features = ["onnx_format"] }
+rten-tensor = "0.26.0"
+sha2 = "0.11"
+
+[dev-dependencies]
+# examples/scan_replay.rs reads the page files of scans kept for testing (#288)
+serde_json = { workspace = true }

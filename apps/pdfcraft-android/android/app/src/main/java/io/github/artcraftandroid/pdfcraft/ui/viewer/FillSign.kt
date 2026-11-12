@@ -115,16 +115,16 @@ fun FillSignLayer(vm: AppViewModel, doc: OpenDocument) {
                     return@toolGestures
                 }
                 // a tap on a form field fills the field, as outside Fill & Sign
-                if (vm.tapField(doc, at)) return@toolGestures
+                if (vm.editor.tapField(doc, at)) return@toolGestures
                 // read now: the gesture handler outlives the composition it was made in
-                when (val element = vm.fillElement) {
-                    FillElement.Text -> vm.fillTextPrompt = TextPrompt(doc, at)
+                when (val element = vm.signing.fillElement) {
+                    FillElement.Text -> vm.signing.fillTextPrompt = TextPrompt(doc, at)
                     FillElement.Signature, FillElement.Initials -> {
                         val initials = element == FillElement.Initials
-                        if (vm.signatures.fileFor(initials).isFile) vm.placeFill(doc, element, at)
-                        else vm.signaturePad = SignaturePad(initials, doc, at)
+                        if (vm.signing.signatures.fileFor(initials).isFile) vm.signing.placeFill(doc, element, at)
+                        else vm.signing.signaturePad = SignaturePad(initials, doc, at)
                     }
-                    else -> vm.placeFill(doc, element, at)
+                    else -> vm.signing.placeFill(doc, element, at)
                 }
             },
             onCancel = {},
@@ -138,14 +138,14 @@ fun FillSignLayer(vm: AppViewModel, doc: OpenDocument) {
  */
 @Composable
 fun FillSignToolbar(vm: AppViewModel, doc: OpenDocument) {
-    val sel = vm.fillElement
+    val sel = vm.signing.fillElement
     SubToolbar {
-        SubTextField(stringResource(R.string.fill_add_text), sel == FillElement.Text) { vm.fillElement = FillElement.Text }
-        SubTool(LucideIcons.X, stringResource(R.string.fill_add_cross), sel == FillElement.Cross, { vm.fillElement = FillElement.Cross })
-        SubTool(LucideIcons.Check, stringResource(R.string.fill_add_check), sel == FillElement.Check, { vm.fillElement = FillElement.Check })
-        SubDot(stringResource(R.string.fill_add_dot), sel == FillElement.Dot) { vm.fillElement = FillElement.Dot }
-        SubTool(LucideIcons.RectangleHorizontal, stringResource(R.string.fill_add_box), sel == FillElement.Box, { vm.fillElement = FillElement.Box })
-        SubTool(LucideIcons.Minus, stringResource(R.string.fill_add_line), sel == FillElement.Line, { vm.fillElement = FillElement.Line })
+        SubTextField(stringResource(R.string.fill_add_text), sel == FillElement.Text) { vm.signing.fillElement = FillElement.Text }
+        SubTool(LucideIcons.X, stringResource(R.string.fill_add_cross), sel == FillElement.Cross, { vm.signing.fillElement = FillElement.Cross })
+        SubTool(LucideIcons.Check, stringResource(R.string.fill_add_check), sel == FillElement.Check, { vm.signing.fillElement = FillElement.Check })
+        SubDot(stringResource(R.string.fill_add_dot), sel == FillElement.Dot) { vm.signing.fillElement = FillElement.Dot }
+        SubTool(LucideIcons.RectangleHorizontal, stringResource(R.string.fill_add_box), sel == FillElement.Box, { vm.signing.fillElement = FillElement.Box })
+        SubTool(LucideIcons.Minus, stringResource(R.string.fill_add_line), sel == FillElement.Line, { vm.signing.fillElement = FillElement.Line })
         SubTool(LucideIcons.Signature, stringResource(R.string.fill_sign_or_initials), sel == FillElement.Signature || sel == FillElement.Initials || doc.controller.signPanel, { doc.controller.signPanel = true })
     }
 }
@@ -154,23 +154,23 @@ fun FillSignToolbar(vm: AppViewModel, doc: OpenDocument) {
 @Composable
 fun SignPanel(vm: AppViewModel, doc: OpenDocument, onDismiss: () -> Unit) {
     // read so the panel redraws when a saved signature is cleared or made
-    val version = vm.signaturesChanged
+    val version = vm.signing.signaturesChanged
     // over the Fill & Sign bar, which stays in view: two dashed boxes, Add signature and Add initials
     PdfSheet(onDismiss = onDismiss, modifier = Modifier.padding(bottom = BottomBarHeight + 1.dp).navigationBarsPadding(), bottomBand = false) {
         Spacer(Modifier.height(7.dp))
         for (initials in listOf(false, true)) {
-            val file = vm.signatures.fileFor(initials)
+            val file = vm.signing.signatures.fileFor(initials)
             val placeHint = stringResource(if (initials) R.string.fill_tap_place_initials else R.string.fill_tap_place_signature)
             if (!initials) Unit else Spacer(Modifier.height(18.dp))
             SignBox(
                 onClick = {
                     if (file.isFile) {
-                        vm.fillElement = if (initials) FillElement.Initials else FillElement.Signature
+                        vm.signing.fillElement = if (initials) FillElement.Initials else FillElement.Signature
                         onDismiss()
                         vm.tell(placeHint)
                     } else {
                         onDismiss()
-                        vm.signaturePad = SignaturePad(initials, doc, null)
+                        vm.signing.signaturePad = SignaturePad(initials, doc, null)
                     }
                 },
             ) {
@@ -187,7 +187,7 @@ fun SignPanel(vm: AppViewModel, doc: OpenDocument, onDismiss: () -> Unit) {
                     } else {
                         Spacer(Modifier.weight(1f))
                     }
-                    BarIcon(LucideIcons.Trash2, stringResource(if (initials) R.string.fill_clear_initials else R.string.fill_clear_signature), { file.delete(); vm.signaturesChanged++ }, size = 40.dp)
+                    BarIcon(LucideIcons.Trash2, stringResource(if (initials) R.string.fill_clear_initials else R.string.fill_clear_signature), { file.delete(); vm.signing.signaturesChanged++ }, size = 40.dp)
                 } else {
                     Text(stringResource(if (initials) R.string.fill_add_initials else R.string.fill_add_signature), color = pdfColors.text, fontSize = 16.sp, modifier = Modifier.weight(1f).padding(start = 22.dp))
                     Icon(LucideIcons.Plus, null, tint = pdfColors.icon, modifier = Modifier.padding(end = 9.dp).size(24.dp))
@@ -196,7 +196,7 @@ fun SignPanel(vm: AppViewModel, doc: OpenDocument, onDismiss: () -> Unit) {
         }
         Spacer(Modifier.height(14.dp))
         // a certificate-based signature, which the reference's phone app doesn't have
-        SheetRow(LucideIcons.ShieldCheck, stringResource(R.string.common_tool_sign_digital_id), { onDismiss(); vm.startCertPlacing(doc) }, chevron = true)
+        SheetRow(LucideIcons.ShieldCheck, stringResource(R.string.common_tool_sign_digital_id), { onDismiss(); vm.signing.startCertPlacing(doc) }, chevron = true)
         Spacer(Modifier.height(10.dp))
     }
 }
@@ -237,11 +237,11 @@ fun SignaturePadScreen(vm: AppViewModel, pad: SignaturePad, onPickImage: () -> U
     var size by remember { mutableStateOf(IntSize.Zero) }
     var save by remember { mutableStateOf(true) }
     val ink = Color(vm.toolPrefs.fillColor)
-    val imported = vm.importedSignature
+    val imported = vm.signing.importedSignature
     val drawFirst = stringResource(if (pad.initials) R.string.fill_draw_initials_first else R.string.fill_draw_signature_first)
     Column(Modifier.fillMaxSize().background(c.surface).safeTopPadding().navigationBarsPadding()) {
         Row(Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            TextButton(onClick = { vm.signaturePad = null; vm.importedSignature = null }) { Text(stringResource(R.string.common_cancel), color = c.accent) }
+            TextButton(onClick = { vm.signing.signaturePad = null; vm.signing.importedSignature = null }) { Text(stringResource(R.string.common_cancel), color = c.accent) }
             Text(stringResource(if (pad.initials) R.string.fill_create_initials else R.string.fill_create_signature), color = c.text, fontWeight = FontWeight.SemiBold, fontSize = 17.sp, modifier = Modifier.weight(1f), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
             TextButton(
                 onClick = {
@@ -249,13 +249,13 @@ fun SignaturePadScreen(vm: AppViewModel, pad: SignaturePad, onPickImage: () -> U
                     if (bmp == null) {
                         vm.tell(drawFirst)
                     } else {
-                        vm.finishSignature(pad, bmp, save)
+                        vm.signing.finishSignature(pad, bmp, save)
                     }
                 },
             ) { Text(stringResource(R.string.common_done), color = c.accent, fontWeight = FontWeight.SemiBold) }
         }
         Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            TabChip(stringResource(R.string.fill_tab_draw), imported == null) { vm.importedSignature = null }
+            TabChip(stringResource(R.string.fill_tab_draw), imported == null) { vm.signing.importedSignature = null }
             TabChip(stringResource(R.string.fill_tab_image), imported != null) { onPickImage() }
         }
         Box(
@@ -288,7 +288,7 @@ fun SignaturePadScreen(vm: AppViewModel, pad: SignaturePad, onPickImage: () -> U
                     Text(stringResource(if (pad.initials) R.string.fill_draw_initials_here else R.string.fill_draw_signature_here), color = Color(0xFF8A8A8A), modifier = Modifier.align(Alignment.Center))
                 }
             }
-            Text(stringResource(R.string.common_clear), color = c.accent, modifier = Modifier.align(Alignment.TopEnd).clickable { strokes.clear(); vm.importedSignature = null }.padding(12.dp))
+            Text(stringResource(R.string.common_clear), color = c.accent, modifier = Modifier.align(Alignment.TopEnd).clickable { strokes.clear(); vm.signing.importedSignature = null }.padding(12.dp))
         }
         Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(stringResource(R.string.fill_save_to_device), color = c.text, fontSize = 15.sp, modifier = Modifier.weight(1f))

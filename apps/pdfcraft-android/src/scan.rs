@@ -6,7 +6,9 @@
 use std::path::{Path, PathBuf};
 use std::sync::RwLock;
 
-use pdfcraft_scan::{AspectSource, Format, Look, PageRequest, Paper, Photo, Pyramid, Quad, RefineOptions, process_page, refine};
+use pdfcraft_scan::{
+    AspectSource, Finder, Format, Look, PageRequest, Paper, Photo, Pyramid, Quad, QuadSource, RefineOptions, detect_with, process_page, refine,
+};
 
 use crate::MobileError;
 
@@ -55,6 +57,14 @@ pub struct ScanPageRequest {
     /// Match the page to standard paper sizes (A4, Letter, …) when its shape is within 3 %.
     #[uniffi(default = true)]
     pub snap_paper: bool,
+    /// Flatten a curled, sagging or folded page with the flattening network (#302) instead of
+    /// the perspective warp. Off unless asked for; see [`scan_can_flatten`].
+    #[uniffi(default = false)]
+    pub flatten: bool,
+    /// Take the page's proportions from the lengths of its sides alone, as before #293. A testing
+    /// choice (#288).
+    #[uniffi(default = false)]
+    pub side_proportions: bool,
 }
 
 /// The standard paper a page was matched to.
@@ -98,6 +108,11 @@ pub struct ScanPageResult {
     pub aspect_source: ScanAspectSource,
     /// The camera's focal length and the one the corners imply disagree.
     pub focal_mismatch: bool,
+    /// The page was flattened by the network.
+    pub flattened: bool,
+    /// How far from flat the network found the page, as a share of its diagonal (0 when it was
+    /// not asked).
+    pub bend: f32,
     pub timings: Vec<ScanTiming>,
 }
 
@@ -109,6 +124,39 @@ pub struct ScanQuad {
     pub corners: Vec<f32>,
     /// For the top, right, bottom and left sides: the side was moved onto an edge found in the
     /// photo (`false`: no convincing edge near it, it is where it was given).
+    pub refined: Vec<bool>,
+    /// For the same sides: the edge bends, so the page is not flat.
+    pub curved: Vec<bool>,
+    pub timings: Vec<ScanTiming>,
+}
+
+/// What found a page in a photo (#290).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
+pub enum ScanQuadSource {
+    /// The detector network.
+    Model,
+    /// The line detector (the network's model file is not installed).
+    Lines,
+    /// Nothing convincing was found.
+    None,
+}
+
+/// The page found in a photo, its corners already moved onto the paper's edges (#290, #291).
+#[derive(Debug, Clone, PartialEq, uniffi::Record)]
+pub struct ScanDocument {
+    /// Whether a page was found. Without one, `corners` is the whole photo.
+    pub found: bool,
+    /// x1, y1 … x4, y4 as shares (0–1) of the upright photo: top-left, top-right, bottom-right,
+    /// bottom-left.
+    pub corners: Vec<f32>,
+    /// 0–1, how sure the search was.
+    pub confidence: f32,
+    pub source: ScanQuadSource,
+    /// The angle (degrees) the photo was shown to the network at for the answer it gave.
+    pub angle: i16,
+    /// How many times the network looked.
+    pub passes: u8,
+    /// For the top, right, bottom and left sides: moved onto an edge found in the full-size photo.
     pub refined: Vec<bool>,
     /// For the same sides: the edge bends, so the page is not flat.
     pub curved: Vec<bool>,
@@ -169,6 +217,131 @@ pub fn scan_refine_quad(photo_path: String, corners: Vec<f32>, sides: Vec<bool>,
     refine_in(&root, &photo_path, &corners, &sides, search_share)
 }
 
+/// Whether pages can be flattened (#302): the flattening network's model file is installed.
+#[uniffi::export]
+pub fn scan_can_flatten() -> bool {
+    pdfcraft_scan::models::state(pdfcraft_scan::models::FLATTEN) == pdfcraft_scan::models::ModelState::Ready
+}
+
+/// Which detector finds the page (#288). The scanner's own choice is `Auto`; the others are for
+/// testing, so a page found badly can be pinned on the detector that found it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
+pub enum ScanFinder {
+    /// The network when its model file is there, else the line detector.
+    Auto,
+    /// The network alone (#290).
+    Network,
+    /// The line detector alone, as before the network.
+    Lines,
+    /// Nothing is looked for: the page is the whole photo.
+    Off,
+}
+
+/// How a photo is searched for its page (#288). `ScanFindOptions::default()` is what
+/// [`scan_find_document`] does.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Record)]
+pub struct ScanFindOptions {
+    pub finder: ScanFinder,
+    /// Move the corners found onto the paper's edges at full size (#291).
+    pub refine: bool,
+}
+
+impl Default for ScanFindOptions {
+    fn default() -> Self {
+        ScanFindOptions { finder: ScanFinder::Auto, refine: true }
+    }
+}
+
+/// Find the page in a photo and move its corners onto the paper's edges: the photo is decoded
+/// once, the detector looks at a small copy of it (#290), and each side is then looked at again
+/// at full size (#291). When nothing convincing is found, `found` is false and the corners are
+/// the whole photo.
+#[uniffi::export]
+pub fn scan_find_document(photo_path: String) -> Result<ScanDocument, MobileError> {
+    scan_find_document_with(photo_path, ScanFindOptions::default())
+}
+
+/// [`scan_find_document`] with the detector named and the closer look at the edges on or off:
+/// the scanner's testing options (#288).
+#[uniffi::export]
+pub fn scan_find_document_with(photo_path: String, options: ScanFindOptions) -> Result<ScanDocument, MobileError> {
+    let root = SCAN_ROOT.read().unwrap_or_else(std::sync::PoisonError::into_inner).clone();
+    let root = root.ok_or_else(|| MobileError::Command("scanning is not ready yet".into()))?;
+    find_in(&root, &photo_path, options)
+}
+
+pub(crate) fn find_in(root: &Path, photo_path: &str, options: ScanFindOptions) -> Result<ScanDocument, MobileError> {
+    let bytes = read_photo(root, photo_path)?;
+    let mut timings = Vec::with_capacity(3);
+    let mut clock = std::time::Instant::now();
+    let mut lap = |stage: &str, timings: &mut Vec<ScanTiming>| {
+        timings.push(ScanTiming { stage: stage.into(), ms: u32::try_from(clock.elapsed().as_millis()).unwrap_or(u32::MAX) });
+        clock = std::time::Instant::now();
+    };
+    let photo = Photo::decode(&bytes).map_err(|e| MobileError::Command(e.to_string()))?;
+    drop(bytes);
+    lap("scan_decode", &mut timings);
+    let found = detect_with(
+        &photo,
+        match options.finder {
+            ScanFinder::Auto => Finder::Auto,
+            ScanFinder::Network => Finder::Network,
+            ScanFinder::Lines => Finder::Lines,
+            ScanFinder::Off => Finder::Off,
+        },
+    );
+    lap("scan_detect", &mut timings);
+    let source = match found.source {
+        QuadSource::Model => ScanQuadSource::Model,
+        QuadSource::Lines => ScanQuadSource::Lines,
+        QuadSource::None => ScanQuadSource::None,
+    };
+    let (width, height) = (photo.width, photo.height);
+    let Some(quad) = found.quad else {
+        let whole = vec![0.0, 0.0, 1.0, 0.0, 1.0, 1.0, 0.0, 1.0];
+        return Ok(ScanDocument {
+            found: false,
+            corners: whole,
+            confidence: found.confidence,
+            source,
+            angle: found.angle,
+            passes: found.passes,
+            refined: vec![false; 4],
+            curved: vec![false; 4],
+            timings,
+        });
+    };
+    if !options.refine {
+        // the detector's own corners, as it saw them on its small copy of the photo
+        return Ok(ScanDocument {
+            found: true,
+            corners: quad.to_shares(width, height).to_vec(),
+            confidence: found.confidence,
+            source,
+            angle: found.angle,
+            passes: found.passes,
+            refined: vec![false; 4],
+            curved: vec![false; 4],
+            timings,
+        });
+    }
+    let pyramid = Pyramid::new(photo.luma());
+    drop(photo);
+    let refined = refine(&pyramid, &quad, &RefineOptions::default());
+    lap("scan_refine", &mut timings);
+    Ok(ScanDocument {
+        found: true,
+        corners: refined.quad.to_shares(width, height).to_vec(),
+        confidence: found.confidence,
+        source,
+        angle: found.angle,
+        passes: found.passes,
+        refined: refined.sides.iter().map(|s| s.refined).collect(),
+        curved: refined.sides.iter().map(|s| s.curved).collect(),
+        timings,
+    })
+}
+
 pub(crate) fn refine_in(root: &Path, photo_path: &str, corners: &[f32], sides: &[bool], search_share: f32) -> Result<ScanQuad, MobileError> {
     let corners: [f32; 8] = corners.try_into().map_err(|_| MobileError::Command("a page needs four corners".into()))?;
     let bytes = read_photo(root, photo_path)?;
@@ -223,6 +396,8 @@ pub(crate) fn process_in(root: &Path, request: &ScanPageRequest) -> Result<ScanP
         threads,
         focal_35mm: request.focal_35mm,
         snap_paper: request.snap_paper,
+        flatten: request.flatten,
+        side_proportions: request.side_proportions,
         ..PageRequest::new(&bytes, corners)
     })
     .map_err(|e| MobileError::Command(e.to_string()))?;
@@ -257,6 +432,8 @@ pub(crate) fn process_in(root: &Path, request: &ScanPageRequest) -> Result<ScanP
             AspectSource::SideLengths => ScanAspectSource::SideLengths,
         },
         focal_mismatch: page.focal_mismatch,
+        flattened: page.flattened,
+        bend: page.bend,
         timings: page.timings.into_iter().map(|(stage, ms)| ScanTiming { stage: stage.into(), ms }).collect(),
     })
 }
@@ -281,6 +458,8 @@ mod tests {
             output_path: out.to_string_lossy().into_owned(),
             focal_35mm: None,
             snap_paper: true,
+            flatten: false,
+            side_proportions: false,
         }
     }
 
@@ -340,6 +519,19 @@ mod tests {
         )
         .unwrap();
         assert_eq!((a4.paper, letter.paper, whole.paper), (ScanPaper::A4, ScanPaper::Letter, ScanPaper::Custom));
+        // the testing choices (#288): the side lengths alone, and no matching to a paper
+        let plain = process_in(
+            &root,
+            &ScanPageRequest {
+                corners: vec![0.1, 0.1, 0.5375, 0.1, 0.5375, 0.925, 0.1, 0.925],
+                side_proportions: true,
+                snap_paper: false,
+                ..request(&shot, &root.join("page-3"))
+            },
+        )
+        .unwrap();
+        assert_eq!((plain.paper, plain.aspect_source, (plain.width, plain.height)), (ScanPaper::Custom, ScanAspectSource::SideLengths, (700, 990)));
+        assert_ne!(a4.aspect_source, ScanAspectSource::SideLengths);
         assert_eq!((letter.format, whole.format), (ScanFormat::Png, ScanFormat::Jpeg));
         // the whole photo is the camera's file with a resolution, not a second encoding
         assert_eq!(std::fs::read(&whole.path).unwrap()[20..], std::fs::read(&shot).unwrap()[20..]);
@@ -420,6 +612,121 @@ mod tests {
         let text = String::from_utf8_lossy(&pdf);
         assert!(text.contains("/BitsPerComponent 1") && !text.contains("/BitsPerComponent 8"), "the page image is not 1 bit per pixel in the PDF");
         assert!(pdf.len() < 2 * png.len() + 4096, "PDF {} bytes for a PNG of {}", pdf.len(), png.len());
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    /// A sheet on a table: found by the network and put on its edges, in one call.
+    #[test]
+    fn a_sheet_is_found_and_put_on_its_edges() {
+        let root = temp("find");
+        let shot = root.join("desk.png");
+        let (w, h) = (1200u32, 1600u32);
+        // a light sheet with rows of print, a little turned, on a dark table
+        let (sin, cos) = 4f64.to_radians().sin_cos();
+        image::RgbImage::from_fn(w, h, |x, y| {
+            let (dx, dy) = (f64::from(x) - 600.0, f64::from(y) - 800.0);
+            let (u, v) = (dx * cos + dy * sin, -dx * sin + dy * cos);
+            let sheet = u.abs() < 380.0 && v.abs() < 540.0;
+            let print = sheet
+                && u.abs() < 320.0
+                && v.abs() < 480.0
+                && (v as i64).rem_euclid(26) < 8
+                && ((u as i64).div_euclid(15) + (v as i64).div_euclid(26)).rem_euclid(4) != 0;
+            image::Rgb(if print {
+                [45, 45, 50]
+            } else if sheet {
+                [236, 234, 228]
+            } else {
+                [62 + (x % 7) as u8, 50 + (y % 5) as u8, 44]
+            })
+        })
+        .save(&shot)
+        .unwrap();
+        let found = find_in(&root, &shot.to_string_lossy(), ScanFindOptions::default()).unwrap();
+        assert!(found.found && found.source == ScanQuadSource::Model && found.confidence >= 0.5, "{found:?}");
+        let truth = [(-380.0, -540.0), (380.0, -540.0), (380.0, 540.0), (-380.0, 540.0)]
+            .map(|(u, v): (f64, f64)| [600.0 + u * cos - v * sin, 800.0 + u * sin + v * cos]);
+        for (i, corner) in truth.iter().enumerate() {
+            let (x, y) = (f64::from(found.corners[2 * i]) * f64::from(w), f64::from(found.corners[2 * i + 1]) * f64::from(h));
+            assert!((x - corner[0]).hypot(y - corner[1]) < 1.5, "corner {i}: ({x:.1}, {y:.1}) against {corner:?}");
+        }
+        assert_eq!(found.refined, [true; 4]);
+        assert_eq!(found.timings.iter().map(|t| t.stage.as_str()).collect::<Vec<_>>(), ["scan_decode", "scan_detect", "scan_refine"]);
+
+        // the testing options (#288): each detector alone, the closer look off, and nothing at all
+        let with = |finder, refine| find_in(&root, &shot.to_string_lossy(), ScanFindOptions { finder, refine }).unwrap();
+        assert_eq!(with(ScanFinder::Auto, true).corners, found.corners);
+        assert_eq!(with(ScanFinder::Network, true).corners, found.corners);
+        let lines = with(ScanFinder::Lines, true);
+        assert!(lines.found && lines.source == ScanQuadSource::Lines, "{lines:?}");
+        let coarse = with(ScanFinder::Network, false);
+        assert!(coarse.found && coarse.refined == [false; 4] && coarse.corners != found.corners, "{coarse:?}");
+        assert_eq!(coarse.timings.iter().map(|t| t.stage.as_str()).collect::<Vec<_>>(), ["scan_decode", "scan_detect"]);
+        for (i, corner) in truth.iter().enumerate() {
+            // the network's own corners: within a few percent of the photo, not on the edge
+            let (x, y) = (f64::from(coarse.corners[2 * i]) * f64::from(w), f64::from(coarse.corners[2 * i + 1]) * f64::from(h));
+            assert!((x - corner[0]).hypot(y - corner[1]) < 0.03 * 2000.0, "corner {i}: ({x:.1}, {y:.1}) against {corner:?}");
+        }
+        let off = with(ScanFinder::Off, true);
+        assert!(
+            !off.found && off.source == ScanQuadSource::None && off.passes == 0 && off.corners == [0.0, 0.0, 1.0, 0.0, 1.0, 1.0, 0.0, 1.0],
+            "{off:?}"
+        );
+        // nothing to find: the whole photo, and said so
+        let blank = root.join("blank.png");
+        image::RgbImage::from_fn(640, 480, |x, y| image::Rgb([90 + (x % 3) as u8, 90 + (y % 3) as u8, 90])).save(&blank).unwrap();
+        let none = find_in(&root, &blank.to_string_lossy(), ScanFindOptions::default()).unwrap();
+        assert!(!none.found && none.source == ScanQuadSource::None && none.corners == [0.0, 0.0, 1.0, 0.0, 1.0, 1.0, 0.0, 1.0], "{none:?}");
+        // outside the root: refused
+        let other = temp("find-other");
+        assert!(find_in(&other, &shot.to_string_lossy(), ScanFindOptions::default()).is_err());
+        std::fs::remove_dir_all(root).unwrap();
+        std::fs::remove_dir_all(other).unwrap();
+    }
+
+    /// A page asked to be flattened goes through the flattening network (#302).
+    #[test]
+    fn a_page_is_flattened_when_asked() {
+        let root = temp("flatten");
+        let shot = root.join("page.png");
+        // a sheet whose top and bottom edges bow by 24 pixels, on a dark table
+        image::RgbImage::from_fn(900, 1200, |x, y| {
+            let bow = 24.0 * (std::f64::consts::PI * (f64::from(x) - 150.0) / 600.0).sin();
+            let (level, sheet) = (f64::from(y) + bow, (150..750).contains(&x));
+            let sheet = sheet && level > 180.0 && level < 1020.0;
+            let print = sheet && (200..700).contains(&x) && level > 240.0 && level < 960.0 && (level as i64 - 240).rem_euclid(30) < 9;
+            image::Rgb(if print {
+                [40, 40, 46]
+            } else if sheet {
+                [236, 233, 226]
+            } else {
+                [66, 54, 46]
+            })
+        })
+        .save(&shot)
+        .unwrap();
+        assert!(scan_can_flatten(), "assets/models/scan-flatten.onnx is missing or is not the pinned file");
+        let corners =
+            vec![150.0 / 900.0, 180.0 / 1200.0, 750.0 / 900.0, 180.0 / 1200.0, 750.0 / 900.0, 1020.0 / 1200.0, 150.0 / 900.0, 1020.0 / 1200.0];
+        let plain = process_in(&root, &ScanPageRequest { corners: corners.clone(), look: ScanLook::Original, ..request(&shot, &root.join("plain")) })
+            .unwrap();
+        assert!(!plain.flattened && plain.bend == 0.0);
+        let flat =
+            process_in(&root, &ScanPageRequest { corners, look: ScanLook::Original, flatten: true, ..request(&shot, &root.join("flat")) }).unwrap();
+        assert!(flat.flattened && flat.bend > 0.003, "{flat:?}");
+        assert_eq!((flat.width, flat.height), (plain.width, plain.height));
+        let stages: Vec<_> = flat.timings.iter().map(|t| t.stage.as_str()).collect();
+        assert_eq!(stages, ["scan_decode", "scan_flatten", "scan_rectify", "scan_look", "scan_encode"]);
+        // the rows of print are level in the flattened page and arched in the other: how much
+        // the first row's top edge moves between the page's sides and its middle
+        let arch = |path: &str| {
+            let page = image::open(path).unwrap().to_luma8();
+            let top = |x: u32| (page.height() / 30..page.height() / 4).find(|&y| page.get_pixel(x, y).0[0] < 110).map_or(0.0, f64::from);
+            let (w, scale) = (page.width(), f64::from(page.height()) / 840.0);
+            ((top(w / 2) - top(w / 6)).abs() + (top(w / 2) - top(w * 5 / 6)).abs()) / 2.0 / scale
+        };
+        let (was, now) = (arch(&plain.path), arch(&flat.path));
+        assert!(was > 8.0 && now < was / 3.0, "arched by {was:.1} px before and {now:.1} px after");
         std::fs::remove_dir_all(root).unwrap();
     }
 

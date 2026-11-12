@@ -118,10 +118,10 @@ fun ReadingModeContent(vm: AppViewModel, doc: OpenDocument, top: Dp, bottom: Dp,
             items(doc.pageCount) { page ->
                 LaunchedEffect(page, doc.info.generation) {
                     if (loaded.containsKey(page)) return@LaunchedEffect
-                    vm.loadParagraphs(doc, page)
+                    vm.editor.loadParagraphs(doc, page)
                     // the editable paragraphs when the engine finds them, else the text layer's
                     // lines joined into paragraphs (what most PDFs from browsers need)
-                    val found = vm.paragraphs[page].orEmpty().ifEmpty { vm.reflowParagraphs(doc, page) }
+                    val found = vm.editor.paragraphs[page].orEmpty().ifEmpty { vm.reflowParagraphs(doc, page) }
                     // a page scrolled away mid-load was cancelled (the engine calls swallow that):
                     // keep nothing, so it loads again when it comes back
                     if (!isActive) return@LaunchedEffect

@@ -324,6 +324,7 @@
     <string name="tools_filter_grayscale">Niveaux de gris</string>
     <string name="tools_filter_whiteboard">Tableau blanc</string>
     <string name="tools_filter_light_text">Texte clair</string>
+    <string name="tools_scan_flatten">Aplatir la page</string>
 
     <!-- App dialogs: the first comment's name prompt -->
     <!-- Verb: go on without entering a name -->
@@ -1077,6 +1078,29 @@
     <string name="home_record_diagnostics_body">Garde un journal détaillé de l’ouverture et de l’affichage des fichiers, de la latence du stylet, des enregistrements, des numérisations, de la mémoire et des erreurs, pour vérifier un problème depuis le téléphone. Seulement des noms d’événements, durées, nombres et tailles, sans noms de fichiers, chemins ni contenu. Le désactiver l’efface.</string>
     <string name="home_share_diagnostics">Partager le journal de diagnostic</string>
     <string name="home_clear_diagnostics">Effacer le journal de diagnostic</string>
+    <string name="scan_lab_section">Test du scanner</string>
+    <string name="scan_lab_keep">Conserver les numérisations pour les tests</string>
+    <string name="scan_lab_keep_body">Conserve la photo de chaque page numérisée, enregistrée ou abandonnée, avec ses coins, ses réglages et son résultat. Elles restent sur cet appareil jusqu\'à ce que vous les partagiez ou les supprimiez. 600 Mo au plus sont conservés ; les numérisations les plus anciennes laissent la place aux nouvelles.</string>
+    <string name="scan_lab_share">Partager les numérisations conservées (%1$d pages, %2$s)</string>
+    <string name="scan_lab_clear">Supprimer les numérisations conservées</string>
+    <string name="scan_lab_share_title">Partager les numérisations conservées ?</string>
+    <string name="scan_lab_share_body">Le fichier contient les photos des documents numérisés et le journal de diagnostic. Ne le partagez qu\'avec une personne à qui vous confieriez ces documents.</string>
+    <string name="scan_lab_clear_title">Supprimer les numérisations conservées ?</string>
+    <string name="scan_lab_nothing_kept">Aucune numérisation conservée pour l\'instant</string>
+    <string name="scan_lab_subject">Numérisations PdfCraft pour les tests</string>
+    <string name="scan_lab_finder">Trouver la page avec</string>
+    <string name="scan_lab_finder_auto">Automatique</string>
+    <string name="scan_lab_finder_network">Réseau de neurones</string>
+    <string name="scan_lab_finder_lines">Lignes</string>
+    <string name="scan_lab_finder_off">Rien</string>
+    <string name="scan_lab_refine">Affiner les bords sur la photo entière</string>
+    <string name="scan_lab_perspective">Proportions d\'après la perspective</string>
+    <string name="scan_lab_snap_paper">Ajuster aux formats de papier standard</string>
+    <string name="scan_lab_strength">Intensité du filtre</string>
+    <string name="scan_lab_strength_own">Par défaut</string>
+    <string name="scan_lab_options_body">Ces options désactivent des parties du scanner ou les remplacent par ce qu\'elles ont remplacé, pour savoir de quelle partie vient un problème. Le journal note ce qui était en vigueur pour chaque page.</string>
+    <string name="scan_lab_reset">Réinitialiser les options de test du scanner</string>
+    <string name="scan_lab_active">Une option de test du scanner est active (Réglages, À propos, Diagnostic)</string>
     <string name="home_diagnostics_empty">Aucun diagnostic pour l’instant : activez l’option puis utilisez l’app.</string>
     <string name="home_diagnostics_subject">Journal de diagnostic PdfCraft</string>
     <string name="home_diagnostics_cleared">Journal de diagnostic effacé</string>
@@ -1834,4 +1858,26 @@
         <item quantity="other">Texte ajouté à %d dessins</item>
     </plurals>
     <string name="toolbar_label_handwriting">Écriture</string>
+    <string name="lecture_title">Enregistrements de cours</string>
+    <string name="lecture_record">Enregistrer le cours</string>
+    <string name="lecture_recording">Enregistrement</string>
+    <string name="lecture_paused">En pause</string>
+    <string name="lecture_pause">Pause</string>
+    <string name="lecture_resume">Reprendre l\'enregistrement</string>
+    <string name="lecture_stop">Arrêter l\'enregistrement</string>
+    <string name="lecture_play">Lire</string>
+    <string name="lecture_back_10">Reculer de 10 secondes</string>
+    <string name="lecture_forward_10">Avancer de 10 secondes</string>
+    <string name="lecture_close_player">Fermer le lecteur du cours</string>
+    <string name="lecture_body">Pendant l\'enregistrement, chaque commentaire écrit retient son moment. Lisez un enregistrement et touchez un commentaire pour entendre ce qui se disait quand vous l\'avez écrit. Les enregistrements restent sur ce téléphone, dans PdfCraft.</string>
+    <string name="lecture_delete_title">Supprimer cet enregistrement ?</string>
+    <string name="lecture_needs_saved">Enregistrez d\'abord ce document pour enregistrer à côté</string>
+    <string name="lecture_cannot_record">L\'enregistrement n\'a pas pu être fait</string>
+    <string name="lecture_cannot_play">Cet enregistrement ne peut pas être lu</string>
+    <string name="lecture_saved">Cours enregistré (%1$s)</string>
+    <plurals name="lecture_notes">
+        <item quantity="one">%d note</item>
+        <item quantity="many">%d notes</item>
+        <item quantity="other">%d notes</item>
+    </plurals>
 </resources>

@@ -113,22 +113,22 @@ fun editImageFrom(page: Int, o: org.json.JSONObject): EditImage? {
 fun AppViewModel.imageAction(doc: OpenDocument, img: EditImage, action: String, extra: Map<String, Any?> = emptyMap(), number: Int? = img.number) {
     runTool(doc, "image_edit", mapOf("page" to img.page + 1, "image" to img.number, "action" to action) + extra) {
         if (number == null) {
-            editImage = null
+            editor.editImage = null
         } else {
-            viewModelScope.launch { editImage = readImage(doc, img.page, number) }
+            viewModelScope.launch { editor.editImage = readImage(doc, img.page, number) }
         }
     }
 }
 
 /** Start framing a crop of [img], from what it shows now. */
 fun AppViewModel.startCrop(img: EditImage) {
-    imageEdit.cropRatio = null
-    imageEdit.crop = (img.visible ?: img.rect).copyOf()
+    editor.imageEdit.cropRatio = null
+    editor.imageEdit.crop = (img.visible ?: img.rect).copyOf()
 }
 
 fun AppViewModel.applyCrop(doc: OpenDocument, img: EditImage) {
-    val c = imageEdit.crop ?: return
-    imageEdit.crop = null
+    val c = editor.imageEdit.crop ?: return
+    editor.imageEdit.crop = null
     imageAction(doc, img, "crop", mapOf("rect" to c.map { it.toDouble() }))
 }
 
@@ -205,9 +205,9 @@ fun AppViewModel.saveImage(doc: OpenDocument, img: EditImage) {
 /** Ungroup Form artwork: its text becomes editable paragraphs, so the page's paragraphs are read again. */
 fun AppViewModel.ungroupImage(doc: OpenDocument, img: EditImage) {
     runTool(doc, "image_edit", mapOf("page" to img.page + 1, "image" to img.number, "action" to "ungroup")) {
-        editImage = null
-        paragraphs.remove(img.page)
-        viewModelScope.launch { loadParagraphs(doc, img.page) }
+        editor.editImage = null
+        editor.paragraphs.remove(img.page)
+        viewModelScope.launch { editor.loadParagraphs(doc, img.page) }
         tell(text(R.string.edit_image_ungrouped))
     }
 }

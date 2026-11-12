@@ -233,6 +233,18 @@ pub struct Proportions {
 /// the camera said about its lens (`None` for nothing); `snap_paper` matches the result to
 /// standard papers.
 pub fn proportions(quad: &Quad, photo_w: u32, photo_h: u32, camera: impl Into<Focal>, snap_paper: bool) -> Proportions {
+    shape(quad, photo_w, photo_h, camera.into(), snap_paper, true)
+}
+
+/// The page's proportions from the lengths of its sides in the photo alone, as before #293: right
+/// for a page seen square on, too short along the direction it leans away for any other. A
+/// testing choice (#288), to tell a page drawn with the wrong proportions by [`proportions`]
+/// from one whose corners are wrong.
+pub fn proportions_by_sides(quad: &Quad, photo_w: u32, photo_h: u32, snap_paper: bool) -> Proportions {
+    shape(quad, photo_w, photo_h, Focal::default(), snap_paper, false)
+}
+
+fn shape(quad: &Quad, photo_w: u32, photo_h: u32, camera: Focal, snap_paper: bool, perspective: bool) -> Proportions {
     let unit = f64::from(photo_w.max(photo_h)).max(1.0);
     let (cx, cy) = (f64::from(photo_w) / 2.0, f64::from(photo_h) / 2.0);
     let m = |i: usize| -> V3 { [(quad.0[i][0] - cx) / unit, (quad.0[i][1] - cy) / unit, 1.0] };
@@ -240,8 +252,7 @@ pub fn proportions(quad: &Quad, photo_w: u32, photo_h: u32, camera: impl Into<Fo
     let by_sides = ((top + bottom) / (left + right).max(1e-9), AspectSource::SideLengths, None, None);
     // top-left, top-right, bottom-left, bottom-right: mind the order
     let corners = [m(0), m(1), m(3), m(2)];
-    let camera = camera.into();
-    let measured = side_vectors(&corners).map(|(n2, n3)| {
+    let measured = side_vectors(&corners).filter(|_| perspective).map(|(n2, n3)| {
         let (f, source, known, firm) = focal(camera, unit, focal_estimate(&corners));
         (ratio_at(n2, n3, f), source, known, firm)
     });

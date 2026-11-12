@@ -24,6 +24,8 @@ import androidx.activity.viewModels
 import androidx.core.content.FileProvider
 import androidx.core.content.IntentCompat
 import androidx.lifecycle.lifecycleScope
+import io.github.artcraftandroid.pdfcraft.engine.Diag
+import io.github.artcraftandroid.pdfcraft.engine.DiagArea
 import io.github.artcraftandroid.pdfcraft.ui.AppRoot
 import io.github.artcraftandroid.pdfcraft.ui.AppViewModel
 import io.github.artcraftandroid.pdfcraft.ui.FilePickKind
@@ -52,8 +54,8 @@ class MainActivity : ComponentActivity() {
 
     private val saveCopy = registerForActivityResult(ActivityResultContracts.CreateDocument("application/pdf")) { uri -> vm.copyTo(uri) }
     private val takePhoto = registerForActivityResult(ActivityResultContracts.TakePicture()) { ok -> vm.onScanPhoto(ok) }
-    private val pickImage = registerForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri -> vm.addImage(uri) }
-    private val pickSignature = registerForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri -> vm.importSignatureImage(uri) }
+    private val pickImage = registerForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri -> vm.editor.addImage(uri) }
+    private val pickSignature = registerForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri -> vm.signing.importSignatureImage(uri) }
     private val pickPhotos = registerForActivityResult(ActivityResultContracts.PickMultipleVisualMedia()) { uris -> vm.onPhotosPicked(uris) }
     private val pickOutputFolder = registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri -> vm.onOutputFolderPicked(uri) }
     private val pickFolder = registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri -> uri?.let(vm::addLocalFolder) }
@@ -173,7 +175,7 @@ class MainActivity : ComponentActivity() {
                 try { requestFolder.launch(null) } catch (e: Exception) { vm.requests.onFolder(null); throw e }
             }
         }
-        lifecycleScope.launch { for (d in vm.imagePicks) launchSafely { pickImage.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) } }
+        lifecycleScope.launch { for (d in vm.editor.imagePicks) launchSafely { pickImage.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) } }
         lifecycleScope.launch { for (u in vm.photoPicks) launchSafely { pickPhotos.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) } }
         // the folder picker opens at Documents, where PDFs usually are (Download itself can't be chosen)
         val documents = android.provider.DocumentsContract.buildDocumentUri("com.android.externalstorage.documents", "primary:Documents")
@@ -348,19 +350,24 @@ class MainActivity : ComponentActivity() {
             }
 
             override fun onWrite(pages: Array<out PageRange>?, destination: ParcelFileDescriptor, cancel: CancellationSignal?, callback: WriteResultCallback) {
+                val start = System.nanoTime()
                 try {
                     file.inputStream().use { input -> FileOutputStream(destination.fileDescriptor).use { input.copyTo(it) } }
                     callback.onWriteFinished(arrayOf(PageRange.ALL_PAGES))
+                    Diag.event(DiagArea.Pages, "print_write", "bytes" to file.length(), "ms" to (System.nanoTime() - start) / 1_000_000, "temporary" to deleteWhenDone)
                 } catch (e: Exception) {
+                    Diag.failure(DiagArea.Pages, "print_write", e)
                     callback.onWriteFailed(e.message)
                 }
             }
 
             override fun onFinish() {
+                Diag.event(DiagArea.Pages, "print_finished", "temporary" to deleteWhenDone)
                 if (deleteWhenDone) file.delete()
             }
         }
         runCatching { pm.print(name, adapter, null) }.onFailure {
+            Diag.failure(DiagArea.Pages, "print_start", it)
             if (deleteWhenDone) file.delete()
             vm.tell(getString(R.string.main_error_print_not_allowed))
         }

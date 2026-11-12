@@ -324,6 +324,7 @@
     <string name="tools_filter_grayscale">Graustufen</string>
     <string name="tools_filter_whiteboard">Whiteboard</string>
     <string name="tools_filter_light_text">Heller Text</string>
+    <string name="tools_scan_flatten">Seite glätten</string>
 
     <!-- App dialogs: the first comment's name prompt -->
     <!-- Verb: go on without entering a name -->
@@ -1197,6 +1198,29 @@
     <string name="home_record_diagnostics_body">Speichert ein ausführliches Protokoll über Öffnen und Zeichnen von Dateien, Stift-Latenz, Speichern, Scans, Arbeitsspeicher und Fehler, damit ein Problem vom Telefon aus geprüft werden kann. Nur Ereignisnamen, Zeiten, Anzahlen und Größen, keine Dateinamen, Pfade oder Inhalte. Beim Ausschalten wird es gelöscht.</string>
     <string name="home_share_diagnostics">Diagnoseprotokoll teilen</string>
     <string name="home_clear_diagnostics">Diagnoseprotokoll löschen</string>
+    <string name="scan_lab_section">Scanner-Test</string>
+    <string name="scan_lab_keep">Scans zum Testen aufbewahren</string>
+    <string name="scan_lab_keep_body">Bewahrt das Foto jeder gescannten Seite auf, ob gespeichert oder verworfen, mit Ecken, Einstellungen und Ergebnis. Sie bleiben auf diesem Gerät, bis du sie teilst oder löschst. Höchstens 600 MB werden aufbewahrt; ältere Scans machen neueren Platz.</string>
+    <string name="scan_lab_share">Aufbewahrte Scans teilen (%1$d Seiten, %2$s)</string>
+    <string name="scan_lab_clear">Aufbewahrte Scans löschen</string>
+    <string name="scan_lab_share_title">Aufbewahrte Scans teilen?</string>
+    <string name="scan_lab_share_body">Die Datei enthält die Fotos der gescannten Dokumente und das Diagnoseprotokoll. Teile sie nur mit jemandem, dem du diese Dokumente anvertraust.</string>
+    <string name="scan_lab_clear_title">Aufbewahrte Scans löschen?</string>
+    <string name="scan_lab_nothing_kept">Noch keine Scans aufbewahrt</string>
+    <string name="scan_lab_subject">PdfCraft-Scans zum Testen</string>
+    <string name="scan_lab_finder">Seite finden mit</string>
+    <string name="scan_lab_finder_auto">Automatisch</string>
+    <string name="scan_lab_finder_network">Neuronales Netz</string>
+    <string name="scan_lab_finder_lines">Linien</string>
+    <string name="scan_lab_finder_off">Nichts</string>
+    <string name="scan_lab_refine">Kanten am vollen Foto verfeinern</string>
+    <string name="scan_lab_perspective">Proportionen aus der Perspektive</string>
+    <string name="scan_lab_snap_paper">An Standardpapierformate anpassen</string>
+    <string name="scan_lab_strength">Filterstärke</string>
+    <string name="scan_lab_strength_own">Standard</string>
+    <string name="scan_lab_options_body">Diese Optionen schalten Teile des Scanners ab oder ersetzen sie durch ihre Vorgänger, um herauszufinden, von welchem Teil ein Problem kommt. Das Protokoll hält für jede Seite fest, was galt.</string>
+    <string name="scan_lab_reset">Scanner-Testoptionen zurücksetzen</string>
+    <string name="scan_lab_active">Eine Scanner-Testoption ist aktiv (Einstellungen, Über, Diagnose)</string>
     <string name="home_diagnostics_empty">Noch keine Diagnose: Einschalten und dann die App verwenden.</string>
     <string name="home_diagnostics_subject">PdfCraft-Diagnoseprotokoll</string>
     <string name="home_diagnostics_cleared">Diagnoseprotokoll gelöscht</string>
@@ -1950,4 +1974,25 @@
         <item quantity="other">Text zu %d Zeichnungen hinzugefügt</item>
     </plurals>
     <string name="toolbar_label_handwriting">Handschrift</string>
+    <string name="lecture_title">Vorlesungsaufnahmen</string>
+    <string name="lecture_record">Vorlesung aufnehmen</string>
+    <string name="lecture_recording">Aufnahme läuft</string>
+    <string name="lecture_paused">Pausiert</string>
+    <string name="lecture_pause">Pausieren</string>
+    <string name="lecture_resume">Aufnahme fortsetzen</string>
+    <string name="lecture_stop">Aufnahme beenden</string>
+    <string name="lecture_play">Abspielen</string>
+    <string name="lecture_back_10">10 Sekunden zurück</string>
+    <string name="lecture_forward_10">10 Sekunden vor</string>
+    <string name="lecture_close_player">Vorlesungsplayer schließen</string>
+    <string name="lecture_body">Während der Aufnahme merkt sich jeder Kommentar, wann er geschrieben wurde. Spiele eine Aufnahme ab und tippe auf einen Kommentar, um zu hören, was dabei gesagt wurde. Aufnahmen bleiben auf diesem Telefon, in PdfCraft.</string>
+    <string name="lecture_delete_title">Diese Aufnahme löschen?</string>
+    <string name="lecture_needs_saved">Speichere dieses Dokument zuerst, um dazu aufzunehmen</string>
+    <string name="lecture_cannot_record">Die Aufnahme konnte nicht erstellt werden</string>
+    <string name="lecture_cannot_play">Diese Aufnahme kann nicht abgespielt werden</string>
+    <string name="lecture_saved">Vorlesung gespeichert (%1$s)</string>
+    <plurals name="lecture_notes">
+        <item quantity="one">%d Notiz</item>
+        <item quantity="other">%d Notizen</item>
+    </plurals>
 </resources>

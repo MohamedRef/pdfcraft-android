@@ -354,7 +354,7 @@ fun BoxScope.SelectionMenu(vm: AppViewModel, doc: OpenDocument, sel: Selection) 
             val at = PagePoint(page, (r[0] + r[2]) / 2f, (r[1] + r[3]) / 2f)
             doc.selection.clear()
             vm.enterTool(doc, ViewerTool.Edit)
-            if (doc.controller.tool == ViewerTool.Edit) vm.editTap(doc, at)
+            if (doc.controller.tool == ViewerTool.Edit) vm.editor.editTap(doc, at)
         }
         if (doc.info.allowsCopying) MenuRow(LucideIcons.Copy, stringResource(R.string.viewer_copy_text)) { vm.copySelection(doc) }
         MenuRow(LucideIcons.SwatchBook, stringResource(R.string.cards_make)) { vm.study.makeCardFromSelection(doc, cloze = false) }
