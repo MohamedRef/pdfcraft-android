@@ -25,12 +25,19 @@ internal data class ScanCapture(
     val rotation: Int = 0,
     /** From the shutter press to the file written, in milliseconds. */
     val captureMs: Long = 0L,
+    /** The live outline at the shutter (#295): whether it was on, showed a page, was steady, the advice shown, and the outline (8 shares of the upright frame). */
+    val live: Boolean = false,
+    val liveFound: Boolean = false,
+    val liveStable: Boolean = false,
+    val liveHint: String = "none",
+    val previewQuad: FloatArray? = null,
 ) {
     /** The facts as diagnostics fields: short lowercase words, booleans and numbers only. */
     fun diag(): Array<Pair<String, Any?>> = arrayOf(
         "source" to source, "mp10" to megapixelsTenths, "width" to width, "height" to height,
         "exposure_index" to exposureIndex, "exposure_step_milli" to exposureStepMilli, "torch" to torch,
         "focused" to focused, "rotation" to rotation, "capture_ms" to captureMs,
+        "live" to live, "live_found" to liveFound, "live_stable" to liveStable, "live_hint" to liveHint,
     )
 
     /** The facts as JSON, for a kept scan's page file. */
@@ -38,6 +45,11 @@ internal data class ScanCapture(
         .put("source", source).put("mp10", megapixelsTenths).put("width", width).put("height", height)
         .put("exposure_index", exposureIndex).put("exposure_step_milli", exposureStepMilli).put("torch", torch)
         .put("focused", focused).put("rotation", rotation).put("capture_ms", captureMs)
+        .put("live", live).put("live_found", liveFound).put("live_stable", liveStable).put("live_hint", liveHint)
+        .put(
+            "preview_quad",
+            previewQuad?.takeIf { it.size == 8 }?.let { q -> org.json.JSONArray().also { a -> q.forEach { v -> a.put(if (v.isFinite()) Math.round(v * 100000.0) / 100000.0 else 0.0) } } } ?: JSONObject.NULL,
+        )
 }
 
 /**
