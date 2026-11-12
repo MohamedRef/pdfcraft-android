@@ -34,7 +34,7 @@ a phone yet.** Every number in the scanner's documents was measured on a desktop
 | #303 | Book mode | **Not started** | | All of it |
 | #304 | "Max quality" (DocRes) | **Not started** | | Feasibility first, as the issue says |
 | #305, #306 | Research: moiré; fingers, glare | **Not started** | | |
-| #307 | ML Kit as a second engine | Protocol only | this PR | The comparison protocol and its blind-ranking script ([ANDROID_SCAN_COMPARISON.md](ANDROID_SCAN_COMPARISON.md)); Google's scanner is used from the Drive app. Not in the app: the library would end the F-Droid build, and the owner was asked whether to add it anyway. No comparison has been run |
+| #307 | ML Kit as a second engine | Protocol only | #406 | The comparison protocol and its blind-ranking script ([ANDROID_SCAN_COMPARISON.md](ANDROID_SCAN_COMPARISON.md)); Google's scanner is used from the Drive app. Not in the app: the library would end the F-Droid build, and the owner was asked whether to add it anyway. No comparison has been run |
 | #339 | Pages turned upright | Core done | #370 | The "Turned upright · Undo" chip, a rotate button, the multi-page rule, a switch in ordinary settings |
 
 "Core done" means the code and its tests are merged and the issue's acceptance items that need
