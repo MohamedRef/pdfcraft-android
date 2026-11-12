@@ -9,7 +9,7 @@ use crate::tensor::area_weights;
 use crate::{Photo, Quad};
 
 /// A photo of a sheet with rows of print at `quad` on a dark, grainy table.
-fn photo(w: u32, h: u32, quad: [Point; 4]) -> Photo {
+pub(crate) fn photo(w: u32, h: u32, quad: [Point; 4]) -> Photo {
     let mut page = crate::tests::test_page(600, 800);
     // rows of print between the test page's own marks
     for y in (120..760).step_by(22) {

@@ -16,9 +16,13 @@ desktop.
 - A page that is half of a spread says so on the scan screen ("Right page of a spread").
 - A photo that is not a spread stays one page (see "When a photo is cut" below).
 
-The issue puts the switch in the in-app camera (#294) with a guide line for the spine. That
-camera does not exist yet, so the switch is on the scan screen for now and works with the phone's
-camera app. When #294 lands, the switch and a centre guide belong there.
+- In the in-app camera (#294) the same **Book** switch is in the top bar. While it is on, a
+  dashed line runs down the middle of the viewfinder with the hint "Line up the book's spine with
+  the line": the gutter is searched for in the middle 30 % of the spread, so a spine near the
+  line is found. The scan screen keeps its switch too, for the phone's camera app.
+- On the crop screen, a half says which side is the cut along the gutter and not a paper edge.
+  **Auto-detect** on a half finds the spread again, cuts it again and keeps the same half, so it
+  does not jump to the whole spread.
 
 ## How it works
 
@@ -69,7 +73,9 @@ cut at the centre line with confidence 0. Anything else stays one page.
 - **Diagnostics log.** On each `photo` line: `book` (on or off) and, when on, `book_order`,
   `book_gutter_search`, `book_split`, `gutter_found`, `gutter_top`, `gutter_bottom`,
   `gutter_confidence` and `book_ms`. On each `page` line: `book_half` (`left`, `right`, `none`).
-  `book_mode` is written when the switch or the order is changed.
+  `book_mode` is written when the switch or the order is changed, with `from` (`screen` or
+  `camera`). A `crop_detect` line says which `book_half` was detected again (`none` for a page of
+  its own).
 - **Kept scan page file.** `"book": {"half", "gutter_found", "gutter_top", "gutter_bottom",
   "confidence", "order"}`, or `null`. The options carry `book_gutter`. `scan_replay` repeats a
   half from its own corners like any page.
@@ -103,8 +109,7 @@ time (after the outline search), which is most of its cost. The log's `book_ms` 
   keep the refinement of the whole outline. Re-refining the halves' outer sides was not done.
 - No `even_edges` pass for a dark band along the gutter. The issue says to add it only if the
   test photos show a band after the lighting step.
-- The crop screen does not yet say that a page comes from a spread. That note lands once #292's
-  crop screen is merged.
-- The switch belongs in the in-app camera (#294) with a guide line, once it exists.
+- Snap on the crop screen treats the gutter side like any side and may move it onto the edge of
+  the gutter's shadow. Not changed: the person decides, and Reset puts the cut back.
 - A portrait spread (two pages above each other) has no centre-line fallback.
 - Part B (text-line flattening) is not started.
