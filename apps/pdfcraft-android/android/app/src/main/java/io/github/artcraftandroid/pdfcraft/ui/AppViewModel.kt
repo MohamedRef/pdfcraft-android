@@ -4666,8 +4666,9 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
 
     /**
      * Save the scanned pages as a PDF with [filter]'s look (or insert them where Organize asked).
-     * Each photo is decoded once, straightened, given the look and encoded once natively (#287);
-     * a page that can't be processed goes in as the camera took it.
+     * Each photo is decoded once, straightened to the page's true proportions (#293), given the
+     * look and encoded once natively (#287); a page that can't be processed goes in as the camera
+     * took it.
      */
     fun saveScan(filter: ScanFilter) = job(text(R.string.msg_busy_saving_scan)) { eng ->
         val pages = scanPages.toList()
@@ -4678,11 +4679,9 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             // the Scan gates (#286): found edges, whether they were moved and how far (in % of the
             // photo's diagonal, so the thumbnail's proportions are enough)
             val stats = scanPageStats(page.corners, page.found, ScanPage.WHOLE, page.thumb.width.toDouble(), page.thumb.height.toDouble())
-            if (!scanNeedsProcessing(page.corners.contentEquals(ScanPage.WHOLE), filter.mode)) {
-                Diag.event(DiagArea.Scan, "page", "index" to i + 1, "edges_found" to stats.found, "corners_moved" to stats.touched, "max_move_pct" to stats.maxMovePct, "filter" to filter, "enhanced" to false)
-                saved += scanSavedPage(page.file.absolutePath, null)
-                continue
-            }
+            // a whole photo in Original stays the camera's own file: natively it only gets its
+            // resolution written in, so its PDF page has a size like the others (#293)
+            val untouched = !scanNeedsProcessing(page.corners.contentEquals(ScanPage.WHOLE), filter.mode)
             busy = text(R.string.msg_busy_cleaning_page, i + 1, pages.size)
             val request = io.github.artcraftandroid.pdfcraft.core.ScanPageRequest(
                 photoPath = page.file.absolutePath,
@@ -4695,13 +4694,16 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             val result = withContext(Dispatchers.Default) { runCatching { io.github.artcraftandroid.pdfcraft.core.scanProcessPage(request) } }
             result.onFailure { Diag.failure(DiagArea.Scan, "scan_process_page", it) }
             val r = result.getOrNull()
-            // decode, straighten, look and encode times (#287), and the page's pixels and proportions
+            // decode, straighten, look and encode times (#287), the page's pixels, and how its
+            // proportions were worked out and which paper it was matched to (#293)
             Diag.event(
                 DiagArea.Scan, "page", "index" to i + 1, "edges_found" to stats.found, "corners_moved" to stats.touched, "max_move_pct" to stats.maxMovePct,
-                "filter" to filter, "enhanced" to (r != null), "enhance_ms" to android.os.SystemClock.elapsedRealtime() - enhanceStarted,
+                "filter" to filter, "enhanced" to (r != null && !untouched), "enhance_ms" to android.os.SystemClock.elapsedRealtime() - enhanceStarted,
                 *(r?.timings.orEmpty().map<io.github.artcraftandroid.pdfcraft.core.ScanTiming, Pair<String, Any?>> { it.stage.removePrefix("scan_") + "_ms" to it.ms.toLong() }.toTypedArray()),
                 "out_width" to (r?.width?.toLong() ?: 0L), "out_height" to (r?.height?.toLong() ?: 0L),
                 "out_format" to (r?.format?.name?.lowercase() ?: "none"), "dpi" to (r?.dpi?.toDouble() ?: 0.0),
+                "paper" to (r?.paper?.name?.lowercase() ?: "none"), "aspect" to (r?.aspectSource?.name?.lowercase() ?: "none"),
+                "focal_mismatch" to (r?.focalMismatch ?: false),
             )
             saved += scanSavedPage(page.file.absolutePath, r?.let { it.path to it.dpi })
         }
@@ -5491,6 +5493,58 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             if (pages.isNotEmpty()) put("pages", pages.map { it + 1 })
         }
         runTool(doc, "page_margin", args) { tell(text(R.string.margin_removed)) }
+    }
+
+    // ---- Handwriting to text (#151) ----
+
+    /**
+     * Read the handwriting on page [page] (0-based): the ink comments with no text of their own
+     * are pasted on a blank page of the same size, read by the engine's OCR there (so printed
+     * text under them is not read too), and each gets the words that lie in it as its text,
+     * which the comment list, search across documents and other PDF readers show.
+     */
+    fun recognizeHandwriting(doc: OpenDocument, page: Int) {
+        val eng = engine ?: return
+        if (!doc.writable) { tell(text(R.string.margin_read_only)); return }
+        doc.commitTool?.invoke()
+        viewModelScope.launch {
+            busy = text(R.string.msg_busy_preparing_ocr)
+            withContext(Dispatchers.IO) { runCatching { eng.prepareOcrModels(getApplication()) } }
+            val status = runCatching { eng.tool("ocr_status") }.getOrNull()
+            if (status?.optBoolean("available", false) != true) {
+                busy = null
+                tell(text(R.string.msg_ocr_not_installed))
+                return@launch
+            }
+            busy = text(R.string.handwriting_busy)
+            val blank = tempFile("pdf")
+            var copy: Long? = null
+            try {
+                val inks = io.github.artcraftandroid.pdfcraft.engine.Handwriting.inksWithoutText(eng.tool("comment_list", mapOf("doc" to doc.id, "page" to page + 1)))
+                if (inks.isEmpty()) { tell(text(R.string.handwriting_none)); return@launch }
+                val xfdf = eng.tool("comments_copy", mapOf("doc" to doc.id, "comments" to inks.map { listOf(page + 1, it.index) })).getString("xfdf")
+                val size = doc.info.pages[page]
+                withContext(Dispatchers.IO) { blank.writeBytes(io.github.artcraftandroid.pdfcraft.engine.Handwriting.blankPdf(size.width.toDouble(), size.height.toDouble())) }
+                copy = eng.tool("doc_open", mapOf("path" to blank.absolutePath)).optLong("doc")
+                // centred where they were, so their boxes on the blank page are the ones listed
+                val cx = (inks.minOf { it.x0 } + inks.maxOf { it.x1 }) / 2
+                val cy = (inks.minOf { it.y0 } + inks.maxOf { it.y1 }) / 2
+                eng.tool("comments_paste", mapOf("doc" to copy, "page" to 1, "xfdf" to xfdf, "at" to listOf(cx, cy)))
+                eng.tool("doc_save", mapOf("doc" to copy))
+                val read = eng.tool("ocr_words", mapOf("doc" to copy, "pages" to listOf(1), "force_ocr" to true, "auto_rotate" to true))
+                val found = io.github.artcraftandroid.pdfcraft.engine.Handwriting.assign(inks, io.github.artcraftandroid.pdfcraft.engine.Handwriting.words(read))
+                if (found.isEmpty()) { tell(text(R.string.handwriting_nothing_read)); return@launch }
+                for ((index, words) in found) eng.tool("comment_edit", mapOf("doc" to doc.id, "page" to page + 1, "index" to index, "contents" to words))
+                refresh(doc)
+                success = SuccessBanner(plural(R.plurals.handwriting_done, found.size, found.size), null)
+            } catch (e: Exception) {
+                tell(e.userMessage)
+            } finally {
+                copy?.let { c -> runCatching { eng.tool("doc_close", mapOf("doc" to c, "discard_changes" to true)) } }
+                withContext(Dispatchers.IO) { blank.delete() }
+                busy = null
+            }
+        }
     }
 
     // ---- Backups (#145) and version history: see BackupController ----

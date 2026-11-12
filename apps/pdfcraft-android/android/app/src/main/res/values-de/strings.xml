@@ -1941,4 +1941,13 @@
         <item quantity="one">Diese Seite</item>
         <item quantity="other">%d Seiten</item>
     </plurals>
+    <string name="handwriting_read_page">Handschrift auf dieser Seite lesen (Beta)</string>
+    <string name="handwriting_busy">Handschrift wird gelesen…</string>
+    <string name="handwriting_none">Keine noch ungelesene Handschrift auf dieser Seite</string>
+    <string name="handwriting_nothing_read">Es konnten keine Wörter gelesen werden. Am besten klappt es mit deutlichen lateinischen Druckbuchstaben.</string>
+    <plurals name="handwriting_done">
+        <item quantity="one">Text zu %d Zeichnung hinzugefügt</item>
+        <item quantity="other">Text zu %d Zeichnungen hinzugefügt</item>
+    </plurals>
+    <string name="toolbar_label_handwriting">Handschrift</string>
 </resources>

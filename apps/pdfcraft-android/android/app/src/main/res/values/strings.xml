@@ -2459,6 +2459,15 @@
     <string name="print_binding_right">Bind on the right</string>
     <string name="print_comments">Print comments</string>
     <string name="print_explain">The next screen still picks the printer, copies and paper.</string>
+    <string name="handwriting_read_page">Read handwriting on this page (beta)</string>
+    <string name="handwriting_busy">Reading handwriting…</string>
+    <string name="handwriting_none">No handwriting on this page that isn\'t read yet</string>
+    <string name="handwriting_nothing_read">No words could be read. Recognition works best on clear print-style Latin letters.</string>
+    <plurals name="handwriting_done">
+        <item quantity="one">Text added to %d drawing</item>
+        <item quantity="other">Text added to %d drawings</item>
+    </plurals>
+    <string name="toolbar_label_handwriting">Handwriting</string>
     <!-- Measure tool (#135, #180) -->
     <string name="measure_tool">Measure</string>
     <string name="measure_distance">Distance</string>

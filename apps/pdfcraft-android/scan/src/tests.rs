@@ -9,7 +9,7 @@ const WHITE: [u8; 3] = [255, 255, 255];
 const BLUE: [u8; 3] = [20, 40, 220];
 
 /// A test page: black bars, a 1 px checker patch, a red block and a blue square at each corner.
-fn test_page(w: u32, h: u32) -> Photo {
+pub(crate) fn test_page(w: u32, h: u32) -> Photo {
     let mut rgb = Vec::with_capacity((w * h * 3) as usize);
     for y in 0..h {
         for x in 0..w {
@@ -36,7 +36,7 @@ fn test_page(w: u32, h: u32) -> Photo {
 
 /// `page` photographed into a `w` × `h` photo at `quad` on a grey table (each photo pixel the
 /// mean of 3 × 3 bilinear samples of the page, as a camera's pixels integrate light).
-fn photograph(page: &Photo, w: u32, h: u32, quad: [[f64; 2]; 4]) -> Photo {
+pub(crate) fn photograph(page: &Photo, w: u32, h: u32, quad: [[f64; 2]; 4]) -> Photo {
     let (pw, ph) = (f64::from(page.width), f64::from(page.height));
     let to_page = Homography::from_points(quad, [[0.0, 0.0], [pw, 0.0], [pw, ph], [0.0, ph]]).unwrap();
     let px = |x: i64, y: i64| {
@@ -264,7 +264,7 @@ const SAMPLE_CORNERS: [f32; 8] = [80.0 / 600.0, 60.0 / 800.0, 530.0 / 600.0, 90.
 fn the_same_photo_gives_the_same_bytes_on_any_number_of_threads() {
     let photo = sample_photo();
     for look in [Look::Original, Look::Colour, Look::Greyscale, Look::BlackWhite, Look::Auto] {
-        let run = |threads| process_page(&PageRequest { photo: &photo, corners: SAMPLE_CORNERS, look, strength: 60, threads }).unwrap();
+        let run = |threads| process_page(&PageRequest { look, strength: 60, threads, ..PageRequest::new(&photo, SAMPLE_CORNERS) }).unwrap();
         let (a, b, c) = (run(1), run(1), run(4));
         assert_eq!(a.bytes, b.bytes, "{look:?}: twice");
         assert_eq!(a.bytes, c.bytes, "{look:?}: 1 and 4 threads");
