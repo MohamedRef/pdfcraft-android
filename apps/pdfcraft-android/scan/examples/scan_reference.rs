@@ -69,7 +69,9 @@ fn look(dir: &Path, out: &Path, strength: u8, sharpen: u8, threads: usize) {
         let img = image::open(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display())).to_rgb8();
         let page = Rgb { width: img.width(), height: img.height(), data: img.into_raw() };
         let clock = Instant::now();
-        let Some(result) = auto(&page, &AutoParams { strength, paper: PaperMode::White, threads, sharpen, denoise: true, dpi: 300 }) else {
+        let Some(result) =
+            auto(&page, &AutoParams { strength, paper: PaperMode::White, threads, sharpen, denoise: true, dpi: 300, ..AutoParams::default() })
+        else {
             continue;
         };
         let ms = clock.elapsed().as_millis();

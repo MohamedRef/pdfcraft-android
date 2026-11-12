@@ -6,10 +6,11 @@ use std::time::Instant;
 use crate::aspect::{AspectSource, Focal, Paper, dpi_without_paper, proportions, proportions_by_sides};
 use crate::encode::{Format, JPEG_QUALITY, Raster, encode_jpeg, encode_png_bilevel, stamp_jpeg_density};
 use crate::enhance::DEFAULT_SHARPEN;
+use crate::enhance::Shape;
 use crate::enhance::enlargement;
 use crate::flatten::{predict_grid, unwarp, unwarp_trimmed};
 use crate::flatten_guard::{Kept, Trim, border_trim, guard};
-use crate::look::{Applied, Look, LookParams, Pixels, apply_full};
+use crate::look::{Applied, Look, LookParams, Pixels, apply_with_photos};
 use crate::page_kind::{PageKind, PresetChoice, page_kind};
 use crate::straightness::{Straightness, line_straightness};
 use crate::upright::{Upright, turned, upright};
@@ -89,6 +90,13 @@ pub struct PageRequest<'a> {
     pub curved_sides: u8,
     /// The strength was set by hand (a testing option): a document type does not change it.
     pub fixed_strength: bool,
+    /// A document type also changes the tone curve: its extra gamma (a receipt's faint print),
+    /// its S-curve and colour factor (a whiteboard) (#299). Off: only strength, sharpening and
+    /// paper colour, as #391 had it.
+    pub kind_tone: bool,
+    /// Sharpen the photographs the block photo mask finds (#299, section 4) as gently as the
+    /// objects the Auto look finds itself (30 %). Off: only those objects.
+    pub photo_sharpen: bool,
     /// For a preview (#301): the page shrunk so its longer side is this many pixels at most,
     /// whatever its look. `None` for the page at the size it is saved at.
     pub max_side: Option<u32>,
@@ -117,6 +125,8 @@ impl<'a> PageRequest<'a> {
             preset: PresetChoice::Off,
             curved_sides: 0,
             fixed_strength: false,
+            kind_tone: false,
+            photo_sharpen: false,
             max_side: None,
         }
     }
@@ -323,6 +333,7 @@ pub fn page_look_kind(base: &PageBase, request: &PageRequest<'_>) -> Result<(App
         sharpen: request.sharpen,
         denoise: request.denoise,
         keep_paper: false,
+        shape: Shape::default(),
     };
     if let Some(kind) = &kind {
         if !request.fixed_strength {
@@ -332,9 +343,18 @@ pub fn page_look_kind(base: &PageBase, request: &PageRequest<'_>) -> Result<(App
             params.sharpen = kind.params.sharpen;
         }
         params.keep_paper = kind.params.keep_paper;
+        if request.kind_tone {
+            params.shape = kind_shape(&kind.params);
+        }
     }
-    let applied = apply_full(&base.page, request.look, &params).ok_or(ScanError::Encode)?;
+    let photos = kind.as_ref().filter(|_| request.photo_sharpen).and_then(|k| k.photos.as_ref());
+    let applied = apply_with_photos(&base.page, request.look, &params, photos).ok_or(ScanError::Encode)?;
     Ok((applied, kind))
+}
+
+/// A document type's change to the tone curve (#299).
+pub fn kind_shape(p: &crate::preset::PresetParams) -> Shape {
+    Shape { extra_gamma: p.extra_gamma, s_curve: p.s_curve, colour_factor: p.colour_factor }
 }
 
 /// The page of `request` before its look: decoded, straightened to its proportions (or

@@ -103,6 +103,13 @@ pub struct ScanPageRequest {
     /// The strength was set by hand (a testing option): a document type does not change it.
     #[uniffi(default = false)]
     pub fixed_strength: bool,
+    /// A document type also changes Clean scan's tone curve: a receipt's extra gamma, a
+    /// whiteboard's S-curve and colour (#299).
+    #[uniffi(default = false)]
+    pub kind_tone: bool,
+    /// Sharpen the photographs found on the page as gently as the look's own objects (#299).
+    #[uniffi(default = false)]
+    pub photo_sharpen: bool,
 }
 
 /// The kind of document the Auto look took a page for, its settings, and what the page measured
@@ -128,6 +135,11 @@ pub struct ScanPageKind {
     pub glare_share: f32,
     pub gutter_band: bool,
     pub whole_photo: bool,
+    /// The kind's change to the tone curve (#299): added gamma, the S-curve, the colour factor.
+    /// Used only when the request's `kind_tone` asked for it.
+    pub extra_gamma: f32,
+    pub s_curve: bool,
+    pub colour_factor: f32,
 }
 
 fn kind_of(kind: &PageKind) -> ScanPageKind {
@@ -148,6 +160,9 @@ fn kind_of(kind: &PageKind) -> ScanPageKind {
         glare_share: f.glare_share as f32,
         gutter_band: f.gutter_band,
         whole_photo: kind.whole_photo,
+        extra_gamma: kind.params.extra_gamma,
+        s_curve: kind.params.s_curve,
+        colour_factor: kind.params.colour_factor,
     }
 }
 
@@ -563,6 +578,8 @@ fn page_request<'a>(request: &ScanPageRequest, photo: &'a [u8], corners: [f32; 8
         preset: preset_choice(&request.preset),
         curved_sides: request.curved_sides.min(4),
         fixed_strength: request.fixed_strength,
+        kind_tone: request.kind_tone,
+        photo_sharpen: request.photo_sharpen,
         max_side,
         ..PageRequest::new(photo, corners)
     }
@@ -1069,6 +1086,8 @@ mod tests {
             preset: "off".into(),
             curved_sides: 0,
             fixed_strength: false,
+            kind_tone: false,
+            photo_sharpen: false,
         }
     }
 

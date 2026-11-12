@@ -89,6 +89,9 @@ internal fun scanPageRequest(
     preset = scanPresetAsk(preset, lab.presets),
     curvedSides = curvedSides.coerceIn(0, 4).toUByte(),
     fixedStrength = lab.strength != null,
+    // a document type's own tone, and photographs sharpened gently (#299)
+    kindTone = lab.kindTone,
+    photoSharpen = lab.photoSharpen,
 )
 }
 

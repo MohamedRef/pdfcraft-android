@@ -13,4 +13,9 @@
     <string name="scan_preset_title">Tipo de documento</string>
     <string name="scan_preset_automatic">Automático</string>
     <string name="scan_lab_presets">Tipos de documento em Digitalização limpa</string>
+    <string name="scan_lab_kind_tone">Os tipos de documento ajustam os tons da digitalização limpa (recibos mais escuros, quadros mais claros)</string>
+    <string name="scan_lab_photo_sharpen">Aumentar a nitidez das fotos da página com suavidade</string>
+    <string name="scan_lab_suggestions">Sugerir Aplanar página ou Tons de cinza conforme o tipo de documento</string>
+    <string name="scan_suggest_flatten">Aplanar esta página?</string>
+    <string name="scan_suggest_greyscale">Experimentar tons de cinza</string>
 </resources>

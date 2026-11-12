@@ -44,6 +44,11 @@ class ScanLabTest {
         // document types are on as designed (#299)
         assertTrue(lab.presets)
         assertFalse(lab.copy(presets = false).asDesigned)
+        // a type's own tone, gentle sharpening of photographs and the suggestions are as designed (#299)
+        assertTrue(lab.kindTone && lab.photoSharpen && lab.suggestions)
+        assertFalse(lab.copy(kindTone = false).asDesigned)
+        assertFalse(lab.copy(photoSharpen = false).asDesigned)
+        assertFalse(lab.copy(suggestions = false).asDesigned)
         // the crop screen with magnifier and snapping is as designed; the old one is a testing option (#292)
         assertTrue(lab.cropTools)
         assertFalse(lab.copy(cropTools = false).asDesigned)
@@ -74,6 +79,8 @@ class ScanLabTest {
             ScanLab(preview = false),
             ScanLab(settleTurns = false),
             ScanLab(presets = false),
+            ScanLab(kindTone = false, photoSharpen = false, suggestions = false),
+            ScanLab(photoSharpen = false),
             ScanLab(cropTools = false),
             ScanLab(flattenAuto = true),
             ScanLab(flattenTrim = false),
@@ -208,6 +215,13 @@ class ScanLabTest {
         assertEquals("other", json.getString("kind"))
         assertTrue(JSONObject(scanTestPageJson("1.0 (1)", true, crop, null, null, "bw", 75, false, ScanLab(), null, result)).isNull("document_type"))
         assertEquals(true, ScanLab().diag().toMap()["presets"])
+        // the kind's own tone (#299): a receipt's added gamma, no S-curve, colour as it was
+        assertEquals(0.3, JSONObject(scanTestPageJson("1.0 (1)", true, crop, null, null, "auto", 60, false, ScanLab(), null, result, null, kind = kind.copy(extraGamma = 0.3)))
+            .getJSONObject("document_type").getDouble("extra_gamma"), 1e-9)
+        assertFalse(type.getBoolean("s_curve"))
+        assertEquals(1.0, type.getDouble("colour_factor"), 1e-9)
+        val options = json.getJSONObject("options")
+        assertTrue(options.getBoolean("kind_tone") && options.getBoolean("photo_sharpen") && options.getBoolean("suggestions"))
     }
 
     @Test

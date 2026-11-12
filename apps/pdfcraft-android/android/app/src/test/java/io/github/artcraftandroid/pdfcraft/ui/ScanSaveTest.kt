@@ -193,4 +193,17 @@ class ScanSaveTest {
         val unmeasured = scanFlattenCheckDiag(io.github.artcraftandroid.pdfcraft.core.ScanFlattenCheck(false, "unmeasured", null, 2f, 0u, 5u)).toMap()
         assertEquals(-1.0, unmeasured["straight_px"])
     }
+
+    @Test
+    fun aDocumentTypesToneAndGentlePhotoSharpeningFollowTheirTestingOptions() {
+        val corners = floatArrayOf(0.1f, 0.1f, 0.9f, 0.1f, 0.9f, 0.9f, 0.1f, 0.9f)
+        val on = scanPageRequest("/a", corners, ScanFilter.CleanScan, false, ScanLab(), "")
+        assertTrue(on.kindTone && on.photoSharpen)
+        val off = scanPageRequest("/a", corners, ScanFilter.CleanScan, false, ScanLab(kindTone = false, photoSharpen = false), "")
+        assertFalse(off.kindTone || off.photoSharpen)
+        // a preview made with either option is not the one made without it (#301)
+        val page = ScanPreviewKey("/a", corners.toList(), ScanFilter.CleanScan, false, ScanLab())
+        assertFalse(page == page.copy(lab = ScanLab(kindTone = false)))
+        assertFalse(page == page.copy(lab = ScanLab(photoSharpen = false)))
+    }
 }

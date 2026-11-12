@@ -43,6 +43,9 @@ on one part. While any is changed, the scan screen says so.
 | Sharpen text, in Clean scan (#299) | 30 | Off, 60 or 100 |
 | Smooth grain in dim photos, in Clean scan (#299) | On | Off |
 | Document types in Clean scan (#299) | On | Off: the filter's own strength and the sharpening above, as before |
+| Document types shape Clean scan's tone (#299) | On | Off: a type sets only strength, sharpening and paper color (no receipt gamma, no whiteboard S-curve) |
+| Sharpen photos on the page gently (#299) | On | Off: only the objects the look finds itself are sharpened gently, as before |
+| Suggest Flatten page or Grayscale for a document type (#299) | On | Off: no suggestion chips |
 | Filter strength | Each filter's own | 20, 40, 60, 80 or 100 for every filter |
 | Flatten page (#302) | Off | On, with the switch on the scan screen itself |
 | Scan with (#294) | PdfCraft camera | Phone's camera app (also in Settings → Scan; the same setting) |

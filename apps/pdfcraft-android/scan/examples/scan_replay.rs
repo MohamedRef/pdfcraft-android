@@ -173,6 +173,9 @@ fn main() {
             },
             curved_sides: facts["finding"]["curved_sides"].as_u64().map_or(0, |v| v.min(4) as u8),
             fixed_strength: !options["strength_override"].is_null(),
+            // a document type's tone and the photo mask in sharpening (#299); files from before them have neither
+            kind_tone: options["kind_tone"].as_bool().unwrap_or(false),
+            photo_sharpen: options["photo_sharpen"].as_bool().unwrap_or(false),
             ..PageRequest::new(&bytes, left)
         };
         match process_page(&request) {

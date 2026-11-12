@@ -13,4 +13,9 @@
     <string name="scan_preset_title">Dokumenttyp</string>
     <string name="scan_preset_automatic">Automatisch</string>
     <string name="scan_lab_presets">Dokumenttypen in Sauberer Scan</string>
+    <string name="scan_lab_kind_tone">Dokumenttypen passen die Tonwerte von Sauberer Scan an (Belege dunkler, Whiteboards heller)</string>
+    <string name="scan_lab_photo_sharpen">Fotos auf der Seite behutsam schärfen</string>
+    <string name="scan_lab_suggestions">Seite glätten oder Graustufen je nach Dokumenttyp vorschlagen</string>
+    <string name="scan_suggest_flatten">Diese Seite glätten?</string>
+    <string name="scan_suggest_greyscale">Graustufen ausprobieren</string>
 </resources>

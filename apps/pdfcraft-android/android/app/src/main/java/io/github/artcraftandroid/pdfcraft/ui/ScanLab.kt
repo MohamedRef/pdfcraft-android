@@ -58,6 +58,16 @@ internal data class ScanLab(
      * strength and the sharpening above, as before.
      */
     val presets: Boolean = true,
+    /**
+     * A document type also changes Clean scan's tone curve (#299): a receipt's faint print is
+     * darkened (extra gamma), a whiteboard gets its S-curve and stronger marker colour. Off: a
+     * type sets only strength, sharpening and paper colour.
+     */
+    val kindTone: Boolean = true,
+    /** Photographs found on the page are sharpened as gently as the look's own objects (#299). Off: only those objects. */
+    val photoSharpen: Boolean = true,
+    /** Show what a document type suggests, Flatten page or Grayscale, as a chip to tap (#299). */
+    val suggestions: Boolean = true,
     /** In book mode, cut a spread along the gutter found in the photo (#303); off cuts every spread at its centre line. */
     val bookGutter: Boolean = true,
 ) {
@@ -73,21 +83,21 @@ internal data class ScanLab(
     fun diag(): Array<Pair<String, Any?>> = arrayOf<Pair<String, Any?>>(
         "finder" to finderId(finder), "refine" to refine, "side_proportions" to !perspective,
         "snap_paper" to snapPaper, "strength_override" to (strength ?: -1), "upright" to upright, "sharpen" to sharpen,
-        "denoise" to denoise, "preview" to preview, "crop_tools" to cropTools, "flatten_auto" to flattenAuto, "flatten_trim" to flattenTrim, "settle_turns" to settleTurns, "presets" to presets, "book_gutter" to bookGutter, "keep" to keep,
+        "denoise" to denoise, "preview" to preview, "crop_tools" to cropTools, "flatten_auto" to flattenAuto, "flatten_trim" to flattenTrim, "settle_turns" to settleTurns, "presets" to presets, "kind_tone" to kindTone, "photo_sharpen" to photoSharpen, "suggestions" to suggestions, "book_gutter" to bookGutter, "keep" to keep,
     )
 
     /** The options as JSON, for a kept scan's page file. */
     fun json(): JSONObject = JSONObject()
         .put("finder", finderId(finder)).put("refine", refine).put("side_proportions", !perspective)
         .put("snap_paper", snapPaper).put("strength_override", strength ?: JSONObject.NULL).put("upright", upright)
-        .put("sharpen", sharpen).put("denoise", denoise).put("preview", preview).put("crop_tools", cropTools).put("flatten_auto", flattenAuto).put("flatten_trim", flattenTrim).put("settle_turns", settleTurns).put("presets", presets).put("book_gutter", bookGutter)
+        .put("sharpen", sharpen).put("denoise", denoise).put("preview", preview).put("crop_tools", cropTools).put("flatten_auto", flattenAuto).put("flatten_trim", flattenTrim).put("settle_turns", settleTurns).put("presets", presets).put("kind_tone", kindTone).put("photo_sharpen", photoSharpen).put("suggestions", suggestions).put("book_gutter", bookGutter)
 
     /** One line of text for the app's preferences. */
     fun encode(): String = listOf(
         "keep" to flag(keep), "finder" to finderId(finder), "refine" to flag(refine),
         "perspective" to flag(perspective), "snap" to flag(snapPaper), "strength" to (strength?.toString() ?: ""),
         "upright" to flag(upright), "sharpen" to sharpen.toString(), "denoise" to flag(denoise), "preview" to flag(preview), "crop" to flag(cropTools), "flatten_auto" to flag(flattenAuto), "flatten_trim" to flag(flattenTrim),
-        "settle" to flag(settleTurns), "presets" to flag(presets), "gutter" to flag(bookGutter),
+        "settle" to flag(settleTurns), "presets" to flag(presets), "kind_tone" to flag(kindTone), "photo_sharpen" to flag(photoSharpen), "suggest" to flag(suggestions), "gutter" to flag(bookGutter),
     ).joinToString(";") { (k, v) -> "$k=$v" }
 
     companion object {
@@ -131,6 +141,9 @@ internal data class ScanLab(
                 flattenAuto = on("flatten_auto", default.flattenAuto),
                 flattenTrim = on("flatten_trim", default.flattenTrim),
                 presets = on("presets", default.presets),
+                kindTone = on("kind_tone", default.kindTone),
+                photoSharpen = on("photo_sharpen", default.photoSharpen),
+                suggestions = on("suggest", default.suggestions),
                 bookGutter = on("gutter", default.bookGutter),
             )
         }
@@ -191,6 +204,10 @@ internal data class ScanTestKind(
     val glareShare: Double,
     val gutterBand: Boolean,
     val wholePhoto: Boolean,
+    /** The kind's change to the tone curve (#299): added gamma, the S-curve, the colour factor. */
+    val extraGamma: Double = 0.0,
+    val sCurve: Boolean = false,
+    val colourFactor: Double = 1.0,
 )
 
 /** The orientation classifier's answer for a page (#339): the turn it would give, and how sure it was. */
@@ -265,6 +282,7 @@ internal fun scanTestPageJson(
                     .put("ratio", r(it.ratio)).put("ink_share", r(it.inkShare)).put("colour_ink_share", r(it.colourInkShare))
                     .put("photo_share", r(it.photoShare)).put("stroke_mm", r(it.strokeMm)).put("glare_share", r(it.glareShare))
                     .put("gutter_band", it.gutterBand).put("whole_photo", it.wholePhoto)
+                    .put("extra_gamma", r(it.extraGamma)).put("s_curve", it.sCurve).put("colour_factor", r(it.colourFactor))
             } ?: JSONObject.NULL,
         )
         .put(

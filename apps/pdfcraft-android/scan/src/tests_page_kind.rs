@@ -16,12 +16,17 @@ fn drawn(png: &[u8]) -> Rgb {
 
 /// A slip of paper three times as long as it is wide, with rows of thin grey print.
 fn receipt() -> Rgb {
+    receipt_printed(90)
+}
+
+/// A receipt whose print has the grey level `ink`.
+fn receipt_printed(ink: u8) -> Rgb {
     let (w, h) = (400u32, 1200u32);
     let mut data = Vec::with_capacity((w * h * 3) as usize);
     for y in 0..h {
         for x in 0..w {
             let print = (y % 40) < 4 && (40..360).contains(&x) && (x / 6) % 3 != 0;
-            let v: u8 = if print { 90 } else { 238 };
+            let v: u8 = if print { ink } else { 238 };
             data.extend([v, v, v.saturating_sub(6)]);
         }
     }
@@ -182,4 +187,105 @@ fn a_page_too_small_or_malformed_has_no_kind() {
     assert!(page_kind(&bad, 200, Paper::Custom, 0, PresetChoice::Auto).is_none());
     let empty = Rgb { width: 0, height: 0, data: Vec::new() };
     assert!(page_kind(&empty, 200, Paper::Custom, 0, PresetChoice::Auto).is_none());
+}
+
+/// The mean luminance of `pixels` where `print` marks the page's print.
+fn ink_level(pixels: &[u8], print: &[bool]) -> f64 {
+    let (sum, n) = pixels
+        .as_chunks::<3>()
+        .0
+        .iter()
+        .zip(print)
+        .filter(|(_, p)| **p)
+        .fold((0.0, 0usize), |(s, n), (px, _)| (s + f64::from(crate::luma(*px)), n + 1));
+    sum / n.max(1) as f64
+}
+
+#[test]
+fn a_receipts_extra_gamma_darkens_its_faint_print_when_the_kinds_tone_is_asked_for() {
+    // #299, section 5: a receipt's thermal print is faint, and its kind adds 0.3 to the gamma
+    let page = base(receipt_printed(170), 200, Paper::Custom);
+    let print: Vec<bool> = page.page.data.as_chunks::<3>().0.iter().map(|p| p[0] < 200).collect();
+    let (plain, kind) = page_look_kind(&page, &request(PresetChoice::Auto)).unwrap();
+    assert_eq!(kind.map(|k| k.preset), Some(Preset::Receipt));
+    let (toned, _) = page_look_kind(&page, &PageRequest { kind_tone: true, ..request(PresetChoice::Auto) }).unwrap();
+    let (plain, toned) = (rgb(plain.pixels), rgb(toned.pixels));
+    let (before, after) = (ink_level(&plain, &print), ink_level(&toned, &print));
+    println!("receipt print: {before:.1} without the kind's tone, {after:.1} with it");
+    assert!(after < before - 2.0, "{before} -> {after}");
+    // a document's shape changes nothing: the kind's tone is the same page as before
+    let english = drawn(include_bytes!("../tests/data/upright-english.png"));
+    let doc = base(english, 81, Paper::A4);
+    let a = page_look(&doc, &request(PresetChoice::Auto)).unwrap();
+    let b = page_look(&doc, &PageRequest { kind_tone: true, ..request(PresetChoice::Auto) }).unwrap();
+    assert!(rgb(a.pixels) == rgb(b.pixels), "a document has no tone of its own");
+}
+
+#[test]
+fn a_whiteboard_gets_its_s_curve_and_stronger_marker_colour() {
+    // the S-curve (Zhang and He) keeps 0 and 1, rises steadily, and is steeper than the line
+    // in the middle
+    let s = crate::enhance::s_curve_for_tests;
+    assert!(s(0.0).abs() < 1e-6 && (s(1.0) - 1.0).abs() < 1e-6);
+    assert!((0..100).all(|i| s(i as f32 / 100.0) <= s((i + 1) as f32 / 100.0)));
+    assert!(s(0.6) - s(0.4) > 0.2);
+    // a pale board with thick blue marker
+    let (w, h) = (600u32, 450u32);
+    let mut data = Vec::with_capacity((w * h * 3) as usize);
+    for y in 0..h {
+        for x in 0..w {
+            let stroke = (y % 60) < 10 && (60..540).contains(&x) && (x / 30) % 4 != 0;
+            data.extend(if stroke { [70, 90, 190] } else { [225, 228, 226] });
+        }
+    }
+    let page = base(Rgb { width: w, height: h, data }, 100, Paper::Custom);
+    let print: Vec<bool> = page.page.data.as_chunks::<3>().0.iter().map(|p| i32::from(p[2]) > i32::from(p[0]) + 50).collect();
+    let ask = request(PresetChoice::Fixed(Preset::Whiteboard));
+    let plain = rgb(page_look(&page, &ask).unwrap().pixels);
+    let toned = rgb(page_look(&page, &PageRequest { kind_tone: true, ..ask }).unwrap().pixels);
+    let chroma = |v: &[u8]| {
+        let (s, n) = v
+            .as_chunks::<3>()
+            .0
+            .iter()
+            .zip(&print)
+            .filter(|(_, p)| **p)
+            .fold((0.0, 0usize), |(s, n), (px, _)| (s + f64::from(px.iter().max().unwrap() - px.iter().min().unwrap()), n + 1));
+        s / n.max(1) as f64
+    };
+    println!("marker colour: {:.1} without the kind's tone, {:.1} with it", chroma(&plain), chroma(&toned));
+    assert!(plain != toned);
+    assert!(chroma(&toned) > chroma(&plain) + 5.0);
+}
+
+#[test]
+fn photographs_on_a_page_are_sharpened_gently_and_print_as_before() {
+    // #299, section 4: inside the block photo mask, sharpening is 30 % of what print gets
+    // the picture over the top 40 % of the page, rows of print under it
+    let mut drawn = picture_page();
+    let w = drawn.width as usize;
+    for y in 384..960 {
+        for x in 0..w {
+            let print = y >= 420 && (y % 24) < 7 && (60..660).contains(&x) && (x / 9) % 4 != 0;
+            let v = if print { 25 } else { 245 };
+            drawn.data[(y * w + x) * 3..(y * w + x) * 3 + 3].copy_from_slice(&[v, v, v]);
+        }
+    }
+    let page = base(drawn, 150, Paper::Custom);
+    let ask = PageRequest { sharpen: 100, preset: PresetChoice::Fixed(Preset::PhotoRich), fixed_strength: true, ..request(PresetChoice::Off) };
+    let (sharp, kind) = page_look_kind(&page, &ask).unwrap();
+    let photos = kind.as_ref().and_then(|k| k.photos.as_ref()).expect("the page has a photo mask");
+    println!("photo share {:.2}, whole page {}", photos.share, photos.whole_page);
+    assert!(!photos.whole_page && photos.share > 0.2, "{} {}", photos.share, photos.whole_page);
+    let (gentle, _) = page_look_kind(&page, &PageRequest { photo_sharpen: true, ..ask }).unwrap();
+    let unsharp = rgb(page_look(&page, &PageRequest { sharpen: 0, ..ask }).unwrap().pixels);
+    let (sharp, gentle) = (rgb(sharp.pixels), rgb(gentle.pixels));
+    // how far sharpening moved the picture (rows 40..300) and the print under it (rows 500..950, clear of the mask's soft edge)
+    let moved = |v: &[u8], rows: std::ops::Range<usize>| {
+        rows.flat_map(|y| (0..w * 3).map(move |i| y * w * 3 + i)).map(|i| f64::from(v[i].abs_diff(unsharp[i]))).sum::<f64>()
+    };
+    let (picture_full, picture_gentle) = (moved(&sharp, 40..300), moved(&gentle, 40..300));
+    println!("sharpening moved the picture by {picture_full:.0} without the mask, {picture_gentle:.0} with it");
+    assert!(picture_gentle < picture_full * 0.6, "{picture_gentle} against {picture_full}");
+    assert_eq!(moved(&sharp, 500..950), moved(&gentle, 500..950), "the print is sharpened as before");
 }

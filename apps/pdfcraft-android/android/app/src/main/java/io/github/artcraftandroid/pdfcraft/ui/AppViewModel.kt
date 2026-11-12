@@ -2046,6 +2046,10 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 "photo_share" to (r?.kind?.photoShare?.toDouble() ?: -1.0), "stroke_mm" to (r?.kind?.strokeMm?.toDouble() ?: -1.0),
                 "glare_share" to (r?.kind?.glareShare?.toDouble() ?: -1.0), "gutter_band" to (r?.kind?.gutterBand ?: false),
                 "whole_photo" to (r?.kind?.wholePhoto ?: false),
+                // the kind's own tone and whether it was used, and the photo mask in sharpening (#299)
+                "kind_tone" to lab.kindTone, "kind_gamma" to (r?.kind?.extraGamma?.toDouble() ?: 0.0),
+                "kind_s_curve" to (r?.kind?.sCurve ?: false), "kind_colour" to (r?.kind?.colourFactor?.toDouble() ?: 1.0),
+                "photo_sharpen" to lab.photoSharpen, "suggestions" to lab.suggestions,
             )
             if (keepIn != null) {
                 val kept = r?.let {
@@ -2063,6 +2067,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                     ScanTestKind(
                         k.preset, k.chosen, k.strength.toInt(), k.sharpen.toInt(), k.keepPaper, k.suggestFlatten, k.suggestGreyscale, k.ratio.toDouble(),
                         k.inkShare.toDouble(), k.colourInkShare.toDouble(), k.photoShare.toDouble(), k.strokeMm.toDouble(), k.glareShare.toDouble(), k.gutterBand, k.wholePhoto,
+                        k.extraGamma.toDouble(), k.sCurve, k.colourFactor.toDouble(),
                     )
                 }
                 withContext(Dispatchers.IO) { scanLab.keepPage(keepIn, i, page, true, filter.mode, strength, flatten, r?.path?.let(::File), kept, scanPreviewRecord(page), turn, kind) }

@@ -111,6 +111,15 @@ internal fun ScanLabSettings(vm: AppViewModel) {
     SheetRow(null, stringResource(R.string.scan_lab_presets), { lab.update(o.copy(presets = !o.presets)) }) {
         PdfSwitch(o.presets, { lab.update(o.copy(presets = it)) })
     }
+    SheetRow(null, stringResource(R.string.scan_lab_kind_tone), { lab.update(o.copy(kindTone = !o.kindTone)) }) {
+        PdfSwitch(o.kindTone, { lab.update(o.copy(kindTone = it)) })
+    }
+    SheetRow(null, stringResource(R.string.scan_lab_photo_sharpen), { lab.update(o.copy(photoSharpen = !o.photoSharpen)) }) {
+        PdfSwitch(o.photoSharpen, { lab.update(o.copy(photoSharpen = it)) })
+    }
+    SheetRow(null, stringResource(R.string.scan_lab_suggestions), { lab.update(o.copy(suggestions = !o.suggestions)) }) {
+        PdfSwitch(o.suggestions, { lab.update(o.copy(suggestions = it)) })
+    }
     val own = stringResource(R.string.scan_lab_strength_own)
     Choice(stringResource(R.string.scan_lab_strength), ScanLab.STRENGTHS.map { it to (it?.toString() ?: own) }, o.strength) { lab.update(o.copy(strength = it)) }
     Text(stringResource(R.string.scan_lab_options_body), color = c.textSecondary, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 20.dp))

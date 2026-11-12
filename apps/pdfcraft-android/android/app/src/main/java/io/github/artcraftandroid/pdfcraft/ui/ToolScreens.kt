@@ -984,8 +984,22 @@ fun ScanScreen(vm: AppViewModel) {
         }
         // the kind of document Clean scan took the page for, and a way to choose another (#299)
         if (page != null && filter == ScanFilter.CleanScan && lab.presets) {
-            Row(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.Center) {
+            // and what that kind suggests: Flatten page for a book page, Grayscale for a receipt
+            val suggestions = io.github.artcraftandroid.pdfcraft.ui.scan.scanSuggestions(
+                lab.suggestions, preview?.kind?.suggestFlatten == true, preview?.kind?.suggestGreyscale == true,
+                vm.scanCanFlatten, page.flatten, filter == ScanFilter.CleanScan,
+            )
+            Row(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally)) {
                 io.github.artcraftandroid.pdfcraft.ui.scan.ScanPresetChip(vm, shownAt, page.preset, preview?.kind?.preset)
+                for (s in suggestions) {
+                    io.github.artcraftandroid.pdfcraft.ui.scan.ScanSuggestionChip(s, {
+                        io.github.artcraftandroid.pdfcraft.ui.scan.logScanSuggestionTaken(shownAt, s)
+                        when (s) {
+                            io.github.artcraftandroid.pdfcraft.ui.scan.ScanSuggestion.Flatten -> vm.toggleScanFlatten(shownAt)
+                            io.github.artcraftandroid.pdfcraft.ui.scan.ScanSuggestion.Greyscale -> filter = ScanFilter.Grayscale
+                        }
+                    })
+                }
             }
         }
         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {

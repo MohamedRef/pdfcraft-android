@@ -13,4 +13,9 @@
     <string name="scan_preset_title">نوع المستند</string>
     <string name="scan_preset_automatic">تلقائي</string>
     <string name="scan_lab_presets">أنواع المستندات في المسح النظيف</string>
+    <string name="scan_lab_kind_tone">أنواع المستندات تغيّر درجات المسح النظيف (الإيصالات أغمق، والسبورات أوضح)</string>
+    <string name="scan_lab_photo_sharpen">شحذ الصور الموجودة في الصفحة بلطف</string>
+    <string name="scan_lab_suggestions">اقتراح فرد الصفحة أو التدرج الرمادي حسب نوع المستند</string>
+    <string name="scan_suggest_flatten">فرد هذه الصفحة؟</string>
+    <string name="scan_suggest_greyscale">جرّب التدرج الرمادي</string>
 </resources>

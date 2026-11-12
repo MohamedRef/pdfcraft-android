@@ -14,7 +14,7 @@ use crate::Rgb;
 use crate::aspect::Paper;
 use crate::enhance::evened;
 use crate::photo::Luma;
-use crate::photo_mask::photo_mask;
+use crate::photo_mask::{PhotoMask, photo_mask};
 use crate::preset::{PageFeatures, Preset, PresetParams, classify, gutter_band, ink_features, params};
 
 /// The working copy's longer side is shrunk to this many pixels or a little more (whole steps).
@@ -45,6 +45,9 @@ pub struct PageKind {
     pub features: PageFeatures,
     /// The photo mask found the whole page to be a picture.
     pub whole_photo: bool,
+    /// Where the photographs are (#299, section 4), over the page as a whole; `None` when the page
+    /// was too small to cut into blocks.
+    pub photos: Option<PhotoMask>,
 }
 
 /// The preset a short word names ("receipt", "id_card", …: `Preset::id`), or `None`.
@@ -92,7 +95,7 @@ fn luma_of(page: &Rgb) -> Luma {
 /// What `page` (straightened, before its look, at `dpi`, matched to `paper`) measures as. The
 /// page's edge detection said `curved_sides` of its four sides are curved. `None` for a page too
 /// small or malformed to measure.
-pub fn page_features(page: &Rgb, dpi: u16, paper: Paper, curved_sides: u8) -> Option<(PageFeatures, bool)> {
+pub fn page_features(page: &Rgb, dpi: u16, paper: Paper, curved_sides: u8) -> Option<(PageFeatures, Option<PhotoMask>)> {
     let (small, step) = working_copy(page)?;
     let small_dpi = f32::from(dpi.max(1)) / step as f32;
     // glare and the gutter before the light is evened out (see the module's comment)
@@ -118,7 +121,7 @@ pub fn page_features(page: &Rgb, dpi: u16, paper: Paper, curved_sides: u8) -> Op
         gutter_band: gutter,
         glare_share,
     };
-    Some((features, mask.is_some_and(|m| m.whole_page)))
+    Some((features, mask))
 }
 
 /// The kind of `page` and its settings under `choice`; `None` when presets are off or the page
@@ -127,10 +130,11 @@ pub fn page_kind(page: &Rgb, dpi: u16, paper: Paper, curved_sides: u8, choice: P
     if choice == PresetChoice::Off {
         return None;
     }
-    let (features, whole_photo) = page_features(page, dpi, paper, curved_sides)?;
+    let (features, photos) = page_features(page, dpi, paper, curved_sides)?;
+    let whole_photo = photos.as_ref().is_some_and(|m| m.whole_page);
     let (preset, chosen) = match choice {
         PresetChoice::Fixed(p) => (p, true),
         _ => (classify(&features), false),
     };
-    Some(PageKind { preset, chosen, params: params(preset), features, whole_photo })
+    Some(PageKind { preset, chosen, params: params(preset), features, whole_photo, photos })
 }
