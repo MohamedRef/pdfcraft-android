@@ -62,7 +62,7 @@ These came from one run of separate workers on 12 November that the owner stoppe
 Every threshold in them is the issue's starting value or was set on pages drawn in code.
 
 One document per feature says how it works, what was measured and what was not:
-`ANDROID_SCAN_AUTO_LOOK.md`, `_BLACK_WHITE.md`, `_CAPTURE.md`, `_DETAIL.md`, `_DETECTOR.md`, `_EDGES.md`,
+`ANDROID_SCAN_AUTO.md`, `_AUTO_LOOK.md`, `_BLACK_WHITE.md`, `_CAPTURE.md`, `_DETAIL.md`, `_DETECTOR.md`, `_EDGES.md`,
 `_CAMERA.md`, `_FLATTEN.md`, `_LIVE.md`, `_MEASURING.md`, `_MODELS.md`, `_PREVIEW.md`, `_PROPORTIONS.md`, `_TESTING.md`, `_UPRIGHT.md` (all
 `docs/ANDROID_SCAN_…`). Read the one for a feature before changing it.
 
