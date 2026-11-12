@@ -27,6 +27,7 @@ pub mod eval;
 pub mod exif;
 pub mod flatten;
 pub mod flatten_guard;
+pub mod flatten_lines;
 pub mod look;
 pub mod merge;
 pub mod metrics_compare;
@@ -84,6 +85,8 @@ mod tests_flatten;
 mod tests_gate;
 #[cfg(test)]
 mod tests_flatten_guard;
+#[cfg(test)]
+mod tests_flatten_lines;
 #[cfg(test)]
 mod tests_merge;
 #[cfg(test)]
