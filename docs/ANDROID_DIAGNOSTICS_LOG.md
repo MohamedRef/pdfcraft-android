@@ -72,7 +72,7 @@ Areas (lines · issues):
 | `error` | Failures with their stage and exception class, engine panics caught, and crashes with the exception classes and code locations | `Diag.failure`, `Engine`, crash handler | #114 |
 | `viewer` | Document tabs and split view (`tab_*`, `split_*`), reading and presenting: jumps back and forward, Go to page, the layout a file opens in and why, page mode and spread changes, the spread a window shows, reading colours, keyboard shortcuts, hiding annotations, comment-list filters and dimming, copies without annotations, presentation start and end, clicker keys, the second screen and the pages drawn for it (see below) | `ViewerController`, `AppViewModel`, `TabsController`, `TabStrip`, `ViewerScreen`, `CommentList`, `ExternalPresentation` | #138 #139 #152 #153 #155 #157 #184 #198 #203 #204 #327 |
 | `markup` | Comments, markup, links, measuring and study: comment export, import, summary, copy and paste, status and lock; markup follow-up actions, area highlights, replace and insert suggestions, shape annotations; links added, edited, deleted, made from addresses and removed; measure points, saved measurements, scales and exports; masking tape and quizzes (see below). Never a comment's text, a link's address or a measurement's label | `MarkupDiag`, `AppViewModel`, `Tools`, `Study` | #133 #134 #135 #143 #158 #159 #169 #170 #179 #180 #196 #197 |
-| `edit` | Content editing: image edits, redaction marks and apply, the hidden-information and fake-redaction checks, OCR runs, reviews and batches, Compare, the accessibility check and its fixes, Prepare form, imported fonts, spacing, overflow warnings, grouped text made editable, and moving, copying and pasting objects (see below) | `EditDiagnostics.kt` with `ImageTools`, `Redact`, `OcrTools`, `Compare`, `Accessibility`, `PrepareForm`, `TextTools`, `ObjectSelect` | #161 #162 #163 #164 #166 #167 #171 #182 |
+| `edit` | Content editing: image edits, redaction marks and apply, the hidden-information and fake-redaction checks, OCR runs, reviews and batches, Compare, the accessibility check and its fixes, Prepare form, imported fonts, spacing, overflow warnings, grouped text made editable, moving, copying and pasting objects, and Fill & Sign with digital signatures (see below) | `EditDiagnostics.kt` with `ImageTools`, `Redact`, `OcrTools`, `Compare`, `Accessibility`, `PrepareForm`, `TextTools`, `ObjectSelect`, `SigningController` | #161 #162 #163 #164 #166 #167 #171 #178 #182 |
 
 ### `viewer` lines
 
@@ -170,7 +170,20 @@ Every line has `doc`. None holds a word, name, expression, field name or alterna
 | `text_prepare` | `prepared`, `refused` | Text inside grouped artwork was made editable, and groups the engine left alone (#167) |
 | `objects_move`, `objects_copy`, `objects_paste` | `count`; `cut`, `count`; `pasted`, `same_doc` | Several objects were moved, copied or cut, and pasted (#162) |
 
-Signing (#178) is not logged here yet: its code lives in `AppViewModel`, which is being split; the `tool` and `error` lines cover its engine calls until then.
+Signing (#178) adds these lines. They never hold a name, email, organization, password, reason, location or certificate:
+
+| Name | Fields | Meaning |
+|---|---|---|
+| `sign_fill_place` | `element` (`text`, `cross`, `check`, `dot`, `box`, `line`, `signature`, `initials`, ...) | A Fill & Sign element was placed |
+| `sign_drawn` | `initials`, `saved`, `placed`, `imported` | A signature or initials was finished on the pad, saved for later or not, placed on a page or not, from an image or drawn |
+| `sign_cert_target` | `placement` (`box`, `field`, `invisible`, `read_only`) | A digital signature was started: a drawn box, a signature field, no box, or refused on a read-only file |
+| `sign_document` | `placement`, `look` (`name`, `typed`, `drawn`), `reason`, `location`, `ms`, `result` (`signed`, `wrong_password`, `refused`, `error`), `saved` | A document was signed with a digital ID, or the attempt was refused. `reason` and `location` say only whether they were filled in |
+| `sign_id_import` | `result` (`added`, `cancelled`, `wrong_password`, `cannot_sign`, `unusable`), `ids` | A digital ID file was added, or why not |
+| `sign_id_create` | `ok`, `ms` | A self-signed digital ID was made |
+| `sign_id_remove` | `ids` | A digital ID was removed, and how many are left |
+| `sign_list` | `fields`, `signed`, `valid`, `unknown`, `invalid` | The document's signature fields and how their signatures checked out |
+| `sign_trust` | `trusted`, `count` | A signer was trusted or no longer trusted, and how many are trusted now |
+| `sign_signed_version` | `revisions`, `found` | View signed version: the revisions, and whether the signed one was found |
 
 ## Privacy rules
 
