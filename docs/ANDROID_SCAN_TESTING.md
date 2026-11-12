@@ -38,6 +38,7 @@ on one part. While any is changed, the scan screen says so.
 | Smooth grain in dim photos, in Clean scan (#299) | On | Off |
 | Filter strength | Each filter's own | 20, 40, 60, 80 or 100 for every filter |
 | Flatten page (#302) | Off | On, with the switch on the scan screen itself |
+| Scan with (#294) | PdfCraft camera | Phone's camera app (also in Settings → Scan; the same setting) |
 
 **Reset scanner testing options** puts them back. Keeping scans is not one of them: it changes
 no page.
@@ -63,6 +64,8 @@ The zip also holds `diagnostics.txt`, the diagnostics log as **Share diagnostics
  "look": "auto", "strength": 60, "flatten": false,
  "options": {"finder": "auto", "refine": true, "side_proportions": false, "snap_paper": true, "strength_override": null, "upright": true,
              "sharpen": 30, "denoise": true},
+ "capture": {"source": "in_app", "mp10": 500, "width": 8160, "height": 6120, "exposure_index": -1, "exposure_step_milli": 333,
+             "torch": false, "focused": true, "rotation": 0, "capture_ms": 640},
  "result": {"file": "page-01.out.jpg", "width": 1654, "height": 2339, "format": "jpeg", "dpi": 200.0,
             "paper": "a4", "aspect": "known_focal", "focal_mismatch": false, "flattened": false, "bend_pct": 0.0,
             "quarter_turns": 3,
@@ -76,6 +79,9 @@ set entry as it stands. `corners` are where the person left the corners: 8 share
 photo, top-left, top-right, bottom-right, bottom-left. `found` is what the app found by itself,
 or `null`. `outcome` is `saved` or `discarded`; a discarded page has no `look`, `strength` or
 `result`.
+`capture` says how the photo was taken (#294, `docs/ANDROID_SCAN_CAMERA.md`): `source` is
+`in_app`, `phone_app` or `import`; the still's size and exposure are known for `in_app` only. It is
+`null` when the capture is not known, as for a scan Android restored after closing the app.
 
 ## On the desktop
 

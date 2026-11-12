@@ -151,6 +151,8 @@ internal fun scanTestPageJson(
     lab: ScanLab,
     output: String?,
     result: ScanTestResult?,
+    /** How the photo was taken (#294): which camera and with what; null when not known. */
+    capture: JSONObject? = null,
 ): String {
     val page = JSONObject()
         .put("corners", shares(corners)).put("kind", "other").put("paper", "unknown").put("curved", false).put("notes", "")
@@ -165,6 +167,7 @@ internal fun scanTestPageJson(
         )
         .put("look", look ?: JSONObject.NULL).put("strength", strength ?: JSONObject.NULL).put("flatten", flatten)
         .put("options", lab.json())
+        .put("capture", capture ?: JSONObject.NULL)
     page.put(
         "result",
         result?.let {

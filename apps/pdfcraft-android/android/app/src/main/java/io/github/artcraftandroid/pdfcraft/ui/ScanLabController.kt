@@ -67,8 +67,9 @@ internal class ScanLabController(private val vm: AppViewModel) {
     fun keepPage(scan: File, index: Int, page: ScanPage, saved: Boolean, look: String?, strength: Int?, flatten: Boolean, output: File?, result: ScanTestResult?) {
         val lab = options
         val version = "${vm.appVersion} (${versionCode()})"
+        val capture = io.github.artcraftandroid.pdfcraft.ui.scan.ScanCaptures.of(page.file.path)?.json()
         store.addPage(scan, index, page.file, output) { keptOutput ->
-            scanTestPageJson(version, saved, page.corners, page.found, page.finding, look, strength, flatten, lab, keptOutput, result)
+            scanTestPageJson(version, saved, page.corners, page.found, page.finding, look, strength, flatten, lab, keptOutput, result, capture)
         }
     }
 
@@ -126,7 +127,8 @@ internal class ScanLabController(private val vm: AppViewModel) {
               page-NN.jpg       the photo as the camera wrote it
               page-NN.json      the page's corners as they were left (8 shares of the upright photo: top-left,
                                 top-right, bottom-right, bottom-left), what the app found by itself, the look and
-                                testing options in force, and the size of the page it made
+                                testing options in force, the size of the page it made, and how the photo was
+                                taken (capture: which camera, still size, exposure, light, focus, time)
               page-NN.out.jpg   the page as the app made it (.png for black and white); saved scans only
             diagnostics.txt     the diagnostics log at the time of sharing
 

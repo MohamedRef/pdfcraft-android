@@ -22,7 +22,7 @@ a phone yet.** Every number in the scanner's documents was measured on a desktop
 | #291 | Edges refined at full size | Core done | #356 | A corner outside the photo is not accepted; the owner's set; phone time |
 | #292 | Crop screen: magnifier, side handles, snap, rotate | **Not started** | | All of it. `scan_refine_quad` is the native half of "snap" and exists |
 | #293 | True proportions, paper sizes | Core done | #353 | The focal length from the in-app camera (#294, section 7 there) |
-| #294 | In-app camera (CameraX) | **Not started** | | All of it |
+| #294 | In-app camera (CameraX) | Core done, not run on a phone | this PR | Everything on the owner's phone (`ANDROID_SCAN_CAMERA.md`); the focal length from the camera's calibration for #293 |
 | #295 | Live page outline, hints | **Not started** | | Needs #294 |
 | #296 | Auto-capture, blur check | **Not started** | | Needs #295 |
 | #297 | Multi-frame merge | **Not started** | | Needs #294 |
@@ -42,13 +42,14 @@ the owner's phone or his test set are open. Each issue has a comment saying the 
 
 One document per feature says how it works, what was measured and what was not:
 `ANDROID_SCAN_AUTO_LOOK.md`, `_BLACK_WHITE.md`, `_DETAIL.md`, `_DETECTOR.md`, `_EDGES.md`,
-`_FLATTEN.md`, `_PREVIEW.md`, `_PROPORTIONS.md`, `_TESTING.md`, `_UPRIGHT.md` (all
+`_CAMERA.md`, `_FLATTEN.md`, `_PREVIEW.md`, `_PROPORTIONS.md`, `_TESTING.md`, `_UPRIGHT.md` (all
 `docs/ANDROID_SCAN_…`). Read the one for a feature before changing it.
 
 ## 2. How a scan goes through the code today
 
 ```
-MainActivity (TakePicture: the phone's camera app)  ->  cacheDir/camera/scan-*.jpg
+ScanCameraRouter: PdfCraft's camera screen (ui/scan, #294) or the phone's camera app
+                                                     ->  cacheDir/camera/scan-*.jpg
 AppViewModel.onScanPhoto
     prepareOcrModels            unpack assets/models into filesDir/models, set PDFCRAFT_MODELS
     scan_find_document_with     decode, detect (detect.rs), refine edges (refine.rs)
