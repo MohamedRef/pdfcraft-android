@@ -16,7 +16,7 @@ a phone yet.** Every number in the scanner's documents was measured on a desktop
 | Issue | What | State | Merged in | What is left |
 |---|---|---|---|---|
 | #287 | `pdfcraft-scan` crate, one pass from photo to page | Done, closed | #331, #346 | |
-| #288 | Measuring: harness, drawn pages, test set | Part | #346, #367, #382, #386, #394 | The CI gate, the SmartDoc script. The drawn photos (`synth`), the metrics blocks and the `scan-eval` runner are in; see [ANDROID_SCAN_MEASURING.md](ANDROID_SCAN_MEASURING.md) |
+| #288 | Measuring: harness, drawn pages, test set | Part | #346, #367, #382, #386, #394, #404 | The SmartDoc script. The drawn photos (`synth`), the metrics blocks, the `scan-eval` runner and the CI gate are in; see [ANDROID_SCAN_MEASURING.md](ANDROID_SCAN_MEASURING.md) |
 | #289 | Model files: pinned, loaded, exported | Part | #360, #365, #370 | `scan_model_states`, a Models list in settings, optional packs, copying a *changed* model on update (section 6) |
 | #290 | Page found by a network | Core done | #360 | Figures on the owner's set; phone time. Known: wrong and accepted on 2 of the 10 reference photos, nothing found on 2 |
 | #291 | Edges refined at full size | Core done | #356, #291 PR | Corners off the photo (up to 15%) checked on drawn pages only; the owner's set; phone time |
@@ -188,8 +188,9 @@ The list in #286 ("Rules for every scan PR") is the reference. The ones that hav
 
 ## 6. Building, testing, measuring
 
-- Rust: `cargo test --locked -p pdfcraft-scan -p pdfcraft-android` (about 90 tests each; a
-  minute and a half). `cargo clippy -p pdfcraft-scan --all-targets --no-deps` must add no
+- Rust: `cargo test --locked -p pdfcraft-scan -p pdfcraft-android` (about 300 and 90 tests;
+  the scan crate's take a little over a minute, most of it the CI gate of #288, which fails a
+  change that makes the scanner worse on 40 drawn photos: see `ANDROID_SCAN_MEASURING.md`). `cargo clippy -p pdfcraft-scan --all-targets --no-deps` must add no
   warning; CI runs neither clippy nor rustfmt, so run both. `cargo fmt -p pdfcraft-scan
   -p pdfcraft-android` also reformats files this work does not own (`src/eraser_tests.rs`,
   `pressure_ink_tests.rs`, `progressive_tests.rs`, `tests.rs`, `scan/src/tests.rs`,
