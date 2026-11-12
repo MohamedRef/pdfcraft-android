@@ -69,6 +69,8 @@ mod tests_eval;
 #[cfg(test)]
 mod tests_flatten;
 #[cfg(test)]
+mod tests_gate;
+#[cfg(test)]
 mod tests_flatten_guard;
 #[cfg(test)]
 mod tests_merge;
