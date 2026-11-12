@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Turning scanned pages (#339), kept apart from strings.xml so parallel scanner work merges cleanly. -->
+<resources>
+    <string name="scan_rotate">Drehen</string>
+    <string name="scan_turned_upright_undo">Aufgerichtet · Rückgängig</string>
+    <string name="scan_turn_undo_description">Drehung rückgängig machen</string>
+    <string name="settings_scan_upright">Seiten automatisch aufrichten</string>
+    <string name="settings_scan_upright_body">Gescannte Seiten werden richtig herum gedreht, wenn die App sicher ist, wie herum das ist. Drehen auf dem Scan-Bildschirm funktioniert immer.</string>
+    <string name="scan_lab_settle_turns">Unsichere Seiten folgen ihren Nachbarn</string>
+</resources>

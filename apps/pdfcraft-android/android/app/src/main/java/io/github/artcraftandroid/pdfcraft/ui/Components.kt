@@ -89,6 +89,7 @@ import androidx.compose.ui.unit.sp
 import io.github.artcraftandroid.pdfcraft.R
 import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
+import androidx.compose.material3.minimumInteractiveComponentSize
 
 /** Motion for sheets: in rising from below, out dropping away. */
 object PdfMotion {
@@ -97,7 +98,7 @@ object PdfMotion {
     const val BARS_MS = 300
 }
 
-/** An icon button of the bars: a 46 dp target with a 24 dp icon, a pressed background when [selected]. */
+/** An icon button of the bars: a 46 dp target with a 24 dp icon (smaller ones get a 48 dp target), a pressed background when [selected]. */
 @Composable
 fun BarIcon(
     icon: ImageVector,
@@ -112,6 +113,9 @@ fun BarIcon(
 ) {
     Box(
         modifier
+            // a button drawn smaller than the bars' 46 dp still gets a 48 dp target (#124); the bars'
+            // own buttons keep their size so a full toolbar still fits a 360 dp phone
+            .then(if (size < 46.dp) Modifier.minimumInteractiveComponentSize() else Modifier)
             .size(size)
             .clip(RoundedCornerShape(6.dp))
             .background(if (selected) pdfColors.pressed else Color.Transparent)

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Scanner book mode (#303), kept apart from strings.xml so parallel scanner work merges cleanly. -->
+<resources>
+    <string name="tools_scan_book">Libro</string>
+    <string name="tools_scan_book_ltr">De izquierda a derecha</string>
+    <string name="tools_scan_book_rtl">De derecha a izquierda</string>
+    <string name="tools_scan_book_left_page">Página izquierda de una doble página</string>
+    <string name="tools_scan_book_right_page">Página derecha de una doble página</string>
+    <string name="scan_lab_book_gutter">Modo libro: cortar por el lomo encontrado en la foto</string>
+</resources>

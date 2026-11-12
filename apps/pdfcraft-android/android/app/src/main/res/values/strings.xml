@@ -110,12 +110,14 @@
     <!-- Home: empty lists -->
     <string name="home_no_recent_title">No recent files</string>
     <string name="home_no_recent_body">Files you open will appear here.</string>
+    <string name="home_try_sample">Try a sample PDF</string>
+    <string name="home_sample_failed">Couldn\'t open the sample PDF.</string>
     <string name="home_no_starred_title">No starred files</string>
     <string name="home_no_starred_body">Star a file from its menu to find it here quickly.</string>
     <string name="home_device_files_title">Files on your device</string>
     <string name="home_device_files_body">Choose folders to list PDFs from, such as Documents or a folder inside Download. Files you open from anywhere stay in Recent.</string>
     <!-- On this device, before any folder is added: the longer explanation -->
-    <string name="home_device_files_body_long">Choose folders to list PDFs from, such as Documents or a folder inside Download (Android doesn\'t let apps list the whole Download folder). PdfCraft sees only the folders you choose, and files you open from anywhere stay in Recent.</string>
+    <string name="home_device_files_body_long">Choose folders to list PDFs from, such as Documents. PdfCraft sees only the folders you choose; files you open from anywhere stay in Recent.</string>
     <string name="home_no_pdfs_title">No PDFs in your folders</string>
     <string name="home_no_pdfs_body">PDFs in the folders you added will appear here.</string>
     <string name="home_add_folder">Add a folder</string>
@@ -243,7 +245,7 @@
     <string name="home_section_keyboard">Keyboard</string>
     <string name="home_keyboard_shortcuts">Keyboard shortcuts</string>
     <!-- N, P, Page Down, Page Up, Ctrl+P, Ctrl, + and − are keys on the keyboard -->
-    <string name="home_keyboard_shortcuts_body">With a keyboard connected: P, H, E, L, T, N and S pick a tool, Esc goes back to reading, Ctrl+Z undoes, Ctrl+F finds, Page Up and Page Down turn pages. Ctrl+/ lists them all.</string>
+    <string name="home_keyboard_shortcuts_body">With a keyboard: letters pick a tool, Esc goes back to reading, Ctrl+Z undoes, Ctrl+F finds, Page Up and Down turn pages. Ctrl+/ lists them all.</string>
     <string name="shortcut_group">PdfCraft viewer</string>
     <string name="shortcut_pen">Pen</string>
     <string name="shortcut_highlight">Highlight text</string>
@@ -311,7 +313,7 @@
     <string name="tools_password_rule">Use 6 to 128 characters: letters, numbers and symbols, no spaces.</string>
     <string name="tools_password_mismatch">The passwords don\'t match.</string>
     <!-- "Remove password" is the name of a command in the viewer -->
-    <string name="tools_about_passwords_body">The copy is encrypted with AES-256. Keep the password safe: it can\'t be recovered. To remove the password later, open the copy with it and choose Remove password.</string>
+    <string name="tools_about_passwords_body">The copy is encrypted with AES-256. The password can\'t be recovered, so keep it safe. To remove it later, open the copy and choose Remove password.</string>
 
     <!-- Tool screens: Export PDF -->
     <string name="tools_export_action">Export</string>
@@ -722,7 +724,7 @@
     <string name="sign_id_password_prompt">Enter the password that protects %1$s.</string>
 
     <!-- Digital signatures: the Create a digital ID screen -->
-    <string name="sign_create_about">A digital ID made here is self-signed: a document you sign with it shows any change made after you signed, but nobody else vouches that it\'s you. For that, use the ID file an organization or a certificate authority gives you.</string>
+    <string name="sign_create_about">An ID made here is self-signed: it shows any change made after signing, but nobody vouches that it\'s you. For that, use an ID from an organization.</string>
     <string name="sign_section_name">Name</string>
     <string name="sign_section_email">Email (optional)</string>
     <!-- Translator note: an example email address shown in the empty field -->
@@ -876,7 +878,7 @@
     <string name="properties_panel_page">Page only</string>
     <string name="flatten_title">Flatten…</string>
     <string name="flatten_action">Flatten</string>
-    <string name="flatten_warning">Flattened comments and form fields become part of the page. They print and show in every viewer, but can\'t be edited any more. You can undo this until the file is saved.</string>
+    <string name="flatten_warning">Flattened comments and fields become part of the page: they show in every viewer but can\'t be edited. You can undo this until the file is saved.</string>
     <string name="flatten_comments">Comments</string>
     <string name="flatten_fields">Form fields</string>
     <string name="protect_restrict">Restrict editing and printing</string>
@@ -1226,16 +1228,16 @@
 
     <!-- Edit PDF: list styles -->
     <!-- Note: spoken for the list style buttons; "None" is no list (plain paragraphs) -->
-    <string name="edit_list_desc_none">List None</string>
-    <string name="edit_list_desc_bullet">List Bullet</string>
-    <string name="edit_list_desc_dash">List Dash</string>
-    <string name="edit_list_desc_number">List Number</string>
+    <string name="edit_list_desc_none">No list</string>
+    <string name="edit_list_desc_bullet">Bulleted list</string>
+    <string name="edit_list_desc_dash">Dashed list</string>
+    <string name="edit_list_desc_number">Numbered list</string>
     <!-- Note: a list numbered a., b., c. -->
-    <string name="edit_list_desc_lower">List Lower</string>
+    <string name="edit_list_desc_lower">Lettered list (a, b, c)</string>
     <!-- Note: a list numbered A., B., C. -->
-    <string name="edit_list_desc_upper">List Upper</string>
+    <string name="edit_list_desc_upper">Lettered list (A, B, C)</string>
     <!-- Note: a list numbered i., ii., iii. -->
-    <string name="edit_list_desc_roman">List Roman</string>
+    <string name="edit_list_desc_roman">Roman numeral list</string>
 
     <!-- Edit PDF: text alignment -->
     <string name="edit_align_left">Align left</string>
@@ -1540,14 +1542,16 @@
     <!-- Translator note: notification button that stops reading aloud -->
     <string name="service_action_stop">Stop</string>
     <string name="toolbar_stylus_only">Pen only (fingers scroll)</string>
+    <!-- Translator note: Superscript and subscript: raising or lowering selected characters while editing text. -->
     <string name="edit_script_title">Superscript and subscript</string>
     <string name="edit_superscript">Superscript (x²)</string>
     <string name="edit_subscript">Subscript (H₂O)</string>
     <string name="edit_script_scope">Changes the selected text, or the whole paragraph when nothing is selected. Characters the font lacks stay as they are.</string>
     <string name="edit_script_applying">Formatting paragraph…</string>
     <string name="edit_script_unavailable">Finish typing and select a paragraph in an editable, unsigned PDF. If the document changed, select it again.</string>
+    <!-- Translator note: Create contents from headings: builds a table of contents from the font styles used for headings in the document. -->
     <string name="text_styles_title">Create contents from headings</string>
-    <string name="text_styles_explanation">Analyze text styles, then choose up to nine in heading order. The first style is level 1, the next level 2, and so on. New entries are added under an “Untitled” bookmark; existing contents stay in place. You can Undo the change.</string>
+    <string name="text_styles_explanation">Analyze text styles, then pick up to nine in heading order (first is level 1). New entries go under an “Untitled” bookmark. You can undo it.</string>
     <string name="text_styles_scan">Analyze text styles</string>
     <string name="text_styles_scope">Large documents may take a while.</string>
     <string name="text_styles_loading">Analyzing text styles…</string>
@@ -1559,8 +1563,9 @@
     <string name="text_styles_creating">Creating PDF contents…</string>
     <string name="text_styles_created">Heading bookmarks added. This change can be undone.</string>
     <string name="text_styles_unavailable">Cannot create contents: the PDF changed, is closed, signed, read-only, or restricts copying or document assembly. Use an editable copy and analyze again.</string>
+    <!-- Translator note: Page backgrounds: backgrounds painted by the PDF itself (white fills or page-sized images) that can be shown, hidden or removed. -->
     <string name="backdrops_title">Page backgrounds</string>
-    <string name="backdrops_explanation">Inspect backgrounds painted by the PDF itself. A white fill can hide an added background; a page-sized image may cover it too. This inspection does not change the PDF.</string>
+    <string name="backdrops_explanation">Shows backgrounds painted by the PDF itself. A white fill or a page-sized image can hide an added background. Nothing in the PDF changes.</string>
     <string name="backdrops_range">Pages %1$d–%2$d of %3$d</string>
     <string name="backdrops_page">Page %1$d: %2$s</string>
     <string name="backdrops_fill">Opaque white fill</string>
@@ -1570,7 +1575,7 @@
     <string name="backdrops_failed">Could not inspect these pages. Open this panel again to retry.</string>
     <string name="backdrops_previous">Previous pages</string>
     <string name="backdrops_next">Next pages</string>
-    <!-- Multi-document Bates: saved inputs, fresh copies and explicit partial results. -->
+    <!-- Translator note: Bates numbering: stamping running numbers (like ABC000001) on the pages of several documents, saved as new copies. "Bates" is a legal term; keep it if your language has no common equivalent. -->
     <string name="bates_title">Bates numbering</string>
     <string name="bates_about">Number saved PDFs consecutively in the order below. New copies go to Downloads; originals stay intact.</string>
     <string name="bates_limits">Up to 20 PDFs, 512 MB in total. Save open edits before choosing their files.</string>
@@ -1595,8 +1600,10 @@
     <string name="bates_failed">Could not complete numbering. Check file access, passwords and editing permissions. Originals were not changed.</string>
     <string name="bates_source_refused">A signed or read-only PDF cannot be numbered by this tool.</string>
     <string name="bates_export_failed">Could not save this new copy to Downloads.</string>
+    <!-- Translator note: Pen presets: each pen remembers its own color, width and opacity. -->
     <string name="ink_presets_title">Favorite pens</string>
     <string name="ink_presets_help">Each pen keeps its own color, width and opacity. Tap a favorite to restore its settings.</string>
+    <!-- Translator note: Ink latency: a measurement of how fast drawn ink appears on this device. Keep numbers and ms units as is. -->
     <string name="ink_latency_reset">Reset</string>
     <string name="ink_latency_refresh">Update</string>
     <string name="ink_latency_none">not measured yet</string>
@@ -1605,10 +1612,13 @@
     <string name="ink_latency_normal">Normal</string>
     <string name="ink_latency_explanation">Write with the pen with Low-latency ink off, then on, and compare. Measured from the pen event to the app\'s drawing; the screen adds a little more.</string>
     <string name="ink_latency_title">Ink latency on this device</string>
+    <!-- Translator note: Palm guard: ignores touches from the side of the hand while writing with a stylus. -->
     <string name="palm_guard_calibrate_clear">Clear touches</string>
-    <string name="palm_guard_calibrate_help">Hover or write with the pen, then rest your hand as you do when writing. Green touches are ignored; red ones would scroll or press buttons. Adjust the size until your resting hand lands in green.</string>
+    <string name="palm_guard_calibrate_help">Hold the pen as you write and rest your hand. Green touches are ignored; red ones would scroll or tap. Adjust the size until your hand lands in green.</string>
     <string name="palm_guard_calibrate">Check palm area</string>
+    <!-- Translator note: Pen gestures: shapes drawn with the pen that act as commands, such as scratching out to erase. -->
     <string name="pen_gesture_lasso_empty">Nothing to select inside the loop.</string>
+    <!-- Translator note: Drawing tools: protractor, custom colors and saved color palettes. Color names describe the color, not a brand. -->
     <string name="ink_protractor">Protractor</string>
     <string name="ink_hsv_hue">Hue</string>
     <string name="ink_hsv_square">Saturation %1$d%%, brightness %2$d%%</string>
@@ -1634,30 +1644,39 @@
     <string name="ink_color_vermillion">Vermilion</string>
     <string name="ink_color_bluish_green">Bluish green</string>
     <string name="ink_color_sky_blue">Sky blue</string>
+    <!-- Translator note: Low-latency ink: an experimental faster way of drawing on screen. -->
     <string name="ink_low_latency_explanation">Draws the line you are writing straight to the screen before the app redraws. Opaque pens only.</string>
     <string name="ink_low_latency">Low-latency ink (experimental)</string>
+    <!-- Translator note: Zoom box: a magnified strip for writing small, neat ink that is placed on the page. -->
     <string name="zoom_box_new_line">New line</string>
     <string name="zoom_box">Zoom box</string>
+    <!-- Translator note: Pen gestures, continued: what happens after a gesture. -->
     <string name="pen_gesture_scratched">Scratched out %1$d strokes. Undo restores them.</string>
-    <string name="pen_gestures_explanation">Scribble over ink to delete it. A straight marker line over text highlights it; a straight pen line just under text underlines it. Recognised after you lift the pen.</string>
+    <string name="pen_gestures_explanation">Scribble over ink to delete it. A straight highlighter line over text highlights it; a pen line just under text underlines it. Recognized when you lift the pen.</string>
     <string name="pen_gestures">Smart pen gestures</string>
+    <!-- Translator note: Ruler: an on-screen straightedge for drawing straight lines. -->
     <string name="ink_ruler">Ruler</string>
+    <!-- Translator note: Palm guard settings. dp is a screen size unit; keep it. -->
     <string name="palm_guard_size">Palm area: %1$d dp</string>
     <string name="palm_guard_explanation">While the S Pen hovers or writes, finger touches beside and below it on your writing-hand side do not scroll, zoom or draw. The area shows while the pen hovers.</string>
     <string name="palm_guard">Ignore palm while writing</string>
+    <!-- Translator note: Writing hand: which hand holds the pen, used by the palm guard. -->
     <string name="hand_left">Left</string>
     <string name="hand_right">Right</string>
     <string name="hand_title">Writing hand</string>
+    <!-- Translator note: Eyedropper: picking the pen color from ink or a comment on the page. -->
     <string name="ink_eyedropper_none">No ink or colored comment there.</string>
     <string name="ink_eyedropper_picked">Pen color set to %1$s.</string>
     <string name="ink_eyedropper_hint">Tap a stroke or comment to use its color.</string>
     <string name="ink_eyedropper">Pick color from page</string>
+    <!-- Translator note: S Pen button: what pressing or holding the side button of a Samsung S Pen does. Keep "S Pen" as is. -->
     <string name="pen_button_click_toggle">Switch to previous pen</string>
     <string name="pen_button_click_title">S Pen button click while hovering</string>
     <string name="pen_button_none">Nothing</string>
     <string name="pen_button_hold_highlighter">Highlighter</string>
     <string name="pen_button_hold_eraser">Eraser</string>
     <string name="pen_button_hold_title">While the S Pen button is held</string>
+    <!-- Translator note: Hex color: typing a color as #RRGGBB. Keep #RRGGBB and #AARRGGBB untranslated. -->
     <string name="ink_hex_invalid">Enter #RRGGBB or #AARRGGBB.</string>
     <string name="ink_hex_apply">Apply</string>
     <string name="ink_hex_label">Hex color</string>
@@ -1682,7 +1701,7 @@
     <string name="ink_preset_save">Replace with current pen</string>
     <string name="ink_preset_saved">Saved favorite pen %1$d.</string>
     <string name="ink_preset_invalid">Choose a valid pen width and opacity first.</string>
-    <!-- Native PDFCraft v0.19.0 scan enhancement, opt-in on an already-open editable PDF. -->
+    <!-- Translator note: Scan enhancement: cleaning up photographed pages (contrast, shadows) in a PDF that is already open. -->
     <string name="scan_enhance_title">Enhance scanned pages</string>
     <string name="scan_enhance_explanation">Cleans scanned paper backgrounds so text is easier to read. Text, links and comments stay. You can undo it.</string>
     <string name="scan_enhance_current">Current page only, page %1$d</string>
@@ -1697,10 +1716,12 @@
     <string name="scan_enhance_busy">Enhancing selected scanned pages…</string>
     <string name="scan_enhance_finished">Enhanced %1$d scanned pages</string>
     <string name="scan_enhance_no_changes">No eligible scanned images were changed.</string>
+    <!-- Translator note: Vertical toolbar: docking the drawing toolbar on the left or right side of the screen. -->
     <string name="toolbar_vertical_mode">Vertical toolbar</string>
     <string name="toolbar_vertical_right">Dock on the right</string>
     <string name="toolbar_vertical_more">More tools</string>
     <string name="toolbar_drag_handle">Drag to move toolbar. Release to snap to the nearest side.</string>
+    <!-- Translator note: App updates: checking for, downloading and installing new versions of the app. Installing always asks for the user's approval. -->
     <string name="updater_title">App updates</string>
     <string name="updater_description">Download updates from published GitHub Releases. Interrupted downloads can resume.</string>
     <string name="updater_no_updates">You\'re up to date.</string>
@@ -1736,6 +1757,7 @@
     <string name="updater_installer_error">Android couldn\'t open the installer.</string>
     <string name="updater_install">Install update</string>
     <string name="updater_install_notice">Installing always asks for your approval. PdfCraft first checks that the update is signed by PdfCraft and matches the published release.</string>
+    <!-- Translator note: Pen styles: saved looks for the pen, such as color and width. -->
     <string name="ink_styles_title">Pen styles</string>
     <string name="ink_width_value">%1$.1f pt</string>
     <string name="ink_style_ballpoint">Ballpoint</string>
@@ -1759,7 +1781,7 @@
     <string name="ink_toolbar_pencil">Pencil</string>
     <string name="ink_toolbar_fountain">Fountain</string>
     <string name="ink_toolbar_ballpoint">Ball</string>
-    <!-- Read-only page-specific upstream native OCR word confidence review. -->
+    <!-- Translator note: Text recognition review: shows, per page, the words the app was unsure about after reading text from an image. -->
     <string name="ocr_review_title">Review recognized text</string>
     <string name="ocr_review_scope">Current page: %1$d</string>
     <string name="ocr_review_read_only">Check words with low recognition confidence. This review does not edit your PDF.</string>
@@ -1790,13 +1812,15 @@
     <string name="msg_copy_request_lost">PdfCraft was closed while you chose where to save the copy, so nothing was saved. The empty file it left there was removed.</string>
     <string name="msg_copy_request_lost_kept">PdfCraft was closed while you chose where to save the copy, so nothing was saved. Check that location for an empty file.</string>
     <string name="home_section_diagnostics">Diagnostics</string>
+    <!-- Translator note: Diagnostics: an on-device log the user can export to report problems. It never contains file names, paths or contents. -->
     <string name="home_record_diagnostics">Record diagnostics log</string>
-    <string name="home_record_diagnostics_body">Keeps a detailed log of opening and drawing files, pen latency, saves, scans, memory and errors, so a problem can be checked from your phone. Only event names, times, counts and sizes; no file names, paths or contents. Turning it off deletes it.</string>
+    <string name="home_record_diagnostics_body">Logs opening, drawing, saves, scans, memory and errors as event names, times, counts and sizes, never file names, paths or contents. Turning it off deletes it.</string>
     <string name="home_share_diagnostics">Share diagnostics log</string>
     <string name="home_clear_diagnostics">Clear diagnostics log</string>
+    <!-- Translator note: Scan lab: optional, experimental scan settings for testing. Keep names short. -->
     <string name="scan_lab_section">Scanner testing</string>
     <string name="scan_lab_keep">Keep scans for testing</string>
-    <string name="scan_lab_keep_body">Keeps the photo of every page you scan, saved or discarded, with its corners, settings and result. They stay on this device until you share or delete them. At most 600 MB is kept; older scans make room for newer ones.</string>
+    <string name="scan_lab_keep_body">Keeps every scanned photo with its corners, settings and result on this device until you share or delete it. Up to 600 MB; older scans make room.</string>
     <string name="scan_lab_share">Share kept scans (%1$d pages, %2$s)</string>
     <string name="scan_lab_clear">Delete kept scans</string>
     <string name="scan_lab_share_title">Share the kept scans?</string>
@@ -1821,9 +1845,10 @@
     <string name="scan_lab_flatten_auto">Flatten pages automatically when it makes their lines straighter</string>
     <string name="scan_lab_strength">Filter strength</string>
     <string name="scan_lab_strength_own">Default</string>
-    <string name="scan_lab_options_body">These switch parts of the scanner off, or swap them for what they replaced, to find which part a problem comes from. The log records what was in force for every page.</string>
+    <string name="scan_lab_options_body">Turns parts of the scanner off, or back to what they replaced, to find where a problem comes from. The log records the settings of every page.</string>
     <string name="scan_lab_reset">Reset scanner testing options</string>
     <string name="scan_lab_active">A scanner testing option is on (Settings, About, Diagnostics)</string>
+    <!-- Translator note: Diagnostics log messages, continued. -->
     <string name="home_diagnostics_empty">No diagnostics yet: turn this on, then use the app.</string>
     <string name="home_diagnostics_subject">PdfCraft diagnostics log</string>
     <string name="home_diagnostics_cleared">Diagnostics log cleared</string>
@@ -1834,6 +1859,7 @@
     <string name="msg_busy_recognizing_page">Recognizing text: page %1$d of %2$d…</string>
     <string name="busy_cancelling">Stopping…</string>
     <string name="busy_cancel_keeps">Cancel stops after the current page. Pages already read keep their text.</string>
+    <!-- Translator note: Results of Recognize text, which reads text from page images so it can be selected and searched. -->
     <string name="msg_ocr_cancelled">Recognize text stopped before any page was read.</string>
     <plurals name="msg_ocr_done_pages">
         <item quantity="one">Text recognized on %1$d page. It can now be selected, copied, searched and highlighted.</item>
@@ -1843,6 +1869,7 @@
         <item quantity="one">Stopped. Text recognized on %1$d page is kept.</item>
         <item quantity="other">Stopped. Text recognized on %1$d pages is kept.</item>
     </plurals>
+    <!-- Translator note: Notebooks: blank PDFs the user writes in, created from page templates. -->
     <string name="notebook_new">New notebook</string>
     <string name="notebook_title">Notebook paper</string>
     <string name="notebook_size">Size</string>
@@ -1880,6 +1907,7 @@
     <string name="notebook_cannot_add_page">Pages can\'t be added to this document</string>
     <string name="notebook_busy_saving_template">Saving template…</string>
     <string name="notebook_template_saved">Saved template %1$s</string>
+    <!-- Translator note: App update errors: why a downloaded update was not installed. The app never installs a file it cannot verify. -->
     <string name="updater_err_checksum">The downloaded update doesn\'t match the published release, so it wasn\'t installed. Try downloading again.</string>
     <string name="updater_err_invalid_apk">The downloaded file isn\'t a valid signed Android app.</string>
     <string name="updater_err_wrong_build">The downloaded file isn\'t the expected PdfCraft update.</string>
@@ -1956,6 +1984,7 @@
         <item quantity="one">%1$d comment imported</item>
         <item quantity="other">%1$d comments imported</item>
     </plurals>
+    <!-- Translator note: Undo and Redo labels: short names of the edit that Undo or Redo would reverse, shown as "Undo Rotate page". -->
     <string name="edit_label_rotate_page">Rotate page</string>
     <string name="edit_label_change_tag_properties">Change tag properties</string>
     <string name="edit_label_rotate_pages">Rotate pages</string>
@@ -2127,6 +2156,7 @@
     <string name="msg_compressed_sizes">%1$s → %2$s</string>
     <string name="msg_compress_target_reached">Target size reached.</string>
     <string name="msg_compress_target_missed">Couldn\'t reach the target size; this is as small as these settings allow.</string>
+    <!-- Translator note: Compress: making a PDF file smaller, optionally aiming for a target size. -->
     <string name="compress_whats_taking_space">What\'s taking space?</string>
     <string name="compress_advanced">Advanced settings</string>
     <string name="compress_target_size">Target file size (MB)</string>
@@ -2148,6 +2178,7 @@
     <string name="export_dpi">%1$d dpi</string>
     <string name="export_pictures_explain">Save every image in this PDF as its own image file, once each.</string>
     <string name="export_skip_small">Skip small images (icons, bullets)</string>
+    <!-- Translator note: Export images: saving the pictures inside a PDF to the Downloads folder. -->
     <string name="msg_no_images_found">This PDF has no images to export.</string>
     <plurals name="msg_images_saved_downloads">
         <item quantity="one">%1$d image saved to Downloads.</item>
@@ -2161,6 +2192,7 @@
         <item quantity="one">%1$d image couldn\'t be exported (%2$s).</item>
         <item quantity="other">%1$d images couldn\'t be exported (%2$s).</item>
     </plurals>
+    <!-- Translator note: Export notes: exports the highlights and notes of a document as text or Markdown. -->
     <string name="digest_title">Export notes</string>
     <string name="digest_format">Format</string>
     <string name="digest_markdown">Markdown (Obsidian links)</string>
@@ -2193,6 +2225,7 @@
     <string name="digest_purple">Purple</string>
     <string name="digest_black">Black</string>
     <string name="digest_grey">Gray</string>
+    <!-- Translator note: Focus timer: work and break periods while reading. Keep it short and friendly. -->
     <string name="focus_timer">Focus timer</string>
     <string name="focus_work">Focus</string>
     <string name="focus_break">Break</string>
@@ -2205,6 +2238,7 @@
     <string name="focus_hint">Focus and break alternate until you stop. The notification counts down when PdfCraft is in the background.</string>
     <string name="focus_break_started">Time for a break</string>
     <string name="focus_work_started">Back to focus</string>
+    <!-- Translator note: Study statistics: how much the user has studied, read and reviewed. -->
     <string name="study_section">Study statistics</string>
     <string name="study_clear_stats">Delete study statistics</string>
     <string name="study_stats_body">Reading time counts only while a document is open in front and you touched the screen in the last 2 minutes. It stays on this phone.</string>
@@ -2267,6 +2301,7 @@
     <string name="marks_msg_bg_updated">Background updated.</string>
     <string name="marks_msg_removed">Removed.</string>
     <string name="marks_msg_removed_with_warnings">Removed. Some pages may still show a white backdrop.</string>
+    <!-- Translator note: Library: the list of the user's documents, with search across their text. -->
     <string name="library_title">Library</string>
     <string name="library_add">Add to library</string>
     <string name="library_add_to">Add to library</string>
@@ -2286,7 +2321,7 @@
     <string name="library_delete_collection">Delete collection</string>
     <string name="library_delete_collection_body">The collection and the collections inside it are deleted. The files are not deleted.</string>
     <string name="library_index_switch">Search inside documents</string>
-    <string name="library_index_body">Builds a search index of the text, bookmarks and comments of library files, one at a time while no document is open, and not below 20% battery unless charging. It stays on this phone.</string>
+    <string name="library_index_body">Indexes the text, bookmarks and comments of library files while no document is open, and not below 20% battery unless charging. It stays on this phone.</string>
     <string name="library_wipe_index">Delete search index</string>
     <string name="library_index_wiped">Search index deleted</string>
     <string name="library_unavailable">Unavailable: the file was moved or access was removed</string>
@@ -2302,6 +2337,7 @@
     <string name="library_remove">Remove from library</string>
     <string name="viewer_comment_as">Comment as %1$s · Change</string>
     <string name="viewer_comment_as_add">Add your name to comments</string>
+    <!-- Translator note: Save status shown in the viewer's top bar. Very short labels, one or two words. -->
     <string name="save_state_saved">Saved</string>
     <string name="save_state_saving">Saving…</string>
     <string name="save_state_unsaved">Unsaved changes</string>
@@ -2309,6 +2345,7 @@
     <string name="save_state_save_now">Save now</string>
     <string name="msg_copy_continues">Saved as %1$s. You\'re now working in the copy; the original is as you opened it.</string>
     <string name="msg_copy_continues_saved_before">Saved as %1$s. You\'re now working in the copy. Changes saved before this were already in the original.</string>
+    <!-- Translator note: First-run tips: short hints shown once after install. Keep each under two lines. -->
     <string name="tips_title">Tips</string>
     <string name="tips_next">Next</string>
     <string name="tips_skip">Skip</string>
@@ -2320,6 +2357,7 @@
     <string name="tips_find_body">⋮ holds the comments, bookmarks and pages. Tap the handle above the bottom bar to show or hide your shortcuts.</string>
     <string name="home_open_pdf">Open a PDF</string>
     <string name="home_or_start_with_tool">Or start with a tool</string>
+    <!-- Translator note: App update card on Home and the automatic update check setting. -->
     <string name="updater_open_settings">Open settings</string>
     <string name="updater_home_ready">Update %1$s is ready</string>
     <string name="updater_home_view">View</string>
@@ -2331,6 +2369,7 @@
     <string name="viewer_menu_underline">Underline</string>
     <string name="viewer_menu_strike">Strike</string>
     <string name="viewer_menu_squiggly">Squiggly</string>
+    <!-- Translator note: Find and replace in the viewer. -->
     <string name="viewer_replace_text">Replace text</string>
     <string name="viewer_insert_text">Insert text after</string>
     <string name="viewer_replacement_hint">Replacement text</string>
@@ -2344,6 +2383,7 @@
     <string name="ink_toolbar_polyline">Lines</string>
     <string name="viewer_hint_polygon">Tap each corner. Tap the first corner again to finish.</string>
     <string name="viewer_hint_polyline">Tap each point. Tap the last point again to finish.</string>
+    <!-- Translator note: Flashcards: front and back cards made from the document and reviewed on a schedule. Again, Hard, Good and Easy are review ratings. -->
     <plurals name="cards_due">
         <item quantity="one">%d card due</item>
         <item quantity="other">%d cards due</item>
@@ -2383,6 +2423,7 @@
     <string name="cards_busy_export">Exporting flashcards…</string>
     <string name="cards_file_name">Flashcards %1$s</string>
     <string name="cards_imported">Imported %1$d flashcards</string>
+    <!-- Translator note: Backup history: older saved versions of a document that can be restored. -->
     <string name="backup_section">Backup</string>
     <string name="backup_choose_folder">Choose a backup folder</string>
     <string name="backup_folder_is">Backup folder: %1$s</string>
@@ -2392,7 +2433,7 @@
     <string name="backup_status_failed">The last backup could not be written. It will be tried again at the next save.</string>
     <string name="backup_retry">Retry backup</string>
     <string name="backup_turn_off">Turn off backups</string>
-    <string name="backup_body">After each save, a dated copy of the PDF and its comments (XFDF) goes to the folder you choose, in a folder named after the document; older versions are removed. Your library, flashcards and notebooks are saved there too. The original file is never changed.</string>
+    <string name="backup_body">After each save, a dated copy of the PDF and its comments goes to the folder you choose, with your library, cards and notebooks. The original never changes.</string>
     <string name="backup_folder_not_writable">PdfCraft can\'t write to that folder. Choose another one.</string>
     <string name="backup_failed">Backup failed. Your document is saved.</string>
     <string name="backup_history">Version history</string>
@@ -2403,6 +2444,7 @@
     <string name="backup_restore_comments">Restore comments here</string>
     <string name="backup_restoring">Restoring…</string>
     <string name="backup_comments_restored">Comments restored</string>
+    <!-- Translator note: Note margin: extra blank space added beside each page for handwritten notes. -->
     <string name="margin_title">Note margin</string>
     <string name="margin_add">Add</string>
     <string name="margin_side">Where</string>
@@ -2425,6 +2467,7 @@
     </plurals>
     <!-- Link authoring (#179, #159) -->
     <string name="edit_link">Link</string>
+    <!-- Translator note: Links: tappable areas on a page that open a web address or jump to a page. -->
     <string name="link_drag_hint">Drag a box over what should be a link, or tap a link to change it.</string>
     <string name="link_not_editable">This link can\'t be changed here.</string>
     <string name="link_new">New link</string>
@@ -2480,7 +2523,7 @@
     <string name="std_msg_pdfa_partly">Fixed what could be fixed. Some problems remain.</string>
     <string name="std_msg_pdfa_id_removed">PDF/A identification removed.</string>
     <string name="std_readiness_check">Check</string>
-    <string name="std_readiness_explain">A read-only report for professional printing: image resolution where each image is drawn, page boxes and bleed, fonts that aren\'t embedded, and output intents. The file isn\'t changed.</string>
+    <string name="std_readiness_explain">A report for professional printing: image resolution, page boxes and bleed, fonts not embedded and output intents. The file isn\'t changed.</string>
     <string name="std_readiness_findings">Findings</string>
     <string name="std_readiness_report">Report</string>
     <string name="std_hairlines_fix">Fix</string>
@@ -2514,6 +2557,7 @@
     <string name="print_binding_right">Bind on the right</string>
     <string name="print_comments">Print comments</string>
     <string name="print_explain">The next screen still picks the printer, copies and paper.</string>
+    <!-- Translator note: Handwriting: reading handwritten ink so it becomes searchable, copyable text. -->
     <string name="handwriting_read_page">Read handwriting on this page (beta)</string>
     <string name="handwriting_busy">Reading handwriting…</string>
     <string name="handwriting_none">No handwriting on this page that isn\'t read yet</string>
@@ -2547,7 +2591,8 @@
     <string name="viewer_hint_measure">Tap points to measure. They snap to the drawing\'s lines. Set the scale first for real units.</string>
     <!-- Study: masking tape and quiz mode (#143) -->
     <string name="study_title">Study: tape and quiz</string>
-    <string name="study_explain">Cover answers with tape and tap to check yourself, or let a quiz cover your highlights. Lifting tape and quizzes don\'t change the file; other apps show the page without tape.</string>
+    <string name="study_explain">Cover answers with tape and tap to check yourself, or let a quiz cover your highlights. Neither changes the file; other apps show the page without tape.</string>
+    <!-- Translator note: Study tape: strips the user draws over answers and taps to reveal while studying. -->
     <string name="study_draw_tape">Draw tape</string>
     <string name="study_tape_hint">Drag over what to cover</string>
     <string name="study_tape_hint_freehand">Drag along the line to cover</string>
@@ -2591,6 +2636,7 @@
     <string name="study_results_item">Page %1$d: %2$s</string>
     <string name="study_results_highlight">Highlight</string>
     <string name="study_results_retry">Quiz the ones I missed</string>
+    <!-- Translator note: Lecture recordings: audio recorded while reading, linked to the pages that were open. -->
     <string name="lecture_title">Lecture recordings</string>
     <string name="lecture_record">Record lecture</string>
     <string name="lecture_recording">Recording</string>
@@ -2602,7 +2648,7 @@
     <string name="lecture_back_10">Back 10 seconds</string>
     <string name="lecture_forward_10">Forward 10 seconds</string>
     <string name="lecture_close_player">Close the lecture player</string>
-    <string name="lecture_body">While recording, every comment you write remembers when. Play a recording and tap a comment to hear what was said as you wrote it. Recordings stay on this phone, in PdfCraft.</string>
+    <string name="lecture_body">While recording, each comment you write remembers when. Tap a comment during playback to hear what was said then. Recordings stay on this phone.</string>
     <string name="lecture_delete_title">Delete this recording?</string>
     <string name="lecture_needs_saved">Save this document first to record beside it</string>
     <string name="lecture_cannot_record">The recording could not be made</string>
@@ -2612,4 +2658,21 @@
         <item quantity="one">%d note</item>
         <item quantity="other">%d notes</item>
     </plurals>
+    <string name="scan_models_section">Scanner models</string>
+    <string name="scan_model_edges">Page finder</string>
+    <string name="scan_model_flatten">Page flattening</string>
+    <string name="scan_model_upright">Turning pages upright</string>
+    <string name="scan_model_ready">Installed</string>
+    <string name="scan_model_missing">Not installed</string>
+    <string name="scan_model_corrupt">Damaged, not used</string>
+    <string name="scan_model_line">%1$s · %2$s · %3$s</string>
+    <string name="scan_models_body">These models come with the app and run on this device. A damaged model is not used, and its feature is off until the app copies it again.</string>
+    <string name="scan_models_copy_again">Copy the models again</string>
+    <string name="scan_models_copied">Models copied: %1$d</string>
+    <string name="scan_model_not_downloaded">Not downloaded</string>
+    <string name="scan_model_download">Download (%1$s)</string>
+    <string name="scan_model_downloading">Downloading: %1$d%%</string>
+    <string name="scan_model_cancel">Cancel download</string>
+    <string name="scan_model_remove">Remove</string>
+    <string name="scan_model_download_failed">The download did not finish. Tap Download to try again; what was saved is kept.</string>
 </resources>

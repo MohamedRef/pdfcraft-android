@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Scanner book mode (#303), kept apart from strings.xml so parallel scanner work merges cleanly. -->
+<resources>
+    <string name="tools_scan_book">كتاب</string>
+    <string name="tools_scan_book_ltr">من اليسار لليمين</string>
+    <string name="tools_scan_book_rtl">من اليمين لليسار</string>
+    <string name="tools_scan_book_left_page">الصفحة اليسرى من صفحتين متقابلتين</string>
+    <string name="tools_scan_book_right_page">الصفحة اليمنى من صفحتين متقابلتين</string>
+    <string name="scan_lab_book_gutter">وضع الكتاب: القص عند ثنية الكتاب الظاهرة في الصورة</string>
+</resources>

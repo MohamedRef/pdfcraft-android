@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Document types in Clean scan (#299), kept apart from strings.xml so parallel scanner work merges cleanly. -->
+<resources>
+    <string name="scan_preset_document">مستند</string>
+    <string name="scan_preset_receipt">إيصال</string>
+    <string name="scan_preset_whiteboard">سبورة</string>
+    <string name="scan_preset_book_page">صفحة كتاب</string>
+    <string name="scan_preset_photo_rich">مستند به صور</string>
+    <string name="scan_preset_photo">صورة</string>
+    <string name="scan_preset_id_card">بطاقة هوية</string>
+    <string name="scan_preset_coloured_form">نموذج ملوّن</string>
+    <string name="scan_preset_auto_is">تلقائي: %1$s</string>
+    <string name="scan_preset_title">نوع المستند</string>
+    <string name="scan_preset_automatic">تلقائي</string>
+    <string name="scan_lab_presets">أنواع المستندات في المسح النظيف</string>
+</resources>

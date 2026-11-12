@@ -36,14 +36,21 @@ on one part. While any is changed, the scan screen says so.
 | Show pages as they will be saved (#301) | On | Off: the scan screen shows the camera's photo with its outline, as before; nothing is previewed |
 | Crop with magnifier and snapping to edges (#292) | On | Off: the crop screen before #292, four corner handles on the thumbnail |
 | Flatten pages automatically when it makes their lines straighter (#302) | Off | On: every page is flattened by the network and kept only when its lines of text come out at least 10 % straighter (the Flatten switch still flattens without the check) |
-| Turn pages upright (#339) | On | Off: a page stays as its corners gave it |
+| Book mode: cut at the gutter found in the photo (#303) | On | Off: in book mode every spread is cut at its centre line, whatever the photo shows |
+| Turn pages upright (#339) | On | Off: a page stays as its corners gave it (Rotate still works) |
+| Unsure pages follow their neighbors (#339) | On | Off: in a scan of several pages each page is turned by its own answer only |
 | Sharpen text, in Clean scan (#299) | 30 | Off, 60 or 100 |
 | Smooth grain in dim photos, in Clean scan (#299) | On | Off |
+| Document types in Clean scan (#299) | On | Off: the filter's own strength and the sharpening above, as before |
 | Filter strength | Each filter's own | 20, 40, 60, 80 or 100 for every filter |
 | Flatten page (#302) | Off | On, with the switch on the scan screen itself |
 | Scan with (#294) | PdfCraft camera | Phone's camera app (also in Settings → Scan; the same setting) |
 | Page outline in the camera (#295) | On | Off: no frames are analysed, the camera is as in #294 |
 | Auto-capture (#296) | On | Off: only the shutter takes photos. Needs the page outline; also switched in the camera's top bar |
+
+Settings → **Scanner models** (#289) lists each model with its state; while the log is
+recorded it also has **Copy the models again**, which copies every model out of the app anew
+(see `docs/ANDROID_SCAN_MODELS.md`).
 
 **Reset scanner testing options** puts them back. Keeping scans is not one of them: it changes
 no page.
@@ -68,16 +75,22 @@ The zip also holds `diagnostics.txt`, the diagnostics log as **Share diagnostics
  "finding": {"source": "model", "confidence": 0.835, "angle": 0, "passes": 1, "refined_sides": 4, "curved_sides": 0},
  "look": "auto", "strength": 60, "flatten": false,
  "options": {"finder": "auto", "refine": true, "side_proportions": false, "snap_paper": true, "strength_override": null, "upright": true,
-             "sharpen": 30, "denoise": true, "preview": true, "crop_tools": true, "flatten_auto": false},
+             "sharpen": 30, "denoise": true, "preview": true, "crop_tools": true, "flatten_auto": false, "settle_turns": true, "presets": true, "book_gutter": true},
+ "document_type": {"preset": "receipt", "chosen": false, "strength": 80, "sharpen": 35, "keep_paper": false, "suggest_flatten": false,
+                   "suggest_greyscale": true, "ratio": 3.0, "ink_share": 0.043, "colour_ink_share": 0.0, "photo_share": 0.0,
+                   "stroke_mm": 0.339, "glare_share": 0.0, "gutter_band": false, "whole_photo": false},
+ "turns": {"manual": null, "auto": true, "total": 3, "followed": false, "source": "classifier"},
  "capture": {"source": "in_app", "mp10": 499, "width": 8160, "height": 6120, "exposure_index": -1, "exposure_step_milli": 333,
              "torch": false, "focused": true, "rotation": 0, "capture_ms": 640, "live": true, "live_found": true,
              "live_stable": true, "live_hint": "ready", "preview_quad": [0.11, 0.08, 0.93, 0.10, 0.95, 0.90, 0.07, 0.89],
              "auto_on": true, "auto_shot": true, "sharpness": 1.235, "sharpness_blurred_unverified": false, "sharpness_ms": 85},
  "preview": {"shown": true, "reused": true, "ms": 412, "width": 905, "height": 1280, "look": "auto"},
+ "models": {"edges": "ready", "flatten": "ready", "upright": "ready"},
  "crop": {"visits": 1, "corner_drags": 2, "side_drags": 1, "snaps_asked": 3, "snaps_taken": 2, "snaps_held": 0, "snaps_failed": 0,
           "snap_ms_max": 85, "nudges": 0, "detects": 0, "detects_found": 0, "whole_photo": 0, "resets": 0,
           "loupe_decodes": 6, "snap": true, "ms": 9100, "moved_pct": 1.235,
           "corners_off": 0},
+ "book": {"half": "right", "gutter_found": true, "gutter_top": 0.4712, "gutter_bottom": 0.4790, "confidence": 0.62, "order": "rtl"},
  "result": {"file": "page-01.out.jpg", "width": 1654, "height": 2339, "format": "jpeg", "dpi": 200.0,
             "paper": "a4", "aspect": "known_focal", "focal_mismatch": false, "flattened": false, "bend_pct": 0.0,
             "quarter_turns": 3,
@@ -100,7 +113,8 @@ was: drags of corners and of sides, snaps asked for, taken, skipped by holding s
 the longest snap, keyboard and TalkBack moves, Auto-detect, No crop and Reset, magnifier regions
 decoded, whether Snap was on, the time spent, and `moved_pct`, the largest corner move from where
 the screen opened in % of the photo's diagonal, and `corners_off`, how many corners were left off
-the photo the last time (#291). It is not kept if the app is closed by Android
+the photo the last time (#291). `models` says which models the engine accepted when the page
+was kept (#289): `ready`, `missing` or `corrupt` for each, or `null` when that could not be read. It is not kept if the app is closed by Android
 before the scan is saved.
 `capture` says how the photo was taken (#294, `docs/ANDROID_SCAN_CAMERA.md`): `source` is
 `in_app`, `phone_app` or `import`; the still's size and exposure are known for `in_app` only. It is
@@ -112,6 +126,15 @@ From #296 (`ANDROID_SCAN_AUTO.md`): whether auto-capture was on (`auto_on`) and 
 (`auto_shot`), and the photo's `sharpness` score inside the outline (`null` until measured or when
 it failed), `sharpness_blurred_unverified` and `sharpness_ms`. The blur flag is recorded only: it
 does not detect motion blur and its threshold comes from drawn pages, so nothing acts on it.
+`turns` says which way up the page was saved (#339): `manual` is the
+person's own turn from Rotate or Undo (0–3 clockwise, `null` when they gave none), `auto` the
+ordinary setting "Turn pages upright automatically", `total` the turn the page was saved with,
+`followed` whether it took its neighbours' turn, and `source` one of `manual`, `neighbours`,
+`classifier` or `off`. `result.quarter_turns` and `result.orientation` stay the classifier's own
+answer, also for a page that then followed its neighbours. `document_type` is the kind Clean scan
+took the page for (#299), whether the person chose it, the kind's settings and what the page
+measured as (`stroke_mm` -1 when there is no ink); `null` for the other filters or with the option
+off. `scan_replay` keeps a chosen kind and works an automatic one out again. `book` is set on a page that is half of a photographed book spread (#303): which `half`, whether a dark gutter was found (`gutter_found`; false means the cut is the centre line), where the cut crosses the straightened spread's top and bottom edges as shares of its width, the gutter's `confidence`, and the page `order` in force (`ltr` or `rtl`). It is `null` for a page of its own. The two halves of a spread are kept as two pages, each with its own copy of the one photo, and their `corners` and `found` are the half's own outline.
 
 ## On the desktop
 
@@ -131,8 +154,14 @@ photo collected so far.
 ## In the diagnostics log
 
 Besides what `docs/ANDROID_DIAGNOSTICS_LOG.md` lists for `scan`: every `photo` line carries the
-`finder` and `refine` in force, every `page` line the `strength` used, `side_proportions`,
-`snap_paper`, `upright`, `sharpen` and `denoise`; every `preview` line (#301) says which page and
+`finder` and `refine` in force and what book mode did (#303: `book`, and when it is on
+`book_order`, `book_gutter_search`, `book_split`, `gutter_found`, `gutter_top`, `gutter_bottom`,
+`gutter_confidence`, `book_ms`), every `page` line which `book_half` it is (`left`, `right` or
+`none`), every `page` line the `strength` used, `side_proportions`,
+`snap_paper`, `upright`, `sharpen` and `denoise`, and how its turn was decided (#339:
+`auto_upright`, `turns_manual` (-1 for none), `turns`, `turn_source`, `settle_turns`, `followed`);
+every press of Rotate or of Undo on the "Turned upright" chip is a `turn` line (`index`, `action`
+`rotate` or `undo`, `auto_turns`, `turns`); every `preview` line (#301) says which page and
 filter, whether the preview was `made`, whether the straightened page was `reused`, the total `ms`
 and the native stages (`preview_base_ms`, `decode_ms`, `rectify_ms`, `preview_look_ms`, and the others
 the page needed), its `width` and `height`, `quarter_turns` and `flattened`; every `crop` line
@@ -142,7 +171,10 @@ how many were `refined` or `curved`, whether the snap was `taken`, `stale` (anot
 started) or `failed`, and its `ms`; every `crop_detect` line whether Auto-detect `found` a page,
 its `source` and `ms`; every `page` and `preview` line `flatten_auto` and, from
 #302's check, `flatten_checked`, `flatten_kept`, `flatten_why`, `straight_px`, `straight_flat_px`
-(tenths of a pixel, -1 when not measured), `straight_lines` and `straight_flat_lines`; `test_options` is written when an option is changed, `tests_shared` (pages, bytes)
+(tenths of a pixel, -1 when not measured), `straight_lines` and `straight_flat_lines`; every `model_files` line (#289) what the models check copied and why
+(`copied`, `kept`, `failed`, `new`, `changed`, `size`, `unrecorded`, `forced`, `ms`), and while
+the log is recorded a `model_states` line with each model's state; a `model_download` or
+`model_removed` line for an optional model (none yet); `test_options` is written when an option is changed, `tests_shared` (pages, bytes)
 when the zip is handed out, and `tests_cleared` when the kept scans are deleted. The log itself
 still holds no file name, path or document content.
 

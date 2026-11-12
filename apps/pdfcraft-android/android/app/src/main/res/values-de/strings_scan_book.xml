@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Scanner book mode (#303), kept apart from strings.xml so parallel scanner work merges cleanly. -->
+<resources>
+    <string name="tools_scan_book">Buch</string>
+    <string name="tools_scan_book_ltr">Von links nach rechts</string>
+    <string name="tools_scan_book_rtl">Von rechts nach links</string>
+    <string name="tools_scan_book_left_page">Linke Seite einer Doppelseite</string>
+    <string name="tools_scan_book_right_page">Rechte Seite einer Doppelseite</string>
+    <string name="scan_lab_book_gutter">Buchmodus: am im Foto gefundenen Bund teilen</string>
+</resources>
