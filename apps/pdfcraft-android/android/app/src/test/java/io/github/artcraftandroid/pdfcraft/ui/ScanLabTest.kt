@@ -41,6 +41,9 @@ class ScanLabTest {
         // unsure pages follow their neighbours as designed (#339)
         assertTrue(lab.settleTurns)
         assertFalse(lab.copy(settleTurns = false).asDesigned)
+        // the crop screen with magnifier and snapping is as designed; the old one is a testing option (#292)
+        assertTrue(lab.cropTools)
+        assertFalse(lab.copy(cropTools = false).asDesigned)
         assertEquals(30, lab.sharpen)
         assertTrue(lab.denoise && lab.sharpen in ScanLab.SHARPENING && 0 in ScanLab.SHARPENING)
     }
@@ -61,6 +64,7 @@ class ScanLabTest {
             ScanLab(sharpen = 100),
             ScanLab(preview = false),
             ScanLab(settleTurns = false),
+            ScanLab(cropTools = false),
             ScanLab(finder = ScanFinder.LINES, strength = 100),
             ScanLab(finder = ScanFinder.OFF),
         )
@@ -111,6 +115,9 @@ class ScanLabTest {
         assertEquals(1280, shown.getInt("height"))
         assertEquals("auto", shown.getString("look"))
         assertTrue(json.getJSONObject("options").getBoolean("preview"))
+        assertTrue(json.getJSONObject("options").getBoolean("crop_tools"))
+        // a page never opened in Crop has no crop facts
+        assertTrue(json.isNull("crop"))
         // the test set's own keys (#288)
         assertEquals(8, json.getJSONArray("corners").length())
         assertEquals(0.12, json.getJSONArray("corners").getDouble(3), 1e-9)
@@ -156,7 +163,7 @@ class ScanLabTest {
     @Test
     fun aKeptPageSaysHowItsTurnWasDecided() {
         // a page that took its neighbours' turn (#339)
-        val followed = JSONObject(scanTestPageJson("1.0 (1)", true, crop, null, null, "auto", 60, false, ScanLab(), null, result, null, ScanTestTurn(null, true, 1, true, "neighbours")))
+        val followed = JSONObject(scanTestPageJson("1.0 (1)", true, crop, null, null, "auto", 60, false, ScanLab(), null, result, null, turn = ScanTestTurn(null, true, 1, true, "neighbours")))
         val turns = followed.getJSONObject("turns")
         assertTrue(turns.isNull("manual"))
         assertTrue(turns.getBoolean("auto") && turns.getBoolean("followed"))
@@ -164,7 +171,7 @@ class ScanLabTest {
         assertEquals("neighbours", turns.getString("source"))
         assertTrue(followed.getJSONObject("options").getBoolean("settle_turns"))
         // a page the person turned
-        val manual = JSONObject(scanTestPageJson("1.0 (1)", true, crop, null, null, "auto", 60, false, ScanLab(settleTurns = false), null, result, null, ScanTestTurn(2, false, 2, false, "manual")))
+        val manual = JSONObject(scanTestPageJson("1.0 (1)", true, crop, null, null, "auto", 60, false, ScanLab(settleTurns = false), null, result, null, turn = ScanTestTurn(2, false, 2, false, "manual")))
         assertEquals(2, manual.getJSONObject("turns").getInt("manual"))
         assertFalse(manual.getJSONObject("options").getBoolean("settle_turns"))
         // and in the log, as a word
@@ -175,7 +182,7 @@ class ScanLabTest {
     fun aDiscardedPageHasNoResultAndMayHaveNoFinding() {
         val json = JSONObject(scanTestPageJson("1.0 (1)", false, ScanPage.WHOLE, null, null, null, null, false, ScanLab(), null, null))
         assertEquals("discarded", json.getString("outcome"))
-        assertTrue(json.isNull("found") && json.isNull("finding") && json.isNull("look") && json.isNull("strength") && json.isNull("result") && json.isNull("preview") && json.isNull("turns"))
+        assertTrue(json.isNull("found") && json.isNull("finding") && json.isNull("look") && json.isNull("strength") && json.isNull("result") && json.isNull("preview") && json.isNull("crop") && json.isNull("turns"))
         assertTrue(json.getJSONObject("options").isNull("strength_override"))
         assertEquals(1.0, json.getJSONArray("corners").getDouble(2), 0.0)
         // a corner that is not a number never breaks the file
@@ -267,5 +274,17 @@ class ScanLabTest {
         assertFalse(scan.exists())
         assertNull(root.listFiles()?.firstOrNull())
         assertNotNull(store.newScan(""))
+    }
+
+    @Test
+    fun aKeptPageSaysWhatHappenedOnTheCropScreen() {
+        val stats = io.github.artcraftandroid.pdfcraft.ui.scan.ScanCropStats(visits = 1, cornerDrags = 2, sideDrags = 1, snapsAsked = 3, snapsTaken = 2, snapMsMax = 85, snapOn = true, ms = 9100, movedPct = 1.23456)
+        val json = JSONObject(scanTestPageJson("1.0 (1)", false, crop, crop, null, null, null, false, ScanLab(), null, null, null, stats)).getJSONObject("crop")
+        assertEquals(1, json.getInt("visits"))
+        assertEquals(2, json.getInt("corner_drags"))
+        assertEquals(2, json.getInt("snaps_taken"))
+        assertEquals(85, json.getInt("snap_ms_max"))
+        assertEquals(1.235, json.getDouble("moved_pct"), 1e-9)
+        assertTrue(json.getBoolean("snap"))
     }
 }

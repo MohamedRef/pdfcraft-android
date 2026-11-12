@@ -20,7 +20,7 @@ a phone yet.** Every number in the scanner's documents was measured on a desktop
 | #289 | Model files: pinned, loaded, exported | Part | #360, #365, #370 | `scan_model_states`, a Models list in settings, optional packs, copying a *changed* model on update (section 6) |
 | #290 | Page found by a network | Core done | #360 | Figures on the owner's set; phone time. Known: wrong and accepted on 2 of the 10 reference photos, nothing found on 2 |
 | #291 | Edges refined at full size | Core done | #356 | A corner outside the photo is not accepted; the owner's set; phone time |
-| #292 | Crop screen: magnifier, side handles, snap, rotate | **Not started** | | All of it. `scan_refine_quad` is the native half of "snap" and exists |
+| #292 | Crop screen: magnifier, side handles, snap, rotate | Screen done, rotate left | #381 | Rotate is on the scan screen (#387, with `ScanSession` 2); a Rotate on the crop screen itself is not done; all of it on a phone (`docs/ANDROID_SCAN_CROP.md`) |
 | #293 | True proportions, paper sizes | Core done | #353 | The focal length from the in-app camera (#294, section 7 there) |
 | #294 | In-app camera (CameraX) | **Not started** | | All of it |
 | #295 | Live page outline, hints | **Not started** | | Needs #294 |
@@ -35,10 +35,31 @@ a phone yet.** Every number in the scanner's documents was measured on a desktop
 | #304 | "Max quality" (DocRes) | **Not started** | | Feasibility first, as the issue says |
 | #305, #306 | Research: moiré; fingers, glare | **Not started** | | |
 | #307 | ML Kit as a second engine | **Not started** | | Cannot be tried without a phone with Google Play services |
-| #339 | Pages turned upright | Core done | #370, this PR | Acceptance on the owner's set (per script), phone timing. The chip, Rotate, the multi-page rule and the ordinary setting are in (not yet run on a phone) |
+| #339 | Pages turned upright | Core done | #370, #387 | Acceptance on the owner's set (per script), phone timing. The chip, Rotate (on the scan screen), the multi-page rule and the ordinary setting are in (not yet run on a phone) |
 
 "Core done" means the code and its tests are merged and the issue's acceptance items that need
 the owner's phone or his test set are open. Each issue has a comment saying the same in detail.
+
+### Blocks already written for the open issues
+
+Before starting an item in the table, look here: part of it may exist.
+
+- **In the crate, tested, called by nothing yet** ([ANDROID_SCAN_BLOCKS.md](ANDROID_SCAN_BLOCKS.md),
+  one row per module with what its tests measured and its known gaps): `metrics_geometry`,
+  `metrics_tone`, `metrics_compare` and `straightness` for #288; `flatten_guard` for #302;
+  `photo_mask` and `preset` for #299; `book` for #303 (part A's Rust); `merge` for #297;
+  `sharpness` for #296; `upright_pages` for #339 (the multi-page rule, and a quarter turn by
+  reordering the corners, which gives Rotate without a new field in `ScanPageRequest`). Wire a
+  block in instead of writing it again; its issue stays open until it has its testing option,
+  its log fields and its kept-scan fields (section 3).
+- **Parked, never compiled or reviewed** (branch `draft/scan-app-blocks`, folder
+  `docs/scan-blocks/`, whose README says what state each file is in): Kotlin drafts for #301,
+  #295, #307 and the pure half of #294, the drawn-photo generator for #288 with one test still
+  failing, and research notes for #304, #305 and #306. Take what is useful from there and
+  review it as new code; that branch is not for merging.
+
+These came from one run of separate workers on 12 November that the owner stopped part-way.
+Every threshold in them is the issue's starting value or was set on pages drawn in code.
 
 One document per feature says how it works, what was measured and what was not:
 `ANDROID_SCAN_AUTO_LOOK.md`, `_BLACK_WHITE.md`, `_DETAIL.md`, `_DETECTOR.md`, `_EDGES.md`,
@@ -118,7 +139,10 @@ The order in #286 stands. Within it, this is what unblocks the most:
    whole experience. Put it in a file of its own (`ui/scan/`) and leave `ScanPhoto` as
    `ScanScreen` uses it.
 3. **#288, the metrics module**, `line_straightness` first, then **#302's automatic mode**.
-4. **#299's presets**, **#303**. (#339's undo and rotate are in: `ScanPageRequest.turns`.)
+   The measures and the guard are written (`straightness`, `flatten_guard`, `metrics_*`): what
+   is left is the runner, the gate, and making both versions of the page at preview size.
+4. **#299's presets**, **#303**. The blocks exist for both (section 1). #339's undo and rotate
+   are in (#387: `ScanPageRequest.turns`, added with `upright_pages::total_turn`).
 5. **#294 to #297, the camera.** The largest and riskiest part: declaring the CAMERA permission
    changes how the existing path behaves (the manifest's comment explains it), and none of it
    can be tried without a phone. Keep the phone's camera app reachable as a setting, as the

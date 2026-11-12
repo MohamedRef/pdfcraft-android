@@ -13181,6 +13181,40 @@ fn a_new_link_to_another_pdf_is_a_relative_gotor_that_link_open_follows() {
     assert_eq!(ok(&mut b, "link_list", json!({ "doc": reopened }))["count"], 2, "refused links are not added");
 }
 
+/// Android adaptation (#379): a link to an area of another PDF (split view's back-links) fits
+/// that area as a `/FitR` destination in the linked page's user space, placed with the linked PDF
+/// open (`to_doc`); without `to_rect` the destination stays `/Fit`, as before.
+#[test]
+fn a_link_to_an_area_of_another_pdf_fits_that_area() {
+    let (_base, root) = sandbox("gotor-area");
+    std::fs::write(root.join("notes.pdf"), fixture(3)).unwrap();
+    std::fs::write(root.join("source.pdf"), fixture(1)).unwrap();
+    let mut a = auto(&root);
+    let doc = ok(&mut a, "doc_open", json!({ "path": "source.pdf" }))["doc"].as_u64().unwrap();
+    let notes = ok(&mut a, "doc_open", json!({ "path": "notes.pdf" }))["doc"].as_u64().unwrap();
+    let height = ok(&mut a, "doc_info", json!({ "doc": notes }))["pages"][1]["height"].as_f64().unwrap();
+    ok(&mut a, "link_add", json!({ "doc": doc, "page": 1, "rect": [10, 10, 80, 30], "file": "notes.pdf", "to_page": 2, "to_rect": [10, 20, 110, 70], "to_doc": notes }));
+    ok(&mut a, "link_add", json!({ "doc": doc, "page": 1, "rect": [10, 40, 80, 60], "file": "notes.pdf", "to_page": 2 }));
+    let listed = ok(&mut a, "link_list", json!({ "doc": doc }));
+    assert_eq!((&listed["links"][0]["file"], &listed["links"][0]["file_page"]), (&json!("notes.pdf"), &json!(2)));
+    ok(&mut a, "doc_save", json!({ "doc": doc }));
+    let bytes = std::fs::read(root.join("source.pdf")).unwrap();
+    let text = String::from_utf8_lossy(&bytes);
+    assert_eq!(text.matches("/FitR").count(), 1, "only the link with to_rect fits an area: {text}");
+    assert_eq!(text.matches("/Fit]").count() + text.matches("/Fit ]").count(), 1, "the other keeps /Fit: {text}");
+    // user space: y up from the page's bottom, so the area's top (20 pt down) is height - 20
+    let top = (height - 20.0).round() as i64;
+    let bottom = (height - 70.0).round() as i64;
+    let fitr = &text[text.find("/FitR").unwrap()..];
+    let nums: Vec<i64> = fitr[5..fitr.find(']').unwrap()].split_whitespace().filter_map(|n| n.parse::<f64>().ok()).map(|n| n.round() as i64).collect();
+    assert_eq!(nums, vec![10, bottom, 110, top], "{fitr}");
+
+    let e = err(&mut a, "link_add", json!({ "doc": doc, "page": 1, "rect": [10, 70, 80, 90], "file": "notes.pdf", "to_rect": [1, 2, 30, 40] }));
+    assert!(matches!(&e, ToolError::InvalidArgs(m) if m.contains("to_doc")), "{e:?}");
+    let e = err(&mut a, "link_add", json!({ "doc": doc, "page": 1, "rect": [10, 70, 80, 90], "file": "notes.pdf", "to_page": 9, "to_rect": [1, 2, 30, 40], "to_doc": notes }));
+    assert!(matches!(&e, ToolError::InvalidArgs(m) if m.contains("to_page")), "{e:?}");
+}
+
 /// Android adaptation (#350): comments put on a named layer carry `/OC` to one optional content
 /// group, listed (and on) in `/OCProperties`, so a reader's Layers panel toggles them; a second
 /// call reuses the group, `layer_set` switches it, and undo takes it all back.

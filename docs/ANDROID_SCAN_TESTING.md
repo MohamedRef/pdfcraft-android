@@ -34,6 +34,7 @@ on one part. While any is changed, the scan screen says so.
 | Proportions from perspective (#293) | On | Off: from the lengths of the page's sides, as before |
 | Match standard paper sizes (#293) | On | Off: the page keeps the shape worked out for it |
 | Show pages as they will be saved (#301) | On | Off: the scan screen shows the camera's photo with its outline, as before; nothing is previewed |
+| Crop with magnifier and snapping to edges (#292) | On | Off: the crop screen before #292, four corner handles on the thumbnail |
 | Turn pages upright (#339) | On | Off: a page stays as its corners gave it (Rotate still works) |
 | Unsure pages follow their neighbors (#339) | On | Off: in a scan of several pages each page is turned by its own answer only |
 | Sharpen text, in Clean scan (#299) | 30 | Off, 60 or 100 |
@@ -64,9 +65,12 @@ The zip also holds `diagnostics.txt`, the diagnostics log as **Share diagnostics
  "finding": {"source": "model", "confidence": 0.835, "angle": 0, "passes": 1, "refined_sides": 4, "curved_sides": 0},
  "look": "auto", "strength": 60, "flatten": false,
  "options": {"finder": "auto", "refine": true, "side_proportions": false, "snap_paper": true, "strength_override": null, "upright": true,
-             "sharpen": 30, "denoise": true, "preview": true, "settle_turns": true},
+             "sharpen": 30, "denoise": true, "preview": true, "crop_tools": true, "settle_turns": true},
  "turns": {"manual": null, "auto": true, "total": 3, "followed": false, "source": "classifier"},
  "preview": {"shown": true, "reused": true, "ms": 412, "width": 905, "height": 1280, "look": "auto"},
+ "crop": {"visits": 1, "corner_drags": 2, "side_drags": 1, "snaps_asked": 3, "snaps_taken": 2, "snaps_held": 0, "snaps_failed": 0,
+          "snap_ms_max": 85, "nudges": 0, "detects": 0, "detects_found": 0, "whole_photo": 0, "resets": 0,
+          "loupe_decodes": 6, "snap": true, "ms": 9100, "moved_pct": 1.235},
  "result": {"file": "page-01.out.jpg", "width": 1654, "height": 2339, "format": "jpeg", "dpi": 200.0,
             "paper": "a4", "aspect": "known_focal", "focal_mismatch": false, "flattened": false, "bend_pct": 0.0,
             "quarter_turns": 3,
@@ -83,12 +87,18 @@ or `null`. `outcome` is `saved` or `discarded`; a discarded page has no `look`, 
 (#301): `shown` is false when none was (the option off, or Save tapped before it was ready),
 `reused` whether its straightened page was kept from an earlier preview, `ms` the time from the
 request to the result, and `look` the filter it showed, which can differ from the one saved when
-the filter was changed and saved before the new preview came. `turns` says which way up the page
-was saved (#339): `manual` is the person's own turn from Rotate or Undo (0–3 clockwise, `null`
-when they gave none), `auto` the ordinary setting "Turn pages upright automatically", `total` the
-turn the page was saved with, `followed` whether it took its neighbours' turn, and `source` one of
-`manual`, `neighbours`, `classifier` or `off`. `result.quarter_turns` and `result.orientation` stay
-the classifier's own answer, also for a page that then followed its neighbours.
+the filter was changed and saved before the new preview came. `crop` is what happened on the crop
+screen (#292), added up over every time the page was cropped with Done, or `null` when it never
+was: drags of corners and of sides, snaps asked for, taken, skipped by holding still and failed,
+the longest snap, keyboard and TalkBack moves, Auto-detect, No crop and Reset, magnifier regions
+decoded, whether Snap was on, the time spent, and `moved_pct`, the largest corner move from where
+the screen opened in % of the photo's diagonal. It is not kept if the app is closed by Android
+before the scan is saved. `turns` says which way up the page was saved (#339): `manual` is the
+person's own turn from Rotate or Undo (0–3 clockwise, `null` when they gave none), `auto` the
+ordinary setting "Turn pages upright automatically", `total` the turn the page was saved with,
+`followed` whether it took its neighbours' turn, and `source` one of `manual`, `neighbours`,
+`classifier` or `off`. `result.quarter_turns` and `result.orientation` stay the classifier's own
+answer, also for a page that then followed its neighbours.
 
 ## On the desktop
 
@@ -115,7 +125,12 @@ every press of Rotate or of Undo on the "Turned upright" chip is a `turn` line (
 `rotate` or `undo`, `auto_turns`, `turns`); every `preview` line (#301) says which page and
 filter, whether the preview was `made`, whether the straightened page was `reused`, the total `ms`
 and the native stages (`preview_base_ms`, `decode_ms`, `rectify_ms`, `preview_look_ms`, and the others
-the page needed), its `width` and `height`, `quarter_turns` and `flattened`; `test_options` is written when an option is changed, `tests_shared` (pages, bytes)
+the page needed), its `width` and `height`, `quarter_turns` and `flattened`; every `crop` line
+(#292) the page's `index`, whether it was left with Done, and the counts of its `crop` object;
+every `crop_snap` line whether a `corner` or `side` was let go, how many `sides` were asked for and
+how many were `refined` or `curved`, whether the snap was `taken`, `stale` (another drag had
+started) or `failed`, and its `ms`; every `crop_detect` line whether Auto-detect `found` a page,
+its `source` and `ms`; `test_options` is written when an option is changed, `tests_shared` (pages, bytes)
 when the zip is handed out, and `tests_cleared` when the kept scans are deleted. The log itself
 still holds no file name, path or document content.
 

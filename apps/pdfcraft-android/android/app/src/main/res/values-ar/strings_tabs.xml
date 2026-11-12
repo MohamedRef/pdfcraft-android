@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Document tabs and split view (#138 #139), kept apart from strings.xml so parallel work merges cleanly. -->
+<resources>
+    <string name="tabs_open_another">فتح مستند آخر</string>
+    <string name="tabs_parked">%1$s، مغلق لتوفير الذاكرة</string>
+    <string name="tabs_close">إغلاق %1$s</string>
+    <string name="tabs_split">عرض مقسوم</string>
+    <string name="tabs_split_close">إغلاق العرض المقسوم</string>
+    <string name="tabs_split_choose">عرض بجانب هذا المستند</string>
+    <string name="tabs_close_all">إغلاق الكل</string>
+    <string name="tabs_resume">العودة إلى المستندات</string>
+    <string name="tabs_split_edit_here">تعديل هنا</string>
+    <string name="tabs_snip">نسخ منطقة</string>
+    <string name="tabs_snip_hint">اسحب فوق المنطقة المراد نسخها</string>
+    <string name="tabs_snip_drag">اسحبها إلى المستند الآخر</string>
+    <string name="tabs_drop_linked">تمت الإضافة مع رابط إلى صفحة المصدر</string>
+    <string name="tabs_drop_done">تمت الإضافة</string>
+    <string name="tabs_drop_off_page">أفلتها على صفحة</string>
+    <plurals name="tabs_open_count">
+        <item quantity="zero">لا مستندات مفتوحة</item>
+        <item quantity="one">مستند واحد مفتوح</item>
+        <item quantity="two">مستندان مفتوحان</item>
+        <item quantity="few">%1$d مستندات مفتوحة</item>
+        <item quantity="many">%1$d مستندًا مفتوحًا</item>
+        <item quantity="other">%1$d مستند مفتوح</item>
+    </plurals>
+</resources>
