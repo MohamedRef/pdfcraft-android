@@ -297,6 +297,8 @@ private fun LicencesScreen(vm: AppViewModel) {
             entry(stringResource(R.string.root_licence_foxit), "BSD-3-Clause, Foxit Software Inc. and the PDFium Authors")
             entry(stringResource(R.string.root_licence_cmaps), "BSD-3-Clause, Adobe")
             entry(stringResource(R.string.root_licence_ocrs), stringResource(R.string.root_licence_ocrs_terms))
+            // the scanner's page detector (#290); its notice and licence text are in assets/models
+            entry("DocQuadNet-256 (MakeACopy)", "Apache-2.0, Christian Kierdorf")
             entry(stringResource(R.string.root_licence_rust), stringResource(R.string.root_licence_rust_terms))
             for (licence in texts.filter { it.isNotBlank() }) {
                 Spacer(Modifier.height(20.dp))

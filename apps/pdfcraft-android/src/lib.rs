@@ -1279,6 +1279,8 @@ impl MobileSession {
     pub fn release_memory(&self) {
         self.cache().clear();
         self.texts().clear();
+        // the scanner's detector model loads again when the next photo is taken
+        pdfcraft_scan::models::release();
     }
 
     /// The word at point (`x`, `y`) on page `page` (points, top-left origin), or the one nearest it

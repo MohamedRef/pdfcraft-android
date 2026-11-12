@@ -6,7 +6,7 @@
 use std::path::{Path, PathBuf};
 use std::sync::RwLock;
 
-use pdfcraft_scan::{AspectSource, Format, Look, PageRequest, Paper, Photo, Pyramid, Quad, RefineOptions, process_page, refine};
+use pdfcraft_scan::{AspectSource, Format, Look, PageRequest, Paper, Photo, Pyramid, Quad, QuadSource, RefineOptions, detect, process_page, refine};
 
 use crate::MobileError;
 
@@ -115,6 +115,39 @@ pub struct ScanQuad {
     pub timings: Vec<ScanTiming>,
 }
 
+/// What found a page in a photo (#290).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
+pub enum ScanQuadSource {
+    /// The detector network.
+    Model,
+    /// The line detector (the network's model file is not installed).
+    Lines,
+    /// Nothing convincing was found.
+    None,
+}
+
+/// The page found in a photo, its corners already moved onto the paper's edges (#290, #291).
+#[derive(Debug, Clone, PartialEq, uniffi::Record)]
+pub struct ScanDocument {
+    /// Whether a page was found. Without one, `corners` is the whole photo.
+    pub found: bool,
+    /// x1, y1 … x4, y4 as shares (0–1) of the upright photo: top-left, top-right, bottom-right,
+    /// bottom-left.
+    pub corners: Vec<f32>,
+    /// 0–1, how sure the search was.
+    pub confidence: f32,
+    pub source: ScanQuadSource,
+    /// The angle (degrees) the photo was shown to the network at for the answer it gave.
+    pub angle: i16,
+    /// How many times the network looked.
+    pub passes: u8,
+    /// For the top, right, bottom and left sides: moved onto an edge found in the full-size photo.
+    pub refined: Vec<bool>,
+    /// For the same sides: the edge bends, so the page is not flat.
+    pub curved: Vec<bool>,
+    pub timings: Vec<ScanTiming>,
+}
+
 /// The one directory scan functions read from and write to.
 static SCAN_ROOT: RwLock<Option<PathBuf>> = RwLock::new(None);
 
@@ -167,6 +200,67 @@ pub fn scan_refine_quad(photo_path: String, corners: Vec<f32>, sides: Vec<bool>,
     let root = SCAN_ROOT.read().unwrap_or_else(std::sync::PoisonError::into_inner).clone();
     let root = root.ok_or_else(|| MobileError::Command("scanning is not ready yet".into()))?;
     refine_in(&root, &photo_path, &corners, &sides, search_share)
+}
+
+/// Find the page in a photo and move its corners onto the paper's edges: the photo is decoded
+/// once, the detector looks at a small copy of it (#290), and each side is then looked at again
+/// at full size (#291). When nothing convincing is found, `found` is false and the corners are
+/// the whole photo.
+#[uniffi::export]
+pub fn scan_find_document(photo_path: String) -> Result<ScanDocument, MobileError> {
+    let root = SCAN_ROOT.read().unwrap_or_else(std::sync::PoisonError::into_inner).clone();
+    let root = root.ok_or_else(|| MobileError::Command("scanning is not ready yet".into()))?;
+    find_in(&root, &photo_path)
+}
+
+pub(crate) fn find_in(root: &Path, photo_path: &str) -> Result<ScanDocument, MobileError> {
+    let bytes = read_photo(root, photo_path)?;
+    let mut timings = Vec::with_capacity(3);
+    let mut clock = std::time::Instant::now();
+    let mut lap = |stage: &str, timings: &mut Vec<ScanTiming>| {
+        timings.push(ScanTiming { stage: stage.into(), ms: u32::try_from(clock.elapsed().as_millis()).unwrap_or(u32::MAX) });
+        clock = std::time::Instant::now();
+    };
+    let photo = Photo::decode(&bytes).map_err(|e| MobileError::Command(e.to_string()))?;
+    drop(bytes);
+    lap("scan_decode", &mut timings);
+    let found = detect(&photo);
+    lap("scan_detect", &mut timings);
+    let source = match found.source {
+        QuadSource::Model => ScanQuadSource::Model,
+        QuadSource::Lines => ScanQuadSource::Lines,
+        QuadSource::None => ScanQuadSource::None,
+    };
+    let (width, height) = (photo.width, photo.height);
+    let Some(quad) = found.quad else {
+        let whole = vec![0.0, 0.0, 1.0, 0.0, 1.0, 1.0, 0.0, 1.0];
+        return Ok(ScanDocument {
+            found: false,
+            corners: whole,
+            confidence: found.confidence,
+            source,
+            angle: found.angle,
+            passes: found.passes,
+            refined: vec![false; 4],
+            curved: vec![false; 4],
+            timings,
+        });
+    };
+    let pyramid = Pyramid::new(photo.luma());
+    drop(photo);
+    let refined = refine(&pyramid, &quad, &RefineOptions::default());
+    lap("scan_refine", &mut timings);
+    Ok(ScanDocument {
+        found: true,
+        corners: refined.quad.to_shares(width, height).to_vec(),
+        confidence: found.confidence,
+        source,
+        angle: found.angle,
+        passes: found.passes,
+        refined: refined.sides.iter().map(|s| s.refined).collect(),
+        curved: refined.sides.iter().map(|s| s.curved).collect(),
+        timings,
+    })
 }
 
 pub(crate) fn refine_in(root: &Path, photo_path: &str, corners: &[f32], sides: &[bool], search_share: f32) -> Result<ScanQuad, MobileError> {
@@ -421,6 +515,55 @@ mod tests {
         assert!(text.contains("/BitsPerComponent 1") && !text.contains("/BitsPerComponent 8"), "the page image is not 1 bit per pixel in the PDF");
         assert!(pdf.len() < 2 * png.len() + 4096, "PDF {} bytes for a PNG of {}", pdf.len(), png.len());
         std::fs::remove_dir_all(root).unwrap();
+    }
+
+    /// A sheet on a table: found by the network and put on its edges, in one call.
+    #[test]
+    fn a_sheet_is_found_and_put_on_its_edges() {
+        let root = temp("find");
+        let shot = root.join("desk.png");
+        let (w, h) = (1200u32, 1600u32);
+        // a light sheet with rows of print, a little turned, on a dark table
+        let (sin, cos) = 4f64.to_radians().sin_cos();
+        image::RgbImage::from_fn(w, h, |x, y| {
+            let (dx, dy) = (f64::from(x) - 600.0, f64::from(y) - 800.0);
+            let (u, v) = (dx * cos + dy * sin, -dx * sin + dy * cos);
+            let sheet = u.abs() < 380.0 && v.abs() < 540.0;
+            let print = sheet
+                && u.abs() < 320.0
+                && v.abs() < 480.0
+                && (v as i64).rem_euclid(26) < 8
+                && ((u as i64).div_euclid(15) + (v as i64).div_euclid(26)).rem_euclid(4) != 0;
+            image::Rgb(if print {
+                [45, 45, 50]
+            } else if sheet {
+                [236, 234, 228]
+            } else {
+                [62 + (x % 7) as u8, 50 + (y % 5) as u8, 44]
+            })
+        })
+        .save(&shot)
+        .unwrap();
+        let found = find_in(&root, &shot.to_string_lossy()).unwrap();
+        assert!(found.found && found.source == ScanQuadSource::Model && found.confidence >= 0.5, "{found:?}");
+        let truth = [(-380.0, -540.0), (380.0, -540.0), (380.0, 540.0), (-380.0, 540.0)]
+            .map(|(u, v): (f64, f64)| [600.0 + u * cos - v * sin, 800.0 + u * sin + v * cos]);
+        for (i, corner) in truth.iter().enumerate() {
+            let (x, y) = (f64::from(found.corners[2 * i]) * f64::from(w), f64::from(found.corners[2 * i + 1]) * f64::from(h));
+            assert!((x - corner[0]).hypot(y - corner[1]) < 1.5, "corner {i}: ({x:.1}, {y:.1}) against {corner:?}");
+        }
+        assert_eq!(found.refined, [true; 4]);
+        assert_eq!(found.timings.iter().map(|t| t.stage.as_str()).collect::<Vec<_>>(), ["scan_decode", "scan_detect", "scan_refine"]);
+        // nothing to find: the whole photo, and said so
+        let blank = root.join("blank.png");
+        image::RgbImage::from_fn(640, 480, |x, y| image::Rgb([90 + (x % 3) as u8, 90 + (y % 3) as u8, 90])).save(&blank).unwrap();
+        let none = find_in(&root, &blank.to_string_lossy()).unwrap();
+        assert!(!none.found && none.source == ScanQuadSource::None && none.corners == [0.0, 0.0, 1.0, 0.0, 1.0, 1.0, 0.0, 1.0], "{none:?}");
+        // outside the root: refused
+        let other = temp("find-other");
+        assert!(find_in(&other, &shot.to_string_lossy()).is_err());
+        std::fs::remove_dir_all(root).unwrap();
+        std::fs::remove_dir_all(other).unwrap();
     }
 
     #[test]
