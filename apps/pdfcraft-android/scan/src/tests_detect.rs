@@ -3,8 +3,9 @@
 
 use pdfcraft_geom::perspective::Point;
 
-use crate::detect::{Finder, Placement, QuadSource, SIDE, area_weights, detect, detect_with, read, shrink, square, with_lines};
+use crate::detect::{Finder, Placement, QuadSource, SIDE, detect, detect_with, read, shrink, square, with_lines};
 use crate::models::{EDGES, MODELS, ModelState, load, release, state};
+use crate::tensor::area_weights;
 use crate::{Photo, Quad};
 
 /// A photo of a sheet with rows of print at `quad` on a dark, grainy table.

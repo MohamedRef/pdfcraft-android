@@ -15,7 +15,7 @@ fault (raised under #125).
 
 Now, for both:
 
-- The build (`OcrModels` in `app/build.gradle.kts`) writes `models.index` next to the models in
+- The build (`ScanAndOcrModels` in `app/build.gradle.kts`, called `OcrModels` before) writes `models.index` next to the models in
   the APK: one line per file, `name<TAB>bytes<TAB>sha256`. It copies the folder when it holds a
   `.rten` or an `.onnx` file (before, only `.rten`).
 - `engine/ModelFiles.kt` compares that list with `.installed.index`, the list it wrote into
@@ -111,7 +111,27 @@ licence), and check that its feature says plainly when the model is missing.
 - **Not verified**: no real download has been made (there is no pack to fetch), nothing ran on a
   phone, and the list's download rows have not been seen on a screen.
 
-## Not done yet (#289)
+## Tensor helpers (section 2)
 
-- Moving a model to a pack, which waits on the owner.
-- `tensor.rs` (section 2) and renaming the Gradle task.
+`scan/src/tensor.rs` holds what each model module needs around a network:
+
+- `shrink_rgb` and `area_weights` (an exact area average), `resize_rgb` with `ResizeMode::Stretch`
+  or `Letterbox` (area when shrinking, bilinear when growing, black around a letterbox) and the
+  `Mapping` back to the source;
+- `planes` and `rgb_to_nchw_f32` (interleaved pixels to three planes, `(v - mean) / std`);
+- `sigmoid`, `argmax`, `argmax_2d` and `soft_argmax_window` (the centre of the probability near a
+  heat map's peak).
+
+`shrink_rgb`, `area_weights`, `Picture` and `sigmoid` moved out of `detect.rs` unchanged;
+`upright.rs` now takes `shrink_rgb` from here. `detect::read` uses `argmax_2d` and
+`soft_argmax_window` in place of its own loop, and `tests_tensor.rs` keeps the old loop word for
+word and checks, on 200 repeatable sets of corner maps (with ties and peaks on the edges), that
+every corner and the confidence come out **bit for bit** the same. So no page, corner or
+confidence changes. The flattening and orientation modules keep their own input code: their
+sampling (a grid of samples through a homography, centred tiles) is not one of these helpers,
+and rewriting it would change their numbers for nothing.
+
+## #289 is done
+
+What the issue asked for is in, except moving a model to a download, which the owner decided
+against for now (all three stay in the app). The pack code is ready for the day that changes.
