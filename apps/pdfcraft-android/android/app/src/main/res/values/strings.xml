@@ -379,6 +379,10 @@
     <string name="tools_filter_whiteboard">Whiteboard</string>
     <string name="tools_filter_light_text">Light text</string>
     <string name="tools_scan_flatten">Flatten page</string>
+    <string name="tools_scan_view_result">Result</string>
+    <string name="tools_scan_view_photo">Photo</string>
+    <string name="tools_scan_preparing">Preparing the page</string>
+    <string name="tools_scan_result_description">Page %1$d as it will be saved</string>
 
     <!-- App dialogs: the first comment's name prompt -->
     <!-- Verb: go on without entering a name -->
@@ -1801,6 +1805,7 @@
     <string name="scan_lab_sharpen">Sharpen text (Clean scan)</string>
     <string name="scan_lab_off">Off</string>
     <string name="scan_lab_denoise">Smooth grain in dim photos (Clean scan)</string>
+    <string name="scan_lab_preview">Show pages as they will be saved</string>
     <string name="scan_lab_strength">Filter strength</string>
     <string name="scan_lab_strength_own">Default</string>
     <string name="scan_lab_options_body">These switch parts of the scanner off, or swap them for what they replaced, to find which part a problem comes from. The log records what was in force for every page.</string>
