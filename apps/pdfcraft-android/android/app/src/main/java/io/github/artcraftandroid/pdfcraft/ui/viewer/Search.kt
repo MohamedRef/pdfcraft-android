@@ -7,6 +7,8 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import io.github.artcraftandroid.pdfcraft.core.SearchHit
+import io.github.artcraftandroid.pdfcraft.engine.Diag
+import io.github.artcraftandroid.pdfcraft.engine.DiagArea
 import io.github.artcraftandroid.pdfcraft.engine.Engine
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -60,26 +62,45 @@ class SearchState(private val engine: Engine, private val doc: ULong, private va
         val whole = wholeWords
         job = scope.launch {
             var announced = false
-            for (k in 0 until pageCount) {
-                if (!isActive) return@launch
-                val page = (fromPage + k) % pageCount
-                val found = runCatching {
-                    withContext(engine.documentText) { engine.session.findInPage(doc, page.toUInt(), text, case, whole) }
-                }.getOrDefault(emptyList())
-                if (found.isNotEmpty()) {
-                    // keep reading order: insert this page's hits where they belong
-                    val at = insertionPoint(hits, page)
-                    hits.addAll(at, found)
-                    if (current >= at) current += found.size
-                    if (!announced) {
-                        announced = true
-                        current = at
-                        onFirst(found.first())
+            // #87 #88: one summary line per search, also when a new search or clear() stops it
+            val started = android.os.SystemClock.elapsedRealtime()
+            var firstHitMs = -1L
+            var finished = false
+            var pagesRead = 0
+            var hitCount = 0
+            try {
+                for (k in 0 until pageCount) {
+                    if (!isActive) return@launch
+                    val page = (fromPage + k) % pageCount
+                    val found = runCatching {
+                        withContext(engine.documentText) { engine.session.findInPage(doc, page.toUInt(), text, case, whole) }
+                    }.getOrDefault(emptyList())
+                    if (found.isNotEmpty()) {
+                        // keep reading order: insert this page's hits where they belong
+                        val at = insertionPoint(hits, page)
+                        hits.addAll(at, found)
+                        hitCount += found.size
+                        if (current >= at) current += found.size
+                        if (!announced) {
+                            announced = true
+                            firstHitMs = android.os.SystemClock.elapsedRealtime() - started
+                            current = at
+                            onFirst(found.first())
+                        }
                     }
+                    searched = k + 1
+                    pagesRead = k + 1
                 }
-                searched = k + 1
+                finished = true
+                running = false
+            } finally {
+                if (Diag.enabled()) {
+                    Diag.event(
+                        DiagArea.Text, "search", "pages" to pageCount, "searched" to pagesRead, "hits" to hitCount,
+                        "ms" to android.os.SystemClock.elapsedRealtime() - started, "first_hit_ms" to firstHitMs, "finished" to finished,
+                    )
+                }
             }
-            running = false
         }
     }
 

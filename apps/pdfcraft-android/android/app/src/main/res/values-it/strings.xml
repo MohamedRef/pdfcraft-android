@@ -1934,4 +1934,14 @@
         <item quantity="many">%d pagine</item>
         <item quantity="other">%d pagine</item>
     </plurals>
+    <string name="handwriting_read_page">Leggi la scrittura a mano di questa pagina (beta)</string>
+    <string name="handwriting_busy">Lettura della scrittura a mano…</string>
+    <string name="handwriting_none">Nessuna scrittura a mano ancora da leggere in questa pagina</string>
+    <string name="handwriting_nothing_read">Nessuna parola letta. Il riconoscimento funziona meglio con lettere latine chiare in stampatello.</string>
+    <plurals name="handwriting_done">
+        <item quantity="one">Testo aggiunto a %d disegno</item>
+        <item quantity="many">Testo aggiunto a %d disegni</item>
+        <item quantity="other">Testo aggiunto a %d disegni</item>
+    </plurals>
+    <string name="toolbar_label_handwriting">Scrittura</string>
 </resources>

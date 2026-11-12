@@ -8,15 +8,19 @@
 #![forbid(unsafe_code)]
 #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
 
+pub mod aspect;
 pub mod encode;
 pub mod enhance;
 mod error;
+pub mod exif;
 pub mod look;
 pub mod page;
 mod photo;
 mod quad;
+pub mod refine;
 pub mod warp;
 
+pub use aspect::{AspectSource, Focal, Paper, Proportions, proportions};
 pub use encode::Format;
 pub use enhance::{AutoOutput, AutoParams, PaperMode, auto};
 pub use error::ScanError;
@@ -24,7 +28,12 @@ pub use look::Look;
 pub use page::{PageRequest, PageResult, process_page};
 pub use photo::{Luma, MAX_PHOTO_PIXELS, Photo, luma};
 pub use quad::Quad;
+pub use refine::{Pyramid, RefineOptions, Refined, SideFit, refine};
 pub use warp::{Rgb, rectify};
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tests_proportions;
+#[cfg(test)]
+mod tests_refine;

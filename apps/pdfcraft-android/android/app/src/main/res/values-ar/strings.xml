@@ -1793,6 +1793,19 @@
         <item quantity="many">تحول %1$d عنوانًا إلى روابط</item>
         <item quantity="other">تحول %1$d عنوان إلى روابط</item>
     </plurals>
+    <string name="handwriting_read_page">قراءة خط اليد في هذه الصفحة (تجريبي)</string>
+    <string name="handwriting_busy">جارٍ قراءة خط اليد…</string>
+    <string name="handwriting_none">لا يوجد خط يد في هذه الصفحة لم تتم قراءته بعد</string>
+    <string name="handwriting_nothing_read">تعذّرت قراءة أي كلمات. تعمل القراءة أفضل مع حروف لاتينية واضحة منفصلة.</string>
+    <plurals name="handwriting_done">
+        <item quantity="zero">أُضيف نص إلى %d رسمة</item>
+        <item quantity="one">أُضيف نص إلى رسمة واحدة</item>
+        <item quantity="two">أُضيف نص إلى رسمتين</item>
+        <item quantity="few">أُضيف نص إلى %d رسمات</item>
+        <item quantity="many">أُضيف نص إلى %d رسمة</item>
+        <item quantity="other">أُضيف نص إلى %d رسمة</item>
+    </plurals>
+    <string name="toolbar_label_handwriting">خط اليد</string>
     <!-- Measure tool (#135, #180) -->
     <string name="measure_tool">القياس</string>
     <string name="measure_distance">المسافة</string>

@@ -679,6 +679,7 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
                 ViewerSheet.NoteMargin -> NoteMarginSheet(vm, doc, listOf(doc.viewer.currentPage)) { ctl.sheet = ViewerSheet.None }
                 ViewerSheet.Redact -> RedactSheet(vm, doc)
                 ViewerSheet.Compare -> CompareSheet(vm, doc)
+                ViewerSheet.Accessibility -> AccessibilitySheet(vm, doc)
                 ViewerSheet.None -> Unit
             }
         }

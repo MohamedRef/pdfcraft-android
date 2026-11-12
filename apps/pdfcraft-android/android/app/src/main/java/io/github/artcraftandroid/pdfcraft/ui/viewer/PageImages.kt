@@ -8,6 +8,8 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import io.github.artcraftandroid.pdfcraft.core.RenderCancel
 import io.github.artcraftandroid.pdfcraft.core.TileRect
+import io.github.artcraftandroid.pdfcraft.engine.Diag
+import io.github.artcraftandroid.pdfcraft.engine.DiagArea
 import io.github.artcraftandroid.pdfcraft.engine.Engine
 import io.github.artcraftandroid.pdfcraft.engine.OpenTiming
 import io.github.artcraftandroid.pdfcraft.engine.toBitmap
@@ -126,7 +128,11 @@ class PageImages(
     /** Drop every image the view does not want now (the app went to the background, #92). */
     fun trimToWanted() {
         val keep = synchronized(lock) { wanted.mapTo(HashSet()) { it.key } }
+        val before = synchronized(lock) { bytes }
         trim(keep)
+        // #92: what going to the background freed
+        val after = synchronized(lock) { bytes }
+        Diag.event(DiagArea.Memory, "page_images_trim", "kept" to keep.size, "freed_mb" to (before - after) / (1024 * 1024), "kept_mb" to after / (1024 * 1024))
     }
 
     companion object {

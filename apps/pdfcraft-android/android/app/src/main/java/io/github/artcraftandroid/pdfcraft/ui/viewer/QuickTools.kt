@@ -83,6 +83,7 @@ enum class QuickTool(val id: String, @StringRes val label: Int, @StringRes val t
     Protect("protect", R.string.toolbar_label_password, R.string.common_tool_set_password, LucideIcons.FileLock2, ToolHues.protect),
     // a tool that changes the content: More tools, not ⋮ (#195)
     Redact("redact", R.string.redact_title, R.string.redact_title, LucideIcons.SquareDashed, ToolHues.protect),
+    Accessibility("accessibility", R.string.a11y_title, R.string.a11y_title, LucideIcons.Accessibility, ToolHues.protect),
     Organize("organize", R.string.toolbar_label_organize, R.string.common_tool_organize, LucideIcons.LayoutGrid, ToolHues.organize),
     Crop("crop", R.string.toolbar_label_crop, R.string.common_tool_crop, LucideIcons.Crop, ToolHues.crop),
     // room beside the content for notes (#146): changes the pages, so More tools
@@ -91,6 +92,8 @@ enum class QuickTool(val id: String, @StringRes val label: Int, @StringRes val t
     // the scan tools sit with Recognize text, in one place (#195)
     ScanEnhance("enhance", R.string.toolbar_label_enhance, R.string.scan_enhance_title, LucideIcons.WandSparkles, ToolHues.ocr),
     OcrReview("ocrreview", R.string.toolbar_label_review_ocr, R.string.ocr_review_title, LucideIcons.ListChecks, ToolHues.ocr),
+    // ink comments get their handwriting as text (#151), beside the other reading tools
+    Handwriting("handwriting", R.string.toolbar_label_handwriting, R.string.handwriting_read_page, LucideIcons.ScanText, ToolHues.ocr),
     Create("create", R.string.common_tool_create_pdf, R.string.common_tool_create_pdf, LucideIcons.FilePlus2, ToolHues.create),
     Text("text", R.string.toolbar_label_add_text, R.string.toolbar_tool_text, LucideIcons.Type, ToolHues.text),
     Scan("scan", R.string.common_tool_scan, R.string.common_tool_scan, LucideIcons.Camera, ToolHues.scan),
@@ -204,7 +207,9 @@ fun AppViewModel.runQuickTool(doc: OpenDocument, tool: QuickTool) {
         QuickTool.Ocr -> recognizeText(doc)
         QuickTool.ScanEnhance -> doc.controller.sheet = ViewerSheet.ScanEnhance
         QuickTool.Redact -> openRedact(doc)
+        QuickTool.Accessibility -> doc.controller.sheet = ViewerSheet.Accessibility
         QuickTool.OcrReview -> doc.controller.sheet = ViewerSheet.OcrConfidence
+        QuickTool.Handwriting -> recognizeHandwriting(doc, doc.viewer.currentPage)
         QuickTool.Create -> openCreate()
         QuickTool.Scan -> startScan()
         QuickTool.ReadAloud -> startReadAloud(doc)

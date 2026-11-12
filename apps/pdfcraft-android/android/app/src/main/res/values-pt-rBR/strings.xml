@@ -1529,4 +1529,14 @@
         <item quantity="many">%d páginas</item>
         <item quantity="other">%d páginas</item>
     </plurals>
+    <string name="handwriting_read_page">Ler a escrita à mão desta página (beta)</string>
+    <string name="handwriting_busy">Lendo a escrita à mão…</string>
+    <string name="handwriting_none">Não há escrita à mão ainda não lida nesta página</string>
+    <string name="handwriting_nothing_read">Nenhuma palavra pôde ser lida. Funciona melhor com letras latinas claras, de forma.</string>
+    <plurals name="handwriting_done">
+        <item quantity="one">Texto adicionado a %d desenho</item>
+        <item quantity="many">Texto adicionado a %d desenhos</item>
+        <item quantity="other">Texto adicionado a %d desenhos</item>
+    </plurals>
+    <string name="toolbar_label_handwriting">Escrita</string>
 </resources>
