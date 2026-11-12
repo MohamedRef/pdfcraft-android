@@ -78,6 +78,7 @@ import io.github.artcraftandroid.pdfcraft.ui.OpenDocument
 import io.github.artcraftandroid.pdfcraft.ui.PdfSheet
 import io.github.artcraftandroid.pdfcraft.ui.pdfColors
 import kotlin.math.roundToInt
+import androidx.compose.material3.minimumInteractiveComponentSize
 
 /** A note waiting for its text: at a point (Comment tool) or on selected text (Add comment). */
 class NotePrompt(
@@ -360,8 +361,8 @@ fun BoxScope.SelectionMenu(vm: AppViewModel, doc: OpenDocument, sel: Selection) 
         MenuRow(LucideIcons.SwatchBook, stringResource(R.string.cards_make)) { vm.study.makeCardFromSelection(doc, cloze = false) }
         MenuRow(LucideIcons.SwatchBook, stringResource(R.string.cards_make_cloze)) { vm.study.makeCardFromSelection(doc, cloze = true) }
         // while reading aloud, the reading moves to the selection (the reference's "from here")
-        MenuRow(LucideIcons.Volume2, stringResource(if (vm.readAloud != null) R.string.viewer_read_from_here else R.string.common_tool_read_aloud)) {
-            vm.startReadAloud(doc, fromSelection = true)
+        MenuRow(LucideIcons.Volume2, stringResource(if (vm.sharing.readAloud != null) R.string.viewer_read_from_here else R.string.common_tool_read_aloud)) {
+            vm.sharing.startReadAloud(doc, fromSelection = true)
             doc.selection.clear()
         }
         Spacer(Modifier.height(8.dp))
@@ -411,7 +412,7 @@ fun BoxScope.MarkupFollowUpBar(vm: AppViewModel, f: MarkupFollowUp) {
         for (color in FOLLOW_UP_COLORS) {
             val on = color == f.color
             Box(
-                Modifier.size(40.dp).clickable(role = Role.RadioButton) { vm.commenting.recolorFollowUp(f, color) }
+                Modifier.minimumInteractiveComponentSize().size(40.dp).clickable(role = Role.RadioButton) { vm.commenting.recolorFollowUp(f, color) }
                     .semantics { contentDescription = colorLabel; selected = on },
                 contentAlignment = Alignment.Center,
             ) {
@@ -449,14 +450,14 @@ fun NoteSheet(vm: AppViewModel, prompt: NotePrompt) {
         onDismiss = { vm.commenting.notePrompt = null },
         onPost = { vm.commenting.postNote(prompt, it) },
         onVoice = if (at != null && prompt.selection == null && prompt.edit == null) ({ vm.commenting.notePrompt = null; vm.commenting.startVoice(prompt.doc, at) }) else null,
-        author = vm.prefsChanged.let { vm.settings.toolPrefs.author }, onAuthor = { vm.authorPrompt = true },
+        author = vm.home.prefsChanged.let { vm.settings.toolPrefs.author }, onAuthor = { vm.authorPrompt = true },
     )
 }
 
 /** A reply being typed: the same bar, under the comment it answers. */
 @Composable
 fun ReplySheet(vm: AppViewModel, prompt: ReplyPrompt) {
-    InlineNoteBar(hint = stringResource(R.string.viewer_write_reply), onDismiss = { vm.commenting.replyPrompt = null }, onPost = { vm.commenting.postReply(prompt, it) }, onVoice = null, author = vm.prefsChanged.let { vm.settings.toolPrefs.author }, onAuthor = { vm.authorPrompt = true })
+    InlineNoteBar(hint = stringResource(R.string.viewer_write_reply), onDismiss = { vm.commenting.replyPrompt = null }, onPost = { vm.commenting.postReply(prompt, it) }, onVoice = null, author = vm.home.prefsChanged.let { vm.settings.toolPrefs.author }, onAuthor = { vm.authorPrompt = true })
 }
 
 /**

@@ -150,7 +150,8 @@ its `source` and `ms`; every `page` and `preview` line `flatten_auto` and, from
 #302's check, `flatten_checked`, `flatten_kept`, `flatten_why`, `straight_px`, `straight_flat_px`
 (tenths of a pixel, -1 when not measured), `straight_lines` and `straight_flat_lines`; every `model_files` line (#289) what the models check copied and why
 (`copied`, `kept`, `failed`, `new`, `changed`, `size`, `unrecorded`, `forced`, `ms`), and while
-the log is recorded a `model_states` line with each model's state; `test_options` is written when an option is changed, `tests_shared` (pages, bytes)
+the log is recorded a `model_states` line with each model's state; a `model_download` or
+`model_removed` line for an optional model (none yet); `test_options` is written when an option is changed, `tests_shared` (pages, bytes)
 when the zip is handed out, and `tests_cleared` when the kept scans are deleted. The log itself
 still holds no file name, path or document content.
 

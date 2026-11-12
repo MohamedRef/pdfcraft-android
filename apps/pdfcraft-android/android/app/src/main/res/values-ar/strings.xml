@@ -1971,4 +1971,10 @@
     <string name="scan_models_body">هذه النماذج مضمّنة في التطبيق وتعمل على هذا الجهاز. النموذج التالف لا يُستخدم، وتبقى ميزته متوقفة حتى ينسخه التطبيق من جديد.</string>
     <string name="scan_models_copy_again">نسخ النماذج من جديد</string>
     <string name="scan_models_copied">النماذج المنسوخة: %1$d</string>
+    <string name="scan_model_not_downloaded">غير محمّل</string>
+    <string name="scan_model_download">تنزيل (%1$s)</string>
+    <string name="scan_model_downloading">جارٍ التنزيل: %1$d%%</string>
+    <string name="scan_model_cancel">إلغاء التنزيل</string>
+    <string name="scan_model_remove">إزالة</string>
+    <string name="scan_model_download_failed">لم يكتمل التنزيل. اضغط تنزيل للمحاولة مرة أخرى؛ ما تم حفظه يبقى.</string>
 </resources>

@@ -173,7 +173,7 @@ class Thumbnails(private val context: Context) {
         // The engine maps a working copy in the app's private store (no copy, so any size it
         // opens) and reads other files only up to its 100 MiB preview limit.
         if (!f.isFile || f.length() > MAX_LOCAL) return null
-        return cached(sha("$path|${f.lastModified()}|${f.length()}|$maxSide")) { fileThumbnail(path, maxSide.toUInt()).toBitmap() }
+        return cached(key(path, f.lastModified(), f.length(), maxSide)) { fileThumbnail(path, maxSide.toUInt()).toBitmap() }
     }
 
     private fun ofContent(uri: Uri, maxSide: Int): Bitmap? {
@@ -186,7 +186,7 @@ class Thumbnails(private val context: Context) {
         }.getOrNull() ?: return null
         // a very large file isn't copied just for its first page
         if (size > MAX_COPY) return null
-        return cached(sha("$uri|$modified|$size|$maxSide")) {
+        return cached(key(uri.toString(), modified, size, maxSide)) {
             val tmp = File.createTempFile("thumb", ".pdf", context.cacheDir)
             try {
                 // a provider that reports no size is still held to the limit while copying (#116)
@@ -222,11 +222,17 @@ class Thumbnails(private val context: Context) {
         return bmp
     }
 
-    private fun sha(s: String) = MessageDigest.getInstance("SHA-1").digest(s.toByteArray()).joinToString("") { "%02x".format(it) }
-
-    private companion object {
+    internal companion object {
+        /** The largest file a preview copies out of another app (the engine's preview limit). */
         const val MAX_COPY = 100L * 1024 * 1024
         /** The engine's input limit; the engine itself keeps 100 MiB for files it must copy. */
         const val MAX_LOCAL = 512L * 1024 * 1024
+
+        /**
+         * The cache key of a preview: it changes when the file changes (modified time or size) or
+         * a different size is asked for, so a stale or failed preview is never shown for a new file.
+         */
+        fun key(source: String, modified: Long, size: Long, maxSide: Int): String =
+            MessageDigest.getInstance("SHA-1").digest("$source|$modified|$size|$maxSide".toByteArray()).joinToString("") { "%02x".format(it) }
     }
 }

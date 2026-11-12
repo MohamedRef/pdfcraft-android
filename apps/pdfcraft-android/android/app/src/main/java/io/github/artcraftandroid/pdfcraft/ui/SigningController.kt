@@ -396,7 +396,7 @@ class SigningController internal constructor(private val vm: AppViewModel) {
                 if (saved) {
                     vm.tell(text(R.string.msg_signed_saved))
                 } else {
-                    vm.tell(text(R.string.msg_signed_not_saved, doc.name), text(R.string.common_save_copy)) { vm.saveCopyAs(doc) }
+                    vm.tell(text(R.string.msg_signed_not_saved, doc.name), text(R.string.common_save_copy)) { vm.sharing.saveCopyAs(doc) }
                 }
             } catch (e: MobileException) {
                 val m = toolMessage(e, "sign_document")

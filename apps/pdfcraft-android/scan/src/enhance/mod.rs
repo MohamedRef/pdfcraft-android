@@ -10,6 +10,7 @@
 mod background;
 mod bw;
 mod detail;
+pub mod learned;
 mod objects;
 mod plane;
 mod tone;
@@ -20,6 +21,8 @@ mod tests;
 mod tests_bw;
 #[cfg(test)]
 mod tests_detail;
+#[cfg(test)]
+mod tests_learned;
 
 pub use bw::{Bitmap1, BwParams, DEFAULT_BW_STRENGTH, black_white};
 pub use plane::Mask;

@@ -23,7 +23,14 @@ pub struct ModelSpec {
     pub licence: &'static str,
     /// Shipped in the app (`true`), or an optional download (#289, section 4).
     pub bundled: bool,
+    /// Where an optional download is fetched from: an asset of a release of this repository
+    /// ([`PACK_URL_PREFIX`]). Empty for a bundled model.
+    pub url: &'static str,
 }
+
+/// Every optional model is an asset of a release of this repository whose tag starts with
+/// `scan-models-`; the app refuses any other address (`engine/ModelDownload.kt` checks the same).
+pub const PACK_URL_PREFIX: &str = "https://github.com/MohamedRef/pdfcraft-android/releases/download/scan-models-";
 
 /// The document detector (#290): DocQuadNet-256 from MakeACopy.
 pub const EDGES: &str = "edges";
@@ -43,6 +50,7 @@ pub static MODELS: &[ModelSpec] = &[
         bytes: 6_700_744,
         licence: "Apache-2.0",
         bundled: true,
+        url: "",
     },
     ModelSpec {
         id: FLATTEN,
@@ -51,6 +59,7 @@ pub static MODELS: &[ModelSpec] = &[
         bytes: 15_803_619,
         licence: "MIT",
         bundled: true,
+        url: "",
     },
     ModelSpec {
         id: UPRIGHT,
@@ -59,6 +68,7 @@ pub static MODELS: &[ModelSpec] = &[
         bytes: 3_439_151,
         licence: "Apache-2.0",
         bundled: true,
+        url: "",
     },
 ];
 

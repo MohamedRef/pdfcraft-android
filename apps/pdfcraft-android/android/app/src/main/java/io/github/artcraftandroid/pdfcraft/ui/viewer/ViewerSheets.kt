@@ -112,7 +112,7 @@ fun MoreSheet(vm: AppViewModel, doc: OpenDocument) {
                     )
                 }
             }
-            BarIcon(LucideIcons.Printer, stringResource(R.string.sheet_print), { close(); vm.print(doc) }, size = 40.dp)
+            BarIcon(LucideIcons.Printer, stringResource(R.string.sheet_print), { close(); vm.sharing.print(doc) }, size = 40.dp)
             BarIcon(LucideIcons.Star, stringResource(if (starred) R.string.sheet_remove_star else R.string.sheet_add_star), { vm.settings.toggleStar(doc) },
                 tint = if (starred) Color(0xFFF5B800) else c.icon, size = 40.dp)
         }
@@ -124,7 +124,7 @@ fun MoreSheet(vm: AppViewModel, doc: OpenDocument) {
             MoreHeading(stringResource(R.string.sheet_group_view))
             SheetRow(LucideIcons.Info, stringResource(R.string.file_details_title), { ctl.sheet = ViewerSheet.FileDetails }, chevron = true)
             SheetRow(LucideIcons.Glasses, stringResource(R.string.sheet_view_settings), { ctl.sheet = ViewerSheet.ViewSettings }, chevron = true)
-            SheetRow(LucideIcons.Presentation, stringResource(R.string.sheet_present), { close(); vm.startPresenting(doc) })
+            SheetRow(LucideIcons.Presentation, stringResource(R.string.sheet_present), { close(); vm.sharing.startPresenting(doc) })
             // tabs (#138): keep this document open and open another beside it
             SheetRow(LucideIcons.FilePlus, stringResource(R.string.tabs_open_another), { close(); vm.tabs.openAnother() })
             SheetRow(LucideIcons.LayoutGrid, stringResource(R.string.sheet_pages), {
@@ -135,7 +135,7 @@ fun MoreSheet(vm: AppViewModel, doc: OpenDocument) {
             }, chevron = true)
             SheetRow(LucideIcons.Clock, stringResource(R.string.focus_timer), { ctl.sheet = ViewerSheet.FocusTimer })
             SheetRow(LucideIcons.Bandage, stringResource(R.string.study_title), { ctl.sheet = ViewerSheet.Study }, chevron = true)
-            if (doc.source != null) SheetRow(LucideIcons.Mic, stringResource(if (vm.lectureRecording != null) R.string.lecture_recording else R.string.lecture_title), { ctl.sheet = ViewerSheet.Lectures }, chevron = true)
+            if (doc.source != null) SheetRow(LucideIcons.Mic, stringResource(if (vm.noteTaking.lectureRecording != null) R.string.lecture_recording else R.string.lecture_title), { ctl.sheet = ViewerSheet.Lectures }, chevron = true)
             GroupDivider()
             MoreHeading(stringResource(R.string.sheet_group_navigate))
             SheetRow(LucideIcons.Bookmark, stringResource(R.string.sheet_bookmarks_contents), { ctl.sheet = ViewerSheet.Bookmarks }, chevron = true)
@@ -159,17 +159,17 @@ fun MoreSheet(vm: AppViewModel, doc: OpenDocument) {
             }
             GroupDivider()
             MoreHeading(stringResource(R.string.sheet_group_file))
-            SheetRow(LucideIcons.Copy, stringResource(R.string.common_save_copy), { close(); vm.saveCopyAs(doc) })
+            SheetRow(LucideIcons.Copy, stringResource(R.string.common_save_copy), { close(); vm.sharing.saveCopyAs(doc) })
             if (vm.backups.backupTree != null) SheetRow(LucideIcons.RotateCcw, stringResource(R.string.backup_history), { ctl.sheet = ViewerSheet.Backups }, chevron = true)
             SheetRow(LucideIcons.GitCompare, stringResource(R.string.compare_with_older), { close(); vm.startCompare(doc) })
-            SheetRow(LucideIcons.FileOutput, stringResource(R.string.sheet_export_as), { close(); vm.openExport(doc) })
+            SheetRow(LucideIcons.FileOutput, stringResource(R.string.sheet_export_as), { close(); vm.sharing.openExport(doc) })
             SheetRow(LucideIcons.BrushCleaning, stringResource(R.string.hidden_title), { ctl.sheet = ViewerSheet.HiddenInfo }, chevron = true)
             SheetRow(LucideIcons.BadgeCheck, stringResource(R.string.std_title), { close(); vm.docTools.openStandards(doc) })
             SheetRow(LucideIcons.Heading, stringResource(R.string.marks_title), { close(); vm.docTools.openPageMarks(doc) }, enabled = canEditDocument(doc))
             SheetRow(LucideIcons.Stamp, stringResource(R.string.flatten_title), { close(); vm.docTools.flattenPrompt = doc }, enabled = canEditDocument(doc))
             // a clean copy to print; the working file keeps its comments (#155). Sharing one is in Share.
             SheetRow(LucideIcons.Printer, stringResource(R.string.print_options_title), { close(); vm.docTools.openPrintOptions(doc) })
-            SheetRow(LucideIcons.Printer, stringResource(R.string.sheet_print_clean), { close(); vm.print(doc, clean = true) })
+            SheetRow(LucideIcons.Printer, stringResource(R.string.sheet_print_clean), { close(); vm.sharing.print(doc, clean = true) })
             Spacer(Modifier.height(8.dp))
         }
     }
@@ -604,8 +604,8 @@ fun MoreToolsSheet(vm: AppViewModel, doc: OpenDocument) {
         }
         // Customize toolbar: an outlined pill across the sheet
         Box(
-            Modifier.padding(horizontal = 36.dp).fillMaxWidth().height(41.dp).clip(RoundedCornerShape(20.5.dp))
-                .border(2.dp, pdfColors.divider, RoundedCornerShape(20.5.dp))
+            Modifier.padding(horizontal = 36.dp).fillMaxWidth().heightIn(min = 48.dp).clip(RoundedCornerShape(24.dp))
+                .border(2.dp, pdfColors.divider, RoundedCornerShape(24.dp))
                 .clickable(role = Role.Button) { customizing = true },
             contentAlignment = Alignment.Center,
         ) {

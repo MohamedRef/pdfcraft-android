@@ -1618,4 +1618,10 @@
     <string name="scan_models_body">Estes modelos vêm com o app e rodam neste dispositivo. Um modelo danificado não é usado, e o recurso fica desligado até o app copiá-lo de novo.</string>
     <string name="scan_models_copy_again">Copiar os modelos de novo</string>
     <string name="scan_models_copied">Modelos copiados: %1$d</string>
+    <string name="scan_model_not_downloaded">Não baixado</string>
+    <string name="scan_model_download">Baixar (%1$s)</string>
+    <string name="scan_model_downloading">Baixando: %1$d%%</string>
+    <string name="scan_model_cancel">Cancelar download</string>
+    <string name="scan_model_remove">Remover</string>
+    <string name="scan_model_download_failed">O download não terminou. Toque em Baixar para tentar de novo; o que foi salvo é mantido.</string>
 </resources>

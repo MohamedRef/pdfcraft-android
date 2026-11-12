@@ -529,7 +529,7 @@ fun CreateSourcesScreen(vm: AppViewModel) {
             Text(stringResource(R.string.tools_create_title), color = c.label, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
         }
         Spacer(Modifier.height(8.dp))
-        SourceRow(LucideIcons.Images, stringResource(R.string.home_photos)) { vm.tools.toolScreen = null; vm.pickPhotosToPdf() }
+        SourceRow(LucideIcons.Images, stringResource(R.string.home_photos)) { vm.tools.toolScreen = null; vm.home.pickPhotosToPdf() }
         SourceRow(LucideIcons.FolderOpen, stringResource(R.string.tools_browse_files)) { vm.tools.toolScreen = null; vm.pickFiles(FilePickKind.Create) }
         Text(stringResource(R.string.tools_or_make_new), color = c.textSecondary, fontSize = 14.sp, modifier = Modifier.padding(start = 20.dp, top = 20.dp, bottom = 6.dp))
         Box(Modifier.padding(horizontal = 16.dp).fillMaxWidth().height(1.dp).background(c.divider))

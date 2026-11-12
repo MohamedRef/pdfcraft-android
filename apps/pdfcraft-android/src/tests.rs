@@ -1409,3 +1409,74 @@ fn page_mark_preview_on_a_copy_of_one_page() {
     assert!(s.page_marks(doc).unwrap().is_empty());
     std::fs::remove_dir_all(&dir).ok();
 }
+
+/// The 44-byte header the app's VoiceRecorder.writeWavHeader writes (checked byte for byte by
+/// WavHeaderTest on the JVM side), for 16-bit PCM mono at `rate`, claiming `data_len` bytes.
+fn app_wav_header(rate: u32, data_len: u64) -> Vec<u8> {
+    let data = data_len.min(0xFFFF_FFFF - 36) as u32;
+    let mut h = Vec::with_capacity(44);
+    h.extend_from_slice(b"RIFF");
+    h.extend_from_slice(&(data as u64 + 36).min(0xFFFF_FFFF).to_le_bytes()[..4]);
+    h.extend_from_slice(b"WAVEfmt ");
+    h.extend_from_slice(&16u32.to_le_bytes());
+    h.extend_from_slice(&1u16.to_le_bytes()); // PCM
+    h.extend_from_slice(&1u16.to_le_bytes()); // mono
+    h.extend_from_slice(&rate.to_le_bytes());
+    h.extend_from_slice(&(rate * 2).to_le_bytes());
+    h.extend_from_slice(&2u16.to_le_bytes());
+    h.extend_from_slice(&16u16.to_le_bytes());
+    h.extend_from_slice(b"data");
+    h.extend_from_slice(&data.to_le_bytes());
+    h
+}
+
+/// Post `wav` as a voice comment on page 1 of a fresh document, as CommentsController.postVoice does.
+fn post_voice(wav: &[u8]) -> Result<String, MobileError> {
+    let s = MobileSession::new();
+    let doc = s.open(blank_pdf(1), None).unwrap().id;
+    let path = scratch().join("voice.wav");
+    std::fs::write(&path, wav).unwrap();
+    let args = serde_json::json!({"doc": doc, "page": 1, "type": "sound", "at": [72.0, 72.0], "path": path, "color": "#FFD400", "author": "Test"});
+    s.execute("comment_add".into(), args.to_string())
+}
+
+#[test]
+fn a_voice_comment_recorded_by_the_app_is_accepted() {
+    // #125: the cross-language contract between VoiceRecorder.writeWavHeader and wav_samples
+    let mut wav = app_wav_header(16_000, 32_000);
+    assert_eq!(wav.len(), 44);
+    wav.extend(std::iter::repeat_n(0u8, 32_000));
+    post_voice(&wav).unwrap();
+}
+
+#[test]
+fn a_recording_stopped_before_its_length_was_written_is_still_accepted() {
+    // the header written when recording starts claims the longest length RIFF can say; a recorder
+    // stopped before it was rewritten leaves that, and the engine takes the samples that are there
+    let mut wav = app_wav_header(16_000, u64::MAX);
+    assert_eq!(&wav[4..8], &[0xFF; 4]);
+    wav.extend(std::iter::repeat_n(0u8, 3_200));
+    post_voice(&wav).unwrap();
+}
+
+#[test]
+fn a_header_without_samples_is_refused() {
+    assert!(post_voice(&app_wav_header(16_000, 0)).is_err());
+}
+
+#[test]
+fn a_file_thumbnail_fits_the_asked_size_and_keeps_the_page_shape() {
+    // #125: the file list's previews (Thumbnails in LocalFiles.kt) ask for 160 px
+    let pdf = blank_pdf(1);
+    let t = file_thumbnail(pdf.clone(), 160).unwrap();
+    assert!(t.width > 0 && t.height > 0);
+    assert!(t.width.max(t.height) <= 161, "{}x{}", t.width, t.height);
+    assert!(t.height > t.width, "a US Letter page is taller than wide");
+    assert_eq!(t.rgba.len(), (t.width * t.height * 4) as usize);
+    // the side asked for is held between 16 and 2048 px
+    let big = file_thumbnail(pdf.clone(), 100_000).unwrap();
+    assert!(big.width.max(big.height) <= 2049);
+    let small = file_thumbnail(pdf, 0).unwrap();
+    assert!(small.width.max(small.height) >= 15);
+}
+
