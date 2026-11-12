@@ -468,6 +468,10 @@ struct PreviewKey {
 /// under 5 MB, so four of them are under 20 MB.
 static PREVIEWS: std::sync::Mutex<Vec<(PreviewKey, std::sync::Arc<PageBase>)>> = std::sync::Mutex::new(Vec::new());
 const PREVIEWS_KEPT: usize = 4;
+/// Tests that empty the preview store (directly or through `release_memory`) hold this, so the
+/// test that counts what the store keeps never sees it emptied by another test running beside it.
+#[cfg(test)]
+pub(crate) static PREVIEWS_TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
 /// Forget the straightened preview pages (when memory is short, or the scan is over).
 #[uniffi::export]
@@ -872,6 +876,7 @@ mod tests {
     /// between calls, so a second look costs no decoding.
     #[test]
     fn a_preview_shows_what_will_be_saved() {
+        let _store = PREVIEWS_TEST_LOCK.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
         let root = temp("preview");
         let shot = root.join("page.png");
         // a page of print, photographed whole on a table a little larger than it
