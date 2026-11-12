@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Scan: low-light merge in the in-app camera (#297), kept apart from strings.xml so parallel scanner work merges cleanly. -->
+<resources>
+    <string name="scan_merge_setting">Fusión con poca luz</string>
+    <string name="scan_merge_auto">Automática</string>
+    <string name="scan_merge_always">Siempre</string>
+    <string name="scan_merge_off">Desactivada</string>
+    <string name="scan_merge_body">Con poca luz, la cámara toma cuatro fotos de la página y las fusiona en una página más limpia. La captura tarda alrededor de un segundo más.</string>
+    <string name="scan_merge_working">No muevas el teléfono: fusionando cuatro fotos</string>
+</resources>
