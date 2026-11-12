@@ -36,6 +36,11 @@ internal data class ScanLab(
     /** Crop with the magnifier, side handles and snapping to the paper's edge (#292); off is the old four-handle screen. */
     val cropTools: Boolean = true,
     /**
+     * In a scan of several pages, a page the orientation classifier was not sure of takes the turn
+     * of its two neighbours when both are sure and agree (#339). Off saves each page by its own answer.
+     */
+    val settleTurns: Boolean = true,
+    /**
      * Flatten every page with the network and keep the flattened page only when its lines of text
      * come out at least 10 % straighter (#302's automatic mode). Off: a page is flattened only when
      * the scan screen's switch asks for it. Off by default until real photos have shown it helps.
@@ -54,20 +59,21 @@ internal data class ScanLab(
     fun diag(): Array<Pair<String, Any?>> = arrayOf<Pair<String, Any?>>(
         "finder" to finderId(finder), "refine" to refine, "side_proportions" to !perspective,
         "snap_paper" to snapPaper, "strength_override" to (strength ?: -1), "upright" to upright, "sharpen" to sharpen,
-        "denoise" to denoise, "preview" to preview, "crop_tools" to cropTools, "flatten_auto" to flattenAuto, "keep" to keep,
+        "denoise" to denoise, "preview" to preview, "crop_tools" to cropTools, "flatten_auto" to flattenAuto, "settle_turns" to settleTurns, "keep" to keep,
     )
 
     /** The options as JSON, for a kept scan's page file. */
     fun json(): JSONObject = JSONObject()
         .put("finder", finderId(finder)).put("refine", refine).put("side_proportions", !perspective)
         .put("snap_paper", snapPaper).put("strength_override", strength ?: JSONObject.NULL).put("upright", upright)
-        .put("sharpen", sharpen).put("denoise", denoise).put("preview", preview).put("crop_tools", cropTools).put("flatten_auto", flattenAuto)
+        .put("sharpen", sharpen).put("denoise", denoise).put("preview", preview).put("crop_tools", cropTools).put("flatten_auto", flattenAuto).put("settle_turns", settleTurns)
 
     /** One line of text for the app's preferences. */
     fun encode(): String = listOf(
         "keep" to flag(keep), "finder" to finderId(finder), "refine" to flag(refine),
         "perspective" to flag(perspective), "snap" to flag(snapPaper), "strength" to (strength?.toString() ?: ""),
         "upright" to flag(upright), "sharpen" to sharpen.toString(), "denoise" to flag(denoise), "preview" to flag(preview), "crop" to flag(cropTools), "flatten_auto" to flag(flattenAuto),
+        "settle" to flag(settleTurns),
     ).joinToString(";") { (k, v) -> "$k=$v" }
 
     companion object {
@@ -107,6 +113,7 @@ internal data class ScanLab(
                 denoise = on("denoise", default.denoise),
                 preview = on("preview", default.preview),
                 cropTools = on("crop", default.cropTools),
+                settleTurns = on("settle", default.settleTurns),
                 flattenAuto = on("flatten_auto", default.flattenAuto),
             )
         }
@@ -136,6 +143,13 @@ internal data class ScanTestResult(
     /** How the flattened and the straightened page compared, when flattening was checked (#302). */
     val flattenCheck: io.github.artcraftandroid.pdfcraft.core.ScanFlattenCheck? = null,
 )
+
+/**
+ * How a saved page's turn was decided (#339): the person's own turn ([manual], null when there is
+ * none), the automatic-turn setting, the turn the page was saved with ([total], 0–3 clockwise),
+ * whether that turn came from its neighbours, and a short word for where it came from.
+ */
+internal data class ScanTestTurn(val manual: Int?, val auto: Boolean, val total: Int, val followed: Boolean, val source: String)
 
 /** The orientation classifier's answer for a page (#339): the turn it would give, and how sure it was. */
 internal data class ScanTestOrientation(val quarterTurns: Int, val confidence: Double, val agreement: Double, val tiles: Int, val sure: Boolean)
@@ -178,6 +192,7 @@ internal fun scanTestPageJson(
     /** How the photo was taken (#294): which camera and with what; null when not known. */
     capture: JSONObject? = null,
     models: JSONObject? = null,
+    turn: ScanTestTurn? = null,
 ): String {
     val page = JSONObject()
         .put("corners", shares(corners)).put("kind", "other").put("paper", "unknown").put("curved", false).put("notes", "")
@@ -192,6 +207,13 @@ internal fun scanTestPageJson(
         )
         .put("look", look ?: JSONObject.NULL).put("strength", strength ?: JSONObject.NULL).put("flatten", flatten)
         .put("options", lab.json())
+        .put(
+            "turns",
+            turn?.let {
+                JSONObject().put("manual", it.manual ?: JSONObject.NULL).put("auto", it.auto).put("total", it.total)
+                    .put("followed", it.followed).put("source", it.source)
+            } ?: JSONObject.NULL,
+        )
         .put(
             "preview",
             preview?.let {

@@ -38,6 +38,9 @@ class ScanLabTest {
         // the page preview is on as designed; off is a testing option (#301)
         assertTrue(lab.preview)
         assertFalse(lab.copy(preview = false).asDesigned)
+        // unsure pages follow their neighbours as designed (#339)
+        assertTrue(lab.settleTurns)
+        assertFalse(lab.copy(settleTurns = false).asDesigned)
         // the crop screen with magnifier and snapping is as designed; the old one is a testing option (#292)
         assertTrue(lab.cropTools)
         assertFalse(lab.copy(cropTools = false).asDesigned)
@@ -63,6 +66,7 @@ class ScanLabTest {
             ScanLab(keep = true, finder = ScanFinder.NETWORK, refine = false, perspective = false, snapPaper = false, strength = 0, upright = false, sharpen = 0, denoise = false),
             ScanLab(sharpen = 100),
             ScanLab(preview = false),
+            ScanLab(settleTurns = false),
             ScanLab(cropTools = false),
             ScanLab(flattenAuto = true),
             ScanLab(finder = ScanFinder.LINES, strength = 100),
@@ -161,10 +165,28 @@ class ScanLabTest {
     }
 
     @Test
+    fun aKeptPageSaysHowItsTurnWasDecided() {
+        // a page that took its neighbours' turn (#339)
+        val followed = JSONObject(scanTestPageJson("1.0 (1)", true, crop, null, null, "auto", 60, false, ScanLab(), null, result, null, turn = ScanTestTurn(null, true, 1, true, "neighbours")))
+        val turns = followed.getJSONObject("turns")
+        assertTrue(turns.isNull("manual"))
+        assertTrue(turns.getBoolean("auto") && turns.getBoolean("followed"))
+        assertEquals(1, turns.getInt("total"))
+        assertEquals("neighbours", turns.getString("source"))
+        assertTrue(followed.getJSONObject("options").getBoolean("settle_turns"))
+        // a page the person turned
+        val manual = JSONObject(scanTestPageJson("1.0 (1)", true, crop, null, null, "auto", 60, false, ScanLab(settleTurns = false), null, result, null, turn = ScanTestTurn(2, false, 2, false, "manual")))
+        assertEquals(2, manual.getJSONObject("turns").getInt("manual"))
+        assertFalse(manual.getJSONObject("options").getBoolean("settle_turns"))
+        // and in the log, as a word
+        assertEquals(true, ScanLab().diag().toMap()["settle_turns"])
+    }
+
+    @Test
     fun aDiscardedPageHasNoResultAndMayHaveNoFinding() {
         val json = JSONObject(scanTestPageJson("1.0 (1)", false, ScanPage.WHOLE, null, null, null, null, false, ScanLab(), null, null))
         assertEquals("discarded", json.getString("outcome"))
-        assertTrue(json.isNull("found") && json.isNull("finding") && json.isNull("look") && json.isNull("strength") && json.isNull("result") && json.isNull("preview") && json.isNull("crop"))
+        assertTrue(json.isNull("found") && json.isNull("finding") && json.isNull("look") && json.isNull("strength") && json.isNull("result") && json.isNull("preview") && json.isNull("crop") && json.isNull("turns"))
         assertTrue(json.getJSONObject("options").isNull("strength_override"))
         assertEquals(1.0, json.getJSONArray("corners").getDouble(2), 0.0)
         // a corner that is not a number never breaks the file

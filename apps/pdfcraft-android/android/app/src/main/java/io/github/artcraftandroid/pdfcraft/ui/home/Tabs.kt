@@ -411,6 +411,12 @@ private fun Preferences(vm: AppViewModel) {
     // which camera Scan uses (#294): the phone's camera app stays one tap away
     Section(stringResource(R.string.common_tool_scan))
     io.github.artcraftandroid.pdfcraft.ui.scan.ScanCameraSetting()
+    var autoUpright by remember { mutableStateOf(io.github.artcraftandroid.pdfcraft.ui.scan.ScanUprightSetting.get(vm.settings.appPrefs)) }
+    val setAutoUpright = { on: Boolean -> autoUpright = on; io.github.artcraftandroid.pdfcraft.ui.scan.ScanUprightSetting.set(vm.settings.appPrefs, on) }
+    SheetRow(null, stringResource(R.string.settings_scan_upright), { setAutoUpright(!autoUpright) }) {
+        PdfSwitch(autoUpright, { setAutoUpright(it) })
+    }
+    Text(stringResource(R.string.settings_scan_upright_body), color = c.textSecondary, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 20.dp))
     SheetDivider()
     Section(stringResource(R.string.library_title))
     SheetRow(null, stringResource(R.string.library_index_switch), { vm.study.updateLibraryIndexing(!vm.study.libraryIndexing) }) {

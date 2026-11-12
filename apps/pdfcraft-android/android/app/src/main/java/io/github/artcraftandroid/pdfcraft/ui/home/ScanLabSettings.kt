@@ -94,6 +94,9 @@ internal fun ScanLabSettings(vm: AppViewModel) {
     SheetRow(null, stringResource(R.string.scan_lab_upright), { lab.update(o.copy(upright = !o.upright)) }) {
         PdfSwitch(o.upright, { lab.update(o.copy(upright = it)) })
     }
+    SheetRow(null, stringResource(R.string.scan_lab_settle_turns), { lab.update(o.copy(settleTurns = !o.settleTurns)) }) {
+        PdfSwitch(o.settleTurns, { lab.update(o.copy(settleTurns = it)) })
+    }
     val off = stringResource(R.string.scan_lab_off)
     Choice(stringResource(R.string.scan_lab_sharpen), ScanLab.SHARPENING.map { it to (if (it == 0) off else it.toString()) }, o.sharpen) { lab.update(o.copy(sharpen = it)) }
     SheetRow(null, stringResource(R.string.scan_lab_denoise), { lab.update(o.copy(denoise = !o.denoise)) }) {

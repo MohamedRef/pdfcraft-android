@@ -142,6 +142,10 @@ fn main() {
             println!("    made again: the corners left make no page");
             continue;
         }
+        // the page's turn as the phone settled it (#339): the person's own turn, or the one it took
+        // from its neighbours, stands in for the classifier; files from before then have neither
+        let turned = &facts["turns"];
+        let fixed = turned["manual"].as_u64().or_else(|| turned["followed"].as_bool().filter(|f| *f).and(turned["total"].as_u64()));
         let request = PageRequest {
             look: look_of(facts["look"].as_str().unwrap_or("auto")),
             strength: facts["strength"].as_u64().map_or(60, |v| v.min(100) as u8),
@@ -152,7 +156,8 @@ fn main() {
             flatten: facts["flatten"].as_bool().unwrap_or(false) || (options["flatten_auto"].as_bool().unwrap_or(false)),
             flatten_check: !facts["flatten"].as_bool().unwrap_or(false) && options["flatten_auto"].as_bool().unwrap_or(false),
             // a file from before pages were turned upright (#339) has no such option
-            upright: options["upright"].as_bool().unwrap_or(false),
+            upright: fixed.is_none() && options["upright"].as_bool().unwrap_or(false) && turned["auto"].as_bool().unwrap_or(true),
+            turns: fixed.map_or(0, |t| (t % 4) as u8),
             // nor one from before the Auto look sharpened and smoothed (#299)
             sharpen: options["sharpen"].as_u64().map_or(0, |v| v.min(100) as u8),
             denoise: options["denoise"].as_bool().unwrap_or(false),

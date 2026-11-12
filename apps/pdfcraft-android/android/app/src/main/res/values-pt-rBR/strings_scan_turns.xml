@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Turning scanned pages (#339), kept apart from strings.xml so parallel scanner work merges cleanly. -->
+<resources>
+    <string name="scan_rotate">Girar</string>
+    <string name="scan_turned_upright_undo">Endireitada · Desfazer</string>
+    <string name="scan_turn_undo_description">Desfazer o giro</string>
+    <string name="settings_scan_upright">Endireitar páginas automaticamente</string>
+    <string name="settings_scan_upright_body">As páginas digitalizadas são giradas para a posição certa quando o app tem certeza de qual é. Girar na tela de digitalização sempre funciona.</string>
+    <string name="scan_lab_settle_turns">Páginas incertas seguem as vizinhas</string>
+</resources>

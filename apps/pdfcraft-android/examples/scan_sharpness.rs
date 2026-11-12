@@ -140,6 +140,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             flatten_check: false,
             side_proportions: false,
             upright: false,
+            turns: 0,
             sharpen: 30,
             denoise: true,
         })?;

@@ -1390,7 +1390,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     /** The scan in progress (or the Add image photo being taken); null when there is none. */
     private fun scanSession(): ScanSession? {
         if (shotFile == null && scanPages.isEmpty()) return null
-        return ScanSession(shotFile?.path, retakeIndex, editor.imageShot, scanName, scanPages.map { ScanSession.Page(it.file.path, it.corners, it.found) })
+        return ScanSession(shotFile?.path, retakeIndex, editor.imageShot, scanName, scanPages.map { ScanSession.Page(it.file.path, it.corners, it.found, it.turns) })
     }
 
     private fun restoreScan(text: String, session: ScanSession): kotlinx.coroutines.Job {
@@ -1401,7 +1401,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         scanName = session.name
         return viewModelScope.launch {
             val pages = withContext(Dispatchers.IO) {
-                session.pages.mapNotNull { p -> File(p.path).let { f -> scanThumb(f)?.let { ScanPage(f, it, p.corners, p.found) } } }
+                session.pages.mapNotNull { p -> File(p.path).let { f -> scanThumb(f)?.let { ScanPage(f, it, p.corners, p.found, turns = p.turns) } } }
             }
             scanPages.addAll(pages)
             scanRestoring = null
@@ -1826,12 +1826,13 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
      */
     internal fun requestScanPreview(index: Int, page: ScanPage, filter: ScanFilter, flatten: Boolean) {
         val lab = scanLab.options
-        val key = ScanPreviewKey.of(page, filter, flatten, lab)
+        val autoUpright = io.github.artcraftandroid.pdfcraft.ui.scan.ScanUprightSetting.get(settings.appPrefs)
+        val key = ScanPreviewKey.of(page, filter, flatten, lab, autoUpright)
         if (scanPreview?.key == key || scanPreviewWanted == key) return
         scanPreviewWanted = key
         scanPreviewJob?.cancel()
         scanPreviewJob = viewModelScope.launch(scanPreviewDispatcher) {
-            val request = scanPageRequest(page.file.absolutePath, page.corners, filter, flatten, lab, "")
+            val request = scanPageRequest(page.file.absolutePath, page.corners, filter, flatten, lab, "", page.turns, autoUpright)
             val started = android.os.SystemClock.elapsedRealtime()
             val made = runCatching { io.github.artcraftandroid.pdfcraft.core.scanPreviewPage(request, SCAN_PREVIEW_SIDE.toUInt()) }
             val ms = android.os.SystemClock.elapsedRealtime() - started
@@ -1899,25 +1900,48 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         val lab = scanLab.options
         val strength = lab.strengthFor(filter.level)
         val keepIn = withContext(Dispatchers.IO) { scanLab.begin() }
+        // which way up (#339): the ordinary setting, and each page's own turn when the person gave one
+        val autoUpright = io.github.artcraftandroid.pdfcraft.ui.scan.ScanUprightSetting.get(settings.appPrefs)
+        // each page made once, the same request the screen's preview was made from (#301)
+        val made = arrayOfNulls<io.github.artcraftandroid.pdfcraft.core.ScanPageResult>(pages.size)
+        val madeMs = LongArray(pages.size)
+        suspend fun make(i: Int, turns: Int?) {
+            val page = pages[i]
+            tools.busy = text(R.string.msg_busy_cleaning_page, i + 1, pages.size)
+            val request = scanPageRequest(page.file.absolutePath, page.corners, filter, flatten, lab, File(dir, "page-$i").absolutePath, turns, autoUpright)
+            val started = android.os.SystemClock.elapsedRealtime()
+            val result = withContext(Dispatchers.Default) { runCatching { io.github.artcraftandroid.pdfcraft.core.scanProcessPage(request) } }
+            result.onFailure { Diag.failure(DiagArea.Scan, "scan_process_page", it) }
+            madeMs[i] += android.os.SystemClock.elapsedRealtime() - started
+            result.getOrNull()?.let { made[i] = it }
+        }
+        for (i in pages.indices) make(i, pages[i].turns)
+        // what the classifier said of each page, before the multi-page rule makes any page again
+        val found = made.map { it?.orientation }
+        val classifierTurns = made.map { it?.quarterTurns?.toInt() ?: 0 }
+        // the multi-page rule (#339): an unsure page between two sure neighbours that agree takes
+        // their turn, and is made again with it
+        val settled = if (lab.settleTurns && pages.size >= 3) {
+            runCatching { io.github.artcraftandroid.pdfcraft.core.scanSettleTurns(found) }.getOrNull()
+                ?.map { io.github.artcraftandroid.pdfcraft.ui.scan.ScanSettled(it.quarterTurns.toInt(), it.followed) }
+        } else null
+        val redo = settled?.let { io.github.artcraftandroid.pdfcraft.ui.scan.scanTurnsToRedo(it, made.map { r -> r?.turns?.toInt() }, lab.settleTurns) }.orEmpty()
+        for ((i, turn) in redo) make(i, turn)
         for ((i, page) in pages.withIndex()) {
             // the Scan gates (#286): found edges, whether they were moved and how far (in % of the
             // photo's diagonal, so the thumbnail's proportions are enough)
             val stats = scanPageStats(page.corners, page.found, ScanPage.WHOLE, page.thumb.width.toDouble(), page.thumb.height.toDouble())
             // a whole photo in Original stays the camera's own file: natively it only gets its
             // resolution written in, so its PDF page has a size like the others (#293)
-            tools.busy = text(R.string.msg_busy_cleaning_page, i + 1, pages.size)
-            // the same request the screen's preview was made from (#301)
-            val request = scanPageRequest(page.file.absolutePath, page.corners, filter, flatten, lab, File(dir, "page-$i").absolutePath)
-            val untouched = !request.flatten && !scanNeedsProcessing(page.corners.contentEquals(ScanPage.WHOLE), filter.mode)
-            val enhanceStarted = android.os.SystemClock.elapsedRealtime()
-            val result = withContext(Dispatchers.Default) { runCatching { io.github.artcraftandroid.pdfcraft.core.scanProcessPage(request) } }
-            result.onFailure { Diag.failure(DiagArea.Scan, "scan_process_page", it) }
-            val r = result.getOrNull()
+            val untouched = !(flatten || lab.flattenAuto) && !scanNeedsProcessing(page.corners.contentEquals(ScanPage.WHOLE), filter.mode)
+            val r = made[i]
+            val followed = i in redo
+            val turnSource = io.github.artcraftandroid.pdfcraft.ui.scan.scanTurnSource(page.turns, followed, page.turns == null && autoUpright && lab.upright)
             // decode, straighten, look and encode times (#287), the page's pixels, and how its
             // proportions were worked out and which paper it was matched to (#293)
             Diag.event(
                 DiagArea.Scan, "page", "index" to i + 1, "edges_found" to stats.found, "corners_moved" to stats.touched, "max_move_pct" to stats.maxMovePct,
-                "filter" to filter, "enhanced" to (r != null && !untouched), "enhance_ms" to android.os.SystemClock.elapsedRealtime() - enhanceStarted,
+                "filter" to filter, "enhanced" to (r != null && !untouched), "enhance_ms" to madeMs[i],
                 *(r?.timings.orEmpty().map<io.github.artcraftandroid.pdfcraft.core.ScanTiming, Pair<String, Any?>> { it.stage.removePrefix("scan_") + "_ms" to it.ms.toLong() }.toTypedArray()),
                 "out_width" to (r?.width?.toLong() ?: 0L), "out_height" to (r?.height?.toLong() ?: 0L),
                 "out_format" to (r?.format?.name?.lowercase() ?: "none"), "dpi" to (r?.dpi?.toDouble() ?: 0.0),
@@ -1927,23 +1951,27 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 "flatten_auto" to lab.flattenAuto, *scanFlattenCheckDiag(r?.flattenCheck),
                 "strength" to strength, "side_proportions" to !lab.perspective, "snap_paper" to lab.snapPaper,
                 // which way up the page was found to be and whether it was turned (#339)
-                "upright" to lab.upright, "quarter_turns" to (r?.quarterTurns?.toInt() ?: 0), "upright_sure" to (r?.orientation?.sure ?: false),
-                "upright_confidence" to (r?.orientation?.confidence?.toDouble() ?: 0.0), "upright_agreement" to (r?.orientation?.agreement?.toDouble() ?: 0.0),
-                "upright_tiles" to (r?.orientation?.tiles?.toInt() ?: 0),
+                "upright" to lab.upright, "quarter_turns" to classifierTurns[i], "upright_sure" to (found[i]?.sure ?: false),
+                "upright_confidence" to (found[i]?.confidence?.toDouble() ?: 0.0), "upright_agreement" to (found[i]?.agreement?.toDouble() ?: 0.0),
+                "upright_tiles" to (found[i]?.tiles?.toInt() ?: 0),
+                // the turn the page was saved with and where it came from: the person, its neighbours or the classifier
+                "auto_upright" to autoUpright, "turns_manual" to (page.turns ?: -1), "turns" to (r?.turns?.toInt() ?: 0),
+                "turn_source" to turnSource, "settle_turns" to lab.settleTurns, "followed" to followed,
                 // sharpening and smoothing asked of the Clean scan filter, and the grain it measured (#299)
                 "sharpen" to lab.sharpen, "denoise" to lab.denoise, "noise_sigma" to (r?.noise?.toDouble() ?: -1.0),
             )
             if (keepIn != null) {
-                val made = r?.let {
+                val kept = r?.let {
                     ScanTestResult(
                         it.width.toLong(), it.height.toLong(), it.format.name.lowercase(), it.dpi.toDouble(), it.paper.name.lowercase(),
-                        it.aspectSource.name.lowercase(), it.focalMismatch, it.flattened, it.bend * 100.0, it.quarterTurns.toInt(),
-                        it.orientation?.let { o -> ScanTestOrientation(o.quarterTurns.toInt(), o.confidence.toDouble(), o.agreement.toDouble(), o.tiles.toInt(), o.sure) },
+                        it.aspectSource.name.lowercase(), it.focalMismatch, it.flattened, it.bend * 100.0, classifierTurns[i],
+                        found[i]?.let { o -> ScanTestOrientation(o.quarterTurns.toInt(), o.confidence.toDouble(), o.agreement.toDouble(), o.tiles.toInt(), o.sure) },
                         it.noise?.toDouble(),
                         it.flattenCheck,
                     )
                 }
-                withContext(Dispatchers.IO) { scanLab.keepPage(keepIn, i, page, true, filter.mode, strength, flatten, r?.path?.let(::File), made, scanPreviewRecord(page)) }
+                val turn = ScanTestTurn(page.turns, autoUpright, r?.turns?.toInt() ?: 0, followed, turnSource)
+                withContext(Dispatchers.IO) { scanLab.keepPage(keepIn, i, page, true, filter.mode, strength, flatten, r?.path?.let(::File), kept, scanPreviewRecord(page), turn) }
             }
             saved += scanSavedPage(page.file.absolutePath, r?.let { it.path to it.dpi })
         }
