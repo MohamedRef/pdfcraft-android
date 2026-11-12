@@ -35,6 +35,8 @@ mod quad;
 pub mod refine;
 pub mod sharpness;
 pub mod straightness;
+#[cfg(any(test, feature = "synth"))]
+pub mod synth;
 pub mod upright;
 pub mod upright_pages;
 pub mod warp;
@@ -83,6 +85,8 @@ mod tests_refine;
 mod tests_sharpness;
 #[cfg(test)]
 mod tests_straightness;
+#[cfg(test)]
+mod tests_synth;
 #[cfg(test)]
 mod tests_upright;
 #[cfg(test)]

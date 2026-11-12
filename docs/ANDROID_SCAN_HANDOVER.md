@@ -16,7 +16,7 @@ a phone yet.** Every number in the scanner's documents was measured on a desktop
 | Issue | What | State | Merged in | What is left |
 |---|---|---|---|---|
 | #287 | `pdfcraft-scan` crate, one pass from photo to page | Done, closed | #331, #346 | |
-| #288 | Measuring: harness, drawn pages, test set | Part | #346, #367 | The synthetic generator, the metrics module (`line_straightness` first: #302 waits for it), the `scan-eval` runner, the CI gate, the SmartDoc script |
+| #288 | Measuring: harness, drawn pages, test set | Part | #346, #367, #382, this PR | The `scan-eval` runner, the CI gate, the SmartDoc script. The drawn photos (`synth`) and the metrics blocks are in; see [ANDROID_SCAN_MEASURING.md](ANDROID_SCAN_MEASURING.md) |
 | #289 | Model files: pinned, loaded, exported | Part | #360, #365, #370 | `scan_model_states`, a Models list in settings, optional packs, copying a *changed* model on update (section 6) |
 | #290 | Page found by a network | Core done | #360 | Figures on the owner's set; phone time. Known: wrong and accepted on 2 of the 10 reference photos, nothing found on 2 |
 | #291 | Edges refined at full size | Core done | #356 | A corner outside the photo is not accepted; the owner's set; phone time |
@@ -54,8 +54,8 @@ Before starting an item in the table, look here: part of it may exist.
   its log fields and its kept-scan fields (section 3).
 - **Parked, never compiled or reviewed** (branch `draft/scan-app-blocks`, folder
   `docs/scan-blocks/`, whose README says what state each file is in): Kotlin drafts for #301,
-  #295, #307 and the pure half of #294, the drawn-photo generator for #288 with one test still
-  failing, and research notes for #304, #305 and #306. Take what is useful from there and
+  #295, #307 and the pure half of #294, a second drawn-photo generator for #288 (superseded by
+  `synth.rs` in the crate), and research notes for #304, #305 and #306. Take what is useful from there and
   review it as new code; that branch is not for merging.
 
 These came from one run of separate workers on 12 November that the owner stopped part-way.
@@ -63,7 +63,7 @@ Every threshold in them is the issue's starting value or was set on pages drawn 
 
 One document per feature says how it works, what was measured and what was not:
 `ANDROID_SCAN_AUTO_LOOK.md`, `_BLACK_WHITE.md`, `_DETAIL.md`, `_DETECTOR.md`, `_EDGES.md`,
-`_FLATTEN.md`, `_PREVIEW.md`, `_PROPORTIONS.md`, `_TESTING.md`, `_UPRIGHT.md` (all
+`_FLATTEN.md`, `_MEASURING.md`, `_PREVIEW.md`, `_PROPORTIONS.md`, `_TESTING.md`, `_UPRIGHT.md` (all
 `docs/ANDROID_SCAN_…`). Read the one for a feature before changing it.
 
 ## 2. How a scan goes through the code today
