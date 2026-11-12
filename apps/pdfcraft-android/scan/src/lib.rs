@@ -23,8 +23,8 @@ mod quad;
 pub mod refine;
 pub mod warp;
 
-pub use aspect::{AspectSource, Focal, Paper, Proportions, proportions};
-pub use detect::{Detection, QuadSource, detect};
+pub use aspect::{AspectSource, Focal, Paper, Proportions, proportions, proportions_by_sides};
+pub use detect::{Detection, Finder, QuadSource, detect, detect_with};
 pub use encode::Format;
 pub use enhance::{AutoOutput, AutoParams, PaperMode, auto};
 pub use error::ScanError;

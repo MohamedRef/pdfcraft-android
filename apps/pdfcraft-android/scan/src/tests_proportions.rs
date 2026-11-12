@@ -2,7 +2,7 @@
 //! the resolution written into the files, and the lens data read from a photo.
 
 use crate::Quad;
-use crate::aspect::{AspectSource, Focal, Paper, focal_px, proportions};
+use crate::aspect::{AspectSource, Focal, Paper, focal_px, proportions, proportions_by_sides};
 use crate::encode::{Raster, encode_jpeg, encode_png_grey};
 use crate::exif::{Camera, camera};
 
@@ -220,6 +220,23 @@ fn bad_corners_never_give_a_wild_shape() {
         assert!(p.width.is_finite() && p.height.is_finite() && p.width >= 1.0 && p.height >= 1.0);
         assert!(p.output(1.0).is_ok());
     }
+}
+
+/// The testing choice (#288): the side lengths alone, as before #293. Right square on, and short
+/// along the lean for a tilted page, which is what the corner formula is for.
+#[test]
+fn the_side_lengths_alone_can_be_asked_for() {
+    let square_on = proportions_by_sides(&frontal(1000.0, 1400.0), PHOTO.0, PHOTO.1, true);
+    assert_eq!((square_on.source, square_on.paper), (AspectSource::SideLengths, Paper::A4));
+    assert!(!square_on.focal_mismatch && square_on.estimated_focal_px.is_none());
+    let mut rng = Rng(12);
+    let quad = Quad::new(view(std::f64::consts::SQRT_2, 0.75, (35.0, 20.0, 5.0), 0.0, &mut rng)).unwrap();
+    let (sides, formula) = (proportions_by_sides(&quad, PHOTO.0, PHOTO.1, false), proportions(&quad, PHOTO.0, PHOTO.1, None, false));
+    let [top, right, bottom, left] = quad.side_lengths();
+    assert_eq!(sides.source, AspectSource::SideLengths);
+    assert!((sides.ratio - (top + bottom) / (left + right)).abs() < 1e-12, "{sides:?}");
+    println!("tilted A4: the sides say {:.4}, the corners {:.4}", sides.ratio, formula.ratio);
+    assert!(error(formula.ratio, std::f64::consts::SQRT_2) < 0.001 && error(sides.ratio, std::f64::consts::SQRT_2) > 0.05);
 }
 
 fn frontal(w: f64, h: f64) -> Quad {

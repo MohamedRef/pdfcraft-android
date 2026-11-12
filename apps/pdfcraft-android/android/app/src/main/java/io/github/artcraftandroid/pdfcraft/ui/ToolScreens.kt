@@ -818,9 +818,10 @@ fun CropScreen(vm: AppViewModel, doc: OpenDocument) {
 /**
  * A scanned page: the photo's file, its thumbnail (as taken) and the part of it kept: [corners]
  * as shares of the photo's width and height (x1, y1 … x4, y4 from the top left, clockwise), the
- * whole photo when No crop was chosen or no edges were found. [found] is what Auto-detect found.
+ * whole photo when No crop was chosen or no edges were found. [found] is what Auto-detect found,
+ * and [finding] how it went about it (for the diagnostics and scans kept for testing, #288).
  */
-data class ScanPage(val file: java.io.File, val thumb: ImageBitmap, val corners: FloatArray = WHOLE, val found: FloatArray? = null) {
+data class ScanPage(val file: java.io.File, val thumb: ImageBitmap, val corners: FloatArray = WHOLE, val found: FloatArray? = null, val finding: ScanFinding? = null) {
     companion object {
         val WHOLE = floatArrayOf(0f, 0f, 1f, 0f, 1f, 1f, 0f, 1f)
     }
@@ -869,6 +870,10 @@ fun ScanScreen(vm: AppViewModel) {
         { vm.discardScan() },
         stringResource(R.string.tools_save_pdf), pages.isNotEmpty(), { vm.saveScan(filter, flatten && vm.scanCanFlatten) },
     ) {
+        // a reminder that the scanner is not as it is meant to be used: a testing option is on (#288)
+        if (!vm.scanLab.options.asDesigned) {
+            Text(stringResource(R.string.scan_lab_active), color = c.textSecondary, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp))
+        }
         // the new file's name, changeable before it's saved (not when the pages go into an open document)
         if (vm.insertScanAt == null && vm.scanName.isNotBlank()) {
             val nameLabel = stringResource(R.string.tools_scan_name_description, vm.scanName)
