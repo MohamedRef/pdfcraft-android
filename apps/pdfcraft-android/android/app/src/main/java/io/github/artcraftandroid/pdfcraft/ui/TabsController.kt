@@ -124,7 +124,7 @@ class TabsController internal constructor(private val vm: AppViewModel) {
     internal fun front(tab: DocTab, doc: OpenDocument) {
         val before = vm.document
         vm.document = doc
-        vm.readingMode = tab.reading
+        vm.settings.readingMode = tab.reading
         tab.lastUsed = android.os.SystemClock.elapsedRealtime()
         // editing moved to the other pane: the document that was in front stays in its pane
         if (splitWith === doc) splitWith = swapBack?.takeIf { it === before && it !== doc && tabs.any { t -> t.doc === it } }
@@ -230,7 +230,7 @@ class TabsController internal constructor(private val vm: AppViewModel) {
                 stash(eng, current)
                 splitWith = null
                 vm.document = null
-                vm.readingMode = false
+                vm.settings.readingMode = false
                 Diag.event(DiagArea.Viewer, "tab_home", "doc" to current.diagNumber, "tabs" to tabs.size)
             }
             vm.refreshRecents()
@@ -341,7 +341,7 @@ class TabsController internal constructor(private val vm: AppViewModel) {
                     box = SplitDrop.place(at.x, at.y, w, h, page.width, page.height, centred = false)
                     eng.tool("comment_add", mapOf(
                         "doc" to target.id, "page" to at.page + 1, "type" to "textbox", "rect" to box.map { it.toDouble() },
-                        "contents" to lines.joinToString("\n"), "color" to vm.toolPrefs.color(io.github.artcraftandroid.pdfcraft.ui.viewer.StyledTool.FreeText).hex(),
+                        "contents" to lines.joinToString("\n"), "color" to vm.settings.toolPrefs.color(io.github.artcraftandroid.pdfcraft.ui.viewer.StyledTool.FreeText).hex(),
                         "font_size" to size.toDouble(), "author" to vm.commenting.author,
                     ))
                     kind = "text"
@@ -439,10 +439,10 @@ class TabsController internal constructor(private val vm: AppViewModel) {
 
     /** Leave [doc] as the front document: what the viewer held for it alone stops. */
     private fun leaveFront(doc: OpenDocument, tab: DocTab) {
-        tab.reading = vm.readingMode
+        tab.reading = vm.settings.readingMode
         tab.tool = doc.controller.tool
-        vm.closeLecturePlayback()
-        vm.readAloud?.stop()
+        vm.noteTaking.closeLecturePlayback()
+        vm.sharing.readAloud?.stop()
         vm.study.pauseStudy()
         vm.study.studyDoc = null
         if (doc.controller.tool != ViewerTool.None) vm.leaveTool(doc)
@@ -467,11 +467,11 @@ class TabsController internal constructor(private val vm: AppViewModel) {
 
     private fun persist() {
         val saved = TabPolicy.encode(tabs.filter { it.key.startsWith("content:") || it.key.startsWith("file:") }.map { it.key to it.title })
-        runCatching { vm.appPrefs.edit().putString(PREF, saved).apply() }
+        runCatching { vm.settings.appPrefs.edit().putString(PREF, saved).apply() }
     }
 
     private fun restore(): List<DocTab> =
-        runCatching { TabPolicy.decode(vm.appPrefs.getString(PREF, null)) }.getOrDefault(emptyList()).map { (uri, title) -> DocTab(uri, title) }
+        runCatching { TabPolicy.decode(vm.settings.appPrefs.getString(PREF, null)) }.getOrDefault(emptyList()).map { (uri, title) -> DocTab(uri, title) }
 
     private companion object {
         const val PREF = "openTabs"

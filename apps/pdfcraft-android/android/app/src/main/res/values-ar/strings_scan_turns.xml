@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Turning scanned pages (#339), kept apart from strings.xml so parallel scanner work merges cleanly. -->
+<resources>
+    <string name="scan_rotate">تدوير</string>
+    <string name="scan_turned_upright_undo">اتعدلت الصفحة · تراجع</string>
+    <string name="scan_turn_undo_description">تراجع عن التدوير</string>
+    <string name="settings_scan_upright">تعديل اتجاه الصفحات تلقائيًا</string>
+    <string name="settings_scan_upright_body">تُدار الصفحات الممسوحة لتصبح معتدلة عندما يكون التطبيق متأكدًا من الاتجاه الصحيح. زر التدوير في شاشة المسح يعمل دائمًا.</string>
+    <string name="scan_lab_settle_turns">الصفحات غير المؤكدة تتبع جيرانها</string>
+</resources>

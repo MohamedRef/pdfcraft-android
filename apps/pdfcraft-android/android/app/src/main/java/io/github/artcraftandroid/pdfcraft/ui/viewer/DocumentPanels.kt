@@ -104,7 +104,7 @@ fun LayersSheet(vm: AppViewModel, doc: OpenDocument) {
     var initial by remember { mutableStateOf<List<Boolean>?>(null) }
     var busy by remember { mutableStateOf(false) }
     suspend fun reload() {
-        val l = vm.layers(doc)
+        val l = vm.docTools.layers(doc)
         layers = l
         if (initial == null) initial = doc.controller.initialLayers ?: l.map { it.visible }.also { doc.controller.initialLayers = it }
     }
@@ -115,7 +115,7 @@ fun LayersSheet(vm: AppViewModel, doc: OpenDocument) {
         if (changes.isEmpty()) return
         busy = true
         var left = changes.size
-        for ((i, v) in changes) vm.setLayer(doc, i + 1, v) {
+        for ((i, v) in changes) vm.docTools.setLayer(doc, i + 1, v) {
             if (--left == 0) { busy = false; refresh++ }
         }
     }
@@ -175,7 +175,7 @@ fun AttachmentsPanel(vm: AppViewModel, doc: OpenDocument) {
     val locked = lockedReason(doc)
     PdfSheet(onDismiss = { ctl.sheet = ViewerSheet.None }, maxHeightFraction = 0.7f) {
         SheetBackHeader(stringResource(R.string.sheet_attachments), onBack = { ctl.sheet = ViewerSheet.More })
-        SheetRow(LucideIcons.Paperclip, stringResource(R.string.attachments_add), { vm.pickAttachment(doc) }, enabled = locked == null)
+        SheetRow(LucideIcons.Paperclip, stringResource(R.string.attachments_add), { vm.docTools.pickAttachment(doc) }, enabled = locked == null)
         if (locked != null) {
             Text(locked, color = c.textSecondary, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp))
         }
@@ -201,7 +201,7 @@ private fun AttachmentRow(vm: AppViewModel, doc: OpenDocument, a: AttachmentInfo
         Modifier.fillMaxWidth()
             .combinedClickable(onClick = { ctl.sheet = ViewerSheet.None; vm.openAttachment(doc, a.name) }, onLongClick = { if (canDelete) menu = true })
             .semantics {
-                if (canDelete) customActions = listOf(CustomAccessibilityAction(deleteLabel) { vm.deleteAttachment(doc, a.name); true })
+                if (canDelete) customActions = listOf(CustomAccessibilityAction(deleteLabel) { vm.docTools.deleteAttachment(doc, a.name); true })
             }
             .padding(start = 20.dp, end = 8.dp, top = 10.dp, bottom = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -216,7 +216,7 @@ private fun AttachmentRow(vm: AppViewModel, doc: OpenDocument, a: AttachmentInfo
         if (canDelete) Box {
             BarIcon(LucideIcons.EllipsisVertical, stringResource(R.string.attachments_options, a.name), { menu = true })
             DropdownMenu(expanded = menu, onDismissRequest = { menu = false }, containerColor = c.menu) {
-                DropdownMenuItem(text = { Text(deleteLabel, color = c.text) }, onClick = { menu = false; vm.deleteAttachment(doc, a.name) })
+                DropdownMenuItem(text = { Text(deleteLabel, color = c.text) }, onClick = { menu = false; vm.docTools.deleteAttachment(doc, a.name) })
             }
         }
     }
@@ -228,10 +228,10 @@ fun AttachDialog(vm: AppViewModel, prompt: AttachPrompt) {
     val c = pdfColors
     var description by remember { mutableStateOf("") }
     PdfDialog(
-        onDismiss = { vm.cancelAttach() },
+        onDismiss = { vm.docTools.cancelAttach() },
         title = stringResource(R.string.attachments_add),
         confirm = stringResource(R.string.attachments_attach),
-        onConfirm = { vm.attach(prompt, description) },
+        onConfirm = { vm.docTools.attach(prompt, description) },
     ) {
         Column {
             Text(prompt.name, color = c.text, fontSize = 15.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
@@ -260,7 +260,7 @@ fun EditContentsSheet(vm: AppViewModel, doc: OpenDocument) {
     val c = pdfColors
     val ctl = doc.controller
     var rows by remember { mutableStateOf<List<OutlineRow>?>(null) }
-    LaunchedEffect(doc.info.generation) { rows = vm.outlineRows(doc) }
+    LaunchedEffect(doc.info.generation) { rows = vm.docTools.outlineRows(doc) }
     var prompt by remember { mutableStateOf<OutlinePrompt?>(null) }
     val locked = lockedReason(doc)
     PdfSheet(onDismiss = { ctl.sheet = ViewerSheet.None }, maxHeightFraction = 0.85f, fill = true) {
@@ -272,7 +272,7 @@ fun EditContentsSheet(vm: AppViewModel, doc: OpenDocument) {
         }
         SheetRow(LucideIcons.BookmarkPlus, stringResource(R.string.contents_add_current), { prompt = OutlinePrompt.Add(null) }, enabled = locked == null)
         if (doc.info.tagged) {
-            SheetRow(LucideIcons.Heading, stringResource(R.string.contents_from_tags), { vm.editBookmark(doc, "bookmark_from_structure", null) }, enabled = locked == null)
+            SheetRow(LucideIcons.Heading, stringResource(R.string.contents_from_tags), { vm.docTools.editBookmark(doc, "bookmark_from_structure", null) }, enabled = locked == null)
         }
         SheetDivider()
         val all = rows
@@ -306,7 +306,7 @@ fun EditContentsSheet(vm: AppViewModel, doc: OpenDocument) {
                                 drag = null
                                 val args = t?.let { outlineDropArgs(all, row.path, it.first, it.second) }
                                 Diag.event(DiagArea.Pages, "outline_drag", "doc" to doc.diagNumber, "moved" to (args != null), "levels" to ((t?.second ?: row.depth) - row.depth), "rows" to all.size)
-                                if (args != null) vm.editBookmark(doc, "bookmark_move", null, args)
+                                if (args != null) vm.docTools.editBookmark(doc, "bookmark_move", null, args)
                             },
                             onDragCancel = { drag = null },
                         ) { prompt = it }
@@ -325,15 +325,15 @@ fun EditContentsSheet(vm: AppViewModel, doc: OpenDocument) {
             prompt = null
             val args = mutableMapOf<String, Any?>("title" to title, "page" to doc.viewer.currentPage + 1)
             if (p.parent != null) args["parent"] = p.parent
-            vm.editBookmark(doc, "bookmark_add", null, args)
+            vm.docTools.editBookmark(doc, "bookmark_add", null, args)
         }
         is OutlinePrompt.Rename -> TitleDialog(stringResource(R.string.common_rename), p.row.title, onDismiss = { prompt = null }) { title ->
             prompt = null
-            vm.editBookmark(doc, "bookmark_rename", p.row.path, mapOf("title" to title))
+            vm.docTools.editBookmark(doc, "bookmark_rename", p.row.path, mapOf("title" to title))
         }
         is OutlinePrompt.Style -> StyleDialog(p.row, onDismiss = { prompt = null }) { color, bold, italic ->
             prompt = null
-            vm.editBookmark(doc, "bookmark_set_style", p.row.path, mapOf("color" to color.map { it.toDouble() }, "bold" to bold, "italic" to italic))
+            vm.docTools.editBookmark(doc, "bookmark_set_style", p.row.path, mapOf("color" to color.map { it.toDouble() }, "bold" to bold, "italic" to italic))
         }
         null -> Unit
     }
@@ -389,7 +389,7 @@ private fun OutlineEditRow(
                 }
             }
             .semantics {
-                if (enabled) customActions = moves.map { (m, args) -> CustomAccessibilityAction(moveLabels.getValue(m)) { vm.editBookmark(doc, "bookmark_move", null, args); true } }
+                if (enabled) customActions = moves.map { (m, args) -> CustomAccessibilityAction(moveLabels.getValue(m)) { vm.docTools.editBookmark(doc, "bookmark_move", null, args); true } }
             }
             .padding(start = 16.dp + (row.depth.coerceAtMost(8) * OUTLINE_LEVEL_DP).dp, end = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -419,12 +419,12 @@ private fun OutlineEditRow(
                 fun item(label: String, onClick: () -> Unit) = DropdownMenuItem(text = { Text(label, color = c.text) }, onClick = { menu = false; onClick() })
                 item(stringResource(R.string.common_rename)) { onPrompt(OutlinePrompt.Rename(row)) }
                 item(stringResource(R.string.contents_set_current_page, doc.viewer.currentPage + 1)) {
-                    vm.editBookmark(doc, "bookmark_set_page", row.path, mapOf("page" to doc.viewer.currentPage + 1))
+                    vm.docTools.editBookmark(doc, "bookmark_set_page", row.path, mapOf("page" to doc.viewer.currentPage + 1))
                 }
                 item(stringResource(R.string.contents_style)) { onPrompt(OutlinePrompt.Style(row)) }
                 item(stringResource(R.string.contents_add_child)) { onPrompt(OutlinePrompt.Add(row.path)) }
-                for ((m, args) in moves) item(moveLabels.getValue(m)) { vm.editBookmark(doc, "bookmark_move", null, args) }
-                item(stringResource(R.string.common_delete)) { vm.editBookmark(doc, "bookmark_delete", row.path) }
+                for ((m, args) in moves) item(moveLabels.getValue(m)) { vm.docTools.editBookmark(doc, "bookmark_move", null, args) }
+                item(stringResource(R.string.common_delete)) { vm.docTools.editBookmark(doc, "bookmark_delete", row.path) }
             }
         }
     }

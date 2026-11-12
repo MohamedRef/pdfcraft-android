@@ -70,10 +70,18 @@ Time at 12 MP on a desktop x86-64 core: 6.5 ms for the pyramid, 15 ms per refine
 while it runs. Not measured on a phone; decoding the photo (not counted here) takes longer than
 both. The diagnostics log records `refine_ms`, `refined_sides` and `curved_sides` per photo.
 
+## A corner outside the photo (#291)
+
+A side is fitted from its visible part, and the corner goes where the two fitted sides meet, even
+off the photo, up to 15% of the photo's side past the edge (`quad::OUTSIDE`); a meeting point
+further out is held at that limit. The page function paints the part with no photo white, and the
+crop screen shows such a corner (`docs/ANDROID_SCAN_CROP.md`). The detector still gives corners on
+the photo; it is the refinement that moves them out. Checked on drawn pages only
+(`a_corner_outside_the_frame_is_where_its_sides_meet`): a page whose top-right corner is 30 px
+above and 100 px right of a 2000 × 1500 photo came out within 3 px of each true corner.
+
 ## Not done here
 
-- A corner outside the photo. The side is fitted from its visible part, but the corner is then
-  kept on the photo's border: corners outside it need the crop screen to show them (#292).
 - The page mask of a neural detector as a hint (#290 has to exist first).
 - Snapping a dragged corner in the crop screen (#292): `scan_refine_quad` takes the sides to look
   at again for that, and the pyramid is built so that it can be kept between calls.

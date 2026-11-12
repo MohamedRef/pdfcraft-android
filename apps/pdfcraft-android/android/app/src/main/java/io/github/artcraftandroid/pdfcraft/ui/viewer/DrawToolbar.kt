@@ -73,7 +73,7 @@ internal fun activateDrawingPreset(ctl: ViewerController, prefs: ToolPrefs, inde
 @Composable
 internal fun DrawToolbar(vm: AppViewModel, doc: OpenDocument) {
     val ctl = doc.controller
-    val prefs = vm.toolPrefs
+    val prefs = vm.settings.toolPrefs
     val c = pdfColors
     val color = prefs.color(StyledTool.Ink)
     val opacity = prefs.opacity(StyledTool.Ink)

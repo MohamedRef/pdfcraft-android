@@ -45,7 +45,7 @@ fun ScanEnhanceSheet(vm: AppViewModel, doc: OpenDocument) {
     var confirm by remember(doc.id) { mutableStateOf(false) }
     val plan = scanEnhancePlan(doc.pageCount, currentPage, batch, level, edges, speckles)
     val writable = vm.document === doc && doc.writable && !doc.info.signed &&
-        doc.info.readOnlyReason == null && vm.busy == null
+        doc.info.readOnlyReason == null && vm.tools.busy == null
 
     PdfSheet(onDismiss = { ctl.sheet = ViewerSheet.None }, maxHeightFraction = 0.82f) {
         SheetBackHeader(stringResource(R.string.scan_enhance_title), onBack = { ctl.sheet = ViewerSheet.More })

@@ -215,7 +215,7 @@ class LinkMeasureController internal constructor(private val vm: AppViewModel) {
                 return@job
             }
             val uri = withContext(Dispatchers.IO) { vm.files.shareable(out, "${doc.title} measurements.csv") }
-            vm.intents.trySend(Intent.createChooser(vm.sendIntent(listOf(uri), "text/csv"), null))
+            vm.intents.trySend(Intent.createChooser(vm.sharing.sendIntent(listOf(uri), "text/csv"), null))
         } finally {
             out.delete()
         }

@@ -274,3 +274,39 @@ fn is_convex(q: &[Point; 4]) -> bool {
     let same_sign = turns.iter().all(|&t| t > 0.0) || turns.iter().all(|&t| t < 0.0);
     same_sign && turns.iter().all(|t| t.is_finite())
 }
+
+/// Longer side, in pixels, of the straightened spread the gutter is searched in (S17 A: 800).
+pub const SPREAD_SIDE: u32 = 800;
+
+/// What book mode made of one photographed spread: the gutter it cut along (in the straightened
+/// spread) and the two page outlines in the photo.
+#[derive(Clone, Debug, PartialEq)]
+pub struct BookSplit {
+    pub gutter: Gutter,
+    pub spread: Spread,
+    /// The size of the straightened spread the gutter was searched in.
+    pub searched: (u32, u32),
+}
+
+/// Book mode on one photo (#303): the spread inside `quad` (full-size photo pixels, reading
+/// order) is straightened to [`SPREAD_SIDE`] pixels on its longer side, its gutter found with
+/// [`find_gutter`], and the outline cut along it with [`split`]. With `look_for_gutter` false
+/// (a testing option) the cut is the centre line whatever the picture shows, with confidence 0.
+/// `None` when the spread is not two pages (no gutter and not the shape of two pages) or the cut
+/// gives no two convex halves: the photo is then one page.
+pub fn split_photo(pyramid: &crate::Pyramid, quad: &Quad, look_for_gutter: bool) -> Option<BookSplit> {
+    let [top, right, bottom, left] = quad.side_lengths();
+    let (w, h) = (top.max(bottom), left.max(right));
+    if !(w.is_finite() && h.is_finite() && w >= 1.0 && h >= 1.0) {
+        return None;
+    }
+    let k = f64::from(SPREAD_SIDE) / w.max(h);
+    let (out_w, out_h) = ((w * k).round().max(1.0) as u32, (h * k).round().max(1.0) as u32);
+    let gutter = if look_for_gutter {
+        find_gutter(&pyramid.straighten(quad, out_w, out_h)?)?
+    } else {
+        Gutter { top: 0.5, bottom: 0.5, confidence: 0.0, found: false }
+    };
+    let spread = split(quad, &gutter)?;
+    Some(BookSplit { gutter, spread, searched: (out_w, out_h) })
+}

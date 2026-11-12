@@ -236,7 +236,7 @@ fun SignaturePadScreen(vm: AppViewModel, pad: SignaturePad, onPickImage: () -> U
     val strokes = remember { mutableStateListOf<MutableList<Offset>>() }
     var size by remember { mutableStateOf(IntSize.Zero) }
     var save by remember { mutableStateOf(true) }
-    val ink = Color(vm.toolPrefs.fillColor)
+    val ink = Color(vm.settings.toolPrefs.fillColor)
     val imported = vm.signing.importedSignature
     val drawFirst = stringResource(if (pad.initials) R.string.fill_draw_initials_first else R.string.fill_draw_signature_first)
     Column(Modifier.fillMaxSize().background(c.surface).safeTopPadding().navigationBarsPadding()) {
@@ -375,7 +375,7 @@ fun androidx.compose.foundation.layout.BoxScope.FillElementMenu(vm: AppViewModel
                     Box(
                         Modifier.size(48.dp).clickable(role = Role.Button) {
                             palette = false
-                            vm.toolPrefs.setFillColor(col)
+                            vm.settings.toolPrefs.setFillColor(col)
                             vm.commenting.recolorComment(doc, c, col)
                         }.semantics { contentDescription = name },
                         contentAlignment = Alignment.Center,

@@ -15,6 +15,9 @@ pub enum ScanError {
     /// A camera frame that cannot be looked at (#295): its size, its bytes or its turn.
     #[error("the camera frame is not usable: {0}")]
     BadFrame(&'static str),
+    /// A burst to merge has too few or too many photos (#297).
+    #[error("a merge takes 2 to 4 photos of the page")]
+    FrameCount,
     /// The page could not be written as a picture.
     #[error("the page could not be saved as a picture")]
     Encode,

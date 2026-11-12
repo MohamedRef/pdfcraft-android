@@ -83,6 +83,7 @@ import io.github.artcraftandroid.pdfcraft.ui.LucideIcons
 import io.github.artcraftandroid.pdfcraft.ui.OpenDocument
 import io.github.artcraftandroid.pdfcraft.ui.pdfColors
 import kotlin.math.roundToInt
+import androidx.compose.material3.minimumInteractiveComponentSize
 
 /** A paragraph Edit PDF can change: its number on the page, text, box (points) and style. */
 data class Paragraph(
@@ -158,7 +159,7 @@ private fun EditToolsBar(vm: AppViewModel, doc: OpenDocument) {
         val textHint = stringResource(R.string.edit_tap_for_text)
         val imageHint = stringResource(R.string.edit_tap_for_image)
         EditBarItem(LucideIcons.LayoutGrid, stringResource(R.string.common_tool_organize), false, 96.dp) {
-            vm.organizing = true
+            vm.tools.organizing = true
             doc.controller.pagesOpen = true
         }
         // several objects at once: select, move, copy, cut and paste (#162)
@@ -260,7 +261,7 @@ private fun EditFormatBar(vm: AppViewModel, doc: OpenDocument, para: Paragraph) 
             FormatPanel.Script -> Column(Modifier.fillMaxWidth().padding(12.dp)) {
                 Text(stringResource(R.string.edit_script_scope), color = c.textSecondary)
                 Row {
-                    val enabled = (vm.editor.editing == null || (vm.editor.editDraft == para.text && !vm.editor.editComposing)) && vm.busy == null
+                    val enabled = (vm.editor.editing == null || (vm.editor.editDraft == para.text && !vm.editor.editComposing)) && vm.tools.busy == null
                     TextButton(enabled = enabled, onClick = { vm.editor.scriptParagraph(doc, para, "superscript") }) {
                         Text(stringResource(R.string.edit_superscript))
                     }
@@ -295,12 +296,12 @@ private fun EditFormatBar(vm: AppViewModel, doc: OpenDocument, para: Paragraph) 
             LetterButton("tT", stringResource(R.string.edit_text_size), panel == FormatPanel.Size, small = true) { toggle(FormatPanel.Size) }
             val fontLabel = stringResource(R.string.edit_font)
             Box(
-                Modifier.size(44.dp).clickable(role = Role.Button) { toggle(FormatPanel.Font) }.semantics { contentDescription = fontLabel },
+                Modifier.minimumInteractiveComponentSize().size(44.dp).clickable(role = Role.Button) { toggle(FormatPanel.Font) }.semantics { contentDescription = fontLabel },
                 contentAlignment = Alignment.Center,
             ) { Text("Ag", color = if (panel == FormatPanel.Font) c.toolAccent else c.icon, fontSize = 20.sp, fontFamily = FontFamily.Serif) }
             val colourLabel = stringResource(R.string.edit_colour)
             Box(
-                Modifier.size(44.dp).clickable(role = Role.Button) { toggle(FormatPanel.Color) }.semantics { contentDescription = colourLabel },
+                Modifier.minimumInteractiveComponentSize().size(44.dp).clickable(role = Role.Button) { toggle(FormatPanel.Color) }.semantics { contentDescription = colourLabel },
                 contentAlignment = Alignment.Center,
             ) {
                 Box(
@@ -330,7 +331,7 @@ private fun LetterButton(
 ) {
     val c = pdfColors
     Box(
-        Modifier.size(44.dp).clickable(role = Role.Button, onClick = onClick).semantics { contentDescription = description },
+        Modifier.minimumInteractiveComponentSize().size(44.dp).clickable(role = Role.Button, onClick = onClick).semantics { contentDescription = description },
         contentAlignment = Alignment.Center,
     ) {
         Text(
@@ -344,7 +345,7 @@ private fun LetterButton(
 private fun FormatButton(icon: ImageVector, description: String, selected: Boolean, tintSelected: Boolean = selected, onClick: () -> Unit) {
     val c = pdfColors
     Box(
-        Modifier.size(44.dp).clickable(role = Role.Button, onClick = onClick).semantics { contentDescription = description },
+        Modifier.minimumInteractiveComponentSize().size(44.dp).clickable(role = Role.Button, onClick = onClick).semantics { contentDescription = description },
         contentAlignment = Alignment.Center,
     ) { Icon(icon, null, tint = if (tintSelected) c.toolAccent else c.icon, modifier = Modifier.size(26.dp)) }
 }
