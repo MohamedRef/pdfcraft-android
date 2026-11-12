@@ -18,9 +18,10 @@ on:
 permissions:
   contents: read
 
+# Manual only. A second dry run waits for the first instead of cancelling it (issue #206).
 concurrency:
-  group: release-dry-run-${{ github.ref }}
-  cancel-in-progress: true
+  group: release-dry-run-${{ github.ref }}-${{ github.sha }}
+  cancel-in-progress: false
 
 env:
   CARGO_TERM_COLOR: always
