@@ -348,6 +348,12 @@ private fun SplitPane(vm: AppViewModel, doc: OpenDocument, side: Boolean, onGhos
                 if (a != null && b != null) {
                     drawRect(accent, Offset(minOf(a.x, b.x), minOf(a.y, b.y)), Size(kotlin.math.abs(a.x - b.x), kotlin.math.abs(a.y - b.y)), style = Stroke(2.dp.toPx()))
                 }
+                // a back-link's area (#379) flashes here too
+                doc.linkFlash?.let { f ->
+                    val fa = doc.viewer.pageToScreen(f.page, f.rect[0], f.rect[1])
+                    val fb = doc.viewer.pageToScreen(f.page, f.rect[2], f.rect[3])
+                    drawRect(Color(0x66B36B2E), fa, Size(fb.x - fa.x, fb.y - fa.y))
+                }
                 if (snip != null) {
                     val tl = doc.viewer.pageToScreen(snip.page, snip.rect[0], snip.rect[1])
                     val br = doc.viewer.pageToScreen(snip.page, snip.rect[2], snip.rect[3])

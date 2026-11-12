@@ -316,9 +316,26 @@ class TabsController internal constructor(private val vm: AppViewModel) {
                     eng.tool("text_extract", mapOf("doc" to source.id, "pages" to listOf(snip.page + 1), "rect" to r.map { it.toDouble() }))
                         .optJSONArray("pages")?.optJSONObject(0)?.optString("text")?.trim()
                 }.getOrNull().orEmpty()
+                // drawings in the area (ink, shapes) go across as drawings that stay editable (#379)
+                val drawn = runCatching {
+                    val list = eng.tool("comment_list", mapOf("doc" to source.id, "page" to snip.page + 1)).optJSONArray("comments")
+                    (0 until (list?.length() ?: 0)).mapNotNull { i ->
+                        val c = list!!.optJSONObject(i) ?: return@mapNotNull null
+                        if (c.optString("type") !in SplitDrop.DRAWN) return@mapNotNull null
+                        val b = c.optJSONArray("rect") ?: return@mapNotNull null
+                        val box = floatArrayOf(b.optDouble(0).toFloat(), b.optDouble(1).toFloat(), b.optDouble(2).toFloat(), b.optDouble(3).toFloat())
+                        if (SplitDrop.inside(box, r)) c.optInt("index") to box else null
+                    }
+                }.getOrDefault(emptyList())
                 val box: FloatArray
                 val kind: String
-                if (text.isNotEmpty()) {
+                if (drawn.isNotEmpty()) {
+                    val xfdf = eng.tool("comments_copy", mapOf("doc" to source.id, "comments" to drawn.map { listOf(snip.page + 1, it.first) })).getString("xfdf")
+                    val moved = SplitDrop.movedUnion(drawn.map { it.second }, at.x, at.y)
+                    eng.tool("comments_paste", mapOf("doc" to target.id, "page" to at.page + 1, "xfdf" to xfdf, "at" to listOf(at.x.toDouble(), at.y.toDouble())))
+                    box = SplitDrop.place(moved[0], moved[1], moved[2] - moved[0], moved[3] - moved[1], page.width, page.height, centred = false)
+                    kind = "ink"
+                } else if (text.isNotEmpty()) {
                     val size = 12f
                     val (lines, w, h) = FreeTextLayout.layout(text, size, (page.width - at.x - 6f).coerceAtLeast(size * 4))
                     box = SplitDrop.place(at.x, at.y, w, h, page.width, page.height, centred = false)
@@ -350,7 +367,11 @@ class TabsController internal constructor(private val vm: AppViewModel) {
                 // the back-link: the source file by name and its page, as a GoToR action
                 val name = io.github.artcraftandroid.pdfcraft.ui.viewer.linkFileName(source.name)
                 if (name != null) {
-                    eng.tool("link_add", mapOf("doc" to target.id, "page" to at.page + 1, "rect" to box.map { it.toDouble() }, "file" to name, "to_page" to snip.page + 1))
+                    // the exact area it came from, as a /FitR destination (#379)
+                    eng.tool("link_add", mapOf(
+                        "doc" to target.id, "page" to at.page + 1, "rect" to box.map { it.toDouble() }, "file" to name, "to_page" to snip.page + 1,
+                        "to_rect" to r.map { it.toDouble() }, "to_doc" to source.id,
+                    ))
                 }
                 vm.refresh(target)
                 Diag.event(DiagArea.Viewer, "split_drop", "doc" to target.diagNumber, "other" to source.diagNumber, "kind" to kind, "linked" to (name != null), "ms" to android.os.SystemClock.elapsedRealtime() - started)
@@ -370,18 +391,42 @@ class TabsController internal constructor(private val vm: AppViewModel) {
      * document is open in the other pane it scrolls there; in another tab, that tab comes to the
      * front on that page. Returns false when it isn't open, so the caller opens it.
      */
-    fun followLink(uri: String, page: Int): Boolean {
+    fun followLink(uri: String, page: Int, area: List<Float>? = null): Boolean {
         val other = splitWith
         if (other != null && other.source?.toString() == uri) {
-            if (page in 0 until other.pageCount) other.viewer.goToPage(page)
-            Diag.event(DiagArea.Viewer, "split_link", "doc" to vm.document?.diagNumber, "other" to other.diagNumber, "pane" to true)
+            Diag.event(DiagArea.Viewer, "split_link", "doc" to vm.document?.diagNumber, "other" to other.diagNumber, "pane" to true, "area" to (area != null))
+            vm.viewModelScope.launch { showArea(other, page, area) }
             return true
         }
         val tab = tabs.firstOrNull { it.doc != null && it.key == uri } ?: return false
         val d = tab.doc ?: return false
-        switchTo(tab) { if (vm.document === d && page in 0 until d.pageCount) { d.controller.rememberJump(d.viewer); d.viewer.goToPage(page) } }
-        Diag.event(DiagArea.Viewer, "split_link", "doc" to vm.document?.diagNumber, "other" to d.diagNumber, "pane" to false)
+        switchTo(tab) {
+            if (vm.document === d) {
+                d.controller.rememberJump(d.viewer)
+                vm.viewModelScope.launch { showArea(d, page, area) }
+            }
+        }
+        Diag.event(DiagArea.Viewer, "split_link", "doc" to vm.document?.diagNumber, "other" to d.diagNumber, "pane" to false, "area" to (area != null))
         return true
+    }
+
+    /**
+     * Show [page] of [doc]; with [area] (that page's PDF user space, from a /FitR back-link, #379)
+     * scrolled to the area, which flashes so the eye finds it.
+     */
+    internal suspend fun showArea(doc: OpenDocument, page: Int, area: List<Float>?) {
+        if (page !in 0 until doc.pageCount) return
+        val view = area?.let { a -> vm.engine?.let { eng -> runCatching { eng.command { userRectToView(doc.id, page.toUInt(), a) } }.getOrNull() } }
+            ?.takeIf { it.size == 4 }
+        if (view == null) {
+            doc.viewer.goToPage(page)
+            return
+        }
+        doc.viewer.goToPage(page, (view[1] - 24f).coerceAtLeast(0f))
+        val flash = io.github.artcraftandroid.pdfcraft.ui.viewer.LinkFlash(page, view.toFloatArray())
+        doc.linkFlash = flash
+        kotlinx.coroutines.delay(1500)
+        if (doc.linkFlash === flash) doc.linkFlash = null
     }
 
     // ---- inside ----------------------------------------------------------------------------------

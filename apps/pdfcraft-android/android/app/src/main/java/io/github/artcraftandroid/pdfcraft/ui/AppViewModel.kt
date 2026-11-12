@@ -393,7 +393,14 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             // a link from another PDF names the page to open on (#334)
             val linkPage = linkOpenPage?.takeIf { it.first == uri.toString() }?.second?.takeIf { it in 0 until info.pages.size }
             linkOpenPage = null
+            val linkArea = linkOpenArea.takeIf { linkPage != null }
+            linkOpenArea = null
             pendingPage = linkPage ?: recent?.lastPage?.takeIf { it in 0 until info.pages.size }
+            // a back-link to an area (#379): scroll there and flash it once the pages are laid out
+            if (linkPage != null && linkArea != null) viewModelScope.launch {
+                doc.images.awaitFirstCanvas()
+                if (document === doc) tabs.showArea(doc, linkPage, linkArea)
+            }
             pendingSpot = recent?.takeIf { linkPage == null && pendingPage != null && it.lastX >= 0f && it.lastY >= 0f }?.let { Triple(it.lastX, it.lastY, it.lastZoom) }
             withContext(Dispatchers.IO) {
                 recents.touch(RecentFile(uri.toString(), info.name, System.currentTimeMillis(), info.pages.size, file.length(), recent?.lastPage ?: 0))
@@ -965,7 +972,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         val uri = link.uri
         val file = link.file
         when {
-            file != null -> openLinkedFile(doc, file, link.filePage.toInt())
+            file != null -> openLinkedFile(doc, file, link.filePage.toInt(), link.fileRect)
             page != null -> {
                 doc.controller.rememberJump(doc.viewer)
                 doc.viewer.goToPage(page.toInt(), link.top)
@@ -984,6 +991,9 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     /** The page a link from another PDF asked for, kept until that file ([first], its URI) opens (#334). */
     private var linkOpenPage: Pair<String, Int>? = null
 
+    /** With [linkOpenPage]: the area of that page a back-link fits (#379), shown once the file opens. */
+    private var linkOpenArea: List<Float>? = null
+
     /**
      * PDFs a link can go to: the Library's files and the recent ones (not [exclude]), by their
      * names. Reads small files: call off the main thread.
@@ -995,7 +1005,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             .filter { it.uri != exclude?.toString() && io.github.artcraftandroid.pdfcraft.ui.viewer.linkFileName(it.name) != null }
 
     /** Follow a link to page [page] (0-based) of the PDF named [file]: found by name among [linkableFiles]. */
-    fun openLinkedFile(doc: OpenDocument, file: String, page: Int) {
+    fun openLinkedFile(doc: OpenDocument, file: String, page: Int, area: List<Float>? = null) {
         viewModelScope.launch {
             val target = withContext(Dispatchers.IO) { io.github.artcraftandroid.pdfcraft.ui.viewer.linkedFileFor(file, linkableFiles(doc.source)) }
             io.github.artcraftandroid.pdfcraft.ui.viewer.MarkupDiag.linkFollow(doc, found = target != null, page = page)
@@ -1004,8 +1014,9 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 return@launch
             }
             // open in the other pane or another tab (#139 back-links): go there, nothing reopens
-            if (tabs.followLink(target.uri, page)) return@launch
+            if (tabs.followLink(target.uri, page, area)) return@launch
             linkOpenPage = target.uri to page
+            linkOpenArea = area
             open(Uri.parse(target.uri))
         }
     }

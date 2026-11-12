@@ -76,6 +76,21 @@ internal object SplitDrop {
         return floatArrayOf(x0, y0, x0 + bw, y0 + bh)
     }
 
+    /** Annotation types copied across as drawings (editable ink and shapes, #379). */
+    val DRAWN = setOf("Ink", "Line", "Square", "Circle", "Polygon", "PolyLine")
+
+    /** Whether a drawing with box [b] lies in [area] (a little slack for stroke width). */
+    fun inside(b: FloatArray, area: FloatArray, slack: Float = 4f): Boolean =
+        b[0] >= area[0] - slack && b[1] >= area[1] - slack && b[2] <= area[2] + slack && b[3] <= area[3] + slack
+
+    /** The box around [boxes], moved so its centre is at ([x], [y]). */
+    fun movedUnion(boxes: List<FloatArray>, x: Float, y: Float): FloatArray {
+        val u = floatArrayOf(boxes.minOf { it[0] }, boxes.minOf { it[1] }, boxes.maxOf { it[2] }, boxes.maxOf { it[3] })
+        val dx = x - (u[0] + u[2]) / 2f
+        val dy = y - (u[1] + u[3]) / 2f
+        return floatArrayOf(u[0] + dx, u[1] + dy, u[2] + dx, u[3] + dy)
+    }
+
     /** The area a drag from [a] to [b] marks (points on one page), or null when too small to mean anything. */
     fun area(ax: Float, ay: Float, bx: Float, by: Float, min: Float = 6f): FloatArray? {
         val r = floatArrayOf(minOf(ax, bx), minOf(ay, by), maxOf(ax, bx), maxOf(ay, by))

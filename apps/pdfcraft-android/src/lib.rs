@@ -337,6 +337,9 @@ pub struct LinkInfo {
     pub file: Option<String>,
     /// The page of [file] it opens (0-based); 0 when the link names none.
     pub file_page: u32,
+    /// The area of that page it fits (`/FitR`), in that page's PDF user space, when it names one
+    /// (#379): [`MobileSession::user_rect_to_view`] places it once [file] is open.
+    pub file_rect: Option<Vec<f32>>,
 }
 
 /// A comment (annotation) as the comment list shows it.
@@ -1151,6 +1154,15 @@ impl MobileSession {
             .collect()
     }
 
+    /// `rect` (`x0, y0, x1, y1` in page `page`'s PDF user space, as [`LinkInfo::file_rect`]) in
+    /// points from the top-left of the displayed page; empty when the page doesn't exist (#379).
+    pub fn user_rect_to_view(&self, doc: u64, page: u32, rect: Vec<f32>) -> Result<Vec<f32>, MobileError> {
+        self.with_doc(doc, |d| match (d.info.pages.get(page as usize), <[f32; 4]>::try_from(rect.as_slice())) {
+            (Some(p), Ok(r)) => view_rect(p, r),
+            _ => Vec::new(),
+        })
+    }
+
     /// The links on page `page`.
     pub fn links(&self, doc: u64, page: u32) -> Result<Vec<LinkInfo>, MobileError> {
         self.with_doc(doc, |d| {
@@ -1162,12 +1174,16 @@ impl MobileSession {
                 .filter_map(|l| {
                     let mut file = None;
                     let mut file_page = 0u32;
+                    let mut file_rect = None;
                     let (uri, target, top) = match &l.target {
                         pdfcraft_render::LinkTarget::Uri(u) => (Some(u.clone()), None, None),
                         // a page of another PDF (#334); a launch of a program is never followed
                         pdfcraft_render::LinkTarget::RemoteGoTo { launch: false, file: f, destination, .. } => {
-                            if let pdfcraft_render::RemoteDestination::Page { page, .. } = destination {
+                            if let pdfcraft_render::RemoteDestination::Page { page, view } = destination {
                                 file_page = u32::try_from(*page).unwrap_or(0);
+                                if let pdfcraft_render::DestView::FitR { rect } = view {
+                                    file_rect = Some(rect.to_vec());
+                                }
                             }
                             file = Some(f.clone());
                             (None, None, None)
@@ -1183,7 +1199,7 @@ impl MobileSession {
                         }
                         _ => return None,
                     };
-                    Some(LinkInfo { rect: view_rect(p, l.rect), uri, page: target, top, file, file_page })
+                    Some(LinkInfo { rect: view_rect(p, l.rect), uri, page: target, top, file, file_page, file_rect })
                 })
                 .collect()
         })

@@ -17,9 +17,13 @@ pub enum LinkAction {
     /// A page (0-based) of another PDF, named by a relative file specification: a GoToR action
     /// (§12.6.4.3) shown fitted. Android adaptation (#334): written only; reading lists it as
     /// [`LinkAction::Other`] (`GoToR`) and the viewer's `LinkTarget::RemoteGoTo` carries the target.
+    /// Android adaptation (#379): with `area` (that page's user space, `[x0, y0, x1, y1]`) the
+    /// destination fits that rectangle (`/FitR`), so a back-link from split view opens the exact
+    /// area it was copied from; without it the page is fitted as before.
     Remote {
         file: String,
         page: usize,
+        area: Option<[f64; 4]>,
     },
     /// Something PdfCraft doesn't edit yet (named destination, JavaScript…): kept as is.
     Other(String),
@@ -345,7 +349,7 @@ fn write_action(doc: &Document, d: &mut Dict, a: &LinkAction) -> Result<(), Anno
             act.set(b"URI".to_vec(), PdfString::literal(uri_bytes(u)));
             d.set(b"A".to_vec(), Object::Dict(act));
         }
-        LinkAction::Remote { file, page } => {
+        LinkAction::Remote { file, page, area } => {
             let file = file.trim();
             if file.is_empty() {
                 return Err(AnnotError::Invalid("choose the PDF to link to first".into()));
@@ -356,7 +360,14 @@ fn write_action(doc: &Document, d: &mut Dict, a: &LinkAction) -> Result<(), Anno
             act.set(b"S".to_vec(), Object::name("GoToR"));
             act.set(b"F".to_vec(), remote_file_spec(file));
             // A remote destination names its page by number (§12.3.2.2).
-            act.set(b"D".to_vec(), Object::Array(vec![Object::Int(page), Object::name("Fit")]));
+            let dest = match area {
+                Some(r) => {
+                    let r = checked_rect(*r)?;
+                    vec![Object::Int(page), Object::name("FitR"), Object::Real(r[0]), Object::Real(r[1]), Object::Real(r[2]), Object::Real(r[3])]
+                }
+                None => vec![Object::Int(page), Object::name("Fit")],
+            };
+            act.set(b"D".to_vec(), Object::Array(dest));
             d.set(b"A".to_vec(), Object::Dict(act));
         }
         LinkAction::Other(_) => {}

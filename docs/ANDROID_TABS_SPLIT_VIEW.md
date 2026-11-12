@@ -20,11 +20,12 @@
   (25% to 75%). The pane closes with ×, or the split button again.
 - **Copy across with a back-link.** In the other pane, tap ✂ (Copy an area) and drag over the area
   to copy, then drag the "Drag onto the other document" chip onto a page of the document being
-  edited. Text in the area becomes a text box there; an area without text becomes an image. Either
-  gets a link back to the source page, saved as a standard PDF GoToR link (file name and page), so
-  it also works in other readers when both files are in the same folder. In PdfCraft, tapping the
-  link scrolls the other pane to that page when the source is open there, or brings its tab to the
-  front, without reopening it.
+  edited. Drawings in the area (ink, lines, shapes) go across as drawings that stay editable
+  (`comments_copy` / `comments_paste`); otherwise text in the area becomes a text box, and an area
+  with neither becomes an image. Each gets a link back to the exact area it came from, saved as a
+  standard PDF GoToR link with a `/FitR` destination (file name, page, area), so it also works in
+  other readers when both files are in the same folder. In PdfCraft, tapping the link scrolls the
+  other pane (or the source's tab, or the source once opened) to that area, which flashes.
 
 ## How it works
 
@@ -48,9 +49,8 @@
   composition state.
 - Diagnostics: `tab_*` and `split_*` lines in the `viewer` area (see `ANDROID_DIAGNOSTICS_LOG.md`).
 
-## Not done yet (follow-up issues)
+## Not verified on a device
 
-- Dragging lasso-selected ink across panes (an area copies as text or an image, not as editable ink).
-- The back-link opens the source page, not the exact area (a GoToR link carries a page).
-- Measured switch time and memory with 4 to 8 tabs on the owner's phone: not measured. The
-  `tab_switch ms` and `memory` lines in the diagnostics log will answer it.
+- Switch time and memory with 4 to 8 tabs, Ctrl+Tab on DeX, and dragging across panes on the
+  owner's phone: not measured. The `tab_switch ms`, `split_drop ms` and `memory` lines in the
+  diagnostics log will answer it.
