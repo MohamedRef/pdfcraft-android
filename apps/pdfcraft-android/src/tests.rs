@@ -1280,3 +1280,31 @@ fn cancelled_renders_stop_and_others_draw_the_same() {
     assert!(s.render_page_compact(doc, 1, 1.5, None, true).is_ok());
     s.close(doc, true).unwrap();
 }
+
+/// Masking tape (#143): Android lays tape as an invisible rectangle marked "PdfCraft tape" and
+/// draws the tape itself, so the page renders without it, comment_list gives back what Android
+/// finds it by, and Remove all tape (comments_edit_many delete) takes it away in one undo step.
+#[test]
+fn study_tape_is_an_invisible_marked_rectangle() {
+    let s = MobileSession::new();
+    let doc = s.open(blank_pdf(1), None).unwrap().id;
+    let blank = s.render_page(doc, 0, 0.5, None).unwrap();
+    s.execute(
+        "comment_add".into(),
+        json!({"doc": doc, "page": 1, "type": "rectangle", "rect": [100, 100, 300, 160], "color": "#E0A526", "fill": "#E0A526", "opacity": 0.0, "width": 0.0, "contents": "PdfCraft tape", "author": "Mona"}).to_string(),
+    )
+    .unwrap();
+    let comments = s.comments(doc).unwrap();
+    let tape = comments.iter().find(|c| c.contents.as_deref() == Some("PdfCraft tape")).expect("tape is listed");
+    assert_eq!(tape.subtype, "Square");
+    assert!(tape.opacity < 0.01, "opacity {}", tape.opacity);
+    assert_eq!(tape.color, Some(0xE0A526));
+    assert!((tape.rect[0] - 100.0).abs() < 2.0 && (tape.rect[3] - 160.0).abs() < 2.0, "{:?}", tape.rect);
+    let drawn = s.render_page(doc, 0, 0.5, None).unwrap();
+    assert_eq!(drawn.rgba, blank.rgba, "the engine draws tape invisibly; Android covers the page itself");
+    assert!(s.document(doc).unwrap().dirty);
+    s.execute("comments_edit_many".into(), json!({"doc": doc, "page": 1, "comments": [tape.index + 1], "delete": true}).to_string()).unwrap();
+    assert!(s.comments(doc).unwrap().iter().all(|c| c.contents.as_deref() != Some("PdfCraft tape")));
+    s.execute("edit_undo".into(), json!({"doc": doc}).to_string()).unwrap();
+    assert_eq!(s.comments(doc).unwrap().iter().filter(|c| c.contents.as_deref() == Some("PdfCraft tape")).count(), 1, "undo brings it back");
+}

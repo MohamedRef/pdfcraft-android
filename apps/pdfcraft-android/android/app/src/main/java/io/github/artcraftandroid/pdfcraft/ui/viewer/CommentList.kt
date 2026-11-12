@@ -192,7 +192,7 @@ fun CommentListScreen(vm: AppViewModel, doc: OpenDocument) {
     val guest = stringResource(R.string.comments_guest)
     val me = vm.commentAuthor
     val all = list.orEmpty().filter { !it.fillSign }
-    val parents = all.filter { it.replyTo == null && it.state == null && it.subtype in LISTED }
+    val parents = all.filter { it.replyTo == null && it.state == null && it.subtype in LISTED && !it.isTape() }
     // each thread: its comment, then the replies to it in order
     val threads = remember(list) { parents.map { p -> listOf(p) + all.filter { it.replyTo != null && it.replyTo == p.name && it.state == null } } }
     fun statusOf(cm: CommentInfo) = statuses[cm.page.toInt() to cm.index.toInt()]
