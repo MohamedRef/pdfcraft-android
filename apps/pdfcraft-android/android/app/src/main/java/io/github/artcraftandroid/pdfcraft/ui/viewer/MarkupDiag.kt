@@ -34,6 +34,7 @@ internal object MarkupDiag {
     fun link(doc: OpenDocument, action: String, target: String?, from: String) = e("link", doc, "action" to action, "target" to target, "from" to from)
     fun linksFromUrls(doc: OpenDocument, created: Int, ms: Long) = e("links_from_urls", doc, "created" to created, "ms" to ms)
     fun linksRemoved(doc: OpenDocument) = e("links_remove", doc)
+    fun linkFollow(doc: OpenDocument, found: Boolean, page: Int) = e("link_follow_file", doc, "found" to found, "page" to page)
 
     // measure (#135 #180)
     fun measurePoint(doc: OpenDocument, kind: String, snapped: Boolean, points: Int, ms: Long) =

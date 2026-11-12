@@ -115,7 +115,8 @@ Every line carries `doc` (the document's number in the log).
 | `area_highlight` | `w_pt`, `h_pt` | A Highlight drag that found no text highlighted the area instead (#134) |
 | `text_suggestion` | `kind` (`replace`, `insert`), `lines` | A replace or insert suggestion on selected text (#133) |
 | `shape` | `type` (the shape mode, such as `arrow`, `cloud`, `polygon`), `points` | A drawn shape became its own annotation rather than ink (#170) |
-| `link` | `action` (`add`, `edit`, `delete`), `target` (`page`, `web`, `mail`), `from` (`box`, `lasso`) | A link was made, changed or removed, and how its area was chosen (#179) |
+| `link` | `action` (`add`, `edit`, `delete`), `target` (`page`, `file`, `web`, `mail`), `from` (`box`, `lasso`) | A link was made, changed or removed, and how its area was chosen (#179 #334) |
+| `link_follow_file` | `found`, `page` | A link to another PDF was tapped, and whether that PDF was in the Library or recent files (#334) |
 | `links_from_urls`, `links_remove` | `created`, `ms` | Web addresses in the text were turned into links, or all links were removed (#159) |
 | `measure_point` | `kind` (`distance`, `perimeter`, `area`, `calibrate`), `snapped`, `points`, `snap_ms` | Each measuring tap, whether it snapped to the page's lines and how long snapping took (#135 #180) |
 | `measure_saved`, `measure_scale`, `measure_export` | `kind`, `points`; `method` (`ratio`, `calibrate`), `unit`; `count` | A measurement was saved, a scale set, or measurements exported (#135 #180) |

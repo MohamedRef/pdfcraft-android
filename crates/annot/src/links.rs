@@ -14,6 +14,13 @@ pub enum LinkAction {
         zoom: LinkZoom,
     },
     Uri(String),
+    /// A page (0-based) of another PDF, named by a relative file specification: a GoToR action
+    /// (§12.6.4.3) shown fitted. Android adaptation (#334): written only; reading lists it as
+    /// [`LinkAction::Other`] (`GoToR`) and the viewer's `LinkTarget::RemoteGoTo` carries the target.
+    Remote {
+        file: String,
+        page: usize,
+    },
     /// Something PdfCraft doesn't edit yet (named destination, JavaScript…): kept as is.
     Other(String),
 }
@@ -338,9 +345,37 @@ fn write_action(doc: &Document, d: &mut Dict, a: &LinkAction) -> Result<(), Anno
             act.set(b"URI".to_vec(), PdfString::literal(uri_bytes(u)));
             d.set(b"A".to_vec(), Object::Dict(act));
         }
+        LinkAction::Remote { file, page } => {
+            let file = file.trim();
+            if file.is_empty() {
+                return Err(AnnotError::Invalid("choose the PDF to link to first".into()));
+            }
+            let page = i64::try_from(*page).map_err(|_| AnnotError::Invalid("the linked page is out of range".into()))?;
+            d.remove(b"Dest");
+            let mut act = Dict::new();
+            act.set(b"S".to_vec(), Object::name("GoToR"));
+            act.set(b"F".to_vec(), remote_file_spec(file));
+            // A remote destination names its page by number (§12.3.2.2).
+            act.set(b"D".to_vec(), Object::Array(vec![Object::Int(page), Object::name("Fit")]));
+            d.set(b"A".to_vec(), Object::Dict(act));
+        }
         LinkAction::Other(_) => {}
     }
     Ok(())
+}
+
+/// A GoToR `/F` for `file`: a plain string when it is printable ASCII, else a file specification
+/// dictionary with an ASCII `/F` fallback and the name itself in `/UF` (§7.11.3).
+fn remote_file_spec(file: &str) -> Object {
+    if file.chars().all(|c| (' '..='~').contains(&c)) {
+        return Object::String(PdfString::literal(file.as_bytes().to_vec()));
+    }
+    let fallback: String = file.chars().map(|c| if (' '..='~').contains(&c) { c } else { '_' }).collect();
+    let mut spec = Dict::new();
+    spec.set(b"Type".to_vec(), Object::name("Filespec"));
+    spec.set(b"F".to_vec(), Object::String(PdfString::literal(fallback.into_bytes())));
+    spec.set(b"UF".to_vec(), Object::String(PdfString::text(file)));
+    Object::Dict(spec)
 }
 
 /// Check link geometry before writing PDF objects: a user or automation call can supply
@@ -372,7 +407,7 @@ pub fn add(doc: &mut Document, page: usize, rect: [f64; 4], action: &LinkAction,
 fn new_link(doc: &mut Document, p: ObjRef, rect: [f64; 4], action: &LinkAction, style: &LinkStyle) -> Result<ObjRef, AnnotError> {
     let r = checked_rect(rect)?;
     if matches!(action, LinkAction::Other(_)) {
-        return Err(AnnotError::Invalid("choose a page or a web address".into()));
+        return Err(AnnotError::Invalid("choose a page, a PDF or a web address".into()));
     }
     let mut d = Dict::new();
     d.set(b"Type".to_vec(), Object::name("Annot"));

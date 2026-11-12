@@ -805,23 +805,25 @@ pub fn tools() -> Vec<ToolDef> {
                 json!({ "doc": doc(), "page": { "type": "integer", "minimum": 1 }, "index": { "type": "integer", "minimum": 1 }, "password": { "type": "string", "description": "Optional password for the linked PDF." }, "allow_absolute": { "type": "boolean", "description": "Explicitly allow an absolute local GoToR target (default false). Existing validation and --root confinement still apply." } }),
                 &["doc", "page", "index"],
             )),
-        t("link_add", "Add a link", "Add a link over rect on page that opens url or goes to to_page, shown at zoom: fit_page (default), fit_width, fit_height, fit_visible, actual, inherit (keep the reader's zoom) or a percentage. Appearance: visible (rectangle), color, width 1-3, highlight none/invert/outline/inset. Undoable.")
+        t("link_add", "Add a link", "Add a link over rect on page that opens url, goes to to_page, or opens page to_page of another PDF file (relative path), shown at zoom: fit_page (default), fit_width, fit_height, fit_visible, actual, inherit (keep the reader's zoom) or a percentage. Appearance: visible (rectangle), color, width 1-3, highlight none/invert/outline/inset. Undoable.")
             .cmd("edit.link")
             .with(schema(
                 json!({
                     "doc": doc(), "page": { "type": "integer", "minimum": 1 }, "rect": { "type": "array", "items": { "type": "number" }, "minItems": 4, "maxItems": 4 },
                     "url": { "type": "string" }, "to_page": { "type": "integer", "minimum": 1 },
+                    "file": { "type": "string", "description": "Another PDF, as a path relative to this document's folder (e.g. Notes.pdf): the link opens its to_page (default 1), fitted, as a GoToR action." },
                     "zoom": { "description": "fit_page, fit_width, fit_height, fit_visible, actual, inherit, or a percentage" },
                     "visible": { "type": "boolean" }, "color": { "type": "string" }, "width": { "type": "number" }, "highlight": { "type": "string", "enum": ["none", "invert", "outline", "inset"] },
                 }),
                 &["doc", "page", "rect"],
             )),
-        t("link_edit", "Edit a link", "Change a link's rect, destination (url, or to_page and zoom as in link_add; a new to_page keeps the link's zoom, a zoom alone keeps its page) or appearance. Undoable.")
+        t("link_edit", "Edit a link", "Change a link's rect, destination (url, file, or to_page and zoom as in link_add; a new to_page keeps the link's zoom, a zoom alone keeps its page) or appearance. Undoable.")
             .with(schema(
                 json!({
                     "doc": doc(), "page": { "type": "integer", "minimum": 1 }, "index": { "type": "integer", "minimum": 1 },
                     "rect": { "type": "array", "items": { "type": "number" }, "minItems": 4, "maxItems": 4 },
                     "url": { "type": "string" }, "to_page": { "type": "integer", "minimum": 1 },
+                    "file": { "type": "string", "description": "Another PDF, as a path relative to this document's folder (e.g. Notes.pdf): the link opens its to_page (default 1), fitted, as a GoToR action." },
                     "zoom": { "description": "fit_page, fit_width, fit_height, fit_visible, actual, inherit, or a percentage" },
                     "visible": { "type": "boolean" }, "color": { "type": "string" }, "width": { "type": "number" }, "highlight": { "type": "string", "enum": ["none", "invert", "outline", "inset"] },
                 }),
