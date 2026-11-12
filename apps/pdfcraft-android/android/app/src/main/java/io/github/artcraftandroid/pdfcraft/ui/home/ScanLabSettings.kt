@@ -144,6 +144,13 @@ internal fun ScanLabSettings(vm: AppViewModel) {
     SheetRow(null, stringResource(R.string.scan_lab_suggestions), { lab.update(o.copy(suggestions = !o.suggestions)) }) {
         PdfSwitch(o.suggestions, { lab.update(o.copy(suggestions = it)) })
     }
+    SheetRow(null, stringResource(R.string.scan_lab_strict_gutter), { lab.update(o.copy(strictGutter = !o.strictGutter)) }) {
+        PdfSwitch(o.strictGutter, { lab.update(o.copy(strictGutter = it)) })
+    }
+    // the slider's strength counts as set by hand, and sharpening scales the type's (#424)
+    SheetRow(null, stringResource(R.string.scan_lab_page_strength), { lab.update(o.copy(pageStrength = !o.pageStrength)) }) {
+        PdfSwitch(o.pageStrength, { lab.update(o.copy(pageStrength = it)) })
+    }
     // the research detectors (#305, #306): a report only, in kept scans, so it changes no page
     SheetRow(null, stringResource(R.string.scan_lab_inspect), { lab.update(o.copy(inspect = !o.inspect)) }) {
         PdfSwitch(o.inspect, { lab.update(o.copy(inspect = it)) })

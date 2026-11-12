@@ -166,7 +166,15 @@ fn main() {
             upright: fixed.is_none() && options["upright"].as_bool().unwrap_or(false) && turned["auto"].as_bool().unwrap_or(true),
             turns: fixed.map_or(0, |t| (t % 4) as u8),
             // nor one from before the Auto look sharpened and smoothed (#299)
-            sharpen: options["sharpen"].as_u64().map_or(0, |v| v.min(100) as u8),
+            // with the page-strength option off (#424) every level but none was the kind's own
+            sharpen: match (
+                options["sharpen"].as_u64().map_or(0, |v| v.min(100) as u8),
+                options["page_strength"].as_bool(),
+                options["presets"].as_bool(),
+            ) {
+                (s, Some(false), Some(true)) if s > 0 => pdfcraft_scan::DEFAULT_SHARPEN,
+                (s, _, _) => s,
+            },
             denoise: options["denoise"].as_bool().unwrap_or(false),
             // the kind of document (#299): one the person chose is kept; one the phone worked out
             // is worked out again by this build; files from before then have none
@@ -176,7 +184,9 @@ fn main() {
                 (None, _) => PresetChoice::Off,
             },
             curved_sides: facts["finding"]["curved_sides"].as_u64().map_or(0, |v| v.min(4) as u8),
-            fixed_strength: !options["strength_override"].is_null(),
+            // set by hand (#424): the testing option's strength, or the page's slider; files from
+            // before #424 say only whether the testing option set one
+            fixed_strength: facts["strength_applied"]["fixed"].as_bool().unwrap_or_else(|| !options["strength_override"].is_null()),
             // a document type's tone and the photo mask in sharpening (#299); files from before them have neither
             kind_tone: options["kind_tone"].as_bool().unwrap_or(false),
             photo_sharpen: options["photo_sharpen"].as_bool().unwrap_or(false),

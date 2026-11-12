@@ -18,4 +18,5 @@
     <string name="scan_lab_suggestions">Sugerir Aplanar página o Escala de grises según el tipo de documento</string>
     <string name="scan_suggest_flatten">¿Aplanar esta página?</string>
     <string name="scan_suggest_greyscale">Probar escala de grises</string>
+    <string name="scan_lab_page_strength">La intensidad de la página prevalece sobre el tipo de documento</string>
 </resources>

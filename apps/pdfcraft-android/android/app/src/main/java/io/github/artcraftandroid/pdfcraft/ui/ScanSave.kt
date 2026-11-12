@@ -105,15 +105,61 @@ internal fun scanPageRequest(
     sideProportions = !lab.perspective,
     upright = ask.upright,
     turns = ask.turns.toUByte(),
-    sharpen = lab.sharpen.coerceIn(0, 100).toUByte(),
+    sharpen = scanSharpenAsk(lab).toUByte(),
     denoise = lab.denoise,
     preset = scanPresetAsk(preset, lab.presets),
     curvedSides = curvedSides.coerceIn(0, 4).toUByte(),
-    fixedStrength = lab.strength != null,
+    // a book's gutter must run the whole side, stay narrow and fade inward (#427)
+    strictGutter = lab.strictGutter,
+    fixedStrength = scanFixedStrength(lab, strength),
     // a document type's own tone, and photographs sharpened gently (#299)
     kindTone = lab.kindTone,
     photoSharpen = lab.photoSharpen,
 )
+}
+
+/**
+ * Whether the page's strength is "set by hand", so a document type does not replace it (#424):
+ * the testing option's one strength, or (with [ScanLab.pageStrength] on) the page's own from the
+ * slider. A page with no strength of its own still gets its kind's.
+ */
+internal fun scanFixedStrength(lab: ScanLab, pageStrength: Int?): Boolean =
+    lab.strength != null || (lab.pageStrength && pageStrength != null)
+
+/**
+ * The sharpening asked of the native side (#424). Natively the kind's sharpening is scaled by it
+ * (the default, 30, gives the kind's own); with [ScanLab.pageStrength] off and document types on,
+ * any level but none asks for the default, which is what every level did before.
+ */
+internal fun scanSharpenAsk(lab: ScanLab): Int {
+    val asked = lab.sharpen.coerceIn(0, 100)
+    return if (!lab.pageStrength && lab.presets && asked > 0) SCAN_DEFAULT_SHARPEN else asked
+}
+
+/** [applied] as diagnostics fields (#424): the strength used, where it came from, and the option. */
+internal fun scanAppliedStrengthDiag(applied: ScanAppliedStrength, lab: ScanLab): Array<Pair<String, Any?>> = arrayOf(
+    "strength_applied" to applied.strength, "strength_applied_source" to applied.source,
+    "strength_fixed" to applied.fixed, "page_strength" to lab.pageStrength, "sharpen_asked" to scanSharpenAsk(lab),
+)
+
+/** The native default sharpening, the level at which a document type's own is used (#424). */
+internal const val SCAN_DEFAULT_SHARPEN = 30
+
+/** The strength a page was really made at, and where it came from: "lab", "page", "kind" or "look" (#424). */
+internal data class ScanAppliedStrength(val strength: Int, val source: String, val fixed: Boolean)
+
+/**
+ * The strength a page of [look] was made at (#424): [kindStrength] is the document type's (null
+ * when the page had none), which wins only while the strength is not set by hand.
+ */
+internal fun scanAppliedStrength(look: io.github.artcraftandroid.pdfcraft.ui.scan.ScanPageLook, lab: ScanLab, kindStrength: Int?): ScanAppliedStrength {
+    val fixed = scanFixedStrength(lab, look.strength)
+    val asked = scanLookStrength(look, lab)
+    return when {
+        lab.strength != null -> ScanAppliedStrength(asked, "lab", true)
+        kindStrength != null && !fixed -> ScanAppliedStrength(kindStrength.coerceIn(0, 100), "kind", false)
+        else -> ScanAppliedStrength(asked, look.strengthSource, fixed)
+    }
 }
 
 /** The native request's document type (#299): "off" with the testing option off, the person's kind, or "auto". */

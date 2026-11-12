@@ -18,4 +18,5 @@
     <string name="scan_lab_suggestions">Sugerir Aplanar página ou Tons de cinza conforme o tipo de documento</string>
     <string name="scan_suggest_flatten">Aplanar esta página?</string>
     <string name="scan_suggest_greyscale">Experimentar tons de cinza</string>
+    <string name="scan_lab_page_strength">A intensidade da página prevalece sobre o tipo de documento</string>
 </resources>

@@ -18,4 +18,5 @@
     <string name="scan_lab_suggestions">Suggest Flatten page or Grayscale for a document type</string>
     <string name="scan_suggest_flatten">Flatten this page?</string>
     <string name="scan_suggest_greyscale">Try grayscale</string>
+    <string name="scan_lab_page_strength">Page strength wins over the document type</string>
 </resources>

@@ -147,6 +147,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             denoise: true,
             preset: "off".into(),
             curved_sides: 0,
+            strict_gutter: true,
             fixed_strength: false,
             kind_tone: false,
             photo_sharpen: false,

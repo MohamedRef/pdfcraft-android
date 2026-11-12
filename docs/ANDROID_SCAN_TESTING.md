@@ -46,12 +46,13 @@ on one part. While any is changed, the scan screen says so.
 | Flatten from the lines of text when the network gives nothing better (#303) | On | Off: a flattened page whose network result was missing or not kept stays straightened by its corners, as before |
 | Turn pages upright (#339) | On | Off: a page stays as its corners gave it (Rotate still works) |
 | Unsure pages follow their neighbors (#339) | On | Off: in a scan of several pages each page is turned by its own answer only |
-| Sharpen text, in Clean scan (#299) | 30 | Off, 60 or 100 |
+| Sharpen text, in Clean scan (#299) | 30 | Off, 60 or 100. With document types on, the type's own sharpening is scaled by this level over 30 (#424): 60 is twice the type's, 100 three and a third times it, at most 100 |
 | Smooth grain in dim photos, in Clean scan (#299) | On | Off |
 | Document types in Clean scan (#299) | On | Off: the filter's own strength and the sharpening above, as before |
 | Document types shape Clean scan's tone (#299) | On | Off: a type sets only strength, sharpening and paper color (no receipt gamma, no whiteboard S-curve) |
 | Sharpen photos on the page gently (#299) | On | Off: only the objects the look finds itself are sharpened gently, as before |
 | Suggest Flatten page or Grayscale for a document type (#299) | On | Off: no suggestion chips |
+| Page strength wins over the document type (#424) | On | Off: the document type's strength replaces the slider's, and every sharpening level but Off gives the type's own, as before #424 |
 | Filter strength | Each filter's own | 20, 40, 60, 80 or 100 for every filter |
 | Flatten page (#302) | Off | On, with the switch on the scan screen itself |
 | Report moiré, fingers, glare and stains in kept scans (#305, #306) | Off | On: each kept page is also run through the two research detectors, and what they see goes to the log (`inspect`) and the page file (`inspect`). No page changes |
@@ -91,12 +92,13 @@ The zip also holds `diagnostics.txt`, the diagnostics log as **Share diagnostics
  "finding": {"source": "model", "confidence": 0.835, "angle": 0, "passes": 1, "refined_sides": 4, "curved_sides": 0},
  "look": "auto", "strength": 60, "flatten": false, "flatten_chosen": null,
  "options": {"finder": "auto", "refine": true, "side_proportions": false, "snap_paper": true, "strength_override": null, "upright": true,
-             "sharpen": 30, "denoise": true, "preview": true, "crop_tools": true, "flatten_auto": false, "flatten_trim": true, "settle_turns": true, "presets": true, "book_gutter": true, "line_flatten": true,
+             "sharpen": 30, "denoise": true, "preview": true, "crop_tools": true, "flatten_auto": false, "flatten_trim": true, "settle_turns": true, "presets": true, "strict_gutter": true, "book_gutter": true, "line_flatten": true,
              "look_per_page": true, "look_strip": true, "whiteboard_look": true, "preview_stop": true,
              "preview_zoom": true},
  "document_type": {"preset": "receipt", "chosen": false, "strength": 80, "sharpen": 35, "keep_paper": false, "suggest_flatten": false,
                    "suggest_greyscale": true, "ratio": 3.0, "ink_share": 0.043, "colour_ink_share": 0.0, "photo_share": 0.0,
-                   "stroke_mm": 0.339, "glare_share": 0.0, "gutter_band": false, "whole_photo": false},
+                   "stroke_mm": 0.339, "bright_share": 0.0, "gutter_band": false, "gutter_loose": false, "gutter_cover": 0.0,
+                   "whole_photo": false},
  "turns": {"manual": null, "auto": true, "total": 3, "followed": false, "source": "classifier"},
  "capture": {"source": "in_app", "mp10": 499, "width": 8160, "height": 6120, "exposure_index": -1, "exposure_step_milli": 333,
              "torch": false, "focused": true, "rotation": 0, "capture_ms": 640, "live": true, "live_found": true,
@@ -110,6 +112,7 @@ The zip also holds `diagnostics.txt`, the diagnostics log as **Share diagnostics
           "loupe_decodes": 6, "snap": true, "ms": 9100, "moved_pct": 1.235,
           "corners_off": 0},
  "page_look": {"id": "clean", "strength": null, "level": 60, "per_page": true, "paper": "auto"},
+ "strength_applied": {"strength": 80, "source": "kind", "fixed": false},
  "book": {"half": "right", "gutter_found": true, "gutter_top": 0.4712, "gutter_bottom": 0.4790, "confidence": 0.62, "order": "rtl"},
  "result": {"file": "page-01.out.jpg", "width": 1654, "height": 2339, "format": "jpeg", "dpi": 200.0,
             "paper": "a4", "aspect": "known_focal", "focal_mismatch": false, "flattened": false, "bend_pct": 0.0,
@@ -132,7 +135,10 @@ as the scan screen left it (#301): `id` (`original`, `clean`, `colour`, `greysca
 or `bw`; Auto color and Whiteboard share the native `colour` look, so `look` alone can't tell
 them apart), `strength` set with the slider (`null` for the look's own), the `level` it was made
 at before any testing option, whether each page had its own (`per_page`), and the `paper`
-chosen for Clean scan and Whiteboard (`auto`, `white` or `keep`). `crop` is what happened on the crop
+chosen for Clean scan and Whiteboard (`auto`, `white` or `keep`). `strength_applied` is the
+strength the saved page was really made at (#424): `source` is `lab` (the testing option),
+`page` (the slider), `kind` (the document type's, while the slider was not moved) or `look`;
+`fixed` says the document type did not replace it; `null` when no page was made. `crop` is what happened on the crop
 screen (#292), added up over every time the page was cropped with Done, or `null` when it never
 was: drags of corners and of sides, snaps asked for, taken, skipped by holding still and failed,
 the longest snap, keyboard and TalkBack moves, Auto-detect, No crop and Reset, magnifier regions

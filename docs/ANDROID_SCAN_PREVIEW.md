@@ -96,6 +96,15 @@ Added after the preview, in the same issue. All of it is Kotlin; the native side
   slide makes the value it stops on, and a newer request replaces one still waiting. The testing
   option **Filter strength** still wins: while it sets a strength the slider shows that value,
   can't be moved and says why.
+  In Clean scan with document types on (#424), a strength set with the slider counts as set by
+  hand: the document type's strength no longer replaces it (`scanFixedStrength`). Until the
+  person moves it, the page is made at the type's strength (Receipt 80, Whiteboard 90, Photo 25,
+  …) and the slider starts there, read from the preview's `kind` (`scanAppliedStrength`), so the
+  first drag does not jump. Testing option **Page strength wins over the document type**
+  (`ScanLab.pageStrength`, on); off is the rule before #424, where the type's strength replaced
+  the slider's. Log fields on `preview` and `page`: `strength_applied`, `strength_applied_source`
+  (`lab`, `page`, `kind`, `look`), `strength_fixed`, `page_strength`, `sharpen_asked`; the kept
+  page file has `strength_applied` (`strength`, `source`, `fixed`).
 - **While a new look is made** the page in its last look stays on screen ("Preparing the page"
   shown over it) instead of going back to the photo: `ScanPreviewKey.samePage` and `scanShown`.
   The photo is shown only until a page's first preview arrives.

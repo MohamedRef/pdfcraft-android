@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Scanner document types: the book-page gutter rule (#427), kept apart from strings.xml so parallel scanner work merges cleanly. -->
+<resources>
+    <string name="scan_lab_strict_gutter">Pagina di libro solo se un\'ombra percorre tutto il lato della rilegatura e sfuma verso l\'interno</string>
+</resources>

@@ -1940,6 +1940,8 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 // the page's own look and strength (#301)
                 "look" to io.github.artcraftandroid.pdfcraft.ui.scan.scanFilterId(filter), "strength" to scanLookStrength(look, lab), "paper" to look.paper.word, "whiteboard_look" to lab.whiteboardLook,
                 "strength_source" to (if (lab.strength != null) "lab" else look.strengthSource), "settled" to settle,
+                // the strength the page was really made at, and whether the slider's counts as set by hand (#424)
+                *scanAppliedStrengthDiag(scanAppliedStrength(look, lab, p?.kind?.strength?.toInt()), lab),
                 "flatten" to flatten, "made" to (image != null),
                 "reused" to (p?.reused ?: false), "ms" to ms,
                 *(p?.timings.orEmpty().map<io.github.artcraftandroid.pdfcraft.core.ScanTiming, Pair<String, Any?>> { it.stage.removePrefix("scan_") + "_ms" to it.ms.toLong() }.toTypedArray()),
@@ -2222,6 +2224,8 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 "flatten_trim" to lab.flattenTrim, *io.github.artcraftandroid.pdfcraft.ui.scan.scanTrimDiag(r?.trim),
                 *scanLineFlattenDiag(lab.lineFlatten, r?.lineFlatten),
                 "strength" to strength, "side_proportions" to !lab.perspective, "snap_paper" to lab.snapPaper,
+                // the strength the page was really made at, and whether the slider's counts as set by hand (#424)
+                *scanAppliedStrengthDiag(scanAppliedStrength(page.look, lab, r?.kind?.strength?.toInt()), lab),
                 // which way up the page was found to be and whether it was turned (#339)
                 "upright" to lab.upright, "quarter_turns" to classifierTurns[i], "upright_sure" to (found[i]?.sure ?: false),
                 "upright_confidence" to (found[i]?.confidence?.toDouble() ?: 0.0), "upright_agreement" to (found[i]?.agreement?.toDouble() ?: 0.0),
@@ -2238,7 +2242,10 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 "suggest_greyscale" to (r?.kind?.suggestGreyscale ?: false), "page_ratio" to (r?.kind?.ratio?.toDouble() ?: 0.0),
                 "ink_share" to (r?.kind?.inkShare?.toDouble() ?: -1.0), "colour_ink_share" to (r?.kind?.colourInkShare?.toDouble() ?: -1.0),
                 "photo_share" to (r?.kind?.photoShare?.toDouble() ?: -1.0), "stroke_mm" to (r?.kind?.strokeMm?.toDouble() ?: -1.0),
-                "glare_share" to (r?.kind?.glareShare?.toDouble() ?: -1.0), "gutter_band" to (r?.kind?.gutterBand ?: false),
+                "bright_share" to (r?.kind?.brightShare?.toDouble() ?: -1.0), "gutter_band" to (r?.kind?.gutterBand ?: false),
+                // the book-page gutter rule (#427): the option, what the first rule says, and how much of the side was dark
+                "strict_gutter" to lab.strictGutter, "gutter_loose" to (r?.kind?.gutterLoose ?: false),
+                "gutter_cover" to (r?.kind?.gutterCover?.toDouble() ?: -1.0),
                 "whole_photo" to (r?.kind?.wholePhoto ?: false),
                 // the kind's own tone and whether it was used, and the photo mask in sharpening (#299)
                 "kind_tone" to lab.kindTone, "kind_gamma" to (r?.kind?.extraGamma?.toDouble() ?: 0.0),
@@ -2261,11 +2268,12 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 val kind = r?.kind?.let { k ->
                     ScanTestKind(
                         k.preset, k.chosen, k.strength.toInt(), k.sharpen.toInt(), k.keepPaper, k.suggestFlatten, k.suggestGreyscale, k.ratio.toDouble(),
-                        k.inkShare.toDouble(), k.colourInkShare.toDouble(), k.photoShare.toDouble(), k.strokeMm.toDouble(), k.glareShare.toDouble(), k.gutterBand, k.wholePhoto,
+                        k.inkShare.toDouble(), k.colourInkShare.toDouble(), k.photoShare.toDouble(), k.strokeMm.toDouble(), k.brightShare.toDouble(), k.gutterBand, k.wholePhoto,
+                        k.gutterLoose, k.gutterCover.toDouble(),
                         k.extraGamma.toDouble(), k.sCurve, k.colourFactor.toDouble(),
                     )
                 }
-                withContext(Dispatchers.IO) { scanLab.keepPage(keepIn, i, page, true, scanLookWord(filter, lab), strength, flatten, r?.path?.let(::File), kept, scanPreviewRecord(page), turn, kind) }
+                withContext(Dispatchers.IO) { scanLab.keepPage(keepIn, i, page, true, scanLookWord(filter, lab), strength, flatten, r?.path?.let(::File), kept, scanPreviewRecord(page), turn, kind, r?.let { scanAppliedStrength(page.look, lab, it.kind?.strength?.toInt()) }) }
             }
             saved += scanSavedPage(page.file.absolutePath, r?.let { it.path to it.dpi })
         }

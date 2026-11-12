@@ -208,15 +208,47 @@ class ScanSaveTest {
     }
 
     @Test
-    fun aPagesOwnStrengthGoesIntoTheRequestUnlessATestingOptionSetsOne() {
+    fun aPagesOwnStrengthGoesIntoTheRequestAndCountsAsSetByHand() {
         val corners = floatArrayOf(0f, 0f, 1f, 0f, 1f, 1f, 0f, 1f)
         // the slider's strength for the page (#301), the look's own without one
         assertEquals(25, scanPageRequest("/a", corners, ScanFilter.AutoColor, false, ScanLab(), "", strength = 25).strength.toInt())
         assertEquals(ScanFilter.AutoColor.level, scanPageRequest("/a", corners, ScanFilter.AutoColor, false, ScanLab(), "").strength.toInt())
         // the testing option's one strength for every look wins over the slider
         assertEquals(80, scanPageRequest("/a", corners, ScanFilter.AutoColor, false, ScanLab(strength = 80), "", strength = 25).strength.toInt())
-        // a page's strength does not make it "set by hand" for the document types: only the testing option does
-        assertFalse(scanPageRequest("/a", corners, ScanFilter.CleanScan, false, ScanLab(), "", strength = 25).fixedStrength)
+        // a page's strength from the slider counts as set by hand, so the document type does not replace it (#424)
+        assertTrue(scanPageRequest("/a", corners, ScanFilter.CleanScan, false, ScanLab(), "", strength = 25).fixedStrength)
+        // a page with no strength of its own still gets its kind's
+        assertFalse(scanPageRequest("/a", corners, ScanFilter.CleanScan, false, ScanLab(), "").fixedStrength)
+        // the testing option off is the rule before #424: only the testing option's strength is set by hand
+        assertFalse(scanPageRequest("/a", corners, ScanFilter.CleanScan, false, ScanLab(pageStrength = false), "", strength = 25).fixedStrength)
+        assertTrue(scanPageRequest("/a", corners, ScanFilter.CleanScan, false, ScanLab(pageStrength = false, strength = 40), "").fixedStrength)
+    }
+
+    @Test
+    fun theSharpeningOptionScalesTheKindsUnlessTheTestingOptionIsOff() {
+        val corners = floatArrayOf(0f, 0f, 1f, 0f, 1f, 1f, 0f, 1f)
+        fun asked(lab: ScanLab) = scanPageRequest("/a", corners, ScanFilter.CleanScan, false, lab, "").sharpen.toInt()
+        // natively the kind's sharpening is scaled by the level asked (#424), so each level goes through
+        for (level in ScanLab.SHARPENING) assertEquals(level, asked(ScanLab(sharpen = level)))
+        // off with document types on: every level but none is the default, as before
+        assertEquals(listOf(0, 30, 30, 30), ScanLab.SHARPENING.map { asked(ScanLab(sharpen = it, pageStrength = false)) })
+        // document types off: the level as it is, whatever the option
+        assertEquals(60, asked(ScanLab(sharpen = 60, pageStrength = false, presets = false)))
+    }
+
+    @Test
+    fun theStrengthAPageIsMadeAtIsTheKindsUntilThePersonSetsOne() {
+        val clean = io.github.artcraftandroid.pdfcraft.ui.scan.ScanPageLook(ScanFilter.CleanScan)
+        // no strength of its own: the kind's, so the slider starts there and the first drag does not jump (#424)
+        assertEquals(ScanAppliedStrength(80, "kind", false), scanAppliedStrength(clean, ScanLab(), 80))
+        // the slider's strength wins over the kind's
+        assertEquals(ScanAppliedStrength(20, "page", true), scanAppliedStrength(clean.copy(strength = 20), ScanLab(), 80))
+        // without a kind (another look, or document types off) the look's own level
+        assertEquals(ScanAppliedStrength(clean.level, "look", false), scanAppliedStrength(clean, ScanLab(), null))
+        // the testing option's strength wins over everything
+        assertEquals(ScanAppliedStrength(40, "lab", true), scanAppliedStrength(clean.copy(strength = 20), ScanLab(strength = 40), 80))
+        // option off: the kind's replaces the slider's, as before #424
+        assertEquals(ScanAppliedStrength(80, "kind", false), scanAppliedStrength(clean.copy(strength = 20), ScanLab(pageStrength = false), 80))
     }
 
     @Test

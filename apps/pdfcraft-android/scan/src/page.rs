@@ -12,7 +12,7 @@ use crate::flatten::{predict_grid, unwarp, unwarp_trimmed};
 use crate::flatten_guard::{Kept, Trim, border_trim, guard};
 use crate::flatten_lines::{LineFit, fit_page};
 use crate::look::{Applied, Look, LookParams, Pixels, apply_with_photos};
-use crate::page_kind::{PageKind, PresetChoice, page_kind};
+use crate::page_kind::{Measured, PageKind, PresetChoice, kind_of, measure};
 use crate::straightness::{Straightness, line_straightness};
 use crate::upright::{Upright, turned, upright};
 use crate::upright_pages::total_turn;
@@ -96,7 +96,11 @@ pub struct PageRequest<'a> {
     pub preset: PresetChoice,
     /// How many sides of the page its edge detection found curved (0–4): a book page's sign (#299).
     pub curved_sides: u8,
-    /// The strength was set by hand (a testing option): a document type does not change it.
+    /// A dark band down one long side counts as a book's gutter only when it runs the whole
+    /// length, stays narrow and fades inward (#427); false is the first rule (#299), a testing choice.
+    pub strict_gutter: bool,
+    /// The strength was set by hand (the page's slider or a testing option, #424): a document
+    /// type does not change it.
     pub fixed_strength: bool,
     /// A document type also changes the tone curve: its extra gamma (a receipt's faint print),
     /// its S-curve and colour factor (a whiteboard) (#299). Off: only strength, sharpening and
@@ -137,6 +141,7 @@ impl<'a> PageRequest<'a> {
             denoise: true,
             preset: PresetChoice::Off,
             curved_sides: 0,
+            strict_gutter: true,
             fixed_strength: false,
             kind_tone: false,
             photo_sharpen: false,
@@ -245,6 +250,17 @@ pub struct PageBase {
     pub line_flatten: Option<LineFlatten>,
     /// (stage, milliseconds) of the stages so far.
     pub timings: Vec<(&'static str, u32)>,
+    /// What the page measures as for the document types (#299), taken the first time a look asks
+    /// and kept (#427): every later look of the same base (the preview's looks and strengths)
+    /// reuses it. Empty until then; `None` inside when the page could not be measured.
+    pub measured: std::sync::OnceLock<Option<Measured>>,
+}
+
+impl PageBase {
+    /// The page's measurements for the document types, taken once (see `measured`).
+    pub fn measured(&self) -> Option<&Measured> {
+        self.measured.get_or_init(|| measure(&self.page, self.dpi, self.paper)).as_ref()
+    }
 }
 
 /// A black-and-white page under this resolution is made at twice the size.
@@ -322,6 +338,7 @@ pub fn process_page(request: &PageRequest<'_>) -> Result<PageResult, ScanError> 
         trim,
         line_flatten,
         mut timings,
+        measured: _,
     } = base;
     let (w, h) = (page.width, page.height);
     drop(page);
@@ -364,12 +381,22 @@ pub fn page_look(base: &PageBase, request: &PageRequest<'_>) -> Result<Applied, 
     page_look_kind(base, request).map(|(applied, _)| applied)
 }
 
+/// The sharpening a page of a kind whose own is `kind` gets when the request asks for `asked`
+/// (#424): the kind's scaled by `asked` over the default, so the default gives the kind's own and
+/// 0 gives none. At most 100.
+pub fn kind_sharpen(kind: u8, asked: u8) -> u8 {
+    let scaled = u32::from(kind) * u32::from(asked) / u32::from(DEFAULT_SHARPEN);
+    u8::try_from(scaled.min(100)).unwrap_or(100)
+}
+
 /// `page_look`, and the kind of document the Auto look took the page for (#299). With a kind,
-/// its strength (unless the strength was set by hand), its sharpening (unless sharpening is off)
-/// and its paper colour replace the request's.
+/// its strength (unless the strength was set by hand: the slider or the testing option), its
+/// sharpening (scaled by the request's, #424) and its paper colour replace the request's.
 pub fn page_look_kind(base: &PageBase, request: &PageRequest<'_>) -> Result<(Applied, Option<PageKind>), ScanError> {
     let kind = match request.look {
-        Look::Auto => page_kind(&base.page, base.dpi, base.paper, request.curved_sides, request.preset),
+        Look::Auto if request.preset != PresetChoice::Off => {
+            base.measured().and_then(|m| kind_of(m, request.curved_sides, request.preset, request.strict_gutter))
+        }
         _ => None,
     };
     let mut params = LookParams {
@@ -385,9 +412,9 @@ pub fn page_look_kind(base: &PageBase, request: &PageRequest<'_>) -> Result<(App
         if !request.fixed_strength {
             params.strength = kind.params.strength;
         }
-        if request.sharpen > 0 {
-            params.sharpen = kind.params.sharpen;
-        }
+        // the request's sharpening scales the kind's (#424): the default (30) gives the kind's
+        // own, 0 none, 60 twice the kind's, so each level of the testing option does something
+        params.sharpen = kind_sharpen(kind.params.sharpen, request.sharpen);
         params.keep_paper = kind.params.keep_paper;
         if request.kind_tone {
             params.shape = kind_shape(&kind.params);
@@ -525,6 +552,7 @@ pub fn page_base(request: &PageRequest<'_>) -> Result<PageBase, ScanError> {
         trim,
         line_flatten,
         timings,
+        measured: std::sync::OnceLock::new(),
     })
 }
 

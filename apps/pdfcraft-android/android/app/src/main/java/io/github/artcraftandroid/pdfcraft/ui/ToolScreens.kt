@@ -1101,7 +1101,9 @@ fun ScanScreen(vm: AppViewModel) {
         if (page != null && lab.lookStrip) {
             io.github.artcraftandroid.pdfcraft.ui.scan.ScanLooksStrip(vm, shownAt, page.look, exact?.image)
         }
-        if (page != null) io.github.artcraftandroid.pdfcraft.ui.scan.ScanStrengthRow(vm, shownAt, page.look)
+        // the slider starts from the document type's strength the preview was made at (#424)
+        val kindStrength = preview?.takeIf { page != null && it.key.filter == page.look.filter }?.kind?.strength?.toInt()
+        if (page != null) io.github.artcraftandroid.pdfcraft.ui.scan.ScanStrengthRow(vm, shownAt, page.look, kindStrength)
         // the paper's colour for Clean scan and Whiteboard (#301)
         if (page != null) io.github.artcraftandroid.pdfcraft.ui.scan.ScanPaperRow(vm, shownAt, page.look)
         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 8.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {

@@ -101,6 +101,7 @@ class ScanLabTest {
             ScanLab(lookStrip = false),
             ScanLab(whiteboardLook = false, previewStop = false, previewZoom = false),
             ScanLab(lookPerPage = false, lookStrip = false, presets = false),
+            ScanLab(pageStrength = false),
             ScanLab(keep = true, inspect = true),
             ScanLab(finder = ScanFinder.LINES, strength = 100),
             ScanLab(finder = ScanFinder.OFF),
@@ -217,7 +218,7 @@ class ScanLabTest {
 
     @Test
     fun aKeptPageSaysWhichKindOfDocumentItWasTakenFor() {
-        val kind = ScanTestKind("receipt", false, 80, 35, false, false, true, 3.0004, 0.04321, 0.0, 0.0, 0.3387, 0.0, false, false)
+        val kind = ScanTestKind("receipt", false, 80, 35, false, false, true, 3.0004, 0.04321, 0.0, 0.0, 0.3387, 0.0, false, false, gutterLoose = true, gutterCover = 0.61234)
         val json = JSONObject(scanTestPageJson("1.0 (1)", true, crop, null, null, "auto", 60, false, ScanLab(), null, result, null, kind = kind))
         val type = json.getJSONObject("document_type")
         assertEquals("receipt", type.getString("preset"))

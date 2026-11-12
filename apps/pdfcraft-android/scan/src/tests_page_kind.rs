@@ -4,7 +4,7 @@
 
 use crate::aspect::{AspectSource, Paper};
 use crate::look::{Look, Pixels};
-use crate::page::{PageBase, PageRequest, page_look, page_look_kind};
+use crate::page::{PageBase, PageRequest, kind_sharpen, page_look, page_look_kind};
 use crate::page_kind::{PresetChoice, page_features, page_kind, preset_from_id};
 use crate::preset::{Preset, params};
 use crate::warp::Rgb;
@@ -49,6 +49,7 @@ fn base(page: Rgb, dpi: u16, paper: Paper) -> PageBase {
         trim: None,
         line_flatten: None,
         timings: Vec::new(),
+        measured: std::sync::OnceLock::new(),
     }
 }
 
@@ -289,4 +290,100 @@ fn photographs_on_a_page_are_sharpened_gently_and_print_as_before() {
     println!("sharpening moved the picture by {picture_full:.0} without the mask, {picture_gentle:.0} with it");
     assert!(picture_gentle < picture_full * 0.6, "{picture_gentle} against {picture_full}");
     assert_eq!(moved(&sharp, 500..950), moved(&gentle, 500..950), "the print is sharpened as before");
+}
+
+/// The drawn A4 page with a flat dark band down its left side: what the first gutter rule took
+/// for a book's gutter (#427).
+fn english_with_band() -> (Rgb, u16) {
+    let mut page = drawn(include_bytes!("../tests/data/upright-english.png"));
+    let dpi = (f64::from(page.width.min(page.height)) / 210.0 * 25.4).round() as u16;
+    let band = (f64::from(page.width) * 0.06).round() as u32;
+    for y in 0..page.height {
+        for x in 0..band {
+            let i = ((y * page.width + x) * 3) as usize;
+            page.data[i..i + 3].copy_from_slice(&[120, 120, 120]);
+        }
+    }
+    (page, dpi)
+}
+
+#[test]
+fn a_flat_dark_band_is_a_book_page_only_under_the_first_gutter_rule() {
+    let (page, dpi) = english_with_band();
+    let page = base(page, dpi, Paper::A4);
+    let strict = request(PresetChoice::Auto);
+    let loose = PageRequest { strict_gutter: false, ..request(PresetChoice::Auto) };
+    let (_, with_strict) = page_look_kind(&page, &strict).unwrap();
+    let (_, with_loose) = page_look_kind(&page, &loose).unwrap();
+    let (with_strict, with_loose) = (with_strict.unwrap(), with_loose.unwrap());
+    println!("strict: {:?} {:?}\nloose: {:?}", with_strict.preset, with_strict.features, with_loose.preset);
+    assert_eq!(with_strict.preset, Preset::Document);
+    assert_eq!(with_loose.preset, Preset::BookPage);
+    // both rules' readings are in the features, whichever is in force
+    assert!(with_strict.features.gutter_loose && !with_strict.features.gutter_band);
+    assert!(with_loose.features.gutter_loose && with_loose.features.gutter_band);
+    // a curved side still makes it a book page under the strict rule
+    let curved = PageRequest { curved_sides: 1, ..request(PresetChoice::Auto) };
+    assert_eq!(page_look_kind(&page, &curved).unwrap().1.unwrap().preset, Preset::BookPage);
+}
+
+#[test]
+fn a_page_base_measures_its_page_once_and_every_look_gets_the_same_kind() {
+    let (page, dpi) = english_with_band();
+    let fresh = base(page.clone(), dpi, Paper::A4);
+    assert!(fresh.measured.get().is_none());
+    let (first, kind) = page_look_kind(&fresh, &request(PresetChoice::Auto)).unwrap();
+    // kept after the first look
+    assert!(fresh.measured.get().is_some_and(|m| m.is_some()));
+    let kept = fresh.measured.get().cloned();
+    // a second look, a strength change and the other rule reuse it
+    let (again, kind_again) = page_look_kind(&fresh, &request(PresetChoice::Auto)).unwrap();
+    let _ = page_look_kind(&fresh, &PageRequest { strength: 20, strict_gutter: false, ..request(PresetChoice::Auto) }).unwrap();
+    assert_eq!(fresh.measured.get().cloned(), kept);
+    assert_eq!(rgb(first.pixels), rgb(again.pixels.clone()));
+    assert_eq!(kind, kind_again);
+    // and what it kept is what a page measured afresh gives
+    assert_eq!(kind.unwrap(), page_kind(&page, dpi, Paper::A4, 0, PresetChoice::Auto).unwrap());
+    let unmeasured = base(page, dpi, Paper::A4);
+    assert_eq!(rgb(page_look_kind(&unmeasured, &request(PresetChoice::Auto)).unwrap().0.pixels), rgb(again.pixels));
+    // presets off and the other looks do not measure at all
+    let off = base(Rgb { width: 4, height: 4, data: vec![200; 48] }, 200, Paper::Custom);
+    let _ = page_look_kind(&off, &request(PresetChoice::Off)).unwrap();
+    let _ = page_look_kind(&off, &PageRequest { look: Look::Colour, ..request(PresetChoice::Auto) }).unwrap();
+    assert!(off.measured.get().is_none());
+}
+
+#[test]
+fn with_document_types_on_a_strength_set_on_the_page_changes_the_page() {
+    // #424: the slider's strength counts as set by hand, so 20 and 100 give different pages
+    let page = base(receipt(), 200, Paper::Custom);
+    let at = |strength: u8, fixed_strength: bool| {
+        let (made, found) = page_look_kind(&page, &PageRequest { strength, fixed_strength, ..request(PresetChoice::Auto) }).unwrap();
+        assert_eq!(found.map(|k| k.preset), Some(Preset::Receipt));
+        rgb(made.pixels)
+    };
+    assert!(at(20, true) != at(100, true), "the page's strength did nothing with document types on");
+    // a page with no strength of its own still gets its kind's, whatever the look's own level is
+    assert!(at(20, false) == at(100, false));
+    let receipt = params(Preset::Receipt);
+    let by_hand = page_look(&page, &PageRequest { strength: receipt.strength, sharpen: receipt.sharpen, ..request(PresetChoice::Off) }).unwrap();
+    assert!(at(20, false) == rgb(by_hand.pixels));
+}
+
+#[test]
+fn the_sharpening_option_scales_the_kinds_sharpening() {
+    // #424: before, 30, 60 and 100 all gave the kind's own sharpening
+    assert_eq!(kind_sharpen(40, 30), 40);
+    assert_eq!(kind_sharpen(40, 0), 0);
+    assert_eq!(kind_sharpen(40, 60), 80);
+    assert_eq!(kind_sharpen(40, 100), 100);
+    assert_eq!(kind_sharpen(100, 100), 100);
+    // a printed page, whose letters' edges sharpening can move
+    let english = drawn(include_bytes!("../tests/data/upright-english.png"));
+    let dpi = (f64::from(english.width.min(english.height)) / 210.0 * 25.4).round() as u16;
+    let page = base(english, dpi, Paper::A4);
+    let at = |sharpen: u8| rgb(page_look_kind(&page, &PageRequest { sharpen, ..request(PresetChoice::Auto) }).unwrap().0.pixels);
+    let (none, default, more) = (at(0), at(30), at(60));
+    assert!(none != default, "sharpening did nothing on this page");
+    assert!(default != more, "sharpening 60 made the same page as 30");
 }

@@ -141,14 +141,17 @@ internal fun ScanLookChips(vm: AppViewModel, index: Int, look: ScanPageLook) {
 
 /**
  * The strength slider for the page's look (#301), hidden for Original. While the testing option
- * sets one strength for every look, the slider shows it and can't be moved, and says why.
+ * sets one strength for every look, the slider shows it and can't be moved, and says why. It
+ * starts from the strength the preview was made at (#424): in Clean scan, the document type's
+ * ([kindStrength], from the preview) until the person moves it.
  */
 @Composable
-internal fun ScanStrengthRow(vm: AppViewModel, index: Int, look: ScanPageLook) {
+internal fun ScanStrengthRow(vm: AppViewModel, index: Int, look: ScanPageLook, kindStrength: Int? = null) {
     if (!look.hasStrength) return
     val c = pdfColors
-    val fixed = vm.scanLab.options.strength
-    val value = fixed ?: look.level
+    val lab = vm.scanLab.options
+    val fixed = lab.strength
+    val value = io.github.artcraftandroid.pdfcraft.ui.scanAppliedStrength(look, lab, kindStrength).strength
     val label = stringResource(R.string.scan_look_strength_label)
     val state = stringResource(R.string.scan_look_strength, value)
     Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
