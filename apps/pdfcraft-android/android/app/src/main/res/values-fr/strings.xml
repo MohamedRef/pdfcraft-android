@@ -1913,4 +1913,10 @@
     <string name="scan_models_body">Ces modèles sont fournis avec l’app et s’exécutent sur cet appareil. Un modèle endommagé n’est pas utilisé et sa fonction reste désactivée jusqu’à ce que l’app le copie à nouveau.</string>
     <string name="scan_models_copy_again">Copier à nouveau les modèles</string>
     <string name="scan_models_copied">Modèles copiés : %1$d</string>
+    <string name="scan_model_not_downloaded">Non téléchargé</string>
+    <string name="scan_model_download">Télécharger (%1$s)</string>
+    <string name="scan_model_downloading">Téléchargement : %1$d%%</string>
+    <string name="scan_model_cancel">Annuler le téléchargement</string>
+    <string name="scan_model_remove">Supprimer</string>
+    <string name="scan_model_download_failed">Le téléchargement n’a pas abouti. Touchez Télécharger pour réessayer ; ce qui a été enregistré est conservé.</string>
 </resources>

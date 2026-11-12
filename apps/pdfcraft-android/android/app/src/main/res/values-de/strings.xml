@@ -2028,4 +2028,10 @@
     <string name="scan_models_body">Diese Modelle gehören zur App und laufen auf diesem Gerät. Ein beschädigtes Modell wird nicht verwendet; seine Funktion bleibt aus, bis die App es neu kopiert.</string>
     <string name="scan_models_copy_again">Modelle neu kopieren</string>
     <string name="scan_models_copied">Kopierte Modelle: %1$d</string>
+    <string name="scan_model_not_downloaded">Nicht heruntergeladen</string>
+    <string name="scan_model_download">Herunterladen (%1$s)</string>
+    <string name="scan_model_downloading">Wird heruntergeladen: %1$d%%</string>
+    <string name="scan_model_cancel">Download abbrechen</string>
+    <string name="scan_model_remove">Entfernen</string>
+    <string name="scan_model_download_failed">Der Download wurde nicht abgeschlossen. Tippe auf Herunterladen, um es erneut zu versuchen; Gespeichertes bleibt erhalten.</string>
 </resources>

@@ -2041,4 +2041,10 @@
     <string name="scan_models_body">Estos modelos vienen con la app y se ejecutan en este dispositivo. Un modelo dañado no se usa y su función queda desactivada hasta que la app lo vuelva a copiar.</string>
     <string name="scan_models_copy_again">Volver a copiar los modelos</string>
     <string name="scan_models_copied">Modelos copiados: %1$d</string>
+    <string name="scan_model_not_downloaded">No descargado</string>
+    <string name="scan_model_download">Descargar (%1$s)</string>
+    <string name="scan_model_downloading">Descargando: %1$d%%</string>
+    <string name="scan_model_cancel">Cancelar descarga</string>
+    <string name="scan_model_remove">Quitar</string>
+    <string name="scan_model_download_failed">La descarga no terminó. Toca Descargar para volver a intentarlo; lo guardado se conserva.</string>
 </resources>

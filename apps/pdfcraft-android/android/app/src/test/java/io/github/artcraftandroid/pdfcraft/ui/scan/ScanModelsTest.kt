@@ -13,7 +13,8 @@ import org.junit.Test
 
 /** #289: the Models list and a kept scan's page file say which models the engine accepted. */
 class ScanModelsTest {
-    private fun info(id: String, state: ScanModelState) = ScanModelInfo(id, "scan-$id.onnx", 100uL, "MIT", true, state)
+    private fun info(id: String, state: ScanModelState, url: String = "") =
+        ScanModelInfo(id, "scan-$id.onnx", 100uL, "MIT", url.isEmpty(), "a".repeat(64), url, state)
 
     @Test
     fun thePageFileSaysWhichModelsWereAccepted() {
@@ -35,6 +36,18 @@ class ScanModelsTest {
         assertEquals(R.string.scan_model_flatten, scanModelName("flatten"))
         assertEquals(R.string.scan_model_upright, scanModelName("upright"))
         assertNull(scanModelName("later"))
-        assertEquals(setOf(R.string.scan_model_ready, R.string.scan_model_missing, R.string.scan_model_corrupt), ScanModelState.entries.map(::scanModelStateText).toSet())
+        assertEquals(setOf(R.string.scan_model_ready, R.string.scan_model_missing, R.string.scan_model_corrupt), ScanModelState.entries.map { scanModelStateText(it) }.toSet())
+        // an optional model that is not there yet is "Not downloaded", not "Not installed"
+        assertEquals(R.string.scan_model_not_downloaded, scanModelStateText(ScanModelState.MISSING, bundled = false))
+    }
+
+    @Test
+    fun onlyAnOptionalModelCanBeDownloaded() {
+        assertNull(scanModelPack(info("edges", ScanModelState.READY)))
+        val url = io.github.artcraftandroid.pdfcraft.engine.ModelDownload.URL_PREFIX + "1/scan-flatten.onnx"
+        val pack = scanModelPack(info("flatten", ScanModelState.MISSING, url))!!
+        assertEquals("scan-flatten.onnx", pack.file)
+        assertEquals(100L, pack.bytes)
+        assertTrue(io.github.artcraftandroid.pdfcraft.engine.ModelDownload.trusted(pack))
     }
 }
