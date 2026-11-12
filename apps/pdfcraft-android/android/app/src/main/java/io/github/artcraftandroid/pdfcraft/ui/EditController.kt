@@ -98,6 +98,9 @@ class EditController internal constructor(private val vm: AppViewModel) {
     /** Editing existing text: document fonts, spacing and the overflow warning (#167). */
     val textFormat = io.github.artcraftandroid.pdfcraft.ui.viewer.TextFormatState()
 
+    /** Several objects selected together in Edit PDF, and the copied count (#162). */
+    val objectSelect = io.github.artcraftandroid.pdfcraft.ui.viewer.ObjectSelectState()
+
     /** Formatting the engine doesn't report back, kept per paragraph (page to number) while editing. */
     val editFont = androidx.compose.runtime.mutableStateMapOf<Pair<Int, Int>, String>()
     val editAlign = androidx.compose.runtime.mutableStateMapOf<Pair<Int, Int>, String>()
