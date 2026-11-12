@@ -1245,6 +1245,7 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                         if (args != null) {
                             doc.commitTool?.invoke()
                             documentEdit("comment_add", args)
+                            MarkupDiag.shape(doc, s.shapeMode.name.lowercase(), s.points.size)
                         }
                         return@toolGestures
                     }
@@ -1509,7 +1510,7 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                     // link the selected handwriting to a page or web address (#159)
                     if (doc.info.allowsAnnotation) SubTool(LucideIcons.Link, stringResource(R.string.ink_lasso_link), false, {
                         doc.commitTool?.invoke()
-                        vm.linkEdit = LinkEdit(doc, selPage, floatArrayOf(b.left - 2f, b.top - 2f, b.right + 2f, b.bottom + 2f))
+                        vm.linkEdit = LinkEdit(doc, selPage, floatArrayOf(b.left - 2f, b.top - 2f, b.right + 2f, b.bottom + 2f), from = "lasso")
                         clearSelection()
                     })
                     if (savedSelected.isNotEmpty()) {
@@ -1708,6 +1709,7 @@ private fun MarkupLayer(vm: AppViewModel, doc: OpenDocument) {
                             val area = areaHighlightRect(gesture.start.x, gesture.start.y, end.x, end.y)
                             if (area != null) {
                                 queued = true
+                                MarkupDiag.areaHighlight(doc, area)
                                 vm.addMarkup(doc, TextMarkup.Highlight, page, listOf(area), selectedColor, selectedOpacity, onSettled = {
                                     if (requestSerial == serial) {
                                         pendingTap = null

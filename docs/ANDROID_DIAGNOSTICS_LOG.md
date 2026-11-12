@@ -68,6 +68,7 @@ Areas (lines · issues):
 | `tool` | Engine tools that took 100 ms or more, or failed | `Engine.tool` | #96 #113 |
 | `error` | Failures with their stage and exception class, engine panics caught, and crashes with the exception classes and code locations | `Diag.failure`, `Engine`, crash handler | #114 |
 | `viewer` | Reading and presenting: jumps back and forward, Go to page, the layout a file opens in and why, page mode and spread changes, the spread a window shows, reading colours, keyboard shortcuts, hiding annotations, comment-list filters and dimming, copies without annotations, presentation start and end, clicker keys, the second screen and the pages drawn for it (see below) | `ViewerController`, `AppViewModel`, `ViewerScreen`, `CommentList`, `ExternalPresentation` | #152 #153 #155 #157 #184 #198 #203 #204 #327 |
+| `markup` | Comments, markup, links, measuring and study: comment export, import, summary, copy and paste, status and lock; markup follow-up actions, area highlights, replace and insert suggestions, shape annotations; links added, edited, deleted, made from addresses and removed; measure points, saved measurements, scales and exports; masking tape and quizzes (see below). Never a comment's text, a link's address or a measurement's label | `MarkupDiag`, `AppViewModel`, `Tools`, `Study` | #133 #134 #135 #143 #158 #159 #169 #170 #179 #180 #196 #197 |
 
 ### `viewer` lines
 
@@ -95,6 +96,31 @@ Areas (lines · issues):
 
 Failures in these steps also write an `[error] failed area=viewer stage=…` line (`comments_hide`,
 `reading_colors`, `clean_copy`, `unlocked_copy`, `external_show`).
+
+### `markup` lines
+
+Every line carries `doc` (the document's number in the log).
+
+| Line | Fields | What it answers |
+| --- | --- | --- |
+| `comments_export` | `share`, `bytes`, `ms` | Comments were exported to a file or shared as XFDF, its size and time (#169) |
+| `comments_import` | `kind` (file extension), `bytes`, `added`, `ms` | An XFDF or FDF import, how many comments it added and how long it took (#169) |
+| `comments_summary` | `sort`, `ms` | A comment summary was made, in which order and how fast (#158) |
+| `comments_copy`, `comments_paste` | `comments`, `pages`; `pages`, `skipped_pages` | Comments copied to another document, and pages a paste had to skip because the document is shorter (#169) |
+| `comment_status`, `comment_lock` | `status` (`accepted`, `rejected`, `cancelled`, `completed`, `none`); `locked` | A review status or lock was set from the list (#196) |
+| `markup_follow_up` | `action` (`recolor`, `note`, `delete`) | The bar that follows a new markup was used (#197) |
+| `area_highlight` | `w_pt`, `h_pt` | A Highlight drag that found no text highlighted the area instead (#134) |
+| `text_suggestion` | `kind` (`replace`, `insert`), `lines` | A replace or insert suggestion on selected text (#133) |
+| `shape` | `type` (the shape mode, such as `arrow`, `cloud`, `polygon`), `points` | A drawn shape became its own annotation rather than ink (#170) |
+| `link` | `action` (`add`, `edit`, `delete`), `target` (`page`, `web`, `mail`), `from` (`box`, `lasso`) | A link was made, changed or removed, and how its area was chosen (#179) |
+| `links_from_urls`, `links_remove` | `created`, `ms` | Web addresses in the text were turned into links, or all links were removed (#159) |
+| `measure_point` | `kind` (`distance`, `perimeter`, `area`, `calibrate`), `snapped`, `points`, `snap_ms` | Each measuring tap, whether it snapped to the page's lines and how long snapping took (#135 #180) |
+| `measure_saved`, `measure_scale`, `measure_export` | `kind`, `points`; `method` (`ratio`, `calibrate`), `unit`; `count` | A measurement was saved, a scale set, or measurements exported (#135 #180) |
+| `tape_add`, `tape_toggle` | `color` (index in the tape colours); `lifted`, `via` (`tap`, `talkback`) | Tape was laid, or lifted or laid again (#143) |
+| `tape_all`, `tape_remove_all` | `lifted`, `tapes`; `tapes`, `pages` | Reveal all, Cover all, or Remove all tape (#143) |
+| `quiz_start`, `quiz_end` | `scope` (`page`, `document`), `items`; `items`, `answered`, `known` | A quiz started over highlights and how it ended (#143) |
+
+Failed engine tools in these steps write the usual `[tool]` and `[error]` lines.
 
 How the Scan gates read from the log: the no-touch rate is `untouched_pages / found_pages` in the
 `saved` line; the corner error is the median of `max_move_pct` over the `page` lines with
