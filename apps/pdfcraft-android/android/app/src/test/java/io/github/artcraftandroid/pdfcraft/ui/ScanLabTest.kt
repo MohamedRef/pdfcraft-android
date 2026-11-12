@@ -26,6 +26,10 @@ class ScanLabTest {
         assertEquals(60, lab.strengthFor(60))
         // keeping scans changes no page; every other option does
         assertTrue(lab.copy(keep = true).asDesigned)
+        // nor does the detectors' report (#305, #306), which is off as designed
+        assertFalse(lab.inspect)
+        assertTrue(lab.copy(inspect = true).asDesigned)
+        assertTrue(lab.copy(keep = true, inspect = true).asDesigned)
         assertFalse(lab.copy(finder = ScanFinder.LINES).asDesigned)
         assertFalse(lab.copy(refine = false).asDesigned)
         assertFalse(lab.copy(perspective = false).asDesigned)
@@ -73,6 +77,7 @@ class ScanLabTest {
             ScanLab(presets = false),
             ScanLab(cropTools = false),
             ScanLab(flattenAuto = true),
+            ScanLab(keep = true, inspect = true),
             ScanLab(finder = ScanFinder.LINES, strength = 100),
             ScanLab(finder = ScanFinder.OFF),
         )
@@ -212,6 +217,13 @@ class ScanLabTest {
         assertEquals("discarded", json.getString("outcome"))
         assertTrue(json.isNull("found") && json.isNull("finding") && json.isNull("look") && json.isNull("strength") && json.isNull("result") && json.isNull("preview") && json.isNull("crop") && json.isNull("turns"))
         assertTrue(json.getJSONObject("options").isNull("strength_override"))
+        // the detectors' report (#305, #306) is there only when it was asked for
+        assertTrue(json.isNull("inspect"))
+        assertFalse(json.getJSONObject("options").getBoolean("inspect"))
+        val report = JSONObject().put("flagged", 1)
+        val inspected = JSONObject(scanTestPageJson("1.0 (1)", false, ScanPage.WHOLE, null, null, null, null, false, ScanLab(keep = true, inspect = true), null, null, inspection = report))
+        assertEquals(1, inspected.getJSONObject("inspect").getInt("flagged"))
+        assertTrue(inspected.getJSONObject("options").getBoolean("inspect"))
         assertEquals(1.0, json.getJSONArray("corners").getDouble(2), 0.0)
         // a corner that is not a number never breaks the file
         val odd = crop.copyOf().also { it[0] = Float.NaN }

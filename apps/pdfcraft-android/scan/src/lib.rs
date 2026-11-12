@@ -27,6 +27,7 @@ pub mod eval;
 pub mod exif;
 pub mod flatten;
 pub mod flatten_guard;
+pub mod inspect;
 pub mod look;
 pub mod merge;
 pub mod metrics_compare;
@@ -72,6 +73,8 @@ mod tests_book;
 mod tests_capture;
 #[cfg(test)]
 mod tests_defects;
+#[cfg(test)]
+mod tests_inspect;
 #[cfg(test)]
 mod tests_detect;
 #[cfg(test)]

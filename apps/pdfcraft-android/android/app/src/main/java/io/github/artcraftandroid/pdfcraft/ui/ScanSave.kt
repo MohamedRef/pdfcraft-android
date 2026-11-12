@@ -121,7 +121,7 @@ internal data class ScanPreviewKey(
 ) {
     companion object {
         fun of(page: ScanPage, filter: ScanFilter, flatten: Boolean, lab: ScanLab, autoUpright: Boolean = true) =
-            ScanPreviewKey(page.file.absolutePath, page.corners.toList(), filter, flatten, lab.copy(keep = false), page.turns, autoUpright, page.preset)
+            ScanPreviewKey(page.file.absolutePath, page.corners.toList(), filter, flatten, lab.copy(keep = false, inspect = false), page.turns, autoUpright, page.preset)
     }
 }
 

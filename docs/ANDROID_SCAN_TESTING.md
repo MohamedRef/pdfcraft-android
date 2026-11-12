@@ -43,14 +43,15 @@ on one part. While any is changed, the scan screen says so.
 | Document types in Clean scan (#299) | On | Off: the filter's own strength and the sharpening above, as before |
 | Filter strength | Each filter's own | 20, 40, 60, 80 or 100 for every filter |
 | Flatten page (#302) | Off | On, with the switch on the scan screen itself |
+| Report moiré, fingers, glare and stains in kept scans (#305, #306) | Off | On: each kept page is also run through the two research detectors, and what they see goes to the log (`inspect`) and the page file (`inspect`). No page changes |
 | Scan with (#294) | PdfCraft camera | Phone's camera app (also in Settings → Scan; the same setting) |
 
 Settings → **Scanner models** (#289) lists each model with its state; while the log is
 recorded it also has **Copy the models again**, which copies every model out of the app anew
 (see `docs/ANDROID_SCAN_MODELS.md`).
 
-**Reset scanner testing options** puts them back. Keeping scans is not one of them: it changes
-no page.
+**Reset scanner testing options** puts them back. Keeping scans and the detectors' report are
+not among them: they change no page.
 
 ## What a kept scan is
 
@@ -113,6 +114,10 @@ before the scan is saved.
 `capture` says how the photo was taken (#294, `docs/ANDROID_SCAN_CAMERA.md`): `source` is
 `in_app`, `phone_app` or `import`; the still's size and exposure are known for `in_app` only. It is
 `null` when the capture is not known, as for a scan Android restored after closing the app.
+`inspect` is what the research detectors saw on the page when their report is on (#305, #306):
+`moire` (`kind`, `period`, `tiles`, `busy_tiles`, `periodic_tiles`), `fingers`, `glare` and
+`stains` (`count`, `over_print`, `area`; `null` when the search could not run), `flagged` and
+`timings_ms`; `null` when the report is off. Every `inspect` line in the log has the same, flat.
 `turns` says which way up the page was saved (#339): `manual` is the
 person's own turn from Rotate or Undo (0–3 clockwise, `null` when they gave none), `auto` the
 ordinary setting "Turn pages upright automatically", `total` the turn the page was saved with,

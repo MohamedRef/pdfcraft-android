@@ -52,9 +52,15 @@ internal data class ScanLab(
      * strength and the sharpening above, as before.
      */
     val presets: Boolean = true,
+    /**
+     * With keeping scans on, run the research detectors on each kept page and report what they see
+     * (#305 moiré, #306 fingers, glare and stains) in the log and the page file. Detection only:
+     * no page changes, so this does not count as a changed option.
+     */
+    val inspect: Boolean = false,
 ) {
-    /** Nothing differs from the scanner as it is meant to be used (keeping scans changes no page). */
-    val asDesigned: Boolean get() = copy(keep = false) == ScanLab()
+    /** Nothing differs from the scanner as it is meant to be used (keeping scans and reporting what the detectors see change no page). */
+    val asDesigned: Boolean get() = copy(keep = false, inspect = false) == ScanLab()
 
     fun findOptions() = ScanFindOptions(finder, refine)
 
@@ -65,21 +71,21 @@ internal data class ScanLab(
     fun diag(): Array<Pair<String, Any?>> = arrayOf<Pair<String, Any?>>(
         "finder" to finderId(finder), "refine" to refine, "side_proportions" to !perspective,
         "snap_paper" to snapPaper, "strength_override" to (strength ?: -1), "upright" to upright, "sharpen" to sharpen,
-        "denoise" to denoise, "preview" to preview, "crop_tools" to cropTools, "flatten_auto" to flattenAuto, "settle_turns" to settleTurns, "presets" to presets, "keep" to keep,
+        "denoise" to denoise, "preview" to preview, "crop_tools" to cropTools, "flatten_auto" to flattenAuto, "settle_turns" to settleTurns, "presets" to presets, "keep" to keep, "inspect" to inspect,
     )
 
     /** The options as JSON, for a kept scan's page file. */
     fun json(): JSONObject = JSONObject()
         .put("finder", finderId(finder)).put("refine", refine).put("side_proportions", !perspective)
         .put("snap_paper", snapPaper).put("strength_override", strength ?: JSONObject.NULL).put("upright", upright)
-        .put("sharpen", sharpen).put("denoise", denoise).put("preview", preview).put("crop_tools", cropTools).put("flatten_auto", flattenAuto).put("settle_turns", settleTurns).put("presets", presets)
+        .put("sharpen", sharpen).put("denoise", denoise).put("preview", preview).put("crop_tools", cropTools).put("flatten_auto", flattenAuto).put("settle_turns", settleTurns).put("presets", presets).put("inspect", inspect)
 
     /** One line of text for the app's preferences. */
     fun encode(): String = listOf(
         "keep" to flag(keep), "finder" to finderId(finder), "refine" to flag(refine),
         "perspective" to flag(perspective), "snap" to flag(snapPaper), "strength" to (strength?.toString() ?: ""),
         "upright" to flag(upright), "sharpen" to sharpen.toString(), "denoise" to flag(denoise), "preview" to flag(preview), "crop" to flag(cropTools), "flatten_auto" to flag(flattenAuto),
-        "settle" to flag(settleTurns), "presets" to flag(presets),
+        "settle" to flag(settleTurns), "presets" to flag(presets), "inspect" to flag(inspect),
     ).joinToString(";") { (k, v) -> "$k=$v" }
 
     companion object {
@@ -122,6 +128,7 @@ internal data class ScanLab(
                 settleTurns = on("settle", default.settleTurns),
                 flattenAuto = on("flatten_auto", default.flattenAuto),
                 presets = on("presets", default.presets),
+                inspect = on("inspect", default.inspect),
             )
         }
     }
@@ -224,6 +231,8 @@ internal fun scanTestPageJson(
     models: JSONObject? = null,
     turn: ScanTestTurn? = null,
     kind: ScanTestKind? = null,
+    /** What the research detectors saw on the page (#305, #306); null when they were not asked. */
+    inspection: JSONObject? = null,
 ): String {
     val page = JSONObject()
         .put("corners", shares(corners)).put("kind", "other").put("paper", "unknown").put("curved", false).put("notes", "")
@@ -266,6 +275,7 @@ internal fun scanTestPageJson(
         .put("crop", crop?.json() ?: JSONObject.NULL)
         .put("capture", capture ?: JSONObject.NULL)
         .put("models", models ?: JSONObject.NULL)
+        .put("inspect", inspection ?: JSONObject.NULL)
     page.put(
         "result",
         result?.let {

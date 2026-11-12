@@ -1,6 +1,7 @@
 # Scanner: moiré on photos of screens and halftones (#305)
 
-**State: research prototype. Nothing in the app calls it, and no page the app makes changes.**
+**State: research prototype. No page the app makes changes. A testing option reports what it
+finds in kept scans (below); nothing else calls it.**
 The issue asks for measurements and a recommendation before anything ships; the measurements
 that matter (the owner's `screen` photos, his phone's timings) have not been taken.
 
@@ -78,6 +79,18 @@ a form; 672 × 896), on a desktop (4 cores, release build). **No photo and no ph
   finds a grid that the photo resolves.
 - The thresholds are the issue's starting values except `MAX_PERIOD`, the family rules and
   `BLOCK_TILES` (4), which were set on the drawn pages above.
+
+## The report in kept scans
+
+A testing option, **Report moiré, fingers, glare and stains in kept scans** (Settings → About →
+Diagnostics, off by default), runs this detector on each page a kept scan keeps
+(`scan/src/inspect.rs`, called through `scan_inspect_page`). It straightens the page as Save
+would (no flattening, no turn) and changes nothing: what it finds goes to the log's `inspect`
+line and to the page file's `inspect` key. It runs only while **Keep scans for testing** is on,
+and adds the time of one more straightening and the detectors to each kept page.
+
+Log fields: `moire` (`none`, `screen`, `halftone`), `moire_period` (pixels of the straightened
+page, -1 without a pattern), `moire_tiles`, `moire_busy_tiles`, `moire_periodic_tiles`, `moire_ms`.
 
 ## Not done (needs the owner's photos or phone)
 
