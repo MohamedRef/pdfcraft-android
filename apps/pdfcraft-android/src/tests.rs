@@ -825,6 +825,20 @@ fn profiled_open_preserves_document_rendering_and_records_only_stage_durations()
     assert_eq!(s.documents().len(), 2);
 }
 
+/// #234: the open timings say how the display copy was made. A file whose comment has no
+/// appearance gets one drawn into a copy (an owned input on the host, so `copied`); a file with
+/// nothing to draw is shown as stored and records neither marker.
+#[test]
+fn profiled_open_records_how_the_display_copy_was_made() {
+    let s = MobileSession::new();
+    let names = |path: String| -> Vec<String> { s.open_with_timings(path, None).unwrap().timings.into_iter().map(|t| t.stage).collect() };
+    let drawn = names(attachments_pdf());
+    assert!(drawn.iter().any(|n| n == "native_display_copied"), "{drawn:?}");
+    assert!(!drawn.iter().any(|n| n == "native_display_spliced"));
+    let plain = names(blank_pdf(1));
+    assert!(!plain.iter().any(|n| n.starts_with("native_display_spliced") || n.starts_with("native_display_copied")), "{plain:?}");
+}
+
 /// Comments ▸ Hide all comments: the page is drawn again without them, even by renderers kept
 /// idle from before (they were made with the other setting), and showing them brings them back.
 #[test]
