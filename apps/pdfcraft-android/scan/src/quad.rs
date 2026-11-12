@@ -4,6 +4,11 @@ use pdfcraft_geom::perspective::{Point, order_quad};
 
 use crate::ScanError;
 
+/// How far outside the photo a corner may be, as a share of the photo's width or height (#291):
+/// a page whose corner was cut off by the frame has it there, where the two sides meet. Whatever
+/// of the page lies outside the photo comes out white.
+pub const OUTSIDE: f32 = 0.15;
+
 /// Four corners in photo pixels: top-left, top-right, bottom-right, bottom-left.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Quad(pub [Point; 4]);
@@ -14,13 +19,16 @@ impl Quad {
         order_quad(points).map(Quad).ok_or(ScanError::BadCorners)
     }
 
-    /// Corners as shares (0–1) of a `width` × `height` photo: x1, y1, … x4, y4.
+    /// Corners as shares of a `width` × `height` photo: x1, y1, … x4, y4. 0–1 is on the photo; a
+    /// corner may be up to [`OUTSIDE`] beyond it (a corner the frame cut off), not farther.
     pub fn from_shares(shares: &[f32; 8], width: u32, height: u32) -> Result<Quad, ScanError> {
-        if shares.iter().any(|v| !v.is_finite() || !(-0.01..=1.01).contains(v)) {
+        let (lo, hi) = (-OUTSIDE - 0.01, 1.0 + OUTSIDE + 0.01);
+        if shares.iter().any(|v| !v.is_finite() || !(lo..=hi).contains(v)) {
             return Err(ScanError::BadCorners);
         }
         let (w, h) = (f64::from(width), f64::from(height));
-        let p = |i: usize| [f64::from(shares[2 * i]).clamp(0.0, 1.0) * w, f64::from(shares[2 * i + 1]).clamp(0.0, 1.0) * h];
+        let (lo, hi) = (-f64::from(OUTSIDE), 1.0 + f64::from(OUTSIDE));
+        let p = |i: usize| [f64::from(shares[2 * i]).clamp(lo, hi) * w, f64::from(shares[2 * i + 1]).clamp(lo, hi) * h];
         Quad::new([p(0), p(1), p(2), p(3)])
     }
 
