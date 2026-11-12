@@ -27,8 +27,8 @@ use std::sync::{Mutex, PoisonError};
 use rten_tensor::NdTensor;
 use rten_tensor::prelude::*;
 
-use crate::detect::shrink_rgb;
 use crate::models::{UPRIGHT, load};
+use crate::tensor::shrink_rgb;
 use crate::warp::Rgb;
 
 /// The side of the square the network looks at.
