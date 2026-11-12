@@ -159,11 +159,15 @@ pub struct Options {
     /// Refine the found edges on the full photo, as the app does by default.
     pub refine: bool,
     pub threads: usize,
+    /// Give the page made from the found corners its look and encode it, for `sharpness` and
+    /// the time of those two stages. The CI gate leaves it out to stay fast: its clean-up
+    /// measures come from the page made from the true corners either way.
+    pub look_found_page: bool,
 }
 
 impl Default for Options {
     fn default() -> Self {
-        Options { finder: Finder::Auto, refine: true, threads: 4 }
+        Options { finder: Finder::Auto, refine: true, threads: 4, look_found_page: true }
     }
 }
 
@@ -257,7 +261,6 @@ pub fn measure(entry: &Entry, options: &Options) -> Measured {
     let req = request(entry, quad.to_shares(w, h), options);
     let Ok(base) = page_base(&req) else { return m };
     m.timings.extend(base.timings.iter().filter(|(s, _)| *s != crate::page::STAGE_DECODE).map(|(s, ms)| (*s, f64::from(*ms))));
-    clock = Instant::now();
     if let Some(truth) = entry.aspect {
         m.set("aspect_err", Some(aspect_err(f64::from(base.page.width) / f64::from(base.page.height), truth)));
     }
@@ -266,7 +269,20 @@ pub fn measure(entry: &Entry, options: &Options) -> Measured {
         m.set("line_straightness", Some(s.px));
         m.set("bowed_px", Some(s.bowed_px));
     }
-    let Ok(applied) = page_look(&base, &req) else { return m };
+    if options.look_found_page {
+        look_and_encode(&mut m, &base, &req);
+    }
+
+    if let (Some(truth), Some(pt)) = (m.truth, &entry.page) {
+        clean_up(&mut m, entry, truth, pt, options);
+    }
+    m
+}
+
+/// The found page's look and encoding, timed, and the sharpness of the result.
+fn look_and_encode(m: &mut Measured, base: &crate::page::PageBase, req: &PageRequest<'_>) {
+    let mut clock = Instant::now();
+    let Ok(applied) = page_look(base, req) else { return };
     let (pw, ph) = (base.page.width, base.page.height);
     let looked_at = clock.elapsed().as_secs_f64() * 1000.0;
     m.timings.push((crate::page::STAGE_LOOK, looked_at));
@@ -279,11 +295,6 @@ pub fn measure(entry: &Entry, options: &Options) -> Measured {
     m.timings.push((crate::page::STAGE_ENCODE, clock.elapsed().as_secs_f64() * 1000.0));
     let looked = grey(&as_rgb(&applied.pixels, pw, ph));
     m.set("sharpness", sharpness(&looked, &vec![true; looked.data.len()]));
-
-    if let (Some(truth), Some(pt)) = (m.truth, &entry.page) {
-        clean_up(&mut m, entry, truth, pt, options);
-    }
-    m
 }
 
 /// The clean-up measures on the page straightened with its true corners.

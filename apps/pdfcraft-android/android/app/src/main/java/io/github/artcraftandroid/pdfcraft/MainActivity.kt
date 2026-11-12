@@ -21,7 +21,6 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
-import androidx.core.content.FileProvider
 import androidx.core.content.IntentCompat
 import androidx.lifecycle.lifecycleScope
 import io.github.artcraftandroid.pdfcraft.engine.Diag
@@ -31,6 +30,8 @@ import io.github.artcraftandroid.pdfcraft.ui.AppViewModel
 import io.github.artcraftandroid.pdfcraft.ui.FilePickKind
 import io.github.artcraftandroid.pdfcraft.ui.PdfcraftTheme
 import io.github.artcraftandroid.pdfcraft.ui.XFDF_MIME
+import io.github.artcraftandroid.pdfcraft.ui.scan.ScanCameraModel
+import io.github.artcraftandroid.pdfcraft.ui.scan.ScanCameraRouter
 import java.io.File
 import java.io.FileOutputStream
 import kotlinx.coroutines.delay
@@ -53,7 +54,9 @@ class MainActivity : ComponentActivity() {
     private val pickComments = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> vm.commenting.onCommentsPicked(uri) }
 
     private val saveCopy = registerForActivityResult(ActivityResultContracts.CreateDocument("application/pdf")) { uri -> vm.copyTo(uri) }
-    private val takePhoto = registerForActivityResult(ActivityResultContracts.TakePicture()) { ok -> vm.onScanPhoto(ok) }
+    // Scan's photos: PdfCraft's camera screen or the phone's camera app (#294)
+    private val scanCameraModel: ScanCameraModel by viewModels()
+    private val scanCamera = ScanCameraRouter(this, { vm }, { scanCameraModel })
     private val pickImage = registerForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri -> vm.editor.addImage(uri) }
     private val pickSignature = registerForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri -> vm.signing.importSignatureImage(uri) }
     private val pickPhotos = registerForActivityResult(ActivityResultContracts.PickMultipleVisualMedia()) { uris -> vm.onPhotosPicked(uris) }
@@ -94,11 +97,15 @@ class MainActivity : ComponentActivity() {
         collectRequests()
         setContent {
             PdfcraftTheme {
-                AppRoot(
-                    vm,
-                    onBrowse = { launchSafely { pickPdf.launch(arrayOf("application/pdf")) } },
-                    onPickSignatureImage = { launchSafely { pickSignature.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) } },
-                )
+                androidx.compose.foundation.layout.Box {
+                    AppRoot(
+                        vm,
+                        onBrowse = { launchSafely { pickPdf.launch(arrayOf("application/pdf")) } },
+                        onPickSignatureImage = { launchSafely { pickSignature.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) } },
+                    )
+                    // the in-app scan camera, over everything while a photo is wanted (#294)
+                    scanCamera.Screen()
+                }
             }
         }
     }
@@ -150,10 +157,7 @@ class MainActivity : ComponentActivity() {
             }
         }
         lifecycleScope.launch {
-            for (f in vm.cameraShots) {
-                val uri = FileProvider.getUriForFile(this@MainActivity, "$packageName.files", f)
-                launchSafely { takePhoto.launch(uri) }
-            }
+            for (f in vm.cameraShots) scanCamera.route(f)
         }
         lifecycleScope.launch {
             for (r in vm.requests.creates) launchSafely {

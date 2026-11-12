@@ -366,6 +366,11 @@ dependencies {
     implementation(libs.androidx.compose.material3)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.androidx.exifinterface)
+    // Scan: the in-app camera (#294), Apache-2.0 like the other AndroidX libraries
+    implementation(libs.androidx.camera.core)
+    implementation(libs.androidx.camera.camera2)
+    implementation(libs.androidx.camera.lifecycle)
+    implementation(libs.androidx.camera.compose)
     implementation(libs.jna) { artifact { type = "aar" } }
     testImplementation(libs.junit)
     testImplementation(libs.org.json)

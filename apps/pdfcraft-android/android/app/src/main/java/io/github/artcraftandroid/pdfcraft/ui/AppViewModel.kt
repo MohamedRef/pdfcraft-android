@@ -1941,6 +1941,9 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     internal var shotFile: File? = null
     private var retakeIndex: Int? = null
 
+    /** Whether the photo being taken replaces a page (Retake): the in-app camera then takes just the one (#294). */
+    internal val scanRetaking: Boolean get() = retakeIndex != null
+
     // A scan Android closed the app in the middle of, while the camera app was in front, carries on
     // when the photo comes back (#38): what it needs is kept in the saved state, read when it's saved.
     private var scanRestoring: String? = null
