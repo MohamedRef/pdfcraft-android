@@ -17,7 +17,7 @@ use crate::Rgb;
 use crate::aspect::Paper;
 use crate::enhance::evened;
 use crate::photo::Luma;
-use crate::photo_mask::photo_masks;
+use crate::photo_mask::{PhotoMask, PhotoMasks, photo_masks};
 use crate::preset::{PageFeatures, Preset, PresetParams, classify, gutter_reading, ink_features, params};
 
 /// The working copy's longer side is shrunk to this many pixels or a little more (whole steps).
@@ -48,6 +48,9 @@ pub struct PageKind {
     pub features: PageFeatures,
     /// The photo mask found the whole page to be a picture.
     pub whole_photo: bool,
+    /// Where the photographs are (#299, section 4), over the page as a whole; `None` when the page
+    /// was too small to cut into blocks.
+    pub photos: Option<PhotoMask>,
 }
 
 /// The preset a short word names ("receipt", "id_card", …: `Preset::id`), or `None`.
@@ -107,6 +110,9 @@ pub struct Measured {
     pub photo_strict: f64,
     /// The first photo rule found the whole page to be a picture.
     pub whole_photo_loose: bool,
+    /// Where the page has photographs by both rules (#299 section 4, #427), for gentle sharpening;
+    /// `None` when the page is too small for a mask.
+    pub photos: Option<PhotoMasks>,
 }
 
 impl Measured {
@@ -172,7 +178,8 @@ pub fn measure(page: &Rgb, dpi: u16, paper: Paper) -> Option<Measured> {
         gutter_strict: gutter.strict,
         whole_photo: masks.as_ref().is_some_and(|m| m.strict.whole_page),
         photo_strict,
-        whole_photo_loose: masks.is_some_and(|m| m.loose.whole_page),
+        whole_photo_loose: masks.as_ref().is_some_and(|m| m.loose.whole_page),
+        photos: masks,
     })
 }
 
@@ -210,9 +217,10 @@ pub fn kind_of(measured: &Measured, curved_sides: u8, choice: PresetChoice, rule
     }
     let features = measured.features(curved_sides, rules.strict_gutter, rules.strict_photo);
     let whole_photo = measured.whole_photo(rules.strict_photo);
+    let photos: Option<PhotoMask> = measured.photos.as_ref().map(|m| if rules.strict_photo { m.strict.clone() } else { m.loose.clone() });
     let (preset, chosen) = match choice {
         PresetChoice::Fixed(p) => (p, true),
         _ => (classify(&features), false),
     };
-    Some(PageKind { preset, chosen, params: params(preset), features, whole_photo })
+    Some(PageKind { preset, chosen, params: params(preset), features, whole_photo, photos })
 }

@@ -151,6 +151,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             strict_gutter: true,
             strict_photo: true,
             fixed_strength: false,
+            kind_tone: false,
+            photo_sharpen: false,
             paper: "auto".into(),
         })?;
         let new = run(&s, "doc_create", json!({ "from": "images", "paths": [r.path], "dpi": r.dpi }))?;

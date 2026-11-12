@@ -49,6 +49,9 @@ on one part. While any is changed, the scan screen says so.
 | Sharpen text, in Clean scan (#299) | 30 | Off, 60 or 100. With document types on, the type's own sharpening is scaled by this level over 30 (#424): 60 is twice the type's, 100 three and a third times it, at most 100 |
 | Smooth grain in dim photos, in Clean scan (#299) | On | Off |
 | Document types in Clean scan (#299) | On | Off: the filter's own strength and the sharpening above, as before |
+| Document types shape Clean scan's tone (#299) | On | Off: a type sets only strength, sharpening and paper color (no receipt gamma, no whiteboard S-curve) |
+| Sharpen photos on the page gently (#299) | On | Off: only the objects the look finds itself are sharpened gently, as before |
+| Suggest Flatten page or Grayscale for a document type (#299) | On | Off: no suggestion chips |
 | Barcodes, stamps and soft print are not photographs (#427) | On | Off: the first photograph rule, which also reads those as photographs, so a label with a large barcode becomes a document with photographs |
 | Page strength wins over the document type (#424) | On | Off: the document type's strength replaces the slider's, and every sharpening level but Off gives the type's own, as before #424 |
 | Filter strength | Each filter's own | 20, 40, 60, 80 or 100 for every filter |

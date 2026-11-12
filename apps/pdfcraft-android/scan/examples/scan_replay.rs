@@ -187,6 +187,9 @@ fn main() {
             // set by hand (#424): the testing option's strength, or the page's slider; files from
             // before #424 say only whether the testing option set one
             fixed_strength: facts["strength_applied"]["fixed"].as_bool().unwrap_or_else(|| !options["strength_override"].is_null()),
+            // a document type's tone and the photo mask in sharpening (#299); files from before them have neither
+            kind_tone: options["kind_tone"].as_bool().unwrap_or(false),
+            photo_sharpen: options["photo_sharpen"].as_bool().unwrap_or(false),
             // the paper the person chose for the page (#301); files from before then leave it to the document type
             keep_paper: match facts["page_look"]["paper"].as_str() {
                 Some("keep") => Some(true),

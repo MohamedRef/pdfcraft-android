@@ -29,6 +29,12 @@ pub use bw::{Bitmap1, BwParams, DEFAULT_BW_STRENGTH, black_white};
 pub use plane::Mask;
 pub use whiteboard::{WHITEBOARD_COLOUR_FACTOR, whiteboard_tone};
 
+/// The whiteboard's S-curve, for the tests of the page pipeline.
+#[cfg(test)]
+pub(crate) fn s_curve_for_tests(t: f32) -> f32 {
+    tone::s_curve(t)
+}
+
 use crate::Rgb;
 
 /// The strength the constants were measured at.
@@ -58,8 +64,26 @@ pub enum PaperMode {
     Keep,
 }
 
+/// A kind of document's change to the tone curve (#299): `preset::PresetParams`' extra gamma,
+/// S-curve and colour factor. The default changes nothing.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Shape {
+    /// Added to the curve's gamma; positive darkens faint print (a receipt's +0.3).
+    pub extra_gamma: f32,
+    /// The whiteboard's S-curve in place of the gamma curve.
+    pub s_curve: bool,
+    /// Multiplies how much colour is put back (a whiteboard's ×1.5 for its markers).
+    pub colour_factor: f32,
+}
+
+impl Default for Shape {
+    fn default() -> Self {
+        Shape { extra_gamma: 0.0, s_curve: false, colour_factor: 1.0 }
+    }
+}
+
 /// How to run [`auto`].
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct AutoParams {
     /// 0–100; 0 returns the page untouched.
     pub strength: u8,
@@ -72,11 +96,21 @@ pub struct AutoParams {
     pub denoise: bool,
     /// The page's resolution: sharpening looks one pixel around at 300 dpi and wider above.
     pub dpi: u16,
+    /// A kind of document's change to the tone curve (#299).
+    pub shape: Shape,
 }
 
 impl Default for AutoParams {
     fn default() -> Self {
-        AutoParams { strength: DEFAULT_STRENGTH, paper: PaperMode::White, threads: 1, sharpen: DEFAULT_SHARPEN, denoise: true, dpi: 300 }
+        AutoParams {
+            strength: DEFAULT_STRENGTH,
+            paper: PaperMode::White,
+            threads: 1,
+            sharpen: DEFAULT_SHARPEN,
+            denoise: true,
+            dpi: 300,
+            shape: Shape::default(),
+        }
     }
 }
 
@@ -102,6 +136,12 @@ pub fn enlargement(w: f64, h: f64) -> f64 {
 
 /// Give `page` the Auto look. `None` when the page's buffer doesn't match its size.
 pub fn auto(page: &Rgb, params: &AutoParams) -> Option<AutoOutput> {
+    auto_with_photos(page, params, None)
+}
+
+/// [`auto`], with the photographs `photos` found on the page (#299, the block photo mask)
+/// sharpened as gently as the objects the look finds itself.
+pub fn auto_with_photos(page: &Rgb, params: &AutoParams, photos: Option<&crate::photo_mask::PhotoMask>) -> Option<AutoOutput> {
     let (w, h) = (page.width as usize, page.height as usize);
     if page.data.len() != w.checked_mul(h)?.checked_mul(3)? {
         return None;
@@ -121,10 +161,16 @@ pub fn auto(page: &Rgb, params: &AutoParams) -> Option<AutoOutput> {
     }
     if params.sharpen > 0 {
         let k_sharp = f32::from(params.sharpen.min(100)) / 100.0;
-        let data = detail::sharpen(detailed.as_ref().unwrap_or(page), k_sharp, noise, f32::from(params.dpi), Some(&bg.objects), params.threads);
+        let gentle = photos.map_or_else(|| bg.objects.clone(), |p| with_photos(&bg.objects, p));
+        let data = detail::sharpen(detailed.as_ref().unwrap_or(page), k_sharp, noise, f32::from(params.dpi), Some(&gentle), params.threads);
         detailed = Some(Rgb { width: page.width, height: page.height, data });
     }
-    let renderer = tone::Renderer::new(detailed.as_ref().unwrap_or(page), &bg.light, tone::Tone::at(strength), params.paper == PaperMode::Keep);
+    let renderer = tone::Renderer::new(
+        detailed.as_ref().unwrap_or(page),
+        &bg.light,
+        tone::Tone::at(strength).shaped(params.shape),
+        params.paper == PaperMode::Keep,
+    );
     let mut data = renderer.render(params.threads);
     if params.strength < BLEND_BELOW {
         let (a, n) = (u32::from(params.strength), u32::from(BLEND_BELOW));
@@ -133,6 +179,29 @@ pub fn auto(page: &Rgb, params: &AutoParams) -> Option<AutoOutput> {
         }
     }
     Some(AutoOutput { rgb: Rgb { width: page.width, height: page.height, data }, objects: bg.objects, closing_radius: bg.radius as u8, noise })
+}
+
+/// The cells of `objects` (at its own size) set, and those where `photos` (a block mask over the
+/// same page) weighs at least a half. A mask with no cells takes the photo mask's block grid.
+pub(crate) fn with_photos(objects: &Mask, photos: &crate::photo_mask::PhotoMask) -> Mask {
+    let (w, h) = if objects.width > 0 && objects.height > 0 && objects.data.len() == objects.width * objects.height {
+        (objects.width, objects.height)
+    } else {
+        (photos.cols, photos.rows)
+    };
+    if w == 0 || h == 0 || photos.cols == 0 || photos.rows == 0 || photos.weight.len() != photos.cols * photos.rows {
+        return objects.clone();
+    }
+    let mut out = Mask::new(w, h);
+    for y in 0..h {
+        let row = ((y * 2 + 1) * photos.rows / (h * 2)).min(photos.rows - 1);
+        for x in 0..w {
+            let col = ((x * 2 + 1) * photos.cols / (w * 2)).min(photos.cols - 1);
+            let object = objects.data.get(y * objects.width + x).copied().unwrap_or(false) && objects.width == w;
+            out.data[y * w + x] = object || photos.weight[row * photos.cols + col] >= 0.5;
+        }
+    }
+    out
 }
 
 /// `page` with its light evened out and nothing else: each channel divided by the paper's colour

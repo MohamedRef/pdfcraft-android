@@ -100,7 +100,15 @@ pub fn inspect_photo(photo: &[u8], corners: [f32; 8]) -> Result<Inspection, Scan
 
 /// The page in the Auto look as RGB (paper near white), or `None` when the look fails.
 fn auto_look(page: &Rgb, dpi: u16) -> Option<Rgb> {
-    let params = LookParams { strength: LOOK_STRENGTH, threads: 1, dpi: f32::from(dpi), sharpen: DEFAULT_SHARPEN, denoise: true, keep_paper: false };
+    let params = LookParams {
+        strength: LOOK_STRENGTH,
+        threads: 1,
+        dpi: f32::from(dpi),
+        sharpen: DEFAULT_SHARPEN,
+        denoise: true,
+        keep_paper: false,
+        shape: Default::default(),
+    };
     let data = match apply_full(page, Look::Auto, &params)?.pixels {
         Pixels::Rgb(rgb) => rgb,
         Pixels::Grey(grey) => grey.iter().flat_map(|&v| [v, v, v]).collect(),

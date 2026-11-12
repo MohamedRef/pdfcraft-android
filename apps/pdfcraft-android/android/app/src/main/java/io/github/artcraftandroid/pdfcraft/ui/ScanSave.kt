@@ -116,6 +116,9 @@ internal fun scanPageRequest(
     // barcodes, stamps and soft print are not photographs (#427)
     strictPhoto = lab.strictPhoto,
     fixedStrength = scanFixedStrength(lab, strength),
+    // a document type's own tone, and photographs sharpened gently (#299)
+    kindTone = lab.kindTone,
+    photoSharpen = lab.photoSharpen,
 )
 }
 

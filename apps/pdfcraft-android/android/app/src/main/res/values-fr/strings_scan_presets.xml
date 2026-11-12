@@ -13,5 +13,10 @@
     <string name="scan_preset_title">Type de document</string>
     <string name="scan_preset_automatic">Automatique</string>
     <string name="scan_lab_presets">Types de document dans Scan net</string>
+    <string name="scan_lab_kind_tone">Les types de document ajustent les tons du scan net (tickets plus foncés, tableaux blancs plus clairs)</string>
+    <string name="scan_lab_photo_sharpen">Accentuer en douceur les photos de la page</string>
+    <string name="scan_lab_suggestions">Suggérer Aplatir la page ou Niveaux de gris selon le type de document</string>
+    <string name="scan_suggest_flatten">Aplatir cette page ?</string>
+    <string name="scan_suggest_greyscale">Essayer les niveaux de gris</string>
     <string name="scan_lab_page_strength">L’intensité de la page prime sur le type de document</string>
 </resources>

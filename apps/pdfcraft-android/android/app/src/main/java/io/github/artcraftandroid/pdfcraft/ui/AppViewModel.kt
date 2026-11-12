@@ -2249,6 +2249,10 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 // the photo rule (#427): the option, and what the first rule reads as photograph
                 "strict_photo" to lab.strictPhoto, "photo_loose" to (r?.kind?.photoLoose?.toDouble() ?: -1.0),
                 "whole_photo" to (r?.kind?.wholePhoto ?: false),
+                // the kind's own tone and whether it was used, and the photo mask in sharpening (#299)
+                "kind_tone" to lab.kindTone, "kind_gamma" to (r?.kind?.extraGamma?.toDouble() ?: 0.0),
+                "kind_s_curve" to (r?.kind?.sCurve ?: false), "kind_colour" to (r?.kind?.colourFactor?.toDouble() ?: 1.0),
+                "photo_sharpen" to lab.photoSharpen, "suggestions" to lab.suggestions,
             )
             if (keepIn != null) {
                 val kept = r?.let {
@@ -2268,6 +2272,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                         k.preset, k.chosen, k.strength.toInt(), k.sharpen.toInt(), k.keepPaper, k.suggestFlatten, k.suggestGreyscale, k.ratio.toDouble(),
                         k.inkShare.toDouble(), k.colourInkShare.toDouble(), k.photoShare.toDouble(), k.strokeMm.toDouble(), k.brightShare.toDouble(), k.gutterBand, k.wholePhoto,
                         k.gutterLoose, k.gutterCover.toDouble(), k.photoLoose.toDouble(),
+                        k.extraGamma.toDouble(), k.sCurve, k.colourFactor.toDouble(),
                     )
                 }
                 withContext(Dispatchers.IO) { scanLab.keepPage(keepIn, i, page, true, scanLookWord(filter, lab), strength, flatten, r?.path?.let(::File), kept, scanPreviewRecord(page), turn, kind, r?.let { scanAppliedStrength(page.look, lab, it.kind?.strength?.toInt()) }) }

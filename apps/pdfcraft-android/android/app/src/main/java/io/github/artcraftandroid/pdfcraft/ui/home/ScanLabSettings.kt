@@ -138,6 +138,15 @@ internal fun ScanLabSettings(vm: AppViewModel) {
     SheetRow(null, stringResource(R.string.scan_lab_presets), { lab.update(o.copy(presets = !o.presets)) }) {
         PdfSwitch(o.presets, { lab.update(o.copy(presets = it)) })
     }
+    SheetRow(null, stringResource(R.string.scan_lab_kind_tone), { lab.update(o.copy(kindTone = !o.kindTone)) }) {
+        PdfSwitch(o.kindTone, { lab.update(o.copy(kindTone = it)) })
+    }
+    SheetRow(null, stringResource(R.string.scan_lab_photo_sharpen), { lab.update(o.copy(photoSharpen = !o.photoSharpen)) }) {
+        PdfSwitch(o.photoSharpen, { lab.update(o.copy(photoSharpen = it)) })
+    }
+    SheetRow(null, stringResource(R.string.scan_lab_suggestions), { lab.update(o.copy(suggestions = !o.suggestions)) }) {
+        PdfSwitch(o.suggestions, { lab.update(o.copy(suggestions = it)) })
+    }
     SheetRow(null, stringResource(R.string.scan_lab_strict_gutter), { lab.update(o.copy(strictGutter = !o.strictGutter)) }) {
         PdfSwitch(o.strictGutter, { lab.update(o.copy(strictGutter = it)) })
     }
