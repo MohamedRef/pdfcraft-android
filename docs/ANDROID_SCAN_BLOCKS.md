@@ -31,8 +31,8 @@ phone**, and every threshold below is the issue's starting value or was set on d
 
 The same run was stopped by the owner before these were done. Nothing of them is in the crate:
 
-- **Drawn test photos with exact answers** (#288, the `synth` generator): half written, its
-  tests not yet passing.
+- **Drawn test photos with exact answers** (#288, the `synth` generator): finished from an
+  earlier draft and merged on its own; see [ANDROID_SCAN_MEASURING.md](ANDROID_SCAN_MEASURING.md).
 - **Kotlin and research drafts**: see the draft pull request named in this pull request's
   description. They were never compiled.
 
