@@ -72,6 +72,7 @@ Areas (lines · issues):
 | `error` | Failures with their stage and exception class, engine panics caught, and crashes with the exception classes and code locations | `Diag.failure`, `Engine`, crash handler | #114 |
 | `viewer` | Reading and presenting: jumps back and forward, Go to page, the layout a file opens in and why, page mode and spread changes, the spread a window shows, reading colours, keyboard shortcuts, hiding annotations, comment-list filters and dimming, copies without annotations, presentation start and end, clicker keys, the second screen and the pages drawn for it (see below) | `ViewerController`, `AppViewModel`, `ViewerScreen`, `CommentList`, `ExternalPresentation` | #152 #153 #155 #157 #184 #198 #203 #204 #327 |
 | `markup` | Comments, markup, links, measuring and study: comment export, import, summary, copy and paste, status and lock; markup follow-up actions, area highlights, replace and insert suggestions, shape annotations; links added, edited, deleted, made from addresses and removed; measure points, saved measurements, scales and exports; masking tape and quizzes (see below). Never a comment's text, a link's address or a measurement's label | `MarkupDiag`, `AppViewModel`, `Tools`, `Study` | #133 #134 #135 #143 #158 #159 #169 #170 #179 #180 #196 #197 |
+| `edit` | Content editing: image edits, redaction marks and apply, the hidden-information and fake-redaction checks, OCR runs, reviews and batches, Compare, the accessibility check and its fixes, Prepare form, imported fonts, spacing, overflow warnings, grouped text made editable, and moving, copying and pasting objects (see below) | `EditDiagnostics.kt` with `ImageTools`, `Redact`, `OcrTools`, `Compare`, `Accessibility`, `PrepareForm`, `TextTools`, `ObjectSelect` | #161 #162 #163 #164 #166 #167 #171 #182 |
 
 ### `viewer` lines
 
@@ -130,6 +131,37 @@ Failed engine tools in these steps write the usual `[tool]` and `[error]` lines.
 How the Scan gates read from the log: the no-touch rate is `untouched_pages / found_pages` in the
 `saved` line; the corner error is the median of `max_move_pct` over the `page` lines with
 `corners_moved=true`; the A4 ratio check uses `ratio` in the `page_size` lines (A4 is 1.414).
+
+### `edit` lines
+
+Every line has `doc`. None holds a word, name, expression, field name or alternate text the user typed, or any text from the document. Engine time and failures of these tools are also in `tool` and `error`.
+
+| Line | Fields | What it answers |
+| --- | --- | --- |
+| `image_edit` | `action` (`crop`, `remove_crop`, `flip_horizontal`, `flip_vertical`, `rotate_by`, `replace`, `ungroup`, ...) | An image edit was done (#161) |
+| `redact_mark` | `how` (`area`, `page`, `phrase`, `words`, `pattern`, `regex`), `marked` | How redaction marks were added, and how many (#163) |
+| `redact_apply` | `applied` | Marks applied for good (#163) |
+| `hidden_info`, `hidden_removed` | `categories` | Hidden-information categories found after applying, and how many were removed (#163) |
+| `redact_audit`, `redact_audit_found` | `ms`, `ok`; `findings` | The fake-redaction check, its time, and how many problems it found (#163) |
+| `ocr_run` | `editable`, `pages`, `ms`, `ok` | Recognize text in the open file, as searchable text or an editable copy (#166) |
+| `ocr_review_apply` | `corrections` | Words corrected in the OCR review (#166) |
+| `ocr_batch` | `files`, `failed`, `finished` | OCR for many files, at its end or when cancelled (#166) |
+| `compare` | `visual`, `changes`, `identical`, `ms` | A comparison with an older version and its time (#171) |
+| `compare_mark`, `compare_report` | `comments`; - | Changes added as comments; the report was written (#171) |
+| `a11y_check` | `failed`, `manual`, `passed`, `figures`, `ms` | The accessibility check (#182) |
+| `a11y_fix` | `rule` (the engine's rule id), `status` | A rule was fixed, and whether it passes now (#182) |
+| `a11y_alt` | `decorative` | Alternate text was set, or an image marked decorative (#182) |
+| `a11y_autotag_preview`, `a11y_autotag_apply`, `a11y_tag_fields`, `a11y_report` | `page`, `candidates`, `unclassified_images` (preview) | Auto-tagging, tagging form fields, the saved report (#182) |
+| `form_add_field`, `form_delete_field` | `kind`, `drawn` (a box drawn, or a tap) | Prepare form placed or deleted a field (#164) |
+| `form_detect`, `form_detect_found`, `form_detect_add` | `ms`, `ok`; `found`; `proposed`, `accepted`, `added` | Detect fields: its time, the proposals, and how many were kept (#164) |
+| `form_tab_order` | `order` (`row`, `column`, `structure`) or `move` (`earlier`, `later`), `fields` | The tab order was set (#164) |
+| `font_import` | `ok`, `otf` | A font file was imported for a paragraph (#167) |
+| `text_spacing` | `line`, `letter` | Line and letter spacing were set (#167) |
+| `text_overflow` | `page` | A draft paragraph no longer fits its box (#167) |
+| `text_prepare` | `prepared`, `refused` | Text inside grouped artwork was made editable, and groups the engine left alone (#167) |
+| `objects_move`, `objects_copy`, `objects_paste` | `count`; `cut`, `count`; `pasted`, `same_doc` | Several objects were moved, copied or cut, and pasted (#162) |
+
+Signing (#178) is not logged here yet: its code lives in `AppViewModel`, which is being split; the `tool` and `error` lines cover its engine calls until then.
 
 ## Privacy rules
 

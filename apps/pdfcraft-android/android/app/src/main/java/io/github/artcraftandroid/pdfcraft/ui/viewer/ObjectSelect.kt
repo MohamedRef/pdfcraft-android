@@ -142,6 +142,7 @@ private fun AppViewModel.selectionArgs(): Map<String, Any?> = mapOf(
 fun AppViewModel.moveObjects(doc: OpenDocument, dx: Float, dy: Float) {
     if (editor.objectSelect.chosen.isEmpty()) return
     val keep = editor.objectSelect.selected
+    editEvent(doc, "objects_move", "count" to editor.objectSelect.chosen.size)
     val page = editor.objectSelect.page
     runTool(doc, "object_move", selectionArgs() + ("offset" to listOf(dx.toDouble(), dy.toDouble())), onSettled = { loadObjects(doc, page, keep) })
 }
@@ -152,6 +153,7 @@ fun AppViewModel.copyObjects(doc: OpenDocument, cut: Boolean) {
     val page = editor.objectSelect.page
     runTool(doc, "object_copy", selectionArgs() + ("cut" to cut), onSettled = { loadObjects(doc, page) }) { r ->
         editor.objectSelect.copied = r.optInt("copied", n)
+        editEvent(doc, "objects_copy", "cut" to cut, "count" to editor.objectSelect.copied)
         tell(plural(if (cut) R.plurals.objects_cut else R.plurals.objects_copied, editor.objectSelect.copied, editor.objectSelect.copied))
     }
 }
@@ -161,6 +163,7 @@ fun AppViewModel.pasteObjects(doc: OpenDocument, page: Int) {
     if (editor.objectSelect.copied == 0) return
     val before = editor.objectSelect.objects.takeIf { editor.objectSelect.doc === doc && editor.objectSelect.page == page }?.map { it.key }?.toSet()
     runTool(doc, "object_paste", mapOf("page" to page + 1)) { r ->
+        editEvent(doc, "objects_paste", "pasted" to r.optInt("pasted", editor.objectSelect.copied), "same_doc" to (editor.objectSelect.doc === doc))
         tell(plural(R.plurals.objects_pasted, r.optInt("pasted", editor.objectSelect.copied), r.optInt("pasted", editor.objectSelect.copied)))
         if (editor.objectSelect.doc === doc) {
             val eng = engine ?: return@runTool

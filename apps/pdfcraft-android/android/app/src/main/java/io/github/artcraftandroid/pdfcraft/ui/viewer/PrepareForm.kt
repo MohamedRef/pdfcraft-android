@@ -196,6 +196,7 @@ fun AppViewModel.addField(doc: OpenDocument, page: Int, kind: FieldKind, rect: F
         putAll(extra)
     }
     runTool(doc, "form_add_field", args) { r ->
+        editEvent(doc, "form_add_field", "kind" to kind.arg, "drawn" to extra.isEmpty())
         prepareForm.kind = null
         prepareForm.selected = r.optString("field").takeIf { it.isNotEmpty() }
     }
@@ -207,7 +208,9 @@ fun AppViewModel.moveField(doc: OpenDocument, field: String, rect: FloatArray) {
 
 fun AppViewModel.deleteField(doc: OpenDocument, field: String) {
     prepareForm.selected = null
-    runTool(doc, "form_delete_field", mapOf("field" to field)) { tell(appText(R.string.form_field_deleted, field)) }
+    runTool(doc, "form_delete_field", mapOf("field" to field)) {
+        editEvent(doc, "form_delete_field")
+        tell(appText(R.string.form_field_deleted, field)) }
 }
 
 /** A copy of [field] just below it: the same kind, size and choices, with the next free name. */
@@ -267,7 +270,7 @@ fun AppViewModel.detectFields(doc: OpenDocument) {
     val eng = engine ?: return
     viewModelScope.launch {
         try {
-            val r = eng.tool("form_detect_fields", mapOf("doc" to doc.id, "add" to false))
+            val r = editMeasure(doc, "form_detect") { eng.tool("form_detect_fields", mapOf("doc" to doc.id, "add" to false)) }
             val fs = r.optJSONArray("fields") ?: JSONArray()
             val list = (0 until fs.length()).mapNotNull { i ->
                 val f = fs.getJSONObject(i)
@@ -276,6 +279,7 @@ fun AppViewModel.detectFields(doc: OpenDocument) {
                 val a = f.optJSONArray("rect") ?: return@mapNotNull null
                 DetectedField(page, f.optString("kind"), f.optString("name"), flipRect(FloatArray(4) { a.getDouble(it).toFloat() }, ph), if (f.has("comb")) f.optInt("comb") else null)
             }
+            editEvent(doc, "form_detect_found", "found" to list.size)
             if (list.isEmpty()) tell(appText(R.string.form_detect_none)) else prepareForm.detected = list
         } catch (e: Exception) {
             tell(e.userMessage)
@@ -288,7 +292,7 @@ fun AppViewModel.addDetected(doc: OpenDocument, all: List<DetectedField>, accept
     prepareForm.detected = null
     if (accepted.isEmpty()) return
     if (accepted.size == all.size) {
-        runTool(doc, "form_detect_fields", mapOf("add" to true)) { tell(plural(R.plurals.form_fields_added, all.size, all.size)) }
+        runTool(doc, "form_detect_fields", mapOf("add" to true)) { editEvent(doc, "form_detect_add", "proposed" to all.size, "added" to all.size); tell(plural(R.plurals.form_fields_added, all.size, all.size)) }
         return
     }
     val eng = engine ?: return
@@ -308,6 +312,7 @@ fun AppViewModel.addDetected(doc: OpenDocument, all: List<DetectedField>, accept
             tell(e.userMessage)
         } finally {
             refresh(doc, null)
+            editEvent(doc, "form_detect_add", "proposed" to all.size, "accepted" to accepted.size, "added" to added)
             if (added > 0) tell(plural(R.plurals.form_fields_added, added, added))
         }
     }
@@ -324,7 +329,10 @@ fun AppViewModel.tabOrder(doc: OpenDocument, order: String? = null, field: Strin
     viewModelScope.launch {
         try {
             val r = eng.tool("form_tab_order", args)
-            if (order != null || field != null) refresh(doc, null)
+            if (order != null || field != null) {
+                editEvent(doc, "form_tab_order", "order" to order, "move" to (if (field == null) null else if (later) "later" else "earlier"), "fields" to (r.optJSONArray("tab_order")?.length() ?: 0))
+                refresh(doc, null)
+            }
             val t = r.optJSONArray("tab_order") ?: JSONArray()
             prepareForm.tabOrder = (0 until t.length()).map { t.getString(it) }
         } catch (e: Exception) {
