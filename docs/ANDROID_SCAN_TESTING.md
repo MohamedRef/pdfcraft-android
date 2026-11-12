@@ -41,6 +41,7 @@ on one part. While any is changed, the scan screen says so.
 | Smooth grain in dim photos, in Clean scan (#299) | On | Off |
 | Filter strength | Each filter's own | 20, 40, 60, 80 or 100 for every filter |
 | Flatten page (#302) | Off | On, with the switch on the scan screen itself |
+| Scan with (#294) | PdfCraft camera | Phone's camera app (also in Settings → Scan; the same setting) |
 
 Settings → **Scanner models** (#289) lists each model with its state; while the log is
 recorded it also has **Copy the models again**, which copies every model out of the app anew
@@ -70,6 +71,8 @@ The zip also holds `diagnostics.txt`, the diagnostics log as **Share diagnostics
  "look": "auto", "strength": 60, "flatten": false,
  "options": {"finder": "auto", "refine": true, "side_proportions": false, "snap_paper": true, "strength_override": null, "upright": true,
              "sharpen": 30, "denoise": true, "preview": true, "crop_tools": true, "flatten_auto": false},
+ "capture": {"source": "in_app", "mp10": 499, "width": 8160, "height": 6120, "exposure_index": -1, "exposure_step_milli": 333,
+             "torch": false, "focused": true, "rotation": 0, "capture_ms": 640},
  "preview": {"shown": true, "reused": true, "ms": 412, "width": 905, "height": 1280, "look": "auto"},
  "models": {"edges": "ready", "flatten": "ready", "upright": "ready"},
  "crop": {"visits": 1, "corner_drags": 2, "side_drags": 1, "snaps_asked": 3, "snaps_taken": 2, "snaps_held": 0, "snaps_failed": 0,
@@ -101,6 +104,9 @@ the screen opened in % of the photo's diagonal, and `corners_off`, how many corn
 the photo the last time (#291). `models` says which models the engine accepted when the page
 was kept (#289): `ready`, `missing` or `corrupt` for each, or `null` when that could not be read. It is not kept if the app is closed by Android
 before the scan is saved.
+`capture` says how the photo was taken (#294, `docs/ANDROID_SCAN_CAMERA.md`): `source` is
+`in_app`, `phone_app` or `import`; the still's size and exposure are known for `in_app` only. It is
+`null` when the capture is not known, as for a scan Android restored after closing the app.
 
 ## On the desktop
 

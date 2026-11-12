@@ -175,6 +175,8 @@ internal fun scanTestPageJson(
     result: ScanTestResult?,
     preview: ScanTestPreview? = null,
     crop: io.github.artcraftandroid.pdfcraft.ui.scan.ScanCropStats? = null,
+    /** How the photo was taken (#294): which camera and with what; null when not known. */
+    capture: JSONObject? = null,
     models: JSONObject? = null,
 ): String {
     val page = JSONObject()
@@ -198,6 +200,7 @@ internal fun scanTestPageJson(
             } ?: JSONObject.NULL,
         )
         .put("crop", crop?.json() ?: JSONObject.NULL)
+        .put("capture", capture ?: JSONObject.NULL)
         .put("models", models ?: JSONObject.NULL)
     page.put(
         "result",
