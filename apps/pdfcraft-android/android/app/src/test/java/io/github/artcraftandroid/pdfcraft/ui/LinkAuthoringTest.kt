@@ -82,7 +82,7 @@ class LinkAuthoringTest {
         fun link(vararg r: Float) = LinkInfo(rect = r.toList(), uri = null, page = 1u, top = null, file = null, filePage = 0u)
         fun ink(page: Int, vararg r: Float, subtype: String = "Ink") = CommentInfo(
             page = page.toUInt(), index = 0u, subtype = subtype, kind = subtype, author = null, contents = null, modified = null, rect = r.toList(),
-            color = null, name = null, replyTo = null, state = null, locked = false, fillSign = false, opacity = 1f, width = null, hidden = false,
+            color = null, name = null, replyTo = null, state = null, locked = false, fillSign = false, opacity = 1f, width = null, hidden = false, points = emptyList(),
         )
         val links = mapOf(0 to listOf(link(10f, 10f, 50f, 30f), link(200f, 200f, 240f, 220f)), 1 to listOf(link(10f, 10f, 50f, 30f)))
         val badges = linkedInkRects(links, listOf(ink(0, 5f, 5f, 45f, 35f), ink(1, 45f, 25f, 90f, 90f), ink(0, 200f, 200f, 240f, 220f, subtype = "Square")))

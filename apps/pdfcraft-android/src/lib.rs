@@ -371,6 +371,9 @@ pub struct CommentInfo {
     /// The PDF hides it (`/F` Hidden or NoView): the page raster leaves it out, and so must the
     /// app's own sticky-note overlay (#115).
     pub hidden: bool,
+    /// A polygon's corners, `x0, y0, x1, y1, …` (points, top-left origin), so the app can draw
+    /// the freehand study tape it makes (#350); empty for other comments.
+    pub points: Vec<f32>,
 }
 
 /// A form field's widget on a page: what a tap there fills.
@@ -1523,6 +1526,10 @@ fn comment_records(snapshot: &pdfcraft_engine::OverlaySnapshot) -> Vec<CommentIn
                 opacity: props.as_ref().map(|p| p.opacity as f32).filter(|v| v.is_finite()).unwrap_or(1.0).clamp(0.0, 1.0),
                 width: props.as_ref().and_then(|p| p.width).map(|w| w as f32).filter(|w| w.is_finite() && *w >= 0.0),
                 hidden: props.as_ref().is_some_and(|p| p.hidden),
+                points: match (a.subtype.as_str(), snapshot.pages.get(a.page)) {
+                    ("Polygon", Some(p)) => a.points.iter().flat_map(|q| p.user_to_view(q[0], q[1])).collect(),
+                    _ => Vec::new(),
+                },
             }
         })
         .collect()

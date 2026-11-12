@@ -120,7 +120,8 @@ Every line carries `doc` (the document's number in the log).
 | `links_from_urls`, `links_remove` | `created`, `ms` | Web addresses in the text were turned into links, or all links were removed (#159) |
 | `measure_point` | `kind` (`distance`, `perimeter`, `area`, `calibrate`), `snapped`, `points`, `snap_ms` | Each measuring tap, whether it snapped to the page's lines and how long snapping took (#135 #180) |
 | `measure_saved`, `measure_scale`, `measure_export` | `kind`, `points`; `method` (`ratio`, `calibrate`), `unit`; `count` | A measurement was saved, a scale set, or measurements exported (#135 #180) |
-| `tape_add`, `tape_toggle` | `color` (index in the tape colours); `lifted`, `via` (`tap`, `talkback`) | Tape was laid, or lifted or laid again (#143) |
+| `tape_add`, `tape_toggle` | `color` (index in the tape colours), `pattern` (`stripes`, `dots`, `grid`, `plain`), `freehand`; `lifted`, `via` (`tap`, `talkback`) | Tape was laid, or lifted or laid again (#143 #350) |
+| `tape_share` | `tapes`, `ms` | Share ▸ With tape showing: how much tape the copy made opaque on its Tape layer, and how long it took (#350) |
 | `tape_all`, `tape_remove_all` | `lifted`, `tapes`; `tapes`, `pages` | Reveal all, Cover all, or Remove all tape (#143) |
 | `quiz_start`, `quiz_end` | `scope` (`page`, `document`), `items`; `items`, `answered`, `known` | A quiz started over highlights and how it ended (#143) |
 

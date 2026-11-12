@@ -1317,3 +1317,84 @@ pub fn erase_ink(doc: &mut Document, page: usize, index: usize, path: &[[f64; 2]
     set_appearance(doc, r)?;
     Ok(true)
 }
+
+/// Most characters a layer name given to [`annots_to_layer`] may have.
+pub const MAX_LAYER_NAME_CHARS: usize = 127;
+
+/// Android adaptation (#350): put the annotations at `indices` in page `page`'s `/Annots` on the
+/// optional content group (layer) named `name`, so a reader's Layers panel shows and hides them
+/// together (ISO 32000-2 §8.11.2, `/OC` on annotations §12.5.2). A group of that name is reused;
+/// otherwise one is made and listed in `/OCProperties /OCGs` and the default configuration's
+/// `/Order`, and turned on there when the configuration's base state is off. Returns how many
+/// annotations were put on it.
+pub fn annots_to_layer(doc: &mut Document, page: usize, indices: &[usize], name: &str) -> Result<usize, AnnotError> {
+    let name = name.trim();
+    if name.is_empty() || name.chars().count() > MAX_LAYER_NAME_CHARS || name.chars().any(char::is_control) {
+        return Err(AnnotError::Invalid(format!("a layer name has 1 to {MAX_LAYER_NAME_CHARS} characters")));
+    }
+    if indices.is_empty() {
+        return Ok(0);
+    }
+    // the annotations first, so a missing one changes nothing
+    let mut refs = Vec::with_capacity(indices.len());
+    for &index in indices {
+        refs.push(annot_ref(doc, page, index)?.1);
+    }
+    let group = layer_named(doc, name)?;
+    for r in &refs {
+        doc.update_dict(*r, |d| d.set(b"OC".to_vec(), Object::Ref(group)))?;
+    }
+    Ok(refs.len())
+}
+
+/// The optional content group named `name`, made (and listed) when the document has none.
+fn layer_named(doc: &mut Document, name: &str) -> Result<ObjRef, AnnotError> {
+    let root = doc.root().ok_or_else(|| AnnotError::Invalid("the document has no catalog".into()))?;
+    let catalog = annot_dict(doc, root);
+    let props_ref = catalog.reference(b"OCProperties");
+    let mut props = catalog.get(b"OCProperties").and_then(|p| doc.resolve(p).as_dict().cloned()).unwrap_or_default();
+    let groups_ref = props.reference(b"OCGs");
+    let mut groups = props.get(b"OCGs").and_then(|g| doc.resolve(g).as_array().cloned()).unwrap_or_default();
+    let existing = groups.iter().find_map(|g| {
+        let Object::Ref(r) = g else { return None };
+        let d = doc.get(*r);
+        let named = d.as_dict()?.get(b"Name").map(|n| doc.resolve(n)).is_some_and(|n| n.as_string().is_some_and(|s| s.text_eq(name)));
+        named.then_some(*r)
+    });
+    if let Some(r) = existing {
+        return Ok(r);
+    }
+    let mut ocg = Dict::new();
+    ocg.set(b"Type".to_vec(), Object::name("OCG"));
+    ocg.set(b"Name".to_vec(), Object::String(PdfString::text(name)));
+    let group = doc.add(Object::Dict(ocg));
+    groups.push(Object::Ref(group));
+    match groups_ref {
+        Some(r) => doc.set(r, Object::Array(groups)),
+        None => props.set(b"OCGs".to_vec(), Object::Array(groups)),
+    }
+    let config_ref = props.reference(b"D");
+    let mut config = props.get(b"D").and_then(|d| doc.resolve(d).as_dict().cloned()).unwrap_or_default();
+    let mut list = |key: &[u8], config: &mut Dict| {
+        let r = config.reference(key);
+        let mut a = config.get(key).and_then(|o| doc.resolve(o).as_array().cloned()).unwrap_or_default();
+        a.push(Object::Ref(group));
+        match r {
+            Some(r) => doc.set(r, Object::Array(a)),
+            None => config.set(key.to_vec(), Object::Array(a)),
+        }
+    };
+    list(b"Order", &mut config);
+    if config.name(b"BaseState") == Some(b"OFF") {
+        list(b"ON", &mut config);
+    }
+    match config_ref {
+        Some(r) => doc.set(r, Object::Dict(config)),
+        None => props.set(b"D".to_vec(), Object::Dict(config)),
+    }
+    match props_ref {
+        Some(r) => doc.set(r, Object::Dict(props)),
+        None => doc.update_dict(root, |c| c.set(b"OCProperties".to_vec(), Object::Dict(props)))?,
+    }
+    Ok(group)
+}
