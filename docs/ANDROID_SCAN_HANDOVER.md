@@ -24,7 +24,7 @@ a phone yet.** Every number in the scanner's documents was measured on a desktop
 | #293 | True proportions, paper sizes | Core done | #353 | The focal length from the in-app camera (#294, section 7 there) |
 | #294 | In-app camera (CameraX) | Core done, not run on a phone | #390 | Everything on the owner's phone (`ANDROID_SCAN_CAMERA.md`); the focal length from the camera's calibration for #293 |
 | #295 | Live page outline, hints | Core done, not run on a phone | #398 (native), #405 | Everything on the owner's phone (`ANDROID_SCAN_LIVE.md`): detection rate, lag, flicker, the hint thresholds; handing the outline to the still (section 6) |
-| #296 | Auto-capture, blur check | Native call only, in #389 | | `scan_sharpness` exists (`docs/ANDROID_SCAN_CAPTURE.md`); its `blurred_unverified` is for logs only (motion blur not detected, threshold from drawn pages). Everything else needs #295 |
+| #296 | Auto-capture, blur check | #389 (native), this PR | | Auto-capture in the in-app camera (`docs/ANDROID_SCAN_AUTO.md`). The blur check is measured and recorded only, no retake prompt: `scan_sharpness` does not detect motion blur and its threshold comes from drawn pages. Nothing ran on a phone |
 | #297 | Multi-frame merge | Native call only, in #389 | | `scan_merge_frames` exists (`docs/ANDROID_SCAN_CAPTURE.md`), measured on drawn frames only. The burst, the setting and the phone measurements need #294 |
 | #298 | Auto look, part 1 | Core done | #346 | Phone time; the paper White / Keep control has no screen (#301) |
 | #299 | Auto look, part 2 | Part | #373 | The block photo mask, document-type presets and `scan_classify`, the recognition-error check |

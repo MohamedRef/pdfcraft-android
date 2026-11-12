@@ -69,7 +69,9 @@ internal class ScanLiveAnalyzer(private val onResult: (ScanLiveDetection) -> Uni
                 "found" to quad.found, "confidence" to quad.confidence.toDouble(), "luma" to quad.meanLuma.toDouble(), "cut_off" to quad.cutOff,
             )
         }
-        onResult(ScanLiveDetection(quad.points.toFloatArray(), quad.confidence, quad.meanLuma, quad.found, quad.cutOff, SystemClock.elapsedRealtime()))
+        val points = quad.points.toFloatArray()
+        val signature = if (quad.found) scanPageSignature(buffer, w, h, rotation, points) else null
+        onResult(ScanLiveDetection(points, quad.confidence, quad.meanLuma, quad.found, quad.cutOff, SystemClock.elapsedRealtime(), signature))
     }
 
     /** One line for the whole time the camera showed: frames looked at, how many found the page, the average and longest call. */

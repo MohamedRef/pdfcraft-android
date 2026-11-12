@@ -53,7 +53,16 @@ internal fun scanFrameShareToView(shareX: Float, shareY: Float, frameAspect: Flo
 }
 
 /** One answer of the frame detector, its points in shares of the upright frame. */
-internal data class ScanLiveDetection(val points: FloatArray, val confidence: Float, val meanLuma: Float, val found: Boolean, val cutOff: Boolean, val at: Long)
+internal data class ScanLiveDetection(
+    val points: FloatArray,
+    val confidence: Float,
+    val meanLuma: Float,
+    val found: Boolean,
+    val cutOff: Boolean,
+    val at: Long,
+    /** The page's signature for auto-capture (#296), when the page was found. */
+    val signature: FloatArray? = null,
+)
 
 /** The outline shown, and what the tracker makes of it. */
 internal data class ScanLiveOutline(

@@ -82,6 +82,7 @@ internal class ScanCameraRouter(private val activity: ComponentActivity, private
         onCaptured = { file, facts, more ->
             ScanCaptures.put(file.path, facts)
             Diag.event(DiagArea.Scan, "camera", *facts.diag())
+            measureSharpness(file, facts)
             val v = vm()
             v.onScanPhoto(true)
             // the camera stays open for the next page, in a file of its own
@@ -117,6 +118,29 @@ internal class ScanCameraRouter(private val activity: ComponentActivity, private
     private fun launchPhoneCamera(file: File) {
         val uri = FileProvider.getUriForFile(activity, "${activity.packageName}.files", file)
         launch(onFail = { vm().onScanPhoto(false) }) { phoneCamera.launch(uri) }
+    }
+
+    /**
+     * The photo's sharpness (#296, #389), measured after the shot and only recorded: in the log
+     * (`camera_sharpness`) and in a kept scan's page file. Never a reason to take it again, since
+     * the measure does not see motion blur and its threshold comes from drawn pages.
+     */
+    private fun measureSharpness(file: File, facts: ScanCapture) {
+        val corners = facts.previewQuad?.takeIf { it.size == 8 }?.toList() ?: listOf(0f, 0f, 1f, 0f, 1f, 1f, 0f, 1f)
+        activity.lifecycleScope.launch {
+            val r = withContext(Dispatchers.Default) { runCatching { io.github.artcraftandroid.pdfcraft.core.scanSharpness(file.path, corners) } }
+            val s = r.getOrNull()
+            if (s == null) {
+                Diag.event(DiagArea.Scan, "camera_sharpness", "measured" to false)
+                return@launch
+            }
+            val ms = s.timings.sumOf { it.ms.toLong() }
+            Diag.event(
+                DiagArea.Scan, "camera_sharpness", "measured" to true, "score" to s.score.toDouble(), "blurred_unverified" to s.blurredUnverified,
+                "threshold" to s.threshold.toDouble(), "ms" to ms, "from_outline" to (facts.previewQuad != null), "auto_shot" to facts.autoShot,
+            )
+            ScanCaptures.of(file.path)?.let { ScanCaptures.put(file.path, it.copy(sharpness = s.score.toDouble(), sharpnessBlurredUnverified = s.blurredUnverified, sharpnessMs = ms)) }
+        }
     }
 
     /** Photos picked to scan: copied next to the camera's, each through the same path as a photo taken. */
