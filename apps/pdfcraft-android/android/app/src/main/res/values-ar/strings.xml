@@ -1016,6 +1016,7 @@
     <string name="scan_lab_denoise">تنعيم التحبّب في الصور المعتمة (مسح نظيف)</string>
     <string name="scan_lab_preview">عرض الصفحات كما ستُحفظ</string>
     <string name="scan_lab_crop">القص مع المكبّر والمحاذاة إلى الحواف</string>
+    <string name="scan_lab_flatten_auto">تسطيح الصفحات تلقائيًا عندما يجعل سطورها أكثر استقامة</string>
     <string name="scan_lab_strength">شدة الفلتر</string>
     <string name="scan_lab_strength_own">الافتراضي</string>
     <string name="scan_lab_options_body">توقف هذه الخيارات أجزاء من الماسح الضوئي أو تستبدل بها ما كان قبلها، لمعرفة الجزء الذي تأتي منه المشكلة. يسجّل السجل ما كان مفعّلًا لكل صفحة.</string>

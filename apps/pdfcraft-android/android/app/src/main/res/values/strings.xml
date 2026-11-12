@@ -1818,6 +1818,7 @@
     <string name="scan_lab_denoise">Smooth grain in dim photos (Clean scan)</string>
     <string name="scan_lab_preview">Show pages as they will be saved</string>
     <string name="scan_lab_crop">Crop with magnifier and snapping to edges</string>
+    <string name="scan_lab_flatten_auto">Flatten pages automatically when it makes their lines straighter</string>
     <string name="scan_lab_strength">Filter strength</string>
     <string name="scan_lab_strength_own">Default</string>
     <string name="scan_lab_options_body">These switch parts of the scanner off, or swap them for what they replaced, to find which part a problem comes from. The log records what was in force for every page.</string>
