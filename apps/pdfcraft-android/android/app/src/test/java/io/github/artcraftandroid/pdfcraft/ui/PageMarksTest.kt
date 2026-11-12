@@ -70,4 +70,16 @@ class PageMarksTest {
         assertEquals(1.0, image["scale"])
         assertFalse(image.containsKey("color"))
     }
+
+    @Test fun previewArgsFillInThePageText() {
+        val spec = HeaderFooterSpec(slots = listOf("<<Page 1 of n>>", "", "", "", "<<m/d/yyyy>> <<Bates Number#6#10##>>", ""), startNumber = 5)
+        val a = markPreviewArgs(spec, 1, 3, replace = false, date = day)
+        // the second marked page: page 6 of the document's 3, Bates 11
+        assertEquals("Page 6 of 3", a["header_left"])
+        assertEquals("3/7/2026 000011", a["footer_center"])
+        assertFalse(a.containsKey("pages"))
+        assertFalse(a.containsKey("replace"))
+        assertEquals(true, markPreviewArgs(WatermarkSpec(text = "DRAFT"), 0, 3, replace = true)["replace"])
+        assertEquals("/x/a.pdf", markPreviewArgs(BackgroundSpec(imagePath = "/x/a.pdf"), 0, 3, replace = false)["file"])
+    }
 }

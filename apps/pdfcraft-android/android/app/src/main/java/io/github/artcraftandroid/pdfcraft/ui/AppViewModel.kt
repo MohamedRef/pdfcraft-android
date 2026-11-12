@@ -3356,6 +3356,40 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         }
     }
 
+    /**
+     * Page [page] (0-based) of [doc] with a mark drawn by the engine (#314): the page is copied out
+     * (`page_extract`), opened on its own, marked with [tool] and [args] and drawn at about
+     * [maxSide] pixels on its longer side, so the preview is the engine's own result, PDF pictures
+     * included. The document is not touched. Null when it can't be made. Runs to the end once
+     * started, so the copy is always closed and deleted.
+     */
+    suspend fun markPreview(doc: OpenDocument, kind: MarkKind, args: Map<String, Any?>, page: Int, maxSide: Float): android.graphics.Bitmap? {
+        val eng = engine ?: return null
+        val size = doc.info.pages.getOrNull(page) ?: return null
+        return withContext(NonCancellable) {
+            val dir = File(getApplication<Application>().cacheDir, "mark-preview").apply { mkdirs() }
+            val file = File(dir, "page-${System.nanoTime()}.pdf")
+            var copy: Long? = null
+            val start = System.nanoTime()
+            try {
+                eng.tool("page_extract", mapOf("doc" to doc.id, "pages" to listOf(page + 1), "out" to file.absolutePath))
+                copy = eng.tool("doc_open", mapOf("path" to file.absolutePath)).optLong("doc")
+                eng.tool(kind.tool, args + ("doc" to copy))
+                val scale = maxSide / maxOf(size.width, size.height).coerceAtLeast(1f)
+                val id = copy.toULong()
+                withContext(eng.thumbnails) { eng.session.renderPage(id, 0u, scale, null).toBitmap() }.also {
+                    Diag.event(DiagArea.Pages, "mark_preview", "doc" to doc.diagNumber, "kind" to kind, "picture" to args.containsKey("file"), "ms" to (System.nanoTime() - start) / 1_000_000)
+                }
+            } catch (e: Exception) {
+                Diag.failure(DiagArea.Pages, "mark_preview", e)
+                null
+            } finally {
+                copy?.let { c -> runCatching { eng.tool("doc_close", mapOf("doc" to c, "discard_changes" to true)) } }
+                file.delete()
+            }
+        }
+    }
+
     /** Files waiting for the person to pick the folder they go into, and what to delete afterwards. */
     private var folderOutput: FolderOutput? = null
     val outputFolderRequests = Channel<Unit>(Channel.CONFLATED)
