@@ -128,5 +128,22 @@ class WorkflowGateTests(unittest.TestCase):
         self.assertLess(job.index("uses: Swatinem/rust-cache"), job.index("base64 -d"))
 
 
+    def test_main_pushes_never_cancel_each_other(self):
+        # Issue #206: a per-ref group lets a newer main push cancel the older pending run, so each
+        # main commit (and manual run) needs its own group; only pull requests may cancel.
+        import re
+        text = (WORKFLOWS / "android-update.yml").read_text()
+        top = text[text.index("\nconcurrency:"):text.index("\njobs:")]
+        self.assertIn("github.sha", top)
+        self.assertIn("cancel-in-progress: ${{ github.event_name == 'pull_request' }}", top)
+        for job in ("signed-apk", "publish-release"):
+            start = text.index(f"\n  {job}:")
+            nxt = re.search(r"\n  [a-z-]+:\n", text[start + 1:])
+            body = text[start:start + 1 + nxt.start()] if nxt else text[start:]
+            self.assertIn("group: android-publish", body, job)
+            self.assertIn("cancel-in-progress: false", body, job)
+        for name, wf in workflow_texts().items():
+            self.assertNotIn("cancel-in-progress: true", wf, name)
+
 if __name__ == "__main__":
     unittest.main()
