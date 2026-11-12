@@ -73,6 +73,11 @@ pub struct ScanPageRequest {
     /// of a side at most) and draw the page again without it, at the same size (#302).
     #[uniffi(default = false)]
     pub flatten_trim: bool,
+    /// With `flatten`: when the network is not installed or its page was not kept, fit a
+    /// curled-page model to the page's lines of text and keep that page when it is at least 10 %
+    /// straighter (#303, part B).
+    #[uniffi(default = false)]
+    pub line_flatten: bool,
     /// Take the page's proportions from the lengths of its sides alone, as before #293. A testing
     /// choice (#288).
     #[uniffi(default = false)]
@@ -209,6 +214,8 @@ pub struct ScanPageResult {
     /// The strips of background trimmed from a flattened page's edges (#302); `None` when no trim
     /// was looked for.
     pub trim: Option<ScanTrim>,
+    /// What the text-line fallback did, when it ran (#303, part B).
+    pub line_flatten: Option<ScanLineFlatten>,
     /// The quarter turns clockwise the page was given to stand upright (#339): 0 when it was not
     /// asked, already upright, or the classifier was not sure.
     pub quarter_turns: u8,
@@ -555,6 +562,7 @@ fn page_request<'a>(request: &ScanPageRequest, photo: &'a [u8], corners: [f32; 8
         flatten: request.flatten,
         flatten_check: request.flatten_check,
         flatten_trim: request.flatten_trim,
+        line_flatten: request.line_flatten,
         side_proportions: request.side_proportions,
         upright: request.upright,
         turns: request.turns,
@@ -625,6 +633,45 @@ impl From<pdfcraft_scan::page::FlattenCheck> for ScanFlattenCheck {
     }
 }
 
+/// What the text-line fallback did with a page (#303, part B).
+#[derive(Debug, Clone, PartialEq, uniffi::Record)]
+pub struct ScanLineFlatten {
+    /// Why no surface was fitted (`few_lines`, `no_fit`, `folds`); `None` when one was.
+    pub gave_up: Option<String>,
+    /// Lines of text and points on them that the fit used (0 when it gave up before fitting).
+    pub lines: u32,
+    pub points: u32,
+    /// The fitted surface's slopes at the page's left and right ends.
+    pub alpha: f32,
+    pub beta: f32,
+    /// Root mean square distance of the points from the model before and after the fit, in
+    /// pixels of the page.
+    pub rms_before: f32,
+    pub rms_after: f32,
+    /// Fitting steps taken.
+    pub steps: u32,
+    /// The guard's comparison with the page straightened by its corners; `kept` says which one
+    /// the page is.
+    pub check: Option<ScanFlattenCheck>,
+}
+
+impl From<&pdfcraft_scan::page::LineFlatten> for ScanLineFlatten {
+    fn from(l: &pdfcraft_scan::page::LineFlatten) -> Self {
+        let fit = l.fit.as_ref();
+        ScanLineFlatten {
+            gave_up: l.gave_up.map(Into::into),
+            lines: fit.map_or(0, |f| f.lines),
+            points: fit.map_or(0, |f| f.points),
+            alpha: fit.map_or(0.0, |f| f.alpha as f32),
+            beta: fit.map_or(0.0, |f| f.beta as f32),
+            rms_before: fit.map_or(0.0, |f| f.rms_before as f32),
+            rms_after: fit.map_or(0.0, |f| f.rms_after as f32),
+            steps: fit.map_or(0, |f| f.steps),
+            check: l.check.map(Into::into),
+        }
+    }
+}
+
 /// A page as it will be saved, small enough to show (#301).
 #[derive(Debug, Clone, uniffi::Record)]
 pub struct ScanPreview {
@@ -647,6 +694,8 @@ pub struct ScanPreview {
     pub flatten_check: Option<ScanFlattenCheck>,
     /// The border trimmed from a flattened page (#302), when one was looked for.
     pub trim: Option<ScanTrim>,
+    /// What the text-line fallback did, when it ran (#303, part B).
+    pub line_flatten: Option<ScanLineFlatten>,
     /// The straightened page was still at hand from an earlier preview: only its look was made.
     pub reused: bool,
     pub timings: Vec<ScanTiming>,
@@ -666,6 +715,7 @@ struct PreviewKey {
     flatten: bool,
     flatten_check: bool,
     flatten_trim: bool,
+    line_flatten: bool,
     upright: bool,
     turns: u8,
     max_side: u32,
@@ -719,6 +769,7 @@ pub(crate) fn preview_in(root: &Path, request: &ScanPageRequest, max_side: u32) 
         flatten: request.flatten,
         flatten_check: request.flatten_check,
         flatten_trim: request.flatten_trim,
+        line_flatten: request.line_flatten,
         upright: request.upright,
         turns: request.turns % 4,
         max_side,
@@ -782,6 +833,7 @@ pub(crate) fn preview_in(root: &Path, request: &ScanPageRequest, max_side: u32) 
         kind: kind.as_ref().map(kind_of),
         flatten_check: base.flatten_check.map(Into::into),
         trim: base.trim.map(|t| ScanTrim::of(t, before_turn(base.page.width, base.page.height, base.turns))),
+        line_flatten: base.line_flatten.as_ref().map(Into::into),
         reused,
         timings,
     })
@@ -865,6 +917,7 @@ pub(crate) fn process_in(root: &Path, request: &ScanPageRequest) -> Result<ScanP
         bend: page.bend,
         flatten_check: page.flatten_check.map(Into::into),
         trim: page.trim.map(|t| ScanTrim::of(t, before_turn(page.width, page.height, page.turns))),
+        line_flatten: page.line_flatten.as_ref().map(Into::into),
         quarter_turns: page.quarter_turns,
         orientation: page.orientation.map(orientation_of),
         turns: page.turns,
@@ -1061,6 +1114,7 @@ mod tests {
             flatten: false,
             flatten_check: false,
             flatten_trim: false,
+            line_flatten: false,
             side_proportions: false,
             upright: false,
             turns: 0,

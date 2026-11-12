@@ -42,6 +42,7 @@ fn base(page: Rgb, dpi: u16, paper: Paper) -> PageBase {
         turns: 0,
         flatten_check: None,
         trim: None,
+        line_flatten: None,
         timings: Vec::new(),
     }
 }

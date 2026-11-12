@@ -10,4 +10,5 @@
     <string name="scan_crop_book_left">Linke Seite einer Doppelseite: Ihre rechte Seite ist der Schnitt am Bund, keine Papierkante.</string>
     <string name="scan_crop_book_right">Rechte Seite einer Doppelseite: Ihre linke Seite ist der Schnitt am Bund, keine Papierkante.</string>
     <string name="scan_camera_book_hint">Buchrücken an der Linie ausrichten</string>
+    <string name="scan_lab_line_flatten">Aus den Textzeilen glätten, wenn das Netz nichts Besseres liefert</string>
 </resources>
