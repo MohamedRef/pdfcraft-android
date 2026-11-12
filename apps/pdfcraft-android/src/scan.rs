@@ -716,6 +716,170 @@ pub(crate) fn process_in(root: &Path, request: &ScanPageRequest) -> Result<ScanP
     })
 }
 
+/// How sharp the page in a photo is (#296). **Not a verdict to act on yet**: see
+/// [`ScanSharpness::blurred_unverified`].
+#[derive(Debug, Clone, PartialEq, uniffi::Record)]
+pub struct ScanSharpness {
+    /// Edge strength over contrast inside the page (sharp drawn pages 1.5–1.9; 0 when the page
+    /// could not be measured). For logs and kept scans, and to compare attempts at one page.
+    pub score: f32,
+    /// The score is under [`ScanSharpness::threshold`] on a page with detail. **Unverified: log it
+    /// and keep it, never ask for a retake from it.** The threshold was set on drawn pages, not
+    /// on photos, and motion blur (a shaken phone, the commonest blur) is not told apart: drawn
+    /// streaks of 7 and 13 pixels score across the sharp range (`docs/ANDROID_SCAN_BLOCKS.md`).
+    pub blurred_unverified: bool,
+    /// The score under which a page is called blurred (from drawn pages).
+    pub threshold: f32,
+    /// `scan_decode`, then `scan_sharpness`.
+    pub timings: Vec<ScanTiming>,
+}
+
+/// Measure how sharp the page inside `corners` (8 shares, 0–1, of the upright photo, as every
+/// scan call takes them) is in the photo at `photo_path` (#296). The photo is decoded with the
+/// usual limits (64 megapixels, 256 MB) and measured on a half-size copy, inside the page's
+/// outline shrunk by 5 %.
+#[uniffi::export]
+pub fn scan_sharpness(photo_path: String, corners: Vec<f32>) -> Result<ScanSharpness, MobileError> {
+    let root = SCAN_ROOT.read().unwrap_or_else(std::sync::PoisonError::into_inner).clone();
+    let root = root.ok_or_else(|| MobileError::Command("scanning is not ready yet".into()))?;
+    sharpness_in(&root, &photo_path, &corners)
+}
+
+pub(crate) fn sharpness_in(root: &Path, photo_path: &str, corners: &[f32]) -> Result<ScanSharpness, MobileError> {
+    let corners: [f32; 8] = corners.try_into().map_err(|_| MobileError::Command("a page needs four corners".into()))?;
+    let bytes = read_photo(root, photo_path)?;
+    let found = pdfcraft_scan::photo_sharpness(&bytes, corners).map_err(|e| MobileError::Command(e.to_string()))?;
+    Ok(ScanSharpness {
+        score: found.sharpness.score,
+        blurred_unverified: found.sharpness.blurred,
+        threshold: pdfcraft_scan::sharpness::BLURRED_BELOW,
+        timings: found.timings.into_iter().map(|(stage, ms)| ScanTiming { stage: stage.into(), ms }).collect(),
+    })
+}
+
+/// One photo of a burst (#297).
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct ScanMergeFrame {
+    /// The camera file.
+    pub photo_path: String,
+    /// 8 shares (0–1) of the upright photo: x1, y1 … x4, y4 (top-left, top-right,
+    /// bottom-right, bottom-left), this photo's own corners.
+    pub corners: Vec<f32>,
+}
+
+/// A burst of photos of one page to merge into one straightened page (#297).
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct ScanMergeRequest {
+    /// 2 to 4 photos of the same page, taken in a row.
+    pub frames: Vec<ScanMergeFrame>,
+    /// Where the merged page is written; `.jpg` or `.png` is added.
+    pub output_path: String,
+    /// JPEG (as a colour page is saved) or PNG (lossless).
+    pub format: ScanFormat,
+    /// The camera's focal length as a 35 mm equivalent, as in [`ScanPageRequest`].
+    #[uniffi(default = None)]
+    pub focal_35mm: Option<f32>,
+    /// Match the page to standard paper sizes, as in [`ScanPageRequest`].
+    #[uniffi(default = true)]
+    pub snap_paper: bool,
+}
+
+/// The merged page written (#297).
+#[derive(Debug, Clone, PartialEq, uniffi::Record)]
+pub struct ScanMergeResult {
+    pub path: String,
+    pub width: u32,
+    pub height: u32,
+    pub format: ScanFormat,
+    /// The resolution written into the file.
+    pub dpi: f32,
+    /// Which frame (its index in the request) the others were lined up on: the sharpest.
+    pub reference: u8,
+    /// Every frame's sharpness score, in the request's order.
+    pub scores: Vec<f32>,
+    /// Frames averaged, the reference included.
+    pub used: u8,
+    /// Frames left out for scoring under 70 % of the reference.
+    pub rejected_blur: u8,
+    /// Frames left out because they could not be lined up (moved over 2.5 pixels, or too
+    /// different after the move).
+    pub rejected_align: u8,
+    /// The theoretical noise gain for the samples averaged, 10·log10 of the mean count, in
+    /// tenths of a dB (60 is the most four frames give). An estimate, not a measurement.
+    pub psnr_gain_tenths_db: u16,
+    /// `scan_decode`, `scan_sharpness`, `scan_rectify`, `scan_merge_align`, `scan_merge`,
+    /// `scan_encode`, each summed over the frames.
+    pub timings: Vec<ScanTiming>,
+}
+
+/// Merge a burst of photos of one page into one straightened page with less noise (#297), and
+/// write it. The sharpest frame is the reference; frames under 70 % of its sharpness are left
+/// out; the others are straightened to the reference's size (at most 12 megapixels), lined up
+/// on it to a fraction of a pixel and averaged, a value at a time, leaving out what moved. The
+/// page has no look: give it one with [`scan_process_page`] and the whole-photo corners.
+#[uniffi::export]
+pub fn scan_merge_frames(request: ScanMergeRequest) -> Result<ScanMergeResult, MobileError> {
+    let root = SCAN_ROOT.read().unwrap_or_else(std::sync::PoisonError::into_inner).clone();
+    let root = root.ok_or_else(|| MobileError::Command("scanning is not ready yet".into()))?;
+    merge_in(&root, &request)
+}
+
+pub(crate) fn merge_in(root: &Path, request: &ScanMergeRequest) -> Result<ScanMergeResult, MobileError> {
+    let outside = || MobileError::Command("the scan's files must be in the app's own folder".into());
+    let count = request.frames.len();
+    if !(pdfcraft_scan::capture::MIN_MERGE_FRAMES..=pdfcraft_scan::capture::MAX_MERGE_FRAMES).contains(&count) {
+        return Err(MobileError::Command(pdfcraft_scan::ScanError::FrameCount.to_string()));
+    }
+    let corners = request
+        .frames
+        .iter()
+        .map(|f| <[f32; 8]>::try_from(f.corners.as_slice()))
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|_| MobileError::Command("a page needs four corners".into()))?;
+    let out = Path::new(&request.output_path);
+    let (Some(parent), Some(name)) = (out.parent(), out.file_name()) else { return Err(outside()) };
+    let parent = parent.canonicalize().map_err(|_| outside())?;
+    if !parent.starts_with(root) {
+        return Err(outside());
+    }
+    // the camera files as they are (a few MB each); the photos are decoded one at a time
+    let files = request.frames.iter().map(|f| read_photo(root, &f.photo_path)).collect::<Result<Vec<_>, _>>()?;
+    let frames: Vec<_> = files.iter().zip(corners).map(|(photo, corners)| pdfcraft_scan::MergeFrame { photo, corners }).collect();
+    let format = match request.format {
+        ScanFormat::Jpeg => Format::Jpeg,
+        ScanFormat::Png => Format::Png,
+    };
+    let merged = pdfcraft_scan::merge_frames(&pdfcraft_scan::MergeRequest {
+        frames: &frames,
+        format,
+        threads: std::thread::available_parallelism().map_or(1, usize::from).min(pdfcraft_scan::warp::MAX_THREADS),
+        focal_35mm: request.focal_35mm,
+        snap_paper: request.snap_paper,
+    })
+    .map_err(|e| MobileError::Command(e.to_string()))?;
+    drop(frames);
+    drop(files);
+    let mut file_name = name.to_os_string();
+    file_name.push(".");
+    file_name.push(merged.format.extension());
+    let target = parent.join(file_name);
+    std::fs::write(&target, &merged.bytes).map_err(|_| MobileError::Command("the page could not be saved".into()))?;
+    Ok(ScanMergeResult {
+        path: target.to_string_lossy().into_owned(),
+        width: merged.width,
+        height: merged.height,
+        format: request.format,
+        dpi: f32::from(merged.dpi),
+        reference: merged.reference,
+        scores: merged.scores,
+        used: merged.used,
+        rejected_blur: merged.rejected_blur,
+        rejected_align: merged.rejected_align,
+        psnr_gain_tenths_db: (merged.psnr_gain_estimate * 10.0).round().clamp(0.0, f32::from(u16::MAX)) as u16,
+        timings: merged.timings.into_iter().map(|(stage, ms)| ScanTiming { stage: stage.into(), ms }).collect(),
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1245,6 +1409,152 @@ mod tests {
         assert!(process_in(&root, &request(&inside, &root.join("missing").join("p"))).is_err(), "no such folder");
         assert!(process_in(&root, &ScanPageRequest { corners: vec![0.0; 6], ..request(&inside, &root.join("p")) }).is_err(), "six numbers");
         assert!(!other.join("p.jpg").exists());
+        std::fs::remove_dir_all(root).unwrap();
+        std::fs::remove_dir_all(other).unwrap();
+    }
+
+    /// A drawn sheet with rows of words on a table, 480 × 600, the sheet at 60..420 × 50..550,
+    /// with Gaussian-like noise of about `sigma` (sum of uniforms) from `seed`, then blurred by a
+    /// box of side 2·`blur` + 1 three times across and down (0: sharp).
+    fn burst_photo(sigma: f64, seed: u64, blur: i64) -> image::RgbImage {
+        let (w, h) = (480i64, 600i64);
+        let mut grey: Vec<f64> = (0..w * h)
+            .map(|i| {
+                let (x, y) = (i % w, i / w);
+                let sheet = (60..420).contains(&x) && (50..550).contains(&y);
+                let row = (y - 80).rem_euclid(22) < 8 && (80..520).contains(&y);
+                let word = (x * 7 + (y / 22) * 31).rem_euclid(53) > 12;
+                match (sheet, sheet && row && word && (90..390).contains(&x)) {
+                    (true, true) => 45.0,
+                    (true, false) => 220.0,
+                    _ => 70.0,
+                }
+            })
+            .collect();
+        for _ in 0..3 * usize::from(blur > 0) {
+            for across in [true, false] {
+                let src = grey.clone();
+                for y in 0..h {
+                    for x in 0..w {
+                        let sum: f64 = (-blur..=blur)
+                            .map(|k| {
+                                if across { src[(y * w + (x + k).clamp(0, w - 1)) as usize] } else { src[((y + k).clamp(0, h - 1) * w + x) as usize] }
+                            })
+                            .sum();
+                        grey[(y * w + x) as usize] = sum / (2 * blur + 1) as f64;
+                    }
+                }
+            }
+        }
+        let mut state = seed.wrapping_mul(0x9E37_79B9_7F4A_7C15) | 1;
+        let mut uniform = move || {
+            state ^= state << 13;
+            state ^= state >> 7;
+            state ^= state << 17;
+            (state >> 11) as f64 / (1u64 << 53) as f64
+        };
+        image::RgbImage::from_fn(w as u32, h as u32, |x, y| {
+            let v = grey[(i64::from(y) * w + i64::from(x)) as usize];
+            image::Rgb(std::array::from_fn(|_| {
+                // twelve uniforms: a standard deviation of 1
+                let n: f64 = (0..12).map(|_| uniform()).sum::<f64>() - 6.0;
+                (v + sigma * n).round().clamp(0.0, 255.0) as u8
+            }))
+        })
+    }
+
+    /// The sheet's corners as shares, a little off by (`dx`, `dy`) pixels.
+    fn sheet(dx: f32, dy: f32) -> Vec<f32> {
+        let (l, t, r, b) = (60.0 + dx, 50.0 + dy, 420.0 + dx, 550.0 + dy);
+        vec![l / 480.0, t / 600.0, r / 480.0, t / 600.0, r / 480.0, b / 600.0, l / 480.0, b / 600.0]
+    }
+
+    /// #297 through the files: three noisy photos of a drawn sheet, each with its corners a
+    /// little off, merge into a page written beside the request that is closer to the clean sheet
+    /// than the reference photo straightened alone.
+    #[test]
+    fn a_burst_on_disk_merges_into_a_cleaner_page() {
+        let root = temp("merge");
+        let offsets = [(0.0f32, 0.0f32), (0.9, 0.5), (-0.6, -0.8)];
+        let paths: Vec<PathBuf> = (0..3)
+            .map(|i| {
+                let p = root.join(format!("burst-{i}.png"));
+                burst_photo(10.0, 7 + i as u64, 1).save(&p).unwrap();
+                p
+            })
+            .collect();
+        let frames: Vec<ScanMergeFrame> = paths
+            .iter()
+            .zip(offsets)
+            .map(|(p, (dx, dy))| ScanMergeFrame { photo_path: p.to_string_lossy().into_owned(), corners: sheet(dx, dy) })
+            .collect();
+        let ask = |frames: Vec<ScanMergeFrame>, out: &Path| ScanMergeRequest {
+            frames,
+            output_path: out.to_string_lossy().into_owned(),
+            format: ScanFormat::Png,
+            focal_35mm: None,
+            snap_paper: false,
+        };
+        let merged = merge_in(&root, &ask(frames.clone(), &root.join("merged"))).unwrap();
+        assert!(merged.path.ends_with("merged.png"), "{}", merged.path);
+        assert_eq!((merged.used, merged.rejected_blur, merged.rejected_align, merged.width, merged.height), (3, 0, 0, 360, 500), "{merged:?}");
+        assert!(merged.psnr_gain_tenths_db > 40, "{merged:?}");
+        let stages: Vec<_> = merged.timings.iter().map(|t| t.stage.as_str()).collect();
+        assert_eq!(stages, ["scan_decode", "scan_sharpness", "scan_rectify", "scan_merge_align", "scan_merge", "scan_encode"]);
+        // against the clean sheet straightened from the reference's corners
+        let r = usize::from(merged.reference);
+        let straighten = |picture: image::RgbImage| {
+            let photo = pdfcraft_scan::Photo { width: 480, height: 600, rgb: picture.into_raw() };
+            let shares: [f32; 8] = sheet(offsets[r].0, offsets[r].1).try_into().unwrap();
+            pdfcraft_scan::rectify(&photo, &Quad::from_shares(&shares, 480, 600).unwrap(), 360, 500).unwrap().data
+        };
+        let truth = straighten(burst_photo(0.0, 0, 1));
+        let single = straighten(image::open(&paths[r]).unwrap().to_rgb8());
+        let written = image::open(&merged.path).unwrap().to_rgb8().into_raw();
+        let rmse = |a: &[u8]| (a.iter().zip(&truth).map(|(&x, &y)| (f64::from(x) - f64::from(y)).powi(2)).sum::<f64>() / a.len() as f64).sqrt();
+        let (alone, together) = (rmse(&single), rmse(&written));
+        println!("error against the clean sheet: {alone:.2} for the reference alone, {together:.2} merged; {merged:?}");
+        assert!(together < 0.75 * alone, "{together} against {alone}");
+
+        // refused: too few or too many photos, a missing photo, three corners, outside the root
+        assert!(merge_in(&root, &ask(frames[..1].to_vec(), &root.join("one"))).is_err());
+        let five: Vec<_> = frames.iter().cycle().take(5).cloned().collect();
+        assert!(merge_in(&root, &ask(five, &root.join("five"))).is_err());
+        let missing = ScanMergeFrame { photo_path: root.join("missing.png").to_string_lossy().into_owned(), corners: sheet(0.0, 0.0) };
+        assert!(merge_in(&root, &ask(vec![frames[0].clone(), missing], &root.join("missing"))).is_err());
+        let short = ScanMergeFrame { corners: vec![0.1; 6], ..frames[1].clone() };
+        assert!(merge_in(&root, &ask(vec![frames[0].clone(), short], &root.join("short"))).is_err());
+        let crossed = ScanMergeFrame { corners: vec![0.5; 8], ..frames[1].clone() };
+        assert!(merge_in(&root, &ask(vec![frames[0].clone(), crossed], &root.join("crossed"))).is_err());
+        let other = temp("merge-other");
+        assert!(merge_in(&root, &ask(frames.clone(), &other.join("merged"))).is_err());
+        assert!(merge_in(&other, &ask(frames, &other.join("merged"))).is_err());
+        for name in ["one", "five", "missing", "short", "crossed"] {
+            assert!(!root.join(format!("{name}.png")).exists(), "{name}");
+        }
+        std::fs::remove_dir_all(root).unwrap();
+        std::fs::remove_dir_all(other).unwrap();
+    }
+
+    /// #296 through the files: a sharp drawn sheet in a JPEG scores above the threshold, the
+    /// same sheet blurred below it; bad requests are refused.
+    #[test]
+    fn a_blurred_photo_scores_lower_than_a_sharp_one() {
+        let root = temp("sharpness");
+        let (sharp, soft) = (root.join("sharp.jpg"), root.join("soft.jpg"));
+        burst_photo(0.0, 0, 0).save(&sharp).unwrap();
+        burst_photo(0.0, 0, 3).save(&soft).unwrap();
+        let measure = |p: &Path| sharpness_in(&root, &p.to_string_lossy(), &sheet(0.0, 0.0));
+        let (a, b) = (measure(&sharp).unwrap(), measure(&soft).unwrap());
+        println!("sharp {a:?}\nblurred {b:?}");
+        assert!(a.score > 2.0 * b.score, "{a:?} {b:?}");
+        assert!(!a.blurred_unverified && b.blurred_unverified && a.threshold == 1.0, "{a:?} {b:?}");
+        assert_eq!(a.timings.iter().map(|t| t.stage.as_str()).collect::<Vec<_>>(), ["scan_decode", "scan_sharpness"]);
+        assert!(sharpness_in(&root, &root.join("missing.jpg").to_string_lossy(), &sheet(0.0, 0.0)).is_err());
+        assert!(sharpness_in(&root, &sharp.to_string_lossy(), &[0.1; 6]).is_err());
+        assert!(sharpness_in(&root, &sharp.to_string_lossy(), &[f32::NAN; 8]).is_err());
+        let other = temp("sharpness-other");
+        assert!(sharpness_in(&other, &sharp.to_string_lossy(), &sheet(0.0, 0.0)).is_err());
         std::fs::remove_dir_all(root).unwrap();
         std::fs::remove_dir_all(other).unwrap();
     }

@@ -12,7 +12,7 @@ workspace = true
 [features]
 # Drawn test photos with exact answers (#288): for the scan-eval runner and the CI gate, never in
 # the app. The crate's own tests turn it on by themselves.
-synth = []
+synth = ["dep:serde_json"]
 
 [dependencies]
 image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
@@ -27,7 +27,13 @@ thiserror = { workspace = true }
 rten = { version = "0.26.0", default-features = false, features = ["onnx_format"] }
 rten-tensor = "0.26.0"
 sha2 = "0.11"
+# the scan-eval runner reads test set entries and writes its report (synth feature only)
+serde_json = { workspace = true, optional = true }
 
 [dev-dependencies]
 # examples/scan_replay.rs reads the page files of scans kept for testing (#288)
 serde_json = { workspace = true }
+
+[[bin]]
+name = "scan-eval"
+required-features = ["synth"]

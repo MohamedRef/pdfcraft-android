@@ -408,8 +408,9 @@ private fun Preferences(vm: AppViewModel) {
     }
     SheetRow(null, stringResource(R.string.home_clear_suggestions), { vm.editor.clearFormSuggestions() })
     SheetDivider()
-    // which way up scanned pages are saved (#339)
+    // which camera Scan uses (#294): the phone's camera app stays one tap away
     Section(stringResource(R.string.common_tool_scan))
+    io.github.artcraftandroid.pdfcraft.ui.scan.ScanCameraSetting()
     var autoUpright by remember { mutableStateOf(io.github.artcraftandroid.pdfcraft.ui.scan.ScanUprightSetting.get(vm.appPrefs)) }
     val setAutoUpright = { on: Boolean -> autoUpright = on; io.github.artcraftandroid.pdfcraft.ui.scan.ScanUprightSetting.set(vm.appPrefs, on) }
     SheetRow(null, stringResource(R.string.settings_scan_upright), { setAutoUpright(!autoUpright) }) {
