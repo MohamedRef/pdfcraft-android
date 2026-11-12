@@ -10,4 +10,5 @@
     <string name="scan_crop_book_left">Página izquierda de una doble página: su lado derecho es el corte por el lomo, no un borde del papel.</string>
     <string name="scan_crop_book_right">Página derecha de una doble página: su lado izquierdo es el corte por el lomo, no un borde del papel.</string>
     <string name="scan_camera_book_hint">Alinea el lomo del libro con la línea</string>
+    <string name="scan_lab_line_flatten">Aplanar a partir de las líneas de texto cuando la red no da nada mejor</string>
 </resources>

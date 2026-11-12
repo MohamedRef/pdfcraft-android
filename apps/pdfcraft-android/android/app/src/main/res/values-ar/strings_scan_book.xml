@@ -10,4 +10,5 @@
     <string name="scan_crop_book_left">الصفحة اليسرى من صفحتين متقابلتين: جانبها الأيمن هو القطع عند ثنية الكتاب، وليس حافة الورقة.</string>
     <string name="scan_crop_book_right">الصفحة اليمنى من صفحتين متقابلتين: جانبها الأيسر هو القطع عند ثنية الكتاب، وليس حافة الورقة.</string>
     <string name="scan_camera_book_hint">اجعل كعب الكتاب على الخط</string>
+    <string name="scan_lab_line_flatten">تسوية الصفحة من سطور النص عندما لا تعطي الشبكة نتيجة أفضل</string>
 </resources>
