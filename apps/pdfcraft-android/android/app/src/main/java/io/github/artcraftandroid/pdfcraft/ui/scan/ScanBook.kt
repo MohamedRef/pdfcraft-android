@@ -116,3 +116,10 @@ fun <T> scanReplacePage(pages: List<T>, at: Int?, replacement: List<T>, sameFile
  * stays while any page uses it (the two halves of a spread share one, #303).
  */
 fun scanUnusedFiles(before: List<String>, after: List<String>): Set<String> = before.toSet() - after.toSet()
+
+/**
+ * Auto-detect on the crop screen for a half of a spread (#303): the spread found is cut again and
+ * the same half kept. Null when the spread was not cut in two, so the corners stay as they are.
+ */
+fun scanBookRecut(half: ScanBookHalf, cut: ScanBookCut?): FloatArray? =
+    cut?.takeIf { it.usable }?.let { if (half.left) it.left else it.right }

@@ -7,4 +7,7 @@
     <string name="tools_scan_book_left_page">Page de gauche d’une double page</string>
     <string name="tools_scan_book_right_page">Page de droite d’une double page</string>
     <string name="scan_lab_book_gutter">Mode livre : couper au pli trouvé sur la photo</string>
+    <string name="scan_crop_book_left">Page de gauche d’une double page : son côté droit est la coupe au pli du livre, pas un bord du papier.</string>
+    <string name="scan_crop_book_right">Page de droite d’une double page : son côté gauche est la coupe au pli du livre, pas un bord du papier.</string>
+    <string name="scan_camera_book_hint">Alignez le dos du livre sur la ligne</string>
 </resources>
