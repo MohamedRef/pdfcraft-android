@@ -14,9 +14,17 @@
 - **Keyboard (DeX, tablets with a keyboard):** Ctrl+Tab and Ctrl+Shift+Tab switch tabs, Ctrl+W
   closes the tab in front. They follow the Keyboard shortcuts setting.
 - **Split view.** The split button at the end of the tab strip shows another open document beside
-  the one in front (side by side on a wide window, one above the other on a tall one). The second
-  pane scrolls and zooms on its own and is read-only; **Swap** brings it to the front for editing.
-  The divider drags (25% to 75%). The pane closes with ×, or the split button again.
+  the one in front (side by side on a wide window, one above the other on a tall one). Each pane
+  scrolls and zooms on its own. Editing follows the pane you use: tap the other pane (or **Edit
+  here**) and it gets the full editing viewer while the panes keep their places. The divider drags
+  (25% to 75%). The pane closes with ×, or the split button again.
+- **Copy across with a back-link.** In the other pane, tap ✂ (Copy an area) and drag over the area
+  to copy, then drag the "Drag onto the other document" chip onto a page of the document being
+  edited. Text in the area becomes a text box there; an area without text becomes an image. Either
+  gets a link back to the source page, saved as a standard PDF GoToR link (file name and page), so
+  it also works in other readers when both files are in the same folder. In PdfCraft, tapping the
+  link scrolls the other pane to that page when the source is open there, or brings its tab to the
+  front, without reopening it.
 
 ## How it works
 
@@ -42,8 +50,7 @@
 
 ## Not done yet (follow-up issues)
 
-- Dragging text, a snip or ink from one pane to the other with a back-link (#139's drag-to-copy and
-  PDF back-links).
-- Editing in both panes at once (the second pane is read-only; Swap moves editing across).
+- Dragging lasso-selected ink across panes (an area copies as text or an image, not as editable ink).
+- The back-link opens the source page, not the exact area (a GoToR link carries a page).
 - Measured switch time and memory with 4 to 8 tabs on the owner's phone: not measured. The
   `tab_switch ms` and `memory` lines in the diagnostics log will answer it.

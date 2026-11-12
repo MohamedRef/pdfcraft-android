@@ -7,10 +7,15 @@
     <string name="tabs_split">عرض مقسوم</string>
     <string name="tabs_split_close">إغلاق العرض المقسوم</string>
     <string name="tabs_split_choose">عرض بجانب هذا المستند</string>
-    <string name="tabs_split_read_only">للقراءة فقط · صفحة %1$d من %2$d</string>
-    <string name="tabs_split_swap">تبديل</string>
     <string name="tabs_close_all">إغلاق الكل</string>
     <string name="tabs_resume">العودة إلى المستندات</string>
+    <string name="tabs_split_edit_here">تعديل هنا</string>
+    <string name="tabs_snip">نسخ منطقة</string>
+    <string name="tabs_snip_hint">اسحب فوق المنطقة المراد نسخها</string>
+    <string name="tabs_snip_drag">اسحبها إلى المستند الآخر</string>
+    <string name="tabs_drop_linked">تمت الإضافة مع رابط إلى صفحة المصدر</string>
+    <string name="tabs_drop_done">تمت الإضافة</string>
+    <string name="tabs_drop_off_page">أفلتها على صفحة</string>
     <plurals name="tabs_open_count">
         <item quantity="zero">لا مستندات مفتوحة</item>
         <item quantity="one">مستند واحد مفتوح</item>

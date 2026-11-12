@@ -7,10 +7,15 @@
     <string name="tabs_split">Vue partagée</string>
     <string name="tabs_split_close">Fermer la vue partagée</string>
     <string name="tabs_split_choose">Afficher à côté de ce document</string>
-    <string name="tabs_split_read_only">Lecture seule · page %1$d sur %2$d</string>
-    <string name="tabs_split_swap">Échanger</string>
     <string name="tabs_close_all">Tout fermer</string>
     <string name="tabs_resume">Retour aux documents</string>
+    <string name="tabs_split_edit_here">Modifier ici</string>
+    <string name="tabs_snip">Copier une zone</string>
+    <string name="tabs_snip_hint">Faites glisser sur la zone à copier</string>
+    <string name="tabs_snip_drag">Faites glisser vers l’autre document</string>
+    <string name="tabs_drop_linked">Ajouté, avec un lien vers la page d’origine</string>
+    <string name="tabs_drop_done">Ajouté</string>
+    <string name="tabs_drop_off_page">Déposez-le sur une page</string>
     <plurals name="tabs_open_count">
         <item quantity="one">%1$d document ouvert</item>
         <item quantity="many">%1$d documents ouverts</item>

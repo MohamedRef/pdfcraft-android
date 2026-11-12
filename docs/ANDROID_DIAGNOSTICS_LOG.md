@@ -104,6 +104,8 @@ Areas (lines · issues):
 | `tab_home`, `tab_key` | `doc`, `tabs`; `action` (`cycle`, `close`) | Home was opened with tabs kept; Ctrl+Tab or Ctrl+W was pressed (#138) |
 | `split_open`, `split_close`, `split_swap` | `doc`, `other`, `tabs` | Split view started, ended or swapped its panes (#139) |
 | `split_shown`, `split_resize` | `doc`, `other`, `side_by_side`, `width_dp`, `height_dp`; `percent` | How split view was laid out for the window, and the main pane's share after dragging the divider (#139) |
+| `split_snip`, `split_drop` | `doc`, `page`; `other`, `kind` (`text`, `image`, `cancelled`, `failed`), `linked`, `ms` | An area was marked in the other pane, and what dropping it on the document in front made, whether it got a back-link, and how long it took (#139) |
+| `split_link` | `doc`, `other`, `pane` | A back-link to a document already open went to the other pane (`pane=true`) or its tab, without reopening it (#139) |
 
 Failures in these steps also write an `[error] failed area=viewer stage=…` line (`comments_hide`,
 `reading_colors`, `clean_copy`, `unlocked_copy`, `external_show`).

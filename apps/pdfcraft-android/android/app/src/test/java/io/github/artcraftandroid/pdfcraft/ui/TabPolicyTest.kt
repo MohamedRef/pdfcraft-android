@@ -66,4 +66,22 @@ class TabPolicyTest {
             TabPolicy.decode("doc:5\tNo source\ncontent://a/1\tx\ncontent://a/1\ty\nnot a line"),
         )
     }
+
+    @Test
+    fun aDroppedSnipStaysOnThePageAndFits() {
+        // top-left at the drop point
+        assertEquals(listOf(100f, 200f, 300f, 250f), SplitDrop.place(100f, 200f, 200f, 50f, 612f, 792f, centred = false).toList())
+        // centred, pushed back inside the page at its right edge
+        assertEquals(listOf(412f, 0f, 612f, 100f), SplitDrop.place(600f, 10f, 200f, 100f, 612f, 792f, centred = true).toList())
+        // larger than the page: shrunk to fit, keeping its shape
+        val big = SplitDrop.place(0f, 0f, 1224f, 396f, 612f, 792f, centred = true)
+        assertEquals(612f, big[2] - big[0], 0.01f)
+        assertEquals(198f, big[3] - big[1], 0.01f)
+    }
+
+    @Test
+    fun aMarkedAreaIsNormalisedAndTinyOnesIgnored() {
+        assertEquals(listOf(10f, 20f, 110f, 70f), SplitDrop.area(110f, 70f, 10f, 20f)!!.toList())
+        assertNull(SplitDrop.area(10f, 10f, 12f, 40f))
+    }
 }

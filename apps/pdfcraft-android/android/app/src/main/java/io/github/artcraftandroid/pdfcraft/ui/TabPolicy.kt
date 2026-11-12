@@ -55,3 +55,30 @@ internal object TabPolicy {
             uri to line.substring(cut + 1)
         }.distinctBy { it.first }
 }
+
+/** Where a dropped snip goes (#139). */
+internal object SplitDrop {
+    /** Pixels per point a snip without text is copied at (144 dpi). */
+    const val SNIP_SCALE = 2f
+
+    /**
+     * The box [w] × [h] points for a drop at ([x], [y]) on a page [pageW] × [pageH]: its top-left
+     * at the point, or [centred] on it, shrunk to fit and kept on the page.
+     */
+    fun place(x: Float, y: Float, w: Float, h: Float, pageW: Float, pageH: Float, centred: Boolean): FloatArray {
+        var bw = w.coerceAtLeast(8f)
+        var bh = h.coerceAtLeast(8f)
+        val fit = minOf(1f, pageW / bw, pageH / bh)
+        bw *= fit
+        bh *= fit
+        val x0 = (if (centred) x - bw / 2f else x).coerceIn(0f, (pageW - bw).coerceAtLeast(0f))
+        val y0 = (if (centred) y - bh / 2f else y).coerceIn(0f, (pageH - bh).coerceAtLeast(0f))
+        return floatArrayOf(x0, y0, x0 + bw, y0 + bh)
+    }
+
+    /** The area a drag from [a] to [b] marks (points on one page), or null when too small to mean anything. */
+    fun area(ax: Float, ay: Float, bx: Float, by: Float, min: Float = 6f): FloatArray? {
+        val r = floatArrayOf(minOf(ax, bx), minOf(ay, by), maxOf(ax, bx), maxOf(ay, by))
+        return r.takeIf { it[2] - it[0] >= min && it[3] - it[1] >= min }
+    }
+}

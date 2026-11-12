@@ -11,6 +11,9 @@ import io.github.artcraftandroid.pdfcraft.engine.Diag
 import io.github.artcraftandroid.pdfcraft.engine.DiagArea
 import io.github.artcraftandroid.pdfcraft.engine.Engine
 import io.github.artcraftandroid.pdfcraft.ui.viewer.ViewerTool
+import androidx.compose.ui.graphics.asAndroidBitmap
+import io.github.artcraftandroid.pdfcraft.engine.userMessage
+import io.github.artcraftandroid.pdfcraft.ui.viewer.hex
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.withLock
 
@@ -38,6 +41,9 @@ class DocTab(val key: String, title: String) {
  * again from their file when chosen. The tab list outlives the process, so after Android closes
  * the app the tabs come back (parked).
  */
+/** An area marked in the read-only pane (#139): [rect] in points on [page] of [doc]. */
+class Snip(val doc: OpenDocument, val page: Int, val rect: FloatArray)
+
 class TabsController internal constructor(private val vm: AppViewModel) {
     /** The tabs, in strip order. The one whose [DocTab.doc] is [AppViewModel.document] is in front. */
     var tabs by mutableStateOf(restore())
@@ -116,10 +122,13 @@ class TabsController internal constructor(private val vm: AppViewModel) {
 
     /** Bring [tab]'s document to the front as it was left: Reading Mode and its tool. */
     internal fun front(tab: DocTab, doc: OpenDocument) {
+        val before = vm.document
         vm.document = doc
         vm.readingMode = tab.reading
         tab.lastUsed = android.os.SystemClock.elapsedRealtime()
-        if (splitWith === doc) splitWith = null
+        // editing moved to the other pane: the document that was in front stays in its pane
+        if (splitWith === doc) splitWith = swapBack?.takeIf { it === before && it !== doc && tabs.any { t -> t.doc === it } }
+        swapBack = null
         if (tab.tool != ViewerTool.None && !tab.reading) vm.enterTool(doc, tab.tool)
         tab.tool = ViewerTool.None
     }
@@ -241,6 +250,7 @@ class TabsController internal constructor(private val vm: AppViewModel) {
         val doc = tab.doc
         if (doc == null || doc === vm.document) return
         splitWith = doc
+        splitFirst = vm.document
         tab.lastUsed = android.os.SystemClock.elapsedRealtime()
         Diag.event(DiagArea.Viewer, "split_open", "doc" to vm.document?.diagNumber, "other" to doc.diagNumber, "tabs" to tabs.size)
     }
@@ -248,16 +258,130 @@ class TabsController internal constructor(private val vm: AppViewModel) {
     fun closeSplit() {
         val other = splitWith ?: return
         splitWith = null
+        snip = null
+        snipping = false
         Diag.event(DiagArea.Viewer, "split_close", "doc" to vm.document?.diagNumber, "other" to other.diagNumber)
     }
 
-    /** Swap the panes: the second pane's document comes to the front for editing. */
+    /**
+     * Edit in the other pane (#139): its document comes to the front with the whole editing
+     * viewer, and the one that was in front stays where it is, read-only. The panes keep their places.
+     */
     fun swapSplit() {
         val other = splitWith ?: return
         val current = vm.document ?: return
         val tab = tabs.firstOrNull { it.doc === other } ?: return
+        snip = null
+        snipping = false
         Diag.event(DiagArea.Viewer, "split_swap", "doc" to current.diagNumber, "other" to other.diagNumber)
-        switchTo(tab) { if (vm.document === other && current.let { c -> tabs.any { it.doc === c } }) splitWith = current }
+        swapBack = current
+        switchTo(tab)
+    }
+
+    private var swapBack: OpenDocument? = null
+
+    /** The document in the first pane (start or top), so panes keep their places when editing moves. */
+    var splitFirst by mutableStateOf<OpenDocument?>(null)
+        private set
+
+    // ---- dragging between the panes (#139) --------------------------------------------------------
+
+    /** Snip mode in the read-only pane: a drag marks an area to copy across. */
+    var snipping by mutableStateOf(false)
+
+    /** The area marked in the read-only pane, waiting to be dragged onto the other one. */
+    var snip by mutableStateOf<Snip?>(null)
+
+    /**
+     * [snip] was dropped at [at] on the document in front: its text becomes a text box there
+     * (an image of the area when it has no text), with a link back to the source page as a
+     * standard GoToR action, so it also works in other readers.
+     */
+    fun drop(snip: Snip, at: io.github.artcraftandroid.pdfcraft.ui.viewer.PagePoint) {
+        val target = vm.document ?: return
+        val source = snip.doc
+        this.snip = null
+        if (source === target) return
+        if (!target.info.allowsAnnotation) {
+            vm.tell(target.info.readOnlyReason ?: vm.getApplication<android.app.Application>().getString(io.github.artcraftandroid.pdfcraft.R.string.msg_tool_blocked_security))
+            return
+        }
+        val eng = vm.engine ?: return
+        val page = target.info.pages.getOrNull(at.page) ?: return
+        val started = android.os.SystemClock.elapsedRealtime()
+        vm.viewModelScope.launch {
+            try {
+                val r = snip.rect
+                val text = runCatching {
+                    eng.tool("text_extract", mapOf("doc" to source.id, "pages" to listOf(snip.page + 1), "rect" to r.map { it.toDouble() }))
+                        .optJSONArray("pages")?.optJSONObject(0)?.optString("text")?.trim()
+                }.getOrNull().orEmpty()
+                val box: FloatArray
+                val kind: String
+                if (text.isNotEmpty()) {
+                    val size = 12f
+                    val (lines, w, h) = FreeTextLayout.layout(text, size, (page.width - at.x - 6f).coerceAtLeast(size * 4))
+                    box = SplitDrop.place(at.x, at.y, w, h, page.width, page.height, centred = false)
+                    eng.tool("comment_add", mapOf(
+                        "doc" to target.id, "page" to at.page + 1, "type" to "textbox", "rect" to box.map { it.toDouble() },
+                        "contents" to lines.joinToString("\n"), "color" to vm.toolPrefs.color(io.github.artcraftandroid.pdfcraft.ui.viewer.StyledTool.FreeText).hex(),
+                        "font_size" to size.toDouble(), "author" to vm.commenting.author,
+                    ))
+                    kind = "text"
+                } else {
+                    val scale = SplitDrop.SNIP_SCALE
+                    val tile = io.github.artcraftandroid.pdfcraft.core.TileRect(
+                        (r[0] * scale).toInt().coerceAtLeast(0).toUInt(), (r[1] * scale).toInt().coerceAtLeast(0).toUInt(),
+                        ((r[2] - r[0]) * scale).toInt().coerceAtLeast(1).toUInt(), ((r[3] - r[1]) * scale).toInt().coerceAtLeast(1).toUInt(),
+                    )
+                    val image = source.images.renderRegion(snip.page, scale, tile) ?: throw IllegalStateException("snip render failed")
+                    val file = vm.tempFile("png")
+                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                        file.outputStream().use { image.asAndroidBitmap().compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+                    }
+                    box = SplitDrop.place(at.x, at.y, r[2] - r[0], r[3] - r[1], page.width, page.height, centred = true)
+                    try {
+                        eng.tool("page_add_image", mapOf("doc" to target.id, "page" to at.page + 1, "path" to file.absolutePath, "rect" to box.map { it.toDouble() }))
+                    } finally {
+                        file.delete()
+                    }
+                    kind = "image"
+                }
+                // the back-link: the source file by name and its page, as a GoToR action
+                val name = io.github.artcraftandroid.pdfcraft.ui.viewer.linkFileName(source.name)
+                if (name != null) {
+                    eng.tool("link_add", mapOf("doc" to target.id, "page" to at.page + 1, "rect" to box.map { it.toDouble() }, "file" to name, "to_page" to snip.page + 1))
+                }
+                vm.refresh(target)
+                Diag.event(DiagArea.Viewer, "split_drop", "doc" to target.diagNumber, "other" to source.diagNumber, "kind" to kind, "linked" to (name != null), "ms" to android.os.SystemClock.elapsedRealtime() - started)
+                vm.tell(vm.getApplication<android.app.Application>().getString(if (name != null) io.github.artcraftandroid.pdfcraft.R.string.tabs_drop_linked else io.github.artcraftandroid.pdfcraft.R.string.tabs_drop_done))
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Diag.event(DiagArea.Viewer, "split_drop", "doc" to target.diagNumber, "other" to source.diagNumber, "kind" to "failed")
+                vm.tell(e.userMessage)
+                vm.refresh(target)
+            }
+        }
+    }
+
+    /**
+     * A link to page [page] (0-based) of the PDF at [uri] (#139 back-links, #334): when that
+     * document is open in the other pane it scrolls there; in another tab, that tab comes to the
+     * front on that page. Returns false when it isn't open, so the caller opens it.
+     */
+    fun followLink(uri: String, page: Int): Boolean {
+        val other = splitWith
+        if (other != null && other.source?.toString() == uri) {
+            if (page in 0 until other.pageCount) other.viewer.goToPage(page)
+            Diag.event(DiagArea.Viewer, "split_link", "doc" to vm.document?.diagNumber, "other" to other.diagNumber, "pane" to true)
+            return true
+        }
+        val tab = tabs.firstOrNull { it.doc != null && it.key == uri } ?: return false
+        val d = tab.doc ?: return false
+        switchTo(tab) { if (vm.document === d && page in 0 until d.pageCount) { d.controller.rememberJump(d.viewer); d.viewer.goToPage(page) } }
+        Diag.event(DiagArea.Viewer, "split_link", "doc" to vm.document?.diagNumber, "other" to d.diagNumber, "pane" to false)
+        return true
     }
 
     // ---- inside ----------------------------------------------------------------------------------

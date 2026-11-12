@@ -1003,6 +1003,8 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 tell(text(R.string.link_file_missing, io.github.artcraftandroid.pdfcraft.ui.viewer.linkFileBaseName(file)))
                 return@launch
             }
+            // open in the other pane or another tab (#139 back-links): go there, nothing reopens
+            if (tabs.followLink(target.uri, page)) return@launch
             linkOpenPage = target.uri to page
             open(Uri.parse(target.uri))
         }

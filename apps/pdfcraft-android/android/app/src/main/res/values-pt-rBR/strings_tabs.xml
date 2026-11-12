@@ -7,10 +7,15 @@
     <string name="tabs_split">Visualização dividida</string>
     <string name="tabs_split_close">Fechar visualização dividida</string>
     <string name="tabs_split_choose">Mostrar ao lado deste documento</string>
-    <string name="tabs_split_read_only">Somente leitura · página %1$d de %2$d</string>
-    <string name="tabs_split_swap">Trocar</string>
     <string name="tabs_close_all">Fechar tudo</string>
     <string name="tabs_resume">Voltar aos documentos</string>
+    <string name="tabs_split_edit_here">Editar aqui</string>
+    <string name="tabs_snip">Copiar uma área</string>
+    <string name="tabs_snip_hint">Arraste sobre a área a copiar</string>
+    <string name="tabs_snip_drag">Arraste para o outro documento</string>
+    <string name="tabs_drop_linked">Adicionado, com um link para a página de origem</string>
+    <string name="tabs_drop_done">Adicionado</string>
+    <string name="tabs_drop_off_page">Solte em uma página</string>
     <plurals name="tabs_open_count">
         <item quantity="one">%1$d documento aberto</item>
         <item quantity="many">%1$d documentos abertos</item>
