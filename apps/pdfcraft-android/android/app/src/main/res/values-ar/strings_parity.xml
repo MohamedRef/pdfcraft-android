@@ -160,4 +160,21 @@
         <item quantity="many">%1$d حالة حجب زائف محتملة:</item>
         <item quantity="other">%1$d حالة حجب زائف محتملة:</item>
     </plurals>
+    <string name="compare_title">مقارنة الملفات</string>
+    <string name="compare_about">اعرف ما تغيّر بين نسختين من ملف PDF</string>
+    <string name="compare_with_older">مقارنة بنسخة أقدم</string>
+    <string name="compare_busy">جارٍ المقارنة…</string>
+    <string name="compare_against">التغييرات منذ %1$s</string>
+    <string name="compare_identical">النص متطابق في الملفين</string>
+    <string name="compare_counts">%1$d مستبدل · %2$d مضاف · %3$d محذوف</string>
+    <string name="compare_mark">إضافة كتعليقات</string>
+    <string name="compare_marked">تمت إضافة %1$d تعليق</string>
+    <string name="compare_report">حفظ تقرير PDF</string>
+    <string name="compare_report_saved">تم حفظ التقرير</string>
+    <string name="compare_visual">مقارنة شكل الصفحات</string>
+    <string name="compare_kind_replaced">مستبدل</string>
+    <string name="compare_kind_inserted">مضاف</string>
+    <string name="compare_kind_deleted">محذوف</string>
+    <string name="compare_kind_visual">يبدو مختلفًا</string>
+    <string name="compare_page">صفحة %1$d</string>
 </resources>

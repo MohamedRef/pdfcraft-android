@@ -214,6 +214,7 @@ fun Modifier.toolGestures(
         var touchTravel = 0f
         var zoomDrift = 0f
         var endTime = down.uptimeMillis
+        val diag = if (io.github.artcraftandroid.pdfcraft.engine.Diag.enabled()) GestureDiag(down.uptimeMillis, down.type.toolPointer(), route.role) else null
         if (one) { onPenDownMode(route.mode); onDown(last, lastPressure, route.activePen) }
         if (eraseOne) onEraserDown(last)
         fun dispatchPenMotion(change: androidx.compose.ui.input.pointer.PointerInputChange) {
@@ -249,6 +250,7 @@ fun Modifier.toolGestures(
                     if (one) onCancel()
                     if (eraseOne) onEraserCancel()
                     activeId = arrivingPen.id
+                    diag?.penArrived = true
                     val role = route.penArrives(
                         arrivingPen.type.toolPointer(), arrivingPen.position,
                         event.buttons.isPrimaryPressed || event.buttons.isSecondaryPressed, penButtonHold,
@@ -266,6 +268,7 @@ fun Modifier.toolGestures(
                 // splits or erases the stroke being written (#82, #144).
                 // Touch/palm pointers do not replace or interrupt an active pen or eraser tip.
                 if (route.activePen) {
+                    if (active != null) endTime = maxOf(endTime, active.uptimeMillis)
                     if (active == null || !active.pressed) {
                         if (active?.isConsumed == true) {
                             if (one) onCancel()
@@ -318,7 +321,9 @@ fun Modifier.toolGestures(
                 if (active == null || !active.pressed) { onCancel(); one = false; continue }
                 if (active.positionChanged()) {
                     // Every batched sample of a fast finger, not one point per frame (#84).
-                    for (point in fingerMotionPoints(last, active.historical.map { it.position }, active.position)) {
+                    val points = fingerMotionPoints(last, active.historical.map { it.position }, active.position)
+                    diag?.let { it.fingerEvents++; it.fingerSamples += points.size }
+                    for (point in points) {
                         route.motion(point)
                         last = point
                         onMove(point, active.pressure, false)
@@ -327,6 +332,7 @@ fun Modifier.toolGestures(
                 }
             }
             if (eraseOne) onEraserUp(last) else if (one) onUp(last, route.moved)
+            diag?.log(route, maxTouches, endTime, cancelled = false)
             if (!route.activePen && !palm && !overlay && onMultiFingerTap != null) {
                 multiFingerTapFingers(maxTouches, endTime - down.uptimeMillis, touchTravel + if (route.moved) Float.MAX_VALUE else 0f, zoomDrift, viewConfiguration.touchSlop)
                     ?.let(onMultiFingerTap)
@@ -334,6 +340,7 @@ fun Modifier.toolGestures(
         } catch (e: kotlinx.coroutines.CancellationException) {
             if (one) onCancel()
             if (eraseOne) onEraserCancel()
+            diag?.log(route, maxTouches, endTime, cancelled = true)
             throw e
         }
     }
@@ -557,6 +564,7 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
     val savedSelected = remember { mutableStateListOf<io.github.artcraftandroid.pdfcraft.core.CommentInfo>() }
     var moveAnchor by remember { mutableStateOf<Offset?>(null) }
     var moveOffset by remember { mutableStateOf(Offset.Zero) }
+    val lassoDrag = remember { LassoDragDiag() }
     var moving by remember { mutableStateOf(false) }
     fun clearSelection() { selected.clear(); savedSelected.clear(); lassoPage = null; lassoPoints.clear(); moving = false; moveAnchor = null; moveOffset = Offset.Zero }
     /** Every selected outline in page points: draft stroke points and saved comments' rectangles. */
@@ -755,6 +763,8 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
     }
     var eraserPage by remember { mutableStateOf<Int?>(null) }
     val eraserPoints = remember { mutableStateListOf<Offset>() }
+    /** Chunks of the current eraser gesture sent before lift, for the diagnostics log (#76). */
+    val eraserChunks = remember { intArrayOf(0) }
     var eraserScreen by remember { mutableStateOf<Offset?>(null) }
     // Snapshot for the duration of a gesture: slider changes never resize an in-flight erase.
     var activeEraserRadius by remember { mutableFloatStateOf(prefs.eraserRadius) }
@@ -854,6 +864,7 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
         eraserScreen = p
         eraserPoints.clear()
         eraserPoints.add(Offset(at.x, at.y))
+        eraserChunks[0] = 0
     }
 
     fun moveErase(p: Offset) {
@@ -863,6 +874,7 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
         eraserScreen = p
         appendEraserPoint(eraserPoints, Offset(at.x, at.y), activeEraserRadius)?.let { chunk ->
             // A very long gesture erases its finished part now; the rest follows on lift (#76).
+            eraserChunks[0]++
             documentEdit("comment_erase", inkEraseCommand(page, chunk, activeEraserRadius.toDouble()))
         }
     }
@@ -877,7 +889,9 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
         val page = eraserPage ?: return
         moveErase(p)
         val path = eraserPoints.toList()
+        val radius = activeEraserRadius
         cancelErase()
+        logEraseGesture(path.size, eraserChunks[0], radius)
         if (path.isNotEmpty()) {
             // One native Edit::Batch per gesture, including freehand marker Ink.
             documentEdit("comment_erase", inkEraseCommand(page, path, activeEraserRadius.toDouble()))
@@ -926,12 +940,14 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
         if (moving) {
             val anchor = moveAnchor ?: return
             val pageSize = doc.viewer.pages.getOrNull(page) ?: return
-            moveOffset = boundedInkLassoMove(
-                selectionBounds,
-                point - anchor,
-                pageSize.width,
-                pageSize.height,
-            )
+            moveOffset = lassoDrag.time {
+                boundedInkLassoMove(
+                    selectionBounds,
+                    point - anchor,
+                    pageSize.width,
+                    pageSize.height,
+                )
+            }
         } else {
             addInkLassoPoint(lassoPoints, point)
         }
@@ -957,6 +973,7 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
         val page = lassoPage ?: return
         moveLasso(p)
         if (moving) {
+            lassoDrag.end(selected.size, savedSelected.size, moveOffset != Offset.Zero)
             if (moveOffset != Offset.Zero) {
                 if (selected.isNotEmpty()) {
                     val edit = DraftInkEdit.Moved(selected.toList(), moveOffset)
@@ -978,7 +995,18 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
             moveOffset = Offset.Zero
             return
         }
-        selectInLoop(page, lassoPoints.toList())
+        val loop = lassoPoints.toList()
+        // How long finding what a loop encloses takes on the phone (#85).
+        io.github.artcraftandroid.pdfcraft.engine.Diag.measure(
+            io.github.artcraftandroid.pdfcraft.engine.DiagArea.Ink, "lasso_select",
+            "points" to loop.size, "drafts" to strokes.size, "saved_comments" to doc.comments.size,
+        ) { selectInLoop(page, loop) }
+        if (io.github.artcraftandroid.pdfcraft.engine.Diag.enabled()) {
+            io.github.artcraftandroid.pdfcraft.engine.Diag.event(
+                io.github.artcraftandroid.pdfcraft.engine.DiagArea.Ink, "lasso_selected",
+                "strokes" to selected.size, "saved" to savedSelected.size,
+            )
+        }
     }
 
 
@@ -1238,7 +1266,9 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                         s.pressures.addAll(List(shape.size) { 1f })
                     }
                     // Cut at the page edge: what is off the page is dropped (#75).
+                    val pointsIn = s.points.size
                     val pieces = clipStrokeToPage(s)
+                    if (pieces.singleOrNull() !== s) logStrokeClip(pointsIn, pieces)
                     if (pieces.isNotEmpty()) {
                         edits.add(DraftInkEdit.Added(pieces))
                         undone.clear()
@@ -1255,6 +1285,7 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                 endWet()
                 if (doc.controller.lassoMode) {
                     if (moving) {
+                        lassoDrag.end(selected.size, savedSelected.size, moved = false)
                         moving = false
                         moveAnchor = null
                         moveOffset = Offset.Zero

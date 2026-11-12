@@ -2,6 +2,7 @@ package io.github.artcraftandroid.pdfcraft.ui
 
 import io.github.artcraftandroid.pdfcraft.ui.viewer.ViewLayout
 import io.github.artcraftandroid.pdfcraft.ui.viewer.recognizeText
+import io.github.artcraftandroid.pdfcraft.ui.viewer.startCompare
 import io.github.artcraftandroid.pdfcraft.ui.home.FileTool
 import io.github.artcraftandroid.pdfcraft.ui.viewer.FillElement
 import androidx.compose.ui.graphics.asImageBitmap
@@ -2072,6 +2073,8 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
 
     /** Redact: marks, the box being drawn, the look, and the checks after applying (#163). */
     val redact = io.github.artcraftandroid.pdfcraft.ui.viewer.RedactState()
+    /** Compare files: the older document and the differences found (#171). */
+    val compare = io.github.artcraftandroid.pdfcraft.ui.viewer.CompareState()
 
     /** A finished job's green banner over the viewer's bar, with Undo. */
     var success by mutableStateOf<SuccessBanner?>(null)
@@ -5129,6 +5132,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             FileTool.Ocr -> recognizeText(doc)
             FileTool.Draw -> enterTool(doc, ViewerTool.Draw)
             FileTool.Split -> { organizing = true; doc.controller.pagesOpen = true; splitOpen = true }
+            FileTool.Compare -> startCompare(doc)
         }
     }
 
