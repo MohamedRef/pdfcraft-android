@@ -1506,6 +1506,10 @@
     <string name="edit_label_lock_comment">قفل التعليق</string>
     <string name="edit_label_unlock_comment">إلغاء قفل التعليق</string>
     <string name="edit_label_move_comment">نقل التعليق</string>
+    <string name="edit_label_edit_attachment_description">تعديل وصف المرفق</string>
+    <string name="edit_label_open_comment_popup">فتح النافذة المنبثقة للتعليق</string>
+    <string name="edit_label_close_comment_popup">إغلاق النافذة المنبثقة للتعليق</string>
+    <string name="edit_label_move_comment_popup">نقل النافذة المنبثقة للتعليق</string>
     <string name="edit_label_reshape_comment">إعادة تشكيل التعليق</string>
     <string name="edit_label_resize_comment">تغيير حجم التعليق</string>
     <string name="edit_label_change_comment_properties">تغيير خصائص التعليق</string>

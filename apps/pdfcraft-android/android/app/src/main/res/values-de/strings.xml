@@ -1713,6 +1713,10 @@
     <string name="edit_label_lock_comment">Kommentar sperren</string>
     <string name="edit_label_unlock_comment">Kommentar entsperren</string>
     <string name="edit_label_move_comment">Kommentar verschieben</string>
+    <string name="edit_label_edit_attachment_description">Anhangsbeschreibung bearbeiten</string>
+    <string name="edit_label_open_comment_popup">Kommentar-Pop-up öffnen</string>
+    <string name="edit_label_close_comment_popup">Kommentar-Pop-up schließen</string>
+    <string name="edit_label_move_comment_popup">Kommentar-Pop-up verschieben</string>
     <string name="edit_label_reshape_comment">Kommentarform ändern</string>
     <string name="edit_label_resize_comment">Kommentargröße ändern</string>
     <string name="edit_label_change_comment_properties">Kommentareigenschaften ändern</string>

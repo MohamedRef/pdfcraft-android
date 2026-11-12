@@ -4921,7 +4921,9 @@ fn the_eraser_densifies_within_a_total() {
         "<< /Type /Page /Parent 2 0 R /Annots [4 0 R] >>".into(),
         format!("<< /Type /Annot /Subtype /Ink /Rect [0 0 5000 2100] /InkList [[{zigzag}]] >>"),
     ]);
-    match erase_ink(&mut doc, 0, 0, &[[1.0, 1.0]], 0.01, &meta("")) {
+    // Android's eraser densifies only the segments it can reach (#77), so the path crosses every
+    // segment of the zigzag: 2099 segments at the 2000-sample clamp are past the total.
+    match erase_ink(&mut doc, 0, 0, &[[2500.0, 0.0], [2500.0, 2100.0]], 0.01, &meta("")) {
         Err(AnnotError::Invalid(m)) => assert!(m.contains("too large to erase"), "{m}"),
         other => panic!("refused: {other:?}"),
     }

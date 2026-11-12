@@ -2067,6 +2067,10 @@
     <string name="edit_label_lock_comment">Lock comment</string>
     <string name="edit_label_unlock_comment">Unlock comment</string>
     <string name="edit_label_move_comment">Move comment</string>
+    <string name="edit_label_edit_attachment_description">Edit attachment description</string>
+    <string name="edit_label_open_comment_popup">Open comment pop-up</string>
+    <string name="edit_label_close_comment_popup">Close comment pop-up</string>
+    <string name="edit_label_move_comment_popup">Move comment pop-up</string>
     <string name="edit_label_reshape_comment">Reshape comment</string>
     <string name="edit_label_resize_comment">Resize comment</string>
     <string name="edit_label_change_comment_properties">Change comment properties</string>

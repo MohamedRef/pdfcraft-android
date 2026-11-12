@@ -32,6 +32,8 @@ Hand-resolved conflicts. In each, both sides are kept:
 - `render/src/inspect/core.rs`: upstream's shared field-text allowance (storytold/pdfcraft#6015) and layer order, inside Android's open-timing measurements.
 - `engine/src/open.rs`: upstream's `with_highlight` beside Android's two-stage reading open.
 - Shared immutable input (`PdfBytes` instead of `Arc<Vec<u8>>`): `cos/src/document/state.rs`, `engine/src/actions.rs`, `engine/src/ocr.rs`, `engine/src/session/files.rs`, `engine/src/sources.rs`, `automation/src/batch.rs` take upstream's new parameters (JavaScript preference, Office conversion, #5081 page-source checks) with Android's byte type.
+- Two upstream tests adapted to Android behavior, same assertions: `the_eraser_densifies_within_a_total` erases across every segment of its zigzag, since the Android eraser densifies only the segments it can reach; `form_fill_cannot_print_but_js_run_can` reads the scripts' output from the `form_fill` result, where Android returns it.
+- Edit history: the four new engine wordings (attachment description, open/close/move comment pop-up) are translated in `EditLabels.kt` and every `strings.xml`.
 - Tests (`annot/src/tests.rs`, `engine/src/tests.rs`, `forms/src/tests.rs`, `automation/tests/it/main.rs`): both sides' tests kept. Upstream's tests use `PdfBytes` where they pass bytes by reference. `model_3d`/`model_render` test modules stay unregistered.
 
 New adaptations, needed after the merge so the build compiles with the shared input type:
@@ -53,7 +55,7 @@ New adaptations, needed after the merge so the build compiles with the shared in
 
 ## Tools
 
-The mobile table has 208 tools: the earlier 203 plus upstream's `attachment_edit`, `comment_popup`, `doc_convert_colours`, `doc_printer_marks` and `text_replace`. They have no dedicated Android UI yet. The bridge regression `upgraded_tool_table_preserves_mobile_tools_and_adds_stable_021_schemas` checks them.
+The mobile table has 211 tools: the earlier 203 plus upstream's `attachment_edit`, `comment_popup`, `doc_convert_colours`, `doc_printer_marks`, `form_focus`, `js_event`, `printer_papers` and `text_replace`. They have no dedicated Android UI yet. `printer_papers` asks a desktop print system (CUPS), which Android doesn't have. The bridge regression `upgraded_tool_table_preserves_mobile_tools_and_adds_stable_021_schemas` checks them.
 
 Office files (Word, Excel, PowerPoint) convert through LibreOffice upstream. LibreOffice isn't on Android, so that path reports that it isn't installed.
 
