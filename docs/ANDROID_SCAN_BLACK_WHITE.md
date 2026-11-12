@@ -17,7 +17,7 @@ the page with one bit per pixel. In the app it is the **Light text** filter. Cod
      the pixel may belong to. Small on purpose, so a pale line next to bold print is measured
      against its own darkness and not the print's.
 3. **Ink** is a pixel below the middle of the two, where they are at least a gate apart. The gate
-   is the strength setting: `60 − 0.4 × strength` grey levels, so 36 at the default 55 and 30 at
+   is the strength setting: `60 − 0.4 × strength` grey levels, so 38 at the default 55 and 30 at
    75 (Light text). A pale stroke and a bold one each get the threshold halfway up their own
    edge; where the two values are close there is nothing to separate and the pixel is paper.
 4. **Solid dark areas.** Inside a filled area both values are dark and close together. A pixel
