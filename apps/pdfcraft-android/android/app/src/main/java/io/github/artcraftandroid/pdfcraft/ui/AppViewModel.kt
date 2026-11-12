@@ -916,6 +916,11 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             editor.editSelection = null
             editor.editImage = null
             editor.imageEdit.crop = null
+            if (editor.objectSelect.doc === doc) {
+                editor.objectSelect.doc = null
+                editor.objectSelect.objects = emptyList()
+                editor.objectSelect.selected = emptySet()
+            }
             editor.editMode = io.github.artcraftandroid.pdfcraft.ui.viewer.EditMode.Select
         }
         if (signing.certPlacing === doc) signing.certPlacing = null
