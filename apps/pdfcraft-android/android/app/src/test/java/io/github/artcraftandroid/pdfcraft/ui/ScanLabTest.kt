@@ -146,6 +146,8 @@ class ScanLabTest {
     fun aKeptPageSaysWhatTheTestSetNeedsAndHowTheAppGotThere() {
         val finding = ScanFinding("model", 0.8349, 0, 1, 4, 0)
         val json = JSONObject(scanTestPageJson("0.0.26-beta (26001)", true, crop, crop, finding, "auto", 60, true, ScanLab(strength = 60), "page-01.out.jpg", result, ScanTestPreview(true, true, 412, 905, 1280, "auto")))
+        // #425: nobody has checked the corners yet, so scan-eval leaves the page out until someone sets this
+        assertFalse(json.getBoolean("checked"))
         // the last preview shown before saving (#301)
         val shown = json.getJSONObject("preview")
         assertTrue(shown.getBoolean("shown") && shown.getBoolean("reused"))

@@ -24,6 +24,8 @@ pub mod enhance;
 mod error;
 #[cfg(any(test, feature = "synth"))]
 pub mod eval;
+#[cfg(any(test, feature = "synth"))]
+pub mod eval_set;
 pub mod exif;
 pub mod flatten;
 pub mod flatten_guard;
@@ -86,6 +88,8 @@ mod tests_inspect;
 mod tests_detect;
 #[cfg(test)]
 mod tests_eval;
+#[cfg(test)]
+mod tests_eval_set;
 #[cfg(test)]
 mod tests_flatten;
 #[cfg(test)]
