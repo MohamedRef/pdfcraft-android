@@ -125,6 +125,8 @@ class Engine private constructor(val session: MobileSession) {
             initLogging()
             val session = MobileSession()
             session.setPrivateInputRoot(context.filesDir.absolutePath)
+            // Scan reads camera photos and writes page images only inside the cache directory
+            io.github.artcraftandroid.pdfcraft.core.scanSetRoot(context.cacheDir.absolutePath)
             return Engine(session)
         }
 

@@ -112,9 +112,31 @@ class DiagnosticsTest {
         assertEquals("PdfCraft diagnostics log", text.lines()[0])
         assertTrue("app: 0.0.24-beta (24012)" in text.lines())
         assertTrue("  [open] 2 · #211 #212 #234 #235 #317" in text.lines())
-        assertTrue("  [ink] 1 · #128" in text.lines())
+        assertTrue("  [ink] 1 · #74 #75 #76 #81 #84 #85 #128" in text.lines())
         assertTrue(text.lines().indexOf(lines[0]) < text.lines().indexOf(lines[2]))
     }
 
     private enum class TestLook { AutoColor }
+
+    @Test
+    fun viewerLinesKeepTheirEnumValues() {
+        // the viewer's log values are enums and numbers: none of them may come out redacted (#152 #153 #155 #157)
+        val line = diagLine(
+            LocalDateTime.of(2026, 11, 11, 21, 0), DiagArea.Viewer, "layout_open",
+            listOf(
+                "mode" to io.github.artcraftandroid.pdfcraft.ui.viewer.PageMode.Horizontal,
+                "spread" to io.github.artcraftandroid.pdfcraft.ui.viewer.Spread.TwoUpCover,
+                "action" to io.github.artcraftandroid.pdfcraft.ui.viewer.ViewerShortcut.ZoomIn,
+                "layout" to io.github.artcraftandroid.pdfcraft.ui.OpenLayout.TwoUpContinuousCover,
+                "colors" to io.github.artcraftandroid.pdfcraft.ui.viewer.ReadingColors.YellowOnBlack,
+                "turn" to io.github.artcraftandroid.pdfcraft.ui.viewer.PresentGesture.TapNext,
+                "source" to "remembered",
+            ),
+        )
+        assertEquals(
+            "11-11 21:00:00.000 [viewer] layout_open mode=horizontal spread=twoupcover action=zoomin layout=twoupcontinuouscover colors=yellowonblack turn=tapnext source=remembered",
+            line,
+        )
+        assertFalse(line.contains(Diag.REDACTED))
+    }
 }

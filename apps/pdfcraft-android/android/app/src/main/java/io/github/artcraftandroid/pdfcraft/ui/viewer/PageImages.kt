@@ -247,6 +247,12 @@ class PageImages(
                 Log.w("PdfCraft", "render of ${r.key} failed: ${e.message}")
                 io.github.artcraftandroid.pdfcraft.engine.Diag.failure(io.github.artcraftandroid.pdfcraft.engine.DiagArea.Render, "page_render", e)
                 val wait = synchronized(lock) { failures.record(r.key, android.os.SystemClock.elapsedRealtime()) }
+                // Retried after wait_ms, or left out until the next edit when gave_up (#99).
+                io.github.artcraftandroid.pdfcraft.engine.Diag.event(
+                    io.github.artcraftandroid.pdfcraft.engine.DiagArea.Render, "render_retry",
+                    "page" to r.key.page, "base" to r.key.isBase, "level" to r.key.level,
+                    "oom" to (e is OutOfMemoryError), "wait_ms" to wait, "gave_up" to (wait == null),
+                )
                 if (wait != null) {
                     scope.launch(job) {
                         kotlinx.coroutines.delay(wait)
@@ -269,7 +275,13 @@ class PageImages(
                 OpenTiming.count("stale_tile_dropped", 1L)
             } else if (image != null) {
                 synchronized(lock) {
-                    failures.succeeded(r.key)
+                    val failedBefore = failures.succeeded(r.key)
+                    if (failedBefore > 0) {
+                        io.github.artcraftandroid.pdfcraft.engine.Diag.event(
+                            io.github.artcraftandroid.pdfcraft.engine.DiagArea.Render, "render_recovered",
+                            "page" to r.key.page, "base" to r.key.isBase, "failed_tries" to failedBefore,
+                        )
+                    }
                     cache.put(r.key, image)?.let { bytes -= it.bytes }
                     bytes += image.bytes
                     if (r.key.isBase) {

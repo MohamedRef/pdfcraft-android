@@ -154,7 +154,10 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
     val windowWidthDp = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp
     val windowHeightDp = androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp
     LaunchedEffect(doc, vm.spreadPref, vm.spreadAuto, windowWidthDp, windowHeightDp) {
-        doc.viewer.showSpread(shownSpread(vm.spreadPref, vm.spreadAuto, windowWidthDp, windowHeightDp))
+        val shown = shownSpread(vm.spreadPref, vm.spreadAuto, windowWidthDp, windowHeightDp)
+        // the spread shown for this window: whether two pages fit, and automatic two pages (#152)
+        io.github.artcraftandroid.pdfcraft.engine.Diag.event(io.github.artcraftandroid.pdfcraft.engine.DiagArea.Viewer, "spread_shown", "doc" to doc.diagNumber, "spread" to shown, "chosen" to vm.spreadPref, "auto" to vm.spreadAuto, "width_dp" to windowWidthDp, "height_dp" to windowHeightDp)
+        doc.viewer.showSpread(shown)
     }
 
     // the reader's saved reading colours, once the engine has the whole document
@@ -352,13 +355,21 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
 
         // Presenting: taps turn pages and a drag is the laser pointer, over the page alone.
         if (ctl.presenting) {
-            PresentationLayer(doc.viewer, ctl.laser, ctl.tempInk)
+            PresentationLayer(doc.viewer, ctl.laser, ctl.tempInk) { g ->
+                when (g) {
+                    PresentGesture.Laser -> ctl.laserStrokes++
+                    PresentGesture.Ink -> ctl.inkStrokes++
+                    else -> io.github.artcraftandroid.pdfcraft.engine.Diag.event(io.github.artcraftandroid.pdfcraft.engine.DiagArea.Viewer, "present_tap", "doc" to doc.diagNumber, "turn" to g, "page" to doc.viewer.currentPage + 1)
+                }
+            }
             ExternalPresentation(doc)
         }
 
         // The active tool takes the touches over the pages.
         ToolLayer(vm, doc)
         if (ctl.tool == ViewerTool.Edit) EditOverlay(vm, doc)
+        if (ctl.tool == ViewerTool.Edit && vm.editMode == EditMode.Link) LinkLayer(vm, doc)
+        vm.linkEdit?.takeIf { it.doc === doc }?.let { LinkSheet(vm, it) }
         vm.textPrompt?.takeIf { it.doc === doc }?.let { TextEntry(vm, it, onDone = vm::postText) }
         vm.fillTextPrompt?.takeIf { it.doc === doc }?.let { TextEntry(vm, it, onDone = vm::postFillText) }
         vm.addTextPrompt?.takeIf { it.doc === doc }?.let { TextEntry(vm, it, onDone = vm::postAddText) }
@@ -648,6 +659,7 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
                 ViewerSheet.Backups -> VersionHistorySheet(vm, doc) { ctl.sheet = ViewerSheet.None }
                 ViewerSheet.NoteMargin -> NoteMarginSheet(vm, doc, listOf(doc.viewer.currentPage)) { ctl.sheet = ViewerSheet.None }
                 ViewerSheet.Redact -> RedactSheet(vm, doc)
+                ViewerSheet.Compare -> CompareSheet(vm, doc)
                 ViewerSheet.None -> Unit
             }
         }

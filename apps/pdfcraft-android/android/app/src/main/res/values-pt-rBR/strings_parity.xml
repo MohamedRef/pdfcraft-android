@@ -144,4 +144,21 @@
         <item quantity="one">%1$d possível ocultação falsa:</item>
         <item quantity="other">%1$d possíveis ocultações falsas:</item>
     </plurals>
+    <string name="compare_title">Comparar arquivos</string>
+    <string name="compare_about">Veja o que mudou entre duas versões de um PDF</string>
+    <string name="compare_with_older">Comparar com uma versão anterior</string>
+    <string name="compare_busy">Comparando…</string>
+    <string name="compare_against">Alterações desde %1$s</string>
+    <string name="compare_identical">O texto é igual nos dois</string>
+    <string name="compare_counts">%1$d substituídos · %2$d inseridos · %3$d excluídos</string>
+    <string name="compare_mark">Adicionar como comentários</string>
+    <string name="compare_marked">%1$d comentários adicionados</string>
+    <string name="compare_report">Salvar relatório PDF</string>
+    <string name="compare_report_saved">Relatório salvo</string>
+    <string name="compare_visual">Comparar a aparência das páginas</string>
+    <string name="compare_kind_replaced">Substituído</string>
+    <string name="compare_kind_inserted">Inserido</string>
+    <string name="compare_kind_deleted">Excluído</string>
+    <string name="compare_kind_visual">Aparência diferente</string>
+    <string name="compare_page">página %1$d</string>
 </resources>
