@@ -35,9 +35,9 @@ import io.github.artcraftandroid.pdfcraft.ui.viewer.runOcrBatch
 @Composable
 fun OcrBatchScreen(vm: AppViewModel) {
     val c = pdfColors
-    val s = vm.ocr
+    val s = vm.tools.ocr
     val running = s.batchRunning
-    val close = { if (s.batchRunning) vm.cancelOcrBatch() else vm.toolScreen = null }
+    val close = { if (s.batchRunning) vm.cancelOcrBatch() else vm.tools.toolScreen = null }
     ToolPage(
         stringResource(R.string.ocr_batch_title), close,
         stringResource(R.string.ocr_run), !running && s.batch.isNotEmpty() && s.batchFolder != null, { s.batchOptions = true },
