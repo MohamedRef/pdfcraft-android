@@ -325,6 +325,10 @@
     <string name="tools_filter_whiteboard">Whiteboard</string>
     <string name="tools_filter_light_text">Heller Text</string>
     <string name="tools_scan_flatten">Seite glätten</string>
+    <string name="tools_scan_view_result">Ergebnis</string>
+    <string name="tools_scan_view_photo">Foto</string>
+    <string name="tools_scan_preparing">Seite wird vorbereitet</string>
+    <string name="tools_scan_result_description">Seite %1$d, wie sie gespeichert wird</string>
 
     <!-- App dialogs: the first comment's name prompt -->
     <!-- Verb: go on without entering a name -->
@@ -1220,6 +1224,7 @@
     <string name="scan_lab_sharpen">Text schärfen (Sauberer Scan)</string>
     <string name="scan_lab_off">Aus</string>
     <string name="scan_lab_denoise">Körnung bei dunklen Fotos glätten (Sauberer Scan)</string>
+    <string name="scan_lab_preview">Seiten so zeigen, wie sie gespeichert werden</string>
     <string name="scan_lab_strength">Filterstärke</string>
     <string name="scan_lab_strength_own">Standard</string>
     <string name="scan_lab_options_body">Diese Optionen schalten Teile des Scanners ab oder ersetzen sie durch ihre Vorgänger, um herauszufinden, von welchem Teil ein Problem kommt. Das Protokoll hält für jede Seite fest, was galt.</string>

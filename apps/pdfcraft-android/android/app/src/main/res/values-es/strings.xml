@@ -332,6 +332,10 @@
     <string name="tools_filter_whiteboard">Pizarra</string>
     <string name="tools_filter_light_text">Texto claro</string>
     <string name="tools_scan_flatten">Aplanar página</string>
+    <string name="tools_scan_view_result">Resultado</string>
+    <string name="tools_scan_view_photo">Foto</string>
+    <string name="tools_scan_preparing">Preparando la página</string>
+    <string name="tools_scan_result_description">Página %1$d tal como se guardará</string>
 
     <!-- App dialogs: the first comment's name prompt -->
     <!-- Verb: go on without entering a name -->
@@ -1228,6 +1232,7 @@
     <string name="scan_lab_sharpen">Enfocar el texto (Escaneo limpio)</string>
     <string name="scan_lab_off">No</string>
     <string name="scan_lab_denoise">Suavizar el grano en fotos oscuras (Escaneo limpio)</string>
+    <string name="scan_lab_preview">Mostrar las páginas como se guardarán</string>
     <string name="scan_lab_strength">Intensidad del filtro</string>
     <string name="scan_lab_strength_own">Predeterminada</string>
     <string name="scan_lab_options_body">Estas opciones apagan partes del escáner o las cambian por lo que sustituyeron, para saber de qué parte viene un problema. El registro anota lo que estaba activo en cada página.</string>

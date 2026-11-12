@@ -33,6 +33,7 @@ on one part. While any is changed, the scan screen says so.
 | Refine edges on the full photo (#291) | On | Off: the corners are the detector's own, from its small copy of the photo |
 | Proportions from perspective (#293) | On | Off: from the lengths of the page's sides, as before |
 | Match standard paper sizes (#293) | On | Off: the page keeps the shape worked out for it |
+| Show pages as they will be saved (#301) | On | Off: the scan screen shows the camera's photo with its outline, as before; nothing is previewed |
 | Turn pages upright (#339) | On | Off: a page stays as its corners gave it |
 | Sharpen text, in Clean scan (#299) | 30 | Off, 60 or 100 |
 | Smooth grain in dim photos, in Clean scan (#299) | On | Off |
@@ -62,7 +63,8 @@ The zip also holds `diagnostics.txt`, the diagnostics log as **Share diagnostics
  "finding": {"source": "model", "confidence": 0.835, "angle": 0, "passes": 1, "refined_sides": 4, "curved_sides": 0},
  "look": "auto", "strength": 60, "flatten": false,
  "options": {"finder": "auto", "refine": true, "side_proportions": false, "snap_paper": true, "strength_override": null, "upright": true,
-             "sharpen": 30, "denoise": true},
+             "sharpen": 30, "denoise": true, "preview": true},
+ "preview": {"shown": true, "reused": true, "ms": 412, "width": 905, "height": 1280, "look": "auto"},
  "result": {"file": "page-01.out.jpg", "width": 1654, "height": 2339, "format": "jpeg", "dpi": 200.0,
             "paper": "a4", "aspect": "known_focal", "focal_mismatch": false, "flattened": false, "bend_pct": 0.0,
             "quarter_turns": 3,
@@ -75,7 +77,11 @@ The first five keys are the scan test set's format (#288, section 1), so a kept 
 set entry as it stands. `corners` are where the person left the corners: 8 shares of the upright
 photo, top-left, top-right, bottom-right, bottom-left. `found` is what the app found by itself,
 or `null`. `outcome` is `saved` or `discarded`; a discarded page has no `look`, `strength` or
-`result`.
+`result`. `preview` is the last preview the scan screen made of the page before it was saved
+(#301): `shown` is false when none was (the option off, or Save tapped before it was ready),
+`reused` whether its straightened page was kept from an earlier preview, `ms` the time from the
+request to the result, and `look` the filter it showed, which can differ from the one saved when
+the filter was changed and saved before the new preview came.
 
 ## On the desktop
 
@@ -96,7 +102,10 @@ photo collected so far.
 
 Besides what `docs/ANDROID_DIAGNOSTICS_LOG.md` lists for `scan`: every `photo` line carries the
 `finder` and `refine` in force, every `page` line the `strength` used, `side_proportions`,
-`snap_paper`, `upright`, `sharpen` and `denoise`; `test_options` is written when an option is changed, `tests_shared` (pages, bytes)
+`snap_paper`, `upright`, `sharpen` and `denoise`; every `preview` line (#301) says which page and
+filter, whether the preview was `made`, whether the straightened page was `reused`, the total `ms`
+and the native stages (`preview_base_ms`, `decode_ms`, `rectify_ms`, `preview_look_ms`, and the others
+the page needed), its `width` and `height`, `quarter_turns` and `flattened`; `test_options` is written when an option is changed, `tests_shared` (pages, bytes)
 when the zip is handed out, and `tests_cleared` when the kept scans are deleted. The log itself
 still holds no file name, path or document content.
 

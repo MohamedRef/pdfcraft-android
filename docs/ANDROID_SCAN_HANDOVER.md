@@ -29,7 +29,7 @@ a phone yet.** Every number in the scanner's documents was measured on a desktop
 | #298 | Auto look, part 1 | Core done | #346 | Phone time; the paper White / Keep control has no screen (#301) |
 | #299 | Auto look, part 2 | Part | #373 | The block photo mask, document-type presets and `scan_classify`, the recognition-error check |
 | #300 | Black and white, 1 bit | Core done | #359 | Speckle on textured grey fills; photographs wider than a quarter of the page are not dithered; 0.85 s for 12 megapixels on a desktop |
-| #301 | Filter screen | Native preview only | #376 | The whole screen: show the preview, a look per page, strength, looks strip, compare, apply to all, the session's new fields, cancel |
+| #301 | Filter screen | Preview on the scan screen | #376, #380 | A look per page, strength, looks strip, compare, apply to all, the session's new fields, cancel. Preview speed and sharpness on a phone |
 | #302 | Flatten curved pages | Switch only | #365 | The automatic mode and its quality guard (need #288's `line_straightness`), border trim, a switch per page |
 | #303 | Book mode | **Not started** | | All of it |
 | #304 | "Max quality" (DocRes) | **Not started** | | Feasibility first, as the issue says |
@@ -39,6 +39,27 @@ a phone yet.** Every number in the scanner's documents was measured on a desktop
 
 "Core done" means the code and its tests are merged and the issue's acceptance items that need
 the owner's phone or his test set are open. Each issue has a comment saying the same in detail.
+
+### Blocks already written for the open issues
+
+Before starting an item in the table, look here: part of it may exist.
+
+- **In the crate, tested, called by nothing yet** ([ANDROID_SCAN_BLOCKS.md](ANDROID_SCAN_BLOCKS.md),
+  one row per module with what its tests measured and its known gaps): `metrics_geometry`,
+  `metrics_tone`, `metrics_compare` and `straightness` for #288; `flatten_guard` for #302;
+  `photo_mask` and `preset` for #299; `book` for #303 (part A's Rust); `merge` for #297;
+  `sharpness` for #296; `upright_pages` for #339 (the multi-page rule, and a quarter turn by
+  reordering the corners, which gives Rotate without a new field in `ScanPageRequest`). Wire a
+  block in instead of writing it again; its issue stays open until it has its testing option,
+  its log fields and its kept-scan fields (section 3).
+- **Parked, never compiled or reviewed** (branch `draft/scan-app-blocks`, folder
+  `docs/scan-blocks/`, whose README says what state each file is in): Kotlin drafts for #301,
+  #295, #307 and the pure half of #294, the drawn-photo generator for #288 with one test still
+  failing, and research notes for #304, #305 and #306. Take what is useful from there and
+  review it as new code; that branch is not for merging.
+
+These came from one run of separate workers on 12 November that the owner stopped part-way.
+Every threshold in them is the issue's starting value or was set on pages drawn in code.
 
 One document per feature says how it works, what was measured and what was not:
 `ANDROID_SCAN_AUTO_LOOK.md`, `_BLACK_WHITE.md`, `_DETAIL.md`, `_DETECTOR.md`, `_EDGES.md`,
@@ -105,7 +126,9 @@ that can be pulled out of the app. So **every new scanner feature needs three th
 
 The order in #286 stands. Within it, this is what unblocks the most:
 
-1. **#301, the screen for the preview.** The native call exists (#376,
+1. **#301, the screen for the preview.** Done in #380: the scan screen shows the preview, with
+   Result and Photo to switch. What follows is how it was meant; the rest of #301 is still to do.
+   The native call exists (#376,
    `docs/ANDROID_SCAN_PREVIEW.md`). Show its result on the scan screen in place of the
    thumbnail, with a way back to the photo and its outline (he needs to see the detected edges
    too). Build the request with the one function `saveScan` uses, so preview and save cannot
@@ -116,8 +139,11 @@ The order in #286 stands. Within it, this is what unblocks the most:
    whole experience. Put it in a file of its own (`ui/scan/`) and leave `ScanPhoto` as
    `ScanScreen` uses it.
 3. **#288, the metrics module**, `line_straightness` first, then **#302's automatic mode**.
-4. **#299's presets**, **#339's undo and rotate** (a rotate needs a turn in `ScanPageRequest`;
-   `upright.rs` has `turned`), **#303**.
+   The measures and the guard are written (`straightness`, `flatten_guard`, `metrics_*`): what
+   is left is the runner, the gate, and making both versions of the page at preview size.
+4. **#299's presets**, **#339's undo and rotate** (`upright_pages::turn_corners` turns a page by
+   reordering its corners; `upright.rs` has `turned`), **#303**. The blocks exist for all
+   three (section 1).
 5. **#294 to #297, the camera.** The largest and riskiest part: declaring the CAMERA permission
    changes how the existing path behaves (the manifest's comment explains it), and none of it
    can be tried without a phone. Keep the phone's camera app reachable as a setting, as the

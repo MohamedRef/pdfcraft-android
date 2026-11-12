@@ -1,8 +1,10 @@
-# Scan: a preview of the page as it will be saved (#301, native side)
+# Scan: a preview of the page as it will be saved (#301)
 
-The scan screen still shows the camera's thumbnail with the crop outline; a look is only seen in
-the saved PDF. This is the native half of changing that: one call that returns the page exactly
-as Save would make it, small enough to show. **No screen uses it yet.**
+The scan screen shows each page as Save will make it: straightened, with its proportions, turned
+upright, flattened when asked, and with the chosen filter. Under it, **Result** and **Photo**
+switch between that page and the camera's photo with the outline of the part kept, so the edges
+the app found can still be checked. The native call below makes the page; the screen part is
+described after it.
 
 ## The call
 
@@ -54,11 +56,33 @@ size (640) is further off: Auto 4.8, black and white 10.9. A 12-megapixel photo'
 shrunk more than this test's, so expect the upper figures there. It was not measured on a real
 photo.
 
+## The screen
+
+- `ScanScreen` (`ui/ToolScreens.kt`) asks for a preview of the page in view whenever the page, its
+  corners, the filter, Flatten or a testing option changes. Until the preview of exactly that is
+  ready it shows the photo with its outline and a "Preparing the page" note; if the preview
+  fails it shows the photo without the note.
+- `AppViewModel.requestScanPreview` builds the request with `scanPageRequest` (`ui/ScanSave.kt`),
+  the same function `saveScan` uses, so a preview and the saved page are made from one
+  description. Previews run one at a time on a dispatcher of their own (`Dispatchers.Default`
+  limited to one thread), so they never run two at once and never compete with each other for
+  memory. A newer request replaces one still waiting; one already running finishes (the native
+  call cannot be stopped) and its result is dropped if it is no longer the one wanted.
+- The preview is held as one `ImageBitmap` of at most 1280 pixels on its long side (under 7 MB).
+  It and the native store are released when the scan is saved or discarded.
+- Testing option **Show pages as they will be saved** (on by default): off puts back the old
+  screen, the photo only, and asks for no preview.
+- Diagnostics: a `preview` line per preview made (see `docs/ANDROID_SCAN_TESTING.md`).
+- Kept scans: each page file's `preview` says whether one was shown before saving, its time and size.
+
+What was checked: the request builder, the out-of-date rule and which view is shown, by JVM
+tests (`ScanSaveTest`), and the whole app by CI's build. **Not run on a phone**: how long a
+preview takes there, whether 1280 pixels is sharp enough on his screen, and how the switch between
+pages feels.
+
 ## Not done (the rest of #301)
 
-- The screen: showing the preview, a way back to the photo with its outline, latest-wins
-  scheduling on a dispatcher of its own.
 - `ScanCancel`: a preview cannot be stopped once started.
 - A look per page, the strength slider, the looks strip, compare, apply to all, the session's
   new fields.
-- Timings on a phone.
+- Timings on a phone (the log now records them).

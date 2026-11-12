@@ -35,6 +35,9 @@ class ScanLabTest {
         assertTrue(lab.upright)
         assertFalse(lab.copy(sharpen = 0).asDesigned)
         assertFalse(lab.copy(denoise = false).asDesigned)
+        // the page preview is on as designed; off is a testing option (#301)
+        assertTrue(lab.preview)
+        assertFalse(lab.copy(preview = false).asDesigned)
         assertEquals(30, lab.sharpen)
         assertTrue(lab.denoise && lab.sharpen in ScanLab.SHARPENING && 0 in ScanLab.SHARPENING)
     }
@@ -53,6 +56,7 @@ class ScanLabTest {
             ScanLab(),
             ScanLab(keep = true, finder = ScanFinder.NETWORK, refine = false, perspective = false, snapPaper = false, strength = 0, upright = false, sharpen = 0, denoise = false),
             ScanLab(sharpen = 100),
+            ScanLab(preview = false),
             ScanLab(finder = ScanFinder.LINES, strength = 100),
             ScanLab(finder = ScanFinder.OFF),
         )
@@ -95,7 +99,14 @@ class ScanLabTest {
     @Test
     fun aKeptPageSaysWhatTheTestSetNeedsAndHowTheAppGotThere() {
         val finding = ScanFinding("model", 0.8349, 0, 1, 4, 0)
-        val json = JSONObject(scanTestPageJson("0.0.26-beta (26001)", true, crop, crop, finding, "auto", 60, true, ScanLab(strength = 60), "page-01.out.jpg", result))
+        val json = JSONObject(scanTestPageJson("0.0.26-beta (26001)", true, crop, crop, finding, "auto", 60, true, ScanLab(strength = 60), "page-01.out.jpg", result, ScanTestPreview(true, true, 412, 905, 1280, "auto")))
+        // the last preview shown before saving (#301)
+        val shown = json.getJSONObject("preview")
+        assertTrue(shown.getBoolean("shown") && shown.getBoolean("reused"))
+        assertEquals(412, shown.getInt("ms"))
+        assertEquals(1280, shown.getInt("height"))
+        assertEquals("auto", shown.getString("look"))
+        assertTrue(json.getJSONObject("options").getBoolean("preview"))
         // the test set's own keys (#288)
         assertEquals(8, json.getJSONArray("corners").length())
         assertEquals(0.12, json.getJSONArray("corners").getDouble(3), 1e-9)
@@ -142,7 +153,7 @@ class ScanLabTest {
     fun aDiscardedPageHasNoResultAndMayHaveNoFinding() {
         val json = JSONObject(scanTestPageJson("1.0 (1)", false, ScanPage.WHOLE, null, null, null, null, false, ScanLab(), null, null))
         assertEquals("discarded", json.getString("outcome"))
-        assertTrue(json.isNull("found") && json.isNull("finding") && json.isNull("look") && json.isNull("strength") && json.isNull("result"))
+        assertTrue(json.isNull("found") && json.isNull("finding") && json.isNull("look") && json.isNull("strength") && json.isNull("result") && json.isNull("preview"))
         assertTrue(json.getJSONObject("options").isNull("strength_override"))
         assertEquals(1.0, json.getJSONArray("corners").getDouble(2), 0.0)
         // a corner that is not a number never breaks the file

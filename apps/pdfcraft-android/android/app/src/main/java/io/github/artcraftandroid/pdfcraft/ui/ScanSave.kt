@@ -45,3 +45,63 @@ internal fun scanCreateArgs(pages: List<ScanSavedPage>): Map<String, Any?> {
     }
     return args
 }
+
+/**
+ * The native request for one page, as Save makes it and as the scan screen's preview asks for it
+ * (#301): built in one place so the preview and the saved page cannot drift apart. [outputPath]
+ * is where Save writes the page; a preview writes nothing and ignores it.
+ */
+internal fun scanPageRequest(
+    photoPath: String,
+    corners: FloatArray,
+    filter: ScanFilter,
+    flatten: Boolean,
+    lab: ScanLab,
+    outputPath: String,
+): io.github.artcraftandroid.pdfcraft.core.ScanPageRequest = io.github.artcraftandroid.pdfcraft.core.ScanPageRequest(
+    photoPath = photoPath,
+    corners = corners.toList(),
+    look = scanLookOf(filter.mode),
+    strength = lab.strengthFor(filter.level).toUByte(),
+    outputPath = outputPath,
+    snapPaper = lab.snapPaper,
+    flatten = flatten,
+    sideProportions = !lab.perspective,
+    upright = lab.upright,
+    sharpen = lab.sharpen.coerceIn(0, 100).toUByte(),
+    denoise = lab.denoise,
+)
+
+/** The longer side, in pixels, of the page preview the scan screen asks for (#301). */
+internal const val SCAN_PREVIEW_SIDE = 1280
+
+/**
+ * What a page preview shows (#301): the photo (by path), its corners, the look, flattening and the
+ * testing options. A preview whose key is not the one wanted now is out of date.
+ */
+internal data class ScanPreviewKey(val photoPath: String, val corners: List<Float>, val filter: ScanFilter, val flatten: Boolean, val lab: ScanLab) {
+    companion object {
+        fun of(page: ScanPage, filter: ScanFilter, flatten: Boolean, lab: ScanLab) =
+            ScanPreviewKey(page.file.absolutePath, page.corners.toList(), filter, flatten, lab.copy(keep = false))
+    }
+}
+
+/** What the scan screen shows in its main area (#301). */
+internal enum class ScanView {
+    /** The page as it will be saved. */
+    Result,
+    /** The camera's photo with the outline of the part kept. */
+    Photo,
+}
+
+/**
+ * Which view the scan screen shows: the photo whenever previews are off, the person chose it, or
+ * there is no preview of what is asked for yet (with [waiting] true while one is being made).
+ */
+internal data class ScanShown(val view: ScanView, val waiting: Boolean)
+
+internal fun scanShown(previews: Boolean, chosen: ScanView, haveWanted: Boolean, failed: Boolean): ScanShown = when {
+    !previews || chosen == ScanView.Photo -> ScanShown(ScanView.Photo, false)
+    haveWanted -> ScanShown(ScanView.Result, false)
+    else -> ScanShown(ScanView.Photo, !failed)
+}
