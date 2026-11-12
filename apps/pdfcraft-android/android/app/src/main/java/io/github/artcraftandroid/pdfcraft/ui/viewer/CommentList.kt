@@ -397,7 +397,7 @@ fun CommentListScreen(vm: AppViewModel, doc: OpenDocument) {
             SheetRow(
                 if (hidden) LucideIcons.Eye else LucideIcons.EyeOff,
                 stringResource(if (hidden) R.string.comments_show_all else R.string.comments_hide_all),
-                { pick { vm.setCommentsHidden(doc, !hidden) } },
+                { pick { vm.settings.setCommentsHidden(doc, !hidden) } },
             )
             Spacer(Modifier.height(8.dp))
         }

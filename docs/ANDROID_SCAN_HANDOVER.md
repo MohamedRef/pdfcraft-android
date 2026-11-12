@@ -16,11 +16,11 @@ a phone yet.** Every number in the scanner's documents was measured on a desktop
 | Issue | What | State | Merged in | What is left |
 |---|---|---|---|---|
 | #287 | `pdfcraft-scan` crate, one pass from photo to page | Done, closed | #331, #346 | |
-| #288 | Measuring: harness, drawn pages, test set | Part | #346, #367, #382, #386, #394 | The CI gate, the SmartDoc script. The drawn photos (`synth`), the metrics blocks and the `scan-eval` runner are in; see [ANDROID_SCAN_MEASURING.md](ANDROID_SCAN_MEASURING.md) |
-| #289 | Model files: pinned, loaded, exported | Part | #360, #365, #370 | `scan_model_states`, a Models list in settings, optional packs, copying a *changed* model on update (section 6) |
+| #288 | Measuring: harness, drawn pages, test set | Part | #346, #367, #382, #386, #394, #404 | The SmartDoc script. The drawn photos (`synth`), the metrics blocks, the `scan-eval` runner and the CI gate are in; see [ANDROID_SCAN_MEASURING.md](ANDROID_SCAN_MEASURING.md) |
+| #289 | Model files: pinned, loaded, exported, copied again when changed | Part | #360, #365, #370, #403 | Optional packs (the flattening model as a download), `tensor.rs`. The copy by size and SHA-256, `scan_model_states` and the Models list are done (`docs/ANDROID_SCAN_MODELS.md`) |
 | #290 | Page found by a network | Core done | #360 | Figures on the owner's set; phone time. Known: wrong and accepted on 2 of the 10 reference photos, nothing found on 2 |
 | #291 | Edges refined at full size | Core done | #356, #291 PR | Corners off the photo (up to 15%) checked on drawn pages only; the owner's set; phone time |
-| #292 | Crop screen: magnifier, side handles, snap, rotate | Screen done, rotate left | #381 | Rotate is on the scan screen (#387, with `ScanSession` 2); a Rotate on the crop screen itself is not done; all of it on a phone (`docs/ANDROID_SCAN_CROP.md`) |
+| #292 | Crop screen: magnifier, side handles, snap, rotate | Screen done, rotate left | #381 | Rotate (with #339's user turns and `ScanSession` 2); all of it on a phone (`docs/ANDROID_SCAN_CROP.md`) |
 | #293 | True proportions, paper sizes | Core done | #353 | The focal length from the in-app camera (#294, section 7 there) |
 | #294 | In-app camera (CameraX) | Core done, not run on a phone | #390 | Everything on the owner's phone (`ANDROID_SCAN_CAMERA.md`); the focal length from the camera's calibration for #293 |
 | #295 | Live page outline, hints | **Not started** | | Needs #294 |
@@ -35,7 +35,7 @@ a phone yet.** Every number in the scanner's documents was measured on a desktop
 | #304 | "Max quality" (DocRes) | **Not started** | | Feasibility first, as the issue says |
 | #305, #306 | Research: moiré; fingers, glare | **Not started** | | |
 | #307 | ML Kit as a second engine | **Dropped** | | The owner decided on 12 November 2026: nothing from Google in the app or in the scanner's work, so the app keeps no proprietary dependency and stays buildable by F-Droid. Do not add ML Kit or compare against Google's scanner |
-| #339 | Pages turned upright | Core done | #370, #387 | Acceptance on the owner's set (per script), phone timing. The chip, Rotate (on the scan screen), the multi-page rule and the ordinary setting are in (not yet run on a phone) |
+| #339 | Pages turned upright | Core done | #370 | The "Turned upright · Undo" chip, a rotate button, the multi-page rule, a switch in ordinary settings |
 
 "Core done" means the code and its tests are merged and the issue's acceptance items that need
 the owner's phone or his test set are open. Each issue has a comment saying the same in detail.
@@ -63,7 +63,7 @@ Every threshold in them is the issue's starting value or was set on pages drawn 
 
 One document per feature says how it works, what was measured and what was not:
 `ANDROID_SCAN_AUTO_LOOK.md`, `_BLACK_WHITE.md`, `_CAPTURE.md`, `_DETAIL.md`, `_DETECTOR.md`, `_EDGES.md`,
-`_CAMERA.md`, `_FLATTEN.md`, `_MEASURING.md`, `_PREVIEW.md`, `_PROPORTIONS.md`, `_TESTING.md`, `_UPRIGHT.md` (all
+`_CAMERA.md`, `_FLATTEN.md`, `_MEASURING.md`, `_MODELS.md`, `_PREVIEW.md`, `_PROPORTIONS.md`, `_TESTING.md`, `_UPRIGHT.md` (all
 `docs/ANDROID_SCAN_…`). Read the one for a feature before changing it.
 
 ## 2. How a scan goes through the code today
@@ -72,7 +72,7 @@ One document per feature says how it works, what was measured and what was not:
 ScanCameraRouter: PdfCraft's camera screen (ui/scan, #294) or the phone's camera app
                                                      ->  cacheDir/camera/scan-*.jpg
 AppViewModel.onScanPhoto
-    prepareOcrModels            unpack assets/models into filesDir/models, set PDFCRAFT_MODELS
+    prepareOcrModels            copy new or changed models into filesDir/models, set PDFCRAFT_MODELS
     scan_find_document_with     decode, detect (detect.rs), refine edges (refine.rs)
 ScanScreen / ScanCrop (ui/ToolScreens.kt)   thumbnail with the outline; four corner handles
 AppViewModel.saveScan, per page
@@ -95,7 +95,7 @@ AppViewModel.saveScan, per page
   `ui/ScanSave.kt`, `ui/ScanDiagnostics.kt`, and the testing side: `ui/ScanLab.kt`,
   `ui/ScanLabController.kt`, `ui/ScanTestStore.kt`, `ui/home/ScanLabSettings.kt`.
 - **Models** (`assets/models/`, pinned by size and SHA-256 in `scan/src/models.rs`, run on
-  `rten`): `scan-edges.onnx` 6.7 MB, `scan-flatten.onnx` 15.8 MB, `scan-upright.onnx` 3.4 MB.
+  `rten`; copied out of the APK by `engine/ModelFiles.kt`, listed in Settings → Scanner models): `scan-edges.onnx` 6.7 MB, `scan-flatten.onnx` 15.8 MB, `scan-upright.onnx` 3.4 MB.
   `tools/scan-models/README.md` says where each is from and how it was made, to the byte.
 - **Looks on screen**: the chips are `ScanFilter` (Original, Clean scan = Auto, Auto color,
   Grayscale, Whiteboard, Light text = black and white), one look for the whole scan, plus the
@@ -187,8 +187,9 @@ The list in #286 ("Rules for every scan PR") is the reference. The ones that hav
 
 ## 6. Building, testing, measuring
 
-- Rust: `cargo test --locked -p pdfcraft-scan -p pdfcraft-android` (about 90 tests each; a
-  minute and a half). `cargo clippy -p pdfcraft-scan --all-targets --no-deps` must add no
+- Rust: `cargo test --locked -p pdfcraft-scan -p pdfcraft-android` (about 300 and 90 tests;
+  the scan crate's take a little over a minute, most of it the CI gate of #288, which fails a
+  change that makes the scanner worse on 40 drawn photos: see `ANDROID_SCAN_MEASURING.md`). `cargo clippy -p pdfcraft-scan --all-targets --no-deps` must add no
   warning; CI runs neither clippy nor rustfmt, so run both. `cargo fmt -p pdfcraft-scan
   -p pdfcraft-android` also reformats files this work does not own (`src/eraser_tests.rs`,
   `pressure_ink_tests.rs`, `progressive_tests.rs`, `tests.rs`, `scan/src/tests.rs`,
@@ -206,10 +207,10 @@ The list in #286 ("Rules for every scan PR") is the reference. The ones that hav
   pairs: `scan_reference upright | flatten | detect`.
 - Drawn test pages with real print (English, Arabic, a form): `tools/scan-eval/text_pages.py`;
   the three it makes are in `apps/pdfcraft-android/scan/tests/data/`.
-- **A model file that changes must change its name.** `Engine.prepareOcrModels` copies a model
-  out of the APK only when no file of that name is there yet. A new model is unpacked after an
-  update; a replaced one is not, and then fails its SHA-256 check and the feature is silently
-  off. #289, section 3, is the proper fix and is not done.
+- **A changed model is copied again on update** (#289): the build lists each model's size and
+  SHA-256 in `models.index`, and `engine/ModelFiles.kt` copies a file whose line differs from the
+  one recorded at the last copy. A model can keep its file name when it is replaced.
+  `docs/ANDROID_SCAN_MODELS.md` says how, and how to see each model's state.
 - The three scan models add 25.9 MB to the APK. #289 sets about 25 MB as the limit before
   models become optional downloads; the flattening model (15.8 MB) is the candidate.
 

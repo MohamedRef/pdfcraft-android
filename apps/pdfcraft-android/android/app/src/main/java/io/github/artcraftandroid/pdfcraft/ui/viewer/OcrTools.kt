@@ -52,9 +52,9 @@ class OcrState {
 
 /** Unpack the models and ask whether recognition can run; false (and says so) when it can't. */
 suspend fun AppViewModel.ocrReady(eng: Engine): Boolean {
-    busy = text(R.string.msg_busy_preparing_ocr)
+    tools.busy = text(R.string.msg_busy_preparing_ocr)
     withContext(Dispatchers.IO) { runCatching { eng.prepareOcrModels(getApplication()) } }
-    busy = null
+    tools.busy = null
     val status = runCatching { eng.tool("ocr_status") }.getOrNull()
     if (status?.optBoolean("available", false) != true) {
         tell(text(R.string.msg_ocr_not_installed))
@@ -64,14 +64,14 @@ suspend fun AppViewModel.ocrReady(eng: Engine): Boolean {
     val list = (0 until (langs?.length() ?: 0)).mapNotNull { i ->
         langs?.optJSONObject(i)?.let { o -> o.optString("code").takeIf { it.isNotEmpty() }?.let { it to o.optString("name", it) } }
     }
-    if (list.isNotEmpty()) ocr.languages = list
+    if (list.isNotEmpty()) tools.ocr.languages = list
     return true
 }
 
 /** Recognize text: first its options. */
 fun AppViewModel.recognizeText(doc: OpenDocument) {
     val eng = engine ?: return
-    viewModelScope.launch { if (ocrReady(eng)) ocr.optionsFor = doc }
+    viewModelScope.launch { if (ocrReady(eng)) tools.ocr.optionsFor = doc }
 }
 
 /**
@@ -81,12 +81,12 @@ fun AppViewModel.recognizeText(doc: OpenDocument) {
 fun AppViewModel.runOcr(doc: OpenDocument, o: OcrOptions) {
     val eng = engine ?: return
     val ctx = getApplication<Application>()
-    ocr.optionsFor = null
+    tools.ocr.optionsFor = null
     o.save(ctx)
     viewModelScope.launch {
         val out = if (o.editable) File(ctx.cacheDir, "out-ocr-${System.nanoTime()}.pdf") else null
         val args = o.recognizeArgs(doc.viewer.currentPage, doc.pageCount, out?.absolutePath) ?: return@launch
-        busy = text(R.string.msg_busy_recognizing)
+        tools.busy = text(R.string.msg_busy_recognizing)
         val t0 = System.nanoTime()
         var ok = false
         try {
@@ -94,7 +94,7 @@ fun AppViewModel.runOcr(doc: OpenDocument, o: OcrOptions) {
                 recognizeByPage(eng, doc, args)
             } else {
                 val r = eng.tool("ocr_recognize", args + ("doc" to doc.id))
-                busy = null
+                tools.busy = null
                 requests.create("${doc.name.removeSuffix(".pdf")}_ocr.pdf", "application/pdf") { uri ->
                     viewModelScope.launch {
                         try {
@@ -115,7 +115,7 @@ fun AppViewModel.runOcr(doc: OpenDocument, o: OcrOptions) {
             out?.delete()
             tell(e.userMessage)
         } finally {
-            busy = null
+            tools.busy = null
             editEvent(doc, "ocr_run", "editable" to (out != null), "pages" to doc.pageCount, "ms" to (System.nanoTime() - t0) / 1_000_000, "ok" to ok)
         }
     }
@@ -130,28 +130,28 @@ private suspend fun AppViewModel.recognizeByPage(eng: Engine, doc: OpenDocument,
     @Suppress("UNCHECKED_CAST")
     val pages = (args["pages"] as? List<Int>) ?: (1..doc.pageCount).toList()
     var cancelled = false
-    busyCancel = { cancelled = true }
+    tools.busyCancel = { cancelled = true }
     var recognized = 0
     try {
         for ((k, page) in pages.withIndex()) {
             if (cancelled || document !== doc) break
-            busy = text(R.string.msg_busy_recognizing_page, k + 1, pages.size)
-            busyProgress = k to pages.size
+            tools.busy = text(R.string.msg_busy_recognizing_page, k + 1, pages.size)
+            tools.busyProgress = k to pages.size
             val r = eng.tool("ocr_recognize", args + mapOf("doc" to doc.id, "pages" to listOf(page)))
             val read = r.optJSONArray("pages")
             if ((0 until (read?.length() ?: 0)).any { read?.optJSONObject(it)?.has("skipped") == false }) recognized++
         }
     } finally {
-        busyProgress = null
-        busyCancel = null
+        tools.busyProgress = null
+        tools.busyCancel = null
         refresh(doc)
     }
     when {
         recognized == 0 && cancelled -> tell(text(R.string.msg_ocr_cancelled))
         recognized == 0 -> tell(text(R.string.msg_ocr_nothing))
-        else -> success = SuccessBanner(
+        else -> tools.success = SuccessBanner(
             plural(if (cancelled) R.plurals.msg_ocr_stopped else R.plurals.msg_ocr_done_pages, recognized, recognized),
-        ) { undoSteps(doc, recognized) }
+        ) { tools.undoSteps(doc, recognized) }
     }
 }
 
@@ -185,7 +185,7 @@ suspend fun AppViewModel.addToOcrDictionary(language: String, word: String): Boo
  * applied ([OcrReview.review]).
  */
 internal suspend fun AppViewModel.startOcrReview(doc: OpenDocument, page: Int, o: OcrOptions): JSONObject? {
-    if (document !== doc || page !in 1..doc.pageCount || busy != null) return null
+    if (document !== doc || page !in 1..doc.pageCount || tools.busy != null) return null
     val eng = engine ?: return null
     withContext(Dispatchers.IO) { runCatching { eng.prepareOcrModels(getApplication()) } }
     val status = eng.tool("ocr_status")
@@ -198,7 +198,7 @@ fun AppViewModel.applyOcrReview(doc: OpenDocument, review: Int, corrections: Map
     val list = corrections.map { (k, t) -> mapOf("page" to k.first, "word" to k.second, "text" to t) }
     runTool(doc, "ocr_review_apply", mapOf("review" to review, "corrections" to list)) {
         editEvent(doc, "ocr_review_apply", "corrections" to list.size)
-        success = SuccessBanner(text(R.string.ocr_review_applied)) { undo(doc) }
+        tools.success = SuccessBanner(text(R.string.ocr_review_applied)) { undo(doc) }
         onDone()
     }
 }
@@ -212,25 +212,25 @@ fun AppViewModel.discardOcrReview(doc: OpenDocument, review: Int) {
 // ---- Several files -----------------------------------------------------------------------------
 
 fun AppViewModel.openOcrBatch() {
-    if (ocr.batchRunning) return
-    ocr.batch.clear()
-    ocr.batchStatus = null
-    toolScreen = ToolScreen.OcrBatch
+    if (tools.ocr.batchRunning) return
+    tools.ocr.batch.clear()
+    tools.ocr.batchStatus = null
+    tools.toolScreen = ToolScreen.OcrBatch
 }
 
 fun AppViewModel.addOcrBatchFiles() {
-    if (ocr.batchRunning) return
+    if (tools.ocr.batchRunning) return
     requests.open(arrayOf("application/pdf"), many = true) { uris ->
-        for (u in uris.distinct()) if (ocr.batch.none { it.uri == u }) ocr.batch.add(OcrBatchFile(u, files.displayNameRaw(u).take(180)))
+        for (u in uris.distinct()) if (tools.ocr.batch.none { it.uri == u }) tools.ocr.batch.add(OcrBatchFile(u, files.displayNameRaw(u).take(180)))
     }
 }
 
 fun AppViewModel.chooseOcrBatchFolder() {
     requests.folder { uri ->
         if (uri == null) return@folder
-        ocr.batchFolder = uri
+        tools.ocr.batchFolder = uri
         // "primary:Documents/Scans" reads "Documents/Scans"
-        ocr.batchFolderName = runCatching { android.provider.DocumentsContract.getTreeDocumentId(uri).substringAfter(':') }.getOrNull() ?: uri.lastPathSegment
+        tools.ocr.batchFolderName = runCatching { android.provider.DocumentsContract.getTreeDocumentId(uri).substringAfter(':') }.getOrNull() ?: uri.lastPathSegment
     }
 }
 
@@ -241,25 +241,25 @@ fun AppViewModel.chooseOcrBatchFolder() {
  */
 fun AppViewModel.runOcrBatch(o: OcrOptions) {
     val eng = engine ?: return
-    val folder = ocr.batchFolder ?: return
-    if (ocr.batchRunning || ocr.batch.isEmpty()) return
+    val folder = tools.ocr.batchFolder ?: return
+    if (tools.ocr.batchRunning || tools.ocr.batch.isEmpty()) return
     val ctx = getApplication<Application>()
     o.save(ctx)
-    ocr.batchOptions = false
-    ocr.batchRunning = true
-    for (i in ocr.batch.indices) ocr.batch[i] = ocr.batch[i].copy(result = null, failed = false)
-    ocr.batchJob = viewModelScope.launch {
+    tools.ocr.batchOptions = false
+    tools.ocr.batchRunning = true
+    for (i in tools.ocr.batch.indices) tools.ocr.batch[i] = tools.ocr.batch[i].copy(result = null, failed = false)
+    tools.ocr.batchJob = viewModelScope.launch {
         if (!ocrReady(eng)) {
-            ocr.batchRunning = false
+            tools.ocr.batchRunning = false
             return@launch
         }
         val dir = File(ctx.cacheDir, "out-ocrbatch-${System.nanoTime()}").apply { mkdirs() }
         val outDir = File(dir, "out").apply { mkdirs() }
         try {
-            for (i in ocr.batch.indices) {
+            for (i in tools.ocr.batch.indices) {
                 ensureActive()
-                val f = ocr.batch[i]
-                ocr.batchStatus = text(R.string.ocr_batch_progress, i + 1, ocr.batch.size, f.name)
+                val f = tools.ocr.batch[i]
+                tools.ocr.batchStatus = text(R.string.ocr_batch_progress, i + 1, tools.ocr.batch.size, f.name)
                 val row = try {
                     val input = copyIntoCache(ctx, f.uri, "ocrbatch-in")
                     val named = File(dir, DocumentFiles.safeName(f.name)).also { input.renameTo(it) }
@@ -285,21 +285,21 @@ fun AppViewModel.runOcrBatch(o: OcrOptions) {
                 } catch (e: Exception) {
                     f.copy(result = e.userMessage.replace(dir.absolutePath, "").take(240), failed = true)
                 }
-                ocr.batch[i] = row
+                tools.ocr.batch[i] = row
             }
-            ocr.batchStatus = text(R.string.ocr_batch_finished)
+            tools.ocr.batchStatus = text(R.string.ocr_batch_finished)
         } catch (e: kotlinx.coroutines.CancellationException) {
-            ocr.batchStatus = text(R.string.ocr_batch_cancelled)
+            tools.ocr.batchStatus = text(R.string.ocr_batch_cancelled)
         } finally {
             withContext(NonCancellable + Dispatchers.IO) { dir.deleteRecursively() }
-            ocr.batchRunning = false
-            if (Diag.enabled()) Diag.event(DiagArea.Edit, "ocr_batch", "files" to ocr.batch.size, "failed" to ocr.batch.count { it.failed }, "finished" to ocr.batch.count { it.result != null && !it.failed })
+            tools.ocr.batchRunning = false
+            if (Diag.enabled()) Diag.event(DiagArea.Edit, "ocr_batch", "files" to tools.ocr.batch.size, "failed" to tools.ocr.batch.count { it.failed }, "finished" to tools.ocr.batch.count { it.result != null && !it.failed })
         }
     }
 }
 
 fun AppViewModel.cancelOcrBatch() {
-    ocr.batchJob?.cancel()
+    tools.ocr.batchJob?.cancel()
 }
 
 /** Write [file] into the folder [tree] (a document tree the user chose) as [name]. */

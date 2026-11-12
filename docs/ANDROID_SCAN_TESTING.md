@@ -44,6 +44,10 @@ on one part. While any is changed, the scan screen says so.
 | Flatten page (#302) | Off | On, with the switch on the scan screen itself |
 | Scan with (#294) | PdfCraft camera | Phone's camera app (also in Settings → Scan; the same setting) |
 
+Settings → **Scanner models** (#289) lists each model with its state; while the log is
+recorded it also has **Copy the models again**, which copies every model out of the app anew
+(see `docs/ANDROID_SCAN_MODELS.md`).
+
 **Reset scanner testing options** puts them back. Keeping scans is not one of them: it changes
 no page.
 
@@ -72,6 +76,7 @@ The zip also holds `diagnostics.txt`, the diagnostics log as **Share diagnostics
  "capture": {"source": "in_app", "mp10": 499, "width": 8160, "height": 6120, "exposure_index": -1, "exposure_step_milli": 333,
              "torch": false, "focused": true, "rotation": 0, "capture_ms": 640},
  "preview": {"shown": true, "reused": true, "ms": 412, "width": 905, "height": 1280, "look": "auto"},
+ "models": {"edges": "ready", "flatten": "ready", "upright": "ready"},
  "crop": {"visits": 1, "corner_drags": 2, "side_drags": 1, "snaps_asked": 3, "snaps_taken": 2, "snaps_held": 0, "snaps_failed": 0,
           "snap_ms_max": 85, "nudges": 0, "detects": 0, "detects_found": 0, "whole_photo": 0, "resets": 0,
           "loupe_decodes": 6, "snap": true, "ms": 9100, "moved_pct": 1.235,
@@ -98,7 +103,8 @@ was: drags of corners and of sides, snaps asked for, taken, skipped by holding s
 the longest snap, keyboard and TalkBack moves, Auto-detect, No crop and Reset, magnifier regions
 decoded, whether Snap was on, the time spent, and `moved_pct`, the largest corner move from where
 the screen opened in % of the photo's diagonal, and `corners_off`, how many corners were left off
-the photo the last time (#291). It is not kept if the app is closed by Android
+the photo the last time (#291). `models` says which models the engine accepted when the page
+was kept (#289): `ready`, `missing` or `corrupt` for each, or `null` when that could not be read. It is not kept if the app is closed by Android
 before the scan is saved.
 `capture` says how the photo was taken (#294, `docs/ANDROID_SCAN_CAMERA.md`): `source` is
 `in_app`, `phone_app` or `import`; the still's size and exposure are known for `in_app` only. It is
@@ -142,7 +148,9 @@ how many were `refined` or `curved`, whether the snap was `taken`, `stale` (anot
 started) or `failed`, and its `ms`; every `crop_detect` line whether Auto-detect `found` a page,
 its `source` and `ms`; every `page` and `preview` line `flatten_auto` and, from
 #302's check, `flatten_checked`, `flatten_kept`, `flatten_why`, `straight_px`, `straight_flat_px`
-(tenths of a pixel, -1 when not measured), `straight_lines` and `straight_flat_lines`; `test_options` is written when an option is changed, `tests_shared` (pages, bytes)
+(tenths of a pixel, -1 when not measured), `straight_lines` and `straight_flat_lines`; every `model_files` line (#289) what the models check copied and why
+(`copied`, `kept`, `failed`, `new`, `changed`, `size`, `unrecorded`, `forced`, `ms`), and while
+the log is recorded a `model_states` line with each model's state; `test_options` is written when an option is changed, `tests_shared` (pages, bytes)
 when the zip is handed out, and `tests_cleared` when the kept scans are deleted. The log itself
 still holds no file name, path or document content.
 

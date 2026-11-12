@@ -84,7 +84,7 @@ import kotlinx.coroutines.withContext
 @Composable
 fun PagesScreen(vm: AppViewModel, doc: OpenDocument, onClose: () -> Unit) {
     val c = pdfColors
-    val organizing = vm.organizing
+    val organizing = vm.tools.organizing
     val selected = remember { mutableStateMapOf<Int, Boolean>() }
     val thumbs = remember(doc.info.generation) { mutableStateMapOf<Int, ImageBitmap>() }
     var insertMenu by remember { mutableStateOf(false) }
@@ -111,11 +111,11 @@ fun PagesScreen(vm: AppViewModel, doc: OpenDocument, onClose: () -> Unit) {
     // dragging a page: its index and where it would drop
     var dragFrom by remember { mutableStateOf<Int?>(null) }
     var dragTo by remember { mutableStateOf<Int?>(null) }
-    val exporting = vm.imageExport
+    val exporting = vm.tools.imageExport
     fun close() {
-        vm.organizing = false
-        vm.splitOpen = false
-        vm.imageExport = null
+        vm.tools.organizing = false
+        vm.docTools.splitOpen = false
+        vm.tools.imageExport = null
         selected.clear()
         onClose()
     }
@@ -124,7 +124,7 @@ fun PagesScreen(vm: AppViewModel, doc: OpenDocument, onClose: () -> Unit) {
         if (exporting != null) {
             close()
         } else if (organizing) {
-            vm.organizing = false
+            vm.tools.organizing = false
             selected.clear()
         } else {
             close()
@@ -133,7 +133,7 @@ fun PagesScreen(vm: AppViewModel, doc: OpenDocument, onClose: () -> Unit) {
     BackHandler(onBack = ::back)
     // holding and dragging moves pages, which nothing on screen shows: said the first few times (#199)
     LaunchedEffect(Unit) {
-        if (exporting == null && doc.info.allowsAssembly && doc.pageCount > 1 && vm.toolPrefs.takeToolHint("pages.drag")) vm.tell(text(R.string.pages_drag_hint))
+        if (exporting == null && doc.info.allowsAssembly && doc.pageCount > 1 && vm.settings.toolPrefs.takeToolHint("pages.drag")) vm.tell(text(R.string.pages_drag_hint))
     }
     // organizing starts with the page being read ticked, as the reference's does
     LaunchedEffect(organizing) { if (organizing && selected.isEmpty()) selected[doc.viewer.currentPage] = true }
@@ -165,7 +165,7 @@ fun PagesScreen(vm: AppViewModel, doc: OpenDocument, onClose: () -> Unit) {
             )
             // Select starts organizing in place (#199); organizing, Select all / Select none
             if (!organizing && exporting == null && doc.info.allowsAssembly) {
-                androidx.compose.material3.TextButton(onClick = { vm.organizing = true }) {
+                androidx.compose.material3.TextButton(onClick = { vm.tools.organizing = true }) {
                     Text(stringResource(R.string.pages_select_action), color = c.toolAccent, fontWeight = FontWeight.SemiBold)
                 }
                 Spacer(Modifier.width(6.dp))
@@ -300,11 +300,11 @@ fun PagesScreen(vm: AppViewModel, doc: OpenDocument, onClose: () -> Unit) {
         ) {
             if (exporting != null) {
                 // picking the pages to export: save them to the phone's pictures, or share them
-                OrganizeItem(LucideIcons.Save, stringResource(R.string.common_save), enabled) { vm.writeImages(doc, exporting, picked, share = false) }
-                OrganizeItem(LucideIcons.Share2, stringResource(R.string.common_share), enabled) { vm.writeImages(doc, exporting, picked, share = true) }
+                OrganizeItem(LucideIcons.Save, stringResource(R.string.common_save), enabled) { vm.tools.writeImages(doc, exporting, picked, share = false) }
+                OrganizeItem(LucideIcons.Share2, stringResource(R.string.common_share), enabled) { vm.tools.writeImages(doc, exporting, picked, share = true) }
             } else if (organizing) {
                 OrganizeItem(LucideIcons.FilePlus, stringResource(R.string.pages_insert_page), true) { insertMenu = true }
-                OrganizeItem(LucideIcons.CopyPlus, stringResource(R.string.pages_duplicate), enabled && doc.info.allowsAssembly) { vm.duplicatePages(doc, picked) }
+                OrganizeItem(LucideIcons.CopyPlus, stringResource(R.string.pages_duplicate), enabled && doc.info.allowsAssembly) { vm.docTools.duplicatePages(doc, picked) }
                 OrganizeItem(LucideIcons.Trash2, stringResource(R.string.common_delete), enabled && picked.size < doc.pageCount) {
                     // no confirmation step: the deletion says what it did and offers Undo at once (#199)
                     val count = picked.size
@@ -325,25 +325,25 @@ fun PagesScreen(vm: AppViewModel, doc: OpenDocument, onClose: () -> Unit) {
                     close()
                     vm.runQuickTool(doc, QuickTool.Crop)
                 }
-                OrganizeItem(LucideIcons.Scissors, stringResource(R.string.pages_split_short), doc.pageCount > 1) { vm.splitOpen = true }
+                OrganizeItem(LucideIcons.Scissors, stringResource(R.string.pages_split_short), doc.pageCount > 1) { vm.docTools.splitOpen = true }
             }
         }
     }
     if (moreMenu) {
         PdfSheet(onDismiss = { moreMenu = false }, dim = true) {
             SheetTitle(stringResource(R.string.pages_more))
-            SheetRow(LucideIcons.FileOutput, stringResource(R.string.pages_extract), { moreMenu = false; vm.extractPages(doc, picked) }, enabled = picked.isNotEmpty())
+            SheetRow(LucideIcons.FileOutput, stringResource(R.string.pages_extract), { moreMenu = false; vm.tools.extractPages(doc, picked) }, enabled = picked.isNotEmpty())
             val assemble = doc.info.allowsAssembly
-            SheetRow(LucideIcons.Replace, stringResource(R.string.pages_replace_with), { moreMenu = false; vm.pickReplaceFile(doc, picked) }, enabled = assemble && picked.isNotEmpty())
-            SheetRow(LucideIcons.ArrowUpDown, stringResource(R.string.pages_reverse_order), { moreMenu = false; vm.reversePages(doc, picked) }, enabled = assemble && doc.pageCount > 1)
+            SheetRow(LucideIcons.Replace, stringResource(R.string.pages_replace_with), { moreMenu = false; vm.docTools.pickReplaceFile(doc, picked) }, enabled = assemble && picked.isNotEmpty())
+            SheetRow(LucideIcons.ArrowUpDown, stringResource(R.string.pages_reverse_order), { moreMenu = false; vm.docTools.reversePages(doc, picked) }, enabled = assemble && doc.pageCount > 1)
             SheetRow(LucideIcons.Tag, stringResource(R.string.pages_labels), { moreMenu = false; labelsOpen = true }, enabled = assemble)
-            SheetRow(LucideIcons.Scissors, stringResource(R.string.pages_split), { moreMenu = false; vm.splitOpen = true }, enabled = doc.pageCount > 1)
+            SheetRow(LucideIcons.Scissors, stringResource(R.string.pages_split), { moreMenu = false; vm.docTools.splitOpen = true }, enabled = doc.pageCount > 1)
             Spacer(Modifier.height(12.dp))
         }
     }
     if (labelsOpen) PageLabelsSheet(vm, doc, picked) { labelsOpen = false }
-    if (vm.splitOpen) SplitSheet(vm, doc, picked) { vm.splitOpen = false }
-    vm.replacePrompt?.takeIf { it.doc === doc }?.let { ReplacePagesDialog(vm, it) }
+    if (vm.docTools.splitOpen) SplitSheet(vm, doc, picked) { vm.docTools.splitOpen = false }
+    vm.docTools.replacePrompt?.takeIf { it.doc === doc }?.let { ReplacePagesDialog(vm, it) }
     if (insertMenu) {
         // where the new pages go, as the reference asks: around the selection, or at either end
         var after by remember { mutableStateOf(true) }

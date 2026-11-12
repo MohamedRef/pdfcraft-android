@@ -184,7 +184,7 @@ private fun SplitButton(vm: AppViewModel) {
 @Composable
 fun SplitLayout(vm: AppViewModel, doc: OpenDocument, main: @Composable () -> Unit) {
     val tabs = vm.tabs
-    val other = tabs.splitWith?.takeIf { it !== doc && !vm.readingMode && !doc.controller.pagesOpen && !doc.controller.presenting }
+    val other = tabs.splitWith?.takeIf { it !== doc && !vm.settings.readingMode && !doc.controller.pagesOpen && !doc.controller.presenting }
     val config = androidx.compose.ui.platform.LocalConfiguration.current
     val side = TabPolicy.sideBySide(config.screenWidthDp, config.screenHeightDp)
     if (other == null) {

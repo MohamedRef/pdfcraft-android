@@ -34,7 +34,7 @@ internal class ScanLabController(private val vm: AppViewModel) {
     private val store by lazy { ScanTestStore(File(app.filesDir, "scan-tests")) }
 
     /** The testing options in force. */
-    var options by mutableStateOf(ScanLab.decode(vm.appPrefs.getString(PREF, null)))
+    var options by mutableStateOf(ScanLab.decode(vm.settings.appPrefs.getString(PREF, null)))
         private set
 
     /** What is kept for testing (shown on the Share row). */
@@ -44,7 +44,7 @@ internal class ScanLabController(private val vm: AppViewModel) {
     fun update(next: ScanLab) {
         if (next == options) return
         options = next
-        vm.appPrefs.edit().putString(PREF, next.encode()).apply()
+        vm.settings.appPrefs.edit().putString(PREF, next.encode()).apply()
         Diag.event(DiagArea.Scan, "test_options", *next.diag())
     }
 
@@ -67,9 +67,11 @@ internal class ScanLabController(private val vm: AppViewModel) {
     fun keepPage(scan: File, index: Int, page: ScanPage, saved: Boolean, look: String?, strength: Int?, flatten: Boolean, output: File?, result: ScanTestResult?, preview: ScanTestPreview? = null, turn: ScanTestTurn? = null) {
         val lab = options
         val version = "${vm.appVersion} (${versionCode()})"
+        // which models the engine accepted (#289); a loaded model is not hashed again
+        val models = io.github.artcraftandroid.pdfcraft.ui.scan.scanModelsJson(runCatching { io.github.artcraftandroid.pdfcraft.core.scanModelStates() }.getOrNull())
         val capture = io.github.artcraftandroid.pdfcraft.ui.scan.ScanCaptures.of(page.file.path)?.json()
         store.addPage(scan, index, page.file, output) { keptOutput ->
-            scanTestPageJson(version, saved, page.corners, page.found, page.finding, look, strength, flatten, lab, keptOutput, result, preview, page.crop, capture, turn)
+            scanTestPageJson(version, saved, page.corners, page.found, page.finding, look, strength, flatten, lab, keptOutput, result, preview, page.crop, capture, models, turn)
         }
     }
 

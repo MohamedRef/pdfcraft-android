@@ -192,14 +192,14 @@ fun AppViewModel.runQuickTool(doc: OpenDocument, tool: QuickTool) {
         QuickTool.FillSign -> enterTool(doc, ViewerTool.FillSign)
         QuickTool.Text -> enterTool(doc, ViewerTool.Text)
         QuickTool.Export -> openExport(doc)
-        QuickTool.Combine -> openCombine(doc)
-        QuickTool.Compress -> openCompress(doc)
-        QuickTool.Protect -> openProtect(doc)
+        QuickTool.Combine -> tools.openCombine(doc)
+        QuickTool.Compress -> tools.openCompress(doc)
+        QuickTool.Protect -> tools.openProtect(doc)
         QuickTool.Organize -> {
             doc.controller.pagesOpen = true
-            organizing = true
+            tools.organizing = true
         }
-        QuickTool.Crop -> openCrop(doc)
+        QuickTool.Crop -> tools.openCrop(doc)
         QuickTool.NoteMargin -> {
             // Draft ink keeps page sizes; add it before the pages grow.
             doc.commitTool?.invoke()
@@ -212,7 +212,7 @@ fun AppViewModel.runQuickTool(doc: OpenDocument, tool: QuickTool) {
         QuickTool.PrepareForm -> openPrepareForm(doc)
         QuickTool.OcrReview -> doc.controller.sheet = ViewerSheet.OcrConfidence
         QuickTool.Handwriting -> recognizeHandwriting(doc, doc.viewer.currentPage)
-        QuickTool.Create -> openCreate()
+        QuickTool.Create -> tools.openCreate()
         QuickTool.Scan -> startScan()
         QuickTool.ReadAloud -> startReadAloud(doc)
         QuickTool.Measure -> enterTool(doc, ViewerTool.Measure)
@@ -227,7 +227,7 @@ fun AppViewModel.runQuickTool(doc: OpenDocument, tool: QuickTool) {
 @Composable
 fun CustomizeToolbar(vm: AppViewModel, onDone: () -> Unit) {
     val c = pdfColors
-    val prefs = vm.quickToolbar
+    val prefs = vm.settings.quickToolbar
     val slots = toolbarSlots(LocalConfiguration.current.screenWidthDp)
     val bar = remember { prefs.bar.take(slots).toMutableStateList() }
     val grid = remember { mutableStateListOf<QuickTool>().apply { addAll(QuickToolbarPrefs.complete(prefs.grid + prefs.bar.drop(slots), bar)) } }

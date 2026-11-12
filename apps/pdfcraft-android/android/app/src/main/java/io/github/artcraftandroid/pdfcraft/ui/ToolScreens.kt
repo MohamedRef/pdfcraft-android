@@ -266,7 +266,7 @@ fun CompressScreen(vm: AppViewModel, doc: OpenDocument) {
     )
     val targetOk = target.isEmpty() || target.toDoubleOrNull()?.let { it > 0 } == true
     fun options() = o.copy(targetMb = target.toDoubleOrNull()?.takeIf { it > 0 })
-    ToolPage(stringResource(R.string.common_tool_compress), { vm.toolScreen = null }, stringResource(R.string.tools_compress_action), targetOk, {
+    ToolPage(stringResource(R.string.common_tool_compress), { vm.tools.toolScreen = null }, stringResource(R.string.tools_compress_action), targetOk, {
         val chosen = options()
         vm.updateCompressOptions(chosen)
         vm.compress(doc, level, chosen)
@@ -383,7 +383,7 @@ fun ProtectScreen(vm: AppViewModel, doc: OpenDocument) {
     val ownerMismatch = ownerConfirm.isNotEmpty() && ownerConfirm != owner
     val args = if (mismatch || pw.isNotEmpty() && confirm.isEmpty() || restrict && (ownerMismatch || ownerConfirm.isEmpty())) null
         else protectArgs(pw, if (restrict) owner else null, rules)
-    ToolPage(stringResource(R.string.common_tool_set_password), { vm.toolScreen = null }, stringResource(R.string.common_tool_set_password), args != null, { args?.let { vm.protect(doc, it) } },
+    ToolPage(stringResource(R.string.common_tool_set_password), { vm.tools.toolScreen = null }, stringResource(R.string.common_tool_set_password), args != null, { args?.let { vm.protect(doc, it) } },
         trailing = { BarIcon(LucideIcons.Info, stringResource(R.string.tools_about_passwords), { info = true }) }) {
         Column(Modifier.verticalScroll(rememberScrollState())) {
             Text(stringResource(R.string.tools_protect_intro), color = c.label, fontSize = 16.sp, modifier = Modifier.padding(horizontal = 24.dp))
@@ -447,9 +447,9 @@ fun ExportScreen(vm: AppViewModel, doc: OpenDocument) {
     val c = pdfColors
     var tab by remember { mutableStateOf(0) }
     // the image format used last time comes first chosen
-    var format by remember(tab) { mutableStateOf(if (tab == 1) listOf("jpg", "png", "tif").indexOf(vm.lastImageFormat).coerceAtLeast(0) else 0) }
-    var dpi by remember { mutableStateOf(vm.imageDpi) }
-    var quality by remember { mutableStateOf(vm.imageQuality) }
+    var format by remember(tab) { mutableStateOf(if (tab == 1) listOf("jpg", "png", "tif").indexOf(vm.tools.lastImageFormat).coerceAtLeast(0) else 0) }
+    var dpi by remember { mutableStateOf(vm.tools.imageDpi) }
+    var quality by remember { mutableStateOf(vm.tools.imageQuality) }
     var skipSmall by remember { mutableStateOf(true) }
     val formats = when (tab) {
         0 -> listOf(
@@ -462,11 +462,11 @@ fun ExportScreen(vm: AppViewModel, doc: OpenDocument) {
         else -> emptyList()
     }
     val textBlocked = doc.info.encrypted && !doc.info.allowsCopying
-    ToolPage(stringResource(R.string.common_tool_export), { vm.toolScreen = null }, stringResource(if (tab == 2) R.string.pages_save_to_folder else R.string.tools_export_action), !(tab != 1 && textBlocked), {
+    ToolPage(stringResource(R.string.common_tool_export), { vm.tools.toolScreen = null }, stringResource(if (tab == 2) R.string.pages_save_to_folder else R.string.tools_export_action), !(tab != 1 && textBlocked), {
         when (tab) {
-            0 -> vm.exportDocument(doc, formats[format].second)
-            1 -> { vm.updateImageSettings(dpi, quality); vm.exportImages(doc, formats[format].second) }
-            else -> vm.exportAllImages(doc, skipSmall, share = false)
+            0 -> vm.tools.exportDocument(doc, formats[format].second)
+            1 -> { vm.tools.updateImageSettings(dpi, quality); vm.tools.exportImages(doc, formats[format].second) }
+            else -> vm.tools.exportAllImages(doc, skipSmall, share = false)
         }
     }) {
         // the tabs sit at the left, each underlined across its own label
@@ -504,7 +504,7 @@ fun ExportScreen(vm: AppViewModel, doc: OpenDocument) {
                 SwitchRow(stringResource(R.string.export_skip_small), skipSmall) { skipSmall = it }
                 Text(
                     stringResource(R.string.common_share), color = c.accent, fontSize = 16.sp, fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.clickable(enabled = !textBlocked, role = androidx.compose.ui.semantics.Role.Button) { vm.exportAllImages(doc, skipSmall, share = true) }
+                    modifier = Modifier.clickable(enabled = !textBlocked, role = androidx.compose.ui.semantics.Role.Button) { vm.tools.exportAllImages(doc, skipSmall, share = true) }
                         .padding(horizontal = 24.dp, vertical = 12.dp),
                 )
             }
@@ -520,7 +520,7 @@ fun ExportScreen(vm: AppViewModel, doc: OpenDocument) {
 @Composable
 fun CreateSourcesScreen(vm: AppViewModel) {
     val c = pdfColors
-    val back = { vm.toolScreen = null }
+    val back = { vm.tools.toolScreen = null }
     BackHandler(onBack = back)
     Column(Modifier.fillMaxSize().background(c.surface).safeTopPadding().background(c.navBand).navigationBarsPadding().background(c.surface)) {
         Row(Modifier.fillMaxWidth().height(io.github.artcraftandroid.pdfcraft.ui.viewer.TopBarHeight), verticalAlignment = Alignment.CenterVertically) {
@@ -529,12 +529,12 @@ fun CreateSourcesScreen(vm: AppViewModel) {
             Text(stringResource(R.string.tools_create_title), color = c.label, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
         }
         Spacer(Modifier.height(8.dp))
-        SourceRow(LucideIcons.Images, stringResource(R.string.home_photos)) { vm.toolScreen = null; vm.pickPhotosToPdf() }
-        SourceRow(LucideIcons.FolderOpen, stringResource(R.string.tools_browse_files)) { vm.toolScreen = null; vm.pickFiles(FilePickKind.Create) }
+        SourceRow(LucideIcons.Images, stringResource(R.string.home_photos)) { vm.tools.toolScreen = null; vm.pickPhotosToPdf() }
+        SourceRow(LucideIcons.FolderOpen, stringResource(R.string.tools_browse_files)) { vm.tools.toolScreen = null; vm.pickFiles(FilePickKind.Create) }
         Text(stringResource(R.string.tools_or_make_new), color = c.textSecondary, fontSize = 14.sp, modifier = Modifier.padding(start = 20.dp, top = 20.dp, bottom = 6.dp))
         Box(Modifier.padding(horizontal = 16.dp).fillMaxWidth().height(1.dp).background(c.divider))
-        SourceRow(LucideIcons.Camera, stringResource(R.string.tools_scan_document)) { vm.toolScreen = null; vm.startScan() }
-        SourceRow(LucideIcons.BookOpen, stringResource(R.string.notebook_new)) { vm.toolScreen = null; vm.study.newNotebookOpen = true }
+        SourceRow(LucideIcons.Camera, stringResource(R.string.tools_scan_document)) { vm.tools.toolScreen = null; vm.startScan() }
+        SourceRow(LucideIcons.BookOpen, stringResource(R.string.notebook_new)) { vm.tools.toolScreen = null; vm.study.newNotebookOpen = true }
     }
 }
 
@@ -584,7 +584,7 @@ fun CombineScreen(vm: AppViewModel) {
     var dragOffset by remember { mutableFloatStateOf(0f) }
     val rowPx = with(LocalDensity.current) { 58.dp.toPx() }
     val ok = files.size in 2..12
-    val back = { vm.toolScreen = null; vm.combineFiles.clear() }
+    val back = { vm.tools.toolScreen = null; vm.combineFiles.clear() }
     val dragLabel = stringResource(R.string.tools_drag_to_reorder)
     val removedMessage = stringResource(R.string.tools_file_removed)
     BackHandler(onBack = back)
@@ -691,14 +691,14 @@ fun CropScreen(vm: AppViewModel, doc: OpenDocument) {
         bitmap = runCatching { withContext(eng.thumbnails) { eng.session.renderPage(doc.id, page.toUInt(), scale, null).toBitmap().asImageBitmap() } }.getOrNull()
     }
     val changed = !(rect[0] == 0f && rect[1] == 0f && rect[2] == 1f && rect[3] == 1f)
-    ToolScaffold(stringResource(if (allPages) R.string.tools_all_pages else R.string.tools_current_page), { vm.toolScreen = null }, null, false, {},
+    ToolScaffold(stringResource(if (allPages) R.string.tools_all_pages else R.string.tools_current_page), { vm.tools.toolScreen = null }, null, false, {},
         viewerBands = true,
         trailing = {
             Text(
                 stringResource(R.string.common_save), color = if (changed) c.label else c.textSecondary.copy(alpha = 0.5f), fontSize = 17.sp,
                 modifier = Modifier.clickable(enabled = changed) {
                     val info = p ?: return@clickable
-                    vm.crop(doc, if (allPages) null else page, floatArrayOf(rect[0] * info.width, rect[1] * info.height, rect[2] * info.width, rect[3] * info.height))
+                    vm.tools.crop(doc, if (allPages) null else page, floatArrayOf(rect[0] * info.width, rect[1] * info.height, rect[2] * info.width, rect[3] * info.height))
                 }.padding(horizontal = 16.dp, vertical = 12.dp),
             )
         }) {
@@ -916,7 +916,7 @@ fun ScanScreen(vm: AppViewModel) {
         val lab = vm.scanLab.options
         val flattening = flatten && vm.scanCanFlatten
         // Settings ▸ Preferences ▸ Scan (#339); read each time, so a change there shows here
-        val autoUpright = io.github.artcraftandroid.pdfcraft.ui.scan.ScanUprightSetting.get(vm.appPrefs)
+        val autoUpright = io.github.artcraftandroid.pdfcraft.ui.scan.ScanUprightSetting.get(vm.settings.appPrefs)
         if (page != null && lab.preview) {
             LaunchedEffect(page.file, page.corners.toList(), page.turns, filter, flattening, lab, autoUpright) { vm.requestScanPreview(shownAt, page, filter, flattening) }
         }
