@@ -132,6 +132,10 @@ data class MarkupDrag(val range: TextRange, val rects: List<FloatArray>)
 @Composable
 fun ToolLayer(vm: AppViewModel, doc: OpenDocument) {
     val tool = doc.controller.tool
+    if (vm.redact.placing === doc) {
+        RedactPlaceLayer(vm, doc)
+        return
+    }
     if (tool == ViewerTool.None || tool == ViewerTool.Edit) return
     when (tool) {
         ViewerTool.Draw -> DrawLayer(vm, doc)

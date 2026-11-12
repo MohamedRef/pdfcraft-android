@@ -484,14 +484,17 @@ private fun About(vm: AppViewModel) {
     UpdatePanel()
     SheetDivider()
     Section(stringResource(R.string.home_section_diagnostics))
-    SheetRow(null, stringResource(R.string.home_record_open_timings), { vm.updateRecordOpenTimings(!vm.recordOpenTimings) }) {
-        PdfSwitch(vm.recordOpenTimings, { vm.updateRecordOpenTimings(it) })
+    SheetRow(null, stringResource(R.string.home_record_diagnostics), { vm.updateRecordDiagnostics(!vm.recordDiagnostics) }) {
+        PdfSwitch(vm.recordDiagnostics, { vm.updateRecordDiagnostics(it) })
     }
     Text(
-        stringResource(R.string.home_record_open_timings_body),
+        stringResource(R.string.home_record_diagnostics_body),
         color = c.textSecondary, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 20.dp),
     )
-    if (vm.recordOpenTimings) SheetRow(null, stringResource(R.string.home_share_open_timings), { vm.shareOpenTimings() })
+    if (vm.recordDiagnostics) {
+        SheetRow(null, stringResource(R.string.home_share_diagnostics), { vm.shareDiagnostics() })
+        SheetRow(null, stringResource(R.string.home_clear_diagnostics), { vm.clearDiagnostics() })
+    }
     SheetDivider()
     Section(stringResource(R.string.home_section_legal))
     SheetRow(null, stringResource(R.string.home_licences), { vm.showLicences = true })
