@@ -27,6 +27,7 @@ pub mod metrics_compare;
 pub mod metrics_geometry;
 pub mod metrics_tone;
 pub mod models;
+pub mod moire;
 pub mod page;
 mod photo;
 pub mod photo_mask;
@@ -71,6 +72,8 @@ mod tests_metrics_compare;
 mod tests_metrics_geometry;
 #[cfg(test)]
 mod tests_metrics_tone;
+#[cfg(test)]
+mod tests_moire;
 #[cfg(test)]
 mod tests_photo_mask;
 #[cfg(test)]
