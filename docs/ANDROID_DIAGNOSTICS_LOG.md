@@ -48,7 +48,7 @@ Areas (lines · issues):
 | --- | --- | --- | --- |
 | `app` | Process start, pause (and whether it was for the app's own picker or share sheet), resume, recording on, log cleared | `PdfcraftApplication`, `MainActivity` | #97 |
 | `open` | `open_start` with a per-open number, then every open stage and milestone of `OpenTiming` (see `docs/PDF_OPEN_PROFILING.md`), including `native_input_mapped`/`_owned` and `native_display_spliced`/`_copied` (whether the display copy duplicated the file, #234) | `AppViewModel.open`, `DocumentFiles`, native timings | #211 #212 #234 #235 #317 |
-| `render` | Page, tile and prefetch render times, slow-render pixels, stale tiles, render failures. `render_retry` for each failed page or tile render (page, base or tile, `oom`, `wait_ms` before the retry, `gave_up` after the last try) and `render_recovered` when a retry then worked (`failed_tries`) | `PageImages` | #99 #236 |
+| `render` | Page, tile and prefetch render times, slow-render pixels, stale tiles, render failures. `tile_render_cancelled` when a tile the view stopped wanting was stopped while it drew (#91). `render_retry` for each failed page or tile render (page, base or tile, `oom`, `wait_ms` before the retry, `gave_up` after the last try) and `render_recovered` when a retry then worked (`failed_tries`) | `PageImages` | #99 #236 #86 #91 |
 | `ink` | One `stroke` line per pen stroke: duration, events, samples, sample rate, how the stroke started (`mode=ink`, `erase` or `highlight`, from the eraser tip or the S Pen button), and app-side latency (count, median, p95, max) of the normal and low-latency paths. `latency_summary` for each path when the log is shared | `StylusLog`, `InkLatency` | #128 #144 |
 | `ink` | `gesture`: one line per touch on the page with a drawing tool: the pointer it started with, its role at the start and at the end (`draw`, `erase`, `navigate`, `palm`, `overlay`), pen mode, whether a pen took over from a finger, whether it moved past touch slop (`moved=false` is a tap), most fingers down, finger events and the batched samples they carried, duration, cancelled | `toolGestures`, `InkDiagnostics.kt` | #74 #81 #84 |
 | `ink` | `erase`: one line per eraser gesture: points, chunks erased before lift (a long gesture), radius in points | `InkDiagnostics.kt` | #76 |
@@ -63,11 +63,14 @@ Areas (lines · issues):
 | `save` | Pause with a document open (dirty or not), and each save: `doc_save`, `refresh` and `write_back` times, bytes written, trigger (`pause`, `close`, `save_now`, `other`) and outcome (`saved`, `held` while Save a copy's picker is open, `read_only`, `failed`). Save a copy: `copy_start` (dirty, whether a save of this visit already wrote the original), `copy_cancel`, `copy_continue` (whether the original's working copy was discarded) | `AppViewModel.onPause`, `AppViewModel.save`, `AppViewModel.saveCopyAs` | #97 #101-#104 #190 |
 | `share` | Each share: the choice (`pdf`, `flattened`, `clean`, `page`, `images`), the page in view and page count, and the bytes of the file handed out | `AppViewModel.share` | #205 #155 |
 | `update` | Each update check (`auto` for the daily one, found or not, time), downloads (`verified`, `paused` with progress, failures) and installs (installer launched or permission missing) | `UpdaterState`, `UpdatePanel` | #193 |
-| `scan` | Each photo (edges found, edge search time), each saved page (edges found, corners moved, largest move in % of the photo diagonal, look, clean-up time, and from #287 the native `decode_ms`, `rectify_ms`, `look_ms`, `encode_ms`, output `out_width`/`out_height`, `out_format` and `dpi`, and from #293 the matched `paper`, the `aspect` source (`known_focal`, `estimated_focal`, `typical_focal`, `side_lengths`) and `focal_mismatch`), the saved pages' size and ratio, OCR time, and a summary with found and untouched pages | `AppViewModel.onScanPhoto`, `AppViewModel.saveScan`, `ScanDiagnostics.kt` | #286-#307 (gates) |
-| `memory` | Java heap and native heap at process start, after the native open, after overlays, on memory trims and when sharing | `Diagnostics.memory` | #212 #92 |
-| `tool` | Engine tools that took 100 ms or more, or failed | `Engine.tool` | #96 #113 |
+| `scan` | Each photo (edges found, search time `find_ms` with its parts `decode_ms`, `detect_ms` and `refine_ms`; from #290 what found the page: `source` (`model`, `lines`, `none`, or `failed`), its `confidence`, the `angle` the photo was shown to the network at and how many `passes` it took; from #291 how many sides were `refined_sides` and `curved_sides`), each saved page (edges found, corners moved, largest move in % of the photo diagonal, look, clean-up time, and from #287 the native `decode_ms`, `rectify_ms`, `look_ms`, `encode_ms`, output `out_width`/`out_height`, `out_format` and `dpi`, and from #293 the matched `paper`, the `aspect` source (`known_focal`, `estimated_focal`, `typical_focal`, `side_lengths`) and `focal_mismatch`), the saved pages' size and ratio, OCR time, and a summary with found and untouched pages | `AppViewModel.onScanPhoto`, `AppViewModel.saveScan`, `ScanDiagnostics.kt` | #286-#307 (gates) |
+| `memory` | Java heap and native heap at process start, after the native open, after overlays, on memory trims and when sharing. `page_images_trim` when the app goes to the background: page images kept, MB freed and MB kept | `Diagnostics.memory`, `PageImages.trimToWanted` | #212 #92 #95 |
+| `tool` | Engine tools that took 100 ms or more, or failed. A comment edit's time (`comment_add`, `comment_update`) is the cost of #131 | `Engine.tool` | #96 #113 #131 |
+| `text` | One `search` line per search (pages, pages searched, hits, total and first-hit time, whether it finished or was replaced); one `word_count` line per Read Aloud start (pages counted, time, finished or stopped); `slow_selection` for a selection query (long press, drag, handles, copy) that took 100 ms or more, waiting included | `SearchState`, `ReadAloud`, `TextSelection` | #87 #88 |
+| `home` | `recents` (files on Home, time to work out their sources and locations) and `slow_thumbnail` for a file card preview that took 100 ms or more | `AppViewModel.refreshRecents`, `Thumbnails.load` | #93 #94 |
 | `error` | Failures with their stage and exception class, engine panics caught, and crashes with the exception classes and code locations | `Diag.failure`, `Engine`, crash handler | #114 |
 | `viewer` | Reading and presenting: jumps back and forward, Go to page, the layout a file opens in and why, page mode and spread changes, the spread a window shows, reading colours, keyboard shortcuts, hiding annotations, comment-list filters and dimming, copies without annotations, presentation start and end, clicker keys, the second screen and the pages drawn for it (see below) | `ViewerController`, `AppViewModel`, `ViewerScreen`, `CommentList`, `ExternalPresentation` | #152 #153 #155 #157 #184 #198 #203 #204 #327 |
+| `markup` | Comments, markup, links, measuring and study: comment export, import, summary, copy and paste, status and lock; markup follow-up actions, area highlights, replace and insert suggestions, shape annotations; links added, edited, deleted, made from addresses and removed; measure points, saved measurements, scales and exports; masking tape and quizzes (see below). Never a comment's text, a link's address or a measurement's label | `MarkupDiag`, `AppViewModel`, `Tools`, `Study` | #133 #134 #135 #143 #158 #159 #169 #170 #179 #180 #196 #197 |
 
 ### `viewer` lines
 
@@ -95,6 +98,31 @@ Areas (lines · issues):
 
 Failures in these steps also write an `[error] failed area=viewer stage=…` line (`comments_hide`,
 `reading_colors`, `clean_copy`, `unlocked_copy`, `external_show`).
+
+### `markup` lines
+
+Every line carries `doc` (the document's number in the log).
+
+| Line | Fields | What it answers |
+| --- | --- | --- |
+| `comments_export` | `share`, `bytes`, `ms` | Comments were exported to a file or shared as XFDF, its size and time (#169) |
+| `comments_import` | `kind` (file extension), `bytes`, `added`, `ms` | An XFDF or FDF import, how many comments it added and how long it took (#169) |
+| `comments_summary` | `sort`, `ms` | A comment summary was made, in which order and how fast (#158) |
+| `comments_copy`, `comments_paste` | `comments`, `pages`; `pages`, `skipped_pages` | Comments copied to another document, and pages a paste had to skip because the document is shorter (#169) |
+| `comment_status`, `comment_lock` | `status` (`accepted`, `rejected`, `cancelled`, `completed`, `none`); `locked` | A review status or lock was set from the list (#196) |
+| `markup_follow_up` | `action` (`recolor`, `note`, `delete`) | The bar that follows a new markup was used (#197) |
+| `area_highlight` | `w_pt`, `h_pt` | A Highlight drag that found no text highlighted the area instead (#134) |
+| `text_suggestion` | `kind` (`replace`, `insert`), `lines` | A replace or insert suggestion on selected text (#133) |
+| `shape` | `type` (the shape mode, such as `arrow`, `cloud`, `polygon`), `points` | A drawn shape became its own annotation rather than ink (#170) |
+| `link` | `action` (`add`, `edit`, `delete`), `target` (`page`, `web`, `mail`), `from` (`box`, `lasso`) | A link was made, changed or removed, and how its area was chosen (#179) |
+| `links_from_urls`, `links_remove` | `created`, `ms` | Web addresses in the text were turned into links, or all links were removed (#159) |
+| `measure_point` | `kind` (`distance`, `perimeter`, `area`, `calibrate`), `snapped`, `points`, `snap_ms` | Each measuring tap, whether it snapped to the page's lines and how long snapping took (#135 #180) |
+| `measure_saved`, `measure_scale`, `measure_export` | `kind`, `points`; `method` (`ratio`, `calibrate`), `unit`; `count` | A measurement was saved, a scale set, or measurements exported (#135 #180) |
+| `tape_add`, `tape_toggle` | `color` (index in the tape colours); `lifted`, `via` (`tap`, `talkback`) | Tape was laid, or lifted or laid again (#143) |
+| `tape_all`, `tape_remove_all` | `lifted`, `tapes`; `tapes`, `pages` | Reveal all, Cover all, or Remove all tape (#143) |
+| `quiz_start`, `quiz_end` | `scope` (`page`, `document`), `items`; `items`, `answered`, `known` | A quiz started over highlights and how it ended (#143) |
+
+Failed engine tools in these steps write the usual `[tool]` and `[error]` lines.
 
 How the Scan gates read from the log: the no-touch rate is `untouched_pages / found_pages` in the
 `saved` line; the corner error is the median of `max_move_pct` over the `page` lines with

@@ -377,7 +377,7 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
         if (ctl.tool == ViewerTool.Edit && vm.editMode == EditMode.Link) LinkLayer(vm, doc)
         vm.linkEdit?.takeIf { it.doc === doc }?.let { LinkSheet(vm, it) }
         vm.textPrompt?.takeIf { it.doc === doc }?.let { TextEntry(vm, it, onDone = vm::postText) }
-        vm.fillTextPrompt?.takeIf { it.doc === doc }?.let { TextEntry(vm, it, onDone = vm::postFillText) }
+        vm.signing.fillTextPrompt?.takeIf { it.doc === doc }?.let { TextEntry(vm, it, onDone = vm.signing::postFillText) }
         vm.addTextPrompt?.takeIf { it.doc === doc }?.let { TextEntry(vm, it, onDone = vm::postAddText) }
         vm.fieldEdit?.takeIf { it.doc === doc }?.let { FieldEditor(vm, it) }
         // a Fill & Sign element can be dragged and, for boxes, resized (a comment's: over its panel, below)

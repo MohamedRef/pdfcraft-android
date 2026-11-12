@@ -1281,6 +1281,36 @@ fn cancelled_renders_stop_and_others_draw_the_same() {
     s.close(doc, true).unwrap();
 }
 
+/// Check & prepare and Print options: the arguments the app sends are accepted, and the fixes undo.
+#[test]
+fn standards_and_print_options_the_app_sends() {
+    let s = MobileSession::new();
+    let doc = s.open(blank_pdf(5), None).unwrap().id;
+    let run = |name: &str, args: Value| -> Value {
+        let mut args = args;
+        args["doc"] = json!(doc);
+        serde_json::from_str(&s.execute(name.into(), args.to_string()).unwrap()).unwrap()
+    };
+    assert_eq!(run("pdfa_verify", json!({ "level": "3b" }))["compliant"], json!(false));
+    let fixed = run("pdfa_convert", json!({ "level": "2b" }));
+    assert_eq!(fixed["compliant"], json!(true));
+    assert_eq!(fixed["declared"]["pdfa"], json!("PDF/A-2b"));
+    run("standards_remove_id", json!({ "standard": "pdfa" }));
+    assert!(run("pdfa_verify", json!({ "level": "2b" }))["declared"]["pdfa"].is_null());
+    assert!(run("print_readiness", json!({}))["text"].as_str().unwrap().contains("Print readiness"));
+    assert_eq!(run("doc_fix_hairlines", json!({ "narrower_than": 0.216, "width": 0.72, "pages": [2] }))["fixed"], json!(0));
+    let dir = std::env::temp_dir().join(format!("pdfcraft-print-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let out = |n: &str| dir.join(n).to_string_lossy().into_owned();
+    let n_up = run("doc_print", json!({ "path": out("a.pdf"), "pages": "1-3", "subset": "odd", "layout": "multiple", "per_sheet": 2, "border": true, "comments_forms": "document" }));
+    assert_eq!(n_up["sheets"], json!(1)); // pages 1 and 3 on one sheet
+    let booklet = run("doc_print", json!({ "path": out("b.pdf"), "layout": "booklet", "binding": "right", "comments_forms": "document-and-markups" }));
+    assert_eq!(booklet["sheets"], json!(4)); // 5 pages padded to 8: four sides
+    let plain = run("doc_print", json!({ "path": out("c.pdf"), "reverse": true, "layout": "fit", "comments_forms": "document-and-markups" }));
+    assert_eq!(plain["sheets"], json!(5));
+    std::fs::remove_dir_all(&dir).ok();
+}
+
 /// Masking tape (#143): Android lays tape as an invisible rectangle marked "PdfCraft tape" and
 /// draws the tape itself, so the page renders without it, comment_list gives back what Android
 /// finds it by, and Remove all tape (comments_edit_many delete) takes it away in one undo step.

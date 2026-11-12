@@ -1,11 +1,12 @@
-//! How a straightened page looks. **Auto** is this crate's own enhancement (#298, [`crate::enhance`]).
-//! The other looks are still the engine's camera clean-up (`pdfcraft_engine::camera_clean`), so
-//! they look exactly as they did before this crate; #299, #300 and #301 replace them on purpose.
+//! How a straightened page looks. **Auto** (#298) and **black and white** (#300) are this crate's
+//! own ([`crate::enhance`]). The other looks are still the engine's camera clean-up
+//! (`pdfcraft_engine::camera_clean`), so they look exactly as they did before this crate; #299
+//! and #301 replace them on purpose.
 
 use pdfcraft_engine::camera_clean;
 
 use crate::Rgb;
-use crate::enhance::{AutoParams, PaperMode, auto};
+use crate::enhance::{AutoParams, Bitmap1, BwParams, PaperMode, auto, black_white};
 
 /// A page's look.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
@@ -30,30 +31,45 @@ impl Look {
             Look::Original => Some(camera_clean::Look::Original),
             Look::Colour => Some(camera_clean::Look::Colour),
             Look::Greyscale => Some(camera_clean::Look::Greyscale),
-            Look::BlackWhite => Some(camera_clean::Look::BlackWhite),
-            Look::Auto => None,
+            Look::BlackWhite | Look::Auto => None,
         }
     }
 }
 
-/// A page's pixels with its look: RGB8, or one grey byte per pixel.
+/// A page's pixels with its look: RGB8, one grey byte per pixel, or one bit per pixel.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Pixels {
     Rgb(Vec<u8>),
     Grey(Vec<u8>),
+    Bilevel(Bitmap1),
 }
 
-/// Give `page` the `look` at `strength` (0–100; for black and white the threshold). `None` when
-/// the page's buffer doesn't match its size.
+/// What a look needs to know besides the pixels.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct LookParams {
+    /// 0–100.
+    pub strength: u8,
+    /// Threads (only the looks of this crate use more than one; the bytes are the same for any
+    /// number).
+    pub threads: usize,
+    /// The page's resolution, for the looks that measure in millimetres.
+    pub dpi: f32,
+}
+
+/// Give `page` the `look` at `strength` (0–100), taking it to be at 300 dpi. `None` when the
+/// page's buffer doesn't match its size.
 pub fn apply(page: &Rgb, look: Look, strength: u8) -> Option<Pixels> {
-    apply_with_threads(page, look, strength, 1)
+    apply_with(page, look, &LookParams { strength, threads: 1, dpi: 300.0 })
 }
 
-/// [`apply`] on up to `threads` threads (only Auto uses more than one; the bytes are the same for
-/// any number).
-pub fn apply_with_threads(page: &Rgb, look: Look, strength: u8, threads: usize) -> Option<Pixels> {
+/// Give `page` the `look`.
+pub fn apply_with(page: &Rgb, look: Look, params: &LookParams) -> Option<Pixels> {
+    let LookParams { strength, threads, dpi } = *params;
     let Some(engine) = look.engine() else {
-        return Some(Pixels::Rgb(auto(page, &AutoParams { strength, paper: PaperMode::White, threads })?.rgb.data));
+        return Some(match look {
+            Look::BlackWhite => Pixels::Bilevel(black_white(page, &BwParams { strength, dither_photos: true, dpi, threads })?),
+            _ => Pixels::Rgb(auto(page, &AutoParams { strength, paper: PaperMode::White, threads })?.rgb.data),
+        });
     };
     Some(match camera_clean::apply(&page.data, page.width, page.height, engine, strength.min(camera_clean::MAX_LEVEL))? {
         camera_clean::Pixels::Rgb(v) => Pixels::Rgb(v),

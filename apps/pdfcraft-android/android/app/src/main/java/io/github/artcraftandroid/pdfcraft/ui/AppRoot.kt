@@ -123,9 +123,9 @@ fun AppRoot(vm: AppViewModel, onBrowse: () -> Unit, onPickSignatureImage: () -> 
             vm.study.reviewing?.let { ReviewScreen(vm, it) }
             vm.study.cardDraft?.let { CardEditor(vm, it) }
             if (vm.study.newNotebookOpen) io.github.artcraftandroid.pdfcraft.ui.home.NewNotebookSheet(vm) { vm.study.newNotebookOpen = false }
-            vm.signaturePad?.let { SignaturePadScreen(vm, it, onPickSignatureImage) }
-            vm.certSign?.let { CertSignScreen(vm, it) }
-            if (vm.idCreate) CreateIdScreen(vm)
+            vm.signing.signaturePad?.let { SignaturePadScreen(vm, it, onPickSignatureImage) }
+            vm.signing.certSign?.let { CertSignScreen(vm, it) }
+            if (vm.signing.idCreate) CreateIdScreen(vm)
             if (vm.settingsOpen) SettingsScreen(vm)
             if (vm.showLicences) LicencesScreen(vm)
 
@@ -140,8 +140,8 @@ fun AppRoot(vm: AppViewModel, onBrowse: () -> Unit, onPickSignatureImage: () -> 
             SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = 72.dp, start = 8.dp, end = 8.dp))
 
             vm.passwordRequest?.let { PasswordDialog(vm, it) }
-            vm.idImport?.let { IdPasswordDialog(vm, it) }
-            vm.signFieldChoice?.let { (d, w) -> SignFieldChoiceDialog(vm, d, w) }
+            vm.signing.idImport?.let { IdPasswordDialog(vm, it) }
+            vm.signing.signFieldChoice?.let { (d, w) -> SignFieldChoiceDialog(vm, d, w) }
             if (vm.tipsOpen) FirstRunTipsDialog(onClose = { vm.tipsOpen = false })
             if (vm.authorPrompt) {
                 var name by remember { mutableStateOf("") }
@@ -297,6 +297,8 @@ private fun LicencesScreen(vm: AppViewModel) {
             entry(stringResource(R.string.root_licence_foxit), "BSD-3-Clause, Foxit Software Inc. and the PDFium Authors")
             entry(stringResource(R.string.root_licence_cmaps), "BSD-3-Clause, Adobe")
             entry(stringResource(R.string.root_licence_ocrs), stringResource(R.string.root_licence_ocrs_terms))
+            // the scanner's page detector (#290); its notice and licence text are in assets/models
+            entry("DocQuadNet-256 (MakeACopy)", "Apache-2.0, Christian Kierdorf")
             entry(stringResource(R.string.root_licence_rust), stringResource(R.string.root_licence_rust_terms))
             for (licence in texts.filter { it.isNotBlank() }) {
                 Spacer(Modifier.height(20.dp))

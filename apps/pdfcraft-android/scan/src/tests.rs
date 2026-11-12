@@ -283,7 +283,8 @@ fn each_look_is_the_engines_camera_clean_up() {
     let (w, h) = output_size(&quad).unwrap();
     let page = rectify_with_threads(&photo, &quad, w, h, 2).unwrap();
     use pdfcraft_engine::camera_clean as cc;
-    for (look, engine) in [(Look::Original, cc::Look::Original), (Look::Colour, cc::Look::Colour), (Look::Greyscale, cc::Look::Greyscale), (Look::BlackWhite, cc::Look::BlackWhite)] {
+    // black and white (#300) and Auto (#298) are this crate's own
+    for (look, engine) in [(Look::Original, cc::Look::Original), (Look::Colour, cc::Look::Colour), (Look::Greyscale, cc::Look::Greyscale)] {
         for strength in [0, 50, 100] {
             let ours = apply(&page, look, strength).unwrap();
             let theirs = match cc::apply(&page.data, w, h, engine, strength).unwrap() {

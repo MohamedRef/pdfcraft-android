@@ -12,6 +12,14 @@
 //! cargo run -p pdfcraft-scan --example scan_reference -- page <dir> <out_dir> [strength]
 //!     the whole pipeline (decode, straighten to the reference's corners, Auto, encode) on every
 //!     <dir>/<name>.before.jpg that has a <name>.ref.json  ->  <out_dir>/<name>.jpg
+//!
+//! cargo run -p pdfcraft-scan --example scan_reference -- bw <dir> <out_dir> [strength]
+//!     the same pipeline in black and white (#300)  ->  <out_dir>/<name>.png (1 bit per pixel)
+//!
+//! cargo run -p pdfcraft-scan --example scan_reference -- detect <dir> <out_dir>
+//!     where the page is found in every <dir>/<name>.before.jpg (#290) and after the edges are
+//!     refined (#291), against the reference's crop: the largest corner distance in % of the
+//!     photo's diagonal. Nothing is written.
 //! ```
 //!
 //! The pairs are someone's documents: keep the folders outside the repository.
@@ -19,7 +27,7 @@
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
-use pdfcraft_scan::{AutoParams, Look, PageRequest, PaperMode, Rgb, auto, process_page};
+use pdfcraft_scan::{AutoParams, Look, PageRequest, PaperMode, Photo, Pyramid, RefineOptions, Rgb, auto, detect, process_page, refine};
 
 fn files(dir: &Path, suffix: &str) -> Vec<PathBuf> {
     let mut found: Vec<PathBuf> = std::fs::read_dir(dir)
@@ -59,7 +67,7 @@ fn look(dir: &Path, out: &Path, strength: u8, threads: usize) {
     }
 }
 
-fn page(dir: &Path, out: &Path, strength: u8, threads: usize) {
+fn page(dir: &Path, out: &Path, look: Look, strength: u8, threads: usize) {
     for path in files(dir, ".before.jpg") {
         let name = name_of(&path, ".before.jpg");
         let Some(corners) = std::fs::read_to_string(dir.join(format!("{name}.ref.json"))).ok().as_deref().and_then(corners) else {
@@ -67,29 +75,77 @@ fn page(dir: &Path, out: &Path, strength: u8, threads: usize) {
             continue;
         };
         let photo = std::fs::read(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
-        match process_page(&PageRequest { look: Look::Auto, strength, threads, ..PageRequest::new(&photo, corners) }) {
+        match process_page(&PageRequest { look, strength, threads, ..PageRequest::new(&photo, corners) }) {
             Ok(result) => {
                 let stages: Vec<String> = result.timings.iter().map(|(stage, ms)| format!("{stage} {ms} ms")).collect();
-                println!("{name}: {} x {}, {}", result.width, result.height, stages.join(", "));
-                std::fs::write(out.join(format!("{name}.jpg")), &result.bytes).unwrap_or_else(|e| panic!("{name}: {e}"));
+                println!(
+                    "{name}: {} x {} at {} dpi, {} KiB, {}",
+                    result.width,
+                    result.height,
+                    result.dpi,
+                    result.bytes.len() / 1024,
+                    stages.join(", ")
+                );
+                std::fs::write(out.join(format!("{name}.{}", result.format.extension())), &result.bytes).unwrap_or_else(|e| panic!("{name}: {e}"));
             }
             Err(e) => println!("{name}: {e}"),
         }
     }
 }
 
+/// The eight numbers after `"corners":` as they are (a reference corner may lie outside the photo).
+fn reference_corners(json: &str) -> Option<[f64; 8]> {
+    let list = json.split("\"corners\":").nth(1)?.split('[').nth(1)?.split(']').next()?;
+    let v: Vec<f64> = list.split(',').filter_map(|s| s.trim().parse().ok()).collect();
+    v.try_into().ok()
+}
+
+fn find(dir: &Path) {
+    for path in files(dir, ".before.jpg") {
+        let name = name_of(&path, ".before.jpg");
+        let Some(reference) = std::fs::read_to_string(dir.join(format!("{name}.ref.json"))).ok().as_deref().and_then(reference_corners) else {
+            continue;
+        };
+        let Ok(photo) = Photo::decode(&std::fs::read(&path).unwrap_or_default()) else { continue };
+        let (w, h) = (f64::from(photo.width), f64::from(photo.height));
+        let off = |q: &pdfcraft_scan::Quad| {
+            (0..4).map(|i| (q.0[i][0] - reference[2 * i] * w).hypot(q.0[i][1] - reference[2 * i + 1] * h) / w.hypot(h) * 100.0).fold(0.0, f64::max)
+        };
+        let clock = Instant::now();
+        let found = detect(&photo);
+        let ms = clock.elapsed().as_millis();
+        let Some(quad) = found.quad else {
+            println!("{name}: nothing ({:?}, confidence {:.2}, {} passes, {ms} ms)", found.source, found.confidence, found.passes);
+            continue;
+        };
+        let refined = refine(&Pyramid::new(photo.luma()), &quad, &RefineOptions::default());
+        let sides = refined.sides.iter().filter(|s| s.refined).count();
+        println!(
+            "{name}: {:?} confidence {:.2}, turned {}, {} passes, {ms} ms: {:.1} % from the reference, {:.1} % after refining {sides} sides",
+            found.source,
+            found.confidence,
+            found.angle,
+            found.passes,
+            off(&quad),
+            off(&refined.quad)
+        );
+    }
+}
+
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     let (Some(mode), Some(dir), Some(out)) = (args.get(1), args.get(2), args.get(3)) else {
-        eprintln!("usage: scan_reference look|page <dir> <out_dir> [strength]");
+        eprintln!("usage: scan_reference look|page|bw|detect <dir> <out_dir> [strength]");
         std::process::exit(2);
     };
-    let strength = args.get(4).and_then(|v| v.parse().ok()).unwrap_or(60);
+    let strength = args.get(4).and_then(|v| v.parse().ok()).unwrap_or(if mode == "bw" { 55 } else { 60 });
     let threads = std::thread::available_parallelism().map_or(1, usize::from).min(4);
     std::fs::create_dir_all(out).unwrap_or_else(|e| panic!("{out}: {e}"));
     match mode.as_str() {
         "look" => look(Path::new(dir), Path::new(out), strength, threads),
-        "page" => page(Path::new(dir), Path::new(out), strength, threads),
-        other => eprintln!("unknown mode {other}: use look or page"),
+        "page" => page(Path::new(dir), Path::new(out), Look::Auto, strength, threads),
+        "bw" => page(Path::new(dir), Path::new(out), Look::BlackWhite, strength, threads),
+        "detect" => find(Path::new(dir)),
+        other => eprintln!("unknown mode {other}: use look, page, bw or detect"),
     }
 }

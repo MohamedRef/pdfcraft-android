@@ -347,11 +347,9 @@ impl Session {
             Self::release_working(doc);
         }
         let Some(editor) = doc.editor.as_mut() else { return Ok(()) };
-        // Comment edits, and form edits (a script may change annotation properties), may change
-        // annotation dictionaries, invalidating cached appearances.
-        if matches!(scope, Scope::Comments | Scope::Form) {
-            editor.appearances.clear();
-        }
+        // Comment and form edits keep cached appearances: each entry is checked against the
+        // annotation dictionary and the values it follows, so a changed annotation is drawn
+        // again and an unchanged one is reused (#322).
         let bytes = if editor.cos.is_modified() {
             Arc::new(write_incremental(&editor.cos, &SaveOptions::default()).map_err(|e| EditError::Write(e.to_string()))?)
         } else {

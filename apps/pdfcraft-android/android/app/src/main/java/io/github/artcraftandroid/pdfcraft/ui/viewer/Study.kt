@@ -209,8 +209,9 @@ fun AppViewModel.tapStudyMask(doc: OpenDocument, at: PagePoint?): Boolean {
     return true
 }
 
-fun toggleTape(doc: OpenDocument, key: String) {
+fun toggleTape(doc: OpenDocument, key: String, via: String = "tap") {
     val s = doc.study
+    MarkupDiag.tapeToggle(doc, lifted = !s.isLifted(key), via = via)
     if (s.isLifted(key)) {
         if (s.allLifted) {
             // lay this one again, the rest stay lifted
@@ -225,6 +226,7 @@ fun toggleTape(doc: OpenDocument, key: String) {
 
 /** Reveal all ([lifted]) or Cover all. */
 fun setAllTapeLifted(doc: OpenDocument, lifted: Boolean) {
+    MarkupDiag.tapeAll(doc, lifted, tapes(doc).size)
     doc.study.lifted.clear()
     doc.study.allLifted = lifted
 }
@@ -236,6 +238,7 @@ fun AppViewModel.addTape(doc: OpenDocument, page: Int, rect: FloatArray) {
         return
     }
     runTool(doc, "comment_add", tapeArgs(page, rect, doc.study.tapeColor, commentAuthor))
+    MarkupDiag.tapeAdd(doc, doc.study.tapeColor)
 }
 
 /** Remove every piece of tape in the document (one undo step per page). */
@@ -250,7 +253,9 @@ fun AppViewModel.removeAllTape(doc: OpenDocument) {
         for ((page, list) in byPage) {
             runTool(doc, "comments_edit_many", mapOf("page" to page + 1, "comments" to list.map { it.index.toInt() + 1 }, "delete" to true))
         }
-        setAllTapeLifted(doc, false)
+        MarkupDiag.tapeRemoveAll(doc, byPage.values.sumOf { it.size }, byPage.size)
+        doc.study.lifted.clear()
+        doc.study.allLifted = false
         tell(text(R.string.study_tape_removed))
     }
 }
@@ -266,11 +271,13 @@ fun AppViewModel.startQuiz(doc: OpenDocument, page: Int?) {
         }
         doc.study.results = false
         doc.study.quiz = QuizSession(items)
+        MarkupDiag.quizStart(doc, if (page == null) "document" else "page", items.size)
         if (page == null) doc.viewer.goToPage(items.first().page, items.first().rect[1])
     }
 }
 
 fun endQuiz(doc: OpenDocument) {
+    doc.study.quiz?.let { MarkupDiag.quizEnd(doc, it) }
     doc.study.quiz = null
     doc.study.results = false
 }
@@ -356,7 +363,7 @@ private fun MaskSemantics(doc: OpenDocument) {
                         onClick(if (covered) reveal else cover) {
                             val q = s.quiz
                             if (q != null && q.items.any { it.key == m.key }) s.quiz = if (covered) q.reveal(m.key) else q.cover(m.key)
-                            else toggleTape(doc, m.key)
+                            else toggleTape(doc, m.key, via = "talkback")
                             true
                         }
                     },

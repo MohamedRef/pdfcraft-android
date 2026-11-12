@@ -245,7 +245,7 @@ fun CertPlaceLayer(vm: AppViewModel, doc: OpenDocument) {
                 start = null
                 end = null
                 // the hint's Cancel was tapped (it sits over this layer): nothing to place
-                if (vm.certPlacing !== doc) return@toolGestures
+                if (vm.signing.certPlacing !== doc) return@toolGestures
                 val at = s?.let { doc.viewer.screenToPage(it) } ?: return@toolGestures
                 val page = doc.info.pages.getOrNull(at.page) ?: return@toolGestures
                 val pw = page.width
@@ -259,7 +259,7 @@ fun CertPlaceLayer(vm: AppViewModel, doc: OpenDocument) {
                 } else {
                     null
                 }
-                vm.placeCert(doc, at.page, fitSignatureBox(rect, at.x, at.y, pw, ph))
+                vm.signing.placeCert(doc, at.page, fitSignatureBox(rect, at.x, at.y, pw, ph))
             },
             onCancel = { start = null; end = null },
         ),
@@ -281,8 +281,8 @@ fun CertPlaceLayer(vm: AppViewModel, doc: OpenDocument) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(stringResource(R.string.sign_place_hint), color = c.text, fontSize = 14.sp, modifier = Modifier.weight(1f, fill = false))
-            TextButton(onClick = { vm.signInvisibly(doc) }) { Text(stringResource(R.string.sign_invisible_short), color = c.accent) }
-            TextButton(onClick = { vm.certPlacing = null }) { Text(stringResource(R.string.common_cancel), color = c.accent) }
+            TextButton(onClick = { vm.signing.signInvisibly(doc) }) { Text(stringResource(R.string.sign_invisible_short), color = c.accent) }
+            TextButton(onClick = { vm.signing.certPlacing = null }) { Text(stringResource(R.string.common_cancel), color = c.accent) }
         }
     }
 }
@@ -306,10 +306,10 @@ internal fun fitSignatureBox(rect: FloatArray?, x: Float, y: Float, pageW: Float
 @Composable
 fun CertSignScreen(vm: AppViewModel, target: CertTarget) {
     val c = pdfColors
-    androidx.activity.compose.BackHandler { vm.certSign = null }
-    val ids = vm.digitalIds.all
-    val chosen = vm.chosenId?.takeIf { it in ids }
-    val hasDrawn = remember(vm.signaturesChanged) { vm.signatures.signature.isFile }
+    androidx.activity.compose.BackHandler { vm.signing.certSign = null }
+    val ids = vm.signing.digitalIds.all
+    val chosen = vm.signing.chosenId?.takeIf { it in ids }
+    val hasDrawn = remember(vm.signing.signaturesChanged) { vm.signing.signatures.signature.isFile }
     var look by remember { mutableStateOf(CertLook.Name) }
     var reason by remember { mutableStateOf("") }
     var location by remember { mutableStateOf("") }
@@ -318,11 +318,11 @@ fun CertSignScreen(vm: AppViewModel, target: CertTarget) {
     val unusable = chosen?.let { idProblem(it) }
     val canSign = chosen != null && unusable == null
     fun sign() {
-        if (chosen != null && canSign) vm.signWithId(target, chosen, password, if (look == CertLook.Drawn && !hasDrawn) CertLook.Name else look, reason, location, options)
+        if (chosen != null && canSign) vm.signing.signWithId(target, chosen, password, if (look == CertLook.Drawn && !hasDrawn) CertLook.Name else look, reason, location, options)
     }
     Column(Modifier.fillMaxSize().background(c.surface).pointerInput(Unit) { detectTapGestures() }.safeTopPadding().navigationBarsPadding().imePadding()) {
         Row(Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            TextButton(onClick = { vm.certSign = null }) { Text(stringResource(R.string.common_cancel), color = c.accent) }
+            TextButton(onClick = { vm.signing.certSign = null }) { Text(stringResource(R.string.common_cancel), color = c.accent) }
             Text(stringResource(R.string.common_tool_sign_digital_id), color = c.text, fontWeight = FontWeight.SemiBold, fontSize = 17.sp, modifier = Modifier.weight(1f), textAlign = TextAlign.Center, maxLines = 1, overflow = TextOverflow.Ellipsis)
             TextButton(onClick = ::sign, enabled = canSign) { Text(stringResource(R.string.common_sign), color = if (canSign) c.accent else c.textSecondary, fontWeight = FontWeight.SemiBold) }
         }
@@ -335,9 +335,9 @@ fun CertSignScreen(vm: AppViewModel, target: CertTarget) {
                     color = c.textSecondary, fontSize = 14.sp, modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
                 )
             }
-            for (id in ids) IdRow(vm, id, selected = id == chosen) { vm.chosenId = id }
-            SheetRow(LucideIcons.FolderOpen, stringResource(R.string.sign_add_id_file), { vm.pickDigitalId() })
-            SheetRow(LucideIcons.Plus, stringResource(R.string.sign_create_id), { vm.idCreate = true })
+            for (id in ids) IdRow(vm, id, selected = id == chosen) { vm.signing.chosenId = id }
+            SheetRow(LucideIcons.FolderOpen, stringResource(R.string.sign_add_id_file), { vm.signing.pickDigitalId() })
+            SheetRow(LucideIcons.Plus, stringResource(R.string.sign_create_id), { vm.signing.idCreate = true })
             SheetDivider(vertical = 6.dp)
 
             CertifySection(options) { options = it }
@@ -382,13 +382,13 @@ fun CertSignScreen(vm: AppViewModel, target: CertTarget) {
                 Section(stringResource(R.string.sign_section_password, chosen.name))
                 Box(Modifier.padding(horizontal = 16.dp)) {
                     PdfField(
-                        password, { password = it; vm.certSignError = null }, stringResource(R.string.sign_id_password), password = true, error = vm.certSignError != null,
+                        password, { password = it; vm.signing.certSignError = null }, stringResource(R.string.sign_id_password), password = true, error = vm.signing.certSignError != null,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
                         keyboardActions = androidx.compose.foundation.text.KeyboardActions(onDone = { sign() }),
                     )
                 }
             }
-            (vm.certSignError ?: unusable)?.let { Text(it, color = c.red, fontSize = 14.sp, modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) }
+            (vm.signing.certSignError ?: unusable)?.let { Text(it, color = c.red, fontSize = 14.sp, modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) }
             Text(
                 stringResource(R.string.sign_saves_note),
                 color = c.textSecondary, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp),
@@ -508,7 +508,7 @@ private fun IdRow(vm: AppViewModel, id: DigitalId, selected: Boolean, onClick: (
     if (confirm) {
         PdfDialog(
             onDismiss = { confirm = false }, title = stringResource(R.string.sign_remove_id_title), confirm = stringResource(R.string.sign_remove), destructive = true,
-            onConfirm = { confirm = false; vm.removeDigitalId(id) },
+            onConfirm = { confirm = false; vm.signing.removeDigitalId(id) },
         ) { Text(stringResource(R.string.sign_remove_id_message, id.name), color = c.text, fontSize = 14.sp) }
     }
 }
@@ -520,13 +520,13 @@ fun IdPasswordDialog(vm: AppViewModel, imp: IdImport) {
     var pw by remember(imp) { mutableStateOf("") }
     val focus = remember { androidx.compose.ui.focus.FocusRequester() }
     androidx.compose.runtime.LaunchedEffect(imp) { runCatching { focus.requestFocus() } }
-    PdfDialog(onDismiss = { vm.answerIdImport(null) }, title = stringResource(R.string.sign_id_password), confirm = stringResource(R.string.sign_add), onConfirm = { vm.answerIdImport(pw) }) {
+    PdfDialog(onDismiss = { vm.signing.answerIdImport(null) }, title = stringResource(R.string.sign_id_password), confirm = stringResource(R.string.sign_add), onConfirm = { vm.signing.answerIdImport(pw) }) {
         Text(stringResource(R.string.sign_id_password_prompt, imp.name), color = c.text, fontSize = 14.sp)
         Spacer(Modifier.height(14.dp))
         PdfField(
             pw, { pw = it }, stringResource(R.string.common_password), error = imp.wrong, password = true, focus = focus,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
-            keyboardActions = androidx.compose.foundation.text.KeyboardActions(onDone = { vm.answerIdImport(pw) }),
+            keyboardActions = androidx.compose.foundation.text.KeyboardActions(onDone = { vm.signing.answerIdImport(pw) }),
         )
         if (imp.wrong) Text(stringResource(R.string.common_wrong_password), color = c.red, fontSize = 13.sp, modifier = Modifier.padding(top = 8.dp))
     }
@@ -536,7 +536,7 @@ fun IdPasswordDialog(vm: AppViewModel, imp: IdImport) {
 @Composable
 fun CreateIdScreen(vm: AppViewModel) {
     val c = pdfColors
-    androidx.activity.compose.BackHandler { vm.idCreate = false }
+    androidx.activity.compose.BackHandler { vm.signing.idCreate = false }
     var name by remember { mutableStateOf(vm.toolPrefs.author) }
     var email by remember { mutableStateOf("") }
     var organization by remember { mutableStateOf("") }
@@ -551,9 +551,9 @@ fun CreateIdScreen(vm: AppViewModel) {
     val ok = name.isNotBlank() && password.length >= 8 && again == password
     Column(Modifier.fillMaxSize().background(c.surface).pointerInput(Unit) { detectTapGestures() }.safeTopPadding().navigationBarsPadding().imePadding()) {
         Row(Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            TextButton(onClick = { vm.idCreate = false }) { Text(stringResource(R.string.common_cancel), color = c.accent) }
+            TextButton(onClick = { vm.signing.idCreate = false }) { Text(stringResource(R.string.common_cancel), color = c.accent) }
             Text(stringResource(R.string.sign_create_id), color = c.text, fontWeight = FontWeight.SemiBold, fontSize = 17.sp, modifier = Modifier.weight(1f), textAlign = TextAlign.Center)
-            TextButton(onClick = { vm.createDigitalId(name, email, organization, password) }, enabled = ok) {
+            TextButton(onClick = { vm.signing.createDigitalId(name, email, organization, password) }, enabled = ok) {
                 Text(stringResource(R.string.common_create), color = if (ok) c.accent else c.textSecondary, fontWeight = FontWeight.SemiBold)
             }
         }
@@ -589,9 +589,9 @@ fun CreateIdScreen(vm: AppViewModel) {
 /** Tapping an empty signature field: draw a signature there, or sign it with a digital ID. */
 @Composable
 fun SignFieldChoiceDialog(vm: AppViewModel, doc: OpenDocument, field: io.github.artcraftandroid.pdfcraft.core.WidgetInfo) {
-    PdfDialog(onDismiss = { vm.signFieldChoice = null }, title = null, confirm = null, dismiss = null, list = true) {
-        SheetRow(LucideIcons.Signature, stringResource(R.string.sign_add_your_signature), { vm.signFieldChoice = null; vm.drawSignatureInField(doc, field) })
-        SheetRow(LucideIcons.ShieldCheck, stringResource(R.string.common_tool_sign_digital_id), { vm.signFieldChoice = null; vm.signFieldWithId(doc, field) })
+    PdfDialog(onDismiss = { vm.signing.signFieldChoice = null }, title = null, confirm = null, dismiss = null, list = true) {
+        SheetRow(LucideIcons.Signature, stringResource(R.string.sign_add_your_signature), { vm.signing.signFieldChoice = null; vm.signing.drawSignatureInField(doc, field) })
+        SheetRow(LucideIcons.ShieldCheck, stringResource(R.string.common_tool_sign_digital_id), { vm.signing.signFieldChoice = null; vm.signing.signFieldWithId(doc, field) })
     }
 }
 
@@ -608,7 +608,7 @@ fun SignaturesSheet(vm: AppViewModel, doc: OpenDocument) {
         ctl.sheet = ViewerSheet.None
     }
     // read so Trust redraws the list
-    vm.trustedCerts.version
+    vm.signing.trustedCerts.version
     var open by remember { mutableStateOf<String?>(null) }
     PdfSheet(onDismiss = ::close, maxHeightFraction = 0.85f) {
         SheetTitle(stringResource(R.string.sign_signatures))
@@ -642,7 +642,7 @@ fun SignaturesSheet(vm: AppViewModel, doc: OpenDocument) {
                 }
                 SheetDivider()
             }
-            SheetRow(LucideIcons.ShieldCheck, stringResource(R.string.sign_add_signature), { close(); vm.startCertPlacing(doc) })
+            SheetRow(LucideIcons.ShieldCheck, stringResource(R.string.sign_add_signature), { close(); vm.signing.startCertPlacing(doc) })
             Spacer(Modifier.height(8.dp))
         }
     }
@@ -695,23 +695,23 @@ private fun SignatureDetails(vm: AppViewModel, doc: OpenDocument, s: SignatureEn
         }
         androidx.compose.foundation.layout.FlowRow(Modifier.padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             if (s.page != null && s.rect != null) {
-                TextButton(onClick = { doc.controller.sheet = ViewerSheet.None; vm.showSignature(doc, s) }) { Text(stringResource(R.string.sign_go_to), color = c.accent) }
+                TextButton(onClick = { doc.controller.sheet = ViewerSheet.None; vm.signing.showSignature(doc, s) }) { Text(stringResource(R.string.sign_go_to), color = c.accent) }
             }
             val sha = s.cert?.sha256
             if (s.signed && sha != null) {
-                if (vm.trustedCerts.contains(sha)) {
-                    TextButton(onClick = { vm.untrustSigner(doc, s) }) { Text(stringResource(R.string.sign_stop_trusting), color = c.accent) }
+                if (vm.signing.trustedCerts.contains(sha)) {
+                    TextButton(onClick = { vm.signing.untrustSigner(doc, s) }) { Text(stringResource(R.string.sign_stop_trusting), color = c.accent) }
                 } else if (s.status == "unknown") {
-                    TextButton(onClick = { vm.trustSigner(doc, s) }) { Text(stringResource(R.string.sign_trust), color = c.accent) }
+                    TextButton(onClick = { vm.signing.trustSigner(doc, s) }) { Text(stringResource(R.string.sign_trust), color = c.accent) }
                 }
             }
             if (s.signed) {
-                TextButton(onClick = { doc.controller.sheet = ViewerSheet.None; vm.openSignedVersion(doc, s) }) { Text(stringResource(R.string.sign_view_signed_version), color = c.accent) }
+                TextButton(onClick = { doc.controller.sheet = ViewerSheet.None; vm.signing.openSignedVersion(doc, s) }) { Text(stringResource(R.string.sign_view_signed_version), color = c.accent) }
             }
             if (!s.signed) {
                 TextButton(onClick = {
                     doc.controller.sheet = ViewerSheet.None
-                    doc.widgets.firstOrNull { it.field == s.field }?.let { vm.signFieldWithId(doc, it) }
+                    doc.widgets.firstOrNull { it.field == s.field }?.let { vm.signing.signFieldWithId(doc, it) }
                 }) { Text(stringResource(R.string.common_sign), color = c.accent) }
             }
         }

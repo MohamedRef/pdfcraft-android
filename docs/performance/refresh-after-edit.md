@@ -38,7 +38,34 @@ Results and output are unchanged, because a cached object is the one a fresh loa
 | 869 pages, 32 links and 2 comments a page, with images (357,797,013 bytes) | 1,354–1,556 ms | 839–955 ms |
 | Same pages without images (6.2 MB) | 803–1,190 ms | 435–539 ms |
 
-## Not changed, measured for follow-up
+## Keeping comment appearances (#322)
 
-- A comment edit clears the comment-appearance cache, so every comment without its own appearance is drawn and compressed again (about 18% of the edit before this change). About 12% of the edit is zlib setup for these small streams.
-- Keeping valid entries would need to know which annotations, and which objects they reference, the edit touched. Tracked in #322.
+Before #322, a comment or form edit emptied the comment-appearance cache. Every comment without its own appearance was then drawn and compressed again. That was about 18% of the edit, and about 12% of the edit was zlib setup for these small streams.
+
+Each cache entry is now checked against everything its appearance is drawn from:
+
+- the crop box,
+- the annotation dictionary,
+- the values its references lead to (colours, `/QuadPoints` and so on).
+
+An annotation the edit changed is drawn again. Every other annotation reuses its entry. The reference budget is spent for every annotation, cached or not, so output is byte-identical to an uncached pass. An annotation whose followed dictionary still holds a reference that was not followed is never cached. A full refresh still empties the cache.
+
+`cached_appearances_match_a_fresh_pass_after_every_edit` (crates/annot) checks this. After each of several edits it compares the cached display copy, byte for byte, with a fresh uncached pass. The edits are:
+
+- a colour change,
+- a change to a referenced colour,
+- a change to referenced quad points,
+- a smaller crop box,
+- a shorter annotation list,
+- a contents change.
+
+The test also checks that unchanged annotations were reused.
+
+Measured with `session_contention_timings edit`, release profile, on the same kind of host. Three ink comments, two runs each, before = `main` at 93125b4:
+
+| Fixture | Before | After |
+| --- | ---: | ---: |
+| 869 pages, 32 links and 2 comments a page, without images (6.2 MB) | 557–705 ms | 465–553 ms |
+| Image pages with no comments | 227–241 ms | 210–248 ms (no comments to keep, unchanged) |
+
+These are host numbers, not phone results.
