@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Scanner testing: timing a picked model file (#304), kept apart from strings.xml so parallel scanner work merges cleanly. -->
+<resources>
+    <string name="scan_lab_time_model">قياس سرعة نموذج مستندات من ملف (للاختبار فقط)</string>
+    <string name="scan_lab_time_model_body">اختر ملف نموذج (ONNX) على هذا الهاتف. يُشغَّل مرتين على صفحة مصطنعة ويُقاس وقته، وتُكتب الأوقات في السجل. لا يُحتفظ بالملف ولا تتغيّر أي صفحة.</string>
+    <string name="scan_lab_time_model_running">جارٍ قياس النموذج…</string>
+    <string name="scan_lab_time_model_done">النموذج: التحميل %1$d م.ث، التشغيل %2$s م.ث، أقصى ذاكرة %3$s م.ب</string>
+    <string name="scan_lab_time_model_failed">تعذّر قياس النموذج: %1$s</string>
+</resources>

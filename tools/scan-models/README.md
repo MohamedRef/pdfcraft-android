@@ -130,3 +130,10 @@ made or shipped; `docs/ANDROID_SCAN_MAX_QUALITY.md` says why.
 pip install opencv-python-headless numpy     # OpenCV 5.0.0, NumPy 2.5.4 when the fixtures were made
 python3 tools/scan-models/docres_prompts.py apps/pdfcraft-android/scan/tests/data
 ```
+
+## `export_docres.py`: DocRes, for timing on a phone only (#304)
+
+Not a file in `assets/models/` and never one: DocRes's weights have no licence from their
+authors. The script writes the network at a fixed 1 × 6 × 512 × 384 so it can be picked in
+ScanLab's **Time a document model from a file** on the developer's own phone; see
+`docs/ANDROID_SCAN_MAX_QUALITY.md`. It checks the weights' SHA-256 before exporting.
