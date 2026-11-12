@@ -5274,8 +5274,9 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
 
     /**
      * Save the scanned pages as a PDF with [filter]'s look (or insert them where Organize asked).
-     * Each photo is decoded once, straightened, given the look and encoded once natively (#287);
-     * a page that can't be processed goes in as the camera took it.
+     * Each photo is decoded once, straightened to the page's true proportions (#293), given the
+     * look and encoded once natively (#287); a page that can't be processed goes in as the camera
+     * took it.
      */
     fun saveScan(filter: ScanFilter) = job(text(R.string.msg_busy_saving_scan)) { eng ->
         val pages = scanPages.toList()
@@ -5286,11 +5287,9 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             // the Scan gates (#286): found edges, whether they were moved and how far (in % of the
             // photo's diagonal, so the thumbnail's proportions are enough)
             val stats = scanPageStats(page.corners, page.found, ScanPage.WHOLE, page.thumb.width.toDouble(), page.thumb.height.toDouble())
-            if (!scanNeedsProcessing(page.corners.contentEquals(ScanPage.WHOLE), filter.mode)) {
-                Diag.event(DiagArea.Scan, "page", "index" to i + 1, "edges_found" to stats.found, "corners_moved" to stats.touched, "max_move_pct" to stats.maxMovePct, "filter" to filter, "enhanced" to false)
-                saved += scanSavedPage(page.file.absolutePath, null)
-                continue
-            }
+            // a whole photo in Original stays the camera's own file: natively it only gets its
+            // resolution written in, so its PDF page has a size like the others (#293)
+            val untouched = !scanNeedsProcessing(page.corners.contentEquals(ScanPage.WHOLE), filter.mode)
             busy = text(R.string.msg_busy_cleaning_page, i + 1, pages.size)
             val request = io.github.artcraftandroid.pdfcraft.core.ScanPageRequest(
                 photoPath = page.file.absolutePath,
@@ -5303,13 +5302,16 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             val result = withContext(Dispatchers.Default) { runCatching { io.github.artcraftandroid.pdfcraft.core.scanProcessPage(request) } }
             result.onFailure { Diag.failure(DiagArea.Scan, "scan_process_page", it) }
             val r = result.getOrNull()
-            // decode, straighten, look and encode times (#287), and the page's pixels and proportions
+            // decode, straighten, look and encode times (#287), the page's pixels, and how its
+            // proportions were worked out and which paper it was matched to (#293)
             Diag.event(
                 DiagArea.Scan, "page", "index" to i + 1, "edges_found" to stats.found, "corners_moved" to stats.touched, "max_move_pct" to stats.maxMovePct,
-                "filter" to filter, "enhanced" to (r != null), "enhance_ms" to android.os.SystemClock.elapsedRealtime() - enhanceStarted,
+                "filter" to filter, "enhanced" to (r != null && !untouched), "enhance_ms" to android.os.SystemClock.elapsedRealtime() - enhanceStarted,
                 *(r?.timings.orEmpty().map<io.github.artcraftandroid.pdfcraft.core.ScanTiming, Pair<String, Any?>> { it.stage.removePrefix("scan_") + "_ms" to it.ms.toLong() }.toTypedArray()),
                 "out_width" to (r?.width?.toLong() ?: 0L), "out_height" to (r?.height?.toLong() ?: 0L),
                 "out_format" to (r?.format?.name?.lowercase() ?: "none"), "dpi" to (r?.dpi?.toDouble() ?: 0.0),
+                "paper" to (r?.paper?.name?.lowercase() ?: "none"), "aspect" to (r?.aspectSource?.name?.lowercase() ?: "none"),
+                "focal_mismatch" to (r?.focalMismatch ?: false),
             )
             saved += scanSavedPage(page.file.absolutePath, r?.let { it.path to it.dpi })
         }

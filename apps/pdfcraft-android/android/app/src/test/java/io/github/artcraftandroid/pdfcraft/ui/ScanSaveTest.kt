@@ -32,20 +32,32 @@ class ScanSaveTest {
     }
 
     @Test
-    fun onePageListOneCallWithTheMedianResolution() {
+    fun processedPagesKeepTheirOwnResolution() {
+        val args = scanCreateArgs(listOf(
+            ScanSavedPage("/c/page-0.jpg", 300f),
+            ScanSavedPage("/c/page-1.png", 400f),
+            ScanSavedPage("/c/page-2.jpg", 320f),
+        ))
+        assertEquals("images", args["from"])
+        assertEquals(listOf("/c/page-0.jpg", "/c/page-1.png", "/c/page-2.jpg"), args["paths"])
+        // each file says its own size, so an A4 page and a Letter page are each exact
+        assertFalse(args.containsKey("dpi"))
+    }
+
+    @Test
+    fun aCameraFileAmongProcessedPagesTakesTheirMedianResolution() {
         val args = scanCreateArgs(listOf(
             ScanSavedPage("/c/page-0.jpg", 300f),
             ScanSavedPage("/c/shot-1.jpg", null),
             ScanSavedPage("/c/page-2.png", 400f),
             ScanSavedPage("/c/page-3.jpg", 320f),
         ))
-        assertEquals("images", args["from"])
         assertEquals(listOf("/c/page-0.jpg", "/c/shot-1.jpg", "/c/page-2.png", "/c/page-3.jpg"), args["paths"])
         assertEquals(320.0, args["dpi"] as Double, 1e-6)
         // an even count takes the mean of the middle two
-        assertEquals(350.0, scanCreateArgs(listOf(ScanSavedPage("a", 300f), ScanSavedPage("b", 400f)))["dpi"] as Double, 1e-6)
+        assertEquals(350.0, scanCreateArgs(listOf(ScanSavedPage("a", 300f), ScanSavedPage("b", 400f), ScanSavedPage("c", null)))["dpi"] as Double, 1e-6)
         // clamped to 72–600
-        assertEquals(600.0, scanCreateArgs(listOf(ScanSavedPage("a", 900f)))["dpi"] as Double, 1e-6)
+        assertEquals(600.0, scanCreateArgs(listOf(ScanSavedPage("a", 900f), ScanSavedPage("c", null)))["dpi"] as Double, 1e-6)
     }
 
     @Test
