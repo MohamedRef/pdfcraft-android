@@ -17,7 +17,7 @@ a phone yet.** Every number in the scanner's documents was measured on a desktop
 |---|---|---|---|---|
 | #287 | `pdfcraft-scan` crate, one pass from photo to page | Done, closed | #331, #346 | |
 | #288 | Measuring: harness, drawn pages, test set | Part | #346, #367, #382, #386, #394, #404 | The SmartDoc script. The drawn photos (`synth`), the metrics blocks, the `scan-eval` runner and the CI gate are in; see [ANDROID_SCAN_MEASURING.md](ANDROID_SCAN_MEASURING.md) |
-| #289 | Model files: pinned, loaded, exported, copied again when changed, packs ready, tensor helpers | Done | #360, #365, #370, #403, #410, this PR | Nothing. All three models stay in the app by the owner's choice; `docs/ANDROID_SCAN_MODELS.md` says how to make one a download |
+| #289 | Model files: pinned, loaded, exported, copied again when changed, packs ready, tensor helpers | Done | #360, #365, #370, #403, #410, #415 | Nothing. All three models stay in the app by the owner's choice; `docs/ANDROID_SCAN_MODELS.md` says how to make one a download |
 | #290 | Page found by a network | Core done | #360 | Figures on the owner's set; phone time. Known: wrong and accepted on 2 of the 10 reference photos, nothing found on 2 |
 | #291 | Edges refined at full size | Core done | #356, #291 PR | Corners off the photo (up to 15%) checked on drawn pages only; the owner's set; phone time |
 | #292 | Crop screen: magnifier, side handles, snap, rotate | Screen done, rotate left | #381 | Rotate (with #339's user turns and `ScanSession` 2); all of it on a phone (`docs/ANDROID_SCAN_CROP.md`) |
