@@ -67,6 +67,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import io.github.artcraftandroid.pdfcraft.R
 import io.github.artcraftandroid.pdfcraft.engine.Diag
 import io.github.artcraftandroid.pdfcraft.engine.DiagArea
@@ -157,12 +158,12 @@ internal fun ScanCropScreen(page: ScanPage, index: Int, lab: ScanLab, onDone: (F
     val density = LocalDensity.current
     val haptics = LocalHapticFeedback.current
     val scope = rememberCoroutineScope()
-    val opened = remember(page.file) { page.corners.copyOf() }
-    val openedAt = remember(page.file) { SystemClock.elapsedRealtime() }
-    var corners by remember(page.file) { mutableStateOf(page.corners) }
+    val opened = remember(page.key) { page.corners.copyOf() }
+    val openedAt = remember(page.key) { SystemClock.elapsedRealtime() }
+    var corners by remember(page.key) { mutableStateOf(page.corners) }
     // sides placed by hand without a snap are drawn dashed
-    var byHand by remember(page.file) { mutableStateOf(List(4) { false }) }
-    var stats by remember(page.file) { mutableStateOf(ScanCropStats()) }
+    var byHand by remember(page.key) { mutableStateOf(List(4) { false }) }
+    var stats by remember(page.key) { mutableStateOf(ScanCropStats()) }
     var snapOn by remember { mutableStateOf(snapSetting(context).getBoolean(SNAP_PREF, true)) }
     var held by remember { mutableStateOf<QuadHandle?>(null) }
     // what the view shows stays put while a finger is down, so the photo does not slide under it
@@ -266,6 +267,13 @@ internal fun ScanCropScreen(page: ScanPage, index: Int, lab: ScanLab, onDone: (F
         val focus = remember { FocusRequester() }
         val names = QuadHandle.ALL.associateWith { handleName(it) }
         val moveLabels = listOf(R.string.comments_move_up, R.string.comments_move_down, R.string.comments_move_left, R.string.comments_move_right).map { stringResource(it) }
+        // a half of a book spread (#303): one of its sides is the cut along the gutter, not the paper's edge
+        page.book?.let { half ->
+            Text(
+                stringResource(if (half.left) R.string.scan_crop_book_left else R.string.scan_crop_book_right), color = c.textSecondary, fontSize = 13.sp,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
+            )
+        }
         BoxWithConstraints(
             Modifier.weight(1f).fillMaxWidth().background(c.desk).focusRequester(focus).focusable().onKeyEvent { e ->
                 if (e.type != KeyEventType.KeyDown) return@onKeyEvent false
@@ -422,9 +430,16 @@ internal fun ScanCropScreen(page: ScanPage, index: Int, lab: ScanLab, onDone: (F
                             runCatching { io.github.artcraftandroid.pdfcraft.core.scanFindDocumentWith(page.file.absolutePath, lab.findOptions()) }
                                 .onFailure { e -> Diag.failure(DiagArea.Scan, "scan_find_document", e) }.getOrNull()
                         }
-                        val found = doc?.takeIf { it.found }?.corners?.takeIf { it.size == 8 }?.toFloatArray()?.takeIf { convexQuad(it) }
+                        val spread = doc?.takeIf { it.found }?.corners?.takeIf { it.size == 8 }?.toFloatArray()?.takeIf { convexQuad(it) }
+                        // a half of a book spread (#303): the spread found is cut again and this half kept
+                        val half = page.book
+                        val found = if (half == null || spread == null) spread else withContext(Dispatchers.Default) {
+                            runCatching { io.github.artcraftandroid.pdfcraft.core.scanSplitSpread(page.file.absolutePath, spread.toList(), lab.bookGutter) }
+                                .onFailure { e -> Diag.failure(DiagArea.Scan, "scan_split_spread", e) }.getOrNull()
+                        }?.let { ScanBookCut(it.split, it.left.toFloatArray(), it.right.toFloatArray(), it.gutterFound, it.gutterTop, it.gutterBottom, it.confidence) }
+                            .let { cut -> scanBookRecut(half, cut)?.takeIf { convexQuad(it) } }
                         Diag.event(
-                            DiagArea.Scan, "crop_detect", "index" to index, "found" to (found != null),
+                            DiagArea.Scan, "crop_detect", "index" to index, "found" to (found != null), "book_half" to (half?.side ?: "none"),
                             "source" to (doc?.source?.name?.lowercase() ?: "failed"), "ms" to SystemClock.elapsedRealtime() - started,
                         )
                         detecting = false

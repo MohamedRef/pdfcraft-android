@@ -110,7 +110,7 @@ internal class ScanCameraRouter(private val activity: ComponentActivity, private
     @Composable
     fun Screen() {
         val m = model()
-        if (m.target != null) ScanCameraScreen(m, vm().scanPages.map { it.thumb }, actions)
+        if (m.target != null) ScanCameraScreen(m, vm().scanPages.map { it.thumb }, actions, vm().scanBook)
     }
 
     private fun launchPermission() = launch { permission.launch(Manifest.permission.CAMERA) }

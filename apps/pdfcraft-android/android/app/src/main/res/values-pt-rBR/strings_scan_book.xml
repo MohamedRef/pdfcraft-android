@@ -7,4 +7,7 @@
     <string name="tools_scan_book_left_page">Página esquerda de uma página dupla</string>
     <string name="tools_scan_book_right_page">Página direita de uma página dupla</string>
     <string name="scan_lab_book_gutter">Modo livro: cortar na dobra encontrada na foto</string>
+    <string name="scan_crop_book_left">Página esquerda de uma página dupla: o lado direito é o corte na dobra do livro, não uma borda do papel.</string>
+    <string name="scan_crop_book_right">Página direita de uma página dupla: o lado esquerdo é o corte na dobra do livro, não uma borda do papel.</string>
+    <string name="scan_camera_book_hint">Alinhe a lombada do livro com a linha</string>
 </resources>
