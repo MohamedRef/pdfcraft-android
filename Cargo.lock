@@ -2870,6 +2870,7 @@ dependencies = [
 name = "pdfcraft-bytes"
 version = "0.20.0"
 dependencies = [
+ "libc",
  "memmap2",
 ]
 

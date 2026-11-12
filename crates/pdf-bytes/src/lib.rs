@@ -14,6 +14,11 @@ pub trait PdfSource: Deref<Target = [u8]> + AsRef<[u8]> + std::fmt::Debug + Send
     /// ahead (#212): copying a mapped 352 MB file page fault by page fault took about 0.45 s
     /// longer than copying the same bytes from memory on a phone. Only a hint.
     fn will_read_all(&self) {}
+    /// These bytes followed by `tail` as one source, without copying these bytes, where the
+    /// source can do that; `None` otherwise. Callers use [`joined`], which falls back to a copy.
+    fn appended(&self, _tail: &[u8]) -> Option<PdfBytes> {
+        None
+    }
 }
 impl PdfSource for Vec<u8> {
     fn capacity(&self) -> usize {
@@ -36,6 +41,67 @@ impl PdfSource for memmap2::Mmap {
     }
 }
 pub type PdfBytes = Arc<dyn PdfSource>;
+
+/// `source` followed by `tail` as one immutable source, as an incremental update is written
+/// (§7.5.6). A managed private file that is mapped is extended instead of copied (#234): its pages
+/// stay shared with the file and only the tail, plus the file's last partial page, is new memory.
+/// Any other source is copied once, into an allocation of the exact size.
+pub fn joined(source: &PdfBytes, tail: &[u8]) -> PdfBytes {
+    if tail.is_empty() {
+        return source.clone();
+    }
+    if let Some(spliced) = source.appended(tail) {
+        return spliced;
+    }
+    let mut file = Vec::with_capacity(source.len() + tail.len());
+    // Android adaptation (#212): a mapped original is read ahead for this full copy.
+    source.will_read_all();
+    file.extend_from_slice(source);
+    file.extend_from_slice(tail);
+    Arc::new(file)
+}
+
+/// A managed private file mapped read-only (see [`read_private_input`]). The descriptor stays
+/// open so [`PdfSource::appended`] can map the same inode again beneath an appended revision.
+#[derive(Debug)]
+struct ManagedMap {
+    map: memmap2::Mmap,
+    #[cfg_attr(not(any(target_os = "android", target_os = "linux")), allow(dead_code))]
+    file: File,
+}
+impl Deref for ManagedMap {
+    type Target = [u8];
+    fn deref(&self) -> &[u8] {
+        &self.map
+    }
+}
+impl AsRef<[u8]> for ManagedMap {
+    fn as_ref(&self) -> &[u8] {
+        &self.map
+    }
+}
+impl PdfSource for ManagedMap {
+    fn capacity(&self) -> usize {
+        self.map.len()
+    }
+    fn is_mapped(&self) -> bool {
+        true
+    }
+    fn will_read_all(&self) {
+        self.map.will_read_all();
+    }
+    fn appended(&self, tail: &[u8]) -> Option<PdfBytes> {
+        #[cfg(any(target_os = "android", target_os = "linux"))]
+        {
+            splice::append(&self.file, self.map.len(), tail).map(|s| Arc::new(s) as PdfBytes)
+        }
+        #[cfg(not(any(target_os = "android", target_os = "linux")))]
+        {
+            let _ = tail;
+            None
+        }
+    }
+}
 
 pub fn same_storage<A: ?Sized, B: ?Sized>(a: &Arc<A>, b: &Arc<B>) -> bool {
     Arc::as_ptr(a).cast::<()>() == Arc::as_ptr(b).cast::<()>()
@@ -98,8 +164,8 @@ fn read_private_bounded(
         return Err(input_limit_error(cap));
     }
     if metadata.len() >= 1024 * 1024 && root.is_some_and(|root| managed_private_file(path, root, &metadata)) {
-        if let Ok(mapped) = map(&file) {
-            return Ok(Arc::new(mapped));
+        if let Ok(map) = map(&file) {
+            return Ok(Arc::new(ManagedMap { map, file }));
         }
     }
     if metadata.is_file() && metadata.len() > owned_cap {
@@ -186,9 +252,107 @@ impl PartialEq for dyn PdfSource {
 }
 impl Eq for dyn PdfSource {}
 
+/// The second audited unsafe boundary (#234): an incremental revision appended to a managed
+/// mapped file without copying the file. One private, read-only region holds the file's own
+/// pages (mapped again from the same descriptor) and, right after its last byte, the tail.
+#[cfg(any(target_os = "android", target_os = "linux"))]
+#[allow(unsafe_code)]
+mod splice {
+    use std::fs::File;
+    use std::os::fd::AsRawFd;
+    use std::ptr::NonNull;
+
+    /// Read-only `prefix ++ tail`, unmapped on drop.
+    pub(super) struct Spliced {
+        ptr: NonNull<u8>,
+        len: usize,
+        reserved: usize,
+    }
+    // SAFETY: the region is read-only for its whole life and owned by this value alone.
+    unsafe impl Send for Spliced {}
+    unsafe impl Sync for Spliced {}
+    impl std::panic::RefUnwindSafe for Spliced {}
+    impl std::panic::UnwindSafe for Spliced {}
+
+    impl std::ops::Deref for Spliced {
+        type Target = [u8];
+        fn deref(&self) -> &[u8] {
+            // SAFETY: `ptr` addresses `reserved >= len` readable bytes until drop.
+            unsafe { std::slice::from_raw_parts(self.ptr.as_ptr(), self.len) }
+        }
+    }
+    impl AsRef<[u8]> for Spliced {
+        fn as_ref(&self) -> &[u8] {
+            self
+        }
+    }
+    impl std::fmt::Debug for Spliced {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            f.debug_struct("Spliced").field("len", &self.len).finish()
+        }
+    }
+    impl super::PdfSource for Spliced {
+        fn capacity(&self) -> usize {
+            self.len
+        }
+        fn is_mapped(&self) -> bool {
+            true
+        }
+    }
+    impl Drop for Spliced {
+        fn drop(&mut self) {
+            // SAFETY: the region was mapped by `append` with exactly this base and length.
+            unsafe { libc::munmap(self.ptr.as_ptr().cast(), self.reserved) };
+        }
+    }
+
+    /// The `prefix` bytes of `file` followed by `tail`, or `None` when the region cannot be made
+    /// (the caller then copies). `file` is the descriptor of a managed private file whose mapping
+    /// holds `prefix` bytes; the stores replace such files by rename and never write them in
+    /// place, so its bytes are still the mapped ones. A length that no longer matches is refused.
+    pub(super) fn append(file: &File, prefix: usize, tail: &[u8]) -> Option<Spliced> {
+        // SAFETY: sysconf has no preconditions.
+        let page = usize::try_from(unsafe { libc::sysconf(libc::_SC_PAGESIZE) }).ok().filter(|p| p.is_power_of_two())?;
+        if prefix == 0 || file.metadata().ok()?.len() != prefix as u64 {
+            return None;
+        }
+        let round = |n: usize| n.checked_add(page - 1).map(|n| n & !(page - 1));
+        let reserved = round(prefix.checked_add(tail.len())?)?;
+        let file_span = round(prefix)?;
+        // SAFETY: a fresh private anonymous region; nothing else refers to it.
+        let base =
+            unsafe { libc::mmap(std::ptr::null_mut(), reserved, libc::PROT_READ | libc::PROT_WRITE, libc::MAP_PRIVATE | libc::MAP_ANONYMOUS, -1, 0) };
+        if base == libc::MAP_FAILED {
+            return None;
+        }
+        let fail = |base: *mut libc::c_void| {
+            // SAFETY: unmapping the region this call reserved.
+            unsafe { libc::munmap(base, reserved) };
+            None
+        };
+        // The file's pages replace the start of that region (MAP_FIXED only over memory this call
+        // owns). Private, so the copy-on-write tail page never reaches the file; the bytes of its
+        // last page past the end of the file read as zero until the tail covers them.
+        // SAFETY: `base..base + file_span` lies inside the reservation; the descriptor is valid.
+        let mapped =
+            unsafe { libc::mmap(base, file_span, libc::PROT_READ | libc::PROT_WRITE, libc::MAP_PRIVATE | libc::MAP_FIXED, file.as_raw_fd(), 0) };
+        if mapped != base {
+            return fail(base);
+        }
+        // SAFETY: `prefix + tail.len() <= reserved`, and the region is writable and ours.
+        unsafe { std::ptr::copy_nonoverlapping(tail.as_ptr(), base.cast::<u8>().add(prefix), tail.len()) };
+        // SAFETY: the region this call mapped.
+        if unsafe { libc::mprotect(base, reserved, libc::PROT_READ) } != 0 {
+            return fail(base);
+        }
+        Some(Spliced { ptr: NonNull::new(base.cast())?, len: prefix + tail.len(), reserved })
+    }
+}
+
 #[cfg(all(test, target_os = "linux"))]
 mod tests {
     use super::*;
+    use std::io::Write;
     use std::os::unix::fs::PermissionsExt;
     use std::sync::atomic::{AtomicUsize, Ordering};
     struct Fixture(std::path::PathBuf);
@@ -305,6 +469,56 @@ mod tests {
         assert!(unmappable.is_err(), "a failed mapping keeps the copy limit");
         let small = fixture.write("small.pdf", &vec![1u8; 1024]);
         assert!(!read_private_preview(&small, None, 8 * 1024 * 1024, 2 * 1024 * 1024).unwrap().is_mapped());
+    }
+
+    /// #234: a managed mapped file joined with a revision reads exactly as the copy did, at
+    /// every alignment of the file's end and the tail's, and the spliced source outlives the
+    /// file's replacement and unlinking.
+    #[test]
+    fn joining_a_managed_mapping_matches_the_copy_and_survives_replacement() {
+        let fixture = Fixture::new();
+        let page = 4096;
+        for (len, tail_len) in
+            [(1024 * 1024, 1), (1024 * 1024, page), (1024 * 1024 + 1, page - 1), (1024 * 1024 + 7, 3 * page + 5), (1024 * 1024 + page - 1, 2)]
+        {
+            let original: Vec<u8> = (0..len).map(|i| (i * 31 % 251) as u8).collect();
+            let tail: Vec<u8> = (0..tail_len).map(|i| (i * 17 % 253) as u8 | 1).collect();
+            let path = fixture.write("Documents/joined.pdf", &original);
+            let source = read_private_input(&path, Some(&fixture.0), 4 * 1024 * 1024).unwrap();
+            assert!(source.is_mapped());
+            let spliced = source.appended(&tail).expect("a managed mapping is extended");
+            let copied = joined(&(Arc::new(original.clone()) as PdfBytes), &tail);
+            assert!(!copied.is_mapped());
+            assert_eq!(spliced.as_slice(), copied.as_slice(), "len {len} tail {tail_len}");
+            assert_eq!(joined(&source, &tail).as_slice(), copied.as_slice());
+            assert!(same_storage(&joined(&source, &[]), &source), "an empty tail keeps the source");
+            assert_eq!(source.as_slice(), original, "the file mapping is not written");
+            let staged = fixture.write("Documents/staged.pdf", b"new revision");
+            std::fs::rename(staged, &path).unwrap();
+            std::fs::remove_file(&path).unwrap();
+            drop(source);
+            assert_eq!(spliced.as_slice(), copied.as_slice());
+        }
+    }
+
+    /// A descriptor whose length no longer matches its mapping is not spliced; owned and
+    /// anonymous sources are copied.
+    #[test]
+    fn joining_other_sources_copies_them() {
+        let fixture = Fixture::new();
+        let original = vec![5u8; 1024 * 1024];
+        let path = fixture.write("Documents/grown.pdf", &original);
+        let file = File::open(&path).unwrap();
+        let map = map_managed_inode(&file).unwrap();
+        std::fs::OpenOptions::new().append(true).open(&path).unwrap().write_all(b"x").unwrap();
+        let managed: PdfBytes = Arc::new(ManagedMap { map, file });
+        assert!(managed.appended(b"tail").is_none());
+        let joined_bytes = joined(&managed, b"tail");
+        assert!(!joined_bytes.is_mapped());
+        assert_eq!(&joined_bytes[original.len()..], b"tail");
+        let anonymous = memory_snapshot(b"%PDF-1.7").unwrap();
+        assert!(anonymous.appended(b"x").is_none());
+        assert_eq!(joined(&anonymous, b"\n%%EOF").as_slice(), b"%PDF-1.7\n%%EOF");
     }
 
     #[test]
