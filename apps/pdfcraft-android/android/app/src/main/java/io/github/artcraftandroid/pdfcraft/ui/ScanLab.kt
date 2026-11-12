@@ -66,6 +66,10 @@ internal data class ScanLab(
      * part B). Off: such a page stays straightened by its corners, as before.
      */
     val lineFlatten: Boolean = true,
+    /** Each page keeps its own look and strength (#301); off, choosing a look changes every page, as before. */
+    val lookPerPage: Boolean = true,
+    /** The looks strip shows each look as a small picture of the page (#301); off, the looks are words, as before. */
+    val lookStrip: Boolean = true,
 ) {
     /** Nothing differs from the scanner as it is meant to be used (keeping scans changes no page). */
     val asDesigned: Boolean get() = copy(keep = false) == ScanLab()
@@ -79,7 +83,8 @@ internal data class ScanLab(
     fun diag(): Array<Pair<String, Any?>> = arrayOf<Pair<String, Any?>>(
         "finder" to finderId(finder), "refine" to refine, "side_proportions" to !perspective,
         "snap_paper" to snapPaper, "strength_override" to (strength ?: -1), "upright" to upright, "sharpen" to sharpen,
-        "denoise" to denoise, "preview" to preview, "crop_tools" to cropTools, "flatten_auto" to flattenAuto, "flatten_trim" to flattenTrim, "settle_turns" to settleTurns, "presets" to presets, "book_gutter" to bookGutter, "line_flatten" to lineFlatten, "keep" to keep,
+        "denoise" to denoise, "preview" to preview, "crop_tools" to cropTools, "flatten_auto" to flattenAuto, "flatten_trim" to flattenTrim, "settle_turns" to settleTurns, "presets" to presets, "book_gutter" to bookGutter, "line_flatten" to lineFlatten,
+        "look_per_page" to lookPerPage, "look_strip" to lookStrip, "keep" to keep,
     )
 
     /** The options as JSON, for a kept scan's page file. */
@@ -87,6 +92,7 @@ internal data class ScanLab(
         .put("finder", finderId(finder)).put("refine", refine).put("side_proportions", !perspective)
         .put("snap_paper", snapPaper).put("strength_override", strength ?: JSONObject.NULL).put("upright", upright)
         .put("sharpen", sharpen).put("denoise", denoise).put("preview", preview).put("crop_tools", cropTools).put("flatten_auto", flattenAuto).put("flatten_trim", flattenTrim).put("settle_turns", settleTurns).put("presets", presets).put("book_gutter", bookGutter).put("line_flatten", lineFlatten)
+        .put("look_per_page", lookPerPage).put("look_strip", lookStrip)
 
     /** One line of text for the app's preferences. */
     fun encode(): String = listOf(
@@ -94,6 +100,7 @@ internal data class ScanLab(
         "perspective" to flag(perspective), "snap" to flag(snapPaper), "strength" to (strength?.toString() ?: ""),
         "upright" to flag(upright), "sharpen" to sharpen.toString(), "denoise" to flag(denoise), "preview" to flag(preview), "crop" to flag(cropTools), "flatten_auto" to flag(flattenAuto), "flatten_trim" to flag(flattenTrim),
         "settle" to flag(settleTurns), "presets" to flag(presets), "gutter" to flag(bookGutter), "line_flatten" to flag(lineFlatten),
+        "look_page" to flag(lookPerPage), "look_strip" to flag(lookStrip),
     ).joinToString(";") { (k, v) -> "$k=$v" }
 
     companion object {
@@ -139,6 +146,8 @@ internal data class ScanLab(
                 presets = on("presets", default.presets),
                 bookGutter = on("gutter", default.bookGutter),
                 lineFlatten = on("line_flatten", default.lineFlatten),
+                lookPerPage = on("look_page", default.lookPerPage),
+                lookStrip = on("look_strip", default.lookStrip),
             )
         }
     }
@@ -249,6 +258,8 @@ internal fun scanTestPageJson(
     book: io.github.artcraftandroid.pdfcraft.ui.scan.ScanBookHalf? = null,
     /** The person's Flatten page choice for the page (#302); null when there is none. */
     flattenChosen: Boolean? = null,
+    /** The page's own look and strength as the scan screen left them (#301); null for a page discarded or from before it. */
+    pageLook: JSONObject? = null,
 ): String {
     val page = JSONObject()
         .put("corners", shares(corners)).put("kind", "other").put("paper", "unknown").put("curved", false).put("notes", "")
@@ -294,6 +305,7 @@ internal fun scanTestPageJson(
         .put("capture", capture ?: JSONObject.NULL)
         .put("models", models ?: JSONObject.NULL)
         .put("book", book?.json() ?: JSONObject.NULL)
+        .put("page_look", pageLook ?: JSONObject.NULL)
     page.put(
         "result",
         result?.let {
