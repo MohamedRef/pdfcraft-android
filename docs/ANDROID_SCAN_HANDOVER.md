@@ -34,7 +34,7 @@ a phone yet.** Every number in the scanner's documents was measured on a desktop
 | #303 | Book mode | **Not started** | | All of it |
 | #304 | "Max quality" (DocRes) | **Not started** | | Feasibility first, as the issue says |
 | #305 | Research: moiré | **Not started** | | |
-| #306 | Research: fingers, glare, stains | Prototype | this PR | `defects.rs` finds fingers at the edge, glare spots and stains, fills only blank paper and divides stains out, tested on drawn pages only and called by nothing ([ANDROID_SCAN_DEFECTS.md](ANDROID_SCAN_DEFECTS.md)). Left: a testing option and log fields so the owner's phone can report what it finds, precision and recall on his photos, the mask overlay, glare by two frames (#297) and camera hints (#295), the recommendation |
+| #306 | Research: fingers, glare, stains | Prototype | #397 | `defects.rs` finds fingers at the edge, glare spots and stains, fills only blank paper and divides stains out, tested on drawn pages only and called by nothing ([ANDROID_SCAN_DEFECTS.md](ANDROID_SCAN_DEFECTS.md)). Left: a testing option and log fields so the owner's phone can report what it finds, precision and recall on his photos, the mask overlay, glare by two frames (#297) and camera hints (#295), the recommendation |
 | #307 | ML Kit as a second engine | **Not started** | | Cannot be tried without a phone with Google Play services |
 | #339 | Pages turned upright | Core done | #370 | The "Turned upright · Undo" chip, a rotate button, the multi-page rule, a switch in ordinary settings |
 
