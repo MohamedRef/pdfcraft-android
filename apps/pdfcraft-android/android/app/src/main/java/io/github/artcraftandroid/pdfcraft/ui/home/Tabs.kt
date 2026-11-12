@@ -462,6 +462,9 @@ private fun Preferences(vm: AppViewModel) {
         color = c.textSecondary, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 20.dp),
     )
     SheetDivider()
+    // the scanner's models: what is installed and whether it is accepted (#289)
+    io.github.artcraftandroid.pdfcraft.ui.scan.ScanModelsSection(vm.engine, vm.recordDiagnostics)
+    SheetDivider()
     Section(stringResource(R.string.updater_title))
     val context = androidx.compose.ui.platform.LocalContext.current
     var autoCheck by remember { mutableStateOf(UpdaterState.autoCheckOn(context)) }

@@ -17,7 +17,7 @@ a phone yet.** Every number in the scanner's documents was measured on a desktop
 |---|---|---|---|---|
 | #287 | `pdfcraft-scan` crate, one pass from photo to page | Done, closed | #331, #346 | |
 | #288 | Measuring: harness, drawn pages, test set | Part | #346, #367 | The synthetic generator, the metrics module (`line_straightness` first: #302 waits for it), the `scan-eval` runner, the CI gate, the SmartDoc script |
-| #289 | Model files: pinned, loaded, exported | Part | #360, #365, #370 | `scan_model_states`, a Models list in settings, optional packs, copying a *changed* model on update (section 6) |
+| #289 | Model files: pinned, loaded, exported, copied again when changed | Part | #360, #365, #370, this PR | Optional packs (the flattening model as a download), `tensor.rs`. The copy by size and SHA-256, `scan_model_states` and the Models list are done (`docs/ANDROID_SCAN_MODELS.md`) |
 | #290 | Page found by a network | Core done | #360 | Figures on the owner's set; phone time. Known: wrong and accepted on 2 of the 10 reference photos, nothing found on 2 |
 | #291 | Edges refined at full size | Core done | #356 | A corner outside the photo is not accepted; the owner's set; phone time |
 | #292 | Crop screen: magnifier, side handles, snap, rotate | Screen done, rotate left | #381 | Rotate (with #339's user turns and `ScanSession` 2); all of it on a phone (`docs/ANDROID_SCAN_CROP.md`) |
@@ -63,7 +63,7 @@ Every threshold in them is the issue's starting value or was set on pages drawn 
 
 One document per feature says how it works, what was measured and what was not:
 `ANDROID_SCAN_AUTO_LOOK.md`, `_BLACK_WHITE.md`, `_DETAIL.md`, `_DETECTOR.md`, `_EDGES.md`,
-`_FLATTEN.md`, `_PREVIEW.md`, `_PROPORTIONS.md`, `_TESTING.md`, `_UPRIGHT.md` (all
+`_FLATTEN.md`, `_MODELS.md`, `_PREVIEW.md`, `_PROPORTIONS.md`, `_TESTING.md`, `_UPRIGHT.md` (all
 `docs/ANDROID_SCAN_…`). Read the one for a feature before changing it.
 
 ## 2. How a scan goes through the code today
@@ -71,7 +71,7 @@ One document per feature says how it works, what was measured and what was not:
 ```
 MainActivity (TakePicture: the phone's camera app)  ->  cacheDir/camera/scan-*.jpg
 AppViewModel.onScanPhoto
-    prepareOcrModels            unpack assets/models into filesDir/models, set PDFCRAFT_MODELS
+    prepareOcrModels            copy new or changed models into filesDir/models, set PDFCRAFT_MODELS
     scan_find_document_with     decode, detect (detect.rs), refine edges (refine.rs)
 ScanScreen / ScanCrop (ui/ToolScreens.kt)   thumbnail with the outline; four corner handles
 AppViewModel.saveScan, per page
@@ -93,7 +93,7 @@ AppViewModel.saveScan, per page
   `ui/ScanSave.kt`, `ui/ScanDiagnostics.kt`, and the testing side: `ui/ScanLab.kt`,
   `ui/ScanLabController.kt`, `ui/ScanTestStore.kt`, `ui/home/ScanLabSettings.kt`.
 - **Models** (`assets/models/`, pinned by size and SHA-256 in `scan/src/models.rs`, run on
-  `rten`): `scan-edges.onnx` 6.7 MB, `scan-flatten.onnx` 15.8 MB, `scan-upright.onnx` 3.4 MB.
+  `rten`; copied out of the APK by `engine/ModelFiles.kt`, listed in Settings → Scanner models): `scan-edges.onnx` 6.7 MB, `scan-flatten.onnx` 15.8 MB, `scan-upright.onnx` 3.4 MB.
   `tools/scan-models/README.md` says where each is from and how it was made, to the byte.
 - **Looks on screen**: the chips are `ScanFilter` (Original, Clean scan = Auto, Auto color,
   Grayscale, Whiteboard, Light text = black and white), one look for the whole scan, plus the
@@ -204,10 +204,10 @@ The list in #286 ("Rules for every scan PR") is the reference. The ones that hav
   pairs: `scan_reference upright | flatten | detect`.
 - Drawn test pages with real print (English, Arabic, a form): `tools/scan-eval/text_pages.py`;
   the three it makes are in `apps/pdfcraft-android/scan/tests/data/`.
-- **A model file that changes must change its name.** `Engine.prepareOcrModels` copies a model
-  out of the APK only when no file of that name is there yet. A new model is unpacked after an
-  update; a replaced one is not, and then fails its SHA-256 check and the feature is silently
-  off. #289, section 3, is the proper fix and is not done.
+- **A changed model is copied again on update** (#289): the build lists each model's size and
+  SHA-256 in `models.index`, and `engine/ModelFiles.kt` copies a file whose line differs from the
+  one recorded at the last copy. A model can keep its file name when it is replaced.
+  `docs/ANDROID_SCAN_MODELS.md` says how, and how to see each model's state.
 - The three scan models add 25.9 MB to the APK. #289 sets about 25 MB as the limit before
   models become optional downloads; the flattening model (15.8 MB) is the candidate.
 

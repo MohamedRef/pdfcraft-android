@@ -41,6 +41,10 @@ on one part. While any is changed, the scan screen says so.
 | Filter strength | Each filter's own | 20, 40, 60, 80 or 100 for every filter |
 | Flatten page (#302) | Off | On, with the switch on the scan screen itself |
 
+Settings → **Scanner models** (#289) lists each model with its state; while the log is
+recorded it also has **Copy the models again**, which copies every model out of the app anew
+(see `docs/ANDROID_SCAN_MODELS.md`).
+
 **Reset scanner testing options** puts them back. Keeping scans is not one of them: it changes
 no page.
 
@@ -66,6 +70,7 @@ The zip also holds `diagnostics.txt`, the diagnostics log as **Share diagnostics
  "options": {"finder": "auto", "refine": true, "side_proportions": false, "snap_paper": true, "strength_override": null, "upright": true,
              "sharpen": 30, "denoise": true, "preview": true, "crop_tools": true},
  "preview": {"shown": true, "reused": true, "ms": 412, "width": 905, "height": 1280, "look": "auto"},
+ "models": {"edges": "ready", "flatten": "ready", "upright": "ready"},
  "crop": {"visits": 1, "corner_drags": 2, "side_drags": 1, "snaps_asked": 3, "snaps_taken": 2, "snaps_held": 0, "snaps_failed": 0,
           "snap_ms_max": 85, "nudges": 0, "detects": 0, "detects_found": 0, "whole_photo": 0, "resets": 0,
           "loupe_decodes": 6, "snap": true, "ms": 9100, "moved_pct": 1.235},
@@ -90,7 +95,8 @@ screen (#292), added up over every time the page was cropped with Done, or `null
 was: drags of corners and of sides, snaps asked for, taken, skipped by holding still and failed,
 the longest snap, keyboard and TalkBack moves, Auto-detect, No crop and Reset, magnifier regions
 decoded, whether Snap was on, the time spent, and `moved_pct`, the largest corner move from where
-the screen opened in % of the photo's diagonal. It is not kept if the app is closed by Android
+the screen opened in % of the photo's diagonal. `models` says which models the engine accepted when the page
+was kept (#289): `ready`, `missing` or `corrupt` for each, or `null` when that could not be read. It is not kept if the app is closed by Android
 before the scan is saved.
 
 ## On the desktop
@@ -120,7 +126,9 @@ the page needed), its `width` and `height`, `quarter_turns` and `flattened`; eve
 every `crop_snap` line whether a `corner` or `side` was let go, how many `sides` were asked for and
 how many were `refined` or `curved`, whether the snap was `taken`, `stale` (another drag had
 started) or `failed`, and its `ms`; every `crop_detect` line whether Auto-detect `found` a page,
-its `source` and `ms`; `test_options` is written when an option is changed, `tests_shared` (pages, bytes)
+its `source` and `ms`; every `model_files` line (#289) what the models check copied and why
+(`copied`, `kept`, `failed`, `new`, `changed`, `size`, `unrecorded`, `forced`, `ms`), and while
+the log is recorded a `model_states` line with each model's state; `test_options` is written when an option is changed, `tests_shared` (pages, bytes)
 when the zip is handed out, and `tests_cleared` when the kept scans are deleted. The log itself
 still holds no file name, path or document content.
 

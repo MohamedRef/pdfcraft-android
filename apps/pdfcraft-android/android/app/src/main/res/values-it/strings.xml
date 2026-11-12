@@ -2009,4 +2009,15 @@
         <item quantity="many">%d note</item>
         <item quantity="other">%d note</item>
     </plurals>
+    <string name="scan_models_section">Modelli dello scanner</string>
+    <string name="scan_model_edges">Rilevamento della pagina</string>
+    <string name="scan_model_flatten">Appiattimento della pagina</string>
+    <string name="scan_model_upright">Raddrizzamento delle pagine</string>
+    <string name="scan_model_ready">Installato</string>
+    <string name="scan_model_missing">Non installato</string>
+    <string name="scan_model_corrupt">Danneggiato, non usato</string>
+    <string name="scan_model_line">%1$s · %2$s · %3$s</string>
+    <string name="scan_models_body">Questi modelli sono inclusi nell’app e vengono eseguiti su questo dispositivo. Un modello danneggiato non viene usato e la sua funzione resta disattivata finché l’app non lo copia di nuovo.</string>
+    <string name="scan_models_copy_again">Copia di nuovo i modelli</string>
+    <string name="scan_models_copied">Modelli copiati: %1$d</string>
 </resources>
