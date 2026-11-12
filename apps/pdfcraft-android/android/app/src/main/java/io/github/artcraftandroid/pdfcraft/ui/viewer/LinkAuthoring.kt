@@ -137,8 +137,8 @@ fun LinkLayer(vm: AppViewModel, doc: OpenDocument) {
                 end = null
                 if (s == null) return@toolGestures
                 val rect = if (moved && e != null) areaRect(s, e) else null
-                if (rect != null) vm.linkEdit = LinkEdit(doc, s.page, rect)
-                else vm.editLinkAt(doc, doc.viewer.screenToPage(p) ?: s)
+                if (rect != null) vm.linksAndMeasure.linkEdit = LinkEdit(doc, s.page, rect)
+                else vm.linksAndMeasure.editLinkAt(doc, doc.viewer.screenToPage(p) ?: s)
             },
             onCancel = {
                 start = null
@@ -200,7 +200,7 @@ fun LinkSheet(vm: AppViewModel, edit: LinkEdit) {
         kind = k
         wrong = false
     }
-    PdfSheet(onDismiss = { vm.linkEdit = null }, dim = true) {
+    PdfSheet(onDismiss = { vm.linksAndMeasure.linkEdit = null }, dim = true) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
             Text(
                 stringResource(if (edit.index == null) R.string.link_new else R.string.link_edit),
@@ -273,23 +273,23 @@ fun LinkSheet(vm: AppViewModel, edit: LinkEdit) {
         }
         Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.End) {
             if (edit.index != null) {
-                SheetTextButton(stringResource(R.string.common_delete), c.red) { vm.deleteLink(edit) }
+                SheetTextButton(stringResource(R.string.common_delete), c.red) { vm.linksAndMeasure.deleteLink(edit) }
             }
-            SheetTextButton(stringResource(R.string.common_cancel), c.textSecondary) { vm.linkEdit = null }
+            SheetTextButton(stringResource(R.string.common_cancel), c.textSecondary) { vm.linksAndMeasure.linkEdit = null }
             SheetTextButton(stringResource(R.string.link_save), c.accent) {
                 when (kind) {
                     LinkTargetKind.Page -> {
                         val p = parseLinkPage(page, doc.pageCount)
-                        if (p == null) wrong = true else vm.saveLink(edit, url = null, toPage = p)
+                        if (p == null) wrong = true else vm.linksAndMeasure.saveLink(edit, url = null, toPage = p)
                     }
                     LinkTargetKind.File -> {
                         val f = file
                         val p = parseLinkPage(page, Int.MAX_VALUE)
-                        if (f == null || p == null) wrong = true else vm.saveLink(edit, url = null, toPage = p, file = f)
+                        if (f == null || p == null) wrong = true else vm.linksAndMeasure.saveLink(edit, url = null, toPage = p, file = f)
                     }
                     LinkTargetKind.Web -> {
                         val u = normalizeLinkUrl(url)
-                        if (u == null) wrong = true else vm.saveLink(edit, url = u, toPage = null)
+                        if (u == null) wrong = true else vm.linksAndMeasure.saveLink(edit, url = u, toPage = null)
                     }
                 }
             }
