@@ -123,9 +123,9 @@ fun AppRoot(vm: AppViewModel, onBrowse: () -> Unit, onPickSignatureImage: () -> 
             vm.study.reviewing?.let { ReviewScreen(vm, it) }
             vm.study.cardDraft?.let { CardEditor(vm, it) }
             if (vm.study.newNotebookOpen) io.github.artcraftandroid.pdfcraft.ui.home.NewNotebookSheet(vm) { vm.study.newNotebookOpen = false }
-            vm.signaturePad?.let { SignaturePadScreen(vm, it, onPickSignatureImage) }
-            vm.certSign?.let { CertSignScreen(vm, it) }
-            if (vm.idCreate) CreateIdScreen(vm)
+            vm.signing.signaturePad?.let { SignaturePadScreen(vm, it, onPickSignatureImage) }
+            vm.signing.certSign?.let { CertSignScreen(vm, it) }
+            if (vm.signing.idCreate) CreateIdScreen(vm)
             if (vm.settingsOpen) SettingsScreen(vm)
             if (vm.showLicences) LicencesScreen(vm)
 
@@ -140,8 +140,8 @@ fun AppRoot(vm: AppViewModel, onBrowse: () -> Unit, onPickSignatureImage: () -> 
             SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = 72.dp, start = 8.dp, end = 8.dp))
 
             vm.passwordRequest?.let { PasswordDialog(vm, it) }
-            vm.idImport?.let { IdPasswordDialog(vm, it) }
-            vm.signFieldChoice?.let { (d, w) -> SignFieldChoiceDialog(vm, d, w) }
+            vm.signing.idImport?.let { IdPasswordDialog(vm, it) }
+            vm.signing.signFieldChoice?.let { (d, w) -> SignFieldChoiceDialog(vm, d, w) }
             if (vm.tipsOpen) FirstRunTipsDialog(onClose = { vm.tipsOpen = false })
             if (vm.authorPrompt) {
                 var name by remember { mutableStateOf("") }
