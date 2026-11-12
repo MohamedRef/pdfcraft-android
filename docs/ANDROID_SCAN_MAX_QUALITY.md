@@ -1,8 +1,8 @@
 # Scanner: "Max quality" with DocRes (#304)
 
-**State: groundwork only. The model has not been fetched, exported or run, so the issue's
-feasibility gate (seconds per page on the owner's phone) is not measured. Nothing in the app
-calls this code.**
+**State: groundwork, a desktop measurement, and a testing option that times a model file picked on
+the phone. The issue's feasibility gate (seconds per page on the owner's phone) is not measured
+yet: nothing has run on a phone. No page the app makes uses DocRes.**
 
 Code: `apps/pdfcraft-android/scan/src/enhance/learned.rs`, tests in `enhance/tests_learned.rs`,
 fixtures made by `tools/scan-models/docres_prompts.py`.
@@ -46,21 +46,55 @@ Timings are from a desktop (release build, one thread).
   output of a model exists.
 - **Time at 384 × 512:** both prompts 0.65 s, the map 0.07 s.
 
+## Timing it on a phone
+
+Settings → About → Diagnostics, while the log is recorded: **Time a document model from a file
+(testing only)**. The person picks a model file (ONNX, fixed input size). The app copies it into
+its cache, loads it, fills its first input with a fixed smooth pattern of the declared size, runs
+it twice (the first run warms the runtime up), deletes the copy and shows the load time, the run
+times and the peak memory. Nothing else is done with the file: it is never kept, never used on a
+page, and neither the app nor this repository carries one.
+
+For DocRes the file is made on a computer with `tools/scan-models/export_docres.py` from the
+authors' weights (pinned by SHA-256 there). Code: `scan/src/model_timing.rs` (tests in
+`tests_model_timing.rs`, on the bundled page detector, the one model file the tests can count on),
+`src/scan_model_timing.rs`, `ui/ScanLabController.kt` (`timeModel`) and `ui/scan/ScanModelTiming.kt`.
+
+The log line is `model_timing`: `bytes`, `sha` (`h` and the first 16 hex digits of the file's
+SHA-256), `inputs`, `input_dims` and `input_0`… (the shape run), `output_dims` and `output_0`…,
+`output_finite`, `threads` (0: the runtime's own pool, one thread per core), `cores`, `load_ms`,
+`run_1_ms`, `run_2_ms`, `peak_mb_before` and `peak_mb_after` (the process's peak resident memory,
+-1 where the system does not say). A file that cannot be timed is a `failed` line with stage
+`scan_time_model`.
+
+## On a desktop
+
+DocRes at 1 × 6 × 512 × 384, exported as above (15.2 million parameters; `rten` 0.26.0's output
+within 3.2e-6 of PyTorch's on the same input), on the build machine of 12 November 2026, an x86-64
+cloud container:
+
+| Runtime | Threads | One run |
+|---|---|---|
+| PyTorch (CPU) | 4 | 11.6 s |
+| `rten` 0.26.0 | 4 | 8.8 to 9.7 s |
+| `rten` 0.26.0 | 1 | 22.5 to 23.8 s |
+
+Peak memory about 2.1 GB, loading 0.05 s. A phone is slower than this machine, so the 6 s gate looks
+unlikely at this size; only the phone can say.
+
 ## Not done, and why
 
 - **The weights.** The authors publish `docres.pkl` on OneDrive and state no licence for it. The
-  copies on Hugging Face say MIT, but that is the mirrors' claim, not the authors'. Neither
-  OneDrive nor Hugging Face could be reached from the machine this was written on. Until the
-  weights' terms are known, the model can be used for measuring only, not shipped, not even as
-  an optional download. The research notes on branch `draft/scan-app-blocks`
+  copies on Hugging Face say MIT, but that is the mirrors' claim, not the authors'. The desktop
+  numbers above used the copy at `DaVinciCode/doctra-docres-main` (revision 1e63bad), which has the
+  pinned SHA-256. With no licence from the authors the file is not committed and not shipped, not
+  even as an optional download. The research notes on branch `draft/scan-app-blocks`
   (`docs/scan-blocks/research/304.md`) have the sources.
-- **Export to ONNX and the operator check in `rten`.** This needs the weights and PyTorch.
-  Pixel-unshuffle may export as `SpaceToDepth`, which `rten` does not support; it would be
-  rewritten as reshape and transpose.
-- **The gate itself:** load time, peak memory and seconds per inference on the owner's phone.
+- **The gate itself:** load time, peak memory and seconds per inference on the owner's phone; the
+  testing option above measures them once the file is picked there.
   From the paper's 183 GFLOPs at an unstated size, one pass at 384 × 512 is 137 to 549 GFLOP
   (worked out in the research notes, not measured).
 - **Model parity, cancellation, the look in #301's strip, the pack download.** These are step 2
   of the issue and wait for the gate.
-- **The testing option, log fields and kept-scan fields.** These come with the model; nothing
-  runs yet that could be logged.
+- **A page cleaned by the model, its option and kept-scan fields.** These come with step 2, after
+  the gate.

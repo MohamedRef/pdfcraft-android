@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Scanner testing: timing a picked model file (#304), kept apart from strings.xml so parallel scanner work merges cleanly. -->
+<resources>
+    <string name="scan_lab_time_model">Mesurer un modèle de documents depuis un fichier (tests uniquement)</string>
+    <string name="scan_lab_time_model_body">Choisissez un fichier de modèle (ONNX) sur ce téléphone. Il est exécuté deux fois sur une page générée et les durées vont dans le journal. Le fichier n\'est pas gardé et aucune page n\'est modifiée.</string>
+    <string name="scan_lab_time_model_running">Mesure du modèle…</string>
+    <string name="scan_lab_time_model_done">Modèle : chargement %1$d ms, exécutions %2$s ms, mémoire max %3$s Mo</string>
+    <string name="scan_lab_time_model_failed">Le modèle n\'a pas pu être mesuré : %1$s</string>
+</resources>
