@@ -689,8 +689,8 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
             }
         }
         if (ctl.sheet == ViewerSheet.Comments) CommentListScreen(vm, doc)
-        vm.attachPrompt?.takeIf { it.doc === doc }?.let { AttachDialog(vm, it) }
-        if (vm.flattenPrompt === doc) FlattenDialog(vm, doc)
+        vm.docTools.attachPrompt?.takeIf { it.doc === doc }?.let { AttachDialog(vm, it) }
+        if (vm.docTools.flattenPrompt === doc) FlattenDialog(vm, doc)
         vm.tools.redact.findings?.let { RedactionAuditDialog(vm, doc, it) }
         vm.editor.pageMenu?.takeIf { it.doc === doc }?.let { PageMenuView(vm, it) }
         if (vm.editor.imageSource?.first === doc) {

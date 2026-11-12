@@ -121,9 +121,9 @@ fun StandardsScreen(vm: AppViewModel, doc: OpenDocument) {
     }
     ToolPage(stringResource(R.string.std_title), { vm.tools.toolScreen = null }, action, actionEnabled, {
         when (tab) {
-            0 -> scope.launch { running = true; vm.report(doc, "pdfa_verify", mapOf("level" to level))?.let { pdfa = parsePdfaReport(it) }; running = false }
-            1 -> scope.launch { running = true; vm.report(doc, "print_readiness")?.let { readiness = parsePrintFindings(it) to it.optString("text") }; running = false }
-            else -> vm.fixHairlines(doc, fix, pages)
+            0 -> scope.launch { running = true; vm.docTools.report(doc, "pdfa_verify", mapOf("level" to level))?.let { pdfa = parsePdfaReport(it) }; running = false }
+            1 -> scope.launch { running = true; vm.docTools.report(doc, "print_readiness")?.let { readiness = parsePrintFindings(it) to it.optString("text") }; running = false }
+            else -> vm.docTools.fixHairlines(doc, fix, pages)
         }
     }) {
         Tabs(listOf(R.string.std_tab_pdfa, R.string.std_tab_readiness, R.string.std_tab_hairlines), tab) { tab = it }
@@ -148,14 +148,14 @@ fun StandardsScreen(vm: AppViewModel, doc: OpenDocument) {
                             }
                             if (r.issues.any { it.fixable }) {
                                 Row(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp)) {
-                                    ActionPill(stringResource(R.string.std_pdfa_fix), editable, { vm.convertToPdfa(doc, level) { pdfa = it } })
+                                    ActionPill(stringResource(R.string.std_pdfa_fix), editable, { vm.docTools.convertToPdfa(doc, level) { pdfa = it } })
                                 }
                             }
                         }
                         if (r.declared != null) {
                             Text(
                                 stringResource(R.string.std_pdfa_remove_id), color = if (editable) c.red else c.textSecondary, fontSize = 15.sp,
-                                modifier = Modifier.clickable(enabled = editable, role = Role.Button) { vm.removePdfaId(doc) { pdfa = null } }.padding(horizontal = 24.dp, vertical = 12.dp),
+                                modifier = Modifier.clickable(enabled = editable, role = Role.Button) { vm.docTools.removePdfaId(doc) { pdfa = null } }.padding(horizontal = 24.dp, vertical = 12.dp),
                             )
                         }
                     }
@@ -209,10 +209,10 @@ fun PrintOptionsScreen(vm: AppViewModel, doc: OpenDocument) {
     var o by remember { mutableStateOf(PrintOptions()) }
     val c = pdfColors
     ToolPage(
-        stringResource(R.string.print_options_title), { vm.tools.toolScreen = null }, stringResource(R.string.sheet_print), true, { vm.printWithOptions(doc, o, save = false) },
+        stringResource(R.string.print_options_title), { vm.tools.toolScreen = null }, stringResource(R.string.sheet_print), true, { vm.docTools.printWithOptions(doc, o, save = false) },
         trailing = {
             Text(stringResource(R.string.print_save_ready), color = c.label, fontSize = 16.sp,
-                modifier = Modifier.clickable(role = Role.Button) { vm.printWithOptions(doc, o, save = true) }.padding(horizontal = 16.dp, vertical = 12.dp))
+                modifier = Modifier.clickable(role = Role.Button) { vm.docTools.printWithOptions(doc, o, save = true) }.padding(horizontal = 16.dp, vertical = 12.dp))
         },
     ) {
         Column(Modifier.verticalScroll(rememberScrollState())) {

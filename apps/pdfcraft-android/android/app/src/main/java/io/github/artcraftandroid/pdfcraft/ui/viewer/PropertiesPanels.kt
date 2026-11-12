@@ -65,9 +65,9 @@ fun FileDetailsTools(vm: AppViewModel, doc: OpenDocument, properties: DocumentPr
         if (counting) return@SheetRow
         counting = true
         scope.launch {
-            val t = vm.wordCount(doc)
+            val t = vm.docTools.wordCount(doc)
             counting = false
-            if (t != null) count = vm.wordCountLabel(t.optLong("words"), t.optLong("characters"))
+            if (t != null) count = vm.docTools.wordCountLabel(t.optLong("words"), t.optLong("characters"))
         }
     }, enabled = doc.info.allowsCopying && !doc.info.preparing)
     if (!editable) Text(stringResource(R.string.panels_locked_read_only), color = c.textSecondary, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp))
@@ -97,7 +97,7 @@ private fun EditPropertiesDialog(vm: AppViewModel, doc: OpenDocument, properties
         onConfirm = {
             val after = values.toMap().toMutableMap()
             if (newKey.isNotEmpty() && newValue.isNotBlank()) after[newKey] = newValue
-            vm.setDocInfo(doc, metadataChanges(before, after))
+            vm.docTools.setDocInfo(doc, metadataChanges(before, after))
             onDismiss()
         },
     ) {
@@ -126,7 +126,7 @@ private fun InitialViewDialog(vm: AppViewModel, doc: OpenDocument, onDismiss: ()
     var page by remember { mutableStateOf("1") }
     var original by remember { mutableStateOf<Map<String, Any?>>(emptyMap()) }
     LaunchedEffect(Unit) {
-        val v = vm.initialView(doc) ?: return@LaunchedEffect onDismiss()
+        val v = vm.docTools.initialView(doc) ?: return@LaunchedEffect onDismiss()
         layout = OpenLayout.fromReply(v.optString("layout"))
         zoom = OpenZoom.fromReply(v.optString("magnification"))
         percent = percentFromReply(v.optString("magnification"))
@@ -141,7 +141,7 @@ private fun InitialViewDialog(vm: AppViewModel, doc: OpenDocument, onDismiss: ()
         confirmEnabled = loaded && p != null && p in 1..doc.pageCount,
         onConfirm = {
             val now = mapOf("layout" to layout.arg, "magnification" to zoom?.arg, "navigation" to panel.arg, "page" to p)
-            vm.setInitialView(doc, now.filter { (k, v) -> v != null && original[k] != v })
+            vm.docTools.setInitialView(doc, now.filter { (k, v) -> v != null && original[k] != v })
             onDismiss()
         },
     ) {
@@ -181,9 +181,9 @@ fun FlattenDialog(vm: AppViewModel, doc: OpenDocument) {
     var comments by remember { mutableStateOf(true) }
     var fields by remember { mutableStateOf(doc.info.fields > 0u) }
     PdfDialog(
-        onDismiss = { vm.flattenPrompt = null }, title = stringResource(R.string.flatten_title), confirm = stringResource(R.string.flatten_action),
+        onDismiss = { vm.docTools.flattenPrompt = null }, title = stringResource(R.string.flatten_title), confirm = stringResource(R.string.flatten_action),
         confirmEnabled = comments || fields, destructive = true,
-        onConfirm = { vm.flatten(doc, comments, fields) },
+        onConfirm = { vm.docTools.flatten(doc, comments, fields) },
     ) {
         Column {
             Text(stringResource(R.string.flatten_warning), color = c.textSecondary, fontSize = 14.sp)

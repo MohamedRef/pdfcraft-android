@@ -57,7 +57,7 @@ class MainActivity : ComponentActivity() {
     private val pickImage = registerForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri -> vm.editor.addImage(uri) }
     private val pickSignature = registerForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri -> vm.signing.importSignatureImage(uri) }
     private val pickPhotos = registerForActivityResult(ActivityResultContracts.PickMultipleVisualMedia()) { uris -> vm.onPhotosPicked(uris) }
-    private val pickOutputFolder = registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri -> vm.onOutputFolderPicked(uri) }
+    private val pickOutputFolder = registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri -> vm.docTools.onOutputFolderPicked(uri) }
     private val pickFolder = registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri -> uri?.let(vm::addLocalFolder) }
     private val micPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted -> vm.commenting.onMicPermission(granted) }
     private val pickBackupFolder = registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { vm.backups.onBackupFolderPicked(it) }
@@ -180,8 +180,8 @@ class MainActivity : ComponentActivity() {
         // the folder picker opens at Documents, where PDFs usually are (Download itself can't be chosen)
         val documents = android.provider.DocumentsContract.buildDocumentUri("com.android.externalstorage.documents", "primary:Documents")
         lifecycleScope.launch {
-            for (u in vm.outputFolderRequests) {
-                try { pickOutputFolder.launch(null) } catch (e: ActivityNotFoundException) { vm.onOutputFolderPicked(null); vm.tell(getString(R.string.main_error_no_app)) }
+            for (u in vm.docTools.outputFolderRequests) {
+                try { pickOutputFolder.launch(null) } catch (e: ActivityNotFoundException) { vm.docTools.onOutputFolderPicked(null); vm.tell(getString(R.string.main_error_no_app)) }
             }
         }
         lifecycleScope.launch { for (u in vm.accessRequests) launchSafely { pickFolder.launch(documents) } }

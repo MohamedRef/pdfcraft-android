@@ -156,7 +156,7 @@ class SettingsController internal constructor(private val vm: AppViewModel) {
     fun saveLayoutAsInitialView(doc: OpenDocument) {
         val open = currentLayout(doc).openLayout() ?: return
         io.github.artcraftandroid.pdfcraft.engine.Diag.event(io.github.artcraftandroid.pdfcraft.engine.DiagArea.Viewer, "layout_initial_view", "doc" to doc.diagNumber, "layout" to open)
-        vm.setInitialView(doc, mapOf("layout" to open.arg))
+        vm.docTools.setInitialView(doc, mapOf("layout" to open.arg))
     }
 
     /** Whether [doc]'s layout can be written as its initial view. */

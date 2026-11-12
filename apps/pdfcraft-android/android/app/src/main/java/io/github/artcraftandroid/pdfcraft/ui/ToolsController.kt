@@ -431,7 +431,7 @@ class ToolsController internal constructor(private val vm: AppViewModel) {
                 val uris = try { withContext(Dispatchers.IO) { vm.files.shareableAll(made) } } finally { dir.deleteRecursively() }
                 vm.intents.trySend(Intent.createChooser(vm.sendIntent(uris, "image/*"), null))
             } else {
-                vm.saveAllToFolder(made, "image/*", cleanup = dir)
+                vm.docTools.saveAllToFolder(made, "image/*", cleanup = dir)
             }
         } catch (e: Exception) {
             dir.deleteRecursively()
