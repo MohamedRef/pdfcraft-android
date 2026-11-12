@@ -94,6 +94,7 @@ class ScanLabTest {
             ScanLab(lookStrip = false),
             ScanLab(whiteboardLook = false, previewStop = false, previewZoom = false),
             ScanLab(lookPerPage = false, lookStrip = false, presets = false),
+            ScanLab(pageStrength = false),
             ScanLab(keep = true, inspect = true),
             ScanLab(finder = ScanFinder.LINES, strength = 100),
             ScanLab(finder = ScanFinder.OFF),

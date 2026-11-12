@@ -60,11 +60,16 @@ internal class ScanCameraModel(app: Application) : AndroidViewModel(app) {
     var merge by mutableStateOf(ScanMergeSetting.decode(prefs.getString(PREF_MERGE, null)))
         private set
 
+    /** Whether the person picked the merge setting; false while it is the default (Off, #426). */
+    var mergeChosen by mutableStateOf(prefs.contains(PREF_MERGE))
+        private set
+
     fun updateMerge(next: ScanMergeSetting) {
-        if (next == merge) return
+        if (next == merge && mergeChosen) return
         merge = next
+        mergeChosen = true
         prefs.edit().putString(PREF_MERGE, next.id).apply()
-        Diag.event(DiagArea.Scan, "camera_merge_option", "merge" to next.id)
+        Diag.event(DiagArea.Scan, "camera_merge_option", "merge" to next.id, "default" to ScanMergeSetting.DEFAULT.id)
     }
 
     /** The phone's memory class in MB: a merge needs [ScanMergeRules.MEMORY_MB]. */

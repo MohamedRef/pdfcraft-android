@@ -81,8 +81,13 @@ paper colour. This wires in two blocks from #382 rather than writing them again:
 - **Kinds and settings**: as in the issue's table (Photo, ID card, Receipt, Whiteboard, Book page,
   Photo-rich document, Document; Coloured form only when a person picks it).
 - **What a kind changes** (`page_look_kind`):
-  - the look's strength, unless the strength testing option is set (`fixed_strength`);
-  - the sharpening, unless sharpening is off in the testing options;
+  - the look's strength, unless the strength was set by hand (`fixed_strength`): the strength
+    testing option, or the page's own from the scan screen's slider (#424). A page whose slider
+    was never moved gets its kind's strength, and the slider shows that value;
+  - the sharpening: the kind's, scaled by the sharpening testing option over its default
+    (`kind_sharpen`, #424). At the default (30) it is the kind's own, 0 is none, 60 twice the
+    kind's and 100 three and a third times it, at most 100. Before #424, 30, 60 and 100 all gave
+    the kind's own;
   - paper Keep for Photo, ID card and Coloured form.
 - **Not used yet**: the kinds' `extra_gamma`, `s_curve` and `colour_factor` (Receipt's lift for
   faint thermal print, Whiteboard's S-curve and colour boost). The tone step has no such inputs
