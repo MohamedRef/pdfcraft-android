@@ -5,6 +5,6 @@
     <string name="scan_merge_auto">Automatica</string>
     <string name="scan_merge_always">Sempre</string>
     <string name="scan_merge_off">Disattivata</string>
-    <string name="scan_merge_body">Con poca luce la fotocamera scatta quattro foto della pagina e le unisce in una pagina più pulita. Lo scatto dura circa un secondo in più. Disattivato per impostazione predefinita. La pagina unita è già ritagliata e le foto non vengono conservate, quindi Ritaglia non può allargarla.</string>
+    <string name="scan_merge_body">Con poca luce la fotocamera unisce quattro foto in una pagina più pulita. Disattivato di default: la pagina è già ritagliata e Ritaglia non può allargarla.</string>
     <string name="scan_merge_working">Tieni fermo il telefono: unione di quattro foto</string>
 </resources>

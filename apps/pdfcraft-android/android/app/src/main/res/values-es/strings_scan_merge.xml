@@ -5,6 +5,6 @@
     <string name="scan_merge_auto">Automática</string>
     <string name="scan_merge_always">Siempre</string>
     <string name="scan_merge_off">Desactivada</string>
-    <string name="scan_merge_body">Con poca luz, la cámara toma cuatro fotos de la página y las fusiona en una página más limpia. La captura tarda alrededor de un segundo más. Desactivado por defecto. La página fusionada ya está recortada y las fotos no se conservan, así que Recortar no puede ampliarla.</string>
+    <string name="scan_merge_body">Con poca luz, la cámara fusiona cuatro fotos en una página más limpia. Desactivado por defecto: la página sale ya recortada y Recortar no puede ampliarla.</string>
     <string name="scan_merge_working">No muevas el teléfono: fusionando cuatro fotos</string>
 </resources>

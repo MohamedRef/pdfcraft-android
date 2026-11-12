@@ -40,7 +40,7 @@ four 12 MP photos per page for the life of the scan and changes the session's fi
 a later pull request, and has not been started.
 
 **What a person who turns it on gets** is the behaviour below, unchanged; the setting's text now
-says that the merged page is already cropped and its photos are not kept.
+says it is off by default and that the merged page comes already cropped.
 
 **Existing installs.** The setting is stored only when someone picks a value. An install where
 nobody picked one moves from Auto to Off; one where someone picked Auto or Always keeps it.
