@@ -21,6 +21,7 @@ internal enum class DiagArea(val tag: String, val issues: String) {
     Tool("tool", "#96 #113 #131, slow or failed engine tools"),
     Text("text", "#87 #88, search, Read Aloud word count, slow selection"),
     Home("home", "#93 #94, file thumbnails and recent files"),
+    Pages("pages", "#165 #168 #172 #173 #174-#177 #181 #183 #185, page and document tools"),
     Error("error", "#114, any failure"),
     Share("share", "#205 #155"),
     Update("update", "#193"),

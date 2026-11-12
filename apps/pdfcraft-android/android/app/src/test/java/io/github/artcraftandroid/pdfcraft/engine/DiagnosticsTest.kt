@@ -23,6 +23,14 @@ class DiagnosticsTest {
     }
 
     @Test
+    fun pageToolLinesKeepTheirFixedWords() {
+        // the page tools' values: tool names, mark kinds, print layouts and PDF/A levels as the app writes them
+        val line = diagLine(at, DiagArea.Pages, "page_edit", listOf("tool" to "page_rotate", "kind" to io.github.artcraftandroid.pdfcraft.ui.MarkKind.HeaderFooter,
+            "layout" to io.github.artcraftandroid.pdfcraft.ui.PrintLayout.Booklet, "level" to "pdfa2b"))
+        assertEquals("11-11 21:03:12.481 [pages] page_edit tool=page_rotate kind=headerfooter layout=booklet level=pdfa2b", line)
+    }
+
+    @Test
     fun anythingThatCouldBeUserTextIsRedacted() {
         // a file name, a path, a URI, a sentence, a password-like string
         for (v in listOf("Thesis Final.pdf", "/storage/emulated/0/Download/a.pdf", "content://com.android.providers/document/1", "Hello world", "Secret123")) {

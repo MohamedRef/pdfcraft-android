@@ -784,10 +784,16 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         val eng = engine ?: return
         viewModelScope.launch {
             try {
+                val start = System.nanoTime()
                 val r = eng.tool(name, args + ("doc" to doc.id))
                 if (name == "comment_add") study.studyNote(doc)
                 if (name == "comment_add") lectureNoted(doc)
                 refresh(doc, io.github.artcraftandroid.pdfcraft.ui.viewer.pageTouchedBy(name, args))
+                // organize (#165): each page edit with the pages it touched and the time to the redrawn view
+                if (name.startsWith("page_") && Diag.enabled()) {
+                    Diag.event(DiagArea.Pages, "page_edit", "doc" to doc.diagNumber, "tool" to name, "pages" to ((args["pages"] as? List<*>)?.size ?: -1),
+                        "page_count" to doc.pageCount, "ms" to (System.nanoTime() - start) / 1_000_000)
+                }
                 onDone(r)
             } catch (e: MobileException) {
                 tell(e.userMessage)
@@ -3321,7 +3327,15 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
 
     /** Put [file] into Downloads as [name] and say so, with Open. */
     internal suspend fun deliver(file: File, name: String, mime: String = "application/pdf", lead: String? = null) {
-        val uri = withContext(Dispatchers.IO) { files.saveToDownloads(file, name, mime).also { file.delete() } }
+        val bytes = file.length()
+        val uri = try {
+            Diag.measure(DiagArea.Pages, "save_to_downloads", "bytes" to bytes, "pdf" to (mime == "application/pdf")) {
+                withContext(Dispatchers.IO) { files.saveToDownloads(file, name, mime).also { file.delete() } }
+            }
+        } catch (e: Exception) {
+            Diag.failure(DiagArea.Pages, "save_to_downloads", e)
+            throw e
+        }
         val size = withContext(Dispatchers.IO) { files.size(uri) }
         val saved = (size?.let { text(R.string.msg_saved_downloads_size, name, io.github.artcraftandroid.pdfcraft.ui.viewer.formatSize(it)) } ?: text(R.string.msg_saved_downloads, name))
             .let { if (lead != null) "$lead $it" else it }
@@ -3362,9 +3376,13 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     /** Compress PDF at [level] (0 high, 1 medium, 2 low compression), or with Advanced [options]. */
     fun compress(doc: OpenDocument, level: Int, options: CompressOptions = compressOptions) = job(text(R.string.msg_busy_compressing)) { eng ->
         val out = tempFile("pdf")
-        val r = eng.tool("doc_optimize", compressArgs(level, options) + mapOf("doc" to doc.id, "path" to out.absolutePath))
+        val r = Diag.measure(DiagArea.Pages, "compress_run", "doc" to doc.diagNumber, "level" to level, "advanced" to options.enabled) {
+            eng.tool("doc_optimize", compressArgs(level, options) + mapOf("doc" to doc.id, "path" to out.absolutePath))
+        }
         toolScreen = null
         val before = doc.info.fileSize.toLong()
+        Diag.event(DiagArea.Pages, "compress_result", "doc" to doc.diagNumber, "before_bytes" to before, "after_bytes" to out.length(),
+            "smaller" to (out.length() < before), "target_set" to r.has("target_reached"), "target_reached" to r.optBoolean("target_reached"))
         if (out.length() >= before) {
             // as the reference: nothing is saved when the file can't get any smaller
             out.delete()
@@ -3413,8 +3431,10 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         val out = tempFile("pdf")
         val copy = eng.tool("doc_open", mapOf("path" to doc.file.absolutePath, "password" to doc.password)).optLong("doc")
         try {
-            eng.tool("doc_protect", protection + ("doc" to copy))
-            eng.tool("doc_save", mapOf("doc" to copy, "path" to out.absolutePath, "full" to true))
+            Diag.measure(DiagArea.Pages, "protect_copy", "doc" to doc.diagNumber, "settings" to protection.size) {
+                eng.tool("doc_protect", protection + ("doc" to copy))
+                eng.tool("doc_save", mapOf("doc" to copy, "path" to out.absolutePath, "full" to true))
+            }
         } finally {
             runCatching { eng.tool("doc_close", mapOf("doc" to copy, "discard_changes" to true)) }
         }
@@ -3432,8 +3452,10 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         val out = tempFile("pdf")
         val copy = eng.tool("doc_open", mapOf("path" to doc.file.absolutePath, "password" to doc.password)).optLong("doc")
         try {
-            eng.tool("doc_unprotect", mapOf("doc" to copy))
-            eng.tool("doc_save", mapOf("doc" to copy, "path" to out.absolutePath, "full" to true))
+            Diag.measure(DiagArea.Pages, "unprotect_copy", "doc" to doc.diagNumber, "encrypted" to doc.info.encrypted) {
+                eng.tool("doc_unprotect", mapOf("doc" to copy))
+                eng.tool("doc_save", mapOf("doc" to copy, "path" to out.absolutePath, "full" to true))
+            }
         } catch (e: Exception) {
             out.delete()
             throw e
@@ -3460,6 +3482,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         doc.commitTool?.invoke()
         runTool(doc, "doc_remove_hidden", if (categories == null) emptyMap() else mapOf("categories" to categories)) {
             doc.controller.sheet = io.github.artcraftandroid.pdfcraft.ui.viewer.ViewerSheet.None
+            Diag.event(DiagArea.Pages, "hidden_removed", "doc" to doc.diagNumber, "all" to (categories == null), "categories" to (categories?.size ?: -1))
             tell(text(R.string.msg_hidden_removed), text(R.string.common_undo)) { undo(doc) }
         }
     }
@@ -3719,11 +3742,15 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         val mime = when (format) { "png" -> "image/png"; "tiff" -> "image/tiff"; else -> "image/jpeg" }
         val dir = File(getApplication<Application>().cacheDir, "images/${System.nanoTime()}").apply { mkdirs() }
         try {
-            val r = eng.tool("doc_export_images", mapOf(
-                "doc" to doc.id, "folder" to dir.absolutePath, "format" to format, "dpi" to imageDpi, "quality" to imageQuality,
-                "pages" to pages.map { it + 1 },
-            ))
+            val r = Diag.measure(DiagArea.Pages, "export_pages_render", "doc" to doc.diagNumber, "format" to format, "dpi" to imageDpi, "pages" to pages.size) {
+                eng.tool("doc_export_images", mapOf(
+                    "doc" to doc.id, "folder" to dir.absolutePath, "format" to format, "dpi" to imageDpi, "quality" to imageQuality,
+                    "pages" to pages.map { it + 1 },
+                ))
+            }
             val made = exportedFiles(r).map { f -> f to "${doc.title}_${f.name.substringAfterLast("_page_")}" }
+            if (Diag.enabled()) Diag.event(DiagArea.Pages, "export_pages_result", "doc" to doc.diagNumber, "files" to made.size,
+                "bytes" to made.sumOf { it.first.length() }, "lower_dpi" to (r.optJSONArray("lower_dpi")?.length() ?: 0), "share" to share)
             imageExport = null
             organizing = false
             doc.controller.pagesOpen = false
@@ -3732,8 +3759,10 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 val uris = withContext(Dispatchers.IO) { files.shareableAll(made) }
                 intents.trySend(Intent.createChooser(sendIntent(uris, mime), null))
             } else {
-                withContext(Dispatchers.IO) {
-                    for ((f, name) in made) if (format == "tiff") files.saveToDownloads(f, name, mime) else files.saveToPictures(f, name, mime)
+                Diag.measure(DiagArea.Pages, "export_pages_save", "files" to made.size, "to_downloads" to (format == "tiff")) {
+                    withContext(Dispatchers.IO) {
+                        for ((f, name) in made) if (format == "tiff") files.saveToDownloads(f, name, mime) else files.saveToPictures(f, name, mime)
+                    }
                 }
                 tell(plural(if (format == "tiff") R.plurals.msg_images_saved_downloads else R.plurals.msg_images_saved, made.size, made.size))
             }
@@ -3756,9 +3785,13 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     fun exportAllImages(doc: OpenDocument, skipSmall: Boolean, share: Boolean) = job(text(R.string.msg_busy_exporting_images)) { eng ->
         val dir = File(getApplication<Application>().cacheDir, "images/${System.nanoTime()}").apply { mkdirs() }
         try {
-            val r = eng.tool("doc_export_all_images", mapOf("doc" to doc.id, "folder" to dir.absolutePath, "min_size" to if (skipSmall) 64 else 0))
+            val r = Diag.measure(DiagArea.Pages, "export_all_images", "doc" to doc.diagNumber, "skip_small" to skipSmall) {
+                eng.tool("doc_export_all_images", mapOf("doc" to doc.id, "folder" to dir.absolutePath, "min_size" to if (skipSmall) 64 else 0))
+            }
             val made = exportedFiles(r).map { it to it.name }
             val skipped = r.optJSONArray("skipped")
+            if (Diag.enabled()) Diag.event(DiagArea.Pages, "export_all_images_result", "doc" to doc.diagNumber, "files" to made.size,
+                "bytes" to made.sumOf { it.first.length() }, "skipped" to (skipped?.length() ?: 0), "share" to share)
             val reasons = (0 until (skipped?.length() ?: 0)).mapNotNull { skipped!!.optJSONObject(it)?.optString("reason")?.takeIf(String::isNotBlank) }.distinct()
             toolScreen = null
             if (made.isEmpty()) {
@@ -3804,7 +3837,9 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     /** Pages [pages] (0-based) of [doc] as a new PDF in Downloads. */
     fun extractPages(doc: OpenDocument, pages: List<Int>) = job(text(R.string.msg_busy_extracting)) { eng ->
         val out = tempFile("pdf")
-        eng.tool("page_extract", mapOf("doc" to doc.id, "pages" to pages.map { it + 1 }, "out" to out.absolutePath))
+        Diag.measure(DiagArea.Pages, "extract_pages", "doc" to doc.diagNumber, "pages" to pages.size) {
+            eng.tool("page_extract", mapOf("doc" to doc.id, "pages" to pages.map { it + 1 }, "out" to out.absolutePath))
+        }
         deliver(out, "Pages from ${doc.title}.pdf")
     }
 
@@ -3874,9 +3909,10 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         try {
             val args = mutableMapOf<String, Any?>("doc" to doc.id, "out_dir" to dir.absolutePath)
             args += mode.args()
-            val r = eng.tool("doc_split", args)
+            val r = Diag.measure(DiagArea.Pages, "split", "doc" to doc.diagNumber, "share" to share) { eng.tool("doc_split", args) }
             val list = r.optJSONArray("files")
             val parts = (0 until (list?.length() ?: 0)).map { File(list!!.getJSONObject(it).getString("path")) }.filter { it.isFile }
+            if (Diag.enabled()) Diag.event(DiagArea.Pages, "split_result", "doc" to doc.diagNumber, "files" to parts.size, "bytes" to parts.sumOf { it.length() })
             if (parts.isEmpty()) {
                 tell(text(R.string.msg_split_nothing))
                 dir.deleteRecursively()
@@ -3908,7 +3944,9 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         val eng = engine ?: return
         viewModelScope.launch {
             try {
-                eng.tool("layer_set", mapOf("doc" to doc.id, "layer" to position, "visible" to visible))
+                Diag.measure(DiagArea.Pages, "layer_set", "doc" to doc.diagNumber, "visible" to visible) {
+                    eng.tool("layer_set", mapOf("doc" to doc.id, "layer" to position, "visible" to visible))
+                }
                 doc.images.invalidate()
             } catch (e: MobileException) {
                 tell(e.userMessage)
@@ -4027,6 +4065,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         if (!comments && !fields) return
         doc.commitTool?.invoke()
         runTool(doc, "doc_flatten", mapOf("comments" to comments, "fields" to fields)) {
+            Diag.event(DiagArea.Pages, "flattened", "doc" to doc.diagNumber, "comments" to comments, "fields" to fields)
             tell(text(R.string.msg_flattened), text(R.string.common_undo)) { undo(doc) }
         }
     }
@@ -4047,6 +4086,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     fun convertToPdfa(doc: OpenDocument, level: String, onDone: (PdfaReport) -> Unit) {
         runTool(doc, "pdfa_convert", mapOf("level" to level)) { r ->
             val report = parsePdfaReport(r)
+            Diag.event(DiagArea.Pages, "pdfa_convert", "doc" to doc.diagNumber, "level" to "pdfa${level.lowercase()}", "compliant" to report.compliant, "issues_left" to report.issues.size)
             onDone(report)
             tell(text(if (report.compliant) R.string.std_msg_pdfa_done else R.string.std_msg_pdfa_partly), text(R.string.common_undo)) { undo(doc) }
         }
@@ -4064,6 +4104,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     fun fixHairlines(doc: OpenDocument, fix: HairlineFix, pages: List<Int>?) {
         runTool(doc, "doc_fix_hairlines", fix.args(pages)) { r ->
             val n = r.optInt("fixed")
+            Diag.event(DiagArea.Pages, "fix_hairlines", "doc" to doc.diagNumber, "fixed" to n, "pages" to r.optInt("pages"), "all_pages" to (pages == null))
             if (n == 0) tell(text(R.string.std_msg_no_hairlines))
             else tell(plural(R.plurals.std_msg_hairlines_fixed, n, n, r.optInt("pages")), text(R.string.common_undo)) { undo(doc) }
         }
@@ -4093,7 +4134,11 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             val dir = File(getApplication<Application>().cacheDir, "print/${System.nanoTime()}").apply { mkdirs() }
             val out = File(dir, "${doc.title}-print.pdf")
             try {
-                eng.tool("doc_print", options.args(out.absolutePath) + ("doc" to doc.id))
+                val r = Diag.measure(DiagArea.Pages, "print_layout", "doc" to doc.diagNumber, "layout" to options.layout, "per_sheet" to options.perSheet,
+                    "subset" to options.subset, "reverse" to options.reverse, "page_range" to options.pages.isNotBlank(), "save" to save) {
+                    eng.tool("doc_print", options.args(out.absolutePath) + ("doc" to doc.id))
+                }
+                Diag.event(DiagArea.Pages, "print_layout_result", "doc" to doc.diagNumber, "sheets" to r.optInt("sheets"), "bytes" to out.length())
                 toolScreen = null
                 if (save) {
                     deliver(out, out.name, "application/pdf")
@@ -4135,6 +4180,8 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     /** Add (or, with [replace], update) a mark of [kind] with [args]; one undo step. */
     fun applyMark(doc: OpenDocument, kind: MarkKind, args: Map<String, Any?>, replace: Boolean) {
         runTool(doc, kind.tool, args) {
+            Diag.event(DiagArea.Pages, "mark_applied", "doc" to doc.diagNumber, "kind" to kind, "replace" to replace,
+                "picture" to args.containsKey("file"), "pages" to ((args["pages"] as? List<*>)?.size ?: -1))
             toolScreen = null
             clearMarkImage()
             val msg = when (kind) {
@@ -4151,6 +4198,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         runTool(doc, "doc_remove_marks", mapOf("kind" to kind.key)) { r ->
             onDone()
             val warn = r.optJSONArray("warnings")?.length() ?: 0
+            Diag.event(DiagArea.Pages, "marks_removed", "doc" to doc.diagNumber, "kind" to kind, "warnings" to warn)
             tell(text(if (warn > 0) R.string.marks_msg_removed_with_warnings else R.string.marks_msg_removed), text(R.string.common_undo)) { undo(doc) }
         }
     }
@@ -4176,7 +4224,10 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         }
         job(text(R.string.msg_busy_saving_files)) {
             try {
-                val saved = withContext(Dispatchers.IO) { files.saveAllToTree(tree, out.files, out.mime) }
+                val saved = Diag.measure(DiagArea.Pages, "save_to_folder", "files" to out.files.size) {
+                    withContext(Dispatchers.IO) { files.saveAllToTree(tree, out.files, out.mime) }
+                }
+                Diag.event(DiagArea.Pages, "save_to_folder_result", "files" to out.files.size, "saved" to saved)
                 tell(plural(R.plurals.msg_files_saved_folder, saved, saved))
             } finally {
                 withContext(NonCancellable + Dispatchers.IO) { out.discard() }
