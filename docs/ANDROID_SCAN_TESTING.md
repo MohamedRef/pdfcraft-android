@@ -90,7 +90,7 @@ The zip also holds `diagnostics.txt`, the diagnostics log as **Share diagnostics
  "finding": {"source": "model", "confidence": 0.835, "angle": 0, "passes": 1, "refined_sides": 4, "curved_sides": 0},
  "look": "auto", "strength": 60, "flatten": false, "flatten_chosen": null,
  "options": {"finder": "auto", "refine": true, "side_proportions": false, "snap_paper": true, "strength_override": null, "upright": true,
-             "sharpen": 30, "denoise": true, "preview": true, "crop_tools": true, "flatten_auto": false, "flatten_trim": true, "settle_turns": true, "presets": true, "strict_gutter": true, "strict_photo": true, "book_gutter": true, "line_flatten": true,
+             "sharpen": 30, "denoise": true, "preview": true, "crop_tools": true, "flatten_auto": false, "flatten_trim": true, "flatten_line_floor": true, "settle_turns": true, "presets": true, "strict_gutter": true, "strict_photo": true, "book_gutter": true, "line_flatten": true,
              "look_per_page": true, "look_strip": true, "whiteboard_look": true, "preview_stop": true,
              "preview_zoom": true},
  "document_type": {"preset": "receipt", "chosen": false, "strength": 80, "sharpen": 35, "keep_paper": false, "suggest_flatten": false,

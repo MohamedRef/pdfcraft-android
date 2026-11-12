@@ -117,7 +117,13 @@ What is built is the second rule, the quality guard:
   `flatten_guard::guard` keeps the flattened page only when its figure is at least 10 % lower.
 - When both are under half a pixel there is nothing to gain, and when either cannot be measured
   (fewer than three lines of text followed) the straightened page is kept.
-- The result says which page was kept, why (`straighter`, `notbetter`, `unmeasured`, `straight`),
+- A floor on the lines followed (#302 review, see below): a flattened page the figures would keep
+  is kept only when at least 8 lines of text were followed on both pages; otherwise the
+  straightened page is kept and the reason is `fewlines` (`flatten_guard::guard_with_floor`,
+  `PageRequest::flatten_min_lines`, `ScanPageRequest.flatten_min_lines`, 8 by default, 0 for none).
+  It applies to the network's page in the automatic mode and to the page flattened from its lines
+  of text (#303, part B).
+- The result says which page was kept, why (`straighter`, `notbetter`, `unmeasured`, `straight`, `fewlines`),
   both figures and the number of lines each had. The extra work is timed as `scan_flatten_check`.
 - The preview (#301) makes the same choice, at its own size. Near the 10 % margin the preview and
   the saved page can choose differently, because the figures are in pixels of each size. Both are
@@ -130,14 +136,32 @@ the check. It stays off by default because nothing has run on a phone: how long 
 second straightened page take there, and whether the guard decides well on real pages, is what
 the log fields below are for.
 
+### The floor on lines followed
+
+A review of `main` at `fa61b265` ran the automatic mode on the owner's ten reference photos (figures
+in a comment on #302). On pages straightened by their corners the measure read 4 to 19 px, and on
+4 of the 10 it followed only 3 or 4 lines; a 10 % difference between two such readings rests on
+very little. The most bent page followed only 3 lines. So the guard now needs 8 lines on both
+pages before it may keep a flattened page. On those figures it changes none of the three pages
+that were kept (the curled receipt on 13 lines each, the invoice on 34 and 32, the 0.64 % page on
+14 each); it stops a future verdict on 3 or 4 lines, like those the four weakest pages gave. The
+figures are the review's, not re-run here; nothing was run on a real photo for this change.
+
+The automatic mode stays **off by default**, as the review advises, until the owner's kept scans
+(`straightened_px`, `flattened_px` and both line counts are already in them) say otherwise.
+
+Testing option: **Keep a flattened page only when at least 8 lines of text were followed**
+(`ScanLab.flattenLineFloor`, `flatten_line_floor`, on). Off is the guard as before.
+
 Log fields on each `page` and `preview` line:
 
-- `flatten_auto`;
+- `flatten_auto` and `flatten_line_floor` (the option);
 - `flatten_checked`, `flatten_kept` and `flatten_why`;
 - `straight_px` and `straight_flat_px`, in tenths of a pixel, -1 when not measured;
 - `straight_lines` and `straight_flat_lines`.
 
-Kept scans: `result.flatten_check` in each page file.
+Kept scans: `result.flatten_check` in each page file (its `why` may be `fewlines`), and
+`options.flatten_line_floor`.
 
 What was measured, on drawn pages only (`a_checked_flattening_is_kept_only_when_the_lines_come_out_straighter`,
 with the pinned model):

@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Scanner flattening guard's line floor (#302), kept apart from strings.xml so parallel scanner work merges cleanly. -->
+<resources>
+    <string name="scan_lab_flatten_line_floor">Manter uma página achatada só quando ao menos 8 linhas de texto foram seguidas</string>
+</resources>

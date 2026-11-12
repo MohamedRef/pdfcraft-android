@@ -53,6 +53,12 @@ internal data class ScanLab(
      */
     val flattenTrim: Boolean = true,
     /**
+     * The flattening guard keeps a flattened page (the network's in the automatic mode, or one
+     * flattened from its lines of text) only when at least 8 lines of text were followed on both
+     * pages (#302). Off: the guard as before, which could decide on 3 or 4 lines.
+     */
+    val flattenLineFloor: Boolean = true,
+    /**
      * Clean scan takes each page for a kind of document (receipt, whiteboard, book page, …) and
      * uses that kind's strength, sharpening and paper colour (#299). Off uses the filter's own
      * strength and the sharpening above, as before.
@@ -115,7 +121,7 @@ internal data class ScanLab(
     fun diag(): Array<Pair<String, Any?>> = arrayOf<Pair<String, Any?>>(
         "finder" to finderId(finder), "refine" to refine, "side_proportions" to !perspective,
         "snap_paper" to snapPaper, "strength_override" to (strength ?: -1), "upright" to upright, "sharpen" to sharpen,
-        "denoise" to denoise, "preview" to preview, "crop_tools" to cropTools, "flatten_auto" to flattenAuto, "flatten_trim" to flattenTrim, "settle_turns" to settleTurns, "presets" to presets, "strict_gutter" to strictGutter, "strict_photo" to strictPhoto, "book_gutter" to bookGutter, "line_flatten" to lineFlatten,
+        "denoise" to denoise, "preview" to preview, "crop_tools" to cropTools, "flatten_auto" to flattenAuto, "flatten_trim" to flattenTrim, "flatten_line_floor" to flattenLineFloor, "settle_turns" to settleTurns, "presets" to presets, "strict_gutter" to strictGutter, "strict_photo" to strictPhoto, "book_gutter" to bookGutter, "line_flatten" to lineFlatten,
         "page_strength" to pageStrength, "look_per_page" to lookPerPage, "look_strip" to lookStrip,
         "whiteboard_look" to whiteboardLook, "preview_stop" to previewStop, "preview_zoom" to previewZoom, "keep" to keep, "inspect" to inspect,
     )
@@ -124,7 +130,7 @@ internal data class ScanLab(
     fun json(): JSONObject = JSONObject()
         .put("finder", finderId(finder)).put("refine", refine).put("side_proportions", !perspective)
         .put("snap_paper", snapPaper).put("strength_override", strength ?: JSONObject.NULL).put("upright", upright)
-        .put("sharpen", sharpen).put("denoise", denoise).put("preview", preview).put("crop_tools", cropTools).put("flatten_auto", flattenAuto).put("flatten_trim", flattenTrim).put("settle_turns", settleTurns).put("presets", presets).put("strict_gutter", strictGutter).put("strict_photo", strictPhoto).put("book_gutter", bookGutter).put("line_flatten", lineFlatten)
+        .put("sharpen", sharpen).put("denoise", denoise).put("preview", preview).put("crop_tools", cropTools).put("flatten_auto", flattenAuto).put("flatten_trim", flattenTrim).put("flatten_line_floor", flattenLineFloor).put("settle_turns", settleTurns).put("presets", presets).put("strict_gutter", strictGutter).put("strict_photo", strictPhoto).put("book_gutter", bookGutter).put("line_flatten", lineFlatten)
         .put("page_strength", pageStrength).put("look_per_page", lookPerPage).put("look_strip", lookStrip)
         .put("whiteboard_look", whiteboardLook).put("preview_stop", previewStop).put("preview_zoom", previewZoom).put("inspect", inspect)
 
@@ -132,13 +138,16 @@ internal data class ScanLab(
     fun encode(): String = listOf(
         "keep" to flag(keep), "finder" to finderId(finder), "refine" to flag(refine),
         "perspective" to flag(perspective), "snap" to flag(snapPaper), "strength" to (strength?.toString() ?: ""),
-        "upright" to flag(upright), "sharpen" to sharpen.toString(), "denoise" to flag(denoise), "preview" to flag(preview), "crop" to flag(cropTools), "flatten_auto" to flag(flattenAuto), "flatten_trim" to flag(flattenTrim),
+        "upright" to flag(upright), "sharpen" to sharpen.toString(), "denoise" to flag(denoise), "preview" to flag(preview), "crop" to flag(cropTools), "flatten_auto" to flag(flattenAuto), "flatten_trim" to flag(flattenTrim), "line_floor" to flag(flattenLineFloor),
         "settle" to flag(settleTurns), "presets" to flag(presets), "strict_gutter" to flag(strictGutter), "strict_photo" to flag(strictPhoto), "gutter" to flag(bookGutter), "line_flatten" to flag(lineFlatten),
         "page_strength" to flag(pageStrength), "look_page" to flag(lookPerPage), "look_strip" to flag(lookStrip),
         "board" to flag(whiteboardLook), "stop" to flag(previewStop), "zoom" to flag(previewZoom), "inspect" to flag(inspect),
     ).joinToString(";") { (k, v) -> "$k=$v" }
 
     companion object {
+        /** The fewest lines of text followed on both pages before the flattening guard may keep a flattened page (#302). */
+        const val FLATTEN_MIN_LINES = 8
+
         /** The strengths offered: null is each look's own. */
         val STRENGTHS: List<Int?> = listOf(null, 20, 40, 60, 80, 100)
 
@@ -178,6 +187,7 @@ internal data class ScanLab(
                 settleTurns = on("settle", default.settleTurns),
                 flattenAuto = on("flatten_auto", default.flattenAuto),
                 flattenTrim = on("flatten_trim", default.flattenTrim),
+                flattenLineFloor = on("line_floor", default.flattenLineFloor),
                 presets = on("presets", default.presets),
                 strictGutter = on("strict_gutter", default.strictGutter),
                 strictPhoto = on("strict_photo", default.strictPhoto),

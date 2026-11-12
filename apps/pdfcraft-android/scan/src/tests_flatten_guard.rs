@@ -225,3 +225,27 @@ fn a_page_whose_data_does_not_match_its_size_is_left_alone() {
     assert_eq!(t, Trim::default());
     assert_eq!(out, bad);
 }
+
+// The floor on lines followed (#302): the review on the owner's reference photos found readings
+// on 3 or 4 lines deciding a page.
+
+#[test]
+fn a_straighter_page_on_too_few_lines_is_not_kept() {
+    use crate::flatten_guard::{MIN_LINES, guard_with_floor};
+    // 10 → 5 px is clearly straighter: kept on 8 lines each, not on 3 (the review's weakest case)
+    let enough = guard_with_floor(Some(10.0), Some(5.0), (Some(8), Some(8)), MIN_LINES);
+    let few = guard_with_floor(Some(10.0), Some(5.0), (Some(3), Some(30)), MIN_LINES);
+    let few_flat = guard_with_floor(Some(10.0), Some(5.0), (Some(30), Some(7)), MIN_LINES);
+    println!("8/8: {enough:?}, 3/30: {few:?}, 30/7: {few_flat:?}");
+    assert_eq!(enough.kept, Kept::Flattened);
+    assert_eq!((few.kept, few.why), (Kept::Perspective, Why::FewLines));
+    assert_eq!((few_flat.kept, few_flat.why), (Kept::Perspective, Why::FewLines));
+    assert_eq!(Why::FewLines.id(), "fewlines");
+    // no floor: the guard as before
+    assert_eq!(guard_with_floor(Some(10.0), Some(5.0), (Some(3), Some(3)), 0), guard(Some(10.0), Some(5.0)));
+    // a page the guard would not keep keeps its own reason
+    assert_eq!(guard_with_floor(Some(10.0), Some(9.5), (Some(3), Some(3)), MIN_LINES).why, Why::NotStraighter);
+    assert_eq!(guard_with_floor(None, Some(5.0), (None, Some(30)), MIN_LINES).why, Why::Unmeasured);
+    // unmeasured line counts never pass the floor
+    assert_eq!(guard_with_floor(Some(10.0), Some(5.0), (None, Some(30)), MIN_LINES).why, Why::FewLines);
+}
