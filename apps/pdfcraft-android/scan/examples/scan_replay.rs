@@ -160,11 +160,12 @@ fn main() {
             // nor one from before the Auto look sharpened and smoothed (#299)
             sharpen: options["sharpen"].as_u64().map_or(0, |v| v.min(100) as u8),
             denoise: options["denoise"].as_bool().unwrap_or(false),
-            // the kind of document the page was made as (#299): the one the phone used, so a page
-            // the person set by hand is repeated as such; files from before then have none
-            preset: match facts["document_type"]["preset"].as_str().and_then(preset_from_id) {
-                Some(p) => PresetChoice::Fixed(p),
-                None => PresetChoice::Off,
+            // the kind of document (#299): one the person chose is kept; one the phone worked out
+            // is worked out again by this build; files from before then have none
+            preset: match (facts["document_type"]["preset"].as_str().and_then(preset_from_id), facts["document_type"]["chosen"].as_bool()) {
+                (Some(p), Some(true)) => PresetChoice::Fixed(p),
+                (Some(_), _) => PresetChoice::Auto,
+                (None, _) => PresetChoice::Off,
             },
             curved_sides: facts["finding"]["curved_sides"].as_u64().map_or(0, |v| v.min(4) as u8),
             fixed_strength: !options["strength_override"].is_null(),
