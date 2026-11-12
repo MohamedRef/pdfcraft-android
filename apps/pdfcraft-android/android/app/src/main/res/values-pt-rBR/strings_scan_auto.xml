@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Scan: auto-capture in the in-app camera (#296), kept apart from strings.xml so parallel scanner work merges cleanly. -->
+<resources>
+    <string name="scan_auto_next">Próxima página</string>
+    <string name="scan_auto_tip">A captura automática está ativada: segure o celular parado sobre a página e ele tira a foto.</string>
+    <string name="scan_auto_setting">Captura automática</string>
+    <string name="scan_auto_skip">Tirando a foto. Toque aqui para pular esta página.</string>
+</resources>
