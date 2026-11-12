@@ -3,12 +3,13 @@
 
 use pdfcraft_geom::perspective::Point;
 
-use crate::detect::{Finder, Placement, QuadSource, SIDE, area_weights, detect, detect_with, read, shrink, square, with_lines};
+use crate::detect::{Finder, Placement, QuadSource, SIDE, detect, detect_with, read, shrink, square, with_lines};
 use crate::models::{EDGES, MODELS, ModelState, load, release, state};
+use crate::tensor::area_weights;
 use crate::{Photo, Quad};
 
 /// A photo of a sheet with rows of print at `quad` on a dark, grainy table.
-fn photo(w: u32, h: u32, quad: [Point; 4]) -> Photo {
+pub(crate) fn photo(w: u32, h: u32, quad: [Point; 4]) -> Photo {
     let mut page = crate::tests::test_page(600, 800);
     // rows of print between the test page's own marks
     for y in (120..760).step_by(22) {

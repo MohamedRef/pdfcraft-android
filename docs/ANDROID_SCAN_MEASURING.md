@@ -202,7 +202,43 @@ Time: the two gate tests took 39 s together on the 4-core desktop this was writt
 other test running; the whole scan crate's tests 73 s. CI's runner also has four cores, and runs
 the gate beside the crate's other tests.
 
+## Public photos: SmartDoc 2015 (`tools/scan-eval/scan_dataset_smartdoc.py`)
+
+SmartDoc 2015 Challenge 1 (ICDAR 2015, CC BY 4.0) is phone video of six printed documents on five
+backgrounds, with the page's corners marked on every frame: real camera photos whose answers are
+known, which nobody's private documents are in. The script turns a local copy into a test set that
+`scan-eval <folder>` reads as it is (section 7 of #288):
+
+It reads either published form: the frames release (`frames.tar.gz` from
+https://github.com/jchazalon/smartdoc15-ch1-dataset/releases, unpacked: `metadata.csv.gz` and the
+frames as JPEG), which needs only Python's standard library, or the original videos with their
+`*.gt.xml` files (Zenodo record 1230218), which need `opencv-python` to decode.
+
+```sh
+python3 tools/scan-eval/scan_dataset_smartdoc.py ~/smartdoc ~/smartdoc-set --every 30 --list   # what it would write
+python3 tools/scan-eval/scan_dataset_smartdoc.py ~/smartdoc ~/smartdoc-set --every 30
+cargo run --release -p pdfcraft-scan --features synth --bin scan-eval -- ~/smartdoc-set --md smartdoc.md
+```
+
+- Every 30th frame (`--every`), starting at the first; frames the dataset marks `rejected`, or with
+  a corner missing, are left out.
+- `corners` are the marked corners as shares of the frame, TL TR BR BL, not clamped; `paper` is
+  `a4`, `curved` false, `notes` names the background, the document and the frame.
+- `kind` is `other` unless `--kind background01=desk` (and so on) says otherwise. The backgrounds
+  were not looked at when the script was written, so it claims no mapping of its own.
+- It downloads nothing, and neither the dataset nor what the script writes goes into the
+  repository.
+
+- The dataset's `tl` is the page's own top-left as a reader holds it, even when the page is upside
+  down in the frame: the same convention as the test set.
+
+**Not verified:** the script has not run on the real dataset; it was not downloaded on the machine
+the script was written on, which has no OpenCV either. Its tests (`test_scan_dataset_smartdoc.py`,
+run by CI) use files written by hand in the two formats as their documentation gives them (the
+frames release's README and its example row; the `.gt.xml` `frame` / `point` layout), and check the
+sampling, the corner order, the JPEG size read, the copy and the JSON. No `scan-eval` figures on
+SmartDoc exist yet.
+
 ## Still to do in #288
 
-- The SmartDoc script.
 - `scan-eval --reference` (section 8): `scan_reference look` does that job and stays.
