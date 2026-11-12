@@ -442,7 +442,7 @@ class TabsController internal constructor(private val vm: AppViewModel) {
         tab.reading = vm.settings.readingMode
         tab.tool = doc.controller.tool
         vm.noteTaking.closeLecturePlayback()
-        vm.readAloud?.stop()
+        vm.sharing.readAloud?.stop()
         vm.study.pauseStudy()
         vm.study.studyDoc = null
         if (doc.controller.tool != ViewerTool.None) vm.leaveTool(doc)

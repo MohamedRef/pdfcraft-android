@@ -53,7 +53,7 @@ class MainActivity : ComponentActivity() {
     // Comments to import (XFDF, FDF or another PDF's): a picker of their own, like the bookmarks'.
     private val pickComments = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> vm.commenting.onCommentsPicked(uri) }
 
-    private val saveCopy = registerForActivityResult(ActivityResultContracts.CreateDocument("application/pdf")) { uri -> vm.copyTo(uri) }
+    private val saveCopy = registerForActivityResult(ActivityResultContracts.CreateDocument("application/pdf")) { uri -> vm.sharing.copyTo(uri) }
     // Scan's photos: PdfCraft's camera screen or the phone's camera app (#294)
     private val scanCameraModel: ScanCameraModel by viewModels()
     private val scanCamera = ScanCameraRouter(this, { vm }, { scanCameraModel })
@@ -116,7 +116,7 @@ class MainActivity : ComponentActivity() {
         // a document another app opened was closed: back to that app, not Home (#47)
         lifecycleScope.launch { for (u in vm.leave) finish() }
         lifecycleScope.launch { for (job in vm.prints) print(job.file, job.name, job.deleteWhenDone) }
-        lifecycleScope.launch { for (name in vm.saveCopyRequests) launchSafely(onFail = vm::saveCopyLaunchFailed) { saveCopy.launch(name) } }
+        lifecycleScope.launch { for (name in vm.sharing.saveCopyRequests) launchSafely(onFail = vm.sharing::saveCopyLaunchFailed) { saveCopy.launch(name) } }
         lifecycleScope.launch {
             for (ignored in vm.tools.bookmarkJsonPicks) {
                 launchSafely { pickBookmarkJson.launch(arrayOf("application/json", "text/plain", "application/octet-stream")) }
@@ -217,14 +217,14 @@ class MainActivity : ComponentActivity() {
     // Ctrl+Tab switches tabs (#138) before Compose takes Tab to move focus
     override fun dispatchKeyEvent(event: android.view.KeyEvent): Boolean {
         if (event.keyCode == android.view.KeyEvent.KEYCODE_TAB && event.isCtrlPressed && vm.document != null && vm.tabs.tabs.size > 1) {
-            if (event.action == android.view.KeyEvent.ACTION_DOWN) vm.viewerKey(event.keyCode, ctrl = true, shift = event.isShiftPressed)
+            if (event.action == android.view.KeyEvent.ACTION_DOWN) vm.sharing.viewerKey(event.keyCode, ctrl = true, shift = event.isShiftPressed)
             return true
         }
         return super.dispatchKeyEvent(event)
     }
 
     override fun onKeyDown(keyCode: Int, event: android.view.KeyEvent): Boolean =
-        vm.viewerKey(keyCode, event.isCtrlPressed, event.isShiftPressed) || super.onKeyDown(keyCode, event)
+        vm.sharing.viewerKey(keyCode, event.isCtrlPressed, event.isShiftPressed) || super.onKeyDown(keyCode, event)
 
     // the viewer's shortcuts in the system's Meta+/ list (#153)
     override fun onProvideKeyboardShortcuts(data: MutableList<android.view.KeyboardShortcutGroup>, menu: android.view.Menu?, deviceId: Int) {

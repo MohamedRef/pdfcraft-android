@@ -360,8 +360,8 @@ fun BoxScope.SelectionMenu(vm: AppViewModel, doc: OpenDocument, sel: Selection) 
         MenuRow(LucideIcons.SwatchBook, stringResource(R.string.cards_make)) { vm.study.makeCardFromSelection(doc, cloze = false) }
         MenuRow(LucideIcons.SwatchBook, stringResource(R.string.cards_make_cloze)) { vm.study.makeCardFromSelection(doc, cloze = true) }
         // while reading aloud, the reading moves to the selection (the reference's "from here")
-        MenuRow(LucideIcons.Volume2, stringResource(if (vm.readAloud != null) R.string.viewer_read_from_here else R.string.common_tool_read_aloud)) {
-            vm.startReadAloud(doc, fromSelection = true)
+        MenuRow(LucideIcons.Volume2, stringResource(if (vm.sharing.readAloud != null) R.string.viewer_read_from_here else R.string.common_tool_read_aloud)) {
+            vm.sharing.startReadAloud(doc, fromSelection = true)
             doc.selection.clear()
         }
         Spacer(Modifier.height(8.dp))

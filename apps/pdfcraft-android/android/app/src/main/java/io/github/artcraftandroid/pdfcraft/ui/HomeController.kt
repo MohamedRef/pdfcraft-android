@@ -215,12 +215,12 @@ class HomeController internal constructor(private val vm: AppViewModel) {
         pendingTool = null
         when (t) {
             FileTool.Edit -> vm.enterTool(doc, ViewerTool.Edit)
-            FileTool.ReadAloud -> vm.startReadAloud(doc)
+            FileTool.ReadAloud -> vm.sharing.startReadAloud(doc)
             FileTool.FillSign -> vm.enterTool(doc, ViewerTool.FillSign)
             FileTool.Comment -> vm.enterTool(doc, ViewerTool.Comment)
             FileTool.Organize -> { vm.tools.organizing = true; doc.controller.pagesOpen = true }
             FileTool.Compress -> vm.tools.openCompress(doc)
-            FileTool.Export -> vm.openExport(doc)
+            FileTool.Export -> vm.sharing.openExport(doc)
             FileTool.Protect -> vm.tools.openProtect(doc)
             FileTool.Crop -> vm.tools.openCrop(doc)
             FileTool.Ocr -> vm.recognizeText(doc)
@@ -246,10 +246,10 @@ class HomeController internal constructor(private val vm: AppViewModel) {
 
     /** Several PDFs to the share sheet at once. */
     fun shareFiles(rows: List<io.github.artcraftandroid.pdfcraft.ui.home.FileRow>) {
-        vm.handOut {
+        vm.sharing.handOut {
             val local = rows.mapNotNull { r -> localFileOf(r)?.let { it to r.name } }
             if (local.isEmpty()) error(text(R.string.msg_files_unreadable))
-            vm.sendIntent(withContext(Dispatchers.IO) { vm.files.shareableAll(local) })
+            vm.sharing.sendIntent(withContext(Dispatchers.IO) { vm.files.shareableAll(local) })
         }
     }
 
@@ -268,9 +268,9 @@ class HomeController internal constructor(private val vm: AppViewModel) {
     }
 
     fun shareFile(row: io.github.artcraftandroid.pdfcraft.ui.home.FileRow) {
-        vm.handOut {
+        vm.sharing.handOut {
             val f = localFileOf(row) ?: error(text(R.string.common_file_unreadable))
-            vm.sendIntent(listOf(withContext(Dispatchers.IO) { vm.files.shareable(f, row.name) }))
+            vm.sharing.sendIntent(listOf(withContext(Dispatchers.IO) { vm.files.shareable(f, row.name) }))
         }
     }
 
@@ -282,7 +282,7 @@ class HomeController internal constructor(private val vm: AppViewModel) {
     }
 
     fun openWith(row: io.github.artcraftandroid.pdfcraft.ui.home.FileRow) {
-        vm.handOut {
+        vm.sharing.handOut {
             val f = localFileOf(row) ?: error(text(R.string.common_file_unreadable))
             val uri = withContext(Dispatchers.IO) { vm.files.shareable(f, row.name) }
             Intent(Intent.ACTION_VIEW).setDataAndType(uri, "application/pdf").addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
@@ -339,7 +339,7 @@ class HomeController internal constructor(private val vm: AppViewModel) {
     }
 
     fun saveFileCopy(row: io.github.artcraftandroid.pdfcraft.ui.home.FileRow) {
-        vm.startCopyRequest(AppViewModel.CopyRequest.Row(row), row.name)
+        vm.sharing.startCopyRequest(SharingController.CopyRequest.Row(row), row.name)
     }
 
     /** The place chosen for a file row's Save a copy. */

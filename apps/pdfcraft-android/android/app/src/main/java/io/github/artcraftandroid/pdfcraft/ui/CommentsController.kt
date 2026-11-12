@@ -384,7 +384,7 @@ class CommentsController internal constructor(private val vm: AppViewModel) {
                 val name = "${doc.title}.xfdf"
                 if (share) {
                     val uri = withContext(Dispatchers.IO) { vm.files.shareable(out, name) }
-                    vm.intents.trySend(Intent.createChooser(vm.sendIntent(listOf(uri), XFDF_MIME).putExtra(Intent.EXTRA_SUBJECT, text(R.string.comments_share_subject, doc.title)), null))
+                    vm.intents.trySend(Intent.createChooser(vm.sharing.sendIntent(listOf(uri), XFDF_MIME).putExtra(Intent.EXTRA_SUBJECT, text(R.string.comments_share_subject, doc.title)), null))
                 } else {
                     vm.deliver(out, name, XFDF_MIME)
                 }

@@ -449,7 +449,7 @@ class EditController internal constructor(private val vm: AppViewModel) {
                     val names = act.optJSONArray("reset")?.let { a -> (0 until a.length()).map { a.optString(it) } }.orEmpty()
                     vm.runTool(doc, "form_reset", if (names.isEmpty()) emptyMap() else mapOf("fields" to names)) { vm.tell(text(R.string.msg_form_cleared)) }
                 }
-                act.has("url") -> vm.linkPrompt = act.optString("url")
+                act.has("url") -> vm.sharing.linkPrompt = act.optString("url")
                 act.has("page") -> doc.viewer.goToPage((act.optInt("page") - 1).coerceIn(0, doc.pageCount - 1))
                 act.has("submit") -> vm.tell(text(R.string.msg_button_submit))
                 act.has("javascript") -> vm.runTool(doc, "js_run", mapOf("field" to w.field, "script" to act.optString("javascript"))) { scriptOutput(doc, it) }
@@ -497,8 +497,8 @@ class EditController internal constructor(private val vm: AppViewModel) {
             val q = requests.optJSONObject(i) ?: continue
             when {
                 q.has("page") -> doc.viewer.goToPage((q.optInt("page") - 1).coerceIn(0, doc.pageCount - 1))
-                q.has("url") -> vm.linkPrompt = q.optString("url")
-                q.has("print") -> vm.print(doc)
+                q.has("url") -> vm.sharing.linkPrompt = q.optString("url")
+                q.has("print") -> vm.sharing.print(doc)
                 q.has("submit") -> vm.tell(text(R.string.msg_button_submit))
             }
         }

@@ -186,9 +186,9 @@ fun AppRoot(vm: AppViewModel, onBrowse: () -> Unit, onPickSignatureImage: () -> 
                     }
                 }
             }
-            vm.linkPrompt?.let { url ->
+            vm.sharing.linkPrompt?.let { url ->
                 val shown = runCatching { android.net.Uri.parse(url).let { u -> "${u.scheme}://${u.host}${if (u.port > 0) ":${u.port}" else ""}" } }.getOrDefault(url)
-                PdfDialog(onDismiss = { vm.answerLink(false) }, title = stringResource(R.string.root_open_link_title), confirm = stringResource(R.string.common_open), onConfirm = { vm.answerLink(true) }) {
+                PdfDialog(onDismiss = { vm.sharing.answerLink(false) }, title = stringResource(R.string.root_open_link_title), confirm = stringResource(R.string.common_open), onConfirm = { vm.sharing.answerLink(true) }) {
                     Text(stringResource(R.string.root_open_link_body, shown), color = c.text, fontSize = 14.sp)
                 }
             }

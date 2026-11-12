@@ -191,7 +191,7 @@ fun AppViewModel.runQuickTool(doc: OpenDocument, tool: QuickTool) {
         QuickTool.Draw -> enterTool(doc, ViewerTool.Draw)
         QuickTool.FillSign -> enterTool(doc, ViewerTool.FillSign)
         QuickTool.Text -> enterTool(doc, ViewerTool.Text)
-        QuickTool.Export -> openExport(doc)
+        QuickTool.Export -> sharing.openExport(doc)
         QuickTool.Combine -> tools.openCombine(doc)
         QuickTool.Compress -> tools.openCompress(doc)
         QuickTool.Protect -> tools.openProtect(doc)
@@ -214,7 +214,7 @@ fun AppViewModel.runQuickTool(doc: OpenDocument, tool: QuickTool) {
         QuickTool.Handwriting -> noteTaking.recognizeHandwriting(doc, doc.viewer.currentPage)
         QuickTool.Create -> tools.openCreate()
         QuickTool.Scan -> startScan()
-        QuickTool.ReadAloud -> startReadAloud(doc)
+        QuickTool.ReadAloud -> sharing.startReadAloud(doc)
         QuickTool.Measure -> enterTool(doc, ViewerTool.Measure)
     }
 }
