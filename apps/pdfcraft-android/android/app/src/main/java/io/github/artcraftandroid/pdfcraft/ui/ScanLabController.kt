@@ -34,7 +34,7 @@ internal class ScanLabController(private val vm: AppViewModel) {
     private val store by lazy { ScanTestStore(File(app.filesDir, "scan-tests")) }
 
     /** The testing options in force. */
-    var options by mutableStateOf(ScanLab.decode(vm.appPrefs.getString(PREF, null)))
+    var options by mutableStateOf(ScanLab.decode(vm.settings.appPrefs.getString(PREF, null)))
         private set
 
     /** What is kept for testing (shown on the Share row). */
@@ -44,7 +44,7 @@ internal class ScanLabController(private val vm: AppViewModel) {
     fun update(next: ScanLab) {
         if (next == options) return
         options = next
-        vm.appPrefs.edit().putString(PREF, next.encode()).apply()
+        vm.settings.appPrefs.edit().putString(PREF, next.encode()).apply()
         Diag.event(DiagArea.Scan, "test_options", *next.diag())
     }
 
