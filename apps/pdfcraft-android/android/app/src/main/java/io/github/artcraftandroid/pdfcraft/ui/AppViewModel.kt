@@ -5262,42 +5262,65 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
 
     fun discardScan() {
         scanPages.forEach { it.file.delete() }
+        scanPageDir().listFiles()?.forEach { it.delete() }
         scanPages.clear()
         scanName = ""
         insertScanAt = null
         toolScreen = null
     }
 
-    /** Save the scanned pages as a PDF with [filter]'s look (or insert them where Organize asked). */
+    /** Where Save writes each scanned page's straightened image (removed when the scan ends). */
+    private fun scanPageDir() = File(getApplication<Application>().cacheDir, "scan")
+
+    /**
+     * Save the scanned pages as a PDF with [filter]'s look (or insert them where Organize asked).
+     * Each photo is decoded once, straightened, given the look and encoded once natively (#287);
+     * a page that can't be processed goes in as the camera took it.
+     */
     fun saveScan(filter: ScanFilter) = job(text(R.string.msg_busy_saving_scan)) { eng ->
         val pages = scanPages.toList()
-        val paths = pages.map { it.file.absolutePath }
         val scanStarted = android.os.SystemClock.elapsedRealtime()
-        val created = eng.tool("doc_create", mapOf("from" to "images", "paths" to paths, "name" to "Scan"))
+        val dir = scanPageDir().apply { mkdirs() }
+        val saved = ArrayList<ScanSavedPage>(pages.size)
+        for ((i, page) in pages.withIndex()) {
+            // the Scan gates (#286): found edges, whether they were moved and how far (in % of the
+            // photo's diagonal, so the thumbnail's proportions are enough)
+            val stats = scanPageStats(page.corners, page.found, ScanPage.WHOLE, page.thumb.width.toDouble(), page.thumb.height.toDouble())
+            if (!scanNeedsProcessing(page.corners.contentEquals(ScanPage.WHOLE), filter.mode)) {
+                Diag.event(DiagArea.Scan, "page", "index" to i + 1, "edges_found" to stats.found, "corners_moved" to stats.touched, "max_move_pct" to stats.maxMovePct, "filter" to filter, "enhanced" to false)
+                saved += scanSavedPage(page.file.absolutePath, null)
+                continue
+            }
+            busy = text(R.string.msg_busy_cleaning_page, i + 1, pages.size)
+            val request = io.github.artcraftandroid.pdfcraft.core.ScanPageRequest(
+                photoPath = page.file.absolutePath,
+                corners = page.corners.toList(),
+                look = scanLookOf(filter.mode),
+                strength = filter.level.coerceIn(0, 100).toUByte(),
+                outputPath = File(dir, "page-$i").absolutePath,
+            )
+            val enhanceStarted = android.os.SystemClock.elapsedRealtime()
+            val result = withContext(Dispatchers.Default) { runCatching { io.github.artcraftandroid.pdfcraft.core.scanProcessPage(request) } }
+            result.onFailure { Diag.failure(DiagArea.Scan, "scan_process_page", it) }
+            val r = result.getOrNull()
+            // decode, straighten, look and encode times (#287), and the page's pixels and proportions
+            Diag.event(
+                DiagArea.Scan, "page", "index" to i + 1, "edges_found" to stats.found, "corners_moved" to stats.touched, "max_move_pct" to stats.maxMovePct,
+                "filter" to filter, "enhanced" to (r != null), "enhance_ms" to android.os.SystemClock.elapsedRealtime() - enhanceStarted,
+                *(r?.timings.orEmpty().map<io.github.artcraftandroid.pdfcraft.core.ScanTiming, Pair<String, Any?>> { it.stage.removePrefix("scan_") + "_ms" to it.ms.toLong() }.toTypedArray()),
+                "out_width" to (r?.width?.toLong() ?: 0L), "out_height" to (r?.height?.toLong() ?: 0L),
+                "out_format" to (r?.format?.name?.lowercase() ?: "none"), "dpi" to (r?.dpi?.toDouble() ?: 0.0),
+            )
+            saved += scanSavedPage(page.file.absolutePath, r?.let { it.path to it.dpi })
+        }
+        val created = try {
+            eng.tool("doc_create", scanCreateArgs(saved))
+        } finally {
+            // the PDF holds the pages now
+            dir.listFiles()?.forEach { it.delete() }
+        }
         val id = created.optLong("doc")
         try {
-            // each page keeps the part inside its corners, straightened, with the look; a whole
-            // photo in Original stays as it was taken
-            val sizes = eng.tool("doc_info", mapOf("doc" to id)).optJSONArray("pages")
-            for ((i, page) in pages.withIndex()) {
-                val size = sizes?.optJSONObject(i)
-                val (w, h) = (size?.optDouble("width") ?: 0.0) to (size?.optDouble("height") ?: 0.0)
-                // the Scan gates (#286): found edges, whether they were moved and how far
-                val stats = scanPageStats(page.corners, page.found, ScanPage.WHOLE, w, h)
-                if (page.corners.contentEquals(ScanPage.WHOLE) && filter == ScanFilter.Original || size == null) {
-                    Diag.event(DiagArea.Scan, "page", "index" to i + 1, "edges_found" to stats.found, "corners_moved" to stats.touched, "max_move_pct" to stats.maxMovePct, "filter" to filter, "enhanced" to false)
-                    continue
-                }
-                val corners = page.corners.mapIndexed { k, v -> v * if (k % 2 == 0) w else h }
-                busy = text(R.string.msg_busy_cleaning_page, i + 1, pages.size)
-                val enhanceStarted = android.os.SystemClock.elapsedRealtime()
-                val ok = runCatching { eng.tool("page_enhance_camera", mapOf("doc" to id, "page" to i + 1, "corners" to corners, "mode" to filter.mode, "level" to filter.level)) }
-                    .onFailure { Diag.failure(DiagArea.Scan, "page_enhance_camera", it) }.isSuccess
-                Diag.event(
-                    DiagArea.Scan, "page", "index" to i + 1, "edges_found" to stats.found, "corners_moved" to stats.touched, "max_move_pct" to stats.maxMovePct,
-                    "filter" to filter, "enhanced" to ok, "enhance_ms" to android.os.SystemClock.elapsedRealtime() - enhanceStarted,
-                )
-            }
             if (Diag.enabled()) {
                 // the straightened pages' proportions (A4 is 1.414; the gate is within 2%)
                 eng.tool("doc_info", mapOf("doc" to id)).optJSONArray("pages")?.let { out ->

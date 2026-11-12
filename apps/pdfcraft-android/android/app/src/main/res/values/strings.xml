@@ -373,6 +373,7 @@
     <string name="tools_retake">Retake</string>
     <!-- Looks a scanned page can have -->
     <string name="tools_filter_original">Original</string>
+    <string name="tools_filter_clean_scan">Clean scan</string>
     <string name="tools_filter_auto_colour">Auto color</string>
     <string name="tools_filter_grayscale">Grayscale</string>
     <string name="tools_filter_whiteboard">Whiteboard</string>

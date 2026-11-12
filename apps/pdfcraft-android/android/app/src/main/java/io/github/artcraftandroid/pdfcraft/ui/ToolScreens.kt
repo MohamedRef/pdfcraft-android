@@ -825,6 +825,8 @@ data class ScanPage(val file: java.io.File, val thumb: ImageBitmap, val corners:
 /** The looks a scan can have, and how the engine's camera clean-up gives each. */
 enum class ScanFilter(@StringRes val label: Int, val mode: String, val level: Int) {
     Original(R.string.tools_filter_original, "original", 0),
+    /** The scan crate's Auto look (#298): no shadows, white paper, dark ink, real colours. */
+    CleanScan(R.string.tools_filter_clean_scan, "auto", 60),
     AutoColor(R.string.tools_filter_auto_colour, "colour", 50),
     Grayscale(R.string.tools_filter_grayscale, "greyscale", 40),
     Whiteboard(R.string.tools_filter_whiteboard, "colour", 85),
@@ -836,7 +838,7 @@ enum class ScanFilter(@StringRes val label: Int, val mode: String, val level: In
 fun ScanScreen(vm: AppViewModel) {
     val c = pdfColors
     val pages = vm.scanPages
-    var filter by remember { mutableStateOf(ScanFilter.AutoColor) }
+    var filter by remember { mutableStateOf(ScanFilter.CleanScan) }
     var current by remember { mutableStateOf(0) }
     var cropping by remember { mutableStateOf<java.io.File?>(null) }
     var naming by remember { mutableStateOf(false) }

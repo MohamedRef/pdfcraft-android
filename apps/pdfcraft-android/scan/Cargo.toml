@@ -1,0 +1,17 @@
+[package]
+name = "pdfcraft-scan"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+description = "PdfCraft Android's document scanner: one pass from a camera photo to a straightened, cleaned page image (decode once, encode once)"
+
+[lints]
+workspace = true
+
+[dependencies]
+image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
+pdfcraft-geom = { workspace = true }
+# camera_clean (the looks) stays in the engine until the scan issues replace it (#298, #300)
+pdfcraft-engine = { workspace = true }
+thiserror = { workspace = true }

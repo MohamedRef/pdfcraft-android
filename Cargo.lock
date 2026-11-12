@@ -2796,12 +2796,15 @@ name = "pdfcraft-android"
 version = "0.20.0"
 dependencies = [
  "android_logger",
+ "image",
  "log",
  "pdfcraft-android-ffi-bytes",
  "pdfcraft-automation",
  "pdfcraft-cos",
  "pdfcraft-engine",
+ "pdfcraft-geom",
  "pdfcraft-render",
+ "pdfcraft-scan",
  "serde_json",
  "thiserror",
  "uniffi",
@@ -3196,6 +3199,16 @@ dependencies = [
  "skrifa 0.44.0",
  "thiserror",
  "unicode-bidi",
+]
+
+[[package]]
+name = "pdfcraft-scan"
+version = "0.20.0"
+dependencies = [
+ "image",
+ "pdfcraft-engine",
+ "pdfcraft-geom",
+ "thiserror",
 ]
 
 [[package]]
