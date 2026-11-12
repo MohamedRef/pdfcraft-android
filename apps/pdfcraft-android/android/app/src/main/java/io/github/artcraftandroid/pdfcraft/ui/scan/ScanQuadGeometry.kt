@@ -36,9 +36,41 @@ internal data class QuadFit(val left: Float, val top: Float, val width: Float, v
     fun y(share: Float) = top + share * height
 }
 
-/** The corners can be anywhere on the photo, never off it: the page function refuses those. */
-internal const val QUAD_MIN = 0f
-internal const val QUAD_MAX = 1f
+/**
+ * How far a corner can go off the photo (#291): a page the frame cut off has its corner where its
+ * sides meet, outside the picture. The page function takes up to 15% of the photo's side past
+ * each edge (`quad::OUTSIDE`) and paints the part with no photo white.
+ */
+internal const val QUAD_OUTSIDE = 0.15f
+internal const val QUAD_MIN = -QUAD_OUTSIDE
+internal const val QUAD_MAX = 1f + QUAD_OUTSIDE
+
+/**
+ * What the crop screen shows, in shares: the photo, grown to take in any corner off it, as
+ * (left, top, right, bottom).
+ */
+internal fun quadSpan(q: FloatArray): FloatArray {
+    val xs = q.filterIndexed { k, v -> k % 2 == 0 && v.isFinite() }
+    val ys = q.filterIndexed { k, v -> k % 2 == 1 && v.isFinite() }
+    return floatArrayOf(
+        minOf(0f, xs.minOrNull() ?: 0f).coerceAtLeast(QUAD_MIN),
+        minOf(0f, ys.minOrNull() ?: 0f).coerceAtLeast(QUAD_MIN),
+        maxOf(1f, xs.maxOrNull() ?: 1f).coerceAtMost(QUAD_MAX),
+        maxOf(1f, ys.maxOrNull() ?: 1f).coerceAtMost(QUAD_MAX),
+    )
+}
+
+/**
+ * Where a photo [photoW] by [photoH] pixels goes in a [viewW] by [viewH] view with [pad] around it,
+ * when the view must show the shares in [span] (from [quadSpan]).
+ */
+internal fun fitSpan(span: FloatArray, photoW: Float, photoH: Float, viewW: Float, viewH: Float, pad: Float): QuadFit {
+    val sw = span[2] - span[0]
+    val sh = span[3] - span[1]
+    val k = minOf((viewW - 2 * pad) / (photoW * sw), (viewH - 2 * pad) / (photoH * sh)).coerceAtLeast(0.01f)
+    val (iw, ih) = photoW * k to photoH * k
+    return QuadFit((viewW - iw * sw) / 2f - span[0] * iw, (viewH - ih * sh) / 2f - span[1] * ih, iw, ih)
+}
 
 /** The share point of [h] on [q]: the corner itself, or the middle of the side. */
 internal fun handlePoint(q: FloatArray, h: QuadHandle): Pair<Float, Float> = when (h) {
@@ -93,7 +125,7 @@ private fun keepsShape(q: FloatArray, before: FloatArray) = convexQuad(q) && tur
 
 private fun onPhoto(q: FloatArray) = q.all { it.isFinite() && it >= QUAD_MIN - 1e-5f && it <= QUAD_MAX + 1e-5f }
 
-/** Corner [i] moved by ([dx], [dy]) shares and kept on the photo; null when the shape stops being convex. */
+/** Corner [i] moved by ([dx], [dy]) shares and kept within [QUAD_MIN]..[QUAD_MAX]; null when the shape stops being convex. */
 internal fun moveCorner(q: FloatArray, i: Int, dx: Float, dy: Float): FloatArray? {
     val out = q.copyOf()
     out[2 * i] = (q[2 * i] + dx).coerceIn(QUAD_MIN, QUAD_MAX)
