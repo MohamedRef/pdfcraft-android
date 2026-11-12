@@ -27,6 +27,7 @@ pub mod eval;
 pub mod exif;
 pub mod flatten;
 pub mod flatten_guard;
+pub mod inspect;
 pub mod flatten_lines;
 pub mod live;
 pub mod look;
@@ -79,6 +80,8 @@ mod tests_book_photo;
 mod tests_capture;
 #[cfg(test)]
 mod tests_defects;
+#[cfg(test)]
+mod tests_inspect;
 #[cfg(test)]
 mod tests_detect;
 #[cfg(test)]
