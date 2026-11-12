@@ -1772,6 +1772,15 @@
     <string name="link_to_page">صفحة في هذا المستند</string>
     <string name="link_to_web">عنوان ويب أو بريد إلكتروني</string>
     <string name="link_page_hint">رقم الصفحة (1–%1$d)</string>
+    <string name="link_to_file">صفحة في ملف PDF آخر</string>
+    <string name="link_file_none">افتح ملف PDF الآخر مرة واحدة، أو أضفه إلى المكتبة، لتتمكن من الربط به.</string>
+    <string name="link_file_pick">اختر ملف PDF</string>
+    <string name="link_file_page_hint">رقم الصفحة (1 أو أكثر)</string>
+    <string name="link_file_wrong">اختر ملف PDF وأدخل رقم الصفحة.</string>
+    <string name="link_file_missing">الملف %1$s ليس في المكتبة ولا في الملفات الأخيرة. افتحه مرة واحدة ثم اضغط على الرابط مرة أخرى.</string>
+    <string name="link_file_same_folder">احتفظ بالملفين في المجلد نفسه ليعمل الرابط أيضًا في تطبيقات PDF الأخرى.</string>
+    <string name="link_from_bookmark">اختر من الإشارات المرجعية</string>
+    <string name="link_bookmarks_none">لا توجد إشارات مرجعية في هذا المستند.</string>
     <string name="link_web_hint">https://example.com</string>
     <string name="link_page_wrong">أدخل رقم صفحة في هذا المستند.</string>
     <string name="link_web_wrong">أدخل عنوان ويب (https://…) أو بريدًا إلكترونيًا.</string>

@@ -33,6 +33,20 @@ impl Automation {
             Some(LinkAction::Page { page, zoom }) => (Some(*page), Some(*zoom)),
             _ => (None, None),
         };
+        // Android adaptation (#334): a page of another PDF, as a relative GoToR link.
+        if let Some(file) = a.opt_str("file")? {
+            if a.opt_str("url")?.is_some() {
+                return Err(bad("pass url or file, not both"));
+            }
+            if zoom.is_some() {
+                return Err(bad("a link to another PDF opens its page fitted; zoom goes with to_page alone"));
+            }
+            let page = a.opt_int("to_page")?.unwrap_or(1);
+            if page < 1 {
+                return Err(bad("to_page must be 1 or more"));
+            }
+            return Ok(Some(LinkAction::Remote { file: remote_link_file(file)?, page: (page - 1) as usize }));
+        }
         match (a.opt_str("url")?, a.opt_int("to_page")?) {
             (Some(_), Some(_)) => Err(bad("pass url or to_page, not both")),
             (Some(_), None) if zoom.is_some() => Err(bad("zoom goes with to_page, not url")),
@@ -101,14 +115,25 @@ impl Automation {
                         match action {
                             LinkAction::Page { zoom, .. } => v["zoom"] = zoom_value(*zoom),
                             LinkAction::Other(_) => v["named"] = json!(true),
-                            LinkAction::Uri(_) => {}
+                            LinkAction::Uri(_) | LinkAction::Remote { .. } => {}
                         }
                     }
                     (LinkAction::Page { page, zoom }, None) => {
                         v["to_page"] = json!(page + 1);
                         v["zoom"] = zoom_value(*zoom);
                     }
+                    (LinkAction::Remote { file, page }, None) => {
+                        v["file"] = json!(file);
+                        v["file_page"] = json!(page + 1);
+                    }
                     (LinkAction::Other(o), None) => v["other"] = json!(o),
+                }
+                // Android adaptation (#334): a GoToR link's file and page, as the viewer reads them.
+                if let Some(LinkTarget::RemoteGoTo { launch: false, file, destination, .. }) = targets.get(&(l.page, l.index)) {
+                    v["file"] = json!(file);
+                    if let RemoteDestination::Page { page, .. } = destination {
+                        v["file_page"] = json!(page + 1);
+                    }
                 }
                 v
             })
@@ -275,6 +300,32 @@ impl Automation {
         out["removed"] = json!(before);
         Ok(out)
     }
+}
+
+/// A file name a new GoToR link may carry: a relative path to a `.pdf`, at most
+/// [`pdfcraft_engine::links::MAX_REMOTE_DOCUMENT_PATH_BYTES`] long, that never climbs above the
+/// linking document's folder and is not a URL (the checks `link_open` makes, done when written).
+fn remote_link_file(raw: &str) -> Result<String> {
+    let file = raw.trim();
+    if file.is_empty() {
+        return Err(bad("file is empty"));
+    }
+    if file.len() > pdfcraft_engine::links::MAX_REMOTE_DOCUMENT_PATH_BYTES {
+        return Err(bad("file is too long"));
+    }
+    if file.chars().any(char::is_control) {
+        return Err(bad("file contains control characters"));
+    }
+    if pdfcraft_engine::links::remote_document_path_is_absolute(file) || file.starts_with(['/', '\\']) || file.contains(':') {
+        return Err(bad("file must be a relative path to a PDF, such as \"Notes.pdf\""));
+    }
+    if file.split(['/', '\\']).any(|part| part == "..") {
+        return Err(bad("file must not climb above this document's folder"));
+    }
+    if !file.to_ascii_lowercase().ends_with(".pdf") {
+        return Err(bad("file must be a .pdf"));
+    }
+    Ok(file.to_string())
 }
 
 /// The zoom a `zoom` argument names: fit_page, fit_width, fit_height, fit_visible, actual

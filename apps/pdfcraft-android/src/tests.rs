@@ -1223,6 +1223,12 @@ fn link_mode_adds_edits_and_deletes_links() {
     run("link_add", json!({"doc": doc, "page": 2, "rect": [40, 50, 140, 90], "url": "https://example.org"}));
     run("links_remove", json!({"doc": doc}));
     assert!(s.links(doc, 0).unwrap().is_empty() && s.links(doc, 1).unwrap().is_empty());
+    // a page of another PDF (#334): the viewer gets its file name and page, not a page here
+    run("link_add", json!({"doc": doc, "page": 1, "rect": [40, 50, 140, 90], "file": "Chapter 2.pdf", "to_page": 4}));
+    let remote = &s.links(doc, 0).unwrap()[0];
+    assert_eq!((remote.file.as_deref(), remote.file_page, remote.page, remote.uri.as_deref()), (Some("Chapter 2.pdf"), 3, None, None));
+    run("link_add", json!({"doc": doc, "page": 1, "rect": [40, 100, 140, 140], "file": "notes.pdf"}));
+    assert_eq!(s.links(doc, 0).unwrap()[1].file_page, 0, "no page named: the first");
     // nothing to make clickable is an error the app words itself
     assert!(s.execute("links_from_urls".into(), json!({"doc": doc}).to_string()).is_err());
     let text = s.open(text_pdf("Read https://example.org/notes today"), None).unwrap().id;

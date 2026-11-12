@@ -380,8 +380,11 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             } else {
                 completeReadingOpen(eng, doc, requestId, openStartedAt)
             }
-            pendingPage = recent?.lastPage?.takeIf { it in 0 until info.pages.size }
-            pendingSpot = recent?.takeIf { pendingPage != null && it.lastX >= 0f && it.lastY >= 0f }?.let { Triple(it.lastX, it.lastY, it.lastZoom) }
+            // a link from another PDF names the page to open on (#334)
+            val linkPage = linkOpenPage?.takeIf { it.first == uri.toString() }?.second?.takeIf { it in 0 until info.pages.size }
+            linkOpenPage = null
+            pendingPage = linkPage ?: recent?.lastPage?.takeIf { it in 0 until info.pages.size }
+            pendingSpot = recent?.takeIf { linkPage == null && pendingPage != null && it.lastX >= 0f && it.lastY >= 0f }?.let { Triple(it.lastX, it.lastY, it.lastZoom) }
             withContext(Dispatchers.IO) {
                 recents.touch(RecentFile(uri.toString(), info.name, System.currentTimeMillis(), info.pages.size, file.length(), recent?.lastPage ?: 0))
             }
@@ -924,7 +927,9 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         }
         val page = link.page
         val uri = link.uri
+        val file = link.file
         when {
+            file != null -> openLinkedFile(doc, file, link.filePage.toInt())
             page != null -> {
                 doc.controller.rememberJump(doc.viewer)
                 doc.viewer.goToPage(page.toInt(), link.top)
@@ -938,6 +943,33 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             }
         }
         return true
+    }
+
+    /** The page a link from another PDF asked for, kept until that file ([first], its URI) opens (#334). */
+    private var linkOpenPage: Pair<String, Int>? = null
+
+    /**
+     * PDFs a link can go to: the Library's files and the recent ones (not [exclude]), by their
+     * names. Reads small files: call off the main thread.
+     */
+    fun linkableFiles(exclude: Uri?): List<io.github.artcraftandroid.pdfcraft.ui.viewer.LinkableFile> =
+        (study.library.load().items.map { io.github.artcraftandroid.pdfcraft.ui.viewer.LinkableFile(it.uri, it.name) } +
+            recents.list().map { io.github.artcraftandroid.pdfcraft.ui.viewer.LinkableFile(it.uri, it.name) })
+            .distinctBy { it.uri }
+            .filter { it.uri != exclude?.toString() && io.github.artcraftandroid.pdfcraft.ui.viewer.linkFileName(it.name) != null }
+
+    /** Follow a link to page [page] (0-based) of the PDF named [file]: found by name among [linkableFiles]. */
+    fun openLinkedFile(doc: OpenDocument, file: String, page: Int) {
+        viewModelScope.launch {
+            val target = withContext(Dispatchers.IO) { io.github.artcraftandroid.pdfcraft.ui.viewer.linkedFileFor(file, linkableFiles(doc.source)) }
+            io.github.artcraftandroid.pdfcraft.ui.viewer.MarkupDiag.linkFollow(doc, found = target != null, page = page)
+            if (target == null) {
+                tell(text(R.string.link_file_missing, io.github.artcraftandroid.pdfcraft.ui.viewer.linkFileBaseName(file)))
+                return@launch
+            }
+            linkOpenPage = target.uri to page
+            open(Uri.parse(target.uri))
+        }
     }
 
     // ---- Link authoring (#179, #159) ---------------------------------------------------------
@@ -965,17 +997,28 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 tell(text(R.string.link_not_editable))
                 return@launch
             }
-            linkEdit = io.github.artcraftandroid.pdfcraft.ui.viewer.LinkEdit(doc, at.page, link.rect.toFloatArray(), index, link.uri, link.page?.toInt())
+            linkEdit = io.github.artcraftandroid.pdfcraft.ui.viewer.LinkEdit(
+                doc, at.page, link.rect.toFloatArray(), index, link.uri, link.page?.toInt() ?: link.file?.let { link.filePage.toInt() }, file = link.file,
+            )
         }
     }
 
-    /** Make the link in [e] go to [url] or page [toPage] (0-based): a new link, or a change to it. */
-    fun saveLink(e: io.github.artcraftandroid.pdfcraft.ui.viewer.LinkEdit, url: String?, toPage: Int?) {
+    /**
+     * Make the link in [e] go to [url], page [toPage] (0-based), or page [toPage] of the PDF named
+     * [file] (#334): a new link, or a change to it.
+     */
+    fun saveLink(e: io.github.artcraftandroid.pdfcraft.ui.viewer.LinkEdit, url: String?, toPage: Int?, file: String? = null) {
         linkEdit = null
-        val target: Map<String, Any?> = if (url != null) mapOf("url" to url) else mapOf("to_page" to (toPage ?: return) + 1)
-        val kind = if (url == null) "page" else if (url.startsWith("mailto:")) "mail" else "web"
+        val target: Map<String, Any?> = when {
+            url != null -> mapOf("url" to url)
+            file != null -> mapOf("file" to file, "to_page" to (toPage ?: 0) + 1)
+            else -> mapOf("to_page" to (toPage ?: return) + 1)
+        }
+        val kind = if (file != null) "file" else if (url == null) "page" else if (url.startsWith("mailto:")) "mail" else "web"
+        // a link to another PDF opens its page fitted: the engine takes no zoom with it
+        val zoom: Map<String, Any?> = if (file == null) mapOf("zoom" to "inherit") else emptyMap()
         if (e.index == null) {
-            runTool(e.doc, "link_add", mapOf("page" to e.page + 1, "rect" to e.rect.map { it.toDouble() }, "zoom" to "inherit") + target) {
+            runTool(e.doc, "link_add", mapOf("page" to e.page + 1, "rect" to e.rect.map { it.toDouble() }) + zoom + target) {
                 io.github.artcraftandroid.pdfcraft.ui.viewer.MarkupDiag.link(e.doc, "add", kind, e.from)
                 tell(text(R.string.link_added))
             }

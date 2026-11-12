@@ -2386,6 +2386,15 @@
     <string name="link_to_page">Page in this document</string>
     <string name="link_to_web">Web or email address</string>
     <string name="link_page_hint">Page number (1–%1$d)</string>
+    <string name="link_to_file">Page of another PDF</string>
+    <string name="link_file_none">Open another PDF once, or add it to your Library, to link to it.</string>
+    <string name="link_file_pick">Choose the PDF</string>
+    <string name="link_file_page_hint">Page number (1 or more)</string>
+    <string name="link_file_wrong">Choose a PDF and enter a page number.</string>
+    <string name="link_file_missing">%1$s isn\'t in your Library or recent files. Open it once, then tap the link again.</string>
+    <string name="link_file_same_folder">Keep both files in the same folder so the link also works in other PDF apps.</string>
+    <string name="link_from_bookmark">Choose from bookmarks</string>
+    <string name="link_bookmarks_none">This document has no bookmarks.</string>
     <string name="link_web_hint">https://example.com</string>
     <string name="link_page_wrong">Enter a page number in this document.</string>
     <string name="link_web_wrong">Enter a web address (https://…) or an email address.</string>

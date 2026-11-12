@@ -248,6 +248,8 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
     val config = androidx.compose.ui.platform.LocalConfiguration.current
     val desktop = remember(config) { isDesktop(context, config) }
     val zoomButtons = remember(doc) { ZoomButtonsState(scope) }
+    // links drawn over handwriting get a small badge, so linked notes can be told apart (#334)
+    val linkBadges = remember(doc.links, doc.comments) { linkedInkRects(doc.links, doc.comments) }
     LaunchedEffect(ctl.barsVisible) { if (!ctl.barsVisible) zoomButtons.hide() }
     val canvasLook = CanvasLook(background = c.desk, pageShadow = c.pageEdge, invert = ctl.nightMode)
 
@@ -345,6 +347,7 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
                 if (ctl.tool == ViewerTool.None || ctl.tool == ViewerTool.FillSign) drawFieldTints(doc)
                 if (!doc.info.commentsHidden) drawNotes(doc, ctl.nightMode, vm.selectedComment?.takeIf { it.first === doc }?.second)
                 drawStudyMasks(doc)
+                if (!doc.info.commentsHidden) drawLinkBadges(doc, linkBadges)
                 vm.selectedComment?.takeIf { it.first === doc }?.second?.let { drawCommentSelection(doc, it) }
                 vm.readAloud?.let { drawReadAloud(doc, it) }
                 drawSearchHits(doc)
