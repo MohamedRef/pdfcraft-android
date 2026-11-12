@@ -3,7 +3,8 @@
 
 use pdfcraft_geom::perspective::{Homography, Point};
 
-use crate::flatten::{BENT, FlattenGrid, View, flat_grid, grid_in_photo, predict_grid, unwarp};
+use crate::flatten::{BENT, FlattenGrid, View, flat_grid, grid_in_photo, predict_grid, unwarp, unwarp_trimmed};
+use crate::flatten_guard::{Trim, border_trim};
 use crate::warp::rectify_with_threads;
 use crate::{Photo, Quad};
 
@@ -169,6 +170,57 @@ fn a_flat_pages_grid_is_the_perspective_warp() {
     let bent = Bent::new(QUAD, 28.0, 0.0).grid(COLS, ROWS);
     // a bow of 28 px against a diagonal of about 1460 px: under 2 %, and well over the threshold
     assert!(bent.bend() > BENT && bent.bend() < 0.02, "{}", bent.bend());
+}
+
+/// The share of a page's edge column or row (`side`: 0 left, 1 top, 2 right, 3 bottom) that is
+/// dark like the table.
+fn dark_edge(page: &crate::warp::Rgb, side: u8) -> f64 {
+    let (w, h) = (page.width as usize, page.height as usize);
+    let px: Vec<usize> = match side {
+        0 => (0..h).map(|y| y * w).collect(),
+        1 => (0..w).collect(),
+        2 => (0..h).map(|y| y * w + w - 1).collect(),
+        _ => (0..w).map(|x| (h - 1) * w + x).collect(),
+    };
+    px.iter().filter(|&&i| page.data[i * 3] < 128).count() as f64 / px.len() as f64
+}
+
+#[test]
+fn a_strip_of_table_along_a_flattened_pages_edge_is_trimmed_and_the_page_keeps_its_size() {
+    // #302, section 3: a grid that reaches a little past the page, as the network's can, leaves
+    // a strip of table along every edge
+    let page = printed(600, 848);
+    let bent = Bent::new(QUAD, 20.0, 0.0);
+    let photo = bent.photograph(&page, 1200, 1600);
+    let centre = [QUAD.iter().map(|p| p[0]).sum::<f64>() / 4.0, QUAD.iter().map(|p| p[1]).sum::<f64>() / 4.0];
+    let wide = QUAD.map(|[x, y]| [centre[0] + (x - centre[0]) * 1.025, centre[1] + (y - centre[1]) * 1.025]);
+    let grid = Bent::new(wide, 20.0, 0.0).grid(COLS, ROWS);
+    let flat = unwarp(&photo, &grid, 600, 848, 2).unwrap();
+    for side in 0..4 {
+        assert!(dark_edge(&flat, side) > 0.9, "side {side}: the strip of table is there before the trim ({})", dark_edge(&flat, side));
+    }
+    let trim = border_trim(&flat);
+    println!("trim {trim:?} on a 600 × 848 page");
+    // a little over 1 % of each side is table; never more than 2 % is cut
+    for (px, of) in [(trim.left, 600), (trim.top, 848), (trim.right, 600), (trim.bottom, 848)] {
+        assert!(px > 0 && f64::from(px) <= 0.02 * f64::from(of) + 1.0, "{trim:?}");
+    }
+    let trimmed = unwarp_trimmed(&photo, &grid, 600, 848, trim, 2).unwrap();
+    assert_eq!((trimmed.width, trimmed.height), (600, 848), "drawn again at the page's own size");
+    for side in 0..4 {
+        assert!(dark_edge(&trimmed, side) < 0.2, "side {side}: still table after the trim ({})", dark_edge(&trimmed, side));
+    }
+    // the print stays straight, and the same pixels come out on any number of threads
+    assert!(waviness(&trimmed) <= 1.5, "{}", waviness(&trimmed));
+    assert_eq!(unwarp_trimmed(&photo, &grid, 600, 848, trim, 1).unwrap(), trimmed);
+    assert_eq!(unwarp_trimmed(&photo, &grid, 600, 848, trim, 4).unwrap(), trimmed);
+    // no trim is the page as unwarp makes it; a trim of half a side or more is refused
+    assert_eq!(unwarp_trimmed(&photo, &grid, 600, 848, Trim::default(), 2).unwrap(), flat);
+    assert!(unwarp_trimmed(&photo, &grid, 600, 848, Trim { left: 200, right: 120, ..Trim::default() }, 2).is_err());
+    // the exact grid of the page has no strip, and nothing is trimmed from it
+    let exact = unwarp(&photo, &bent.grid(COLS, ROWS), 600, 848, 2).unwrap();
+    let none = border_trim(&exact);
+    assert!(none.left + none.top + none.right + none.bottom <= 4, "{none:?}");
 }
 
 #[test]

@@ -69,6 +69,10 @@ pub struct ScanPageRequest {
     /// page only when its lines of text are at least 10 % straighter (#302's automatic mode).
     #[uniffi(default = false)]
     pub flatten_check: bool,
+    /// When a flattened page is kept: trim a thin strip of background left along its edges (2 %
+    /// of a side at most) and draw the page again without it, at the same size (#302).
+    #[uniffi(default = false)]
+    pub flatten_trim: bool,
     /// With `flatten`: when the network is not installed or its page was not kept, fit a
     /// curled-page model to the page's lines of text and keep that page when it is at least 10 %
     /// straighter (#303, part B).
@@ -207,6 +211,9 @@ pub struct ScanPageResult {
     pub bend: f32,
     /// How the flattened and the straightened page compared, when that was asked (#302).
     pub flatten_check: Option<ScanFlattenCheck>,
+    /// The strips of background trimmed from a flattened page's edges (#302); `None` when no trim
+    /// was looked for.
+    pub trim: Option<ScanTrim>,
     /// What the text-line fallback did, when it ran (#303, part B).
     pub line_flatten: Option<ScanLineFlatten>,
     /// The quarter turns clockwise the page was given to stand upright (#339): 0 when it was not
@@ -554,6 +561,7 @@ fn page_request<'a>(request: &ScanPageRequest, photo: &'a [u8], corners: [f32; 8
         snap_paper: request.snap_paper,
         flatten: request.flatten,
         flatten_check: request.flatten_check,
+        flatten_trim: request.flatten_trim,
         line_flatten: request.line_flatten,
         side_proportions: request.side_proportions,
         upright: request.upright,
@@ -566,6 +574,34 @@ fn page_request<'a>(request: &ScanPageRequest, photo: &'a [u8], corners: [f32; 8
         max_side,
         ..PageRequest::new(photo, corners)
     }
+}
+
+/// The strips of background trimmed from a flattened page's four edges (#302), each as a share of
+/// the page's size across that side (0–0.02), before any turn upright.
+#[derive(Debug, Clone, Copy, PartialEq, uniffi::Record)]
+pub struct ScanTrim {
+    pub left: f32,
+    pub top: f32,
+    pub right: f32,
+    pub bottom: f32,
+}
+
+impl ScanTrim {
+    /// A trim in pixels of a `width` × `height` page (as it was flattened, before a quarter turn).
+    fn of(t: pdfcraft_scan::flatten_guard::Trim, (width, height): (u32, u32)) -> Self {
+        let share = |px: u32, of: u32| if of == 0 { 0.0 } else { px as f32 / of as f32 };
+        ScanTrim { left: share(t.left, width), top: share(t.top, height), right: share(t.right, width), bottom: share(t.bottom, height) }
+    }
+
+    /// Whether anything was trimmed.
+    pub fn any(&self) -> bool {
+        self.left > 0.0 || self.top > 0.0 || self.right > 0.0 || self.bottom > 0.0
+    }
+}
+
+/// A page's width and height before it was given `turns` quarter turns.
+fn before_turn(width: u32, height: u32, turns: u8) -> (u32, u32) {
+    if turns % 2 == 1 { (height, width) } else { (width, height) }
 }
 
 /// How the flattened page and the page straightened by its corners compared (#302).
@@ -656,6 +692,8 @@ pub struct ScanPreview {
     pub kind: Option<ScanPageKind>,
     /// How the flattened and the straightened page compared, when that was asked (#302).
     pub flatten_check: Option<ScanFlattenCheck>,
+    /// The border trimmed from a flattened page (#302), when one was looked for.
+    pub trim: Option<ScanTrim>,
     /// What the text-line fallback did, when it ran (#303, part B).
     pub line_flatten: Option<ScanLineFlatten>,
     /// The straightened page was still at hand from an earlier preview: only its look was made.
@@ -676,6 +714,7 @@ struct PreviewKey {
     side_proportions: bool,
     flatten: bool,
     flatten_check: bool,
+    flatten_trim: bool,
     line_flatten: bool,
     upright: bool,
     turns: u8,
@@ -729,6 +768,7 @@ pub(crate) fn preview_in(root: &Path, request: &ScanPageRequest, max_side: u32) 
         side_proportions: request.side_proportions,
         flatten: request.flatten,
         flatten_check: request.flatten_check,
+        flatten_trim: request.flatten_trim,
         line_flatten: request.line_flatten,
         upright: request.upright,
         turns: request.turns % 4,
@@ -792,6 +832,7 @@ pub(crate) fn preview_in(root: &Path, request: &ScanPageRequest, max_side: u32) 
         flattened: base.flattened,
         kind: kind.as_ref().map(kind_of),
         flatten_check: base.flatten_check.map(Into::into),
+        trim: base.trim.map(|t| ScanTrim::of(t, before_turn(base.page.width, base.page.height, base.turns))),
         line_flatten: base.line_flatten.as_ref().map(Into::into),
         reused,
         timings,
@@ -875,6 +916,7 @@ pub(crate) fn process_in(root: &Path, request: &ScanPageRequest) -> Result<ScanP
         flattened: page.flattened,
         bend: page.bend,
         flatten_check: page.flatten_check.map(Into::into),
+        trim: page.trim.map(|t| ScanTrim::of(t, before_turn(page.width, page.height, page.turns))),
         line_flatten: page.line_flatten.as_ref().map(Into::into),
         quarter_turns: page.quarter_turns,
         orientation: page.orientation.map(orientation_of),
@@ -1071,6 +1113,7 @@ mod tests {
             snap_paper: true,
             flatten: false,
             flatten_check: false,
+            flatten_trim: false,
             line_flatten: false,
             side_proportions: false,
             upright: false,
@@ -1647,6 +1690,21 @@ mod tests {
         // the preview makes the same choice
         let preview = preview_in(&root, &ask(&root.join("bowed.png"), "unused"), 1280).unwrap();
         assert!(preview.flattened && preview.flatten_check.is_some_and(|c| c.kept));
+        assert_eq!(bowed.trim, None, "no trim looked for unless asked");
+        // the border trim (#302): looked for on a kept flattened page, at most 2 % of a side, its
+        // own stage in the timings; the page keeps its size
+        let trimmed = process_in(&root, &ScanPageRequest { flatten_trim: true, ..ask(&root.join("bowed.png"), "trimmed") }).unwrap();
+        let trim = trimmed.trim.expect("looked for");
+        println!("trim on the bowed sheet: {trim:?}");
+        assert!([trim.left, trim.top, trim.right, trim.bottom].iter().all(|v| (0.0..=0.021).contains(v)), "{trim:?}");
+        assert_eq!((trimmed.width, trimmed.height), (bowed.width, bowed.height));
+        let stages: Vec<_> = trimmed.timings.iter().map(|t| t.stage.as_str()).collect();
+        assert_eq!(stages, ["scan_decode", "scan_flatten", "scan_rectify", "scan_flatten_check", "scan_flatten_trim", "scan_look", "scan_encode"]);
+        // a page the check did not keep flattened is not trimmed
+        let level = process_in(&root, &ScanPageRequest { flatten_trim: true, ..ask(&root.join("level.png"), "level-trim") }).unwrap();
+        assert_eq!(level.trim, None);
+        let preview = preview_in(&root, &ScanPageRequest { flatten_trim: true, ..ask(&root.join("bowed.png"), "unused") }, 1280).unwrap();
+        assert!(preview.trim.is_some());
         std::fs::remove_dir_all(root).unwrap();
     }
 

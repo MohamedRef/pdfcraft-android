@@ -113,8 +113,10 @@ Added after the preview, in the same issue. All of it is Kotlin; the native side
   of document), after asking; it is enabled only when it would change a page. **Reset look** puts
   the page back to Clean scan at its own strength. A page whose look differs from the first page's
   has a dot on its thumbnail.
-- **The session.** Each page's look goes in a `look` line after its `page` line, and the Flatten
-  switch in a `flatten` line (`ScanSession`), so both survive Android closing the app. The version
+- **The session.** Each page's look goes in a `look` line after its `page` line, and its Flatten
+  page choice in the page line's eighth field (#302), so both survive Android closing the app. The
+  scan-wide `flatten` line of a session written before Flatten became per page is still read: its
+  pages come back flattened. The version
   stays `pdfcraft-scan 2` on purpose: a build that reads 2 ignores lines it doesn't know, so a
   newer session still opens in an older build (with default looks).
 - **Cancel while saving.** The busy dialog has Cancel and a count while pages are made; Cancel
