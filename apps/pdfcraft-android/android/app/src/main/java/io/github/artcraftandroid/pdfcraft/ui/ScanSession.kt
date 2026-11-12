@@ -14,7 +14,8 @@ data class ScanSession(
     val name: String,
     val pages: List<Page>,
 ) {
-    class Page(val path: String, val corners: FloatArray, val found: FloatArray?)
+    /** [book] is a book spread's half as [io.github.artcraftandroid.pdfcraft.ui.scan.ScanBookHalf.encode] wrote it (#303); null for a page of its own. */
+    class Page(val path: String, val corners: FloatArray, val found: FloatArray?, val book: String? = null)
 
     fun encode(): String = buildString {
         append(HEADER).append('\n')
@@ -24,7 +25,10 @@ data class ScanSession(
         append("name\t").append(name.replace('\n', ' ').replace('\t', ' ')).append('\n')
         for (p in pages) {
             append("page\t").append(p.path).append('\t').append(p.corners.joinToString(","))
-            append('\t').append(p.found?.joinToString(",").orEmpty()).append('\n')
+            append('\t').append(p.found?.joinToString(",").orEmpty())
+            // the two halves of a book spread name the same photo; the fifth field says which half
+            if (p.book != null) append('\t').append(p.book.replace('\t', ' ').replace('\n', ' '))
+            append('\n')
         }
     }
 
@@ -50,7 +54,7 @@ data class ScanSession(
                     "name" -> name = value
                     "page" -> {
                         val corners = corners(parts.getOrNull(2)) ?: continue
-                        if (value.isNotEmpty()) pages += Page(value, corners, corners(parts.getOrNull(3)))
+                        if (value.isNotEmpty()) pages += Page(value, corners, corners(parts.getOrNull(3)), parts.getOrNull(4)?.ifEmpty { null })
                     }
                 }
             }

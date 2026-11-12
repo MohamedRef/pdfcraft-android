@@ -2514,7 +2514,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     /** The scan in progress (or the Add image photo being taken); null when there is none. */
     private fun scanSession(): ScanSession? {
         if (shotFile == null && scanPages.isEmpty()) return null
-        return ScanSession(shotFile?.path, retakeIndex, editor.imageShot, scanName, scanPages.map { ScanSession.Page(it.file.path, it.corners, it.found) })
+        return ScanSession(shotFile?.path, retakeIndex, editor.imageShot, scanName, scanPages.map { ScanSession.Page(it.file.path, it.corners, it.found, it.book?.encode()) })
     }
 
     private fun restoreScan(text: String, session: ScanSession): kotlinx.coroutines.Job {
@@ -2525,7 +2525,9 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         scanName = session.name
         return viewModelScope.launch {
             val pages = withContext(Dispatchers.IO) {
-                session.pages.mapNotNull { p -> File(p.path).let { f -> scanThumb(f)?.let { ScanPage(f, it, p.corners, p.found) } } }
+                // the two halves of a book spread share a photo, so each photo's thumbnail is made once
+                val thumbs = HashMap<String, androidx.compose.ui.graphics.ImageBitmap?>()
+                session.pages.mapNotNull { p -> File(p.path).let { f -> thumbs.getOrPut(p.path) { scanThumb(f) }?.let { ScanPage(f, it, p.corners, p.found, book = io.github.artcraftandroid.pdfcraft.ui.scan.ScanBookHalf.decode(p.book)) } } }
             }
             scanPages.addAll(pages)
             scanRestoring = null
@@ -3603,7 +3605,8 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             val page = ScanPage(f, thumb)
             val r = retakeIndex
             retakeIndex = null
-            if (r != null && r in scanPages.indices) scanPages[r] = page else scanPages.add(page)
+            // a retaken half of a book spread takes its other half with it (#303)
+            replaceScanPages(r, listOf(page))
             if (scanName.isBlank()) scanName = "Scan " + java.text.SimpleDateFormat("yyyy-MM-dd HH.mm.ss", java.util.Locale.US).format(java.util.Date())
             if (toolScreen != ToolScreen.Scan) toolScreen = ToolScreen.Scan
             // the document's edges in the photo, shown on the page and moved in Crop; the whole
@@ -3623,6 +3626,12 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                     .onFailure { e -> Diag.failure(DiagArea.Scan, "scan_find_document", e) }.getOrNull()
             }
             val edges = doc?.takeIf { it.found }?.corners?.takeIf { it.size == 8 }?.toFloatArray()
+            // book mode (#303): the outline (or the whole photo when none was found) cut along the gutter
+            val book = scanBook.on
+            val bookOrder = scanBook.order
+            val bookStarted = android.os.SystemClock.elapsedRealtime()
+            val cut = if (book && eng != null) splitScanSpread(f, edges ?: ScanPage.WHOLE, lab.bookGutter) else null
+            val bookMs = android.os.SystemClock.elapsedRealtime() - bookStarted
             // the models are unpacked by now: whether the flattening one is among them (#302)
             if (!scanCanFlatten && eng != null) {
                 scanCanFlatten = withContext(Dispatchers.Default) { runCatching { io.github.artcraftandroid.pdfcraft.core.scanCanFlatten() }.getOrDefault(false) }
@@ -3635,13 +3644,62 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 *(doc?.timings.orEmpty().map<io.github.artcraftandroid.pdfcraft.core.ScanTiming, Pair<String, Any?>> { it.stage.removePrefix("scan_") + "_ms" to it.ms.toLong() }.toTypedArray()),
                 "refined_sides" to (doc?.refined?.count { it } ?: 0), "curved_sides" to (doc?.curved?.count { it } ?: 0),
                 "finder" to ScanLab.finderId(lab.finder), "refine" to lab.refine,
+                *io.github.artcraftandroid.pdfcraft.ui.scan.scanBookDiag(book, lab.bookGutter, bookOrder, cut, bookMs),
             )
             val finding = doc?.let { d ->
                 ScanFinding(d.source.name.lowercase(), d.confidence.toDouble(), d.angle.toInt(), d.passes.toInt(), d.refined.count { it }, d.curved.count { it })
             }
             val at = scanPages.indexOfFirst { it.file == f }
-            if (at >= 0) scanPages[at] = if (edges != null) scanPages[at].copy(corners = edges, found = edges, finding = finding) else scanPages[at].copy(finding = finding)
+            if (at >= 0) {
+                val one = if (edges != null) scanPages[at].copy(corners = edges, found = edges, finding = finding) else scanPages[at].copy(finding = finding)
+                // in book mode the page becomes the spread's two halves, in the order chosen (#303)
+                val halves = io.github.artcraftandroid.pdfcraft.ui.scan.scanBookPages(one.corners, cut, bookOrder).map { (corners, half) ->
+                    // a half's own outline is what was found for it, so a corner moved later is measured from there
+                    if (half == null) one else one.copy(corners = corners, found = one.found?.let { corners }, book = half)
+                }
+                scanPages.removeAt(at)
+                scanPages.addAll(at, halves)
+            }
         }
+    }
+
+    /** Book mode (#303): whether photos are cut into a spread's two pages, and their order. */
+    internal val scanBook = io.github.artcraftandroid.pdfcraft.ui.scan.ScanBookController(appPrefs) {
+        getApplication<Application>().resources.configuration.layoutDirection == android.view.View.LAYOUT_DIRECTION_RTL
+    }
+
+    /** The outline [corners] of the photo [f] cut along the book's gutter (#303); null when that failed. */
+    private suspend fun splitScanSpread(f: File, corners: FloatArray, lookForGutter: Boolean): io.github.artcraftandroid.pdfcraft.ui.scan.ScanBookCut? =
+        withContext(Dispatchers.Default) {
+            runCatching { io.github.artcraftandroid.pdfcraft.core.scanSplitSpread(f.absolutePath, corners.toList(), lookForGutter) }
+                .onFailure { e -> Diag.failure(DiagArea.Scan, "scan_split_spread", e) }.getOrNull()
+        }?.let {
+            io.github.artcraftandroid.pdfcraft.ui.scan.ScanBookCut(it.split, it.left.toFloatArray(), it.right.toFloatArray(), it.gutterFound, it.gutterTop, it.gutterBottom, it.confidence)
+        }
+
+    /**
+     * Put [replacement] in place of page [at] (null or out of range: after the last page). A half
+     * of a book spread goes with its other half, and a photo no page uses any more is deleted (#303).
+     */
+    private fun replaceScanPages(at: Int?, replacement: List<ScanPage>) {
+        val before = scanPages.toList()
+        val after = io.github.artcraftandroid.pdfcraft.ui.scan.scanReplacePage(before, at, replacement) { a, b -> a.file == b.file }
+        scanPages.clear()
+        scanPages.addAll(after)
+        deleteUnusedScanFiles(before, after)
+    }
+
+    /** Remove page [index] from the scan; its photo is deleted unless the spread's other half still uses it (#303). */
+    fun deleteScanPage(index: Int) {
+        if (index !in scanPages.indices) return
+        val before = scanPages.toList()
+        scanPages.removeAt(index)
+        deleteUnusedScanFiles(before, scanPages.toList())
+    }
+
+    private fun deleteUnusedScanFiles(before: List<ScanPage>, after: List<ScanPage>) {
+        val unused = io.github.artcraftandroid.pdfcraft.ui.scan.scanUnusedFiles(before.map { it.file.path }, after.map { it.file.path })
+        unused.forEach { File(it).delete() }
     }
 
     private fun rotateForExif(f: File, bmp: android.graphics.Bitmap): android.graphics.Bitmap {
@@ -3743,7 +3801,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 if (scanPreviewWanted != key) return@withContext
                 if (p != null && image != null) {
                     scanPreview = ScanPreviewShown(key, image, p.quarterTurns.toInt(), p.flattened)
-                    scanPreviewStats[page.file.absolutePath] = ScanTestPreview(true, p.reused, ms, p.width.toInt(), p.height.toInt(), filter.mode)
+                    scanPreviewStats[page.key] = ScanTestPreview(true, p.reused, ms, p.width.toInt(), p.height.toInt(), filter.mode)
                 } else {
                     scanPreviewFailed = key
                 }
@@ -3753,7 +3811,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
 
     /** A page's last preview for a kept scan, or "none shown" (#301). */
     private fun scanPreviewRecord(page: ScanPage): ScanTestPreview =
-        scanPreviewStats[page.file.absolutePath] ?: ScanTestPreview(false, false, 0, 0, 0, null)
+        scanPreviewStats[page.key] ?: ScanTestPreview(false, false, 0, 0, 0, null)
 
     /** The scan is over: forget the previews and the straightened pages kept for them. */
     private fun releaseScanPreviews() {
@@ -3799,7 +3857,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             // decode, straighten, look and encode times (#287), the page's pixels, and how its
             // proportions were worked out and which paper it was matched to (#293)
             Diag.event(
-                DiagArea.Scan, "page", "index" to i + 1, "edges_found" to stats.found, "corners_moved" to stats.touched, "max_move_pct" to stats.maxMovePct,
+                DiagArea.Scan, "page", "index" to i + 1, "book_half" to (page.book?.side ?: "none"), "edges_found" to stats.found, "corners_moved" to stats.touched, "max_move_pct" to stats.maxMovePct,
                 "filter" to filter, "enhanced" to (r != null && !untouched), "enhance_ms" to android.os.SystemClock.elapsedRealtime() - enhanceStarted,
                 *(r?.timings.orEmpty().map<io.github.artcraftandroid.pdfcraft.core.ScanTiming, Pair<String, Any?>> { it.stage.removePrefix("scan_") + "_ms" to it.ms.toLong() }.toTypedArray()),
                 "out_width" to (r?.width?.toLong() ?: 0L), "out_height" to (r?.height?.toLong() ?: 0L),

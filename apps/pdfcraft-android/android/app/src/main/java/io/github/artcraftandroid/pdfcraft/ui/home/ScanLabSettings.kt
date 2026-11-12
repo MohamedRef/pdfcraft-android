@@ -83,6 +83,9 @@ internal fun ScanLabSettings(vm: AppViewModel) {
     SheetRow(null, stringResource(R.string.scan_lab_preview), { lab.update(o.copy(preview = !o.preview)) }) {
         PdfSwitch(o.preview, { lab.update(o.copy(preview = it)) })
     }
+    SheetRow(null, stringResource(R.string.scan_lab_book_gutter), { lab.update(o.copy(bookGutter = !o.bookGutter)) }) {
+        PdfSwitch(o.bookGutter, { lab.update(o.copy(bookGutter = it)) })
+    }
     SheetRow(null, stringResource(R.string.scan_lab_upright), { lab.update(o.copy(upright = !o.upright)) }) {
         PdfSwitch(o.upright, { lab.update(o.copy(upright = it)) })
     }

@@ -130,10 +130,7 @@ impl Pyramid {
         let mut data = Vec::with_capacity(out_w as usize * out_h as usize);
         for row in 0..out_h {
             for col in 0..out_w {
-                let v = map
-                    .apply([f64::from(col) + 0.5, f64::from(row) + 0.5])
-                    .and_then(|[x, y]| sample(img, x, y))
-                    .unwrap_or(255.0);
+                let v = map.apply([f64::from(col) + 0.5, f64::from(row) + 0.5]).and_then(|[x, y]| sample(img, x, y)).unwrap_or(255.0);
                 data.push(v.round().clamp(0.0, 255.0) as u8);
             }
         }

@@ -33,6 +33,8 @@ internal data class ScanLab(
     val denoise: Boolean = true,
     /** Show each page as it will be saved on the scan screen (#301); off shows the camera's photo, as before. */
     val preview: Boolean = true,
+    /** In book mode, cut a spread along the gutter found in the photo (#303); off cuts every spread at its centre line. */
+    val bookGutter: Boolean = true,
 ) {
     /** Nothing differs from the scanner as it is meant to be used (keeping scans changes no page). */
     val asDesigned: Boolean get() = copy(keep = false) == ScanLab()
@@ -46,20 +48,20 @@ internal data class ScanLab(
     fun diag(): Array<Pair<String, Any?>> = arrayOf<Pair<String, Any?>>(
         "finder" to finderId(finder), "refine" to refine, "side_proportions" to !perspective,
         "snap_paper" to snapPaper, "strength_override" to (strength ?: -1), "upright" to upright, "sharpen" to sharpen,
-        "denoise" to denoise, "preview" to preview, "keep" to keep,
+        "denoise" to denoise, "preview" to preview, "book_gutter" to bookGutter, "keep" to keep,
     )
 
     /** The options as JSON, for a kept scan's page file. */
     fun json(): JSONObject = JSONObject()
         .put("finder", finderId(finder)).put("refine", refine).put("side_proportions", !perspective)
         .put("snap_paper", snapPaper).put("strength_override", strength ?: JSONObject.NULL).put("upright", upright)
-        .put("sharpen", sharpen).put("denoise", denoise).put("preview", preview)
+        .put("sharpen", sharpen).put("denoise", denoise).put("preview", preview).put("book_gutter", bookGutter)
 
     /** One line of text for the app's preferences. */
     fun encode(): String = listOf(
         "keep" to flag(keep), "finder" to finderId(finder), "refine" to flag(refine),
         "perspective" to flag(perspective), "snap" to flag(snapPaper), "strength" to (strength?.toString() ?: ""),
-        "upright" to flag(upright), "sharpen" to sharpen.toString(), "denoise" to flag(denoise), "preview" to flag(preview),
+        "upright" to flag(upright), "sharpen" to sharpen.toString(), "denoise" to flag(denoise), "preview" to flag(preview), "gutter" to flag(bookGutter),
     ).joinToString(";") { (k, v) -> "$k=$v" }
 
     companion object {
@@ -98,6 +100,7 @@ internal data class ScanLab(
                 sharpen = values["sharpen"]?.toIntOrNull()?.takeIf { it in 0..100 } ?: default.sharpen,
                 denoise = on("denoise", default.denoise),
                 preview = on("preview", default.preview),
+                bookGutter = on("gutter", default.bookGutter),
             )
         }
     }
@@ -162,6 +165,8 @@ internal fun scanTestPageJson(
     output: String?,
     result: ScanTestResult?,
     preview: ScanTestPreview? = null,
+    /** Which half of a book spread the page is, and how the spread was cut (#303); null for a page of its own. */
+    book: io.github.artcraftandroid.pdfcraft.ui.scan.ScanBookHalf? = null,
 ): String {
     val page = JSONObject()
         .put("corners", shares(corners)).put("kind", "other").put("paper", "unknown").put("curved", false).put("notes", "")
@@ -183,6 +188,7 @@ internal fun scanTestPageJson(
                     .put("look", it.look ?: JSONObject.NULL)
             } ?: JSONObject.NULL,
         )
+        .put("book", book?.json() ?: JSONObject.NULL)
     page.put(
         "result",
         result?.let {

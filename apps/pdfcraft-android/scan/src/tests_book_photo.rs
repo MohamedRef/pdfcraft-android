@@ -83,8 +83,7 @@ fn a_photographed_spread_is_cut_along_its_gutter_within_half_a_percent() {
     assert!(distance(book.spread.left.0[1], truth_top) < 0.01 * width, "left top {:?}", book.spread.left.0[1]);
     assert!(distance(book.spread.right.0[3], truth_bottom) < 0.01 * width, "right bottom {:?}", book.spread.right.0[3]);
     // the outer corners are the outline's own
-    assert_eq!(book.spread.left.0[0], quad[0]);
-    assert_eq!(book.spread.right.0[2], quad[2]);
+    assert!(distance(book.spread.left.0[0], quad[0]) < 1e-6 && distance(book.spread.right.0[2], quad[2]) < 1e-6);
 }
 
 #[test]

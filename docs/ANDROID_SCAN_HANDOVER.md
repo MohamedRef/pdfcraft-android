@@ -31,7 +31,7 @@ a phone yet.** Every number in the scanner's documents was measured on a desktop
 | #300 | Black and white, 1 bit | Core done | #359 | Speckle on textured grey fills; photographs wider than a quarter of the page are not dithered; 0.85 s for 12 megapixels on a desktop |
 | #301 | Filter screen | Preview on the scan screen | #376, #380 | A look per page, strength, looks strip, compare, apply to all, the session's new fields, cancel. Preview speed and sharpness on a phone |
 | #302 | Flatten curved pages | Switch only | #365 | The automatic mode and its quality guard (need #288's `line_straightness`), border trim, a switch per page |
-| #303 | Book mode | **Not started** | | All of it |
+| #303 | Book mode | Part A core done | this PR | Phone checks (10 spreads in both orders); the switch in the in-app camera with a guide (#294); a note on the crop screen; `even_edges` only if photos show a gutter band; part B (text-line flattening) |
 | #304 | "Max quality" (DocRes) | **Not started** | | Feasibility first, as the issue says |
 | #305, #306 | Research: moiré; fingers, glare | **Not started** | | |
 | #307 | ML Kit as a second engine | **Not started** | | Cannot be tried without a phone with Google Play services |
@@ -42,7 +42,7 @@ the owner's phone or his test set are open. Each issue has a comment saying the 
 
 One document per feature says how it works, what was measured and what was not:
 `ANDROID_SCAN_AUTO_LOOK.md`, `_BLACK_WHITE.md`, `_DETAIL.md`, `_DETECTOR.md`, `_EDGES.md`,
-`_FLATTEN.md`, `_PREVIEW.md`, `_PROPORTIONS.md`, `_TESTING.md`, `_UPRIGHT.md` (all
+`_BOOK.md`, `_FLATTEN.md`, `_PREVIEW.md`, `_PROPORTIONS.md`, `_TESTING.md`, `_UPRIGHT.md` (all
 `docs/ANDROID_SCAN_…`). Read the one for a feature before changing it.
 
 ## 2. How a scan goes through the code today
@@ -65,7 +65,8 @@ AppViewModel.saveScan, per page
 - **Native code**: `apps/pdfcraft-android/scan` (crate `pdfcraft-scan`, about 7 900 lines with
   tests) and its UniFFI layer `apps/pdfcraft-android/src/scan.rs`: `scan_set_root`,
   `scan_find_document`, `scan_find_document_with`, `scan_refine_quad`, `scan_process_page`,
-  `scan_preview_page`, `scan_release_previews`, `scan_can_flatten`. Kotlin bindings are generated
+  `scan_preview_page`, `scan_release_previews`, `scan_can_flatten`, and in `src/scan_book.rs`
+  `scan_split_spread` (book mode, #303). Kotlin bindings are generated
   at build time; nothing generated is committed.
 - **Kotlin**: `ui/AppViewModel.kt` (`onScanPhoto`, `saveScan`, `discardScan`),
   `ui/ToolScreens.kt` (`ScanScreen`, `ScanCrop`, `ScanPage`, `ScanFilter`), `ui/ScanSession.kt`,
