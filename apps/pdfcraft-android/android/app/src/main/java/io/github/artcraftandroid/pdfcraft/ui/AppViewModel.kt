@@ -2349,8 +2349,10 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     }
 
     /** Book mode (#303): whether photos are cut into a spread's two pages, and their order. */
-    internal val scanBook = io.github.artcraftandroid.pdfcraft.ui.scan.ScanBookController(appPrefs) {
-        getApplication<Application>().resources.configuration.layoutDirection == android.view.View.LAYOUT_DIRECTION_RTL
+    internal val scanBook by lazy {
+        io.github.artcraftandroid.pdfcraft.ui.scan.ScanBookController(settings.appPrefs) {
+            getApplication<Application>().resources.configuration.layoutDirection == android.view.View.LAYOUT_DIRECTION_RTL
+        }
     }
 
     /** The outline [corners] of the photo [f] cut along the book's gutter (#303); null when that failed. */
