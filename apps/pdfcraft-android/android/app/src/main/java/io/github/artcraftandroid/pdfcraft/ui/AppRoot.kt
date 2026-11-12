@@ -98,12 +98,12 @@ fun AppRoot(vm: AppViewModel, onBrowse: () -> Unit, onPickSignatureImage: () -> 
     }
     // Back in the viewer closes the document (saving it) and returns to Home
     // (with other tabs open it goes Home and keeps them, #138)
-    androidx.activity.compose.BackHandler(enabled = doc != null && vm.toolScreen == null) { vm.tabs.back() }
+    androidx.activity.compose.BackHandler(enabled = doc != null && vm.tools.toolScreen == null) { vm.tabs.back() }
     // sideways, the camera cutout and the navigation bar sit at the sides: content stays between
     // them, on black, as the reference's does. With Extra Features' status bar in documents the
     // page goes under the camera too, as it does upright (#45): the viewer is laid out full width
     // and keeps its bars clear of the camera itself.
-    val fullWidthViewer = doc != null && vm.statusBarInDocuments
+    val fullWidthViewer = doc != null && vm.settings.statusBarInDocuments
     Box(Modifier.fillMaxSize().background(Color.Black)) {
         if (fullWidthViewer && doc != null) {
             Box(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.navigationBars.only(WindowInsetsSides.Horizontal))) { androidx.compose.runtime.key(doc) { AdaptiveViewer(vm, doc) } }
@@ -120,20 +120,20 @@ fun AppRoot(vm: AppViewModel, onBrowse: () -> Unit, onPickSignatureImage: () -> 
                 else -> HomeRoot(vm, onBrowse)
             }
             // documents still open in tabs (#138): back to them from Home
-            if (doc == null && vm.tabs.tabs.isNotEmpty() && vm.toolScreen == null && !vm.settingsOpen) {
+            if (doc == null && vm.tabs.tabs.isNotEmpty() && vm.tools.toolScreen == null && !vm.home.settingsOpen) {
                 io.github.artcraftandroid.pdfcraft.ui.viewer.OpenTabsBar(vm, Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = 72.dp, start = 16.dp, end = 16.dp))
             }
             // here rather than in the file's row: a sheet inside a scrolling list has no height to fill
-            if (doc == null) vm.fileSheet?.let { (r, recent) -> io.github.artcraftandroid.pdfcraft.ui.home.FileSheet(vm, r, recent) { vm.fileSheet = null } }
-            vm.toolScreen?.let { ToolScreenHost(vm, it) }
+            if (doc == null) vm.home.fileSheet?.let { (r, recent) -> io.github.artcraftandroid.pdfcraft.ui.home.FileSheet(vm, r, recent) { vm.home.fileSheet = null } }
+            vm.tools.toolScreen?.let { ToolScreenHost(vm, it) }
             vm.study.reviewing?.let { ReviewScreen(vm, it) }
             vm.study.cardDraft?.let { CardEditor(vm, it) }
             if (vm.study.newNotebookOpen) io.github.artcraftandroid.pdfcraft.ui.home.NewNotebookSheet(vm) { vm.study.newNotebookOpen = false }
             vm.signing.signaturePad?.let { SignaturePadScreen(vm, it, onPickSignatureImage) }
             vm.signing.certSign?.let { CertSignScreen(vm, it) }
             if (vm.signing.idCreate) CreateIdScreen(vm)
-            if (vm.settingsOpen) SettingsScreen(vm)
-            if (vm.showLicences) LicencesScreen(vm)
+            if (vm.home.settingsOpen) SettingsScreen(vm)
+            if (vm.home.showLicences) LicencesScreen(vm)
 
             if (vm.opening && doc == null) CircularProgressIndicator(Modifier.align(Alignment.Center), color = c.accent)
             if (doc?.info?.preparing == true) {
@@ -153,7 +153,7 @@ fun AppRoot(vm: AppViewModel, onBrowse: () -> Unit, onPickSignatureImage: () -> 
                 var name by remember { mutableStateOf("") }
                 PdfDialog(
                     onDismiss = { vm.authorPrompt = false }, title = stringResource(R.string.home_author_title),
-                    confirm = stringResource(R.string.common_save), onConfirm = { vm.toolPrefs.author = name.trim(); vm.authorPrompt = false; vm.prefsChanged++ },
+                    confirm = stringResource(R.string.common_save), onConfirm = { vm.settings.toolPrefs.author = name.trim(); vm.authorPrompt = false; vm.home.prefsChanged++ },
                     dismiss = stringResource(R.string.root_skip),
                 ) {
                     Text(stringResource(R.string.root_author_prompt_body), color = c.text, fontSize = 14.sp)
@@ -186,9 +186,9 @@ fun AppRoot(vm: AppViewModel, onBrowse: () -> Unit, onPickSignatureImage: () -> 
                     }
                 }
             }
-            vm.linkPrompt?.let { url ->
+            vm.sharing.linkPrompt?.let { url ->
                 val shown = runCatching { android.net.Uri.parse(url).let { u -> "${u.scheme}://${u.host}${if (u.port > 0) ":${u.port}" else ""}" } }.getOrDefault(url)
-                PdfDialog(onDismiss = { vm.answerLink(false) }, title = stringResource(R.string.root_open_link_title), confirm = stringResource(R.string.common_open), onConfirm = { vm.answerLink(true) }) {
+                PdfDialog(onDismiss = { vm.sharing.answerLink(false) }, title = stringResource(R.string.root_open_link_title), confirm = stringResource(R.string.common_open), onConfirm = { vm.sharing.answerLink(true) }) {
                     Text(stringResource(R.string.root_open_link_body, shown), color = c.text, fontSize = 14.sp)
                 }
             }
@@ -198,21 +198,21 @@ fun AppRoot(vm: AppViewModel, onBrowse: () -> Unit, onPickSignatureImage: () -> 
                     Text(message, color = c.text, fontSize = 14.sp)
                 }
             }
-            vm.confirmDeleteAllBookmarks?.let { d ->
+            vm.settings.confirmDeleteAllBookmarks?.let { d ->
                 PdfDialog(
-                    onDismiss = { vm.confirmDeleteAllBookmarks = null }, title = stringResource(R.string.root_delete_bookmarks_title),
-                    confirm = stringResource(R.string.root_delete_all), onConfirm = { vm.confirmDeleteAllBookmarks = null; vm.deleteAllBookmarks(d) }, destructive = true,
+                    onDismiss = { vm.settings.confirmDeleteAllBookmarks = null }, title = stringResource(R.string.root_delete_bookmarks_title),
+                    confirm = stringResource(R.string.root_delete_all), onConfirm = { vm.settings.confirmDeleteAllBookmarks = null; vm.settings.deleteAllBookmarks(d) }, destructive = true,
                 ) { Text(stringResource(R.string.root_delete_bookmarks_body), color = c.text, fontSize = 14.sp) }
             }
-            vm.readingModeBlocked?.let {
-                PdfDialog(onDismiss = { vm.readingModeBlocked = null }, title = stringResource(R.string.root_reading_mode_title), confirm = stringResource(R.string.common_ok), onConfirm = { vm.readingModeBlocked = null }, dismiss = null) {
+            vm.settings.readingModeBlocked?.let {
+                PdfDialog(onDismiss = { vm.settings.readingModeBlocked = null }, title = stringResource(R.string.root_reading_mode_title), confirm = stringResource(R.string.common_ok), onConfirm = { vm.settings.readingModeBlocked = null }, dismiss = null) {
                     Text(stringResource(R.string.root_reading_mode_body), color = c.text, fontSize = 14.sp)
                 }
             }
             io.github.artcraftandroid.pdfcraft.ui.viewer.ToolDialogs(vm)
-            vm.busy?.let { message ->
+            vm.tools.busy?.let { message ->
                 // a count and Cancel when the job has them (#200)
-                val cancel = vm.busyCancel
+                val cancel = vm.tools.busyCancel
                 var cancelling by remember(cancel) { mutableStateOf(false) }
                 PdfDialog(
                     onDismiss = {}, title = null, confirm = null,
@@ -224,7 +224,7 @@ fun AppRoot(vm: AppViewModel, onBrowse: () -> Unit, onPickSignatureImage: () -> 
                         Spacer(Modifier.width(20.dp))
                         Text(message, color = c.text)
                     }
-                    vm.busyProgress?.let { (done, total) ->
+                    vm.tools.busyProgress?.let { (done, total) ->
                         Spacer(Modifier.height(14.dp))
                         LinearProgressIndicator(
                             progress = { if (total > 0) done.toFloat() / total else 0f },
@@ -275,7 +275,7 @@ private fun PasswordDialog(vm: AppViewModel, req: PasswordRequest) {
 private fun LicencesScreen(vm: AppViewModel) {
     val c = pdfColors
     val context = LocalContext.current
-    androidx.activity.compose.BackHandler { vm.showLicences = false }
+    androidx.activity.compose.BackHandler { vm.home.showLicences = false }
     // the full texts of the bundled notices, in the order of the entries below
     val texts = remember {
         listOf("LICENSE-lucide.txt", "OFL-Inter.txt", "OFL-DancingScript.txt", "LICENSE-foxit.txt", "LICENSE-adobe-cmaps.txt").map { name ->
@@ -284,7 +284,7 @@ private fun LicencesScreen(vm: AppViewModel) {
     }
     Column(Modifier.fillMaxSize().background(c.surface).safeTopPadding().navigationBarsPadding()) {
         Row(Modifier.fillMaxWidth().height(56.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.width(56.dp), contentAlignment = Alignment.Center) { BarIcon(LucideIcons.ArrowLeft, stringResource(R.string.common_back), { vm.showLicences = false }) }
+            Box(Modifier.width(56.dp), contentAlignment = Alignment.Center) { BarIcon(LucideIcons.ArrowLeft, stringResource(R.string.common_back), { vm.home.showLicences = false }) }
             Text(stringResource(R.string.home_licences), color = c.text, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
         }
         Column(Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 20.dp)) {

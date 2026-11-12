@@ -17,10 +17,13 @@
 pub mod aspect;
 pub mod book;
 pub mod capture;
+pub mod defects;
 pub mod detect;
 pub mod encode;
 pub mod enhance;
 mod error;
+#[cfg(any(test, feature = "synth"))]
+pub mod eval;
 pub mod exif;
 pub mod flatten;
 pub mod flatten_guard;
@@ -31,7 +34,9 @@ pub mod metrics_compare;
 pub mod metrics_geometry;
 pub mod metrics_tone;
 pub mod models;
+pub mod moire;
 pub mod page;
+pub mod page_kind;
 mod photo;
 pub mod photo_mask;
 pub mod preset;
@@ -66,11 +71,19 @@ mod tests;
 #[cfg(test)]
 mod tests_book;
 #[cfg(test)]
+mod tests_book_photo;
+#[cfg(test)]
 mod tests_capture;
+#[cfg(test)]
+mod tests_defects;
 #[cfg(test)]
 mod tests_detect;
 #[cfg(test)]
+mod tests_eval;
+#[cfg(test)]
 mod tests_flatten;
+#[cfg(test)]
+mod tests_gate;
 #[cfg(test)]
 mod tests_flatten_guard;
 #[cfg(test)]
@@ -81,6 +94,10 @@ mod tests_metrics_compare;
 mod tests_metrics_geometry;
 #[cfg(test)]
 mod tests_metrics_tone;
+#[cfg(test)]
+mod tests_page_kind;
+#[cfg(test)]
+mod tests_moire;
 #[cfg(test)]
 mod tests_photo_mask;
 #[cfg(test)]

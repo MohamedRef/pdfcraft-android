@@ -126,6 +126,11 @@ debug = false
 
 [profile.dev]
 opt-level = 1
+
+# The scanner's tests run the whole pipeline on drawn photos (the CI gate of #288): at the dev
+# profile's opt-level 1 that took over a minute, at 2 it takes seconds.
+[profile.dev.package.pdfcraft-scan]
+opt-level = 2
 debug = "line-tables-only"
 
 [profile.low-disk]

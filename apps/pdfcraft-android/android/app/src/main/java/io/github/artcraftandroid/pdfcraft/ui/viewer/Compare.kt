@@ -133,22 +133,22 @@ fun AppViewModel.startCompare(doc: OpenDocument) {
         val uri = uris.firstOrNull() ?: return@open
         val eng = engine ?: return@open
         val ctx = getApplication<Application>()
-        compare.job?.cancel()
-        compare.job = viewModelScope.launch {
+        tools.compare.job?.cancel()
+        tools.compare.job = viewModelScope.launch {
             closeCompare()
-            busy = appText(R.string.compare_busy)
+            tools.busy = appText(R.string.compare_busy)
             var file: File? = null
             try {
                 file = copyIntoCache(ctx, uri, "compare", ".pdf")
                 val path = file.absolutePath
                 val id = withContext(NonCancellable) { eng.command { open(path, null).id } }
-                compare.newer = doc
-                compare.olderId = id
-                compare.olderName = files.displayName(uri)
+                tools.compare.newer = doc
+                tools.compare.olderId = id
+                tools.compare.olderName = files.displayName(uri)
                 runCompare(doc)
             } catch (e: Exception) {
                 tell(e.userMessage)
-                busy = null
+                tools.busy = null
             } finally {
                 // the engine holds the document's bytes once it is open
                 file?.delete()
@@ -160,26 +160,26 @@ fun AppViewModel.startCompare(doc: OpenDocument) {
 /** Compare again (after the visual switch changed). */
 fun AppViewModel.runCompare(doc: OpenDocument) {
     val eng = engine ?: return
-    val older = compare.olderId ?: return
+    val older = tools.compare.olderId ?: return
     viewModelScope.launch {
-        busy = appText(R.string.compare_busy)
+        tools.busy = appText(R.string.compare_busy)
         try {
             val t0 = System.nanoTime()
-            val r = eng.tool("doc_compare", mapOf("doc" to doc.id, "other" to older.toLong(), "visual" to compare.visual, "limit" to 2000))
-            compare.result = parseCompare(r, doc.info.pages.map { it.height })
-            editEvent(doc, "compare", "visual" to compare.visual, "changes" to compare.result?.changes?.size, "identical" to compare.result?.identical, "ms" to (System.nanoTime() - t0) / 1_000_000)
+            val r = eng.tool("doc_compare", mapOf("doc" to doc.id, "other" to older.toLong(), "visual" to tools.compare.visual, "limit" to 2000))
+            tools.compare.result = parseCompare(r, doc.info.pages.map { it.height })
+            editEvent(doc, "compare", "visual" to tools.compare.visual, "changes" to tools.compare.result?.changes?.size, "identical" to tools.compare.result?.identical, "ms" to (System.nanoTime() - t0) / 1_000_000)
             doc.controller.sheet = ViewerSheet.Compare
         } catch (e: Exception) {
             tell(e.userMessage)
         } finally {
-            busy = null
+            tools.busy = null
         }
     }
 }
 
 /** Add the differences to the newer document as comments (one undo step). */
 fun AppViewModel.markCompare(doc: OpenDocument) {
-    val older = compare.olderId ?: return
+    val older = tools.compare.olderId ?: return
     runTool(doc, "doc_compare_mark", mapOf("other" to older.toLong())) { r ->
         editEvent(doc, "compare_mark", "comments" to r.optInt("comments"))
         tell(appText(R.string.compare_marked, r.optInt("comments")), appText(R.string.common_undo)) { undo(doc) }
@@ -189,7 +189,7 @@ fun AppViewModel.markCompare(doc: OpenDocument) {
 /** Save the summary report PDF where the user chooses. */
 fun AppViewModel.saveCompareReport(doc: OpenDocument) {
     val eng = engine ?: return
-    val older = compare.olderId ?: return
+    val older = tools.compare.olderId ?: return
     val ctx = getApplication<Application>()
     viewModelScope.launch {
         val out = File(ctx.cacheDir, "out-compare-report-${System.nanoTime()}.pdf")
@@ -220,10 +220,10 @@ fun AppViewModel.saveCompareReport(doc: OpenDocument) {
 
 /** Close the older document and forget the result. */
 suspend fun AppViewModel.closeCompare() {
-    val id = compare.olderId ?: return
-    compare.olderId = null
-    compare.result = null
-    compare.newer = null
+    val id = tools.compare.olderId ?: return
+    tools.compare.olderId = null
+    tools.compare.result = null
+    tools.compare.newer = null
     val eng = engine ?: return
     runCatching { withContext(NonCancellable) { eng.command { close(id, true) } } }
 }
@@ -245,10 +245,10 @@ private val Red = Color(0xFFE34850)
 @Composable
 fun CompareSheet(vm: AppViewModel, doc: OpenDocument) {
     val c = pdfColors
-    val r = vm.compare.result ?: return
+    val r = vm.tools.compare.result ?: return
     PdfSheet(onDismiss = { vm.endCompare(doc) }, maxHeightFraction = 0.6f, dim = false) {
         SheetBackHeader(stringResource(R.string.compare_title), onBack = { vm.endCompare(doc) })
-        Text(stringResource(R.string.compare_against, vm.compare.olderName), color = c.textSecondary, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 20.dp))
+        Text(stringResource(R.string.compare_against, vm.tools.compare.olderName), color = c.textSecondary, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 20.dp))
         Text(
             if (r.identical) stringResource(R.string.compare_identical) else stringResource(R.string.compare_counts, r.replaced, r.inserted, r.deleted),
             color = c.text, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
@@ -258,12 +258,12 @@ fun CompareSheet(vm: AppViewModel, doc: OpenDocument) {
             TextButton(onClick = { vm.saveCompareReport(doc) }) { Text(stringResource(R.string.compare_report), color = c.accent) }
         }
         Row(
-            Modifier.fillMaxWidth().heightIn(min = 48.dp).toggleable(value = vm.compare.visual, role = Role.Switch) { vm.compare.visual = it; vm.runCompare(doc) }
+            Modifier.fillMaxWidth().heightIn(min = 48.dp).toggleable(value = vm.tools.compare.visual, role = Role.Switch) { vm.tools.compare.visual = it; vm.runCompare(doc) }
                 .padding(horizontal = 20.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(stringResource(R.string.compare_visual), color = c.text, fontSize = 15.sp, modifier = Modifier.weight(1f))
-            PdfSwitch(vm.compare.visual, null)
+            PdfSwitch(vm.tools.compare.visual, null)
         }
         SheetDivider()
         LazyColumn(Modifier.fillMaxWidth()) {

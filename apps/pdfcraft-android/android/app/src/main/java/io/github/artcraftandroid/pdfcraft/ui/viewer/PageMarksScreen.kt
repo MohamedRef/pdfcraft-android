@@ -94,7 +94,7 @@ fun PageMarksScreen(vm: AppViewModel, doc: OpenDocument) {
     val c = pdfColors
     var tab by remember { mutableStateOf(MarkKind.HeaderFooter) }
     var existing by remember { mutableStateOf<Set<MarkKind>>(emptySet()) }
-    LaunchedEffect(doc.info.generation) { existing = vm.pageMarks(doc) }
+    LaunchedEffect(doc.info.generation) { existing = vm.docTools.pageMarks(doc) }
     var hf by remember { mutableStateOf(HeaderFooterSpec()) }
     var wm by remember { mutableStateOf(WatermarkSpec()) }
     var bg by remember { mutableStateOf(BackgroundSpec()) }
@@ -105,7 +105,7 @@ fun PageMarksScreen(vm: AppViewModel, doc: OpenDocument) {
     val rangeOk = allPages || pages != null
     // a picture picked for the tab that asked for it
     var pictureFor by remember { mutableStateOf<MarkKind?>(null) }
-    val picked = vm.markImage
+    val picked = vm.docTools.markImage
     LaunchedEffect(picked) {
         val f = picked ?: return@LaunchedEffect
         when (pictureFor) {
@@ -120,19 +120,19 @@ fun PageMarksScreen(vm: AppViewModel, doc: OpenDocument) {
         MarkKind.Watermark -> wm.usable
         MarkKind.Background -> true
     }
-    val close = { vm.clearMarkImage(); vm.toolScreen = null }
+    val close = { vm.docTools.clearMarkImage(); vm.tools.toolScreen = null }
     ToolPage(
         stringResource(R.string.marks_title), close,
         stringResource(if (update) R.string.marks_update else R.string.marks_add), usable,
         {
             val spec: Any = when (tab) { MarkKind.HeaderFooter -> hf; MarkKind.Watermark -> wm; MarkKind.Background -> bg }
-            vm.applyMark(doc, tab, markArgs(spec, pages, replace = update), update)
+            vm.docTools.applyMark(doc, tab, markArgs(spec, pages, replace = update), update)
         },
         trailing = {
             if (update) {
                 Text(
                     stringResource(R.string.marks_remove), color = c.red, fontSize = 16.sp,
-                    modifier = Modifier.clickable(role = Role.Button) { vm.removeMarks(doc, tab) { existing = existing - tab } }.padding(horizontal = 16.dp, vertical = 12.dp),
+                    modifier = Modifier.clickable(role = Role.Button) { vm.docTools.removeMarks(doc, tab) { existing = existing - tab } }.padding(horizontal = 16.dp, vertical = 12.dp),
                 )
             }
         },
@@ -170,8 +170,8 @@ fun PageMarksScreen(vm: AppViewModel, doc: OpenDocument) {
             Spacer(Modifier.height(8.dp))
             when (tab) {
                 MarkKind.HeaderFooter -> HeaderFooterControls(hf) { hf = it }
-                MarkKind.Watermark -> WatermarkControls(wm, { wm = it }) { pictureFor = MarkKind.Watermark; vm.pickMarkImage() }
-                MarkKind.Background -> BackgroundControls(bg, { bg = it }) { pictureFor = MarkKind.Background; vm.pickMarkImage() }
+                MarkKind.Watermark -> WatermarkControls(wm, { wm = it }) { pictureFor = MarkKind.Watermark; vm.docTools.pickMarkImage() }
+                MarkKind.Background -> BackgroundControls(bg, { bg = it }) { pictureFor = MarkKind.Background; vm.docTools.pickMarkImage() }
             }
             Spacer(Modifier.height(24.dp))
         }
@@ -204,7 +204,7 @@ private fun MarkPreview(vm: AppViewModel, doc: OpenDocument, tab: MarkKind, hf: 
     LaunchedEffect(previewArgs, page, doc.info.generation, usable) {
         if (!usable) return@LaunchedEffect
         delay(400)
-        val img = vm.markPreview(doc, tab, previewArgs, page, 900f)?.asImageBitmap() ?: return@LaunchedEffect
+        val img = vm.docTools.markPreview(doc, tab, previewArgs, page, 900f)?.asImageBitmap() ?: return@LaunchedEffect
         exact = previewArgs to img
     }
     val engineImage = exact?.takeIf { it.first == previewArgs && usable }?.second

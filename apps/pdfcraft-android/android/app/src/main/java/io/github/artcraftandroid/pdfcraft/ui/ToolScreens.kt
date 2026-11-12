@@ -3,6 +3,8 @@ package io.github.artcraftandroid.pdfcraft.ui
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.selection.selectable
+import io.github.artcraftandroid.pdfcraft.ui.scan.rotateScanPage
+import io.github.artcraftandroid.pdfcraft.ui.scan.undoScanTurn
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -264,7 +266,7 @@ fun CompressScreen(vm: AppViewModel, doc: OpenDocument) {
     )
     val targetOk = target.isEmpty() || target.toDoubleOrNull()?.let { it > 0 } == true
     fun options() = o.copy(targetMb = target.toDoubleOrNull()?.takeIf { it > 0 })
-    ToolPage(stringResource(R.string.common_tool_compress), { vm.toolScreen = null }, stringResource(R.string.tools_compress_action), targetOk, {
+    ToolPage(stringResource(R.string.common_tool_compress), { vm.tools.toolScreen = null }, stringResource(R.string.tools_compress_action), targetOk, {
         val chosen = options()
         vm.updateCompressOptions(chosen)
         vm.compress(doc, level, chosen)
@@ -381,7 +383,7 @@ fun ProtectScreen(vm: AppViewModel, doc: OpenDocument) {
     val ownerMismatch = ownerConfirm.isNotEmpty() && ownerConfirm != owner
     val args = if (mismatch || pw.isNotEmpty() && confirm.isEmpty() || restrict && (ownerMismatch || ownerConfirm.isEmpty())) null
         else protectArgs(pw, if (restrict) owner else null, rules)
-    ToolPage(stringResource(R.string.common_tool_set_password), { vm.toolScreen = null }, stringResource(R.string.common_tool_set_password), args != null, { args?.let { vm.protect(doc, it) } },
+    ToolPage(stringResource(R.string.common_tool_set_password), { vm.tools.toolScreen = null }, stringResource(R.string.common_tool_set_password), args != null, { args?.let { vm.protect(doc, it) } },
         trailing = { BarIcon(LucideIcons.Info, stringResource(R.string.tools_about_passwords), { info = true }) }) {
         Column(Modifier.verticalScroll(rememberScrollState())) {
             Text(stringResource(R.string.tools_protect_intro), color = c.label, fontSize = 16.sp, modifier = Modifier.padding(horizontal = 24.dp))
@@ -445,9 +447,9 @@ fun ExportScreen(vm: AppViewModel, doc: OpenDocument) {
     val c = pdfColors
     var tab by remember { mutableStateOf(0) }
     // the image format used last time comes first chosen
-    var format by remember(tab) { mutableStateOf(if (tab == 1) listOf("jpg", "png", "tif").indexOf(vm.lastImageFormat).coerceAtLeast(0) else 0) }
-    var dpi by remember { mutableStateOf(vm.imageDpi) }
-    var quality by remember { mutableStateOf(vm.imageQuality) }
+    var format by remember(tab) { mutableStateOf(if (tab == 1) listOf("jpg", "png", "tif").indexOf(vm.tools.lastImageFormat).coerceAtLeast(0) else 0) }
+    var dpi by remember { mutableStateOf(vm.tools.imageDpi) }
+    var quality by remember { mutableStateOf(vm.tools.imageQuality) }
     var skipSmall by remember { mutableStateOf(true) }
     val formats = when (tab) {
         0 -> listOf(
@@ -460,11 +462,11 @@ fun ExportScreen(vm: AppViewModel, doc: OpenDocument) {
         else -> emptyList()
     }
     val textBlocked = doc.info.encrypted && !doc.info.allowsCopying
-    ToolPage(stringResource(R.string.common_tool_export), { vm.toolScreen = null }, stringResource(if (tab == 2) R.string.pages_save_to_folder else R.string.tools_export_action), !(tab != 1 && textBlocked), {
+    ToolPage(stringResource(R.string.common_tool_export), { vm.tools.toolScreen = null }, stringResource(if (tab == 2) R.string.pages_save_to_folder else R.string.tools_export_action), !(tab != 1 && textBlocked), {
         when (tab) {
-            0 -> vm.exportDocument(doc, formats[format].second)
-            1 -> { vm.updateImageSettings(dpi, quality); vm.exportImages(doc, formats[format].second) }
-            else -> vm.exportAllImages(doc, skipSmall, share = false)
+            0 -> vm.tools.exportDocument(doc, formats[format].second)
+            1 -> { vm.tools.updateImageSettings(dpi, quality); vm.tools.exportImages(doc, formats[format].second) }
+            else -> vm.tools.exportAllImages(doc, skipSmall, share = false)
         }
     }) {
         // the tabs sit at the left, each underlined across its own label
@@ -502,7 +504,7 @@ fun ExportScreen(vm: AppViewModel, doc: OpenDocument) {
                 SwitchRow(stringResource(R.string.export_skip_small), skipSmall) { skipSmall = it }
                 Text(
                     stringResource(R.string.common_share), color = c.accent, fontSize = 16.sp, fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.clickable(enabled = !textBlocked, role = androidx.compose.ui.semantics.Role.Button) { vm.exportAllImages(doc, skipSmall, share = true) }
+                    modifier = Modifier.clickable(enabled = !textBlocked, role = androidx.compose.ui.semantics.Role.Button) { vm.tools.exportAllImages(doc, skipSmall, share = true) }
                         .padding(horizontal = 24.dp, vertical = 12.dp),
                 )
             }
@@ -518,7 +520,7 @@ fun ExportScreen(vm: AppViewModel, doc: OpenDocument) {
 @Composable
 fun CreateSourcesScreen(vm: AppViewModel) {
     val c = pdfColors
-    val back = { vm.toolScreen = null }
+    val back = { vm.tools.toolScreen = null }
     BackHandler(onBack = back)
     Column(Modifier.fillMaxSize().background(c.surface).safeTopPadding().background(c.navBand).navigationBarsPadding().background(c.surface)) {
         Row(Modifier.fillMaxWidth().height(io.github.artcraftandroid.pdfcraft.ui.viewer.TopBarHeight), verticalAlignment = Alignment.CenterVertically) {
@@ -527,12 +529,12 @@ fun CreateSourcesScreen(vm: AppViewModel) {
             Text(stringResource(R.string.tools_create_title), color = c.label, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
         }
         Spacer(Modifier.height(8.dp))
-        SourceRow(LucideIcons.Images, stringResource(R.string.home_photos)) { vm.toolScreen = null; vm.pickPhotosToPdf() }
-        SourceRow(LucideIcons.FolderOpen, stringResource(R.string.tools_browse_files)) { vm.toolScreen = null; vm.pickFiles(FilePickKind.Create) }
+        SourceRow(LucideIcons.Images, stringResource(R.string.home_photos)) { vm.tools.toolScreen = null; vm.home.pickPhotosToPdf() }
+        SourceRow(LucideIcons.FolderOpen, stringResource(R.string.tools_browse_files)) { vm.tools.toolScreen = null; vm.pickFiles(FilePickKind.Create) }
         Text(stringResource(R.string.tools_or_make_new), color = c.textSecondary, fontSize = 14.sp, modifier = Modifier.padding(start = 20.dp, top = 20.dp, bottom = 6.dp))
         Box(Modifier.padding(horizontal = 16.dp).fillMaxWidth().height(1.dp).background(c.divider))
-        SourceRow(LucideIcons.Camera, stringResource(R.string.tools_scan_document)) { vm.toolScreen = null; vm.startScan() }
-        SourceRow(LucideIcons.BookOpen, stringResource(R.string.notebook_new)) { vm.toolScreen = null; vm.study.newNotebookOpen = true }
+        SourceRow(LucideIcons.Camera, stringResource(R.string.tools_scan_document)) { vm.tools.toolScreen = null; vm.startScan() }
+        SourceRow(LucideIcons.BookOpen, stringResource(R.string.notebook_new)) { vm.tools.toolScreen = null; vm.study.newNotebookOpen = true }
     }
 }
 
@@ -582,7 +584,7 @@ fun CombineScreen(vm: AppViewModel) {
     var dragOffset by remember { mutableFloatStateOf(0f) }
     val rowPx = with(LocalDensity.current) { 58.dp.toPx() }
     val ok = files.size in 2..12
-    val back = { vm.toolScreen = null; vm.combineFiles.clear() }
+    val back = { vm.tools.toolScreen = null; vm.combineFiles.clear() }
     val dragLabel = stringResource(R.string.tools_drag_to_reorder)
     val removedMessage = stringResource(R.string.tools_file_removed)
     BackHandler(onBack = back)
@@ -689,14 +691,14 @@ fun CropScreen(vm: AppViewModel, doc: OpenDocument) {
         bitmap = runCatching { withContext(eng.thumbnails) { eng.session.renderPage(doc.id, page.toUInt(), scale, null).toBitmap().asImageBitmap() } }.getOrNull()
     }
     val changed = !(rect[0] == 0f && rect[1] == 0f && rect[2] == 1f && rect[3] == 1f)
-    ToolScaffold(stringResource(if (allPages) R.string.tools_all_pages else R.string.tools_current_page), { vm.toolScreen = null }, null, false, {},
+    ToolScaffold(stringResource(if (allPages) R.string.tools_all_pages else R.string.tools_current_page), { vm.tools.toolScreen = null }, null, false, {},
         viewerBands = true,
         trailing = {
             Text(
                 stringResource(R.string.common_save), color = if (changed) c.label else c.textSecondary.copy(alpha = 0.5f), fontSize = 17.sp,
                 modifier = Modifier.clickable(enabled = changed) {
                     val info = p ?: return@clickable
-                    vm.crop(doc, if (allPages) null else page, floatArrayOf(rect[0] * info.width, rect[1] * info.height, rect[2] * info.width, rect[3] * info.height))
+                    vm.tools.crop(doc, if (allPages) null else page, floatArrayOf(rect[0] * info.width, rect[1] * info.height, rect[2] * info.width, rect[3] * info.height))
                 }.padding(horizontal = 16.dp, vertical = 12.dp),
             )
         }) {
@@ -821,8 +823,26 @@ fun CropScreen(vm: AppViewModel, doc: OpenDocument) {
  * as shares of the photo's width and height (x1, y1 … x4, y4 from the top left, clockwise), the
  * whole photo when No crop was chosen or no edges were found. [found] is what Auto-detect found,
  * and [finding] how it went about it (for the diagnostics and scans kept for testing, #288).
+ * [turns] is the person's own turn of the page (0–3 quarter turns clockwise, from Rotate or the
+ * chip's Undo), or null while the orientation classifier decides (#339). [preset] is the kind of
+ * document the person chose for the page ("receipt", "id_card", …), or null while Clean scan
+ * works it out (#299).
  */
-data class ScanPage(val file: java.io.File, val thumb: ImageBitmap, val corners: FloatArray = WHOLE, val found: FloatArray? = null, val finding: ScanFinding? = null, val crop: io.github.artcraftandroid.pdfcraft.ui.scan.ScanCropStats? = null) {
+data class ScanPage(
+    val file: java.io.File,
+    val thumb: ImageBitmap,
+    val corners: FloatArray = WHOLE,
+    val found: FloatArray? = null,
+    val finding: ScanFinding? = null,
+    val crop: io.github.artcraftandroid.pdfcraft.ui.scan.ScanCropStats? = null,
+    val turns: Int? = null,
+    val preset: String? = null,
+    /** Which half of a photographed book spread this page is (#303); null for a page of its own. */
+    val book: io.github.artcraftandroid.pdfcraft.ui.scan.ScanBookHalf? = null,
+) {
+    /** The page among the scan's pages: the two halves of a spread share one photo [file]. */
+    val key: String get() = book?.let { "${file.absolutePath}#${it.side}" } ?: file.absolutePath
+
     companion object {
         val WHOLE = floatArrayOf(0f, 0f, 1f, 0f, 1f, 1f, 0f, 1f)
     }
@@ -851,7 +871,7 @@ fun ScanScreen(vm: AppViewModel) {
     // network is a little less exact than the plain straightening
     var flatten by remember { mutableStateOf(false) }
     var current by remember { mutableStateOf(0) }
-    var cropping by remember { mutableStateOf<java.io.File?>(null) }
+    var cropping by remember { mutableStateOf<String?>(null) }
     var naming by remember { mutableStateOf(false) }
     // the page as it will be saved, or the photo it is made from (#301)
     var view by remember { mutableStateOf(ScanView.Result) }
@@ -862,7 +882,7 @@ fun ScanScreen(vm: AppViewModel) {
         if (pages.size > seen) current = pages.lastIndex
         seen = pages.size
     }
-    val croppingAt = pages.indexOfFirst { it.file == cropping }
+    val croppingAt = pages.indexOfFirst { it.key == cropping }
     if (croppingAt >= 0) {
         val lab = vm.scanLab.options
         if (lab.cropTools) {
@@ -911,10 +931,12 @@ fun ScanScreen(vm: AppViewModel) {
         val page = pages.getOrNull(shownAt)
         val lab = vm.scanLab.options
         val flattening = flatten && vm.scanCanFlatten
+        // Settings ▸ Preferences ▸ Scan (#339); read each time, so a change there shows here
+        val autoUpright = io.github.artcraftandroid.pdfcraft.ui.scan.ScanUprightSetting.get(vm.settings.appPrefs)
         if (page != null && lab.preview) {
-            LaunchedEffect(page.file, page.corners.toList(), filter, flattening, lab) { vm.requestScanPreview(shownAt, page, filter, flattening) }
+            LaunchedEffect(page.file, page.corners.toList(), page.turns, page.preset, filter, flattening, lab, autoUpright) { vm.requestScanPreview(shownAt, page, filter, flattening) }
         }
-        val wanted = page?.let { ScanPreviewKey.of(it, filter, flattening, lab) }
+        val wanted = page?.let { ScanPreviewKey.of(it, filter, flattening, lab, autoUpright) }
         val preview = vm.scanPreview?.takeIf { wanted != null && it.key == wanted }
         val shown = scanShown(lab.preview, view, preview != null, wanted != null && vm.scanPreviewFailed == wanted)
         Box(Modifier.weight(1f).fillMaxWidth().background(c.desk), contentAlignment = Alignment.Center) {
@@ -926,6 +948,16 @@ fun ScanScreen(vm: AppViewModel) {
                     )
                 } else {
                     ScanPhoto(page.thumb, page.corners, Modifier.fillMaxSize())
+                }
+                page.book?.let { io.github.artcraftandroid.pdfcraft.ui.scan.ScanBookLabel(it, Modifier.align(Alignment.TopStart)) }
+                // the classifier turned this page and the person has not: say so, with a way back (#339)
+                if (shown.view == ScanView.Result && preview != null && io.github.artcraftandroid.pdfcraft.ui.scan.scanShowsTurnedChip(page.turns, preview.quarterTurns)) {
+                    val undoLabel = stringResource(R.string.scan_turn_undo_description)
+                    Text(
+                        stringResource(R.string.scan_turned_upright_undo), color = Color.White, fontSize = 13.sp,
+                        modifier = Modifier.align(Alignment.TopCenter).padding(12.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.6f))
+                            .clickable(role = Role.Button, onClickLabel = undoLabel) { vm.undoScanTurn(shownAt) }.padding(horizontal = 12.dp, vertical = 6.dp),
+                    )
                 }
                 if (shown.waiting) {
                     Text(
@@ -946,6 +978,12 @@ fun ScanScreen(vm: AppViewModel) {
                             .selectable(selected = v == view, role = Role.Tab) { view = v }.padding(horizontal = 16.dp, vertical = 6.dp),
                     )
                 }
+            }
+        }
+        // the kind of document Clean scan took the page for, and a way to choose another (#299)
+        if (page != null && filter == ScanFilter.CleanScan && lab.presets) {
+            Row(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.Center) {
+                io.github.artcraftandroid.pdfcraft.ui.scan.ScanPresetChip(vm, shownAt, page.preset, preview?.kind?.preset)
             }
         }
         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -971,11 +1009,15 @@ fun ScanScreen(vm: AppViewModel) {
                         .toggleable(value = flatten, role = Role.Switch) { flatten = it }.padding(horizontal = 14.dp, vertical = 8.dp),
                 )
             }
+            // book mode (#303): photos taken from now on become a spread's two pages
+            io.github.artcraftandroid.pdfcraft.ui.scan.ScanBookChips(vm.scanBook)
         }
         Row(Modifier.fillMaxWidth().padding(8.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
             TextButton(onClick = { vm.retakeScan(current) }, enabled = pages.isNotEmpty()) { Text(stringResource(R.string.tools_retake), color = c.accent) }
-            TextButton(onClick = { cropping = pages.getOrNull(current.coerceAtMost(pages.lastIndex))?.file }, enabled = pages.isNotEmpty()) { Text(stringResource(R.string.tools_crop), color = c.accent) }
-            TextButton(onClick = { if (pages.isNotEmpty()) { pages.removeAt(current.coerceAtMost(pages.lastIndex)); current = (current - 1).coerceAtLeast(0) } }, enabled = pages.isNotEmpty()) { Text(stringResource(R.string.common_delete), color = c.accent) }
+            TextButton(onClick = { cropping = pages.getOrNull(current.coerceAtMost(pages.lastIndex))?.key }, enabled = pages.isNotEmpty()) { Text(stringResource(R.string.tools_crop), color = c.accent) }
+            // a quarter turn clockwise, the person's from then on (#339)
+            TextButton(onClick = { vm.rotateScanPage(current.coerceAtMost(pages.lastIndex)) }, enabled = pages.isNotEmpty()) { Text(stringResource(R.string.scan_rotate), color = c.accent) }
+            TextButton(onClick = { if (pages.isNotEmpty()) { vm.deleteScanPage(current.coerceAtMost(pages.lastIndex)); current = (current - 1).coerceAtLeast(0) } }, enabled = pages.isNotEmpty()) { Text(stringResource(R.string.common_delete), color = c.accent) }
         }
     }
     if (naming) {
