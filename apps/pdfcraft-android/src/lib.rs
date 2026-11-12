@@ -1178,12 +1178,29 @@ impl MobileSession {
         Ok(comment_records(&snapshot))
     }
 
-    /// The files embedded in the document.
     /// The document's layers in the order `layer_set` numbers them (1-based there).
     pub fn layers(&self, doc: u64) -> Result<Vec<LayerInfo>, MobileError> {
         self.with_doc(doc, |d| d.info.layers.iter().map(|l| LayerInfo { name: l.name.clone(), visible: l.visible }).collect())
     }
 
+    /// The page marks the document has (`header_footer`, `watermark`, `background`, as
+    /// `doc_remove_marks` names them), so Page marks can offer Update and Remove.
+    pub fn page_marks(&self, doc: u64) -> Result<Vec<String>, MobileError> {
+        use pdfcraft_engine::MarkKind;
+        self.with_doc(doc, |d| {
+            d.marks()
+                .iter()
+                .map(|k| match k {
+                    MarkKind::HeaderFooter => "header_footer",
+                    MarkKind::Watermark => "watermark",
+                    MarkKind::Background => "background",
+                })
+                .map(str::to_owned)
+                .collect()
+        })
+    }
+
+    /// The files embedded in the document.
     pub fn attachments(&self, doc: u64) -> Result<Vec<AttachmentInfo>, MobileError> {
         self.with_doc(doc, |d| {
             d.info
