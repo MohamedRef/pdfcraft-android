@@ -24,6 +24,12 @@
 //! cargo run -p pdfcraft-scan --example scan_reference -- flatten <dir> <out_dir>
 //!     how bent the flattening network finds each page (#302), and the page flattened
 //!     (<name>.png) and by perspective alone (<name>.plain.png), both without a look
+//!
+//! cargo run -p pdfcraft-scan --example scan_reference -- upright <dir> <out_dir>
+//!     which way up the orientation classifier finds each page (#339): the page straightened to
+//!     the reference's corners, then turned four ways. The four answers must name the same
+//!     upright page; the turn that puts the page as the reference has it upright is printed
+//!     with the confidence, the tiles' agreement and the time. Nothing is written.
 //! ```
 //!
 //! The pairs are someone's documents: keep the folders outside the repository.
@@ -136,6 +142,40 @@ fn find(dir: &Path) {
     }
 }
 
+/// Which way up each page is found to be, shown to the classifier turned four ways.
+fn which_way_up(dir: &Path) {
+    for path in files(dir, ".before.jpg") {
+        let name = name_of(&path, ".before.jpg");
+        let Some(corners) = std::fs::read_to_string(dir.join(format!("{name}.ref.json"))).ok().as_deref().and_then(corners) else { continue };
+        let Ok(photo) = Photo::decode(&std::fs::read(&path).unwrap_or_default()) else { continue };
+        let Ok(quad) = pdfcraft_scan::Quad::from_shares(&corners, photo.width, photo.height) else { continue };
+        let [top, right, bottom, left] = quad.side_lengths();
+        let Ok(page) = pdfcraft_scan::rectify(&photo, &quad, top.max(bottom).round() as u32, left.max(right).round() as u32) else { continue };
+        let mut answers = Vec::new();
+        for k in 0..4u8 {
+            let shown = pdfcraft_scan::turned(&page, k);
+            let clock = Instant::now();
+            let Some(found) = pdfcraft_scan::upright(&shown) else {
+                println!("{name}: the orientation model is not installed");
+                return;
+            };
+            // the turn that would put the page as the reference has it upright
+            answers.push(((found.quarter_turns + k) % 4, found, clock.elapsed().as_millis()));
+        }
+        let same = answers.iter().all(|a| a.0 == answers[0].0);
+        let sure = answers.iter().filter(|a| a.1.sure).count();
+        let detail: Vec<String> =
+            answers.iter().map(|(turn, f, ms)| format!("{turn} ({:.2}, {:.2}, {} tiles, {ms} ms)", f.confidence, f.agreement, f.tiles)).collect();
+        println!(
+            "{name}: {} x {}; quarter turns clockwise from the reference's page to upright, shown turned 0-3: {}{}; sure of {sure}",
+            page.width,
+            page.height,
+            detail.join(", "),
+            if same { "" } else { "  <- the four do not agree" }
+        );
+    }
+}
+
 /// How bent the flattening network finds each page, and the page flattened (as the camera took
 /// it otherwise) for looking at.
 fn flatten(dir: &Path, out: &Path) {
@@ -172,7 +212,7 @@ fn flatten(dir: &Path, out: &Path) {
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     let (Some(mode), Some(dir), Some(out)) = (args.get(1), args.get(2), args.get(3)) else {
-        eprintln!("usage: scan_reference look|page|bw|detect|flatten <dir> <out_dir> [strength]");
+        eprintln!("usage: scan_reference look|page|bw|detect|flatten|upright <dir> <out_dir> [strength]");
         std::process::exit(2);
     };
     let strength = args.get(4).and_then(|v| v.parse().ok()).unwrap_or(if mode == "bw" { 55 } else { 60 });
@@ -184,6 +224,7 @@ fn main() {
         "bw" => page(Path::new(dir), Path::new(out), Look::BlackWhite, strength, threads),
         "detect" => find(Path::new(dir)),
         "flatten" => flatten(Path::new(dir), Path::new(out)),
-        other => eprintln!("unknown mode {other}: use look, page, bw, detect or flatten"),
+        "upright" => which_way_up(Path::new(dir)),
+        other => eprintln!("unknown mode {other}: use look, page, bw, detect, flatten or upright"),
     }
 }
