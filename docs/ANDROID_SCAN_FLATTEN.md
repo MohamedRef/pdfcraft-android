@@ -102,24 +102,63 @@ had right, by up to 2 % of the diagonal (C, D, E, H, I, in both runs), so flatte
 on for every page. On the sagging sheet and the receipt it helps by both measures. On the invoice
 the eye says its rows are more level and the measures do not agree with each other.
 
-## Why there is no automatic mode yet
+## Automatic mode, as a testing option
 
-The issue describes one: flatten when the grid's `bend` is 0.3 % or more, and keep the result only
-if its lines are at least 10 % straighter. On the ten photos `bend` is 0.34–1.30 % for every page,
-flat ones included (the flat label 0.34, the flat note 0.62, the sagging sheet 0.69, the receipt
-0.72), so the first rule would flatten everything. Whether a side was found curved when the
-corners were refined (#291) does not separate them either. The second rule needs a
-line-straightness measure that can be trusted on real pages, which is part of #288 and is not
-built; the block-by-block one above is too unsteady.
+The issue's first rule (flatten when the grid's `bend` is 0.3 % or more) is not used. On the ten
+reference photos `bend` was 0.34–1.30 % for every page, flat ones included, so it would flatten
+everything. Whether a side was found curved when the corners were refined (#291) does not separate
+them either.
 
-So this is a switch. The diagnostics log records, per saved page, `flatten` (asked), `flattened`
-(done), `bend_pct` and `flatten_ms`, which is what an automatic rule would be built from once
-there are more photos.
+What is built is the second rule, the quality guard:
+
+- With `flatten_check` (`PageRequest`, `ScanPageRequest`), a flattened page is made, and so is the
+  page straightened by its corners alone.
+- Both are measured with `line_straightness` (`straightness.rs`, from #382), and
+  `flatten_guard::guard` keeps the flattened page only when its figure is at least 10 % lower.
+- When both are under half a pixel there is nothing to gain, and when either cannot be measured
+  (fewer than three lines of text followed) the straightened page is kept.
+- The result says which page was kept, why (`straighter`, `notbetter`, `unmeasured`, `straight`),
+  both figures and the number of lines each had. The extra work is timed as `scan_flatten_check`.
+- The preview (#301) makes the same choice, at its own size. Near the 10 % margin the preview and
+  the saved page can choose differently, because the figures are in pixels of each size. Both are
+  logged.
+
+In the app this is the testing option **Flatten pages automatically when it makes their lines
+straighter** (Settings, About, Diagnostics), off by default. With it on, every page goes through
+the network and the guard, unless the scan screen's Flatten switch is on, which flattens without
+the check. It stays off by default because nothing has run on a phone: how long the network and a
+second straightened page take there, and whether the guard decides well on real pages, is what
+the log fields below are for.
+
+Log fields on each `page` and `preview` line:
+
+- `flatten_auto`;
+- `flatten_checked`, `flatten_kept` and `flatten_why`;
+- `straight_px` and `straight_flat_px`, in tenths of a pixel, -1 when not measured;
+- `straight_lines` and `straight_flat_lines`.
+
+Kept scans: `result.flatten_check` in each page file.
+
+What was measured, on drawn pages only (`a_checked_flattening_is_kept_only_when_the_lines_come_out_straighter`,
+with the pinned model):
+
+- a sheet bowed by 24 px, with 25 lines of words: straightened 5.58 px, flattened 1.59 px, so
+  the flattened page was kept (`straighter`);
+- the same sheet flat: 0.005 px against 0.49 px, so the straightened page was kept (`straight`).
+
+Known limits:
+
+- `line_straightness` decides ink with a single threshold over the whole page, and the guard
+  measures the page before its look. A strong shadow across a page could hide its lines and give
+  `unmeasured`, which keeps the straightened page.
+- Ruled table lines are followed as if they were text lines.
+- Both pages are held at full size at once while they are compared.
 
 ## Not done
 
-- No automatic mode and no quality guard (above).
+- The automatic mode is a testing option, off by default (above). Choosing its default needs
+  real photos.
 - No trim of a strip of background left along an edge.
-- The switch is for the whole scan, not per page, and the page shown before saving is not
-  flattened: the result is first seen in the saved PDF.
+- The switch is for the whole scan, not per page. The page preview (#301, #380) shows the
+  flattened page.
 - No phone timings; nothing has been run on a device.

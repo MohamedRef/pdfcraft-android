@@ -8,16 +8,21 @@ use crate::encode::{Format, JPEG_QUALITY, Raster, encode_jpeg, encode_png_bileve
 use crate::enhance::DEFAULT_SHARPEN;
 use crate::enhance::enlargement;
 use crate::flatten::{predict_grid, unwarp};
+use crate::flatten_guard::{Kept, guard};
 use crate::look::{Applied, Look, LookParams, Pixels, apply_full};
 use crate::upright::{Upright, turned, upright};
 use crate::warp::{Rgb, rectify_with_threads};
-use crate::{Photo, Quad, ScanError};
+use crate::straightness::{Straightness, line_straightness};
+use crate::{Luma, Photo, Quad, ScanError};
 
 /// The stage names timings are recorded under (fixed: diagnostics never hold document data).
 pub const STAGE_DECODE: &str = "scan_decode";
 /// The flattening network's run; only there when flattening was asked for.
 pub const STAGE_FLATTEN: &str = "scan_flatten";
 pub const STAGE_RECTIFY: &str = "scan_rectify";
+/// The straightened page made as well, and both measured, to choose between them; only there when
+/// flattening was checked (#302).
+pub const STAGE_FLATTEN_CHECK: &str = "scan_flatten_check";
 /// The orientation classifier's run and the turn; only there when turning upright was asked for.
 pub const STAGE_UPRIGHT: &str = "scan_upright";
 pub const STAGE_LOOK: &str = "scan_look";
@@ -49,6 +54,10 @@ pub struct PageRequest<'a> {
     /// a little less exact than the perspective warp, and it cannot tell which kind it is looking
     /// at. Without the model file the perspective warp is used.
     pub flatten: bool,
+    /// With `flatten`: keep the flattened page only when its lines of text are at least 10 %
+    /// straighter than on the page straightened by its corners alone, which is made as well
+    /// (#302's automatic mode and quality guard). Without it a flattened page is always kept.
+    pub flatten_check: bool,
     /// Turn the page the right way up when the orientation classifier is sure which way that is
     /// (#339). Without the model file, and on a page it is not sure of, the page stays as the
     /// corners gave it. A whole photo in the Original look is the camera's file and is never
@@ -77,6 +86,7 @@ impl<'a> PageRequest<'a> {
             snap_paper: true,
             side_proportions: false,
             flatten: false,
+            flatten_check: false,
             upright: false,
             sharpen: DEFAULT_SHARPEN,
             denoise: true,
@@ -113,11 +123,27 @@ pub struct PageResult {
     pub quarter_turns: u8,
     /// What the orientation classifier found (`None` when it was not asked or has no model file).
     pub orientation: Option<Upright>,
+    /// The comparison that chose between flattened and straightened (#302), when it was asked for.
+    pub flatten_check: Option<FlattenCheck>,
     /// The page's grain as the Auto look measured it: the standard deviation of its noise on
     /// blank paper, in grey levels of 255 (`None` for the other looks).
     pub noise: Option<f32>,
     /// (stage, milliseconds), in pipeline order.
     pub timings: Vec<(&'static str, u32)>,
+}
+
+/// How the flattened page and the page straightened by its corners compared, when flattening was
+/// checked (#302).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct FlattenCheck {
+    /// The flattened page was kept.
+    pub kept: bool,
+    /// Why: `straighter`, `notbetter`, `unmeasured` or `straight` (see [`crate::flatten_guard::Why`]).
+    pub why: &'static str,
+    /// The two pages' line measures, in pixels of this page; `None` when too few lines of text
+    /// could be followed.
+    pub straightened: Option<Straightness>,
+    pub flattened: Option<Straightness>,
 }
 
 /// A page straightened (and flattened and turned upright, when that was asked): everything before
@@ -134,6 +160,9 @@ pub struct PageBase {
     pub bend: f32,
     pub quarter_turns: u8,
     pub orientation: Option<Upright>,
+    /// The comparison that chose between flattened and straightened (#302), when it was asked for
+    /// and the network gave a page.
+    pub flatten_check: Option<FlattenCheck>,
     /// (stage, milliseconds) of the stages so far.
     pub timings: Vec<(&'static str, u32)>,
 }
@@ -173,6 +202,7 @@ fn untouched(request: &PageRequest<'_>) -> Option<Result<PageResult, ScanError>>
         bend: 0.0,
         quarter_turns: 0,
         orientation: None,
+        flatten_check: None,
         noise: None,
         timings,
     }))
@@ -192,7 +222,7 @@ pub fn process_page(request: &PageRequest<'_>) -> Result<PageResult, ScanError> 
     };
     let applied = page_look(&base, request)?;
     let (pixels, noise) = (applied.pixels, applied.noise);
-    let PageBase { page, dpi, paper, aspect, focal_mismatch, flattened, bend, quarter_turns, orientation, mut timings } = base;
+    let PageBase { page, dpi, paper, aspect, focal_mismatch, flattened, bend, quarter_turns, orientation, flatten_check, mut timings } = base;
     let (w, h) = (page.width, page.height);
     drop(page);
     lap(STAGE_LOOK, &mut timings);
@@ -218,6 +248,7 @@ pub fn process_page(request: &PageRequest<'_>) -> Result<PageResult, ScanError> 
         bend,
         quarter_turns,
         orientation,
+        flatten_check,
         noise,
         timings,
     })
@@ -281,13 +312,26 @@ pub fn page_base(request: &PageRequest<'_>) -> Result<PageBase, ScanError> {
     }
     // a grid that cannot be used leaves the page straightened by its corners, as without the switch
     let flat = grid.as_ref().and_then(|grid| unwarp(&photo, grid, w, h, request.threads).ok());
-    let flattened = flat.is_some();
-    let page = match flat {
-        Some(page) => page,
-        None => rectify_with_threads(&photo, &quad, w, h, request.threads)?,
+    let (page, flatten_check, flattened) = match flat {
+        Some(flat) if request.flatten_check => {
+            lap(STAGE_RECTIFY, &mut timings);
+            let plain = rectify_with_threads(&photo, &quad, w, h, request.threads)?;
+            let check = compare_flattened(&plain, &flat);
+            lap(STAGE_FLATTEN_CHECK, &mut timings);
+            let kept = check.kept;
+            (if kept { flat } else { plain }, Some(check), kept)
+        }
+        Some(flat) => {
+            lap(STAGE_RECTIFY, &mut timings);
+            (flat, None, true)
+        }
+        None => {
+            let plain = rectify_with_threads(&photo, &quad, w, h, request.threads)?;
+            lap(STAGE_RECTIFY, &mut timings);
+            (plain, None, false)
+        }
     };
     drop(photo);
-    lap(STAGE_RECTIFY, &mut timings);
 
     // the right way up, when the classifier is sure: the same pixels in new places, so the page
     // is still resampled once (#339)
@@ -313,6 +357,21 @@ pub fn page_base(request: &PageRequest<'_>) -> Result<PageBase, ScanError> {
         bend: grid.map_or(0.0, |g| g.bend() as f32),
         quarter_turns,
         orientation,
+        flatten_check,
         timings,
     })
+}
+
+/// Measures the lines of text on the page straightened by its corners and on the flattened one,
+/// and keeps the flattened page only when it is clearly straighter (#302, the quality guard).
+pub fn compare_flattened(straightened: &Rgb, flattened: &Rgb) -> FlattenCheck {
+    let (s, f) = (line_straightness(&grey(straightened)), line_straightness(&grey(flattened)));
+    let decision = guard(s.map(|m| m.px), f.map(|m| m.px));
+    FlattenCheck { kept: decision.kept == Kept::Flattened, why: decision.why.id(), straightened: s, flattened: f }
+}
+
+/// The page in shades of grey, for measuring.
+fn grey(page: &Rgb) -> Luma {
+    let data = page.data.chunks_exact(3).map(|p| crate::photo::luma([p[0], p[1], p[2]])).collect();
+    Luma { width: page.width, height: page.height, data }
 }
