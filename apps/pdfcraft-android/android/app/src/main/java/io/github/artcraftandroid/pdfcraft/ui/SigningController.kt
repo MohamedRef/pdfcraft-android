@@ -54,11 +54,11 @@ class SigningController internal constructor(private val vm: AppViewModel) {
     fun placeFill(doc: OpenDocument, element: io.github.artcraftandroid.pdfcraft.ui.viewer.FillElement, at: PagePoint, text: String? = null) {
         if (element == FillElement.Box) {
             // a rounded box around what was tapped, in the Fill & Sign colour: drawn as one ink stroke
-            val r = vm.toolPrefs.fillTextSize
+            val r = vm.settings.toolPrefs.fillTextSize
             vm.runTool(doc, "comment_add", mapOf(
                 "page" to at.page + 1, "type" to "ink",
                 "strokes" to listOf(roundedBox(at.x, at.y, r * 4f, r * 2f, r * 0.6f)),
-                "color" to androidx.compose.ui.graphics.Color(vm.toolPrefs.fillColor).hex(), "width" to 1.5, "author" to vm.commenting.author,
+                "color" to androidx.compose.ui.graphics.Color(vm.settings.toolPrefs.fillColor).hex(), "width" to 1.5, "author" to vm.commenting.author,
             ))
             return
         }

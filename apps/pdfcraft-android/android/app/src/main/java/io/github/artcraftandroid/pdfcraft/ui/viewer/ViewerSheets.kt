@@ -84,8 +84,8 @@ fun MoreSheet(vm: AppViewModel, doc: OpenDocument) {
     fun close() {
         ctl.sheet = ViewerSheet.None
     }
-    val bookmarked = vm.bookmarks.isBookmarked(doc, doc.viewer.currentPage)
-    val starred = vm.isStarred(doc)
+    val bookmarked = vm.settings.bookmarks.isBookmarked(doc, doc.viewer.currentPage)
+    val starred = vm.settings.isStarred(doc)
     // like the reference, the sheet opens part way and rises to full height once its list scrolls
     val scroll = rememberScrollState()
     var expanded by remember { mutableStateOf(false) }
@@ -113,7 +113,7 @@ fun MoreSheet(vm: AppViewModel, doc: OpenDocument) {
                 }
             }
             BarIcon(LucideIcons.Printer, stringResource(R.string.sheet_print), { close(); vm.print(doc) }, size = 40.dp)
-            BarIcon(LucideIcons.Star, stringResource(if (starred) R.string.sheet_remove_star else R.string.sheet_add_star), { vm.toggleStar(doc) },
+            BarIcon(LucideIcons.Star, stringResource(if (starred) R.string.sheet_remove_star else R.string.sheet_add_star), { vm.settings.toggleStar(doc) },
                 tint = if (starred) Color(0xFFF5B800) else c.icon, size = 40.dp)
         }
         SheetDivider()
@@ -140,7 +140,7 @@ fun MoreSheet(vm: AppViewModel, doc: OpenDocument) {
             SheetRow(
                 if (bookmarked) LucideIcons.BookmarkMinus else LucideIcons.BookmarkPlus,
                 stringResource(if (bookmarked) R.string.sheet_remove_bookmark else R.string.sheet_add_bookmark),
-                { close(); vm.toggleBookmark(doc) },
+                { close(); vm.settings.toggleBookmark(doc) },
             )
             SheetRow(LucideIcons.MessagesSquare, stringResource(R.string.sheet_comment_list), { ctl.sheet = ViewerSheet.Comments }, chevron = true)
             if (doc.info.attachments > 0u) SheetRow(LucideIcons.Paperclip, stringResource(R.string.sheet_attachments), { ctl.sheet = ViewerSheet.Attachments }, chevron = true)
@@ -193,51 +193,51 @@ fun ViewSettingsSheet(vm: AppViewModel, doc: OpenDocument) {
     PdfSheet(onDismiss = { ctl.sheet = ViewerSheet.None }) {
         SheetBackHeader(stringResource(R.string.sheet_view_settings), onBack = { ctl.sheet = ViewerSheet.More })
         SheetRow(LucideIcons.GalleryVerticalEnd, stringResource(R.string.sheet_continuous), {
-            vm.setPageMode(doc, PageMode.Continuous)
+            vm.settings.setPageMode(doc, PageMode.Continuous)
             ctl.sheet = ViewerSheet.None
-        }, checked = doc.viewer.mode == PageMode.Continuous && !vm.readingMode)
+        }, checked = doc.viewer.mode == PageMode.Continuous && !vm.settings.readingMode)
         SheetRow(LucideIcons.File, stringResource(R.string.sheet_single_page), {
-            vm.setPageMode(doc, PageMode.SinglePage)
+            vm.settings.setPageMode(doc, PageMode.SinglePage)
             ctl.sheet = ViewerSheet.None
-        }, checked = doc.viewer.mode == PageMode.SinglePage && !vm.readingMode)
+        }, checked = doc.viewer.mode == PageMode.SinglePage && !vm.settings.readingMode)
         // pages in a row, scrolled sideways (#152)
         SheetRow(LucideIcons.Columns3, stringResource(R.string.sheet_horizontal), {
-            vm.setPageMode(doc, PageMode.Horizontal)
+            vm.settings.setPageMode(doc, PageMode.Horizontal)
             ctl.sheet = ViewerSheet.None
-        }, checked = doc.viewer.mode == PageMode.Horizontal && !vm.readingMode)
+        }, checked = doc.viewer.mode == PageMode.Horizontal && !vm.settings.readingMode)
         // two pages side by side: only where the window has room for them (#152)
         if (spreadFits(androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp)) {
             GroupDivider()
             SheetRow(LucideIcons.Columns2, stringResource(R.string.sheet_two_pages), {
-                vm.setSpread(if (vm.spreadPref == Spread.TwoUp && !vm.spreadAuto) Spread.Single else Spread.TwoUp)
+                vm.settings.setSpread(if (vm.settings.spreadPref == Spread.TwoUp && !vm.settings.spreadAuto) Spread.Single else Spread.TwoUp)
                 ctl.sheet = ViewerSheet.None
-            }, checked = vm.spreadPref == Spread.TwoUp && !vm.spreadAuto && !vm.readingMode)
+            }, checked = vm.settings.spreadPref == Spread.TwoUp && !vm.settings.spreadAuto && !vm.settings.readingMode)
             SheetRow(LucideIcons.BookOpen, stringResource(R.string.sheet_two_pages_cover), {
-                vm.setSpread(if (vm.spreadPref == Spread.TwoUpCover && !vm.spreadAuto) Spread.Single else Spread.TwoUpCover)
+                vm.settings.setSpread(if (vm.settings.spreadPref == Spread.TwoUpCover && !vm.settings.spreadAuto) Spread.Single else Spread.TwoUpCover)
                 ctl.sheet = ViewerSheet.None
-            }, checked = vm.spreadPref == Spread.TwoUpCover && !vm.spreadAuto && !vm.readingMode)
+            }, checked = vm.settings.spreadPref == Spread.TwoUpCover && !vm.settings.spreadAuto && !vm.settings.readingMode)
         }
         // two pages whenever the window is wide and landscape, one otherwise
-        SheetRow(LucideIcons.Columns2, stringResource(R.string.sheet_two_pages_auto), { vm.chooseSpreadAuto(!vm.spreadAuto) }) {
-            PdfSwitch(vm.spreadAuto, { vm.chooseSpreadAuto(it) })
+        SheetRow(LucideIcons.Columns2, stringResource(R.string.sheet_two_pages_auto), { vm.settings.chooseSpreadAuto(!vm.settings.spreadAuto) }) {
+            PdfSwitch(vm.settings.spreadAuto, { vm.settings.chooseSpreadAuto(it) })
         }
         // other readers open the file the same way (its initial view)
-        if (canEditDocument(doc) && !vm.readingMode && vm.layoutHasInitialView(doc)) {
-            SheetRow(LucideIcons.Save, stringResource(R.string.sheet_layout_initial_view), { ctl.sheet = ViewerSheet.None; vm.saveLayoutAsInitialView(doc) })
+        if (canEditDocument(doc) && !vm.settings.readingMode && vm.settings.layoutHasInitialView(doc)) {
+            SheetRow(LucideIcons.Save, stringResource(R.string.sheet_layout_initial_view), { ctl.sheet = ViewerSheet.None; vm.settings.saveLayoutAsInitialView(doc) })
         }
         SheetRow(LucideIcons.BookOpenText, stringResource(R.string.sheet_reading_mode), {
             ctl.sheet = ViewerSheet.None
-            vm.openReadingMode(doc)
-        }, checked = vm.readingMode)
+            vm.settings.openReadingMode(doc)
+        }, checked = vm.settings.readingMode)
         GroupDivider()
-        SheetRow(LucideIcons.Moon, stringResource(R.string.sheet_night_mode), { vm.setNightMode(doc, !ctl.nightMode); ctl.sheet = ViewerSheet.None }) {
-            PdfSwitch(ctl.nightMode, { vm.setNightMode(doc, it); ctl.sheet = ViewerSheet.None })
+        SheetRow(LucideIcons.Moon, stringResource(R.string.sheet_night_mode), { vm.settings.setNightMode(doc, !ctl.nightMode); ctl.sheet = ViewerSheet.None }) {
+            PdfSwitch(ctl.nightMode, { vm.settings.setNightMode(doc, it); ctl.sheet = ViewerSheet.None })
         }
-        ReadingColorsPicker(ctl.readingColors, enabled = !doc.info.preparing) { vm.setReadingColors(doc, it) }
+        ReadingColorsPicker(ctl.readingColors, enabled = !doc.info.preparing) { vm.settings.setReadingColors(doc, it) }
         GroupDivider()
         // a clean look at the page under the annotations; the file doesn't change (#155)
-        SheetRow(LucideIcons.EyeOff, stringResource(R.string.sheet_hide_annotations), { vm.setCommentsHidden(doc, !doc.info.commentsHidden) }, enabled = !doc.info.preparing) {
-            PdfSwitch(doc.info.commentsHidden, { vm.setCommentsHidden(doc, it) })
+        SheetRow(LucideIcons.EyeOff, stringResource(R.string.sheet_hide_annotations), { vm.settings.setCommentsHidden(doc, !doc.info.commentsHidden) }, enabled = !doc.info.preparing) {
+            PdfSwitch(doc.info.commentsHidden, { vm.settings.setCommentsHidden(doc, it) })
         }
         Spacer(Modifier.height(24.dp))
     }
@@ -399,7 +399,7 @@ fun BookmarksSheet(vm: AppViewModel, doc: OpenDocument) {
                 }
             }
         } else {
-            val list = vm.bookmarks.list(doc)
+            val list = vm.settings.bookmarks.list(doc)
             if (list.isEmpty()) {
                 Column(Modifier.fillMaxWidth().padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     Icon(LucideIcons.Bookmark, null, tint = c.textSecondary, modifier = Modifier.size(40.dp))
@@ -407,7 +407,7 @@ fun BookmarksSheet(vm: AppViewModel, doc: OpenDocument) {
                     Text(stringResource(R.string.sheet_bookmarks_empty), color = c.text, fontSize = 15.sp)
                     Spacer(Modifier.height(16.dp))
                     Text(stringResource(R.string.sheet_add_a_bookmark), color = c.accent, fontSize = 15.sp, fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier.clickable { vm.toggleBookmark(doc) }.padding(8.dp))
+                        modifier = Modifier.clickable { vm.settings.toggleBookmark(doc) }.padding(8.dp))
                 }
             } else {
                 LazyColumn(Modifier.weight(1f)) {
@@ -425,10 +425,10 @@ fun BookmarksSheet(vm: AppViewModel, doc: OpenDocument) {
                             onRename = { renaming = i },
                             onRenamed = { name ->
                                 renaming = null
-                                if (name.isBlank()) vm.tell(text(R.string.sheet_bookmark_name_invalid)) else vm.bookmarks.rename(doc, b, name.trim())
+                                if (name.isBlank()) vm.tell(text(R.string.sheet_bookmark_name_invalid)) else vm.settings.bookmarks.rename(doc, b, name.trim())
                             },
-                            onDelete = { vm.bookmarks.remove(doc, b); vm.tell(text(R.string.sheet_bookmark_removed, b.name)) },
-                            onDeleteAll = { vm.confirmDeleteAllBookmarks = doc },
+                            onDelete = { vm.settings.bookmarks.remove(doc, b); vm.tell(text(R.string.sheet_bookmark_removed, b.name)) },
+                            onDeleteAll = { vm.settings.confirmDeleteAllBookmarks = doc },
                         )
                     }
                 }
@@ -565,7 +565,7 @@ fun MoreToolsSheet(vm: AppViewModel, doc: OpenDocument) {
             return@PdfSheet
         }
         SheetTitle(stringResource(R.string.common_tool_more_tools))
-        val placement = vm.quickToolbar
+        val placement = vm.settings.quickToolbar
         Row(
             Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -581,7 +581,7 @@ fun MoreToolsSheet(vm: AppViewModel, doc: OpenDocument) {
             PdfSwitch(placement.railRight, onChange = { placement.updateRailRight(it) })
         }
         val slots = toolbarSlots(androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp)
-        val prefs = vm.quickToolbar
+        val prefs = vm.settings.quickToolbar
         val tools = prefs.bar.drop(slots) + prefs.grid
         // six to a row in 85 dp columns, as the reference lays them out
         androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxWidth().padding(top = 5.dp)) {

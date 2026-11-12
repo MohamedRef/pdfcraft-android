@@ -256,7 +256,7 @@ fun SearchTab(vm: AppViewModel) {
             BasicTextField(
                 value = query, onValueChange = { query = it }, singleLine = true,
                 keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Search),
-                keyboardActions = androidx.compose.foundation.text.KeyboardActions(onSearch = { vm.addRecentSearch(query) }),
+                keyboardActions = androidx.compose.foundation.text.KeyboardActions(onSearch = { vm.settings.addRecentSearch(query) }),
                 textStyle = TextStyle(fontFamily = Inter, fontSize = 16.sp, color = c.text), cursorBrush = SolidColor(c.accent),
                 modifier = Modifier.weight(1f).semantics { contentDescription = searchHint },
                 decorationBox = { inner -> Box { if (query.isEmpty()) Text(searchHint, color = c.textSecondary, fontSize = 16.sp); inner() } },
@@ -264,7 +264,7 @@ fun SearchTab(vm: AppViewModel) {
             if (query.isNotEmpty()) BarIcon(LucideIcons.X, stringResource(R.string.common_clear), { query = "" }, size = 32.dp)
         }
         if (query.isBlank()) {
-            val recent = vm.recentSearches
+            val recent = vm.settings.recentSearches
             if (recent.isEmpty()) {
                 EmptyState(LucideIcons.Search, searchHint, stringResource(R.string.home_search_empty_body))
                 return@Column
@@ -272,7 +272,7 @@ fun SearchTab(vm: AppViewModel) {
             // the last searches, to run again with a tap
             Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text(stringResource(R.string.home_recent_searches), color = c.text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-                Text(stringResource(R.string.common_clear), color = c.toolAccent, fontSize = 15.sp, modifier = Modifier.clickable { vm.clearRecentSearches() }.padding(12.dp))
+                Text(stringResource(R.string.common_clear), color = c.toolAccent, fontSize = 15.sp, modifier = Modifier.clickable { vm.settings.clearRecentSearches() }.padding(12.dp))
             }
             LazyColumn(Modifier.weight(1f)) {
                 items(recent, key = { it }) { q ->
@@ -280,7 +280,7 @@ fun SearchTab(vm: AppViewModel) {
                         Icon(LucideIcons.Clock, null, tint = c.icon, modifier = Modifier.size(22.dp))
                         Spacer(Modifier.width(16.dp))
                         Text(q, color = c.text, fontSize = 16.sp, maxLines = 1, modifier = Modifier.weight(1f))
-                        BarIcon(LucideIcons.X, stringResource(R.string.home_remove_search, q), { vm.removeRecentSearch(q) }, size = 40.dp)
+                        BarIcon(LucideIcons.X, stringResource(R.string.home_remove_search, q), { vm.settings.removeRecentSearch(q) }, size = 40.dp)
                     }
                 }
             }
@@ -289,7 +289,7 @@ fun SearchTab(vm: AppViewModel) {
         // a search left in place for a moment counts as one made
         LaunchedEffect(query) {
             kotlinx.coroutines.delay(2000)
-            if (vm.searchFiles(query).isNotEmpty()) vm.addRecentSearch(query)
+            if (vm.searchFiles(query).isNotEmpty()) vm.settings.addRecentSearch(query)
         }
         val results = vm.searchFiles(query).let { list ->
             when (sort) {
@@ -370,24 +370,24 @@ private fun Preferences(vm: AppViewModel) {
     var authorDialog by remember { mutableStateOf(false) }
     // grouped by what they change (#194); no section says something the app doesn't do
     Section(stringResource(R.string.home_section_reading))
-    SheetRow(null, stringResource(R.string.home_keep_screen_on), { vm.updateKeepScreenOn(!vm.keepScreenOn) }) {
-        PdfSwitch(vm.keepScreenOn, { vm.updateKeepScreenOn(it) })
+    SheetRow(null, stringResource(R.string.home_keep_screen_on), { vm.settings.updateKeepScreenOn(!vm.settings.keepScreenOn) }) {
+        PdfSwitch(vm.settings.keepScreenOn, { vm.settings.updateKeepScreenOn(it) })
     }
     Text(stringResource(R.string.home_keep_screen_on_body), color = c.textSecondary, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 20.dp))
     Spacer(Modifier.height(8.dp))
-    SheetRow(null, stringResource(R.string.home_status_bar_in_documents), { vm.updateStatusBarInDocuments(!vm.statusBarInDocuments) }) {
-        PdfSwitch(vm.statusBarInDocuments, { vm.updateStatusBarInDocuments(it) })
+    SheetRow(null, stringResource(R.string.home_status_bar_in_documents), { vm.settings.updateStatusBarInDocuments(!vm.settings.statusBarInDocuments) }) {
+        PdfSwitch(vm.settings.statusBarInDocuments, { vm.settings.updateStatusBarInDocuments(it) })
     }
     Text(stringResource(R.string.home_status_bar_in_documents_body), color = c.textSecondary, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 20.dp))
     Spacer(Modifier.height(8.dp))
-    SheetRow(null, stringResource(R.string.compact_previews), { vm.updateCompactPreviews(!vm.compactPreviews) }) {
-        PdfSwitch(vm.compactPreviews, { vm.updateCompactPreviews(it) })
+    SheetRow(null, stringResource(R.string.compact_previews), { vm.settings.updateCompactPreviews(!vm.settings.compactPreviews) }) {
+        PdfSwitch(vm.settings.compactPreviews, { vm.settings.updateCompactPreviews(it) })
     }
     Text(stringResource(R.string.compact_previews_body), color = c.textSecondary, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 20.dp))
     SheetDivider()
     // the same settings as Draw's Pens sheet: one state, so both places stay in step
     Section(stringResource(R.string.home_section_pen))
-    val prefs = vm.toolPrefs
+    val prefs = vm.settings.toolPrefs
     SheetRow(null, stringResource(R.string.toolbar_stylus_only), { prefs.updateStylusOnly(!prefs.stylusOnly) }) {
         PdfSwitch(prefs.stylusOnly, { prefs.updateStylusOnly(it) })
     }
@@ -454,8 +454,8 @@ private fun Preferences(vm: AppViewModel) {
     )
     SheetDivider()
     Section(stringResource(R.string.home_section_keyboard))
-    SheetRow(null, stringResource(R.string.home_keyboard_shortcuts), { vm.updateKeyboardShortcuts(!vm.keyboardShortcuts) }) {
-        PdfSwitch(vm.keyboardShortcuts, { vm.updateKeyboardShortcuts(it) })
+    SheetRow(null, stringResource(R.string.home_keyboard_shortcuts), { vm.settings.updateKeyboardShortcuts(!vm.settings.keyboardShortcuts) }) {
+        PdfSwitch(vm.settings.keyboardShortcuts, { vm.settings.updateKeyboardShortcuts(it) })
     }
     Text(
         stringResource(R.string.home_keyboard_shortcuts_body),
@@ -475,10 +475,10 @@ private fun Preferences(vm: AppViewModel) {
     )
     Spacer(Modifier.height(24.dp))
     if (authorDialog) {
-        var name by remember { mutableStateOf(vm.toolPrefs.author) }
+        var name by remember { mutableStateOf(vm.settings.toolPrefs.author) }
         io.github.artcraftandroid.pdfcraft.ui.PdfDialog(
             onDismiss = { authorDialog = false }, title = stringResource(R.string.home_author_title),
-            confirm = stringResource(R.string.common_ok), onConfirm = { vm.toolPrefs.author = name.trim(); authorDialog = false; vm.prefsChanged++ },
+            confirm = stringResource(R.string.common_ok), onConfirm = { vm.settings.toolPrefs.author = name.trim(); authorDialog = false; vm.prefsChanged++ },
         ) { io.github.artcraftandroid.pdfcraft.ui.PdfField(name, { name = it }, stringResource(R.string.common_your_name)) }
     }
 }
@@ -510,16 +510,16 @@ private fun About(vm: AppViewModel) {
     UpdatePanel()
     SheetDivider()
     Section(stringResource(R.string.home_section_diagnostics))
-    SheetRow(null, stringResource(R.string.home_record_diagnostics), { vm.updateRecordDiagnostics(!vm.recordDiagnostics) }) {
-        PdfSwitch(vm.recordDiagnostics, { vm.updateRecordDiagnostics(it) })
+    SheetRow(null, stringResource(R.string.home_record_diagnostics), { vm.settings.updateRecordDiagnostics(!vm.settings.recordDiagnostics) }) {
+        PdfSwitch(vm.settings.recordDiagnostics, { vm.settings.updateRecordDiagnostics(it) })
     }
     Text(
         stringResource(R.string.home_record_diagnostics_body),
         color = c.textSecondary, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 20.dp),
     )
-    if (vm.recordDiagnostics) {
-        SheetRow(null, stringResource(R.string.home_share_diagnostics), { vm.shareDiagnostics() })
-        SheetRow(null, stringResource(R.string.home_clear_diagnostics), { vm.clearDiagnostics() })
+    if (vm.settings.recordDiagnostics) {
+        SheetRow(null, stringResource(R.string.home_share_diagnostics), { vm.settings.shareDiagnostics() })
+        SheetRow(null, stringResource(R.string.home_clear_diagnostics), { vm.settings.clearDiagnostics() })
         // the scanner's testing options and the scans kept for testing (#288)
         ScanLabSettings(vm)
     }

@@ -200,7 +200,7 @@ class MainActivity : ComponentActivity() {
         // keep the screen on while reading, if asked, until half an hour without a touch
         lifecycleScope.launch {
             while (true) {
-                val on = vm.keepScreenOn && vm.document != null && System.currentTimeMillis() - lastTouch < 30L * 60 * 1000
+                val on = vm.settings.keepScreenOn && vm.document != null && System.currentTimeMillis() - lastTouch < 30L * 60 * 1000
                 if (on) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) else window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
                 delay(5_000)
             }
@@ -216,7 +216,7 @@ class MainActivity : ComponentActivity() {
     // the viewer's shortcuts in the system's Meta+/ list (#153)
     override fun onProvideKeyboardShortcuts(data: MutableList<android.view.KeyboardShortcutGroup>, menu: android.view.Menu?, deviceId: Int) {
         super.onProvideKeyboardShortcuts(data, menu, deviceId)
-        if (vm.keyboardShortcuts) data.add(io.github.artcraftandroid.pdfcraft.ui.viewer.shortcutGroup(this))
+        if (vm.settings.keyboardShortcuts) data.add(io.github.artcraftandroid.pdfcraft.ui.viewer.shortcutGroup(this))
     }
 
     /** Log raw pen samples (real historical pressure, pen speed) before Compose handles the event. */

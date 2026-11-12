@@ -216,9 +216,9 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             // An older request can become obsolete while waiting for the native engine.
             if (!isCurrentOpenRequest(requestId)) return@withLock
             openStartedAt = android.os.SystemClock.elapsedRealtime()
-            diagDoc = Diag.nextDocNumber()
+            settings.diagDoc = Diag.nextDocNumber()
             // a number per open, never the file's name (#105): the lines after it are about this file
-            Diag.event(DiagArea.Open, "open_start", "doc" to diagDoc, "scheme" to uri.scheme, "from_other_app" to fromOtherApp, "has_password" to (password != null))
+            Diag.event(DiagArea.Open, "open_start", "doc" to settings.diagDoc, "scheme" to uri.scheme, "from_other_app" to fromOtherApp, "has_password" to (password != null))
             opening = true
             var openStage = "provider_copy"
             try {
@@ -352,21 +352,21 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 runCatching { eng.command { repairCount(info.id) } }.getOrNull()
                     ?.let { io.github.artcraftandroid.pdfcraft.engine.OpenTiming.count("native_repairs", it.toLong()) }
             }
-            val images = PageImages(eng, info.id, viewModelScope, imageBudget, openedAt = openStartedAt, compact = compactPreviews)
+            val images = PageImages(eng, info.id, viewModelScope, imageBudget, openedAt = openStartedAt, compact = settings.compactPreviews)
             val source = uri.takeIf { it.scheme == "content" || it.scheme == "file" }
             val doc = OpenDocument(info.id, info, source, file, images, password, eng, viewModelScope)
             doc.fromOtherApp = fromOtherApp
-            doc.diagNumber = diagDoc
+            doc.diagNumber = settings.diagDoc
             doc.writable = withContext(Dispatchers.IO) { source == null || files.canWrite(source) }
             doc.notWrittenBack = source?.let { withContext(Dispatchers.IO) { files.hasPendingWriteBack(it) } } ?: false
             io.github.artcraftandroid.pdfcraft.engine.OpenTiming.milestone("source_access_ready", openStartedAt)
-            doc.controller.nightMode = savedNightMode
+            doc.controller.nightMode = settings.savedNightMode
             // the layout this file was left in, else the one the file asks for, else the app's (#152)
             val remembered = ViewLayout.decode(recent?.layout)
-            val fromFile = if (remembered == null && recent?.layout == null && !info.preparing) fileLayout(eng, info.id) else null
-            applyLayout(doc, remembered ?: fromFile, if (remembered != null) "remembered" else "file")
+            val fromFile = if (remembered == null && recent?.layout == null && !info.preparing) settings.fileLayout(eng, info.id) else null
+            settings.applyLayout(doc, remembered ?: fromFile, if (remembered != null) "remembered" else "file")
             // a file left in Reading Mode reopens in it, unless it was opened for a tool
-            readingMode = recent?.reading == true && pendingTool == null
+            settings.readingMode = recent?.reading == true && pendingTool == null
             document = doc
             io.github.artcraftandroid.pdfcraft.engine.OpenTiming.milestone("viewer_model_ready", openStartedAt, pages = info.pages.size)
             if (!info.preparing) {
@@ -428,7 +428,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                     tell(e.userMessage)
                     closeQuietly(eng, doc)
                     document = null
-                    readingMode = false
+                    settings.readingMode = false
                 }
             }
         }
@@ -490,7 +490,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                     return@withLock
                 }
                 document = null
-                readingMode = false
+                settings.readingMode = false
                 refreshRecents()
                 study.indexLibrary()
                 withContext(Dispatchers.IO) { sweepCache() }
@@ -555,13 +555,13 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     }
 
     private suspend fun saveAndClose(eng: Engine, doc: OpenDocument): Boolean {
-        val reading = readingMode
+        val reading = settings.readingMode
         val pending = pendingPage
         // the spot at the screen's top-left and the zoom, to reopen there (as the reference does)
         val v = doc.viewer
         val spot = if (pending == null && v.mode == io.github.artcraftandroid.pdfcraft.ui.viewer.PageMode.Continuous) v.screenToPage(androidx.compose.ui.geometry.Offset(0f, v.padTop), nearest = true) else null
         val zoom = v.zoom
-        val layout = currentLayout(doc).encode()
+        val layout = settings.currentLayout(doc).encode()
         withContext(Dispatchers.IO) {
             // in Reading Mode the page canvas has no layout: the page read is the pending one
             val page = pending ?: spot?.page ?: v.currentPage
@@ -877,8 +877,8 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             return
         }
         // as the reference: no tool works on reflowed text; say so and stay in Reading Mode
-        if (readingMode && tool != ViewerTool.None) {
-            readingModeBlocked = tool
+        if (settings.readingMode && tool != ViewerTool.None) {
+            settings.readingModeBlocked = tool
             return
         }
         val info = doc.info
@@ -895,9 +895,9 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         if (ctl.tool != ViewerTool.None) leaveTool(doc)
         doc.selection.clear()
         // annotating with the annotations hidden would hide what is being made: show them again
-        if (tool in setOf(ViewerTool.Comment, ViewerTool.Markup, ViewerTool.Draw, ViewerTool.Text) && doc.info.commentsHidden) setCommentsHidden(doc, false)
+        if (tool in setOf(ViewerTool.Comment, ViewerTool.Markup, ViewerTool.Draw, ViewerTool.Text) && doc.info.commentsHidden) settings.setCommentsHidden(doc, false)
         ctl.switchTool(tool)
-        if (tool == ViewerTool.Draw && toolPrefs.snapToShape && toolPrefs.takeSnapHint()) tell(text(R.string.msg_snap_to_shape_on))
+        if (tool == ViewerTool.Draw && settings.toolPrefs.snapToShape && settings.toolPrefs.takeSnapHint()) tell(text(R.string.msg_snap_to_shape_on))
         // no name dialog before the first mark (#202): the comment box offers "Comment as" instead
     }
 
@@ -1029,7 +1029,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
 
     /** The Share sheet's choice last used, marked next time (#205). */
     val lastShareChoice: io.github.artcraftandroid.pdfcraft.ui.viewer.ShareChoice
-        get() = io.github.artcraftandroid.pdfcraft.ui.viewer.ShareChoice.of(appPrefs.getString("shareChoice", null))
+        get() = io.github.artcraftandroid.pdfcraft.ui.viewer.ShareChoice.of(settings.appPrefs.getString("shareChoice", null))
 
     /**
      * Share [doc] as [choice] picks (#205): the PDF as it is, a flattened copy (comments and
@@ -1037,7 +1037,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
      * in the page grid). The subject is the document's title only.
      */
     fun share(doc: OpenDocument, choice: io.github.artcraftandroid.pdfcraft.ui.viewer.ShareChoice = io.github.artcraftandroid.pdfcraft.ui.viewer.ShareChoice.Pdf) {
-        appPrefs.edit().putString("shareChoice", choice.id).apply()
+        settings.appPrefs.edit().putString("shareChoice", choice.id).apply()
         Diag.event(DiagArea.Share, "share", "doc" to doc.diagNumber, "choice" to choice.id, "page" to doc.viewer.currentPage + 1, "pages" to doc.pageCount)
         if (doc.controller.tool == ViewerTool.Draw) doc.commitTool?.invoke()
         if (choice == io.github.artcraftandroid.pdfcraft.ui.viewer.ShareChoice.Images) {
@@ -1105,7 +1105,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
      * may read them and returns the intent. A failure on the way, such as a file gone or a phone
      * too full for the copy, is told in a snackbar instead of closing the app.
      */
-    private fun handOut(make: suspend () -> Intent) {
+    internal fun handOut(make: suspend () -> Intent) {
         viewModelScope.launch {
             val intent = try {
                 make()
@@ -1129,7 +1129,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     fun startPresenting(doc: OpenDocument) {
         val ctl = doc.controller
         if (ctl.tool != ViewerTool.None) leaveTool(doc)
-        readingMode = false
+        settings.readingMode = false
         doc.selection.clear()
         doc.search.clear()
         ctl.searching = false
@@ -1173,8 +1173,8 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     fun viewerKey(keyCode: Int, ctrl: Boolean, shift: Boolean = false): Boolean {
         val doc = document ?: return false
         // a presentation clicker works even with the shortcuts turned off
-        if (!keyboardShortcuts && !doc.controller.presenting) return false
-        if (toolScreen != null || readingMode) return false
+        if (!settings.keyboardShortcuts && !doc.controller.presenting) return false
+        if (toolScreen != null || settings.readingMode) return false
         val v = doc.viewer
         val ctl = doc.controller
         val center = androidx.compose.ui.geometry.Offset(v.viewW / 2f, v.viewH / 2f)
@@ -1194,7 +1194,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             return true
         }
         val drawing = ctl.tool == ViewerTool.Draw
-        if (!ctrl && drawing) io.github.artcraftandroid.pdfcraft.ui.viewer.presetForKey(keyCode)?.let { return toolPrefs.applyInkPreset(it) }
+        if (!ctrl && drawing) io.github.artcraftandroid.pdfcraft.ui.viewer.presetForKey(keyCode)?.let { return settings.toolPrefs.applyInkPreset(it) }
         val shortcut = io.github.artcraftandroid.pdfcraft.ui.viewer.viewerShortcut(keyCode, ctrl, shift) ?: return false
         io.github.artcraftandroid.pdfcraft.engine.Diag.event(io.github.artcraftandroid.pdfcraft.engine.DiagArea.Viewer, "shortcut", "doc" to doc.diagNumber, "action" to shortcut, "ctrl" to ctrl, "shift" to shift, "tool" to ctl.tool)
         fun tool(t: ViewerTool) { if (ctl.tool != t) enterTool(doc, t) }
@@ -1206,7 +1206,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             ctl.inkShapeMode = shape
         }
         when (shortcut) {
-            io.github.artcraftandroid.pdfcraft.ui.viewer.ViewerShortcut.Pen -> { draw(); toolPrefs.selectWritingPen() }
+            io.github.artcraftandroid.pdfcraft.ui.viewer.ViewerShortcut.Pen -> { draw(); settings.toolPrefs.selectWritingPen() }
             io.github.artcraftandroid.pdfcraft.ui.viewer.ViewerShortcut.Highlighter -> { ctl.markup = io.github.artcraftandroid.pdfcraft.ui.viewer.TextMarkup.Highlight; tool(ViewerTool.Markup) }
             io.github.artcraftandroid.pdfcraft.ui.viewer.ViewerShortcut.Eraser -> draw(eraser = true)
             io.github.artcraftandroid.pdfcraft.ui.viewer.ViewerShortcut.Lasso -> draw(lasso = true)
@@ -1236,7 +1236,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 ctl.searching = true
                 ctl.sheet = io.github.artcraftandroid.pdfcraft.ui.viewer.ViewerSheet.None
             }
-            io.github.artcraftandroid.pdfcraft.ui.viewer.ViewerShortcut.Bookmark -> toggleBookmark(doc)
+            io.github.artcraftandroid.pdfcraft.ui.viewer.ViewerShortcut.Bookmark -> settings.toggleBookmark(doc)
             io.github.artcraftandroid.pdfcraft.ui.viewer.ViewerShortcut.Delete -> {
                 val c = commenting.selectedComment?.takeIf { it.first === doc }?.second ?: return false
                 commenting.deleteComment(doc, c)
@@ -1244,7 +1244,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             io.github.artcraftandroid.pdfcraft.ui.viewer.ViewerShortcut.Thinner, io.github.artcraftandroid.pdfcraft.ui.viewer.ViewerShortcut.Thicker -> {
                 if (!drawing) return false
                 val dir = if (shortcut == io.github.artcraftandroid.pdfcraft.ui.viewer.ViewerShortcut.Thicker) 1 else -1
-                toolPrefs.updateInkWidth(io.github.artcraftandroid.pdfcraft.ui.viewer.steppedInkWidth(toolPrefs.inkWidth, dir))
+                settings.toolPrefs.updateInkWidth(io.github.artcraftandroid.pdfcraft.ui.viewer.steppedInkWidth(settings.toolPrefs.inkWidth, dir))
             }
             io.github.artcraftandroid.pdfcraft.ui.viewer.ViewerShortcut.NextPage -> v.turnPage(1)
             io.github.artcraftandroid.pdfcraft.ui.viewer.ViewerShortcut.PreviousPage -> v.turnPage(-1)
@@ -1524,7 +1524,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         }
         readAloud?.stop()
         val eng = engine ?: return
-        val key = docKey(doc)
+        val key = settings.docKey(doc)
         val sel = if (fromSelection) doc.selection.selection?.range else null
         if (sel != null) {
             // from the selection's first word
@@ -1560,356 +1560,13 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         val word = withContext(eng.commands) { eng.session.wordAt(doc.id, at.page.toUInt(), at.x, at.y, slopPoints) } ?: return false
         if (readAloud !== current) return false
         current.stop()
-        readAloud = ReadAloud(getApplication(), eng, doc, viewModelScope, word.page.toInt(), { readAloud = null }, docKey(doc), startGlyph = word.start)
+        readAloud = ReadAloud(getApplication(), eng, doc, viewModelScope, word.page.toInt(), { readAloud = null }, settings.docKey(doc), startGlyph = word.start)
         return true
     }
 
-    // ---- Tools' remembered settings, bookmarks, stars --------------------------------------
+    // ---- Tools' remembered, View settings: see SettingsController ----
 
-    val toolPrefs = ToolPrefs(app)
-
-    /** The viewer's bottom toolbar as the user arranged it (More tools ▸ Customize toolbar). */
-    val quickToolbar = io.github.artcraftandroid.pdfcraft.ui.viewer.QuickToolbarPrefs(app)
-    internal val appPrefs = app.getSharedPreferences("app", android.content.Context.MODE_PRIVATE)
-    var compactPreviews by mutableStateOf(appPrefs.getBoolean("compactPreviews", false))
-        private set
-    fun updateCompactPreviews(on: Boolean) {
-        compactPreviews = on
-        appPrefs.edit().putBoolean("compactPreviews", on).apply()
-    }
-    private val bookmarkStore = UserBookmarks(File(app.filesDir, "bookmarks.json"))
-
-    /** The Search tab's last searches, newest first (kept on the phone, as the reference keeps them). */
-    var recentSearches by mutableStateOf(appPrefs.getString("recentSearches", null)?.split('\n')?.filter { it.isNotBlank() } ?: emptyList())
-        private set
-
-    fun addRecentSearch(q: String) {
-        val t = q.trim()
-        if (t.isEmpty()) return
-        recentSearches = (listOf(t) + recentSearches.filterNot { it.equals(t, ignoreCase = true) }).take(10)
-        appPrefs.edit().putString("recentSearches", recentSearches.joinToString("\n")).apply()
-    }
-
-    fun removeRecentSearch(q: String) {
-        recentSearches = recentSearches - q
-        appPrefs.edit().putString("recentSearches", recentSearches.joinToString("\n")).apply()
-    }
-
-    fun clearRecentSearches() {
-        recentSearches = emptyList()
-        appPrefs.edit().remove("recentSearches").apply()
-    }
-
-    /** The key a document's own data (bookmarks, stars, last page) is kept under: where it came from. */
-    fun docKey(doc: OpenDocument): String = doc.source?.toString() ?: doc.file.absolutePath
-
-    /** The reader's bookmarks of a document. */
-    inner class Bookmarks {
-        fun list(doc: OpenDocument) = bookmarkStore.list(docKey(doc))
-        fun isBookmarked(doc: OpenDocument, page: Int) = bookmarkStore.has(docKey(doc), page)
-        fun rename(doc: OpenDocument, b: UserBookmark, name: String) = bookmarkStore.rename(docKey(doc), b, name)
-        fun remove(doc: OpenDocument, b: UserBookmark) = bookmarkStore.remove(docKey(doc), b)
-        fun clear(doc: OpenDocument) = bookmarkStore.clear(docKey(doc))
-    }
-
-    val bookmarks = Bookmarks()
-
-    /** Add a bookmark on the current page, or remove the one there. */
-    fun toggleBookmark(doc: OpenDocument) {
-        val (b, added) = bookmarkStore.toggle(docKey(doc), doc.viewer.currentPage)
-        tell(text(if (added) R.string.msg_bookmark_added else R.string.msg_bookmark_removed, b.name))
-    }
-
-    /** Delete all bookmarks of a document: waiting for confirmation. */
-    var confirmDeleteAllBookmarks by mutableStateOf<OpenDocument?>(null)
-
-    fun deleteAllBookmarks(doc: OpenDocument) {
-        bookmarks.clear(doc)
-        tell(text(R.string.msg_bookmarks_cleared))
-    }
-
-    fun isStarred(doc: OpenDocument): Boolean = recentList.firstOrNull { it.uri == docKey(doc) }?.starred == true
-
-    fun toggleStar(doc: OpenDocument) {
-        val key = docKey(doc)
-        viewModelScope.launch {
-            withContext(Dispatchers.IO) { recents.update(key) { it.copy(starred = !it.starred) } }
-            refreshRecents()
-        }
-    }
-
-    fun setStarred(uri: String, starred: Boolean) {
-        viewModelScope.launch {
-            withContext(Dispatchers.IO) { recents.update(uri) { it.copy(starred = starred) } }
-            refreshRecents()
-        }
-    }
-
-    // ---- View settings ----------------------------------------------------------------------
-
-    /** Reading Mode (text reflowed to the screen) is showing. Remembered for each file, as the reference does. */
-    var readingMode by mutableStateOf(false)
-        private set
-
-    /** The page mode documents open in (View settings; the app's default, and each file's own once changed). */
-    val savedPageMode: io.github.artcraftandroid.pdfcraft.ui.viewer.PageMode
-        get() = when (appPrefs.getString("pageMode", "continuous")) {
-            "single" -> io.github.artcraftandroid.pdfcraft.ui.viewer.PageMode.SinglePage
-            "horizontal" -> io.github.artcraftandroid.pdfcraft.ui.viewer.PageMode.Horizontal
-            else -> io.github.artcraftandroid.pdfcraft.ui.viewer.PageMode.Continuous
-        }
-
-    /** The app's spread: View settings' last choice, for files that have none of their own. */
-    private val savedSpread: io.github.artcraftandroid.pdfcraft.ui.viewer.Spread
-        get() = when (appPrefs.getString("spread", "single")) {
-            "two" -> io.github.artcraftandroid.pdfcraft.ui.viewer.Spread.TwoUp
-            "cover" -> io.github.artcraftandroid.pdfcraft.ui.viewer.Spread.TwoUpCover
-            else -> io.github.artcraftandroid.pdfcraft.ui.viewer.Spread.Single
-        }
-
-    /** Lay [doc] out as [layout] remembered for it, or as the app's View settings when null (#152). */
-    private fun applyLayout(doc: OpenDocument, layout: ViewLayout?, source: String) {
-        val l = layout ?: ViewLayout(savedPageMode, savedSpread, appPrefs.getBoolean("spreadAuto", false))
-        // where the layout a file opened in came from: remembered for it, its initial view, or the app's (#152)
-        io.github.artcraftandroid.pdfcraft.engine.Diag.event(io.github.artcraftandroid.pdfcraft.engine.DiagArea.Viewer, "layout_open", "doc" to doc.diagNumber, "source" to (if (layout == null) "app" else source), "mode" to l.mode, "spread" to l.spread, "auto" to l.autoSpread)
-        if (l.mode != doc.viewer.mode) doc.viewer.switchMode(l.mode)
-        spreadPref = l.spread
-        spreadAuto = l.autoSpread
-    }
-
-    /** The layout [doc]'s initial view asks for, or null when it leaves it to the reader or can't be read. */
-    private suspend fun fileLayout(eng: io.github.artcraftandroid.pdfcraft.engine.Engine, doc: ULong): ViewLayout? = runCatching {
-        val view = eng.tool("doc_initial_view", mapOf("doc" to doc.toLong())).optJSONObject("initial_view")
-        ViewLayout.of(OpenLayout.fromReply(view?.optString("layout")))
-    }.getOrNull()
-
-    /** How [doc] is laid out now, to remember for it (the layout it had before presenting, if presenting). */
-    private fun currentLayout(doc: OpenDocument) =
-        ViewLayout(doc.controller.modeBeforePresenting ?: doc.viewer.mode, spreadPref, spreadAuto)
-
-    /**
-     * Write [doc]'s layout into the file as its initial view, so other readers open it the same
-     * way (#152). Pages in a row and automatic two pages have no PDF equivalent.
-     */
-    fun saveLayoutAsInitialView(doc: OpenDocument) {
-        val open = currentLayout(doc).openLayout() ?: return
-        io.github.artcraftandroid.pdfcraft.engine.Diag.event(io.github.artcraftandroid.pdfcraft.engine.DiagArea.Viewer, "layout_initial_view", "doc" to doc.diagNumber, "layout" to open)
-        setInitialView(doc, mapOf("layout" to open.arg))
-    }
-
-    /** Whether [doc]'s layout can be written as its initial view. */
-    fun layoutHasInitialView(doc: OpenDocument): Boolean = currentLayout(doc).openLayout() != null
-
-    val savedNightMode: Boolean get() = appPrefs.getBoolean("nightMode", false)
-
-    /**
-     * Two pages side by side (View settings; remembered app-wide). It applies only where the
-     * window is wide enough ([io.github.artcraftandroid.pdfcraft.ui.viewer.spreadFits]); a phone
-     * held upright shows one page.
-     */
-    var spreadPref by mutableStateOf(savedSpread)
-        private set
-
-    /** Two pages side by side when the window is wide and landscape, one otherwise (#152). */
-    var spreadAuto by mutableStateOf(appPrefs.getBoolean("spreadAuto", false))
-        private set
-
-    fun chooseSpreadAuto(on: Boolean) {
-        readingMode = false
-        spreadAuto = on
-        io.github.artcraftandroid.pdfcraft.engine.Diag.event(io.github.artcraftandroid.pdfcraft.engine.DiagArea.Viewer, "spread_auto", "on" to on)
-        appPrefs.edit().putBoolean("spreadAuto", on).apply()
-    }
-
-    fun setSpread(spread: io.github.artcraftandroid.pdfcraft.ui.viewer.Spread) {
-        // two pages side by side are page views: leave Reading Mode for them
-        readingMode = false
-        spreadPref = spread
-        spreadAuto = false
-        io.github.artcraftandroid.pdfcraft.engine.Diag.event(io.github.artcraftandroid.pdfcraft.engine.DiagArea.Viewer, "spread", "spread" to spread)
-        appPrefs.edit().putBoolean("spreadAuto", false).putString("spread", when (spread) {
-            io.github.artcraftandroid.pdfcraft.ui.viewer.Spread.TwoUp -> "two"
-            io.github.artcraftandroid.pdfcraft.ui.viewer.Spread.TwoUpCover -> "cover"
-            io.github.artcraftandroid.pdfcraft.ui.viewer.Spread.Single -> "single"
-        }).apply()
-    }
-
-    fun setPageMode(doc: OpenDocument, mode: io.github.artcraftandroid.pdfcraft.ui.viewer.PageMode) {
-        // leaving Reading Mode: a canvas laid out already followed the page read; else it shows it on layout
-        if (readingMode && doc.viewer.viewW > 0f) pendingPage = null
-        readingMode = false
-        io.github.artcraftandroid.pdfcraft.engine.Diag.event(io.github.artcraftandroid.pdfcraft.engine.DiagArea.Viewer, "page_mode", "doc" to doc.diagNumber, "from" to doc.viewer.mode, "to" to mode, "page" to doc.viewer.currentPage + 1)
-        doc.viewer.switchMode(mode)
-        appPrefs.edit().putString("pageMode", when (mode) {
-            io.github.artcraftandroid.pdfcraft.ui.viewer.PageMode.SinglePage -> "single"
-            io.github.artcraftandroid.pdfcraft.ui.viewer.PageMode.Horizontal -> "horizontal"
-            io.github.artcraftandroid.pdfcraft.ui.viewer.PageMode.Continuous -> "continuous"
-        }).apply()
-    }
-
-    fun setNightMode(doc: OpenDocument, on: Boolean) {
-        doc.controller.nightMode = on
-        appPrefs.edit().putBoolean("nightMode", on).apply()
-        // Night mode inverts the page: on top of reading colours it would undo them
-        if (on && doc.controller.readingColors != io.github.artcraftandroid.pdfcraft.ui.viewer.ReadingColors.Off) {
-            setReadingColors(doc, io.github.artcraftandroid.pdfcraft.ui.viewer.ReadingColors.Off)
-        }
-    }
-
-    /** The reading colours documents open with (View settings; remembered app-wide). */
-    val savedReadingColors: io.github.artcraftandroid.pdfcraft.ui.viewer.ReadingColors
-        get() = io.github.artcraftandroid.pdfcraft.ui.viewer.ReadingColors.fromPref(appPrefs.getString("readingColors", null))
-
-    /** Draw [doc]'s pages in [colors] (a view setting in the engine; the file doesn't change). */
-    fun setReadingColors(doc: OpenDocument, colors: io.github.artcraftandroid.pdfcraft.ui.viewer.ReadingColors) {
-        appPrefs.edit().putString("readingColors", colors.engineMode).apply()
-        if (colors != io.github.artcraftandroid.pdfcraft.ui.viewer.ReadingColors.Off && doc.controller.nightMode) {
-            doc.controller.nightMode = false
-            appPrefs.edit().putBoolean("nightMode", false).apply()
-        }
-        applyReadingColors(doc, colors)
-    }
-
-    /**
-     * Hide or show every annotation on the pages (#155): a view setting in the engine
-     * (comments_hide), so the file isn't changed or marked as edited.
-     */
-    fun setCommentsHidden(doc: OpenDocument, hidden: Boolean) {
-        val eng = engine ?: return
-        if (doc.info.preparing) return
-        commenting.selectedComment = null
-        viewModelScope.launch {
-            val ok = runCatching {
-                io.github.artcraftandroid.pdfcraft.engine.Diag.measure(io.github.artcraftandroid.pdfcraft.engine.DiagArea.Viewer, "comments_hide", "doc" to doc.diagNumber, "hidden" to hidden) { eng.tool("comments_hide", mapOf("doc" to doc.id, "hidden" to hidden)) }
-            }.onFailure { io.github.artcraftandroid.pdfcraft.engine.Diag.failure(io.github.artcraftandroid.pdfcraft.engine.DiagArea.Viewer, "comments_hide", it) }.isSuccess
-            if (!ok) return@launch
-            // the switch reads the engine's state; the pages draw again without waiting for an edit
-            refresh(doc)
-            doc.images.invalidate()
-        }
-    }
-
-    /** Give a newly opened (and prepared) [doc] the saved reading colours. */
-    fun applySavedReadingColors(doc: OpenDocument) {
-        val saved = savedReadingColors
-        if (saved != doc.controller.readingColors) applyReadingColors(doc, saved)
-    }
-
-    private fun applyReadingColors(doc: OpenDocument, colors: io.github.artcraftandroid.pdfcraft.ui.viewer.ReadingColors) {
-        val eng = engine ?: return
-        if (doc.info.preparing) return
-        viewModelScope.launch {
-            val ok = runCatching {
-                io.github.artcraftandroid.pdfcraft.engine.Diag.measure(io.github.artcraftandroid.pdfcraft.engine.DiagArea.Viewer, "reading_colors", "doc" to doc.diagNumber, "colors" to colors) { eng.tool("view_reading_colors", mapOf("doc" to doc.id, "mode" to colors.engineMode)) }
-            }.onFailure { io.github.artcraftandroid.pdfcraft.engine.Diag.failure(io.github.artcraftandroid.pdfcraft.engine.DiagArea.Viewer, "reading_colors", it) }.isSuccess
-            if (!ok) return@launch
-            doc.controller.readingColors = colors
-            // the engine's view changed: every page draws again
-            refresh(doc)
-        }
-    }
-
-    fun openReadingMode(doc: OpenDocument) {
-        if (doc.info.preparing) { tell(text(R.string.document_preparing)); return }
-        if (doc.controller.tool != ViewerTool.None) leaveTool(doc)
-        readingMode = true
-    }
-
-    /** A tool tried in Reading Mode, for the dialog that says it needs another view. */
-    var readingModeBlocked by mutableStateOf<ViewerTool?>(null)
-
-    /** Keep the screen on while reading (Preferences; released after half an hour without a touch). */
-    var keepScreenOn by mutableStateOf(appPrefs.getBoolean("keepScreenOn", false))
-        private set
-
-    fun updateKeepScreenOn(on: Boolean) {
-        keepScreenOn = on
-        appPrefs.edit().putBoolean("keepScreenOn", on).apply()
-    }
-
-    /** The diagnostics number of the latest open (#105: lines name a number, never the file). */
-    private var diagDoc = 0
-
-    /**
-     * About → Diagnostics: record the detailed diagnostics log (open and render timings, pen
-     * latency, saves, scans, memory, failures) in app-private files so it can be shared without
-     * adb. See docs/ANDROID_DIAGNOSTICS_LOG.md.
-     */
-    var recordDiagnostics by mutableStateOf(Diag.enabled())
-        private set
-
-    fun updateRecordDiagnostics(on: Boolean) {
-        recordDiagnostics = on
-        val app = getApplication<Application>()
-        viewModelScope.launch(Dispatchers.IO) { Diagnostics.setOn(app, on) }
-    }
-
-    fun clearDiagnostics() {
-        val app = getApplication<Application>()
-        viewModelScope.launch {
-            withContext(Dispatchers.IO) { Diagnostics.clear(app) }
-            tell(text(R.string.home_diagnostics_cleared))
-        }
-    }
-
-    /** Share the diagnostics log as a text file; only event names, times, counts and sizes. */
-    fun shareDiagnostics() {
-        val app = getApplication<Application>()
-        viewModelScope.launch {
-            // the pen latency so far (#128), as Pen settings shows it
-            listOf("normal" to io.github.artcraftandroid.pdfcraft.ui.viewer.InkLatency.normal, "low_latency" to io.github.artcraftandroid.pdfcraft.ui.viewer.InkLatency.lowLatency).forEach { (path, stats) ->
-                stats.summary()?.let { Diag.event(DiagArea.Ink, "latency_summary", "path" to path, "samples" to it.count, "p50_ms" to it.medianMs, "p95_ms" to it.p95Ms) }
-            }
-            io.github.artcraftandroid.pdfcraft.ui.viewer.PenDiag.flushPalm()
-            Diagnostics.memory("share")
-            val lines = withContext(Dispatchers.IO) { Diagnostics.lines(app) }
-            if (lines.isEmpty()) {
-                tell(text(R.string.home_diagnostics_empty))
-                return@launch
-            }
-            handOut {
-                val facts = Diagnostics.facts(app, appVersion, io.github.artcraftandroid.pdfcraft.ui.home.installedVersionCode(app), io.github.artcraftandroid.pdfcraft.core.engineVersion())
-                val report = io.github.artcraftandroid.pdfcraft.engine.diagReport(facts, lines)
-                val file = withContext(Dispatchers.IO) {
-                    File(File(app.cacheDir, "share").apply { mkdirs() }, "pdfcraft-diagnostics.txt").apply { writeText(report) }
-                }
-                val uri = androidx.core.content.FileProvider.getUriForFile(app, "${app.packageName}.files", file)
-                // the file only: a long log is too big for a message's text
-                sendIntent(listOf(uri), "text/plain")
-                    .putExtra(Intent.EXTRA_SUBJECT, text(R.string.home_diagnostics_subject))
-            }
-        }
-    }
-
-    /** The viewer's keyboard shortcuts (Preferences; on by default: only a keyboard sends them, #153). */
-    var keyboardShortcuts by mutableStateOf(appPrefs.getBoolean("keyboardShortcuts", true))
-        private set
-
-    fun updateKeyboardShortcuts(on: Boolean) {
-        keyboardShortcuts = on
-        appPrefs.edit().putBoolean("keyboardShortcuts", on).apply()
-    }
-
-    /** The app's theme (Preferences ▸ Theme): the system's, or always light or dark. */
-    var theme by mutableStateOf(runCatching { ThemeChoice.valueOf(appPrefs.getString("theme", "System") ?: "System") }.getOrDefault(ThemeChoice.System))
-        private set
-
-    fun setThemeChoice(t: ThemeChoice) {
-        theme = t
-        appPrefs.edit().putString("theme", t.name).apply()
-    }
-
-    /**
-     * Extra Features ▸ the status bar in documents: shown with the viewer's bars, and the page uses the
-     * whole screen when they hide (off: the reference's black band where the camera is).
-     */
-    var statusBarInDocuments by mutableStateOf(appPrefs.getBoolean("statusBarInDocuments", false))
-        private set
-
-    fun updateStatusBarInDocuments(on: Boolean) {
-        statusBarInDocuments = on
-        appPrefs.edit().putBoolean("statusBarInDocuments", on).apply()
-    }
+    val settings = SettingsController(this)
 
     // ---- Reading the document ---------------------------------------------------------------
 
@@ -2470,20 +2127,20 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         private set
 
     private fun loadCompressOptions(): CompressOptions = CompressOptions(
-        enabled = appPrefs.getBoolean("compress.advanced", false),
-        targetMb = appPrefs.getFloat("compress.targetMb", 0f).toDouble().takeIf { it > 0 },
-        ppi = appPrefs.getInt("compress.ppi", 150),
-        quality = appPrefs.getInt("compress.quality", 60),
-        mobile = appPrefs.getBoolean("compress.mobile", false),
-        removeInvalidLinks = appPrefs.getBoolean("compress.removeInvalidLinks", true),
-        discardFormActions = appPrefs.getBoolean("compress.discardFormActions", false),
-        discardTags = appPrefs.getBoolean("compress.discardTags", false),
-        discardAlternateImages = appPrefs.getBoolean("compress.discardAlternateImages", true),
+        enabled = settings.appPrefs.getBoolean("compress.advanced", false),
+        targetMb = settings.appPrefs.getFloat("compress.targetMb", 0f).toDouble().takeIf { it > 0 },
+        ppi = settings.appPrefs.getInt("compress.ppi", 150),
+        quality = settings.appPrefs.getInt("compress.quality", 60),
+        mobile = settings.appPrefs.getBoolean("compress.mobile", false),
+        removeInvalidLinks = settings.appPrefs.getBoolean("compress.removeInvalidLinks", true),
+        discardFormActions = settings.appPrefs.getBoolean("compress.discardFormActions", false),
+        discardTags = settings.appPrefs.getBoolean("compress.discardTags", false),
+        discardAlternateImages = settings.appPrefs.getBoolean("compress.discardAlternateImages", true),
     )
 
     fun updateCompressOptions(o: CompressOptions) {
         compressOptions = o
-        appPrefs.edit()
+        settings.appPrefs.edit()
             .putBoolean("compress.advanced", o.enabled).putFloat("compress.targetMb", (o.targetMb ?: 0.0).toFloat())
             .putInt("compress.ppi", o.ppi).putInt("compress.quality", o.quality).putBoolean("compress.mobile", o.mobile)
             .putBoolean("compress.removeInvalidLinks", o.removeInvalidLinks).putBoolean("compress.discardFormActions", o.discardFormActions)
@@ -2828,11 +2485,11 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     var imageExport by mutableStateOf<String?>(null)
 
     /** The image format last exported to, offered first next time (as the reference remembers it). */
-    val lastImageFormat: String get() = appPrefs.getString("imageFormat", "jpg") ?: "jpg"
+    val lastImageFormat: String get() = settings.appPrefs.getString("imageFormat", "jpg") ?: "jpg"
 
     /** Export to images: remember the format, then pick the pages in the page grid (Save or Share there). */
     fun exportImages(doc: OpenDocument, ext: String) {
-        appPrefs.edit().putString("imageFormat", ext).apply()
+        settings.appPrefs.edit().putString("imageFormat", ext).apply()
         toolScreen = null
         imageExport = ext
         organizing = true
@@ -2840,15 +2497,15 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     }
 
     /** Export to images: resolution (dpi) and JPEG quality, as last used. */
-    var imageDpi by mutableStateOf(appPrefs.getInt("imageDpi", 150))
+    var imageDpi by mutableStateOf(settings.appPrefs.getInt("imageDpi", 150))
         private set
-    var imageQuality by mutableStateOf(appPrefs.getInt("imageQuality", 85))
+    var imageQuality by mutableStateOf(settings.appPrefs.getInt("imageQuality", 85))
         private set
 
     fun updateImageSettings(dpi: Int, quality: Int) {
         imageDpi = dpi
         imageQuality = quality
-        appPrefs.edit().putInt("imageDpi", dpi).putInt("imageQuality", quality).apply()
+        settings.appPrefs.edit().putInt("imageDpi", dpi).putInt("imageQuality", quality).apply()
     }
 
     /**
@@ -3709,21 +3366,21 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     var filesShowLocal by mutableStateOf(false)
 
     /** Lists as a grid instead of rows (remembered). */
-    private var gridViewState by mutableStateOf(appPrefs.getBoolean("gridView", false))
+    private var gridViewState by mutableStateOf(settings.appPrefs.getBoolean("gridView", false))
     var gridView: Boolean
         get() = gridViewState
         set(v) {
             gridViewState = v
-            appPrefs.edit().putBoolean("gridView", v).apply()
+            settings.appPrefs.edit().putBoolean("gridView", v).apply()
         }
 
     /** Starred: 0 by date, 1 by name. */
-    private var starSortState by mutableStateOf(appPrefs.getInt("starSort", 0))
+    private var starSortState by mutableStateOf(settings.appPrefs.getInt("starSort", 0))
     var starSort: Int
         get() = starSortState
         set(v) {
             starSortState = v
-            appPrefs.edit().putInt("starSort", v).apply()
+            settings.appPrefs.edit().putInt("starSort", v).apply()
         }
 
     /** Bumped when a preference shown on screen changes outside Compose state. */
@@ -3965,7 +3622,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                             require(f.renameTo(target)) { text(R.string.msg_rename_failed) }
                             recents.remove(setOf(row.key))
                             recents.touch(RecentFile(Uri.fromFile(target).toString(), name, System.currentTimeMillis(), 0, target.length()))
-                            bookmarkStore.move(row.key, Uri.fromFile(target).toString())
+                            settings.bookmarkStore.move(row.key, Uri.fromFile(target).toString())
                         }
                         // what the tools saved to Downloads: MediaStore entries keep their address when renamed
                         u.authority == android.provider.MediaStore.AUTHORITY -> {
@@ -3978,7 +3635,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                                 ?: error(text(R.string.msg_rename_not_here))
                             recents.remove(setOf(row.key))
                             recents.touch(RecentFile(renamed.toString(), name, System.currentTimeMillis(), 0, files.size(renamed) ?: 0))
-                            bookmarkStore.move(row.key, renamed.toString())
+                            settings.bookmarkStore.move(row.key, renamed.toString())
                         }
                     }
                 }

@@ -227,7 +227,7 @@ fun AppViewModel.runQuickTool(doc: OpenDocument, tool: QuickTool) {
 @Composable
 fun CustomizeToolbar(vm: AppViewModel, onDone: () -> Unit) {
     val c = pdfColors
-    val prefs = vm.quickToolbar
+    val prefs = vm.settings.quickToolbar
     val slots = toolbarSlots(LocalConfiguration.current.screenWidthDp)
     val bar = remember { prefs.bar.take(slots).toMutableStateList() }
     val grid = remember { mutableStateListOf<QuickTool>().apply { addAll(QuickToolbarPrefs.complete(prefs.grid + prefs.bar.drop(slots), bar)) } }

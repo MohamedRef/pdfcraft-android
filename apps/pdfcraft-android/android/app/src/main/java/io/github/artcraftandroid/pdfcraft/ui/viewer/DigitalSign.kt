@@ -537,7 +537,7 @@ fun IdPasswordDialog(vm: AppViewModel, imp: IdImport) {
 fun CreateIdScreen(vm: AppViewModel) {
     val c = pdfColors
     androidx.activity.compose.BackHandler { vm.signing.idCreate = false }
-    var name by remember { mutableStateOf(vm.toolPrefs.author) }
+    var name by remember { mutableStateOf(vm.settings.toolPrefs.author) }
     var email by remember { mutableStateOf("") }
     var organization by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }

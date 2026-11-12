@@ -70,7 +70,7 @@ private val ColorBlindSafeNames = listOf(
  */
 @Composable
 internal fun InkPaletteSection(vm: AppViewModel, current: Int, onPick: (Int) -> Unit) {
-    val prefs = vm.toolPrefs
+    val prefs = vm.settings.toolPrefs
     val c = pdfColors
     var naming by remember { mutableStateOf(false) }
     val shown = prefs.inkPaletteShown.let { key ->
@@ -278,13 +278,13 @@ private fun AppViewModel.importInkPalette() {
                     PenDiag.palette("import", why)
                     tell(text(R.string.ink_palette_import_invalid))
                 }
-                !toolPrefs.addInkPalette(palette) -> {
+                !settings.toolPrefs.addInkPalette(palette) -> {
                     PenDiag.palette("import", "full", palette.colors.size)
                     tell(text(R.string.ink_palette_full))
                 }
                 else -> {
                     PenDiag.palette("import", "imported", palette.colors.size)
-                    tell(text(R.string.ink_palette_imported, toolPrefs.inkPaletteShown))
+                    tell(text(R.string.ink_palette_imported, settings.toolPrefs.inkPaletteShown))
                 }
             }
         }

@@ -102,7 +102,7 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
     val context = LocalContext.current
 
     // The system bars go with the viewer's bars.
-    val statusBar = vm.statusBarInDocuments
+    val statusBar = vm.settings.statusBarInDocuments
     DisposableEffect(ctl.barsVisible, statusBar, c.dark) {
         val window = (context as? Activity)?.window
         if (window != null) {
@@ -135,13 +135,13 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
     val topPx = with(density) { TopBarHeight.toPx() }
     // the quick toolbar grows with a large font setting: the page area leaves room for that too
     var quickExtraPx by remember { mutableIntStateOf(0) }
-    val railVisible = vm.quickToolbar.railMode && ctl.tool == ViewerTool.None
+    val railVisible = vm.settings.quickToolbar.railMode && ctl.tool == ViewerTool.None
     val bottomPx = with(density) {
         if (railVisible) 0f else if (ctl.tool == ViewerTool.None) QuickBarHeight.toPx() + quickExtraPx else if (ctl.tool == ViewerTool.Draw) DrawToolbarHeight.toPx() else BottomBarHeight.toPx()
     }
     // keyed on the document too: one opened over another (Create, Combine) has a fresh page view
-    LaunchedEffect(doc, ctl.barsVisible, statusPx, navPx, ctl.searching, ctl.tool, vm.readingMode, bottomPx, statusBar) {
-        val bottomShown = ctl.barsVisible && !ctl.searching && !vm.readingMode
+    LaunchedEffect(doc, ctl.barsVisible, statusPx, navPx, ctl.searching, ctl.tool, vm.settings.readingMode, bottomPx, statusBar) {
+        val bottomShown = ctl.barsVisible && !ctl.searching && !vm.settings.readingMode
         doc.viewer.setPadding(
             // with the status bar in documents, the page goes up to the top edge once the bars hide
             top = if (ctl.barsVisible) statusPx + topPx else if (statusBar) 0f else statusPx,
@@ -153,16 +153,16 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
     // two pages side by side where the window is wide enough; one page on a narrow one (#152)
     val windowWidthDp = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp
     val windowHeightDp = androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp
-    LaunchedEffect(doc, vm.spreadPref, vm.spreadAuto, windowWidthDp, windowHeightDp) {
-        val shown = shownSpread(vm.spreadPref, vm.spreadAuto, windowWidthDp, windowHeightDp)
+    LaunchedEffect(doc, vm.settings.spreadPref, vm.settings.spreadAuto, windowWidthDp, windowHeightDp) {
+        val shown = shownSpread(vm.settings.spreadPref, vm.settings.spreadAuto, windowWidthDp, windowHeightDp)
         // the spread shown for this window: whether two pages fit, and automatic two pages (#152)
-        io.github.artcraftandroid.pdfcraft.engine.Diag.event(io.github.artcraftandroid.pdfcraft.engine.DiagArea.Viewer, "spread_shown", "doc" to doc.diagNumber, "spread" to shown, "chosen" to vm.spreadPref, "auto" to vm.spreadAuto, "width_dp" to windowWidthDp, "height_dp" to windowHeightDp)
+        io.github.artcraftandroid.pdfcraft.engine.Diag.event(io.github.artcraftandroid.pdfcraft.engine.DiagArea.Viewer, "spread_shown", "doc" to doc.diagNumber, "spread" to shown, "chosen" to vm.settings.spreadPref, "auto" to vm.settings.spreadAuto, "width_dp" to windowWidthDp, "height_dp" to windowHeightDp)
         doc.viewer.showSpread(shown)
     }
 
     // the reader's saved reading colours, once the engine has the whole document
     LaunchedEffect(doc, doc.info.preparing) {
-        if (!doc.info.preparing) vm.applySavedReadingColors(doc)
+        if (!doc.info.preparing) vm.settings.applySavedReadingColors(doc)
     }
 
     LaunchedEffect(doc) {
@@ -234,7 +234,7 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
     // The hint a tool shows when it starts.
     var hint by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(ctl.tool, ctl.markup) {
-        hint = toolHint(ctl.tool, ctl.markup, doc)?.takeIf { vm.toolPrefs.takeToolHint("${ctl.tool}.${if (ctl.tool == ViewerTool.Markup) ctl.markup else ""}") }
+        hint = toolHint(ctl.tool, ctl.markup, doc)?.takeIf { vm.settings.toolPrefs.takeToolHint("${ctl.tool}.${if (ctl.tool == ViewerTool.Markup) ctl.markup else ""}") }
         if (hint != null) {
             delay(2500)
             hint = null
@@ -272,7 +272,7 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
         ),
     ) {
         val gesturesForTool = ctl.tool == ViewerTool.None || ctl.tool == ViewerTool.Edit
-        if (vm.readingMode) ReadingModeContent(
+        if (vm.settings.readingMode) ReadingModeContent(
             vm, doc,
             // the text stays put when the bars hide, as the pages do
             top = with(density) { (statusPx + topPx).toDp() },
@@ -333,14 +333,14 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
                 if (at != null && (gesturesForTool && vm.commenting.tapComment(doc, at))) Unit
                 else if (at != null && gesturesForTool) scope.launch {
                     val slop = 12f / doc.viewer.pixelsPerPoint(at.page).coerceAtLeast(0.1f) * density.density
-                    if (!selection.selectWordAt(at, slop) && ctl.tool == ViewerTool.None && !vm.readingMode) vm.editor.longPressPage(doc, at, p)
+                    if (!selection.selectWordAt(at, slop) && ctl.tool == ViewerTool.None && !vm.settings.readingMode) vm.editor.longPressPage(doc, at, p)
                 }
             },
             onLongPress = { p, at ->
                 if (at != null) scope.launch {
                     val slop = 12f / doc.viewer.pixelsPerPoint(at.page).coerceAtLeast(0.1f) * density.density
                     // no word there: a picture, or the page menu, as the reference's long press
-                    if (!selection.selectWordAt(at, slop) && ctl.tool == ViewerTool.None && !vm.readingMode) vm.editor.longPressPage(doc, at, p)
+                    if (!selection.selectWordAt(at, slop) && ctl.tool == ViewerTool.None && !vm.settings.readingMode) vm.editor.longPressPage(doc, at, p)
                 }
             },
             overlay = {
@@ -372,7 +372,7 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
         }
 
         // Tape and quiz (#143): what covers the pages, for TalkBack, and their bars.
-        if (!vm.readingMode) StudyLayer(vm, doc)
+        if (!vm.settings.readingMode) StudyLayer(vm, doc)
 
         // The active tool takes the touches over the pages.
         ToolLayer(vm, doc)
@@ -391,7 +391,7 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
 
         // Scrubber and page pill (continuous, three pages or more).
         Box(Modifier.fillMaxSize().then(cutoutSides)) {
-            if (vm.readingMode || ctl.presenting) {
+            if (vm.settings.readingMode || ctl.presenting) {
                 Unit
             } else if (doc.pageCount >= 3 && doc.viewer.mode == PageMode.SinglePage) {
                 HorizontalScrubber(
@@ -412,20 +412,20 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
                 )
             }
 
-            if (!vm.readingMode && !ctl.searching && ctl.tool == ViewerTool.None) JumpChip(
+            if (!vm.settings.readingMode && !ctl.searching && ctl.tool == ViewerTool.None) JumpChip(
                 doc, visible = jumpChipVisible,
                 bottom = with(density) { doc.viewer.padBottom.toDp() },
             )
-            if (!vm.readingMode && !ctl.searching && ctl.sheet != ViewerSheet.Comments) CommentFilterChip(doc, top = with(density) { doc.viewer.padTop.toDp() })
+            if (!vm.settings.readingMode && !ctl.searching && ctl.sheet != ViewerSheet.Comments) CommentFilterChip(doc, top = with(density) { doc.viewer.padTop.toDp() })
             LectureBar(vm, doc, bottom = with(density) { doc.viewer.padBottom.toDp() }, modifier = Modifier.align(Alignment.BottomCenter))
-            if (!vm.readingMode) FocusTimerPill(
+            if (!vm.settings.readingMode) FocusTimerPill(
                 vm, top = with(density) { doc.viewer.padTop.toDp() },
                 onOpen = { ctl.sheet = ViewerSheet.FocusTimer },
                 modifier = Modifier.align(Alignment.TopStart),
             )
 
             // Draw mode on the last page: add a page with the notebook's template (blank otherwise)
-            if (ctl.tool == ViewerTool.Draw && !vm.readingMode && doc.writable && doc.viewer.currentPage == doc.pageCount - 1) {
+            if (ctl.tool == ViewerTool.Draw && !vm.settings.readingMode && doc.writable && doc.viewer.currentPage == doc.pageCount - 1) {
                 AddPageHandle(
                     bottom = maxOf(96.dp, with(density) { doc.viewer.padBottom.toDp() } + 12.dp),
                     onClick = { vm.study.insertNotebookPage(doc, null) },
@@ -433,14 +433,14 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
                 )
             }
 
-            if (desktop && !vm.readingMode) ZoomButtons(
+            if (desktop && !vm.settings.readingMode) ZoomButtons(
                 doc.viewer,
                 visible = ctl.tool == ViewerTool.None && !ctl.searching && (ctl.barsVisible || zoomButtons.showing),
                 // above the bottom bar when it shows
                 bottom = maxOf(122.dp, with(density) { doc.viewer.padBottom.toDp() } + 12.dp),
                 onHover = { if (!ctl.barsVisible) zoomButtons.poke() },
                 // Left-handed: the physical right corner, away from the writing hand, in any language (#156).
-                modifier = Modifier.align(if (vm.toolPrefs.leftHanded) androidx.compose.ui.AbsoluteAlignment.BottomRight else Alignment.BottomEnd),
+                modifier = Modifier.align(if (vm.settings.toolPrefs.leftHanded) androidx.compose.ui.AbsoluteAlignment.BottomRight else Alignment.BottomEnd),
             )
         }
 
@@ -449,7 +449,7 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
         // the file's name in a translucent white chip under the top bar for a moment after it opens
         // (80 % white: grey over the desk, near-white over a page, as the reference's)
         // the first document opened shows the first-run tips once (#202)
-        LaunchedEffect(doc) { if (vm.toolPrefs.takeFirstRunTips()) vm.tipsOpen = true }
+        LaunchedEffect(doc) { if (vm.settings.toolPrefs.takeFirstRunTips()) vm.tipsOpen = true }
         var nameChip by remember(doc) { mutableStateOf(false) }
         LaunchedEffect(doc) {
             delay(900)
@@ -531,7 +531,7 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
                             readingAloud = vm.readAloud != null,
                             onReadAloud = { vm.readAloud?.stop() ?: vm.startReadAloud(doc) },
                             // Reading Mode has no search, as the reference's bar shows
-                            onSearch = if (vm.readingMode) null else ({
+                            onSearch = if (vm.settings.readingMode) null else ({
                                 selection.clear()
                                 ctl.searching = true
                                 ctl.sheet = ViewerSheet.None
@@ -562,7 +562,7 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
             ((config.screenHeightDp.dp.toPx() - doc.viewer.padTop -
                 navPx - 400.dp.toPx()) / 2f).coerceAtLeast(0f)
         }
-        val prefsRail = vm.quickToolbar
+        val prefsRail = vm.settings.quickToolbar
         val storedYpx = with(density) { prefsRail.railYOffsetDp.dp.toPx() }
         val railXpx = (
             if (prefsRail.railRight) viewportWidthPx - railWidthPx else 0f
@@ -572,7 +572,7 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
         // Optional Xodo-like dock: same saved shortcuts, accessible on left or right.
         // The normal bottom sub-toolbar remains available for active tools.
         AnimatedVisibility(
-            visible = railVisible && ctl.barsVisible && !ctl.searching && !vm.readingMode &&
+            visible = railVisible && ctl.barsVisible && !ctl.searching && !vm.settings.readingMode &&
                 vm.readAloud == null && vm.editor.fieldActions == null,
             // Physical sides, not start/end: the rail's side follows the writing hand, which does
             // not change with an Arabic (right-to-left) interface (#156). Drags are physical too.
@@ -584,10 +584,10 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
                 .padding(
                     top = with(density) { doc.viewer.padTop.toDp() },
                     bottom = with(density) { navPx.toDp() + 8.dp },
-                ).then(cutoutSides).palmGuardedTaps(ctl, vm.toolPrefs),
+                ).then(cutoutSides).palmGuardedTaps(ctl, vm.settings.toolPrefs),
         ) {
             VerticalQuickToolbar(
-                tools = vm.quickToolbar.bar,
+                tools = vm.settings.quickToolbar.bar,
                 onTool = { vm.runQuickTool(doc, it) },
                 onMoreTools = { ctl.sheet = if (ctl.sheet == ViewerSheet.MoreTools) ViewerSheet.None else ViewerSheet.MoreTools },
                 moreToolsOpen = ctl.sheet == ViewerSheet.MoreTools,
@@ -617,19 +617,19 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
                 ReadOnlyNotice(onSaveCopy = { vm.saveCopyAs(doc) }, onClose = { doc.readOnlyNoticeClosed = true })
             }
             AnimatedVisibility(
-                ctl.barsVisible && !ctl.searching && !vm.readingMode && (!railVisible || ctl.tool != ViewerTool.None),
+                ctl.barsVisible && !ctl.searching && !vm.settings.readingMode && (!railVisible || ctl.tool != ViewerTool.None),
                 enter = slideInVertically(tween(PdfMotion.BARS_MS)) { it } + fadeIn(tween(PdfMotion.BARS_MS)),
                 exit = slideOutVertically(tween(PdfMotion.BARS_MS)) { it } + fadeOut(tween(PdfMotion.BARS_MS)),
             ) {
                 Column(barSides) {
                     if (ctl.tool == ViewerTool.None) {
                         QuickToolbar(
-                            tools = vm.quickToolbar.bar,
+                            tools = vm.settings.quickToolbar.bar,
                             onTool = { vm.runQuickTool(doc, it) },
                             onMoreTools = { ctl.sheet = if (ctl.sheet == ViewerSheet.MoreTools) ViewerSheet.None else ViewerSheet.MoreTools },
                             moreToolsOpen = ctl.sheet == ViewerSheet.MoreTools,
                             chips = listOf(
-                                QuickChip(stringResource(if (vm.isStarred(doc)) R.string.viewer_unstar_file else R.string.viewer_star_file), LucideIcons.Star, ToolHues.combine) { vm.toggleStar(doc) },
+                                QuickChip(stringResource(if (vm.settings.isStarred(doc)) R.string.viewer_unstar_file else R.string.viewer_star_file), LucideIcons.Star, ToolHues.combine) { vm.settings.toggleStar(doc) },
                                 QuickChip(stringResource(R.string.common_tool_read_aloud), LucideIcons.Headphones, ToolHues.read) { vm.startReadAloud(doc) },
                                 QuickChip(stringResource(R.string.common_tool_create_pdf), QuickTool.Create.icon, ToolHues.create) { vm.runQuickTool(doc, QuickTool.Create) },
                                 QuickChip(stringResource(R.string.common_tool_organize), QuickTool.Organize.icon, ToolHues.organize) { vm.runQuickTool(doc, QuickTool.Organize) },

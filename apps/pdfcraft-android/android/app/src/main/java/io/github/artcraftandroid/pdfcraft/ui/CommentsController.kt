@@ -49,7 +49,7 @@ class CommentsController internal constructor(private val vm: AppViewModel) {
     /** A reply being written to a comment. */
     var replyPrompt by mutableStateOf<ReplyPrompt?>(null)
 
-    internal val author: String? get() = vm.toolPrefs.author.ifBlank { null }
+    internal val author: String? get() = vm.settings.toolPrefs.author.ifBlank { null }
 
     /** A pending selection-menu annotation, rendered until the native refresh settles. */
     var pendingMarkupPreview by mutableStateOf<PendingMarkupPreview?>(null)
@@ -111,7 +111,7 @@ class CommentsController internal constructor(private val vm: AppViewModel) {
         io.github.artcraftandroid.pdfcraft.ui.viewer.MarkupDiag.textEdit(doc, "replace", rects.size)
         vm.runTool(doc, "comment_add", mapOf(
             "page" to page + 1, "type" to "replace", "quads" to quads, "contents" to replacement,
-            "color" to vm.toolPrefs.color(StyledTool.Strikethrough).hex(), "author" to author,
+            "color" to vm.settings.toolPrefs.color(StyledTool.Strikethrough).hex(), "author" to author,
         ))
     }
 
@@ -122,7 +122,7 @@ class CommentsController internal constructor(private val vm: AppViewModel) {
         io.github.artcraftandroid.pdfcraft.ui.viewer.MarkupDiag.textEdit(doc, "insert", rects.size)
         vm.runTool(doc, "comment_add", mapOf(
             "page" to page + 1, "type" to "caret", "at" to listOf(last[2].toDouble(), last[3].toDouble()), "contents" to inserted,
-            "color" to vm.toolPrefs.color(StyledTool.Note).hex(), "author" to author,
+            "color" to vm.settings.toolPrefs.color(StyledTool.Note).hex(), "author" to author,
         ))
     }
 
@@ -151,7 +151,7 @@ class CommentsController internal constructor(private val vm: AppViewModel) {
         }
         val sel = prompt.selection
         if (sel != null) {
-            addMarkup(doc, TextMarkup.Highlight, sel.range.page.toInt(), sel.rects, vm.toolPrefs.color(StyledTool.Highlight), vm.toolPrefs.opacity(StyledTool.Highlight), text)
+            addMarkup(doc, TextMarkup.Highlight, sel.range.page.toInt(), sel.rects, vm.settings.toolPrefs.color(StyledTool.Highlight), vm.settings.toolPrefs.opacity(StyledTool.Highlight), text)
             doc.selection.clear()
             return
         }
@@ -160,7 +160,7 @@ class CommentsController internal constructor(private val vm: AppViewModel) {
             doc, "comment_add",
             mapOf(
                 "page" to at.page + 1, "type" to "note", "at" to listOf(at.x.toDouble(), at.y.toDouble()),
-                "contents" to text, "color" to vm.toolPrefs.color(StyledTool.Note).hex(), "author" to author,
+                "contents" to text, "color" to vm.settings.toolPrefs.color(StyledTool.Note).hex(), "author" to author,
             ),
         )
     }
@@ -170,7 +170,7 @@ class CommentsController internal constructor(private val vm: AppViewModel) {
         textPrompt = null
         if (text.isBlank()) return
         val at = prompt.at
-        val size = vm.toolPrefs.textSize
+        val size = vm.settings.toolPrefs.textSize
         val page = prompt.doc.info.pages.getOrNull(at.page) ?: return
         // as the reference: lines that wrap where the page ends become real line breaks, and the box
         // is as wide as its longest line (measured as the engine draws it, so it doesn't wrap again)
@@ -184,7 +184,7 @@ class CommentsController internal constructor(private val vm: AppViewModel) {
                     mapOf(
                         "page" to at.page + 1, "type" to "callout", "rect" to box.map { it.toDouble() },
                         "to" to listOf(at.x.toDouble(), at.y.toDouble()), "contents" to lines.joinToString("\n"),
-                        "color" to vm.toolPrefs.color(StyledTool.FreeText).hex(), "font_size" to size.toDouble(), "author" to author,
+                        "color" to vm.settings.toolPrefs.color(StyledTool.FreeText).hex(), "font_size" to size.toDouble(), "author" to author,
                     ),
                 )
                 return
@@ -198,7 +198,7 @@ class CommentsController internal constructor(private val vm: AppViewModel) {
             prompt.doc, "comment_add",
             mapOf(
                 "page" to at.page + 1, "type" to "textbox", "rect" to listOf(at.x, at.y, x1, y1).map { it.toDouble() },
-                "contents" to wrapped, "color" to vm.toolPrefs.color(StyledTool.FreeText).hex(), "font_size" to size.toDouble(), "author" to author,
+                "contents" to wrapped, "color" to vm.settings.toolPrefs.color(StyledTool.FreeText).hex(), "font_size" to size.toDouble(), "author" to author,
             ),
         )
     }
@@ -263,7 +263,7 @@ class CommentsController internal constructor(private val vm: AppViewModel) {
             prompt.doc, "comment_add",
             mapOf(
                 "page" to at.page + 1, "type" to "sound", "at" to listOf(at.x.toDouble(), at.y.toDouble()),
-                "path" to file.absolutePath, "color" to vm.toolPrefs.color(StyledTool.Note).hex(), "author" to author,
+                "path" to file.absolutePath, "color" to vm.settings.toolPrefs.color(StyledTool.Note).hex(), "author" to author,
             ),
             // The recording is in the PDF or was refused: either way the cache copy goes.
             onSettled = { file.delete() },

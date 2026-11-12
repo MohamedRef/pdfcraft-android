@@ -497,7 +497,7 @@ fun FileSheet(vm: AppViewModel, r: FileRow, recent: Boolean, onDismiss: () -> Un
             SheetRow(LucideIcons.Share2, stringResource(R.string.common_share), { act { vm.shareFile(r) } })
             SheetRow(LucideIcons.Printer, stringResource(R.string.home_print), { act { vm.printFile(r) } })
             SheetRow(LucideIcons.ExternalLink, stringResource(R.string.home_open_with), { act { vm.openWith(r) } })
-            SheetRow(LucideIcons.Star, stringResource(if (r.starred) R.string.home_unstar else R.string.home_star), { act { vm.setStarred(r.key, !r.starred) } })
+            SheetRow(LucideIcons.Star, stringResource(if (r.starred) R.string.home_unstar else R.string.home_star), { act { vm.settings.setStarred(r.key, !r.starred) } })
             if (vm.study.libraryData.item(r.key) == null) SheetRow(LucideIcons.Layers, stringResource(R.string.library_add_to), { act { vm.study.addToLibrary(r.key, r.name) } })
             SheetRow(LucideIcons.Pencil, stringResource(R.string.common_rename), { renaming = true })
             SheetRow(LucideIcons.Copy, stringResource(R.string.home_duplicate), { act { vm.duplicateFile(r) } })

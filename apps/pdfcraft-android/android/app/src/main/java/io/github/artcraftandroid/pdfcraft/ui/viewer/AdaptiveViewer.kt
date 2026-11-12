@@ -66,7 +66,7 @@ fun AdaptiveViewer(vm: AppViewModel, doc: OpenDocument) {
         isDesktop(context, configuration),
     )
     var railOpen by remember(doc) { mutableStateOf(true) }
-    val showRail = wide && doc.pageCount >= 2 && !vm.readingMode && !doc.controller.pagesOpen
+    val showRail = wide && doc.pageCount >= 2 && !vm.settings.readingMode && !doc.controller.pagesOpen
     // Keep ViewerScreen at one composition call site across breakpoint changes. Moving it
     // between compact/expanded branches discards remembered uncommitted ink and tool state.
     Row(Modifier.fillMaxSize()) {

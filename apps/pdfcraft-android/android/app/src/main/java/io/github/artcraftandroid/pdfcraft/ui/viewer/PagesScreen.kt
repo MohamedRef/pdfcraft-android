@@ -133,7 +133,7 @@ fun PagesScreen(vm: AppViewModel, doc: OpenDocument, onClose: () -> Unit) {
     BackHandler(onBack = ::back)
     // holding and dragging moves pages, which nothing on screen shows: said the first few times (#199)
     LaunchedEffect(Unit) {
-        if (exporting == null && doc.info.allowsAssembly && doc.pageCount > 1 && vm.toolPrefs.takeToolHint("pages.drag")) vm.tell(text(R.string.pages_drag_hint))
+        if (exporting == null && doc.info.allowsAssembly && doc.pageCount > 1 && vm.settings.toolPrefs.takeToolHint("pages.drag")) vm.tell(text(R.string.pages_drag_hint))
     }
     // organizing starts with the page being read ticked, as the reference's does
     LaunchedEffect(organizing) { if (organizing && selected.isEmpty()) selected[doc.viewer.currentPage] = true }

@@ -102,7 +102,7 @@ fun AppRoot(vm: AppViewModel, onBrowse: () -> Unit, onPickSignatureImage: () -> 
     // them, on black, as the reference's does. With Extra Features' status bar in documents the
     // page goes under the camera too, as it does upright (#45): the viewer is laid out full width
     // and keeps its bars clear of the camera itself.
-    val fullWidthViewer = doc != null && vm.statusBarInDocuments
+    val fullWidthViewer = doc != null && vm.settings.statusBarInDocuments
     Box(Modifier.fillMaxSize().background(Color.Black)) {
         if (fullWidthViewer && doc != null) {
             Box(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.navigationBars.only(WindowInsetsSides.Horizontal))) { AdaptiveViewer(vm, doc) }
@@ -147,7 +147,7 @@ fun AppRoot(vm: AppViewModel, onBrowse: () -> Unit, onPickSignatureImage: () -> 
                 var name by remember { mutableStateOf("") }
                 PdfDialog(
                     onDismiss = { vm.authorPrompt = false }, title = stringResource(R.string.home_author_title),
-                    confirm = stringResource(R.string.common_save), onConfirm = { vm.toolPrefs.author = name.trim(); vm.authorPrompt = false; vm.prefsChanged++ },
+                    confirm = stringResource(R.string.common_save), onConfirm = { vm.settings.toolPrefs.author = name.trim(); vm.authorPrompt = false; vm.prefsChanged++ },
                     dismiss = stringResource(R.string.root_skip),
                 ) {
                     Text(stringResource(R.string.root_author_prompt_body), color = c.text, fontSize = 14.sp)
@@ -192,14 +192,14 @@ fun AppRoot(vm: AppViewModel, onBrowse: () -> Unit, onPickSignatureImage: () -> 
                     Text(message, color = c.text, fontSize = 14.sp)
                 }
             }
-            vm.confirmDeleteAllBookmarks?.let { d ->
+            vm.settings.confirmDeleteAllBookmarks?.let { d ->
                 PdfDialog(
-                    onDismiss = { vm.confirmDeleteAllBookmarks = null }, title = stringResource(R.string.root_delete_bookmarks_title),
-                    confirm = stringResource(R.string.root_delete_all), onConfirm = { vm.confirmDeleteAllBookmarks = null; vm.deleteAllBookmarks(d) }, destructive = true,
+                    onDismiss = { vm.settings.confirmDeleteAllBookmarks = null }, title = stringResource(R.string.root_delete_bookmarks_title),
+                    confirm = stringResource(R.string.root_delete_all), onConfirm = { vm.settings.confirmDeleteAllBookmarks = null; vm.settings.deleteAllBookmarks(d) }, destructive = true,
                 ) { Text(stringResource(R.string.root_delete_bookmarks_body), color = c.text, fontSize = 14.sp) }
             }
-            vm.readingModeBlocked?.let {
-                PdfDialog(onDismiss = { vm.readingModeBlocked = null }, title = stringResource(R.string.root_reading_mode_title), confirm = stringResource(R.string.common_ok), onConfirm = { vm.readingModeBlocked = null }, dismiss = null) {
+            vm.settings.readingModeBlocked?.let {
+                PdfDialog(onDismiss = { vm.settings.readingModeBlocked = null }, title = stringResource(R.string.root_reading_mode_title), confirm = stringResource(R.string.common_ok), onConfirm = { vm.settings.readingModeBlocked = null }, dismiss = null) {
                     Text(stringResource(R.string.root_reading_mode_body), color = c.text, fontSize = 14.sp)
                 }
             }
