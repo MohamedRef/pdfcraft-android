@@ -4,6 +4,13 @@ import io.github.artcraftandroid.pdfcraft.core.CommentInfo
 import io.github.artcraftandroid.pdfcraft.ui.viewer.QuizSession
 import io.github.artcraftandroid.pdfcraft.ui.viewer.StudyState
 import io.github.artcraftandroid.pdfcraft.ui.viewer.TAPE_MARK
+import io.github.artcraftandroid.pdfcraft.ui.viewer.TapePattern
+import io.github.artcraftandroid.pdfcraft.ui.viewer.freehandTapeArgs
+import io.github.artcraftandroid.pdfcraft.ui.viewer.freehandTapeOutline
+import io.github.artcraftandroid.pdfcraft.ui.viewer.insidePolygon
+import io.github.artcraftandroid.pdfcraft.ui.viewer.tapeContents
+import io.github.artcraftandroid.pdfcraft.ui.viewer.tapePatternOf
+import io.github.artcraftandroid.pdfcraft.ui.viewer.tapesOf
 import io.github.artcraftandroid.pdfcraft.ui.viewer.isTape
 import io.github.artcraftandroid.pdfcraft.ui.viewer.maskAt
 import io.github.artcraftandroid.pdfcraft.ui.viewer.quizItems
@@ -19,10 +26,12 @@ import org.junit.Test
 class StudyTest {
     private var next = 0
 
-    private fun comment(subtype: String, page: Int = 0, y: Float = 0f, contents: String? = null, opacity: Float = 1f, replyTo: String? = null) = CommentInfo(
+    private fun comment(
+        subtype: String, page: Int = 0, y: Float = 0f, contents: String? = null, opacity: Float = 1f, replyTo: String? = null, points: List<Float> = emptyList(),
+    ) = CommentInfo(
         page = page.toUInt(), index = (next++).toUInt(), subtype = subtype, kind = subtype, author = "Ann", contents = contents,
         modified = null, rect = listOf(10f, y, 100f, y + 12f), color = 0xE0A526u, name = "c$next", replyTo = replyTo, state = null,
-        locked = false, fillSign = false, opacity = opacity, width = null, hidden = false,
+        locked = false, fillSign = false, opacity = opacity, width = null, hidden = false, points = points,
     )
 
     @Test
@@ -97,5 +106,44 @@ class StudyTest {
         assertTrue(s.isLifted("a"))
         s.allLifted = true
         assertTrue(s.isLifted("b"))
+    }
+
+    @Test
+    fun tapePatternsSayWhatTheyAreInTheMark() {
+        assertEquals(TAPE_MARK, tapeContents(TapePattern.Stripes))
+        for (p in TapePattern.entries) assertEquals(p, tapePatternOf(tapeContents(p)))
+        assertEquals("PdfCraft tape [dots]", tapeContents(TapePattern.Dots))
+        // a pattern a newer version made reads as stripes; other text is not tape
+        assertEquals(TapePattern.Stripes, tapePatternOf("$TAPE_MARK [zigzag]"))
+        assertNull(tapePatternOf("PdfCraft tapes"))
+        assertNull(tapePatternOf(null))
+        assertTrue(comment("Square", contents = tapeContents(TapePattern.Grid), opacity = 0f).isTape())
+        assertTrue(comment("Polygon", contents = TAPE_MARK, opacity = 0f).isTape())
+        assertFalse(comment("Ink", contents = TAPE_MARK, opacity = 0f).isTape())
+    }
+
+    @Test
+    fun freehandTapeFollowsTheDrag() {
+        // a level drag: a band 9 points either side
+        val outline = freehandTapeOutline(floatArrayOf(10f, 50f, 10.5f, 50f, 40f, 50f, 80f, 50f))!!
+        assertEquals(12, outline.size)
+        assertEquals(listOf(10f, 59f, 40f, 59f, 80f, 59f, 80f, 41f, 40f, 41f, 10f, 41f), outline.toList())
+        assertTrue(insidePolygon(outline.toList(), 45f, 50f))
+        assertFalse(insidePolygon(outline.toList(), 45f, 70f))
+        assertNull("too short", freehandTapeOutline(floatArrayOf(10f, 10f, 14f, 10f)))
+        assertNull(freehandTapeOutline(floatArrayOf(10f, Float.NaN, 40f, 10f)))
+        // a long drag is thinned
+        val long = FloatArray(2000) { if (it % 2 == 0) it.toFloat() else 100f }
+        assertEquals(240 * 2, freehandTapeOutline(long)!!.size)
+        val args = freehandTapeArgs(0, outline, 0x4F8FCF, "Ann", TapePattern.Dots)
+        assertEquals("polygon", args["type"])
+        assertEquals("PdfCraft tape [dots]", args["contents"])
+        assertEquals(listOf(10.0, 59.0), (args["points"] as List<*>).first())
+        // a tap inside the band lifts it; one inside its box but off the band doesn't
+        val diagonal = freehandTapeOutline(floatArrayOf(0f, 0f, 100f, 100f))!!.toList()
+        val tape = tapesOf(listOf(comment("Polygon", y = 0f, contents = TAPE_MARK, opacity = 0f, points = diagonal))).single()
+        val masks = listOf(tape.copy(rect = listOf(-10f, -10f, 110f, 110f)))
+        assertEquals(tape.key, maskAt(masks, 0, 50f, 50f)?.key)
+        assertNull(maskAt(masks, 0, 90f, 10f))
     }
 }

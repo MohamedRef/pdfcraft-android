@@ -1260,6 +1260,20 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                     val copy = preparedCopy(doc, unlock = false, clean = true) ?: throw IllegalStateException(text(R.string.msg_clean_copy_failed))
                     copy to doc.name
                 }
+                io.github.artcraftandroid.pdfcraft.ui.viewer.ShareChoice.Tape -> {
+                    // tape made opaque on a "Tape" layer, in a temporary copy: the open document keeps it invisible (#350)
+                    val out = tempFile("pdf")
+                    val start = android.os.SystemClock.elapsedRealtime()
+                    val copy = eng.tool("doc_open", mapOf("path" to doc.file.absolutePath, "password" to doc.password)).optLong("doc")
+                    try {
+                        val n = io.github.artcraftandroid.pdfcraft.ui.viewer.showTapeIn(eng, copy.toULong())
+                        eng.tool("doc_save", mapOf("doc" to copy, "path" to out.absolutePath, "full" to true))
+                        io.github.artcraftandroid.pdfcraft.ui.viewer.MarkupDiag.tapeShare(doc, n, android.os.SystemClock.elapsedRealtime() - start)
+                    } finally {
+                        runCatching { eng.tool("doc_close", mapOf("doc" to copy, "discard_changes" to true)) }
+                    }
+                    out to text(R.string.share_name_tape, doc.title)
+                }
                 io.github.artcraftandroid.pdfcraft.ui.viewer.ShareChoice.Page -> {
                     val out = tempFile("pdf")
                     eng.tool("page_extract", mapOf("doc" to doc.id, "pages" to listOf(page + 1), "out" to out.absolutePath))

@@ -13180,3 +13180,43 @@ fn a_new_link_to_another_pdf_is_a_relative_gotor_that_link_open_follows() {
     assert!(matches!(&e, ToolError::InvalidArgs(m) if m.contains("zoom")), "{e:?}");
     assert_eq!(ok(&mut b, "link_list", json!({ "doc": reopened }))["count"], 2, "refused links are not added");
 }
+
+/// Android adaptation (#350): comments put on a named layer carry `/OC` to one optional content
+/// group, listed (and on) in `/OCProperties`, so a reader's Layers panel toggles them; a second
+/// call reuses the group, `layer_set` switches it, and undo takes it all back.
+#[test]
+fn comments_put_on_a_layer_share_one_optional_content_group() {
+    let (_base, root) = sandbox("comments-layer");
+    std::fs::write(root.join("tape.pdf"), fixture(2)).unwrap();
+    let mut a = auto(&root);
+    let doc = ok(&mut a, "doc_open", json!({ "path": "tape.pdf" }))["doc"].as_u64().unwrap();
+    for (page, rect) in [(1, [10, 10, 200, 200]), (1, [10, 300, 60, 340]), (2, [10, 10, 90, 40])] {
+        ok(&mut a, "comment_add", json!({ "doc": doc, "page": page, "type": "rectangle", "rect": rect, "fill": "#000000" }));
+    }
+    let put = ok(&mut a, "comments_to_layer", json!({ "doc": doc, "page": 1, "comments": [1, 2, 2], "layer": " Tape " }));
+    assert_eq!((&put["changed"], &put["layer"]), (&json!(2), &json!("Tape")));
+    ok(&mut a, "comments_to_layer", json!({ "doc": doc, "page": 2, "comments": [1], "layer": "Tape" }));
+    let info = ok(&mut a, "doc_info", json!({ "doc": doc }));
+    assert_eq!(info["layers"], json!([{ "name": "Tape", "visible": true, "initial": true }]), "one layer for both calls");
+
+    // the Layers panel's switch
+    let hidden = ok(&mut a, "layer_set", json!({ "doc": doc, "layer": "Tape", "visible": false }));
+    assert_eq!(hidden["layers"], json!([{ "name": "Tape", "visible": false }]));
+    ok(&mut a, "layer_set", json!({ "doc": doc, "layer": "Tape", "visible": true }));
+
+    ok(&mut a, "doc_save", json!({ "doc": doc }));
+    let text = String::from_utf8_lossy(&std::fs::read(root.join("tape.pdf")).unwrap()).into_owned();
+    assert!(text.contains("/OCProperties") && text.contains("/OCG") && text.matches("/OC ").count() >= 3, "{text}");
+
+    for (args, reason) in [
+        (json!({ "doc": doc, "page": 1, "comments": [9], "layer": "Tape" }), "no comment 9"),
+        (json!({ "doc": doc, "page": 1, "comments": [1], "layer": "   " }), "layer name"),
+        (json!({ "doc": doc, "page": 1, "comments": [], "layer": "Tape" }), "1 to 1000"),
+    ] {
+        let e = err(&mut a, "comments_to_layer", args);
+        assert!(matches!(&e, ToolError::InvalidArgs(m) | ToolError::Failed(m) if m.contains(reason)), "{e:?}");
+    }
+    ok(&mut a, "edit_undo", json!({ "doc": doc }));
+    ok(&mut a, "edit_undo", json!({ "doc": doc }));
+    assert_eq!(ok(&mut a, "doc_info", json!({ "doc": doc }))["layers"], json!([]), "undo removes the layer");
+}

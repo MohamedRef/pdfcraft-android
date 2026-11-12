@@ -35,6 +35,8 @@
     <string name="share_choice_images">Share pages as images</string>
     <!-- Translator note: file name of a shared flattened copy; %1$s is the document's title. -->
     <string name="share_name_flattened">%1$s (flattened).pdf</string>
+    <string name="share_choice_tape">Share with tape showing (a \"Tape\" layer readers can hide)</string>
+    <string name="share_name_tape">%1$s (with tape).pdf</string>
     <!-- Translator note: file name of one shared page; %1$s is the title, %2$d the page number. -->
     <string name="share_name_page">%1$s (page %2$d).pdf</string>
     <string name="common_open">Open</string>
@@ -2532,6 +2534,13 @@
     <string name="study_explain">Cover answers with tape and tap to check yourself, or let a quiz cover your highlights. Lifting tape and quizzes don\'t change the file; other apps show the page without tape.</string>
     <string name="study_draw_tape">Draw tape</string>
     <string name="study_tape_hint">Drag over what to cover</string>
+    <string name="study_tape_hint_freehand">Drag along the line to cover</string>
+    <string name="study_tape_box">Box</string>
+    <string name="study_tape_freehand">Freehand</string>
+    <string name="study_pattern_stripes">Striped tape</string>
+    <string name="study_pattern_dots">Dotted tape</string>
+    <string name="study_pattern_grid">Grid tape</string>
+    <string name="study_pattern_plain">Plain tape</string>
     <string name="study_color_amber">Amber tape</string>
     <string name="study_color_blue">Blue tape</string>
     <string name="study_color_lilac">Lilac tape</string>

@@ -213,6 +213,7 @@ impl Edit {
             Edit::AddCustomStamp { .. } => Label::of("Add stamp"),
             Edit::AddModel3d { .. } => Label::of("Add 3D model"),
             Edit::DeleteAnnotation { .. } => Label::of("Delete comment"),
+            Edit::AnnotationsToLayer { .. } => Label::of("Put comments on a layer"),
             Edit::PasteComments { .. } => Label::of("Paste comments"),
             Edit::SetAnnotationContents { .. } => Label::of("Edit comment"),
             Edit::ReplyToAnnotation { .. } => Label::of("Reply"),

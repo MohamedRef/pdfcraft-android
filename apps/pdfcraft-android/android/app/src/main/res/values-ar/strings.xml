@@ -19,6 +19,8 @@
     <string name="share_choice_page">مشاركة هذه الصفحة</string>
     <string name="share_choice_images">مشاركة الصفحات كصور</string>
     <string name="share_name_flattened">%1$s (مدمج).pdf</string>
+    <string name="share_choice_tape">مشاركة مع إظهار الشريط (طبقة \"Tape\" يمكن إخفاؤها في القارئ)</string>
+    <string name="share_name_tape">%1$s (مع الشريط).pdf</string>
     <string name="share_name_page">%1$s (صفحة %2$d).pdf</string>
     <string name="common_open">فتح</string>
     <string name="common_create">إنشاء</string>
@@ -1870,6 +1872,13 @@
     <string name="study_explain">غطِّ الإجابات بشريط واضغط عليها لتختبر نفسك، أو دع الاختبار يغطي التظليلات. رفع الشريط والاختبارات لا يغيّران الملف، والتطبيقات الأخرى تعرض الصفحة بدون شريط.</string>
     <string name="study_draw_tape">رسم شريط</string>
     <string name="study_tape_hint">اسحب فوق ما تريد تغطيته</string>
+    <string name="study_tape_hint_freehand">اسحب على السطر المراد تغطيته</string>
+    <string name="study_tape_box">مربع</string>
+    <string name="study_tape_freehand">حر</string>
+    <string name="study_pattern_stripes">شريط مخطط</string>
+    <string name="study_pattern_dots">شريط منقط</string>
+    <string name="study_pattern_grid">شريط مربعات</string>
+    <string name="study_pattern_plain">شريط سادة</string>
     <string name="study_color_amber">شريط كهرماني</string>
     <string name="study_color_blue">شريط أزرق</string>
     <string name="study_color_lilac">شريط بنفسجي</string>
