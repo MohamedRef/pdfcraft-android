@@ -35,6 +35,7 @@ a phone yet.** Every number in the scanner's documents was measured on a desktop
 | #304 | "Max quality" (DocRes) | **Not started** | | Feasibility first, as the issue says |
 | #305, #306 | Research: moiré; fingers, glare | **Not started** | | |
 | #307 | ML Kit as a second engine | **Dropped** | | The owner decided on 12 November 2026: nothing from Google in the app or in the scanner's work, so the app keeps no proprietary dependency and stays buildable by F-Droid. Do not add ML Kit or compare against Google's scanner |
+| #424 | Strength slider in Clean scan with document types on | Fixed in code, not run on a phone | #424 PR | The slider's strength now wins over the document type's, the slider starts from the type's, and the sharpening option scales the type's. Testing option `pageStrength` (off is the old rule). How it looks on the owner's photos and phone |
 | #339 | Pages turned upright | Core done | #370 | The "Turned upright · Undo" chip, a rotate button, the multi-page rule, a switch in ordinary settings |
 
 "Core done" means the code and its tests are merged and the issue's acceptance items that need
