@@ -309,15 +309,20 @@ fn apply_appearance(doc: &mut Document, r: ObjRef, d: &Dict, built: Built) -> Re
 /// A content edit (moving a paragraph, retyping text, …) leaves every annotation dictionary
 /// alone, but the display copy is rebuilt from the edited document on every refresh: without
 /// this cache each refresh redrew every appearance (27k on one CAD file, ~0.7 s per edit
-/// commit). Entries are keyed by annotation reference; object numbers are never reused within
-/// a document lineage, so an entry stays valid until an annotation edit runs. Callers clear
-/// the cache on any refresh that may change annotations (comments, structural and full
-/// refreshes) and keep it for content-only ones.
+/// commit). Entries are keyed by annotation reference.
+///
+/// Android adaptation (#322): an entry also keeps everything the builder read: the
+/// annotation's dictionary, the same dictionary with its references followed
+/// ([`with_direct_values_within`]) and the page region. It is reused only when all three are
+/// equal now, so a comment edit redraws the comments it changed (or whose referenced values it
+/// changed) and reuses the rest, instead of the whole cache being cleared. An annotation whose
+/// followed dictionary still holds a reference outside [`LINK_KEYS`] (one the budget or depth
+/// left unfollowed, which `/QuadPoints` drawing can still read) is never reused.
 #[derive(Clone, Debug, Default)]
 pub struct AppearanceCache {
-    /// Each appearance with the page region it was drawn for (see [`appearance::build_on_page`]):
-    /// a changed crop box draws it again.
-    entries: std::collections::HashMap<ObjRef, (Option<[f64; 4]>, Built)>,
+    /// Each appearance with the page region it was drawn for (see [`appearance::build_on_page`])
+    /// and the dictionaries it was drawn from.
+    entries: std::collections::HashMap<ObjRef, Entry>,
     bytes: usize,
     hits: u64,
     builds: u64,
@@ -332,21 +337,34 @@ impl AppearanceCache {
         *self = Self::default();
     }
 
-    fn get(&mut self, r: ObjRef, crop: Option<[f64; 4]>) -> Option<Built> {
-        let built = self.entries.get(&r).filter(|(drawn_for, _)| *drawn_for == crop)?.1.clone();
+    fn get(&mut self, r: ObjRef, crop: Option<[f64; 4]>, d: &Dict, direct: &Dict) -> Option<Built> {
+        let e = self.entries.get(&r)?;
+        let same = e.crop == crop && e.dict == *d && e.direct.as_ref().map_or(direct == d, |x| x == direct);
+        if !same {
+            return None;
+        }
+        let built = e.built.clone();
         self.hits += 1;
         Some(built)
     }
 
-    fn insert(&mut self, r: ObjRef, crop: Option<[f64; 4]>, built: &Built) {
-        let stream = &built.stream;
+    fn insert(&mut self, r: ObjRef, crop: Option<[f64; 4]>, d: &Dict, direct: &Dict, built: &Built) {
         self.builds += 1;
+        // A stale entry for `r` is dropped whether or not the new one is kept.
+        if let Some(old) = self.entries.remove(&r) {
+            self.bytes = self.bytes.saturating_sub(old.bytes);
+        }
+        if has_unfollowed_reference(direct) {
+            return;
+        }
         if self.entries.len() >= 1_000_000 {
             self.clear();
         }
-        if self.bytes.saturating_add(stream.raw.len()) <= Self::MAX_BYTES {
-            self.bytes += stream.raw.len();
-            self.entries.insert(r, (crop, built.clone()));
+        let direct = (direct != d).then(|| direct.clone());
+        let bytes = built.stream.raw.len().saturating_add(dict_bytes(d)).saturating_add(direct.as_ref().map_or(0, dict_bytes));
+        if self.bytes.saturating_add(bytes) <= Self::MAX_BYTES {
+            self.bytes += bytes;
+            self.entries.insert(r, Entry { crop, dict: d.clone(), direct, built: built.clone(), bytes });
         }
         // Else over budget: keep serving the entries already cached instead of growing.
     }
@@ -360,6 +378,50 @@ impl AppearanceCache {
     pub fn builds(&self) -> u64 {
         self.builds
     }
+}
+
+/// One [`AppearanceCache`] entry: the appearance and what it was drawn from.
+#[derive(Clone, Debug)]
+struct Entry {
+    crop: Option<[f64; 4]>,
+    dict: Dict,
+    /// The dictionary with its references followed, when that differs from `dict`.
+    direct: Option<Dict>,
+    built: Built,
+    /// What the entry is counted as against [`AppearanceCache::MAX_BYTES`].
+    bytes: usize,
+}
+
+/// Whether `d`, with its references followed, still holds one outside [`LINK_KEYS`]: the builder
+/// may read through it (`/QuadPoints`), so what it drew can change without `d` changing.
+fn has_unfollowed_reference(d: &Dict) -> bool {
+    let mut stack: Vec<&Object> = d.iter().filter(|(k, _)| !LINK_KEYS.contains(&k.as_slice())).map(|(_, v)| v).collect();
+    while let Some(o) = stack.pop() {
+        match o {
+            Object::Ref(_) => return true,
+            Object::Array(items) => stack.extend(items.iter()),
+            Object::Dict(entries) => stack.extend(entries.iter().map(|(_, v)| v)),
+            _ => {}
+        }
+    }
+    false
+}
+
+/// A rough size of `d` for the cache's byte budget: 32 bytes a value, plus strings and names.
+fn dict_bytes(d: &Dict) -> usize {
+    let mut bytes = 0usize;
+    let mut stack: Vec<&Object> = d.iter().map(|(_, v)| v).collect();
+    while let Some(o) = stack.pop() {
+        bytes = bytes.saturating_add(32);
+        match o {
+            Object::Array(items) => stack.extend(items.iter()),
+            Object::Dict(entries) => stack.extend(entries.iter().map(|(_, v)| v)),
+            Object::String(s) => bytes = bytes.saturating_add(s.bytes.len()),
+            Object::Name(n) => bytes = bytes.saturating_add(n.len()),
+            _ => {}
+        }
+    }
+    bytes
 }
 
 /// A copy of `doc` in which every annotation without a normal appearance (`/AP /N`) has the one
@@ -399,7 +461,10 @@ pub fn with_missing_appearances_cached(doc: &Document, cache: &mut AppearanceCac
             let crop = appearance::is_drawn_from_points(&d)
                 .then(|| crops.get_or_insert_with(|| pdfcraft_model::pages(doc).iter().map(|p| (p.obj, p.crop(doc))).collect()).get(&page).copied())
                 .flatten();
-            if let Some(built) = cache.get(r, crop) {
+            // Followed for every annotation, cached or not, so the pass budget is spent as a pass
+            // without a cache spends it (#322).
+            let direct = with_direct_values_within(doc, &d, &mut budget);
+            if let Some(built) = cache.get(r, crop, &d, &direct) {
                 // Fails only when `r` isn't a dictionary, which the cached build ruled out.
                 apply_appearance(copy.get_or_insert_with(|| doc.clone()), r, &d, built).ok();
                 continue;
@@ -411,10 +476,9 @@ pub fn with_missing_appearances_cached(doc: &Document, cache: &mut AppearanceCac
                 bare.remove(b"AP");
                 appearance::display_stamp(&bare)
             };
-            let direct = with_direct_values_within(doc, &d, &mut budget);
             let Some(stream) = build_appearance(doc, &d, &direct, crop).or_else(other_stamp) else { continue };
             let built = Built::new(stream, &direct);
-            cache.insert(r, crop, &built);
+            cache.insert(r, crop, &d, &direct, &built);
             // Fails only when `r` isn't a dictionary, which the build just ruled out.
             apply_appearance(copy.get_or_insert_with(|| doc.clone()), r, &d, built).ok();
         }

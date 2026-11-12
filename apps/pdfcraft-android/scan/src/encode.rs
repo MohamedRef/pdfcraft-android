@@ -62,6 +62,23 @@ pub fn encode_png_grey(page: &Raster<'_>) -> Result<Vec<u8>, ScanError> {
     Ok(out)
 }
 
+/// A black-and-white page as a 1-bit PNG, its resolution in the `pHYs` chunk. One bit per pixel
+/// before compression, and no filter: on two-level rows a filter only gets in the compressor's
+/// way.
+pub fn encode_png_bilevel(page: &crate::enhance::Bitmap1, dpi: u16) -> Result<Vec<u8>, ScanError> {
+    let mut out = Vec::new();
+    let mut encoder = png::Encoder::new(&mut out, page.width, page.height);
+    encoder.set_color(png::ColorType::Grayscale);
+    encoder.set_depth(png::BitDepth::One);
+    encoder.set_filter(png::Filter::NoFilter);
+    let per_metre = (f64::from(dpi.max(1)) / 0.0254).round() as u32;
+    encoder.set_pixel_dims(Some(png::PixelDimensions { xppu: per_metre, yppu: per_metre, unit: png::Unit::Meter }));
+    let mut writer = encoder.write_header().map_err(|_| ScanError::Encode)?;
+    writer.write_image_data(&page.data).map_err(|_| ScanError::Encode)?;
+    writer.finish().map_err(|_| ScanError::Encode)?;
+    Ok(out)
+}
+
 /// A JPEG file unchanged but for its resolution: `dpi` in its JFIF header, which is added when
 /// the file has none (a camera's usually has only EXIF). Not one pixel is decoded or re-encoded.
 /// `None` when the bytes are not a JPEG file.

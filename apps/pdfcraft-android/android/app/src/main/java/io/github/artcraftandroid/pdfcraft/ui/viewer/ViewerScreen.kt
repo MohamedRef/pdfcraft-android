@@ -377,7 +377,7 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
         if (ctl.tool == ViewerTool.Edit && vm.editMode == EditMode.Link) LinkLayer(vm, doc)
         vm.linkEdit?.takeIf { it.doc === doc }?.let { LinkSheet(vm, it) }
         vm.textPrompt?.takeIf { it.doc === doc }?.let { TextEntry(vm, it, onDone = vm::postText) }
-        vm.fillTextPrompt?.takeIf { it.doc === doc }?.let { TextEntry(vm, it, onDone = vm::postFillText) }
+        vm.signing.fillTextPrompt?.takeIf { it.doc === doc }?.let { TextEntry(vm, it, onDone = vm.signing::postFillText) }
         vm.addTextPrompt?.takeIf { it.doc === doc }?.let { TextEntry(vm, it, onDone = vm::postAddText) }
         vm.fieldEdit?.takeIf { it.doc === doc }?.let { FieldEditor(vm, it) }
         // a Fill & Sign element can be dragged and, for boxes, resized (a comment's: over its panel, below)
@@ -414,6 +414,7 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
                 bottom = with(density) { doc.viewer.padBottom.toDp() },
             )
             if (!vm.readingMode && !ctl.searching && ctl.sheet != ViewerSheet.Comments) CommentFilterChip(doc, top = with(density) { doc.viewer.padTop.toDp() })
+            LectureBar(vm, doc, bottom = with(density) { doc.viewer.padBottom.toDp() }, modifier = Modifier.align(Alignment.BottomCenter))
             if (!vm.readingMode) FocusTimerPill(
                 vm, top = with(density) { doc.viewer.padTop.toDp() },
                 onOpen = { ctl.sheet = ViewerSheet.FocusTimer },
@@ -676,6 +677,7 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
                 ViewerSheet.Share -> ShareSheet(vm, doc)
                 ViewerSheet.FocusTimer -> FocusTimerSheet(vm) { ctl.sheet = ViewerSheet.None }
                 ViewerSheet.Backups -> VersionHistorySheet(vm, doc) { ctl.sheet = ViewerSheet.None }
+                ViewerSheet.Lectures -> LecturesSheet(vm, doc) { ctl.sheet = ViewerSheet.None }
                 ViewerSheet.NoteMargin -> NoteMarginSheet(vm, doc, listOf(doc.viewer.currentPage)) { ctl.sheet = ViewerSheet.None }
                 ViewerSheet.Redact -> RedactSheet(vm, doc)
                 ViewerSheet.Compare -> CompareSheet(vm, doc)

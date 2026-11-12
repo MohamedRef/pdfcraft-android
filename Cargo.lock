@@ -3209,6 +3209,9 @@ dependencies = [
  "pdfcraft-engine",
  "pdfcraft-geom",
  "png",
+ "rten",
+ "rten-tensor",
+ "sha2 0.11.1",
  "thiserror",
 ]
 

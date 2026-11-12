@@ -832,7 +832,8 @@ enum class ScanFilter(@StringRes val label: Int, val mode: String, val level: In
     AutoColor(R.string.tools_filter_auto_colour, "colour", 50),
     Grayscale(R.string.tools_filter_grayscale, "greyscale", 40),
     Whiteboard(R.string.tools_filter_whiteboard, "colour", 85),
-    LightText(R.string.tools_filter_light_text, "bw", 60),
+    /** Black and white (#300); the level is how faint a stroke may be and still be kept. */
+    LightText(R.string.tools_filter_light_text, "bw", 75),
 }
 
 /** Scan: pages taken with the camera, reviewed (name, retake, crop, delete, look), then saved as a PDF. */
