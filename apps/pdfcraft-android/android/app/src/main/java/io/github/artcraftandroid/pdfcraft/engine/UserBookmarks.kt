@@ -20,14 +20,14 @@ class UserBookmarks(private val file: File) {
     private val byDoc = mutableStateMapOf<String, List<UserBookmark>>()
 
     init {
-        runCatching {
-            if (file.isFile) {
-                val o = JSONObject(file.readText())
-                for (key in o.keys()) {
-                    val a = o.getJSONArray(key)
-                    byDoc[key] = (0 until a.length()).mapNotNull { i ->
-                        a.optJSONObject(i)?.let { UserBookmark(it.optString("name", text(R.string.files_bookmark_page, it.optInt("page") + 1)), it.optInt("page")) }
-                    }
+        val o = runCatching { if (file.isFile) JSONObject(file.readText()) else null }.getOrNull()
+        // one malformed document entry is skipped; the other documents' bookmarks still load (#125)
+        for (key in o?.keys()?.asSequence().orEmpty()) {
+            val a = o?.optJSONArray(key) ?: continue
+            byDoc[key] = (0 until a.length()).mapNotNull { i ->
+                a.optJSONObject(i)?.let { b ->
+                    val page = b.optInt("page")
+                    UserBookmark(b.optString("name").ifEmpty { text(R.string.files_bookmark_page, page + 1) }, page)
                 }
             }
         }
