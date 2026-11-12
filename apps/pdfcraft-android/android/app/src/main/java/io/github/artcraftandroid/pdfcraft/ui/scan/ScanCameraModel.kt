@@ -56,6 +56,23 @@ internal class ScanCameraModel(app: Application) : AndroidViewModel(app) {
         prefs.edit().putBoolean(PREF_AUTO_TIP, true).apply()
     }
 
+    /** Low-light merge (#297): Auto, Always or Off, a setting. */
+    var merge by mutableStateOf(ScanMergeSetting.decode(prefs.getString(PREF_MERGE, null)))
+        private set
+
+    fun updateMerge(next: ScanMergeSetting) {
+        if (next == merge) return
+        merge = next
+        prefs.edit().putString(PREF_MERGE, next.id).apply()
+        Diag.event(DiagArea.Scan, "camera_merge_option", "merge" to next.id)
+    }
+
+    /** The phone's memory class in MB: a merge needs [ScanMergeRules.MEMORY_MB]. */
+    val memoryClassMb: Int get() = getApplication<Application>().getSystemService(android.app.ActivityManager::class.java)?.memoryClass ?: 0
+
+    /** A burst is being merged: the screen holds the shutter until the page is in the scan. */
+    var merging by mutableStateOf(false)
+
     /** The file the next photo is written into, while the camera screen shows; null when it is closed. */
     var target by mutableStateOf<File?>(null)
         private set
@@ -94,6 +111,7 @@ internal class ScanCameraModel(app: Application) : AndroidViewModel(app) {
 
     fun hide() {
         target = null
+        merging = false
     }
 
     private companion object {
@@ -101,5 +119,6 @@ internal class ScanCameraModel(app: Application) : AndroidViewModel(app) {
         const val PREF_LIVE = "scanLiveOutline"
         const val PREF_AUTO = "scanAutoCapture"
         const val PREF_AUTO_TIP = "scanAutoTip"
+        const val PREF_MERGE = "scanLowLightMerge"
     }
 }

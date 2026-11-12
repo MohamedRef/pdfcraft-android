@@ -12,6 +12,7 @@ import io.github.artcraftandroid.pdfcraft.engine.Diag
 import io.github.artcraftandroid.pdfcraft.engine.DiagArea
 import io.github.artcraftandroid.pdfcraft.engine.Diagnostics
 import io.github.artcraftandroid.pdfcraft.engine.diagReport
+import io.github.artcraftandroid.pdfcraft.engine.userMessage
 import io.github.artcraftandroid.pdfcraft.text
 import io.github.artcraftandroid.pdfcraft.ui.home.installedVersionCode
 import java.io.File
@@ -110,6 +111,65 @@ internal class ScanLabController(private val vm: AppViewModel) {
         }
     }
 
+    /** A picked model file is being timed (#304). */
+    var timingModel by mutableStateOf(false)
+        private set
+
+    /**
+     * Copy the model file at [uri] into the cache, time it (#304) and log what came back, then
+     * delete the copy. Measurement only: the file is never kept or used on a page.
+     */
+    fun timeModel(uri: android.net.Uri) {
+        if (timingModel) return
+        timingModel = true
+        vm.viewModelScope.launch {
+            val file = File(File(app.cacheDir, "model-timing"), "model.onnx")
+            try {
+                val t = withContext(Dispatchers.IO) {
+                    copyCapped(uri, file)
+                    // before the run: if a large model gets the app closed, this line is the last one
+                    Diag.event(DiagArea.Scan, "model_timing_start", "bytes" to file.length())
+                    Diag.sink?.flush()
+                    io.github.artcraftandroid.pdfcraft.core.scanTimeModel(file.path, MODEL_RUNS, 0u)
+                }
+                Diag.event(DiagArea.Scan, "model_timing", *io.github.artcraftandroid.pdfcraft.ui.scan.scanModelTimingDiag(t))
+                vm.tell(
+                    text(
+                        R.string.scan_lab_time_model_done, t.loadMs.toInt(),
+                        io.github.artcraftandroid.pdfcraft.ui.scan.scanModelTimingRuns(t), io.github.artcraftandroid.pdfcraft.ui.scan.scanModelTimingPeak(t),
+                    ),
+                )
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Diag.failure(DiagArea.Scan, "scan_time_model", e)
+                vm.tell(text(R.string.scan_lab_time_model_failed, e.userMessage))
+            } finally {
+                withContext(kotlinx.coroutines.NonCancellable + Dispatchers.IO) { file.delete() }
+                timingModel = false
+            }
+        }
+    }
+
+    /** [uri] into [to], refused past [MODEL_MAX_BYTES] so a wrong pick does not fill the storage. */
+    private fun copyCapped(uri: android.net.Uri, to: File) {
+        to.parentFile?.mkdirs()
+        val input = app.contentResolver.openInputStream(uri) ?: throw java.io.IOException("unreadable")
+        input.use { from ->
+            to.outputStream().use { out ->
+                val buf = ByteArray(1 shl 16)
+                var total = 0L
+                while (true) {
+                    val n = from.read(buf)
+                    if (n < 0) break
+                    total += n
+                    if (total > MODEL_MAX_BYTES) throw java.io.IOException("too large")
+                    out.write(buf, 0, n)
+                }
+            }
+        }
+    }
+
     fun clear() {
         vm.viewModelScope.launch {
             withContext(Dispatchers.IO) { store.clear() }
@@ -120,6 +180,12 @@ internal class ScanLabController(private val vm: AppViewModel) {
 
     private companion object {
         const val PREF = "scanLab"
+
+        /** Runs per timing: the first warms the runtime up, the second is the one to compare. */
+        const val MODEL_RUNS = 2u
+
+        /** The largest model file copied (the native side refuses the same). */
+        const val MODEL_MAX_BYTES = 600L * 1024 * 1024
 
         // for whoever opens the zip; not shown in the app
         val README = """
