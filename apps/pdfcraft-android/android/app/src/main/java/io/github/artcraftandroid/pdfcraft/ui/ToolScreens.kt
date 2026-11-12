@@ -4,11 +4,14 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.selection.selectable
 import io.github.artcraftandroid.pdfcraft.ui.scan.rotateScanPage
+import io.github.artcraftandroid.pdfcraft.ui.scan.chooseScanLook
+import io.github.artcraftandroid.pdfcraft.ui.scan.toggleScanFlatten
 import io.github.artcraftandroid.pdfcraft.ui.scan.undoScanTurn
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -76,6 +79,7 @@ import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.onLongClick
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -839,6 +843,10 @@ data class ScanPage(
     val preset: String? = null,
     /** Which half of a photographed book spread this page is (#303); null for a page of its own. */
     val book: io.github.artcraftandroid.pdfcraft.ui.scan.ScanBookHalf? = null,
+    /** The person's Flatten page choice for this page (#302): null until they make one, which is off. */
+    val flatten: Boolean? = null,
+    /** The page's own look and strength (#301); a new page takes the look chosen last. */
+    val look: io.github.artcraftandroid.pdfcraft.ui.scan.ScanPageLook = io.github.artcraftandroid.pdfcraft.ui.scan.ScanPageLook(),
 ) {
     /** The page among the scan's pages: the two halves of a spread share one photo [file]. */
     val key: String get() = book?.let { "${file.absolutePath}#${it.side}" } ?: file.absolutePath
@@ -865,11 +873,11 @@ enum class ScanFilter(@StringRes val label: Int, val mode: String, val level: In
 fun ScanScreen(vm: AppViewModel) {
     val c = pdfColors
     val pages = vm.scanPages
-    var filter by remember { mutableStateOf(ScanFilter.CleanScan) }
-    // curled, sagging or folded pages drawn flat (#302): the person's choice and off to begin
-    // with, because nothing measured tells a bent page from a flat one, and on a flat page the
-    // network is a little less exact than the plain straightening
-    var flatten by remember { mutableStateOf(false) }
+    // each page has its own look and strength (#301), kept with the page and with the scan
+    // Apply to all's question, when some page has a look of its own (#301)
+    var confirmApply by remember { mutableStateOf(false) }
+    // a finger held on the preview shows the page in the Original look (#301)
+    var holding by remember { mutableStateOf(false) }
     var current by remember { mutableStateOf(0) }
     var cropping by remember { mutableStateOf<String?>(null) }
     var naming by remember { mutableStateOf(false) }
@@ -905,7 +913,7 @@ fun ScanScreen(vm: AppViewModel) {
     ToolScaffold(
         if (pages.isEmpty()) stringResource(R.string.common_tool_scan) else stringResource(R.string.tools_page_of, current.coerceAtMost(pages.lastIndex) + 1, pages.size),
         { vm.discardScan() },
-        stringResource(R.string.tools_save_pdf), pages.isNotEmpty(), { vm.saveScan(filter, flatten && vm.scanCanFlatten) },
+        stringResource(R.string.tools_save_pdf), pages.isNotEmpty(), { vm.saveScan() },
     ) {
         // a reminder that the scanner is not as it is meant to be used: a testing option is on (#288)
         if (!vm.scanLab.options.asDesigned) {
@@ -930,22 +938,54 @@ fun ScanScreen(vm: AppViewModel) {
         val shownAt = current.coerceAtMost(pages.lastIndex)
         val page = pages.getOrNull(shownAt)
         val lab = vm.scanLab.options
-        val flattening = flatten && vm.scanCanFlatten
+        // curled, sagging or folded pages drawn flat (#302): the person's choice for each page, and
+        // off to begin with, because nothing measured tells a bent page from a flat one, and on a
+        // flat page the network is a little less exact than the plain straightening
+        val flattening = page != null && io.github.artcraftandroid.pdfcraft.ui.scan.scanPageFlattens(page.flatten, vm.scanCanFlatten)
         // Settings ▸ Preferences ▸ Scan (#339); read each time, so a change there shows here
         val autoUpright = io.github.artcraftandroid.pdfcraft.ui.scan.ScanUprightSetting.get(vm.settings.appPrefs)
         if (page != null && lab.preview) {
-            LaunchedEffect(page.file, page.corners.toList(), page.turns, page.preset, filter, flattening, lab, autoUpright) { vm.requestScanPreview(shownAt, page, filter, flattening) }
+            LaunchedEffect(page.file, page.corners.toList(), page.turns, page.preset, page.look, flattening, lab, autoUpright) { vm.requestScanPreview(shownAt, page, flattening) }
         }
-        val wanted = page?.let { ScanPreviewKey.of(it, filter, flattening, lab, autoUpright) }
-        val preview = vm.scanPreview?.takeIf { wanted != null && it.key == wanted }
-        val shown = scanShown(lab.preview, view, preview != null, wanted != null && vm.scanPreviewFailed == wanted)
-        Box(Modifier.weight(1f).fillMaxWidth().background(c.desk), contentAlignment = Alignment.Center) {
+        val wanted = page?.let { ScanPreviewKey.of(it, flattening, lab, autoUpright) }
+        val exact = vm.scanPreview?.takeIf { wanted != null && it.key == wanted }
+        // while a new look or strength is made, the page in its last look stays on screen (#301)
+        val preview = exact ?: vm.scanPreview?.takeIf { wanted != null && wanted.samePage(it.key) }
+        val shown = scanShown(lab.preview, view, exact != null, wanted != null && vm.scanPreviewFailed == wanted, haveSamePage = preview != null)
+        // the page in the Original look, for press-and-hold (#301)
+        val original = vm.scanCompare?.takeIf { wanted != null && vm.scanTilesFor?.samePage(wanted) == true }
+        val comparing = io.github.artcraftandroid.pdfcraft.ui.scan.scanCompareShows(holding, original != null, page?.look?.filter ?: ScanFilter.Original)
+        val compareHint = stringResource(R.string.scan_compare_hint)
+        val compareAction = stringResource(R.string.scan_compare_action)
+        val canCompare = shown.view == ScanView.Result && preview != null && page?.look?.filter != ScanFilter.Original
+        Box(
+            Modifier.weight(1f).fillMaxWidth().background(c.desk).then(
+                if (!canCompare) Modifier else Modifier.pointerInput(Unit) {
+                    detectTapGestures(onPress = {
+                        holding = true
+                        tryAwaitRelease()
+                        holding = false
+                    })
+                }.semantics {
+                    // TalkBack: a long press shows the original until the next one (#301)
+                    onLongClick(compareAction) { holding = !holding; true }
+                },
+            ),
+            contentAlignment = Alignment.Center,
+        ) {
             if (page != null) {
                 if (shown.view == ScanView.Result && preview != null) {
                     Image(
-                        preview.image, stringResource(R.string.tools_scan_result_description, shownAt + 1),
+                        if (comparing && original != null) original else preview.image, stringResource(R.string.tools_scan_result_description, shownAt + 1),
                         modifier = Modifier.fillMaxSize().padding(16.dp), contentScale = ContentScale.Fit,
                     )
+                    // what is on screen while held, and a hint that holding compares
+                    if (canCompare && (comparing || original != null)) {
+                        Text(
+                            if (comparing) stringResource(R.string.tools_filter_original) else compareHint, color = Color.White, fontSize = 12.sp,
+                            modifier = Modifier.align(Alignment.BottomEnd).padding(12.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.5f)).padding(horizontal = 10.dp, vertical = 4.dp),
+                        )
+                    }
                 } else {
                     ScanPhoto(page.thumb, page.corners, Modifier.fillMaxSize())
                 }
@@ -981,44 +1021,70 @@ fun ScanScreen(vm: AppViewModel) {
             }
         }
         // the kind of document Clean scan took the page for, and a way to choose another (#299)
-        if (page != null && filter == ScanFilter.CleanScan && lab.presets) {
+        if (page != null && page.look.filter == ScanFilter.CleanScan && lab.presets) {
             Row(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.Center) {
                 io.github.artcraftandroid.pdfcraft.ui.scan.ScanPresetChip(vm, shownAt, page.preset, preview?.kind?.preset)
             }
         }
         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            val looks = pages.map { it.look }
             pages.forEachIndexed { i, p ->
-                Image(p.thumb, stringResource(R.string.tools_page_number, i + 1), modifier = Modifier.size(56.dp, 72.dp).clip(RoundedCornerShape(4.dp)).border(2.dp, if (i == current) c.accent else Color.Transparent, RoundedCornerShape(4.dp)).clickable { current = i }, contentScale = ContentScale.Crop)
+                // a dot on a page whose look is not the first page's (#301)
+                val own = io.github.artcraftandroid.pdfcraft.ui.scan.scanLookDiffers(looks, i)
+                Box {
+                    Image(p.thumb, if (own) stringResource(R.string.scan_page_own_look, i + 1) else stringResource(R.string.tools_page_number, i + 1), modifier = Modifier.size(56.dp, 72.dp).clip(RoundedCornerShape(4.dp)).border(2.dp, if (i == current) c.accent else Color.Transparent, RoundedCornerShape(4.dp)).clickable { current = i }, contentScale = ContentScale.Crop)
+                    if (own) Box(Modifier.align(Alignment.TopEnd).padding(4.dp).size(10.dp).clip(CircleShape).background(c.accent).border(1.dp, Color.White, CircleShape))
+                }
             }
             Box(Modifier.size(56.dp, 72.dp).clip(RoundedCornerShape(4.dp)).background(c.surfaceRaised).clickable { vm.takeScanPhoto() }.semantics { contentDescription = addPageLabel }, contentAlignment = Alignment.Center) {
                 Icon(LucideIcons.Plus, null, tint = c.icon)
             }
         }
+        // the looks, each a small preview of the page (#301), and the page's strength
+        if (page != null && lab.lookStrip) {
+            io.github.artcraftandroid.pdfcraft.ui.scan.ScanLooksStrip(vm, shownAt, page.look, exact?.image)
+        }
+        if (page != null) io.github.artcraftandroid.pdfcraft.ui.scan.ScanStrengthRow(vm, shownAt, page.look)
         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 8.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            ScanFilter.entries.forEach { f ->
-                Text(
-                    stringResource(f.label), color = if (f == filter) c.accent else c.text, fontSize = 14.sp,
-                    modifier = Modifier.clip(CircleShape).background(if (f == filter) c.pressed else Color.Transparent).clickable { filter = f }.padding(horizontal = 14.dp, vertical = 8.dp),
-                )
-            }
-            if (vm.scanCanFlatten) {
-                // a switch beside the looks, not one of them: outlined, and filled when it is on
+            // the testing option's way back: the looks as words (#301)
+            if (page != null && !lab.lookStrip) io.github.artcraftandroid.pdfcraft.ui.scan.ScanLookChips(vm, shownAt, page.look)
+            if (vm.scanCanFlatten && page != null) {
+                // a switch beside the looks, not one of them: outlined, and filled when it is on;
+                // it flattens the page shown, and pages taken after it start the same way (#302)
+                val flatten = page.flatten == true
                 Text(
                     stringResource(R.string.tools_scan_flatten), color = if (flatten) c.accent else c.text, fontSize = 14.sp,
                     modifier = Modifier.clip(CircleShape).background(if (flatten) c.pressed else Color.Transparent).border(1.dp, if (flatten) c.accent else c.textSecondary, CircleShape)
-                        .toggleable(value = flatten, role = Role.Switch) { flatten = it }.padding(horizontal = 14.dp, vertical = 8.dp),
+                        .toggleable(value = flatten, role = Role.Switch) { vm.toggleScanFlatten(shownAt) }.padding(horizontal = 14.dp, vertical = 8.dp),
                 )
             }
             // book mode (#303): photos taken from now on become a spread's two pages
             io.github.artcraftandroid.pdfcraft.ui.scan.ScanBookChips(vm.scanBook)
         }
-        Row(Modifier.fillMaxWidth().padding(8.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
+        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(8.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             TextButton(onClick = { vm.retakeScan(current) }, enabled = pages.isNotEmpty()) { Text(stringResource(R.string.tools_retake), color = c.accent) }
             TextButton(onClick = { cropping = pages.getOrNull(current.coerceAtMost(pages.lastIndex))?.key }, enabled = pages.isNotEmpty()) { Text(stringResource(R.string.tools_crop), color = c.accent) }
             // a quarter turn clockwise, the person's from then on (#339)
             TextButton(onClick = { vm.rotateScanPage(current.coerceAtMost(pages.lastIndex)) }, enabled = pages.isNotEmpty()) { Text(stringResource(R.string.scan_rotate), color = c.accent) }
             TextButton(onClick = { if (pages.isNotEmpty()) { vm.deleteScanPage(current.coerceAtMost(pages.lastIndex)); current = (current - 1).coerceAtLeast(0) } }, enabled = pages.isNotEmpty()) { Text(stringResource(R.string.common_delete), color = c.accent) }
+            // the page's look and strength for every page, asking first when that changes a page with its own (#301)
+            val lookAt = current.coerceAtMost(pages.lastIndex)
+            TextButton(
+                onClick = {
+                    if (io.github.artcraftandroid.pdfcraft.ui.scan.scanApplyLookNeedsConfirm(pages.map { it.look }, lookAt)) confirmApply = true
+                },
+                enabled = pages.size > 1 && io.github.artcraftandroid.pdfcraft.ui.scan.scanApplyLookNeedsConfirm(pages.map { it.look }, lookAt),
+            ) { Text(stringResource(R.string.scan_apply_look_all), color = c.accent) }
+            val resetTo = io.github.artcraftandroid.pdfcraft.ui.scan.ScanPageLook()
+            TextButton(
+                onClick = { vm.chooseScanLook(lookAt, resetTo, "reset") },
+                enabled = pages.getOrNull(lookAt)?.look?.let { it != resetTo } == true,
+            ) { Text(stringResource(R.string.scan_reset_look), color = c.accent) }
         }
+    }
+    if (confirmApply) {
+        val at = current.coerceAtMost(pages.lastIndex)
+        pages.getOrNull(at)?.let { io.github.artcraftandroid.pdfcraft.ui.scan.ScanApplyLookDialog(vm, at, it.look) { confirmApply = false } } ?: run { confirmApply = false }
     }
     if (naming) {
         var name by remember { mutableStateOf(vm.scanName) }

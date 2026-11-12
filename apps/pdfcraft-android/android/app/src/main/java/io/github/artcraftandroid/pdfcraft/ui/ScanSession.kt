@@ -13,11 +13,19 @@ data class ScanSession(
     val forImage: Boolean,
     val name: String,
     val pages: List<Page>,
+    /**
+     * One Flatten page switch for the whole scan, as #301 kept it before the choice became each
+     * page's own (#302, [Page.flatten]). Still read, so a session written then opens with its pages
+     * flattened; the app now leaves it off.
+     */
+    val flatten: Boolean = false,
 ) {
     /** [turns] is the person's own turn of the page (#339), null while the classifier decides. */
     /** [preset] is the kind of document the person chose for the page (#299), null while Clean scan works it out. */
     /** [book] is a book spread's half as [io.github.artcraftandroid.pdfcraft.ui.scan.ScanBookHalf.encode] wrote it (#303); null for a page of its own. */
-    class Page(val path: String, val corners: FloatArray, val found: FloatArray?, val turns: Int? = null, val preset: String? = null, val book: String? = null)
+    /** [look] is the page's own look and strength (#301), null in a session written before it (the default look then). */
+    /** [flatten] is the person's Flatten page choice (#302), null when they made none. */
+    class Page(val path: String, val corners: FloatArray, val found: FloatArray?, val turns: Int? = null, val preset: String? = null, val book: String? = null, val look: io.github.artcraftandroid.pdfcraft.ui.scan.ScanPageLook? = null, val flatten: Boolean? = null)
 
     fun encode(): String = buildString {
         append(HEADER).append('\n')
@@ -25,20 +33,29 @@ data class ScanSession(
         append("retake\t").append(retake?.toString().orEmpty()).append('\n')
         append("image\t").append(if (forImage) "1" else "0").append('\n')
         append("name\t").append(name.replace('\n', ' ').replace('\t', ' ')).append('\n')
+        // since #301; a build before it ignores the line
+        append("flatten\t").append(if (flatten) "1" else "0").append('\n')
         for (p in pages) {
             append("page\t").append(p.path).append('\t').append(p.corners.joinToString(","))
             append('\t').append(p.found?.joinToString(",").orEmpty())
             append('\t').append(p.turns?.toString().orEmpty())
             append('\t').append(p.preset?.takeIf(::isWord).orEmpty())
             // the two halves of a book spread name the same photo; the seventh field says which half (#303)
-            if (p.book != null) append('\t').append(p.book.replace('\t', ' ').replace('\n', ' '))
+            if (p.book != null || p.flatten != null) append('\t').append(p.book.orEmpty().replace('\t', ' ').replace('\n', ' '))
+            // the eighth, the page's Flatten page choice (#302): 1, 0, or nothing
+            if (p.flatten != null) append('\t').append(if (p.flatten) "1" else "0")
             append('\n')
+            // the page's look (#301) on a line of its own after the page's, so the page line keeps
+            // its columns and a build from before #301 reads the session, ignoring the line
+            p.look?.let { append("look\t").append(io.github.artcraftandroid.pdfcraft.ui.scan.scanFilterId(it.filter)).append('\t').append(it.strength?.toString().orEmpty()).append('\n') }
         }
     }
 
     companion object {
         // 2: a page line may end with the person's turn of the page (#339); a session written as
-        // 1 (before an update) still comes back, its pages with no turn
+        // 1 (before an update) still comes back, its pages with no turn. #301's `look` and `flatten`
+        // lines did not change the version on purpose: every build that reads 2 ignores a line it
+        // doesn't know, so a session written now still opens in a build from before them
         private const val HEADER = "pdfcraft-scan 2"
         private const val HEADER_V1 = "pdfcraft-scan 1"
 
@@ -50,7 +67,10 @@ data class ScanSession(
             var retake: Int? = null
             var forImage = false
             var name = ""
+            var flatten = false
             val pages = mutableListOf<Page>()
+            // a look line belongs to the page line just before it; none when that page was left out
+            var lastPage = false
             for (line in lines.drop(1)) {
                 val parts = line.split('\t')
                 val value = parts.getOrNull(1).orEmpty()
@@ -59,15 +79,30 @@ data class ScanSession(
                     "retake" -> retake = value.toIntOrNull()
                     "image" -> forImage = value == "1"
                     "name" -> name = value
+                    "flatten" -> flatten = value == "1"
                     "page" -> {
+                        lastPage = false
                         val corners = corners(parts.getOrNull(2)) ?: continue
                         val turns = parts.getOrNull(4)?.toIntOrNull()?.takeIf { it in 0..3 }
                         val preset = parts.getOrNull(5)?.takeIf { it.isNotEmpty() && isWord(it) }
-                        if (value.isNotEmpty()) pages += Page(value, corners, corners(parts.getOrNull(3)), turns, preset, parts.getOrNull(6)?.ifEmpty { null })
+                        val flatten = when (parts.getOrNull(7)) {
+                            "1" -> true
+                            "0" -> false
+                            else -> null
+                        }
+                        if (value.isNotEmpty()) {
+                            pages += Page(value, corners, corners(parts.getOrNull(3)), turns, preset, parts.getOrNull(6)?.ifEmpty { null }, flatten = flatten)
+                            lastPage = true
+                        }
+                    }
+                    "look" -> {
+                        val look = io.github.artcraftandroid.pdfcraft.ui.scan.ScanPageLook.decode(value, parts.getOrNull(2))
+                        if (lastPage && look != null) pages[pages.lastIndex] = pages.last().let { Page(it.path, it.corners, it.found, it.turns, it.preset, it.book, look, it.flatten) }
+                        lastPage = false
                     }
                 }
             }
-            return ScanSession(shot, retake, forImage, name, pages)
+            return ScanSession(shot, retake, forImage, name, pages, flatten)
         }
 
         // a kind of document's word: lowercase letters and underscores, nothing that could break a line

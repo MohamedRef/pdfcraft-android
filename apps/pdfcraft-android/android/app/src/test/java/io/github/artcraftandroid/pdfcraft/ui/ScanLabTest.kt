@@ -54,6 +54,13 @@ class ScanLabTest {
         // automatic flattening is a testing option, off as designed until real photos show it helps (#302)
         assertFalse(lab.flattenAuto)
         assertFalse(lab.copy(flattenAuto = true).asDesigned)
+        // a flattened page's border is trimmed as designed; off is a testing option (#302)
+        assertTrue(lab.flattenTrim)
+        assertFalse(lab.copy(flattenTrim = false).asDesigned)
+        // a look per page and the looks strip's previews are as designed; off is the way back (#301)
+        assertTrue(lab.lookPerPage && lab.lookStrip)
+        assertFalse(lab.copy(lookPerPage = false).asDesigned)
+        assertFalse(lab.copy(lookStrip = false).asDesigned)
         assertEquals(30, lab.sharpen)
         assertTrue(lab.denoise && lab.sharpen in ScanLab.SHARPENING && 0 in ScanLab.SHARPENING)
     }
@@ -77,6 +84,10 @@ class ScanLabTest {
             ScanLab(presets = false),
             ScanLab(cropTools = false),
             ScanLab(flattenAuto = true),
+            ScanLab(flattenTrim = false),
+            ScanLab(lookPerPage = false),
+            ScanLab(lookStrip = false),
+            ScanLab(lookPerPage = false, lookStrip = false, presets = false),
             ScanLab(keep = true, inspect = true),
             ScanLab(finder = ScanFinder.LINES, strength = 100),
             ScanLab(finder = ScanFinder.OFF),
@@ -345,5 +356,47 @@ class ScanLabTest {
         assertTrue(plain.getJSONObject("result").isNull("flatten_check"))
         val unmeasured = scanFlattenCheckJson(io.github.artcraftandroid.pdfcraft.core.ScanFlattenCheck(false, "unmeasured", null, Float.NaN, 0u, 0u))
         assertTrue(unmeasured.isNull("straightened_px") && unmeasured.isNull("flattened_px"))
+    }
+
+    @Test
+    fun aKeptPageSaysWhatWasTrimmedAndThePersonsFlattenChoice() {
+        val trim = io.github.artcraftandroid.pdfcraft.core.ScanTrim(0.015f, 0f, 0f, 0.02f)
+        val json = JSONObject(
+            scanTestPageJson("1.0 (1)", true, crop, crop, null, "auto", 60, true, ScanLab(), "page-01.out.jpg", result.copy(trim = trim), flattenChosen = true),
+        )
+        val t = json.getJSONObject("result").getJSONObject("flatten_trim")
+        assertEquals(1.5, t.getDouble("left_pct"), 1e-9)
+        assertEquals(2.0, t.getDouble("bottom_pct"), 1e-9)
+        assertTrue(json.getBoolean("flatten_chosen"))
+        assertTrue(json.getJSONObject("options").getBoolean("flatten_trim"))
+        // no trim looked for, and no choice made: null
+        val plain = JSONObject(scanTestPageJson("1.0 (1)", true, crop, crop, null, "auto", 60, false, ScanLab(flattenTrim = false), "page-01.out.jpg", result))
+        assertTrue(plain.getJSONObject("result").isNull("flatten_trim"))
+        assertTrue(plain.isNull("flatten_chosen"))
+        assertFalse(plain.getJSONObject("options").getBoolean("flatten_trim"))
+    }
+
+    @Test
+    fun aKeptPageSaysItsOwnLookAndTheLookOptions() {
+        val look = io.github.artcraftandroid.pdfcraft.ui.scan.ScanPageLook(ScanFilter.Whiteboard, 70)
+        val json = JSONObject(scanTestPageJson("1.0 (1)", true, crop, null, null, "colour", 70, false, ScanLab(lookStrip = false), null, result, pageLook = look.json(true)))
+        val own = json.getJSONObject("page_look")
+        // the look's word tells Whiteboard from Auto color, which share the native "colour" look
+        assertEquals("whiteboard", own.getString("id"))
+        assertEquals(70, own.getInt("strength"))
+        assertEquals(70, own.getInt("level"))
+        assertTrue(own.getBoolean("per_page"))
+        assertTrue(json.getJSONObject("options").getBoolean("look_per_page"))
+        assertFalse(json.getJSONObject("options").getBoolean("look_strip"))
+        // the look's own strength is no strength in the file, and its level is the look's
+        val plain = io.github.artcraftandroid.pdfcraft.ui.scan.ScanPageLook(ScanFilter.LightText).json(false)
+        assertTrue(plain.isNull("strength"))
+        assertEquals(ScanFilter.LightText.level, plain.getInt("level"))
+        // a page from before #301, or discarded without a look, has none
+        assertTrue(JSONObject(scanTestPageJson("1.0 (1)", false, crop, null, null, null, null, false, ScanLab(), null, null)).isNull("page_look"))
+        // the log's fields stay words and booleans
+        val fields = ScanLab(lookPerPage = false).diag().toMap()
+        assertEquals(false, fields["look_per_page"])
+        assertEquals(true, fields["look_strip"])
     }
 }

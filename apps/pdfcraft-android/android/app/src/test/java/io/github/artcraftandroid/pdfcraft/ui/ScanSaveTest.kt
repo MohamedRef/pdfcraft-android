@@ -161,6 +161,11 @@ class ScanSaveTest {
         // on: every page goes through the network, and is kept only when straighter (#302)
         val checked = scanPageRequest("/a", corners, ScanFilter.CleanScan, false, auto, "")
         assertTrue(checked.flatten && checked.flattenCheck)
+        // a flattened page's border is trimmed unless the testing option is off (#302)
+        assertTrue(checked.flattenTrim && plain.flattenTrim)
+        assertFalse(scanPageRequest("/a", corners, ScanFilter.CleanScan, true, ScanLab(flattenTrim = false), "").flattenTrim)
+        val noTrim = ScanPreviewKey("/a", corners.toList(), ScanFilter.CleanScan, true, ScanLab())
+        assertFalse(noTrim == noTrim.copy(lab = ScanLab(flattenTrim = false)))
         // the scan screen's switch asks for it: flattened as asked, without the check
         val asked = scanPageRequest("/a", corners, ScanFilter.CleanScan, true, auto, "")
         assertTrue(asked.flatten)
@@ -187,5 +192,45 @@ class ScanSaveTest {
         // an unmeasured page
         val unmeasured = scanFlattenCheckDiag(io.github.artcraftandroid.pdfcraft.core.ScanFlattenCheck(false, "unmeasured", null, 2f, 0u, 5u)).toMap()
         assertEquals(-1.0, unmeasured["straight_px"])
+    }
+
+    @Test
+    fun aPagesOwnStrengthGoesIntoTheRequestUnlessATestingOptionSetsOne() {
+        val corners = floatArrayOf(0f, 0f, 1f, 0f, 1f, 1f, 0f, 1f)
+        // the slider's strength for the page (#301), the look's own without one
+        assertEquals(25, scanPageRequest("/a", corners, ScanFilter.AutoColor, false, ScanLab(), "", strength = 25).strength.toInt())
+        assertEquals(ScanFilter.AutoColor.level, scanPageRequest("/a", corners, ScanFilter.AutoColor, false, ScanLab(), "").strength.toInt())
+        // the testing option's one strength for every look wins over the slider
+        assertEquals(80, scanPageRequest("/a", corners, ScanFilter.AutoColor, false, ScanLab(strength = 80), "", strength = 25).strength.toInt())
+        // a page's strength does not make it "set by hand" for the document types: only the testing option does
+        assertFalse(scanPageRequest("/a", corners, ScanFilter.CleanScan, false, ScanLab(), "", strength = 25).fixedStrength)
+    }
+
+    @Test
+    fun aPreviewOfAnotherLookOrStrengthIsOfTheSamePage() {
+        val corners = listOf(0f, 0f, 1f, 0f, 1f, 1f, 0f, 1f)
+        val key = ScanPreviewKey("/c/shot.jpg", corners, ScanFilter.CleanScan, false, ScanLab())
+        // a strength from the slider changes the preview (#301)
+        assertFalse(key == key.copy(strength = 40))
+        assertTrue(key.samePage(key.copy(strength = 40)))
+        assertTrue(key.samePage(key.copy(filter = ScanFilter.LightText, strength = 10)))
+        assertTrue(key.samePage(key))
+        // anything that changes the page itself is another page
+        assertFalse(key.samePage(key.copy(corners = corners.mapIndexed { i, v -> if (i == 0) 0.01f else v })))
+        assertFalse(key.samePage(key.copy(photoPath = "/c/other.jpg")))
+        assertFalse(key.samePage(key.copy(flatten = true)))
+        assertFalse(key.samePage(key.copy(turns = 1)))
+        assertFalse(key.samePage(null))
+        assertEquals(io.github.artcraftandroid.pdfcraft.ui.scan.ScanPageLook(ScanFilter.CleanScan, 40), key.copy(strength = 40).look)
+    }
+
+    @Test
+    fun theLastLookOfTheSamePageStaysUpWhileTheNewOneIsMade() {
+        // the same page in its previous look is shown, marked as being updated, instead of the photo (#301)
+        assertEquals(ScanShown(ScanView.Result, true), scanShown(true, ScanView.Result, haveWanted = false, failed = false, haveSamePage = true))
+        // but not once the new look failed, nor when the photo was asked for or previews are off
+        assertEquals(ScanShown(ScanView.Photo, false), scanShown(true, ScanView.Result, haveWanted = false, failed = true, haveSamePage = true))
+        assertEquals(ScanShown(ScanView.Photo, false), scanShown(true, ScanView.Photo, haveWanted = false, failed = false, haveSamePage = true))
+        assertEquals(ScanShown(ScanView.Photo, false), scanShown(false, ScanView.Result, haveWanted = false, failed = false, haveSamePage = true))
     }
 }

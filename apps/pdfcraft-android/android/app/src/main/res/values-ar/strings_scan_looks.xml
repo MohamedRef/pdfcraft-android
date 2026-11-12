@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The scan screen's looks: a look per page, strength, the looks strip, compare, apply to all (#301). -->
+<resources>
+    <string name="scan_look_strength">القوة: %1$d</string>
+    <string name="scan_look_strength_label">القوة</string>
+    <string name="scan_look_strength_fixed">القوة محددة من خيار اختبار</string>
+    <string name="scan_compare_hint">اضغط مطولًا لرؤية الأصل</string>
+    <string name="scan_compare_action">عرض الأصل</string>
+    <string name="scan_apply_look_all">تطبيق على الكل</string>
+    <string name="scan_apply_look_title">تطبيق هذا المظهر على كل الصفحات؟</string>
+    <string name="scan_apply_look_body">الصفحات التي لها مظهر خاص ستتغير إلى %1$s.</string>
+    <string name="scan_apply_look_confirm">تطبيق</string>
+    <string name="scan_reset_look">إعادة ضبط المظهر</string>
+    <string name="scan_page_own_look">الصفحة %1$d، بمظهر خاص بها</string>
+    <string name="scan_look_tile_waiting">%1$s، المعاينة غير جاهزة</string>
+    <string name="msg_scan_save_cancelled">توقف الحفظ. صفحاتك ما زالت هنا.</string>
+    <string name="msg_scan_unenhanced">صفحات حُفظت كما صُوّرت، دون تنظيف: %1$d</string>
+    <string name="scan_lab_look_per_page">مظهر لكل صفحة</string>
+    <string name="scan_lab_look_strip">عرض المظاهر كمعاينات صغيرة للصفحة</string>
+</resources>

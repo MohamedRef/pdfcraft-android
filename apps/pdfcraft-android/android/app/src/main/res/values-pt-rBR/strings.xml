@@ -823,6 +823,7 @@
     <string name="scan_lab_preview">Mostrar as páginas como serão salvas</string>
     <string name="scan_lab_crop">Cortar com lupa e encaixe nas bordas</string>
     <string name="scan_lab_flatten_auto">Aplanar as páginas automaticamente quando as linhas ficam mais retas</string>
+    <string name="scan_lab_flatten_trim">Cortar o fundo que sobra nas bordas de uma página aplanada</string>
     <string name="scan_lab_strength">Intensidade do filtro</string>
     <string name="scan_lab_strength_own">Padrão</string>
     <string name="scan_lab_options_body">Estas opções desligam partes do scanner ou as trocam pelo que substituíram, para descobrir de qual parte vem um problema. O log registra o que estava em vigor em cada página.</string>

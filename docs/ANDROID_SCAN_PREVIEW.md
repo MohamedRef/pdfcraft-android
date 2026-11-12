@@ -80,9 +80,73 @@ tests (`ScanSaveTest`), and the whole app by CI's build. **Not run on a phone**:
 preview takes there, whether 1280 pixels is sharp enough on his screen, and how the switch between
 pages feels.
 
-## Not done (the rest of #301)
+## Looks per page, strength, the strip, compare, apply to all, cancel
 
-- `ScanCancel`: a preview cannot be stopped once started.
-- A look per page, the strength slider, the looks strip, compare, apply to all, the session's
-  new fields.
-- Timings on a phone (the log now records them).
+Added after the preview, in the same issue. All of it is Kotlin; the native side is unchanged.
+
+- **A look per page.** `ScanPage.look` (`ScanPageLook` in `ui/scan/ScanLooks.kt`) holds the look
+  and its strength (null for the look's own). Choosing a look changes the page shown; a new page
+  takes the look of the last page (the one chosen last), and a retaken page keeps its own.
+  `saveScan` makes each page in its own look, through the same `scanPageRequest`, which now takes
+  the page's strength. The testing option **A look for each page** (on) puts back one look for
+  the whole scan when off: choosing a look then changes every page.
+- **Strength.** A slider under the looks for every look but Original (`ScanStrengthRow`,
+  `ui/scan/ScanLookUi.kt`). It changes the page's strength as it moves; a preview of the same
+  page in another strength waits 30 ms before it starts (`SCAN_PREVIEW_SETTLE_MS`), so a quick
+  slide makes the value it stops on, and a newer request replaces one still waiting. The testing
+  option **Filter strength** still wins: while it sets a strength the slider shows that value,
+  can't be moved and says why.
+- **While a new look is made** the page in its last look stays on screen ("Preparing the page"
+  shown over it) instead of going back to the photo: `ScanPreviewKey.samePage` and `scanShown`.
+  The photo is shown only until a page's first preview arrives.
+- **The looks strip.** One tile per look, 72 × 96 dp, with its name underneath; the page's look is
+  outlined, and its tile is the page's own preview. The other tiles are made after the page's
+  preview, Original first, each at the main preview's size (so the straightened page kept
+  natively serves them all and each costs one look) and then shrunk
+  (`AppViewModel.requestScanTiles`). They share the preview's thread and give way to a page
+  preview between looks. The testing option **Show the looks as small previews of the page** (on)
+  puts back the looks as words when off, and then only Original is made (for compare).
+- **Compare.** Press and hold on the preview to see the page in the Original look (made once per
+  page, kept while the page is shown). A note at the bottom says "Hold to see the original", and
+  "Original" while held. TalkBack: a long press action, "Show the original", switches it on and off.
+- **Apply to all** gives every page this page's look and strength (not its corners, turn or kind
+  of document), after asking; it is enabled only when it would change a page. **Reset look** puts
+  the page back to Clean scan at its own strength. A page whose look differs from the first page's
+  has a dot on its thumbnail.
+- **The session.** Each page's look goes in a `look` line after its `page` line, and its Flatten
+  page choice in the page line's eighth field (#302), so both survive Android closing the app. The
+  scan-wide `flatten` line of a session written before Flatten became per page is still read: its
+  pages come back flattened. The version
+  stays `pdfcraft-scan 2` on purpose: a build that reads 2 ignores lines it doesn't know, so a
+  newer session still opens in an older build (with default looks).
+- **Cancel while saving.** The busy dialog has Cancel and a count while pages are made; Cancel
+  stops before the next page, deletes the pages made, and leaves the scan on screen as it was.
+  Once the pages go into the PDF it can no longer be stopped.
+- **Pages saved without clean-up.** A page whose processing fails still goes in as photographed;
+  the final message now says how many did.
+- **Diagnostics.** `preview` lines gain `look`, `strength` (as made), `strength_source` (`look`,
+  `page` or `lab`) and `settled`; `page` lines gain `look`, `look_per_page`, `strength_source` and
+  `look_differs`; the `saved` line gains `looks_mixed` and `unenhanced`. New lines: `looks_strip`
+  (`index`, `look_strip`, `asked`, `made`, `reused`, `ms`, `slowest_ms`), `look_chosen` (`index`,
+  `why` = `look`, `strength` or `reset`, `look`, `strength`, `strength_source`, `look_per_page`,
+  `pages`; the slider writes one when let go), `look_applied_all` (`index`, `look`, `strength`,
+  `pages`, `changed`) and `save_cancelled` (`pages`, `made`, `ms`).
+- **Kept scans.** Each page file gains `page_look` (`id`, `strength`, `level`, `per_page`); `look`
+  and `strength` are now the page's own. `options` gains `look_per_page` and `look_strip`.
+  `scan_replay` reads `look` and `strength` as before, so it repeats each page's own.
+
+What was checked: the look rules (new page, retake, choose with and without the option, apply to
+all and its question, the dot, the strip's order and which image a tile shows, compare), the
+session's new lines and an older build reading them, the request's strength, the page file and
+the options, by JVM tests (`ScanLooksTest`, `ScanSessionTest`, `ScanSaveTest`, `ScanLabTest`).
+The screen itself was built, not used: **nothing here has run on a phone**, so the strip's speed,
+how the slider feels, the hold gesture, TalkBack and the layout at large font sizes are not known.
+
+## Not done (left in #301)
+
+- `ScanCancel`: a native preview cannot be stopped once started.
+- Paper White / Keep color: `ScanPageRequest` has no paper field yet.
+- Whiteboard as a pipeline of its own (it is Auto color at 85).
+- Zoom on the preview (double-tap or pinch to 100 %).
+- A test of the latest-wins order with a fake dispatcher; the app has no coroutine test library.
+- Timings on a phone (the log now records them, including the strip's).

@@ -1843,6 +1843,7 @@
     <string name="scan_lab_preview">Show pages as they will be saved</string>
     <string name="scan_lab_crop">Crop with magnifier and snapping to edges</string>
     <string name="scan_lab_flatten_auto">Flatten pages automatically when it makes their lines straighter</string>
+    <string name="scan_lab_flatten_trim">Trim the background left along a flattened page\'s edges</string>
     <string name="scan_lab_strength">Filter strength</string>
     <string name="scan_lab_strength_own">Default</string>
     <string name="scan_lab_options_body">Turns parts of the scanner off, or back to what they replaced, to find where a problem comes from. The log records the settings of every page.</string>
