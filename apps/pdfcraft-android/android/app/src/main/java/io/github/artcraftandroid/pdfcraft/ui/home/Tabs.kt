@@ -473,7 +473,7 @@ private fun Preferences(vm: AppViewModel) {
     )
     SheetDivider()
     // the scanner's models: what is installed and whether it is accepted (#289)
-    io.github.artcraftandroid.pdfcraft.ui.scan.ScanModelsSection(vm.engine, vm.recordDiagnostics)
+    io.github.artcraftandroid.pdfcraft.ui.scan.ScanModelsSection(vm.engine, vm.settings.recordDiagnostics)
     SheetDivider()
     Section(stringResource(R.string.updater_title))
     val context = androidx.compose.ui.platform.LocalContext.current
