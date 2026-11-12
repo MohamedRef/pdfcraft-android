@@ -46,6 +46,7 @@ Only fixed stage names, monotonic elapsed milliseconds, byte counts and page cou
 | `tile_render duration_ms` | One tile of a visible page at a deeper zoom level | Several per page when zoomed in |
 | `*_prefetch duration_ms` | The same kinds, for pages just outside the view | Do not delay what is on screen unless the workers are busy |
 | `slow_render_pixels count` | Pixels of the render just above it, when it took 250 ms or more | Tells a large tile or page from a slow small one (#236) |
+| `native_display_spliced` / `native_display_copied` | Zero-time marker: how the display copy (drawn comment/field appearances and signature marks) was made. Spliced extends a mapped working copy without copying the file; copied made a full in-memory copy | Absent when nothing had to be drawn. `copied` on a large mapped file means the splice fell back (#234) |
 | `first_page_raster_ready elapsed_ms` | First whole-page bitmap becomes available in image cache | Includes bitmap conversion, not GPU display |
 | `first_page_canvas_ms` | First raster submitted to Compose Canvas | **Not** a guaranteed on-screen/GPU frame |
  

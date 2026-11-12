@@ -107,6 +107,16 @@ fn open_prework(context: &OpenContext, cos: &pdfcraft_cos::Document, bytes: &pdf
     OpenPrework { sig_cache, signatures, fields, appearances, display, field_appearances }
 }
 
+/// A zero-time marker saying how the display copy was made, for the diagnostics log (#234):
+/// `native_display_spliced` when a mapped working copy was extended by the display revision,
+/// `native_display_copied` when the file was copied into it, and nothing when the source is shown
+/// as stored.
+fn note_display_storage(trace: &OpenTrace, bytes: &pdfcraft_cos::PdfBytes, display: &pdfcraft_cos::PdfBytes) {
+    if !pdfcraft_cos::same_storage(bytes, display) {
+        trace.event(if display.is_mapped() { "native_display_spliced" } else { "native_display_copied" });
+    }
+}
+
 impl OpenContext {
     /// Attach request-local diagnostics without changing any open or editing behavior.
     pub fn with_open_trace(mut self, trace: OpenTrace) -> Self {
@@ -597,6 +607,7 @@ impl Session {
                 }),
             }
         };
+        note_display_storage(&context.trace, &bytes, &display);
         context.check_cancelled()?;
         let renderer = context.trace.measure("native_render_pool", || RenderPool::new(display.clone(), render_threads(), display_config(&config)));
         let (form, adopted) = editor
