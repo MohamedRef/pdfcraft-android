@@ -2246,6 +2246,8 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 // the book-page gutter rule (#427): the option, what the first rule says, and how much of the side was dark
                 "strict_gutter" to lab.strictGutter, "gutter_loose" to (r?.kind?.gutterLoose ?: false),
                 "gutter_cover" to (r?.kind?.gutterCover?.toDouble() ?: -1.0),
+                // the photo rule (#427): the option, and what the first rule reads as photograph
+                "strict_photo" to lab.strictPhoto, "photo_loose" to (r?.kind?.photoLoose?.toDouble() ?: -1.0),
                 "whole_photo" to (r?.kind?.wholePhoto ?: false),
             )
             if (keepIn != null) {
@@ -2265,7 +2267,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                     ScanTestKind(
                         k.preset, k.chosen, k.strength.toInt(), k.sharpen.toInt(), k.keepPaper, k.suggestFlatten, k.suggestGreyscale, k.ratio.toDouble(),
                         k.inkShare.toDouble(), k.colourInkShare.toDouble(), k.photoShare.toDouble(), k.strokeMm.toDouble(), k.brightShare.toDouble(), k.gutterBand, k.wholePhoto,
-                        k.gutterLoose, k.gutterCover.toDouble(),
+                        k.gutterLoose, k.gutterCover.toDouble(), k.photoLoose.toDouble(),
                     )
                 }
                 withContext(Dispatchers.IO) { scanLab.keepPage(keepIn, i, page, true, scanLookWord(filter, lab), strength, flatten, r?.path?.let(::File), kept, scanPreviewRecord(page), turn, kind, r?.let { scanAppliedStrength(page.look, lab, it.kind?.strength?.toInt()) }) }

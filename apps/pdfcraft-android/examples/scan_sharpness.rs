@@ -149,6 +149,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             preset: "off".into(),
             curved_sides: 0,
             strict_gutter: true,
+            strict_photo: true,
             fixed_strength: false,
             paper: "auto".into(),
         })?;
