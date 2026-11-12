@@ -1,5 +1,6 @@
 package io.github.artcraftandroid.pdfcraft.ui
 
+import io.github.artcraftandroid.pdfcraft.engine.toBitmap
 import android.app.Application
 import android.net.Uri
 import androidx.compose.runtime.getValue
@@ -380,6 +381,40 @@ class DocumentToolsController internal constructor(private val vm: AppViewModel)
             val warn = r.optJSONArray("warnings")?.length() ?: 0
             Diag.event(DiagArea.Pages, "marks_removed", "doc" to doc.diagNumber, "kind" to kind, "warnings" to warn)
             vm.tell(text(if (warn > 0) R.string.marks_msg_removed_with_warnings else R.string.marks_msg_removed), text(R.string.common_undo)) { vm.undo(doc) }
+        }
+    }
+
+    /**
+     * Page [page] (0-based) of [doc] with a mark drawn by the engine (#314): the page is copied out
+     * (`page_extract`), opened on its own, marked with [tool] and [args] and drawn at about
+     * [maxSide] pixels on its longer side, so the preview is the engine's own result, PDF pictures
+     * included. The document is not touched. Null when it can't be made. Runs to the end once
+     * started, so the copy is always closed and deleted.
+     */
+    suspend fun markPreview(doc: OpenDocument, kind: MarkKind, args: Map<String, Any?>, page: Int, maxSide: Float): android.graphics.Bitmap? {
+        val eng = vm.engine ?: return null
+        val size = doc.info.pages.getOrNull(page) ?: return null
+        return withContext(NonCancellable) {
+            val dir = File(app.cacheDir, "mark-preview").apply { mkdirs() }
+            val file = File(dir, "page-${System.nanoTime()}.pdf")
+            var copy: Long? = null
+            val start = System.nanoTime()
+            try {
+                eng.tool("page_extract", mapOf("doc" to doc.id, "pages" to listOf(page + 1), "out" to file.absolutePath))
+                copy = eng.tool("doc_open", mapOf("path" to file.absolutePath)).optLong("doc")
+                eng.tool(kind.tool, args + ("doc" to copy))
+                val scale = maxSide / maxOf(size.width, size.height).coerceAtLeast(1f)
+                val id = copy.toULong()
+                withContext(eng.thumbnails) { eng.session.renderPage(id, 0u, scale, null).toBitmap() }.also {
+                    Diag.event(DiagArea.Pages, "mark_preview", "doc" to doc.diagNumber, "kind" to kind, "picture" to args.containsKey("file"), "ms" to (System.nanoTime() - start) / 1_000_000)
+                }
+            } catch (e: Exception) {
+                Diag.failure(DiagArea.Pages, "mark_preview", e)
+                null
+            } finally {
+                copy?.let { c -> runCatching { eng.tool("doc_close", mapOf("doc" to c, "discard_changes" to true)) } }
+                file.delete()
+            }
         }
     }
 

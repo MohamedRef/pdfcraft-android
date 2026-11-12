@@ -1382,3 +1382,30 @@ fn study_tape_freehand_corners_and_the_tape_layer() {
     let layers = s.layers(doc).unwrap();
     assert_eq!(layers.iter().map(|l| (l.name.as_str(), l.visible)).collect::<Vec<_>>(), vec![("Tape", true)]);
 }
+
+/// The Page marks preview (#314): one page copied out with `page_extract`, opened on its own, the
+/// mark applied there and the page drawn. The document itself is not changed.
+#[test]
+fn page_mark_preview_on_a_copy_of_one_page() {
+    let s = MobileSession::new();
+    let doc = s.open(blank_pdf(3), None).unwrap().id;
+    let run = |name: &str, args: Value| -> Value { serde_json::from_str(&s.execute(name.into(), args.to_string()).unwrap()).unwrap() };
+    let dir = std::env::temp_dir().join(format!("pdfcraft-mark-preview-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let page = dir.join("page.pdf").to_string_lossy().into_owned();
+    run("page_extract", json!({ "doc": doc, "pages": [2], "out": page }));
+    let scratch = run("doc_open", json!({ "path": page }))["doc"].as_u64().unwrap();
+    let plain = s.render_page(scratch, 0, 0.5, None).unwrap();
+    // what the app sends: the page's text already filled in, every page of the copy
+    run("doc_watermark", json!({ "doc": scratch, "text": "DRAFT", "rotation": 45.0, "opacity": 0.5, "behind": false, "color": "#ff0000" }));
+    run("doc_header_footer", json!({ "doc": scratch, "footer_center": "Page 2 of 3", "font": "Times", "font_size": 10.0, "color": "#000000", "margins": [36.0, 36.0, 72.0, 72.0], "start_number": 1, "shrink": false }));
+    let marked = s.render_page(scratch, 0, 0.5, None).unwrap();
+    assert_eq!((plain.width, plain.height), (marked.width, marked.height));
+    let changed = plain.rgba.chunks(4).zip(marked.rgba.chunks(4)).filter(|(a, b)| a != b).count();
+    assert!(changed > 100, "only {changed} pixels changed");
+    assert!(s.page_plain_text(scratch, 0).unwrap().contains("Page 2 of 3"));
+    s.close(scratch, true).unwrap();
+    // the document itself has no mark
+    assert!(s.page_marks(doc).unwrap().is_empty());
+    std::fs::remove_dir_all(&dir).ok();
+}

@@ -12,6 +12,9 @@ pub enum ScanError {
     /// The four corners don't enclose a page.
     #[error("the four corners must enclose an area (a convex quadrilateral inside the photo)")]
     BadCorners,
+    /// A burst to merge has too few or too many photos (#297).
+    #[error("a merge takes 2 to 4 photos of the page")]
+    FrameCount,
     /// The page could not be written as a picture.
     #[error("the page could not be saved as a picture")]
     Encode,
