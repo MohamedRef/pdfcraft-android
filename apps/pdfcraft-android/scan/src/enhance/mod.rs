@@ -8,13 +8,17 @@
 //! repeats the comparison.
 
 mod background;
+mod bw;
 mod objects;
 mod plane;
 mod tone;
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tests_bw;
 
+pub use bw::{Bitmap1, BwParams, DEFAULT_BW_STRENGTH, black_white};
 pub use plane::Mask;
 
 use crate::Rgb;
@@ -28,6 +32,9 @@ const BLEND_BELOW: u8 = 20;
 pub const MIN_OUTPUT_PIXELS: f64 = 3_600_000.0;
 /// ...by at most this factor per side.
 pub const MAX_ENLARGE: f64 = 4.0;
+
+/// A page with a side shorter than this is too small to tell paper from ink.
+pub(crate) const MIN_SIDE: usize = 16;
 
 /// What the paper becomes.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
@@ -80,7 +87,7 @@ pub fn auto(page: &Rgb, params: &AutoParams) -> Option<AutoOutput> {
     }
     let untouched = |page: &Rgb| AutoOutput { rgb: page.clone(), objects: Mask::new(0, 0), closing_radius: 0 };
     // too small to tell paper from ink
-    if params.strength == 0 || w < 16 || h < 16 {
+    if params.strength == 0 || w < MIN_SIDE || h < MIN_SIDE {
         return Some(untouched(page));
     }
     let bg = background::background(page, params.threads > 1);

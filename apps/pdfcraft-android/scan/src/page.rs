@@ -4,9 +4,9 @@
 use std::time::Instant;
 
 use crate::aspect::{AspectSource, Focal, Paper, dpi_without_paper, proportions};
-use crate::encode::{Format, JPEG_QUALITY, Raster, encode_jpeg, encode_png_grey, stamp_jpeg_density};
+use crate::encode::{Format, JPEG_QUALITY, Raster, encode_jpeg, encode_png_bilevel, stamp_jpeg_density};
 use crate::enhance::enlargement;
-use crate::look::{Look, Pixels, apply_with_threads};
+use crate::look::{Look, LookParams, Pixels, apply_with};
 use crate::warp::rectify_with_threads;
 use crate::{Photo, Quad, ScanError};
 
@@ -66,6 +66,9 @@ pub struct PageResult {
     pub timings: Vec<(&'static str, u32)>,
 }
 
+/// A black-and-white page under this resolution is made at twice the size.
+const BW_MIN_DPI: u16 = 200;
+
 /// The corners of a page that is the whole photo.
 pub const WHOLE_PHOTO: [f32; 8] = [0.0, 0.0, 1.0, 0.0, 1.0, 1.0, 0.0, 1.0];
 
@@ -121,22 +124,29 @@ pub fn process_page(request: &PageRequest<'_>) -> Result<PageResult, ScanError> 
         None => Focal::from_35mm(lens.focal_35mm, lens.digital_zoom, photo.width, photo.height),
     };
     let shape = proportions(&quad, photo.width, photo.height, camera, request.snap_paper);
-    // Auto enlarges a small page in this same resampling pass, before its tone curve (#298, step 0)
-    let scale = if request.look == Look::Auto { enlargement(shape.width, shape.height) } else { 1.0 };
+    let scale = match request.look {
+        // Auto enlarges a small page in this same resampling pass, before its tone curve (#298, step 0)
+        Look::Auto => enlargement(shape.width, shape.height),
+        // two levels need more pixels than shades of grey to draw a thin stroke: a page under
+        // 200 dpi is made at twice the size (#300)
+        Look::BlackWhite if shape.output(1.0)?.2 < BW_MIN_DPI => 2.0,
+        _ => 1.0,
+    };
     let (w, h, dpi) = shape.output(scale)?;
     let page = rectify_with_threads(&photo, &quad, w, h, request.threads)?;
     drop(photo);
     lap(STAGE_RECTIFY, &mut timings);
 
-    let pixels = apply_with_threads(&page, request.look, request.strength, request.threads).ok_or(ScanError::Encode)?;
+    let pixels = apply_with(&page, request.look, &LookParams { strength: request.strength, threads: request.threads, dpi: f32::from(dpi) })
+        .ok_or(ScanError::Encode)?;
     drop(page);
     lap(STAGE_LOOK, &mut timings);
 
     let raster = |pixels, grey| Raster { pixels, grey, width: w, height: h, dpi };
     let (bytes, format) = match &pixels {
         Pixels::Rgb(rgb) => (encode_jpeg(&raster(rgb, false), JPEG_QUALITY)?, Format::Jpeg),
-        Pixels::Grey(grey) if request.look == Look::BlackWhite => (encode_png_grey(&raster(grey, true))?, Format::Png),
         Pixels::Grey(grey) => (encode_jpeg(&raster(grey, true), JPEG_QUALITY)?, Format::Jpeg),
+        Pixels::Bilevel(bits) => (encode_png_bilevel(bits, dpi)?, Format::Png),
     };
     lap(STAGE_ENCODE, &mut timings);
 

@@ -12,6 +12,9 @@
 //! cargo run -p pdfcraft-scan --example scan_reference -- page <dir> <out_dir> [strength]
 //!     the whole pipeline (decode, straighten to the reference's corners, Auto, encode) on every
 //!     <dir>/<name>.before.jpg that has a <name>.ref.json  ->  <out_dir>/<name>.jpg
+//!
+//! cargo run -p pdfcraft-scan --example scan_reference -- bw <dir> <out_dir> [strength]
+//!     the same pipeline in black and white (#300)  ->  <out_dir>/<name>.png (1 bit per pixel)
 //! ```
 //!
 //! The pairs are someone's documents: keep the folders outside the repository.
@@ -59,7 +62,7 @@ fn look(dir: &Path, out: &Path, strength: u8, threads: usize) {
     }
 }
 
-fn page(dir: &Path, out: &Path, strength: u8, threads: usize) {
+fn page(dir: &Path, out: &Path, look: Look, strength: u8, threads: usize) {
     for path in files(dir, ".before.jpg") {
         let name = name_of(&path, ".before.jpg");
         let Some(corners) = std::fs::read_to_string(dir.join(format!("{name}.ref.json"))).ok().as_deref().and_then(corners) else {
@@ -67,11 +70,18 @@ fn page(dir: &Path, out: &Path, strength: u8, threads: usize) {
             continue;
         };
         let photo = std::fs::read(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
-        match process_page(&PageRequest { look: Look::Auto, strength, threads, ..PageRequest::new(&photo, corners) }) {
+        match process_page(&PageRequest { look, strength, threads, ..PageRequest::new(&photo, corners) }) {
             Ok(result) => {
                 let stages: Vec<String> = result.timings.iter().map(|(stage, ms)| format!("{stage} {ms} ms")).collect();
-                println!("{name}: {} x {}, {}", result.width, result.height, stages.join(", "));
-                std::fs::write(out.join(format!("{name}.jpg")), &result.bytes).unwrap_or_else(|e| panic!("{name}: {e}"));
+                println!(
+                    "{name}: {} x {} at {} dpi, {} KiB, {}",
+                    result.width,
+                    result.height,
+                    result.dpi,
+                    result.bytes.len() / 1024,
+                    stages.join(", ")
+                );
+                std::fs::write(out.join(format!("{name}.{}", result.format.extension())), &result.bytes).unwrap_or_else(|e| panic!("{name}: {e}"));
             }
             Err(e) => println!("{name}: {e}"),
         }
@@ -81,15 +91,16 @@ fn page(dir: &Path, out: &Path, strength: u8, threads: usize) {
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     let (Some(mode), Some(dir), Some(out)) = (args.get(1), args.get(2), args.get(3)) else {
-        eprintln!("usage: scan_reference look|page <dir> <out_dir> [strength]");
+        eprintln!("usage: scan_reference look|page|bw <dir> <out_dir> [strength]");
         std::process::exit(2);
     };
-    let strength = args.get(4).and_then(|v| v.parse().ok()).unwrap_or(60);
+    let strength = args.get(4).and_then(|v| v.parse().ok()).unwrap_or(if mode == "bw" { 55 } else { 60 });
     let threads = std::thread::available_parallelism().map_or(1, usize::from).min(4);
     std::fs::create_dir_all(out).unwrap_or_else(|e| panic!("{out}: {e}"));
     match mode.as_str() {
         "look" => look(Path::new(dir), Path::new(out), strength, threads),
-        "page" => page(Path::new(dir), Path::new(out), strength, threads),
-        other => eprintln!("unknown mode {other}: use look or page"),
+        "page" => page(Path::new(dir), Path::new(out), Look::Auto, strength, threads),
+        "bw" => page(Path::new(dir), Path::new(out), Look::BlackWhite, strength, threads),
+        other => eprintln!("unknown mode {other}: use look, page or bw"),
     }
 }
