@@ -145,8 +145,8 @@ fun MoreSheet(vm: AppViewModel, doc: OpenDocument) {
             SheetRow(LucideIcons.ShieldCheck, stringResource(R.string.sign_signatures), { ctl.sheet = ViewerSheet.Signatures }, chevron = true)
             if (doc.info.layers > 0u) SheetRow(LucideIcons.Layers, stringResource(R.string.sheet_layers), { ctl.sheet = ViewerSheet.Layers }, chevron = true)
             doc.source?.let { src ->
-                val due = vm.dueCounts[src.toString()] ?: 0
-                SheetRow(LucideIcons.SwatchBook, if (due > 0) stringResource(R.string.cards_row_due, due) else stringResource(R.string.cards_title), { close(); vm.startReview(src.toString(), doc.info.name) })
+                val due = vm.study.dueCounts[src.toString()] ?: 0
+                SheetRow(LucideIcons.SwatchBook, if (due > 0) stringResource(R.string.cards_row_due, due) else stringResource(R.string.cards_title), { close(); vm.study.startReview(src.toString(), doc.info.name) })
             }
             if (doc.info.undo != null || doc.info.redo != null) {
                 GroupDivider()
