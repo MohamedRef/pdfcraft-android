@@ -94,7 +94,7 @@ paper colour. This wires in two blocks from #382 rather than writing them again:
   when its weight is at least one half. A page the mask finds to be a picture is all gentle.
 - **Suggestions** (testing option "Suggest Flatten page or Grayscale for a document type", on): a
   Book page shows a chip "Flatten this page?" beside the type while the person has not chosen
-  either way for the page and the flattening model is there; a Receipt shows "Try Grayscale" while
+  either way for the page and the flattening model is there; a Receipt shows "Try grayscale" while
   the look is Clean scan. Tapping a chip makes the change (the page's own Flatten page switch from
   #302, or the Grayscale look); nothing changes by itself, because the type is a guess. A
   `suggestion_taken` line (`index`, `suggestion`) is logged for each tap.
