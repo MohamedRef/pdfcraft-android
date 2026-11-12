@@ -71,10 +71,12 @@ import io.github.artcraftandroid.pdfcraft.ui.ToolPage
 import io.github.artcraftandroid.pdfcraft.ui.WatermarkSpec
 import io.github.artcraftandroid.pdfcraft.ui.expandMarkTokens
 import io.github.artcraftandroid.pdfcraft.ui.markArgs
+import io.github.artcraftandroid.pdfcraft.ui.markPreviewArgs
 import io.github.artcraftandroid.pdfcraft.ui.parsePageRange
 import io.github.artcraftandroid.pdfcraft.ui.pdfColors
 import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 
 /** The colours page marks offer, as `#RRGGBB`. */
@@ -84,8 +86,8 @@ private val BACKGROUND_COLORS = listOf("#FFF8DC", "#FFFFCC", "#E3F2FD", "#E8F5E9
 /**
  * Page marks (#168): Header & footer, Watermark and Background, each with a preview of the page as
  * it will look, the pages to mark, and Add, or Update and Remove when the document already has one.
- * The preview is drawn by the app over the page as it is now; the result is the engine's, and each
- * Add, Update or Remove is one undo step.
+ * The preview is the engine's own drawing of the mark on a copy of the page (#314); each Add,
+ * Update or Remove is one undo step.
  */
 @Composable
 fun PageMarksScreen(vm: AppViewModel, doc: OpenDocument) {
@@ -152,7 +154,7 @@ fun PageMarksScreen(vm: AppViewModel, doc: OpenDocument) {
             }
         }
         Column(Modifier.verticalScroll(rememberScrollState())) {
-            MarkPreview(vm, doc, tab, hf, wm, bg, pages)
+            MarkPreview(vm, doc, tab, hf, wm, bg, pages, update)
             if (update) {
                 Text(stringResource(R.string.marks_update_note), color = c.textSecondary, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 24.dp, vertical = 4.dp))
             }
@@ -176,9 +178,13 @@ fun PageMarksScreen(vm: AppViewModel, doc: OpenDocument) {
     }
 }
 
-/** The first marked page as it is now, with the mark drawn over it the way the engine will draw it. */
+/**
+ * A marked page with the mark on it. The engine draws it on a copy of the page (#314) a moment
+ * after the settings stop changing; until then the app draws an approximation over the page as it
+ * is now, so the preview follows every change at once.
+ */
 @Composable
-private fun MarkPreview(vm: AppViewModel, doc: OpenDocument, tab: MarkKind, hf: HeaderFooterSpec, wm: WatermarkSpec, bg: BackgroundSpec, pages: List<Int>?) {
+private fun MarkPreview(vm: AppViewModel, doc: OpenDocument, tab: MarkKind, hf: HeaderFooterSpec, wm: WatermarkSpec, bg: BackgroundSpec, pages: List<Int>?, replace: Boolean) {
     val c = pdfColors
     val marked = pages ?: (1..doc.info.pages.size).toList()
     var at by remember(marked) { mutableStateOf(0) }
@@ -190,6 +196,18 @@ private fun MarkPreview(vm: AppViewModel, doc: OpenDocument, tab: MarkKind, hf: 
         val scale = 900f / maxOf(info.width, info.height).coerceAtLeast(1f)
         bitmap = runCatching { withContext(eng.thumbnails) { eng.session.renderPage(doc.id, page.toUInt(), scale, null).toBitmap().asImageBitmap() } }.getOrNull()
     }
+    // the engine's preview for these exact settings, once it is ready
+    val spec: Any = when (tab) { MarkKind.HeaderFooter -> hf; MarkKind.Watermark -> wm; MarkKind.Background -> bg }
+    val usable = when (tab) { MarkKind.HeaderFooter -> hf.usable; MarkKind.Watermark -> wm.usable; MarkKind.Background -> true }
+    val previewArgs = remember(tab, spec, at, replace, doc.info.pages.size) { markPreviewArgs(spec, at, doc.info.pages.size, replace) }
+    var exact by remember(page, doc.info.generation) { mutableStateOf<Pair<Map<String, Any?>, ImageBitmap>?>(null) }
+    LaunchedEffect(previewArgs, page, doc.info.generation, usable) {
+        if (!usable) return@LaunchedEffect
+        delay(400)
+        val img = vm.markPreview(doc, tab, previewArgs, page, 900f)?.asImageBitmap() ?: return@LaunchedEffect
+        exact = previewArgs to img
+    }
+    val engineImage = exact?.takeIf { it.first == previewArgs && usable }?.second
     val picturePath = when (tab) { MarkKind.Watermark -> wm.imagePath; MarkKind.Background -> bg.imagePath; else -> null }
     var picture by remember(picturePath) { mutableStateOf<ImageBitmap?>(null) }
     LaunchedEffect(picturePath) {
@@ -210,6 +228,10 @@ private fun MarkPreview(vm: AppViewModel, doc: OpenDocument, tab: MarkKind, hf: 
             Canvas(Modifier.size((h * ratio).dp, h.dp).semantics { contentDescription = previewDesc }) {
                 val pt = size.width / info.width.coerceAtLeast(1f)
                 val img = bitmap
+                if (engineImage != null) {
+                    drawImage(engineImage, dstSize = IntSize(size.width.roundToInt(), size.height.roundToInt()))
+                    return@Canvas
+                }
                 when (tab) {
                     MarkKind.Background -> {
                         // the background sits behind the content: white paper takes its colour or picture
