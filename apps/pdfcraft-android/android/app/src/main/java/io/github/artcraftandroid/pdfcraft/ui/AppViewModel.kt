@@ -4556,9 +4556,23 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             val found = (engine ?: application.engine.await().getOrNull())?.let { eng -> runCatching { eng.tool("photo_find_document", mapOf("path" to f.absolutePath)) }.getOrNull() }
                 ?.takeIf { it.optBoolean("found") }?.optJSONArray("corners")?.takeIf { it.length() == 8 }
                 ?.let { a -> FloatArray(8) { a.optDouble(it).toFloat() } }
-            Diag.event(DiagArea.Scan, "photo", "retake" to (r != null), "bytes" to f.length(), "edges_found" to (found != null), "find_ms" to android.os.SystemClock.elapsedRealtime() - findStarted)
+            val findMs = android.os.SystemClock.elapsedRealtime() - findStarted
+            // the edges looked at again in the full-size photo: the search above sees a small copy
+            // of it, so its corners are several pixels off (#291); a side with no convincing edge
+            // near it stays where it was found
+            val refineStarted = android.os.SystemClock.elapsedRealtime()
+            val refined = found?.let { c ->
+                withContext(Dispatchers.Default) { runCatching { io.github.artcraftandroid.pdfcraft.core.scanRefineQuad(f.absolutePath, c.toList(), listOf(true, true, true, true), 0f) } }
+                    .onFailure { Diag.failure(DiagArea.Scan, "scan_refine_quad", it) }.getOrNull()
+            }
+            val edges = refined?.corners?.takeIf { it.size == 8 }?.toFloatArray() ?: found
+            Diag.event(
+                DiagArea.Scan, "photo", "retake" to (r != null), "bytes" to f.length(), "edges_found" to (found != null), "find_ms" to findMs,
+                "refine_ms" to android.os.SystemClock.elapsedRealtime() - refineStarted,
+                "refined_sides" to (refined?.refined?.count { it } ?: 0), "curved_sides" to (refined?.curved?.count { it } ?: 0),
+            )
             val at = scanPages.indexOfFirst { it.file == f }
-            if (found != null && at >= 0) scanPages[at] = scanPages[at].copy(corners = found, found = found)
+            if (edges != null && at >= 0) scanPages[at] = scanPages[at].copy(corners = edges, found = edges)
         }
     }
 

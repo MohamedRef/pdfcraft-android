@@ -6,7 +6,7 @@
 use std::path::{Path, PathBuf};
 use std::sync::RwLock;
 
-use pdfcraft_scan::{AspectSource, Format, Look, PageRequest, Paper, process_page};
+use pdfcraft_scan::{AspectSource, Format, Look, PageRequest, Paper, Photo, Pyramid, Quad, RefineOptions, process_page, refine};
 
 use crate::MobileError;
 
@@ -101,6 +101,20 @@ pub struct ScanPageResult {
     pub timings: Vec<ScanTiming>,
 }
 
+/// A page's corners after a closer look at the photo (#291).
+#[derive(Debug, Clone, PartialEq, uniffi::Record)]
+pub struct ScanQuad {
+    /// x1, y1 … x4, y4 as shares (0–1) of the upright photo: top-left, top-right, bottom-right,
+    /// bottom-left.
+    pub corners: Vec<f32>,
+    /// For the top, right, bottom and left sides: the side was moved onto an edge found in the
+    /// photo (`false`: no convincing edge near it, it is where it was given).
+    pub refined: Vec<bool>,
+    /// For the same sides: the edge bends, so the page is not flat.
+    pub curved: Vec<bool>,
+    pub timings: Vec<ScanTiming>,
+}
+
 /// The one directory scan functions read from and write to.
 static SCAN_ROOT: RwLock<Option<PathBuf>> = RwLock::new(None);
 
@@ -130,12 +144,62 @@ pub fn scan_process_page(request: ScanPageRequest) -> Result<ScanPageResult, Mob
 /// The largest camera file read (a 64 MP PNG is under 200 MB).
 const MAX_PHOTO_BYTES: u64 = 256 << 20;
 
+/// The bytes of the photo at `path`, which must be inside `root`.
+fn read_photo(root: &Path, path: &str) -> Result<Vec<u8>, MobileError> {
+    let unreadable = || MobileError::Command("the photo could not be read".into());
+    let photo_path = Path::new(path).canonicalize().map_err(|_| unreadable())?;
+    if !photo_path.starts_with(root) {
+        return Err(MobileError::Command("the scan's files must be in the app's own folder".into()));
+    }
+    if std::fs::metadata(&photo_path).map_err(|_| unreadable())?.len() > MAX_PHOTO_BYTES {
+        return Err(MobileError::Command("the photo is too large".into()));
+    }
+    std::fs::read(&photo_path).map_err(|_| unreadable())
+}
+
+/// Move a page's corners onto the paper's edges as they are in the full-size photo (#291). A
+/// detector sees a small copy of the photo, so its corners are several pixels off at full size.
+/// `sides` says which of the top, right, bottom and left sides to look at again (all four when it
+/// is not four values); `search_share` is how far from each side to look, as a share of the
+/// photo's diagonal (0 for the usual 1.5 %). A side with no convincing edge near it stays.
+#[uniffi::export]
+pub fn scan_refine_quad(photo_path: String, corners: Vec<f32>, sides: Vec<bool>, search_share: f32) -> Result<ScanQuad, MobileError> {
+    let root = SCAN_ROOT.read().unwrap_or_else(std::sync::PoisonError::into_inner).clone();
+    let root = root.ok_or_else(|| MobileError::Command("scanning is not ready yet".into()))?;
+    refine_in(&root, &photo_path, &corners, &sides, search_share)
+}
+
+pub(crate) fn refine_in(root: &Path, photo_path: &str, corners: &[f32], sides: &[bool], search_share: f32) -> Result<ScanQuad, MobileError> {
+    let corners: [f32; 8] = corners.try_into().map_err(|_| MobileError::Command("a page needs four corners".into()))?;
+    let bytes = read_photo(root, photo_path)?;
+    let mut timings = Vec::with_capacity(2);
+    let mut clock = std::time::Instant::now();
+    let mut lap = |stage: &str, timings: &mut Vec<ScanTiming>| {
+        timings.push(ScanTiming { stage: stage.into(), ms: u32::try_from(clock.elapsed().as_millis()).unwrap_or(u32::MAX) });
+        clock = std::time::Instant::now();
+    };
+    let photo = Photo::decode(&bytes).map_err(|e| MobileError::Command(e.to_string()))?;
+    drop(bytes);
+    let (width, height) = (photo.width, photo.height);
+    let quad = Quad::from_shares(&corners, width, height).map_err(|e| MobileError::Command(e.to_string()))?;
+    let pyramid = Pyramid::new(photo.luma());
+    drop(photo);
+    lap("scan_decode", &mut timings);
+    let diagonal = f64::from(width).hypot(f64::from(height));
+    let search_px = (search_share.is_finite() && search_share > 0.0).then(|| (f64::from(search_share.min(0.2)) * diagonal) as f32);
+    let options = RefineOptions { search_px, sides: sides.try_into().unwrap_or([true; 4]) };
+    let found = refine(&pyramid, &quad, &options);
+    lap("scan_refine", &mut timings);
+    Ok(ScanQuad {
+        corners: found.quad.to_shares(width, height).to_vec(),
+        refined: found.sides.iter().map(|s| s.refined).collect(),
+        curved: found.sides.iter().map(|s| s.curved).collect(),
+        timings,
+    })
+}
+
 pub(crate) fn process_in(root: &Path, request: &ScanPageRequest) -> Result<ScanPageResult, MobileError> {
     let outside = || MobileError::Command("the scan's files must be in the app's own folder".into());
-    let photo_path = Path::new(&request.photo_path).canonicalize().map_err(|_| MobileError::Command("the photo could not be read".into()))?;
-    if !photo_path.starts_with(root) {
-        return Err(outside());
-    }
     let corners: [f32; 8] = request.corners.as_slice().try_into().map_err(|_| MobileError::Command("a page needs four corners".into()))?;
     // The output's folder must exist inside the root; its name may not carry a folder.
     let out = Path::new(&request.output_path);
@@ -144,11 +208,7 @@ pub(crate) fn process_in(root: &Path, request: &ScanPageRequest) -> Result<ScanP
     if !parent.starts_with(root) {
         return Err(outside());
     }
-    let size = std::fs::metadata(&photo_path).map_err(|_| MobileError::Command("the photo could not be read".into()))?.len();
-    if size > MAX_PHOTO_BYTES {
-        return Err(MobileError::Command("the photo is too large".into()));
-    }
-    let bytes = std::fs::read(&photo_path).map_err(|_| MobileError::Command("the photo could not be read".into()))?;
+    let bytes = read_photo(root, &request.photo_path)?;
     let look = match request.look {
         ScanLook::Original => Look::Original,
         ScanLook::Colour => Look::Colour,
@@ -291,6 +351,39 @@ mod tests {
         // 1600 pixels as long as A4: 137 dots per inch
         assert!(near(sizes[2], (1600.0 * 72.0 / 137.0, 1200.0 * 72.0 / 137.0)), "the whole photo: {:?}", sizes[2]);
         std::fs::remove_dir_all(root).unwrap();
+    }
+
+    /// A light sheet on a dark desk, found roughly: the corners come back on the sheet's edges.
+    #[test]
+    fn rough_corners_are_moved_onto_the_sheets_edges() {
+        let root = temp("refine");
+        let shot = root.join("desk.png");
+        let (w, h) = (1600u32, 1200u32);
+        image::GrayImage::from_fn(w, h, |x, y| image::Luma([if (300..1300).contains(&x) && (200..1000).contains(&y) { 230 } else { 50 }]))
+            .save(&shot)
+            .unwrap();
+        let path = shot.to_string_lossy().into_owned();
+        // each corner about 10 pixels off
+        let rough =
+            [290.0 / 1600.0, 212.0 / 1200.0, 1311.0 / 1600.0, 195.0 / 1200.0, 1292.0 / 1600.0, 1009.0 / 1200.0, 306.0 / 1600.0, 991.0 / 1200.0];
+        let found = refine_in(&root, &path, &rough, &[], 0.0).unwrap();
+        let truth = [300.0, 200.0, 1300.0, 200.0, 1300.0, 1000.0, 300.0, 1000.0];
+        for (i, share) in found.corners.iter().enumerate() {
+            let px = share * if i % 2 == 0 { w as f32 } else { h as f32 };
+            assert!((px - truth[i]).abs() < 0.5, "corner coordinate {i}: {px} against {}", truth[i]);
+        }
+        assert_eq!((found.refined.as_slice(), found.curved.as_slice()), ([true; 4].as_slice(), [false; 4].as_slice()));
+        assert_eq!(found.timings.iter().map(|t| t.stage.as_str()).collect::<Vec<_>>(), ["scan_decode", "scan_refine"]);
+        // only two sides asked for: the corner between the other two stays where it was given
+        let two = refine_in(&root, &path, &rough, &[true, true, false, false], 0.0).unwrap();
+        assert_eq!(two.refined, [true, true, false, false]);
+        assert!((two.corners[6] - rough[6]).abs() < 1e-6 && (two.corners[7] - rough[7]).abs() < 1e-6);
+        // refused like the page function: outside the root, not four corners
+        let other = temp("refine-other");
+        assert!(refine_in(&other, &path, &rough, &[], 0.0).is_err());
+        assert!(refine_in(&root, &path, &rough[..6], &[], 0.0).is_err());
+        std::fs::remove_dir_all(root).unwrap();
+        std::fs::remove_dir_all(other).unwrap();
     }
 
     #[test]

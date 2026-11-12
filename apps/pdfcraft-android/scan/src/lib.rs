@@ -17,6 +17,7 @@ pub mod look;
 pub mod page;
 mod photo;
 mod quad;
+pub mod refine;
 pub mod warp;
 
 pub use aspect::{AspectSource, Focal, Paper, Proportions, proportions};
@@ -27,9 +28,12 @@ pub use look::Look;
 pub use page::{PageRequest, PageResult, process_page};
 pub use photo::{Luma, MAX_PHOTO_PIXELS, Photo, luma};
 pub use quad::Quad;
+pub use refine::{Pyramid, RefineOptions, Refined, SideFit, refine};
 pub use warp::{Rgb, rectify};
 
 #[cfg(test)]
 mod tests;
 #[cfg(test)]
 mod tests_proportions;
+#[cfg(test)]
+mod tests_refine;
