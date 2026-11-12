@@ -2403,6 +2403,62 @@
         <item quantity="one">%1$d web address became a link</item>
         <item quantity="other">%1$d web addresses became links</item>
     </plurals>
+    <!-- Check & prepare: PDF/A, print readiness, thin lines (#181) -->
+    <string name="std_title">Check &amp; prepare</string>
+    <string name="std_tab_pdfa">PDF/A</string>
+    <string name="std_tab_readiness">Print readiness</string>
+    <string name="std_tab_hairlines">Thin lines</string>
+    <string name="std_pdfa_check">Check</string>
+    <string name="std_pdfa_explain">PDF/A is the standard for keeping documents readable for the long term. Check this document against PDF/A-2b or 3b.</string>
+    <string name="std_pdfa_declares">This document says it is %1$s.</string>
+    <string name="std_pdfa_ok">Meets %1$s.</string>
+    <plurals name="std_pdfa_issues">
+        <item quantity="one">%1$d problem for %2$s</item>
+        <item quantity="other">%1$d problems for %2$s</item>
+    </plurals>
+    <string name="std_on_page">, page %1$d</string>
+    <string name="std_fixable">can be fixed</string>
+    <string name="std_not_fixable">can\'t be fixed here</string>
+    <string name="std_pdfa_fix">Fix and make PDF/A</string>
+    <string name="std_pdfa_remove_id">Remove the PDF/A identification</string>
+    <string name="std_msg_pdfa_done">Now meets PDF/A. Save the file to keep it.</string>
+    <string name="std_msg_pdfa_partly">Fixed what could be fixed. Some problems remain.</string>
+    <string name="std_msg_pdfa_id_removed">PDF/A identification removed.</string>
+    <string name="std_readiness_check">Check</string>
+    <string name="std_readiness_explain">A read-only report for professional printing: image resolution where each image is drawn, page boxes and bleed, fonts that aren\'t embedded, and output intents. The file isn\'t changed.</string>
+    <string name="std_readiness_findings">Findings</string>
+    <string name="std_readiness_report">Report</string>
+    <string name="std_hairlines_fix">Fix</string>
+    <string name="std_hairlines_explain">Lines thinner than a printer can reproduce may disappear in print. Widen every line thinner than the first width to the second.</string>
+    <string name="std_hairlines_narrower">Lines thinner than (points)</string>
+    <string name="std_hairlines_width">Make them (points)</string>
+    <string name="std_read_only">This document can\'t be changed.</string>
+    <string name="std_msg_no_hairlines">No lines needed widening.</string>
+    <plurals name="std_msg_hairlines_fixed">
+        <item quantity="one">%1$d line widened on %2$d pages.</item>
+        <item quantity="other">%1$d lines widened on %2$d pages.</item>
+    </plurals>
+    <!-- Print options (#185) -->
+    <string name="print_options_title">Print options…</string>
+    <string name="print_save_ready">Save PDF</string>
+    <string name="print_busy">Preparing to print…</string>
+    <string name="print_pages">Pages</string>
+    <string name="print_pages_hint">All, or e.g. 1-3, 6, 9-</string>
+    <string name="print_all">All</string>
+    <string name="print_odd">Odd</string>
+    <string name="print_even">Even</string>
+    <string name="print_reverse">Reverse order</string>
+    <string name="print_layout">Layout</string>
+    <string name="print_layout_fit">Fit to paper</string>
+    <string name="print_layout_actual">Actual size</string>
+    <string name="print_layout_shrink">Shrink oversized pages</string>
+    <string name="print_layout_multiple">Multiple pages per sheet</string>
+    <string name="print_layout_booklet">Booklet</string>
+    <string name="print_border">Draw a border around each page</string>
+    <string name="print_binding_left">Bind on the left</string>
+    <string name="print_binding_right">Bind on the right</string>
+    <string name="print_comments">Print comments</string>
+    <string name="print_explain">The next screen still picks the printer, copies and paper.</string>
     <string name="handwriting_read_page">Read handwriting on this page (beta)</string>
     <string name="handwriting_busy">Reading handwriting…</string>
     <string name="handwriting_none">No handwriting on this page that isn\'t read yet</string>
