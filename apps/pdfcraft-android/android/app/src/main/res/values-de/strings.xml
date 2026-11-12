@@ -329,6 +329,15 @@
     <string name="tools_scan_view_photo">Foto</string>
     <string name="tools_scan_preparing">Seite wird vorbereitet</string>
     <string name="tools_scan_result_description">Seite %1$d, wie sie gespeichert wird</string>
+    <string name="tools_crop_snap">Einrasten</string>
+    <string name="tools_crop_top_left">Ecke oben links</string>
+    <string name="tools_crop_top_right">Ecke oben rechts</string>
+    <string name="tools_crop_bottom_right">Ecke unten rechts</string>
+    <string name="tools_crop_bottom_left">Ecke unten links</string>
+    <string name="tools_crop_top_side">Obere Seite</string>
+    <string name="tools_crop_right_side">Rechte Seite</string>
+    <string name="tools_crop_bottom_side">Untere Seite</string>
+    <string name="tools_crop_left_side">Linke Seite</string>
 
     <!-- App dialogs: the first comment's name prompt -->
     <!-- Verb: go on without entering a name -->
@@ -1225,6 +1234,7 @@
     <string name="scan_lab_off">Aus</string>
     <string name="scan_lab_denoise">Körnung bei dunklen Fotos glätten (Sauberer Scan)</string>
     <string name="scan_lab_preview">Seiten so zeigen, wie sie gespeichert werden</string>
+    <string name="scan_lab_crop">Zuschneiden mit Lupe und Einrasten an Kanten</string>
     <string name="scan_lab_strength">Filterstärke</string>
     <string name="scan_lab_strength_own">Standard</string>
     <string name="scan_lab_options_body">Diese Optionen schalten Teile des Scanners ab oder ersetzen sie durch ihre Vorgänger, um herauszufinden, von welchem Teil ein Problem kommt. Das Protokoll hält für jede Seite fest, was galt.</string>

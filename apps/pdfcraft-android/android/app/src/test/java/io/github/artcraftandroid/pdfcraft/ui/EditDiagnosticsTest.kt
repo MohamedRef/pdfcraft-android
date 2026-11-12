@@ -31,4 +31,15 @@ class EditDiagnosticsTest {
         // a typed word that slipped in would still be redacted
         assertFalse("Jane" in diagLine(at, DiagArea.Edit, "redact_mark", listOf("how" to "Jane Doe")))
     }
+
+    @Test
+    fun aSignatureLineKeepsOnlyKindsAndResults() {
+        val line = diagLine(at, DiagArea.Edit, "sign_document", listOf(
+            "doc" to 2, "placement" to "field", "look" to "typed", "reason" to true, "location" to false,
+            "ms" to 412L, "result" to "signed", "saved" to true,
+        ))
+        assertEquals("11-12 06:00:00.000 [edit] sign_document doc=2 placement=field look=typed reason=true location=false ms=412 result=signed saved=true", line)
+        // a signer's name would be redacted if it ever reached a line
+        assertFalse("Jane" in diagLine(at, DiagArea.Edit, "sign_trust", listOf("signer" to "Jane Doe")))
+    }
 }
