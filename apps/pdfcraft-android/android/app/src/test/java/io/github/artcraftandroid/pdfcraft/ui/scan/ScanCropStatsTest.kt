@@ -7,8 +7,8 @@ import org.junit.Test
 class ScanCropStatsTest {
     @Test
     fun twoVisitsAddUp() {
-        val a = ScanCropStats(visits = 1, cornerDrags = 2, snapsAsked = 2, snapsTaken = 1, snapMsMax = 90, ms = 4000, movedPct = 2.0, snapOn = true)
-        val b = ScanCropStats(visits = 1, sideDrags = 1, snapsAsked = 1, snapsTaken = 1, snapMsMax = 40, ms = 1500, movedPct = 0.5, snapOn = false)
+        val a = ScanCropStats(visits = 1, cornerDrags = 2, snapsAsked = 2, snapsTaken = 1, snapMsMax = 90, ms = 4000, movedPct = 2.0, snapOn = true, cornersOff = 1)
+        val b = ScanCropStats(visits = 1, sideDrags = 1, snapsAsked = 1, snapsTaken = 1, snapMsMax = 40, ms = 1500, movedPct = 0.5, snapOn = false, cornersOff = 2)
         val sum = a + b
         assertEquals(2, sum.visits)
         assertEquals(2, sum.cornerDrags)
@@ -18,8 +18,17 @@ class ScanCropStatsTest {
         assertEquals(90, sum.snapMsMax)
         assertEquals(5500, sum.ms)
         assertEquals(2.0, sum.movedPct, 0.0)
-        // the switch as it was last left
+        // the switch and the corners as they were last left
         assertFalse(sum.snapOn)
+        assertEquals(2, sum.cornersOff)
+        // a visit left with Back does not change where the corners were kept
+        assertEquals(1, (a + ScanCropStats(cornersOff = 0)).cornersOff)
+    }
+
+    @Test
+    fun cornersOffThePhotoAreCounted() {
+        assertEquals(0, cornersOffPhoto(floatArrayOf(0f, 0f, 1f, 0f, 1f, 1f, 0f, 1f)))
+        assertEquals(2, cornersOffPhoto(floatArrayOf(0.1f, -0.05f, 1.1f, 0f, 0.9f, 0.9f, 0.1f, 0.9f)))
     }
 
     @Test

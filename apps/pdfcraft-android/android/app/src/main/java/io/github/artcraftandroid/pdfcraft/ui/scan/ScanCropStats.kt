@@ -39,12 +39,15 @@ data class ScanCropStats(
     val ms: Long = 0,
     /** The largest corner move from where the screen opened, in % of the photo's diagonal. */
     val movedPct: Double = 0.0,
+    /** Corners off the photo when the screen was last left with Done (#291), 0 to 4. */
+    val cornersOff: Int = 0,
 ) {
     operator fun plus(o: ScanCropStats) = ScanCropStats(
         visits + o.visits, cornerDrags + o.cornerDrags, sideDrags + o.sideDrags, snapsAsked + o.snapsAsked,
         snapsTaken + o.snapsTaken, snapsHeld + o.snapsHeld, snapsFailed + o.snapsFailed, max(snapMsMax, o.snapMsMax),
         nudges + o.nudges, detects + o.detects, detectsFound + o.detectsFound, wholePhoto + o.wholePhoto, resets + o.resets,
         loupeDecodes + o.loupeDecodes, o.snapOn, ms + o.ms, max(movedPct, o.movedPct),
+        if (o.visits > 0) o.cornersOff else cornersOff,
     )
 
     /** As diagnostics fields: numbers and booleans only. */
@@ -53,6 +56,7 @@ data class ScanCropStats(
         "snaps_held" to snapsHeld, "snaps_failed" to snapsFailed, "snap_ms_max" to snapMsMax, "nudges" to nudges,
         "detects" to detects, "detects_found" to detectsFound, "whole_photo" to wholePhoto, "resets" to resets,
         "loupe_decodes" to loupeDecodes, "snap" to snapOn, "ms" to ms, "moved_pct" to round3(movedPct),
+        "corners_off" to cornersOff,
     )
 
     /** As JSON, for a kept scan's page file. */
@@ -60,6 +64,10 @@ data class ScanCropStats(
 
     private fun round3(v: Double) = if (v.isFinite()) Math.round(v * 1000.0) / 1000.0 else 0.0
 }
+
+/** How many of the corners [q] (shares) lie off the photo. */
+internal fun cornersOffPhoto(q: FloatArray): Int =
+    (0 until q.size / 2).count { i -> q[2 * i] !in 0f..1f || q[2 * i + 1] !in 0f..1f }
 
 /**
  * The largest distance between a corner of [a] and the same corner of [b], in % of the photo's
