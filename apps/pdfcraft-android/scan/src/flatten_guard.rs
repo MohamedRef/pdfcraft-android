@@ -11,6 +11,11 @@ use crate::Rgb;
 /// better). A learned grid adds small errors, so it has to win clearly to be used.
 pub const GAIN: f64 = 0.9;
 
+/// The fewest lines of text that must be followed on both pages before the guard may keep a
+/// flattened page (#302's review on the owner's reference photos: on 4 of 10 pages only 3 or 4
+/// lines were followed, and a 10 % difference between two such readings rests on very little).
+pub const MIN_LINES: u32 = 8;
+
 /// Both figures below this many pixels: the page is already straight, so there is nothing to gain.
 const STRAIGHT_ENOUGH_PX: f64 = 0.5;
 /// The border search runs on a copy reduced this many times in each direction (spec section 3: 4).
@@ -43,6 +48,9 @@ pub enum Why {
     Unmeasured,
     /// Both figures are under half a pixel: there is nothing to gain by flattening.
     AlreadyStraight,
+    /// The flattened page read straighter, but too few lines were followed on one of the pages
+    /// for the reading to count (`MIN_LINES`), so the perspective page is kept.
+    FewLines,
 }
 
 /// The guard's decision: the page to keep and the reason.
@@ -62,6 +70,7 @@ impl Why {
             Why::NotStraighter => "notbetter",
             Why::Unmeasured => "unmeasured",
             Why::AlreadyStraight => "straight",
+            Why::FewLines => "fewlines",
         }
     }
 }
@@ -78,6 +87,19 @@ pub fn guard(perspective_px: Option<f64>, flattened_px: Option<f64>) -> Guard {
         return Guard { kept: Kept::Perspective, why: Why::AlreadyStraight };
     }
     if f <= p * GAIN { Guard { kept: Kept::Flattened, why: Why::Straighter } } else { Guard { kept: Kept::Perspective, why: Why::NotStraighter } }
+}
+
+/// `guard`, with a floor on the lines followed (#302): a flattened page the figures would keep is
+/// kept only when at least `min_lines` lines were followed on both pages. `lines` are the
+/// perspective page's and the flattened page's counts, `None` when a page was not measured.
+/// `min_lines` 0 is no floor, the guard as before.
+pub fn guard_with_floor(perspective_px: Option<f64>, flattened_px: Option<f64>, lines: (Option<u32>, Option<u32>), min_lines: u32) -> Guard {
+    let decision = guard(perspective_px, flattened_px);
+    let enough = |n: Option<u32>| n.is_some_and(|n| n >= min_lines);
+    if decision.kept == Kept::Flattened && min_lines > 0 && !(enough(lines.0) && enough(lines.1)) {
+        return Guard { kept: Kept::Perspective, why: Why::FewLines };
+    }
+    decision
 }
 
 /// The figure when it is a usable number (finite and not negative), otherwise `None`.

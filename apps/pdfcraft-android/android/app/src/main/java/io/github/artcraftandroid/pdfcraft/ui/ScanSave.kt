@@ -100,6 +100,8 @@ internal fun scanPageRequest(
     flattenCheck = !flatten && lab.flattenAuto,
     // a strip of table left along a flattened page's edges is trimmed (#302)
     flattenTrim = lab.flattenTrim,
+    // the guard keeps a flattened page only on enough lines of text (#302)
+    flattenMinLines = (if (lab.flattenLineFloor) ScanLab.FLATTEN_MIN_LINES else 0).toUByte(),
     // when the network gives nothing better, the page's lines of text may still flatten it (#303)
     lineFlatten = lab.lineFlatten,
     sideProportions = !lab.perspective,

@@ -115,6 +115,9 @@ internal fun ScanLabSettings(vm: AppViewModel) {
     SheetRow(null, stringResource(R.string.scan_lab_flatten_trim), { lab.update(o.copy(flattenTrim = !o.flattenTrim)) }) {
         PdfSwitch(o.flattenTrim, { lab.update(o.copy(flattenTrim = it)) })
     }
+    SheetRow(null, stringResource(R.string.scan_lab_flatten_line_floor), { lab.update(o.copy(flattenLineFloor = !o.flattenLineFloor)) }) {
+        PdfSwitch(o.flattenLineFloor, { lab.update(o.copy(flattenLineFloor = it)) })
+    }
     SheetRow(null, stringResource(R.string.scan_lab_line_flatten), { lab.update(o.copy(lineFlatten = !o.lineFlatten)) }) {
         PdfSwitch(o.lineFlatten, { lab.update(o.copy(lineFlatten = it)) })
     }
