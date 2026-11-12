@@ -17,4 +17,11 @@
     <string name="msg_scan_unenhanced">Seiten wie fotografiert gespeichert, ohne Bereinigung: %1$d</string>
     <string name="scan_lab_look_per_page">Ein Stil pro Seite</string>
     <string name="scan_lab_look_strip">Stile als kleine Vorschauen der Seite zeigen</string>
+    <string name="scan_paper_label">Papier</string>
+    <string name="scan_paper_auto">Automatisch</string>
+    <string name="scan_paper_white">Weiß</string>
+    <string name="scan_paper_keep">Farbe behalten</string>
+    <string name="scan_lab_whiteboard_look">Whiteboard: hellere Tafel und kräftigere Markerfarben</string>
+    <string name="scan_lab_preview_stop">Nicht mehr benötigte Vorschauen anhalten</string>
+    <string name="scan_lab_preview_zoom">Seitenvorschau zoomen</string>
 </resources>

@@ -12,6 +12,9 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -863,7 +866,8 @@ enum class ScanFilter(@StringRes val label: Int, val mode: String, val level: In
     CleanScan(R.string.tools_filter_clean_scan, "auto", 60),
     AutoColor(R.string.tools_filter_auto_colour, "colour", 50),
     Grayscale(R.string.tools_filter_grayscale, "greyscale", 40),
-    Whiteboard(R.string.tools_filter_whiteboard, "colour", 85),
+    /** Auto's light steps, then an S-curve and stronger colour (#301); Auto color at 85 before, and with the testing option off. */
+    Whiteboard(R.string.tools_filter_whiteboard, "whiteboard", 90),
     /** Black and white (#300); the level is how faint a stroke may be and still be kept. */
     LightText(R.string.tools_filter_light_text, "bw", 75),
 }
@@ -958,17 +962,50 @@ fun ScanScreen(vm: AppViewModel) {
         val compareHint = stringResource(R.string.scan_compare_hint)
         val compareAction = stringResource(R.string.scan_compare_action)
         val canCompare = shown.view == ScanView.Result && preview != null && page?.look?.filter != ScanFilter.Original
+        // double-tap or pinch to look closer (#301); a sharper page is made once zoomed in
+        val zoomable = lab.previewZoom && shown.view == ScanView.Result && preview != null
+        var zoom by remember(page?.key, zoomable) { mutableFloatStateOf(1f) }
+        var panX by remember(page?.key, zoomable) { mutableFloatStateOf(0f) }
+        var panY by remember(page?.key, zoomable) { mutableFloatStateOf(0f) }
+        var boxSize by remember { mutableStateOf(androidx.compose.ui.unit.IntSize.Zero) }
+        // a pinch is not a hold: the original is not shown while two fingers move the page
+        var pinching by remember { mutableStateOf(false) }
+        val wantsDetail = io.github.artcraftandroid.pdfcraft.ui.scan.scanWantsDetail(zoom, SCAN_ZOOM_DETAIL, zoomable)
+        if (page != null && wantsDetail) {
+            LaunchedEffect(wanted) { vm.requestScanDetail(shownAt, page, flattening) }
+        }
+        val detail = vm.scanDetail?.takeIf { wantsDetail && wanted != null && it.first == wanted }?.second
         Box(
-            Modifier.weight(1f).fillMaxWidth().background(c.desk).then(
-                if (!canCompare) Modifier else Modifier.pointerInput(Unit) {
-                    detectTapGestures(onPress = {
-                        holding = true
-                        tryAwaitRelease()
-                        holding = false
-                    })
+            Modifier.weight(1f).fillMaxWidth().background(c.desk).onSizeChanged { boxSize = it }.then(
+                if (!canCompare && !zoomable) Modifier else Modifier.pointerInput(canCompare, zoomable) {
+                    detectTapGestures(
+                        onDoubleTap = if (!zoomable) null else { _ ->
+                            zoom = io.github.artcraftandroid.pdfcraft.ui.scan.scanZoomAfterDoubleTap(zoom, SCAN_ZOOM_TAP)
+                            panX = 0f
+                            panY = 0f
+                        },
+                        onPress = {
+                            if (canCompare) {
+                                pinching = false
+                                holding = true
+                                tryAwaitRelease()
+                                holding = false
+                            }
+                        },
+                    )
                 }.semantics {
                     // TalkBack: a long press shows the original until the next one (#301)
-                    onLongClick(compareAction) { holding = !holding; true }
+                    if (canCompare) onLongClick(compareAction) { holding = !holding; true }
+                },
+            ).then(
+                if (!zoomable) Modifier else Modifier.pointerInput(Unit) {
+                    detectTransformGestures { _, move, scale, _ ->
+                        if (scale != 1f) pinching = true
+                        zoom = io.github.artcraftandroid.pdfcraft.ui.scan.scanZoomClamp(zoom * scale, SCAN_ZOOM_MAX)
+                        val (x, y) = io.github.artcraftandroid.pdfcraft.ui.scan.scanPanClamp(panX + move.x, panY + move.y, zoom, boxSize.width.toFloat(), boxSize.height.toFloat())
+                        panX = x
+                        panY = y
+                    }
                 },
             ),
             contentAlignment = Alignment.Center,
@@ -976,8 +1013,14 @@ fun ScanScreen(vm: AppViewModel) {
             if (page != null) {
                 if (shown.view == ScanView.Result && preview != null) {
                     Image(
-                        if (comparing && original != null) original else preview.image, stringResource(R.string.tools_scan_result_description, shownAt + 1),
-                        modifier = Modifier.fillMaxSize().padding(16.dp), contentScale = ContentScale.Fit,
+                        if (comparing && !pinching && original != null) original else detail ?: preview.image, stringResource(R.string.tools_scan_result_description, shownAt + 1),
+                        modifier = Modifier.fillMaxSize().padding(16.dp).graphicsLayer {
+                            scaleX = zoom
+                            scaleY = zoom
+                            translationX = panX
+                            translationY = panY
+                        },
+                        contentScale = ContentScale.Fit,
                     )
                     // what is on screen while held, and a hint that holding compares
                     if (canCompare && (comparing || original != null)) {
@@ -1045,6 +1088,8 @@ fun ScanScreen(vm: AppViewModel) {
             io.github.artcraftandroid.pdfcraft.ui.scan.ScanLooksStrip(vm, shownAt, page.look, exact?.image)
         }
         if (page != null) io.github.artcraftandroid.pdfcraft.ui.scan.ScanStrengthRow(vm, shownAt, page.look)
+        // the paper's colour for Clean scan and Whiteboard (#301)
+        if (page != null) io.github.artcraftandroid.pdfcraft.ui.scan.ScanPaperRow(vm, shownAt, page.look)
         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 8.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             // the testing option's way back: the looks as words (#301)
             if (page != null && !lab.lookStrip) io.github.artcraftandroid.pdfcraft.ui.scan.ScanLookChips(vm, shownAt, page.look)

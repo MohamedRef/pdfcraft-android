@@ -17,4 +17,11 @@
     <string name="msg_scan_unenhanced">صفحات حُفظت كما صُوّرت، دون تنظيف: %1$d</string>
     <string name="scan_lab_look_per_page">مظهر لكل صفحة</string>
     <string name="scan_lab_look_strip">عرض المظاهر كمعاينات صغيرة للصفحة</string>
+    <string name="scan_paper_label">الورق</string>
+    <string name="scan_paper_auto">تلقائي</string>
+    <string name="scan_paper_white">أبيض</string>
+    <string name="scan_paper_keep">الإبقاء على اللون</string>
+    <string name="scan_lab_whiteboard_look">السبورة: خلفية أفتح وألوان أقلام أقوى</string>
+    <string name="scan_lab_preview_stop">إيقاف المعاينات التي لم تعد مطلوبة</string>
+    <string name="scan_lab_preview_zoom">تكبير معاينة الصفحة</string>
 </resources>

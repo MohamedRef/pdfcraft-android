@@ -35,8 +35,9 @@ class ScanLooksTest {
         for (f in ScanFilter.entries) assertEquals(f, scanFilterOf(scanFilterId(f)))
         // words only: they go into the log and a session line
         assertTrue(ids.all { id -> id.all { it in 'a'..'z' } })
-        // Auto color and Whiteboard share the native mode, not the word
-        assertEquals(ScanFilter.AutoColor.mode, ScanFilter.Whiteboard.mode)
+        // Whiteboard is a native look of its own since #301; with its testing option off it is Auto
+        // color's look again, so the word, not the native look, says which was chosen
+        assertFalse(ScanFilter.AutoColor.mode == ScanFilter.Whiteboard.mode)
         assertFalse(scanFilterId(ScanFilter.AutoColor) == scanFilterId(ScanFilter.Whiteboard))
         assertNull(scanFilterOf("magic"))
         assertNull(scanFilterOf(null))
@@ -117,5 +118,37 @@ class ScanLooksTest {
     fun theFinalMessageCountsPagesSavedAsPhotographed() {
         assertEquals(0, scanUnenhancedCount(listOf(true, true)))
         assertEquals(2, scanUnenhancedCount(listOf(false, true, false)))
+    }
+
+    @Test
+    fun thePaperChoiceIsForCleanScanAndWhiteboardAndComesBackFromItsWord() {
+        assertTrue(ScanPageLook(ScanFilter.CleanScan).hasPaper && ScanPageLook(ScanFilter.Whiteboard).hasPaper)
+        assertFalse(ScanFilter.entries.filter { it != ScanFilter.CleanScan && it != ScanFilter.Whiteboard }.any { ScanPageLook(it).hasPaper })
+        for (p in ScanPaperChoice.entries) assertEquals(p, ScanPaperChoice.of(p.word))
+        assertEquals(ScanPaperChoice.Auto, ScanPaperChoice.of("purple"))
+        assertEquals(ScanPaperChoice.Auto, ScanPaperChoice.of(null))
+        assertEquals(ScanPageLook(ScanFilter.CleanScan, 40, ScanPaperChoice.Keep), ScanPageLook.decode("clean", "40", "keep"))
+        // a line from before the paper choice has none: Automatic
+        assertEquals(ScanPageLook(ScanFilter.CleanScan, 40), ScanPageLook.decode("clean", "40"))
+        assertEquals("white", ScanPageLook(paper = ScanPaperChoice.White).json(true).getString("paper"))
+    }
+
+    @Test
+    fun aDoubleTapZoomsInAndOutAndThePageStaysInItsBox() {
+        assertEquals(2.5f, scanZoomAfterDoubleTap(1f, 2.5f), 0f)
+        assertEquals(1f, scanZoomAfterDoubleTap(2.5f, 2.5f), 0f)
+        assertEquals(1f, scanZoomAfterDoubleTap(4f, 2.5f), 0f)
+        assertEquals(1f, scanZoomClamp(0.3f, 5f), 0f)
+        assertEquals(5f, scanZoomClamp(9f, 5f), 0f)
+        assertEquals(1f, scanZoomClamp(Float.NaN, 5f), 0f)
+        // at 2x on a 400 x 600 box the page moves at most 200 and 300 each way
+        assertEquals(200f to -300f, scanPanClamp(900f, -900f, 2f, 400f, 600f))
+        assertEquals(50f to 10f, scanPanClamp(50f, 10f, 2f, 400f, 600f))
+        // at the whole page it doesn't move
+        assertEquals(0f to 0f, scanPanClamp(80f, 80f, 1f, 400f, 600f))
+        assertEquals(0f to 0f, scanPanClamp(Float.NaN, 0f, 2f, 400f, 600f))
+        assertTrue(scanWantsDetail(1.5f, 1.5f, true))
+        assertFalse(scanWantsDetail(1.4f, 1.5f, true))
+        assertFalse(scanWantsDetail(3f, 1.5f, false))
     }
 }

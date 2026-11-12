@@ -47,7 +47,7 @@ data class ScanSession(
             append('\n')
             // the page's look (#301) on a line of its own after the page's, so the page line keeps
             // its columns and a build from before #301 reads the session, ignoring the line
-            p.look?.let { append("look\t").append(io.github.artcraftandroid.pdfcraft.ui.scan.scanFilterId(it.filter)).append('\t').append(it.strength?.toString().orEmpty()).append('\n') }
+            p.look?.let { append("look\t").append(io.github.artcraftandroid.pdfcraft.ui.scan.scanFilterId(it.filter)).append('\t').append(it.strength?.toString().orEmpty()).append('\t').append(it.paper.word).append('\n') }
         }
     }
 
@@ -96,7 +96,7 @@ data class ScanSession(
                         }
                     }
                     "look" -> {
-                        val look = io.github.artcraftandroid.pdfcraft.ui.scan.ScanPageLook.decode(value, parts.getOrNull(2))
+                        val look = io.github.artcraftandroid.pdfcraft.ui.scan.ScanPageLook.decode(value, parts.getOrNull(2), parts.getOrNull(3))
                         if (lastPage && look != null) pages[pages.lastIndex] = pages.last().let { Page(it.path, it.corners, it.found, it.turns, it.preset, it.book, look, it.flatten) }
                         lastPage = false
                     }

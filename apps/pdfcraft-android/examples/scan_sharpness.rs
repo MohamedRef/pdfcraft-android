@@ -148,6 +148,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             preset: "off".into(),
             curved_sides: 0,
             fixed_strength: false,
+            paper: "auto".into(),
         })?;
         let new = run(&s, "doc_create", json!({ "from": "images", "paths": [r.path], "dpi": r.dpi }))?;
         let nid = new["doc"].as_u64().ok_or("no doc")?;

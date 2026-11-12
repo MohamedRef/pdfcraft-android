@@ -17,4 +17,11 @@
     <string name="msg_scan_unenhanced">Páginas salvas como fotografadas, sem limpeza: %1$d</string>
     <string name="scan_lab_look_per_page">Um estilo para cada página</string>
     <string name="scan_lab_look_strip">Mostrar os estilos como pequenas prévias da página</string>
+    <string name="scan_paper_label">Papel</string>
+    <string name="scan_paper_auto">Automático</string>
+    <string name="scan_paper_white">Branco</string>
+    <string name="scan_paper_keep">Manter a cor</string>
+    <string name="scan_lab_whiteboard_look">Quadro branco: fundo mais claro e cores de caneta mais fortes</string>
+    <string name="scan_lab_preview_stop">Parar as prévias que não são mais necessárias</string>
+    <string name="scan_lab_preview_zoom">Ampliar a prévia da página</string>
 </resources>

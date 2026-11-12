@@ -67,7 +67,7 @@ internal fun AppViewModel.chooseScanLook(index: Int, look: ScanPageLook, why: St
     if (log) {
         Diag.event(
             DiagArea.Scan, "look_chosen", "index" to index + 1, "why" to why, "look" to scanFilterId(look.filter),
-            "strength" to look.level, "strength_source" to look.strengthSource, "look_per_page" to lab.lookPerPage,
+            "strength" to look.level, "strength_source" to look.strengthSource, "paper" to look.paper.word, "look_per_page" to lab.lookPerPage,
             "pages" to looks.size,
         )
     }
@@ -168,6 +168,37 @@ internal fun ScanStrengthRow(vm: AppViewModel, index: Int, look: ScanPageLook) {
     }
     if (fixed != null) {
         Text(stringResource(R.string.scan_look_strength_fixed), color = c.textSecondary, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 16.dp))
+    }
+}
+
+/**
+ * The paper's colour for Clean scan and Whiteboard (#301): Automatic (the kind of document
+ * decides, white unless it keeps the paper), White, or Keep color.
+ */
+@Composable
+internal fun ScanPaperRow(vm: AppViewModel, index: Int, look: ScanPageLook) {
+    if (!look.hasPaper) return
+    val c = pdfColors
+    Row(
+        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Text(stringResource(R.string.scan_paper_label), color = c.text, fontSize = 14.sp)
+        for ((choice, label) in listOf(
+            ScanPaperChoice.Auto to R.string.scan_paper_auto,
+            ScanPaperChoice.White to R.string.scan_paper_white,
+            ScanPaperChoice.Keep to R.string.scan_paper_keep,
+        )) {
+            val selected = choice == look.paper
+            Text(
+                stringResource(label), color = if (selected) c.accent else c.text, fontSize = 13.sp,
+                modifier = Modifier.clip(CircleShape).background(if (selected) c.pressed else Color.Transparent)
+                    .border(1.dp, if (selected) c.accent else c.textSecondary.copy(alpha = 0.5f), CircleShape)
+                    .selectable(selected = selected, role = Role.RadioButton) { if (!selected) vm.chooseScanLook(index, look.copy(paper = choice), "paper") }
+                    .padding(horizontal = 12.dp, vertical = 6.dp),
+            )
+        }
     }
 }
 
