@@ -333,6 +333,10 @@ pub struct LinkInfo {
     pub page: Option<u32>,
     /// Where on that page the view goes (points from its top), when the link says.
     pub top: Option<f32>,
+    /// Another PDF, as the link names it (a relative path such as `Notes.pdf`) (#334).
+    pub file: Option<String>,
+    /// The page of [file] it opens (0-based); 0 when the link names none.
+    pub file_page: u32,
 }
 
 /// A comment (annotation) as the comment list shows it.
@@ -367,6 +371,9 @@ pub struct CommentInfo {
     /// The PDF hides it (`/F` Hidden or NoView): the page raster leaves it out, and so must the
     /// app's own sticky-note overlay (#115).
     pub hidden: bool,
+    /// A polygon's corners, `x0, y0, x1, y1, …` (points, top-left origin), so the app can draw
+    /// the freehand study tape it makes (#350); empty for other comments.
+    pub points: Vec<f32>,
 }
 
 /// A form field's widget on a page: what a tap there fills.
@@ -1153,8 +1160,18 @@ impl MobileSession {
                 .iter()
                 .filter(|l| l.page == page as usize)
                 .filter_map(|l| {
+                    let mut file = None;
+                    let mut file_page = 0u32;
                     let (uri, target, top) = match &l.target {
                         pdfcraft_render::LinkTarget::Uri(u) => (Some(u.clone()), None, None),
+                        // a page of another PDF (#334); a launch of a program is never followed
+                        pdfcraft_render::LinkTarget::RemoteGoTo { launch: false, file: f, destination, .. } => {
+                            if let pdfcraft_render::RemoteDestination::Page { page, .. } = destination {
+                                file_page = u32::try_from(*page).unwrap_or(0);
+                            }
+                            file = Some(f.clone());
+                            (None, None, None)
+                        }
                         pdfcraft_render::LinkTarget::Page(n, view) => {
                             let top = match view {
                                 pdfcraft_render::DestView::Xyz { top: Some(t), .. } | pdfcraft_render::DestView::FitH { top: Some(t) } => {
@@ -1166,7 +1183,7 @@ impl MobileSession {
                         }
                         _ => return None,
                     };
-                    Some(LinkInfo { rect: view_rect(p, l.rect), uri, page: target, top })
+                    Some(LinkInfo { rect: view_rect(p, l.rect), uri, page: target, top, file, file_page })
                 })
                 .collect()
         })
@@ -1281,6 +1298,8 @@ impl MobileSession {
         self.texts().clear();
         // the scanner's detector model loads again when the next photo is taken
         pdfcraft_scan::models::release();
+        // and a preview is straightened again when it is next asked for
+        crate::scan::scan_release_previews();
     }
 
     /// The word at point (`x`, `y`) on page `page` (points, top-left origin), or the one nearest it
@@ -1509,6 +1528,10 @@ fn comment_records(snapshot: &pdfcraft_engine::OverlaySnapshot) -> Vec<CommentIn
                 opacity: props.as_ref().map(|p| p.opacity as f32).filter(|v| v.is_finite()).unwrap_or(1.0).clamp(0.0, 1.0),
                 width: props.as_ref().and_then(|p| p.width).map(|w| w as f32).filter(|w| w.is_finite() && *w >= 0.0),
                 hidden: props.as_ref().is_some_and(|p| p.hidden),
+                points: match (a.subtype.as_str(), snapshot.pages.get(a.page)) {
+                    ("Polygon", Some(p)) => a.points.iter().flat_map(|q| p.user_to_view(q[0], q[1])).collect(),
+                    _ => Vec::new(),
+                },
             }
         })
         .collect()

@@ -3,6 +3,7 @@ package io.github.artcraftandroid.pdfcraft.ui
 import io.github.artcraftandroid.pdfcraft.ui.viewer.ViewLayout
 import io.github.artcraftandroid.pdfcraft.ui.viewer.recognizeText
 import io.github.artcraftandroid.pdfcraft.ui.viewer.startCompare
+import io.github.artcraftandroid.pdfcraft.ui.viewer.prepareGroupedText
 import io.github.artcraftandroid.pdfcraft.ui.home.FileTool
 import io.github.artcraftandroid.pdfcraft.ui.viewer.FillElement
 import androidx.compose.ui.graphics.asImageBitmap
@@ -83,7 +84,7 @@ data class PasswordRequest(
 )
 
 /** Script alerts waiting at once, at most. */
-private const val MAX_SCRIPT_ALERTS = 20
+internal const val MAX_SCRIPT_ALERTS = 20
 
 /** The saved-state key of the scan in progress. */
 private const val SCAN_STATE = "scan"
@@ -380,8 +381,11 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             } else {
                 completeReadingOpen(eng, doc, requestId, openStartedAt)
             }
-            pendingPage = recent?.lastPage?.takeIf { it in 0 until info.pages.size }
-            pendingSpot = recent?.takeIf { pendingPage != null && it.lastX >= 0f && it.lastY >= 0f }?.let { Triple(it.lastX, it.lastY, it.lastZoom) }
+            // a link from another PDF names the page to open on (#334)
+            val linkPage = linkOpenPage?.takeIf { it.first == uri.toString() }?.second?.takeIf { it in 0 until info.pages.size }
+            linkOpenPage = null
+            pendingPage = linkPage ?: recent?.lastPage?.takeIf { it in 0 until info.pages.size }
+            pendingSpot = recent?.takeIf { linkPage == null && pendingPage != null && it.lastX >= 0f && it.lastY >= 0f }?.let { Triple(it.lastX, it.lastY, it.lastZoom) }
             withContext(Dispatchers.IO) {
                 recents.touch(RecentFile(uri.toString(), info.name, System.currentTimeMillis(), info.pages.size, file.length(), recent?.lastPage ?: 0))
             }
@@ -784,10 +788,16 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         val eng = engine ?: return
         viewModelScope.launch {
             try {
+                val start = System.nanoTime()
                 val r = eng.tool(name, args + ("doc" to doc.id))
                 if (name == "comment_add") study.studyNote(doc)
                 if (name == "comment_add") lectureNoted(doc)
                 refresh(doc, io.github.artcraftandroid.pdfcraft.ui.viewer.pageTouchedBy(name, args))
+                // organize (#165): each page edit with the pages it touched and the time to the redrawn view
+                if (name.startsWith("page_") && Diag.enabled()) {
+                    Diag.event(DiagArea.Pages, "page_edit", "doc" to doc.diagNumber, "tool" to name, "pages" to ((args["pages"] as? List<*>)?.size ?: -1),
+                        "page_count" to doc.pageCount, "ms" to (System.nanoTime() - start) / 1_000_000)
+                }
                 onDone(r)
             } catch (e: MobileException) {
                 tell(e.userMessage)
@@ -902,11 +912,16 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         doc.commitTool?.invoke()
         doc.commitTool = null
         if (doc.controller.tool == ViewerTool.Edit) {
-            commitInlineEdit(doc)
-            editSelection = null
-            editImage = null
-            imageEdit.crop = null
-            editMode = io.github.artcraftandroid.pdfcraft.ui.viewer.EditMode.Select
+            editor.commitInlineEdit(doc)
+            editor.editSelection = null
+            editor.editImage = null
+            editor.imageEdit.crop = null
+            if (editor.objectSelect.doc === doc) {
+                editor.objectSelect.doc = null
+                editor.objectSelect.objects = emptyList()
+                editor.objectSelect.selected = emptySet()
+            }
+            editor.editMode = io.github.artcraftandroid.pdfcraft.ui.viewer.EditMode.Select
         }
         if (signing.certPlacing === doc) signing.certPlacing = null
         if (measure?.doc === doc) measure = null
@@ -929,7 +944,9 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         }
         val page = link.page
         val uri = link.uri
+        val file = link.file
         when {
+            file != null -> openLinkedFile(doc, file, link.filePage.toInt())
             page != null -> {
                 doc.controller.rememberJump(doc.viewer)
                 doc.viewer.goToPage(page.toInt(), link.top)
@@ -943,6 +960,33 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             }
         }
         return true
+    }
+
+    /** The page a link from another PDF asked for, kept until that file ([first], its URI) opens (#334). */
+    private var linkOpenPage: Pair<String, Int>? = null
+
+    /**
+     * PDFs a link can go to: the Library's files and the recent ones (not [exclude]), by their
+     * names. Reads small files: call off the main thread.
+     */
+    fun linkableFiles(exclude: Uri?): List<io.github.artcraftandroid.pdfcraft.ui.viewer.LinkableFile> =
+        (study.library.load().items.map { io.github.artcraftandroid.pdfcraft.ui.viewer.LinkableFile(it.uri, it.name) } +
+            recents.list().map { io.github.artcraftandroid.pdfcraft.ui.viewer.LinkableFile(it.uri, it.name) })
+            .distinctBy { it.uri }
+            .filter { it.uri != exclude?.toString() && io.github.artcraftandroid.pdfcraft.ui.viewer.linkFileName(it.name) != null }
+
+    /** Follow a link to page [page] (0-based) of the PDF named [file]: found by name among [linkableFiles]. */
+    fun openLinkedFile(doc: OpenDocument, file: String, page: Int) {
+        viewModelScope.launch {
+            val target = withContext(Dispatchers.IO) { io.github.artcraftandroid.pdfcraft.ui.viewer.linkedFileFor(file, linkableFiles(doc.source)) }
+            io.github.artcraftandroid.pdfcraft.ui.viewer.MarkupDiag.linkFollow(doc, found = target != null, page = page)
+            if (target == null) {
+                tell(text(R.string.link_file_missing, io.github.artcraftandroid.pdfcraft.ui.viewer.linkFileBaseName(file)))
+                return@launch
+            }
+            linkOpenPage = target.uri to page
+            open(Uri.parse(target.uri))
+        }
     }
 
     // ---- Link authoring (#179, #159) ---------------------------------------------------------
@@ -970,17 +1014,28 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 tell(text(R.string.link_not_editable))
                 return@launch
             }
-            linkEdit = io.github.artcraftandroid.pdfcraft.ui.viewer.LinkEdit(doc, at.page, link.rect.toFloatArray(), index, link.uri, link.page?.toInt())
+            linkEdit = io.github.artcraftandroid.pdfcraft.ui.viewer.LinkEdit(
+                doc, at.page, link.rect.toFloatArray(), index, link.uri, link.page?.toInt() ?: link.file?.let { link.filePage.toInt() }, file = link.file,
+            )
         }
     }
 
-    /** Make the link in [e] go to [url] or page [toPage] (0-based): a new link, or a change to it. */
-    fun saveLink(e: io.github.artcraftandroid.pdfcraft.ui.viewer.LinkEdit, url: String?, toPage: Int?) {
+    /**
+     * Make the link in [e] go to [url], page [toPage] (0-based), or page [toPage] of the PDF named
+     * [file] (#334): a new link, or a change to it.
+     */
+    fun saveLink(e: io.github.artcraftandroid.pdfcraft.ui.viewer.LinkEdit, url: String?, toPage: Int?, file: String? = null) {
         linkEdit = null
-        val target: Map<String, Any?> = if (url != null) mapOf("url" to url) else mapOf("to_page" to (toPage ?: return) + 1)
-        val kind = if (url == null) "page" else if (url.startsWith("mailto:")) "mail" else "web"
+        val target: Map<String, Any?> = when {
+            url != null -> mapOf("url" to url)
+            file != null -> mapOf("file" to file, "to_page" to (toPage ?: 0) + 1)
+            else -> mapOf("to_page" to (toPage ?: return) + 1)
+        }
+        val kind = if (file != null) "file" else if (url == null) "page" else if (url.startsWith("mailto:")) "mail" else "web"
+        // a link to another PDF opens its page fitted: the engine takes no zoom with it
+        val zoom: Map<String, Any?> = if (file == null) mapOf("zoom" to "inherit") else emptyMap()
         if (e.index == null) {
-            runTool(e.doc, "link_add", mapOf("page" to e.page + 1, "rect" to e.rect.map { it.toDouble() }, "zoom" to "inherit") + target) {
+            runTool(e.doc, "link_add", mapOf("page" to e.page + 1, "rect" to e.rect.map { it.toDouble() }) + zoom + target) {
                 io.github.artcraftandroid.pdfcraft.ui.viewer.MarkupDiag.link(e.doc, "add", kind, e.from)
                 tell(text(R.string.link_added))
             }
@@ -1085,7 +1140,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         if (m.points.size < m.mode.minPoints) return
         val label = m.reading
         val args = mapOf(
-            "page" to page + 1, "points" to m.points.map { listOf(it.x.toDouble(), it.y.toDouble()) }, "author" to author,
+            "page" to page + 1, "points" to m.points.map { listOf(it.x.toDouble(), it.y.toDouble()) }, "author" to commenting.author,
         )
         val kind = m.mode.kind
         val points = m.points.size
@@ -1138,7 +1193,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
 
     /** A web address waiting for "Open web page?". */
     var linkPrompt by mutableStateOf<String?>(null)
-        private set
+        internal set
 
     fun answerLink(open: Boolean) {
         val uri = linkPrompt ?: return
@@ -1210,6 +1265,20 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                     val copy = preparedCopy(doc, unlock = false, clean = true) ?: throw IllegalStateException(text(R.string.msg_clean_copy_failed))
                     copy to doc.name
                 }
+                io.github.artcraftandroid.pdfcraft.ui.viewer.ShareChoice.Tape -> {
+                    // tape made opaque on a "Tape" layer, in a temporary copy: the open document keeps it invisible (#350)
+                    val out = tempFile("pdf")
+                    val start = android.os.SystemClock.elapsedRealtime()
+                    val copy = eng.tool("doc_open", mapOf("path" to doc.file.absolutePath, "password" to doc.password)).optLong("doc")
+                    try {
+                        val n = io.github.artcraftandroid.pdfcraft.ui.viewer.showTapeIn(eng, copy.toULong())
+                        eng.tool("doc_save", mapOf("doc" to copy, "path" to out.absolutePath, "full" to true))
+                        io.github.artcraftandroid.pdfcraft.ui.viewer.MarkupDiag.tapeShare(doc, n, android.os.SystemClock.elapsedRealtime() - start)
+                    } finally {
+                        runCatching { eng.tool("doc_close", mapOf("doc" to copy, "discard_changes" to true)) }
+                    }
+                    out to text(R.string.share_name_tape, doc.title)
+                }
                 io.github.artcraftandroid.pdfcraft.ui.viewer.ShareChoice.Page -> {
                     val out = tempFile("pdf")
                     eng.tool("page_extract", mapOf("doc" to doc.id, "pages" to listOf(page + 1), "out" to out.absolutePath))
@@ -1246,7 +1315,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     }
 
     /** A send intent for [uris], with them as its clip too so the share sheet can show them. */
-    private fun sendIntent(uris: List<Uri>, mime: String = "application/pdf"): Intent {
+    internal fun sendIntent(uris: List<Uri>, mime: String = "application/pdf"): Intent {
         val send = if (uris.size == 1) Intent(Intent.ACTION_SEND).putExtra(Intent.EXTRA_STREAM, uris.first())
         else Intent(Intent.ACTION_SEND_MULTIPLE).putParcelableArrayListExtra(Intent.EXTRA_STREAM, ArrayList(uris))
         send.clipData = ClipData(null, arrayOf(mime), ClipData.Item(uris.first())).apply { uris.drop(1).forEach { addItem(ClipData.Item(it)) } }
@@ -1351,7 +1420,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             }
             io.github.artcraftandroid.pdfcraft.ui.viewer.ViewerShortcut.Leave -> when {
                 doc.selection.selection != null -> doc.selection.clear()
-                selectedComment?.first === doc -> selectedComment = null
+                commenting.selectedComment?.first === doc -> commenting.selectedComment = null
                 ctl.sheet != io.github.artcraftandroid.pdfcraft.ui.viewer.ViewerSheet.None -> ctl.sheet = io.github.artcraftandroid.pdfcraft.ui.viewer.ViewerSheet.None
                 ctl.searching -> { doc.search.clear(); ctl.searching = false }
                 ctl.tool != ViewerTool.None -> leaveTool(doc)
@@ -1366,8 +1435,8 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             }
             io.github.artcraftandroid.pdfcraft.ui.viewer.ViewerShortcut.Bookmark -> toggleBookmark(doc)
             io.github.artcraftandroid.pdfcraft.ui.viewer.ViewerShortcut.Delete -> {
-                val c = selectedComment?.takeIf { it.first === doc }?.second ?: return false
-                deleteComment(doc, c)
+                val c = commenting.selectedComment?.takeIf { it.first === doc }?.second ?: return false
+                commenting.deleteComment(doc, c)
             }
             io.github.artcraftandroid.pdfcraft.ui.viewer.ViewerShortcut.Thinner, io.github.artcraftandroid.pdfcraft.ui.viewer.ViewerShortcut.Thicker -> {
                 if (!drawing) return false
@@ -1905,7 +1974,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     fun setCommentsHidden(doc: OpenDocument, hidden: Boolean) {
         val eng = engine ?: return
         if (doc.info.preparing) return
-        selectedComment = null
+        commenting.selectedComment = null
         viewModelScope.launch {
             val ok = runCatching {
                 io.github.artcraftandroid.pdfcraft.engine.Diag.measure(io.github.artcraftandroid.pdfcraft.engine.DiagArea.Viewer, "comments_hide", "doc" to doc.diagNumber, "hidden" to hidden) { eng.tool("comments_hide", mapOf("doc" to doc.id, "hidden" to hidden)) }
@@ -2093,277 +2162,9 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         }
     }
 
-    // ---- Comments ----------------------------------------------------------------------------
+    // ---- Comments, voice comments, selecting a comment, review and sharing: see CommentsController ----
 
-    /** A note being written (Comment tool, or Add comment on a selection). */
-    var notePrompt by mutableStateOf<NotePrompt?>(null)
-
-    /** Free text being typed (Text tool). */
-    var textPrompt by mutableStateOf<TextPrompt?>(null)
-
-    /** A reply being written to a comment. */
-    var replyPrompt by mutableStateOf<ReplyPrompt?>(null)
-
-    internal val author: String? get() = toolPrefs.author.ifBlank { null }
-
-    /** A pending selection-menu annotation, rendered until the native refresh settles. */
-    var pendingMarkupPreview by mutableStateOf<PendingMarkupPreview?>(null)
-        private set
-
-    /** Same annotation path as the drawing tool, with a temporary visual bridge. */
-    fun addSelectedMarkup(
-        doc: OpenDocument, markup: TextMarkup, page: Int, rects: List<FloatArray>,
-        color: androidx.compose.ui.graphics.Color, opacity: Float,
-    ) {
-        if (document !== doc || !doc.info.allowsAnnotation || rects.isEmpty()) return
-        val preview = PendingMarkupPreview(doc, page, rects.map { it.copyOf() }, markup, color, opacity)
-        pendingMarkupPreview = preview
-        addMarkup(doc, markup, page, rects, color, opacity, onSettled = {
-            if (pendingMarkupPreview === preview) pendingMarkupPreview = null
-        }, onDone = { r ->
-            // the new markup stays in hand: recolour it, add a note to it or delete it (#197)
-            val added = r.optJSONObject("comment")
-            val index = added?.optInt("index", 0) ?: 0
-            if (index > 0 && document === doc) {
-                val bounds = floatArrayOf(rects.minOf { it[0] }, rects.minOf { it[1] }, rects.maxOf { it[2] }, rects.maxOf { it[3] })
-                markupFollowUp = io.github.artcraftandroid.pdfcraft.ui.viewer.MarkupFollowUp(doc, page, index - 1, bounds, color)
-            }
-        })
-    }
-
-    /** The text markup just added from the selection menu, with its follow-up bar (#197). */
-    var markupFollowUp by mutableStateOf<io.github.artcraftandroid.pdfcraft.ui.viewer.MarkupFollowUp?>(null)
-
-    private fun followUpArgs(f: io.github.artcraftandroid.pdfcraft.ui.viewer.MarkupFollowUp) = mapOf("page" to f.page + 1, "index" to f.index + 1)
-
-    /** Give the new markup another colour (the bar stays, showing it). */
-    fun recolorFollowUp(f: io.github.artcraftandroid.pdfcraft.ui.viewer.MarkupFollowUp, color: androidx.compose.ui.graphics.Color) {
-        markupFollowUp = f.copy(color = color)
-        io.github.artcraftandroid.pdfcraft.ui.viewer.MarkupDiag.followUp(f.doc, "recolor")
-        runTool(f.doc, "comment_edit", followUpArgs(f) + ("color" to color.hex()))
-    }
-
-    /** Write a note on the new markup: its text, as a highlight carrying a note has. */
-    fun noteFollowUp(f: io.github.artcraftandroid.pdfcraft.ui.viewer.MarkupFollowUp) {
-        markupFollowUp = null
-        io.github.artcraftandroid.pdfcraft.ui.viewer.MarkupDiag.followUp(f.doc, "note")
-        notePrompt = NotePrompt(f.doc, null, edit = f)
-    }
-
-    fun deleteFollowUp(f: io.github.artcraftandroid.pdfcraft.ui.viewer.MarkupFollowUp) {
-        markupFollowUp = null
-        io.github.artcraftandroid.pdfcraft.ui.viewer.MarkupDiag.followUp(f.doc, "delete")
-        runTool(f.doc, "comment_delete", followUpArgs(f))
-    }
-
-    /**
-     * Replace Text (#170): strike the selection through and suggest [replacement] for it, as
-     * Acrobat's Replace Text does (a StrikeOut grouped with a Caret carrying the new text).
-     */
-    fun replaceSelection(doc: OpenDocument, page: Int, rects: List<FloatArray>, replacement: String) {
-        if (document !== doc || !doc.info.allowsAnnotation || rects.isEmpty() || replacement.isBlank()) return
-        val quads = rects.map { r -> listOf(r[0], r[1], r[2], r[1], r[0], r[3], r[2], r[3]).map { it.toDouble() } }
-        io.github.artcraftandroid.pdfcraft.ui.viewer.MarkupDiag.textEdit(doc, "replace", rects.size)
-        runTool(doc, "comment_add", mapOf(
-            "page" to page + 1, "type" to "replace", "quads" to quads, "contents" to replacement,
-            "color" to toolPrefs.color(StyledTool.Strikethrough).hex(), "author" to author,
-        ))
-    }
-
-    /** Insert Text (#170): a caret after the selection's last character, carrying [inserted]. */
-    fun insertAfterSelection(doc: OpenDocument, page: Int, rects: List<FloatArray>, inserted: String) {
-        val last = rects.lastOrNull() ?: return
-        if (document !== doc || !doc.info.allowsAnnotation || inserted.isBlank()) return
-        io.github.artcraftandroid.pdfcraft.ui.viewer.MarkupDiag.textEdit(doc, "insert", rects.size)
-        runTool(doc, "comment_add", mapOf(
-            "page" to page + 1, "type" to "caret", "at" to listOf(last[2].toDouble(), last[3].toDouble()), "contents" to inserted,
-            "color" to toolPrefs.color(StyledTool.Note).hex(), "author" to author,
-        ))
-    }
-
-    /** Mark text with [markup]: [rects] (points, one per line) on [page]. */
-    fun addMarkup(doc: OpenDocument, markup: TextMarkup, page: Int, rects: List<FloatArray>, color: androidx.compose.ui.graphics.Color, opacity: Float, contents: String? = null, onSettled: (() -> Unit)? = null, onDone: (JSONObject) -> Unit = {}) {
-        runTool(doc, "comment_add", markupArgs(markup, page, rects, color, opacity, author, contents), onSettled = onSettled, onDone = onDone)
-    }
-
-    /** Post a note at [at] (or, for a selection, a highlight carrying the note). */
-    fun postNote(prompt: NotePrompt, text: String) {
-        notePrompt = null
-        val doc = prompt.doc
-        prompt.edit?.let { f ->
-            if (text.isNotBlank()) runTool(doc, "comment_edit", followUpArgs(f) + ("contents" to text))
-            return
-        }
-        prompt.replace?.let { sel ->
-            replaceSelection(doc, sel.range.page.toInt(), sel.rects, text)
-            doc.selection.clear()
-            return
-        }
-        prompt.insert?.let { sel ->
-            insertAfterSelection(doc, sel.range.page.toInt(), sel.rects, text)
-            doc.selection.clear()
-            return
-        }
-        val sel = prompt.selection
-        if (sel != null) {
-            addMarkup(doc, TextMarkup.Highlight, sel.range.page.toInt(), sel.rects, toolPrefs.color(StyledTool.Highlight), toolPrefs.opacity(StyledTool.Highlight), text)
-            doc.selection.clear()
-            return
-        }
-        val at = prompt.at ?: return
-        runTool(
-            doc, "comment_add",
-            mapOf(
-                "page" to at.page + 1, "type" to "note", "at" to listOf(at.x.toDouble(), at.y.toDouble()),
-                "contents" to text, "color" to toolPrefs.color(StyledTool.Note).hex(), "author" to author,
-            ),
-        )
-    }
-
-    /** Place typed text at the prompt's point, in the Text tool's colour and size. */
-    fun postText(prompt: TextPrompt, text: String) {
-        textPrompt = null
-        if (text.isBlank()) return
-        val at = prompt.at
-        val size = toolPrefs.textSize
-        val page = prompt.doc.info.pages.getOrNull(at.page) ?: return
-        // as the reference: lines that wrap where the page ends become real line breaks, and the box
-        // is as wide as its longest line (measured as the engine draws it, so it doesn't wrap again)
-        if (prompt.callout) {
-            // A callout's box sits beside the point it marks, so it may use most of the page width.
-            val (lines, width, height) = FreeTextLayout.layout(text, size, (page.width * 0.6f).coerceAtLeast(size * 4))
-            val box = io.github.artcraftandroid.pdfcraft.ui.viewer.calloutBox(at.x, at.y, width + 4f, height + 4f, page.width, page.height)
-            if (box != null) {
-                runTool(
-                    prompt.doc, "comment_add",
-                    mapOf(
-                        "page" to at.page + 1, "type" to "callout", "rect" to box.map { it.toDouble() },
-                        "to" to listOf(at.x.toDouble(), at.y.toDouble()), "contents" to lines.joinToString("\n"),
-                        "color" to toolPrefs.color(StyledTool.FreeText).hex(), "font_size" to size.toDouble(), "author" to author,
-                    ),
-                )
-                return
-            }
-        }
-        val (lines, width, height) = FreeTextLayout.layout(text, size, (page.width - at.x - 6f).coerceAtLeast(size * 4))
-        val wrapped = lines.joinToString("\n")
-        val x1 = (at.x + width).coerceAtMost(page.width)
-        val y1 = (at.y + height).coerceAtMost(page.height)
-        runTool(
-            prompt.doc, "comment_add",
-            mapOf(
-                "page" to at.page + 1, "type" to "textbox", "rect" to listOf(at.x, at.y, x1, y1).map { it.toDouble() },
-                "contents" to wrapped, "color" to toolPrefs.color(StyledTool.FreeText).hex(), "font_size" to size.toDouble(), "author" to author,
-            ),
-        )
-    }
-
-    // ---- Voice comments ----------------------------------------------------------------------
-
-    /** A voice comment being recorded where the page was tapped. */
-    var voicePrompt by mutableStateOf<VoicePrompt?>(null)
-
-    /** Asks the activity for the microphone. */
-    val micRequests = Channel<Unit>(Channel.CONFLATED)
-
-    /** The microphone was refused before: explain, and offer the app's settings. */
-    var micRationale by mutableStateOf(false)
-    private var pendingVoice: VoicePrompt? = null
-
-    /** Record a voice comment at [at], once the microphone is allowed. */
-    fun startVoice(doc: OpenDocument, at: PagePoint) {
-        val app = getApplication<Application>()
-        if (app.cacheDir.usableSpace < 60L * 1024 * 1024) {
-            tell(text(R.string.msg_voice_no_storage))
-            return
-        }
-        val prompt = VoicePrompt(doc, at)
-        if (androidx.core.content.ContextCompat.checkSelfPermission(app, android.Manifest.permission.RECORD_AUDIO) == android.content.pm.PackageManager.PERMISSION_GRANTED) {
-            voicePrompt = prompt
-        } else {
-            pendingVoice = prompt
-            micRequests.trySend(Unit)
-        }
-    }
-
-    /** The answer to the microphone request. */
-    fun onMicPermission(granted: Boolean) {
-        pendingLecture?.let { d ->
-            pendingLecture = null
-            Diag.event(DiagArea.Study, "lecture_mic", "granted" to granted)
-            if (granted) startLecture(d) else tell(text(R.string.msg_voice_no_mic))
-            return
-        }
-        val p = pendingVoice
-        pendingVoice = null
-        if (granted && p != null) voicePrompt = p else if (!granted) tell(text(R.string.msg_voice_no_mic))
-    }
-
-    fun dismissMicRationale(openSettings: Boolean) {
-        micRationale = false
-        pendingVoice = null
-        if (openSettings) {
-            val app = getApplication<Application>()
-            intents.trySend(Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", app.packageName, null)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-        }
-    }
-
-    /** A cache file for a new recording. */
-    fun voiceFile(): File = File(getApplication<Application>().cacheDir, "voice-${System.nanoTime()}.wav")
-
-    /** Post [file] (a WAV recording) as a voice comment at the prompt's point. */
-    fun postVoice(prompt: VoicePrompt, file: File) {
-        voicePrompt = null
-        val at = prompt.at
-        runTool(
-            prompt.doc, "comment_add",
-            mapOf(
-                "page" to at.page + 1, "type" to "sound", "at" to listOf(at.x.toDouble(), at.y.toDouble()),
-                "path" to file.absolutePath, "color" to toolPrefs.color(StyledTool.Note).hex(), "author" to author,
-            ),
-            // The recording is in the PDF or was refused: either way the cache copy goes.
-            onSettled = { file.delete() },
-        )
-    }
-
-    /** Voice comment [c]'s recording as a WAV file to play, or null when it can't be read. */
-    suspend fun voiceRecording(doc: OpenDocument, c: io.github.artcraftandroid.pdfcraft.core.CommentInfo): File? {
-        val eng = engine ?: return null
-        // one file per playback: the player deletes it once it has loaded it (#105)
-        val f = File(getApplication<Application>().cacheDir, "voice-play-${System.nanoTime()}.wav")
-        return withContext(eng.commands) {
-            runCatching { eng.session.saveSound(doc.id, c.page, c.index, f.absolutePath); f }.onFailure { f.delete() }.getOrNull()
-        }
-    }
-
-    fun postReply(prompt: ReplyPrompt, text: String) {
-        replyPrompt = null
-        if (text.isBlank()) return
-        runTool(prompt.doc, "comment_reply", mapOf("page" to prompt.comment.page.toInt() + 1, "index" to prompt.comment.index.toInt() + 1, "text" to text, "author" to author))
-    }
-
-    /** Put [text] on the clipboard (Android 13 and later confirm it themselves). */
-    fun copyText(text: String) {
-        val cm = getApplication<Application>().getSystemService(android.content.ClipboardManager::class.java)
-        // the parameter `text` hides the text() function here: called by its full name
-        cm?.setPrimaryClip(android.content.ClipData.newPlainText(io.github.artcraftandroid.pdfcraft.text(R.string.msg_clip_comment), text))
-        if (android.os.Build.VERSION.SDK_INT < 33) tell(io.github.artcraftandroid.pdfcraft.text(R.string.msg_copied))
-    }
-
-    /** Copy the selected text (when the document allows copying). */
-    fun copySelection(doc: OpenDocument) {
-        if (!doc.info.allowsCopying) {
-            tell(text(R.string.msg_copy_not_allowed))
-            return
-        }
-        viewModelScope.launch {
-            val text = doc.selection.text() ?: return@launch
-            val cm = getApplication<Application>().getSystemService(android.content.ClipboardManager::class.java)
-            cm?.setPrimaryClip(android.content.ClipData.newPlainText(io.github.artcraftandroid.pdfcraft.text(R.string.msg_clip_pdf_text), text))
-            doc.selection.clear()
-            if (android.os.Build.VERSION.SDK_INT < 33) tell(io.github.artcraftandroid.pdfcraft.text(R.string.msg_copied))
-        }
-    }
+    val commenting = CommentsController(this)
 
     // ---- Tool screens (Compress, Combine, Protect, Create, Crop, Recognize text, Scan, Redact, Organize) ----
 
@@ -2468,490 +2269,9 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
 
     val signing = SigningController(this)
 
-    // ---- Edit PDF ----------------------------------------------------------------------------
+    // ---- Edit PDF, Forms, Form auto-suggestions: see EditController ----
 
-    var editMode by mutableStateOf(io.github.artcraftandroid.pdfcraft.ui.viewer.EditMode.Select)
-
-    /** Each page's paragraphs (0-based page), read when Edit PDF shows the page. */
-    val paragraphs = androidx.compose.runtime.mutableStateMapOf<Int, List<io.github.artcraftandroid.pdfcraft.ui.viewer.Paragraph>>()
-    private var paragraphsGen = -1L
-
-    /** The paragraph tapped once (outlined), and the one open in the editor. */
-    var editSelection by mutableStateOf<io.github.artcraftandroid.pdfcraft.ui.viewer.Paragraph?>(null)
-    var editing by mutableStateOf<io.github.artcraftandroid.pdfcraft.ui.viewer.Paragraph?>(null)
-
-    suspend fun loadParagraphs(doc: OpenDocument, page: Int) {
-        val eng = engine ?: return
-        if (paragraphsGen != doc.info.generation.toLong()) {
-            paragraphs.clear()
-            paragraphsGen = doc.info.generation.toLong()
-        }
-        if (paragraphs.containsKey(page)) return
-        val r = runCatching { eng.tool("text_paragraphs", mapOf("doc" to doc.id, "page" to page + 1)) }.getOrNull() ?: return
-        val arr = r.optJSONArray("paragraphs") ?: return
-        paragraphs[page] = (0 until arr.length()).mapNotNull { i ->
-            val o = arr.optJSONObject(i) ?: return@mapNotNull null
-            val rect = o.optJSONArray("rect") ?: return@mapNotNull null
-            val font = o.optString("font")
-            io.github.artcraftandroid.pdfcraft.ui.viewer.Paragraph(
-                page = page, number = o.optInt("paragraph"), text = o.optString("text"),
-                box = FloatArray(4) { k -> rect.optDouble(k).toFloat() }, font = font, size = o.optDouble("size", 12.0).toFloat(),
-                bold = if (o.has("bold")) o.optBoolean("bold") else font.contains("Bold", true) || font.contains("Black", true) || font.contains("Heavy", true),
-                italic = if (o.has("italic")) o.optBoolean("italic") else font.contains("Italic", true) || font.contains("Oblique", true),
-                color = o.optString("color").takeIf { it.startsWith("#") },
-            )
-        }
-        editSelection?.takeIf { it.page == page }?.let { sel -> editSelection = paragraphs[page]?.firstOrNull { it.number == sel.number } }
-        editing?.takeIf { it.page == page }?.let { sel -> editing = paragraphs[page]?.firstOrNull { it.number == sel.number } }
-    }
-
-    /** A tap in Edit PDF: finish typing, place new text, or select the paragraph or picture under it. */
-    fun editTap(doc: OpenDocument, at: PagePoint?) {
-        editing?.let { commitInlineEdit(doc) }
-        editImage = null
-        imageEdit.crop = null
-        if (at == null) {
-            editSelection = null
-            return
-        }
-        if (editMode == io.github.artcraftandroid.pdfcraft.ui.viewer.EditMode.AddText) {
-            editMode = io.github.artcraftandroid.pdfcraft.ui.viewer.EditMode.Select
-            editSelection = null
-            addTextPrompt = TextPrompt(doc, at)
-            return
-        }
-        if (editMode == io.github.artcraftandroid.pdfcraft.ui.viewer.EditMode.AddImage) {
-            editMode = io.github.artcraftandroid.pdfcraft.ui.viewer.EditMode.Select
-            editSelection = null
-            addImageAt(doc, at)
-            return
-        }
-        val hit = paragraphs[at.page].orEmpty().firstOrNull { p -> at.x in (p.box[0] - 4)..(p.box[2] + 4) && at.y in (p.box[1] - 4)..(p.box[3] + 4) }
-        editSelection = hit
-        if (hit == null) selectImageAt(doc, at)
-    }
-
-    /** The picture selected in Edit PDF. */
-    var editImage by mutableStateOf<io.github.artcraftandroid.pdfcraft.ui.viewer.EditImage?>(null)
-
-    /** The picture tools' state: a crop being framed, the Rotate dialog (#161). */
-    val imageEdit = io.github.artcraftandroid.pdfcraft.ui.viewer.ImageEditState()
-
-    /** Formatting the engine doesn't report back, kept per paragraph (page to number) while editing. */
-    val editFont = androidx.compose.runtime.mutableStateMapOf<Pair<Int, Int>, String>()
-    val editAlign = androidx.compose.runtime.mutableStateMapOf<Pair<Int, Int>, String>()
-    val editUnderline = androidx.compose.runtime.mutableStateMapOf<Pair<Int, Int>, Boolean>()
-
-    /** Typing in a paragraph: whether it opened with everything selected, and the text so far. */
-    var editSelectAll = false
-    var editDraft: String? = null
-    var editTextSelection: Pair<Int, Int>? = null
-    var editComposing by mutableStateOf(false)
-
-    fun startInlineEdit(para: io.github.artcraftandroid.pdfcraft.ui.viewer.Paragraph, selectAll: Boolean) {
-        editSelectAll = selectAll
-        editDraft = para.text
-        editComposing = false
-        editTextSelection = if (selectAll) 0 to para.text.length else para.text.length to para.text.length
-        editSelection = para
-        editing = para
-    }
-
-    /** Write the paragraph being typed in into the page (when it changed) and stop typing. */
-    fun commitInlineEdit(doc: OpenDocument) {
-        val para = editing ?: return
-        val text = editDraft ?: para.text
-        editing = null
-        editDraft = null
-        editTextSelection = null
-        editComposing = false
-        if (text != para.text) runTool(doc, "text_edit", mapOf("page" to para.page + 1, "paragraph" to para.number, "text" to text))
-    }
-
-    private fun paraArgs(para: io.github.artcraftandroid.pdfcraft.ui.viewer.Paragraph) = mapOf<String, Any?>("page" to para.page + 1, "paragraph" to para.number)
-
-    /** Make [para] a list of [style] (or plain again), with any typing so far. */
-    fun listParagraph(doc: OpenDocument, para: io.github.artcraftandroid.pdfcraft.ui.viewer.Paragraph, style: io.github.artcraftandroid.pdfcraft.ui.viewer.ListStyle) {
-        val typing = editing != null && editing?.number == para.number && editing?.page == para.page
-        val base = if (typing) editDraft ?: para.text else para.text
-        val text = io.github.artcraftandroid.pdfcraft.ui.viewer.ListStyle.apply(base, style)
-        if (text == base) return
-        if (typing) editDraft = text
-        runTool(doc, "text_edit", paraArgs(para) + ("text" to text))
-    }
-
-    /** A formatting change to [para], applied to the page at once (with any typing so far). */
-    fun styleParagraph(doc: OpenDocument, para: io.github.artcraftandroid.pdfcraft.ui.viewer.Paragraph, style: Map<String, Any?>) {
-        val typed = editDraft?.takeIf { editing != null && it != para.text }
-        runTool(doc, "text_edit", paraArgs(para) + style + (if (typed != null) mapOf("text" to typed) else emptyMap()))
-    }
-
-    /** Unicode script toggle for selected text or a paragraph; no uncommitted draft is lost. */
-    fun scriptParagraph(doc: OpenDocument, para: io.github.artcraftandroid.pdfcraft.ui.viewer.Paragraph, script: String) {
-        val typing = editing
-        if (script !in setOf("superscript", "subscript") || (typing != null &&
-            (typing.number != para.number || typing.page != para.page || editDraft != para.text || editComposing)) || document !== doc ||
-            !doc.writable || doc.info.signed || doc.info.readOnlyReason != null) {
-            tell(text(R.string.edit_script_unavailable))
-            return
-        }
-        val range = if (typing != null) {
-            val (anchor, focus) = editTextSelection ?: (0 to 0)
-            try { io.github.artcraftandroid.pdfcraft.engine.nativeUtf8Range(para.text, anchor, focus) }
-            catch (_: IllegalArgumentException) { tell(text(R.string.edit_script_unavailable)); return }
-        } else null
-        // Only an unchanged draft reaches here, so dismissing the inline editor loses no typing.
-        editing = null
-        editDraft = null
-        editTextSelection = null
-        editComposing = false
-        val generation = doc.info.generation
-        job(text(R.string.edit_script_applying)) { eng ->
-            if (document !== doc || editing != null || !doc.writable) {
-                tell(text(R.string.edit_script_unavailable))
-                return@job
-            }
-            val raw = eng.command {
-                val current = document(doc.id)
-                require(current.generation == generation && !current.signed && current.readOnlyReason == null) {
-                    text(R.string.edit_script_unavailable)
-                }
-                if (range != null) {
-                    val listed = JSONObject(execute("text_paragraphs", Engine.toJson(
-                        mapOf("doc" to doc.id, "page" to para.page + 1)).toString())).getJSONArray("paragraphs")
-                    val row = (0 until listed.length()).map { listed.getJSONObject(it) }
-                        .firstOrNull { it.getInt("paragraph") == para.number }
-                    // A range is valid only against the exact native editor text, not display
-                    // text normalized differently by PDF extraction or a stale local draft.
-                    require(row != null && row.optString("editor_text", row.optString("text")) == para.text) {
-                        text(R.string.edit_script_unavailable)
-                    }
-                }
-                execute("text_script", Engine.toJson(paraArgs(para) + mapOf("doc" to doc.id, "script" to script) +
-                    (range?.let { mapOf("range" to it) } ?: emptyMap())).toString())
-            }
-            refresh(doc)
-            val warnings = JSONObject(raw).optJSONArray("warnings")
-            for (i in 0 until minOf(warnings?.length() ?: 0, 3)) tell(warnings!!.getString(i).take(500))
-        }
-    }
-
-    /** Move [para] by ([dx], [dy]) points (right and down on screen). */
-    fun moveParagraph(doc: OpenDocument, para: io.github.artcraftandroid.pdfcraft.ui.viewer.Paragraph, dx: Float, dy: Float) {
-        runTool(doc, "text_edit", paraArgs(para) + mapOf("dx" to dx.toDouble(), "dy" to -dy.toDouble()))
-    }
-
-    /** Rewrap [para] to [width] points, moving it [shift] points right first (dragged from the left). */
-    fun resizeParagraph(doc: OpenDocument, para: io.github.artcraftandroid.pdfcraft.ui.viewer.Paragraph, width: Float, shift: Float) {
-        val args = paraArgs(para) + ("width" to width.toDouble()) + (if (shift != 0f) mapOf("dx" to shift.toDouble()) else emptyMap())
-        runTool(doc, "text_edit", args)
-    }
-
-    fun deleteParagraph(doc: OpenDocument, para: io.github.artcraftandroid.pdfcraft.ui.viewer.Paragraph) {
-        editSelection = null
-        editing = null
-        runTool(doc, "text_edit", paraArgs(para) + ("text" to ""))
-    }
-
-    /** The page's colour just outside [para], for typing over it. */
-    suspend fun paperColor(doc: OpenDocument, para: io.github.artcraftandroid.pdfcraft.ui.viewer.Paragraph): androidx.compose.ui.graphics.Color? {
-        val eng = engine ?: return null
-        val x = (para.box[0] - 4f).coerceAtLeast(0f).toInt().toUInt()
-        val y = (para.box[1] - 4f).coerceAtLeast(0f).toInt().toUInt()
-        val img = runCatching {
-            withContext(eng.interactive) { eng.session.renderPage(doc.id, para.page.toUInt(), 1f, io.github.artcraftandroid.pdfcraft.core.TileRect(x, y, 2u, 2u)) }
-        }.getOrNull() ?: return null
-        val px = img.rgba
-        if (px.size < 4) return null
-        return androidx.compose.ui.graphics.Color(px[0].toInt() and 0xff, px[1].toInt() and 0xff, px[2].toInt() and 0xff)
-    }
-
-    private fun selectImageAt(doc: OpenDocument, at: PagePoint) {
-        viewModelScope.launch { imageUnder(doc, at)?.let { editImage = it } }
-    }
-
-    /** The picture drawn under [at], topmost first, if any. */
-    private suspend fun imageUnder(doc: OpenDocument, at: PagePoint): io.github.artcraftandroid.pdfcraft.ui.viewer.EditImage? {
-        val eng = engine ?: return null
-        val r = runCatching { eng.tool("page_images", mapOf("doc" to doc.id, "page" to at.page + 1)) }.getOrNull() ?: return null
-        val arr = r.optJSONArray("images") ?: return null
-        for (i in arr.length() - 1 downTo 0) {
-            val o = arr.optJSONObject(i) ?: continue
-            val rect = (o.optJSONArray("visible_rect") ?: o.optJSONArray("rect")) ?: continue
-            val box = FloatArray(4) { k -> rect.optDouble(k).toFloat() }
-            if (at.x in box[0]..box[2] && at.y in box[1]..box[3]) {
-                return io.github.artcraftandroid.pdfcraft.ui.viewer.editImageFrom(at.page, o)
-            }
-        }
-        return null
-    }
-
-    /** The menu a long press on an empty part of a page opens. */
-    var pageMenu by mutableStateOf<io.github.artcraftandroid.pdfcraft.ui.viewer.PageMenu?>(null)
-
-    /**
-     * A long press where no word is: on a picture, Edit PDF with the picture selected (the
-     * reference's picture menu leads to editing it); elsewhere, the page menu at that point.
-     */
-    fun longPressPage(doc: OpenDocument, at: PagePoint, screen: androidx.compose.ui.geometry.Offset) {
-        val eng = engine ?: return
-        viewModelScope.launch {
-            val img = imageUnder(doc, at)
-            if (img != null) {
-                enterTool(doc, io.github.artcraftandroid.pdfcraft.ui.viewer.ViewerTool.Edit)
-                if (doc.controller.tool == io.github.artcraftandroid.pdfcraft.ui.viewer.ViewerTool.Edit) editImage = img
-                return@launch
-            }
-            val glyphs = runCatching { withContext(eng.commands) { eng.session.glyphCount(doc.id, at.page.toUInt()) } }.getOrDefault(1u)
-            pageMenu = io.github.artcraftandroid.pdfcraft.ui.viewer.PageMenu(doc, at, screen, pageHasText = glyphs > 0u)
-        }
-    }
-
-    /** Put [img] in [rect] (points): a move or a resize. */
-    fun placeImage(doc: OpenDocument, img: io.github.artcraftandroid.pdfcraft.ui.viewer.EditImage, rect: FloatArray) {
-        editImage = img.copy(rect = rect)
-        runTool(doc, "image_edit", mapOf("page" to img.page + 1, "image" to img.number, "action" to "move", "rect" to rect.map { it.toDouble() }))
-    }
-
-    fun turnImage(doc: OpenDocument, img: io.github.artcraftandroid.pdfcraft.ui.viewer.EditImage, quarters: Int) {
-        runTool(doc, "image_edit", mapOf("page" to img.page + 1, "image" to img.number, "action" to "rotate", "quarters" to quarters)) {
-            // the turned picture keeps its centre; read its new box
-            selectImageAt(doc, PagePoint(img.page, (img.rect[0] + img.rect[2]) / 2f, (img.rect[1] + img.rect[3]) / 2f))
-        }
-    }
-
-    fun deleteImage(doc: OpenDocument, img: io.github.artcraftandroid.pdfcraft.ui.viewer.EditImage) {
-        editImage = null
-        runTool(doc, "image_edit", mapOf("page" to img.page + 1, "image" to img.number, "action" to "delete"))
-    }
-
-    /** New page text being typed in Edit PDF (Add text). */
-    var addTextPrompt by mutableStateOf<TextPrompt?>(null)
-
-    fun postAddText(prompt: TextPrompt, text: String) {
-        addTextPrompt = null
-        if (text.isBlank()) return
-        runTool(prompt.doc, "page_add_text", mapOf(
-            "page" to prompt.at.page + 1, "text" to text, "at" to listOf(prompt.at.x.toDouble(), prompt.at.y.toDouble()),
-            "size" to 12.0, "font" to "helvetica",
-        ))
-    }
-
-    /** Add image: the activity picks a picture, then [addImage] places it on the current page. */
-    val imagePicks = Channel<OpenDocument>(Channel.BUFFERED)
-    private var imageFor: OpenDocument? = null
-
-    /** Where the picture being picked goes (centred there); null: the current page as before. */
-    private var imageAt: PagePoint? = null
-
-    fun pickEditImage(doc: OpenDocument) {
-        imageFor = doc
-        imagePicks.trySend(doc)
-    }
-
-    /** Add image at a tapped point (Edit PDF's Add image mode, or the page menu): first, from where. */
-    fun addImageAt(doc: OpenDocument, at: PagePoint) {
-        imageSource = doc to at
-    }
-
-    /** Asking where the picture comes from (photos or the camera), as the reference's menu does. */
-    var imageSource by mutableStateOf<Pair<OpenDocument, PagePoint>?>(null)
-
-    fun addImageFrom(camera: Boolean) {
-        val (doc, at) = imageSource ?: return
-        imageSource = null
-        imageAt = at
-        if (!camera) {
-            pickEditImage(doc)
-            return
-        }
-        imageFor = doc
-        val dir = File(getApplication<Application>().cacheDir, "camera").apply { mkdirs() }
-        val f = File(dir, "image-${System.nanoTime()}.jpg")
-        shotFile = f
-        imageShot = true
-        cameraShots.trySend(f)
-    }
-
-    /** The camera's photo is for Add image, not a scan. */
-    private var imageShot = false
-
-    fun addImage(uri: Uri?) {
-        val doc = imageFor ?: return
-        imageFor = null
-        if (uri == null) return
-        viewModelScope.launch {
-            try {
-                val name = files.displayName(uri).removeSuffix(".pdf")
-                val f = File(getApplication<Application>().cacheDir, "image-${System.nanoTime()}-${name}")
-                withContext(Dispatchers.IO) {
-                    getApplication<Application>().contentResolver.openInputStream(uri).use { input ->
-                        requireNotNull(input) { text(R.string.msg_picture_unreadable) }
-                        f.outputStream().use { input.copyTo(it) }
-                    }
-                }
-                if (name.lowercase().endsWith(".gif")) {
-                    tell(text(R.string.msg_gif_not_supported))
-                    return@launch
-                }
-                val eng = engine ?: return@launch
-                val at = imageAt
-                imageAt = null
-                val args = mutableMapOf<String, Any?>("doc" to doc.id, "page" to (at?.page ?: doc.viewer.currentPage) + 1, "path" to f.absolutePath)
-                // centred on the tapped point, a third of the page wide, kept on the page
-                val page = at?.let { doc.info.pages.getOrNull(it.page) }
-                val bounds = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
-                android.graphics.BitmapFactory.decodeFile(f.absolutePath, bounds)
-                if (at != null && page != null && bounds.outWidth > 0 && bounds.outHeight > 0) {
-                    var w = page.width / 3f
-                    var h = w * bounds.outHeight / bounds.outWidth
-                    if (h > page.height / 2f) {
-                        h = page.height / 2f
-                        w = h * bounds.outWidth / bounds.outHeight
-                    }
-                    val x0 = (at.x - w / 2f).coerceIn(0f, (page.width - w).coerceAtLeast(0f))
-                    val y0 = (at.y - h / 2f).coerceIn(0f, (page.height - h).coerceAtLeast(0f))
-                    args["rect"] = listOf(x0, y0, x0 + w, y0 + h).map { it.toDouble() }
-                }
-                eng.tool("page_add_image", args)
-                refresh(doc)
-            } catch (e: Exception) {
-                tell(e.userMessage)
-            }
-        }
-    }
-
-    // ---- Forms -------------------------------------------------------------------------------
-
-    /** The field being filled in. */
-    var fieldEdit by mutableStateOf<io.github.artcraftandroid.pdfcraft.ui.viewer.FieldEdit?>(null)
-
-    /** The top bar's Reset and arrows while a text field is filled. */
-    var fieldActions by mutableStateOf<io.github.artcraftandroid.pdfcraft.ui.viewer.FieldActions?>(null)
-
-    /**
-     * A tap at [at]: fill the form field there, if any (a check box or radio button toggles at
-     * once). Returns whether there was one.
-     */
-    fun tapField(doc: OpenDocument, at: PagePoint?): Boolean {
-        if (at == null || doc.widgets.isEmpty()) return false
-        val w = doc.widgets.firstOrNull { w ->
-            w.page.toInt() == at.page && w.rect.size == 4 && at.x in w.rect[0]..w.rect[2] && at.y in w.rect[1]..w.rect[3]
-        } ?: return false
-        if (w.readOnly) return true
-        if (!doc.info.allowsFormFilling) {
-            tell(text(R.string.msg_tool_blocked_security))
-            return true
-        }
-        when (w.kind) {
-            "checkbox" -> fillField(doc, w.field, !w.on)
-            "radio" -> w.export?.let { fillField(doc, w.field, it) }
-            "text", "combo", "list" -> fieldEdit = io.github.artcraftandroid.pdfcraft.ui.viewer.FieldEdit(doc, w)
-            // a signed field shows its signature's details; an empty one, a drawn or a digital signature
-            "signature" -> if (doc.signatures.any { it.field == w.field && it.signed }) {
-                doc.controller.sheet = io.github.artcraftandroid.pdfcraft.ui.viewer.ViewerSheet.Signatures
-            } else {
-                signing.signFieldChoice = doc to w
-            }
-            "button" -> pressButton(doc, w)
-            else -> return false
-        }
-        return true
-    }
-
-    /**
-     * A form button: does what its release action says, as far as a reader does on a phone:
-     * clear the form (or the fields it names), open a web address after asking, go to a page, or
-     * run its script. Sending the form online isn't done.
-     */
-    private fun pressButton(doc: OpenDocument, w: io.github.artcraftandroid.pdfcraft.core.WidgetInfo) {
-        val eng = engine ?: return
-        viewModelScope.launch {
-            val r = runCatching { eng.tool("form_actions", mapOf("doc" to doc.id, "field" to w.field)) }.getOrNull() ?: return@launch
-            val acts = r.optJSONArray("actions") ?: return@launch
-            val all = (0 until acts.length()).mapNotNull { acts.optJSONObject(it) }
-            val act = all.firstOrNull { it.optString("trigger") == "mouse_up" } ?: all.firstOrNull() ?: return@launch
-            when {
-                act.has("reset") -> {
-                    val names = act.optJSONArray("reset")?.let { a -> (0 until a.length()).map { a.optString(it) } }.orEmpty()
-                    runTool(doc, "form_reset", if (names.isEmpty()) emptyMap() else mapOf("fields" to names)) { tell(text(R.string.msg_form_cleared)) }
-                }
-                act.has("url") -> linkPrompt = act.optString("url")
-                act.has("page") -> doc.viewer.goToPage((act.optInt("page") - 1).coerceIn(0, doc.pageCount - 1))
-                act.has("submit") -> tell(text(R.string.msg_button_submit))
-                act.has("javascript") -> runTool(doc, "js_run", mapOf("field" to w.field, "script" to act.optString("javascript"))) { scriptOutput(doc, it) }
-            }
-        }
-    }
-
-    fun fillField(doc: OpenDocument, field: String, value: Any) {
-        val eng = engine ?: return
-        viewModelScope.launch {
-            try {
-                val r = eng.tool("form_fill", mapOf("doc" to doc.id, "values" to mapOf(field to value)))
-                refresh(doc)
-                scriptOutput(doc, r)
-            } catch (e: MobileException) {
-                // the field refused the value (its format, or its own script's check): said in a
-                // dialog, in the form's own words
-                showScriptAlert(e.userMessage)
-            }
-        }
-    }
-
-    /** What a form's scripts said (their alerts), shown one at a time. */
-    val scriptAlerts = androidx.compose.runtime.mutableStateListOf<String>()
-
-    private fun showScriptAlert(message: String) {
-        // a script that alerts in a loop can't queue dialogs without end
-        if (message.isNotBlank() && scriptAlerts.size < MAX_SCRIPT_ALERTS) scriptAlerts.add(message)
-    }
-
-    fun dismissScriptAlert() {
-        if (scriptAlerts.isNotEmpty()) scriptAlerts.removeAt(0)
-    }
-
-    /**
-     * What a form's scripts said and asked of the viewer, from a tool's result: alerts are shown, a
-     * page is shown, a web address asks first and printing prints; sending the form online isn't done.
-     */
-    private fun scriptOutput(doc: OpenDocument, r: JSONObject) {
-        // a script that failed: kept out of sight, as the reference keeps it, but in the log
-        r.optString("error").takeIf { it.isNotEmpty() && it != "null" }?.let { android.util.Log.w("PdfCraft", "form script: $it") }
-        r.optJSONArray("alerts")?.let { a -> for (i in 0 until a.length()) showScriptAlert(a.optString(i)) }
-        val requests = r.optJSONArray("requests") ?: return
-        for (i in 0 until requests.length()) {
-            val q = requests.optJSONObject(i) ?: continue
-            when {
-                q.has("page") -> doc.viewer.goToPage((q.optInt("page") - 1).coerceIn(0, doc.pageCount - 1))
-                q.has("url") -> linkPrompt = q.optString("url")
-                q.has("print") -> print(doc)
-                q.has("submit") -> tell(text(R.string.msg_button_submit))
-            }
-        }
-    }
-
-    /** Move to the next (or previous) fillable text or choice field in reading order. */
-    fun nextField(doc: OpenDocument, from: io.github.artcraftandroid.pdfcraft.core.WidgetInfo, forward: Boolean) {
-        viewModelScope.launch {
-            loadAllWidgets(doc)
-            if (document !== doc || !doc.widgetsComplete) return@launch
-            // the document's own tab order (Prepare form ▸ Tab order) leads; fields it doesn't name keep reading order
-            val order = runCatching {
-                val t = engine?.tool("form_tab_order", mapOf("doc" to doc.id))?.optJSONArray("tab_order")
-                if (t == null) emptyList() else (0 until t.length()).map { t.getString(it) }
-            }.getOrDefault(emptyList())
-            val fillable = io.github.artcraftandroid.pdfcraft.ui.viewer.inTabOrder(
-                doc.widgets.filter { !it.readOnly && (it.kind == "text" || it.kind == "combo" || it.kind == "list") }, order,
-            ) { it.field }
-            val i = fillable.indexOfFirst { it.field == from.field && it.page == from.page && it.rect == from.rect }
-            val next = fillable.getOrNull(if (forward) i + 1 else i - 1)
-            fieldEdit = next?.let {
-                if (it.page.toInt() != doc.viewer.currentPage) doc.viewer.goToPage(it.page.toInt(), (it.rect[1] - 60f).coerceAtLeast(0f))
-                io.github.artcraftandroid.pdfcraft.ui.viewer.FieldEdit(doc, it)
-            }
-        }
-    }
+    val editor = EditController(this)
 
     // ---- Tool jobs: each runs on the phone and saves its result into Downloads ---------------
 
@@ -3171,7 +2491,11 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
 
     /** The scan's file name (without .pdf), set when its first page is taken and changeable before saving. */
     var scanName by mutableStateOf("")
-    private var shotFile: File? = null
+
+    /** Whether this build can flatten curled pages (#302): its flattening model is installed. */
+    var scanCanFlatten by mutableStateOf(false)
+        private set
+    internal var shotFile: File? = null
     private var retakeIndex: Int? = null
 
     // A scan Android closed the app in the middle of, while the camera app was in front, carries on
@@ -3190,14 +2514,14 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     /** The scan in progress (or the Add image photo being taken); null when there is none. */
     private fun scanSession(): ScanSession? {
         if (shotFile == null && scanPages.isEmpty()) return null
-        return ScanSession(shotFile?.path, retakeIndex, imageShot, scanName, scanPages.map { ScanSession.Page(it.file.path, it.corners, it.found) })
+        return ScanSession(shotFile?.path, retakeIndex, editor.imageShot, scanName, scanPages.map { ScanSession.Page(it.file.path, it.corners, it.found) })
     }
 
     private fun restoreScan(text: String, session: ScanSession): kotlinx.coroutines.Job {
         scanRestoring = text
         shotFile = session.shot?.let(::File)
         retakeIndex = session.retake
-        imageShot = session.forImage
+        editor.imageShot = session.forImage
         scanName = session.name
         return viewModelScope.launch {
             val pages = withContext(Dispatchers.IO) {
@@ -3318,7 +2642,15 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
 
     /** Put [file] into Downloads as [name] and say so, with Open. */
     internal suspend fun deliver(file: File, name: String, mime: String = "application/pdf", lead: String? = null) {
-        val uri = withContext(Dispatchers.IO) { files.saveToDownloads(file, name, mime).also { file.delete() } }
+        val bytes = file.length()
+        val uri = try {
+            Diag.measure(DiagArea.Pages, "save_to_downloads", "bytes" to bytes, "pdf" to (mime == "application/pdf")) {
+                withContext(Dispatchers.IO) { files.saveToDownloads(file, name, mime).also { file.delete() } }
+            }
+        } catch (e: Exception) {
+            Diag.failure(DiagArea.Pages, "save_to_downloads", e)
+            throw e
+        }
         val size = withContext(Dispatchers.IO) { files.size(uri) }
         val saved = (size?.let { text(R.string.msg_saved_downloads_size, name, io.github.artcraftandroid.pdfcraft.ui.viewer.formatSize(it)) } ?: text(R.string.msg_saved_downloads, name))
             .let { if (lead != null) "$lead $it" else it }
@@ -3359,9 +2691,13 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     /** Compress PDF at [level] (0 high, 1 medium, 2 low compression), or with Advanced [options]. */
     fun compress(doc: OpenDocument, level: Int, options: CompressOptions = compressOptions) = job(text(R.string.msg_busy_compressing)) { eng ->
         val out = tempFile("pdf")
-        val r = eng.tool("doc_optimize", compressArgs(level, options) + mapOf("doc" to doc.id, "path" to out.absolutePath))
+        val r = Diag.measure(DiagArea.Pages, "compress_run", "doc" to doc.diagNumber, "level" to level, "advanced" to options.enabled) {
+            eng.tool("doc_optimize", compressArgs(level, options) + mapOf("doc" to doc.id, "path" to out.absolutePath))
+        }
         toolScreen = null
         val before = doc.info.fileSize.toLong()
+        Diag.event(DiagArea.Pages, "compress_result", "doc" to doc.diagNumber, "before_bytes" to before, "after_bytes" to out.length(),
+            "smaller" to (out.length() < before), "target_set" to r.has("target_reached"), "target_reached" to r.optBoolean("target_reached"))
         if (out.length() >= before) {
             // as the reference: nothing is saved when the file can't get any smaller
             out.delete()
@@ -3410,8 +2746,10 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         val out = tempFile("pdf")
         val copy = eng.tool("doc_open", mapOf("path" to doc.file.absolutePath, "password" to doc.password)).optLong("doc")
         try {
-            eng.tool("doc_protect", protection + ("doc" to copy))
-            eng.tool("doc_save", mapOf("doc" to copy, "path" to out.absolutePath, "full" to true))
+            Diag.measure(DiagArea.Pages, "protect_copy", "doc" to doc.diagNumber, "settings" to protection.size) {
+                eng.tool("doc_protect", protection + ("doc" to copy))
+                eng.tool("doc_save", mapOf("doc" to copy, "path" to out.absolutePath, "full" to true))
+            }
         } finally {
             runCatching { eng.tool("doc_close", mapOf("doc" to copy, "discard_changes" to true)) }
         }
@@ -3429,8 +2767,10 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         val out = tempFile("pdf")
         val copy = eng.tool("doc_open", mapOf("path" to doc.file.absolutePath, "password" to doc.password)).optLong("doc")
         try {
-            eng.tool("doc_unprotect", mapOf("doc" to copy))
-            eng.tool("doc_save", mapOf("doc" to copy, "path" to out.absolutePath, "full" to true))
+            Diag.measure(DiagArea.Pages, "unprotect_copy", "doc" to doc.diagNumber, "encrypted" to doc.info.encrypted) {
+                eng.tool("doc_unprotect", mapOf("doc" to copy))
+                eng.tool("doc_save", mapOf("doc" to copy, "path" to out.absolutePath, "full" to true))
+            }
         } catch (e: Exception) {
             out.delete()
             throw e
@@ -3457,6 +2797,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         doc.commitTool?.invoke()
         runTool(doc, "doc_remove_hidden", if (categories == null) emptyMap() else mapOf("categories" to categories)) {
             doc.controller.sheet = io.github.artcraftandroid.pdfcraft.ui.viewer.ViewerSheet.None
+            Diag.event(DiagArea.Pages, "hidden_removed", "doc" to doc.diagNumber, "all" to (categories == null), "categories" to (categories?.size ?: -1))
             tell(text(R.string.msg_hidden_removed), text(R.string.common_undo)) { undo(doc) }
         }
     }
@@ -3716,11 +3057,15 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         val mime = when (format) { "png" -> "image/png"; "tiff" -> "image/tiff"; else -> "image/jpeg" }
         val dir = File(getApplication<Application>().cacheDir, "images/${System.nanoTime()}").apply { mkdirs() }
         try {
-            val r = eng.tool("doc_export_images", mapOf(
-                "doc" to doc.id, "folder" to dir.absolutePath, "format" to format, "dpi" to imageDpi, "quality" to imageQuality,
-                "pages" to pages.map { it + 1 },
-            ))
+            val r = Diag.measure(DiagArea.Pages, "export_pages_render", "doc" to doc.diagNumber, "format" to format, "dpi" to imageDpi, "pages" to pages.size) {
+                eng.tool("doc_export_images", mapOf(
+                    "doc" to doc.id, "folder" to dir.absolutePath, "format" to format, "dpi" to imageDpi, "quality" to imageQuality,
+                    "pages" to pages.map { it + 1 },
+                ))
+            }
             val made = exportedFiles(r).map { f -> f to "${doc.title}_${f.name.substringAfterLast("_page_")}" }
+            if (Diag.enabled()) Diag.event(DiagArea.Pages, "export_pages_result", "doc" to doc.diagNumber, "files" to made.size,
+                "bytes" to made.sumOf { it.first.length() }, "lower_dpi" to (r.optJSONArray("lower_dpi")?.length() ?: 0), "share" to share)
             imageExport = null
             organizing = false
             doc.controller.pagesOpen = false
@@ -3729,8 +3074,10 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 val uris = withContext(Dispatchers.IO) { files.shareableAll(made) }
                 intents.trySend(Intent.createChooser(sendIntent(uris, mime), null))
             } else {
-                withContext(Dispatchers.IO) {
-                    for ((f, name) in made) if (format == "tiff") files.saveToDownloads(f, name, mime) else files.saveToPictures(f, name, mime)
+                Diag.measure(DiagArea.Pages, "export_pages_save", "files" to made.size, "to_downloads" to (format == "tiff")) {
+                    withContext(Dispatchers.IO) {
+                        for ((f, name) in made) if (format == "tiff") files.saveToDownloads(f, name, mime) else files.saveToPictures(f, name, mime)
+                    }
                 }
                 tell(plural(if (format == "tiff") R.plurals.msg_images_saved_downloads else R.plurals.msg_images_saved, made.size, made.size))
             }
@@ -3753,9 +3100,13 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     fun exportAllImages(doc: OpenDocument, skipSmall: Boolean, share: Boolean) = job(text(R.string.msg_busy_exporting_images)) { eng ->
         val dir = File(getApplication<Application>().cacheDir, "images/${System.nanoTime()}").apply { mkdirs() }
         try {
-            val r = eng.tool("doc_export_all_images", mapOf("doc" to doc.id, "folder" to dir.absolutePath, "min_size" to if (skipSmall) 64 else 0))
+            val r = Diag.measure(DiagArea.Pages, "export_all_images", "doc" to doc.diagNumber, "skip_small" to skipSmall) {
+                eng.tool("doc_export_all_images", mapOf("doc" to doc.id, "folder" to dir.absolutePath, "min_size" to if (skipSmall) 64 else 0))
+            }
             val made = exportedFiles(r).map { it to it.name }
             val skipped = r.optJSONArray("skipped")
+            if (Diag.enabled()) Diag.event(DiagArea.Pages, "export_all_images_result", "doc" to doc.diagNumber, "files" to made.size,
+                "bytes" to made.sumOf { it.first.length() }, "skipped" to (skipped?.length() ?: 0), "share" to share)
             val reasons = (0 until (skipped?.length() ?: 0)).mapNotNull { skipped!!.optJSONObject(it)?.optString("reason")?.takeIf(String::isNotBlank) }.distinct()
             toolScreen = null
             if (made.isEmpty()) {
@@ -3801,7 +3152,9 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     /** Pages [pages] (0-based) of [doc] as a new PDF in Downloads. */
     fun extractPages(doc: OpenDocument, pages: List<Int>) = job(text(R.string.msg_busy_extracting)) { eng ->
         val out = tempFile("pdf")
-        eng.tool("page_extract", mapOf("doc" to doc.id, "pages" to pages.map { it + 1 }, "out" to out.absolutePath))
+        Diag.measure(DiagArea.Pages, "extract_pages", "doc" to doc.diagNumber, "pages" to pages.size) {
+            eng.tool("page_extract", mapOf("doc" to doc.id, "pages" to pages.map { it + 1 }, "out" to out.absolutePath))
+        }
         deliver(out, "Pages from ${doc.title}.pdf")
     }
 
@@ -3871,9 +3224,10 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         try {
             val args = mutableMapOf<String, Any?>("doc" to doc.id, "out_dir" to dir.absolutePath)
             args += mode.args()
-            val r = eng.tool("doc_split", args)
+            val r = Diag.measure(DiagArea.Pages, "split", "doc" to doc.diagNumber, "share" to share) { eng.tool("doc_split", args) }
             val list = r.optJSONArray("files")
             val parts = (0 until (list?.length() ?: 0)).map { File(list!!.getJSONObject(it).getString("path")) }.filter { it.isFile }
+            if (Diag.enabled()) Diag.event(DiagArea.Pages, "split_result", "doc" to doc.diagNumber, "files" to parts.size, "bytes" to parts.sumOf { it.length() })
             if (parts.isEmpty()) {
                 tell(text(R.string.msg_split_nothing))
                 dir.deleteRecursively()
@@ -3905,7 +3259,9 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         val eng = engine ?: return
         viewModelScope.launch {
             try {
-                eng.tool("layer_set", mapOf("doc" to doc.id, "layer" to position, "visible" to visible))
+                Diag.measure(DiagArea.Pages, "layer_set", "doc" to doc.diagNumber, "visible" to visible) {
+                    eng.tool("layer_set", mapOf("doc" to doc.id, "layer" to position, "visible" to visible))
+                }
                 doc.images.invalidate()
             } catch (e: MobileException) {
                 tell(e.userMessage)
@@ -4024,6 +3380,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         if (!comments && !fields) return
         doc.commitTool?.invoke()
         runTool(doc, "doc_flatten", mapOf("comments" to comments, "fields" to fields)) {
+            Diag.event(DiagArea.Pages, "flattened", "doc" to doc.diagNumber, "comments" to comments, "fields" to fields)
             tell(text(R.string.msg_flattened), text(R.string.common_undo)) { undo(doc) }
         }
     }
@@ -4044,6 +3401,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     fun convertToPdfa(doc: OpenDocument, level: String, onDone: (PdfaReport) -> Unit) {
         runTool(doc, "pdfa_convert", mapOf("level" to level)) { r ->
             val report = parsePdfaReport(r)
+            Diag.event(DiagArea.Pages, "pdfa_convert", "doc" to doc.diagNumber, "level" to "pdfa${level.lowercase()}", "compliant" to report.compliant, "issues_left" to report.issues.size)
             onDone(report)
             tell(text(if (report.compliant) R.string.std_msg_pdfa_done else R.string.std_msg_pdfa_partly), text(R.string.common_undo)) { undo(doc) }
         }
@@ -4061,6 +3419,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     fun fixHairlines(doc: OpenDocument, fix: HairlineFix, pages: List<Int>?) {
         runTool(doc, "doc_fix_hairlines", fix.args(pages)) { r ->
             val n = r.optInt("fixed")
+            Diag.event(DiagArea.Pages, "fix_hairlines", "doc" to doc.diagNumber, "fixed" to n, "pages" to r.optInt("pages"), "all_pages" to (pages == null))
             if (n == 0) tell(text(R.string.std_msg_no_hairlines))
             else tell(plural(R.plurals.std_msg_hairlines_fixed, n, n, r.optInt("pages")), text(R.string.common_undo)) { undo(doc) }
         }
@@ -4090,7 +3449,11 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             val dir = File(getApplication<Application>().cacheDir, "print/${System.nanoTime()}").apply { mkdirs() }
             val out = File(dir, "${doc.title}-print.pdf")
             try {
-                eng.tool("doc_print", options.args(out.absolutePath) + ("doc" to doc.id))
+                val r = Diag.measure(DiagArea.Pages, "print_layout", "doc" to doc.diagNumber, "layout" to options.layout, "per_sheet" to options.perSheet,
+                    "subset" to options.subset, "reverse" to options.reverse, "page_range" to options.pages.isNotBlank(), "save" to save) {
+                    eng.tool("doc_print", options.args(out.absolutePath) + ("doc" to doc.id))
+                }
+                Diag.event(DiagArea.Pages, "print_layout_result", "doc" to doc.diagNumber, "sheets" to r.optInt("sheets"), "bytes" to out.length())
                 toolScreen = null
                 if (save) {
                     deliver(out, out.name, "application/pdf")
@@ -4132,6 +3495,8 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     /** Add (or, with [replace], update) a mark of [kind] with [args]; one undo step. */
     fun applyMark(doc: OpenDocument, kind: MarkKind, args: Map<String, Any?>, replace: Boolean) {
         runTool(doc, kind.tool, args) {
+            Diag.event(DiagArea.Pages, "mark_applied", "doc" to doc.diagNumber, "kind" to kind, "replace" to replace,
+                "picture" to args.containsKey("file"), "pages" to ((args["pages"] as? List<*>)?.size ?: -1))
             toolScreen = null
             clearMarkImage()
             val msg = when (kind) {
@@ -4148,6 +3513,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         runTool(doc, "doc_remove_marks", mapOf("kind" to kind.key)) { r ->
             onDone()
             val warn = r.optJSONArray("warnings")?.length() ?: 0
+            Diag.event(DiagArea.Pages, "marks_removed", "doc" to doc.diagNumber, "kind" to kind, "warnings" to warn)
             tell(text(if (warn > 0) R.string.marks_msg_removed_with_warnings else R.string.marks_msg_removed), text(R.string.common_undo)) { undo(doc) }
         }
     }
@@ -4173,7 +3539,10 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         }
         job(text(R.string.msg_busy_saving_files)) {
             try {
-                val saved = withContext(Dispatchers.IO) { files.saveAllToTree(tree, out.files, out.mime) }
+                val saved = Diag.measure(DiagArea.Pages, "save_to_folder", "files" to out.files.size) {
+                    withContext(Dispatchers.IO) { files.saveAllToTree(tree, out.files, out.mime) }
+                }
+                Diag.event(DiagArea.Pages, "save_to_folder_result", "files" to out.files.size, "saved" to saved)
                 tell(plural(R.plurals.msg_files_saved_folder, saved, saved))
             } finally {
                 withContext(NonCancellable + Dispatchers.IO) { out.discard() }
@@ -4197,13 +3566,13 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     fun onScanPhoto(ok: Boolean) {
         val f = shotFile ?: return
         shotFile = null
-        if (imageShot) {
-            imageShot = false
+        if (editor.imageShot) {
+            editor.imageShot = false
             // after Android closed the app, the document the picture was for isn't open any more
-            if (!ok || !f.isFile || f.length() == 0L || imageFor == null) {
+            if (!ok || !f.isFile || f.length() == 0L || editor.imageFor == null) {
                 f.delete()
-                imageFor = null
-                imageAt = null
+                editor.imageFor = null
+                editor.imageAt = null
                 return
             }
             // turned upright as the camera meant it (the page keeps no orientation tag), then placed
@@ -4216,7 +3585,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                         out
                     }.getOrDefault(f)
                 }
-                addImage(Uri.fromFile(upright))
+                editor.addImage(Uri.fromFile(upright))
             }
             return
         }
@@ -4245,13 +3614,19 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             // One native call decodes the photo once, has the detector network find the page on a
             // small copy (#290) and moves each side onto the paper's edge at full size (#291). The
             // network's model is unpacked from the app's assets the first time; without it the
-            // line detector is asked instead.
+            // line detector is asked instead. The testing options (#288) can name the detector
+            // and leave the closer look out.
+            val lab = scanLab.options
             val doc = eng?.let {
                 withContext(Dispatchers.IO) { runCatching { it.prepareOcrModels(getApplication()) } }
-                withContext(Dispatchers.Default) { runCatching { io.github.artcraftandroid.pdfcraft.core.scanFindDocument(f.absolutePath) } }
+                withContext(Dispatchers.Default) { runCatching { io.github.artcraftandroid.pdfcraft.core.scanFindDocumentWith(f.absolutePath, lab.findOptions()) } }
                     .onFailure { e -> Diag.failure(DiagArea.Scan, "scan_find_document", e) }.getOrNull()
             }
             val edges = doc?.takeIf { it.found }?.corners?.takeIf { it.size == 8 }?.toFloatArray()
+            // the models are unpacked by now: whether the flattening one is among them (#302)
+            if (!scanCanFlatten && eng != null) {
+                scanCanFlatten = withContext(Dispatchers.Default) { runCatching { io.github.artcraftandroid.pdfcraft.core.scanCanFlatten() }.getOrDefault(false) }
+            }
             Diag.event(
                 DiagArea.Scan, "photo", "retake" to (r != null), "bytes" to f.length(), "edges_found" to (edges != null),
                 "find_ms" to android.os.SystemClock.elapsedRealtime() - findStarted,
@@ -4259,9 +3634,13 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 "angle" to (doc?.angle?.toInt() ?: 0), "passes" to (doc?.passes?.toInt() ?: 0),
                 *(doc?.timings.orEmpty().map<io.github.artcraftandroid.pdfcraft.core.ScanTiming, Pair<String, Any?>> { it.stage.removePrefix("scan_") + "_ms" to it.ms.toLong() }.toTypedArray()),
                 "refined_sides" to (doc?.refined?.count { it } ?: 0), "curved_sides" to (doc?.curved?.count { it } ?: 0),
+                "finder" to ScanLab.finderId(lab.finder), "refine" to lab.refine,
             )
+            val finding = doc?.let { d ->
+                ScanFinding(d.source.name.lowercase(), d.confidence.toDouble(), d.angle.toInt(), d.passes.toInt(), d.refined.count { it }, d.curved.count { it })
+            }
             val at = scanPages.indexOfFirst { it.file == f }
-            if (edges != null && at >= 0) scanPages[at] = scanPages[at].copy(corners = edges, found = edges)
+            if (at >= 0) scanPages[at] = if (edges != null) scanPages[at].copy(corners = edges, found = edges, finding = finding) else scanPages[at].copy(finding = finding)
         }
     }
 
@@ -4280,7 +3659,19 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     }
 
     fun discardScan() {
-        scanPages.forEach { it.file.delete() }
+        val discarded = scanPages.toList()
+        if (scanLab.options.keep && discarded.isNotEmpty()) {
+            // kept for testing first (#288): a scan given up on is often the one worth looking at
+            viewModelScope.launch {
+                withContext(Dispatchers.IO) {
+                    scanLab.keepDiscarded(discarded)
+                    discarded.forEach { it.file.delete() }
+                }
+                scanLab.refreshKept()
+            }
+        } else {
+            discarded.forEach { it.file.delete() }
+        }
         scanPageDir().listFiles()?.forEach { it.delete() }
         scanPages.clear()
         scanName = ""
@@ -4295,27 +3686,38 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
      * Save the scanned pages as a PDF with [filter]'s look (or insert them where Organize asked).
      * Each photo is decoded once, straightened to the page's true proportions (#293), given the
      * look and encoded once natively (#287); a page that can't be processed goes in as the camera
-     * took it.
+     * took it. With [flatten], a curled, sagging or folded page is drawn flat by the flattening
+     * network first (#302); that is the person's choice, never made for them.
      */
-    fun saveScan(filter: ScanFilter) = job(text(R.string.msg_busy_saving_scan)) { eng ->
+    fun saveScan(filter: ScanFilter, flatten: Boolean = false) = job(text(R.string.msg_busy_saving_scan)) { eng ->
         val pages = scanPages.toList()
         val scanStarted = android.os.SystemClock.elapsedRealtime()
         val dir = scanPageDir().apply { mkdirs() }
         val saved = ArrayList<ScanSavedPage>(pages.size)
+        // the testing options in force (#288), and where this scan is kept when scans are kept
+        val lab = scanLab.options
+        val strength = lab.strengthFor(filter.level)
+        val keepIn = withContext(Dispatchers.IO) { scanLab.begin() }
         for ((i, page) in pages.withIndex()) {
             // the Scan gates (#286): found edges, whether they were moved and how far (in % of the
             // photo's diagonal, so the thumbnail's proportions are enough)
             val stats = scanPageStats(page.corners, page.found, ScanPage.WHOLE, page.thumb.width.toDouble(), page.thumb.height.toDouble())
             // a whole photo in Original stays the camera's own file: natively it only gets its
             // resolution written in, so its PDF page has a size like the others (#293)
-            val untouched = !scanNeedsProcessing(page.corners.contentEquals(ScanPage.WHOLE), filter.mode)
+            val untouched = !flatten && !scanNeedsProcessing(page.corners.contentEquals(ScanPage.WHOLE), filter.mode)
             busy = text(R.string.msg_busy_cleaning_page, i + 1, pages.size)
             val request = io.github.artcraftandroid.pdfcraft.core.ScanPageRequest(
                 photoPath = page.file.absolutePath,
                 corners = page.corners.toList(),
                 look = scanLookOf(filter.mode),
-                strength = filter.level.coerceIn(0, 100).toUByte(),
+                strength = strength.toUByte(),
                 outputPath = File(dir, "page-$i").absolutePath,
+                snapPaper = lab.snapPaper,
+                flatten = flatten,
+                sideProportions = !lab.perspective,
+                upright = lab.upright,
+                sharpen = lab.sharpen.coerceIn(0, 100).toUByte(),
+                denoise = lab.denoise,
             )
             val enhanceStarted = android.os.SystemClock.elapsedRealtime()
             val result = withContext(Dispatchers.Default) { runCatching { io.github.artcraftandroid.pdfcraft.core.scanProcessPage(request) } }
@@ -4331,8 +3733,31 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 "out_format" to (r?.format?.name?.lowercase() ?: "none"), "dpi" to (r?.dpi?.toDouble() ?: 0.0),
                 "paper" to (r?.paper?.name?.lowercase() ?: "none"), "aspect" to (r?.aspectSource?.name?.lowercase() ?: "none"),
                 "focal_mismatch" to (r?.focalMismatch ?: false),
+                "flatten" to flatten, "flattened" to (r?.flattened ?: false), "bend_pct" to ((r?.bend ?: 0f) * 100.0),
+                "strength" to strength, "side_proportions" to !lab.perspective, "snap_paper" to lab.snapPaper,
+                // which way up the page was found to be and whether it was turned (#339)
+                "upright" to lab.upright, "quarter_turns" to (r?.quarterTurns?.toInt() ?: 0), "upright_sure" to (r?.orientation?.sure ?: false),
+                "upright_confidence" to (r?.orientation?.confidence?.toDouble() ?: 0.0), "upright_agreement" to (r?.orientation?.agreement?.toDouble() ?: 0.0),
+                "upright_tiles" to (r?.orientation?.tiles?.toInt() ?: 0),
+                // sharpening and smoothing asked of the Clean scan filter, and the grain it measured (#299)
+                "sharpen" to lab.sharpen, "denoise" to lab.denoise, "noise_sigma" to (r?.noise?.toDouble() ?: -1.0),
             )
+            if (keepIn != null) {
+                val made = r?.let {
+                    ScanTestResult(
+                        it.width.toLong(), it.height.toLong(), it.format.name.lowercase(), it.dpi.toDouble(), it.paper.name.lowercase(),
+                        it.aspectSource.name.lowercase(), it.focalMismatch, it.flattened, it.bend * 100.0, it.quarterTurns.toInt(),
+                        it.orientation?.let { o -> ScanTestOrientation(o.quarterTurns.toInt(), o.confidence.toDouble(), o.agreement.toDouble(), o.tiles.toInt(), o.sure) },
+                        it.noise?.toDouble(),
+                    )
+                }
+                withContext(Dispatchers.IO) { scanLab.keepPage(keepIn, i, page, true, filter.mode, strength, flatten, r?.path?.let(::File), made) }
+            }
             saved += scanSavedPage(page.file.absolutePath, r?.let { it.path to it.dpi })
+        }
+        if (keepIn != null) {
+            withContext(Dispatchers.IO) { scanLab.end(keepIn) }
+            scanLab.refreshKept()
         }
         val created = try {
             eng.tool("doc_create", scanCreateArgs(saved))
@@ -4742,358 +4167,6 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         if (uris.isNotEmpty()) onFilesPicked(FilePickKind.Create, uris)
     }
 
-    // ---- Form auto-suggestions -----------------------------------------------------------------
-
-    var formSuggestions by mutableStateOf(appPrefs.getBoolean("formSuggestions", true))
-        private set
-
-    fun updateFormSuggestions(on: Boolean) {
-        formSuggestions = on
-        appPrefs.edit().putBoolean("formSuggestions", on).apply()
-    }
-
-    /** Words typed into form fields before, newest first. */
-    fun suggestionsFor(prefix: String): List<String> {
-        if (!formSuggestions || prefix.isBlank()) return emptyList()
-        val all = appPrefs.getString("suggestions", "").orEmpty().split('\n').filter { it.isNotBlank() }
-        return all.filter { it.startsWith(prefix, ignoreCase = true) && !it.equals(prefix, ignoreCase = true) }.take(3)
-    }
-
-    fun rememberSuggestion(value: String) {
-        if (!formSuggestions || value.isBlank() || value.length > 200) return
-        val all = appPrefs.getString("suggestions", "").orEmpty().split('\n').filter { it.isNotBlank() && it != value }
-        appPrefs.edit().putString("suggestions", (listOf(value) + all).take(200).joinToString("\n")).apply()
-    }
-
-    fun clearFormSuggestions() {
-        appPrefs.edit().remove("suggestions").apply()
-        tell(text(R.string.msg_suggestions_cleared))
-    }
-
-    // ---- Selecting a comment ------------------------------------------------------------------
-
-    /** The comment tapped: its panel shows over the viewer. */
-    var selectedComment by mutableStateOf<Pair<OpenDocument, io.github.artcraftandroid.pdfcraft.core.CommentInfo>?>(null)
-
-    /** A tap at [at]: select the comment there (the top one), if any. */
-    fun tapComment(doc: OpenDocument, at: PagePoint?): Boolean {
-        if (at == null) return false
-        val hit = doc.comments.lastOrNull { c ->
-            // A comment the PDF hides (Hidden/NoView) is not drawn, so it cannot be tapped (#115).
-            c.page.toInt() == at.page && !c.hidden && c.replyTo == null && c.state == null && c.rect.size == 4 &&
-                at.x in (c.rect[0] - 4)..(c.rect[2] + 4) && at.y in (c.rect[1] - 4)..(c.rect[3] + 4)
-        } ?: return false
-        selectedComment = doc to hit
-        lectureSeekToComment(doc, hit)
-        return true
-    }
-
-    private fun commentArgs(c: io.github.artcraftandroid.pdfcraft.core.CommentInfo) = mapOf("page" to c.page.toInt() + 1, "index" to c.index.toInt() + 1)
-
-    fun deleteComment(doc: OpenDocument, c: io.github.artcraftandroid.pdfcraft.core.CommentInfo) {
-        selectedComment = null
-        runTool(doc, "comment_delete", commentArgs(c))
-    }
-
-    // ---- Comments: review, sharing and import (#169, #158) ----------------------------------
-
-    /** The saved author name (what Mine in the Comments list filters by), or null. */
-    val commentAuthor: String? get() = author
-
-    /**
-     * Each comment's review status, by (0-based page, 0-based index), as the engine works it out
-     * (the latest status reply, by reference). Empty when nobody set one.
-     */
-    suspend fun commentStatuses(doc: OpenDocument): Map<Pair<Int, Int>, String> {
-        val eng = engine ?: return emptyMap()
-        if (doc.comments.none { it.state != null }) return emptyMap()
-        val r = runCatching { eng.tool("comment_list", mapOf("doc" to doc.id)) }.getOrNull() ?: return emptyMap()
-        return io.github.artcraftandroid.pdfcraft.ui.viewer.parseCommentStatuses(r)
-    }
-
-    /** Set comment [c]'s review status (`none`, `accepted`, `rejected`, `cancelled`, `completed`). */
-    fun setCommentStatus(doc: OpenDocument, c: io.github.artcraftandroid.pdfcraft.core.CommentInfo, status: String) {
-        runTool(doc, "comment_set_status", commentArgs(c) + mapOf("status" to status, "author" to author)) { io.github.artcraftandroid.pdfcraft.ui.viewer.MarkupDiag.commentStatus(doc, status) }
-    }
-
-    /** Lock or unlock comment [c]: a locked one can't be moved, restyled or deleted. */
-    fun lockComment(doc: OpenDocument, c: io.github.artcraftandroid.pdfcraft.core.CommentInfo, locked: Boolean) {
-        runTool(doc, "comment_lock", commentArgs(c) + ("locked" to locked)) {
-            io.github.artcraftandroid.pdfcraft.ui.viewer.MarkupDiag.commentLock(doc, locked)
-            tell(text(if (locked) R.string.comments_locked_msg else R.string.comments_unlocked_msg))
-        }
-    }
-
-    /**
-     * The comments of [doc] as an XFDF file, handed to the share sheet ([share]) or saved into
-     * Downloads: what a classmate imports into their copy of the same PDF.
-     */
-    fun exportComments(doc: OpenDocument, share: Boolean) {
-        if (doc.comments.none { !it.fillSign } && doc.commentsComplete) {
-            tell(text(R.string.comments_export_none))
-            return
-        }
-        job(text(R.string.comments_exporting)) { eng ->
-            val out = tempFile("xfdf")
-            try {
-                val start = android.os.SystemClock.elapsedRealtime()
-                eng.tool("doc_export_data", mapOf("doc" to doc.id, "path" to out.absolutePath, "what" to "comments"))
-                io.github.artcraftandroid.pdfcraft.ui.viewer.MarkupDiag.commentsExport(doc, share, out.length(), android.os.SystemClock.elapsedRealtime() - start)
-                val name = "${doc.title}.xfdf"
-                if (share) {
-                    val uri = withContext(Dispatchers.IO) { files.shareable(out, name) }
-                    intents.trySend(Intent.createChooser(sendIntent(listOf(uri), XFDF_MIME).putExtra(Intent.EXTRA_SUBJECT, text(R.string.comments_share_subject, doc.title)), null))
-                } else {
-                    deliver(out, name, XFDF_MIME)
-                }
-            } finally {
-                out.delete()
-            }
-        }
-    }
-
-    /** Asks the activity for comments to import: XFDF, FDF or another PDF. */
-    val commentImportPicks = Channel<Unit>(Channel.CONFLATED)
-    private var commentImportTarget: OpenDocument? = null
-
-    fun pickCommentsImport(doc: OpenDocument) {
-        if (!canImportComments(doc)) return
-        commentImportTarget = doc
-        commentImportPicks.trySend(Unit)
-    }
-
-    private fun canImportComments(doc: OpenDocument): Boolean {
-        if (document !== doc || !doc.info.allowsAnnotation || doc.info.readOnlyReason != null) {
-            tell(text(R.string.comments_import_unavailable))
-            return false
-        }
-        return true
-    }
-
-    /** The picker's answer (null when cancelled). */
-    fun onCommentsPicked(uri: Uri?) {
-        val doc = commentImportTarget
-        commentImportTarget = null
-        if (uri == null || doc == null) return
-        importComments(doc, uri)
-    }
-
-    /**
-     * Comments shared to the app (an `.xfdf` or `.fdf` from a messaging app) go into the document
-     * open now; with none open, the reader is asked to open the PDF they belong to first.
-     */
-    fun receiveComments(uri: Uri) {
-        val doc = document
-        if (doc == null) {
-            tell(text(R.string.comments_import_open_pdf_first))
-            return
-        }
-        importComments(doc, uri)
-    }
-
-    /**
-     * Import the comments in [uri] into [doc], each onto the page with the same number. A
-     * comment already there under the same name is replaced, so the same file imported twice
-     * doesn't add a second set. One undo step.
-     */
-    private fun importComments(doc: OpenDocument, uri: Uri) {
-        if (!canImportComments(doc)) return
-        job(text(R.string.comments_importing)) { eng ->
-            val name = withContext(Dispatchers.IO) { runCatching { files.displayNameRaw(uri) }.getOrDefault("comments") }
-            val ext = name.substringAfterLast('.', "").lowercase().takeIf { it in setOf("xfdf", "fdf", "pdf", "xml") } ?: "xfdf"
-            val staged = tempFile(ext)
-            try {
-                withContext(Dispatchers.IO) {
-                    val stream = getApplication<Application>().contentResolver.openInputStream(uri)
-                        ?: throw java.io.IOException(text(R.string.msg_that_file_unreadable))
-                    val ctx = currentCoroutineContext()
-                    val limit = if (ext == "pdf") SafBoundedCopy.MAX_BOOKMARK_SOURCE_PDF_BYTES else MAX_COMMENT_FILE_BYTES
-                    stream.use { input -> staged.outputStream().use { SafBoundedCopy.copy(input, it, limit, "Comments") { ctx.ensureActive() } } }
-                }
-                if (document !== doc) return@job
-                val before = commentCount(doc)
-                val start = android.os.SystemClock.elapsedRealtime()
-                eng.tool("doc_import_data", mapOf("doc" to doc.id, "path" to staged.absolutePath))
-                refresh(doc)
-                val after = comments(doc)?.count { it.replyTo == null && it.state == null && !it.fillSign }
-                val added = if (after != null && before != null) after - before else null
-                io.github.artcraftandroid.pdfcraft.ui.viewer.MarkupDiag.commentsImport(doc, ext, staged.length(), added, android.os.SystemClock.elapsedRealtime() - start)
-                tell(
-                    when {
-                        added == null -> text(R.string.comments_imported)
-                        added > 0 -> plural(R.plurals.comments_imported_count, added, added)
-                        else -> text(R.string.comments_imported_none_new)
-                    },
-                )
-            } finally {
-                staged.delete()
-            }
-        }
-    }
-
-    private suspend fun commentCount(doc: OpenDocument): Int? = comments(doc)?.count { it.replyTo == null && it.state == null && !it.fillSign }
-
-    /** A PDF summarising every comment, sorted by [sort] (`page`, `author`, `date`, `type`), into Downloads with Open. */
-    fun summarizeComments(doc: OpenDocument, sort: String) = job(text(R.string.comments_summarizing)) { eng ->
-        val out = tempFile("pdf")
-        try {
-            val start = android.os.SystemClock.elapsedRealtime()
-            eng.tool("comments_summarize", mapOf("doc" to doc.id, "sort" to sort, "out" to out.absolutePath, "open" to false))
-            io.github.artcraftandroid.pdfcraft.ui.viewer.MarkupDiag.commentsSummary(doc, sort, android.os.SystemClock.elapsedRealtime() - start)
-            deliver(out, text(R.string.comments_summary_file, doc.title), "application/pdf")
-        } finally {
-            out.delete()
-        }
-    }
-
-    /**
-     * Comments copied from one document to paste into another (#169): each page's XFDF, by its
-     * 1-based page number. Kept in memory only, never on the system clipboard.
-     */
-    var copiedComments by mutableStateOf<Map<Int, String>>(emptyMap())
-        private set
-
-    /** Copy [list] (comments, not replies) with their replies, page by page. */
-    fun copyComments(doc: OpenDocument, list: List<io.github.artcraftandroid.pdfcraft.core.CommentInfo>) {
-        val eng = engine ?: return
-        val byPage = list.filter { it.replyTo == null && it.state == null && it.subtype != "Sound" && it.subtype != "FileAttachment" }
-            .groupBy { it.page.toInt() + 1 }
-        if (byPage.isEmpty()) {
-            tell(text(R.string.comments_copy_none))
-            return
-        }
-        viewModelScope.launch {
-            try {
-                val out = mutableMapOf<Int, String>()
-                for ((page, cs) in byPage) {
-                    val r = eng.tool("comments_copy", mapOf("doc" to doc.id, "comments" to cs.map { listOf(page, it.index.toInt() + 1) }))
-                    val xfdf = r.optString("xfdf").ifEmpty { r.optString("text") }
-                    if (xfdf.isNotEmpty()) out[page] = xfdf
-                }
-                copiedComments = out
-                val n = byPage.values.sumOf { it.size }
-                io.github.artcraftandroid.pdfcraft.ui.viewer.MarkupDiag.commentsCopy(doc, n, out.size)
-                tell(plural(R.plurals.comments_copied, n, n))
-            } catch (e: MobileException) {
-                tell(e.userMessage)
-            }
-        }
-    }
-
-    /** Paste the copied comments into [doc], each onto the page with the number it had (one undo step per page). */
-    fun pasteComments(doc: OpenDocument) {
-        val copied = copiedComments
-        if (copied.isEmpty()) return
-        if (!canImportComments(doc)) return
-        val eng = engine ?: return
-        viewModelScope.launch {
-            var skipped = 0
-            try {
-                for ((page, xfdf) in copied.toSortedMap()) {
-                    if (page > doc.pageCount) { skipped++; continue }
-                    eng.tool("comments_paste", mapOf("doc" to doc.id, "page" to page, "xfdf" to xfdf))
-                }
-            } catch (e: MobileException) {
-                tell(e.userMessage)
-            } finally {
-                refresh(doc)
-            }
-            io.github.artcraftandroid.pdfcraft.ui.viewer.MarkupDiag.commentsPaste(doc, copied.size - skipped, skipped)
-            tell(if (skipped > 0) text(R.string.comments_pasted_some, skipped) else text(R.string.comments_pasted))
-        }
-    }
-
-    fun recolorComment(doc: OpenDocument, c: io.github.artcraftandroid.pdfcraft.core.CommentInfo, color: androidx.compose.ui.graphics.Color) {
-        runTool(doc, "comment_edit", commentArgs(c) + ("color" to color.hex())) { reselect(doc, c) }
-    }
-
-    /** Change a comment's opacity or line width (one undo step each). */
-    /** [reselect] false: the panel is closing or moving on, so the selection is left as it is. */
-    fun styleComment(doc: OpenDocument, c: io.github.artcraftandroid.pdfcraft.core.CommentInfo, style: Map<String, Any?>, reselect: Boolean = true) {
-        if (reselect) runTool(doc, "comment_edit", commentArgs(c) + style) { reselect(doc, c) }
-        else runTool(doc, "comment_edit", commentArgs(c) + style)
-    }
-
-    fun editCommentText(doc: OpenDocument, c: io.github.artcraftandroid.pdfcraft.core.CommentInfo, text: String) {
-        runTool(doc, "comment_edit", commentArgs(c) + ("contents" to text)) { reselect(doc, c) }
-    }
-
-    fun moveComment(doc: OpenDocument, c: io.github.artcraftandroid.pdfcraft.core.CommentInfo, dx: Float, dy: Float) {
-        runTool(doc, "comment_edit", commentArgs(c) + ("move" to listOf(dx.toDouble(), dy.toDouble()))) { reselect(doc, c) }
-    }
-
-    /** Put a comment in a new rectangle (points, top-left origin): a resize. */
-    fun resizeComment(doc: OpenDocument, c: io.github.artcraftandroid.pdfcraft.core.CommentInfo, rect: List<Float>) {
-        runTool(doc, "comment_edit", commentArgs(c) + ("rect" to rect.map { it.toDouble() })) { reselect(doc, c) }
-    }
-
-    /** Move or resize a Fill & Sign element, keeping it selected. */
-    fun moveFill(doc: OpenDocument, c: io.github.artcraftandroid.pdfcraft.core.CommentInfo, dx: Float, dy: Float) {
-        runTool(doc, "comment_edit", commentArgs(c) + ("move" to listOf(dx.toDouble(), dy.toDouble()))) {
-            selectedFill = doc.comments.firstOrNull { it.page == c.page && it.index == c.index }
-        }
-    }
-
-    fun resizeFill(doc: OpenDocument, c: io.github.artcraftandroid.pdfcraft.core.CommentInfo, rect: List<Float>) {
-        runTool(doc, "comment_edit", commentArgs(c) + ("rect" to rect.map { it.toDouble() })) {
-            selectedFill = doc.comments.firstOrNull { it.page == c.page && it.index == c.index }
-        }
-    }
-
-    /** After an edit the comment is read again (same page and position). */
-    private fun reselect(doc: OpenDocument, c: io.github.artcraftandroid.pdfcraft.core.CommentInfo) {
-        val again = doc.comments.firstOrNull { it.page == c.page && it.index == c.index }
-        selectedComment = again?.let { doc to it }
-    }
-
-    /** The Fill & Sign element tapped (its menu shows over it). */
-    var selectedFill by mutableStateOf<io.github.artcraftandroid.pdfcraft.core.CommentInfo?>(null)
-
-    /** Make a Fill & Sign element [factor] times bigger, about its top-left corner. */
-    fun scaleFill(doc: OpenDocument, c: io.github.artcraftandroid.pdfcraft.core.CommentInfo, factor: Float) {
-        if (c.rect.size < 4) return
-        val w = (c.rect[2] - c.rect[0]) * factor
-        val h = (c.rect[3] - c.rect[1]) * factor
-        if (w < 3f || h < 3f || w > 2000f || h > 2000f) return
-        val rect = listOf(c.rect[0], c.rect[1], c.rect[0] + w, c.rect[1] + h).map { it.toDouble() }
-        runTool(doc, "comment_edit", commentArgs(c) + ("rect" to rect)) {
-            selectedFill = doc.comments.firstOrNull { it.page == c.page && it.index == c.index }
-        }
-    }
-
-    /**
-     * Page [page]'s text reflowed into paragraphs from its text layer: lines are joined until one
-     * ends a sentence well short of the line width, or a heading-like short line stands alone.
-     */
-    suspend fun reflowParagraphs(doc: OpenDocument, page: Int): List<io.github.artcraftandroid.pdfcraft.ui.viewer.Paragraph> {
-        val eng = engine ?: return emptyList()
-        val text = runCatching { eng.command { pagePlainText(doc.id, page.toUInt()) } }.getOrDefault("")
-        val lines = text.lines().map { it.trim() }
-        if (lines.none { it.isNotEmpty() }) return emptyList()
-        val longest = lines.maxOf { it.length }.coerceAtLeast(1)
-        val out = mutableListOf<io.github.artcraftandroid.pdfcraft.ui.viewer.Paragraph>()
-        val current = StringBuilder()
-        fun flush() {
-            if (current.isNotBlank()) {
-                out += io.github.artcraftandroid.pdfcraft.ui.viewer.Paragraph(page, out.size + 1, current.toString().trim(), floatArrayOf(0f, 0f, 0f, 0f), "", 12f, false, false, null)
-            }
-            current.clear()
-        }
-        for (line in lines) {
-            if (line.isEmpty()) {
-                flush()
-                continue
-            }
-            // a hyphen at a line's end joins the word across it
-            if (current.endsWith("-")) current.setLength(current.length - 1) else if (current.isNotEmpty()) current.append(' ')
-            current.append(line)
-            val short = line.length < longest * 0.6
-            if (short && (line.last() in ".!?:" || line.length < longest * 0.35)) flush()
-        }
-        flush()
-        return out
-    }
-
     // ---- Note margins (#146) ----
 
     /** Which pages have a note margin (one per page), from the engine. */
@@ -5226,7 +4299,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         private set
     var lecturePaused by mutableStateOf(false)
         private set
-    private var pendingLecture: OpenDocument? = null
+    internal var pendingLecture: OpenDocument? = null
 
     /** Start recording the lecture beside [doc]: comments written meanwhile remember when. */
     fun startLecture(doc: OpenDocument) {
@@ -5236,7 +4309,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         if (app.filesDir.usableSpace < 100L * 1024 * 1024) { tell(text(R.string.msg_voice_no_storage)); return }
         if (androidx.core.content.ContextCompat.checkSelfPermission(app, android.Manifest.permission.RECORD_AUDIO) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
             pendingLecture = doc
-            micRequests.trySend(Unit)
+            commenting.micRequests.trySend(Unit)
             return
         }
         viewModelScope.launch {
@@ -5421,7 +4494,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     }
 
     /** In playback, tapping a comment written during the lecture plays from just before it. */
-    private fun lectureSeekToComment(doc: OpenDocument, c: io.github.artcraftandroid.pdfcraft.core.CommentInfo) {
+    internal fun lectureSeekToComment(doc: OpenDocument, c: io.github.artcraftandroid.pdfcraft.core.CommentInfo) {
         val p = lecturePlayback ?: return
         if (doc.source?.toString() != p.uri) return
         val name = c.name ?: return
@@ -5435,6 +4508,10 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     // ---- Backups (#145) and version history: see BackupController ----
 
     val backups = BackupController(this)
+
+    // ---- The scanner's testing options and scans kept for testing (#288): see ScanLabController ----
+
+    internal val scanLab = ScanLabController(this)
 }
 
 /** The most files Create PDF converts at once. */
@@ -5452,7 +4529,7 @@ data class PrintJob(val file: File, val name: String, val deleteWhenDone: Boolea
 const val XFDF_MIME = "application/vnd.adobe.xfdf"
 
 /** The largest XFDF or FDF file imported (a PDF to take comments from may be larger). */
-private const val MAX_COMMENT_FILE_BYTES = 64L * 1024 * 1024
+internal const val MAX_COMMENT_FILE_BYTES = 64L * 1024 * 1024
 
 /** What Export notes writes. */
 enum class DigestFormat(@androidx.annotation.StringRes val label: Int) {

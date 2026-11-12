@@ -146,7 +146,7 @@ fun ToolLayer(vm: AppViewModel, doc: OpenDocument) {
         ViewerTool.Markup -> MarkupLayer(vm, doc)
         ViewerTool.Comment -> TapLayer(doc) { p ->
             when (doc.controller.commentMode) {
-                CommentMode.Voice -> vm.startVoice(doc, p)
+                CommentMode.Voice -> vm.commenting.startVoice(doc, p)
                 CommentMode.Stamp -> vm.runTool(
                     doc, "comment_add",
                     mapOf(
@@ -154,10 +154,10 @@ fun ToolLayer(vm: AppViewModel, doc: OpenDocument) {
                         "stamp" to doc.controller.stamp, "author" to vm.toolPrefs.author.ifBlank { null },
                     ),
                 )
-                CommentMode.Text -> vm.notePrompt = NotePrompt(doc, p)
+                CommentMode.Text -> vm.commenting.notePrompt = NotePrompt(doc, p)
             }
         }
-        ViewerTool.Text -> TapLayer(doc) { p -> vm.textPrompt = TextPrompt(doc, p, callout = doc.controller.textCallout) }
+        ViewerTool.Text -> TapLayer(doc) { p -> vm.commenting.textPrompt = TextPrompt(doc, p, callout = doc.controller.textCallout) }
         ViewerTool.FillSign -> if (vm.signing.certPlacing === doc) CertPlaceLayer(vm, doc) else FillSignLayer(vm, doc)
         ViewerTool.Measure -> MeasureLayer(vm, doc)
         else -> Unit
@@ -1696,7 +1696,7 @@ private fun MarkupLayer(vm: AppViewModel, doc: OpenDocument) {
                                 pendingTap = null
                             }
                             queued = true
-                            vm.addMarkup(
+                            vm.commenting.addMarkup(
                                 doc, selectedMarkup, selected.range.page.toInt(), selected.rects,
                                 selectedColor, selectedOpacity,
                                 onSettled = {
@@ -1714,7 +1714,7 @@ private fun MarkupLayer(vm: AppViewModel, doc: OpenDocument) {
                             if (area != null) {
                                 queued = true
                                 MarkupDiag.areaHighlight(doc, area)
-                                vm.addMarkup(doc, TextMarkup.Highlight, page, listOf(area), selectedColor, selectedOpacity, onSettled = {
+                                vm.commenting.addMarkup(doc, TextMarkup.Highlight, page, listOf(area), selectedColor, selectedOpacity, onSettled = {
                                     if (requestSerial == serial) {
                                         pendingTap = null
                                         drag = null
@@ -1820,7 +1820,7 @@ fun ToolSubToolbar(vm: AppViewModel, doc: OpenDocument) {
         }
         ViewerTool.FillSign -> FillSignToolbar(vm, doc)
         ViewerTool.Edit -> androidx.compose.foundation.layout.Column {
-            if (vm.editMode == EditMode.Link && vm.editSelection == null) LinkCommandsRow(vm, doc)
+            if (vm.editor.editMode == EditMode.Link && vm.editor.editSelection == null) LinkCommandsRow(vm, doc)
             EditToolbar(vm, doc)
         }
         ViewerTool.Measure -> MeasureToolbar(vm, doc)

@@ -1,0 +1,186 @@
+package io.github.artcraftandroid.pdfcraft.ui
+
+import io.github.artcraftandroid.pdfcraft.core.ScanFindOptions
+import io.github.artcraftandroid.pdfcraft.core.ScanFinder
+import java.util.Locale
+import org.json.JSONArray
+import org.json.JSONObject
+
+/**
+ * The scanner's testing options (#288), under Settings, About, Diagnostics. Each scanner feature
+ * can be switched off or swapped for what it replaced, so a page that comes out wrong on a real
+ * phone can be pinned on one of them, and the scans can be kept to be looked at afterwards.
+ * The defaults are the scanner as it is meant to be used.
+ */
+internal data class ScanLab(
+    /** Keep each scan's photos, corners, settings and results on the device (see [ScanTestStore]). */
+    val keep: Boolean = false,
+    /** Which detector finds the page (#290). */
+    val finder: ScanFinder = ScanFinder.AUTO,
+    /** Move the corners found onto the paper's edges on the full-size photo (#291). */
+    val refine: Boolean = true,
+    /** Work the page's proportions out from its perspective (#293), not its side lengths alone. */
+    val perspective: Boolean = true,
+    /** Match the page to a standard paper size when it is within 3 % of one (#293). */
+    val snapPaper: Boolean = true,
+    /** A strength (0–100) for every look in place of each look's own; null for the look's own. */
+    val strength: Int? = null,
+    /** Turn each page the right way up when the orientation classifier is sure which way that is (#339). */
+    val upright: Boolean = true,
+    /** How much the Clean scan filter sharpens print, 0–100; 0 for none (#299). */
+    val sharpen: Int = 30,
+    /** Whether the Clean scan filter smooths the grain of a page that has a lot of it (#299). */
+    val denoise: Boolean = true,
+) {
+    /** Nothing differs from the scanner as it is meant to be used (keeping scans changes no page). */
+    val asDesigned: Boolean get() = copy(keep = false) == ScanLab()
+
+    fun findOptions() = ScanFindOptions(finder, refine)
+
+    /** The strength a look with its own [level] is applied at. */
+    fun strengthFor(level: Int): Int = (strength ?: level).coerceIn(0, 100)
+
+    /** The options as diagnostics fields: short lowercase words, booleans and numbers only. */
+    fun diag(): Array<Pair<String, Any?>> = arrayOf<Pair<String, Any?>>(
+        "finder" to finderId(finder), "refine" to refine, "side_proportions" to !perspective,
+        "snap_paper" to snapPaper, "strength_override" to (strength ?: -1), "upright" to upright, "sharpen" to sharpen,
+        "denoise" to denoise, "keep" to keep,
+    )
+
+    /** The options as JSON, for a kept scan's page file. */
+    fun json(): JSONObject = JSONObject()
+        .put("finder", finderId(finder)).put("refine", refine).put("side_proportions", !perspective)
+        .put("snap_paper", snapPaper).put("strength_override", strength ?: JSONObject.NULL).put("upright", upright)
+        .put("sharpen", sharpen).put("denoise", denoise)
+
+    /** One line of text for the app's preferences. */
+    fun encode(): String = listOf(
+        "keep" to flag(keep), "finder" to finderId(finder), "refine" to flag(refine),
+        "perspective" to flag(perspective), "snap" to flag(snapPaper), "strength" to (strength?.toString() ?: ""),
+        "upright" to flag(upright), "sharpen" to sharpen.toString(), "denoise" to flag(denoise),
+    ).joinToString(";") { (k, v) -> "$k=$v" }
+
+    companion object {
+        /** The strengths offered: null is each look's own. */
+        val STRENGTHS: List<Int?> = listOf(null, 20, 40, 60, 80, 100)
+
+        /** How much sharpening is offered: none, the default, and two steps more. */
+        val SHARPENING: List<Int> = listOf(0, 30, 60, 100)
+
+        private fun flag(on: Boolean) = if (on) "1" else "0"
+
+        fun finderId(finder: ScanFinder): String = when (finder) {
+            ScanFinder.AUTO -> "auto"
+            ScanFinder.NETWORK -> "network"
+            ScanFinder.LINES -> "lines"
+            ScanFinder.OFF -> "off"
+        }
+
+        /** The options in [text]; anything missing or not understood is the default. */
+        fun decode(text: String?): ScanLab {
+            val values = text.orEmpty().split(';').mapNotNull { part -> part.split('=', limit = 2).takeIf { it.size == 2 }?.let { it[0] to it[1] } }.toMap()
+            val default = ScanLab()
+            fun on(key: String, otherwise: Boolean) = when (values[key]) {
+                "1" -> true
+                "0" -> false
+                else -> otherwise
+            }
+            return ScanLab(
+                keep = on("keep", default.keep),
+                finder = ScanFinder.entries.firstOrNull { finderId(it) == values["finder"] } ?: default.finder,
+                refine = on("refine", default.refine),
+                perspective = on("perspective", default.perspective),
+                snapPaper = on("snap", default.snapPaper),
+                strength = values["strength"]?.toIntOrNull()?.takeIf { it in 0..100 },
+                upright = on("upright", default.upright),
+                sharpen = values["sharpen"]?.toIntOrNull()?.takeIf { it in 0..100 } ?: default.sharpen,
+                denoise = on("denoise", default.denoise),
+            )
+        }
+    }
+}
+
+/** What the search for a page's edges came back with (#290, #291): kept with a scan kept for testing. */
+data class ScanFinding(val source: String, val confidence: Double, val angle: Int, val passes: Int, val refinedSides: Int, val curvedSides: Int)
+
+/** A page as Save made it, for a kept scan's page file. */
+internal data class ScanTestResult(
+    val width: Long,
+    val height: Long,
+    val format: String,
+    val dpi: Double,
+    val paper: String,
+    val aspect: String,
+    val focalMismatch: Boolean,
+    val flattened: Boolean,
+    val bendPct: Double,
+    /** The quarter turns clockwise the page was given to stand upright (#339). */
+    val quarterTurns: Int = 0,
+    /** What the orientation classifier made of the page, or null when it was not asked. */
+    val orientation: ScanTestOrientation? = null,
+    /** The page's grain in grey levels, as the Clean scan filter measured it (#299); null for the other filters. */
+    val noise: Double? = null,
+)
+
+/** The orientation classifier's answer for a page (#339): the turn it would give, and how sure it was. */
+internal data class ScanTestOrientation(val quarterTurns: Int, val confidence: Double, val agreement: Double, val tiles: Int, val sure: Boolean)
+
+/** The name, without an extension, of page [index] (from 0) of a kept scan. */
+internal fun scanTestName(index: Int): String = String.format(Locale.US, "page-%02d", index + 1)
+
+private fun shares(values: FloatArray): JSONArray = JSONArray().also { out ->
+    // five decimals of a share is a twentieth of a pixel on a 50-megapixel photo
+    for (v in values) out.put(if (v.isFinite()) Math.round(v * 100000.0) / 100000.0 else 0.0)
+}
+
+/**
+ * A kept page's facts as JSON. The first five keys are the scan test set's own (#288): `corners`
+ * are the page's corners as the person left them, as 8 shares of the upright photo, which become
+ * ground truth once someone has checked them. The rest says how the app got there: what it found
+ * by itself, the look and options in force, and the page it made ([output] is its file's name).
+ */
+internal fun scanTestPageJson(
+    app: String,
+    saved: Boolean,
+    corners: FloatArray,
+    found: FloatArray?,
+    finding: ScanFinding?,
+    look: String?,
+    strength: Int?,
+    flatten: Boolean,
+    lab: ScanLab,
+    output: String?,
+    result: ScanTestResult?,
+): String {
+    val page = JSONObject()
+        .put("corners", shares(corners)).put("kind", "other").put("paper", "unknown").put("curved", false).put("notes", "")
+        .put("app", app).put("outcome", if (saved) "saved" else "discarded")
+        .put("found", found?.let(::shares) ?: JSONObject.NULL)
+        .put(
+            "finding",
+            finding?.let {
+                JSONObject().put("source", it.source).put("confidence", Math.round(it.confidence * 1000.0) / 1000.0).put("angle", it.angle)
+                    .put("passes", it.passes).put("refined_sides", it.refinedSides).put("curved_sides", it.curvedSides)
+            } ?: JSONObject.NULL,
+        )
+        .put("look", look ?: JSONObject.NULL).put("strength", strength ?: JSONObject.NULL).put("flatten", flatten)
+        .put("options", lab.json())
+    page.put(
+        "result",
+        result?.let {
+            JSONObject().put("file", output ?: JSONObject.NULL).put("width", it.width).put("height", it.height).put("format", it.format)
+                .put("dpi", if (it.dpi.isFinite()) it.dpi else 0.0).put("paper", it.paper).put("aspect", it.aspect)
+                .put("focal_mismatch", it.focalMismatch).put("flattened", it.flattened).put("bend_pct", if (it.bendPct.isFinite()) Math.round(it.bendPct * 1000.0) / 1000.0 else 0.0)
+                .put("quarter_turns", it.quarterTurns)
+                .put("noise", it.noise?.takeIf { n -> n.isFinite() }?.let { n -> Math.round(n * 100.0) / 100.0 } ?: JSONObject.NULL)
+                .put(
+                    "orientation",
+                    it.orientation?.let { o ->
+                        JSONObject().put("quarter_turns", o.quarterTurns).put("confidence", if (o.confidence.isFinite()) Math.round(o.confidence * 1000.0) / 1000.0 else 0.0)
+                            .put("agreement", if (o.agreement.isFinite()) Math.round(o.agreement * 1000.0) / 1000.0 else 0.0).put("tiles", o.tiles).put("sure", o.sure)
+                    } ?: JSONObject.NULL,
+                )
+        } ?: JSONObject.NULL,
+    )
+    return page.toString(1)
+}

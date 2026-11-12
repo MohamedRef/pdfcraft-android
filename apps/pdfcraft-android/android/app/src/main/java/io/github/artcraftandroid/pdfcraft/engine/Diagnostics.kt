@@ -21,11 +21,13 @@ internal enum class DiagArea(val tag: String, val issues: String) {
     Tool("tool", "#96 #113 #131, slow or failed engine tools"),
     Text("text", "#87 #88, search, Read Aloud word count, slow selection"),
     Home("home", "#93 #94, file thumbnails and recent files"),
+    Pages("pages", "#165 #168 #172 #173 #174-#177 #181 #183 #185, page and document tools"),
     Error("error", "#114, any failure"),
     Share("share", "#205 #155"),
     Update("update", "#193"),
     Viewer("viewer", "#152 #153 #155 #157 #184 #198 #203 #204 #327"),
     Markup("markup", "#133 #134 #135 #143 #158 #159 #169 #170 #179 #180 #196 #197"),
+    Edit("edit", "#161 #162 #163 #164 #166 #167 #171 #182"),
     Study("study", "#140 #141 #142 #145 #146 #147 #151 #154 #160"),
 }
 

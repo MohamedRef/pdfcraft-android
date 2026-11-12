@@ -3,7 +3,7 @@
 
 use pdfcraft_geom::perspective::Point;
 
-use crate::detect::{Placement, QuadSource, SIDE, area_weights, detect, read, shrink, square, with_lines};
+use crate::detect::{Finder, Placement, QuadSource, SIDE, area_weights, detect, detect_with, read, shrink, square, with_lines};
 use crate::models::{EDGES, MODELS, ModelState, load, release, state};
 use crate::{Photo, Quad};
 
@@ -130,9 +130,17 @@ fn the_pinned_model_is_there_and_loads_once() {
     assert!(load("no-such-model").is_none());
     let (a, b) = (load(EDGES).unwrap(), load(EDGES).unwrap());
     assert!(std::sync::Arc::ptr_eq(&a, &b));
-    // the file is what assets/models/ATTRIBUTION.txt says it is
+    // every model file is there, is the pinned one, and is what assets/models/ATTRIBUTION.txt
+    // says it is
     let notice = include_str!("../../../../assets/models/ATTRIBUTION.txt");
-    assert!(notice.contains(MODELS[0].file) && notice.contains(MODELS[0].sha256) && notice.contains(MODELS[0].licence));
+    for model in MODELS {
+        assert_eq!(state(model.id), ModelState::Ready, "assets/models/{} is missing or is not the pinned file", model.file);
+        assert!(
+            notice.contains(model.file) && notice.contains(model.sha256) && notice.contains(model.licence),
+            "{} is not in ATTRIBUTION.txt",
+            model.file
+        );
+    }
 }
 
 /// A sheet on a table, seen upright, tilted and on its side: the network finds it to a few
@@ -176,4 +184,20 @@ fn without_the_network_the_line_detector_is_asked() {
     assert!(off(&found.quad.unwrap(), truth, w, h) < 0.02, "{found:?}");
     // too small to hold a page
     assert!(detect(&Photo { width: 8, height: 8, rgb: vec![0; 192] }).quad.is_none());
+}
+
+/// The testing choice of detector (#288): each asks only what it names.
+#[test]
+fn a_named_detector_is_the_only_one_asked() {
+    let (w, h) = (1200u32, 1600u32);
+    let truth = [[230.0, 260.0], [960.0, 300.0], [1010.0, 1330.0], [190.0, 1290.0]];
+    let sheet = photo(w, h, truth);
+    assert_eq!(detect_with(&sheet, Finder::Auto), detect(&sheet));
+    assert_eq!(detect_with(&sheet, Finder::Network).source, QuadSource::Model);
+    let lines = detect_with(&sheet, Finder::Lines);
+    assert_eq!(lines, with_lines(&sheet));
+    assert_eq!(lines.source, QuadSource::Lines);
+    let off = detect_with(&sheet, Finder::Off);
+    assert!(off.quad.is_none() && off.source == QuadSource::None && off.passes == 0, "{off:?}");
+    assert_eq!(Finder::default(), Finder::Auto);
 }

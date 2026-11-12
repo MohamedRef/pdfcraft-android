@@ -93,7 +93,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     let (x0, y0) = (x0 as i64, y0 as i64);
                     let (a, b, c, d) = (at(x0, y0), at(x0 + 1, y0), at(x0, y0 + 1), at(x0 + 1, y0 + 1));
                     // Paper under a room light: a little darker and warmer than white.
-                    std::array::from_fn(|k| ((a[k] * (1.0 - ax) + b[k] * ax) * (1.0 - ay) + (c[k] * (1.0 - ax) + d[k] * ax) * ay) * [0.86, 0.84, 0.78][k])
+                    std::array::from_fn(|k| {
+                        ((a[k] * (1.0 - ax) + b[k] * ax) * (1.0 - ay) + (c[k] * (1.0 - ax) + d[k] * ax) * ay) * [0.86, 0.84, 0.78][k]
+                    })
                 };
                 for k in 0..3 {
                     sum[k] += c[k] / 4.0;
@@ -134,6 +136,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             output_path: dir.join(format!("page-{n}")).to_string_lossy().into_owned(),
             focal_35mm: None,
             snap_paper: false,
+            flatten: false,
+            side_proportions: false,
+            upright: false,
+            sharpen: 30,
+            denoise: true,
         })?;
         let new = run(&s, "doc_create", json!({ "from": "images", "paths": [r.path], "dpi": r.dpi }))?;
         let nid = new["doc"].as_u64().ok_or("no doc")?;

@@ -1,5 +1,6 @@
-PdfCraft's text recognition (Scan & OCR) uses the two text models, unmodified, and its scanner
-finds the page in a photo with scan-edges.onnx.
+PdfCraft's text recognition (Scan & OCR) uses the two text models, unmodified. Its scanner finds
+the page in a photo with scan-edges.onnx, turns it the right way up with scan-upright.onnx and,
+when asked to, flattens a curled page with scan-flatten.onnx.
 
 text-detection.rten
   Ocrs text detection model
@@ -20,3 +21,19 @@ scan-edges.onnx
   changed: the same network and weights, stored differently. The upstream file is in ONNX Runtime's own format; tools/scan-models/ort_to_onnx.py writes it back as plain ONNX (outputs equal to 2e-5) and tools/scan-models/to_fp16.py stores the weights as 16-bit floats.
   sha256: f5bf500c0ab7482ebd9e949c7cfcd3c9f43dcef619baa8e41e0f83e88a3f9880
   licence: Apache-2.0 (https://www.apache.org/licenses/LICENSE-2.0.txt; full text in scan-edges.onnx.LICENCE.txt)
+
+scan-flatten.onnx
+  UVDoc, a network that flattens a photographed page ("UVDoc: Neural Grid-based Document Unwarping", SIGGRAPH Asia 2023)
+  by Tanguy Magne (Copyright 2023; with Floor Verhoeven and Olga Sorkine-Hornung; trained on the UVDoc and Doc3D datasets, neither of which is redistributed)
+  from https://github.com/tanguymagne/UVDoc at commit 4c9b82b537057aff2526e6dd118a847cdd072e82, file model/best_model.pkl (SHA-256 7e90861b8a516eb4bc51f84bd889cb77275743d2d1d3ca8091951ec9f2b7da23)
+  changed: the same network and weights, stored differently. The upstream file is a PyTorch checkpoint; tools/scan-models/export_uvdoc.py writes the part that predicts the 2D grid as plain ONNX with each batch normalisation folded into the convolution before it (outputs equal to 3e-7; the 3D grid, used only in training, is left out) and tools/scan-models/to_fp16.py stores the weights as 16-bit floats.
+  sha256: 13fc4e8322de53f2d8b74ed43d996ba8e70e3b875fc5e88766c30943ada2fb1b
+  licence: MIT (the repository's licence file, which the checkpoint is published under; the repository states no separate licence for the weights. https://opensource.org/license/mit; full text in scan-flatten.onnx.LICENCE.txt)
+
+scan-upright.onnx
+  PP-LCNet x1.0 trained to tell which way up an image with text in it is (0, 90, 180 or 270 degrees): PaddleClas's "PULC" text image orientation model
+  by the PaddlePaddle Authors (PaddleClas, https://github.com/PaddlePaddle/PaddleClas, docs/zh_CN/models/PULC/PULC_text_image_orientation.md at commit 177e4be74639c0960efeae2c5166d3226c9a02eb); written as ONNX by RapidAI (https://github.com/RapidAI/RapidStructure), who name that model as its source
+  from https://pypi.org/project/rapid-orientation/0.0.4/, file rapid_orientation-0.0.4-py3-none-any.whl (SHA-256 a46b22f90090bd70d11f8a24124f64e182683c0b36c62f5e1e3d7bcd6ab41eea), member rapid_orientation/models/rapid_orientation.onnx (SHA-256 9c84a1041b98fc74132d11edada7f5afc8c911fae355cde7d04c628d34af1d8a)
+  changed: the same network and weights; tools/scan-models/to_fp16.py stores the weights as 16-bit floats.
+  sha256: 96b65002cc0388d4c0e0c07ac6f3aea045ce8d46c1e3fb9e0242624ad75033fd
+  licence: Apache-2.0 (PaddleClas and the rapid-orientation package both; neither states a separate licence for the weights. https://www.apache.org/licenses/LICENSE-2.0.txt; full text in scan-upright.onnx.LICENCE.txt)

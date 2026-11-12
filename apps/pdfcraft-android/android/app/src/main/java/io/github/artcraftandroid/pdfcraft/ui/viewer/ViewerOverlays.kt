@@ -322,7 +322,7 @@ fun BoxScope.SelectionMenu(vm: AppViewModel, doc: OpenDocument, sel: Selection) 
     val prefs = vm.toolPrefs
     fun markup(m: TextMarkup) {
         if (!allowed) return
-        vm.addSelectedMarkup(doc, m, page, sel.rects, prefs.color(m.styled), prefs.opacity(m.styled))
+        vm.commenting.addSelectedMarkup(doc, m, page, sel.rects, prefs.color(m.styled), prefs.opacity(m.styled))
         doc.selection.clear()
     }
     Column(
@@ -335,7 +335,7 @@ fun BoxScope.SelectionMenu(vm: AppViewModel, doc: OpenDocument, sel: Selection) 
     ) {
         // each icon has a short label under it, and Highlight a dot of the colour it will use (#197)
         Row(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.Top) {
-            MenuIcon(LucideIcons.MessageSquarePlus, stringResource(R.string.viewer_add_comment), allowed, short = stringResource(R.string.viewer_menu_note)) { vm.notePrompt = NotePrompt(doc, null, sel) }
+            MenuIcon(LucideIcons.MessageSquarePlus, stringResource(R.string.viewer_add_comment), allowed, short = stringResource(R.string.viewer_menu_note)) { vm.commenting.notePrompt = NotePrompt(doc, null, sel) }
             MenuIcon(LucideIcons.Highlighter, stringResource(R.string.common_tool_highlight), allowed, short = stringResource(R.string.viewer_menu_highlight), dot = prefs.color(TextMarkup.Highlight.styled)) { markup(TextMarkup.Highlight) }
             MenuIcon(LucideIcons.Underline, stringResource(R.string.common_tool_underline), allowed, short = stringResource(R.string.viewer_menu_underline)) { markup(TextMarkup.Underline) }
             MenuIcon(LucideIcons.Strikethrough, stringResource(R.string.viewer_strikethrough), allowed, short = stringResource(R.string.viewer_menu_strike)) { markup(TextMarkup.Strikethrough) }
@@ -345,8 +345,8 @@ fun BoxScope.SelectionMenu(vm: AppViewModel, doc: OpenDocument, sel: Selection) 
         Box(Modifier.fillMaxWidth().padding(horizontal = 4.dp).height(1.dp).background(c.divider))
         Spacer(Modifier.height(8.dp))
         if (allowed) {
-            MenuRow(LucideIcons.Replace, stringResource(R.string.viewer_replace_text)) { vm.notePrompt = NotePrompt(doc, null, replace = sel) }
-            MenuRow(LucideIcons.TextCursorInput, stringResource(R.string.viewer_insert_text)) { vm.notePrompt = NotePrompt(doc, null, insert = sel) }
+            MenuRow(LucideIcons.Replace, stringResource(R.string.viewer_replace_text)) { vm.commenting.notePrompt = NotePrompt(doc, null, replace = sel) }
+            MenuRow(LucideIcons.TextCursorInput, stringResource(R.string.viewer_insert_text)) { vm.commenting.notePrompt = NotePrompt(doc, null, insert = sel) }
         }
         if (doc.writable || doc.source == null) MenuRow(LucideIcons.FilePenLine, stringResource(R.string.viewer_edit_text)) {
             // Edit PDF opens on the paragraph the selection is in, not in general (#197)
@@ -354,9 +354,9 @@ fun BoxScope.SelectionMenu(vm: AppViewModel, doc: OpenDocument, sel: Selection) 
             val at = PagePoint(page, (r[0] + r[2]) / 2f, (r[1] + r[3]) / 2f)
             doc.selection.clear()
             vm.enterTool(doc, ViewerTool.Edit)
-            if (doc.controller.tool == ViewerTool.Edit) vm.editTap(doc, at)
+            if (doc.controller.tool == ViewerTool.Edit) vm.editor.editTap(doc, at)
         }
-        if (doc.info.allowsCopying) MenuRow(LucideIcons.Copy, stringResource(R.string.viewer_copy_text)) { vm.copySelection(doc) }
+        if (doc.info.allowsCopying) MenuRow(LucideIcons.Copy, stringResource(R.string.viewer_copy_text)) { vm.commenting.copySelection(doc) }
         MenuRow(LucideIcons.SwatchBook, stringResource(R.string.cards_make)) { vm.study.makeCardFromSelection(doc, cloze = false) }
         MenuRow(LucideIcons.SwatchBook, stringResource(R.string.cards_make_cloze)) { vm.study.makeCardFromSelection(doc, cloze = true) }
         // while reading aloud, the reading moves to the selection (the reference's "from here")
@@ -411,7 +411,7 @@ fun BoxScope.MarkupFollowUpBar(vm: AppViewModel, f: MarkupFollowUp) {
         for (color in FOLLOW_UP_COLORS) {
             val on = color == f.color
             Box(
-                Modifier.size(40.dp).clickable(role = Role.RadioButton) { vm.recolorFollowUp(f, color) }
+                Modifier.size(40.dp).clickable(role = Role.RadioButton) { vm.commenting.recolorFollowUp(f, color) }
                     .semantics { contentDescription = colorLabel; selected = on },
                 contentAlignment = Alignment.Center,
             ) {
@@ -419,8 +419,8 @@ fun BoxScope.MarkupFollowUpBar(vm: AppViewModel, f: MarkupFollowUp) {
             }
         }
         Box(Modifier.padding(horizontal = 4.dp).size(width = 1.dp, height = 24.dp).background(c.divider))
-        MenuIcon(LucideIcons.MessageSquarePlus, stringResource(R.string.viewer_add_note), true, short = stringResource(R.string.viewer_menu_note)) { vm.noteFollowUp(f) }
-        MenuIcon(LucideIcons.Trash2, stringResource(R.string.common_delete), true, short = stringResource(R.string.common_delete)) { vm.deleteFollowUp(f) }
+        MenuIcon(LucideIcons.MessageSquarePlus, stringResource(R.string.viewer_add_note), true, short = stringResource(R.string.viewer_menu_note)) { vm.commenting.noteFollowUp(f) }
+        MenuIcon(LucideIcons.Trash2, stringResource(R.string.common_delete), true, short = stringResource(R.string.common_delete)) { vm.commenting.deleteFollowUp(f) }
     }
 }
 
@@ -446,9 +446,9 @@ fun NoteSheet(vm: AppViewModel, prompt: NotePrompt) {
                 else -> R.string.viewer_write_note
             },
         ),
-        onDismiss = { vm.notePrompt = null },
-        onPost = { vm.postNote(prompt, it) },
-        onVoice = if (at != null && prompt.selection == null && prompt.edit == null) ({ vm.notePrompt = null; vm.startVoice(prompt.doc, at) }) else null,
+        onDismiss = { vm.commenting.notePrompt = null },
+        onPost = { vm.commenting.postNote(prompt, it) },
+        onVoice = if (at != null && prompt.selection == null && prompt.edit == null) ({ vm.commenting.notePrompt = null; vm.commenting.startVoice(prompt.doc, at) }) else null,
         author = vm.prefsChanged.let { vm.toolPrefs.author }, onAuthor = { vm.authorPrompt = true },
     )
 }
@@ -456,7 +456,7 @@ fun NoteSheet(vm: AppViewModel, prompt: NotePrompt) {
 /** A reply being typed: the same bar, under the comment it answers. */
 @Composable
 fun ReplySheet(vm: AppViewModel, prompt: ReplyPrompt) {
-    InlineNoteBar(hint = stringResource(R.string.viewer_write_reply), onDismiss = { vm.replyPrompt = null }, onPost = { vm.postReply(prompt, it) }, onVoice = null, author = vm.prefsChanged.let { vm.toolPrefs.author }, onAuthor = { vm.authorPrompt = true })
+    InlineNoteBar(hint = stringResource(R.string.viewer_write_reply), onDismiss = { vm.commenting.replyPrompt = null }, onPost = { vm.commenting.postReply(prompt, it) }, onVoice = null, author = vm.prefsChanged.let { vm.toolPrefs.author }, onAuthor = { vm.authorPrompt = true })
 }
 
 /**

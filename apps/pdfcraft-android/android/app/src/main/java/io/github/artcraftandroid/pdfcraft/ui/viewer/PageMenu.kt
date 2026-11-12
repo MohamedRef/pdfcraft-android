@@ -60,7 +60,7 @@ fun PageMenuView(vm: AppViewModel, menu: PageMenu) {
     val doc = menu.doc
     val density = LocalDensity.current
     var size by remember { mutableStateOf(IntSize.Zero) }
-    val close = { vm.pageMenu = null }
+    val close = { vm.editor.pageMenu = null }
     val annotate = doc.info.allowsAnnotation
     val fill = doc.info.allowsFormFilling || annotate
     Box(Modifier.fillMaxSize().pointerInput(Unit) { detectTapGestures { close() } }) {
@@ -79,9 +79,9 @@ fun PageMenuView(vm: AppViewModel, menu: PageMenu) {
                 .pointerInput(Unit) { detectTapGestures { } },
         ) {
             Row(Modifier.fillMaxWidth().height(61.dp), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
-                PageMenuIcon(LucideIcons.MessageSquarePlus, stringResource(R.string.page_menu_add_comment), annotate) { close(); vm.notePrompt = NotePrompt(doc, menu.at) }
+                PageMenuIcon(LucideIcons.MessageSquarePlus, stringResource(R.string.page_menu_add_comment), annotate) { close(); vm.commenting.notePrompt = NotePrompt(doc, menu.at) }
                 PageMenuIcon(LucideIcons.Pencil, stringResource(R.string.common_tool_draw), annotate) { close(); vm.enterTool(doc, ViewerTool.Draw) }
-                PageMenuIcon(LucideIcons.Type, stringResource(R.string.page_menu_add_text), annotate) { close(); vm.textPrompt = TextPrompt(doc, menu.at) }
+                PageMenuIcon(LucideIcons.Type, stringResource(R.string.page_menu_add_text), annotate) { close(); vm.commenting.textPrompt = TextPrompt(doc, menu.at) }
                 if (fill) PageMenuIcon(LucideIcons.Signature, stringResource(R.string.common_sign), true) { close(); vm.enterTool(doc, ViewerTool.FillSign) }
             }
             Box(Modifier.fillMaxWidth().padding(horizontal = 4.dp).height(1.dp).background(c.divider))
@@ -89,7 +89,7 @@ fun PageMenuView(vm: AppViewModel, menu: PageMenu) {
             if (!menu.pageHasText) PageMenuRow(LucideIcons.ScanText, stringResource(R.string.common_tool_recognize_text)) { close(); vm.recognizeText(doc) }
             PageMenuRow(LucideIcons.Crop, stringResource(R.string.common_tool_crop)) { close(); vm.openCrop(doc) }
             PageMenuRow(LucideIcons.FilePenLine, stringResource(R.string.common_tool_edit_pdf)) { close(); vm.enterTool(doc, ViewerTool.Edit) }
-            PageMenuRow(LucideIcons.ImagePlus, stringResource(R.string.page_menu_add_image)) { close(); vm.addImageAt(doc, menu.at) }
+            PageMenuRow(LucideIcons.ImagePlus, stringResource(R.string.page_menu_add_image)) { close(); vm.editor.addImageAt(doc, menu.at) }
             Spacer(Modifier.height(8.dp))
         }
     }

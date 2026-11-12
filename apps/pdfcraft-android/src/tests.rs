@@ -704,7 +704,7 @@ fn upgraded_tool_table_preserves_mobile_tools_and_adds_stable_020_schemas() {
     let tools = session.tools();
     let names: std::collections::HashSet<_> = tools.iter().map(|t| t.name.as_str()).collect();
     assert_eq!(names.len(), tools.len(), "tool names must remain unique");
-    assert_eq!(names.len(), 202);
+    assert_eq!(names.len(), 203);
     for name in [
         "photo_find_document",
         "page_margin",
@@ -730,6 +730,7 @@ fn upgraded_tool_table_preserves_mobile_tools_and_adds_stable_020_schemas() {
         "object_paste",
         "text_prepare",
         "comments_edit_many",
+        "comments_to_layer",
     ] {
         assert!(names.contains(name), "missing mobile/stable tool: {name}");
     }
@@ -1115,7 +1116,11 @@ fn text_layers_stay_bounded() {
     // the most recently used page is still there, the oldest is gone
     assert!(s.texts().get_mut(&doc).unwrap().get(pages as usize - 1).is_some());
     assert!(s.texts().get_mut(&doc).unwrap().get(0).is_none());
-    s.release_memory();
+    {
+        // it also empties the scanner's preview store, which another test counts
+        let _store = crate::scan::PREVIEWS_TEST_LOCK.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        s.release_memory();
+    }
     assert_eq!(kept(&s), 0);
 }
 
@@ -1223,6 +1228,12 @@ fn link_mode_adds_edits_and_deletes_links() {
     run("link_add", json!({"doc": doc, "page": 2, "rect": [40, 50, 140, 90], "url": "https://example.org"}));
     run("links_remove", json!({"doc": doc}));
     assert!(s.links(doc, 0).unwrap().is_empty() && s.links(doc, 1).unwrap().is_empty());
+    // a page of another PDF (#334): the viewer gets its file name and page, not a page here
+    run("link_add", json!({"doc": doc, "page": 1, "rect": [40, 50, 140, 90], "file": "Chapter 2.pdf", "to_page": 4}));
+    let remote = &s.links(doc, 0).unwrap()[0];
+    assert_eq!((remote.file.as_deref(), remote.file_page, remote.page, remote.uri.as_deref()), (Some("Chapter 2.pdf"), 3, None, None));
+    run("link_add", json!({"doc": doc, "page": 1, "rect": [40, 100, 140, 140], "file": "notes.pdf"}));
+    assert_eq!(s.links(doc, 0).unwrap()[1].file_page, 0, "no page named: the first");
     // nothing to make clickable is an error the app words itself
     assert!(s.execute("links_from_urls".into(), json!({"doc": doc}).to_string()).is_err());
     let text = s.open(text_pdf("Read https://example.org/notes today"), None).unwrap().id;
@@ -1337,4 +1348,37 @@ fn study_tape_is_an_invisible_marked_rectangle() {
     assert!(s.comments(doc).unwrap().iter().all(|c| c.contents.as_deref() != Some("PdfCraft tape")));
     s.execute("edit_undo".into(), json!({"doc": doc}).to_string()).unwrap();
     assert_eq!(s.comments(doc).unwrap().iter().filter(|c| c.contents.as_deref() == Some("PdfCraft tape")).count(), 1, "undo brings it back");
+}
+
+/// Study tape as the app lays and shares it (#350): an invisible rectangle and a freehand polygon
+/// marked as tape, the polygon's corners in the comment record, and the share copy's steps (made
+/// opaque, then put on a "Tape" layer).
+#[test]
+fn study_tape_freehand_corners_and_the_tape_layer() {
+    let s = MobileSession::new();
+    let doc = s.open(blank_pdf(2), None).unwrap().id;
+    let run = |name: &str, args: Value| -> Value { serde_json::from_str(&s.execute(name.into(), args.to_string()).unwrap()).unwrap() };
+    let tape = json!({"color": "#E0A526", "fill": "#E0A526", "opacity": 0.0, "width": 0.0, "contents": "PdfCraft tape [dots]"});
+    let mut square = json!({"doc": doc, "page": 1, "type": "rectangle", "rect": [20, 30, 120, 50]});
+    let mut polygon = json!({"doc": doc, "page": 2, "type": "polygon", "points": [[10, 41], [80, 41], [80, 59], [10, 59]]});
+    for v in [&mut square, &mut polygon] {
+        for (k, x) in tape.as_object().unwrap() {
+            v[k] = x.clone();
+        }
+        run("comment_add", v.clone());
+    }
+    let all = s.comments(doc).unwrap();
+    let poly = all.iter().find(|c| c.subtype == "Polygon").unwrap();
+    assert!(poly.opacity < 0.01 && poly.contents.as_deref() == Some("PdfCraft tape [dots]"));
+    let corners: Vec<i32> = poly.points.iter().map(|v| v.round() as i32).collect();
+    assert_eq!(corners, vec![10, 41, 80, 41, 80, 59, 10, 59], "corners in page points, top-left origin");
+    assert!(all.iter().find(|c| c.subtype == "Square").unwrap().points.is_empty());
+
+    for c in &all {
+        run("comment_edit", json!({"doc": doc, "page": c.page + 1, "index": c.index + 1, "opacity": 1.0}));
+        run("comments_to_layer", json!({"doc": doc, "page": c.page + 1, "comments": [c.index + 1], "layer": "Tape"}));
+    }
+    assert!(s.comments(doc).unwrap().iter().all(|c| c.opacity > 0.99), "opaque in the copy");
+    let layers = s.layers(doc).unwrap();
+    assert_eq!(layers.iter().map(|l| (l.name.as_str(), l.visible)).collect::<Vec<_>>(), vec![("Tape", true)]);
 }

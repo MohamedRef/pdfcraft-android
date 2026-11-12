@@ -24,6 +24,8 @@ import androidx.activity.viewModels
 import androidx.core.content.FileProvider
 import androidx.core.content.IntentCompat
 import androidx.lifecycle.lifecycleScope
+import io.github.artcraftandroid.pdfcraft.engine.Diag
+import io.github.artcraftandroid.pdfcraft.engine.DiagArea
 import io.github.artcraftandroid.pdfcraft.ui.AppRoot
 import io.github.artcraftandroid.pdfcraft.ui.AppViewModel
 import io.github.artcraftandroid.pdfcraft.ui.FilePickKind
@@ -48,16 +50,16 @@ class MainActivity : ComponentActivity() {
     private val pickBookmarkJson = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> vm.onBookmarkJsonPicked(uri) }
     private val pickBookmarkPdf = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> vm.onBookmarkPdfPicked(uri) }
     // Comments to import (XFDF, FDF or another PDF's): a picker of their own, like the bookmarks'.
-    private val pickComments = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> vm.onCommentsPicked(uri) }
+    private val pickComments = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> vm.commenting.onCommentsPicked(uri) }
 
     private val saveCopy = registerForActivityResult(ActivityResultContracts.CreateDocument("application/pdf")) { uri -> vm.copyTo(uri) }
     private val takePhoto = registerForActivityResult(ActivityResultContracts.TakePicture()) { ok -> vm.onScanPhoto(ok) }
-    private val pickImage = registerForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri -> vm.addImage(uri) }
+    private val pickImage = registerForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri -> vm.editor.addImage(uri) }
     private val pickSignature = registerForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri -> vm.signing.importSignatureImage(uri) }
     private val pickPhotos = registerForActivityResult(ActivityResultContracts.PickMultipleVisualMedia()) { uris -> vm.onPhotosPicked(uris) }
     private val pickOutputFolder = registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri -> vm.onOutputFolderPicked(uri) }
     private val pickFolder = registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri -> uri?.let(vm::addLocalFolder) }
-    private val micPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted -> vm.onMicPermission(granted) }
+    private val micPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted -> vm.commenting.onMicPermission(granted) }
     private val pickBackupFolder = registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { vm.backups.onBackupFolderPicked(it) }
     private val pickCardFile = registerForActivityResult(ActivityResultContracts.OpenDocument()) { vm.study.onCardFilePicked(it) }
     private val notificationPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { vm.study.updateFocusTimer(vm.study.focusTimer) }
@@ -119,7 +121,7 @@ class MainActivity : ComponentActivity() {
             }
         }
         lifecycleScope.launch {
-            for (ignored in vm.commentImportPicks) {
+            for (ignored in vm.commenting.commentImportPicks) {
                 // providers rarely know XFDF's type: anything may be picked, the engine reads its content
                 launchSafely { pickComments.launch(arrayOf(XFDF_MIME, FDF_MIME, "application/pdf", "application/xml", "text/xml", "application/octet-stream", "*/*")) }
             }
@@ -173,7 +175,7 @@ class MainActivity : ComponentActivity() {
                 try { requestFolder.launch(null) } catch (e: Exception) { vm.requests.onFolder(null); throw e }
             }
         }
-        lifecycleScope.launch { for (d in vm.imagePicks) launchSafely { pickImage.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) } }
+        lifecycleScope.launch { for (d in vm.editor.imagePicks) launchSafely { pickImage.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) } }
         lifecycleScope.launch { for (u in vm.photoPicks) launchSafely { pickPhotos.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) } }
         // the folder picker opens at Documents, where PDFs usually are (Download itself can't be chosen)
         val documents = android.provider.DocumentsContract.buildDocumentUri("com.android.externalstorage.documents", "primary:Documents")
@@ -184,9 +186,9 @@ class MainActivity : ComponentActivity() {
         }
         lifecycleScope.launch { for (u in vm.accessRequests) launchSafely { pickFolder.launch(documents) } }
         lifecycleScope.launch {
-            for (u in vm.micRequests) {
+            for (u in vm.commenting.micRequests) {
                 // refused before: explain first (the reference's order); otherwise Android's own prompt
-                if (shouldShowRequestPermissionRationale(android.Manifest.permission.RECORD_AUDIO)) vm.micRationale = true
+                if (shouldShowRequestPermissionRationale(android.Manifest.permission.RECORD_AUDIO)) vm.commenting.micRationale = true
                 else launchSafely { micPermission.launch(android.Manifest.permission.RECORD_AUDIO) }
             }
         }
@@ -328,7 +330,7 @@ class MainActivity : ComponentActivity() {
     private fun openFromIntent(intent: Intent?) {
         val uri = runCatching { externalPdfUri(intent) }.getOrNull() ?: return
         // shared comments (#158) go into the document open now, not open as one
-        if (isCommentsType(runCatching { intent?.type }.getOrNull())) vm.receiveComments(uri)
+        if (isCommentsType(runCatching { intent?.type }.getOrNull())) vm.commenting.receiveComments(uri)
         else vm.open(uri, fromOtherApp = true)
     }
 
@@ -348,19 +350,24 @@ class MainActivity : ComponentActivity() {
             }
 
             override fun onWrite(pages: Array<out PageRange>?, destination: ParcelFileDescriptor, cancel: CancellationSignal?, callback: WriteResultCallback) {
+                val start = System.nanoTime()
                 try {
                     file.inputStream().use { input -> FileOutputStream(destination.fileDescriptor).use { input.copyTo(it) } }
                     callback.onWriteFinished(arrayOf(PageRange.ALL_PAGES))
+                    Diag.event(DiagArea.Pages, "print_write", "bytes" to file.length(), "ms" to (System.nanoTime() - start) / 1_000_000, "temporary" to deleteWhenDone)
                 } catch (e: Exception) {
+                    Diag.failure(DiagArea.Pages, "print_write", e)
                     callback.onWriteFailed(e.message)
                 }
             }
 
             override fun onFinish() {
+                Diag.event(DiagArea.Pages, "print_finished", "temporary" to deleteWhenDone)
                 if (deleteWhenDone) file.delete()
             }
         }
         runCatching { pm.print(name, adapter, null) }.onFailure {
+            Diag.failure(DiagArea.Pages, "print_start", it)
             if (deleteWhenDone) file.delete()
             vm.tell(getString(R.string.main_error_print_not_allowed))
         }

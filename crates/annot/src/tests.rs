@@ -4465,3 +4465,59 @@ fn cached_appearances_match_a_fresh_pass_after_every_edit() {
     doc.update_dict(r(9), |d| d.set(b"Contents".to_vec(), Object::String(pdfcraft_cos::PdfString::literal(b"changed".to_vec())))).unwrap();
     check(&doc, &mut cache, "a text box's words");
 }
+
+/// Android adaptation (#350): annotations put on a layer get `/OC` to one group; a document's own
+/// layers (an indirect default configuration with base state OFF) keep theirs, the new group is
+/// listed in `/Order` and `/ON`, a group of the same name is reused, and a missing annotation
+/// changes nothing.
+#[test]
+fn annotations_join_a_named_layer_in_the_existing_configuration() {
+    let objs: Vec<&[u8]> = vec![
+        b"<< /Type /Catalog /Pages 2 0 R /OCProperties << /OCGs [7 0 R] /D 8 0 R >> >>", // 1
+        b"<< /Type /Pages /Kids [3 0 R 4 0 R] /Count 2 /MediaBox [0 0 612 792] >>",      // 2
+        b"<< /Type /Page /Parent 2 0 R /Annots [<< /Type /Annot /Subtype /Square /Rect [10 10 50 50] >> 6 0 R] >>", // 3
+        b"<< /Type /Page /Parent 2 0 R >>",                                               // 4
+        b"null",                                                                          // 5
+        b"<< /Type /Annot /Subtype /Square /Rect [60 10 90 50] >>",                       // 6
+        b"<< /Type /OCG /Name (Red) >>",                                                  // 7
+        b"<< /BaseState /OFF /ON [7 0 R] /Order [7 0 R] >>",                              // 8
+    ];
+    let mut out = b"%PDF-1.7\n".to_vec();
+    let mut offsets = Vec::new();
+    for (i, o) in objs.iter().enumerate() {
+        offsets.push(out.len());
+        out.extend_from_slice(format!("{} 0 obj\n", i + 1).as_bytes());
+        out.extend_from_slice(o);
+        out.extend_from_slice(b"\nendobj\n");
+    }
+    let xref = out.len();
+    out.extend_from_slice(format!("xref\n0 {}\n0000000000 65535 f \n", objs.len() + 1).as_bytes());
+    for o in offsets {
+        out.extend_from_slice(format!("{o:010} 00000 n \n").as_bytes());
+    }
+    out.extend_from_slice(format!("trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n", objs.len() + 1).as_bytes());
+    let mut doc = Document::open(Arc::new(out)).expect("opens");
+
+    assert!(matches!(annots_to_layer(&mut doc, 0, &[0, 5], "Tape"), Err(AnnotError::NoSuchAnnotation { .. })));
+    assert!(matches!(annots_to_layer(&mut doc, 0, &[0], " "), Err(AnnotError::Invalid(_))));
+    assert_eq!(annots_to_layer(&mut doc, 0, &[0, 1], "Tape").unwrap(), 2);
+    assert_eq!(annots_to_layer(&mut doc, 0, &[1], "Red").unwrap(), 1, "an existing layer is reused");
+    let doc = reopen(&doc);
+    let catalog = doc.resolve(&Object::Ref(doc.root().unwrap())).as_dict().cloned().unwrap();
+    let props = doc.resolve(catalog.get(b"OCProperties").unwrap()).as_dict().cloned().unwrap();
+    let groups = doc.resolve(props.get(b"OCGs").unwrap()).as_array().cloned().unwrap();
+    assert_eq!(groups.len(), 2, "Red and Tape");
+    let tape = match &groups[1] {
+        Object::Ref(r) => *r,
+        o => panic!("{o:?}"),
+    };
+    assert!(doc.get(tape).as_dict().unwrap().get(b"Name").and_then(|n| n.as_string()).is_some_and(|n| n.text_eq("Tape")));
+    let config = doc.resolve(&Object::Ref(ObjRef { num: 8, generation: 0 })).as_dict().cloned().unwrap();
+    for key in [&b"Order"[..], b"ON"] {
+        let list = config.get(key).and_then(|a| a.as_array()).unwrap();
+        assert_eq!(list, &vec![Object::Ref(ObjRef { num: 7, generation: 0 }), Object::Ref(tape)], "{}", String::from_utf8_lossy(key));
+    }
+    let on_page = list(&doc, 0);
+    assert_eq!(on_page[0].reference(b"OC"), Some(tape));
+    assert_eq!(on_page[1].reference(b"OC"), Some(ObjRef { num: 7, generation: 0 }), "moved to Red by the second call");
+}

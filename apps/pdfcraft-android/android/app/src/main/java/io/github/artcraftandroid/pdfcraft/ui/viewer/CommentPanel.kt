@@ -92,7 +92,7 @@ fun CommentPanel(vm: AppViewModel, doc: OpenDocument, c: CommentInfo) {
     fun go(to: CommentInfo) {
         val y = to.rect.getOrNull(1) ?: 0f
         doc.viewer.goToPage(to.page.toInt(), (y - 80f).coerceAtLeast(0f))
-        vm.selectedComment = doc to to
+        vm.commenting.selectedComment = doc to to
     }
     val canEdit = !c.locked && doc.info.allowsAnnotation
     val snippets = remember(doc.info.generation) { androidx.compose.runtime.mutableStateMapOf<String, androidx.compose.ui.graphics.ImageBitmap>() }
@@ -101,7 +101,7 @@ fun CommentPanel(vm: AppViewModel, doc: OpenDocument, c: CommentInfo) {
     LaunchedEffect(scroll.value > 0) { if (scroll.value > 0) expanded = true }
     val landscape = androidx.compose.ui.platform.LocalConfiguration.current.let { it.screenWidthDp > it.screenHeightDp }
     val fraction by androidx.compose.animation.core.animateFloatAsState(if (expanded) 0.6f else if (landscape) 0.5f else 0.4f, label = "panel")
-    PdfSheet(onDismiss = { vm.selectedComment = null }, modifier = Modifier.imePadding(), maxHeightFraction = fraction, background = colors.menu, handleHeight = 12.dp, aboveNavBar = true, fill = true) {
+    PdfSheet(onDismiss = { vm.commenting.selectedComment = null }, modifier = Modifier.imePadding(), maxHeightFraction = fraction, background = colors.menu, handleHeight = 12.dp, aboveNavBar = true, fill = true) {
         Column(Modifier.fillMaxWidth().fillMaxHeight()) {
             // the navigator, and the colour button at the right
             Box(Modifier.fillMaxWidth().height(40.dp)) {
@@ -133,7 +133,7 @@ fun CommentPanel(vm: AppViewModel, doc: OpenDocument, c: CommentInfo) {
                 // for drawings and shapes, its line width
                 val shown = c.color?.let { Color(0xFF000000 or it.toLong()) } ?: Color.Transparent
                 Spacer(Modifier.height(8.dp))
-                ColorGrid(shown) { vm.recolorComment(doc, c, it) }
+                ColorGrid(shown) { vm.commenting.recolorComment(doc, c, it) }
                 if (c.subtype != "FreeText") {
                     var opacity by remember(c.page, c.index) { mutableStateOf(c.opacity) }
                     // The opacity last sent. A drag is applied 300 ms after it stops; a change still
@@ -145,13 +145,13 @@ fun CommentPanel(vm: AppViewModel, doc: OpenDocument, c: CommentInfo) {
                         if (opacity == sent) return@LaunchedEffect
                         kotlinx.coroutines.delay(300)
                         sent = opacity
-                        vm.styleComment(doc, c, mapOf("opacity" to opacity.toDouble()))
+                        vm.commenting.styleComment(doc, c, mapOf("opacity" to opacity.toDouble()))
                     }
                     DisposableEffect(c.page, c.index) {
                         onDispose {
                             if (pending != sent) {
                                 sent = pending
-                                vm.styleComment(doc, target, mapOf("opacity" to pending.toDouble()), reselect = false)
+                                vm.commenting.styleComment(doc, target, mapOf("opacity" to pending.toDouble()), reselect = false)
                             }
                         }
                     }
@@ -160,7 +160,7 @@ fun CommentPanel(vm: AppViewModel, doc: OpenDocument, c: CommentInfo) {
                 }
                 if (c.width != null && c.subtype in LineComments) {
                     Text(stringResource(R.string.comments_line_thickness), color = colors.text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 20.dp, top = 16.dp, bottom = 8.dp))
-                    InkWidthRow(shown, InkWidths.minByOrNull { kotlin.math.abs(it - (c.width ?: 0f)) }) { vm.styleComment(doc, c, mapOf("width" to it.toDouble())) }
+                    InkWidthRow(shown, InkWidths.minByOrNull { kotlin.math.abs(it - (c.width ?: 0f)) }) { vm.commenting.styleComment(doc, c, mapOf("width" to it.toDouble())) }
                 }
                 Spacer(Modifier.height(8.dp))
             }
@@ -176,7 +176,7 @@ fun CommentPanel(vm: AppViewModel, doc: OpenDocument, c: CommentInfo) {
                             Row {
                                 Spacer(Modifier.weight(1f))
                                 TextButton(onClick = { editing = null }) { Text(stringResource(R.string.common_cancel), color = colors.toolAccent) }
-                                TextButton(onClick = { editing = null; vm.editCommentText(doc, cm, text) }) { Text(stringResource(R.string.common_save), color = colors.toolAccent, fontWeight = FontWeight.SemiBold) }
+                                TextButton(onClick = { editing = null; vm.commenting.editCommentText(doc, cm, text) }) { Text(stringResource(R.string.common_save), color = colors.toolAccent, fontWeight = FontWeight.SemiBold) }
                             }
                         }
                     } else {
@@ -200,7 +200,7 @@ fun CommentPanel(vm: AppViewModel, doc: OpenDocument, c: CommentInfo) {
                                         DropdownMenuItem(
                                             text = { Text(stringResource(R.string.comments_copy_text), color = colors.text) },
                                             leadingIcon = { Icon(LucideIcons.Copy, null, tint = colors.icon) },
-                                            onClick = { menuFor = null; vm.copyText(text) },
+                                            onClick = { menuFor = null; vm.commenting.copyText(text) },
                                         )
                                     }
                                     if (!cm.locked && doc.info.allowsAnnotation) {
@@ -212,7 +212,7 @@ fun CommentPanel(vm: AppViewModel, doc: OpenDocument, c: CommentInfo) {
                                         DropdownMenuItem(
                                             text = { Text(stringResource(R.string.common_delete), color = colors.text) },
                                             leadingIcon = { Icon(LucideIcons.Trash2, null, tint = colors.icon) },
-                                            onClick = { menuFor = null; vm.deleteComment(doc, cm) },
+                                            onClick = { menuFor = null; vm.commenting.deleteComment(doc, cm) },
                                         )
                                     }
                                 }
@@ -243,7 +243,7 @@ fun CommentPanel(vm: AppViewModel, doc: OpenDocument, c: CommentInfo) {
                     )
                     if (reply.isNotEmpty()) {
                         Box(Modifier.padding(horizontal = 4.dp).size(width = 1.dp, height = 21.dp).background(colors.divider))
-                        BarIcon(LucideIcons.Send, stringResource(R.string.common_post), { vm.postReply(ReplyPrompt(doc, c), reply); reply = "" }, size = 40.dp, enabled = reply.isNotBlank(), tint = colors.toolAccent)
+                        BarIcon(LucideIcons.Send, stringResource(R.string.common_post), { vm.commenting.postReply(ReplyPrompt(doc, c), reply); reply = "" }, size = 40.dp, enabled = reply.isNotBlank(), tint = colors.toolAccent)
                     }
                 }
             }

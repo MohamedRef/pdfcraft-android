@@ -262,4 +262,41 @@
         <item quantity="one">%1$d Feld hinzugefügt</item>
         <item quantity="other">%1$d Felder hinzugefügt</item>
     </plurals>
+    <string name="edit_grouped_text">Dieser Text liegt in gruppierter Grafik</string>
+    <string name="edit_grouped_make_editable">Bearbeitbar machen</string>
+    <string name="edit_grouped_ready">Der Text auf dieser Seite ist jetzt bearbeitbar</string>
+    <string name="edit_grouped_refused">Einige Gruppen blieben unverändert: %1$s</string>
+    <string name="edit_fonts_in_document">In diesem Dokument</string>
+    <string name="edit_fonts_none">Keine eingebetteten Schriften dieser Seite wiederverwendbar</string>
+    <string name="edit_font_from_file">Schrift aus Datei hinzufügen…</string>
+    <string name="edit_font_imported">In %1$s gesetzt</string>
+    <string name="edit_spacing">Abstand</string>
+    <string name="edit_line_spacing">Zeilenabstand</string>
+    <string name="edit_letter_spacing">Zeichenabstand</string>
+    <string name="edit_points">%1$s pt</string>
+    <string name="edit_spacing_less">%1$s verringern</string>
+    <string name="edit_spacing_more">%1$s erhöhen</string>
+    <string name="edit_overflow">Dieser Text passt nicht mehr an seine Stelle</string>
+    <string name="objects_select">Auswählen</string>
+    <string name="objects_hint">Objekte antippen oder einen Rahmen um sie ziehen</string>
+    <string name="objects_select_all">Alle auswählen</string>
+    <string name="objects_copy">Kopieren</string>
+    <plurals name="objects_cut">
+        <item quantity="one">%1$d Objekt ausgeschnitten</item>
+        <item quantity="other">%1$d Objekte ausgeschnitten</item>
+    </plurals>
+    <string name="objects_paste">Einfügen</string>
+    <plurals name="objects_selected">
+        <item quantity="one">%1$d Objekt ausgewählt · zum Verschieben ziehen</item>
+        <item quantity="other">%1$d Objekte ausgewählt · zum Verschieben ziehen</item>
+    </plurals>
+    <plurals name="objects_copied">
+        <item quantity="one">%1$d Objekt kopiert</item>
+        <item quantity="other">%1$d Objekte kopiert</item>
+    </plurals>
+    <plurals name="objects_pasted">
+        <item quantity="one">%1$d Objekt eingefügt</item>
+        <item quantity="other">%1$d Objekte eingefügt</item>
+    </plurals>
+    <string name="objects_cut_label">Ausschneiden</string>
 </resources>

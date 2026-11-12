@@ -35,6 +35,8 @@
     <string name="share_choice_images">Share pages as images</string>
     <!-- Translator note: file name of a shared flattened copy; %1$s is the document's title. -->
     <string name="share_name_flattened">%1$s (flattened).pdf</string>
+    <string name="share_choice_tape">Share with tape showing (a \"Tape\" layer readers can hide)</string>
+    <string name="share_name_tape">%1$s (with tape).pdf</string>
     <!-- Translator note: file name of one shared page; %1$s is the title, %2$d the page number. -->
     <string name="share_name_page">%1$s (page %2$d).pdf</string>
     <string name="common_open">Open</string>
@@ -378,6 +380,7 @@
     <string name="tools_filter_grayscale">Grayscale</string>
     <string name="tools_filter_whiteboard">Whiteboard</string>
     <string name="tools_filter_light_text">Light text</string>
+    <string name="tools_scan_flatten">Flatten page</string>
 
     <!-- App dialogs: the first comment's name prompt -->
     <!-- Verb: go on without entering a name -->
@@ -1778,6 +1781,33 @@
     <string name="home_record_diagnostics_body">Keeps a detailed log of opening and drawing files, pen latency, saves, scans, memory and errors, so a problem can be checked from your phone. Only event names, times, counts and sizes; no file names, paths or contents. Turning it off deletes it.</string>
     <string name="home_share_diagnostics">Share diagnostics log</string>
     <string name="home_clear_diagnostics">Clear diagnostics log</string>
+    <string name="scan_lab_section">Scanner testing</string>
+    <string name="scan_lab_keep">Keep scans for testing</string>
+    <string name="scan_lab_keep_body">Keeps the photo of every page you scan, saved or discarded, with its corners, settings and result. They stay on this device until you share or delete them. At most 600 MB is kept; older scans make room for newer ones.</string>
+    <string name="scan_lab_share">Share kept scans (%1$d pages, %2$s)</string>
+    <string name="scan_lab_clear">Delete kept scans</string>
+    <string name="scan_lab_share_title">Share the kept scans?</string>
+    <string name="scan_lab_share_body">The file holds the photos of the documents you scanned and the diagnostics log. Share it only with someone you trust with those documents.</string>
+    <string name="scan_lab_clear_title">Delete the kept scans?</string>
+    <string name="scan_lab_nothing_kept">No scans are kept yet</string>
+    <string name="scan_lab_subject">PdfCraft scans for testing</string>
+    <string name="scan_lab_finder">Find the page with</string>
+    <string name="scan_lab_finder_auto">Automatic</string>
+    <string name="scan_lab_finder_network">Neural network</string>
+    <string name="scan_lab_finder_lines">Lines</string>
+    <string name="scan_lab_finder_off">Nothing</string>
+    <string name="scan_lab_refine">Refine edges on the full photo</string>
+    <string name="scan_lab_perspective">Proportions from perspective</string>
+    <string name="scan_lab_snap_paper">Match standard paper sizes</string>
+    <string name="scan_lab_upright">Turn pages upright</string>
+    <string name="scan_lab_sharpen">Sharpen text (Clean scan)</string>
+    <string name="scan_lab_off">Off</string>
+    <string name="scan_lab_denoise">Smooth grain in dim photos (Clean scan)</string>
+    <string name="scan_lab_strength">Filter strength</string>
+    <string name="scan_lab_strength_own">Default</string>
+    <string name="scan_lab_options_body">These switch parts of the scanner off, or swap them for what they replaced, to find which part a problem comes from. The log records what was in force for every page.</string>
+    <string name="scan_lab_reset">Reset scanner testing options</string>
+    <string name="scan_lab_active">A scanner testing option is on (Settings, About, Diagnostics)</string>
     <string name="home_diagnostics_empty">No diagnostics yet: turn this on, then use the app.</string>
     <string name="home_diagnostics_subject">PdfCraft diagnostics log</string>
     <string name="home_diagnostics_cleared">Diagnostics log cleared</string>
@@ -2386,6 +2416,15 @@
     <string name="link_to_page">Page in this document</string>
     <string name="link_to_web">Web or email address</string>
     <string name="link_page_hint">Page number (1–%1$d)</string>
+    <string name="link_to_file">Page of another PDF</string>
+    <string name="link_file_none">Open another PDF once, or add it to your Library, to link to it.</string>
+    <string name="link_file_pick">Choose the PDF</string>
+    <string name="link_file_page_hint">Page number (1 or more)</string>
+    <string name="link_file_wrong">Choose a PDF and enter a page number.</string>
+    <string name="link_file_missing">%1$s isn\'t in your Library or recent files. Open it once, then tap the link again.</string>
+    <string name="link_file_same_folder">Keep both files in the same folder so the link also works in other PDF apps.</string>
+    <string name="link_from_bookmark">Choose from bookmarks</string>
+    <string name="link_bookmarks_none">This document has no bookmarks.</string>
     <string name="link_web_hint">https://example.com</string>
     <string name="link_page_wrong">Enter a page number in this document.</string>
     <string name="link_web_wrong">Enter a web address (https://…) or an email address.</string>
@@ -2495,6 +2534,13 @@
     <string name="study_explain">Cover answers with tape and tap to check yourself, or let a quiz cover your highlights. Lifting tape and quizzes don\'t change the file; other apps show the page without tape.</string>
     <string name="study_draw_tape">Draw tape</string>
     <string name="study_tape_hint">Drag over what to cover</string>
+    <string name="study_tape_hint_freehand">Drag along the line to cover</string>
+    <string name="study_tape_box">Box</string>
+    <string name="study_tape_freehand">Freehand</string>
+    <string name="study_pattern_stripes">Striped tape</string>
+    <string name="study_pattern_dots">Dotted tape</string>
+    <string name="study_pattern_grid">Grid tape</string>
+    <string name="study_pattern_plain">Plain tape</string>
     <string name="study_color_amber">Amber tape</string>
     <string name="study_color_blue">Blue tape</string>
     <string name="study_color_lilac">Lilac tape</string>

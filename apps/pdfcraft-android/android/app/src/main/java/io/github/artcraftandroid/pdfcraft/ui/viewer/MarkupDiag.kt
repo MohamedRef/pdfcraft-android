@@ -34,6 +34,7 @@ internal object MarkupDiag {
     fun link(doc: OpenDocument, action: String, target: String?, from: String) = e("link", doc, "action" to action, "target" to target, "from" to from)
     fun linksFromUrls(doc: OpenDocument, created: Int, ms: Long) = e("links_from_urls", doc, "created" to created, "ms" to ms)
     fun linksRemoved(doc: OpenDocument) = e("links_remove", doc)
+    fun linkFollow(doc: OpenDocument, found: Boolean, page: Int) = e("link_follow_file", doc, "found" to found, "page" to page)
 
     // measure (#135 #180)
     fun measurePoint(doc: OpenDocument, kind: String, snapped: Boolean, points: Int, ms: Long) =
@@ -43,7 +44,9 @@ internal object MarkupDiag {
     fun measureExport(doc: OpenDocument, count: Int) = e("measure_export", doc, "count" to count)
 
     // study (#143)
-    fun tapeAdd(doc: OpenDocument, color: Int) = e("tape_add", doc, "color" to TAPE_COLORS.indexOf(color))
+    fun tapeAdd(doc: OpenDocument, color: Int, pattern: TapePattern, freehand: Boolean) =
+        e("tape_add", doc, "color" to TAPE_COLORS.indexOf(color), "pattern" to pattern, "freehand" to freehand)
+    fun tapeShare(doc: OpenDocument, tapes: Int, ms: Long) = e("tape_share", doc, "tapes" to tapes, "ms" to ms)
     fun tapeToggle(doc: OpenDocument, lifted: Boolean, via: String) = e("tape_toggle", doc, "lifted" to lifted, "via" to via)
     fun tapeAll(doc: OpenDocument, lifted: Boolean, tapes: Int) = e("tape_all", doc, "lifted" to lifted, "tapes" to tapes)
     fun tapeRemoveAll(doc: OpenDocument, tapes: Int, pages: Int) = e("tape_remove_all", doc, "tapes" to tapes, "pages" to pages)

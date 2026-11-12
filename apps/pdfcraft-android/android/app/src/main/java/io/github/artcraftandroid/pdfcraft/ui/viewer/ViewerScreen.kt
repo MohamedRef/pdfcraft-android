@@ -248,6 +248,8 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
     val config = androidx.compose.ui.platform.LocalConfiguration.current
     val desktop = remember(config) { isDesktop(context, config) }
     val zoomButtons = remember(doc) { ZoomButtonsState(scope) }
+    // links drawn over handwriting get a small badge, so linked notes can be told apart (#334)
+    val linkBadges = remember(doc.links, doc.comments) { linkedInkRects(doc.links, doc.comments) }
     LaunchedEffect(ctl.barsVisible) { if (!ctl.barsVisible) zoomButtons.hide() }
     val canvasLook = CanvasLook(background = c.desk, pageShadow = c.pageEdge, invert = ctl.nightMode)
 
@@ -287,13 +289,13 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
                 // Fields, comments, edits and selection must remain immediate; no link
                 // hydration is allowed to delay those higher-priority interactions.
                 when {
-                    vm.markupFollowUp != null -> vm.markupFollowUp = null
+                    vm.commenting.markupFollowUp != null -> vm.commenting.markupFollowUp = null
                     selection.selection != null -> selection.clear()
-                    ctl.tool == ViewerTool.Edit -> vm.editTap(doc, at)
+                    ctl.tool == ViewerTool.Edit -> vm.editor.editTap(doc, at)
                     // tape and quiz masks lift with a tap (#143)
                     vm.tapStudyMask(doc, at) -> Unit
-                    vm.tapField(doc, at) -> Unit
-                    vm.tapComment(doc, at) -> Unit
+                    vm.editor.tapField(doc, at) -> Unit
+                    vm.commenting.tapComment(doc, at) -> Unit
                     else -> scope.launch {
                         val generation = doc.info.generation
                         // Only unresolved link taps wait for their one page's link table.
@@ -328,30 +330,31 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
             onWheelZoom = { if (desktop) zoomButtons.poke() },
             // a right click: a comment's menu, else what a long press gives (a word, a picture, the page menu)
             onSecondaryClick = { p, at ->
-                if (at != null && (gesturesForTool && vm.tapComment(doc, at))) Unit
+                if (at != null && (gesturesForTool && vm.commenting.tapComment(doc, at))) Unit
                 else if (at != null && gesturesForTool) scope.launch {
                     val slop = 12f / doc.viewer.pixelsPerPoint(at.page).coerceAtLeast(0.1f) * density.density
-                    if (!selection.selectWordAt(at, slop) && ctl.tool == ViewerTool.None && !vm.readingMode) vm.longPressPage(doc, at, p)
+                    if (!selection.selectWordAt(at, slop) && ctl.tool == ViewerTool.None && !vm.readingMode) vm.editor.longPressPage(doc, at, p)
                 }
             },
             onLongPress = { p, at ->
                 if (at != null) scope.launch {
                     val slop = 12f / doc.viewer.pixelsPerPoint(at.page).coerceAtLeast(0.1f) * density.density
                     // no word there: a picture, or the page menu, as the reference's long press
-                    if (!selection.selectWordAt(at, slop) && ctl.tool == ViewerTool.None && !vm.readingMode) vm.longPressPage(doc, at, p)
+                    if (!selection.selectWordAt(at, slop) && ctl.tool == ViewerTool.None && !vm.readingMode) vm.editor.longPressPage(doc, at, p)
                 }
             },
             overlay = {
                 if (ctl.tool == ViewerTool.None || ctl.tool == ViewerTool.FillSign) drawFieldTints(doc)
-                if (!doc.info.commentsHidden) drawNotes(doc, ctl.nightMode, vm.selectedComment?.takeIf { it.first === doc }?.second)
+                if (!doc.info.commentsHidden) drawNotes(doc, ctl.nightMode, vm.commenting.selectedComment?.takeIf { it.first === doc }?.second)
                 drawStudyMasks(doc)
-                vm.selectedComment?.takeIf { it.first === doc }?.second?.let { drawCommentSelection(doc, it) }
+                if (!doc.info.commentsHidden) drawLinkBadges(doc, linkBadges)
+                vm.commenting.selectedComment?.takeIf { it.first === doc }?.second?.let { drawCommentSelection(doc, it) }
                 vm.readAloud?.let { drawReadAloud(doc, it) }
                 drawSearchHits(doc)
                 // the comment list's filters leave these out: veiled so the rest stand out (#155)
                 if (!doc.info.commentsHidden && ctl.sheet != ViewerSheet.Comments && ctl.dimmedGeneration == doc.info.generation.toLong()) drawDimmedComments(doc.viewer, ctl.dimmedComments, ctl.nightMode)
                 drawSelection(doc)
-                vm.pendingMarkupPreview?.takeIf { it.doc === doc }?.let { drawPendingMarkup(it) }
+                vm.commenting.pendingMarkupPreview?.takeIf { it.doc === doc }?.let { drawPendingMarkup(it) }
                 drawLinkFlash(doc)
             },
         )
@@ -374,17 +377,17 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
         // The active tool takes the touches over the pages.
         ToolLayer(vm, doc)
         if (ctl.tool == ViewerTool.Edit) EditOverlay(vm, doc)
-        if (ctl.tool == ViewerTool.Edit && vm.editMode == EditMode.Link) LinkLayer(vm, doc)
+        if (ctl.tool == ViewerTool.Edit && vm.editor.editMode == EditMode.Link) LinkLayer(vm, doc)
         vm.linkEdit?.takeIf { it.doc === doc }?.let { LinkSheet(vm, it) }
-        vm.textPrompt?.takeIf { it.doc === doc }?.let { TextEntry(vm, it, onDone = vm::postText) }
+        vm.commenting.textPrompt?.takeIf { it.doc === doc }?.let { TextEntry(vm, it, onDone = vm.commenting::postText) }
         vm.signing.fillTextPrompt?.takeIf { it.doc === doc }?.let { TextEntry(vm, it, onDone = vm.signing::postFillText) }
-        vm.addTextPrompt?.takeIf { it.doc === doc }?.let { TextEntry(vm, it, onDone = vm::postAddText) }
-        vm.fieldEdit?.takeIf { it.doc === doc }?.let { FieldEditor(vm, it) }
+        vm.editor.addTextPrompt?.takeIf { it.doc === doc }?.let { TextEntry(vm, it, onDone = vm.editor::postAddText) }
+        vm.editor.fieldEdit?.takeIf { it.doc === doc }?.let { FieldEditor(vm, it) }
         // a Fill & Sign element can be dragged and, for boxes, resized (a comment's: over its panel, below)
-        if (ctl.tool == ViewerTool.FillSign) vm.selectedFill?.let { c ->
-            CommentDragOverlay(doc, c, onMove = { dx, dy -> vm.moveFill(doc, c, dx, dy) }, onResize = { vm.resizeFill(doc, c, it) })
+        if (ctl.tool == ViewerTool.FillSign) vm.commenting.selectedFill?.let { c ->
+            CommentDragOverlay(doc, c, onMove = { dx, dy -> vm.commenting.moveFill(doc, c, dx, dy) }, onResize = { vm.commenting.resizeFill(doc, c, it) })
         }
-        if (ctl.tool == ViewerTool.FillSign) vm.selectedFill?.let { FillElementMenu(vm, doc, it) }
+        if (ctl.tool == ViewerTool.FillSign) vm.commenting.selectedFill?.let { FillElementMenu(vm, doc, it) }
 
         // Scrubber and page pill (continuous, three pages or more).
         Box(Modifier.fillMaxSize().then(cutoutSides)) {
@@ -515,7 +518,7 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
                             progressLabel = if (search.running) stringResource(R.string.viewer_search_progress, search.searched, doc.pageCount) else null,
                         )
                     } else {
-                        val fa = vm.fieldActions
+                        val fa = vm.editor.fieldActions
                         if (fa != null) FieldTopBar(fa) else ViewerTopBar(
                             toolActive = ctl.tool != ViewerTool.None,
                             doneIsCheck = ctl.tool != ViewerTool.Comment,
@@ -570,7 +573,7 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
         // The normal bottom sub-toolbar remains available for active tools.
         AnimatedVisibility(
             visible = railVisible && ctl.barsVisible && !ctl.searching && !vm.readingMode &&
-                vm.readAloud == null && vm.fieldActions == null,
+                vm.readAloud == null && vm.editor.fieldActions == null,
             // Physical sides, not start/end: the rail's side follows the writing hand, which does
             // not change with an Arabic (right-to-left) interface (#156). Drags are physical too.
             modifier = Modifier.align(if (prefsRail.railRight) androidx.compose.ui.AbsoluteAlignment.CenterRight else androidx.compose.ui.AbsoluteAlignment.CenterLeft)
@@ -607,7 +610,7 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
 
         // the Read Aloud player takes the bottom bar's place
         // while typing on the page, the bar (with its formatting) rides above the keyboard
-        if (vm.readAloud == null && vm.fieldActions == null) Column(Modifier.fillMaxWidth().align(Alignment.BottomCenter).then(if (vm.editing != null) Modifier.imePadding() else Modifier)) {
+        if (vm.readAloud == null && vm.editor.fieldActions == null) Column(Modifier.fillMaxWidth().align(Alignment.BottomCenter).then(if (vm.editor.editing != null) Modifier.imePadding() else Modifier)) {
             vm.success?.let { SuccessBannerView(it, onClose = { vm.success = null }) }
             // edits that can't reach the original: said as soon as there are any, not only on leaving (#191)
             if (showReadOnlyNotice(doc.writable, doc.source != null, doc.info.dirty || doc.notWrittenBack, doc.readOnlyNoticeClosed)) {
@@ -652,7 +655,7 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
             if (selection.magnifierAt == null) SelectionMenu(vm, doc, sel)
         }
         // the markup just added from that menu: colours, Add note, Delete (#197)
-        if (selection.selection == null) vm.markupFollowUp?.takeIf { it.doc === doc && ctl.tool == ViewerTool.None }?.let { MarkupFollowUpBar(vm, it) }
+        if (selection.selection == null) vm.commenting.markupFollowUp?.takeIf { it.doc === doc && ctl.tool == ViewerTool.None }?.let { MarkupFollowUpBar(vm, it) }
 
         // Sheets and dialogs.
         SheetHost(ctl.sheet.takeIf { it != ViewerSheet.None }) { sheet ->
@@ -689,26 +692,26 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
         vm.attachPrompt?.takeIf { it.doc === doc }?.let { AttachDialog(vm, it) }
         if (vm.flattenPrompt === doc) FlattenDialog(vm, doc)
         vm.redact.findings?.let { RedactionAuditDialog(vm, doc, it) }
-        vm.pageMenu?.takeIf { it.doc === doc }?.let { PageMenuView(vm, it) }
-        if (vm.imageSource?.first === doc) {
-            io.github.artcraftandroid.pdfcraft.ui.PdfSheet(onDismiss = { vm.imageSource = null }, dim = true) {
+        vm.editor.pageMenu?.takeIf { it.doc === doc }?.let { PageMenuView(vm, it) }
+        if (vm.editor.imageSource?.first === doc) {
+            io.github.artcraftandroid.pdfcraft.ui.PdfSheet(onDismiss = { vm.editor.imageSource = null }, dim = true) {
                 io.github.artcraftandroid.pdfcraft.ui.SheetTitle(stringResource(R.string.viewer_add_image))
-                io.github.artcraftandroid.pdfcraft.ui.SheetRow(LucideIcons.Images, stringResource(R.string.viewer_image_from_photos), { vm.addImageFrom(camera = false) })
-                io.github.artcraftandroid.pdfcraft.ui.SheetRow(LucideIcons.Camera, stringResource(R.string.viewer_image_from_camera), { vm.addImageFrom(camera = true) })
+                io.github.artcraftandroid.pdfcraft.ui.SheetRow(LucideIcons.Images, stringResource(R.string.viewer_image_from_photos), { vm.editor.addImageFrom(camera = false) })
+                io.github.artcraftandroid.pdfcraft.ui.SheetRow(LucideIcons.Camera, stringResource(R.string.viewer_image_from_camera), { vm.editor.addImageFrom(camera = true) })
                 Spacer(Modifier.height(12.dp))
             }
         }
-        vm.notePrompt?.takeIf { it.doc === doc }?.let { NoteSheet(vm, it) }
-        vm.voicePrompt?.takeIf { it.doc === doc }?.let { VoiceSheet(vm, it) }
-        if (vm.micRationale) MicRationaleDialog(vm)
-        vm.selectedComment?.takeIf { it.first === doc }?.let { (_, cm) -> CommentPanel(vm, doc, cm) }
+        vm.commenting.notePrompt?.takeIf { it.doc === doc }?.let { NoteSheet(vm, it) }
+        vm.commenting.voicePrompt?.takeIf { it.doc === doc }?.let { VoiceSheet(vm, it) }
+        if (vm.commenting.micRationale) MicRationaleDialog(vm)
+        vm.commenting.selectedComment?.takeIf { it.first === doc }?.let { (_, cm) -> CommentPanel(vm, doc, cm) }
         // over the panel's tap-to-close area, but only where the comment is: drag it to move, corners to resize
         if (ctl.tool == ViewerTool.None && doc.info.allowsAnnotation) {
-            vm.selectedComment?.takeIf { it.first === doc }?.second?.let { c ->
-                CommentDragOverlay(doc, c, onMove = { dx, dy -> vm.moveComment(doc, c, dx, dy) }, onResize = { vm.resizeComment(doc, c, it) })
+            vm.commenting.selectedComment?.takeIf { it.first === doc }?.second?.let { c ->
+                CommentDragOverlay(doc, c, onMove = { dx, dy -> vm.commenting.moveComment(doc, c, dx, dy) }, onResize = { vm.commenting.resizeComment(doc, c, it) })
             }
         }
-        vm.replyPrompt?.takeIf { it.doc === doc }?.let { ReplySheet(vm, it) }
+        vm.commenting.replyPrompt?.takeIf { it.doc === doc }?.let { ReplySheet(vm, it) }
         vm.readAloud?.let { ReadAloudBar(vm, doc, it) }
         if (ctl.goToPage) GoToPageDialog(doc, onDismiss = { ctl.goToPage = false })
         if (vm.shortcutsHelp) ShortcutsDialog(onDismiss = { vm.shortcutsHelp = false })

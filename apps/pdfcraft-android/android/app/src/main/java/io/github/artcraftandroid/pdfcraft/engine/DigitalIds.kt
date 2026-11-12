@@ -41,14 +41,14 @@ class DigitalIds(dir: File) {
         val target = File(root, fileKey(info.sha256) + ".p12")
         if (source.canonicalPath != target.canonicalPath) source.copyTo(target, overwrite = true)
         val id = DigitalId(target, info.name, info.issuer, info.email, info.validFrom, info.validTo, info.selfSigned, info.sha256)
-        all = all.filter { it.sha256 != info.sha256 } + id
+        all = all.filter { fileKey(it.sha256) != fileKey(info.sha256) } + id
         save()
         id
     }
 
     fun remove(id: DigitalId) = synchronized(lock) {
         id.file.delete()
-        all = all.filter { it.sha256 != id.sha256 }
+        all = all.filter { fileKey(it.sha256) != fileKey(id.sha256) }
         save()
     }
 

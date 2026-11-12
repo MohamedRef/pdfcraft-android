@@ -30,6 +30,9 @@ enum class ShareChoice(val id: String, @StringRes val label: Int) {
     /** The page in view, as a PDF of its own. */
     Page("page", R.string.share_choice_page),
 
+    /** Study tape made opaque on a "Tape" layer, for handing a quiz sheet on (#350); only offered when there is tape. */
+    Tape("tape", R.string.share_choice_tape),
+
     /** Pictures of pages, picked in the page grid. */
     Images("images", R.string.share_choice_images);
 
@@ -39,6 +42,7 @@ enum class ShareChoice(val id: String, @StringRes val label: Int) {
             Flattened -> LucideIcons.Layers
             Clean -> LucideIcons.BrushCleaning
             Page -> LucideIcons.File
+            Tape -> LucideIcons.SwatchBook
             Images -> LucideIcons.Images
         }
 
@@ -55,7 +59,9 @@ fun ShareSheet(vm: AppViewModel, doc: OpenDocument) {
     val last = vm.lastShareChoice
     PdfSheet(onDismiss = { ctl.sheet = ViewerSheet.None }) {
         SheetTitle(stringResource(R.string.common_share))
+        val hasTape = tapes(doc).isNotEmpty()
         for (choice in ShareChoice.entries) {
+            if (choice == ShareChoice.Tape && !hasTape) continue
             SheetRow(choice.icon, stringResource(choice.label), {
                 ctl.sheet = ViewerSheet.None
                 vm.share(doc, choice)

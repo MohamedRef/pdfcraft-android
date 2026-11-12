@@ -33,6 +33,21 @@ pub enum QuadSource {
     None,
 }
 
+/// Which detector is asked (#288). The scanner's own choice is [`Finder::Auto`]; the others
+/// are for testing, so a page found badly can be pinned on the detector that found it.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Finder {
+    /// The network when its model file is there, else the line detector.
+    #[default]
+    Auto,
+    /// The network alone: nothing is found without its model file.
+    Network,
+    /// The engine's line detector alone, as before the network (#290).
+    Lines,
+    /// Nothing is looked for: the page is the whole photo.
+    Off,
+}
+
 /// The page found in a photo.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Detection {
@@ -97,13 +112,17 @@ pub(crate) fn area_weights(n_in: usize, n_out: usize) -> Vec<(usize, Vec<f32>)> 
 /// `photo` shrunk so its longer side is `side` at most (each pixel the average of what it
 /// covers), and the scale it was shrunk by.
 pub(crate) fn shrink(photo: &Photo, side: usize) -> (Picture, f64) {
-    let (w, h) = (photo.width as usize, photo.height as usize);
+    shrink_rgb(&photo.rgb, photo.width as usize, photo.height as usize, side)
+}
+
+/// [`shrink`] for any `w` × `h` picture of RGB bytes.
+pub(crate) fn shrink_rgb(pixels: &[u8], w: usize, h: usize, side: usize) -> (Picture, f64) {
     let scale = (side as f64 / w.max(h) as f64).min(1.0);
     let (ow, oh) = (((w as f64 * scale).round() as usize).max(1), ((h as f64 * scale).round() as usize).max(1));
     let (xs, ys) = (area_weights(w, ow), area_weights(h, oh));
     // rows first: h × ow
     let mut rows = vec![0f32; h * ow * 3];
-    for (source, out) in photo.rgb.chunks_exact(w * 3).zip(rows.chunks_exact_mut(ow * 3)) {
+    for (source, out) in pixels.chunks_exact(w * 3).zip(rows.chunks_exact_mut(ow * 3)) {
         for ((first, weights), px) in xs.iter().zip(out.chunks_exact_mut(3)) {
             for (i, weight) in weights.iter().enumerate() {
                 let s = &source[(first + i) * 3..(first + i) * 3 + 3];
@@ -310,11 +329,19 @@ pub(crate) fn with_lines(photo: &Photo) -> Detection {
 /// Find the page in `photo`. With the model file in place the network decides, and says so when
 /// it finds nothing convincing; without it the engine's line detector is asked.
 pub fn detect(photo: &Photo) -> Detection {
+    detect_with(photo, Finder::Auto)
+}
+
+/// Find the page in `photo` with the detector `finder` names.
+pub fn detect_with(photo: &Photo, finder: Finder) -> Detection {
     if photo.width < 16 || photo.height < 16 {
         return Detection::NOTHING;
     }
-    match load(EDGES).and_then(|model| with_model(&model, photo)) {
-        Some(found) => found,
-        None => with_lines(photo),
+    let network = || load(EDGES).and_then(|model| with_model(&model, photo));
+    match finder {
+        Finder::Auto => network().unwrap_or_else(|| with_lines(photo)),
+        Finder::Network => network().unwrap_or(Detection::NOTHING),
+        Finder::Lines => with_lines(photo),
+        Finder::Off => Detection::NOTHING,
     }
 }

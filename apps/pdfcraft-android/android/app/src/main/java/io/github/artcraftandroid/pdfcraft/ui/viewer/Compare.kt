@@ -164,8 +164,10 @@ fun AppViewModel.runCompare(doc: OpenDocument) {
     viewModelScope.launch {
         busy = appText(R.string.compare_busy)
         try {
+            val t0 = System.nanoTime()
             val r = eng.tool("doc_compare", mapOf("doc" to doc.id, "other" to older.toLong(), "visual" to compare.visual, "limit" to 2000))
             compare.result = parseCompare(r, doc.info.pages.map { it.height })
+            editEvent(doc, "compare", "visual" to compare.visual, "changes" to compare.result?.changes?.size, "identical" to compare.result?.identical, "ms" to (System.nanoTime() - t0) / 1_000_000)
             doc.controller.sheet = ViewerSheet.Compare
         } catch (e: Exception) {
             tell(e.userMessage)
@@ -179,6 +181,7 @@ fun AppViewModel.runCompare(doc: OpenDocument) {
 fun AppViewModel.markCompare(doc: OpenDocument) {
     val older = compare.olderId ?: return
     runTool(doc, "doc_compare_mark", mapOf("other" to older.toLong())) { r ->
+        editEvent(doc, "compare_mark", "comments" to r.optInt("comments"))
         tell(appText(R.string.compare_marked, r.optInt("comments")), appText(R.string.common_undo)) { undo(doc) }
     }
 }
@@ -197,6 +200,7 @@ fun AppViewModel.saveCompareReport(doc: OpenDocument) {
             tell(e.userMessage)
             return@launch
         }
+        editEvent(doc, "compare_report")
         requests.create("${doc.name.removeSuffix(".pdf")}_compare.pdf", "application/pdf") { uri ->
             viewModelScope.launch {
                 try {

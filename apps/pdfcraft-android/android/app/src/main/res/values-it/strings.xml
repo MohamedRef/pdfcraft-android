@@ -324,6 +324,7 @@
     <string name="tools_filter_grayscale">Scala di grigi</string>
     <string name="tools_filter_whiteboard">Lavagna bianca</string>
     <string name="tools_filter_light_text">Testo chiaro</string>
+    <string name="tools_scan_flatten">Appiattisci pagina</string>
 
     <!-- ================================================================ -->
     <!-- Finestre di dialogo dell'app -->
@@ -1187,6 +1188,33 @@
     <string name="home_record_diagnostics_body">Conserva un log dettagliato di apertura e disegno dei file, latenza della penna, salvataggi, scansioni, memoria ed errori, per controllare un problema dal telefono. Solo nomi degli eventi, tempi, conteggi e dimensioni; nessun nome di file, percorso o contenuto. Disattivandolo si cancella.</string>
     <string name="home_share_diagnostics">Condividi il log di diagnostica</string>
     <string name="home_clear_diagnostics">Cancella il log di diagnostica</string>
+    <string name="scan_lab_section">Test dello scanner</string>
+    <string name="scan_lab_keep">Conserva le scansioni per i test</string>
+    <string name="scan_lab_keep_body">Conserva la foto di ogni pagina scansionata, salvata o scartata, con angoli, impostazioni e risultato. Restano su questo dispositivo finché non le condividi o le elimini. Si conservano al massimo 600 MB; le scansioni più vecchie fanno posto alle nuove.</string>
+    <string name="scan_lab_share">Condividi le scansioni conservate (%1$d pagine, %2$s)</string>
+    <string name="scan_lab_clear">Elimina le scansioni conservate</string>
+    <string name="scan_lab_share_title">Condividere le scansioni conservate?</string>
+    <string name="scan_lab_share_body">Il file contiene le foto dei documenti scansionati e il log di diagnostica. Condividilo solo con chi ti fidi di affidare quei documenti.</string>
+    <string name="scan_lab_clear_title">Eliminare le scansioni conservate?</string>
+    <string name="scan_lab_nothing_kept">Nessuna scansione conservata per ora</string>
+    <string name="scan_lab_subject">Scansioni PdfCraft per i test</string>
+    <string name="scan_lab_finder">Trova la pagina con</string>
+    <string name="scan_lab_finder_auto">Automatico</string>
+    <string name="scan_lab_finder_network">Rete neurale</string>
+    <string name="scan_lab_finder_lines">Linee</string>
+    <string name="scan_lab_finder_off">Niente</string>
+    <string name="scan_lab_refine">Rifinisci i bordi sulla foto intera</string>
+    <string name="scan_lab_perspective">Proporzioni dalla prospettiva</string>
+    <string name="scan_lab_snap_paper">Adatta ai formati di carta standard</string>
+    <string name="scan_lab_upright">Raddrizza le pagine</string>
+    <string name="scan_lab_sharpen">Rendi più nitido il testo (Scansione pulita)</string>
+    <string name="scan_lab_off">No</string>
+    <string name="scan_lab_denoise">Attenua la grana nelle foto scure (Scansione pulita)</string>
+    <string name="scan_lab_strength">Intensità del filtro</string>
+    <string name="scan_lab_strength_own">Predefinita</string>
+    <string name="scan_lab_options_body">Queste opzioni spengono parti dello scanner o le sostituiscono con ciò che avevano rimpiazzato, per capire da quale parte viene un problema. Il log registra che cosa era attivo per ogni pagina.</string>
+    <string name="scan_lab_reset">Ripristina le opzioni di test dello scanner</string>
+    <string name="scan_lab_active">Un\'opzione di test dello scanner è attiva (Impostazioni, Informazioni, Diagnostica)</string>
     <string name="home_diagnostics_empty">Ancora nessuna diagnostica: attiva l’opzione e usa l’app.</string>
     <string name="home_diagnostics_subject">Log di diagnostica di PdfCraft</string>
     <string name="home_diagnostics_cleared">Log di diagnostica cancellato</string>

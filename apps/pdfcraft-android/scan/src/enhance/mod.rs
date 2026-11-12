@@ -9,6 +9,7 @@
 
 mod background;
 mod bw;
+mod detail;
 mod objects;
 mod plane;
 mod tone;
@@ -17,6 +18,8 @@ mod tone;
 mod tests;
 #[cfg(test)]
 mod tests_bw;
+#[cfg(test)]
+mod tests_detail;
 
 pub use bw::{Bitmap1, BwParams, DEFAULT_BW_STRENGTH, black_white};
 pub use plane::Mask;
@@ -32,6 +35,10 @@ const BLEND_BELOW: u8 = 20;
 pub const MIN_OUTPUT_PIXELS: f64 = 3_600_000.0;
 /// ...by at most this factor per side.
 pub const MAX_ENLARGE: f64 = 4.0;
+
+/// How much print is sharpened unless told otherwise, of 100 (#299): low, because on the
+/// reference photos the tone curve alone already gives edges as crisp as the reference's.
+pub const DEFAULT_SHARPEN: u8 = 30;
 
 /// A page with a side shorter than this is too small to tell paper from ink.
 pub(crate) const MIN_SIDE: usize = 16;
@@ -54,11 +61,17 @@ pub struct AutoParams {
     pub paper: PaperMode,
     /// Threads for the full-resolution pass (the bytes are the same for any number).
     pub threads: usize,
+    /// How much print is sharpened, 0–100; 0 leaves it as it is (#299).
+    pub sharpen: u8,
+    /// Smooth the grain of a page that has a lot of it (a photo taken in dim light, #299).
+    pub denoise: bool,
+    /// The page's resolution: sharpening looks one pixel around at 300 dpi and wider above.
+    pub dpi: u16,
 }
 
 impl Default for AutoParams {
     fn default() -> Self {
-        AutoParams { strength: DEFAULT_STRENGTH, paper: PaperMode::White, threads: 1 }
+        AutoParams { strength: DEFAULT_STRENGTH, paper: PaperMode::White, threads: 1, sharpen: DEFAULT_SHARPEN, denoise: true, dpi: 300 }
     }
 }
 
@@ -71,6 +84,9 @@ pub struct AutoOutput {
     pub objects: Mask,
     /// The closing radius used, in working pixels (0 when the page was left alone).
     pub closing_radius: u8,
+    /// The page's grain: the standard deviation of its noise on blank paper, in grey levels of
+    /// 255 (0 when the page was left alone). At 2 or more it was smoothed, if that was asked for.
+    pub noise: f32,
 }
 
 /// How much a `w` × `h` page is enlarged per side so it has [`MIN_OUTPUT_PIXELS`] (1 when it is
@@ -85,14 +101,25 @@ pub fn auto(page: &Rgb, params: &AutoParams) -> Option<AutoOutput> {
     if page.data.len() != w.checked_mul(h)?.checked_mul(3)? {
         return None;
     }
-    let untouched = |page: &Rgb| AutoOutput { rgb: page.clone(), objects: Mask::new(0, 0), closing_radius: 0 };
+    let untouched = |page: &Rgb| AutoOutput { rgb: page.clone(), objects: Mask::new(0, 0), closing_radius: 0, noise: 0.0 };
     // too small to tell paper from ink
     if params.strength == 0 || w < MIN_SIDE || h < MIN_SIDE {
         return Some(untouched(page));
     }
     let bg = background::background(page, params.threads > 1);
     let strength = params.strength.clamp(BLEND_BELOW, 100);
-    let renderer = tone::Renderer::new(page, &bg.light, tone::Tone::at(strength), params.paper == PaperMode::Keep);
+    // less grain where there is a lot, then crisper print, both before the curve (#299)
+    let noise = detail::noise_sigma(page, &bg.light);
+    let mut detailed: Option<Rgb> = None;
+    if params.denoise && noise >= detail::NOISE_FLOOR {
+        detailed = Some(Rgb { width: page.width, height: page.height, data: detail::denoise(page, noise, params.threads) });
+    }
+    if params.sharpen > 0 {
+        let k_sharp = f32::from(params.sharpen.min(100)) / 100.0;
+        let data = detail::sharpen(detailed.as_ref().unwrap_or(page), k_sharp, noise, f32::from(params.dpi), Some(&bg.objects), params.threads);
+        detailed = Some(Rgb { width: page.width, height: page.height, data });
+    }
+    let renderer = tone::Renderer::new(detailed.as_ref().unwrap_or(page), &bg.light, tone::Tone::at(strength), params.paper == PaperMode::Keep);
     let mut data = renderer.render(params.threads);
     if params.strength < BLEND_BELOW {
         let (a, n) = (u32::from(params.strength), u32::from(BLEND_BELOW));
@@ -100,5 +127,5 @@ pub fn auto(page: &Rgb, params: &AutoParams) -> Option<AutoOutput> {
             *o = ((u32::from(*o) * a + u32::from(i) * (n - a) + n / 2) / n) as u8;
         }
     }
-    Some(AutoOutput { rgb: Rgb { width: page.width, height: page.height, data }, objects: bg.objects, closing_radius: bg.radius as u8 })
+    Some(AutoOutput { rgb: Rgb { width: page.width, height: page.height, data }, objects: bg.objects, closing_radius: bg.radius as u8, noise })
 }

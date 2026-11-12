@@ -262,4 +262,41 @@
         <item quantity="one">%1$d campo añadido</item>
         <item quantity="other">%1$d campos añadidos</item>
     </plurals>
+    <string name="edit_grouped_text">Este texto está dentro de un gráfico agrupado</string>
+    <string name="edit_grouped_make_editable">Hacer editable</string>
+    <string name="edit_grouped_ready">Ahora se puede editar el texto de esta página</string>
+    <string name="edit_grouped_refused">Algunos grupos se dejaron como estaban: %1$s</string>
+    <string name="edit_fonts_in_document">En este documento</string>
+    <string name="edit_fonts_none">No hay fuentes incrustadas reutilizables en esta página</string>
+    <string name="edit_font_from_file">Añadir fuente desde archivo…</string>
+    <string name="edit_font_imported">Aplicada %1$s</string>
+    <string name="edit_spacing">Espaciado</string>
+    <string name="edit_line_spacing">Interlineado</string>
+    <string name="edit_letter_spacing">Espaciado entre letras</string>
+    <string name="edit_points">%1$s pt</string>
+    <string name="edit_spacing_less">Reducir %1$s</string>
+    <string name="edit_spacing_more">Aumentar %1$s</string>
+    <string name="edit_overflow">Este texto ya no cabe donde estaba</string>
+    <string name="objects_select">Seleccionar</string>
+    <string name="objects_hint">Toque objetos para seleccionarlos o arrastre un recuadro a su alrededor</string>
+    <string name="objects_select_all">Seleccionar todo</string>
+    <string name="objects_copy">Copiar</string>
+    <plurals name="objects_cut">
+        <item quantity="one">%1$d objeto cortado</item>
+        <item quantity="other">%1$d objetos cortados</item>
+    </plurals>
+    <string name="objects_paste">Pegar</string>
+    <plurals name="objects_selected">
+        <item quantity="one">%1$d objeto seleccionado · arrástrelo para moverlo</item>
+        <item quantity="other">%1$d objetos seleccionados · arrástrelos para moverlos</item>
+    </plurals>
+    <plurals name="objects_copied">
+        <item quantity="one">%1$d objeto copiado</item>
+        <item quantity="other">%1$d objetos copiados</item>
+    </plurals>
+    <plurals name="objects_pasted">
+        <item quantity="one">%1$d objeto pegado</item>
+        <item quantity="other">%1$d objetos pegados</item>
+    </plurals>
+    <string name="objects_cut_label">Cortar</string>
 </resources>

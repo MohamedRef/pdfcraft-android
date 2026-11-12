@@ -13118,3 +13118,105 @@ fn grouped_existing_thai_body_edits_saves_reopens_and_undo_restores_original_gly
     assert_eq!(page_text(&mut a, reopened), [new, old]);
     assert_eq!(ok(&mut a, "content_list", json!({"doc":reopened}))["count"], 0, "editing existing text must not create Add Text objects");
 }
+
+/// Android adaptation (#334): a link to a page of another PDF is written as a relative GoToR
+/// action, listed with its file and page, survives a save, and `link_open` follows it within the
+/// root. Paths that are absolute, climb out, are URLs or are not PDFs are refused when written.
+#[test]
+fn a_new_link_to_another_pdf_is_a_relative_gotor_that_link_open_follows() {
+    let (_base, root) = sandbox("gotor-write");
+    std::fs::write(root.join("notes.pdf"), fixture(3)).unwrap();
+    std::fs::write(root.join("Résumé.pdf"), fixture(2)).unwrap();
+    std::fs::write(root.join("source.pdf"), fixture(1)).unwrap();
+    let mut a = auto(&root);
+    let doc = ok(&mut a, "doc_open", json!({ "path": "source.pdf" }))["doc"].as_u64().unwrap();
+    ok(&mut a, "link_add", json!({ "doc": doc, "page": 1, "rect": [10, 10, 80, 30], "file": "notes.pdf", "to_page": 3 }));
+    ok(&mut a, "link_add", json!({ "doc": doc, "page": 1, "rect": [10, 40, 80, 60], "file": "Résumé.pdf" }));
+    let listed = ok(&mut a, "link_list", json!({ "doc": doc }));
+    assert_eq!(listed["links"][0]["other"], "GoToR");
+    assert_eq!(listed["links"][0]["file"], "notes.pdf");
+    assert_eq!(listed["links"][0]["file_page"], 3);
+    assert_eq!(listed["links"][1]["file"], "Résumé.pdf", "a non-ASCII name reads back from /UF");
+    assert_eq!(listed["links"][1]["file_page"], 1);
+    ok(&mut a, "doc_save", json!({ "doc": doc }));
+    let bytes = std::fs::read(root.join("source.pdf")).unwrap();
+    let text = String::from_utf8_lossy(&bytes);
+    assert!(text.contains("/GoToR") && text.contains("(notes.pdf)") && text.contains("/Filespec"), "{text}");
+
+    let mut b = auto(&root);
+    let reopened = ok(&mut b, "doc_open", json!({ "path": "source.pdf" }))["doc"].as_u64().unwrap();
+    let opened = ok(&mut b, "link_open", json!({ "doc": reopened, "page": 1, "index": 1 }));
+    assert_eq!(opened["path"], "notes.pdf");
+    assert_eq!(opened["destination_applied"], true);
+    assert_eq!(opened["destination"]["page"], 3);
+    let opened = ok(&mut b, "link_open", json!({ "doc": reopened, "page": 1, "index": 2 }));
+    assert_eq!(opened["path"], "Résumé.pdf");
+
+    // Editing the target: another file, then back to a page of this document.
+    ok(&mut b, "link_edit", json!({ "doc": reopened, "page": 1, "index": 1, "file": "Résumé.pdf", "to_page": 2 }));
+    let listed = ok(&mut b, "link_list", json!({ "doc": reopened }));
+    assert_eq!((&listed["links"][0]["file"], &listed["links"][0]["file_page"]), (&json!("Résumé.pdf"), &json!(2)));
+    ok(&mut b, "link_edit", json!({ "doc": reopened, "page": 1, "index": 1, "to_page": 1 }));
+    let listed = ok(&mut b, "link_list", json!({ "doc": reopened }));
+    assert_eq!(listed["links"][0]["to_page"], 1);
+    assert!(listed["links"][0].get("file").is_none());
+
+    for (file, reason) in [
+        ("", "empty"),
+        ("/etc/notes.pdf", "relative"),
+        ("C:\\notes.pdf", "relative"),
+        ("https://example.org/a.pdf", "relative"),
+        ("../outside/secret.pdf", "climb"),
+        ("sub/../../x.pdf", "climb"),
+        ("notes.txt", ".pdf"),
+        ("no\u{7}tes.pdf", "control"),
+    ] {
+        let e = err(&mut b, "link_add", json!({ "doc": reopened, "page": 1, "rect": [10, 70, 80, 90], "file": file }));
+        assert!(matches!(&e, ToolError::InvalidArgs(m) if m.contains(reason)), "{file:?}: {e:?}");
+    }
+    let e = err(&mut b, "link_add", json!({ "doc": reopened, "page": 1, "rect": [10, 70, 80, 90], "file": "notes.pdf", "url": "https://x.org" }));
+    assert!(matches!(&e, ToolError::InvalidArgs(m) if m.contains("not both")), "{e:?}");
+    let e = err(&mut b, "link_add", json!({ "doc": reopened, "page": 1, "rect": [10, 70, 80, 90], "file": "notes.pdf", "zoom": "fit_width" }));
+    assert!(matches!(&e, ToolError::InvalidArgs(m) if m.contains("zoom")), "{e:?}");
+    assert_eq!(ok(&mut b, "link_list", json!({ "doc": reopened }))["count"], 2, "refused links are not added");
+}
+
+/// Android adaptation (#350): comments put on a named layer carry `/OC` to one optional content
+/// group, listed (and on) in `/OCProperties`, so a reader's Layers panel toggles them; a second
+/// call reuses the group, `layer_set` switches it, and undo takes it all back.
+#[test]
+fn comments_put_on_a_layer_share_one_optional_content_group() {
+    let (_base, root) = sandbox("comments-layer");
+    std::fs::write(root.join("tape.pdf"), fixture(2)).unwrap();
+    let mut a = auto(&root);
+    let doc = ok(&mut a, "doc_open", json!({ "path": "tape.pdf" }))["doc"].as_u64().unwrap();
+    for (page, rect) in [(1, [10, 10, 200, 200]), (1, [10, 300, 60, 340]), (2, [10, 10, 90, 40])] {
+        ok(&mut a, "comment_add", json!({ "doc": doc, "page": page, "type": "rectangle", "rect": rect, "fill": "#000000" }));
+    }
+    let put = ok(&mut a, "comments_to_layer", json!({ "doc": doc, "page": 1, "comments": [1, 2, 2], "layer": " Tape " }));
+    assert_eq!((&put["changed"], &put["layer"]), (&json!(2), &json!("Tape")));
+    ok(&mut a, "comments_to_layer", json!({ "doc": doc, "page": 2, "comments": [1], "layer": "Tape" }));
+    let info = ok(&mut a, "doc_info", json!({ "doc": doc }));
+    assert_eq!(info["layers"], json!([{ "name": "Tape", "visible": true, "initial": true }]), "one layer for both calls");
+
+    // the Layers panel's switch
+    let hidden = ok(&mut a, "layer_set", json!({ "doc": doc, "layer": "Tape", "visible": false }));
+    assert_eq!(hidden["layers"], json!([{ "name": "Tape", "visible": false }]));
+    ok(&mut a, "layer_set", json!({ "doc": doc, "layer": "Tape", "visible": true }));
+
+    ok(&mut a, "doc_save", json!({ "doc": doc }));
+    let text = String::from_utf8_lossy(&std::fs::read(root.join("tape.pdf")).unwrap()).into_owned();
+    assert!(text.contains("/OCProperties") && text.contains("/OCG") && text.matches("/OC ").count() >= 3, "{text}");
+
+    for (args, reason) in [
+        (json!({ "doc": doc, "page": 1, "comments": [9], "layer": "Tape" }), "no comment 9"),
+        (json!({ "doc": doc, "page": 1, "comments": [1], "layer": "   " }), "layer name"),
+        (json!({ "doc": doc, "page": 1, "comments": [], "layer": "Tape" }), "1 to 1000"),
+    ] {
+        let e = err(&mut a, "comments_to_layer", args);
+        assert!(matches!(&e, ToolError::InvalidArgs(m) | ToolError::Failed(m) if m.contains(reason)), "{e:?}");
+    }
+    ok(&mut a, "edit_undo", json!({ "doc": doc }));
+    ok(&mut a, "edit_undo", json!({ "doc": doc }));
+    assert_eq!(ok(&mut a, "doc_info", json!({ "doc": doc }))["layers"], json!([]), "undo removes the layer");
+}
