@@ -2432,6 +2432,8 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     val redact = io.github.artcraftandroid.pdfcraft.ui.viewer.RedactState()
     /** Compare files: the older document and the differences found (#171). */
     val compare = io.github.artcraftandroid.pdfcraft.ui.viewer.CompareState()
+    /** Accessibility: the last check, figures and auto-tag preview (#182). */
+    val accessibility = io.github.artcraftandroid.pdfcraft.ui.viewer.AccessibilityState()
 
     /** A finished job's green banner over the viewer's bar, with Undo. */
     var success by mutableStateOf<SuccessBanner?>(null)
