@@ -2203,9 +2203,9 @@
     <string name="marks_start_number">First page number</string>
     <string name="marks_shrink">Shrink the page so marks don\'t cover it</string>
     <string name="marks_source_text">Text</string>
-    <string name="marks_source_picture">Picture</string>
-    <string name="marks_source_color">Colour</string>
-    <string name="marks_no_picture">No picture chosen</string>
+    <string name="marks_source_picture">Image</string>
+    <string name="marks_source_color">Color</string>
+    <string name="marks_no_picture">No image chosen</string>
     <string name="marks_choose_picture">Choose…</string>
     <string name="marks_watermark_hint">e.g. CONFIDENTIAL</string>
     <string name="marks_scale">Size: %1$d%%</string>
