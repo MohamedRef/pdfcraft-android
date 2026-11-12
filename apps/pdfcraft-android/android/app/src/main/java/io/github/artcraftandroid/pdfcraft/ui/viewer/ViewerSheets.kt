@@ -153,6 +153,7 @@ fun MoreSheet(vm: AppViewModel, doc: OpenDocument) {
             SheetRow(LucideIcons.Glasses, stringResource(R.string.ocr_review_title),
                 { ctl.sheet = ViewerSheet.OcrConfidence }, chevron = true)
             SheetRow(LucideIcons.SquareDashed, stringResource(R.string.redact_title), { vm.openRedact(doc) }, chevron = true)
+            SheetRow(LucideIcons.GitCompare, stringResource(R.string.compare_with_older), { close(); vm.startCompare(doc) })
             SheetRow(LucideIcons.Combine, stringResource(R.string.common_tool_combine), { close(); vm.openCombine(doc) })
             SheetRow(LucideIcons.FileLock2, stringResource(R.string.common_tool_set_password), { close(); vm.openProtect(doc) })
             SheetRow(LucideIcons.BrushCleaning, stringResource(R.string.hidden_title), { ctl.sheet = ViewerSheet.HiddenInfo }, chevron = true)

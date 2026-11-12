@@ -13,13 +13,14 @@ import java.util.concurrent.Executors
 internal enum class DiagArea(val tag: String, val issues: String) {
     App("app", "lifecycle, memory trims"),
     Open("open", "#211 #212 #234 #235 #317"),
-    Render("render", "#236"),
-    Ink("ink", "#128"),
+    Render("render", "#99 #236"),
+    Ink("ink", "#74 #75 #76 #81 #84 #85 #128"),
     Save("save", "#97 #101-#104"),
     Scan("scan", "#286-#307"),
     Memory("memory", "#212 #92"),
     Tool("tool", "#96 #113, slow or failed engine tools"),
     Error("error", "#114, any failure"),
+    Viewer("viewer", "#152 #153 #155 #157 #184 #198 #203 #204 #327"),
 }
 
 /**

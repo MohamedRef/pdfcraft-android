@@ -37,10 +37,8 @@ internal class RenderFailures {
         return wait
     }
 
-    /** A render of [key] succeeded: it starts afresh. */
-    fun succeeded(key: ImageKey) {
-        entries.remove(key)
-    }
+    /** A render of [key] succeeded: it starts afresh. Returns how many tries had failed before (0 for none). */
+    fun succeeded(key: ImageKey): Int = entries.remove(key)?.count ?: 0
 
     /** The keys that may not be rendered at [now]. */
     fun blocked(now: Long): Set<ImageKey> = entries.filterValues { now < it.retryAt }.keys

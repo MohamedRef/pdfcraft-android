@@ -144,4 +144,21 @@
         <item quantity="one">%1$d fausse biffure possible :</item>
         <item quantity="other">%1$d fausses biffures possibles :</item>
     </plurals>
+    <string name="compare_title">Comparer des fichiers</string>
+    <string name="compare_about">Voir ce qui a changé entre deux versions d’un PDF</string>
+    <string name="compare_with_older">Comparer avec une version antérieure</string>
+    <string name="compare_busy">Comparaison…</string>
+    <string name="compare_against">Modifications depuis %1$s</string>
+    <string name="compare_identical">Le texte est identique dans les deux</string>
+    <string name="compare_counts">%1$d remplacés · %2$d insérés · %3$d supprimés</string>
+    <string name="compare_mark">Ajouter en commentaires</string>
+    <string name="compare_marked">%1$d commentaires ajoutés</string>
+    <string name="compare_report">Enregistrer le rapport PDF</string>
+    <string name="compare_report_saved">Rapport enregistré</string>
+    <string name="compare_visual">Comparer l’apparence des pages</string>
+    <string name="compare_kind_replaced">Remplacé</string>
+    <string name="compare_kind_inserted">Inséré</string>
+    <string name="compare_kind_deleted">Supprimé</string>
+    <string name="compare_kind_visual">Apparence différente</string>
+    <string name="compare_page">page %1$d</string>
 </resources>

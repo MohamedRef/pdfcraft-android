@@ -112,7 +112,12 @@ data class EditImage(
 )
 
 /** What Edit PDF is doing: picking a paragraph, or placing new text or an image. */
-enum class EditMode { Select, AddText, AddImage }
+enum class EditMode {
+    Select, AddText, AddImage,
+
+    /** Drag a box to make a link; tap a link to change or delete it (#179). */
+    Link,
+}
 
 /** The selection outline and its handles, as the reference draws them. */
 private val SelectionBlue = Color(0xFF448AFF)
@@ -162,6 +167,45 @@ private fun EditToolsBar(vm: AppViewModel, doc: OpenDocument) {
             vm.editMode = if (vm.editMode == EditMode.AddImage) EditMode.Select else EditMode.AddImage
             if (vm.editMode == EditMode.AddImage) vm.tell(imageHint)
         }
+        val linkHint = stringResource(R.string.link_drag_hint)
+        EditBarItem(LucideIcons.Link, stringResource(R.string.edit_link), vm.editMode == EditMode.Link, 64.dp) {
+            vm.editMode = if (vm.editMode == EditMode.Link) EditMode.Select else EditMode.Link
+            if (vm.editMode == EditMode.Link) {
+                vm.editTap(doc, null)
+                vm.tell(linkHint)
+            }
+        }
+    }
+}
+
+/** In Link mode, above the Edit bar: the two whole-document link commands (#179). */
+@Composable
+fun LinkCommandsRow(vm: AppViewModel, doc: OpenDocument) {
+    val c = pdfColors
+    var confirmRemove by remember { mutableStateOf(false) }
+    Row(
+        Modifier.fillMaxWidth().background(c.surface).padding(horizontal = 8.dp),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        androidx.compose.material3.TextButton(onClick = { vm.linksFromUrls(doc) }) {
+            Text(stringResource(R.string.link_from_urls), color = c.accent, fontSize = 14.sp)
+        }
+        androidx.compose.material3.TextButton(onClick = { confirmRemove = true }) {
+            Text(stringResource(R.string.link_remove_all), color = c.red, fontSize = 14.sp)
+        }
+    }
+    if (confirmRemove) {
+        io.github.artcraftandroid.pdfcraft.ui.PdfDialog(
+            onDismiss = { confirmRemove = false },
+            title = stringResource(R.string.link_remove_all_title),
+            confirm = stringResource(R.string.link_remove_all),
+            destructive = true,
+            onConfirm = {
+                confirmRemove = false
+                vm.removeAllLinks(doc)
+            },
+        ) { Text(stringResource(R.string.link_remove_all_body), color = c.textSecondary, fontSize = 15.sp) }
     }
 }
 

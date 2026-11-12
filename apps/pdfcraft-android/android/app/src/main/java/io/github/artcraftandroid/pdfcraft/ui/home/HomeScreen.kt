@@ -271,7 +271,7 @@ private fun HomeTabScreen(vm: AppViewModel, onBrowse: () -> Unit) {
 }
 
 /** A tool that starts by choosing a PDF. */
-enum class FileTool { Edit, ReadAloud, FillSign, Organize, Compress, Export, Protect, Comment, Crop, Ocr, Draw, Split, PageMarks }
+enum class FileTool { Edit, ReadAloud, FillSign, Organize, Compress, Export, Protect, Comment, Crop, Ocr, Draw, Split, PageMarks, Compare }
 
 /** The row of tools under "Start with a tool". */
 @Composable

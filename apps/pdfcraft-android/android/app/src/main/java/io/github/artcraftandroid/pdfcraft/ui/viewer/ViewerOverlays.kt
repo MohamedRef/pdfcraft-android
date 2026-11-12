@@ -184,6 +184,8 @@ fun GoToPageDialog(doc: OpenDocument, onDismiss: () -> Unit) {
     fun go() {
         // a page label first when the document has them (as Acrobat), else the plain number
         val page = if (custom) io.github.artcraftandroid.pdfcraft.ui.pageForEntry(labels, text) else parsePageNumber(text, doc.pageCount)
+        // whether the entry was a page label or a number, and whether it was refused (#203)
+        io.github.artcraftandroid.pdfcraft.engine.Diag.event(io.github.artcraftandroid.pdfcraft.engine.DiagArea.Viewer, "go_to_page", "doc" to doc.diagNumber, "labels" to custom, "ok" to (page != null), "page_count" to doc.pageCount)
         if (page == null) {
             // keep what was typed, and say what is allowed
             wrong = true
