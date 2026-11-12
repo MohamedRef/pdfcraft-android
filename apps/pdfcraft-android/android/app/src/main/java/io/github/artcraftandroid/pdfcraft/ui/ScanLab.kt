@@ -2,6 +2,7 @@ package io.github.artcraftandroid.pdfcraft.ui
 
 import io.github.artcraftandroid.pdfcraft.core.ScanFindOptions
 import io.github.artcraftandroid.pdfcraft.core.ScanFinder
+import io.github.artcraftandroid.pdfcraft.ui.scan.scanTrimJson
 import java.util.Locale
 import org.json.JSONArray
 import org.json.JSONObject
@@ -293,7 +294,7 @@ internal fun scanTestPageJson(
                 .put("quarter_turns", it.quarterTurns)
                 .put("noise", it.noise?.takeIf { n -> n.isFinite() }?.let { n -> Math.round(n * 100.0) / 100.0 } ?: JSONObject.NULL)
                 .put("flatten_check", it.flattenCheck?.let(::scanFlattenCheckJson) ?: JSONObject.NULL)
-                .put("flatten_trim", it.trim?.let(io.github.artcraftandroid.pdfcraft.ui.scan::scanTrimJson) ?: JSONObject.NULL)
+                .put("flatten_trim", it.trim?.let(::scanTrimJson) ?: JSONObject.NULL)
                 .put(
                     "orientation",
                     it.orientation?.let { o ->
