@@ -3,12 +3,17 @@
 //! ```text
 //! cargo run --release -p pdfcraft-scan --features synth --bin scan-eval -- \
 //!     (--synthetic N [--seed S] [--size WxH] | <folder>) \
-//!     [--finder auto|network|lines|off] [--no-refine] \
+//!     [--finder auto|network|lines|off] [--no-refine] [--unchecked] \
 //!     [--json out.json] [--md out.md] [--baseline base.json] [--contact-sheet <folder>]
 //! ```
 //!
 //! `<folder>` is a test set: `<name>.jpg` with `<name>.json` (`corners`, `kind`, `paper`), looked
-//! for in every subfolder, so an unzipped kept-scans export from the phone is one as it stands.
+//! for in every subfolder. An unzipped kept-scans export from the phone has that shape, but its
+//! figures mean something only once someone has checked the corners of its pages and set
+//! `"checked": true` in their page files (#425): pages the app wrote are left out until then
+//! (`--unchecked` measures them anyway). Pages made by a low-light merge, halves of a book spread
+//! and pages of discarded scans are always left out, being wrong as detection tests by
+//! construction. The report says how many were left out and why (`eval_set`).
 //! The report has a table per kind (median, mean and 95th percentile of every measure) and the
 //! time of each stage. With `--baseline`, it exits with 1 when a measure's mean got worse than
 //! the baseline report's by more than its tolerance (`eval::METRICS`).
@@ -22,6 +27,7 @@ use std::process::ExitCode;
 
 use pdfcraft_scan::Finder;
 use pdfcraft_scan::eval::{self, Entry, METRICS, Measured, Options, Summary};
+use pdfcraft_scan::eval_set::{self, Loaded, SetOptions};
 use pdfcraft_scan::synth::Kind;
 use serde_json::{Value, json};
 
@@ -32,6 +38,7 @@ struct Args {
     md: Option<PathBuf>,
     baseline: Option<PathBuf>,
     contact_sheet: Option<PathBuf>,
+    set: SetOptions,
 }
 
 enum Source {
@@ -39,12 +46,13 @@ enum Source {
     Folder(PathBuf),
 }
 
-const USAGE: &str = "usage: scan-eval (--synthetic N [--seed S] [--size WxH] | <folder>) [--finder auto|network|lines|off] [--no-refine] [--json out.json] [--md out.md] [--baseline base.json] [--contact-sheet <folder>]";
+const USAGE: &str = "usage: scan-eval (--synthetic N [--seed S] [--size WxH] | <folder>) [--finder auto|network|lines|off] [--no-refine] [--unchecked] [--json out.json] [--md out.md] [--baseline base.json] [--contact-sheet <folder>]";
 
 fn parse(mut it: impl Iterator<Item = String>) -> Result<Args, String> {
     let (mut synthetic, mut seed, mut size, mut folder) = (None, 0u64, (800u32, 1066u32), None);
     let mut options = Options::default();
     let (mut json, mut md, mut baseline, mut contact_sheet) = (None, None, None, None);
+    let mut set = SetOptions::default();
     while let Some(arg) = it.next() {
         let mut value = || it.next().ok_or_else(|| format!("{arg} needs a value"));
         match arg.as_str() {
@@ -65,6 +73,7 @@ fn parse(mut it: impl Iterator<Item = String>) -> Result<Args, String> {
                 }
             }
             "--no-refine" => options.refine = false,
+            "--unchecked" => set.unchecked = true,
             "--json" => json = Some(PathBuf::from(value()?)),
             "--md" => md = Some(PathBuf::from(value()?)),
             "--baseline" => baseline = Some(PathBuf::from(value()?)),
@@ -79,48 +88,7 @@ fn parse(mut it: impl Iterator<Item = String>) -> Result<Args, String> {
         (None, Some(dir)) => Source::Folder(dir),
         _ => return Err(USAGE.into()),
     };
-    Ok(Args { source, options, json, md, baseline, contact_sheet })
-}
-
-/// Every `<name>.json` under `dir` with a `<name>.jpg` beside it.
-fn folder_entries(dir: &Path) -> Result<Vec<Entry>, String> {
-    let mut files = Vec::new();
-    let mut stack = vec![dir.to_path_buf()];
-    while let Some(d) = stack.pop() {
-        for item in std::fs::read_dir(&d).map_err(|e| format!("{}: {e}", d.display()))? {
-            let path = item.map_err(|e| e.to_string())?.path();
-            if path.is_dir() {
-                stack.push(path);
-            } else if path.extension().is_some_and(|e| e == "json") && path.with_extension("jpg").is_file() {
-                files.push(path);
-            }
-        }
-    }
-    files.sort();
-    let mut out = Vec::new();
-    for json_path in files {
-        let text = std::fs::read_to_string(&json_path).map_err(|e| format!("{}: {e}", json_path.display()))?;
-        let Ok(v) = serde_json::from_str::<Value>(&text) else {
-            eprintln!("skipped {}: not JSON", json_path.display());
-            continue;
-        };
-        let corners = v["corners"].as_array().filter(|a| a.len() == 8).and_then(|a| {
-            let vals: Vec<f32> = a.iter().filter_map(|x| x.as_f64().map(|f| f as f32)).collect();
-            <[f32; 8]>::try_from(vals).ok()
-        });
-        let photo = std::fs::read(json_path.with_extension("jpg")).map_err(|e| e.to_string())?;
-        let name = json_path.strip_prefix(dir).unwrap_or(&json_path).with_extension("").to_string_lossy().into_owned();
-        out.push(Entry {
-            name,
-            kind: Kind::from_name(v["kind"].as_str().unwrap_or("other")),
-            photo,
-            corners,
-            aspect: v["paper"].as_str().and_then(eval::paper_aspect),
-            focal_35mm: None,
-            page: None,
-        });
-    }
-    Ok(out)
+    Ok(Args { source, options, json, md, baseline, contact_sheet, set })
 }
 
 fn fmt(v: f64) -> String {
@@ -149,10 +117,16 @@ fn kinds_of(measured: &[Measured]) -> Vec<Kind> {
     kinds
 }
 
-fn report(measured: &[Measured], source: &str) -> String {
+fn report(measured: &[Measured], source: &str, left_out: &Loaded) -> String {
     let all: Vec<&Measured> = measured.iter().collect();
     let found = measured.iter().filter(|m| m.detected).count();
     let mut out = format!("## scan-eval: {source}\n\n{} photos; the detector found a page in {found}.\n", measured.len());
+    if !left_out.left_out.is_empty() {
+        let _ = writeln!(out, "\n{} left out, not measured (#425):\n\n| why | n |\n|---|---|", left_out.left_out.len());
+        for (why, n) in left_out.counts().into_iter().filter(|(_, n)| *n > 0) {
+            let _ = writeln!(out, "| {}: {} | {n} |", why.name(), why.why());
+        }
+    }
     table(&mut out, "All", &eval::summary_of(&all));
     for kind in kinds_of(measured) {
         let some: Vec<&Measured> = measured.iter().filter(|m| m.kind == kind).collect();
@@ -174,7 +148,7 @@ fn summary_json(rows: &[(&'static str, Summary)]) -> Value {
     )
 }
 
-fn report_json(measured: &[Measured], source: &str) -> Value {
+fn report_json(measured: &[Measured], source: &str, left_out: &Loaded) -> Value {
     let all: Vec<&Measured> = measured.iter().collect();
     let mut summary = serde_json::Map::new();
     summary.insert("all".into(), summary_json(&eval::summary_of(&all)));
@@ -194,7 +168,15 @@ fn report_json(measured: &[Measured], source: &str) -> Value {
             json!({"name": m.name, "kind": m.kind.name(), "detected": m.detected, "metrics": metrics, "timings_ms": timings})
         })
         .collect();
-    json!({"source": source, "summary": summary, "timings_ms": summary_json(&eval::timing_summary(&all)), "entries": entries})
+    let counts: serde_json::Map<String, Value> = left_out.counts().into_iter().map(|(why, n)| (why.name().to_string(), json!(n))).collect();
+    let names: Vec<Value> = left_out.left_out.iter().map(|(name, why)| json!({"name": name, "why": why.name()})).collect();
+    json!({
+        "source": source,
+        "summary": summary,
+        "timings_ms": summary_json(&eval::timing_summary(&all)),
+        "entries": entries,
+        "left_out": {"total": left_out.left_out.len(), "counts": counts, "entries": names},
+    })
 }
 
 fn baseline_means(path: &Path) -> Result<Vec<(String, f64)>, String> {
@@ -235,14 +217,22 @@ fn contact_sheet(entry: &Entry, m: &Measured, dir: &Path) -> Result<(), String> 
 }
 
 fn run(args: &Args) -> Result<bool, String> {
+    let mut left_out = Loaded::default();
     let (entries, source): (Box<dyn Iterator<Item = Entry>>, String) = match &args.source {
         Source::Synthetic { n, seed, width, height } => {
             (Box::new(eval::synthetic(*n, *seed, *width, *height)), format!("{n} drawn photos, {width}×{height}, seeds from {seed}"))
         }
-        Source::Folder(dir) => (
-            Box::new(folder_entries(dir)?.into_iter()),
-            format!("folder {}", dir.file_name().map_or_else(String::new, |n| n.to_string_lossy().into_owned())),
-        ),
+        Source::Folder(dir) => {
+            let loaded = eval_set::load_folder(dir, args.set)?;
+            for (name, why) in &loaded.left_out {
+                eprintln!("{name}: left out ({})", why.name());
+            }
+            left_out.left_out = loaded.left_out;
+            (
+                Box::new(loaded.entries.into_iter()),
+                format!("folder {}", dir.file_name().map_or_else(String::new, |n| n.to_string_lossy().into_owned())),
+            )
+        }
     };
     if let Some(dir) = &args.contact_sheet {
         std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
@@ -256,13 +246,13 @@ fn run(args: &Args) -> Result<bool, String> {
         eprintln!("{}: iou {} corner_err_max {}", m.name, fmt(m.get("iou")), fmt(m.get("corner_err_max")));
         measured.push(m);
     }
-    let md = report(&measured, &source);
+    let md = report(&measured, &source, &left_out);
     println!("{md}");
     if let Some(path) = &args.md {
         std::fs::write(path, &md).map_err(|e| e.to_string())?;
     }
     if let Some(path) = &args.json {
-        let text = serde_json::to_string_pretty(&report_json(&measured, &source)).map_err(|e| e.to_string())?;
+        let text = serde_json::to_string_pretty(&report_json(&measured, &source, &left_out)).map_err(|e| e.to_string())?;
         std::fs::write(path, text).map_err(|e| e.to_string())?;
     }
     let Some(path) = &args.baseline else { return Ok(true) };

@@ -282,7 +282,8 @@ private fun shares(values: FloatArray): JSONArray = JSONArray().also { out ->
 /**
  * A kept page's facts as JSON. The first five keys are the scan test set's own (#288): `corners`
  * are the page's corners as the person left them, as 8 shares of the upright photo, which become
- * ground truth once someone has checked them. The rest says how the app got there: what it found
+ * ground truth once someone has checked them and set `checked` to true (#425; `scan-eval` leaves
+ * the page out until then). The rest says how the app got there: what it found
  * by itself, the look and options in force, and the page it made ([output] is its file's name).
  */
 internal fun scanTestPageJson(
@@ -317,6 +318,8 @@ internal fun scanTestPageJson(
 ): String {
     val page = JSONObject()
         .put("corners", shares(corners)).put("kind", "other").put("paper", "unknown").put("curved", false).put("notes", "")
+        // #425: the corners are ground truth only once someone has looked at them and set this to true
+        .put("checked", false)
         .put("app", app).put("outcome", if (saved) "saved" else "discarded")
         .put("found", found?.let(::shares) ?: JSONObject.NULL)
         .put(

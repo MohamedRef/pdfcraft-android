@@ -83,7 +83,7 @@ The zip also holds `diagnostics.txt`, the diagnostics log as **Share diagnostics
 ```json
 {
  "corners": [0.11, 0.08, 0.93, 0.10, 0.95, 0.91, 0.07, 0.89],
- "kind": "other", "paper": "unknown", "curved": false, "notes": "",
+ "kind": "other", "paper": "unknown", "curved": false, "notes": "", "checked": false,
  "app": "0.0.26-beta (26001)",
  "outcome": "saved",
  "found": [0.11, 0.08, 0.93, 0.10, 0.95, 0.90, 0.07, 0.89],
@@ -122,7 +122,9 @@ The zip also holds `diagnostics.txt`, the diagnostics log as **Share diagnostics
 
 The first five keys are the scan test set's format (#288, section 1), so a kept scan is a test
 set entry as it stands. `corners` are where the person left the corners: 8 shares of the upright
-photo, top-left, top-right, bottom-right, bottom-left. `found` is what the app found by itself,
+photo, top-left, top-right, bottom-right, bottom-left. `checked` is always written `false`: the
+corners become ground truth only once someone has looked at them on the photo and set it to `true`
+(#425), and `scan-eval` leaves the page out of its measures until then. `found` is what the app found by itself,
 or `null`. `outcome` is `saved` or `discarded`; a discarded page has no `look`, `strength` or
 `result`. `preview` is the last preview the scan screen made of the page before it was saved
 (#301): `shown` is false when none was (the option off, or Save tapped before it was ready),
