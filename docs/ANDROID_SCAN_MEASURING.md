@@ -162,8 +162,47 @@ How to read it:
   picture region as lines too (its known gap in [ANDROID_SCAN_BLOCKS.md](ANDROID_SCAN_BLOCKS.md)).
   Book pages are at about 13 px.
 
+## The CI gate (`tests_gate.rs`)
+
+A test of the scan crate, so it runs in CI's "Rust engine and provenance" job with the others:
+40 drawn photos (seeds 288–327, the six kinds in turn) go through the pipeline, and a summary of
+each gated measure must stay within its limit. Each limit is a little looser than what the
+pipeline measured on these photos when the gate was set. A change that makes a measure better
+should tighten its limit in the same pull request; one that makes it worse fails the gate.
+
+| Measure | Over the 40 photos | Limit | Measured when set |
+|---|---|---|---|
+| `iou` | median | ≥ 0.995 | 0.99976 |
+| `no_touch` | share | ≥ 0.80 | 0.900 (36 of 40) |
+| `corner_err_max` | median | ≤ 0.002 | 0.00010 |
+| `aspect_err` | median | ≤ 0.005 | 0.00009 |
+| `paper_white` | mean | ≥ 0.79 | 0.820 |
+| `illum_spread` | mean | ≤ 0.15 | 0.133 |
+| `ink_contrast` | mean | ≥ 240 | 250.0 |
+| `hue_shift` | mean | ≤ 8.0° | 6.17° |
+| `psnr` | mean | ≥ 15.3 dB | 15.90 dB |
+| `ssim` | mean | ≥ 0.66 | 0.679 |
+| `line_straightness` | median | ≤ 3.5 px | 2.66 px |
+
+A measure taken on fewer than 36 of the 40 photos fails too. A second test runs the same photos
+with the detector switched off (the page is the whole photo) and checks that `iou`, `no_touch`,
+`corner_err_max` and `aspect_err` all fail: with nothing found, they were 0.41, 0, 0.27 and 0.06.
+
+Where it departs from the issue (#288, section 5):
+
+- The photos are 600 × 800, not 800 × 1066. The time goes into the page the app makes, whose
+  size comes from the paper size and not from the photo, so a bigger photo adds little but
+  drawing time; 600 × 800 keeps the drawing short.
+- The found page is not given its look (`Options::look_found_page`): the clean-up measures come
+  from the page made with the true corners either way, and the look is the slowest stage.
+- The scan crate is built at `opt-level = 2` in the dev profile (root `Cargo.toml`), as its
+  dependencies already were. At 1, the gate took over a minute on four cores.
+
+Time: the two gate tests took 39 s together on the 4-core desktop this was written on, with no
+other test running; the whole scan crate's tests 73 s. CI's runner also has four cores, and runs
+the gate beside the crate's other tests.
+
 ## Still to do in #288
 
-- The CI gate on 40 drawn photos.
 - The SmartDoc script.
 - `scan-eval --reference` (section 8): `scan_reference look` does that job and stays.
