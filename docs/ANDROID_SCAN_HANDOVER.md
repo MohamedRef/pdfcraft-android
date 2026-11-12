@@ -16,7 +16,7 @@ a phone yet.** Every number in the scanner's documents was measured on a desktop
 | Issue | What | State | Merged in | What is left |
 |---|---|---|---|---|
 | #287 | `pdfcraft-scan` crate, one pass from photo to page | Done, closed | #331, #346 | |
-| #288 | Measuring: harness, drawn pages, test set | Part | #346, #367 | The synthetic generator, the metrics module (`line_straightness` first: #302 waits for it), the `scan-eval` runner, the CI gate, the SmartDoc script |
+| #288 | Measuring: harness, drawn pages, test set | Part | #346, #367, #382, #386 | The `scan-eval` runner, the CI gate, the SmartDoc script. The drawn photos (`synth`) and the metrics blocks are in; see [ANDROID_SCAN_MEASURING.md](ANDROID_SCAN_MEASURING.md) |
 | #289 | Model files: pinned, loaded, exported | Part | #360, #365, #370 | `scan_model_states`, a Models list in settings, optional packs, copying a *changed* model on update (section 6) |
 | #290 | Page found by a network | Core done | #360 | Figures on the owner's set; phone time. Known: wrong and accepted on 2 of the 10 reference photos, nothing found on 2 |
 | #291 | Edges refined at full size | Core done | #356 | A corner outside the photo is not accepted; the owner's set; phone time |
@@ -30,7 +30,7 @@ a phone yet.** Every number in the scanner's documents was measured on a desktop
 | #299 | Auto look, part 2 | Part | #373 | The block photo mask, document-type presets and `scan_classify`, the recognition-error check |
 | #300 | Black and white, 1 bit | Core done | #359 | Speckle on textured grey fills; photographs wider than a quarter of the page are not dithered; 0.85 s for 12 megapixels on a desktop |
 | #301 | Filter screen | Preview on the scan screen | #376, #380 | A look per page, strength, looks strip, compare, apply to all, the session's new fields, cancel. Preview speed and sharpness on a phone |
-| #302 | Flatten curved pages | Switch only | #365 | The automatic mode and its quality guard (need #288's `line_straightness`), border trim, a switch per page |
+| #302 | Flatten curved pages | Switch, and automatic mode with its quality guard as a testing option | #365, #385 | Choosing the automatic mode's default from real photos; border trim; a switch per page; phone timings |
 | #303 | Book mode | Part A core done | #393 | Phone checks (10 spreads in both orders); the switch in the in-app camera with a guide (#294); a note on the crop screen; `even_edges` only if photos show a gutter band; part B (text-line flattening) |
 | #304 | "Max quality" (DocRes) | **Not started** | | Feasibility first, as the issue says |
 | #305, #306 | Research: moiré; fingers, glare | **Not started** | | |
@@ -54,8 +54,8 @@ Before starting an item in the table, look here: part of it may exist.
   its log fields and its kept-scan fields (section 3).
 - **Parked, never compiled or reviewed** (branch `draft/scan-app-blocks`, folder
   `docs/scan-blocks/`, whose README says what state each file is in): Kotlin drafts for #301,
-  #295, #307 and the pure half of #294, the drawn-photo generator for #288 with one test still
-  failing, and research notes for #304, #305 and #306. Take what is useful from there and
+  #295, #307 and the pure half of #294, a second drawn-photo generator for #288 (superseded by
+  `synth.rs` in the crate), and research notes for #304, #305 and #306. Take what is useful from there and
   review it as new code; that branch is not for merging.
 
 These came from one run of separate workers on 12 November that the owner stopped part-way.
@@ -63,7 +63,7 @@ Every threshold in them is the issue's starting value or was set on pages drawn 
 
 One document per feature says how it works, what was measured and what was not:
 `ANDROID_SCAN_AUTO_LOOK.md`, `_BLACK_WHITE.md`, `_DETAIL.md`, `_DETECTOR.md`, `_EDGES.md`,
-`_BOOK.md`, `_FLATTEN.md`, `_PREVIEW.md`, `_PROPORTIONS.md`, `_TESTING.md`, `_UPRIGHT.md` (all
+`_BOOK.md`, `_FLATTEN.md`, `_MEASURING.md`, `_PREVIEW.md`, `_PROPORTIONS.md`, `_TESTING.md`, `_UPRIGHT.md` (all
 `docs/ANDROID_SCAN_…`). Read the one for a feature before changing it.
 
 ## 2. How a scan goes through the code today
