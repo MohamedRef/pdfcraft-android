@@ -65,6 +65,10 @@ pub struct ScanPageRequest {
     /// choice (#288).
     #[uniffi(default = false)]
     pub side_proportions: bool,
+    /// Turn the page the right way up when the orientation classifier is sure which way that is
+    /// (#339). A whole photo in the Original look is never turned.
+    #[uniffi(default = true)]
+    pub upright: bool,
 }
 
 /// The standard paper a page was matched to.
@@ -113,7 +117,28 @@ pub struct ScanPageResult {
     /// How far from flat the network found the page, as a share of its diagonal (0 when it was
     /// not asked).
     pub bend: f32,
+    /// The quarter turns clockwise the page was given to stand upright (#339): 0 when it was not
+    /// asked, already upright, or the classifier was not sure.
+    pub quarter_turns: u8,
+    /// What the orientation classifier made of the page; `None` when it was not asked or its
+    /// model file is not installed.
+    pub orientation: Option<ScanOrientation>,
     pub timings: Vec<ScanTiming>,
+}
+
+/// What the orientation classifier made of a page (#339).
+#[derive(Debug, Clone, Copy, PartialEq, uniffi::Record)]
+pub struct ScanOrientation {
+    /// The quarter turns clockwise that would put the page upright (0–3), acted on or not.
+    pub quarter_turns: u8,
+    /// The share of the vote that answer got (0–1; clean print gives about 0.85).
+    pub confidence: f32,
+    /// The share of the tiles looked at that gave that answer themselves.
+    pub agreement: f32,
+    /// How many tiles of the page were looked at (0 for an empty page).
+    pub tiles: u8,
+    /// Sure enough to act on.
+    pub sure: bool,
 }
 
 /// A page's corners after a closer look at the photo (#291).
@@ -398,6 +423,7 @@ pub(crate) fn process_in(root: &Path, request: &ScanPageRequest) -> Result<ScanP
         snap_paper: request.snap_paper,
         flatten: request.flatten,
         side_proportions: request.side_proportions,
+        upright: request.upright,
         ..PageRequest::new(&bytes, corners)
     })
     .map_err(|e| MobileError::Command(e.to_string()))?;
@@ -434,6 +460,14 @@ pub(crate) fn process_in(root: &Path, request: &ScanPageRequest) -> Result<ScanP
         focal_mismatch: page.focal_mismatch,
         flattened: page.flattened,
         bend: page.bend,
+        quarter_turns: page.quarter_turns,
+        orientation: page.orientation.map(|found| ScanOrientation {
+            quarter_turns: found.quarter_turns,
+            confidence: found.confidence,
+            agreement: found.agreement,
+            tiles: found.tiles,
+            sure: found.sure,
+        }),
         timings: page.timings.into_iter().map(|(stage, ms)| ScanTiming { stage: stage.into(), ms }).collect(),
     })
 }
@@ -460,6 +494,7 @@ mod tests {
             snap_paper: true,
             flatten: false,
             side_proportions: false,
+            upright: false,
         }
     }
 
@@ -682,6 +717,32 @@ mod tests {
         assert!(find_in(&other, &shot.to_string_lossy(), ScanFindOptions::default()).is_err());
         std::fs::remove_dir_all(root).unwrap();
         std::fs::remove_dir_all(other).unwrap();
+    }
+
+    /// A page photographed sideways comes out upright, and says so (#339).
+    #[test]
+    fn a_sideways_page_is_turned_upright() {
+        let root = temp("upright");
+        let shot = root.join("sideways.png");
+        let drawn = image::load_from_memory(include_bytes!("../scan/tests/data/upright-arabic.png")).unwrap().to_rgb8();
+        let drawn = pdfcraft_scan::Rgb { width: drawn.width(), height: drawn.height(), data: drawn.into_raw() };
+        // lying on its right side: turned clockwise once
+        let sideways = pdfcraft_scan::turned(&drawn, 1);
+        image::RgbImage::from_raw(sideways.width, sideways.height, sideways.data).unwrap().save(&shot).unwrap();
+        let whole = vec![0.01, 0.01, 0.99, 0.01, 0.99, 0.99, 0.01, 0.99];
+        let ask = |upright, out: &str| {
+            process_in(&root, &ScanPageRequest { corners: whole.clone(), snap_paper: false, upright, ..request(&shot, &root.join(out)) }).unwrap()
+        };
+        let (kept, turned) = (ask(false, "kept"), ask(true, "turned"));
+        assert_eq!((kept.quarter_turns, kept.orientation), (0, None));
+        assert!(kept.width > kept.height);
+        let found = turned.orientation.expect("assets/models/scan-upright.onnx is missing or is not the pinned file");
+        assert_eq!((turned.quarter_turns, found.quarter_turns, found.sure), (3, 3, true), "{found:?}");
+        assert!(found.confidence >= 0.7 && found.agreement >= 0.8 && found.tiles >= 4, "{found:?}");
+        assert_eq!((turned.width, turned.height), (kept.height, kept.width));
+        let stages: Vec<_> = turned.timings.iter().map(|t| t.stage.as_str()).collect();
+        assert_eq!(stages, ["scan_decode", "scan_rectify", "scan_upright", "scan_look", "scan_encode"]);
+        std::fs::remove_dir_all(root).unwrap();
     }
 
     /// A page asked to be flattened goes through the flattening network (#302).

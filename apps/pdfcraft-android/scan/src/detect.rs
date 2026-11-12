@@ -112,13 +112,17 @@ pub(crate) fn area_weights(n_in: usize, n_out: usize) -> Vec<(usize, Vec<f32>)> 
 /// `photo` shrunk so its longer side is `side` at most (each pixel the average of what it
 /// covers), and the scale it was shrunk by.
 pub(crate) fn shrink(photo: &Photo, side: usize) -> (Picture, f64) {
-    let (w, h) = (photo.width as usize, photo.height as usize);
+    shrink_rgb(&photo.rgb, photo.width as usize, photo.height as usize, side)
+}
+
+/// [`shrink`] for any `w` × `h` picture of RGB bytes.
+pub(crate) fn shrink_rgb(pixels: &[u8], w: usize, h: usize, side: usize) -> (Picture, f64) {
     let scale = (side as f64 / w.max(h) as f64).min(1.0);
     let (ow, oh) = (((w as f64 * scale).round() as usize).max(1), ((h as f64 * scale).round() as usize).max(1));
     let (xs, ys) = (area_weights(w, ow), area_weights(h, oh));
     // rows first: h × ow
     let mut rows = vec![0f32; h * ow * 3];
-    for (source, out) in photo.rgb.chunks_exact(w * 3).zip(rows.chunks_exact_mut(ow * 3)) {
+    for (source, out) in pixels.chunks_exact(w * 3).zip(rows.chunks_exact_mut(ow * 3)) {
         for ((first, weights), px) in xs.iter().zip(out.chunks_exact_mut(3)) {
             for (i, weight) in weights.iter().enumerate() {
                 let s = &source[(first + i) * 3..(first + i) * 3 + 3];

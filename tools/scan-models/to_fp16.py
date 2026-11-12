@@ -27,7 +27,8 @@ def main():
     rng = np.random.default_rng(0)
     worst = 0.0
     for _ in range(5):
-        feed = {i.name: rng.random(i.shape, dtype=np.float32) for i in full.get_inputs()}
+        # a size the model leaves open (the number of pictures in a batch) is taken as 1
+        feed = {i.name: rng.random([d if isinstance(d, int) else 1 for d in i.shape], dtype=np.float32) for i in full.get_inputs()}
         for a, b in zip(full.run(None, feed), half.run(None, feed)):
             worst = max(worst, float(np.abs(a - b).max()))
     print(f"{target}: largest difference from {source}: {worst:.2e}")

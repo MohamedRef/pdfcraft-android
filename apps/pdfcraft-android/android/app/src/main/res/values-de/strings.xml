@@ -1216,6 +1216,7 @@
     <string name="scan_lab_refine">Kanten am vollen Foto verfeinern</string>
     <string name="scan_lab_perspective">Proportionen aus der Perspektive</string>
     <string name="scan_lab_snap_paper">An Standardpapierformate anpassen</string>
+    <string name="scan_lab_upright">Seiten aufrecht drehen</string>
     <string name="scan_lab_strength">Filterstärke</string>
     <string name="scan_lab_strength_own">Standard</string>
     <string name="scan_lab_options_body">Diese Optionen schalten Teile des Scanners ab oder ersetzen sie durch ihre Vorgänger, um herauszufinden, von welchem Teil ein Problem kommt. Das Protokoll hält für jede Seite fest, was galt.</string>

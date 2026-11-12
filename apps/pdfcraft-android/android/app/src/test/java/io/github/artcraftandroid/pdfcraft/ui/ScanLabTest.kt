@@ -31,6 +31,8 @@ class ScanLabTest {
         assertFalse(lab.copy(perspective = false).asDesigned)
         assertFalse(lab.copy(snapPaper = false).asDesigned)
         assertFalse(lab.copy(strength = 80).asDesigned)
+        assertFalse(lab.copy(upright = false).asDesigned)
+        assertTrue(lab.upright)
     }
 
     @Test
@@ -45,7 +47,7 @@ class ScanLabTest {
     fun optionsComeBackFromThePreferencesAsTheyWere() {
         val all = listOf(
             ScanLab(),
-            ScanLab(keep = true, finder = ScanFinder.NETWORK, refine = false, perspective = false, snapPaper = false, strength = 0),
+            ScanLab(keep = true, finder = ScanFinder.NETWORK, refine = false, perspective = false, snapPaper = false, strength = 0, upright = false),
             ScanLab(finder = ScanFinder.LINES, strength = 100),
             ScanLab(finder = ScanFinder.OFF),
         )
@@ -61,6 +63,8 @@ class ScanLabTest {
         assertEquals(ScanLab(), ScanLab.decode("nonsense;;=;finder=moon;refine=yes;strength=900"))
         // a later version's extra option is passed over
         assertEquals(ScanLab(refine = false), ScanLab.decode("refine=0;colour_space=wide"))
+        // options saved before pages were turned upright (#339) get that as it is meant to be: on
+        assertEquals(ScanLab(keep = true), ScanLab.decode("keep=1;finder=auto;refine=1;perspective=1;snap=1;strength="))
     }
 
     @Test
@@ -69,11 +73,15 @@ class ScanLabTest {
         assertEquals("lines", fields["finder"])
         assertEquals(true, fields["side_proportions"])
         assertEquals(40, fields["strength_override"])
+        assertEquals(true, fields["upright"])
         assertEquals(-1, ScanLab().diag().toMap()["strength_override"])
         for (value in fields.values) assertTrue(value is Boolean || value is Int || (value is String && value.all { it in 'a'..'z' }))
     }
 
-    private val result = ScanTestResult(1654, 2339, "jpeg", 200.0, "a4", "known_focal", focalMismatch = false, flattened = true, bendPct = 0.6912)
+    private val result = ScanTestResult(
+        1654, 2339, "jpeg", 200.0, "a4", "known_focal", focalMismatch = false, flattened = true, bendPct = 0.6912,
+        quarterTurns = 3, orientation = ScanTestOrientation(3, 0.8349, 0.8889, 9, true),
+    )
 
     @Test
     fun aKeptPageSaysWhatTheTestSetNeedsAndHowTheAppGotThere() {
@@ -104,6 +112,17 @@ class ScanLabTest {
         assertEquals("a4", made.getString("paper"))
         assertEquals(0.691, made.getDouble("bend_pct"), 1e-9)
         assertTrue(made.getBoolean("flattened"))
+        // which way up it was found to be, and the turn it was given (#339)
+        assertEquals(3, made.getInt("quarter_turns"))
+        assertEquals(0.835, made.getJSONObject("orientation").getDouble("confidence"), 1e-9)
+        assertEquals(0.889, made.getJSONObject("orientation").getDouble("agreement"), 1e-9)
+        assertEquals(9, made.getJSONObject("orientation").getInt("tiles"))
+        assertTrue(made.getJSONObject("orientation").getBoolean("sure"))
+        assertTrue(json.getJSONObject("options").getBoolean("upright"))
+        // a page the classifier was not asked about
+        val plain = JSONObject(scanTestPageJson("1.0 (1)", true, crop, null, null, "bw", 75, false, ScanLab(upright = false), null, result.copy(quarterTurns = 0, orientation = null)))
+        assertTrue(plain.getJSONObject("result").isNull("orientation"))
+        assertFalse(plain.getJSONObject("options").getBoolean("upright"))
     }
 
     @Test
