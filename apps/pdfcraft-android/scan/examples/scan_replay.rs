@@ -19,6 +19,7 @@
 
 use std::path::{Path, PathBuf};
 
+use pdfcraft_scan::page_kind::{PresetChoice, preset_from_id};
 use pdfcraft_scan::{Finder, Look, PageRequest, Photo, Pyramid, Quad, RefineOptions, detect_with, process_page, refine};
 use serde_json::Value;
 
@@ -159,6 +160,14 @@ fn main() {
             // nor one from before the Auto look sharpened and smoothed (#299)
             sharpen: options["sharpen"].as_u64().map_or(0, |v| v.min(100) as u8),
             denoise: options["denoise"].as_bool().unwrap_or(false),
+            // the kind of document the page was made as (#299): the one the phone used, so a page
+            // the person set by hand is repeated as such; files from before then have none
+            preset: match facts["document_type"]["preset"].as_str().and_then(preset_from_id) {
+                Some(p) => PresetChoice::Fixed(p),
+                None => PresetChoice::Off,
+            },
+            curved_sides: facts["finding"]["curved_sides"].as_u64().map_or(0, |v| v.min(4) as u8),
+            fixed_strength: !options["strength_override"].is_null(),
             ..PageRequest::new(&bytes, left)
         };
         match process_page(&request) {

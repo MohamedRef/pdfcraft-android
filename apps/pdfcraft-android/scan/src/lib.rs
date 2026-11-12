@@ -28,6 +28,7 @@ pub mod metrics_geometry;
 pub mod metrics_tone;
 pub mod models;
 pub mod page;
+pub mod page_kind;
 mod photo;
 pub mod photo_mask;
 pub mod preset;
@@ -71,6 +72,8 @@ mod tests_metrics_compare;
 mod tests_metrics_geometry;
 #[cfg(test)]
 mod tests_metrics_tone;
+#[cfg(test)]
+mod tests_page_kind;
 #[cfg(test)]
 mod tests_photo_mask;
 #[cfg(test)]

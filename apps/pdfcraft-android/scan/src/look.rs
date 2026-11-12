@@ -58,6 +58,8 @@ pub struct LookParams {
     pub sharpen: u8,
     /// Whether Auto smooths the grain of a page that has a lot of it (#299).
     pub denoise: bool,
+    /// Auto keeps the paper's own colour instead of whitening it (a document type's setting, #299).
+    pub keep_paper: bool,
 }
 
 /// A page with its look, and what the look found out about the page on the way.
@@ -71,7 +73,7 @@ pub struct Applied {
 /// Give `page` the `look` at `strength` (0–100), taking it to be at 300 dpi. `None` when the
 /// page's buffer doesn't match its size.
 pub fn apply(page: &Rgb, look: Look, strength: u8) -> Option<Pixels> {
-    apply_with(page, look, &LookParams { strength, threads: 1, dpi: 300.0, sharpen: DEFAULT_SHARPEN, denoise: true })
+    apply_with(page, look, &LookParams { strength, threads: 1, dpi: 300.0, sharpen: DEFAULT_SHARPEN, denoise: true, keep_paper: false })
 }
 
 /// Give `page` the `look`.
@@ -81,7 +83,7 @@ pub fn apply_with(page: &Rgb, look: Look, params: &LookParams) -> Option<Pixels>
 
 /// Give `page` the `look`, and say what the look measured.
 pub fn apply_full(page: &Rgb, look: Look, params: &LookParams) -> Option<Applied> {
-    let LookParams { strength, threads, dpi, sharpen, denoise } = *params;
+    let LookParams { strength, threads, dpi, sharpen, denoise, keep_paper } = *params;
     let Some(engine) = look.engine() else {
         return Some(match look {
             Look::BlackWhite => {
@@ -89,7 +91,10 @@ pub fn apply_full(page: &Rgb, look: Look, params: &LookParams) -> Option<Applied
             }
             _ => {
                 let dpi = if dpi.is_finite() { dpi.clamp(1.0, 2400.0) as u16 } else { 300 };
-                let made = auto(page, &AutoParams { strength, paper: PaperMode::White, threads, sharpen, denoise, dpi })?;
+                let made = auto(
+                    page,
+                    &AutoParams { strength, paper: if keep_paper { PaperMode::Keep } else { PaperMode::White }, threads, sharpen, denoise, dpi },
+                )?;
                 Applied { pixels: Pixels::Rgb(made.rgb.data), noise: Some(made.noise) }
             }
         });
