@@ -2,7 +2,7 @@
 
 use std::sync::{Arc, OnceLock};
 
-use pdfcraft_cos::{SaveOptions, write_incremental};
+use pdfcraft_cos::{SaveOptions, write_incremental, write_incremental_shared};
 use pdfcraft_render::{DocInfo, RenderConfig, RenderPool};
 
 use crate::history::Editor;
@@ -893,8 +893,9 @@ fn write_display_parts(
     display: &pdfcraft_cos::Document,
     signatures: &mut [SignatureInfo],
 ) -> (pdfcraft_cos::PdfBytes, Option<String>) {
-    match write_incremental(display, &SaveOptions::default()) {
-        Ok(written) => (Arc::new(written), None),
+    // Shared, not copied (#234): a mapped working copy is extended by the display revision.
+    match write_incremental_shared(display, &SaveOptions::default()) {
+        Ok(written) => (written, None),
         Err(err) => {
             for sig in signatures.iter_mut() {
                 sig.verdict_shown = false;
@@ -982,7 +983,7 @@ pub fn display_bytes_for(bytes: pdfcraft_cos::PdfBytes, password: Option<&str>) 
         if !(added || drawn) {
             return None;
         }
-        write_incremental(&display, &SaveOptions::default()).ok().map(|v| Arc::new(v) as pdfcraft_cos::PdfBytes)
+        write_incremental_shared(&display, &SaveOptions::default()).ok()
     })
     .ok()
     .flatten()
