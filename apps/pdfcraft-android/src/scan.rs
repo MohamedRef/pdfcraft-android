@@ -107,6 +107,10 @@ pub struct ScanPageRequest {
     /// How many sides of the page its edge detection found curved (0–4), a book page's sign (#299).
     #[uniffi(default = 0)]
     pub curved_sides: u8,
+    /// A dark band down one long side counts as a book's gutter only when it runs the whole
+    /// length, stays narrow and fades inward (#427); false is the first rule (#299, a testing choice).
+    #[uniffi(default = true)]
+    pub strict_gutter: bool,
     /// The strength was set by hand (a testing option): a document type does not change it.
     #[uniffi(default = false)]
     pub fixed_strength: bool,
@@ -137,8 +141,14 @@ pub struct ScanPageKind {
     pub photo_share: f32,
     /// Median stroke width in millimetres; -1 when there is no ink.
     pub stroke_mm: f32,
-    pub glare_share: f32,
+    /// Share of near-white pixels before the light is evened (not glare: white paper reaches it, #427).
+    pub bright_share: f32,
+    /// The gutter rule in force said this page has a gutter's dark band.
     pub gutter_band: bool,
+    /// What the first gutter rule (#299) says, whichever rule is in force (#427).
+    pub gutter_loose: bool,
+    /// Share of the darker long side's length along which its strip is dark (0–1, #427).
+    pub gutter_cover: f32,
     pub whole_photo: bool,
 }
 
@@ -157,8 +167,10 @@ fn kind_of(kind: &PageKind) -> ScanPageKind {
         colour_ink_share: f.colour_ink_share as f32,
         photo_share: f.photo_share as f32,
         stroke_mm: f.stroke_mm.map_or(-1.0, |v| v as f32),
-        glare_share: f.glare_share as f32,
+        bright_share: f.bright_share as f32,
         gutter_band: f.gutter_band,
+        gutter_loose: f.gutter_loose,
+        gutter_cover: f.gutter_cover as f32,
         whole_photo: kind.whole_photo,
     }
 }
@@ -578,6 +590,7 @@ fn page_request<'a>(request: &ScanPageRequest, photo: &'a [u8], corners: [f32; 8
         denoise: request.denoise,
         preset: preset_choice(&request.preset),
         curved_sides: request.curved_sides.min(4),
+        strict_gutter: request.strict_gutter,
         fixed_strength: request.fixed_strength,
         max_side,
         keep_paper: match request.paper.as_str() {
@@ -1191,6 +1204,7 @@ mod tests {
             denoise: true,
             preset: "off".into(),
             curved_sides: 0,
+            strict_gutter: true,
             fixed_strength: false,
             paper: "auto".into(),
         }

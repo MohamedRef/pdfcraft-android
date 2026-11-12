@@ -109,6 +109,8 @@ internal fun scanPageRequest(
     denoise = lab.denoise,
     preset = scanPresetAsk(preset, lab.presets),
     curvedSides = curvedSides.coerceIn(0, 4).toUByte(),
+    // a book's gutter must run the whole side, stay narrow and fade inward (#427)
+    strictGutter = lab.strictGutter,
     fixedStrength = scanFixedStrength(lab, strength),
 )
 }

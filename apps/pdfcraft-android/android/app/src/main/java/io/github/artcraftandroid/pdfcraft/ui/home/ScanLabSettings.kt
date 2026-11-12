@@ -135,6 +135,9 @@ internal fun ScanLabSettings(vm: AppViewModel) {
     SheetRow(null, stringResource(R.string.scan_lab_presets), { lab.update(o.copy(presets = !o.presets)) }) {
         PdfSwitch(o.presets, { lab.update(o.copy(presets = it)) })
     }
+    SheetRow(null, stringResource(R.string.scan_lab_strict_gutter), { lab.update(o.copy(strictGutter = !o.strictGutter)) }) {
+        PdfSwitch(o.strictGutter, { lab.update(o.copy(strictGutter = it)) })
+    }
     // the slider's strength counts as set by hand, and sharpening scales the type's (#424)
     SheetRow(null, stringResource(R.string.scan_lab_page_strength), { lab.update(o.copy(pageStrength = !o.pageStrength)) }) {
         PdfSwitch(o.pageStrength, { lab.update(o.copy(pageStrength = it)) })

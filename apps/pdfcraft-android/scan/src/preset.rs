@@ -49,10 +49,17 @@ pub struct PageFeatures {
     pub stroke_mm: Option<f64>,
     /// How many of the four sides are curved (from the page's edge detection).
     pub curved_sides: u8,
-    /// A dark band runs down one long side (a book's gutter), see `gutter_band`.
+    /// A dark band runs down one long side (a book's gutter), by the rule in force: the strict
+    /// rule of `gutter_reading` (#427), or the first rule (`gutter_band`) when that testing option
+    /// is off. This is the one `classify` reads.
     pub gutter_band: bool,
-    /// Share of pixels with all three channels at `GLARE_LEVEL` or more.
-    pub glare_share: f64,
+    /// What the first rule (`gutter_band`, #299) says, kept for the log whichever rule is in force.
+    pub gutter_loose: bool,
+    /// Share of the dark long side's length along which its strip is dark (0–1; see `GutterReading`).
+    pub gutter_cover: f64,
+    /// Share of pixels with all three channels at `BRIGHT_LEVEL` or more, before the light is
+    /// evened. Not a glare measure: white paper in good light reaches it (#427). No rule reads it.
+    pub bright_share: f64,
 }
 
 /// The clean-up settings for one preset.
@@ -137,8 +144,8 @@ const WHITE: f64 = 255.0;
 const INK_LUMA: f64 = 0.5 * WHITE;
 /// A coloured ink pixel has (max − min) / 255 over this.
 const COLOUR_CHROMA: f64 = 0.15;
-/// Glare: a pixel with all three channels at this level or more is saturated.
-const GLARE_LEVEL: u8 = 250;
+/// Bright: a pixel with all three channels at this level or more is near white.
+const BRIGHT_LEVEL: u8 = 250;
 /// Millimetres in an inch: converts pixels to millimetres at a dpi.
 const MM_PER_INCH: f64 = 25.4;
 
@@ -148,6 +155,17 @@ const MM_PER_INCH: f64 = 25.4;
 const GUTTER_STRIP_SHARE: f64 = 0.06;
 /// The strip's mean must be this share under the page's median luminance.
 const GUTTER_DARK_SHARE: f64 = 0.12;
+/// Strict rule (#427): the long side is cut into this many equal pieces along its length.
+const GUTTER_SEGMENTS: usize = 10;
+/// Strict rule: the strip must be dark in at least this many of the pieces (the whole length,
+/// allowing one piece for a corner the crop cut or a page number).
+const GUTTER_SEGMENTS_DARK: usize = 9;
+/// Strict rule: the inner half of the strip must still be this share under the page's median: a
+/// gutter's shadow fades across the strip, where a thin dark surround left by the crop stops.
+const GUTTER_INNER_DARK_SHARE: f64 = 0.04;
+/// Strict rule: the outer half of the strip must be darker than its inner half by this share of
+/// the median: a shadow darkens toward the binding, where a band of dark surround is flat.
+const GUTTER_FALLOFF_SHARE: f64 = 0.03;
 /// Grey levels in one byte: the size of the luminance histogram.
 const LUMA_LEVELS: usize = 256;
 
@@ -251,10 +269,10 @@ pub struct InkFeatures {
     pub colour_ink_share: f64,
     /// Median stroke width in millimetres, `None` when there is no ink.
     pub stroke_mm: Option<f64>,
-    /// Share of all pixels with all three channels at `GLARE_LEVEL` or more. This is the plain
-    /// share: the caller must measure it before the paper is whitened, because whitened paper
-    /// would count as glare.
-    pub glare_share: f64,
+    /// Share of all pixels with all three channels at `BRIGHT_LEVEL` or more. This is the plain
+    /// share, not glare: white paper in good light reaches it (#427). The caller measures it
+    /// before the paper is whitened, because on whitened paper every pixel would count.
+    pub bright_share: f64,
 }
 
 /// Measures the ink of a page, from the page after lighting correction. Ink: luminance under
@@ -275,7 +293,7 @@ pub fn ink_features(page: &Rgb, dpi: f32) -> Option<InkFeatures> {
         ink_share: tally.ink as f64 / total,
         colour_ink_share,
         stroke_mm: stroke_mm(&ink, w, h, dpi),
-        glare_share: tally.glare as f64 / total,
+        bright_share: tally.bright as f64 / total,
     })
 }
 
@@ -284,7 +302,7 @@ pub fn ink_features(page: &Rgb, dpi: f32) -> Option<InkFeatures> {
 struct Tally {
     ink: usize,
     coloured: usize,
-    glare: usize,
+    bright: usize,
 }
 
 /// One pass over the RGB bytes: the ink mask (one flag per pixel) and the counts.
@@ -302,8 +320,8 @@ fn scan_pixels(data: &[u8]) -> (Vec<bool>, Tally) {
                 tally.coloured += 1;
             }
         }
-        if r >= GLARE_LEVEL && g >= GLARE_LEVEL && b >= GLARE_LEVEL {
-            tally.glare += 1;
+        if r >= BRIGHT_LEVEL && g >= BRIGHT_LEVEL && b >= BRIGHT_LEVEL {
+            tally.bright += 1;
         }
     }
     (ink, tally)
@@ -379,6 +397,67 @@ pub fn gutter_band(page: &Luma) -> bool {
     let first_dark = mean(0..strip) <= limit;
     let second_dark = mean(short - strip..short) <= limit;
     first_dark != second_dark
+}
+
+/// What the gutter rules read on a page (#299, #427).
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct GutterReading {
+    /// The first rule (`gutter_band`): one long side's strip is dark on average and the other's is not.
+    pub loose: bool,
+    /// The strict rule (#427): the first rule, and on the dark side the band also runs the whole
+    /// length (`GUTTER_SEGMENTS_DARK` of `GUTTER_SEGMENTS` pieces), is narrow (the next strip in is
+    /// not dark), and fades inward (darker at the edge, still dark in the strip's inner half).
+    pub strict: bool,
+    /// Share of the pieces along the darker long side whose strip is dark (0–1).
+    pub cover: f64,
+}
+
+/// Both gutter rules on `page` (#427). The first rule (`gutter_band`) fired on a sheet in dappled
+/// shade and on a flat label in the review of #427: a patch of shade or a band of dark surround
+/// along one side is enough for it. A book's gutter is a shadow that runs the whole length of the
+/// binding side, stays near it, and fades toward the page's middle; the strict rule asks for all
+/// three. A page whose data does not match its size, or a square page, reads as no gutter.
+pub fn gutter_reading(page: &Luma) -> GutterReading {
+    let Some((w, h, n)) = dims(page.width, page.height) else { return GutterReading::default() };
+    if w == h || page.data.len() != n {
+        return GutterReading::default();
+    }
+    let landscape = w > h;
+    let (long, short) = if landscape { (w, h) } else { (h, w) };
+    let strip = ((short as f64 * GUTTER_STRIP_SHARE).round() as usize).clamp(1, short);
+    let pixel = |along: usize, across: usize| {
+        let (x, y) = if landscape { (along, across) } else { (across, along) };
+        u64::from(page.data.get(y * w + x).copied().unwrap_or(0))
+    };
+    // mean over `along` × `across`, where `across` counts from the first long side (`from_far`
+    // false) or from the second
+    let mean = |along: std::ops::Range<usize>, across: std::ops::Range<usize>, from_far: bool| {
+        let count = along.len() * across.len();
+        if count == 0 {
+            return f64::NAN;
+        }
+        let sum: u64 = along.flat_map(|a| across.clone().map(move |c| (a, c))).map(|(a, c)| pixel(a, if from_far { short - 1 - c } else { c })).sum();
+        sum as f64 / count as f64
+    };
+    let median = median_level(&page.data);
+    let limit = median * (1.0 - GUTTER_DARK_SHARE);
+    let first_dark = mean(0..long, 0..strip, false) <= limit;
+    let second_dark = mean(0..long, 0..strip, true) <= limit;
+    let loose = first_dark != second_dark;
+    // the strict checks run on the darker side (the dark one when the first rule fired)
+    let far = if loose { second_dark } else { mean(0..long, 0..strip, true) < mean(0..long, 0..strip, false) };
+    let pieces = GUTTER_SEGMENTS.min(long);
+    let dark_pieces = (0..pieces).filter(|&i| mean(i * long / pieces..(i + 1) * long / pieces, 0..strip, far) <= limit).count();
+    let cover = dark_pieces as f64 / pieces as f64;
+    let half = (strip / 2).max(1);
+    let outer = mean(0..long, 0..half, far);
+    let inner = if half < strip { mean(0..long, half..strip, far) } else { outer };
+    let beyond_end = (2 * strip).min(short / 2);
+    let beyond = if beyond_end > strip { mean(0..long, strip..beyond_end, far) } else { f64::NAN };
+    let whole_length = dark_pieces * GUTTER_SEGMENTS >= GUTTER_SEGMENTS_DARK * pieces;
+    let narrow = beyond.is_finite() && beyond > limit;
+    let fades = inner <= median * (1.0 - GUTTER_INNER_DARK_SHARE) && inner - outer >= median * GUTTER_FALLOFF_SHARE;
+    GutterReading { loose, strict: loose && whole_length && narrow && fades, cover }
 }
 
 /// The median grey level of the bytes, from a 256-bin histogram (the lower median).

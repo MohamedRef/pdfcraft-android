@@ -59,6 +59,13 @@ internal data class ScanLab(
      */
     val presets: Boolean = true,
     /**
+     * A dark band down one long side makes Clean scan call a page a book page only when the band
+     * runs the whole length of the side, stays narrow and fades toward the middle, as a gutter's
+     * shadow does (#427). Off is the first rule, where a patch of shade or a strip of dark
+     * surround along one side was enough.
+     */
+    val strictGutter: Boolean = true,
+    /**
      * A strength set on the page with the scan screen's slider counts as set by hand: the document
      * type's strength no longer replaces it, and the sharpening above scales the type's own
      * sharpening (#424). Off: the type's strength and sharpening replace them, as before.
@@ -101,7 +108,7 @@ internal data class ScanLab(
     fun diag(): Array<Pair<String, Any?>> = arrayOf<Pair<String, Any?>>(
         "finder" to finderId(finder), "refine" to refine, "side_proportions" to !perspective,
         "snap_paper" to snapPaper, "strength_override" to (strength ?: -1), "upright" to upright, "sharpen" to sharpen,
-        "denoise" to denoise, "preview" to preview, "crop_tools" to cropTools, "flatten_auto" to flattenAuto, "flatten_trim" to flattenTrim, "settle_turns" to settleTurns, "presets" to presets, "book_gutter" to bookGutter, "line_flatten" to lineFlatten,
+        "denoise" to denoise, "preview" to preview, "crop_tools" to cropTools, "flatten_auto" to flattenAuto, "flatten_trim" to flattenTrim, "settle_turns" to settleTurns, "presets" to presets, "strict_gutter" to strictGutter, "book_gutter" to bookGutter, "line_flatten" to lineFlatten,
         "page_strength" to pageStrength, "look_per_page" to lookPerPage, "look_strip" to lookStrip,
         "whiteboard_look" to whiteboardLook, "preview_stop" to previewStop, "preview_zoom" to previewZoom, "keep" to keep, "inspect" to inspect,
     )
@@ -110,7 +117,7 @@ internal data class ScanLab(
     fun json(): JSONObject = JSONObject()
         .put("finder", finderId(finder)).put("refine", refine).put("side_proportions", !perspective)
         .put("snap_paper", snapPaper).put("strength_override", strength ?: JSONObject.NULL).put("upright", upright)
-        .put("sharpen", sharpen).put("denoise", denoise).put("preview", preview).put("crop_tools", cropTools).put("flatten_auto", flattenAuto).put("flatten_trim", flattenTrim).put("settle_turns", settleTurns).put("presets", presets).put("book_gutter", bookGutter).put("line_flatten", lineFlatten)
+        .put("sharpen", sharpen).put("denoise", denoise).put("preview", preview).put("crop_tools", cropTools).put("flatten_auto", flattenAuto).put("flatten_trim", flattenTrim).put("settle_turns", settleTurns).put("presets", presets).put("strict_gutter", strictGutter).put("book_gutter", bookGutter).put("line_flatten", lineFlatten)
         .put("page_strength", pageStrength).put("look_per_page", lookPerPage).put("look_strip", lookStrip)
         .put("whiteboard_look", whiteboardLook).put("preview_stop", previewStop).put("preview_zoom", previewZoom).put("inspect", inspect)
 
@@ -119,7 +126,7 @@ internal data class ScanLab(
         "keep" to flag(keep), "finder" to finderId(finder), "refine" to flag(refine),
         "perspective" to flag(perspective), "snap" to flag(snapPaper), "strength" to (strength?.toString() ?: ""),
         "upright" to flag(upright), "sharpen" to sharpen.toString(), "denoise" to flag(denoise), "preview" to flag(preview), "crop" to flag(cropTools), "flatten_auto" to flag(flattenAuto), "flatten_trim" to flag(flattenTrim),
-        "settle" to flag(settleTurns), "presets" to flag(presets), "gutter" to flag(bookGutter), "line_flatten" to flag(lineFlatten),
+        "settle" to flag(settleTurns), "presets" to flag(presets), "strict_gutter" to flag(strictGutter), "gutter" to flag(bookGutter), "line_flatten" to flag(lineFlatten),
         "page_strength" to flag(pageStrength), "look_page" to flag(lookPerPage), "look_strip" to flag(lookStrip),
         "board" to flag(whiteboardLook), "stop" to flag(previewStop), "zoom" to flag(previewZoom), "inspect" to flag(inspect),
     ).joinToString(";") { (k, v) -> "$k=$v" }
@@ -165,6 +172,7 @@ internal data class ScanLab(
                 flattenAuto = on("flatten_auto", default.flattenAuto),
                 flattenTrim = on("flatten_trim", default.flattenTrim),
                 presets = on("presets", default.presets),
+                strictGutter = on("strict_gutter", default.strictGutter),
                 bookGutter = on("gutter", default.bookGutter),
                 lineFlatten = on("line_flatten", default.lineFlatten),
                 pageStrength = on("page_strength", default.pageStrength),
@@ -232,9 +240,15 @@ internal data class ScanTestKind(
     val photoShare: Double,
     /** -1 when the page has no ink. */
     val strokeMm: Double,
-    val glareShare: Double,
+    /** Share of near-white pixels before the light is evened: not glare, white paper reaches it (#427). */
+    val brightShare: Double,
+    /** The gutter rule in force found a gutter's dark band. */
     val gutterBand: Boolean,
     val wholePhoto: Boolean,
+    /** What the first gutter rule (#299) says, whichever rule is in force (#427). */
+    val gutterLoose: Boolean = false,
+    /** Share of the darker long side's length along which its strip is dark, 0–1 (#427). */
+    val gutterCover: Double = 0.0,
 )
 
 /** The orientation classifier's answer for a page (#339): the turn it would give, and how sure it was. */
@@ -316,8 +330,8 @@ internal fun scanTestPageJson(
                 JSONObject().put("preset", it.preset).put("chosen", it.chosen).put("strength", it.strength).put("sharpen", it.sharpen)
                     .put("keep_paper", it.keepPaper).put("suggest_flatten", it.suggestFlatten).put("suggest_greyscale", it.suggestGreyscale)
                     .put("ratio", r(it.ratio)).put("ink_share", r(it.inkShare)).put("colour_ink_share", r(it.colourInkShare))
-                    .put("photo_share", r(it.photoShare)).put("stroke_mm", r(it.strokeMm)).put("glare_share", r(it.glareShare))
-                    .put("gutter_band", it.gutterBand).put("whole_photo", it.wholePhoto)
+                    .put("photo_share", r(it.photoShare)).put("stroke_mm", r(it.strokeMm)).put("bright_share", r(it.brightShare))
+                    .put("gutter_band", it.gutterBand).put("gutter_loose", it.gutterLoose).put("gutter_cover", r(it.gutterCover)).put("whole_photo", it.wholePhoto)
             } ?: JSONObject.NULL,
         )
         .put(
