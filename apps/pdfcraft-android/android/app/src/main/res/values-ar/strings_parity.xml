@@ -301,4 +301,42 @@
     <string name="edit_spacing_less">تقليل %1$s</string>
     <string name="edit_spacing_more">زيادة %1$s</string>
     <string name="edit_overflow">لم يعد هذا النص يتسع في مكانه</string>
+    <string name="objects_select">تحديد</string>
+    <string name="objects_hint">اضغط على العناصر لتحديدها، أو اسحب مربعًا حولها</string>
+    <string name="objects_select_all">تحديد الكل</string>
+    <string name="objects_copy">نسخ</string>
+    <plurals name="objects_cut">
+        <item quantity="zero">لم يُقص شيء</item>
+        <item quantity="one">قُص عنصر واحد</item>
+        <item quantity="two">قُص عنصران</item>
+        <item quantity="few">قُصت %1$d عناصر</item>
+        <item quantity="many">قُص %1$d عنصرًا</item>
+        <item quantity="other">قُص %1$d عنصر</item>
+    </plurals>
+    <string name="objects_paste">لصق</string>
+    <plurals name="objects_selected">
+        <item quantity="zero">لا توجد عناصر محددة</item>
+        <item quantity="one">عنصر واحد محدد · اسحبه لنقله</item>
+        <item quantity="two">عنصران محددان · اسحبهما لنقلهما</item>
+        <item quantity="few">%1$d عناصر محددة · اسحبها لنقلها</item>
+        <item quantity="many">%1$d عنصرًا محددًا · اسحبها لنقلها</item>
+        <item quantity="other">%1$d عنصر محدد · اسحبها لنقلها</item>
+    </plurals>
+    <plurals name="objects_copied">
+        <item quantity="zero">لم يُنسخ شيء</item>
+        <item quantity="one">نُسخ عنصر واحد</item>
+        <item quantity="two">نُسخ عنصران</item>
+        <item quantity="few">نُسخت %1$d عناصر</item>
+        <item quantity="many">نُسخ %1$d عنصرًا</item>
+        <item quantity="other">نُسخ %1$d عنصر</item>
+    </plurals>
+    <plurals name="objects_pasted">
+        <item quantity="zero">لم يُلصق شيء</item>
+        <item quantity="one">لُصق عنصر واحد</item>
+        <item quantity="two">لُصق عنصران</item>
+        <item quantity="few">لُصقت %1$d عناصر</item>
+        <item quantity="many">لُصق %1$d عنصرًا</item>
+        <item quantity="other">لُصق %1$d عنصر</item>
+    </plurals>
+    <string name="objects_cut_label">قص</string>
 </resources>

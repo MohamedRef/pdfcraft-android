@@ -277,4 +277,26 @@
     <string name="edit_spacing_less">Less %1$s</string>
     <string name="edit_spacing_more">More %1$s</string>
     <string name="edit_overflow">This text no longer fits where it was</string>
+    <string name="objects_select">Select</string>
+    <string name="objects_hint">Tap objects to select them, or drag a box around them</string>
+    <string name="objects_select_all">Select all</string>
+    <string name="objects_copy">Copy</string>
+    <plurals name="objects_cut">
+        <item quantity="one">%1$d object cut</item>
+        <item quantity="other">%1$d objects cut</item>
+    </plurals>
+    <string name="objects_paste">Paste</string>
+    <plurals name="objects_selected">
+        <item quantity="one">%1$d object selected · drag it to move</item>
+        <item quantity="other">%1$d objects selected · drag them to move</item>
+    </plurals>
+    <plurals name="objects_copied">
+        <item quantity="one">%1$d object copied</item>
+        <item quantity="other">%1$d objects copied</item>
+    </plurals>
+    <plurals name="objects_pasted">
+        <item quantity="one">%1$d object pasted</item>
+        <item quantity="other">%1$d objects pasted</item>
+    </plurals>
+    <string name="objects_cut_label">Cut</string>
 </resources>

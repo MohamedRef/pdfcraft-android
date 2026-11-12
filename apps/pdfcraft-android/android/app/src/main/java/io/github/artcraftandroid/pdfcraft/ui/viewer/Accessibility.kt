@@ -123,10 +123,12 @@ fun AppViewModel.checkAccessibility(doc: OpenDocument) {
     accessibility.checking = true
     viewModelScope.launch {
         try {
+            val t0 = System.nanoTime()
             val r = eng.tool("accessibility_check", mapOf("doc" to doc.id))
             accessibility.rules = sortA11yRules(parseA11yRules(r))
             accessibility.counts = Triple(r.optInt("failed"), r.optInt("manual"), r.optInt("passed"))
             accessibility.figures = parseA11yFigures(eng.tool("accessibility_figures", mapOf("doc" to doc.id)))
+            editEvent(doc, "a11y_check", "failed" to r.optInt("failed"), "manual" to r.optInt("manual"), "passed" to r.optInt("passed"), "figures" to accessibility.figures.size, "ms" to (System.nanoTime() - t0) / 1_000_000)
         } catch (e: Exception) {
             tell(e.userMessage)
         } finally {
@@ -142,6 +144,7 @@ fun AppViewModel.fixAccessibility(doc: OpenDocument, rule: String, value: String
         if (!value.isNullOrBlank()) put("value", value.trim())
     }
     runTool(doc, "accessibility_fix", args) { r ->
+        editEvent(doc, "a11y_fix", "rule" to rule, "status" to r.optString("status"))
         tell(appText(if (r.optString("status") == "passed") R.string.a11y_fixed else R.string.a11y_fix_partial))
         checkAccessibility(doc)
     }
@@ -151,6 +154,7 @@ fun AppViewModel.fixAccessibility(doc: OpenDocument, rule: String, value: String
 fun AppViewModel.setAltText(doc: OpenDocument, figure: A11yFigure, alt: String, decorative: Boolean) {
     val args = if (decorative) mapOf("figure" to figure.figure, "decorative" to true) else mapOf("figure" to figure.figure, "alt" to alt.trim())
     runTool(doc, "accessibility_set_alt", args) { r ->
+        editEvent(doc, "a11y_alt", "decorative" to decorative)
         accessibility.figures = parseA11yFigures(r)
         tell(appText(if (decorative) R.string.a11y_marked_decorative else R.string.a11y_alt_saved))
         checkAccessibility(doc)
@@ -169,6 +173,7 @@ fun AppViewModel.previewAutotag(doc: OpenDocument, page: Int) {
                 (0 until cs.length()).map { cs.getJSONObject(it).let { c -> c.optString("type") to c.optString("text") } },
                 r.optInt("unclassified_images"),
             )
+            editEvent(doc, "a11y_autotag_preview", "page" to page + 1, "candidates" to cs.length(), "unclassified_images" to r.optInt("unclassified_images"))
         } catch (e: Exception) {
             tell(e.userMessage)
         }
@@ -177,11 +182,11 @@ fun AppViewModel.previewAutotag(doc: OpenDocument, page: Int) {
 
 fun AppViewModel.applyAutotag(doc: OpenDocument) {
     accessibility.preview = null
-    runTool(doc, "accessibility_autotag_apply") { tell(appText(R.string.a11y_tagged)); checkAccessibility(doc) }
+    runTool(doc, "accessibility_autotag_apply") { editEvent(doc, "a11y_autotag_apply"); tell(appText(R.string.a11y_tagged)); checkAccessibility(doc) }
 }
 
 fun AppViewModel.tagFormFields(doc: OpenDocument) {
-    runTool(doc, "accessibility_autotag_form_fields") { tell(appText(R.string.a11y_fields_tagged)); checkAccessibility(doc) }
+    runTool(doc, "accessibility_autotag_form_fields") { editEvent(doc, "a11y_tag_fields"); tell(appText(R.string.a11y_fields_tagged)); checkAccessibility(doc) }
 }
 
 /** Write the checker's HTML report and save it where the user picks. */
@@ -197,6 +202,7 @@ fun AppViewModel.saveAccessibilityReport(doc: OpenDocument) {
             tell(e.userMessage)
             return@launch
         }
+        editEvent(doc, "a11y_report")
         requests.create("${doc.name.removeSuffix(".pdf")}_accessibility.html", "text/html") { uri ->
             viewModelScope.launch {
                 try {

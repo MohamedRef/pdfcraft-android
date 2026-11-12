@@ -8,6 +8,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.viewModelScope
 import io.github.artcraftandroid.pdfcraft.R
+import io.github.artcraftandroid.pdfcraft.engine.Diag
+import io.github.artcraftandroid.pdfcraft.engine.DiagArea
 import io.github.artcraftandroid.pdfcraft.engine.DocumentFiles
 import io.github.artcraftandroid.pdfcraft.engine.Engine
 import io.github.artcraftandroid.pdfcraft.engine.userMessage
@@ -85,6 +87,8 @@ fun AppViewModel.runOcr(doc: OpenDocument, o: OcrOptions) {
         val out = if (o.editable) File(ctx.cacheDir, "out-ocr-${System.nanoTime()}.pdf") else null
         val args = o.recognizeArgs(doc.viewer.currentPage, doc.pageCount, out?.absolutePath) ?: return@launch
         busy = text(R.string.msg_busy_recognizing)
+        val t0 = System.nanoTime()
+        var ok = false
         try {
             if (out == null) {
                 recognizeByPage(eng, doc, args)
@@ -106,11 +110,13 @@ fun AppViewModel.runOcr(doc: OpenDocument, o: OcrOptions) {
                     }
                 }
             }
+            ok = true
         } catch (e: Exception) {
             out?.delete()
             tell(e.userMessage)
         } finally {
             busy = null
+            editEvent(doc, "ocr_run", "editable" to (out != null), "pages" to doc.pageCount, "ms" to (System.nanoTime() - t0) / 1_000_000, "ok" to ok)
         }
     }
 }
@@ -191,6 +197,7 @@ internal suspend fun AppViewModel.startOcrReview(doc: OpenDocument, page: Int, o
 fun AppViewModel.applyOcrReview(doc: OpenDocument, review: Int, corrections: Map<Pair<Int, Int>, String>, onDone: () -> Unit) {
     val list = corrections.map { (k, t) -> mapOf("page" to k.first, "word" to k.second, "text" to t) }
     runTool(doc, "ocr_review_apply", mapOf("review" to review, "corrections" to list)) {
+        editEvent(doc, "ocr_review_apply", "corrections" to list.size)
         success = SuccessBanner(text(R.string.ocr_review_applied)) { undo(doc) }
         onDone()
     }
@@ -286,6 +293,7 @@ fun AppViewModel.runOcrBatch(o: OcrOptions) {
         } finally {
             withContext(NonCancellable + Dispatchers.IO) { dir.deleteRecursively() }
             ocr.batchRunning = false
+            if (Diag.enabled()) Diag.event(DiagArea.Edit, "ocr_batch", "files" to ocr.batch.size, "failed" to ocr.batch.count { it.failed }, "finished" to ocr.batch.count { it.result != null && !it.failed })
         }
     }
 }
