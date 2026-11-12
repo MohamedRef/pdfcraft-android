@@ -1299,6 +1299,10 @@
     <string name="edit_label_lock_comment">Bloquear comentário</string>
     <string name="edit_label_unlock_comment">Desbloquear comentário</string>
     <string name="edit_label_move_comment">Mover comentário</string>
+    <string name="edit_label_edit_attachment_description">Editar descrição do anexo</string>
+    <string name="edit_label_open_comment_popup">Abrir pop-up do comentário</string>
+    <string name="edit_label_close_comment_popup">Fechar pop-up do comentário</string>
+    <string name="edit_label_move_comment_popup">Mover pop-up do comentário</string>
     <string name="edit_label_reshape_comment">Remodelar comentário</string>
     <string name="edit_label_resize_comment">Redimensionar comentário</string>
     <string name="edit_label_change_comment_properties">Alterar propriedades do comentário</string>

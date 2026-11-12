@@ -9,8 +9,12 @@ mod batch;
 mod batch_failures;
 mod batch_secrets;
 mod button_caption;
+mod document_actions;
+mod find_text;
 mod form_bulk;
 mod hostile_args;
+mod list_selection;
+mod office;
 // Android deliberately omits PRC/model tools and their desktop implementation scenarios.
 // Keep their source files pinned, and test the mobile rejection contract below instead.
 #[test]
@@ -24,8 +28,10 @@ fn deferred_desktop_model_tools_are_unavailable_without_document_edits() {
     assert_eq!(automation.call("doc_list", &serde_json::json!({})).unwrap(), before);
 }
 mod optimize_content_boundaries;
+mod portfolio_info;
 mod redact_after_stray_q_form;
 mod redact_text_after_q;
 mod render_warnings;
 mod text_copy;
+mod timesheet_compat;
 mod unreadable_objects;

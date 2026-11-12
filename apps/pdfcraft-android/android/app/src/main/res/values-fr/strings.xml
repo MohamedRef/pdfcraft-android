@@ -1594,6 +1594,10 @@
     <string name="edit_label_lock_comment">Verrouiller le commentaire</string>
     <string name="edit_label_unlock_comment">Déverrouiller le commentaire</string>
     <string name="edit_label_move_comment">Déplacer le commentaire</string>
+    <string name="edit_label_edit_attachment_description">Modifier la description de la pièce jointe</string>
+    <string name="edit_label_open_comment_popup">Ouvrir la fenêtre contextuelle du commentaire</string>
+    <string name="edit_label_close_comment_popup">Fermer la fenêtre contextuelle du commentaire</string>
+    <string name="edit_label_move_comment_popup">Déplacer la fenêtre contextuelle du commentaire</string>
     <string name="edit_label_reshape_comment">Remodeler le commentaire</string>
     <string name="edit_label_resize_comment">Redimensionner le commentaire</string>
     <string name="edit_label_change_comment_properties">Modifier les propriétés du commentaire</string>
