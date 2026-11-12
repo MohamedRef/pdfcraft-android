@@ -154,11 +154,68 @@ Known limits:
 - Ruled table lines are followed as if they were text lines.
 - Both pages are held at full size at once while they are compared.
 
+## Flatten page, one page at a time
+
+The scan screen's **Flatten page** switch is each page's own (`ScanPage.flatten`): it flattens
+the page shown and no other. A page taken afterwards starts with the choice of the page before it,
+and a retake with the choice of the page it replaces, so a run of book pages needs one tap. A page
+nobody chose for is not flattened. The choice is kept with the scan when Android closes the app
+(`ScanSession`, the eighth field of a page line), and the page preview (#301) follows it.
+
+- Log: `flatten_page` on each `page` and `preview` line (`on`, `off`, or `none` when the person
+  made no choice for the page; `flatten` is still whether the page was flattened), and a
+  `flatten_page` line (`index`, `flatten`) for each tap of the switch.
+- Kept scans: `flatten_chosen` in the page file (`true`, `false` or `null`); `flatten` is still
+  what was done. `scan_replay` reads `flatten`.
+
+## Border trim
+
+The network's grid follows the page's own outline, but it can reach a little past it and leave a
+thin strip of table along an edge. With `flatten_trim` (`PageRequest`, `ScanPageRequest`), a
+flattened page that is kept is looked at once more (`flatten_guard::border_trim`, from #382): on a
+copy reduced four times, from each side inward, the first line where at least 90 % of the pixels
+are within 40 of the page's colour (the median of its central half) is the page's edge. At most 2 %
+of a side is cut, and a side whose first line is already page is left alone.
+
+What is left is then **drawn again from the photo at the page's own size**
+(`flatten::unwarp_trimmed`): the output's corners are moved along the grid to the trimmed edges,
+so the photo is sampled once and the page keeps its proportions, rather than being cropped (which
+would change them) or cropped and stretched (which would sample it twice). The strip was table,
+not page, so stretching what is left over the page's size puts the page's edge where it belongs.
+The stage is timed as `scan_flatten_trim`; the result's `trim` gives each side as a share of the
+page's size across it (before any turn upright). A trim that would leave less than half a side is
+refused, and the untrimmed page is kept.
+
+In the app this is the testing option **Trim the background left along a flattened page's edges**,
+on by default: off keeps the flattened page as the grid gives it.
+
+- Log: `flatten_trim` (the option), `trim_looked`, `trimmed`, and `trim_left_pct`, `trim_top_pct`,
+  `trim_right_pct`, `trim_bottom_pct` in percent of each side (-1 when no trim was looked for) on
+  each `page` and `preview` line.
+- Kept scans: `options.flatten_trim`, and `result.flatten_trim` with `left_pct`, `top_pct`,
+  `right_pct`, `bottom_pct` (null when no trim was looked for). `scan_replay` reads the option.
+
+What was measured, on drawn pages only:
+
+- `a_strip_of_table_along_a_flattened_pages_edge_is_trimmed_and_the_page_keeps_its_size`
+  (`tests_flatten.rs`): a printed page bowed by 20 px on a dark table, flattened along a grid
+  2.5 % wider than the page, so every edge column and row of the result is table. The trim found
+  a strip on each side within the 2 % limit, the page drawn again is 600 × 848 as before, under
+  20 % of each edge is still dark, and its printed frame stays within 1.5 px of straight. The same
+  pixels on 1, 2 and 4 threads; no trim gives `unwarp`'s page exactly; the page's exact grid gives
+  (almost) no trim.
+- With the pinned model (`a_checked_flattening_is_kept_only_when_the_lines_come_out_straighter`
+  in `src/scan.rs`): on the drawn bowed sheet the trim is looked for, stays within 2 % of each
+  side and adds its stage; a page the check did not keep flattened is not trimmed; the preview
+  says the same. Whether the network leaves any strip there is printed, not asserted.
+
+Known limits: the trim moves in steps of 4 pixels of the page (the reduced copy); a page whose
+edge is printed to the border (a photo, a dark band) is not trimmed on that side; a strip lighter
+than 40 grey levels from the paper (a white table) is taken for page.
+
 ## Not done
 
 - The automatic mode is a testing option, off by default (above). Choosing its default needs
   real photos.
-- No trim of a strip of background left along an edge.
-- The switch is for the whole scan, not per page. The page preview (#301, #380) shows the
-  flattened page.
-- No phone timings; nothing has been run on a device.
+- No phone timings; nothing has been run on a device. How often the network leaves a strip on
+  real photos, and whether the trim's thresholds suit them, is what its log fields are for.

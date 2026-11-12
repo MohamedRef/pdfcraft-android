@@ -47,6 +47,11 @@ internal data class ScanLab(
      */
     val flattenAuto: Boolean = false,
     /**
+     * Trim a thin strip of background left along a flattened page's edges (2 % of a side at most)
+     * and draw the page again without it (#302). Off keeps the flattened page as the network gives it.
+     */
+    val flattenTrim: Boolean = true,
+    /**
      * Clean scan takes each page for a kind of document (receipt, whiteboard, book page, …) and
      * uses that kind's strength, sharpening and paper colour (#299). Off uses the filter's own
      * strength and the sharpening above, as before.
@@ -67,20 +72,20 @@ internal data class ScanLab(
     fun diag(): Array<Pair<String, Any?>> = arrayOf<Pair<String, Any?>>(
         "finder" to finderId(finder), "refine" to refine, "side_proportions" to !perspective,
         "snap_paper" to snapPaper, "strength_override" to (strength ?: -1), "upright" to upright, "sharpen" to sharpen,
-        "denoise" to denoise, "preview" to preview, "crop_tools" to cropTools, "flatten_auto" to flattenAuto, "settle_turns" to settleTurns, "presets" to presets, "book_gutter" to bookGutter, "keep" to keep,
+        "denoise" to denoise, "preview" to preview, "crop_tools" to cropTools, "flatten_auto" to flattenAuto, "flatten_trim" to flattenTrim, "settle_turns" to settleTurns, "presets" to presets, "book_gutter" to bookGutter, "keep" to keep,
     )
 
     /** The options as JSON, for a kept scan's page file. */
     fun json(): JSONObject = JSONObject()
         .put("finder", finderId(finder)).put("refine", refine).put("side_proportions", !perspective)
         .put("snap_paper", snapPaper).put("strength_override", strength ?: JSONObject.NULL).put("upright", upright)
-        .put("sharpen", sharpen).put("denoise", denoise).put("preview", preview).put("crop_tools", cropTools).put("flatten_auto", flattenAuto).put("settle_turns", settleTurns).put("presets", presets).put("book_gutter", bookGutter)
+        .put("sharpen", sharpen).put("denoise", denoise).put("preview", preview).put("crop_tools", cropTools).put("flatten_auto", flattenAuto).put("flatten_trim", flattenTrim).put("settle_turns", settleTurns).put("presets", presets).put("book_gutter", bookGutter)
 
     /** One line of text for the app's preferences. */
     fun encode(): String = listOf(
         "keep" to flag(keep), "finder" to finderId(finder), "refine" to flag(refine),
         "perspective" to flag(perspective), "snap" to flag(snapPaper), "strength" to (strength?.toString() ?: ""),
-        "upright" to flag(upright), "sharpen" to sharpen.toString(), "denoise" to flag(denoise), "preview" to flag(preview), "crop" to flag(cropTools), "flatten_auto" to flag(flattenAuto),
+        "upright" to flag(upright), "sharpen" to sharpen.toString(), "denoise" to flag(denoise), "preview" to flag(preview), "crop" to flag(cropTools), "flatten_auto" to flag(flattenAuto), "flatten_trim" to flag(flattenTrim),
         "settle" to flag(settleTurns), "presets" to flag(presets), "gutter" to flag(bookGutter),
     ).joinToString(";") { (k, v) -> "$k=$v" }
 
@@ -123,6 +128,7 @@ internal data class ScanLab(
                 cropTools = on("crop", default.cropTools),
                 settleTurns = on("settle", default.settleTurns),
                 flattenAuto = on("flatten_auto", default.flattenAuto),
+                flattenTrim = on("flatten_trim", default.flattenTrim),
                 presets = on("presets", default.presets),
                 bookGutter = on("gutter", default.bookGutter),
             )
@@ -152,6 +158,8 @@ internal data class ScanTestResult(
     val noise: Double? = null,
     /** How the flattened and the straightened page compared, when flattening was checked (#302). */
     val flattenCheck: io.github.artcraftandroid.pdfcraft.core.ScanFlattenCheck? = null,
+    /** The strips of background trimmed from a flattened page (#302), or null when none was looked for. */
+    val trim: io.github.artcraftandroid.pdfcraft.core.ScanTrim? = null,
 )
 
 /**
@@ -229,6 +237,8 @@ internal fun scanTestPageJson(
     kind: ScanTestKind? = null,
     /** Which half of a book spread the page is, and how the spread was cut (#303); null for a page of its own. */
     book: io.github.artcraftandroid.pdfcraft.ui.scan.ScanBookHalf? = null,
+    /** The person's Flatten page choice for the page (#302); null when there is none. */
+    flattenChosen: Boolean? = null,
 ): String {
     val page = JSONObject()
         .put("corners", shares(corners)).put("kind", "other").put("paper", "unknown").put("curved", false).put("notes", "")
@@ -242,6 +252,8 @@ internal fun scanTestPageJson(
             } ?: JSONObject.NULL,
         )
         .put("look", look ?: JSONObject.NULL).put("strength", strength ?: JSONObject.NULL).put("flatten", flatten)
+        // the person's own Flatten page choice for this page (#302): true, false or null for none
+        .put("flatten_chosen", flattenChosen ?: JSONObject.NULL)
         .put("options", lab.json())
         .put(
             "document_type",
@@ -281,6 +293,7 @@ internal fun scanTestPageJson(
                 .put("quarter_turns", it.quarterTurns)
                 .put("noise", it.noise?.takeIf { n -> n.isFinite() }?.let { n -> Math.round(n * 100.0) / 100.0 } ?: JSONObject.NULL)
                 .put("flatten_check", it.flattenCheck?.let(::scanFlattenCheckJson) ?: JSONObject.NULL)
+                .put("flatten_trim", it.trim?.let(io.github.artcraftandroid.pdfcraft.ui.scan::scanTrimJson) ?: JSONObject.NULL)
                 .put(
                     "orientation",
                     it.orientation?.let { o ->

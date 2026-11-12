@@ -79,4 +79,21 @@ class ScanSessionTest {
         assertEquals(1, odd.pages.size)
         assertNull(odd.pages[0].preset)
     }
+
+    @Test
+    fun aPagesFlattenChoiceComesBack() {
+        val s = ScanSession(
+            null, null, false, "Scan",
+            listOf(
+                ScanSession.Page("/c/a.jpg", crop, null, flatten = true),
+                ScanSession.Page("/c/b.jpg", crop, null, null, "receipt", flatten = false),
+                ScanSession.Page("/c/c.jpg", crop, null),
+                ScanSession.Page("/c/d.jpg", crop, null, book = "left"),
+            ),
+        )
+        val back = ScanSession.decode(s.encode())!!
+        assertEquals(listOf(true, false, null, null), back.pages.map { it.flatten })
+        assertEquals(listOf(null, null, null, "left"), back.pages.map { it.book })
+        assertEquals(listOf(null, "receipt", null, null), back.pages.map { it.preset })
+    }
 }

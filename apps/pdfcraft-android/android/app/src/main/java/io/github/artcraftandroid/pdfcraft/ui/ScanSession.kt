@@ -17,7 +17,8 @@ data class ScanSession(
     /** [turns] is the person's own turn of the page (#339), null while the classifier decides. */
     /** [preset] is the kind of document the person chose for the page (#299), null while Clean scan works it out. */
     /** [book] is a book spread's half as [io.github.artcraftandroid.pdfcraft.ui.scan.ScanBookHalf.encode] wrote it (#303); null for a page of its own. */
-    class Page(val path: String, val corners: FloatArray, val found: FloatArray?, val turns: Int? = null, val preset: String? = null, val book: String? = null)
+    /** [flatten] is the person's Flatten page choice (#302), null when they made none. */
+    class Page(val path: String, val corners: FloatArray, val found: FloatArray?, val turns: Int? = null, val preset: String? = null, val book: String? = null, val flatten: Boolean? = null)
 
     fun encode(): String = buildString {
         append(HEADER).append('\n')
@@ -31,7 +32,9 @@ data class ScanSession(
             append('\t').append(p.turns?.toString().orEmpty())
             append('\t').append(p.preset?.takeIf(::isWord).orEmpty())
             // the two halves of a book spread name the same photo; the seventh field says which half (#303)
-            if (p.book != null) append('\t').append(p.book.replace('\t', ' ').replace('\n', ' '))
+            if (p.book != null || p.flatten != null) append('\t').append(p.book.orEmpty().replace('\t', ' ').replace('\n', ' '))
+            // the eighth, the page's Flatten page choice (#302): 1, 0, or nothing
+            if (p.flatten != null) append('\t').append(if (p.flatten) "1" else "0")
             append('\n')
         }
     }
@@ -63,7 +66,12 @@ data class ScanSession(
                         val corners = corners(parts.getOrNull(2)) ?: continue
                         val turns = parts.getOrNull(4)?.toIntOrNull()?.takeIf { it in 0..3 }
                         val preset = parts.getOrNull(5)?.takeIf { it.isNotEmpty() && isWord(it) }
-                        if (value.isNotEmpty()) pages += Page(value, corners, corners(parts.getOrNull(3)), turns, preset, parts.getOrNull(6)?.ifEmpty { null })
+                        val flatten = when (parts.getOrNull(7)) {
+                            "1" -> true
+                            "0" -> false
+                            else -> null
+                        }
+                        if (value.isNotEmpty()) pages += Page(value, corners, corners(parts.getOrNull(3)), turns, preset, parts.getOrNull(6)?.ifEmpty { null }, flatten)
                     }
                 }
             }

@@ -16,6 +16,7 @@ use pdfcraft_geom::perspective::{Homography, Point};
 use rten_tensor::NdTensor;
 use rten_tensor::prelude::*;
 
+use crate::flatten_guard::Trim;
 use crate::models::{FLATTEN, load};
 use crate::warp::{MAX_OUTPUT_PIXELS, MAX_THREADS, Rgb, ToPhoto, resample};
 use crate::{Photo, Quad, ScanError};
@@ -244,6 +245,9 @@ struct GridMap<'a> {
     grid: &'a FlattenGrid,
     /// Grid cells per output pixel.
     step: Point,
+    /// The grid position of the output's top-left corner: 0, 0 for the whole page, more when the
+    /// output is a part of it (a trimmed border, #302).
+    origin: Point,
 }
 
 impl GridMap<'_> {
@@ -280,7 +284,10 @@ impl GridMap<'_> {
 impl ToPhoto for GridMap<'_> {
     fn apply(&self, [x, y]: Point) -> Option<Point> {
         // the output's edges are the page's edges, the grid's first and last points
-        let (gx, gy) = ((x * self.step[0]).clamp(0.0, (self.grid.cols - 1) as f64), (y * self.step[1]).clamp(0.0, (self.grid.rows - 1) as f64));
+        let (gx, gy) = (
+            (self.origin[0] + x * self.step[0]).clamp(0.0, (self.grid.cols - 1) as f64),
+            (self.origin[1] + y * self.step[1]).clamp(0.0, (self.grid.rows - 1) as f64),
+        );
         let (c0, r0) = (gx.floor().min((self.grid.cols - 2) as f64), gy.floor().min((self.grid.rows - 2) as f64));
         let (wx, wy) = (smooth(gx - c0), smooth(gy - r0));
         let mut p = [0.0; 2];
@@ -310,6 +317,19 @@ impl ToPhoto for GridMap<'_> {
 /// The page drawn flat at `out_w` × `out_h` by sampling the photo along `grid`, on up to
 /// `threads` threads (the same pixels for any number). Outside the photo is white.
 pub fn unwarp(photo: &Photo, grid: &FlattenGrid, out_w: u32, out_h: u32, threads: usize) -> Result<Rgb, ScanError> {
+    unwarp_part(photo, grid, (out_w, out_h), Trim::default(), threads)
+}
+
+/// The page drawn flat at `out_w` × `out_h` like [`unwarp`], without the strips `trim` names: the
+/// trim is in pixels of the page [`unwarp`] makes at this same size, and what is left of it is
+/// drawn at the full `out_w` × `out_h` straight from the photo (one resampling, not a crop and a
+/// second one). The proportions stay the page's: the strips were background, not page (#302).
+/// A trim that would leave less than half of either side is refused.
+pub fn unwarp_trimmed(photo: &Photo, grid: &FlattenGrid, out_w: u32, out_h: u32, trim: Trim, threads: usize) -> Result<Rgb, ScanError> {
+    unwarp_part(photo, grid, (out_w, out_h), trim, threads)
+}
+
+fn unwarp_part(photo: &Photo, grid: &FlattenGrid, (out_w, out_h): (u32, u32), trim: Trim, threads: usize) -> Result<Rgb, ScanError> {
     let (pw, ph) = (photo.width as usize, photo.height as usize);
     if pw == 0 || ph == 0 || pw.checked_mul(ph).and_then(|n| n.checked_mul(3)) != Some(photo.rgb.len()) {
         return Err(ScanError::Unreadable);
@@ -324,8 +344,16 @@ pub fn unwarp(photo: &Photo, grid: &FlattenGrid, out_w: u32, out_h: u32, threads
     {
         return Err(ScanError::BadCorners);
     }
-    let step = [(grid.cols - 1) as f64 / f64::from(out_w), (grid.rows - 1) as f64 / f64::from(out_h)];
-    Ok(resample(photo, &GridMap { grid, step }, out_w, out_h, threads.clamp(1, MAX_THREADS)))
+    let (kept_w, kept_h) =
+        (f64::from(out_w) - f64::from(trim.left) - f64::from(trim.right), f64::from(out_h) - f64::from(trim.top) - f64::from(trim.bottom));
+    if kept_w < f64::from(out_w) / 2.0 || kept_h < f64::from(out_h) / 2.0 {
+        return Err(ScanError::BadCorners);
+    }
+    // grid cells per pixel of the untrimmed page, and the part of it kept stretched over the output
+    let cell = [(grid.cols - 1) as f64 / f64::from(out_w), (grid.rows - 1) as f64 / f64::from(out_h)];
+    let step = [cell[0] * kept_w / f64::from(out_w), cell[1] * kept_h / f64::from(out_h)];
+    let origin = [cell[0] * f64::from(trim.left), cell[1] * f64::from(trim.top)];
+    Ok(resample(photo, &GridMap { grid, step, origin }, out_w, out_h, threads.clamp(1, MAX_THREADS)))
 }
 
 /// Where [`unwarp`] takes a point of an `out_w` × `out_h` page from (for tests of the map
@@ -333,7 +361,7 @@ pub fn unwarp(photo: &Photo, grid: &FlattenGrid, out_w: u32, out_h: u32, threads
 #[cfg(test)]
 pub(crate) fn photo_point(grid: &FlattenGrid, out_w: u32, out_h: u32, p: Point) -> Point {
     let step = [(grid.cols - 1) as f64 / f64::from(out_w), (grid.rows - 1) as f64 / f64::from(out_h)];
-    GridMap { grid, step }.apply(p).unwrap_or(p)
+    GridMap { grid, step, origin: [0.0, 0.0] }.apply(p).unwrap_or(p)
 }
 
 /// The grid a flat page at `quad` has: what [`unwarp`] turns into the plain perspective warp.

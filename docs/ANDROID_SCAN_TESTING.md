@@ -36,6 +36,7 @@ on one part. While any is changed, the scan screen says so.
 | Show pages as they will be saved (#301) | On | Off: the scan screen shows the camera's photo with its outline, as before; nothing is previewed |
 | Crop with magnifier and snapping to edges (#292) | On | Off: the crop screen before #292, four corner handles on the thumbnail |
 | Flatten pages automatically when it makes their lines straighter (#302) | Off | On: every page is flattened by the network and kept only when its lines of text come out at least 10 % straighter (the Flatten switch still flattens without the check) |
+| Trim the background left along a flattened page's edges (#302) | On | Off: a flattened page is kept as the network's grid gives it, with any strip of table along its edges |
 | Book mode: cut at the gutter found in the photo (#303) | On | Off: in book mode every spread is cut at its centre line, whatever the photo shows |
 | Turn pages upright (#339) | On | Off: a page stays as its corners gave it (Rotate still works) |
 | Unsure pages follow their neighbors (#339) | On | Off: in a scan of several pages each page is turned by its own answer only |
@@ -71,9 +72,10 @@ The zip also holds `diagnostics.txt`, the diagnostics log as **Share diagnostics
  "outcome": "saved",
  "found": [0.11, 0.08, 0.93, 0.10, 0.95, 0.90, 0.07, 0.89],
  "finding": {"source": "model", "confidence": 0.835, "angle": 0, "passes": 1, "refined_sides": 4, "curved_sides": 0},
- "look": "auto", "strength": 60, "flatten": false,
+ "look": "auto", "strength": 60, "flatten": false, "flatten_chosen": null,
  "options": {"finder": "auto", "refine": true, "side_proportions": false, "snap_paper": true, "strength_override": null, "upright": true,
-             "sharpen": 30, "denoise": true, "preview": true, "crop_tools": true, "flatten_auto": false, "settle_turns": true, "presets": true, "book_gutter": true},
+             "sharpen": 30, "denoise": true, "preview": true, "crop_tools": true, "flatten_auto": false, "flatten_trim": true, "settle_turns": true,
+             "presets": true, "book_gutter": true},
  "document_type": {"preset": "receipt", "chosen": false, "strength": 80, "sharpen": 35, "keep_paper": false, "suggest_flatten": false,
                    "suggest_greyscale": true, "ratio": 3.0, "ink_share": 0.043, "colour_ink_share": 0.0, "photo_share": 0.0,
                    "stroke_mm": 0.339, "glare_share": 0.0, "gutter_band": false, "whole_photo": false},
@@ -91,7 +93,7 @@ The zip also holds `diagnostics.txt`, the diagnostics log as **Share diagnostics
             "paper": "a4", "aspect": "known_focal", "focal_mismatch": false, "flattened": false, "bend_pct": 0.0,
             "quarter_turns": 3,
             "orientation": {"quarter_turns": 3, "confidence": 0.81, "agreement": 1.0, "tiles": 4, "sure": true},
-            "noise": 0.33, "flatten_check": null}
+            "noise": 0.33, "flatten_check": null, "flatten_trim": null}
 }
 ```
 
@@ -160,7 +162,10 @@ how many were `refined` or `curved`, whether the snap was `taken`, `stale` (anot
 started) or `failed`, and its `ms`; every `crop_detect` line whether Auto-detect `found` a page,
 its `source` and `ms`; every `page` and `preview` line `flatten_auto` and, from
 #302's check, `flatten_checked`, `flatten_kept`, `flatten_why`, `straight_px`, `straight_flat_px`
-(tenths of a pixel, -1 when not measured), `straight_lines` and `straight_flat_lines`; every `model_files` line (#289) what the models check copied and why
+(tenths of a pixel, -1 when not measured), `straight_lines` and `straight_flat_lines`, the
+person's own Flatten page choice `flatten_page` (`on`, `off`, `none`) and the border trim
+(`flatten_trim`, `trim_looked`, `trimmed`, `trim_left_pct`, `trim_top_pct`, `trim_right_pct`,
+`trim_bottom_pct`); a `flatten_page` line for each tap of the Flatten page switch; every `model_files` line (#289) what the models check copied and why
 (`copied`, `kept`, `failed`, `new`, `changed`, `size`, `unrecorded`, `forced`, `ms`), and while
 the log is recorded a `model_states` line with each model's state; a `model_download` or
 `model_removed` line for an optional model (none yet); `test_options` is written when an option is changed, `tests_shared` (pages, bytes)

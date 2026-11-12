@@ -79,6 +79,8 @@ internal fun scanPageRequest(
     // and keeps the result only when it is straighter (#302)
     flatten = flatten || lab.flattenAuto,
     flattenCheck = !flatten && lab.flattenAuto,
+    // a strip of table left along a flattened page's edges is trimmed (#302)
+    flattenTrim = lab.flattenTrim,
     sideProportions = !lab.perspective,
     upright = ask.upright,
     turns = ask.turns.toUByte(),

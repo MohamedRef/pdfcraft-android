@@ -1238,6 +1238,7 @@
     <string name="scan_lab_preview">Seiten so zeigen, wie sie gespeichert werden</string>
     <string name="scan_lab_crop">Zuschneiden mit Lupe und Einrasten an Kanten</string>
     <string name="scan_lab_flatten_auto">Seiten automatisch glätten, wenn ihre Zeilen dadurch gerader werden</string>
+    <string name="scan_lab_flatten_trim">Hintergrund an den Rändern einer geglätteten Seite abschneiden</string>
     <string name="scan_lab_strength">Filterstärke</string>
     <string name="scan_lab_strength_own">Standard</string>
     <string name="scan_lab_options_body">Diese Optionen schalten Teile des Scanners ab oder ersetzen sie durch ihre Vorgänger, um herauszufinden, von welchem Teil ein Problem kommt. Das Protokoll hält für jede Seite fest, was galt.</string>

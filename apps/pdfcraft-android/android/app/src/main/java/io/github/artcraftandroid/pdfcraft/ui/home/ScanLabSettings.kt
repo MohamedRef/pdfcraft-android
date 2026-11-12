@@ -91,6 +91,9 @@ internal fun ScanLabSettings(vm: AppViewModel) {
     SheetRow(null, stringResource(R.string.scan_lab_flatten_auto), { lab.update(o.copy(flattenAuto = !o.flattenAuto)) }) {
         PdfSwitch(o.flattenAuto, { lab.update(o.copy(flattenAuto = it)) })
     }
+    SheetRow(null, stringResource(R.string.scan_lab_flatten_trim), { lab.update(o.copy(flattenTrim = !o.flattenTrim)) }) {
+        PdfSwitch(o.flattenTrim, { lab.update(o.copy(flattenTrim = it)) })
+    }
     SheetRow(null, stringResource(R.string.scan_lab_book_gutter), { lab.update(o.copy(bookGutter = !o.bookGutter)) }) {
         PdfSwitch(o.bookGutter, { lab.update(o.copy(bookGutter = it)) })
     }
