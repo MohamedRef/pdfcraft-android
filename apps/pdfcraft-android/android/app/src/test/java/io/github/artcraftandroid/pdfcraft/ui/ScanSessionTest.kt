@@ -64,7 +64,8 @@ class ScanSessionTest {
         assertEquals(listOf("/c/a.jpg"), older.pages.map { it.path })
         assertNull(older.pages[0].turns)
         // a turn that is not 0 to 3 is no turn
-        assertNull(ScanSession.decode(s.encode().replace("\t3\n", "\t7\n"))!!.pages[0].turns)
+        // (the page line goes on with the chosen kind of document, #299, empty here)
+        assertNull(ScanSession.decode(s.encode().replace("\t3\t\n", "\t7\t\n"))!!.pages[0].turns)
     }
 
     @Test
