@@ -148,7 +148,9 @@ fn main() {
             threads,
             snap_paper: options["snap_paper"].as_bool().unwrap_or(true),
             side_proportions: options["side_proportions"].as_bool().unwrap_or(false),
-            flatten: facts["flatten"].as_bool().unwrap_or(false),
+            // the scan screen's switch, or every page checked by the automatic mode (#302)
+            flatten: facts["flatten"].as_bool().unwrap_or(false) || (options["flatten_auto"].as_bool().unwrap_or(false)),
+            flatten_check: !facts["flatten"].as_bool().unwrap_or(false) && options["flatten_auto"].as_bool().unwrap_or(false),
             // a file from before pages were turned upright (#339) has no such option
             upright: options["upright"].as_bool().unwrap_or(false),
             // nor one from before the Auto look sharpened and smoothed (#299)
