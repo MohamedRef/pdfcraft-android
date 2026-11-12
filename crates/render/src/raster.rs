@@ -544,7 +544,19 @@ impl PageRenderer {
 
     /// Render one page. Never panics.
     pub fn render(&mut self, req: RenderRequest) -> RenderedPage {
+        self.render_until(req, None)
+    }
+
+    /// Android adaptation (#91): [`Self::render`] that stops drawing once `stop` is set, as the
+    /// pool's workers stop on a cancelled request. A stopped render answers with an error and no
+    /// pixels; while `stop` stays unset it draws exactly what [`Self::render`] draws.
+    pub fn render_until(&mut self, req: RenderRequest, stop: Option<&Arc<AtomicBool>>) -> RenderedPage {
+        let stopped = || stop.is_some_and(|s| s.load(Ordering::Acquire));
+        let cancelled = |req: RenderRequest, start: Stopwatch| finish(req, start, Err((RENDER_STOPPED.into(), false)), Vec::new());
         let start = Stopwatch::start();
+        if stopped() {
+            return cancelled(req, start);
+        }
         if self.pdf.is_some() {
             self.stats.render_requests += 1;
             if req.tile.is_some() {
@@ -563,16 +575,31 @@ impl PageRenderer {
         };
         let cache = RenderCache::new();
         let warnings = Arc::new(Mutex::new(Vec::new()));
-        let settings = warning_settings(&self.settings, warnings.clone());
+        let stopping;
+        let base = match stop {
+            Some(stop) => {
+                stopping = InterpreterSettings { cancelled: Some(stop.clone()), ..self.settings.clone() };
+                &stopping
+            }
+            None => &self.settings,
+        };
+        let settings = warning_settings(base, warnings.clone());
         let r = render_page(pdf, &cache, &settings, &self.config, req);
         let warnings = take_warnings(&warnings);
         if matches!(r, Err((_, true))) {
             self.pdf = parse(&self.bytes, self.config.password.as_deref());
             self.stats.parser_builds += 1;
         }
+        // Stopped part way, the pixels are incomplete.
+        if stopped() && r.is_ok() {
+            return cancelled(req, start);
+        }
         finish(req, start, r, warnings)
     }
 }
+
+/// The error of a render [`PageRenderer::render_until`] stopped.
+pub const RENDER_STOPPED: &str = "the render was cancelled";
 
 fn parse(bytes: &pdfcraft_cos::PdfBytes, password: Option<&str>) -> Option<Pdf> {
     catch_unwind(AssertUnwindSafe(|| Pdf::new_with_password(Arc::new(pdfcraft_cos::PdfView(bytes.clone())), password.unwrap_or("")).ok()))

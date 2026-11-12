@@ -1,6 +1,6 @@
 # Viewer work queues and memory bounds
 
-Issues: #88, #91 (in part), #92, #93, #94, #95, #96, #98.
+Issues: #88, #91, #92, #93, #94, #95, #96, #98.
 
 These are code-path changes in the Android app. They were checked with JVM unit tests and on the host, not measured on a phone; no device speed-up is claimed here.
 
@@ -22,7 +22,7 @@ Selection queries no longer wait behind queued tools; since the bridge publishes
 
 - **Backgrounding (#92).** `TRIM_MEMORY_UI_HIDDEN` drops page images that are not on screen and keeps the parsed documents. `RUNNING_LOW`, `RUNNING_CRITICAL` and `BACKGROUND` and above also drop native renderers and text layers, off the main thread.
 - **Pages grid (#95).** Thumbnails are kept for the pages in view and 24 on each side; others render again when scrolled back to (was: every page ever shown, about 465 KB each).
-- **Stale tiles (#91).** A tile that finishes after the view stopped wanting it is not cached, so it cannot evict images about to be needed (`stale_tile_dropped` in open timings). Cancelling the native render itself is not done; it needs an engine cancellation hook.
+- **Stale tiles (#91).** A tile that finishes after the view stopped wanting it is not cached, so it cannot evict images about to be needed (`stale_tile_dropped` in open timings). A tile the view stops wanting while it renders is now also stopped in the engine (`render_page_compact_cancellable` with a `RenderCancel` switch; `tile_render_cancelled` in open timings). Whole pages still finish, because they stand in while their page scrolls back. On a synthetic page of 150,000 strokes, a whole-page render took 1,880–2,017 ms; the same render cancelled 5 ms in returned after 10–11 ms (host, `session_contention_timings cancel`).
 - **File-list thumbnails (#93).** At most two draw at once (was: one per visible cell on `Dispatchers.IO`). A file that cannot be drawn leaves a marker keyed like the cached image, so it is not read and parsed again each time its cell shows.
 
 ## Main thread and per-frame work

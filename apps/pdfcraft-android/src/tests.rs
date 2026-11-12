@@ -825,6 +825,20 @@ fn profiled_open_preserves_document_rendering_and_records_only_stage_durations()
     assert_eq!(s.documents().len(), 2);
 }
 
+/// #234: the open timings say how the display copy was made. A file whose comment has no
+/// appearance gets one drawn into a copy (an owned input on the host, so `copied`); a file with
+/// nothing to draw is shown as stored and records neither marker.
+#[test]
+fn profiled_open_records_how_the_display_copy_was_made() {
+    let s = MobileSession::new();
+    let names = |path: String| -> Vec<String> { s.open_with_timings(path, None).unwrap().timings.into_iter().map(|t| t.stage).collect() };
+    let drawn = names(attachments_pdf());
+    assert!(drawn.iter().any(|n| n == "native_display_copied"), "{drawn:?}");
+    assert!(!drawn.iter().any(|n| n == "native_display_spliced"));
+    let plain = names(blank_pdf(1));
+    assert!(!plain.iter().any(|n| n.starts_with("native_display_spliced") || n.starts_with("native_display_copied")), "{plain:?}");
+}
+
 /// Comments ▸ Hide all comments: the page is drawn again without them, even by renderers kept
 /// idle from before (they were made with the other setting), and showing them brings them back.
 #[test]
@@ -1204,4 +1218,26 @@ fn measure_tool_scales_saves_snaps_and_exports() {
     assert_eq!(out["count"], 2);
     let text = std::fs::read_to_string(&csv).unwrap();
     assert!(text.contains("Ann") && text.contains("1:50") || text.contains("1 mm = 50 mm") || text.lines().count() >= 3, "{text}");
+}
+
+/// #91: a render the view gave up on stops; an uncancelled one draws what `render_page_compact` does.
+#[test]
+fn cancelled_renders_stop_and_others_draw_the_same() {
+    let s = MobileSession::new();
+    let doc = s.open(blank_pdf(2), None).unwrap().id;
+    let tile = Some(TileRect { x: 8, y: 8, width: 64, height: 48 });
+    for (tile, compact) in [(None, true), (None, false), (tile, false)] {
+        let plain = s.render_page_compact(doc, 1, 1.5, tile, compact).unwrap();
+        let token = RenderCancel::new();
+        let kept = s.render_page_compact_cancellable(doc, 1, 1.5, tile, compact, token.clone()).unwrap();
+        assert!(!token.is_cancelled());
+        assert_eq!((plain.width, plain.height, plain.rgb565), (kept.width, kept.height, kept.rgb565));
+        assert!(*plain.pixels == *kept.pixels, "same pixels for {tile:?}");
+        token.cancel();
+        let stopped = s.render_page_compact_cancellable(doc, 1, 1.5, tile, compact, token);
+        assert!(matches!(&stopped, Err(MobileError::Render(e)) if e.contains(pdfcraft_render::RENDER_STOPPED)), "{:?}", stopped.err());
+    }
+    // the renderer kept for the document still draws
+    assert!(s.render_page_compact(doc, 1, 1.5, None, true).is_ok());
+    s.close(doc, true).unwrap();
 }
