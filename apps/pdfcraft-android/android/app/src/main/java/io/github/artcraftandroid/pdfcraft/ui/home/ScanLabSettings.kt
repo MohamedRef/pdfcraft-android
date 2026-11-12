@@ -64,6 +64,7 @@ internal fun ScanLabSettings(vm: AppViewModel) {
     // the in-app camera (#294), or the phone's camera app it replaced (the same setting as in Settings)
     io.github.artcraftandroid.pdfcraft.ui.scan.ScanCameraSetting()
     io.github.artcraftandroid.pdfcraft.ui.scan.ScanLiveSetting()
+    io.github.artcraftandroid.pdfcraft.ui.scan.ScanAutoSetting()
     Choice(
         stringResource(R.string.scan_lab_finder),
         listOf(

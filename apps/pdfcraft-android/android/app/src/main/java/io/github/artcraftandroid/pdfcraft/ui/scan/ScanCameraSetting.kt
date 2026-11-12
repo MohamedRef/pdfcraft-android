@@ -53,3 +53,12 @@ internal fun ScanLiveSetting() {
         io.github.artcraftandroid.pdfcraft.ui.PdfSwitch(model.liveOutline, { model.updateLiveOutline(it) })
     }
 }
+
+/** Auto-capture (#296), a testing option and the camera screen's Auto switch: off, only the shutter takes photos. */
+@Composable
+internal fun ScanAutoSetting() {
+    val model: ScanCameraModel = viewModel()
+    io.github.artcraftandroid.pdfcraft.ui.SheetRow(null, stringResource(R.string.scan_auto_setting), { model.updateAutoCapture(!model.autoCapture) }) {
+        io.github.artcraftandroid.pdfcraft.ui.PdfSwitch(model.autoCapture, { model.updateAutoCapture(it) })
+    }
+}

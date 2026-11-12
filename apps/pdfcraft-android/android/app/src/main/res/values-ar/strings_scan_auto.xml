@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Scan: auto-capture in the in-app camera (#296), kept apart from strings.xml so parallel scanner work merges cleanly. -->
+<resources>
+    <string name="scan_auto_next">الصفحة التالية</string>
+    <string name="scan_auto_tip">الالتقاط التلقائي مفعّل: ثبّت الهاتف فوق الصفحة وسيلتقط الصورة.</string>
+    <string name="scan_auto_setting">الالتقاط التلقائي</string>
+    <string name="scan_auto_skip">جارٍ التقاط الصورة. اضغط هنا لتخطي هذه الصفحة.</string>
+</resources>
