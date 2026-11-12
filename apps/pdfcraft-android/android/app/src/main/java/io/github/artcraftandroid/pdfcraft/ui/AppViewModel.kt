@@ -239,7 +239,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 if (!isCurrentOpenRequest(requestId)) return@withLock
                 if (copy != null) {
                     openFile(eng, uri, copy, password, fromOtherApp, requestId)
-                    tell(text(R.string.msg_opened_own_copy))
+                    tell(text(R.string.msg_opened_own_copy), text(R.string.common_save_copy)) { document?.let { saveCopyAs(it) } }
                 } else {
                     withContext(Dispatchers.IO) { recents.remove(setOf(uri.toString())) }
                     refreshRecents()
@@ -257,7 +257,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 if (!isCurrentOpenRequest(requestId)) return@withLock
                 if (copy != null) {
                     openFile(eng, uri, copy, password, fromOtherApp, requestId)
-                    tell(text(R.string.msg_opened_own_copy))
+                    tell(text(R.string.msg_opened_own_copy), text(R.string.common_save_copy)) { document?.let { saveCopyAs(it) } }
                 } else {
                     tell(text(R.string.msg_file_access_lost))
                 }
@@ -603,6 +603,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         // A reading stage has no edits; do not write an incompletely checked source back.
         if (doc.info.preparing) return@withLock true
         if (!doc.info.dirty && !doc.notWrittenBack) return@withLock true
+        doc.saving = true
         // #97: what each save costs, and what started it (pause, close, an edit, a tool)
         val started = android.os.SystemClock.elapsedRealtime()
         var stage = "mark"
@@ -622,9 +623,9 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             stage = "write_back"
             if (src != null && src.scheme == "content") {
                 // The marker set above stays until the provider verifiably holds the new bytes.
-                if (!doc.writable) {
+                if (!doc.writable || doc.holdWriteBack) {
                     doc.notWrittenBack = true
-                    outcome = "read_only"
+                    outcome = if (doc.writable) "held" else "read_only"
                     return@withLock false
                 }
                 Diag.measure(DiagArea.Save, "write_back", "doc" to doc.diagNumber, "bytes" to doc.file.length(), "target" to "provider") {
@@ -633,14 +634,24 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                         files.clearPendingWriteBack(src)
                     }
                 }
+                doc.wroteOriginal = true
             } else if (src != null && src.scheme == "file") {
                 val target = File(requireNotNull(src.path))
-                if (target.canonicalPath != doc.file.canonicalPath) Diag.measure(DiagArea.Save, "write_back", "doc" to doc.diagNumber, "bytes" to doc.file.length(), "target" to "file") {
-                    withContext(Dispatchers.IO) {
-                        doc.file.copyTo(target, overwrite = true)
-                        files.clearPendingWriteBack(src)
+                if (target.canonicalPath != doc.file.canonicalPath) {
+                    if (doc.holdWriteBack) {
+                        doc.notWrittenBack = true
+                        outcome = "held"
+                        return@withLock false
+                    }
+                    Diag.measure(DiagArea.Save, "write_back", "doc" to doc.diagNumber, "bytes" to doc.file.length(), "target" to "file") {
+                        withContext(Dispatchers.IO) {
+                            doc.file.copyTo(target, overwrite = true)
+                            files.clearPendingWriteBack(src)
+                        }
                     }
                 }
+                // a file edited in place: the save above already changed it
+                doc.wroteOriginal = true
             }
             doc.notWrittenBack = false
             true
@@ -652,7 +663,22 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             if (!quiet) tell(e.userMessage)
             false
         } finally {
+            doc.saving = false
             Diag.event(DiagArea.Save, "save", "doc" to doc.diagNumber, "trigger" to trigger, "outcome" to outcome, "ms" to android.os.SystemClock.elapsedRealtime() - started)
+        }
+    }
+
+    /** The top bar's save state, tapped: save now, or Save a copy when the original can't be written (#190). */
+    fun saveNow(doc: OpenDocument) {
+        if (doc.saving) return
+        if (!doc.writable && doc.source != null) {
+            saveCopyAs(doc)
+            return
+        }
+        viewModelScope.launch {
+            openMutex.withLock {
+                if (document === doc && readOnlyPrompt == null && !resolvingReadOnly && save(doc, trigger = "save_now")) tell(text(R.string.save_state_saved))
+            }
         }
     }
 
@@ -854,15 +880,14 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         if (tool in setOf(ViewerTool.Comment, ViewerTool.Markup, ViewerTool.Draw, ViewerTool.Text) && doc.info.commentsHidden) setCommentsHidden(doc, false)
         ctl.switchTool(tool)
         if (tool == ViewerTool.Draw && toolPrefs.snapToShape && toolPrefs.takeSnapHint()) tell(text(R.string.msg_snap_to_shape_on))
-        // the first time the reader comments without a name, ask for one (once)
-        if (tool in setOf(ViewerTool.Comment, ViewerTool.Markup, ViewerTool.Draw, ViewerTool.Text) && toolPrefs.author.isBlank() && !toolPrefs.authorAsked) {
-            toolPrefs.authorAsked = true
-            authorPrompt = true
-        }
+        // no name dialog before the first mark (#202): the comment box offers "Comment as" instead
     }
 
     /** Asking for the name comments are signed with. */
     var authorPrompt by mutableStateOf(false)
+
+    /** The first-run tips are showing (the first document, or Help ▸ Tips) (#202). */
+    var tipsOpen by mutableStateOf(false)
 
     /** Leave the active tool: whatever it holds (ink being drawn) is added first. */
     fun leaveTool(doc: OpenDocument) {
@@ -1009,23 +1034,62 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         }
     }
 
+    /** The Share sheet's choice last used, marked next time (#205). */
+    val lastShareChoice: io.github.artcraftandroid.pdfcraft.ui.viewer.ShareChoice
+        get() = io.github.artcraftandroid.pdfcraft.ui.viewer.ShareChoice.of(appPrefs.getString("shareChoice", null))
+
     /**
-     * Share a copy of [doc] through the system's share sheet (saved first, with the ink being drawn).
-     * With [clean], the copy has no comments or markups while the working file keeps them (#155).
+     * Share [doc] as [choice] picks (#205): the PDF as it is, a flattened copy (comments and
+     * fields baked into the pages), the page in view as its own PDF, or pictures of pages (picked
+     * in the page grid). The subject is the document's title only.
      */
-    fun share(doc: OpenDocument, clean: Boolean = false) {
+    fun share(doc: OpenDocument, choice: io.github.artcraftandroid.pdfcraft.ui.viewer.ShareChoice = io.github.artcraftandroid.pdfcraft.ui.viewer.ShareChoice.Pdf) {
+        appPrefs.edit().putString("shareChoice", choice.id).apply()
+        Diag.event(DiagArea.Share, "share", "doc" to doc.diagNumber, "choice" to choice.id, "page" to doc.viewer.currentPage + 1, "pages" to doc.pageCount)
         if (doc.controller.tool == ViewerTool.Draw) doc.commitTool?.invoke()
+        if (choice == io.github.artcraftandroid.pdfcraft.ui.viewer.ShareChoice.Images) {
+            exportImages(doc, lastImageFormat)
+            return
+        }
+        val eng = engine ?: return
+        val page = doc.viewer.currentPage
         handOut {
             // the ink is queued in the engine: reading the document back waits for it, so the save has it
             refresh(doc)
             save(doc)
-            val copy = if (clean) preparedCopy(doc, unlock = false, clean = true) ?: throw IllegalStateException(text(R.string.msg_clean_copy_failed)) else null
-            val uri = try {
-                withContext(Dispatchers.IO) { files.shareable(copy ?: doc.file, doc.name) }
-            } finally {
-                copy?.delete()
+            val (file, name) = when (choice) {
+                io.github.artcraftandroid.pdfcraft.ui.viewer.ShareChoice.Flattened -> {
+                    // from a second, temporary engine document: the open one keeps its comments and fields
+                    val out = tempFile("pdf")
+                    val copy = eng.tool("doc_open", mapOf("path" to doc.file.absolutePath, "password" to doc.password)).optLong("doc")
+                    try {
+                        eng.tool("doc_flatten", mapOf("doc" to copy))
+                        eng.tool("doc_save", mapOf("doc" to copy, "path" to out.absolutePath, "full" to true))
+                    } finally {
+                        runCatching { eng.tool("doc_close", mapOf("doc" to copy, "discard_changes" to true)) }
+                    }
+                    out to text(R.string.share_name_flattened, doc.title)
+                }
+                io.github.artcraftandroid.pdfcraft.ui.viewer.ShareChoice.Clean -> {
+                    // the saved file opened again without comments and markups; this one keeps them (#155)
+                    val copy = preparedCopy(doc, unlock = false, clean = true) ?: throw IllegalStateException(text(R.string.msg_clean_copy_failed))
+                    copy to doc.name
+                }
+                io.github.artcraftandroid.pdfcraft.ui.viewer.ShareChoice.Page -> {
+                    val out = tempFile("pdf")
+                    eng.tool("page_extract", mapOf("doc" to doc.id, "pages" to listOf(page + 1), "out" to out.absolutePath))
+                    out to text(R.string.share_name_page, doc.title, page + 1)
+                }
+                else -> doc.file to doc.name
             }
-            sendIntent(listOf(uri)).putExtra(Intent.EXTRA_SUBJECT, text(R.string.msg_share_subject, doc.title))
+            Diag.event(DiagArea.Share, "share_file", "doc" to doc.diagNumber, "choice" to choice.id, "bytes" to file.length())
+            val uri = try {
+                withContext(Dispatchers.IO) { files.shareable(file, name) }
+            } finally {
+                // the share folder holds its own copy; a temporary file goes now (#105)
+                if (file != doc.file) file.delete()
+            }
+            sendIntent(listOf(uri)).putExtra(Intent.EXTRA_SUBJECT, doc.title)
         }
     }
 
@@ -1288,6 +1352,11 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
      * opens are no longer blocked by it.
      */
     private fun abandonCopyRequest(request: CopyRequest) {
+        // changes kept back while the picker was open go to the original again at the next save
+        if (request is CopyRequest.Document) {
+            request.doc.holdWriteBack = false
+            Diag.event(DiagArea.Save, "copy_cancel", "doc" to request.doc.diagNumber, "not_written_back" to request.doc.notWrittenBack)
+        }
         if (request is CopyRequest.Document && request.then != null && resolvingReadOnly) {
             readOnlyPrompt = request.doc
             resolvingReadOnly = false
@@ -1301,6 +1370,9 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
 
     /** Save a copy of [doc] under a name and place the user picks. */
     fun saveCopyAs(doc: OpenDocument, then: (() -> Unit)? = null) {
+        // Opening the picker pauses the app: that save must not write the original (#190).
+        doc.holdWriteBack = true
+        Diag.event(DiagArea.Save, "copy_start", "doc" to doc.diagNumber, "dirty" to doc.info.dirty, "wrote_original" to doc.wroteOriginal, "resolving" to (then != null))
         startCopyRequest(CopyRequest.Document(doc, then), doc.name)
     }
 
@@ -1347,6 +1419,9 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                         markBeforeWorkingCopyChanges(doc)
                         engine?.tool("doc_save", mapOf("doc" to doc.id))
                         if (doc.source != null) doc.notWrittenBack = true
+                        // a file edited in place has just been written
+                        doc.source?.takeIf { it.scheme == "file" && File(requireNotNull(it.path)).canonicalPath == doc.file.canonicalPath }
+                            ?.let { doc.wroteOriginal = true }
                     }
                     withContext(Dispatchers.IO) {
                         files.writeBack(doc.file, target)
@@ -1355,9 +1430,18 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                     if (then != null) doc.notWrittenBack = false
                     refresh(doc)
                 }
-                tell(text(R.string.msg_saved_copy))
-                then?.invoke()
+                if (then != null) {
+                    tell(text(R.string.msg_saved_copy))
+                    then()
+                } else if (doc.source != null) {
+                    continueInCopy(doc, target)
+                } else {
+                    doc.holdWriteBack = false
+                    tell(text(R.string.msg_saved_copy))
+                }
             } catch (e: Exception) {
+                doc.holdWriteBack = false
+                Diag.failure(DiagArea.Save, "copy", e)
                 if (then != null && resolvingReadOnly) {
                     readOnlyPrompt = doc
                     resolvingReadOnly = false
@@ -1365,6 +1449,37 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 tell(e.userMessage)
             }
         }
+    }
+
+    /**
+     * Save a copy is "save as" (#190): [target] now holds every change, so the viewer goes on in it
+     * and [doc]'s original is left as it was opened, unless an earlier save of this visit already
+     * wrote it (then the message says so).
+     */
+    private suspend fun continueInCopy(doc: OpenDocument, target: Uri) {
+        val eng = engine ?: return
+        val src = doc.source ?: return
+        var left = false
+        openMutex.withLock {
+            if (document !== doc) return@withLock
+            closeQuietly(eng, doc)
+            // the working copy's changes are in the copy: the original keeps its own bytes
+            withContext(Dispatchers.IO) {
+                runCatching {
+                    if (src.scheme == "content") files.discardWorkingCopy(src) else { files.clearPendingWriteBack(src); true }
+                }.getOrDefault(false)
+            }.let { discarded ->
+                Diag.event(DiagArea.Save, "copy_continue", "doc" to doc.diagNumber, "wrote_original" to doc.wroteOriginal, "working_copy_discarded" to discarded, "scheme" to src.scheme)
+                if (!discarded) tell(text(R.string.discard_kept_recovery))
+            }
+            document = null
+            refreshRecents()
+            left = true
+        }
+        if (!left) return
+        open(target)
+        val name = withContext(Dispatchers.IO) { runCatching { files.displayName(target) }.getOrDefault("") }
+        tell(text(if (doc.wroteOriginal) R.string.msg_copy_continues_saved_before else R.string.msg_copy_continues, name))
     }
 
     /** Export PDF (to Word, RTF, Excel, PowerPoint, or images of its pages). */
@@ -2168,6 +2283,24 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
 
     /** Recognize text: its options, review and batch state (#166). */
     val ocr = io.github.artcraftandroid.pdfcraft.ui.viewer.OcrState()
+
+    /** Undo [steps] edits of [doc] in a row (a recognition made page by page), then redraw. */
+    internal fun undoSteps(doc: OpenDocument, steps: Int) {
+        val eng = engine ?: return
+        viewModelScope.launch {
+            try {
+                repeat(steps) { if (document === doc && doc.info.undo != null) { eng.tool("edit_undo", mapOf("doc" to doc.id)); refresh(doc) } }
+            } catch (e: MobileException) {
+                tell(e.userMessage)
+            }
+        }
+    }
+
+    /** The busy dialog's count (done, total) when the job knows it, for a determinate bar (#200). */
+    var busyProgress by mutableStateOf<Pair<Int, Int>?>(null)
+
+    /** The busy dialog's Cancel, when the job can stop safely (between pages). */
+    var busyCancel by mutableStateOf<(() -> Unit)?>(null)
 
     /** Redact: marks, the box being drawn, the look, and the checks after applying (#163). */
     val redact = io.github.artcraftandroid.pdfcraft.ui.viewer.RedactState()
@@ -3444,6 +3577,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 tell(e.userMessage)
             } finally {
                 busy = null
+                busyProgress = null
             }
         }
     }
@@ -5068,6 +5202,16 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     var homeTab by mutableStateOf(io.github.artcraftandroid.pdfcraft.ui.home.HomeTab.Home)
     var settingsOpen by mutableStateOf(false)
 
+    /** The Settings page to open on (root, about, prefs, help). */
+    var settingsStartPage = "root"
+        private set
+
+    /** Open Settings at [page]: Home's update card opens About (#193). */
+    fun openSettings(page: String = "root", show: Boolean = true) {
+        settingsStartPage = page
+        if (show) settingsOpen = true
+    }
+
     /** The file whose "..." sheet is open, and whether it was opened from Recent. */
     var fileSheet by mutableStateOf<Pair<io.github.artcraftandroid.pdfcraft.ui.home.FileRow, Boolean>?>(null)
     var showLicences by mutableStateOf(false)
@@ -5953,6 +6097,8 @@ private const val MAX_CREATE_FILES = 12
 
 /** A green banner saying a job worked, with the way to undo it. */
 class SuccessBanner(val text: String, val undo: (() -> Unit)?)
+
+/** Recognize text waiting for its pages: [page] is the one in view (0-based). */
 
 /** A file for the activity to print; [deleteWhenDone]: a temporary copy (an unlocked one) the job deletes (#105). */
 data class PrintJob(val file: File, val name: String, val deleteWhenDone: Boolean)

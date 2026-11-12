@@ -188,6 +188,8 @@ Release batches must use `versionName (actual Android versionCode)`, retain the 
 </tr>
 </table>
 
+Changes are saved back to the file when you leave it or switch apps, and the top bar shows Saved, Unsaved changes (tap to save now) or Kept in PdfCraft when the file can't be written. Save a copy continues in the copy and leaves the original as you opened it.
+
 <br>
 
 ## Light theme
