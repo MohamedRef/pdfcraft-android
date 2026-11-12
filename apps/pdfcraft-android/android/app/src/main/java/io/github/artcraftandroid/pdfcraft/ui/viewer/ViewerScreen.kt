@@ -414,6 +414,7 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
                 bottom = with(density) { doc.viewer.padBottom.toDp() },
             )
             if (!vm.readingMode && !ctl.searching && ctl.sheet != ViewerSheet.Comments) CommentFilterChip(doc, top = with(density) { doc.viewer.padTop.toDp() })
+            LectureBar(vm, doc, bottom = with(density) { doc.viewer.padBottom.toDp() }, modifier = Modifier.align(Alignment.BottomCenter))
             if (!vm.readingMode) FocusTimerPill(
                 vm, top = with(density) { doc.viewer.padTop.toDp() },
                 onOpen = { ctl.sheet = ViewerSheet.FocusTimer },
@@ -676,6 +677,7 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
                 ViewerSheet.Share -> ShareSheet(vm, doc)
                 ViewerSheet.FocusTimer -> FocusTimerSheet(vm) { ctl.sheet = ViewerSheet.None }
                 ViewerSheet.Backups -> VersionHistorySheet(vm, doc) { ctl.sheet = ViewerSheet.None }
+                ViewerSheet.Lectures -> LecturesSheet(vm, doc) { ctl.sheet = ViewerSheet.None }
                 ViewerSheet.NoteMargin -> NoteMarginSheet(vm, doc, listOf(doc.viewer.currentPage)) { ctl.sheet = ViewerSheet.None }
                 ViewerSheet.Redact -> RedactSheet(vm, doc)
                 ViewerSheet.Compare -> CompareSheet(vm, doc)

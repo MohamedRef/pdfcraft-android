@@ -1871,4 +1871,29 @@
     <string name="study_results_item">صفحة %1$d: %2$s</string>
     <string name="study_results_highlight">تظليل</string>
     <string name="study_results_retry">اختبرني في التي فاتتني</string>
+    <string name="lecture_title">تسجيلات المحاضرة</string>
+    <string name="lecture_record">تسجيل المحاضرة</string>
+    <string name="lecture_recording">جارٍ التسجيل</string>
+    <string name="lecture_paused">متوقف مؤقتًا</string>
+    <string name="lecture_pause">إيقاف مؤقت</string>
+    <string name="lecture_resume">متابعة التسجيل</string>
+    <string name="lecture_stop">إيقاف التسجيل</string>
+    <string name="lecture_play">تشغيل</string>
+    <string name="lecture_back_10">رجوع 10 ثوانٍ</string>
+    <string name="lecture_forward_10">تقديم 10 ثوانٍ</string>
+    <string name="lecture_close_player">إغلاق مشغّل المحاضرة</string>
+    <string name="lecture_body">أثناء التسجيل، كل تعليق تكتبه يتذكّر وقته. شغّل التسجيل واضغط على تعليق لتسمع ما قيل وأنت تكتبه. تبقى التسجيلات على هذا الهاتف داخل PdfCraft.</string>
+    <string name="lecture_delete_title">حذف هذا التسجيل؟</string>
+    <string name="lecture_needs_saved">احفظ هذا المستند أولًا لتسجّل بجانبه</string>
+    <string name="lecture_cannot_record">تعذّر إجراء التسجيل</string>
+    <string name="lecture_cannot_play">لا يمكن تشغيل هذا التسجيل</string>
+    <string name="lecture_saved">تم حفظ المحاضرة (%1$s)</string>
+    <plurals name="lecture_notes">
+        <item quantity="zero">%d ملاحظة</item>
+        <item quantity="one">ملاحظة واحدة</item>
+        <item quantity="two">ملاحظتان</item>
+        <item quantity="few">%d ملاحظات</item>
+        <item quantity="many">%d ملاحظة</item>
+        <item quantity="other">%d ملاحظة</item>
+    </plurals>
 </resources>

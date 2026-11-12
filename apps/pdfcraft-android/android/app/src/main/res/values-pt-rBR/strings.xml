@@ -1539,4 +1539,26 @@
         <item quantity="other">Texto adicionado a %d desenhos</item>
     </plurals>
     <string name="toolbar_label_handwriting">Escrita</string>
+    <string name="lecture_title">Gravações de aula</string>
+    <string name="lecture_record">Gravar a aula</string>
+    <string name="lecture_recording">Gravando</string>
+    <string name="lecture_paused">Pausado</string>
+    <string name="lecture_pause">Pausar</string>
+    <string name="lecture_resume">Retomar a gravação</string>
+    <string name="lecture_stop">Parar a gravação</string>
+    <string name="lecture_play">Reproduzir</string>
+    <string name="lecture_back_10">Voltar 10 segundos</string>
+    <string name="lecture_forward_10">Avançar 10 segundos</string>
+    <string name="lecture_close_player">Fechar o player da aula</string>
+    <string name="lecture_body">Durante a gravação, cada comentário que você escreve lembra quando. Reproduza uma gravação e toque num comentário para ouvir o que se dizia quando você o escreveu. As gravações ficam neste telefone, no PdfCraft.</string>
+    <string name="lecture_delete_title">Excluir esta gravação?</string>
+    <string name="lecture_needs_saved">Salve este documento primeiro para gravar junto a ele</string>
+    <string name="lecture_cannot_record">Não foi possível fazer a gravação</string>
+    <string name="lecture_cannot_play">Não é possível reproduzir esta gravação</string>
+    <string name="lecture_saved">Aula salva (%1$s)</string>
+    <plurals name="lecture_notes">
+        <item quantity="one">%d nota</item>
+        <item quantity="many">%d notas</item>
+        <item quantity="other">%d notas</item>
+    </plurals>
 </resources>

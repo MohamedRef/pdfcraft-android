@@ -431,6 +431,8 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     }
 
     override fun onCleared() {
+        stopLecture()
+        closeLecturePlayback()
         document?.takeIf { it.info.preparing }?.let { doc ->
             runCatching { engine?.session?.close(doc.id, true) }
             doc.images.close()
@@ -469,6 +471,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
 
     /** Leave the viewer: changes are saved first, as the reference does (no prompt). */
     fun closeDocument() {
+        closeLecturePlayback()
         val doc = document ?: return
         study.pauseStudy()
         study.studyDoc = null
@@ -783,6 +786,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             try {
                 val r = eng.tool(name, args + ("doc" to doc.id))
                 if (name == "comment_add") study.studyNote(doc)
+                if (name == "comment_add") lectureNoted(doc)
                 refresh(doc, io.github.artcraftandroid.pdfcraft.ui.viewer.pageTouchedBy(name, args))
                 onDone(r)
             } catch (e: MobileException) {
@@ -817,6 +821,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 // A partially accepted batch must be visible even if a later group is refused.
                 try {
                     refresh(doc, io.github.artcraftandroid.pdfcraft.ui.viewer.pageTouchedByBatch(name, all))
+                    if (name == "comment_add" && applied > 0) lectureNoted(doc)
                 } finally {
                     onSettled(applied)
                 }
@@ -2283,6 +2288,11 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
 
     /** The answer to the microphone request. */
     fun onMicPermission(granted: Boolean) {
+        pendingLecture?.let { d ->
+            pendingLecture = null
+            if (granted) startLecture(d) else tell(text(R.string.msg_voice_no_mic))
+            return
+        }
         val p = pendingVoice
         pendingVoice = null
         if (granted && p != null) voicePrompt = p else if (!granted) tell(text(R.string.msg_voice_no_mic))
@@ -4773,6 +4783,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 at.x in (c.rect[0] - 4)..(c.rect[2] + 4) && at.y in (c.rect[1] - 4)..(c.rect[3] + 4)
         } ?: return false
         selectedComment = doc to hit
+        lectureSeekToComment(doc, hit)
         return true
     }
 
@@ -5170,6 +5181,215 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 busy = null
             }
         }
+    }
+
+    // ---- Lecture recording (#142) ----
+
+    val lectures = io.github.artcraftandroid.pdfcraft.engine.Lectures(File(getApplication<Application>().filesDir, "lectures"))
+
+    /** A recording in progress beside one document (by URI, so it goes on across pages and reopening). */
+    class LectureSession(
+        val uri: String, val title: String, val id: String, val file: File, val started: Long,
+        val recorder: android.media.MediaRecorder, val clock: io.github.artcraftandroid.pdfcraft.engine.RecordingClock,
+    ) {
+        var marks: List<io.github.artcraftandroid.pdfcraft.engine.LectureMark> = emptyList()
+        val known = HashSet<String>()
+    }
+
+    var lectureRecording by mutableStateOf<LectureSession?>(null)
+        private set
+    var lecturePaused by mutableStateOf(false)
+        private set
+    private var pendingLecture: OpenDocument? = null
+
+    /** Start recording the lecture beside [doc]: comments written meanwhile remember when. */
+    fun startLecture(doc: OpenDocument) {
+        val app = getApplication<Application>()
+        val uri = doc.source?.toString() ?: run { tell(text(R.string.lecture_needs_saved)); return }
+        if (lectureRecording != null) return
+        if (app.filesDir.usableSpace < 100L * 1024 * 1024) { tell(text(R.string.msg_voice_no_storage)); return }
+        if (androidx.core.content.ContextCompat.checkSelfPermission(app, android.Manifest.permission.RECORD_AUDIO) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            pendingLecture = doc
+            micRequests.trySend(Unit)
+            return
+        }
+        viewModelScope.launch {
+            val now = System.currentTimeMillis()
+            val (id, file) = withContext(Dispatchers.IO) { lectures.newFile(now) }
+            @Suppress("DEPRECATION")
+            val recorder = if (android.os.Build.VERSION.SDK_INT >= 31) android.media.MediaRecorder(app) else android.media.MediaRecorder()
+            try {
+                recorder.setAudioSource(android.media.MediaRecorder.AudioSource.MIC)
+                recorder.setOutputFormat(android.media.MediaRecorder.OutputFormat.MPEG_4)
+                recorder.setAudioEncoder(android.media.MediaRecorder.AudioEncoder.AAC)
+                recorder.setAudioChannels(1)
+                recorder.setAudioSamplingRate(44_100)
+                recorder.setAudioEncodingBitRate(64_000)
+                recorder.setOutputFile(file.absolutePath)
+                recorder.prepare()
+                recorder.start()
+            } catch (e: Exception) {
+                recorder.release()
+                file.delete()
+                tell(text(R.string.lecture_cannot_record))
+                return@launch
+            }
+            val clock = io.github.artcraftandroid.pdfcraft.engine.RecordingClock { android.os.SystemClock.elapsedRealtime() }
+            clock.start()
+            val session = LectureSession(uri, doc.title, id, file, now, recorder, clock)
+            // the comments already there are not marked as written during the lecture
+            comments(doc)?.mapNotNullTo(session.known) { it.name }
+            lectureRecording = session
+            lecturePaused = false
+            withContext(Dispatchers.IO) { lectures.put(uri, io.github.artcraftandroid.pdfcraft.engine.Lecture(id, now, 0, emptyList())) }
+            io.github.artcraftandroid.pdfcraft.LectureRecordService.onStop = { viewModelScope.launch { stopLecture() } }
+            io.github.artcraftandroid.pdfcraft.LectureRecordService.show(app, doc.title, now)
+        }
+    }
+
+    fun pauseLecture() {
+        val s = lectureRecording ?: return
+        if (lecturePaused) return
+        runCatching { s.recorder.pause() }.onSuccess { s.clock.pause(); lecturePaused = true }
+    }
+
+    fun resumeLecture() {
+        val s = lectureRecording ?: return
+        if (!lecturePaused) return
+        runCatching { s.recorder.resume() }.onSuccess {
+            s.clock.start()
+            lecturePaused = false
+            io.github.artcraftandroid.pdfcraft.LectureRecordService.show(getApplication(), s.title, System.currentTimeMillis() - s.clock.elapsed())
+        }
+    }
+
+    /** Stop and keep the recording with the times its comments were written. */
+    fun stopLecture() {
+        val s = lectureRecording ?: return
+        lectureRecording = null
+        lecturePaused = false
+        io.github.artcraftandroid.pdfcraft.LectureRecordService.onStop = null
+        io.github.artcraftandroid.pdfcraft.LectureRecordService.hide(getApplication())
+        val duration = s.clock.elapsed().also { s.clock.pause() }
+        // stop() fails when nothing was recorded: then nothing is kept
+        val ok = runCatching { s.recorder.stop() }.isSuccess
+        s.recorder.release()
+        viewModelScope.launch(Dispatchers.IO) {
+            if (ok && s.file.length() > 0) {
+                lectures.put(s.uri, io.github.artcraftandroid.pdfcraft.engine.Lecture(s.id, s.started, duration, s.marks))
+                withContext(Dispatchers.Main) { tell(text(R.string.lecture_saved, io.github.artcraftandroid.pdfcraft.ui.viewer.timerClock(duration))) }
+            } else {
+                lectures.delete(s.uri, s.id)
+                withContext(Dispatchers.Main) { tell(text(R.string.lecture_cannot_record)) }
+            }
+        }
+    }
+
+    /** A comment was added to [doc]: if a lecture is being recorded beside it, remember when. */
+    private fun lectureNoted(doc: OpenDocument) {
+        val s = lectureRecording ?: return
+        if (doc.source?.toString() != s.uri) return
+        val at = s.clock.elapsed()
+        viewModelScope.launch {
+            val added = comments(doc)?.filter { c -> c.name?.let { it !in s.known } == true && c.replyTo == null }.orEmpty()
+            if (added.isEmpty()) return@launch
+            added.forEach { s.known += it.name!! }
+            s.marks = s.marks + added.map { io.github.artcraftandroid.pdfcraft.engine.LectureMark(it.name!!, it.page.toInt(), at) }
+            if (lectureRecording === s) withContext(Dispatchers.IO) {
+                lectures.put(s.uri, io.github.artcraftandroid.pdfcraft.engine.Lecture(s.id, s.started, at, s.marks))
+            }
+        }
+    }
+
+    // Playback
+
+    class LecturePlayback(val uri: String, val lecture: io.github.artcraftandroid.pdfcraft.engine.Lecture, val player: android.media.MediaPlayer)
+
+    var lecturePlayback by mutableStateOf<LecturePlayback?>(null)
+        private set
+    var lecturePlaying by mutableStateOf(false)
+        private set
+    var lectureSpeed by mutableStateOf(1f)
+        private set
+
+    fun lecturesOf(doc: OpenDocument): List<io.github.artcraftandroid.pdfcraft.engine.Lecture> =
+        doc.source?.toString()?.let { lectures.list(it) }.orEmpty()
+
+    /** Play [l] from [fromMs]. */
+    fun playLecture(doc: OpenDocument, l: io.github.artcraftandroid.pdfcraft.engine.Lecture, fromMs: Long = 0) {
+        val uri = doc.source?.toString() ?: return
+        val current = lecturePlayback
+        if (current != null && current.lecture.id == l.id) {
+            seekLecture(fromMs)
+            if (!lecturePlaying) toggleLecturePlay()
+            return
+        }
+        closeLecturePlayback()
+        val player = android.media.MediaPlayer()
+        try {
+            player.setDataSource(lectures.audio(l).absolutePath)
+            player.prepare()
+        } catch (e: Exception) {
+            player.release()
+            tell(text(R.string.lecture_cannot_play))
+            return
+        }
+        player.setOnCompletionListener { lecturePlaying = false }
+        lecturePlayback = LecturePlayback(uri, l, player)
+        applySpeed(player)
+        player.seekTo(fromMs.toInt())
+        player.start()
+        lecturePlaying = true
+    }
+
+    fun toggleLecturePlay() {
+        val p = lecturePlayback ?: return
+        if (p.player.isPlaying) { p.player.pause(); lecturePlaying = false } else { p.player.start(); applySpeed(p.player); lecturePlaying = true }
+    }
+
+    fun seekLecture(ms: Long) {
+        val p = lecturePlayback ?: return
+        p.player.seekTo(ms.coerceIn(0, p.player.duration.toLong().coerceAtLeast(0)).toInt())
+    }
+
+    fun skipLecture(deltaMs: Long) {
+        val p = lecturePlayback ?: return
+        seekLecture(p.player.currentPosition + deltaMs)
+    }
+
+    fun lecturePosition(): Long = lecturePlayback?.let { runCatching { it.player.currentPosition.toLong() }.getOrDefault(0) } ?: 0
+
+    fun cycleLectureSpeed() {
+        val speeds = listOf(0.75f, 1f, 1.25f, 1.5f, 2f)
+        lectureSpeed = speeds[(speeds.indexOf(lectureSpeed) + 1) % speeds.size]
+        lecturePlayback?.player?.let(::applySpeed)
+    }
+
+    private fun applySpeed(player: android.media.MediaPlayer) {
+        if (!player.isPlaying) return
+        runCatching { player.playbackParams = player.playbackParams.setSpeed(lectureSpeed) }
+    }
+
+    fun closeLecturePlayback() {
+        lecturePlayback?.player?.let { runCatching { it.stop() }; it.release() }
+        lecturePlayback = null
+        lecturePlaying = false
+    }
+
+    fun deleteLecture(doc: OpenDocument, l: io.github.artcraftandroid.pdfcraft.engine.Lecture) {
+        val uri = doc.source?.toString() ?: return
+        if (lecturePlayback?.lecture?.id == l.id) closeLecturePlayback()
+        viewModelScope.launch(Dispatchers.IO) { lectures.delete(uri, l.id) }
+    }
+
+    /** In playback, tapping a comment written during the lecture plays from just before it. */
+    private fun lectureSeekToComment(doc: OpenDocument, c: io.github.artcraftandroid.pdfcraft.core.CommentInfo) {
+        val p = lecturePlayback ?: return
+        if (doc.source?.toString() != p.uri) return
+        val name = c.name ?: return
+        val (_, at) = io.github.artcraftandroid.pdfcraft.engine.Lectures.seekFor(listOf(p.lecture), name) ?: return
+        seekLecture(at)
+        if (!lecturePlaying) toggleLecturePlay()
     }
 
     // ---- Backups (#145) and version history: see BackupController ----

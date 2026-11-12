@@ -2529,4 +2529,25 @@
     <string name="study_results_item">Page %1$d: %2$s</string>
     <string name="study_results_highlight">Highlight</string>
     <string name="study_results_retry">Quiz the ones I missed</string>
+    <string name="lecture_title">Lecture recordings</string>
+    <string name="lecture_record">Record lecture</string>
+    <string name="lecture_recording">Recording</string>
+    <string name="lecture_paused">Paused</string>
+    <string name="lecture_pause">Pause</string>
+    <string name="lecture_resume">Resume recording</string>
+    <string name="lecture_stop">Stop recording</string>
+    <string name="lecture_play">Play</string>
+    <string name="lecture_back_10">Back 10 seconds</string>
+    <string name="lecture_forward_10">Forward 10 seconds</string>
+    <string name="lecture_close_player">Close the lecture player</string>
+    <string name="lecture_body">While recording, every comment you write remembers when. Play a recording and tap a comment to hear what was said as you wrote it. Recordings stay on this phone, in PdfCraft.</string>
+    <string name="lecture_delete_title">Delete this recording?</string>
+    <string name="lecture_needs_saved">Save this document first to record beside it</string>
+    <string name="lecture_cannot_record">The recording could not be made</string>
+    <string name="lecture_cannot_play">This recording can\'t be played</string>
+    <string name="lecture_saved">Lecture saved (%1$s)</string>
+    <plurals name="lecture_notes">
+        <item quantity="one">%d note</item>
+        <item quantity="other">%d notes</item>
+    </plurals>
 </resources>
