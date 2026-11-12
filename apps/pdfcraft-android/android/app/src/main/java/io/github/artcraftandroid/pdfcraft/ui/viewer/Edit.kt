@@ -130,7 +130,7 @@ private val EditColors = listOf(
 )
 
 /** Which formatting panel is open over the bar. */
-private enum class FormatPanel { None, Size, Font, Color, Align, List, Script }
+private enum class FormatPanel { None, Size, Font, Color, Align, List, Script, Spacing }
 
 /**
  * Edit PDF's bottom bar. With nothing selected: Organize pages, then Add text and Add image. With a
@@ -140,7 +140,11 @@ private enum class FormatPanel { None, Size, Font, Color, Align, List, Script }
 @Composable
 fun EditToolbar(vm: AppViewModel, doc: OpenDocument) {
     val para = vm.editor.editSelection
-    if (para != null) EditFormatBar(vm, doc, para) else EditToolsBar(vm, doc)
+    when {
+        vm.editor.objectSelect.doc === doc -> ObjectSelectBar(vm, doc)
+        para != null -> EditFormatBar(vm, doc, para)
+        else -> EditToolsBar(vm, doc)
+    }
 }
 
 @Composable
@@ -156,6 +160,11 @@ private fun EditToolsBar(vm: AppViewModel, doc: OpenDocument) {
         EditBarItem(LucideIcons.LayoutGrid, stringResource(R.string.common_tool_organize), false, 96.dp) {
             vm.organizing = true
             doc.controller.pagesOpen = true
+        }
+        // several objects at once: select, move, copy, cut and paste (#162)
+        EditBarItem(LucideIcons.SquareDashedMousePointer, stringResource(R.string.objects_select), false, 78.dp) { vm.startObjectSelect(doc) }
+        if (vm.editor.objectSelect.copied > 0) {
+            EditBarItem(LucideIcons.ClipboardPaste, stringResource(R.string.objects_paste), false, 70.dp) { vm.pasteObjects(doc, doc.viewer.currentPage) }
         }
         BarDividerLine()
         EditBarItem(LucideIcons.Type, stringResource(R.string.edit_add_text), vm.editor.editMode == EditMode.AddText, 70.dp) {
@@ -238,7 +247,7 @@ private fun EditFormatBar(vm: AppViewModel, doc: OpenDocument, para: Paragraph) 
     Column(Modifier.fillMaxWidth().background(c.surface)) {
         when (panel) {
             FormatPanel.Size -> SizePanel(para) { vm.editor.styleParagraph(doc, para, mapOf("size" to it.toDouble())) }
-            FormatPanel.Font -> FontPanel(vm.editor.editFont[para.page to para.number]) { f ->
+            FormatPanel.Font -> FontPanel(vm, doc, para, vm.editor.editFont[para.page to para.number]) { f ->
                 vm.editor.editFont[para.page to para.number] = f
                 vm.editor.styleParagraph(doc, para, mapOf("font" to f, "bold" to para.bold, "italic" to para.italic))
             }
@@ -260,7 +269,15 @@ private fun EditFormatBar(vm: AppViewModel, doc: OpenDocument, para: Paragraph) 
                     }
                 }
             }
+            FormatPanel.Spacing -> SpacingPanel(vm, doc, para)
             FormatPanel.None -> Unit
+        }
+        if (vm.editor.textFormat.overflow == (para.page to para.number)) {
+            Row(Modifier.fillMaxWidth().barTopLine().padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Icon(LucideIcons.TriangleAlert, null, tint = c.red, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Text(stringResource(R.string.edit_overflow), color = c.red, fontSize = 14.sp)
+            }
         }
         Row(
             Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).height(BottomBarHeight).barTopLine(),
@@ -295,6 +312,7 @@ private fun EditFormatBar(vm: AppViewModel, doc: OpenDocument, para: Paragraph) 
             // bulleted and numbered lists, as the reference's phone toolbar offers
             FormatButton(LucideIcons.List, stringResource(R.string.edit_list), true, tintSelected = true) { toggle(FormatPanel.List) }
             FormatButton(LucideIcons.Superscript, stringResource(R.string.edit_script_title), true, tintSelected = panel == FormatPanel.Script) { toggle(FormatPanel.Script) }
+            FormatButton(LucideIcons.Pilcrow, stringResource(R.string.edit_spacing), true, tintSelected = panel == FormatPanel.Spacing) { toggle(FormatPanel.Spacing) }
         }
     }
 }
@@ -353,8 +371,9 @@ private fun SizePanel(para: Paragraph, onSize: (Float) -> Unit) {
 
 /** The faces the engine can set text in, each named in its own face; the paragraph's own comes first. */
 @Composable
-private fun FontPanel(current: String?, onFont: (String) -> Unit) {
+private fun FontPanel(vm: AppViewModel, doc: OpenDocument, para: Paragraph, current: String?, onFont: (String) -> Unit) {
     val c = pdfColors
+    LaunchedEffect(para.page, doc.info.generation) { vm.loadDocFonts(doc, para.page) }
     val faces = listOf(null to R.string.edit_font_original, "helvetica" to R.string.edit_font_sans, "times" to R.string.edit_font_serif, "courier" to R.string.edit_font_mono)
     LazyColumn(Modifier.fillMaxWidth().heightIn(max = 240.dp).barTopLine().padding(horizontal = 24.dp, vertical = 4.dp)) {
         items(faces.size) { i ->
@@ -371,6 +390,7 @@ private fun FontPanel(current: String?, onFont: (String) -> Unit) {
                 if (chosen) Icon(LucideIcons.Check, null, tint = c.textSecondary, modifier = Modifier.size(22.dp))
             }
         }
+        item { Column { DocFontsSection(vm, doc, para) } }
     }
 }
 
@@ -428,6 +448,10 @@ private fun AlignPanel(current: String, onAlign: (String) -> Unit) {
  */
 @Composable
 fun BoxScope.EditOverlay(vm: AppViewModel, doc: OpenDocument) {
+    if (vm.editor.objectSelect.doc === doc) {
+        ObjectSelectLayer(vm, doc)
+        return
+    }
     val pages = doc.viewer.visiblePages()
     LaunchedEffect(pages, doc.info.generation) { for (p in pages) vm.editor.loadParagraphs(doc, p) }
     val accent = pdfColors.accent
@@ -591,6 +615,8 @@ private fun BoxScope.InlineEditor(vm: AppViewModel, doc: OpenDocument, para: Par
         if (b.y > clear) v.setScroll(v.scrollX, v.scrollY + (b.y - clear))
     }
     LaunchedEffect(value.text) { vm.editor.editDraft = value.text }
+    // warn before Apply when the draft no longer fits where the paragraph was (#167)
+    LaunchedEffect(value.text) { vm.measureDraft(doc, para, value.text) }
     // misspelled words, checked a moment after typing stops, underlined in red (as the reference does)
     val context = androidx.compose.ui.platform.LocalContext.current
     val speller = remember { SpellCheck(context) }

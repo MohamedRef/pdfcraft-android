@@ -899,6 +899,33 @@ impl Automation {
     /// Android lasso: move, recolour or delete several comments on one page as one undo step.
     /// `comments`: 1-based indices from comment_list. Locked and Fill & Sign comments are skipped
     /// and reported; a delete removes from the highest index down so the others keep theirs.
+    /// Android adaptation (#350): put comments of one page on a named layer, one undo step.
+    pub(crate) fn comments_to_layer(&mut self, a: &Args) -> Result<Value> {
+        let page = self.page(a)?;
+        let layer = a.str("layer")?.trim().to_string();
+        let raw = a.get("comments").and_then(Value::as_array).ok_or_else(|| ToolError::InvalidArgs("comments must be an array of 1-based indices".into()))?;
+        if raw.is_empty() || raw.len() > 1000 {
+            return Err(ToolError::InvalidArgs("comments must list 1 to 1000 indices".into()));
+        }
+        let mut indices = raw
+            .iter()
+            .map(|v| v.as_u64().filter(|i| *i >= 1).map(|i| (i - 1) as usize).ok_or_else(|| ToolError::InvalidArgs("each comment index must be a positive integer".into())))
+            .collect::<Result<Vec<usize>>>()?;
+        indices.sort_unstable();
+        indices.dedup();
+        let doc = self.doc(a)?;
+        for index in &indices {
+            if !doc.info.annotations.iter().any(|c| c.page == page && c.index == *index) {
+                return Err(ToolError::InvalidArgs(format!("page {} has no comment {}", page + 1, index + 1)));
+            }
+        }
+        let count = indices.len();
+        let mut out = self.apply(a, Edit::AnnotationsToLayer { page, indices, name: layer.clone() })?;
+        out["layer"] = json!(layer);
+        out["changed"] = json!(count);
+        Ok(out)
+    }
+
     pub(crate) fn comments_edit_many(&mut self, a: &Args) -> Result<Value> {
         let page = self.page(a)?;
         let info = self.doc(a)?.info.pages[page].clone();

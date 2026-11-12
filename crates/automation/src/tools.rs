@@ -1067,6 +1067,14 @@ pub fn tools() -> Vec<ToolDef> {
                 "color": color(),
                 "delete": { "type": "boolean" }
             }), &["doc", "page", "comments"])),
+        // Android adaptation (#350)
+        t("comments_to_layer", "Put comments on a layer", "Put comments of one page on a layer (optional content group) named `layer`, so a reader's Layers panel shows and hides them together; the layer is made, and on, when the document has none of that name. `comments`: 1-based indices from comment_list. One undo step.")
+            .with(schema(json!({
+                "doc": doc(),
+                "page": { "type": "integer", "minimum": 1 },
+                "comments": { "type": "array", "items": { "type": "integer", "minimum": 1 }, "minItems": 1, "maxItems": 1000 },
+                "layer": { "type": "string", "minLength": 1, "maxLength": 127 }
+            }), &["doc", "page", "comments", "layer"])),
         t(
             "comments_copy",
             "Copy comments",

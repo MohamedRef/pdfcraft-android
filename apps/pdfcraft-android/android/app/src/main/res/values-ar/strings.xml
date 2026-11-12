@@ -19,6 +19,8 @@
     <string name="share_choice_page">مشاركة هذه الصفحة</string>
     <string name="share_choice_images">مشاركة الصفحات كصور</string>
     <string name="share_name_flattened">%1$s (مدمج).pdf</string>
+    <string name="share_choice_tape">مشاركة مع إظهار الشريط (طبقة \"Tape\" يمكن إخفاؤها في القارئ)</string>
+    <string name="share_name_tape">%1$s (مع الشريط).pdf</string>
     <string name="share_name_page">%1$s (صفحة %2$d).pdf</string>
     <string name="common_open">فتح</string>
     <string name="common_create">إنشاء</string>
@@ -284,6 +286,10 @@
     <string name="tools_filter_whiteboard">سبورة بيضاء</string>
     <string name="tools_filter_light_text">نص فاتح</string>
     <string name="tools_scan_flatten">فرد الصفحة</string>
+    <string name="tools_scan_view_result">النتيجة</string>
+    <string name="tools_scan_view_photo">الصورة</string>
+    <string name="tools_scan_preparing">جارٍ تجهيز الصفحة</string>
+    <string name="tools_scan_result_description">الصفحة %1$d كما ستُحفظ</string>
     <string name="root_skip">تخطي</string>
     <string name="root_author_prompt_body">أضف اسمًا يوضح صاحب كل تعليق. يمكنك تغييره لاحقًا في التفضيلات.</string>
     <string name="root_read_only_title">الملف للقراءة فقط</string>
@@ -996,6 +1002,10 @@
     <string name="scan_lab_perspective">النسب من المنظور</string>
     <string name="scan_lab_snap_paper">مطابقة مقاسات الورق القياسية</string>
     <string name="scan_lab_upright">ضبط اتجاه الصفحات تلقائيًا</string>
+    <string name="scan_lab_sharpen">توضيح النص (مسح نظيف)</string>
+    <string name="scan_lab_off">إيقاف</string>
+    <string name="scan_lab_denoise">تنعيم التحبّب في الصور المعتمة (مسح نظيف)</string>
+    <string name="scan_lab_preview">عرض الصفحات كما ستُحفظ</string>
     <string name="scan_lab_strength">شدة الفلتر</string>
     <string name="scan_lab_strength_own">الافتراضي</string>
     <string name="scan_lab_options_body">توقف هذه الخيارات أجزاء من الماسح الضوئي أو تستبدل بها ما كان قبلها، لمعرفة الجزء الذي تأتي منه المشكلة. يسجّل السجل ما كان مفعّلًا لكل صفحة.</string>
@@ -1867,6 +1877,13 @@
     <string name="study_explain">غطِّ الإجابات بشريط واضغط عليها لتختبر نفسك، أو دع الاختبار يغطي التظليلات. رفع الشريط والاختبارات لا يغيّران الملف، والتطبيقات الأخرى تعرض الصفحة بدون شريط.</string>
     <string name="study_draw_tape">رسم شريط</string>
     <string name="study_tape_hint">اسحب فوق ما تريد تغطيته</string>
+    <string name="study_tape_hint_freehand">اسحب على السطر المراد تغطيته</string>
+    <string name="study_tape_box">مربع</string>
+    <string name="study_tape_freehand">حر</string>
+    <string name="study_pattern_stripes">شريط مخطط</string>
+    <string name="study_pattern_dots">شريط منقط</string>
+    <string name="study_pattern_grid">شريط مربعات</string>
+    <string name="study_pattern_plain">شريط سادة</string>
     <string name="study_color_amber">شريط كهرماني</string>
     <string name="study_color_blue">شريط أزرق</string>
     <string name="study_color_lilac">شريط بنفسجي</string>

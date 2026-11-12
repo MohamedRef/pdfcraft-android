@@ -151,6 +151,9 @@ fn main() {
             flatten: facts["flatten"].as_bool().unwrap_or(false),
             // a file from before pages were turned upright (#339) has no such option
             upright: options["upright"].as_bool().unwrap_or(false),
+            // nor one from before the Auto look sharpened and smoothed (#299)
+            sharpen: options["sharpen"].as_u64().map_or(0, |v| v.min(100) as u8),
+            denoise: options["denoise"].as_bool().unwrap_or(false),
             ..PageRequest::new(&bytes, left)
         };
         match process_page(&request) {

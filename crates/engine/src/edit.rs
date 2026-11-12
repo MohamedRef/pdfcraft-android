@@ -178,6 +178,13 @@ pub enum Edit {
         activation: pdfcraft_annot::Activation3d,
         name: String,
     },
+    /// Android adaptation (#350): put the comments at `indices` in the page's `/Annots` on the
+    /// layer (optional content group) called `name`, made when the document has none.
+    AnnotationsToLayer {
+        page: usize,
+        indices: Vec<usize>,
+        name: String,
+    },
     /// Delete the comment at `index` in the page's `/Annots`, with its pop-up and replies.
     DeleteAnnotation {
         page: usize,

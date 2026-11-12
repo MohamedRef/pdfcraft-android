@@ -234,6 +234,10 @@
     <string name="tools_filter_whiteboard">Quadro branco</string>
     <string name="tools_filter_light_text">Texto claro</string>
     <string name="tools_scan_flatten">Aplanar página</string>
+    <string name="tools_scan_view_result">Resultado</string>
+    <string name="tools_scan_view_photo">Foto</string>
+    <string name="tools_scan_preparing">Preparando a página</string>
+    <string name="tools_scan_result_description">Página %1$d como será salva</string>
     <string name="root_skip">Pular</string>
     <string name="root_author_prompt_body">Adicione um nome para mostrar quem fez cada comentário. Você pode alterá-lo depois em Preferências.</string>
     <string name="root_read_only_title">Arquivo somente leitura</string>
@@ -802,6 +806,10 @@
     <string name="scan_lab_perspective">Proporções a partir da perspectiva</string>
     <string name="scan_lab_snap_paper">Ajustar a tamanhos de papel padrão</string>
     <string name="scan_lab_upright">Colocar as páginas na posição correta</string>
+    <string name="scan_lab_sharpen">Realçar o texto (Digitalização limpa)</string>
+    <string name="scan_lab_off">Não</string>
+    <string name="scan_lab_denoise">Suavizar o granulado em fotos escuras (Digitalização limpa)</string>
+    <string name="scan_lab_preview">Mostrar as páginas como serão salvas</string>
     <string name="scan_lab_strength">Intensidade do filtro</string>
     <string name="scan_lab_strength_own">Padrão</string>
     <string name="scan_lab_options_body">Estas opções desligam partes do scanner ou as trocam pelo que substituíram, para descobrir de qual parte vem um problema. O log registra o que estava em vigor em cada página.</string>

@@ -33,6 +33,13 @@ class ScanLabTest {
         assertFalse(lab.copy(strength = 80).asDesigned)
         assertFalse(lab.copy(upright = false).asDesigned)
         assertTrue(lab.upright)
+        assertFalse(lab.copy(sharpen = 0).asDesigned)
+        assertFalse(lab.copy(denoise = false).asDesigned)
+        // the page preview is on as designed; off is a testing option (#301)
+        assertTrue(lab.preview)
+        assertFalse(lab.copy(preview = false).asDesigned)
+        assertEquals(30, lab.sharpen)
+        assertTrue(lab.denoise && lab.sharpen in ScanLab.SHARPENING && 0 in ScanLab.SHARPENING)
     }
 
     @Test
@@ -47,7 +54,9 @@ class ScanLabTest {
     fun optionsComeBackFromThePreferencesAsTheyWere() {
         val all = listOf(
             ScanLab(),
-            ScanLab(keep = true, finder = ScanFinder.NETWORK, refine = false, perspective = false, snapPaper = false, strength = 0, upright = false),
+            ScanLab(keep = true, finder = ScanFinder.NETWORK, refine = false, perspective = false, snapPaper = false, strength = 0, upright = false, sharpen = 0, denoise = false),
+            ScanLab(sharpen = 100),
+            ScanLab(preview = false),
             ScanLab(finder = ScanFinder.LINES, strength = 100),
             ScanLab(finder = ScanFinder.OFF),
         )
@@ -65,6 +74,8 @@ class ScanLabTest {
         assertEquals(ScanLab(refine = false), ScanLab.decode("refine=0;colour_space=wide"))
         // options saved before pages were turned upright (#339) get that as it is meant to be: on
         assertEquals(ScanLab(keep = true), ScanLab.decode("keep=1;finder=auto;refine=1;perspective=1;snap=1;strength="))
+        // a sharpening that is not a number from 0 to 100 is the default
+        assertEquals(ScanLab(), ScanLab.decode("sharpen=250;denoise=maybe"))
     }
 
     @Test
@@ -74,19 +85,28 @@ class ScanLabTest {
         assertEquals(true, fields["side_proportions"])
         assertEquals(40, fields["strength_override"])
         assertEquals(true, fields["upright"])
+        assertEquals(30, fields["sharpen"])
+        assertEquals(true, fields["denoise"])
         assertEquals(-1, ScanLab().diag().toMap()["strength_override"])
         for (value in fields.values) assertTrue(value is Boolean || value is Int || (value is String && value.all { it in 'a'..'z' }))
     }
 
     private val result = ScanTestResult(
         1654, 2339, "jpeg", 200.0, "a4", "known_focal", focalMismatch = false, flattened = true, bendPct = 0.6912,
-        quarterTurns = 3, orientation = ScanTestOrientation(3, 0.8349, 0.8889, 9, true),
+        quarterTurns = 3, orientation = ScanTestOrientation(3, 0.8349, 0.8889, 9, true), noise = 1.2345,
     )
 
     @Test
     fun aKeptPageSaysWhatTheTestSetNeedsAndHowTheAppGotThere() {
         val finding = ScanFinding("model", 0.8349, 0, 1, 4, 0)
-        val json = JSONObject(scanTestPageJson("0.0.26-beta (26001)", true, crop, crop, finding, "auto", 60, true, ScanLab(strength = 60), "page-01.out.jpg", result))
+        val json = JSONObject(scanTestPageJson("0.0.26-beta (26001)", true, crop, crop, finding, "auto", 60, true, ScanLab(strength = 60), "page-01.out.jpg", result, ScanTestPreview(true, true, 412, 905, 1280, "auto")))
+        // the last preview shown before saving (#301)
+        val shown = json.getJSONObject("preview")
+        assertTrue(shown.getBoolean("shown") && shown.getBoolean("reused"))
+        assertEquals(412, shown.getInt("ms"))
+        assertEquals(1280, shown.getInt("height"))
+        assertEquals("auto", shown.getString("look"))
+        assertTrue(json.getJSONObject("options").getBoolean("preview"))
         // the test set's own keys (#288)
         assertEquals(8, json.getJSONArray("corners").length())
         assertEquals(0.12, json.getJSONArray("corners").getDouble(3), 1e-9)
@@ -119,9 +139,13 @@ class ScanLabTest {
         assertEquals(9, made.getJSONObject("orientation").getInt("tiles"))
         assertTrue(made.getJSONObject("orientation").getBoolean("sure"))
         assertTrue(json.getJSONObject("options").getBoolean("upright"))
+        // the sharpening and smoothing asked for, and the grain measured (#299)
+        assertEquals(30, json.getJSONObject("options").getInt("sharpen"))
+        assertTrue(json.getJSONObject("options").getBoolean("denoise"))
+        assertEquals(1.23, made.getDouble("noise"), 1e-9)
         // a page the classifier was not asked about
-        val plain = JSONObject(scanTestPageJson("1.0 (1)", true, crop, null, null, "bw", 75, false, ScanLab(upright = false), null, result.copy(quarterTurns = 0, orientation = null)))
-        assertTrue(plain.getJSONObject("result").isNull("orientation"))
+        val plain = JSONObject(scanTestPageJson("1.0 (1)", true, crop, null, null, "bw", 75, false, ScanLab(upright = false), null, result.copy(quarterTurns = 0, orientation = null, noise = null)))
+        assertTrue(plain.getJSONObject("result").isNull("orientation") && plain.getJSONObject("result").isNull("noise"))
         assertFalse(plain.getJSONObject("options").getBoolean("upright"))
     }
 
@@ -129,7 +153,7 @@ class ScanLabTest {
     fun aDiscardedPageHasNoResultAndMayHaveNoFinding() {
         val json = JSONObject(scanTestPageJson("1.0 (1)", false, ScanPage.WHOLE, null, null, null, null, false, ScanLab(), null, null))
         assertEquals("discarded", json.getString("outcome"))
-        assertTrue(json.isNull("found") && json.isNull("finding") && json.isNull("look") && json.isNull("strength") && json.isNull("result"))
+        assertTrue(json.isNull("found") && json.isNull("finding") && json.isNull("look") && json.isNull("strength") && json.isNull("result") && json.isNull("preview"))
         assertTrue(json.getJSONObject("options").isNull("strength_override"))
         assertEquals(1.0, json.getJSONArray("corners").getDouble(2), 0.0)
         // a corner that is not a number never breaks the file

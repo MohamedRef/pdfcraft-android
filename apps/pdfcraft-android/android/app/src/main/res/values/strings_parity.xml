@@ -262,4 +262,41 @@
         <item quantity="one">%1$d field added</item>
         <item quantity="other">%1$d fields added</item>
     </plurals>
+    <string name="edit_grouped_text">This text is inside grouped artwork</string>
+    <string name="edit_grouped_make_editable">Make editable</string>
+    <string name="edit_grouped_ready">The text on this page can now be edited</string>
+    <string name="edit_grouped_refused">Some groups were left as they were: %1$s</string>
+    <string name="edit_fonts_in_document">In this document</string>
+    <string name="edit_fonts_none">No embedded fonts on this page can be reused</string>
+    <string name="edit_font_from_file">Add font from file…</string>
+    <string name="edit_font_imported">Set in %1$s</string>
+    <string name="edit_spacing">Spacing</string>
+    <string name="edit_line_spacing">Line spacing</string>
+    <string name="edit_letter_spacing">Letter spacing</string>
+    <string name="edit_points">%1$s pt</string>
+    <string name="edit_spacing_less">Less %1$s</string>
+    <string name="edit_spacing_more">More %1$s</string>
+    <string name="edit_overflow">This text no longer fits where it was</string>
+    <string name="objects_select">Select</string>
+    <string name="objects_hint">Tap objects to select them, or drag a box around them</string>
+    <string name="objects_select_all">Select all</string>
+    <string name="objects_copy">Copy</string>
+    <plurals name="objects_cut">
+        <item quantity="one">%1$d object cut</item>
+        <item quantity="other">%1$d objects cut</item>
+    </plurals>
+    <string name="objects_paste">Paste</string>
+    <plurals name="objects_selected">
+        <item quantity="one">%1$d object selected · drag it to move</item>
+        <item quantity="other">%1$d objects selected · drag them to move</item>
+    </plurals>
+    <plurals name="objects_copied">
+        <item quantity="one">%1$d object copied</item>
+        <item quantity="other">%1$d objects copied</item>
+    </plurals>
+    <plurals name="objects_pasted">
+        <item quantity="one">%1$d object pasted</item>
+        <item quantity="other">%1$d objects pasted</item>
+    </plurals>
+    <string name="objects_cut_label">Cut</string>
 </resources>

@@ -5,11 +5,12 @@ use std::time::Instant;
 
 use crate::aspect::{AspectSource, Focal, Paper, dpi_without_paper, proportions, proportions_by_sides};
 use crate::encode::{Format, JPEG_QUALITY, Raster, encode_jpeg, encode_png_bilevel, stamp_jpeg_density};
+use crate::enhance::DEFAULT_SHARPEN;
 use crate::enhance::enlargement;
 use crate::flatten::{predict_grid, unwarp};
-use crate::look::{Look, LookParams, Pixels, apply_with};
+use crate::look::{Applied, Look, LookParams, Pixels, apply_full};
 use crate::upright::{Upright, turned, upright};
-use crate::warp::rectify_with_threads;
+use crate::warp::{Rgb, rectify_with_threads};
 use crate::{Photo, Quad, ScanError};
 
 /// The stage names timings are recorded under (fixed: diagnostics never hold document data).
@@ -53,6 +54,13 @@ pub struct PageRequest<'a> {
     /// corners gave it. A whole photo in the Original look is the camera's file and is never
     /// turned.
     pub upright: bool,
+    /// How much the Auto look sharpens print, 0–100; 0 for none (#299).
+    pub sharpen: u8,
+    /// Whether the Auto look smooths the grain of a page that has a lot of it (#299).
+    pub denoise: bool,
+    /// For a preview (#301): the page shrunk so its longer side is this many pixels at most,
+    /// whatever its look. `None` for the page at the size it is saved at.
+    pub max_side: Option<u32>,
 }
 
 impl<'a> PageRequest<'a> {
@@ -70,6 +78,9 @@ impl<'a> PageRequest<'a> {
             side_proportions: false,
             flatten: false,
             upright: false,
+            sharpen: DEFAULT_SHARPEN,
+            denoise: true,
+            max_side: None,
         }
     }
 }
@@ -102,7 +113,28 @@ pub struct PageResult {
     pub quarter_turns: u8,
     /// What the orientation classifier found (`None` when it was not asked or has no model file).
     pub orientation: Option<Upright>,
+    /// The page's grain as the Auto look measured it: the standard deviation of its noise on
+    /// blank paper, in grey levels of 255 (`None` for the other looks).
+    pub noise: Option<f32>,
     /// (stage, milliseconds), in pipeline order.
+    pub timings: Vec<(&'static str, u32)>,
+}
+
+/// A page straightened (and flattened and turned upright, when that was asked): everything before
+/// its look. A preview keeps one of these and gives it each look in turn (#301).
+#[derive(Clone, Debug, PartialEq)]
+pub struct PageBase {
+    pub page: Rgb,
+    /// The page's resolution at this size.
+    pub dpi: u16,
+    pub paper: Paper,
+    pub aspect: AspectSource,
+    pub focal_mismatch: bool,
+    pub flattened: bool,
+    pub bend: f32,
+    pub quarter_turns: u8,
+    pub orientation: Option<Upright>,
+    /// (stage, milliseconds) of the stages so far.
     pub timings: Vec<(&'static str, u32)>,
 }
 
@@ -117,7 +149,7 @@ pub const WHOLE_PHOTO: [f32; 8] = [0.0, 0.0, 1.0, 0.0, 1.0, 1.0, 0.0, 1.0];
 /// other pages. `None` when the request asks for more than that.
 fn untouched(request: &PageRequest<'_>) -> Option<Result<PageResult, ScanError>> {
     let whole = request.corners.iter().zip(WHOLE_PHOTO).all(|(a, b)| (a - b).abs() < 1e-6);
-    if request.look != Look::Original || !whole || request.flatten {
+    if request.look != Look::Original || !whole || request.flatten || request.max_side.is_some() {
         return None;
     }
     let (width, height) = match Photo::upright_size(request.photo) {
@@ -141,6 +173,7 @@ fn untouched(request: &PageRequest<'_>) -> Option<Result<PageResult, ScanError>>
         bend: 0.0,
         quarter_turns: 0,
         orientation: None,
+        noise: None,
         timings,
     }))
 }
@@ -150,7 +183,63 @@ pub fn process_page(request: &PageRequest<'_>) -> Result<PageResult, ScanError> 
     if let Some(page) = untouched(request) {
         return page;
     }
-    let mut timings = Vec::with_capacity(4);
+    let base = page_base(request)?;
+    let mut clock = Instant::now();
+    let mut lap = |stage: &'static str, timings: &mut Vec<(&'static str, u32)>| {
+        let ms = u32::try_from(clock.elapsed().as_millis()).unwrap_or(u32::MAX);
+        timings.push((stage, ms));
+        clock = Instant::now();
+    };
+    let applied = page_look(&base, request)?;
+    let (pixels, noise) = (applied.pixels, applied.noise);
+    let PageBase { page, dpi, paper, aspect, focal_mismatch, flattened, bend, quarter_turns, orientation, mut timings } = base;
+    let (w, h) = (page.width, page.height);
+    drop(page);
+    lap(STAGE_LOOK, &mut timings);
+
+    let raster = |pixels, grey| Raster { pixels, grey, width: w, height: h, dpi };
+    let (bytes, format) = match &pixels {
+        Pixels::Rgb(rgb) => (encode_jpeg(&raster(rgb, false), JPEG_QUALITY)?, Format::Jpeg),
+        Pixels::Grey(grey) => (encode_jpeg(&raster(grey, true), JPEG_QUALITY)?, Format::Jpeg),
+        Pixels::Bilevel(bits) => (encode_png_bilevel(bits, dpi)?, Format::Png),
+    };
+    lap(STAGE_ENCODE, &mut timings);
+
+    Ok(PageResult {
+        bytes,
+        format,
+        width: w,
+        height: h,
+        dpi: f32::from(dpi),
+        paper,
+        aspect,
+        focal_mismatch,
+        flattened,
+        bend,
+        quarter_turns,
+        orientation,
+        noise,
+        timings,
+    })
+}
+
+/// `base` with the look `request` asks for, at its strength, sharpening and smoothing (the
+/// request's photo and corners are not looked at: `base` is what was made of them).
+pub fn page_look(base: &PageBase, request: &PageRequest<'_>) -> Result<Applied, ScanError> {
+    let params = LookParams {
+        strength: request.strength,
+        threads: request.threads,
+        dpi: f32::from(base.dpi),
+        sharpen: request.sharpen,
+        denoise: request.denoise,
+    };
+    apply_full(&base.page, request.look, &params).ok_or(ScanError::Encode)
+}
+
+/// The page of `request` before its look: decoded, straightened to its proportions (or
+/// flattened), and turned upright.
+pub fn page_base(request: &PageRequest<'_>) -> Result<PageBase, ScanError> {
+    let mut timings = Vec::with_capacity(6);
     let mut clock = Instant::now();
     let mut lap = |stage: &'static str, timings: &mut Vec<(&'static str, u32)>| {
         let ms = u32::try_from(clock.elapsed().as_millis()).unwrap_or(u32::MAX);
@@ -171,12 +260,18 @@ pub fn process_page(request: &PageRequest<'_>) -> Result<PageResult, ScanError> 
         true => proportions_by_sides(&quad, photo.width, photo.height, request.snap_paper),
         false => proportions(&quad, photo.width, photo.height, camera, request.snap_paper),
     };
-    let scale = match request.look {
+    let scale = match (request.max_side, request.look) {
+        // a preview: shrunk to fit and never enlarged, whatever the look, so that one
+        // straightened page serves every look (#301)
+        (Some(side), _) => {
+            let (w, h, _) = shape.output(1.0)?;
+            (f64::from(side.max(16)) / f64::from(w.max(h))).min(1.0)
+        }
         // Auto enlarges a small page in this same resampling pass, before its tone curve (#298, step 0)
-        Look::Auto => enlargement(shape.width, shape.height),
+        (None, Look::Auto) => enlargement(shape.width, shape.height),
         // two levels need more pixels than shades of grey to draw a thin stroke: a page under
         // 200 dpi is made at twice the size (#300)
-        Look::BlackWhite if shape.output(1.0)?.2 < BW_MIN_DPI => 2.0,
+        (None, Look::BlackWhite) if shape.output(1.0)?.2 < BW_MIN_DPI => 2.0,
         _ => 1.0,
     };
     let (w, h, dpi) = shape.output(scale)?;
@@ -205,30 +300,12 @@ pub fn process_page(request: &PageRequest<'_>) -> Result<PageResult, ScanError> 
         drop(page);
         upright
     };
-    let (w, h) = (page.width, page.height);
     if request.upright {
         lap(STAGE_UPRIGHT, &mut timings);
     }
-
-    let pixels = apply_with(&page, request.look, &LookParams { strength: request.strength, threads: request.threads, dpi: f32::from(dpi) })
-        .ok_or(ScanError::Encode)?;
-    drop(page);
-    lap(STAGE_LOOK, &mut timings);
-
-    let raster = |pixels, grey| Raster { pixels, grey, width: w, height: h, dpi };
-    let (bytes, format) = match &pixels {
-        Pixels::Rgb(rgb) => (encode_jpeg(&raster(rgb, false), JPEG_QUALITY)?, Format::Jpeg),
-        Pixels::Grey(grey) => (encode_jpeg(&raster(grey, true), JPEG_QUALITY)?, Format::Jpeg),
-        Pixels::Bilevel(bits) => (encode_png_bilevel(bits, dpi)?, Format::Png),
-    };
-    lap(STAGE_ENCODE, &mut timings);
-
-    Ok(PageResult {
-        bytes,
-        format,
-        width: w,
-        height: h,
-        dpi: f32::from(dpi),
+    Ok(PageBase {
+        page,
+        dpi,
         paper: shape.paper,
         aspect: shape.source,
         focal_mismatch: shape.focal_mismatch,
