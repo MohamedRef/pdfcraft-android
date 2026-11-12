@@ -1,7 +1,7 @@
 {
   "source_repository": "https://github.com/storytold/pdfcraft",
-  "source_commit": "2ad7717f87ad6f15b14bdf22cddc1019d6fd0aed",
-  "source_tag": "v0.20.0",
+  "source_commit": "b503b2e62dfeec5598f344e4e287d9c9cbdb34fa",
+  "source_tag": "v0.21.1",
   "crates": [
     "a11y",
     "annot",
@@ -57,7 +57,7 @@
     "xtask"
   ],
   "adaptations": [
-    "Cargo.toml: Android workspace membership, coherent upstream 0.20.0 package/dependency versions, no egui/winit patches",
+    "Cargo.toml: Android workspace membership, coherent upstream 0.21.1 package/dependency versions, no egui/winit patches",
     "Cargo.lock: stable dependency pins, resolved with Android UniFFI members",
     "engine/camera.rs: preserve Android photo detection and regression tests",
     "engine/document.rs: bounded Android XMP metadata getter",

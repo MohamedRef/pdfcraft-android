@@ -11,6 +11,11 @@
 
 # PdfCraft Android - development handover
 
+## ENGINE v0.21.1 — 2026-11-12
+
+- The Rust engine moves from upstream v0.20.0 to v0.21.1 (v0.21.0 included). Method, conflicts, new adaptations and tools: [`ANDROID_ENGINE_0.21.1_UPGRADE.md`](ANDROID_ENGINE_0.21.1_UPGRADE.md). Owner chose to ship it in the next release.
+- Not yet run on a phone. Before calling it good: open timings on the large test PDF against 0.0.24-beta's, S Pen ink and eraser, SAF write-back, and an install-over upgrade.
+
 ## DOCUMENT SCANNER — 2026-11-12
 
 - The scanner is being rebuilt under tracking issue #286 (`Scan S01`–`S22`). Its own handover is [`ANDROID_SCAN_HANDOVER.md`](ANDROID_SCAN_HANDOVER.md): the state of every issue, the remaining work in order, the rules, and what was learned. Read that file for scanner work; this one does not repeat it.

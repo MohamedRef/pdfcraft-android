@@ -972,14 +972,14 @@ source = "git+https://github.com/storytold/craft-libs?rev=787a7a0f972fd1d7a7618f
 [[package]]
 name = "craft-print"
 version = "0.1.0"
-source = "git+https://github.com/storytold/craft-libs?rev=7ee35a9fbd47af572d55fd63dbf0333d1f00da17#7ee35a9fbd47af572d55fd63dbf0333d1f00da17"
+source = "git+https://github.com/storytold/craft-libs?rev=60ede99985ef1e5df87a2aca66ed538eb23dec99#60ede99985ef1e5df87a2aca66ed538eb23dec99"
 dependencies = [
  "craft-winprint-gdi",
  "log",
  "miniz_oxide 0.9.1",
  "roxmltree",
  "tempfile",
- "winprint",
+ "winprint 0.2.1 (git+https://github.com/storytold/winprint.rs?rev=bc06a7c48b768eb27a828c7986f6d2868b245ee0)",
  "winsafe",
 ]
 
@@ -2782,7 +2782,7 @@ dependencies = [
 
 [[package]]
 name = "pdfcraft-a11y"
-version = "0.20.0"
+version = "0.21.1"
 dependencies = [
  "pdfcraft-content",
  "pdfcraft-cos",
@@ -2793,7 +2793,7 @@ dependencies = [
 
 [[package]]
 name = "pdfcraft-android"
-version = "0.20.0"
+version = "0.21.1"
 dependencies = [
  "android_logger",
  "image",
@@ -2812,21 +2812,21 @@ dependencies = [
 
 [[package]]
 name = "pdfcraft-android-bindgen"
-version = "0.20.0"
+version = "0.21.1"
 dependencies = [
  "uniffi",
 ]
 
 [[package]]
 name = "pdfcraft-android-ffi-bytes"
-version = "0.20.0"
+version = "0.21.1"
 dependencies = [
  "uniffi",
 ]
 
 [[package]]
 name = "pdfcraft-annot"
-version = "0.20.0"
+version = "0.21.1"
 dependencies = [
  "hayro-syntax",
  "pdfcraft-cos",
@@ -2838,7 +2838,7 @@ dependencies = [
 
 [[package]]
 name = "pdfcraft-audit"
-version = "0.20.0"
+version = "0.21.1"
 dependencies = [
  "pdfcraft-content",
  "pdfcraft-cos",
@@ -2849,7 +2849,7 @@ dependencies = [
 
 [[package]]
 name = "pdfcraft-automation"
-version = "0.20.0"
+version = "0.21.1"
 dependencies = [
  "base64 0.23.1",
  "flate2",
@@ -2871,7 +2871,7 @@ dependencies = [
 
 [[package]]
 name = "pdfcraft-bytes"
-version = "0.20.0"
+version = "0.21.1"
 dependencies = [
  "libc",
  "memmap2",
@@ -2879,11 +2879,11 @@ dependencies = [
 
 [[package]]
 name = "pdfcraft-compare"
-version = "0.20.0"
+version = "0.21.1"
 
 [[package]]
 name = "pdfcraft-content"
-version = "0.20.0"
+version = "0.21.1"
 dependencies = [
  "hayro-syntax",
  "pdfcraft-cos",
@@ -2891,7 +2891,7 @@ dependencies = [
 
 [[package]]
 name = "pdfcraft-cos"
-version = "0.20.0"
+version = "0.21.1"
 dependencies = [
  "chrono",
  "hayro-syntax",
@@ -2910,7 +2910,7 @@ dependencies = [
 
 [[package]]
 name = "pdfcraft-create"
-version = "0.20.0"
+version = "0.21.1"
 dependencies = [
  "encoding_rs",
  "hayro-ccitt",
@@ -2922,6 +2922,7 @@ dependencies = [
  "pdfcraft-model",
  "pdfcraft-xfa",
  "png",
+ "rustix",
  "thiserror",
  "tiff",
  "zune-jpeg",
@@ -2929,7 +2930,7 @@ dependencies = [
 
 [[package]]
 name = "pdfcraft-crypt"
-version = "0.20.0"
+version = "0.21.1"
 dependencies = [
  "aes",
  "md-5",
@@ -2937,11 +2938,12 @@ dependencies = [
  "sha2 0.11.1",
  "stringprep",
  "thiserror",
+ "zeroize",
 ]
 
 [[package]]
 name = "pdfcraft-edit"
-version = "0.20.0"
+version = "0.21.1"
 dependencies = [
  "hayro-syntax",
  "icu_segmenter",
@@ -2960,7 +2962,7 @@ dependencies = [
 
 [[package]]
 name = "pdfcraft-engine"
-version = "0.20.0"
+version = "0.21.1"
 dependencies = [
  "chrono",
  "craft-docpath",
@@ -3004,14 +3006,14 @@ dependencies = [
 
 [[package]]
 name = "pdfcraft-export"
-version = "0.20.0"
+version = "0.21.1"
 dependencies = [
  "flate2",
 ]
 
 [[package]]
 name = "pdfcraft-filters"
-version = "0.20.0"
+version = "0.21.1"
 dependencies = [
  "fax",
  "flate2",
@@ -3024,7 +3026,7 @@ dependencies = [
 
 [[package]]
 name = "pdfcraft-fonts"
-version = "0.20.0"
+version = "0.21.1"
 dependencies = [
  "harfrust",
  "pdfcraft-cos",
@@ -3034,7 +3036,7 @@ dependencies = [
 
 [[package]]
 name = "pdfcraft-forms"
-version = "0.20.0"
+version = "0.21.1"
 dependencies = [
  "hayro-syntax",
  "pdfcraft-content",
@@ -3047,11 +3049,11 @@ dependencies = [
 
 [[package]]
 name = "pdfcraft-geom"
-version = "0.20.0"
+version = "0.21.1"
 
 [[package]]
 name = "pdfcraft-js"
-version = "0.20.0"
+version = "0.21.1"
 dependencies = [
  "boa_engine",
  "chrono",
@@ -3059,7 +3061,7 @@ dependencies = [
 
 [[package]]
 name = "pdfcraft-measure"
-version = "0.20.0"
+version = "0.21.1"
 dependencies = [
  "pdfcraft-annot",
  "pdfcraft-content",
@@ -3072,19 +3074,20 @@ dependencies = [
 
 [[package]]
 name = "pdfcraft-model"
-version = "0.20.0"
+version = "0.21.1"
 dependencies = [
  "pdfcraft-cos",
 ]
 
 [[package]]
 name = "pdfcraft-ocr"
-version = "0.20.0"
+version = "0.21.1"
 dependencies = [
  "ocrs",
  "pdfcraft-fonts",
  "png",
  "rten",
+ "rten-imageproc",
  "serde_json",
  "sha2 0.11.1",
  "tempfile",
@@ -3093,7 +3096,7 @@ dependencies = [
 
 [[package]]
 name = "pdfcraft-optimize"
-version = "0.20.0"
+version = "0.21.1"
 dependencies = [
  "image",
  "pdfcraft-annot",
@@ -3110,11 +3113,11 @@ dependencies = [
 
 [[package]]
 name = "pdfcraft-oracle"
-version = "0.20.0"
+version = "0.21.1"
 
 [[package]]
 name = "pdfcraft-organize"
-version = "0.20.0"
+version = "0.21.1"
 dependencies = [
  "hayro-syntax",
  "pdfcraft-content",
@@ -3125,17 +3128,18 @@ dependencies = [
 
 [[package]]
 name = "pdfcraft-platform"
-version = "0.20.0"
+version = "0.21.1"
 dependencies = [
  "async-channel",
  "futures-lite",
+ "log",
  "rustix",
  "zbus",
 ]
 
 [[package]]
 name = "pdfcraft-preflight"
-version = "0.20.0"
+version = "0.21.1"
 dependencies = [
  "flate2",
  "pdfcraft-content",
@@ -3146,19 +3150,22 @@ dependencies = [
 
 [[package]]
 name = "pdfcraft-print"
-version = "0.20.0"
+version = "0.21.1"
 dependencies = [
  "craft-print",
+ "log",
  "pdfcraft-content",
  "pdfcraft-cos",
  "pdfcraft-model",
  "pdfcraft-render",
+ "skrifa 0.44.0",
  "thiserror",
+ "winprint 0.2.1 (git+https://github.com/storytold/winprint.rs?rev=5f80b9baf6b58937c401656634e42d33f00ddf49)",
 ]
 
 [[package]]
 name = "pdfcraft-redact"
-version = "0.20.0"
+version = "0.21.1"
 dependencies = [
  "aho-corasick",
  "pdfcraft-annot",
@@ -3174,13 +3181,15 @@ dependencies = [
  "pdfcraft-testkit",
  "pdfcraft-xfa",
  "regex",
+ "roxmltree",
  "sha2 0.11.1",
  "thiserror",
+ "unicode-normalization",
 ]
 
 [[package]]
 name = "pdfcraft-render"
-version = "0.20.0"
+version = "0.21.1"
 dependencies = [
  "bytemuck",
  "flate2",
@@ -3199,11 +3208,12 @@ dependencies = [
  "skrifa 0.44.0",
  "thiserror",
  "unicode-bidi",
+ "url",
 ]
 
 [[package]]
 name = "pdfcraft-scan"
-version = "0.20.0"
+version = "0.21.1"
 dependencies = [
  "image",
  "pdfcraft-engine",
@@ -3218,7 +3228,7 @@ dependencies = [
 
 [[package]]
 name = "pdfcraft-sign"
-version = "0.20.0"
+version = "0.21.1"
 dependencies = [
  "aes",
  "aws-lc-rs",
@@ -3252,15 +3262,16 @@ dependencies = [
  "sha2 0.11.1",
  "sha3",
  "thiserror",
+ "zeroize",
 ]
 
 [[package]]
 name = "pdfcraft-testkit"
-version = "0.20.0"
+version = "0.21.1"
 
 [[package]]
 name = "pdfcraft-xfa"
-version = "0.20.0"
+version = "0.21.1"
 dependencies = [
  "base64 0.23.1",
  "image",
@@ -3274,7 +3285,7 @@ dependencies = [
 
 [[package]]
 name = "pdfcraft-xfdf"
-version = "0.20.0"
+version = "0.21.1"
 dependencies = [
  "base64 0.23.1",
  "pdfcraft-annot",
@@ -5930,7 +5941,7 @@ dependencies = [
 [[package]]
 name = "winprint"
 version = "0.2.1"
-source = "git+https://github.com/storytold/winprint.rs?rev=51934db382f225454cf152a8657eb03789be63c4#51934db382f225454cf152a8657eb03789be63c4"
+source = "git+https://github.com/storytold/winprint.rs?rev=5f80b9baf6b58937c401656634e42d33f00ddf49#5f80b9baf6b58937c401656634e42d33f00ddf49"
 dependencies = [
  "flate2",
  "fmt-derive",
@@ -5945,6 +5956,28 @@ dependencies = [
  "windows",
  "windows-core",
  "windows-implement",
+ "xml",
+]
+
+[[package]]
+name = "winprint"
+version = "0.2.1"
+source = "git+https://github.com/storytold/winprint.rs?rev=bc06a7c48b768eb27a828c7986f6d2868b245ee0#bc06a7c48b768eb27a828c7986f6d2868b245ee0"
+dependencies = [
+ "flate2",
+ "fmt-derive",
+ "reqwest",
+ "scopeguard",
+ "sigstore-trust-root",
+ "sigstore-types",
+ "sigstore-verify",
+ "strum",
+ "tar",
+ "thiserror",
+ "windows",
+ "windows-core",
+ "windows-implement",
+ "windows-numerics",
  "xml",
 ]
 
