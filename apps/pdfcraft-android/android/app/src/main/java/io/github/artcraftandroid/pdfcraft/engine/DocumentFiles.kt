@@ -120,10 +120,11 @@ class DocumentFiles(private val context: Context) {
      * Keep reusable copies within [reuseBudget], most recently used first; [open]'s stays.
      * Copies that are not reusable are left to the rules that already govern them.
      */
-    private fun enforceReuseBudget(open: String?) {
+    private fun enforceReuseBudget(open: String?, tabs: Set<String> = emptySet()) {
         // a copy written in the last few minutes may belong to a document being opened right now
         val settled = System.currentTimeMillis() - 10 * 60 * 1000L
-        val dirs = workDir.listFiles()?.filter { it.isDirectory && reusable(it) && it.lastModified() < settled }.orEmpty()
+        // documents open in other tabs (#138) are live working copies, never budget candidates
+        val dirs = workDir.listFiles()?.filter { it.isDirectory && it.name !in tabs && reusable(it) && it.lastModified() < settled }.orEmpty()
         if (dirs.isEmpty()) return
         val sizes = dirs.map { d -> KeptCopy(d.name, d.listFiles()?.sumOf { it.length() } ?: 0L, d.lastModified()) }
         val keep = copiesToKeep(sizes, reuseBudget(workDir.usableSpace), open?.let { sha(it) })
@@ -159,21 +160,24 @@ class DocumentFiles(private val context: Context) {
     /**
      * Remove the working copies no longer needed: those of documents that left [recent], and of
      * those in it whose original the app can read again. The [open] document's copy stays, and so
-     * does one written in the last few minutes (a document being opened right now).
+     * does one written in the last few minutes (a document being opened right now), and those of
+     * documents open in other [tabs] (#138).
      */
-    fun pruneCopies(recent: Collection<String>, open: String?) {
+    fun pruneCopies(recent: Collection<String>, open: String?, tabs: Collection<String> = emptyList()) {
         val readable = resolver.persistedUriPermissions.filter { it.isReadPermission }.mapTo(HashSet()) { it.uri.toString() }
         val wanted = recent.filter { it !in readable }.mapTo(HashSet()) { sha(it) }
         // reusable copies of documents still in Recent may stay, within the budget below (#210)
         val inRecent = recent.mapTo(HashSet()) { sha(it) }
         open?.let { wanted += sha(it) }
+        val tabCopies = tabs.mapTo(HashSet()) { sha(it) }
+        wanted += tabCopies
         val settled = System.currentTimeMillis() - 10 * 60 * 1000L
         workDir.listFiles()?.forEach { dir ->
             if (PendingWorkingCopy.isPending(dir) || dir.name in wanted || dir.lastModified() >= settled) return@forEach
             if (dir.name in inRecent && reusable(dir)) return@forEach
             dir.deleteRecursively()
         }
-        enforceReuseBudget(open)
+        enforceReuseBudget(open, tabCopies)
     }
 
     /** Explicit Discard from the unsaved-changes prompt. Never call from automatic cleanup. */

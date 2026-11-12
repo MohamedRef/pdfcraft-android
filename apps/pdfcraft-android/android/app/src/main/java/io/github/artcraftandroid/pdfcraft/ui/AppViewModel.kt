@@ -105,9 +105,12 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     var engineProblem by mutableStateOf<String?>(null)
         private set
 
-    /** The document in the viewer, if one is open. */
+    /** The document in the viewer, if one is open (the tab in front, see [tabs]). */
     var document by mutableStateOf<OpenDocument?>(null)
-        private set
+        internal set
+
+    /** Other documents open in tabs, and split view (#138 #139). */
+    val tabs: TabsController by lazy { TabsController(this) }
 
     var recentList by mutableStateOf<List<RecentFile>>(emptyList())
         private set
@@ -155,14 +158,16 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         viewModelScope.launch {
             val open = document?.source?.toString()
             val started = android.os.SystemClock.elapsedRealtime()
+            // documents open in other tabs keep their access and working copies (#138)
+            val tabUris = tabs.sources()
             val (list, places) = withContext(Dispatchers.IO) {
                 val list = recents.list().also { list ->
                     val uris = list.map { it.uri }
                     // access to documents that left Recent is given back (#108), before the copies
                     // are pruned, so a document whose grant goes keeps its copy
-                    runCatching { files.releaseUnusedAccess(uris + study.library.load().items.map { it.uri }, open) }
+                    runCatching { files.releaseUnusedAccess(uris + tabUris + study.library.load().items.map { it.uri }, open) }
                     // copies of documents that left Recent go too (#42)
-                    runCatching { files.pruneCopies(uris, open) }
+                    runCatching { files.pruneCopies(uris, open, tabUris) }
                 }
                 // each row's thumbnail source lists a folder and its location may ask the package
                 // manager: worked out here, never while Home composes (#94)
@@ -176,7 +181,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     }
 
     /** Opening is serial: multiple ACTION_VIEW deliveries must not share a working file or engine document. */
-    private val openMutex = Mutex()
+    internal val openMutex = Mutex()
     private var lastOpenRequest = 0L
     private var openStartedAt = 0L
 
@@ -201,6 +206,12 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         // over its live Rust working file before those edits can be saved.
         if (document?.source == uri) {
             if (fromOtherApp) document?.fromOtherApp = true
+            return
+        }
+        // already open in another tab (#138): bring that tab to the front instead
+        tabs.tabs.firstOrNull { it.doc != null && it.doc?.source == uri }?.let { tab ->
+            if (fromOtherApp) tab.doc?.fromOtherApp = true
+            tabs.switchTo(tab)
             return
         }
         // Never replace the document while its unsaved write-back choice is unresolved.
@@ -313,12 +324,9 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         if (!isCurrentOpenRequest(requestId)) return
         try {
             document?.let { current ->
-                val previousSaved = saveAndClose(eng, current)
+                // the document in front stays open in its tab, saved first (#138)
+                tabs.stash(eng, current)
                 io.github.artcraftandroid.pdfcraft.engine.OpenTiming.milestone("previous_document_closed", openStartedAt)
-                if (!previousSaved) {
-                    readOnlyPrompt = current
-                    return
-                }
                 document = null
             }
             val recent = withContext(Dispatchers.IO) { recents.list().firstOrNull { it.uri == uri.toString() } }
@@ -368,6 +376,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             // a file left in Reading Mode reopens in it, unless it was opened for a tool
             readingMode = recent?.reading == true && pendingTool == null
             document = doc
+            tabs.opened(doc, doc.title)
             io.github.artcraftandroid.pdfcraft.engine.OpenTiming.milestone("viewer_model_ready", openStartedAt, pages = info.pages.size)
             if (!info.preparing) {
                 viewModelScope.launch {
@@ -384,7 +393,14 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             // a link from another PDF names the page to open on (#334)
             val linkPage = linkOpenPage?.takeIf { it.first == uri.toString() }?.second?.takeIf { it in 0 until info.pages.size }
             linkOpenPage = null
+            val linkArea = linkOpenArea.takeIf { linkPage != null }
+            linkOpenArea = null
             pendingPage = linkPage ?: recent?.lastPage?.takeIf { it in 0 until info.pages.size }
+            // a back-link to an area (#379): scroll there and flash it once the pages are laid out
+            if (linkPage != null && linkArea != null) viewModelScope.launch {
+                doc.images.awaitFirstCanvas()
+                if (document === doc) tabs.showArea(doc, linkPage, linkArea)
+            }
             pendingSpot = recent?.takeIf { linkPage == null && pendingPage != null && it.lastX >= 0f && it.lastY >= 0f }?.let { Triple(it.lastX, it.lastY, it.lastZoom) }
             withContext(Dispatchers.IO) {
                 recents.touch(RecentFile(uri.toString(), info.name, System.currentTimeMillis(), info.pages.size, file.length(), recent?.lastPage ?: 0))
@@ -429,6 +445,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                     closeQuietly(eng, doc)
                     document = null
                     readingMode = false
+                    tabs.closed(doc)
                 }
             }
         }
@@ -491,10 +508,11 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 }
                 document = null
                 readingMode = false
+                val next = tabs.closed(doc)
                 refreshRecents()
                 study.indexLibrary()
                 withContext(Dispatchers.IO) { sweepCache() }
-                if (doc.fromOtherApp) leave.trySend(Unit)
+                if (doc.fromOtherApp) leave.trySend(Unit) else showTab(next)
             }
         }
     }
@@ -518,8 +536,9 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                             if (document !== doc) return@withLock
                             closeQuietly(eng, doc)
                             document = null
+                            val next = tabs.closed(doc)
                             refreshRecents()
-                            if (doc.fromOtherApp) leave.trySend(Unit)
+                            if (doc.fromOtherApp) leave.trySend(Unit) else showTab(next)
                         }
                     } finally {
                         resolvingReadOnly = false
@@ -544,8 +563,9 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                             if (!discarded) tell(text(R.string.discard_kept_recovery))
                         }
                         document = null
+                        val next = tabs.closed(doc)
                         refreshRecents()
-                        if (doc.fromOtherApp) leave.trySend(Unit)
+                        if (doc.fromOtherApp) leave.trySend(Unit) else showTab(next)
                     }
                 } finally {
                     resolvingReadOnly = false
@@ -554,9 +574,15 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         }
     }
 
-    private suspend fun saveAndClose(eng: Engine, doc: OpenDocument): Boolean {
-        val reading = readingMode
-        val pending = pendingPage
+    /** After the document in front closed: the next tab comes to the front (a parked one opens again). */
+    private fun showTab(next: DocTab?) {
+        next ?: return
+        val d = next.doc
+        if (d != null) tabs.front(next, d) else open(Uri.parse(next.key))
+    }
+
+    /** [reading] and [pending] are the front document's unless a background tab is closed (#138). */
+    internal suspend fun saveAndClose(eng: Engine, doc: OpenDocument, reading: Boolean = readingMode, pending: Int? = pendingPage): Boolean {
         // the spot at the screen's top-left and the zoom, to reopen there (as the reference does)
         val v = doc.viewer
         val spot = if (pending == null && v.mode == io.github.artcraftandroid.pdfcraft.ui.viewer.PageMode.Continuous) v.screenToPage(androidx.compose.ui.geometry.Offset(0f, v.padTop), nearest = true) else null
@@ -946,7 +972,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         val uri = link.uri
         val file = link.file
         when {
-            file != null -> openLinkedFile(doc, file, link.filePage.toInt())
+            file != null -> openLinkedFile(doc, file, link.filePage.toInt(), link.fileRect)
             page != null -> {
                 doc.controller.rememberJump(doc.viewer)
                 doc.viewer.goToPage(page.toInt(), link.top)
@@ -965,6 +991,9 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     /** The page a link from another PDF asked for, kept until that file ([first], its URI) opens (#334). */
     private var linkOpenPage: Pair<String, Int>? = null
 
+    /** With [linkOpenPage]: the area of that page a back-link fits (#379), shown once the file opens. */
+    private var linkOpenArea: List<Float>? = null
+
     /**
      * PDFs a link can go to: the Library's files and the recent ones (not [exclude]), by their
      * names. Reads small files: call off the main thread.
@@ -976,7 +1005,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             .filter { it.uri != exclude?.toString() && io.github.artcraftandroid.pdfcraft.ui.viewer.linkFileName(it.name) != null }
 
     /** Follow a link to page [page] (0-based) of the PDF named [file]: found by name among [linkableFiles]. */
-    fun openLinkedFile(doc: OpenDocument, file: String, page: Int) {
+    fun openLinkedFile(doc: OpenDocument, file: String, page: Int, area: List<Float>? = null) {
         viewModelScope.launch {
             val target = withContext(Dispatchers.IO) { io.github.artcraftandroid.pdfcraft.ui.viewer.linkedFileFor(file, linkableFiles(doc.source)) }
             io.github.artcraftandroid.pdfcraft.ui.viewer.MarkupDiag.linkFollow(doc, found = target != null, page = page)
@@ -984,7 +1013,10 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 tell(text(R.string.link_file_missing, io.github.artcraftandroid.pdfcraft.ui.viewer.linkFileBaseName(file)))
                 return@launch
             }
+            // open in the other pane or another tab (#139 back-links): go there, nothing reopens
+            if (tabs.followLink(target.uri, page, area)) return@launch
             linkOpenPage = target.uri to page
+            linkOpenArea = area
             open(Uri.parse(target.uri))
         }
     }
@@ -1174,7 +1206,10 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         val doc = document ?: return false
         // a presentation clicker works even with the shortcuts turned off
         if (!keyboardShortcuts && !doc.controller.presenting) return false
-        if (toolScreen != null || readingMode) return false
+        if (toolScreen != null) return false
+        // tabs (#138): Ctrl+Tab, Ctrl+Shift+Tab and Ctrl+W, in Reading Mode too
+        if (ctrl && !doc.controller.presenting) tabs.key(keyCode, shift)?.let { return it }
+        if (readingMode) return false
         val v = doc.viewer
         val ctl = doc.controller
         val center = androidx.compose.ui.geometry.Offset(v.viewW / 2f, v.viewH / 2f)
@@ -1649,7 +1684,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
 
     /** Reading Mode (text reflowed to the screen) is showing. Remembered for each file, as the reference does. */
     var readingMode by mutableStateOf(false)
-        private set
+        internal set
 
     /** The page mode documents open in (View settings; the app's default, and each file's own once changed). */
     val savedPageMode: io.github.artcraftandroid.pdfcraft.ui.viewer.PageMode
