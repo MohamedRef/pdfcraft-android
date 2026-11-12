@@ -10,4 +10,5 @@
     <string name="scan_crop_book_left">Pagina sinistra di una doppia pagina: il lato destro è il taglio sulla piega del libro, non un bordo del foglio.</string>
     <string name="scan_crop_book_right">Pagina destra di una doppia pagina: il lato sinistro è il taglio sulla piega del libro, non un bordo del foglio.</string>
     <string name="scan_camera_book_hint">Allinea il dorso del libro alla linea</string>
+    <string name="scan_lab_line_flatten">Appiattire dalle righe di testo quando la rete non fa di meglio</string>
 </resources>

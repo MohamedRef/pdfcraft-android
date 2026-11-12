@@ -67,14 +67,52 @@ pub fn line_straightness(page: &Luma) -> Option<Straightness> {
         return None;
     }
     let threshold = ink_threshold(&page.data)?;
-    let strips: Vec<Vec<f64>> = (0..STRIPS).map(|i| strip_heights(page, strip_edge(i, w), strip_edge(i + 1, w), threshold)).collect();
-    let page_gap = median(strips.iter().flat_map(|runs| gaps(runs)).collect());
     let kept: Vec<Vec<(usize, f64)>> =
-        follow(&strips, page_gap).into_iter().filter(|t| t.points.len() >= MIN_LINE_STRIPS).map(|t| t.points).collect();
+        tracks(page, STRIPS, threshold).into_iter().filter(|t| t.points.len() >= MIN_LINE_STRIPS).map(|t| t.points).collect();
     if kept.len() < MIN_LINES {
         return None;
     }
     pool(&kept)
+}
+
+/// The lines of text on `page` as points in its pixels, for fitting a curled page to them (#303,
+/// part B). The page is cut into `strips` strips (at least 16) and followed as for
+/// [`line_straightness`]; each point is a strip's centre column and the line's height there. A
+/// line is kept when its first and last points are at least `min_span` of the page's width
+/// apart and it was seen in at least 5 strips. Lines come top to bottom. `None` for a blank page
+/// or data that does not match the page's size.
+pub fn text_lines(page: &Luma, strips: usize, min_span: f64) -> Option<Vec<Vec<[f64; 2]>>> {
+    let strips = strips.max(STRIPS);
+    let (w, h) = (page.width as usize, page.height as usize);
+    if w < strips || h == 0 || page.data.len() != w.checked_mul(h)? {
+        return None;
+    }
+    let threshold = ink_threshold(&page.data)?;
+    let centre = |s: usize| (strip_edge_of(s, w, strips) + strip_edge_of(s + 1, w, strips)) as f64 / 2.0;
+    let mut lines: Vec<Vec<[f64; 2]>> = tracks(page, strips, threshold)
+        .into_iter()
+        .filter(|t| t.points.len() >= MIN_TEXT_LINE_POINTS)
+        .map(|t| t.points.iter().map(|&(s, y)| [centre(s), y]).collect::<Vec<[f64; 2]>>())
+        .filter(|line| match (line.first(), line.last()) {
+            (Some(a), Some(b)) => b[0] - a[0] >= min_span * w as f64,
+            _ => false,
+        })
+        .collect();
+    let mean = |line: &Vec<[f64; 2]>| line.iter().map(|p| p[1]).sum::<f64>() / line.len().max(1) as f64;
+    lines.sort_by(|a, b| mean(a).total_cmp(&mean(b)));
+    Some(lines)
+}
+
+/// Fewest strips a line must be seen in for [`text_lines`].
+const MIN_TEXT_LINE_POINTS: usize = 5;
+
+/// The page's text-line runs in `strips` strips, followed into lines (none kept or dropped yet).
+fn tracks(page: &Luma, strips: usize, threshold: f64) -> Vec<Track> {
+    let w = page.width as usize;
+    let runs: Vec<Vec<f64>> =
+        (0..strips).map(|i| strip_heights(page, strip_edge_of(i, w, strips), strip_edge_of(i + 1, w, strips), threshold)).collect();
+    let page_gap = median(runs.iter().flat_map(|r| gaps(r)).collect());
+    follow(&runs, page_gap)
 }
 
 /// A text line followed across strips: its (strip, height) points and the last height and strip
@@ -86,10 +124,10 @@ struct Track {
     last_strip: usize,
 }
 
-/// The first column of strip `i` when a `width`-pixel page is cut into equal strips. Strip `i`
-/// runs from `strip_edge(i)` up to `strip_edge(i + 1)`.
-fn strip_edge(i: usize, width: usize) -> usize {
-    i.saturating_mul(width) / STRIPS
+/// The first column of strip `i` when a `width`-pixel page is cut into `strips` equal strips.
+/// Strip `i` runs from `strip_edge_of(i)` up to `strip_edge_of(i + 1)`.
+fn strip_edge_of(i: usize, width: usize, strips: usize) -> usize {
+    i.saturating_mul(width) / strips.max(1)
 }
 
 /// The grey level under which a pixel is ink: the midpoint of the 5th and 90th percentile. `None`

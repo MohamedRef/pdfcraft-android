@@ -10,4 +10,5 @@
     <string name="scan_crop_book_left">Left page of a spread: its right side is the cut along the book\'s gutter, not a paper edge.</string>
     <string name="scan_crop_book_right">Right page of a spread: its left side is the cut along the book\'s gutter, not a paper edge.</string>
     <string name="scan_camera_book_hint">Line up the book\'s spine with the line</string>
+    <string name="scan_lab_line_flatten">Flatten from the lines of text when the network gives nothing better</string>
 </resources>

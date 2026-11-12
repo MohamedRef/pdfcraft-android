@@ -81,6 +81,8 @@ internal fun scanPageRequest(
     // and keeps the result only when it is straighter (#302)
     flatten = flatten || lab.flattenAuto,
     flattenCheck = !flatten && lab.flattenAuto,
+    // when the network gives nothing better, the page's lines of text may still flatten it (#303)
+    lineFlatten = lab.lineFlatten,
     sideProportions = !lab.perspective,
     upright = ask.upright,
     turns = ask.turns.toUByte(),
