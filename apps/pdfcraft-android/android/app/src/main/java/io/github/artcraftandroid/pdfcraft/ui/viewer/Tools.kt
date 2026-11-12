@@ -1514,7 +1514,7 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                     // link the selected handwriting to a page or web address (#159)
                     if (doc.info.allowsAnnotation) SubTool(LucideIcons.Link, stringResource(R.string.ink_lasso_link), false, {
                         doc.commitTool?.invoke()
-                        vm.linkEdit = LinkEdit(doc, selPage, floatArrayOf(b.left - 2f, b.top - 2f, b.right + 2f, b.bottom + 2f), from = "lasso")
+                        vm.linksAndMeasure.linkEdit = LinkEdit(doc, selPage, floatArrayOf(b.left - 2f, b.top - 2f, b.right + 2f, b.bottom + 2f), from = "lasso")
                         clearSelection()
                     })
                     if (savedSelected.isNotEmpty()) {

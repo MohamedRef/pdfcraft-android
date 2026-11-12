@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Document tabs and split view (#138 #139), kept apart from strings.xml so parallel work merges cleanly. -->
+<resources>
+    <string name="tabs_open_another">Weiteres Dokument öffnen</string>
+    <string name="tabs_parked">%1$s, geschlossen, um Speicher zu sparen</string>
+    <string name="tabs_close">%1$s schließen</string>
+    <string name="tabs_split">Geteilte Ansicht</string>
+    <string name="tabs_split_close">Geteilte Ansicht schließen</string>
+    <string name="tabs_split_choose">Neben diesem Dokument anzeigen</string>
+    <string name="tabs_close_all">Alle schließen</string>
+    <string name="tabs_resume">Zurück zu den Dokumenten</string>
+    <string name="tabs_split_edit_here">Hier bearbeiten</string>
+    <string name="tabs_snip">Bereich kopieren</string>
+    <string name="tabs_snip_hint">Über den zu kopierenden Bereich ziehen</string>
+    <string name="tabs_snip_drag">Auf das andere Dokument ziehen</string>
+    <string name="tabs_drop_linked">Hinzugefügt, mit einem Link zur Quellseite</string>
+    <string name="tabs_drop_done">Hinzugefügt</string>
+    <string name="tabs_drop_off_page">Auf einer Seite ablegen</string>
+    <plurals name="tabs_open_count">
+        <item quantity="one">%1$d geöffnetes Dokument</item>
+        <item quantity="other">%1$d geöffnete Dokumente</item>
+    </plurals>
+</resources>

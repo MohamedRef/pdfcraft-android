@@ -68,7 +68,7 @@ internal class ScanLabController(private val vm: AppViewModel) {
         val lab = options
         val version = "${vm.appVersion} (${versionCode()})"
         store.addPage(scan, index, page.file, output) { keptOutput ->
-            scanTestPageJson(version, saved, page.corners, page.found, page.finding, look, strength, flatten, lab, keptOutput, result, preview, turn, kind)
+            scanTestPageJson(version, saved, page.corners, page.found, page.finding, look, strength, flatten, lab, keptOutput, result, preview, page.crop, turn, kind)
         }
     }
 

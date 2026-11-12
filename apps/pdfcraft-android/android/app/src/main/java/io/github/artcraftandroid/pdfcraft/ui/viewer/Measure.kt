@@ -110,7 +110,7 @@ class MeasureSession(val doc: OpenDocument) {
 /** Measure: taps place points, snapped to the drawing's lines; a loupe shows what is under the finger. */
 @Composable
 fun MeasureLayer(vm: AppViewModel, doc: OpenDocument) {
-    val m = vm.measureSession(doc)
+    val m = vm.linksAndMeasure.measureSession(doc)
     Box(
         Modifier.fillMaxSize().toolGestures(
             doc,
@@ -119,7 +119,7 @@ fun MeasureLayer(vm: AppViewModel, doc: OpenDocument) {
             onUp = { p, _ ->
                 doc.selection.magnifierAt = null
                 val at = doc.viewer.screenToPage(p) ?: return@toolGestures
-                vm.measureTap(m, at)
+                vm.linksAndMeasure.measureTap(m, at)
             },
             onCancel = { doc.selection.magnifierAt = null },
         ),
@@ -162,17 +162,17 @@ fun MeasureLayer(vm: AppViewModel, doc: OpenDocument) {
 /** Measure's bar: Distance · Perimeter · Area, then Undo point, Done, Scale and Export. */
 @Composable
 fun MeasureToolbar(vm: AppViewModel, doc: OpenDocument) {
-    val m = vm.measureSession(doc)
+    val m = vm.linksAndMeasure.measureSession(doc)
     SubToolbar {
-        SubTool(LucideIcons.Ruler, stringResource(R.string.measure_distance), m.mode == MeasureMode.Distance && !m.calibrating, { vm.setMeasureMode(m, MeasureMode.Distance) })
-        SubTool(LucideIcons.Spline, stringResource(R.string.measure_perimeter), m.mode == MeasureMode.Perimeter && !m.calibrating, { vm.setMeasureMode(m, MeasureMode.Perimeter) })
-        SubTool(LucideIcons.Pentagon, stringResource(R.string.measure_area), m.mode == MeasureMode.Area && !m.calibrating, { vm.setMeasureMode(m, MeasureMode.Area) })
+        SubTool(LucideIcons.Ruler, stringResource(R.string.measure_distance), m.mode == MeasureMode.Distance && !m.calibrating, { vm.linksAndMeasure.setMeasureMode(m, MeasureMode.Distance) })
+        SubTool(LucideIcons.Spline, stringResource(R.string.measure_perimeter), m.mode == MeasureMode.Perimeter && !m.calibrating, { vm.linksAndMeasure.setMeasureMode(m, MeasureMode.Perimeter) })
+        SubTool(LucideIcons.Pentagon, stringResource(R.string.measure_area), m.mode == MeasureMode.Area && !m.calibrating, { vm.linksAndMeasure.setMeasureMode(m, MeasureMode.Area) })
         SubDivider()
-        SubTool(LucideIcons.Undo2, stringResource(R.string.measure_undo_point), false, { vm.undoMeasurePoint(m) }, enabled = m.points.isNotEmpty())
-        SubTool(LucideIcons.Check, stringResource(R.string.measure_done), false, { vm.finishMeasurement(m) }, enabled = m.points.size >= m.mode.minPoints && !m.calibrating)
+        SubTool(LucideIcons.Undo2, stringResource(R.string.measure_undo_point), false, { vm.linksAndMeasure.undoMeasurePoint(m) }, enabled = m.points.isNotEmpty())
+        SubTool(LucideIcons.Check, stringResource(R.string.measure_done), false, { vm.linksAndMeasure.finishMeasurement(m) }, enabled = m.points.size >= m.mode.minPoints && !m.calibrating)
         SubDivider()
         SubTool(LucideIcons.Settings2, stringResource(R.string.measure_scale), m.calibrating, { m.scaleSheet = true })
-        SubTool(LucideIcons.FileSpreadsheet, stringResource(R.string.measure_export), false, { vm.exportMeasurements(doc) })
+        SubTool(LucideIcons.FileSpreadsheet, stringResource(R.string.measure_export), false, { vm.linksAndMeasure.exportMeasurements(doc) })
     }
 }
 
@@ -199,14 +199,14 @@ private fun ScaleSheet(vm: AppViewModel, m: MeasureSession) {
                     val n = parseMeasureNumber(ratio)
                     if (n == null) wrong = true else {
                         m.scaleSheet = false
-                        vm.setMeasureRatio(m, n, unit)
+                        vm.linksAndMeasure.setMeasureRatio(m, n, unit)
                     }
                 }) { Text(stringResource(R.string.measure_scale_apply), color = c.accent, fontWeight = FontWeight.SemiBold) }
             }
         }
         SheetRow(LucideIcons.Ruler, stringResource(R.string.measure_calibrate), {
             m.scaleSheet = false
-            vm.startCalibration(m)
+            vm.linksAndMeasure.startCalibration(m)
         })
         Spacer(Modifier.height(8.dp))
     }
@@ -228,7 +228,7 @@ private fun CalibrationSheet(vm: AppViewModel, m: MeasureSession, pts: Pair<Offs
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                 androidx.compose.material3.TextButton(onClick = {
                     val n = parseMeasureNumber(length)
-                    if (n == null) wrong = true else vm.finishCalibration(m, pts, n, unit)
+                    if (n == null) wrong = true else vm.linksAndMeasure.finishCalibration(m, pts, n, unit)
                 }) { Text(stringResource(R.string.measure_scale_apply), color = c.accent, fontWeight = FontWeight.SemiBold) }
             }
         }

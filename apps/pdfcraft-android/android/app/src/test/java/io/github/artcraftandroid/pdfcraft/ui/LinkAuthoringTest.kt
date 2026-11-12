@@ -79,7 +79,7 @@ class LinkAuthoringTest {
 
     @Test
     fun linksOverHandwritingGetABadge() {
-        fun link(vararg r: Float) = LinkInfo(rect = r.toList(), uri = null, page = 1u, top = null, file = null, filePage = 0u)
+        fun link(vararg r: Float) = LinkInfo(rect = r.toList(), uri = null, page = 1u, top = null, file = null, filePage = 0u, fileRect = null)
         fun ink(page: Int, vararg r: Float, subtype: String = "Ink") = CommentInfo(
             page = page.toUInt(), index = 0u, subtype = subtype, kind = subtype, author = null, contents = null, modified = null, rect = r.toList(),
             color = null, name = null, replyTo = null, state = null, locked = false, fillSign = false, opacity = 1f, width = null, hidden = false, points = emptyList(),
