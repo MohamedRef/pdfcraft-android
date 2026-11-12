@@ -161,6 +161,11 @@ class ScanSaveTest {
         // on: every page goes through the network, and is kept only when straighter (#302)
         val checked = scanPageRequest("/a", corners, ScanFilter.CleanScan, false, auto, "")
         assertTrue(checked.flatten && checked.flattenCheck)
+        // a flattened page's border is trimmed unless the testing option is off (#302)
+        assertTrue(checked.flattenTrim && plain.flattenTrim)
+        assertFalse(scanPageRequest("/a", corners, ScanFilter.CleanScan, true, ScanLab(flattenTrim = false), "").flattenTrim)
+        val noTrim = ScanPreviewKey("/a", corners.toList(), ScanFilter.CleanScan, true, ScanLab())
+        assertFalse(noTrim == noTrim.copy(lab = ScanLab(flattenTrim = false)))
         // the scan screen's switch asks for it: flattened as asked, without the check
         val asked = scanPageRequest("/a", corners, ScanFilter.CleanScan, true, auto, "")
         assertTrue(asked.flatten)

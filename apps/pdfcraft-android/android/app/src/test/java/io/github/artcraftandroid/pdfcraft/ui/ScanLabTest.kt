@@ -50,6 +50,9 @@ class ScanLabTest {
         // automatic flattening is a testing option, off as designed until real photos show it helps (#302)
         assertFalse(lab.flattenAuto)
         assertFalse(lab.copy(flattenAuto = true).asDesigned)
+        // a flattened page's border is trimmed as designed; off is a testing option (#302)
+        assertTrue(lab.flattenTrim)
+        assertFalse(lab.copy(flattenTrim = false).asDesigned)
         // a look per page and the looks strip's previews are as designed; off is the way back (#301)
         assertTrue(lab.lookPerPage && lab.lookStrip)
         assertFalse(lab.copy(lookPerPage = false).asDesigned)
@@ -82,6 +85,7 @@ class ScanLabTest {
             ScanLab(presets = false),
             ScanLab(cropTools = false),
             ScanLab(flattenAuto = true),
+            ScanLab(flattenTrim = false),
             ScanLab(lookPerPage = false),
             ScanLab(lookStrip = false),
             ScanLab(whiteboardLook = false, previewStop = false, previewZoom = false),
@@ -346,6 +350,24 @@ class ScanLabTest {
         assertTrue(plain.getJSONObject("result").isNull("flatten_check"))
         val unmeasured = scanFlattenCheckJson(io.github.artcraftandroid.pdfcraft.core.ScanFlattenCheck(false, "unmeasured", null, Float.NaN, 0u, 0u))
         assertTrue(unmeasured.isNull("straightened_px") && unmeasured.isNull("flattened_px"))
+    }
+
+    @Test
+    fun aKeptPageSaysWhatWasTrimmedAndThePersonsFlattenChoice() {
+        val trim = io.github.artcraftandroid.pdfcraft.core.ScanTrim(0.015f, 0f, 0f, 0.02f)
+        val json = JSONObject(
+            scanTestPageJson("1.0 (1)", true, crop, crop, null, "auto", 60, true, ScanLab(), "page-01.out.jpg", result.copy(trim = trim), flattenChosen = true),
+        )
+        val t = json.getJSONObject("result").getJSONObject("flatten_trim")
+        assertEquals(1.5, t.getDouble("left_pct"), 1e-9)
+        assertEquals(2.0, t.getDouble("bottom_pct"), 1e-9)
+        assertTrue(json.getBoolean("flatten_chosen"))
+        assertTrue(json.getJSONObject("options").getBoolean("flatten_trim"))
+        // no trim looked for, and no choice made: null
+        val plain = JSONObject(scanTestPageJson("1.0 (1)", true, crop, crop, null, "auto", 60, false, ScanLab(flattenTrim = false), "page-01.out.jpg", result))
+        assertTrue(plain.getJSONObject("result").isNull("flatten_trim"))
+        assertTrue(plain.isNull("flatten_chosen"))
+        assertFalse(plain.getJSONObject("options").getBoolean("flatten_trim"))
     }
 
     @Test

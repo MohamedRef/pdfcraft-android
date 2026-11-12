@@ -5,6 +5,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.selection.selectable
 import io.github.artcraftandroid.pdfcraft.ui.scan.rotateScanPage
 import io.github.artcraftandroid.pdfcraft.ui.scan.chooseScanLook
+import io.github.artcraftandroid.pdfcraft.ui.scan.toggleScanFlatten
 import io.github.artcraftandroid.pdfcraft.ui.scan.undoScanTurn
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -845,6 +846,8 @@ data class ScanPage(
     val preset: String? = null,
     /** Which half of a photographed book spread this page is (#303); null for a page of its own. */
     val book: io.github.artcraftandroid.pdfcraft.ui.scan.ScanBookHalf? = null,
+    /** The person's Flatten page choice for this page (#302): null until they make one, which is off. */
+    val flatten: Boolean? = null,
     /** The page's own look and strength (#301); a new page takes the look chosen last. */
     val look: io.github.artcraftandroid.pdfcraft.ui.scan.ScanPageLook = io.github.artcraftandroid.pdfcraft.ui.scan.ScanPageLook(),
 ) {
@@ -875,10 +878,6 @@ fun ScanScreen(vm: AppViewModel) {
     val c = pdfColors
     val pages = vm.scanPages
     // each page has its own look and strength (#301), kept with the page and with the scan
-    // curled, sagging or folded pages drawn flat (#302): the person's choice and off to begin
-    // with, because nothing measured tells a bent page from a flat one, and on a flat page the
-    // network is a little less exact than the plain straightening; kept with the scan (#301)
-    val flatten = vm.scanFlatten
     // Apply to all's question, when some page has a look of its own (#301)
     var confirmApply by remember { mutableStateOf(false) }
     // a finger held on the preview shows the page in the Original look (#301)
@@ -918,7 +917,7 @@ fun ScanScreen(vm: AppViewModel) {
     ToolScaffold(
         if (pages.isEmpty()) stringResource(R.string.common_tool_scan) else stringResource(R.string.tools_page_of, current.coerceAtMost(pages.lastIndex) + 1, pages.size),
         { vm.discardScan() },
-        stringResource(R.string.tools_save_pdf), pages.isNotEmpty(), { vm.saveScan(flatten && vm.scanCanFlatten) },
+        stringResource(R.string.tools_save_pdf), pages.isNotEmpty(), { vm.saveScan() },
     ) {
         // a reminder that the scanner is not as it is meant to be used: a testing option is on (#288)
         if (!vm.scanLab.options.asDesigned) {
@@ -943,7 +942,10 @@ fun ScanScreen(vm: AppViewModel) {
         val shownAt = current.coerceAtMost(pages.lastIndex)
         val page = pages.getOrNull(shownAt)
         val lab = vm.scanLab.options
-        val flattening = flatten && vm.scanCanFlatten
+        // curled, sagging or folded pages drawn flat (#302): the person's choice for each page, and
+        // off to begin with, because nothing measured tells a bent page from a flat one, and on a
+        // flat page the network is a little less exact than the plain straightening
+        val flattening = page != null && io.github.artcraftandroid.pdfcraft.ui.scan.scanPageFlattens(page.flatten, vm.scanCanFlatten)
         // Settings ▸ Preferences ▸ Scan (#339); read each time, so a change there shows here
         val autoUpright = io.github.artcraftandroid.pdfcraft.ui.scan.ScanUprightSetting.get(vm.settings.appPrefs)
         if (page != null && lab.preview) {
@@ -1091,12 +1093,14 @@ fun ScanScreen(vm: AppViewModel) {
         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 8.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             // the testing option's way back: the looks as words (#301)
             if (page != null && !lab.lookStrip) io.github.artcraftandroid.pdfcraft.ui.scan.ScanLookChips(vm, shownAt, page.look)
-            if (vm.scanCanFlatten) {
-                // a switch beside the looks, not one of them: outlined, and filled when it is on
+            if (vm.scanCanFlatten && page != null) {
+                // a switch beside the looks, not one of them: outlined, and filled when it is on;
+                // it flattens the page shown, and pages taken after it start the same way (#302)
+                val flatten = page.flatten == true
                 Text(
                     stringResource(R.string.tools_scan_flatten), color = if (flatten) c.accent else c.text, fontSize = 14.sp,
                     modifier = Modifier.clip(CircleShape).background(if (flatten) c.pressed else Color.Transparent).border(1.dp, if (flatten) c.accent else c.textSecondary, CircleShape)
-                        .toggleable(value = flatten, role = Role.Switch) { vm.scanFlatten = it }.padding(horizontal = 14.dp, vertical = 8.dp),
+                        .toggleable(value = flatten, role = Role.Switch) { vm.toggleScanFlatten(shownAt) }.padding(horizontal = 14.dp, vertical = 8.dp),
                 )
             }
             // book mode (#303): photos taken from now on become a spread's two pages

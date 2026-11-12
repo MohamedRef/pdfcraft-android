@@ -158,6 +158,8 @@ fn main() {
             // the scan screen's switch, or every page checked by the automatic mode (#302)
             flatten: facts["flatten"].as_bool().unwrap_or(false) || (options["flatten_auto"].as_bool().unwrap_or(false)),
             flatten_check: !facts["flatten"].as_bool().unwrap_or(false) && options["flatten_auto"].as_bool().unwrap_or(false),
+            // the border trim of a flattened page (#302); files from before it have none
+            flatten_trim: options["flatten_trim"].as_bool().unwrap_or(false),
             // the text-line fallback (#303): files from before it have no such option
             line_flatten: options["line_flatten"].as_bool().unwrap_or(false),
             // a file from before pages were turned upright (#339) has no such option
