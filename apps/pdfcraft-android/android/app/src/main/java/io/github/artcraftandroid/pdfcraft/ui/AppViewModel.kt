@@ -3,6 +3,7 @@ package io.github.artcraftandroid.pdfcraft.ui
 import io.github.artcraftandroid.pdfcraft.ui.viewer.ViewLayout
 import io.github.artcraftandroid.pdfcraft.ui.viewer.recognizeText
 import io.github.artcraftandroid.pdfcraft.ui.viewer.startCompare
+import io.github.artcraftandroid.pdfcraft.ui.viewer.prepareGroupedText
 import io.github.artcraftandroid.pdfcraft.ui.home.FileTool
 import io.github.artcraftandroid.pdfcraft.ui.viewer.FillElement
 import androidx.compose.ui.graphics.asImageBitmap

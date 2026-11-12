@@ -14,6 +14,7 @@ import io.github.artcraftandroid.pdfcraft.text
 import io.github.artcraftandroid.pdfcraft.ui.viewer.PagePoint
 import io.github.artcraftandroid.pdfcraft.ui.viewer.TextPrompt
 import io.github.artcraftandroid.pdfcraft.ui.viewer.ViewerTool
+import io.github.artcraftandroid.pdfcraft.ui.viewer.prepareGroupedText
 import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
@@ -93,6 +94,9 @@ class EditController internal constructor(private val vm: AppViewModel) {
 
     /** The picture tools' state: a crop being framed, the Rotate dialog (#161). */
     val imageEdit = io.github.artcraftandroid.pdfcraft.ui.viewer.ImageEditState()
+
+    /** Editing existing text: document fonts, spacing and the overflow warning (#167). */
+    val textFormat = io.github.artcraftandroid.pdfcraft.ui.viewer.TextFormatState()
 
     /** Formatting the engine doesn't report back, kept per paragraph (page to number) while editing. */
     val editFont = androidx.compose.runtime.mutableStateMapOf<Pair<Int, Int>, String>()
@@ -224,7 +228,16 @@ class EditController internal constructor(private val vm: AppViewModel) {
     }
 
     private fun selectImageAt(doc: OpenDocument, at: PagePoint) {
-        vm.viewModelScope.launch { imageUnder(doc, at)?.let { editImage = it } }
+        vm.viewModelScope.launch {
+            val img = imageUnder(doc, at) ?: return@launch
+            editImage = img
+            // text drawn inside grouped artwork has no paragraph until the page is prepared (#167)
+            if (img.kind == "form") {
+                vm.tell(text(R.string.edit_grouped_text), text(R.string.edit_grouped_make_editable)) {
+                    vm.prepareGroupedText(doc, at)
+                }
+            }
+        }
     }
 
     /** The picture drawn under [at], topmost first, if any. */

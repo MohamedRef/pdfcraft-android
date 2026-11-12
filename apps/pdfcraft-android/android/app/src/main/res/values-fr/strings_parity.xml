@@ -262,4 +262,19 @@
         <item quantity="one">%1$d champ ajouté</item>
         <item quantity="other">%1$d champs ajoutés</item>
     </plurals>
+    <string name="edit_grouped_text">Ce texte est dans un graphisme groupé</string>
+    <string name="edit_grouped_make_editable">Rendre modifiable</string>
+    <string name="edit_grouped_ready">Le texte de cette page est maintenant modifiable</string>
+    <string name="edit_grouped_refused">Certains groupes sont restés inchangés : %1$s</string>
+    <string name="edit_fonts_in_document">Dans ce document</string>
+    <string name="edit_fonts_none">Aucune police incorporée réutilisable sur cette page</string>
+    <string name="edit_font_from_file">Ajouter une police depuis un fichier…</string>
+    <string name="edit_font_imported">Composé en %1$s</string>
+    <string name="edit_spacing">Espacement</string>
+    <string name="edit_line_spacing">Interligne</string>
+    <string name="edit_letter_spacing">Espacement des lettres</string>
+    <string name="edit_points">%1$s pt</string>
+    <string name="edit_spacing_less">Réduire %1$s</string>
+    <string name="edit_spacing_more">Augmenter %1$s</string>
+    <string name="edit_overflow">Ce texte ne tient plus à sa place</string>
 </resources>
