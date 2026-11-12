@@ -16,7 +16,7 @@ a phone yet.** Every number in the scanner's documents was measured on a desktop
 | Issue | What | State | Merged in | What is left |
 |---|---|---|---|---|
 | #287 | `pdfcraft-scan` crate, one pass from photo to page | Done, closed | #331, #346 | |
-| #288 | Measuring: harness, drawn pages, test set | Part | #346, #367, #382, #386 | The `scan-eval` runner, the CI gate, the SmartDoc script. The drawn photos (`synth`) and the metrics blocks are in; see [ANDROID_SCAN_MEASURING.md](ANDROID_SCAN_MEASURING.md) |
+| #288 | Measuring: harness, drawn pages, test set | Part | #346, #367, #382, #386, this PR | The CI gate, the SmartDoc script. The drawn photos (`synth`), the metrics blocks and the `scan-eval` runner are in; see [ANDROID_SCAN_MEASURING.md](ANDROID_SCAN_MEASURING.md) |
 | #289 | Model files: pinned, loaded, exported | Part | #360, #365, #370 | `scan_model_states`, a Models list in settings, optional packs, copying a *changed* model on update (section 6) |
 | #290 | Page found by a network | Core done | #360 | Figures on the owner's set; phone time. Known: wrong and accepted on 2 of the 10 reference photos, nothing found on 2 |
 | #291 | Edges refined at full size | Core done | #356 | A corner outside the photo is not accepted; the owner's set; phone time |
@@ -199,6 +199,7 @@ The list in #286 ("Rules for every scan PR") is the reference. The ones that hav
   this was written on had no Android SDK; every Kotlin change here was checked by CI alone.
 - CI on every pull request: "Rust engine and provenance" (about 15 minutes), "Android JVM and
   UI tests" (about 8), "Merge gate", "Conventional title".
+- Measuring on drawn photos or a test set: `scan-eval` ([ANDROID_SCAN_MEASURING.md](ANDROID_SCAN_MEASURING.md)).
 - Measuring against a reference scanner: `tools/scan-eval/README.md` (`reference_pairs.py`,
   with `scan_reference look`). Measuring orientation, flattening and detection on the same
   pairs: `scan_reference upright | flatten | detect`.

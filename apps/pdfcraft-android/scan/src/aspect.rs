@@ -86,7 +86,7 @@ const CORNER_NOISE: f64 = 0.00075;
 /// to be compared with the camera's.
 const FIRM_ESTIMATE: f64 = 0.1;
 /// The diagonal of a 35 mm frame, which "35 mm equivalent" focal lengths refer to.
-const FRAME_35MM_DIAGONAL: f64 = 43.27;
+pub const FRAME_35MM_DIAGONAL: f64 = 43.27;
 
 /// The focal length in pixels of an upright `width` × `height` photo from its 35 mm equivalent,
 /// as a camera writes it into the file. `None` when the photo's shape is not a camera's (it was
