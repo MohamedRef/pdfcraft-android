@@ -1960,4 +1960,15 @@
         <item quantity="many">%d ملاحظة</item>
         <item quantity="other">%d ملاحظة</item>
     </plurals>
+    <string name="scan_models_section">نماذج الماسح الضوئي</string>
+    <string name="scan_model_edges">العثور على الصفحة</string>
+    <string name="scan_model_flatten">فرد الصفحة</string>
+    <string name="scan_model_upright">تعديل اتجاه الصفحات</string>
+    <string name="scan_model_ready">مثبّت</string>
+    <string name="scan_model_missing">غير مثبّت</string>
+    <string name="scan_model_corrupt">تالف، لا يُستخدم</string>
+    <string name="scan_model_line">%1$s · %2$s · %3$s</string>
+    <string name="scan_models_body">هذه النماذج مضمّنة في التطبيق وتعمل على هذا الجهاز. النموذج التالف لا يُستخدم، وتبقى ميزته متوقفة حتى ينسخه التطبيق من جديد.</string>
+    <string name="scan_models_copy_again">نسخ النماذج من جديد</string>
+    <string name="scan_models_copied">النماذج المنسوخة: %1$d</string>
 </resources>

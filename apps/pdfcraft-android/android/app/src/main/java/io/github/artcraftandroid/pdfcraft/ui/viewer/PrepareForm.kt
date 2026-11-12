@@ -172,19 +172,19 @@ fun AppViewModel.openPrepareForm(doc: OpenDocument) {
         return
     }
     doc.controller.sheet = ViewerSheet.None
-    prepareForm.kind = null
-    prepareForm.selected = null
-    prepareForm.doc = doc
+    tools.prepareForm.kind = null
+    tools.prepareForm.selected = null
+    tools.prepareForm.doc = doc
     viewModelScope.launch { loadAllWidgets(doc) }
 }
 
 fun AppViewModel.closePrepareForm() {
-    prepareForm.doc = null
-    prepareForm.kind = null
-    prepareForm.selected = null
-    prepareForm.props = null
-    prepareForm.detected = null
-    prepareForm.tabOrder = null
+    tools.prepareForm.doc = null
+    tools.prepareForm.kind = null
+    tools.prepareForm.selected = null
+    tools.prepareForm.props = null
+    tools.prepareForm.detected = null
+    tools.prepareForm.tabOrder = null
 }
 
 fun AppViewModel.addField(doc: OpenDocument, page: Int, kind: FieldKind, rect: FloatArray, extra: Map<String, Any?> = emptyMap()) {
@@ -197,8 +197,8 @@ fun AppViewModel.addField(doc: OpenDocument, page: Int, kind: FieldKind, rect: F
     }
     runTool(doc, "form_add_field", args) { r ->
         editEvent(doc, "form_add_field", "kind" to kind.arg, "drawn" to extra.isEmpty())
-        prepareForm.kind = null
-        prepareForm.selected = r.optString("field").takeIf { it.isNotEmpty() }
+        tools.prepareForm.kind = null
+        tools.prepareForm.selected = r.optString("field").takeIf { it.isNotEmpty() }
     }
 }
 
@@ -207,7 +207,7 @@ fun AppViewModel.moveField(doc: OpenDocument, field: String, rect: FloatArray) {
 }
 
 fun AppViewModel.deleteField(doc: OpenDocument, field: String) {
-    prepareForm.selected = null
+    tools.prepareForm.selected = null
     runTool(doc, "form_delete_field", mapOf("field" to field)) {
         editEvent(doc, "form_delete_field")
         tell(appText(R.string.form_field_deleted, field)) }
@@ -243,7 +243,7 @@ fun AppViewModel.editFieldProps(doc: OpenDocument, field: String) {
                     else -> o.toString()
                 }
             }
-            prepareForm.props = FieldProps(
+            tools.prepareForm.props = FieldProps(
                 name = field, type = f.optString("type"),
                 tooltip = f.optString("tooltip").takeUnless { f.isNull("tooltip") } ?: "",
                 required = f.optBoolean("required"), readOnly = f.optBoolean("read_only"), multiline = f.optBoolean("multiline"),
@@ -257,11 +257,11 @@ fun AppViewModel.editFieldProps(doc: OpenDocument, field: String) {
 }
 
 fun AppViewModel.saveFieldProps(doc: OpenDocument, old: FieldProps, new: FieldProps) {
-    prepareForm.props = null
+    tools.prepareForm.props = null
     val args = propsArgs(old, new)
     if (args.isEmpty()) return
     runTool(doc, "form_set_props", args + ("field" to old.name)) { r ->
-        if (prepareForm.selected == old.name) prepareForm.selected = r.optString("field").ifEmpty { new.name.trim() }
+        if (tools.prepareForm.selected == old.name) tools.prepareForm.selected = r.optString("field").ifEmpty { new.name.trim() }
     }
 }
 
@@ -280,7 +280,7 @@ fun AppViewModel.detectFields(doc: OpenDocument) {
                 DetectedField(page, f.optString("kind"), f.optString("name"), flipRect(FloatArray(4) { a.getDouble(it).toFloat() }, ph), if (f.has("comb")) f.optInt("comb") else null)
             }
             editEvent(doc, "form_detect_found", "found" to list.size)
-            if (list.isEmpty()) tell(appText(R.string.form_detect_none)) else prepareForm.detected = list
+            if (list.isEmpty()) tell(appText(R.string.form_detect_none)) else tools.prepareForm.detected = list
         } catch (e: Exception) {
             tell(e.userMessage)
         }
@@ -289,7 +289,7 @@ fun AppViewModel.detectFields(doc: OpenDocument) {
 
 /** Add the [accepted] proposals: all of them in one undoable step, or each one when only some are kept. */
 fun AppViewModel.addDetected(doc: OpenDocument, all: List<DetectedField>, accepted: Set<Int>) {
-    prepareForm.detected = null
+    tools.prepareForm.detected = null
     if (accepted.isEmpty()) return
     if (accepted.size == all.size) {
         runTool(doc, "form_detect_fields", mapOf("add" to true)) { editEvent(doc, "form_detect_add", "proposed" to all.size, "added" to all.size); tell(plural(R.plurals.form_fields_added, all.size, all.size)) }
@@ -334,7 +334,7 @@ fun AppViewModel.tabOrder(doc: OpenDocument, order: String? = null, field: Strin
                 refresh(doc, null)
             }
             val t = r.optJSONArray("tab_order") ?: JSONArray()
-            prepareForm.tabOrder = (0 until t.length()).map { t.getString(it) }
+            tools.prepareForm.tabOrder = (0 until t.length()).map { t.getString(it) }
         } catch (e: Exception) {
             tell(e.userMessage)
         }
@@ -350,7 +350,7 @@ fun AppViewModel.tabOrder(doc: OpenDocument, order: String? = null, field: Strin
 @Composable
 fun PrepareFormLayer(vm: AppViewModel, doc: OpenDocument) {
     val c = pdfColors
-    val st = vm.prepareForm
+    val st = vm.tools.prepareForm
     val density = LocalDensity.current
     var start by remember { mutableStateOf<Offset?>(null) }
     var end by remember { mutableStateOf<Offset?>(null) }
@@ -512,7 +512,7 @@ private fun FieldPropsDialog(vm: AppViewModel, doc: OpenDocument, old: FieldProp
     val c = pdfColors
     var p by remember(old) { mutableStateOf(old) }
     PdfDialog(
-        onDismiss = { vm.prepareForm.props = null },
+        onDismiss = { vm.tools.prepareForm.props = null },
         title = stringResource(R.string.form_properties),
         confirm = stringResource(R.string.common_save),
         confirmEnabled = p.name.isNotBlank() && !p.name.contains('.') || p.name == old.name,
@@ -564,7 +564,7 @@ private fun DetectDialog(vm: AppViewModel, doc: OpenDocument, all: List<Detected
     val c = pdfColors
     var keep by remember(all) { mutableStateOf(all.indices.toSet()) }
     PdfDialog(
-        onDismiss = { vm.prepareForm.detected = null },
+        onDismiss = { vm.tools.prepareForm.detected = null },
         title = stringResource(R.string.form_detect),
         confirm = stringResource(R.string.form_detect_add),
         confirmEnabled = keep.isNotEmpty(),
@@ -596,10 +596,10 @@ private fun DetectDialog(vm: AppViewModel, doc: OpenDocument, all: List<Detected
 private fun TabOrderDialog(vm: AppViewModel, doc: OpenDocument, order: List<String>) {
     val c = pdfColors
     PdfDialog(
-        onDismiss = { vm.prepareForm.tabOrder = null },
+        onDismiss = { vm.tools.prepareForm.tabOrder = null },
         title = stringResource(R.string.form_tab_order),
         confirm = stringResource(R.string.common_done),
-        onConfirm = { vm.prepareForm.tabOrder = null },
+        onConfirm = { vm.tools.prepareForm.tabOrder = null },
         dismiss = null,
     ) {
         Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {

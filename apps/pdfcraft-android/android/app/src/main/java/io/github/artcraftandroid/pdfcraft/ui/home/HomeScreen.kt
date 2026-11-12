@@ -285,7 +285,7 @@ private fun HomeTabScreen(vm: AppViewModel, onBrowse: () -> Unit) {
             SheetRow(LucideIcons.BookOpen, stringResource(R.string.notebook_new), { fabMenu = false; vm.study.newNotebookOpen = true })
             SheetDivider()
             SheetRow(LucideIcons.FilePenLine, stringResource(R.string.common_tool_edit_pdf), { fabMenu = false; vm.toolForFile(FileTool.Edit) })
-            SheetRow(LucideIcons.FilePlus2, stringResource(R.string.common_tool_create_pdf), { fabMenu = false; vm.openCreate() })
+            SheetRow(LucideIcons.FilePlus2, stringResource(R.string.common_tool_create_pdf), { fabMenu = false; vm.tools.openCreate() })
             SheetRow(LucideIcons.Combine, stringResource(R.string.common_tool_combine), { fabMenu = false; vm.pickFiles(io.github.artcraftandroid.pdfcraft.ui.FilePickKind.Combine) })
             Spacer(Modifier.height(12.dp))
         }
@@ -309,7 +309,7 @@ private fun ToolsCarousel(vm: AppViewModel, onBrowse: () -> Unit) {
         CarouselTile(LucideIcons.FilePenLine, stringResource(R.string.common_tool_edit_pdf), ToolHues.edit) { vm.toolForFile(FileTool.Edit) }
         CarouselTile(LucideIcons.Volume2, stringResource(R.string.common_tool_read_aloud), ToolHues.read) { vm.toolForFile(FileTool.ReadAloud) }
         CarouselTile(LucideIcons.Signature, stringResource(R.string.common_tool_fill_sign), ToolHues.sign) { vm.toolForFile(FileTool.FillSign) }
-        CarouselTile(LucideIcons.FilePlus2, stringResource(R.string.common_tool_create_pdf), ToolHues.create) { vm.openCreate() }
+        CarouselTile(LucideIcons.FilePlus2, stringResource(R.string.common_tool_create_pdf), ToolHues.create) { vm.tools.openCreate() }
         CarouselTile(LucideIcons.LayoutGrid, stringResource(R.string.common_tool_organize), ToolHues.organize) { vm.toolForFile(FileTool.Organize) }
         CarouselTile(LucideIcons.Combine, stringResource(R.string.common_tool_combine), ToolHues.combine) { vm.pickFiles(io.github.artcraftandroid.pdfcraft.ui.FilePickKind.Combine) }
         CarouselTile(LucideIcons.FileArchive, stringResource(R.string.common_tool_compress), ToolHues.compress) { vm.toolForFile(FileTool.Compress) }
@@ -497,7 +497,7 @@ fun FileSheet(vm: AppViewModel, r: FileRow, recent: Boolean, onDismiss: () -> Un
             SheetRow(LucideIcons.Share2, stringResource(R.string.common_share), { act { vm.shareFile(r) } })
             SheetRow(LucideIcons.Printer, stringResource(R.string.home_print), { act { vm.printFile(r) } })
             SheetRow(LucideIcons.ExternalLink, stringResource(R.string.home_open_with), { act { vm.openWith(r) } })
-            SheetRow(LucideIcons.Star, stringResource(if (r.starred) R.string.home_unstar else R.string.home_star), { act { vm.setStarred(r.key, !r.starred) } })
+            SheetRow(LucideIcons.Star, stringResource(if (r.starred) R.string.home_unstar else R.string.home_star), { act { vm.settings.setStarred(r.key, !r.starred) } })
             if (vm.study.libraryData.item(r.key) == null) SheetRow(LucideIcons.Layers, stringResource(R.string.library_add_to), { act { vm.study.addToLibrary(r.key, r.name) } })
             SheetRow(LucideIcons.Pencil, stringResource(R.string.common_rename), { renaming = true })
             SheetRow(LucideIcons.Copy, stringResource(R.string.home_duplicate), { act { vm.duplicateFile(r) } })
