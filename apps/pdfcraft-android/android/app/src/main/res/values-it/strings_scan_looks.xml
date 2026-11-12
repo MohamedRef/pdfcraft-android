@@ -17,4 +17,11 @@
     <string name="msg_scan_unenhanced">Pagine salvate come fotografate, senza pulizia: %1$d</string>
     <string name="scan_lab_look_per_page">Uno stile per ogni pagina</string>
     <string name="scan_lab_look_strip">Mostra gli stili come piccole anteprime della pagina</string>
+    <string name="scan_paper_label">Carta</string>
+    <string name="scan_paper_auto">Automatico</string>
+    <string name="scan_paper_white">Bianco</string>
+    <string name="scan_paper_keep">Mantieni il colore</string>
+    <string name="scan_lab_whiteboard_look">Lavagna: sfondo più chiaro e colori dei pennarelli più intensi</string>
+    <string name="scan_lab_preview_stop">Interrompi le anteprime non più necessarie</string>
+    <string name="scan_lab_preview_zoom">Ingrandisci l’anteprima della pagina</string>
 </resources>

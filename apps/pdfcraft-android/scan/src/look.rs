@@ -6,7 +6,9 @@
 use pdfcraft_engine::camera_clean;
 
 use crate::Rgb;
-use crate::enhance::{AutoParams, Bitmap1, BwParams, DEFAULT_SHARPEN, PaperMode, Shape, auto_with_photos, black_white};
+use crate::enhance::{
+    AutoParams, Bitmap1, BwParams, DEFAULT_SHARPEN, PaperMode, Shape, WHITEBOARD_COLOUR_FACTOR, auto_with_photos, black_white, whiteboard_tone,
+};
 use crate::photo_mask::PhotoMask;
 
 /// A page's look.
@@ -23,6 +25,8 @@ pub enum Look {
     BlackWhite,
     /// Like a flatbed scan in one step: no shadows, white paper, dark ink, real colours (#298).
     Auto,
+    /// Auto's light steps, then an S-curve on brightness and stronger colour, for boards (#301).
+    Whiteboard,
 }
 
 impl Look {
@@ -32,7 +36,7 @@ impl Look {
             Look::Original => Some(camera_clean::Look::Original),
             Look::Colour => Some(camera_clean::Look::Colour),
             Look::Greyscale => Some(camera_clean::Look::Greyscale),
-            Look::BlackWhite | Look::Auto => None,
+            Look::BlackWhite | Look::Auto | Look::Whiteboard => None,
         }
     }
 }
@@ -105,7 +109,11 @@ pub fn apply_with_photos(page: &Rgb, look: Look, params: &LookParams, photos: Op
                 let dpi = if dpi.is_finite() { dpi.clamp(1.0, 2400.0) as u16 } else { 300 };
                 let paper = if keep_paper { PaperMode::Keep } else { PaperMode::White };
                 let made = auto_with_photos(page, &AutoParams { strength, paper, threads, sharpen, denoise, dpi, shape }, photos)?;
-                Applied { pixels: Pixels::Rgb(made.rgb.data), noise: Some(made.noise) }
+                let mut rgb = made.rgb.data;
+                if look == Look::Whiteboard {
+                    whiteboard_tone(&mut rgb, WHITEBOARD_COLOUR_FACTOR);
+                }
+                Applied { pixels: Pixels::Rgb(rgb), noise: Some(made.noise) }
             }
         });
     };

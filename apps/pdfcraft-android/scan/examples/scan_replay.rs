@@ -60,6 +60,8 @@ fn look_of(name: &str) -> Look {
         "auto" => Look::Auto,
         "greyscale" => Look::Greyscale,
         "bw" => Look::BlackWhite,
+        // its own look since #301; Auto color's settings before
+        "whiteboard" => Look::Whiteboard,
         _ => Look::Colour,
     }
 }
@@ -178,6 +180,12 @@ fn main() {
             // a document type's tone and the photo mask in sharpening (#299); files from before them have neither
             kind_tone: options["kind_tone"].as_bool().unwrap_or(false),
             photo_sharpen: options["photo_sharpen"].as_bool().unwrap_or(false),
+            // the paper the person chose for the page (#301); files from before then leave it to the document type
+            keep_paper: match facts["page_look"]["paper"].as_str() {
+                Some("keep") => Some(true),
+                Some("white") => Some(false),
+                _ => None,
+            },
             ..PageRequest::new(&bytes, left)
         };
         match process_page(&request) {

@@ -62,6 +62,11 @@ class ScanLabTest {
         assertTrue(lab.lookPerPage && lab.lookStrip)
         assertFalse(lab.copy(lookPerPage = false).asDesigned)
         assertFalse(lab.copy(lookStrip = false).asDesigned)
+        // the Whiteboard look, stopping old previews and zoom are as designed (#301)
+        assertTrue(lab.whiteboardLook && lab.previewStop && lab.previewZoom)
+        assertFalse(lab.copy(whiteboardLook = false).asDesigned)
+        assertFalse(lab.copy(previewStop = false).asDesigned)
+        assertFalse(lab.copy(previewZoom = false).asDesigned)
         assertEquals(30, lab.sharpen)
         assertTrue(lab.denoise && lab.sharpen in ScanLab.SHARPENING && 0 in ScanLab.SHARPENING)
     }
@@ -90,6 +95,7 @@ class ScanLabTest {
             ScanLab(flattenTrim = false),
             ScanLab(lookPerPage = false),
             ScanLab(lookStrip = false),
+            ScanLab(whiteboardLook = false, previewStop = false, previewZoom = false),
             ScanLab(lookPerPage = false, lookStrip = false, presets = false),
             ScanLab(finder = ScanFinder.LINES, strength = 100),
             ScanLab(finder = ScanFinder.OFF),

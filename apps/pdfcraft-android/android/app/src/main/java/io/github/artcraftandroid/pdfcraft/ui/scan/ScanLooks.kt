@@ -7,7 +7,15 @@ import org.json.JSONObject
  * A page's look on the scan screen (#301): which look, and its strength (0–100), null for the
  * look's own. Each page has its own; a new page takes the look chosen last.
  */
-data class ScanPageLook(val filter: ScanFilter = ScanFilter.CleanScan, val strength: Int? = null) {
+data class ScanPageLook(
+    val filter: ScanFilter = ScanFilter.CleanScan,
+    val strength: Int? = null,
+    /** The paper's colour, for the looks that have one (Clean scan and Whiteboard). */
+    val paper: ScanPaperChoice = ScanPaperChoice.Auto,
+) {
+    /** Clean scan and Whiteboard whiten the paper or keep its colour; the other looks have no such choice. */
+    val hasPaper: Boolean get() = filter == ScanFilter.CleanScan || filter == ScanFilter.Whiteboard
+
     /** The strength the page is made at, before any testing option overrides it. */
     val level: Int get() = (strength ?: filter.level).coerceIn(0, 100)
 
@@ -20,22 +28,38 @@ data class ScanPageLook(val filter: ScanFilter = ScanFilter.CleanScan, val stren
     /** The look as it goes into a kept scan's page file. */
     fun json(perPage: Boolean): JSONObject = JSONObject()
         .put("id", scanFilterId(filter)).put("strength", strength ?: JSONObject.NULL).put("level", level).put("per_page", perPage)
+        .put("paper", paper.word)
 
     companion object {
         /** The look in a session's `look` line ([id] and [strength] as [scanFilterId] and digits); null when it is not one. */
-        fun decode(id: String?, strength: String?): ScanPageLook? {
+        fun decode(id: String?, strength: String?, paper: String? = null): ScanPageLook? {
             val filter = scanFilterOf(id) ?: return null
             val s = strength?.takeIf { it.isNotEmpty() }?.let { it.toIntOrNull()?.takeIf { v -> v in 0..100 } ?: return null }
-            return ScanPageLook(filter, s)
+            return ScanPageLook(filter, s, ScanPaperChoice.of(paper))
         }
+    }
+}
+
+/**
+ * The paper's colour in Clean scan and Whiteboard (#301): left to the kind of document (white
+ * unless the kind keeps it), white, or the paper's own colour evenly lit. White is the kind's
+ * usual answer because a photo can't tell coloured paper from coloured light (#298).
+ */
+enum class ScanPaperChoice(val word: String) {
+    Auto("auto"),
+    White("white"),
+    Keep("keep");
+
+    companion object {
+        /** The choice in [word]; Auto for anything else. */
+        fun of(word: String?): ScanPaperChoice = entries.firstOrNull { it.word == word } ?: Auto
     }
 }
 
 /**
  * A look's word, kept in a scan session and written to the diagnostics log. Fixed here and not
  * taken from the enum's names, so renaming a look in code cannot lose a saved session's choice.
- * Two looks share a native mode (Auto color and Whiteboard are both "colour"), so the mode alone
- * would not do.
+ * The native look alone would not do: with its testing option off, Whiteboard is Auto color's.
  */
 fun scanFilterId(filter: ScanFilter): String = when (filter) {
     ScanFilter.Original -> "original"
@@ -109,3 +133,23 @@ fun scanCompareShows(holding: Boolean, haveOriginal: Boolean, look: ScanFilter):
 /** How many pages went into the PDF as photographed because their processing failed (#301): the final message counts them. */
 fun scanUnenhancedCount(processed: List<Boolean>): Int = processed.count { !it }
 
+
+/** The zoom after a double-tap on the preview (#301): in to [tap] from the whole page, back to the whole page from anywhere else. */
+fun scanZoomAfterDoubleTap(zoom: Float, tap: Float): Float = if (zoom > 1.01f) 1f else tap
+
+/** A zoom kept between the whole page (1) and [max]; anything that is not a number is the whole page. */
+fun scanZoomClamp(zoom: Float, max: Float): Float = if (zoom.isFinite()) zoom.coerceIn(1f, max) else 1f
+
+/**
+ * How far the zoomed page may be moved, so its edge never comes inside the box: at [zoom] on a
+ * box [width] × [height] it can move `(zoom − 1) / 2` of the box each way. Returns the offset kept.
+ */
+fun scanPanClamp(x: Float, y: Float, zoom: Float, width: Float, height: Float): Pair<Float, Float> {
+    val mx = ((zoom - 1f) * width / 2f).coerceAtLeast(0f)
+    val my = ((zoom - 1f) * height / 2f).coerceAtLeast(0f)
+    fun keep(v: Float, m: Float) = if (v.isFinite()) v.coerceIn(-m, m) else 0f
+    return keep(x, mx) to keep(y, my)
+}
+
+/** Whether the sharper page is wanted: zoomed in at least [from], with the testing option on. */
+fun scanWantsDetail(zoom: Float, from: Float, enabled: Boolean): Boolean = enabled && zoom >= from

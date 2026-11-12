@@ -108,6 +108,10 @@ pub struct PageRequest<'a> {
     /// For a preview (#301): the page shrunk so its longer side is this many pixels at most,
     /// whatever its look. `None` for the page at the size it is saved at.
     pub max_side: Option<u32>,
+    /// The paper's colour as the person chose it for Auto and Whiteboard (#301): `Some(true)`
+    /// keeps the paper's own colour, `Some(false)` makes it white, `None` leaves it to the
+    /// document type (white unless the type keeps it).
+    pub keep_paper: Option<bool>,
 }
 
 impl<'a> PageRequest<'a> {
@@ -137,6 +141,7 @@ impl<'a> PageRequest<'a> {
             kind_tone: false,
             photo_sharpen: false,
             max_side: None,
+            keep_paper: None,
         }
     }
 }
@@ -388,6 +393,10 @@ pub fn page_look_kind(base: &PageBase, request: &PageRequest<'_>) -> Result<(App
             params.shape = kind_shape(&kind.params);
         }
     }
+    // the person's choice of paper wins over the document type's (#301)
+    if let Some(keep) = request.keep_paper {
+        params.keep_paper = keep;
+    }
     let photos = kind.as_ref().filter(|_| request.photo_sharpen).and_then(|k| k.photos.as_ref());
     let applied = apply_with_photos(&base.page, request.look, &params, photos).ok_or(ScanError::Encode)?;
     Ok((applied, kind))
@@ -430,7 +439,7 @@ pub fn page_base(request: &PageRequest<'_>) -> Result<PageBase, ScanError> {
             (f64::from(side.max(16)) / f64::from(w.max(h))).min(1.0)
         }
         // Auto enlarges a small page in this same resampling pass, before its tone curve (#298, step 0)
-        (None, Look::Auto) => enlargement(shape.width, shape.height),
+        (None, Look::Auto | Look::Whiteboard) => enlargement(shape.width, shape.height),
         // two levels need more pixels than shades of grey to draw a thin stroke: a page under
         // 200 dpi is made at twice the size (#300)
         (None, Look::BlackWhite) if shape.output(1.0)?.2 < BW_MIN_DPI => 2.0,

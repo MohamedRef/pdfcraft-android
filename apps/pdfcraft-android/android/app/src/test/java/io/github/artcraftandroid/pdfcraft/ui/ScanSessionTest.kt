@@ -150,4 +150,14 @@ class ScanSessionTest {
         // one look line per page: the second is ignored
         assertEquals(io.github.artcraftandroid.pdfcraft.ui.scan.ScanPageLook(ScanFilter.Original), back.pages[2].look)
     }
+
+    @Test
+    fun aPagesPaperChoiceComesBack() {
+        val keep = io.github.artcraftandroid.pdfcraft.ui.scan.ScanPageLook(ScanFilter.Whiteboard, null, io.github.artcraftandroid.pdfcraft.ui.scan.ScanPaperChoice.Keep)
+        val back = ScanSession.decode(ScanSession(null, null, false, "Scan", listOf(ScanSession.Page("/c/a.jpg", crop, null, look = keep))).encode())!!
+        assertEquals(keep, back.pages[0].look)
+        // a look line from before the paper choice: Automatic
+        val older = ScanSession.decode("pdfcraft-scan 2\npage\t/c/a.jpg\t" + crop.joinToString(",") + "\t\nlook\tclean\t40\n")!!
+        assertEquals(io.github.artcraftandroid.pdfcraft.ui.scan.ScanPaperChoice.Auto, older.pages[0].look!!.paper)
+    }
 }

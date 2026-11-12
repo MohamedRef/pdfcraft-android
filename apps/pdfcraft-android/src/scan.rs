@@ -25,6 +25,8 @@ pub enum ScanLook {
     BlackWhite,
     /// Like a flatbed scan in one step (#298).
     Auto,
+    /// Auto's light steps with an S-curve and stronger colour, for boards (#301).
+    Whiteboard,
 }
 
 /// The format a page image was written in.
@@ -115,6 +117,11 @@ pub struct ScanPageRequest {
     /// Sharpen the photographs found on the page as gently as the look's own objects (#299).
     #[uniffi(default = false)]
     pub photo_sharpen: bool,
+    /// The paper's colour in Auto and Whiteboard, as the person chose it (#301): "white", "keep"
+    /// (the paper's own colour), or "auto" (the document type decides; white unless it keeps it).
+    /// Anything else is "auto".
+    #[uniffi(default = "auto")]
+    pub paper: String,
 }
 
 /// The kind of document the Auto look took a page for, its settings, and what the page measured
@@ -567,6 +574,7 @@ fn page_request<'a>(request: &ScanPageRequest, photo: &'a [u8], corners: [f32; 8
         ScanLook::Greyscale => Look::Greyscale,
         ScanLook::BlackWhite => Look::BlackWhite,
         ScanLook::Auto => Look::Auto,
+        ScanLook::Whiteboard => Look::Whiteboard,
     };
     PageRequest {
         look,
@@ -589,6 +597,11 @@ fn page_request<'a>(request: &ScanPageRequest, photo: &'a [u8], corners: [f32; 8
         kind_tone: request.kind_tone,
         photo_sharpen: request.photo_sharpen,
         max_side,
+        keep_paper: match request.paper.as_str() {
+            "keep" => Some(true),
+            "white" => Some(false),
+            _ => None,
+        },
         ..PageRequest::new(photo, corners)
     }
 }
@@ -766,7 +779,59 @@ pub fn scan_preview_page(request: ScanPageRequest, max_side: u32) -> Result<Scan
     preview_in(&root, &request, max_side)
 }
 
+/// A preview the caller no longer wants (#301): set once, and the preview it was given to stops
+/// at the next stage instead of finishing. Checked before decoding, after the straightened page
+/// is made (which is still kept for the next preview) and before and after the look; a stage
+/// already running finishes first.
+#[derive(Debug, Default, uniffi::Object)]
+pub struct ScanCancel {
+    cancelled: std::sync::atomic::AtomicBool,
+}
+
+#[uniffi::export]
+impl ScanCancel {
+    #[uniffi::constructor]
+    pub fn new() -> std::sync::Arc<Self> {
+        std::sync::Arc::new(ScanCancel::default())
+    }
+
+    /// Stop the preview at its next stage.
+    pub fn cancel(&self) {
+        self.cancelled.store(true, std::sync::atomic::Ordering::SeqCst);
+    }
+
+    pub fn is_cancelled(&self) -> bool {
+        self.cancelled.load(std::sync::atomic::Ordering::SeqCst)
+    }
+}
+
+/// The error a stopped preview returns; the caller drops it.
+pub const PREVIEW_CANCELLED: &str = "cancelled";
+
+/// [`scan_preview_page`] that stops when `cancel` is set (#301); it then returns the error
+/// "cancelled", which the scan screen ignores.
+#[uniffi::export]
+pub fn scan_preview_page_with(request: ScanPageRequest, max_side: u32, cancel: std::sync::Arc<ScanCancel>) -> Result<ScanPreview, MobileError> {
+    let root = SCAN_ROOT.read().unwrap_or_else(std::sync::PoisonError::into_inner).clone();
+    let root = root.ok_or_else(|| MobileError::Command("scanning is not ready yet".into()))?;
+    preview_stoppable(&root, &request, max_side, Some(&cancel))
+}
+
 pub(crate) fn preview_in(root: &Path, request: &ScanPageRequest, max_side: u32) -> Result<ScanPreview, MobileError> {
+    preview_stoppable(root, request, max_side, None)
+}
+
+pub(crate) fn preview_stoppable(
+    root: &Path,
+    request: &ScanPageRequest,
+    max_side: u32,
+    cancel: Option<&ScanCancel>,
+) -> Result<ScanPreview, MobileError> {
+    let check = || match cancel.is_some_and(ScanCancel::is_cancelled) {
+        true => Err(MobileError::Command(PREVIEW_CANCELLED.into())),
+        false => Ok(()),
+    };
+    check()?;
     let unreadable = || MobileError::Command("the photo could not be read".into());
     let corners: [f32; 8] = request.corners.as_slice().try_into().map_err(|_| MobileError::Command("a page needs four corners".into()))?;
     let max_side = max_side.clamp(64, 4096);
@@ -806,6 +871,7 @@ pub(crate) fn preview_in(root: &Path, request: &ScanPageRequest, max_side: u32) 
         Some(base) => (base, true),
         None => {
             let bytes = read_photo(root, &request.photo_path)?;
+            check()?;
             let made = page_base(&page_request(request, &bytes, corners, Some(max_side))).map_err(|e| MobileError::Command(e.to_string()))?;
             let base = std::sync::Arc::new(made);
             let mut previews = PREVIEWS.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
@@ -824,6 +890,8 @@ pub(crate) fn preview_in(root: &Path, request: &ScanPageRequest, max_side: u32) 
         // decoding, straightening and the rest, as one figure before its parts
         timings.insert(0, ScanTiming { stage: "scan_preview_base".into(), ms: ms(clock) });
     }
+    // a straightened page just made is kept for the next preview even when this one stops here
+    check()?;
     let clock = std::time::Instant::now();
     let (applied, kind) =
         page_look_kind(&base, &page_request(request, &[], corners, Some(max_side))).map_err(|e| MobileError::Command(e.to_string()))?;
@@ -839,6 +907,7 @@ pub(crate) fn preview_in(root: &Path, request: &ScanPageRequest, max_side: u32) 
         return Err(MobileError::Command("the page could not be drawn".into()));
     }
     timings.push(ScanTiming { stage: "scan_preview_look".into(), ms: ms(clock) });
+    check()?;
     Ok(ScanPreview {
         width,
         height,
@@ -1142,6 +1211,7 @@ mod tests {
             fixed_strength: false,
             kind_tone: false,
             photo_sharpen: false,
+            paper: "auto".into(),
         }
     }
 
@@ -1436,6 +1506,8 @@ mod tests {
             (ScanLook::Colour, 50, 3.0),
             (ScanLook::Greyscale, 40, 3.0),
             (ScanLook::BlackWhite, 75, 8.0),
+            // the S-curve steepens mid greys, so small resampling differences grow: 3.08 measured, the issue asks 3
+            (ScanLook::Whiteboard, 90, 3.5),
         ] {
             let preview = preview_in(&root, &ask(look, strength), 1280).unwrap();
             assert_eq!(preview.rgba.len(), (preview.width * preview.height * 4) as usize);
@@ -1485,6 +1557,80 @@ mod tests {
         assert!(preview_in(&other, &ask(ScanLook::Auto, 60), 1280).is_err());
         std::fs::remove_dir_all(root).unwrap();
         std::fs::remove_dir_all(other).unwrap();
+    }
+
+    /// A preview that is no longer wanted stops at its next stage and says "cancelled" (#301);
+    /// the straightened page it made is still kept for the next one.
+    #[test]
+    fn a_preview_no_longer_wanted_stops() {
+        let _store = PREVIEWS_TEST_LOCK.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let root = temp("preview-cancel");
+        let shot = root.join("page.png");
+        image::RgbImage::from_fn(600, 800, |x, y| {
+            if (y % 24) < 3 && (40..560).contains(&x) { image::Rgb([30, 30, 30]) } else { image::Rgb([235, 232, 226]) }
+        })
+        .save(&shot)
+        .unwrap();
+        let ask = ScanPageRequest { corners: vec![0.0, 0.0, 1.0, 0.0, 1.0, 1.0, 0.0, 1.0], look: ScanLook::Auto, ..request(&shot, &root.join("x")) };
+        scan_release_previews();
+        let stopped = ScanCancel::new();
+        stopped.cancel();
+        assert!(stopped.is_cancelled());
+        match preview_stoppable(&root, &ask, 640, Some(&stopped)) {
+            Err(MobileError::Command(word)) => assert_eq!(word, PREVIEW_CANCELLED),
+            other => panic!("{other:?}"),
+        }
+        // nothing was made, so the next preview straightens the page
+        let wanted = ScanCancel::new();
+        let made = preview_stoppable(&root, &ask, 640, Some(&wanted)).unwrap();
+        assert!(!made.reused && !wanted.is_cancelled());
+        // the same as without a flag
+        let plain = preview_in(&root, &ask, 640).unwrap();
+        assert!(plain.reused);
+        assert_eq!(plain.rgba, made.rgba);
+        // stopped after the straightened page is at hand: still an error, and the page stays kept
+        assert!(preview_stoppable(&root, &ScanPageRequest { look: ScanLook::Whiteboard, ..ask.clone() }, 640, Some(&stopped)).is_err());
+        assert!(preview_in(&root, &ask, 640).unwrap().reused);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    /// The paper the person chose wins over the document type's, in Auto and Whiteboard (#301).
+    #[test]
+    fn the_paper_chosen_wins_over_the_document_type() {
+        let _store = PREVIEWS_TEST_LOCK.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let root = temp("paper");
+        let shot = root.join("yellow.png");
+        // print on yellow paper
+        image::RgbImage::from_fn(600, 800, |x, y| {
+            if (y % 24) < 3 && (40..560).contains(&x) { image::Rgb([30, 30, 30]) } else { image::Rgb([240, 226, 150]) }
+        })
+        .save(&shot)
+        .unwrap();
+        let ask = |look, paper: &str| ScanPageRequest {
+            corners: vec![0.0, 0.0, 1.0, 0.0, 1.0, 1.0, 0.0, 1.0],
+            look,
+            strength: 60,
+            preset: "off".into(),
+            paper: paper.into(),
+            ..request(&shot, &root.join("x"))
+        };
+        // how far the paper is from grey: blue below red on yellow paper
+        let yellow = |p: &ScanPreview| {
+            let n = (p.width * p.height) as f64;
+            p.rgba.as_chunks::<4>().0.iter().map(|q| f64::from(q[0]) - f64::from(q[2])).sum::<f64>() / n
+        };
+        for look in [ScanLook::Auto, ScanLook::Whiteboard] {
+            let white = preview_in(&root, &ask(look, "white"), 400).unwrap();
+            let keep = preview_in(&root, &ask(look, "keep"), 400).unwrap();
+            let auto = preview_in(&root, &ask(look, "auto"), 400).unwrap();
+            let odd = preview_in(&root, &ask(look, "purple"), 400).unwrap();
+            println!("{look:?}: red minus blue, white {:.1}, keep {:.1}, auto {:.1}", yellow(&white), yellow(&keep), yellow(&auto));
+            assert!(yellow(&keep) > yellow(&white) + 20.0, "{look:?}");
+            // with no document type, auto is white, and a word that is not one is auto
+            assert_eq!(auto.rgba, white.rgba);
+            assert_eq!(odd.rgba, auto.rgba);
+        }
+        std::fs::remove_dir_all(root).unwrap();
     }
 
     /// A page photographed sideways comes out upright, and says so (#339).

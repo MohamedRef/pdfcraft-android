@@ -14,6 +14,7 @@ pub mod learned;
 mod objects;
 mod plane;
 mod tone;
+mod whiteboard;
 
 #[cfg(test)]
 mod tests;
@@ -26,6 +27,7 @@ mod tests_learned;
 
 pub use bw::{Bitmap1, BwParams, DEFAULT_BW_STRENGTH, black_white};
 pub use plane::Mask;
+pub use whiteboard::{WHITEBOARD_COLOUR_FACTOR, whiteboard_tone};
 
 /// The whiteboard's S-curve, for the tests of the page pipeline.
 #[cfg(test)]

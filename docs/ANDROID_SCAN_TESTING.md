@@ -36,6 +36,9 @@ on one part. While any is changed, the scan screen says so.
 | Show pages as they will be saved (#301) | On | Off: the scan screen shows the camera's photo with its outline, as before; nothing is previewed |
 | A look for each page (#301) | On | Off: choosing a look or a strength changes every page, as before |
 | Show the looks as small previews of the page (#301) | On | Off: the looks are words, as before, and no small previews are made |
+| Whiteboard: brighter board and stronger marker colors (#301) | On | Off: Whiteboard is Auto color at 85, as before |
+| Stop previews that are no longer needed (#301) | On | Off: an old preview runs to the end and is dropped, as before |
+| Zoom the page preview (#301) | On | Off: the preview can't be zoomed and no sharper page is made |
 | Crop with magnifier and snapping to edges (#292) | On | Off: the crop screen before #292, four corner handles on the thumbnail |
 | Flatten pages automatically when it makes their lines straighter (#302) | Off | On: every page is flattened by the network and kept only when its lines of text come out at least 10 % straighter (the Flatten switch still flattens without the check) |
 | Trim the background left along a flattened page's edges (#302) | On | Off: a flattened page is kept as the network's grid gives it, with any strip of table along its edges |
@@ -88,7 +91,8 @@ The zip also holds `diagnostics.txt`, the diagnostics log as **Share diagnostics
  "look": "auto", "strength": 60, "flatten": false, "flatten_chosen": null,
  "options": {"finder": "auto", "refine": true, "side_proportions": false, "snap_paper": true, "strength_override": null, "upright": true,
              "sharpen": 30, "denoise": true, "preview": true, "crop_tools": true, "flatten_auto": false, "flatten_trim": true, "settle_turns": true, "presets": true, "book_gutter": true, "line_flatten": true,
-             "look_per_page": true, "look_strip": true},
+             "look_per_page": true, "look_strip": true, "whiteboard_look": true, "preview_stop": true,
+             "preview_zoom": true},
  "document_type": {"preset": "receipt", "chosen": false, "strength": 80, "sharpen": 35, "keep_paper": false, "suggest_flatten": false,
                    "suggest_greyscale": true, "ratio": 3.0, "ink_share": 0.043, "colour_ink_share": 0.0, "photo_share": 0.0,
                    "stroke_mm": 0.339, "glare_share": 0.0, "gutter_band": false, "whole_photo": false},
@@ -104,7 +108,7 @@ The zip also holds `diagnostics.txt`, the diagnostics log as **Share diagnostics
           "snap_ms_max": 85, "nudges": 0, "detects": 0, "detects_found": 0, "whole_photo": 0, "resets": 0,
           "loupe_decodes": 6, "snap": true, "ms": 9100, "moved_pct": 1.235,
           "corners_off": 0},
- "page_look": {"id": "clean", "strength": null, "level": 60, "per_page": true},
+ "page_look": {"id": "clean", "strength": null, "level": 60, "per_page": true, "paper": "auto"},
  "book": {"half": "right", "gutter_found": true, "gutter_top": 0.4712, "gutter_bottom": 0.4790, "confidence": 0.62, "order": "rtl"},
  "result": {"file": "page-01.out.jpg", "width": 1654, "height": 2339, "format": "jpeg", "dpi": 200.0,
             "paper": "a4", "aspect": "known_focal", "focal_mismatch": false, "flattened": false, "bend_pct": 0.0,
@@ -126,7 +130,8 @@ the filter was changed and saved before the new preview came. `page_look` is the
 as the scan screen left it (#301): `id` (`original`, `clean`, `colour`, `greyscale`, `whiteboard`
 or `bw`; Auto color and Whiteboard share the native `colour` look, so `look` alone can't tell
 them apart), `strength` set with the slider (`null` for the look's own), the `level` it was made
-at before any testing option, and whether each page had its own (`per_page`). `crop` is what happened on the crop
+at before any testing option, whether each page had its own (`per_page`), and the `paper`
+chosen for Clean scan and Whiteboard (`auto`, `white` or `keep`). `crop` is what happened on the crop
 screen (#292), added up over every time the page was cropped with Done, or `null` when it never
 was: drags of corners and of sides, snaps asked for, taken, skipped by holding still and failed,
 the longest snap, keyboard and TalkBack moves, Auto-detect, No crop and Reset, magnifier regions
@@ -194,7 +199,10 @@ the page needed), its `width` and `height`, `quarter_turns` and `flattened`, and
 (`look_differs`); a `looks_strip` line for each run of the looks strip (`asked`, `made`,
 `reused`, `ms`, `slowest_ms`), a `look_chosen` line when a look, a strength (once the slider is let
 go) or Reset look is chosen, `look_applied_all` for Apply to all, and `save_cancelled` when Save is
-stopped (`pages`, `made`, `ms`); the `saved` line `looks_mixed` and `unenhanced`; every `crop` line
+stopped (`pages`, `made`, `ms`); `paper` and `whiteboard_look` on every `page` and `preview`
+line, `preview_stopped` (`index`, `ms`) when an old preview was stopped for a newer one, and
+`preview_detail` (`index`, `made`, `reused`, `ms`, `width`, `height`) for the sharper page made
+when zoomed in; the `saved` line `looks_mixed` and `unenhanced`; every `crop` line
 (#292) the page's `index`, whether it was left with Done, and the counts of its `crop` object;
 every `crop_snap` line whether a `corner` or `side` was let go, how many `sides` were asked for and
 how many were `refined` or `curved`, whether the snap was `taken`, `stale` (another drag had

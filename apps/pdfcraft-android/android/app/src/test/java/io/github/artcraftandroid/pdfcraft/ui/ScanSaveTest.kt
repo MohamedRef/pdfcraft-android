@@ -246,4 +246,33 @@ class ScanSaveTest {
         assertEquals(ScanShown(ScanView.Photo, false), scanShown(true, ScanView.Photo, haveWanted = false, failed = false, haveSamePage = true))
         assertEquals(ScanShown(ScanView.Photo, false), scanShown(false, ScanView.Result, haveWanted = false, failed = false, haveSamePage = true))
     }
+
+    @Test
+    fun whiteboardIsItsOwnLookAndTheTestingOptionPutsBackTheOldOne() {
+        val corners = floatArrayOf(0f, 0f, 1f, 0f, 1f, 1f, 0f, 1f)
+        val board = scanPageRequest("/a", corners, ScanFilter.Whiteboard, false, ScanLab(), "")
+        assertEquals(io.github.artcraftandroid.pdfcraft.core.ScanLook.WHITEBOARD, board.look)
+        assertEquals(90, board.strength.toInt())
+        assertEquals("whiteboard", scanLookWord(ScanFilter.Whiteboard, ScanLab()))
+        // off: Auto color at 85, as before #301, and the kept page file says "colour"
+        val old = scanPageRequest("/a", corners, ScanFilter.Whiteboard, false, ScanLab(whiteboardLook = false), "")
+        assertEquals(io.github.artcraftandroid.pdfcraft.core.ScanLook.COLOUR, old.look)
+        assertEquals(85, old.strength.toInt())
+        assertEquals("colour", scanLookWord(ScanFilter.Whiteboard, ScanLab(whiteboardLook = false)))
+        // the slider's strength still applies, and the other looks are not touched by the option
+        assertEquals(30, scanPageRequest("/a", corners, ScanFilter.Whiteboard, false, ScanLab(whiteboardLook = false), "", strength = 30).strength.toInt())
+        assertEquals("colour", scanLookWord(ScanFilter.AutoColor, ScanLab()))
+        assertEquals(85, scanLookStrength(io.github.artcraftandroid.pdfcraft.ui.scan.ScanPageLook(ScanFilter.Whiteboard), ScanLab(whiteboardLook = false)))
+    }
+
+    @Test
+    fun thePaperChosenGoesIntoTheRequestAndChangesThePreview() {
+        val corners = floatArrayOf(0f, 0f, 1f, 0f, 1f, 1f, 0f, 1f)
+        assertEquals("auto", scanPageRequest("/a", corners, ScanFilter.CleanScan, false, ScanLab(), "").paper)
+        assertEquals("keep", scanPageRequest("/a", corners, ScanFilter.CleanScan, false, ScanLab(), "", paper = io.github.artcraftandroid.pdfcraft.ui.scan.ScanPaperChoice.Keep).paper)
+        val key = ScanPreviewKey("/c/shot.jpg", corners.toList(), ScanFilter.CleanScan, false, ScanLab())
+        val kept = key.copy(paper = io.github.artcraftandroid.pdfcraft.ui.scan.ScanPaperChoice.Keep)
+        assertFalse(key == kept)
+        assertTrue(key.samePage(kept))
+    }
 }
