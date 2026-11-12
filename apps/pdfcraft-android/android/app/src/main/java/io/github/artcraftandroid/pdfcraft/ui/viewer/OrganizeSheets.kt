@@ -111,8 +111,8 @@ fun SplitSheet(vm: AppViewModel, doc: OpenDocument, picked: List<Int>, onDismiss
             if (kind == 3) NumberField(mb, { mb = it }, stringResource(R.string.pages_split_size_mb), decimal = true, modifier = Modifier.padding(start = 60.dp, end = 16.dp, bottom = 8.dp))
             SheetDivider()
             SheetButtons(
-                stringResource(R.string.pages_save_to_folder), ok, { mode?.let { vm.split(doc, it, share = false) } },
-                stringResource(R.string.common_share), { mode?.let { vm.split(doc, it, share = true) } },
+                stringResource(R.string.pages_save_to_folder), ok, { mode?.let { vm.docTools.split(doc, it, share = false) } },
+                stringResource(R.string.common_share), { mode?.let { vm.docTools.split(doc, it, share = true) } },
             )
         }
     }
@@ -181,7 +181,7 @@ fun PageLabelsSheet(vm: AppViewModel, doc: OpenDocument, picked: List<Int>, onDi
             SheetDivider(vertical = 8.dp)
             SheetButtons(stringResource(R.string.pages_labels_apply), ok, {
                 onDismiss()
-                vm.labelPages(doc, f!! - 1, t!! - 1, style.engine, prefix, s!!)
+                vm.docTools.labelPages(doc, f!! - 1, t!! - 1, style.engine, prefix, s!!)
             })
         }
     }
@@ -194,10 +194,10 @@ fun ReplacePagesDialog(vm: AppViewModel, prompt: ReplacePrompt) {
     var first by remember { mutableStateOf("1") }
     val n = first.toIntOrNull()
     PdfDialog(
-        onDismiss = { vm.cancelReplace() },
+        onDismiss = { vm.docTools.cancelReplace() },
         title = stringResource(R.string.pages_replace_title),
         confirm = stringResource(R.string.pages_replace_action),
-        onConfirm = { n?.let { vm.replacePages(prompt, it) } },
+        onConfirm = { n?.let { vm.docTools.replacePages(prompt, it) } },
         confirmEnabled = n != null && n >= 1,
     ) {
         Column {
