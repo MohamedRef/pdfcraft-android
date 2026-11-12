@@ -71,8 +71,24 @@ photo's resolution, so the finest print is lost in the photo and cannot come bac
 cargo run --release -p pdfcraft-scan --features synth --bin scan-eval -- --synthetic 200 --json now.json
 # a test set: <name>.jpg with <name>.json, in any subfolder (an unzipped kept-scans export is one)
 cargo run --release -p pdfcraft-scan --features synth --bin scan-eval -- ~/kept-scans
-# options: --finder auto|network|lines|off, --no-refine, --md report.md, --contact-sheet <folder>
+# options: --finder auto|network|lines|off, --no-refine, --unchecked, --md report.md, --contact-sheet <folder>
 ```
+
+**What a kept-scans export needs before its figures mean anything (#425).** A page file is a
+detection test only when its `corners` are the page's true corners. The runner leaves out, and
+counts in its report (`left_out` in the JSON, a table in the text) with the reason:
+
+| Left out | Why it is not a detection test |
+|---|---|
+| `merged`: `capture.merge.merged` is true, or `capture.photos_kept` is false (#426) | A low-light merge's photo is already the cropped page, so its corners are the whole picture |
+| `book_half`: `book` is not null | The photo holds the whole spread and the corners only one half; the detector finds the spread |
+| `discarded`: `outcome` is `discarded` | A scan given up on, often because something went wrong, corners included |
+| `unchecked`: `checked` is not true | The app writes `"checked": false`. Corners nobody looked at are the detector's own answer and score as perfect. Open the photo, correct the page file's `corners` if needed, then set `"checked": true` |
+
+The first three are always left out (their look could still be measured, but the runner does not
+do that yet). `--unchecked` measures unchecked pages anyway, for a quick look; do not choose a
+default from such a run. A page file made by hand (it has no `app` key) counts as checked unless
+it says `"checked": false`, so test sets made before #425 and the SmartDoc script's are unchanged.
 
 Each photo goes through the app's own stages (`eval.rs`): decode, find the page
 (`detect_with`, the testing option's finder), refine the edges, straighten (`page_base`, with
