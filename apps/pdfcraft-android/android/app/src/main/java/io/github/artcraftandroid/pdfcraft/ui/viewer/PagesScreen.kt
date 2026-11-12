@@ -84,7 +84,7 @@ import kotlinx.coroutines.withContext
 @Composable
 fun PagesScreen(vm: AppViewModel, doc: OpenDocument, onClose: () -> Unit) {
     val c = pdfColors
-    val organizing = vm.organizing
+    val organizing = vm.tools.organizing
     val selected = remember { mutableStateMapOf<Int, Boolean>() }
     val thumbs = remember(doc.info.generation) { mutableStateMapOf<Int, ImageBitmap>() }
     var insertMenu by remember { mutableStateOf(false) }
@@ -111,11 +111,11 @@ fun PagesScreen(vm: AppViewModel, doc: OpenDocument, onClose: () -> Unit) {
     // dragging a page: its index and where it would drop
     var dragFrom by remember { mutableStateOf<Int?>(null) }
     var dragTo by remember { mutableStateOf<Int?>(null) }
-    val exporting = vm.imageExport
+    val exporting = vm.tools.imageExport
     fun close() {
-        vm.organizing = false
+        vm.tools.organizing = false
         vm.splitOpen = false
-        vm.imageExport = null
+        vm.tools.imageExport = null
         selected.clear()
         onClose()
     }
@@ -124,7 +124,7 @@ fun PagesScreen(vm: AppViewModel, doc: OpenDocument, onClose: () -> Unit) {
         if (exporting != null) {
             close()
         } else if (organizing) {
-            vm.organizing = false
+            vm.tools.organizing = false
             selected.clear()
         } else {
             close()
@@ -165,7 +165,7 @@ fun PagesScreen(vm: AppViewModel, doc: OpenDocument, onClose: () -> Unit) {
             )
             // Select starts organizing in place (#199); organizing, Select all / Select none
             if (!organizing && exporting == null && doc.info.allowsAssembly) {
-                androidx.compose.material3.TextButton(onClick = { vm.organizing = true }) {
+                androidx.compose.material3.TextButton(onClick = { vm.tools.organizing = true }) {
                     Text(stringResource(R.string.pages_select_action), color = c.toolAccent, fontWeight = FontWeight.SemiBold)
                 }
                 Spacer(Modifier.width(6.dp))
@@ -300,8 +300,8 @@ fun PagesScreen(vm: AppViewModel, doc: OpenDocument, onClose: () -> Unit) {
         ) {
             if (exporting != null) {
                 // picking the pages to export: save them to the phone's pictures, or share them
-                OrganizeItem(LucideIcons.Save, stringResource(R.string.common_save), enabled) { vm.writeImages(doc, exporting, picked, share = false) }
-                OrganizeItem(LucideIcons.Share2, stringResource(R.string.common_share), enabled) { vm.writeImages(doc, exporting, picked, share = true) }
+                OrganizeItem(LucideIcons.Save, stringResource(R.string.common_save), enabled) { vm.tools.writeImages(doc, exporting, picked, share = false) }
+                OrganizeItem(LucideIcons.Share2, stringResource(R.string.common_share), enabled) { vm.tools.writeImages(doc, exporting, picked, share = true) }
             } else if (organizing) {
                 OrganizeItem(LucideIcons.FilePlus, stringResource(R.string.pages_insert_page), true) { insertMenu = true }
                 OrganizeItem(LucideIcons.CopyPlus, stringResource(R.string.pages_duplicate), enabled && doc.info.allowsAssembly) { vm.duplicatePages(doc, picked) }
@@ -332,7 +332,7 @@ fun PagesScreen(vm: AppViewModel, doc: OpenDocument, onClose: () -> Unit) {
     if (moreMenu) {
         PdfSheet(onDismiss = { moreMenu = false }, dim = true) {
             SheetTitle(stringResource(R.string.pages_more))
-            SheetRow(LucideIcons.FileOutput, stringResource(R.string.pages_extract), { moreMenu = false; vm.extractPages(doc, picked) }, enabled = picked.isNotEmpty())
+            SheetRow(LucideIcons.FileOutput, stringResource(R.string.pages_extract), { moreMenu = false; vm.tools.extractPages(doc, picked) }, enabled = picked.isNotEmpty())
             val assemble = doc.info.allowsAssembly
             SheetRow(LucideIcons.Replace, stringResource(R.string.pages_replace_with), { moreMenu = false; vm.pickReplaceFile(doc, picked) }, enabled = assemble && picked.isNotEmpty())
             SheetRow(LucideIcons.ArrowUpDown, stringResource(R.string.pages_reverse_order), { moreMenu = false; vm.reversePages(doc, picked) }, enabled = assemble && doc.pageCount > 1)

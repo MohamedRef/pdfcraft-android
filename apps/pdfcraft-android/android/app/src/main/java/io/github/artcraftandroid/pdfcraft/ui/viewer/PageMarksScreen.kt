@@ -118,7 +118,7 @@ fun PageMarksScreen(vm: AppViewModel, doc: OpenDocument) {
         MarkKind.Watermark -> wm.usable
         MarkKind.Background -> true
     }
-    val close = { vm.clearMarkImage(); vm.toolScreen = null }
+    val close = { vm.clearMarkImage(); vm.tools.toolScreen = null }
     ToolPage(
         stringResource(R.string.marks_title), close,
         stringResource(if (update) R.string.marks_update else R.string.marks_add), usable,

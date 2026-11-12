@@ -119,7 +119,7 @@ fun StandardsScreen(vm: AppViewModel, doc: OpenDocument) {
         1 -> stringResource(R.string.std_readiness_check) to !running
         else -> stringResource(R.string.std_hairlines_fix) to (fix.valid && (allPages || pages != null) && editable)
     }
-    ToolPage(stringResource(R.string.std_title), { vm.toolScreen = null }, action, actionEnabled, {
+    ToolPage(stringResource(R.string.std_title), { vm.tools.toolScreen = null }, action, actionEnabled, {
         when (tab) {
             0 -> scope.launch { running = true; vm.report(doc, "pdfa_verify", mapOf("level" to level))?.let { pdfa = parsePdfaReport(it) }; running = false }
             1 -> scope.launch { running = true; vm.report(doc, "print_readiness")?.let { readiness = parsePrintFindings(it) to it.optString("text") }; running = false }
@@ -209,7 +209,7 @@ fun PrintOptionsScreen(vm: AppViewModel, doc: OpenDocument) {
     var o by remember { mutableStateOf(PrintOptions()) }
     val c = pdfColors
     ToolPage(
-        stringResource(R.string.print_options_title), { vm.toolScreen = null }, stringResource(R.string.sheet_print), true, { vm.printWithOptions(doc, o, save = false) },
+        stringResource(R.string.print_options_title), { vm.tools.toolScreen = null }, stringResource(R.string.sheet_print), true, { vm.printWithOptions(doc, o, save = false) },
         trailing = {
             Text(stringResource(R.string.print_save_ready), color = c.label, fontSize = 16.sp,
                 modifier = Modifier.clickable(role = Role.Button) { vm.printWithOptions(doc, o, save = true) }.padding(horizontal = 16.dp, vertical = 12.dp))

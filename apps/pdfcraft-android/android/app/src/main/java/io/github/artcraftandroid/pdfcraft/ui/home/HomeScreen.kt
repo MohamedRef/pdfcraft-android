@@ -285,7 +285,7 @@ private fun HomeTabScreen(vm: AppViewModel, onBrowse: () -> Unit) {
             SheetRow(LucideIcons.BookOpen, stringResource(R.string.notebook_new), { fabMenu = false; vm.study.newNotebookOpen = true })
             SheetDivider()
             SheetRow(LucideIcons.FilePenLine, stringResource(R.string.common_tool_edit_pdf), { fabMenu = false; vm.toolForFile(FileTool.Edit) })
-            SheetRow(LucideIcons.FilePlus2, stringResource(R.string.common_tool_create_pdf), { fabMenu = false; vm.openCreate() })
+            SheetRow(LucideIcons.FilePlus2, stringResource(R.string.common_tool_create_pdf), { fabMenu = false; vm.tools.openCreate() })
             SheetRow(LucideIcons.Combine, stringResource(R.string.common_tool_combine), { fabMenu = false; vm.pickFiles(io.github.artcraftandroid.pdfcraft.ui.FilePickKind.Combine) })
             Spacer(Modifier.height(12.dp))
         }
@@ -309,7 +309,7 @@ private fun ToolsCarousel(vm: AppViewModel, onBrowse: () -> Unit) {
         CarouselTile(LucideIcons.FilePenLine, stringResource(R.string.common_tool_edit_pdf), ToolHues.edit) { vm.toolForFile(FileTool.Edit) }
         CarouselTile(LucideIcons.Volume2, stringResource(R.string.common_tool_read_aloud), ToolHues.read) { vm.toolForFile(FileTool.ReadAloud) }
         CarouselTile(LucideIcons.Signature, stringResource(R.string.common_tool_fill_sign), ToolHues.sign) { vm.toolForFile(FileTool.FillSign) }
-        CarouselTile(LucideIcons.FilePlus2, stringResource(R.string.common_tool_create_pdf), ToolHues.create) { vm.openCreate() }
+        CarouselTile(LucideIcons.FilePlus2, stringResource(R.string.common_tool_create_pdf), ToolHues.create) { vm.tools.openCreate() }
         CarouselTile(LucideIcons.LayoutGrid, stringResource(R.string.common_tool_organize), ToolHues.organize) { vm.toolForFile(FileTool.Organize) }
         CarouselTile(LucideIcons.Combine, stringResource(R.string.common_tool_combine), ToolHues.combine) { vm.pickFiles(io.github.artcraftandroid.pdfcraft.ui.FilePickKind.Combine) }
         CarouselTile(LucideIcons.FileArchive, stringResource(R.string.common_tool_compress), ToolHues.compress) { vm.toolForFile(FileTool.Compress) }

@@ -189,17 +189,17 @@ class BackupController internal constructor(private val vm: AppViewModel) {
         val folder = backupFolder() ?: return
         val base = BackupNames.base(doc.info.name)
         vm.viewModelScope.launch {
-            vm.busy = text(R.string.backup_restoring)
+            vm.tools.busy = text(R.string.backup_restoring)
             try {
                 val tmp = File(backupDir(), "restore-${System.nanoTime()}.pdf")
                 val uri = withContext(Dispatchers.IO) {
                     folder.read(base, v.pdf, tmp)
                     try { vm.files.saveToDownloads(tmp, DocumentFiles.safeName(v.pdf)) } finally { tmp.delete() }
                 }
-                vm.busy = null
+                vm.tools.busy = null
                 vm.open(uri)
             } catch (e: Exception) {
-                vm.busy = null
+                vm.tools.busy = null
                 vm.tell(e.userMessage)
             }
         }

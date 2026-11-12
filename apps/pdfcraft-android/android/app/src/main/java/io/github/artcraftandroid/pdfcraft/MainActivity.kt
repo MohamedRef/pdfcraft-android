@@ -47,8 +47,8 @@ class MainActivity : ComponentActivity() {
     private val pickOne = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> vm.onFilesPicked(pickKind, listOfNotNull(uri)) }
     // Separate picker/result from the regular file pick kind, so a stale PDF selection cannot
     // accidentally feed untrusted bookmark JSON into another tool or document.
-    private val pickBookmarkJson = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> vm.onBookmarkJsonPicked(uri) }
-    private val pickBookmarkPdf = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> vm.onBookmarkPdfPicked(uri) }
+    private val pickBookmarkJson = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> vm.tools.onBookmarkJsonPicked(uri) }
+    private val pickBookmarkPdf = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> vm.tools.onBookmarkPdfPicked(uri) }
     // Comments to import (XFDF, FDF or another PDF's): a picker of their own, like the bookmarks'.
     private val pickComments = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> vm.commenting.onCommentsPicked(uri) }
 
@@ -111,12 +111,12 @@ class MainActivity : ComponentActivity() {
         lifecycleScope.launch { for (job in vm.prints) print(job.file, job.name, job.deleteWhenDone) }
         lifecycleScope.launch { for (name in vm.saveCopyRequests) launchSafely(onFail = vm::saveCopyLaunchFailed) { saveCopy.launch(name) } }
         lifecycleScope.launch {
-            for (ignored in vm.bookmarkJsonPicks) {
+            for (ignored in vm.tools.bookmarkJsonPicks) {
                 launchSafely { pickBookmarkJson.launch(arrayOf("application/json", "text/plain", "application/octet-stream")) }
             }
         }
         lifecycleScope.launch {
-            for (ignored in vm.bookmarkPdfPicks) {
+            for (ignored in vm.tools.bookmarkPdfPicks) {
                 launchSafely { pickBookmarkPdf.launch(arrayOf("application/pdf")) }
             }
         }

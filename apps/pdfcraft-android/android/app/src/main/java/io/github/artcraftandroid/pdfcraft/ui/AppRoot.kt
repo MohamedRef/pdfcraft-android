@@ -97,7 +97,7 @@ fun AppRoot(vm: AppViewModel, onBrowse: () -> Unit, onPickSignatureImage: () -> 
         }
     }
     // Back in the viewer closes the document (saving it) and returns to Home
-    androidx.activity.compose.BackHandler(enabled = doc != null && vm.toolScreen == null) { vm.closeDocument() }
+    androidx.activity.compose.BackHandler(enabled = doc != null && vm.tools.toolScreen == null) { vm.closeDocument() }
     // sideways, the camera cutout and the navigation bar sit at the sides: content stays between
     // them, on black, as the reference's does. With Extra Features' status bar in documents the
     // page goes under the camera too, as it does upright (#45): the viewer is laid out full width
@@ -119,7 +119,7 @@ fun AppRoot(vm: AppViewModel, onBrowse: () -> Unit, onPickSignatureImage: () -> 
             }
             // here rather than in the file's row: a sheet inside a scrolling list has no height to fill
             if (doc == null) vm.fileSheet?.let { (r, recent) -> io.github.artcraftandroid.pdfcraft.ui.home.FileSheet(vm, r, recent) { vm.fileSheet = null } }
-            vm.toolScreen?.let { ToolScreenHost(vm, it) }
+            vm.tools.toolScreen?.let { ToolScreenHost(vm, it) }
             vm.study.reviewing?.let { ReviewScreen(vm, it) }
             vm.study.cardDraft?.let { CardEditor(vm, it) }
             if (vm.study.newNotebookOpen) io.github.artcraftandroid.pdfcraft.ui.home.NewNotebookSheet(vm) { vm.study.newNotebookOpen = false }
@@ -204,9 +204,9 @@ fun AppRoot(vm: AppViewModel, onBrowse: () -> Unit, onPickSignatureImage: () -> 
                 }
             }
             io.github.artcraftandroid.pdfcraft.ui.viewer.ToolDialogs(vm)
-            vm.busy?.let { message ->
+            vm.tools.busy?.let { message ->
                 // a count and Cancel when the job has them (#200)
-                val cancel = vm.busyCancel
+                val cancel = vm.tools.busyCancel
                 var cancelling by remember(cancel) { mutableStateOf(false) }
                 PdfDialog(
                     onDismiss = {}, title = null, confirm = null,
@@ -218,7 +218,7 @@ fun AppRoot(vm: AppViewModel, onBrowse: () -> Unit, onPickSignatureImage: () -> 
                         Spacer(Modifier.width(20.dp))
                         Text(message, color = c.text)
                     }
-                    vm.busyProgress?.let { (done, total) ->
+                    vm.tools.busyProgress?.let { (done, total) ->
                         Spacer(Modifier.height(14.dp))
                         LinearProgressIndicator(
                             progress = { if (total > 0) done.toFloat() / total else 0f },

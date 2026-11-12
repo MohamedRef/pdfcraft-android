@@ -611,7 +611,7 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
         // the Read Aloud player takes the bottom bar's place
         // while typing on the page, the bar (with its formatting) rides above the keyboard
         if (vm.readAloud == null && vm.editor.fieldActions == null) Column(Modifier.fillMaxWidth().align(Alignment.BottomCenter).then(if (vm.editor.editing != null) Modifier.imePadding() else Modifier)) {
-            vm.success?.let { SuccessBannerView(it, onClose = { vm.success = null }) }
+            vm.tools.success?.let { SuccessBannerView(it, onClose = { vm.tools.success = null }) }
             // edits that can't reach the original: said as soon as there are any, not only on leaving (#191)
             if (showReadOnlyNotice(doc.writable, doc.source != null, doc.info.dirty || doc.notWrittenBack, doc.readOnlyNoticeClosed)) {
                 ReadOnlyNotice(onSaveCopy = { vm.saveCopyAs(doc) }, onClose = { doc.readOnlyNoticeClosed = true })
@@ -691,7 +691,7 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
         if (ctl.sheet == ViewerSheet.Comments) CommentListScreen(vm, doc)
         vm.attachPrompt?.takeIf { it.doc === doc }?.let { AttachDialog(vm, it) }
         if (vm.flattenPrompt === doc) FlattenDialog(vm, doc)
-        vm.redact.findings?.let { RedactionAuditDialog(vm, doc, it) }
+        vm.tools.redact.findings?.let { RedactionAuditDialog(vm, doc, it) }
         vm.editor.pageMenu?.takeIf { it.doc === doc }?.let { PageMenuView(vm, it) }
         if (vm.editor.imageSource?.first === doc) {
             io.github.artcraftandroid.pdfcraft.ui.PdfSheet(onDismiss = { vm.editor.imageSource = null }, dim = true) {

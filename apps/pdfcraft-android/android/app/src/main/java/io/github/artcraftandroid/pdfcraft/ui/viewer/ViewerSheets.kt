@@ -321,9 +321,9 @@ fun BookmarksSheet(vm: AppViewModel, doc: OpenDocument) {
                     item(LucideIcons.SquarePen, stringResource(R.string.contents_edit_title), !locked) { ctl.sheet = ViewerSheet.EditContents }
                     item(LucideIcons.ListTree, stringResource(R.string.sheet_contents_from_headings), !headingsLocked) { ctl.sheet = ViewerSheet.TextStyles }
                     if (doc.info.tagged) item(LucideIcons.Heading, stringResource(R.string.contents_from_tags), !locked) { vm.editBookmark(doc, "bookmark_from_structure", null) }
-                    item(LucideIcons.Copy, stringResource(R.string.sheet_contents_copy_from_pdf), !locked) { vm.pickEmbeddedBookmarksCopy(doc) }
-                    if (hasOutline) item(LucideIcons.FileOutput, stringResource(R.string.sheet_contents_backup), true) { vm.exportEmbeddedBookmarks(doc) }
-                    item(LucideIcons.FileInput, stringResource(R.string.sheet_contents_restore), !locked) { vm.pickEmbeddedBookmarksImport(doc) }
+                    item(LucideIcons.Copy, stringResource(R.string.sheet_contents_copy_from_pdf), !locked) { vm.tools.pickEmbeddedBookmarksCopy(doc) }
+                    if (hasOutline) item(LucideIcons.FileOutput, stringResource(R.string.sheet_contents_backup), true) { vm.tools.exportEmbeddedBookmarks(doc) }
+                    item(LucideIcons.FileInput, stringResource(R.string.sheet_contents_restore), !locked) { vm.tools.pickEmbeddedBookmarksImport(doc) }
                     if (locked) Text(
                         stringResource(R.string.sheet_contents_locked), color = c.textSecondary, fontSize = 13.sp,
                         modifier = Modifier.widthIn(max = 280.dp).padding(horizontal = 16.dp, vertical = 8.dp),

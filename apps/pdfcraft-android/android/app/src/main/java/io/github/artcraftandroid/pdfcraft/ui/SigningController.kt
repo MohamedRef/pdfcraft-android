@@ -283,7 +283,7 @@ class SigningController internal constructor(private val vm: AppViewModel) {
     fun createDigitalId(name: String, email: String, organization: String, password: String) {
         val eng = vm.engine ?: return
         vm.viewModelScope.launch {
-            vm.busy = text(R.string.msg_busy_creating_id)
+            vm.tools.busy = text(R.string.msg_busy_creating_id)
             val tmp = File(app.cacheDir, "new-id-${System.nanoTime()}.p12")
             try {
                 eng.tool("sign_id_create", mapOf(
@@ -298,7 +298,7 @@ class SigningController internal constructor(private val vm: AppViewModel) {
                 vm.tell(toolMessage(e, "sign_id_create"))
             } finally {
                 tmp.delete()
-                vm.busy = null
+                vm.tools.busy = null
             }
         }
     }
@@ -324,7 +324,7 @@ class SigningController internal constructor(private val vm: AppViewModel) {
         val eng = vm.engine ?: return
         val doc = t.doc
         vm.viewModelScope.launch {
-            vm.busy = text(R.string.msg_busy_signing)
+            vm.tools.busy = text(R.string.msg_busy_signing)
             try {
                 val args = mutableMapOf<String, Any?>(
                     "doc" to doc.id, "id" to id.file.absolutePath, "password" to password, "out" to doc.file.absolutePath,
@@ -378,7 +378,7 @@ class SigningController internal constructor(private val vm: AppViewModel) {
                 // e.g. the recovery marker could not be written: nothing was signed
                 vm.tell(e.userMessage)
             } finally {
-                vm.busy = null
+                vm.tools.busy = null
             }
         }
     }

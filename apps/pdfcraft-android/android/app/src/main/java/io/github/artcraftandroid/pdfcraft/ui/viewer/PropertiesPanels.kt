@@ -212,7 +212,7 @@ fun HiddenInfoSheet(vm: AppViewModel, doc: OpenDocument) {
     var found by remember { mutableStateOf<List<Pair<String, Int>>?>(null) }
     val picked = remember { androidx.compose.runtime.mutableStateMapOf<String, Boolean>() }
     LaunchedEffect(doc.info.generation) {
-        val f = vm.hiddenInfo(doc)
+        val f = vm.tools.hiddenInfo(doc)
         found = f
         picked.clear()
         f?.forEach { (k, n) -> picked[k] = n > 0 }
@@ -246,11 +246,11 @@ fun HiddenInfoSheet(vm: AppViewModel, doc: OpenDocument) {
             val chosen = list.filter { (k, n) -> n > 0 && picked[k] == true }.map { it.first }
             if (!editable) Text(stringResource(R.string.panels_locked_read_only), color = c.textSecondary, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp))
             Row(Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(12.dp, Alignment.End)) {
-                androidx.compose.material3.OutlinedButton(onClick = { vm.removeHidden(doc, null) }, enabled = editable && list.any { it.second > 0 }) {
+                androidx.compose.material3.OutlinedButton(onClick = { vm.tools.removeHidden(doc, null) }, enabled = editable && list.any { it.second > 0 }) {
                     Text(stringResource(R.string.hidden_sanitize), color = c.text)
                 }
                 androidx.compose.material3.Button(
-                    onClick = { vm.removeHidden(doc, chosen) }, enabled = editable && chosen.isNotEmpty(),
+                    onClick = { vm.tools.removeHidden(doc, chosen) }, enabled = editable && chosen.isNotEmpty(),
                     colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = c.toolAccent),
                 ) { Text(stringResource(R.string.hidden_remove)) }
             }

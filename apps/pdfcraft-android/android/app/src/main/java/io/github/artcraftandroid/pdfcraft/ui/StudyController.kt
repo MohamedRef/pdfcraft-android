@@ -651,7 +651,7 @@ class StudyController internal constructor(private val vm: AppViewModel) {
     fun createNotebook(page: io.github.artcraftandroid.pdfcraft.engine.NotebookPage, title: String) {
         newNotebookOpen = false
         vm.viewModelScope.launch {
-            vm.busy = text(R.string.notebook_busy_creating)
+            vm.tools.busy = text(R.string.notebook_busy_creating)
             try {
                 val out = notebookPageFile(page) ?: run { vm.tell(text(R.string.notebook_template_missing)); return@launch }
                 val stamp = java.text.SimpleDateFormat("yyyy-MM-dd HH.mm", java.util.Locale.US).format(java.util.Date())
@@ -663,7 +663,7 @@ class StudyController internal constructor(private val vm: AppViewModel) {
             } catch (e: Exception) {
                 vm.tell(e.userMessage)
             } finally {
-                vm.busy = null
+                vm.tools.busy = null
             }
         }
     }

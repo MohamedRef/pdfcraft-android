@@ -186,7 +186,7 @@ fun ToolsTab(vm: AppViewModel) {
             HubTool(LucideIcons.Signature, "Fill & Sign", R.string.common_tool_fill_sign, R.string.home_about_fill_sign, ToolHues.sign, emptySet()) { vm.toolForFile(FileTool.FillSign) },
             HubTool(LucideIcons.MessageSquareText, "Add comment", R.string.home_tool_add_comment, R.string.home_about_comment, ToolHues.comment, emptySet()) { vm.toolForFile(FileTool.Comment) },
             HubTool(LucideIcons.Volume2, "Read aloud", R.string.common_tool_read_aloud, R.string.home_about_read_aloud, ToolHues.read, setOf("Read")) { vm.toolForFile(FileTool.ReadAloud) },
-            HubTool(LucideIcons.FilePlus2, "Create PDF", R.string.common_tool_create_pdf, R.string.home_about_create, ToolHues.create, setOf("Create")) { vm.openCreate() },
+            HubTool(LucideIcons.FilePlus2, "Create PDF", R.string.common_tool_create_pdf, R.string.home_about_create, ToolHues.create, setOf("Create")) { vm.tools.openCreate() },
             HubTool(LucideIcons.Camera, "New scan", R.string.home_new_scan, R.string.home_about_scan, ToolHues.scan, setOf("Create")) { vm.startScan() },
             HubTool(LucideIcons.Combine, "Combine files", R.string.common_tool_combine, R.string.home_about_combine, ToolHues.combine, setOf("Create", "Edit")) { vm.pickFiles(io.github.artcraftandroid.pdfcraft.ui.FilePickKind.Combine) },
             HubTool(LucideIcons.GitCompare, "Compare files", R.string.compare_title, R.string.compare_about, ToolHues.read, setOf("Read")) { vm.toolForFile(FileTool.Compare) },
