@@ -43,6 +43,7 @@ on one part. While any is changed, the scan screen says so.
 | Document types in Clean scan (#299) | On | Off: the filter's own strength and the sharpening above, as before |
 | Filter strength | Each filter's own | 20, 40, 60, 80 or 100 for every filter |
 | Flatten page (#302) | Off | On, with the switch on the scan screen itself |
+| Scan with (#294) | PdfCraft camera | Phone's camera app (also in Settings → Scan; the same setting) |
 
 **Reset scanner testing options** puts them back. Keeping scans is not one of them: it changes
 no page.
@@ -72,10 +73,13 @@ The zip also holds `diagnostics.txt`, the diagnostics log as **Share diagnostics
                    "suggest_greyscale": true, "ratio": 3.0, "ink_share": 0.043, "colour_ink_share": 0.0, "photo_share": 0.0,
                    "stroke_mm": 0.339, "glare_share": 0.0, "gutter_band": false, "whole_photo": false},
  "turns": {"manual": null, "auto": true, "total": 3, "followed": false, "source": "classifier"},
+ "capture": {"source": "in_app", "mp10": 499, "width": 8160, "height": 6120, "exposure_index": -1, "exposure_step_milli": 333,
+             "torch": false, "focused": true, "rotation": 0, "capture_ms": 640},
  "preview": {"shown": true, "reused": true, "ms": 412, "width": 905, "height": 1280, "look": "auto"},
  "crop": {"visits": 1, "corner_drags": 2, "side_drags": 1, "snaps_asked": 3, "snaps_taken": 2, "snaps_held": 0, "snaps_failed": 0,
           "snap_ms_max": 85, "nudges": 0, "detects": 0, "detects_found": 0, "whole_photo": 0, "resets": 0,
-          "loupe_decodes": 6, "snap": true, "ms": 9100, "moved_pct": 1.235},
+          "loupe_decodes": 6, "snap": true, "ms": 9100, "moved_pct": 1.235,
+          "corners_off": 0},
  "result": {"file": "page-01.out.jpg", "width": 1654, "height": 2339, "format": "jpeg", "dpi": 200.0,
             "paper": "a4", "aspect": "known_focal", "focal_mismatch": false, "flattened": false, "bend_pct": 0.0,
             "quarter_turns": 3,
@@ -97,8 +101,13 @@ screen (#292), added up over every time the page was cropped with Done, or `null
 was: drags of corners and of sides, snaps asked for, taken, skipped by holding still and failed,
 the longest snap, keyboard and TalkBack moves, Auto-detect, No crop and Reset, magnifier regions
 decoded, whether Snap was on, the time spent, and `moved_pct`, the largest corner move from where
-the screen opened in % of the photo's diagonal. It is not kept if the app is closed by Android
-before the scan is saved. `turns` says which way up the page was saved (#339): `manual` is the
+the screen opened in % of the photo's diagonal, and `corners_off`, how many corners were left off
+the photo the last time (#291). It is not kept if the app is closed by Android
+before the scan is saved.
+`capture` says how the photo was taken (#294, `docs/ANDROID_SCAN_CAMERA.md`): `source` is
+`in_app`, `phone_app` or `import`; the still's size and exposure are known for `in_app` only. It is
+`null` when the capture is not known, as for a scan Android restored after closing the app.
+`turns` says which way up the page was saved (#339): `manual` is the
 person's own turn from Rotate or Undo (0–3 clockwise, `null` when they gave none), `auto` the
 ordinary setting "Turn pages upright automatically", `total` the turn the page was saved with,
 `followed` whether it took its neighbours' turn, and `source` one of `manual`, `neighbours`,

@@ -500,9 +500,15 @@ pub fn refine(pyramid: &Pyramid, quad: &Quad, options: &RefineOptions) -> Refine
     if sides.iter().all(|s| !s.refined) {
         return Refined { sides, ..unchanged };
     }
-    // inside the photo, as every corner of a page is taken to be
-    let corners = corners.map(|[x, y]| [x.clamp(0.0, f64::from(width)), y.clamp(0.0, f64::from(height))]);
-    let moved_far = corners.iter().zip(&quad.0).any(|(p, q)| (p[0] - q[0]).hypot(p[1] - q[1]) > 2.0 * search);
+    // a corner the frame cut off is where its two sides meet, outside the photo, but not more
+    // than 15 % of the photo beyond it (#291)
+    let (w, h) = (f64::from(width), f64::from(height));
+    let out = f64::from(crate::quad::OUTSIDE);
+    let corners = corners.map(|[x, y]| [x.clamp(-out * w, (1.0 + out) * w), y.clamp(-out * h, (1.0 + out) * h)]);
+    // a corner on the photo may not move farther than twice the search distance; one outside it
+    // was never seen, so where it was given says little (the detector puts it on the border)
+    let on_photo = |p: &[f64; 2]| (0.0..=w).contains(&p[0]) && (0.0..=h).contains(&p[1]);
+    let moved_far = corners.iter().zip(&quad.0).any(|(p, q)| on_photo(p) && (p[0] - q[0]).hypot(p[1] - q[1]) > 2.0 * search);
     let refined = Quad(corners);
     let area = refined.area() / quad.area().max(1e-9);
     if moved_far || !refined.is_convex() || !(0.8..=1.25).contains(&area) || corners.iter().flatten().any(|v| !v.is_finite()) {

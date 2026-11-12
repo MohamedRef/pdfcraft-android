@@ -10,6 +10,8 @@ import io.github.artcraftandroid.pdfcraft.R
 import io.github.artcraftandroid.pdfcraft.engine.BackupFolder
 import io.github.artcraftandroid.pdfcraft.engine.BackupNames
 import io.github.artcraftandroid.pdfcraft.engine.BackupVersion
+import io.github.artcraftandroid.pdfcraft.engine.Diag
+import io.github.artcraftandroid.pdfcraft.engine.DiagArea
 import io.github.artcraftandroid.pdfcraft.engine.DocumentFiles
 import io.github.artcraftandroid.pdfcraft.engine.Engine
 import io.github.artcraftandroid.pdfcraft.engine.LocalFiles
@@ -102,9 +104,11 @@ class BackupController internal constructor(private val vm: AppViewModel) {
         val dir = backupDir()
         val pdf = File(dir, "${time}-${base.hashCode()}.pdf")
         val xfdf = File(dir, "${time}-${base.hashCode()}.xfdf")
+        val started = System.nanoTime()
         try {
             withContext(Dispatchers.IO) { doc.file.copyTo(pdf, overwrite = true) }
         } catch (e: Exception) {
+            Diag.failure(DiagArea.Study, "backup_snapshot", e)
             pdf.delete()
             backupFailed = true
             return
@@ -112,6 +116,10 @@ class BackupController internal constructor(private val vm: AppViewModel) {
         // the comments alone; a document whose comments cannot be exported still gets its PDF copy
         val hasXfdf = runCatching { eng.tool("doc_export_data", mapOf("doc" to doc.id, "path" to xfdf.absolutePath, "what" to "comments")) }.isSuccess && xfdf.isFile
         if (!hasXfdf) xfdf.delete()
+        Diag.event(
+            DiagArea.Study, "backup_snapshot", "doc" to doc.diagNumber, "ms" to (System.nanoTime() - started) / 1_000_000,
+            "bytes" to pdf.length(), "comments" to hasXfdf, "comment_bytes" to (if (hasXfdf) xfdf.length() else 0L), "waiting" to pendingBackups.size,
+        )
         pendingBackups.put(base, PendingBackup(base, time, pdf, xfdf.takeIf { hasXfdf }))?.let { old -> old.pdf.delete(); old.xfdf?.delete() }
         flushBackups()
     }
@@ -124,18 +132,28 @@ class BackupController internal constructor(private val vm: AppViewModel) {
                 var failed = false
                 for (base in pendingBackups.keys.toList()) {
                     val p = pendingBackups[base] ?: continue
-                    val ok = runCatching {
+                    val started = System.nanoTime()
+                    var pruned = 0
+                    val result = runCatching {
                         folder.write(base, BackupNames.pdfName(base, p.time), "application/pdf", p.pdf)
                         p.xfdf?.let { folder.write(base, BackupNames.xfdfName(base, p.time), "application/vnd.adobe.xfdf", it) }
                         val prune = BackupNames.toPrune(base, folder.list(base), backupKeep)
                         if (prune.isNotEmpty()) folder.delete(base, prune)
-                    }.isSuccess
+                        pruned = prune.size
+                    }
+                    val ok = result.isSuccess
+                    result.exceptionOrNull()?.let { Diag.failure(DiagArea.Study, "backup_write", it) }
+                    Diag.event(
+                        DiagArea.Study, "backup_write", "ok" to ok, "ms" to (System.nanoTime() - started) / 1_000_000,
+                        "bytes" to p.pdf.length(), "comments" to (p.xfdf != null), "pruned" to pruned, "keep" to backupKeep,
+                        "age_ms" to System.currentTimeMillis() - p.time,
+                    )
                     if (ok) {
                         // a newer snapshot may have arrived meanwhile; only this one is done
                         if (pendingBackups.remove(base, p)) { p.pdf.delete(); p.xfdf?.delete() }
                     } else failed = true
                 }
-                if (!failed) runCatching { writeAppData(folder) }
+                if (!failed) runCatching { writeAppData(folder) }.onFailure { Diag.failure(DiagArea.Study, "backup_app_data", it) }
                 withContext(Dispatchers.Main) {
                     if (failed && !backupFailed) vm.tell(text(R.string.backup_failed), text(R.string.backup_retry)) { flushBackups() }
                     backupFailed = failed
@@ -178,9 +196,13 @@ class BackupController internal constructor(private val vm: AppViewModel) {
         backupVersions = null
         vm.viewModelScope.launch {
             val base = BackupNames.base(doc.info.name)
-            backupVersions = withContext(Dispatchers.IO) {
-                runCatching { backupFolder()?.let { BackupNames.versions(base, it.list(base)) } }.getOrNull().orEmpty()
+            val started = System.nanoTime()
+            val found = withContext(Dispatchers.IO) {
+                runCatching { backupFolder()?.let { BackupNames.versions(base, it.list(base)) } }
+                    .onFailure { Diag.failure(DiagArea.Study, "backup_versions", it) }.getOrNull().orEmpty()
             }
+            Diag.event(DiagArea.Study, "backup_versions", "doc" to doc.diagNumber, "versions" to found.size, "with_comments" to found.count { it.xfdf != null }, "ms" to (System.nanoTime() - started) / 1_000_000)
+            backupVersions = found
         }
     }
 
@@ -196,9 +218,11 @@ class BackupController internal constructor(private val vm: AppViewModel) {
                     folder.read(base, v.pdf, tmp)
                     try { vm.files.saveToDownloads(tmp, DocumentFiles.safeName(v.pdf)) } finally { tmp.delete() }
                 }
+                Diag.event(DiagArea.Study, "backup_restore", "what" to "copy", "ok" to true, "age_ms" to System.currentTimeMillis() - v.time, "bytes" to v.size)
                 vm.busy = null
                 vm.open(uri)
             } catch (e: Exception) {
+                Diag.failure(DiagArea.Study, "backup_restore_copy", e)
                 vm.busy = null
                 vm.tell(e.userMessage)
             }
@@ -217,8 +241,10 @@ class BackupController internal constructor(private val vm: AppViewModel) {
                 withContext(Dispatchers.IO) { folder.read(base, name, tmp) }
                 eng.tool("doc_import_data", mapOf("doc" to doc.id, "path" to tmp.absolutePath))
                 vm.refresh(doc)
+                Diag.event(DiagArea.Study, "backup_restore", "what" to "comments", "doc" to doc.diagNumber, "ok" to true, "age_ms" to System.currentTimeMillis() - v.time)
                 vm.tell(text(R.string.backup_comments_restored))
             } catch (e: Exception) {
+                Diag.failure(DiagArea.Study, "backup_restore_comments", e)
                 vm.tell(e.userMessage)
             } finally {
                 withContext(Dispatchers.IO) { tmp.delete() }
