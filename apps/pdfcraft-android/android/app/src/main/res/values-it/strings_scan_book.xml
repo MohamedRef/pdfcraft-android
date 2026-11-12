@@ -7,4 +7,7 @@
     <string name="tools_scan_book_left_page">Pagina sinistra di una doppia pagina</string>
     <string name="tools_scan_book_right_page">Pagina destra di una doppia pagina</string>
     <string name="scan_lab_book_gutter">Modalità libro: taglia sulla piega trovata nella foto</string>
+    <string name="scan_crop_book_left">Pagina sinistra di una doppia pagina: il lato destro è il taglio sulla piega del libro, non un bordo del foglio.</string>
+    <string name="scan_crop_book_right">Pagina destra di una doppia pagina: il lato sinistro è il taglio sulla piega del libro, non un bordo del foglio.</string>
+    <string name="scan_camera_book_hint">Allinea il dorso del libro alla linea</string>
 </resources>
