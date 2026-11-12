@@ -165,6 +165,8 @@ internal fun ScanCropScreen(page: ScanPage, index: Int, lab: ScanLab, onDone: (F
     var stats by remember(page.file) { mutableStateOf(ScanCropStats()) }
     var snapOn by remember { mutableStateOf(snapSetting(context).getBoolean(SNAP_PREF, true)) }
     var held by remember { mutableStateOf<QuadHandle?>(null) }
+    // what the view shows stays put while a finger is down, so the photo does not slide under it
+    var heldSpan by remember { mutableStateOf<FloatArray?>(null) }
     var selected by remember { mutableStateOf<QuadHandle?>(null) }
     var detecting by remember { mutableStateOf(false) }
     // a drag started after a snap was asked for makes that snap's answer stale
@@ -254,6 +256,7 @@ internal fun ScanCropScreen(page: ScanPage, index: Int, lab: ScanLab, onDone: (F
         val s = stats.copy(
             visits = if (done) 1 else 0, snapOn = snapOn, ms = SystemClock.elapsedRealtime() - openedAt,
             movedPct = if (done) maxCornerMovePct(opened, corners, aspect) else 0.0,
+            cornersOff = if (done) cornersOffPhoto(corners) else 0,
         )
         Diag.event(DiagArea.Scan, "crop", "index" to index, "done" to done, *s.diag())
         if (done) onDone(corners, s) else onCancel()
@@ -296,11 +299,11 @@ internal fun ScanCropScreen(page: ScanPage, index: Int, lab: ScanLab, onDone: (F
             val thumb = page.thumb
             // room around the photo for the handles
             val pad = with(density) { 24.dp.toPx() }
-            val k = minOf((constraints.maxWidth - 2 * pad) / thumb.width, (constraints.maxHeight - 2 * pad) / thumb.height).coerceAtLeast(0.01f)
-            val (iw, ih) = thumb.width * k to thumb.height * k
             val viewW = constraints.maxWidth.toFloat()
             val viewH = constraints.maxHeight.toFloat()
-            val fit = QuadFit((constraints.maxWidth - iw) / 2f, (constraints.maxHeight - ih) / 2f, iw, ih)
+            // a corner off the photo (#291) widens the view to show it
+            val fit = fitSpan(heldSpan ?: quadSpan(corners), thumb.width.toFloat(), thumb.height.toFloat(), viewW, viewH, pad)
+            val (iw, ih) = fit.width to fit.height
             val latest = rememberUpdatedState(corners)
             val latestFit = rememberUpdatedState(fit)
             val latestAspect = rememberUpdatedState(aspect)
@@ -325,6 +328,7 @@ internal fun ScanCropScreen(page: ScanPage, index: Int, lab: ScanLab, onDone: (F
                         val h = hitTest(p.x, p.y, latest.value, latestFit.value, 48.dp.toPx(), 40.dp.toPx())
                         held = h
                         if (h != null) {
+                            heldSpan = quadSpan(latest.value)
                             dragSerial++
                             selected = h
                             lastMove = SystemClock.uptimeMillis()
@@ -335,9 +339,13 @@ internal fun ScanCropScreen(page: ScanPage, index: Int, lab: ScanLab, onDone: (F
                     onDragEnd = {
                         val h = held
                         held = null
+                        heldSpan = null
                         if (h != null) snap(h, SystemClock.uptimeMillis() - lastMove)
                     },
-                    onDragCancel = { held = null },
+                    onDragCancel = {
+                        held = null
+                        heldSpan = null
+                    },
                 ) { change, d ->
                     val h = held ?: return@detectDragGestures
                     change.consume()
