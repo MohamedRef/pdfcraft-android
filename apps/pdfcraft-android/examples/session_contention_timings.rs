@@ -4,6 +4,7 @@
 //! `session_contention_timings edit /abs/file.pdf`  first repaint after one comment edit
 //! `session_contention_timings save /abs/file.pdf`  a render while `doc_save` holds the session
 //! `session_contention_timings text /abs/file.pdf`  search every page, then report the text cache
+//! `session_contention_timings cancel /abs/file.pdf`  a page render, then the same one stopped 5 ms in
 use pdfcraft_android::MobileSession;
 use serde_json::json;
 use std::sync::Arc;
@@ -31,7 +32,7 @@ fn open(s: &MobileSession, path: &str) -> Result<u64, Box<dyn std::error::Error>
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut args = std::env::args().skip(1);
-    let mode = args.next().ok_or("usage: session_contention_timings edit|save|text|lower /absolute/file.pdf")?;
+    let mode = args.next().ok_or("usage: session_contention_timings edit|save|text|lower|cancel /absolute/file.pdf")?;
     let path = args.next().ok_or("missing PDF path")?;
     let s = Arc::new(MobileSession::new());
     let doc = open(&s, &path)?;
@@ -110,6 +111,29 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let lower = t.elapsed().as_micros();
             println!("render_ms={render} pixel_bytes={bytes} uniffi_lower_us={lower} buffer_len={}", buf.len());
             drop(buf.destroy_into_vec());
+        }
+        "cancel" => {
+            // a whole page at the 4 MP cap, then the same render stopped 5 ms in (#91)
+            let page = 2.min(pages.saturating_sub(1));
+            s.render_page(doc, page, 8.0, None)?;
+            for round in 1..=3 {
+                let t = Instant::now();
+                s.render_page_compact(doc, page, 8.0, None, false)?;
+                let full = ms(t);
+                let stop = pdfcraft_android::RenderCancel::new();
+                let stopper = {
+                    let stop = stop.clone();
+                    std::thread::spawn(move || {
+                        std::thread::sleep(std::time::Duration::from_millis(5));
+                        stop.cancel();
+                    })
+                };
+                let t = Instant::now();
+                let r = s.render_page_compact_cancellable(doc, page, 8.0, None, false, stop);
+                let stopped = ms(t);
+                stopper.join().map_err(|_| "stopper panicked")?;
+                println!("round={round} full_render_ms={full} cancelled_at_5ms_returned_ms={stopped} cancelled={}", r.is_err());
+            }
         }
         other => return Err(format!("unknown mode {other}").into()),
     }
