@@ -65,16 +65,24 @@ internal class ScanCameraRouter(private val activity: ComponentActivity, private
             ScanCaptureRoute.AskPermission -> {
                 pending = file
                 // the scan explains first, on the camera screen; Add image asks straight away
-                if (forImage) launchPermission() else m.show(file, r, v.scanRetaking)
+                if (forImage) launchPermission() else show(file, r)
             }
             else -> if (forImage) {
                 // no camera, or refused: the photo for Add image is given up on
                 v.tell(activity.getString(R.string.scan_camera_image_unavailable))
                 v.onScanPhoto(false)
             } else {
-                m.show(file, r, v.scanRetaking)
+                show(file, r)
             }
         }
+    }
+
+    /** The camera screen for [file], logging the mode it opens in (#457). */
+    private fun show(file: File, screen: ScanCaptureRoute) {
+        val v = vm()
+        val m = model()
+        val bar = v.scanLab.options.cameraBar
+        m.show(file, screen, v.scanRetaking, scanCameraModeId(bar, m.modeShown(v.scanBook)), bar)
     }
 
     /** The camera screen's actions. */
@@ -113,7 +121,7 @@ internal class ScanCameraRouter(private val activity: ComponentActivity, private
     @Composable
     fun Screen() {
         val m = model()
-        if (m.target != null) ScanCameraScreen(m, vm().scanPages.map { it.thumb }, actions, vm().scanBook)
+        if (m.target != null) ScanCameraScreen(m, vm().scanPages.map { it.thumb }, actions, vm().scanBook, vm().scanLab.options.cameraBar)
     }
 
     private fun launchPermission() = launch { permission.launch(Manifest.permission.CAMERA) }

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Scan: the scanner's screens one job at a time (#455): camera modes and bars (#457). Kept apart so parallel scanner work merges cleanly. -->
+<resources>
+    <string name="scan_mode_single">صفحة واحدة</string>
+    <string name="scan_mode_batch">عدة صفحات</string>
+    <string name="scan_mode_book">كتاب</string>
+    <string name="scan_camera_light">الإضاءة</string>
+    <string name="scan_camera_grid">الشبكة</string>
+    <string name="scan_camera_more">خيارات أخرى</string>
+    <string name="scan_camera_use_phone_app">استخدام تطبيق الكاميرا في الهاتف</string>
+    <string name="scan_camera_import_short">استيراد</string>
+    <string name="scan_camera_open_pages">فتح المسح. الصفحات: %1$d</string>
+    <string name="scan_camera_done_short">تم</string>
+    <string name="scan_camera_zoom">التكبير %1$s</string>
+    <string name="scan_lab_camera_bar">أوضاع الكاميرا (صفحة واحدة، عدة صفحات، كتاب) وشريط الأيقونات والتكبير</string>
+</resources>
