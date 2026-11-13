@@ -479,7 +479,9 @@ private fun AboutPage(vm: AppViewModel, open: (SettingsPage) -> Unit) = Group {
     val context = LocalContext.current
     val clipboard = LocalClipboardManager.current
     val leave = rememberLeaving()
-    val version = stringResource(R.string.home_version, "${vm.home.appVersion} (${installedVersionCode(context)})", io.github.artcraftandroid.pdfcraft.core.engineVersion())
+    // a missing engine library shows "?" rather than closing the app
+    val engine = remember { runCatching { io.github.artcraftandroid.pdfcraft.core.engineVersion() }.getOrDefault("?") }
+    val version = stringResource(R.string.home_version, "${vm.home.appVersion} (${installedVersionCode(context)})", engine)
     val copied = stringResource(R.string.home_version_copied)
     val copyLabel = stringResource(R.string.settings_copy_version)
     val copy = { clipboard.setText(AnnotatedString(version)); vm.tell(copied) }
