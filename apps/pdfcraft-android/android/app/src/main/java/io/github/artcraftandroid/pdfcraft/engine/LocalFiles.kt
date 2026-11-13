@@ -11,6 +11,7 @@ import android.provider.MediaStore
 import android.provider.OpenableColumns
 import io.github.artcraftandroid.pdfcraft.R
 import io.github.artcraftandroid.pdfcraft.core.fileThumbnail
+import io.github.artcraftandroid.pdfcraft.core.fileThumbnailLent
 import java.io.File
 import java.security.MessageDigest
 
@@ -184,6 +185,10 @@ class Thumbnails(private val context: Context) {
                 else (if (c.isNull(0)) 0L else c.getLong(0)) to (if (c.columnCount > 1 && !c.isNull(1)) c.getLong(1) else 0L)
             }
         }.getOrNull() ?: return null
+        // a provider's regular file is drawn in place, at any size the viewer opens (#453)
+        if (size in 1..MAX_LOCAL) {
+            lentThumbnail(uri, maxSide, modified, size)?.let { return it.getOrNull() }
+        }
         // a very large file isn't copied just for its first page
         if (size > MAX_COPY) return null
         return cached(key(uri.toString(), modified, size, maxSide)) {
@@ -196,6 +201,20 @@ class Thumbnails(private val context: Context) {
             } finally {
                 tmp.delete()
             }
+        }
+    }
+
+    /**
+     * [uri]'s thumbnail drawn from its provider's descriptor (#453), or null when the provider
+     * lends no plain file (then it is copied as before). The result holds null when it can't be drawn.
+     */
+    private fun lentThumbnail(uri: Uri, maxSide: Int, modified: Long, size: Long): Result<Bitmap?>? {
+        val asset = runCatching { context.contentResolver.openAssetFileDescriptor(uri, "r") }.getOrNull() ?: return null
+        return asset.use {
+            val stat = runCatching { android.system.Os.fstat(asset.parcelFileDescriptor.fileDescriptor) }.getOrNull()
+            val regular = stat != null && android.system.OsConstants.S_ISREG(stat.st_mode)
+            if (inPlaceRefusal(true, true, false, asset.startOffset, asset.declaredLength, stat?.st_size ?: -1, regular) != null) return null
+            Result.success(cached(key(uri.toString(), modified, size, maxSide)) { fileThumbnailLent(asset.parcelFileDescriptor.fd, maxSide.toUInt()).toBitmap() })
         }
     }
 

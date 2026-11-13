@@ -16,6 +16,8 @@ workspace = true
 
 [dependencies]
 pdfcraft-cos = { workspace = true }
+# provider files opened in place (#453)
+pdfcraft-bytes = { workspace = true }
 pdfcraft-engine = { workspace = true }
 pdfcraft-render = { workspace = true }
 # the headless tool table (the same tools as the CLI and MCP), without the MCP server
