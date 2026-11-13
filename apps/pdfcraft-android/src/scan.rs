@@ -693,7 +693,7 @@ fn before_turn(width: u32, height: u32, turns: u8) -> (u32, u32) {
 pub struct ScanFlattenCheck {
     /// The flattened page was kept.
     pub kept: bool,
-    /// Why, as a short word: `straighter`, `notbetter`, `unmeasured`, `straight` or `fewlines` (#302).
+    /// Why, as a short word: `straighter`, `notbetter`, `unmeasured`, `straight`, `fewlines` or `muchbetter` (#302).
     pub why: String,
     /// How far the lines of text are from straight and level, in pixels of the page, on each;
     /// `None` when too few lines could be followed.

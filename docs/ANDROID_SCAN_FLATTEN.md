@@ -102,6 +102,87 @@ had right, by up to 2 % of the diagonal (C, D, E, H, I, in both runs), so flatte
 on for every page. On the sagging sheet and the receipt it helps by both measures. On the invoice
 the eye says its rows are more level and the measures do not agree with each other.
 
+## The decision, set on the owner's photos (#466, 13 Nov)
+
+The owner asked for flattening to be better and automatic. The ten reference photos were run
+again, this time **with the app's own corners** (the detector and the edge refinement, the whole
+photo where no page is found), which is what the app does and what the table above did not: it
+used the reference's corners. The photos are private; only figures leave them.
+
+**A steadier measure.** The distance from the reference in the table above repeats badly because
+it reads a fitted cubic at places where no points matched. It is replaced here by two parts,
+both in % of the page's diagonal, from points matched between our page and the reference's:
+
+- *lean*: how far the best perspective map between the two pages is from a plain stretch along
+  each axis. This is what corners that are a little off leave behind: a skew, a keystone, a turn.
+- *bend*: how far the matched points still are after that best map (90th percentile).
+
+By this measure the three bent pages are bent by about 0.5 % of the diagonal (A 0.47, F 0.51,
+G 0.49) and the flat ones by 0.11 to 0.22. The figures of 2.6 to 4.5 % in this file and in #302
+were several times too large.
+
+**What the measure showed:**
+
+- With the reference's corners the network makes every flat page a little worse and helps the
+  receipt (as the table above says).
+- **With the app's own corners the largest part of the distance is lean, not bend** (up to 3.4),
+  and the network takes much of it out, because it finds the page again. That is where
+  flattening earns its place: on pages whose corners were found a little off.
+- The page's lines of text could not be followed under shade: on the sheet in the shade of a
+  tree the guard measured 4 lines on one page and 3 on the other, and called the flattened page
+  twice as bad.
+- On the one page that is a whole photo because no outline was found, the network's page read
+  26 % straighter and was further from the reference.
+
+**What changed:**
+
+1. The guard measures both pages with their light evened out (`page::evened_grey`: each pixel
+   over the bright level of its part of the page; what is darker than 0.45 of the page's bright
+   level is left dark). On the shaded sheet 15 and 16 lines are followed. The text-line fallback
+   finds its lines on the same evened page.
+2. Under the floor of 8 lines, a flattened page is still kept when both pages have at least 4
+   lines and it reads half or less of the straightened page's figure (reason `muchbetter`). A
+   change that large is lean being taken out.
+3. In the automatic mode (the check is asked for) a page that is the whole photo is not given to
+   the network. Its lines of text may still flatten it. Flatten page by hand still asks the
+   network.
+
+**The ten photos, the app's own corners, distance from the reference (lean and bend together):**
+
+| Page | Flattening off | Automatic, before this change | Automatic, now | What now decides |
+|---|---|---|---|---|
+| A, sheet in the shade of a tree | 0.88 | 0.88 | **0.43** | network, 9.9 → 4.4 px on 15 and 16 lines |
+| B, open booklet in the hand | 0.58 | 0.58 | 0.58 | not kept, 3.4 → 5.4 px |
+| C, flat label | 0.16 | 0.16 | 0.20 | network, 2.9 → 1.9 px on 8 lines |
+| D, parcel label | 0.88 | 0.88 | 0.88 | not kept |
+| E, handwritten note | 1.81 | 1.81 | **1.22** | network, 12.2 → 4.0 px on 6 and 7 lines (`muchbetter`) |
+| F, curled receipt | 2.15 | 1.83 | 1.83 | network, 9.6 → 7.3 px |
+| G, invoice with a fold (whole photo) | 0.83 | 0.83 | 0.83 | network not asked; lines not kept |
+| H, a note on another sheet (whole photo) | 0.88 | 0.88 | 0.88 | network not asked; lines not kept |
+| I, a page already scanned | 3.44 | 3.44 | 3.44 | not kept, 4 lines |
+| J, a page already scanned | 2.38 | 0.78 | 0.78 | network, 13.2 → 6.7 px |
+| Mean | 1.40 | 1.21 | **1.11** | |
+
+Five pages are flattened and five are not. Of the five, four are clearly closer to the reference
+(two of them new with this change) and one, the flat label, is 0.04 further, which is within
+what the measure can tell apart. No page is clearly worse. With the reference's corners only A
+and F are flattened, both closer.
+
+**What this does not show:**
+
+- Ten photos. The rules fit them; the 4-line rule rests on one page.
+- The distances that remain are mostly lean the network did not take out (F 1.71, I 3.44, E
+  1.15): corners found off. That is the detector's and the refinement's work (#290, #291), not
+  flattening's.
+- The fold's sideways squeeze (G) is not helped by either method.
+- Time: 0.9 to 1.7 s a page on a 2-core desktop in the automatic mode, against 0.3 to 0.6 s
+  where the network is not asked. **No phone.** The owner's log of 13 Nov has the network alone
+  at 352 to 400 ms on his phone.
+- Whether the flattened pages look right was checked by eye for three of them only.
+
+**Recommendation:** the automatic mode can be on by default. It is `ScanLab.flattenAuto`, still
+off: turning it on, with the notice and the way back that #466 asks for, is that issue's.
+
 ## Automatic mode, as a testing option
 
 The issue's first rule (flatten when the grid's `bend` is 0.3 % or more) is not used. On the ten
@@ -123,7 +204,7 @@ What is built is the second rule, the quality guard:
   `PageRequest::flatten_min_lines`, `ScanPageRequest.flatten_min_lines`, 8 by default, 0 for none).
   It applies to the network's page in the automatic mode and to the page flattened from its lines
   of text (#303, part B).
-- The result says which page was kept, why (`straighter`, `notbetter`, `unmeasured`, `straight`, `fewlines`),
+- The result says which page was kept, why (`straighter`, `notbetter`, `unmeasured`, `straight`, `fewlines`, `muchbetter`),
   both figures and the number of lines each had. The extra work is timed as `scan_flatten_check`.
 - The preview (#301) makes the same choice, at its own size. Near the 10 % margin the preview and
   the saved page can choose differently, because the figures are in pixels of each size. Both are
@@ -160,7 +241,7 @@ Log fields on each `page` and `preview` line:
 - `straight_px` and `straight_flat_px`, in tenths of a pixel, -1 when not measured;
 - `straight_lines` and `straight_flat_lines`.
 
-Kept scans: `result.flatten_check` in each page file (its `why` may be `fewlines`), and
+Kept scans: `result.flatten_check` in each page file (its `why` may be `fewlines` or `muchbetter`), and
 `options.flatten_line_floor`.
 
 What was measured, on drawn pages only (`a_checked_flattening_is_kept_only_when_the_lines_come_out_straighter`,

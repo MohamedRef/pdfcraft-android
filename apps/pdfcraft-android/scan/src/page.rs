@@ -226,7 +226,7 @@ pub struct PageResult {
 pub struct FlattenCheck {
     /// The flattened page was kept.
     pub kept: bool,
-    /// Why: `straighter`, `notbetter`, `unmeasured`, `straight` or `fewlines` (see [`crate::flatten_guard::Why`]).
+    /// Why: `straighter`, `notbetter`, `unmeasured`, `straight`, `fewlines` or `muchbetter` (see [`crate::flatten_guard::Why`]).
     /// The floor on the lines followed that was in force (0 for none, #302).
     pub min_lines: u32,
     pub why: &'static str,
@@ -498,7 +498,13 @@ pub fn page_base(request: &PageRequest<'_>) -> Result<PageBase, ScanError> {
         _ => 1.0,
     };
     let (w, h, dpi) = shape.output(scale)?;
-    let grid = if request.flatten { predict_grid(&photo, &quad) } else { None };
+    // A page whose outline was not found is the whole photo, table and all. The network is made
+    // for a page with its own edges, and in the automatic mode (the check is asked for) nothing
+    // would tell a page it bent wrongly from one it flattened: on the owner's photos the one such
+    // page read 26 % straighter and was further from the reference (#466). So it is not asked
+    // there; the page's lines of text may still flatten it. Flatten page chosen by hand asks it.
+    let whole = request.corners.iter().zip(WHOLE_PHOTO).all(|(a, b)| (a - b).abs() < 1e-6);
+    let grid = if request.flatten && !(whole && request.flatten_check) { predict_grid(&photo, &quad) } else { None };
     if request.flatten {
         lap(STAGE_FLATTEN, &mut timings);
     }
@@ -598,7 +604,7 @@ fn trim_flattened(photo: &Photo, grid: &crate::flatten::FlattenGrid, page: Rgb, 
 /// The text-line fallback on `plain`, the page straightened by `quad` (#303, part B): the page
 /// flattened from its lines when the guard keeps it, and what was found either way.
 pub(crate) fn flatten_by_lines(photo: &Photo, quad: &Quad, plain: &Rgb, threads: usize, min_lines: u32) -> (Option<Rgb>, LineFlatten) {
-    let fit = match fit_page(&grey(plain)) {
+    let fit = match fit_page(&evened_grey(plain)) {
         Ok(fit) => fit,
         Err(why) => return (None, LineFlatten { gave_up: Some(why.id()), fit: None, check: None }),
     };
@@ -616,9 +622,14 @@ pub(crate) fn flatten_by_lines(photo: &Photo, quad: &Quad, plain: &Rgb, threads:
 
 /// Measures the lines of text on the page straightened by its corners and on the flattened one,
 /// and keeps the flattened page only when it is clearly straighter (#302, the quality guard) and
-/// at least `min_lines` lines were followed on both (0: no floor).
+/// at least `min_lines` lines were followed on both (0: no floor; a page that reads far
+/// straighter is kept on fewer, see [`crate::flatten_guard::guard_with_floor`]).
+///
+/// Both pages are measured with their light evened out ([`evened_grey`]): under a shadow the
+/// lines cannot be followed otherwise (#466: on the owner's sheet in the shade of a tree 4 lines
+/// were followed, and 16 once the light was evened).
 pub fn compare_flattened(straightened: &Rgb, flattened: &Rgb, min_lines: u32) -> FlattenCheck {
-    let (s, f) = (line_straightness(&grey(straightened)), line_straightness(&grey(flattened)));
+    let (s, f) = (line_straightness(&evened_grey(straightened)), line_straightness(&evened_grey(flattened)));
     let decision = guard_with_floor(s.map(|m| m.px), f.map(|m| m.px), (s.map(|m| m.lines), f.map(|m| m.lines)), min_lines);
     FlattenCheck { kept: decision.kept == Kept::Flattened, why: decision.why.id(), min_lines, straightened: s, flattened: f }
 }
@@ -627,4 +638,100 @@ pub fn compare_flattened(straightened: &Rgb, flattened: &Rgb, min_lines: u32) ->
 fn grey(page: &Rgb) -> Luma {
     let data = page.data.chunks_exact(3).map(|p| crate::photo::luma([p[0], p[1], p[2]])).collect();
     Luma { width: page.width, height: page.height, data }
+}
+
+/// Cells along the page's longer side for [`evened_grey`]'s light.
+const EVEN_CELLS: usize = 48;
+/// The deepest shadow that is evened out, as a share of the page's bright level: darker than
+/// this is taken for something that is dark itself. (The owner's sheet under a tree is at 0.6 to
+/// 0.7 in its shade.)
+const EVEN_DEEPEST: f32 = 0.45;
+/// The grey level evened paper is brought to: under 255, so paper a little brighter than its
+/// surroundings is not cut off.
+const EVEN_PAPER: f32 = 230.0;
+
+/// The page in shades of grey with its light evened out, for following lines of text: every
+/// pixel over the paper's brightness near it, paper at [`EVEN_PAPER`].
+///
+/// The light is the 90th percentile of each cell of the page ([`EVEN_CELLS`] along the longer
+/// side: paper shows between lines of print), raised to the middle level of the nine cells
+/// around it where the cell itself is mostly print, and read between cell centres. It is far
+/// cheaper and rougher than the Auto look's light and is only for measuring: along a shadow's
+/// hard edge a band up to a cell wide stays dark, and what is darker than [`EVEN_DEEPEST`] of
+/// the page's bright level stays as dark as it is. A page too small for cells comes back as
+/// plain grey.
+pub(crate) fn evened_grey(page: &Rgb) -> Luma {
+    let mut out = grey(page);
+    let (w, h) = (out.width as usize, out.height as usize);
+    let cell = w.max(h).div_ceil(EVEN_CELLS).max(4);
+    let (cw, ch) = (w.div_ceil(cell), h.div_ceil(cell));
+    if cw < 3 || ch < 3 || out.data.len() != w * h {
+        return out;
+    }
+    // each cell's bright level: the 90th percentile of its grey levels, from their counts
+    let mut bright = vec![0f32; cw * ch];
+    for cy in 0..ch {
+        for cx in 0..cw {
+            let mut counts = [0u32; 256];
+            let mut n = 0u32;
+            for y in cy * cell..((cy + 1) * cell).min(h) {
+                for &v in &out.data[y * w + cx * cell..y * w + ((cx + 1) * cell).min(w)] {
+                    counts[usize::from(v)] += 1;
+                    n += 1;
+                }
+            }
+            let mut above = n / 10;
+            let mut level = 255usize;
+            while level > 0 && counts[level] <= above {
+                above -= counts[level];
+                level -= 1;
+            }
+            bright[cy * cw + cx] = level as f32;
+        }
+    }
+    // a cell that is mostly print (a heading, a rule, a filled box) takes the middle level of
+    // the nine cells around it: paper, unless most of them are dark too, which is a shadow
+    let mut light = vec![0f32; cw * ch];
+    for cy in 0..ch {
+        for cx in 0..cw {
+            let mut around = [0f32; 9];
+            let mut n = 0;
+            for y in cy.saturating_sub(1)..=(cy + 1).min(ch - 1) {
+                for x in cx.saturating_sub(1)..=(cx + 1).min(cw - 1) {
+                    around[n] = bright[y * cw + x];
+                    n += 1;
+                }
+            }
+            around[..n].sort_by(f32::total_cmp);
+            light[cy * cw + cx] = around[n / 2].max(bright[cy * cw + cx]);
+        }
+    }
+    // a shadow dims paper; a table beside the page or a dark picture is not dimmed paper. What
+    // is darker than [`EVEN_DEEPEST`] of the page's own bright level is left as dark as it is.
+    let mut levels = light.clone();
+    levels.sort_by(f32::total_cmp);
+    let floor = EVEN_DEEPEST * levels[levels.len() * 9 / 10];
+    for l in &mut light {
+        *l = l.max(floor);
+    }
+    // read between cell centres, and divide
+    let at = |v: usize, n: usize| {
+        let pos = ((v as f32 + 0.5) / cell as f32 - 0.5).clamp(0.0, (n - 1) as f32);
+        let i = (pos as usize).min(n - 2);
+        (i, pos - i as f32)
+    };
+    for y in 0..h {
+        let (cy, fy) = at(y, ch);
+        for x in 0..w {
+            let (cx, fx) = at(x, cw);
+            let (a, b) = (
+                light[cy * cw + cx] + (light[cy * cw + cx + 1] - light[cy * cw + cx]) * fx,
+                light[(cy + 1) * cw + cx] + (light[(cy + 1) * cw + cx + 1] - light[(cy + 1) * cw + cx]) * fx,
+            );
+            let paper = (a + (b - a) * fy).max(16.0);
+            let v = &mut out.data[y * w + x];
+            *v = (f32::from(*v) * EVEN_PAPER / paper).round().clamp(0.0, 255.0) as u8;
+        }
+    }
+    out
 }
