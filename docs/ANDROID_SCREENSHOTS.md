@@ -17,12 +17,22 @@ every Settings page (`SettingsPage`), light and dark, in English and Arabic (rig
 
 Files: `app/build/screenshots/settings/<page>_<locale>_<size>_<theme>.png`.
 
-The scanner's screens are not drawn yet (#462).
+`app/src/test/java/io/github/artcraftandroid/pdfcraft/ui/scan/ScanScreenshotsTest.kt`: the
+scanner's screens on main. The in-app camera's bars in each mode (One page, Many pages, Book) laid
+out as `ScanCameraScreen` lays them around a drawn frame (CameraX does not run in a JVM test), the
+camera permission page, and the crop screen on a drawn page (light and dark). English and Arabic at
+360×640 dp and 384×832 dp, French and German (long words) at 360×640 dp.
+
+Files: `app/build/screenshots/scan/camera_<mode>_<locale>_<size>.png`,
+`camera_permission_<locale>_<size>.png` and `crop_<locale>_<size>_<theme>.png`.
+
+Still to add as they land: Adjust borders (#458), Enhance (#459) and the document screen (#460),
+which replace today's single scan screen.
 
 ## In CI
 
 The Android job runs the pictures on a pull request whose merge commit changes
-`app/src/main/java/.../ui/`, `app/src/main/res/` or the test itself, and uploads them as the
+`app/src/main/java/.../ui/`, `app/src/main/res/` or one of the two tests, and uploads them as the
 `screen-pictures` artifact (the run's Summary page, Artifacts). They add about half a minute.
 
 ## Locally

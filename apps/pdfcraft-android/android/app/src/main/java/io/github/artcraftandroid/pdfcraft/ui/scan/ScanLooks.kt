@@ -96,6 +96,28 @@ fun scanApplyLookToAll(looks: List<ScanPageLook>, index: Int): List<ScanPageLook
     return looks.map { from }
 }
 
+/**
+ * What Apply to all copies from a page (#465): its look (with strength and paper colour), and with
+ * every page made in the background also its document type ([preset], null for automatic) and
+ * Flatten page choice. With that option off the other two are left null, so only the look counts.
+ */
+data class ScanPageSettings(val look: ScanPageLook, val preset: String? = null, val flatten: Boolean? = null)
+
+internal fun scanPageSettings(page: io.github.artcraftandroid.pdfcraft.ui.ScanPage, all: Boolean): ScanPageSettings =
+    if (all) ScanPageSettings(page.look, page.preset, page.flatten) else ScanPageSettings(page.look)
+
+/** Apply to all over [settings]: every page takes page [index]'s; out of range changes nothing. */
+fun scanApplyAll(settings: List<ScanPageSettings>, index: Int): List<ScanPageSettings> {
+    val from = settings.getOrNull(index) ?: return settings
+    return settings.map { from }
+}
+
+/** Apply to all is offered when it would change a page: some page's settings differ from page [index]'s. */
+fun scanApplyAllChanges(settings: List<ScanPageSettings>, index: Int): Boolean {
+    val from = settings.getOrNull(index) ?: return false
+    return settings.any { it != from }
+}
+
 /** Apply to all asks first when it would change a page: some page's look differs from page [index]'s. */
 fun scanApplyLookNeedsConfirm(looks: List<ScanPageLook>, index: Int): Boolean {
     val from = looks.getOrNull(index) ?: return false

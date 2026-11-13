@@ -74,13 +74,31 @@ internal fun AppViewModel.chooseScanLook(index: Int, look: ScanPageLook, why: St
     }
 }
 
-/** Apply to all (#301): every page takes page [index]'s look and strength; corners, turns and kinds stay. */
+/**
+ * Apply to all (#301): every page takes page [index]'s look and strength; corners and turns stay.
+ * With every page made in the background (#465) it also takes the page's paper colour, document
+ * type and Flatten page, so photos imported together are flattened with one tap.
+ */
 internal fun AppViewModel.applyScanLookToAll(index: Int) {
-    val looks = scanPages.map { it.look }
-    val from = looks.getOrNull(index) ?: return
-    val changed = looks.count { it != from }
-    setScanLooks(scanApplyLookToAll(looks, index))
-    Diag.event(DiagArea.Scan, "look_applied_all", "index" to index + 1, "look" to scanFilterId(from.filter), "strength" to from.level, "pages" to looks.size, "changed" to changed)
+    val all = scanLab.options.backgroundPages
+    val settings = scanPages.map { scanPageSettings(it, all) }
+    val from = settings.getOrNull(index) ?: return
+    val changed = settings.count { it != from }
+    val next = scanApplyAll(settings, index)
+    val touched = ArrayList<String>()
+    for (i in scanPages.indices) {
+        val s = next.getOrNull(i) ?: continue
+        val page = scanPages[i]
+        if (scanPageSettings(page, all) == s) continue
+        touched += page.key
+        scanPages[i] = if (all) page.copy(look = s.look, preset = s.preset, flatten = s.flatten) else page.copy(look = s.look)
+    }
+    pageQueue.appliedToAll(touched)
+    Diag.event(
+        DiagArea.Scan, "look_applied_all", "index" to index + 1, "look" to scanFilterId(from.look.filter), "strength" to from.look.level, "pages" to settings.size, "changed" to changed,
+        // what it carried (#465): the document type and Flatten page too, with every page made in the background
+        "carries_all" to all, "preset" to (from.preset ?: "auto"), "flatten" to scanFlattenChoiceId(from.flatten),
+    )
 }
 
 /**
@@ -224,7 +242,9 @@ internal fun ScanApplyLookDialog(vm: AppViewModel, index: Int, look: ScanPageLoo
             onDone()
         },
     ) {
-        Text(stringResource(R.string.scan_apply_look_body, stringResource(look.filter.label)), color = pdfColors.text, fontSize = 14.sp)
+        // with every page made in the background it also carries the document type and Flatten page (#465)
+        val body = if (vm.scanLab.options.backgroundPages) R.string.scan_apply_all_body else R.string.scan_apply_look_body
+        Text(stringResource(body, stringResource(look.filter.label)), color = pdfColors.text, fontSize = 14.sp)
     }
 }
 
