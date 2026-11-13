@@ -10,6 +10,7 @@ import io.github.artcraftandroid.pdfcraft.ui.scan.scanAutoTurns
 import io.github.artcraftandroid.pdfcraft.ui.scan.chooseScanLook
 import io.github.artcraftandroid.pdfcraft.ui.scan.toggleScanFlatten
 import io.github.artcraftandroid.pdfcraft.ui.scan.undoScanTurn
+import io.github.artcraftandroid.pdfcraft.ui.scan.setScanRemoveFingers
 import io.github.artcraftandroid.pdfcraft.ui.scan.undoScanAuto
 import io.github.artcraftandroid.pdfcraft.ui.scan.afterScanMarkupAsk
 import io.github.artcraftandroid.pdfcraft.ui.scan.clearScanMarks
@@ -1057,7 +1058,8 @@ fun ScanScreen(vm: AppViewModel) {
         // Settings ▸ Preferences ▸ Scan (#339); read each time, so a change there shows here
         val autoUpright = io.github.artcraftandroid.pdfcraft.ui.scan.ScanUprightSetting.get(vm.settings.appPrefs)
         if (page != null && lab.preview) {
-            LaunchedEffect(page.file, page.corners.toList(), page.turns, page.preset, page.look, page.flatten, flattening, lab, autoUpright) { vm.requestScanPreview(shownAt, page, flattening) }
+            // page.auto too: an Undo or Remove fingers changes only the page's marks, and the page must be made again (#492)
+            LaunchedEffect(page.file, page.corners.toList(), page.turns, page.preset, page.look, page.flatten, page.auto, flattening, lab, autoUpright) { vm.requestScanPreview(shownAt, page, flattening) }
         }
         // every page made in the background, the page on screen first (#465)
         vm.pageQueue.shownIndex = shownAt
@@ -1167,11 +1169,15 @@ fun ScanScreen(vm: AppViewModel) {
                     val chips = io.github.artcraftandroid.pdfcraft.ui.scan.scanAutoChips(lab, page.auto, page.look, page.flatten, preview.flattened, preview.fingers?.filled?.toInt() ?: 0, preview.fingers?.overPrint?.toInt() ?: 0)
                     if (chips.isNotEmpty()) {
                         // under "Turned upright · Undo", which sits at the top
-                        Row(Modifier.align(Alignment.TopCenter).padding(top = 52.dp, start = 12.dp, end = 12.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            for (chip in chips) io.github.artcraftandroid.pdfcraft.ui.scan.ScanAutoChipView(chip, {
-                                // taking flattening back moves the page under its marks: asked first (#495)
-                                if (chip == io.github.artcraftandroid.pdfcraft.ui.scan.ScanAutoChip.Flattened) vm.afterScanMarkupAsk(shownAt, "flatten") { vm.undoScanAuto(shownAt, chip) } else vm.undoScanAuto(shownAt, chip)
-                            })
+                        Column(Modifier.align(Alignment.TopCenter).padding(top = 52.dp, start = 12.dp, end = 12.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                for (chip in chips) io.github.artcraftandroid.pdfcraft.ui.scan.ScanAutoChipView(chip, {
+                                    // taking flattening back moves the page under its marks: asked first (#495)
+                                    if (chip == io.github.artcraftandroid.pdfcraft.ui.scan.ScanAutoChip.Flattened) vm.afterScanMarkupAsk(shownAt, "flatten") { vm.undoScanAuto(shownAt, chip) } else vm.undoScanAuto(shownAt, chip)
+                                })
+                            }
+                            // a finger hid print: words that do nothing on a tap, apart from the chip's Undo (#492)
+                            if (io.github.artcraftandroid.pdfcraft.ui.scan.ScanAutoChip.FingersOverPrint in chips) io.github.artcraftandroid.pdfcraft.ui.scan.ScanFingerOverPrintNote()
                         }
                     }
                 }
@@ -1323,6 +1329,12 @@ fun ScanScreen(vm: AppViewModel) {
                 Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                     if (page.look.filter == ScanFilter.CleanScan && lab.presets) io.github.artcraftandroid.pdfcraft.ui.scan.ScanPresetChip(vm, shownAt, page.preset, preview?.kind?.preset)
                     flattenSwitch()
+                }
+                // the lasting way back for the finger removal, the same state as its chip's Undo (#492)
+                if (io.github.artcraftandroid.pdfcraft.ui.scan.scanShowsFingerSwitch(lab, page.look, page.look.strength ?: kindStrength ?: page.look.level)) {
+                    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        io.github.artcraftandroid.pdfcraft.ui.scan.ScanFingersSwitch(io.github.artcraftandroid.pdfcraft.ui.scan.scanRemovesFingers(lab, page.auto)) { vm.setScanRemoveFingers(shownAt, it) }
+                    }
                 }
             }
         }

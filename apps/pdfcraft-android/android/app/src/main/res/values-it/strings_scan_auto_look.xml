@@ -10,4 +10,6 @@
     <string name="scan_auto_fingers_undo">Dito rimosso · Annulla</string>
     <string name="scan_auto_fingers_undo_description">Rimetti il dito</string>
     <string name="scan_auto_fingers_over_print">Un dito copriva parte del testo. Rifai la foto per recuperarlo.</string>
+    <!-- Adjust: the person's own switch for the finger removal, the same state as the chip's Undo (#492) -->
+    <string name="scan_auto_fingers_switch">Rimuovi dita</string>
 </resources>

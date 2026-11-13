@@ -172,4 +172,35 @@ class ScanAutoLookTest {
         assertEquals(14, json.getInt("fingers_ms"))
         assertEquals("none", scanAutoDecisions("document", null, 0, false, null, null, false, ScanAutoMarks(), null).suggestionApplied)
     }
+
+    @Test
+    fun aFingerUndoCanBeTakenBackWithTheSwitch() {
+        // #492: Undo on the chip and Adjust's switch are one state, and the switch brings the removal back
+        val undone = scanFingersMarks(ScanAutoMarks(), remove = false)
+        assertEquals(setOf(ScanAutoMarks.FINGERS), undone.undone)
+        assertFalse(scanRemovesFingers(ScanLab(), undone))
+        val redone = scanFingersMarks(undone, remove = true)
+        assertTrue(scanRemovesFingers(ScanLab(), redone))
+        assertEquals(ScanAutoMarks(), redone)
+        // the other marks are left alone
+        val both = ScanAutoMarks(greyApplied = true, undone = setOf(ScanAutoMarks.FLATTEN, ScanAutoMarks.FINGERS))
+        assertEquals(ScanAutoMarks(greyApplied = true, undone = setOf(ScanAutoMarks.FLATTEN)), scanFingersMarks(both, remove = true))
+        // the page's request asks for the removal again once the switch is on
+        assertTrue(scanPageRequest("/a", ScanPage.WHOLE, ScanFilter.CleanScan, false, ScanLab(), "", removeFingers = scanRemovesFingers(ScanLab(), redone)).removeFingers)
+    }
+
+    @Test
+    fun theFingerSwitchShowsWhereTheStepRuns() {
+        assertTrue(scanShowsFingerSwitch(ScanLab(), ScanPageLook(), 40))
+        assertFalse(scanShowsFingerSwitch(ScanLab(), ScanPageLook(), 39))
+        assertFalse(scanShowsFingerSwitch(ScanLab(), ScanPageLook(ScanFilter.Grayscale), 80))
+        assertFalse(scanShowsFingerSwitch(ScanLab(removeFingers = false), ScanPageLook(), 80))
+    }
+
+    @Test
+    fun everyAutoChipSaysThatATapIsUndo() {
+        // #492: the over-print case reads "Finger removed · Undo" too; its news is a separate note
+        assertEquals(io.github.artcraftandroid.pdfcraft.R.string.scan_auto_fingers_undo, scanAutoChipWords(ScanAutoChip.FingersOverPrint).first)
+        assertEquals(scanAutoChipWords(ScanAutoChip.Fingers), scanAutoChipWords(ScanAutoChip.FingersOverPrint))
+    }
 }

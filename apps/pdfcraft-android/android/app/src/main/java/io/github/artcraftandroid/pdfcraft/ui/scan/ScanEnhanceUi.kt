@@ -304,7 +304,11 @@ internal fun ScanEnhanceNotes(
                 modifier = Modifier.clip(CircleShape).background(Color.Black.copy(alpha = 0.6f))
                     .clickable(role = Role.Button, onClickLabel = undoTurn) { onUndoTurn() }.padding(horizontal = 12.dp, vertical = 6.dp),
             )
-            is ScanEnhanceNote.Auto -> ScanAutoChipView(n.chip, { onUndoAuto(n.chip) })
+            is ScanEnhanceNote.Auto -> {
+                ScanAutoChipView(n.chip, { onUndoAuto(n.chip) })
+                // a finger hid print: words beside its Undo that do nothing on a tap (#492)
+                if (n.chip == ScanAutoChip.FingersOverPrint) ScanFingerOverPrintNote()
+            }
             is ScanEnhanceNote.Suggest -> ScanSuggestionOverlay(n.suggestion, onTake = { onTake(n.suggestion) }, onDismiss = { onDismiss(n.suggestion) })
             is ScanEnhanceNote.Compare -> Text(
                 stringResource(if (n.comparing) R.string.tools_filter_original else R.string.scan_compare_hint), color = Color.White, fontSize = 12.sp,
