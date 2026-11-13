@@ -18,8 +18,12 @@ import java.io.File
  * here changes the behavior until it is granted.
  */
 object AllFilesAccess {
-    /** Whether the person has granted All files access to PdfCraft. */
-    fun granted(): Boolean = Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && Environment.isExternalStorageManager()
+    /**
+     * Whether the person has granted All files access to PdfCraft. False when shared storage
+     * can't be asked (no primary storage volume: the check then fails inside Android).
+     */
+    fun granted(): Boolean = Build.VERSION.SDK_INT >= Build.VERSION_CODES.R &&
+        runCatching { Environment.isExternalStorageManager() }.getOrDefault(false)
 
     /** The system settings page where the person grants it for PdfCraft. */
     fun settingsIntent(context: Context): Intent =
