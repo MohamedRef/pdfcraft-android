@@ -710,8 +710,12 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         doc.source?.let { src -> withContext(Dispatchers.IO) { runCatching { files.dropCopyIfReachable(src) } } }
     }
 
-    /** The app went to the background: save the open document, as the reference does. */
-    fun onPause() {
+    /**
+     * The app went to the background: save the open document, as the reference does. When the
+     * pause is for one of the app's own screens (a picker, the share sheet), the working copy is
+     * saved but the original is written when the app is really left or the document closes (#97).
+     */
+    fun onPause(ownScreen: Boolean = false) {
         study.pauseStudy()
         val doc = document ?: return
         if (Diag.enabled()) Diag.event(DiagArea.Save, "pause_with_document", "doc" to doc.diagNumber, "dirty" to doc.info.dirty, "not_written_back" to doc.notWrittenBack, "preparing" to doc.info.preparing, "bytes" to doc.file.length())
@@ -720,7 +724,9 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             // A paused Activity must not save a closed/replaced engine document.
             // Use the same lock as Open with and Close before touching native handles.
             openMutex.withLock {
-                if (document === doc && readOnlyPrompt == null && !resolvingReadOnly) save(doc, trigger = "pause")
+                if (document === doc && readOnlyPrompt == null && !resolvingReadOnly) {
+                    save(doc, trigger = if (ownScreen) "pause_own_screen" else "pause", deferWriteBack = ownScreen)
+                }
             }
         }
     }
@@ -729,8 +735,10 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
      * Save [doc]'s changes: into its working file (incrementally, so earlier signatures stay
      * valid), then back over the file it came from when the app may write there. Returns
      * whether the changes reached the original; [quiet] leaves a failure's message to the caller.
+     * [deferWriteBack] saves the working file only and leaves the original for the next save, which
+     * a pause that leaves the app or the close makes (#97); the recovery marker stays meanwhile.
      */
-    suspend fun save(doc: OpenDocument, quiet: Boolean = false, trigger: String = "other"): Boolean = saveMutex.withLock {
+    suspend fun save(doc: OpenDocument, quiet: Boolean = false, trigger: String = "other", deferWriteBack: Boolean = false): Boolean = saveMutex.withLock {
         val eng = engine ?: return@withLock false
         // A reading stage has no edits; do not write an incompletely checked source back.
         if (doc.info.preparing) return@withLock true
@@ -757,6 +765,12 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             stage = "backup"
             Diag.measure(DiagArea.Save, "backup_snapshot", "doc" to doc.diagNumber) { backups.snapshotForBackup(eng, doc) }
             stage = "write_back"
+            if (writeBackWaits(deferWriteBack, src?.scheme, src?.path?.let { File(it).canonicalPath }, doc.file.canonicalPath)) {
+                // #97: no whole-file rewrite (or upload) of the original for a picker or the share sheet
+                doc.notWrittenBack = true
+                outcome = "deferred"
+                return@withLock false
+            }
             if (src != null && src.scheme == "content") {
                 // The marker set above stays until the provider verifiably holds the new bytes.
                 if (!doc.writable || doc.holdWriteBack) {
@@ -2633,3 +2647,10 @@ class ReviewSession(val deck: String?, val deckName: String) {
 
 /** Where a note margin goes. */
 enum class MarginSide { Right, Bottom, Both }
+
+/**
+ * Whether a save leaves the original for a later save (#97): only when asked to, and only when
+ * there is an original apart from the working file to write (a provider document, or another file).
+ */
+internal fun writeBackWaits(deferWriteBack: Boolean, scheme: String?, sourcePath: String?, workingPath: String): Boolean =
+    deferWriteBack && (scheme == "content" || (scheme == "file" && sourcePath != null && sourcePath != workingPath))
