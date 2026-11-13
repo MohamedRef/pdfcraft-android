@@ -68,6 +68,9 @@ struct ManagedMap {
     map: memmap2::Mmap,
     #[cfg_attr(not(any(target_os = "android", target_os = "linux")), allow(dead_code))]
     file: File,
+    /// Set for a provider's file opened in place (#453): every mapping of it holds this token.
+    #[cfg_attr(not(any(target_os = "android", target_os = "linux")), allow(dead_code))]
+    lent: Option<Arc<LentInode>>,
 }
 impl Deref for ManagedMap {
     type Target = [u8];
@@ -93,7 +96,7 @@ impl PdfSource for ManagedMap {
     fn appended(&self, tail: &[u8]) -> Option<PdfBytes> {
         #[cfg(any(target_os = "android", target_os = "linux"))]
         {
-            splice::append(&self.file, self.map.len(), tail).map(|s| Arc::new(s) as PdfBytes)
+            splice::append(&self.file, self.map.len(), tail, self.lent.clone()).map(|s| Arc::new(s) as PdfBytes)
         }
         #[cfg(not(any(target_os = "android", target_os = "linux")))]
         {
@@ -165,7 +168,7 @@ fn read_private_bounded(
     }
     if metadata.len() >= 1024 * 1024 && root.is_some_and(|root| managed_private_file(path, root, &metadata)) {
         if let Ok(map) = map(&file) {
-            return Ok(Arc::new(ManagedMap { map, file }));
+            return Ok(Arc::new(ManagedMap { map, file, lent: None }));
         }
     }
     if metadata.is_file() && metadata.len() > owned_cap {
@@ -245,6 +248,97 @@ fn map_managed_inode(file: &File) -> io::Result<memmap2::Mmap> {
     unsafe { memmap2::MmapOptions::new().map(file) }
 }
 
+/// Android adaptation (#453): a document provider's file opened in place. Every mapping of the
+/// file (its own and the regions [`PdfSource::appended`] splices onto it) holds one of these, so
+/// the app can tell when nothing maps the file any more ([`lent_inode_in_use`]) before it writes
+/// the file in a way that could shrink it.
+#[derive(Debug)]
+pub struct LentInode {
+    dev: u64,
+    ino: u64,
+}
+
+static LENT: std::sync::Mutex<Vec<std::sync::Weak<LentInode>>> = std::sync::Mutex::new(Vec::new());
+
+/// Whether any mapping of the lent file `dev`/`ino` (see [`read_lent_descriptor`]) is still alive.
+pub fn lent_inode_in_use(dev: u64, ino: u64) -> bool {
+    let mut lent = LENT.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+    lent.retain(|w| w.strong_count() > 0);
+    lent.iter().filter_map(std::sync::Weak::upgrade).any(|l| l.dev == dev && l.ino == ino)
+}
+
+/// A provider file opened in place (#453): the bytes of the open descriptor `fd`, which the
+/// caller keeps open for the length of this call. Its own copy of the descriptor is kept, so the
+/// caller may close `fd` afterwards. A regular file of at least 1 MiB is mapped read-only from
+/// that copy; a smaller one is read into memory. Anything else (a pipe, a socket) is refused, and
+/// the app copies it in as before. `cap` bounds the size as for [`read_private_input`].
+///
+/// The app writes a mapped lent file only by appending (its first bytes stay as mapped), and
+/// rewrites it only when [`lent_inode_in_use`] says no mapping is left.
+#[cfg(any(target_os = "android", target_os = "linux"))]
+pub fn read_lent_descriptor(fd: i32, cap: u64) -> io::Result<PdfBytes> {
+    use std::os::unix::fs::{FileExt, MetadataExt};
+    let file = lent::duplicate(fd)?;
+    let metadata = file.metadata()?;
+    if !metadata.is_file() {
+        return Err(io::Error::new(io::ErrorKind::Unsupported, "not a regular file"));
+    }
+    let cap = cap.min(512 * 1024 * 1024);
+    let len = metadata.len();
+    if len > cap {
+        return Err(input_limit_error(cap));
+    }
+    if len == 0 {
+        return Err(io::Error::new(io::ErrorKind::UnexpectedEof, "the file is empty"));
+    }
+    if len >= 1024 * 1024 {
+        let token = Arc::new(LentInode { dev: metadata.dev(), ino: metadata.ino() });
+        let map = lent::map(&file)?;
+        if map.len() as u64 != len {
+            return Err(io::Error::new(io::ErrorKind::InvalidData, "the file changed while it was mapped"));
+        }
+        LENT.lock().unwrap_or_else(std::sync::PoisonError::into_inner).push(Arc::downgrade(&token));
+        return Ok(Arc::new(ManagedMap { map, file, lent: Some(token) }));
+    }
+    let mut bytes = vec![0u8; len as usize];
+    // positional reads: the caller's descriptor shares this one's file position
+    file.read_exact_at(&mut bytes, 0)?;
+    Ok(Arc::new(bytes))
+}
+
+#[cfg(not(any(target_os = "android", target_os = "linux")))]
+pub fn read_lent_descriptor(_fd: i32, _cap: u64) -> io::Result<PdfBytes> {
+    Err(io::Error::new(io::ErrorKind::Unsupported, "descriptors are opened in place only on Android"))
+}
+
+/// The third audited unsafe boundary (#453): a provider's descriptor, lent for one call.
+#[cfg(any(target_os = "android", target_os = "linux"))]
+#[allow(unsafe_code)]
+mod lent {
+    use std::fs::File;
+    use std::io;
+    use std::os::fd::BorrowedFd;
+
+    /// A copy of the open descriptor `fd`. Refuses a negative one.
+    pub(super) fn duplicate(fd: i32) -> io::Result<File> {
+        if fd < 0 {
+            return Err(io::Error::from_raw_os_error(libc::EBADF));
+        }
+        // SAFETY: the caller keeps `fd` open for the duration of this call (see
+        // `read_lent_descriptor`); it is only borrowed here to duplicate it, never closed.
+        let borrowed = unsafe { BorrowedFd::borrow_raw(fd) };
+        Ok(File::from(borrowed.try_clone_to_owned()?))
+    }
+
+    /// A read-only mapping of a provider's regular file. Its pages can change only by the app's
+    /// own appends past the mapped length; see `read_lent_descriptor`.
+    pub(super) fn map(file: &File) -> io::Result<memmap2::Mmap> {
+        // SAFETY: read-only and shared with no writer of the mapped range in this process: the
+        // app appends past it, and rewrites the file only once `lent_inode_in_use` is false.
+        unsafe { memmap2::MmapOptions::new().map(file) }
+    }
+}
+
 impl PartialEq for dyn PdfSource {
     fn eq(&self, other: &Self) -> bool {
         self.as_slice() == other.as_slice()
@@ -267,6 +361,8 @@ mod splice {
         ptr: NonNull<u8>,
         len: usize,
         reserved: usize,
+        /// A lent file's token (#453): this region maps that file's pages too.
+        _lent: Option<std::sync::Arc<super::LentInode>>,
     }
     // SAFETY: the region is read-only for its whole life and owned by this value alone.
     unsafe impl Send for Spliced {}
@@ -310,10 +406,14 @@ mod splice {
     /// (the caller then copies). `file` is the descriptor of a managed private file whose mapping
     /// holds `prefix` bytes; the stores replace such files by rename and never write them in
     /// place, so its bytes are still the mapped ones. A length that no longer matches is refused.
-    pub(super) fn append(file: &File, prefix: usize, tail: &[u8]) -> Option<Spliced> {
+    pub(super) fn append(file: &File, prefix: usize, tail: &[u8], lent: Option<std::sync::Arc<super::LentInode>>) -> Option<Spliced> {
         // SAFETY: sysconf has no preconditions.
         let page = usize::try_from(unsafe { libc::sysconf(libc::_SC_PAGESIZE) }).ok().filter(|p| p.is_power_of_two())?;
-        if prefix == 0 || file.metadata().ok()?.len() != prefix as u64 {
+        let len = file.metadata().ok()?.len();
+        // A lent file only ever grows by the app's own appended revisions (#453), which leave
+        // its first `prefix` bytes as they are; a private file must still be exactly as mapped.
+        let unchanged = if lent.is_some() { len >= prefix as u64 } else { len == prefix as u64 };
+        if prefix == 0 || !unchanged {
             return None;
         }
         let round = |n: usize| n.checked_add(page - 1).map(|n| n & !(page - 1));
@@ -345,7 +445,7 @@ mod splice {
         if unsafe { libc::mprotect(base, reserved, libc::PROT_READ) } != 0 {
             return fail(base);
         }
-        Some(Spliced { ptr: NonNull::new(base.cast())?, len: prefix + tail.len(), reserved })
+        Some(Spliced { ptr: NonNull::new(base.cast())?, len: prefix + tail.len(), reserved, _lent: lent })
     }
 }
 
@@ -511,7 +611,7 @@ mod tests {
         let file = File::open(&path).unwrap();
         let map = map_managed_inode(&file).unwrap();
         std::fs::OpenOptions::new().append(true).open(&path).unwrap().write_all(b"x").unwrap();
-        let managed: PdfBytes = Arc::new(ManagedMap { map, file });
+        let managed: PdfBytes = Arc::new(ManagedMap { map, file, lent: None });
         assert!(managed.appended(b"tail").is_none());
         let joined_bytes = joined(&managed, b"tail");
         assert!(!joined_bytes.is_mapped());
@@ -519,6 +619,58 @@ mod tests {
         let anonymous = memory_snapshot(b"%PDF-1.7").unwrap();
         assert!(anonymous.appended(b"x").is_none());
         assert_eq!(joined(&anonymous, b"\n%%EOF").as_slice(), b"%PDF-1.7\n%%EOF");
+    }
+
+    /// #453: a provider's file opened in place reads exactly as the file, keeps working after the
+    /// caller closes its descriptor and after the app appends a revision, splices that revision
+    /// without a copy, and is reported in use until its last mapping (spliced ones too) is gone.
+    #[test]
+    fn lent_descriptors_map_in_place_and_report_their_mappings() {
+        use std::os::fd::AsRawFd;
+        use std::os::unix::fs::MetadataExt;
+        let fixture = Fixture::new();
+        let original: Vec<u8> = (0..1024 * 1024 + 5).map(|i| (i * 13 % 251) as u8).collect();
+        let path = fixture.write("shared/book.pdf", &original);
+        let meta = std::fs::metadata(&path).unwrap();
+        let (dev, ino) = (meta.dev(), meta.ino());
+        let lent = File::open(&path).unwrap();
+        let source = read_lent_descriptor(lent.as_raw_fd(), 4 * 1024 * 1024).unwrap();
+        drop(lent);
+        assert!(source.is_mapped());
+        assert_eq!(source.as_slice(), original);
+        assert!(lent_inode_in_use(dev, ino));
+        // the app's own write-back appends the next revision to the same file
+        std::fs::OpenOptions::new().append(true).open(&path).unwrap().write_all(b"\nrevision 2\n%%EOF\n").unwrap();
+        assert_eq!(source.as_slice(), original, "the mapped bytes stay as they were");
+        let spliced = source.appended(b"\nrevision 2\n%%EOF\n").expect("a grown lent file is still spliced");
+        assert!(spliced.is_mapped());
+        assert_eq!(&spliced[..original.len()], original.as_slice());
+        assert_eq!(&spliced[original.len()..], b"\nrevision 2\n%%EOF\n");
+        drop(source);
+        assert!(lent_inode_in_use(dev, ino), "the spliced revision still maps the file");
+        drop(spliced);
+        assert!(!lent_inode_in_use(dev, ino));
+    }
+
+    #[test]
+    fn small_lent_files_are_read_and_other_descriptors_refused() {
+        use std::os::fd::AsRawFd;
+        use std::os::unix::fs::MetadataExt;
+        let fixture = Fixture::new();
+        let path = fixture.write("shared/small.pdf", b"%PDF-1.7 small");
+        let lent = File::open(&path).unwrap();
+        // a caller's file position is not moved or used
+        let source = read_lent_descriptor(lent.as_raw_fd(), 1024).unwrap();
+        assert!(!source.is_mapped());
+        assert_eq!(source.as_slice(), b"%PDF-1.7 small");
+        let meta = std::fs::metadata(&path).unwrap();
+        assert!(!lent_inode_in_use(meta.dev(), meta.ino()));
+        assert!(read_lent_descriptor(lent.as_raw_fd(), 4).is_err(), "over the cap");
+        assert!(read_lent_descriptor(-1, 1024).is_err());
+        let dir = File::open(&fixture.0).unwrap();
+        assert!(read_lent_descriptor(dir.as_raw_fd(), 1024).is_err(), "not a regular file");
+        let empty = fixture.write("shared/empty.pdf", b"");
+        assert!(read_lent_descriptor(File::open(&empty).unwrap().as_raw_fd(), 1024).is_err());
     }
 
     #[test]

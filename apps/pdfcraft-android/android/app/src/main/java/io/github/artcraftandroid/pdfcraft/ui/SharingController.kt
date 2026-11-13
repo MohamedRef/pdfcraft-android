@@ -91,7 +91,7 @@ class SharingController internal constructor(private val vm: AppViewModel) {
                 io.github.artcraftandroid.pdfcraft.ui.viewer.ShareChoice.Flattened -> {
                     // from a second, temporary engine document: the open one keeps its comments and fields
                     val out = vm.tempFile("pdf")
-                    val copy = eng.tool("doc_open", mapOf("path" to doc.file.absolutePath, "password" to doc.password)).optLong("doc")
+                    val copy = eng.tool("doc_open", mapOf("path" to vm.savedFile(doc, "share").absolutePath, "password" to doc.password)).optLong("doc")
                     try {
                         eng.tool("doc_flatten", mapOf("doc" to copy))
                         eng.tool("doc_save", mapOf("doc" to copy, "path" to out.absolutePath, "full" to true))
@@ -109,7 +109,7 @@ class SharingController internal constructor(private val vm: AppViewModel) {
                     // tape made opaque on a "Tape" layer, in a temporary copy: the open document keeps it invisible (#350)
                     val out = vm.tempFile("pdf")
                     val start = android.os.SystemClock.elapsedRealtime()
-                    val copy = eng.tool("doc_open", mapOf("path" to doc.file.absolutePath, "password" to doc.password)).optLong("doc")
+                    val copy = eng.tool("doc_open", mapOf("path" to vm.savedFile(doc, "share").absolutePath, "password" to doc.password)).optLong("doc")
                     try {
                         val n = io.github.artcraftandroid.pdfcraft.ui.viewer.showTapeIn(eng, copy.toULong())
                         eng.tool("doc_save", mapOf("doc" to copy, "path" to out.absolutePath, "full" to true))
@@ -124,7 +124,7 @@ class SharingController internal constructor(private val vm: AppViewModel) {
                     eng.tool("page_extract", mapOf("doc" to doc.id, "pages" to listOf(page + 1), "out" to out.absolutePath))
                     out to text(R.string.share_name_page, doc.title, page + 1)
                 }
-                else -> doc.file to doc.name
+                else -> vm.savedFile(doc, "share") to doc.name
             }
             Diag.event(DiagArea.Share, "share_file", "doc" to doc.diagNumber, "choice" to choice.id, "bytes" to file.length())
             val uri = try {
@@ -330,8 +330,9 @@ class SharingController internal constructor(private val vm: AppViewModel) {
      * thread while the print screen is open, and the app's pause saves the working file then.
      */
     private suspend fun printSnapshot(doc: OpenDocument): File? = vm.saveMutex.withLock {
+        val saved = runCatching { vm.savedFile(doc, "print") }.getOrNull() ?: return@withLock null
         withContext(Dispatchers.IO) {
-            runCatching { vm.tempFile("pdf").also { out -> doc.file.copyTo(out, overwrite = true) } }.getOrNull()
+            runCatching { vm.tempFile("pdf").also { out -> saved.copyTo(out, overwrite = true) } }.getOrNull()
         }
     }
 
@@ -347,7 +348,7 @@ class SharingController internal constructor(private val vm: AppViewModel) {
         var removed = 0
         return runCatching {
             val copy = vm.saveMutex.withLock {
-                eng.tool("doc_open", mapOf("path" to doc.file.absolutePath, "password" to doc.password)).optLong("doc")
+                eng.tool("doc_open", mapOf("path" to vm.savedFile(doc, "print").absolutePath, "password" to doc.password)).optLong("doc")
             }
             try {
                 if (unlock) eng.tool("doc_unprotect", mapOf("doc" to copy))
@@ -464,14 +465,16 @@ class SharingController internal constructor(private val vm: AppViewModel) {
                         // The working copy now holds edits its original lacks: mark it first and
                         // keep it owed to the original, as any save does (#103).
                         vm.markBeforeWorkingCopyChanges(doc)
-                        vm.engine?.tool("doc_save", mapOf("doc" to doc.id))
+                        val out = vm.engine?.tool("doc_save", mapOf("doc" to doc.id))
+                        // an in-place original takes only appended revisions while open (#453)
+                        doc.lent?.saved(out?.optBoolean("incremental", false) ?: false)
                         if (doc.source != null) doc.notWrittenBack = true
                         // a file edited in place has just been written
                         doc.source?.takeIf { it.scheme == "file" && File(requireNotNull(it.path)).canonicalPath == doc.file.canonicalPath }
                             ?.let { doc.wroteOriginal = true }
                     }
                     withContext(Dispatchers.IO) {
-                        vm.files.writeBack(doc.file, target)
+                        vm.files.writeBack(vm.savedFile(doc, "save_copy"), target)
                         if (then != null) doc.source?.let { vm.files.clearPendingWriteBack(it) }
                     }
                     if (then != null) doc.notWrittenBack = false

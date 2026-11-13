@@ -98,6 +98,12 @@ fun MoreSheet(vm: AppViewModel, doc: OpenDocument) {
             androidx.compose.foundation.layout.WindowInsets.displayCutout.getTop(density),
         ).toDp()
     } + TopBarHeight
+    // an in-place document (#453) has no working file until it is saved: its original's date
+    val modified by androidx.compose.runtime.produceState(doc.file.lastModified(), doc.info.generation) {
+        value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            doc.file.lastModified().takeIf { it > 0 } ?: doc.source?.let { vm.files.lastModified(it) } ?: 0L
+        }
+    }
     PdfSheet(onDismiss = ::close, maxHeightFraction = fraction, topReserve = top) {
         Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp, top = 4.dp, bottom = 14.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
@@ -107,7 +113,7 @@ fun MoreSheet(vm: AppViewModel, doc: OpenDocument) {
                     Icon(LucideIcons.Smartphone, stringResource(R.string.sheet_stored_on_device), tint = c.icon, modifier = Modifier.size(16.dp))
                     Spacer(Modifier.width(6.dp))
                     Text(
-                        "PDF • ${modifiedLabel(doc.file.lastModified(), stringResource(R.string.common_yesterday))}" + if (!doc.writable) " • " + stringResource(R.string.sheet_read_only) else "",
+                        "PDF • ${modifiedLabel(modified, stringResource(R.string.common_yesterday))}" + if (!doc.writable) " • " + stringResource(R.string.sheet_read_only) else "",
                         color = c.text, fontSize = 13.sp,
                     )
                 }
