@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Recent scans, kept to be edited again (#461) -->
+<resources>
+    <string name="scan_lab_recent">Escaneos recientes para volver a editar (últimos 10)</string>
+    <string name="scan_recent_title">Escaneos recientes</string>
+    <string name="scan_recent_about">Abre de nuevo un escaneo guardado para cambiarlo</string>
+    <string name="scan_recent_empty">Aún no hay escaneos recientes. Los escaneos que guardes aparecerán aquí para cambiar sus bordes o aspecto más tarde.</string>
+    <string name="scan_recent_off">Guardar escaneos recientes está desactivado. Actívalo en Ajustes, Escáner.</string>
+    <string name="scan_recent_busy">Termina o descarta primero el escaneo en curso.</string>
+    <string name="scan_recent_unreadable">No se pudo abrir este escaneo.</string>
+    <string name="scan_recent_untitled">Escaneo %1$s</string>
+    <string name="scan_recent_delete_title">¿Eliminar este escaneo?</string>
+    <string name="scan_recent_delete_body">Sus fotos se quitan de la app. El PDF que guardaste se queda.</string>
+    <string name="settings_scan_recent">Guardar escaneos recientes para editarlos</string>
+    <string name="settings_scan_recent_body">Los últimos 10 escaneos que guardes conservan sus fotos en la app para cambiar sus bordes y aspecto más tarde. Las fotos se quedan en este teléfono hasta que las elimines.</string>
+    <string name="settings_scan_recent_delete">Eliminar escaneos recientes</string>
+    <string name="settings_scan_recent_none">No hay escaneos recientes</string>
+    <plurals name="scan_recent_missing">
+        <item quantity="one">No se encontró %d página.</item>
+        <item quantity="other">No se encontraron %d páginas.</item>
+    </plurals>
+    <plurals name="scan_recent_pages">
+        <item quantity="one">%d página</item>
+        <item quantity="other">%d páginas</item>
+    </plurals>
+    <plurals name="settings_scan_recent_size">
+        <item quantity="one">%1$d escaneo · %2$s</item>
+        <item quantity="other">%1$d escaneos · %2$s</item>
+    </plurals>
+</resources>

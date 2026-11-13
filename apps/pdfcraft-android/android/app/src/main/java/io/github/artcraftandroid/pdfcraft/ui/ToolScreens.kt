@@ -573,6 +573,7 @@ fun ToolScreenHost(vm: AppViewModel, screen: ToolScreen) {
         ToolScreen.Bates -> BatesScreen(vm)
         ToolScreen.OcrBatch -> OcrBatchScreen(vm)
         ToolScreen.Scan -> ScanScreen(vm)
+        ToolScreen.ScanRecent -> io.github.artcraftandroid.pdfcraft.ui.scan.ScanRecentScreen(vm)
         ToolScreen.Create -> CreateSourcesScreen(vm)
         is ToolScreen.PageMarks -> io.github.artcraftandroid.pdfcraft.ui.viewer.PageMarksScreen(vm, screen.doc)
         is ToolScreen.Standards -> io.github.artcraftandroid.pdfcraft.ui.viewer.StandardsScreen(vm, screen.doc)

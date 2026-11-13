@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Recent scans, kept to be edited again (#461) -->
+<resources>
+    <string name="scan_lab_recent">Digitalizações recentes para editar de novo (últimas 10)</string>
+    <string name="scan_recent_title">Digitalizações recentes</string>
+    <string name="scan_recent_about">Abra de novo uma digitalização salva para alterá-la</string>
+    <string name="scan_recent_empty">Ainda não há digitalizações recentes. As que você salvar aparecem aqui para alterar bordas ou aparência depois.</string>
+    <string name="scan_recent_off">Manter digitalizações recentes está desligado. Ligue em Configurações, Scanner.</string>
+    <string name="scan_recent_busy">Termine ou descarte primeiro a digitalização em andamento.</string>
+    <string name="scan_recent_unreadable">Não foi possível abrir esta digitalização.</string>
+    <string name="scan_recent_untitled">Digitalização %1$s</string>
+    <string name="scan_recent_delete_title">Excluir esta digitalização?</string>
+    <string name="scan_recent_delete_body">As fotos dela são removidas do app. O PDF salvo continua.</string>
+    <string name="settings_scan_recent">Manter digitalizações recentes para editar</string>
+    <string name="settings_scan_recent_body">As últimas 10 digitalizações salvas mantêm as fotos no app para você alterar bordas e aparência depois. As fotos ficam neste telefone até você excluí-las.</string>
+    <string name="settings_scan_recent_delete">Excluir digitalizações recentes</string>
+    <string name="settings_scan_recent_none">Nenhuma digitalização recente</string>
+    <plurals name="scan_recent_missing">
+        <item quantity="one">%d página não foi encontrada.</item>
+        <item quantity="other">%d páginas não foram encontradas.</item>
+    </plurals>
+    <plurals name="scan_recent_pages">
+        <item quantity="one">%d página</item>
+        <item quantity="other">%d páginas</item>
+    </plurals>
+    <plurals name="settings_scan_recent_size">
+        <item quantity="one">%1$d digitalização · %2$s</item>
+        <item quantity="other">%1$d digitalizações · %2$s</item>
+    </plurals>
+</resources>

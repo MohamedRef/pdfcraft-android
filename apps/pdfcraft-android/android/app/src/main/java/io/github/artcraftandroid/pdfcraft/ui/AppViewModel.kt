@@ -1616,7 +1616,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         return ScanSession(shotFile?.path, retakeIndex, editor.imageShot, scanName, scanPages.map { ScanSession.Page(it.file.path, it.corners, it.found, it.turns, it.preset, it.book?.encode(), it.look, it.flatten, it.auto) })
     }
 
-    private fun restoreScan(text: String, session: ScanSession): kotlinx.coroutines.Job {
+    internal fun restoreScan(text: String, session: ScanSession): kotlinx.coroutines.Job {
         scanRestoring = text
         shotFile = session.shot?.let(::File)
         retakeIndex = session.retake
@@ -2129,12 +2129,13 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     fun discardScan(asked: Boolean = false) {
         val discarded = scanPages.toList()
         val gallery = scanGallerySaved.toSet()
+        val fromRecent = scanRecent.openedFrom != null
         Diag.event(DiagArea.Scan, "discard", *io.github.artcraftandroid.pdfcraft.ui.scan.scanDiscardDiag(discarded.size, asked, confirmed = true))
         if (scanLab.options.keep && discarded.isNotEmpty()) {
             // kept for testing first (#288): a scan given up on is often the one worth looking at
             viewModelScope.launch {
                 withContext(Dispatchers.IO) {
-                    scanLab.keepDiscarded(discarded, asked, gallery)
+                    scanLab.keepDiscarded(discarded, asked, gallery, fromRecent)
                     discarded.forEach { it.file.delete() }
                 }
                 scanLab.refreshKept()
@@ -2145,6 +2146,8 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         scanPageDir().listFiles()?.forEach { it.delete() }
         scanPages.clear()
         scanSteps.reset()
+        // a scan opened from Recent scans and given up on stays there as it was saved (#461)
+        scanRecent.openedFrom = null
         scanGallerySaved.clear()
         scanName = ""
         // the previews and the strip's tiles of a scan given up on (#301)
@@ -2726,7 +2729,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                         k.extraGamma.toDouble(), k.sCurve, k.colourFactor.toDouble(),
                     )
                 }
-                withContext(Dispatchers.IO) { scanLab.keepPage(keepIn, i, page, true, scanLookWord(filter, lab), strength, flatten, r?.path?.let(::File), kept, scanPreviewRecord(page), turn, kind, r?.let { scanAppliedStrength(page.look, lab, it.kind?.strength?.toInt()) }, shown[i]?.json(), gallerySaved = page.key in scanGallerySaved, autoDecisions = decisions.json()) }
+                withContext(Dispatchers.IO) { scanLab.keepPage(keepIn, i, page, true, scanLookWord(filter, lab), strength, flatten, r?.path?.let(::File), kept, scanPreviewRecord(page), turn, kind, r?.let { scanAppliedStrength(page.look, lab, it.kind?.strength?.toInt()) }, shown[i]?.json(), gallerySaved = page.key in scanGallerySaved, autoDecisions = decisions.json(), fromRecent = scanRecent.openedFrom != null) }
             }
             saved += scanSavedPage(page.file.absolutePath, r?.let { it.path to it.dpi })
         }
@@ -2786,7 +2789,17 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             val target = insertScanAt
             insertScanAt = null
             val chosen = scanName.trim()
-            scanPages.forEach { it.file.delete() }
+            // kept to be edited again (#461): a scan of its own (not pages going into an open
+            // document), with the switch in Settings and the testing option on; else the photos go
+            val recent = if (target == null && scanRecent.on()) {
+                ScanSession(null, null, false, chosen, pages.map { ScanSession.Page(it.file.absolutePath, it.corners, it.found, it.turns, it.preset, it.book?.encode(), it.look, it.flatten, it.auto) })
+            } else null
+            if (recent != null) {
+                withContext(Dispatchers.IO) { scanRecent.keep(recent) }
+            } else {
+                scanRecent.openedFrom = null
+                scanPages.forEach { it.file.delete() }
+            }
             releaseScanPreviews()
             scanPages.clear()
             scanSteps.reset()
@@ -2824,6 +2837,10 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     // ---- The scanner's testing options and scans kept for testing (#288): see ScanLabController ----
 
     internal val scanLab = ScanLabController(this)
+
+    // ---- Recent scans, kept to be edited again (#461): see ScanRecentController ----
+
+    internal val scanRecent = ScanRecentController(this)
 }
 
 /** The most files Create PDF converts at once. */

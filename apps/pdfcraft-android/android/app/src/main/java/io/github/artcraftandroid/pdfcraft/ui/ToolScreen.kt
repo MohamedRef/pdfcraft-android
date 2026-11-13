@@ -11,6 +11,8 @@ sealed class ToolScreen {
     data object Bates : ToolScreen()
     data object OcrBatch : ToolScreen()
     data object Scan : ToolScreen()
+    /** Recent scans, kept to be edited again (#461). */
+    data object ScanRecent : ToolScreen()
     class PageMarks(val doc: OpenDocument) : ToolScreen()
     class Standards(val doc: OpenDocument) : ToolScreen()
     class PrintOptions(val doc: OpenDocument) : ToolScreen()

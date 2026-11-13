@@ -137,6 +137,8 @@ internal fun ScanLabSettings(vm: AppViewModel) {
     Sw(R.string.scan_lab_camera_bar, o.cameraBar) { lab.update(o.copy(cameraBar = it)) }
     // the screens one job each (#455): Adjust borders after a photo (#458), Enhance (#459)
     Sw(R.string.scan_lab_steps, o.steps) { lab.update(o.copy(steps = it)) }
+    // saved scans kept to be opened and saved again (#461)
+    Sw(R.string.scan_lab_recent, o.recentScans) { lab.update(o.copy(recentScans = it)) }
     // Back and Delete ask before a scan or a page is thrown away (#456)
     Sw(R.string.scan_lab_ask_discard, o.askDiscard) { lab.update(o.copy(askDiscard = it)) }
 
