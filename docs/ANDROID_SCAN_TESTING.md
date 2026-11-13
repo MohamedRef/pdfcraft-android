@@ -62,6 +62,7 @@ on one part. While any is changed, the scan screen says so.
 | Page outline in the camera (#295) | On | Off: no frames are analysed, the camera is as in #294 |
 | Auto-capture (#296) | On | Off: only the shutter takes photos. Needs the page outline; also switched in the camera's top bar |
 | Low-light merge (#297) | Auto | Always: a burst of 4 merged in any light. Off: one photo, as in #296. Also in Settings ▸ Scan |
+| Camera modes (One page, Many pages, Book), icon bar and zoom (#457) | On | Off: the camera's bars before #457: words in the top bar, no modes (every photo is added until Done), Import only before the first page, no grid and no zoom, and the permission page's four text buttons |
 
 Settings → **Scanner models** (#289) lists each model with its state; while the log is
 recorded it also has **Copy the models again**, which copies every model out of the app anew
@@ -106,7 +107,7 @@ The zip also holds `diagnostics.txt`, the diagnostics log as **Share diagnostics
              "torch": false, "focused": true, "rotation": 0, "capture_ms": 640, "live": true, "live_found": true,
              "live_stable": true, "live_hint": "ready", "preview_quad": [0.11, 0.08, 0.93, 0.10, 0.95, 0.90, 0.07, 0.89],
              "auto_on": true, "auto_shot": true, "sharpness": 1.235, "sharpness_blurred_unverified": false, "sharpness_ms": 85,
-             "merge": null},
+             "merge": null, "mode": "batch", "zoom": 1.0, "grid": false},
  "preview": {"shown": true, "reused": true, "ms": 412, "width": 905, "height": 1280, "look": "auto"},
  "models": {"edges": "ready", "flatten": "ready", "upright": "ready"},
  "crop": {"visits": 1, "corner_drags": 2, "side_drags": 1, "snaps_asked": 3, "snaps_taken": 2, "snaps_held": 0, "snaps_failed": 0,
@@ -165,6 +166,9 @@ From #297 (`ANDROID_SCAN_MERGE.md`): `merge` is `null` for one photo, or the low
 facts: `why`, `frames`, `found`, `merged`, `used`, `rejected_blur`, `rejected_align`,
 `psnr_gain_tenths_db`, `burst_ms`, `find_ms`, `merge_ms` and `fallback`. A merged page's
 `preview_quad` is `null`: the page is already straightened.
+From #457: the camera's `mode` (`single`, `batch` or `book`; `null` for the phone's camera app
+and imports, and `batch` or `book` with the testing option "Camera modes" off), the `zoom` the
+photo was taken at (1.0 for none) and whether the `grid` was showing.
 
 `inspect` is what the research detectors saw on the page when their report is on (#305, #306):
 `moire` (`kind`, `period`, `tiles`, `busy_tiles`, `periodic_tiles`), `fingers`, `glare` and

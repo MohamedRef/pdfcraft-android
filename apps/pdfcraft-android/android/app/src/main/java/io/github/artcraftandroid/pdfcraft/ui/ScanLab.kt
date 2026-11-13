@@ -117,6 +117,12 @@ internal data class ScanLab(
     val whiteboardLook: Boolean = true,
     /** A preview no longer wanted is stopped at its next stage (#301); off, it runs to the end and is dropped, as before. */
     val previewStop: Boolean = true,
+    /**
+     * The camera's mode row (One page, Many pages, Book), its bar of icons (light, auto-capture,
+     * grid, more), zoom, and the same places for Import, the shutter and the last page (#457).
+     * Off: the camera's bars as before, where every photo is added until Done.
+     */
+    val cameraBar: Boolean = true,
     /** Double-tap or pinch the preview to look closer, with a sharper page once zoomed in (#301); off, the preview doesn't zoom. */
     val previewZoom: Boolean = true,
     /**
@@ -140,7 +146,7 @@ internal data class ScanLab(
         "snap_paper" to snapPaper, "strength_override" to (strength ?: -1), "upright" to upright, "sharpen" to sharpen,
         "denoise" to denoise, "preview" to preview, "crop_tools" to cropTools, "flatten_auto" to flattenAuto, "flatten_trim" to flattenTrim, "flatten_line_floor" to flattenLineFloor, "settle_turns" to settleTurns, "presets" to presets, "kind_tone" to kindTone, "photo_sharpen" to photoSharpen, "suggestions" to suggestions, "strict_gutter" to strictGutter, "strict_photo" to strictPhoto, "book_gutter" to bookGutter, "line_flatten" to lineFlatten,
         "page_strength" to pageStrength, "unfound_document" to unfoundDocument, "look_per_page" to lookPerPage, "look_strip" to lookStrip,
-        "whiteboard_look" to whiteboardLook, "preview_stop" to previewStop, "preview_zoom" to previewZoom, "keep" to keep, "inspect" to inspect,
+        "whiteboard_look" to whiteboardLook, "preview_stop" to previewStop, "preview_zoom" to previewZoom, "camera_bar" to cameraBar, "keep" to keep, "inspect" to inspect,
     )
 
     /** The options as JSON, for a kept scan's page file. */
@@ -149,7 +155,7 @@ internal data class ScanLab(
         .put("snap_paper", snapPaper).put("strength_override", strength ?: JSONObject.NULL).put("upright", upright)
         .put("sharpen", sharpen).put("denoise", denoise).put("preview", preview).put("crop_tools", cropTools).put("flatten_auto", flattenAuto).put("flatten_trim", flattenTrim).put("flatten_line_floor", flattenLineFloor).put("settle_turns", settleTurns).put("presets", presets).put("kind_tone", kindTone).put("photo_sharpen", photoSharpen).put("suggestions", suggestions).put("strict_gutter", strictGutter).put("strict_photo", strictPhoto).put("book_gutter", bookGutter).put("line_flatten", lineFlatten)
         .put("page_strength", pageStrength).put("unfound_document", unfoundDocument).put("look_per_page", lookPerPage).put("look_strip", lookStrip)
-        .put("whiteboard_look", whiteboardLook).put("preview_stop", previewStop).put("preview_zoom", previewZoom).put("inspect", inspect)
+        .put("whiteboard_look", whiteboardLook).put("preview_stop", previewStop).put("preview_zoom", previewZoom).put("camera_bar", cameraBar).put("inspect", inspect)
 
     /** One line of text for the app's preferences. */
     fun encode(): String = listOf(
@@ -158,7 +164,7 @@ internal data class ScanLab(
         "upright" to flag(upright), "sharpen" to sharpen.toString(), "denoise" to flag(denoise), "preview" to flag(preview), "crop" to flag(cropTools), "flatten_auto" to flag(flattenAuto), "flatten_trim" to flag(flattenTrim), "line_floor" to flag(flattenLineFloor),
         "settle" to flag(settleTurns), "presets" to flag(presets), "kind_tone" to flag(kindTone), "photo_sharpen" to flag(photoSharpen), "suggest" to flag(suggestions), "strict_gutter" to flag(strictGutter), "strict_photo" to flag(strictPhoto), "gutter" to flag(bookGutter), "line_flatten" to flag(lineFlatten),
         "page_strength" to flag(pageStrength), "unfound_doc" to flag(unfoundDocument), "look_page" to flag(lookPerPage), "look_strip" to flag(lookStrip),
-        "board" to flag(whiteboardLook), "stop" to flag(previewStop), "zoom" to flag(previewZoom), "inspect" to flag(inspect),
+        "board" to flag(whiteboardLook), "stop" to flag(previewStop), "zoom" to flag(previewZoom), "camera_bar" to flag(cameraBar), "inspect" to flag(inspect),
     ).joinToString(";") { (k, v) -> "$k=$v" }
 
     companion object {
@@ -220,6 +226,7 @@ internal data class ScanLab(
                 whiteboardLook = on("board", default.whiteboardLook),
                 previewStop = on("stop", default.previewStop),
                 previewZoom = on("zoom", default.previewZoom),
+                cameraBar = on("camera_bar", default.cameraBar),
                 inspect = on("inspect", default.inspect),
             )
         }

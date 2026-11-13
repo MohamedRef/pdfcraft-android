@@ -71,6 +71,9 @@ class ScanLabTest {
         assertFalse(lab.copy(whiteboardLook = false).asDesigned)
         assertFalse(lab.copy(previewStop = false).asDesigned)
         assertFalse(lab.copy(previewZoom = false).asDesigned)
+        // the camera's modes and icon bar are as designed; off is today's bars (#457)
+        assertTrue(lab.cameraBar)
+        assertFalse(lab.copy(cameraBar = false).asDesigned)
         assertEquals(30, lab.sharpen)
         assertTrue(lab.denoise && lab.sharpen in ScanLab.SHARPENING && 0 in ScanLab.SHARPENING)
     }
@@ -102,6 +105,7 @@ class ScanLabTest {
             ScanLab(whiteboardLook = false, previewStop = false, previewZoom = false),
             ScanLab(lookPerPage = false, lookStrip = false, presets = false),
             ScanLab(pageStrength = false),
+            ScanLab(cameraBar = false),
             ScanLab(keep = true, inspect = true),
             ScanLab(finder = ScanFinder.LINES, strength = 100),
             ScanLab(finder = ScanFinder.OFF),

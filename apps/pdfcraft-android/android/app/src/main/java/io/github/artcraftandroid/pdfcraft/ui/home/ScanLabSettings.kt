@@ -106,6 +106,10 @@ internal fun ScanLabSettings(vm: AppViewModel) {
     SheetRow(null, stringResource(R.string.scan_lab_preview_zoom), { lab.update(o.copy(previewZoom = !o.previewZoom)) }) {
         PdfSwitch(o.previewZoom, { lab.update(o.copy(previewZoom = it)) })
     }
+    // the camera's modes, icon bar and zoom (#457)
+    SheetRow(null, stringResource(R.string.scan_lab_camera_bar), { lab.update(o.copy(cameraBar = !o.cameraBar)) }) {
+        PdfSwitch(o.cameraBar, { lab.update(o.copy(cameraBar = it)) })
+    }
     SheetRow(null, stringResource(R.string.scan_lab_crop), { lab.update(o.copy(cropTools = !o.cropTools)) }) {
         PdfSwitch(o.cropTools, { lab.update(o.copy(cropTools = it)) })
     }

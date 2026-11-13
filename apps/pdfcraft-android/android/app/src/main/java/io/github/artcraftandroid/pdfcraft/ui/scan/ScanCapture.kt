@@ -46,6 +46,15 @@ internal data class ScanCapture(
      */
     val mergeSetting: String? = null,
     val mergeChosen: Boolean = false,
+    /**
+     * The camera's mode (#457): `single`, `batch` or `book`; null for the phone's camera app and
+     * imports. With the testing option "Camera modes and icon bar" off it is `batch` or `book`.
+     */
+    val mode: String? = null,
+    /** The zoom the photo was taken at (#457), 1.0 for none. */
+    val zoom: Double = 1.0,
+    /** Whether the lines of thirds were over the viewfinder (#457). */
+    val grid: Boolean = false,
 ) {
     /** The photo is a page the merge already straightened: its edges are not searched for again. */
     val straightened: Boolean get() = merge?.merged == true
@@ -58,6 +67,7 @@ internal data class ScanCapture(
         "live" to live, "live_found" to liveFound, "live_stable" to liveStable, "live_hint" to liveHint,
         "auto_on" to autoOn, "auto_shot" to autoShot, "burst" to (merge != null), "merged" to straightened,
         "merge_setting" to (mergeSetting ?: "none"), "merge_chosen" to mergeChosen,
+        "mode" to (mode ?: "none"), "zoom" to zoom, "grid" to grid,
     )
 
     /** The facts as JSON, for a kept scan's page file. */
@@ -71,6 +81,7 @@ internal data class ScanCapture(
         .put("sharpness_blurred_unverified", sharpnessBlurredUnverified).put("sharpness_ms", sharpnessMs)
         .put("merge", merge?.json() ?: JSONObject.NULL)
         .put("merge_setting", mergeSetting ?: JSONObject.NULL).put("merge_chosen", mergeChosen)
+        .put("mode", mode ?: JSONObject.NULL).put("zoom", zoom).put("grid", grid)
         // a merged page is already cropped by the detector and its photos were deleted (#426): not raw ground truth
         .put("photos_kept", !straightened)
         .put(
