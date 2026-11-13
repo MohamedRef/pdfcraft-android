@@ -80,7 +80,16 @@ fn sharpening_print_does_not_make_text_recognition_worse() {
     println!("clean page: CER {:.2} %", 100.0 * clean_cer);
     assert!(clean_cer < 0.10, "the recogniser cannot read the drawn page ({clean_cer})");
     let look = |page: &Rgb, sharpen: u8| {
-        let params = LookParams { strength: 60, threads: 2, dpi: 150.0, sharpen, denoise: true, keep_paper: false, shape: Default::default() };
+        let params = LookParams {
+            strength: 60,
+            threads: 2,
+            dpi: 150.0,
+            sharpen,
+            denoise: true,
+            keep_paper: false,
+            shape: Default::default(),
+            grain_white: true,
+        };
         let Pixels::Rgb(data) = apply_full(page, Look::Auto, &params).unwrap().pixels else { panic!("Clean scan gives colour") };
         Rgb { width: page.width, height: page.height, data }
     };

@@ -1243,6 +1243,7 @@
     <string name="scan_lab_sharpen">Enfocar el texto (Escaneo limpio)</string>
     <string name="scan_lab_off">No</string>
     <string name="scan_lab_denoise">Suavizar el grano en fotos oscuras (Escaneo limpio)</string>
+    <string name="scan_lab_grain_white">Dibujar en blanco el papel de las fotos con grano (Escaneo limpio)</string>
     <string name="scan_lab_preview">Mostrar las páginas como se guardarán</string>
     <string name="scan_lab_crop">Recortar con lupa y ajuste a los bordes</string>
     <string name="scan_lab_flatten_auto">Aplanar las páginas automáticamente cuando sus líneas quedan más rectas</string>

@@ -110,6 +110,8 @@ internal fun ScanLabSettings(vm: AppViewModel) {
     val off = stringResource(R.string.scan_lab_off)
     SettingsChoice(stringResource(R.string.scan_lab_sharpen), ScanLab.SHARPENING.map { it to (if (it == 0) off else it.toString()) }, o.sharpen, { lab.update(o.copy(sharpen = it)) })
     Sw(R.string.scan_lab_denoise, o.denoise) { lab.update(o.copy(denoise = it)) }
+    // a grainy page's paper drawn white from a lower level (#466)
+    Sw(R.string.scan_lab_grain_white, o.grainWhite) { lab.update(o.copy(grainWhite = it)) }
     Sw(R.string.scan_lab_presets, o.presets) { lab.update(o.copy(presets = it)) }
     Sw(R.string.scan_lab_kind_tone, o.kindTone) { lab.update(o.copy(kindTone = it)) }
     Sw(R.string.scan_lab_photo_sharpen, o.photoSharpen) { lab.update(o.copy(photoSharpen = it)) }

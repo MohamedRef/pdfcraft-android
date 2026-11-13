@@ -98,6 +98,9 @@ pub struct AutoParams {
     pub dpi: u16,
     /// A kind of document's change to the tone curve (#299).
     pub shape: Shape,
+    /// Draw a grainy page's paper white from a lower level (a photo taken in dim light, #466);
+    /// false is the curve as it was (a testing choice).
+    pub grain_white: bool,
 }
 
 impl Default for AutoParams {
@@ -110,6 +113,7 @@ impl Default for AutoParams {
             denoise: true,
             dpi: 300,
             shape: Shape::default(),
+            grain_white: true,
         }
     }
 }
@@ -126,6 +130,14 @@ pub struct AutoOutput {
     /// The page's grain: the standard deviation of its noise on blank paper, in grey levels of
     /// 255 (0 when the page was left alone). At 2 or more it was smoothed, if that was asked for.
     pub noise: f32,
+    /// How much the paper's brightness varies after the light is divided out, as a share of the
+    /// paper's own brightness (#466, `tone::paper_spread`): about 0.005 to 0.02 on a clean page,
+    /// several times that on a photo taken in dim light. 0 when the page was left alone.
+    pub paper_spread: f32,
+    /// The level, 0–1 of the page over its paper, from which paper is drawn white: the
+    /// strength's own white point, or lower on a grainy page (#466). 1 when the page was left
+    /// alone.
+    pub white_point: f32,
     /// (stage, milliseconds) of the parts that ran (#446): `look_light` (the light estimate),
     /// `look_noise` (the grain), `look_denoise`, `look_sharpen`, `look_tone`. A part kept from an earlier look
     /// of the same page is not listed.
@@ -239,6 +251,8 @@ pub fn auto_prepared(page: &Rgb, params: &AutoParams, photos: Option<&crate::pho
         objects: Mask::new(0, 0),
         closing_radius: 0,
         noise: 0.0,
+        paper_spread: 0.0,
+        white_point: 1.0,
         stages: Vec::new(),
         light_reused: false,
         detail_reused: false,
@@ -301,9 +315,10 @@ pub fn auto_prepared(page: &Rgb, params: &AutoParams, photos: Option<&crate::pho
     let renderer = tone::Renderer::new(
         detailed.as_deref().unwrap_or(page),
         &bg.light,
-        tone::Tone::at(strength).shaped(params.shape),
+        tone::Tone { grain_white: params.grain_white, ..tone::Tone::at(strength).shaped(params.shape) },
         params.paper == PaperMode::Keep,
     );
+    let (paper_spread, white_point) = (renderer.paper_spread(), renderer.white_point());
     let mut data = renderer.render(params.threads);
     if params.strength < BLEND_BELOW {
         let (a, n) = (u32::from(params.strength), u32::from(BLEND_BELOW));
@@ -317,6 +332,8 @@ pub fn auto_prepared(page: &Rgb, params: &AutoParams, photos: Option<&crate::pho
         objects: bg.objects.clone(),
         closing_radius: bg.radius as u8,
         noise,
+        paper_spread,
+        white_point,
         stages,
         light_reused,
         detail_reused,
