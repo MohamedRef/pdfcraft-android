@@ -30,7 +30,9 @@ installed, the network's page is kept as before and the fallback does not run.
 Following Matt Zucker's page dewarping (2016,
 <https://mzucker.github.io/2016/08/15/page-dewarping>):
 
-1. **Lines of text.** The page straightened by its corners is cut into 32 vertical strips, and
+1. **Lines of text.** The page straightened by its corners, with its light evened out
+   (`page::evened_grey`, #466: under a shadow the lines cannot be followed otherwise), is cut
+   into 32 vertical strips, and
    text lines are followed across them with the same tracker as the straightness measure (#288,
    `straightness::text_lines`). A point is a strip's centre and the line's height there. A line
    is used when it runs across at least 30 % of the width and was seen in at least 5 strips. A

@@ -20,4 +20,15 @@
     <string name="settings_scan_testing_summary">Scannerfunktionen ein- und ausschalten, Scans zum Teilen behalten</string>
     <string name="settings_scan_testing_needs_log">Diagnoseprotokoll einschalten, um sie zu nutzen</string>
     <string name="settings_copy_version">Version kopieren</string>
+    <string name="settings_on">An</string>
+    <string name="updater_last_checked">Zuletzt geprüft %1$s.</string>
+    <string name="updater_last_checked_current">Zuletzt geprüft %1$s. Die App ist aktuell.</string>
+    <string name="backup_turn_off_body">Sicherungen im Ordner bleiben erhalten. Noch nicht geschriebene Kopien werden verworfen.</string>
+    <string name="scan_lab_group_kept">Behaltene Scans</string>
+    <string name="scan_lab_group_finding">Seite finden</string>
+    <string name="scan_lab_group_borders">Ränder</string>
+    <string name="scan_lab_group_flattening">Glätten</string>
+    <string name="scan_lab_group_looks">Looks</string>
+    <string name="scan_lab_group_camera">Kamera</string>
+    <string name="scan_lab_group_reports">Berichte</string>
 </resources>

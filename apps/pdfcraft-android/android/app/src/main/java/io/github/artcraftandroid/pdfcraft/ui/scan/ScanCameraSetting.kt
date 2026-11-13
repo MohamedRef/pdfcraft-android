@@ -1,26 +1,9 @@
 package io.github.artcraftandroid.pdfcraft.ui.scan
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.selection.selectable
-import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import io.github.artcraftandroid.pdfcraft.R
-import io.github.artcraftandroid.pdfcraft.ui.pdfColors
 
 /**
  * Scan with: PdfCraft's camera or the phone's camera app (#294). In the ordinary settings, so the
@@ -41,18 +24,14 @@ internal fun ScanCameraSetting() {
 @Composable
 internal fun ScanLiveSetting() {
     val model: ScanCameraModel = viewModel()
-    io.github.artcraftandroid.pdfcraft.ui.SheetRow(null, stringResource(R.string.scan_live_setting), { model.updateLiveOutline(!model.liveOutline) }) {
-        io.github.artcraftandroid.pdfcraft.ui.PdfSwitch(model.liveOutline, { model.updateLiveOutline(it) })
-    }
+    io.github.artcraftandroid.pdfcraft.ui.home.SettingsSwitch(stringResource(R.string.scan_live_setting), model.liveOutline, { model.updateLiveOutline(it) })
 }
 
-/** Auto-capture (#296), a testing option and the camera screen's Auto switch: off, only the shutter takes photos. */
+/** Auto-capture (#296): the camera screen's Auto switch, also in Settings, Scanner (#463) and the testing options; off, only the shutter takes photos. */
 @Composable
 internal fun ScanAutoSetting() {
     val model: ScanCameraModel = viewModel()
-    io.github.artcraftandroid.pdfcraft.ui.SheetRow(null, stringResource(R.string.scan_auto_setting), { model.updateAutoCapture(!model.autoCapture) }) {
-        io.github.artcraftandroid.pdfcraft.ui.PdfSwitch(model.autoCapture, { model.updateAutoCapture(it) })
-    }
+    io.github.artcraftandroid.pdfcraft.ui.home.SettingsSwitch(stringResource(R.string.scan_auto_setting), model.autoCapture, { model.updateAutoCapture(it) })
 }
 
 /** Low-light merge (#297): Auto, Always or Off; in the ordinary settings and among the testing options. */

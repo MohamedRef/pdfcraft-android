@@ -27,6 +27,9 @@ One per scanner feature. The defaults are the scanner as it is meant to be used;
 switch a feature off or put back what it replaced, so a page that comes out wrong can be pinned
 on one part. While any is changed, the scan screen says so.
 
+On the page they are grouped in the order a scan goes through (#463): Kept scans, Finding the
+page, Borders, Flattening, Looks, Camera, Reports. The table below lists them by feature.
+
 | Option | Default | The other choices |
 |---|---|---|
 | Find the page with | Automatic: the network (#290), or the line detector when its model is missing | Neural network only · Lines only (the detector before #290) · Nothing (the whole photo) |
