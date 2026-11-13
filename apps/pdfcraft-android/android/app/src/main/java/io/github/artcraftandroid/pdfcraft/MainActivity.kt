@@ -270,12 +270,13 @@ class MainActivity : ComponentActivity() {
 
     override fun onPause() {
         super.onPause()
+        val ownScreen = pauseForOwnScreen(android.os.SystemClock.elapsedRealtime(), ownLaunchAt, isFinishing)
         io.github.artcraftandroid.pdfcraft.engine.Diag.event(
             io.github.artcraftandroid.pdfcraft.engine.DiagArea.App, "pause",
-            "own_screen" to (android.os.SystemClock.elapsedRealtime() - ownLaunchAt < 2_000),
+            "own_screen" to ownScreen,
             "changing_config" to isChangingConfigurations, "finishing" to isFinishing,
         )
-        vm.onPause()
+        vm.onPause(ownScreen)
     }
 
     override fun onResume() {
@@ -406,3 +407,10 @@ private class CreateTypedDocument : androidx.activity.result.contract.ActivityRe
 
     override fun parseResult(resultCode: Int, intent: Intent?): Uri? = intent.takeIf { resultCode == android.app.Activity.RESULT_OK }?.data
 }
+
+/**
+ * Whether a pause is for one of the app's own screens, started at [ownLaunchAt] (0 when none):
+ * a picker or the share sheet in front pauses the app within moments of the launch (#97).
+ */
+internal fun pauseForOwnScreen(now: Long, ownLaunchAt: Long, finishing: Boolean): Boolean =
+    !finishing && ownLaunchAt > 0 && now - ownLaunchAt in 0 until 2_000
