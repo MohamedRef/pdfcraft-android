@@ -26,7 +26,7 @@ From the owner's diagnostics log (Samsung SM-S928B, Android 17, engine 0.21.1), 
 | Open | Working copy | First page drawn | Complete (`native_ready`) |
 | --- | --- | --- | --- |
 | First after app start (cold file cache) | reused, 31 ms | 727 ms | 1940 ms |
-| After a Discard, copy made again | `provider_descriptor_copy` 1126 ms | 1315 ms | not reached (closed) |
+| Copy made again, after closing the edited read-only file | `provider_descriptor_copy` 1126 ms | 1315 ms | not reached (closed) |
 | Same file tapped twice while opening (#439) | reused, 33 ms | 3.0 s after the first tap | 1119 ms after the second tap |
 | After 15 min in the background (cold file cache) | reused, 29 ms | 682 ms | 1993 ms |
 | Warm | reused, 16 ms | 168 ms | 1437 ms |
