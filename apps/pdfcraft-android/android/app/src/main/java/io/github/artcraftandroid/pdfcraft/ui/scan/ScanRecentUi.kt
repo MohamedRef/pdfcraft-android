@@ -112,14 +112,16 @@ internal fun ScanRecentScreen(vm: AppViewModel) {
 /** The first page of a kept scan, cut to its borders as the document screen shows it. */
 @Composable
 private fun ScanRecentThumb(entry: ScanRecentEntry, modifier: Modifier) {
-    val thumb by produceState<ImageBitmap?>(null, entry.firstPhoto) {
+    // the first page as made when one was kept (#494): drawn whole, as it is in the PDF
+    val shown by produceState<Pair<ImageBitmap, Boolean>?>(null, entry.firstPhoto, entry.cover) {
         value = withContext(Dispatchers.IO) {
-            entry.firstPhoto?.let { f -> runCatching { scanRecentThumb(f) }.getOrNull() }
+            entry.cover?.let { f -> runCatching { BitmapFactory.decodeFile(f.absolutePath, BitmapFactory.Options().apply { inSampleSize = 2 })?.asImageBitmap() }.getOrNull() }?.let { it to true }
+                ?: entry.firstPhoto?.let { f -> runCatching { scanRecentThumb(f) }.getOrNull() }?.let { it to false }
         }
     }
     Box(modifier) {
-        val t = thumb ?: return@Box
-        val region = remember(t, entry.firstCorners) { scanThumbRegion(entry.firstCorners ?: floatArrayOf(), t.width, t.height) }
+        val (t, whole) = shown ?: return@Box
+        val region = remember(t, entry.firstCorners, whole) { if (whole) intArrayOf(0, 0, t.width, t.height) else scanThumbRegion(entry.firstCorners ?: floatArrayOf(), t.width, t.height) }
         Canvas(Modifier.fillMaxSize().padding(4.dp)) {
             val (sw, sh) = region[2].toFloat() to region[3].toFloat()
             val k = min(size.width / sw, size.height / sh)

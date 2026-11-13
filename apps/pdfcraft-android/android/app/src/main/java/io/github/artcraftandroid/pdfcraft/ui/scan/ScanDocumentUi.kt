@@ -2,12 +2,14 @@ package io.github.artcraftandroid.pdfcraft.ui.scan
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -37,6 +39,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -46,6 +49,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -65,12 +69,15 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.github.artcraftandroid.pdfcraft.R
+import io.github.artcraftandroid.pdfcraft.engine.Diag
+import io.github.artcraftandroid.pdfcraft.engine.DiagArea
 import io.github.artcraftandroid.pdfcraft.ui.AppViewModel
 import io.github.artcraftandroid.pdfcraft.ui.BarIcon
 import io.github.artcraftandroid.pdfcraft.ui.LucideIcons
 import io.github.artcraftandroid.pdfcraft.ui.PdfDialog
 import io.github.artcraftandroid.pdfcraft.ui.PdfField
 import io.github.artcraftandroid.pdfcraft.ui.ScanPage
+import io.github.artcraftandroid.pdfcraft.ui.ScanPageMark
 import io.github.artcraftandroid.pdfcraft.ui.pdfColors
 import io.github.artcraftandroid.pdfcraft.ui.safeTopPadding
 import kotlin.math.min
@@ -171,6 +178,19 @@ internal fun ScanDocumentScreen(vm: AppViewModel, onOpen: (Int) -> Unit) {
             Text(stringResource(R.string.scan_lab_active), color = c.textSecondary, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp))
         }
         Text(stringResource(R.string.scan_doc_hint), color = c.textSecondary, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
+        // every page made in the background here too (#494): a page rotated from the selection bar,
+        // or imported, is made again without opening Enhance
+        val lab = vm.scanLab.options
+        val autoUpright = ScanUprightSetting.get(vm.settings.appPrefs)
+        LaunchedEffect(pages.toList(), lab, autoUpright, vm.scanCanFlatten) { vm.pageQueue.kick() }
+        // what the tiles showed when the screen opened, once per opening (#494)
+        LaunchedEffect(Unit) {
+            Diag.event(DiagArea.Scan, "doc_shown", *scanDocShownDiag(pages.size, pages.count { vm.pageQueue.madeOf(it) != null }, lab.backgroundPages && lab.preview))
+        }
+        // how many pages are ready while some are still being made (#465, #494)
+        vm.pageQueue.preparing(pages)?.let { (ready, total) ->
+            Text(stringResource(R.string.scan_pages_preparing, ready, total), color = c.textSecondary, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp))
+        }
         val grid = rememberLazyGridState()
         var dragFrom by remember { mutableStateOf<Int?>(null) }
         var dragTo by remember { mutableStateOf<Int?>(null) }
@@ -252,7 +272,15 @@ internal fun ScanDocumentScreen(vm: AppViewModel, onOpen: (Int) -> Unit) {
                         Modifier.fillMaxWidth().aspectRatio(0.75f).clip(RoundedCornerShape(6.dp)).background(c.surfaceRaised)
                             .border(if (highlighted) 3.dp else 1.dp, if (highlighted) c.accent else c.divider, RoundedCornerShape(6.dp)),
                     ) {
-                        ScanDocumentThumb(p, scanTurnShown(p.turns, vm.scanAutoTurns(i)), Modifier.fillMaxSize().padding(8.dp))
+                        // the page as made once the queue made it, else the photo with its waiting / working mark (#494)
+                        ScanDocumentThumb(vm, p, scanTurnShown(p.turns, vm.scanAutoTurns(i)), Modifier.fillMaxSize().padding(8.dp))
+                        when (vm.pageQueue.mark(p)) {
+                            ScanPageMark.Ready -> Unit
+                            ScanPageMark.Waiting -> Box(Modifier.align(Alignment.BottomEnd).padding(8.dp).size(16.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.55f)).border(1.5.dp, Color.White, CircleShape))
+                            ScanPageMark.Working -> Box(Modifier.align(Alignment.BottomEnd).padding(8.dp).size(22.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.55f)), contentAlignment = Alignment.Center) {
+                                androidx.compose.material3.CircularProgressIndicator(Modifier.size(14.dp), color = Color.White, strokeWidth = 1.5.dp)
+                            }
+                        }
                         // a spread's halves keep their names (#303)
                         p.book?.let { ScanBookLabel(it, Modifier.align(Alignment.TopStart)) }
                         if (selecting) {
@@ -321,9 +349,31 @@ internal fun ScanDocumentScreen(vm: AppViewModel, onOpen: (Int) -> Unit) {
     }
 }
 
-/** A page's tile: the part of the photo inside its corners, turned as it will be saved. */
+/**
+ * A page's tile (#494): the page as made by the background queue, whole and as it was made (the
+ * turn is in it), read at the tile's size; before it is made, the part of the photo inside its
+ * corners, turned as it will be saved. While a page is made again, its last result stays.
+ */
 @Composable
-private fun ScanDocumentThumb(page: ScanPage, turns: Int, modifier: Modifier) {
+private fun ScanDocumentThumb(vm: AppViewModel, page: ScanPage, photoTurns: Int, modifier: Modifier) {
+    val m = vm.pageQueue.madeOf(page)
+    val tile = scanDocTile(m != null, photoTurns)
+    BoxWithConstraints(modifier) {
+        if (m != null && tile.made) {
+            val w = constraints.maxWidth.coerceAtLeast(1)
+            val h = constraints.maxHeight.coerceAtLeast(1)
+            // the small thumbnail at once, the sharp one when it is read
+            val image by produceState(m.thumb, m.file, w, h) { value = vm.pageQueue.tileImage(m, w, h) ?: m.thumb }
+            Image(image, null, Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
+        } else {
+            ScanPhotoTile(page, tile.turns, Modifier.fillMaxSize())
+        }
+    }
+}
+
+/** The part of the photo inside a page's corners, turned by [turns] quarters. */
+@Composable
+private fun ScanPhotoTile(page: ScanPage, turns: Int, modifier: Modifier) {
     val thumb: ImageBitmap = page.thumb
     val region = remember(page.corners, thumb) { scanThumbRegion(page.corners, thumb.width, thumb.height) }
     Canvas(modifier) {

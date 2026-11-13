@@ -218,6 +218,17 @@ code is `ui/ScanPageQueue.kt`; nothing native changed.
   as that type). The multi-page turn rule (#339) still runs on the shown answers and can still
   change a page that was unsure, as before. Flattening is not pinned: with the switch it is the
   same request; with the automatic flattening testing option on, the full-size page is checked again.
+- The document screen's grid (#494) shows each page as made, whole and with its turn already in
+  it, the same picture Save PDF writes; until a page is made it shows the photo cut to its corners
+  with the same waiting dot or spinner, and "Preparing pages: n of m" is shown there too. The queue
+  is started from the document screen as well, so a page rotated from the selection bar is made
+  again without opening Enhance. A tile reads the kept 1280 px result at its own size (the
+  largest power-of-two step that still covers the tile, about 600 × 800 px for a 156 × 208 dp tile
+  on a 3× screen, ~1.9 MB), only for the tiles on screen, with at most 24 MB of tiles kept (about
+  12 such tiles); scrolled-away tiles are read again from the file. The 72 dp thumbnail is shown
+  until the sharp one is read. So a 100-page scan holds 100 small thumbnails (as before) plus a
+  screenful of tiles. The Recent scans list (#461) shows the first page as made when the queue had
+  made it at Save (copied as `cover.jpg` into the kept scan's folder), else the photo as before.
 - Discarding or saving the scan stops the queue and deletes the kept results.
 - Testing option "Make every page in the background" (`backgroundPages`, on): off is the screen as
   before #465.

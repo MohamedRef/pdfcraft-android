@@ -2833,7 +2833,9 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 ScanSession(null, null, false, chosen, pages.map { ScanSession.Page(it.file.absolutePath, it.corners, it.found, it.turns, it.preset, it.book?.encode(), it.look, it.flatten, it.auto) })
             } else null
             if (recent != null) {
-                withContext(Dispatchers.IO) { scanRecent.keep(recent) }
+                // the first page as made, for the Recent scans list's picture (#494)
+                val cover = pages.firstOrNull()?.let { pageQueue.readyOf(it)?.file }
+                withContext(Dispatchers.IO) { scanRecent.keep(recent, cover) }
             } else {
                 scanRecent.openedFrom = null
                 scanPages.forEach { it.file.delete() }
