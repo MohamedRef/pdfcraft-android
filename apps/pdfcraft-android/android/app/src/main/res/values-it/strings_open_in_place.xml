@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Opening PDFs from other apps in place, without a copy in the app's storage (#453). -->
+<resources>
+    <!-- Diagnostics testing option: a switch title -->
+    <string name="open_in_place">Apri i PDF sul posto</string>
+    <string name="open_in_place_body">Apre direttamente i file di altre app, senza copiarli nella memoria di PdfCraft. Disattiva per copiarli prima, come nelle versioni precedenti.</string>
+    <!-- Shown when a save could not reach the original file yet; the changes are safe in the app -->
+    <string name="in_place_write_back_waiting">Le modifiche sono conservate in PdfCraft e verranno salvate nel file alla prossima apertura.</string>
+</resources>

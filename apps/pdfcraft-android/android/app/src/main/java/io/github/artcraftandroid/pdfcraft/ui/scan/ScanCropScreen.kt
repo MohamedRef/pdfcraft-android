@@ -32,6 +32,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -61,8 +62,10 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
@@ -170,6 +173,10 @@ internal fun ScanCropScreen(page: ScanPage, index: Int, lab: ScanLab, onDone: (F
     var heldSpan by remember { mutableStateOf<FloatArray?>(null) }
     var selected by remember { mutableStateOf<QuadHandle?>(null) }
     var detecting by remember { mutableStateOf(false) }
+    // what the last Auto-detect press came to, said on screen and to TalkBack (#443)
+    var detectNote by remember(page.key) { mutableStateOf<ScanCropDetectNote?>(null) }
+    // searches that found nothing on this photo, starting with the import's own (#443)
+    var detectEmpty by remember(page.key) { mutableStateOf(scanCropDetectEmptyAtOpen(page.found, page.finding?.asked)) }
     // a drag started after a snap was asked for makes that snap's answer stale
     var dragSerial by remember { mutableStateOf(0) }
     var info by remember(page.file) { mutableStateOf<ScanPhotoInfo?>(null) }
@@ -229,7 +236,7 @@ internal fun ScanCropScreen(page: ScanPage, index: Int, lab: ScanLab, onDone: (F
             val result = quad?.let { snapped(asked, it.refined, it.corners.toFloatArray()) }
             val stale = serial != dragSerial
             Diag.event(
-                DiagArea.Scan, "crop_snap", "index" to index, "handle" to if (handle is QuadHandle.Corner) "corner" else "side",
+                DiagArea.Scan, "crop_snap", "index" to scanLogPageNumber(index), "handle" to if (handle is QuadHandle.Corner) "corner" else "side",
                 "sides" to asked.count { it }, "refined" to (quad?.refined?.withIndex()?.count { (k, r) -> r && asked[k] } ?: 0),
                 "curved" to (quad?.curved?.withIndex()?.count { (k, r) -> r && asked[k] } ?: 0),
                 "taken" to (result != null && !stale), "stale" to stale, "failed" to (quad == null), "ms" to ms,
@@ -259,7 +266,7 @@ internal fun ScanCropScreen(page: ScanPage, index: Int, lab: ScanLab, onDone: (F
             movedPct = if (done) maxCornerMovePct(opened, corners, aspect) else 0.0,
             cornersOff = if (done) cornersOffPhoto(corners) else 0,
         )
-        Diag.event(DiagArea.Scan, "crop", "index" to index, "done" to done, *s.diag())
+        Diag.event(DiagArea.Scan, "crop", "index" to scanLogPageNumber(index), "done" to done, *s.diag())
         if (done) onDone(corners, s) else onCancel()
     }
 
@@ -341,6 +348,7 @@ internal fun ScanCropScreen(page: ScanPage, index: Int, lab: ScanLab, onDone: (F
                             selected = h
                             lastMove = SystemClock.uptimeMillis()
                             stats = if (h is QuadHandle.Corner) stats.copy(cornerDrags = stats.cornerDrags + 1) else stats.copy(sideDrags = stats.sideDrags + 1)
+                            detectNote = null
                             wantLoupe(h)
                         }
                     },
@@ -419,15 +427,38 @@ internal fun ScanCropScreen(page: ScanPage, index: Int, lab: ScanLab, onDone: (F
                 }
             }
         }
+        // what Auto-detect came to (#443): always in place and a polite live region, so TalkBack reads each new line
+        val noteText = detectNote?.let { stringResource(it.text) }.orEmpty()
+        Text(
+            noteText, color = c.textSecondary, fontSize = 13.sp,
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = if (noteText.isEmpty()) 0.dp else 6.dp)
+                .semantics { liveRegion = LiveRegionMode.Polite },
+        )
         Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 8.dp), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
             TextButton(
                 onClick = {
                     detecting = true
                     stats = stats.copy(detects = stats.detects + 1)
+                    // the line is emptied first, so the same words said again are announced again
+                    detectNote = null
+                    val asked = lab.findOptions()
+                    val plan = scanCropDetectPlan(asked, detectEmpty, lab.cropDetectNote)
                     scope.launch {
+                        if (plan !is ScanCropDetectPlan.Search) {
+                            Diag.event(
+                                DiagArea.Scan, "crop_detect", "index" to scanLogPageNumber(index), "found" to false, "book_half" to (page.book?.side ?: "none"),
+                                "source" to "skipped", "ms" to 0L, "finder" to "none", "other" to false, "skipped" to true,
+                                "note" to ScanCropDetectNote.AlreadySearched.id, "detect_note" to lab.cropDetectNote,
+                            )
+                            stats = stats.copy(detectsSkipped = stats.detectsSkipped + 1)
+                            withFrameNanos { }
+                            detectNote = ScanCropDetectNote.AlreadySearched
+                            detecting = false
+                            return@launch
+                        }
                         val started = SystemClock.elapsedRealtime()
                         val doc = withContext(Dispatchers.Default) {
-                            runCatching { io.github.artcraftandroid.pdfcraft.core.scanFindDocumentWith(page.file.absolutePath, lab.findOptions()) }
+                            runCatching { io.github.artcraftandroid.pdfcraft.core.scanFindDocumentWith(page.file.absolutePath, plan.options) }
                                 .onFailure { e -> Diag.failure(DiagArea.Scan, "scan_find_document", e) }.getOrNull()
                         }
                         val spread = doc?.takeIf { it.found }?.corners?.takeIf { it.size == 8 }?.toFloatArray()?.takeIf { convexQuad(it) }
@@ -438,10 +469,17 @@ internal fun ScanCropScreen(page: ScanPage, index: Int, lab: ScanLab, onDone: (F
                                 .onFailure { e -> Diag.failure(DiagArea.Scan, "scan_split_spread", e) }.getOrNull()
                         }?.let { ScanBookCut(it.split, it.left.toFloatArray(), it.right.toFloatArray(), it.gutterFound, it.gutterTop, it.gutterBottom, it.confidence) }
                             .let { cut -> scanBookRecut(half, cut)?.takeIf { convexQuad(it) } }
+                        val note = if (lab.cropDetectNote) scanCropDetectNote(found != null, doc == null, plan.other) else null
                         Diag.event(
-                            DiagArea.Scan, "crop_detect", "index" to index, "found" to (found != null), "book_half" to (half?.side ?: "none"),
+                            DiagArea.Scan, "crop_detect", "index" to scanLogPageNumber(index), "found" to (found != null), "book_half" to (half?.side ?: "none"),
                             "source" to (doc?.source?.name?.lowercase() ?: "failed"), "ms" to SystemClock.elapsedRealtime() - started,
+                            "finder" to ScanLab.finderId(plan.options.finder), "other" to plan.other, "skipped" to false,
+                            "note" to (note?.id ?: "none_shown"), "detect_note" to lab.cropDetectNote,
                         )
+                        // a search that ran and found nothing would find nothing again (a failed call might not)
+                        if (found == null && doc != null) detectEmpty = detectEmpty + plan.options
+                        if (plan.other) stats = stats.copy(detectsOther = stats.detectsOther + 1)
+                        detectNote = note
                         detecting = false
                         if (found != null) {
                             stats = stats.copy(detectsFound = stats.detectsFound + 1)
@@ -454,11 +492,13 @@ internal fun ScanCropScreen(page: ScanPage, index: Int, lab: ScanLab, onDone: (F
             ) { Text(stringResource(R.string.tools_auto_detect), color = if (detecting) c.textSecondary else c.accent) }
             TextButton(onClick = {
                 stats = stats.copy(wholePhoto = stats.wholePhoto + 1)
+                detectNote = null
                 byHand = List(4) { false }
                 corners = ScanPage.WHOLE
             }) { Text(stringResource(R.string.tools_no_crop), color = c.accent) }
             TextButton(onClick = {
                 stats = stats.copy(resets = stats.resets + 1)
+                detectNote = null
                 byHand = List(4) { false }
                 corners = opened.copyOf()
             }) { Text(stringResource(R.string.tools_reset), color = c.accent) }

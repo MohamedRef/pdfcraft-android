@@ -73,7 +73,7 @@ internal class ScanLabController(private val vm: AppViewModel) {
         val capture = io.github.artcraftandroid.pdfcraft.ui.scan.ScanCaptures.of(page.file.path)?.json()
         val inspection = if (lab.inspect) inspect(index, page) else null
         store.addPage(scan, index, page.file, output) { keptOutput ->
-            scanTestPageJson(version, saved, page.corners, page.found, page.finding, look, strength, flatten, lab, keptOutput, result, preview, page.crop, capture, models, turn, kind, page.book, flattenChosen = page.flatten, pageLook = page.look.json(lab.lookPerPage), inspection = inspection, applied = applied)
+            scanTestPageJson(version, saved, page.corners, page.found, page.finding, look, strength, flatten, lab, keptOutput, result, preview, page.crop, capture, models, turn, kind, page.book, flattenChosen = page.flatten, pageLook = page.look.json(lab.lookPerPage), inspection = inspection, applied = applied, kindSource = io.github.artcraftandroid.pdfcraft.ui.scan.scanKindSource(page, lab))
         }
     }
 
@@ -139,14 +139,21 @@ internal class ScanLabController(private val vm: AppViewModel) {
         timingModel = true
         vm.viewModelScope.launch {
             val file = File(File(app.cacheDir, "model-timing"), "model.onnx")
+            val started = android.os.SystemClock.elapsedRealtime()
             try {
-                val t = withContext(Dispatchers.IO) {
-                    copyCapped(uri, file)
+                val outcome = withContext(Dispatchers.IO) {
+                    try {
+                        copyCapped(uri, file)
+                    } catch (e: java.io.IOException) {
+                        // the copy into the app's folder failed (#445): too large, or the file could not be read
+                        throw io.github.artcraftandroid.pdfcraft.ui.scan.ScanModelTimingFailed(io.github.artcraftandroid.pdfcraft.ui.scan.scanModelCopyReason(e), "copy", e.userMessage, -1)
+                    }
                     // before the run: if a large model gets the app closed, this line is the last one
                     Diag.event(DiagArea.Scan, "model_timing_start", "bytes" to file.length())
                     Diag.sink?.flush()
-                    io.github.artcraftandroid.pdfcraft.core.scanTimeModel(file.path, MODEL_RUNS, 0u)
+                    io.github.artcraftandroid.pdfcraft.core.scanTimeModelOutcome(file.path, MODEL_RUNS, 0u)
                 }
+                val t = outcome.timing ?: throw io.github.artcraftandroid.pdfcraft.ui.scan.ScanModelTimingFailed(outcome.reason, "time", outcome.message, outcome.ms.toLong())
                 Diag.event(DiagArea.Scan, "model_timing", *io.github.artcraftandroid.pdfcraft.ui.scan.scanModelTimingDiag(t))
                 vm.tell(
                     text(
@@ -156,6 +163,10 @@ internal class ScanLabController(private val vm: AppViewModel) {
                 )
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
+            } catch (e: io.github.artcraftandroid.pdfcraft.ui.scan.ScanModelTimingFailed) {
+                // why it failed and how long it took, as words and numbers the log can carry (#445)
+                Diag.event(DiagArea.Scan, "model_timing_failed", *io.github.artcraftandroid.pdfcraft.ui.scan.scanModelTimingFailedDiag(e, android.os.SystemClock.elapsedRealtime() - started))
+                vm.tell(text(R.string.scan_lab_time_model_failed, e.shown))
             } catch (e: Exception) {
                 Diag.failure(DiagArea.Scan, "scan_time_model", e)
                 vm.tell(text(R.string.scan_lab_time_model_failed, e.userMessage))
@@ -178,7 +189,7 @@ internal class ScanLabController(private val vm: AppViewModel) {
                     val n = from.read(buf)
                     if (n < 0) break
                     total += n
-                    if (total > MODEL_MAX_BYTES) throw java.io.IOException("too large")
+                    if (total > MODEL_MAX_BYTES) throw java.io.IOException(io.github.artcraftandroid.pdfcraft.ui.scan.SCAN_MODEL_COPY_TOO_LARGE)
                     out.write(buf, 0, n)
                 }
             }

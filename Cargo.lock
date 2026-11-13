@@ -2800,6 +2800,7 @@ dependencies = [
  "log",
  "pdfcraft-android-ffi-bytes",
  "pdfcraft-automation",
+ "pdfcraft-bytes",
  "pdfcraft-cos",
  "pdfcraft-engine",
  "pdfcraft-geom",

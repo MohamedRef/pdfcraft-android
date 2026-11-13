@@ -39,6 +39,17 @@ class SettingsController internal constructor(private val vm: AppViewModel) {
         compactPreviews = on
         appPrefs.edit().putBoolean("compactPreviews", on).apply()
     }
+    /**
+     * Testing option (#453): open PDFs from other apps in place, without a copy in the app's
+     * storage. Off: the copy every earlier version made, to compare the two on a phone.
+     */
+    var openInPlace by mutableStateOf(appPrefs.getBoolean("openInPlace", true))
+        internal set
+    fun updateOpenInPlace(on: Boolean) {
+        openInPlace = on
+        appPrefs.edit().putBoolean("openInPlace", on).apply()
+        io.github.artcraftandroid.pdfcraft.engine.Diag.event(io.github.artcraftandroid.pdfcraft.engine.DiagArea.Open, "open_in_place_setting", "on" to on)
+    }
     internal val bookmarkStore = UserBookmarks(File(app.filesDir, "bookmarks.json"))
 
     /** The Search tab's last searches, newest first (kept on the phone, as the reference keeps them). */

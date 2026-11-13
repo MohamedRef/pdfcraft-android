@@ -48,3 +48,20 @@ fn a_model_file_from_the_environment() {
     let threads = std::env::var("PDFCRAFT_TIME_THREADS").ok().and_then(|t| t.parse().ok()).unwrap_or(0);
     println!("{:?}", time_model(std::fs::read(path).unwrap(), 2, threads).unwrap());
 }
+
+/// #445: each failure has a short lowercase word for the log, distinct from the others.
+#[test]
+fn each_failure_has_its_own_reason_word() {
+    let all = [
+        TimingError::TooLarge,
+        TimingError::NotAModel,
+        TimingError::NoInput,
+        TimingError::NotFixed("height".into()),
+        TimingError::InputTooLarge,
+        TimingError::NoOutput,
+        TimingError::RunFailed,
+    ];
+    let words: Vec<&str> = all.iter().map(TimingError::reason).collect();
+    assert_eq!(words, ["too_large", "not_a_model", "no_input", "not_fixed", "input_too_large", "no_output", "run_failed"]);
+    assert_eq!(time_model(b"not a model".to_vec(), 1, 1).unwrap_err().reason(), "not_a_model");
+}

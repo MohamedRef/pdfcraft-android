@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="scan_crop_detect_none">لم يُعثر على حدود الصفحة. اسحب الزوايا، أو اضغط بلا اقتصاص للاحتفاظ بالصورة كاملة.</string>
+    <string name="scan_crop_detect_none_other">لم يُعثر على حدود الصفحة، ولا بكاشف الخطوط أيضًا. اسحب الزوايا، أو اضغط بلا اقتصاص للاحتفاظ بالصورة كاملة.</string>
+    <string name="scan_crop_detect_already">سبق البحث في هذه الصورة ولم يُعثر على حدود الصفحة. اسحب الزوايا، أو اضغط بلا اقتصاص للاحتفاظ بالصورة كاملة.</string>
+    <string name="scan_crop_detect_found_other">عُثر على الصفحة بكاشف الخطوط. تحقق من زواياها.</string>
+    <string name="scan_crop_detect_failed">تعذّر على الكشف التلقائي قراءة هذه الصورة.</string>
+    <string name="scan_lab_crop_detect_note">القص: الإبلاغ حين لا يجد الكشف التلقائي شيئًا، وتجربة كاشف الخطوط بعده</string>
+</resources>

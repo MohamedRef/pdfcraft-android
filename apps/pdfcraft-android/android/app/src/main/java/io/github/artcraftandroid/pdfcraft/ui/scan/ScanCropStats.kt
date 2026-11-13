@@ -41,20 +41,25 @@ data class ScanCropStats(
     val movedPct: Double = 0.0,
     /** Corners off the photo when the screen was last left with Done (#291), 0 to 4. */
     val cornersOff: Int = 0,
+    /** Auto-detect presses that searched with the line detector because the first search had found nothing (#443). */
+    val detectsOther: Int = 0,
+    /** Auto-detect presses that did not search, because every search had found nothing on the photo (#443). */
+    val detectsSkipped: Int = 0,
 ) {
     operator fun plus(o: ScanCropStats) = ScanCropStats(
         visits + o.visits, cornerDrags + o.cornerDrags, sideDrags + o.sideDrags, snapsAsked + o.snapsAsked,
         snapsTaken + o.snapsTaken, snapsHeld + o.snapsHeld, snapsFailed + o.snapsFailed, max(snapMsMax, o.snapMsMax),
         nudges + o.nudges, detects + o.detects, detectsFound + o.detectsFound, wholePhoto + o.wholePhoto, resets + o.resets,
         loupeDecodes + o.loupeDecodes, o.snapOn, ms + o.ms, max(movedPct, o.movedPct),
-        if (o.visits > 0) o.cornersOff else cornersOff,
+        if (o.visits > 0) o.cornersOff else cornersOff, detectsOther + o.detectsOther, detectsSkipped + o.detectsSkipped,
     )
 
     /** As diagnostics fields: numbers and booleans only. */
     fun diag(): Array<Pair<String, Any?>> = arrayOf(
         "corner_drags" to cornerDrags, "side_drags" to sideDrags, "snaps_asked" to snapsAsked, "snaps_taken" to snapsTaken,
         "snaps_held" to snapsHeld, "snaps_failed" to snapsFailed, "snap_ms_max" to snapMsMax, "nudges" to nudges,
-        "detects" to detects, "detects_found" to detectsFound, "whole_photo" to wholePhoto, "resets" to resets,
+        "detects" to detects, "detects_found" to detectsFound, "detects_other" to detectsOther,
+        "detects_skipped" to detectsSkipped, "whole_photo" to wholePhoto, "resets" to resets,
         "loupe_decodes" to loupeDecodes, "snap" to snapOn, "ms" to ms, "moved_pct" to round3(movedPct),
         "corners_off" to cornersOff,
     )
@@ -78,3 +83,9 @@ internal fun maxCornerMovePct(a: FloatArray, b: FloatArray, aspect: Float): Doub
     val diagonal = sqrt(aspect.toDouble() * aspect + 1.0)
     return (0..3).maxOf { i -> hypot((a[2 * i] - b[2 * i]).toDouble() * aspect, (a[2 * i + 1] - b[2 * i + 1]).toDouble()) } / diagonal * 100.0
 }
+
+/**
+ * The page number the crop screen's log lines (`crop`, `crop_snap`, `crop_detect`) carry for the
+ * page at list position [index] (#445): from 1, like every other scan line.
+ */
+internal fun scanLogPageNumber(index: Int): Int = index + 1

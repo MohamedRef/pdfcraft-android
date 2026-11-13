@@ -12,7 +12,7 @@ use crate::flatten::{predict_grid, unwarp, unwarp_trimmed};
 use crate::flatten_guard::{Kept, MIN_LINES, Trim, border_trim, guard_with_floor};
 use crate::flatten_lines::{LineFit, fit_page};
 use crate::look::{Applied, Look, LookParams, Pixels, apply_prepared};
-use crate::page_kind::{Measured, PageKind, PresetChoice, Rules, kind_of, measure};
+use crate::page_kind::{Curve, Measured, PageKind, PresetChoice, Rules, kind_of, measure};
 use crate::straightness::{Straightness, line_straightness};
 use crate::upright::{Upright, turned, upright};
 use crate::upright_pages::total_turn;
@@ -100,6 +100,14 @@ pub struct PageRequest<'a> {
     pub preset: PresetChoice,
     /// How many sides of the page its edge detection found curved (0–4): a book page's sign (#299).
     pub curved_sides: u8,
+    /// Two opposite sides of the page were found curved (#442).
+    pub curved_opposite: bool,
+    /// The page is one half of a spread cut in book mode (#303, #442).
+    pub book_mode: bool,
+    /// A book page needs more than one curved side: the gutter, two opposite curved sides, or a
+    /// curved side in book mode, and one curved side only suggests flattening (#442); false is
+    /// the first rule (#299, any curved side), a testing choice.
+    pub strict_book: bool,
     /// A dark band down one long side counts as a book's gutter only when it runs the whole
     /// length, stays narrow and fades inward (#427); false is the first rule (#299), a testing choice.
     pub strict_gutter: bool,
@@ -155,6 +163,9 @@ impl<'a> PageRequest<'a> {
             denoise: true,
             preset: PresetChoice::Off,
             curved_sides: 0,
+            curved_opposite: false,
+            book_mode: false,
+            strict_book: true,
             strict_gutter: true,
             strict_photo: true,
             fixed_strength: false,
@@ -432,8 +443,9 @@ pub fn kind_sharpen(kind: u8, asked: u8) -> u8 {
 pub fn page_look_kind(base: &PageBase, request: &PageRequest<'_>) -> Result<(Applied, Option<PageKind>), ScanError> {
     let kind = match request.look {
         Look::Auto if request.preset != PresetChoice::Off => {
-            let rules = Rules { strict_gutter: request.strict_gutter, strict_photo: request.strict_photo };
-            base.measured().and_then(|m| kind_of(m, request.curved_sides, request.preset, rules))
+            let rules = Rules { strict_gutter: request.strict_gutter, strict_photo: request.strict_photo, strict_book: request.strict_book };
+            let curve = Curve { sides: request.curved_sides, opposite: request.curved_opposite, book_mode: request.book_mode };
+            base.measured().and_then(|m| kind_of(m, curve, request.preset, rules))
         }
         _ => None,
     };

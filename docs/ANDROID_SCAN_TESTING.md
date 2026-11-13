@@ -41,6 +41,7 @@ on one part. While any is changed, the scan screen says so.
 | Zoom the page preview (#301) | On | Off: the preview can't be zoomed and no sharper page is made |
 | Keep the page's light estimate between Clean scan changes (#446) | On | Off: Clean scan and Whiteboard measure the page's light, grain and sharpening again for every strength or paper change, as before. The page looks the same either way |
 | Crop with magnifier and snapping to edges (#292) | On | Off: the crop screen before #292, four corner handles on the thumbnail |
+| Crop: say when Auto-detect finds nothing, and try the line detector next (#443) | On | Off: every Auto-detect press makes the same search again and nothing is said when it finds nothing, as before #443 |
 | Flatten pages automatically when it makes their lines straighter (#302) | Off | On: every page is flattened by the network and kept only when its lines of text come out at least 10 % straighter (the Flatten switch still flattens without the check) |
 | Trim the background left along a flattened page's edges (#302) | On | Off: a flattened page is kept as the network's grid gives it, with any strip of table along its edges |
 | Book mode: cut at the gutter found in the photo (#303) | On | Off: in book mode every spread is cut at its centre line, whatever the photo shows |
@@ -54,6 +55,7 @@ on one part. While any is changed, the scan screen says so.
 | Sharpen photos on the page gently (#299) | On | Off: only the objects the look finds itself are sharpened gently, as before |
 | Suggest Flatten page or Grayscale for a document type (#299) | On | Off: no suggestion chips |
 | Barcodes, stamps and soft print are not photographs (#427) | On | Off: the first photograph rule, which also reads those as photographs, so a label with a large barcode becomes a document with photographs |
+| A page whose edges were not found is a Document until it is cropped (#444) | On | Off: the kind of such a page is worked out from the whole photo, table and surroundings included, as before #444 |
 | Page strength wins over the document type (#424) | On | Off: the document type's strength replaces the slider's, and every sharpening level but Off gives the type's own, as before #424 |
 | Filter strength | Each filter's own | 20, 40, 60, 80 or 100 for every filter |
 | Flatten page (#302) | Off | On, with the switch on the scan screen itself |
@@ -91,16 +93,16 @@ The zip also holds `diagnostics.txt`, the diagnostics log as **Share diagnostics
  "app": "0.0.26-beta (26001)",
  "outcome": "saved",
  "found": [0.11, 0.08, 0.93, 0.10, 0.95, 0.90, 0.07, 0.89],
- "finding": {"source": "model", "confidence": 0.835, "angle": 0, "passes": 1, "refined_sides": 4, "curved_sides": 0},
+ "finding": {"source": "model", "confidence": 0.835, "angle": 0, "passes": 1, "refined_sides": 4, "curved_sides": 0, "curved_opposite": false},
  "look": "auto", "strength": 60, "flatten": false, "flatten_chosen": null,
  "options": {"finder": "auto", "refine": true, "side_proportions": false, "snap_paper": true, "strength_override": null, "upright": true,
-             "sharpen": 30, "denoise": true, "preview": true, "crop_tools": true, "flatten_auto": false, "flatten_trim": true, "flatten_line_floor": true, "settle_turns": true, "presets": true, "strict_gutter": true, "strict_photo": true, "book_gutter": true, "line_flatten": true,
+             "sharpen": 30, "denoise": true, "preview": true, "crop_tools": true, "flatten_auto": false, "flatten_trim": true, "flatten_line_floor": true, "settle_turns": true, "presets": true, "strict_gutter": true, "strict_photo": true, "strict_book": true, "book_gutter": true, "line_flatten": true,
              "look_per_page": true, "look_strip": true, "whiteboard_look": true, "preview_stop": true,
              "preview_zoom": true, "look_reuse": true},
  "document_type": {"preset": "receipt", "chosen": false, "strength": 80, "sharpen": 35, "keep_paper": false, "suggest_flatten": false,
                    "suggest_greyscale": true, "ratio": 3.0, "ink_share": 0.043, "colour_ink_share": 0.0, "photo_share": 0.0,
                    "stroke_mm": 0.339, "bright_share": 0.0, "gutter_band": false, "gutter_loose": false, "gutter_cover": 0.0,
-                   "photo_loose": 0.0, "whole_photo": false},
+                   "photo_loose": 0.0, "whole_photo": false, "book_loose": false, "curved_opposite": false, "book_mode": false},
  "turns": {"manual": null, "auto": true, "total": 3, "followed": false, "source": "classifier"},
  "capture": {"source": "in_app", "mp10": 499, "width": 8160, "height": 6120, "exposure_index": -1, "exposure_step_milli": 333,
              "torch": false, "focused": true, "rotation": 0, "capture_ms": 640, "live": true, "live_found": true,
@@ -111,7 +113,8 @@ The zip also holds `diagnostics.txt`, the diagnostics log as **Share diagnostics
              "light_reused": true, "look_parts_ms": {"look_tone": 21}},
  "models": {"edges": "ready", "flatten": "ready", "upright": "ready"},
  "crop": {"visits": 1, "corner_drags": 2, "side_drags": 1, "snaps_asked": 3, "snaps_taken": 2, "snaps_held": 0, "snaps_failed": 0,
-          "snap_ms_max": 85, "nudges": 0, "detects": 0, "detects_found": 0, "whole_photo": 0, "resets": 0,
+          "snap_ms_max": 85, "nudges": 0, "detects": 0, "detects_found": 0, "detects_other": 0,
+          "detects_skipped": 0, "whole_photo": 0, "resets": 0,
           "loupe_decodes": 6, "snap": true, "ms": 9100, "moved_pct": 1.235,
           "corners_off": 0},
  "page_look": {"id": "clean", "strength": null, "level": 60, "per_page": true, "paper": "auto"},
@@ -149,7 +152,9 @@ strength the saved page was really made at (#424): `source` is `lab` (the testin
 `fixed` says the document type did not replace it; `null` when no page was made. `crop` is what happened on the crop
 screen (#292), added up over every time the page was cropped with Done, or `null` when it never
 was: drags of corners and of sides, snaps asked for, taken, skipped by holding still and failed,
-the longest snap, keyboard and TalkBack moves, Auto-detect, No crop and Reset, magnifier regions
+the longest snap, keyboard and TalkBack moves, Auto-detect (and from #443 `detects_other`, the
+presses that tried the line detector after an empty search, and `detects_skipped`, those that did
+not search because every search had found nothing), No crop and Reset, magnifier regions
 decoded, whether Snap was on, the time spent, and `moved_pct`, the largest corner move from where
 the screen opened in % of the photo's diagonal, and `corners_off`, how many corners were left off
 the photo the last time (#291). `models` says which models the engine accepted when the page
@@ -183,7 +188,7 @@ ordinary setting "Turn pages upright automatically", `total` the turn the page w
 answer, also for a page that then followed its neighbours. `document_type` is the kind Clean scan
 took the page for (#299), whether the person chose it, the kind's settings and what the page
 measured as (`stroke_mm` -1 when there is no ink); `null` for the other filters or with the option
-off. `scan_replay` keeps a chosen kind and works an automatic one out again. `book` is set on a page that is half of a photographed book spread (#303): which `half`, whether a dark gutter was found (`gutter_found`; false means the cut is the centre line), where the cut crosses the straightened spread's top and bottom edges as shares of its width, the gutter's `confidence`, and the page `order` in force (`ltr` or `rtl`). It is `null` for a page of its own. The two halves of a spread are kept as two pages, each with its own copy of the one photo, and their `corners` and `found` are the half's own outline.
+off. `scan_replay` keeps a chosen kind and works an automatic one out again. `document_type_source` (#444) says where the kind came from: `chosen`, `measured`, `off`, or `no_outline` for a page whose outline was not found and which was not cropped; such a page is made a Document (its `document_type.chosen` is true, since the app chose it) while `document_type`'s measurements still say what the whole photo read as. `book` is set on a page that is half of a photographed book spread (#303): which `half`, whether a dark gutter was found (`gutter_found`; false means the cut is the centre line), where the cut crosses the straightened spread's top and bottom edges as shares of its width, the gutter's `confidence`, and the page `order` in force (`ltr` or `rtl`). It is `null` for a page of its own. The two halves of a spread are kept as two pages, each with its own copy of the one photo, and their `corners` and `found` are the half's own outline.
 
 ## On the desktop
 
@@ -231,7 +236,9 @@ when zoomed in; the `saved` line `looks_mixed` and `unenhanced`; every `crop` li
 every `crop_snap` line whether a `corner` or `side` was let go, how many `sides` were asked for and
 how many were `refined` or `curved`, whether the snap was `taken`, `stale` (another drag had
 started) or `failed`, and its `ms`; every `crop_detect` line whether Auto-detect `found` a page,
-its `source` and `ms`; every `page` and `preview` line `flatten_auto` and, from
+its `source` and `ms`, and from #443 the `finder` used (`none` when the press did not search),
+`other`, `skipped`, the line shown as `note` (`none`, `none_other`, `already`, `found_other`,
+`failed`, or `none_shown` when no line was shown) and the testing option `detect_note`; every `page` and `preview` line `flatten_auto` and, from
 #302's check, `flatten_checked`, `flatten_kept`, `flatten_why`, `straight_px`, `straight_flat_px`
 (tenths of a pixel, -1 when not measured), `straight_lines` and `straight_flat_lines`, the
 person's own Flatten page choice `flatten_page` (`on`, `off`, `none`) and the border trim
