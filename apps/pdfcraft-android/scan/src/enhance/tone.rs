@@ -79,13 +79,89 @@ pub(crate) struct Renderer<'a> {
     inv_range: f32,
     tone: Tone,
     curve: Vec<f32>,
+    /// The level from which this page is drawn white ([`white_from`]): 1, or lower on a grainy
+    /// page.
+    white_from: f32,
+}
+
+/// A sample counts as paper for [`paper_spread`] when it is at least this bright against its
+/// light: well above print, and low enough to keep the dark half of a grainy page's paper.
+const PAPERISH: f32 = 0.7;
+/// The paper's spread a page may have before its white point moves: 0.025 of the paper's own
+/// brightness. The owner's ten reference photos measure 0.005 to 0.021 (the largest is a sheet in
+/// the dappled shade of a tree), and dimmed, grainy copies of them 0.040 to 0.114 (#466).
+pub(crate) const GRAIN_FREE: f32 = 0.025;
+/// How far the white point comes down for each unit of spread over [`GRAIN_FREE`]: at 4, paper
+/// up to about two and a half times the spread under its own level is still drawn white.
+const GRAIN_REACH: f32 = 4.0;
+/// The lowest white point the grain can bring about.
+pub(crate) const GRAIN_WHITE_MIN: f32 = 0.80;
+
+/// How much the paper's brightness varies from place to place after the light has been divided
+/// out: the median distance of the paper samples (`lumas` at or over [`PAPERISH`]) from their
+/// median, scaled to a standard deviation. On an evenly lit, clean page this is the page's fine
+/// grain; a photo taken in dim light has several times more. 0 when too little of the page is
+/// paper to say.
+pub(crate) fn paper_spread(lumas: &[f32]) -> f32 {
+    let mut paper: Vec<f32> = lumas.iter().copied().filter(|&l| l >= PAPERISH).collect();
+    if paper.len() < 64 {
+        return 0.0;
+    }
+    let middle = median(&mut paper);
+    let mut off: Vec<f32> = paper.iter().map(|l| (l - middle).abs()).collect();
+    1.4826 * median(&mut off)
+}
+
+/// The level from which a page whose paper varies by `spread` (see [`paper_spread`]) is drawn
+/// white, as a share of the way from the black point to the white point: 1 for a page under
+/// [`GRAIN_FREE`], lower by [`GRAIN_REACH`] for the spread over it, the white point never under
+/// [`GRAIN_WHITE_MIN`].
+///
+/// The curve is steepest just under white, so the grain of a photo taken in dim light showed as
+/// grey specks all over the paper (#466: on dimmed, grainy copies of the owner's photos 5 to 46 %
+/// of the paper was not white). A page under [`GRAIN_FREE`] gives exactly 1, so every look made
+/// before this is unchanged.
+pub(crate) fn white_from(tone: &Tone, spread: f32) -> f32 {
+    if !spread.is_finite() || spread <= GRAIN_FREE {
+        return 1.0;
+    }
+    let white = (tone.white - GRAIN_REACH * (spread - GRAIN_FREE)).max(GRAIN_WHITE_MIN.min(tone.white));
+    ((white - tone.black) / (tone.white - tone.black).max(1e-3)).clamp(0.3, 1.0)
+}
+
+/// The curve's input with everything from `white_from` up drawn white: unchanged up to
+/// [`KNEE`] below that level, then rising smoothly to 1 at it. Print and mid greys keep their
+/// tone; only the top of the range, where the paper and its grain are, moves.
+pub(crate) fn lifted(t: f32, white_from: f32) -> f32 {
+    if white_from >= 1.0 {
+        return t;
+    }
+    let knee = (white_from - KNEE).max(0.0);
+    if t <= knee {
+        t
+    } else if t >= white_from {
+        1.0
+    } else {
+        let x = (t - knee) / (white_from - knee);
+        t + (1.0 - white_from) * x * x
+    }
+}
+
+/// How far below the level drawn white the curve starts to leave its own shape.
+const KNEE: f32 = 0.2;
+
+/// The tone curve as a table over 0–1, with everything from `white_from` up drawn white.
+fn curve_table(tone: &Tone, white_from: f32) -> Vec<f32> {
+    (0..=CURVE_STEPS)
+        .map(|i| lifted(i as f32 / CURVE_STEPS as f32, white_from))
+        .map(|t| if tone.s_curve { s_curve(t) } else { t.powf(tone.gamma) })
+        .collect()
 }
 
 impl<'a> Renderer<'a> {
     pub fn new(page: &'a Rgb, light: &[Plane; 3], tone: Tone, keep_paper: bool) -> Renderer<'a> {
         let (w, h) = (page.width as usize, page.height as usize);
-        let curve =
-            (0..=CURVE_STEPS).map(|i| i as f32 / CURVE_STEPS as f32).map(|t| if tone.s_curve { s_curve(t) } else { t.powf(tone.gamma) }).collect();
+        let curve = curve_table(&tone, 1.0);
         let tint = if keep_paper { paper_tint(light) } else { [1.0; 3] };
         let gain = [0, 1, 2].map(|c| light[c].map(|l| tint[c] / (255.0 * l.max(0.02))));
         let mut r = Renderer {
@@ -100,9 +176,16 @@ impl<'a> Renderer<'a> {
             inv_range: 1.0 / (tone.white - tone.black).max(1e-3),
             tone,
             curve,
+            white_from: 1.0,
         };
-        (r.black, r.off) = r.black_colour();
+        let spread;
+        (r.black, r.off, spread) = r.black_colour();
         r.inv_fade = 1.0 / (1.0 - r.black + 1e-3);
+        // a grainy page's paper is drawn white from a lower level (#466)
+        r.white_from = white_from(&tone, spread);
+        if r.white_from < 1.0 {
+            r.curve = curve_table(&tone, r.white_from);
+        }
         r
     }
 
@@ -125,8 +208,9 @@ impl<'a> Renderer<'a> {
     }
 
     /// The colour of the darkest 2 % of the page (from a grid of at most about a million
-    /// samples): its luminance, and its distance from grey limited to [`BLACK_TINT_LIMIT`].
-    fn black_colour(&self) -> (f32, [f32; 3]) {
+    /// samples): its luminance, and its distance from grey limited to [`BLACK_TINT_LIMIT`]. And,
+    /// from the same samples, the paper's spread ([`paper_spread`]).
+    fn black_colour(&self) -> (f32, [f32; 3], f32) {
         let (w, h) = (self.page.width as usize, self.page.height as usize);
         let step = (((w * h) as f64 / 1e6).sqrt().ceil() as usize).max(1);
         let mut light = vec![0f32; self.gain[0].w * 3];
@@ -136,14 +220,16 @@ impl<'a> Renderer<'a> {
             let row = &self.page.data[y * w * 3..(y + 1) * w * 3];
             samples.extend((step / 2..w).step_by(step).map(|x| self.flat(x, &row[x * 3..x * 3 + 3], &light)));
         }
-        let limit = percentile(&mut samples.iter().map(|&s| luma(s)).collect::<Vec<_>>(), 2.0);
+        let mut lumas: Vec<f32> = samples.iter().map(|&s| luma(s)).collect();
+        let spread = paper_spread(&lumas);
+        let limit = percentile(&mut lumas, 2.0);
         let dark: Vec<[f32; 3]> = samples.into_iter().filter(|&s| luma(s) <= limit).collect();
         if dark.is_empty() {
-            return (0.0, [0.0; 3]);
+            return (0.0, [0.0; 3], spread);
         }
         let d = [0, 1, 2].map(|c| median(&mut dark.iter().map(|s| s[c]).collect::<Vec<_>>()));
         let l = luma(d);
-        (l, d.map(|v| (v - l).clamp(-BLACK_TINT_LIMIT, BLACK_TINT_LIMIT)))
+        (l, d.map(|v| (v - l).clamp(-BLACK_TINT_LIMIT, BLACK_TINT_LIMIT)), spread)
     }
 
     fn curve(&self, t: f32) -> f32 {
@@ -222,4 +308,144 @@ fn paper_tint(light: &[Plane; 3]) -> [f32; 3] {
     let p = [0, 1, 2].map(|c| median(&mut light[c].d.iter().zip(&y.d).filter(|&(_, &l)| l >= from).map(|(&v, _)| v).collect::<Vec<_>>()));
     let top = p[0].max(p[1]).max(p[2]).max(1e-3);
     p.map(|v| v / top)
+}
+
+#[cfg(test)]
+mod grain_tests {
+    //! A grainy page's paper is drawn white (#466), on pages drawn here. In this file, not with
+    //! the look's other tests, because it tests this file's own functions.
+    use super::*;
+    use crate::enhance::{AutoParams, auto};
+
+    /// A `w` × `h` page under a light `level` (0–1) of full brightness: white paper with bars of
+    /// print, and `grain` grey levels of noise on every pixel and channel.
+    fn page(w: usize, h: usize, level: f32, grain: f32, seed: u64) -> Rgb {
+        let mut state = seed | 1;
+        let mut normal = move || {
+            // the sum of four uniform numbers: close enough to a bell for a test, and cheap
+            let mut sum = 0.0f32;
+            for _ in 0..4 {
+                state = state.wrapping_mul(6_364_136_223_846_793_005).wrapping_add(1_442_695_040_888_963_407);
+                sum += (state >> 40) as f32 / (1u64 << 24) as f32;
+            }
+            (sum - 2.0) * 1.732
+        };
+        let mut data = Vec::with_capacity(w * h * 3);
+        for y in 0..h {
+            for x in 0..w {
+                let print = y % 40 < 6 && (60..w - 60).contains(&x) && (80..h - 80).contains(&y) && x % 23 < 15;
+                let base = if print { 30.0 } else { 235.0 } * level;
+                for _ in 0..3 {
+                    data.push((base + grain * normal()).round().clamp(0.0, 255.0) as u8);
+                }
+            }
+        }
+        Rgb { width: w as u32, height: h as u32, data }
+    }
+
+    /// Share of the page's paper (every pixel that is not within 4 px of a bar of print) that is
+    /// not drawn white, and the mean grey level of the print.
+    fn drawn(look: &Rgb) -> (f32, f32) {
+        let (w, h) = (look.width as usize, look.height as usize);
+        let (mut paper, mut grey, mut ink, mut ink_sum) = (0usize, 0usize, 0usize, 0f32);
+        for y in 0..h {
+            for x in 0..w {
+                let v = crate::luma([look.data[(y * w + x) * 3], look.data[(y * w + x) * 3 + 1], look.data[(y * w + x) * 3 + 2]]);
+                let in_text = (60..w - 60).contains(&x) && (80..h - 80).contains(&y);
+                if in_text && y % 40 < 6 && x % 23 < 15 {
+                    if (1..5).contains(&(y % 40)) && (2..13).contains(&(x % 23)) {
+                        ink += 1;
+                        ink_sum += f32::from(v);
+                    }
+                } else if !in_text || (10..36).contains(&(y % 40)) {
+                    paper += 1;
+                    grey += usize::from(v < 240);
+                }
+            }
+        }
+        (grey as f32 / paper.max(1) as f32, ink_sum / ink.max(1) as f32)
+    }
+
+    #[test]
+    fn the_spread_is_small_on_clean_paper_and_large_on_grainy_paper() {
+        // paper within ±0.012 of its level, and a ninth of the samples print: under the free spread
+        let clean: Vec<f32> = (0..4000).map(|i| if i % 9 == 0 { 0.2 } else { 1.0 + 0.004 * ((i % 7) as f32 - 3.0) }).collect();
+        let spread = paper_spread(&clean);
+        assert!((0.005..GRAIN_FREE).contains(&spread), "{spread}");
+        // paper spread evenly over ±0.1: half of it is within 0.05 of the middle
+        let grainy: Vec<f32> = (0..4001).map(|i| 0.9 + 0.2 * i as f32 / 4000.0).collect();
+        let spread = paper_spread(&grainy);
+        assert!((spread - 1.4826 * 0.05).abs() < 0.002, "{spread}");
+        // too little paper to say
+        assert_eq!(paper_spread(&[1.0; 10]), 0.0);
+        assert_eq!(paper_spread(&[0.3; 500]), 0.0);
+    }
+
+    #[test]
+    fn a_page_under_the_free_spread_keeps_its_curve_exactly() {
+        let tone = Tone::at(60);
+        for spread in [0.0, 0.01, GRAIN_FREE, f32::NAN] {
+            assert_eq!(white_from(&tone, spread), 1.0, "{spread}");
+        }
+        for i in 0..=100 {
+            let t = i as f32 / 100.0;
+            assert_eq!(lifted(t, 1.0), t);
+        }
+        assert_eq!(curve_table(&tone, 1.0), (0..=CURVE_STEPS).map(|i| (i as f32 / CURVE_STEPS as f32).powf(tone.gamma)).collect::<Vec<_>>());
+    }
+
+    #[test]
+    fn the_lift_leaves_print_alone_rises_without_a_step_and_stops_at_the_floor() {
+        let tone = Tone::at(60);
+        let from = white_from(&tone, 0.05);
+        // 0.97 − 4 × 0.025 = 0.87, as a share of 0.25…0.97
+        assert!((from - (0.87 - tone.black) / (tone.white - tone.black)).abs() < 1e-4, "{from}");
+        let mut last = 0.0;
+        for i in 0..=1000 {
+            let t = i as f32 / 1000.0;
+            let u = lifted(t, from);
+            assert!(u >= last && u >= t && u <= 1.0, "{t}: {u} after {last}");
+            assert!(u - last < 0.01, "a step at {t}: {last} to {u}");
+            if t <= from - KNEE {
+                assert_eq!(u, t);
+            }
+            if t >= from {
+                assert_eq!(u, 1.0);
+            }
+            last = u;
+        }
+        // however grainy, the white point is not brought under the floor
+        let floor = (GRAIN_WHITE_MIN - tone.black) / (tone.white - tone.black);
+        assert!((white_from(&tone, 0.5) - floor).abs() < 1e-4);
+    }
+
+    /// The owner's case (#466), drawn: a page photographed in dim light, grainy. Without the
+    /// lift a good part of its paper is grey specks; with it the paper is white and the print
+    /// is as dark as before.
+    #[test]
+    fn a_dim_grainy_page_has_white_paper_and_the_same_print() {
+        let params = AutoParams { denoise: false, sharpen: 0, ..AutoParams::default() };
+        let clean = auto(&page(480, 640, 0.9, 0.5, 3), &params).unwrap();
+        let (clean_grey, clean_ink) = drawn(&clean.rgb);
+        assert!(clean_grey < 0.005, "{clean_grey}");
+
+        let grainy = page(480, 640, 0.45, 8.0, 7);
+        let look = auto(&grainy, &params).unwrap();
+        let (grey, ink) = drawn(&look.rgb);
+        println!("grainy page: {:.1} % of the paper not white, print at {ink:.0} (clean page: {clean_ink:.0})", 100.0 * grey);
+        assert!(grey < 0.06, "{grey}");
+        assert!((ink - clean_ink).abs() < 12.0, "{ink} against {clean_ink}");
+
+        // the same page drawn with the curve as it was: the specks this is about
+        let bg = crate::enhance::background::background(&grainy, false);
+        let mut plain = Renderer::new(&grainy, &bg.light, Tone::at(params.strength), false);
+        assert!(plain.white_from < 1.0);
+        plain.white_from = 1.0;
+        plain.curve = curve_table(&plain.tone, 1.0);
+        let before = Rgb { width: grainy.width, height: grainy.height, data: plain.render(1) };
+        let (grey_before, ink_before) = drawn(&before);
+        println!("the same without the lift: {:.1} % not white, print at {ink_before:.0}", 100.0 * grey_before);
+        assert!(grey_before > 0.08 && grey_before > 4.0 * grey, "{grey_before} against {grey}");
+        assert!((ink - ink_before).abs() < 2.0, "{ink} against {ink_before}");
+    }
 }

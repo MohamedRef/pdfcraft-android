@@ -23,6 +23,7 @@ multiply, one curve lookup and a little arithmetic per pixel.
 | 4 | `background.rs` (`paper_light`) | The paper's colour under the local light: an average over paper pixels only (three scales), limited by the closing so hard shadow edges stay in place. |
 | 5 | `tone.rs` | Each pixel divided by its paper colour; the colour of the page's black made neutral. |
 | 6 | `tone.rs` | Tone curve on luminance (at strength 60: black point 0.25, white point 0.97, gamma 1.4) and colour added back at its absolute strength. |
+| 6a | `tone.rs` (`paper_spread`, `white_from`, `lifted`) | On a grainy page only: the paper is drawn white from a lower level (see "Grainy pages" below). |
 
 The result is deterministic: the same bytes for the same page on any number of threads.
 
@@ -45,6 +46,52 @@ On those ten pairs, with the look applied to the photo resampled onto the refere
 
 The numpy/OpenCV prototype in `tools/scan-eval/auto_reference.py` gives the same figures.
 
+## Grainy pages: photos taken in dim light (#466)
+
+A photo taken in dim light is grainy, and dividing by a dim light makes the grain larger. The
+tone curve is steepest just under white, so the grain showed as grey specks all over the paper.
+
+What the look does now, in `tone.rs`:
+
+- It measures how much the paper varies after the light has been divided out (`paper_spread`:
+  the median distance of the paper samples from their median, as a standard deviation, as a
+  share of the paper's own brightness).
+- Up to a spread of 0.025 nothing changes: **the bytes are the same as before.**
+- Over it, the level from which paper is drawn white comes down by 4 times the excess, never
+  under 0.80 (`white_from`). The curve keeps its shape up to a fifth of its range below that
+  level and then rises smoothly to white (`lifted`), so print and mid greys keep their tone.
+
+Why the spread and not the look's grain measure (`detail::noise_sigma`): that measure reads the
+finest detail only. On the pages below, which step 0 had enlarged, it read 0.6 to 3.6 grey
+levels where the paper's real variation was 10 to 20.
+
+**Measured (13 Nov, desktop):**
+
+| | Paper's spread | Paper not white, before | After | Print still dark, before | After |
+|---|---|---|---|---|---|
+| The owner's ten reference photos | 0.005–0.021 | | unchanged: the same bytes | | |
+| Five of them dimmed to a quarter of the light, with sensor grain added | 0.040–0.080 | 5.5–24.9 % | 0.2–7.9 % | 94.4–99.4 % | 94.1–99.4 % |
+| The same five at a tenth of the light | 0.064–0.114 | 18.6–45.9 % | 0.4–27.0 % | 82.6–98.2 % | 82.1–98.1 % |
+
+The page that stays worst in both rows is the sheet in the dappled shade of a tree: dimmed, its
+shade and its grain together are past what the floor of 0.80 can take. The saved files are 14 to
+46 % smaller on the dimmed copies (4 to 33 % at a tenth of the light).
+
+**What this is not:**
+
+- **None of the owner's photos was taken in dim light.** Their paper is at 193 to 255 of 255
+  and their grain under 1 grey level. The dimmed copies were made by lowering the exposure and
+  adding shot and read noise to each pixel. A phone's own processing smooths grain before the
+  photo is saved, so a real dim photo will differ; the figures say the direction, not the size.
+- The grain is not removed, only kept out of the paper. Specks inside coloured or grey areas
+  and along the edges of print stay. The look's smoothing step (`detail::denoise`) still
+  starts from the fine-grain measure, which under-reads enlarged pages; that is not changed here.
+- Faint marks lighter than the new level (pale pencil, a light stamp) are drawn white on a
+  grainy page. On a page under the free spread nothing is lost.
+- There is no testing option, log field or kept-scan field for this yet (see the pull request).
+- Low-light merge (#297), which lowers the grain itself by averaging four photos, is a
+  different thing and still off by default (#426).
+
 ## Limits
 
 - A sliver of shade narrower than twice the closing radius and darker than 88 % of the paper
@@ -57,6 +104,10 @@ The numpy/OpenCV prototype in `tools/scan-eval/auto_reference.py` gives the same
 - No phone timing has been taken yet. The target in #298 is 12 MP in under 500 ms.
 
 ## Tests
+
+Grainy pages: `tone.rs`'s own `grain_tests` (a clean page keeps its curve exactly; the lift
+leaves print alone, has no step and stops at the floor; a drawn dim page with 8 grey levels of
+grain goes from 17.6 % of its paper not white to 3.7 %, its print unchanged).
 
 `cargo test -p pdfcraft-scan`: synthetic pages with known truth (flat light, gradient with a hard
 shadow, dappled shade, coloured light, pencil, pen and stamp, a finger at the edge, a warm soft
