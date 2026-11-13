@@ -10,4 +10,11 @@
     <string name="root_read_only_body_lent">PdfCraft was only allowed to read %1$s, so your changes can’t be saved there. Save a copy to keep them. To save to this file next time, open it with Open file in PdfCraft.</string>
     <!-- The read-only prompt when writing to the original failed (#491) -->
     <string name="root_read_only_body_failed">Saving your changes to %1$s failed. Save a copy to keep them.</string>
+    <!-- Saving to originals lent read-only, with Android's All files access (#491) -->
+    <string name="all_files_setting">Save to original files</string>
+    <string name="all_files_setting_on">On: files other apps open for reading only are saved where they are</string>
+    <string name="all_files_setting_off">Off: changes to files other apps open for reading only are saved as a copy</string>
+    <string name="all_files_prompt_body">To save straight into files other apps open for reading only, give PdfCraft All files access in Android’s settings, as other PDF readers do.</string>
+    <string name="all_files_allow">Allow saving to original files</string>
+    <string name="all_files_now_writable">Your changes are now saved to the original file.</string>
 </resources>

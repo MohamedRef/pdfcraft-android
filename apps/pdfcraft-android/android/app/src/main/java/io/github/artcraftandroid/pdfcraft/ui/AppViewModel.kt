@@ -716,6 +716,31 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     }
 
     /**
+     * Back in the app, perhaps from the system's All files access page (#491): a document that
+     * opened read-only because the app that lent it allowed reading only is saved to its
+     * original from now on, when the person granted that access meanwhile.
+     */
+    fun recheckWriteAccess() {
+        val granted = io.github.artcraftandroid.pdfcraft.engine.AllFilesAccess.granted()
+        if (settings.allFilesAccess != granted) {
+            settings.allFilesAccess = granted
+            Diag.event(DiagArea.App, "all_files_access", "granted" to granted)
+        }
+        val doc = document ?: return
+        val src = doc.source ?: return
+        if (!granted || doc.writable || !io.github.artcraftandroid.pdfcraft.engine.WriteAccess.allFilesHelps(doc.readOnlyReason)) return
+        viewModelScope.launch {
+            val access = withContext(Dispatchers.IO) { runCatching { files.writeAccess(src) }.getOrNull() }
+            if (document !== doc || doc.writable || access !in io.github.artcraftandroid.pdfcraft.engine.WriteAccess.WRITABLE) return@launch
+            doc.writable = true
+            doc.readOnlyReason = null
+            if (readOnlyPrompt === doc) readOnlyPrompt = null
+            Diag.event(DiagArea.Open, "source_access", "doc" to doc.diagNumber, "access" to access, "writable" to true, "provider" to files.providerKind(src), "recheck" to true)
+            tell(text(R.string.all_files_now_writable), text(R.string.common_save)) { saveNow(doc) }
+        }
+    }
+
+    /**
      * The app went to the background: save the open document, as the reference does. When the
      * pause is for one of the app's own screens (a picker, the share sheet), the working copy is
      * saved but the original is written when the app is really left or the document closes (#97).

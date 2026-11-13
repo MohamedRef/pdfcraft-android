@@ -127,5 +127,10 @@ internal object WriteAccess {
     const val WRITE_PROBE = "write_probe"
     const val READ_GRANT_ONLY = "read_grant_only"
     const val PROBE_FAILED = "probe_failed"
-    val WRITABLE = setOf(FILE_WRITABLE, WRITE_GRANT, WRITE_PROBE)
+    /** Its real file is written directly, with All files access ([AllFilesAccess]). */
+    const val ALL_FILES = "all_files"
+    val WRITABLE = setOf(FILE_WRITABLE, WRITE_GRANT, WRITE_PROBE, ALL_FILES)
+
+    /** A reason that All files access would overcome (not a write that was tried and failed). */
+    fun allFilesHelps(reason: String?): Boolean = reason == PROVIDER_READ_ONLY || reason == READ_GRANT_ONLY || reason == PROBE_FAILED
 }

@@ -10,4 +10,11 @@
     <string name="root_read_only_body_lent">PdfCraft durfte %1$s nur lesen, daher können deine Änderungen dort nicht gespeichert werden. Speichere eine Kopie, um sie zu behalten. Um künftig in diese Datei zu speichern, öffne sie mit „Datei öffnen“ in PdfCraft.</string>
     <!-- The read-only prompt when writing to the original failed (#491) -->
     <string name="root_read_only_body_failed">Deine Änderungen an %1$s konnten nicht gespeichert werden. Speichere eine Kopie, um sie zu behalten.</string>
+    <!-- Saving to originals lent read-only, with Android's All files access (#491) -->
+    <string name="all_files_setting">In Originaldateien speichern</string>
+    <string name="all_files_setting_on">An: Dateien, die andere Apps nur zum Lesen öffnen, werden an ihrem Ort gespeichert</string>
+    <string name="all_files_setting_off">Aus: Änderungen an Dateien, die andere Apps nur zum Lesen öffnen, werden als Kopie gespeichert</string>
+    <string name="all_files_prompt_body">Um direkt in Dateien zu speichern, die andere Apps nur zum Lesen öffnen, erlaube PdfCraft in den Android-Einstellungen den Zugriff auf alle Dateien, wie es andere PDF-Reader tun.</string>
+    <string name="all_files_allow">Speichern in Originaldateien erlauben</string>
+    <string name="all_files_now_writable">Deine Änderungen werden jetzt in der Originaldatei gespeichert.</string>
 </resources>

@@ -286,6 +286,7 @@ class MainActivity : ComponentActivity() {
         super.onResume()
         io.github.artcraftandroid.pdfcraft.engine.Diag.event(io.github.artcraftandroid.pdfcraft.engine.DiagArea.App, "resume")
         vm.home.onResumed()
+        vm.recheckWriteAccess()
     }
 
     override fun onNewIntent(intent: Intent) {

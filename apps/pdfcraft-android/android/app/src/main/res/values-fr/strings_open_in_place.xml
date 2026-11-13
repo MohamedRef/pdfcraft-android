@@ -10,4 +10,11 @@
     <string name="root_read_only_body_lent">PdfCraft était seulement autorisé à lire %1$s : vos modifications ne peuvent pas y être enregistrées. Enregistrez une copie pour les conserver. Pour enregistrer dans ce fichier la prochaine fois, ouvrez-le avec Ouvrir un fichier dans PdfCraft.</string>
     <!-- The read-only prompt when writing to the original failed (#491) -->
     <string name="root_read_only_body_failed">L’enregistrement de vos modifications dans %1$s a échoué. Enregistrez une copie pour les conserver.</string>
+    <!-- Saving to originals lent read-only, with Android's All files access (#491) -->
+    <string name="all_files_setting">Enregistrer dans les fichiers d’origine</string>
+    <string name="all_files_setting_on">Activé : les fichiers que d’autres applis ouvrent en lecture seule sont enregistrés à leur place</string>
+    <string name="all_files_setting_off">Désactivé : les modifications des fichiers que d’autres applis ouvrent en lecture seule sont enregistrées dans une copie</string>
+    <string name="all_files_prompt_body">Pour enregistrer directement dans les fichiers que d’autres applis ouvrent en lecture seule, accordez à PdfCraft l’accès à tous les fichiers dans les paramètres Android, comme le font d’autres lecteurs PDF.</string>
+    <string name="all_files_allow">Autoriser l’enregistrement dans les fichiers d’origine</string>
+    <string name="all_files_now_writable">Vos modifications sont désormais enregistrées dans le fichier d’origine.</string>
 </resources>

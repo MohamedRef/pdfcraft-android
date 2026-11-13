@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- User-approved APK installation from verified GitHub Releases. -->
@@ -34,6 +35,11 @@
 
     <!-- Focus timer: its countdown notification (asked for when the timer is first started) -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Optional, off until the person grants it in system settings (#491): saves go straight
+         into a file another app lent for reading only, as other PDF readers do. -->
+    <uses-permission
+        android:name="android.permission.MANAGE_EXTERNAL_STORAGE"
+        tools:ignore="ScopedStorage" />
 
     <!-- No app data leaves the phone through backup or device transfer (#107). -->
     <application

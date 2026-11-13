@@ -3,7 +3,9 @@ package io.github.artcraftandroid.pdfcraft.engine
 import android.content.ContentResolver
 import android.content.Context
 import android.content.Intent
+import android.content.res.AssetFileDescriptor
 import android.net.Uri
+import android.os.ParcelFileDescriptor
 import android.provider.DocumentsContract
 import android.provider.MediaStore
 import android.provider.OpenableColumns
@@ -30,6 +32,51 @@ class DocumentFiles(private val context: Context) {
 
     /** Files the app creates itself (combine, create, scans) before the user saves them somewhere. */
     val createdDir = File(context.filesDir, "Created").apply { mkdirs() }
+
+    /**
+     * Where each opened document's real file is in shared storage, by [sha] of its address (#491):
+     * remembered at open, so that with All files access a document another app lent for one
+     * visit is still saved to, and reopened from, its file after that app's grant is gone.
+     */
+    private val realPaths by lazy { context.getSharedPreferences("real_paths", Context.MODE_PRIVATE) }
+
+    /**
+     * The real file of [uri] that PdfCraft reads and writes directly, as PDF readers with "All
+     * files access" do (#491): only while the person has granted it, and only a file whose size
+     * matches what the provider reports (when it still answers).
+     */
+    fun directFile(uri: Uri): File? {
+        if (uri.scheme != ContentResolver.SCHEME_CONTENT || !AllFilesAccess.granted()) return null
+        val key = sha(uri.toString())
+        val size = size(uri)
+        realPaths.getString(key, null)?.let(::File)?.takeIf { AllFilesAccess.usable(it, size) }?.let { return it.canonicalFile }
+        val found = AllFilesAccess.realFile(context, uri, size)?.canonicalFile ?: return null
+        runCatching { realPaths.edit().putString(key, found.path).apply() }
+        return found
+    }
+
+    /** Remember the path [uri]'s address names, while no access is needed to tell it (#491). */
+    private fun rememberPath(uri: Uri) {
+        val key = sha(uri.toString())
+        if (realPaths.contains(key)) return
+        val path = AllFilesAccess.candidates(context, uri, query = true).firstOrNull() ?: return
+        runCatching { realPaths.edit().putString(key, path).apply() }
+    }
+
+    /** [uri]'s descriptor in [mode]: its real file with All files access ([directFile]), else its provider's. */
+    private fun openPfd(uri: Uri, mode: String): ParcelFileDescriptor? {
+        directFile(uri)?.let { f -> runCatching { ParcelFileDescriptor.open(f, ParcelFileDescriptor.parseMode(mode)) }.getOrNull()?.let { return it } }
+        return resolver.openFileDescriptor(uri, mode)
+    }
+
+    /** [uri] for reading, as [openPfd] chooses: a whole real file, or the provider's asset. */
+    private fun openAsset(uri: Uri): AssetFileDescriptor? {
+        directFile(uri)?.let { f ->
+            runCatching { ParcelFileDescriptor.open(f, ParcelFileDescriptor.MODE_READ_ONLY) }.getOrNull()
+                ?.let { return AssetFileDescriptor(it, 0, AssetFileDescriptor.UNKNOWN_LENGTH) }
+        }
+        return resolver.openAssetFileDescriptor(uri, "r")
+    }
 
     /** The working copy of [uri]: copied in (again) unless it is a file the app already owns. */
     fun workingCopy(uri: Uri): File {
@@ -61,7 +108,7 @@ class DocumentFiles(private val context: Context) {
         try {
             val copied = try {
                 OpenTiming.measure("provider_descriptor_copy") {
-                    resolver.openAssetFileDescriptor(uri, "r")?.use { asset ->
+                    openAsset(uri)?.use { asset ->
                         val size = asset.parcelFileDescriptor.statSize
                         val length = if (asset.declaredLength >= 0) asset.declaredLength else size - asset.startOffset
                         asset.createInputStream().use { input ->
@@ -117,7 +164,7 @@ class DocumentFiles(private val context: Context) {
         val dir = File(workDir, sha(uri.toString()))
         val early = inPlaceRefusal(enabled, uri.scheme == ContentResolver.SCHEME_CONTENT, PendingWorkingCopy.isPending(dir), 0, -1, 1, true)
         if (early != null) return null to early
-        val asset = resolver.openAssetFileDescriptor(uri, "r") ?: return null to InPlaceReason.NO_DESCRIPTOR
+        val asset = openAsset(uri) ?: return null to InPlaceReason.NO_DESCRIPTOR
         var handed = false
         try {
             val stat = runCatching { android.system.Os.fstat(asset.parcelFileDescriptor.fileDescriptor) }.getOrNull()
@@ -143,7 +190,7 @@ class DocumentFiles(private val context: Context) {
      */
     fun appendWriteBack(file: File, uri: Uri, providerLength: Long): Boolean {
         val pfd = try {
-            resolver.openFileDescriptor(uri, "rw")
+            openPfd(uri, "rw")
         } catch (e: java.io.FileNotFoundException) {
             null
         } catch (e: IllegalArgumentException) {
@@ -203,7 +250,7 @@ class DocumentFiles(private val context: Context) {
         target.parentFile?.mkdirs()
         val tmp = File(target.parentFile, ".${target.name}.part")
         try {
-            resolver.openInputStream(uri).use { input ->
+            (directFile(uri)?.inputStream() ?: resolver.openInputStream(uri)).use { input ->
                 requireNotNull(input) { context.getString(R.string.common_file_unreadable) }
                 tmp.outputStream().use { input.copyTo(it, PdfSnapshotCopy.BUFFER_BYTES) }
             }
@@ -215,7 +262,7 @@ class DocumentFiles(private val context: Context) {
 
     /** The size of the original at [uri] as its descriptor says now, or null. */
     fun descriptorSize(uri: Uri): Long? = runCatching {
-        resolver.openFileDescriptor(uri, "r")?.use { android.system.Os.fstat(it.fileDescriptor).st_size }
+        openPfd(uri, "r")?.use { android.system.Os.fstat(it.fileDescriptor).st_size }
     }.getOrNull()
 
     /**
@@ -341,7 +388,7 @@ class DocumentFiles(private val context: Context) {
 
     /** Whether [uri] still starts like a PDF and, when its end can be read, ends like one. */
     private fun originalLooksIntact(uri: Uri): Boolean = runCatching {
-        resolver.openAssetFileDescriptor(uri, "r")?.use { afd ->
+        openAsset(uri)?.use { afd ->
             val length = afd.length
             java.io.FileInputStream(afd.fileDescriptor).use { input ->
                 input.channel.position(afd.startOffset)
@@ -378,7 +425,8 @@ class DocumentFiles(private val context: Context) {
             resolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { c ->
                 if (c.moveToFirst()) c.namedString(OpenableColumns.DISPLAY_NAME) else null
             }
-        }.getOrNull() ?: uri.lastPathSegment?.substringAfterLast('/') ?: "Document.pdf"
+        }.getOrNull() ?: realPaths.getString(sha(uri.toString()), null)?.substringAfterLast('/')
+            ?: uri.lastPathSegment?.substringAfterLast('/') ?: "Document.pdf"
         return safeName(name)
     }
 
@@ -409,6 +457,9 @@ class DocumentFiles(private val context: Context) {
         if (uri.scheme == ContentResolver.SCHEME_FILE) {
             return if (uri.path?.let { File(it).canWrite() } == true) WriteAccess.FILE_WRITABLE else WriteAccess.FILE_NOT_WRITABLE
         }
+        // with All files access its real file is written directly, whatever the lending app allowed
+        if (directFile(uri)?.canWrite() == true) return WriteAccess.ALL_FILES
+        runCatching { rememberPath(uri) }
         // a provider that says its document can't be written refuses whatever access the picker
         // granted (Android's media documents, which the picker's Recent shows: "Media is read-only")
         if (DocumentsContract.isDocumentUri(context, uri) && documentFlags(uri)?.let { it and DocumentsContract.Document.FLAG_SUPPORTS_WRITE == 0 } == true) return WriteAccess.PROVIDER_READ_ONLY
@@ -485,7 +536,7 @@ class DocumentFiles(private val context: Context) {
     private fun writeThroughDescriptor(file: File, uri: Uri): Boolean {
         waitUntilUnmapped(uri)
         val pfd = try {
-            resolver.openFileDescriptor(uri, "rwt")
+            openPfd(uri, "rwt")
         } catch (e: java.io.FileNotFoundException) {
             null
         } catch (e: IllegalArgumentException) {
@@ -514,10 +565,15 @@ class DocumentFiles(private val context: Context) {
      * still holds — since a mapped file that shrinks can't be read. Throws when it stays mapped.
      */
     private fun waitUntilUnmapped(uri: Uri) {
-        val stat = runCatching { resolver.openFileDescriptor(uri, "r")?.use { android.system.Os.fstat(it.fileDescriptor) } }.getOrNull() ?: return
-        if (!android.system.OsConstants.S_ISREG(stat.st_mode)) return
+        // the file as its provider lends it and as its real path names it (#491) may report
+        // different identities (shared storage is reached through a translating filesystem)
+        val stats = listOfNotNull(
+            runCatching { openPfd(uri, "r")?.use { android.system.Os.fstat(it.fileDescriptor) } }.getOrNull(),
+            runCatching { resolver.openFileDescriptor(uri, "r")?.use { android.system.Os.fstat(it.fileDescriptor) } }.getOrNull(),
+        ).filter { android.system.OsConstants.S_ISREG(it.st_mode) }
+        if (stats.isEmpty()) return
         repeat(60) {
-            if (!io.github.artcraftandroid.pdfcraft.core.lentFileInUse(stat.st_dev.toULong(), stat.st_ino.toULong())) return
+            if (stats.none { io.github.artcraftandroid.pdfcraft.core.lentFileInUse(it.st_dev.toULong(), it.st_ino.toULong()) }) return
             Thread.sleep(50)
         }
         throw IOException(context.getString(R.string.in_place_write_back_waiting))
@@ -532,7 +588,7 @@ class DocumentFiles(private val context: Context) {
 
     /** What [uri] holds now, read through a fresh descriptor; null when it can't be read back. */
     private fun readBack(uri: Uri, tailBytes: Int): WrittenBack? = runCatching {
-        resolver.openAssetFileDescriptor(uri, "r")?.use { afd ->
+        openAsset(uri)?.use { afd ->
             val stat = afd.parcelFileDescriptor.statSize
             val length = when {
                 afd.declaredLength >= 0 -> afd.declaredLength
@@ -565,6 +621,12 @@ class DocumentFiles(private val context: Context) {
      * grants out of Android's per-app limit (#108). Folder (tree) grants are never released here.
      */
     fun releaseUnusedAccess(recent: Collection<String>, open: String?) {
+        // the real paths of documents that left Recent are forgotten with their grants (#491)
+        runCatching {
+            val keep = (recent + listOfNotNull(open)).map(::sha).toSet()
+            val gone = realPaths.all.keys.filter { it !in keep }
+            if (gone.isNotEmpty()) realPaths.edit().apply { gone.forEach(::remove) }.apply()
+        }
         val grants = runCatching { resolver.persistedUriPermissions }.getOrDefault(emptyList())
         if (grants.isEmpty()) return
         val release = documentGrantsToRelease(

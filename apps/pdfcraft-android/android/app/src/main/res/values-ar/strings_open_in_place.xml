@@ -10,4 +10,11 @@
     <string name="root_read_only_body_lent">سُمح لـ PdfCraft بقراءة %1$s فقط، لذلك لا يمكن حفظ تغييراتك فيه. احفظ نسخة للاحتفاظ بها. لتحفظ في هذا الملف في المرة القادمة، افتحه من «فتح ملف» داخل PdfCraft.</string>
     <!-- The read-only prompt when writing to the original failed (#491) -->
     <string name="root_read_only_body_failed">تعذّر حفظ تغييراتك في %1$s. احفظ نسخة للاحتفاظ بها.</string>
+    <!-- Saving to originals lent read-only, with Android's All files access (#491) -->
+    <string name="all_files_setting">الحفظ في الملفات الأصلية</string>
+    <string name="all_files_setting_on">مفعّل: الملفات التي تفتحها تطبيقات أخرى للقراءة فقط تُحفظ في مكانها</string>
+    <string name="all_files_setting_off">متوقف: تغييرات الملفات التي تفتحها تطبيقات أخرى للقراءة فقط تُحفظ كنسخة</string>
+    <string name="all_files_prompt_body">للحفظ مباشرة في الملفات التي تفتحها تطبيقات أخرى للقراءة فقط، امنح PdfCraft إذن الوصول إلى كل الملفات من إعدادات Android، كما تفعل قارئات PDF الأخرى.</string>
+    <string name="all_files_allow">السماح بالحفظ في الملفات الأصلية</string>
+    <string name="all_files_now_writable">تُحفظ تغييراتك الآن في الملف الأصلي.</string>
 </resources>
