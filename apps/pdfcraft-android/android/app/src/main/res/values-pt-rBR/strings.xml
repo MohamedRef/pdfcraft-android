@@ -234,7 +234,7 @@
     <string name="tools_filter_auto_colour">Cor automática</string>
     <string name="tools_filter_grayscale">Escala de cinza</string>
     <string name="tools_filter_whiteboard">Quadro branco</string>
-    <string name="tools_filter_light_text">Texto claro</string>
+    <string name="tools_filter_light_text">Preto e branco</string>
     <string name="tools_scan_flatten">Aplanar página</string>
     <string name="tools_scan_view_result">Resultado</string>
     <string name="tools_scan_view_photo">Foto</string>

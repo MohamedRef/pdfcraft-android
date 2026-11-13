@@ -27,4 +27,14 @@
     <string name="scan_borders_discard">Discard</string>
     <string name="scan_borders_keep">Keep</string>
     <string name="scan_lab_steps">Scan screens in steps (Adjust borders after a photo)</string>
+    <!-- Enhance (#459) -->
+    <string name="scan_enhance_borders">Borders</string>
+    <string name="scan_enhance_more">More</string>
+    <string name="scan_enhance_apply_all">Use this look for all pages</string>
+    <string name="scan_enhance_compare">Compare with the photo</string>
+    <string name="scan_enhance_rename">Rename</string>
+    <string name="scan_enhance_adjust">Adjust</string>
+    <string name="scan_enhance_page_before">Page before</string>
+    <string name="scan_enhance_page_after">Page after</string>
+    <string name="scan_enhance_dismiss">Dismiss</string>
 </resources>

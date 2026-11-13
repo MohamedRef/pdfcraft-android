@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Slider
@@ -106,10 +107,16 @@ internal fun AppViewModel.applyScanLookToAll(index: Int) {
  * look's tile. A tile whose preview is not ready yet shows its name on a plain card.
  */
 @Composable
-internal fun ScanLooksStrip(vm: AppViewModel, index: Int, look: ScanPageLook, shown: ImageBitmap?, modifier: Modifier = Modifier) {
+internal fun ScanLooksStrip(
+    vm: AppViewModel, index: Int, look: ScanPageLook, shown: ImageBitmap?, modifier: Modifier = Modifier,
+    /** The tiles' size: 72×96 on the old screen, 56×72 on Enhance (#459). */
+    tileWidth: Int = SCAN_TILE_WIDTH_DP, tileHeight: Int = SCAN_TILE_SIDE_DP,
+    /** What the log's `look` line says the choice came from (#459): `look` on the old screen, `strip` on Enhance. */
+    from: String = "look",
+) {
     val c = pdfColors
     Row(
-        modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 8.dp),
+        modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 8.dp).selectableGroup(),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         for (f in ScanFilter.entries) {
@@ -118,14 +125,14 @@ internal fun ScanLooksStrip(vm: AppViewModel, index: Int, look: ScanPageLook, sh
             val image = scanTileImage(f, look, vm.scanTiles, shown)
             val waiting = stringResource(R.string.scan_look_tile_waiting, name)
             Column(
-                Modifier.width(SCAN_TILE_WIDTH_DP.dp).clip(RoundedCornerShape(6.dp))
-                    .selectable(selected = selected, role = Role.RadioButton) { if (!selected) vm.chooseScanLook(index, ScanPageLook(f), "look") }
+                Modifier.width(tileWidth.dp).clip(RoundedCornerShape(6.dp))
+                    .selectable(selected = selected, role = Role.RadioButton) { if (!selected) vm.chooseScanLook(index, ScanPageLook(f), from) }
                     .semantics { if (image == null) contentDescription = waiting }
                     .padding(vertical = 4.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 Box(
-                    Modifier.size(SCAN_TILE_WIDTH_DP.dp, SCAN_TILE_SIDE_DP.dp).clip(RoundedCornerShape(4.dp)).background(c.surfaceRaised)
+                    Modifier.size(tileWidth.dp, tileHeight.dp).clip(RoundedCornerShape(4.dp)).background(c.surfaceRaised)
                         .border(if (selected) 2.dp else 1.dp, if (selected) c.accent else c.textSecondary.copy(alpha = 0.4f), RoundedCornerShape(4.dp)),
                     contentAlignment = Alignment.Center,
                 ) {

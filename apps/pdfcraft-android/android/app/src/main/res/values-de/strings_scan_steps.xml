@@ -27,4 +27,14 @@
     <string name="scan_borders_discard">Verwerfen</string>
     <string name="scan_borders_keep">Behalten</string>
     <string name="scan_lab_steps">Scan-Bildschirme in Schritten (Ränder nach dem Foto anpassen)</string>
+    <!-- Enhance (#459) -->
+    <string name="scan_enhance_borders">Ränder</string>
+    <string name="scan_enhance_more">Mehr</string>
+    <string name="scan_enhance_apply_all">Diesen Stil für alle Seiten</string>
+    <string name="scan_enhance_compare">Mit dem Foto vergleichen</string>
+    <string name="scan_enhance_rename">Umbenennen</string>
+    <string name="scan_enhance_adjust">Anpassen</string>
+    <string name="scan_enhance_page_before">Vorherige Seite</string>
+    <string name="scan_enhance_page_after">Nächste Seite</string>
+    <string name="scan_enhance_dismiss">Ausblenden</string>
 </resources>

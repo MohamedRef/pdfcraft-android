@@ -381,7 +381,7 @@
     <string name="tools_filter_auto_colour">Auto color</string>
     <string name="tools_filter_grayscale">Grayscale</string>
     <string name="tools_filter_whiteboard">Whiteboard</string>
-    <string name="tools_filter_light_text">Light text</string>
+    <string name="tools_filter_light_text">Black and white</string>
     <string name="tools_scan_flatten">Flatten page</string>
     <string name="tools_scan_view_result">Result</string>
     <string name="tools_scan_view_photo">Photo</string>
