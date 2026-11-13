@@ -20,4 +20,15 @@
     <string name="settings_scan_testing_summary">Switch scanner features off or back, and keep scans to share</string>
     <string name="settings_scan_testing_needs_log">Turn on the diagnostics log to use these</string>
     <string name="settings_copy_version">Copy version</string>
+    <string name="settings_on">On</string>
+    <string name="updater_last_checked">Last checked %1$s.</string>
+    <string name="updater_last_checked_current">Last checked %1$s. You\'re up to date.</string>
+    <string name="backup_turn_off_body">Backups already in the folder stay there. Copies not yet written are dropped.</string>
+    <string name="scan_lab_group_kept">Kept scans</string>
+    <string name="scan_lab_group_finding">Finding the page</string>
+    <string name="scan_lab_group_borders">Borders</string>
+    <string name="scan_lab_group_flattening">Flattening</string>
+    <string name="scan_lab_group_looks">Looks</string>
+    <string name="scan_lab_group_camera">Camera</string>
+    <string name="scan_lab_group_reports">Reports</string>
 </resources>

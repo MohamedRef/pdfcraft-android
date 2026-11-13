@@ -1025,7 +1025,7 @@
     <string name="scan_lab_strength_own">الافتراضي</string>
     <string name="scan_lab_options_body">توقف هذه الخيارات أجزاء من الماسح الضوئي أو تستبدل بها ما كان قبلها، لمعرفة الجزء الذي تأتي منه المشكلة. يسجّل السجل ما كان مفعّلًا لكل صفحة.</string>
     <string name="scan_lab_reset">إعادة ضبط خيارات اختبار الماسح الضوئي</string>
-    <string name="scan_lab_active">أحد خيارات اختبار الماسح الضوئي مفعّل (الإعدادات، حول التطبيق، التشخيص)</string>
+    <string name="scan_lab_active">أحد خيارات اختبار الماسح الضوئي مفعّل (الإعدادات، التشخيص، اختبار الماسح الضوئي)</string>
     <string name="home_diagnostics_empty">لا يوجد تشخيص بعد: فعّل التسجيل ثم استخدم التطبيق.</string>
     <string name="home_diagnostics_subject">سجل تشخيص PdfCraft</string>
     <string name="home_diagnostics_cleared">تم مسح سجل التشخيص</string>

@@ -20,4 +20,15 @@
     <string name="settings_scan_testing_summary">إيقاف ميزات الماسح أو إرجاعها، والاحتفاظ بالمسوحات لمشاركتها</string>
     <string name="settings_scan_testing_needs_log">شغّل سجل التشخيص لاستخدام هذه الخيارات</string>
     <string name="settings_copy_version">نسخ الإصدار</string>
+    <string name="settings_on">مفعّل</string>
+    <string name="updater_last_checked">آخر فحص %1$s.</string>
+    <string name="updater_last_checked_current">آخر فحص %1$s. لديك أحدث إصدار.</string>
+    <string name="backup_turn_off_body">النسخ الموجودة في المجلد تبقى كما هي. والنسخ التي لم تُكتب بعد تُلغى.</string>
+    <string name="scan_lab_group_kept">المسوحات المحفوظة</string>
+    <string name="scan_lab_group_finding">العثور على الصفحة</string>
+    <string name="scan_lab_group_borders">الحواف</string>
+    <string name="scan_lab_group_flattening">التسوية</string>
+    <string name="scan_lab_group_looks">المظهر</string>
+    <string name="scan_lab_group_camera">الكاميرا</string>
+    <string name="scan_lab_group_reports">التقارير</string>
 </resources>

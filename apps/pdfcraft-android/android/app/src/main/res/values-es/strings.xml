@@ -1252,7 +1252,7 @@
     <string name="scan_lab_strength_own">Predeterminada</string>
     <string name="scan_lab_options_body">Estas opciones apagan partes del escáner o las cambian por lo que sustituyeron, para saber de qué parte viene un problema. El registro anota lo que estaba activo en cada página.</string>
     <string name="scan_lab_reset">Restablecer opciones de prueba del escáner</string>
-    <string name="scan_lab_active">Hay una opción de prueba del escáner activa (Ajustes, Acerca de, Diagnóstico)</string>
+    <string name="scan_lab_active">Hay una opción de prueba del escáner activa (Ajustes, Diagnóstico, Pruebas del escáner)</string>
     <string name="home_diagnostics_empty">Aún no hay diagnóstico: actívalo y usa la app.</string>
     <string name="home_diagnostics_subject">Registro de diagnóstico de PdfCraft</string>
     <string name="home_diagnostics_cleared">Registro de diagnóstico borrado</string>

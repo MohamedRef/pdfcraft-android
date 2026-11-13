@@ -1244,7 +1244,7 @@
     <string name="scan_lab_strength_own">Standard</string>
     <string name="scan_lab_options_body">Diese Optionen schalten Teile des Scanners ab oder ersetzen sie durch ihre Vorgänger, um herauszufinden, von welchem Teil ein Problem kommt. Das Protokoll hält für jede Seite fest, was galt.</string>
     <string name="scan_lab_reset">Scanner-Testoptionen zurücksetzen</string>
-    <string name="scan_lab_active">Eine Scanner-Testoption ist aktiv (Einstellungen, Über, Diagnose)</string>
+    <string name="scan_lab_active">Eine Scanner-Testoption ist aktiv (Einstellungen, Diagnose, Scanner-Test)</string>
     <string name="home_diagnostics_empty">Noch keine Diagnose: Einschalten und dann die App verwenden.</string>
     <string name="home_diagnostics_subject">PdfCraft-Diagnoseprotokoll</string>
     <string name="home_diagnostics_cleared">Diagnoseprotokoll gelöscht</string>
