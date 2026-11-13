@@ -249,6 +249,50 @@ class ScanScreenshotsTest {
     @Test @Config(qualifiers = "de-w320dp-h640dp-xhdpi") fun notesGerman320() = notes("de_320x640")
     @Test @Config(qualifiers = "fr-w320dp-h640dp-xhdpi") fun notesFrench320() = notes("fr_320x640")
 
+    /**
+     * Markup's colours (#503) under a drawn page: Erase with its three fills and the Color fill on a
+     * colour picked from the page (so the row shows it after its own two), the eyedropper's loupe
+     * over the page, and the Pen's row with More colors and the eyedropper. The page itself is the
+     * engine's in the app, so here it is a drawn page; the colour sheet is the viewer's own.
+     */
+    private fun markup(config: String) {
+        val bitmap = drawnPage(600, 800, tilted = false, background = 0xFF2B2B2B.toInt())
+        val page = bitmap.asImageBitmap()
+        val picked = 0x8DB3D9
+        var erase by androidx.compose.runtime.mutableStateOf(true)
+        rule.setContent {
+            PdfcraftTheme(ThemeChoice.Light) {
+                Column(Modifier.fillMaxSize().background(Color(0xFF2B2B2B))) {
+                    androidx.compose.foundation.Canvas(Modifier.weight(1f).fillMaxWidth()) {
+                        val fit = minOf(size.width / page.width, size.height / page.height) * 0.94f
+                        val w = page.width * fit
+                        val h = page.height * fit
+                        val r = PageRect((size.width - w) / 2f, (size.height - h) / 2f, w, h, 0)
+                        drawImage(page, dstOffset = androidx.compose.ui.unit.IntOffset(r.left.toInt(), r.top.toInt()), dstSize = androidx.compose.ui.unit.IntSize(w.toInt(), h.toInt()))
+                        val at = androidx.compose.ui.geometry.Offset(r.left + w * 0.5f, r.top + h * 0.45f)
+                        if (erase) drawLoupe(page, r, at, scanDropperSample(bitmap, page.width * 0.5f, page.height * 0.45f))
+                    }
+                    val tool = if (erase) ScanMarkupTool.Erase else ScanMarkupTool.Pen
+                    val fill = if (erase) ScanEraseFill.Colour else ScanEraseFill.Paper
+                    val colour = if (erase) picked else 0x000000
+                    ScanMarkupBars(
+                        tool, scanMarkupTools(io.github.artcraftandroid.pdfcraft.ui.ScanFilter.CleanScan), fill, ScanEraseFill.entries, dropping = false,
+                        size = 1, colour = colour, swatches = scanMarkupSwatches(tool, fill, colour, false), more = true, dropper = true, selectedText = null,
+                        onTool = {}, onFill = {}, onSize = {}, onColour = {}, onMore = {}, onDropper = {}, onEditText = {}, onDeleteText = {},
+                    )
+                }
+            }
+        }
+        shoot("markup_erase_colour_$config")
+        erase = false
+        shoot("markup_pen_$config")
+    }
+
+    @Test @Config(qualifiers = "en-w360dp-h640dp-xhdpi") fun markupEnglish360() = markup("en_360x640")
+    @Test @Config(qualifiers = "ar-w360dp-h640dp-xhdpi") fun markupArabic360() = markup("ar_360x640")
+    @Test @Config(qualifiers = "de-w360dp-h640dp-xhdpi") fun markupGerman360() = markup("de_360x640")
+    @Test @Config(qualifiers = "fr-w320dp-h640dp-xhdpi") fun markupFrench320() = markup("fr_320x640")
+
     @Test @Config(qualifiers = "en-w360dp-h640dp-xhdpi") fun stepsEnglish360() = steps("en_360x640")
     @Test @Config(qualifiers = "en-w384dp-h832dp-xhdpi") fun stepsEnglish384() = steps("en_384x832")
     @Test @Config(qualifiers = "ar-w360dp-h640dp-xhdpi") fun stepsArabic360() = steps("ar_360x640")

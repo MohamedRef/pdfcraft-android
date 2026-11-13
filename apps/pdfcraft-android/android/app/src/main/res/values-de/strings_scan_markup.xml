@@ -22,4 +22,16 @@
     <string name="scan_markup_ask_body">Neue Ränder oder eine geänderte Glättung verschieben die Seite unter den Markierungen, daher werden sie entfernt.</string>
     <string name="scan_markup_ask_keep">Behalten</string>
     <string name="scan_markup_ask_remove">Entfernen</string>
+    <!-- #503: colours, the eyedropper and the eraser's fills -->
+    <string name="scan_lab_markup_colours">Markierungsfarben: Paletten, eigene Farbe, Pipette, Radierer mit Farbe</string>
+    <string name="scan_lab_markup_edge">Radierer: Kanten folgen (in Bewertung)</string>
+    <string name="scan_markup_more_colours">Weitere Farben</string>
+    <string name="scan_markup_dropper">Farbe von der Seite aufnehmen</string>
+    <string name="scan_markup_dropper_hint">Seite berühren und zur gewünschten Farbe ziehen. Finger anheben, um sie zu übernehmen.</string>
+    <string name="scan_markup_erase_hint">Über etwas reiben, um es mit dem Papier ringsum zu übermalen.</string>
+    <string name="scan_markup_erase_colour_hint">Reiben, um die gewählte Farbe aufzutragen. Die Pipette nimmt eine von der Seite.</string>
+    <string name="scan_markup_erase_edge_hint">Über etwas reiben, um die Farben ringsum darüber fortzusetzen.</string>
+    <string name="scan_markup_fill_paper">Papier ringsum</string>
+    <string name="scan_markup_fill_colour">Farbe</string>
+    <string name="scan_markup_fill_edge">Kanten folgen</string>
 </resources>

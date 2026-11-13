@@ -208,7 +208,8 @@ class ToolPrefs(context: Context) {
     )
         private set
 
-    private fun rememberInkColor(argb: Int) {
+    /** Put [argb] first in the recent colours (the viewer's pen and the scan's Markup share them, #503). */
+    internal fun rememberInkColor(argb: Int) {
         recentInkColors = withRecentColor(recentInkColors, argb)
         prefs.edit().putString("ink.recentColors", recentInkColors.joinToString(",") { "%08X".format(it) }).apply()
     }

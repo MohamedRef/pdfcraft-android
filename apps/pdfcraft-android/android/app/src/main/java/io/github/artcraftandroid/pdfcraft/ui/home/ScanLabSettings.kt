@@ -143,6 +143,10 @@ internal fun ScanLabSettings(vm: AppViewModel) {
     Sw(R.string.scan_lab_recent, o.recentScans) { lab.update(o.copy(recentScans = it)) }
     // erase, pen, highlighter and text on a scanned page (#495)
     Sw(R.string.scan_lab_markup, o.markup) { lab.update(o.copy(markup = it)) }
+    // Markup's colours: the viewer's palettes, custom, recent, the eyedropper and Erase's Color fill (#503)
+    Sw(R.string.scan_lab_markup_colours, o.markupColours) { lab.update(o.copy(markupColours = it)) }
+    // Erase's "Follow the edges" fill, while it is judged (#503)
+    Sw(R.string.scan_lab_markup_edge, o.markupEdge) { lab.update(o.copy(markupEdge = it)) }
     // Back and Delete ask before a scan or a page is thrown away (#456)
     Sw(R.string.scan_lab_ask_discard, o.askDiscard) { lab.update(o.copy(askDiscard = it)) }
 

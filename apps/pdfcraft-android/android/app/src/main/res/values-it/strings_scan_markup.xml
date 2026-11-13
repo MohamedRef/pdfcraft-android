@@ -22,4 +22,16 @@
     <string name="scan_markup_ask_body">Nuovi bordi o un cambio di appiattimento spostano la pagina sotto i segni, quindi vengono rimossi.</string>
     <string name="scan_markup_ask_keep">Mantieni</string>
     <string name="scan_markup_ask_remove">Rimuovi segni</string>
+    <!-- #503: colours, the eyedropper and the eraser's fills -->
+    <string name="scan_lab_markup_colours">Colori dei segni: tavolozze, colore personalizzato, contagocce, gomma con un colore</string>
+    <string name="scan_lab_markup_edge">Gomma: segui i bordi (in valutazione)</string>
+    <string name="scan_markup_more_colours">Altri colori</string>
+    <string name="scan_markup_dropper">Prendi un colore dalla pagina</string>
+    <string name="scan_markup_dropper_hint">Tocca la pagina e scorri fino al colore che vuoi. Solleva il dito per prenderlo.</string>
+    <string name="scan_markup_erase_hint">Strofina su qualcosa per coprirlo con la carta che lo circonda.</string>
+    <string name="scan_markup_erase_colour_hint">Strofina per dipingere il colore scelto. Il contagocce ne prende uno dalla pagina.</string>
+    <string name="scan_markup_erase_edge_hint">Strofina su qualcosa per continuarci sopra i colori intorno.</string>
+    <string name="scan_markup_fill_paper">Carta intorno</string>
+    <string name="scan_markup_fill_colour">Colore</string>
+    <string name="scan_markup_fill_edge">Segui i bordi</string>
 </resources>

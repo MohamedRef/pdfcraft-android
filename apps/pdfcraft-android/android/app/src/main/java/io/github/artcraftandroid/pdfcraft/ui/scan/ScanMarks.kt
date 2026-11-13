@@ -14,12 +14,22 @@ import org.json.JSONObject
  * app asks before those and clears the page's marks.
  */
 
-/** A mark's tool, with its word in a session and the log. */
+/**
+ * A mark's tool, with its word for the engine and the log and its letter in a session. The eraser
+ * has three fills: the paper around it, a picked colour (#503) and the colours at its edge carried
+ * inward (#503). A build from before #503 reads a session with `c` or `g` strokes and leaves those
+ * strokes out (an unknown letter is not guessed); the page's other marks are kept.
+ */
 enum class ScanMarkTool(val id: String, val letter: Char) {
     Erase("erase", 'e'),
+    EraseColour("erase_colour", 'c'),
+    EraseEdge("erase_edge", 'g'),
     Pen("pen", 'p'),
     Highlighter("highlighter", 'h'),
     ;
+
+    /** Whether it is one of the eraser's fills. */
+    val isEraser: Boolean get() = this == Erase || this == EraseColour || this == EraseEdge
 
     companion object {
         fun ofLetter(c: Char): ScanMarkTool? = entries.firstOrNull { it.letter == c }
@@ -55,8 +65,11 @@ data class ScanMarks(val turns: Int = 0, val strokes: List<ScanStrokeMark> = emp
         get() = ScanMarkCounts(
             pen = strokes.count { it.tool == ScanMarkTool.Pen },
             highlighter = strokes.count { it.tool == ScanMarkTool.Highlighter },
-            erase = strokes.count { it.tool == ScanMarkTool.Erase },
+            erase = strokes.count { it.tool.isEraser },
             text = texts.size,
+            eraseColour = strokes.count { it.tool == ScanMarkTool.EraseColour },
+            eraseEdge = strokes.count { it.tool == ScanMarkTool.EraseEdge },
+            customColours = strokes.count { scanMarkIsCustomColour(it.tool, it.colour) } + texts.count { scanMarkIsCustomColour(null, it.colour) },
         )
 
     /**
@@ -133,11 +146,17 @@ data class ScanMarks(val turns: Int = 0, val strokes: List<ScanStrokeMark> = emp
     }
 }
 
-/** How many marks of each kind a page has (#495), for the log and a kept page file. */
-data class ScanMarkCounts(val pen: Int = 0, val highlighter: Int = 0, val erase: Int = 0, val text: Int = 0) {
+/**
+ * How many marks of each kind a page has (#495), for the log and a kept page file. [erase] is every
+ * eraser stroke; [eraseColour] and [eraseEdge] are those with the colour and the edge fill (#503);
+ * [customColours] the marks in a colour that is not one of their tool's own swatches (#503).
+ */
+data class ScanMarkCounts(val pen: Int = 0, val highlighter: Int = 0, val erase: Int = 0, val text: Int = 0, val eraseColour: Int = 0, val eraseEdge: Int = 0, val customColours: Int = 0) {
     val total: Int get() = pen + highlighter + erase + text
 
-    fun json(erasedShare: Double?): JSONObject = JSONObject().put("pen", pen).put("highlighter", highlighter).put("erase", erase).put("text", text)
+    /** [eyedropper] is how many times the eyedropper picked a colour on the page in this scan (#503). */
+    fun json(erasedShare: Double?, eyedropper: Int = 0): JSONObject = JSONObject().put("pen", pen).put("highlighter", highlighter).put("erase", erase).put("text", text)
+        .put("erase_paper", erase - eraseColour - eraseEdge).put("erase_colour", eraseColour).put("erase_edge", eraseEdge).put("custom_colours", customColours).put("eyedropper", eyedropper)
         .put("total", total).put("erased_share", erasedShare?.takeIf { it.isFinite() }?.let { Math.round(it * 10000.0) / 10000.0 } ?: JSONObject.NULL)
 }
 
@@ -184,15 +203,18 @@ internal fun scanMarksDiag(option: Boolean, marks: ScanMarks?, erasedShare: Floa
     val c = marks?.counts ?: ScanMarkCounts()
     return arrayOf(
         "markup" to option, "marks" to c.total, "marks_pen" to c.pen, "marks_highlighter" to c.highlighter, "marks_erase" to c.erase, "marks_text" to c.text,
+        "marks_erase_colour" to c.eraseColour, "marks_erase_edge" to c.eraseEdge, "marks_custom_colours" to c.customColours,
         "erased_share" to (erasedShare?.takeIf { it.isFinite() }?.let { Math.round(it * 10000.0) / 10000.0 } ?: 0.0), "markup_ms" to (ms ?: -1L),
     )
 }
 
 /** The `markup_done` log line's fields (#495). */
-internal fun scanMarkupDoneDiag(index: Int, marks: ScanMarks?, erasedShare: Float?, ms: Long, cancelled: Boolean, changed: Boolean): Array<Pair<String, Any?>> {
+internal fun scanMarkupDoneDiag(index: Int, marks: ScanMarks?, erasedShare: Float?, ms: Long, cancelled: Boolean, changed: Boolean, eyedropper: Int = 0, eraseFill: String = "paper"): Array<Pair<String, Any?>> {
     val c = marks?.counts ?: ScanMarkCounts()
     return arrayOf(
         "index" to index + 1, "strokes" to c.pen + c.highlighter, "pen" to c.pen, "highlighter" to c.highlighter, "erase" to c.erase, "text" to c.text,
+        // #503: colours from the sheet or the eyedropper, the eyedropper's picks, and the eraser's fills
+        "custom_colours" to c.customColours, "eyedropper" to eyedropper, "erase_colour" to c.eraseColour, "erase_edge" to c.eraseEdge, "erase_fill" to eraseFill,
         "erased_share" to (erasedShare?.takeIf { it.isFinite() }?.let { Math.round(it * 10000.0) / 10000.0 } ?: 0.0),
         "ms" to ms, "cancelled" to cancelled, "changed" to changed,
     )

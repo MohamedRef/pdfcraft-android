@@ -14,6 +14,12 @@
 //! black-and-white page the rubbed pixels become paper, pen and text are drawn black, and a
 //! highlighter is left out (it is counted in [`Applied::skipped`]).
 //!
+//! The eraser has two more fills (#503): `EraseColour` paints a colour the person picked (from a
+//! palette or with the eyedropper from the page), opaque with the eraser's soft edge, and
+//! `EraseEdge` carries the colours at the brush's edge inward smoothly (a membrane between them,
+//! not the lighter half of each block), then adds the grain, so a shaded band, a tinted area or the
+//! desk beside a page cropped wide is continued instead of becoming paper.
+//!
 //! Text is drawn by the app (it has the fonts) into an alpha mask; this module scales the mask
 //! into its box and turns it with the page.
 
@@ -25,6 +31,10 @@ use crate::look::Pixels;
 pub enum Tool {
     /// Paints the paper around it over what it rubs.
     Erase,
+    /// The eraser painting the stroke's colour, opaque, with the eraser's soft edge (#503).
+    EraseColour,
+    /// The eraser carrying the colours at its edge inward, with the grain added back (#503).
+    EraseEdge,
     /// Opaque ink, its width following the pen's pressure.
     Pen,
     /// See-through ink that multiplies, so print under it stays readable.
@@ -35,7 +45,7 @@ pub enum Tool {
 #[derive(Clone, Debug, PartialEq)]
 pub struct Stroke {
     pub tool: Tool,
-    /// Red, green, blue (not used by the eraser).
+    /// Red, green, blue (not used by the eraser's paper and edge fills).
     pub colour: [u8; 3],
     /// The stroke's full width at full pressure, as a share of the page's longer side.
     pub width: f32,
@@ -82,8 +92,12 @@ pub struct Applied {
     pub pen: u32,
     /// Highlighter strokes drawn.
     pub highlighter: u32,
-    /// Eraser strokes applied.
+    /// Eraser strokes applied, whatever their fill.
     pub erase: u32,
+    /// Of those, the ones that painted a picked colour (#503).
+    pub erase_colour: u32,
+    /// Of those, the ones that carried the colours at their edge inward (#503).
+    pub erase_edge: u32,
     /// Text boxes drawn.
     pub text: u32,
     /// Marks left out: a highlighter on a black-and-white page, or a text box whose mask does not
@@ -124,13 +138,28 @@ pub fn apply(pixels: &mut Pixels, width: u32, height: u32, page_turns: u8, marku
     let mut erased = 0f64;
     let mut at = 0;
     while at < strokes.len() {
-        // consecutive eraser strokes are one fill: the paper is measured once, around all of them
-        if strokes[at].tool == Tool::Erase {
-            let end = strokes[at..].iter().position(|s| s.tool != Tool::Erase).map_or(strokes.len(), |n| at + n);
+        // consecutive eraser strokes of one fill are one fill: the paper (or the edge) is measured
+        // once, around all of them; a colour fill is one per colour
+        let tool = strokes[at].tool;
+        if matches!(tool, Tool::Erase | Tool::EraseColour | Tool::EraseEdge) {
+            let colour = strokes[at].colour;
+            let same = |s: &Stroke| s.tool == tool && (tool != Tool::EraseColour || s.colour == colour);
+            let end = strokes[at..].iter().position(|s| !same(s)).map_or(strokes.len(), |n| at + n);
             let group = &strokes[at..end];
             let paths: Vec<Path> = group.iter().filter_map(|s| Path::of(s, turn, w, h, long)).collect();
-            erased += erase(&mut canvas, &paths);
-            out.erase += u32::try_from(paths.len()).unwrap_or(u32::MAX);
+            let n = u32::try_from(paths.len()).unwrap_or(u32::MAX);
+            match tool {
+                Tool::EraseColour => {
+                    erased += erase_colour(&mut canvas, &paths, colour);
+                    out.erase_colour += n;
+                }
+                Tool::EraseEdge => {
+                    erased += erase_edge(&mut canvas, &paths);
+                    out.erase_edge += n;
+                }
+                _ => erased += erase(&mut canvas, &paths),
+            }
+            out.erase += n;
             at = end;
             continue;
         }
@@ -138,6 +167,7 @@ pub fn apply(pixels: &mut Pixels, width: u32, height: u32, page_turns: u8, marku
         at += 1;
         let Some(path) = Path::of(stroke, turn, w, h, long) else { continue };
         match stroke.tool {
+            Tool::Erase | Tool::EraseColour | Tool::EraseEdge => {}
             Tool::Highlighter if canvas.is_bilevel() => out.skipped += 1,
             Tool::Highlighter => {
                 draw(&mut canvas, &path, stroke.colour, true);
@@ -390,9 +420,9 @@ fn feather(r: f32) -> f32 {
     (r * 0.25).max(1.5)
 }
 
-/// Paint the paper around `paths` over them; returns the painted area in pixels (by weight).
-fn erase(canvas: &mut Canvas, paths: &[Path]) -> f64 {
-    let (w, h) = (canvas.w, canvas.h);
+/// The eraser's weights over the pixels `paths` touch: the area (x0, y0, x1, y1) and one byte a
+/// pixel, 255 inside the brush falling to 0 across its soft edge.
+fn eraser_cover(paths: &[Path], w: usize, h: usize) -> Option<((usize, usize, usize, usize), Vec<u8>)> {
     let reach = paths.iter().flat_map(|p| p.points.iter().map(|&(_, _, r)| feather(r))).fold(1.5f32, f32::max);
     let mut area: Option<(usize, usize, usize, usize)> = None;
     for p in paths {
@@ -403,10 +433,8 @@ fn erase(canvas: &mut Canvas, paths: &[Path]) -> f64 {
             });
         }
     }
-    let Some((x0, y0, x1, y1)) = area else { return 0.0 };
-    let bw = x1 - x0;
-    // the weight of each pixel in the area: 1 inside the brush, falling to 0 across its soft edge
-    let mut cover = vec![0u8; bw * (y1 - y0)];
+    let (x0, y0, x1, y1) = area?;
+    let mut cover = vec![0u8; (x1 - x0) * (y1 - y0)];
     for p in paths {
         p.paint(&mut cover, (x0, y0, x1, y1), reach, &|d, r| {
             let f = feather(r);
@@ -414,6 +442,14 @@ fn erase(canvas: &mut Canvas, paths: &[Path]) -> f64 {
             k * k * (3.0 - 2.0 * k)
         });
     }
+    Some(((x0, y0, x1, y1), cover))
+}
+
+/// Paint the paper around `paths` over them; returns the painted area in pixels (by weight).
+fn erase(canvas: &mut Canvas, paths: &[Path]) -> f64 {
+    let (w, h) = (canvas.w, canvas.h);
+    let Some(((x0, y0, x1, y1), cover)) = eraser_cover(paths, w, h) else { return 0.0 };
+    let bw = x1 - x0;
     let weight = |x: usize, y: usize| f32::from(cover[(y - y0) * bw + (x - x0)]) / 255.0;
     if canvas.bilevel {
         let mut total = 0f64;
@@ -441,6 +477,54 @@ fn erase(canvas: &mut Canvas, paths: &[Path]) -> f64 {
             // a triangular grain of the paper's spread, the same for every channel (as #466's fill)
             let noise = (((seed >> 40) & 0xFFFF) as f32 / 65_535.0 + ((seed >> 20) & 0xFFFF) as f32 / 65_535.0 - 1.0) * paper.grain * 1.22;
             let target = paper.at(x as f32 + 0.5, y as f32 + 0.5).map(|c| c + noise);
+            canvas.blend(y * w + x, target, k);
+        }
+    }
+    total
+}
+
+/// Paint `colour` over `paths`, opaque, with the eraser's soft edge (#503); on a black-and-white page
+/// the colour is ink or paper, whichever it is nearer. Returns the painted area in pixels (by weight).
+fn erase_colour(canvas: &mut Canvas, paths: &[Path], colour: [u8; 3]) -> f64 {
+    let (w, h) = (canvas.w, canvas.h);
+    let Some(((x0, y0, x1, y1), cover)) = eraser_cover(paths, w, h) else { return 0.0 };
+    let bw = x1 - x0;
+    let target = colour.map(f32::from);
+    let mut total = 0f64;
+    for y in y0..y1 {
+        for x in x0..x1 {
+            let k = f32::from(cover[(y - y0) * bw + (x - x0)]) / 255.0;
+            if k <= 0.0 {
+                continue;
+            }
+            total += f64::from(if canvas.bilevel { if k >= 0.5 { 1.0 } else { 0.0 } } else { k });
+            canvas.blend(y * w + x, target, k);
+        }
+    }
+    total
+}
+
+/// Carry the colours at the edge of `paths` inward over them (#503): returns the painted area in
+/// pixels (by weight).
+fn erase_edge(canvas: &mut Canvas, paths: &[Path]) -> f64 {
+    let (w, h) = (canvas.w, canvas.h);
+    let Some(((x0, y0, x1, y1), cover)) = eraser_cover(paths, w, h) else { return 0.0 };
+    let bw = x1 - x0;
+    let radius = paths.iter().flat_map(|p| p.points.iter().map(|&(_, _, r)| r)).fold(f32::MAX, f32::min);
+    let edge = PaperMap::from_edge(canvas, (x0, y0, x1, y1), &cover, radius);
+    let mut seed = 0x2545_F491_4F6C_DD1Du64 ^ (((x0 as u64) << 32) | y0 as u64);
+    let mut total = 0f64;
+    for y in y0..y1 {
+        for x in x0..x1 {
+            let k = f32::from(cover[(y - y0) * bw + (x - x0)]) / 255.0;
+            if k <= 0.0 {
+                continue;
+            }
+            total += f64::from(if canvas.bilevel { if k >= 0.5 { 1.0 } else { 0.0 } } else { k });
+            seed = seed.wrapping_mul(6_364_136_223_846_793_005).wrapping_add(1_442_695_040_888_963_407);
+            // a triangular grain with the spread measured around the brush (sqrt 6: its spread is 1)
+            let noise = (((seed >> 40) & 0xFFFF) as f32 / 65_535.0 + ((seed >> 20) & 0xFFFF) as f32 / 65_535.0 - 1.0) * edge.grain * 2.449;
+            let target = edge.at(x as f32 + 0.5, y as f32 + 0.5).map(|c| c + noise);
             canvas.blend(y * w + x, target, k);
         }
     }
@@ -523,6 +607,121 @@ impl PaperMap {
         fill_unknown(&mut colours, &mut known, cols, rows);
         spreads.sort_unstable_by(f32::total_cmp);
         let grain = spreads.get(spreads.len() / 2).copied().unwrap_or(0.0).min(12.0);
+        PaperMap { x0, y0, side, cols, rows, colours, grain }
+    }
+
+    /// What is around `area` (whose eraser weights are `cover`), carried inward (#503): blocks of
+    /// about half the brush's smallest radius `radius`; a block mostly outside the brush keeps the
+    /// median of its pixels (thin print does not move a median), and the blocks under the brush
+    /// take the smooth surface that meets all of those (each the mean of its four neighbours, a
+    /// membrane), so a gradient across the brush is continued, not cut into rings. The grain is the
+    /// spread of the pixels outside the brush around the mean of their four neighbours, which a
+    /// smooth shading does not change.
+    fn from_edge(canvas: &Canvas, area: (usize, usize, usize, usize), cover: &[u8], radius: f32) -> PaperMap {
+        let (w, h) = (canvas.w, canvas.h);
+        let (ax0, ay0, ax1, ay1) = area;
+        let aw = ax1 - ax0;
+        let side = ((radius / 2.0).round() as usize).clamp(3, 32);
+        let margin = side * 2;
+        let x0 = ax0.saturating_sub(margin) / side * side;
+        let y0 = ay0.saturating_sub(margin) / side * side;
+        let x1 = (ax1 + margin).min(w);
+        let y1 = (ay1 + margin).min(h);
+        let cols = (x1 - x0).div_ceil(side).max(1);
+        let rows = (y1 - y0).div_ceil(side).max(1);
+        let erased = |x: usize, y: usize| x >= ax0 && x < ax1 && y >= ay0 && y < ay1 && cover[(y - ay0) * aw + (x - ax0)] > 0;
+        let step = (side / 8).max(1);
+        let mut colours = vec![[0f32; 3]; cols * rows];
+        let mut known = vec![false; cols * rows];
+        let mut channel: [Vec<f32>; 3] = [Vec::new(), Vec::new(), Vec::new()];
+        for by in 0..rows {
+            for bx in 0..cols {
+                channel.iter_mut().for_each(Vec::clear);
+                let (sx0, sy0) = (x0 + bx * side, y0 + by * side);
+                let mut looked = 0usize;
+                for y in (sy0..(sy0 + side).min(h)).step_by(step) {
+                    for x in (sx0..(sx0 + side).min(w)).step_by(step) {
+                        looked += 1;
+                        if erased(x, y) {
+                            continue;
+                        }
+                        let c = canvas.colour_at(y * w + x);
+                        for k in 0..3 {
+                            channel[k].push(c[k]);
+                        }
+                    }
+                }
+                // a block a quarter under the brush is part of what is being replaced
+                if looked == 0 || channel[0].len() * 4 < looked * 3 {
+                    continue;
+                }
+                let mut c = [0f32; 3];
+                for k in 0..3 {
+                    let v = &mut channel[k];
+                    let mid = v.len() / 2;
+                    v.select_nth_unstable_by(mid, f32::total_cmp);
+                    c[k] = v[mid];
+                }
+                colours[by * cols + bx] = c;
+                known[by * cols + bx] = true;
+            }
+        }
+        let fixed = known.clone();
+        fill_unknown(&mut colours, &mut known, cols, rows);
+        // the membrane: Gauss-Seidel until nothing moves by a twentieth of a level
+        for _ in 0..2000 {
+            let mut moved = 0f32;
+            for by in 0..rows {
+                for bx in 0..cols {
+                    let i = by * cols + bx;
+                    if fixed[i] {
+                        continue;
+                    }
+                    let (mut sum, mut n) = ([0f32; 3], 0f32);
+                    for (nx, ny) in [(bx.wrapping_sub(1), by), (bx + 1, by), (bx, by.wrapping_sub(1)), (bx, by + 1)] {
+                        if nx < cols && ny < rows {
+                            let c = colours[ny * cols + nx];
+                            for k in 0..3 {
+                                sum[k] += c[k];
+                            }
+                            n += 1.0;
+                        }
+                    }
+                    let next = sum.map(|s| s / n);
+                    for k in 0..3 {
+                        moved = moved.max((next[k] - colours[i][k]).abs());
+                    }
+                    colours[i] = next;
+                }
+            }
+            if moved < 0.05 {
+                break;
+            }
+        }
+        // the grain: pixels outside the brush against the mean of their four neighbours (a smooth
+        // shading leaves nothing); for white noise of spread s that is s * sqrt(1.25)
+        let mut residuals = Vec::new();
+        let gstep = ((x1 - x0) * (y1 - y0) / 20_000).max(1);
+        let mut at = 0usize;
+        for y in y0.max(1)..y1.min(h - 1) {
+            for x in x0.max(1)..x1.min(w - 1) {
+                at += 1;
+                if at % gstep != 0 || erased(x, y) || erased(x - 1, y) || erased(x + 1, y) || erased(x, y - 1) || erased(x, y + 1) {
+                    continue;
+                }
+                let g = |x: usize, y: usize| grey_of(canvas.colour_at(y * w + x));
+                let r = g(x, y) - (g(x - 1, y) + g(x + 1, y) + g(x, y - 1) + g(x, y + 1)) / 4.0;
+                residuals.push(r.abs());
+            }
+        }
+        let grain = if canvas.bilevel || residuals.is_empty() {
+            0.0
+        } else {
+            let mid = residuals.len() / 2;
+            residuals.select_nth_unstable_by(mid, f32::total_cmp);
+            // the median of |x| is 0.6745 of the spread of a normal x
+            (residuals[mid] / 0.6745 / 1.118).min(12.0)
+        };
         PaperMap { x0, y0, side, cols, rows, colours, grain }
     }
 

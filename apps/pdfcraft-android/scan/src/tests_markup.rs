@@ -220,3 +220,164 @@ fn marks_are_deterministic() {
     };
     assert_eq!(make(), make());
 }
+
+/// A page whose paper is shaded across a band: 240 above y 100, falling evenly to 100 at y 220,
+/// then 100 (the desk beside a page cropped wide), tinted warm, with a little grain.
+fn shaded_page() -> Vec<u8> {
+    let mut seed = 0x9e37_79b9_7f4a_7c15u64;
+    let mut data = Vec::with_capacity(W * H * 3);
+    for y in 0..H {
+        let v = match y {
+            0..100 => 240.0,
+            100..220 => 240.0 - 140.0 * (y - 100) as f32 / 120.0,
+            _ => 100.0,
+        };
+        for _ in 0..W {
+            for warm in [1.0f32, 0.95, 0.85] {
+                seed ^= seed << 13;
+                seed ^= seed >> 7;
+                seed ^= seed << 17;
+                let g = (seed % 5) as f32 - 2.0;
+                data.push((v * warm + g).round().clamp(0.0, 255.0) as u8);
+            }
+        }
+    }
+    data
+}
+
+/// The worst difference from `clean`, in levels, over the pixels of rows `ys` and columns `xs`.
+fn worst_off(out: &[u8], clean: &[u8], xs: std::ops::Range<usize>, ys: std::ops::Range<usize>) -> f32 {
+    let mut worst = 0f32;
+    for y in ys {
+        for x in xs.clone() {
+            let (a, b) = (px(out, x, y), px(clean, x, y));
+            for c in 0..3 {
+                worst = worst.max((a[c] - b[c]).abs());
+            }
+        }
+    }
+    worst
+}
+
+/// #503: a blot on paper shaded across a band, rubbed with the edge fill, is the shading again (the
+/// exact answer is the clean page), where the paper fill, which takes each block's lighter half
+/// and fills ring by ring, leaves a step. Measured here: paper fill and edge fill against the
+/// clean page at every pixel inside the blot.
+#[test]
+fn the_edge_fill_continues_a_shaded_band() {
+    let clean = shaded_page();
+    let mut blotted = clean.clone();
+    for y in 140..180 {
+        for x in 60..340 {
+            let i = (y * W + x) * 3;
+            blotted[i..i + 3].copy_from_slice(&[40, 30, 30]);
+        }
+    }
+    let run = |tool: Tool| {
+        let mut pixels = Pixels::Rgb(blotted.clone());
+        let rub = stroke(tool, [0; 3], 56.0 / 600.0, &[(50.0 / W as f32, 160.0 / H as f32), (350.0 / W as f32, 160.0 / H as f32)]);
+        let done = apply(&mut pixels, W as u32, H as u32, 0, &marks(vec![rub]));
+        let Pixels::Rgb(out) = pixels else { panic!("still colour") };
+        (done, out)
+    };
+    let (paper_done, paper) = run(Tool::Erase);
+    let (edge_done, edge) = run(Tool::EraseEdge);
+    assert_eq!((paper_done.erase, paper_done.erase_edge), (1, 0));
+    assert_eq!((edge_done.erase, edge_done.erase_edge), (1, 1));
+    let paper_off = worst_off(&paper, &clean, 64..336, 142..178);
+    let edge_off = worst_off(&edge, &clean, 64..336, 142..178);
+    eprintln!("shaded band: paper fill {paper_off} levels off, edge fill {edge_off}");
+    assert!(edge_off < 9.0, "the edge fill is {edge_off} levels off the shading");
+    assert!(paper_off > 2.0 * edge_off, "paper {paper_off} edge {edge_off}");
+    // it is shaded, not one value: the top of the fill is lighter than its bottom, as the band is
+    let (top, bottom) = (px(&edge, 200, 143)[0], px(&edge, 200, 177)[0]);
+    assert!(top - bottom > 30.0, "top {top} bottom {bottom}");
+    // and it has grain
+    let row: Vec<f32> = (150..170).map(|x| px(&edge, x, 160)[1]).collect();
+    let mean = row.iter().sum::<f32>() / row.len() as f32;
+    let spread = (row.iter().map(|v| (v - mean).powi(2)).sum::<f32>() / row.len() as f32).sqrt();
+    assert!(spread > 0.3, "flat fill, spread {spread}");
+}
+
+/// #503: the edge fill on the tinted page whose light falls off is as good as the paper fill there
+/// (the paper fill's own test, the same blot and brush).
+#[test]
+fn the_edge_fill_also_paints_plain_paper() {
+    let clean = tinted_page();
+    let mut blotted = clean.clone();
+    for y in 100..140 {
+        for x in 60..340 {
+            let i = (y * W + x) * 3;
+            blotted[i..i + 3].copy_from_slice(&[90, 70, 60]);
+        }
+    }
+    let mut pixels = Pixels::Rgb(blotted);
+    let rub = stroke(Tool::EraseEdge, [0; 3], 50.0 / 600.0, &[(50.0 / W as f32, 120.0 / H as f32), (350.0 / W as f32, 120.0 / H as f32)]);
+    apply(&mut pixels, W as u32, H as u32, 0, &marks(vec![rub]));
+    let Pixels::Rgb(out) = pixels else { panic!("still colour") };
+    let off = worst_off(&out, &clean, 64..336, 104..136);
+    eprintln!("tinted paper: edge fill {off} levels off");
+    assert!(off < 8.0, "the edge fill is {off} levels off the paper");
+    // the print outside the brush is untouched
+    assert_eq!(worst_off(&out, &clean, 0..W, 250..350), 0.0);
+}
+
+/// #503: the colour fill paints the picked colour, opaque, inside the brush, with a soft edge (a
+/// pixel at the edge is between the colour and the page) and nothing beyond it.
+#[test]
+fn the_colour_fill_paints_the_picked_colour() {
+    let clean = tinted_page();
+    let mut pixels = Pixels::Rgb(clean.clone());
+    // a brush 40 px wide along y 120
+    let rub = stroke(Tool::EraseColour, [30, 90, 200], 40.0 / 600.0, &[(0.2, 120.0 / H as f32), (0.8, 120.0 / H as f32)]);
+    let done = apply(&mut pixels, W as u32, H as u32, 0, &marks(vec![rub]));
+    let Pixels::Rgb(out) = pixels else { panic!("still colour") };
+    assert_eq!((done.erase, done.erase_colour, done.erase_edge), (1, 1, 0));
+    assert_eq!(px(&out, 200, 120), [30.0, 90.0, 200.0]);
+    assert_eq!(px(&out, 200, 112), [30.0, 90.0, 200.0]);
+    // the radius is 20 and the soft edge 5 wide on each side of it: at 20 px off the line, half way
+    let edge = px(&out, 200, 140);
+    let page = px(&clean, 200, 140);
+    assert!(edge[2] > page[2].min(200.0) && edge[0] < page[0] && edge[0] > 30.0, "{edge:?} page {page:?}");
+    assert_eq!(px(&out, 200, 146), px(&clean, 200, 146));
+}
+
+/// #503: on a black-and-white page the colour fill is ink or paper, whichever the colour is
+/// nearer, and the edge fill continues what is around it.
+#[test]
+fn a_black_and_white_page_gets_ink_or_paper_from_the_new_fills() {
+    let stride = W.div_ceil(8);
+    let white = || Pixels::Bilevel(Bitmap1 { width: W as u32, height: H as u32, data: vec![0xFF; stride * H] });
+    let mut pixels = white();
+    let dark = stroke(Tool::EraseColour, [40, 40, 120], 40.0 / 600.0, &[(0.5, 0.3)]);
+    let light = stroke(Tool::EraseColour, [250, 240, 200], 40.0 / 600.0, &[(0.5, 0.7)]);
+    let done = apply(&mut pixels, W as u32, H as u32, 0, &marks(vec![dark, light]));
+    assert_eq!(done.erase_colour, 2);
+    let Pixels::Bilevel(out) = pixels else { panic!("still black and white") };
+    assert!(out.is_black(W as u32 / 2, (0.3 * H as f32) as u32));
+    assert!(!out.is_black(W as u32 / 2, (0.7 * H as f32) as u32));
+    // all ink with a white dot in the middle: the edge fill around the dot is ink
+    let mut bits = vec![0u8; stride * H];
+    bits[300 * stride + 25] = 0xFF;
+    let mut pixels = Pixels::Bilevel(Bitmap1 { width: W as u32, height: H as u32, data: bits });
+    apply(&mut pixels, W as u32, H as u32, 0, &marks(vec![stroke(Tool::EraseEdge, [0; 3], 40.0 / 600.0, &[(203.0 / W as f32, 0.5)])]));
+    let Pixels::Bilevel(out) = pixels else { panic!("still black and white") };
+    assert!(out.is_black(203, 300));
+}
+
+/// #503: strokes of the old tools draw exactly as before when new fills are in the same marks
+/// (each fill is measured on its own run of strokes).
+#[test]
+fn the_new_fills_leave_the_others_alone() {
+    let old = vec![stroke(Tool::Erase, [0; 3], 0.05, &[(0.2, 0.2), (0.7, 0.3)]), stroke(Tool::Pen, [10, 20, 200], 0.01, &[(0.1, 0.8), (0.9, 0.85)])];
+    let mut a = Pixels::Rgb(tinted_page());
+    apply(&mut a, W as u32, H as u32, 0, &marks(old.clone()));
+    let mut b = Pixels::Rgb(tinted_page());
+    let mut with_new = old;
+    // far from the others, at the bottom of the page
+    with_new.push(stroke(Tool::EraseColour, [200, 0, 0], 0.02, &[(0.5, 0.98)]));
+    with_new.push(stroke(Tool::EraseEdge, [0; 3], 0.02, &[(0.1, 0.98)]));
+    apply(&mut b, W as u32, H as u32, 0, &marks(with_new));
+    let (Pixels::Rgb(a), Pixels::Rgb(b)) = (a, b) else { panic!("still colour") };
+    assert_eq!(a[..W * 3 * 560], b[..W * 3 * 560]);
+}

@@ -22,4 +22,16 @@
     <string name="scan_markup_ask_body">New borders or a change of flattening move the page under its markup, so the markup is removed.</string>
     <string name="scan_markup_ask_keep">Keep</string>
     <string name="scan_markup_ask_remove">Remove markup</string>
+    <!-- #503: colours, the eyedropper and the eraser's fills -->
+    <string name="scan_lab_markup_colours">Markup colors: palettes, custom color, eyedropper, Erase with a color</string>
+    <string name="scan_lab_markup_edge">Erase: Follow the edges (being judged)</string>
+    <string name="scan_markup_more_colours">More colors</string>
+    <string name="scan_markup_dropper">Pick a color from the page</string>
+    <string name="scan_markup_dropper_hint">Touch the page and move to the color you want. Lift your finger to take it.</string>
+    <string name="scan_markup_erase_hint">Rub over something to paint the paper around it over it.</string>
+    <string name="scan_markup_erase_colour_hint">Rub to paint the picked color. The eyedropper picks one from the page.</string>
+    <string name="scan_markup_erase_edge_hint">Rub over something to carry the colors around it over it.</string>
+    <string name="scan_markup_fill_paper">Paper around it</string>
+    <string name="scan_markup_fill_colour">Color</string>
+    <string name="scan_markup_fill_edge">Follow the edges</string>
 </resources>
