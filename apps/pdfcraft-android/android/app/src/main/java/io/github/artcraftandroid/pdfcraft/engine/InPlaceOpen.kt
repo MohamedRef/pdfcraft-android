@@ -117,3 +117,15 @@ internal fun appendCheckOffsets(length: Long, window: Long): List<Long> {
     val last = (length - window).coerceAtLeast(0)
     return (0..15).map { i -> last * i / 15 }.distinct()
 }
+
+/** Why a document may or may not be written where it is ([DocumentFiles.writeAccess], #491). */
+internal object WriteAccess {
+    const val FILE_WRITABLE = "file_writable"
+    const val FILE_NOT_WRITABLE = "file_not_writable"
+    const val PROVIDER_READ_ONLY = "provider_read_only"
+    const val WRITE_GRANT = "write_grant"
+    const val WRITE_PROBE = "write_probe"
+    const val READ_GRANT_ONLY = "read_grant_only"
+    const val PROBE_FAILED = "probe_failed"
+    val WRITABLE = setOf(FILE_WRITABLE, WRITE_GRANT, WRITE_PROBE)
+}

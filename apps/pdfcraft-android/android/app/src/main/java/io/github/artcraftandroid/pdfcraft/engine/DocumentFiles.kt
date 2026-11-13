@@ -399,13 +399,42 @@ class DocumentFiles(private val context: Context) {
     }
 
     /** Whether the app may write to [uri] (a document the user picked with write access). */
-    fun canWrite(uri: Uri): Boolean {
-        if (uri.scheme == ContentResolver.SCHEME_FILE) return uri.path?.let { File(it).canWrite() } == true
+    fun canWrite(uri: Uri): Boolean = writeAccess(uri) in WriteAccess.WRITABLE
+
+    /**
+     * Whether, and why, the app may write to [uri] (#491): the diagnostics log names the reason a
+     * document opened read-only, and the read-only prompt says what to do about it.
+     */
+    fun writeAccess(uri: Uri): String {
+        if (uri.scheme == ContentResolver.SCHEME_FILE) {
+            return if (uri.path?.let { File(it).canWrite() } == true) WriteAccess.FILE_WRITABLE else WriteAccess.FILE_NOT_WRITABLE
+        }
         // a provider that says its document can't be written refuses whatever access the picker
         // granted (Android's media documents, which the picker's Recent shows: "Media is read-only")
-        if (DocumentsContract.isDocumentUri(context, uri) && documentFlags(uri)?.let { it and DocumentsContract.Document.FLAG_SUPPORTS_WRITE == 0 } == true) return false
-        val granted = resolver.persistedUriPermissions.any { it.uri == uri && it.isWritePermission }
-        return granted || runCatching { resolver.openFileDescriptor(uri, "wa")?.close(); true }.getOrDefault(false)
+        if (DocumentsContract.isDocumentUri(context, uri) && documentFlags(uri)?.let { it and DocumentsContract.Document.FLAG_SUPPORTS_WRITE == 0 } == true) return WriteAccess.PROVIDER_READ_ONLY
+        if (resolver.persistedUriPermissions.any { it.uri == uri && it.isWritePermission }) return WriteAccess.WRITE_GRANT
+        return try {
+            resolver.openFileDescriptor(uri, "wa")?.close()
+            WriteAccess.WRITE_PROBE
+        } catch (e: SecurityException) {
+            // the app that opened it lent it for reading only (a file manager's Open with)
+            WriteAccess.READ_GRANT_ONLY
+        } catch (e: Exception) {
+            WriteAccess.PROBE_FAILED
+        }
+    }
+
+    /** Which app holds [uri], as a short word for the diagnostics log (never the file's name). */
+    fun providerKind(uri: Uri): String {
+        val auth = uri.authority.orEmpty()
+        return when {
+            uri.scheme == ContentResolver.SCHEME_FILE -> "file"
+            auth == "com.android.externalstorage.documents" -> "storage"
+            auth == "com.android.providers.downloads.documents" -> "downloads"
+            auth == "com.android.providers.media.documents" || auth == "media" -> "media"
+            auth.endsWith(".fileprovider") || auth.endsWith(".FileProvider") || auth.contains("fileprovider", ignoreCase = true) -> "app_file_provider"
+            else -> "other"
+        }
     }
 
     /** A document's flags (DocumentsContract.Document.FLAG_*), when its provider says. */

@@ -447,7 +447,11 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             doc.fromOtherApp = fromOtherApp
             doc.diagNumber = settings.diagDoc
             doc.lent = lent?.let { io.github.artcraftandroid.pdfcraft.engine.LentState(it.dev, it.ino, it.size) }
-            doc.writable = withContext(Dispatchers.IO) { source == null || files.canWrite(source) }
+            val access = source?.let { withContext(Dispatchers.IO) { files.writeAccess(it) } }
+            doc.writable = access == null || access in io.github.artcraftandroid.pdfcraft.engine.WriteAccess.WRITABLE
+            if (!doc.writable) doc.readOnlyReason = access
+            // why a document can or can't be saved where it is (#491)
+            Diag.event(DiagArea.Open, "source_access", "doc" to doc.diagNumber, "access" to access, "writable" to doc.writable, "provider" to source?.let { files.providerKind(it) }, "from_other_app" to fromOtherApp)
             doc.notWrittenBack = source?.let { withContext(Dispatchers.IO) { files.hasPendingWriteBack(it) } } ?: false
             io.github.artcraftandroid.pdfcraft.engine.OpenTiming.milestone("source_access_ready", openStartedAt)
             doc.controller.nightMode = settings.savedNightMode
@@ -820,6 +824,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             outcome = "failed"
             Diag.failure(DiagArea.Save, stage, e)
             doc.writable = false
+            doc.readOnlyReason = OpenDocument.WRITE_FAILED
             doc.notWrittenBack = true
             if (!quiet) tell(e.userMessage)
             false
@@ -841,8 +846,16 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         val mapped = runCatching { io.github.artcraftandroid.pdfcraft.core.lentFileInUse(lent.dev.toULong(), lent.ino.toULong()) }.getOrDefault(true)
         var mode = io.github.artcraftandroid.pdfcraft.engine.inPlaceWriteBack(lent.chainIntact, lent.providerLength, original, working, mapped)
         if (mode == io.github.artcraftandroid.pdfcraft.engine.InPlaceWriteBack.Append) {
-            val appended = Diag.measure(DiagArea.Save, "write_back", "doc" to doc.diagNumber, "bytes" to working - lent.providerLength, "target" to "provider", "mode" to "append") {
-                withContext(Dispatchers.IO) { files.appendWriteBack(doc.file, src, lent.providerLength) }
+            val appended = try {
+                Diag.measure(DiagArea.Save, "write_back", "doc" to doc.diagNumber, "bytes" to working - lent.providerLength, "target" to "provider", "mode" to "append") {
+                    withContext(Dispatchers.IO) { files.appendWriteBack(doc.file, src, lent.providerLength) }
+                }
+            } catch (e: Exception) {
+                // the original is cut back to what it had; the changes stay in the working file
+                // (with its recovery marker) and are written over the original at close (#491)
+                Diag.failure(DiagArea.Save, "write_back_append", e)
+                lent.saved(incremental = false)
+                false
             }
             if (appended) {
                 lent.appended(working)

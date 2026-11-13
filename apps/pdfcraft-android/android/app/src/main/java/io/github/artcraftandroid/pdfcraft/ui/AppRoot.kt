@@ -177,7 +177,13 @@ fun AppRoot(vm: AppViewModel, onBrowse: () -> Unit, onPickSignatureImage: () -> 
                         confirm = stringResource(R.string.common_save_copy), onConfirm = { vm.answerReadOnly(true) },
                         dismiss = stringResource(R.string.root_keep_editing), onDismissButton = { vm.answerReadOnly(null) },
                     ) {
-                        Text(stringResource(R.string.root_read_only_body, d.name), color = c.text, fontSize = 14.sp)
+                        // why it can't be saved there, and what to do next time (#491)
+                        val why = when (d.readOnlyReason) {
+                            io.github.artcraftandroid.pdfcraft.ui.OpenDocument.WRITE_FAILED -> R.string.root_read_only_body_failed
+                            io.github.artcraftandroid.pdfcraft.engine.WriteAccess.READ_GRANT_ONLY -> R.string.root_read_only_body_lent
+                            else -> R.string.root_read_only_body
+                        }
+                        Text(stringResource(why, d.name), color = c.text, fontSize = 14.sp)
                         Spacer(Modifier.height(12.dp))
                         Text(
                             stringResource(R.string.root_discard), color = c.red, fontSize = 14.sp, fontWeight = FontWeight.SemiBold,

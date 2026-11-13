@@ -6,4 +6,8 @@
     <string name="open_in_place_body">يفتح الملفات من التطبيقات الأخرى مباشرةً، دون نسخها إلى مساحة تخزين PdfCraft. أوقفه لنسخها أولًا كما في الإصدارات السابقة.</string>
     <!-- Shown when a save could not reach the original file yet; the changes are safe in the app -->
     <string name="in_place_write_back_waiting">تغييراتك محفوظة في PdfCraft، وستُحفظ في الملف عند فتحه في المرة القادمة.</string>
+    <!-- The read-only prompt when the app that opened the file lent it for reading only (#491) -->
+    <string name="root_read_only_body_lent">سُمح لـ PdfCraft بقراءة %1$s فقط، لذلك لا يمكن حفظ تغييراتك فيه. احفظ نسخة للاحتفاظ بها. لتحفظ في هذا الملف في المرة القادمة، افتحه من «فتح ملف» داخل PdfCraft.</string>
+    <!-- The read-only prompt when writing to the original failed (#491) -->
+    <string name="root_read_only_body_failed">تعذّر حفظ تغييراتك في %1$s. احفظ نسخة للاحتفاظ بها.</string>
 </resources>
