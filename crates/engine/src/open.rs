@@ -169,7 +169,7 @@ impl OpenContext {
                 let catalog = cos.get(root);
                 let Some(catalog) = catalog.as_dict() else { return Err("native_reading_fallback_catalog") };
                 let field_pages = self.trace.measure("native_reading_fields", || reading_field_pages(&cos, catalog))?;
-                let Ok(pages) = self.trace.measure("native_reading_pages", || pdfcraft_annot::page_refs(&cos)) else {
+                let Ok(pages) = self.trace.measure("native_reading_pages", || pdfcraft_annot::page_refs_skimming(&cos)) else {
                     return Err("native_reading_fallback_page_tree");
                 };
                 if pages.is_empty() {
