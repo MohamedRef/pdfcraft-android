@@ -1836,9 +1836,13 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         deleteUnusedScanFiles(before, after)
     }
 
-    /** Remove page [index] from the scan; its photo is deleted unless the spread's other half still uses it (#303). */
-    fun deleteScanPage(index: Int) {
+    /**
+     * Remove page [index] from the scan; its photo is deleted unless the spread's other half still
+     * uses it (#303). [asked]: the person confirmed it in the Delete page question (#456).
+     */
+    fun deleteScanPage(index: Int, asked: Boolean = false) {
         if (index !in scanPages.indices) return
+        Diag.event(DiagArea.Scan, "page_delete", *io.github.artcraftandroid.pdfcraft.ui.scan.scanPageDeleteDiag(index, scanPages.size, asked, confirmed = true))
         val before = scanPages.toList()
         scanPages.removeAt(index)
         deleteUnusedScanFiles(before, scanPages.toList())
@@ -1863,13 +1867,24 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         return android.graphics.Bitmap.createBitmap(bmp, 0, 0, bmp.width, bmp.height, m, true)
     }
 
-    fun discardScan() {
+    /** The person answered Keep scanning (or Cancel) to the scan screen's question (#456): nothing goes. */
+    fun keepScanAfterAsking(deletingPage: Int? = null) {
+        if (deletingPage != null) {
+            Diag.event(DiagArea.Scan, "page_delete", *io.github.artcraftandroid.pdfcraft.ui.scan.scanPageDeleteDiag(deletingPage, scanPages.size, asked = true, confirmed = false))
+        } else {
+            Diag.event(DiagArea.Scan, "discard", *io.github.artcraftandroid.pdfcraft.ui.scan.scanDiscardDiag(scanPages.size, asked = true, confirmed = false))
+        }
+    }
+
+    /** Throw the scan away: every page's photo is deleted. [asked]: the person confirmed it in the scan screen's question (#456). */
+    fun discardScan(asked: Boolean = false) {
         val discarded = scanPages.toList()
+        Diag.event(DiagArea.Scan, "discard", *io.github.artcraftandroid.pdfcraft.ui.scan.scanDiscardDiag(discarded.size, asked, confirmed = true))
         if (scanLab.options.keep && discarded.isNotEmpty()) {
             // kept for testing first (#288): a scan given up on is often the one worth looking at
             viewModelScope.launch {
                 withContext(Dispatchers.IO) {
-                    scanLab.keepDiscarded(discarded)
+                    scanLab.keepDiscarded(discarded, asked)
                     discarded.forEach { it.file.delete() }
                 }
                 scanLab.refreshKept()
