@@ -30,7 +30,10 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.unit.dp
 import androidx.test.core.app.ApplicationProvider
+import androidx.lifecycle.viewmodel.compose.viewModel
+import io.github.artcraftandroid.pdfcraft.ui.AppViewModel
 import io.github.artcraftandroid.pdfcraft.ui.PdfcraftTheme
+import io.github.artcraftandroid.pdfcraft.ui.ScanScreen
 import io.github.artcraftandroid.pdfcraft.ui.ScanLab
 import io.github.artcraftandroid.pdfcraft.ui.ScanPage
 import io.github.artcraftandroid.pdfcraft.ui.ThemeChoice
@@ -46,9 +49,10 @@ import org.robolectric.annotation.GraphicsMode
 
 /**
  * Pictures of the scanner's screens for UI review (#462): the camera's bars in each mode over a
- * drawn frame, the camera permission page, and the crop screen on a drawn page. English, Arabic
- * (right to left), French and German (long words), at 360×640 dp and 384×832 dp; the crop screen
- * light and dark. Off unless Gradle gets -Ppdfcraft.screenshots=true (docs/ANDROID_SCREENSHOTS.md).
+ * drawn frame, the camera permission page, the crop screen on a drawn page, and the screens after
+ * the camera with "Scan screens in steps" on: Adjust borders (#458), Enhance (#459) and the
+ * document screen (#460), on a scan of three drawn pages. English, Arabic (right to left), French
+ * and German (long words), at 360×640 dp and 384×832 dp; the crop screen and the steps light and dark. Off unless Gradle gets -Ppdfcraft.screenshots=true (docs/ANDROID_SCREENSHOTS.md).
  *
  * **Never a real photo**: every page and frame here is drawn in code. The camera preview itself
  * (CameraX) does not run in a JVM test, so the bars are laid out as ScanCameraScreen lays them,
@@ -137,6 +141,46 @@ class ScanScreenshotsTest {
         }
     }
 
+    /**
+     * Adjust borders, Enhance and the document screen, as the scan screen shows them with the steps
+     * on (the default), on three drawn pages: Adjust borders open on page 2, then Next to Enhance on
+     * it, then the document screen with all three. The engine does not run in a JVM test, so the
+     * testing option "Show pages as they will be saved" is off here and Enhance shows the drawn
+     * page where a phone shows the finished one.
+     */
+    private fun steps(config: String, themes: List<ThemeChoice> = listOf(ThemeChoice.Light, ThemeChoice.Dark)) {
+        val quad = floatArrayOf(0.20f, 0.14f, 0.82f, 0.18f, 0.79f, 0.86f, 0.17f, 0.82f)
+        val pages = (1..3).map { n ->
+            val photo = drawnPage(1200, 1600, tilted = true, background = 0xFF6B5E50.toInt())
+            val file = File.createTempFile("drawn-page-$n-", ".jpg").apply { deleteOnExit() }
+            file.outputStream().use { photo.compress(Bitmap.CompressFormat.JPEG, 90, it) }
+            ScanPage(file = file, thumb = Bitmap.createScaledBitmap(photo, 300, 400, true).asImageBitmap(), corners = quad, found = quad)
+        }
+        var theme by androidx.compose.runtime.mutableStateOf(themes.first())
+        lateinit var vm: AppViewModel
+        rule.setContent {
+            PdfcraftTheme(theme) {
+                vm = viewModel()
+                if (vm.scanPages.isEmpty()) {
+                    vm.scanLab.update(vm.scanLab.options.copy(preview = false))
+                    vm.scanPages.addAll(pages)
+                }
+                androidx.compose.runtime.key(theme) { ScanScreen(vm) }
+            }
+        }
+        for (t in themes) {
+            theme = t
+            val name = "${config}_${t.name.lowercase()}"
+            rule.runOnIdle { vm.scanSteps.openFromPage(pages[1].key, 2, "single") }
+            shoot("borders_$name")
+            rule.runOnIdle { vm.scanSteps.close("scan", 2) }
+            shoot("enhance_$name")
+            rule.runOnIdle { vm.scanSteps.showDocument("enhance", pages.size) }
+            shoot("document_$name")
+            rule.runOnIdle { vm.scanSteps.openEnhance(1, pages.size) }
+        }
+    }
+
     @Test @Config(qualifiers = "en-w360dp-h640dp-xhdpi") fun cameraEnglish360() = camera("en_360x640")
     @Test @Config(qualifiers = "en-w384dp-h832dp-xhdpi") fun cameraEnglish384() = camera("en_384x832")
     @Test @Config(qualifiers = "ar-w360dp-h640dp-xhdpi") fun cameraArabic360() = camera("ar_360x640")
@@ -150,6 +194,13 @@ class ScanScreenshotsTest {
     @Test @Config(qualifiers = "ar-w384dp-h832dp-xhdpi") fun cropArabic384() = crop("ar_384x832", listOf(ThemeChoice.Light))
     @Test @Config(qualifiers = "fr-w360dp-h640dp-xhdpi") fun cropFrench360() = crop("fr_360x640", listOf(ThemeChoice.Light))
     @Test @Config(qualifiers = "de-w360dp-h640dp-xhdpi") fun cropGerman360() = crop("de_360x640", listOf(ThemeChoice.Light))
+
+    @Test @Config(qualifiers = "en-w360dp-h640dp-xhdpi") fun stepsEnglish360() = steps("en_360x640")
+    @Test @Config(qualifiers = "en-w384dp-h832dp-xhdpi") fun stepsEnglish384() = steps("en_384x832")
+    @Test @Config(qualifiers = "ar-w360dp-h640dp-xhdpi") fun stepsArabic360() = steps("ar_360x640")
+    @Test @Config(qualifiers = "ar-w384dp-h832dp-xhdpi") fun stepsArabic384() = steps("ar_384x832", listOf(ThemeChoice.Light))
+    @Test @Config(qualifiers = "fr-w360dp-h640dp-xhdpi") fun stepsFrench360() = steps("fr_360x640", listOf(ThemeChoice.Light))
+    @Test @Config(qualifiers = "de-w360dp-h640dp-xhdpi") fun stepsGerman360() = steps("de_360x640", listOf(ThemeChoice.Light))
 
     companion object {
         /** A page drawn in code: white paper with grey text lines, on [background], optionally tilted. */
