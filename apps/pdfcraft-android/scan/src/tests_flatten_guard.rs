@@ -98,7 +98,7 @@ fn one_figure_under_half_a_pixel_still_needs_the_gain() {
 
 #[test]
 fn the_reason_words_are_short_lowercase_and_distinct() {
-    let ids = [Why::Straighter, Why::NotStraighter, Why::Unmeasured, Why::AlreadyStraight].map(Why::id);
+    let ids = [Why::Straighter, Why::NotStraighter, Why::Unmeasured, Why::AlreadyStraight, Why::FewLines, Why::MuchStraighter].map(Why::id);
     println!("reason words: {ids:?}");
     for (i, a) in ids.iter().enumerate() {
         assert!(a.len() <= 12 && a.chars().all(|c| c.is_ascii_lowercase()));
@@ -235,7 +235,7 @@ fn a_straighter_page_on_too_few_lines_is_not_kept() {
     // 10 → 5 px is clearly straighter: kept on 8 lines each, not on 3 (the review's weakest case)
     let enough = guard_with_floor(Some(10.0), Some(5.0), (Some(8), Some(8)), MIN_LINES);
     let few = guard_with_floor(Some(10.0), Some(5.0), (Some(3), Some(30)), MIN_LINES);
-    let few_flat = guard_with_floor(Some(10.0), Some(5.0), (Some(30), Some(7)), MIN_LINES);
+    let few_flat = guard_with_floor(Some(10.0), Some(6.0), (Some(30), Some(7)), MIN_LINES);
     println!("8/8: {enough:?}, 3/30: {few:?}, 30/7: {few_flat:?}");
     assert_eq!(enough.kept, Kept::Flattened);
     assert_eq!((few.kept, few.why), (Kept::Perspective, Why::FewLines));
@@ -246,6 +246,95 @@ fn a_straighter_page_on_too_few_lines_is_not_kept() {
     // a page the guard would not keep keeps its own reason
     assert_eq!(guard_with_floor(Some(10.0), Some(9.5), (Some(3), Some(3)), MIN_LINES).why, Why::NotStraighter);
     assert_eq!(guard_with_floor(None, Some(5.0), (None, Some(30)), MIN_LINES).why, Why::Unmeasured);
+    // far straighter (half or less) on at least 4 lines each is kept under the floor (#466)
+    use crate::flatten_guard::{FEW_GAIN, FEW_LINES};
+    let much = guard_with_floor(Some(12.2), Some(4.4), (Some(6), Some(7)), MIN_LINES);
+    assert_eq!((much.kept, much.why, much.why.id()), (Kept::Flattened, Why::MuchStraighter, "muchbetter"));
+    assert_eq!(guard_with_floor(Some(10.0), Some(10.0 * FEW_GAIN), (Some(FEW_LINES), Some(FEW_LINES)), MIN_LINES).kept, Kept::Flattened);
+    assert_eq!(guard_with_floor(Some(10.0), Some(10.0 * FEW_GAIN + 0.1), (Some(7), Some(7)), MIN_LINES).why, Why::FewLines);
+    assert_eq!(guard_with_floor(Some(10.0), Some(2.0), (Some(FEW_LINES - 1), Some(30)), MIN_LINES).why, Why::FewLines);
+    assert_eq!(guard_with_floor(Some(10.0), Some(2.0), (Some(30), Some(FEW_LINES - 1)), MIN_LINES).why, Why::FewLines);
+    // with enough lines the ordinary reason is given, however large the gain
+    assert_eq!(guard_with_floor(Some(10.0), Some(2.0), (Some(8), Some(8)), MIN_LINES).why, Why::Straighter);
     // unmeasured line counts never pass the floor
     assert_eq!(guard_with_floor(Some(10.0), Some(5.0), (None, Some(30)), MIN_LINES).why, Why::FewLines);
+}
+
+// The guard measures with the light evened out (#466): under a shadow the lines of text cannot
+// be followed, and a page with a shadow is exactly the kind that is photographed bent.
+
+/// A 600 × 840 page of 16 lines of word bars, each line `lean` px lower at the right than at the
+/// left, with the light falling to `shade` of its brightness over the page's lower right part,
+/// across a diagonal edge 60 px soft (a shadow cast from some way off).
+fn shaded_text(lean: f64, shade: f64) -> Rgb {
+    let (w, h) = (600usize, 840usize);
+    let mut data = vec![0u8; w * h * 3];
+    for y in 0..h {
+        for x in 0..w {
+            let t = x as f64 / w as f64;
+            let row = y as f64 - lean * t;
+            let line = ((row - 60.0) / 45.0).floor();
+            let in_line = (0.0..16.0).contains(&line) && (row - 60.0 - line * 45.0) < 14.0;
+            let word = (40..w - 40).contains(&x) && (x + 13 * line as usize) % 80 < 62;
+            let ink = in_line && word;
+            let into = (((x as f64) * 0.9 + (y as f64) - 590.0) / 60.0).clamp(0.0, 1.0);
+            let light = 1.0 + (shade - 1.0) * into * into * (3.0 - 2.0 * into);
+            let v = (if ink { 40.0 } else { 236.0 } * light).round() as u8;
+            data[(y * w + x) * 3..(y * w + x) * 3 + 3].copy_from_slice(&[v, v, v]);
+        }
+    }
+    Rgb { width: w as u32, height: h as u32, data }
+}
+
+#[test]
+fn lines_under_a_shadow_are_followed_once_the_light_is_evened() {
+    use crate::page::evened_grey;
+    use crate::straightness::line_straightness;
+    let plain_grey = |page: &Rgb| crate::Luma { width: page.width, height: page.height, data: page.data.chunks_exact(3).map(|p| p[0]).collect() };
+    let lit = shaded_text(0.0, 1.0);
+    let shaded = shaded_text(0.0, 0.5);
+    let all = line_straightness(&plain_grey(&lit)).expect("a plain page of text");
+    assert_eq!(all.lines, 16);
+    // at half the light the shadowed paper is darker than the level between the page's ink and
+    // its lit paper, so the whole shadow counts as ink and the lines in it are lost
+    let lost = line_straightness(&plain_grey(&shaded));
+    println!("lit: {all:?}; shaded, plain grey: {lost:?}");
+    assert!(lost.is_none_or(|m| m.lines < 12), "{lost:?}");
+    let evened = line_straightness(&evened_grey(&shaded)).expect("the evened page");
+    let lit_evened = line_straightness(&evened_grey(&lit)).expect("the lit page, evened");
+    println!("shaded, evened: {evened:?}; lit, evened: {lit_evened:?}");
+    assert!(evened.lines >= 15, "{evened:?}");
+    assert!(evened.px < 1.5 && lit_evened.px < 1.0, "{evened:?} {lit_evened:?}");
+    // evening does not hide a lean: 12 px across the page reads about 3.5 px, shadow or not
+    let leaning = line_straightness(&evened_grey(&shaded_text(12.0, 0.5))).expect("the leaning page");
+    println!("leaning 12 px, shaded, evened: {leaning:?}");
+    assert!((2.5..4.5).contains(&leaning.px) && leaning.lines >= 15, "{leaning:?}");
+}
+
+#[test]
+fn the_guard_chooses_between_two_shaded_pages_by_their_lines() {
+    use crate::compare_flattened;
+    use crate::flatten_guard::MIN_LINES;
+    // the page straightened by its corners leans; the flattened one is level: kept, under the
+    // same shadow that hid the lines from the plain measure
+    let check = compare_flattened(&shaded_text(12.0, 0.5), &shaded_text(0.0, 0.5), MIN_LINES);
+    println!("{check:?}");
+    assert!(check.kept && check.why == "straighter", "{check:?}");
+    assert!(check.straightened.is_some_and(|m| m.lines >= 15) && check.flattened.is_some_and(|m| m.lines >= 15));
+    // and the other way round it is not
+    let check = compare_flattened(&shaded_text(0.0, 0.5), &shaded_text(12.0, 0.5), MIN_LINES);
+    assert!(!check.kept, "{check:?}");
+    // what is far darker than a shadow is not evened: a table at a fifth of the paper's level
+    // beside the page stays dark
+    let mut beside = shaded_text(0.0, 1.0);
+    for y in 0..840usize {
+        for x in 480..600usize {
+            beside.data[(y * 600 + x) * 3..(y * 600 + x) * 3 + 3].copy_from_slice(&[47, 47, 47]);
+        }
+    }
+    let evened = crate::page::evened_grey(&beside);
+    assert!(evened.data[400 * 600 + 560] < 120, "{}", evened.data[400 * 600 + 560]);
+    // a tiny page comes back as plain grey and is measured as before
+    let tiny = Rgb { width: 8, height: 8, data: vec![200; 8 * 8 * 3] };
+    assert_eq!(crate::page::evened_grey(&tiny).data, vec![200u8; 64]);
 }

@@ -16,6 +16,15 @@ pub const GAIN: f64 = 0.9;
 /// lines were followed, and a 10 % difference between two such readings rests on very little).
 pub const MIN_LINES: u32 = 8;
 
+/// With fewer lines than `min_lines` on a page, but at least this many on both, a flattened page
+/// is still kept when it reads at most [`FEW_GAIN`] of the perspective page's figure. Corners
+/// that are a little off leave every line leaning, and the network takes most of that lean out:
+/// a change that large is not chance even on a few lines (#466: the owner's handwritten note,
+/// 6 lines, 12.2 px straightened and 3.7 px flattened, and closer to the reference by a third).
+pub const FEW_LINES: u32 = 4;
+/// See [`FEW_LINES`].
+pub const FEW_GAIN: f64 = 0.5;
+
 /// Both figures below this many pixels: the page is already straight, so there is nothing to gain.
 const STRAIGHT_ENOUGH_PX: f64 = 0.5;
 /// The border search runs on a copy reduced this many times in each direction (spec section 3: 4).
@@ -51,6 +60,9 @@ pub enum Why {
     /// The flattened page read straighter, but too few lines were followed on one of the pages
     /// for the reading to count (`MIN_LINES`), so the perspective page is kept.
     FewLines,
+    /// Fewer lines than `MIN_LINES` were followed, but at least [`FEW_LINES`] on both pages, and
+    /// the flattened page is at most [`FEW_GAIN`] of the perspective page's figure: kept.
+    MuchStraighter,
 }
 
 /// The guard's decision: the page to keep and the reason.
@@ -71,6 +83,7 @@ impl Why {
             Why::Unmeasured => "unmeasured",
             Why::AlreadyStraight => "straight",
             Why::FewLines => "fewlines",
+            Why::MuchStraighter => "muchbetter",
         }
     }
 }
@@ -93,11 +106,19 @@ pub fn guard(perspective_px: Option<f64>, flattened_px: Option<f64>) -> Guard {
 /// kept only when at least `min_lines` lines were followed on both pages. `lines` are the
 /// perspective page's and the flattened page's counts, `None` when a page was not measured.
 /// `min_lines` 0 is no floor, the guard as before.
+///
+/// Under the floor a flattened page is still kept when both pages have at least [`FEW_LINES`]
+/// lines and it reads at most [`FEW_GAIN`] of the perspective page's figure
+/// ([`Why::MuchStraighter`]).
 pub fn guard_with_floor(perspective_px: Option<f64>, flattened_px: Option<f64>, lines: (Option<u32>, Option<u32>), min_lines: u32) -> Guard {
     let decision = guard(perspective_px, flattened_px);
-    let enough = |n: Option<u32>| n.is_some_and(|n| n >= min_lines);
-    if decision.kept == Kept::Flattened && min_lines > 0 && !(enough(lines.0) && enough(lines.1)) {
-        return Guard { kept: Kept::Perspective, why: Why::FewLines };
+    let at_least = |n: Option<u32>, floor: u32| n.is_some_and(|n| n >= floor);
+    if decision.kept == Kept::Flattened && min_lines > 0 && !(at_least(lines.0, min_lines) && at_least(lines.1, min_lines)) {
+        let far_straighter = matches!((measured(perspective_px), measured(flattened_px)), (Some(p), Some(f)) if f <= p * FEW_GAIN);
+        return match far_straighter && at_least(lines.0, FEW_LINES.min(min_lines)) && at_least(lines.1, FEW_LINES.min(min_lines)) {
+            true => Guard { kept: Kept::Flattened, why: Why::MuchStraighter },
+            false => Guard { kept: Kept::Perspective, why: Why::FewLines },
+        };
     }
     decision
 }

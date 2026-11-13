@@ -322,3 +322,28 @@ fn the_page_pipeline_runs_the_fallback_only_when_asked_and_logs_why_it_gave_up()
     assert_eq!(without.line_flatten, None);
     assert!(without.timings.iter().all(|&(stage, _)| stage != crate::page::STAGE_FLATTEN_LINES));
 }
+
+/// In the automatic mode (the check asked for) a page that is the whole photo is not given to
+/// the network (#466); the lines of text may still flatten it, and Flatten page by hand still
+/// asks the network.
+#[test]
+fn a_whole_photo_is_not_given_to_the_network_in_the_automatic_mode() {
+    let scene = curled(0.3, -0.3, [0.35, 0.2, 0.0]);
+    let bytes = png_of(&scene.photograph(&text(18)));
+    let whole = crate::page::WHOLE_PHOTO;
+    let automatic =
+        crate::page_base(&crate::PageRequest { flatten: true, flatten_check: true, line_flatten: true, ..crate::PageRequest::new(&bytes, whole) })
+            .unwrap();
+    assert_eq!(automatic.flatten_check, None, "the network was asked about a whole photo");
+    assert_eq!(automatic.bend, 0.0);
+    assert!(automatic.line_flatten.is_some(), "the lines of text were not tried");
+    // the page's own corners: the network is asked and its page is checked
+    let corners = scene.corners().to_shares(scene.photo.0, scene.photo.1);
+    let found =
+        crate::page_base(&crate::PageRequest { flatten: true, flatten_check: true, line_flatten: true, ..crate::PageRequest::new(&bytes, corners) })
+            .unwrap();
+    assert!(found.flatten_check.is_some());
+    // by hand, without the check: the network is asked even for the whole photo
+    let by_hand = crate::page_base(&crate::PageRequest { flatten: true, ..crate::PageRequest::new(&bytes, whole) }).unwrap();
+    assert!(by_hand.flattened && by_hand.bend > 0.0);
+}
