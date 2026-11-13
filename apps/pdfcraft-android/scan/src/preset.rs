@@ -19,7 +19,8 @@ pub enum Preset {
     Receipt,
     /// A whiteboard: thick marker strokes on a pale board, with a curve that lifts the board.
     Whiteboard,
-    /// A page of a book: curved or with a gutter shadow, so it should be flattened.
+    /// A page of a book: a gutter shadow, two opposite curved sides, or a curved side in book mode
+    /// (#442), so it should be flattened.
     BookPage,
     /// A form printed or filled on coloured paper. Never chosen by `classify`: only a person
     /// picks it, because white paper under coloured light also looks coloured.
@@ -54,6 +55,12 @@ pub struct PageFeatures {
     pub stroke_mm: Option<f64>,
     /// How many of the four sides are curved (from the page's edge detection).
     pub curved_sides: u8,
+    /// Two opposite sides are both curved: the top and the bottom, or the left and the right
+    /// (#442). An open book's page bows along both its top and its bottom edge; a sheet held in
+    /// one hand or curling at one corner bends one side.
+    pub curved_opposite: bool,
+    /// The page is one half of a spread cut in book mode (#303): the person said it is a book.
+    pub book_mode: bool,
     /// A dark band runs down one long side (a book's gutter), by the rule in force: the strict
     /// rule of `gutter_reading` (#427), or the first rule (`gutter_band`) when that testing option
     /// is off. This is the one `classify` reads.
@@ -174,10 +181,17 @@ const GUTTER_FALLOFF_SHARE: f64 = 0.03;
 /// Grey levels in one byte: the size of the luminance histogram.
 const LUMA_LEVELS: usize = 256;
 
-/// The spec's rules in the spec's order; the first that matches wins. `ColouredForm` is never
-/// returned, because the spec says so (white paper under coloured light looked coloured on four
-/// of the owner's ten reference photos): only a person can choose it.
+/// The spec's rules in the spec's order; the first that matches wins, with the book page rule in
+/// force (`is_book_page`, #442). `ColouredForm` is never returned, because the spec says so (white
+/// paper under coloured light looked coloured on four of the owner's ten reference photos): only a
+/// person can choose it.
 pub fn classify(features: &PageFeatures) -> Preset {
+    classify_with(features, true)
+}
+
+/// `classify` with the book page rule in force (`strict_book`) or the first one (#299, a testing
+/// choice; see `is_book_page`).
+pub fn classify_with(features: &PageFeatures, strict_book: bool) -> Preset {
     if above(features.photo_share, PHOTO_SHARE_PHOTO) {
         Preset::Photo
     } else if features.id_card {
@@ -186,13 +200,32 @@ pub fn classify(features: &PageFeatures) -> Preset {
         Preset::Receipt
     } else if is_whiteboard(features) {
         Preset::Whiteboard
-    } else if features.curved_sides >= 1 || features.gutter_band {
+    } else if is_book_page(features, strict_book) {
         Preset::BookPage
     } else if above(features.photo_share, PHOTO_RICH_SHARE) {
         Preset::PhotoRich
     } else {
         Preset::Document
     }
+}
+
+/// Book page. The strict rule (#442) needs more than one curved side: the gutter band, the two
+/// opposite sides both curved, or a curved side on a page cut in book mode. A sheet held in the
+/// hand or curling at one edge has one curved side too, and is not a book: that side suggests
+/// flattening (`curve_suggests_flatten`) without changing the kind. The first rule (#299), kept
+/// as a testing choice, took any curved side for a book.
+pub fn is_book_page(features: &PageFeatures, strict_book: bool) -> bool {
+    if strict_book {
+        features.gutter_band || features.curved_opposite || (features.curved_sides >= 1 && features.book_mode)
+    } else {
+        features.curved_sides >= 1 || features.gutter_band
+    }
+}
+
+/// A page with a curved side is not lying flat, whatever its kind: a good reason to suggest
+/// flattening it (#442).
+pub fn curve_suggests_flatten(features: &PageFeatures) -> bool {
+    features.curved_sides >= 1
 }
 
 /// Receipt: a long, narrow page, or a short side under `RECEIPT_SHORT_MM` when the size is known.

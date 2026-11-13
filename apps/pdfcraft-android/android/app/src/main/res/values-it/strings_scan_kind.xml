@@ -3,4 +3,5 @@
 <resources>
     <string name="scan_lab_strict_gutter">Pagina di libro solo se un\'ombra percorre tutto il lato della rilegatura e sfuma verso l\'interno</string>
     <string name="scan_lab_strict_photo">Codici a barre, timbri e stampa sfocata non sono fotografie</string>
+    <string name="scan_lab_strict_book">Un solo lato curvo non è una pagina di libro</string>
 </resources>
