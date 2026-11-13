@@ -27,31 +27,81 @@ pub struct ScanModelTiming {
     pub peak_kb_after: Option<u64>,
 }
 
+/// What timing a model came back with (#445): the timing, or why it failed as a short lowercase
+/// word for the log (`reason`) with the message the person sees, and how long it ran before it
+/// failed.
+#[derive(Debug, Clone, PartialEq, uniffi::Record)]
+pub struct ScanModelTimingOutcome {
+    pub timing: Option<ScanModelTiming>,
+    /// Empty when timed; otherwise `not_ready`, `outside_folder`, `unreadable`, `too_large`,
+    /// `not_a_model`, `no_input`, `not_fixed`, `input_too_large`, `no_output` or `run_failed`.
+    pub reason: String,
+    /// The message for the screen; empty when timed.
+    pub message: String,
+    /// From the call to its answer, in milliseconds.
+    pub ms: u32,
+}
+
+/// Why timing a model failed (#445): the log's word and the screen's message.
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct Failure {
+    pub reason: &'static str,
+    pub message: String,
+}
+
+impl Failure {
+    fn new(reason: &'static str, message: impl Into<String>) -> Self {
+        Failure { reason, message: message.into() }
+    }
+}
+
+impl From<pdfcraft_scan::model_timing::TimingError> for Failure {
+    fn from(e: pdfcraft_scan::model_timing::TimingError) -> Self {
+        Failure::new(e.reason(), e.to_string())
+    }
+}
+
+/// `scan_time_model`, with the reason it failed for the log instead of an error (#445).
+#[uniffi::export]
+pub fn scan_time_model_outcome(path: String, runs: u32, threads: u32) -> ScanModelTimingOutcome {
+    let started = std::time::Instant::now();
+    let result = time_model_rooted(&path, runs, threads);
+    let ms = u32::try_from(started.elapsed().as_millis()).unwrap_or(u32::MAX);
+    match result {
+        Ok(t) => ScanModelTimingOutcome { timing: Some(t), reason: String::new(), message: String::new(), ms },
+        Err(f) => ScanModelTimingOutcome { timing: None, reason: f.reason.into(), message: f.message, ms },
+    }
+}
+
 /// Load the model file at `path` and time `runs` runs (1 to 5) of it on `threads` threads (0: one
 /// per core), on a fixed input of the size the model declares. Blocking, and heavy: a large model
 /// takes its own size in memory and more. Like every other scan call that takes a path (#429), the
 /// file must be inside the scan root (the app's cache directory, see `scan_set_root`).
 #[uniffi::export]
 pub fn scan_time_model(path: String, runs: u32, threads: u32) -> Result<ScanModelTiming, MobileError> {
-    let root = SCAN_ROOT.read().unwrap_or_else(std::sync::PoisonError::into_inner).clone();
-    let root = root.ok_or_else(|| MobileError::Command("scanning is not ready yet".into()))?;
-    time_model_in(&root, &path, runs, threads)
+    time_model_rooted(&path, runs, threads).map_err(|f| MobileError::Command(f.message))
 }
 
-pub(crate) fn time_model_in(root: &Path, path: &str, runs: u32, threads: u32) -> Result<ScanModelTiming, MobileError> {
-    let unreadable = || MobileError::Command("the model file could not be read".into());
+fn time_model_rooted(path: &str, runs: u32, threads: u32) -> Result<ScanModelTiming, Failure> {
+    let root = SCAN_ROOT.read().unwrap_or_else(std::sync::PoisonError::into_inner).clone();
+    let root = root.ok_or_else(|| Failure::new("not_ready", "scanning is not ready yet"))?;
+    time_model_in(&root, path, runs, threads)
+}
+
+pub(crate) fn time_model_in(root: &Path, path: &str, runs: u32, threads: u32) -> Result<ScanModelTiming, Failure> {
+    let unreadable = || Failure::new("unreadable", "the model file could not be read");
     // resolved first, so `..` and links cannot lead out of the root
     let model_path = Path::new(path).canonicalize().map_err(|_| unreadable())?;
     if !model_path.starts_with(root) {
-        return Err(MobileError::Command("the scan's files must be in the app's own folder".into()));
+        return Err(Failure::new("outside_folder", "the scan's files must be in the app's own folder"));
     }
     let size = std::fs::metadata(&model_path).map_err(|_| unreadable())?.len();
     if size > pdfcraft_scan::model_timing::MAX_BYTES {
-        return Err(MobileError::Command(pdfcraft_scan::model_timing::TimingError::TooLarge.to_string()));
+        return Err(pdfcraft_scan::model_timing::TimingError::TooLarge.into());
     }
     let bytes = std::fs::read(&model_path).map_err(|_| unreadable())?;
     let n = |v: usize| u32::try_from(v).unwrap_or(u32::MAX);
-    let t = pdfcraft_scan::model_timing::time_model(bytes, runs as usize, threads as usize).map_err(|e| MobileError::Command(e.to_string()))?;
+    let t = pdfcraft_scan::model_timing::time_model(bytes, runs as usize, threads as usize)?;
     Ok(ScanModelTiming {
         bytes: t.bytes,
         sha256_16: t.sha256_16,
@@ -91,8 +141,9 @@ mod tests {
         assert!(t.output_finite);
         let junk = root.join("junk.onnx");
         std::fs::write(&junk, b"not a model").unwrap();
-        assert!(time_model_in(&root, &junk.to_string_lossy(), 1, 1).is_err());
-        assert!(time_model_in(&root, &root.join("missing.onnx").to_string_lossy(), 1, 1).is_err());
+        // #445: each failure says why, as a word for the log
+        assert_eq!(time_model_in(&root, &junk.to_string_lossy(), 1, 1).unwrap_err().reason, "not_a_model");
+        assert_eq!(time_model_in(&root, &root.join("missing.onnx").to_string_lossy(), 1, 1).unwrap_err().reason, "unreadable");
         std::fs::remove_dir_all(root).unwrap();
     }
 
@@ -106,7 +157,7 @@ mod tests {
         let model = outside.join("model.onnx");
         std::fs::copy(&edges, &model).unwrap();
         let refused = |path: &std::path::Path| match time_model_in(&root, &path.to_string_lossy(), 1, 1) {
-            Err(crate::MobileError::Command(m)) => m.contains("app's own folder"),
+            Err(f) => f.message.contains("app's own folder") && f.reason == "outside_folder",
             _ => false,
         };
         assert!(refused(&model));
