@@ -1009,6 +1009,9 @@ fun ScanScreen(vm: AppViewModel) {
         if (page != null && lab.preview) {
             LaunchedEffect(page.file, page.corners.toList(), page.turns, page.preset, page.look, flattening, lab, autoUpright) { vm.requestScanPreview(shownAt, page, flattening) }
         }
+        // every page made in the background, the page on screen first (#465)
+        vm.pageQueue.shownIndex = shownAt
+        LaunchedEffect(pages.toList(), lab, autoUpright, vm.scanCanFlatten) { vm.pageQueue.kick() }
         val wanted = page?.let { ScanPreviewKey.of(it, flattening, lab, autoUpright) }
         val exact = vm.scanPreview?.takeIf { wanted != null && it.key == wanted }
         // while a new look or strength is made, the page in its last look stays on screen (#301)
@@ -1175,15 +1178,33 @@ fun ScanScreen(vm: AppViewModel) {
                 }
             }
         }
+        // how many pages are ready while some are still being made (#465)
+        vm.pageQueue.preparing(pages)?.let { (ready, total) ->
+            Text(stringResource(R.string.scan_pages_preparing, ready, total), color = c.textSecondary, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp))
+        }
         // the pages strip moves to the document screen (#460); on Enhance, ‹ › and a swipe go between pages
         if (!stepsOn) Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             val looks = pages.map { it.look }
             pages.forEachIndexed { i, p ->
                 // a dot on a page whose look is not the first page's (#301)
                 val own = io.github.artcraftandroid.pdfcraft.ui.scan.scanLookDiffers(looks, i)
+                // the page as it will be saved once it is made in the background, and a mark until then (#465)
+                val mark = vm.pageQueue.mark(p)
+                val label = when (mark) {
+                    ScanPageMark.Ready -> if (own) stringResource(R.string.scan_page_own_look, i + 1) else stringResource(R.string.tools_page_number, i + 1)
+                    ScanPageMark.Waiting -> stringResource(R.string.scan_page_waiting, i + 1)
+                    ScanPageMark.Working -> stringResource(R.string.scan_page_working, i + 1)
+                }
                 Box {
-                    Image(p.thumb, if (own) stringResource(R.string.scan_page_own_look, i + 1) else stringResource(R.string.tools_page_number, i + 1), modifier = Modifier.size(56.dp, 72.dp).clip(RoundedCornerShape(4.dp)).border(2.dp, if (i == current) c.accent else Color.Transparent, RoundedCornerShape(4.dp)).clickable { current = i }, contentScale = ContentScale.Crop)
+                    Image(vm.pageQueue.thumbOf(p) ?: p.thumb, label, modifier = Modifier.size(56.dp, 72.dp).clip(RoundedCornerShape(4.dp)).border(2.dp, if (i == current) c.accent else Color.Transparent, RoundedCornerShape(4.dp)).clickable { current = i }, contentScale = ContentScale.Crop)
                     if (own) Box(Modifier.align(Alignment.TopEnd).padding(4.dp).size(10.dp).clip(CircleShape).background(c.accent).border(1.dp, Color.White, CircleShape))
+                    when (mark) {
+                        ScanPageMark.Ready -> Unit
+                        ScanPageMark.Waiting -> Box(Modifier.align(Alignment.BottomEnd).padding(4.dp).size(14.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.55f)).border(1.5.dp, Color.White, CircleShape))
+                        ScanPageMark.Working -> Box(Modifier.align(Alignment.BottomEnd).padding(4.dp).size(18.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.55f)), contentAlignment = Alignment.Center) {
+                            androidx.compose.material3.CircularProgressIndicator(Modifier.size(12.dp), color = Color.White, strokeWidth = 1.5.dp)
+                        }
+                    }
                 }
             }
             Box(Modifier.size(56.dp, 72.dp).clip(RoundedCornerShape(4.dp)).background(c.surfaceRaised).clickable { vm.takeScanPhoto() }.semantics { contentDescription = addPageLabel }, contentAlignment = Alignment.Center) {
@@ -1295,11 +1316,11 @@ fun ScanScreen(vm: AppViewModel) {
             TextButton(onClick = deleteShown, enabled = pages.isNotEmpty()) { Text(stringResource(R.string.common_delete), color = c.accent) }
             // the page's look and strength for every page, asking first when that changes a page with its own (#301)
             val lookAt = current.coerceAtMost(pages.lastIndex)
+            // with every page made in the background, the document type and Flatten page go too (#465)
+            val applies = io.github.artcraftandroid.pdfcraft.ui.scan.scanApplyAllChanges(pages.map { io.github.artcraftandroid.pdfcraft.ui.scan.scanPageSettings(it, lab.backgroundPages) }, lookAt)
             TextButton(
-                onClick = {
-                    if (io.github.artcraftandroid.pdfcraft.ui.scan.scanApplyLookNeedsConfirm(pages.map { it.look }, lookAt)) confirmApply = true
-                },
-                enabled = pages.size > 1 && io.github.artcraftandroid.pdfcraft.ui.scan.scanApplyLookNeedsConfirm(pages.map { it.look }, lookAt),
+                onClick = { if (applies) confirmApply = true },
+                enabled = pages.size > 1 && applies,
             ) { Text(stringResource(R.string.scan_apply_look_all), color = c.accent) }
             val resetTo = io.github.artcraftandroid.pdfcraft.ui.scan.ScanPageLook()
             TextButton(

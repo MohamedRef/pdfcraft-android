@@ -1946,6 +1946,8 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 look = io.github.artcraftandroid.pdfcraft.ui.scan.scanLookForNewPage(scanPages.map { it.look }, r),
             )
             retakeIndex = null
+            // the page waits for its edges before it is made in the background (#465)
+            pageQueue.findingStarted(f)
             // a retaken half of a book spread takes its other half with it (#303)
             replaceScanPages(r, listOf(page))
             // One page mode, or an import of one photo: Adjust borders opens on it (#458)
@@ -2009,6 +2011,9 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 scanPages.removeAt(at)
                 scanPages.addAll(at, halves)
             }
+        }.invokeOnCompletion {
+            // the page may be made now that its edges are known (#465)
+            viewModelScope.launch { pageQueue.findingDone(f) }
         }
     }
 
@@ -2130,12 +2135,22 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
 
     /** Previews run one at a time, off the main thread and away from saving; the latest asked for wins. */
     @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
-    private val scanPreviewDispatcher = Dispatchers.Default.limitedParallelism(1)
+    internal val scanPreviewDispatcher = Dispatchers.Default.limitedParallelism(1)
     private var scanPreviewJob: kotlinx.coroutines.Job? = null
     /** Tells the native preview running now to stop when a newer one is asked for (#301). */
     private var scanPreviewStop: io.github.artcraftandroid.pdfcraft.core.ScanCancel? = null
     /** The request asked for last: a preview of anything else is out of date when it arrives. */
     private var scanPreviewWanted: ScanPreviewKey? = null
+
+    /** The preview asked for last (the background queue leaves that page to it, #465). */
+    internal fun scanPreviewWantedKey(): ScanPreviewKey? = scanPreviewWanted
+
+    /** The native request for [page]'s preview: the queue (#465) and the screen ask the same. */
+    internal fun scanPreviewRequest(page: ScanPage, flatten: Boolean, lab: ScanLab, autoUpright: Boolean): io.github.artcraftandroid.pdfcraft.core.ScanPageRequest =
+        scanPageRequest(page.file.absolutePath, page.corners, page.look.filter, flatten, lab, "", page.turns, autoUpright, io.github.artcraftandroid.pdfcraft.ui.scan.scanPresetFor(page, lab), page.finding?.curvedSides ?: 0, page.finding?.curvedOpposite ?: false, page.book != null, page.look.strength, page.look.paper)
+
+    /** Every page of the scan made in the background (#465). */
+    internal val pageQueue = ScanPageQueue(this)
 
     /** What the last preview of each photo was, for a kept scan's page file. */
     private val scanPreviewStats = java.util.concurrent.ConcurrentHashMap<String, ScanTestPreview>()
@@ -2149,9 +2164,12 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         val lab = scanLab.options
         val autoUpright = io.github.artcraftandroid.pdfcraft.ui.scan.ScanUprightSetting.get(settings.appPrefs)
         val key = ScanPreviewKey.of(page, flatten, lab, autoUpright)
+        pageQueue.shown(page)
         if (scanPreview?.key == key || scanPreviewWanted == key) return
         scanPreviewWanted = key
         scanPreviewJob?.cancel()
+        // the page on screen goes first: a page the queue is making now stops (#465)
+        pageQueue.yieldTo(page.key)
         // the native preview still running for an older request stops at its next stage (#301)
         if (lab.previewStop) scanPreviewStop?.cancel()
         val stop = io.github.artcraftandroid.pdfcraft.core.ScanCancel()
@@ -2162,8 +2180,20 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         // one it settles on is worth making (#301); a new page starts at once
         val settle = key.samePage(scanPreview?.key)
         scanPreviewJob = viewModelScope.launch(scanPreviewDispatcher) {
+            // made already in the background (#465): shown from what was kept, without the engine
+            val keptStarted = android.os.SystemClock.elapsedRealtime()
+            pageQueue.shownImage(page, key)?.let { (m, image) ->
+                Diag.event(DiagArea.Scan, "preview_kept", "index" to index + 1, "ms" to android.os.SystemClock.elapsedRealtime() - keptStarted)
+                withContext(Dispatchers.Main) {
+                    if (scanPreviewWanted != key) return@withContext
+                    scanPreview = ScanPreviewShown(key, image, m.quarterTurns, m.flattened, m.kind)
+                    scanPreviewStats[page.key] = ScanTestPreview(true, true, android.os.SystemClock.elapsedRealtime() - keptStarted, image.width, image.height, filter.mode)
+                    requestScanTiles(index, page, flatten)
+                }
+                return@launch
+            }
             if (settle) delay(SCAN_PREVIEW_SETTLE_MS)
-            val request = scanPageRequest(page.file.absolutePath, page.corners, filter, flatten, lab, "", page.turns, autoUpright, io.github.artcraftandroid.pdfcraft.ui.scan.scanPresetFor(page, lab), page.finding?.curvedSides ?: 0, page.finding?.curvedOpposite ?: false, page.book != null, look.strength, look.paper)
+            val request = scanPreviewRequest(page, flatten, lab, autoUpright)
             val started = android.os.SystemClock.elapsedRealtime()
             val made = runCatching { io.github.artcraftandroid.pdfcraft.core.scanPreviewPageWith(request, SCAN_PREVIEW_SIDE.toUInt(), stop) }
             val ms = android.os.SystemClock.elapsedRealtime() - started
@@ -2173,7 +2203,8 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 return@launch
             }
             val p = made.getOrNull()
-            val image = p?.let { scanPreviewBitmap(it)?.asImageBitmap() }
+            val bitmap = p?.let { scanPreviewBitmap(it) }
+            val image = bitmap?.asImageBitmap()
             made.exceptionOrNull()?.let { Diag.failure(DiagArea.Scan, "scan_preview_page", it) }
             // what the preview took and whether it reused the straightened page (#301)
             Diag.event(
@@ -2217,11 +2248,16 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                     scanPreviewFailed = key
                 }
             }
+            // the page on screen is ready too: kept for the strip and for coming back (#465)
+            withContext(Dispatchers.Main) {
+                if (p != null && bitmap != null) pageQueue.store(index, page, key, p, bitmap, ms) else pageQueue.failedOnScreen(page, key)
+                pageQueue.kick()
+            }
         }
     }
 
     /** A native preview as a bitmap; null when it could not be made into one. */
-    private fun scanPreviewBitmap(p: io.github.artcraftandroid.pdfcraft.core.ScanPreview): android.graphics.Bitmap? = runCatching {
+    internal fun scanPreviewBitmap(p: io.github.artcraftandroid.pdfcraft.core.ScanPreview): android.graphics.Bitmap? = runCatching {
         val bmp = android.graphics.Bitmap.createBitmap(p.width.toInt(), p.height.toInt(), android.graphics.Bitmap.Config.ARGB_8888)
         // ARGB_8888 keeps its bytes in R, G, B, A order: the preview's own
         bmp.copyPixelsFromBuffer(java.nio.ByteBuffer.wrap(p.rgba))
@@ -2361,6 +2397,8 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         scanDetailJob = null
         scanDetailWanted = null
         scanDetail = null
+        // the pages made in the background and their files (#465)
+        pageQueue.clear()
         runCatching { io.github.artcraftandroid.pdfcraft.core.scanReleasePreviews() }
     }
 
@@ -2393,12 +2431,19 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         // each page made once, the same request the screen's preview was made from (#301)
         val made = arrayOfNulls<io.github.artcraftandroid.pdfcraft.core.ScanPageResult>(pages.size)
         val madeMs = LongArray(pages.size)
+        // the turn and document type each page showed, kept for the PDF (#465): what was seen is what is saved
+        val shown = pages.map { page ->
+            pageQueue.readyOf(page)?.takeIf { lab.backgroundPages && lab.preview }?.let { m ->
+                io.github.artcraftandroid.pdfcraft.ui.scan.scanShownDecisions(page.turns, m.turns, io.github.artcraftandroid.pdfcraft.ui.scan.scanKindSource(page, lab), m.kind?.preset)
+            }
+        }
         suspend fun make(i: Int, turns: Int?) {
             val page = pages[i]
             tools.busy = text(R.string.msg_busy_cleaning_page, i + 1, pages.size)
             val flatten = io.github.artcraftandroid.pdfcraft.ui.scan.scanPageFlattens(page.flatten, scanCanFlatten)
             tools.busyProgress = i to pages.size
-            val request = scanPageRequest(page.file.absolutePath, page.corners, page.look.filter, flatten, lab, File(dir, "page-$i").absolutePath, turns, autoUpright, io.github.artcraftandroid.pdfcraft.ui.scan.scanPresetFor(page, lab), page.finding?.curvedSides ?: 0, page.finding?.curvedOpposite ?: false, page.book != null, page.look.strength, page.look.paper)
+            val preset = shown[i]?.preset ?: io.github.artcraftandroid.pdfcraft.ui.scan.scanPresetFor(page, lab)
+            val request = scanPageRequest(page.file.absolutePath, page.corners, page.look.filter, flatten, lab, File(dir, "page-$i").absolutePath, turns, autoUpright, preset, page.finding?.curvedSides ?: 0, page.finding?.curvedOpposite ?: false, page.book != null, page.look.strength, page.look.paper)
             val started = android.os.SystemClock.elapsedRealtime()
             val result = withContext(Dispatchers.Default) { runCatching { io.github.artcraftandroid.pdfcraft.core.scanProcessPage(request) } }
             result.onFailure { Diag.failure(DiagArea.Scan, "scan_process_page", it) }
@@ -2408,7 +2453,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         try {
             for (i in pages.indices) {
                 if (cancelled) break
-                make(i, pages[i].turns)
+                make(i, pages[i].turns ?: shown[i]?.turns)
             }
         } finally {
             // from here the pages go into the PDF, which can't be stopped half-way
@@ -2427,8 +2472,9 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         }
         tools.busyProgress = null
         // what the classifier said of each page, before the multi-page rule makes any page again
-        val found = made.map { it?.orientation }
-        val classifierTurns = made.map { it?.quarterTurns?.toInt() ?: 0 }
+        // a page whose shown turn was kept was not asked again: the classifier's answer is the shown one (#465)
+        val found = made.mapIndexed { i, r -> r?.orientation ?: pageQueue.readyOf(pages[i])?.takeIf { shown[i]?.turns != null }?.orientation }
+        val classifierTurns = made.mapIndexed { i, r -> if (shown[i]?.turns != null) pageQueue.readyOf(pages[i])?.quarterTurns ?: 0 else r?.quarterTurns?.toInt() ?: 0 }
         // the multi-page rule (#339): an unsure page between two sure neighbours that agree takes
         // their turn, and is made again with it
         val settled = if (lab.settleTurns && pages.size >= 3) {
@@ -2508,6 +2554,9 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 "kind_tone" to lab.kindTone, "kind_gamma" to (r?.kind?.extraGamma?.toDouble() ?: 0.0),
                 "kind_s_curve" to (r?.kind?.sCurve ?: false), "kind_colour" to (r?.kind?.colourFactor?.toDouble() ?: 1.0),
                 "photo_sharpen" to lab.photoSharpen, "suggestions" to lab.suggestions,
+                // the turn and document type the page showed, kept for the PDF (#465)
+                "background_pages" to lab.backgroundPages, "shown_turn_kept" to (shown[i]?.turns != null), "shown_preset_kept" to (shown[i]?.preset != null),
+                "made_before_shown" to (pageQueue.madeBeforeShown(page)?.toString() ?: "none"),
             )
             if (keepIn != null) {
                 val kept = r?.let {
@@ -2532,7 +2581,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                         k.extraGamma.toDouble(), k.sCurve, k.colourFactor.toDouble(),
                     )
                 }
-                withContext(Dispatchers.IO) { scanLab.keepPage(keepIn, i, page, true, scanLookWord(filter, lab), strength, flatten, r?.path?.let(::File), kept, scanPreviewRecord(page), turn, kind, r?.let { scanAppliedStrength(page.look, lab, it.kind?.strength?.toInt()) }) }
+                withContext(Dispatchers.IO) { scanLab.keepPage(keepIn, i, page, true, scanLookWord(filter, lab), strength, flatten, r?.path?.let(::File), kept, scanPreviewRecord(page), turn, kind, r?.let { scanAppliedStrength(page.look, lab, it.kind?.strength?.toInt()) }, shown[i]?.json()) }
             }
             saved += scanSavedPage(page.file.absolutePath, r?.let { it.path to it.dpi })
         }
