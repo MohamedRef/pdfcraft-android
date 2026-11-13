@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Markup on a scanned page: eraser, pen, highlighter, text (#495) -->
+<resources>
+    <string name="scan_lab_markup">Segni sulle pagine scansionate: gomma, penna, evidenziatore, testo</string>
+    <string name="scan_markup">Segna</string>
+    <string name="scan_markup_clear">Cancella segni</string>
+    <string name="scan_markup_erase">Gomma</string>
+    <string name="scan_markup_pen">Penna</string>
+    <string name="scan_markup_highlighter">Evidenziatore</string>
+    <string name="scan_markup_text">Testo</string>
+    <string name="scan_markup_size_small">Piccolo</string>
+    <string name="scan_markup_size_medium">Medio</string>
+    <string name="scan_markup_size_large">Grande</string>
+    <string name="scan_markup_colour">Colore %1$d</string>
+    <string name="scan_markup_hint">Un dito disegna o cancella. Due dita spostano e ingrandiscono.</string>
+    <string name="scan_markup_text_hint">Tocca la pagina per aggiungere testo. Tocca un testo per spostarlo, modificarlo o eliminarlo.</string>
+    <string name="scan_markup_add_text">Aggiungi testo</string>
+    <string name="scan_markup_edit_text">Modifica testo</string>
+    <string name="scan_markup_delete_text">Elimina testo</string>
+    <string name="scan_markup_page_description">Pagina %1$d con i suoi segni</string>
+    <string name="scan_markup_ask_title">Rimuovere i segni da questa pagina?</string>
+    <string name="scan_markup_ask_body">Nuovi bordi o un cambio di appiattimento spostano la pagina sotto i segni, quindi vengono rimossi.</string>
+    <string name="scan_markup_ask_keep">Mantieni</string>
+    <string name="scan_markup_ask_remove">Rimuovi segni</string>
+</resources>

@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Markup on a scanned page: eraser, pen, highlighter, text (#495) -->
+<resources>
+    <string name="scan_lab_markup">Markup on scan pages: erase, pen, highlighter, text</string>
+    <string name="scan_markup">Markup</string>
+    <string name="scan_markup_clear">Clear markup</string>
+    <string name="scan_markup_erase">Erase</string>
+    <string name="scan_markup_pen">Pen</string>
+    <string name="scan_markup_highlighter">Highlighter</string>
+    <string name="scan_markup_text">Text</string>
+    <string name="scan_markup_size_small">Small</string>
+    <string name="scan_markup_size_medium">Medium</string>
+    <string name="scan_markup_size_large">Large</string>
+    <string name="scan_markup_colour">Color %1$d</string>
+    <string name="scan_markup_hint">One finger draws or rubs. Two fingers move and zoom.</string>
+    <string name="scan_markup_text_hint">Tap the page to add text. Tap a text to move, change or delete it.</string>
+    <string name="scan_markup_add_text">Add text</string>
+    <string name="scan_markup_edit_text">Edit text</string>
+    <string name="scan_markup_delete_text">Delete text</string>
+    <string name="scan_markup_page_description">Page %1$d with its markup</string>
+    <string name="scan_markup_ask_title">Remove this page\'s markup?</string>
+    <string name="scan_markup_ask_body">New borders or a change of flattening move the page under its markup, so the markup is removed.</string>
+    <string name="scan_markup_ask_keep">Keep</string>
+    <string name="scan_markup_ask_remove">Remove markup</string>
+</resources>

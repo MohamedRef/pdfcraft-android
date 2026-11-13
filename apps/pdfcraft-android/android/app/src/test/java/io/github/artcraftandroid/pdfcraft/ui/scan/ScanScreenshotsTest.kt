@@ -177,8 +177,37 @@ class ScanScreenshotsTest {
             shoot("enhance_$name")
             rule.runOnIdle { vm.scanSteps.showDocument("enhance", pages.size) }
             shoot("document_$name")
+            // #494: pages 1 and 3 as made by the background queue, page 2 still waiting
+            if (t == themes.first()) {
+                rule.runOnIdle { madeTiles(vm, pages, listOf(0, 2)) }
+                shoot("document_made_$name")
+                rule.runOnIdle { noMadeTiles(vm) }
+            }
             rule.runOnIdle { vm.scanSteps.openEnhance(1, pages.size) }
         }
+    }
+
+    /**
+     * Pages [at] as if the background queue had made them (#494): a straight drawn page in place of
+     * the engine's result, which a JVM test cannot make. The others are held as if their edges
+     * were still being looked for, so the queue (whose engine cannot load here) leaves them alone
+     * and they keep their photo with the waiting dot.
+     */
+    private fun madeTiles(vm: AppViewModel, pages: List<ScanPage>, at: List<Int>) {
+        pages.indices.filter { it !in at }.forEach { vm.pageQueue.findingStarted(pages[it].file) }
+        vm.scanLab.update(vm.scanLab.options.copy(preview = true, backgroundPages = true))
+        for (i in at) {
+            val made = drawnPage(600, 800, tilted = false, background = 0xFFF7F5F0.toInt())
+            val file = File.createTempFile("made-page-$i-", ".jpg").apply { deleteOnExit() }
+            file.outputStream().use { made.compress(Bitmap.CompressFormat.JPEG, 90, it) }
+            val thumb = Bitmap.createScaledBitmap(made, 54, 72, true).asImageBitmap()
+            vm.pageQueue.made[pages[i].key] = io.github.artcraftandroid.pdfcraft.ui.ScanMadePage(vm.pageQueue.keyOf(pages[i]), file, thumb, 0, 0, false, null, null)
+        }
+    }
+
+    private fun noMadeTiles(vm: AppViewModel) {
+        vm.scanLab.update(vm.scanLab.options.copy(preview = false))
+        vm.pageQueue.clear()
     }
 
     @Test @Config(qualifiers = "en-w360dp-h640dp-xhdpi") fun cameraEnglish360() = camera("en_360x640")
@@ -194,6 +223,31 @@ class ScanScreenshotsTest {
     @Test @Config(qualifiers = "ar-w384dp-h832dp-xhdpi") fun cropArabic384() = crop("ar_384x832", listOf(ThemeChoice.Light))
     @Test @Config(qualifiers = "fr-w360dp-h640dp-xhdpi") fun cropFrench360() = crop("fr_360x640", listOf(ThemeChoice.Light))
     @Test @Config(qualifiers = "de-w360dp-h640dp-xhdpi") fun cropGerman360() = crop("de_360x640", listOf(ThemeChoice.Light))
+
+    /**
+     * Enhance's notes line in its worst case (#493): a page turned, flattened and with a finger
+     * removed over print, a suggestion and the compare hint, under a drawn page, at 320 dp. The
+     * line scrolls sideways, so nothing overlaps and the page above stays clear.
+     */
+    private fun notes(config: String) {
+        val page = drawnPage(600, 800, tilted = false, background = 0xFFF7F5F0.toInt()).asImageBitmap()
+        val worst = scanEnhanceNotes(
+            turned = true, chips = listOf(ScanAutoChip.Flattened, ScanAutoChip.FingersOverPrint),
+            suggestion = ScanSuggestion.Greyscale, compare = false,
+        )
+        rule.setContent {
+            PdfcraftTheme(ThemeChoice.Light) {
+                Column(Modifier.fillMaxSize().background(Color(0xFF2B2B2B))) {
+                    Image(page, null, Modifier.weight(1f).fillMaxWidth().padding(16.dp), contentScale = ContentScale.Fit)
+                    ScanEnhanceNotes(worst)
+                }
+            }
+        }
+        shoot("enhance_notes_$config")
+    }
+
+    @Test @Config(qualifiers = "de-w320dp-h640dp-xhdpi") fun notesGerman320() = notes("de_320x640")
+    @Test @Config(qualifiers = "fr-w320dp-h640dp-xhdpi") fun notesFrench320() = notes("fr_320x640")
 
     @Test @Config(qualifiers = "en-w360dp-h640dp-xhdpi") fun stepsEnglish360() = steps("en_360x640")
     @Test @Config(qualifiers = "en-w384dp-h832dp-xhdpi") fun stepsEnglish384() = steps("en_384x832")

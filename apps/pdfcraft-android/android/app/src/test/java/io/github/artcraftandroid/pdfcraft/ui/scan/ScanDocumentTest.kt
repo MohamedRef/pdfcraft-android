@@ -111,4 +111,33 @@ class ScanDocumentTest {
         assertTrue(JSONObject(scanTestPageJson("1.0 (1)", true, corners, null, null, "auto", 60, false, ScanLab(), null, null, gallerySaved = true)).getBoolean("gallery_saved"))
         assertFalse(JSONObject(scanTestPageJson("1.0 (1)", true, corners, null, null, "auto", 60, false, ScanLab(), null, null)).getBoolean("gallery_saved"))
     }
+
+    @Test
+    fun aMadePageIsShownWholeWithNoTurnOnTop() {
+        // #494: the made page already has its turn, crop and look in it
+        assertEquals(ScanDocTile(made = true, turns = 0, cut = false), scanDocTile(hasMade = true, photoTurns = 1))
+        // until it is made, the photo cut to its corners and turned as before
+        assertEquals(ScanDocTile(made = false, turns = 3, cut = true), scanDocTile(hasMade = false, photoTurns = 3))
+    }
+
+    @Test
+    fun aTileIsReadSharpAtItsSize() {
+        // a 1200 × 1600 page in a 468 × 624 px tile (156 × 208 dp at 3×): read at half, 600 × 800
+        assertEquals(2, scanTileSampleSize(1200, 1600, 468, 624))
+        // never smaller than drawn
+        val n = scanTileSampleSize(1200, 1600, 468, 624)
+        assertTrue(1600 / n >= 624 && 1200 / n >= 468)
+        // a small tile reads fewer pixels
+        assertEquals(8, scanTileSampleSize(1200, 1600, 150, 200))
+        // a page as small as its tile is read whole
+        assertEquals(1, scanTileSampleSize(400, 600, 468, 624))
+        assertEquals(1, scanTileSampleSize(0, 0, 468, 624))
+    }
+
+    @Test
+    fun theDocumentLineCountsMadeAndWaitingTiles() {
+        val d = scanDocShownDiag(pages = 9, made = 6, background = true).toMap()
+        assertEquals(9, d["pages"]); assertEquals(6, d["made"]); assertEquals(3, d["waiting"]); assertEquals(true, d["background_pages"])
+        assertEquals(0, scanDocShownDiag(2, 2, false).toMap()["waiting"])
+    }
 }

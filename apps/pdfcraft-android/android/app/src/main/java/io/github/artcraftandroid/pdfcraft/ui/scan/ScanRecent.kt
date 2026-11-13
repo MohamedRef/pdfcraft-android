@@ -35,6 +35,8 @@ internal data class ScanRecentEntry(
     /** The first page's photo and corners, for the list's picture; null when the photo is gone. */
     val firstPhoto: File?,
     val firstCorners: FloatArray?,
+    /** The first page as it was made when the scan was saved (#494), for the list's picture; null when it was not made in the background. */
+    val cover: File? = null,
 )
 
 /** What keeping a scan did: its id, the photos and space it now takes, whether it replaced its own older copy, and how many old scans went. */
@@ -54,7 +56,7 @@ internal fun scanRecentPhotos(pages: List<ScanSession.Page>): List<String> = pag
 
 /** [session] with each page's photo path changed through [moved]; a page whose photo is not in it is left out. */
 internal fun scanRecentRepath(session: ScanSession, moved: Map<String, String>): ScanSession =
-    session.copy(shot = null, retake = null, forImage = false, pages = session.pages.mapNotNull { p -> moved[p.path]?.let { to -> ScanSession.Page(to, p.corners, p.found, p.turns, p.preset, p.book, p.look, p.flatten, p.auto) } })
+    session.copy(shot = null, retake = null, forImage = false, pages = session.pages.mapNotNull { p -> moved[p.path]?.let { to -> ScanSession.Page(to, p.corners, p.found, p.turns, p.preset, p.book, p.look, p.flatten, p.auto, p.marks) } })
 
 /** The log's line for a scan kept to be edited again (#461). */
 internal fun scanRecentKeepDiag(kept: ScanRecentKept, pages: Int, ms: Long): Array<Pair<String, Any?>> =
@@ -86,7 +88,7 @@ internal class ScanRecentStore(private val root: File) {
     fun list(): List<ScanRecentEntry> = (root.listFiles()?.filter { it.isDirectory } ?: emptyList()).mapNotNull { d ->
         val s = session(d) ?: return@mapNotNull null
         val first = s.pages.firstOrNull()
-        ScanRecentEntry(d.name, s.name, savedAt(d), s.pages.size, size(d), first?.path?.let(::File)?.takeIf { it.isFile }, first?.corners)
+        ScanRecentEntry(d.name, s.name, savedAt(d), s.pages.size, size(d), first?.path?.let(::File)?.takeIf { it.isFile }, first?.corners, File(d, COVER).takeIf { it.isFile })
     }.sortedByDescending { it.savedAt }
 
     /** How many scans are kept and the space they take. */
@@ -95,9 +97,9 @@ internal class ScanRecentStore(private val root: File) {
     /**
      * Keep [session]'s photos (moved, not copied) and settings as scan [id], or as a new scan when
      * [id] is null or gone. Photos the scan no longer uses are removed, and then the oldest scans
-     * beyond [max].
+     * beyond [max]. [cover] is the first page as made (#494), copied for the list's picture.
      */
-    fun keep(id: String?, session: ScanSession, now: Long, max: Int = SCAN_RECENT_MAX): ScanRecentKept {
+    fun keep(id: String?, session: ScanSession, now: Long, max: Int = SCAN_RECENT_MAX, cover: File? = null): ScanRecentKept {
         root.mkdirs()
         val updated = id != null && dir(id).isDirectory
         val key = if (updated) id!! else "scan-$now-${System.nanoTime() % 100000}"
@@ -116,8 +118,10 @@ internal class ScanRecentStore(private val root: File) {
         val kept = scanRecentRepath(session, moved)
         writeAtomically(File(d, SESSION), kept.encode())
         writeAtomically(File(d, SAVED), now.toString())
+        // the first page as made, for the list (#494); a scan saved without one shows its photo
+        val hasCover = cover?.isFile == true && runCatching { cover.copyTo(File(d, COVER), overwrite = true) }.isSuccess
         // the photos of the scan as it was before it was opened again
-        val used = moved.values.map { File(it).name }.toSet() + setOf(SESSION, SAVED)
+        val used = moved.values.map { File(it).name }.toSet() + setOf(SESSION, SAVED) + (if (hasCover) setOf(COVER) else emptySet())
         d.listFiles()?.forEach { if (it.name !in used) it.delete() }
         val all = (root.listFiles()?.filter { it.isDirectory } ?: emptyList()).associate { it.name to savedAt(it) }
         val prune = scanRecentToPrune(all, max, keep = key)
@@ -169,5 +173,7 @@ internal class ScanRecentStore(private val root: File) {
     private companion object {
         const val SESSION = "scan.txt"
         const val SAVED = "saved.txt"
+        /** The first page as made (#494). */
+        const val COVER = "cover.jpg"
     }
 }

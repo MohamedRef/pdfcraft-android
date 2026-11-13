@@ -6,6 +6,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -129,7 +130,8 @@ internal fun ScanLooksStrip(
             val image = scanTileImage(f, look, vm.scanTiles, shown)
             val waiting = stringResource(R.string.scan_look_tile_waiting, name)
             Column(
-                Modifier.width(tileWidth.dp).clip(RoundedCornerShape(6.dp))
+                // as wide as the tile, or as its name's longest word: a name never breaks inside a word (#493)
+                Modifier.width(IntrinsicSize.Min).clip(RoundedCornerShape(6.dp))
                     .selectable(selected = selected, role = Role.RadioButton) { if (!selected) vm.chooseScanLook(index, ScanPageLook(f), from) }
                     .semantics { if (image == null) contentDescription = waiting }
                     .padding(vertical = 4.dp),

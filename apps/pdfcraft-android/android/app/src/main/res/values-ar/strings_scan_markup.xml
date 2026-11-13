@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Markup on a scanned page: eraser, pen, highlighter, text (#495) -->
+<resources>
+    <string name="scan_lab_markup">التعليم على صفحات السكان: ممحاة، قلم، هايلايتر، نص</string>
+    <string name="scan_markup">تعليم</string>
+    <string name="scan_markup_clear">مسح التعليم</string>
+    <string name="scan_markup_erase">ممحاة</string>
+    <string name="scan_markup_pen">قلم</string>
+    <string name="scan_markup_highlighter">هايلايتر</string>
+    <string name="scan_markup_text">نص</string>
+    <string name="scan_markup_size_small">صغير</string>
+    <string name="scan_markup_size_medium">متوسط</string>
+    <string name="scan_markup_size_large">كبير</string>
+    <string name="scan_markup_colour">لون %1$d</string>
+    <string name="scan_markup_hint">إصبع واحد يرسم أو يمسح. إصبعان للتحريك والتكبير.</string>
+    <string name="scan_markup_text_hint">اضغط على الصفحة لإضافة نص. اضغط على نص لتحريكه أو تعديله أو حذفه.</string>
+    <string name="scan_markup_add_text">إضافة نص</string>
+    <string name="scan_markup_edit_text">تعديل النص</string>
+    <string name="scan_markup_delete_text">حذف النص</string>
+    <string name="scan_markup_page_description">الصفحة %1$d مع التعليم</string>
+    <string name="scan_markup_ask_title">حذف التعليم من هذه الصفحة؟</string>
+    <string name="scan_markup_ask_body">الحواف الجديدة أو تغيير الفرد يحرّكان الصفحة تحت التعليم، لذلك سيُحذف التعليم.</string>
+    <string name="scan_markup_ask_keep">إبقاء</string>
+    <string name="scan_markup_ask_remove">حذف التعليم</string>
+</resources>

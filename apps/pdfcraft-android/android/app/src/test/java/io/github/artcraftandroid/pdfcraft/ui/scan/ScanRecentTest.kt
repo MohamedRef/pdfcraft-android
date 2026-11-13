@@ -83,6 +83,25 @@ class ScanRecentTest {
     }
 
     @Test
+    fun theFirstPageAsMadeIsKeptForTheList() {
+        // #494: the list's picture is the first page as made, when the queue had made it
+        val cam = tmp.newFolder("camera")
+        val store = ScanRecentStore(File(tmp.root, "recent"))
+        val made = photo(tmp.newFolder("made"), "page-1.jpg", 50)
+        val kept = store.keep(null, session("Letter", photo(cam, "a.jpg")), now = 1_000L, cover = made)
+        val cover = store.list()[0].cover
+        assertNotNull(cover)
+        assertEquals(50L, cover!!.length())
+        // the made page is copied, the queue's own file stays for the scan screen until it clears
+        assertTrue(made.exists())
+        // saved again with no page made: the old picture goes and the photo is shown
+        val opened = store.open(kept.id, tmp.newFolder("work"))!!
+        store.keep(kept.id, opened.session, now = 2_000L)
+        assertNull(store.list()[0].cover)
+        assertNotNull(store.list()[0].firstPhoto)
+    }
+
+    @Test
     fun savingAnOpenedScanReplacesItsOwnEntry() {
         val cam = tmp.newFolder("camera")
         val store = ScanRecentStore(File(tmp.root, "recent"))

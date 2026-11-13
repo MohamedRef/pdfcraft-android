@@ -34,6 +34,33 @@ class ScanEnhanceTest {
         assertFalse(scanEnhanceMoreEnabled(ScanEnhanceMore.Compare, pages = 2, applyNeeded = false, lookIsDefault = true, canCompare = false, canRename = true))
         assertFalse(scanEnhanceMoreEnabled(ScanEnhanceMore.Rename, pages = 2, applyNeeded = false, lookIsDefault = true, canCompare = false, canRename = false))
         assertTrue(scanEnhanceMoreEnabled(ScanEnhanceMore.AddPage, pages = 0, applyNeeded = false, lookIsDefault = true, canCompare = false, canRename = false))
-        assertEquals(5, ScanEnhanceMore.entries.map { it.id }.toSet().size)
+        assertEquals(7, ScanEnhanceMore.entries.map { it.id }.toSet().size)
+        // Markup (#495): only with a page whose preview can be drawn on; Clear markup only with marks
+        assertFalse(scanEnhanceMoreEnabled(ScanEnhanceMore.Markup, pages = 1, applyNeeded = false, lookIsDefault = true, canCompare = false, canRename = false, canMarkup = false))
+        assertTrue(scanEnhanceMoreEnabled(ScanEnhanceMore.Markup, pages = 1, applyNeeded = false, lookIsDefault = true, canCompare = false, canRename = false, canMarkup = true))
+        assertFalse(scanEnhanceMoreEnabled(ScanEnhanceMore.ClearMarkup, pages = 1, applyNeeded = false, lookIsDefault = true, canCompare = false, canRename = false, hasMarks = false))
+        assertTrue(scanEnhanceMoreEnabled(ScanEnhanceMore.ClearMarkup, pages = 1, applyNeeded = false, lookIsDefault = true, canCompare = false, canRename = false, hasMarks = true))
+        assertFalse(scanEnhanceMoreShown(ScanEnhanceMore.Markup, markup = false))
+        assertFalse(scanEnhanceMoreShown(ScanEnhanceMore.ClearMarkup, markup = false))
+        assertTrue(scanEnhanceMoreShown(ScanEnhanceMore.Markup, markup = true))
+        assertTrue(scanEnhanceMoreShown(ScanEnhanceMore.Rename, markup = false))
+    }
+
+    @Test
+    fun theNotesUnderThePageComeInOneLineInReadingOrder() {
+        // #493: the worst case: turned, flattened, a finger removed over print, a suggestion and the compare hint
+        val notes = scanEnhanceNotes(
+            turned = true, chips = listOf(ScanAutoChip.Flattened, ScanAutoChip.FingersOverPrint),
+            suggestion = ScanSuggestion.Greyscale, compare = false,
+        )
+        assertEquals(
+            listOf(
+                ScanEnhanceNote.Turned, ScanEnhanceNote.Auto(ScanAutoChip.Flattened), ScanEnhanceNote.Auto(ScanAutoChip.FingersOverPrint),
+                ScanEnhanceNote.Suggest(ScanSuggestion.Greyscale), ScanEnhanceNote.Compare(false),
+            ),
+            notes,
+        )
+        assertEquals(emptyList<ScanEnhanceNote>(), scanEnhanceNotes(false, emptyList(), null, null))
+        assertEquals(listOf(ScanEnhanceNote.Compare(true)), scanEnhanceNotes(false, emptyList(), null, true))
     }
 }

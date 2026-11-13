@@ -53,12 +53,13 @@ internal class ScanRecentController(private val vm: AppViewModel) {
 
     /**
      * Keep a saved scan's photos and settings; the photos are moved, so the scan's own copies are
-     * gone after this. Blocking. False when it could not be kept (the photos are deleted then).
+     * gone after this. [cover] is the first page as made, for the list's picture (#494). Blocking.
+     * False when it could not be kept (the photos are deleted then).
      */
-    fun keep(session: ScanSession): Boolean {
+    fun keep(session: ScanSession, cover: File? = null): Boolean {
         val started = SystemClock.elapsedRealtime()
         return try {
-            val kept = store.keep(openedFrom, session, System.currentTimeMillis())
+            val kept = store.keep(openedFrom, session, System.currentTimeMillis(), cover = cover)
             Diag.event(DiagArea.Scan, "recent_keep", *scanRecentKeepDiag(kept, session.pages.size, SystemClock.elapsedRealtime() - started))
             true
         } catch (e: Exception) {

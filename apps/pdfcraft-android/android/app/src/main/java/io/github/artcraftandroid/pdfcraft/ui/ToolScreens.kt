@@ -10,7 +10,12 @@ import io.github.artcraftandroid.pdfcraft.ui.scan.scanAutoTurns
 import io.github.artcraftandroid.pdfcraft.ui.scan.chooseScanLook
 import io.github.artcraftandroid.pdfcraft.ui.scan.toggleScanFlatten
 import io.github.artcraftandroid.pdfcraft.ui.scan.undoScanTurn
+import io.github.artcraftandroid.pdfcraft.ui.scan.setScanRemoveFingers
 import io.github.artcraftandroid.pdfcraft.ui.scan.undoScanAuto
+import io.github.artcraftandroid.pdfcraft.ui.scan.afterScanMarkupAsk
+import io.github.artcraftandroid.pdfcraft.ui.scan.clearScanMarks
+import io.github.artcraftandroid.pdfcraft.ui.scan.openScanMarkup
+import io.github.artcraftandroid.pdfcraft.ui.scan.scanCornersChanging
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -863,6 +868,8 @@ data class ScanPage(
     val uncropped: FloatArray? = null,
     /** What the automatic look did to the page and what the person took back (#466). */
     val auto: io.github.artcraftandroid.pdfcraft.ui.scan.ScanAutoMarks = io.github.artcraftandroid.pdfcraft.ui.scan.ScanAutoMarks(),
+    /** Marks made by hand on the page (#495): eraser, pen, highlighter and text; null for none. */
+    val marks: io.github.artcraftandroid.pdfcraft.ui.scan.ScanMarks? = null,
 ) {
     /** The page among the scan's pages: the two halves of a spread share one photo [file]. */
     val key: String get() = book?.let { "${file.absolutePath}#${it.side}" } ?: file.absolutePath
@@ -927,6 +934,8 @@ fun ScanScreen(vm: AppViewModel) {
         io.github.artcraftandroid.pdfcraft.ui.scan.ScanCropScreen(
             p, bordersAt, vm.scanLab.options,
             onDone = { q, stats ->
+                // new corners move the page under its marks (#495): they go, as the person was told
+                vm.scanCornersChanging(bordersAt, q)
                 val now = pages[bordersAt]
                 pages[bordersAt] = now.copy(corners = q, crop = now.crop?.plus(stats) ?: stats)
                 current = bordersAt
@@ -963,6 +972,7 @@ fun ScanScreen(vm: AppViewModel) {
             io.github.artcraftandroid.pdfcraft.ui.scan.ScanCropScreen(
                 pages[croppingAt], croppingAt, lab,
                 onDone = { q, stats ->
+                    vm.scanCornersChanging(croppingAt, q)
                     val p = pages[croppingAt]
                     pages[croppingAt] = p.copy(corners = q, crop = p.crop?.plus(stats) ?: stats)
                     cropping = null
@@ -970,8 +980,28 @@ fun ScanScreen(vm: AppViewModel) {
                 onCancel = { cropping = null },
             )
         } else {
-            ScanCrop(pages[croppingAt], onDone = { pages[croppingAt] = pages[croppingAt].copy(corners = it); cropping = null }, onCancel = { cropping = null })
+            ScanCrop(pages[croppingAt], onDone = { vm.scanCornersChanging(croppingAt, it); pages[croppingAt] = pages[croppingAt].copy(corners = it); cropping = null }, onCancel = { cropping = null })
         }
+        return
+    }
+    // "Remove this page's markup?" before new borders or a change of flattening (#495)
+    vm.scanMarkup.asking?.let { ask ->
+        io.github.artcraftandroid.pdfcraft.ui.scan.ScanMarkupAskDialog(
+            ask,
+            onKeep = {
+                vm.scanMarkup.asking = null
+                io.github.artcraftandroid.pdfcraft.engine.Diag.event(io.github.artcraftandroid.pdfcraft.engine.DiagArea.Scan, "markup_kept", "index" to ask.index + 1, "why" to ask.why)
+            },
+            onRemove = {
+                vm.scanMarkup.asking = null
+                ask.then()
+            },
+        )
+    }
+    // Markup (#495): the page full screen with its tools
+    val markupAt = vm.scanMarkup.open?.let { key -> pages.indexOfFirst { it.key == key } } ?: -1
+    if (markupAt >= 0) {
+        io.github.artcraftandroid.pdfcraft.ui.scan.ScanMarkupScreen(vm, markupAt, pages[markupAt])
         return
     }
     // the document screen (#460): the pages in a grid, where they are ordered, saved or shared
@@ -1028,7 +1058,8 @@ fun ScanScreen(vm: AppViewModel) {
         // Settings ▸ Preferences ▸ Scan (#339); read each time, so a change there shows here
         val autoUpright = io.github.artcraftandroid.pdfcraft.ui.scan.ScanUprightSetting.get(vm.settings.appPrefs)
         if (page != null && lab.preview) {
-            LaunchedEffect(page.file, page.corners.toList(), page.turns, page.preset, page.look, page.flatten, flattening, lab, autoUpright) { vm.requestScanPreview(shownAt, page, flattening) }
+            // page.auto too: an Undo or Remove fingers changes only the page's marks, and the page must be made again (#492)
+            LaunchedEffect(page.file, page.corners.toList(), page.turns, page.preset, page.look, page.flatten, page.auto, flattening, lab, autoUpright) { vm.requestScanPreview(shownAt, page, flattening) }
         }
         // every page made in the background, the page on screen first (#465)
         vm.pageQueue.shownIndex = shownAt
@@ -1112,7 +1143,8 @@ fun ScanScreen(vm: AppViewModel) {
                         contentScale = ContentScale.Fit,
                     )
                     // what is on screen while held, and a hint that holding compares
-                    if (canCompare && (comparing || original != null)) {
+                    // Enhance has it in the notes line under the page (#493)
+                    if (!stepsOn && canCompare && (comparing || original != null)) {
                         Text(
                             if (comparing) stringResource(R.string.tools_filter_original) else compareHint, color = Color.White, fontSize = 12.sp,
                             modifier = Modifier.align(Alignment.BottomEnd).padding(12.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.5f)).padding(horizontal = 10.dp, vertical = 4.dp),
@@ -1123,7 +1155,8 @@ fun ScanScreen(vm: AppViewModel) {
                 }
                 page.book?.let { io.github.artcraftandroid.pdfcraft.ui.scan.ScanBookLabel(it, Modifier.align(Alignment.TopStart)) }
                 // the classifier turned this page and the person has not: say so, with a way back (#339)
-                if (shown.view == ScanView.Result && preview != null && io.github.artcraftandroid.pdfcraft.ui.scan.scanShowsTurnedChip(page.turns, preview.quarterTurns)) {
+                // on Enhance these go in the notes line under the page instead (#493)
+                if (!stepsOn && shown.view == ScanView.Result && preview != null && io.github.artcraftandroid.pdfcraft.ui.scan.scanShowsTurnedChip(page.turns, preview.quarterTurns)) {
                     val undoLabel = stringResource(R.string.scan_turn_undo_description)
                     Text(
                         stringResource(R.string.scan_turned_upright_undo), color = Color.White, fontSize = 13.sp,
@@ -1132,12 +1165,19 @@ fun ScanScreen(vm: AppViewModel) {
                     )
                 }
                 // what the automatic look did, each with a way back (#466)
-                if (shown.view == ScanView.Result && preview != null) {
+                if (!stepsOn && shown.view == ScanView.Result && preview != null) {
                     val chips = io.github.artcraftandroid.pdfcraft.ui.scan.scanAutoChips(lab, page.auto, page.look, page.flatten, preview.flattened, preview.fingers?.filled?.toInt() ?: 0, preview.fingers?.overPrint?.toInt() ?: 0)
                     if (chips.isNotEmpty()) {
                         // under "Turned upright · Undo", which sits at the top
-                        Row(Modifier.align(Alignment.TopCenter).padding(top = 52.dp, start = 12.dp, end = 12.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            for (chip in chips) io.github.artcraftandroid.pdfcraft.ui.scan.ScanAutoChipView(chip, { vm.undoScanAuto(shownAt, chip) })
+                        Column(Modifier.align(Alignment.TopCenter).padding(top = 52.dp, start = 12.dp, end = 12.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                for (chip in chips) io.github.artcraftandroid.pdfcraft.ui.scan.ScanAutoChipView(chip, {
+                                    // taking flattening back moves the page under its marks: asked first (#495)
+                                    if (chip == io.github.artcraftandroid.pdfcraft.ui.scan.ScanAutoChip.Flattened) vm.afterScanMarkupAsk(shownAt, "flatten") { vm.undoScanAuto(shownAt, chip) } else vm.undoScanAuto(shownAt, chip)
+                                })
+                            }
+                            // a finger hid print: words that do nothing on a tap, apart from the chip's Undo (#492)
+                            if (io.github.artcraftandroid.pdfcraft.ui.scan.ScanAutoChip.FingersOverPrint in chips) io.github.artcraftandroid.pdfcraft.ui.scan.ScanFingerOverPrintNote()
                         }
                     }
                 }
@@ -1151,26 +1191,6 @@ fun ScanScreen(vm: AppViewModel) {
                     // ‹ › for the page before and after (#459)
                     io.github.artcraftandroid.pdfcraft.ui.scan.ScanPageArrows(shownAt, pages.size, Modifier.align(Alignment.CenterStart)) { step ->
                         current = io.github.artcraftandroid.pdfcraft.ui.scan.scanEnhancePageAfter(shownAt, pages.size, step)
-                    }
-                    // what the document type suggests, one chip over the page's bottom edge that can be dismissed (#459)
-                    if (page.look.filter == ScanFilter.CleanScan && lab.presets) {
-                        val suggestion = io.github.artcraftandroid.pdfcraft.ui.scan.scanSuggestions(
-                            lab.suggestions, preview?.kind?.suggestFlatten == true, preview?.kind?.suggestGreyscale == true,
-                            vm.scanCanFlatten, page.flatten, true,
-                        ).firstOrNull { "${page.key}#${it.name}" !in dismissedSuggestions }
-                        if (suggestion != null && !shown.waiting) {
-                            io.github.artcraftandroid.pdfcraft.ui.scan.ScanSuggestionOverlay(
-                                suggestion, Modifier.align(Alignment.BottomCenter).padding(bottom = 12.dp),
-                                onTake = {
-                                    io.github.artcraftandroid.pdfcraft.ui.scan.logScanSuggestionTaken(shownAt, suggestion)
-                                    when (suggestion) {
-                                        io.github.artcraftandroid.pdfcraft.ui.scan.ScanSuggestion.Flatten -> vm.toggleScanFlatten(shownAt)
-                                        io.github.artcraftandroid.pdfcraft.ui.scan.ScanSuggestion.Greyscale -> vm.chooseScanLook(shownAt, io.github.artcraftandroid.pdfcraft.ui.scan.ScanPageLook(ScanFilter.Grayscale), "suggestion")
-                                    }
-                                },
-                                onDismiss = { dismissedSuggestions += "${page.key}#${suggestion.name}" },
-                            )
-                        }
                     }
                 }
             } else {
@@ -1194,8 +1214,8 @@ fun ScanScreen(vm: AppViewModel) {
             // and what that kind suggests: Flatten page for a book page, Grayscale for a receipt
             // with the automatic look, Grayscale is applied rather than offered, and with its
             // flattening decision on, so is Flatten page (#466)
-            val suggestions = io.github.artcraftandroid.pdfcraft.ui.scan.scanSuggestions(
-                lab.suggestions, preview?.kind?.suggestFlatten == true && !lab.flattenAuto, preview?.kind?.suggestGreyscale == true && !lab.autoLook,
+            val suggestions = io.github.artcraftandroid.pdfcraft.ui.scan.scanSuggestionsShown(
+                lab, preview?.kind?.suggestFlatten == true, preview?.kind?.suggestGreyscale == true,
                 vm.scanCanFlatten, page.flatten, page.look.filter == ScanFilter.CleanScan,
             )
             Row(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally)) {
@@ -1244,6 +1264,34 @@ fun ScanScreen(vm: AppViewModel) {
                 Icon(LucideIcons.Plus, null, tint = c.icon)
             }
         }
+        // Enhance (#493): what was done to the page, what its kind suggests and the compare hint, in
+        // one line between the page and the looks; nothing stays over the page
+        if (stepsOn && page != null) {
+            val result = shown.view == ScanView.Result && preview != null
+            val chips = if (!result) emptyList() else io.github.artcraftandroid.pdfcraft.ui.scan.scanAutoChips(lab, page.auto, page.look, page.flatten, preview!!.flattened, preview.fingers?.filled?.toInt() ?: 0, preview.fingers?.overPrint?.toInt() ?: 0)
+            // no suggestion for what the automatic look decides by itself (#466, #493)
+            val suggestion = if (page.look.filter != ScanFilter.CleanScan || !lab.presets || shown.waiting) null else io.github.artcraftandroid.pdfcraft.ui.scan.scanSuggestionsShown(
+                lab, preview?.kind?.suggestFlatten == true, preview?.kind?.suggestGreyscale == true, vm.scanCanFlatten, page.flatten, true,
+            ).firstOrNull { "${page.key}#${it.name}" !in dismissedSuggestions }
+            val notes = io.github.artcraftandroid.pdfcraft.ui.scan.scanEnhanceNotes(
+                turned = result && io.github.artcraftandroid.pdfcraft.ui.scan.scanShowsTurnedChip(page.turns, preview!!.quarterTurns),
+                chips = chips, suggestion = suggestion,
+                compare = if (canCompare && (comparing || original != null)) comparing else null,
+            )
+            io.github.artcraftandroid.pdfcraft.ui.scan.ScanEnhanceNotes(
+                notes,
+                onUndoTurn = { vm.undoScanTurn(shownAt) },
+                onUndoAuto = { chip -> vm.undoScanAuto(shownAt, chip) },
+                onTake = { s ->
+                    io.github.artcraftandroid.pdfcraft.ui.scan.logScanSuggestionTaken(shownAt, s)
+                    when (s) {
+                        io.github.artcraftandroid.pdfcraft.ui.scan.ScanSuggestion.Flatten -> vm.toggleScanFlatten(shownAt)
+                        io.github.artcraftandroid.pdfcraft.ui.scan.ScanSuggestion.Greyscale -> vm.chooseScanLook(shownAt, io.github.artcraftandroid.pdfcraft.ui.scan.ScanPageLook(ScanFilter.Grayscale), "suggestion")
+                    }
+                },
+                onDismiss = { s -> dismissedSuggestions += "${page.key}#${s.name}" },
+            )
+        }
         // the looks, each a small preview of the page (#301), and the page's strength
         if (page != null && lab.lookStrip && stepsOn) {
             // Enhance (#459): smaller tiles, and the sliders button for a look that has settings
@@ -1282,6 +1330,12 @@ fun ScanScreen(vm: AppViewModel) {
                     if (page.look.filter == ScanFilter.CleanScan && lab.presets) io.github.artcraftandroid.pdfcraft.ui.scan.ScanPresetChip(vm, shownAt, page.preset, preview?.kind?.preset)
                     flattenSwitch()
                 }
+                // the lasting way back for the finger removal, the same state as its chip's Undo (#492)
+                if (io.github.artcraftandroid.pdfcraft.ui.scan.scanShowsFingerSwitch(lab, page.look, page.look.strength ?: kindStrength ?: page.look.level)) {
+                    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        io.github.artcraftandroid.pdfcraft.ui.scan.ScanFingersSwitch(io.github.artcraftandroid.pdfcraft.ui.scan.scanRemovesFingers(lab, page.auto)) { vm.setScanRemoveFingers(shownAt, it) }
+                    }
+                }
             }
         }
         if (!stepsOn && page != null) io.github.artcraftandroid.pdfcraft.ui.scan.ScanStrengthRow(vm, shownAt, page.look, kindStrength)
@@ -1316,10 +1370,16 @@ fun ScanScreen(vm: AppViewModel) {
                     io.github.artcraftandroid.pdfcraft.ui.scan.scanEnhanceMoreEnabled(
                         item, pages.size, io.github.artcraftandroid.pdfcraft.ui.scan.scanApplyLookNeedsConfirm(pages.map { it.look }, lookAt),
                         pages.getOrNull(lookAt)?.look == defaultLook, canCompare, vm.insertScanAt == null && vm.scanName.isNotBlank(),
+                        // Markup draws on the page as it will be saved (#495): it needs the page's preview
+                        canMarkup = lab.preview && preview != null, hasMarks = pages.getOrNull(lookAt)?.marks?.isEmpty == false,
                     )
                 },
+                moreShown = { item -> io.github.artcraftandroid.pdfcraft.ui.scan.scanEnhanceMoreShown(item, lab.markup) },
                 onRetake = { vm.retakeScan(lookAt) },
-                onBorders = { pages.getOrNull(lookAt)?.key?.let { vm.scanSteps.openFromPage(it, lookAt + 1, "page") } },
+                onBorders = {
+                    // a page with marks asks first: new borders move the page under them (#495)
+                    vm.afterScanMarkupAsk(lookAt, "borders", clearFirst = false) { pages.getOrNull(lookAt)?.key?.let { vm.scanSteps.openFromPage(it, lookAt + 1, "page") } }
+                },
                 onRotate = { vm.rotateScanPage(lookAt) },
                 onDelete = deleteShown,
                 onMore = { item ->
@@ -1330,6 +1390,8 @@ fun ScanScreen(vm: AppViewModel) {
                         io.github.artcraftandroid.pdfcraft.ui.scan.ScanEnhanceMore.Compare -> holding = !holding
                         io.github.artcraftandroid.pdfcraft.ui.scan.ScanEnhanceMore.AddPage -> vm.takeScanPhoto()
                         io.github.artcraftandroid.pdfcraft.ui.scan.ScanEnhanceMore.Rename -> naming = true
+                        io.github.artcraftandroid.pdfcraft.ui.scan.ScanEnhanceMore.Markup -> vm.openScanMarkup(lookAt)
+                        io.github.artcraftandroid.pdfcraft.ui.scan.ScanEnhanceMore.ClearMarkup -> vm.clearScanMarks(lookAt, "clear")
                     }
                 },
             )
@@ -1339,8 +1401,8 @@ fun ScanScreen(vm: AppViewModel) {
                 onClick = {
                     val at = current.coerceAtMost(pages.lastIndex)
                     val key = pages.getOrNull(at)?.key
-                    // with the steps on, Crop opens Adjust borders on the page (#458)
-                    if (stepsOn && key != null) vm.scanSteps.openFromPage(key, at + 1, "page") else cropping = key
+                    // with the steps on, Crop opens Adjust borders on the page (#458); a page with marks asks first (#495)
+                    vm.afterScanMarkupAsk(at, "borders", clearFirst = false) { if (stepsOn && key != null) vm.scanSteps.openFromPage(key, at + 1, "page") else cropping = key }
                 },
                 enabled = pages.isNotEmpty(),
             ) { Text(stringResource(R.string.tools_crop), color = c.accent) }

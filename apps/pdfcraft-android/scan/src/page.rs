@@ -144,6 +144,9 @@ pub struct PageRequest<'a> {
     /// strength [`FINGER_MIN_STRENGTH`] or more, fingers are found on the look's own output and
     /// papered over. False leaves the page as the look made it, as before.
     pub remove_fingers: bool,
+    /// Marks made by hand on the page (#495): drawn after the look and the finger step. `None` or
+    /// empty for none.
+    pub markup: Option<&'a crate::markup::Markup>,
 }
 
 /// The weakest Clean scan strength at which fingers are looked for (#466): below it the paper is
@@ -187,6 +190,7 @@ impl<'a> PageRequest<'a> {
             keep_paper: None,
             reuse_look: true,
             remove_fingers: false,
+            markup: None,
         }
     }
 }
@@ -243,6 +247,8 @@ pub struct PageResult {
     pub kind: Option<PageKind>,
     /// What the automatic look's finger step did (#466); `None` when it did not run.
     pub fingers: Option<crate::defects::FingerFill>,
+    /// What drawing the page's hand-made marks did (#495); `None` when it had none.
+    pub markup: Option<crate::markup::Applied>,
     /// (stage, milliseconds), in pipeline order.
     pub timings: Vec<(&'static str, u32)>,
 }
@@ -329,7 +335,8 @@ pub const WHOLE_PHOTO: [f32; 8] = [0.0, 0.0, 1.0, 0.0, 1.0, 1.0, 0.0, 1.0];
 fn untouched(request: &PageRequest<'_>) -> Option<Result<PageResult, ScanError>> {
     let whole = request.corners.iter().zip(WHOLE_PHOTO).all(|(a, b)| (a - b).abs() < 1e-6);
     let turned_by_hand = !request.turns.is_multiple_of(4);
-    if request.look != Look::Original || !whole || request.flatten || turned_by_hand || request.max_side.is_some() {
+    let marked = request.markup.is_some_and(|m| !m.is_empty());
+    if request.look != Look::Original || !whole || request.flatten || turned_by_hand || request.max_side.is_some() || marked {
         return None;
     }
     let (width, height) = match Photo::upright_size(request.photo) {
@@ -362,6 +369,7 @@ fn untouched(request: &PageRequest<'_>) -> Option<Result<PageResult, ScanError>>
         white_point: None,
         kind: None,
         fingers: None,
+        markup: None,
         timings,
     }))
 }
@@ -380,7 +388,7 @@ pub fn process_page(request: &PageRequest<'_>) -> Result<PageResult, ScanError> 
     };
     let (applied, kind) = page_look_kind(&base, request)?;
     let (paper_spread, white_point) = (applied.paper_spread, applied.white_point);
-    let (pixels, noise, look_stages, fingers) = (applied.pixels, applied.noise, applied.stages, applied.fingers);
+    let (pixels, noise, look_stages, fingers, markup) = (applied.pixels, applied.noise, applied.stages, applied.fingers, applied.markup);
     let PageBase {
         page,
         dpi,
@@ -435,6 +443,7 @@ pub fn process_page(request: &PageRequest<'_>) -> Result<PageResult, ScanError> 
         white_point,
         kind,
         fingers,
+        markup,
         timings,
     })
 }
@@ -520,6 +529,10 @@ pub fn page_look_kind(base: &PageBase, request: &PageRequest<'_>) -> Result<(App
             applied.fingers = Some(crate::defects::remove_fingers(&mut page));
             *data = page.data;
         }
+    }
+    // the marks made by hand (#495), over the look and the finger step, turned with the page
+    if let Some(markup) = request.markup.filter(|m| !m.is_empty()) {
+        applied.markup = Some(crate::markup::apply(&mut applied.pixels, base.page.width, base.page.height, base.turns, markup));
     }
     Ok((applied, kind))
 }
