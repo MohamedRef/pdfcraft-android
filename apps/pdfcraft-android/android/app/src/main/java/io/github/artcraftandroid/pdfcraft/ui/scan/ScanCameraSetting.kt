@@ -2,6 +2,7 @@ package io.github.artcraftandroid.pdfcraft.ui.scan
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
@@ -38,7 +39,7 @@ internal fun ScanCameraSetting() {
             Text(
                 name, color = if (on) Color.White else c.text, fontSize = 14.sp,
                 modifier = Modifier.clip(RoundedCornerShape(14.dp)).background(if (on) c.accent else c.surface)
-                    .clickable(role = Role.RadioButton) { model.updateChoice(choice) }.padding(horizontal = 12.dp, vertical = 6.dp),
+                    .selectable(selected = on, role = Role.RadioButton) { model.updateChoice(choice) }.padding(horizontal = 12.dp, vertical = 6.dp),
             )
         }
     }
@@ -82,7 +83,7 @@ internal fun ScanMergeSettingRow() {
             Text(
                 name, color = if (on) Color.White else c.text, fontSize = 14.sp,
                 modifier = Modifier.clip(RoundedCornerShape(14.dp)).background(if (on) c.accent else c.surface)
-                    .clickable(role = Role.RadioButton) { model.updateMerge(s) }.padding(horizontal = 12.dp, vertical = 6.dp),
+                    .selectable(selected = on, role = Role.RadioButton) { model.updateMerge(s) }.padding(horizontal = 12.dp, vertical = 6.dp),
             )
         }
     }

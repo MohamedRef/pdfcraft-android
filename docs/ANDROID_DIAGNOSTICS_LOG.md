@@ -5,11 +5,12 @@ needs evidence from a real phone can be checked without a computer or adb.
 
 ## For the person testing
 
-1. Settings → About → Diagnostics → turn on **Record diagnostics log**.
+1. Settings → Diagnostics (also reachable as Settings → About → Diagnostics) → turn on **Record
+   diagnostics log**.
 2. Use the app as usual: open the large file, write with the pen, leave the app, scan pages.
-3. Settings → About → Diagnostics → **Share diagnostics log**, and send the file
+3. Settings → Diagnostics → **Share diagnostics log**, and send the file
    (`pdfcraft-diagnostics.txt`).
-4. **Clear diagnostics log** starts a fresh log for the next test. Turning the switch off deletes
+4. **Clear diagnostics log** (it asks first) starts a fresh log for the next test. Turning the switch off deletes
    the log.
 
 The log is kept in the app's private storage, so it survives the app being closed in the

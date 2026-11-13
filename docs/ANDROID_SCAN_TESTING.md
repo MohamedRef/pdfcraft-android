@@ -4,8 +4,8 @@ The scanner has been built and measured on a desktop, on drawn pages and ten ref
 What it does with a real camera in real light is found out on a phone. This page says how to
 collect that evidence and what comes back.
 
-Everything here is under **Settings → About → Diagnostics**, and appears once **Record
-diagnostics log** is on.
+Everything here is under **Settings → Diagnostics → Scanner testing** (Diagnostics is also in
+Settings → About), and can be opened once **Record diagnostics log** is on.
 
 ## For the person testing
 
