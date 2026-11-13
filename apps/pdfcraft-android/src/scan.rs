@@ -229,9 +229,9 @@ pub struct ScanMarkup {
 /// One stroke (#495).
 #[derive(Debug, Clone, PartialEq, uniffi::Record)]
 pub struct ScanStroke {
-    /// "erase", "pen" or "highlighter"; anything else is left out.
+    /// "erase", "erase_colour", "erase_edge", "pen" or "highlighter"; anything else is left out.
     pub tool: String,
-    /// 0xRRGGBB (not used by the eraser).
+    /// 0xRRGGBB (not used by the eraser's paper and edge fills).
     pub colour: u32,
     /// The full width, as a share of the page's longer side.
     pub width: f32,
@@ -260,7 +260,12 @@ pub struct ScanTextMark {
 pub struct ScanMarkupApplied {
     pub pen: u32,
     pub highlighter: u32,
+    /// Eraser strokes, whatever their fill.
     pub erase: u32,
+    /// Of those, the ones that painted a picked colour (#503).
+    pub erase_colour: u32,
+    /// Of those, the ones that carried the colours at their edge inward (#503).
+    pub erase_edge: u32,
     pub text: u32,
     /// Marks left out: a highlighter on a black-and-white page, or a broken text mask.
     pub skipped: u32,
@@ -271,7 +276,17 @@ pub struct ScanMarkupApplied {
 
 impl From<pdfcraft_scan::markup::Applied> for ScanMarkupApplied {
     fn from(a: pdfcraft_scan::markup::Applied) -> Self {
-        ScanMarkupApplied { pen: a.pen, highlighter: a.highlighter, erase: a.erase, text: a.text, skipped: a.skipped, erased_share: a.erased_share, ms: a.ms }
+        ScanMarkupApplied {
+            pen: a.pen,
+            highlighter: a.highlighter,
+            erase: a.erase,
+            erase_colour: a.erase_colour,
+            erase_edge: a.erase_edge,
+            text: a.text,
+            skipped: a.skipped,
+            erased_share: a.erased_share,
+            ms: a.ms,
+        }
     }
 }
 
@@ -290,6 +305,8 @@ pub(crate) fn markup_of(markup: &ScanMarkup) -> pdfcraft_scan::markup::Markup {
             .filter_map(|s| {
                 let tool = match s.tool.as_str() {
                     "erase" => Tool::Erase,
+                    "erase_colour" => Tool::EraseColour,
+                    "erase_edge" => Tool::EraseEdge,
                     "pen" => Tool::Pen,
                     "highlighter" => Tool::Highlighter,
                     _ => return None,

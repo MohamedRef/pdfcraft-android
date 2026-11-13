@@ -22,4 +22,16 @@
     <string name="scan_markup_ask_body">De nouveaux bords ou un changement d\'aplatissement déplacent la page sous ses annotations : elles sont retirées.</string>
     <string name="scan_markup_ask_keep">Garder</string>
     <string name="scan_markup_ask_remove">Retirer</string>
+    <!-- #503: colours, the eyedropper and the eraser's fills -->
+    <string name="scan_lab_markup_colours">Couleurs des annotations : palettes, couleur personnalisée, pipette, gomme avec une couleur</string>
+    <string name="scan_lab_markup_edge">Gomme : suivre les bords (en évaluation)</string>
+    <string name="scan_markup_more_colours">Plus de couleurs</string>
+    <string name="scan_markup_dropper">Prendre une couleur sur la page</string>
+    <string name="scan_markup_dropper_hint">Touchez la page et glissez jusqu’à la couleur voulue. Levez le doigt pour la prendre.</string>
+    <string name="scan_markup_erase_hint">Frottez sur un élément pour le recouvrir du papier qui l’entoure.</string>
+    <string name="scan_markup_erase_colour_hint">Frottez pour peindre la couleur choisie. La pipette en prend une sur la page.</string>
+    <string name="scan_markup_erase_edge_hint">Frottez sur un élément pour prolonger dessus les couleurs qui l’entourent.</string>
+    <string name="scan_markup_fill_paper">Papier autour</string>
+    <string name="scan_markup_fill_colour">Couleur</string>
+    <string name="scan_markup_fill_edge">Suivre les bords</string>
 </resources>

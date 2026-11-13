@@ -17,10 +17,27 @@ automatic search missed.
   draws or rubs, two fingers move and zoom (as the viewer's Draw); an S Pen's pressure changes
   the pen's width. Undo, Redo and Clear are at the top, Done at the bottom; Back is Cancel and
   leaves the page as it was.
+- **Colours (#503)**, behind their own testing option: each tool's row keeps its few swatches,
+  shows the colour in use when it is another one, and ends with **More colors** (a palette icon)
+  and the **eyedropper**. More colors opens the viewer's colour sheet: the recent colours, the
+  palettes (the standard 18, the colour-blind-safe set and the person's own named palettes with
+  new, add, export, import and delete) and a custom colour. It is the same store as the viewer's
+  pen, so a palette made in either is in both, and a colour picked in Markup joins the recent ones.
+- **Eyedropper (#503)**: touch the page and move; a loupe above the finger shows the page three
+  times closer, the disc being averaged and, as its ring, the colour it would take. Lifting the
+  finger takes the mean colour of that disc of the made page's pixels (about a 250th of its longer
+  side across) for the tool in use, puts it in the recent colours and ends the eyedropper. With
+  Erase it also turns the fill to Color.
+- **Erase's fill (#503)**, a row of chips above its sizes: **Paper around it** (the default, as in
+  #495), **Color** (the picked colour, opaque, at the eraser's sizes with its soft edge: with the
+  eyedropper, "paint with the colour I picked from the page") and **Follow the edges** (behind its
+  own testing option while it is judged). The hint says what the chosen fill does, e.g. "Rub over
+  something to paint the paper around it over it."
 - **Text**: a tap on the page asks for the words, a size and a colour, and places the box there.
   A tap on a box picks it (it can be dragged, edited or deleted); an empty text removes it.
 - A **black-and-white** page (#300) has no Highlighter (it has no grey to multiply): pen and
-  text are drawn black and the eraser makes paper. A highlighter drawn while the page had
+  text are drawn black and the eraser makes paper. Erase's Color is black or paper only, and
+  More colors and the eyedropper are not offered there. A highlighter drawn while the page had
   another look is left out on that page and counted (`skipped`).
 - New borders (Borders, Crop) or a change of flattening (the Flatten page switch, a flattening
   suggestion, "Flattened · Undo") on a page with marks first ask **"Remove this page's markup?"**;
@@ -69,6 +86,23 @@ photo in Original with marks is decoded and drawn on rather than copied. The eng
   On a tinted page whose light falls off by 30 % across it, a dark blot rubbed out comes within
   4 grey levels of the clean paper at every pixel (test `the_eraser_paints_the_paper_around_it`).
   Consecutive eraser strokes are one fill;
+- paints the eraser's **Color** fill (#503) as the picked colour blended in by the eraser's own
+  weight (opaque inside, the same soft edge); on a black-and-white page it is ink or paper,
+  whichever the colour is nearer;
+- **follows the edges** (#503) by cutting the area around the strokes into blocks of about half the
+  brush's radius (3 to 32 pixels); a block at most a quarter under the brush keeps the median of
+  its pixels per channel (a thin print line does not move a median); the blocks under the brush
+  take the smooth surface that meets all of those (each the mean of its four neighbours until
+  nothing moves by a twentieth of a level, a membrane), so a gradient across the brush is carried
+  through instead of filled ring by ring; the fill follows the blocks bilinearly, with the grain
+  measured around the brush (the spread of each pixel against the mean of its four neighbours,
+  which a smooth shading does not change, at most 12 levels) added back as seeded noise. On paper
+  shaded from 240 to 100 across a band, a dark blot rubbed out with it comes within 5 levels of the
+  clean page at every pixel, where the paper fill is 38 off (test
+  `the_edge_fill_continues_a_shaded_band`); on the tinted page it is 5 off
+  (`the_edge_fill_also_paints_plain_paper`). It does not continue lines or texture (a table's
+  rules, a dotted line): that is patch-based fill, its own issue (#506). Consecutive strokes
+  of the same fill are one fill;
 - draws **text** from a mask of coverage the app makes with Android's own font (the engine has
   none), at the letter height it has on a page 3 000 pixels long, scaled into the box.
 
@@ -78,19 +112,31 @@ drawn yet, on top. It draws the text boxes itself from the same mask, so they ca
 
 ## Testing option, log and kept page file
 
+- Testing options **Markup colors** (`markupColours`, key `markup_colours`, on: More colors, the
+  eyedropper and Erase's Color) and **Erase: Follow the edges** (`markupEdge`, key `markup_edge`,
+  on, while it is judged). Off, those are not offered; strokes already made with them are drawn
+  as they are (#503).
 - Testing option **Markup on scan pages** (`markup`, key `markup`, on). Off: More has no Markup
   or Clear markup, and no page is drawn with marks (they stay with the page and come back when the
   option is on again).
 - Log: `markup_open` (`index`, `marks`); `markup_done` (`index`, `strokes`, `pen`, `highlighter`,
-  `erase`, `text`, `erased_share`, `ms` in the screen, `cancelled`, `changed`); `markup_clear`
+  `erase`, `text`, `erased_share`, `ms` in the screen, `cancelled`, `changed`; since #503
+  `custom_colours` (marks in a colour that is not their tool's own swatch), `eyedropper` (colours it
+  picked), `erase_colour` and `erase_edge` (strokes) and `erase_fill` (`paper`, `colour` or `edge`,
+  Erase's fill when the screen closed)); `markup_clear`
   (`index`, `why`: `clear`, `borders` or `flatten`, `marks`); `markup_ask` and `markup_kept`
   (`index`, `why`); on `page` and `preview` lines `markup` (the option), `marks`, `marks_pen`,
-  `marks_highlighter`, `marks_erase`, `marks_text`, `erased_share` (share of the page the eraser
+  `marks_highlighter`, `marks_erase`, `marks_text`, `marks_erase_colour`, `marks_erase_edge`, `marks_custom_colours`, `erased_share` (share of the page the eraser
   painted, 0–1) and `markup_ms` (-1 when no marks were drawn).
 - Kept page file: `marks` with `pen`, `highlighter`, `erase`, `text`, `total` and
-  `erased_share`, or `null` for a page without marks. **Never the strokes or the words.**
+  `erased_share`, and since #503 `erase_paper`, `erase_colour`, `erase_edge`, `custom_colours` and
+  `eyedropper` (its picks on that page in this scan; a kept scan opened again starts from 0), or
+  `null` for a page without marks. **Never the strokes or the words.**
 
 ## Not done, and not checked
+
+- A session or kept scan with `erase_colour` (`c`) or `erase_edge` (`g`) strokes opened by a build
+  from before #503: those strokes are left out (an unknown tool is not guessed), the others kept.
 
 - The saved PDF has the marks in the page's picture (the same pixels the gallery gets). Writing
   them as real PDF annotations is a question for the owner.
