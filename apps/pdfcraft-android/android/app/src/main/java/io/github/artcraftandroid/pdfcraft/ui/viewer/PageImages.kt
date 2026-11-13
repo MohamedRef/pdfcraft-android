@@ -254,8 +254,13 @@ class PageImages(
                         if (stop == null) engine.session.renderPageCompact(doc, r.key.page.toUInt(), r.scale, r.tile, compact)
                         else engine.session.renderPageCompactCancellable(doc, r.key.page.toUInt(), r.scale, r.tile, compact, stop)
                     }
-                    if (android.os.SystemClock.elapsedRealtime() - started >= SLOW_RENDER_MS) {
-                        io.github.artcraftandroid.pdfcraft.engine.OpenTiming.count("slow_render_pixels", img.width.toLong() * img.height.toLong())
+                    val took = android.os.SystemClock.elapsedRealtime() - started
+                    if (took >= SLOW_RENDER_MS) {
+                        val pixels = img.width.toLong() * img.height.toLong()
+                        io.github.artcraftandroid.pdfcraft.engine.OpenTiming.count("slow_render_pixels", pixels)
+                        // Which page (#236): the same page slow every time is heavy content; a page
+                        // slow only the first time points at font or image decoding.
+                        Diag.event(DiagArea.Render, "slow_render", "page" to r.key.page, "stage" to stage, "ms" to took, "pixels" to pixels)
                     }
                     val bitmap = img.toBitmap()
                     PageImage(r.key, bitmap.asImageBitmap(), r.scale, r.tile?.x?.toInt() ?: 0, r.tile?.y?.toInt() ?: 0, bitmap.allocationByteCount)
