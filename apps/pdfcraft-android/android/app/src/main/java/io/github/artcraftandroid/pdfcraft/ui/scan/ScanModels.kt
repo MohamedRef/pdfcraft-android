@@ -130,7 +130,7 @@ internal fun ScanModelsSection(engine: Engine?, testing: Boolean) {
         models = result.second
     }
 
-    Text(stringResource(R.string.scan_models_section), color = c.accent, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 20.dp, top = 16.dp, bottom = 4.dp))
+    io.github.artcraftandroid.pdfcraft.ui.home.SettingsHeader(stringResource(R.string.scan_models_section))
     for (m in models.orEmpty()) {
         val name = scanModelName(m.id)?.let { stringResource(it) } ?: m.file
         val line = stringResource(R.string.scan_model_line, formatSize(m.bytes.toLong()), m.licence, stringResource(scanModelStateText(m.state, m.bundled)))

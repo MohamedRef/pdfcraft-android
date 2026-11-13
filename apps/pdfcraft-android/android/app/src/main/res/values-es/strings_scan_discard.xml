@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Scanner: Back and Delete ask before a scan or a page is thrown away (#456); kept apart from strings.xml so parallel scanner work merges cleanly. -->
+<resources>
+    <string name="scan_discard_title">¿Descartar este escaneo?</string>
+    <string name="scan_discard">Descartar</string>
+    <string name="scan_keep_scanning">Seguir escaneando</string>
+    <plurals name="scan_discard_body">
+        <item quantity="one">Se eliminará %d página.</item>
+        <item quantity="many">Se eliminarán %d páginas.</item>
+        <item quantity="other">Se eliminarán %d páginas.</item>
+    </plurals>
+    <string name="scan_delete_page_title">¿Eliminar la página %d?</string>
+    <string name="scan_delete_page_body">Se eliminará su foto.</string>
+    <string name="scan_lab_ask_discard">Preguntar antes de que Atrás descarte un escaneo o Eliminar quite una página</string>
+</resources>

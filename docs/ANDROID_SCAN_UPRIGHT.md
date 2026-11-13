@@ -94,7 +94,7 @@ Added after the classifier, in the pull request that closes the rest of #339:
 - The person's turn is kept in the scan session (`ScanSession` version 2, a fifth field on each
   page line; a version 1 session from before an update still comes back), so it survives Android
   closing the app while the camera is in front.
-- **Settings ▸ Preferences ▸ Scan ▸ Turn pages upright automatically**, on by default. Off, no
+- **Settings ▸ Scanner ▸ Turn pages upright automatically**, on by default. Off, no
   page is given to the classifier; Rotate still works. The testing option "Turn pages upright"
   stays, and either one off stops the classifier.
 - **The multi-page rule** (`upright_pages::settle` and `followed`, through `scan_settle_turns`):

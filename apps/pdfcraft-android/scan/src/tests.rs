@@ -279,7 +279,23 @@ fn the_same_photo_gives_the_same_bytes_on_any_number_of_threads() {
         assert_eq!(a.bytes, b.bytes, "{look:?}: twice");
         assert_eq!(a.bytes, c.bytes, "{look:?}: 1 and 4 threads");
         let stages: Vec<&str> = a.timings.iter().map(|t| t.0).collect();
-        assert_eq!(stages, ["scan_decode", "scan_rectify", "scan_look", "scan_encode"]);
+        match look {
+            // Clean scan lists its parts after the whole (#446)
+            Look::Auto => assert_eq!(
+                stages,
+                [
+                    "scan_decode",
+                    "scan_rectify",
+                    "scan_look",
+                    "scan_look_light",
+                    "scan_look_noise",
+                    "scan_look_sharpen",
+                    "scan_look_tone",
+                    "scan_encode"
+                ]
+            ),
+            _ => assert_eq!(stages, ["scan_decode", "scan_rectify", "scan_look", "scan_encode"]),
+        }
         let want = if look == Look::BlackWhite { crate::Format::Png } else { crate::Format::Jpeg };
         assert_eq!(a.format, want);
         assert!((72.0..=600.0).contains(&a.dpi));

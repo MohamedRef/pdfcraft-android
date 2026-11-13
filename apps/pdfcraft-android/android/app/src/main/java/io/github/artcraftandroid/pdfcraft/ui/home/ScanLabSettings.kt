@@ -4,6 +4,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
@@ -36,7 +37,7 @@ import io.github.artcraftandroid.pdfcraft.ui.pdfColors
 import io.github.artcraftandroid.pdfcraft.ui.viewer.formatSize
 
 /**
- * Settings, About, Diagnostics, while the log is being recorded: the scanner's testing options
+ * Settings, Diagnostics, Scanner testing, while the log is being recorded: the scanner's testing options
  * (#288). Each scanner feature can be switched off or swapped for what it replaced, and scans can
  * be kept on the device and shared as a zip, so a page that comes out wrong on a real phone can
  * be looked at afterwards with the photo it was made from.
@@ -49,8 +50,6 @@ internal fun ScanLabSettings(vm: AppViewModel) {
     var confirmShare by remember { mutableStateOf(false) }
     var confirmClear by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { lab.refreshKept() }
-
-    Text(stringResource(R.string.scan_lab_section), color = c.accent, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 20.dp, top = 16.dp, bottom = 4.dp))
 
     // the scans themselves
     SheetRow(null, stringResource(R.string.scan_lab_keep), { lab.update(o.copy(keep = !o.keep)) }) {
@@ -102,6 +101,9 @@ internal fun ScanLabSettings(vm: AppViewModel) {
     }
     SheetRow(null, stringResource(R.string.scan_lab_preview_stop), { lab.update(o.copy(previewStop = !o.previewStop)) }) {
         PdfSwitch(o.previewStop, { lab.update(o.copy(previewStop = it)) })
+    }
+    SheetRow(null, stringResource(R.string.scan_lab_look_reuse), { lab.update(o.copy(lookReuse = !o.lookReuse)) }) {
+        PdfSwitch(o.lookReuse, { lab.update(o.copy(lookReuse = it)) })
     }
     SheetRow(null, stringResource(R.string.scan_lab_preview_zoom), { lab.update(o.copy(previewZoom = !o.previewZoom)) }) {
         PdfSwitch(o.previewZoom, { lab.update(o.copy(previewZoom = it)) })
@@ -157,6 +159,10 @@ internal fun ScanLabSettings(vm: AppViewModel) {
     SheetRow(null, stringResource(R.string.scan_lab_strict_photo), { lab.update(o.copy(strictPhoto = !o.strictPhoto)) }) {
         PdfSwitch(o.strictPhoto, { lab.update(o.copy(strictPhoto = it)) })
     }
+    // one curved side suggests flattening, a book page needs more (#442)
+    SheetRow(null, stringResource(R.string.scan_lab_strict_book), { lab.update(o.copy(strictBook = !o.strictBook)) }) {
+        PdfSwitch(o.strictBook, { lab.update(o.copy(strictBook = it)) })
+    }
     // the slider's strength counts as set by hand, and sharpening scales the type's (#424)
     SheetRow(null, stringResource(R.string.scan_lab_page_strength), { lab.update(o.copy(pageStrength = !o.pageStrength)) }) {
         PdfSwitch(o.pageStrength, { lab.update(o.copy(pageStrength = it)) })
@@ -164,6 +170,10 @@ internal fun ScanLabSettings(vm: AppViewModel) {
     // a page whose outline was not found is a Document until it is cropped (#444)
     SheetRow(null, stringResource(R.string.scan_lab_unfound_document), { lab.update(o.copy(unfoundDocument = !o.unfoundDocument)) }) {
         PdfSwitch(o.unfoundDocument, { lab.update(o.copy(unfoundDocument = it)) })
+    }
+    // Back and Delete ask before a scan or a page is thrown away (#456)
+    SheetRow(null, stringResource(R.string.scan_lab_ask_discard), { lab.update(o.copy(askDiscard = !o.askDiscard)) }) {
+        PdfSwitch(o.askDiscard, { lab.update(o.copy(askDiscard = it)) })
     }
     // the research detectors (#305, #306): a report only, in kept scans, so it changes no page
     SheetRow(null, stringResource(R.string.scan_lab_inspect), { lab.update(o.copy(inspect = !o.inspect)) }) {
@@ -218,7 +228,7 @@ private fun <T> Choice(label: String, values: List<Pair<T, String>>, selected: T
             Text(
                 name, color = if (on) Color.White else c.text, fontSize = 14.sp,
                 modifier = Modifier.clip(RoundedCornerShape(14.dp)).background(if (on) c.accent else c.surface)
-                    .clickable(role = Role.RadioButton) { onPick(value) }.padding(horizontal = 12.dp, vertical = 6.dp),
+                    .selectable(selected = on, role = Role.RadioButton) { onPick(value) }.padding(horizontal = 12.dp, vertical = 6.dp),
             )
         }
     }

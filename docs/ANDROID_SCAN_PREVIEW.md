@@ -15,8 +15,9 @@ nothing is written. `max_side` is the preview's longer side in pixels (64–4096
 should ask for 1280).
 
 `ScanPreview` holds `width`, `height`, `rgba` (four bytes a pixel, ready for an Android
-`Bitmap`), `quarter_turns`, `flattened`, `reused` and `timings` (`scan_preview_base` with its
-parts when the page had to be straightened, then `scan_preview_look`).
+`Bitmap`), `quarter_turns`, `flattened`, `reused`, `light_reused` and `timings`
+(`scan_preview_base` with its parts when the page had to be straightened, then
+`scan_preview_look`, then for Clean scan and Whiteboard the look's parts that ran, #446).
 
 ## How it stays quick
 
@@ -191,6 +192,33 @@ The last parts of #301 that a desktop can build.
 Checked by Rust tests (`a_preview_no_longer_wanted_stops`, `the_paper_chosen_wins_over_the_document_type`,
 Whiteboard in `a_preview_shows_what_will_be_saved`, `enhance::whiteboard` tests) and JVM tests
 (`ScanLooksTest`, `ScanSaveTest`, `ScanSessionTest`, `ScanLabTest`). None of it has run on a phone.
+
+## Clean scan keeps its light estimate (#446)
+
+The phone's first log (0.0.25-beta (25012), Galaxy S24 Ultra) showed a Clean scan strength or
+paper change taking 202 to 394 ms on a straightened page, against 38 to 61 ms for Colour and
+Greyscale. Measured on a desktop (`docs/performance/scan-clean-look-reuse.md`), about 80 % of a
+change was the light estimate (`enhance::background`), which depends on the page only.
+
+- `enhance::Prepared` keeps, for one straightened page, the light estimate with the object mask,
+  the page's grain, and the page smoothed and sharpened before the curve (kept for the last
+  sharpening, smoothing, resolution and photo mask asked for). `PageBase::look_kept` holds one, so
+  every look of a kept preview page uses it; `auto_with_photos` is `auto_prepared` with an empty
+  one, so a saved page is made exactly as before.
+- A strength or paper change, or a document type's tone, then runs the tone curve alone; a change
+  of sharpening sharpens again but keeps the light. Every look made this way has the same bytes as
+  one measured from nothing (`a_look_from_what_was_kept_has_the_bytes_of_one_made_from_nothing`).
+- Memory: one more page-sized RGB buffer per kept preview page (under 5 MB at 1280 pixels; four
+  pages kept, so under 20 MB more at most) and the light planes at 1000 pixels.
+- Testing option **Keep the page's light estimate between Clean scan changes** (on); off measures
+  everything again for each look, as before (`PageRequest::reuse_look`, `ScanPageRequest.reuse_look`).
+- Log: `preview` lines gain `preview_look_light_ms`, `preview_look_noise_ms`,
+  `preview_look_denoise_ms`, `preview_look_sharpen_ms`, `preview_look_tone_ms` (the parts that ran),
+  `look_reuse` and `light_reused`; a saved page's `page` line gains `look_light_ms` and the others
+  from its own timings. **Page file**: `preview.light_reused`, `preview.look_parts_ms`, and
+  `options.look_reuse`.
+- Not done: Black and white (255 ms on the phone) and the first look of a page (the light estimate
+  still has to be made once) are unchanged. Nothing here has run on a phone.
 
 ## Not done (left in #301)
 

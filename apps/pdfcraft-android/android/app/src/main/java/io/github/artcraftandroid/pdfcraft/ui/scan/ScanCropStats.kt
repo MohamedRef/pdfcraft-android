@@ -83,3 +83,9 @@ internal fun maxCornerMovePct(a: FloatArray, b: FloatArray, aspect: Float): Doub
     val diagonal = sqrt(aspect.toDouble() * aspect + 1.0)
     return (0..3).maxOf { i -> hypot((a[2 * i] - b[2 * i]).toDouble() * aspect, (a[2 * i + 1] - b[2 * i + 1]).toDouble()) } / diagonal * 100.0
 }
+
+/**
+ * The page number the crop screen's log lines (`crop`, `crop_snap`, `crop_detect`) carry for the
+ * page at list position [index] (#445): from 1, like every other scan line.
+ */
+internal fun scanLogPageNumber(index: Int): Int = index + 1

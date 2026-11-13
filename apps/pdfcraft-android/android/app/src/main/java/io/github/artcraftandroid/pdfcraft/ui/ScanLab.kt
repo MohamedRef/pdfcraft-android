@@ -89,6 +89,12 @@ internal data class ScanLab(
      */
     val strictPhoto: Boolean = true,
     /**
+     * A page is a Book page only with more than one curved side: the gutter's band, the two
+     * opposite sides both curved, or a curved side in book mode (#442). One curved side (a sheet
+     * held in the hand) only suggests flattening. Off is the first rule: any curved side.
+     */
+    val strictBook: Boolean = true,
+    /**
      * A strength set on the page with the scan screen's slider counts as set by hand: the document
      * type's strength no longer replaces it, and the sharpening above scales the type's own
      * sharpening (#424). Off: the type's strength and sharpening replace them, as before.
@@ -101,6 +107,11 @@ internal data class ScanLab(
      * out from the whole photo, as before.
      */
     val unfoundDocument: Boolean = true,
+    /**
+     * The scan screen's Back (the arrow and Android's Back) asks before it throws away a scan
+     * with pages, and Delete asks before it removes a page (#456). Off: both act at once, as before.
+     */
+    val askDiscard: Boolean = true,
     /** In book mode, cut a spread along the gutter found in the photo (#303); off cuts every spread at its centre line. */
     val bookGutter: Boolean = true,
     /**
@@ -126,6 +137,12 @@ internal data class ScanLab(
     /** Double-tap or pinch the preview to look closer, with a sharper page once zoomed in (#301); off, the preview doesn't zoom. */
     val previewZoom: Boolean = true,
     /**
+     * Clean scan and Whiteboard keep the page's light estimate with its straightened preview page,
+     * so a strength or paper change only redraws the tone (#446). The page looks the same either
+     * way; off, the light is estimated again for every change, as before.
+     */
+    val lookReuse: Boolean = true,
+    /**
      * With keeping scans on, run the research detectors on each kept page and report what they see
      * (#305 moiré, #306 fingers, glare and stains) in the log and the page file. Detection only:
      * no page changes, so this does not count as a changed option.
@@ -144,27 +161,27 @@ internal data class ScanLab(
     fun diag(): Array<Pair<String, Any?>> = arrayOf<Pair<String, Any?>>(
         "finder" to finderId(finder), "refine" to refine, "side_proportions" to !perspective,
         "snap_paper" to snapPaper, "strength_override" to (strength ?: -1), "upright" to upright, "sharpen" to sharpen,
-        "denoise" to denoise, "preview" to preview, "crop_tools" to cropTools, "crop_detect_note" to cropDetectNote, "flatten_auto" to flattenAuto, "flatten_trim" to flattenTrim, "flatten_line_floor" to flattenLineFloor, "settle_turns" to settleTurns, "presets" to presets, "kind_tone" to kindTone, "photo_sharpen" to photoSharpen, "suggestions" to suggestions, "strict_gutter" to strictGutter, "strict_photo" to strictPhoto, "book_gutter" to bookGutter, "line_flatten" to lineFlatten,
-        "page_strength" to pageStrength, "unfound_document" to unfoundDocument, "look_per_page" to lookPerPage, "look_strip" to lookStrip,
-        "whiteboard_look" to whiteboardLook, "preview_stop" to previewStop, "preview_zoom" to previewZoom, "keep" to keep, "inspect" to inspect,
+        "denoise" to denoise, "preview" to preview, "crop_tools" to cropTools, "crop_detect_note" to cropDetectNote, "flatten_auto" to flattenAuto, "flatten_trim" to flattenTrim, "flatten_line_floor" to flattenLineFloor, "settle_turns" to settleTurns, "presets" to presets, "kind_tone" to kindTone, "photo_sharpen" to photoSharpen, "suggestions" to suggestions, "strict_gutter" to strictGutter, "strict_photo" to strictPhoto, "strict_book" to strictBook, "book_gutter" to bookGutter, "line_flatten" to lineFlatten,
+        "page_strength" to pageStrength, "unfound_document" to unfoundDocument, "ask_discard" to askDiscard, "look_per_page" to lookPerPage, "look_strip" to lookStrip,
+        "whiteboard_look" to whiteboardLook, "preview_stop" to previewStop, "preview_zoom" to previewZoom, "look_reuse" to lookReuse, "keep" to keep, "inspect" to inspect,
     )
 
     /** The options as JSON, for a kept scan's page file. */
     fun json(): JSONObject = JSONObject()
         .put("finder", finderId(finder)).put("refine", refine).put("side_proportions", !perspective)
         .put("snap_paper", snapPaper).put("strength_override", strength ?: JSONObject.NULL).put("upright", upright)
-        .put("sharpen", sharpen).put("denoise", denoise).put("preview", preview).put("crop_tools", cropTools).put("crop_detect_note", cropDetectNote).put("flatten_auto", flattenAuto).put("flatten_trim", flattenTrim).put("flatten_line_floor", flattenLineFloor).put("settle_turns", settleTurns).put("presets", presets).put("kind_tone", kindTone).put("photo_sharpen", photoSharpen).put("suggestions", suggestions).put("strict_gutter", strictGutter).put("strict_photo", strictPhoto).put("book_gutter", bookGutter).put("line_flatten", lineFlatten)
-        .put("page_strength", pageStrength).put("unfound_document", unfoundDocument).put("look_per_page", lookPerPage).put("look_strip", lookStrip)
-        .put("whiteboard_look", whiteboardLook).put("preview_stop", previewStop).put("preview_zoom", previewZoom).put("inspect", inspect)
+        .put("sharpen", sharpen).put("denoise", denoise).put("preview", preview).put("crop_tools", cropTools).put("crop_detect_note", cropDetectNote).put("flatten_auto", flattenAuto).put("flatten_trim", flattenTrim).put("flatten_line_floor", flattenLineFloor).put("settle_turns", settleTurns).put("presets", presets).put("kind_tone", kindTone).put("photo_sharpen", photoSharpen).put("suggestions", suggestions).put("strict_gutter", strictGutter).put("strict_photo", strictPhoto).put("strict_book", strictBook).put("book_gutter", bookGutter).put("line_flatten", lineFlatten)
+        .put("page_strength", pageStrength).put("unfound_document", unfoundDocument).put("ask_discard", askDiscard).put("look_per_page", lookPerPage).put("look_strip", lookStrip)
+        .put("whiteboard_look", whiteboardLook).put("preview_stop", previewStop).put("preview_zoom", previewZoom).put("look_reuse", lookReuse).put("inspect", inspect)
 
     /** One line of text for the app's preferences. */
     fun encode(): String = listOf(
         "keep" to flag(keep), "finder" to finderId(finder), "refine" to flag(refine),
         "perspective" to flag(perspective), "snap" to flag(snapPaper), "strength" to (strength?.toString() ?: ""),
         "upright" to flag(upright), "sharpen" to sharpen.toString(), "denoise" to flag(denoise), "preview" to flag(preview), "crop" to flag(cropTools), "detect_note" to flag(cropDetectNote), "flatten_auto" to flag(flattenAuto), "flatten_trim" to flag(flattenTrim), "line_floor" to flag(flattenLineFloor),
-        "settle" to flag(settleTurns), "presets" to flag(presets), "kind_tone" to flag(kindTone), "photo_sharpen" to flag(photoSharpen), "suggest" to flag(suggestions), "strict_gutter" to flag(strictGutter), "strict_photo" to flag(strictPhoto), "gutter" to flag(bookGutter), "line_flatten" to flag(lineFlatten),
-        "page_strength" to flag(pageStrength), "unfound_doc" to flag(unfoundDocument), "look_page" to flag(lookPerPage), "look_strip" to flag(lookStrip),
-        "board" to flag(whiteboardLook), "stop" to flag(previewStop), "zoom" to flag(previewZoom), "inspect" to flag(inspect),
+        "settle" to flag(settleTurns), "presets" to flag(presets), "kind_tone" to flag(kindTone), "photo_sharpen" to flag(photoSharpen), "suggest" to flag(suggestions), "strict_gutter" to flag(strictGutter), "strict_photo" to flag(strictPhoto), "strict_book" to flag(strictBook), "gutter" to flag(bookGutter), "line_flatten" to flag(lineFlatten),
+        "page_strength" to flag(pageStrength), "unfound_doc" to flag(unfoundDocument), "ask_discard" to flag(askDiscard), "look_page" to flag(lookPerPage), "look_strip" to flag(lookStrip),
+        "board" to flag(whiteboardLook), "stop" to flag(previewStop), "zoom" to flag(previewZoom), "look_reuse" to flag(lookReuse), "inspect" to flag(inspect),
     ).joinToString(";") { (k, v) -> "$k=$v" }
 
     companion object {
@@ -218,20 +235,26 @@ internal data class ScanLab(
                 suggestions = on("suggest", default.suggestions),
                 strictGutter = on("strict_gutter", default.strictGutter),
                 strictPhoto = on("strict_photo", default.strictPhoto),
+                strictBook = on("strict_book", default.strictBook),
                 bookGutter = on("gutter", default.bookGutter),
                 lineFlatten = on("line_flatten", default.lineFlatten),
                 pageStrength = on("page_strength", default.pageStrength),
                 unfoundDocument = on("unfound_doc", default.unfoundDocument),
+                askDiscard = on("ask_discard", default.askDiscard),
                 lookPerPage = on("look_page", default.lookPerPage),
                 lookStrip = on("look_strip", default.lookStrip),
                 whiteboardLook = on("board", default.whiteboardLook),
                 previewStop = on("stop", default.previewStop),
                 previewZoom = on("zoom", default.previewZoom),
+                lookReuse = on("look_reuse", default.lookReuse),
                 inspect = on("inspect", default.inspect),
             )
         }
     }
 }
+
+/** How a scan was thrown away (#456): whether the person was asked first, and how many pages it had. */
+internal data class ScanDiscard(val asked: Boolean, val pages: Int)
 
 /** What the search for a page's edges came back with (#290, #291): kept with a scan kept for testing. */
 data class ScanFinding(
@@ -241,6 +264,8 @@ data class ScanFinding(
     val passes: Int,
     val refinedSides: Int,
     val curvedSides: Int,
+    /** Two opposite sides (top and bottom, or left and right) were both found curved (#442). */
+    val curvedOpposite: Boolean = false,
     /** The search that was made, so the crop screen does not make it again when it found nothing (#443). */
     val asked: ScanFindOptions? = null,
 )
@@ -306,6 +331,12 @@ internal data class ScanTestKind(
     val gutterCover: Double = 0.0,
     /** What the first photo rule (#299) reads as photograph, whichever rule is in force (#427); -1 when not known. */
     val photoLoose: Double = -1.0,
+    /** What the first book page rule (#299: any curved side) says, whichever rule is in force (#442). */
+    val bookLoose: Boolean = false,
+    /** Two opposite sides were found curved (#442). */
+    val curvedOpposite: Boolean = false,
+    /** The page came from book mode (#442). */
+    val bookMode: Boolean = false,
     /** The kind's change to the tone curve (#299): added gamma, the S-curve, the colour factor. */
     val extraGamma: Double = 0.0,
     val sCurve: Boolean = false,
@@ -319,8 +350,19 @@ internal data class ScanTestOrientation(val quarterTurns: Int, val confidence: D
  * The last preview the scan screen showed of a page before it was saved (#301): whether one was
  * shown at all, whether its straightened page was reused, how long it took and its size. A page
  * saved without one (the option off, or saved before the preview came) has [shown] false.
+ * [lightReused] says Clean scan or Whiteboard found the page's light estimate kept from an earlier
+ * look, and [lookParts] holds the look's parts that ran, in milliseconds (#446).
  */
-internal data class ScanTestPreview(val shown: Boolean, val reused: Boolean, val ms: Long, val width: Int, val height: Int, val look: String?)
+internal data class ScanTestPreview(
+    val shown: Boolean,
+    val reused: Boolean,
+    val ms: Long,
+    val width: Int,
+    val height: Int,
+    val look: String?,
+    val lightReused: Boolean = false,
+    val lookParts: Map<String, Long> = emptyMap(),
+)
 
 /** The name, without an extension, of page [index] (from 0) of a kept scan. */
 internal fun scanTestName(index: Int): String = String.format(Locale.US, "page-%02d", index + 1)
@@ -368,6 +410,8 @@ internal fun scanTestPageJson(
     applied: ScanAppliedStrength? = null,
     /** Where the page's kind of document came from (#444): "off", "chosen", "no_outline" or "measured"; null when not known. */
     kindSource: String? = null,
+    /** How a discarded scan was given up (#456): `asked` and `pages`; null for a saved page. */
+    discard: ScanDiscard? = null,
 ): String {
     val page = JSONObject()
         .put("corners", shares(corners)).put("kind", "other").put("paper", "unknown").put("curved", false).put("notes", "")
@@ -380,6 +424,7 @@ internal fun scanTestPageJson(
             finding?.let {
                 JSONObject().put("source", it.source).put("confidence", Math.round(it.confidence * 1000.0) / 1000.0).put("angle", it.angle)
                     .put("passes", it.passes).put("refined_sides", it.refinedSides).put("curved_sides", it.curvedSides)
+                    .put("curved_opposite", it.curvedOpposite)
             } ?: JSONObject.NULL,
         )
         .put("look", look ?: JSONObject.NULL).put("strength", strength ?: JSONObject.NULL).put("flatten", flatten)
@@ -397,6 +442,7 @@ internal fun scanTestPageJson(
                     .put("ratio", r(it.ratio)).put("ink_share", r(it.inkShare)).put("colour_ink_share", r(it.colourInkShare))
                     .put("photo_share", r(it.photoShare)).put("stroke_mm", r(it.strokeMm)).put("bright_share", r(it.brightShare))
                     .put("gutter_band", it.gutterBand).put("gutter_loose", it.gutterLoose).put("gutter_cover", r(it.gutterCover)).put("photo_loose", r(it.photoLoose)).put("whole_photo", it.wholePhoto)
+                    .put("book_loose", it.bookLoose).put("curved_opposite", it.curvedOpposite).put("book_mode", it.bookMode)
                     .put("extra_gamma", r(it.extraGamma)).put("s_curve", it.sCurve).put("colour_factor", r(it.colourFactor))
             } ?: JSONObject.NULL,
         )
@@ -412,6 +458,9 @@ internal fun scanTestPageJson(
             preview?.let {
                 JSONObject().put("shown", it.shown).put("reused", it.reused).put("ms", it.ms).put("width", it.width).put("height", it.height)
                     .put("look", it.look ?: JSONObject.NULL)
+                    // the look's light estimate kept from an earlier look, and the parts that ran (#446)
+                    .put("light_reused", it.lightReused)
+                    .put("look_parts_ms", JSONObject().also { parts -> it.lookParts.forEach { (stage, ms) -> parts.put(stage, ms) } })
             } ?: JSONObject.NULL,
         )
         .put("crop", crop?.json() ?: JSONObject.NULL)
@@ -420,6 +469,8 @@ internal fun scanTestPageJson(
         .put("book", book?.json() ?: JSONObject.NULL)
         .put("page_look", pageLook ?: JSONObject.NULL)
         .put("inspect", inspection ?: JSONObject.NULL)
+        // #456: whether the person was asked before the scan was thrown away, and how many pages it had
+        .put("discard", discard?.let { JSONObject().put("asked", it.asked).put("pages", it.pages) } ?: JSONObject.NULL)
         .put("strength_applied", applied?.let { JSONObject().put("strength", it.strength).put("source", it.source).put("fixed", it.fixed) } ?: JSONObject.NULL)
     page.put(
         "result",

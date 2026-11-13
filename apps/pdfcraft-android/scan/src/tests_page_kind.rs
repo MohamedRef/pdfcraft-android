@@ -5,7 +5,7 @@
 use crate::aspect::{AspectSource, Paper};
 use crate::look::{Look, Pixels};
 use crate::page::{PageBase, PageRequest, kind_sharpen, page_look, page_look_kind};
-use crate::page_kind::{PresetChoice, page_features, page_kind, preset_from_id};
+use crate::page_kind::{Curve, PresetChoice, page_features, page_kind, preset_from_id};
 use crate::preset::{Preset, params};
 use crate::warp::Rgb;
 
@@ -50,6 +50,7 @@ fn base(page: Rgb, dpi: u16, paper: Paper) -> PageBase {
         line_flatten: None,
         timings: Vec::new(),
         measured: std::sync::OnceLock::new(),
+        look_kept: crate::enhance::Prepared::new(),
     }
 }
 
@@ -76,7 +77,7 @@ fn every_preset_has_a_word_that_names_it() {
 #[test]
 fn a_long_narrow_slip_is_a_receipt_and_gets_the_receipts_settings() {
     let page = base(receipt(), 200, Paper::Custom);
-    let kind = page_kind(&page.page, page.dpi, page.paper, 0, PresetChoice::Auto).unwrap();
+    let kind = page_kind(&page.page, page.dpi, page.paper, Curve::default(), PresetChoice::Auto).unwrap();
     assert_eq!((kind.preset, kind.chosen), (Preset::Receipt, false));
     assert!((kind.features.ratio - 3.0).abs() < 1e-9, "{:?}", kind.features);
     assert_eq!(kind.params, params(Preset::Receipt));
@@ -134,15 +135,17 @@ fn only_the_clean_scan_look_has_a_kind_and_off_is_as_before() {
 fn a_printed_a4_page_is_a_document_and_a_card_sized_one_an_id_card() {
     let english = drawn(include_bytes!("../tests/data/upright-english.png"));
     let dpi = (f64::from(english.width.min(english.height)) / 210.0 * 25.4).round() as u16;
-    let kind = page_kind(&english, dpi, Paper::A4, 0, PresetChoice::Auto).unwrap();
+    let kind = page_kind(&english, dpi, Paper::A4, Curve::default(), PresetChoice::Auto).unwrap();
     assert_eq!(kind.preset, Preset::Document, "{:?}", kind.features);
     assert!(kind.features.photo_share < 0.15 && !kind.whole_photo, "{:?}", kind.features);
     assert!((kind.features.short_mm.unwrap() - 210.0).abs() < 1.0);
-    // two curved sides make it a book page
-    assert_eq!(page_kind(&english, dpi, Paper::A4, 2, PresetChoice::Auto).unwrap().preset, Preset::BookPage);
-    assert_eq!(page_kind(&english, dpi, Paper::IdCard, 0, PresetChoice::Auto).unwrap().preset, Preset::IdCard);
+    // two opposite curved sides make it a book page; one does not (#442)
+    let opposite = Curve { sides: 2, opposite: true, book_mode: false };
+    assert_eq!(page_kind(&english, dpi, Paper::A4, opposite, PresetChoice::Auto).unwrap().preset, Preset::BookPage);
+    assert_eq!(page_kind(&english, dpi, Paper::A4, Curve::sides(1), PresetChoice::Auto).unwrap().preset, Preset::Document);
+    assert_eq!(page_kind(&english, dpi, Paper::IdCard, Curve::default(), PresetChoice::Auto).unwrap().preset, Preset::IdCard);
     // the same page gives the same features every time
-    assert_eq!(page_features(&english, dpi, Paper::A4, 0), page_features(&english, dpi, Paper::A4, 0));
+    assert_eq!(page_features(&english, dpi, Paper::A4, Curve::default()), page_features(&english, dpi, Paper::A4, Curve::default()));
 }
 
 /// A smooth random picture over the top nine tenths of a white page, mid tones only (as in
@@ -178,7 +181,7 @@ fn picture_page() -> Rgb {
 
 #[test]
 fn a_page_that_is_mostly_a_photograph_is_a_photo() {
-    let kind = page_kind(&picture_page(), 150, Paper::Custom, 0, PresetChoice::Auto).unwrap();
+    let kind = page_kind(&picture_page(), 150, Paper::Custom, Curve::default(), PresetChoice::Auto).unwrap();
     assert_eq!(kind.preset, Preset::Photo, "{:?}", kind.features);
     assert!(kind.whole_photo);
 }
@@ -186,9 +189,9 @@ fn a_page_that_is_mostly_a_photograph_is_a_photo() {
 #[test]
 fn a_page_too_small_or_malformed_has_no_kind() {
     let bad = Rgb { width: 10, height: 10, data: vec![0; 5] };
-    assert!(page_kind(&bad, 200, Paper::Custom, 0, PresetChoice::Auto).is_none());
+    assert!(page_kind(&bad, 200, Paper::Custom, Curve::default(), PresetChoice::Auto).is_none());
     let empty = Rgb { width: 0, height: 0, data: Vec::new() };
-    assert!(page_kind(&empty, 200, Paper::Custom, 0, PresetChoice::Auto).is_none());
+    assert!(page_kind(&empty, 200, Paper::Custom, Curve::default(), PresetChoice::Auto).is_none());
 }
 
 /// The mean luminance of `pixels` where `print` marks the page's print.
@@ -322,9 +325,51 @@ fn a_flat_dark_band_is_a_book_page_only_under_the_first_gutter_rule() {
     // both rules' readings are in the features, whichever is in force
     assert!(with_strict.features.gutter_loose && !with_strict.features.gutter_band);
     assert!(with_loose.features.gutter_loose && with_loose.features.gutter_band);
-    // a curved side still makes it a book page under the strict rule
+    // a curved side with the strict gutter band is a book page (#442); the band here is not one
     let curved = PageRequest { curved_sides: 1, ..request(PresetChoice::Auto) };
-    assert_eq!(page_look_kind(&page, &curved).unwrap().1.unwrap().preset, Preset::BookPage);
+    assert_eq!(page_look_kind(&page, &curved).unwrap().1.unwrap().preset, Preset::Document);
+    let curved_loose = PageRequest { curved_sides: 1, strict_gutter: false, ..request(PresetChoice::Auto) };
+    assert_eq!(page_look_kind(&page, &curved_loose).unwrap().1.unwrap().preset, Preset::BookPage);
+}
+
+/// #442: a plain sheet whose edge detection found one curved side (held in the hand, curling at
+/// one edge), with no gutter, is a Document and still gets the Flatten suggestion. Two opposite
+/// curved sides, or one in book mode, make it a book page; the first rule took any curved side.
+#[test]
+fn one_curved_side_on_a_plain_sheet_suggests_flattening_but_is_not_a_book_page() {
+    let english = drawn(include_bytes!("../tests/data/upright-english.png"));
+    let dpi = (f64::from(english.width.min(english.height)) / 210.0 * 25.4).round() as u16;
+    let page = base(english, dpi, Paper::A4);
+    let kind = |r: PageRequest<'static>| page_look_kind(&page, &r).unwrap().1.unwrap();
+
+    let flat = kind(request(PresetChoice::Auto));
+    assert_eq!(flat.preset, Preset::Document);
+    assert!(!flat.params.suggest_flatten && !flat.book_loose);
+
+    let one = kind(PageRequest { curved_sides: 1, ..request(PresetChoice::Auto) });
+    println!("one curved side: {:?}, suggest_flatten {}, book_loose {}", one.preset, one.params.suggest_flatten, one.book_loose);
+    assert_eq!(one.preset, Preset::Document);
+    assert!(one.params.suggest_flatten, "a curved side still suggests flattening");
+    assert!(one.book_loose && !one.features.gutter_band, "the first rule would have called it a book page");
+    // the kind's other settings are the Document's: only the suggestion changes
+    assert_eq!(one.params.strength, flat.params.strength);
+
+    let opposite = kind(PageRequest { curved_sides: 2, curved_opposite: true, ..request(PresetChoice::Auto) });
+    assert_eq!(opposite.preset, Preset::BookPage);
+    let book = kind(PageRequest { curved_sides: 1, book_mode: true, ..request(PresetChoice::Auto) });
+    assert_eq!(book.preset, Preset::BookPage);
+    let adjacent = kind(PageRequest { curved_sides: 2, ..request(PresetChoice::Auto) });
+    assert_eq!((adjacent.preset, adjacent.params.suggest_flatten), (Preset::Document, true));
+
+    // the testing option puts the first rule back exactly: book page, its own suggestion
+    let first = kind(PageRequest { curved_sides: 1, strict_book: false, ..request(PresetChoice::Auto) });
+    assert_eq!((first.preset, first.params.suggest_flatten), (Preset::BookPage, true));
+    let first_flat = kind(PageRequest { strict_book: false, ..request(PresetChoice::Auto) });
+    assert_eq!(first_flat, flat);
+
+    // a kind the person chose keeps its own name, and a curved side still suggests flattening
+    let chosen = kind(PageRequest { curved_sides: 1, ..request(PresetChoice::Fixed(Preset::Receipt)) });
+    assert_eq!((chosen.preset, chosen.params.suggest_flatten), (Preset::Receipt, true));
 }
 
 /// A label as a small photo shows it: a few lines of print and a large barcode whose thin bars
@@ -413,7 +458,7 @@ fn a_page_base_measures_its_page_once_and_every_look_gets_the_same_kind() {
     assert_eq!(rgb(first.pixels), rgb(again.pixels.clone()));
     assert_eq!(kind, kind_again);
     // and what it kept is what a page measured afresh gives
-    assert_eq!(kind.unwrap(), page_kind(&page, dpi, Paper::A4, 0, PresetChoice::Auto).unwrap());
+    assert_eq!(kind.unwrap(), page_kind(&page, dpi, Paper::A4, Curve::default(), PresetChoice::Auto).unwrap());
     let unmeasured = base(page, dpi, Paper::A4);
     assert_eq!(rgb(page_look_kind(&unmeasured, &request(PresetChoice::Auto)).unwrap().0.pixels), rgb(again.pixels));
     // presets off and the other looks do not measure at all
