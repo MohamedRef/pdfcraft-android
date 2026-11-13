@@ -4,6 +4,8 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.selection.selectable
 import io.github.artcraftandroid.pdfcraft.ui.scan.rotateScanPage
+import io.github.artcraftandroid.pdfcraft.ui.scan.rotateScanPageBy
+import io.github.artcraftandroid.pdfcraft.ui.scan.scanAutoTurns
 import io.github.artcraftandroid.pdfcraft.ui.scan.chooseScanLook
 import io.github.artcraftandroid.pdfcraft.ui.scan.toggleScanFlatten
 import io.github.artcraftandroid.pdfcraft.ui.scan.undoScanTurn
@@ -903,6 +905,46 @@ fun ScanScreen(vm: AppViewModel) {
         if (pages.size > seen) current = pages.lastIndex
         seen = pages.size
     }
+    // Adjust borders, the step after a photo (#458): the crop screen with its own bars
+    val stepsOn = vm.scanLab.options.steps
+    val borders = vm.scanSteps.borders
+    val bordersAt = if (stepsOn && borders != null) pages.indexOfFirst { it.key == borders.key } else -1
+    // a page deleted or replaced while it was open: nothing to show (a retake reopens it itself)
+    LaunchedEffect(borders, bordersAt, stepsOn, vm.scanRetaking) {
+        if (borders != null && bordersAt < 0 && !vm.scanRetaking) vm.scanSteps.close("scan", 0)
+    }
+    if (borders != null && bordersAt >= 0) {
+        val p = pages[bordersAt]
+        val shownTurns = io.github.artcraftandroid.pdfcraft.ui.scan.scanTurnShown(p.turns, vm.scanAutoTurns(bordersAt))
+        io.github.artcraftandroid.pdfcraft.ui.scan.ScanCropScreen(
+            p, bordersAt, vm.scanLab.options,
+            onDone = { q, stats ->
+                val now = pages[bordersAt]
+                pages[bordersAt] = now.copy(corners = q, crop = now.crop?.plus(stats) ?: stats)
+                current = bordersAt
+                // Next goes to Enhance once #459 is in; until then to this page on the scan screen
+                vm.scanSteps.close("scan", bordersAt + 1)
+            },
+            onCancel = { vm.scanSteps.close("scan", bordersAt + 1) },
+            steps = io.github.artcraftandroid.pdfcraft.ui.scan.ScanBordersStep(
+                page = bordersAt + 1, pages = pages.size, opener = borders.opener,
+                finding = io.github.artcraftandroid.pdfcraft.ui.scan.scanBordersFinding(p.found, p.file.absolutePath in vm.scanSteps.searched, p.uncropped),
+                turns = shownTurns,
+                onRetake = {
+                    vm.scanSteps.retakeFromBorders = true
+                    vm.retakeScan(bordersAt)
+                },
+                onRotate = { d -> vm.rotateScanPageBy(bordersAt, d) },
+                onDiscard = {
+                    // one step back: the photo just taken goes, and the camera comes back for another
+                    vm.scanSteps.close("camera", bordersAt + 1)
+                    vm.deleteScanPage(bordersAt)
+                    vm.takeScanPhoto()
+                },
+            ),
+        )
+        return
+    }
     val croppingAt = pages.indexOfFirst { it.key == cropping }
     if (croppingAt >= 0) {
         val lab = vm.scanLab.options
@@ -1136,7 +1178,15 @@ fun ScanScreen(vm: AppViewModel) {
         }
         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(8.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             TextButton(onClick = { vm.retakeScan(current) }, enabled = pages.isNotEmpty()) { Text(stringResource(R.string.tools_retake), color = c.accent) }
-            TextButton(onClick = { cropping = pages.getOrNull(current.coerceAtMost(pages.lastIndex))?.key }, enabled = pages.isNotEmpty()) { Text(stringResource(R.string.tools_crop), color = c.accent) }
+            TextButton(
+                onClick = {
+                    val at = current.coerceAtMost(pages.lastIndex)
+                    val key = pages.getOrNull(at)?.key
+                    // with the steps on, Crop opens Adjust borders on the page (#458)
+                    if (stepsOn && key != null) vm.scanSteps.openFromPage(key, at + 1, "page") else cropping = key
+                },
+                enabled = pages.isNotEmpty(),
+            ) { Text(stringResource(R.string.tools_crop), color = c.accent) }
             // a quarter turn clockwise, the person's from then on (#339)
             TextButton(onClick = { vm.rotateScanPage(current.coerceAtMost(pages.lastIndex)) }, enabled = pages.isNotEmpty()) { Text(stringResource(R.string.scan_rotate), color = c.accent) }
             TextButton(

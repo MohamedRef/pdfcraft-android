@@ -155,13 +155,13 @@ private fun snapSetting(context: Context) = context.getSharedPreferences("app", 
  * [onDone] gets the corners and what happened here, for the diagnostics log and kept scans.
  */
 @Composable
-internal fun ScanCropScreen(page: ScanPage, index: Int, lab: ScanLab, onDone: (FloatArray, ScanCropStats) -> Unit, onCancel: () -> Unit) {
+internal fun ScanCropScreen(page: ScanPage, index: Int, lab: ScanLab, onDone: (FloatArray, ScanCropStats) -> Unit, onCancel: () -> Unit, steps: ScanBordersStep? = null) {
     val c = pdfColors
     val context = LocalContext.current
     val density = LocalDensity.current
     val haptics = LocalHapticFeedback.current
     val scope = rememberCoroutineScope()
-    val opened = remember(page.key) { page.corners.copyOf() }
+    var opened by remember(page.key) { mutableStateOf(page.corners.copyOf()) }
     val openedAt = remember(page.key) { SystemClock.elapsedRealtime() }
     var corners by remember(page.key) { mutableStateOf(page.corners) }
     // sides placed by hand without a snap are drawn dashed
@@ -177,6 +177,17 @@ internal fun ScanCropScreen(page: ScanPage, index: Int, lab: ScanLab, onDone: (F
     var detectNote by remember(page.key) { mutableStateOf<ScanCropDetectNote?>(null) }
     // searches that found nothing on this photo, starting with the import's own (#443)
     var detectEmpty by remember(page.key) { mutableStateOf(scanCropDetectEmptyAtOpen(page.found, page.finding?.asked)) }
+    // the corners the last Auto found, for the Whole photo ⇄ Auto button (#458)
+    var lastFound by remember(page.key) { mutableStateOf<FloatArray?>(null) }
+    // Adjust borders opens right after the photo (#458), before the page's outline is found: the
+    // corners follow the search's answer until they are touched
+    LaunchedEffect(page.key, page.corners, page.finding) {
+        if (scanSameCorners(corners, opened) && !scanSameCorners(page.corners, opened)) {
+            opened = page.corners.copyOf()
+            corners = page.corners
+        }
+        if (stats.detects == 0) detectEmpty = scanCropDetectEmptyAtOpen(page.found, page.finding?.asked)
+    }
     // a drag started after a snap was asked for makes that snap's answer stale
     var dragSerial by remember { mutableStateOf(0) }
     var info by remember(page.file) { mutableStateOf<ScanPhotoInfo?>(null) }
@@ -266,11 +277,94 @@ internal fun ScanCropScreen(page: ScanPage, index: Int, lab: ScanLab, onDone: (F
             movedPct = if (done) maxCornerMovePct(opened, corners, aspect) else 0.0,
             cornersOff = if (done) cornersOffPhoto(corners) else 0,
         )
-        Diag.event(DiagArea.Scan, "crop", "index" to scanLogPageNumber(index), "done" to done, *s.diag())
+        Diag.event(DiagArea.Scan, "crop", "index" to scanLogPageNumber(index), "done" to done, "opened_by" to (steps?.opener?.id ?: "crop_button"), *s.diag())
         if (done) onDone(corners, s) else onCancel()
     }
 
-    ToolScaffold(stringResource(R.string.tools_crop), { finish(false) }, stringResource(R.string.common_done), true, { finish(true) }) {
+    /** Auto-detect: the page searched for again, and the corners moved onto it when found. */
+    fun detect() {
+        detecting = true
+        stats = stats.copy(detects = stats.detects + 1)
+        // the line is emptied first, so the same words said again are announced again
+        detectNote = null
+        val asked = lab.findOptions()
+        val plan = scanCropDetectPlan(asked, detectEmpty, lab.cropDetectNote)
+        scope.launch {
+            if (plan !is ScanCropDetectPlan.Search) {
+                Diag.event(
+                    DiagArea.Scan, "crop_detect", "index" to scanLogPageNumber(index), "found" to false, "book_half" to (page.book?.side ?: "none"),
+                    "source" to "skipped", "ms" to 0L, "finder" to "none", "other" to false, "skipped" to true,
+                    "note" to ScanCropDetectNote.AlreadySearched.id, "detect_note" to lab.cropDetectNote,
+                )
+                stats = stats.copy(detectsSkipped = stats.detectsSkipped + 1)
+                withFrameNanos { }
+                detectNote = ScanCropDetectNote.AlreadySearched
+                detecting = false
+                return@launch
+            }
+            val started = SystemClock.elapsedRealtime()
+            val doc = withContext(Dispatchers.Default) {
+                runCatching { io.github.artcraftandroid.pdfcraft.core.scanFindDocumentWith(page.file.absolutePath, plan.options) }
+                    .onFailure { e -> Diag.failure(DiagArea.Scan, "scan_find_document", e) }.getOrNull()
+            }
+            val spread = doc?.takeIf { it.found }?.corners?.takeIf { it.size == 8 }?.toFloatArray()?.takeIf { convexQuad(it) }
+            // a half of a book spread (#303): the spread found is cut again and this half kept
+            val half = page.book
+            val found = if (half == null || spread == null) spread else withContext(Dispatchers.Default) {
+                runCatching { io.github.artcraftandroid.pdfcraft.core.scanSplitSpread(page.file.absolutePath, spread.toList(), lab.bookGutter) }
+                    .onFailure { e -> Diag.failure(DiagArea.Scan, "scan_split_spread", e) }.getOrNull()
+            }?.let { ScanBookCut(it.split, it.left.toFloatArray(), it.right.toFloatArray(), it.gutterFound, it.gutterTop, it.gutterBottom, it.confidence) }
+                .let { cut -> scanBookRecut(half, cut)?.takeIf { convexQuad(it) } }
+            val note = if (lab.cropDetectNote) scanCropDetectNote(found != null, doc == null, plan.other) else null
+            Diag.event(
+                DiagArea.Scan, "crop_detect", "index" to scanLogPageNumber(index), "found" to (found != null), "book_half" to (half?.side ?: "none"),
+                "source" to (doc?.source?.name?.lowercase() ?: "failed"), "ms" to SystemClock.elapsedRealtime() - started,
+                "finder" to ScanLab.finderId(plan.options.finder), "other" to plan.other, "skipped" to false,
+                "note" to (note?.id ?: "none_shown"), "detect_note" to lab.cropDetectNote,
+            )
+            // a search that ran and found nothing would find nothing again (a failed call might not)
+            if (found == null && doc != null) detectEmpty = detectEmpty + plan.options
+            if (plan.other) stats = stats.copy(detectsOther = stats.detectsOther + 1)
+            detectNote = note
+            detecting = false
+            if (found != null) {
+                stats = stats.copy(detectsFound = stats.detectsFound + 1)
+                byHand = List(4) { false }
+                lastFound = found
+                animateTo(found)
+            }
+        }
+    }
+
+    /** No crop / Whole photo: the corners at the photo's edges. */
+    fun wholePhoto() {
+        stats = stats.copy(wholePhoto = stats.wholePhoto + 1)
+        detectNote = null
+        byHand = List(4) { false }
+        corners = ScanPage.WHOLE
+    }
+
+    // Back on Adjust borders right after a photo asks before the photo is dropped (#458, #456)
+    var askDiscard by remember { mutableStateOf(false) }
+    val back = {
+        if (steps?.opener?.afterPhoto == true) askDiscard = true else finish(false)
+    }
+    if (askDiscard && steps != null) {
+        ScanBordersDiscardDialog(
+            onKeep = { askDiscard = false },
+            onDiscard = {
+                askDiscard = false
+                Diag.event(DiagArea.Scan, "crop", "index" to scanLogPageNumber(index), "done" to false, "discarded" to true, "opened_by" to steps.opener.id, *stats.diag())
+                steps.onDiscard()
+            },
+        )
+    }
+
+    val title = if (steps != null) stringResource(R.string.scan_borders_title) else stringResource(R.string.tools_crop)
+    val action = if (steps?.opener?.afterPhoto == true) stringResource(R.string.scan_borders_next) else stringResource(R.string.common_done)
+    // the corners are final only once the search has answered: its answer would replace them
+    val actionEnabled = steps == null || steps.finding != ScanBordersFinding.Searching
+    ToolScaffold(title, back, action, actionEnabled, { finish(true) }) {
         val focus = remember { FocusRequester() }
         val names = QuadHandle.ALL.associateWith { handleName(it) }
         val moveLabels = listOf(R.string.comments_move_up, R.string.comments_move_down, R.string.comments_move_left, R.string.comments_move_right).map { stringResource(it) }
@@ -281,8 +375,11 @@ internal fun ScanCropScreen(page: ScanPage, index: Int, lab: ScanLab, onDone: (F
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
             )
         }
+        if (steps != null) ScanBordersHeader(steps, index)
+        // the photo turned as the page will be saved (#458): Rotate here turns it with its corners
+        ScanTurnedBox(steps?.turns ?: 0, Modifier.weight(1f).fillMaxWidth().background(c.desk)) { turned ->
         BoxWithConstraints(
-            Modifier.weight(1f).fillMaxWidth().background(c.desk).focusRequester(focus).focusable().onKeyEvent { e ->
+            turned.background(c.desk).focusRequester(focus).focusable().onKeyEvent { e ->
                 if (e.type != KeyEventType.KeyDown) return@onKeyEvent false
                 when (e.key) {
                     Key.Tab -> {
@@ -427,6 +524,7 @@ internal fun ScanCropScreen(page: ScanPage, index: Int, lab: ScanLab, onDone: (F
                 }
             }
         }
+        }
         // what Auto-detect came to (#443): always in place and a polite live region, so TalkBack reads each new line
         val noteText = detectNote?.let { stringResource(it.text) }.orEmpty()
         Text(
@@ -434,68 +532,23 @@ internal fun ScanCropScreen(page: ScanPage, index: Int, lab: ScanLab, onDone: (F
             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = if (noteText.isEmpty()) 0.dp else 6.dp)
                 .semantics { liveRegion = LiveRegionMode.Polite },
         )
-        Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 8.dp), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
-            TextButton(
-                onClick = {
-                    detecting = true
-                    stats = stats.copy(detects = stats.detects + 1)
-                    // the line is emptied first, so the same words said again are announced again
-                    detectNote = null
-                    val asked = lab.findOptions()
-                    val plan = scanCropDetectPlan(asked, detectEmpty, lab.cropDetectNote)
-                    scope.launch {
-                        if (plan !is ScanCropDetectPlan.Search) {
-                            Diag.event(
-                                DiagArea.Scan, "crop_detect", "index" to scanLogPageNumber(index), "found" to false, "book_half" to (page.book?.side ?: "none"),
-                                "source" to "skipped", "ms" to 0L, "finder" to "none", "other" to false, "skipped" to true,
-                                "note" to ScanCropDetectNote.AlreadySearched.id, "detect_note" to lab.cropDetectNote,
-                            )
-                            stats = stats.copy(detectsSkipped = stats.detectsSkipped + 1)
-                            withFrameNanos { }
-                            detectNote = ScanCropDetectNote.AlreadySearched
-                            detecting = false
-                            return@launch
-                        }
-                        val started = SystemClock.elapsedRealtime()
-                        val doc = withContext(Dispatchers.Default) {
-                            runCatching { io.github.artcraftandroid.pdfcraft.core.scanFindDocumentWith(page.file.absolutePath, plan.options) }
-                                .onFailure { e -> Diag.failure(DiagArea.Scan, "scan_find_document", e) }.getOrNull()
-                        }
-                        val spread = doc?.takeIf { it.found }?.corners?.takeIf { it.size == 8 }?.toFloatArray()?.takeIf { convexQuad(it) }
-                        // a half of a book spread (#303): the spread found is cut again and this half kept
-                        val half = page.book
-                        val found = if (half == null || spread == null) spread else withContext(Dispatchers.Default) {
-                            runCatching { io.github.artcraftandroid.pdfcraft.core.scanSplitSpread(page.file.absolutePath, spread.toList(), lab.bookGutter) }
-                                .onFailure { e -> Diag.failure(DiagArea.Scan, "scan_split_spread", e) }.getOrNull()
-                        }?.let { ScanBookCut(it.split, it.left.toFloatArray(), it.right.toFloatArray(), it.gutterFound, it.gutterTop, it.gutterBottom, it.confidence) }
-                            .let { cut -> scanBookRecut(half, cut)?.takeIf { convexQuad(it) } }
-                        val note = if (lab.cropDetectNote) scanCropDetectNote(found != null, doc == null, plan.other) else null
-                        Diag.event(
-                            DiagArea.Scan, "crop_detect", "index" to scanLogPageNumber(index), "found" to (found != null), "book_half" to (half?.side ?: "none"),
-                            "source" to (doc?.source?.name?.lowercase() ?: "failed"), "ms" to SystemClock.elapsedRealtime() - started,
-                            "finder" to ScanLab.finderId(plan.options.finder), "other" to plan.other, "skipped" to false,
-                            "note" to (note?.id ?: "none_shown"), "detect_note" to lab.cropDetectNote,
-                        )
-                        // a search that ran and found nothing would find nothing again (a failed call might not)
-                        if (found == null && doc != null) detectEmpty = detectEmpty + plan.options
-                        if (plan.other) stats = stats.copy(detectsOther = stats.detectsOther + 1)
-                        detectNote = note
-                        detecting = false
-                        if (found != null) {
-                            stats = stats.copy(detectsFound = stats.detectsFound + 1)
-                            byHand = List(4) { false }
-                            animateTo(found)
-                        }
-                    }
+        if (steps != null) {
+            ScanBordersBar(
+                steps, toggle = scanBordersToggle(corners, page.found ?: lastFound), detecting = detecting,
+                snapOn = snapOn,
+                onSnap = { on ->
+                    snapOn = on
+                    snapSetting(context).edit().putBoolean(SNAP_PREF, on).apply()
                 },
+                onWhole = { wholePhoto() },
+                onAuto = { detect() },
+            )
+        } else Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 8.dp), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
+            TextButton(
+                onClick = { detect() },
                 enabled = !detecting,
             ) { Text(stringResource(R.string.tools_auto_detect), color = if (detecting) c.textSecondary else c.accent) }
-            TextButton(onClick = {
-                stats = stats.copy(wholePhoto = stats.wholePhoto + 1)
-                detectNote = null
-                byHand = List(4) { false }
-                corners = ScanPage.WHOLE
-            }) { Text(stringResource(R.string.tools_no_crop), color = c.accent) }
+            TextButton(onClick = { wholePhoto() }) { Text(stringResource(R.string.tools_no_crop), color = c.accent) }
             TextButton(onClick = {
                 stats = stats.copy(resets = stats.resets + 1)
                 detectNote = null
