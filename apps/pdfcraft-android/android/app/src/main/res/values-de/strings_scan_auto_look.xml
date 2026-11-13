@@ -6,4 +6,8 @@
     <string name="scan_auto_flattened_undo_description">Glätten rückgängig machen</string>
     <string name="scan_auto_grayscale_undo">Graustufen · Rückgängig</string>
     <string name="scan_auto_grayscale_undo_description">Graustufen rückgängig machen</string>
+    <string name="scan_lab_remove_fingers">Finger am Seitenrand entfernen</string>
+    <string name="scan_auto_fingers_undo">Finger entfernt · Rückgängig</string>
+    <string name="scan_auto_fingers_undo_description">Finger wiederherstellen</string>
+    <string name="scan_auto_fingers_over_print">Ein Finger hat Text verdeckt. Neu aufnehmen, um ihn zurückzuholen.</string>
 </resources>

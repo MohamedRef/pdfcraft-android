@@ -107,6 +107,8 @@ internal fun ScanLabSettings(vm: AppViewModel) {
     Sw(R.string.scan_lab_background_pages, o.backgroundPages) { lab.update(o.copy(backgroundPages = it)) }
     // the automatic look (#466): suggestions applied with Undo
     Sw(R.string.scan_lab_auto_look, o.autoLook) { lab.update(o.copy(autoLook = it)) }
+    // fingers at the page's edge removed by the automatic look (#466)
+    Sw(R.string.scan_lab_remove_fingers, o.removeFingers) { lab.update(o.copy(removeFingers = it)) }
     // a look per page and the looks strip's small previews (#301)
     Sw(R.string.scan_lab_look_per_page, o.lookPerPage) { lab.update(o.copy(lookPerPage = it)) }
     Sw(R.string.scan_lab_look_strip, o.lookStrip) { lab.update(o.copy(lookStrip = it)) }

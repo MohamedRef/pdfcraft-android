@@ -5,5 +5,9 @@
     <string name="scan_auto_flattened_undo">Flattened · Undo</string>
     <string name="scan_auto_flattened_undo_description">Undo the flattening</string>
     <string name="scan_auto_grayscale_undo">Grayscale · Undo</string>
-    <string name="scan_auto_grayscale_undo_description">Undo Grayscale</string>
+    <string name="scan_auto_grayscale_undo_description">Undo grayscale</string>
+    <string name="scan_lab_remove_fingers">Remove fingers at the page\'s edge</string>
+    <string name="scan_auto_fingers_undo">Finger removed · Undo</string>
+    <string name="scan_auto_fingers_undo_description">Put the finger back</string>
+    <string name="scan_auto_fingers_over_print">A finger hid some print. Retake to get it back.</string>
 </resources>

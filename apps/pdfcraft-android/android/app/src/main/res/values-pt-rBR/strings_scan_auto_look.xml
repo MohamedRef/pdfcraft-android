@@ -6,4 +6,8 @@
     <string name="scan_auto_flattened_undo_description">Desfazer o aplanamento</string>
     <string name="scan_auto_grayscale_undo">Escala de cinza · Desfazer</string>
     <string name="scan_auto_grayscale_undo_description">Desfazer a escala de cinza</string>
+    <string name="scan_lab_remove_fingers">Remover dedos da borda da página</string>
+    <string name="scan_auto_fingers_undo">Dedo removido · Desfazer</string>
+    <string name="scan_auto_fingers_undo_description">Devolver o dedo</string>
+    <string name="scan_auto_fingers_over_print">Um dedo cobria parte do texto. Tire a foto de novo para recuperá-lo.</string>
 </resources>

@@ -89,6 +89,8 @@ pub struct Applied {
     pub light_reused: bool,
     /// ...and the page smoothed and sharpened before the curve as well.
     pub detail_reused: bool,
+    /// What the automatic look's finger step did (#466); `None` when it did not run.
+    pub fingers: Option<crate::defects::FingerFill>,
 }
 
 /// Give `page` the `look` at `strength` (0–100), taking it to be at 300 dpi. `None` when the
@@ -138,6 +140,7 @@ pub fn apply_prepared(page: &Rgb, look: Look, params: &LookParams, photos: Optio
         stages: Vec::new(),
         light_reused: false,
         detail_reused: false,
+        fingers: None,
     };
     let Some(engine) = look.engine() else {
         return Some(match look {
@@ -159,6 +162,7 @@ pub fn apply_prepared(page: &Rgb, look: Look, params: &LookParams, photos: Optio
                     stages: made.stages,
                     light_reused: made.light_reused,
                     detail_reused: made.detail_reused,
+                    fingers: None,
                 }
             }
         });

@@ -1115,7 +1115,7 @@ fun ScanScreen(vm: AppViewModel) {
                 }
                 // what the automatic look did, each with a way back (#466)
                 if (shown.view == ScanView.Result && preview != null) {
-                    val chips = io.github.artcraftandroid.pdfcraft.ui.scan.scanAutoChips(lab, page.auto, page.look, page.flatten, preview.flattened)
+                    val chips = io.github.artcraftandroid.pdfcraft.ui.scan.scanAutoChips(lab, page.auto, page.look, page.flatten, preview.flattened, preview.fingers?.filled?.toInt() ?: 0, preview.fingers?.overPrint?.toInt() ?: 0)
                     if (chips.isNotEmpty()) {
                         // under "Turned upright · Undo", which sits at the top
                         Row(Modifier.align(Alignment.TopCenter).padding(top = 52.dp, start = 12.dp, end = 12.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {

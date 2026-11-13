@@ -6,4 +6,8 @@
     <string name="scan_auto_flattened_undo_description">تراجع عن فرد الصفحة</string>
     <string name="scan_auto_grayscale_undo">تدرّج رمادي · تراجع</string>
     <string name="scan_auto_grayscale_undo_description">تراجع عن التدرّج الرمادي</string>
+    <string name="scan_lab_remove_fingers">إزالة الأصابع من على حافة الصفحة</string>
+    <string name="scan_auto_fingers_undo">اتشال الصباع · تراجع</string>
+    <string name="scan_auto_fingers_undo_description">رجّع الصباع</string>
+    <string name="scan_auto_fingers_over_print">صباع كان مغطي جزء من الكلام. صوّر تاني عشان يرجع.</string>
 </resources>

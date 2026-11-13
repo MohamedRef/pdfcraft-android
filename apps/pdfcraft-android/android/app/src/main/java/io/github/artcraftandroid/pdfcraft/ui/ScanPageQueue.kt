@@ -42,6 +42,8 @@ internal class ScanMadePage(
     val flattened: Boolean,
     val kind: io.github.artcraftandroid.pdfcraft.core.ScanPageKind?,
     val orientation: io.github.artcraftandroid.pdfcraft.core.ScanOrientation?,
+    /** What removing fingers did to the page (#466); null when it did not run. */
+    val fingers: io.github.artcraftandroid.pdfcraft.core.ScanFingers? = null,
 )
 
 /**
@@ -258,7 +260,7 @@ internal class ScanPageQueue(private val vm: AppViewModel) {
             out.delete()
             return
         }
-        made.put(page.key, ScanMadePage(key, out, thumb.asImageBitmap(), p.quarterTurns.toInt(), p.turns.toInt(), scanCameOutFlat(p), p.kind, p.orientation))?.file?.takeIf { it != out }?.delete()
+        made.put(page.key, ScanMadePage(key, out, thumb.asImageBitmap(), p.quarterTurns.toInt(), p.turns.toInt(), scanCameOutFlat(p), p.kind, p.orientation, p.fingers))?.file?.takeIf { it != out }?.delete()
         val now = android.os.SystemClock.elapsedRealtime()
         val since = waitingSince.remove(page.key)
         val why = waitingWhy.remove(page.key) ?: scanQueueWhy(null, key, false)

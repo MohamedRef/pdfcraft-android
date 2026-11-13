@@ -130,4 +130,45 @@ class ScanAutoLookTest {
         assertEquals(ScanFilter.Grayscale, back.pages[0].look?.filter)
         assertEquals(ScanAutoMarks(), back.pages[1].auto)
     }
+
+    @Test
+    fun fingersAreRemovedByDefaultAndUndoKeepsThemOnThatPage() {
+        assertTrue(ScanLab().removeFingers)
+        assertFalse(ScanLab(removeFingers = false).asDesigned)
+        assertEquals(ScanLab(removeFingers = false), ScanLab.decode(ScanLab(removeFingers = false).encode()))
+        assertTrue(ScanLab.decode("keep=1;auto_look=1").removeFingers)
+        assertEquals(false, ScanLab(removeFingers = false).diag().toMap()["remove_fingers"])
+        val undone = ScanAutoMarks(undone = setOf(ScanAutoMarks.FINGERS))
+        assertTrue(scanRemovesFingers(ScanLab(), ScanAutoMarks()))
+        assertFalse(scanRemovesFingers(ScanLab(), undone))
+        assertFalse(scanRemovesFingers(ScanLab(removeFingers = false), ScanAutoMarks()))
+        assertEquals(undone, ScanAutoMarks.decode(undone.encode()))
+        // the native request asks for it unless the page's Undo was taken
+        assertTrue(scanPageRequest("/a", ScanPage.WHOLE, ScanFilter.CleanScan, false, ScanLab(), "").removeFingers)
+        assertFalse(scanPageRequest("/a", ScanPage.WHOLE, ScanFilter.CleanScan, false, ScanLab(), "", removeFingers = false).removeFingers)
+    }
+
+    @Test
+    fun aRemovedFingerHasAChipThatSaysWhenPrintWasLost() {
+        val look = ScanPageLook()
+        assertEquals(listOf(ScanAutoChip.Fingers), scanAutoChips(ScanLab(), ScanAutoMarks(), look, null, false, fingersFilled = 1))
+        assertEquals(listOf(ScanAutoChip.FingersOverPrint), scanAutoChips(ScanLab(), ScanAutoMarks(), look, null, false, fingersFilled = 2, fingersOverPrint = 1))
+        assertEquals(emptyList<ScanAutoChip>(), scanAutoChips(ScanLab(), ScanAutoMarks(), look, null, false))
+        assertEquals(emptyList<ScanAutoChip>(), scanAutoChips(ScanLab(), ScanAutoMarks(undone = setOf(ScanAutoMarks.FINGERS)), look, null, false, fingersFilled = 1))
+        assertEquals(ScanAutoMarks.FINGERS, scanAutoChipWhat(ScanAutoChip.FingersOverPrint))
+    }
+
+    @Test
+    fun theFingersAreLoggedAndKept() {
+        val counts = ScanFingerCounts(found = 2, overPrint = 1, filled = 2, ms = 14)
+        val diag = scanFingersDiag(true, counts).toMap()
+        assertEquals(2, diag["fingers"]); assertEquals(1, diag["fingers_over_print"]); assertEquals(2, diag["fingers_filled"]); assertEquals(14, diag["fingers_ms"])
+        assertEquals(-1, scanFingersDiag(true, null).toMap()["fingers"])
+        val d = scanAutoDecisions("document", null, 0, false, null, null, false, ScanAutoMarks(), counts)
+        assertEquals("fingers", d.suggestionApplied)
+        val json = d.json()
+        assertEquals(1, json.getInt("fingers_over_print"))
+        assertEquals(14, json.getInt("fingers_ms"))
+        assertEquals("none", scanAutoDecisions("document", null, 0, false, null, null, false, ScanAutoMarks(), null).suggestionApplied)
+    }
 }

@@ -95,6 +95,8 @@ internal fun scanPageRequest(
      * not flattened; without it, every page is, as the automatic mode did before.
      */
     autoFlatten: Boolean = lab.flattenAuto,
+    /** Fingers at the page's edge are removed after Clean scan (#466): the option, unless the person undid it on this page. */
+    removeFingers: Boolean = lab.removeFingers,
 ): io.github.artcraftandroid.pdfcraft.core.ScanPageRequest = scanTurnAsk(turns, autoUpright, lab.upright).let { ask ->
     io.github.artcraftandroid.pdfcraft.core.ScanPageRequest(
     photoPath = photoPath,
@@ -138,6 +140,8 @@ internal fun scanPageRequest(
     photoSharpen = lab.photoSharpen,
     // the light estimate kept with the straightened page between looks (#446)
     reuseLook = lab.lookReuse,
+    // fingers at the page's edge papered over after Clean scan (#466)
+    removeFingers = removeFingers,
 )
 }
 
@@ -232,7 +236,7 @@ internal data class ScanPreviewKey(
     companion object {
         /** The preview of [page] in [look] (by default the page's own). */
         fun of(page: ScanPage, flatten: Boolean, lab: ScanLab, autoUpright: Boolean = true, look: io.github.artcraftandroid.pdfcraft.ui.scan.ScanPageLook = page.look, autoFlatten: Boolean = false) =
-            ScanPreviewKey(page.file.absolutePath, page.corners.toList(), look.filter, flatten, lab.copy(keep = false, inspect = false), page.turns, autoUpright, io.github.artcraftandroid.pdfcraft.ui.scan.scanPresetFor(page, lab), look.strength, look.paper, autoFlatten)
+            ScanPreviewKey(page.file.absolutePath, page.corners.toList(), look.filter, flatten, lab.copy(keep = false, inspect = false, removeFingers = io.github.artcraftandroid.pdfcraft.ui.scan.scanRemovesFingers(lab, page.auto)), page.turns, autoUpright, io.github.artcraftandroid.pdfcraft.ui.scan.scanPresetFor(page, lab), look.strength, look.paper, autoFlatten)
     }
 }
 
