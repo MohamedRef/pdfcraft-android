@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="scan_crop_detect_none">Nenhum contorno de página encontrado. Arraste os cantos ou toque em Sem recorte para manter a foto inteira.</string>
+    <string name="scan_crop_detect_none_other">Nenhum contorno de página encontrado, nem com o detector de linhas. Arraste os cantos ou toque em Sem recorte para manter a foto inteira.</string>
+    <string name="scan_crop_detect_already">Esta foto já foi analisada e nenhum contorno de página foi encontrado. Arraste os cantos ou toque em Sem recorte para manter a foto inteira.</string>
+    <string name="scan_crop_detect_found_other">Página encontrada com o detector de linhas. Confira os cantos.</string>
+    <string name="scan_crop_detect_failed">A detecção automática não conseguiu ler esta foto.</string>
+    <string name="scan_lab_crop_detect_note">Corte: avisar quando a detecção automática não encontra nada e tentar o detector de linhas em seguida</string>
+</resources>

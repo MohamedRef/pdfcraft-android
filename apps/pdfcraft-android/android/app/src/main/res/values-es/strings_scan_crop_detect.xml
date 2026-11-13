@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="scan_crop_detect_none">No se encontró el contorno de la página. Arrastra las esquinas o toca Sin recorte para conservar la foto entera.</string>
+    <string name="scan_crop_detect_none_other">No se encontró el contorno de la página, tampoco con el detector de líneas. Arrastra las esquinas o toca Sin recorte para conservar la foto entera.</string>
+    <string name="scan_crop_detect_already">Esta foto ya se analizó y no se encontró el contorno de la página. Arrastra las esquinas o toca Sin recorte para conservar la foto entera.</string>
+    <string name="scan_crop_detect_found_other">Página encontrada con el detector de líneas. Revisa sus esquinas.</string>
+    <string name="scan_crop_detect_failed">La detección automática no pudo leer esta foto.</string>
+    <string name="scan_lab_crop_detect_note">Recorte: avisar cuando la detección automática no encuentra nada y probar después el detector de líneas</string>
+</resources>
