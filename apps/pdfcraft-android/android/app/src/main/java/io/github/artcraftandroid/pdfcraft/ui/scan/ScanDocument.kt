@@ -69,3 +69,17 @@ internal fun scanThumbRegion(corners: FloatArray, width: Int, height: Int): IntA
 /** The index a drag dropped on: the cell under the finger at ([x], [y]), or null over a gap. Cells are left, top, width, height. */
 internal fun scanDropIndex(cells: List<Pair<Int, IntArray>>, x: Float, y: Float): Int? =
     cells.firstOrNull { (_, r) -> x >= r[0] && x <= r[0] + r[2] && y >= r[1] && y <= r[1] + r[3] }?.first
+
+/** A page's name in the gallery (#470): the scan's name and its page number from 1, `.png` for a page made as PNG. */
+internal fun scanGalleryName(base: String, index: Int, png: Boolean): String = "$base - ${index + 1}.${if (png) "png" else "jpg"}"
+
+/**
+ * The log's line for pages saved to the gallery (#470): how many were asked for, saved and
+ * failed, which failed (from 1), their size, the time taken, whether only selected pages were
+ * saved, and whether Cancel stopped it.
+ */
+internal fun scanGalleryDiag(pages: Int, saved: Int, failed: List<Int>, bytes: Long, ms: Long, selected: Boolean, cancelled: Boolean): Array<Pair<String, Any?>> =
+    arrayOf(
+        "pages" to pages, "saved" to saved, "failed" to failed.size, "failed_pages" to failed.joinToString(",").ifEmpty { "none" },
+        "bytes" to bytes, "ms" to ms, "selected" to selected, "cancelled" to cancelled,
+    )

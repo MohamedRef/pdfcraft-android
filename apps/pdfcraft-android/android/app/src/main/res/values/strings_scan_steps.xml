@@ -55,4 +55,13 @@
         <item quantity="one">Delete %d page?</item>
         <item quantity="other">Delete %d pages?</item>
     </plurals>
+    <!-- Save to gallery (#470) -->
+    <string name="scan_gallery_save">Save to gallery</string>
+    <string name="scan_gallery_save_all">Save all to gallery</string>
+    <string name="scan_gallery_busy">Saving to the gallery…</string>
+    <string name="scan_gallery_failed">Page %1$s could not be saved to the gallery.</string>
+    <plurals name="scan_gallery_saved">
+        <item quantity="one">%d page saved to Pictures/PdfCraft.</item>
+        <item quantity="other">%d pages saved to Pictures/PdfCraft.</item>
+    </plurals>
 </resources>

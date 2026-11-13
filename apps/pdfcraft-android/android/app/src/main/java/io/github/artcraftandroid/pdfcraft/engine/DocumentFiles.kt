@@ -667,17 +667,28 @@ class DocumentFiles(private val context: Context) {
         return saved
     }
 
-    /** Save an image into Pictures/PdfCraft (exported pages). */
+    /**
+     * Save an image into Pictures/PdfCraft (exported pages, a scan's pages #470). No storage
+     * permission is needed for the app's own pictures. The picture stays hidden from the gallery
+     * until it is written whole, and an unfinished one is removed.
+     */
     fun saveToPictures(file: File, name: String, mime: String): Uri {
         val values = android.content.ContentValues().apply {
             put(android.provider.MediaStore.MediaColumns.DISPLAY_NAME, name)
             put(android.provider.MediaStore.MediaColumns.MIME_TYPE, mime)
             put(android.provider.MediaStore.MediaColumns.RELATIVE_PATH, android.os.Environment.DIRECTORY_PICTURES + "/PdfCraft")
+            put(android.provider.MediaStore.MediaColumns.IS_PENDING, 1)
         }
         val uri = resolver.insert(android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values) ?: error(context.getString(R.string.files_error_save_image))
-        resolver.openOutputStream(uri).use { out ->
-            requireNotNull(out) { context.getString(R.string.files_error_save_image) }
-            file.inputStream().use { it.copyTo(out) }
+        try {
+            resolver.openOutputStream(uri).use { out ->
+                requireNotNull(out) { context.getString(R.string.files_error_save_image) }
+                file.inputStream().use { it.copyTo(out) }
+            }
+            resolver.update(uri, android.content.ContentValues().apply { put(android.provider.MediaStore.MediaColumns.IS_PENDING, 0) }, null, null)
+        } catch (e: Exception) {
+            runCatching { resolver.delete(uri, null, null) }
+            throw e
         }
         return uri
     }
