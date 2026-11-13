@@ -33,6 +33,7 @@ pub mod inspect;
 pub mod flatten_lines;
 pub mod live;
 pub mod look;
+pub mod markup;
 pub mod merge;
 pub mod metrics_compare;
 pub mod metrics_geometry;
@@ -112,6 +113,8 @@ mod tests_metrics_tone;
 mod tests_page_kind;
 #[cfg(test)]
 mod tests_look_reuse;
+#[cfg(test)]
+mod tests_markup;
 #[cfg(test)]
 mod tests_moire;
 #[cfg(test)]

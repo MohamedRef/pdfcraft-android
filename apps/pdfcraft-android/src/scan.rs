@@ -160,6 +160,110 @@ pub struct ScanPageRequest {
     /// as the look made it (a testing choice).
     #[uniffi(default = false)]
     pub remove_fingers: bool,
+    /// Marks made by hand on the page (#495): eraser, pen and highlighter strokes and text boxes,
+    /// drawn after the look and the finger step. `None` for none.
+    #[uniffi(default = None)]
+    pub markup: Option<ScanMarkup>,
+}
+
+/// Marks made by hand on a page (#495), in the page's own terms: points as shares of the page as
+/// it was shown when they were made, widths and text sizes as shares of its longer side.
+#[derive(Debug, Clone, PartialEq, uniffi::Record)]
+pub struct ScanMarkup {
+    /// The page's quarter turns clockwise in all (the preview's `turns`) when the marks were made:
+    /// they turn with the page from there.
+    pub turns: u8,
+    /// In the order they were drawn.
+    pub strokes: Vec<ScanStroke>,
+    /// Drawn over the strokes.
+    pub texts: Vec<ScanTextMark>,
+}
+
+/// One stroke (#495).
+#[derive(Debug, Clone, PartialEq, uniffi::Record)]
+pub struct ScanStroke {
+    /// "erase", "pen" or "highlighter"; anything else is left out.
+    pub tool: String,
+    /// 0xRRGGBB (not used by the eraser).
+    pub colour: u32,
+    /// The full width, as a share of the page's longer side.
+    pub width: f32,
+    /// x, y, pressure, x, y, pressure …: shares of the page's width and height, pressure 0–1.
+    pub points: Vec<f32>,
+}
+
+/// A text box (#495): the app draws the text into `mask`, one byte of coverage per pixel.
+#[derive(Debug, Clone, PartialEq, uniffi::Record)]
+pub struct ScanTextMark {
+    /// The box's centre, as shares of the page's width and height.
+    pub x: f32,
+    pub y: f32,
+    /// The box's size, as shares of the page's longer side.
+    pub width: f32,
+    pub height: f32,
+    /// 0xRRGGBB.
+    pub colour: u32,
+    pub mask_width: u32,
+    pub mask_height: u32,
+    pub mask: Vec<u8>,
+}
+
+/// What drawing a page's marks did (#495).
+#[derive(Debug, Clone, Copy, PartialEq, uniffi::Record)]
+pub struct ScanMarkupApplied {
+    pub pen: u32,
+    pub highlighter: u32,
+    pub erase: u32,
+    pub text: u32,
+    /// Marks left out: a highlighter on a black-and-white page, or a broken text mask.
+    pub skipped: u32,
+    /// The share of the page the eraser painted, 0–1.
+    pub erased_share: f32,
+    pub ms: u32,
+}
+
+impl From<pdfcraft_scan::markup::Applied> for ScanMarkupApplied {
+    fn from(a: pdfcraft_scan::markup::Applied) -> Self {
+        ScanMarkupApplied { pen: a.pen, highlighter: a.highlighter, erase: a.erase, text: a.text, skipped: a.skipped, erased_share: a.erased_share, ms: a.ms }
+    }
+}
+
+fn rgb_of(colour: u32) -> [u8; 3] {
+    [(colour >> 16) as u8, (colour >> 8) as u8, colour as u8]
+}
+
+/// The scan crate's marks for `markup`: strokes of an unknown tool are left out.
+pub(crate) fn markup_of(markup: &ScanMarkup) -> pdfcraft_scan::markup::Markup {
+    use pdfcraft_scan::markup::{Markup, Stroke, Text, Tool};
+    Markup {
+        turns: markup.turns % 4,
+        strokes: markup
+            .strokes
+            .iter()
+            .filter_map(|s| {
+                let tool = match s.tool.as_str() {
+                    "erase" => Tool::Erase,
+                    "pen" => Tool::Pen,
+                    "highlighter" => Tool::Highlighter,
+                    _ => return None,
+                };
+                let points = s.points.chunks_exact(3).map(|p| [p[0], p[1], p[2]]).collect();
+                Some(Stroke { tool, colour: rgb_of(s.colour), width: s.width, points })
+            })
+            .collect(),
+        texts: markup
+            .texts
+            .iter()
+            .map(|t| Text {
+                centre: [t.x, t.y],
+                size: [t.width, t.height],
+                colour: rgb_of(t.colour),
+                mask_width: t.mask_width,
+                mask_height: t.mask_height,
+                mask: t.mask.clone(),
+            })
+            .collect(),
+    }
 }
 
 /// What the automatic look's finger step did to a page (#466).
@@ -343,6 +447,8 @@ pub struct ScanPageResult {
     pub kind: Option<ScanPageKind>,
     /// What the finger step did (#466); `None` when it did not run.
     pub fingers: Option<ScanFingers>,
+    /// What drawing the page's hand-made marks did (#495); `None` when it had none.
+    pub markup: Option<ScanMarkupApplied>,
     pub timings: Vec<ScanTiming>,
 }
 
@@ -657,7 +763,13 @@ pub(crate) fn refine_in(root: &Path, photo_path: &str, corners: &[f32], sides: &
 
 /// The page a request asks for, as the scan crate takes it: the same for a saved page and for
 /// its preview, so the preview shows what will be saved.
-fn page_request<'a>(request: &ScanPageRequest, photo: &'a [u8], corners: [f32; 8], max_side: Option<u32>) -> PageRequest<'a> {
+fn page_request<'a>(
+    request: &ScanPageRequest,
+    photo: &'a [u8],
+    corners: [f32; 8],
+    max_side: Option<u32>,
+    markup: Option<&'a pdfcraft_scan::markup::Markup>,
+) -> PageRequest<'a> {
     let look = match request.look {
         ScanLook::Original => Look::Original,
         ScanLook::Colour => Look::Colour,
@@ -701,6 +813,7 @@ fn page_request<'a>(request: &ScanPageRequest, photo: &'a [u8], corners: [f32; 8
         },
         reuse_look: request.reuse_look,
         remove_fingers: request.remove_fingers,
+        markup,
         ..PageRequest::new(photo, corners)
     }
 }
@@ -821,6 +934,8 @@ pub struct ScanPreview {
     pub kind: Option<ScanPageKind>,
     /// What the finger step did (#466); `None` when it did not run.
     pub fingers: Option<ScanFingers>,
+    /// What drawing the page's hand-made marks did (#495); `None` when it had none.
+    pub markup: Option<ScanMarkupApplied>,
     /// How the flattened and the straightened page compared, when that was asked (#302).
     pub flatten_check: Option<ScanFlattenCheck>,
     /// The border trimmed from a flattened page (#302), when one was looked for.
@@ -982,7 +1097,7 @@ pub(crate) fn preview_stoppable(
         None => {
             let bytes = read_photo(root, &request.photo_path)?;
             check()?;
-            let made = page_base(&page_request(request, &bytes, corners, Some(max_side))).map_err(|e| MobileError::Command(e.to_string()))?;
+            let made = page_base(&page_request(request, &bytes, corners, Some(max_side), None)).map_err(|e| MobileError::Command(e.to_string()))?;
             let base = std::sync::Arc::new(made);
             let mut previews = PREVIEWS.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
             previews.push((key, std::sync::Arc::clone(&base)));
@@ -1003,8 +1118,10 @@ pub(crate) fn preview_stoppable(
     // a straightened page just made is kept for the next preview even when this one stops here
     check()?;
     let clock = std::time::Instant::now();
-    let (applied, kind) =
-        page_look_kind(&base, &page_request(request, &[], corners, Some(max_side))).map_err(|e| MobileError::Command(e.to_string()))?;
+    // the page's hand-made marks (#495), drawn after the look as on the saved page
+    let markup = request.markup.as_ref().map(markup_of);
+    let (applied, kind) = page_look_kind(&base, &page_request(request, &[], corners, Some(max_side), markup.as_ref()))
+        .map_err(|e| MobileError::Command(e.to_string()))?;
     let (width, height) = (base.page.width, base.page.height);
     let pixels = width as usize * height as usize;
     let mut rgba = Vec::with_capacity(pixels * 4);
@@ -1030,6 +1147,7 @@ pub(crate) fn preview_stoppable(
         flattened: base.flattened,
         kind: kind.as_ref().map(kind_of),
         fingers: applied.fingers.map(Into::into),
+        markup: applied.markup.map(Into::into),
         flatten_check: base.flatten_check.map(Into::into),
         trim: base.trim.map(|t| ScanTrim::of(t, before_turn(base.page.width, base.page.height, base.turns))),
         line_flatten: base.line_flatten.as_ref().map(Into::into),
@@ -1081,7 +1199,8 @@ pub(crate) fn process_in(root: &Path, request: &ScanPageRequest) -> Result<ScanP
         return Err(outside());
     }
     let bytes = read_photo(root, &request.photo_path)?;
-    let page = process_page(&page_request(request, &bytes, corners, None)).map_err(|e| MobileError::Command(e.to_string()))?;
+    let markup = request.markup.as_ref().map(markup_of);
+    let page = process_page(&page_request(request, &bytes, corners, None, markup.as_ref())).map_err(|e| MobileError::Command(e.to_string()))?;
     drop(bytes);
     let mut file_name = name.to_os_string();
     file_name.push(".");
@@ -1126,6 +1245,7 @@ pub(crate) fn process_in(root: &Path, request: &ScanPageRequest) -> Result<ScanP
         white_point: page.white_point,
         kind: page.kind.as_ref().map(kind_of),
         fingers: page.fingers.map(Into::into),
+        markup: page.markup.map(Into::into),
         timings: page.timings.into_iter().map(|(stage, ms)| ScanTiming { stage: stage.into(), ms }).collect(),
     })
 }
@@ -1338,6 +1458,7 @@ mod tests {
             paper: "auto".into(),
             reuse_look: true,
             remove_fingers: false,
+            markup: None,
         }
     }
 
@@ -1720,6 +1841,52 @@ mod tests {
         let saved = process_in(&root, &ScanPageRequest { remove_fingers: true, ..ask.clone() }).unwrap();
         assert_eq!(saved.fingers.map(|f| f.filled), Some(0));
         assert!(process_in(&root, &ask).unwrap().fingers.is_none());
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    /// Hand-made marks (#495) are drawn on the preview and on the saved page alike, turn with the
+    /// page, and leave a page without marks as it was; a whole photo in Original with marks is
+    /// made, not copied.
+    #[test]
+    fn marks_are_drawn_on_the_preview_and_the_saved_page() {
+        let _store = PREVIEWS_TEST_LOCK.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let root = temp("preview-markup");
+        let shot = root.join("page.png");
+        image::RgbImage::from_fn(600, 800, |_, _| image::Rgb([240, 238, 230])).save(&shot).unwrap();
+        let whole = vec![0.0, 0.0, 1.0, 0.0, 1.0, 1.0, 0.0, 1.0];
+        let ask = ScanPageRequest { corners: whole, look: ScanLook::Original, upright: false, ..request(&shot, &root.join("m")) };
+        // a black pen line across the top tenth of the page as shown
+        let pen = ScanStroke { tool: "pen".into(), colour: 0x000000, width: 0.02, points: vec![0.1, 0.1, 1.0, 0.9, 0.1, 1.0] };
+        let marked = ScanPageRequest { markup: Some(ScanMarkup { turns: 0, strokes: vec![pen.clone()], texts: Vec::new() }), ..ask.clone() };
+        scan_release_previews();
+        let plain = preview_in(&root, &ask, 400).unwrap();
+        assert!(plain.markup.is_none());
+        let drawn = preview_in(&root, &marked, 400).unwrap();
+        let applied = drawn.markup.expect("the marks were drawn");
+        assert_eq!((applied.pen, applied.erase, applied.skipped), (1, 0, 0));
+        let at = |p: &ScanPreview, x: f32, y: f32| {
+            let i = ((y * p.height as f32) as usize * p.width as usize + (x * p.width as f32) as usize) * 4;
+            p.rgba[i]
+        };
+        assert!(at(&drawn, 0.5, 0.1) < 40, "the line is on the preview");
+        assert_eq!(at(&drawn, 0.5, 0.5), at(&plain, 0.5, 0.5));
+        assert!(at(&plain, 0.5, 0.1) > 200);
+        // an unknown tool is left out, and empty marks are no marks
+        let odd = ScanPageRequest { markup: Some(ScanMarkup { turns: 0, strokes: vec![ScanStroke { tool: "spray".into(), ..pen.clone() }], texts: Vec::new() }), ..ask.clone() };
+        assert_eq!(preview_in(&root, &odd, 400).unwrap().rgba, plain.rgba);
+        // drawn with the page turned a quarter (turns 1), then made upright again: the line stands
+        // on the page's left side, where the top of the turned page was
+        let turned = ScanPageRequest { markup: Some(ScanMarkup { turns: 1, strokes: vec![pen.clone()], texts: Vec::new() }), ..ask.clone() };
+        let back = preview_in(&root, &turned, 400).unwrap();
+        assert!(at(&back, 0.1, 0.5) < 40 && at(&back, 0.5, 0.1) > 200);
+        // the saved page: a whole photo in Original is copied as it was, unless it has marks
+        let copied = process_in(&root, &ask).unwrap();
+        assert!(copied.markup.is_none());
+        let made = process_in(&root, &marked).unwrap();
+        assert_eq!(made.markup.map(|m| m.pen), Some(1));
+        let page = image::open(&made.path).unwrap().to_rgb8();
+        assert!(page.get_pixel(page.width() / 2, page.height() / 10).0[0] < 60);
+        assert!(page.get_pixel(page.width() / 2, page.height() / 2).0[0] > 200);
         std::fs::remove_dir_all(root).unwrap();
     }
 
