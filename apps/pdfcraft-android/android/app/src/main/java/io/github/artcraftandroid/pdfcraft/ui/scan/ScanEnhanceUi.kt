@@ -59,15 +59,27 @@ internal enum class ScanEnhanceMore(val id: String) {
     Compare("compare"),
     AddPage("add_page"),
     Rename("rename"),
+    /** Erase, pen, highlighter and text on the page (#495); hidden with the testing option off. */
+    Markup("markup"),
+    /** Every mark of the page gone at once (#495); hidden with the testing option off. */
+    ClearMarkup("clear_markup"),
 }
 
 /** Which of More's items can be used now. */
-internal fun scanEnhanceMoreEnabled(item: ScanEnhanceMore, pages: Int, applyNeeded: Boolean, lookIsDefault: Boolean, canCompare: Boolean, canRename: Boolean): Boolean = when (item) {
+internal fun scanEnhanceMoreEnabled(item: ScanEnhanceMore, pages: Int, applyNeeded: Boolean, lookIsDefault: Boolean, canCompare: Boolean, canRename: Boolean, canMarkup: Boolean = false, hasMarks: Boolean = false): Boolean = when (item) {
     ScanEnhanceMore.ApplyAll -> pages > 1 && applyNeeded
     ScanEnhanceMore.ResetLook -> pages > 0 && !lookIsDefault
     ScanEnhanceMore.Compare -> canCompare
     ScanEnhanceMore.AddPage -> true
     ScanEnhanceMore.Rename -> canRename
+    ScanEnhanceMore.Markup -> pages > 0 && canMarkup
+    ScanEnhanceMore.ClearMarkup -> pages > 0 && hasMarks
+}
+
+/** Which of More's items are offered at all: Markup and Clear markup only with their testing option on (#495). */
+internal fun scanEnhanceMoreShown(item: ScanEnhanceMore, markup: Boolean): Boolean = when (item) {
+    ScanEnhanceMore.Markup, ScanEnhanceMore.ClearMarkup -> markup
+    else -> true
 }
 
 /** The page shown after a swipe or an arrow: one step, never past either end. */
@@ -90,6 +102,7 @@ internal fun ScanEnhanceBar(
     onRotate: () -> Unit,
     onDelete: () -> Unit,
     onMore: (ScanEnhanceMore) -> Unit,
+    moreShown: (ScanEnhanceMore) -> Boolean = { true },
 ) {
     var menu by remember { mutableStateOf(false) }
     Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.Top) {
@@ -102,7 +115,7 @@ internal fun ScanEnhanceBar(
         Box(share) {
             ScanBarButton(LucideIcons.EllipsisVertical, stringResource(R.string.scan_enhance_more), modifier = Modifier.fillMaxWidth()) { menu = true }
             DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                for (item in ScanEnhanceMore.entries) {
+                for (item in ScanEnhanceMore.entries.filter(moreShown)) {
                     DropdownMenuItem(
                         text = { Text(stringResource(scanEnhanceMoreLabel(item))) },
                         enabled = moreEnabled(item),
@@ -123,6 +136,8 @@ private fun scanEnhanceMoreLabel(item: ScanEnhanceMore): Int = when (item) {
     ScanEnhanceMore.Compare -> R.string.scan_enhance_compare
     ScanEnhanceMore.AddPage -> R.string.tools_add_page
     ScanEnhanceMore.Rename -> R.string.scan_enhance_rename
+    ScanEnhanceMore.Markup -> R.string.scan_markup
+    ScanEnhanceMore.ClearMarkup -> R.string.scan_markup_clear
 }
 
 /** The sliders button at the end of the looks strip, for a look that has settings. */

@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Markup on a scanned page: eraser, pen, highlighter, text (#495) -->
+<resources>
+    <string name="scan_lab_markup">Marcas en páginas escaneadas: borrador, bolígrafo, resaltador, texto</string>
+    <string name="scan_markup">Marcar</string>
+    <string name="scan_markup_clear">Borrar marcas</string>
+    <string name="scan_markup_erase">Borrar</string>
+    <string name="scan_markup_pen">Bolígrafo</string>
+    <string name="scan_markup_highlighter">Resaltador</string>
+    <string name="scan_markup_text">Texto</string>
+    <string name="scan_markup_size_small">Pequeño</string>
+    <string name="scan_markup_size_medium">Mediano</string>
+    <string name="scan_markup_size_large">Grande</string>
+    <string name="scan_markup_colour">Color %1$d</string>
+    <string name="scan_markup_hint">Un dedo dibuja o borra. Dos dedos mueven y amplían.</string>
+    <string name="scan_markup_text_hint">Toca la página para añadir texto. Toca un texto para moverlo, cambiarlo o eliminarlo.</string>
+    <string name="scan_markup_add_text">Añadir texto</string>
+    <string name="scan_markup_edit_text">Editar texto</string>
+    <string name="scan_markup_delete_text">Eliminar texto</string>
+    <string name="scan_markup_page_description">Página %1$d con sus marcas</string>
+    <string name="scan_markup_ask_title">¿Quitar las marcas de esta página?</string>
+    <string name="scan_markup_ask_body">Bordes nuevos o un cambio de aplanado mueven la página bajo sus marcas, así que se quitan.</string>
+    <string name="scan_markup_ask_keep">Conservar</string>
+    <string name="scan_markup_ask_remove">Quitar marcas</string>
+</resources>

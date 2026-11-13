@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Markup on a scanned page: eraser, pen, highlighter, text (#495) -->
+<resources>
+    <string name="scan_lab_markup">Annotations sur les pages scannées : gomme, stylo, surligneur, texte</string>
+    <string name="scan_markup">Annoter</string>
+    <string name="scan_markup_clear">Effacer les annotations</string>
+    <string name="scan_markup_erase">Gomme</string>
+    <string name="scan_markup_pen">Stylo</string>
+    <string name="scan_markup_highlighter">Surligneur</string>
+    <string name="scan_markup_text">Texte</string>
+    <string name="scan_markup_size_small">Petit</string>
+    <string name="scan_markup_size_medium">Moyen</string>
+    <string name="scan_markup_size_large">Grand</string>
+    <string name="scan_markup_colour">Couleur %1$d</string>
+    <string name="scan_markup_hint">Un doigt dessine ou gomme. Deux doigts déplacent et zooment.</string>
+    <string name="scan_markup_text_hint">Touchez la page pour ajouter du texte. Touchez un texte pour le déplacer, le modifier ou le supprimer.</string>
+    <string name="scan_markup_add_text">Ajouter du texte</string>
+    <string name="scan_markup_edit_text">Modifier le texte</string>
+    <string name="scan_markup_delete_text">Supprimer le texte</string>
+    <string name="scan_markup_page_description">Page %1$d avec ses annotations</string>
+    <string name="scan_markup_ask_title">Retirer les annotations de cette page ?</string>
+    <string name="scan_markup_ask_body">De nouveaux bords ou un changement d\'aplatissement déplacent la page sous ses annotations : elles sont retirées.</string>
+    <string name="scan_markup_ask_keep">Garder</string>
+    <string name="scan_markup_ask_remove">Retirer</string>
+</resources>

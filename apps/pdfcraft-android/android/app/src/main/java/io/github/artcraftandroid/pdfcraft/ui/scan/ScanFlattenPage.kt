@@ -32,6 +32,8 @@ internal fun scanFlattenChoiceId(flatten: Boolean?): String = when (flatten) {
 
 /** The scan screen's switch: flatten the page at [index], or stop flattening it (#302). */
 internal fun AppViewModel.toggleScanFlatten(index: Int) {
+    // a page with marks asks first: flattening moves the page under them (#495)
+    if (scanMarkupAsks(index, "flatten") { toggleScanFlatten(index) }) return
     val page = scanPages.getOrNull(index) ?: return
     val on = page.flatten != true
     scanPages[index] = page.copy(flatten = on)

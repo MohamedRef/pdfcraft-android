@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Markup on a scanned page: eraser, pen, highlighter, text (#495) -->
+<resources>
+    <string name="scan_lab_markup">Marcações em páginas digitalizadas: borracha, caneta, marca-texto, texto</string>
+    <string name="scan_markup">Marcar</string>
+    <string name="scan_markup_clear">Limpar marcações</string>
+    <string name="scan_markup_erase">Borracha</string>
+    <string name="scan_markup_pen">Caneta</string>
+    <string name="scan_markup_highlighter">Marca-texto</string>
+    <string name="scan_markup_text">Texto</string>
+    <string name="scan_markup_size_small">Pequeno</string>
+    <string name="scan_markup_size_medium">Médio</string>
+    <string name="scan_markup_size_large">Grande</string>
+    <string name="scan_markup_colour">Cor %1$d</string>
+    <string name="scan_markup_hint">Um dedo desenha ou apaga. Dois dedos movem e ampliam.</string>
+    <string name="scan_markup_text_hint">Toque na página para adicionar texto. Toque em um texto para movê-lo, alterá-lo ou excluí-lo.</string>
+    <string name="scan_markup_add_text">Adicionar texto</string>
+    <string name="scan_markup_edit_text">Editar texto</string>
+    <string name="scan_markup_delete_text">Excluir texto</string>
+    <string name="scan_markup_page_description">Página %1$d com suas marcações</string>
+    <string name="scan_markup_ask_title">Remover as marcações desta página?</string>
+    <string name="scan_markup_ask_body">Novas bordas ou uma mudança de achatamento movem a página sob as marcações, então elas são removidas.</string>
+    <string name="scan_markup_ask_keep">Manter</string>
+    <string name="scan_markup_ask_remove">Remover marcações</string>
+</resources>

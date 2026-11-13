@@ -97,6 +97,8 @@ internal fun scanPageRequest(
     autoFlatten: Boolean = lab.flattenAuto,
     /** Fingers at the page's edge are removed after Clean scan (#466): the option, unless the person undid it on this page. */
     removeFingers: Boolean = lab.removeFingers,
+    /** The page's marks made by hand (#495), as the engine takes them; null for none. */
+    markup: io.github.artcraftandroid.pdfcraft.core.ScanMarkup? = null,
 ): io.github.artcraftandroid.pdfcraft.core.ScanPageRequest = scanTurnAsk(turns, autoUpright, lab.upright).let { ask ->
     io.github.artcraftandroid.pdfcraft.core.ScanPageRequest(
     photoPath = photoPath,
@@ -142,6 +144,8 @@ internal fun scanPageRequest(
     reuseLook = lab.lookReuse,
     // fingers at the page's edge papered over after Clean scan (#466)
     removeFingers = removeFingers,
+    // the marks made by hand, drawn after the look (#495)
+    markup = markup,
 )
 }
 
@@ -223,6 +227,8 @@ internal data class ScanPreviewKey(
     val paper: io.github.artcraftandroid.pdfcraft.ui.scan.ScanPaperChoice = io.github.artcraftandroid.pdfcraft.ui.scan.ScanPaperChoice.Auto,
     /** The automatic look decides the page's flattening (#466). */
     val autoFlatten: Boolean = false,
+    /** The page's marks made by hand (#495), with the testing option on; null for none. */
+    val marks: io.github.artcraftandroid.pdfcraft.ui.scan.ScanMarks? = null,
 ) {
     /** The look this preview shows, as the page keeps it. */
     val look: io.github.artcraftandroid.pdfcraft.ui.scan.ScanPageLook get() = io.github.artcraftandroid.pdfcraft.ui.scan.ScanPageLook(filter, strength, paper)
@@ -231,12 +237,12 @@ internal data class ScanPreviewKey(
      * Whether this preview and [other] show the same page apart from its look: while the preview
      * of a new look or strength is made, the old one stays on screen instead of the photo (#301).
      */
-    fun samePage(other: ScanPreviewKey?): Boolean = other != null && copy(filter = other.filter, strength = other.strength, paper = other.paper) == other
+    fun samePage(other: ScanPreviewKey?): Boolean = other != null && copy(filter = other.filter, strength = other.strength, paper = other.paper, marks = other.marks) == other
 
     companion object {
         /** The preview of [page] in [look] (by default the page's own). */
         fun of(page: ScanPage, flatten: Boolean, lab: ScanLab, autoUpright: Boolean = true, look: io.github.artcraftandroid.pdfcraft.ui.scan.ScanPageLook = page.look, autoFlatten: Boolean = false) =
-            ScanPreviewKey(page.file.absolutePath, page.corners.toList(), look.filter, flatten, lab.copy(keep = false, inspect = false, removeFingers = io.github.artcraftandroid.pdfcraft.ui.scan.scanRemovesFingers(lab, page.auto)), page.turns, autoUpright, io.github.artcraftandroid.pdfcraft.ui.scan.scanPresetFor(page, lab), look.strength, look.paper, autoFlatten)
+            ScanPreviewKey(page.file.absolutePath, page.corners.toList(), look.filter, flatten, lab.copy(keep = false, inspect = false, removeFingers = io.github.artcraftandroid.pdfcraft.ui.scan.scanRemovesFingers(lab, page.auto)), page.turns, autoUpright, io.github.artcraftandroid.pdfcraft.ui.scan.scanPresetFor(page, lab), look.strength, look.paper, autoFlatten, io.github.artcraftandroid.pdfcraft.ui.scan.scanMarksFor(page, lab))
     }
 }
 
