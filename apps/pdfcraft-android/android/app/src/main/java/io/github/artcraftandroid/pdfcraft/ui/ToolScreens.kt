@@ -850,6 +850,12 @@ data class ScanPage(
     val flatten: Boolean? = null,
     /** The page's own look and strength (#301); a new page takes the look chosen last. */
     val look: io.github.artcraftandroid.pdfcraft.ui.scan.ScanPageLook = io.github.artcraftandroid.pdfcraft.ui.scan.ScanPageLook(),
+    /**
+     * The corners the page started with when its outline was not found (#444), or null. While the
+     * corners are still these, the page is the photo with its surroundings, so its kind of
+     * document is not worked out (see `scanKindSource`).
+     */
+    val uncropped: FloatArray? = null,
 ) {
     /** The page among the scan's pages: the two halves of a spread share one photo [file]. */
     val key: String get() = book?.let { "${file.absolutePath}#${it.side}" } ?: file.absolutePath

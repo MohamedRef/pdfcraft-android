@@ -200,7 +200,7 @@ internal data class ScanPreviewKey(
     /** The person's turn of the page and the automatic-turn setting (#339): either changes the page shown. */
     val turns: Int? = null,
     val autoUpright: Boolean = true,
-    /** The kind of document the person chose for the page (#299). */
+    /** The kind of document asked for the page (#299): the person's, or Document for a page whose outline was not found (#444). */
     val preset: String? = null,
     /** The page's strength from the slider (#301), null for the look's own. */
     val strength: Int? = null,
@@ -219,7 +219,7 @@ internal data class ScanPreviewKey(
     companion object {
         /** The preview of [page] in [look] (by default the page's own). */
         fun of(page: ScanPage, flatten: Boolean, lab: ScanLab, autoUpright: Boolean = true, look: io.github.artcraftandroid.pdfcraft.ui.scan.ScanPageLook = page.look) =
-            ScanPreviewKey(page.file.absolutePath, page.corners.toList(), look.filter, flatten, lab.copy(keep = false, inspect = false), page.turns, autoUpright, page.preset, look.strength, look.paper)
+            ScanPreviewKey(page.file.absolutePath, page.corners.toList(), look.filter, flatten, lab.copy(keep = false, inspect = false), page.turns, autoUpright, io.github.artcraftandroid.pdfcraft.ui.scan.scanPresetFor(page, lab), look.strength, look.paper)
     }
 }
 

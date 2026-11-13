@@ -183,6 +183,8 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     /** Opening is serial: multiple ACTION_VIEW deliveries must not share a working file or engine document. */
     internal val openMutex = Mutex()
     private var lastOpenRequest = 0L
+    /** The file the latest open request is for, until that request finishes (#439). */
+    private var openingUri: String? = null
     private var openStartedAt = 0L
 
     /** Shared gate for initial, native and cached-copy open paths. */
@@ -217,10 +219,14 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         // Never replace the document while its unsaved write-back choice is unresolved.
         // Otherwise a rapid second Open with could bypass Save a copy / Discard.
         if (readOnlyPrompt != null || resolvingReadOnly) return
+        // the same file is already opening: let that open finish (#439)
+        if (io.github.artcraftandroid.pdfcraft.isRepeatOpen(openingUri, uri.toString(), fromOtherApp, password)) return
         val requestId = ++lastOpenRequest
+        openingUri = uri.toString()
         // Lock the entire copy/open/replace transaction. A newer external request may arrive
         // while the previous provider streams slowly; only the latest waiting one opens.
         viewModelScope.launch {
+          try {
           openMutex.withLock {
             if (!isCurrentOpenRequest(requestId)) return@withLock
             val eng = engine ?: application.engine.await().getOrNull() ?: run { tell(engineProblem ?: text(R.string.msg_engine_not_started)); return@withLock }
@@ -283,6 +289,9 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             } finally {
                 opening = false
             }
+          }
+          } finally {
+              if (lastOpenRequest == requestId) openingUri = null
           }
         }
     }
@@ -494,11 +503,15 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     fun closeDocument() {
         noteTaking.closeLecturePlayback()
         val doc = document ?: return
+        // Close pressed again while this close is still saving: one save is enough (#440)
+        if (closingDoc === doc) return
         study.pauseStudy()
         study.studyDoc = null
         val eng = engine ?: return
         if (doc.controller.tool != ViewerTool.None) leaveTool(doc)
+        closingDoc = doc
         viewModelScope.launch {
+          try {
             openMutex.withLock {
                 if (document !== doc) return@withLock
                 // Opening a second document and closing the first must not race native handles.
@@ -514,8 +527,14 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 withContext(Dispatchers.IO) { sweepCache() }
                 if (doc.fromOtherApp) leave.trySend(Unit) else showTab(next)
             }
+          } finally {
+              if (closingDoc === doc) closingDoc = null
+          }
         }
     }
+
+    /** The document whose Close is saving now; a repeated Close waits for it (#440). */
+    private var closingDoc: OpenDocument? = null
 
     /** Resolve an unsaved write-back prompt without racing an incoming Open with. */
     fun answerReadOnly(saveCopy: Boolean?) {
@@ -1404,7 +1423,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             val pages = withContext(Dispatchers.IO) {
                 // the two halves of a book spread share a photo, so each photo's thumbnail is made once
                 val thumbs = HashMap<String, androidx.compose.ui.graphics.ImageBitmap?>()
-                session.pages.mapNotNull { p -> File(p.path).let { f -> thumbs.getOrPut(p.path) { scanThumb(f) }?.let { ScanPage(f, it, p.corners, p.found, turns = p.turns, preset = p.preset, book = io.github.artcraftandroid.pdfcraft.ui.scan.ScanBookHalf.decode(p.book), flatten = p.flatten ?: true.takeIf { session.flatten }, look = p.look ?: io.github.artcraftandroid.pdfcraft.ui.scan.ScanPageLook()) } } }
+                session.pages.mapNotNull { p -> File(p.path).let { f -> thumbs.getOrPut(p.path) { scanThumb(f) }?.let { ScanPage(f, it, p.corners, p.found, turns = p.turns, preset = p.preset, book = io.github.artcraftandroid.pdfcraft.ui.scan.ScanBookHalf.decode(p.book), flatten = p.flatten ?: true.takeIf { session.flatten }, look = p.look ?: io.github.artcraftandroid.pdfcraft.ui.scan.ScanPageLook(), uncropped = io.github.artcraftandroid.pdfcraft.ui.scan.scanRestoredUncropped(p.corners, p.found, io.github.artcraftandroid.pdfcraft.ui.scan.ScanBookHalf.decode(p.book), io.github.artcraftandroid.pdfcraft.ui.scan.ScanCaptures.of(p.path)?.straightened == true)) } } }
             }
             scanPages.addAll(pages)
             scanRestoring = null
@@ -1771,15 +1790,17 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 *io.github.artcraftandroid.pdfcraft.ui.scan.scanBookDiag(book, lab.bookGutter, bookOrder, cut, bookMs),
             )
             val finding = doc?.let { d ->
-                ScanFinding(d.source.name.lowercase(), d.confidence.toDouble(), d.angle.toInt(), d.passes.toInt(), d.refined.count { it }, d.curved.count { it }, scanCurvedOpposite(d.curved))
+                ScanFinding(d.source.name.lowercase(), d.confidence.toDouble(), d.angle.toInt(), d.passes.toInt(), d.refined.count { it }, d.curved.count { it }, scanCurvedOpposite(d.curved), lab.findOptions())
             }
             val at = scanPages.indexOfFirst { it.file == f }
             if (at >= 0) {
-                val one = if (edges != null) scanPages[at].copy(corners = edges, found = edges, finding = finding) else scanPages[at].copy(finding = finding)
+                // a page whose outline was not found remembers the corners it started with (#444)
+                val one = if (edges != null) scanPages[at].copy(corners = edges, found = edges, finding = finding)
+                else scanPages[at].let { it.copy(finding = finding, uncropped = io.github.artcraftandroid.pdfcraft.ui.scan.scanUncropped(it.corners, null, straightened)) }
                 // in book mode the page becomes the spread's two halves, in the order chosen (#303)
                 val halves = io.github.artcraftandroid.pdfcraft.ui.scan.scanBookPages(one.corners, cut, bookOrder).map { (corners, half) ->
                     // a half's own outline is what was found for it, so a corner moved later is measured from there
-                    if (half == null) one else one.copy(corners = corners, found = one.found?.let { corners }, book = half)
+                    if (half == null) one else one.copy(corners = corners, found = one.found?.let { corners }, uncropped = one.uncropped?.let { corners }, book = half)
                 }
                 scanPages.removeAt(at)
                 scanPages.addAll(at, halves)
@@ -1922,7 +1943,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         val settle = key.samePage(scanPreview?.key)
         scanPreviewJob = viewModelScope.launch(scanPreviewDispatcher) {
             if (settle) delay(SCAN_PREVIEW_SETTLE_MS)
-            val request = scanPageRequest(page.file.absolutePath, page.corners, filter, flatten, lab, "", page.turns, autoUpright, page.preset, page.finding?.curvedSides ?: 0, page.finding?.curvedOpposite ?: false, page.book != null, look.strength, look.paper)
+            val request = scanPageRequest(page.file.absolutePath, page.corners, filter, flatten, lab, "", page.turns, autoUpright, io.github.artcraftandroid.pdfcraft.ui.scan.scanPresetFor(page, lab), page.finding?.curvedSides ?: 0, page.finding?.curvedOpposite ?: false, page.book != null, look.strength, look.paper)
             val started = android.os.SystemClock.elapsedRealtime()
             val made = runCatching { io.github.artcraftandroid.pdfcraft.core.scanPreviewPageWith(request, SCAN_PREVIEW_SIDE.toUInt(), stop) }
             val ms = android.os.SystemClock.elapsedRealtime() - started
@@ -1956,6 +1977,8 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 *scanLineFlattenDiag(lab.lineFlatten, p?.lineFlatten),
                 // the kind of document Clean scan took the page for (#299)
                 "preset" to (p?.kind?.preset ?: "none"), "preset_chosen" to (p?.kind?.chosen ?: false),
+                // where the kind came from: not worked out for a page whose outline was not found (#444)
+                "kind_source" to io.github.artcraftandroid.pdfcraft.ui.scan.scanKindSource(page, lab),
             )
             withContext(Dispatchers.Main) {
                 // a newer request may have come in while this one ran: only the wanted one is shown
@@ -2018,7 +2041,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         scanDetailJob?.cancel()
         val look = page.look
         scanDetailJob = viewModelScope.launch(scanPreviewDispatcher) {
-            val request = scanPageRequest(page.file.absolutePath, page.corners, look.filter, flatten, lab, "", page.turns, autoUpright, page.preset, page.finding?.curvedSides ?: 0, page.finding?.curvedOpposite ?: false, page.book != null, look.strength, look.paper)
+            val request = scanPageRequest(page.file.absolutePath, page.corners, look.filter, flatten, lab, "", page.turns, autoUpright, io.github.artcraftandroid.pdfcraft.ui.scan.scanPresetFor(page, lab), page.finding?.curvedSides ?: 0, page.finding?.curvedOpposite ?: false, page.book != null, look.strength, look.paper)
             val started = android.os.SystemClock.elapsedRealtime()
             val made = runCatching { io.github.artcraftandroid.pdfcraft.core.scanPreviewPage(request, SCAN_DETAIL_SIDE.toUInt()) }
             made.exceptionOrNull()?.let { Diag.failure(DiagArea.Scan, "scan_preview_detail", it) }
@@ -2066,7 +2089,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             for (f in todo) {
                 // a page preview asked for meanwhile goes first
                 kotlinx.coroutines.yield()
-                val request = scanPageRequest(page.file.absolutePath, page.corners, f, flatten, lab, "", page.turns, autoUpright, page.preset, page.finding?.curvedSides ?: 0, page.finding?.curvedOpposite ?: false, page.book != null)
+                val request = scanPageRequest(page.file.absolutePath, page.corners, f, flatten, lab, "", page.turns, autoUpright, io.github.artcraftandroid.pdfcraft.ui.scan.scanPresetFor(page, lab), page.finding?.curvedSides ?: 0, page.finding?.curvedOpposite ?: false, page.book != null)
                 val one = android.os.SystemClock.elapsedRealtime()
                 val p = runCatching { io.github.artcraftandroid.pdfcraft.core.scanPreviewPageWith(request, SCAN_PREVIEW_SIDE.toUInt(), stop) }
                     .onFailure { if (!stop.isCancelled()) Diag.failure(DiagArea.Scan, "scan_look_tile", it) }.getOrNull() ?: continue
@@ -2150,7 +2173,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             tools.busy = text(R.string.msg_busy_cleaning_page, i + 1, pages.size)
             val flatten = io.github.artcraftandroid.pdfcraft.ui.scan.scanPageFlattens(page.flatten, scanCanFlatten)
             tools.busyProgress = i to pages.size
-            val request = scanPageRequest(page.file.absolutePath, page.corners, page.look.filter, flatten, lab, File(dir, "page-$i").absolutePath, turns, autoUpright, page.preset, page.finding?.curvedSides ?: 0, page.finding?.curvedOpposite ?: false, page.book != null, page.look.strength, page.look.paper)
+            val request = scanPageRequest(page.file.absolutePath, page.corners, page.look.filter, flatten, lab, File(dir, "page-$i").absolutePath, turns, autoUpright, io.github.artcraftandroid.pdfcraft.ui.scan.scanPresetFor(page, lab), page.finding?.curvedSides ?: 0, page.finding?.curvedOpposite ?: false, page.book != null, page.look.strength, page.look.paper)
             val started = android.os.SystemClock.elapsedRealtime()
             val result = withContext(Dispatchers.Default) { runCatching { io.github.artcraftandroid.pdfcraft.core.scanProcessPage(request) } }
             result.onFailure { Diag.failure(DiagArea.Scan, "scan_process_page", it) }
@@ -2237,6 +2260,8 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 "sharpen" to lab.sharpen, "denoise" to lab.denoise, "noise_sigma" to (r?.noise?.toDouble() ?: -1.0),
                 // the kind of document Clean scan took the page for, its settings and what it read (#299)
                 "presets" to lab.presets, "preset" to (r?.kind?.preset ?: "none"), "preset_chosen" to (r?.kind?.chosen ?: false),
+                // where the kind came from: not worked out for a page whose outline was not found (#444)
+                "kind_source" to io.github.artcraftandroid.pdfcraft.ui.scan.scanKindSource(page, lab), "unfound_document" to lab.unfoundDocument,
                 "preset_strength" to (r?.kind?.strength?.toInt() ?: -1), "preset_sharpen" to (r?.kind?.sharpen?.toInt() ?: -1),
                 "keep_paper" to (r?.kind?.keepPaper ?: false), "suggest_flatten" to (r?.kind?.suggestFlatten ?: false),
                 "suggest_greyscale" to (r?.kind?.suggestGreyscale ?: false), "page_ratio" to (r?.kind?.ratio?.toDouble() ?: 0.0),

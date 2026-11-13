@@ -109,6 +109,10 @@ internal fun ScanLabSettings(vm: AppViewModel) {
     SheetRow(null, stringResource(R.string.scan_lab_crop), { lab.update(o.copy(cropTools = !o.cropTools)) }) {
         PdfSwitch(o.cropTools, { lab.update(o.copy(cropTools = it)) })
     }
+    // Auto-detect says when it finds nothing and does not repeat a search that found nothing (#443)
+    SheetRow(null, stringResource(R.string.scan_lab_crop_detect_note), { lab.update(o.copy(cropDetectNote = !o.cropDetectNote)) }) {
+        PdfSwitch(o.cropDetectNote, { lab.update(o.copy(cropDetectNote = it)) })
+    }
     SheetRow(null, stringResource(R.string.scan_lab_flatten_auto), { lab.update(o.copy(flattenAuto = !o.flattenAuto)) }) {
         PdfSwitch(o.flattenAuto, { lab.update(o.copy(flattenAuto = it)) })
     }
@@ -160,6 +164,10 @@ internal fun ScanLabSettings(vm: AppViewModel) {
     // the slider's strength counts as set by hand, and sharpening scales the type's (#424)
     SheetRow(null, stringResource(R.string.scan_lab_page_strength), { lab.update(o.copy(pageStrength = !o.pageStrength)) }) {
         PdfSwitch(o.pageStrength, { lab.update(o.copy(pageStrength = it)) })
+    }
+    // a page whose outline was not found is a Document until it is cropped (#444)
+    SheetRow(null, stringResource(R.string.scan_lab_unfound_document), { lab.update(o.copy(unfoundDocument = !o.unfoundDocument)) }) {
+        PdfSwitch(o.unfoundDocument, { lab.update(o.copy(unfoundDocument = it)) })
     }
     // the research detectors (#305, #306): a report only, in kept scans, so it changes no page
     SheetRow(null, stringResource(R.string.scan_lab_inspect), { lab.update(o.copy(inspect = !o.inspect)) }) {

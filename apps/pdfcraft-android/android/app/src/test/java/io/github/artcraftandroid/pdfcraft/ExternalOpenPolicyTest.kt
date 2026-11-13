@@ -66,6 +66,18 @@ class ExternalOpenPolicyTest {
         assertFalse(canProceedWithPdfOpen(requestA, requestB, true, true))
     }
 
+    @Test fun secondTapOnAFileStillOpeningIsIgnored() {
+        val file = "content://com.android.providers.downloads.documents/document/32"
+        val other = "content://com.android.providers.downloads.documents/document/33"
+        // #439: the same file again while it opens lets the running open finish
+        assertTrue(isRepeatOpen(file, file, fromOtherApp = false, password = null))
+        // nothing opening, another file, another app's request or a password: a new request
+        assertFalse(isRepeatOpen(null, file, fromOtherApp = false, password = null))
+        assertFalse(isRepeatOpen(file, other, fromOtherApp = false, password = null))
+        assertFalse(isRepeatOpen(file, file, fromOtherApp = true, password = null))
+        assertFalse(isRepeatOpen(file, file, fromOtherApp = false, password = "secret"))
+    }
+
     @Test fun clipFallbackDoesNotLetBrokenFirstItemMaskValidPdf() {
         val candidates = listOf(
             IncomingPdfUri("https", "example.com", "/pdf"),

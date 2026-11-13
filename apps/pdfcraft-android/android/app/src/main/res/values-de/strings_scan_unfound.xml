@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Scanner: a page whose outline was not found is not measured for its kind (#444); kept apart from strings.xml so parallel scanner work merges cleanly. -->
+<resources>
+    <string name="scan_lab_unfound_document">Eine Seite ohne gefundene Ränder gilt bis zum Zuschneiden als Dokument</string>
+</resources>

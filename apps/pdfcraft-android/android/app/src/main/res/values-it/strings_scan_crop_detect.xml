@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="scan_crop_detect_none">Nessun contorno di pagina trovato. Trascina gli angoli o tocca Nessun ritaglio per tenere tutta la foto.</string>
+    <string name="scan_crop_detect_none_other">Nessun contorno di pagina trovato, nemmeno con il rilevatore di linee. Trascina gli angoli o tocca Nessun ritaglio per tenere tutta la foto.</string>
+    <string name="scan_crop_detect_already">Questa foto è già stata analizzata e non è stato trovato il contorno della pagina. Trascina gli angoli o tocca Nessun ritaglio per tenere tutta la foto.</string>
+    <string name="scan_crop_detect_found_other">Pagina trovata con il rilevatore di linee. Controlla gli angoli.</string>
+    <string name="scan_crop_detect_failed">Il rilevamento automatico non è riuscito a leggere questa foto.</string>
+    <string name="scan_lab_crop_detect_note">Ritaglio: avvisa quando il rilevamento automatico non trova nulla e prova poi il rilevatore di linee</string>
+</resources>
