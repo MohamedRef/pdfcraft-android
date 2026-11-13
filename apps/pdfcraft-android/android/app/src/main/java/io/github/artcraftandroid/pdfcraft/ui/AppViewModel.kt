@@ -2145,6 +2145,8 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 *scanAppliedStrengthDiag(scanAppliedStrength(look, lab, p?.kind?.strength?.toInt()), lab),
                 "flatten" to flatten, "made" to (image != null),
                 "reused" to (p?.reused ?: false), "ms" to ms,
+                // the look's light estimate kept from an earlier look of the page; its parts are the preview_look_*_ms fields (#446)
+                "look_reuse" to lab.lookReuse, "light_reused" to (p?.lightReused ?: false),
                 *(p?.timings.orEmpty().map<io.github.artcraftandroid.pdfcraft.core.ScanTiming, Pair<String, Any?>> { it.stage.removePrefix("scan_") + "_ms" to it.ms.toLong() }.toTypedArray()),
                 "width" to (p?.width?.toLong() ?: 0L), "height" to (p?.height?.toLong() ?: 0L),
                 "quarter_turns" to (p?.quarterTurns?.toInt() ?: 0), "flattened" to (p?.flattened ?: false),
@@ -2165,7 +2167,10 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 if (scanPreviewWanted != key) return@withContext
                 if (p != null && image != null) {
                     scanPreview = ScanPreviewShown(key, image, p.quarterTurns.toInt(), p.flattened, p.kind)
-                    scanPreviewStats[page.key] = ScanTestPreview(true, p.reused, ms, p.width.toInt(), p.height.toInt(), filter.mode)
+                    scanPreviewStats[page.key] = ScanTestPreview(
+                        true, p.reused, ms, p.width.toInt(), p.height.toInt(), filter.mode,
+                        lightReused = p.lightReused, lookParts = scanLookParts(p.timings),
+                    )
                     // the strip and the comparison follow the page shown (#301)
                     requestScanTiles(index, page, flatten)
                 } else {

@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Testing option: Clean scan keeps the page's light estimate between strength and paper changes (#446). -->
+<resources>
+    <string name="scan_lab_look_reuse">Manter a estimativa de luz da página entre mudanças da digitalização limpa</string>
+</resources>

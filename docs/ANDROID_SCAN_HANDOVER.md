@@ -40,6 +40,7 @@ a phone yet.** Every number in the scanner's documents was measured on a desktop
 | #445 | Scan log: crop lines counted pages from 0; a failed model timing gave no reason | Fixed in code | #464 | `crop`, `crop_snap` and `crop_detect` now carry `index` from 1. A failed timing writes `model_timing_failed` with `reason`, `stage`, `ms` and `native_ms` (new native call `scan_time_model_outcome`). Not run on a phone |
 | #443 | Auto-detect on the crop screen says nothing when it finds nothing | Fixed in code, not run on a phone | #449 | A line under the photo (read by TalkBack) says when nothing was found; a search that already found nothing on the photo, at import or on the screen, is not made again: the next press tries the line detector, then presses only say the photo was already searched. Testing option `cropDetectNote` (off is the old behaviour). Log: `finder`, `other`, `skipped`, `note` on `crop_detect`; `detects_other`, `detects_skipped` in `crop`. How often the line detector finds what the network missed, on the owner's photos (`ANDROID_SCAN_CROP.md`) |
 | #339 | Pages turned upright | Done in code, not run on a phone | #370, #387 | The chip, Rotate, the multi-page rule and the setting are in. Acceptance on the owner's test set per script, and phone timing; the neighbour rule's 0.95 bar may seldom act with this network's confidences (`ANDROID_SCAN_UPRIGHT.md`) |
+| #446 | Clean scan preview: 200 to 400 ms per strength or paper change on the phone | Done in code, not run on a phone | #454 | The light estimate (about 80 % of a change on a desktop) is kept with the straightened preview page, so a change runs the tone curve alone: 175–202 ms down to 20–24 ms per change on a desktop, same bytes (`docs/performance/scan-clean-look-reuse.md`). Testing option `lookReuse` (off is the old way); log `preview_look_light_ms` … `preview_look_tone_ms`, `light_reused`; page file `preview.light_reused`, `preview.look_parts_ms`. Left: the phone's figures in the next log; Black and white (255 ms) is unchanged |
 
 "Core done" means the code and its tests are merged and the issue's acceptance items that need
 the owner's phone or his test set are open. Each issue has a comment saying the same in detail.
@@ -75,7 +76,7 @@ Every threshold in them is the issue's starting value or was set on pages drawn 
 
 One document per feature says how it works, what was measured and what was not:
 `ANDROID_SCAN_AUTO.md`, `_AUTO_LOOK.md`, `_BLACK_WHITE.md`, `_CAPTURE.md`, `_DETAIL.md`, `_DETECTOR.md`, `_EDGES.md`,
-`_CAMERA.md`, `_FLATTEN.md`, `_LIVE.md`, `_MEASURING.md`, `_MERGE.md`, `_MODELS.md`, `_PREVIEW.md`, `_PROPORTIONS.md`, `_TESTING.md`, `_UPRIGHT.md` (all
+`_CAMERA.md`, `_FLATTEN.md`, `_LIVE.md`, `_MEASURING.md`, `_MERGE.md`, `_MODELS.md`, `_PREVIEW.md` (with #446's kept light estimate), `_PROPORTIONS.md`, `_TESTING.md`, `_UPRIGHT.md` (all
 `docs/ANDROID_SCAN_…`). Read the one for a feature before changing it.
 
 ## 2. How a scan goes through the code today
