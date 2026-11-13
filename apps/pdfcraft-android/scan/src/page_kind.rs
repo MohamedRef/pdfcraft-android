@@ -18,7 +18,7 @@ use crate::aspect::Paper;
 use crate::enhance::evened;
 use crate::photo::Luma;
 use crate::photo_mask::{PhotoMask, PhotoMasks, photo_masks};
-use crate::preset::{PageFeatures, Preset, PresetParams, classify, gutter_reading, ink_features, params};
+use crate::preset::{PageFeatures, Preset, PresetParams, classify_with, curve_suggests_flatten, gutter_reading, ink_features, is_book_page, params};
 
 /// The working copy's longer side is shrunk to this many pixels or a little more (whole steps).
 const WORKING_SIDE: u32 = 1000;
@@ -48,6 +48,9 @@ pub struct PageKind {
     pub features: PageFeatures,
     /// The photo mask found the whole page to be a picture.
     pub whole_photo: bool,
+    /// What the first book page rule (#299: any curved side, or the gutter in force) says,
+    /// whichever rule is in force (#442).
+    pub book_loose: bool,
     /// Where the photographs are (#299, section 4), over the page as a whole; `None` when the page
     /// was too small to cut into blocks.
     pub photos: Option<PhotoMask>,
@@ -116,12 +119,14 @@ pub struct Measured {
 }
 
 impl Measured {
-    /// The features for a page whose edge detection found `curved_sides` curved sides, under the
-    /// strict gutter rule (`strict_gutter`) or the first one, and the photo mask that leaves out
-    /// blocks that are mostly paper (`strict_photo`) or the first one.
-    pub fn features(&self, curved_sides: u8, strict_gutter: bool, strict_photo: bool) -> PageFeatures {
+    /// The features for a page whose edge detection found the sides `curve` says curved, under
+    /// the strict gutter rule (`strict_gutter`) or the first one, and the photo mask that leaves
+    /// out blocks that are mostly paper (`strict_photo`) or the first one.
+    pub fn features(&self, curve: Curve, strict_gutter: bool, strict_photo: bool) -> PageFeatures {
         PageFeatures {
-            curved_sides: curved_sides.min(4),
+            curved_sides: curve.sides.min(4),
+            curved_opposite: curve.opposite,
+            book_mode: curve.book_mode,
             gutter_band: if strict_gutter { self.gutter_strict } else { self.features.gutter_loose },
             photo_share: if strict_photo { self.photo_strict } else { self.features.photo_loose },
             ..self.features.clone()
@@ -134,12 +139,31 @@ impl Measured {
     }
 }
 
+/// What the page's edge detection said of its sides (#291), and whether the page came from book
+/// mode (#303): the inputs of the book page rule that are not measured on the page (#442).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Curve {
+    /// How many of the four sides are curved (0–4).
+    pub sides: u8,
+    /// Two opposite sides are both curved (top and bottom, or left and right).
+    pub opposite: bool,
+    /// The page is one half of a spread cut in book mode.
+    pub book_mode: bool,
+}
+
+impl Curve {
+    /// `sides` curved sides, none of them opposite, outside book mode.
+    pub fn sides(sides: u8) -> Self {
+        Curve { sides, ..Curve::default() }
+    }
+}
+
 /// What `page` (straightened, before its look, at `dpi`, matched to `paper`) measures as. The
-/// page's edge detection said `curved_sides` of its four sides are curved. `gutter_band` is the
-/// strict rule's (#427). `None` for a page too small or malformed to measure.
-pub fn page_features(page: &Rgb, dpi: u16, paper: Paper, curved_sides: u8) -> Option<(PageFeatures, bool)> {
+/// page's edge detection said `curve` of its sides. `gutter_band` is the strict rule's (#427).
+/// `None` for a page too small or malformed to measure.
+pub fn page_features(page: &Rgb, dpi: u16, paper: Paper, curve: Curve) -> Option<(PageFeatures, bool)> {
     let measured = measure(page, dpi, paper)?;
-    Some((measured.features(curved_sides, true, true), measured.whole_photo))
+    Some((measured.features(curve, true, true), measured.whole_photo))
 }
 
 /// Takes the measurements of `page` (see `page_features`).
@@ -168,6 +192,8 @@ pub fn measure(page: &Rgb, dpi: u16, paper: Paper) -> Option<Measured> {
         photo_loose: masks.as_ref().map_or(0.0, |m| m.loose.share),
         stroke_mm: ink.stroke_mm,
         curved_sides: 0,
+        curved_opposite: false,
+        book_mode: false,
         gutter_band: gutter.strict,
         gutter_loose: gutter.loose,
         gutter_cover: gutter.cover,
@@ -185,11 +211,11 @@ pub fn measure(page: &Rgb, dpi: u16, paper: Paper) -> Option<Measured> {
 
 /// The kind of `page` and its settings under `choice`, with the strict gutter rule (#427); `None`
 /// when presets are off or the page cannot be measured.
-pub fn page_kind(page: &Rgb, dpi: u16, paper: Paper, curved_sides: u8, choice: PresetChoice) -> Option<PageKind> {
+pub fn page_kind(page: &Rgb, dpi: u16, paper: Paper, curve: Curve, choice: PresetChoice) -> Option<PageKind> {
     if choice == PresetChoice::Off {
         return None;
     }
-    kind_of(&measure(page, dpi, paper)?, curved_sides, choice, Rules::default())
+    kind_of(&measure(page, dpi, paper)?, curve, choice, Rules::default())
 }
 
 /// Which of each pair of rules reads a page (#427): the ones in force, or the first ones (testing
@@ -200,27 +226,36 @@ pub struct Rules {
     pub strict_gutter: bool,
     /// A photograph is where little paper shows: barcodes, stamps and soft print are not one.
     pub strict_photo: bool,
+    /// A book page needs more than one curved side (#442): the gutter, two opposite curved sides,
+    /// or a curved side in book mode; a single curved side only suggests flattening.
+    pub strict_book: bool,
 }
 
 impl Default for Rules {
     /// The rules in force.
     fn default() -> Self {
-        Rules { strict_gutter: true, strict_photo: true }
+        Rules { strict_gutter: true, strict_photo: true, strict_book: true }
     }
 }
 
-/// The kind under `choice` of a page measured as `measured` whose edge detection found
-/// `curved_sides` curved sides, read by `rules`; `None` when presets are off.
-pub fn kind_of(measured: &Measured, curved_sides: u8, choice: PresetChoice, rules: Rules) -> Option<PageKind> {
+/// The kind under `choice` of a page measured as `measured` whose edge detection found the sides
+/// `curve` says curved, read by `rules`; `None` when presets are off. Under the strict book rule
+/// a curved side suggests flattening whatever the kind (#442).
+pub fn kind_of(measured: &Measured, curve: Curve, choice: PresetChoice, rules: Rules) -> Option<PageKind> {
     if choice == PresetChoice::Off {
         return None;
     }
-    let features = measured.features(curved_sides, rules.strict_gutter, rules.strict_photo);
+    let features = measured.features(curve, rules.strict_gutter, rules.strict_photo);
     let whole_photo = measured.whole_photo(rules.strict_photo);
     let photos: Option<PhotoMask> = measured.photos.as_ref().map(|m| if rules.strict_photo { m.strict.clone() } else { m.loose.clone() });
     let (preset, chosen) = match choice {
         PresetChoice::Fixed(p) => (p, true),
-        _ => (classify(&features), false),
+        _ => (classify_with(&features, rules.strict_book), false),
     };
-    Some(PageKind { preset, chosen, params: params(preset), features, whole_photo, photos })
+    let mut params = params(preset);
+    if rules.strict_book && curve_suggests_flatten(&features) {
+        params.suggest_flatten = true;
+    }
+    let book_loose = is_book_page(&features, false);
+    Some(PageKind { preset, chosen, params, features, whole_photo, book_loose, photos })
 }

@@ -184,6 +184,11 @@ fn main() {
                 (None, _) => PresetChoice::Off,
             },
             curved_sides: facts["finding"]["curved_sides"].as_u64().map_or(0, |v| v.min(4) as u8),
+            // which sides were curved and book mode (#442); files from before then say neither
+            curved_opposite: facts["finding"]["curved_opposite"].as_bool().unwrap_or(false),
+            book_mode: !facts["book"].is_null(),
+            // the book page rule (#442): the phone's choice, or the rule in force for older files
+            strict_book: options["strict_book"].as_bool().unwrap_or(true),
             // set by hand (#424): the testing option's strength, or the page's slider; files from
             // before #424 say only whether the testing option set one
             fixed_strength: facts["strength_applied"]["fixed"].as_bool().unwrap_or_else(|| !options["strength_override"].is_null()),

@@ -81,6 +81,10 @@ internal fun scanPageRequest(
     preset: String? = null,
     /** How many sides of the page its edge detection found curved (#291): a book page's sign (#299). */
     curvedSides: Int = 0,
+    /** Two opposite sides were found curved (#442): with the gutter, a book page's sign. */
+    curvedOpposite: Boolean = false,
+    /** The page is one half of a spread cut in book mode (#303): a curved side then makes it a book page (#442). */
+    bookMode: Boolean = false,
     /** The page's strength from the scan screen's slider (#301), or null for the look's own. */
     strength: Int? = null,
     /** The paper's colour the person chose for the page (#301). */
@@ -111,6 +115,10 @@ internal fun scanPageRequest(
     denoise = lab.denoise,
     preset = scanPresetAsk(preset, lab.presets),
     curvedSides = curvedSides.coerceIn(0, 4).toUByte(),
+    curvedOpposite = curvedOpposite,
+    bookMode = bookMode,
+    // one curved side suggests flattening but does not make a book page (#442)
+    strictBook = lab.strictBook,
     // a book's gutter must run the whole side, stay narrow and fade inward (#427)
     strictGutter = lab.strictGutter,
     // barcodes, stamps and soft print are not photographs (#427)
@@ -266,3 +274,11 @@ internal const val SCAN_ZOOM_MAX = 5f
 
 /** From this zoom on, the sharper page is asked for. */
 internal const val SCAN_ZOOM_DETAIL = 1.5f
+
+/**
+ * Whether two opposite sides were both found curved (#442): [curved] lists the top, right, bottom
+ * and left sides as the edge refinement gives them. An open book's page bows along its top and its
+ * bottom; a sheet held in one hand bends one side.
+ */
+internal fun scanCurvedOpposite(curved: List<Boolean>): Boolean =
+    curved.size == 4 && ((curved[0] && curved[2]) || (curved[1] && curved[3]))
