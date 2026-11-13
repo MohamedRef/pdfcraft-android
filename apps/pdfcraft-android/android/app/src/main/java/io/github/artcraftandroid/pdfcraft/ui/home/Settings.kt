@@ -7,6 +7,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -235,6 +236,29 @@ internal fun <T> SettingsPills(values: List<Pair<T, String>>, selected: T, onPic
     }
 }
 
+/** A setting with a few values: its title, the values as pills (they scroll when the line is short), and what it does. */
+@Composable
+internal fun <T> SettingsChoice(title: String, values: List<Pair<T, String>>, selected: T, onPick: (T) -> Unit, body: String? = null) {
+    Text(title, color = pdfColors.text, fontSize = 16.sp, modifier = Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 12.dp))
+    Box(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 8.dp)) {
+        SettingsPills(values, selected, onPick)
+    }
+    if (body != null) SettingsNote(body)
+}
+
+/** Asks before a link opens the browser, the same way everywhere in Settings (#463). */
+@Composable
+private fun rememberLeaving(): (String) -> Unit {
+    val uri = LocalUriHandler.current
+    var leaving by remember { mutableStateOf<String?>(null) }
+    leaving?.let { url ->
+        PdfDialog(
+            onDismiss = { leaving = null }, title = stringResource(R.string.home_leaving_title), confirm = stringResource(R.string.home_continue), onConfirm = { leaving = null; uri.openUri(url) },
+        ) { Text(stringResource(R.string.home_leaving_body), color = pdfColors.text, fontSize = 14.sp) }
+    }
+    return { leaving = it }
+}
+
 /** Asks before an action that removes something (#448). */
 @Composable
 private fun rememberConfirm(title: String, confirm: String, body: String? = null, action: () -> Unit): () -> Unit {
@@ -437,16 +461,10 @@ private fun DiagnosticsPage(vm: AppViewModel, open: (SettingsPage) -> Unit) = Gr
 
 @Composable
 private fun HelpPage(vm: AppViewModel) = Group {
-    val uri = LocalUriHandler.current
-    var leaving by remember { mutableStateOf<String?>(null) }
+    val leave = rememberLeaving()
     SettingsRow(stringResource(R.string.tips_title), { vm.tipsOpen = true }, icon = LucideIcons.Sparkles)
-    SettingsRow(stringResource(R.string.home_help), { leaving = "$APP_REPO#readme" }, icon = LucideIcons.CircleHelp, trailing = { LinkOut() })
-    SettingsRow(stringResource(R.string.home_report_problem), { leaving = "$APP_REPO/issues" }, icon = LucideIcons.MessageSquare, trailing = { LinkOut() })
-    leaving?.let { url ->
-        PdfDialog(
-            onDismiss = { leaving = null }, title = stringResource(R.string.home_leaving_title), confirm = stringResource(R.string.home_continue), onConfirm = { leaving = null; uri.openUri(url) },
-        ) { Text(stringResource(R.string.home_leaving_body), color = pdfColors.text, fontSize = 14.sp) }
-    }
+    SettingsRow(stringResource(R.string.home_help), { leave("$APP_REPO#readme") }, icon = LucideIcons.CircleHelp, trailing = { LinkOut() })
+    SettingsRow(stringResource(R.string.home_report_problem), { leave("$APP_REPO/issues") }, icon = LucideIcons.MessageSquare, trailing = { LinkOut() })
 }
 
 @Composable
@@ -458,7 +476,7 @@ private fun AboutPage(vm: AppViewModel, open: (SettingsPage) -> Unit) = Group {
     val c = pdfColors
     val context = LocalContext.current
     val clipboard = LocalClipboardManager.current
-    val uri = LocalUriHandler.current
+    val leave = rememberLeaving()
     val version = stringResource(R.string.home_version, "${vm.home.appVersion} (${installedVersionCode(context)})", io.github.artcraftandroid.pdfcraft.core.engineVersion())
     val copied = stringResource(R.string.home_version_copied)
     val copyLabel = stringResource(R.string.settings_copy_version)
@@ -484,7 +502,7 @@ private fun AboutPage(vm: AppViewModel, open: (SettingsPage) -> Unit) = Group {
     )
     SettingsHeader(stringResource(R.string.home_section_legal))
     SettingsRow(stringResource(R.string.home_licences), { vm.home.showLicences = true }, chevron = true)
-    SettingsRow(stringResource(R.string.home_source_code), { uri.openUri(APP_REPO) }, trailing = { LinkOut() })
-    SettingsRow(stringResource(R.string.home_engine), { uri.openUri("https://github.com/storytold/pdfcraft") }, trailing = { LinkOut() })
+    SettingsRow(stringResource(R.string.home_source_code), { leave(APP_REPO) }, trailing = { LinkOut() })
+    SettingsRow(stringResource(R.string.home_engine), { leave("https://github.com/storytold/pdfcraft") }, trailing = { LinkOut() })
     SettingsNote(stringResource(R.string.home_legal_notice))
 }
