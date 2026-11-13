@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Markup on a scanned page: eraser, pen, highlighter, text (#495) -->
+<resources>
+    <string name="scan_lab_markup">Markierungen auf Scanseiten: Radierer, Stift, Textmarker, Text</string>
+    <string name="scan_markup">Markieren</string>
+    <string name="scan_markup_clear">Markierungen löschen</string>
+    <string name="scan_markup_erase">Radieren</string>
+    <string name="scan_markup_pen">Stift</string>
+    <string name="scan_markup_highlighter">Textmarker</string>
+    <string name="scan_markup_text">Text</string>
+    <string name="scan_markup_size_small">Klein</string>
+    <string name="scan_markup_size_medium">Mittel</string>
+    <string name="scan_markup_size_large">Groß</string>
+    <string name="scan_markup_colour">Farbe %1$d</string>
+    <string name="scan_markup_hint">Ein Finger zeichnet oder radiert. Zwei Finger verschieben und zoomen.</string>
+    <string name="scan_markup_text_hint">Tippe auf die Seite, um Text hinzuzufügen. Tippe auf einen Text, um ihn zu verschieben, zu ändern oder zu löschen.</string>
+    <string name="scan_markup_add_text">Text hinzufügen</string>
+    <string name="scan_markup_edit_text">Text bearbeiten</string>
+    <string name="scan_markup_delete_text">Text löschen</string>
+    <string name="scan_markup_page_description">Seite %1$d mit Markierungen</string>
+    <string name="scan_markup_ask_title">Markierungen dieser Seite entfernen?</string>
+    <string name="scan_markup_ask_body">Neue Ränder oder eine geänderte Glättung verschieben die Seite unter den Markierungen, daher werden sie entfernt.</string>
+    <string name="scan_markup_ask_keep">Behalten</string>
+    <string name="scan_markup_ask_remove">Entfernen</string>
+</resources>

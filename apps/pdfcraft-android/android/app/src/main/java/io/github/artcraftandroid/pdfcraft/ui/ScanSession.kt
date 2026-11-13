@@ -25,7 +25,8 @@ data class ScanSession(
     /** [book] is a book spread's half as [io.github.artcraftandroid.pdfcraft.ui.scan.ScanBookHalf.encode] wrote it (#303); null for a page of its own. */
     /** [look] is the page's own look and strength (#301), null in a session written before it (the default look then). */
     /** [flatten] is the person's Flatten page choice (#302), null when they made none. */
-    class Page(val path: String, val corners: FloatArray, val found: FloatArray?, val turns: Int? = null, val preset: String? = null, val book: String? = null, val look: io.github.artcraftandroid.pdfcraft.ui.scan.ScanPageLook? = null, val flatten: Boolean? = null, val auto: io.github.artcraftandroid.pdfcraft.ui.scan.ScanAutoMarks = io.github.artcraftandroid.pdfcraft.ui.scan.ScanAutoMarks())
+    /** [marks] are the marks made by hand on the page (#495), null for none. */
+    class Page(val path: String, val corners: FloatArray, val found: FloatArray?, val turns: Int? = null, val preset: String? = null, val book: String? = null, val look: io.github.artcraftandroid.pdfcraft.ui.scan.ScanPageLook? = null, val flatten: Boolean? = null, val auto: io.github.artcraftandroid.pdfcraft.ui.scan.ScanAutoMarks = io.github.artcraftandroid.pdfcraft.ui.scan.ScanAutoMarks(), val marks: io.github.artcraftandroid.pdfcraft.ui.scan.ScanMarks? = null)
 
     fun encode(): String = buildString {
         append(HEADER).append('\n')
@@ -48,6 +49,8 @@ data class ScanSession(
             // what the automatic look did and what was taken back (#466), before the look line;
             // a build from before it ignores the line
             if (p.auto != io.github.artcraftandroid.pdfcraft.ui.scan.ScanAutoMarks()) append("auto\t").append(p.auto.encode()).append('\n')
+            // the marks made by hand (#495), also before the look line; a build from before them ignores the line
+            p.marks?.takeUnless { it.isEmpty }?.let { append("marks\t").append(it.encode()).append('\n') }
             // the page's look (#301) on a line of its own after the page's, so the page line keeps
             // its columns and a build from before #301 reads the session, ignoring the line
             p.look?.let { append("look\t").append(io.github.artcraftandroid.pdfcraft.ui.scan.scanFilterId(it.filter)).append('\t').append(it.strength?.toString().orEmpty()).append('\t').append(it.paper.word).append('\n') }
@@ -100,11 +103,16 @@ data class ScanSession(
                     }
                     "auto" -> {
                         // belongs to the page line before it, like the look line after it (#466)
-                        if (lastPage) pages[pages.lastIndex] = pages.last().let { Page(it.path, it.corners, it.found, it.turns, it.preset, it.book, it.look, it.flatten, io.github.artcraftandroid.pdfcraft.ui.scan.ScanAutoMarks.decode(value)) }
+                        if (lastPage) pages[pages.lastIndex] = pages.last().let { Page(it.path, it.corners, it.found, it.turns, it.preset, it.book, it.look, it.flatten, io.github.artcraftandroid.pdfcraft.ui.scan.ScanAutoMarks.decode(value), it.marks) }
+                    }
+                    "marks" -> {
+                        // belongs to the page line before it, like the auto and look lines (#495)
+                        val marks = io.github.artcraftandroid.pdfcraft.ui.scan.ScanMarks.decode(value)
+                        if (lastPage && marks != null) pages[pages.lastIndex] = pages.last().let { Page(it.path, it.corners, it.found, it.turns, it.preset, it.book, it.look, it.flatten, it.auto, marks) }
                     }
                     "look" -> {
                         val look = io.github.artcraftandroid.pdfcraft.ui.scan.ScanPageLook.decode(value, parts.getOrNull(2), parts.getOrNull(3))
-                        if (lastPage && look != null) pages[pages.lastIndex] = pages.last().let { Page(it.path, it.corners, it.found, it.turns, it.preset, it.book, look, it.flatten, it.auto) }
+                        if (lastPage && look != null) pages[pages.lastIndex] = pages.last().let { Page(it.path, it.corners, it.found, it.turns, it.preset, it.book, look, it.flatten, it.auto, it.marks) }
                         lastPage = false
                     }
                 }

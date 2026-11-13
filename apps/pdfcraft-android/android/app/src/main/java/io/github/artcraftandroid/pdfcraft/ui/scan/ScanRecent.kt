@@ -56,7 +56,7 @@ internal fun scanRecentPhotos(pages: List<ScanSession.Page>): List<String> = pag
 
 /** [session] with each page's photo path changed through [moved]; a page whose photo is not in it is left out. */
 internal fun scanRecentRepath(session: ScanSession, moved: Map<String, String>): ScanSession =
-    session.copy(shot = null, retake = null, forImage = false, pages = session.pages.mapNotNull { p -> moved[p.path]?.let { to -> ScanSession.Page(to, p.corners, p.found, p.turns, p.preset, p.book, p.look, p.flatten, p.auto) } })
+    session.copy(shot = null, retake = null, forImage = false, pages = session.pages.mapNotNull { p -> moved[p.path]?.let { to -> ScanSession.Page(to, p.corners, p.found, p.turns, p.preset, p.book, p.look, p.flatten, p.auto, p.marks) } })
 
 /** The log's line for a scan kept to be edited again (#461). */
 internal fun scanRecentKeepDiag(kept: ScanRecentKept, pages: Int, ms: Long): Array<Pair<String, Any?>> =

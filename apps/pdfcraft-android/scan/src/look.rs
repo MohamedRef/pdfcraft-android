@@ -91,6 +91,8 @@ pub struct Applied {
     pub detail_reused: bool,
     /// What the automatic look's finger step did (#466); `None` when it did not run.
     pub fingers: Option<crate::defects::FingerFill>,
+    /// What drawing the page's hand-made marks did (#495); `None` when it had none.
+    pub markup: Option<crate::markup::Applied>,
 }
 
 /// Give `page` the `look` at `strength` (0–100), taking it to be at 300 dpi. `None` when the
@@ -141,6 +143,7 @@ pub fn apply_prepared(page: &Rgb, look: Look, params: &LookParams, photos: Optio
         light_reused: false,
         detail_reused: false,
         fingers: None,
+        markup: None,
     };
     let Some(engine) = look.engine() else {
         return Some(match look {
@@ -163,6 +166,7 @@ pub fn apply_prepared(page: &Rgb, look: Look, params: &LookParams, photos: Optio
                     light_reused: made.light_reused,
                     detail_reused: made.detail_reused,
                     fingers: None,
+                    markup: None,
                 }
             }
         });
