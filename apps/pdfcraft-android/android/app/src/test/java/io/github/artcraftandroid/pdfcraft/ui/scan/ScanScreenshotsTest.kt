@@ -189,10 +189,12 @@ class ScanScreenshotsTest {
 
     /**
      * Pages [at] as if the background queue had made them (#494): a straight drawn page in place of
-     * the engine's result, which a JVM test cannot make. The queue may try the others and fail;
-     * they keep their photo with the waiting dot.
+     * the engine's result, which a JVM test cannot make. The others are held as if their edges
+     * were still being looked for, so the queue (whose engine cannot load here) leaves them alone
+     * and they keep their photo with the waiting dot.
      */
     private fun madeTiles(vm: AppViewModel, pages: List<ScanPage>, at: List<Int>) {
+        pages.indices.filter { it !in at }.forEach { vm.pageQueue.findingStarted(pages[it].file) }
         vm.scanLab.update(vm.scanLab.options.copy(preview = true, backgroundPages = true))
         for (i in at) {
             val made = drawnPage(600, 800, tilted = false, background = 0xFFF7F5F0.toInt())
@@ -204,8 +206,8 @@ class ScanScreenshotsTest {
     }
 
     private fun noMadeTiles(vm: AppViewModel) {
-        vm.pageQueue.made.clear()
         vm.scanLab.update(vm.scanLab.options.copy(preview = false))
+        vm.pageQueue.clear()
     }
 
     @Test @Config(qualifiers = "en-w360dp-h640dp-xhdpi") fun cameraEnglish360() = camera("en_360x640")
