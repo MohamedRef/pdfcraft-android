@@ -4,6 +4,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
@@ -36,7 +37,7 @@ import io.github.artcraftandroid.pdfcraft.ui.pdfColors
 import io.github.artcraftandroid.pdfcraft.ui.viewer.formatSize
 
 /**
- * Settings, About, Diagnostics, while the log is being recorded: the scanner's testing options
+ * Settings, Diagnostics, Scanner testing, while the log is being recorded: the scanner's testing options
  * (#288). Each scanner feature can be switched off or swapped for what it replaced, and scans can
  * be kept on the device and shared as a zip, so a page that comes out wrong on a real phone can
  * be looked at afterwards with the photo it was made from.
@@ -49,8 +50,6 @@ internal fun ScanLabSettings(vm: AppViewModel) {
     var confirmShare by remember { mutableStateOf(false) }
     var confirmClear by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { lab.refreshKept() }
-
-    Text(stringResource(R.string.scan_lab_section), color = c.accent, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 20.dp, top = 16.dp, bottom = 4.dp))
 
     // the scans themselves
     SheetRow(null, stringResource(R.string.scan_lab_keep), { lab.update(o.copy(keep = !o.keep)) }) {
@@ -225,7 +224,7 @@ private fun <T> Choice(label: String, values: List<Pair<T, String>>, selected: T
             Text(
                 name, color = if (on) Color.White else c.text, fontSize = 14.sp,
                 modifier = Modifier.clip(RoundedCornerShape(14.dp)).background(if (on) c.accent else c.surface)
-                    .clickable(role = Role.RadioButton) { onPick(value) }.padding(horizontal = 12.dp, vertical = 6.dp),
+                    .selectable(selected = on, role = Role.RadioButton) { onPick(value) }.padding(horizontal = 12.dp, vertical = 6.dp),
             )
         }
     }

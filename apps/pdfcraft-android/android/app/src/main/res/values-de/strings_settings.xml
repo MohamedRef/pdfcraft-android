@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Settings pages and their summaries (#447). -->
+<resources>
+    <string name="settings_group_documents">Dokumente</string>
+    <string name="settings_group_tools">Werkzeuge</string>
+    <string name="settings_group_app">App</string>
+    <string name="settings_group_support">Support</string>
+    <string name="settings_reading">Lesen und Anzeige</string>
+    <string name="settings_reading_summary">Bildschirm an, Statusleiste, Seitenvorschauen</string>
+    <string name="settings_pen_summary">Nur Stift, Formen, Name des Autors</string>
+    <string name="settings_forms_summary">Vorschläge beim Ausfüllen von Formularen</string>
+    <string name="settings_scanner">Scanner</string>
+    <string name="settings_scanner_summary">Kamera, wenig Licht, Seiten drehen, Modelle</string>
+    <string name="settings_library">Bibliothek und Lernen</string>
+    <string name="settings_library_summary">Suchindex, Lernstatistik</string>
+    <string name="settings_off">Aus</string>
+    <string name="settings_updates_summary">Nach neuen Versionen suchen und sie laden</string>
+    <string name="settings_diagnostics_recording">Wird aufgezeichnet</string>
+    <string name="settings_help_summary">Tipps, Hilfe, Problem melden</string>
+    <string name="settings_scan_testing_summary">Scannerfunktionen ein- und ausschalten, Scans zum Teilen behalten</string>
+    <string name="settings_scan_testing_needs_log">Diagnoseprotokoll einschalten, um sie zu nutzen</string>
+    <string name="settings_copy_version">Version kopieren</string>
+</resources>

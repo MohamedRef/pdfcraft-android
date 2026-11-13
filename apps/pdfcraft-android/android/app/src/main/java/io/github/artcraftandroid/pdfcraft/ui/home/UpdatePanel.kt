@@ -78,7 +78,7 @@ internal fun updateNoteSections(markdown: String): List<UpdateNoteSection> {
 }
 
 @Composable
-internal fun UpdatePanel() {
+internal fun UpdatePanel(showTitle: Boolean = true) {
     val colors = pdfColors
     val context = LocalContext.current
     val uriHandler = LocalUriHandler.current
@@ -96,7 +96,7 @@ internal fun UpdatePanel() {
     var showAllNotes by remember(candidate) { mutableStateOf(false) }
     var showKnownLimits by remember(candidate) { mutableStateOf(false) }
 
-    Text(stringResource(R.string.updater_title), color = colors.accent, fontWeight = FontWeight.SemiBold,
+    if (showTitle) Text(stringResource(R.string.updater_title), color = colors.accent, fontWeight = FontWeight.SemiBold,
         fontSize = 13.sp, modifier = Modifier.padding(start = 20.dp, top = 16.dp, bottom = 8.dp))
     Text(
         stringResource(R.string.updater_description),
