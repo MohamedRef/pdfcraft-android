@@ -126,6 +126,14 @@ pub struct AutoOutput {
     /// The page's grain: the standard deviation of its noise on blank paper, in grey levels of
     /// 255 (0 when the page was left alone). At 2 or more it was smoothed, if that was asked for.
     pub noise: f32,
+    /// (stage, milliseconds) of the parts that ran (#446): `look_light` (the light estimate),
+    /// `look_noise` (the grain), `look_denoise`, `look_sharpen`, `look_tone`. A part kept from an earlier look
+    /// of the same page is not listed.
+    pub stages: Vec<(&'static str, u32)>,
+    /// The light estimate was kept from an earlier look of the same page (#446).
+    pub light_reused: bool,
+    /// The page smoothed and sharpened before the curve was kept from an earlier look (#446).
+    pub detail_reused: bool,
 }
 
 /// How much a `w` × `h` page is enlarged per side so it has [`MIN_OUTPUT_PIXELS`] (1 when it is
@@ -142,31 +150,156 @@ pub fn auto(page: &Rgb, params: &AutoParams) -> Option<AutoOutput> {
 /// [`auto`], with the photographs `photos` found on the page (#299, the block photo mask)
 /// sharpened as gently as the objects the look finds itself.
 pub fn auto_with_photos(page: &Rgb, params: &AutoParams, photos: Option<&crate::photo_mask::PhotoMask>) -> Option<AutoOutput> {
+    auto_prepared(page, params, photos, &Prepared::default())
+}
+
+/// The parts of the Auto look that do not depend on its strength, its paper choice or its tone
+/// curve, kept for one straightened page (#446): the light estimate, the page's grain, and the
+/// page smoothed and sharpened before the curve. Empty until the first look asks; a later look of
+/// the same page at another strength or paper choice then costs the tone curve alone. Every look
+/// made with it has exactly the bytes [`auto_with_photos`] gives.
+///
+/// Only ever used with the one page it was first used with.
+#[derive(Default)]
+pub struct Prepared {
+    light: std::sync::OnceLock<Light>,
+    /// The page smoothed and sharpened for the last [`DetailKey`] asked for.
+    detailed: std::sync::Mutex<Option<(DetailKey, std::sync::Arc<Rgb>)>>,
+}
+
+/// The light estimate and what is measured from it.
+struct Light {
+    bg: background::Background,
+    noise: f32,
+}
+
+/// What the page before the curve depends on besides the page itself.
+#[derive(Clone, Debug, PartialEq)]
+struct DetailKey {
+    denoise: bool,
+    sharpen: u8,
+    dpi: u16,
+    /// The block photo mask's weights, when one was given.
+    photos: Option<(usize, usize, Vec<u32>)>,
+}
+
+impl Prepared {
+    /// A new, empty store.
+    pub fn new() -> Prepared {
+        Prepared::default()
+    }
+
+    /// Whether the light estimate has been made.
+    pub fn has_light(&self) -> bool {
+        self.light.get().is_some()
+    }
+}
+
+impl Clone for Prepared {
+    fn clone(&self) -> Self {
+        let out = Prepared::default();
+        if let Some(light) = self.light.get() {
+            let _ = out.light.set(Light { bg: light.bg.clone(), noise: light.noise });
+        }
+        *out.detailed.lock().unwrap_or_else(std::sync::PoisonError::into_inner) =
+            self.detailed.lock().unwrap_or_else(std::sync::PoisonError::into_inner).clone();
+        out
+    }
+}
+
+impl PartialEq for Prepared {
+    /// Always equal: what is kept is made from the page and changes no look.
+    fn eq(&self, _: &Self) -> bool {
+        true
+    }
+}
+
+impl std::fmt::Debug for Prepared {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Prepared").field("light", &self.has_light()).finish_non_exhaustive()
+    }
+}
+
+/// Stage names of the Auto look's parts in [`AutoOutput::stages`] (#446).
+pub const STAGE_LIGHT: &str = "look_light";
+pub const STAGE_NOISE: &str = "look_noise";
+pub const STAGE_DENOISE: &str = "look_denoise";
+pub const STAGE_SHARPEN: &str = "look_sharpen";
+pub const STAGE_TONE: &str = "look_tone";
+
+/// [`auto_with_photos`], taking and keeping in `prepared` what does not depend on the strength,
+/// the paper or the tone curve (#446). `prepared` must only ever be used with this `page`.
+pub fn auto_prepared(page: &Rgb, params: &AutoParams, photos: Option<&crate::photo_mask::PhotoMask>, prepared: &Prepared) -> Option<AutoOutput> {
     let (w, h) = (page.width as usize, page.height as usize);
     if page.data.len() != w.checked_mul(h)?.checked_mul(3)? {
         return None;
     }
-    let untouched = |page: &Rgb| AutoOutput { rgb: page.clone(), objects: Mask::new(0, 0), closing_radius: 0, noise: 0.0 };
+    let untouched = |page: &Rgb| AutoOutput {
+        rgb: page.clone(),
+        objects: Mask::new(0, 0),
+        closing_radius: 0,
+        noise: 0.0,
+        stages: Vec::new(),
+        light_reused: false,
+        detail_reused: false,
+    };
     // too small to tell paper from ink
     if params.strength == 0 || w < MIN_SIDE || h < MIN_SIDE {
         return Some(untouched(page));
     }
-    let bg = background::background(page, params.threads > 1);
+    let mut stages: Vec<(&'static str, u32)> = Vec::with_capacity(5);
+    let mut clock = std::time::Instant::now();
+    let mut lap = |stage: &'static str, stages: &mut Vec<(&'static str, u32)>| {
+        stages.push((stage, u32::try_from(clock.elapsed().as_millis()).unwrap_or(u32::MAX)));
+        clock = std::time::Instant::now();
+    };
+    let light_reused = prepared.has_light();
+    let light = prepared.light.get_or_init(|| {
+        let bg = background::background(page, params.threads > 1);
+        lap(STAGE_LIGHT, &mut stages);
+        let noise = detail::noise_sigma(page, &bg.light);
+        lap(STAGE_NOISE, &mut stages);
+        Light { bg, noise }
+    });
+    let (bg, noise) = (&light.bg, light.noise);
     let strength = params.strength.clamp(BLEND_BELOW, 100);
     // less grain where there is a lot, then crisper print, both before the curve (#299)
-    let noise = detail::noise_sigma(page, &bg.light);
-    let mut detailed: Option<Rgb> = None;
-    if params.denoise && noise >= detail::NOISE_FLOOR {
-        detailed = Some(Rgb { width: page.width, height: page.height, data: detail::denoise(page, noise, params.threads) });
-    }
-    if params.sharpen > 0 {
-        let k_sharp = f32::from(params.sharpen.min(100)) / 100.0;
-        let gentle = photos.map_or_else(|| bg.objects.clone(), |p| with_photos(&bg.objects, p));
-        let data = detail::sharpen(detailed.as_ref().unwrap_or(page), k_sharp, noise, f32::from(params.dpi), Some(&gentle), params.threads);
-        detailed = Some(Rgb { width: page.width, height: page.height, data });
-    }
+    let key = DetailKey {
+        denoise: params.denoise && noise >= detail::NOISE_FLOOR,
+        sharpen: params.sharpen.min(100),
+        dpi: params.dpi,
+        photos: photos.map(|p| (p.cols, p.rows, p.weight.iter().map(|w| w.to_bits()).collect())),
+    };
+    let kept = {
+        let slot = prepared.detailed.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        slot.as_ref().filter(|(k, _)| *k == key).map(|(_, d)| std::sync::Arc::clone(d))
+    };
+    let detail_reused = kept.is_some();
+    let detailed: Option<std::sync::Arc<Rgb>> = match kept {
+        Some(d) => Some(d),
+        None if !key.denoise && key.sharpen == 0 => None,
+        None => {
+            let mut detailed: Option<Rgb> = None;
+            if key.denoise {
+                detailed = Some(Rgb { width: page.width, height: page.height, data: detail::denoise(page, noise, params.threads) });
+                lap(STAGE_DENOISE, &mut stages);
+            }
+            if key.sharpen > 0 {
+                let k_sharp = f32::from(key.sharpen) / 100.0;
+                let gentle = photos.map_or_else(|| bg.objects.clone(), |p| with_photos(&bg.objects, p));
+                let data = detail::sharpen(detailed.as_ref().unwrap_or(page), k_sharp, noise, f32::from(params.dpi), Some(&gentle), params.threads);
+                detailed = Some(Rgb { width: page.width, height: page.height, data });
+                lap(STAGE_SHARPEN, &mut stages);
+            }
+            let made = detailed.map(std::sync::Arc::new);
+            if let Some(made) = &made {
+                *prepared.detailed.lock().unwrap_or_else(std::sync::PoisonError::into_inner) = Some((key, std::sync::Arc::clone(made)));
+            }
+            made
+        }
+    };
     let renderer = tone::Renderer::new(
-        detailed.as_ref().unwrap_or(page),
+        detailed.as_deref().unwrap_or(page),
         &bg.light,
         tone::Tone::at(strength).shaped(params.shape),
         params.paper == PaperMode::Keep,
@@ -178,7 +311,16 @@ pub fn auto_with_photos(page: &Rgb, params: &AutoParams, photos: Option<&crate::
             *o = ((u32::from(*o) * a + u32::from(i) * (n - a) + n / 2) / n) as u8;
         }
     }
-    Some(AutoOutput { rgb: Rgb { width: page.width, height: page.height, data }, objects: bg.objects, closing_radius: bg.radius as u8, noise })
+    lap(STAGE_TONE, &mut stages);
+    Some(AutoOutput {
+        rgb: Rgb { width: page.width, height: page.height, data },
+        objects: bg.objects.clone(),
+        closing_radius: bg.radius as u8,
+        noise,
+        stages,
+        light_reused,
+        detail_reused,
+    })
 }
 
 /// The cells of `objects` (at its own size) set, and those where `photos` (a block mask over the

@@ -7,7 +7,7 @@ use pdfcraft_engine::camera_clean;
 
 use crate::Rgb;
 use crate::enhance::{
-    AutoParams, Bitmap1, BwParams, DEFAULT_SHARPEN, PaperMode, Shape, WHITEBOARD_COLOUR_FACTOR, auto_with_photos, black_white, whiteboard_tone,
+    AutoParams, Bitmap1, BwParams, DEFAULT_SHARPEN, PaperMode, Prepared, Shape, WHITEBOARD_COLOUR_FACTOR, auto_prepared, black_white, whiteboard_tone,
 };
 use crate::photo_mask::PhotoMask;
 
@@ -75,6 +75,12 @@ pub struct Applied {
     pub pixels: Pixels,
     /// The page's grain in grey levels (Auto measures it, #299); `None` for the other looks.
     pub noise: Option<f32>,
+    /// (stage, milliseconds) of the look's parts (#446); only Clean scan and Whiteboard list any.
+    pub stages: Vec<(&'static str, u32)>,
+    /// Clean scan or Whiteboard took the page's light estimate from an earlier look (#446).
+    pub light_reused: bool,
+    /// ...and the page smoothed and sharpened before the curve as well.
+    pub detail_reused: bool,
 }
 
 /// Give `page` the `look` at `strength` (0–100), taking it to be at 300 dpi. `None` when the
@@ -99,21 +105,33 @@ pub fn apply_full(page: &Rgb, look: Look, params: &LookParams) -> Option<Applied
 
 /// [`apply_full`], with the photographs found on the page (#299): Auto sharpens them gently.
 pub fn apply_with_photos(page: &Rgb, look: Look, params: &LookParams, photos: Option<&PhotoMask>) -> Option<Applied> {
+    apply_prepared(page, look, params, photos, &Prepared::new())
+}
+
+/// [`apply_with_photos`], with what Clean scan and Whiteboard measure of `page` independently of
+/// the strength and the paper kept in `prepared` for the next look of the same page (#446). The
+/// pixels are the same as without it. `prepared` must only ever be used with this `page`.
+pub fn apply_prepared(page: &Rgb, look: Look, params: &LookParams, photos: Option<&PhotoMask>, prepared: &Prepared) -> Option<Applied> {
     let LookParams { strength, threads, dpi, sharpen, denoise, keep_paper, shape } = *params;
+    let plain = |pixels| Applied { pixels, noise: None, stages: Vec::new(), light_reused: false, detail_reused: false };
     let Some(engine) = look.engine() else {
         return Some(match look {
-            Look::BlackWhite => {
-                Applied { pixels: Pixels::Bilevel(black_white(page, &BwParams { strength, dither_photos: true, dpi, threads })?), noise: None }
-            }
+            Look::BlackWhite => plain(Pixels::Bilevel(black_white(page, &BwParams { strength, dither_photos: true, dpi, threads })?)),
             _ => {
                 let dpi = if dpi.is_finite() { dpi.clamp(1.0, 2400.0) as u16 } else { 300 };
                 let paper = if keep_paper { PaperMode::Keep } else { PaperMode::White };
-                let made = auto_with_photos(page, &AutoParams { strength, paper, threads, sharpen, denoise, dpi, shape }, photos)?;
+                let made = auto_prepared(page, &AutoParams { strength, paper, threads, sharpen, denoise, dpi, shape }, photos, prepared)?;
                 let mut rgb = made.rgb.data;
                 if look == Look::Whiteboard {
                     whiteboard_tone(&mut rgb, WHITEBOARD_COLOUR_FACTOR);
                 }
-                Applied { pixels: Pixels::Rgb(rgb), noise: Some(made.noise) }
+                Applied {
+                    pixels: Pixels::Rgb(rgb),
+                    noise: Some(made.noise),
+                    stages: made.stages,
+                    light_reused: made.light_reused,
+                    detail_reused: made.detail_reused,
+                }
             }
         });
     };
@@ -121,5 +139,5 @@ pub fn apply_with_photos(page: &Rgb, look: Look, params: &LookParams, photos: Op
         camera_clean::Pixels::Rgb(v) => Pixels::Rgb(v),
         camera_clean::Pixels::Grey(v) => Pixels::Grey(v),
     };
-    Some(Applied { pixels, noise: None })
+    Some(plain(pixels))
 }

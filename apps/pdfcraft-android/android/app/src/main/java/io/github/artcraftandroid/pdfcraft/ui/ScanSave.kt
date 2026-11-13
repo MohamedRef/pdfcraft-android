@@ -127,6 +127,8 @@ internal fun scanPageRequest(
     // a document type's own tone, and photographs sharpened gently (#299)
     kindTone = lab.kindTone,
     photoSharpen = lab.photoSharpen,
+    // the light estimate kept with the straightened page between looks (#446)
+    reuseLook = lab.lookReuse,
 )
 }
 
@@ -282,3 +284,10 @@ internal const val SCAN_ZOOM_DETAIL = 1.5f
  */
 internal fun scanCurvedOpposite(curved: List<Boolean>): Boolean =
     curved.size == 4 && ((curved[0] && curved[2]) || (curved[1] && curved[3]))
+
+/**
+ * The parts of a preview's look that ran (#446), from its timings: `scan_preview_look_light` and
+ * the others become `look_light` and so on, in milliseconds. Empty for a look with no parts.
+ */
+internal fun scanLookParts(timings: List<io.github.artcraftandroid.pdfcraft.core.ScanTiming>): Map<String, Long> =
+    timings.filter { it.stage.startsWith("scan_preview_look_") }.associate { it.stage.removePrefix("scan_preview_") to it.ms.toLong() }

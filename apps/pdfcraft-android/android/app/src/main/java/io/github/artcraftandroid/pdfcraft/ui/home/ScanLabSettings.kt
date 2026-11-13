@@ -101,6 +101,7 @@ internal fun ScanLabSettings(vm: AppViewModel) {
     SettingsHeader(stringResource(R.string.scan_lab_group_looks))
     Sw(R.string.scan_lab_preview, o.preview) { lab.update(o.copy(preview = it)) }
     Sw(R.string.scan_lab_preview_stop, o.previewStop) { lab.update(o.copy(previewStop = it)) }
+    Sw(R.string.scan_lab_look_reuse, o.lookReuse) { lab.update(o.copy(lookReuse = it)) }
     Sw(R.string.scan_lab_preview_zoom, o.previewZoom) { lab.update(o.copy(previewZoom = it)) }
     // a look per page and the looks strip's small previews (#301)
     Sw(R.string.scan_lab_look_per_page, o.lookPerPage) { lab.update(o.copy(lookPerPage = it)) }

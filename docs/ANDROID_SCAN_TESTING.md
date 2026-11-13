@@ -42,6 +42,7 @@ page, Borders, Flattening, Looks, Camera, Reports. The table below lists them by
 | Whiteboard: brighter board and stronger marker colors (#301) | On | Off: Whiteboard is Auto color at 85, as before |
 | Stop previews that are no longer needed (#301) | On | Off: an old preview runs to the end and is dropped, as before |
 | Zoom the page preview (#301) | On | Off: the preview can't be zoomed and no sharper page is made |
+| Keep the page's light estimate between Clean scan changes (#446) | On | Off: Clean scan and Whiteboard measure the page's light, grain and sharpening again for every strength or paper change, as before. The page looks the same either way |
 | Crop with magnifier and snapping to edges (#292) | On | Off: the crop screen before #292, four corner handles on the thumbnail |
 | Crop: say when Auto-detect finds nothing, and try the line detector next (#443) | On | Off: every Auto-detect press makes the same search again and nothing is said when it finds nothing, as before #443 |
 | Flatten pages automatically when it makes their lines straighter (#302) | Off | On: every page is flattened by the network and kept only when its lines of text come out at least 10 % straighter (the Flatten switch still flattens without the check) |
@@ -100,7 +101,7 @@ The zip also holds `diagnostics.txt`, the diagnostics log as **Share diagnostics
  "options": {"finder": "auto", "refine": true, "side_proportions": false, "snap_paper": true, "strength_override": null, "upright": true,
              "sharpen": 30, "denoise": true, "preview": true, "crop_tools": true, "flatten_auto": false, "flatten_trim": true, "flatten_line_floor": true, "settle_turns": true, "presets": true, "strict_gutter": true, "strict_photo": true, "strict_book": true, "book_gutter": true, "line_flatten": true,
              "look_per_page": true, "look_strip": true, "whiteboard_look": true, "preview_stop": true,
-             "preview_zoom": true},
+             "preview_zoom": true, "look_reuse": true},
  "document_type": {"preset": "receipt", "chosen": false, "strength": 80, "sharpen": 35, "keep_paper": false, "suggest_flatten": false,
                    "suggest_greyscale": true, "ratio": 3.0, "ink_share": 0.043, "colour_ink_share": 0.0, "photo_share": 0.0,
                    "stroke_mm": 0.339, "bright_share": 0.0, "gutter_band": false, "gutter_loose": false, "gutter_cover": 0.0,
@@ -111,7 +112,8 @@ The zip also holds `diagnostics.txt`, the diagnostics log as **Share diagnostics
              "live_stable": true, "live_hint": "ready", "preview_quad": [0.11, 0.08, 0.93, 0.10, 0.95, 0.90, 0.07, 0.89],
              "auto_on": true, "auto_shot": true, "sharpness": 1.235, "sharpness_blurred_unverified": false, "sharpness_ms": 85,
              "merge": null},
- "preview": {"shown": true, "reused": true, "ms": 412, "width": 905, "height": 1280, "look": "auto"},
+ "preview": {"shown": true, "reused": true, "ms": 31, "width": 905, "height": 1280, "look": "auto",
+             "light_reused": true, "look_parts_ms": {"look_tone": 21}},
  "models": {"edges": "ready", "flatten": "ready", "upright": "ready"},
  "crop": {"visits": 1, "corner_drags": 2, "side_drags": 1, "snaps_asked": 3, "snaps_taken": 2, "snaps_held": 0, "snaps_failed": 0,
           "snap_ms_max": 85, "nudges": 0, "detects": 0, "detects_found": 0, "detects_other": 0,
@@ -138,7 +140,10 @@ or `null`. `outcome` is `saved` or `discarded`; a discarded page has no `look`, 
 `result`. `preview` is the last preview the scan screen made of the page before it was saved
 (#301): `shown` is false when none was (the option off, or Save tapped before it was ready),
 `reused` whether its straightened page was kept from an earlier preview, `ms` the time from the
-request to the result, and `look` the filter it showed, which can differ from the one saved when
+request to the result, `light_reused` whether Clean scan or Whiteboard found the page's light
+estimate kept from an earlier look (#446) and `look_parts_ms` the parts of that look that ran
+(`look_light`, `look_noise`, `look_denoise`, `look_sharpen`, `look_tone`; only the tone when the
+estimate was kept), and `look` the filter it showed, which can differ from the one saved when
 the filter was changed and saved before the new preview came. `page_look` is the page's own look
 as the scan screen left it (#301): `id` (`original`, `clean`, `colour`, `greyscale`, `whiteboard`
 or `bw`; Auto color and Whiteboard share the native `colour` look, so `look` alone can't tell
@@ -216,7 +221,10 @@ every press of Rotate or of Undo on the "Turned upright" chip is a `turn` line (
 `rotate` or `undo`, `auto_turns`, `turns`); every `preview` line (#301) says which page and
 filter, whether the preview was `made`, whether the straightened page was `reused`, the total `ms`
 and the native stages (`preview_base_ms`, `decode_ms`, `rectify_ms`, `preview_look_ms`, and the others
-the page needed), its `width` and `height`, `quarter_turns` and `flattened`, and the page's own
+the page needed; for Clean scan and Whiteboard also the look's parts that ran, #446:
+`preview_look_light_ms` (the light estimate), `preview_look_noise_ms`, `preview_look_denoise_ms`,
+`preview_look_sharpen_ms` and `preview_look_tone_ms`, with `look_reuse` (the testing option) and
+`light_reused` (the estimate was kept from an earlier look of the page)), its `width` and `height`, `quarter_turns` and `flattened`, and the page's own
 `look`, the `strength` it was made at, where that came from (`strength_source`: `look`, `page` or
 `lab`) and whether it waited for the slider to settle (`settled`); every `page` line its `look`,
 `look_per_page`, `strength_source` and whether its look differs from the first page's
