@@ -22,6 +22,13 @@
 - Merged so far: the `pdfcraft-scan` crate and single-pass pipeline (#331, #346), the Auto look (#346), true proportions (#353), edge refinement (#356), 1-bit black and white (#359), the detector network (#360), Flatten page (#365), testing options and kept scans (#367), upright pages (#370), grain and sharpening (#373), the native preview (#376).
 - **Nothing in the scanner has run on a phone.** The owner will test with the options and kept scans described in [`ANDROID_SCAN_TESTING.md`](ANDROID_SCAN_TESTING.md). Release 0.0.25-beta (25012) is the first to contain it.
 
+## RELEASE 0.0.27-beta (27012) — 2026-11-13 (owner requested)
+
+- Release PR publishes `0.0.27-beta` / ARM64 build `27012` (`pdfcraft.versionCode=2701`), same package ID and signer. Trigger matches only `chore(release): publish 0.0.27-beta (27012)`.
+- Owner asked for it on 2026-11-13 at 14:33 UTC and at 14:37 held it until #492–#495 were fixed (#498, #500, #499, #501).
+- Included: scan markup (#495), finger removal redo (#492), Enhance notes in one line (#493), grid shows made pages (#494), and #496 (fixes #491): the read-only prompt says why, a failed in-place append no longer makes the document read-only, and saving into originals lent read-only works with opt-in All files access. See [`releases/0.0.27-beta.md`](releases/0.0.27-beta.md).
+- Open: not run on a phone yet.
+
 ## RELEASE 0.0.26-beta (26012) — 2026-11-13 (owner requested)
 
 - Release PR publishes `0.0.26-beta` / ARM64 build `26012` (`pdfcraft.versionCode=2601`), same package ID and signer. Trigger matches only `chore(release): publish 0.0.26-beta (26012)`.
