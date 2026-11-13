@@ -22,6 +22,13 @@
 - Merged so far: the `pdfcraft-scan` crate and single-pass pipeline (#331, #346), the Auto look (#346), true proportions (#353), edge refinement (#356), 1-bit black and white (#359), the detector network (#360), Flatten page (#365), testing options and kept scans (#367), upright pages (#370), grain and sharpening (#373), the native preview (#376).
 - **Nothing in the scanner has run on a phone.** The owner will test with the options and kept scans described in [`ANDROID_SCAN_TESTING.md`](ANDROID_SCAN_TESTING.md). Release 0.0.25-beta (25012) is the first to contain it.
 
+## RELEASE 0.0.28-beta (28012) — 2026-11-13 (owner requested)
+
+- Release PR publishes `0.0.28-beta` / ARM64 build `28012` (`pdfcraft.versionCode=2801`), same package ID and signer. Trigger matches only `chore(release): publish 0.0.28-beta (28012)`.
+- Owner asked at 20:15 UTC for a release once the PRs in flight had merged.
+- Included: #508 (fixes #502 and #507, plus the lint NewApi check), #509 (#504, Save at once, OCR only when asked), #510 (#503, Markup colours), #511 (#505, size choices and per-page encoding). See [`releases/0.0.28-beta.md`](releases/0.0.28-beta.md).
+- Open: not run on a phone yet.
+
 ## RELEASE 0.0.27-beta (27012) — 2026-11-13 (owner requested)
 
 - Release PR publishes `0.0.27-beta` / ARM64 build `27012` (`pdfcraft.versionCode=2701`), same package ID and signer. Trigger matches only `chore(release): publish 0.0.27-beta (27012)`.
