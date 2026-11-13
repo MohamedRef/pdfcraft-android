@@ -940,10 +940,12 @@ fun ScanScreen(vm: AppViewModel) {
                 },
                 onRotate = { d -> vm.rotateScanPageBy(bordersAt, d) },
                 onDiscard = {
-                    // one step back: the photo just taken goes, and the camera comes back for another
-                    vm.scanSteps.close("camera", bordersAt + 1)
+                    // one step back: the photo just taken goes, and the camera comes back for another;
+                    // an imported photo goes back to the pages there are, when there are some (#460)
+                    val toPages = borders.opener == io.github.artcraftandroid.pdfcraft.ui.scan.ScanBordersOpener.Import && pages.size > 1
+                    vm.scanSteps.close(if (toPages) "document" else "camera", bordersAt + 1)
                     vm.deleteScanPage(bordersAt)
-                    vm.takeScanPhoto()
+                    if (toPages) vm.scanSteps.showDocument("borders", pages.size) else vm.takeScanPhoto()
                 },
             ),
         )
@@ -968,14 +970,29 @@ fun ScanScreen(vm: AppViewModel) {
         }
         return
     }
+    // the document screen (#460): the pages in a grid, where they are ordered, saved or shared
+    if (stepsOn && vm.scanSteps.document && pages.isNotEmpty()) {
+        io.github.artcraftandroid.pdfcraft.ui.scan.ScanDocumentScreen(vm) { i ->
+            current = i
+            vm.scanSteps.openEnhance(i + 1, pages.size)
+        }
+        return
+    }
     val addPageLabel = stringResource(R.string.tools_add_page)
     ToolScaffold(
         if (pages.isEmpty()) stringResource(R.string.common_tool_scan) else stringResource(R.string.tools_page_of, current.coerceAtMost(pages.lastIndex) + 1, pages.size),
         {
-            // with pages, the arrow and Android's Back ask first; with none they leave at once (#456)
-            if (io.github.artcraftandroid.pdfcraft.ui.scan.scanBackAsks(pages.size, vm.scanLab.options)) askingDiscard = true else vm.discardScan()
+            when {
+                // Enhance goes back to the pages (#460), where Back asks before the scan goes
+                stepsOn && pages.isNotEmpty() -> vm.scanSteps.showDocument("enhance", pages.size)
+                // with pages, the arrow and Android's Back ask first; with none they leave at once (#456)
+                io.github.artcraftandroid.pdfcraft.ui.scan.scanBackAsks(pages.size, vm.scanLab.options) -> askingDiscard = true
+                else -> vm.discardScan()
+            }
         },
-        stringResource(R.string.tools_save_pdf), pages.isNotEmpty(), { vm.saveScan() },
+        // Enhance's Done leads to the document screen, which saves and shares (#460)
+        stringResource(if (stepsOn) R.string.scan_camera_done_short else R.string.tools_save_pdf), pages.isNotEmpty(),
+        { if (stepsOn) vm.scanSteps.showDocument("enhance", pages.size) else vm.saveScan() },
     ) {
         // a reminder that the scanner is not as it is meant to be used: a testing option is on (#288)
         if (!vm.scanLab.options.asDesigned) {

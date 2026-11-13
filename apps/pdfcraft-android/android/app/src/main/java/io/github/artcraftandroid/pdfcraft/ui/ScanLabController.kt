@@ -73,7 +73,7 @@ internal class ScanLabController(private val vm: AppViewModel) {
         val capture = io.github.artcraftandroid.pdfcraft.ui.scan.ScanCaptures.of(page.file.path)?.json()
         val inspection = if (lab.inspect) inspect(index, page) else null
         store.addPage(scan, index, page.file, output) { keptOutput ->
-            scanTestPageJson(version, saved, page.corners, page.found, page.finding, look, strength, flatten, lab, keptOutput, result, preview, page.crop, capture, models, turn, kind, page.book, flattenChosen = page.flatten, pageLook = page.look.json(lab.lookPerPage), inspection = inspection, applied = applied, kindSource = io.github.artcraftandroid.pdfcraft.ui.scan.scanKindSource(page, lab), madeBeforeShown = vm.pageQueue.madeBeforeShown(page), shownKept = shownKept, discard = discard)
+            scanTestPageJson(version, saved, page.corners, page.found, page.finding, look, strength, flatten, lab, keptOutput, result, preview, page.crop, capture, models, turn, kind, page.book, flattenChosen = page.flatten, pageLook = page.look.json(lab.lookPerPage), inspection = inspection, applied = applied, kindSource = io.github.artcraftandroid.pdfcraft.ui.scan.scanKindSource(page, lab), madeBeforeShown = vm.pageQueue.madeBeforeShown(page), shownKept = shownKept, discard = discard, position = index + 1)
         }
     }
 

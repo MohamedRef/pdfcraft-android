@@ -160,6 +160,9 @@ class MainActivity : ComponentActivity() {
             for (f in vm.cameraShots) scanCamera.route(f)
         }
         lifecycleScope.launch {
+            for (u in vm.scanImports) scanCamera.importPhotos()
+        }
+        lifecycleScope.launch {
             for (r in vm.requests.creates) launchSafely {
                 try { requestCreate.launch(r.name to r.mime) } catch (e: Exception) { vm.requests.onCreated(null); throw e }
             }

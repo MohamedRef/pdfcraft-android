@@ -128,15 +128,36 @@ internal class ScanStepsController {
     fun close(to: String, page: Int) {
         val open = borders ?: return
         borders = null
+        // Next goes to Enhance on the page, even when the page was added from the document screen (#460)
+        if (to == "scan") document = false
         Diag.event(
             DiagArea.Scan, "screen", "from" to "borders", "to" to to, "mode" to open.mode, "page" to page,
             "opened_by" to open.opener.id, "ms_on_screen" to (SystemClock.elapsedRealtime() - open.openedAt),
         )
     }
 
+    /** The document screen (#460) is showing: the scan's pages in a grid. */
+    var document by mutableStateOf(false)
+        private set
+
+    /** The document screen opens, from [from] (`camera`, `import`, `enhance`, `borders`). */
+    fun showDocument(from: String, pages: Int) {
+        if (document) return
+        document = true
+        Diag.event(DiagArea.Scan, "screen", "from" to from, "to" to "document", "pages" to pages)
+    }
+
+    /** A page was opened from the document screen in Enhance; [page] counted from 1. */
+    fun openEnhance(page: Int, pages: Int) {
+        if (!document) return
+        document = false
+        Diag.event(DiagArea.Scan, "screen", "from" to "document", "to" to "enhance", "page" to page, "pages" to pages)
+    }
+
     /** The scan ended: nothing stays open. */
     fun reset() {
         borders = null
+        document = false
         searched.clear()
         pending = null
         retakeFromBorders = false
