@@ -32,6 +32,8 @@ internal data class ScanLab(
     val sharpen: Int = 30,
     /** Whether the Clean scan filter smooths the grain of a page that has a lot of it (#299). */
     val denoise: Boolean = true,
+    /** Whether the Clean scan filter draws a grainy page's paper white from a lower level (a photo taken in dim light, #466). */
+    val grainWhite: Boolean = true,
     /** Show each page as it will be saved on the scan screen (#301); off shows the camera's photo, as before. */
     val preview: Boolean = true,
     /** Crop with the magnifier, side handles and snapping to the paper's edge (#292); off is the old four-handle screen. */
@@ -161,7 +163,7 @@ internal data class ScanLab(
     fun diag(): Array<Pair<String, Any?>> = arrayOf<Pair<String, Any?>>(
         "finder" to finderId(finder), "refine" to refine, "side_proportions" to !perspective,
         "snap_paper" to snapPaper, "strength_override" to (strength ?: -1), "upright" to upright, "sharpen" to sharpen,
-        "denoise" to denoise, "preview" to preview, "crop_tools" to cropTools, "crop_detect_note" to cropDetectNote, "flatten_auto" to flattenAuto, "flatten_trim" to flattenTrim, "flatten_line_floor" to flattenLineFloor, "settle_turns" to settleTurns, "presets" to presets, "kind_tone" to kindTone, "photo_sharpen" to photoSharpen, "suggestions" to suggestions, "strict_gutter" to strictGutter, "strict_photo" to strictPhoto, "strict_book" to strictBook, "book_gutter" to bookGutter, "line_flatten" to lineFlatten,
+        "denoise" to denoise, "grain_white" to grainWhite, "preview" to preview, "crop_tools" to cropTools, "crop_detect_note" to cropDetectNote, "flatten_auto" to flattenAuto, "flatten_trim" to flattenTrim, "flatten_line_floor" to flattenLineFloor, "settle_turns" to settleTurns, "presets" to presets, "kind_tone" to kindTone, "photo_sharpen" to photoSharpen, "suggestions" to suggestions, "strict_gutter" to strictGutter, "strict_photo" to strictPhoto, "strict_book" to strictBook, "book_gutter" to bookGutter, "line_flatten" to lineFlatten,
         "page_strength" to pageStrength, "unfound_document" to unfoundDocument, "ask_discard" to askDiscard, "look_per_page" to lookPerPage, "look_strip" to lookStrip,
         "whiteboard_look" to whiteboardLook, "preview_stop" to previewStop, "preview_zoom" to previewZoom, "look_reuse" to lookReuse, "keep" to keep, "inspect" to inspect,
     )
@@ -170,7 +172,7 @@ internal data class ScanLab(
     fun json(): JSONObject = JSONObject()
         .put("finder", finderId(finder)).put("refine", refine).put("side_proportions", !perspective)
         .put("snap_paper", snapPaper).put("strength_override", strength ?: JSONObject.NULL).put("upright", upright)
-        .put("sharpen", sharpen).put("denoise", denoise).put("preview", preview).put("crop_tools", cropTools).put("crop_detect_note", cropDetectNote).put("flatten_auto", flattenAuto).put("flatten_trim", flattenTrim).put("flatten_line_floor", flattenLineFloor).put("settle_turns", settleTurns).put("presets", presets).put("kind_tone", kindTone).put("photo_sharpen", photoSharpen).put("suggestions", suggestions).put("strict_gutter", strictGutter).put("strict_photo", strictPhoto).put("strict_book", strictBook).put("book_gutter", bookGutter).put("line_flatten", lineFlatten)
+        .put("sharpen", sharpen).put("denoise", denoise).put("grain_white", grainWhite).put("preview", preview).put("crop_tools", cropTools).put("crop_detect_note", cropDetectNote).put("flatten_auto", flattenAuto).put("flatten_trim", flattenTrim).put("flatten_line_floor", flattenLineFloor).put("settle_turns", settleTurns).put("presets", presets).put("kind_tone", kindTone).put("photo_sharpen", photoSharpen).put("suggestions", suggestions).put("strict_gutter", strictGutter).put("strict_photo", strictPhoto).put("strict_book", strictBook).put("book_gutter", bookGutter).put("line_flatten", lineFlatten)
         .put("page_strength", pageStrength).put("unfound_document", unfoundDocument).put("ask_discard", askDiscard).put("look_per_page", lookPerPage).put("look_strip", lookStrip)
         .put("whiteboard_look", whiteboardLook).put("preview_stop", previewStop).put("preview_zoom", previewZoom).put("look_reuse", lookReuse).put("inspect", inspect)
 
@@ -178,7 +180,7 @@ internal data class ScanLab(
     fun encode(): String = listOf(
         "keep" to flag(keep), "finder" to finderId(finder), "refine" to flag(refine),
         "perspective" to flag(perspective), "snap" to flag(snapPaper), "strength" to (strength?.toString() ?: ""),
-        "upright" to flag(upright), "sharpen" to sharpen.toString(), "denoise" to flag(denoise), "preview" to flag(preview), "crop" to flag(cropTools), "detect_note" to flag(cropDetectNote), "flatten_auto" to flag(flattenAuto), "flatten_trim" to flag(flattenTrim), "line_floor" to flag(flattenLineFloor),
+        "upright" to flag(upright), "sharpen" to sharpen.toString(), "denoise" to flag(denoise), "grain_white" to flag(grainWhite), "preview" to flag(preview), "crop" to flag(cropTools), "detect_note" to flag(cropDetectNote), "flatten_auto" to flag(flattenAuto), "flatten_trim" to flag(flattenTrim), "line_floor" to flag(flattenLineFloor),
         "settle" to flag(settleTurns), "presets" to flag(presets), "kind_tone" to flag(kindTone), "photo_sharpen" to flag(photoSharpen), "suggest" to flag(suggestions), "strict_gutter" to flag(strictGutter), "strict_photo" to flag(strictPhoto), "strict_book" to flag(strictBook), "gutter" to flag(bookGutter), "line_flatten" to flag(lineFlatten),
         "page_strength" to flag(pageStrength), "unfound_doc" to flag(unfoundDocument), "ask_discard" to flag(askDiscard), "look_page" to flag(lookPerPage), "look_strip" to flag(lookStrip),
         "board" to flag(whiteboardLook), "stop" to flag(previewStop), "zoom" to flag(previewZoom), "look_reuse" to flag(lookReuse), "inspect" to flag(inspect),
@@ -222,6 +224,7 @@ internal data class ScanLab(
                 upright = on("upright", default.upright),
                 sharpen = values["sharpen"]?.toIntOrNull()?.takeIf { it in 0..100 } ?: default.sharpen,
                 denoise = on("denoise", default.denoise),
+                grainWhite = on("grain_white", default.grainWhite),
                 preview = on("preview", default.preview),
                 cropTools = on("crop", default.cropTools),
                 cropDetectNote = on("detect_note", default.cropDetectNote),
@@ -293,6 +296,10 @@ internal data class ScanTestResult(
     val trim: io.github.artcraftandroid.pdfcraft.core.ScanTrim? = null,
     /** What flattening from the lines of text did, when it ran (#303, part B). */
     val lineFlatten: io.github.artcraftandroid.pdfcraft.core.ScanLineFlatten? = null,
+    /** How much the page's paper varies after its light is divided out, as the Clean scan filter measured it (#466); null for the other filters. */
+    val paperSpread: Double? = null,
+    /** The level from which the page's paper was drawn white (#466): the strength's own, or lower on a grainy page; null for the other filters. */
+    val whitePoint: Double? = null,
 )
 
 /**
@@ -480,6 +487,8 @@ internal fun scanTestPageJson(
                 .put("focal_mismatch", it.focalMismatch).put("flattened", it.flattened).put("bend_pct", if (it.bendPct.isFinite()) Math.round(it.bendPct * 1000.0) / 1000.0 else 0.0)
                 .put("quarter_turns", it.quarterTurns)
                 .put("noise", it.noise?.takeIf { n -> n.isFinite() }?.let { n -> Math.round(n * 100.0) / 100.0 } ?: JSONObject.NULL)
+                .put("paper_spread", it.paperSpread?.takeIf { n -> n.isFinite() }?.let { n -> Math.round(n * 10000.0) / 10000.0 } ?: JSONObject.NULL)
+                .put("white_point", it.whitePoint?.takeIf { n -> n.isFinite() }?.let { n -> Math.round(n * 1000.0) / 1000.0 } ?: JSONObject.NULL)
                 .put("flatten_check", it.flattenCheck?.let(::scanFlattenCheckJson) ?: JSONObject.NULL)
                 .put("flatten_trim", it.trim?.let(::scanTrimJson) ?: JSONObject.NULL)
                 .put("line_flatten", it.lineFlatten?.let(::scanLineFlattenJson) ?: JSONObject.NULL)

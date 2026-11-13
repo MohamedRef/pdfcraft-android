@@ -820,6 +820,7 @@
     <string name="scan_lab_sharpen">Realçar o texto (Digitalização limpa)</string>
     <string name="scan_lab_off">Não</string>
     <string name="scan_lab_denoise">Suavizar o granulado em fotos escuras (Digitalização limpa)</string>
+    <string name="scan_lab_grain_white">Deixar branco o papel de fotos granuladas (Digitalização limpa)</string>
     <string name="scan_lab_preview">Mostrar as páginas como serão salvas</string>
     <string name="scan_lab_crop">Cortar com lupa e encaixe nas bordas</string>
     <string name="scan_lab_flatten_auto">Aplanar as páginas automaticamente quando as linhas ficam mais retas</string>

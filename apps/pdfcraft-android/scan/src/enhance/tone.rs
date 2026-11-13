@@ -14,6 +14,9 @@ pub(crate) struct Tone {
     pub colour: f32,
     /// Use the S-curve `0.5 − 0.5·cos(t^0.75·π)` in place of the gamma curve (a whiteboard, #299).
     pub s_curve: bool,
+    /// Draw a grainy page's paper white from a lower level (#466, [`white_from`]); false is the
+    /// curve as it was (a testing choice).
+    pub grain_white: bool,
 }
 
 impl Tone {
@@ -21,7 +24,7 @@ impl Tone {
     /// gamma 1.4, colour 1.2 (#298).
     pub fn at(strength: u8) -> Tone {
         let k = f32::from(strength.min(100)) / 100.0;
-        Tone { black: 0.42 * k, white: 1.0 - 0.05 * k, gamma: 1.0 + 0.67 * k, colour: 1.0 + 0.33 * k, s_curve: false }
+        Tone { black: 0.42 * k, white: 1.0 - 0.05 * k, gamma: 1.0 + 0.67 * k, colour: 1.0 + 0.33 * k, s_curve: false, grain_white: true }
     }
 
     /// This tone with a kind of document's shape on top (#299): its extra gamma added (a positive
@@ -82,6 +85,8 @@ pub(crate) struct Renderer<'a> {
     /// The level from which this page is drawn white ([`white_from`]): 1, or lower on a grainy
     /// page.
     white_from: f32,
+    /// How much the page's paper varies ([`paper_spread`]).
+    paper_spread: f32,
 }
 
 /// A sample counts as paper for [`paper_spread`] when it is at least this bright against its
@@ -177,12 +182,14 @@ impl<'a> Renderer<'a> {
             tone,
             curve,
             white_from: 1.0,
+            paper_spread: 0.0,
         };
         let spread;
         (r.black, r.off, spread) = r.black_colour();
         r.inv_fade = 1.0 / (1.0 - r.black + 1e-3);
         // a grainy page's paper is drawn white from a lower level (#466)
-        r.white_from = white_from(&tone, spread);
+        r.paper_spread = spread;
+        r.white_from = if tone.grain_white { white_from(&tone, spread) } else { 1.0 };
         if r.white_from < 1.0 {
             r.curve = curve_table(&tone, r.white_from);
         }
@@ -198,6 +205,17 @@ impl<'a> Renderer<'a> {
                 into[x * 3 + c] = top + (bottom - top) * wy;
             }
         }
+    }
+
+    /// How much the page's paper varies after its light is divided out ([`paper_spread`]).
+    pub fn paper_spread(&self) -> f32 {
+        self.paper_spread
+    }
+
+    /// The level, 0–1 of the page over its paper, from which this page is drawn white: the
+    /// strength's own white point, or lower on a grainy page (#466).
+    pub fn white_point(&self) -> f32 {
+        self.tone.black + self.white_from * (self.tone.white - self.tone.black)
     }
 
     /// The pixel divided by its paper colour: paper is 1 in every channel (or the paper's tint).
@@ -436,14 +454,19 @@ mod grain_tests {
         assert!(grey < 0.06, "{grey}");
         assert!((ink - clean_ink).abs() < 12.0, "{ink} against {clean_ink}");
 
-        // the same page drawn with the curve as it was: the specks this is about
-        let bg = crate::enhance::background::background(&grainy, false);
-        let mut plain = Renderer::new(&grainy, &bg.light, Tone::at(params.strength), false);
-        assert!(plain.white_from < 1.0);
-        plain.white_from = 1.0;
-        plain.curve = curve_table(&plain.tone, 1.0);
-        let before = Rgb { width: grainy.width, height: grainy.height, data: plain.render(1) };
-        let (grey_before, ink_before) = drawn(&before);
+        assert!(look.paper_spread > GRAIN_FREE && look.white_point < Tone::at(params.strength).white, "{} {}", look.paper_spread, look.white_point);
+        assert!(
+            clean.paper_spread < GRAIN_FREE && clean.white_point == Tone::at(params.strength).white,
+            "{} {}",
+            clean.paper_spread,
+            clean.white_point
+        );
+
+        // the same page with the testing option off, the curve as it was: the specks this is about
+        let before = auto(&grainy, &AutoParams { grain_white: false, ..params }).unwrap();
+        assert_eq!(before.white_point, Tone::at(params.strength).white);
+        assert_eq!(before.paper_spread, look.paper_spread);
+        let (grey_before, ink_before) = drawn(&before.rgb);
         println!("the same without the lift: {:.1} % not white, print at {ink_before:.0}", 100.0 * grey_before);
         assert!(grey_before > 0.08 && grey_before > 4.0 * grey, "{grey_before} against {grey}");
         assert!((ink - ink_before).abs() < 2.0, "{ink} against {ink_before}");

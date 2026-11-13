@@ -141,6 +141,9 @@ internal fun ScanLabSettings(vm: AppViewModel) {
     SheetRow(null, stringResource(R.string.scan_lab_denoise), { lab.update(o.copy(denoise = !o.denoise)) }) {
         PdfSwitch(o.denoise, { lab.update(o.copy(denoise = it)) })
     }
+    SheetRow(null, stringResource(R.string.scan_lab_grain_white), { lab.update(o.copy(grainWhite = !o.grainWhite)) }) {
+        PdfSwitch(o.grainWhite, { lab.update(o.copy(grainWhite = it)) })
+    }
     SheetRow(null, stringResource(R.string.scan_lab_presets), { lab.update(o.copy(presets = !o.presets)) }) {
         PdfSwitch(o.presets, { lab.update(o.copy(presets = it)) })
     }

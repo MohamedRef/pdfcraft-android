@@ -1840,6 +1840,7 @@
     <string name="scan_lab_sharpen">Sharpen text (Clean scan)</string>
     <string name="scan_lab_off">Off</string>
     <string name="scan_lab_denoise">Smooth grain in dim photos (Clean scan)</string>
+    <string name="scan_lab_grain_white">Draw the paper of a grainy photo white (Clean scan)</string>
     <string name="scan_lab_preview">Show pages as they will be saved</string>
     <string name="scan_lab_crop">Crop with magnifier and snapping to edges</string>
     <string name="scan_lab_flatten_auto">Flatten pages automatically when it makes their lines straighter</string>

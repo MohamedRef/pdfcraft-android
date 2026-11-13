@@ -94,6 +94,9 @@ pub struct PageRequest<'a> {
     pub sharpen: u8,
     /// Whether the Auto look smooths the grain of a page that has a lot of it (#299).
     pub denoise: bool,
+    /// Whether the Auto look draws a grainy page's paper white from a lower level (a photo taken
+    /// in dim light, #466); false is the curve as it was (a testing choice).
+    pub grain_white: bool,
     /// How the Auto look picks its settings by the kind of document (#299): off (the look's own
     /// strength and `sharpen`), worked out from the page, or the person's choice. Other looks
     /// ignore it.
@@ -161,6 +164,7 @@ impl<'a> PageRequest<'a> {
             turns: 0,
             sharpen: DEFAULT_SHARPEN,
             denoise: true,
+            grain_white: true,
             preset: PresetChoice::Off,
             curved_sides: 0,
             curved_opposite: false,
@@ -219,6 +223,12 @@ pub struct PageResult {
     /// The page's grain as the Auto look measured it: the standard deviation of its noise on
     /// blank paper, in grey levels of 255 (`None` for the other looks).
     pub noise: Option<f32>,
+    /// How much the page's paper varies after its light is divided out, as a share of the
+    /// paper's own brightness, and the level from which paper was drawn white (#466): about
+    /// 0.005 to 0.02 and the strength's own white point on a clean page, more and lower on a photo
+    /// taken in dim light. `None` for the other looks.
+    pub paper_spread: Option<f32>,
+    pub white_point: Option<f32>,
     /// The kind of document the Auto look took the page for, and its settings (#299); `None` for
     /// the other looks or with document types off.
     pub kind: Option<PageKind>,
@@ -337,6 +347,8 @@ fn untouched(request: &PageRequest<'_>) -> Option<Result<PageResult, ScanError>>
         trim: None,
         line_flatten: None,
         noise: None,
+        paper_spread: None,
+        white_point: None,
         kind: None,
         timings,
     }))
@@ -355,6 +367,7 @@ pub fn process_page(request: &PageRequest<'_>) -> Result<PageResult, ScanError> 
         clock = Instant::now();
     };
     let (applied, kind) = page_look_kind(&base, request)?;
+    let (paper_spread, white_point) = (applied.paper_spread, applied.white_point);
     let (pixels, noise, look_stages) = (applied.pixels, applied.noise, applied.stages);
     let PageBase {
         page,
@@ -406,6 +419,8 @@ pub fn process_page(request: &PageRequest<'_>) -> Result<PageResult, ScanError> 
         trim,
         line_flatten,
         noise,
+        paper_spread,
+        white_point,
         kind,
         timings,
     })
@@ -457,6 +472,7 @@ pub fn page_look_kind(base: &PageBase, request: &PageRequest<'_>) -> Result<(App
         denoise: request.denoise,
         keep_paper: false,
         shape: Shape::default(),
+        grain_white: request.grain_white,
     };
     if let Some(kind) = &kind {
         if !request.fixed_strength {

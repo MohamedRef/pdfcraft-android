@@ -86,7 +86,7 @@ fn a_look_from_what_was_kept_has_the_bytes_of_one_made_from_nothing() {
                         Shape { extra_gamma: 0.3, s_curve: false, colour_factor: 1.0 },
                         Shape { extra_gamma: 0.0, s_curve: true, colour_factor: 1.5 },
                     ] {
-                        let params = AutoParams { strength, paper, threads: 2, sharpen, denoise, dpi: 150, shape };
+                        let params = AutoParams { strength, paper, threads: 2, sharpen, denoise, dpi: 150, shape, grain_white: true };
                         let photos = with_photos.then_some(&photos);
                         let made = auto_prepared(&page, &params, photos, &kept).unwrap();
                         let fresh = auto_with_photos(&page, &params, photos).unwrap();

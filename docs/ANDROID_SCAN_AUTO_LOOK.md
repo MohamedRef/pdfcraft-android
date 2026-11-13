@@ -88,7 +88,11 @@ shade and its grain together are past what the floor of 0.80 can take. The saved
   starts from the fine-grain measure, which under-reads enlarged pages; that is not changed here.
 - Faint marks lighter than the new level (pale pencil, a light stamp) are drawn white on a
   grainy page. On a page under the free spread nothing is lost.
-- There is no testing option, log field or kept-scan field for this yet (see the pull request).
+- Testing option: **Draw the paper of a grainy photo white (Clean scan)** (`ScanLab.grainWhite`,
+  `grain_white`, on). Off is the tone curve as it was. The `page` log line has `grain_white`,
+  `paper_spread` and `white_point`; a kept scan's page file has `paper_spread` and `white_point`
+  in `result` and `grain_white` in `options`. A preview made with the option is not reused for
+  one made without.
 - Low-light merge (#297), which lowers the grain itself by averaging four photos, is a
   different thing and still off by default (#426).
 
