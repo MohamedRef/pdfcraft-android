@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Scanner: the automatic look (#466); kept apart from strings.xml so parallel scanner work merges cleanly. -->
+<resources>
+    <string name="scan_lab_auto_look">Scansione pulita applica da sola i suoi suggerimenti, con Annulla</string>
+    <string name="scan_auto_flattened_undo">Appiattita · Annulla</string>
+    <string name="scan_auto_flattened_undo_description">Annulla l\'appiattimento</string>
+    <string name="scan_auto_grayscale_undo">Scala di grigi · Annulla</string>
+    <string name="scan_auto_grayscale_undo_description">Annulla la scala di grigi</string>
+    <string name="scan_lab_remove_fingers">Rimuovi le dita dal bordo della pagina</string>
+    <string name="scan_auto_fingers_undo">Dito rimosso · Annulla</string>
+    <string name="scan_auto_fingers_undo_description">Rimetti il dito</string>
+    <string name="scan_auto_fingers_over_print">Un dito copriva parte del testo. Rifai la foto per recuperarlo.</string>
+</resources>

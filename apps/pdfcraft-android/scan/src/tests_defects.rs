@@ -1,7 +1,7 @@
 //! Fingers, glare and stains (#306), on pages drawn here: what is found, what is filled, and
 //! that nothing over print is filled.
 
-use crate::defects::{fill_blank, fill_fingers, find, normalise_stains};
+use crate::defects::{fill_blank, fill_fingers, find, normalise_stains, remove_fingers};
 use crate::warp::Rgb;
 
 const W: u32 = 1200;
@@ -393,4 +393,22 @@ fn defects_are_bounded_and_deterministic() {
     fill_blank(&mut x, &a);
     fill_blank(&mut y, &b);
     assert!(same(&x, &y));
+}
+
+/// The automatic look's finger step (#466): one finger at the edge is found and papered over,
+/// and a page with none comes back byte for byte.
+#[test]
+fn the_automatic_look_removes_a_finger_and_leaves_a_clean_page_alone() {
+    let mut page = printed();
+    finger_from_bottom(&mut page, 300, 110, 260);
+    let report = remove_fingers(&mut page);
+    assert_eq!((report.found, report.over_print, report.filled), (1, 0, 1), "{report:?}");
+    for k in 0..3 {
+        assert!(get(&page, 300, 1500)[k].abs_diff(PAPER[k]) <= 6);
+    }
+    let clean = printed();
+    let mut again = clean.clone();
+    let report = remove_fingers(&mut again);
+    assert_eq!((report.found, report.filled), (0, 0));
+    assert!(same(&clean, &again));
 }

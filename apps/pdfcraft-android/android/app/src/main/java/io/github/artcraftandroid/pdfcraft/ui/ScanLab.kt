@@ -45,10 +45,12 @@ internal data class ScanLab(
     val settleTurns: Boolean = true,
     /**
      * Flatten every page with the network and keep the flattened page only when its lines of text
-     * come out at least 10 % straighter (#302's automatic mode). Off: a page is flattened only when
-     * the scan screen's switch asks for it. Off by default until real photos have shown it helps.
+     * come out at least 10 % straighter (#302's automatic mode), with "Flattened · Undo"; a page
+     * whose Flatten page the person set is left to that choice (#466). On by default since the
+     * guard was checked on the owner's photos (#475, docs/ANDROID_SCAN_FLATTEN.md). Off: a page is
+     * flattened only when the scan screen's switch asks for it.
      */
-    val flattenAuto: Boolean = false,
+    val flattenAuto: Boolean = true,
     /**
      * Trim a thin strip of background left along a flattened page's edges (2 % of a side at most)
      * and draw the page again without it (#302). Off keeps the flattened page as the network gives it.
@@ -121,6 +123,18 @@ internal data class ScanLab(
      * with pages, and Delete asks before it removes a page (#456). Off: both act at once, as before.
      */
     val askDiscard: Boolean = true,
+    /**
+     * The automatic look (#466): Clean scan applies what a page's document type suggests instead
+     * of offering it (a receipt becomes Grayscale, with "Grayscale · Undo"), and it comes first in
+     * the looks strip. Off: suggestions are chips to tap and the strip is in its old order.
+     */
+    val autoLook: Boolean = true,
+    /**
+     * Remove fingers at the page's edge (#466): after Clean scan at strength 40 or more, fingers
+     * holding the page are found on the look's own output and papered over, with "Finger removed ·
+     * Undo". Off: the page keeps them, as before.
+     */
+    val removeFingers: Boolean = true,
     /** In book mode, cut a spread along the gutter found in the photo (#303); off cuts every spread at its centre line. */
     val bookGutter: Boolean = true,
     /**
@@ -183,7 +197,7 @@ internal data class ScanLab(
         "finder" to finderId(finder), "refine" to refine, "side_proportions" to !perspective,
         "snap_paper" to snapPaper, "strength_override" to (strength ?: -1), "upright" to upright, "sharpen" to sharpen,
         "denoise" to denoise, "grain_white" to grainWhite, "preview" to preview, "crop_tools" to cropTools, "crop_detect_note" to cropDetectNote, "flatten_auto" to flattenAuto, "flatten_trim" to flattenTrim, "flatten_line_floor" to flattenLineFloor, "settle_turns" to settleTurns, "presets" to presets, "kind_tone" to kindTone, "photo_sharpen" to photoSharpen, "suggestions" to suggestions, "strict_gutter" to strictGutter, "strict_photo" to strictPhoto, "strict_book" to strictBook, "book_gutter" to bookGutter, "line_flatten" to lineFlatten,
-        "page_strength" to pageStrength, "unfound_document" to unfoundDocument, "background_pages" to backgroundPages, "ask_discard" to askDiscard, "look_per_page" to lookPerPage, "look_strip" to lookStrip,
+        "page_strength" to pageStrength, "unfound_document" to unfoundDocument, "background_pages" to backgroundPages, "ask_discard" to askDiscard, "auto_look" to autoLook, "remove_fingers" to removeFingers, "look_per_page" to lookPerPage, "look_strip" to lookStrip,
         "whiteboard_look" to whiteboardLook, "preview_stop" to previewStop, "preview_zoom" to previewZoom, "look_reuse" to lookReuse, "camera_bar" to cameraBar, "steps" to steps, "keep" to keep, "inspect" to inspect,
     )
 
@@ -192,16 +206,16 @@ internal data class ScanLab(
         .put("finder", finderId(finder)).put("refine", refine).put("side_proportions", !perspective)
         .put("snap_paper", snapPaper).put("strength_override", strength ?: JSONObject.NULL).put("upright", upright)
         .put("sharpen", sharpen).put("denoise", denoise).put("grain_white", grainWhite).put("preview", preview).put("crop_tools", cropTools).put("crop_detect_note", cropDetectNote).put("flatten_auto", flattenAuto).put("flatten_trim", flattenTrim).put("flatten_line_floor", flattenLineFloor).put("settle_turns", settleTurns).put("presets", presets).put("kind_tone", kindTone).put("photo_sharpen", photoSharpen).put("suggestions", suggestions).put("strict_gutter", strictGutter).put("strict_photo", strictPhoto).put("strict_book", strictBook).put("book_gutter", bookGutter).put("line_flatten", lineFlatten)
-        .put("page_strength", pageStrength).put("unfound_document", unfoundDocument).put("background_pages", backgroundPages).put("ask_discard", askDiscard).put("look_per_page", lookPerPage).put("look_strip", lookStrip)
+        .put("page_strength", pageStrength).put("unfound_document", unfoundDocument).put("background_pages", backgroundPages).put("ask_discard", askDiscard).put("auto_look", autoLook).put("remove_fingers", removeFingers).put("look_per_page", lookPerPage).put("look_strip", lookStrip)
         .put("whiteboard_look", whiteboardLook).put("preview_stop", previewStop).put("preview_zoom", previewZoom).put("look_reuse", lookReuse).put("camera_bar", cameraBar).put("steps", steps).put("inspect", inspect)
 
     /** One line of text for the app's preferences. */
     fun encode(): String = listOf(
         "keep" to flag(keep), "finder" to finderId(finder), "refine" to flag(refine),
         "perspective" to flag(perspective), "snap" to flag(snapPaper), "strength" to (strength?.toString() ?: ""),
-        "upright" to flag(upright), "sharpen" to sharpen.toString(), "denoise" to flag(denoise), "grain_white" to flag(grainWhite), "preview" to flag(preview), "crop" to flag(cropTools), "detect_note" to flag(cropDetectNote), "flatten_auto" to flag(flattenAuto), "flatten_trim" to flag(flattenTrim), "line_floor" to flag(flattenLineFloor),
+        "upright" to flag(upright), "sharpen" to sharpen.toString(), "denoise" to flag(denoise), "grain_white" to flag(grainWhite), "preview" to flag(preview), "crop" to flag(cropTools), "detect_note" to flag(cropDetectNote), "flatten_auto_on" to flag(flattenAuto), "flatten_trim" to flag(flattenTrim), "line_floor" to flag(flattenLineFloor),
         "settle" to flag(settleTurns), "presets" to flag(presets), "kind_tone" to flag(kindTone), "photo_sharpen" to flag(photoSharpen), "suggest" to flag(suggestions), "strict_gutter" to flag(strictGutter), "strict_photo" to flag(strictPhoto), "strict_book" to flag(strictBook), "gutter" to flag(bookGutter), "line_flatten" to flag(lineFlatten),
-        "page_strength" to flag(pageStrength), "unfound_doc" to flag(unfoundDocument), "bg_pages" to flag(backgroundPages), "ask_discard" to flag(askDiscard), "look_page" to flag(lookPerPage), "look_strip" to flag(lookStrip),
+        "page_strength" to flag(pageStrength), "unfound_doc" to flag(unfoundDocument), "bg_pages" to flag(backgroundPages), "ask_discard" to flag(askDiscard), "auto_look" to flag(autoLook), "fingers" to flag(removeFingers), "look_page" to flag(lookPerPage), "look_strip" to flag(lookStrip),
         "board" to flag(whiteboardLook), "stop" to flag(previewStop), "zoom" to flag(previewZoom), "look_reuse" to flag(lookReuse), "camera_bar" to flag(cameraBar), "steps" to flag(steps), "inspect" to flag(inspect),
     ).joinToString(";") { (k, v) -> "$k=$v" }
 
@@ -248,7 +262,8 @@ internal data class ScanLab(
                 cropTools = on("crop", default.cropTools),
                 cropDetectNote = on("detect_note", default.cropDetectNote),
                 settleTurns = on("settle", default.settleTurns),
-                flattenAuto = on("flatten_auto", default.flattenAuto),
+                // a new key (#466): "off" saved while it was off by default is not read
+                flattenAuto = on("flatten_auto_on", default.flattenAuto),
                 flattenTrim = on("flatten_trim", default.flattenTrim),
                 flattenLineFloor = on("line_floor", default.flattenLineFloor),
                 presets = on("presets", default.presets),
@@ -264,6 +279,8 @@ internal data class ScanLab(
                 unfoundDocument = on("unfound_doc", default.unfoundDocument),
                 backgroundPages = on("bg_pages", default.backgroundPages),
                 askDiscard = on("ask_discard", default.askDiscard),
+                autoLook = on("auto_look", default.autoLook),
+                removeFingers = on("fingers", default.removeFingers),
                 lookPerPage = on("look_page", default.lookPerPage),
                 lookStrip = on("look_strip", default.lookStrip),
                 whiteboardLook = on("board", default.whiteboardLook),
@@ -445,6 +462,8 @@ internal fun scanTestPageJson(
     shownKept: JSONObject? = null,
     /** How a discarded scan was given up (#456): `asked` and `pages`; null for a saved page. */
     discard: ScanDiscard? = null,
+    /** What the automatic look decided for the page (#466); null when not known. */
+    autoDecisions: JSONObject? = null,
     /** The page's place in the scan's order when it was saved or discarded, from 1 (#460); null when not known. */
     position: Int? = null,
     /** Whether the page was saved to the gallery's PdfCraft album before the scan ended (#470). */
@@ -473,6 +492,8 @@ internal fun scanTestPageJson(
         // #465: made in the background before it was first opened, and what Save kept from what it showed
         .put("made_before_shown", madeBeforeShown ?: JSONObject.NULL)
         .put("shown_kept", shownKept ?: JSONObject.NULL)
+        // #466: the automatic look's decisions, as on the auto_decisions log line
+        .put("auto_decisions", autoDecisions ?: JSONObject.NULL)
         .put(
             "document_type",
             kind?.let {

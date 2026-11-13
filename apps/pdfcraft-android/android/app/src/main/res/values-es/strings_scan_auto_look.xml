@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Scanner: the automatic look (#466); kept apart from strings.xml so parallel scanner work merges cleanly. -->
+<resources>
+    <string name="scan_lab_auto_look">Escaneo limpio aplica sus sugerencias por sí mismo, con Deshacer</string>
+    <string name="scan_auto_flattened_undo">Aplanada · Deshacer</string>
+    <string name="scan_auto_flattened_undo_description">Deshacer el aplanado</string>
+    <string name="scan_auto_grayscale_undo">Escala de grises · Deshacer</string>
+    <string name="scan_auto_grayscale_undo_description">Deshacer la escala de grises</string>
+    <string name="scan_lab_remove_fingers">Quitar los dedos del borde de la página</string>
+    <string name="scan_auto_fingers_undo">Dedo quitado · Deshacer</string>
+    <string name="scan_auto_fingers_undo_description">Devolver el dedo</string>
+    <string name="scan_auto_fingers_over_print">Un dedo tapaba parte del texto. Vuelve a hacer la foto para recuperarlo.</string>
+</resources>

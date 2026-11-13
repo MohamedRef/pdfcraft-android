@@ -25,7 +25,7 @@ data class ScanSession(
     /** [book] is a book spread's half as [io.github.artcraftandroid.pdfcraft.ui.scan.ScanBookHalf.encode] wrote it (#303); null for a page of its own. */
     /** [look] is the page's own look and strength (#301), null in a session written before it (the default look then). */
     /** [flatten] is the person's Flatten page choice (#302), null when they made none. */
-    class Page(val path: String, val corners: FloatArray, val found: FloatArray?, val turns: Int? = null, val preset: String? = null, val book: String? = null, val look: io.github.artcraftandroid.pdfcraft.ui.scan.ScanPageLook? = null, val flatten: Boolean? = null)
+    class Page(val path: String, val corners: FloatArray, val found: FloatArray?, val turns: Int? = null, val preset: String? = null, val book: String? = null, val look: io.github.artcraftandroid.pdfcraft.ui.scan.ScanPageLook? = null, val flatten: Boolean? = null, val auto: io.github.artcraftandroid.pdfcraft.ui.scan.ScanAutoMarks = io.github.artcraftandroid.pdfcraft.ui.scan.ScanAutoMarks())
 
     fun encode(): String = buildString {
         append(HEADER).append('\n')
@@ -45,6 +45,9 @@ data class ScanSession(
             // the eighth, the page's Flatten page choice (#302): 1, 0, or nothing
             if (p.flatten != null) append('\t').append(if (p.flatten) "1" else "0")
             append('\n')
+            // what the automatic look did and what was taken back (#466), before the look line;
+            // a build from before it ignores the line
+            if (p.auto != io.github.artcraftandroid.pdfcraft.ui.scan.ScanAutoMarks()) append("auto\t").append(p.auto.encode()).append('\n')
             // the page's look (#301) on a line of its own after the page's, so the page line keeps
             // its columns and a build from before #301 reads the session, ignoring the line
             p.look?.let { append("look\t").append(io.github.artcraftandroid.pdfcraft.ui.scan.scanFilterId(it.filter)).append('\t').append(it.strength?.toString().orEmpty()).append('\t').append(it.paper.word).append('\n') }
@@ -95,9 +98,13 @@ data class ScanSession(
                             lastPage = true
                         }
                     }
+                    "auto" -> {
+                        // belongs to the page line before it, like the look line after it (#466)
+                        if (lastPage) pages[pages.lastIndex] = pages.last().let { Page(it.path, it.corners, it.found, it.turns, it.preset, it.book, it.look, it.flatten, io.github.artcraftandroid.pdfcraft.ui.scan.ScanAutoMarks.decode(value)) }
+                    }
                     "look" -> {
                         val look = io.github.artcraftandroid.pdfcraft.ui.scan.ScanPageLook.decode(value, parts.getOrNull(2), parts.getOrNull(3))
-                        if (lastPage && look != null) pages[pages.lastIndex] = pages.last().let { Page(it.path, it.corners, it.found, it.turns, it.preset, it.book, look, it.flatten) }
+                        if (lastPage && look != null) pages[pages.lastIndex] = pages.last().let { Page(it.path, it.corners, it.found, it.turns, it.preset, it.book, look, it.flatten, it.auto) }
                         lastPage = false
                     }
                 }

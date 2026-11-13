@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Scanner: the automatic look (#466); kept apart from strings.xml so parallel scanner work merges cleanly. -->
+<resources>
+    <string name="scan_lab_auto_look">Scan net applique ses suggestions lui-même, avec Annuler</string>
+    <string name="scan_auto_flattened_undo">Aplatie · Annuler</string>
+    <string name="scan_auto_flattened_undo_description">Annuler l\'aplatissement</string>
+    <string name="scan_auto_grayscale_undo">Niveaux de gris · Annuler</string>
+    <string name="scan_auto_grayscale_undo_description">Annuler les niveaux de gris</string>
+    <string name="scan_lab_remove_fingers">Retirer les doigts au bord de la page</string>
+    <string name="scan_auto_fingers_undo">Doigt retiré · Annuler</string>
+    <string name="scan_auto_fingers_undo_description">Remettre le doigt</string>
+    <string name="scan_auto_fingers_over_print">Un doigt cachait du texte. Reprenez la photo pour le récupérer.</string>
+</resources>

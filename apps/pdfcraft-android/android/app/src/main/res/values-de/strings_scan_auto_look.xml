@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Scanner: the automatic look (#466); kept apart from strings.xml so parallel scanner work merges cleanly. -->
+<resources>
+    <string name="scan_lab_auto_look">Sauberer Scan wendet seine Vorschläge selbst an, mit Rückgängig</string>
+    <string name="scan_auto_flattened_undo">Geglättet · Rückgängig</string>
+    <string name="scan_auto_flattened_undo_description">Glätten rückgängig machen</string>
+    <string name="scan_auto_grayscale_undo">Graustufen · Rückgängig</string>
+    <string name="scan_auto_grayscale_undo_description">Graustufen rückgängig machen</string>
+    <string name="scan_lab_remove_fingers">Finger am Seitenrand entfernen</string>
+    <string name="scan_auto_fingers_undo">Finger entfernt · Rückgängig</string>
+    <string name="scan_auto_fingers_undo_description">Finger wiederherstellen</string>
+    <string name="scan_auto_fingers_over_print">Ein Finger hat Text verdeckt. Neu aufnehmen, um ihn zurückzuholen.</string>
+</resources>

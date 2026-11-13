@@ -140,7 +140,15 @@ pub struct PageRequest<'a> {
     /// from an earlier look of the same [`PageBase`] (#446). The pixels are the same either way;
     /// false measures it again for every look, as before, a testing choice.
     pub reuse_look: bool,
+    /// The automatic look removes fingers at the page's edge (#466): after Clean scan at
+    /// strength [`FINGER_MIN_STRENGTH`] or more, fingers are found on the look's own output and
+    /// papered over. False leaves the page as the look made it, as before.
+    pub remove_fingers: bool,
 }
+
+/// The weakest Clean scan strength at which fingers are looked for (#466): below it the paper is
+/// not white enough for the finger search's thresholds.
+pub const FINGER_MIN_STRENGTH: u8 = 40;
 
 impl<'a> PageRequest<'a> {
     /// A request with the defaults: the colour look at strength 50, one thread, the photo's own
@@ -178,6 +186,7 @@ impl<'a> PageRequest<'a> {
             max_side: None,
             keep_paper: None,
             reuse_look: true,
+            remove_fingers: false,
         }
     }
 }
@@ -232,6 +241,8 @@ pub struct PageResult {
     /// The kind of document the Auto look took the page for, and its settings (#299); `None` for
     /// the other looks or with document types off.
     pub kind: Option<PageKind>,
+    /// What the automatic look's finger step did (#466); `None` when it did not run.
+    pub fingers: Option<crate::defects::FingerFill>,
     /// (stage, milliseconds), in pipeline order.
     pub timings: Vec<(&'static str, u32)>,
 }
@@ -350,6 +361,7 @@ fn untouched(request: &PageRequest<'_>) -> Option<Result<PageResult, ScanError>>
         paper_spread: None,
         white_point: None,
         kind: None,
+        fingers: None,
         timings,
     }))
 }
@@ -368,7 +380,7 @@ pub fn process_page(request: &PageRequest<'_>) -> Result<PageResult, ScanError> 
     };
     let (applied, kind) = page_look_kind(&base, request)?;
     let (paper_spread, white_point) = (applied.paper_spread, applied.white_point);
-    let (pixels, noise, look_stages) = (applied.pixels, applied.noise, applied.stages);
+    let (pixels, noise, look_stages, fingers) = (applied.pixels, applied.noise, applied.stages, applied.fingers);
     let PageBase {
         page,
         dpi,
@@ -422,6 +434,7 @@ pub fn process_page(request: &PageRequest<'_>) -> Result<PageResult, ScanError> 
         paper_spread,
         white_point,
         kind,
+        fingers,
         timings,
     })
 }
@@ -499,7 +512,15 @@ pub fn page_look_kind(base: &PageBase, request: &PageRequest<'_>) -> Result<(App
             &fresh
         }
     };
-    let applied = apply_prepared(&base.page, request.look, &params, photos, kept).ok_or(ScanError::Encode)?;
+    let mut applied = apply_prepared(&base.page, request.look, &params, photos, kept).ok_or(ScanError::Encode)?;
+    // fingers at the page's edge, found on the look's own output and papered over (#466)
+    if request.remove_fingers && request.look == Look::Auto && params.strength >= FINGER_MIN_STRENGTH {
+        if let Pixels::Rgb(data) = &mut applied.pixels {
+            let mut page = Rgb { width: base.page.width, height: base.page.height, data: std::mem::take(data) };
+            applied.fingers = Some(crate::defects::remove_fingers(&mut page));
+            *data = page.data;
+        }
+    }
     Ok((applied, kind))
 }
 

@@ -10,6 +10,7 @@ import io.github.artcraftandroid.pdfcraft.ui.scan.scanAutoTurns
 import io.github.artcraftandroid.pdfcraft.ui.scan.chooseScanLook
 import io.github.artcraftandroid.pdfcraft.ui.scan.toggleScanFlatten
 import io.github.artcraftandroid.pdfcraft.ui.scan.undoScanTurn
+import io.github.artcraftandroid.pdfcraft.ui.scan.undoScanAuto
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -859,6 +860,8 @@ data class ScanPage(
      * document is not worked out (see `scanKindSource`).
      */
     val uncropped: FloatArray? = null,
+    /** What the automatic look did to the page and what the person took back (#466). */
+    val auto: io.github.artcraftandroid.pdfcraft.ui.scan.ScanAutoMarks = io.github.artcraftandroid.pdfcraft.ui.scan.ScanAutoMarks(),
 ) {
     /** The page among the scan's pages: the two halves of a spread share one photo [file]. */
     val key: String get() = book?.let { "${file.absolutePath}#${it.side}" } ?: file.absolutePath
@@ -1024,12 +1027,12 @@ fun ScanScreen(vm: AppViewModel) {
         // Settings ▸ Preferences ▸ Scan (#339); read each time, so a change there shows here
         val autoUpright = io.github.artcraftandroid.pdfcraft.ui.scan.ScanUprightSetting.get(vm.settings.appPrefs)
         if (page != null && lab.preview) {
-            LaunchedEffect(page.file, page.corners.toList(), page.turns, page.preset, page.look, flattening, lab, autoUpright) { vm.requestScanPreview(shownAt, page, flattening) }
+            LaunchedEffect(page.file, page.corners.toList(), page.turns, page.preset, page.look, page.flatten, flattening, lab, autoUpright) { vm.requestScanPreview(shownAt, page, flattening) }
         }
         // every page made in the background, the page on screen first (#465)
         vm.pageQueue.shownIndex = shownAt
         LaunchedEffect(pages.toList(), lab, autoUpright, vm.scanCanFlatten) { vm.pageQueue.kick() }
-        val wanted = page?.let { ScanPreviewKey.of(it, flattening, lab, autoUpright) }
+        val wanted = page?.let { ScanPreviewKey.of(it, flattening, lab, autoUpright, autoFlatten = vm.scanAutoFlattens(it, lab)) }
         val exact = vm.scanPreview?.takeIf { wanted != null && it.key == wanted }
         // while a new look or strength is made, the page in its last look stays on screen (#301)
         val preview = exact ?: vm.scanPreview?.takeIf { wanted != null && wanted.samePage(it.key) }
@@ -1127,6 +1130,16 @@ fun ScanScreen(vm: AppViewModel) {
                             .clickable(role = Role.Button, onClickLabel = undoLabel) { vm.undoScanTurn(shownAt) }.padding(horizontal = 12.dp, vertical = 6.dp),
                     )
                 }
+                // what the automatic look did, each with a way back (#466)
+                if (shown.view == ScanView.Result && preview != null) {
+                    val chips = io.github.artcraftandroid.pdfcraft.ui.scan.scanAutoChips(lab, page.auto, page.look, page.flatten, preview.flattened, preview.fingers?.filled?.toInt() ?: 0, preview.fingers?.overPrint?.toInt() ?: 0)
+                    if (chips.isNotEmpty()) {
+                        // under "Turned upright · Undo", which sits at the top
+                        Row(Modifier.align(Alignment.TopCenter).padding(top = 52.dp, start = 12.dp, end = 12.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            for (chip in chips) io.github.artcraftandroid.pdfcraft.ui.scan.ScanAutoChipView(chip, { vm.undoScanAuto(shownAt, chip) })
+                        }
+                    }
+                }
                 if (shown.waiting) {
                     Text(
                         stringResource(R.string.tools_scan_preparing), color = Color.White, fontSize = 13.sp,
@@ -1178,8 +1191,10 @@ fun ScanScreen(vm: AppViewModel) {
         // the kind of document Clean scan took the page for, and a way to choose another (#299)
         if (!stepsOn && page != null && page.look.filter == ScanFilter.CleanScan && lab.presets) {
             // and what that kind suggests: Flatten page for a book page, Grayscale for a receipt
+            // with the automatic look, Grayscale is applied rather than offered, and with its
+            // flattening decision on, so is Flatten page (#466)
             val suggestions = io.github.artcraftandroid.pdfcraft.ui.scan.scanSuggestions(
-                lab.suggestions, preview?.kind?.suggestFlatten == true, preview?.kind?.suggestGreyscale == true,
+                lab.suggestions, preview?.kind?.suggestFlatten == true && !lab.flattenAuto, preview?.kind?.suggestGreyscale == true && !lab.autoLook,
                 vm.scanCanFlatten, page.flatten, page.look.filter == ScanFilter.CleanScan,
             )
             Row(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally)) {

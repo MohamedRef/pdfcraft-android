@@ -155,6 +155,29 @@ pub struct ScanPageRequest {
     /// before (a testing choice).
     #[uniffi(default = true)]
     pub reuse_look: bool,
+    /// The automatic look removes fingers at the page's edge (#466): after Clean scan at strength
+    /// 40 or more, fingers found on the look's own output are papered over. False leaves the page
+    /// as the look made it (a testing choice).
+    #[uniffi(default = false)]
+    pub remove_fingers: bool,
+}
+
+/// What the automatic look's finger step did to a page (#466).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Record)]
+pub struct ScanFingers {
+    /// Fingers found at the page's edge.
+    pub found: u32,
+    /// Of those, the ones that hid print: only a new photo brings that print back.
+    pub over_print: u32,
+    /// Fingers papered over.
+    pub filled: u32,
+    pub ms: u32,
+}
+
+impl From<pdfcraft_scan::defects::FingerFill> for ScanFingers {
+    fn from(f: pdfcraft_scan::defects::FingerFill) -> Self {
+        ScanFingers { found: f.found, over_print: f.over_print, filled: f.filled, ms: f.ms }
+    }
 }
 
 /// The kind of document the Auto look took a page for, its settings, and what the page measured
@@ -318,6 +341,8 @@ pub struct ScanPageResult {
     /// The kind of document the Auto look took the page for (#299); `None` for the other looks or
     /// with document types off.
     pub kind: Option<ScanPageKind>,
+    /// What the finger step did (#466); `None` when it did not run.
+    pub fingers: Option<ScanFingers>,
     pub timings: Vec<ScanTiming>,
 }
 
@@ -675,6 +700,7 @@ fn page_request<'a>(request: &ScanPageRequest, photo: &'a [u8], corners: [f32; 8
             _ => None,
         },
         reuse_look: request.reuse_look,
+        remove_fingers: request.remove_fingers,
         ..PageRequest::new(photo, corners)
     }
 }
@@ -793,6 +819,8 @@ pub struct ScanPreview {
     pub flattened: bool,
     /// The kind of document the Auto look took the page for (#299).
     pub kind: Option<ScanPageKind>,
+    /// What the finger step did (#466); `None` when it did not run.
+    pub fingers: Option<ScanFingers>,
     /// How the flattened and the straightened page compared, when that was asked (#302).
     pub flatten_check: Option<ScanFlattenCheck>,
     /// The border trimmed from a flattened page (#302), when one was looked for.
@@ -1001,6 +1029,7 @@ pub(crate) fn preview_stoppable(
         turns: base.turns,
         flattened: base.flattened,
         kind: kind.as_ref().map(kind_of),
+        fingers: applied.fingers.map(Into::into),
         flatten_check: base.flatten_check.map(Into::into),
         trim: base.trim.map(|t| ScanTrim::of(t, before_turn(base.page.width, base.page.height, base.turns))),
         line_flatten: base.line_flatten.as_ref().map(Into::into),
@@ -1096,6 +1125,7 @@ pub(crate) fn process_in(root: &Path, request: &ScanPageRequest) -> Result<ScanP
         paper_spread: page.paper_spread,
         white_point: page.white_point,
         kind: page.kind.as_ref().map(kind_of),
+        fingers: page.fingers.map(Into::into),
         timings: page.timings.into_iter().map(|(stage, ms)| ScanTiming { stage: stage.into(), ms }).collect(),
     })
 }
@@ -1307,6 +1337,7 @@ mod tests {
             photo_sharpen: false,
             paper: "auto".into(),
             reuse_look: true,
+            remove_fingers: false,
         }
     }
 
@@ -1660,6 +1691,36 @@ mod tests {
         assert!(preview_in(&other, &ask(ScanLook::Auto, 60), 1280).is_err());
         std::fs::remove_dir_all(root).unwrap();
         std::fs::remove_dir_all(other).unwrap();
+    }
+
+    /// The finger step (#466) runs only when asked, only on Clean scan at strength 40 or more, and
+    /// the saved page and its preview report it alike; a page without fingers is unchanged.
+    #[test]
+    fn the_finger_step_runs_only_when_asked() {
+        let _store = PREVIEWS_TEST_LOCK.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let root = temp("preview-fingers");
+        let shot = root.join("page.png");
+        image::RgbImage::from_fn(600, 800, |x, y| {
+            if (y % 24) < 3 && (40..560).contains(&x) { image::Rgb([30, 30, 30]) } else { image::Rgb([235, 232, 226]) }
+        })
+        .save(&shot)
+        .unwrap();
+        let ask = ScanPageRequest { corners: vec![0.0, 0.0, 1.0, 0.0, 1.0, 1.0, 0.0, 1.0], look: ScanLook::Auto, strength: 60, ..request(&shot, &root.join("x")) };
+        scan_release_previews();
+        let plain = preview_in(&root, &ask, 640).unwrap();
+        assert!(plain.fingers.is_none());
+        let asked = preview_in(&root, &ScanPageRequest { remove_fingers: true, ..ask.clone() }, 640).unwrap();
+        let found = asked.fingers.expect("the step ran");
+        assert_eq!((found.found, found.filled), (0, 0));
+        // nothing found, nothing changed
+        assert_eq!(asked.rgba, plain.rgba);
+        // not for another look, nor a weak Clean scan
+        assert!(preview_in(&root, &ScanPageRequest { remove_fingers: true, look: ScanLook::Colour, ..ask.clone() }, 640).unwrap().fingers.is_none());
+        assert!(preview_in(&root, &ScanPageRequest { remove_fingers: true, strength: 20, fixed_strength: true, preset: "off".into(), ..ask.clone() }, 640).unwrap().fingers.is_none());
+        let saved = process_in(&root, &ScanPageRequest { remove_fingers: true, ..ask.clone() }).unwrap();
+        assert_eq!(saved.fingers.map(|f| f.filled), Some(0));
+        assert!(process_in(&root, &ask).unwrap().fingers.is_none());
+        std::fs::remove_dir_all(root).unwrap();
     }
 
     /// A preview that is no longer wanted stops at its next stage and says "cancelled" (#301);

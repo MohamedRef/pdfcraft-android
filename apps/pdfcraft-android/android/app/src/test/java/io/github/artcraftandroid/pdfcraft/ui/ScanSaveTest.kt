@@ -155,8 +155,8 @@ class ScanSaveTest {
     fun automaticFlatteningFlattensEveryPageAndChecksItUnlessTheSwitchAsks() {
         val corners = floatArrayOf(0.1f, 0.1f, 0.9f, 0.1f, 0.9f, 0.9f, 0.1f, 0.9f)
         val auto = ScanLab(flattenAuto = true)
-        // the testing option off: flattened only when asked, never checked
-        val plain = scanPageRequest("/a", corners, ScanFilter.CleanScan, false, ScanLab(), "")
+        // the testing option off (on by default since #466): flattened only when asked, never checked
+        val plain = scanPageRequest("/a", corners, ScanFilter.CleanScan, false, ScanLab(flattenAuto = false), "")
         assertFalse(plain.flatten || plain.flattenCheck)
         // on: every page goes through the network, and is kept only when straighter (#302)
         val checked = scanPageRequest("/a", corners, ScanFilter.CleanScan, false, auto, "")
@@ -171,7 +171,7 @@ class ScanSaveTest {
         assertTrue(asked.flatten)
         assertFalse(asked.flattenCheck)
         // a preview made with the option is not the one made without it
-        val page = ScanPreviewKey("/a", corners.toList(), ScanFilter.CleanScan, false, ScanLab())
+        val page = ScanPreviewKey("/a", corners.toList(), ScanFilter.CleanScan, false, ScanLab(flattenAuto = false))
         assertFalse(page == page.copy(lab = auto))
     }
 

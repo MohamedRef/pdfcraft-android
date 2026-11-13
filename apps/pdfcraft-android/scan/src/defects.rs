@@ -669,3 +669,30 @@ fn components(mask: &[bool], w: usize, h: usize) -> Vec<Vec<usize>> {
     }
     out
 }
+
+/// What removing fingers did to one page (#466): fingers found, how many of them hid print, how
+/// many were filled, and the milliseconds it took.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct FingerFill {
+    pub found: u32,
+    pub over_print: u32,
+    pub filled: u32,
+    pub ms: u32,
+}
+
+/// The automatic look's finger step (#466): [`find`] on the page as the look left it (no glare,
+/// so no `before`; no second look), then [`fill_fingers`] when any were found. A finger that hid
+/// print is filled too, and counted in `over_print`, so the caller can say that only a new photo
+/// brings that print back.
+pub fn remove_fingers(page: &mut Rgb) -> FingerFill {
+    let clock = std::time::Instant::now();
+    let ms = |clock: std::time::Instant| u32::try_from(clock.elapsed().as_millis()).unwrap_or(u32::MAX);
+    let Some(found) = find(page, None) else { return FingerFill { ms: ms(clock), ..FingerFill::default() } };
+    let filled = if found.fingers.is_empty() { 0 } else { fill_fingers(page, &found) };
+    FingerFill {
+        found: u32::try_from(found.fingers.len()).unwrap_or(u32::MAX),
+        over_print: u32::try_from(found.fingers_over_print()).unwrap_or(u32::MAX),
+        filled: u32::try_from(filled).unwrap_or(u32::MAX),
+        ms: ms(clock),
+    }
+}
