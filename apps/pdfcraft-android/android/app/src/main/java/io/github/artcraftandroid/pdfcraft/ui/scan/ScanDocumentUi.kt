@@ -98,6 +98,8 @@ internal fun ScanDocumentScreen(vm: AppViewModel, onOpen: (Int) -> Unit) {
     // Select pages in ⋮ opens the selection with nothing chosen yet, for whoever does not find the hold
     var choosing by remember { mutableStateOf(false) }
     var askingDiscard by remember { mutableStateOf(false) }
+    // the size choice before Save PDF (false) or Share (true) (#505)
+    var sizing by remember { mutableStateOf<Boolean?>(null) }
     var askingDelete by remember { mutableStateOf(false) }
     var naming by remember { mutableStateOf(false) }
     var menu by remember { mutableStateOf(false) }
@@ -310,10 +312,12 @@ internal fun ScanDocumentScreen(vm: AppViewModel, onOpen: (Int) -> Unit) {
             onGallery = { vm.saveScanToGallery(chosen) },
             onAdd = { vm.takeScanPhoto() },
             onImport = { vm.importScanPhotos() },
-            onShare = { vm.saveScan(share = true) },
-            onSave = { vm.saveScan() },
+            // the size choice first (#505), unless a testing option sets one for every save
+            onShare = { if (vm.scanLab.options.size != null) vm.saveScan(share = true) else sizing = true },
+            onSave = { if (vm.scanLab.options.size != null) vm.saveScan() else sizing = false },
         )
     }
+    sizing?.let { share -> ScanSizeSheet(vm, share) { sizing = null } }
     if (askingDiscard) {
         ScanDiscardDialog(
             pages.size,

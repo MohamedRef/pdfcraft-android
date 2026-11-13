@@ -3219,6 +3219,7 @@ version = "0.21.1"
 dependencies = [
  "image",
  "pdfcraft-engine",
+ "pdfcraft-filters",
  "pdfcraft-geom",
  "png",
  "rten",

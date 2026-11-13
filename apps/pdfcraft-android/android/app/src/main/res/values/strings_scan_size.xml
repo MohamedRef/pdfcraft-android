@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- File size choices at Save PDF and Share (#505) -->
+<resources>
+    <string name="scan_lab_auto_encode">Store each page by what is on it, with size choices at Save</string>
+    <string name="scan_lab_size">Size for every save</string>
+    <string name="scan_lab_size_ask">Ask at Save</string>
+    <string name="scan_size_title">File size</string>
+    <string name="scan_size_best">Best quality</string>
+    <string name="scan_size_best_use">Full size, as before</string>
+    <string name="scan_size_balanced">Balanced</string>
+    <string name="scan_size_balanced_use">For reading and printing</string>
+    <string name="scan_size_small">Small</string>
+    <string name="scan_size_small_use">For sending by mail or chat</string>
+    <string name="scan_size_smallest">Smallest</string>
+    <string name="scan_size_smallest_use">For forms and letters that only have to be read</string>
+    <string name="scan_size_about">about %1$s</string>
+    <string name="scan_size_estimating">Estimating…</string>
+    <string name="scan_size_estimate_note">Estimated from the first page.</string>
+    <string name="scan_size_see_page">See this page as it will be saved</string>
+    <string name="scan_size_page_caption">Page 1 · %1$s · %2$s</string>
+</resources>

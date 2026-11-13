@@ -188,6 +188,14 @@ internal data class ScanLab(
      */
     val markup: Boolean = true,
     /**
+     * Each page stored as what is on it asks, at the size chosen at Save (#505): grey when it has no
+     * colour, the resolution it needs, Huffman tables made for it, 1 bit for text alone at Small and
+     * Smallest. Off: every page as before (quality 92 at full size), whatever the size chosen.
+     */
+    val autoEncode: Boolean = true,
+    /** A size for every save in place of the person's choice at Save (#505): "best", "balanced", "small", "smallest"; null asks. */
+    val size: String? = null,
+    /**
      * Colours in Markup as in the viewer (#503): a "More colors" sheet with the viewer's palettes,
      * a custom colour and the recent colours; an eyedropper that reads the page; and Erase's
      * "Color" fill. Off: each tool has its few swatches and Erase paints the paper, as in #495.
@@ -228,7 +236,7 @@ internal data class ScanLab(
         "snap_paper" to snapPaper, "strength_override" to (strength ?: -1), "upright" to upright, "sharpen" to sharpen,
         "denoise" to denoise, "grain_white" to grainWhite, "preview" to preview, "crop_tools" to cropTools, "crop_detect_note" to cropDetectNote, "flatten_auto" to flattenAuto, "flatten_trim" to flattenTrim, "flatten_line_floor" to flattenLineFloor, "settle_turns" to settleTurns, "presets" to presets, "kind_tone" to kindTone, "photo_sharpen" to photoSharpen, "suggestions" to suggestions, "strict_gutter" to strictGutter, "strict_photo" to strictPhoto, "strict_book" to strictBook, "book_gutter" to bookGutter, "line_flatten" to lineFlatten,
         "page_strength" to pageStrength, "unfound_document" to unfoundDocument, "background_pages" to backgroundPages, "full_pages_ahead" to fullPagesAhead, "ask_discard" to askDiscard, "auto_look" to autoLook, "remove_fingers" to removeFingers, "look_per_page" to lookPerPage, "look_strip" to lookStrip,
-        "whiteboard_look" to whiteboardLook, "preview_stop" to previewStop, "preview_zoom" to previewZoom, "look_reuse" to lookReuse, "camera_bar" to cameraBar, "steps" to steps, "recent_scans" to recentScans, "markup" to markup, "markup_colours" to markupColours, "markup_edge" to markupEdge, "keep" to keep, "inspect" to inspect,
+        "whiteboard_look" to whiteboardLook, "preview_stop" to previewStop, "preview_zoom" to previewZoom, "look_reuse" to lookReuse, "camera_bar" to cameraBar, "steps" to steps, "recent_scans" to recentScans, "markup" to markup, "markup_colours" to markupColours, "markup_edge" to markupEdge, "auto_encode" to autoEncode, "size_override" to (size ?: "none"), "keep" to keep, "inspect" to inspect,
     )
 
     /** The options as JSON, for a kept scan's page file. */
@@ -237,7 +245,7 @@ internal data class ScanLab(
         .put("snap_paper", snapPaper).put("strength_override", strength ?: JSONObject.NULL).put("upright", upright)
         .put("sharpen", sharpen).put("denoise", denoise).put("grain_white", grainWhite).put("preview", preview).put("crop_tools", cropTools).put("crop_detect_note", cropDetectNote).put("flatten_auto", flattenAuto).put("flatten_trim", flattenTrim).put("flatten_line_floor", flattenLineFloor).put("settle_turns", settleTurns).put("presets", presets).put("kind_tone", kindTone).put("photo_sharpen", photoSharpen).put("suggestions", suggestions).put("strict_gutter", strictGutter).put("strict_photo", strictPhoto).put("strict_book", strictBook).put("book_gutter", bookGutter).put("line_flatten", lineFlatten)
         .put("page_strength", pageStrength).put("unfound_document", unfoundDocument).put("background_pages", backgroundPages).put("full_pages_ahead", fullPagesAhead).put("ask_discard", askDiscard).put("auto_look", autoLook).put("remove_fingers", removeFingers).put("look_per_page", lookPerPage).put("look_strip", lookStrip)
-        .put("whiteboard_look", whiteboardLook).put("preview_stop", previewStop).put("preview_zoom", previewZoom).put("look_reuse", lookReuse).put("camera_bar", cameraBar).put("steps", steps).put("recent_scans", recentScans).put("markup", markup).put("markup_colours", markupColours).put("markup_edge", markupEdge).put("inspect", inspect)
+        .put("whiteboard_look", whiteboardLook).put("preview_stop", previewStop).put("preview_zoom", previewZoom).put("look_reuse", lookReuse).put("camera_bar", cameraBar).put("steps", steps).put("recent_scans", recentScans).put("markup", markup).put("markup_colours", markupColours).put("markup_edge", markupEdge).put("auto_encode", autoEncode).put("size_override", size ?: JSONObject.NULL).put("inspect", inspect)
 
     /** One line of text for the app's preferences. */
     fun encode(): String = listOf(
@@ -246,7 +254,7 @@ internal data class ScanLab(
         "upright" to flag(upright), "sharpen" to sharpen.toString(), "denoise" to flag(denoise), "grain_white" to flag(grainWhite), "preview" to flag(preview), "crop" to flag(cropTools), "detect_note" to flag(cropDetectNote), "flatten_auto_on" to flag(flattenAuto), "flatten_trim" to flag(flattenTrim), "line_floor" to flag(flattenLineFloor),
         "settle" to flag(settleTurns), "presets" to flag(presets), "kind_tone" to flag(kindTone), "photo_sharpen" to flag(photoSharpen), "suggest" to flag(suggestions), "strict_gutter" to flag(strictGutter), "strict_photo" to flag(strictPhoto), "strict_book" to flag(strictBook), "gutter" to flag(bookGutter), "line_flatten" to flag(lineFlatten),
         "page_strength" to flag(pageStrength), "unfound_doc" to flag(unfoundDocument), "bg_pages" to flag(backgroundPages), "full_ahead" to flag(fullPagesAhead), "ask_discard" to flag(askDiscard), "auto_look" to flag(autoLook), "fingers" to flag(removeFingers), "look_page" to flag(lookPerPage), "look_strip" to flag(lookStrip),
-        "board" to flag(whiteboardLook), "stop" to flag(previewStop), "zoom" to flag(previewZoom), "look_reuse" to flag(lookReuse), "camera_bar" to flag(cameraBar), "steps" to flag(steps), "recent" to flag(recentScans), "markup" to flag(markup), "markup_colours" to flag(markupColours), "markup_edge" to flag(markupEdge), "inspect" to flag(inspect),
+        "board" to flag(whiteboardLook), "stop" to flag(previewStop), "zoom" to flag(previewZoom), "look_reuse" to flag(lookReuse), "camera_bar" to flag(cameraBar), "steps" to flag(steps), "recent" to flag(recentScans), "markup" to flag(markup), "markup_colours" to flag(markupColours), "markup_edge" to flag(markupEdge), "auto_encode" to flag(autoEncode), "size" to (size ?: ""), "inspect" to flag(inspect),
     ).joinToString(";") { (k, v) -> "$k=$v" }
 
     companion object {
@@ -258,6 +266,9 @@ internal data class ScanLab(
 
         /** How much sharpening is offered: none, the default, and two steps more. */
         val SHARPENING: List<Int> = listOf(0, 30, 60, 100)
+
+        /** The size choices at Save (#505), as the engine names them, largest first. */
+        val SIZES: List<String> = listOf("best", "balanced", "small", "smallest")
 
         private fun flag(on: Boolean) = if (on) "1" else "0"
 
@@ -324,6 +335,8 @@ internal data class ScanLab(
                 markup = on("markup", default.markup),
                 markupColours = on("markup_colours", default.markupColours),
                 markupEdge = on("markup_edge", default.markupEdge),
+                autoEncode = on("auto_encode", default.autoEncode),
+                size = values["size"]?.takeIf { it in SIZES },
                 inspect = on("inspect", default.inspect),
             )
         }
@@ -509,6 +522,8 @@ internal fun scanTestPageJson(
     fromRecent: Boolean = false,
     /** How many marks of each kind the person made on the page and the share the eraser painted (#495); null for none. */
     marks: JSONObject? = null,
+    /** How the page was stored at the size chosen (#505): encoding, pixels, resolution, quality, bytes and why; null for a camera file kept as it was. */
+    encoding: JSONObject? = null,
 ): String {
     val page = JSONObject()
         .put("corners", shares(corners)).put("kind", "other").put("paper", "unknown").put("curved", false).put("notes", "")
@@ -582,6 +597,8 @@ internal fun scanTestPageJson(
         .put("from_recent", fromRecent)
         // #495: the marks made by hand, counted (their content is never written)
         .put("marks", marks ?: JSONObject.NULL)
+        // #505: how the page was stored
+        .put("encoding", encoding ?: JSONObject.NULL)
         .put("strength_applied", applied?.let { JSONObject().put("strength", it.strength).put("source", it.source).put("fixed", it.fixed) } ?: JSONObject.NULL)
     page.put(
         "result",

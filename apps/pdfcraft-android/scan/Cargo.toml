@@ -21,6 +21,8 @@ png = "0.18"
 pdfcraft-geom = { workspace = true }
 # camera_clean (the looks) stays in the engine until the scan issues replace it (#298, #300)
 pdfcraft-engine = { workspace = true }
+# a 1-bit page's size as the PDF stores it, Group 4 (#505); already in the tree through the engine
+pdfcraft-filters = { workspace = true }
 thiserror = { workspace = true }
 # the document detector's model (#290) runs on rten, as the text-recognition models do; the same
 # versions as crates/ocr, so nothing new is compiled

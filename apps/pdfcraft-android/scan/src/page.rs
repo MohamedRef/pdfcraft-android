@@ -4,7 +4,7 @@
 use std::time::Instant;
 
 use crate::aspect::{AspectSource, Focal, Paper, dpi_without_paper, proportions, proportions_by_sides};
-use crate::encode::{Format, JPEG_QUALITY, Raster, encode_jpeg, encode_png_bilevel, stamp_jpeg_density};
+use crate::encode::{Format, stamp_jpeg_density};
 use crate::enhance::DEFAULT_SHARPEN;
 use crate::enhance::Shape;
 use crate::enhance::enlargement;
@@ -147,6 +147,12 @@ pub struct PageRequest<'a> {
     /// Marks made by hand on the page (#495): drawn after the look and the finger step. `None` or
     /// empty for none.
     pub markup: Option<&'a crate::markup::Markup>,
+    /// The person's size choice at Save (#505). Read only with `auto_encode`.
+    pub size: crate::size::SizeChoice,
+    /// Store the page as [`crate::size::store`] decides from what is on it (#505); false stores
+    /// every page as before (a JPEG at quality 92 at full size, 1 bit for Black and white),
+    /// whatever `size` says.
+    pub auto_encode: bool,
 }
 
 /// The weakest Clean scan strength at which fingers are looked for (#466): below it the paper is
@@ -191,6 +197,8 @@ impl<'a> PageRequest<'a> {
             reuse_look: true,
             remove_fingers: false,
             markup: None,
+            size: crate::size::SizeChoice::Best,
+            auto_encode: false,
         }
     }
 }
@@ -249,6 +257,8 @@ pub struct PageResult {
     pub fingers: Option<crate::defects::FingerFill>,
     /// What drawing the page's hand-made marks did (#495); `None` when it had none.
     pub markup: Option<crate::markup::Applied>,
+    /// How the page was stored (#505); `None` for a camera file kept as it was.
+    pub encoded: Option<crate::size::Encoded>,
     /// (stage, milliseconds), in pipeline order.
     pub timings: Vec<(&'static str, u32)>,
 }
@@ -336,7 +346,9 @@ fn untouched(request: &PageRequest<'_>) -> Option<Result<PageResult, ScanError>>
     let whole = request.corners.iter().zip(WHOLE_PHOTO).all(|(a, b)| (a - b).abs() < 1e-6);
     let turned_by_hand = !request.turns.is_multiple_of(4);
     let marked = request.markup.is_some_and(|m| !m.is_empty());
-    if request.look != Look::Original || !whole || request.flatten || turned_by_hand || request.max_side.is_some() || marked {
+    // a smaller size than Best stores the photo again (#505)
+    let smaller = request.auto_encode && request.size != crate::size::SizeChoice::Best;
+    if request.look != Look::Original || !whole || request.flatten || turned_by_hand || request.max_side.is_some() || marked || smaller {
         return None;
     }
     let (width, height) = match Photo::upright_size(request.photo) {
@@ -370,6 +382,7 @@ fn untouched(request: &PageRequest<'_>) -> Option<Result<PageResult, ScanError>>
         kind: None,
         fingers: None,
         markup: None,
+        encoded: None,
         timings,
     }))
 }
@@ -413,12 +426,10 @@ pub fn process_page(request: &PageRequest<'_>) -> Result<PageResult, ScanError> 
     // the look's own parts (#446), after the whole
     timings.extend(look_stages.into_iter().map(|(stage, ms)| (scan_stage(stage), ms)));
 
-    let raster = |pixels, grey| Raster { pixels, grey, width: w, height: h, dpi };
-    let (bytes, format) = match &pixels {
-        Pixels::Rgb(rgb) => (encode_jpeg(&raster(rgb, false), JPEG_QUALITY)?, Format::Jpeg),
-        Pixels::Grey(grey) => (encode_jpeg(&raster(grey, true), JPEG_QUALITY)?, Format::Jpeg),
-        Pixels::Bilevel(bits) => (encode_png_bilevel(bits, dpi)?, Format::Png),
-    };
+    let made = crate::size::Made { pixels: &pixels, width: w, height: h, dpi, look: request.look, kind: kind.as_ref() };
+    let stored = crate::size::store(&made, request.size, request.auto_encode)?;
+    let (bytes, format) = (stored.bytes, stored.format);
+    let (w, h, dpi) = (stored.encoded.width, stored.encoded.height, stored.encoded.dpi);
     lap(STAGE_ENCODE, &mut timings);
 
     Ok(PageResult {
@@ -444,8 +455,22 @@ pub fn process_page(request: &PageRequest<'_>) -> Result<PageResult, ScanError> 
         kind,
         fingers,
         markup,
+        encoded: Some(stored.encoded),
         timings,
     })
+}
+
+/// The page made once and stored at each size choice (#505), for the Save sheet's estimates and
+/// its "as it will be saved" view: what [`process_page`] stores at each, with the automatic
+/// encoding. A whole photo in Original, which Best keeps as the camera's file, is made like any
+/// other page here.
+pub fn page_sizes(request: &PageRequest<'_>) -> Result<Vec<crate::size::Stored>, ScanError> {
+    let base = page_base(request)?;
+    let (applied, kind) = page_look_kind(&base, request)?;
+    let (w, h, dpi) = (base.page.width, base.page.height, base.dpi);
+    drop(base);
+    let made = crate::size::Made { pixels: &applied.pixels, width: w, height: h, dpi, look: request.look, kind: kind.as_ref() };
+    crate::size::SizeChoice::ALL.into_iter().map(|choice| crate::size::store(&made, choice, true)).collect()
 }
 
 /// The timing stage `scan_look_…` of a part of the look (#446).
