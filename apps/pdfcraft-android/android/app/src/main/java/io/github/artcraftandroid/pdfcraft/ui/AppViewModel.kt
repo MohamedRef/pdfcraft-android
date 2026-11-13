@@ -1780,6 +1780,8 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             } finally {
                 tools.busy = null
                 tools.busyProgress = null
+                tools.busyCancelNote = null
+                tools.busyCancelLabel = null
             }
         }
     }
@@ -1965,11 +1967,13 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
 
     /** Delete the pages at [indexes] together, after the person said yes (#460); their photos go unless a spread's other half still uses one. */
     fun deleteScanPages(indexes: List<Int>) {
-        val gone = indexes.filter { it in scanPages.indices }.toSortedSet()
+        // largest first, so each removal leaves the indexes still to go where they were. A plain
+        // Kotlin list: SortedSet.reversed() is Java 21's SequencedCollection member, API 35+ only (#502)
+        val gone = indexes.filter { it in scanPages.indices }.distinct().sortedDescending()
         if (gone.isEmpty()) return
         Diag.event(DiagArea.Scan, "pages_delete", *io.github.artcraftandroid.pdfcraft.ui.scan.scanPagesDeleteDiag(gone.size, scanPages.size, confirmed = true))
         val before = scanPages.toList()
-        for (i in gone.reversed()) scanPages.removeAt(i)
+        for (i in gone) scanPages.removeAt(i)
         deleteUnusedScanFiles(before, scanPages.toList())
         // every page deleted: nothing is left to save, so the scan ends
         if (scanPages.isEmpty()) discardScan(asked = true)
@@ -2247,6 +2251,12 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     /** Every page of the scan made in the background (#465). */
     internal val pageQueue = ScanPageQueue(this)
 
+    /** Every page of the scan made at full size before Save (#504). */
+    internal val fullPages = ScanFullPages(this)
+
+    /** A preview for the screen is being made now (#504: pages made at full size wait for it). */
+    internal fun scanPreviewRunning(): Boolean = scanPreviewJob?.isActive == true
+
     /** The Markup screen (#495): the page open in it, and the question before a change that clears marks. */
     internal val scanMarkup = io.github.artcraftandroid.pdfcraft.ui.scan.ScanMarkupState()
 
@@ -2510,6 +2520,8 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         scanDetail = null
         // the pages made in the background and their files (#465)
         pageQueue.clear()
+        // and the pages made at full size for Save (#504)
+        fullPages.clear()
         runCatching { io.github.artcraftandroid.pdfcraft.core.scanReleasePreviews() }
     }
 
@@ -2529,6 +2541,26 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         markup = io.github.artcraftandroid.pdfcraft.ui.scan.scanNativeMarkup(io.github.artcraftandroid.pdfcraft.ui.scan.scanMarksFor(page, lab)),
     )
 
+    /**
+     * The turn and document type [page] showed, which Save keeps (#465); null when it showed none
+     * of its own or pages are not made in the background.
+     */
+    internal fun scanShownOf(page: ScanPage, lab: ScanLab): io.github.artcraftandroid.pdfcraft.ui.scan.ScanShownDecisions? =
+        pageQueue.readyOf(page)?.takeIf { lab.backgroundPages && lab.preview }?.let { m ->
+            io.github.artcraftandroid.pdfcraft.ui.scan.scanShownDecisions(page.turns, m.turns, io.github.artcraftandroid.pdfcraft.ui.scan.scanKindSource(page, lab), m.kind?.preset)
+        }
+
+    /**
+     * The native request Save makes for [page], written to [out], turned [turns] (#339) and keeping
+     * what it showed ([shown], #465). Pages made at full size ahead of Save (#504) are made from it
+     * too, so Save can take them when it would ask the same.
+     */
+    internal fun scanSaveRequest(page: ScanPage, out: String, turns: Int?, shown: io.github.artcraftandroid.pdfcraft.ui.scan.ScanShownDecisions?, lab: ScanLab, autoUpright: Boolean): io.github.artcraftandroid.pdfcraft.core.ScanPageRequest {
+        val flatten = io.github.artcraftandroid.pdfcraft.ui.scan.scanPageFlattens(page.flatten, scanCanFlatten)
+        val preset = shown?.preset ?: io.github.artcraftandroid.pdfcraft.ui.scan.scanPresetFor(page, lab)
+        return scanPageRequest(page.file.absolutePath, page.corners, page.look.filter, flatten, lab, out, turns, autoUpright, preset, page.finding?.curvedSides ?: 0, page.finding?.curvedOpposite ?: false, page.book != null, page.look.strength, page.look.paper, scanAutoFlattens(page, lab), io.github.artcraftandroid.pdfcraft.ui.scan.scanRemovesFingers(lab, page.auto), markup = io.github.artcraftandroid.pdfcraft.ui.scan.scanNativeMarkup(io.github.artcraftandroid.pdfcraft.ui.scan.scanMarksFor(page, lab)))
+    }
+
     /** The scan's pages saved to the gallery (#470), by key, for the kept scans' page files. */
     internal val scanGallerySaved = mutableSetOf<String>()
 
@@ -2540,9 +2572,14 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
      * is not used here.
      */
     fun saveScanToGallery(indexes: List<Int>?) = job(text(R.string.scan_gallery_busy)) { _ ->
+        // the pages made at full size ahead (#504) are not touched while the gallery is written
+        fullPages.exclusive { saveScanToGalleryNow(indexes) }
+    }
+
+    private suspend fun saveScanToGalleryNow(indexes: List<Int>?) {
         val pages = scanPages.toList()
         val chosen = (indexes ?: pages.indices.toList()).filter { it in pages.indices }.distinct().sorted()
-        if (chosen.isEmpty()) return@job
+        if (chosen.isEmpty()) return
         val started = android.os.SystemClock.elapsedRealtime()
         val dir = File(scanPageDir(), "gallery").apply { mkdirs() }
         val lab = scanLab.options
@@ -2554,22 +2591,36 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         var bytes = 0L
         var cancelled = false
         tools.busyCancel = { cancelled = true }
+        tools.busyCancelNote = text(R.string.busy_cancel_gallery)
+        // pages made at full size ahead (#504): the gallery gets the page Save would make, taken
+        // when it is ready and kept for Save when it is made here
+        val ahead = lab.fullPagesAhead && lab.backgroundPages && lab.preview
+        var readyCount = 0
         try {
             for ((n, i) in chosen.withIndex()) {
                 if (cancelled) break
-                tools.busy = text(R.string.msg_busy_cleaning_page, n + 1, chosen.size)
-                tools.busyProgress = n to chosen.size
                 val page = pages[i]
-                val made = withContext(Dispatchers.Default) { runCatching { io.github.artcraftandroid.pdfcraft.core.scanProcessPage(scanRequestFor(page, File(dir, "page-$i"), page.turns, lab, autoUpright)) } }
-                made.onFailure { Diag.failure(DiagArea.Scan, "scan_process_page", it) }
-                val r = made.getOrNull()
+                val shown = if (ahead) scanShownOf(page, lab) else null
+                val out = if (ahead) fullPages.newFile() else File(dir, "page-$i")
+                val request = if (ahead) scanSaveRequest(page, out.absolutePath, page.turns ?: shown?.turns, shown, lab, autoUpright) else scanRequestFor(page, out, page.turns, lab, autoUpright)
+                val cached = if (ahead) fullPages.take(page, request) else null
+                if (cached != null) readyCount++
+                val r = cached ?: run {
+                    tools.busy = text(if (ahead) R.string.msg_busy_finishing_page else R.string.msg_busy_cleaning_page, n + 1, chosen.size)
+                    tools.busyProgress = n to chosen.size
+                    val started = android.os.SystemClock.elapsedRealtime()
+                    val made = withContext(Dispatchers.Default) { runCatching { io.github.artcraftandroid.pdfcraft.core.scanProcessPage(request) } }
+                    made.onFailure { Diag.failure(DiagArea.Scan, "scan_process_page", it) }
+                    made.getOrNull()?.also { if (ahead) fullPages.keep(i, page, request, it, android.os.SystemClock.elapsedRealtime() - started, null) }
+                }
                 val written = r?.let {
                     withContext(Dispatchers.IO) {
                         val f = File(it.path)
                         val png = it.format == io.github.artcraftandroid.pdfcraft.core.ScanFormat.PNG
                         runCatching { files.saveToPictures(f, io.github.artcraftandroid.pdfcraft.ui.scan.scanGalleryName(base, i, png), if (png) "image/png" else "image/jpeg"); f.length() }
                             .onFailure { e -> Diag.failure(DiagArea.Scan, "gallery_save_page", e) }
-                            .also { f.delete() }
+                            // a page made at full size stays for Save until the scan ends (#504)
+                            .also { if (!ahead) f.delete() }
                             .getOrNull()
                     }
                 }
@@ -2583,10 +2634,11 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             }
         } finally {
             tools.busyCancel = null
+            tools.busyCancelNote = null
             tools.busyProgress = null
             withContext(Dispatchers.IO) { dir.deleteRecursively() }
         }
-        Diag.event(DiagArea.Scan, "gallery_save", *io.github.artcraftandroid.pdfcraft.ui.scan.scanGalleryDiag(chosen.size, saved, failed, bytes, android.os.SystemClock.elapsedRealtime() - started, indexes != null, cancelled))
+        Diag.event(DiagArea.Scan, "gallery_save", *io.github.artcraftandroid.pdfcraft.ui.scan.scanGalleryDiag(chosen.size, saved, failed, bytes, android.os.SystemClock.elapsedRealtime() - started, indexes != null, cancelled), "full_pages_ahead" to ahead, "pages_ready" to readyCount)
         val parts = buildList {
             if (saved > 0) add(plural(R.plurals.scan_gallery_saved, saved, saved))
             if (failed.isNotEmpty()) add(text(R.string.scan_gallery_failed, failed.joinToString(", ")))
@@ -2600,20 +2652,27 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
      * instead: nothing is saved, and the scan stays open to be saved or shared again.
      */
     fun saveScan(share: Boolean = false) = job(text(R.string.msg_busy_saving_scan)) { eng ->
+        // the pages made at full size ahead (#504) are not touched while Save runs
+        fullPages.exclusive { saveScanNow(eng, share) }
+    }
+
+    private suspend fun saveScanNow(eng: io.github.artcraftandroid.pdfcraft.engine.Engine, share: Boolean) {
         val pages = scanPages.toList()
         val scanStarted = android.os.SystemClock.elapsedRealtime()
         val dir = scanPageDir().apply { mkdirs() }
         val saved = ArrayList<ScanSavedPage>(pages.size)
         // the testing options in force (#288), and where this scan is kept when scans are kept
         val lab = scanLab.options
-        // Cancel in the busy dialog stops before the next page is made (#200)
+        // Cancel in the busy dialog stops before the next page is made (#200); nothing is saved (#504)
         var cancelled = false
         tools.busyCancel = { cancelled = true }
+        tools.busyCancelNote = text(R.string.busy_cancel_scan_save)
         // a share is not a saved scan: the kept scans (#288) are the ones saved
         val keepIn = if (share) null else try {
             withContext(Dispatchers.IO) { scanLab.begin() }
         } catch (e: Exception) {
             tools.busyCancel = null
+            tools.busyCancelNote = null
             throw e
         }
         // which way up (#339): the ordinary setting, and each page's own turn when the person gave one
@@ -2622,32 +2681,50 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         val made = arrayOfNulls<io.github.artcraftandroid.pdfcraft.core.ScanPageResult>(pages.size)
         val madeMs = LongArray(pages.size)
         // the turn and document type each page showed, kept for the PDF (#465): what was seen is what is saved
-        val shown = pages.map { page ->
-            pageQueue.readyOf(page)?.takeIf { lab.backgroundPages && lab.preview }?.let { m ->
-                io.github.artcraftandroid.pdfcraft.ui.scan.scanShownDecisions(page.turns, m.turns, io.github.artcraftandroid.pdfcraft.ui.scan.scanKindSource(page, lab), m.kind?.preset)
-            }
-        }
+        val shown = pages.map { scanShownOf(it, lab) }
+        // pages made at full size ahead of Save (#504): taken when Save would ask the same
+        val ahead = lab.fullPagesAhead && lab.backgroundPages && lab.preview
+        val firstTurns = pages.indices.map { pages[it].turns ?: shown[it]?.turns }
+        val readyAtTap = pages.indices.map { i -> ahead && fullPages.take(pages[i], scanSaveRequest(pages[i], "", firstTurns[i], shown[i], lab, autoUpright)) != null }
+        val toFinish = io.github.artcraftandroid.pdfcraft.ui.scan.scanPagesToFinish(readyAtTap)
+        // the n of m in "Finishing page n of m": only the pages not made ahead are counted
+        var finishing = 0
         suspend fun make(i: Int, turns: Int?) {
             val page = pages[i]
-            tools.busy = text(R.string.msg_busy_cleaning_page, i + 1, pages.size)
-            val flatten = io.github.artcraftandroid.pdfcraft.ui.scan.scanPageFlattens(page.flatten, scanCanFlatten)
-            tools.busyProgress = i to pages.size
-            val preset = shown[i]?.preset ?: io.github.artcraftandroid.pdfcraft.ui.scan.scanPresetFor(page, lab)
-            val request = scanPageRequest(page.file.absolutePath, page.corners, page.look.filter, flatten, lab, File(dir, "page-$i").absolutePath, turns, autoUpright, preset, page.finding?.curvedSides ?: 0, page.finding?.curvedOpposite ?: false, page.book != null, page.look.strength, page.look.paper, scanAutoFlattens(page, lab), io.github.artcraftandroid.pdfcraft.ui.scan.scanRemovesFingers(lab, page.auto), markup = io.github.artcraftandroid.pdfcraft.ui.scan.scanNativeMarkup(io.github.artcraftandroid.pdfcraft.ui.scan.scanMarksFor(page, lab)))
+            val out = if (ahead) fullPages.newFile() else File(dir, "page-$i")
+            val request = scanSaveRequest(page, out.absolutePath, turns, shown[i], lab, autoUpright)
+            if (ahead) fullPages.take(page, request)?.let {
+                made[i] = it
+                return
+            }
+            if (ahead) {
+                finishing++
+                val total = maxOf(toFinish.size, finishing)
+                tools.busy = text(R.string.msg_busy_finishing_page, finishing, total)
+                tools.busyProgress = finishing - 1 to total
+            } else {
+                tools.busy = text(R.string.msg_busy_cleaning_page, i + 1, pages.size)
+                tools.busyProgress = i to pages.size
+            }
             val started = android.os.SystemClock.elapsedRealtime()
             val result = withContext(Dispatchers.Default) { runCatching { io.github.artcraftandroid.pdfcraft.core.scanProcessPage(request) } }
             result.onFailure { Diag.failure(DiagArea.Scan, "scan_process_page", it) }
             madeMs[i] += android.os.SystemClock.elapsedRealtime() - started
-            result.getOrNull()?.let { made[i] = it }
+            result.getOrNull()?.let {
+                made[i] = it
+                // kept for a Share followed by Save, or Save to gallery (#504)
+                if (ahead) fullPages.keep(i, page, request, it, madeMs[i], null)
+            }
         }
         try {
             for (i in pages.indices) {
                 if (cancelled) break
-                make(i, pages[i].turns ?: shown[i]?.turns)
+                make(i, firstTurns[i])
             }
         } finally {
             // from here the pages go into the PDF, which can't be stopped half-way
             tools.busyCancel = null
+            tools.busyCancelNote = null
         }
         if (cancelled) {
             // nothing is saved: the pages made so far go, the scan stays on screen as it was
@@ -2656,9 +2733,9 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 dir.listFiles()?.forEach { it.delete() }
                 keepIn?.let { scanLab.end(it) }
             }
-            Diag.event(DiagArea.Scan, "save_cancelled", "pages" to pages.size, "made" to madeCount, "ms" to android.os.SystemClock.elapsedRealtime() - scanStarted)
+            Diag.event(DiagArea.Scan, "save_cancelled", "pages" to pages.size, "made" to madeCount, "ms" to android.os.SystemClock.elapsedRealtime() - scanStarted, "pages_ready" to readyAtTap.count { it })
             tell(text(R.string.msg_scan_save_cancelled))
-            return@job
+            return
         }
         tools.busyProgress = null
         // what the classifier said of each page, before the multi-page rule makes any page again
@@ -2782,7 +2859,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                         k.extraGamma.toDouble(), k.sCurve, k.colourFactor.toDouble(),
                     )
                 }
-                withContext(Dispatchers.IO) { scanLab.keepPage(keepIn, i, page, true, scanLookWord(filter, lab), strength, flatten, r?.path?.let(::File), kept, scanPreviewRecord(page), turn, kind, r?.let { scanAppliedStrength(page.look, lab, it.kind?.strength?.toInt()) }, shown[i]?.json(), gallerySaved = page.key in scanGallerySaved, autoDecisions = decisions.json(), fromRecent = scanRecent.openedFrom != null, erasedShare = r?.markup?.erasedShare?.toDouble()) }
+                withContext(Dispatchers.IO) { scanLab.keepPage(keepIn, i, page, true, scanLookWord(filter, lab), strength, flatten, r?.path?.let(::File), kept, scanPreviewRecord(page), turn, kind, r?.let { scanAppliedStrength(page.look, lab, it.kind?.strength?.toInt()) }, shown[i]?.json(), gallerySaved = page.key in scanGallerySaved, autoDecisions = decisions.json(), fromRecent = scanRecent.openedFrom != null, erasedShare = r?.markup?.erasedShare?.toDouble(), madeFullBeforeSave = io.github.artcraftandroid.pdfcraft.ui.scan.scanMadeFullBeforeSave(ahead, readyAtTap[i])) }
             }
             saved += scanSavedPage(page.file.absolutePath, r?.let { it.path to it.dpi })
         }
@@ -2795,7 +2872,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         val created = try {
             eng.tool("doc_create", scanCreateArgs(saved))
         } finally {
-            // the PDF holds the pages now
+            // the PDF holds the pages now (pages made ahead stay until the scan ends, #504)
             dir.listFiles()?.forEach { it.delete() }
         }
         val id = created.optLong("doc")
@@ -2810,17 +2887,45 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                     }
                 }
             }
-            // the scan's words become text, searchable and selectable, when text recognition is installed
-            withContext(Dispatchers.IO) { runCatching { eng.prepareOcrModels(getApplication()) } }
-            if (runCatching { eng.tool("ocr_status") }.getOrNull()?.optBoolean("available", false) == true) {
-                tools.busy = text(R.string.msg_busy_recognizing)
-                runCatching { Diag.measure(DiagArea.Scan, "ocr", "pages" to pages.size) { eng.tool("ocr_recognize", mapOf("doc" to id)) } }
+            // the scan's words become text, searchable and selectable, only when the person asked for
+            // it in Settings ▸ Scanner (#504); Skip saves the PDF without the pages not read yet
+            val ocrOn = io.github.artcraftandroid.pdfcraft.ui.scan.ScanOcrSetting.get(settings.appPrefs)
+            var ocrAvailable = false
+            var ocrSkipped = false
+            val ocrStarted = android.os.SystemClock.elapsedRealtime()
+            if (ocrOn) {
+                withContext(Dispatchers.IO) { runCatching { eng.prepareOcrModels(getApplication()) } }
+                ocrAvailable = runCatching { eng.tool("ocr_status") }.getOrNull()?.optBoolean("available", false) == true
             }
+            if (ocrOn && ocrAvailable) {
+                tools.busyCancel = { ocrSkipped = true }
+                tools.busyCancelLabel = text(R.string.busy_skip)
+                tools.busyCancelNote = text(R.string.busy_skip_ocr)
+                try {
+                    for (n in 1..pages.size) {
+                        if (ocrSkipped) break
+                        tools.busy = text(R.string.msg_busy_recognizing_page, n, pages.size)
+                        tools.busyProgress = n - 1 to pages.size
+                        runCatching { eng.tool("ocr_recognize", mapOf("doc" to id, "pages" to listOf(n))) }
+                            .onFailure { Diag.failure(DiagArea.Scan, "ocr", it) }
+                    }
+                } finally {
+                    tools.busyCancel = null
+                    tools.busyCancelLabel = null
+                    tools.busyCancelNote = null
+                    tools.busyProgress = null
+                }
+                tools.busy = text(R.string.msg_busy_saving_scan)
+            }
+            val ocr = io.github.artcraftandroid.pdfcraft.ui.scan.scanOcrOutcome(ocrOn, ocrAvailable, ocrSkipped)
+            val ocrMs = if (ocrOn && ocrAvailable) android.os.SystemClock.elapsedRealtime() - ocrStarted else 0L
             val out = tempFile("pdf")
             eng.tool("doc_save", mapOf("doc" to id, "path" to out.absolutePath, "full" to true))
+            // from the tap to the file (#504)
+            val waitDiag = io.github.artcraftandroid.pdfcraft.ui.scan.scanSaveWaitDiag(ahead, readyAtTap.count { it }, android.os.SystemClock.elapsedRealtime() - scanStarted, ocr, ocrMs)
             if (share) {
                 // the scan stays as it is; the copy handed out is swept from the share folder later
-                Diag.event(DiagArea.Scan, "share", *io.github.artcraftandroid.pdfcraft.ui.scan.scanShareDiag(pages.size, out.length(), android.os.SystemClock.elapsedRealtime() - scanStarted))
+                Diag.event(DiagArea.Scan, "share", *io.github.artcraftandroid.pdfcraft.ui.scan.scanShareDiag(pages.size, out.length(), android.os.SystemClock.elapsedRealtime() - scanStarted), *waitDiag)
                 val stamp = java.text.SimpleDateFormat("yyyy-MM-dd HH.mm.ss", java.util.Locale.US).format(java.util.Date())
                 val name = DocumentFiles.safeName(scanName.trim().ifEmpty { "Scan $stamp" })
                 val uri = try {
@@ -2830,7 +2935,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 }
                 if (unenhanced > 0) tell(text(R.string.msg_scan_unenhanced, unenhanced))
                 intents.trySend(android.content.Intent.createChooser(sharing.sendIntent(listOf(uri)).putExtra(android.content.Intent.EXTRA_SUBJECT, name.removeSuffix(".pdf")), null))
-                return@job
+                return
             }
             Diag.event(
                 DiagArea.Scan, "saved", "pages" to pages.size, "filter" to pages.first().look.filter, "bytes" to out.length(),
@@ -2838,6 +2943,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 "looks_mixed" to io.github.artcraftandroid.pdfcraft.ui.scan.scanLooksMixed(pages.map { it.look }), "unenhanced" to unenhanced,
                 "untouched_pages" to pages.count { it.found != null && it.corners.contentEquals(it.found) },
                 "found_pages" to pages.count { it.found != null }, "ms" to android.os.SystemClock.elapsedRealtime() - scanStarted,
+                *waitDiag,
             )
             val target = insertScanAt
             insertScanAt = null
