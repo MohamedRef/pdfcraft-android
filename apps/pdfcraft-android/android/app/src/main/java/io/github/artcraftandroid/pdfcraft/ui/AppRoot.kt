@@ -177,7 +177,28 @@ fun AppRoot(vm: AppViewModel, onBrowse: () -> Unit, onPickSignatureImage: () -> 
                         confirm = stringResource(R.string.common_save_copy), onConfirm = { vm.answerReadOnly(true) },
                         dismiss = stringResource(R.string.root_keep_editing), onDismissButton = { vm.answerReadOnly(null) },
                     ) {
-                        Text(stringResource(R.string.root_read_only_body, d.name), color = c.text, fontSize = 14.sp)
+                        // why it can't be saved there, and what to do next time (#491)
+                        val why = when (d.readOnlyReason) {
+                            io.github.artcraftandroid.pdfcraft.ui.OpenDocument.WRITE_FAILED -> R.string.root_read_only_body_failed
+                            io.github.artcraftandroid.pdfcraft.engine.WriteAccess.READ_GRANT_ONLY -> R.string.root_read_only_body_lent
+                            else -> R.string.root_read_only_body
+                        }
+                        Text(stringResource(why, d.name), color = c.text, fontSize = 14.sp)
+                        // save to originals other apps lend read-only, as PDF readers with All files access do
+                        if (io.github.artcraftandroid.pdfcraft.engine.WriteAccess.allFilesHelps(d.readOnlyReason) &&
+                            io.github.artcraftandroid.pdfcraft.engine.AllFilesAccess.offered && !vm.settings.allFilesAccess
+                        ) {
+                            val context = LocalContext.current
+                            Spacer(Modifier.height(12.dp))
+                            Text(stringResource(R.string.all_files_prompt_body), color = c.textSecondary, fontSize = 13.sp)
+                            Text(
+                                stringResource(R.string.all_files_allow), color = c.accent, fontSize = 14.sp, fontWeight = FontWeight.SemiBold,
+                                modifier = Modifier.clickable(role = androidx.compose.ui.semantics.Role.Button) {
+                                    vm.answerReadOnly(null)
+                                    io.github.artcraftandroid.pdfcraft.engine.AllFilesAccess.openSettings(context)
+                                }.padding(vertical = 8.dp),
+                            )
+                        }
                         Spacer(Modifier.height(12.dp))
                         Text(
                             stringResource(R.string.root_discard), color = c.red, fontSize = 14.sp, fontWeight = FontWeight.SemiBold,

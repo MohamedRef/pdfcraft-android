@@ -6,4 +6,15 @@
     <string name="open_in_place_body">Abre arquivos de outros apps diretamente, sem copiá-los para o armazenamento do PdfCraft. Desative para copiá-los primeiro, como nas versões anteriores.</string>
     <!-- Shown when a save could not reach the original file yet; the changes are safe in the app -->
     <string name="in_place_write_back_waiting">Suas alterações estão guardadas no PdfCraft e serão salvas no arquivo na próxima vez que você abri-lo.</string>
+    <!-- The read-only prompt when the app that opened the file lent it for reading only (#491) -->
+    <string name="root_read_only_body_lent">O PdfCraft só tinha permissão para ler %1$s, então as alterações não podem ser salvas nele. Salve uma cópia ou, da próxima vez, abra-o com Abrir arquivo no PdfCraft.</string>
+    <!-- The read-only prompt when writing to the original failed (#491) -->
+    <string name="root_read_only_body_failed">Não foi possível salvar suas alterações em %1$s. Salve uma cópia para mantê-las.</string>
+    <!-- Saving to originals lent read-only, with Android's All files access (#491) -->
+    <string name="all_files_setting">Salvar nos arquivos originais</string>
+    <string name="all_files_setting_on">Ativado: arquivos que outros apps abrem só para leitura são salvos onde estão</string>
+    <string name="all_files_setting_off">Desativado: alterações em arquivos que outros apps abrem só para leitura são salvas como cópia</string>
+    <string name="all_files_prompt_body">Para salvar direto em arquivos que outros apps abrem só para leitura, dê ao PdfCraft acesso a todos os arquivos nas configurações do Android, como outros leitores de PDF fazem.</string>
+    <string name="all_files_allow">Permitir salvar nos arquivos originais</string>
+    <string name="all_files_now_writable">Suas alterações agora são salvas no arquivo original.</string>
 </resources>

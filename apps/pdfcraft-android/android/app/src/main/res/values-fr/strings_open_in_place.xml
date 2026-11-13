@@ -6,4 +6,15 @@
     <string name="open_in_place_body">Ouvre directement les fichiers des autres applis, sans les copier dans le stockage de PdfCraft. Désactivez pour les copier d’abord, comme dans les versions précédentes.</string>
     <!-- Shown when a save could not reach the original file yet; the changes are safe in the app -->
     <string name="in_place_write_back_waiting">Vos modifications sont conservées dans PdfCraft et seront enregistrées dans le fichier à sa prochaine ouverture.</string>
+    <!-- The read-only prompt when the app that opened the file lent it for reading only (#491) -->
+    <string name="root_read_only_body_lent">PdfCraft était seulement autorisé à lire %1$s : les modifications ne peuvent pas y être enregistrées. Enregistrez une copie, ou ouvrez-le la prochaine fois avec Ouvrir un fichier dans PdfCraft.</string>
+    <!-- The read-only prompt when writing to the original failed (#491) -->
+    <string name="root_read_only_body_failed">L’enregistrement de vos modifications dans %1$s a échoué. Enregistrez une copie pour les conserver.</string>
+    <!-- Saving to originals lent read-only, with Android's All files access (#491) -->
+    <string name="all_files_setting">Enregistrer dans les fichiers d’origine</string>
+    <string name="all_files_setting_on">Activé : les fichiers que d’autres applis ouvrent en lecture seule sont enregistrés à leur place</string>
+    <string name="all_files_setting_off">Désactivé : les modifications des fichiers que d’autres applis ouvrent en lecture seule sont enregistrées dans une copie</string>
+    <string name="all_files_prompt_body">Pour enregistrer directement dans les fichiers que d’autres applis ouvrent en lecture seule, accordez à PdfCraft l’accès à tous les fichiers dans les paramètres Android, comme le font d’autres lecteurs PDF.</string>
+    <string name="all_files_allow">Autoriser l’enregistrement dans les fichiers d’origine</string>
+    <string name="all_files_now_writable">Vos modifications sont désormais enregistrées dans le fichier d’origine.</string>
 </resources>

@@ -56,6 +56,11 @@ class OpenDocument(
     /** Opened by another app (a file manager's Open with, a share): closing it goes back there. */
     var fromOtherApp = false
 
+    companion object {
+        /** [readOnlyReason] when a write to the original failed. */
+        const val WRITE_FAILED = "write_failed"
+    }
+
     /** Opened in place from its provider's file (#453): how its saves reach that file. */
     var lent: io.github.artcraftandroid.pdfcraft.engine.LentState? = null
 
@@ -64,6 +69,12 @@ class OpenDocument(
 
     /** Whether saving can write back to [source] (else changes need Save a copy). */
     var writable by mutableStateOf(true)
+
+    /**
+     * Why [writable] is false (#491): the app was never allowed to write there (a [WriteAccess]
+     * reason from opening), or [WRITE_FAILED] when writing the original failed during this visit.
+     */
+    var readOnlyReason: String? = null
 
     /** Changes saved into [file] that [source] doesn't have (it couldn't be written): closing offers a copy. */
     var notWrittenBack by mutableStateOf(false)

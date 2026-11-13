@@ -301,6 +301,14 @@ private fun RootPage(vm: AppViewModel, open: (SettingsPage) -> Unit) {
         stringResource(if (vm.settings.keyboardShortcuts) R.string.settings_on else R.string.settings_off), LucideIcons.SquareTerminal, chevron = true,
     )
 
+    // save to originals other apps lend read-only, with Android's All files access (#491)
+    if (io.github.artcraftandroid.pdfcraft.engine.AllFilesAccess.offered) {
+        SettingsRow(
+            stringResource(R.string.all_files_setting), { io.github.artcraftandroid.pdfcraft.engine.AllFilesAccess.openSettings(context) },
+            stringResource(if (vm.settings.allFilesAccess) R.string.all_files_setting_on else R.string.all_files_setting_off), LucideIcons.Save, chevron = true,
+        )
+    }
+
     SettingsHeader(stringResource(R.string.settings_group_tools))
     SettingsRow(stringResource(R.string.settings_scanner), { open(SettingsPage.Scan) }, stringResource(R.string.settings_scanner_summary), LucideIcons.Scan, chevron = true)
     SettingsRow(stringResource(R.string.settings_library), { open(SettingsPage.Library) }, stringResource(R.string.settings_library_summary), LucideIcons.FileSearch, chevron = true)

@@ -50,6 +50,9 @@ class SettingsController internal constructor(private val vm: AppViewModel) {
         appPrefs.edit().putBoolean("openInPlace", on).apply()
         io.github.artcraftandroid.pdfcraft.engine.Diag.event(io.github.artcraftandroid.pdfcraft.engine.DiagArea.Open, "open_in_place_setting", "on" to on)
     }
+    /** Whether All files access is granted, so originals lent read-only are saved to directly (#491). */
+    var allFilesAccess by mutableStateOf(io.github.artcraftandroid.pdfcraft.engine.AllFilesAccess.granted())
+        internal set
     internal val bookmarkStore = UserBookmarks(File(app.filesDir, "bookmarks.json"))
 
     /** The Search tab's last searches, newest first (kept on the phone, as the reference keeps them). */
