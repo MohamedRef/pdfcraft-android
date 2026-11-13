@@ -224,6 +224,31 @@ class ScanScreenshotsTest {
     @Test @Config(qualifiers = "fr-w360dp-h640dp-xhdpi") fun cropFrench360() = crop("fr_360x640", listOf(ThemeChoice.Light))
     @Test @Config(qualifiers = "de-w360dp-h640dp-xhdpi") fun cropGerman360() = crop("de_360x640", listOf(ThemeChoice.Light))
 
+    /**
+     * Enhance's notes line in its worst case (#493): a page turned, flattened and with a finger
+     * removed over print, a suggestion and the compare hint, under a drawn page, at 320 dp. The
+     * line scrolls sideways, so nothing overlaps and the page above stays clear.
+     */
+    private fun notes(config: String) {
+        val page = drawnPage(600, 800, tilted = false, background = 0xFFF7F5F0.toInt()).asImageBitmap()
+        val worst = scanEnhanceNotes(
+            turned = true, chips = listOf(ScanAutoChip.Flattened, ScanAutoChip.FingersOverPrint),
+            suggestion = ScanSuggestion.Greyscale, compare = false,
+        )
+        rule.setContent {
+            PdfcraftTheme(ThemeChoice.Light) {
+                Column(Modifier.fillMaxSize().background(Color(0xFF2B2B2B))) {
+                    Image(page, null, Modifier.weight(1f).fillMaxWidth().padding(16.dp), contentScale = ContentScale.Fit)
+                    ScanEnhanceNotes(worst)
+                }
+            }
+        }
+        shoot("enhance_notes_$config")
+    }
+
+    @Test @Config(qualifiers = "de-w320dp-h640dp-xhdpi") fun notesGerman320() = notes("de_320x640")
+    @Test @Config(qualifiers = "fr-w320dp-h640dp-xhdpi") fun notesFrench320() = notes("fr_320x640")
+
     @Test @Config(qualifiers = "en-w360dp-h640dp-xhdpi") fun stepsEnglish360() = steps("en_360x640")
     @Test @Config(qualifiers = "en-w384dp-h832dp-xhdpi") fun stepsEnglish384() = steps("en_384x832")
     @Test @Config(qualifiers = "ar-w360dp-h640dp-xhdpi") fun stepsArabic360() = steps("ar_360x640")

@@ -46,6 +46,22 @@ internal fun scanSuggestions(
     if (suggestGreyscale && cleanScan) add(ScanSuggestion.Greyscale)
 }
 
+/**
+ * The suggestions a page's kind makes, less what the automatic look decides by itself (#466, #493):
+ * no Flatten page with automatic flattening on (its guarded check already decided), no Grayscale
+ * with the automatic look on (it is applied with Undo). The same on Enhance and the older screen.
+ */
+internal fun scanSuggestionsShown(
+    lab: io.github.artcraftandroid.pdfcraft.ui.ScanLab,
+    suggestFlatten: Boolean,
+    suggestGreyscale: Boolean,
+    canFlatten: Boolean,
+    flattenChoice: Boolean?,
+    cleanScan: Boolean,
+): List<ScanSuggestion> = scanSuggestions(
+    lab.suggestions, suggestFlatten && !lab.flattenAuto, suggestGreyscale && !lab.autoLook, canFlatten, flattenChoice, cleanScan,
+)
+
 /** A suggestion was taken: a line in the diagnostics log. */
 internal fun logScanSuggestionTaken(index: Int, suggestion: ScanSuggestion) {
     Diag.event(DiagArea.Scan, "suggestion_taken", "index" to index + 1, "suggestion" to suggestion.id)
