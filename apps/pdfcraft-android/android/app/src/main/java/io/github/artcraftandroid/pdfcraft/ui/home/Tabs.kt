@@ -534,6 +534,11 @@ private fun About(vm: AppViewModel) {
     if (vm.settings.recordDiagnostics) {
         SheetRow(null, stringResource(R.string.home_share_diagnostics), { vm.settings.shareDiagnostics() })
         SheetRow(null, stringResource(R.string.home_clear_diagnostics), { vm.settings.clearDiagnostics() })
+        // testing option (#453): open files from other apps in place, or copy them in as before
+        SheetRow(null, stringResource(R.string.open_in_place), { vm.settings.updateOpenInPlace(!vm.settings.openInPlace) }) {
+            PdfSwitch(vm.settings.openInPlace, { vm.settings.updateOpenInPlace(it) })
+        }
+        Text(stringResource(R.string.open_in_place_body), color = c.textSecondary, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 20.dp))
         // the scanner's testing options and the scans kept for testing (#288)
         ScanLabSettings(vm)
     }

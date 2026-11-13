@@ -38,6 +38,22 @@ pub enum TimingError {
     RunFailed,
 }
 
+impl TimingError {
+    /// A short lowercase word for the diagnostics log (#445): the message stays on screen, the
+    /// log gets this.
+    pub fn reason(&self) -> &'static str {
+        match self {
+            TimingError::TooLarge => "too_large",
+            TimingError::NotAModel => "not_a_model",
+            TimingError::NoInput => "no_input",
+            TimingError::NotFixed(_) => "not_fixed",
+            TimingError::InputTooLarge => "input_too_large",
+            TimingError::NoOutput => "no_output",
+            TimingError::RunFailed => "run_failed",
+        }
+    }
+}
+
 /// What timing a model found.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ModelTiming {

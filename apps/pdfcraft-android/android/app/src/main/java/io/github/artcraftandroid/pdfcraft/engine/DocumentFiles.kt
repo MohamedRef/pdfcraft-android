@@ -14,9 +14,10 @@ import java.io.IOException
 import java.security.MessageDigest
 
 /**
- * Where the app keeps the files it works on. The engine reads and writes real paths, so a
- * document opened from another app (a `content://` URI) is copied into the app's files first, and
- * saving writes the result back to that URI when the app may write there.
+ * Where the app keeps the files it works on. A document opened from another app (a `content://`
+ * URI) is opened in place from its provider's descriptor when it can be (#453, [lend]); otherwise
+ * it is copied into the app's files first ([workingCopy]). Saves go to a working file in the
+ * app's files and are written back to that URI when the app may write there.
  */
 class DocumentFiles(private val context: Context) {
     private val resolver: ContentResolver get() = context.contentResolver
@@ -104,6 +105,151 @@ class DocumentFiles(private val context: Context) {
         dir.listFiles()?.forEach { if (it.isFile && !it.name.startsWith(".") && it.name != target.name) it.delete() }
         dir.setLastModified(System.currentTimeMillis())
         return target
+    }
+
+    /**
+     * Open [uri] in place (#453): its provider's descriptor, when the engine can map it, and the
+     * working file saves will go to (made at the first save, not now). Otherwise the reason it is
+     * copied in instead ([InPlaceReason]); [workingCopy] then makes the copy. Security and
+     * not-found errors are thrown as [workingCopy] throws them.
+     */
+    fun lend(uri: Uri, enabled: Boolean): Pair<LentSource?, String?> {
+        val dir = File(workDir, sha(uri.toString()))
+        val early = inPlaceRefusal(enabled, uri.scheme == ContentResolver.SCHEME_CONTENT, PendingWorkingCopy.isPending(dir), 0, -1, 1, true)
+        if (early != null) return null to early
+        val asset = resolver.openAssetFileDescriptor(uri, "r") ?: return null to InPlaceReason.NO_DESCRIPTOR
+        var handed = false
+        try {
+            val stat = runCatching { android.system.Os.fstat(asset.parcelFileDescriptor.fileDescriptor) }.getOrNull()
+            val regular = stat != null && android.system.OsConstants.S_ISREG(stat.st_mode)
+            val refusal = inPlaceRefusal(true, true, false, asset.startOffset, asset.declaredLength, stat?.st_size ?: -1, regular)
+            if (refusal != null || stat == null) return null to (refusal ?: InPlaceReason.NOT_REGULAR_FILE)
+            val name = OpenTiming.measure("provider_metadata") { displayName(uri) }
+            handed = true
+            return LentSource(asset.parcelFileDescriptor, stat.st_size, stat.st_dev, stat.st_ino, File(dir, name)) to null
+        } finally {
+            if (!handed) runCatching { asset.close() }
+        }
+    }
+
+    /**
+     * Append the revision an incremental save added to [file] (its bytes past [providerLength])
+     * to the original at [uri], which an open document maps (#453): the original's first
+     * [providerLength] bytes are never written, so the mapping keeps reading what it read. Before
+     * writing, the original must still be [providerLength] bytes long and end as [file] does at
+     * that length; then the result is read back as [writeBack] does. Returns false, having
+     * written nothing, when the provider offers no read-write descriptor or the original changed.
+     * A failure after writing started cuts the original back to [providerLength] and throws.
+     */
+    fun appendWriteBack(file: File, uri: Uri, providerLength: Long): Boolean {
+        val pfd = try {
+            resolver.openFileDescriptor(uri, "rw")
+        } catch (e: java.io.FileNotFoundException) {
+            null
+        } catch (e: IllegalArgumentException) {
+            null
+        } catch (e: UnsupportedOperationException) {
+            null
+        } catch (e: SecurityException) {
+            null
+        } ?: return false
+        pfd.use {
+            val stat = runCatching { android.system.Os.fstat(pfd.fileDescriptor) }.getOrNull() ?: return false
+            if (!android.system.OsConstants.S_ISREG(stat.st_mode) || stat.st_size != providerLength) return false
+            java.io.RandomAccessFile(file, "r").use { local ->
+                if (local.length() < providerLength) return false
+                // the saved file starts with the original's bytes, sampled at its start, its end
+                // and evenly between: neither was rewritten since (a rewrite is written at close)
+                val reader = java.io.FileInputStream(pfd.fileDescriptor).channel
+                for (at in appendCheckOffsets(providerLength, WRITE_BACK_TAIL_BYTES.toLong())) {
+                    val n = minOf(WRITE_BACK_TAIL_BYTES.toLong(), providerLength - at).toInt()
+                    val mine = ByteArray(n).also { local.seek(at); local.readFully(it) }
+                    val theirs = java.nio.ByteBuffer.allocate(n)
+                    var pos = at
+                    while (theirs.hasRemaining()) {
+                        val r = reader.read(theirs, pos)
+                        if (r < 0) break
+                        pos += r
+                    }
+                    if (!theirs.array().contentEquals(mine)) return false
+                }
+                val out = java.io.FileOutputStream(pfd.fileDescriptor).channel
+                try {
+                    val input = local.channel
+                    val end = local.length()
+                    var written = providerLength
+                    out.position(providerLength)
+                    while (written < end) written += input.transferTo(written, end - written, out)
+                    out.force(true)
+                } catch (e: Exception) {
+                    // never below the mapped length: the bytes before providerLength are untouched
+                    runCatching { out.truncate(providerLength); out.force(true) }
+                    throw e
+                }
+            }
+        }
+        val tail = tailOf(file)
+        if (!writeBackMatches(file.length(), tail, readBack(uri, tail.size))) {
+            throw IOException(context.getString(R.string.files_error_write_unverified))
+        }
+        return true
+    }
+
+    /**
+     * Copy the original at [uri] into [target] (made only when a tool needs the in-place
+     * document's file before its first save, #453), published by rename as working copies are.
+     */
+    fun materialize(uri: Uri, target: File) {
+        target.parentFile?.mkdirs()
+        val tmp = File(target.parentFile, ".${target.name}.part")
+        try {
+            resolver.openInputStream(uri).use { input ->
+                requireNotNull(input) { context.getString(R.string.common_file_unreadable) }
+                tmp.outputStream().use { input.copyTo(it, PdfSnapshotCopy.BUFFER_BYTES) }
+            }
+            publishWorkingCopy(tmp, target)
+        } finally {
+            tmp.delete()
+        }
+    }
+
+    /** The size of the original at [uri] as its descriptor says now, or null. */
+    fun descriptorSize(uri: Uri): Long? = runCatching {
+        resolver.openFileDescriptor(uri, "r")?.use { android.system.Os.fstat(it.fileDescriptor).st_size }
+    }.getOrNull()
+
+    /**
+     * Remove [uri]'s working folder after its in-place document closed (#453), unless a write-back
+     * is still owed (its marker keeps the recovery copy). Returns the bytes freed.
+     */
+    fun deleteWorkingFiles(uri: Uri): Long {
+        val dir = File(workDir, sha(uri.toString()))
+        if (!dir.exists() || PendingWorkingCopy.isPending(dir)) return 0
+        val bytes = dir.walkBottomUp().filter { it.isFile }.sumOf { it.length() }
+        dir.deleteRecursively()
+        return bytes
+    }
+
+    /**
+     * With documents opened in place (#453), no copy is kept for later: remove every working
+     * folder except those owing a write-back, those of [keep] (the open document and the other
+     * tabs) and one written in the last few minutes (a document being opened right now). This
+     * also clears the copies earlier versions kept (#214). Returns how many folders and bytes went.
+     */
+    fun removeKeptCopies(keep: Collection<String>): Pair<Int, Long> {
+        val wanted = keep.mapTo(HashSet()) { sha(it) }
+        val settled = System.currentTimeMillis() - 10 * 60 * 1000L
+        var count = 0
+        var bytes = 0L
+        workDir.listFiles()?.forEach { dir ->
+            if (!dir.isDirectory || PendingWorkingCopy.isPending(dir) || dir.name in wanted || dir.lastModified() >= settled) return@forEach
+            val size = dir.walkBottomUp().filter { it.isFile }.sumOf { it.length() }
+            if (dir.deleteRecursively()) {
+                count++
+                bytes += size
+            }
+        }
+        return count to bytes
     }
 
     /** The source's size and modification date, when its provider reports both. */
@@ -308,6 +454,7 @@ class DocumentFiles(private val context: Context) {
      * Returns false, having written nothing, when the provider offers no such descriptor.
      */
     private fun writeThroughDescriptor(file: File, uri: Uri): Boolean {
+        waitUntilUnmapped(uri)
         val pfd = try {
             resolver.openFileDescriptor(uri, "rwt")
         } catch (e: java.io.FileNotFoundException) {
@@ -330,6 +477,21 @@ class DocumentFiles(private val context: Context) {
             }
         }
         return true
+    }
+
+    /**
+     * Before [uri]'s file is truncated and rewritten: wait (up to 3 s) while the engine still
+     * maps it in place (#453) — a thumbnail being drawn, or a document whose mapping a render
+     * still holds — since a mapped file that shrinks can't be read. Throws when it stays mapped.
+     */
+    private fun waitUntilUnmapped(uri: Uri) {
+        val stat = runCatching { resolver.openFileDescriptor(uri, "r")?.use { android.system.Os.fstat(it.fileDescriptor) } }.getOrNull() ?: return
+        if (!android.system.OsConstants.S_ISREG(stat.st_mode)) return
+        repeat(60) {
+            if (!io.github.artcraftandroid.pdfcraft.core.lentFileInUse(stat.st_dev.toULong(), stat.st_ino.toULong())) return
+            Thread.sleep(50)
+        }
+        throw IOException(context.getString(R.string.in_place_write_back_waiting))
     }
 
     /** The last bytes of [file] that a write-back compares. */

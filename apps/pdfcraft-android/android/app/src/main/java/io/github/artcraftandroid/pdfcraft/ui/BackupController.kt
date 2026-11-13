@@ -106,7 +106,8 @@ class BackupController internal constructor(private val vm: AppViewModel) {
         val xfdf = File(dir, "${time}-${base.hashCode()}.xfdf")
         val started = System.nanoTime()
         try {
-            withContext(Dispatchers.IO) { doc.file.copyTo(pdf, overwrite = true) }
+            val saved = vm.savedFile(doc, "backup")
+            withContext(Dispatchers.IO) { saved.copyTo(pdf, overwrite = true) }
         } catch (e: Exception) {
             Diag.failure(DiagArea.Study, "backup_snapshot", e)
             pdf.delete()
