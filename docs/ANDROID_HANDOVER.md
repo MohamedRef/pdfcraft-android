@@ -25,8 +25,8 @@
 ## RELEASE 0.0.27-beta (27012) — 2026-11-13 (owner requested)
 
 - Release PR publishes `0.0.27-beta` / ARM64 build `27012` (`pdfcraft.versionCode=2701`), same package ID and signer. Trigger matches only `chore(release): publish 0.0.27-beta (27012)`.
-- Owner asked for it on 2026-11-13 at 14:33 UTC, right after #496 merged.
-- Included: #496 (fixes #491). The read-only prompt says why, a failed in-place append no longer makes the document read-only, and saving into originals lent read-only works with opt-in All files access. See [`releases/0.0.27-beta.md`](releases/0.0.27-beta.md).
+- Owner asked for it on 2026-11-13 at 14:33 UTC and at 14:37 held it until #492–#495 were fixed (#498, #500, #499, #501).
+- Included: scan markup (#495), finger removal redo (#492), Enhance notes in one line (#493), grid shows made pages (#494), and #496 (fixes #491): the read-only prompt says why, a failed in-place append no longer makes the document read-only, and saving into originals lent read-only works with opt-in All files access. See [`releases/0.0.27-beta.md`](releases/0.0.27-beta.md).
 - Open: not run on a phone yet.
 
 ## RELEASE 0.0.26-beta (26012) — 2026-11-13 (owner requested)
