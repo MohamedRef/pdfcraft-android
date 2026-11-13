@@ -3,4 +3,5 @@
 <resources>
     <string name="scan_lab_strict_gutter">Page de livre seulement si une ombre longe tout le côté de la reliure et s\'estompe vers l\'intérieur</string>
     <string name="scan_lab_strict_photo">Les codes-barres, les tampons et l\'impression floue ne sont pas des photographies</string>
+    <string name="scan_lab_strict_book">Un seul bord courbé ne fait pas une page de livre</string>
 </resources>

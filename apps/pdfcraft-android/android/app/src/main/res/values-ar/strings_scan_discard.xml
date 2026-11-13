@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Scanner: Back and Delete ask before a scan or a page is thrown away (#456); kept apart from strings.xml so parallel scanner work merges cleanly. -->
+<resources>
+    <string name="scan_discard_title">تجاهل هذا المسح؟</string>
+    <string name="scan_discard">تجاهل</string>
+    <string name="scan_keep_scanning">متابعة المسح</string>
+    <plurals name="scan_discard_body">
+        <item quantity="zero">لن تُحذف أي صفحة.</item>
+        <item quantity="one">ستُحذف صفحة واحدة.</item>
+        <item quantity="two">ستُحذف صفحتان.</item>
+        <item quantity="few">ستُحذف %d صفحات.</item>
+        <item quantity="many">ستُحذف %d صفحة.</item>
+        <item quantity="other">ستُحذف %d صفحة.</item>
+    </plurals>
+    <string name="scan_delete_page_title">حذف الصفحة %d؟</string>
+    <string name="scan_delete_page_body">ستُحذف صورتها.</string>
+    <string name="scan_lab_ask_discard">السؤال قبل أن يتجاهل الرجوع المسح أو يحذف زر الحذف صفحة</string>
+</resources>

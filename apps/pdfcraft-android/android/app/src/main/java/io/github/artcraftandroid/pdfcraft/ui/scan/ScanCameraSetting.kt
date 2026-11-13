@@ -2,6 +2,7 @@ package io.github.artcraftandroid.pdfcraft.ui.scan
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
@@ -29,20 +30,11 @@ import io.github.artcraftandroid.pdfcraft.ui.pdfColors
 @Composable
 internal fun ScanCameraSetting() {
     val model: ScanCameraModel = viewModel()
-    val c = pdfColors
-    Text(stringResource(R.string.scan_camera_setting), color = c.text, fontSize = 16.sp, modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp))
-    Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        for (choice in ScanCameraChoice.entries) {
-            val on = choice == model.choice
-            val name = stringResource(if (choice == ScanCameraChoice.InApp) R.string.scan_camera_setting_in_app else R.string.scan_camera_setting_phone)
-            Text(
-                name, color = if (on) Color.White else c.text, fontSize = 14.sp,
-                modifier = Modifier.clip(RoundedCornerShape(14.dp)).background(if (on) c.accent else c.surface)
-                    .clickable(role = Role.RadioButton) { model.updateChoice(choice) }.padding(horizontal = 12.dp, vertical = 6.dp),
-            )
-        }
-    }
-    Text(stringResource(R.string.scan_camera_setting_body), color = c.textSecondary, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 20.dp))
+    io.github.artcraftandroid.pdfcraft.ui.home.SettingsChoice(
+        stringResource(R.string.scan_camera_setting),
+        ScanCameraChoice.entries.map { it to stringResource(if (it == ScanCameraChoice.InApp) R.string.scan_camera_setting_in_app else R.string.scan_camera_setting_phone) },
+        model.choice, { model.updateChoice(it) }, stringResource(R.string.scan_camera_setting_body),
+    )
 }
 
 /** The live page outline in the camera (#295), a testing option: off, the camera is as it was before it. */
@@ -67,24 +59,17 @@ internal fun ScanAutoSetting() {
 @Composable
 internal fun ScanMergeSettingRow() {
     val model: ScanCameraModel = viewModel()
-    val c = pdfColors
-    Text(stringResource(R.string.scan_merge_setting), color = c.text, fontSize = 16.sp, modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp))
-    Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        for (s in ScanMergeSetting.entries) {
-            val on = s == model.merge
-            val name = stringResource(
-                when (s) {
+    io.github.artcraftandroid.pdfcraft.ui.home.SettingsChoice(
+        stringResource(R.string.scan_merge_setting),
+        ScanMergeSetting.entries.map {
+            it to stringResource(
+                when (it) {
                     ScanMergeSetting.Auto -> R.string.scan_merge_auto
                     ScanMergeSetting.Always -> R.string.scan_merge_always
                     ScanMergeSetting.Off -> R.string.scan_merge_off
                 },
             )
-            Text(
-                name, color = if (on) Color.White else c.text, fontSize = 14.sp,
-                modifier = Modifier.clip(RoundedCornerShape(14.dp)).background(if (on) c.accent else c.surface)
-                    .clickable(role = Role.RadioButton) { model.updateMerge(s) }.padding(horizontal = 12.dp, vertical = 6.dp),
-            )
-        }
-    }
-    Text(stringResource(R.string.scan_merge_body), color = c.textSecondary, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 20.dp))
+        },
+        model.merge, { model.updateMerge(it) }, stringResource(R.string.scan_merge_body),
+    )
 }

@@ -149,7 +149,7 @@ patch of shade or a band of dark surround left by the crop is enough.
   binding), the next strip in (6–12 %) is not dark (a gutter is narrow), and the shadow fades
   inward: the strip's inner half is still at least 4 % under the median and its outer half at
   least 3 % of the median darker than the inner half (a band of surround is flat or stops).
-  A curved side still makes a Book page on its own.
+  A curved side still made a Book page on its own; #442 changed that (see below).
 - **Kept with the straightened page**: the measurements depend only on the straightened page, so
   `PageBase` keeps them (`PageBase::measured`) the first time a Clean scan look asks. The
   preview's later looks, strength changes and the strip's Clean scan tile reuse them instead of
@@ -215,6 +215,41 @@ about half grey and half blank paper, which is what the first rule calls mid ton
   fine texture in its bright parts (foliage against sky, a halftone screen) could lose those
   blocks; its darker parts stay, and holes inside a region are closed. The owner's kept scans
   will show it: `photo_share` against `photo_loose` on pages with photographs.
+
+### The book page's curved-side rule (#442)
+
+- **Why**: the first rule (#299) made any page with one curved side a Book page. The owner's
+  first phone log (0.0.25-beta (25012)) had three of nine imported pages as Book page, a plain
+  sheet with a table and handwriting among them, with one curved side from the edge refinement and
+  no gutter band. A sheet held in the hand or curling at one edge has a curved side; that is a
+  reason to suggest flattening, not to call the page a book. Since #421 the kind shapes the tone,
+  so the wrong kind changed the page.
+- **The rule in force** (`preset::is_book_page`): a Book page needs the gutter band in force, or
+  two opposite sides both curved (top and bottom, or left and right), or a curved side on a page
+  cut in book mode. Opposite sides of either pair count, not only the long ones: an open book's
+  page bows along its top and bottom edges, which are the short sides of a portrait page.
+- **The Flatten suggestion**: a curved side suggests flattening whatever the kind, also a kind the
+  person chose (`preset::curve_suggests_flatten`, applied in `page_kind::kind_of`). A plain sheet
+  with one curved side is a Document with `suggest_flatten` true; its strength, sharpening and
+  tone are the Document's.
+- **Inputs**: the app passes `curved_sides`, `curved_opposite` (from the four sides the edge
+  refinement reports, `scanCurvedOpposite`) and `book_mode` (the page is a book half) in the
+  page request.
+- **Testing**: option "One curved side is not a book page" (`ScanLab.strictBook`, `strict_book`,
+  on); off is the first rule, and then the suggestion comes from the kind only, as before. `page`
+  log fields `strict_book` (the option), `book_loose` (what the first rule says),
+  `curved_opposite` and `book_mode`; the photo line has `curved_opposite` next to
+  `curved_sides`. In a kept scan: `curved_opposite` in `finding`, `book_loose`, `curved_opposite`
+  and `book_mode` in `document_type`, and `strict_book` in `options`.
+- **Checked on drawn pages only** (`tests_preset.rs`, `tests_page_kind.rs`): one curved side is a
+  Document that suggests flattening (a Book page under the first rule); two adjacent curved sides
+  are a Document; two opposite are a Book page; a curved side with the gutter band, or in book
+  mode, is a Book page; book mode with no curved side is not. The drawn A4 page with one curved
+  side is a Document with the suggestion, and with the option off it is a Book page with the same
+  bytes as before. The owner's photos were not used. **Not checked** on his kept scans, whose
+  `kind` labels are the ground truth: whether real book pages photographed flat show two opposite
+  curved sides often enough, and whether the edge refinement's curve test is too eager on sheets.
+  Nothing here has run on a phone.
 
 **One finding:** the same picture covering four fifths of the page measured 0.595 photo share through the light evening, just under the 0.6 rule, so it came out as Photo-rich. The block's own test of an 80 % picture, on a page already white, gives over 0.6. Whether real photographs land on either side is for the owner's scans to show.
 

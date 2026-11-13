@@ -4,8 +4,8 @@ The scanner has been built and measured on a desktop, on drawn pages and ten ref
 What it does with a real camera in real light is found out on a phone. This page says how to
 collect that evidence and what comes back.
 
-Everything here is under **Settings → About → Diagnostics**, and appears once **Record
-diagnostics log** is on.
+Everything here is under **Settings → Diagnostics → Scanner testing** (Diagnostics is also in
+Settings → About), and can be opened once **Record diagnostics log** is on.
 
 ## For the person testing
 
@@ -39,6 +39,7 @@ on one part. While any is changed, the scan screen says so.
 | Whiteboard: brighter board and stronger marker colors (#301) | On | Off: Whiteboard is Auto color at 85, as before |
 | Stop previews that are no longer needed (#301) | On | Off: an old preview runs to the end and is dropped, as before |
 | Zoom the page preview (#301) | On | Off: the preview can't be zoomed and no sharper page is made |
+| Keep the page's light estimate between Clean scan changes (#446) | On | Off: Clean scan and Whiteboard measure the page's light, grain and sharpening again for every strength or paper change, as before. The page looks the same either way |
 | Crop with magnifier and snapping to edges (#292) | On | Off: the crop screen before #292, four corner handles on the thumbnail |
 | Crop: say when Auto-detect finds nothing, and try the line detector next (#443) | On | Off: every Auto-detect press makes the same search again and nothing is said when it finds nothing, as before #443 |
 | Flatten pages automatically when it makes their lines straighter (#302) | Off | On: every page is flattened by the network and kept only when its lines of text come out at least 10 % straighter (the Flatten switch still flattens without the check) |
@@ -55,6 +56,7 @@ on one part. While any is changed, the scan screen says so.
 | Suggest Flatten page or Grayscale for a document type (#299) | On | Off: no suggestion chips |
 | Barcodes, stamps and soft print are not photographs (#427) | On | Off: the first photograph rule, which also reads those as photographs, so a label with a large barcode becomes a document with photographs |
 | A page whose edges were not found is a Document until it is cropped (#444) | On | Off: the kind of such a page is worked out from the whole photo, table and surroundings included, as before #444 |
+| Ask before Back discards a scan or Delete removes a page (#456) | On | Off: the scan screen's back arrow and Android's Back throw the whole scan away at once, and Delete removes the page at once, as before #456 |
 | Page strength wins over the document type (#424) | On | Off: the document type's strength replaces the slider's, and every sharpening level but Off gives the type's own, as before #424 |
 | Filter strength | Each filter's own | 20, 40, 60, 80 or 100 for every filter |
 | Flatten page (#302) | Off | On, with the switch on the scan screen itself |
@@ -93,23 +95,24 @@ The zip also holds `diagnostics.txt`, the diagnostics log as **Share diagnostics
  "app": "0.0.26-beta (26001)",
  "outcome": "saved",
  "found": [0.11, 0.08, 0.93, 0.10, 0.95, 0.90, 0.07, 0.89],
- "finding": {"source": "model", "confidence": 0.835, "angle": 0, "passes": 1, "refined_sides": 4, "curved_sides": 0},
+ "finding": {"source": "model", "confidence": 0.835, "angle": 0, "passes": 1, "refined_sides": 4, "curved_sides": 0, "curved_opposite": false},
  "look": "auto", "strength": 60, "flatten": false, "flatten_chosen": null,
  "options": {"finder": "auto", "refine": true, "side_proportions": false, "snap_paper": true, "strength_override": null, "upright": true,
-             "sharpen": 30, "denoise": true, "preview": true, "crop_tools": true, "flatten_auto": false, "flatten_trim": true, "flatten_line_floor": true, "settle_turns": true, "presets": true, "strict_gutter": true, "strict_photo": true, "book_gutter": true, "line_flatten": true,
+             "sharpen": 30, "denoise": true, "preview": true, "crop_tools": true, "flatten_auto": false, "flatten_trim": true, "flatten_line_floor": true, "settle_turns": true, "presets": true, "strict_gutter": true, "strict_photo": true, "strict_book": true, "book_gutter": true, "line_flatten": true,
              "look_per_page": true, "look_strip": true, "whiteboard_look": true, "preview_stop": true,
-             "preview_zoom": true},
+             "preview_zoom": true, "look_reuse": true},
  "document_type": {"preset": "receipt", "chosen": false, "strength": 80, "sharpen": 35, "keep_paper": false, "suggest_flatten": false,
                    "suggest_greyscale": true, "ratio": 3.0, "ink_share": 0.043, "colour_ink_share": 0.0, "photo_share": 0.0,
                    "stroke_mm": 0.339, "bright_share": 0.0, "gutter_band": false, "gutter_loose": false, "gutter_cover": 0.0,
-                   "photo_loose": 0.0, "whole_photo": false},
+                   "photo_loose": 0.0, "whole_photo": false, "book_loose": false, "curved_opposite": false, "book_mode": false},
  "turns": {"manual": null, "auto": true, "total": 3, "followed": false, "source": "classifier"},
  "capture": {"source": "in_app", "mp10": 499, "width": 8160, "height": 6120, "exposure_index": -1, "exposure_step_milli": 333,
              "torch": false, "focused": true, "rotation": 0, "capture_ms": 640, "live": true, "live_found": true,
              "live_stable": true, "live_hint": "ready", "preview_quad": [0.11, 0.08, 0.93, 0.10, 0.95, 0.90, 0.07, 0.89],
              "auto_on": true, "auto_shot": true, "sharpness": 1.235, "sharpness_blurred_unverified": false, "sharpness_ms": 85,
              "merge": null, "mode": "batch", "zoom": 1.0, "grid": false},
- "preview": {"shown": true, "reused": true, "ms": 412, "width": 905, "height": 1280, "look": "auto"},
+ "preview": {"shown": true, "reused": true, "ms": 31, "width": 905, "height": 1280, "look": "auto",
+             "light_reused": true, "look_parts_ms": {"look_tone": 21}},
  "models": {"edges": "ready", "flatten": "ready", "upright": "ready"},
  "crop": {"visits": 1, "corner_drags": 2, "side_drags": 1, "snaps_asked": 3, "snaps_taken": 2, "snaps_held": 0, "snaps_failed": 0,
           "snap_ms_max": 85, "nudges": 0, "detects": 0, "detects_found": 0, "detects_other": 0,
@@ -136,7 +139,10 @@ or `null`. `outcome` is `saved` or `discarded`; a discarded page has no `look`, 
 `result`. `preview` is the last preview the scan screen made of the page before it was saved
 (#301): `shown` is false when none was (the option off, or Save tapped before it was ready),
 `reused` whether its straightened page was kept from an earlier preview, `ms` the time from the
-request to the result, and `look` the filter it showed, which can differ from the one saved when
+request to the result, `light_reused` whether Clean scan or Whiteboard found the page's light
+estimate kept from an earlier look (#446) and `look_parts_ms` the parts of that look that ran
+(`look_light`, `look_noise`, `look_denoise`, `look_sharpen`, `look_tone`; only the tone when the
+estimate was kept), and `look` the filter it showed, which can differ from the one saved when
 the filter was changed and saved before the new preview came. `page_look` is the page's own look
 as the scan screen left it (#301): `id` (`original`, `clean`, `colour`, `greyscale`, `whiteboard`
 or `bw`; Auto color and Whiteboard share the native `colour` look, so `look` alone can't tell
@@ -187,7 +193,7 @@ ordinary setting "Turn pages upright automatically", `total` the turn the page w
 answer, also for a page that then followed its neighbours. `document_type` is the kind Clean scan
 took the page for (#299), whether the person chose it, the kind's settings and what the page
 measured as (`stroke_mm` -1 when there is no ink); `null` for the other filters or with the option
-off. `scan_replay` keeps a chosen kind and works an automatic one out again. `document_type_source` (#444) says where the kind came from: `chosen`, `measured`, `off`, or `no_outline` for a page whose outline was not found and which was not cropped; such a page is made a Document (its `document_type.chosen` is true, since the app chose it) while `document_type`'s measurements still say what the whole photo read as. `book` is set on a page that is half of a photographed book spread (#303): which `half`, whether a dark gutter was found (`gutter_found`; false means the cut is the centre line), where the cut crosses the straightened spread's top and bottom edges as shares of its width, the gutter's `confidence`, and the page `order` in force (`ltr` or `rtl`). It is `null` for a page of its own. The two halves of a spread are kept as two pages, each with its own copy of the one photo, and their `corners` and `found` are the half's own outline.
+off. `scan_replay` keeps a chosen kind and works an automatic one out again. `discard` (#456) is set on a page of a discarded scan: whether the person was `asked` before it went (false with the testing option off) and how many `pages` the scan had; `null` on a saved page. `options.ask_discard` is the testing option. `document_type_source` (#444) says where the kind came from: `chosen`, `measured`, `off`, or `no_outline` for a page whose outline was not found and which was not cropped; such a page is made a Document (its `document_type.chosen` is true, since the app chose it) while `document_type`'s measurements still say what the whole photo read as. `book` is set on a page that is half of a photographed book spread (#303): which `half`, whether a dark gutter was found (`gutter_found`; false means the cut is the centre line), where the cut crosses the straightened spread's top and bottom edges as shares of its width, the gutter's `confidence`, and the page `order` in force (`ltr` or `rtl`). It is `null` for a page of its own. The two halves of a spread are kept as two pages, each with its own copy of the one photo, and their `corners` and `found` are the half's own outline.
 
 ## On the desktop
 
@@ -217,7 +223,10 @@ every press of Rotate or of Undo on the "Turned upright" chip is a `turn` line (
 `rotate` or `undo`, `auto_turns`, `turns`); every `preview` line (#301) says which page and
 filter, whether the preview was `made`, whether the straightened page was `reused`, the total `ms`
 and the native stages (`preview_base_ms`, `decode_ms`, `rectify_ms`, `preview_look_ms`, and the others
-the page needed), its `width` and `height`, `quarter_turns` and `flattened`, and the page's own
+the page needed; for Clean scan and Whiteboard also the look's parts that ran, #446:
+`preview_look_light_ms` (the light estimate), `preview_look_noise_ms`, `preview_look_denoise_ms`,
+`preview_look_sharpen_ms` and `preview_look_tone_ms`, with `look_reuse` (the testing option) and
+`light_reused` (the estimate was kept from an earlier look of the page)), its `width` and `height`, `quarter_turns` and `flattened`, and the page's own
 `look`, the `strength` it was made at, where that came from (`strength_source`: `look`, `page` or
 `lab`) and whether it waited for the slider to settle (`settled`); every `page` line its `look`,
 `look_per_page`, `strength_source` and whether its look differs from the first page's
@@ -247,7 +256,10 @@ person's own Flatten page choice `flatten_page` (`on`, `off`, `none`) and the bo
 the log is recorded a `model_states` line with each model's state; a `model_download` or
 `model_removed` line for an optional model (none yet); a `model_timing` line (#304) when a picked model file is timed (fields in
 `docs/ANDROID_SCAN_MAX_QUALITY.md`); `test_options` is written when an option is changed, `tests_shared` (pages, bytes)
-when the zip is handed out, and `tests_cleared` when the kept scans are deleted. The log itself
+when the zip is handed out, a `discard` line (#456) when the scan is thrown away or the person
+answers Keep scanning (`pages`, `asked`, `confirmed`) and a `page_delete` line when a page is
+deleted or the person cancels its question (`index` from 1, `pages` before the delete, `asked`,
+`confirmed`), and `tests_cleared` when the kept scans are deleted. The log itself
 still holds no file name, path or document content.
 
 ## Not verified
