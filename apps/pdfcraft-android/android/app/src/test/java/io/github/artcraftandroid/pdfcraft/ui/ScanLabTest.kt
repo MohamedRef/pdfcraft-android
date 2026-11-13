@@ -56,6 +56,9 @@ class ScanLabTest {
         // the crop screen with magnifier and snapping is as designed; the old one is a testing option (#292)
         assertTrue(lab.cropTools)
         assertFalse(lab.copy(cropTools = false).asDesigned)
+        // Auto-detect's note and not repeating an empty search are as designed; off is the way back (#443)
+        assertTrue(lab.cropDetectNote)
+        assertFalse(lab.copy(cropDetectNote = false).asDesigned)
         // automatic flattening is a testing option, off as designed until real photos show it helps (#302)
         assertFalse(lab.flattenAuto)
         assertFalse(lab.copy(flattenAuto = true).asDesigned)
@@ -95,6 +98,7 @@ class ScanLabTest {
             ScanLab(kindTone = false, photoSharpen = false, suggestions = false),
             ScanLab(photoSharpen = false),
             ScanLab(cropTools = false),
+            ScanLab(cropDetectNote = false),
             ScanLab(flattenAuto = true),
             ScanLab(flattenTrim = false),
             ScanLab(lookPerPage = false),

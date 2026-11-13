@@ -1771,7 +1771,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 *io.github.artcraftandroid.pdfcraft.ui.scan.scanBookDiag(book, lab.bookGutter, bookOrder, cut, bookMs),
             )
             val finding = doc?.let { d ->
-                ScanFinding(d.source.name.lowercase(), d.confidence.toDouble(), d.angle.toInt(), d.passes.toInt(), d.refined.count { it }, d.curved.count { it })
+                ScanFinding(d.source.name.lowercase(), d.confidence.toDouble(), d.angle.toInt(), d.passes.toInt(), d.refined.count { it }, d.curved.count { it }, lab.findOptions())
             }
             val at = scanPages.indexOfFirst { it.file == f }
             if (at >= 0) {

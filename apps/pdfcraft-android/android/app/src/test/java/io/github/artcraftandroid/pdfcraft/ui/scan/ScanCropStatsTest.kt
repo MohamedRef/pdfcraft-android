@@ -23,6 +23,13 @@ class ScanCropStatsTest {
         assertEquals(2, sum.cornersOff)
         // a visit left with Back does not change where the corners were kept
         assertEquals(1, (a + ScanCropStats(cornersOff = 0)).cornersOff)
+        // Auto-detect's other detector and the presses that did not search add up too (#443)
+        val c = ScanCropStats(detects = 3, detectsOther = 1, detectsSkipped = 1) + ScanCropStats(detects = 2, detectsOther = 0, detectsSkipped = 2)
+        assertEquals(5, c.detects)
+        assertEquals(1, c.detectsOther)
+        assertEquals(3, c.detectsSkipped)
+        assertEquals(3, c.json().getInt("detects_skipped"))
+        assertEquals(1, c.json().getInt("detects_other"))
     }
 
     @Test

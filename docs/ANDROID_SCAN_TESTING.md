@@ -40,6 +40,7 @@ on one part. While any is changed, the scan screen says so.
 | Stop previews that are no longer needed (#301) | On | Off: an old preview runs to the end and is dropped, as before |
 | Zoom the page preview (#301) | On | Off: the preview can't be zoomed and no sharper page is made |
 | Crop with magnifier and snapping to edges (#292) | On | Off: the crop screen before #292, four corner handles on the thumbnail |
+| Crop: say when Auto-detect finds nothing, and try the line detector next (#443) | On | Off: every Auto-detect press makes the same search again and nothing is said when it finds nothing, as before #443 |
 | Flatten pages automatically when it makes their lines straighter (#302) | Off | On: every page is flattened by the network and kept only when its lines of text come out at least 10 % straighter (the Flatten switch still flattens without the check) |
 | Trim the background left along a flattened page's edges (#302) | On | Off: a flattened page is kept as the network's grid gives it, with any strip of table along its edges |
 | Book mode: cut at the gutter found in the photo (#303) | On | Off: in book mode every spread is cut at its centre line, whatever the photo shows |
@@ -109,7 +110,8 @@ The zip also holds `diagnostics.txt`, the diagnostics log as **Share diagnostics
  "preview": {"shown": true, "reused": true, "ms": 412, "width": 905, "height": 1280, "look": "auto"},
  "models": {"edges": "ready", "flatten": "ready", "upright": "ready"},
  "crop": {"visits": 1, "corner_drags": 2, "side_drags": 1, "snaps_asked": 3, "snaps_taken": 2, "snaps_held": 0, "snaps_failed": 0,
-          "snap_ms_max": 85, "nudges": 0, "detects": 0, "detects_found": 0, "whole_photo": 0, "resets": 0,
+          "snap_ms_max": 85, "nudges": 0, "detects": 0, "detects_found": 0, "detects_other": 0,
+          "detects_skipped": 0, "whole_photo": 0, "resets": 0,
           "loupe_decodes": 6, "snap": true, "ms": 9100, "moved_pct": 1.235,
           "corners_off": 0},
  "page_look": {"id": "clean", "strength": null, "level": 60, "per_page": true, "paper": "auto"},
@@ -144,7 +146,9 @@ strength the saved page was really made at (#424): `source` is `lab` (the testin
 `fixed` says the document type did not replace it; `null` when no page was made. `crop` is what happened on the crop
 screen (#292), added up over every time the page was cropped with Done, or `null` when it never
 was: drags of corners and of sides, snaps asked for, taken, skipped by holding still and failed,
-the longest snap, keyboard and TalkBack moves, Auto-detect, No crop and Reset, magnifier regions
+the longest snap, keyboard and TalkBack moves, Auto-detect (and from #443 `detects_other`, the
+presses that tried the line detector after an empty search, and `detects_skipped`, those that did
+not search because every search had found nothing), No crop and Reset, magnifier regions
 decoded, whether Snap was on, the time spent, and `moved_pct`, the largest corner move from where
 the screen opened in % of the photo's diagonal, and `corners_off`, how many corners were left off
 the photo the last time (#291). `models` says which models the engine accepted when the page
@@ -223,7 +227,9 @@ when zoomed in; the `saved` line `looks_mixed` and `unenhanced`; every `crop` li
 every `crop_snap` line whether a `corner` or `side` was let go, how many `sides` were asked for and
 how many were `refined` or `curved`, whether the snap was `taken`, `stale` (another drag had
 started) or `failed`, and its `ms`; every `crop_detect` line whether Auto-detect `found` a page,
-its `source` and `ms`; every `page` and `preview` line `flatten_auto` and, from
+its `source` and `ms`, and from #443 the `finder` used (`none` when the press did not search),
+`other`, `skipped`, the line shown as `note` (`none`, `none_other`, `already`, `found_other`,
+`failed`, or `none_shown` when no line was shown) and the testing option `detect_note`; every `page` and `preview` line `flatten_auto` and, from
 #302's check, `flatten_checked`, `flatten_kept`, `flatten_why`, `straight_px`, `straight_flat_px`
 (tenths of a pixel, -1 when not measured), `straight_lines` and `straight_flat_lines`, the
 person's own Flatten page choice `flatten_page` (`on`, `off`, `none`) and the border trim
