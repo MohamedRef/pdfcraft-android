@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Settings pages and their summaries (#447). -->
+<resources>
+    <string name="settings_group_documents">Documents</string>
+    <string name="settings_group_tools">Outils</string>
+    <string name="settings_group_app">Application</string>
+    <string name="settings_group_support">Assistance</string>
+    <string name="settings_reading">Lecture et affichage</string>
+    <string name="settings_reading_summary">Écran allumé, barre d’état, aperçus des pages</string>
+    <string name="settings_pen_summary">Stylet uniquement, formes, nom de l’auteur</string>
+    <string name="settings_forms_summary">Suggestions lors du remplissage des formulaires</string>
+    <string name="settings_scanner">Scanner</string>
+    <string name="settings_scanner_summary">Appareil photo, faible lumière, rotation, modèles</string>
+    <string name="settings_library">Bibliothèque et étude</string>
+    <string name="settings_library_summary">Index de recherche, statistiques d’étude</string>
+    <string name="settings_off">Désactivé</string>
+    <string name="settings_updates_summary">Rechercher et télécharger les nouvelles versions</string>
+    <string name="settings_diagnostics_recording">Enregistrement en cours</string>
+    <string name="settings_help_summary">Astuces, aide, signaler un problème</string>
+    <string name="settings_scan_testing_summary">Activer ou désactiver les fonctions du scanner et garder les numérisations à partager</string>
+    <string name="settings_scan_testing_needs_log">Activez le journal de diagnostic pour les utiliser</string>
+    <string name="settings_copy_version">Copier la version</string>
+</resources>

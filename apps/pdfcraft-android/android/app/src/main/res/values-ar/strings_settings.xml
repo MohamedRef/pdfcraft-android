@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Settings pages and their summaries (#447). -->
+<resources>
+    <string name="settings_group_documents">المستندات</string>
+    <string name="settings_group_tools">الأدوات</string>
+    <string name="settings_group_app">التطبيق</string>
+    <string name="settings_group_support">الدعم</string>
+    <string name="settings_reading">القراءة والعرض</string>
+    <string name="settings_reading_summary">إبقاء الشاشة مضاءة، شريط الحالة، معاينات الصفحات</string>
+    <string name="settings_pen_summary">القلم فقط، تحويل الرسم إلى شكل، اسمك في التعليقات</string>
+    <string name="settings_forms_summary">اقتراحات عند ملء النماذج</string>
+    <string name="settings_scanner">الماسح الضوئي</string>
+    <string name="settings_scanner_summary">الكاميرا، الإضاءة المنخفضة، تدوير الصفحات، النماذج</string>
+    <string name="settings_library">المكتبة والمذاكرة</string>
+    <string name="settings_library_summary">فهرس البحث، إحصاءات المذاكرة</string>
+    <string name="settings_off">متوقف</string>
+    <string name="settings_updates_summary">البحث عن إصدارات جديدة وتنزيلها</string>
+    <string name="settings_diagnostics_recording">قيد التسجيل</string>
+    <string name="settings_help_summary">نصائح، مساعدة، الإبلاغ عن مشكلة</string>
+    <string name="settings_scan_testing_summary">إيقاف ميزات الماسح أو إرجاعها، والاحتفاظ بالمسوحات لمشاركتها</string>
+    <string name="settings_scan_testing_needs_log">شغّل سجل التشخيص لاستخدام هذه الخيارات</string>
+    <string name="settings_copy_version">نسخ الإصدار</string>
+</resources>
