@@ -1,8 +1,10 @@
 package io.github.artcraftandroid.pdfcraft.ui.scan
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -34,7 +36,8 @@ import org.json.JSONObject
  *
  * - fingers holding the page at its edge are papered over after Clean scan at strength 40 or more
  *   (testing option `removeFingers`, on), with "Finger removed · Undo"; when a finger hid print,
- *   the chip says only a new photo brings it back.
+ *   a note that cannot be tapped says only a new photo brings it back (#492). Adjust's "Remove
+ *   fingers" switch is the same state as the chip, so an Undo can always be taken back (#492).
  *
  * The Flatten page switch stays as the person's override for one page. Moiré, glare, stains and
  * deblurring are not part of it yet (#305, #306, #304).
@@ -76,6 +79,24 @@ internal fun scanAutoFlattens(choice: Boolean?, lab: ScanLab): Boolean = lab.fla
 internal fun scanRemovesFingers(lab: ScanLab, marks: ScanAutoMarks): Boolean = lab.removeFingers && ScanAutoMarks.FINGERS !in marks.undone
 
 /**
+ * Whether Adjust shows the "Remove fingers" switch (#492): the testing option is on and the page is
+ * in a look where the step runs, Clean scan at [strength] [SCAN_FINGER_MIN_STRENGTH] or more
+ * (the strength the page is made at: the slider's, else its document type's, else the look's own).
+ */
+internal fun scanShowsFingerSwitch(lab: ScanLab, look: ScanPageLook, strength: Int): Boolean =
+    lab.removeFingers && look.filter == ScanFilter.CleanScan && strength >= SCAN_FINGER_MIN_STRENGTH
+
+/** The weakest Clean scan strength at which fingers are looked for; the engine's `FINGER_MIN_STRENGTH` (#466). */
+internal const val SCAN_FINGER_MIN_STRENGTH = 40
+
+/**
+ * A page's marks after the "Remove fingers" switch or the chip's Undo (#492): off puts `fingers`
+ * in what was undone, on takes it out again. The chip and the switch share this one state.
+ */
+internal fun scanFingersMarks(marks: ScanAutoMarks, remove: Boolean): ScanAutoMarks =
+    marks.copy(undone = if (remove) marks.undone - ScanAutoMarks.FINGERS else marks.undone + ScanAutoMarks.FINGERS)
+
+/**
  * Whether a page just made should become Grayscale (#466): the testing option is on, its kind
  * suggests it, it is still in Clean scan, and the person has not taken that back on this page.
  */
@@ -88,7 +109,10 @@ internal enum class ScanAutoChip {
     Grayscale,
     /** "Finger removed · Undo". */
     Fingers,
-    /** A finger that hid print was removed: only a new photo brings that print back; Undo still puts the finger back. */
+    /**
+     * A finger that hid print was removed: the chip still reads "Finger removed · Undo", and a
+     * separate note that does nothing when tapped says only a new photo brings that print back (#492).
+     */
     FingersOverPrint,
 }
 
@@ -209,15 +233,31 @@ internal fun AppViewModel.scanApplyAutoLook(pageKey: String, suggestGreyscale: B
     Diag.event(DiagArea.Scan, "auto_applied", "index" to at + 1, "suggestion" to ScanAutoMarks.GREYSCALE)
 }
 
-/** Undo on an automatic look's chip (#466): that page only, and not done again for it. */
+/**
+ * Undo on an automatic look's chip (#466): that page only, and not done again for it until the
+ * person turns it back on (Flatten page, the looks strip, or Remove fingers in Adjust, #492).
+ */
 internal fun AppViewModel.undoScanAuto(index: Int, chip: ScanAutoChip) {
     val page = scanPages.getOrNull(index) ?: return
     scanPages[index] = when (chip) {
         ScanAutoChip.Flattened -> page.copy(flatten = false, auto = page.auto.copy(undone = page.auto.undone + ScanAutoMarks.FLATTEN))
         ScanAutoChip.Grayscale -> page.copy(look = ScanPageLook(), auto = page.auto.copy(greyApplied = false, undone = page.auto.undone + ScanAutoMarks.GREYSCALE))
-        ScanAutoChip.Fingers, ScanAutoChip.FingersOverPrint -> page.copy(auto = page.auto.copy(undone = page.auto.undone + ScanAutoMarks.FINGERS))
+        ScanAutoChip.Fingers, ScanAutoChip.FingersOverPrint -> page.copy(auto = scanFingersMarks(page.auto, remove = false))
     }
-    Diag.event(DiagArea.Scan, "auto_undone", "index" to index + 1, "what" to scanAutoChipWhat(chip))
+    Diag.event(DiagArea.Scan, "auto_undone", "index" to index + 1, "what" to scanAutoChipWhat(chip), "by" to "chip")
+}
+
+/**
+ * Adjust's "Remove fingers" switch (#492): on takes `fingers` out of the page's undone marks, so the
+ * page is made with its fingers removed again; off is the same as the chip's Undo. That page only:
+ * a finger is in one photo, so Apply to all does not carry it.
+ */
+internal fun AppViewModel.setScanRemoveFingers(index: Int, remove: Boolean) {
+    val page = scanPages.getOrNull(index) ?: return
+    val next = scanFingersMarks(page.auto, remove)
+    if (next == page.auto) return
+    scanPages[index] = page.copy(auto = next)
+    Diag.event(DiagArea.Scan, if (remove) "auto_redone" else "auto_undone", "index" to index + 1, "what" to ScanAutoMarks.FINGERS, "by" to "switch")
 }
 
 /** The word an Undo of [chip] logs and keeps in the page's marks (#466). */
@@ -230,16 +270,43 @@ internal fun scanAutoChipWhat(chip: ScanAutoChip): String = when (chip) {
 /** The chip for what the automatic look did, with Undo (#466), like "Turned upright · Undo". */
 @Composable
 internal fun ScanAutoChipView(chip: ScanAutoChip, onUndo: () -> Unit, modifier: Modifier = Modifier) {
-    val (label, undo) = when (chip) {
-        ScanAutoChip.Flattened -> R.string.scan_auto_flattened_undo to R.string.scan_auto_flattened_undo_description
-        ScanAutoChip.Grayscale -> R.string.scan_auto_grayscale_undo to R.string.scan_auto_grayscale_undo_description
-        ScanAutoChip.Fingers -> R.string.scan_auto_fingers_undo to R.string.scan_auto_fingers_undo_description
-        ScanAutoChip.FingersOverPrint -> R.string.scan_auto_fingers_over_print to R.string.scan_auto_fingers_undo_description
-    }
+    val (label, undo) = scanAutoChipWords(chip)
     val undoLabel = stringResource(undo)
     Text(
         stringResource(label), color = Color.White, fontSize = 13.sp,
         modifier = modifier.clip(CircleShape).background(Color.Black.copy(alpha = 0.6f))
             .clickable(role = Role.Button, onClickLabel = undoLabel) { onUndo() }.padding(horizontal = 12.dp, vertical = 6.dp),
+    )
+}
+
+/** A chip's words and its Undo's spoken label: every chip says "· Undo", because a tap is Undo (#492). */
+internal fun scanAutoChipWords(chip: ScanAutoChip): Pair<Int, Int> = when (chip) {
+    ScanAutoChip.Flattened -> R.string.scan_auto_flattened_undo to R.string.scan_auto_flattened_undo_description
+    ScanAutoChip.Grayscale -> R.string.scan_auto_grayscale_undo to R.string.scan_auto_grayscale_undo_description
+    // the same words in both cases (#492): a tap is Undo, and the chip says so
+    ScanAutoChip.Fingers, ScanAutoChip.FingersOverPrint -> R.string.scan_auto_fingers_undo to R.string.scan_auto_fingers_undo_description
+}
+
+/**
+ * The note under the chips when a removed finger hid print (#492): words only, nothing happens on
+ * a tap. The chip beside it is the Undo.
+ */
+@Composable
+internal fun ScanFingerOverPrintNote(modifier: Modifier = Modifier) {
+    Text(
+        stringResource(R.string.scan_auto_fingers_over_print), color = Color.White, fontSize = 12.sp,
+        modifier = modifier.clip(CircleShape).background(Color.Black.copy(alpha = 0.5f)).padding(horizontal = 10.dp, vertical = 4.dp),
+    )
+}
+
+/** Adjust's "Remove fingers" switch (#492), drawn like Flatten page beside it: outlined, filled when on. */
+@Composable
+internal fun ScanFingersSwitch(on: Boolean, onChange: (Boolean) -> Unit) {
+    val c = io.github.artcraftandroid.pdfcraft.ui.pdfColors
+    Text(
+        stringResource(R.string.scan_auto_fingers_switch), color = if (on) c.accent else c.text, fontSize = 14.sp,
+        modifier = Modifier.clip(CircleShape).background(if (on) c.pressed else Color.Transparent)
+            .border(1.dp, if (on) c.accent else c.textSecondary, CircleShape)
+            .toggleable(value = on, role = Role.Switch) { onChange(it) }.padding(horizontal = 14.dp, vertical = 8.dp),
     )
 }

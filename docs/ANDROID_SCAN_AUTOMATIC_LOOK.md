@@ -27,6 +27,15 @@ next page taken.
 With `autoLook` on, the Grayscale suggestion chip is no longer shown (it is applied); with
 `flattenAuto` on, the Flatten page suggestion chip is no longer shown (it is decided).
 
+Every Undo has a way back on the same screen (#492): "Turned upright" has Rotate, "Flattened" has
+Flatten page, "Grayscale" has the looks strip, and "Finger removed" has the **Remove fingers**
+switch in Adjust, beside Flatten page. The switch is shown where the finger step runs (Clean scan
+at strength 40 or more, with `removeFingers` on); it and the chip's Undo are one state (`fingers`
+in the page's undone marks). It belongs to the page only: a finger is in one photo, so Apply to
+all does not carry it. Every chip reads "… · Undo"; when a removed finger hid print, the chip
+still reads "Finger removed · Undo" and a separate note, which does nothing when tapped, says
+"A finger hid some print. Retake to get it back."
+
 The automatic flattening mode of #302 (`flattenAuto`) is the switch: it now honours the person's
 Flatten page choice, so Undo on "Flattened" sets Flatten page off for that page. It is on by
 default. Its preference key changed (`flatten_auto_on`), so an "off" saved while the option was
@@ -58,7 +67,8 @@ have been checked on the owner's photos, they become part of this look, not new 
   `fingers_ms` (each -1 when the finger step did not run: another look, strength under 40, the
   option off or the page's Undo).
 - `auto_applied` (`index`, `suggestion`) when a page is made Grayscale; `auto_undone` (`index`,
-  `what`) for each Undo.
+  `what`, `by`: `chip` or `switch`) for each Undo; `auto_redone` (`index`, `what=fingers`,
+  `by=switch`) when Remove fingers is turned back on (#492).
 - `page` and `preview` lines: `remove_fingers`, `fingers`, `fingers_over_print`, `fingers_filled`,
   `fingers_ms`; `preview` lines also `flatten_decided`.
 - Page file: `auto_decisions` with the same fields (the finger counts included); the options in
