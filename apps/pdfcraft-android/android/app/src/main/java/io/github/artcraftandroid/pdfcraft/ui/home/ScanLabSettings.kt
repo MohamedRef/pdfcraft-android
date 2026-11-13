@@ -156,6 +156,10 @@ internal fun ScanLabSettings(vm: AppViewModel) {
     SheetRow(null, stringResource(R.string.scan_lab_page_strength), { lab.update(o.copy(pageStrength = !o.pageStrength)) }) {
         PdfSwitch(o.pageStrength, { lab.update(o.copy(pageStrength = it)) })
     }
+    // a page whose outline was not found is a Document until it is cropped (#444)
+    SheetRow(null, stringResource(R.string.scan_lab_unfound_document), { lab.update(o.copy(unfoundDocument = !o.unfoundDocument)) }) {
+        PdfSwitch(o.unfoundDocument, { lab.update(o.copy(unfoundDocument = it)) })
+    }
     // the research detectors (#305, #306): a report only, in kept scans, so it changes no page
     SheetRow(null, stringResource(R.string.scan_lab_inspect), { lab.update(o.copy(inspect = !o.inspect)) }) {
         PdfSwitch(o.inspect, { lab.update(o.copy(inspect = it)) })
