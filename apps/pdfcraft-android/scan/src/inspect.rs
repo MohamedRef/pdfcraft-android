@@ -108,6 +108,7 @@ fn auto_look(page: &Rgb, dpi: u16) -> Option<Rgb> {
         denoise: true,
         keep_paper: false,
         shape: Default::default(),
+        grain_white: true,
     };
     let data = match apply_full(page, Look::Auto, &params)?.pixels {
         Pixels::Rgb(rgb) => rgb,
