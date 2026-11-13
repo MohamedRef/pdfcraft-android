@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Scanner: Back and Delete ask before a scan or a page is thrown away (#456); kept apart from strings.xml so parallel scanner work merges cleanly. -->
+<resources>
+    <string name="scan_discard_title">Descartar esta digitalização?</string>
+    <string name="scan_discard">Descartar</string>
+    <string name="scan_keep_scanning">Continuar digitalizando</string>
+    <plurals name="scan_discard_body">
+        <item quantity="one">%d página será excluída.</item>
+        <item quantity="many">%d páginas serão excluídas.</item>
+        <item quantity="other">%d páginas serão excluídas.</item>
+    </plurals>
+    <string name="scan_delete_page_title">Excluir a página %d?</string>
+    <string name="scan_delete_page_body">A foto dela será excluída.</string>
+    <string name="scan_lab_ask_discard">Perguntar antes que Voltar descarte uma digitalização ou Excluir remova uma página</string>
+</resources>

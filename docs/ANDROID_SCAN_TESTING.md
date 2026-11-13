@@ -56,6 +56,7 @@ on one part. While any is changed, the scan screen says so.
 | Suggest Flatten page or Grayscale for a document type (#299) | On | Off: no suggestion chips |
 | Barcodes, stamps and soft print are not photographs (#427) | On | Off: the first photograph rule, which also reads those as photographs, so a label with a large barcode becomes a document with photographs |
 | A page whose edges were not found is a Document until it is cropped (#444) | On | Off: the kind of such a page is worked out from the whole photo, table and surroundings included, as before #444 |
+| Ask before Back discards a scan or Delete removes a page (#456) | On | Off: the scan screen's back arrow and Android's Back throw the whole scan away at once, and Delete removes the page at once, as before #456 |
 | Page strength wins over the document type (#424) | On | Off: the document type's strength replaces the slider's, and every sharpening level but Off gives the type's own, as before #424 |
 | Filter strength | Each filter's own | 20, 40, 60, 80 or 100 for every filter |
 | Flatten page (#302) | Off | On, with the switch on the scan screen itself |
@@ -188,7 +189,7 @@ ordinary setting "Turn pages upright automatically", `total` the turn the page w
 answer, also for a page that then followed its neighbours. `document_type` is the kind Clean scan
 took the page for (#299), whether the person chose it, the kind's settings and what the page
 measured as (`stroke_mm` -1 when there is no ink); `null` for the other filters or with the option
-off. `scan_replay` keeps a chosen kind and works an automatic one out again. `document_type_source` (#444) says where the kind came from: `chosen`, `measured`, `off`, or `no_outline` for a page whose outline was not found and which was not cropped; such a page is made a Document (its `document_type.chosen` is true, since the app chose it) while `document_type`'s measurements still say what the whole photo read as. `book` is set on a page that is half of a photographed book spread (#303): which `half`, whether a dark gutter was found (`gutter_found`; false means the cut is the centre line), where the cut crosses the straightened spread's top and bottom edges as shares of its width, the gutter's `confidence`, and the page `order` in force (`ltr` or `rtl`). It is `null` for a page of its own. The two halves of a spread are kept as two pages, each with its own copy of the one photo, and their `corners` and `found` are the half's own outline.
+off. `scan_replay` keeps a chosen kind and works an automatic one out again. `discard` (#456) is set on a page of a discarded scan: whether the person was `asked` before it went (false with the testing option off) and how many `pages` the scan had; `null` on a saved page. `options.ask_discard` is the testing option. `document_type_source` (#444) says where the kind came from: `chosen`, `measured`, `off`, or `no_outline` for a page whose outline was not found and which was not cropped; such a page is made a Document (its `document_type.chosen` is true, since the app chose it) while `document_type`'s measurements still say what the whole photo read as. `book` is set on a page that is half of a photographed book spread (#303): which `half`, whether a dark gutter was found (`gutter_found`; false means the cut is the centre line), where the cut crosses the straightened spread's top and bottom edges as shares of its width, the gutter's `confidence`, and the page `order` in force (`ltr` or `rtl`). It is `null` for a page of its own. The two halves of a spread are kept as two pages, each with its own copy of the one photo, and their `corners` and `found` are the half's own outline.
 
 ## On the desktop
 
@@ -251,7 +252,10 @@ person's own Flatten page choice `flatten_page` (`on`, `off`, `none`) and the bo
 the log is recorded a `model_states` line with each model's state; a `model_download` or
 `model_removed` line for an optional model (none yet); a `model_timing` line (#304) when a picked model file is timed (fields in
 `docs/ANDROID_SCAN_MAX_QUALITY.md`); `test_options` is written when an option is changed, `tests_shared` (pages, bytes)
-when the zip is handed out, and `tests_cleared` when the kept scans are deleted. The log itself
+when the zip is handed out, a `discard` line (#456) when the scan is thrown away or the person
+answers Keep scanning (`pages`, `asked`, `confirmed`) and a `page_delete` line when a page is
+deleted or the person cancels its question (`index` from 1, `pages` before the delete, `asked`,
+`confirmed`), and `tests_cleared` when the kept scans are deleted. The log itself
 still holds no file name, path or document content.
 
 ## Not verified
