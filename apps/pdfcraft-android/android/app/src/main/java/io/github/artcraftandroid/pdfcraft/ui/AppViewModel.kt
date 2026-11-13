@@ -183,6 +183,8 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     /** Opening is serial: multiple ACTION_VIEW deliveries must not share a working file or engine document. */
     internal val openMutex = Mutex()
     private var lastOpenRequest = 0L
+    /** The file the latest open request is for, until that request finishes (#439). */
+    private var openingUri: String? = null
     private var openStartedAt = 0L
 
     /** Shared gate for initial, native and cached-copy open paths. */
@@ -217,10 +219,14 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         // Never replace the document while its unsaved write-back choice is unresolved.
         // Otherwise a rapid second Open with could bypass Save a copy / Discard.
         if (readOnlyPrompt != null || resolvingReadOnly) return
+        // the same file is already opening: let that open finish (#439)
+        if (io.github.artcraftandroid.pdfcraft.isRepeatOpen(openingUri, uri.toString(), fromOtherApp, password)) return
         val requestId = ++lastOpenRequest
+        openingUri = uri.toString()
         // Lock the entire copy/open/replace transaction. A newer external request may arrive
         // while the previous provider streams slowly; only the latest waiting one opens.
         viewModelScope.launch {
+          try {
           openMutex.withLock {
             if (!isCurrentOpenRequest(requestId)) return@withLock
             val eng = engine ?: application.engine.await().getOrNull() ?: run { tell(engineProblem ?: text(R.string.msg_engine_not_started)); return@withLock }
@@ -283,6 +289,9 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             } finally {
                 opening = false
             }
+          }
+          } finally {
+              if (lastOpenRequest == requestId) openingUri = null
           }
         }
     }
@@ -494,11 +503,15 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     fun closeDocument() {
         noteTaking.closeLecturePlayback()
         val doc = document ?: return
+        // Close pressed again while this close is still saving: one save is enough (#440)
+        if (closingDoc === doc) return
         study.pauseStudy()
         study.studyDoc = null
         val eng = engine ?: return
         if (doc.controller.tool != ViewerTool.None) leaveTool(doc)
+        closingDoc = doc
         viewModelScope.launch {
+          try {
             openMutex.withLock {
                 if (document !== doc) return@withLock
                 // Opening a second document and closing the first must not race native handles.
@@ -514,8 +527,14 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 withContext(Dispatchers.IO) { sweepCache() }
                 if (doc.fromOtherApp) leave.trySend(Unit) else showTab(next)
             }
+          } finally {
+              if (closingDoc === doc) closingDoc = null
+          }
         }
     }
+
+    /** The document whose Close is saving now; a repeated Close waits for it (#440). */
+    private var closingDoc: OpenDocument? = null
 
     /** Resolve an unsaved write-back prompt without racing an incoming Open with. */
     fun answerReadOnly(saveCopy: Boolean?) {
