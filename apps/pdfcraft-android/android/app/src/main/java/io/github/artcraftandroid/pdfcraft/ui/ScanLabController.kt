@@ -65,7 +65,7 @@ internal class ScanLabController(private val vm: AppViewModel) {
      * Keep page [index] of the scan in [scan]: its photo, its facts and, when it was saved, the
      * page made of it ([output], [result]). Blocking.
      */
-    fun keepPage(scan: File, index: Int, page: ScanPage, saved: Boolean, look: String?, strength: Int?, flatten: Boolean, output: File?, result: ScanTestResult?, preview: ScanTestPreview? = null, turn: ScanTestTurn? = null, kind: ScanTestKind? = null, applied: ScanAppliedStrength? = null, shownKept: org.json.JSONObject? = null, discard: ScanDiscard? = null, autoDecisions: org.json.JSONObject? = null) {
+    fun keepPage(scan: File, index: Int, page: ScanPage, saved: Boolean, look: String?, strength: Int?, flatten: Boolean, output: File?, result: ScanTestResult?, preview: ScanTestPreview? = null, turn: ScanTestTurn? = null, kind: ScanTestKind? = null, applied: ScanAppliedStrength? = null, shownKept: org.json.JSONObject? = null, discard: ScanDiscard? = null, gallerySaved: Boolean = false, autoDecisions: org.json.JSONObject? = null) {
         val lab = options
         val version = "${vm.home.appVersion} (${versionCode()})"
         // which models the engine accepted (#289); a loaded model is not hashed again
@@ -73,7 +73,7 @@ internal class ScanLabController(private val vm: AppViewModel) {
         val capture = io.github.artcraftandroid.pdfcraft.ui.scan.ScanCaptures.of(page.file.path)?.json()
         val inspection = if (lab.inspect) inspect(index, page) else null
         store.addPage(scan, index, page.file, output) { keptOutput ->
-            scanTestPageJson(version, saved, page.corners, page.found, page.finding, look, strength, flatten, lab, keptOutput, result, preview, page.crop, capture, models, turn, kind, page.book, flattenChosen = page.flatten, pageLook = page.look.json(lab.lookPerPage), inspection = inspection, applied = applied, kindSource = io.github.artcraftandroid.pdfcraft.ui.scan.scanKindSource(page, lab), madeBeforeShown = vm.pageQueue.madeBeforeShown(page), shownKept = shownKept, discard = discard, autoDecisions = autoDecisions, position = index + 1)
+            scanTestPageJson(version, saved, page.corners, page.found, page.finding, look, strength, flatten, lab, keptOutput, result, preview, page.crop, capture, models, turn, kind, page.book, flattenChosen = page.flatten, pageLook = page.look.json(lab.lookPerPage), inspection = inspection, applied = applied, kindSource = io.github.artcraftandroid.pdfcraft.ui.scan.scanKindSource(page, lab), madeBeforeShown = vm.pageQueue.madeBeforeShown(page), shownKept = shownKept, discard = discard, position = index + 1, gallerySaved = gallerySaved, autoDecisions = autoDecisions)
         }
     }
 
@@ -98,10 +98,10 @@ internal class ScanLabController(private val vm: AppViewModel) {
     }
 
     /** Keep a scan that is being discarded as it stands: its photos and where their corners were left. Blocking. */
-    fun keepDiscarded(pages: List<ScanPage>, asked: Boolean = false) {
+    fun keepDiscarded(pages: List<ScanPage>, asked: Boolean = false, gallery: Set<String> = emptySet()) {
         val scan = begin() ?: return
         val discard = ScanDiscard(asked, pages.size)
-        pages.forEachIndexed { i, page -> keepPage(scan, i, page, saved = false, look = null, strength = null, flatten = false, output = null, result = null, discard = discard) }
+        pages.forEachIndexed { i, page -> keepPage(scan, i, page, saved = false, look = null, strength = null, flatten = false, output = null, result = null, discard = discard, gallerySaved = page.key in gallery) }
         end(scan)
     }
 

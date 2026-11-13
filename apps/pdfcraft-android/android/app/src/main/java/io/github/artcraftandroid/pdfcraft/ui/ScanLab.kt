@@ -466,6 +466,8 @@ internal fun scanTestPageJson(
     autoDecisions: JSONObject? = null,
     /** The page's place in the scan's order when it was saved or discarded, from 1 (#460); null when not known. */
     position: Int? = null,
+    /** Whether the page was saved to the gallery's PdfCraft album before the scan ended (#470). */
+    gallerySaved: Boolean = false,
 ): String {
     val page = JSONObject()
         .put("corners", shares(corners)).put("kind", "other").put("paper", "unknown").put("curved", false).put("notes", "")
@@ -532,6 +534,7 @@ internal fun scanTestPageJson(
         .put("discard", discard?.let { JSONObject().put("asked", it.asked).put("pages", it.pages) } ?: JSONObject.NULL)
         // #460: pages can be moved on the document screen, so the order is written, not taken from the file name
         .put("position", position ?: JSONObject.NULL)
+        .put("gallery_saved", gallerySaved)
         .put("strength_applied", applied?.let { JSONObject().put("strength", it.strength).put("source", it.source).put("fixed", it.fixed) } ?: JSONObject.NULL)
     page.put(
         "result",

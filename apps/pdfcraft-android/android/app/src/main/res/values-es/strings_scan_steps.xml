@@ -55,4 +55,13 @@
         <item quantity="one">¿Eliminar %d página?</item>
         <item quantity="other">¿Eliminar %d páginas?</item>
     </plurals>
+    <!-- Save to gallery (#470) -->
+    <string name="scan_gallery_save">Guardar en la galería</string>
+    <string name="scan_gallery_save_all">Guardar todo en la galería</string>
+    <string name="scan_gallery_busy">Guardando en la galería…</string>
+    <string name="scan_gallery_failed">No se pudo guardar la página %1$s en la galería.</string>
+    <plurals name="scan_gallery_saved">
+        <item quantity="one">%d página guardada en Pictures/PdfCraft.</item>
+        <item quantity="other">%d páginas guardadas en Pictures/PdfCraft.</item>
+    </plurals>
 </resources>

@@ -91,4 +91,24 @@ class ScanDocumentTest {
         val unknown = JSONObject(scanTestPageJson("1.0 (1)", true, corners, null, null, "auto", 60, false, ScanLab(), null, null))
         assertTrue(unknown.isNull("position"))
     }
+
+    @Test
+    fun galleryPagesAreNamedFromOneAndLogged() {
+        assertEquals("Scan 2026-11-13 10.15.02 - 3.jpg", scanGalleryName("Scan 2026-11-13 10.15.02", 2, png = false))
+        assertEquals("Notes - 1.png", scanGalleryName("Notes", 0, png = true))
+        val line = scanGalleryDiag(4, 3, listOf(2), 9000L, 120L, selected = true, cancelled = false).toMap()
+        assertEquals(4, line["pages"])
+        assertEquals(3, line["saved"])
+        assertEquals(1, line["failed"])
+        assertEquals("2", line["failed_pages"])
+        assertEquals(true, line["selected"])
+        assertEquals("none", scanGalleryDiag(1, 1, emptyList(), 1L, 1L, false, false).toMap()["failed_pages"])
+    }
+
+    @Test
+    fun aKeptPageFileSaysWhetherItWentToTheGallery() {
+        val corners = floatArrayOf(0f, 0f, 1f, 0f, 1f, 1f, 0f, 1f)
+        assertTrue(JSONObject(scanTestPageJson("1.0 (1)", true, corners, null, null, "auto", 60, false, ScanLab(), null, null, gallerySaved = true)).getBoolean("gallery_saved"))
+        assertFalse(JSONObject(scanTestPageJson("1.0 (1)", true, corners, null, null, "auto", 60, false, ScanLab(), null, null)).getBoolean("gallery_saved"))
+    }
 }

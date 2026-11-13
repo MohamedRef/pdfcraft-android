@@ -156,6 +156,11 @@ internal fun ScanDocumentScreen(vm: AppViewModel, onOpen: (Int) -> Unit) {
                             menu = false
                             naming = true
                         })
+                        // every page into the gallery's PdfCraft album (#470); selected pages from the selection's bar
+                        DropdownMenuItem(text = { Text(stringResource(R.string.scan_gallery_save_all)) }, enabled = pages.isNotEmpty(), onClick = {
+                            menu = false
+                            vm.saveScanToGallery(null)
+                        })
                     }
                 }
                 Spacer(Modifier.width(4.dp))
@@ -274,6 +279,7 @@ internal fun ScanDocumentScreen(vm: AppViewModel, onOpen: (Int) -> Unit) {
             selecting, chosen.size, vm.insertScanAt == null, pages.isNotEmpty(),
             onRotate = { chosen.forEach { vm.rotateScanPage(it) } },
             onDelete = { askingDelete = true },
+            onGallery = { vm.saveScanToGallery(chosen) },
             onAdd = { vm.takeScanPhoto() },
             onImport = { vm.importScanPhotos() },
             onShare = { vm.saveScan(share = true) },
@@ -338,7 +344,7 @@ private fun ScanDocumentThumb(page: ScanPage, turns: Int, modifier: Modifier) {
 
 /**
  * The document screen's bottom bar (#460): Add page, Import, Share and a filled Save PDF; with
- * pages selected, Rotate and Delete for them. [canShare] is false for a scan going into an open
+ * pages selected, Rotate, Save to gallery (#470) and Delete for them. [canShare] is false for a scan going into an open
  * document, which is not shared on its own.
  */
 @Composable
@@ -349,6 +355,7 @@ internal fun ScanDocumentBar(
     hasPages: Boolean,
     onRotate: () -> Unit,
     onDelete: () -> Unit,
+    onGallery: () -> Unit,
     onAdd: () -> Unit,
     onImport: () -> Unit,
     onShare: () -> Unit,
@@ -363,6 +370,7 @@ internal fun ScanDocumentBar(
         val share = Modifier.weight(1f)
         if (selecting) {
             ScanBarButton(LucideIcons.RotateCw, stringResource(R.string.scan_rotate), chosen > 0, share, onRotate)
+            ScanBarButton(LucideIcons.Image, stringResource(R.string.scan_gallery_save), chosen > 0, share, onGallery)
             ScanBarButton(LucideIcons.Trash2, stringResource(R.string.common_delete), chosen > 0, share, onDelete)
         } else {
             ScanBarButton(LucideIcons.Camera, stringResource(R.string.tools_add_page), true, share, onAdd)
