@@ -146,6 +146,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             turns: 0,
             sharpen: 30,
             denoise: true,
+            grain_white: true,
             preset: "off".into(),
             curved_sides: 0,
             curved_opposite: false,

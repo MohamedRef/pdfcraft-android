@@ -2460,6 +2460,8 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 "turn_source" to turnSource, "settle_turns" to lab.settleTurns, "followed" to followed,
                 // sharpening and smoothing asked of the Clean scan filter, and the grain it measured (#299)
                 "sharpen" to lab.sharpen, "denoise" to lab.denoise, "noise_sigma" to (r?.noise?.toDouble() ?: -1.0),
+                // a grainy page's paper drawn white from a lower level (#466): the option, how much the paper varies, the level used
+                "grain_white" to lab.grainWhite, "paper_spread" to (r?.paperSpread?.toDouble() ?: -1.0), "white_point" to (r?.whitePoint?.toDouble() ?: -1.0),
                 // the kind of document Clean scan took the page for, its settings and what it read (#299)
                 "presets" to lab.presets, "preset" to (r?.kind?.preset ?: "none"), "preset_chosen" to (r?.kind?.chosen ?: false),
                 // where the kind came from: not worked out for a page whose outline was not found (#444)
@@ -2494,6 +2496,8 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                         it.flattenCheck,
                         it.trim,
                         it.lineFlatten,
+                        paperSpread = it.paperSpread?.toDouble(),
+                        whitePoint = it.whitePoint?.toDouble(),
                     )
                 }
                 val turn = ScanTestTurn(page.turns, autoUpright, r?.turns?.toInt() ?: 0, followed, turnSource)

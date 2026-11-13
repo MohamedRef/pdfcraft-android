@@ -67,6 +67,9 @@ pub struct LookParams {
     pub keep_paper: bool,
     /// A document type's change to Auto's tone curve: extra gamma, S-curve, colour factor (#299).
     pub shape: Shape,
+    /// Auto draws a grainy page's paper white from a lower level (#466); false is the curve as
+    /// it was (a testing choice).
+    pub grain_white: bool,
 }
 
 /// A page with its look, and what the look found out about the page on the way.
@@ -75,6 +78,11 @@ pub struct Applied {
     pub pixels: Pixels,
     /// The page's grain in grey levels (Auto measures it, #299); `None` for the other looks.
     pub noise: Option<f32>,
+    /// How much the page's paper varies after its light is divided out, and the level from which
+    /// paper was drawn white (#466, `AutoOutput::paper_spread` and `white_point`); `None` for
+    /// the other looks.
+    pub paper_spread: Option<f32>,
+    pub white_point: Option<f32>,
     /// (stage, milliseconds) of the look's parts (#446); only Clean scan and Whiteboard list any.
     pub stages: Vec<(&'static str, u32)>,
     /// Clean scan or Whiteboard took the page's light estimate from an earlier look (#446).
@@ -89,7 +97,16 @@ pub fn apply(page: &Rgb, look: Look, strength: u8) -> Option<Pixels> {
     apply_with(
         page,
         look,
-        &LookParams { strength, threads: 1, dpi: 300.0, sharpen: DEFAULT_SHARPEN, denoise: true, keep_paper: false, shape: Shape::default() },
+        &LookParams {
+            strength,
+            threads: 1,
+            dpi: 300.0,
+            sharpen: DEFAULT_SHARPEN,
+            denoise: true,
+            keep_paper: false,
+            shape: Shape::default(),
+            grain_white: true,
+        },
     )
 }
 
@@ -112,15 +129,24 @@ pub fn apply_with_photos(page: &Rgb, look: Look, params: &LookParams, photos: Op
 /// the strength and the paper kept in `prepared` for the next look of the same page (#446). The
 /// pixels are the same as without it. `prepared` must only ever be used with this `page`.
 pub fn apply_prepared(page: &Rgb, look: Look, params: &LookParams, photos: Option<&PhotoMask>, prepared: &Prepared) -> Option<Applied> {
-    let LookParams { strength, threads, dpi, sharpen, denoise, keep_paper, shape } = *params;
-    let plain = |pixels| Applied { pixels, noise: None, stages: Vec::new(), light_reused: false, detail_reused: false };
+    let LookParams { strength, threads, dpi, sharpen, denoise, keep_paper, shape, grain_white } = *params;
+    let plain = |pixels| Applied {
+        pixels,
+        noise: None,
+        paper_spread: None,
+        white_point: None,
+        stages: Vec::new(),
+        light_reused: false,
+        detail_reused: false,
+    };
     let Some(engine) = look.engine() else {
         return Some(match look {
             Look::BlackWhite => plain(Pixels::Bilevel(black_white(page, &BwParams { strength, dither_photos: true, dpi, threads })?)),
             _ => {
                 let dpi = if dpi.is_finite() { dpi.clamp(1.0, 2400.0) as u16 } else { 300 };
                 let paper = if keep_paper { PaperMode::Keep } else { PaperMode::White };
-                let made = auto_prepared(page, &AutoParams { strength, paper, threads, sharpen, denoise, dpi, shape }, photos, prepared)?;
+                let made =
+                    auto_prepared(page, &AutoParams { strength, paper, threads, sharpen, denoise, dpi, shape, grain_white }, photos, prepared)?;
                 let mut rgb = made.rgb.data;
                 if look == Look::Whiteboard {
                     whiteboard_tone(&mut rgb, WHITEBOARD_COLOUR_FACTOR);
@@ -128,6 +154,8 @@ pub fn apply_prepared(page: &Rgb, look: Look, params: &LookParams, photos: Optio
                 Applied {
                     pixels: Pixels::Rgb(rgb),
                     noise: Some(made.noise),
+                    paper_spread: Some(made.paper_spread),
+                    white_point: Some(made.white_point),
                     stages: made.stages,
                     light_reused: made.light_reused,
                     detail_reused: made.detail_reused,

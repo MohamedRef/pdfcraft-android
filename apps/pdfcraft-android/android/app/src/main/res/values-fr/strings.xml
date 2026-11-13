@@ -1115,6 +1115,7 @@
     <string name="scan_lab_sharpen">Accentuer le texte (Scan net)</string>
     <string name="scan_lab_off">Non</string>
     <string name="scan_lab_denoise">Lisser le grain des photos sombres (Scan net)</string>
+    <string name="scan_lab_grain_white">Rendre blanc le papier des photos à gros grain (Scan net)</string>
     <string name="scan_lab_preview">Afficher les pages telles qu’elles seront enregistrées</string>
     <string name="scan_lab_crop">Recadrer avec loupe et aimantation aux bords</string>
     <string name="scan_lab_flatten_auto">Aplatir les pages automatiquement quand leurs lignes deviennent plus droites</string>
