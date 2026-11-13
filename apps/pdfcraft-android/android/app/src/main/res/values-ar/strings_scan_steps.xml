@@ -63,4 +63,17 @@
         <item quantity="many">حذف %d صفحة؟</item>
         <item quantity="other">حذف %d صفحة؟</item>
     </plurals>
+    <!-- Save to gallery (#470) -->
+    <string name="scan_gallery_save">حفظ في المعرض</string>
+    <string name="scan_gallery_save_all">حفظ الكل في المعرض</string>
+    <string name="scan_gallery_busy">جارٍ الحفظ في المعرض…</string>
+    <string name="scan_gallery_failed">تعذّر حفظ الصفحة %1$s في المعرض.</string>
+    <plurals name="scan_gallery_saved">
+        <item quantity="zero">لم تُحفظ صفحات في Pictures/PdfCraft.</item>
+        <item quantity="one">حُفظت صفحة واحدة في Pictures/PdfCraft.</item>
+        <item quantity="two">حُفظت صفحتان في Pictures/PdfCraft.</item>
+        <item quantity="few">حُفظت %d صفحات في Pictures/PdfCraft.</item>
+        <item quantity="many">حُفظت %d صفحة في Pictures/PdfCraft.</item>
+        <item quantity="other">حُفظت %d صفحة في Pictures/PdfCraft.</item>
+    </plurals>
 </resources>
