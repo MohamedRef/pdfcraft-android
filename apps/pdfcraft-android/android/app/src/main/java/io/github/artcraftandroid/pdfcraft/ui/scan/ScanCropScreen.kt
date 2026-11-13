@@ -236,7 +236,7 @@ internal fun ScanCropScreen(page: ScanPage, index: Int, lab: ScanLab, onDone: (F
             val result = quad?.let { snapped(asked, it.refined, it.corners.toFloatArray()) }
             val stale = serial != dragSerial
             Diag.event(
-                DiagArea.Scan, "crop_snap", "index" to index, "handle" to if (handle is QuadHandle.Corner) "corner" else "side",
+                DiagArea.Scan, "crop_snap", "index" to scanLogPageNumber(index), "handle" to if (handle is QuadHandle.Corner) "corner" else "side",
                 "sides" to asked.count { it }, "refined" to (quad?.refined?.withIndex()?.count { (k, r) -> r && asked[k] } ?: 0),
                 "curved" to (quad?.curved?.withIndex()?.count { (k, r) -> r && asked[k] } ?: 0),
                 "taken" to (result != null && !stale), "stale" to stale, "failed" to (quad == null), "ms" to ms,
@@ -266,7 +266,7 @@ internal fun ScanCropScreen(page: ScanPage, index: Int, lab: ScanLab, onDone: (F
             movedPct = if (done) maxCornerMovePct(opened, corners, aspect) else 0.0,
             cornersOff = if (done) cornersOffPhoto(corners) else 0,
         )
-        Diag.event(DiagArea.Scan, "crop", "index" to index, "done" to done, *s.diag())
+        Diag.event(DiagArea.Scan, "crop", "index" to scanLogPageNumber(index), "done" to done, *s.diag())
         if (done) onDone(corners, s) else onCancel()
     }
 
@@ -446,7 +446,7 @@ internal fun ScanCropScreen(page: ScanPage, index: Int, lab: ScanLab, onDone: (F
                     scope.launch {
                         if (plan !is ScanCropDetectPlan.Search) {
                             Diag.event(
-                                DiagArea.Scan, "crop_detect", "index" to index, "found" to false, "book_half" to (page.book?.side ?: "none"),
+                                DiagArea.Scan, "crop_detect", "index" to scanLogPageNumber(index), "found" to false, "book_half" to (page.book?.side ?: "none"),
                                 "source" to "skipped", "ms" to 0L, "finder" to "none", "other" to false, "skipped" to true,
                                 "note" to ScanCropDetectNote.AlreadySearched.id, "detect_note" to lab.cropDetectNote,
                             )
@@ -471,7 +471,7 @@ internal fun ScanCropScreen(page: ScanPage, index: Int, lab: ScanLab, onDone: (F
                             .let { cut -> scanBookRecut(half, cut)?.takeIf { convexQuad(it) } }
                         val note = if (lab.cropDetectNote) scanCropDetectNote(found != null, doc == null, plan.other) else null
                         Diag.event(
-                            DiagArea.Scan, "crop_detect", "index" to index, "found" to (found != null), "book_half" to (half?.side ?: "none"),
+                            DiagArea.Scan, "crop_detect", "index" to scanLogPageNumber(index), "found" to (found != null), "book_half" to (half?.side ?: "none"),
                             "source" to (doc?.source?.name?.lowercase() ?: "failed"), "ms" to SystemClock.elapsedRealtime() - started,
                             "finder" to ScanLab.finderId(plan.options.finder), "other" to plan.other, "skipped" to false,
                             "note" to (note?.id ?: "none_shown"), "detect_note" to lab.cropDetectNote,

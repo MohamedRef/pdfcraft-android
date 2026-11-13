@@ -64,8 +64,11 @@ Before the run a `model_timing_start` line (`bytes`) is written to the file, so 
 SHA-256), `inputs`, `input_dims` and `input_0`… (the shape run), `output_dims` and `output_0`…,
 `output_finite`, `threads` (0: the runtime's own pool, one thread per core), `cores`, `load_ms`,
 `run_1_ms`, `run_2_ms`, `peak_mb_before` and `peak_mb_after` (the process's peak resident memory,
--1 where the system does not say). A file that cannot be timed is a `failed` line with stage
-`scan_time_model`.
+-1 where the system does not say). A file that cannot be timed is a `model_timing_failed` line
+(#445): `reason` (`not_a_model`, `not_fixed`, `no_input`, `input_too_large`, `no_output`,
+`run_failed`, `too_large`, `outside_folder`, `unreadable`, `not_ready`), `stage` (`copy` or
+`time`), `ms` from the press and `native_ms` for the native call. Before #445 it was a `failed`
+line with stage `scan_time_model` and only the error class (`Command`).
 
 ## On a desktop
 

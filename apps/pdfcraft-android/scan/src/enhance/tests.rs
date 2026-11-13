@@ -5,7 +5,7 @@
 use super::background::stroke_width;
 use super::plane::{Mask, Plane, area, area_rows, close_disk, components, dilate_disk, grow, median3, percentile, shrink, shrink_rgb, wide_blur};
 use super::tone::Tone;
-use super::{AutoParams, PaperMode, auto, enlargement};
+use super::{AutoOutput, AutoParams, PaperMode, auto, enlargement};
 use crate::Rgb;
 
 const W: usize = 800;
@@ -299,7 +299,11 @@ fn the_bytes_do_not_depend_on_the_number_of_threads() {
     let mut page = Page::text();
     page.rect((0, 400), (90, 560), [0.80, 0.58, 0.47]);
     let photo = page.photo(|x, y| [0.5 + 0.4 * x as f32 / W as f32, 0.55 + 0.3 * y as f32 / H as f32, 0.8]);
-    let at = |threads| auto(&photo, &AutoParams { threads, ..AutoParams::default() }).unwrap();
+    let at = |threads| {
+        // the parts' times differ from run to run (#446)
+        let made = auto(&photo, &AutoParams { threads, ..AutoParams::default() }).unwrap();
+        AutoOutput { stages: Vec::new(), ..made }
+    };
     assert_eq!(at(1), at(4));
     assert_eq!(at(1), at(3));
 }

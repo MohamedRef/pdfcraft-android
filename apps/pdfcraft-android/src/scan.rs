@@ -111,6 +111,17 @@ pub struct ScanPageRequest {
     /// How many sides of the page its edge detection found curved (0–4), a book page's sign (#299).
     #[uniffi(default = 0)]
     pub curved_sides: u8,
+    /// Two opposite sides of the page were found curved (#442).
+    #[uniffi(default = false)]
+    pub curved_opposite: bool,
+    /// The page is one half of a spread cut in book mode (#303, #442).
+    #[uniffi(default = false)]
+    pub book_mode: bool,
+    /// A book page needs more than one curved side: the gutter, two opposite curved sides, or a
+    /// curved side in book mode; one curved side only suggests flattening (#442). False is the
+    /// first rule (#299, any curved side), a testing choice.
+    #[uniffi(default = true)]
+    pub strict_book: bool,
     /// A dark band down one long side counts as a book's gutter only when it runs the whole
     /// length, stays narrow and fades inward (#427); false is the first rule (#299, a testing choice).
     #[uniffi(default = true)]
@@ -134,6 +145,12 @@ pub struct ScanPageRequest {
     /// Anything else is "auto".
     #[uniffi(default = "auto")]
     pub paper: String,
+    /// Clean scan and Whiteboard keep the page's light estimate, grain and sharpened page with the
+    /// straightened preview page, so the next strength or paper choice costs the tone curve alone
+    /// (#446). The pixels are the same either way; false measures them again for every look, as
+    /// before (a testing choice).
+    #[uniffi(default = true)]
+    pub reuse_look: bool,
 }
 
 /// The kind of document the Auto look took a page for, its settings, and what the page measured
@@ -168,6 +185,14 @@ pub struct ScanPageKind {
     pub gutter_loose: bool,
     /// Share of the darker long side's length along which its strip is dark (0–1, #427).
     pub gutter_cover: f32,
+    /// How many sides the edge detection found curved, and whether two of them are opposite (#442).
+    pub curved_sides: u8,
+    pub curved_opposite: bool,
+    /// The page came from book mode (#442).
+    pub book_mode: bool,
+    /// What the first book page rule (#299: any curved side, or the gutter in force) says,
+    /// whichever rule is in force (#442).
+    pub book_loose: bool,
     pub whole_photo: bool,
     /// The kind's change to the tone curve (#299): added gamma, the S-curve, the colour factor.
     /// Used only when the request's `kind_tone` asked for it.
@@ -196,6 +221,10 @@ fn kind_of(kind: &PageKind) -> ScanPageKind {
         gutter_band: f.gutter_band,
         gutter_loose: f.gutter_loose,
         gutter_cover: f.gutter_cover as f32,
+        curved_sides: f.curved_sides,
+        curved_opposite: f.curved_opposite,
+        book_mode: f.book_mode,
+        book_loose: kind.book_loose,
         whole_photo: kind.whole_photo,
         extra_gamma: kind.params.extra_gamma,
         s_curve: kind.params.s_curve,
@@ -619,6 +648,9 @@ fn page_request<'a>(request: &ScanPageRequest, photo: &'a [u8], corners: [f32; 8
         denoise: request.denoise,
         preset: preset_choice(&request.preset),
         curved_sides: request.curved_sides.min(4),
+        curved_opposite: request.curved_opposite,
+        book_mode: request.book_mode,
+        strict_book: request.strict_book,
         strict_gutter: request.strict_gutter,
         strict_photo: request.strict_photo,
         fixed_strength: request.fixed_strength,
@@ -630,6 +662,7 @@ fn page_request<'a>(request: &ScanPageRequest, photo: &'a [u8], corners: [f32; 8
             "white" => Some(false),
             _ => None,
         },
+        reuse_look: request.reuse_look,
         ..PageRequest::new(photo, corners)
     }
 }
@@ -756,6 +789,13 @@ pub struct ScanPreview {
     pub line_flatten: Option<ScanLineFlatten>,
     /// The straightened page was still at hand from an earlier preview: only its look was made.
     pub reused: bool,
+    /// Clean scan or Whiteboard found the page's light estimate kept from an earlier look of the
+    /// same straightened page (#446): only the tone curve (and the sharpening, if that changed)
+    /// was made. False for the other looks.
+    pub light_reused: bool,
+    /// `scan_preview_base` and its parts when the page was straightened, then
+    /// `scan_preview_look` and, for Clean scan and Whiteboard, the parts of the look that ran
+    /// (#446): `scan_preview_look_light`, `_noise`, `_denoise`, `_sharpen`, `_tone`.
     pub timings: Vec<ScanTiming>,
 }
 
@@ -937,6 +977,8 @@ pub(crate) fn preview_stoppable(
         return Err(MobileError::Command("the page could not be drawn".into()));
     }
     timings.push(ScanTiming { stage: "scan_preview_look".into(), ms: ms(clock) });
+    // the look's own parts (#446)
+    timings.extend(applied.stages.iter().map(|&(stage, ms)| ScanTiming { stage: format!("scan_preview_{stage}"), ms }));
     check()?;
     Ok(ScanPreview {
         width,
@@ -951,6 +993,7 @@ pub(crate) fn preview_stoppable(
         trim: base.trim.map(|t| ScanTrim::of(t, before_turn(base.page.width, base.page.height, base.turns))),
         line_flatten: base.line_flatten.as_ref().map(Into::into),
         reused,
+        light_reused: applied.light_reused,
         timings,
     })
 }
@@ -1239,12 +1282,16 @@ mod tests {
             denoise: true,
             preset: "off".into(),
             curved_sides: 0,
+            curved_opposite: false,
+            book_mode: false,
+            strict_book: true,
             strict_gutter: true,
             strict_photo: true,
             fixed_strength: false,
             kind_tone: false,
             photo_sharpen: false,
             paper: "auto".into(),
+            reuse_look: true,
         }
     }
 
@@ -1548,9 +1595,17 @@ mod tests {
             // the first call straightens the page; every other look finds it at hand
             assert_eq!(preview.reused, !first, "{look:?}");
             let stages: Vec<_> = preview.timings.iter().map(|t| t.stage.as_str()).collect();
+            // Clean scan and Whiteboard list their parts after the look; the second of them finds
+            // the light estimate kept and draws the tone curve alone (#446)
+            let parts: &[&str] = match look {
+                ScanLook::Auto => &["scan_preview_look_light", "scan_preview_look_noise", "scan_preview_look_sharpen", "scan_preview_look_tone"],
+                ScanLook::Whiteboard => &["scan_preview_look_tone"],
+                _ => &[],
+            };
+            assert_eq!(preview.light_reused, look == ScanLook::Whiteboard, "{look:?}");
             match first {
                 true => assert_eq!(stages, ["scan_preview_base", "scan_decode", "scan_rectify", "scan_preview_look"]),
-                false => assert_eq!(stages, ["scan_preview_look"]),
+                false => assert_eq!(stages, [&["scan_preview_look"], parts].concat()),
             }
             first = false;
             // the saved page, shrunk to the preview's size
@@ -1624,6 +1679,56 @@ mod tests {
         // stopped after the straightened page is at hand: still an error, and the page stays kept
         assert!(preview_stoppable(&root, &ScanPageRequest { look: ScanLook::Whiteboard, ..ask.clone() }, 640, Some(&stopped)).is_err());
         assert!(preview_in(&root, &ask, 640).unwrap().reused);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    /// A strength or paper change on a Clean scan preview draws the tone curve alone (#446): the
+    /// light estimate is kept with the straightened page, and the preview says so. With the
+    /// testing option off it is measured again, and the pixels are the same.
+    #[test]
+    fn a_clean_scan_strength_change_keeps_the_light_estimate() {
+        let _store = PREVIEWS_TEST_LOCK.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let root = temp("preview-light");
+        let shot = root.join("page.png");
+        image::RgbImage::from_fn(600, 800, |x, y| {
+            let light = 235 - (x + y) / 20;
+            if (y % 24) < 3 && (40..560).contains(&x) {
+                image::Rgb([30, 30, 30])
+            } else {
+                image::Rgb([light as u8, (light - 3) as u8, (light - 9) as u8])
+            }
+        })
+        .save(&shot)
+        .unwrap();
+        let whole = vec![0.0, 0.0, 1.0, 0.0, 1.0, 1.0, 0.0, 1.0];
+        let ask = |strength, paper: &str, reuse_look| ScanPageRequest {
+            corners: whole.clone(),
+            look: ScanLook::Auto,
+            strength,
+            preset: "auto".into(),
+            fixed_strength: true,
+            paper: paper.into(),
+            reuse_look,
+            ..request(&shot, &root.join("x"))
+        };
+        let parts =
+            |p: &ScanPreview| -> Vec<String> { p.timings.iter().map(|t| t.stage.clone()).filter(|s| s.starts_with("scan_preview_look_")).collect() };
+        scan_release_previews();
+        let first = preview_in(&root, &ask(60, "auto", true), 640).unwrap();
+        assert!(!first.reused && !first.light_reused);
+        assert!(parts(&first).contains(&"scan_preview_look_light".to_string()), "{:?}", first.timings);
+        for (strength, paper) in [(30, "auto"), (90, "keep"), (60, "white")] {
+            let changed = preview_in(&root, &ask(strength, paper, true), 640).unwrap();
+            assert!(changed.reused && changed.light_reused, "{strength} {paper}");
+            assert_eq!(parts(&changed), ["scan_preview_look_tone"], "{strength} {paper}");
+            let measured = preview_in(&root, &ask(strength, paper, false), 640).unwrap();
+            assert!(measured.reused && !measured.light_reused, "{strength} {paper}");
+            assert!(parts(&measured).contains(&"scan_preview_look_light".to_string()));
+            assert!(changed.rgba == measured.rgba, "{strength} {paper}: kept and measured again differ");
+        }
+        // the other looks keep nothing and list no parts
+        let colour = preview_in(&root, &ScanPageRequest { look: ScanLook::Colour, ..ask(50, "auto", true) }, 640).unwrap();
+        assert!(!colour.light_reused && parts(&colour).is_empty());
         std::fs::remove_dir_all(root).unwrap();
     }
 

@@ -3,4 +3,5 @@
 <resources>
     <string name="scan_lab_strict_gutter">Página de livro só quando uma sombra percorre todo o lado da lombada e se atenua para dentro</string>
     <string name="scan_lab_strict_photo">Códigos de barras, carimbos e impressão suave não são fotografias</string>
+    <string name="scan_lab_strict_book">Uma única borda curva não é uma página de livro</string>
 </resources>

@@ -111,6 +111,8 @@ mod tests_metrics_tone;
 #[cfg(test)]
 mod tests_page_kind;
 #[cfg(test)]
+mod tests_look_reuse;
+#[cfg(test)]
 mod tests_moire;
 #[cfg(test)]
 mod tests_photo_mask;
