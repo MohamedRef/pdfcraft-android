@@ -141,7 +141,9 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     init {
         // temporary files a crash or a killed process left in the cache (#105)
         viewModelScope.launch(Dispatchers.IO) { sweepCache() }
-        viewModelScope.launch {
+        // posted, never run inside the constructor: with the engine already loaded, Main.immediate
+        // would reach refreshRecents while controllers declared further down are still null (#462)
+        viewModelScope.launch(Dispatchers.Main) {
             application.engine.await().onSuccess { engine = it }.onFailure { engineProblem = it.userMessage }
             refreshRecents()
             // the signers the reader trusts, before any signature is checked

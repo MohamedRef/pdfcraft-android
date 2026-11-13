@@ -253,6 +253,8 @@ abstract class ScanAndOcrModels : DefaultTask() {
 android {
     namespace = "io.github.artcraftandroid.pdfcraft"
     compileSdk = 37
+    // Robolectric draws the screens with the app's own resources (#462)
+    testOptions { unitTests { isIncludeAndroidResources = true } }
     ndkVersion = "29.0.14206865"
 
     defaultConfig {
@@ -394,4 +396,26 @@ dependencies {
     implementation(libs.jna) { artifact { type = "aar" } }
     testImplementation(libs.junit)
     testImplementation(libs.org.json)
+    // screen pictures for UI review (#462); the manifest entry only reaches debug builds
+    testImplementation(libs.robolectric)
+    testImplementation(libs.androidx.test.core)
+    testImplementation(platform(libs.androidx.compose.bom))
+    testImplementation(libs.androidx.compose.ui.test.junit4)
+    debugImplementation(libs.androidx.compose.ui.test.manifest)
+}
+
+// Screen pictures (#462): off unless -Ppdfcraft.screenshots=true, written to build/screenshots.
+// -Ppdfcraft.robolectricRepo=<maven url> points Robolectric's runtime download at a mirror.
+tasks.withType<Test>().configureEach {
+    val shots = providers.gradleProperty("pdfcraft.screenshots").orElse("false")
+    val repo = providers.gradleProperty("pdfcraft.robolectricRepo")
+    val out = layout.buildDirectory.dir("screenshots").get().asFile.absolutePath
+    inputs.property("pdfcraft.screenshots", shots)
+    systemProperty("pdfcraft.screenshots", shots.get())
+    systemProperty("pdfcraft.screenshots.dir", out)
+    if (shots.get() == "true") outputs.dir(out)
+    if (repo.isPresent) {
+        systemProperty("robolectric.dependency.repo.url", repo.get())
+        systemProperty("robolectric.dependency.repo.id", "mirror")
+    }
 }
