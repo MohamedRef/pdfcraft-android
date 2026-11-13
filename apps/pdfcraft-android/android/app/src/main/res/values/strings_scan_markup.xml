@@ -11,7 +11,7 @@
     <string name="scan_markup_size_small">Small</string>
     <string name="scan_markup_size_medium">Medium</string>
     <string name="scan_markup_size_large">Large</string>
-    <string name="scan_markup_colour">Colour %1$d</string>
+    <string name="scan_markup_colour">Color %1$d</string>
     <string name="scan_markup_hint">One finger draws or rubs. Two fingers move and zoom.</string>
     <string name="scan_markup_text_hint">Tap the page to add text. Tap a text to move, change or delete it.</string>
     <string name="scan_markup_add_text">Add text</string>
