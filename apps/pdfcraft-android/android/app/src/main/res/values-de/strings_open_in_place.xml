@@ -7,7 +7,7 @@
     <!-- Shown when a save could not reach the original file yet; the changes are safe in the app -->
     <string name="in_place_write_back_waiting">Deine Änderungen sind in PdfCraft gespeichert und werden beim nächsten Öffnen in die Datei geschrieben.</string>
     <!-- The read-only prompt when the app that opened the file lent it for reading only (#491) -->
-    <string name="root_read_only_body_lent">PdfCraft durfte %1$s nur lesen, daher können deine Änderungen dort nicht gespeichert werden. Speichere eine Kopie, um sie zu behalten. Um künftig in diese Datei zu speichern, öffne sie mit „Datei öffnen“ in PdfCraft.</string>
+    <string name="root_read_only_body_lent">PdfCraft durfte %1$s nur lesen, daher können Änderungen dort nicht gespeichert werden. Speichere eine Kopie oder öffne die Datei nächstes Mal mit „Datei öffnen“ in PdfCraft.</string>
     <!-- The read-only prompt when writing to the original failed (#491) -->
     <string name="root_read_only_body_failed">Deine Änderungen an %1$s konnten nicht gespeichert werden. Speichere eine Kopie, um sie zu behalten.</string>
     <!-- Saving to originals lent read-only, with Android's All files access (#491) -->
