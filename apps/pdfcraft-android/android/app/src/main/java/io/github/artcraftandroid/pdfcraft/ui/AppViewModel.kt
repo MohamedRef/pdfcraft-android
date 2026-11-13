@@ -1965,11 +1965,13 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
 
     /** Delete the pages at [indexes] together, after the person said yes (#460); their photos go unless a spread's other half still uses one. */
     fun deleteScanPages(indexes: List<Int>) {
-        val gone = indexes.filter { it in scanPages.indices }.toSortedSet()
+        // largest first, so each removal leaves the indexes still to go where they were. A plain
+        // Kotlin list: SortedSet.reversed() is Java 21's SequencedCollection member, API 35+ only (#502)
+        val gone = indexes.filter { it in scanPages.indices }.distinct().sortedDescending()
         if (gone.isEmpty()) return
         Diag.event(DiagArea.Scan, "pages_delete", *io.github.artcraftandroid.pdfcraft.ui.scan.scanPagesDeleteDiag(gone.size, scanPages.size, confirmed = true))
         val before = scanPages.toList()
-        for (i in gone.reversed()) scanPages.removeAt(i)
+        for (i in gone) scanPages.removeAt(i)
         deleteUnusedScanFiles(before, scanPages.toList())
         // every page deleted: nothing is left to save, so the scan ends
         if (scanPages.isEmpty()) discardScan(asked = true)
