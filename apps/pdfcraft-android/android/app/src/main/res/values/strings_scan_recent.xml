@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Recent scans, kept to be edited again (#461) -->
+<resources>
+    <string name="scan_lab_recent">Recent scans to edit again (last 10)</string>
+    <string name="scan_recent_title">Recent scans</string>
+    <string name="scan_recent_about">Open a saved scan again to change it</string>
+    <string name="scan_recent_empty">No recent scans yet. Scans you save appear here, so you can change their borders or look later.</string>
+    <string name="scan_recent_off">Keeping recent scans is off. Turn it on in Settings, Scanner.</string>
+    <string name="scan_recent_busy">Finish or discard the scan in progress first.</string>
+    <string name="scan_recent_unreadable">This scan could not be opened.</string>
+    <string name="scan_recent_untitled">Scan %1$s</string>
+    <string name="scan_recent_delete_title">Delete this scan?</string>
+    <string name="scan_recent_delete_body">Its photos are removed from the app. The PDF you saved stays.</string>
+    <string name="settings_scan_recent">Keep recent scans to edit again</string>
+    <string name="settings_scan_recent_body">The last 10 scans you save keep their photos in the app, so you can change their borders and look later. The photos stay on this phone until you delete them.</string>
+    <string name="settings_scan_recent_delete">Delete recent scans</string>
+    <string name="settings_scan_recent_none">No recent scans</string>
+    <plurals name="scan_recent_missing">
+        <item quantity="one">%d page could not be found.</item>
+        <item quantity="other">%d pages could not be found.</item>
+    </plurals>
+    <plurals name="scan_recent_pages">
+        <item quantity="one">%d page</item>
+        <item quantity="other">%d pages</item>
+    </plurals>
+    <plurals name="settings_scan_recent_size">
+        <item quantity="one">%1$d scan · %2$s</item>
+        <item quantity="other">%1$d scans · %2$s</item>
+    </plurals>
+</resources>

@@ -34,6 +34,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -48,6 +49,7 @@ import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
@@ -375,6 +377,19 @@ private fun ScanPage(vm: AppViewModel) = Group {
     io.github.artcraftandroid.pdfcraft.ui.scan.ScanAutoSetting()
     var autoUpright by remember { mutableStateOf(ScanUprightSetting.get(vm.settings.appPrefs)) }
     SettingsSwitch(stringResource(R.string.settings_scan_upright), autoUpright, { autoUpright = it; ScanUprightSetting.set(vm.settings.appPrefs, it) }, stringResource(R.string.settings_scan_upright_body))
+    // saved scans kept to be edited again (#461): the switch, and what they take with Delete all
+    var keepRecent by remember { mutableStateOf(io.github.artcraftandroid.pdfcraft.ui.scan.ScanRecentSetting.get(vm.settings.appPrefs)) }
+    SettingsSwitch(stringResource(R.string.settings_scan_recent), keepRecent, { keepRecent = it; io.github.artcraftandroid.pdfcraft.ui.scan.ScanRecentSetting.set(vm.settings.appPrefs, it) }, stringResource(R.string.settings_scan_recent_body))
+    LaunchedEffect(Unit) { vm.scanRecent.refresh() }
+    val recent = vm.scanRecent.list
+    val deleteTitle = stringResource(R.string.settings_scan_recent_delete)
+    val deleteAll = rememberConfirm(deleteTitle, stringResource(R.string.common_delete), stringResource(R.string.scan_recent_delete_body)) { vm.scanRecent.deleteAll() }
+    SettingsRow(
+        deleteTitle, deleteAll,
+        summary = if (recent.isEmpty()) stringResource(R.string.settings_scan_recent_none)
+        else pluralStringResource(R.plurals.settings_scan_recent_size, recent.size, recent.size, io.github.artcraftandroid.pdfcraft.ui.viewer.formatSize(recent.sumOf { it.bytes })),
+        enabled = recent.isNotEmpty(), destructive = true,
+    )
     SheetDivider(vertical = 8.dp)
     // the scanner's models: what is installed and whether it is accepted (#289)
     ScanModelsSection(vm.engine, vm.settings.recordDiagnostics)

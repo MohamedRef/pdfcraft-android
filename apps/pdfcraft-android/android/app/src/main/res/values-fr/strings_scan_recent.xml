@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Recent scans, kept to be edited again (#461) -->
+<resources>
+    <string name="scan_lab_recent">Numérisations récentes à modifier (10 dernières)</string>
+    <string name="scan_recent_title">Numérisations récentes</string>
+    <string name="scan_recent_about">Rouvrir une numérisation enregistrée pour la modifier</string>
+    <string name="scan_recent_empty">Pas encore de numérisation récente. Celles que vous enregistrez apparaissent ici pour modifier leurs bords ou leur rendu plus tard.</string>
+    <string name="scan_recent_off">La conservation des numérisations récentes est désactivée. Activez-la dans Paramètres, Scanner.</string>
+    <string name="scan_recent_busy">Terminez ou abandonnez d’abord la numérisation en cours.</string>
+    <string name="scan_recent_unreadable">Impossible d’ouvrir cette numérisation.</string>
+    <string name="scan_recent_untitled">Numérisation %1$s</string>
+    <string name="scan_recent_delete_title">Supprimer cette numérisation ?</string>
+    <string name="scan_recent_delete_body">Ses photos sont retirées de l’app. Le PDF enregistré reste.</string>
+    <string name="settings_scan_recent">Garder les numérisations récentes pour les modifier</string>
+    <string name="settings_scan_recent_body">Les 10 dernières numérisations enregistrées gardent leurs photos dans l’app pour modifier leurs bords et leur rendu plus tard. Les photos restent sur ce téléphone jusqu’à ce que vous les supprimiez.</string>
+    <string name="settings_scan_recent_delete">Supprimer les numérisations récentes</string>
+    <string name="settings_scan_recent_none">Aucune numérisation récente</string>
+    <plurals name="scan_recent_missing">
+        <item quantity="one">%d page est introuvable.</item>
+        <item quantity="other">%d pages sont introuvables.</item>
+    </plurals>
+    <plurals name="scan_recent_pages">
+        <item quantity="one">%d page</item>
+        <item quantity="other">%d pages</item>
+    </plurals>
+    <plurals name="settings_scan_recent_size">
+        <item quantity="one">%1$d numérisation · %2$s</item>
+        <item quantity="other">%1$d numérisations · %2$s</item>
+    </plurals>
+</resources>

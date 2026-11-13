@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Recent scans, kept to be edited again (#461) -->
+<resources>
+    <string name="scan_lab_recent">السكانات الأخيرة لتعديلها لاحقًا (آخر ١٠)</string>
+    <string name="scan_recent_title">السكانات الأخيرة</string>
+    <string name="scan_recent_about">افتح سكان محفوظ مرة أخرى لتعديله</string>
+    <string name="scan_recent_empty">لا توجد سكانات أخيرة بعد. السكانات التي تحفظها تظهر هنا لتعديل حوافها أو شكلها لاحقًا.</string>
+    <string name="scan_recent_off">حفظ السكانات الأخيرة متوقف. شغّله من الإعدادات، الماسح الضوئي.</string>
+    <string name="scan_recent_busy">أنهِ السكان الحالي أو تجاهله أولًا.</string>
+    <string name="scan_recent_unreadable">تعذّر فتح هذا السكان.</string>
+    <string name="scan_recent_untitled">سكان %1$s</string>
+    <string name="scan_recent_delete_title">حذف هذا السكان؟</string>
+    <string name="scan_recent_delete_body">ستُحذف صوره من التطبيق. ملف PDF الذي حفظته يبقى كما هو.</string>
+    <string name="settings_scan_recent">الاحتفاظ بالسكانات الأخيرة لتعديلها</string>
+    <string name="settings_scan_recent_body">آخر ١٠ سكانات تحفظها تبقى صورها في التطبيق لتعدّل حوافها وشكلها لاحقًا. تبقى الصور على هذا الهاتف حتى تحذفها.</string>
+    <string name="settings_scan_recent_delete">حذف السكانات الأخيرة</string>
+    <string name="settings_scan_recent_none">لا توجد سكانات أخيرة</string>
+    <plurals name="scan_recent_missing">
+        <item quantity="zero">لم يُعثر على %d صفحة.</item>
+        <item quantity="one">لم يُعثر على صفحة واحدة.</item>
+        <item quantity="two">لم يُعثر على صفحتين.</item>
+        <item quantity="few">لم يُعثر على %d صفحات.</item>
+        <item quantity="many">لم يُعثر على %d صفحة.</item>
+        <item quantity="other">لم يُعثر على %d صفحة.</item>
+    </plurals>
+    <plurals name="scan_recent_pages">
+        <item quantity="zero">%d صفحة</item>
+        <item quantity="one">صفحة واحدة</item>
+        <item quantity="two">صفحتان</item>
+        <item quantity="few">%d صفحات</item>
+        <item quantity="many">%d صفحة</item>
+        <item quantity="other">%d صفحة</item>
+    </plurals>
+    <plurals name="settings_scan_recent_size">
+        <item quantity="zero">%1$d سكان · %2$s</item>
+        <item quantity="one">سكان واحد · %2$s</item>
+        <item quantity="two">سكانان · %2$s</item>
+        <item quantity="few">%1$d سكانات · %2$s</item>
+        <item quantity="many">%1$d سكانًا · %2$s</item>
+        <item quantity="other">%1$d سكان · %2$s</item>
+    </plurals>
+</resources>

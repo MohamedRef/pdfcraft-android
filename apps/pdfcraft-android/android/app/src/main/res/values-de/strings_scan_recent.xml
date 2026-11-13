@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Recent scans, kept to be edited again (#461) -->
+<resources>
+    <string name="scan_lab_recent">Letzte Scans zum erneuten Bearbeiten (letzte 10)</string>
+    <string name="scan_recent_title">Letzte Scans</string>
+    <string name="scan_recent_about">Einen gespeicherten Scan erneut öffnen und ändern</string>
+    <string name="scan_recent_empty">Noch keine letzten Scans. Gespeicherte Scans erscheinen hier, damit du Ränder oder Aussehen später ändern kannst.</string>
+    <string name="scan_recent_off">Letzte Scans behalten ist aus. Schalte es unter Einstellungen, Scanner ein.</string>
+    <string name="scan_recent_busy">Beende oder verwirf zuerst den laufenden Scan.</string>
+    <string name="scan_recent_unreadable">Dieser Scan konnte nicht geöffnet werden.</string>
+    <string name="scan_recent_untitled">Scan %1$s</string>
+    <string name="scan_recent_delete_title">Diesen Scan löschen?</string>
+    <string name="scan_recent_delete_body">Seine Fotos werden aus der App entfernt. Das gespeicherte PDF bleibt.</string>
+    <string name="settings_scan_recent">Letzte Scans zum Bearbeiten behalten</string>
+    <string name="settings_scan_recent_body">Die letzten 10 gespeicherten Scans behalten ihre Fotos in der App, damit du Ränder und Aussehen später ändern kannst. Die Fotos bleiben auf diesem Telefon, bis du sie löschst.</string>
+    <string name="settings_scan_recent_delete">Letzte Scans löschen</string>
+    <string name="settings_scan_recent_none">Keine letzten Scans</string>
+    <plurals name="scan_recent_missing">
+        <item quantity="one">%d Seite wurde nicht gefunden.</item>
+        <item quantity="other">%d Seiten wurden nicht gefunden.</item>
+    </plurals>
+    <plurals name="scan_recent_pages">
+        <item quantity="one">%d Seite</item>
+        <item quantity="other">%d Seiten</item>
+    </plurals>
+    <plurals name="settings_scan_recent_size">
+        <item quantity="one">%1$d Scan · %2$s</item>
+        <item quantity="other">%1$d Scans · %2$s</item>
+    </plurals>
+</resources>

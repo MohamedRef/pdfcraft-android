@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Recent scans, kept to be edited again (#461) -->
+<resources>
+    <string name="scan_lab_recent">Scansioni recenti da modificare (ultime 10)</string>
+    <string name="scan_recent_title">Scansioni recenti</string>
+    <string name="scan_recent_about">Riapri una scansione salvata per modificarla</string>
+    <string name="scan_recent_empty">Ancora nessuna scansione recente. Le scansioni che salvi appaiono qui per cambiarne bordi o aspetto in seguito.</string>
+    <string name="scan_recent_off">Conservare le scansioni recenti è disattivato. Attivalo in Impostazioni, Scanner.</string>
+    <string name="scan_recent_busy">Prima termina o scarta la scansione in corso.</string>
+    <string name="scan_recent_unreadable">Impossibile aprire questa scansione.</string>
+    <string name="scan_recent_untitled">Scansione %1$s</string>
+    <string name="scan_recent_delete_title">Eliminare questa scansione?</string>
+    <string name="scan_recent_delete_body">Le sue foto vengono rimosse dall’app. Il PDF salvato resta.</string>
+    <string name="settings_scan_recent">Conserva le scansioni recenti per modificarle</string>
+    <string name="settings_scan_recent_body">Le ultime 10 scansioni salvate conservano le foto nell’app, così puoi cambiarne bordi e aspetto in seguito. Le foto restano su questo telefono finché non le elimini.</string>
+    <string name="settings_scan_recent_delete">Elimina scansioni recenti</string>
+    <string name="settings_scan_recent_none">Nessuna scansione recente</string>
+    <plurals name="scan_recent_missing">
+        <item quantity="one">%d pagina non trovata.</item>
+        <item quantity="other">%d pagine non trovate.</item>
+    </plurals>
+    <plurals name="scan_recent_pages">
+        <item quantity="one">%d pagina</item>
+        <item quantity="other">%d pagine</item>
+    </plurals>
+    <plurals name="settings_scan_recent_size">
+        <item quantity="one">%1$d scansione · %2$s</item>
+        <item quantity="other">%1$d scansioni · %2$s</item>
+    </plurals>
+</resources>
