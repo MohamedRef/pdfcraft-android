@@ -30,7 +30,9 @@ drawn page instead of the finished one, and the look tiles are empty. English an
 
 Files: `app/build/screenshots/scan/camera_<mode>_<locale>_<size>.png`,
 `camera_permission_<locale>_<size>.png`, `crop_<locale>_<size>_<theme>.png`, and
-`borders_`, `enhance_` and `document_<locale>_<size>_<theme>.png`.
+`borders_`, `enhance_` and `document_<locale>_<size>_<theme>.png`. `document_made_…` (first theme
+only) shows the document screen with pages 1 and 3 as made by the background queue (a straight
+drawn page stands in for the engine's result) and page 2 still waiting (#494).
 
 ## In CI
 

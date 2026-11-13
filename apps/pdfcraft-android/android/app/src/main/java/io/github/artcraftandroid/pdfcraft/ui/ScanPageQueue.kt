@@ -132,6 +132,39 @@ internal class ScanPageQueue(private val vm: AppViewModel) {
     /** The strip's thumbnail of [page]: its latest result (the last one while it is made again), or null for the photo. */
     fun thumbOf(page: ScanPage): ImageBitmap? = if (on()) made[page.key]?.thumb else null
 
+    /**
+     * [page]'s latest result for the document screen's tile (#494): the last one while it is made
+     * again, null with the option off or before it was first made (the tile then shows the photo).
+     */
+    fun madeOf(page: ScanPage): ScanMadePage? = if (on()) made[page.key] else null
+
+    /**
+     * The document screen's tiles, read from the kept results at the tile's size (#494). Only tiles
+     * on screen ask; at most [SCAN_TILE_CACHE_BYTES] are kept, so a 100-page scan costs no more
+     * memory than a screenful. Keyed by the result's file, which is new each time a page is made.
+     */
+    private val tiles = object : android.util.LruCache<String, ImageBitmap>(SCAN_TILE_CACHE_BYTES) {
+        override fun sizeOf(key: String, value: ImageBitmap): Int = value.width * value.height * 4
+    }
+
+    /** [m] at about [widthPx] × [heightPx] for a tile; null when it can't be read. */
+    suspend fun tileImage(m: ScanMadePage, widthPx: Int, heightPx: Int): ImageBitmap? {
+        val key = "${m.file.path}@${widthPx}x$heightPx"
+        tiles.get(key)?.let { return it }
+        val image = withContext(Dispatchers.IO) {
+            runCatching {
+                val bounds = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                android.graphics.BitmapFactory.decodeFile(m.file.path, bounds)
+                val opts = android.graphics.BitmapFactory.Options().apply {
+                    inSampleSize = io.github.artcraftandroid.pdfcraft.ui.scan.scanTileSampleSize(bounds.outWidth, bounds.outHeight, widthPx, heightPx)
+                }
+                android.graphics.BitmapFactory.decodeFile(m.file.path, opts)?.asImageBitmap()
+            }.getOrNull()
+        } ?: return null
+        tiles.put(key, image)
+        return image
+    }
+
     /** [page]'s thumbnail mark, or [ScanPageMark.Ready] with the option off. */
     fun mark(page: ScanPage): ScanPageMark = if (!on()) ScanPageMark.Ready else scanPageMark(readyOf(page) != null, working == page.key)
 
@@ -297,6 +330,7 @@ internal class ScanPageQueue(private val vm: AppViewModel) {
         worker = null
         working = null
         made.clear()
+        tiles.evictAll()
         finding.clear()
         waitingSince.clear()
         waitingWhy.clear()
@@ -311,7 +345,13 @@ internal class ScanPageQueue(private val vm: AppViewModel) {
 /** Whether a preview came out flattened (#466): by the network, or from its lines of text (#303). */
 internal fun scanCameOutFlat(p: io.github.artcraftandroid.pdfcraft.core.ScanPreview): Boolean = p.flattened || p.lineFlatten?.check?.kept == true
 
-/** The longer side, in dp, of a page's thumbnail made by the queue (#465): the strip's 72 dp. */
+/**
+ * The memory the document screen's tiles may keep (#494): about 12 tiles of 156 × 208 dp (600 × 800 px read) on a
+ * 3× screen. Tiles off screen are read again when scrolled back.
+ */
+internal const val SCAN_TILE_CACHE_BYTES = 24 * 1024 * 1024
+
+/** The longer side, in dp, of a page's thumbnail made by the queue (#465): the strip's 72 dp; the document screen reads the kept result at its tile's size instead (#494). */
 internal const val SCAN_QUEUE_THUMB_DP = 72
 
 /** JPEG quality of a result kept in the cache folder (#465): it is shown at preview size only. */

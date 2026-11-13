@@ -83,3 +83,34 @@ internal fun scanGalleryDiag(pages: Int, saved: Int, failed: List<Int>, bytes: L
         "pages" to pages, "saved" to saved, "failed" to failed.size, "failed_pages" to failed.joinToString(",").ifEmpty { "none" },
         "bytes" to bytes, "ms" to ms, "selected" to selected, "cancelled" to cancelled,
     )
+
+/**
+ * What a document screen tile draws (#494): the page as made (cropped, straightened, turned, in its
+ * look, fingers removed, flattened) once the background queue made it, drawn whole with no turn on
+ * top; until then the photo cut to its corners and turned by [photoTurns], as before.
+ */
+internal data class ScanDocTile(val made: Boolean, val turns: Int, val cut: Boolean)
+
+internal fun scanDocTile(hasMade: Boolean, photoTurns: Int): ScanDocTile =
+    if (hasMade) ScanDocTile(made = true, turns = 0, cut = false) else ScanDocTile(made = false, turns = photoTurns, cut = true)
+
+/**
+ * The power-of-two step at which a [srcW] × [srcH] made page is read for a tile of [wantW] × [wantH]
+ * pixels (#494): the largest that still leaves the picture at least as large as it is drawn
+ * (fitted in the tile), so a tile is sharp and holds no more pixels than it needs.
+ */
+internal fun scanTileSampleSize(srcW: Int, srcH: Int, wantW: Int, wantH: Int): Int {
+    if (srcW <= 0 || srcH <= 0 || wantW <= 0 || wantH <= 0) return 1
+    // the tile shows the page fitted: the scale it is drawn at
+    val k = minOf(wantW.toDouble() / srcW, wantH.toDouble() / srcH)
+    var n = 1
+    while (n * 2 * k <= 1.0) n *= 2
+    return n
+}
+
+/**
+ * The document screen's log line (#494): `pages`, `made` (tiles showing the made page when the screen
+ * opened), `waiting` (the others) and whether pages are made in the background at all.
+ */
+internal fun scanDocShownDiag(pages: Int, made: Int, background: Boolean): Array<Pair<String, Any?>> =
+    arrayOf("pages" to pages, "made" to made, "waiting" to (pages - made).coerceAtLeast(0), "background_pages" to background)

@@ -177,8 +177,35 @@ class ScanScreenshotsTest {
             shoot("enhance_$name")
             rule.runOnIdle { vm.scanSteps.showDocument("enhance", pages.size) }
             shoot("document_$name")
+            // #494: pages 1 and 3 as made by the background queue, page 2 still waiting
+            if (t == themes.first()) {
+                rule.runOnIdle { madeTiles(vm, pages, listOf(0, 2)) }
+                shoot("document_made_$name")
+                rule.runOnIdle { noMadeTiles(vm) }
+            }
             rule.runOnIdle { vm.scanSteps.openEnhance(1, pages.size) }
         }
+    }
+
+    /**
+     * Pages [at] as if the background queue had made them (#494): a straight drawn page in place of
+     * the engine's result, which a JVM test cannot make. The queue may try the others and fail;
+     * they keep their photo with the waiting dot.
+     */
+    private fun madeTiles(vm: AppViewModel, pages: List<ScanPage>, at: List<Int>) {
+        vm.scanLab.update(vm.scanLab.options.copy(preview = true, backgroundPages = true))
+        for (i in at) {
+            val made = drawnPage(600, 800, tilted = false, background = 0xFFF7F5F0.toInt())
+            val file = File.createTempFile("made-page-$i-", ".jpg").apply { deleteOnExit() }
+            file.outputStream().use { made.compress(Bitmap.CompressFormat.JPEG, 90, it) }
+            val thumb = Bitmap.createScaledBitmap(made, 54, 72, true).asImageBitmap()
+            vm.pageQueue.made[pages[i].key] = io.github.artcraftandroid.pdfcraft.ui.ScanMadePage(vm.pageQueue.keyOf(pages[i]), file, thumb, 0, 0, false, null, null)
+        }
+    }
+
+    private fun noMadeTiles(vm: AppViewModel) {
+        vm.pageQueue.made.clear()
+        vm.scanLab.update(vm.scanLab.options.copy(preview = false))
     }
 
     @Test @Config(qualifiers = "en-w360dp-h640dp-xhdpi") fun cameraEnglish360() = camera("en_360x640")
