@@ -112,6 +112,166 @@ impl<'a> Lexer<'a> {
         self.object_depth(0)
     }
 
+    /// Android adaptation (#235): read the top-level dictionary at the cursor and return only
+    /// the values of `keys` (the last of each, as [`Dict::set`] keeps it), passing over every
+    /// other value without building it. It mirrors [`Self::object`] step for step -- the same
+    /// node budget, depth limit, tolerated junk and leaf readers -- so on any input it succeeds
+    /// exactly when `object()` gives a dictionary, ends at the same position, and the values it
+    /// returns are `object()`'s. Anything other than a dictionary is an error; callers fall back
+    /// to the full parse. Differential tests compare it with `object()`.
+    pub fn skim_dict(&mut self, keys: &[&[u8]]) -> Result<Vec<Option<Object>>, CosError> {
+        self.nodes = 0;
+        // object_depth(0)'s own checks, for the dictionary itself
+        self.nodes = self.nodes.saturating_add(1);
+        if self.over_budget() {
+            return Err(self.err("object too large"));
+        }
+        self.skip_ws();
+        if self.peek() != Some(b'<') || self.data.get(self.pos + 1) != Some(&b'<') {
+            return Err(self.err("not a dictionary"));
+        }
+        self.pos += 2;
+        let depth = 0;
+        let mut found: Vec<Option<Object>> = vec![None; keys.len()];
+        loop {
+            self.skip_ws();
+            match self.peek() {
+                None => return Err(self.err("unterminated dictionary")),
+                Some(b'>') if self.data.get(self.pos + 1) == Some(&b'>') => {
+                    self.pos += 2;
+                    return Ok(found);
+                }
+                Some(b'/') => {
+                    self.pos += 1;
+                    let key = self.name_body();
+                    let wanted = keys.iter().position(|k| *k == key.as_slice());
+                    self.skip_ws();
+                    if self.peek() == Some(b'>') && self.data.get(self.pos + 1) == Some(&b'>') {
+                        if let Some(i) = wanted {
+                            found[i] = Some(Object::Null);
+                        }
+                        continue;
+                    }
+                    match wanted {
+                        Some(i) => found[i] = Some(self.object_depth(depth + 1)?),
+                        None => self.skip_depth(depth + 1)?,
+                    }
+                }
+                Some(_) => {
+                    let before = self.pos;
+                    let _ = self.skip_depth(depth + 1);
+                    if self.over_budget() {
+                        return Err(self.err("object too large"));
+                    }
+                    if self.pos == before {
+                        self.pos += 1;
+                    }
+                }
+            }
+        }
+    }
+
+    /// [`Self::object_depth`] without building the object (#235): the same steps, counts and
+    /// errors, with each leaf read by the same reader and dropped.
+    fn skip_depth(&mut self, depth: usize) -> Result<(), CosError> {
+        if depth > MAX_DEPTH {
+            return Err(self.err("nesting too deep"));
+        }
+        self.nodes = self.nodes.saturating_add(1);
+        if self.over_budget() {
+            return Err(self.err("object too large"));
+        }
+        self.skip_ws();
+        let Some(b) = self.peek() else { return Err(self.err("unexpected end of data")) };
+        match b {
+            b'/' => {
+                self.pos += 1;
+                // name_body always takes the whole run of regular bytes
+                self.token();
+                Ok(())
+            }
+            b'(' => {
+                self.pos += 1;
+                self.literal_string().map(drop)
+            }
+            b'<' if self.data.get(self.pos + 1) == Some(&b'<') => {
+                self.pos += 2;
+                loop {
+                    self.skip_ws();
+                    match self.peek() {
+                        None => return Err(self.err("unterminated dictionary")),
+                        Some(b'>') if self.data.get(self.pos + 1) == Some(&b'>') => {
+                            self.pos += 2;
+                            return Ok(());
+                        }
+                        Some(b'/') => {
+                            self.pos += 1;
+                            self.token();
+                            self.skip_ws();
+                            if self.peek() == Some(b'>') && self.data.get(self.pos + 1) == Some(&b'>') {
+                                continue;
+                            }
+                            self.skip_depth(depth + 1)?;
+                        }
+                        Some(_) => {
+                            let before = self.pos;
+                            let _ = self.skip_depth(depth + 1);
+                            if self.over_budget() {
+                                return Err(self.err("object too large"));
+                            }
+                            if self.pos == before {
+                                self.pos += 1;
+                            }
+                        }
+                    }
+                }
+            }
+            b'<' => {
+                self.pos += 1;
+                self.hex_string().map(drop)
+            }
+            b'[' => {
+                self.pos += 1;
+                loop {
+                    self.skip_ws();
+                    match self.peek() {
+                        None => return Err(self.err("unterminated array")),
+                        Some(b']') => {
+                            self.pos += 1;
+                            return Ok(());
+                        }
+                        _ => {
+                            let before = self.pos;
+                            match self.skip_depth(depth + 1) {
+                                Ok(()) => {}
+                                Err(e) if self.over_budget() => return Err(e),
+                                Err(_) if self.pos == before => self.pos += 1,
+                                Err(e) => return Err(e),
+                            }
+                        }
+                    }
+                }
+            }
+            b'0'..=b'9' => match self.plain_ref() {
+                Some(_) => Ok(()),
+                None => self.number_or_ref().map(drop),
+            },
+            b'+' | b'-' | b'.' => self.number_or_ref().map(drop),
+            _ => {
+                let start = self.pos;
+                let tok = self.token();
+                match tok {
+                    b"true" | b"false" | b"null" => Ok(()),
+                    b"" => {
+                        self.pos = start + 1;
+                        Err(CosError::Syntax { offset: start, detail: format!("unexpected byte 0x{b:02x}") })
+                    }
+                    other => Err(CosError::Syntax { offset: start, detail: format!("unexpected keyword {:?}", String::from_utf8_lossy(other)) }),
+                }
+            }
+        }
+    }
+
     fn over_budget(&self) -> bool {
         self.nodes > MAX_NODES
     }
@@ -1166,6 +1326,85 @@ mod tests {
                 source.extend_from_slice(part);
             }
             assert_plain_ref_matches_general(&source);
+        }
+    }
+
+    /// #235: `skim_dict` succeeds exactly when `object()` reads a dictionary, stops where it
+    /// stops, and gives the values the dictionary holds for the asked keys.
+    fn assert_skim_matches_object(source: &[u8]) {
+        let keys: [&[u8]; 3] = [b"Type", b"Kids", b"A#20B"];
+        let mut full = Lexer::new(source, 0);
+        let parsed = full.object();
+        let mut skim = Lexer::new(source, 0);
+        let skimmed = skim.skim_dict(&keys);
+        match (&parsed, &skimmed) {
+            (Ok(Object::Dict(d)), Ok(values)) => {
+                assert_eq!(skim.pos, full.pos, "{:?}", String::from_utf8_lossy(source));
+                for (k, v) in keys.iter().zip(values) {
+                    assert_eq!(v.as_ref(), d.get(k), "{:?}", String::from_utf8_lossy(source));
+                }
+            }
+            (Ok(Object::Dict(_)), Err(e)) => panic!("skim failed ({e}) where object() read a dictionary: {:?}", String::from_utf8_lossy(source)),
+            (_, Ok(_)) => panic!("skim read what object() did not read as a dictionary: {:?}", String::from_utf8_lossy(source)),
+            (_, Err(_)) => {}
+        }
+    }
+
+    #[test]
+    fn skimmed_dictionaries_read_as_the_full_parse_does() {
+        for source in [
+            &b"<< /Type /Page /Kids [1 0 R 2 0 R] >>"[..],
+            b"<</Type/Pages/Kids 7 0 R/Count 3>>",
+            b"<< /Type /Pages /Type /Page >>",
+            b"<< /Kids [3 0 R] /Kids [4 0 R] /Type /Pages >>",
+            b"<< /Type >>",
+            b"<< /Kids >> trailing",
+            b"<< /A#20B 5 /T#79pe /Page >>",
+            b"<< /Annots [<< /Subtype /Link /A << /URI (x\\)y) >> >> << /Rect [1 2 3 4] >>] /Type /Page >>",
+            b"<< /Resources << /Font << /F1 3 0 R >> >> /Contents <00ff> /Type /Page >>",
+            b"<< 12 junk /Type /Page >>",
+            b"<< /Type /Page /X [1 bad 2] >>",
+            b"<< /Type /Page /X [1 (unterminated] >>",
+            b"<< /Type /Page /X <zz> >>",
+            b"<< /Type /Page /X foo >>",
+            b"<< /Type /Page",
+            b"[ /Type /Page ]",
+            b"/Page",
+            b"",
+            b"<< /N 1.5 /M -.5e3 /O --3 /Type /Page %comment\n/Kids [] >>",
+            b"<< /Type /Page /X << /Y << /Z [[[]]] >> >> /Kids null >>",
+        ] {
+            assert_skim_matches_object(source);
+        }
+        // nesting past the depth limit, and well inside it
+        for depth in [MAX_DEPTH - 2, MAX_DEPTH, MAX_DEPTH + 3] {
+            let mut source = b"<< /Kids ".to_vec();
+            source.extend(std::iter::repeat_n(b'[', depth));
+            source.extend(std::iter::repeat_n(b']', depth));
+            source.extend_from_slice(b" /Type /Pages >>");
+            assert_skim_matches_object(&source);
+            let mut source = b"<< /Other ".to_vec();
+            source.extend(std::iter::repeat_n(b'[', depth));
+            source.extend(std::iter::repeat_n(b']', depth));
+            source.extend_from_slice(b" /Type /Pages >>");
+            assert_skim_matches_object(&source);
+        }
+    }
+
+    proptest::proptest! {
+        #[test]
+        fn skimmed_dictionaries_match_the_full_parse_on_noisy_input(
+            parts in proptest::collection::vec(proptest::sample::select(vec![
+                &b"/Type"[..], b"/Kids", b"/Page", b"/Pages", b"/A#20B", b"/X", b" ", b"\n", b"%c\n",
+                b"<<", b">>", b">", b"<", b"[", b"]", b"(", b")", b"\\", b"<0f>", b"<zz",
+                b"1", b"0", b"R", b" 0 R", b"-", b".", b"+", b"1.5", b"true", b"null", b"junk", b"\xff",
+            ]), 0..24)
+        ) {
+            let mut source = b"<<".to_vec();
+            for part in parts {
+                source.extend_from_slice(part);
+            }
+            assert_skim_matches_object(&source);
         }
     }
 }
