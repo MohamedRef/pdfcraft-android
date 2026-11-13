@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Save PDF that only writes the file, and text recognition only when asked (#504). -->
+<resources>
+    <string name="scan_lab_full_pages_ahead">Seiten vor dem Speichern in voller Größe vorbereiten</string>
+    <string name="settings_scan_ocr">Text auswählbar machen</string>
+    <string name="settings_scan_ocr_body">Beim Speichern als PDF werden die Wörter jeder Seite gelesen, damit du sie suchen und markieren kannst. Das dauert länger und lässt sich überspringen. Aus: Das PDF wird sofort gespeichert; der Viewer kann Text später erkennen.</string>
+    <string name="msg_busy_finishing_page">Seite %1$d von %2$d wird fertiggestellt …</string>
+    <string name="busy_cancel_scan_save">Abbrechen speichert nichts; der Scan bleibt geöffnet.</string>
+    <string name="busy_skip">Überspringen</string>
+    <string name="busy_skip_ocr">Überspringen speichert das PDF jetzt. Bereits gelesene Seiten behalten ihren Text.</string>
+    <string name="busy_cancel_gallery">Abbrechen stoppt nach der aktuellen Seite. Bereits gespeicherte Seiten bleiben in der Galerie.</string>
+</resources>

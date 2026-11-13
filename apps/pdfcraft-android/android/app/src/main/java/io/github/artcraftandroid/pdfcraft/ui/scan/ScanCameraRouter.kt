@@ -124,6 +124,9 @@ internal class ScanCameraRouter(private val activity: ComponentActivity, private
     @Composable
     fun Screen() {
         val m = model()
+        // pages made at full size for Save wait while the camera is open (#504)
+        val open = m.target != null
+        androidx.compose.runtime.LaunchedEffect(open) { vm().fullPages.camera(open) }
         if (m.target != null) ScanCameraScreen(m, vm().scanPages.map { it.thumb }, actions, vm().scanBook, vm().scanLab.options.cameraBar)
     }
 

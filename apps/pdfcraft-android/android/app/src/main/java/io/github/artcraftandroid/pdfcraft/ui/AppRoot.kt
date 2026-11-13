@@ -237,7 +237,7 @@ fun AppRoot(vm: AppViewModel, onBrowse: () -> Unit, onPickSignatureImage: () -> 
                 var cancelling by remember(cancel) { mutableStateOf(false) }
                 PdfDialog(
                     onDismiss = {}, title = null, confirm = null,
-                    dismiss = if (cancel != null) stringResource(if (cancelling) R.string.busy_cancelling else R.string.common_cancel) else null,
+                    dismiss = if (cancel != null) (if (cancelling) stringResource(R.string.busy_cancelling) else vm.tools.busyCancelLabel ?: stringResource(R.string.common_cancel)) else null,
                     onDismissButton = { if (cancel != null && !cancelling) { cancelling = true; cancel() } },
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -254,7 +254,8 @@ fun AppRoot(vm: AppViewModel, onBrowse: () -> Unit, onPickSignatureImage: () -> 
                     }
                     if (cancel != null) {
                         Spacer(Modifier.height(10.dp))
-                        Text(stringResource(R.string.busy_cancel_keeps), color = c.textSecondary, fontSize = 13.sp)
+                        // what Cancel does in this job's words (#504), else text recognition's
+                        Text(vm.tools.busyCancelNote ?: stringResource(R.string.busy_cancel_keeps), color = c.textSecondary, fontSize = 13.sp)
                     }
                 }
             }

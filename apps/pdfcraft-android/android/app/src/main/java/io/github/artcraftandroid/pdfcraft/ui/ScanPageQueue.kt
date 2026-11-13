@@ -197,6 +197,9 @@ internal class ScanPageQueue(private val vm: AppViewModel) {
         if (batchStarted == null) batchStarted = android.os.SystemClock.elapsedRealtime()
     }
 
+    /** No page is being made or waits to be made by the queue (#504): pages made at full size may go. */
+    fun idle(): Boolean = working == null && worker?.isActive != true
+
     /** Start the queue if pages wait and it is not running. Main thread. */
     fun kick() {
         if (!on() || worker?.isActive == true) return
@@ -245,6 +248,8 @@ internal class ScanPageQueue(private val vm: AppViewModel) {
             // a receipt becomes Grayscale by itself, without being opened (#466)
             vm.scanApplyAutoLook(page.key, p.kind?.suggestGreyscale == true)
         }
+        // every preview is made: the pages can be made at full size for Save (#504)
+        vm.fullPages.kick()
     }
 
     /** Pages that could not be made, by key: not asked again until they change. */
@@ -304,6 +309,8 @@ internal class ScanPageQueue(private val vm: AppViewModel) {
             "quarter_turns" to p.quarterTurns.toInt(), "flattened" to p.flattened, "preset" to (p.kind?.preset ?: "none"),
         )
         readyCheck()
+        // a page ready to be made at full size for Save (#504)
+        vm.fullPages.kick()
     }
 
     /** When no page waits any more, one `scan_ready` line for the batch. */
