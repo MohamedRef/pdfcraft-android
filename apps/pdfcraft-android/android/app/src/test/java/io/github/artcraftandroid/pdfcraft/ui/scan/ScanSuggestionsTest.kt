@@ -30,4 +30,15 @@ class ScanSuggestionsTest {
         assertTrue(scanSuggestions(false, true, true, canFlatten = true, flattenChoice = null, cleanScan = true).isEmpty())
         assertEquals(listOf("flatten", "greyscale"), ScanSuggestion.entries.map { it.id })
     }
+
+    @Test
+    fun nothingIsAskedThatTheAutomaticLookDecides() {
+        // #493: automatic flattening on (the default) decided already; no "Flatten this page?"
+        val lab = io.github.artcraftandroid.pdfcraft.ui.ScanLab()
+        assertTrue(lab.flattenAuto && lab.autoLook)
+        assertTrue(scanSuggestionsShown(lab, true, true, canFlatten = true, flattenChoice = null, cleanScan = true).isEmpty())
+        // with each automatic decision off, its suggestion comes back
+        assertEquals(listOf(ScanSuggestion.Flatten), scanSuggestionsShown(lab.copy(flattenAuto = false), true, false, canFlatten = true, flattenChoice = null, cleanScan = true))
+        assertEquals(listOf(ScanSuggestion.Greyscale), scanSuggestionsShown(lab.copy(autoLook = false), false, true, canFlatten = true, flattenChoice = null, cleanScan = true))
+    }
 }
