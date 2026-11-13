@@ -20,14 +20,17 @@ Files: `app/build/screenshots/settings/<page>_<locale>_<size>_<theme>.png`.
 `app/src/test/java/io/github/artcraftandroid/pdfcraft/ui/scan/ScanScreenshotsTest.kt`: the
 scanner's screens on main. The in-app camera's bars in each mode (One page, Many pages, Book) laid
 out as `ScanCameraScreen` lays them around a drawn frame (CameraX does not run in a JVM test), the
-camera permission page, and the crop screen on a drawn page (light and dark). English and Arabic at
+camera permission page, and the crop screen on a drawn page (light and dark). Then the screens after
+the camera with "Scan screens in steps" on, drawn by the real `ScanScreen` on a scan of three drawn
+pages: Adjust borders (#458) on page 2, Enhance (#459) after its Next, and the document screen
+(#460), light and dark. The engine does not run in a JVM test, so the testing option "Show pages as
+they will be saved" is off for these: the testing-option note shows at the top, Enhance shows the
+drawn page instead of the finished one, and the look tiles are empty. English and Arabic at
 360×640 dp and 384×832 dp, French and German (long words) at 360×640 dp.
 
 Files: `app/build/screenshots/scan/camera_<mode>_<locale>_<size>.png`,
-`camera_permission_<locale>_<size>.png` and `crop_<locale>_<size>_<theme>.png`.
-
-Still to add as they land: Adjust borders (#458), Enhance (#459) and the document screen (#460),
-which replace today's single scan screen.
+`camera_permission_<locale>_<size>.png`, `crop_<locale>_<size>_<theme>.png`, and
+`borders_`, `enhance_` and `document_<locale>_<size>_<theme>.png`.
 
 ## In CI
 
