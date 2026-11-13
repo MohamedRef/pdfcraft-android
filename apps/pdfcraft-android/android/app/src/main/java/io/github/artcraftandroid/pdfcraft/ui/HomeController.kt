@@ -31,12 +31,12 @@ class HomeController internal constructor(private val vm: AppViewModel) {
     var homeTab by mutableStateOf(io.github.artcraftandroid.pdfcraft.ui.home.HomeTab.Home)
     var settingsOpen by mutableStateOf(false)
 
-    /** The Settings page to open on (root, about, prefs, help). */
-    var settingsStartPage = "root"
+    /** The Settings page to open on (#447). */
+    var settingsStartPage = io.github.artcraftandroid.pdfcraft.ui.home.SettingsPage.Root
         internal set
 
-    /** Open Settings at [page]: Home's update card opens About (#193). */
-    fun openSettings(page: String = "root", show: Boolean = true) {
+    /** Open Settings at [page]: Home's update card opens Updates (#193, #447). */
+    fun openSettings(page: io.github.artcraftandroid.pdfcraft.ui.home.SettingsPage = io.github.artcraftandroid.pdfcraft.ui.home.SettingsPage.Root, show: Boolean = true) {
         settingsStartPage = page
         if (show) settingsOpen = true
     }

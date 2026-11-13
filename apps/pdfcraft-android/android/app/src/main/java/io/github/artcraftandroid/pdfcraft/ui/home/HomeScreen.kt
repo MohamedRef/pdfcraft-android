@@ -193,7 +193,7 @@ private fun HomeTabScreen(vm: AppViewModel, onBrowse: () -> Unit) {
                         Row(
                             Modifier.padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 8.dp).fillMaxWidth()
                                 .clip(RoundedCornerShape(12.dp)).background(c.surfaceRaised)
-                                .clickable(role = Role.Button) { vm.home.openSettings("about") }.padding(horizontal = 14.dp, vertical = 12.dp),
+                                .clickable(role = Role.Button) { vm.home.openSettings(SettingsPage.Updates) }.padding(horizontal = 14.dp, vertical = 12.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Icon(LucideIcons.Sparkles, null, tint = c.accent, modifier = Modifier.size(20.dp))

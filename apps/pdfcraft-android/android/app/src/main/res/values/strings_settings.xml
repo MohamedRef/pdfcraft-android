@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Settings pages and their summaries (#447). -->
+<resources>
+    <string name="settings_group_documents">Documents</string>
+    <string name="settings_group_tools">Tools</string>
+    <string name="settings_group_app">App</string>
+    <string name="settings_group_support">Support</string>
+    <string name="settings_reading">Reading and display</string>
+    <string name="settings_reading_summary">Screen on, status bar, page previews</string>
+    <string name="settings_pen_summary">Pen only, snap to shape, your name on comments</string>
+    <string name="settings_forms_summary">Suggestions when you fill in forms</string>
+    <string name="settings_scanner">Scanner</string>
+    <string name="settings_scanner_summary">Camera, low light, page turning, models</string>
+    <string name="settings_library">Library and study</string>
+    <string name="settings_library_summary">Search index, study statistics</string>
+    <string name="settings_off">Off</string>
+    <string name="settings_updates_summary">Check for new versions and download them</string>
+    <string name="settings_diagnostics_recording">Recording</string>
+    <string name="settings_help_summary">Tips, help, report a problem</string>
+    <string name="settings_scan_testing_summary">Switch scanner features off or back, and keep scans to share</string>
+    <string name="settings_scan_testing_needs_log">Turn on the diagnostics log to use these</string>
+    <string name="settings_copy_version">Copy version</string>
+</resources>

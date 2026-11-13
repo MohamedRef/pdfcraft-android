@@ -1,7 +1,7 @@
 //! Fingers, glare and stains (#306), on pages drawn here: what is found, what is filled, and
 //! that nothing over print is filled.
 
-use crate::defects::{fill_blank, find, normalise_stains};
+use crate::defects::{fill_blank, fill_fingers, find, normalise_stains};
 use crate::warp::Rgb;
 
 const W: u32 = 1200;
@@ -116,6 +116,130 @@ fn a_finger_over_print_is_flagged_not_filled() {
     let mut fixed = page.clone();
     assert_eq!(fill_blank(&mut fixed, &found), 0);
     assert!(same(&fixed, &page));
+}
+
+/// Skin as the Auto look leaves it on the owner's photos: lit, and under a hand's shadow.
+const SKIN: [u8; 3] = [226, 150, 118];
+const SKIN_IN_SHADOW: [u8; 3] = [120, 62, 48];
+
+/// A fingertip that only just comes over the bottom edge: half an ellipse `width` px wide and
+/// `depth` px deep, centred at `cx`, shaded darker towards its sides. `nail` puts a dark red
+/// nail in its middle.
+fn fingertip(page: &mut Rgb, cx: u32, width: u32, depth: u32, colour: [u8; 3], nail: bool) {
+    let (a, b) = (width as f32 / 2.0, depth as f32);
+    for y in H - depth..H {
+        for x in cx - width / 2..cx + width / 2 {
+            let (dx, dy) = ((x as f32 - cx as f32) / a, (H - y) as f32 / b);
+            if dx * dx + dy * dy > 1.0 {
+                continue;
+            }
+            let shade = 1.0 - 0.2 * dx * dx;
+            let in_nail = nail && dx.abs() < 0.45 && (0.35..0.85).contains(&dy);
+            set(page, x, y, if in_nail { [96, 18, 30] } else { colour.map(|c| (f32::from(c) * shade) as u8) });
+        }
+    }
+}
+
+/// The owner's photos (#466): a fingertip 17 % of the short side wide and a quarter of that
+/// deep, which the issue's starting rules (elongated, at least 1 % of the page) did not find.
+#[test]
+fn a_fingertip_that_only_just_comes_over_the_edge_is_found_and_filled() {
+    let mut page = printed();
+    fingertip(&mut page, 800, 204, 58, SKIN, false);
+    let found = find(&page, None).unwrap();
+    assert_eq!(found.fingers.len(), 1, "{:?}", found.fingers.iter().map(|r| r.area).collect::<Vec<_>>());
+    assert!((0.003..0.006).contains(&found.fingers[0].area), "{}", found.fingers[0].area);
+    assert!(!found.fingers[0].covers_ink);
+    let mut fixed = page.clone();
+    assert_eq!(fill_blank(&mut fixed, &found), 1);
+    for (x, y) in [(800, 1595), (800, 1560), (740, 1590), (860, 1590)] {
+        let c = get(&fixed, x, y);
+        for k in 0..3 {
+            assert!(c[k].abs_diff(PAPER[k]) <= 6, "({x}, {y}): {c:?}");
+        }
+    }
+}
+
+/// A thumb on a small label: a third of the short side wide. One region, nail and all, in
+/// shadow as well as lit.
+#[test]
+fn a_thumb_with_a_nail_is_one_finger_lit_or_in_shadow() {
+    for colour in [SKIN, SKIN_IN_SHADOW] {
+        let mut page = printed();
+        fingertip(&mut page, 500, 390, 220, colour, true);
+        let found = find(&page, None).unwrap();
+        assert_eq!(found.fingers.len(), 1, "{colour:?}: {:?}", found.fingers.iter().map(|r| r.area).collect::<Vec<_>>());
+        // the nail is inside the region: its middle is one of the region's pixels
+        let (w, h) = (found.work_width, found.work_height);
+        let (nx, ny) = (500 * w / W as usize, (H as usize - 130) * h / H as usize);
+        assert!(found.fingers[0].pixels.contains(&(ny * w + nx)), "{colour:?}: the nail is a hole");
+        let mut fixed = page.clone();
+        assert_eq!(fill_fingers(&mut fixed, &found), 1);
+        let c = get(&fixed, 500, H - 130);
+        for k in 0..3 {
+            assert!(c[k].abs_diff(PAPER[k]) <= 6, "{colour:?}: {c:?}");
+        }
+    }
+}
+
+/// A sliver of a wooden table along an edge, a skin-coloured band across the top and a
+/// skin-coloured stamp inside the page are not fingers.
+#[test]
+fn table_slivers_bands_and_stamps_are_not_fingers() {
+    // a strip 14 px thick along 40 % of the right edge
+    let mut sliver = printed();
+    for y in 500..1140u32 {
+        for x in W - 14..W {
+            set(&mut sliver, x, y, SKIN);
+        }
+    }
+    // a strip the same length and 40 px thick: wide enough to stay, far too shallow for a finger
+    let mut strip = printed();
+    for y in 500..900u32 {
+        for x in W - 40..W {
+            set(&mut strip, x, y, SKIN);
+        }
+    }
+    // a band across the whole top
+    let mut band = printed();
+    for y in 0..120u32 {
+        for x in 0..W {
+            set(&mut band, x, y, SKIN);
+        }
+    }
+    // a round stamp in the margin that touches no edge
+    let mut stamp = printed();
+    for y in 1250..1450u32 {
+        for x in 500..700u32 {
+            if (x as f32 - 600.0).hypot(y as f32 - 1350.0) < 95.0 {
+                set(&mut stamp, x, y, SKIN);
+            }
+        }
+    }
+    for (name, page) in [("sliver", sliver), ("strip", strip), ("band", band), ("stamp", stamp)] {
+        let found = find(&page, None).unwrap();
+        assert!(found.fingers.is_empty(), "{name}: {:?}", found.fingers.iter().map(|r| r.area).collect::<Vec<_>>());
+    }
+}
+
+/// A finger that print runs up to is flagged; `fill_blank` leaves it, `fill_fingers` puts paper
+/// over it and changes nothing else.
+#[test]
+fn a_finger_over_print_is_filled_only_when_asked() {
+    let mut page = printed();
+    finger_from_left(&mut page, 600, 110, 300);
+    let found = find(&page, None).unwrap();
+    assert_eq!((found.fingers.len(), found.fingers_over_print()), (1, 1));
+    let mut fixed = page.clone();
+    assert_eq!(fill_fingers(&mut fixed, &found), 1);
+    let c = get(&fixed, 120, 600);
+    for k in 0..3 {
+        assert!(c[k].abs_diff(PAPER[k]) <= 6, "{c:?}");
+    }
+    // print away from the finger is as it was
+    for (x, y) in [(700, 600), (500, 300), (1040, 1000)] {
+        assert_eq!(get(&fixed, x, y), get(&page, x, y), "({x}, {y})");
+    }
 }
 
 /// A glare spot: in the page before correction, a clipped core with a halo of light falling off

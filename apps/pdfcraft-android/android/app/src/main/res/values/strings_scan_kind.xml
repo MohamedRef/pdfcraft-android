@@ -3,4 +3,5 @@
 <resources>
     <string name="scan_lab_strict_gutter">Book page only when a shadow runs down the whole binding side and fades inward</string>
     <string name="scan_lab_strict_photo">Barcodes, stamps and soft print are not photographs</string>
+    <string name="scan_lab_strict_book">One curved side is not a book page</string>
 </resources>

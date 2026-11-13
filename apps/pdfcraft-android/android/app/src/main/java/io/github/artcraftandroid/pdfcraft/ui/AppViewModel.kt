@@ -1967,12 +1967,12 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 "source" to (doc?.source?.name?.lowercase() ?: "failed"), "confidence" to (doc?.confidence?.toDouble() ?: 0.0),
                 "angle" to (doc?.angle?.toInt() ?: 0), "passes" to (doc?.passes?.toInt() ?: 0),
                 *(doc?.timings.orEmpty().map<io.github.artcraftandroid.pdfcraft.core.ScanTiming, Pair<String, Any?>> { it.stage.removePrefix("scan_") + "_ms" to it.ms.toLong() }.toTypedArray()),
-                "refined_sides" to (doc?.refined?.count { it } ?: 0), "curved_sides" to (doc?.curved?.count { it } ?: 0),
+                "refined_sides" to (doc?.refined?.count { it } ?: 0), "curved_sides" to (doc?.curved?.count { it } ?: 0), "curved_opposite" to scanCurvedOpposite(doc?.curved.orEmpty()),
                 "finder" to ScanLab.finderId(lab.finder), "refine" to lab.refine, "straightened" to straightened,
                 *io.github.artcraftandroid.pdfcraft.ui.scan.scanBookDiag(book, lab.bookGutter, bookOrder, cut, bookMs),
             )
             val finding = doc?.let { d ->
-                ScanFinding(d.source.name.lowercase(), d.confidence.toDouble(), d.angle.toInt(), d.passes.toInt(), d.refined.count { it }, d.curved.count { it }, lab.findOptions())
+                ScanFinding(d.source.name.lowercase(), d.confidence.toDouble(), d.angle.toInt(), d.passes.toInt(), d.refined.count { it }, d.curved.count { it }, scanCurvedOpposite(d.curved), lab.findOptions())
             }
             val at = scanPages.indexOfFirst { it.file == f }
             if (at >= 0) {
@@ -2107,7 +2107,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
 
     /** The native request for [page]'s preview: the queue (#465) and the screen ask the same. */
     internal fun scanPreviewRequest(page: ScanPage, flatten: Boolean, lab: ScanLab, autoUpright: Boolean): io.github.artcraftandroid.pdfcraft.core.ScanPageRequest =
-        scanPageRequest(page.file.absolutePath, page.corners, page.look.filter, flatten, lab, "", page.turns, autoUpright, io.github.artcraftandroid.pdfcraft.ui.scan.scanPresetFor(page, lab), page.finding?.curvedSides ?: 0, page.look.strength, page.look.paper)
+        scanPageRequest(page.file.absolutePath, page.corners, page.look.filter, flatten, lab, "", page.turns, autoUpright, io.github.artcraftandroid.pdfcraft.ui.scan.scanPresetFor(page, lab), page.finding?.curvedSides ?: 0, page.finding?.curvedOpposite ?: false, page.book != null, page.look.strength, page.look.paper)
 
     /** Every page of the scan made in the background (#465). */
     internal val pageQueue = ScanPageQueue(this)
@@ -2176,6 +2176,8 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 *scanAppliedStrengthDiag(scanAppliedStrength(look, lab, p?.kind?.strength?.toInt()), lab),
                 "flatten" to flatten, "made" to (image != null),
                 "reused" to (p?.reused ?: false), "ms" to ms,
+                // the look's light estimate kept from an earlier look of the page; its parts are the preview_look_*_ms fields (#446)
+                "look_reuse" to lab.lookReuse, "light_reused" to (p?.lightReused ?: false),
                 *(p?.timings.orEmpty().map<io.github.artcraftandroid.pdfcraft.core.ScanTiming, Pair<String, Any?>> { it.stage.removePrefix("scan_") + "_ms" to it.ms.toLong() }.toTypedArray()),
                 "width" to (p?.width?.toLong() ?: 0L), "height" to (p?.height?.toLong() ?: 0L),
                 "quarter_turns" to (p?.quarterTurns?.toInt() ?: 0), "flattened" to (p?.flattened ?: false),
@@ -2196,7 +2198,10 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 if (scanPreviewWanted != key) return@withContext
                 if (p != null && image != null) {
                     scanPreview = ScanPreviewShown(key, image, p.quarterTurns.toInt(), p.flattened, p.kind)
-                    scanPreviewStats[page.key] = ScanTestPreview(true, p.reused, ms, p.width.toInt(), p.height.toInt(), filter.mode)
+                    scanPreviewStats[page.key] = ScanTestPreview(
+                        true, p.reused, ms, p.width.toInt(), p.height.toInt(), filter.mode,
+                        lightReused = p.lightReused, lookParts = scanLookParts(p.timings),
+                    )
                     // the strip and the comparison follow the page shown (#301)
                     requestScanTiles(index, page, flatten)
                 } else {
@@ -2257,7 +2262,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         scanDetailJob?.cancel()
         val look = page.look
         scanDetailJob = viewModelScope.launch(scanPreviewDispatcher) {
-            val request = scanPageRequest(page.file.absolutePath, page.corners, look.filter, flatten, lab, "", page.turns, autoUpright, io.github.artcraftandroid.pdfcraft.ui.scan.scanPresetFor(page, lab), page.finding?.curvedSides ?: 0, look.strength, look.paper)
+            val request = scanPageRequest(page.file.absolutePath, page.corners, look.filter, flatten, lab, "", page.turns, autoUpright, io.github.artcraftandroid.pdfcraft.ui.scan.scanPresetFor(page, lab), page.finding?.curvedSides ?: 0, page.finding?.curvedOpposite ?: false, page.book != null, look.strength, look.paper)
             val started = android.os.SystemClock.elapsedRealtime()
             val made = runCatching { io.github.artcraftandroid.pdfcraft.core.scanPreviewPage(request, SCAN_DETAIL_SIDE.toUInt()) }
             made.exceptionOrNull()?.let { Diag.failure(DiagArea.Scan, "scan_preview_detail", it) }
@@ -2305,7 +2310,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             for (f in todo) {
                 // a page preview asked for meanwhile goes first
                 kotlinx.coroutines.yield()
-                val request = scanPageRequest(page.file.absolutePath, page.corners, f, flatten, lab, "", page.turns, autoUpright, io.github.artcraftandroid.pdfcraft.ui.scan.scanPresetFor(page, lab), page.finding?.curvedSides ?: 0)
+                val request = scanPageRequest(page.file.absolutePath, page.corners, f, flatten, lab, "", page.turns, autoUpright, io.github.artcraftandroid.pdfcraft.ui.scan.scanPresetFor(page, lab), page.finding?.curvedSides ?: 0, page.finding?.curvedOpposite ?: false, page.book != null)
                 val one = android.os.SystemClock.elapsedRealtime()
                 val p = runCatching { io.github.artcraftandroid.pdfcraft.core.scanPreviewPageWith(request, SCAN_PREVIEW_SIDE.toUInt(), stop) }
                     .onFailure { if (!stop.isCancelled()) Diag.failure(DiagArea.Scan, "scan_look_tile", it) }.getOrNull() ?: continue
@@ -2398,7 +2403,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             val flatten = io.github.artcraftandroid.pdfcraft.ui.scan.scanPageFlattens(page.flatten, scanCanFlatten)
             tools.busyProgress = i to pages.size
             val preset = shown[i]?.preset ?: io.github.artcraftandroid.pdfcraft.ui.scan.scanPresetFor(page, lab)
-            val request = scanPageRequest(page.file.absolutePath, page.corners, page.look.filter, flatten, lab, File(dir, "page-$i").absolutePath, turns, autoUpright, preset, page.finding?.curvedSides ?: 0, page.look.strength, page.look.paper)
+            val request = scanPageRequest(page.file.absolutePath, page.corners, page.look.filter, flatten, lab, File(dir, "page-$i").absolutePath, turns, autoUpright, preset, page.finding?.curvedSides ?: 0, page.finding?.curvedOpposite ?: false, page.book != null, page.look.strength, page.look.paper)
             val started = android.os.SystemClock.elapsedRealtime()
             val result = withContext(Dispatchers.Default) { runCatching { io.github.artcraftandroid.pdfcraft.core.scanProcessPage(request) } }
             result.onFailure { Diag.failure(DiagArea.Scan, "scan_process_page", it) }
@@ -2499,6 +2504,9 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 "gutter_cover" to (r?.kind?.gutterCover?.toDouble() ?: -1.0),
                 // the photo rule (#427): the option, and what the first rule reads as photograph
                 "strict_photo" to lab.strictPhoto, "photo_loose" to (r?.kind?.photoLoose?.toDouble() ?: -1.0),
+                // the book page rule (#442): the option, what the first rule says, and its inputs
+                "strict_book" to lab.strictBook, "book_loose" to (r?.kind?.bookLoose ?: false),
+                "curved_opposite" to (page.finding?.curvedOpposite ?: false), "book_mode" to (page.book != null),
                 "whole_photo" to (r?.kind?.wholePhoto ?: false),
                 // the kind's own tone and whether it was used, and the photo mask in sharpening (#299)
                 "kind_tone" to lab.kindTone, "kind_gamma" to (r?.kind?.extraGamma?.toDouble() ?: 0.0),
@@ -2525,7 +2533,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                     ScanTestKind(
                         k.preset, k.chosen, k.strength.toInt(), k.sharpen.toInt(), k.keepPaper, k.suggestFlatten, k.suggestGreyscale, k.ratio.toDouble(),
                         k.inkShare.toDouble(), k.colourInkShare.toDouble(), k.photoShare.toDouble(), k.strokeMm.toDouble(), k.brightShare.toDouble(), k.gutterBand, k.wholePhoto,
-                        k.gutterLoose, k.gutterCover.toDouble(), k.photoLoose.toDouble(),
+                        k.gutterLoose, k.gutterCover.toDouble(), k.photoLoose.toDouble(), k.bookLoose, k.curvedOpposite, k.bookMode,
                         k.extraGamma.toDouble(), k.sCurve, k.colourFactor.toDouble(),
                     )
                 }

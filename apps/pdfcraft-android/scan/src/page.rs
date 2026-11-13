@@ -11,8 +11,8 @@ use crate::enhance::enlargement;
 use crate::flatten::{predict_grid, unwarp, unwarp_trimmed};
 use crate::flatten_guard::{Kept, MIN_LINES, Trim, border_trim, guard_with_floor};
 use crate::flatten_lines::{LineFit, fit_page};
-use crate::look::{Applied, Look, LookParams, Pixels, apply_with_photos};
-use crate::page_kind::{Measured, PageKind, PresetChoice, Rules, kind_of, measure};
+use crate::look::{Applied, Look, LookParams, Pixels, apply_prepared};
+use crate::page_kind::{Curve, Measured, PageKind, PresetChoice, Rules, kind_of, measure};
 use crate::straightness::{Straightness, line_straightness};
 use crate::upright::{Upright, turned, upright};
 use crate::upright_pages::total_turn;
@@ -100,6 +100,14 @@ pub struct PageRequest<'a> {
     pub preset: PresetChoice,
     /// How many sides of the page its edge detection found curved (0–4): a book page's sign (#299).
     pub curved_sides: u8,
+    /// Two opposite sides of the page were found curved (#442).
+    pub curved_opposite: bool,
+    /// The page is one half of a spread cut in book mode (#303, #442).
+    pub book_mode: bool,
+    /// A book page needs more than one curved side: the gutter, two opposite curved sides, or a
+    /// curved side in book mode, and one curved side only suggests flattening (#442); false is
+    /// the first rule (#299, any curved side), a testing choice.
+    pub strict_book: bool,
     /// A dark band down one long side counts as a book's gutter only when it runs the whole
     /// length, stays narrow and fades inward (#427); false is the first rule (#299), a testing choice.
     pub strict_gutter: bool,
@@ -124,6 +132,11 @@ pub struct PageRequest<'a> {
     /// keeps the paper's own colour, `Some(false)` makes it white, `None` leaves it to the
     /// document type (white unless the type keeps it).
     pub keep_paper: Option<bool>,
+    /// Clean scan and Whiteboard take what they measure of a straightened page independently of
+    /// the strength and the paper (the light estimate, the grain, the page smoothed and sharpened)
+    /// from an earlier look of the same [`PageBase`] (#446). The pixels are the same either way;
+    /// false measures it again for every look, as before, a testing choice.
+    pub reuse_look: bool,
 }
 
 impl<'a> PageRequest<'a> {
@@ -150,6 +163,9 @@ impl<'a> PageRequest<'a> {
             denoise: true,
             preset: PresetChoice::Off,
             curved_sides: 0,
+            curved_opposite: false,
+            book_mode: false,
+            strict_book: true,
             strict_gutter: true,
             strict_photo: true,
             fixed_strength: false,
@@ -157,6 +173,7 @@ impl<'a> PageRequest<'a> {
             photo_sharpen: false,
             max_side: None,
             keep_paper: None,
+            reuse_look: true,
         }
     }
 }
@@ -266,6 +283,10 @@ pub struct PageBase {
     /// and kept (#427): every later look of the same base (the preview's looks and strengths)
     /// reuses it. Empty until then; `None` inside when the page could not be measured.
     pub measured: std::sync::OnceLock<Option<Measured>>,
+    /// What Clean scan and Whiteboard measure of the page independently of the strength and the
+    /// paper (#446), taken the first time one of them is asked for and kept: a preview's next
+    /// strength or paper choice costs the tone curve alone. Not part of what the page is.
+    pub look_kept: crate::enhance::Prepared,
 }
 
 impl PageBase {
@@ -334,7 +355,7 @@ pub fn process_page(request: &PageRequest<'_>) -> Result<PageResult, ScanError> 
         clock = Instant::now();
     };
     let (applied, kind) = page_look_kind(&base, request)?;
-    let (pixels, noise) = (applied.pixels, applied.noise);
+    let (pixels, noise, look_stages) = (applied.pixels, applied.noise, applied.stages);
     let PageBase {
         page,
         dpi,
@@ -351,10 +372,13 @@ pub fn process_page(request: &PageRequest<'_>) -> Result<PageResult, ScanError> 
         line_flatten,
         mut timings,
         measured: _,
+        look_kept: _,
     } = base;
     let (w, h) = (page.width, page.height);
     drop(page);
     lap(STAGE_LOOK, &mut timings);
+    // the look's own parts (#446), after the whole
+    timings.extend(look_stages.into_iter().map(|(stage, ms)| (scan_stage(stage), ms)));
 
     let raster = |pixels, grey| Raster { pixels, grey, width: w, height: h, dpi };
     let (bytes, format) = match &pixels {
@@ -387,6 +411,18 @@ pub fn process_page(request: &PageRequest<'_>) -> Result<PageResult, ScanError> 
     })
 }
 
+/// The timing stage `scan_look_…` of a part of the look (#446).
+fn scan_stage(stage: &'static str) -> &'static str {
+    match stage {
+        crate::enhance::STAGE_LIGHT => "scan_look_light",
+        crate::enhance::STAGE_NOISE => "scan_look_noise",
+        crate::enhance::STAGE_DENOISE => "scan_look_denoise",
+        crate::enhance::STAGE_SHARPEN => "scan_look_sharpen",
+        crate::enhance::STAGE_TONE => "scan_look_tone",
+        other => other,
+    }
+}
+
 /// `base` with the look `request` asks for, at its strength, sharpening and smoothing (the
 /// request's photo and corners are not looked at: `base` is what was made of them).
 pub fn page_look(base: &PageBase, request: &PageRequest<'_>) -> Result<Applied, ScanError> {
@@ -407,8 +443,9 @@ pub fn kind_sharpen(kind: u8, asked: u8) -> u8 {
 pub fn page_look_kind(base: &PageBase, request: &PageRequest<'_>) -> Result<(Applied, Option<PageKind>), ScanError> {
     let kind = match request.look {
         Look::Auto if request.preset != PresetChoice::Off => {
-            let rules = Rules { strict_gutter: request.strict_gutter, strict_photo: request.strict_photo };
-            base.measured().and_then(|m| kind_of(m, request.curved_sides, request.preset, rules))
+            let rules = Rules { strict_gutter: request.strict_gutter, strict_photo: request.strict_photo, strict_book: request.strict_book };
+            let curve = Curve { sides: request.curved_sides, opposite: request.curved_opposite, book_mode: request.book_mode };
+            base.measured().and_then(|m| kind_of(m, curve, request.preset, rules))
         }
         _ => None,
     };
@@ -438,7 +475,15 @@ pub fn page_look_kind(base: &PageBase, request: &PageRequest<'_>) -> Result<(App
         params.keep_paper = keep;
     }
     let photos = kind.as_ref().filter(|_| request.photo_sharpen).and_then(|k| k.photos.as_ref());
-    let applied = apply_with_photos(&base.page, request.look, &params, photos).ok_or(ScanError::Encode)?;
+    let fresh;
+    let kept = match request.reuse_look {
+        true => &base.look_kept,
+        false => {
+            fresh = crate::enhance::Prepared::new();
+            &fresh
+        }
+    };
+    let applied = apply_prepared(&base.page, request.look, &params, photos, kept).ok_or(ScanError::Encode)?;
     Ok((applied, kind))
 }
 
@@ -566,6 +611,7 @@ pub fn page_base(request: &PageRequest<'_>) -> Result<PageBase, ScanError> {
         line_flatten,
         timings,
         measured: std::sync::OnceLock::new(),
+        look_kept: crate::enhance::Prepared::new(),
     })
 }
 

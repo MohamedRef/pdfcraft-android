@@ -1,6 +1,9 @@
 //! Tests for the document-type presets (issue #299). Pages and features are built in code.
 
-use super::preset::{InkFeatures, PageFeatures, Preset, PresetParams, classify, gutter_band, gutter_reading, ink_features, params};
+use super::preset::{
+    InkFeatures, PageFeatures, Preset, PresetParams, classify, classify_with, curve_suggests_flatten, gutter_band, gutter_reading, ink_features,
+    params,
+};
 use crate::{Luma, Rgb};
 
 /// A plain A4 page with nothing on it: every rule's measurement at its neutral value.
@@ -15,6 +18,8 @@ fn a4_document() -> PageFeatures {
         photo_loose: 0.02,
         stroke_mm: Some(0.5),
         curved_sides: 0,
+        curved_opposite: false,
+        book_mode: false,
         gutter_band: false,
         gutter_loose: false,
         gutter_cover: 0.0,
@@ -160,10 +165,42 @@ fn a_missing_stroke_is_not_a_whiteboard() {
 }
 
 #[test]
-fn one_curved_side_is_a_book_page() {
+fn one_curved_side_is_a_document_that_suggests_flattening() {
+    // #442: a sheet held in the hand, or curling at one edge, has one curved side and no gutter
     let f = PageFeatures { curved_sides: 1, ..a4_document() };
-    println!("curved_sides 1 -> {:?}", classify(&f));
-    assert_eq!(classify(&f), Preset::BookPage);
+    println!("curved_sides 1 -> {:?} (first rule {:?})", classify(&f), classify_with(&f, false));
+    assert_eq!(classify(&f), Preset::Document);
+    assert!(curve_suggests_flatten(&f));
+    // the first rule (#299), a testing choice, took it for a book
+    assert_eq!(classify_with(&f, false), Preset::BookPage);
+}
+
+#[test]
+fn two_curved_sides_are_a_book_page_only_when_opposite() {
+    let adjacent = PageFeatures { curved_sides: 2, ..a4_document() };
+    let opposite = PageFeatures { curved_sides: 2, curved_opposite: true, ..a4_document() };
+    println!("two adjacent -> {:?}, two opposite -> {:?}", classify(&adjacent), classify(&opposite));
+    assert_eq!(classify(&adjacent), Preset::Document);
+    assert_eq!(classify(&opposite), Preset::BookPage);
+    assert!(curve_suggests_flatten(&adjacent) && curve_suggests_flatten(&opposite));
+}
+
+#[test]
+fn a_curved_side_with_the_gutter_or_in_book_mode_is_a_book_page() {
+    let gutter = PageFeatures { curved_sides: 1, gutter_band: true, ..a4_document() };
+    let book = PageFeatures { curved_sides: 1, book_mode: true, ..a4_document() };
+    let flat_book = PageFeatures { curved_sides: 0, book_mode: true, ..a4_document() };
+    println!(
+        "curved + gutter -> {:?}, curved + book mode -> {:?}, flat in book mode -> {:?}",
+        classify(&gutter),
+        classify(&book),
+        classify(&flat_book)
+    );
+    assert_eq!(classify(&gutter), Preset::BookPage);
+    assert_eq!(classify(&book), Preset::BookPage);
+    // book mode alone does not make a page curved
+    assert_eq!(classify(&flat_book), Preset::Document);
+    assert!(!curve_suggests_flatten(&flat_book));
 }
 
 #[test]
@@ -218,7 +255,7 @@ fn the_rules_are_checked_in_the_spec_order() {
     let id_and_receipt = PageFeatures { id_card: true, ratio: 3.0, ..a4_document() };
     let receipt_and_whiteboard = PageFeatures { ratio: 3.0, stroke_mm: Some(2.0), ink_share: 0.01, ..a4_document() };
     let whiteboard_and_book = PageFeatures { stroke_mm: Some(2.0), ink_share: 0.01, curved_sides: 2, ..a4_document() };
-    let book_and_photo_rich = PageFeatures { curved_sides: 1, photo_share: 0.2, ..a4_document() };
+    let book_and_photo_rich = PageFeatures { curved_sides: 2, curved_opposite: true, photo_share: 0.2, ..a4_document() };
     let table = [
         (photo_and_receipt, Preset::Photo),
         (id_and_receipt, Preset::IdCard),
@@ -247,6 +284,8 @@ fn coloured_form_never_comes_out_of_classify_for_10000_seeded_pages() {
             photo_loose: rng.unit() * 1.2,
             stroke_mm: if rng.flag() { Some(rng.unit() * 3.0) } else { None },
             curved_sides: (rng.next() % 4) as u8,
+            curved_opposite: rng.flag(),
+            book_mode: rng.flag(),
             gutter_band: rng.flag(),
             gutter_loose: rng.flag(),
             gutter_cover: rng.unit(),

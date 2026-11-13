@@ -19,6 +19,7 @@ const RADIUS_MAX: f64 = 24.0;
 const INK: f32 = 0.88;
 
 /// What the tone step needs from the working copy.
+#[derive(Clone)]
 pub(crate) struct Background {
     /// Paper colour under the local light (R, G, B), working size.
     pub light: [Plane; 3],
