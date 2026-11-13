@@ -37,4 +37,22 @@
     <string name="scan_enhance_page_before">Página anterior</string>
     <string name="scan_enhance_page_after">Página siguiente</string>
     <string name="scan_enhance_dismiss">Descartar</string>
+    <!-- The document screen (#460) -->
+    <string name="scan_doc_select">Seleccionar páginas</string>
+    <string name="scan_doc_select_all">Seleccionar todo</string>
+    <string name="scan_doc_clear">Quitar selección</string>
+    <string name="scan_doc_move_earlier">Mover antes</string>
+    <string name="scan_doc_move_later">Mover después</string>
+    <string name="scan_doc_open">Abrir</string>
+    <string name="scan_doc_choose">Seleccionar</string>
+    <string name="scan_doc_hint">Toca una página para editarla. Mantenla pulsada para moverla o seleccionarla.</string>
+    <string name="scan_doc_delete_body">También se eliminan sus fotos.</string>
+    <plurals name="scan_doc_selected">
+        <item quantity="one">%d seleccionada</item>
+        <item quantity="other">%d seleccionadas</item>
+    </plurals>
+    <plurals name="scan_doc_delete_title">
+        <item quantity="one">¿Eliminar %d página?</item>
+        <item quantity="other">¿Eliminar %d páginas?</item>
+    </plurals>
 </resources>

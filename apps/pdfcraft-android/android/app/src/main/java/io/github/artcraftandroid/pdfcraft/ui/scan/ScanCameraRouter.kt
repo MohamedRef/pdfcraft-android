@@ -101,6 +101,9 @@ internal class ScanCameraRouter(private val activity: ComponentActivity, private
             val m = model()
             val merging = m.merging
             m.hide()
+            // closed with pages taken: the document screen shows them (#460)
+            val v = vm()
+            if (!merging && v.scanPages.isNotEmpty() && scanDocumentAfterCamera(v.scanLab.options.steps, v.scanRetaking, null)) v.scanSteps.showDocument("camera", v.scanPages.size)
             // the photo not taken: with no page yet, the scan ends (a burst being merged still goes to the scan)
             if (!merging) vm().onScanPhoto(false)
         },
@@ -124,6 +127,9 @@ internal class ScanCameraRouter(private val activity: ComponentActivity, private
         if (m.target != null) ScanCameraScreen(m, vm().scanPages.map { it.thumb }, actions, vm().scanBook, vm().scanLab.options.cameraBar)
     }
 
+    /** Import on the document screen (#460): the photo picker straight away, the camera not opened. */
+    fun importPhotos() = launch { importer.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }
+
     private fun launchPermission() = launch { permission.launch(Manifest.permission.CAMERA) }
 
     private fun launchPhoneCamera(file: File) {
@@ -140,6 +146,8 @@ internal class ScanCameraRouter(private val activity: ComponentActivity, private
             val mode = model().modeShown(v.scanBook)
             v.scanSteps.pending = scanBordersAfterCapture(lab.steps, lab.cameraBar, mode, v.scanRetaking, v.scanSteps.retakeFromBorders)
             v.scanSteps.pendingMode = scanCameraModeId(lab.cameraBar, mode)
+            // Done in Many pages or Book: the document screen, with the pages in a grid (#460)
+            if (scanDocumentAfterCamera(lab.steps, v.scanRetaking, v.scanSteps.pending)) v.scanSteps.showDocument("camera", v.scanPages.size + 1)
         }
         v.onScanPhoto(true)
         // the camera stays open for the next page, in a file of its own
@@ -260,6 +268,8 @@ internal class ScanCameraRouter(private val activity: ComponentActivity, private
             // one photo behaves as One page: Adjust borders opens on it (#458)
             v.scanSteps.pending = scanBordersAfterImport(v.scanLab.options.steps, files.size, v.scanRetaking, v.scanSteps.retakeFromBorders)
             v.scanSteps.pendingMode = "import"
+            // several photos: the document screen shows them, as after Many pages (#460)
+            if (scanDocumentAfterCamera(v.scanLab.options.steps, v.scanRetaking, v.scanSteps.pending)) v.scanSteps.showDocument("import", v.scanPages.size + files.size)
             for (f in files) {
                 ScanCaptures.put(f.path, ScanCapture("import"))
                 v.shotFile = f

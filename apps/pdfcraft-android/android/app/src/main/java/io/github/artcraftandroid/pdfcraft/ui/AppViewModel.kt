@@ -1369,6 +1369,9 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     /** Photos for Scan: the activity has the camera app write each into this file. */
     val cameraShots = Channel<File>(Channel.BUFFERED)
 
+    /** Import on the scan's document screen (#460): the activity opens the photo picker. */
+    val scanImports = Channel<Unit>(Channel.CONFLATED)
+
     /** The files gathered for Combine, in order. */
     val combineFiles = androidx.compose.runtime.mutableStateListOf<PickedFile>()
 
@@ -1898,6 +1901,41 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
 
     fun retakeScan(index: Int) = takeScanPhoto(index)
 
+    /** Photos from the gallery for the scan, straight from the document screen (#460). */
+    fun importScanPhotos() {
+        retakeIndex = null
+        Diag.event(DiagArea.Scan, "camera_import_open", "from" to "document", "pages" to scanPages.size)
+        scanImports.trySend(Unit)
+    }
+
+    /**
+     * Move page [from] to [to] (#460); the other pages close up, and the PDF follows the new order.
+     * The two halves of a book spread are pages of their own: moving one leaves the other. [by] is
+     * `drag` or `talkback`, for the log.
+     */
+    fun moveScanPage(from: Int, to: Int, by: String) {
+        if (from !in scanPages.indices || to !in scanPages.indices || from == to) return
+        Diag.event(DiagArea.Scan, "pages_reorder", *io.github.artcraftandroid.pdfcraft.ui.scan.scanReorderDiag(from, to, scanPages.size, by))
+        scanPages.add(to, scanPages.removeAt(from))
+    }
+
+    /** Delete the pages at [indexes] together, after the person said yes (#460); their photos go unless a spread's other half still uses one. */
+    fun deleteScanPages(indexes: List<Int>) {
+        val gone = indexes.filter { it in scanPages.indices }.toSortedSet()
+        if (gone.isEmpty()) return
+        Diag.event(DiagArea.Scan, "pages_delete", *io.github.artcraftandroid.pdfcraft.ui.scan.scanPagesDeleteDiag(gone.size, scanPages.size, confirmed = true))
+        val before = scanPages.toList()
+        for (i in gone.reversed()) scanPages.removeAt(i)
+        deleteUnusedScanFiles(before, scanPages.toList())
+        // every page deleted: nothing is left to save, so the scan ends
+        if (scanPages.isEmpty()) discardScan(asked = true)
+    }
+
+    /** The person answered Cancel to deleting the chosen pages (#460). */
+    fun keepScanPages(count: Int) {
+        Diag.event(DiagArea.Scan, "pages_delete", *io.github.artcraftandroid.pdfcraft.ui.scan.scanPagesDeleteDiag(count, scanPages.size, confirmed = false))
+    }
+
     /** The camera app came back: [ok] when it took the photo. */
     fun onScanPhoto(ok: Boolean) {
         val f = shotFile ?: return
@@ -2372,7 +2410,12 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
      * first (#302); that is the person's choice for each page, never made for them. Cancel stops between
      * pages and leaves the scan as it was (#200, #301).
      */
-    fun saveScan() = job(text(R.string.msg_busy_saving_scan)) { eng ->
+    /**
+     * Make the scan's PDF and save it into Downloads, or into the open document it was for. With
+     * [share] (the document screen's Share, #460) the same PDF goes to Android's share sheet
+     * instead: nothing is saved, and the scan stays open to be saved or shared again.
+     */
+    fun saveScan(share: Boolean = false) = job(text(R.string.msg_busy_saving_scan)) { eng ->
         val pages = scanPages.toList()
         val scanStarted = android.os.SystemClock.elapsedRealtime()
         val dir = scanPageDir().apply { mkdirs() }
@@ -2382,7 +2425,8 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         // Cancel in the busy dialog stops before the next page is made (#200)
         var cancelled = false
         tools.busyCancel = { cancelled = true }
-        val keepIn = try {
+        // a share is not a saved scan: the kept scans (#288) are the ones saved
+        val keepIn = if (share) null else try {
             withContext(Dispatchers.IO) { scanLab.begin() }
         } catch (e: Exception) {
             tools.busyCancel = null
@@ -2568,6 +2612,20 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             }
             val out = tempFile("pdf")
             eng.tool("doc_save", mapOf("doc" to id, "path" to out.absolutePath, "full" to true))
+            if (share) {
+                // the scan stays as it is; the copy handed out is swept from the share folder later
+                Diag.event(DiagArea.Scan, "share", *io.github.artcraftandroid.pdfcraft.ui.scan.scanShareDiag(pages.size, out.length(), android.os.SystemClock.elapsedRealtime() - scanStarted))
+                val stamp = java.text.SimpleDateFormat("yyyy-MM-dd HH.mm.ss", java.util.Locale.US).format(java.util.Date())
+                val name = DocumentFiles.safeName(scanName.trim().ifEmpty { "Scan $stamp" })
+                val uri = try {
+                    withContext(Dispatchers.IO) { files.shareable(out, name) }
+                } finally {
+                    out.delete()
+                }
+                if (unenhanced > 0) tell(text(R.string.msg_scan_unenhanced, unenhanced))
+                intents.trySend(android.content.Intent.createChooser(sharing.sendIntent(listOf(uri)).putExtra(android.content.Intent.EXTRA_SUBJECT, name.removeSuffix(".pdf")), null))
+                return@job
+            }
             Diag.event(
                 DiagArea.Scan, "saved", "pages" to pages.size, "filter" to pages.first().look.filter, "bytes" to out.length(),
                 // how many pages have a look of their own, and how many went in as photographed (#301)
@@ -2581,6 +2639,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             scanPages.forEach { it.file.delete() }
             releaseScanPreviews()
             scanPages.clear()
+            scanSteps.reset()
             scanName = ""
             tools.toolScreen = null
             val unenhancedNote = if (unenhanced > 0) " " + text(R.string.msg_scan_unenhanced, unenhanced) else ""
