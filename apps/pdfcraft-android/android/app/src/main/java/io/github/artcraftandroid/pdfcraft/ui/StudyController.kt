@@ -182,7 +182,17 @@ class StudyController internal constructor(private val vm: AppViewModel) {
             val n = withContext(Dispatchers.IO) {
                 runCatching {
                     val text = app.contentResolver.openInputStream(uri)?.use { s ->
-                        String(s.readNBytes(8 * 1024 * 1024), Charsets.UTF_8).removePrefix("\uFEFF")
+                        // at most 8 MiB; InputStream.readNBytes needs API 33 and the app supports API 29 (#507)
+                        val out = java.io.ByteArrayOutputStream()
+                        val buf = ByteArray(64 * 1024)
+                        var left = 8 * 1024 * 1024
+                        while (left > 0) {
+                            val r = s.read(buf, 0, minOf(buf.size, left))
+                            if (r < 0) break
+                            out.write(buf, 0, r)
+                            left -= r
+                        }
+                        String(out.toByteArray(), Charsets.UTF_8).removePrefix("\uFEFF")
                     } ?: return@runCatching 0
                     val now = System.currentTimeMillis()
                     val cards = io.github.artcraftandroid.pdfcraft.engine.Flashcards.parseDelimited(text).take(10_000).map { (f, b) ->

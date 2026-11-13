@@ -81,6 +81,9 @@ jobs:
       - name: Run Android JVM unit tests
         working-directory: apps/pdfcraft-android/android
         run: bash "$GITHUB_WORKSPACE/scripts/gradle_with_network_retries.sh" ./gradlew testDebugUnitTest "-Ppdfcraft.abis=arm64-v8a" --no-daemon --stacktrace
+      - name: Check calls against minSdk (Android lint, NewApi only)
+        working-directory: apps/pdfcraft-android/android
+        run: bash "$GITHUB_WORKSPACE/scripts/gradle_with_network_retries.sh" ./gradlew lintDebug "-Ppdfcraft.abis=arm64-v8a" --no-daemon --stacktrace
       - name: Publish unit test results
         if: always()
         uses: actions/upload-artifact@v7

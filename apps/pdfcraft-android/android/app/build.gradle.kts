@@ -255,6 +255,15 @@ android {
     compileSdk = 37
     // Robolectric draws the screens with the app's own resources (#462)
     testOptions { unitTests { isIncludeAndroidResources = true } }
+    // Calls to APIs newer than minSdk fail the build (#502, #507): JDK 21's SequencedCollection
+    // members (reversed(), getFirst(), removeLast() on Java collections) compile fine but are
+    // missing below Android 15. Only this check runs, so lint stays quick.
+    lint {
+        checkOnly += "NewApi"
+        abortOnError = true
+        // the shipped code only; tests run on the JVM, not on a phone
+        ignoreTestSources = true
+    }
     ndkVersion = "29.0.14206865"
 
     defaultConfig {
