@@ -8,6 +8,7 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.lifecycle.viewModelScope
 import io.github.artcraftandroid.pdfcraft.engine.Diag
+import io.github.artcraftandroid.pdfcraft.ui.scan.scanApplyAutoLook
 import io.github.artcraftandroid.pdfcraft.engine.DiagArea
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -120,7 +121,7 @@ internal class ScanPageQueue(private val vm: AppViewModel) {
     fun keyOf(page: ScanPage): ScanPreviewKey {
         val lab = vm.scanLab.options
         val autoUpright = io.github.artcraftandroid.pdfcraft.ui.scan.ScanUprightSetting.get(vm.settings.appPrefs)
-        return ScanPreviewKey.of(page, io.github.artcraftandroid.pdfcraft.ui.scan.scanPageFlattens(page.flatten, vm.scanCanFlatten), lab, autoUpright)
+        return ScanPreviewKey.of(page, io.github.artcraftandroid.pdfcraft.ui.scan.scanPageFlattens(page.flatten, vm.scanCanFlatten), lab, autoUpright, autoFlatten = vm.scanAutoFlattens(page, lab))
     }
 
     /** The result of [page] when it is up to date. */
@@ -191,7 +192,7 @@ internal class ScanPageQueue(private val vm: AppViewModel) {
             stop = cancel
             val started = android.os.SystemClock.elapsedRealtime()
             val result = withContext(vm.scanPreviewDispatcher) {
-                runCatching { io.github.artcraftandroid.pdfcraft.core.scanPreviewPageWith(vm.scanPreviewRequest(page, key.flatten, key.lab, key.autoUpright), SCAN_PREVIEW_SIDE.toUInt(), cancel) }
+                runCatching { io.github.artcraftandroid.pdfcraft.core.scanPreviewPageWith(vm.scanPreviewRequest(page, key.flatten, key.lab, key.autoUpright, key.autoFlatten), SCAN_PREVIEW_SIDE.toUInt(), cancel) }
             }
             working = null
             // stopped for the page on screen, whose preview goes first: this page is asked again
@@ -206,6 +207,8 @@ internal class ScanPageQueue(private val vm: AppViewModel) {
                 continue
             }
             store(next, page, key, p, null, android.os.SystemClock.elapsedRealtime() - started)
+            // a receipt becomes Grayscale by itself, without being opened (#466)
+            vm.scanApplyAutoLook(page.key, p.kind?.suggestGreyscale == true)
         }
     }
 
@@ -255,7 +258,7 @@ internal class ScanPageQueue(private val vm: AppViewModel) {
             out.delete()
             return
         }
-        made.put(page.key, ScanMadePage(key, out, thumb.asImageBitmap(), p.quarterTurns.toInt(), p.turns.toInt(), p.flattened, p.kind, p.orientation))?.file?.takeIf { it != out }?.delete()
+        made.put(page.key, ScanMadePage(key, out, thumb.asImageBitmap(), p.quarterTurns.toInt(), p.turns.toInt(), scanCameOutFlat(p), p.kind, p.orientation))?.file?.takeIf { it != out }?.delete()
         val now = android.os.SystemClock.elapsedRealtime()
         val since = waitingSince.remove(page.key)
         val why = waitingWhy.remove(page.key) ?: scanQueueWhy(null, key, false)
@@ -302,6 +305,9 @@ internal class ScanPageQueue(private val vm: AppViewModel) {
         dir().listFiles()?.forEach { it.delete() }
     }
 }
+
+/** Whether a preview came out flattened (#466): by the network, or from its lines of text (#303). */
+internal fun scanCameOutFlat(p: io.github.artcraftandroid.pdfcraft.core.ScanPreview): Boolean = p.flattened || p.lineFlatten?.check?.kept == true
 
 /** The longer side, in dp, of a page's thumbnail made by the queue (#465): the strip's 72 dp. */
 internal const val SCAN_QUEUE_THUMB_DP = 72

@@ -64,6 +64,8 @@ page, Borders, Flattening, Looks, Camera, Reports. The table below lists them by
 | Page strength wins over the document type (#424) | On | Off: the document type's strength replaces the slider's, and every sharpening level but Off gives the type's own, as before #424 |
 | Filter strength | Each filter's own | 20, 40, 60, 80 or 100 for every filter |
 | Make every page in the background (#465) | On | Off: only the page on screen is made, the strip shows the photos, Apply to all copies only the look, and Save works each page's turn and document type out again at full size, as before #465 |
+| Clean scan applies its suggestions by itself, with Undo (#466) | On | Off: a receipt's Grayscale is a chip to tap, and the looks strip starts with Original, as before #466 |
+| Clean scan decides flattening by itself (#466) | **Off** | On: a page with no Flatten page choice is flattened through #302's guarded check, kept only when straighter, with "Flattened · Undo". Off until the review of the owner's photos in #302 sets the decision |
 | Flatten page (#302) | Off | On, with the switch on the scan screen itself |
 | Report moiré, fingers, glare and stains in kept scans (#305, #306) | Off | On: each kept page is also run through the two research detectors, and what they see goes to the log (`inspect`) and the page file (`inspect`). No page changes |
 | Scan with (#294) | PdfCraft camera | Phone's camera app (also in Settings → Scan; the same setting) |

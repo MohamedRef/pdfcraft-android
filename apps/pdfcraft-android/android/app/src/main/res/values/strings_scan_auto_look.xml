@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Scanner: the automatic look (#466); kept apart from strings.xml so parallel scanner work merges cleanly. -->
+<resources>
+    <string name="scan_lab_auto_look">Clean scan applies its suggestions by itself, with Undo</string>
+    <string name="scan_auto_flattened_undo">Flattened · Undo</string>
+    <string name="scan_auto_flattened_undo_description">Undo the flattening</string>
+    <string name="scan_auto_grayscale_undo">Grayscale · Undo</string>
+    <string name="scan_auto_grayscale_undo_description">Undo Grayscale</string>
+</resources>

@@ -1,5 +1,6 @@
 package io.github.artcraftandroid.pdfcraft.ui
 
+import io.github.artcraftandroid.pdfcraft.ui.scan.scanApplyAutoLook
 import io.github.artcraftandroid.pdfcraft.ui.viewer.ViewLayout
 import io.github.artcraftandroid.pdfcraft.ui.viewer.recognizeText
 import io.github.artcraftandroid.pdfcraft.ui.viewer.startCompare
@@ -1609,7 +1610,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     /** The scan in progress (or the Add image photo being taken); null when there is none. */
     private fun scanSession(): ScanSession? {
         if (shotFile == null && scanPages.isEmpty()) return null
-        return ScanSession(shotFile?.path, retakeIndex, editor.imageShot, scanName, scanPages.map { ScanSession.Page(it.file.path, it.corners, it.found, it.turns, it.preset, it.book?.encode(), it.look, it.flatten) })
+        return ScanSession(shotFile?.path, retakeIndex, editor.imageShot, scanName, scanPages.map { ScanSession.Page(it.file.path, it.corners, it.found, it.turns, it.preset, it.book?.encode(), it.look, it.flatten, it.auto) })
     }
 
     private fun restoreScan(text: String, session: ScanSession): kotlinx.coroutines.Job {
@@ -1622,7 +1623,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             val pages = withContext(Dispatchers.IO) {
                 // the two halves of a book spread share a photo, so each photo's thumbnail is made once
                 val thumbs = HashMap<String, androidx.compose.ui.graphics.ImageBitmap?>()
-                session.pages.mapNotNull { p -> File(p.path).let { f -> thumbs.getOrPut(p.path) { scanThumb(f) }?.let { ScanPage(f, it, p.corners, p.found, turns = p.turns, preset = p.preset, book = io.github.artcraftandroid.pdfcraft.ui.scan.ScanBookHalf.decode(p.book), flatten = p.flatten ?: true.takeIf { session.flatten }, look = p.look ?: io.github.artcraftandroid.pdfcraft.ui.scan.ScanPageLook(), uncropped = io.github.artcraftandroid.pdfcraft.ui.scan.scanRestoredUncropped(p.corners, p.found, io.github.artcraftandroid.pdfcraft.ui.scan.ScanBookHalf.decode(p.book), io.github.artcraftandroid.pdfcraft.ui.scan.ScanCaptures.of(p.path)?.straightened == true)) } } }
+                session.pages.mapNotNull { p -> File(p.path).let { f -> thumbs.getOrPut(p.path) { scanThumb(f) }?.let { ScanPage(f, it, p.corners, p.found, turns = p.turns, preset = p.preset, book = io.github.artcraftandroid.pdfcraft.ui.scan.ScanBookHalf.decode(p.book), flatten = p.flatten ?: true.takeIf { session.flatten }, look = p.look ?: io.github.artcraftandroid.pdfcraft.ui.scan.ScanPageLook(), auto = p.auto, uncropped = io.github.artcraftandroid.pdfcraft.ui.scan.scanRestoredUncropped(p.corners, p.found, io.github.artcraftandroid.pdfcraft.ui.scan.ScanBookHalf.decode(p.book), io.github.artcraftandroid.pdfcraft.ui.scan.ScanCaptures.of(p.path)?.straightened == true)) } } }
             }
             scanPages.addAll(pages)
             scanRestoring = null
@@ -1943,7 +1944,8 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             val page = ScanPage(
                 f, thumb,
                 flatten = io.github.artcraftandroid.pdfcraft.ui.scan.scanNewPageFlatten(scanPages.map { it.flatten }, r),
-                look = io.github.artcraftandroid.pdfcraft.ui.scan.scanLookForNewPage(scanPages.map { it.look }, r),
+                // a look the automatic look chose for one page is not passed on (#466)
+                look = io.github.artcraftandroid.pdfcraft.ui.scan.scanLookForNewPage(scanPages.map { io.github.artcraftandroid.pdfcraft.ui.scan.scanLookToPassOn(it.look, it.auto) }, r),
             )
             retakeIndex = null
             // the page waits for its edges before it is made in the background (#465)
@@ -2121,6 +2123,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         val key: ScanPreviewKey,
         val image: androidx.compose.ui.graphics.ImageBitmap,
         val quarterTurns: Int,
+        /** The page came out flattened, by the network or from its lines of text (#466). */
         val flattened: Boolean,
         /** The kind of document Clean scan took the page for (#299); null for the other filters or with the option off. */
         val kind: io.github.artcraftandroid.pdfcraft.core.ScanPageKind? = null,
@@ -2146,8 +2149,12 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     internal fun scanPreviewWantedKey(): ScanPreviewKey? = scanPreviewWanted
 
     /** The native request for [page]'s preview: the queue (#465) and the screen ask the same. */
-    internal fun scanPreviewRequest(page: ScanPage, flatten: Boolean, lab: ScanLab, autoUpright: Boolean): io.github.artcraftandroid.pdfcraft.core.ScanPageRequest =
-        scanPageRequest(page.file.absolutePath, page.corners, page.look.filter, flatten, lab, "", page.turns, autoUpright, io.github.artcraftandroid.pdfcraft.ui.scan.scanPresetFor(page, lab), page.finding?.curvedSides ?: 0, page.finding?.curvedOpposite ?: false, page.book != null, page.look.strength, page.look.paper)
+    internal fun scanPreviewRequest(page: ScanPage, flatten: Boolean, lab: ScanLab, autoUpright: Boolean, autoFlatten: Boolean = false): io.github.artcraftandroid.pdfcraft.core.ScanPageRequest =
+        scanPageRequest(page.file.absolutePath, page.corners, page.look.filter, flatten, lab, "", page.turns, autoUpright, io.github.artcraftandroid.pdfcraft.ui.scan.scanPresetFor(page, lab), page.finding?.curvedSides ?: 0, page.finding?.curvedOpposite ?: false, page.book != null, page.look.strength, page.look.paper, autoFlatten)
+
+    /** Whether the automatic look decides [page]'s flattening (#466). */
+    internal fun scanAutoFlattens(page: ScanPage, lab: ScanLab = scanLab.options): Boolean =
+        io.github.artcraftandroid.pdfcraft.ui.scan.scanAutoFlattens(page.flatten, lab)
 
     /** Every page of the scan made in the background (#465). */
     internal val pageQueue = ScanPageQueue(this)
@@ -2163,7 +2170,8 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     internal fun requestScanPreview(index: Int, page: ScanPage, flatten: Boolean) {
         val lab = scanLab.options
         val autoUpright = io.github.artcraftandroid.pdfcraft.ui.scan.ScanUprightSetting.get(settings.appPrefs)
-        val key = ScanPreviewKey.of(page, flatten, lab, autoUpright)
+        val autoFlatten = scanAutoFlattens(page, lab)
+        val key = ScanPreviewKey.of(page, flatten, lab, autoUpright, autoFlatten = autoFlatten)
         pageQueue.shown(page)
         if (scanPreview?.key == key || scanPreviewWanted == key) return
         scanPreviewWanted = key
@@ -2193,7 +2201,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 return@launch
             }
             if (settle) delay(SCAN_PREVIEW_SETTLE_MS)
-            val request = scanPreviewRequest(page, flatten, lab, autoUpright)
+            val request = scanPreviewRequest(page, flatten, lab, autoUpright, autoFlatten)
             val started = android.os.SystemClock.elapsedRealtime()
             val made = runCatching { io.github.artcraftandroid.pdfcraft.core.scanPreviewPageWith(request, SCAN_PREVIEW_SIDE.toUInt(), stop) }
             val ms = android.os.SystemClock.elapsedRealtime() - started
@@ -2223,6 +2231,8 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 "quarter_turns" to (p?.quarterTurns?.toInt() ?: 0), "flattened" to (p?.flattened ?: false),
                 // flattened and straightened compared (#302)
                 "flatten_auto" to lab.flattenAuto, *scanFlattenCheckDiag(p?.flattenCheck),
+                // the automatic look decided the page's flattening (#466)
+                "flatten_decided" to autoFlatten,
                 // the person's own choice for the page, and the strip of table trimmed from a flattened one (#302)
                 "flatten_page" to io.github.artcraftandroid.pdfcraft.ui.scan.scanFlattenChoiceId(page.flatten),
                 "flatten_trim" to lab.flattenTrim, "flatten_line_floor" to lab.flattenLineFloor, *io.github.artcraftandroid.pdfcraft.ui.scan.scanTrimDiag(p?.trim),
@@ -2237,7 +2247,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 // a newer request may have come in while this one ran: only the wanted one is shown
                 if (scanPreviewWanted != key) return@withContext
                 if (p != null && image != null) {
-                    scanPreview = ScanPreviewShown(key, image, p.quarterTurns.toInt(), p.flattened, p.kind)
+                    scanPreview = ScanPreviewShown(key, image, p.quarterTurns.toInt(), scanCameOutFlat(p), p.kind)
                     scanPreviewStats[page.key] = ScanTestPreview(
                         true, p.reused, ms, p.width.toInt(), p.height.toInt(), filter.mode,
                         lightReused = p.lightReused, lookParts = scanLookParts(p.timings),
@@ -2251,6 +2261,8 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             // the page on screen is ready too: kept for the strip and for coming back (#465)
             withContext(Dispatchers.Main) {
                 if (p != null && bitmap != null) pageQueue.store(index, page, key, p, bitmap, ms) else pageQueue.failedOnScreen(page, key)
+                // a receipt becomes Grayscale by itself (#466)
+                if (p != null) scanApplyAutoLook(page.key, p.kind?.suggestGreyscale == true)
                 pageQueue.kick()
             }
         }
@@ -2296,13 +2308,14 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     internal fun requestScanDetail(index: Int, page: ScanPage, flatten: Boolean) {
         val lab = scanLab.options
         val autoUpright = io.github.artcraftandroid.pdfcraft.ui.scan.ScanUprightSetting.get(settings.appPrefs)
-        val key = ScanPreviewKey.of(page, flatten, lab, autoUpright)
+        val autoFlatten = scanAutoFlattens(page, lab)
+        val key = ScanPreviewKey.of(page, flatten, lab, autoUpright, autoFlatten = autoFlatten)
         if (scanDetail?.first == key || scanDetailWanted == key) return
         scanDetailWanted = key
         scanDetailJob?.cancel()
         val look = page.look
         scanDetailJob = viewModelScope.launch(scanPreviewDispatcher) {
-            val request = scanPageRequest(page.file.absolutePath, page.corners, look.filter, flatten, lab, "", page.turns, autoUpright, io.github.artcraftandroid.pdfcraft.ui.scan.scanPresetFor(page, lab), page.finding?.curvedSides ?: 0, page.finding?.curvedOpposite ?: false, page.book != null, look.strength, look.paper)
+            val request = scanPageRequest(page.file.absolutePath, page.corners, look.filter, flatten, lab, "", page.turns, autoUpright, io.github.artcraftandroid.pdfcraft.ui.scan.scanPresetFor(page, lab), page.finding?.curvedSides ?: 0, page.finding?.curvedOpposite ?: false, page.book != null, look.strength, look.paper, autoFlatten)
             val started = android.os.SystemClock.elapsedRealtime()
             val made = runCatching { io.github.artcraftandroid.pdfcraft.core.scanPreviewPage(request, SCAN_DETAIL_SIDE.toUInt()) }
             made.exceptionOrNull()?.let { Diag.failure(DiagArea.Scan, "scan_preview_detail", it) }
@@ -2327,7 +2340,8 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     internal fun requestScanTiles(index: Int, page: ScanPage, flatten: Boolean) {
         val lab = scanLab.options
         val autoUpright = io.github.artcraftandroid.pdfcraft.ui.scan.ScanUprightSetting.get(settings.appPrefs)
-        val base = ScanPreviewKey.of(page, flatten, lab, autoUpright, io.github.artcraftandroid.pdfcraft.ui.scan.ScanPageLook(ScanFilter.Original))
+        val autoFlatten = scanAutoFlattens(page, lab)
+        val base = ScanPreviewKey.of(page, flatten, lab, autoUpright, io.github.artcraftandroid.pdfcraft.ui.scan.ScanPageLook(ScanFilter.Original), autoFlatten)
         if (base != scanTilesFor) {
             scanTilesJob?.cancel()
             if (lab.previewStop) scanTilesStop?.cancel()
@@ -2350,7 +2364,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             for (f in todo) {
                 // a page preview asked for meanwhile goes first
                 kotlinx.coroutines.yield()
-                val request = scanPageRequest(page.file.absolutePath, page.corners, f, flatten, lab, "", page.turns, autoUpright, io.github.artcraftandroid.pdfcraft.ui.scan.scanPresetFor(page, lab), page.finding?.curvedSides ?: 0, page.finding?.curvedOpposite ?: false, page.book != null)
+                val request = scanPageRequest(page.file.absolutePath, page.corners, f, flatten, lab, "", page.turns, autoUpright, io.github.artcraftandroid.pdfcraft.ui.scan.scanPresetFor(page, lab), page.finding?.curvedSides ?: 0, page.finding?.curvedOpposite ?: false, page.book != null, autoFlatten = autoFlatten)
                 val one = android.os.SystemClock.elapsedRealtime()
                 val p = runCatching { io.github.artcraftandroid.pdfcraft.core.scanPreviewPageWith(request, SCAN_PREVIEW_SIDE.toUInt(), stop) }
                     .onFailure { if (!stop.isCancelled()) Diag.failure(DiagArea.Scan, "scan_look_tile", it) }.getOrNull() ?: continue
@@ -2443,7 +2457,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             val flatten = io.github.artcraftandroid.pdfcraft.ui.scan.scanPageFlattens(page.flatten, scanCanFlatten)
             tools.busyProgress = i to pages.size
             val preset = shown[i]?.preset ?: io.github.artcraftandroid.pdfcraft.ui.scan.scanPresetFor(page, lab)
-            val request = scanPageRequest(page.file.absolutePath, page.corners, page.look.filter, flatten, lab, File(dir, "page-$i").absolutePath, turns, autoUpright, preset, page.finding?.curvedSides ?: 0, page.finding?.curvedOpposite ?: false, page.book != null, page.look.strength, page.look.paper)
+            val request = scanPageRequest(page.file.absolutePath, page.corners, page.look.filter, flatten, lab, File(dir, "page-$i").absolutePath, turns, autoUpright, preset, page.finding?.curvedSides ?: 0, page.finding?.curvedOpposite ?: false, page.book != null, page.look.strength, page.look.paper, scanAutoFlattens(page, lab))
             val started = android.os.SystemClock.elapsedRealtime()
             val result = withContext(Dispatchers.Default) { runCatching { io.github.artcraftandroid.pdfcraft.core.scanProcessPage(request) } }
             result.onFailure { Diag.failure(DiagArea.Scan, "scan_process_page", it) }
@@ -2492,7 +2506,8 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             val flatten = io.github.artcraftandroid.pdfcraft.ui.scan.scanPageFlattens(page.flatten, scanCanFlatten)
             val filter = page.look.filter
             val strength = scanLookStrength(page.look, lab)
-            val untouched = !(flatten || lab.flattenAuto) && !scanNeedsProcessing(page.corners.contentEquals(ScanPage.WHOLE), filter.mode)
+            val autoFlatten = scanAutoFlattens(page, lab)
+            val untouched = !(flatten || autoFlatten) && !scanNeedsProcessing(page.corners.contentEquals(ScanPage.WHOLE), filter.mode)
             val r = made[i]
             val followed = i in redo
             val turnSource = io.github.artcraftandroid.pdfcraft.ui.scan.scanTurnSource(page.turns, followed, page.turns == null && autoUpright && lab.upright)
@@ -2558,6 +2573,12 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 "background_pages" to lab.backgroundPages, "shown_turn_kept" to (shown[i]?.turns != null), "shown_preset_kept" to (shown[i]?.preset != null),
                 "made_before_shown" to (pageQueue.madeBeforeShown(page)?.toString() ?: "none"),
             )
+            // what the automatic look decided for the page, one line each (#466)
+            val decisions = io.github.artcraftandroid.pdfcraft.ui.scan.scanAutoDecisions(
+                r?.kind?.preset, page.turns, r?.turns?.toInt() ?: 0, r?.flattened == true || r?.lineFlatten?.check?.kept == true,
+                r?.flattenCheck?.why, page.flatten, autoFlatten, page.auto,
+            )
+            Diag.event(DiagArea.Scan, "auto_decisions", *decisions.diag(i, lab))
             if (keepIn != null) {
                 val kept = r?.let {
                     ScanTestResult(
@@ -2581,7 +2602,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                         k.extraGamma.toDouble(), k.sCurve, k.colourFactor.toDouble(),
                     )
                 }
-                withContext(Dispatchers.IO) { scanLab.keepPage(keepIn, i, page, true, scanLookWord(filter, lab), strength, flatten, r?.path?.let(::File), kept, scanPreviewRecord(page), turn, kind, r?.let { scanAppliedStrength(page.look, lab, it.kind?.strength?.toInt()) }, shown[i]?.json()) }
+                withContext(Dispatchers.IO) { scanLab.keepPage(keepIn, i, page, true, scanLookWord(filter, lab), strength, flatten, r?.path?.let(::File), kept, scanPreviewRecord(page), turn, kind, r?.let { scanAppliedStrength(page.look, lab, it.kind?.strength?.toInt()) }, shown[i]?.json(), decisions.json()) }
             }
             saved += scanSavedPage(page.file.absolutePath, r?.let { it.path to it.dpi })
         }

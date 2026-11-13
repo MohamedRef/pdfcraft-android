@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Scanner: the automatic look (#466); kept apart from strings.xml so parallel scanner work merges cleanly. -->
+<resources>
+    <string name="scan_lab_auto_look">Scansione pulita applica da sola i suoi suggerimenti, con Annulla</string>
+    <string name="scan_auto_flattened_undo">Appiattita · Annulla</string>
+    <string name="scan_auto_flattened_undo_description">Annulla l\'appiattimento</string>
+    <string name="scan_auto_grayscale_undo">Scala di grigi · Annulla</string>
+    <string name="scan_auto_grayscale_undo_description">Annulla la scala di grigi</string>
+</resources>

@@ -89,6 +89,12 @@ internal fun scanPageRequest(
     strength: Int? = null,
     /** The paper's colour the person chose for the page (#301). */
     paper: io.github.artcraftandroid.pdfcraft.ui.scan.ScanPaperChoice = io.github.artcraftandroid.pdfcraft.ui.scan.ScanPaperChoice.Auto,
+    /**
+     * The page's flattening is decided automatically (#302, #466): asked with the guarded check.
+     * The app passes `scanAutoFlattens`, so a page whose Flatten page the person switched off is
+     * not flattened; without it, every page is, as the automatic mode did before.
+     */
+    autoFlatten: Boolean = lab.flattenAuto,
 ): io.github.artcraftandroid.pdfcraft.core.ScanPageRequest = scanTurnAsk(turns, autoUpright, lab.upright).let { ask ->
     io.github.artcraftandroid.pdfcraft.core.ScanPageRequest(
     photoPath = photoPath,
@@ -100,8 +106,9 @@ internal fun scanPageRequest(
     snapPaper = lab.snapPaper,
     // the scan screen's switch flattens the page as asked; the testing option flattens every page
     // and keeps the result only when it is straighter (#302)
-    flatten = flatten || lab.flattenAuto,
-    flattenCheck = !flatten && lab.flattenAuto,
+    // and the automatic look decides it for a page with no choice of its own (#466)
+    flatten = flatten || autoFlatten,
+    flattenCheck = !flatten && autoFlatten,
     // a strip of table left along a flattened page's edges is trimmed (#302)
     flattenTrim = lab.flattenTrim,
     // the guard keeps a flattened page only on enough lines of text (#302)
@@ -210,6 +217,8 @@ internal data class ScanPreviewKey(
     val strength: Int? = null,
     /** The paper's colour chosen for the page (#301). */
     val paper: io.github.artcraftandroid.pdfcraft.ui.scan.ScanPaperChoice = io.github.artcraftandroid.pdfcraft.ui.scan.ScanPaperChoice.Auto,
+    /** The automatic look decides the page's flattening (#466). */
+    val autoFlatten: Boolean = false,
 ) {
     /** The look this preview shows, as the page keeps it. */
     val look: io.github.artcraftandroid.pdfcraft.ui.scan.ScanPageLook get() = io.github.artcraftandroid.pdfcraft.ui.scan.ScanPageLook(filter, strength, paper)
@@ -222,8 +231,8 @@ internal data class ScanPreviewKey(
 
     companion object {
         /** The preview of [page] in [look] (by default the page's own). */
-        fun of(page: ScanPage, flatten: Boolean, lab: ScanLab, autoUpright: Boolean = true, look: io.github.artcraftandroid.pdfcraft.ui.scan.ScanPageLook = page.look) =
-            ScanPreviewKey(page.file.absolutePath, page.corners.toList(), look.filter, flatten, lab.copy(keep = false, inspect = false), page.turns, autoUpright, io.github.artcraftandroid.pdfcraft.ui.scan.scanPresetFor(page, lab), look.strength, look.paper)
+        fun of(page: ScanPage, flatten: Boolean, lab: ScanLab, autoUpright: Boolean = true, look: io.github.artcraftandroid.pdfcraft.ui.scan.ScanPageLook = page.look, autoFlatten: Boolean = false) =
+            ScanPreviewKey(page.file.absolutePath, page.corners.toList(), look.filter, flatten, lab.copy(keep = false, inspect = false), page.turns, autoUpright, io.github.artcraftandroid.pdfcraft.ui.scan.scanPresetFor(page, lab), look.strength, look.paper, autoFlatten)
     }
 }
 

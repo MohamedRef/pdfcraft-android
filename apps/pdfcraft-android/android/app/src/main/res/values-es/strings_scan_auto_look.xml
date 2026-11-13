@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Scanner: the automatic look (#466); kept apart from strings.xml so parallel scanner work merges cleanly. -->
+<resources>
+    <string name="scan_lab_auto_look">Escaneo limpio aplica sus sugerencias por sí mismo, con Deshacer</string>
+    <string name="scan_auto_flattened_undo">Aplanada · Deshacer</string>
+    <string name="scan_auto_flattened_undo_description">Deshacer el aplanado</string>
+    <string name="scan_auto_grayscale_undo">Escala de grises · Deshacer</string>
+    <string name="scan_auto_grayscale_undo_description">Deshacer la escala de grises</string>
+</resources>

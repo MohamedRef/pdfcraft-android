@@ -51,7 +51,10 @@ import io.github.artcraftandroid.pdfcraft.ui.pdfColors
 private fun AppViewModel.setScanLooks(next: List<ScanPageLook>) {
     for (i in scanPages.indices) {
         val look = next.getOrNull(i) ?: continue
-        if (scanPages[i].look != look) scanPages[i] = scanPages[i].copy(look = look)
+        val page = scanPages[i]
+        if (page.look == look) continue
+        // a look chosen by hand takes back the automatic look's Grayscale on that page (#466)
+        scanPages[i] = if (page.auto.greyApplied) page.copy(look = look, auto = page.auto.copy(greyApplied = false, undone = page.auto.undone + ScanAutoMarks.GREYSCALE)) else page.copy(look = look)
     }
 }
 
@@ -119,7 +122,8 @@ internal fun ScanLooksStrip(
         modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 8.dp).selectableGroup(),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        for (f in ScanFilter.entries) {
+        // the automatic look first (#466)
+        for (f in scanStripOrder(vm.scanLab.options.autoLook)) {
             val selected = f == look.filter
             val name = stringResource(f.label)
             val image = scanTileImage(f, look, vm.scanTiles, shown)

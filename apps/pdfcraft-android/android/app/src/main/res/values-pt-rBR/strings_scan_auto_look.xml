@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Scanner: the automatic look (#466); kept apart from strings.xml so parallel scanner work merges cleanly. -->
+<resources>
+    <string name="scan_lab_auto_look">Digitalização limpa aplica suas sugestões sozinha, com Desfazer</string>
+    <string name="scan_auto_flattened_undo">Aplanada · Desfazer</string>
+    <string name="scan_auto_flattened_undo_description">Desfazer o aplanamento</string>
+    <string name="scan_auto_grayscale_undo">Escala de cinza · Desfazer</string>
+    <string name="scan_auto_grayscale_undo_description">Desfazer a escala de cinza</string>
+</resources>

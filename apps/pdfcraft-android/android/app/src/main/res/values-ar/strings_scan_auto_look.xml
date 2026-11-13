@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Scanner: the automatic look (#466); kept apart from strings.xml so parallel scanner work merges cleanly. -->
+<resources>
+    <string name="scan_lab_auto_look">المسح النظيف يطبّق اقتراحاته بنفسه مع إمكانية التراجع</string>
+    <string name="scan_auto_flattened_undo">اتفردت الصفحة · تراجع</string>
+    <string name="scan_auto_flattened_undo_description">تراجع عن فرد الصفحة</string>
+    <string name="scan_auto_grayscale_undo">تدرّج رمادي · تراجع</string>
+    <string name="scan_auto_grayscale_undo_description">تراجع عن التدرّج الرمادي</string>
+</resources>
