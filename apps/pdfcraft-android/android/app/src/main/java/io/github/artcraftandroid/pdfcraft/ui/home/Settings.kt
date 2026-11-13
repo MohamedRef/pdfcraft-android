@@ -281,20 +281,7 @@ private fun RootPage(vm: AppViewModel, open: (SettingsPage) -> Unit) {
     val c = pdfColors
     val context = LocalContext.current
     val version = "${vm.home.appVersion} (${installedVersionCode(context)})"
-    // the app and its version; an update waiting shows here too
-    Row(
-        Modifier.padding(horizontal = 16.dp, vertical = 8.dp).fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(c.surfaceRaised)
-            .clickable(role = Role.Button) { open(SettingsPage.About) }.padding(16.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Image(painterResource(R.drawable.ic_launcher_tile), null, modifier = Modifier.size(48.dp).clip(RoundedCornerShape(12.dp)))
-        Spacer(Modifier.width(14.dp))
-        Column(Modifier.weight(1f)) {
-            Text(stringResource(R.string.app_name), color = c.text, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
-            Text(version, color = c.textSecondary, fontSize = 14.sp)
-        }
-        Icon(LucideIcons.ChevronRight, null, tint = c.icon, modifier = Modifier.size(20.dp))
-    }
+    // an update waiting shows first; About, at the end, carries the version (#463)
     UpdaterState.candidate?.let { update ->
         SettingsRow(
             stringResource(R.string.updater_available), { open(SettingsPage.Updates) },
@@ -307,7 +294,10 @@ private fun RootPage(vm: AppViewModel, open: (SettingsPage) -> Unit) {
     SettingsRow(stringResource(R.string.settings_reading), { open(SettingsPage.Reading) }, stringResource(R.string.settings_reading_summary), LucideIcons.BookOpen, chevron = true)
     SettingsRow(stringResource(R.string.home_section_pen), { open(SettingsPage.Pen) }, stringResource(R.string.settings_pen_summary), LucideIcons.PenLine, chevron = true)
     SettingsRow(stringResource(R.string.home_section_forms), { open(SettingsPage.Forms) }, stringResource(R.string.settings_forms_summary), LucideIcons.TextCursorInput, chevron = true)
-    SettingsRow(stringResource(R.string.home_section_keyboard), { open(SettingsPage.Keyboard) }, stringResource(R.string.home_keyboard_shortcuts), LucideIcons.SquareTerminal, chevron = true)
+    SettingsRow(
+        stringResource(R.string.home_section_keyboard), { open(SettingsPage.Keyboard) },
+        stringResource(if (vm.settings.keyboardShortcuts) R.string.settings_on else R.string.settings_off), LucideIcons.SquareTerminal, chevron = true,
+    )
 
     SettingsHeader(stringResource(R.string.settings_group_tools))
     SettingsRow(stringResource(R.string.settings_scanner), { open(SettingsPage.Scan) }, stringResource(R.string.settings_scanner_summary), LucideIcons.Scan, chevron = true)
@@ -381,6 +371,8 @@ private fun ScanPage(vm: AppViewModel) = Group {
     // which camera Scan uses (#294): the phone's camera app stays one tap away
     ScanCameraSetting()
     ScanMergeSettingRow()
+    // auto-capture was only in the camera and the testing options (#463)
+    io.github.artcraftandroid.pdfcraft.ui.scan.ScanAutoSetting()
     var autoUpright by remember { mutableStateOf(ScanUprightSetting.get(vm.settings.appPrefs)) }
     SettingsSwitch(stringResource(R.string.settings_scan_upright), autoUpright, { autoUpright = it; ScanUprightSetting.set(vm.settings.appPrefs, it) }, stringResource(R.string.settings_scan_upright_body))
     SheetDivider(vertical = 8.dp)
@@ -423,7 +415,8 @@ private fun BackupPage(vm: AppViewModel) = Group {
         }
         SettingsNote(status, if (b.backupFailed) c.red else c.textSecondary)
         if (b.backupFailed) SettingsRow(stringResource(R.string.backup_retry), { b.flushBackups() })
-        SettingsRow(stringResource(R.string.backup_turn_off), { b.turnOffBackups() })
+        // what Turn off does with the backups made and the copies not yet written (#463)
+        SettingsRow(stringResource(R.string.backup_turn_off), { b.turnOffBackups() }, summary = stringResource(R.string.backup_turn_off_body))
     }
     SettingsNote(stringResource(R.string.backup_body))
 }
@@ -436,6 +429,13 @@ private fun UpdatesPage() = Group {
     SettingsSwitch(stringResource(R.string.updater_auto_check), autoCheck, { autoCheck = it; UpdaterState.setAutoCheck(context, it) }, stringResource(R.string.updater_auto_check_body))
     SheetDivider(vertical = 8.dp)
     UpdatePanel(showTitle = false)
+    // when the last check ran and what it found, also before an update exists (#463)
+    val last = remember(UpdaterState.checking) { UpdaterState.lastCheck(context) }
+    if (last.first > 0L && !UpdaterState.checking) {
+        val ago = android.text.format.DateUtils.getRelativeTimeSpanString(last.first).toString()
+        val upToDate = last.second == UpdaterState.RESULT_CURRENT && UpdaterState.candidate == null
+        SettingsNote(stringResource(if (upToDate) R.string.updater_last_checked_current else R.string.updater_last_checked, ago))
+    }
 }
 
 // ---- Support ----------------------------------------------------------------------------------

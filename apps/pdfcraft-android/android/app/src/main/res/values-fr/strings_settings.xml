@@ -20,4 +20,15 @@
     <string name="settings_scan_testing_summary">Activer ou désactiver les fonctions du scanner et garder les numérisations à partager</string>
     <string name="settings_scan_testing_needs_log">Activez le journal de diagnostic pour les utiliser</string>
     <string name="settings_copy_version">Copier la version</string>
+    <string name="settings_on">Activé</string>
+    <string name="updater_last_checked">Dernière vérification %1$s.</string>
+    <string name="updater_last_checked_current">Dernière vérification %1$s. L\'application est à jour.</string>
+    <string name="backup_turn_off_body">Les sauvegardes déjà dans le dossier y restent. Les copies pas encore écrites sont abandonnées.</string>
+    <string name="scan_lab_group_kept">Numérisations conservées</string>
+    <string name="scan_lab_group_finding">Trouver la page</string>
+    <string name="scan_lab_group_borders">Bords</string>
+    <string name="scan_lab_group_flattening">Aplatissement</string>
+    <string name="scan_lab_group_looks">Rendus</string>
+    <string name="scan_lab_group_camera">Appareil photo</string>
+    <string name="scan_lab_group_reports">Rapports</string>
 </resources>
