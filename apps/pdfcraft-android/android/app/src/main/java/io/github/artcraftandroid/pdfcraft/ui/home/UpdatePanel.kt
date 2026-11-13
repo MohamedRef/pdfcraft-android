@@ -301,6 +301,16 @@ internal object UpdaterState {
         check(app, quiet = true)
     }
 
+    const val RESULT_CURRENT = "current"
+
+    /** When the last check ran (0 for never) and what it found: [RESULT_CURRENT], "found" or "error" (#463). */
+    fun lastCheck(context: Context): Pair<Long, String> {
+        val p = prefs(context.applicationContext)
+        return p.getLong("lastCheck", 0L) to (p.getString("lastResult", null) ?: "")
+    }
+
+    private fun recordResult(context: Context, result: String) = prefs(context).edit().putString("lastResult", result).apply()
+
     /** Look for a newer release; [quiet] (the daily check) leaves the message alone. */
     fun check(context: Context, quiet: Boolean = false) {
         if (checking || downloading) return
@@ -328,10 +338,12 @@ internal object UpdaterState {
                 verifiedApk = null
                 cachedBytes = found?.let { apkCachedBytes(app, it) } ?: 0L
                 progress = if (found == null) 0 else (cachedBytes * 100L / found.size).toInt()
+                recordResult(app, if (found == null) RESULT_CURRENT else "found")
                 if (!quiet) message = if (found == null) app.getString(R.string.updater_no_updates) else null
                 Diag.event(DiagArea.Update, "check", "auto" to quiet, "found" to (found != null), "cached_bytes" to cachedBytes, "ms" to android.os.SystemClock.elapsedRealtime() - started)
             } catch (e: Exception) {
                 Diag.failure(DiagArea.Update, "check", e)
+                recordResult(app, "error")
                 if (!quiet) message = app.getString(R.string.updater_check_error)
             } finally {
                 checking = false

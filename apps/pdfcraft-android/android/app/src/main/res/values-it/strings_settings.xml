@@ -20,4 +20,15 @@
     <string name="settings_scan_testing_summary">Attiva o disattiva le funzioni dello scanner e conserva le scansioni da condividere</string>
     <string name="settings_scan_testing_needs_log">Attiva il registro di diagnostica per usarle</string>
     <string name="settings_copy_version">Copia versione</string>
+    <string name="settings_on">Attivato</string>
+    <string name="updater_last_checked">Ultimo controllo %1$s.</string>
+    <string name="updater_last_checked_current">Ultimo controllo %1$s. L\'app è aggiornata.</string>
+    <string name="backup_turn_off_body">I backup già nella cartella restano. Le copie non ancora scritte vengono scartate.</string>
+    <string name="scan_lab_group_kept">Scansioni conservate</string>
+    <string name="scan_lab_group_finding">Trovare la pagina</string>
+    <string name="scan_lab_group_borders">Bordi</string>
+    <string name="scan_lab_group_flattening">Appiattimento</string>
+    <string name="scan_lab_group_looks">Stili</string>
+    <string name="scan_lab_group_camera">Fotocamera</string>
+    <string name="scan_lab_group_reports">Rapporti</string>
 </resources>

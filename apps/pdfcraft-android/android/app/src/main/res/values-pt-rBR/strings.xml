@@ -828,7 +828,7 @@
     <string name="scan_lab_strength_own">Padrão</string>
     <string name="scan_lab_options_body">Estas opções desligam partes do scanner ou as trocam pelo que substituíram, para descobrir de qual parte vem um problema. O log registra o que estava em vigor em cada página.</string>
     <string name="scan_lab_reset">Redefinir opções de teste do scanner</string>
-    <string name="scan_lab_active">Uma opção de teste do scanner está ativa (Configurações, Sobre, Diagnóstico)</string>
+    <string name="scan_lab_active">Uma opção de teste do scanner está ativa (Configurações, Diagnóstico, Teste do scanner)</string>
     <string name="home_diagnostics_empty">Ainda não há diagnóstico: ative a opção e use o app.</string>
     <string name="home_diagnostics_subject">Log de diagnóstico do PdfCraft</string>
     <string name="home_diagnostics_cleared">Log de diagnóstico limpo</string>
