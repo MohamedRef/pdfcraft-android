@@ -36,4 +36,22 @@ class ScanEnhanceTest {
         assertTrue(scanEnhanceMoreEnabled(ScanEnhanceMore.AddPage, pages = 0, applyNeeded = false, lookIsDefault = true, canCompare = false, canRename = false))
         assertEquals(5, ScanEnhanceMore.entries.map { it.id }.toSet().size)
     }
+
+    @Test
+    fun theNotesUnderThePageComeInOneLineInReadingOrder() {
+        // #493: the worst case: turned, flattened, a finger removed over print, a suggestion and the compare hint
+        val notes = scanEnhanceNotes(
+            turned = true, chips = listOf(ScanAutoChip.Flattened, ScanAutoChip.FingersOverPrint),
+            suggestion = ScanSuggestion.Greyscale, compare = false,
+        )
+        assertEquals(
+            listOf(
+                ScanEnhanceNote.Turned, ScanEnhanceNote.Auto(ScanAutoChip.Flattened), ScanEnhanceNote.Auto(ScanAutoChip.FingersOverPrint),
+                ScanEnhanceNote.Suggest(ScanSuggestion.Greyscale), ScanEnhanceNote.Compare(false),
+            ),
+            notes,
+        )
+        assertEquals(emptyList<ScanEnhanceNote>(), scanEnhanceNotes(false, emptyList(), null, null))
+        assertEquals(listOf(ScanEnhanceNote.Compare(true)), scanEnhanceNotes(false, emptyList(), null, true))
+    }
 }

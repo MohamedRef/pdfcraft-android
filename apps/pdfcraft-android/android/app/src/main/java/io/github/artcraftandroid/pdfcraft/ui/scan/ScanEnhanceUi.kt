@@ -2,6 +2,8 @@ package io.github.artcraftandroid.pdfcraft.ui.scan
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -232,4 +234,68 @@ internal fun Modifier.scanSwipe(enabled: () -> Boolean, onSwipe: (Float) -> Unit
 internal fun scanSuggestionLabel(suggestion: ScanSuggestion): Int = when (suggestion) {
     ScanSuggestion.Flatten -> R.string.scan_suggest_flatten
     ScanSuggestion.Greyscale -> R.string.scan_suggest_greyscale
+}
+
+/**
+ * One thing said about the page on Enhance (#493): what was turned or done automatically, each with
+ * Undo, the document type's suggestion, and the hold-to-compare hint. They sit in one line between
+ * the page and the looks strip, never over the page, so the page is clear while it is judged and
+ * no two notes can overlap.
+ */
+internal sealed interface ScanEnhanceNote {
+    /** "Turned upright · Undo" (#339). */
+    data object Turned : ScanEnhanceNote
+    /** What the automatic look did, with Undo (#466). */
+    data class Auto(val chip: ScanAutoChip) : ScanEnhanceNote
+    /** A suggestion to take or dismiss (#459). */
+    data class Suggest(val suggestion: ScanSuggestion) : ScanEnhanceNote
+    /** "Hold to see the original", or "Original" while it is shown (#301). */
+    data class Compare(val comparing: Boolean) : ScanEnhanceNote
+}
+
+/** The notes for the page shown, in the order they are read: what was done, then what is offered, then the hint (#493). */
+internal fun scanEnhanceNotes(turned: Boolean, chips: List<ScanAutoChip>, suggestion: ScanSuggestion?, compare: Boolean?): List<ScanEnhanceNote> = buildList {
+    if (turned) add(ScanEnhanceNote.Turned)
+    chips.forEach { add(ScanEnhanceNote.Auto(it)) }
+    suggestion?.let { add(ScanEnhanceNote.Suggest(it)) }
+    compare?.let { add(ScanEnhanceNote.Compare(it)) }
+}
+
+/** The height the notes line keeps on Enhance (#493), empty or not, so the page does not jump when a note comes or goes. */
+internal const val SCAN_NOTES_HEIGHT_DP = 44
+
+/**
+ * The notes line under the page on Enhance (#493): one line that scrolls sideways when the notes are
+ * wider than the screen; each note keeps its words on one line.
+ */
+@Composable
+internal fun ScanEnhanceNotes(
+    notes: List<ScanEnhanceNote>,
+    modifier: Modifier = Modifier,
+    onUndoTurn: () -> Unit = {},
+    onUndoAuto: (ScanAutoChip) -> Unit = {},
+    onTake: (ScanSuggestion) -> Unit = {},
+    onDismiss: (ScanSuggestion) -> Unit = {},
+) {
+    val undoTurn = stringResource(R.string.scan_turn_undo_description)
+    Row(
+        modifier.fillMaxWidth().height(SCAN_NOTES_HEIGHT_DP.dp).horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        for (n in notes) when (n) {
+            ScanEnhanceNote.Turned -> Text(
+                stringResource(R.string.scan_turned_upright_undo), color = Color.White, fontSize = 13.sp, maxLines = 1, softWrap = false,
+                modifier = Modifier.clip(CircleShape).background(Color.Black.copy(alpha = 0.6f))
+                    .clickable(role = Role.Button, onClickLabel = undoTurn) { onUndoTurn() }.padding(horizontal = 12.dp, vertical = 6.dp),
+            )
+            is ScanEnhanceNote.Auto -> ScanAutoChipView(n.chip, { onUndoAuto(n.chip) })
+            is ScanEnhanceNote.Suggest -> ScanSuggestionOverlay(n.suggestion, onTake = { onTake(n.suggestion) }, onDismiss = { onDismiss(n.suggestion) })
+            is ScanEnhanceNote.Compare -> Text(
+                stringResource(if (n.comparing) R.string.tools_filter_original else R.string.scan_compare_hint), color = Color.White, fontSize = 12.sp,
+                maxLines = 1, softWrap = false,
+                modifier = Modifier.clip(CircleShape).background(Color.Black.copy(alpha = 0.5f)).padding(horizontal = 10.dp, vertical = 4.dp),
+            )
+        }
+    }
 }
