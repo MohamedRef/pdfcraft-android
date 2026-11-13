@@ -21,6 +21,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlin.math.roundToInt
 
 /**
  * What to draw: a whole page at the zoom-1 scale ([tile] null), or one tile of it at a deeper
@@ -40,6 +41,22 @@ data class ImageRequest(val key: ImageKey, val scale: Float, val tile: TileRect?
 
 /** Renders at least this long also report their size in the open timings (#236). */
 internal const val SLOW_RENDER_MS = 250L
+
+/**
+ * The fields of a `slow_render` line (#236): which page, what kind of render, its size and scale, so
+ * a page that is slow on every open can be found in the file and inspected on a computer. The page
+ * is counted from 1, as the viewer shows it. Numbers and fixed words only: nothing from the document.
+ */
+internal fun slowRenderFields(r: ImageRequest, width: Int, height: Int, ms: Long): Array<Pair<String, Any?>> = arrayOf(
+    "stage" to renderStage(r),
+    "page_number" to r.key.page + 1,
+    "ms" to ms,
+    "width" to width,
+    "height" to height,
+    "scale_milli" to (r.scale * 1000f).roundToInt(),
+    "level" to r.key.level,
+    "tile" to (r.tile != null),
+)
 
 /** The open-timings stage of a render: whole page or tile, zoom-1 or low-resolution base, prefetch. */
 internal fun renderStage(r: ImageRequest): String {
@@ -254,8 +271,14 @@ class PageImages(
                         if (stop == null) engine.session.renderPageCompact(doc, r.key.page.toUInt(), r.scale, r.tile, compact)
                         else engine.session.renderPageCompactCancellable(doc, r.key.page.toUInt(), r.scale, r.tile, compact, stop)
                     }
-                    if (android.os.SystemClock.elapsedRealtime() - started >= SLOW_RENDER_MS) {
+                    val took = android.os.SystemClock.elapsedRealtime() - started
+                    if (took >= SLOW_RENDER_MS) {
                         io.github.artcraftandroid.pdfcraft.engine.OpenTiming.count("slow_render_pixels", img.width.toLong() * img.height.toLong())
+                        // #236: the page itself, so the one slow page near the reading position can be found.
+                        io.github.artcraftandroid.pdfcraft.engine.Diag.event(
+                            io.github.artcraftandroid.pdfcraft.engine.DiagArea.Render, "slow_render",
+                            *slowRenderFields(r, img.width.toInt(), img.height.toInt(), took),
+                        )
                     }
                     val bitmap = img.toBitmap()
                     PageImage(r.key, bitmap.asImageBitmap(), r.scale, r.tile?.x?.toInt() ?: 0, r.tile?.y?.toInt() ?: 0, bitmap.allocationByteCount)
