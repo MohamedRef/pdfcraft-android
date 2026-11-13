@@ -489,3 +489,67 @@ fn hidden_and_no_view_notes_are_reported_hidden() {
         ("shown".to_string(), false)
     ]);
 }
+
+/// #453: a provider's file opened in place (from its descriptor) draws exactly as the same file
+/// opened from a path, saves only to the app's working file (an incremental revision after the
+/// original's unchanged bytes), never writes the original, and stays reported in use until the
+/// document is closed.
+#[test]
+fn lent_descriptor_opens_in_place_and_saves_to_the_working_file() {
+    use std::io::Write;
+    use std::os::fd::AsRawFd;
+    use std::os::unix::fs::MetadataExt;
+    // a padding stream nobody refers to makes the file large enough to be mapped
+    let padding = "0".repeat(1024 * 1024 + 300);
+    let bytes = fixture("", "", "", &[&format!("<< /Length {} >>\nstream\n{padding}\nendstream", padding.len())]);
+    assert!(bytes.len() > 1024 * 1024);
+    let original = file(&bytes);
+    // the app's working file lives elsewhere and does not exist until a save
+    let working = std::path::Path::new(&file(b"")).with_file_name("working.pdf").to_string_lossy().into_owned();
+    let meta = std::fs::metadata(&original).unwrap();
+    for reading_stage in [false, true] {
+        let session = MobileSession::new();
+        let lent = std::fs::File::open(&original).unwrap();
+        let opened = session.begin_open_lent(lent.as_raw_fd(), working.clone(), None, 0, reading_stage, true).unwrap();
+        drop(lent);
+        assert!(opened.timings.iter().any(|t| t.stage == "native_file_read"));
+        let id = opened.document.id;
+        if opened.document.preparing {
+            session.complete_open(id).unwrap();
+        }
+        assert!(lent_file_in_use(meta.dev(), meta.ino()));
+        assert!(!std::path::Path::new(&working).exists(), "opening copies nothing");
+        let ordinary = MobileSession::new();
+        let expected = ordinary.open(original.clone(), None).unwrap();
+        for page in 0..2 {
+            assert_eq!(session.render_page(id, page, 1.0, None).unwrap().rgba, ordinary.render_page(expected.id, page, 1.0, None).unwrap().rgba);
+        }
+        session
+            .execute("comment_add".into(), json!({ "doc": id, "page": 1, "type": "note", "at": [50, 50], "contents": "in place" }).to_string())
+            .unwrap();
+        let saved: Value = serde_json::from_str(&session.execute("doc_save".into(), json!({ "doc": id }).to_string()).unwrap()).unwrap();
+        let saved = saved.get("result").unwrap_or(&saved);
+        assert_eq!(saved["incremental"], json!(true), "{saved}");
+        let written = std::fs::read(&working).unwrap();
+        assert!(written.len() > bytes.len() && written.starts_with(&bytes), "a revision appended after the original's bytes");
+        assert_eq!(std::fs::read(&original).unwrap(), bytes, "the original is never written by the engine");
+        // the app appends that revision to the original; the open document keeps drawing
+        std::fs::OpenOptions::new().append(true).open(&original).unwrap().write_all(&written[bytes.len()..]).unwrap();
+        assert_eq!(session.render_page(id, 0, 1.0, None).unwrap().rgba, ordinary.render_page(expected.id, 0, 1.0, None).unwrap().rgba);
+        session.close(id, true).unwrap();
+        assert!(!lent_file_in_use(meta.dev(), meta.ino()), "closing releases every mapping");
+        std::fs::write(&original, &bytes).unwrap();
+        std::fs::remove_file(&working).unwrap();
+    }
+}
+
+/// #453: a pipe (or anything else that is not a regular file) is refused, so the app copies it.
+#[test]
+fn lent_descriptor_refuses_what_is_not_a_regular_file() {
+    use std::os::fd::AsRawFd;
+    let session = MobileSession::new();
+    let dir = std::fs::File::open(std::env::temp_dir()).unwrap();
+    assert!(matches!(session.begin_open_lent(dir.as_raw_fd(), "/tmp/x.pdf".into(), None, 0, true, false), Err(MobileError::Open(_))));
+    assert!(matches!(session.begin_open_lent(-1, "/tmp/x.pdf".into(), None, 0, true, false), Err(MobileError::Open(_))));
+    assert!(matches!(session.begin_open_lent(dir.as_raw_fd(), "relative.pdf".into(), None, 0, true, false), Err(MobileError::Open(_))));
+}

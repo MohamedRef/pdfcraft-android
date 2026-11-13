@@ -74,10 +74,15 @@ data class BatesExportResult(val name: String, val message: String, val uri: Uri
 
 data class Message(val text: String, val actionLabel: String? = null, val action: (() -> Unit)? = null)
 
+/** How the engine's `begin_open_lent` error starts when it can't use a provider's descriptor (#453). */
+internal const val IN_PLACE_REFUSED = "the file could not be read in place"
+
 /** A document waiting for its password before it opens. */
 data class PasswordRequest(
     val uri: Uri,
     val file: File,
+    /** The file was opened in place (#453): a retry opens the provider's descriptor again. */
+    val inPlace: Boolean = false,
     val wrong: Boolean,
     val fromOtherApp: Boolean = false,
     val requestId: Long = 0L,
@@ -166,8 +171,15 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                     // access to documents that left Recent is given back (#108), before the copies
                     // are pruned, so a document whose grant goes keeps its copy
                     runCatching { files.releaseUnusedAccess(uris + tabUris + study.library.load().items.map { it.uri }, open) }
-                    // copies of documents that left Recent go too (#42)
-                    runCatching { files.pruneCopies(uris, open, tabUris) }
+                    // copies of documents that left Recent go too (#42); opening in place keeps
+                    // none, and clears those earlier versions kept (#453)
+                    if (settings.openInPlace) {
+                        runCatching { files.removeKeptCopies(listOfNotNull(open) + tabUris) }.getOrNull()?.takeIf { it.first > 0 }?.let { (n, bytes) ->
+                            Diag.event(DiagArea.Open, "stale_copies_removed", "folders" to n, "bytes" to bytes)
+                        }
+                    } else {
+                        runCatching { files.pruneCopies(uris, open, tabUris) }
+                    }
                 }
                 // each row's thumbnail source lists a folder and its location may ask the package
                 // manager: worked out here, never while Home composes (#94)
@@ -239,16 +251,15 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             opening = true
             var openStage = "provider_copy"
             try {
-                val file = io.github.artcraftandroid.pdfcraft.engine.OpenTiming.measure("provider_and_working_copy") { withContext(Dispatchers.IO) {
-                    files.keepAccess(uri)
-                    files.workingCopy(uri)
-                } }
-                io.github.artcraftandroid.pdfcraft.engine.OpenTiming.milestone("working_copy_ready", openStartedAt, bytes = file.length())
+                val source = openSource(uri)
                 // Providers may stream a cloud PDF for seconds. Do not replace a live viewer
                 // with that obsolete result when the user has since opened another document.
-                if (!isCurrentOpenRequest(requestId)) return@withLock
+                if (!isCurrentOpenRequest(requestId)) {
+                    source.lent?.descriptor?.let { runCatching { it.close() } }
+                    return@withLock
+                }
                 openStage = "native_open"
-                openFile(eng, uri, file, password, fromOtherApp, requestId)
+                openFile(eng, uri, source, password, fromOtherApp, requestId)
             } catch (e: java.io.FileNotFoundException) {
                 io.github.artcraftandroid.pdfcraft.engine.OpenTiming.failure(openStage, e)
                 // Moved or deleted since it was opened, or a link a file manager lent that a
@@ -259,7 +270,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 // Do not resurrect an obsolete document or alter its Recent entry.
                 if (!isCurrentOpenRequest(requestId)) return@withLock
                 if (copy != null) {
-                    openFile(eng, uri, copy, password, fromOtherApp, requestId)
+                    openFile(eng, uri, OpenSource(copy), password, fromOtherApp, requestId)
                     tell(text(R.string.msg_opened_own_copy), text(R.string.common_save_copy)) { document?.let { sharing.saveCopyAs(it) } }
                 } else {
                     withContext(Dispatchers.IO) { recents.remove(setOf(uri.toString())) }
@@ -277,7 +288,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 // Do not resurrect an obsolete document or alter its Recent entry.
                 if (!isCurrentOpenRequest(requestId)) return@withLock
                 if (copy != null) {
-                    openFile(eng, uri, copy, password, fromOtherApp, requestId)
+                    openFile(eng, uri, OpenSource(copy), password, fromOtherApp, requestId)
                     tell(text(R.string.msg_opened_own_copy), text(R.string.common_save_copy)) { document?.let { sharing.saveCopyAs(it) } }
                 } else {
                     tell(text(R.string.msg_file_access_lost))
@@ -307,7 +318,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         if (password == null) return
         // OK with nothing typed: the field turns red, as a wrong password does
         if (password.isEmpty()) {
-            passwordRequest = PasswordRequest(req.uri, req.file, wrong = true, fromOtherApp = req.fromOtherApp, requestId = req.requestId)
+            passwordRequest = PasswordRequest(req.uri, req.file, req.inPlace, wrong = true, fromOtherApp = req.fromOtherApp, requestId = req.requestId)
             return
         }
         val eng = engine ?: return
@@ -318,7 +329,8 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 openStartedAt = android.os.SystemClock.elapsedRealtime()
                 opening = true
                 try {
-                    openFile(eng, req.uri, req.file, password, req.fromOtherApp, req.requestId)
+                    val source = if (req.inPlace) openSource(req.uri) else OpenSource(req.file)
+                    openFile(eng, req.uri, source, password, req.fromOtherApp, req.requestId)
                 } catch (e: Exception) {
                     tell(e.userMessage)
                 } finally {
@@ -328,9 +340,56 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         }
     }
 
-    private suspend fun openFile(eng: Engine, uri: Uri, file: File, password: String?, fromOtherApp: Boolean, requestId: Long) {
+    /**
+     * What a document opens from (#453): the provider's file in place ([lent]), or a working
+     * copy in the app's files ([file], which an in-place document only saves to).
+     */
+    class OpenSource(val file: File, val lent: io.github.artcraftandroid.pdfcraft.engine.LentSource? = null) {
+        val size: Long get() = lent?.size ?: file.length()
+    }
+
+    /**
+     * [uri] in place when its provider lends a file the engine can map, else copied in as before.
+     * The diagnostics log says which, and why a copy was made (#453).
+     */
+    private suspend fun openSource(uri: Uri): OpenSource = withContext(Dispatchers.IO) {
+        files.keepAccess(uri)
+        val (lent, reason) = io.github.artcraftandroid.pdfcraft.engine.OpenTiming.measure("provider_open_in_place") {
+            files.lend(uri, settings.openInPlace)
+        }
+        if (lent != null) {
+            io.github.artcraftandroid.pdfcraft.engine.OpenTiming.milestone("source_in_place_ready", openStartedAt, bytes = lent.size)
+            Diag.event(DiagArea.Open, "open_source", "doc" to settings.diagDoc, "mode" to "in_place", "bytes" to lent.size)
+            return@withContext OpenSource(lent.file, lent)
+        }
+        val file = io.github.artcraftandroid.pdfcraft.engine.OpenTiming.measure("provider_and_working_copy") { files.workingCopy(uri) }
+        io.github.artcraftandroid.pdfcraft.engine.OpenTiming.milestone("working_copy_ready", openStartedAt, bytes = file.length())
+        Diag.event(DiagArea.Open, "open_source", "doc" to settings.diagDoc, "mode" to "copy", "reason" to reason, "bytes" to file.length())
+        OpenSource(file)
+    }
+
+    private suspend fun openFile(eng: Engine, uri: Uri, opened: OpenSource, password: String?, fromOtherApp: Boolean, requestId: Long) {
+        try {
+            openFileFrom(eng, uri, opened, password, fromOtherApp, requestId)
+        } catch (e: InPlaceRefused) {
+            opened.lent?.descriptor?.let { runCatching { it.close() } }
+            Diag.event(DiagArea.Open, "open_source", "doc" to settings.diagDoc, "mode" to "copy", "reason" to io.github.artcraftandroid.pdfcraft.engine.InPlaceReason.ENGINE_REFUSED)
+            val copy = io.github.artcraftandroid.pdfcraft.engine.OpenTiming.measure("provider_and_working_copy") { withContext(Dispatchers.IO) { files.workingCopy(uri) } }
+            if (isCurrentOpenRequest(requestId)) openFileFrom(eng, uri, OpenSource(copy), password, fromOtherApp, requestId)
+        } finally {
+            // the engine keeps its own descriptor of an in-place file
+            opened.lent?.descriptor?.let { runCatching { it.close() } }
+        }
+    }
+
+    /** The engine could not open a provider's file in place (#453); it is copied in instead. */
+    private class InPlaceRefused(cause: Throwable) : Exception(cause)
+
+    private suspend fun openFileFrom(eng: Engine, uri: Uri, opened: OpenSource, password: String?, fromOtherApp: Boolean, requestId: Long) {
         // Covers password retry and all provider fallback paths too.
         if (!isCurrentOpenRequest(requestId)) return
+        val file = opened.file
+        val lent = opened.lent
         try {
             document?.let { current ->
                 // the document in front stays open in its tab, saved first (#138)
@@ -339,10 +398,20 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 document = null
             }
             val recent = withContext(Dispatchers.IO) { recents.list().firstOrNull { it.uri == uri.toString() } }
-            val progressive = file.length() >= 16L * 1024L * 1024L && recent?.reading != true && home.pendingTool == null
+            val progressive = opened.size >= 16L * 1024L * 1024L && recent?.reading != true && home.pendingTool == null
             val info = io.github.artcraftandroid.pdfcraft.engine.OpenTiming.measure("native_open") {
                 eng.command {
-                    if (progressive) {
+                    if (lent != null) {
+                        // the provider's file itself (#453); saves go to the working file
+                        val out = try {
+                            beginOpenLent(lent.descriptor.fd, file.absolutePath, password, (recent?.lastPage ?: 0).coerceAtLeast(0).toUInt(), progressive, io.github.artcraftandroid.pdfcraft.engine.OpenTiming.enabled())
+                        } catch (e: MobileException.Open) {
+                            // the engine could not map or read the descriptor: copy it in instead
+                            if (e.message.orEmpty().startsWith(IN_PLACE_REFUSED)) throw InPlaceRefused(e) else throw e
+                        }
+                        out.timings.forEach { io.github.artcraftandroid.pdfcraft.engine.OpenTiming.duration(it.stage, it.durationMs.toLong()) }
+                        out.document
+                    } else if (progressive) {
                         val opened = beginOpen(file.absolutePath, password, (recent?.lastPage ?: 0).coerceAtLeast(0).toUInt(), io.github.artcraftandroid.pdfcraft.engine.OpenTiming.enabled())
                         opened.timings.forEach { io.github.artcraftandroid.pdfcraft.engine.OpenTiming.duration(it.stage, it.durationMs.toLong()) }
                         opened.document
@@ -362,7 +431,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 eng.command { close(info.id, true) }
                 return
             }
-            io.github.artcraftandroid.pdfcraft.engine.OpenTiming.milestone(if (info.preparing) "native_reading_ready" else "native_ready", openStartedAt, bytes = file.length(), pages = info.pages.size)
+            io.github.artcraftandroid.pdfcraft.engine.OpenTiming.milestone(if (info.preparing) "native_reading_ready" else "native_ready", openStartedAt, bytes = opened.size, pages = info.pages.size)
             Diagnostics.memory(if (info.preparing) "native_reading_ready" else "native_ready")
             // This counts editing-parser repairs only; renderer fallback work has its own trace.
             if (!info.preparing && io.github.artcraftandroid.pdfcraft.engine.OpenTiming.enabled()) {
@@ -374,6 +443,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             val doc = OpenDocument(info.id, info, source, file, images, password, eng, viewModelScope)
             doc.fromOtherApp = fromOtherApp
             doc.diagNumber = settings.diagDoc
+            doc.lent = lent?.let { io.github.artcraftandroid.pdfcraft.engine.LentState(it.dev, it.ino, it.size) }
             doc.writable = withContext(Dispatchers.IO) { source == null || files.canWrite(source) }
             doc.notWrittenBack = source?.let { withContext(Dispatchers.IO) { files.hasPendingWriteBack(it) } } ?: false
             io.github.artcraftandroid.pdfcraft.engine.OpenTiming.milestone("source_access_ready", openStartedAt)
@@ -412,13 +482,13 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             }
             pendingSpot = recent?.takeIf { linkPage == null && pendingPage != null && it.lastX >= 0f && it.lastY >= 0f }?.let { Triple(it.lastX, it.lastY, it.lastZoom) }
             withContext(Dispatchers.IO) {
-                recents.touch(RecentFile(uri.toString(), info.name, System.currentTimeMillis(), info.pages.size, file.length(), recent?.lastPage ?: 0))
+                recents.touch(RecentFile(uri.toString(), info.name, System.currentTimeMillis(), info.pages.size, opened.size, recent?.lastPage ?: 0))
             }
             refreshRecents()
         } catch (e: MobileException.NeedsPassword) {
-            passwordRequest = PasswordRequest(uri, file, wrong = false, fromOtherApp = fromOtherApp, requestId = requestId)
+            passwordRequest = PasswordRequest(uri, file, lent != null, wrong = false, fromOtherApp = fromOtherApp, requestId = requestId)
         } catch (e: MobileException.WrongPassword) {
-            passwordRequest = PasswordRequest(uri, file, wrong = true, fromOtherApp = fromOtherApp, requestId = requestId)
+            passwordRequest = PasswordRequest(uri, file, lent != null, wrong = true, fromOtherApp = fromOtherApp, requestId = requestId)
         } catch (e: MobileException) {
             tell(e.userMessage)
         }
@@ -629,6 +699,11 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         runCatching { eng.command { close(doc.id, true) } }
         doc.images.close()
         doc.search.clear()
+        if (doc.lent != null) {
+            // nothing of an in-place document stays in the app's files (#453)
+            finishInPlace(eng, doc)
+            return
+        }
         // the working copy isn't kept when the original can be read again (#42)
         doc.source?.let { src -> withContext(Dispatchers.IO) { runCatching { files.dropCopyIfReachable(src) } } }
     }
@@ -669,7 +744,11 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             // the write-back must reopen the saved working copy, not copy the old original over it.
             markBeforeWorkingCopyChanges(doc)
             stage = "doc_save"
-            if (doc.info.dirty) Diag.measure(DiagArea.Save, "doc_save", "doc" to doc.diagNumber) { eng.tool("doc_save", mapOf("doc" to doc.id)) }
+            if (doc.info.dirty) {
+                val out = Diag.measure(DiagArea.Save, "doc_save", "doc" to doc.diagNumber) { eng.tool("doc_save", mapOf("doc" to doc.id)) }
+                // an in-place original takes only appended revisions while it is open (#453)
+                doc.lent?.saved(out.optBoolean("incremental", false))
+            }
             stage = "refresh"
             Diag.measure(DiagArea.Save, "refresh", "doc" to doc.diagNumber) { refresh(doc) }
             // a copy for the backup folder, even when writing back fails (#145)
@@ -683,10 +762,20 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                     outcome = if (doc.writable) "held" else "read_only"
                     return@withLock false
                 }
-                Diag.measure(DiagArea.Save, "write_back", "doc" to doc.diagNumber, "bytes" to doc.file.length(), "target" to "provider") {
-                    withContext(Dispatchers.IO) {
-                        files.writeBack(doc.file, src)
-                        files.clearPendingWriteBack(src)
+                val lent = doc.lent
+                if (lent != null) {
+                    if (!writeBackInPlace(eng, doc, src, lent)) {
+                        // written over the original once the document has closed (#453)
+                        outcome = "at_close"
+                        doc.notWrittenBack = false
+                        return@withLock true
+                    }
+                } else {
+                    Diag.measure(DiagArea.Save, "write_back", "doc" to doc.diagNumber, "bytes" to doc.file.length(), "target" to "provider") {
+                        withContext(Dispatchers.IO) {
+                            files.writeBack(doc.file, src)
+                            files.clearPendingWriteBack(src)
+                        }
                     }
                 }
                 doc.wroteOriginal = true
@@ -721,6 +810,97 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             doc.saving = false
             Diag.event(DiagArea.Save, "save", "doc" to doc.diagNumber, "trigger" to trigger, "outcome" to outcome, "ms" to android.os.SystemClock.elapsedRealtime() - started)
         }
+    }
+
+    /**
+     * Write [doc]'s saved working file back to its in-place original [src] (#453). The engine
+     * maps that original, so it is only ever appended to while the document is open: a save that
+     * rewrote the whole file is written once the document has closed ([finishInPlace]). Returns
+     * false when the write-back waits for the close; the recovery marker stays until then.
+     */
+    private suspend fun writeBackInPlace(eng: Engine, doc: OpenDocument, src: Uri, lent: io.github.artcraftandroid.pdfcraft.engine.LentState): Boolean {
+        val working = doc.file.length()
+        val original = withContext(Dispatchers.IO) { files.descriptorSize(src) }
+        val mapped = runCatching { io.github.artcraftandroid.pdfcraft.core.lentFileInUse(lent.dev.toULong(), lent.ino.toULong()) }.getOrDefault(true)
+        var mode = io.github.artcraftandroid.pdfcraft.engine.inPlaceWriteBack(lent.chainIntact, lent.providerLength, original, working, mapped)
+        if (mode == io.github.artcraftandroid.pdfcraft.engine.InPlaceWriteBack.Append) {
+            val appended = Diag.measure(DiagArea.Save, "write_back", "doc" to doc.diagNumber, "bytes" to working - lent.providerLength, "target" to "provider", "mode" to "append") {
+                withContext(Dispatchers.IO) { files.appendWriteBack(doc.file, src, lent.providerLength) }
+            }
+            if (appended) {
+                lent.appended(working)
+                withContext(Dispatchers.IO) { files.clearPendingWriteBack(src) }
+                return true
+            }
+            // the provider offered no read-write descriptor, or the original changed meanwhile
+            mode = if (mapped) io.github.artcraftandroid.pdfcraft.engine.InPlaceWriteBack.AtClose else io.github.artcraftandroid.pdfcraft.engine.InPlaceWriteBack.Full
+        }
+        if (mode == io.github.artcraftandroid.pdfcraft.engine.InPlaceWriteBack.Full) {
+            Diag.measure(DiagArea.Save, "write_back", "doc" to doc.diagNumber, "bytes" to working, "target" to "provider", "mode" to "full") {
+                withContext(Dispatchers.IO) {
+                    files.writeBack(doc.file, src)
+                    files.clearPendingWriteBack(src)
+                }
+            }
+            lent.appended(working)
+            return true
+        }
+        lent.writeBackAtClose = true
+        Diag.event(DiagArea.Save, "write_back_at_close", "doc" to doc.diagNumber, "bytes" to working, "chain_intact" to lent.chainIntact, "original_matches" to (original == lent.providerLength))
+        return false
+    }
+
+    /**
+     * After an in-place document closed (#453): write a save that rewrote the whole file over the
+     * original, once the engine no longer maps it, then remove the working file. A write-back that
+     * can't be made keeps its marker and working file, which the next open offers (#101-#103).
+     */
+    private suspend fun finishInPlace(eng: Engine, doc: OpenDocument) {
+        val lent = doc.lent ?: return
+        val src = doc.source ?: return
+        if (lent.writeBackAtClose) {
+            var mapped = true
+            // a render still drawing from the original lets it go within moments
+            for (i in 0 until 60) {
+                mapped = runCatching { io.github.artcraftandroid.pdfcraft.core.lentFileInUse(lent.dev.toULong(), lent.ino.toULong()) }.getOrDefault(true)
+                if (!mapped) break
+                kotlinx.coroutines.delay(50)
+            }
+            if (mapped) {
+                Diag.event(DiagArea.Save, "write_back_at_close", "doc" to doc.diagNumber, "outcome" to "still_mapped")
+                tell(text(R.string.in_place_write_back_waiting))
+                return
+            }
+            val ok = runCatching {
+                Diag.measure(DiagArea.Save, "write_back", "doc" to doc.diagNumber, "bytes" to doc.file.length(), "target" to "provider", "mode" to "at_close") {
+                    withContext(Dispatchers.IO) {
+                        files.writeBack(doc.file, src)
+                        files.clearPendingWriteBack(src)
+                    }
+                }
+            }.onFailure { Diag.failure(DiagArea.Save, "write_back_at_close", it) }.isSuccess
+            if (!ok) {
+                tell(text(R.string.in_place_write_back_waiting))
+                return
+            }
+            lent.writeBackAtClose = false
+        }
+        val freed = withContext(Dispatchers.IO) { runCatching { files.deleteWorkingFiles(src) }.getOrDefault(0L) }
+        Diag.event(DiagArea.Save, "working_copy_deleted", "doc" to doc.diagNumber, "bytes" to freed)
+    }
+
+    /**
+     * [doc]'s file as last saved, for a tool that reads it (share, print, a protected copy, a
+     * backup). A document opened in place (#453) has none before its first save: its original
+     * is copied to the working file then (and removed when it closes), and the log says so.
+     */
+    internal suspend fun savedFile(doc: OpenDocument, reason: String): File {
+        val src = doc.source
+        if (doc.lent == null || src == null || doc.file.isFile) return doc.file
+        val started = android.os.SystemClock.elapsedRealtime()
+        withContext(Dispatchers.IO) { files.materialize(src, doc.file) }
+        Diag.event(DiagArea.Open, "working_copy_made", "doc" to doc.diagNumber, "reason" to reason, "bytes" to doc.file.length(), "ms" to android.os.SystemClock.elapsedRealtime() - started)
+        return doc.file
     }
 
     /** The top bar's save state, tapped: save now, or Save a copy when the original can't be written (#190). */
@@ -1642,7 +1822,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     fun protect(doc: OpenDocument, protection: Map<String, Any?>) = job(text(R.string.msg_busy_setting_password)) { eng ->
         save(doc)
         val out = tempFile("pdf")
-        val copy = eng.tool("doc_open", mapOf("path" to doc.file.absolutePath, "password" to doc.password)).optLong("doc")
+        val copy = eng.tool("doc_open", mapOf("path" to savedFile(doc, "protect").absolutePath, "password" to doc.password)).optLong("doc")
         try {
             Diag.measure(DiagArea.Pages, "protect_copy", "doc" to doc.diagNumber, "settings" to protection.size) {
                 eng.tool("doc_protect", protection + ("doc" to copy))
@@ -1663,7 +1843,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     fun unprotect(doc: OpenDocument) = job(text(R.string.msg_busy_removing_security)) { eng ->
         save(doc)
         val out = tempFile("pdf")
-        val copy = eng.tool("doc_open", mapOf("path" to doc.file.absolutePath, "password" to doc.password)).optLong("doc")
+        val copy = eng.tool("doc_open", mapOf("path" to savedFile(doc, "unprotect").absolutePath, "password" to doc.password)).optLong("doc")
         try {
             Diag.measure(DiagArea.Pages, "unprotect_copy", "doc" to doc.diagNumber, "encrypted" to doc.info.encrypted) {
                 eng.tool("doc_unprotect", mapOf("doc" to copy))
