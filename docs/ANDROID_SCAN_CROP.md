@@ -28,6 +28,20 @@ what kept scans record as the truth (`docs/ANDROID_SCAN_TESTING.md`).
   drawn dashed.
 - **Buttons.** Auto-detect looks for the page again with the detector the testing options name.
   No crop takes the whole photo, and Reset goes back to the corners the screen opened with.
+- **When Auto-detect finds nothing (#443).** A line under the photo says so ("No page outline
+  found. Drag the corners, or tap No crop to keep the whole photo.") and TalkBack reads it (a
+  polite live region; the line is emptied first, so the same words are read again on the next
+  press). The same search on the same photo gives the same answer, so a search that already found
+  nothing is not made again: if the import found nothing (`ScanFinding.asked`, the options it
+  searched with), or an earlier press did, the next press tries the line detector instead
+  (only with the Auto detector, which is the network when its model file is there). When that
+  finds the page, the line says so and asks to check the corners; when it finds nothing too, the
+  line says that, and further presses do not search: they say at once that the photo was already
+  searched. A failed native call is said too, and does not count as an empty search. The line
+  goes when a handle is dragged, or No crop or Reset is pressed. The plan is
+  `scanCropDetectPlan` in `ui/scan/ScanCropDetect.kt`, tested on the JVM. Before #443 every press
+  ran the same search again and nothing was said when it found nothing: the owner's first phone
+  log has seven presses in six seconds, each 370 to 410 ms, all `found=false`.
 - **TalkBack and keyboard.** Each of the eight handles is a node named for it ("Top-left corner",
   "Left side"), with Move up, Move down, Move left and Move right actions. Each move is 0.25 % of
   the photo's longer side. With a keyboard, Tab and Shift+Tab go through the handles, the arrows
@@ -40,8 +54,15 @@ old screen (`ScanCrop` in `ui/ToolScreens.kt`) is still there for the testing op
 ## Testing option, log and kept scans
 
 - **Crop with magnifier and snapping to edges** (on by default): off brings back the old screen.
+- **Crop: say when Auto-detect finds nothing, and try the line detector next** (#443, on by
+  default): off is the behaviour before #443, every press making the same search and nothing said.
 - Log lines: `crop` when the screen is left, `crop_snap` per snap and `crop_detect` per
-  Auto-detect (`docs/ANDROID_SCAN_TESTING.md`). They hold counts, times and booleans only.
+  Auto-detect (`docs/ANDROID_SCAN_TESTING.md`). They hold counts, times and booleans only, and
+  from #443 `crop_detect` also has `finder` (the detector used, `none` when the press did not
+  search), `other` (the line detector tried because the first search found nothing), `skipped`,
+  `note` (`none`, `none_other`, `already`, `found_other`, `failed`, or `none_shown`) and
+  `detect_note` (the testing option); `source` is `skipped` and `ms` 0 for a press that did not
+  search. The `crop` line and object count `detects_other` and `detects_skipped`.
 - Kept scans: a `crop` object in each page file, added up over every visit.
 
 ## Corners off the photo (#291)

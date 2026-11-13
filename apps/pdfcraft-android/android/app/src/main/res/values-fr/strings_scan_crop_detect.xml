@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="scan_crop_detect_none">Aucun contour de page trouvé. Faites glisser les coins ou touchez Pas de rognage pour garder toute la photo.</string>
+    <string name="scan_crop_detect_none_other">Aucun contour de page trouvé, même avec le détecteur de lignes. Faites glisser les coins ou touchez Pas de rognage pour garder toute la photo.</string>
+    <string name="scan_crop_detect_already">Cette photo a déjà été analysée sans trouver de contour de page. Faites glisser les coins ou touchez Pas de rognage pour garder toute la photo.</string>
+    <string name="scan_crop_detect_found_other">Page trouvée avec le détecteur de lignes. Vérifiez ses coins.</string>
+    <string name="scan_crop_detect_failed">La détection automatique n’a pas pu lire cette photo.</string>
+    <string name="scan_lab_crop_detect_note">Recadrage : signaler quand la détection automatique ne trouve rien, puis essayer le détecteur de lignes</string>
+</resources>

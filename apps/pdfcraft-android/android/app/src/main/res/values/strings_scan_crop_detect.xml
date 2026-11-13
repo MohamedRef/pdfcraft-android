@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- What Auto detect on the crop screen came to (#443), kept apart from strings.xml so parallel scanner work merges cleanly. -->
+<resources>
+    <string name="scan_crop_detect_none">No page outline found. Drag the corners, or tap No crop to keep the whole photo.</string>
+    <string name="scan_crop_detect_none_other">No page outline found, also with the line detector. Drag the corners, or tap No crop to keep the whole photo.</string>
+    <string name="scan_crop_detect_already">This photo was already searched and no page outline was found. Drag the corners, or tap No crop to keep the whole photo.</string>
+    <string name="scan_crop_detect_found_other">Page found with the line detector. Check its corners.</string>
+    <string name="scan_crop_detect_failed">Auto-detect could not read this photo.</string>
+    <string name="scan_lab_crop_detect_note">Crop: say when Auto-detect finds nothing, and try the line detector next</string>
+</resources>
