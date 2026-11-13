@@ -891,6 +891,9 @@ fun ScanScreen(vm: AppViewModel) {
     var current by remember { mutableStateOf(0) }
     var cropping by remember { mutableStateOf<String?>(null) }
     var naming by remember { mutableStateOf(false) }
+    // Back's and Delete's questions (#456): a scan or a page is never thrown away without one
+    var askingDiscard by remember { mutableStateOf(false) }
+    var askingDelete by remember { mutableStateOf<Int?>(null) }
     // the page as it will be saved, or the photo it is made from (#301)
     var view by remember { mutableStateOf(ScanView.Result) }
     LaunchedEffect(Unit) { if (pages.isEmpty()) vm.takeScanPhoto() }
@@ -922,7 +925,10 @@ fun ScanScreen(vm: AppViewModel) {
     val addPageLabel = stringResource(R.string.tools_add_page)
     ToolScaffold(
         if (pages.isEmpty()) stringResource(R.string.common_tool_scan) else stringResource(R.string.tools_page_of, current.coerceAtMost(pages.lastIndex) + 1, pages.size),
-        { vm.discardScan() },
+        {
+            // with pages, the arrow and Android's Back ask first; with none they leave at once (#456)
+            if (io.github.artcraftandroid.pdfcraft.ui.scan.scanBackAsks(pages.size, vm.scanLab.options)) askingDiscard = true else vm.discardScan()
+        },
         stringResource(R.string.tools_save_pdf), pages.isNotEmpty(), { vm.saveScan() },
     ) {
         // a reminder that the scanner is not as it is meant to be used: a testing option is on (#288)
@@ -1154,7 +1160,21 @@ fun ScanScreen(vm: AppViewModel) {
             TextButton(onClick = { cropping = pages.getOrNull(current.coerceAtMost(pages.lastIndex))?.key }, enabled = pages.isNotEmpty()) { Text(stringResource(R.string.tools_crop), color = c.accent) }
             // a quarter turn clockwise, the person's from then on (#339)
             TextButton(onClick = { vm.rotateScanPage(current.coerceAtMost(pages.lastIndex)) }, enabled = pages.isNotEmpty()) { Text(stringResource(R.string.scan_rotate), color = c.accent) }
-            TextButton(onClick = { if (pages.isNotEmpty()) { vm.deleteScanPage(current.coerceAtMost(pages.lastIndex)); current = (current - 1).coerceAtLeast(0) } }, enabled = pages.isNotEmpty()) { Text(stringResource(R.string.common_delete), color = c.accent) }
+            TextButton(
+                onClick = {
+                    if (pages.isNotEmpty()) {
+                        val at = current.coerceAtMost(pages.lastIndex)
+                        // Delete asks first (#456); off, it deletes at once, as before
+                        if (io.github.artcraftandroid.pdfcraft.ui.scan.scanDeleteAsks(pages.size, vm.scanLab.options)) {
+                            askingDelete = at
+                        } else {
+                            vm.deleteScanPage(at)
+                            current = (current - 1).coerceAtLeast(0)
+                        }
+                    }
+                },
+                enabled = pages.isNotEmpty(),
+            ) { Text(stringResource(R.string.common_delete), color = c.accent) }
             // the page's look and strength for every page, asking first when that changes a page with its own (#301)
             val lookAt = current.coerceAtMost(pages.lastIndex)
             // with every page made in the background, the document type and Flatten page go too (#465)
@@ -1169,6 +1189,25 @@ fun ScanScreen(vm: AppViewModel) {
                 enabled = pages.getOrNull(lookAt)?.look?.let { it != resetTo } == true,
             ) { Text(stringResource(R.string.scan_reset_look), color = c.accent) }
         }
+    }
+    if (askingDiscard) {
+        io.github.artcraftandroid.pdfcraft.ui.scan.ScanDiscardDialog(
+            pages.size,
+            onKeep = { askingDiscard = false; vm.keepScanAfterAsking() },
+            onDiscard = { askingDiscard = false; vm.discardScan(asked = true) },
+        )
+    }
+    // a page that went meanwhile (a restore or a retake of a book half) is not asked about
+    askingDelete?.takeIf { it in pages.indices }?.let { at ->
+        io.github.artcraftandroid.pdfcraft.ui.scan.ScanDeletePageDialog(
+            at,
+            onKeep = { askingDelete = null; vm.keepScanAfterAsking(deletingPage = at) },
+            onDelete = {
+                askingDelete = null
+                vm.deleteScanPage(at, asked = true)
+                current = (current - 1).coerceAtLeast(0)
+            },
+        )
     }
     if (confirmApply) {
         val at = current.coerceAtMost(pages.lastIndex)

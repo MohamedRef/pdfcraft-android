@@ -175,6 +175,10 @@ internal fun ScanLabSettings(vm: AppViewModel) {
     SheetRow(null, stringResource(R.string.scan_lab_background_pages), { lab.update(o.copy(backgroundPages = !o.backgroundPages)) }) {
         PdfSwitch(o.backgroundPages, { lab.update(o.copy(backgroundPages = it)) })
     }
+    // Back and Delete ask before a scan or a page is thrown away (#456)
+    SheetRow(null, stringResource(R.string.scan_lab_ask_discard), { lab.update(o.copy(askDiscard = !o.askDiscard)) }) {
+        PdfSwitch(o.askDiscard, { lab.update(o.copy(askDiscard = it)) })
+    }
     // the research detectors (#305, #306): a report only, in kept scans, so it changes no page
     SheetRow(null, stringResource(R.string.scan_lab_inspect), { lab.update(o.copy(inspect = !o.inspect)) }) {
         PdfSwitch(o.inspect, { lab.update(o.copy(inspect = it)) })
