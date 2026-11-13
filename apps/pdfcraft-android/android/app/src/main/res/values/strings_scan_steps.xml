@@ -37,4 +37,22 @@
     <string name="scan_enhance_page_before">Page before</string>
     <string name="scan_enhance_page_after">Page after</string>
     <string name="scan_enhance_dismiss">Dismiss</string>
+    <!-- The document screen (#460) -->
+    <string name="scan_doc_select">Select pages</string>
+    <string name="scan_doc_select_all">Select all</string>
+    <string name="scan_doc_clear">Clear selection</string>
+    <string name="scan_doc_move_earlier">Move earlier</string>
+    <string name="scan_doc_move_later">Move later</string>
+    <string name="scan_doc_open">Open</string>
+    <string name="scan_doc_choose">Select</string>
+    <string name="scan_doc_hint">Tap a page to edit it. Hold it to move it or select it.</string>
+    <string name="scan_doc_delete_body">Their photos are deleted too.</string>
+    <plurals name="scan_doc_selected">
+        <item quantity="one">%d selected</item>
+        <item quantity="other">%d selected</item>
+    </plurals>
+    <plurals name="scan_doc_delete_title">
+        <item quantity="one">Delete %d page?</item>
+        <item quantity="other">Delete %d pages?</item>
+    </plurals>
 </resources>

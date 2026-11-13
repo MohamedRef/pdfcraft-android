@@ -37,4 +37,30 @@
     <string name="scan_enhance_page_before">الصفحة السابقة</string>
     <string name="scan_enhance_page_after">الصفحة التالية</string>
     <string name="scan_enhance_dismiss">إخفاء</string>
+    <!-- The document screen (#460) -->
+    <string name="scan_doc_select">تحديد الصفحات</string>
+    <string name="scan_doc_select_all">تحديد الكل</string>
+    <string name="scan_doc_clear">إلغاء التحديد</string>
+    <string name="scan_doc_move_earlier">تقديم الصفحة</string>
+    <string name="scan_doc_move_later">تأخير الصفحة</string>
+    <string name="scan_doc_open">فتح</string>
+    <string name="scan_doc_choose">تحديد</string>
+    <string name="scan_doc_hint">اضغط على صفحة لتعديلها. اضغط مطولًا لنقلها أو تحديدها.</string>
+    <string name="scan_doc_delete_body">ستُحذف صورها أيضًا.</string>
+    <plurals name="scan_doc_selected">
+        <item quantity="zero">لم تُحدَّد صفحات</item>
+        <item quantity="one">صفحة واحدة محددة</item>
+        <item quantity="two">صفحتان محددتان</item>
+        <item quantity="few">%d صفحات محددة</item>
+        <item quantity="many">%d صفحة محددة</item>
+        <item quantity="other">%d صفحة محددة</item>
+    </plurals>
+    <plurals name="scan_doc_delete_title">
+        <item quantity="zero">حذف %d صفحة؟</item>
+        <item quantity="one">حذف صفحة واحدة؟</item>
+        <item quantity="two">حذف صفحتين؟</item>
+        <item quantity="few">حذف %d صفحات؟</item>
+        <item quantity="many">حذف %d صفحة؟</item>
+        <item quantity="other">حذف %d صفحة؟</item>
+    </plurals>
 </resources>

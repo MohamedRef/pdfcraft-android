@@ -464,6 +464,8 @@ internal fun scanTestPageJson(
     discard: ScanDiscard? = null,
     /** What the automatic look decided for the page (#466); null when not known. */
     autoDecisions: JSONObject? = null,
+    /** The page's place in the scan's order when it was saved or discarded, from 1 (#460); null when not known. */
+    position: Int? = null,
 ): String {
     val page = JSONObject()
         .put("corners", shares(corners)).put("kind", "other").put("paper", "unknown").put("curved", false).put("notes", "")
@@ -528,6 +530,8 @@ internal fun scanTestPageJson(
         .put("inspect", inspection ?: JSONObject.NULL)
         // #456: whether the person was asked before the scan was thrown away, and how many pages it had
         .put("discard", discard?.let { JSONObject().put("asked", it.asked).put("pages", it.pages) } ?: JSONObject.NULL)
+        // #460: pages can be moved on the document screen, so the order is written, not taken from the file name
+        .put("position", position ?: JSONObject.NULL)
         .put("strength_applied", applied?.let { JSONObject().put("strength", it.strength).put("source", it.source).put("fixed", it.fixed) } ?: JSONObject.NULL)
     page.put(
         "result",
