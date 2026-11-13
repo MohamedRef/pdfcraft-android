@@ -105,3 +105,12 @@ internal fun AppViewModel.undoScanTurn(index: Int) {
     scanPages[index] = page.copy(turns = SCAN_TURN_UNDONE)
     Diag.event(DiagArea.Scan, "turn", "index" to index + 1, "action" to "undo", "auto_turns" to auto, "turns" to SCAN_TURN_UNDONE)
 }
+
+/** Rotate left (-1) or right (+1) on Adjust borders (#458): the page at [index] turned by the person's hand from now on. */
+internal fun AppViewModel.rotateScanPageBy(index: Int, delta: Int) {
+    val page = scanPages.getOrNull(index) ?: return
+    val auto = scanAutoTurns(index)
+    val next = scanTurnAfter(page.turns, auto, delta)
+    scanPages[index] = page.copy(turns = next)
+    Diag.event(DiagArea.Scan, "crop_rotate", "index" to index + 1, "delta" to delta, "auto_turns" to auto, "turns" to next)
+}

@@ -134,6 +134,13 @@ internal class ScanCameraRouter(private val activity: ComponentActivity, private
     /** The photo (at the target file the scan asked for) goes to the scan, then the next photo or the camera closes. */
     private fun toScan(more: Boolean) {
         val v = vm()
+        // One page mode: Adjust borders opens on the page once it is in the scan (#458)
+        if (!more) {
+            val lab = v.scanLab.options
+            val mode = model().modeShown(v.scanBook)
+            v.scanSteps.pending = scanBordersAfterCapture(lab.steps, lab.cameraBar, mode, v.scanRetaking, v.scanSteps.retakeFromBorders)
+            v.scanSteps.pendingMode = scanCameraModeId(lab.cameraBar, mode)
+        }
         v.onScanPhoto(true)
         // the camera stays open for the next page, in a file of its own
         if (more) v.takeScanPhoto() else model().hide()
@@ -250,6 +257,9 @@ internal class ScanCameraRouter(private val activity: ComponentActivity, private
                 v.onScanPhoto(false)
                 return@launch
             }
+            // one photo behaves as One page: Adjust borders opens on it (#458)
+            v.scanSteps.pending = scanBordersAfterImport(v.scanLab.options.steps, files.size, v.scanRetaking, v.scanSteps.retakeFromBorders)
+            v.scanSteps.pendingMode = "import"
             for (f in files) {
                 ScanCaptures.put(f.path, ScanCapture("import"))
                 v.shotFile = f

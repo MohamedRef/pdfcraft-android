@@ -77,6 +77,9 @@ class ScanLabTest {
         // the camera's modes and icon bar are as designed; off is today's bars (#457)
         assertTrue(lab.cameraBar)
         assertFalse(lab.copy(cameraBar = false).asDesigned)
+        // the screens in steps are as designed; off is today's single scan screen (#455, #458)
+        assertTrue(lab.steps)
+        assertFalse(lab.copy(steps = false).asDesigned)
         assertEquals(30, lab.sharpen)
         assertTrue(lab.denoise && lab.sharpen in ScanLab.SHARPENING && 0 in ScanLab.SHARPENING)
     }
@@ -110,6 +113,8 @@ class ScanLabTest {
             ScanLab(lookPerPage = false, lookStrip = false, presets = false),
             ScanLab(pageStrength = false),
             ScanLab(cameraBar = false),
+            ScanLab(steps = false),
+            ScanLab(cameraBar = false, steps = false),
             ScanLab(keep = true, inspect = true),
             ScanLab(finder = ScanFinder.LINES, strength = 100),
             ScanLab(finder = ScanFinder.OFF),

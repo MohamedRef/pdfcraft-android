@@ -13,4 +13,18 @@
     <string name="scan_camera_done_short">تم</string>
     <string name="scan_camera_zoom">التكبير %1$s</string>
     <string name="scan_lab_camera_bar">أوضاع الكاميرا (صفحة واحدة، عدة صفحات، كتاب) وشريط الأيقونات والتكبير</string>
+    <!-- Adjust borders, the step after a photo (#458) -->
+    <string name="scan_borders_title">ضبط الحواف</string>
+    <string name="scan_borders_rotate_left">تدوير لليسار</string>
+    <string name="scan_borders_rotate_right">تدوير لليمين</string>
+    <string name="scan_borders_whole">الصورة كاملة</string>
+    <string name="scan_borders_auto">تلقائي</string>
+    <string name="scan_borders_next">التالي</string>
+    <string name="scan_borders_searching">جارٍ البحث عن الصفحة…</string>
+    <string name="scan_borders_not_found">لم يُعثر على صفحة. اسحب الزوايا إلى الصفحة.</string>
+    <string name="scan_borders_discard_title">تجاهل هذه الصورة؟</string>
+    <string name="scan_borders_discard_body">سيتم حذف الصورة التي التُقطت للتو.</string>
+    <string name="scan_borders_discard">تجاهل</string>
+    <string name="scan_borders_keep">احتفاظ</string>
+    <string name="scan_lab_steps">شاشات المسح خطوة بخطوة (ضبط الحواف بعد الصورة)</string>
 </resources>

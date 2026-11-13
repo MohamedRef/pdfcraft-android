@@ -70,6 +70,7 @@ page, Borders, Flattening, Looks, Camera, Reports. The table below lists them by
 | Auto-capture (#296) | On | Off: only the shutter takes photos. Needs the page outline; also switched in the camera's top bar |
 | Low-light merge (#297) | Auto | Always: a burst of 4 merged in any light. Off: one photo, as in #296. Also in Settings ▸ Scan |
 | Camera modes (One page, Many pages, Book), icon bar and zoom (#457) | On | Off: the camera's bars before #457: words in the top bar, no modes (every photo is added until Done), Import only before the first page, no grid and no zoom, and the permission page's four text buttons |
+| Scan screens in steps (#455, #458) | On | Off: today's single scan screen. On: in One page mode, and after importing one photo, Adjust borders opens straight after the photo (Retake, Rotate left, Rotate right, Whole photo ⇄ Auto, Next); Crop on the scan screen opens the same screen with Done. Until #459 is in, Next shows the page on today's scan screen |
 
 Settings → **Scanner models** (#289) lists each model with its state; while the log is
 recorded it also has **Copy the models again**, which copies every model out of the app anew
