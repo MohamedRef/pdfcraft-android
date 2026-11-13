@@ -27,4 +27,14 @@
     <string name="scan_borders_discard">تجاهل</string>
     <string name="scan_borders_keep">احتفاظ</string>
     <string name="scan_lab_steps">شاشات المسح خطوة بخطوة (ضبط الحواف بعد الصورة)</string>
+    <!-- Enhance (#459) -->
+    <string name="scan_enhance_borders">الحواف</string>
+    <string name="scan_enhance_more">المزيد</string>
+    <string name="scan_enhance_apply_all">استخدام هذا المظهر لكل الصفحات</string>
+    <string name="scan_enhance_compare">مقارنة بالصورة</string>
+    <string name="scan_enhance_rename">إعادة التسمية</string>
+    <string name="scan_enhance_adjust">ضبط</string>
+    <string name="scan_enhance_page_before">الصفحة السابقة</string>
+    <string name="scan_enhance_page_after">الصفحة التالية</string>
+    <string name="scan_enhance_dismiss">إخفاء</string>
 </resources>

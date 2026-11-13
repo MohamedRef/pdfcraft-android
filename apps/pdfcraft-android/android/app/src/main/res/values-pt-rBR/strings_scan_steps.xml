@@ -27,4 +27,14 @@
     <string name="scan_borders_discard">Descartar</string>
     <string name="scan_borders_keep">Manter</string>
     <string name="scan_lab_steps">Telas de digitalização em etapas (ajustar bordas após a foto)</string>
+    <!-- Enhance (#459) -->
+    <string name="scan_enhance_borders">Bordas</string>
+    <string name="scan_enhance_more">Mais</string>
+    <string name="scan_enhance_apply_all">Usar este estilo em todas as páginas</string>
+    <string name="scan_enhance_compare">Comparar com a foto</string>
+    <string name="scan_enhance_rename">Renomear</string>
+    <string name="scan_enhance_adjust">Ajustar</string>
+    <string name="scan_enhance_page_before">Página anterior</string>
+    <string name="scan_enhance_page_after">Próxima página</string>
+    <string name="scan_enhance_dismiss">Dispensar</string>
 </resources>

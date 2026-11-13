@@ -27,4 +27,14 @@
     <string name="scan_borders_discard">Elimina</string>
     <string name="scan_borders_keep">Mantieni</string>
     <string name="scan_lab_steps">Schermate di scansione a passi (regola i bordi dopo la foto)</string>
+    <!-- Enhance (#459) -->
+    <string name="scan_enhance_borders">Bordi</string>
+    <string name="scan_enhance_more">Altro</string>
+    <string name="scan_enhance_apply_all">Usa questo stile per tutte le pagine</string>
+    <string name="scan_enhance_compare">Confronta con la foto</string>
+    <string name="scan_enhance_rename">Rinomina</string>
+    <string name="scan_enhance_adjust">Regola</string>
+    <string name="scan_enhance_page_before">Pagina precedente</string>
+    <string name="scan_enhance_page_after">Pagina successiva</string>
+    <string name="scan_enhance_dismiss">Ignora</string>
 </resources>
