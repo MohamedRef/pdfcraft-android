@@ -103,6 +103,9 @@ internal fun ScanLabSettings(vm: AppViewModel) {
     SheetRow(null, stringResource(R.string.scan_lab_preview_stop), { lab.update(o.copy(previewStop = !o.previewStop)) }) {
         PdfSwitch(o.previewStop, { lab.update(o.copy(previewStop = it)) })
     }
+    SheetRow(null, stringResource(R.string.scan_lab_look_reuse), { lab.update(o.copy(lookReuse = !o.lookReuse)) }) {
+        PdfSwitch(o.lookReuse, { lab.update(o.copy(lookReuse = it)) })
+    }
     SheetRow(null, stringResource(R.string.scan_lab_preview_zoom), { lab.update(o.copy(previewZoom = !o.previewZoom)) }) {
         PdfSwitch(o.previewZoom, { lab.update(o.copy(previewZoom = it)) })
     }

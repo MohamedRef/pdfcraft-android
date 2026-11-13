@@ -113,6 +113,12 @@ internal data class ScanLab(
     /** Double-tap or pinch the preview to look closer, with a sharper page once zoomed in (#301); off, the preview doesn't zoom. */
     val previewZoom: Boolean = true,
     /**
+     * Clean scan and Whiteboard keep the page's light estimate with its straightened preview page,
+     * so a strength or paper change only redraws the tone (#446). The page looks the same either
+     * way; off, the light is estimated again for every change, as before.
+     */
+    val lookReuse: Boolean = true,
+    /**
      * With keeping scans on, run the research detectors on each kept page and report what they see
      * (#305 moiré, #306 fingers, glare and stains) in the log and the page file. Detection only:
      * no page changes, so this does not count as a changed option.
@@ -133,7 +139,7 @@ internal data class ScanLab(
         "snap_paper" to snapPaper, "strength_override" to (strength ?: -1), "upright" to upright, "sharpen" to sharpen,
         "denoise" to denoise, "preview" to preview, "crop_tools" to cropTools, "flatten_auto" to flattenAuto, "flatten_trim" to flattenTrim, "flatten_line_floor" to flattenLineFloor, "settle_turns" to settleTurns, "presets" to presets, "kind_tone" to kindTone, "photo_sharpen" to photoSharpen, "suggestions" to suggestions, "strict_gutter" to strictGutter, "strict_photo" to strictPhoto, "book_gutter" to bookGutter, "line_flatten" to lineFlatten,
         "page_strength" to pageStrength, "look_per_page" to lookPerPage, "look_strip" to lookStrip,
-        "whiteboard_look" to whiteboardLook, "preview_stop" to previewStop, "preview_zoom" to previewZoom, "keep" to keep, "inspect" to inspect,
+        "whiteboard_look" to whiteboardLook, "preview_stop" to previewStop, "preview_zoom" to previewZoom, "look_reuse" to lookReuse, "keep" to keep, "inspect" to inspect,
     )
 
     /** The options as JSON, for a kept scan's page file. */
@@ -142,7 +148,7 @@ internal data class ScanLab(
         .put("snap_paper", snapPaper).put("strength_override", strength ?: JSONObject.NULL).put("upright", upright)
         .put("sharpen", sharpen).put("denoise", denoise).put("preview", preview).put("crop_tools", cropTools).put("flatten_auto", flattenAuto).put("flatten_trim", flattenTrim).put("flatten_line_floor", flattenLineFloor).put("settle_turns", settleTurns).put("presets", presets).put("kind_tone", kindTone).put("photo_sharpen", photoSharpen).put("suggestions", suggestions).put("strict_gutter", strictGutter).put("strict_photo", strictPhoto).put("book_gutter", bookGutter).put("line_flatten", lineFlatten)
         .put("page_strength", pageStrength).put("look_per_page", lookPerPage).put("look_strip", lookStrip)
-        .put("whiteboard_look", whiteboardLook).put("preview_stop", previewStop).put("preview_zoom", previewZoom).put("inspect", inspect)
+        .put("whiteboard_look", whiteboardLook).put("preview_stop", previewStop).put("preview_zoom", previewZoom).put("look_reuse", lookReuse).put("inspect", inspect)
 
     /** One line of text for the app's preferences. */
     fun encode(): String = listOf(
@@ -151,7 +157,7 @@ internal data class ScanLab(
         "upright" to flag(upright), "sharpen" to sharpen.toString(), "denoise" to flag(denoise), "preview" to flag(preview), "crop" to flag(cropTools), "flatten_auto" to flag(flattenAuto), "flatten_trim" to flag(flattenTrim), "line_floor" to flag(flattenLineFloor),
         "settle" to flag(settleTurns), "presets" to flag(presets), "kind_tone" to flag(kindTone), "photo_sharpen" to flag(photoSharpen), "suggest" to flag(suggestions), "strict_gutter" to flag(strictGutter), "strict_photo" to flag(strictPhoto), "gutter" to flag(bookGutter), "line_flatten" to flag(lineFlatten),
         "page_strength" to flag(pageStrength), "look_page" to flag(lookPerPage), "look_strip" to flag(lookStrip),
-        "board" to flag(whiteboardLook), "stop" to flag(previewStop), "zoom" to flag(previewZoom), "inspect" to flag(inspect),
+        "board" to flag(whiteboardLook), "stop" to flag(previewStop), "zoom" to flag(previewZoom), "look_reuse" to flag(lookReuse), "inspect" to flag(inspect),
     ).joinToString(";") { (k, v) -> "$k=$v" }
 
     companion object {
@@ -212,6 +218,7 @@ internal data class ScanLab(
                 whiteboardLook = on("board", default.whiteboardLook),
                 previewStop = on("stop", default.previewStop),
                 previewZoom = on("zoom", default.previewZoom),
+                lookReuse = on("look_reuse", default.lookReuse),
                 inspect = on("inspect", default.inspect),
             )
         }
@@ -295,8 +302,19 @@ internal data class ScanTestOrientation(val quarterTurns: Int, val confidence: D
  * The last preview the scan screen showed of a page before it was saved (#301): whether one was
  * shown at all, whether its straightened page was reused, how long it took and its size. A page
  * saved without one (the option off, or saved before the preview came) has [shown] false.
+ * [lightReused] says Clean scan or Whiteboard found the page's light estimate kept from an earlier
+ * look, and [lookParts] holds the look's parts that ran, in milliseconds (#446).
  */
-internal data class ScanTestPreview(val shown: Boolean, val reused: Boolean, val ms: Long, val width: Int, val height: Int, val look: String?)
+internal data class ScanTestPreview(
+    val shown: Boolean,
+    val reused: Boolean,
+    val ms: Long,
+    val width: Int,
+    val height: Int,
+    val look: String?,
+    val lightReused: Boolean = false,
+    val lookParts: Map<String, Long> = emptyMap(),
+)
 
 /** The name, without an extension, of page [index] (from 0) of a kept scan. */
 internal fun scanTestName(index: Int): String = String.format(Locale.US, "page-%02d", index + 1)
@@ -384,6 +402,9 @@ internal fun scanTestPageJson(
             preview?.let {
                 JSONObject().put("shown", it.shown).put("reused", it.reused).put("ms", it.ms).put("width", it.width).put("height", it.height)
                     .put("look", it.look ?: JSONObject.NULL)
+                    // the look's light estimate kept from an earlier look, and the parts that ran (#446)
+                    .put("light_reused", it.lightReused)
+                    .put("look_parts_ms", JSONObject().also { parts -> it.lookParts.forEach { (stage, ms) -> parts.put(stage, ms) } })
             } ?: JSONObject.NULL,
         )
         .put("crop", crop?.json() ?: JSONObject.NULL)

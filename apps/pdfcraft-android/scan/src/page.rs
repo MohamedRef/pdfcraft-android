@@ -11,7 +11,7 @@ use crate::enhance::enlargement;
 use crate::flatten::{predict_grid, unwarp, unwarp_trimmed};
 use crate::flatten_guard::{Kept, MIN_LINES, Trim, border_trim, guard_with_floor};
 use crate::flatten_lines::{LineFit, fit_page};
-use crate::look::{Applied, Look, LookParams, Pixels, apply_with_photos};
+use crate::look::{Applied, Look, LookParams, Pixels, apply_prepared};
 use crate::page_kind::{Measured, PageKind, PresetChoice, Rules, kind_of, measure};
 use crate::straightness::{Straightness, line_straightness};
 use crate::upright::{Upright, turned, upright};
@@ -124,6 +124,11 @@ pub struct PageRequest<'a> {
     /// keeps the paper's own colour, `Some(false)` makes it white, `None` leaves it to the
     /// document type (white unless the type keeps it).
     pub keep_paper: Option<bool>,
+    /// Clean scan and Whiteboard take what they measure of a straightened page independently of
+    /// the strength and the paper (the light estimate, the grain, the page smoothed and sharpened)
+    /// from an earlier look of the same [`PageBase`] (#446). The pixels are the same either way;
+    /// false measures it again for every look, as before, a testing choice.
+    pub reuse_look: bool,
 }
 
 impl<'a> PageRequest<'a> {
@@ -157,6 +162,7 @@ impl<'a> PageRequest<'a> {
             photo_sharpen: false,
             max_side: None,
             keep_paper: None,
+            reuse_look: true,
         }
     }
 }
@@ -266,6 +272,10 @@ pub struct PageBase {
     /// and kept (#427): every later look of the same base (the preview's looks and strengths)
     /// reuses it. Empty until then; `None` inside when the page could not be measured.
     pub measured: std::sync::OnceLock<Option<Measured>>,
+    /// What Clean scan and Whiteboard measure of the page independently of the strength and the
+    /// paper (#446), taken the first time one of them is asked for and kept: a preview's next
+    /// strength or paper choice costs the tone curve alone. Not part of what the page is.
+    pub look_kept: crate::enhance::Prepared,
 }
 
 impl PageBase {
@@ -334,7 +344,7 @@ pub fn process_page(request: &PageRequest<'_>) -> Result<PageResult, ScanError> 
         clock = Instant::now();
     };
     let (applied, kind) = page_look_kind(&base, request)?;
-    let (pixels, noise) = (applied.pixels, applied.noise);
+    let (pixels, noise, look_stages) = (applied.pixels, applied.noise, applied.stages);
     let PageBase {
         page,
         dpi,
@@ -351,10 +361,13 @@ pub fn process_page(request: &PageRequest<'_>) -> Result<PageResult, ScanError> 
         line_flatten,
         mut timings,
         measured: _,
+        look_kept: _,
     } = base;
     let (w, h) = (page.width, page.height);
     drop(page);
     lap(STAGE_LOOK, &mut timings);
+    // the look's own parts (#446), after the whole
+    timings.extend(look_stages.into_iter().map(|(stage, ms)| (scan_stage(stage), ms)));
 
     let raster = |pixels, grey| Raster { pixels, grey, width: w, height: h, dpi };
     let (bytes, format) = match &pixels {
@@ -385,6 +398,18 @@ pub fn process_page(request: &PageRequest<'_>) -> Result<PageResult, ScanError> 
         kind,
         timings,
     })
+}
+
+/// The timing stage `scan_look_…` of a part of the look (#446).
+fn scan_stage(stage: &'static str) -> &'static str {
+    match stage {
+        crate::enhance::STAGE_LIGHT => "scan_look_light",
+        crate::enhance::STAGE_NOISE => "scan_look_noise",
+        crate::enhance::STAGE_DENOISE => "scan_look_denoise",
+        crate::enhance::STAGE_SHARPEN => "scan_look_sharpen",
+        crate::enhance::STAGE_TONE => "scan_look_tone",
+        other => other,
+    }
 }
 
 /// `base` with the look `request` asks for, at its strength, sharpening and smoothing (the
@@ -438,7 +463,15 @@ pub fn page_look_kind(base: &PageBase, request: &PageRequest<'_>) -> Result<(App
         params.keep_paper = keep;
     }
     let photos = kind.as_ref().filter(|_| request.photo_sharpen).and_then(|k| k.photos.as_ref());
-    let applied = apply_with_photos(&base.page, request.look, &params, photos).ok_or(ScanError::Encode)?;
+    let fresh;
+    let kept = match request.reuse_look {
+        true => &base.look_kept,
+        false => {
+            fresh = crate::enhance::Prepared::new();
+            &fresh
+        }
+    };
+    let applied = apply_prepared(&base.page, request.look, &params, photos, kept).ok_or(ScanError::Encode)?;
     Ok((applied, kind))
 }
 
@@ -566,6 +599,7 @@ pub fn page_base(request: &PageRequest<'_>) -> Result<PageBase, ScanError> {
         line_flatten,
         timings,
         measured: std::sync::OnceLock::new(),
+        look_kept: crate::enhance::Prepared::new(),
     })
 }
 
