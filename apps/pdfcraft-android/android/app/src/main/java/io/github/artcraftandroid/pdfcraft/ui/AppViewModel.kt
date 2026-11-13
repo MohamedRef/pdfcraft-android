@@ -1571,6 +1571,9 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         private set
 
     internal var shotFile: File? = null
+
+    /** The scanner's screens in steps (#455): Adjust borders after a photo (#458). */
+    internal val scanSteps = io.github.artcraftandroid.pdfcraft.ui.scan.ScanStepsController()
     private var retakeIndex: Int? = null
 
     /** Whether the photo being taken replaces a page (Retake): the in-app camera then takes just the one (#294). */
@@ -1909,6 +1912,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             return
         }
         if (!ok || !f.isFile || f.length() == 0L) {
+            scanSteps.photoDropped()
             viewModelScope.launch {
                 scanRestore?.join()
                 if (scanPages.isEmpty()) tools.toolScreen = null
@@ -1932,6 +1936,8 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             pageQueue.findingStarted(f)
             // a retaken half of a book spread takes its other half with it (#303)
             replaceScanPages(r, listOf(page))
+            // One page mode, or an import of one photo: Adjust borders opens on it (#458)
+            scanSteps.pageAdded(page.key)
             if (scanName.isBlank()) scanName = "Scan " + java.text.SimpleDateFormat("yyyy-MM-dd HH.mm.ss", java.util.Locale.US).format(java.util.Date())
             if (tools.toolScreen != ToolScreen.Scan) tools.toolScreen = ToolScreen.Scan
             // the document's edges in the photo, shown on the page and moved in Crop; the whole
@@ -1976,6 +1982,8 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             val finding = doc?.let { d ->
                 ScanFinding(d.source.name.lowercase(), d.confidence.toDouble(), d.angle.toInt(), d.passes.toInt(), d.refined.count { it }, d.curved.count { it }, scanCurvedOpposite(d.curved), lab.findOptions())
             }
+            // Adjust borders waits for this answer before Next (#458)
+            scanSteps.markSearched(f.absolutePath)
             val at = scanPages.indexOfFirst { it.file == f }
             if (at >= 0) {
                 // a page whose outline was not found remembers the corners it started with (#444)
@@ -2081,6 +2089,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         }
         scanPageDir().listFiles()?.forEach { it.delete() }
         scanPages.clear()
+        scanSteps.reset()
         scanName = ""
         // the previews and the strip's tiles of a scan given up on (#301)
         releaseScanPreviews()

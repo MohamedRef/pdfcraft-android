@@ -13,4 +13,18 @@
     <string name="scan_camera_done_short">Fine</string>
     <string name="scan_camera_zoom">Zoom %1$s</string>
     <string name="scan_lab_camera_bar">Modalità fotocamera (Una pagina, Più pagine, Libro), barra delle icone e zoom</string>
+    <!-- Adjust borders, the step after a photo (#458) -->
+    <string name="scan_borders_title">Regola i bordi</string>
+    <string name="scan_borders_rotate_left">Ruota a sinistra</string>
+    <string name="scan_borders_rotate_right">Ruota a destra</string>
+    <string name="scan_borders_whole">Foto intera</string>
+    <string name="scan_borders_auto">Auto</string>
+    <string name="scan_borders_next">Avanti</string>
+    <string name="scan_borders_searching">Ricerca della pagina…</string>
+    <string name="scan_borders_not_found">Nessuna pagina trovata. Trascina gli angoli sulla pagina.</string>
+    <string name="scan_borders_discard_title">Eliminare questa foto?</string>
+    <string name="scan_borders_discard_body">La foto appena scattata verrà eliminata.</string>
+    <string name="scan_borders_discard">Elimina</string>
+    <string name="scan_borders_keep">Mantieni</string>
+    <string name="scan_lab_steps">Schermate di scansione a passi (regola i bordi dopo la foto)</string>
 </resources>
