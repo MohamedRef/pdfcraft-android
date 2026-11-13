@@ -65,7 +65,7 @@ page, Borders, Flattening, Looks, Camera, Reports. The table below lists them by
 | Filter strength | Each filter's own | 20, 40, 60, 80 or 100 for every filter |
 | Make every page in the background (#465) | On | Off: only the page on screen is made, the strip shows the photos, Apply to all copies only the look, and Save works each page's turn and document type out again at full size, as before #465 |
 | Clean scan applies its suggestions by itself, with Undo (#466) | On | Off: a receipt's Grayscale is a chip to tap, and the looks strip starts with Original, as before #466 |
-| Flatten pages automatically when it makes their lines straighter (#302, #466) | **Off** (on once #475 merges) | On: a page with no Flatten page choice is flattened through #302's guarded check, kept only when straighter, with "Flattened · Undo"; Undo sets that page's Flatten page off |
+| Flatten pages automatically when it makes their lines straighter (#302, #466) | On | Off: a page is flattened only when its Flatten page switch is on, as before #466. On, a page with no Flatten page choice is flattened through #302's guarded check, kept only when straighter, with "Flattened · Undo"; Undo sets that page's Flatten page off |
 | Remove fingers at the page's edge (#466) | On | Off: fingers holding the page stay on it, as before #466. On, they are found on Clean scan's output at strength 40 or more and papered over, with "Finger removed · Undo" |
 | Flatten page (#302) | Off | On, with the switch on the scan screen itself |
 | Report moiré, fingers, glare and stains in kept scans (#305, #306) | Off | On: each kept page is also run through the two research detectors, and what they see goes to the log (`inspect`) and the page file (`inspect`). No page changes |
@@ -107,7 +107,7 @@ The zip also holds `diagnostics.txt`, the diagnostics log as **Share diagnostics
  "finding": {"source": "model", "confidence": 0.835, "angle": 0, "passes": 1, "refined_sides": 4, "curved_sides": 0, "curved_opposite": false},
  "look": "auto", "strength": 60, "flatten": false, "flatten_chosen": null,
  "options": {"finder": "auto", "refine": true, "side_proportions": false, "snap_paper": true, "strength_override": null, "upright": true,
-             "sharpen": 30, "denoise": true, "grain_white": true, "preview": true, "crop_tools": true, "flatten_auto": false, "flatten_trim": true, "flatten_line_floor": true, "settle_turns": true, "presets": true, "strict_gutter": true, "strict_photo": true, "strict_book": true, "book_gutter": true, "line_flatten": true,
+             "sharpen": 30, "denoise": true, "grain_white": true, "preview": true, "crop_tools": true, "flatten_auto": true, "flatten_trim": true, "flatten_line_floor": true, "settle_turns": true, "presets": true, "strict_gutter": true, "strict_photo": true, "strict_book": true, "book_gutter": true, "line_flatten": true,
              "look_per_page": true, "look_strip": true, "whiteboard_look": true, "preview_stop": true,
              "preview_zoom": true, "look_reuse": true},
  "document_type": {"preset": "receipt", "chosen": false, "strength": 80, "sharpen": 35, "keep_paper": false, "suggest_flatten": false,

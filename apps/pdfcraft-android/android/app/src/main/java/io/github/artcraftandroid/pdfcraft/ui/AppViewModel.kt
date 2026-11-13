@@ -2608,7 +2608,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                         k.extraGamma.toDouble(), k.sCurve, k.colourFactor.toDouble(),
                     )
                 }
-                withContext(Dispatchers.IO) { scanLab.keepPage(keepIn, i, page, true, scanLookWord(filter, lab), strength, flatten, r?.path?.let(::File), kept, scanPreviewRecord(page), turn, kind, r?.let { scanAppliedStrength(page.look, lab, it.kind?.strength?.toInt()) }, shown[i]?.json(), decisions.json()) }
+                withContext(Dispatchers.IO) { scanLab.keepPage(keepIn, i, page, true, scanLookWord(filter, lab), strength, flatten, r?.path?.let(::File), kept, scanPreviewRecord(page), turn, kind, r?.let { scanAppliedStrength(page.look, lab, it.kind?.strength?.toInt()) }, shown[i]?.json(), autoDecisions = decisions.json()) }
             }
             saved += scanSavedPage(page.file.absolutePath, r?.let { it.path to it.dpi })
         }

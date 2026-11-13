@@ -19,8 +19,9 @@ class ScanAutoLookTest {
     private val flattenOn = ScanLab(flattenAuto = true)
 
     @Test
-    fun suggestionsAreAppliedByDefaultAndFlatteningIsOff() {
+    fun suggestionsAreAppliedAndFlatteningIsDecidedByDefault() {
         assertTrue(ScanLab().autoLook)
+        assertTrue(ScanLab().flattenAuto)
         assertFalse(ScanLab(autoLook = false).asDesigned)
         assertEquals(ScanLab(autoLook = false), ScanLab.decode(ScanLab(autoLook = false).encode()))
         // saved before the option existed
@@ -76,7 +77,7 @@ class ScanAutoLookTest {
     @Test
     fun eachAutomaticChangeHasAChip() {
         val grey = ScanAutoMarks(greyApplied = true)
-        assertEquals(listOf(ScanAutoChip.Grayscale), scanAutoChips(ScanLab(), grey, ScanPageLook(ScanFilter.Grayscale), null, autoFlattened = true))
+        assertEquals(listOf(ScanAutoChip.Grayscale), scanAutoChips(ScanLab(flattenAuto = false), grey, ScanPageLook(ScanFilter.Grayscale), null, autoFlattened = true))
         assertEquals(listOf(ScanAutoChip.Flattened, ScanAutoChip.Grayscale), scanAutoChips(flattenOn, grey, ScanPageLook(ScanFilter.Grayscale), null, autoFlattened = true))
         // the person's own choice has no chip
         assertEquals(emptyList<ScanAutoChip>(), scanAutoChips(flattenOn, ScanAutoMarks(), ScanPageLook(), true, autoFlattened = true))

@@ -20,8 +20,8 @@ class ScanFlattenLineFloorTest {
         assertTrue(ScanLab.decode("keep=1;finder=auto").flattenLineFloor)
         assertEquals(false, ScanLab(flattenLineFloor = false).diag().toMap()["flatten_line_floor"])
         assertEquals(false, ScanLab(flattenLineFloor = false).json().getBoolean("flatten_line_floor"))
-        // automatic flattening itself stays off by default
-        assertFalse(lab.flattenAuto)
+        // automatic flattening itself is on by default (#466)
+        assertTrue(lab.flattenAuto)
     }
 
     @Test

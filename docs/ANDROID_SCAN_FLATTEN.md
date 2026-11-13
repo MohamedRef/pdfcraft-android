@@ -180,8 +180,8 @@ and F are flattened, both closer.
   at 352 to 400 ms on his phone.
 - Whether the flattened pages look right was checked by eye for three of them only.
 
-**Recommendation:** the automatic mode can be on by default. It is `ScanLab.flattenAuto`, still
-off: turning it on, with the notice and the way back that #466 asks for, is that issue's.
+**Recommendation:** the automatic mode can be on by default. It is `ScanLab.flattenAuto`; #466
+turned it on, with "Flattened · Undo" as the notice and the way back.
 
 ## Automatic mode, as a testing option
 
@@ -228,8 +228,8 @@ that were kept (the curled receipt on 13 lines each, the invoice on 34 and 32, t
 14 each); it stops a future verdict on 3 or 4 lines, like those the four weakest pages gave. The
 figures are the review's, not re-run here; nothing was run on a real photo for this change.
 
-The automatic mode stays **off by default**, as the review advises, until the owner's kept scans
-(`straightened_px`, `flattened_px` and both line counts are already in them) say otherwise.
+The automatic mode is **on by default** since #466, on the evidence above; the owner's kept scans
+(`straightened_px`, `flattened_px` and both line counts are already in them) are how to check it.
 
 Testing option: **Keep a flattened page only when at least 8 lines of text were followed**
 (`ScanLab.flattenLineFloor`, `flatten_line_floor`, on). Off is the guard as before.
@@ -320,7 +320,7 @@ than 40 grey levels from the paper (a white table) is taken for page.
 
 ## Not done
 
-- The automatic mode is a testing option, off by default (above). Choosing its default needs
-  real photos.
+- The automatic mode is on by default since #466 (above); the figures are from the owner's ten
+  photos only, not yet from scans made on the phone.
 - No phone timings; nothing has been run on a device. How often the network leaves a strip on
   real photos, and whether the trim's thresholds suit them, is what its log fields are for.

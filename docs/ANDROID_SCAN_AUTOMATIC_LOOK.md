@@ -14,7 +14,7 @@ Auto color, Grayscale, Black and white, Whiteboard.
 | Document type | Clean scan's kinds (#299) | (existing) |
 | Tone, paper colour, sharpening | The kind's own settings (#298, #299) | (existing) |
 | Grayscale for a receipt | **Applied, not offered**: the page becomes Grayscale, with "Grayscale · Undo" | `autoLook` (on) |
-| Flattened or not | **Its own decision**: a page with no Flatten page choice is asked with the guarded check of #302 (kept only when its lines of text come out straighter; the line floor and the text-line fallback apply), with "Flattened · Undo". A page whose Flatten page the person set is left to that choice | `flattenAuto` (**off** until #475) |
+| Flattened or not | **Its own decision**: a page with no Flatten page choice is asked with the guarded check of #302 (kept only when its lines of text come out straighter; the line floor and the text-line fallback apply), with "Flattened · Undo". A page whose Flatten page the person set is left to that choice | `flattenAuto` (on) |
 | Fingers at the page's edge | **Removed**: after Clean scan at strength 40 or more, `defects::find` runs on the look's own output (no second look pass) and `fill_fingers` papers over what it found, with "Finger removed · Undo". When a finger hid print, the chip says "A finger hid some print. Retake to get it back." | `removeFingers` (on) |
 | Every page, without opening it | The background queue (#465) | `backgroundPages` (on) |
 
@@ -28,19 +28,19 @@ With `autoLook` on, the Grayscale suggestion chip is no longer shown (it is appl
 `flattenAuto` on, the Flatten page suggestion chip is no longer shown (it is decided).
 
 The automatic flattening mode of #302 (`flattenAuto`) is the switch: it now honours the person's
-Flatten page choice, so Undo on "Flattened" sets Flatten page off for that page. #475 brings the
-evidence (`docs/ANDROID_SCAN_FLATTEN.md`); once it is merged the owner's rule is to turn
-`flattenAuto` on by default.
+Flatten page choice, so Undo on "Flattened" sets Flatten page off for that page. It is on by
+default. Its preference key changed (`flatten_auto_on`), so an "off" saved while the option was
+off by default does not keep it off; one saved after this change is read as usual.
 
-## Why flattening is off for now
+## Why flattening is on
 
-On the owner's ten reference photos (comment on #302, 12 November) the automatic decision
-flattened two of the three pages that most need it, missed the most bent one, and flattened one
-page that needs almost nothing. The review session, which has the owner's photos, sets the
-decision (the floor on lines followed, the margin, when the text-line method is preferred) and
-reports the figures in #302 in words and numbers only. The default turns on only when that
-report says the three bent pages are flattened and the flat ones are left alone, or names the
-pages it cannot do. The review session reports that in #475; the default changes when it merges.
+On the owner's ten reference photos (comment on #302, 12 November) the first version of the
+automatic decision flattened two of the three pages that most need it, missed the most bent one,
+and flattened one page that needs almost nothing. #475 fixed the guard (under shade, on few lines
+and on whole photos); on the same photos with the app's own corners the automatic mode now
+flattens five pages, four clearly closer to the reference and none clearly worse
+(`docs/ANDROID_SCAN_FLATTEN.md`). On that evidence the owner turned it on by default
+(13 November). The figures are the review session's; nothing was re-run on a phone here.
 
 ## What it does not do yet
 
