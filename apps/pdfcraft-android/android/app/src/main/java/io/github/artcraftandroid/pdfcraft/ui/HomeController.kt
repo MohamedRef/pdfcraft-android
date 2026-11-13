@@ -231,10 +231,13 @@ class HomeController internal constructor(private val vm: AppViewModel) {
         }
     }
 
-    /** A file row's local file, for sharing and the like: the file itself, or a fresh copy. */
+    /**
+     * A file row's local file, for sharing and the like: the file itself, or a temporary copy in
+     * the cache (swept with the others), never a kept working copy (#453).
+     */
     private suspend fun localFileOf(row: io.github.artcraftandroid.pdfcraft.ui.home.FileRow): File? = withContext(Dispatchers.IO) {
         val u = Uri.parse(row.key)
-        runCatching { if (u.scheme == "file") File(requireNotNull(u.path)) else vm.files.workingCopy(u) }.getOrNull()
+        runCatching { if (u.scheme == "file") File(requireNotNull(u.path)) else vm.tempFile("pdf").also { vm.files.materialize(u, it) } }.getOrNull()
     }
 
     /** Files ticked in Home's lists (a long press starts it), keyed by where they are. */
@@ -277,7 +280,8 @@ class HomeController internal constructor(private val vm: AppViewModel) {
     fun printFile(row: io.github.artcraftandroid.pdfcraft.ui.home.FileRow) {
         vm.viewModelScope.launch {
             val f = localFileOf(row) ?: return@launch vm.tell(text(R.string.common_file_unreadable))
-            vm.prints.trySend(PrintJob(f, row.name, deleteWhenDone = false))
+            // a temporary copy of a file from another app goes when the print job is done
+            vm.prints.trySend(PrintJob(f, row.name, deleteWhenDone = Uri.parse(row.key).scheme != "file"))
         }
     }
 

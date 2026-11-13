@@ -449,6 +449,8 @@ private fun DiagnosticsPage(vm: AppViewModel, open: (SettingsPage) -> Unit) = Gr
         SettingsRow(stringResource(R.string.home_share_diagnostics), { s.shareDiagnostics() }, icon = LucideIcons.Share2)
         val clearTitle = stringResource(R.string.home_clear_diagnostics)
         SettingsRow(clearTitle, rememberConfirm(clearTitle, stringResource(R.string.common_clear)) { s.clearDiagnostics() }, icon = LucideIcons.Trash2)
+        // testing option (#453): open files from other apps in place, or copy them in as before
+        SettingsSwitch(stringResource(R.string.open_in_place), s.openInPlace, { s.updateOpenInPlace(it) }, stringResource(R.string.open_in_place_body))
     }
     SheetDivider(vertical = 8.dp)
     // always listed, so it can be found; usable while the log is recorded
