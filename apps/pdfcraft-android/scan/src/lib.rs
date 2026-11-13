@@ -30,6 +30,7 @@ pub mod exif;
 pub mod flatten;
 pub mod flatten_guard;
 pub mod inspect;
+pub mod jpeg;
 pub mod flatten_lines;
 pub mod live;
 pub mod look;
@@ -49,6 +50,7 @@ pub mod preset;
 mod quad;
 pub mod refine;
 pub mod sharpness;
+pub mod size;
 pub mod straightness;
 #[cfg(any(test, feature = "synth"))]
 pub mod synth;
@@ -115,6 +117,8 @@ mod tests_page_kind;
 mod tests_look_reuse;
 #[cfg(test)]
 mod tests_markup;
+#[cfg(test)]
+mod tests_size;
 #[cfg(test)]
 mod tests_moire;
 #[cfg(test)]

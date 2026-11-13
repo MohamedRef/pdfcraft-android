@@ -143,6 +143,10 @@ internal fun ScanLabSettings(vm: AppViewModel) {
     Sw(R.string.scan_lab_recent, o.recentScans) { lab.update(o.copy(recentScans = it)) }
     // erase, pen, highlighter and text on a scanned page (#495)
     Sw(R.string.scan_lab_markup, o.markup) { lab.update(o.copy(markup = it)) }
+    // each page stored as what is on it asks, and a size for every save (#505)
+    Sw(R.string.scan_lab_auto_encode, o.autoEncode) { lab.update(o.copy(autoEncode = it)) }
+    val ask = stringResource(R.string.scan_lab_size_ask)
+    SettingsChoice(stringResource(R.string.scan_lab_size), listOf<Pair<String?, String>>(null to ask) + ScanLab.SIZES.map { it to stringResource(io.github.artcraftandroid.pdfcraft.ui.scan.scanSizeName(it)) }, o.size, { lab.update(o.copy(size = it)) })
     // Back and Delete ask before a scan or a page is thrown away (#456)
     Sw(R.string.scan_lab_ask_discard, o.askDiscard) { lab.update(o.copy(askDiscard = it)) }
 

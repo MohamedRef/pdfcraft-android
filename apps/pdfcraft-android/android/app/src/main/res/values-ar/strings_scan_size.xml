@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- File size choices at Save PDF and Share (#505) -->
+<resources>
+    <string name="scan_lab_auto_encode">حفظ كل صفحة حسب محتواها، مع اختيار الحجم عند الحفظ</string>
+    <string name="scan_lab_size">الحجم لكل حفظ</string>
+    <string name="scan_lab_size_ask">اسأل عند الحفظ</string>
+    <string name="scan_size_title">حجم الملف</string>
+    <string name="scan_size_best">أفضل جودة</string>
+    <string name="scan_size_best_use">الحجم الكامل، كما كان</string>
+    <string name="scan_size_balanced">متوازن</string>
+    <string name="scan_size_balanced_use">للقراءة والطباعة</string>
+    <string name="scan_size_small">صغير</string>
+    <string name="scan_size_small_use">للإرسال بالبريد أو المحادثة</string>
+    <string name="scan_size_smallest">الأصغر</string>
+    <string name="scan_size_smallest_use">للنماذج والخطابات التي تُقرأ فقط</string>
+    <string name="scan_size_about">حوالي %1$s</string>
+    <string name="scan_size_estimating">جارٍ التقدير…</string>
+    <string name="scan_size_estimate_note">تقدير من الصفحة الأولى.</string>
+    <string name="scan_size_see_page">عرض هذه الصفحة كما ستُحفظ</string>
+    <string name="scan_size_page_caption">الصفحة 1 · %1$s · %2$s</string>
+</resources>

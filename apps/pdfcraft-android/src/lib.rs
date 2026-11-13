@@ -42,6 +42,8 @@ mod progressive_tests;
 #[cfg(test)]
 mod scan_cer_tests;
 #[cfg(test)]
+mod scan_size_tests;
+#[cfg(test)]
 mod tests;
 
 /// What went wrong, as a message the user can act on.

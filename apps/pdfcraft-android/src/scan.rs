@@ -164,6 +164,53 @@ pub struct ScanPageRequest {
     /// drawn after the look and the finger step. `None` for none.
     #[uniffi(default = None)]
     pub markup: Option<ScanMarkup>,
+    /// The size choice at Save (#505): "best", "balanced", "small" or "smallest"; anything else is
+    /// "best". Read only with `auto_encode`.
+    #[uniffi(default = "best")]
+    pub size: String,
+    /// Store the page as its content asks at that size (#505); false stores every page as before
+    /// (JPEG quality 92 at full size, 1 bit for Black and white), whatever `size` says.
+    #[uniffi(default = false)]
+    pub auto_encode: bool,
+}
+
+/// How a page was stored (#505). Short words and numbers only: it goes into the log as it is.
+#[derive(Debug, Clone, PartialEq, uniffi::Record)]
+pub struct ScanEncoding {
+    /// "best", "balanced", "small" or "smallest".
+    pub size_choice: String,
+    /// The automatic encoding was on; false: stored as before #505.
+    pub auto: bool,
+    /// "jpeg_rgb", "jpeg_grey" or "bilevel_g4".
+    pub encoding: String,
+    /// The stored page's pixels and resolution.
+    pub width: u32,
+    pub height: u32,
+    pub dpi: u32,
+    /// JPEG quality; 0 for a 1-bit page.
+    pub quality: u8,
+    pub half_chroma: bool,
+    /// The bytes the page takes in the PDF.
+    pub bytes: u64,
+    /// Why, as short words joined by "+".
+    pub why: String,
+}
+
+impl From<&pdfcraft_scan::size::Encoded> for ScanEncoding {
+    fn from(e: &pdfcraft_scan::size::Encoded) -> Self {
+        ScanEncoding {
+            size_choice: e.choice.id().into(),
+            auto: e.auto,
+            encoding: e.encoding.id().into(),
+            width: e.width,
+            height: e.height,
+            dpi: u32::from(e.dpi),
+            quality: e.quality,
+            half_chroma: e.half_chroma,
+            bytes: e.bytes,
+            why: e.why.clone(),
+        }
+    }
 }
 
 /// Marks made by hand on a page (#495), in the page's own terms: points as shares of the page as
@@ -449,6 +496,9 @@ pub struct ScanPageResult {
     pub fingers: Option<ScanFingers>,
     /// What drawing the page's hand-made marks did (#495); `None` when it had none.
     pub markup: Option<ScanMarkupApplied>,
+    /// How the page was stored (#505); `None` for a camera file kept as it was.
+    #[uniffi(default = None)]
+    pub encoding: Option<ScanEncoding>,
     pub timings: Vec<ScanTiming>,
 }
 
@@ -538,6 +588,53 @@ pub fn scan_process_page(request: ScanPageRequest) -> Result<ScanPageResult, Mob
     let root = SCAN_ROOT.read().unwrap_or_else(std::sync::PoisonError::into_inner).clone();
     let root = root.ok_or_else(|| MobileError::Command("scanning is not ready yet".into()))?;
     process_in(&root, &request)
+}
+
+/// One size choice for a page, as the Save sheet shows it (#505).
+#[derive(Debug, Clone, PartialEq, uniffi::Record)]
+pub struct ScanSizeOption {
+    /// "best", "balanced", "small" or "smallest".
+    pub size: String,
+    pub encoding: ScanEncoding,
+    /// The page as it would be stored, to be shown as it will be saved.
+    pub path: String,
+}
+
+/// The page of `request` made once and stored at each size choice with the automatic encoding
+/// (#505): the Save sheet's estimates, and the files it shows "as it will be saved". Each is
+/// written beside `output_path` as `<name>-<size>.<jpg|png>`, inside the app's own folder.
+#[uniffi::export]
+pub fn scan_size_options(request: ScanPageRequest) -> Result<Vec<ScanSizeOption>, MobileError> {
+    let root = SCAN_ROOT.read().unwrap_or_else(std::sync::PoisonError::into_inner).clone();
+    let root = root.ok_or_else(|| MobileError::Command("scanning is not ready yet".into()))?;
+    size_options_in(&root, &request)
+}
+
+pub(crate) fn size_options_in(root: &Path, request: &ScanPageRequest) -> Result<Vec<ScanSizeOption>, MobileError> {
+    let outside = || MobileError::Command("the scan's files must be in the app's own folder".into());
+    let corners: [f32; 8] = request.corners.as_slice().try_into().map_err(|_| MobileError::Command("a page needs four corners".into()))?;
+    let out = Path::new(&request.output_path);
+    let (Some(parent), Some(name)) = (out.parent(), out.file_name()) else { return Err(outside()) };
+    let parent = parent.canonicalize().map_err(|_| outside())?;
+    if !parent.starts_with(root) {
+        return Err(outside());
+    }
+    let bytes = read_photo(root, &request.photo_path)?;
+    let markup = request.markup.as_ref().map(markup_of);
+    let stored = pdfcraft_scan::page::page_sizes(&page_request(request, &bytes, corners, None, markup.as_ref()))
+        .map_err(|e| MobileError::Command(e.to_string()))?;
+    drop(bytes);
+    stored
+        .into_iter()
+        .map(|s| {
+            let size = s.encoded.choice.id();
+            let mut file_name = name.to_os_string();
+            file_name.push(format!("-{size}.{}", s.format.extension()));
+            let target = parent.join(file_name);
+            std::fs::write(&target, &s.bytes).map_err(|_| MobileError::Command("the page could not be saved".into()))?;
+            Ok(ScanSizeOption { size: size.into(), encoding: (&s.encoded).into(), path: target.to_string_lossy().into_owned() })
+        })
+        .collect()
 }
 
 /// The largest camera file read (a 64 MP PNG is under 200 MB).
@@ -814,6 +911,8 @@ fn page_request<'a>(
         reuse_look: request.reuse_look,
         remove_fingers: request.remove_fingers,
         markup,
+        size: pdfcraft_scan::size::SizeChoice::from_id(&request.size).unwrap_or_default(),
+        auto_encode: request.auto_encode,
         ..PageRequest::new(photo, corners)
     }
 }
@@ -1246,6 +1345,7 @@ pub(crate) fn process_in(root: &Path, request: &ScanPageRequest) -> Result<ScanP
         kind: page.kind.as_ref().map(kind_of),
         fingers: page.fingers.map(Into::into),
         markup: page.markup.map(Into::into),
+        encoding: page.encoded.as_ref().map(Into::into),
         timings: page.timings.into_iter().map(|(stage, ms)| ScanTiming { stage: stage.into(), ms }).collect(),
     })
 }
@@ -1459,6 +1559,8 @@ mod tests {
             reuse_look: true,
             remove_fingers: false,
             markup: None,
+            size: "best".into(),
+            auto_encode: false,
         }
     }
 
@@ -1480,6 +1582,39 @@ mod tests {
         assert_eq!(stages, ["scan_decode", "scan_rectify", "scan_look", "scan_encode"]);
         let bw = process_in(&root, &ScanPageRequest { look: ScanLook::BlackWhite, ..request(&shot, &root.join("page-1")) }).unwrap();
         assert!(bw.path.ends_with("page-1.png"));
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    /// The size choices (#505): Save stores a page smaller and logs how; the sheet's options are
+    /// written beside the request, one per choice, none larger than the one above it; the PDF
+    /// keeps the stored page's paper size.
+    #[test]
+    fn size_choices_store_the_page_smaller_and_keep_its_paper_size() {
+        let root = temp("size");
+        let shot = photo(&root);
+        let ask = |size: &str, auto: bool, out: &str| ScanPageRequest { look: ScanLook::Auto, size: size.into(), auto_encode: auto, ..request(&shot, &root.join(out)) };
+        let before = process_in(&root, &ask("smallest", false, "before")).unwrap();
+        let e = before.encoding.clone().unwrap();
+        assert_eq!((e.auto, e.why.as_str(), e.size_choice.as_str()), (false, "as_before", "smallest"));
+        let small = process_in(&root, &ask("small", true, "small")).unwrap();
+        let e = small.encoding.clone().unwrap();
+        assert!(e.auto && e.size_choice == "small" && e.bytes > 0, "{e:?}");
+        assert!(e.bytes <= before.encoding.as_ref().unwrap().bytes);
+        assert_eq!((small.width, small.height), (e.width, e.height));
+        let options = size_options_in(&root, &ask("best", true, "size-page")).unwrap();
+        let sizes: Vec<&str> = options.iter().map(|o| o.size.as_str()).collect();
+        assert_eq!(sizes, ["best", "balanced", "small", "smallest"]);
+        for pair in options.windows(2) {
+            assert!(pair[1].encoding.bytes <= pair[0].encoding.bytes, "{:?}", options);
+        }
+        for o in &options {
+            assert!(o.path.contains(&format!("size-page-{}.", o.size)) && std::fs::metadata(&o.path).unwrap().len() > 0, "{}", o.path);
+        }
+        // the page's paper is the same size in the PDF whatever its resolution
+        let sizes = pdf_page_sizes(&[before.path.as_str(), small.path.as_str()]);
+        assert!((sizes[0].0 - sizes[1].0).abs() < 1.0 && (sizes[0].1 - sizes[1].1).abs() < 1.0, "{sizes:?}");
+        // outside the app's folder: refused
+        assert!(size_options_in(&root, &ScanPageRequest { output_path: "/tmp/elsewhere/x".into(), ..ask("best", true, "x") }).is_err());
         std::fs::remove_dir_all(root).unwrap();
     }
 

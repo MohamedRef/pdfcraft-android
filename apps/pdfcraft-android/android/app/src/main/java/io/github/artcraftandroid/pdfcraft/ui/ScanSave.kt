@@ -99,6 +99,8 @@ internal fun scanPageRequest(
     removeFingers: Boolean = lab.removeFingers,
     /** The page's marks made by hand (#495), as the engine takes them; null for none. */
     markup: io.github.artcraftandroid.pdfcraft.core.ScanMarkup? = null,
+    /** The size chosen at Save (#505), as the engine names it; only Save and Share pass one, a preview never does. */
+    size: String = "best",
 ): io.github.artcraftandroid.pdfcraft.core.ScanPageRequest = scanTurnAsk(turns, autoUpright, lab.upright).let { ask ->
     io.github.artcraftandroid.pdfcraft.core.ScanPageRequest(
     photoPath = photoPath,
@@ -146,6 +148,9 @@ internal fun scanPageRequest(
     removeFingers = removeFingers,
     // the marks made by hand, drawn after the look (#495)
     markup = markup,
+    // each page stored as what is on it asks, at the size chosen (#505)
+    size = size,
+    autoEncode = lab.autoEncode,
 )
 }
 
