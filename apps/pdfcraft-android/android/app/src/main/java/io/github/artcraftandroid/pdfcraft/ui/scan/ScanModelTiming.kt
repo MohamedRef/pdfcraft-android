@@ -30,3 +30,27 @@ internal fun scanModelTimingDiag(t: ScanModelTiming): Array<Pair<String, Any?>> 
 internal fun scanModelTimingRuns(t: ScanModelTiming): String = t.runsMs.joinToString(", ")
 
 internal fun scanModelTimingPeak(t: ScanModelTiming): String = mb(t.peakKbAfter).takeIf { it >= 0 }?.toString() ?: "?"
+
+/** What copyCapped throws for a file past the size limit (#445). */
+internal const val SCAN_MODEL_COPY_TOO_LARGE = "too large"
+
+/**
+ * Timing a model failed (#445): [reason] is a short lowercase word for the log (the native side's,
+ * or `too_large` / `unreadable` when the copy into the app's folder failed), [stage] `copy` or
+ * `time`, [shown] the message for the screen, [nativeMs] how long the native call ran (-1 when it
+ * was not reached).
+ */
+internal class ScanModelTimingFailed(val reason: String, val stage: String, val shown: String, val nativeMs: Long) : Exception(reason)
+
+/** The log's word for a failed copy of the picked file (#445). */
+internal fun scanModelCopyReason(e: java.io.IOException): String = if (e.message == SCAN_MODEL_COPY_TOO_LARGE) "too_large" else "unreadable"
+
+/** The words the native side and the copy give (#445); anything else is logged as `other`. */
+internal val SCAN_MODEL_TIMING_REASONS = setOf(
+    "not_ready", "outside_folder", "unreadable", "too_large", "not_a_model", "no_input", "not_fixed", "input_too_large", "no_output", "run_failed",
+)
+
+/** A failed timing as diagnostics fields (#445): [ms] from the press to the failure. */
+internal fun scanModelTimingFailedDiag(e: ScanModelTimingFailed, ms: Long): Array<Pair<String, Any?>> = arrayOf(
+    "reason" to (e.reason.takeIf { it in SCAN_MODEL_TIMING_REASONS } ?: "other"), "stage" to e.stage, "ms" to ms, "native_ms" to e.nativeMs,
+)
