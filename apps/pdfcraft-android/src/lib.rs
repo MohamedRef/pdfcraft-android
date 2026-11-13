@@ -224,6 +224,27 @@ pub fn file_thumbnail(path: String, max_side: u32) -> Result<RenderedImage, Mobi
     let root = PRIVATE_INPUT_ROOT.get().map(std::path::PathBuf::as_path);
     let bytes = pdfcraft_cos::read_private_preview(std::path::Path::new(&path), root, 512 * 1024 * 1024, 100 * 1024 * 1024)
         .map_err(|e| MobileError::Open(format!("{path}: {e}")))?;
+    thumbnail_of(bytes, max_side)
+}
+
+/// Whether the engine still maps the provider file `dev`/`ino` read in place (#453): an open
+/// document or a thumbnail being drawn. The app rewrites such a file (rather than appending to
+/// it) only once this is false.
+#[uniffi::export]
+pub fn lent_file_in_use(dev: u64, ino: u64) -> bool {
+    pdfcraft_bytes::lent_inode_in_use(dev, ino)
+}
+
+/// [`file_thumbnail`] of a provider's file read in place from its open descriptor `fd` (#453),
+/// which the caller closes when this returns: mapped at any size the viewer opens, so a large
+/// file has a preview without a copy in the app's storage.
+#[uniffi::export]
+pub fn file_thumbnail_lent(fd: i32, max_side: u32) -> Result<RenderedImage, MobileError> {
+    let bytes = pdfcraft_bytes::read_lent_descriptor(fd, MAX_LENT_INPUT).map_err(|e| MobileError::Open(format!("{IN_PLACE_REFUSED}: {e}")))?;
+    thumbnail_of(bytes, max_side)
+}
+
+fn thumbnail_of(bytes: pdfcraft_cos::PdfBytes, max_side: u32) -> Result<RenderedImage, MobileError> {
     let mut r = PageRenderer::new(bytes, RenderConfig::default());
     if r.page_count() == 0 {
         return Err(MobileError::Open("the file has no pages".into()));
@@ -261,6 +282,13 @@ pub struct DigitalIdInfo {
 
 /// The largest digital ID file read: real ones are a few kilobytes.
 const MAX_ID_FILE: u64 = 1 << 20;
+
+/// The largest provider file opened in place (#453): the same limit as any other opened file.
+const MAX_LENT_INPUT: u64 = 512 * 1024 * 1024;
+
+/// How the error starts when a provider's descriptor can't be opened in place (#453); the app
+/// then copies the file in. Kept in step with `IN_PLACE_REFUSED` in AppViewModel.kt.
+const IN_PLACE_REFUSED: &str = "the file could not be read in place";
 
 /// What the digital ID file (.p12 / .pfx) at absolute path `path` holds, unlocked with
 /// `password`: a wrong password is [`MobileError::WrongPassword`].
@@ -994,15 +1022,61 @@ impl MobileSession {
             trace.event(if bytes.is_mapped() { "native_input_mapped" } else { "native_input_owned" });
             (path, bytes, auto.session().open_context())
         };
-        let path = path.to_string_lossy().into_owned();
+        self.open_prepared_input(path.to_string_lossy().into_owned(), bytes, context, trace, password, initial_page, true)
+    }
+
+    /// Open a provider's file in place (#453), without copying it into the app: the bytes of the
+    /// open descriptor `fd` (a regular file; the engine keeps its own copy of the descriptor, so
+    /// the caller closes `fd` when this returns). `path` is the app's working file for the
+    /// document: where saves go, and nothing is read from it. `reading_stage`: show pages before
+    /// the full inspection finishes, as [`Self::begin_open`] does; otherwise open completely.
+    pub fn begin_open_lent(
+        &self,
+        fd: i32,
+        path: String,
+        password: Option<String>,
+        initial_page: u32,
+        reading_stage: bool,
+        recording: bool,
+    ) -> Result<ProfiledOpen, MobileError> {
+        if !std::path::Path::new(&path).is_absolute() {
+            return Err(MobileError::Open("the path must be absolute".into()));
+        }
+        let trace = if recording { pdfcraft_render::OpenTrace::recording() } else { Default::default() };
+        let bytes = trace
+            .measure("native_file_read", || pdfcraft_bytes::read_lent_descriptor(fd, MAX_LENT_INPUT))
+            .map_err(|e| MobileError::Open(format!("{IN_PLACE_REFUSED}: {e}")))?;
+        trace.event(if bytes.is_mapped() { "native_input_lent_mapped" } else { "native_input_lent_owned" });
+        let context = self.lock().session().open_context();
+        self.open_prepared_input(path, bytes, context, trace, password, initial_page, reading_stage)
+    }
+
+}
+
+impl MobileSession {
+    #[allow(clippy::too_many_arguments)]
+    fn open_prepared_input(
+        &self,
+        path: String,
+        bytes: pdfcraft_cos::PdfBytes,
+        context: pdfcraft_engine::OpenContext,
+        trace: pdfcraft_render::OpenTrace,
+        password: Option<String>,
+        initial_page: u32,
+        reading_stage: bool,
+    ) -> Result<ProfiledOpen, MobileError> {
         let name = std::path::Path::new(&path).file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
         let cancelled = Arc::new(AtomicBool::new(false));
         let context = context.with_open_trace(trace.clone()).with_open_cancellation(cancelled.clone());
-        let preview = trace
-            .measure("native_reading_prepare", || {
-                context.prepare_reading(name.clone(), Some(path.clone()), bytes.clone(), password.as_deref(), initial_page as usize)
-            })
-            .map_err(open_native_error)?;
+        let preview = if reading_stage {
+            trace
+                .measure("native_reading_prepare", || {
+                    context.prepare_reading(name.clone(), Some(path.clone()), bytes.clone(), password.as_deref(), initial_page as usize)
+                })
+                .map_err(open_native_error)?
+        } else {
+            None
+        };
         let (mut prepared, pending) = match preview {
             Some(prepared) => (prepared, true),
             None => (
@@ -1029,7 +1103,10 @@ impl MobileSession {
         }
         Ok(ProfiledOpen { document: self.document(id)?, timings: native_stages(&trace, 0) })
     }
+}
 
+#[uniffi::export]
+impl MobileSession {
     /// Complete preparation away from the session lock. Closing the reading stage cancels it;
     /// a late result can never register a replacement document or revive a closed handle.
     pub fn complete_open(&self, doc: u64) -> Result<ProfiledOpen, MobileError> {
