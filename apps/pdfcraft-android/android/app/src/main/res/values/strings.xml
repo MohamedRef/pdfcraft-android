@@ -1848,7 +1848,7 @@
     <string name="scan_lab_strength_own">Default</string>
     <string name="scan_lab_options_body">Turns parts of the scanner off, or back to what they replaced, to find where a problem comes from. The log records the settings of every page.</string>
     <string name="scan_lab_reset">Reset scanner testing options</string>
-    <string name="scan_lab_active">A scanner testing option is on (Settings, About, Diagnostics)</string>
+    <string name="scan_lab_active">A scanner testing option is on (Settings, Diagnostics, Scanner testing)</string>
     <!-- Translator note: Diagnostics log messages, continued. -->
     <string name="home_diagnostics_empty">No diagnostics yet: turn this on, then use the app.</string>
     <string name="home_diagnostics_subject">PdfCraft diagnostics log</string>

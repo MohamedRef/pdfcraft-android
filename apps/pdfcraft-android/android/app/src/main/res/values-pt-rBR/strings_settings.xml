@@ -20,4 +20,15 @@
     <string name="settings_scan_testing_summary">Ativar ou desativar recursos do scanner e guardar digitalizações para compartilhar</string>
     <string name="settings_scan_testing_needs_log">Ative o registro de diagnóstico para usá-las</string>
     <string name="settings_copy_version">Copiar versão</string>
+    <string name="settings_on">Ativado</string>
+    <string name="updater_last_checked">Última verificação %1$s.</string>
+    <string name="updater_last_checked_current">Última verificação %1$s. Você está atualizado.</string>
+    <string name="backup_turn_off_body">Os backups que já estão na pasta continuam lá. Cópias ainda não gravadas são descartadas.</string>
+    <string name="scan_lab_group_kept">Digitalizações guardadas</string>
+    <string name="scan_lab_group_finding">Encontrar a página</string>
+    <string name="scan_lab_group_borders">Bordas</string>
+    <string name="scan_lab_group_flattening">Nivelamento</string>
+    <string name="scan_lab_group_looks">Estilos</string>
+    <string name="scan_lab_group_camera">Câmera</string>
+    <string name="scan_lab_group_reports">Relatórios</string>
 </resources>

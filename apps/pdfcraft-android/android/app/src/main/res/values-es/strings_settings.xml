@@ -20,4 +20,15 @@
     <string name="settings_scan_testing_summary">Activar o desactivar funciones del escáner y guardar escaneos para compartir</string>
     <string name="settings_scan_testing_needs_log">Activa el registro de diagnóstico para usarlas</string>
     <string name="settings_copy_version">Copiar versión</string>
+    <string name="settings_on">Activado</string>
+    <string name="updater_last_checked">Última comprobación %1$s.</string>
+    <string name="updater_last_checked_current">Última comprobación %1$s. Tienes la última versión.</string>
+    <string name="backup_turn_off_body">Las copias que ya están en la carpeta se conservan. Las que aún no se han escrito se descartan.</string>
+    <string name="scan_lab_group_kept">Escaneos guardados</string>
+    <string name="scan_lab_group_finding">Encontrar la página</string>
+    <string name="scan_lab_group_borders">Bordes</string>
+    <string name="scan_lab_group_flattening">Aplanado</string>
+    <string name="scan_lab_group_looks">Estilos</string>
+    <string name="scan_lab_group_camera">Cámara</string>
+    <string name="scan_lab_group_reports">Informes</string>
 </resources>
