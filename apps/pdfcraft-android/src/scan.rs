@@ -103,6 +103,10 @@ pub struct ScanPageRequest {
     /// Whether the Auto look smooths the grain of a page that has a lot of it (#299).
     #[uniffi(default = true)]
     pub denoise: bool,
+    /// Whether the Auto look draws a grainy page's paper white from a lower level (a photo taken
+    /// in dim light, #466); false is the curve as it was (a testing choice).
+    #[uniffi(default = true)]
+    pub grain_white: bool,
     /// How the Auto look picks its settings by the kind of document (#299): "off" (the look's own
     /// strength and `sharpen`, as before), "auto" (worked out from the page), or the word of the
     /// kind the person chose ("receipt", "id_card", …). Anything else is "off".
@@ -304,6 +308,13 @@ pub struct ScanPageResult {
     /// The page's grain as the Auto look measured it (#299): the standard deviation of its noise
     /// on blank paper, in grey levels of 255. `None` for the other looks.
     pub noise: Option<f32>,
+    /// How much the page's paper varies after its light is divided out, as a share of the
+    /// paper's own brightness (#466): about 0.005 to 0.02 on a clean page, several times that on
+    /// a photo taken in dim light. `None` for the other looks.
+    pub paper_spread: Option<f32>,
+    /// The level, 0–1 of the page over its paper, from which paper was drawn white (#466): the
+    /// strength's own white point, or lower on a grainy page. `None` for the other looks.
+    pub white_point: Option<f32>,
     /// The kind of document the Auto look took the page for (#299); `None` for the other looks or
     /// with document types off.
     pub kind: Option<ScanPageKind>,
@@ -646,6 +657,7 @@ fn page_request<'a>(request: &ScanPageRequest, photo: &'a [u8], corners: [f32; 8
         turns: request.turns,
         sharpen: request.sharpen,
         denoise: request.denoise,
+        grain_white: request.grain_white,
         preset: preset_choice(&request.preset),
         curved_sides: request.curved_sides.min(4),
         curved_opposite: request.curved_opposite,
@@ -1081,6 +1093,8 @@ pub(crate) fn process_in(root: &Path, request: &ScanPageRequest) -> Result<ScanP
         orientation: page.orientation.map(orientation_of),
         turns: page.turns,
         noise: page.noise,
+        paper_spread: page.paper_spread,
+        white_point: page.white_point,
         kind: page.kind.as_ref().map(kind_of),
         timings: page.timings.into_iter().map(|(stage, ms)| ScanTiming { stage: stage.into(), ms }).collect(),
     })
@@ -1280,6 +1294,7 @@ mod tests {
             turns: 0,
             sharpen: 30,
             denoise: true,
+            grain_white: true,
             preset: "off".into(),
             curved_sides: 0,
             curved_opposite: false,

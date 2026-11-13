@@ -113,6 +113,8 @@ internal fun scanPageRequest(
     turns = ask.turns.toUByte(),
     sharpen = scanSharpenAsk(lab).toUByte(),
     denoise = lab.denoise,
+    // a grainy page's paper is drawn white from a lower level (#466)
+    grainWhite = lab.grainWhite,
     preset = scanPresetAsk(preset, lab.presets),
     curvedSides = curvedSides.coerceIn(0, 4).toUByte(),
     curvedOpposite = curvedOpposite,

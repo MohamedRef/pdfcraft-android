@@ -710,8 +710,12 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         doc.source?.let { src -> withContext(Dispatchers.IO) { runCatching { files.dropCopyIfReachable(src) } } }
     }
 
-    /** The app went to the background: save the open document, as the reference does. */
-    fun onPause() {
+    /**
+     * The app went to the background: save the open document, as the reference does. When the
+     * pause is for one of the app's own screens (a picker, the share sheet), the working copy is
+     * saved but the original is written when the app is really left or the document closes (#97).
+     */
+    fun onPause(ownScreen: Boolean = false) {
         study.pauseStudy()
         val doc = document ?: return
         if (Diag.enabled()) Diag.event(DiagArea.Save, "pause_with_document", "doc" to doc.diagNumber, "dirty" to doc.info.dirty, "not_written_back" to doc.notWrittenBack, "preparing" to doc.info.preparing, "bytes" to doc.file.length())
@@ -720,7 +724,9 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             // A paused Activity must not save a closed/replaced engine document.
             // Use the same lock as Open with and Close before touching native handles.
             openMutex.withLock {
-                if (document === doc && readOnlyPrompt == null && !resolvingReadOnly) save(doc, trigger = "pause")
+                if (document === doc && readOnlyPrompt == null && !resolvingReadOnly) {
+                    save(doc, trigger = if (ownScreen) "pause_own_screen" else "pause", deferWriteBack = ownScreen)
+                }
             }
         }
     }
@@ -729,8 +735,10 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
      * Save [doc]'s changes: into its working file (incrementally, so earlier signatures stay
      * valid), then back over the file it came from when the app may write there. Returns
      * whether the changes reached the original; [quiet] leaves a failure's message to the caller.
+     * [deferWriteBack] saves the working file only and leaves the original for the next save, which
+     * a pause that leaves the app or the close makes (#97); the recovery marker stays meanwhile.
      */
-    suspend fun save(doc: OpenDocument, quiet: Boolean = false, trigger: String = "other"): Boolean = saveMutex.withLock {
+    suspend fun save(doc: OpenDocument, quiet: Boolean = false, trigger: String = "other", deferWriteBack: Boolean = false): Boolean = saveMutex.withLock {
         val eng = engine ?: return@withLock false
         // A reading stage has no edits; do not write an incompletely checked source back.
         if (doc.info.preparing) return@withLock true
@@ -757,6 +765,12 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             stage = "backup"
             Diag.measure(DiagArea.Save, "backup_snapshot", "doc" to doc.diagNumber) { backups.snapshotForBackup(eng, doc) }
             stage = "write_back"
+            if (writeBackWaits(deferWriteBack, src?.scheme, src?.path?.let { File(it).canonicalPath }, doc.file.canonicalPath)) {
+                // #97: no whole-file rewrite (or upload) of the original for a picker or the share sheet
+                doc.notWrittenBack = true
+                outcome = "deferred"
+                return@withLock false
+            }
             if (src != null && src.scheme == "content") {
                 // The marker set above stays until the provider verifiably holds the new bytes.
                 if (!doc.writable || doc.holdWriteBack) {
@@ -1571,6 +1585,9 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         private set
 
     internal var shotFile: File? = null
+
+    /** The scanner's screens in steps (#455): Adjust borders after a photo (#458). */
+    internal val scanSteps = io.github.artcraftandroid.pdfcraft.ui.scan.ScanStepsController()
     private var retakeIndex: Int? = null
 
     /** Whether the photo being taken replaces a page (Retake): the in-app camera then takes just the one (#294). */
@@ -1909,6 +1926,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             return
         }
         if (!ok || !f.isFile || f.length() == 0L) {
+            scanSteps.photoDropped()
             viewModelScope.launch {
                 scanRestore?.join()
                 if (scanPages.isEmpty()) tools.toolScreen = null
@@ -1930,6 +1948,8 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             retakeIndex = null
             // a retaken half of a book spread takes its other half with it (#303)
             replaceScanPages(r, listOf(page))
+            // One page mode, or an import of one photo: Adjust borders opens on it (#458)
+            scanSteps.pageAdded(page.key)
             if (scanName.isBlank()) scanName = "Scan " + java.text.SimpleDateFormat("yyyy-MM-dd HH.mm.ss", java.util.Locale.US).format(java.util.Date())
             if (tools.toolScreen != ToolScreen.Scan) tools.toolScreen = ToolScreen.Scan
             // the document's edges in the photo, shown on the page and moved in Crop; the whole
@@ -1974,6 +1994,8 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             val finding = doc?.let { d ->
                 ScanFinding(d.source.name.lowercase(), d.confidence.toDouble(), d.angle.toInt(), d.passes.toInt(), d.refined.count { it }, d.curved.count { it }, scanCurvedOpposite(d.curved), lab.findOptions())
             }
+            // Adjust borders waits for this answer before Next (#458)
+            scanSteps.markSearched(f.absolutePath)
             val at = scanPages.indexOfFirst { it.file == f }
             if (at >= 0) {
                 // a page whose outline was not found remembers the corners it started with (#444)
@@ -2076,6 +2098,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         }
         scanPageDir().listFiles()?.forEach { it.delete() }
         scanPages.clear()
+        scanSteps.reset()
         scanName = ""
         // the previews and the strip's tiles of a scan given up on (#301)
         releaseScanPreviews()
@@ -2460,6 +2483,8 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 "turn_source" to turnSource, "settle_turns" to lab.settleTurns, "followed" to followed,
                 // sharpening and smoothing asked of the Clean scan filter, and the grain it measured (#299)
                 "sharpen" to lab.sharpen, "denoise" to lab.denoise, "noise_sigma" to (r?.noise?.toDouble() ?: -1.0),
+                // a grainy page's paper drawn white from a lower level (#466): the option, how much the paper varies, the level used
+                "grain_white" to lab.grainWhite, "paper_spread" to (r?.paperSpread?.toDouble() ?: -1.0), "white_point" to (r?.whitePoint?.toDouble() ?: -1.0),
                 // the kind of document Clean scan took the page for, its settings and what it read (#299)
                 "presets" to lab.presets, "preset" to (r?.kind?.preset ?: "none"), "preset_chosen" to (r?.kind?.chosen ?: false),
                 // where the kind came from: not worked out for a page whose outline was not found (#444)
@@ -2494,6 +2519,8 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                         it.flattenCheck,
                         it.trim,
                         it.lineFlatten,
+                        paperSpread = it.paperSpread?.toDouble(),
+                        whitePoint = it.whitePoint?.toDouble(),
                     )
                 }
                 val turn = ScanTestTurn(page.turns, autoUpright, r?.turns?.toInt() ?: 0, followed, turnSource)
@@ -2629,3 +2656,10 @@ class ReviewSession(val deck: String?, val deckName: String) {
 
 /** Where a note margin goes. */
 enum class MarginSide { Right, Bottom, Both }
+
+/**
+ * Whether a save leaves the original for a later save (#97): only when asked to, and only when
+ * there is an original apart from the working file to write (a provider document, or another file).
+ */
+internal fun writeBackWaits(deferWriteBack: Boolean, scheme: String?, sourcePath: String?, workingPath: String): Boolean =
+    deferWriteBack && (scheme == "content" || (scheme == "file" && sourcePath != null && sourcePath != workingPath))

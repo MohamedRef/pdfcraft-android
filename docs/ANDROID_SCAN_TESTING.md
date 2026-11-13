@@ -53,6 +53,7 @@ page, Borders, Flattening, Looks, Camera, Reports. The table below lists them by
 | Unsure pages follow their neighbors (#339) | On | Off: in a scan of several pages each page is turned by its own answer only |
 | Sharpen text, in Clean scan (#299) | 30 | Off, 60 or 100. With document types on, the type's own sharpening is scaled by this level over 30 (#424): 60 is twice the type's, 100 three and a third times it, at most 100 |
 | Smooth grain in dim photos, in Clean scan (#299) | On | Off |
+| Draw the paper of a grainy photo white, in Clean scan (#466) | On | Off: the tone curve as it was, so a grainy page's paper shows grey specks |
 | Document types in Clean scan (#299) | On | Off: the filter's own strength and the sharpening above, as before |
 | Document types shape Clean scan's tone (#299) | On | Off: a type sets only strength, sharpening and paper color (no receipt gamma, no whiteboard S-curve) |
 | Sharpen photos on the page gently (#299) | On | Off: only the objects the look finds itself are sharpened gently, as before |
@@ -69,6 +70,7 @@ page, Borders, Flattening, Looks, Camera, Reports. The table below lists them by
 | Auto-capture (#296) | On | Off: only the shutter takes photos. Needs the page outline; also switched in the camera's top bar |
 | Low-light merge (#297) | Auto | Always: a burst of 4 merged in any light. Off: one photo, as in #296. Also in Settings ▸ Scan |
 | Camera modes (One page, Many pages, Book), icon bar and zoom (#457) | On | Off: the camera's bars before #457: words in the top bar, no modes (every photo is added until Done), Import only before the first page, no grid and no zoom, and the permission page's four text buttons |
+| Scan screens in steps (#455, #458) | On | Off: today's single scan screen. On: in One page mode, and after importing one photo, Adjust borders opens straight after the photo (Retake, Rotate left, Rotate right, Whole photo ⇄ Auto, Next); Crop on the scan screen opens the same screen with Done. Until #459 is in, Next shows the page on today's scan screen |
 
 Settings → **Scanner models** (#289) lists each model with its state; while the log is
 recorded it also has **Copy the models again**, which copies every model out of the app anew
@@ -101,7 +103,7 @@ The zip also holds `diagnostics.txt`, the diagnostics log as **Share diagnostics
  "finding": {"source": "model", "confidence": 0.835, "angle": 0, "passes": 1, "refined_sides": 4, "curved_sides": 0, "curved_opposite": false},
  "look": "auto", "strength": 60, "flatten": false, "flatten_chosen": null,
  "options": {"finder": "auto", "refine": true, "side_proportions": false, "snap_paper": true, "strength_override": null, "upright": true,
-             "sharpen": 30, "denoise": true, "preview": true, "crop_tools": true, "flatten_auto": false, "flatten_trim": true, "flatten_line_floor": true, "settle_turns": true, "presets": true, "strict_gutter": true, "strict_photo": true, "strict_book": true, "book_gutter": true, "line_flatten": true,
+             "sharpen": 30, "denoise": true, "grain_white": true, "preview": true, "crop_tools": true, "flatten_auto": false, "flatten_trim": true, "flatten_line_floor": true, "settle_turns": true, "presets": true, "strict_gutter": true, "strict_photo": true, "strict_book": true, "book_gutter": true, "line_flatten": true,
              "look_per_page": true, "look_strip": true, "whiteboard_look": true, "preview_stop": true,
              "preview_zoom": true, "look_reuse": true},
  "document_type": {"preset": "receipt", "chosen": false, "strength": 80, "sharpen": 35, "keep_paper": false, "suggest_flatten": false,
@@ -220,7 +222,10 @@ Besides what `docs/ANDROID_DIAGNOSTICS_LOG.md` lists for `scan`: every `photo` l
 `book_order`, `book_gutter_search`, `book_split`, `gutter_found`, `gutter_top`, `gutter_bottom`,
 `gutter_confidence`, `book_ms`), every `page` line which `book_half` it is (`left`, `right` or
 `none`), every `page` line the `strength` used, `side_proportions`,
-`snap_paper`, `upright`, `sharpen` and `denoise`, and how its turn was decided (#339:
+`snap_paper`, `upright`, `sharpen` and `denoise`, `grain_white` with what Clean scan measured for
+it (#466: `paper_spread`, how much the paper varies after its light is divided out, and
+`white_point`, the level from which paper was drawn white; -1 for the other filters; the page
+file's `result` has the same two, null for the other filters), and how its turn was decided (#339:
 `auto_upright`, `turns_manual` (-1 for none), `turns`, `turn_source`, `settle_turns`, `followed`);
 every press of Rotate or of Undo on the "Turned upright" chip is a `turn` line (`index`, `action`
 `rotate` or `undo`, `auto_turns`, `turns`); every `preview` line (#301) says which page and

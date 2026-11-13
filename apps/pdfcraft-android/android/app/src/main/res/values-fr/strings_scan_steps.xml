@@ -13,4 +13,18 @@
     <string name="scan_camera_done_short">OK</string>
     <string name="scan_camera_zoom">Zoom %1$s</string>
     <string name="scan_lab_camera_bar">Modes de l\'appareil photo (Une page, Plusieurs pages, Livre), barre d\'icônes et zoom</string>
+    <!-- Adjust borders, the step after a photo (#458) -->
+    <string name="scan_borders_title">Ajuster les bords</string>
+    <string name="scan_borders_rotate_left">Pivoter à gauche</string>
+    <string name="scan_borders_rotate_right">Pivoter à droite</string>
+    <string name="scan_borders_whole">Photo entière</string>
+    <string name="scan_borders_auto">Auto</string>
+    <string name="scan_borders_next">Suivant</string>
+    <string name="scan_borders_searching">Recherche de la page…</string>
+    <string name="scan_borders_not_found">Aucune page trouvée. Faites glisser les coins sur la page.</string>
+    <string name="scan_borders_discard_title">Supprimer cette photo ?</string>
+    <string name="scan_borders_discard_body">La photo que vous venez de prendre sera supprimée.</string>
+    <string name="scan_borders_discard">Supprimer</string>
+    <string name="scan_borders_keep">Garder</string>
+    <string name="scan_lab_steps">Écrans de numérisation par étapes (ajuster les bords après la photo)</string>
 </resources>

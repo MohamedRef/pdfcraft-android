@@ -110,6 +110,8 @@ internal fun ScanLabSettings(vm: AppViewModel) {
     val off = stringResource(R.string.scan_lab_off)
     SettingsChoice(stringResource(R.string.scan_lab_sharpen), ScanLab.SHARPENING.map { it to (if (it == 0) off else it.toString()) }, o.sharpen, { lab.update(o.copy(sharpen = it)) })
     Sw(R.string.scan_lab_denoise, o.denoise) { lab.update(o.copy(denoise = it)) }
+    // a grainy page's paper drawn white from a lower level (#466)
+    Sw(R.string.scan_lab_grain_white, o.grainWhite) { lab.update(o.copy(grainWhite = it)) }
     Sw(R.string.scan_lab_presets, o.presets) { lab.update(o.copy(presets = it)) }
     Sw(R.string.scan_lab_kind_tone, o.kindTone) { lab.update(o.copy(kindTone = it)) }
     Sw(R.string.scan_lab_photo_sharpen, o.photoSharpen) { lab.update(o.copy(photoSharpen = it)) }
@@ -127,6 +129,8 @@ internal fun ScanLabSettings(vm: AppViewModel) {
     io.github.artcraftandroid.pdfcraft.ui.scan.ScanMergeSettingRow()
     // the camera's modes, icon bar and zoom (#457)
     Sw(R.string.scan_lab_camera_bar, o.cameraBar) { lab.update(o.copy(cameraBar = it)) }
+    // the screens one job each (#455): Adjust borders after a photo (#458), Enhance (#459)
+    Sw(R.string.scan_lab_steps, o.steps) { lab.update(o.copy(steps = it)) }
     // Back and Delete ask before a scan or a page is thrown away (#456)
     Sw(R.string.scan_lab_ask_discard, o.askDiscard) { lab.update(o.copy(askDiscard = it)) }
 
