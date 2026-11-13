@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Slider
@@ -73,13 +74,31 @@ internal fun AppViewModel.chooseScanLook(index: Int, look: ScanPageLook, why: St
     }
 }
 
-/** Apply to all (#301): every page takes page [index]'s look and strength; corners, turns and kinds stay. */
+/**
+ * Apply to all (#301): every page takes page [index]'s look and strength; corners and turns stay.
+ * With every page made in the background (#465) it also takes the page's paper colour, document
+ * type and Flatten page, so photos imported together are flattened with one tap.
+ */
 internal fun AppViewModel.applyScanLookToAll(index: Int) {
-    val looks = scanPages.map { it.look }
-    val from = looks.getOrNull(index) ?: return
-    val changed = looks.count { it != from }
-    setScanLooks(scanApplyLookToAll(looks, index))
-    Diag.event(DiagArea.Scan, "look_applied_all", "index" to index + 1, "look" to scanFilterId(from.filter), "strength" to from.level, "pages" to looks.size, "changed" to changed)
+    val all = scanLab.options.backgroundPages
+    val settings = scanPages.map { scanPageSettings(it, all) }
+    val from = settings.getOrNull(index) ?: return
+    val changed = settings.count { it != from }
+    val next = scanApplyAll(settings, index)
+    val touched = ArrayList<String>()
+    for (i in scanPages.indices) {
+        val s = next.getOrNull(i) ?: continue
+        val page = scanPages[i]
+        if (scanPageSettings(page, all) == s) continue
+        touched += page.key
+        scanPages[i] = if (all) page.copy(look = s.look, preset = s.preset, flatten = s.flatten) else page.copy(look = s.look)
+    }
+    pageQueue.appliedToAll(touched)
+    Diag.event(
+        DiagArea.Scan, "look_applied_all", "index" to index + 1, "look" to scanFilterId(from.look.filter), "strength" to from.look.level, "pages" to settings.size, "changed" to changed,
+        // what it carried (#465): the document type and Flatten page too, with every page made in the background
+        "carries_all" to all, "preset" to (from.preset ?: "auto"), "flatten" to scanFlattenChoiceId(from.flatten),
+    )
 }
 
 /**
@@ -88,10 +107,16 @@ internal fun AppViewModel.applyScanLookToAll(index: Int) {
  * look's tile. A tile whose preview is not ready yet shows its name on a plain card.
  */
 @Composable
-internal fun ScanLooksStrip(vm: AppViewModel, index: Int, look: ScanPageLook, shown: ImageBitmap?, modifier: Modifier = Modifier) {
+internal fun ScanLooksStrip(
+    vm: AppViewModel, index: Int, look: ScanPageLook, shown: ImageBitmap?, modifier: Modifier = Modifier,
+    /** The tiles' size: 72×96 on the old screen, 56×72 on Enhance (#459). */
+    tileWidth: Int = SCAN_TILE_WIDTH_DP, tileHeight: Int = SCAN_TILE_SIDE_DP,
+    /** What the log's `look` line says the choice came from (#459): `look` on the old screen, `strip` on Enhance. */
+    from: String = "look",
+) {
     val c = pdfColors
     Row(
-        modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 8.dp),
+        modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 8.dp).selectableGroup(),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         for (f in ScanFilter.entries) {
@@ -100,14 +125,14 @@ internal fun ScanLooksStrip(vm: AppViewModel, index: Int, look: ScanPageLook, sh
             val image = scanTileImage(f, look, vm.scanTiles, shown)
             val waiting = stringResource(R.string.scan_look_tile_waiting, name)
             Column(
-                Modifier.width(SCAN_TILE_WIDTH_DP.dp).clip(RoundedCornerShape(6.dp))
-                    .selectable(selected = selected, role = Role.RadioButton) { if (!selected) vm.chooseScanLook(index, ScanPageLook(f), "look") }
+                Modifier.width(tileWidth.dp).clip(RoundedCornerShape(6.dp))
+                    .selectable(selected = selected, role = Role.RadioButton) { if (!selected) vm.chooseScanLook(index, ScanPageLook(f), from) }
                     .semantics { if (image == null) contentDescription = waiting }
                     .padding(vertical = 4.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 Box(
-                    Modifier.size(SCAN_TILE_WIDTH_DP.dp, SCAN_TILE_SIDE_DP.dp).clip(RoundedCornerShape(4.dp)).background(c.surfaceRaised)
+                    Modifier.size(tileWidth.dp, tileHeight.dp).clip(RoundedCornerShape(4.dp)).background(c.surfaceRaised)
                         .border(if (selected) 2.dp else 1.dp, if (selected) c.accent else c.textSecondary.copy(alpha = 0.4f), RoundedCornerShape(4.dp)),
                     contentAlignment = Alignment.Center,
                 ) {
@@ -217,7 +242,9 @@ internal fun ScanApplyLookDialog(vm: AppViewModel, index: Int, look: ScanPageLoo
             onDone()
         },
     ) {
-        Text(stringResource(R.string.scan_apply_look_body, stringResource(look.filter.label)), color = pdfColors.text, fontSize = 14.sp)
+        // with every page made in the background it also carries the document type and Flatten page (#465)
+        val body = if (vm.scanLab.options.backgroundPages) R.string.scan_apply_all_body else R.string.scan_apply_look_body
+        Text(stringResource(body, stringResource(look.filter.label)), color = pdfColors.text, fontSize = 14.sp)
     }
 }
 

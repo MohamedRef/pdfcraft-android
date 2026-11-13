@@ -325,7 +325,7 @@
     <string name="tools_filter_auto_colour">Automatische Farbe</string>
     <string name="tools_filter_grayscale">Graustufen</string>
     <string name="tools_filter_whiteboard">Whiteboard</string>
-    <string name="tools_filter_light_text">Heller Text</string>
+    <string name="tools_filter_light_text">Schwarzweiß</string>
     <string name="tools_scan_flatten">Seite glätten</string>
     <string name="tools_scan_view_result">Ergebnis</string>
     <string name="tools_scan_view_photo">Foto</string>
