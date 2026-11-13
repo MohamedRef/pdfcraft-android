@@ -3,4 +3,5 @@
 <resources>
     <string name="scan_lab_strict_gutter">صفحة كتاب فقط عندما يمتد ظل على طول جانب التجليد كله ويخفت نحو الداخل</string>
     <string name="scan_lab_strict_photo">الباركود والأختام والطباعة الباهتة ليست صورًا فوتوغرافية</string>
+    <string name="scan_lab_strict_book">جانب واحد منحني لا يجعل الصفحة صفحة كتاب</string>
 </resources>

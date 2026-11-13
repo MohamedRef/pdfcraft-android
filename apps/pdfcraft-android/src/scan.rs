@@ -111,6 +111,17 @@ pub struct ScanPageRequest {
     /// How many sides of the page its edge detection found curved (0–4), a book page's sign (#299).
     #[uniffi(default = 0)]
     pub curved_sides: u8,
+    /// Two opposite sides of the page were found curved (#442).
+    #[uniffi(default = false)]
+    pub curved_opposite: bool,
+    /// The page is one half of a spread cut in book mode (#303, #442).
+    #[uniffi(default = false)]
+    pub book_mode: bool,
+    /// A book page needs more than one curved side: the gutter, two opposite curved sides, or a
+    /// curved side in book mode; one curved side only suggests flattening (#442). False is the
+    /// first rule (#299, any curved side), a testing choice.
+    #[uniffi(default = true)]
+    pub strict_book: bool,
     /// A dark band down one long side counts as a book's gutter only when it runs the whole
     /// length, stays narrow and fades inward (#427); false is the first rule (#299, a testing choice).
     #[uniffi(default = true)]
@@ -168,6 +179,14 @@ pub struct ScanPageKind {
     pub gutter_loose: bool,
     /// Share of the darker long side's length along which its strip is dark (0–1, #427).
     pub gutter_cover: f32,
+    /// How many sides the edge detection found curved, and whether two of them are opposite (#442).
+    pub curved_sides: u8,
+    pub curved_opposite: bool,
+    /// The page came from book mode (#442).
+    pub book_mode: bool,
+    /// What the first book page rule (#299: any curved side, or the gutter in force) says,
+    /// whichever rule is in force (#442).
+    pub book_loose: bool,
     pub whole_photo: bool,
     /// The kind's change to the tone curve (#299): added gamma, the S-curve, the colour factor.
     /// Used only when the request's `kind_tone` asked for it.
@@ -196,6 +215,10 @@ fn kind_of(kind: &PageKind) -> ScanPageKind {
         gutter_band: f.gutter_band,
         gutter_loose: f.gutter_loose,
         gutter_cover: f.gutter_cover as f32,
+        curved_sides: f.curved_sides,
+        curved_opposite: f.curved_opposite,
+        book_mode: f.book_mode,
+        book_loose: kind.book_loose,
         whole_photo: kind.whole_photo,
         extra_gamma: kind.params.extra_gamma,
         s_curve: kind.params.s_curve,
@@ -619,6 +642,9 @@ fn page_request<'a>(request: &ScanPageRequest, photo: &'a [u8], corners: [f32; 8
         denoise: request.denoise,
         preset: preset_choice(&request.preset),
         curved_sides: request.curved_sides.min(4),
+        curved_opposite: request.curved_opposite,
+        book_mode: request.book_mode,
+        strict_book: request.strict_book,
         strict_gutter: request.strict_gutter,
         strict_photo: request.strict_photo,
         fixed_strength: request.fixed_strength,
@@ -1239,6 +1265,9 @@ mod tests {
             denoise: true,
             preset: "off".into(),
             curved_sides: 0,
+            curved_opposite: false,
+            book_mode: false,
+            strict_book: true,
             strict_gutter: true,
             strict_photo: true,
             fixed_strength: false,
