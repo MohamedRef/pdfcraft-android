@@ -124,11 +124,11 @@ internal fun ScanBordersBar(
 
 /** One button of a bottom bar: an icon with its word under it, 64 dp wide at most so five fit a 360 dp phone. */
 @Composable
-internal fun ScanBarButton(icon: ImageVector, label: String, enabled: Boolean = true, onClick: () -> Unit) {
+internal fun ScanBarButton(icon: ImageVector, label: String, enabled: Boolean = true, modifier: Modifier = Modifier.width(72.dp), onClick: () -> Unit) {
     val c = pdfColors
     val tint = if (enabled) c.text else c.textSecondary
     Column(
-        Modifier.sizeIn(minWidth = 56.dp, minHeight = 56.dp).width(72.dp).clip(RoundedCornerShape(8.dp))
+        modifier.sizeIn(minHeight = 56.dp).clip(RoundedCornerShape(8.dp))
             .clickable(enabled = enabled, role = Role.Button, onClick = onClick).padding(vertical = 4.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {

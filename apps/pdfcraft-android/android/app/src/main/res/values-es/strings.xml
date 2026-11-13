@@ -332,7 +332,7 @@
     <string name="tools_filter_auto_colour">Color automático</string>
     <string name="tools_filter_grayscale">Escala de grises</string>
     <string name="tools_filter_whiteboard">Pizarra</string>
-    <string name="tools_filter_light_text">Texto claro</string>
+    <string name="tools_filter_light_text">Blanco y negro</string>
     <string name="tools_scan_flatten">Aplanar página</string>
     <string name="tools_scan_view_result">Resultado</string>
     <string name="tools_scan_view_photo">Foto</string>

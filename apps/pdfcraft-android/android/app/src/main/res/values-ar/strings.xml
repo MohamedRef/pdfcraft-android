@@ -286,7 +286,7 @@
     <string name="tools_filter_auto_colour">ألوان تلقائية</string>
     <string name="tools_filter_grayscale">تدرّج رمادي</string>
     <string name="tools_filter_whiteboard">سبورة بيضاء</string>
-    <string name="tools_filter_light_text">نص فاتح</string>
+    <string name="tools_filter_light_text">أبيض وأسود</string>
     <string name="tools_scan_flatten">فرد الصفحة</string>
     <string name="tools_scan_view_result">النتيجة</string>
     <string name="tools_scan_view_photo">الصورة</string>
