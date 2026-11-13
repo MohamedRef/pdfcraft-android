@@ -72,6 +72,38 @@ internal class ScanCameraModel(app: Application) : AndroidViewModel(app) {
         Diag.event(DiagArea.Scan, "camera_merge_option", "merge" to next.id, "default" to ScanMergeSetting.DEFAULT.id)
     }
 
+    /** The camera's mode when book mode is off (#457): One page or Many pages, remembered. */
+    var mode by mutableStateOf(ScanCameraMode.decode(prefs.getString(PREF_MODE, null)))
+        private set
+
+    /** The mode the camera shows: Book while book mode is on. */
+    fun modeShown(book: ScanBookController?): ScanCameraMode = scanCameraModeShown(mode, book?.on == true)
+
+    /** A mode chosen on the camera's mode row: Book switches book mode on, the others switch it off. */
+    fun updateMode(next: ScanCameraMode, book: ScanBookController?) {
+        val before = modeShown(book)
+        if (next == before) return
+        if (next == ScanCameraMode.Book) {
+            book?.turn(true, from = "camera")
+        } else {
+            book?.turn(false, from = "camera")
+            mode = next
+            prefs.edit().putString(PREF_MODE, next.id).apply()
+        }
+        Diag.event(DiagArea.Scan, "camera_mode", "mode" to next.id, "from" to before.id)
+    }
+
+    /** Lines of thirds over the viewfinder (#457), remembered; off by default. */
+    var grid by mutableStateOf(prefs.getBoolean(PREF_GRID, false))
+        private set
+
+    fun updateGrid(on: Boolean) {
+        if (on == grid) return
+        grid = on
+        prefs.edit().putBoolean(PREF_GRID, on).apply()
+        Diag.event(DiagArea.Scan, "camera_grid", "grid" to on)
+    }
+
     /** The phone's memory class in MB: a merge needs [ScanMergeRules.MEMORY_MB]. */
     val memoryClassMb: Int get() = getApplication<Application>().getSystemService(android.app.ActivityManager::class.java)?.memoryClass ?: 0
 
@@ -101,12 +133,15 @@ internal class ScanCameraModel(app: Application) : AndroidViewModel(app) {
         Diag.event(DiagArea.Scan, "camera_choice", "choice" to next.id)
     }
 
-    /** Show the camera screen for a photo into [file]; [screen] is one of the routes the screen shows. */
-    fun show(file: File, screen: ScanCaptureRoute, retake: Boolean) {
+    /**
+     * Show the camera screen for a photo into [file]; [screen] is one of the routes the screen shows.
+     * [modeId] and [bar] are for the log only: the camera's mode and whether the new bar is on (#457).
+     */
+    fun show(file: File, screen: ScanCaptureRoute, retake: Boolean, modeId: String, bar: Boolean) {
         target = file
         route = screen
         retaking = retake
-        Diag.event(DiagArea.Scan, "camera_open", "route" to screen.id, "retake" to retake)
+        Diag.event(DiagArea.Scan, "camera_open", "route" to screen.id, "retake" to retake, "mode" to modeId, "camera_bar" to bar)
     }
 
     /** The permission came back while the screen shows: it can be the camera now. */
@@ -125,5 +160,7 @@ internal class ScanCameraModel(app: Application) : AndroidViewModel(app) {
         const val PREF_AUTO = "scanAutoCapture"
         const val PREF_AUTO_TIP = "scanAutoTip"
         const val PREF_MERGE = "scanLowLightMerge"
+        const val PREF_MODE = "scanCameraMode"
+        const val PREF_GRID = "scanCameraGrid"
     }
 }
