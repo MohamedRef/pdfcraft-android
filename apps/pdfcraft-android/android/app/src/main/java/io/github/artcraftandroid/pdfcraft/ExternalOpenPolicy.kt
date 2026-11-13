@@ -65,6 +65,14 @@ internal fun canProceedWithPdfOpen(
     resolvingSaveChoice: Boolean,
 ): Boolean = requestId == latestRequestId && !awaitingSaveChoice && !resolvingSaveChoice
 
+/**
+ * A second tap on a file that is still opening must not restart it (#439): a newer request
+ * makes the running one stale, so its finished work would be thrown away and done again.
+ * Only the same file, without a password, from inside the app counts as a repeat.
+ */
+internal fun isRepeatOpen(openingUri: String?, uri: String, fromOtherApp: Boolean, password: String?): Boolean =
+    openingUri != null && openingUri == uri && !fromOtherApp && password == null
+
 /** FDF, as Acrobat registers it. */
 internal const val FDF_MIME = "application/vnd.fdf"
 

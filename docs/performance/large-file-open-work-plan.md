@@ -18,3 +18,21 @@ The already published reading stage is deliberately conservative. Rejected attem
 Signature absence must not be inferred from a missing AcroForm: standalone timestamps and page-only widgets are regression cases. Signature state remains pending until complete discovery and validation. Neither elapsed-time thresholds nor a two-point page-count comparison prove constant-time complexity; use bounded-work counters and behavior checks alongside manual timing measurements.
 
 Memory mapping must retain an immutable underlying file for its entire lifetime. Verify regular-file writes and Android working-copy replacement before enabling it; a read-only file descriptor alone does not establish immutability. Previously published APKs remain unchanged.
+
+## Phone measurements: 0.0.25-beta (25012)
+
+From the owner's diagnostics log (Samsung SM-S928B, Android 17, engine 0.21.1), one 352 MB, 869-page file opened seven times on 2026-11-13. Only what that log shows:
+
+| Open | Working copy | First page drawn | Complete (`native_ready`) |
+| --- | --- | --- | --- |
+| First after app start (cold file cache) | reused, 31 ms | 727 ms | 1940 ms |
+| Copy made again, after closing the edited read-only file | `provider_descriptor_copy` 1126 ms | 1315 ms | not reached (closed) |
+| Same file tapped twice while opening (#439) | reused, 33 ms | 3.0 s after the first tap | 1119 ms after the second tap |
+| After 15 min in the background (cold file cache) | reused, 29 ms | 682 ms | 1993 ms |
+| Warm | reused, 16 ms | 168 ms | 1437 ms |
+| Warm | reused, 13 ms | 297 ms | 1536 ms |
+
+- Warm reading stage: `native_reading_prepare` 89–92 ms, of which `native_reading_pages` is 57–58 ms (#235). Cold, `native_preview_cos` is 411–455 ms instead of 28–32 ms: the first open after a start or a long pause waits on reading the file from storage.
+- Mapped input works on the phone: `native_file_read` and `native_input_mapped` are 0–3 ms, and the native heap is 62 MB at the reading stage and 226 MB at most for a 352 MB file (#212).
+- Every open has one render of the same 1,390,319-pixel image taking 426–566 ms, as a visible page or a prefetch, also when nothing else is running (#236).
+- Saving after one deleted comment: `doc_save` 3962 ms, because a save writes the whole file through the atomic staging writer even when the change is incremental (#97).
