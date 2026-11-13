@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Scan: the scanner's screens one job at a time (#455): camera modes and bars (#457). Kept apart so parallel scanner work merges cleanly. -->
+<resources>
+    <string name="scan_mode_single">Una pagina</string>
+    <string name="scan_mode_batch">Più pagine</string>
+    <string name="scan_mode_book">Libro</string>
+    <string name="scan_camera_light">Luce</string>
+    <string name="scan_camera_grid">Griglia</string>
+    <string name="scan_camera_more">Altre opzioni</string>
+    <string name="scan_camera_use_phone_app">Usa l\'app fotocamera del telefono</string>
+    <string name="scan_camera_import_short">Importa</string>
+    <string name="scan_camera_open_pages">Apri la scansione. Pagine: %1$d</string>
+    <string name="scan_camera_done_short">Fine</string>
+    <string name="scan_camera_zoom">Zoom %1$s</string>
+    <string name="scan_lab_camera_bar">Modalità fotocamera (Una pagina, Più pagine, Libro), barra delle icone e zoom</string>
+</resources>

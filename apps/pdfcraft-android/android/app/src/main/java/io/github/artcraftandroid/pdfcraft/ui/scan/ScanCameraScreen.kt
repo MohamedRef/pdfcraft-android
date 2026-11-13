@@ -29,6 +29,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -52,6 +53,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -120,7 +122,7 @@ internal class ScanCameraActions(
  * so everything after the shot is as it was with the phone's camera app.
  */
 @Composable
-internal fun ScanCameraScreen(model: ScanCameraModel, pages: List<ImageBitmap>, actions: ScanCameraActions, book: ScanBookController? = null) {
+internal fun ScanCameraScreen(model: ScanCameraModel, pages: List<ImageBitmap>, actions: ScanCameraActions, book: ScanBookController? = null, bar: Boolean = false) {
     val file = model.target ?: return
     BackHandler { actions.onClose() }
     // the permission may have been granted in the system settings meanwhile
@@ -132,8 +134,8 @@ internal fun ScanCameraScreen(model: ScanCameraModel, pages: List<ImageBitmap>, 
     }
     Box(Modifier.fillMaxSize().background(Color.Black).windowInsetsPadding(WindowInsets.safeDrawing)) {
         when (model.route) {
-            ScanCaptureRoute.InApp -> CameraView(file, model.retaking, pages, actions, model.liveOutline, model, book)
-            else -> NoCameraView(model.route, actions)
+            ScanCaptureRoute.InApp -> CameraView(file, model.retaking, pages, actions, model.liveOutline, model, book, bar)
+            else -> if (bar) ScanCameraPermissionView(model.route, actions) else NoCameraView(model.route, actions)
         }
     }
 }
@@ -162,7 +164,7 @@ private fun NoCameraView(route: ScanCaptureRoute, actions: ScanCameraActions) {
 
 /** The camera, once allowed. */
 @Composable
-private fun CameraView(file: File, retaking: Boolean, pages: List<ImageBitmap>, actions: ScanCameraActions, live: Boolean, model: ScanCameraModel, book: ScanBookController?) {
+private fun CameraView(file: File, retaking: Boolean, pages: List<ImageBitmap>, actions: ScanCameraActions, live: Boolean, model: ScanCameraModel, book: ScanBookController?, bar: Boolean) {
     val context = LocalContext.current
     val owner = LocalLifecycleOwner.current
     val scope = rememberCoroutineScope()
@@ -182,6 +184,10 @@ private fun CameraView(file: File, retaking: Boolean, pages: List<ImageBitmap>, 
     var turn by remember { mutableIntStateOf(0) }
     var exposure by remember { mutableStateOf(0 to 0) }
     var shutterAt by remember { mutableStateOf(0L) }
+    // the mode (#457): One page closes the camera after the photo; with the old bar every photo is added
+    val mode = model.modeShown(book)
+    // the zoom (#457): pinch or the 1×/2× button; 1× for each time the camera opens
+    var zoom by remember { mutableFloatStateOf(ScanZoom.MIN) }
     val transformer = remember { MutableCoordinateTransformer() }
     // the live outline (#295): the analyzer's answers, smoothed, and the advice under the viewfinder
     val tracker = remember { ScanLiveTracker() }
@@ -360,6 +366,7 @@ private fun CameraView(file: File, retaking: Boolean, pages: List<ImageBitmap>, 
                 autoOn = autoOn, autoShot = auto.phase == ScanAutoPhase.Capturing && auto.auto,
                 merge = if (why.burst) ScanMergeFacts(why.id, frames = saved.size, burstMs = now - started) else null,
                 mergeSetting = model.merge.id, mergeChosen = model.mergeChosen,
+                mode = scanCameraModeId(bar, mode), zoom = ScanZoom.rounded(zoom), grid = bar && model.grid,
             )
             if (!why.burst) {
                 Diag.event(
@@ -370,7 +377,7 @@ private fun CameraView(file: File, retaking: Boolean, pages: List<ImageBitmap>, 
             auto = auto.reduce(ScanAutoEvent.CaptureEnded(true, lastSignature, now)).first
             view.performHapticFeedback(android.view.HapticFeedbackConstants.CONFIRM)
             // the photo goes to the scan before Done (if pressed meanwhile) closes the screen
-            actions.onCaptured(file, facts, !retaking && !state.doneQueued, if (why.burst) saved.toList() else emptyList())
+            actions.onCaptured(file, facts, scanCameraKeepsOpen(bar, mode, retaking, state.doneQueued), if (why.burst) saved.toList() else emptyList())
             dispatch(ScanCameraEvent.CaptureEnded(true, SystemClock.elapsedRealtime()))
         }
 
@@ -452,12 +459,24 @@ private fun CameraView(file: File, retaking: Boolean, pages: List<ImageBitmap>, 
             error = false
         }
     }
+    // the zoom asked for, on the camera (the bind starts it at 1×)
+    val maxZoom = camera?.cameraInfo?.zoomState?.value?.maxZoomRatio ?: ScanZoom.MIN
+    LaunchedEffect(camera, zoom) { if (bar) camera?.cameraControl?.setZoomRatio(zoom) }
     // a new target is a new page: the screen is ready for it
     LaunchedEffect(file) { if (state.phase == ScanCameraPhase.Finished) state = ScanCameraState() }
 
     Column(Modifier.fillMaxSize()) {
-        // top: close, the phone's camera app, the light
-        Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+        // top (#457): close, then icons with an on/off shape: light, auto-capture, grid, and ⋮ for the phone's camera app
+        if (bar) {
+            ScanCameraTopBar(
+                model, actions, live,
+                torchAvailable = camera?.cameraInfo?.hasFlashUnit() == true, torch = torch,
+                onTorch = {
+                    torch = it
+                    camera?.cameraControl?.enableTorch(it)
+                },
+            )
+        } else Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             BarIcon(LucideIcons.X, stringResource(R.string.common_cancel), actions.onClose, tint = Color.White)
             Spacer(Modifier.weight(1f))
             if (live) {
@@ -484,7 +503,13 @@ private fun CameraView(file: File, retaking: Boolean, pages: List<ImageBitmap>, 
         Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
             val request = surfaceRequest
             val viewfinderLabel = stringResource(R.string.scan_camera_viewfinder)
-            Box(Modifier.aspectRatio(3f / 4f).semantics { contentDescription = viewfinderLabel }) {
+            Box(
+                Modifier.aspectRatio(3f / 4f).semantics { contentDescription = viewfinderLabel }
+                    // pinch to zoom (#457), between 1× and what the camera allows
+                    .pointerInput(bar, maxZoom) {
+                        if (bar) detectTransformGestures { _, _, change, _ -> if (change != 1f) zoom = ScanZoom.clamp(zoom * change, maxZoom) }
+                    },
+            ) {
                 if (request != null && !failed) {
                     var ring by remember { mutableStateOf<Offset?>(null) }
                     CameraXViewfinder(
@@ -515,6 +540,15 @@ private fun CameraView(file: File, retaking: Boolean, pages: List<ImageBitmap>, 
                 }
                 // book mode (#303): a line down the middle of the frame for the book's spine
                 if (book?.on == true && !failed) ScanBookSpineGuide()
+                // lines of thirds (#457)
+                if (bar && model.grid && !failed) ScanCameraGrid(Modifier.fillMaxSize())
+                // 1× / 2× (#457)
+                if (bar && camera != null && !failed && maxZoom > ScanZoom.MIN) {
+                    ScanZoomButton(zoom, Modifier.align(Alignment.BottomCenter).padding(bottom = 12.dp)) {
+                        zoom = ScanZoom.toggled(zoom, maxZoom)
+                        Diag.event(DiagArea.Scan, "camera_zoom", "zoom" to ScanZoom.rounded(zoom), "max" to ScanZoom.rounded(maxZoom))
+                    }
+                }
                 if (failed) {
                     Column(Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(stringResource(R.string.scan_camera_unavailable), color = Color.White, fontSize = 16.sp, textAlign = TextAlign.Center)
@@ -551,19 +585,9 @@ private fun CameraView(file: File, retaking: Boolean, pages: List<ImageBitmap>, 
                 Text(stringResource(scanLiveHintText(h)), color = if (h == ScanLiveHint.Ready) Color(0xFF81C784) else Color.White, fontSize = 14.sp)
             }
         }
-        // bottom: the last page and Import, the shutter, Done
-        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
-                val last = pages.lastOrNull()
-                if (last != null) {
-                    val label = stringResource(R.string.scan_camera_last_page, pages.size)
-                    Image(last, label, Modifier.size(48.dp, 64.dp).clip(RoundedCornerShape(4.dp)).border(1.dp, Color.White, RoundedCornerShape(4.dp)), contentScale = ContentScale.Crop)
-                } else {
-                    TextButton(onClick = actions.onImport) { Text(stringResource(R.string.scan_camera_import), color = Color.White, fontSize = 14.sp) }
-                }
-            }
-            val shutterLabel = stringResource(R.string.scan_camera_shutter)
-            val ready = state.shutterReady && camera != null && !failed && !bursting && !model.merging
+        val shutterLabel = stringResource(R.string.scan_camera_shutter)
+        val ready = state.shutterReady && camera != null && !failed && !bursting && !model.merging
+        val shutter: @Composable () -> Unit = {
             Box(Modifier.size(84.dp), contentAlignment = Alignment.Center) {
                 // the countdown before an automatic shot, around the shutter
                 if (autoOn && auto.phase == ScanAutoPhase.Arming) {
@@ -584,9 +608,37 @@ private fun CameraView(file: File, retaking: Boolean, pages: List<ImageBitmap>, 
                     if (state.phase == ScanCameraPhase.Capturing || state.captureQueued || bursting || model.merging) CircularProgressIndicator(Modifier.size(32.dp), color = Color.Black, strokeWidth = 3.dp)
                 }
             }
+        }
+        val done = { dispatch(ScanCameraEvent.Done(SystemClock.elapsedRealtime())) }
+        if (bar) {
+            // the mode row above the shutter (#457); a retake is one photo whatever the mode
+            if (!retaking) ScanCameraModeRow(mode, book != null) { model.updateMode(it, book) }
+            // bottom (#457): Import, the shutter, the last page with the count, each always in its place
+            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) { ScanImportButton(actions.onImport) }
+                shutter()
+                Box(Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) {
+                    // when retaking, the photo replaces the page and the camera closes: nothing to open
+                    if (!retaking) pages.lastOrNull()?.let { ScanPagesButton(it, pages.size, showDone = mode != ScanCameraMode.Single, onClick = done) }
+                }
+            }
+            return@Column
+        }
+        // bottom: the last page and Import, the shutter, Done
+        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
+                val last = pages.lastOrNull()
+                if (last != null) {
+                    val label = stringResource(R.string.scan_camera_last_page, pages.size)
+                    Image(last, label, Modifier.size(48.dp, 64.dp).clip(RoundedCornerShape(4.dp)).border(1.dp, Color.White, RoundedCornerShape(4.dp)), contentScale = ContentScale.Crop)
+                } else {
+                    TextButton(onClick = actions.onImport) { Text(stringResource(R.string.scan_camera_import), color = Color.White, fontSize = 14.sp) }
+                }
+            }
+            shutter()
             Box(Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) {
                 if (!retaking && pages.isNotEmpty()) {
-                    TextButton(onClick = { dispatch(ScanCameraEvent.Done(SystemClock.elapsedRealtime())) }) {
+                    TextButton(onClick = done) {
                         Text(stringResource(R.string.scan_camera_done, pages.size), color = Color.White, fontSize = 16.sp)
                     }
                 } else if (pages.isNotEmpty()) {

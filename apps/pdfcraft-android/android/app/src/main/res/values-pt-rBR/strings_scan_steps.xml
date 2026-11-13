@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Scan: the scanner's screens one job at a time (#455): camera modes and bars (#457). Kept apart so parallel scanner work merges cleanly. -->
+<resources>
+    <string name="scan_mode_single">Uma página</string>
+    <string name="scan_mode_batch">Várias páginas</string>
+    <string name="scan_mode_book">Livro</string>
+    <string name="scan_camera_light">Luz</string>
+    <string name="scan_camera_grid">Grade</string>
+    <string name="scan_camera_more">Mais opções</string>
+    <string name="scan_camera_use_phone_app">Usar o app de câmera do celular</string>
+    <string name="scan_camera_import_short">Importar</string>
+    <string name="scan_camera_open_pages">Abrir a digitalização. Páginas: %1$d</string>
+    <string name="scan_camera_done_short">Concluir</string>
+    <string name="scan_camera_zoom">Zoom %1$s</string>
+    <string name="scan_lab_camera_bar">Modos da câmera (Uma página, Várias páginas, Livro), barra de ícones e zoom</string>
+</resources>
