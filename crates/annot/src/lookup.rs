@@ -11,6 +11,18 @@ pub fn page_refs(doc: &Document) -> Result<Vec<ObjRef>, AnnotError> {
     Ok(PageWalk::new(doc, pages).collect())
 }
 
+/// [`page_refs`] for the reading stage's first look at a document (#235, Android adaptation):
+/// the same pages in the same order, with each page-tree node's `/Type` and `/Kids` skimmed
+/// from its bytes ([`Document::skim_dict_entries`]) instead of parsing the whole dictionary.
+/// A node that cannot be skimmed is read as `page_refs` reads it. For an unedited document only.
+pub fn page_refs_skimming(doc: &Document) -> Result<Vec<ObjRef>, AnnotError> {
+    let root = doc.root().ok_or(AnnotError::NoPageTree)?;
+    let pages = doc.get(root).as_dict().and_then(|d| d.reference(b"Pages")).ok_or(AnnotError::NoPageTree)?;
+    let mut walk = PageWalk::new(doc, pages);
+    walk.skim = true;
+    Ok(walk.collect())
+}
+
 /// Depth-first walk over the leaf pages under `top`. It keeps one cursor per open `/Kids` array,
 /// never one entry per child, so a child listed many times or shared between nodes is skipped by
 /// the seen check without being queued first (`pdfcraft_model::pages` walks the same way).
@@ -22,12 +34,14 @@ pub(crate) struct PageWalk<'a> {
     pub(crate) pending: Vec<(std::sync::Arc<Object>, usize)>,
     /// `/Kids` entries read so far.
     pub(crate) examined: usize,
+    /// Read each node's `/Type` and `/Kids` without parsing the rest ([`page_refs_skimming`]).
+    skim: bool,
 }
 
 impl<'a> PageWalk<'a> {
     pub(crate) fn new(doc: &'a Document, top: ObjRef) -> Self {
         let top = std::sync::Arc::new(Object::Array(vec![Object::Ref(top)]));
-        Self { doc, seen: Default::default(), pending: vec![(top, 0)], examined: 0 }
+        Self { doc, seen: Default::default(), pending: vec![(top, 0)], examined: 0, skim: false }
     }
 }
 
@@ -49,6 +63,23 @@ impl Iterator for PageWalk<'_> {
                 return None;
             }
             if !self.seen.insert(node) {
+                continue;
+            }
+            if self.skim
+                && let Some(mut entries) = self.doc.skim_dict_entries(node, &[b"Type", b"Kids"])
+            {
+                // the same decisions as below, on the two values the full dictionary would hold
+                let kids = entries.pop().flatten();
+                let is_page = entries.pop().flatten().as_ref().and_then(Object::as_name) == Some(b"Page");
+                match kids {
+                    Some(Object::Ref(array)) if !is_page => {
+                        if self.seen.insert(array) {
+                            self.pending.push((self.doc.get(array), 0));
+                        }
+                    }
+                    Some(kids) if !is_page => self.pending.push((self.doc.resolve(&kids), 0)),
+                    _ => return Some(node),
+                }
                 continue;
             }
             let obj = self.doc.get(node);
@@ -314,4 +345,124 @@ pub fn isolate_annotations(doc: &mut Document, page: usize, indices: &[usize]) -
         d.remove(b"Contents");
     })?;
     Ok(true)
+}
+
+/// #235: the reading stage's skimming walk finds the same pages, in the same order, as the
+/// full one, on the shapes page trees take, including damaged and hostile ones.
+#[cfg(test)]
+mod skim_tests {
+    use super::{page_refs, page_refs_skimming};
+    use pdfcraft_cos::{Document, SaveOptions, write_full};
+    use std::sync::Arc;
+
+    /// A file of `objects` (numbered from 1), its table pointing at `offsets` moved by `shift`.
+    fn pdf(objects: &[String], shift: &[(usize, isize)]) -> Vec<u8> {
+        let mut out = b"%PDF-1.7\n".to_vec();
+        let mut offsets = Vec::new();
+        for (i, o) in objects.iter().enumerate() {
+            offsets.push(out.len());
+            out.extend_from_slice(format!("{} 0 obj\n{o}\nendobj\n", i + 1).as_bytes());
+        }
+        for (i, d) in shift {
+            offsets[*i] = offsets[*i].saturating_add_signed(*d);
+        }
+        let xref = out.len();
+        let mut table = format!("xref\n0 {}\n0000000000 65535 f \n", objects.len() + 1);
+        for off in offsets {
+            table.push_str(&format!("{off:010} 00000 n \n"));
+        }
+        table.push_str(&format!("trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n", objects.len() + 1));
+        out.extend_from_slice(table.as_bytes());
+        out
+    }
+
+    fn assert_same(bytes: Vec<u8>, what: &str) {
+        let doc = Document::open(Arc::new(bytes)).expect("opens");
+        let full = page_refs(&doc).ok();
+        // a fresh document, so nothing the first walk cached is reused
+        let skimmed = page_refs_skimming(&Document::open(doc.bytes().clone()).expect("reopens")).ok();
+        assert_eq!(skimmed, full, "{what}");
+        assert_eq!(page_refs_skimming(&doc).ok(), full, "{what} (after the full walk)");
+    }
+
+    /// Catalog, root node, then `nodes` intermediate nodes of `per` pages each; each page has
+    /// inline links and resources. `page` is the text of each page dictionary's extra entries.
+    fn tree(nodes: usize, per: usize, page: &str) -> Vec<String> {
+        let first_node = 3;
+        let first_page = first_node + nodes;
+        let mut o = vec!["<< /Type /Catalog /Pages 2 0 R >>".to_string()];
+        let kids: String = (0..nodes).map(|n| format!("{} 0 R ", first_node + n)).collect();
+        o.push(format!("<< /Type /Pages /Count {} /Kids [{kids}] >>", nodes * per));
+        for n in 0..nodes {
+            let kids: String = (0..per).map(|p| format!("{} 0 R ", first_page + n * per + p)).collect();
+            o.push(format!("<< /Type /Pages /Parent 2 0 R /Count {per} /Kids [{kids}] >>"));
+        }
+        for n in 0..nodes {
+            for p in 0..per {
+                o.push(format!(
+                    "<< /Type /Page /Parent {} 0 R /MediaBox [0 0 612 792] {page} /Annots [<< /Subtype /Link /Rect [0 0 1 1] /A << /S /URI /URI (u\\)({n}/{p}) >> >>] /Resources << /Font << /F1 << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> >> >> >>",
+                    first_node + n
+                ));
+            }
+        }
+        o
+    }
+
+    #[test]
+    fn ordinary_trees_plain_and_in_object_streams() {
+        let plain = pdf(&tree(4, 5, ""), &[]);
+        assert_same(plain.clone(), "plain");
+        let doc = Document::open(Arc::new(plain)).unwrap();
+        let packed = write_full(&doc, &SaveOptions { object_streams: true, ..SaveOptions::default() }).unwrap();
+        // both shapes are skimmed, not left to the full reader
+        let node = pdfcraft_cos::ObjRef::new(3, 0);
+        assert!(doc.skim_dict_entries(node, &[b"Type"]).is_some());
+        assert!(Document::open(Arc::new(packed.clone())).unwrap().skim_dict_entries(node, &[b"Type"]).is_some());
+        assert_same(packed, "object streams");
+    }
+
+    #[test]
+    fn odd_and_damaged_nodes() {
+        let cases: Vec<(&str, Vec<String>, Vec<(usize, isize)>)> = vec![
+            // a page with a second /Type: the last one counts, here a leaf
+            ("duplicate type", tree(2, 2, "/Type /Pages /Kids [1 0 R]"), vec![]),
+            // /Type by reference is not a name: the node with /Kids is a node
+            ("type by reference", {
+                let mut o = tree(1, 2, "");
+                o[2] = o[2].replace("/Type /Pages", "/Type 1 0 R");
+                o
+            }, vec![]),
+            // /Kids as a reference to an array, shared by two nodes, and a cycle back to the root
+            ("shared kids array", vec![
+                "<< /Type /Catalog /Pages 2 0 R >>".into(),
+                "<< /Type /Pages /Kids [3 0 R 4 0 R 2 0 R 4 0 R] >>".into(),
+                "<< /Type /Pages /Kids 5 0 R >>".into(),
+                "<< /Type /Pages /Kids 5 0 R >>".into(),
+                "[6 0 R 7 0 R 2 0 R 99 0 R (x) 6 0 R]".into(),
+                "<< /Type /Page /Contents << /Length 3 >> >>".into(),
+                "<< /Type /Page /Junk [1 bad 2] >>".into(),
+            ], vec![]),
+            // a node that is a stream, one that is not a dictionary, one unreadable
+            ("streams and junk", vec![
+                "<< /Type /Catalog /Pages 2 0 R >>".into(),
+                "<< /Type /Pages /Kids [3 0 R 4 0 R 5 0 R 6 0 R] >>".into(),
+                "<< /Type /Pages /Kids [6 0 R] /Length 2 >>\nstream\nab\nendstream".into(),
+                "[/Type /Page]".into(),
+                "<< /Type /Page /X (unterminated".into(),
+                "<< /Type /Page >>".into(),
+            ], vec![]),
+            // table offsets a little off: the full reader's repairs are used for those
+            ("offsets off", tree(2, 3, ""), vec![(3, 2), (5, -1), (6, 40)]),
+            // a page whose /Kids is inline and empty, and a node without /Type
+            ("no type", vec![
+                "<< /Type /Catalog /Pages 2 0 R >>".into(),
+                "<< /Kids [3 0 R 4 0 R] >>".into(),
+                "<< /Kids [] >>".into(),
+                "<< /Type /Page /Kids [] >>".into(),
+            ], vec![]),
+        ];
+        for (what, objects, shift) in cases {
+            assert_same(pdf(&objects, &shift), what);
+        }
+    }
 }

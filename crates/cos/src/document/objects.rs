@@ -800,6 +800,46 @@ impl Document {
         }
     }
 
+    /// Android adaptation (#235): the values of `keys` in the dictionary object `r`, read
+    /// without building the rest of it ([`Lexer::skim_dict`]), or `None` when [`Self::get`] must
+    /// be asked instead. Only the plain cases are skimmed: an unedited, unencrypted document, a
+    /// reference that resolves, an object at its cross-reference offset under its own header, or
+    /// a member of an object stream, that is a dictionary and not a stream. In those cases the
+    /// values are the ones `get(r)`'s dictionary holds. Nothing is cached and no read is
+    /// recorded, so callers must not be inside a read frame that a later edit could invalidate
+    /// (the reading stage's page-tree walk is the one caller).
+    pub fn skim_dict_entries(&self, r: ObjRef, keys: &[&[u8]]) -> Option<Vec<Option<Object>>> {
+        if self.security.is_some() || !self.overlay.is_empty() || !self.reference_matches(r) {
+            return None;
+        }
+        match self.entries.lookup(r.num, &self.data)? {
+            XrefEntry::InFile { offset, .. } => {
+                // `load`'s first try, `parse_indirect`'s header: the same object at the same offset
+                let mut lx = Lexer::new(&self.data, usize::try_from(offset).ok()?);
+                lx.skip_ws();
+                let num_tok = lx.token();
+                lx.skip_ws();
+                let gen_tok = lx.token();
+                let parse_u = |t: &[u8]| std::str::from_utf8(t).ok().and_then(|s| s.parse::<u64>().ok());
+                let (Some(num), Some(_)) = (parse_u(num_tok), parse_u(gen_tok)) else { return None };
+                if num.min(u64::from(u32::MAX)) as u32 != r.num || !lx.eat_keyword(b"obj") {
+                    return None;
+                }
+                let found = lx.skim_dict(keys).ok()?;
+                lx.skip_ws();
+                // a stream's dictionary comes with its data and `/Length`: the full reader's
+                (!lx.eat_keyword(b"stream")).then_some(found)
+            }
+            XrefEntry::InStream { stream, index } => {
+                let stm = self.objstm(stream).ok()?;
+                let at = usize::try_from(index).ok().and_then(|i| stm.index.get(i)).copied().flatten().filter(|(n, _)| *n == r.num);
+                let (_, off) = at.or_else(|| stm.index.iter().flatten().find(|(n, _)| *n == r.num).copied())?;
+                Lexer::new(&stm.data, off).skim_dict(keys).ok()
+            }
+            XrefEntry::Free { .. } => None,
+        }
+    }
+
     pub(super) fn objstm(&self, num: u32) -> Result<Arc<ObjStm>, CosError> {
         // An edited or freed stream is this document's alone: clones share the parsed streams.
         let edited = self.overlay.contains_key(&num);
