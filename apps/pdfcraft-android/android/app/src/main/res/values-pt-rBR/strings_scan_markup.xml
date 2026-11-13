@@ -22,4 +22,16 @@
     <string name="scan_markup_ask_body">Novas bordas ou uma mudança de achatamento movem a página sob as marcações, então elas são removidas.</string>
     <string name="scan_markup_ask_keep">Manter</string>
     <string name="scan_markup_ask_remove">Remover marcações</string>
+    <!-- #503: colours, the eyedropper and the eraser's fills -->
+    <string name="scan_lab_markup_colours">Cores das marcações: paletas, cor personalizada, conta-gotas, borracha com uma cor</string>
+    <string name="scan_lab_markup_edge">Borracha: seguir as bordas (em avaliação)</string>
+    <string name="scan_markup_more_colours">Mais cores</string>
+    <string name="scan_markup_dropper">Pegar uma cor da página</string>
+    <string name="scan_markup_dropper_hint">Toque na página e deslize até a cor que quiser. Levante o dedo para pegá-la.</string>
+    <string name="scan_markup_erase_hint">Esfregue sobre algo para pintar por cima o papel ao redor.</string>
+    <string name="scan_markup_erase_colour_hint">Esfregue para pintar a cor escolhida. O conta-gotas pega uma da página.</string>
+    <string name="scan_markup_erase_edge_hint">Esfregue sobre algo para continuar por cima as cores ao redor.</string>
+    <string name="scan_markup_fill_paper">Papel ao redor</string>
+    <string name="scan_markup_fill_colour">Cor</string>
+    <string name="scan_markup_fill_edge">Seguir as bordas</string>
 </resources>

@@ -120,6 +120,7 @@ class ScanMarksTest {
         assertTrue(ScanMarkupTool.Highlighter in scanMarkupTools(ScanFilter.CleanScan))
         for (t in ScanMarkupTool.entries) assertEquals(3, scanMarkupSizes(t).size)
         assertTrue(scanMarkupColours(ScanMarkupTool.Erase).isEmpty())
+        assertEquals(listOf(0xFFFFFF, 0x000000), SCAN_ERASE_COLOURS)
     }
 
     @Test

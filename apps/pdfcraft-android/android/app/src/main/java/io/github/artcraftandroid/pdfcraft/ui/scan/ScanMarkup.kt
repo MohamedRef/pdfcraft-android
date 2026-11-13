@@ -27,6 +27,9 @@ internal class ScanMarkupState {
 
     /** When the Markup screen was opened, for `markup_done`'s time. */
     var openedAt = 0L
+
+    /** How many times the eyedropper picked a colour on each page (by key) in this scan (#503), for a kept page file. */
+    val eyedropper = HashMap<String, Int>()
 }
 
 /** A change that would move page [index] under its marks: what it is (for the log) and what to do on Remove. */
@@ -43,16 +46,18 @@ internal fun AppViewModel.openScanMarkup(index: Int) {
 /**
  * The Markup screen closed: with Done, page [index] keeps [marks] (none when empty); with Cancel
  * ([cancelled]) it stays as it was. [erasedShare] is the share the eraser painted on the screen's
- * last drawing of the page.
+ * last drawing of the page; [eyedropper] how many colours the eyedropper picked there and
+ * [eraseFill] Erase's fill when it closed (#503).
  */
-internal fun AppViewModel.finishScanMarkup(index: Int, marks: ScanMarks?, cancelled: Boolean, erasedShare: Float?) {
+internal fun AppViewModel.finishScanMarkup(index: Int, marks: ScanMarks?, cancelled: Boolean, erasedShare: Float?, eyedropper: Int = 0, eraseFill: String = "paper") {
     val page = scanPages.getOrNull(index)
     val kept = marks?.takeUnless { it.isEmpty }
     val changed = !cancelled && page != null && page.marks != kept
     if (changed && page != null) scanPages[index] = page.copy(marks = kept)
+    if (page != null && eyedropper > 0) scanMarkup.eyedropper.merge(page.key, eyedropper, Int::plus)
     scanMarkup.open = null
     val ms = android.os.SystemClock.elapsedRealtime() - scanMarkup.openedAt
-    Diag.event(DiagArea.Scan, "markup_done", *scanMarkupDoneDiag(index, if (cancelled) page?.marks else kept, erasedShare, ms, cancelled, changed))
+    Diag.event(DiagArea.Scan, "markup_done", *scanMarkupDoneDiag(index, if (cancelled) page?.marks else kept, erasedShare, ms, cancelled, changed, eyedropper, eraseFill))
 }
 
 /** Clear markup (#495): every mark of page [index] gone; [why] is "clear" from More, or the change that asked for it. */

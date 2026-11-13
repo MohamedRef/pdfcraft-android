@@ -22,4 +22,16 @@
     <string name="scan_markup_ask_body">الحواف الجديدة أو تغيير الفرد يحرّكان الصفحة تحت التعليم، لذلك سيُحذف التعليم.</string>
     <string name="scan_markup_ask_keep">إبقاء</string>
     <string name="scan_markup_ask_remove">حذف التعليم</string>
+    <!-- #503: colours, the eyedropper and the eraser's fills -->
+    <string name="scan_lab_markup_colours">ألوان التعليم: لوحات ألوان، لون مخصص، قطّارة، الممحاة بلون</string>
+    <string name="scan_lab_markup_edge">الممحاة: تتبّع الحواف (قيد التقييم)</string>
+    <string name="scan_markup_more_colours">ألوان أكثر</string>
+    <string name="scan_markup_dropper">اختيار لون من الصفحة</string>
+    <string name="scan_markup_dropper_hint">المس الصفحة وحرّك إصبعك إلى اللون الذي تريده، ثم ارفعه لأخذه.</string>
+    <string name="scan_markup_erase_hint">امسح فوق أي شيء ليُطلى بلون الورق المحيط به.</string>
+    <string name="scan_markup_erase_colour_hint">امسح لتطلي باللون المختار. القطّارة تأخذ لونًا من الصفحة.</string>
+    <string name="scan_markup_erase_edge_hint">امسح فوق أي شيء لتمتد فوقه الألوان المحيطة به.</string>
+    <string name="scan_markup_fill_paper">الورق المحيط</string>
+    <string name="scan_markup_fill_colour">لون</string>
+    <string name="scan_markup_fill_edge">تتبّع الحواف</string>
 </resources>
