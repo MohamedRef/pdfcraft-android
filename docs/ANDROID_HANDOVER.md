@@ -25,8 +25,8 @@
 ## RELEASE 0.0.26-beta (26012) — 2026-11-13 (owner requested)
 
 - Release PR publishes `0.0.26-beta` / ARM64 build `26012` (`pdfcraft.versionCode=2601`), same package ID and signer. Trigger matches only `chore(release): publish 0.0.26-beta (26012)`.
-- Owner asked on 2026-11-13 for a release once the PRs in flight had merged (#471, #482, #484, #485, #486, #487).
-- Included: the fixes from the 0.0.25-beta phone log, the automatic scanner (looks, finger removal and flattening on by default), background pages, Scan screens in steps (Adjust borders, Enhance, the pages grid), Save to gallery, opening PDFs in place, the regrouped Settings, and the open and save speed-ups; see [`releases/0.0.26-beta.md`](releases/0.0.26-beta.md).
+- Owner asked on 2026-11-13 for a release once the PRs in flight had merged (#471, #482, #484, #485, #486, #487, #490).
+- Included: the fixes from the 0.0.25-beta phone log, the automatic scanner (looks, finger removal and flattening on by default), background pages, Scan screens in steps (Adjust borders, Enhance, the pages grid), Save to gallery, Recent scans, opening PDFs in place, the regrouped Settings, and the open and save speed-ups; see [`releases/0.0.26-beta.md`](releases/0.0.26-beta.md).
 - Open: none of these changes has run on a phone yet. #211, #212, #235 and #236 wait on this build's diagnostics log; #466 is partly done.
 
 ## RELEASE 0.0.25-beta (25012) — 2026-11-12 (owner requested)
