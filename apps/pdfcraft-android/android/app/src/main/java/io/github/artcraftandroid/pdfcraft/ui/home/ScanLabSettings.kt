@@ -113,6 +113,10 @@ internal fun ScanLabSettings(vm: AppViewModel) {
     SheetRow(null, stringResource(R.string.scan_lab_crop), { lab.update(o.copy(cropTools = !o.cropTools)) }) {
         PdfSwitch(o.cropTools, { lab.update(o.copy(cropTools = it)) })
     }
+    // Auto-detect says when it finds nothing and does not repeat a search that found nothing (#443)
+    SheetRow(null, stringResource(R.string.scan_lab_crop_detect_note), { lab.update(o.copy(cropDetectNote = !o.cropDetectNote)) }) {
+        PdfSwitch(o.cropDetectNote, { lab.update(o.copy(cropDetectNote = it)) })
+    }
     SheetRow(null, stringResource(R.string.scan_lab_flatten_auto), { lab.update(o.copy(flattenAuto = !o.flattenAuto)) }) {
         PdfSwitch(o.flattenAuto, { lab.update(o.copy(flattenAuto = it)) })
     }

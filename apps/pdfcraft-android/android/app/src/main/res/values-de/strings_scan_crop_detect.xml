@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="scan_crop_detect_none">Kein Seitenumriss gefunden. Ziehen Sie die Ecken oder tippen Sie auf Nicht zuschneiden, um das ganze Foto zu behalten.</string>
+    <string name="scan_crop_detect_none_other">Kein Seitenumriss gefunden, auch nicht mit dem Liniendetektor. Ziehen Sie die Ecken oder tippen Sie auf Nicht zuschneiden, um das ganze Foto zu behalten.</string>
+    <string name="scan_crop_detect_already">Dieses Foto wurde bereits durchsucht, ohne Seitenumriss. Ziehen Sie die Ecken oder tippen Sie auf Nicht zuschneiden, um das ganze Foto zu behalten.</string>
+    <string name="scan_crop_detect_found_other">Seite mit dem Liniendetektor gefunden. Prüfen Sie die Ecken.</string>
+    <string name="scan_crop_detect_failed">Die automatische Erkennung konnte dieses Foto nicht lesen.</string>
+    <string name="scan_lab_crop_detect_note">Zuschneiden: melden, wenn die automatische Erkennung nichts findet, und danach den Liniendetektor versuchen</string>
+</resources>

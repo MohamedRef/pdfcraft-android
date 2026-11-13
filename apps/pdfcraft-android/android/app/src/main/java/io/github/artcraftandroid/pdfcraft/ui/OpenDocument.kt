@@ -27,7 +27,10 @@ class OpenDocument(
     info: DocumentInfo,
     /** Where it was opened from (a picked or shared document, or a file), for writing back. */
     val source: Uri?,
-    /** The working copy the engine reads and saves. */
+    /**
+     * The working file the engine saves to. A document opened in place ([lent]) reads its
+     * original and has no working file until its first save.
+     */
     val file: File,
     val images: PageImages,
     /** The password it was opened with. */
@@ -52,6 +55,9 @@ class OpenDocument(
 
     /** Opened by another app (a file manager's Open with, a share): closing it goes back there. */
     var fromOtherApp = false
+
+    /** Opened in place from its provider's file (#453): how its saves reach that file. */
+    var lent: io.github.artcraftandroid.pdfcraft.engine.LentState? = null
 
     /** Its number in the diagnostics log, which never names the file. */
     var diagNumber = 0
