@@ -192,6 +192,40 @@ Checked by Rust tests (`a_preview_no_longer_wanted_stops`, `the_paper_chosen_win
 Whiteboard in `a_preview_shows_what_will_be_saved`, `enhance::whiteboard` tests) and JVM tests
 (`ScanLooksTest`, `ScanSaveTest`, `ScanSessionTest`, `ScanLabTest`). None of it has run on a phone.
 
+## Every page made in the background (#465)
+
+Before #465 only the page on screen was made: the strip showed untouched photos, every visit to a
+page made it again, and Flatten page could not reach photos imported together. Now each page
+joins a queue as it joins the scan (from the camera or an import) and is made off the main thread
+by the same request as the preview, one page at a time, once its edges have been looked for. The
+code is `ui/ScanPageQueue.kt`; nothing native changed.
+
+- The result is kept at preview size (1280 px, JPEG at 90) in the cache folder `scan-made/`, and
+  only a 72 dp thumbnail stays in memory. The pages strip shows that thumbnail. A page still
+  waiting has a dark dot on its thumbnail, the page being made a small spinner, and a line above
+  the strip says "Preparing pages: 3 of 9".
+- The page on screen goes first: its own preview makes it (the queue leaves it alone), and a page
+  the queue is making for another page is told to stop at its next stage. The queue's page is
+  made again afterwards; when it got as far as the straightened page, that is still kept natively.
+- Going back to a page shows the kept result, decoded from the file, without the engine
+  (`preview_kept` in the log). A change to the page's look, strength, paper, borders, turn,
+  document type or Flatten page makes it again; so does a testing option.
+- Apply to all copies the page's look, strength, paper colour, document type and Flatten page to
+  every page, so one tap flattens a run of imported book pages.
+- Save keeps what each page showed: the turn the classifier gave it (asked as that turn, so the
+  classifier is not asked again at full size) and the document type Clean scan took it for (asked
+  as that type). The multi-page turn rule (#339) still runs on the shown answers and can still
+  change a page that was unsure, as before. Flattening is not pinned: with the switch it is the
+  same request; with the automatic flattening testing option on, the full-size page is checked again.
+- Discarding or saving the scan stops the queue and deletes the kept results.
+- Testing option "Make every page in the background" (`backgroundPages`, on): off is the screen as
+  before #465.
+
+Not measured: the time per page and the memory while nine 12 MP pages wait, on a phone. The
+native store of straightened pages keeps four, so with more pages than that the page on screen
+may need its straightened page made again after the queue has passed; the log's `reused` on
+`preview` lines shows how often.
+
 ## Not done (left in #301)
 
 - Stopping a preview inside a stage (between row bands), and timing how soon it stops.

@@ -101,6 +101,13 @@ internal data class ScanLab(
      * out from the whole photo, as before.
      */
     val unfoundDocument: Boolean = true,
+    /**
+     * Every page of the scan is made in the background as it joins (#465), shown in the pages
+     * strip as it will be saved, and shown at once when it is opened; Apply to all carries the
+     * document type and Flatten page too, and Save keeps the turn and document type each page
+     * showed. Off: only the page on screen is made, as before.
+     */
+    val backgroundPages: Boolean = true,
     /** In book mode, cut a spread along the gutter found in the photo (#303); off cuts every spread at its centre line. */
     val bookGutter: Boolean = true,
     /**
@@ -145,7 +152,7 @@ internal data class ScanLab(
         "finder" to finderId(finder), "refine" to refine, "side_proportions" to !perspective,
         "snap_paper" to snapPaper, "strength_override" to (strength ?: -1), "upright" to upright, "sharpen" to sharpen,
         "denoise" to denoise, "preview" to preview, "crop_tools" to cropTools, "crop_detect_note" to cropDetectNote, "flatten_auto" to flattenAuto, "flatten_trim" to flattenTrim, "flatten_line_floor" to flattenLineFloor, "settle_turns" to settleTurns, "presets" to presets, "kind_tone" to kindTone, "photo_sharpen" to photoSharpen, "suggestions" to suggestions, "strict_gutter" to strictGutter, "strict_photo" to strictPhoto, "book_gutter" to bookGutter, "line_flatten" to lineFlatten,
-        "page_strength" to pageStrength, "unfound_document" to unfoundDocument, "look_per_page" to lookPerPage, "look_strip" to lookStrip,
+        "page_strength" to pageStrength, "unfound_document" to unfoundDocument, "background_pages" to backgroundPages, "look_per_page" to lookPerPage, "look_strip" to lookStrip,
         "whiteboard_look" to whiteboardLook, "preview_stop" to previewStop, "preview_zoom" to previewZoom, "keep" to keep, "inspect" to inspect,
     )
 
@@ -154,7 +161,7 @@ internal data class ScanLab(
         .put("finder", finderId(finder)).put("refine", refine).put("side_proportions", !perspective)
         .put("snap_paper", snapPaper).put("strength_override", strength ?: JSONObject.NULL).put("upright", upright)
         .put("sharpen", sharpen).put("denoise", denoise).put("preview", preview).put("crop_tools", cropTools).put("crop_detect_note", cropDetectNote).put("flatten_auto", flattenAuto).put("flatten_trim", flattenTrim).put("flatten_line_floor", flattenLineFloor).put("settle_turns", settleTurns).put("presets", presets).put("kind_tone", kindTone).put("photo_sharpen", photoSharpen).put("suggestions", suggestions).put("strict_gutter", strictGutter).put("strict_photo", strictPhoto).put("book_gutter", bookGutter).put("line_flatten", lineFlatten)
-        .put("page_strength", pageStrength).put("unfound_document", unfoundDocument).put("look_per_page", lookPerPage).put("look_strip", lookStrip)
+        .put("page_strength", pageStrength).put("unfound_document", unfoundDocument).put("background_pages", backgroundPages).put("look_per_page", lookPerPage).put("look_strip", lookStrip)
         .put("whiteboard_look", whiteboardLook).put("preview_stop", previewStop).put("preview_zoom", previewZoom).put("inspect", inspect)
 
     /** One line of text for the app's preferences. */
@@ -163,7 +170,7 @@ internal data class ScanLab(
         "perspective" to flag(perspective), "snap" to flag(snapPaper), "strength" to (strength?.toString() ?: ""),
         "upright" to flag(upright), "sharpen" to sharpen.toString(), "denoise" to flag(denoise), "preview" to flag(preview), "crop" to flag(cropTools), "detect_note" to flag(cropDetectNote), "flatten_auto" to flag(flattenAuto), "flatten_trim" to flag(flattenTrim), "line_floor" to flag(flattenLineFloor),
         "settle" to flag(settleTurns), "presets" to flag(presets), "kind_tone" to flag(kindTone), "photo_sharpen" to flag(photoSharpen), "suggest" to flag(suggestions), "strict_gutter" to flag(strictGutter), "strict_photo" to flag(strictPhoto), "gutter" to flag(bookGutter), "line_flatten" to flag(lineFlatten),
-        "page_strength" to flag(pageStrength), "unfound_doc" to flag(unfoundDocument), "look_page" to flag(lookPerPage), "look_strip" to flag(lookStrip),
+        "page_strength" to flag(pageStrength), "unfound_doc" to flag(unfoundDocument), "bg_pages" to flag(backgroundPages), "look_page" to flag(lookPerPage), "look_strip" to flag(lookStrip),
         "board" to flag(whiteboardLook), "stop" to flag(previewStop), "zoom" to flag(previewZoom), "inspect" to flag(inspect),
     ).joinToString(";") { (k, v) -> "$k=$v" }
 
@@ -222,6 +229,7 @@ internal data class ScanLab(
                 lineFlatten = on("line_flatten", default.lineFlatten),
                 pageStrength = on("page_strength", default.pageStrength),
                 unfoundDocument = on("unfound_doc", default.unfoundDocument),
+                backgroundPages = on("bg_pages", default.backgroundPages),
                 lookPerPage = on("look_page", default.lookPerPage),
                 lookStrip = on("look_strip", default.lookStrip),
                 whiteboardLook = on("board", default.whiteboardLook),
@@ -368,6 +376,10 @@ internal fun scanTestPageJson(
     applied: ScanAppliedStrength? = null,
     /** Where the page's kind of document came from (#444): "off", "chosen", "no_outline" or "measured"; null when not known. */
     kindSource: String? = null,
+    /** Whether the page was made in the background before it was first shown (#465); null with that option off. */
+    madeBeforeShown: Boolean? = null,
+    /** Whether Save kept the turn and document type the page showed (#465); null with that option off. */
+    shownKept: JSONObject? = null,
 ): String {
     val page = JSONObject()
         .put("corners", shares(corners)).put("kind", "other").put("paper", "unknown").put("curved", false).put("notes", "")
@@ -388,6 +400,9 @@ internal fun scanTestPageJson(
         .put("options", lab.json())
         // #444: "no_outline" means the kind was not worked out because the page is the whole photo
         .put("document_type_source", kindSource ?: JSONObject.NULL)
+        // #465: made in the background before it was first opened, and what Save kept from what it showed
+        .put("made_before_shown", madeBeforeShown ?: JSONObject.NULL)
+        .put("shown_kept", shownKept ?: JSONObject.NULL)
         .put(
             "document_type",
             kind?.let {

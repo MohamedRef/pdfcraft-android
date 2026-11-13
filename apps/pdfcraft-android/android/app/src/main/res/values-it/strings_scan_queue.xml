@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Scanner: every page made in the background (#465); kept apart from strings.xml so parallel scanner work merges cleanly. -->
+<resources>
+    <string name="scan_lab_background_pages">Prepara ogni pagina in background</string>
+    <string name="scan_pages_preparing">Preparazione pagine: %1$d di %2$d</string>
+    <string name="scan_page_waiting">Pagina %1$d, in attesa di preparazione</string>
+    <string name="scan_page_working">Pagina %1$d, in preparazione</string>
+    <string name="scan_apply_all_body">Ogni pagina prenderà l\'aspetto di questa pagina (%1$s), l\'intensità, il colore della carta, il tipo di documento e Appiattisci pagina.</string>
+</resources>

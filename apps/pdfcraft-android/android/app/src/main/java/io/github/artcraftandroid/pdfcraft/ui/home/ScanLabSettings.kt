@@ -165,6 +165,10 @@ internal fun ScanLabSettings(vm: AppViewModel) {
     SheetRow(null, stringResource(R.string.scan_lab_unfound_document), { lab.update(o.copy(unfoundDocument = !o.unfoundDocument)) }) {
         PdfSwitch(o.unfoundDocument, { lab.update(o.copy(unfoundDocument = it)) })
     }
+    // every page made in the background (#465)
+    SheetRow(null, stringResource(R.string.scan_lab_background_pages), { lab.update(o.copy(backgroundPages = !o.backgroundPages)) }) {
+        PdfSwitch(o.backgroundPages, { lab.update(o.copy(backgroundPages = it)) })
+    }
     // the research detectors (#305, #306): a report only, in kept scans, so it changes no page
     SheetRow(null, stringResource(R.string.scan_lab_inspect), { lab.update(o.copy(inspect = !o.inspect)) }) {
         PdfSwitch(o.inspect, { lab.update(o.copy(inspect = it)) })
