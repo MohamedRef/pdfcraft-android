@@ -30,7 +30,8 @@ drawn page instead of the finished one, and the look tiles are empty. English an
 
 Files: `app/build/screenshots/scan/camera_<mode>_<locale>_<size>.png`,
 `camera_permission_<locale>_<size>.png`, `crop_<locale>_<size>_<theme>.png`, and
-`borders_`, `enhance_` and `document_<locale>_<size>_<theme>.png`.
+`borders_`, `enhance_` and `document_<locale>_<size>_<theme>.png`. `enhance_notes_<locale>_320x640.png`
+(German and French) is Enhance's notes line in its worst case under a drawn page (#493).
 
 ## In CI
 
