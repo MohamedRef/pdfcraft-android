@@ -385,6 +385,9 @@ private fun ScanPage(vm: AppViewModel) = Group {
     io.github.artcraftandroid.pdfcraft.ui.scan.ScanAutoSetting()
     var autoUpright by remember { mutableStateOf(ScanUprightSetting.get(vm.settings.appPrefs)) }
     SettingsSwitch(stringResource(R.string.settings_scan_upright), autoUpright, { autoUpright = it; ScanUprightSetting.set(vm.settings.appPrefs, it) }, stringResource(R.string.settings_scan_upright_body))
+    // text recognition on Save PDF only when asked (#504): off to begin with
+    var saveOcr by remember { mutableStateOf(io.github.artcraftandroid.pdfcraft.ui.scan.ScanOcrSetting.get(vm.settings.appPrefs)) }
+    SettingsSwitch(stringResource(R.string.settings_scan_ocr), saveOcr, { saveOcr = it; io.github.artcraftandroid.pdfcraft.ui.scan.ScanOcrSetting.set(vm.settings.appPrefs, it) }, stringResource(R.string.settings_scan_ocr_body))
     // saved scans kept to be edited again (#461): the switch, and what they take with Delete all
     var keepRecent by remember { mutableStateOf(io.github.artcraftandroid.pdfcraft.ui.scan.ScanRecentSetting.get(vm.settings.appPrefs)) }
     SettingsSwitch(stringResource(R.string.settings_scan_recent), keepRecent, { keepRecent = it; io.github.artcraftandroid.pdfcraft.ui.scan.ScanRecentSetting.set(vm.settings.appPrefs, it) }, stringResource(R.string.settings_scan_recent_body))

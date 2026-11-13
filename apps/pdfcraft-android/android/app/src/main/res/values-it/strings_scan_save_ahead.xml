@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Save PDF that only writes the file, and text recognition only when asked (#504). -->
+<resources>
+    <string name="scan_lab_full_pages_ahead">Prepara le pagine a dimensione piena prima di salvare</string>
+    <string name="settings_scan_ocr">Rendi il testo selezionabile</string>
+    <string name="settings_scan_ocr_body">Il salvataggio in PDF legge le parole di ogni pagina per cercarle e selezionarle. Richiede più tempo e si può saltare. Disattivato: il PDF viene salvato subito; il visualizzatore può riconoscere il testo in seguito.</string>
+    <string name="msg_busy_finishing_page">Completamento della pagina %1$d di %2$d…</string>
+    <string name="busy_cancel_scan_save">Annulla non salva nulla; la scansione resta aperta.</string>
+    <string name="busy_skip">Salta</string>
+    <string name="busy_skip_ocr">Salta salva subito il PDF. Le pagine già lette mantengono il testo.</string>
+    <string name="busy_cancel_gallery">Annulla si ferma dopo la pagina corrente. Le pagine già salvate restano nella galleria.</string>
+</resources>

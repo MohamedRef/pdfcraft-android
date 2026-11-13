@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Save PDF that only writes the file, and text recognition only when asked (#504). -->
+<resources>
+    <string name="scan_lab_full_pages_ahead">Préparer les pages en taille réelle avant d’enregistrer</string>
+    <string name="settings_scan_ocr">Rendre le texte sélectionnable</string>
+    <string name="settings_scan_ocr_body">L’enregistrement en PDF lit les mots de chaque page pour les rechercher et les sélectionner. C’est plus long et peut être ignoré. Désactivé : le PDF est enregistré tout de suite ; la visionneuse peut reconnaître le texte plus tard.</string>
+    <string name="msg_busy_finishing_page">Finalisation de la page %1$d sur %2$d…</string>
+    <string name="busy_cancel_scan_save">Annuler n’enregistre rien ; la numérisation reste ouverte.</string>
+    <string name="busy_skip">Ignorer</string>
+    <string name="busy_skip_ocr">Ignorer enregistre le PDF maintenant. Les pages déjà lues gardent leur texte.</string>
+    <string name="busy_cancel_gallery">Annuler s’arrête après la page en cours. Les pages déjà enregistrées restent dans la galerie.</string>
+</resources>

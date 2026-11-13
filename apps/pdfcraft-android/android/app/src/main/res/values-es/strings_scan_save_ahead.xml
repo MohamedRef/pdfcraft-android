@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Save PDF that only writes the file, and text recognition only when asked (#504). -->
+<resources>
+    <string name="scan_lab_full_pages_ahead">Preparar las páginas a tamaño completo antes de guardar</string>
+    <string name="settings_scan_ocr">Hacer el texto seleccionable</string>
+    <string name="settings_scan_ocr_body">Al guardar el PDF se leen las palabras de cada página para buscarlas y seleccionarlas. Tarda más y se puede omitir. Desactivado: el PDF se guarda al instante; el visor puede reconocer el texto más tarde.</string>
+    <string name="msg_busy_finishing_page">Terminando la página %1$d de %2$d…</string>
+    <string name="busy_cancel_scan_save">Cancelar no guarda nada; el escaneo sigue abierto.</string>
+    <string name="busy_skip">Omitir</string>
+    <string name="busy_skip_ocr">Omitir guarda el PDF ahora. Las páginas ya leídas conservan su texto.</string>
+    <string name="busy_cancel_gallery">Cancelar se detiene tras la página actual. Las páginas ya guardadas siguen en la galería.</string>
+</resources>

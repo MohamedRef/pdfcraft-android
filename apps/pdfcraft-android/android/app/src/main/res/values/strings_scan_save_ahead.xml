@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Save PDF that only writes the file, and text recognition only when asked (#504). -->
+<resources>
+    <string name="scan_lab_full_pages_ahead">Make full-size pages before Save</string>
+    <string name="settings_scan_ocr">Make the text selectable</string>
+    <string name="settings_scan_ocr_body">Save PDF reads the words on each page so you can search and select them. It takes longer and can be skipped. Off: the PDF is saved at once.</string>
+    <string name="msg_busy_finishing_page">Finishing page %1$d of %2$d…</string>
+    <string name="busy_cancel_scan_save">Cancel saves nothing; the scan stays open.</string>
+    <string name="busy_skip">Skip</string>
+    <string name="busy_skip_ocr">Skip saves the PDF now. Pages already read keep their text.</string>
+    <string name="busy_cancel_gallery">Cancel stops after the current page. Pages already saved stay in the gallery.</string>
+</resources>

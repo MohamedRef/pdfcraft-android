@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Save PDF that only writes the file, and text recognition only when asked (#504). -->
+<resources>
+    <string name="scan_lab_full_pages_ahead">تجهيز الصفحات بحجمها الكامل قبل الحفظ</string>
+    <string name="settings_scan_ocr">جعل النص قابلًا للتحديد</string>
+    <string name="settings_scan_ocr_body">عند حفظ PDF تُقرأ كلمات كل صفحة لتبحث فيها وتحددها. يأخذ وقتًا أطول ويمكن تخطيه. عند الإيقاف: يُحفظ الملف فورًا، ويمكن للعارض التعرّف على النص لاحقًا.</string>
+    <string name="msg_busy_finishing_page">جارٍ إنهاء الصفحة %1$d من %2$d…</string>
+    <string name="busy_cancel_scan_save">الإلغاء لا يحفظ شيئًا، ويبقى السكان مفتوحًا.</string>
+    <string name="busy_skip">تخطٍّ</string>
+    <string name="busy_skip_ocr">التخطي يحفظ الملف الآن. تحتفظ الصفحات المقروءة بنصها.</string>
+    <string name="busy_cancel_gallery">يتوقف الإلغاء بعد الصفحة الحالية. تبقى الصفحات المحفوظة في المعرض.</string>
+</resources>

@@ -105,6 +105,8 @@ internal fun ScanLabSettings(vm: AppViewModel) {
     Sw(R.string.scan_lab_preview_zoom, o.previewZoom) { lab.update(o.copy(previewZoom = it)) }
     // every page made in the background (#465)
     Sw(R.string.scan_lab_background_pages, o.backgroundPages) { lab.update(o.copy(backgroundPages = it)) }
+    // every page made at full size before Save (#504)
+    Sw(R.string.scan_lab_full_pages_ahead, o.fullPagesAhead) { lab.update(o.copy(fullPagesAhead = it)) }
     // the automatic look (#466): suggestions applied with Undo
     Sw(R.string.scan_lab_auto_look, o.autoLook) { lab.update(o.copy(autoLook = it)) }
     // fingers at the page's edge removed by the automatic look (#466)

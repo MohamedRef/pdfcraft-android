@@ -78,6 +78,12 @@ class ToolsController internal constructor(private val vm: AppViewModel) {
     /** The busy dialog's Cancel, when the job can stop safely (between pages). */
     var busyCancel by mutableStateOf<(() -> Unit)?>(null)
 
+    /** What the busy dialog's Cancel does, when the job says it in its own words (#504); null for text recognition's sentence. */
+    var busyCancelNote by mutableStateOf<String?>(null)
+
+    /** The busy dialog's Cancel button named for what it does, such as Skip (#504); null for Cancel. */
+    var busyCancelLabel by mutableStateOf<String?>(null)
+
     /** Redact: marks, the box being drawn, the look, and the checks after applying (#163). */
     val redact = io.github.artcraftandroid.pdfcraft.ui.viewer.RedactState()
     /** Compare files: the older document and the differences found (#171). */
