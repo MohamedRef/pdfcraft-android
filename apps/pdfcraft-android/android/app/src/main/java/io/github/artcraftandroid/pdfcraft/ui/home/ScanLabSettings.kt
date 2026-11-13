@@ -125,6 +125,8 @@ internal fun ScanLabSettings(vm: AppViewModel) {
     io.github.artcraftandroid.pdfcraft.ui.scan.ScanLiveSetting()
     io.github.artcraftandroid.pdfcraft.ui.scan.ScanAutoSetting()
     io.github.artcraftandroid.pdfcraft.ui.scan.ScanMergeSettingRow()
+    // Back and Delete ask before a scan or a page is thrown away (#456)
+    Sw(R.string.scan_lab_ask_discard, o.askDiscard) { lab.update(o.copy(askDiscard = it)) }
 
     SettingsHeader(stringResource(R.string.scan_lab_group_reports))
     // the research detectors (#305, #306): a report only, in kept scans, so it changes no page
