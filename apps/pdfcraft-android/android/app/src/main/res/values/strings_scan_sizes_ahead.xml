@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Pages made ahead stored at every size (#528) -->
+<resources>
+    <string name="scan_lab_sizes_ahead">Pages ready at every size before Save</string>
+</resources>

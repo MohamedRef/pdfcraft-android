@@ -73,3 +73,8 @@ internal fun scanFullReadyDiag(index: Int, ms: Long, bytes: Long, why: String): 
  * pressed; null with the testing option off.
  */
 internal fun scanMadeFullBeforeSave(ahead: Boolean, ready: Boolean): Boolean? = if (ahead) ready else null
+
+/** What Save found ready (#528): pages made ahead at any size, those already stored at the size chosen, and the making Save did itself. */
+internal fun scanSizesAheadDiag(on: Boolean, madeAhead: Int, storedAhead: Int, makeMs: Long): Array<Pair<String, Any?>> = arrayOf(
+    "sizes_ahead" to on, "pages_made_ahead" to madeAhead, "pages_stored_ahead" to storedAhead, "make_ms" to makeMs,
+)
