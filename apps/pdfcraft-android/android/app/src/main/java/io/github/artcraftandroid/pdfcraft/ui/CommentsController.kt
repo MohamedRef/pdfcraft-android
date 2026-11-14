@@ -329,6 +329,19 @@ class CommentsController internal constructor(private val vm: AppViewModel) {
         }
     }
 
+    /** Hand the selected text to another app's text action (#535), read only. Needs copying allowed, like Share. */
+    fun processSelection(doc: OpenDocument, app: io.github.artcraftandroid.pdfcraft.ui.viewer.TextActionApp) {
+        if (!doc.info.allowsCopying) {
+            vm.tell(text(R.string.msg_copy_not_allowed))
+            return
+        }
+        vm.viewModelScope.launch {
+            val text = doc.selection.text()?.takeIf { it.isNotBlank() } ?: return@launch
+            doc.selection.clear()
+            vm.intents.trySend(io.github.artcraftandroid.pdfcraft.ui.viewer.processTextIntent(app, text))
+        }
+    }
+
     /** Find the selected words in the whole document (#523): the Find bar opens with them and their results. */
     fun findSelection(doc: OpenDocument) {
         vm.viewModelScope.launch {
