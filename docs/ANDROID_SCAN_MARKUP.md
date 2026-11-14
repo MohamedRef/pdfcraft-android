@@ -15,8 +15,9 @@ automatic search missed.
 - Markup opens the page full screen with four tools: **Erase**, **Pen**, **Highlighter**,
   **Text**. Each has three sizes; Pen, Highlighter and Text have their own colours. One finger
   draws or rubs, two fingers move and zoom (as the viewer's Draw); an S Pen's pressure changes
-  the pen's width. Undo, Redo and Clear are at the top, Done at the bottom; Back is Cancel and
-  leaves the page as it was.
+  the pen's width. Undo, Redo and Clear are at the top, Done at the bottom. Back (the arrow or
+  Android's Back gesture) keeps the marks, as Done does (#531, the owner's choice): Undo and Clear
+  take them away. Before #531 Back was Cancel and threw them away without asking.
 - **Colours (#503)**, behind their own testing option: each tool's row keeps its few swatches,
   shows the colour in use when it is another one, and ends with **More colors** (a palette icon)
   and the **eyedropper**. More colors opens the viewer's colour sheet: the recent colours, the
@@ -123,7 +124,8 @@ drawn yet, on top. It draws the text boxes itself from the same mask, so they ca
   `erase`, `text`, `erased_share`, `ms` in the screen, `cancelled`, `changed`; since #503
   `custom_colours` (marks in a colour that is not their tool's own swatch), `eyedropper` (colours it
   picked), `erase_colour` and `erase_edge` (strokes) and `erase_fill` (`paper`, `colour` or `edge`,
-  Erase's fill when the screen closed)); `markup_clear`
+  Erase's fill when the screen closed); since #531 `left_by` (`done`, `back`, `gesture`) and
+  `discarded` (marks made in the session and not kept, 0 now that every way out keeps them)); `markup_clear`
   (`index`, `why`: `clear`, `borders` or `flatten`, `marks`); `markup_ask` and `markup_kept`
   (`index`, `why`); on `page` and `preview` lines `markup` (the option), `marks`, `marks_pen`,
   `marks_highlighter`, `marks_erase`, `marks_text`, `marks_erase_colour`, `marks_erase_edge`, `marks_custom_colours`, `erased_share` (share of the page the eraser
