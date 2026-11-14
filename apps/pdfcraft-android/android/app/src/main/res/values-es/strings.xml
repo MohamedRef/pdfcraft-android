@@ -1388,6 +1388,9 @@
     <string name="bates_export_failed">No se pudo guardar esta copia nueva en Descargas.</string>
     <string name="ink_presets_title">Lápices favoritos</string>
     <string name="ink_presets_help">Cada lápiz conserva su propio color, grosor y opacidad. Toca un favorito para recuperar sus ajustes.</string>
+    <string name="ink_shapes">Formas</string>
+    <string name="ink_toolbar_guides">Guías</string>
+    <string name="ink_guides_title">Regla, transportador y lupa</string>
     <string name="ink_latency_reset">Restablecer</string>
     <string name="ink_latency_refresh">Actualizar</string>
     <string name="ink_latency_none">aún sin medir</string>

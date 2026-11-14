@@ -1603,6 +1603,9 @@
     <!-- Translator note: Pen presets: each pen remembers its own color, width and opacity. -->
     <string name="ink_presets_title">Favorite pens</string>
     <string name="ink_presets_help">Each pen keeps its own color, width and opacity. Tap a favorite to restore its settings.</string>
+    <string name="ink_shapes">Shapes</string>
+    <string name="ink_toolbar_guides">Guides</string>
+    <string name="ink_guides_title">Ruler, protractor and zoom box</string>
     <!-- Translator note: Ink latency: a measurement of how fast drawn ink appears on this device. Keep numbers and ms units as is. -->
     <string name="ink_latency_reset">Reset</string>
     <string name="ink_latency_refresh">Update</string>

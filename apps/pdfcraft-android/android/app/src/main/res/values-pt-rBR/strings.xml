@@ -965,6 +965,9 @@
     <string name="bates_export_failed">Não foi possível salvar esta nova cópia em Downloads.</string>
     <string name="ink_presets_title">Canetas favoritas</string>
     <string name="ink_presets_help">Cada caneta guarda a própria cor, espessura e opacidade. Toque em uma favorita para restaurar as configurações dela.</string>
+    <string name="ink_shapes">Formas</string>
+    <string name="ink_toolbar_guides">Guias</string>
+    <string name="ink_guides_title">Régua, transferidor e lupa</string>
     <string name="ink_latency_reset">Redefinir</string>
     <string name="ink_latency_refresh">Atualizar</string>
     <string name="ink_latency_none">ainda não medida</string>
