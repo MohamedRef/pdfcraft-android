@@ -1171,11 +1171,15 @@ pub fn tools() -> Vec<ToolDef> {
             }),
             &["doc"],
         )),
-        t("doc_unprotect", "Remove security", "Remove password security (the document must have been opened with its permissions password, or have none; with restrictions true, any open document: Unlock PDF). Applied by the next doc_save. Undoable.")
+        t("doc_unprotect", "Remove security", "Remove password security (the document must have been opened with its permissions password, or have none; with restrictions true, any open document: Unlock PDF). Applied by the next doc_save. Undoable. With out, the result is instead written to that path at once, as doc_save with full true writes it, and the document is closed, also when this fails: Unlock PDF in one step, without rebuilding the view in between.")
             .cmd("protect.remove")
             .destructive()
             .with(schema(
-                json!({ "doc": doc(), "restrictions": { "type": "boolean", "description": "Also remove restrictions without the permissions password (Unlock PDF). Default false." } }),
+                json!({
+                    "doc": doc(),
+                    "restrictions": { "type": "boolean", "description": "Also remove restrictions without the permissions password (Unlock PDF). Default false." },
+                    "out": { "type": "string", "description": "Write the unprotected file here (a full rewrite) and close the document." }
+                }),
                 &["doc"],
             )),
         t("page_replace", "Replace pages", "Replace the content of pages with pages of another PDF (same count). Links, comments, form fields and bookmarks on the original pages stay, as in Acrobat. Undoable.")

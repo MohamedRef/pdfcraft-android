@@ -254,8 +254,11 @@ private suspend fun AppViewModel.unlockOne(eng: Engine, f: UnlockFile, dir: File
         if (signed && !askUnlockSigned(f.name)) return done(UnlockResult.SkippedSigned)
         val out = File(dir, "unlocked-${System.nanoTime()}.pdf")
         withContext(NonCancellable) {
-            eng.tool("doc_unprotect", mapOf("doc" to copy, "restrictions" to true))
-            eng.tool("doc_save", mapOf("doc" to copy, "path" to out.absolutePath, "full" to true))
+            // One step (#550): written in full and closed, without rebuilding the hidden copy's view
+            // after removing security and again after saving. The bytes are the same as before.
+            val closed = copy
+            copy = null
+            eng.tool("doc_unprotect", mapOf("doc" to closed, "restrictions" to true, "out" to out.absolutePath))
         }
         val name = unlockOutName(f.name)
         val uri = withContext(Dispatchers.IO) { files.saveToDownloads(out, name).also { out.delete() } }
