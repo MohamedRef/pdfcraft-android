@@ -344,7 +344,10 @@ fun BoxScope.SelectionMenu(vm: AppViewModel, doc: OpenDocument, sel: Selection) 
         canFind = !vm.settings.readingMode,
     )
     val halfDp = with(density) { ((doc.viewer.viewH - doc.viewer.padTop - doc.viewer.padBottom) / 2f).toDp().value }
-    val (shown, more) = splitSelectionMenu(rows, halfDp)
+    // other apps' text actions (translate, define…), behind More after the app's own rows (#535)
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val otherApps = remember { textActionApps(context) }
+    val (shown, more) = selectionMenuEntries(rows, otherApps.size, doc.info.allowsCopying, halfDp)
     // More opens in place; a new selection starts closed again
     var expanded by remember(sel.range) { mutableStateOf(false) }
     fun run(a: SelectionAction) {
@@ -402,7 +405,15 @@ fun BoxScope.SelectionMenu(vm: AppViewModel, doc: OpenDocument, sel: Selection) 
         // opened, More's rows scroll inside the half-page limit
         Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState())) {
             Spacer(Modifier.height(8.dp))
-            for (a in if (expanded) rows else shown) SelectionRow(vm, a) { run(a) }
+            for (e in if (expanded) shown + more else shown) when (e) {
+                is SelectionMenuEntry.Own -> SelectionRow(vm, e.action) { run(e.action) }
+                is SelectionMenuEntry.OtherApp -> otherApps.getOrNull(e.index)?.let { app ->
+                    MenuRow(LucideIcons.AppWindow, app.label, image = app.icon) {
+                        log("process_text")
+                        vm.commenting.processSelection(doc, app)
+                    }
+                }
+            }
             Spacer(Modifier.height(8.dp))
         }
     }
@@ -423,7 +434,7 @@ private fun SelectionRow(vm: AppViewModel, a: SelectionAction, onClick: () -> Un
         // while reading aloud, the reading moves to the selection (the reference's "from here")
         SelectionAction.ReadAloud -> LucideIcons.Volume2 to (if (vm.sharing.readAloud != null) R.string.viewer_read_from_here else R.string.common_tool_read_aloud)
     }
-    MenuRow(icon, stringResource(label), onClick)
+    MenuRow(icon, stringResource(label), onClick = onClick)
 }
 
 @Composable
@@ -483,10 +494,12 @@ fun BoxScope.MarkupFollowUpBar(vm: AppViewModel, f: MarkupFollowUp) {
 }
 
 @Composable
-private fun MenuRow(icon: ImageVector, label: String, onClick: () -> Unit) {
+private fun MenuRow(icon: ImageVector, label: String, image: androidx.compose.ui.graphics.ImageBitmap? = null, onClick: () -> Unit) {
     val c = pdfColors
     Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable(onClick = onClick).padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically) {
-        Icon(icon, null, tint = c.icon, modifier = Modifier.size(22.dp))
+        // another app's own icon, in its colours, where it has one (#535)
+        if (image != null) androidx.compose.foundation.Image(image, null, Modifier.size(22.dp))
+        else Icon(icon, null, tint = c.icon, modifier = Modifier.size(22.dp))
         Spacer(Modifier.width(21.dp))
         Text(label, color = c.text, fontSize = 15.sp)
     }

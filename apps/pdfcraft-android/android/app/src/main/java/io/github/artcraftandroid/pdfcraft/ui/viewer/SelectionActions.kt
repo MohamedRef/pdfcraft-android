@@ -55,3 +55,25 @@ fun splitSelectionMenu(rows: List<SelectionAction>, maxHeightDp: Float): Pair<Li
 /** The selected words as a Find query: whitespace (line breaks too) made single spaces, kept short. */
 fun selectionFindQuery(text: String, maxChars: Int = 120): String =
     text.trim().replace(Regex("\\s+"), " ").take(maxChars).trimEnd()
+
+/** A row of the menu: one of the app's own, or another app's text action ([index] into the list of those). */
+sealed interface SelectionMenuEntry {
+    data class Own(val action: SelectionAction) : SelectionMenuEntry
+    data class OtherApp(val index: Int) : SelectionMenuEntry
+}
+
+/**
+ * The rows shown at once and those behind More (#535): [splitSelectionMenu] for the app's own
+ * rows, then other apps' text actions (translate, define…), always behind More after the app's
+ * own rows. They take the text out of the PDF, so like Copy and Share they need [canCopy].
+ */
+fun selectionMenuEntries(
+    rows: List<SelectionAction>,
+    otherApps: Int,
+    canCopy: Boolean,
+    maxHeightDp: Float,
+): Pair<List<SelectionMenuEntry>, List<SelectionMenuEntry>> {
+    val (shown, more) = splitSelectionMenu(rows, maxHeightDp)
+    val apps = if (canCopy) List(otherApps) { SelectionMenuEntry.OtherApp(it) } else emptyList()
+    return shown.map { SelectionMenuEntry.Own(it) } to more.map { SelectionMenuEntry.Own(it) } + apps
+}

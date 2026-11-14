@@ -6,7 +6,9 @@ import io.github.artcraftandroid.pdfcraft.ui.viewer.SELECTION_MENU_PADDING_DP
 import io.github.artcraftandroid.pdfcraft.ui.viewer.SELECTION_MENU_ROW_DP
 import io.github.artcraftandroid.pdfcraft.ui.viewer.SelectionAction
 import io.github.artcraftandroid.pdfcraft.ui.viewer.SelectionAction.*
+import io.github.artcraftandroid.pdfcraft.ui.viewer.SelectionMenuEntry
 import io.github.artcraftandroid.pdfcraft.ui.viewer.selectionFindQuery
+import io.github.artcraftandroid.pdfcraft.ui.viewer.selectionMenuEntries
 import io.github.artcraftandroid.pdfcraft.ui.viewer.selectionMenuRows
 import io.github.artcraftandroid.pdfcraft.ui.viewer.splitSelectionMenu
 import org.junit.Assert.assertEquals
@@ -61,5 +63,22 @@ class SelectionMenuTest {
         assertEquals("cell membrane potential", selectionFindQuery("  cell\nmembrane \t potential \n"))
         assertTrue(selectionFindQuery("x".repeat(500)).length <= 120)
         assertEquals("", selectionFindQuery(" \n "))
+    }
+
+    @Test fun otherAppsTextActionsComeBehindMoreAfterTheAppsOwnRows() {
+        val (shown, more) = selectionMenuEntries(all, otherApps = 2, canCopy = true, maxHeightDp = 280f)
+        assertEquals(listOf(Copy, SelectAll, Find, Share).map { SelectionMenuEntry.Own(it) }, shown)
+        assertEquals(all.drop(4).map { SelectionMenuEntry.Own(it) } + listOf(SelectionMenuEntry.OtherApp(0), SelectionMenuEntry.OtherApp(1)), more)
+        // even when the app's own rows all fit, the other apps' actions still sit behind More
+        val few = listOf(Copy, SelectAll)
+        val (s2, m2) = selectionMenuEntries(few, otherApps = 1, canCopy = true, maxHeightDp = 900f)
+        assertEquals(few.map { SelectionMenuEntry.Own(it) }, s2)
+        assertEquals(listOf(SelectionMenuEntry.OtherApp(0)), m2)
+    }
+
+    @Test fun otherAppsTextActionsNeedCopyingAllowed() {
+        val rows = selectionMenuRows(canCopy = false, canAnnotate = true, canEditText = true, canFind = true)
+        val (shown, more) = selectionMenuEntries(rows, otherApps = 3, canCopy = false, maxHeightDp = 280f)
+        assertTrue((shown + more).none { it is SelectionMenuEntry.OtherApp })
     }
 }
