@@ -33,6 +33,8 @@ internal enum class ScanEditRefusal(val id: String) {
     PagesChanged("pages_changed"),
     /** Another scan is open in the scanner. */
     Busy("busy"),
+    /** The page is not one picture covering it ("Edit as scan"). */
+    NotAPicture("not_a_picture"),
 }
 
 /** Whether page edits from the viewer can go back to scan [scanPages] in a PDF of [pdfPages] pages. */
@@ -107,6 +109,42 @@ private fun scanGeometry(signature: String): String =
     // type do not move the page
     signature.lineSequence().firstOrNull { it.startsWith("page\t") }.orEmpty().split('\t')
         .filterIndexed { i, _ -> i != 3 && i != 5 }.joinToString("\t")
+
+/**
+ * [this] plan for scan pages that sit in the PDF from page [firstPage] on (a picture page edited as
+ * a scan, #513): every page number moves by `firstPage - 1`; the new file's pages do not.
+ */
+internal fun ScanReplacePlan.at(firstPage: Int): ScanReplacePlan {
+    val d = firstPage - 1
+    if (d == 0) return this
+    return ScanReplacePlan(
+        steps.map { s ->
+            when (s) {
+                is ScanReplaceStep.Replace -> s.copy(pages = s.pages.map { it + d })
+                is ScanReplaceStep.Insert -> s.copy(at = s.at + d)
+                is ScanReplaceStep.Delete -> s.copy(pages = s.pages.map { it + d })
+            }
+        },
+        inPlace, changed.map { it + d }, moved.map { it + d },
+    )
+}
+
+/** The least share of the page one picture must cover to be edited as a scan. */
+internal const val SCAN_PICTURE_COVER = 0.9f
+
+/**
+ * Whether a page whose pictures' boxes are [rects] (points: x0, y0, x1, y1) is one picture covering
+ * the page ([width] × [height] points), so it can be edited as a scan: exactly one picture, over
+ * at least [SCAN_PICTURE_COVER] of the page's area (the part inside the page).
+ */
+internal fun scanPictureCovers(rects: List<FloatArray>, width: Float, height: Float): Boolean {
+    if (rects.size != 1 || width <= 0f || height <= 0f) return false
+    val r = rects[0]
+    if (r.size < 4) return false
+    val w = (minOf(maxOf(r[0], r[2]), width) - maxOf(minOf(r[0], r[2]), 0f)).coerceAtLeast(0f)
+    val h = (minOf(maxOf(r[1], r[3]), height) - maxOf(minOf(r[1], r[3]), 0f)).coerceAtLeast(0f)
+    return w * h >= SCAN_PICTURE_COVER * width * height
+}
 
 /** The comments to ask about before Done: those on [moved] pages ([commentPages] are each comment's page, from 1). */
 internal fun scanCommentsOnMoved(commentPages: List<Int>, moved: List<Int>): Int {

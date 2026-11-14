@@ -171,4 +171,32 @@ class ScanViewerEditTest {
         assertTrue(again.updated)
         assertTrue(link.isFile)
     }
+
+    @Test
+    fun aPicturePageIsReplacedWhereItSitsInThePdf() {
+        val before = listOf(page("/a"))
+        val plan = scanReplacePlan(before, listOf(page("/a", corners = moved), page("/b"))).at(5)
+        assertEquals(listOf(ScanReplaceStep.Replace(listOf(5), listOf(1)), ScanReplaceStep.Insert(6, listOf(2))), plan.steps)
+        assertEquals(listOf(5), plan.changed)
+        assertEquals(listOf(5), plan.moved)
+        val deleted = scanReplacePlan(listOf(page("/a"), page("/b")), listOf(page("/a"))).at(3)
+        assertEquals(listOf<ScanReplaceStep>(ScanReplaceStep.Delete(listOf(4))), deleted.steps)
+        // from the first page nothing moves
+        val same = scanReplacePlan(before, listOf(page("/a", corners = moved)))
+        assertEquals(same, same.at(1))
+    }
+
+    @Test
+    fun onlyOnePictureOverThePageIsEditedAsAScan() {
+        val page = floatArrayOf(0f, 0f, 595f, 842f)
+        assertTrue(scanPictureCovers(listOf(page), 595f, 842f))
+        // a small margin around the picture is fine
+        assertTrue(scanPictureCovers(listOf(floatArrayOf(10f, 10f, 585f, 832f)), 595f, 842f))
+        // a picture spilling past the page counts only what is on it
+        assertTrue(scanPictureCovers(listOf(floatArrayOf(-20f, -20f, 615f, 862f)), 595f, 842f))
+        // half the page, or two pictures: text and pictures mixed, not a scan
+        assertFalse(scanPictureCovers(listOf(floatArrayOf(0f, 0f, 595f, 421f)), 595f, 842f))
+        assertFalse(scanPictureCovers(listOf(page, page), 595f, 842f))
+        assertFalse(scanPictureCovers(emptyList(), 595f, 842f))
+    }
 }

@@ -14,6 +14,9 @@
     <string name="scan_edit_comments_keep">Garder</string>
     <string name="scan_edit_comments_remove">Supprimer</string>
     <string name="scan_edit_editing">Modification d\'une page de %1$s</string>
+    <string name="scan_edit_as_scan">Modifier comme un scan</string>
+    <string name="scan_edit_not_a_picture">Seule une page faite d\'une seule image peut être modifiée comme un scan.</string>
+    <string name="scan_edit_from_picture">On part de l\'image enregistrée dans le PDF, pas de la photo d\'origine.</string>
     <plurals name="scan_edit_replaced">
         <item quantity="one">%d page mise à jour dans ce PDF</item>
         <item quantity="other">%d pages mises à jour dans ce PDF</item>

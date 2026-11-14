@@ -14,6 +14,9 @@
     <string name="scan_edit_comments_keep">Conservar</string>
     <string name="scan_edit_comments_remove">Quitar</string>
     <string name="scan_edit_editing">Editando una página de %1$s</string>
+    <string name="scan_edit_as_scan">Editar como escaneo</string>
+    <string name="scan_edit_not_a_picture">Solo una página que es una sola imagen se puede editar como escaneo.</string>
+    <string name="scan_edit_from_picture">Se parte de la imagen guardada en el PDF, no de la foto original.</string>
     <plurals name="scan_edit_replaced">
         <item quantity="one">%d página actualizada en este PDF</item>
         <item quantity="other">%d páginas actualizadas en este PDF</item>

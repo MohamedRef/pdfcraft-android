@@ -14,6 +14,9 @@
     <string name="scan_edit_comments_keep">Behalten</string>
     <string name="scan_edit_comments_remove">Entfernen</string>
     <string name="scan_edit_editing">Seite aus %1$s bearbeiten</string>
+    <string name="scan_edit_as_scan">Als Scan bearbeiten</string>
+    <string name="scan_edit_not_a_picture">Nur eine Seite, die ein einziges Bild ist, kann als Scan bearbeitet werden.</string>
+    <string name="scan_edit_from_picture">Ausgangspunkt ist das im PDF gespeicherte Bild, nicht das ursprüngliche Foto.</string>
     <plurals name="scan_edit_replaced">
         <item quantity="one">%d Seite in diesem PDF aktualisiert</item>
         <item quantity="other">%d Seiten in diesem PDF aktualisiert</item>

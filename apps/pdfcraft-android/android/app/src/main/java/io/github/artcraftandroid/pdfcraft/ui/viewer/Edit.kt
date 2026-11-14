@@ -806,6 +806,8 @@ private fun ImageMenu(vm: AppViewModel, doc: OpenDocument, img: EditImage) {
         MenuItem(stringResource(R.string.edit_image_save), enabled = !form) { close(); vm.saveImage(doc, img) }
         if (img.hasCrop) MenuItem(stringResource(R.string.edit_image_remove_crop)) { close(); vm.imageAction(doc, img, "remove_crop") }
         if (form) MenuItem(stringResource(R.string.edit_image_ungroup)) { close(); vm.ungroupImage(doc, img) }
+        // a page that is one picture, opened in the scanner's screens (#513)
+        if (!form && vm.scanLab.options.editFromViewer) MenuItem(stringResource(R.string.scan_edit_as_scan)) { close(); vm.editor.editImage = null; vm.scanEdit.editPicture(doc, img.page) }
     }
     MenuIconButton(LucideIcons.Trash2, stringResource(R.string.common_delete)) { vm.editor.deleteImage(doc, img) }
 }

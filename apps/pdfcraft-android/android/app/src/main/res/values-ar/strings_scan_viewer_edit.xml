@@ -14,6 +14,9 @@
     <string name="scan_edit_comments_keep">احتفاظ</string>
     <string name="scan_edit_comments_remove">إزالة</string>
     <string name="scan_edit_editing">تعديل صفحة من %1$s</string>
+    <string name="scan_edit_as_scan">تعديل كسكان</string>
+    <string name="scan_edit_not_a_picture">يمكن تعديل الصفحة كسكان فقط إذا كانت صورة واحدة.</string>
+    <string name="scan_edit_from_picture">يبدأ هذا من الصورة المحفوظة في الملف، وليس من الصورة الأصلية من الكاميرا.</string>
     <plurals name="scan_edit_replaced">
         <item quantity="zero">لم تُحدَّث أي صفحة في هذا الملف</item>
         <item quantity="one">حُدّثت صفحة واحدة في هذا الملف</item>
