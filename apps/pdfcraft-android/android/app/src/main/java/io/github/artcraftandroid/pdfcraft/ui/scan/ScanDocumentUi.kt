@@ -161,6 +161,8 @@ internal fun ScanDocumentScreen(vm: AppViewModel, onOpen: (Int) -> Unit) {
                         DropdownMenuItem(text = { Text(stringResource(R.string.scan_doc_select)) }, onClick = {
                             menu = false
                             choosing = true
+                            // with passes over several pages (#515) every page starts ticked, ready for Borders
+                            if (vm.scanLab.options.batchBorders) picked = keys.toSet()
                         })
                         DropdownMenuItem(text = { Text(stringResource(R.string.scan_enhance_rename)) }, enabled = renamable, onClick = {
                             menu = false
@@ -181,6 +183,21 @@ internal fun ScanDocumentScreen(vm: AppViewModel, onOpen: (Int) -> Unit) {
             Text(stringResource(R.string.scan_lab_active), color = c.textSecondary, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp))
         }
         Text(stringResource(R.string.scan_doc_hint), color = c.textSecondary, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
+        // after an import of several photos (#515): their borders checked in one pass
+        val offer = vm.scanBatch.offer
+        if (offer > 0 && !selecting && vm.scanLab.options.batchBorders) {
+            ScanBatchOfferRow(
+                offer,
+                onCheck = {
+                    val imported = keys.filter { it !in vm.scanBatch.offerBefore }.toSet()
+                    vm.startScanBatch(ScanBatchWhat.Borders, imported.ifEmpty { keys.toSet() }, "offer")
+                },
+                onDismiss = {
+                    vm.scanBatch.offer = 0
+                    Diag.event(DiagArea.Scan, "batch_offer_dismissed", "pages" to offer)
+                },
+            )
+        }
         // every page made in the background here too (#494): a page rotated from the selection bar,
         // or imported, is made again without opening Enhance
         val lab = vm.scanLab.options
@@ -309,6 +326,16 @@ internal fun ScanDocumentScreen(vm: AppViewModel, onOpen: (Int) -> Unit) {
         ScanDocumentBar(
             selecting, chosen.size, vm.insertScanAt == null, pages.isNotEmpty(),
             onRotate = { chosen.forEach { vm.rotateScanPage(it) } },
+            // borders and looks for the chosen pages in one pass (#515)
+            batch = vm.scanLab.options.batchBorders,
+            onBorders = { vm.startScanBatch(ScanBatchWhat.Borders, picked, "selection") },
+            onLook = {
+                vm.startScanBatch(ScanBatchWhat.Look, picked, "selection")?.let { first ->
+                    picked = emptySet()
+                    choosing = false
+                    onOpen(first)
+                }
+            },
             onDelete = { askingDelete = true },
             onGallery = { vm.saveScanToGallery(chosen) },
             onAdd = { vm.takeScanPhoto() },
@@ -419,6 +446,10 @@ internal fun ScanDocumentBar(
     onSave: () -> Unit,
     /** Save PDF, or "Save to this PDF" for a scan opened from its PDF (#513). */
     saveLabel: Int = R.string.tools_save_pdf,
+    /** Borders and Look for the chosen pages (#515). */
+    batch: Boolean = false,
+    onBorders: () -> Unit = {},
+    onLook: () -> Unit = {},
 ) {
     val c = pdfColors
     Row(
@@ -428,6 +459,10 @@ internal fun ScanDocumentBar(
     ) {
         val share = Modifier.weight(1f)
         if (selecting) {
+            if (batch) {
+                ScanBarButton(LucideIcons.Crop, stringResource(R.string.scan_enhance_borders), chosen > 0, share, onBorders)
+                ScanBarButton(LucideIcons.Palette, stringResource(R.string.scan_batch_look), chosen > 0, share, onLook)
+            }
             ScanBarButton(LucideIcons.RotateCw, stringResource(R.string.scan_rotate), chosen > 0, share, onRotate)
             ScanBarButton(LucideIcons.Image, stringResource(R.string.scan_gallery_save), chosen > 0, share, onGallery)
             ScanBarButton(LucideIcons.Trash2, stringResource(R.string.common_delete), chosen > 0, share, onDelete)

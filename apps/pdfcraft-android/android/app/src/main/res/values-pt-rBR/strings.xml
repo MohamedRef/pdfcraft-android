@@ -315,6 +315,8 @@
     <string name="viewer_search_count">%1$d de %2$d</string>
     <string name="viewer_read_from_here">Ler a partir daqui</string>
     <string name="viewer_copy_text">Copiar texto</string>
+    <string name="viewer_select_all">Selecionar tudo</string>
+    <string name="viewer_selection_more">Mais</string>
     <string name="viewer_selection_start">Início da seleção</string>
     <string name="viewer_selection_end">Fim da seleção</string>
     <string name="viewer_write_note">Escrever uma nota</string>

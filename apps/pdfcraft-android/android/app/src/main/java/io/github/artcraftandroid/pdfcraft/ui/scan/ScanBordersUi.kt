@@ -49,12 +49,32 @@ internal class ScanBordersStep(
     val finding: ScanBordersFinding,
     /** The quarter turns clockwise the page is shown and saved with. */
     val turns: Int,
-    val onRetake: () -> Unit,
+    /** Retake; null in a pass over several pages (#515), which a retake would leave. */
+    val onRetake: (() -> Unit)?,
     /** Rotate left (-1) or right (+1). */
     val onRotate: (Int) -> Unit,
     /** Back after a photo, confirmed: the photo is dropped and the camera comes back. */
     val onDiscard: () -> Unit,
+    /** A pass over several pages (#515): the place shown and the way to the others; null for one page. */
+    val batch: ScanBatchNav? = null,
 )
+
+/** A borders pass's place (#515): page [at] (from 1) of [count], and leaving the page shown towards -1, +1 or 0 (the tick) with its corners. */
+internal class ScanBatchNav(val at: Int, val count: Int, val onLeave: (Int, FloatArray, ScanCropStats) -> Unit, val onBack: () -> Unit)
+
+/** The pass's counter between Previous and Next (#515). */
+@Composable
+internal fun ScanBatchNavRow(nav: ScanBatchNav, onGo: (Int) -> Unit) {
+    val c = pdfColors
+    Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+        ScanBarButton(LucideIcons.ChevronLeft, stringResource(R.string.tools_previous_page), nav.at > 1) { onGo(-1) }
+        Text(
+            stringResource(R.string.tools_page_of, nav.at, nav.count), color = c.text, fontSize = 15.sp,
+            modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+        )
+        ScanBarButton(LucideIcons.ChevronRight, stringResource(if (nav.at < nav.count) R.string.tools_next_page else R.string.common_done)) { onGo(if (nav.at < nav.count) 1 else 0) }
+    }
+}
 
 /** "Page N of M", and what the search for the page's outline came to. */
 @Composable
@@ -112,7 +132,7 @@ internal fun ScanBordersBar(
         PdfSwitch(snapOn, onSnap, Modifier.semantics { contentDescription = snapLabel })
     }
     Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 6.dp), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.Top) {
-        ScanBarButton(LucideIcons.Camera, stringResource(R.string.tools_retake), onClick = step.onRetake)
+        step.onRetake?.let { ScanBarButton(LucideIcons.Camera, stringResource(R.string.tools_retake), onClick = it) }
         ScanBarButton(LucideIcons.RotateCcw, stringResource(R.string.scan_borders_rotate_left)) { step.onRotate(-1) }
         ScanBarButton(LucideIcons.RotateCw, stringResource(R.string.scan_borders_rotate_right)) { step.onRotate(1) }
         when (toggle) {

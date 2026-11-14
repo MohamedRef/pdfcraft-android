@@ -29,6 +29,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import io.github.artcraftandroid.pdfcraft.engine.Diag
+import io.github.artcraftandroid.pdfcraft.engine.DiagArea
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -314,9 +318,12 @@ fun BoxScope.JumpChip(doc: OpenDocument, visible: Boolean, bottom: Dp) {
 }
 
 /**
- * The menu by selected text: Add comment, Highlight, Underline and Strikethrough as icons, then
- * Edit text, Copy text and Read aloud. Like the reference's it sits below the selection when there
- * is room, else above.
+ * The menu by selected text: Add comment, Highlight, Underline, Strikethrough and Squiggly as
+ * icons, then the rows in [selectionMenuRows] order (#523): Copy, Select all, Find in document and
+ * Share first; the rows that change the document and the study rows behind More, an icon at the
+ * end of the icon row. The menu is never
+ * taller than half the page area. Like the reference's it sits below the selection when there is
+ * room, else above.
  */
 @Composable
 fun BoxScope.SelectionMenu(vm: AppViewModel, doc: OpenDocument, sel: Selection) {
@@ -335,52 +342,102 @@ fun BoxScope.SelectionMenu(vm: AppViewModel, doc: OpenDocument, sel: Selection) 
     val x = ((top.x + bottom.x) / 2f - menuSize.width / 2f).coerceIn(with(density) { 8.dp.toPx() }, (doc.viewer.viewW - menuSize.width - with(density) { 8.dp.toPx() }).coerceAtLeast(0f))
     val allowed = doc.info.allowsAnnotation
     val prefs = vm.settings.toolPrefs
+    val chars = (sel.range.end - sel.range.start).toInt()
+    fun log(action: String) = Diag.event(DiagArea.Text, "selection_action", "action" to action, "chars" to chars)
     fun markup(m: TextMarkup) {
         if (!allowed) return
+        log(m.name.lowercase())
         vm.commenting.addSelectedMarkup(doc, m, page, sel.rects, prefs.color(m.styled), prefs.opacity(m.styled))
         doc.selection.clear()
+    }
+    val rows = selectionMenuRows(
+        canCopy = doc.info.allowsCopying,
+        canAnnotate = allowed,
+        canEditText = doc.writable || doc.source == null,
+        // Reading Mode has no Find, as its bar shows
+        canFind = !vm.settings.readingMode,
+    )
+    val halfDp = with(density) { ((doc.viewer.viewH - doc.viewer.padTop - doc.viewer.padBottom) / 2f).toDp().value }
+    val (shown, more) = splitSelectionMenu(rows, halfDp)
+    // More opens in place; a new selection starts closed again
+    var expanded by remember(sel.range) { mutableStateOf(false) }
+    fun run(a: SelectionAction) {
+        log(a.diag)
+        when (a) {
+            SelectionAction.Copy -> vm.commenting.copySelection(doc)
+            SelectionAction.SelectAll -> doc.selection.selectPage(page)
+            SelectionAction.Find -> vm.commenting.findSelection(doc)
+            SelectionAction.Share -> vm.commenting.shareSelection(doc)
+            SelectionAction.Replace -> vm.commenting.notePrompt = NotePrompt(doc, null, replace = sel)
+            SelectionAction.Insert -> vm.commenting.notePrompt = NotePrompt(doc, null, insert = sel)
+            SelectionAction.EditText -> {
+                // Edit PDF opens on the paragraph the selection is in, not in general (#197)
+                val r = sel.rects.first()
+                val at = PagePoint(page, (r[0] + r[2]) / 2f, (r[1] + r[3]) / 2f)
+                doc.selection.clear()
+                vm.enterTool(doc, ViewerTool.Edit)
+                if (doc.controller.tool == ViewerTool.Edit) vm.editor.editTap(doc, at)
+            }
+            SelectionAction.Card -> vm.study.makeCardFromSelection(doc, cloze = false)
+            SelectionAction.Cloze -> vm.study.makeCardFromSelection(doc, cloze = true)
+            SelectionAction.ReadAloud -> {
+                vm.sharing.startReadAloud(doc, fromSelection = true)
+                doc.selection.clear()
+            }
+        }
     }
     Column(
         Modifier
             .offset { IntOffset(x.roundToInt(), y.roundToInt()) }
             .onSizeChanged { menuSize = it }
-            .width(252.dp)
+            // wide enough for six labelled icons (More is the sixth)
+            .width(272.dp)
+            .heightIn(max = halfDp.dp.coerceAtLeast((SELECTION_MENU_ICONS_DP + SELECTION_MENU_PADDING_DP).dp))
             .shadow(6.dp, RoundedCornerShape(4.dp))
             .background(c.menu, RoundedCornerShape(4.dp)),
     ) {
         // each icon has a short label under it, and Highlight a dot of the colour it will use (#197)
         Row(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.Top) {
-            MenuIcon(LucideIcons.MessageSquarePlus, stringResource(R.string.viewer_add_comment), allowed, short = stringResource(R.string.viewer_menu_note)) { vm.commenting.notePrompt = NotePrompt(doc, null, sel) }
+            MenuIcon(LucideIcons.MessageSquarePlus, stringResource(R.string.viewer_add_comment), allowed, short = stringResource(R.string.viewer_menu_note)) { log("note"); vm.commenting.notePrompt = NotePrompt(doc, null, sel) }
             MenuIcon(LucideIcons.Highlighter, stringResource(R.string.common_tool_highlight), allowed, short = stringResource(R.string.viewer_menu_highlight), dot = prefs.color(TextMarkup.Highlight.styled)) { markup(TextMarkup.Highlight) }
             MenuIcon(LucideIcons.Underline, stringResource(R.string.common_tool_underline), allowed, short = stringResource(R.string.viewer_menu_underline)) { markup(TextMarkup.Underline) }
             MenuIcon(LucideIcons.Strikethrough, stringResource(R.string.viewer_strikethrough), allowed, short = stringResource(R.string.viewer_menu_strike)) { markup(TextMarkup.Strikethrough) }
             MenuIcon(io.github.artcraftandroid.pdfcraft.ui.PdfIcons.SquigglyUnderline, stringResource(R.string.toolbar_squiggly), allowed, short = stringResource(R.string.viewer_menu_squiggly)) { markup(TextMarkup.Squiggly) }
+            // More ends the icon row, so it takes no row of its own; tapped again it closes
+            if (more.isNotEmpty()) {
+                MenuIcon(LucideIcons.Ellipsis, stringResource(R.string.viewer_selection_more), true, short = stringResource(R.string.viewer_selection_more)) {
+                    if (!expanded) log("more")
+                    expanded = !expanded
+                }
+            }
         }
         // an inset divider, then the rows with 8 dp above and below, as the reference's menu
         Box(Modifier.fillMaxWidth().padding(horizontal = 4.dp).height(1.dp).background(c.divider))
-        Spacer(Modifier.height(8.dp))
-        if (allowed) {
-            MenuRow(LucideIcons.Replace, stringResource(R.string.viewer_replace_text)) { vm.commenting.notePrompt = NotePrompt(doc, null, replace = sel) }
-            MenuRow(LucideIcons.TextCursorInput, stringResource(R.string.viewer_insert_text)) { vm.commenting.notePrompt = NotePrompt(doc, null, insert = sel) }
+        // opened, More's rows scroll inside the half-page limit
+        Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState())) {
+            Spacer(Modifier.height(8.dp))
+            for (a in if (expanded) rows else shown) SelectionRow(vm, a) { run(a) }
+            Spacer(Modifier.height(8.dp))
         }
-        if (doc.writable || doc.source == null) MenuRow(LucideIcons.FilePenLine, stringResource(R.string.viewer_edit_text)) {
-            // Edit PDF opens on the paragraph the selection is in, not in general (#197)
-            val r = sel.rects.first()
-            val at = PagePoint(page, (r[0] + r[2]) / 2f, (r[1] + r[3]) / 2f)
-            doc.selection.clear()
-            vm.enterTool(doc, ViewerTool.Edit)
-            if (doc.controller.tool == ViewerTool.Edit) vm.editor.editTap(doc, at)
-        }
-        if (doc.info.allowsCopying) MenuRow(LucideIcons.Copy, stringResource(R.string.viewer_copy_text)) { vm.commenting.copySelection(doc) }
-        MenuRow(LucideIcons.SwatchBook, stringResource(R.string.cards_make)) { vm.study.makeCardFromSelection(doc, cloze = false) }
-        MenuRow(LucideIcons.SwatchBook, stringResource(R.string.cards_make_cloze)) { vm.study.makeCardFromSelection(doc, cloze = true) }
-        // while reading aloud, the reading moves to the selection (the reference's "from here")
-        MenuRow(LucideIcons.Volume2, stringResource(if (vm.sharing.readAloud != null) R.string.viewer_read_from_here else R.string.common_tool_read_aloud)) {
-            vm.sharing.startReadAloud(doc, fromSelection = true)
-            doc.selection.clear()
-        }
-        Spacer(Modifier.height(8.dp))
     }
+}
+
+@Composable
+private fun SelectionRow(vm: AppViewModel, a: SelectionAction, onClick: () -> Unit) {
+    val (icon, label) = when (a) {
+        SelectionAction.Copy -> LucideIcons.Copy to R.string.viewer_copy_text
+        SelectionAction.SelectAll -> LucideIcons.TextSelect to R.string.viewer_select_all
+        SelectionAction.Find -> LucideIcons.Search to R.string.viewer_find_in_document
+        SelectionAction.Share -> LucideIcons.Share2 to R.string.common_share
+        SelectionAction.Replace -> LucideIcons.Replace to R.string.viewer_replace_text
+        SelectionAction.Insert -> LucideIcons.TextCursorInput to R.string.viewer_insert_text
+        SelectionAction.EditText -> LucideIcons.FilePenLine to R.string.viewer_edit_text
+        SelectionAction.Card -> LucideIcons.SwatchBook to R.string.cards_make
+        SelectionAction.Cloze -> LucideIcons.SwatchBook to R.string.cards_make_cloze
+        // while reading aloud, the reading moves to the selection (the reference's "from here")
+        SelectionAction.ReadAloud -> LucideIcons.Volume2 to (if (vm.sharing.readAloud != null) R.string.viewer_read_from_here else R.string.common_tool_read_aloud)
+    }
+    MenuRow(icon, stringResource(label), onClick)
 }
 
 @Composable

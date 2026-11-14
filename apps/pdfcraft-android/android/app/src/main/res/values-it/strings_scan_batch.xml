@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Borders and looks for several pages in one pass (#515) -->
+<resources>
+    <string name="scan_lab_batch">Bordi e aspetto di più pagine insieme</string>
+    <string name="scan_batch_look">Aspetto</string>
+    <string name="scan_batch_check">Controlla</string>
+    <string name="scan_batch_marks_body">I nuovi bordi spostano la pagina sotto le sue segni, quindi vengono rimosse dove i bordi cambiano. Mantieni lascia fuori da questo passaggio le pagine annotate.</string>
+    <plurals name="scan_batch_offer">
+        <item quantity="one">Controlla i bordi di %1$d pagina</item>
+        <item quantity="other">Controlla i bordi di %1$d pagine</item>
+    </plurals>
+    <plurals name="scan_batch_look_note">
+        <item quantity="one">L’aspetto scelto va a %1$d pagina scelta</item>
+        <item quantity="other">L’aspetto scelto va a %1$d pagine scelte</item>
+    </plurals>
+    <plurals name="scan_batch_marks_title">
+        <item quantity="one">Rimuovere le segni da %1$d pagina?</item>
+        <item quantity="other">Rimuovere le segni da %1$d pagine?</item>
+    </plurals>
+</resources>
