@@ -101,6 +101,15 @@ internal fun scanSizeFor(lab: ScanLab, chosen: String): String = lab.size ?: cho
 /** Whether the sheet offers "See this page as it will be saved": at the choices that change how it looks most. */
 internal fun scanSizeShowsPage(id: String): Boolean = id == "small" || id == "smallest"
 
+/**
+ * The scan's own size at each choice (#528) when every page was made ahead and stored at every
+ * size ([stored]: each page's bytes by size, null for a page not ready); null when any is missing.
+ */
+internal fun scanSizeTotals(stored: List<Map<String, Long>?>): Map<String, Long>? {
+    if (stored.isEmpty() || stored.any { it == null || !it.keys.containsAll(ScanLab.SIZES) }) return null
+    return ScanLab.SIZES.associateWith { size -> stored.sumOf { it!!.getValue(size) } }
+}
+
 /** The scan's estimated size from its first page's bytes at a choice: the same for every page. */
 internal fun scanSizeEstimate(firstPage: Long, pages: Int): Long = firstPage * pages.coerceAtLeast(1)
 
@@ -147,6 +156,9 @@ internal fun ScanSizeSheet(vm: AppViewModel, share: Boolean, onDismiss: () -> Un
     var viewing by remember { mutableStateOf<ScanSizeOption?>(null) }
     val pages = vm.scanPages.size
     val options by produceState<Map<String, ScanSizeOption>?>(null) { value = vm.scanSizeOptions() }
+    // every page's own bytes when all were made ahead at every size (#528), else the first page's times the pages
+    val totals = remember(options) { vm.scanSizeTotals() }
+    fun estimate(id: String): Long? = totals?.get(id) ?: options?.get(id)?.encoding?.bytes?.toLong()?.let { scanSizeEstimate(it, pages) }
     LaunchedEffect(Unit) { Diag.event(DiagArea.Scan, "size_sheet", "share" to share, "remembered" to chosen, "pages" to pages) }
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -172,7 +184,7 @@ internal fun ScanSizeSheet(vm: AppViewModel, share: Boolean, onDismiss: () -> Un
                     Spacer(Modifier.width(8.dp))
                     Text(
                         when {
-                            bytes != null -> stringResource(R.string.scan_size_about, sizeText(context, scanSizeEstimate(bytes, pages)))
+                            bytes != null -> stringResource(R.string.scan_size_about, sizeText(context, estimate(id) ?: scanSizeEstimate(bytes, pages)))
                             options == null -> stringResource(R.string.scan_size_estimating)
                             else -> ""
                         },
@@ -180,7 +192,7 @@ internal fun ScanSizeSheet(vm: AppViewModel, share: Boolean, onDismiss: () -> Un
                     )
                 }
             }
-            options?.takeIf { it.isNotEmpty() && pages > 1 }?.let {
+            options?.takeIf { it.isNotEmpty() && pages > 1 && totals == null }?.let {
                 Text(stringResource(R.string.scan_size_estimate_note), color = c.textSecondary, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 20.dp, vertical = 2.dp))
             }
             val seeable = options?.get(chosen)?.takeIf { scanSizeShowsPage(chosen) }
@@ -193,7 +205,7 @@ internal fun ScanSizeSheet(vm: AppViewModel, share: Boolean, onDismiss: () -> Un
             Button(
                 onClick = {
                     ScanSizeSetting.set(prefs, chosen)
-                    Diag.event(DiagArea.Scan, "size_pick", "share" to share, "size_choice" to chosen, "estimated" to (options?.get(chosen)?.encoding?.bytes?.toLong()?.let { scanSizeEstimate(it, pages) } ?: -1L))
+                    Diag.event(DiagArea.Scan, "size_pick", "share" to share, "size_choice" to chosen, "estimated" to (estimate(chosen) ?: -1L), "estimate_whole" to (totals != null))
                     onDismiss()
                     vm.saveScan(share = share, size = chosen)
                 },

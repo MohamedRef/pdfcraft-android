@@ -389,8 +389,16 @@ fn untouched(request: &PageRequest<'_>) -> Option<Result<PageResult, ScanError>>
 
 /// Run the pipeline on one photo.
 pub fn process_page(request: &PageRequest<'_>) -> Result<PageResult, ScanError> {
+    process_page_stored(request, &[]).map(|(page, _)| page)
+}
+
+/// [`process_page`], and the same made page stored also at each of `also` (#528): the page is made
+/// once and only stored again, so a page made ahead of Save is ready at whatever size is picked.
+/// A page kept as the camera's file (a whole photo in Original at Best) is not made, so nothing
+/// else is stored for it.
+pub fn process_page_stored(request: &PageRequest<'_>, also: &[crate::size::SizeChoice]) -> Result<(PageResult, Vec<crate::size::Stored>), ScanError> {
     if let Some(page) = untouched(request) {
-        return page;
+        return page.map(|p| (p, Vec::new()));
     }
     let base = page_base(request)?;
     let mut clock = Instant::now();
@@ -431,8 +439,13 @@ pub fn process_page(request: &PageRequest<'_>) -> Result<PageResult, ScanError> 
     let (bytes, format) = (stored.bytes, stored.format);
     let (w, h, dpi) = (stored.encoded.width, stored.encoded.height, stored.encoded.dpi);
     lap(STAGE_ENCODE, &mut timings);
+    let others = also
+        .iter()
+        .filter(|c| **c != request.size)
+        .map(|c| crate::size::store(&made, *c, request.auto_encode))
+        .collect::<Result<Vec<_>, _>>()?;
 
-    Ok(PageResult {
+    let page = PageResult {
         bytes,
         format,
         width: w,
@@ -457,7 +470,8 @@ pub fn process_page(request: &PageRequest<'_>) -> Result<PageResult, ScanError> 
         markup,
         encoded: Some(stored.encoded),
         timings,
-    })
+    };
+    Ok((page, others))
 }
 
 /// The page made once and stored at each size choice (#505), for the Save sheet's estimates and
