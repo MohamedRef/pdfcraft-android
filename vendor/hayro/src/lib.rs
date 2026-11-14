@@ -90,6 +90,16 @@ impl<'a> RenderCache<'a> {
             outline_cache: Rc::new(RefCell::new(HashMap::new())),
         }
     }
+
+    /// PdfCraft patch (104): a new render cache that keeps decoded images in `images`, so the
+    /// next render of the same document data draws them without decoding them again
+    /// ([`InterpreterCache::with_decoded_images`]).
+    pub fn with_decoded_images(images: &hayro_interpret::DecodedImages) -> Self {
+        Self {
+            interpreter_cache: InterpreterCache::with_decoded_images(images),
+            outline_cache: Rc::new(RefCell::new(HashMap::new())),
+        }
+    }
 }
 
 /// PdfCraft patch: replacement colours for the "reading colours" view setting (Acrobat's

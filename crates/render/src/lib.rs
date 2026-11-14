@@ -29,7 +29,7 @@ pub use link_area::{MAX_LINK_QUADS, MAX_URI_BASE_BYTES, link_quads, quad_contain
 pub use open_trace::{OpenStage, OpenTrace};
 pub use pixels::Pixels;
 pub use raster::{
-    MAX_PIXELS, MAX_SIDE, PRINT_TAG, PageRenderer, RENDER_STOPPED, RenderConfig, RenderPool, RenderRequest, RenderStats, RenderWarning, RenderedPage, RequestKind,
+    DecodedImages, MAX_PIXELS, MAX_SIDE, PRINT_TAG, PageRenderer, RENDER_STOPPED, RenderConfig, RenderPool, RenderRequest, RenderStats, RenderWarning, RenderedPage, RequestKind,
     Retiring, Tile, device_pixels, effective_scale,
 };
 pub use reading::{ReadingColors, ReadingParams};

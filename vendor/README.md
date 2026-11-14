@@ -102,3 +102,5 @@ ones, as ISO 32000-2 §9.6.5.4 prescribes for symbolic fonts; the
 order the font lists them, platform ID first, so a wrong (1, 0) table (SAS 9.4's AMT fonts)
 drew "8" as "p" and "+" as "V". Covered by `raster::tests::symbolic_truetype_cmap`, whose font
 is built in memory.
+
+Large images and repeated renders (#236, hayro-interpret patch 104): an ICC colour transform over an image of at least 1 Mi pixels runs in up to four runs of whole pixels on scoped threads (identical bytes, since the transform maps each pixel on its own; one run when threads cannot start and on wasm32). `DecodedImages` and `InterpreterCache::with_decoded_images` / hayro `RenderCache::with_decoded_images` let a renderer keep its decoded images from one render of the same document data to the next. Covered by `raster::tests::large_cmyk_images_converted_in_parts_match_one_run` and `raster::tests::renderers_keep_and_share_decoded_images_with_identical_pixels`.
