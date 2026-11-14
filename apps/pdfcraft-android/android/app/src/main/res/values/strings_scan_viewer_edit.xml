@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A saved scan edited from its PDF in the viewer (#513) -->
+<resources>
+    <string name="scan_lab_edit_viewer">Edit a saved scan from its PDF</string>
+    <string name="scan_edit_page_edit">Edit</string>
+    <string name="scan_edit_page_edit_description">Edit this page as a scan</string>
+    <string name="scan_edit_page_of">Page %1$d of %2$d</string>
+    <string name="scan_edit_gone">The photos of this scan are no longer kept, so it can\'t be edited as a scan.</string>
+    <string name="scan_edit_pages_changed">Pages were added or removed in this PDF since the scan was saved, so it can\'t be edited as a scan.</string>
+    <string name="scan_edit_save">Save to this PDF</string>
+    <string name="scan_edit_nothing">Nothing changed. The PDF stays as it was.</string>
+    <string name="scan_edit_closed">The PDF was closed, so the scan was saved as a new file.</string>
+    <string name="scan_edit_comments_title">Keep the comments on changed pages?</string>
+    <string name="scan_edit_comments_keep">Keep</string>
+    <string name="scan_edit_comments_remove">Remove</string>
+    <string name="scan_edit_editing">Editing a page of %1$s</string>
+    <plurals name="scan_edit_replaced">
+        <item quantity="one">%d page updated in this PDF</item>
+        <item quantity="other">%d pages updated in this PDF</item>
+    </plurals>
+    <plurals name="scan_edit_comments_body">
+        <item quantity="one">%d comment is on a page whose borders or place changed. It may no longer sit over what it marked.</item>
+        <item quantity="other">%d comments are on pages whose borders or place changed. They may no longer sit over what they marked.</item>
+    </plurals>
+</resources>

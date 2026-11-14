@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A saved scan edited from its PDF in the viewer (#513) -->
+<resources>
+    <string name="scan_lab_edit_viewer">تعديل سكان محفوظ من ملف PDF الخاص به</string>
+    <string name="scan_edit_page_edit">تعديل</string>
+    <string name="scan_edit_page_edit_description">تعديل هذه الصفحة كسكان</string>
+    <string name="scan_edit_page_of">صفحة %1$d من %2$d</string>
+    <string name="scan_edit_gone">صور هذا السكان لم تعد محفوظة، لذلك لا يمكن تعديله كسكان.</string>
+    <string name="scan_edit_pages_changed">أُضيفت صفحات أو حُذفت من هذا الملف منذ حفظ السكان، لذلك لا يمكن تعديله كسكان.</string>
+    <string name="scan_edit_save">حفظ في هذا الملف</string>
+    <string name="scan_edit_nothing">لم يتغير شيء. يبقى الملف كما كان.</string>
+    <string name="scan_edit_closed">أُغلق الملف، لذلك حُفظ السكان كملف جديد.</string>
+    <string name="scan_edit_comments_title">الاحتفاظ بالتعليقات على الصفحات التي تغيرت؟</string>
+    <string name="scan_edit_comments_keep">احتفاظ</string>
+    <string name="scan_edit_comments_remove">إزالة</string>
+    <string name="scan_edit_editing">تعديل صفحة من %1$s</string>
+    <plurals name="scan_edit_replaced">
+        <item quantity="zero">لم تُحدَّث أي صفحة في هذا الملف</item>
+        <item quantity="one">حُدّثت صفحة واحدة في هذا الملف</item>
+        <item quantity="two">حُدّثت صفحتان في هذا الملف</item>
+        <item quantity="few">حُدّثت %d صفحات في هذا الملف</item>
+        <item quantity="many">حُدّثت %d صفحة في هذا الملف</item>
+        <item quantity="other">حُدّثت %d صفحة في هذا الملف</item>
+    </plurals>
+    <plurals name="scan_edit_comments_body">
+        <item quantity="zero">لا توجد تعليقات على صفحات تغيرت حوافها أو مكانها.</item>
+        <item quantity="one">يوجد تعليق على صفحة تغيرت حوافها أو مكانها، وقد لا يبقى فوق ما يشير إليه.</item>
+        <item quantity="two">يوجد تعليقان على صفحات تغيرت حوافها أو مكانها، وقد لا يبقيان فوق ما يشيران إليه.</item>
+        <item quantity="few">توجد %d تعليقات على صفحات تغيرت حوافها أو مكانها، وقد لا تبقى فوق ما تشير إليه.</item>
+        <item quantity="many">يوجد %d تعليقًا على صفحات تغيرت حوافها أو مكانها، وقد لا تبقى فوق ما تشير إليه.</item>
+        <item quantity="other">يوجد %d تعليق على صفحات تغيرت حوافها أو مكانها، وقد لا تبقى فوق ما تشير إليه.</item>
+    </plurals>
+</resources>

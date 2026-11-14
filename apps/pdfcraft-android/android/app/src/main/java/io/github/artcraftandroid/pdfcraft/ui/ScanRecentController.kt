@@ -41,6 +41,21 @@ internal class ScanRecentController(private val vm: AppViewModel) {
     /** Whether a scan saved now is kept. */
     fun on(): Boolean = vm.scanLab.options.recentScans && ScanRecentSetting.get(vm.settings.appPrefs)
 
+    /** The id the scan being saved will be kept under: the one it was opened from, else a new one (#513). */
+    fun idForSave(): String = openedFrom ?: store.newId(System.currentTimeMillis())
+
+    /** Kept scan [id]'s page count and when it was saved; null when it is not kept (#513). Blocking. */
+    fun pagesOf(id: String): Pair<Int, Long>? = runCatching { store.pagesOf(id) }.getOrNull()
+
+    /** Record the file kept scan [id] became (#513). Blocking. */
+    fun link(id: String, uri: String, pages: Int) {
+        runCatching { store.link(id, uri, pages) }.onFailure { Diag.failure(DiagArea.Scan, "scan_link", it) }
+    }
+
+    /** Copy kept scan [id]'s photos into the scan's working folder and hand back its pages (#513). Blocking. */
+    internal fun openCopy(id: String): io.github.artcraftandroid.pdfcraft.ui.scan.ScanRecentOpened? =
+        runCatching { store.open(id, File(app.cacheDir, "camera")) }.onFailure { Diag.failure(DiagArea.Scan, "recent_open", it) }.getOrNull()
+
     fun refresh() {
         vm.viewModelScope.launch { list = withContext(Dispatchers.IO) { store.list() } }
     }
@@ -56,10 +71,10 @@ internal class ScanRecentController(private val vm: AppViewModel) {
      * gone after this. [cover] is the first page as made, for the list's picture (#494). Blocking.
      * False when it could not be kept (the photos are deleted then).
      */
-    fun keep(session: ScanSession, cover: File? = null): Boolean {
+    fun keep(session: ScanSession, cover: File? = null, id: String? = openedFrom): Boolean {
         val started = SystemClock.elapsedRealtime()
         return try {
-            val kept = store.keep(openedFrom, session, System.currentTimeMillis(), cover = cover)
+            val kept = store.keep(id, session, System.currentTimeMillis(), cover = cover)
             Diag.event(DiagArea.Scan, "recent_keep", *scanRecentKeepDiag(kept, session.pages.size, SystemClock.elapsedRealtime() - started))
             true
         } catch (e: Exception) {

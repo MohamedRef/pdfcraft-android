@@ -64,6 +64,9 @@ class OpenDocument(
     /** Opened in place from its provider's file (#453): how its saves reach that file. */
     var lent: io.github.artcraftandroid.pdfcraft.engine.LentState? = null
 
+    /** The kept scan this PDF was made from (#513), as its document information names it; null for any other PDF. */
+    var scanLink by mutableStateOf<String?>(null)
+
     /** Its number in the diagnostics log, which never names the file. */
     var diagNumber = 0
 

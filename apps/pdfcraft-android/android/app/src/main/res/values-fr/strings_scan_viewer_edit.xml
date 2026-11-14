@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A saved scan edited from its PDF in the viewer (#513) -->
+<resources>
+    <string name="scan_lab_edit_viewer">Modifier un scan enregistré depuis son PDF</string>
+    <string name="scan_edit_page_edit">Modifier</string>
+    <string name="scan_edit_page_edit_description">Modifier cette page comme un scan</string>
+    <string name="scan_edit_page_of">Page %1$d sur %2$d</string>
+    <string name="scan_edit_gone">Les photos de ce scan ne sont plus conservées : il ne peut plus être modifié comme un scan.</string>
+    <string name="scan_edit_pages_changed">Des pages ont été ajoutées ou supprimées dans ce PDF depuis l\'enregistrement du scan : il ne peut plus être modifié comme un scan.</string>
+    <string name="scan_edit_save">Enregistrer dans ce PDF</string>
+    <string name="scan_edit_nothing">Rien n\'a changé. Le PDF reste tel quel.</string>
+    <string name="scan_edit_closed">Le PDF a été fermé : le scan a été enregistré dans un nouveau fichier.</string>
+    <string name="scan_edit_comments_title">Garder les commentaires des pages modifiées ?</string>
+    <string name="scan_edit_comments_keep">Garder</string>
+    <string name="scan_edit_comments_remove">Supprimer</string>
+    <string name="scan_edit_editing">Modification d\'une page de %1$s</string>
+    <plurals name="scan_edit_replaced">
+        <item quantity="one">%d page mise à jour dans ce PDF</item>
+        <item quantity="other">%d pages mises à jour dans ce PDF</item>
+    </plurals>
+    <plurals name="scan_edit_comments_body">
+        <item quantity="one">%d commentaire est sur une page dont les bords ou la place ont changé. Il risque de ne plus couvrir ce qu\'il marquait.</item>
+        <item quantity="other">%d commentaires sont sur des pages dont les bords ou la place ont changé. Ils risquent de ne plus couvrir ce qu\'ils marquaient.</item>
+    </plurals>
+</resources>

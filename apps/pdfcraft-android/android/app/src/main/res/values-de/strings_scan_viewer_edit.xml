@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A saved scan edited from its PDF in the viewer (#513) -->
+<resources>
+    <string name="scan_lab_edit_viewer">Gespeicherten Scan aus seinem PDF bearbeiten</string>
+    <string name="scan_edit_page_edit">Bearbeiten</string>
+    <string name="scan_edit_page_edit_description">Diese Seite als Scan bearbeiten</string>
+    <string name="scan_edit_page_of">Seite %1$d von %2$d</string>
+    <string name="scan_edit_gone">Die Fotos dieses Scans werden nicht mehr aufbewahrt, daher kann er nicht als Scan bearbeitet werden.</string>
+    <string name="scan_edit_pages_changed">Seit dem Speichern wurden Seiten in diesem PDF hinzugefügt oder entfernt, daher kann es nicht als Scan bearbeitet werden.</string>
+    <string name="scan_edit_save">In diesem PDF speichern</string>
+    <string name="scan_edit_nothing">Nichts geändert. Das PDF bleibt, wie es war.</string>
+    <string name="scan_edit_closed">Das PDF wurde geschlossen, daher wurde der Scan als neue Datei gespeichert.</string>
+    <string name="scan_edit_comments_title">Kommentare auf geänderten Seiten behalten?</string>
+    <string name="scan_edit_comments_keep">Behalten</string>
+    <string name="scan_edit_comments_remove">Entfernen</string>
+    <string name="scan_edit_editing">Seite aus %1$s bearbeiten</string>
+    <plurals name="scan_edit_replaced">
+        <item quantity="one">%d Seite in diesem PDF aktualisiert</item>
+        <item quantity="other">%d Seiten in diesem PDF aktualisiert</item>
+    </plurals>
+    <plurals name="scan_edit_comments_body">
+        <item quantity="one">%d Kommentar liegt auf einer Seite, deren Ränder oder Platz sich geändert haben. Er sitzt vielleicht nicht mehr über dem Markierten.</item>
+        <item quantity="other">%d Kommentare liegen auf Seiten, deren Ränder oder Platz sich geändert haben. Sie sitzen vielleicht nicht mehr über dem Markierten.</item>
+    </plurals>
+</resources>

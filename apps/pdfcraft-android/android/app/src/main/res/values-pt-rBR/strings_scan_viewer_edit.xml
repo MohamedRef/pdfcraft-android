@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A saved scan edited from its PDF in the viewer (#513) -->
+<resources>
+    <string name="scan_lab_edit_viewer">Editar uma digitalização salva a partir do PDF</string>
+    <string name="scan_edit_page_edit">Editar</string>
+    <string name="scan_edit_page_edit_description">Editar esta página como digitalização</string>
+    <string name="scan_edit_page_of">Página %1$d de %2$d</string>
+    <string name="scan_edit_gone">As fotos desta digitalização não são mais guardadas, então ela não pode ser editada como digitalização.</string>
+    <string name="scan_edit_pages_changed">Páginas foram adicionadas ou removidas neste PDF desde que a digitalização foi salva, então ela não pode ser editada como digitalização.</string>
+    <string name="scan_edit_save">Salvar neste PDF</string>
+    <string name="scan_edit_nothing">Nada mudou. O PDF continua como estava.</string>
+    <string name="scan_edit_closed">O PDF foi fechado, então a digitalização foi salva como um novo arquivo.</string>
+    <string name="scan_edit_comments_title">Manter os comentários das páginas alteradas?</string>
+    <string name="scan_edit_comments_keep">Manter</string>
+    <string name="scan_edit_comments_remove">Remover</string>
+    <string name="scan_edit_editing">Editando uma página de %1$s</string>
+    <plurals name="scan_edit_replaced">
+        <item quantity="one">%d página atualizada neste PDF</item>
+        <item quantity="other">%d páginas atualizadas neste PDF</item>
+    </plurals>
+    <plurals name="scan_edit_comments_body">
+        <item quantity="one">%d comentário está em uma página cujas bordas ou posição mudaram. Ele pode não ficar mais sobre o que marcava.</item>
+        <item quantity="other">%d comentários estão em páginas cujas bordas ou posição mudaram. Eles podem não ficar mais sobre o que marcavam.</item>
+    </plurals>
+</resources>

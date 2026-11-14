@@ -2200,6 +2200,8 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         // the previews and the strip's tiles of a scan given up on (#301)
         releaseScanPreviews()
         insertScanAt = null
+        // a scan opened from its PDF and given up on leaves the PDF as it is (#513)
+        scanEdit.dropped()
         tools.toolScreen = null
     }
 
@@ -2680,14 +2682,21 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
      * [share] (the document screen's Share, #460) the same PDF goes to Android's share sheet
      * instead: nothing is saved, and the scan stays open to be saved or shared again.
      */
-    fun saveScan(share: Boolean = false, size: String? = null) = job(text(R.string.msg_busy_saving_scan)) { eng ->
-        // the pages made at full size ahead (#504) are not touched while Save runs
-        fullPages.exclusive { saveScanNow(eng, share, size) }
+    fun saveScan(share: Boolean = false, size: String? = null) {
+        // a scan opened from its PDF (#513): comments on pages whose borders or place change are asked about first
+        if (!share && scanEdit.mustAsk(size)) return
+        job(text(R.string.msg_busy_saving_scan)) { eng ->
+            // the pages made at full size ahead (#504) are not touched while Save runs
+            fullPages.exclusive { saveScanNow(eng, share, size) }
+        }
     }
 
     private suspend fun saveScanNow(eng: io.github.artcraftandroid.pdfcraft.engine.Engine, share: Boolean, size: String?) {
         val pages = scanPages.toList()
         val scanStarted = android.os.SystemClock.elapsedRealtime()
+        // the PDF this scan was opened from in the viewer, and its pages as they are now (#513)
+        val editing = if (share) null else scanEdit.target
+        val editedPages = editing?.let { scanEdit.pagesNow() }
         val dir = scanPageDir().apply { mkdirs() }
         val saved = ArrayList<ScanSavedPage>(pages.size)
         // the testing options in force (#288), and where this scan is kept when scans are kept
@@ -2894,7 +2903,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                         k.extraGamma.toDouble(), k.sCurve, k.colourFactor.toDouble(),
                     )
                 }
-                withContext(Dispatchers.IO) { scanLab.keepPage(keepIn, i, page, true, scanLookWord(filter, lab), strength, flatten, r?.path?.let(::File), kept, scanPreviewRecord(page), turn, kind, r?.let { scanAppliedStrength(page.look, lab, it.kind?.strength?.toInt()) }, shown[i]?.json(), gallerySaved = page.key in scanGallerySaved, autoDecisions = decisions.json(), fromRecent = scanRecent.openedFrom != null, erasedShare = r?.markup?.erasedShare?.toDouble(), madeFullBeforeSave = io.github.artcraftandroid.pdfcraft.ui.scan.scanMadeFullBeforeSave(ahead, readyAtTap[i]), encoding = io.github.artcraftandroid.pdfcraft.ui.scan.scanEncodingJson(r?.encoding)) }
+                withContext(Dispatchers.IO) { scanLab.keepPage(keepIn, i, page, true, scanLookWord(filter, lab), strength, flatten, r?.path?.let(::File), kept, scanPreviewRecord(page), turn, kind, r?.let { scanAppliedStrength(page.look, lab, it.kind?.strength?.toInt()) }, shown[i]?.json(), gallerySaved = page.key in scanGallerySaved, autoDecisions = decisions.json(), fromRecent = scanRecent.openedFrom != null, erasedShare = r?.markup?.erasedShare?.toDouble(), madeFullBeforeSave = io.github.artcraftandroid.pdfcraft.ui.scan.scanMadeFullBeforeSave(ahead, readyAtTap[i]), encoding = io.github.artcraftandroid.pdfcraft.ui.scan.scanEncodingJson(r?.encoding), viewerSource = editing?.source) }
             }
             saved += scanSavedPage(page.file.absolutePath, r?.let { it.path to it.dpi })
         }
@@ -2956,6 +2965,13 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             }
             val ocr = io.github.artcraftandroid.pdfcraft.ui.scan.scanOcrOutcome(ocrOn, ocrAvailable, ocrSkipped)
             val ocrMs = if (ocrOn && ocrAvailable) android.os.SystemClock.elapsedRealtime() - ocrStarted else 0L
+            // a scan of its own that is kept names its kept scan in the PDF, so a tap on a page in the
+            // viewer can open it again (#513); a share or pages going into an open document are not kept
+            val keepsRecent = !share && insertScanAt == null && scanRecent.on()
+            val linkId = if (keepsRecent) scanRecent.idForSave() else null
+            val linked = linkId != null && editing == null && scanLab.options.editFromViewer &&
+                runCatching { eng.tool("doc_set_info", mapOf("doc" to id, "key" to io.github.artcraftandroid.pdfcraft.ui.scan.SCAN_LINK_KEY, "value" to linkId)) }
+                    .onFailure { Diag.failure(DiagArea.Scan, "scan_link", it) }.isSuccess
             val out = tempFile("pdf")
             eng.tool("doc_save", mapOf("doc" to id, "path" to out.absolutePath, "full" to true))
             // from the tap to the file (#504)
@@ -2989,13 +3005,14 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             val chosen = scanName.trim()
             // kept to be edited again (#461): a scan of its own (not pages going into an open
             // document), with the switch in Settings and the testing option on; else the photos go
+            if (!share && editing == null) Diag.event(DiagArea.Scan, "scan_link", *io.github.artcraftandroid.pdfcraft.ui.scan.scanLinkDiag(linked, pages.size))
             val recent = if (target == null && scanRecent.on()) {
                 ScanSession(null, null, false, chosen, pages.map { ScanSession.Page(it.file.absolutePath, it.corners, it.found, it.turns, it.preset, it.book?.encode(), it.look, it.flatten, it.auto, it.marks) })
             } else null
             if (recent != null) {
                 // the first page as made, for the Recent scans list's picture (#494)
                 val cover = pages.firstOrNull()?.let { pageQueue.readyOf(it)?.file }
-                withContext(Dispatchers.IO) { scanRecent.keep(recent, cover) }
+                withContext(Dispatchers.IO) { scanRecent.keep(recent, cover, linkId ?: scanRecent.openedFrom) }
             } else {
                 scanRecent.openedFrom = null
                 scanPages.forEach { it.file.delete() }
@@ -3010,11 +3027,17 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             if (target != null) {
                 if (unenhanced > 0) tell(unenhancedNote.trim())
                 runTool(target.first, "page_insert_file", mapOf("path" to out.absolutePath, "at" to target.second))
+            } else if (editing != null && editedPages != null && scanEdit.putBack(eng, editing, editedPages, out)) {
+                // the changed pages went back into the PDF they came from (#513)
+                out.delete()
+                if (unenhanced > 0) tell(unenhancedNote.trim())
             } else {
                 val stamp = java.text.SimpleDateFormat("yyyy-MM-dd HH.mm.ss", java.util.Locale.US).format(java.util.Date())
                 val name = DocumentFiles.safeName(chosen.ifEmpty { "Scan $stamp" })
                 val uri = withContext(Dispatchers.IO) { files.saveToDownloads(out, name).also { out.delete() } }
-                tell(text(R.string.msg_saved_downloads, name) + unenhancedNote)
+                // the kept scan knows the file it became (#513)
+                if (recent != null && linkId != null) withContext(Dispatchers.IO) { scanRecent.link(linkId, uri.toString(), pages.size) }
+                tell(if (editing != null) text(R.string.scan_edit_closed) else text(R.string.msg_saved_downloads, name) + unenhancedNote)
                 open(uri)
             }
         } finally {
@@ -3041,6 +3064,13 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     // ---- Recent scans, kept to be edited again (#461): see ScanRecentController ----
 
     internal val scanRecent = ScanRecentController(this)
+
+    // ---- A saved scan edited from its PDF in the viewer (#513): see ScanViewerEditController ----
+
+    internal val scanEdit = ScanViewerEditController(this)
+
+    /** The page (0-based) Enhance opens on next; the scan screen takes it and sets it back to null. */
+    internal var scanShowAt by mutableStateOf<Int?>(null)
 }
 
 /** The most files Create PDF converts at once. */
