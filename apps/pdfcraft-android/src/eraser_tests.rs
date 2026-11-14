@@ -99,3 +99,34 @@ fn eraser_rejects_missing_or_excessive_paths_without_edit() {
     assert!(mobile.comments(doc.id).unwrap().is_empty());
     mobile.close(doc.id, true).unwrap();
 }
+
+/// Dark pixels (any channel under 128) in an RGBA8 image.
+fn dark(rgba: &[u8]) -> usize {
+    rgba.chunks_exact(4).filter(|p| p[0] < 128 || p[1] < 128 || p[2] < 128).count()
+}
+
+#[test]
+fn a_page_can_be_drawn_without_the_ink_being_erased() {
+    // the live eraser's view (#521): the page as it is under the ink, with other ink kept
+    let fixture = Fixture::new();
+    let mobile = MobileSession::new();
+    let doc = mobile.open(fixture.0.to_string_lossy().to_string(), None).unwrap();
+    for strokes in [json!([[[20, 20], [90, 90]]]), json!([[[120, 160], [180, 220]]])] {
+        tool(&mobile, "comment_add", json!({
+            "doc": doc.id, "page": 1, "type": "ink", "strokes": strokes,
+            "color": "#161616", "opacity": 1.0, "width": 4.0,
+        }));
+    }
+    let comments = mobile.comments(doc.id).unwrap();
+    assert_eq!(comments.len(), 2);
+    let all = mobile.render_page(doc.id, 0, 1.0, None).unwrap();
+    let without_first = mobile.render_page_hiding(doc.id, 0, 1.0, None, vec![comments[0].index]).unwrap();
+    let without_both = mobile.render_page_hiding(doc.id, 0, 1.0, None, vec![comments[0].index, comments[1].index]).unwrap();
+    assert!(!without_first.rgb565 && !without_both.rgb565);
+    assert_eq!((without_first.width, without_first.height), (all.width, all.height));
+    let (inked, one, none) = (dark(&all.rgba), dark(&without_first.pixels), dark(&without_both.pixels));
+    assert!(inked > one && one > none, "each hidden stroke leaves the page: {inked} > {one} > {none}");
+    assert_eq!(none, 0, "a blank page with its ink hidden has nothing dark");
+    // nothing is hidden for good: the next ordinary render draws the ink again
+    assert_eq!(dark(&mobile.render_page(doc.id, 0, 1.0, None).unwrap().rgba), inked);
+}

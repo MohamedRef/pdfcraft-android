@@ -112,6 +112,9 @@ pub struct InterpreterSettings {
     /// Android compatibility: skip /Text sticky-note appearances but draw other markup.
     /// Notes are overlaid by Android UI at constant screen size.
     pub hide_notes: bool,
+    /// PdfCraft Android adaptation (#521): positions in the page's `/Annots` not to draw, for
+    /// the viewer's live eraser (the page under the ink it is erasing). Empty draws them all.
+    pub hidden_annots: Arc<Vec<usize>>,
     /// PdfCraft patch: viewer overrides for optional content groups (object number, generation,
     /// visible), applied on top of the document's default configuration (Layers panel toggles).
     pub ocg_overrides: Arc<Vec<(i32, i32, bool)>>,
@@ -153,6 +156,7 @@ impl Default for InterpreterSettings {
             render_annotations: true,
             hide_comments: false,
             hide_notes: false,
+            hidden_annots: Arc::new(Vec::new()),
             ocg_overrides: Arc::new(Vec::new()),
             view_auto_state: true,
             cancelled: None,
@@ -227,8 +231,12 @@ pub fn interpret_page<'a>(
         // comment listed after a check box covered the box. ISO 32000-2 doesn't order the two.
         // Two passes over the array, so nothing is held for every entry of a long one.
         for widgets in [false, true] {
-        for annot in annot_arr.iter::<Dict<'_>>() {
+        for (position, annot) in annot_arr.iter::<Dict<'_>>().enumerate() {
             if (annot.get::<hayro_syntax::object::Name<'_>>(SUBTYPE).as_deref() == Some(b"Widget")) != widgets {
+                continue;
+            }
+            // PdfCraft Android adaptation (#521): the live eraser's page leaves these out.
+            if context.settings.hidden_annots.contains(&position) {
                 continue;
             }
             let flags = annot.get::<u32>(F).unwrap_or(0);

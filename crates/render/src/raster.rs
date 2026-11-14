@@ -593,6 +593,17 @@ impl PageRenderer {
     /// pool's workers stop on a cancelled request. A stopped render answers with an error and no
     /// pixels; while `stop` stays unset it draws exactly what [`Self::render`] draws.
     pub fn render_until(&mut self, req: RenderRequest, stop: Option<&Arc<AtomicBool>>) -> RenderedPage {
+        self.render_with(req, stop, None)
+    }
+
+    /// Android adaptation (#521): [`Self::render_until`] without the annotations at the given
+    /// positions of the page's `/Annots`. The viewer's live eraser shows this page under the
+    /// ink it is erasing while the edit is made. Nothing else about the render changes.
+    pub fn render_hiding(&mut self, req: RenderRequest, stop: Option<&Arc<AtomicBool>>, hidden: Arc<Vec<usize>>) -> RenderedPage {
+        self.render_with(req, stop, Some(hidden))
+    }
+
+    fn render_with(&mut self, req: RenderRequest, stop: Option<&Arc<AtomicBool>>, hidden: Option<Arc<Vec<usize>>>) -> RenderedPage {
         let stopped = || stop.is_some_and(|s| s.load(Ordering::Acquire));
         let cancelled = |req: RenderRequest, start: Stopwatch| finish(req, start, Err((RENDER_STOPPED.into(), false)), Vec::new());
         let start = Stopwatch::start();
@@ -618,12 +629,15 @@ impl PageRenderer {
         let cache = RenderCache::with_decoded_images(&self.images);
         let warnings = Arc::new(Mutex::new(Vec::new()));
         let stopping;
-        let base = match stop {
-            Some(stop) => {
-                stopping = InterpreterSettings { cancelled: Some(stop.clone()), ..self.settings.clone() };
-                &stopping
-            }
-            None => &self.settings,
+        let base = if stop.is_some() || hidden.is_some() {
+            stopping = InterpreterSettings {
+                cancelled: stop.cloned().or_else(|| self.settings.cancelled.clone()),
+                hidden_annots: hidden.unwrap_or_else(|| self.settings.hidden_annots.clone()),
+                ..self.settings.clone()
+            };
+            &stopping
+        } else {
+            &self.settings
         };
         let settings = warning_settings(base, warnings.clone());
         let r = render_page(pdf, &cache, &settings, &self.config, req);
