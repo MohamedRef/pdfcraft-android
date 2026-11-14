@@ -123,6 +123,11 @@ internal fun ScanDocumentScreen(vm: AppViewModel, onOpen: (Int) -> Unit) {
     fun toggle(key: String) {
         picked = if (key in picked) picked - key else picked + key
     }
+    // the selection opened by Select: with passes over several pages (#515) every page starts ticked, ready for Borders
+    fun startSelecting() {
+        choosing = true
+        if (vm.scanLab.options.batchBorders) picked = keys.toSet()
+    }
     Column(Modifier.fillMaxSize().background(c.surface).safeTopPadding().navigationBarsPadding().background(c.surface)) {
         Row(Modifier.fillMaxWidth().height(io.github.artcraftandroid.pdfcraft.ui.viewer.TopBarHeight), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.width(56.dp), contentAlignment = Alignment.Center) {
@@ -155,24 +160,58 @@ internal fun ScanDocumentScreen(vm: AppViewModel, onOpen: (Int) -> Unit) {
                         Icon(LucideIcons.Pencil, null, tint = c.icon, modifier = Modifier.size(18.dp))
                     }
                 }
+                val reach = vm.scanLab.options.toolsInReach
+                // Select in sight, for whoever does not know about the hold (#516)
+                if (scanDocSelectShown(reach)) {
+                    androidx.compose.material3.TextButton(onClick = {
+                        vm.scanToolOpened(ScanReachTool.SelectPages, "bar")
+                        startSelecting()
+                    }) { Text(stringResource(R.string.scan_doc_select_short), color = c.accent, fontSize = 15.sp, maxLines = 1) }
+                }
                 Box {
                     BarIcon(LucideIcons.EllipsisVertical, stringResource(R.string.scan_enhance_more), { menu = true })
                     DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                        DropdownMenuItem(text = { Text(stringResource(R.string.scan_doc_select)) }, onClick = {
-                            menu = false
-                            choosing = true
-                            // with passes over several pages (#515) every page starts ticked, ready for Borders
-                            if (vm.scanLab.options.batchBorders) picked = keys.toSet()
-                        })
-                        DropdownMenuItem(text = { Text(stringResource(R.string.scan_enhance_rename)) }, enabled = renamable, onClick = {
-                            menu = false
-                            naming = true
-                        })
-                        // every page into the gallery's PdfCraft album (#470); selected pages from the selection's bar
-                        DropdownMenuItem(text = { Text(stringResource(R.string.scan_gallery_save_all)) }, enabled = pages.isNotEmpty(), onClick = {
-                            menu = false
-                            vm.saveScanToGallery(null)
-                        })
+                        for (item in scanDocMenuItems(reach)) {
+                            val label = when (item) {
+                                ScanDocMenuItem.Select -> R.string.scan_doc_select
+                                ScanDocMenuItem.Rename -> R.string.scan_enhance_rename
+                                // every page into the gallery's PdfCraft album (#470); selected pages from the selection's bar
+                                ScanDocMenuItem.Gallery -> R.string.scan_gallery_save_all
+                                ScanDocMenuItem.ExtractText -> R.string.scan_doc_extract_text
+                                ScanDocMenuItem.Print -> R.string.sheet_print
+                            }
+                            val enabled = when (item) {
+                                ScanDocMenuItem.Select -> true
+                                ScanDocMenuItem.Rename -> renamable
+                                else -> pages.isNotEmpty()
+                            }
+                            DropdownMenuItem(text = { Text(stringResource(label)) }, enabled = enabled, onClick = {
+                                menu = false
+                                when (item) {
+                                    ScanDocMenuItem.Select -> {
+                                        vm.scanToolOpened(ScanReachTool.SelectPages, "menu")
+                                        startSelecting()
+                                    }
+                                    ScanDocMenuItem.Rename -> {
+                                        vm.scanToolOpened(ScanReachTool.Rename, "menu")
+                                        naming = true
+                                    }
+                                    ScanDocMenuItem.Gallery -> {
+                                        vm.scanToolOpened(ScanReachTool.Gallery, "menu")
+                                        vm.saveScanToGallery(null)
+                                    }
+                                    // the scan made as Save would make it, without saving it (#516)
+                                    ScanDocMenuItem.ExtractText -> {
+                                        vm.scanToolOpened(ScanReachTool.ExtractText, "menu")
+                                        vm.saveScan(size = "best", out = ScanOut.Text)
+                                    }
+                                    ScanDocMenuItem.Print -> {
+                                        vm.scanToolOpened(ScanReachTool.Print, "menu")
+                                        vm.saveScan(size = "best", out = ScanOut.Print)
+                                    }
+                                }
+                            })
+                        }
                     }
                 }
                 Spacer(Modifier.width(4.dp))
@@ -325,19 +364,32 @@ internal fun ScanDocumentScreen(vm: AppViewModel, onOpen: (Int) -> Unit) {
         val chosen = scanSelectedIndexes(picked, keys)
         ScanDocumentBar(
             selecting, chosen.size, vm.insertScanAt == null, pages.isNotEmpty(),
-            onRotate = { chosen.forEach { vm.rotateScanPage(it) } },
+            onRotate = {
+                vm.scanToolOpened(ScanReachTool.Rotate, "selection")
+                chosen.forEach { vm.rotateScanPage(it) }
+            },
             // borders and looks for the chosen pages in one pass (#515)
             batch = vm.scanLab.options.batchBorders,
-            onBorders = { vm.startScanBatch(ScanBatchWhat.Borders, picked, "selection") },
+            onBorders = {
+                vm.scanToolOpened(ScanReachTool.Borders, "selection")
+                vm.startScanBatch(ScanBatchWhat.Borders, picked, "selection")
+            },
             onLook = {
+                vm.scanToolOpened(ScanReachTool.Look, "selection")
                 vm.startScanBatch(ScanBatchWhat.Look, picked, "selection")?.let { first ->
                     picked = emptySet()
                     choosing = false
                     onOpen(first)
                 }
             },
-            onDelete = { askingDelete = true },
-            onGallery = { vm.saveScanToGallery(chosen) },
+            onDelete = {
+                vm.scanToolOpened(ScanReachTool.Delete, "selection")
+                askingDelete = true
+            },
+            onGallery = {
+                vm.scanToolOpened(ScanReachTool.Gallery, "selection")
+                vm.saveScanToGallery(chosen)
+            },
             onAdd = { vm.takeScanPhoto() },
             onImport = { vm.importScanPhotos() },
             // the size choice first (#505), unless a testing option sets one for every save

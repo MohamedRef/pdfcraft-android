@@ -299,6 +299,14 @@ class ScanScreenshotsTest {
     @Test @Config(qualifiers = "ar-w384dp-h832dp-xhdpi") fun stepsArabic384() = steps("ar_384x832", listOf(ThemeChoice.Light))
     @Test @Config(qualifiers = "fr-w360dp-h640dp-xhdpi") fun stepsFrench360() = steps("fr_360x640", listOf(ThemeChoice.Light))
     @Test @Config(qualifiers = "de-w360dp-h640dp-xhdpi") fun stepsGerman360() = steps("de_360x640", listOf(ThemeChoice.Light))
+    // Enhance's bar with Markup, Delete on the top bar and the document screen's Select (#516), at 320 dp in the seven languages
+    @Test @Config(qualifiers = "en-w320dp-h640dp-xhdpi") fun stepsEnglish320() = steps("en_320x640", listOf(ThemeChoice.Light))
+    @Test @Config(qualifiers = "ar-w320dp-h640dp-xhdpi") fun stepsArabic320() = steps("ar_320x640", listOf(ThemeChoice.Light))
+    @Test @Config(qualifiers = "de-w320dp-h640dp-xhdpi") fun stepsGerman320() = steps("de_320x640", listOf(ThemeChoice.Light))
+    @Test @Config(qualifiers = "fr-w320dp-h640dp-xhdpi") fun stepsFrench320() = steps("fr_320x640", listOf(ThemeChoice.Light))
+    @Test @Config(qualifiers = "es-w320dp-h640dp-xhdpi") fun stepsSpanish320() = steps("es_320x640", listOf(ThemeChoice.Light))
+    @Test @Config(qualifiers = "it-w320dp-h640dp-xhdpi") fun stepsItalian320() = steps("it_320x640", listOf(ThemeChoice.Light))
+    @Test @Config(qualifiers = "pt-rBR-w320dp-h640dp-xhdpi") fun stepsPortuguese320() = steps("pt_br_320x640", listOf(ThemeChoice.Light))
 
     companion object {
         /** A page drawn in code: white paper with grey text lines, on [background], optionally tilted. */

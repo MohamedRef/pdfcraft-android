@@ -109,6 +109,48 @@ internal fun ScanRecentScreen(vm: AppViewModel) {
     }
 }
 
+/** How many of the last scans Home shows (#516). */
+internal const val SCAN_RECENT_HOME = 8
+
+/**
+ * The last scans on Home (#516), with every tool in reach: a row of first pages with their names,
+ * one tap to the document screen, and See all for the Recent scans list. Nothing when no scan is
+ * kept or keeping scans is off.
+ */
+@Composable
+internal fun ScanRecentHomeRow(vm: AppViewModel) {
+    val c = pdfColors
+    val recent = vm.scanRecent
+    if (!vm.scanLab.options.toolsInReach || !recent.on()) return
+    LaunchedEffect(Unit) { recent.refresh() }
+    val list = recent.list.take(SCAN_RECENT_HOME)
+    if (list.isEmpty()) return
+    Column(Modifier.fillMaxWidth().padding(top = 12.dp)) {
+        Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(stringResource(R.string.scan_recent_title), color = c.text, fontSize = 15.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium, modifier = Modifier.weight(1f))
+            androidx.compose.material3.TextButton(onClick = { recent.show() }) { Text(stringResource(R.string.scan_recent_see_all), color = c.accent, fontSize = 14.sp) }
+        }
+        androidx.compose.foundation.lazy.LazyRow(
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 16.dp),
+            horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(12.dp),
+        ) {
+            items(list, key = { it.id }) { entry ->
+                val name = scanRecentName(entry)
+                Column(
+                    Modifier.width(88.dp).clip(RoundedCornerShape(6.dp)).clickable(role = androidx.compose.ui.semantics.Role.Button) {
+                        vm.scanToolOpened(ScanReachTool.RecentScan, "home")
+                        recent.open(entry.id)
+                    },
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    ScanRecentThumb(entry, Modifier.size(88.dp, 112.dp).clip(RoundedCornerShape(6.dp)).background(c.surfaceRaised))
+                    Text(name, color = c.text, fontSize = 13.sp, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 4.dp))
+                }
+            }
+        }
+    }
+}
+
 /** The first page of a kept scan, cut to its borders as the document screen shows it. */
 @Composable
 private fun ScanRecentThumb(entry: ScanRecentEntry, modifier: Modifier) {

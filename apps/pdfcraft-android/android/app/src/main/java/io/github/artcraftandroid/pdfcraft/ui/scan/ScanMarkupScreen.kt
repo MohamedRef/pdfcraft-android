@@ -172,7 +172,8 @@ internal fun ScanMarkupScreen(vm: AppViewModel, index: Int, page: ScanPage) {
     val marks = remember(version) { h.now }
     // the marks' frame: the page's turns when they were first made, or now for a page without marks
     var frameTurns by remember(page.key) { mutableStateOf(page.marks?.turns) }
-    var tool by remember { mutableStateOf(ScanMarkupTool.Pen) }
+    // the tool last used, with every tool in reach (#516); else the pen
+    var tool by remember { mutableStateOf(scanMarkupStartTool(vm.scanMarkup.lastTool, tools, lab.toolsInReach)) }
     val sizeAt = remember { mutableStateListOf(1, 1, 1, 1) }
     // each tool's colour (0xRRGGBB) in the order of ScanMarkupTool: Erase's is its Color fill's (#503)
     val colourOf = remember { mutableStateListOf(0xFFFFFF, 0x000000, 0xFFEB3B, 0x000000) }
@@ -384,6 +385,7 @@ internal fun ScanMarkupScreen(vm: AppViewModel, index: Int, page: ScanPage) {
             selectedText = selected?.takeIf { tool == ScanMarkupTool.Text }?.let { marks.texts.getOrNull(it) },
             onTool = { t ->
                 tool = t
+                vm.scanMarkup.lastTool = t
                 dropping = false
                 if (t != ScanMarkupTool.Text) selected = null
             },

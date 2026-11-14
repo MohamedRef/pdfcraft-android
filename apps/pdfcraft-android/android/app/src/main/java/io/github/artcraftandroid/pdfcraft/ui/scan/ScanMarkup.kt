@@ -25,6 +25,9 @@ internal class ScanMarkupState {
     /** A change waiting for the person's answer to "Remove this page's markup?", or null. */
     var asking by mutableStateOf<ScanMarkupAsk?>(null)
 
+    /** The tool used last in this run of the app: Markup opens on it with every tool in reach (#516). */
+    var lastTool: ScanMarkupTool? = null
+
     /** When the Markup screen was opened, for `markup_done`'s time. */
     var openedAt = 0L
 

@@ -78,9 +78,13 @@ internal fun scanEnhanceMoreEnabled(item: ScanEnhanceMore, pages: Int, applyNeed
     ScanEnhanceMore.ClearMarkup -> pages > 0 && hasMarks
 }
 
-/** Which of More's items are offered at all: Markup and Clear markup only with their testing option on (#495). */
-internal fun scanEnhanceMoreShown(item: ScanEnhanceMore, markup: Boolean): Boolean = when (item) {
-    ScanEnhanceMore.Markup, ScanEnhanceMore.ClearMarkup -> markup
+/**
+ * Which of More's items are offered at all: Markup and Clear markup only with their testing option
+ * on (#495), and Markup not when it is on the bar itself (#516).
+ */
+internal fun scanEnhanceMoreShown(item: ScanEnhanceMore, markup: Boolean, markupOnBar: Boolean = false): Boolean = when (item) {
+    ScanEnhanceMore.Markup -> markup && !markupOnBar
+    ScanEnhanceMore.ClearMarkup -> markup
     else -> true
 }
 
@@ -94,7 +98,11 @@ internal fun scanEnhanceSwipeStep(dragX: Float, width: Float, rtl: Boolean): Int
     return if (towardEnd) 1 else -1
 }
 
-/** The bottom bar: Retake, Borders, Rotate, Delete, More. Five icons with words, so nothing scrolls sideways in any language. */
+/**
+ * The bottom bar: Retake, Borders, Rotate, Delete, More; with every tool in reach (#516) Borders,
+ * Markup, Rotate, Retake, More ([items], from [scanEnhanceBarItems]). Five icons with words, so
+ * nothing scrolls sideways in any language.
+ */
 @Composable
 internal fun ScanEnhanceBar(
     enabled: Boolean,
@@ -105,16 +113,29 @@ internal fun ScanEnhanceBar(
     onDelete: () -> Unit,
     onMore: (ScanEnhanceMore) -> Unit,
     moreShown: (ScanEnhanceMore) -> Boolean = { true },
+    items: List<ScanEnhanceBarItem> = scanEnhanceBarItems(inReach = false, markup = false),
+    markupEnabled: Boolean = false,
+    onMarkup: () -> Unit = {},
 ) {
-    var menu by remember { mutableStateOf(false) }
     Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.Top) {
         // five equal shares of the width: they fit a 360 dp phone in every language
         val share = Modifier.weight(1f)
-        ScanBarButton(LucideIcons.Camera, stringResource(R.string.tools_retake), enabled, share, onRetake)
-        ScanBarButton(LucideIcons.Crop, stringResource(R.string.scan_enhance_borders), enabled, share, onBorders)
-        ScanBarButton(LucideIcons.RotateCw, stringResource(R.string.scan_rotate), enabled, share, onRotate)
-        ScanBarButton(LucideIcons.Trash2, stringResource(R.string.common_delete), enabled, share, onDelete)
-        Box(share) {
+        for (item in items) when (item) {
+            ScanEnhanceBarItem.Retake -> ScanBarButton(LucideIcons.Camera, stringResource(R.string.tools_retake), enabled, share, onRetake)
+            ScanEnhanceBarItem.Borders -> ScanBarButton(LucideIcons.Crop, stringResource(R.string.scan_enhance_borders), enabled, share, onBorders)
+            ScanEnhanceBarItem.Markup -> ScanBarButton(LucideIcons.PenLine, stringResource(R.string.scan_markup), enabled && markupEnabled, share, onMarkup)
+            ScanEnhanceBarItem.Rotate -> ScanBarButton(LucideIcons.RotateCw, stringResource(R.string.scan_rotate), enabled, share, onRotate)
+            ScanEnhanceBarItem.Delete -> ScanBarButton(LucideIcons.Trash2, stringResource(R.string.common_delete), enabled, share, onDelete)
+            ScanEnhanceBarItem.More -> ScanEnhanceMoreButton(share, moreEnabled, onMore, moreShown)
+        }
+    }
+}
+
+/** More, the bar's last icon, and its menu. */
+@Composable
+private fun ScanEnhanceMoreButton(share: Modifier, moreEnabled: (ScanEnhanceMore) -> Boolean, onMore: (ScanEnhanceMore) -> Unit, moreShown: (ScanEnhanceMore) -> Boolean) {
+    var menu by remember { mutableStateOf(false) }
+    Box(share) {
             ScanBarButton(LucideIcons.EllipsisVertical, stringResource(R.string.scan_enhance_more), modifier = Modifier.fillMaxWidth()) { menu = true }
             DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                 for (item in ScanEnhanceMore.entries.filter(moreShown)) {
@@ -128,7 +149,6 @@ internal fun ScanEnhanceBar(
                     )
                 }
             }
-        }
     }
 }
 

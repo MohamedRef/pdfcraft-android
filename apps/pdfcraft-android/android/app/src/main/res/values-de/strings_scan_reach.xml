@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Every scanner tool in reach (#516) -->
+<resources>
+    <string name="scan_lab_reach">Alle Scanner-Werkzeuge in Reichweite</string>
+    <string name="scan_doc_select_short">Auswählen</string>
+    <string name="scan_doc_extract_text">Text extrahieren</string>
+    <string name="scan_text_none">Auf diesen Seiten wurden keine Wörter gefunden.</string>
+    <string name="scan_recent_see_all">Alle</string>
+    <string name="scan_busy_preparing">Scan wird vorbereitet…</string>
+</resources>

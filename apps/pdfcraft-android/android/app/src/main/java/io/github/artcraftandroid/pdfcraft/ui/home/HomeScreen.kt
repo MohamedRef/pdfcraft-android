@@ -213,6 +213,8 @@ private fun HomeTabScreen(vm: AppViewModel, onBrowse: () -> Unit) {
                     }
                     Text(stringResource(if (vm.recentList.isEmpty()) R.string.home_or_start_with_tool else R.string.home_start_with_tool), color = c.text, fontSize = 15.sp, lineHeight = 22.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(start = 16.dp, bottom = 8.dp))
                     ToolsCarousel(vm, onBrowse)
+                    // the last scans, one tap from Home (#516)
+                    io.github.artcraftandroid.pdfcraft.ui.scan.ScanRecentHomeRow(vm)
                     if (vm.study.studyRecent.isNotEmpty() || vm.study.dueCounts.isNotEmpty()) ContinueStudying(vm)
                     Spacer(Modifier.height(16.dp))
                     Row(Modifier.fillMaxWidth().padding(start = 8.dp), verticalAlignment = Alignment.CenterVertically) {
