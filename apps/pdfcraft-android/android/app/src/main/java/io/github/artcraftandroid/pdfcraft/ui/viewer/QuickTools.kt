@@ -113,11 +113,16 @@ enum class QuickTool(val id: String, @StringRes val label: Int, @StringRes val t
     }
 }
 
-/** How many tools fit on the bar beside More tools at a screen [widthDp] wide. */
+/**
+ * How many tools fit on the bar beside More tools at a screen [widthDp] wide. Below 352 dp six
+ * tools and More would each be under 48 dp wide (43 dp at 320 dp), too narrow to tap surely, so the
+ * sixth waits in More tools there (#538).
+ */
 fun toolbarSlots(widthDp: Int): Int = when {
     widthDp >= 768 -> 8
     widthDp >= 460 -> 7
-    else -> 6
+    widthDp >= 352 -> 6
+    else -> 5
 }
 
 /** The bar's tools and More tools' order, as the user arranged them (kept in the app's preferences). */

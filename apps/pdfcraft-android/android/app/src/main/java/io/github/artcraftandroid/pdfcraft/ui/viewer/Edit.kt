@@ -150,40 +150,70 @@ fun EditToolbar(vm: AppViewModel, doc: OpenDocument) {
 
 @Composable
 private fun EditToolsBar(vm: AppViewModel, doc: OpenDocument) {
-    Row(
-        // taller when a large font setting enlarges the labels, rather than cutting them off
-        Modifier.fillMaxWidth().heightIn(min = BottomBarHeight).barTopLine().background(pdfColors.surface),
-        horizontalArrangement = Arrangement.Center,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        val textHint = stringResource(R.string.edit_tap_for_text)
-        val imageHint = stringResource(R.string.edit_tap_for_image)
-        EditBarItem(LucideIcons.LayoutGrid, stringResource(R.string.common_tool_organize), false, 96.dp) {
-            vm.tools.organizing = true
-            doc.controller.pagesOpen = true
-        }
-        // several objects at once: select, move, copy, cut and paste (#162)
-        EditBarItem(LucideIcons.SquareDashedMousePointer, stringResource(R.string.objects_select), false, 78.dp) { vm.startObjectSelect(doc) }
-        if (vm.editor.objectSelect.copied > 0) {
-            EditBarItem(LucideIcons.ClipboardPaste, stringResource(R.string.objects_paste), false, 70.dp) { vm.pasteObjects(doc, doc.viewer.currentPage) }
-        }
-        BarDividerLine()
-        EditBarItem(LucideIcons.Type, stringResource(R.string.edit_add_text), vm.editor.editMode == EditMode.AddText, 70.dp) {
-            vm.editor.editMode = if (vm.editor.editMode == EditMode.AddText) EditMode.Select else EditMode.AddText
-            if (vm.editor.editMode == EditMode.AddText) vm.tell(textHint)
-        }
-        // as Add text: a mode, then a tap places the picture there
-        EditBarItem(LucideIcons.ImagePlus, stringResource(R.string.edit_add_image), vm.editor.editMode == EditMode.AddImage, 78.dp) {
-            vm.editor.editMode = if (vm.editor.editMode == EditMode.AddImage) EditMode.Select else EditMode.AddImage
-            if (vm.editor.editMode == EditMode.AddImage) vm.tell(imageHint)
-        }
-        val linkHint = stringResource(R.string.link_drag_hint)
-        EditBarItem(LucideIcons.Link, stringResource(R.string.edit_link), vm.editor.editMode == EditMode.Link, 64.dp) {
-            vm.editor.editMode = if (vm.editor.editMode == EditMode.Link) EditMode.Select else EditMode.Link
-            if (vm.editor.editMode == EditMode.Link) {
+    val textHint = stringResource(R.string.edit_tap_for_text)
+    val imageHint = stringResource(R.string.edit_tap_for_image)
+    val linkHint = stringResource(R.string.link_drag_hint)
+    fun toggle(mode: EditMode): Boolean {
+        vm.editor.editMode = if (vm.editor.editMode == mode) EditMode.Select else mode
+        return vm.editor.editMode == mode
+    }
+    EditToolsRow(
+        editToolsBarItems(paste = vm.editor.objectSelect.copied > 0),
+        selected = when (vm.editor.editMode) {
+            EditMode.AddText -> EditBarItem.AddText
+            EditMode.AddImage -> EditBarItem.AddImage
+            EditMode.Link -> EditBarItem.Link
+            else -> null
+        },
+    ) { item ->
+        when (item) {
+            EditBarItem.Organize -> {
+                vm.tools.organizing = true
+                doc.controller.pagesOpen = true
+            }
+            // several objects at once: select, move, copy, cut and paste (#162)
+            EditBarItem.Select -> vm.startObjectSelect(doc)
+            EditBarItem.Paste -> vm.pasteObjects(doc, doc.viewer.currentPage)
+            EditBarItem.AddText -> if (toggle(EditMode.AddText)) vm.tell(textHint)
+            // as Add text: a mode, then a tap places the picture there
+            EditBarItem.AddImage -> if (toggle(EditMode.AddImage)) vm.tell(imageHint)
+            EditBarItem.Link -> if (toggle(EditMode.Link)) {
                 vm.editor.editTap(doc, null)
                 vm.tell(linkHint)
             }
+        }
+    }
+}
+
+/** The buttons of Edit PDF's bar, in order; a line splits the page tools from the content tools. */
+internal enum class EditBarItem(val icon: ImageVector, val label: Int, val afterLine: Boolean = false) {
+    Organize(LucideIcons.LayoutGrid, R.string.common_tool_organize),
+    Select(LucideIcons.SquareDashedMousePointer, R.string.objects_select),
+    Paste(LucideIcons.ClipboardPaste, R.string.objects_paste),
+    AddText(LucideIcons.Type, R.string.edit_add_text, afterLine = true),
+    AddImage(LucideIcons.ImagePlus, R.string.edit_add_image),
+    Link(LucideIcons.Link, R.string.edit_link),
+}
+
+/** Edit PDF's bar with nothing selected: Paste only once objects were copied. */
+internal fun editToolsBarItems(paste: Boolean): List<EditBarItem> = EditBarItem.entries.filter { paste || it != EditBarItem.Paste }
+
+/**
+ * Edit PDF's bar: the buttons share the width (#538), each name on up to two lines. Before #538
+ * each had a fixed width; together they came to 407 dp, 477 with Paste, and the Row gave the last
+ * ones what was left: on a 360 dp phone Link had no width at all once something was copied.
+ */
+@Composable
+internal fun EditToolsRow(items: List<EditBarItem>, selected: EditBarItem?, onItem: (EditBarItem) -> Unit) {
+    Row(
+        // taller when a large font setting enlarges the labels, rather than cutting them off
+        Modifier.fillMaxWidth().heightIn(min = BottomBarHeight).barTopLine().background(pdfColors.surface).padding(horizontal = 4.dp),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        for (item in items) {
+            if (item.afterLine) BarDividerLine()
+            EditBarButton(item.icon, stringResource(item.label), item == selected, barShare()) { onItem(item) }
         }
     }
 }
@@ -221,20 +251,22 @@ fun LinkCommandsRow(vm: AppViewModel, doc: OpenDocument) {
 
 @Composable
 private fun BarDividerLine() {
-    Box(Modifier.padding(horizontal = 10.dp).width(1.dp).height(30.dp).background(pdfColors.divider))
+    Box(Modifier.padding(horizontal = 4.dp).width(1.dp).height(30.dp).background(pdfColors.divider))
 }
 
 @Composable
-private fun EditBarItem(icon: ImageVector, label: String, selected: Boolean, width: Dp, onClick: () -> Unit) {
+private fun EditBarButton(icon: ImageVector, label: String, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
     val c = pdfColors
+    val tint = if (selected) c.toolAccent else c.label
     Column(
-        Modifier.width(width).heightIn(min = BottomBarHeight).clickable(role = Role.Button, onClick = onClick).semantics { contentDescription = label },
+        modifier.heightIn(min = BottomBarHeight).clickable(role = Role.Button, onClick = onClick)
+            .semantics { contentDescription = label; this.selected = selected }.padding(horizontal = 2.dp, vertical = 6.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
         Icon(icon, null, tint = if (selected) c.toolAccent else c.icon, modifier = Modifier.size(24.dp))
-        Spacer(Modifier.height(6.dp))
-        Text(label, color = if (selected) c.toolAccent else c.label, fontSize = 13.sp, maxLines = 1, softWrap = false)
+        Spacer(Modifier.height(4.dp))
+        io.github.artcraftandroid.pdfcraft.ui.WordWrapLabel(label, tint, size = 12.sp, lineHeight = 14.sp)
     }
 }
 
