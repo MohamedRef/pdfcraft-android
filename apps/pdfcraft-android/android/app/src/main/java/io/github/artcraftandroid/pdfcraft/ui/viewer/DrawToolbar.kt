@@ -193,7 +193,7 @@ internal fun DrawToolbar(vm: AppViewModel, doc: OpenDocument) {
                     ) {
                         Icon(LucideIcons.SlidersHorizontal, null, tint = if (picker == Picker.Presets) c.toolAccent else c.icon, modifier = Modifier.size(24.dp))
                     }
-                    DrawShapeButton(ctl, prefs, InkShapeMode.Line, LucideIcons.Minus, stringResource(R.string.toolbar_draw_line))
+                    DrawShapeButton(ctl, prefs, InkShapeMode.Line, io.github.artcraftandroid.pdfcraft.ui.PdfIcons.StraightLine, stringResource(R.string.toolbar_draw_line))
                     DrawShapeButton(ctl, prefs, InkShapeMode.Rectangle, LucideIcons.Square, stringResource(R.string.toolbar_draw_rectangle))
                     DrawShapeButton(ctl, prefs, InkShapeMode.Oval, LucideIcons.Circle, stringResource(R.string.toolbar_draw_oval))
                     DrawShapeButton(ctl, prefs, InkShapeMode.Arrow, LucideIcons.ArrowUpRight, stringResource(R.string.toolbar_draw_arrow))

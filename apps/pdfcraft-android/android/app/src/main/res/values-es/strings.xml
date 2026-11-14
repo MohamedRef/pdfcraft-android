@@ -1569,6 +1569,17 @@
     <string name="sheet_group_view">Ver</string>
     <string name="sheet_group_navigate">Navegar</string>
     <string name="sheet_group_file">Archivo</string>
+    <string name="sheet_group_study">Estudio</string>
+    <!-- short captions under the Highlight, Comment and Text sub-tools, as Draw has (#526) -->
+    <string name="tool_caption_highlight">Resaltar</string>
+    <string name="tool_caption_underline">Subrayar</string>
+    <string name="tool_caption_strike">Tachar</string>
+    <string name="tool_caption_squiggly">Ondulado</string>
+    <string name="tool_caption_text_comment">Texto</string>
+    <string name="tool_caption_voice_comment">Voz</string>
+    <string name="tool_caption_stamp">Sello</string>
+    <string name="tool_caption_text_box">Cuadro</string>
+    <string name="tool_caption_callout">Llamada</string>
     <string name="pages_select_action">Seleccionar</string>
     <string name="pages_select_all">Seleccionar todo</string>
     <string name="pages_select_none">No seleccionar nada</string>

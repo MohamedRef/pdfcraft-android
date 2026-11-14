@@ -1441,6 +1441,17 @@
     <string name="sheet_group_view">Affichage</string>
     <string name="sheet_group_navigate">Navigation</string>
     <string name="sheet_group_file">Fichier</string>
+    <string name="sheet_group_study">Étude</string>
+    <!-- short captions under the Highlight, Comment and Text sub-tools, as Draw has (#526) -->
+    <string name="tool_caption_highlight">Surligner</string>
+    <string name="tool_caption_underline">Souligner</string>
+    <string name="tool_caption_strike">Barrer</string>
+    <string name="tool_caption_squiggly">Ondulé</string>
+    <string name="tool_caption_text_comment">Texte</string>
+    <string name="tool_caption_voice_comment">Voix</string>
+    <string name="tool_caption_stamp">Tampon</string>
+    <string name="tool_caption_text_box">Zone texte</string>
+    <string name="tool_caption_callout">Légende</string>
     <string name="pages_select_action">Sélectionner</string>
     <string name="pages_select_all">Tout sélectionner</string>
     <string name="pages_select_none">Ne rien sélectionner</string>

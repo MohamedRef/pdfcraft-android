@@ -475,11 +475,42 @@ private fun Modifier.slideToWhenChosen(selected: Boolean): Modifier {
     return onPlaced { x = it.positionInParent().x.toInt() }
 }
 
-/** A sub-toolbar tool: 62 dp apart, as the reference spaces them. */
+/**
+ * A sub-toolbar tool: 62 dp apart, as the reference spaces them. With a [caption], its short name
+ * under the icon, as Draw's buttons have (#526): the button widens to the caption rather than cut it.
+ */
 @Composable
-fun SubTool(icon: ImageVector, description: String, selected: Boolean, onClick: () -> Unit, enabled: Boolean = true) {
+fun SubTool(icon: ImageVector, description: String, selected: Boolean, onClick: () -> Unit, enabled: Boolean = true, caption: String? = null) {
     // Maintain a generous 48dp tap target while fitting the core drawing actions.
-    SubButton(icon, description, selected, onClick, enabled, width = 54.dp)
+    if (caption != null) CaptionedSubButton(icon, description, caption, selected, onClick, enabled)
+    else SubButton(icon, description, selected, onClick, enabled, width = 54.dp)
+}
+
+@Composable
+private fun CaptionedSubButton(icon: ImageVector, description: String, caption: String, selected: Boolean, onClick: () -> Unit, enabled: Boolean) {
+    val c = pdfColors
+    val tint = (if (selected) c.toolAccent else c.label).let { if (enabled) it else it.copy(alpha = 0.38f) }
+    val shape = androidx.compose.foundation.shape.RoundedCornerShape(10.dp)
+    androidx.compose.foundation.layout.Column(
+        Modifier.widthIn(min = 54.dp).height(54.dp)
+            .background(if (selected) c.pressed else androidx.compose.ui.graphics.Color.Transparent, shape)
+            .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
+            .semantics {
+                contentDescription = description
+                if (selected) this.selected = true
+            }
+            .padding(horizontal = 4.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Box(Modifier.height(33.dp), contentAlignment = Alignment.Center) {
+            Icon(icon, null, tint = (if (selected) c.toolAccent else c.icon).let { if (enabled) it else it.copy(alpha = 0.38f) }, modifier = Modifier.size(24.dp))
+        }
+        Text(
+            caption, color = tint, fontSize = 10.sp, lineHeight = 11.sp, maxLines = 1, softWrap = false,
+            fontWeight = if (selected) androidx.compose.ui.text.font.FontWeight.SemiBold else androidx.compose.ui.text.font.FontWeight.Normal,
+        )
+    }
 }
 
 /** Fill & Sign's text tool: an "A" in a dashed box (a field to type in). */

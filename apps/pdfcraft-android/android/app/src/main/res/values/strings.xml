@@ -791,6 +791,17 @@
     <string name="sheet_group_view">View</string>
     <string name="sheet_group_navigate">Navigate</string>
     <string name="sheet_group_file">File</string>
+    <string name="sheet_group_study">Study</string>
+    <!-- short captions under the Highlight, Comment and Text sub-tools, as Draw has (#526) -->
+    <string name="tool_caption_highlight">Highlight</string>
+    <string name="tool_caption_underline">Underline</string>
+    <string name="tool_caption_strike">Strike</string>
+    <string name="tool_caption_squiggly">Squiggly</string>
+    <string name="tool_caption_text_comment">Text</string>
+    <string name="tool_caption_voice_comment">Voice</string>
+    <string name="tool_caption_stamp">Stamp</string>
+    <string name="tool_caption_text_box">Text box</string>
+    <string name="tool_caption_callout">Callout</string>
     <string name="sheet_present">Present</string>
     <!-- Presenting with a second screen attached: %1$s is that screen's name, such as "HDMI Screen" -->
     <string name="present_on_display">Showing on %1$s</string>
@@ -963,7 +974,6 @@
     <string name="sheet_night_mode">Night mode</string>
     <string name="sheet_hide_annotations">Hide annotations</string>
     <string name="sheet_share_clean">Share without annotations</string>
-    <string name="sheet_print_clean">Print without annotations</string>
     <string name="msg_clean_copy_failed">Couldn\'t make a copy without annotations.</string>
     <string name="sheet_reading_colors">Reading colors</string>
     <string name="sheet_reading_colors_sample">Aa</string>

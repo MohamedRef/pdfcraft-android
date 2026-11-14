@@ -310,6 +310,12 @@ class DocumentToolsController internal constructor(private val vm: AppViewModel)
             vm.sharing.print(doc)
             return
         }
+        // only the comments switched off: the clean copy ⋮'s "Print without comments" printed (#155, #526)
+        if (options == PrintOptions(comments = false) && !save) {
+            vm.tools.toolScreen = null
+            vm.sharing.print(doc, clean = true)
+            return
+        }
         if (doc.controller.tool == ViewerTool.Draw) doc.commitTool?.invoke()
         vm.job(text(R.string.print_busy)) { eng ->
             val dir = File(app.cacheDir, "print/${System.nanoTime()}").apply { mkdirs() }

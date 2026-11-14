@@ -1561,6 +1561,17 @@
     <string name="sheet_group_view">Ansicht</string>
     <string name="sheet_group_navigate">Navigieren</string>
     <string name="sheet_group_file">Datei</string>
+    <string name="sheet_group_study">Lernen</string>
+    <!-- short captions under the Highlight, Comment and Text sub-tools, as Draw has (#526) -->
+    <string name="tool_caption_highlight">Markieren</string>
+    <string name="tool_caption_underline">Unterstrich</string>
+    <string name="tool_caption_strike">Durchstrich</string>
+    <string name="tool_caption_squiggly">Wellig</string>
+    <string name="tool_caption_text_comment">Text</string>
+    <string name="tool_caption_voice_comment">Sprache</string>
+    <string name="tool_caption_stamp">Stempel</string>
+    <string name="tool_caption_text_box">Textfeld</string>
+    <string name="tool_caption_callout">Legende</string>
     <string name="pages_select_action">Auswählen</string>
     <string name="pages_select_all">Alle auswählen</string>
     <string name="pages_select_none">Auswahl aufheben</string>

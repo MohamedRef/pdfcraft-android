@@ -36,10 +36,19 @@ drawn page stands in for the engine's result) and page 2 still waiting (#494).
 `enhance_notes_<locale>_320x640.png` (German and French) is Enhance's notes line in its worst
 case under a drawn page (#493).
 
+`app/src/test/java/io/github/artcraftandroid/pdfcraft/ui/viewer/ViewerScreenshotsTest.kt`: the
+viewer's rows of sub-tools with their captions (#526): Highlight's, Comment's (Stamp chosen) and
+Text's, at 320×640 dp in English (light and dark), Arabic, German, Spanish, French, Italian and
+Brazilian Portuguese. Unlike the others, its check runs in every test run: no row may scroll
+sideways at 320 dp, so no caption is cut or pushed off the screen. The ⋮ sheet needs an open
+document, which needs the engine, so it is not drawn.
+
+Files: `app/build/screenshots/viewer/subtools_<locale>_320x640_<theme>.png`.
+
 ## In CI
 
 The Android job runs the pictures on a pull request whose merge commit changes
-`app/src/main/java/.../ui/`, `app/src/main/res/` or one of the two tests, and uploads them as the
+`app/src/main/java/.../ui/`, `app/src/main/res/` or one of the three tests, and uploads them as the
 `screen-pictures` artifact (the run's Summary page, Artifacts). They add about half a minute.
 
 ## Locally

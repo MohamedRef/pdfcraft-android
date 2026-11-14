@@ -1781,6 +1781,45 @@ private fun MarkupLayer(vm: AppViewModel, doc: OpenDocument) {
 /** Which property picker a sub-toolbar has open. */
 enum class Picker { None, Color, Width, TextSize, Presets, PenStyle, EraserSize, Stamp }
 
+/** Highlight's row: the four text markups, each with its caption (#526), and the colour. */
+@Composable
+internal fun MarkupSubTools(markup: TextMarkup, onMarkup: (TextMarkup) -> Unit, color: Color, colorOpen: Boolean, onColor: () -> Unit) {
+    SubToolbar {
+        SubTool(LucideIcons.Highlighter, stringResource(R.string.common_tool_highlight), markup == TextMarkup.Highlight, { onMarkup(TextMarkup.Highlight) }, caption = stringResource(R.string.tool_caption_highlight))
+        SubTool(LucideIcons.Underline, stringResource(R.string.common_tool_underline), markup == TextMarkup.Underline, { onMarkup(TextMarkup.Underline) }, caption = stringResource(R.string.tool_caption_underline))
+        SubTool(LucideIcons.Strikethrough, stringResource(R.string.toolbar_strikethrough), markup == TextMarkup.Strikethrough, { onMarkup(TextMarkup.Strikethrough) }, caption = stringResource(R.string.tool_caption_strike))
+        SubTool(io.github.artcraftandroid.pdfcraft.ui.PdfIcons.SquigglyUnderline, stringResource(R.string.toolbar_squiggly), markup == TextMarkup.Squiggly, { onMarkup(TextMarkup.Squiggly) }, caption = stringResource(R.string.tool_caption_squiggly))
+        SubDivider()
+        ColorDot(color, colorOpen, onColor)
+    }
+}
+
+/** Comment's row: text and voice comments and Stamp, with captions (#526); with Stamp, its choice. */
+@Composable
+internal fun CommentSubTools(mode: CommentMode, onMode: (CommentMode) -> Unit, stampOpen: Boolean, onChooseStamp: () -> Unit) {
+    SubToolbar {
+        SubTool(LucideIcons.MessageSquareText, stringResource(R.string.toolbar_text_comment), mode == CommentMode.Text, { onMode(CommentMode.Text) }, caption = stringResource(R.string.tool_caption_text_comment))
+        SubTool(LucideIcons.MicAudioLines, stringResource(R.string.toolbar_voice_comment), mode == CommentMode.Voice, { onMode(CommentMode.Voice) }, caption = stringResource(R.string.tool_caption_voice_comment))
+        SubTool(LucideIcons.Stamp, stringResource(R.string.toolbar_stamp), mode == CommentMode.Stamp, { onMode(CommentMode.Stamp) }, caption = stringResource(R.string.tool_caption_stamp))
+        if (mode == CommentMode.Stamp) {
+            SubDivider()
+            SubProperty(LucideIcons.SlidersHorizontal, stringResource(R.string.toolbar_stamp_choose), stampOpen, onChooseStamp)
+        }
+    }
+}
+
+/** Text's row: Text box and Callout with captions (#526), then the text size and colour. */
+@Composable
+internal fun TextSubTools(callout: Boolean, onCallout: (Boolean) -> Unit, sizeOpen: Boolean, onSize: () -> Unit, color: Color, colorOpen: Boolean, onColor: () -> Unit) {
+    SubToolbar {
+        SubTool(LucideIcons.Type, stringResource(R.string.toolbar_text_box), !callout, { onCallout(false) }, caption = stringResource(R.string.tool_caption_text_box))
+        SubTool(LucideIcons.MessageSquareQuote, stringResource(R.string.toolbar_callout), callout, { onCallout(true) }, caption = stringResource(R.string.tool_caption_callout))
+        SubDivider()
+        SubProperty(LucideIcons.ALargeSmall, stringResource(R.string.toolbar_text_size), sizeOpen, onSize)
+        ColorDot(color, colorOpen, onColor)
+    }
+}
+
 /** The active tool's sub-toolbar. */
 @Composable
 fun ToolSubToolbar(vm: AppViewModel, doc: OpenDocument) {
@@ -1791,34 +1830,16 @@ fun ToolSubToolbar(vm: AppViewModel, doc: OpenDocument) {
         ctl.picker = if (ctl.picker == p) Picker.None else p
     }
     when (ctl.tool) {
-        ViewerTool.Markup -> SubToolbar {
-            SubTool(LucideIcons.Highlighter, stringResource(R.string.common_tool_highlight), ctl.markup == TextMarkup.Highlight, { ctl.markup = TextMarkup.Highlight })
-            SubTool(LucideIcons.Underline, stringResource(R.string.common_tool_underline), ctl.markup == TextMarkup.Underline, { ctl.markup = TextMarkup.Underline })
-            SubTool(LucideIcons.Strikethrough, stringResource(R.string.toolbar_strikethrough), ctl.markup == TextMarkup.Strikethrough, { ctl.markup = TextMarkup.Strikethrough })
-            SubTool(LucideIcons.Spline, stringResource(R.string.toolbar_squiggly), ctl.markup == TextMarkup.Squiggly, { ctl.markup = TextMarkup.Squiggly })
-            SubDivider()
-            ColorDot(prefs.color(ctl.markup.styled), picker == Picker.Color) { toggle(Picker.Color) }
-        }
+        ViewerTool.Markup -> MarkupSubTools(ctl.markup, { ctl.markup = it }, prefs.color(ctl.markup.styled), picker == Picker.Color) { toggle(Picker.Color) }
         ViewerTool.Draw -> DrawToolbar(vm, doc)
-        ViewerTool.Comment -> SubToolbar {
-            SubTool(LucideIcons.MessageSquareText, stringResource(R.string.toolbar_text_comment), ctl.commentMode == CommentMode.Text, { ctl.commentMode = CommentMode.Text })
-            SubTool(LucideIcons.MicAudioLines, stringResource(R.string.toolbar_voice_comment), ctl.commentMode == CommentMode.Voice, { ctl.commentMode = CommentMode.Voice })
-            SubTool(LucideIcons.Stamp, stringResource(R.string.toolbar_stamp), ctl.commentMode == CommentMode.Stamp, {
-                ctl.commentMode = CommentMode.Stamp
-                ctl.picker = Picker.Stamp
-            })
-            if (ctl.commentMode == CommentMode.Stamp) {
-                SubDivider()
-                SubProperty(LucideIcons.SlidersHorizontal, stringResource(R.string.toolbar_stamp_choose), picker == Picker.Stamp, { toggle(Picker.Stamp) })
-            }
-        }
-        ViewerTool.Text -> SubToolbar {
-            SubTool(LucideIcons.Type, stringResource(R.string.toolbar_text_box), !ctl.textCallout, { ctl.textCallout = false })
-            SubTool(LucideIcons.MessageSquareQuote, stringResource(R.string.toolbar_callout), ctl.textCallout, { ctl.textCallout = true })
-            SubDivider()
-            SubProperty(LucideIcons.ALargeSmall, stringResource(R.string.toolbar_text_size), picker == Picker.TextSize, { toggle(Picker.TextSize) })
-            ColorDot(prefs.color(StyledTool.FreeText), picker == Picker.Color) { toggle(Picker.Color) }
-        }
+        ViewerTool.Comment -> CommentSubTools(ctl.commentMode, {
+            ctl.commentMode = it
+            if (it == CommentMode.Stamp) ctl.picker = Picker.Stamp
+        }, picker == Picker.Stamp) { toggle(Picker.Stamp) }
+        ViewerTool.Text -> TextSubTools(
+            ctl.textCallout, { ctl.textCallout = it }, picker == Picker.TextSize, { toggle(Picker.TextSize) },
+            prefs.color(StyledTool.FreeText), picker == Picker.Color,
+        ) { toggle(Picker.Color) }
         ViewerTool.FillSign -> FillSignToolbar(vm, doc)
         ViewerTool.Edit -> androidx.compose.foundation.layout.Column {
             if (vm.editor.editMode == EditMode.Link && vm.editor.editSelection == null) LinkCommandsRow(vm, doc)

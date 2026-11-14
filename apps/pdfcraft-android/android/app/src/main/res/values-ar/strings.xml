@@ -534,6 +534,17 @@
     <string name="sheet_group_view">العرض</string>
     <string name="sheet_group_navigate">التنقل</string>
     <string name="sheet_group_file">الملف</string>
+    <string name="sheet_group_study">المذاكرة</string>
+    <!-- short captions under the Highlight, Comment and Text sub-tools, as Draw has (#526) -->
+    <string name="tool_caption_highlight">تظليل</string>
+    <string name="tool_caption_underline">تسطير</string>
+    <string name="tool_caption_strike">شطب</string>
+    <string name="tool_caption_squiggly">متعرج</string>
+    <string name="tool_caption_text_comment">نص</string>
+    <string name="tool_caption_voice_comment">صوت</string>
+    <string name="tool_caption_stamp">ختم</string>
+    <string name="tool_caption_text_box">مربع نص</string>
+    <string name="tool_caption_callout">شرح</string>
     <string name="sheet_present">عرض تقديمي</string>
     <string name="present_on_display">يُعرض على %1$s</string>
     <string name="present_next_page">التالية: صفحة %1$d</string>
@@ -607,7 +618,6 @@
     <string name="sheet_night_mode">الوضع الليلي</string>
     <string name="sheet_hide_annotations">إخفاء التعليقات التوضيحية</string>
     <string name="sheet_share_clean">مشاركة بدون التعليقات التوضيحية</string>
-    <string name="sheet_print_clean">طباعة بدون التعليقات التوضيحية</string>
     <string name="msg_clean_copy_failed">تعذّر إنشاء نسخة بدون التعليقات التوضيحية.</string>
     <string name="sheet_reading_colors">ألوان القراءة</string>
     <string name="sheet_reading_colors_sample">أب</string>

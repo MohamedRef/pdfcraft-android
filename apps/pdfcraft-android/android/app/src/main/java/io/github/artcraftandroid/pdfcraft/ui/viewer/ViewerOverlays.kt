@@ -124,21 +124,22 @@ fun BoxScope.Scrubber(doc: OpenDocument, visible: Boolean, top: Dp, bottom: Dp, 
     AnimatedVisibility(visible || dragging, modifier = Modifier.align(Alignment.TopEnd), enter = fadeIn(tween(150)), exit = fadeOut(tween(300))) {
         BoxWithConstraints(Modifier.fillMaxSize().padding(top = top + 8.dp, bottom = bottom + 8.dp)) {
             val track = with(density) { maxHeight.toPx() }
-            val pillH = with(density) { 32.dp.toPx() }
+            val pillH = with(density) { ScrubberPillHeight.toPx() }
             val maxScroll = (v.layout.height * v.zoom - v.viewH).coerceAtLeast(1f)
             val fraction = (v.scrollY / maxScroll).coerceIn(0f, 1f)
             val y = fraction * (track - pillH)
             val shown = pageLabelOf(doc, v.currentPage)
             val label = shown ?: "${v.currentPage + 1}"
             val pageOf = if (shown != null) stringResource(R.string.viewer_page_label_of, shown, v.currentPage + 1, doc.pageCount) else stringResource(R.string.viewer_page_of, v.currentPage + 1, doc.pageCount)
+            // the pill is drawn 32 dp tall, and takes taps and drags on a 48 dp box around it (#124, #526):
+            // the box starts 8 dp above the pill, in the 8 dp the track keeps clear at each end
+            val reach = with(density) { ((ScrubberTouchHeight - ScrubberPillHeight) / 2).toPx() }
             Box(
                 Modifier
                     .align(Alignment.TopEnd)
-                    .offset { IntOffset(0, y.roundToInt()) }
-                    .height(32.dp)
-                    .widthIn(min = if (label.length >= 3) 52.dp else 40.dp, max = 140.dp)
-                    .shadow(2.dp, RoundedCornerShape(topStart = 16.dp, bottomStart = 16.dp))
-                    .background(c.surface, RoundedCornerShape(topStart = 16.dp, bottomStart = 16.dp))
+                    .offset { IntOffset(0, (y - reach).roundToInt()) }
+                    .height(ScrubberTouchHeight)
+                    .widthIn(min = 48.dp)
                     .pointerInput(doc) {
                         detectTapGestures(onTap = { onTap() })
                     }
@@ -155,13 +156,26 @@ fun BoxScope.Scrubber(doc: OpenDocument, visible: Boolean, top: Dp, bottom: Dp, 
                         }
                     }
                     .semantics { contentDescription = pageOf },
-                contentAlignment = Alignment.Center,
+                contentAlignment = Alignment.CenterEnd,
             ) {
-                Text(label, color = c.text, fontSize = 15.sp, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.padding(start = 12.dp, end = 10.dp))
+                Box(
+                    Modifier
+                        .height(ScrubberPillHeight)
+                        .widthIn(min = if (label.length >= 3) 52.dp else 40.dp, max = 140.dp)
+                        .shadow(2.dp, RoundedCornerShape(topStart = 16.dp, bottomStart = 16.dp))
+                        .background(c.surface, RoundedCornerShape(topStart = 16.dp, bottomStart = 16.dp)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(label, color = c.text, fontSize = 15.sp, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.padding(start = 12.dp, end = 10.dp))
+                }
             }
         }
     }
 }
+
+/** The page pill as drawn, and the height it takes touches on (#124's 48 dp, #526). */
+internal val ScrubberPillHeight = 32.dp
+internal val ScrubberTouchHeight = 48.dp
 
 /** The label shown for [page] (0-based) when the document labels its pages other than 1 to N, else null. */
 @Composable
@@ -340,7 +354,7 @@ fun BoxScope.SelectionMenu(vm: AppViewModel, doc: OpenDocument, sel: Selection) 
             MenuIcon(LucideIcons.Highlighter, stringResource(R.string.common_tool_highlight), allowed, short = stringResource(R.string.viewer_menu_highlight), dot = prefs.color(TextMarkup.Highlight.styled)) { markup(TextMarkup.Highlight) }
             MenuIcon(LucideIcons.Underline, stringResource(R.string.common_tool_underline), allowed, short = stringResource(R.string.viewer_menu_underline)) { markup(TextMarkup.Underline) }
             MenuIcon(LucideIcons.Strikethrough, stringResource(R.string.viewer_strikethrough), allowed, short = stringResource(R.string.viewer_menu_strike)) { markup(TextMarkup.Strikethrough) }
-            MenuIcon(LucideIcons.Spline, stringResource(R.string.toolbar_squiggly), allowed, short = stringResource(R.string.viewer_menu_squiggly)) { markup(TextMarkup.Squiggly) }
+            MenuIcon(io.github.artcraftandroid.pdfcraft.ui.PdfIcons.SquigglyUnderline, stringResource(R.string.toolbar_squiggly), allowed, short = stringResource(R.string.viewer_menu_squiggly)) { markup(TextMarkup.Squiggly) }
         }
         // an inset divider, then the rows with 8 dp above and below, as the reference's menu
         Box(Modifier.fillMaxWidth().padding(horizontal = 4.dp).height(1.dp).background(c.divider))
