@@ -1,6 +1,5 @@
 package io.github.artcraftandroid.pdfcraft.ui.home
 
-import io.github.artcraftandroid.pdfcraft.ui.openUnlock
 import io.github.artcraftandroid.pdfcraft.ui.safeTopPadding
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
@@ -70,9 +69,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.annotation.StringRes
 import io.github.artcraftandroid.pdfcraft.R
-import io.github.artcraftandroid.pdfcraft.ui.viewer.openOcrBatch
 import io.github.artcraftandroid.pdfcraft.ui.AppViewModel
 import io.github.artcraftandroid.pdfcraft.ui.BarIcon
 import io.github.artcraftandroid.pdfcraft.ui.Inter
@@ -81,7 +78,9 @@ import io.github.artcraftandroid.pdfcraft.ui.PdfSwitch
 import io.github.artcraftandroid.pdfcraft.ui.SheetDivider
 import io.github.artcraftandroid.pdfcraft.ui.SheetRow
 import io.github.artcraftandroid.pdfcraft.ui.pdfColors
-import io.github.artcraftandroid.pdfcraft.ui.viewer.ToolHues
+import io.github.artcraftandroid.pdfcraft.ui.viewer.QuickTool
+import io.github.artcraftandroid.pdfcraft.ui.viewer.ToolCategory
+import io.github.artcraftandroid.pdfcraft.ui.viewer.startToolFromHome
 
 /** Files: the places files come from; On this device lists every PDF on the phone by folder. */
 @Composable
@@ -164,81 +163,76 @@ private fun OnThisDevice(vm: AppViewModel) {
     }
 }
 
-/** A tool of the Tools tab: its tile, name and one line about it ([name] is its key, [label] what is shown). */
-private class HubTool(val icon: ImageVector, val name: String, @StringRes val label: Int, @StringRes val about: Int, val hue: Color, val categories: Set<String>, val go: () -> Unit)
-
-/** Where a category lists its tools in an order of its own (the rest keep the All order). */
-private val CategoryOrder = mapOf(
-    "Edit" to listOf("Edit PDF", "Crop pages", "Organize pages", "Combine files", "Set password", "Unlock PDF"),
-    "Convert" to listOf("Export PDF", "Compress PDF"),
-)
-
-/** Tools: every tool, by category (All, Read, Create, Edit, Convert), as outlined cards. */
+/**
+ * Tools: every tool of the app from the one list the viewer uses too (#539), with a search box,
+ * by category (All, or one), as three small tiles across; All is ordered by category, then name.
+ */
 @Composable
 fun ToolsTab(vm: AppViewModel) {
     val c = pdfColors
-    val categories = listOf(
-        "All" to R.string.home_category_all, "Read" to R.string.home_category_read, "Create" to R.string.home_category_create,
-        "Edit" to R.string.home_category_edit, "Convert" to R.string.home_category_convert,
-    )
-    var cat by remember { mutableStateOf("All") }
-    val tools = remember {
-        listOf(
-            HubTool(LucideIcons.Signature, "Fill & Sign", R.string.common_tool_fill_sign, R.string.home_about_fill_sign, ToolHues.sign, emptySet()) { vm.home.toolForFile(FileTool.FillSign) },
-            HubTool(LucideIcons.MessageSquareText, "Add comment", R.string.home_tool_add_comment, R.string.home_about_comment, ToolHues.comment, emptySet()) { vm.home.toolForFile(FileTool.Comment) },
-            HubTool(LucideIcons.Volume2, "Read aloud", R.string.common_tool_read_aloud, R.string.home_about_read_aloud, ToolHues.read, setOf("Read")) { vm.home.toolForFile(FileTool.ReadAloud) },
-            HubTool(LucideIcons.FilePlus2, "Create PDF", R.string.common_tool_create_pdf, R.string.home_about_create, ToolHues.create, setOf("Create")) { vm.tools.openCreate() },
-            HubTool(LucideIcons.Camera, "New scan", R.string.home_new_scan, R.string.home_about_scan, ToolHues.scan, setOf("Create")) { vm.startScan() },
-            HubTool(LucideIcons.FileStack, "Recent scans", R.string.scan_recent_title, R.string.scan_recent_about, ToolHues.scan, setOf("Create")) { vm.scanRecent.show() },
-            HubTool(LucideIcons.Combine, "Combine files", R.string.common_tool_combine, R.string.home_about_combine, ToolHues.combine, setOf("Create", "Edit")) { vm.pickFiles(io.github.artcraftandroid.pdfcraft.ui.FilePickKind.Combine) },
-            HubTool(LucideIcons.GitCompare, "Compare files", R.string.compare_title, R.string.compare_about, ToolHues.read, setOf("Read")) { vm.home.toolForFile(FileTool.Compare) },
-            HubTool(LucideIcons.FilePenLine, "Bates numbering", R.string.bates_title, R.string.bates_about, ToolHues.edit, setOf("Edit")) { vm.openBates() },
-            HubTool(LucideIcons.ScanText, "Recognize text in files", R.string.ocr_batch_title, R.string.ocr_batch_about, ToolHues.scan, setOf("Convert")) { vm.openOcrBatch() },
-            HubTool(LucideIcons.LayoutGrid, "Organize pages", R.string.common_tool_organize, R.string.home_about_organize, ToolHues.organize, setOf("Edit")) { vm.home.toolForFile(FileTool.Organize) },
-            HubTool(LucideIcons.Scissors, "Split PDF", R.string.home_tool_split, R.string.home_about_split, ToolHues.organize, setOf("Edit")) { vm.home.toolForFile(FileTool.Split) },
-            HubTool(LucideIcons.Heading, "Page marks", R.string.marks_title, R.string.marks_about, ToolHues.edit, setOf("Edit")) { vm.home.toolForFile(FileTool.PageMarks) },
-            HubTool(LucideIcons.Crop, "Crop pages", R.string.common_tool_crop, R.string.home_about_crop, ToolHues.crop, setOf("Edit")) { vm.home.toolForFile(FileTool.Crop) },
-            HubTool(LucideIcons.FilePenLine, "Edit PDF", R.string.common_tool_edit_pdf, R.string.home_about_edit, ToolHues.edit, setOf("Edit")) { vm.home.toolForFile(FileTool.Edit) },
-            HubTool(LucideIcons.FileArchive, "Compress PDF", R.string.common_tool_compress, R.string.home_about_compress, ToolHues.compress, setOf("Convert")) { vm.home.toolForFile(FileTool.Compress) },
-            HubTool(LucideIcons.FileOutput, "Export PDF", R.string.common_tool_export, R.string.home_about_export, ToolHues.export, setOf("Convert")) { vm.home.toolForFile(FileTool.Export) },
-            HubTool(LucideIcons.FileLock2, "Set password", R.string.common_tool_set_password, R.string.home_about_protect, ToolHues.protect, setOf("Edit")) { vm.home.toolForFile(FileTool.Protect) },
-            // the opposite of Set password (#517): one or several files chosen on the tool's screen
-            HubTool(LucideIcons.LockOpen, "Unlock PDF", R.string.unlock_title, R.string.home_about_unlock, ToolHues.protect, setOf("Edit")) { vm.openUnlock(null) },
-        )
-    }
+    var cat by remember { mutableStateOf<ToolCategory?>(null) }
+    var query by remember { mutableStateOf("") }
+    val names = QuickTool.entries.associateWith { stringResource(it.title) }
+    val categoryNames = ToolCategory.entries.associateWith { stringResource(it.label) }
+    val shown = QuickTool.listed(cat, query, { names.getValue(it) }, { categoryNames.getValue(it) })
+    val searchHint = stringResource(R.string.home_search_tools)
     Column(Modifier.fillMaxSize().safeTopPadding()) {
-        Text(stringResource(R.string.home_tab_tools), color = c.label, fontSize = 27.sp, lineHeight = 35.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 16.dp, top = 12.dp, bottom = 12.dp))
+        Text(stringResource(R.string.home_tab_tools), color = c.label, fontSize = 27.sp, lineHeight = 35.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 16.dp, top = 12.dp, bottom = 8.dp))
+        Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp).padding(bottom = 8.dp).clip(CircleShape).background(c.surfaceRaised).padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(LucideIcons.Search, null, tint = c.textSecondary, modifier = Modifier.size(20.dp))
+            Spacer(Modifier.width(10.dp))
+            BasicTextField(
+                value = query, onValueChange = { query = it.take(60) }, singleLine = true,
+                textStyle = TextStyle(fontFamily = Inter, fontSize = 16.sp, color = c.text), cursorBrush = SolidColor(c.accent),
+                modifier = Modifier.weight(1f).semantics { contentDescription = searchHint },
+                decorationBox = { inner -> Box { if (query.isEmpty()) Text(searchHint, color = c.textSecondary, fontSize = 16.sp); inner() } },
+            )
+            if (query.isNotEmpty()) BarIcon(LucideIcons.X, stringResource(R.string.common_clear), { query = "" }, size = 32.dp)
+        }
         // text tabs with a 2 dp underline under the chosen one
         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
-            for ((k, label) in categories) {
+            for (k in listOf<ToolCategory?>(null) + ToolCategory.entries) {
                 Column(Modifier.clickable(role = Role.Tab) { cat = k }.width(androidx.compose.foundation.layout.IntrinsicSize.Max)) {
-                    Text(stringResource(label), color = if (k == cat) c.label else c.textTertiary, fontSize = 17.sp, lineHeight = 25.sp, fontWeight = if (k == cat) FontWeight.SemiBold else FontWeight.Normal)
-                    Spacer(Modifier.height(14.dp))
+                    Text(k?.let { categoryNames.getValue(it) } ?: stringResource(R.string.home_category_all), color = if (k == cat) c.label else c.textTertiary, fontSize = 17.sp, lineHeight = 25.sp, fontWeight = if (k == cat) FontWeight.SemiBold else FontWeight.Normal)
+                    Spacer(Modifier.height(10.dp))
                     Box(Modifier.fillMaxWidth().height(2.dp).background(if (k == cat) c.label else Color.Transparent))
                 }
             }
         }
-        Spacer(Modifier.height(16.dp))
-        LazyVerticalGrid(
-            GridCells.Adaptive(140.dp), modifier = Modifier.weight(1f).padding(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp),
-        ) {
-            items(tools.filter { cat == "All" || cat in it.categories }.sortedBy { t -> CategoryOrder[cat]?.indexOf(t.name)?.takeIf { it >= 0 } ?: Int.MAX_VALUE }) { t ->
-                val name = stringResource(t.label)
-                Column(
-                    Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(c.surface)
-                        .border(1.dp, c.divider, RoundedCornerShape(12.dp)).clickable(onClick = t.go).padding(16.dp).semantics { contentDescription = name },
-                ) {
-                    Box(Modifier.size(64.dp).clip(RoundedCornerShape(5.dp)).background(tint(t.hue, c.dark)), contentAlignment = Alignment.Center) {
-                        Icon(t.icon, null, tint = t.hue, modifier = Modifier.size(32.dp))
-                    }
-                    Spacer(Modifier.height(12.dp))
-                    Text(name, color = c.label, fontSize = 15.sp, lineHeight = 20.sp, fontWeight = FontWeight.SemiBold)
-                    Text(stringResource(t.about), color = c.label, fontSize = 15.sp, lineHeight = 21.sp)
-                }
-            }
-            item { Spacer(Modifier.height(8.dp)) }
+        if (shown.isEmpty()) {
+            EmptyState(LucideIcons.Search, stringResource(R.string.home_no_tools), stringResource(R.string.home_no_tools_body))
+            return@Column
         }
+        LazyVerticalGrid(
+            GridCells.Adaptive(80.dp), modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            // All: a heading over each category's tools
+            val grouped = shown.groupBy { it.category }
+            for ((category, list) in grouped) {
+                if (cat == null) item(key = "h-${category.key}", span = { androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan) }) {
+                    Text(categoryNames.getValue(category), color = c.textSecondary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 8.dp, top = 10.dp, bottom = 0.dp))
+                }
+                items(list, key = { it.id }) { t -> ToolCell(t, names.getValue(t)) { vm.startToolFromHome(t) } }
+            }
+            item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan) }) { Spacer(Modifier.height(16.dp)) }
+        }
+    }
+}
+
+/** One tool in Tools: its tinted tile over its name, the whole cell one button. */
+@Composable
+private fun ToolCell(t: QuickTool, name: String, onClick: () -> Unit) {
+    val c = pdfColors
+    Column(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable(role = Role.Button, onClick = onClick).padding(vertical = 6.dp, horizontal = 2.dp).semantics { contentDescription = name },
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Box(Modifier.size(44.dp).clip(RoundedCornerShape(5.dp)).background(tint(t.hue, c.dark)), contentAlignment = Alignment.Center) {
+            Icon(t.icon, null, tint = t.hue, modifier = Modifier.size(24.dp))
+        }
+        Spacer(Modifier.height(6.dp))
+        Text(name, color = c.label, fontSize = 12.sp, lineHeight = 15.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center, maxLines = 2, overflow = TextOverflow.Ellipsis)
     }
 }
 
@@ -321,7 +315,8 @@ fun SearchTab(vm: AppViewModel) {
             }
         }
         if (results.isEmpty()) {
-            EmptyState(LucideIcons.FileSearch, stringResource(R.string.home_no_results), stringResource(R.string.home_no_results_body))
+            // nothing by name: the same words, inside the documents (#539)
+            EmptyState(LucideIcons.FileSearch, stringResource(R.string.home_no_results), stringResource(R.string.home_no_results_body), stringResource(R.string.home_search_inside_library)) { vm.home.searchInLibrary(query) }
         } else {
             LazyColumn(Modifier.weight(1f)) { items(results, key = { it.key }) { r -> FileListRow(vm, r) } }
         }

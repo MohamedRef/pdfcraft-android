@@ -728,7 +728,7 @@ class StudyController internal constructor(private val vm: AppViewModel) {
                 val uri = withContext(Dispatchers.IO) { vm.files.saveToDownloads(out, name).also { out.delete() } }
                 withContext(Dispatchers.IO) { vm.notebooks.put(uri.toString(), page) }
                 Diag.event(DiagArea.Study, "notebook_create", "template" to notebookTemplateWord(page))
-                vm.home.pendingTool = io.github.artcraftandroid.pdfcraft.ui.home.FileTool.Draw
+                vm.home.pendingTool = io.github.artcraftandroid.pdfcraft.ui.viewer.QuickTool.Draw
                 vm.open(uri)
             } catch (e: Exception) {
                 Diag.failure(DiagArea.Study, "notebook_create", e)

@@ -15,8 +15,8 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import io.github.artcraftandroid.pdfcraft.ui.viewer.recognizeText
+import io.github.artcraftandroid.pdfcraft.ui.viewer.runQuickTool
 import io.github.artcraftandroid.pdfcraft.ui.viewer.startCompare
-import io.github.artcraftandroid.pdfcraft.ui.home.FileTool
 import android.content.Intent
 import io.github.artcraftandroid.pdfcraft.ui.viewer.ReadAloud
 import io.github.artcraftandroid.pdfcraft.ui.viewer.ViewerTool
@@ -29,6 +29,15 @@ class HomeController internal constructor(private val vm: AppViewModel) {
     // ---- Home, Files, Search -----------------------------------------------------------------
 
     var homeTab by mutableStateOf(io.github.artcraftandroid.pdfcraft.ui.home.HomeTab.Home)
+
+    /** Words a search by name found nothing for, handed to Library's search inside documents (#539). */
+    var libraryQuery by mutableStateOf<String?>(null)
+
+    /** Search inside the library for [words]: Library opens with them in its search box (#539). */
+    fun searchInLibrary(words: String) {
+        libraryQuery = words.trim()
+        homeTab = io.github.artcraftandroid.pdfcraft.ui.home.HomeTab.Library
+    }
     var settingsOpen by mutableStateOf(false)
 
     /** The Settings page to open on (#447). */
@@ -195,16 +204,16 @@ class HomeController internal constructor(private val vm: AppViewModel) {
     }
 
     /** What to do with the next PDF opened from a tool tile (Home, Tools). */
-    internal var pendingTool: io.github.artcraftandroid.pdfcraft.ui.home.FileTool? = null
+    internal var pendingTool: io.github.artcraftandroid.pdfcraft.ui.viewer.QuickTool? = null
 
     /** A tool that starts by choosing a PDF: pick one, open it, then start the tool. */
-    fun toolForFile(tool: io.github.artcraftandroid.pdfcraft.ui.home.FileTool) {
+    fun toolForFile(tool: io.github.artcraftandroid.pdfcraft.ui.viewer.QuickTool) {
         pendingTool = tool
         vm.pickFiles(FilePickKind.Open)
     }
 
     /** Open [row] and start [tool] on it. */
-    fun openFor(row: io.github.artcraftandroid.pdfcraft.ui.home.FileRow, tool: io.github.artcraftandroid.pdfcraft.ui.home.FileTool) {
+    fun openFor(row: io.github.artcraftandroid.pdfcraft.ui.home.FileRow, tool: io.github.artcraftandroid.pdfcraft.ui.viewer.QuickTool) {
         pendingTool = tool
         row.open()
     }
@@ -213,22 +222,8 @@ class HomeController internal constructor(private val vm: AppViewModel) {
     internal fun startPendingTool(doc: OpenDocument) {
         val t = pendingTool ?: return
         pendingTool = null
-        when (t) {
-            FileTool.Edit -> vm.enterTool(doc, ViewerTool.Edit)
-            FileTool.ReadAloud -> vm.sharing.startReadAloud(doc)
-            FileTool.FillSign -> vm.enterTool(doc, ViewerTool.FillSign)
-            FileTool.Comment -> vm.enterTool(doc, ViewerTool.Comment)
-            FileTool.Organize -> { vm.tools.organizing = true; doc.controller.pagesOpen = true }
-            FileTool.Compress -> vm.tools.openCompress(doc)
-            FileTool.Export -> vm.sharing.openExport(doc)
-            FileTool.Protect -> vm.tools.openProtect(doc)
-            FileTool.Crop -> vm.tools.openCrop(doc)
-            FileTool.Ocr -> vm.recognizeText(doc)
-            FileTool.Draw -> vm.enterTool(doc, ViewerTool.Draw)
-            FileTool.Split -> { vm.tools.organizing = true; doc.controller.pagesOpen = true; vm.docTools.splitOpen = true }
-            FileTool.PageMarks -> vm.docTools.openPageMarks(doc)
-            FileTool.Compare -> vm.startCompare(doc)
-        }
+        // the same as the viewer's toolbar and More tools do (#539)
+        vm.runQuickTool(doc, t)
     }
 
     /**
