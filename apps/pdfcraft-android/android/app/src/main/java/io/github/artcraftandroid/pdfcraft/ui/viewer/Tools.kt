@@ -1527,11 +1527,11 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                 }
             }
         }
-        if (prefs.lowLatencyInk) FrontBufferedInkOverlay(wet, Modifier.fillMaxSize())
+        if (prefs.lowLatencyInk) FrontBufferedInkOverlay(wet, doc.controller.wetCovers, Modifier.fillMaxSize())
         if (doc.controller.zoomBoxOn) {
             ZoomWritingPad(
                 doc, prefs,
-                modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(ZOOM_PAD_HEIGHT)
+                modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(ZOOM_PAD_HEIGHT).coversWetInk(doc.controller.wetCovers)
                     .onSizeChanged { padSize = androidx.compose.ui.geometry.Size(it.width.toFloat(), it.height.toFloat()) },
                 padSize = padSize,
                 drafts = strokes,
