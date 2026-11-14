@@ -243,8 +243,11 @@ The list in #286 ("Rules for every scan PR") is the reference. The ones that hav
   `too_many_arguments` and `wildcard_imports`. Only a local clippy run shows a breach.
 - Kotlin: CI's "Android JVM and UI tests" job is the compiler and the unit tests. The machine
   this was written on had no Android SDK; every Kotlin change here was checked by CI alone.
-- CI on every pull request: "Rust engine and provenance" (about 15 minutes), "Android JVM and
-  UI tests" (about 8), "Merge gate", "Conventional title".
+- CI on every pull request (issue #562), in parallel: "Rust engine tests", "Rust scanner tests"
+  (this crate's tests and the scan-eval runner), "Rust native checks", "Android JVM and UI tests",
+  the fast "Provenance, release notes and workflow checks", then "Merge gate", plus "Conventional
+  title". A pull request that changes only Kotlin/resources skips the Rust jobs; one that changes
+  only docs or scripts skips the Rust and Android jobs (`scripts/ci_changed_paths.py`).
 - Measuring on drawn photos or a test set: `scan-eval` ([ANDROID_SCAN_MEASURING.md](ANDROID_SCAN_MEASURING.md)).
 - Measuring against a reference scanner: `tools/scan-eval/README.md` (`reference_pairs.py`,
   with `scan_reference look`). Measuring orientation, flattening and detection on the same

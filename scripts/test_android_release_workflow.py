@@ -12,6 +12,7 @@ def load(name: str, path: str):
 
 
 notes = load("release_notes", "verify_android_release_notes.py")
+paths = load("ci_changed_paths", "ci_changed_paths.py")
 signing = load("apk_signing", "verify_android_apk_certificate.py")
 
 
@@ -88,7 +89,7 @@ class WorkflowGateTests(unittest.TestCase):
             'test "$build" = "$expected_build"',
             "scripts/verify_android_release_notes.py",
             '--title "PdfCraft $version ($build)"',
-            "needs: [rust-tests, android-tests]",
+            "needs: [repo-checks, rust-tests, rust-scan, rust-checks, android-tests]",
         ):
             self.assertIn(gate, text)
 
@@ -144,6 +145,59 @@ class WorkflowGateTests(unittest.TestCase):
             self.assertIn("cancel-in-progress: false", body, job)
         for name, wf in workflow_texts().items():
             self.assertNotIn("cancel-in-progress: true", wf, name)
+
+
+class ChangedPathsTests(unittest.TestCase):
+    # Issue #562: pull requests skip only the test jobs their files cannot affect.
+    def pr(self, *files, title="feat: x"):
+        return paths.needs("pull_request", title, list(files))
+
+    def test_kotlin_and_resources_only_skip_rust(self):
+        self.assertEqual({"rust": False, "android": True}, self.pr(
+            "apps/pdfcraft-android/android/app/src/main/java/io/github/x/Ui.kt",
+            "apps/pdfcraft-android/android/app/src/main/res/values-ar/strings.xml",
+            "docs/ANDROID_SCAN_HANDOVER.md"))
+
+    def test_docs_scripts_and_tools_only_skip_both(self):
+        self.assertEqual({"rust": False, "android": False}, self.pr(
+            "docs/releases/0.0.30-beta.md", "README.md", "scripts/verify_android_release_notes.py",
+            "tools/scan-eval/size_pages.py", ".github/ANDROID_SIGNING.md"))
+
+    def test_rust_changes_run_rust_and_android(self):
+        # the Android job cross-compiles the engine and generates the Kotlin bindings from it
+        for f in ("crates/engine/src/lib.rs", "vendor/hayro-jbig2/src/lib.rs", "apps/pdfcraft-android/src/lib.rs",
+                  "apps/pdfcraft-android/scan/src/lib.rs", "Cargo.lock", "rust-toolchain.toml", "ATTRIBUTION.toml",
+                  "assets/fonts/Inter-Regular.ttf", "crates/annot/README.md"):
+            self.assertEqual({"rust": True, "android": True}, self.pr(f), f)
+
+    def test_workflow_and_gradle_wrapper_changes_run_what_they_drive(self):
+        self.assertEqual({"rust": True, "android": True}, self.pr(".github/workflows/android-update.yml"))
+        self.assertEqual({"rust": False, "android": True}, self.pr("scripts/gradle_with_network_retries.sh"))
+
+    def test_unknown_paths_run_everything(self):
+        self.assertEqual({"rust": True, "android": True}, self.pr("newdir/thing.bin"))
+        self.assertEqual({"rust": True, "android": True}, self.pr(".github/scripts/VerifyAndroidSigning.java"))
+
+    def test_main_pushes_manual_runs_releases_and_empty_diffs_run_everything(self):
+        docs = ["docs/a.md"]
+        for event in ("push", "workflow_dispatch"):
+            self.assertEqual({"rust": True, "android": True}, paths.needs(event, "", docs))
+        self.assertEqual({"rust": True, "android": True},
+                         self.pr(*docs, title="chore(release): publish 0.0.30-beta (30012)"))
+        self.assertEqual({"rust": True, "android": True}, self.pr())
+
+    def test_merge_gate_needs_every_job_and_rejects_unexpected_skips(self):
+        import re
+        text = (WORKFLOWS / "android-update.yml").read_text()
+        gate = text[text.index("\n  merge-gate:"):text.index("\n  signed-apk:")]
+        self.assertIn("needs: [changes, repo-checks, rust-tests, rust-scan, rust-checks, android-tests]", gate)
+        self.assertIn('[ "$2" = true ]', gate)
+        for job in ("rust-tests", "rust-scan", "rust-checks", "android-tests"):
+            start = text.index(f"\n  {job}:")
+            nxt = re.search(r"\n  [a-z-]+:\n", text[start + 1:])
+            body = text[start:start + 1 + nxt.start()]
+            self.assertIn("needs: [changes]", body, job)
+            self.assertRegex(body, r"if: needs\.changes\.outputs\.(rust|android) == 'true'", job)
 
 if __name__ == "__main__":
     unittest.main()

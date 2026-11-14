@@ -25,8 +25,60 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  # Issue #562: a pull request skips the test jobs it cannot affect. scripts/ci_changed_paths.py
+  # decides from the changed files; anything it does not know runs everything. Main pushes, manual
+  # runs and release pull requests ("chore(release): publish ...") always run every job.
+  changes:
+    name: Changed paths
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      rust: ${{ steps.paths.outputs.rust }}
+      android: ${{ steps.paths.outputs.android }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # the merge commit and its base, to list what the pull request changes
+          fetch-depth: 2
+      - name: Decide which test jobs this change needs
+        id: paths
+        env:
+          EVENT: ${{ github.event_name }}
+          TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT" = pull_request ]; then
+            git diff --name-only HEAD^1 HEAD > "$RUNNER_TEMP/changed.txt"
+          else
+            : > "$RUNNER_TEMP/changed.txt"
+          fi
+          python3 scripts/ci_changed_paths.py "$EVENT" "$TITLE" < "$RUNNER_TEMP/changed.txt" | tee -a "$GITHUB_OUTPUT"
+          {
+            echo '## Test jobs for this change'
+            echo "- Changed files: $(wc -l < "$RUNNER_TEMP/changed.txt")"
+            python3 scripts/ci_changed_paths.py "$EVENT" "$TITLE" < "$RUNNER_TEMP/changed.txt" | sed 's/^/- /'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # Fast checks with no build: always run.
+  repo-checks:
+    name: Provenance, release notes and workflow checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - name: Verify pinned upstream engine source
+        run: python3 scripts/verify_android_engine_source.py
+      - name: Validate owner-reviewed release notes
+        run: python3 scripts/verify_android_release_notes.py
+      - name: Verify release workflow regression tests
+        run: python3 -m unittest discover -s scripts -p 'test_android_release_workflow.py'
+      - name: Scan evaluation tool tests
+        run: python3 -m unittest discover -s tools/scan-eval -p 'test_*.py'
+
   rust-tests:
-    name: Rust engine and provenance
+    name: Rust engine tests
+    needs: [changes]
+    if: needs.changes.outputs.rust == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 100
     steps:
@@ -36,20 +88,47 @@ jobs:
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           key: issue55-rust-tests
-      - name: Verify pinned upstream engine source
-        run: python3 scripts/verify_android_engine_source.py
-      - name: Validate owner-reviewed release notes
-        run: python3 scripts/verify_android_release_notes.py
-      - name: Verify release workflow regression tests
-        run: python3 -m unittest discover -s scripts -p 'test_android_release_workflow.py'
-      - name: Scan evaluation tool tests
-        run: python3 -m unittest discover -s tools/scan-eval -p 'test_*.py'
-      - name: Compile all Rust test targets
-        run: cargo build --locked --tests --keep-going -p pdfcraft-bytes -p pdfcraft-automation -p pdfcraft-cos -p pdfcraft-create -p pdfcraft-sign -p pdfcraft-js -p pdfcraft-forms -p pdfcraft-xfa -p pdfcraft-engine -p pdfcraft-render -p pdfcraft-android -p pdfcraft-scan
-      - name: Run Rust tests
-        run: cargo test --locked --no-fail-fast -p pdfcraft-bytes -p pdfcraft-automation -p pdfcraft-cos -p pdfcraft-create -p pdfcraft-sign -p pdfcraft-js -p pdfcraft-forms -p pdfcraft-xfa -p pdfcraft-engine -p pdfcraft-render -p pdfcraft-android -p pdfcraft-scan
+      # pdfcraft-scan's tests take about half the test time, so they run in their own job (#562)
+      - name: Compile all Rust test targets except the scanner's
+        run: cargo build --locked --tests --keep-going -p pdfcraft-bytes -p pdfcraft-automation -p pdfcraft-cos -p pdfcraft-create -p pdfcraft-sign -p pdfcraft-js -p pdfcraft-forms -p pdfcraft-xfa -p pdfcraft-engine -p pdfcraft-render -p pdfcraft-android
+      - name: Run Rust tests except the scanner's
+        run: cargo test --locked --no-fail-fast -p pdfcraft-bytes -p pdfcraft-automation -p pdfcraft-cos -p pdfcraft-create -p pdfcraft-sign -p pdfcraft-js -p pdfcraft-forms -p pdfcraft-xfa -p pdfcraft-engine -p pdfcraft-render -p pdfcraft-android
+
+  # The scanner's tests and measuring runner, in parallel with the other Rust jobs (issue #562).
+  rust-scan:
+    name: Rust scanner tests
+    needs: [changes]
+    if: needs.changes.outputs.rust == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 100
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install pinned Rust
+        run: rustup toolchain install
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          key: issue562-rust-scan
+      - name: Compile the scanner's test targets
+        run: cargo build --locked --tests -p pdfcraft-scan
+      - name: Run the scanner's tests
+        run: cargo test --locked --no-fail-fast -p pdfcraft-scan
       - name: Run the scanner's measuring runner on drawn photos (#288)
         run: cargo run --locked -p pdfcraft-scan --features synth --bin scan-eval -- --synthetic 6 --size 600x800
+
+  # The named native checks, in parallel with the workspace tests (issue #562).
+  rust-checks:
+    name: Rust native checks
+    needs: [changes]
+    if: needs.changes.outputs.rust == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 100
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install pinned Rust
+        run: rustup toolchain install
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          key: issue562-rust-checks
       - name: Verify native open diagnostics and bounded input reads
         run: |
           cargo test --locked -p pdfcraft-automation --lib input_read_preserves_bytes_and_rejects_oversized_regular_files
@@ -59,6 +138,8 @@ jobs:
 
   android-tests:
     name: Android JVM and UI tests
+    needs: [changes]
+    if: needs.changes.outputs.android == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 120
     steps:
@@ -114,24 +195,49 @@ jobs:
           if-no-files-found: error
 
   # Branch protection should require this single non-skippable PR status check.
-  # A skipped or failed dependency is a failed merge gate.
+  # A test job may be skipped only when the Changed paths job said this change does not need it
+  # (issue #562); a failed, cancelled or otherwise skipped job fails the gate.
   merge-gate:
     name: Merge gate (Rust and Android)
     if: ${{ always() && github.event_name == 'pull_request' }}
-    needs: [rust-tests, android-tests]
+    needs: [changes, repo-checks, rust-tests, rust-scan, rust-checks, android-tests]
     runs-on: ubuntu-latest
     steps:
-      - name: Require Rust and Android JVM tests to succeed
+      - name: Require every needed test job to succeed
         env:
+          CHANGES_RESULT: ${{ needs.changes.result }}
+          REPO_RESULT: ${{ needs.repo-checks.result }}
+          RUST_NEEDED: ${{ needs.changes.outputs.rust }}
           RUST_RESULT: ${{ needs.rust-tests.result }}
+          RUST_SCAN_RESULT: ${{ needs.rust-scan.result }}
+          RUST_CHECKS_RESULT: ${{ needs.rust-checks.result }}
+          ANDROID_NEEDED: ${{ needs.changes.outputs.android }}
           ANDROID_RESULT: ${{ needs.android-tests.result }}
         run: |
-          echo "Rust: $RUST_RESULT; Android JVM: $ANDROID_RESULT"
-          if [ "$RUST_RESULT" != success ] || [ "$ANDROID_RESULT" != success ]; then
-            echo '::error::PR is not merge-ready: Rust and Android JVM tests must both pass.'
-            exit 1
-          fi
-          echo 'Rust and Android JVM tests passed; APK packaging is verified once per release batch.' >> "$GITHUB_STEP_SUMMARY"
+          echo "Changed paths: $CHANGES_RESULT (Rust needed: $RUST_NEEDED; Android needed: $ANDROID_NEEDED)"
+          echo "Repository checks: $REPO_RESULT; Rust tests: $RUST_RESULT; Rust scanner tests: $RUST_SCAN_RESULT; Rust native checks: $RUST_CHECKS_RESULT; Android JVM: $ANDROID_RESULT"
+          fail() { echo "::error::PR is not merge-ready: $1"; exit 1; }
+          [ "$CHANGES_RESULT" = success ] || fail "the Changed paths job did not succeed."
+          [ "$REPO_RESULT" = success ] || fail "repository checks must pass."
+          # needed jobs must succeed; a job the change does not need must have been skipped
+          check() { # name needed result
+            if [ "$2" = true ]; then
+              [ "$3" = success ] || fail "$1 must pass."
+            elif [ "$2" = false ]; then
+              [ "$3" = skipped ] || [ "$3" = success ] || fail "$1 ended $3."
+            else
+              fail "the Changed paths job gave no answer for $1."
+            fi
+          }
+          check 'Rust engine tests' "$RUST_NEEDED" "$RUST_RESULT"
+          check 'Rust scanner tests' "$RUST_NEEDED" "$RUST_SCAN_RESULT"
+          check 'Rust native checks' "$RUST_NEEDED" "$RUST_CHECKS_RESULT"
+          check 'Android JVM tests' "$ANDROID_NEEDED" "$ANDROID_RESULT"
+          {
+            echo 'Every test job this change needs passed; APK packaging is verified once per release batch.'
+            [ "$RUST_NEEDED" = true ] || echo '- Rust jobs skipped: this change touches no file they build or test.'
+            [ "$ANDROID_NEEDED" = true ] || echo '- Android JVM job skipped: this change touches no file it builds or tests.'
+          } >> "$GITHUB_STEP_SUMMARY"
 
   signed-apk:
     name: Build and verify signed ARM64 APK
@@ -142,7 +248,7 @@ jobs:
       (github.event_name == 'workflow_dispatch' ||
       (github.event_name == 'push' &&
       startsWith(github.event.head_commit.message, 'chore(release): publish 0.0.30-beta (30012)')))
-    needs: [rust-tests, android-tests]
+    needs: [repo-checks, rust-tests, rust-scan, rust-checks, android-tests]
     concurrency:
       # One signed publication at a time across runs; never cancel one in progress.
       group: android-publish
@@ -266,7 +372,7 @@ jobs:
 
   publish-release:
     name: Publish GitHub Release and update feed
-    # Publish only after both test jobs and the signed APK job complete.
+    # Publish only after every test job and the signed APK job complete.
     # A signed artifact, not a debug/fallback build, is the only permitted input.
     if: >-
       github.ref == 'refs/heads/main' &&
