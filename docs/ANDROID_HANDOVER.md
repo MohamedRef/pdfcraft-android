@@ -25,8 +25,8 @@
 ## RELEASE 0.0.30-beta (30012) — 2026-11-14 (owner requested)
 
 - Release PR publishes `0.0.30-beta` / ARM64 build `30012` (`pdfcraft.versionCode=3001`), same package ID and signer. Trigger matches only `chore(release): publish 0.0.30-beta (30012)`.
-- Owner asked at 13:24 UTC for a release from current main.
-- Included: #534 (#526), #541 and #547 (#520), #544 (#538), #545 (#528), #546 (#531), #543 (#539). See [`releases/0.0.30-beta.md`](releases/0.0.30-beta.md).
+- Owner asked at 13:24 UTC, held it at 13:46 until in-flight work merged (the first release run from #548 was cancelled before publishing), and gave the go at 16:32 UTC.
+- Included: #534 (#526), #541 and #547 (#520), #544 (#538), #545 (#528), #546 (#531), #543 (#539), #552, #551 #556 #558 #559 (#549), #553 (#236), #554 (#550), #555, #557 (#521). See [`releases/0.0.30-beta.md`](releases/0.0.30-beta.md).
 - Open: not run on a phone yet.
 
 ## RELEASE 0.0.29-beta (29012) — 2026-11-14 (owner requested)
