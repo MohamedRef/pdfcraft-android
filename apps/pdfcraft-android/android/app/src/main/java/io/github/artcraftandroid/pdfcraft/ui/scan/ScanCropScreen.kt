@@ -160,6 +160,7 @@ internal fun ScanCropScreen(page: ScanPage, index: Int, lab: ScanLab, onDone: (F
     val context = LocalContext.current
     val density = LocalDensity.current
     val haptics = LocalHapticFeedback.current
+    val rtl = androidx.compose.ui.platform.LocalLayoutDirection.current == androidx.compose.ui.unit.LayoutDirection.Rtl
     val scope = rememberCoroutineScope()
     var opened by remember(page.key) { mutableStateOf(page.corners.copyOf()) }
     val openedAt = remember(page.key) { SystemClock.elapsedRealtime() }
@@ -320,15 +321,27 @@ internal fun ScanCropScreen(page: ScanPage, index: Int, lab: ScanLab, onDone: (F
         stats = stats.copy(nudges = stats.nudges + 1)
     }
 
-    fun finish(done: Boolean) {
+    /** Leave with [done] (Done) or not; in a pass over several pages (#515) towards [dir] (-1, +1, 0 for the tick). */
+    fun finish(done: Boolean, dir: Int = 0) {
+        val batch = steps?.batch
         val s = stats.copy(
             visits = if (done) 1 else 0, snapOn = snapOn, ms = SystemClock.elapsedRealtime() - openedAt,
             movedPct = if (done) maxCornerMovePct(opened, corners, aspect) else 0.0,
             cornersOff = if (done) cornersOffPhoto(corners) else 0,
             sidesOnEdge = if (done) onEdge else stats.sidesOnEdge,
+            batchVisits = if (done && batch != null) 1 else 0,
         )
-        Diag.event(DiagArea.Scan, "crop", "index" to scanLogPageNumber(index), "done" to done, "opened_by" to (steps?.opener?.id ?: "crop_button"), *s.diag())
-        if (done) onDone(corners, s) else onCancel()
+        Diag.event(
+            DiagArea.Scan, "crop", "index" to scanLogPageNumber(index), "done" to done, "opened_by" to (steps?.opener?.id ?: "crop_button"), *s.diag(),
+            // #515: in a pass over several pages, the page's place in it and where the person went
+            "batch" to (batch != null), "batch_at" to (batch?.at ?: 0), "batch_pages" to (batch?.count ?: 0), "batch_go" to dir,
+        )
+        when {
+            batch != null && done -> batch.onLeave(dir, corners, s)
+            batch != null -> batch.onBack()
+            done -> onDone(corners, s)
+            else -> onCancel()
+        }
     }
 
     /** Auto-detect: the page searched for again, and the corners moved onto it when found. */
@@ -426,6 +439,8 @@ internal fun ScanCropScreen(page: ScanPage, index: Int, lab: ScanLab, onDone: (F
             )
         }
         if (steps != null) ScanBordersHeader(steps, index)
+        // a pass over several pages (#515): Previous, "Page N of M" and Next (Done on the last)
+        steps?.batch?.let { nav -> ScanBatchNavRow(nav) { d -> finish(true, d) } }
         // the photo turned as the page will be saved (#458): Rotate here turns it with its corners
         ScanTurnedBox(steps?.turns ?: 0, Modifier.weight(1f).fillMaxWidth().background(c.desk)) { turned ->
         BoxWithConstraints(
@@ -485,9 +500,14 @@ internal fun ScanCropScreen(page: ScanPage, index: Int, lab: ScanLab, onDone: (F
 
             val gestures = Modifier.pointerInput(page.file, iw, ih) {
                 var lastMove = 0L
+                // a drag that took no handle, in a pass over several pages (#515): a swipe to the next or previous page
+                var swipeX = 0f
+                var swipeY = 0f
                 detectDragGestures(
                     onDragStart = { p ->
                         val h = hitTest(p.x, p.y, latest.value, latestFit.value, 48.dp.toPx(), 40.dp.toPx())
+                        swipeX = 0f
+                        swipeY = 0f
                         held = h
                         if (h != null) {
                             heldSpan = quadSpan(latest.value)
@@ -504,6 +524,10 @@ internal fun ScanCropScreen(page: ScanPage, index: Int, lab: ScanLab, onDone: (F
                     },
                     onDragEnd = {
                         val h = held
+                        if (h == null && steps?.batch != null) {
+                            val go = scanBatchSwipe(swipeX, swipeY, steps.turns, 64.dp.toPx(), rtl)
+                            if (go != 0 && (go > 0 || steps.batch.at > 1)) finish(true, go)
+                        }
                         held = null
                         heldSpan = null
                         letGo("lifted")
@@ -521,7 +545,11 @@ internal fun ScanCropScreen(page: ScanPage, index: Int, lab: ScanLab, onDone: (F
                         pullWanted.value = null
                     },
                 ) { change, d ->
-                    val h = held ?: return@detectDragGestures
+                    val h = held ?: run {
+                        swipeX += d.x
+                        swipeY += d.y
+                        return@detectDragGestures
+                    }
                     change.consume()
                     val f = latestFit.value
                     if (pulling) {

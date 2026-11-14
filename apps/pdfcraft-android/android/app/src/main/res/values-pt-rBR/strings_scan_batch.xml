@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Borders and looks for several pages in one pass (#515) -->
+<resources>
+    <string name="scan_lab_batch">Bordas e aparência de várias páginas de uma vez</string>
+    <string name="scan_batch_look">Aparência</string>
+    <string name="scan_batch_check">Conferir</string>
+    <string name="scan_batch_marks_body">Bordas novas movem a página sob as marcações, então elas são removidas onde as bordas mudam. Manter deixa as páginas com marcações fora desta revisão.</string>
+    <plurals name="scan_batch_offer">
+        <item quantity="one">Conferir as bordas de %1$d página</item>
+        <item quantity="other">Conferir as bordas de %1$d páginas</item>
+    </plurals>
+    <plurals name="scan_batch_look_note">
+        <item quantity="one">A aparência escolhida vai para %1$d página escolhida</item>
+        <item quantity="other">A aparência escolhida vai para %1$d páginas escolhidas</item>
+    </plurals>
+    <plurals name="scan_batch_marks_title">
+        <item quantity="one">Remover as marcações de %1$d página?</item>
+        <item quantity="other">Remover as marcações de %1$d páginas?</item>
+    </plurals>
+</resources>
