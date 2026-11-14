@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Borders and looks for several pages in one pass (#515) -->
+<resources>
+    <string name="scan_lab_batch">Bords et rendu de plusieurs pages à la fois</string>
+    <string name="scan_batch_look">Rendu</string>
+    <string name="scan_batch_check">Vérifier</string>
+    <string name="scan_batch_marks_body">De nouveaux bords déplacent la page sous ses annotations : elles sont retirées là où les bords changent. Garder laisse les pages annotées hors de ce passage.</string>
+    <plurals name="scan_batch_offer">
+        <item quantity="one">Vérifier les bords de %1$d page</item>
+        <item quantity="other">Vérifier les bords de %1$d pages</item>
+    </plurals>
+    <plurals name="scan_batch_look_note">
+        <item quantity="one">Le rendu choisi s’applique à %1$d page choisie</item>
+        <item quantity="other">Le rendu choisi s’applique aux %1$d pages choisies</item>
+    </plurals>
+    <plurals name="scan_batch_marks_title">
+        <item quantity="one">Retirer les annotations de %1$d page ?</item>
+        <item quantity="other">Retirer les annotations de %1$d pages ?</item>
+    </plurals>
+</resources>

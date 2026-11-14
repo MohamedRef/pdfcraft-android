@@ -43,6 +43,13 @@ arrow and the ruler switched on. English at 320, 360 and 384 dp wide, Arabic at 
 
 Files: `app/build/screenshots/viewer/draw_<n>fav_<locale>_<size>_<theme>.png`.
 
+`app/src/test/java/io/github/artcraftandroid/pdfcraft/ui/viewer/ViewerTopBarScreenshotsTest.kt`:
+the viewer's top bar (#525) with a short name, a long name with "Unsaved changes", Saving…, a tool
+active, and reading aloud. All seven languages at 320 dp, English and
+Arabic at 360 dp, English also dark.
+
+Files: `app/build/screenshots/viewer/top_bar_<locale>_<width>_<theme>.png`.
+
 ## In CI
 
 The Android job runs the pictures on a pull request whose merge commit changes

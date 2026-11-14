@@ -271,6 +271,12 @@ internal class ScanCameraRouter(private val activity: ComponentActivity, private
             // one photo behaves as One page: Adjust borders opens on it (#458)
             v.scanSteps.pending = scanBordersAfterImport(v.scanLab.options.steps, files.size, v.scanRetaking, v.scanSteps.retakeFromBorders)
             v.scanSteps.pendingMode = "import"
+            // several photos: the document screen offers to check their borders in one pass (#515)
+            val lab = v.scanLab.options
+            if (!v.scanRetaking && scanBatchOffers(lab.batchBorders, lab.steps, files.size)) {
+                v.scanBatch.offerBefore = v.scanPages.map { it.key }.toSet()
+                v.scanBatch.offer = files.size
+            }
             // several photos: the document screen shows them, as after Many pages (#460)
             if (scanDocumentAfterCamera(v.scanLab.options.steps, v.scanRetaking, v.scanSteps.pending)) v.scanSteps.showDocument("import", v.scanPages.size + files.size)
             for (f in files) {
