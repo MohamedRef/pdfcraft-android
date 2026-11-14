@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Flattening made faster (#549): the preview's decision taken over at full size, flat pages skipped -->
+<!-- Flattening made faster (#549): the preview's decision taken over at full size, flat pages skipped, two pages at once -->
 <resources>
     <string name="scan_lab_flatten_reuse">Conservar la decisión de aplanado de la vista previa para la página guardada</string>
     <string name="scan_lab_skip_flat">No aplanar las páginas que ya están planas</string>
+    <string name="scan_lab_parallel_pages">Preparar dos páginas a la vez en segundo plano</string>
 </resources>
