@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Unlock PDF (#517) -->
+<resources>
+    <string name="unlock_title">Unlock PDF</string>
+    <string name="home_about_unlock">Remove a PDF\'s password and restrictions</string>
+    <string name="toolbar_label_unlock">Unlock</string>
+    <string name="unlock_intro">Saves copies without passwords or restrictions in Downloads as name_unlocked.pdf. The files stay as they are. Passwords are never guessed.</string>
+    <string name="unlock_add">Add files</string>
+    <string name="unlock_empty">Add the PDFs to unlock.</string>
+    <string name="unlock_run">Unlock</string>
+    <string name="unlock_progress">%1$d of %2$d</string>
+    <string name="unlock_password_title">Password for %1$s</string>
+    <string name="unlock_password_body">This file needs its password to open. Without it, it can\'t be unlocked.</string>
+    <string name="unlock_password_wrong">That password doesn\'t open this file. Try again, or skip it.</string>
+    <string name="unlock_password_field">Password</string>
+    <string name="unlock_password_all">Use this password for the other files</string>
+    <string name="unlock_skip">Skip this file</string>
+    <string name="unlock_signed_title">This file is signed</string>
+    <string name="unlock_signed_body">Unlocking %1$s changes it, so its signatures will no longer be valid.</string>
+    <string name="unlock_signed_go">Unlock anyway</string>
+    <string name="unlock_done_password">Unlocked: password removed</string>
+    <string name="unlock_done_restrictions">Unlocked: restrictions removed (printing, copying or changes were limited)</string>
+    <string name="unlock_not_protected">Not protected: nothing to remove</string>
+    <string name="unlock_skipped_password">Skipped: its password is needed to unlock it</string>
+    <string name="unlock_skipped_signed">Skipped: signed</string>
+    <string name="unlock_failed">Failed: %1$s</string>
+    <string name="unlock_summary">Unlocked %1$d · Skipped %2$d · Failed %3$d</string>
+    <string name="unlock_failed_names">Failed: %1$s</string>
+    <string name="unlock_cancelled">Stopped. Files already unlocked are in Downloads.</string>
+    <string name="unlock_offer_text">This file is protected with a password.</string>
+    <string name="unlock_offer">Remove password</string>
+</resources>

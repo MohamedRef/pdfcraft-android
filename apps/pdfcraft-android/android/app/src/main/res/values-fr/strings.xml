@@ -257,7 +257,7 @@
     <string name="tools_password_rule">Utilisez de 6 à 128 caractères : lettres, chiffres et symboles, sans espaces.</string>
     <string name="tools_password_mismatch">Les mots de passe ne correspondent pas.</string>
     <!-- "Remove password" is the name of a command in the viewer -->
-    <string name="tools_about_passwords_body">La copie est chiffrée en AES-256. Conservez bien le mot de passe : il est impossible de le récupérer. Pour supprimer le mot de passe plus tard, ouvrez la copie avec celui-ci et choisissez Supprimer le mot de passe.</string>
+    <string name="tools_about_passwords_body">La copie est chiffrée en AES-256. Conservez bien le mot de passe : il est impossible de le récupérer. Pour le retirer plus tard, utilisez Déverrouiller un PDF.</string>
 
     <!-- Tool screens: Export PDF -->
     <string name="tools_export_action">Exporter</string>

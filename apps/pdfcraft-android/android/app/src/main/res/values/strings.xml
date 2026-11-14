@@ -313,7 +313,7 @@
     <string name="tools_password_rule">Use 6 to 128 characters: letters, numbers and symbols, no spaces.</string>
     <string name="tools_password_mismatch">The passwords don\'t match.</string>
     <!-- "Remove password" is the name of a command in the viewer -->
-    <string name="tools_about_passwords_body">The copy is encrypted with AES-256. The password can\'t be recovered, so keep it safe. To remove it later, open the copy and choose Remove password.</string>
+    <string name="tools_about_passwords_body">The copy is encrypted with AES-256. The password can\'t be recovered, so keep it safe. To remove it later, use Unlock PDF.</string>
 
     <!-- Tool screens: Export PDF -->
     <string name="tools_export_action">Export</string>

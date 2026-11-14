@@ -264,7 +264,7 @@
     <string name="tools_repeat_password">Ripeti la password *</string>
     <string name="tools_password_rule">Usa da 6 a 128 caratteri: lettere, numeri e simboli, senza spazi.</string>
     <string name="tools_password_mismatch">Le password non corrispondono.</string>
-    <string name="tools_about_passwords_body">La copia viene crittografata con AES-256. Conserva la password in un luogo sicuro: non può essere recuperata. Per rimuoverla in seguito, apri la copia inserendo la password e scegli Rimuovi password.</string>
+    <string name="tools_about_passwords_body">La copia viene crittografata con AES-256. Conserva la password in un luogo sicuro: non può essere recuperata. Per rimuoverla in seguito, usa Sblocca PDF.</string>
 
     <!-- Esporta PDF -->
 

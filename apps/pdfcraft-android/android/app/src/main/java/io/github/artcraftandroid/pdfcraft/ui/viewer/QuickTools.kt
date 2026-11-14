@@ -1,5 +1,6 @@
 package io.github.artcraftandroid.pdfcraft.ui.viewer
 
+import io.github.artcraftandroid.pdfcraft.ui.openUnlock
 import android.content.Context
 import androidx.annotation.StringRes
 import androidx.compose.animation.core.RepeatMode
@@ -81,6 +82,8 @@ enum class QuickTool(val id: String, @StringRes val label: Int, @StringRes val t
     Combine("combine", R.string.toolbar_label_combine, R.string.common_tool_combine, LucideIcons.Combine, ToolHues.combine),
     Compress("compress", R.string.toolbar_label_compress, R.string.common_tool_compress, LucideIcons.FileArchive, ToolHues.compress),
     Protect("protect", R.string.toolbar_label_password, R.string.common_tool_set_password, LucideIcons.FileLock2, ToolHues.protect),
+    // a copy without its password and restrictions (#517), beside Set password
+    Unlock("unlock", R.string.toolbar_label_unlock, R.string.unlock_title, LucideIcons.LockOpen, ToolHues.protect),
     // a tool that changes the content: More tools, not ⋮ (#195)
     Redact("redact", R.string.redact_title, R.string.redact_title, LucideIcons.SquareDashed, ToolHues.protect),
     Accessibility("accessibility", R.string.a11y_title, R.string.a11y_title, LucideIcons.Accessibility, ToolHues.protect),
@@ -195,6 +198,7 @@ fun AppViewModel.runQuickTool(doc: OpenDocument, tool: QuickTool) {
         QuickTool.Combine -> tools.openCombine(doc)
         QuickTool.Compress -> tools.openCompress(doc)
         QuickTool.Protect -> tools.openProtect(doc)
+        QuickTool.Unlock -> openUnlock(doc)
         QuickTool.Organize -> {
             doc.controller.pagesOpen = true
             tools.organizing = true

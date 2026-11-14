@@ -236,7 +236,7 @@
     <string name="tools_repeat_password">أعد إدخال كلمة المرور *</string>
     <string name="tools_password_rule">استخدم من ٦ إلى ١٢٨ حرفًا ورقمًا ورمزًا، دون مسافات.</string>
     <string name="tools_password_mismatch">كلمتا المرور غير متطابقتين.</string>
-    <string name="tools_about_passwords_body">تُشفّر النسخة باستخدام AES-256. احتفظ بكلمة المرور بأمان؛ لا يمكن استعادتها. لإزالة كلمة المرور لاحقًا، افتح النسخة بها واختر إزالة كلمة المرور.</string>
+    <string name="tools_about_passwords_body">تُشفّر النسخة باستخدام AES-256. احتفظ بكلمة المرور بأمان؛ لا يمكن استعادتها. لإزالتها لاحقًا استخدم إزالة قفل PDF.</string>
     <string name="tools_export_action">تصدير</string>
     <string name="tools_export_document">مستند</string>
     <string name="tools_export_image">صورة</string>

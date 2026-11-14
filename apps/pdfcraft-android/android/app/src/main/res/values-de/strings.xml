@@ -257,7 +257,7 @@
     <string name="tools_password_rule">Verwende 6 bis 128 Zeichen: Buchstaben, Zahlen und Symbole, keine Leerzeichen.</string>
     <string name="tools_password_mismatch">Die Passwörter stimmen nicht überein.</string>
     <!-- "Remove password" is the name of a command in the viewer -->
-    <string name="tools_about_passwords_body">Die Kopie wird mit AES-256 verschlüsselt. Bewahre das Passwort sicher auf: Es kann nicht wiederhergestellt werden. Um das Passwort später zu entfernen, öffne die Kopie damit und wähle „Passwort entfernen“.</string>
+    <string name="tools_about_passwords_body">Die Kopie wird mit AES-256 verschlüsselt. Bewahre das Passwort sicher auf: Es kann nicht wiederhergestellt werden. Um es später zu entfernen, verwende „PDF entsperren“.</string>
 
     <!-- Tool screens: Export PDF -->
     <string name="tools_export_action">Exportieren</string>

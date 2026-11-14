@@ -1171,10 +1171,13 @@ pub fn tools() -> Vec<ToolDef> {
             }),
             &["doc"],
         )),
-        t("doc_unprotect", "Remove security", "Remove password security (the document must have been opened with its permissions password, or have none). Applied by the next doc_save. Undoable.")
+        t("doc_unprotect", "Remove security", "Remove password security (the document must have been opened with its permissions password, or have none; with restrictions true, any open document: Unlock PDF). Applied by the next doc_save. Undoable.")
             .cmd("protect.remove")
             .destructive()
-            .with(schema(json!({ "doc": doc() }), &["doc"])),
+            .with(schema(
+                json!({ "doc": doc(), "restrictions": { "type": "boolean", "description": "Also remove restrictions without the permissions password (Unlock PDF). Default false." } }),
+                &["doc"],
+            )),
         t("page_replace", "Replace pages", "Replace the content of pages with pages of another PDF (same count). Links, comments, form fields and bookmarks on the original pages stay, as in Acrobat. Undoable.")
             .cmd("page.replace")
             .with(schema(json!({ "doc": doc(), "pages": pages("to replace"), "path": path_arg(), "from_pages": pages("of the other file, in order (default: its first pages)") }), &["doc", "pages", "path"])),

@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Unlock PDF (#517) -->
+<resources>
+    <string name="unlock_title">Desbloquear PDF</string>
+    <string name="home_about_unlock">Quitar la contraseña y las restricciones de un PDF</string>
+    <string name="toolbar_label_unlock">Desbloquear</string>
+    <string name="unlock_intro">Guarda copias sin contraseñas ni restricciones en Descargas como name_unlocked.pdf. Los archivos no cambian. Nunca se adivinan contraseñas.</string>
+    <string name="unlock_add">Añadir archivos</string>
+    <string name="unlock_empty">Añade los PDF que quieres desbloquear.</string>
+    <string name="unlock_run">Desbloquear</string>
+    <string name="unlock_progress">%1$d de %2$d</string>
+    <string name="unlock_password_title">Contraseña de %1$s</string>
+    <string name="unlock_password_body">Este archivo necesita su contraseña para abrirse. Sin ella no se puede desbloquear.</string>
+    <string name="unlock_password_wrong">Esa contraseña no abre este archivo. Inténtalo de nuevo u omítelo.</string>
+    <string name="unlock_password_field">Contraseña</string>
+    <string name="unlock_password_all">Usar esta contraseña para los demás archivos</string>
+    <string name="unlock_skip">Omitir este archivo</string>
+    <string name="unlock_signed_title">Este archivo está firmado</string>
+    <string name="unlock_signed_body">Desbloquear %1$s lo modifica, así que sus firmas dejarán de ser válidas.</string>
+    <string name="unlock_signed_go">Desbloquear de todos modos</string>
+    <string name="unlock_done_password">Desbloqueado: contraseña quitada</string>
+    <string name="unlock_done_restrictions">Desbloqueado: restricciones quitadas (la impresión, la copia o los cambios estaban limitados)</string>
+    <string name="unlock_not_protected">Sin protección: no hay nada que quitar</string>
+    <string name="unlock_skipped_password">Omitido: se necesita su contraseña para desbloquearlo</string>
+    <string name="unlock_skipped_signed">Omitido: firmado</string>
+    <string name="unlock_failed">Error: %1$s</string>
+    <string name="unlock_summary">Desbloqueados %1$d · Omitidos %2$d · Con error %3$d</string>
+    <string name="unlock_failed_names">Con error: %1$s</string>
+    <string name="unlock_cancelled">Detenido. Los archivos ya desbloqueados están en Descargas.</string>
+    <string name="unlock_offer_text">Este archivo está protegido con contraseña.</string>
+    <string name="unlock_offer">Quitar contraseña</string>
+</resources>
