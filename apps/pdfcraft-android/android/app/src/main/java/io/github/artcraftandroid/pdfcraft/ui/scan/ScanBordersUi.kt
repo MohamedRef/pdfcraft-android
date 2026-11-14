@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.size
@@ -132,17 +133,19 @@ internal fun ScanBordersBar(
         PdfSwitch(snapOn, onSnap, Modifier.semantics { contentDescription = snapLabel })
     }
     Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 6.dp), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.Top) {
-        step.onRetake?.let { ScanBarButton(LucideIcons.Camera, stringResource(R.string.tools_retake), onClick = it) }
-        ScanBarButton(LucideIcons.RotateCcw, stringResource(R.string.scan_borders_rotate_left)) { step.onRotate(-1) }
-        ScanBarButton(LucideIcons.RotateCw, stringResource(R.string.scan_borders_rotate_right)) { step.onRotate(1) }
+        // equal shares of the width, at most 96 dp each, rather than fixed widths that must add up (#538)
+        val share = Modifier.weight(1f, fill = false).widthIn(max = 96.dp).fillMaxWidth()
+        step.onRetake?.let { ScanBarButton(LucideIcons.Camera, stringResource(R.string.tools_retake), modifier = share, onClick = it) }
+        ScanBarButton(LucideIcons.RotateCcw, stringResource(R.string.scan_borders_rotate_left), modifier = share) { step.onRotate(-1) }
+        ScanBarButton(LucideIcons.RotateCw, stringResource(R.string.scan_borders_rotate_right), modifier = share) { step.onRotate(1) }
         when (toggle) {
-            ScanBordersToggle.WholePhoto -> ScanBarButton(LucideIcons.Maximize, stringResource(R.string.scan_borders_whole), onClick = onWhole)
-            ScanBordersToggle.Auto -> ScanBarButton(LucideIcons.ScanText, stringResource(R.string.scan_borders_auto), enabled = !detecting, onClick = onAuto)
+            ScanBordersToggle.WholePhoto -> ScanBarButton(LucideIcons.Maximize, stringResource(R.string.scan_borders_whole), modifier = share, onClick = onWhole)
+            ScanBordersToggle.Auto -> ScanBarButton(LucideIcons.ScanText, stringResource(R.string.scan_borders_auto), enabled = !detecting, modifier = share, onClick = onAuto)
         }
     }
 }
 
-/** One button of a bottom bar: an icon with its word under it, 64 dp wide at most so five fit a 360 dp phone. */
+/** One button of a bottom bar: an icon with its word under it; the bars give each an equal share of their width (#538). */
 @Composable
 internal fun ScanBarButton(icon: ImageVector, label: String, enabled: Boolean = true, modifier: Modifier = Modifier.width(72.dp), onClick: () -> Unit) {
     val c = pdfColors

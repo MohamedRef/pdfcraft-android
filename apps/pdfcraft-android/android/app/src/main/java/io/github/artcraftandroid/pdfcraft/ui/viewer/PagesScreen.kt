@@ -292,20 +292,23 @@ fun PagesScreen(vm: AppViewModel, doc: OpenDocument, onClose: () -> Unit) {
             }
         }
         val enabled = picked.isNotEmpty()
-        Row(
-            // at least the bar's height, taller when a large font setting enlarges the labels (sp, as the reference's)
-            Modifier.fillMaxWidth().heightIn(min = BottomBarHeight).barTopLine().background(c.surface),
-            horizontalArrangement = Arrangement.spacedBy(if (organizing) 0.dp else 20.dp, Alignment.CenterHorizontally),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            if (exporting != null) {
+        val barItems = organizeBarItems(exporting = exporting != null, organizing = organizing)
+        OrganizeBar(barItems, organizing, enabled = { item ->
+            when (item) {
+                OrganizeBarItem.Save, OrganizeBarItem.Share, OrganizeBarItem.RotateLeft, OrganizeBarItem.RotateRight -> enabled
+                OrganizeBarItem.Duplicate -> enabled && doc.info.allowsAssembly
+                OrganizeBarItem.Delete -> enabled && picked.size < doc.pageCount
+                OrganizeBarItem.Split -> doc.pageCount > 1
+                else -> true
+            }
+        }) { item ->
+            when (item) {
                 // picking the pages to export: save them to the phone's pictures, or share them
-                OrganizeItem(LucideIcons.Save, stringResource(R.string.common_save), enabled) { vm.tools.writeImages(doc, exporting, picked, share = false) }
-                OrganizeItem(LucideIcons.Share2, stringResource(R.string.common_share), enabled) { vm.tools.writeImages(doc, exporting, picked, share = true) }
-            } else if (organizing) {
-                OrganizeItem(LucideIcons.FilePlus, stringResource(R.string.pages_insert_page), true) { insertMenu = true }
-                OrganizeItem(LucideIcons.CopyPlus, stringResource(R.string.pages_duplicate), enabled && doc.info.allowsAssembly) { vm.docTools.duplicatePages(doc, picked) }
-                OrganizeItem(LucideIcons.Trash2, stringResource(R.string.common_delete), enabled && picked.size < doc.pageCount) {
+                OrganizeBarItem.Save -> exporting?.let { vm.tools.writeImages(doc, it, picked, share = false) }
+                OrganizeBarItem.Share -> exporting?.let { vm.tools.writeImages(doc, it, picked, share = true) }
+                OrganizeBarItem.Insert -> insertMenu = true
+                OrganizeBarItem.Duplicate -> vm.docTools.duplicatePages(doc, picked)
+                OrganizeBarItem.Delete -> {
                     // no confirmation step: the deletion says what it did and offers Undo at once (#199)
                     val count = picked.size
                     vm.runTool(doc, "page_delete", mapOf("pages" to picked.map { it + 1 })) {
@@ -313,19 +316,18 @@ fun PagesScreen(vm: AppViewModel, doc: OpenDocument, onClose: () -> Unit) {
                     }
                     selected.clear()
                 }
-                OrganizeItem(LucideIcons.RotateCcw, stringResource(R.string.pages_rotate_left), enabled) { vm.runTool(doc, "page_rotate", mapOf("pages" to picked.map { it + 1 }, "degrees" to -90)) }
-                OrganizeItem(LucideIcons.RotateCw, stringResource(R.string.pages_rotate_right), enabled) { vm.runTool(doc, "page_rotate", mapOf("pages" to picked.map { it + 1 }, "degrees" to 90)) }
-                OrganizeItem(LucideIcons.Ellipsis, stringResource(R.string.pages_more), true) { moreMenu = true }
-            } else {
-                OrganizeItem(LucideIcons.FilePenLine, stringResource(R.string.common_tool_edit_pdf), true) {
+                OrganizeBarItem.RotateLeft -> vm.runTool(doc, "page_rotate", mapOf("pages" to picked.map { it + 1 }, "degrees" to -90))
+                OrganizeBarItem.RotateRight -> vm.runTool(doc, "page_rotate", mapOf("pages" to picked.map { it + 1 }, "degrees" to 90))
+                OrganizeBarItem.More -> moreMenu = true
+                OrganizeBarItem.EditPdf -> {
                     close()
                     vm.enterTool(doc, ViewerTool.Edit)
                 }
-                OrganizeItem(LucideIcons.Crop, stringResource(R.string.common_tool_crop), true) {
+                OrganizeBarItem.Crop -> {
                     close()
                     vm.runQuickTool(doc, QuickTool.Crop)
                 }
-                OrganizeItem(LucideIcons.Scissors, stringResource(R.string.pages_split_short), doc.pageCount > 1) { vm.docTools.splitOpen = true }
+                OrganizeBarItem.Split -> vm.docTools.splitOpen = true
             }
         }
     }
@@ -402,19 +404,66 @@ fun PagesScreen(vm: AppViewModel, doc: OpenDocument, onClose: () -> Unit) {
     }
 }
 
+/** The buttons of the Pages screen's bar ([organizeBarItems] picks which show). */
+internal enum class OrganizeBarItem(val icon: ImageVector, val label: Int) {
+    Save(LucideIcons.Save, R.string.common_save),
+    Share(LucideIcons.Share2, R.string.common_share),
+    Insert(LucideIcons.FilePlus, R.string.pages_insert_page),
+    Duplicate(LucideIcons.CopyPlus, R.string.pages_duplicate),
+    Delete(LucideIcons.Trash2, R.string.common_delete),
+    RotateLeft(LucideIcons.RotateCcw, R.string.pages_rotate_left),
+    RotateRight(LucideIcons.RotateCw, R.string.pages_rotate_right),
+    More(LucideIcons.Ellipsis, R.string.pages_more),
+    EditPdf(LucideIcons.FilePenLine, R.string.common_tool_edit_pdf),
+    Crop(LucideIcons.Crop, R.string.common_tool_crop),
+    Split(LucideIcons.Scissors, R.string.pages_split_short),
+}
+
+/** The bar while exporting pages as pictures, while organizing, or else (Edit PDF, Crop, Split). */
+internal fun organizeBarItems(exporting: Boolean, organizing: Boolean): List<OrganizeBarItem> = when {
+    exporting -> listOf(OrganizeBarItem.Save, OrganizeBarItem.Share)
+    organizing -> listOf(
+        OrganizeBarItem.Insert, OrganizeBarItem.Duplicate, OrganizeBarItem.Delete,
+        OrganizeBarItem.RotateLeft, OrganizeBarItem.RotateRight, OrganizeBarItem.More,
+    )
+    else -> listOf(OrganizeBarItem.EditPdf, OrganizeBarItem.Crop, OrganizeBarItem.Split)
+}
+
+/**
+ * The Pages screen's bar: its buttons share the width (#538), each name on up to two lines. Before
+ * #538 each was as wide as its one-line name; in German or French the six of Organize came to more
+ * than a 360 dp screen and More, the last, was left with no width.
+ */
 @Composable
-private fun OrganizeItem(icon: ImageVector, label: String, enabled: Boolean, onClick: () -> Unit) {
+internal fun OrganizeBar(
+    items: List<OrganizeBarItem>,
+    organizing: Boolean,
+    enabled: (OrganizeBarItem) -> Boolean = { true },
+    onItem: (OrganizeBarItem) -> Unit,
+) {
+    Row(
+        // at least the bar's height, taller when a large font setting enlarges the labels (sp, as the reference's)
+        Modifier.fillMaxWidth().heightIn(min = BottomBarHeight).barTopLine().background(pdfColors.surface).padding(horizontal = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(if (organizing) 0.dp else 20.dp, Alignment.CenterHorizontally),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        for (item in items) OrganizeItem(item.icon, stringResource(item.label), enabled(item), barShare(max = 88.dp)) { onItem(item) }
+    }
+}
+
+@Composable
+private fun OrganizeItem(icon: ImageVector, label: String, enabled: Boolean, modifier: Modifier, onClick: () -> Unit) {
     val c = pdfColors
     val tint = if (enabled) c.icon else c.icon.copy(alpha = 0.35f)
-    // the reference's items: a 40 dp icon box over an 11 sp label, 56 dp wide (wider for long labels)
+    // the reference's items: a 40 dp icon box over an 11 sp label; the name wraps onto a second line when long
     Column(
-        Modifier.widthIn(min = 56.dp).heightIn(min = BottomBarHeight).clickable(enabled = enabled, role = Role.Button, onClick = onClick)
-            .semantics { contentDescription = label }.padding(horizontal = 4.dp),
+        modifier.heightIn(min = BottomBarHeight).clickable(enabled = enabled, role = Role.Button, onClick = onClick)
+            .semantics { contentDescription = label }.padding(horizontal = 2.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
         Box(Modifier.size(40.dp), contentAlignment = Alignment.Center) { Icon(icon, null, tint = tint, modifier = Modifier.size(24.dp)) }
-        Text(label, color = if (enabled) c.label else c.label.copy(alpha = 0.35f), fontSize = 10.5.sp, maxLines = 1)
+        io.github.artcraftandroid.pdfcraft.ui.WordWrapLabel(label, if (enabled) c.label else c.label.copy(alpha = 0.35f), size = 10.5.sp, lineHeight = 13.sp)
     }
 }
 
