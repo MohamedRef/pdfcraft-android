@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- One list of tools on Home and in the viewer (#539). -->
+<resources>
+    <string name="home_category_scan">مسح ضوئي</string>
+    <string name="home_category_annotate">تعليقات توضيحية</string>
+    <string name="home_category_pages">الصفحات</string>
+    <string name="home_new_or_open">جديد أو فتح</string>
+    <string name="home_search_tools">ابحث في الأدوات</string>
+    <string name="home_no_tools">لم يتم العثور على أداة</string>
+    <string name="home_no_tools_body">جرّب كلمة أخرى، أو ابحث في الكل.</string>
+    <string name="home_search_inside_library">ابحث داخل مكتبتك</string>
+    <string name="toolbar_label_bates">بيتس</string>
+    <string name="toolbar_label_marks">علامات</string>
+    <string name="toolbar_label_split">تقسيم</string>
+    <string name="toolbar_label_ocr_files">نص الملفات</string>
+    <string name="toolbar_label_recent_scans">السكانات</string>
+    <string name="toolbar_label_compare">مقارنة</string>
+</resources>

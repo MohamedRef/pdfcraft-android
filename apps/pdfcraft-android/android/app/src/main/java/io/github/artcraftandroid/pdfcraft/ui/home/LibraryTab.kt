@@ -88,7 +88,9 @@ fun LibraryTab(vm: AppViewModel) {
     val data = vm.study.libraryData
     var current by remember { mutableStateOf<String?>(null) }
     var smart by remember { mutableStateOf<Smart?>(null) }
-    var query by remember { mutableStateOf("") }
+    // a search by name that found nothing can hand its words over (#539)
+    var query by remember { mutableStateOf(vm.home.libraryQuery.orEmpty().take(100)) }
+    LaunchedEffect(Unit) { vm.home.libraryQuery = null }
     var results by remember { mutableStateOf<List<SearchHit>?>(null) }
     var menu by remember { mutableStateOf(false) }
     var naming by remember { mutableStateOf<Pair<String?, String>?>(null) }

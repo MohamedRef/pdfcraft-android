@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- One list of tools on Home and in the viewer (#539). -->
+<resources>
+    <string name="home_category_scan">Scan</string>
+    <string name="home_category_annotate">Annotate</string>
+    <string name="home_category_pages">Pages</string>
+    <string name="home_new_or_open">New or open</string>
+    <string name="home_search_tools">Search tools</string>
+    <string name="home_no_tools">No tool found</string>
+    <string name="home_no_tools_body">Try another word, or look under All.</string>
+    <string name="home_search_inside_library">Search inside your library</string>
+    <string name="toolbar_label_bates">Bates</string>
+    <string name="toolbar_label_marks">Marks</string>
+    <string name="toolbar_label_split">Split</string>
+    <string name="toolbar_label_ocr_files">Text in files</string>
+    <string name="toolbar_label_recent_scans">Scans</string>
+    <string name="toolbar_label_compare">Compare</string>
+</resources>

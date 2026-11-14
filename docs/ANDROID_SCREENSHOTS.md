@@ -59,6 +59,13 @@ document, which needs the engine, so it is not drawn.
 
 Files: `app/build/screenshots/viewer/subtools_<locale>_320x640_<theme>.png`.
 
+`app/src/test/java/io/github/artcraftandroid/pdfcraft/ui/home/ToolsTabScreenshotsTest.kt`: Home ▸
+Tools (#539), the one list of tools shared with the viewer, with its search box and categories.
+English at 360 dp (light) and 384 dp (dark), Arabic at 384 dp, German at 320 dp, French at 360 dp,
+and the whole list at once (360 × 1400 dp) to show it fits two phone screens.
+
+Files: `app/build/screenshots/tools/tools_<locale>_<size>_<theme>.png`.
+
 ## In CI
 
 The Android job runs the pictures on a pull request whose merge commit changes

@@ -69,47 +69,108 @@ import io.github.artcraftandroid.pdfcraft.ui.pdfColors
 import kotlin.math.roundToInt
 
 /**
- * A tool that can sit on the viewer's bottom toolbar or in More tools: [label] on the bar,
- * [title] in More tools, [subTools] when it opens a row of sub-tools (the bar's corner mark).
+ * The groups tools are filed under in Home ▸ Tools (#539): each tool has exactly one, and the
+ * list shows them in this order.
  */
-enum class QuickTool(val id: String, @StringRes val label: Int, @StringRes val title: Int, val icon: ImageVector, val hue: Color, val subTools: Boolean = false) {
-    Edit("edit", R.string.common_tool_edit_pdf, R.string.common_tool_edit_pdf, LucideIcons.FilePenLine, ToolHues.edit),
-    Comment("comment", R.string.common_tool_comment, R.string.common_tool_comment, LucideIcons.MessageSquareText, ToolHues.comment, subTools = true),
-    Highlight("highlight", R.string.common_tool_highlight, R.string.common_tool_highlight, LucideIcons.Highlighter, ToolHues.text, subTools = true),
-    Draw("draw", R.string.common_tool_draw, R.string.common_tool_draw, LucideIcons.PenLine, ToolHues.sign),
-    FillSign("fillsign", R.string.common_tool_fill_sign, R.string.common_tool_fill_sign, LucideIcons.Signature, ToolHues.sign, subTools = true),
-    Export("export", R.string.common_tool_export, R.string.common_tool_export, LucideIcons.FileOutput, ToolHues.export),
-    Combine("combine", R.string.toolbar_label_combine, R.string.common_tool_combine, LucideIcons.Combine, ToolHues.combine),
-    Compress("compress", R.string.toolbar_label_compress, R.string.common_tool_compress, LucideIcons.FileArchive, ToolHues.compress),
-    Protect("protect", R.string.toolbar_label_password, R.string.common_tool_set_password, LucideIcons.FileLock2, ToolHues.protect),
+enum class ToolCategory(val key: String, @StringRes val label: Int) {
+    Scan("Scan", R.string.home_category_scan),
+    Annotate("Annotate", R.string.home_category_annotate),
+    Edit("Edit", R.string.home_category_edit),
+    Pages("Pages", R.string.home_category_pages),
+    Convert("Convert", R.string.home_category_convert),
+    Read("Read", R.string.home_category_read),
+}
+
+/**
+ * Every tool of the app, in one list (#539): the viewer's bottom toolbar and More tools, Home ▸
+ * Tools and "Start with a tool" all show tools from here. [label] on the bar, [title] in the lists,
+ * [subTools] when it opens a row of sub-tools (the bar's corner mark), [category] its one group.
+ */
+enum class QuickTool(val id: String, @StringRes val label: Int, @StringRes val title: Int, val icon: ImageVector, val hue: Color, val category: ToolCategory, val subTools: Boolean = false) {
+    Edit("edit", R.string.common_tool_edit_pdf, R.string.common_tool_edit_pdf, LucideIcons.FilePenLine, ToolHues.edit, ToolCategory.Edit),
+    Comment("comment", R.string.common_tool_comment, R.string.common_tool_comment, LucideIcons.MessageSquareText, ToolHues.comment, ToolCategory.Annotate, subTools = true),
+    Highlight("highlight", R.string.common_tool_highlight, R.string.common_tool_highlight, LucideIcons.Highlighter, ToolHues.text, ToolCategory.Annotate, subTools = true),
+    Draw("draw", R.string.common_tool_draw, R.string.common_tool_draw, LucideIcons.PenLine, ToolHues.sign, ToolCategory.Annotate),
+    FillSign("fillsign", R.string.common_tool_fill_sign, R.string.common_tool_fill_sign, LucideIcons.Signature, ToolHues.sign, ToolCategory.Annotate, subTools = true),
+    Export("export", R.string.common_tool_export, R.string.common_tool_export, LucideIcons.FileOutput, ToolHues.export, ToolCategory.Convert),
+    Combine("combine", R.string.toolbar_label_combine, R.string.common_tool_combine, LucideIcons.Combine, ToolHues.combine, ToolCategory.Pages),
+    Compress("compress", R.string.toolbar_label_compress, R.string.common_tool_compress, LucideIcons.FileArchive, ToolHues.compress, ToolCategory.Convert),
+    Protect("protect", R.string.toolbar_label_password, R.string.common_tool_set_password, LucideIcons.FileLock2, ToolHues.protect, ToolCategory.Edit),
     // a copy without its password and restrictions (#517), beside Set password
-    Unlock("unlock", R.string.toolbar_label_unlock, R.string.unlock_title, LucideIcons.LockOpen, ToolHues.protect),
+    Unlock("unlock", R.string.toolbar_label_unlock, R.string.unlock_title, LucideIcons.LockOpen, ToolHues.protect, ToolCategory.Edit),
     // a tool that changes the content: More tools, not ⋮ (#195)
-    Redact("redact", R.string.redact_title, R.string.redact_title, LucideIcons.SquareDashed, ToolHues.protect),
-    Accessibility("accessibility", R.string.a11y_title, R.string.a11y_title, LucideIcons.Accessibility, ToolHues.protect),
-    PrepareForm("prepareform", R.string.form_prepare, R.string.form_prepare, LucideIcons.TextCursorInput, ToolHues.sign),
-    Organize("organize", R.string.toolbar_label_organize, R.string.common_tool_organize, LucideIcons.LayoutGrid, ToolHues.organize),
-    Crop("crop", R.string.toolbar_label_crop, R.string.common_tool_crop, LucideIcons.Crop, ToolHues.crop),
+    Redact("redact", R.string.redact_title, R.string.redact_title, LucideIcons.SquareDashed, ToolHues.protect, ToolCategory.Edit),
+    // numbers across several saved PDFs (#539: was on Home only)
+    Bates("bates", R.string.toolbar_label_bates, R.string.bates_title, LucideIcons.FilePenLine, ToolHues.edit, ToolCategory.Edit),
+    // headers, footers, watermarks and backgrounds (#539: was in ⋮ and on Home only)
+    PageMarks("marks", R.string.toolbar_label_marks, R.string.marks_title, LucideIcons.Heading, ToolHues.edit, ToolCategory.Edit),
+    Accessibility("accessibility", R.string.a11y_title, R.string.a11y_title, LucideIcons.Accessibility, ToolHues.protect, ToolCategory.Read),
+    PrepareForm("prepareform", R.string.form_prepare, R.string.form_prepare, LucideIcons.TextCursorInput, ToolHues.sign, ToolCategory.Edit),
+    Organize("organize", R.string.toolbar_label_organize, R.string.common_tool_organize, LucideIcons.LayoutGrid, ToolHues.organize, ToolCategory.Pages),
+    // #539: was on the Pages screen and Home only
+    Split("split", R.string.toolbar_label_split, R.string.home_tool_split, LucideIcons.Scissors, ToolHues.organize, ToolCategory.Pages),
+    Crop("crop", R.string.toolbar_label_crop, R.string.common_tool_crop, LucideIcons.Crop, ToolHues.crop, ToolCategory.Pages),
     // room beside the content for notes (#146): changes the pages, so More tools
-    NoteMargin("margin", R.string.margin_title, R.string.margin_title, LucideIcons.PanelRight, ToolHues.crop),
-    Ocr("ocr", R.string.toolbar_label_recognize, R.string.common_tool_recognize_text, LucideIcons.ScanText, ToolHues.ocr),
+    NoteMargin("margin", R.string.margin_title, R.string.margin_title, LucideIcons.PanelRight, ToolHues.crop, ToolCategory.Pages),
+    Ocr("ocr", R.string.toolbar_label_recognize, R.string.common_tool_recognize_text, LucideIcons.ScanText, ToolHues.ocr, ToolCategory.Scan),
     // the scan tools sit with Recognize text, in one place (#195)
-    ScanEnhance("enhance", R.string.toolbar_label_enhance, R.string.scan_enhance_title, LucideIcons.WandSparkles, ToolHues.ocr),
-    OcrReview("ocrreview", R.string.toolbar_label_review_ocr, R.string.ocr_review_title, LucideIcons.ListChecks, ToolHues.ocr),
+    ScanEnhance("enhance", R.string.toolbar_label_enhance, R.string.scan_enhance_title, LucideIcons.WandSparkles, ToolHues.ocr, ToolCategory.Scan),
+    OcrReview("ocrreview", R.string.toolbar_label_review_ocr, R.string.ocr_review_title, LucideIcons.ListChecks, ToolHues.ocr, ToolCategory.Scan),
     // ink comments get their handwriting as text (#151), beside the other reading tools
-    Handwriting("handwriting", R.string.toolbar_label_handwriting, R.string.handwriting_read_page, LucideIcons.ScanText, ToolHues.ocr),
-    Create("create", R.string.common_tool_create_pdf, R.string.common_tool_create_pdf, LucideIcons.FilePlus2, ToolHues.create),
-    Text("text", R.string.toolbar_label_add_text, R.string.toolbar_tool_text, LucideIcons.Type, ToolHues.text),
-    Scan("scan", R.string.common_tool_scan, R.string.common_tool_scan, LucideIcons.Camera, ToolHues.scan),
-    ReadAloud("readaloud", R.string.common_tool_read_aloud, R.string.common_tool_read_aloud, LucideIcons.Volume2, ToolHues.read),
+    Handwriting("handwriting", R.string.toolbar_label_handwriting, R.string.handwriting_read_page, LucideIcons.ScanText, ToolHues.ocr, ToolCategory.Scan),
+    // several files at once (#539: was on Home only)
+    OcrBatch("ocrbatch", R.string.toolbar_label_ocr_files, R.string.ocr_batch_title, LucideIcons.ScanText, ToolHues.scan, ToolCategory.Scan),
+    Create("create", R.string.common_tool_create_pdf, R.string.common_tool_create_pdf, LucideIcons.FilePlus2, ToolHues.create, ToolCategory.Convert),
+    Text("text", R.string.toolbar_label_add_text, R.string.toolbar_tool_text, LucideIcons.Type, ToolHues.text, ToolCategory.Annotate),
+    Scan("scan", R.string.common_tool_scan, R.string.common_tool_scan, LucideIcons.Camera, ToolHues.scan, ToolCategory.Scan),
+    // the kept scans (#461, #539: was on Home only)
+    ScanRecent("recentscans", R.string.toolbar_label_recent_scans, R.string.scan_recent_title, LucideIcons.FileStack, ToolHues.scan, ToolCategory.Scan),
+    ReadAloud("readaloud", R.string.common_tool_read_aloud, R.string.common_tool_read_aloud, LucideIcons.Volume2, ToolHues.read, ToolCategory.Read),
+    // #539: was on Home only
+    Compare("compare", R.string.toolbar_label_compare, R.string.compare_title, LucideIcons.GitCompare, ToolHues.read, ToolCategory.Read),
     // distance, perimeter and area on plans and drawings (#135, #180)
-    Measure("measure", R.string.measure_tool, R.string.measure_tool, LucideIcons.Ruler, ToolHues.crop);
+    Measure("measure", R.string.measure_tool, R.string.measure_tool, LucideIcons.Ruler, ToolHues.crop, ToolCategory.Annotate);
+
+    /** True when the tool works on the open file, so Home asks for one first (#539). */
+    val needsFile: Boolean get() = this !in WITHOUT_FILE
 
     companion object {
         /** The bar as it comes: the reference's default tools and order. */
         val DEFAULT_BAR = listOf(Edit, Comment, Highlight, Draw, FillSign, Export)
 
+        /** Tools that start without an open file: they make one, or choose their files on their own screen. */
+        val WITHOUT_FILE = setOf(Create, Scan, ScanRecent, Combine, Unlock, Bates, OcrBatch)
+
+        /** "Start with a tool" on Home, after Open file: Scan first, one tap from Home (#539). */
+        val HOME_START = listOf(Scan, Edit, ReadAloud, FillSign, Create, Organize, Combine, Compress, Export, Protect)
+
         fun of(id: String): QuickTool? = entries.firstOrNull { it.id == id }
+
+        /**
+         * Home ▸ Tools: the tools of [category] (all of them when null) whose shown name, or
+         * category's name, contains [query]; by category, then by name, Scan leading its own (#539).
+         */
+        fun listed(category: ToolCategory?, query: String, nameOf: (QuickTool) -> String, categoryName: (ToolCategory) -> String = { it.key }): List<QuickTool> {
+            val q = query.trim().lowercase()
+            return entries
+                .filter { category == null || it.category == category }
+                .filter { q.isEmpty() || nameOf(it).lowercase().contains(q) || categoryName(it.category).lowercase().contains(q) }
+                .sortedWith(compareBy<QuickTool>({ it.category.ordinal }, { it != Scan }, { nameOf(it).lowercase() }))
+        }
+    }
+}
+
+/** Start [tool] from Home, where no file is open: one that works on a file asks for it first (#539). */
+fun AppViewModel.startToolFromHome(tool: QuickTool) {
+    when (tool) {
+        QuickTool.Create -> tools.openCreate()
+        QuickTool.Scan -> startScan()
+        QuickTool.ScanRecent -> scanRecent.show()
+        QuickTool.Combine -> pickFiles(io.github.artcraftandroid.pdfcraft.ui.FilePickKind.Combine)
+        QuickTool.Unlock -> openUnlock(null)
+        QuickTool.Bates -> openBates()
+        QuickTool.OcrBatch -> openOcrBatch()
+        else -> home.toolForFile(tool)
     }
 }
 
@@ -225,6 +286,16 @@ fun AppViewModel.runQuickTool(doc: OpenDocument, tool: QuickTool) {
         QuickTool.Scan -> startScan()
         QuickTool.ReadAloud -> sharing.startReadAloud(doc)
         QuickTool.Measure -> enterTool(doc, ViewerTool.Measure)
+        QuickTool.Bates -> openBates()
+        QuickTool.PageMarks -> docTools.openPageMarks(doc)
+        QuickTool.Split -> {
+            tools.organizing = true
+            doc.controller.pagesOpen = true
+            docTools.splitOpen = true
+        }
+        QuickTool.OcrBatch -> openOcrBatch()
+        QuickTool.ScanRecent -> scanRecent.show()
+        QuickTool.Compare -> startCompare(doc)
     }
 }
 

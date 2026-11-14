@@ -76,6 +76,8 @@ import io.github.artcraftandroid.pdfcraft.ui.SheetDivider
 import io.github.artcraftandroid.pdfcraft.ui.SheetRow
 import io.github.artcraftandroid.pdfcraft.ui.pdfColors
 import io.github.artcraftandroid.pdfcraft.ui.viewer.ToolHues
+import io.github.artcraftandroid.pdfcraft.ui.viewer.QuickTool
+import io.github.artcraftandroid.pdfcraft.ui.viewer.startToolFromHome
 import io.github.artcraftandroid.pdfcraft.ui.viewer.formatSize
 import java.text.DateFormat
 import java.util.Calendar
@@ -168,7 +170,8 @@ private fun HomeTabScreen(vm: AppViewModel, onBrowse: () -> Unit) {
         ) { Text(stringResource(R.string.home_delete_files_body), color = c.text, fontSize = 14.sp) }
     }
     val settingsLabel = stringResource(R.string.home_settings)
-    val toolsLabel = stringResource(R.string.home_tab_tools)
+    // named for what it does (#539)
+    val toolsLabel = stringResource(R.string.home_new_or_open)
     Box(Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize().safeTopPadding()) {
             if (vm.home.selectedFiles.isNotEmpty()) SelectionBar(vm, recent = tab == 0, onDelete = { confirmDeleteSelected = true }) else
@@ -286,7 +289,7 @@ private fun HomeTabScreen(vm: AppViewModel, onBrowse: () -> Unit) {
             SheetRow(LucideIcons.Camera, stringResource(R.string.home_new_scan), { fabMenu = false; vm.startScan() })
             SheetRow(LucideIcons.BookOpen, stringResource(R.string.notebook_new), { fabMenu = false; vm.study.newNotebookOpen = true })
             SheetDivider()
-            SheetRow(LucideIcons.FilePenLine, stringResource(R.string.common_tool_edit_pdf), { fabMenu = false; vm.home.toolForFile(FileTool.Edit) })
+            SheetRow(LucideIcons.FilePenLine, stringResource(R.string.common_tool_edit_pdf), { fabMenu = false; vm.startToolFromHome(QuickTool.Edit) })
             SheetRow(LucideIcons.FilePlus2, stringResource(R.string.common_tool_create_pdf), { fabMenu = false; vm.tools.openCreate() })
             SheetRow(LucideIcons.Combine, stringResource(R.string.common_tool_combine), { fabMenu = false; vm.pickFiles(io.github.artcraftandroid.pdfcraft.ui.FilePickKind.Combine) })
             Spacer(Modifier.height(12.dp))
@@ -301,22 +304,14 @@ private fun HomeTabScreen(vm: AppViewModel, onBrowse: () -> Unit) {
 }
 
 /** A tool that starts by choosing a PDF. */
-enum class FileTool { Edit, ReadAloud, FillSign, Organize, Compress, Export, Protect, Comment, Crop, Ocr, Draw, Split, PageMarks, Compare }
-
-/** The row of tools under "Start with a tool". */
+/** The row of tools under "Start with a tool": Scan, Open file, then tools from the one list (#539). */
 @Composable
 private fun ToolsCarousel(vm: AppViewModel, onBrowse: () -> Unit) {
     Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+        val tools = QuickTool.HOME_START
+        CarouselTile(tools.first().icon, stringResource(tools.first().title), tools.first().hue) { vm.startToolFromHome(tools.first()) }
         CarouselTile(LucideIcons.FolderOpen, stringResource(R.string.home_open_file), ToolHues.crop, onBrowse)
-        CarouselTile(LucideIcons.FilePenLine, stringResource(R.string.common_tool_edit_pdf), ToolHues.edit) { vm.home.toolForFile(FileTool.Edit) }
-        CarouselTile(LucideIcons.Volume2, stringResource(R.string.common_tool_read_aloud), ToolHues.read) { vm.home.toolForFile(FileTool.ReadAloud) }
-        CarouselTile(LucideIcons.Signature, stringResource(R.string.common_tool_fill_sign), ToolHues.sign) { vm.home.toolForFile(FileTool.FillSign) }
-        CarouselTile(LucideIcons.FilePlus2, stringResource(R.string.common_tool_create_pdf), ToolHues.create) { vm.tools.openCreate() }
-        CarouselTile(LucideIcons.LayoutGrid, stringResource(R.string.common_tool_organize), ToolHues.organize) { vm.home.toolForFile(FileTool.Organize) }
-        CarouselTile(LucideIcons.Combine, stringResource(R.string.common_tool_combine), ToolHues.combine) { vm.pickFiles(io.github.artcraftandroid.pdfcraft.ui.FilePickKind.Combine) }
-        CarouselTile(LucideIcons.FileArchive, stringResource(R.string.common_tool_compress), ToolHues.compress) { vm.home.toolForFile(FileTool.Compress) }
-        CarouselTile(LucideIcons.FileOutput, stringResource(R.string.common_tool_export), ToolHues.export) { vm.home.toolForFile(FileTool.Export) }
-        CarouselTile(LucideIcons.FileLock2, stringResource(R.string.common_tool_set_password), ToolHues.protect) { vm.home.toolForFile(FileTool.Protect) }
+        for (t in tools.drop(1)) CarouselTile(t.icon, stringResource(t.title), t.hue) { vm.startToolFromHome(t) }
     }
 }
 
@@ -490,11 +485,11 @@ fun FileSheet(vm: AppViewModel, r: FileRow, recent: Boolean, onDismiss: () -> Un
         }
         SheetDivider()
         Column(Modifier.verticalScroll(rememberScrollState())) {
-            SheetRow(LucideIcons.FilePenLine, stringResource(R.string.common_tool_edit_pdf), { act { vm.home.openFor(r, FileTool.Edit) } })
-            SheetRow(LucideIcons.Volume2, stringResource(R.string.common_tool_read_aloud), { act { vm.home.openFor(r, FileTool.ReadAloud) } })
-            SheetRow(LucideIcons.FileOutput, stringResource(R.string.home_export_as), { act { vm.home.openFor(r, FileTool.Export) } })
-            SheetRow(LucideIcons.FileArchive, stringResource(R.string.common_tool_compress), { act { vm.home.openFor(r, FileTool.Compress) } })
-            SheetRow(LucideIcons.FileLock2, stringResource(R.string.common_tool_set_password), { act { vm.home.openFor(r, FileTool.Protect) } })
+            SheetRow(LucideIcons.FilePenLine, stringResource(R.string.common_tool_edit_pdf), { act { vm.home.openFor(r, QuickTool.Edit) } })
+            SheetRow(LucideIcons.Volume2, stringResource(R.string.common_tool_read_aloud), { act { vm.home.openFor(r, QuickTool.ReadAloud) } })
+            SheetRow(LucideIcons.FileOutput, stringResource(R.string.home_export_as), { act { vm.home.openFor(r, QuickTool.Export) } })
+            SheetRow(LucideIcons.FileArchive, stringResource(R.string.common_tool_compress), { act { vm.home.openFor(r, QuickTool.Compress) } })
+            SheetRow(LucideIcons.FileLock2, stringResource(R.string.common_tool_set_password), { act { vm.home.openFor(r, QuickTool.Protect) } })
             SheetDivider()
             SheetRow(LucideIcons.Share2, stringResource(R.string.common_share), { act { vm.home.shareFile(r) } })
             SheetRow(LucideIcons.Printer, stringResource(R.string.home_print), { act { vm.home.printFile(r) } })

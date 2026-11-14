@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- One list of tools on Home and in the viewer (#539). -->
+<resources>
+    <string name="home_category_scan">Numériser</string>
+    <string name="home_category_annotate">Annoter</string>
+    <string name="home_category_pages">Pages</string>
+    <string name="home_new_or_open">Nouveau ou ouvrir</string>
+    <string name="home_search_tools">Rechercher un outil</string>
+    <string name="home_no_tools">Aucun outil trouvé</string>
+    <string name="home_no_tools_body">Essayez un autre mot, ou regardez dans Tous.</string>
+    <string name="home_search_inside_library">Rechercher dans votre bibliothèque</string>
+    <string name="toolbar_label_bates">Bates</string>
+    <string name="toolbar_label_marks">Marques</string>
+    <string name="toolbar_label_split">Diviser</string>
+    <string name="toolbar_label_ocr_files">Texte des fichiers</string>
+    <string name="toolbar_label_recent_scans">Numérisations</string>
+    <string name="toolbar_label_compare">Comparer</string>
+</resources>
