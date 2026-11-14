@@ -414,6 +414,18 @@ private fun LibraryPage(vm: AppViewModel) = Group {
     val wipeTitle = stringResource(R.string.library_wipe_index)
     SettingsRow(wipeTitle, rememberConfirm(wipeTitle, stringResource(R.string.common_delete)) { st.wipeLibraryIndex() })
     SettingsHeader(stringResource(R.string.study_section))
+    // the categories (#560): Home's card and the library group documents by them
+    var editing by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    androidx.compose.runtime.LaunchedEffect(Unit) { st.refreshStudy() }
+    val parts = ArrayList<String>()
+    for ((id, ms) in st.studyWeekByCategory) {
+        val min = ms / 60_000
+        val label = st.libraryData.category(id.ifEmpty { null })?.let { categoryName(it) } ?: stringResource(R.string.category_no_category)
+        parts += stringResource(R.string.study_category_time, label, min / 60, min % 60)
+    }
+    val perCategory = parts.joinToString(" · ")
+    SettingsRow(stringResource(R.string.category_edit), { editing = true }, summary = perCategory.takeIf { it.isNotEmpty() }?.let { stringResource(R.string.study_week_by_category, it) }, chevron = true)
+    if (editing) ManageCategories(vm) { editing = false }
     val clearTitle = stringResource(R.string.study_clear_stats)
     SettingsRow(clearTitle, rememberConfirm(clearTitle, stringResource(R.string.common_clear)) { st.clearStudyStats() }, summary = stringResource(R.string.study_stats_body))
 }

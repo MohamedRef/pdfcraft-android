@@ -9,6 +9,30 @@ import org.json.JSONObject
 /** A folder of the library: virtual, so a file can sit in several without being moved or copied. */
 data class LibraryCollection(val id: String, val name: String, val parent: String? = null, val color: Int? = null)
 
+/**
+ * A kind of document (#560): Study, Work, Personal, or one the person made. One grouping with the
+ * library's collections and tags: a document's category is kept on its library item, and giving a
+ * document a category puts it in the library. [name] is null for a built-in category that was
+ * never renamed (it is then shown in the app's language).
+ */
+data class DocCategory(val id: String, val name: String? = null) {
+    val builtIn: Boolean get() = id in BUILT_IN
+
+    /** The category for the diagnostics log: a built-in id, else "custom" (never a typed name). */
+    val diagWord: String get() = if (builtIn) id else "custom"
+
+    companion object {
+        const val STUDY = "study"
+        const val WORK = "work"
+        const val PERSONAL = "personal"
+        val BUILT_IN = listOf(STUDY, WORK, PERSONAL)
+        val DEFAULTS = BUILT_IN.map { DocCategory(it) }
+
+        /** [id] for the diagnostics log: "none", a built-in id or "custom". */
+        fun diagWord(id: String?): String = when (id) { null -> "none"; in BUILT_IN -> id; else -> "custom" }
+    }
+}
+
 /** A file the user added to the library, where it is (its URI), and how it is organised. */
 data class LibraryItem(
     val uri: String,
@@ -18,11 +42,33 @@ data class LibraryItem(
     /** A colour label, `0xRRGGBB`. */
     val color: Int? = null,
     val added: Long = 0,
+    /** Its [DocCategory] id, or none (#560). */
+    val category: String? = null,
+    /**
+     * The file's path in shared storage when it can be told (#560): the same file reached by
+     * another route (the file picker, On device, another app) has another URI but this path.
+     */
+    val path: String? = null,
 )
 
 /** The library's state, as one JSON file. */
-data class LibraryData(val collections: List<LibraryCollection> = emptyList(), val items: List<LibraryItem> = emptyList()) {
+data class LibraryData(
+    val collections: List<LibraryCollection> = emptyList(),
+    val items: List<LibraryItem> = emptyList(),
+    /** The categories, in the person's order (#560). */
+    val categories: List<DocCategory> = DocCategory.DEFAULTS,
+) {
     fun item(uri: String) = items.firstOrNull { it.uri == uri }
+    fun category(id: String?) = id?.let { i -> categories.firstOrNull { it.id == i } }
+
+    /** The library item of the file at [uri], or of the same file reached by another route ([path]). */
+    fun itemFor(uri: String, path: String?): LibraryItem? =
+        item(uri) ?: path?.takeIf { it.isNotEmpty() }?.let { p -> items.firstOrNull { it.path == p } }
+
+    /** The category of the file at [uri] (or the same file at [path]), if it has one. */
+    fun categoryOf(uri: String, path: String?): String? =
+        items.firstOrNull { it.uri == uri && it.category != null }?.category
+            ?: path?.takeIf { it.isNotEmpty() }?.let { p -> items.firstOrNull { it.path == p && it.category != null }?.category }
     fun collection(id: String) = collections.firstOrNull { it.id == id }
     fun children(parent: String?) = collections.filter { it.parent == parent }.sortedBy { it.name.lowercase() }
     fun allTags(): List<String> = items.flatMap { it.tags }.distinct().sortedBy { it.lowercase() }
@@ -51,9 +97,11 @@ data class LibraryData(val collections: List<LibraryCollection> = emptyList(), v
         .put("items", JSONArray().apply {
             items.forEach {
                 put(JSONObject().put("uri", it.uri).put("name", it.name).put("collections", JSONArray(it.collections.sorted()))
-                    .put("tags", JSONArray(it.tags.sorted())).put("color", it.color ?: JSONObject.NULL).put("added", it.added))
+                    .put("tags", JSONArray(it.tags.sorted())).put("color", it.color ?: JSONObject.NULL).put("added", it.added)
+                    .apply { it.category?.let { c -> put("category", c) }; it.path?.let { p -> put("path", p) } })
             }
         })
+        .put("categories", JSONArray().apply { categories.forEach { put(JSONObject().put("id", it.id).put("name", it.name ?: JSONObject.NULL)) } })
 
     companion object {
         fun fromJson(o: JSONObject): LibraryData {
@@ -64,15 +112,27 @@ data class LibraryData(val collections: List<LibraryCollection> = emptyList(), v
                 }
             } ?: emptyList()
             val ids = cols.map { it.id }.toSet()
+            // a library from before #560 starts with the built-in categories
+            val cats = o.optJSONArray("categories")?.let { a ->
+                (0 until a.length()).mapNotNull { i ->
+                    val c = a.optJSONObject(i) ?: return@mapNotNull null
+                    DocCategory(c.optString("id").ifEmpty { return@mapNotNull null }, c.optString("name").takeIf { !c.isNull("name") && it.isNotEmpty() })
+                }.distinctBy { it.id }
+            } ?: DocCategory.DEFAULTS
+            val catIds = cats.map { it.id }.toSet()
             val items = o.optJSONArray("items")?.let { a ->
                 (0 until a.length()).mapNotNull { i ->
                     val c = a.optJSONObject(i) ?: return@mapNotNull null
                     fun set(k: String) = c.optJSONArray(k)?.let { s -> (0 until s.length()).map { s.optString(it) }.filter { it.isNotEmpty() }.toSet() } ?: emptySet()
-                    LibraryItem(c.optString("uri").ifEmpty { return@mapNotNull null }, c.optString("name"), set("collections").filter(ids::contains).toSet(), set("tags"), if (c.isNull("color")) null else c.optInt("color"), c.optLong("added"))
+                    LibraryItem(
+                        c.optString("uri").ifEmpty { return@mapNotNull null }, c.optString("name"), set("collections").filter(ids::contains).toSet(), set("tags"),
+                        if (c.isNull("color")) null else c.optInt("color"), c.optLong("added"),
+                        c.optString("category").takeIf { it in catIds }, c.optString("path").ifEmpty { null },
+                    )
                 }
             } ?: emptyList()
             // a parent that no longer exists makes the collection top-level
-            return LibraryData(cols.map { if (it.parent != null && it.parent !in ids) it.copy(parent = null) else it }, items)
+            return LibraryData(cols.map { if (it.parent != null && it.parent !in ids) it.copy(parent = null) else it }, items, cats)
         }
     }
 }
@@ -109,6 +169,46 @@ class Library(private val file: File) {
 
     fun removeItem(uri: String) = update { d -> d.copy(items = d.items.filter { it.uri != uri }) }
 
+    /**
+     * Give the file at [uri] (named [name], at [path] when known) the category [category], or
+     * none (#560). Every library item of that file, by URI or path, gets it; a file not in the
+     * library yet is added, so it needs no adding by hand first.
+     */
+    fun setCategory(uri: String, name: String, path: String?, category: String?, now: Long) = update { d ->
+        val cat = category?.takeIf { d.category(it) != null }
+        val p = path?.takeIf { it.isNotEmpty() }
+        fun same(i: LibraryItem) = i.uri == uri || (p != null && i.path == p)
+        if (d.items.any(::same)) {
+            d.copy(items = d.items.map { if (same(it)) it.copy(category = cat, path = it.path ?: p) else it })
+        } else if (cat != null) {
+            d.copy(items = d.items + LibraryItem(uri, name, added = now, category = cat, path = p))
+        } else d
+    }
+
+    /** A new category named [name], last in the list. */
+    fun addCategory(name: String, id: String = newId()) = update { d ->
+        val n = cleanCategory(name).ifEmpty { return@update d }
+        d.copy(categories = d.categories + DocCategory(id, n))
+    }
+
+    fun renameCategory(id: String, name: String) = update { d ->
+        val n = cleanCategory(name).ifEmpty { return@update d }
+        d.copy(categories = d.categories.map { if (it.id == id) it.copy(name = n) else it })
+    }
+
+    /** Remove category [id]; its documents stay (in the library, with their reading time) without a category. */
+    fun deleteCategory(id: String) = update { d ->
+        d.copy(categories = d.categories.filter { it.id != id }, items = d.items.map { if (it.category == id) it.copy(category = null) else it })
+    }
+
+    /** Move category [id] [by] places (negative: up). */
+    fun moveCategory(id: String, by: Int) = update { d ->
+        val from = d.categories.indexOfFirst { it.id == id }
+        if (from < 0) return@update d
+        val to = (from + by).coerceIn(0, d.categories.lastIndex)
+        d.copy(categories = d.categories.toMutableList().apply { add(to, removeAt(from)) })
+    }
+
     private fun read(): LibraryData = runCatching { LibraryData.fromJson(JSONObject(file.readText())) }.getOrElse { LibraryData() }
 
     private fun write(d: LibraryData) {
@@ -121,6 +221,7 @@ class Library(private val file: File) {
     companion object {
         fun newId(): String = java.util.UUID.randomUUID().toString().take(12)
         fun cleanTag(t: String): String = t.trim().removePrefix("#").replace(Regex("\\s+"), " ").take(40)
+        fun cleanCategory(t: String): String = t.trim().replace(Regex("\\s+"), " ").take(40)
     }
 }
 

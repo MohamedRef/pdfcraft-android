@@ -21,6 +21,11 @@ data class DocStudy(
     val lastStudied: Long = 0,
     /** Active ms per local day (epoch day), the last [StudyStats.DAYS_KEPT] days. */
     val days: Map<Long, Long> = emptyMap(),
+    /**
+     * The file's path in shared storage (#560), so the same file reached by two routes (two
+     * URIs) is one record; "" when it can't be told, null when not looked up yet.
+     */
+    val path: String? = null,
 ) {
     /** Share of the pages seen, 0 to 1. */
     val progress: Float get() = if (pageCount <= 0) 0f else (pagesSeen.size.toFloat() / pageCount).coerceIn(0f, 1f)
@@ -30,6 +35,21 @@ data class DocStudy(
         .put("seen", JSONArray(pagesSeen.sorted())).put("pages", pageCount)
         .put("notes", annotations).put("last", lastPage).put("at", lastStudied)
         .put("days", JSONObject().apply { days.forEach { (d, ms) -> put(d.toString(), ms) } })
+        .apply { path?.let { put("path", it) } }
+
+    /** This record and [other] (the same file by another route) as one: the newer one's place, both one's time. */
+    fun mergedWith(other: DocStudy): DocStudy {
+        val (newer, older) = if (lastStudied >= other.lastStudied) this to other else other to this
+        val days = HashMap(newer.days)
+        older.days.forEach { (d, ms) -> days[d] = (days[d] ?: 0) + ms }
+        val count = if (newer.pageCount > 0) newer.pageCount else older.pageCount
+        return newer.copy(
+            name = newer.name.ifEmpty { older.name }, activeMs = newer.activeMs + older.activeMs,
+            pagesSeen = (newer.pagesSeen + older.pagesSeen).filter { count <= 0 || it < count }.toSortedSet(),
+            pageCount = count, annotations = newer.annotations + older.annotations, days = days,
+            path = newer.path?.takeIf { it.isNotEmpty() } ?: older.path,
+        )
+    }
 
     companion object {
         fun fromJson(o: JSONObject): DocStudy? {
@@ -37,7 +57,7 @@ data class DocStudy(
             val seen = o.optJSONArray("seen")?.let { a -> (0 until a.length()).map { a.optInt(it) }.filter { it >= 0 }.toSortedSet() } ?: sortedSetOf()
             val days = HashMap<Long, Long>()
             o.optJSONObject("days")?.let { d -> d.keys().forEach { k -> k.toLongOrNull()?.let { days[it] = d.optLong(k).coerceAtLeast(0) } } }
-            return DocStudy(uri, o.optString("name"), o.optLong("ms").coerceAtLeast(0), seen, o.optInt("pages"), o.optInt("notes"), o.optInt("last"), o.optLong("at"), days)
+            return DocStudy(uri, o.optString("name"), o.optLong("ms").coerceAtLeast(0), seen, o.optInt("pages"), o.optInt("notes"), o.optInt("last"), o.optLong("at"), days, if (o.has("path")) o.optString("path") else null)
         }
     }
 }
@@ -81,10 +101,21 @@ class StudyStats(private val file: File, private val zone: () -> ZoneId = { Zone
 
     fun get(uri: String): DocStudy? = synchronized(lock) { read()[uri] }
 
-    /** Add [ms] of active time, the [pages] seen (0-based) and [annotations] made to [uri]'s record at wall-clock [at]. */
-    fun record(uri: String, name: String, pageCount: Int, pages: Set<Int>, lastPage: Int, ms: Long, at: Long, annotations: Int = 0) = synchronized(lock) {
+    /**
+     * Add [ms] of active time, the [pages] seen (0-based) and [annotations] made to [uri]'s record
+     * at wall-clock [at]. With the file's [path], a record of the same file under another URI
+     * (another route to it) is merged into this one (#560).
+     */
+    fun record(uri: String, name: String, pageCount: Int, pages: Set<Int>, lastPage: Int, ms: Long, at: Long, annotations: Int = 0, path: String? = null) = synchronized(lock) {
         val all = read()
-        val old = all[uri] ?: DocStudy(uri, name)
+        var old = all[uri] ?: DocStudy(uri, name)
+        if (!path.isNullOrEmpty()) {
+            for (twin in all.values.filter { it.uri != uri && it.path == path }) {
+                all.remove(twin.uri)
+                old = old.mergedWith(twin).copy(uri = uri)
+            }
+            old = old.copy(path = path)
+        } else if (path != null && old.path == null) old = old.copy(path = "")
         val day = Instant.ofEpochMilli(at).atZone(zone()).toLocalDate().toEpochDay()
         val days = HashMap(old.days)
         if (ms > 0) days[day] = (days[day] ?: 0) + ms
@@ -111,6 +142,24 @@ class StudyStats(private val file: File, private val zone: () -> ZoneId = { Zone
 
     fun remove(uri: String) = synchronized(lock) { write(read().apply { remove(uri) }) }
 
+    /**
+     * Look up the path of each record that has none yet with [pathOf] ("" when it can't be
+     * told), then make the records of one file (one path, several URIs) one (#560). Returns how
+     * many records were merged away.
+     */
+    fun mergeSameFiles(pathOf: (String) -> String?): Int = synchronized(lock) {
+        val all = read()
+        var changed = false
+        for ((uri, d) in all.entries.toList()) if (d.path == null) {
+            all[uri] = d.copy(path = runCatching { pathOf(uri) }.getOrNull().orEmpty())
+            changed = true
+        }
+        val merged = mergeByPath(all.values.toList())
+        val gone = all.size - merged.size
+        if (changed || gone > 0) write(merged.associateBy { it.uri })
+        gone
+    }
+
     private fun read(): MutableMap<String, DocStudy> {
         val arr = runCatching { JSONArray(file.readText()) }.getOrElse { return LinkedHashMap() }
         val out = LinkedHashMap<String, DocStudy>()
@@ -128,6 +177,19 @@ class StudyStats(private val file: File, private val zone: () -> ZoneId = { Zone
     companion object {
         const val MAX_DOCS = 200
         const val DAYS_KEPT = 56L
+
+        /** [docs] with the records of one path made one, each at the newer one's URI; order kept. */
+        fun mergeByPath(docs: List<DocStudy>): List<DocStudy> {
+            val byPath = LinkedHashMap<String, DocStudy>()
+            val out = ArrayList<Any>()
+            for (d in docs) {
+                val p = d.path
+                if (p.isNullOrEmpty()) { out.add(d); continue }
+                val prev = byPath[p]
+                if (prev == null) { byPath[p] = d; out.add(p) } else byPath[p] = prev.mergedWith(d)
+            }
+            return out.map { if (it is String) byPath.getValue(it) else it as DocStudy }
+        }
     }
 }
 

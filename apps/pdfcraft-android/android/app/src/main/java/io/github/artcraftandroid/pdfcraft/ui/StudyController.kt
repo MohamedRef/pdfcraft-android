@@ -71,6 +71,7 @@ class StudyController internal constructor(private val vm: AppViewModel) {
             }
             doc.selection.clear()
             Diag.event(DiagArea.Study, "card_from_selection", "doc" to doc.diagNumber, "cloze" to cloze, "chars" to picked.length)
+            suggestStudy(doc, "card")
             cardDraft = CardDraft(uri, doc.info.name, page, front, "", null)
         }
     }
@@ -484,20 +485,195 @@ class StudyController internal constructor(private val vm: AppViewModel) {
     private val studyPendingPages = HashSet<Int>()
     private var studyLastFlush = 0L
 
-    /** Home's Continue studying card: the documents studied most recently, and this week's minutes. */
+    /** Home's card (#560): the documents listed under the chosen chip, and the Study week's minutes. */
     var studyRecent by mutableStateOf<List<io.github.artcraftandroid.pdfcraft.engine.DocStudy>>(emptyList())
         private set
     var studyWeek by mutableStateOf<List<Long>>(emptyList())
         private set
 
-    fun refreshStudy() {
-        vm.viewModelScope.launch {
-            val (recent, week) = withContext(Dispatchers.IO) {
-                studyStats.all().filter { it.activeMs > 0 }.take(3) to studyStats.week(java.time.LocalDate.now())
+    /** Whether any document has enough counted time to be listed under All (the card shows then). */
+    var studyAnyRows by mutableStateOf(false)
+        private set
+
+    /** The card's category chips after All, and the chosen one (null: All); remembered. */
+    var studyChips by mutableStateOf<List<String>>(emptyList())
+        private set
+    var studyChip by mutableStateOf<String?>(null)
+        private set
+
+    /** Each listed document's category, for the card's rows. */
+    var studyCategories by mutableStateOf<Map<String, String>>(emptyMap())
+        private set
+
+    /** This week's reading time per category id ("" for none), for Settings (#560). */
+    var studyWeekByCategory by mutableStateOf<Map<String, Long>>(emptyMap())
+        private set
+
+    /** A document a study tool was used on, offered once for Study (#560), if any. */
+    var studySuggestion by mutableStateOf<StudySuggestion?>(null)
+        private set
+
+    /** Each document's path in shared storage (#560), "" when it can't be told; looked up off the main thread. */
+    private val docPaths = java.util.concurrent.ConcurrentHashMap<String, String>()
+
+    /**
+     * The path of the file at [uri] (#560), the same whichever route reached it: a file's own
+     * path, or the one its address or provider names. "" when it can't be told. Does I/O.
+     */
+    internal fun docPathOf(uri: String): String = docPaths.getOrPut(uri) {
+        runCatching {
+            val u = Uri.parse(uri)
+            when (u.scheme) {
+                "file" -> u.path?.let { File(it).canonicalPath }
+                "content" -> io.github.artcraftandroid.pdfcraft.engine.AllFilesAccess.candidates(app, u, query = true).firstOrNull()
+                    ?.let { runCatching { File(it).canonicalPath }.getOrDefault(it) }
+                else -> null
             }
-            studyRecent = recent
-            studyWeek = week
+        }.getOrNull().orEmpty()
+    }
+
+    private fun categoryIn(data: io.github.artcraftandroid.pdfcraft.engine.LibraryData, uri: String, path: String?): String? = data.categoryOf(uri, path)
+
+    /** The category of the document at [uri], as last loaded. */
+    fun categoryOf(uri: String): String? = categoryIn(libraryData, uri, docPaths[uri])
+
+    /** The category of the document at [uri], its path looked up first (off the main thread). */
+    suspend fun findCategory(uri: String): String? {
+        val path = withContext(Dispatchers.IO) { docPathOf(uri) }
+        return categoryIn(libraryData, uri, path)
+    }
+
+    fun refreshStudy(): kotlinx.coroutines.Job =
+        vm.viewModelScope.launch {
+            val remembered = vm.settings.appPrefs.getString("studyChip", null)
+            val due = dueCounts.values.sum() > 0
+            val r = withContext(Dispatchers.IO) {
+                val merged = runCatching { studyStats.mergeSameFiles(::docPathOf) }.getOrDefault(0)
+                if (merged > 0) Diag.event(DiagArea.Study, "study_merge", "records" to merged)
+                val data = library.load()
+                val all = studyStats.all()
+                val cat = { d: io.github.artcraftandroid.pdfcraft.engine.DocStudy -> categoryIn(data, d.uri, d.path) }
+                val chips = io.github.artcraftandroid.pdfcraft.engine.StudyCard.chips(all, cat, data.categories, due)
+                val chip = io.github.artcraftandroid.pdfcraft.engine.StudyCard.chosen(remembered, chips)
+                val rows = io.github.artcraftandroid.pdfcraft.engine.StudyCard.rows(all, cat, chip)
+                val week = studyStats.week(java.time.LocalDate.now(), io.github.artcraftandroid.pdfcraft.engine.StudyCard.studyUris(all, cat))
+                val today = java.time.LocalDate.now()
+                val weekDays = (0L..6L).map { today.minusDays(it).toEpochDay() }.toSet()
+                StudyCardState(
+                    data, chips, chip, rows, week, io.github.artcraftandroid.pdfcraft.engine.StudyCard.rows(all, cat, null, 1).isNotEmpty(),
+                    rows.mapNotNull { d -> cat(d)?.let { d.uri to it } }.toMap(), io.github.artcraftandroid.pdfcraft.engine.StudyCard.weekByCategory(all, cat, weekDays),
+                )
+            }
+            libraryData = r.data
+            studyChips = r.chips
+            studyChip = r.chip
+            studyRecent = r.rows
+            studyWeek = r.week
+            studyAnyRows = r.any
+            studyCategories = r.categories
+            studyWeekByCategory = r.byCategory
+            studySuggestion = loadSuggestion()?.takeIf { s -> categoryIn(r.data, s.uri, docPaths[s.uri]) == null }
         }
+
+    private class StudyCardState(
+        val data: io.github.artcraftandroid.pdfcraft.engine.LibraryData, val chips: List<String>, val chip: String?,
+        val rows: List<io.github.artcraftandroid.pdfcraft.engine.DocStudy>, val week: List<Long>, val any: Boolean, val categories: Map<String, String>,
+        val byCategory: Map<String, Long>,
+    )
+
+    /** The person chose a chip on Home's card (null: All); remembered. */
+    fun chooseStudyChip(chip: String?) {
+        vm.settings.appPrefs.edit().apply { if (chip == null) remove("studyChip") else putString("studyChip", chip) }.apply()
+        studyChip = chip
+        vm.viewModelScope.launch {
+            refreshStudy().join()
+            Diag.event(
+                DiagArea.Study, "study_card", "chip" to (chip?.let { io.github.artcraftandroid.pdfcraft.engine.DocCategory.diagWord(it) } ?: "all"),
+                "rows" to studyRecent.size, "no_category" to studyRecent.count { it.uri !in studyCategories },
+            )
+        }
+    }
+
+    /**
+     * Give the file at [uri] (named [name]) the category [category], or none (#560); [from] says
+     * where it was set, for the log. A file not in the library yet is added to it.
+     */
+    fun setCategory(uri: String, name: String, category: String?, from: String) {
+        val doc = vm.tabs.tabs.firstNotNullOfOrNull { t -> t.doc?.takeIf { it.source?.toString() == uri } } ?: vm.document?.takeIf { it.source?.toString() == uri }
+        vm.viewModelScope.launch {
+            val before = withContext(Dispatchers.IO) {
+                val path = docPathOf(uri)
+                val old = library.load().categoryOf(uri, path)
+                if (category != null) runCatching { vm.files.keepAccess(Uri.parse(uri)) }
+                library.setCategory(uri, name, path, category, System.currentTimeMillis())
+                old
+            }
+            Diag.event(
+                DiagArea.Study, "category_set", "doc" to (doc?.diagNumber ?: 0),
+                "from" to io.github.artcraftandroid.pdfcraft.engine.DocCategory.diagWord(before),
+                "to" to io.github.artcraftandroid.pdfcraft.engine.DocCategory.diagWord(category), "where" to from,
+            )
+            if (category != null && studySuggestion?.uri == uri) answerSuggestion(if (category == io.github.artcraftandroid.pdfcraft.engine.DocCategory.STUDY) "accepted" else "dismissed", set = false)
+            refreshLibrary()
+            refreshStudy()
+        }
+    }
+
+    fun addCategory(name: String) = categoryEdit { it.addCategory(name) }
+    fun renameCategory(id: String, name: String) = categoryEdit { it.renameCategory(id, name) }
+    fun deleteCategory(id: String) = categoryEdit { it.deleteCategory(id) }
+    fun moveCategory(id: String, by: Int) = categoryEdit { it.moveCategory(id, by) }
+
+    private fun categoryEdit(f: (io.github.artcraftandroid.pdfcraft.engine.Library) -> Unit) {
+        vm.viewModelScope.launch {
+            withContext(Dispatchers.IO) { f(library) }
+            refreshLibrary()
+            refreshStudy()
+        }
+    }
+
+    /**
+     * A study tool ([reason]: tape, quiz, card, lecture, focus) was used on [doc]: if it has no
+     * category, offer "Add to Study?" once (#560), as a quiet line on Home's card. Never for a PDF
+     * the scanner saved, and never twice for one document.
+     */
+    internal fun suggestStudy(doc: OpenDocument, reason: String) {
+        val uri = doc.source?.toString() ?: return
+        val prefs = vm.settings.appPrefs
+        val offered = prefs.getStringSet("studySuggested", emptySet()).orEmpty()
+        if (uri in offered || uri in prefs.getStringSet("scanMade", emptySet()).orEmpty()) return
+        val name = doc.info.name
+        val number = doc.diagNumber
+        vm.viewModelScope.launch {
+            val has = withContext(Dispatchers.IO) { library.load().categoryOf(uri, docPathOf(uri)) != null }
+            if (has) return@launch
+            // an earlier offer not answered is left, and noted as ignored
+            studySuggestion?.let { old -> Diag.event(DiagArea.Study, "category_suggested", "doc" to old.docNumber, "reason" to old.reason, "outcome" to "ignored") }
+            prefs.edit().putStringSet("studySuggested", (offered + uri).toList().takeLast(200).toSet())
+                .putString("studySuggest", org.json.JSONObject().put("uri", uri).put("name", name).put("reason", reason).put("doc", number).toString()).apply()
+            studySuggestion = StudySuggestion(uri, name, reason, number)
+        }
+    }
+
+    /** The person answered the offer on the card: [outcome] accepted (it goes into Study) or dismissed. */
+    fun answerSuggestion(outcome: String, set: Boolean = true) {
+        val s = studySuggestion ?: return
+        studySuggestion = null
+        vm.settings.appPrefs.edit().remove("studySuggest").apply()
+        Diag.event(DiagArea.Study, "category_suggested", "doc" to s.docNumber, "reason" to s.reason, "outcome" to outcome)
+        if (set && outcome == "accepted") setCategory(s.uri, s.name, io.github.artcraftandroid.pdfcraft.engine.DocCategory.STUDY, "suggestion")
+    }
+
+    private fun loadSuggestion(): StudySuggestion? = runCatching {
+        val o = org.json.JSONObject(vm.settings.appPrefs.getString("studySuggest", null) ?: return null)
+        StudySuggestion(o.getString("uri"), o.optString("name"), o.optString("reason"), o.optInt("doc"))
+    }.getOrNull()
+
+    /** A PDF the scanner saved starts with no category and is never offered for Study (#560). */
+    internal fun markScanMade(uri: String) {
+        val prefs = vm.settings.appPrefs
+        val made = prefs.getStringSet("scanMade", emptySet()).orEmpty()
+        prefs.edit().putStringSet("scanMade", (made + uri).toList().takeLast(200).toSet()).apply()
     }
 
     /**
@@ -537,9 +713,16 @@ class StudyController internal constructor(private val vm: AppViewModel) {
         val name = doc.info.name
         val count = doc.pageCount
         val last = doc.viewer.currentPage
-        Diag.event(DiagArea.Study, "study_time", "doc" to doc.diagNumber, "active_ms" to ms, "pages_seen" to pages.size, "notes" to notes, "page_count" to count)
+        val number = doc.diagNumber
+        val data = libraryData
         vm.viewModelScope.launch(Dispatchers.IO) {
-            runCatching { studyStats.record(uri, name, count, pages, last, ms, System.currentTimeMillis(), notes) }
+            // one record per file, whichever route opened it (#560)
+            val path = docPathOf(uri)
+            Diag.event(
+                DiagArea.Study, "study_time", "doc" to number, "active_ms" to ms, "pages_seen" to pages.size, "notes" to notes, "page_count" to count,
+                "category" to io.github.artcraftandroid.pdfcraft.engine.DocCategory.diagWord(data.categoryOf(uri, path)),
+            )
+            runCatching { studyStats.record(uri, name, count, pages, last, ms, System.currentTimeMillis(), notes, path) }
                 .onFailure { Diag.failure(DiagArea.Study, "study_time_save", it) }
         }
     }
@@ -576,6 +759,8 @@ class StudyController internal constructor(private val vm: AppViewModel) {
             DiagArea.Study, "focus_timer", "running" to t.running, "paused" to (t.pausedLeft >= 0), "on_break" to t.onBreak,
             "work_min" to t.workMs / 60_000, "break_min" to t.breakMs / 60_000,
         )
+        // the focus timer started while a document is open: a study tool used on it (#560)
+        if (t.running && !focusTimer.active) vm.document?.let { suggestStudy(it, "focus") }
         focusTimer = t
         io.github.artcraftandroid.pdfcraft.FocusTimerAlarm.apply(app, t)
     }

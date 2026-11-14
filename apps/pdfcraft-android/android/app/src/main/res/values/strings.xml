@@ -2263,7 +2263,7 @@
     <!-- Translator note: Study statistics: how much the user has studied, read and reviewed. -->
     <string name="study_section">Study statistics</string>
     <string name="study_clear_stats">Delete study statistics</string>
-    <string name="study_stats_body">Reading time counts only while a document is open in front and you touched the screen in the last 2 minutes. It stays on this phone.</string>
+    <string name="study_stats_body">Counts while a document is open in front and you touched the screen in the last 2 minutes. Study time on Home covers Study documents only. Kept on this phone.</string>
     <string name="study_stats_cleared">Study statistics deleted</string>
     <string name="study_continue">Continue studying</string>
     <string name="study_week_minutes">This week %1$d h %2$d min</string>
@@ -2697,4 +2697,24 @@
     <string name="scan_model_cancel">Cancel download</string>
     <string name="scan_model_remove">Remove</string>
     <string name="scan_model_download_failed">The download did not finish. Tap Download to try again; what was saved is kept.</string>
+    <string name="category_study">Study</string>
+    <string name="category_work">Work</string>
+    <string name="category_personal">Personal</string>
+    <string name="category_label">Category</string>
+    <string name="category_edit">Edit categories</string>
+    <string name="category_new">New category</string>
+    <string name="category_name_hint">Category name</string>
+    <string name="category_delete">Delete category</string>
+    <string name="category_delete_body">Documents in “%1$s” keep their reading time; only this category is taken off them.</string>
+    <string name="category_move_up">Move up</string>
+    <string name="category_move_down">Move down</string>
+    <string name="category_choose">Choose a category</string>
+    <string name="category_no_category">No category</string>
+    <string name="study_card_all">All</string>
+    <string name="study_continue_reading">Continue reading</string>
+    <string name="study_suggest">Add “%1$s” to Study?</string>
+    <string name="study_suggest_add">Add</string>
+    <string name="study_suggest_dismiss">Not now</string>
+    <string name="study_week_by_category">This week: %1$s</string>
+    <string name="study_category_time">%1$s %2$d h %3$d min</string>
 </resources>

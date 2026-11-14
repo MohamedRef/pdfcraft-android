@@ -1659,7 +1659,7 @@
     <string name="focus_work_started">رجوع للتركيز</string>
     <string name="study_section">إحصائيات المذاكرة</string>
     <string name="study_clear_stats">حذف إحصائيات المذاكرة</string>
-    <string name="study_stats_body">وقت القراءة بيتحسب بس والمستند مفتوح قدامك ولمست الشاشة في آخر دقيقتين. بيفضل على الموبايل ده بس.</string>
+    <string name="study_stats_body">وقت القراءة بيتحسب بس والمستند مفتوح قدامك ولمست الشاشة في آخر دقيقتين. في الرئيسية، «كمّل مذاكرة» بيحسب مستندات المذاكرة بس. بيفضل على الموبايل ده بس.</string>
     <string name="study_stats_cleared">تم حذف إحصائيات المذاكرة</string>
     <string name="study_continue">كمّل مذاكرة</string>
     <string name="study_week_minutes">الأسبوع ده %1$d س %2$d د</string>
@@ -1999,4 +1999,24 @@
     <string name="scan_model_cancel">إلغاء التنزيل</string>
     <string name="scan_model_remove">إزالة</string>
     <string name="scan_model_download_failed">لم يكتمل التنزيل. اضغط تنزيل للمحاولة مرة أخرى؛ ما تم حفظه يبقى.</string>
+    <string name="category_study">مذاكرة</string>
+    <string name="category_work">شغل</string>
+    <string name="category_personal">شخصي</string>
+    <string name="category_label">التصنيف</string>
+    <string name="category_edit">تعديل التصنيفات</string>
+    <string name="category_new">تصنيف جديد</string>
+    <string name="category_name_hint">اسم التصنيف</string>
+    <string name="category_delete">حذف التصنيف</string>
+    <string name="category_delete_body">المستندات اللي في «%1$s» بيفضل وقت قرايتها؛ بيتشال منها التصنيف ده بس.</string>
+    <string name="category_move_up">لفوق</string>
+    <string name="category_move_down">لتحت</string>
+    <string name="category_choose">اختار تصنيف</string>
+    <string name="category_no_category">من غير تصنيف</string>
+    <string name="study_card_all">الكل</string>
+    <string name="study_continue_reading">كمّل قراية</string>
+    <string name="study_suggest">تضيف «%1$s» للمذاكرة؟</string>
+    <string name="study_suggest_add">ضيف</string>
+    <string name="study_suggest_dismiss">مش دلوقتي</string>
+    <string name="study_week_by_category">الأسبوع ده: %1$s</string>
+    <string name="study_category_time">%1$s %2$d س %3$d د</string>
 </resources>

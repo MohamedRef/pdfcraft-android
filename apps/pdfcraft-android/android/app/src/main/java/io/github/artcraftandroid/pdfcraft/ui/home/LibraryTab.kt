@@ -74,6 +74,8 @@ private sealed interface Smart {
     data object Unresolved : Smart
     data object ThisWeek : Smart
     data class Tagged(val tag: String) : Smart
+    /** The files of one category (#560): the same grouping as Home's card. */
+    data class Category(val id: String) : Smart
 }
 
 /**
@@ -116,6 +118,7 @@ fun LibraryTab(vm: AppViewModel) {
                 Smart.Unresolved -> stringResource(R.string.library_smart_unresolved)
                 Smart.ThisWeek -> stringResource(R.string.library_smart_week)
                 is Smart.Tagged -> "#" + s.tag
+                is Smart.Category -> data.category(s.id)?.let { categoryName(it) } ?: stringResource(R.string.library_title)
                 null -> current?.let { data.collection(it)?.name } ?: stringResource(R.string.library_title)
             }
             Text(title, color = c.text, fontSize = 20.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -144,6 +147,8 @@ fun LibraryTab(vm: AppViewModel) {
                 item { IndexSwitch(vm) }
                 item {
                     Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        // the categories in use first, beside the smart chips (#560)
+                        for (cat in data.categories) if (data.items.any { it.category == cat.id }) SmartChip(categoryName(cat)) { smart = Smart.Category(cat.id) }
                         SmartChip(stringResource(R.string.library_smart_unresolved)) { smart = Smart.Unresolved }
                         SmartChip(stringResource(R.string.library_smart_week)) { smart = Smart.ThisWeek }
                         for (t in data.allTags()) SmartChip("#$t") { smart = Smart.Tagged(t) }
@@ -158,6 +163,7 @@ fun LibraryTab(vm: AppViewModel) {
                     data.items.filter { it.uri in opened || it.added >= since }
                 }
                 is Smart.Tagged -> data.items.filter { s.tag in it.tags }
+                is Smart.Category -> data.items.filter { it.category == s.id }
                 null -> if (current == null) data.items.filter { it.collections.isEmpty() } else data.items.filter { current in it.collections }
             }.sortedBy { it.name.lowercase() }
             if (smart == null) {
@@ -256,6 +262,7 @@ private fun ItemRow(vm: AppViewModel, item: LibraryItem, onMenu: () -> Unit) {
             Text(item.name.removeSuffix(".pdf"), color = if (unavailable) c.textSecondary else c.text, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
             val line = buildList {
                 if (unavailable) add(unavailableText)
+                vm.study.libraryData.category(item.category)?.let { add(categoryName(it)) }
                 addAll(item.tags.sorted().map { "#$it" })
             }.joinToString("  ")
             if (line.isNotEmpty()) Text(line, color = if (unavailable) c.red else c.textSecondary, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -302,6 +309,7 @@ private fun LibraryItemSheet(vm: AppViewModel, item: LibraryItem, onDismiss: () 
     PdfSheet(onDismiss = { vm.study.setItemTags(item.uri, tags.split(',', '،').toSet()); onDismiss() }, dim = true, maxHeightFraction = 0.85f) {
         Column(Modifier.verticalScroll(rememberScrollState()).padding(bottom = 16.dp)) {
             Text(item.name.removeSuffix(".pdf"), color = c.text, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(16.dp), maxLines = 2, overflow = TextOverflow.Ellipsis)
+            CategoryChooser(vm, item.uri, item.name, "library", Modifier.padding(bottom = 8.dp))
             Text(stringResource(R.string.library_label), color = c.textSecondary, fontSize = 13.sp, modifier = Modifier.padding(start = 16.dp))
             Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 val none = stringResource(R.string.library_no_label)

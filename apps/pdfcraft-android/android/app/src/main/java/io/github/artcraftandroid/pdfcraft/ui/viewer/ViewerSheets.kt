@@ -170,6 +170,8 @@ fun MoreSheet(vm: AppViewModel, doc: OpenDocument) {
             }
             GroupDivider()
             MoreHeading(stringResource(R.string.sheet_group_file))
+            // the document's category, one tap here (#560)
+            doc.source?.let { src -> io.github.artcraftandroid.pdfcraft.ui.home.CategoryChooser(vm, src.toString(), doc.info.name, "viewer_sheet") }
             SheetRow(LucideIcons.Copy, stringResource(R.string.common_save_copy), { close(); vm.sharing.saveCopyAs(doc) })
             if (vm.backups.backupTree != null) SheetRow(LucideIcons.RotateCcw, stringResource(R.string.backup_history), { ctl.sheet = ViewerSheet.Backups }, chevron = true)
             SheetRow(LucideIcons.GitCompare, stringResource(R.string.compare_with_older), { close(); vm.startCompare(doc) })
