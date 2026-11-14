@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Markup's ink (#520) -->
+<resources>
+    <string name="scan_lab_markup_ink">Tinta de marcas en pantalla, deshacer al instante, quitar marcas</string>
+    <string name="scan_markup_remove">Quitar trazos</string>
+    <string name="scan_markup_remove_hint">Frota sobre tus trazos de lápiz, resaltador o color para quitarlos.</string>
+</resources>

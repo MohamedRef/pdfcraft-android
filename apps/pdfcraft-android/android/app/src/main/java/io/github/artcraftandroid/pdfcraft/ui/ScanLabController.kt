@@ -75,7 +75,9 @@ internal class ScanLabController(private val vm: AppViewModel) {
         store.addPage(scan, index, page.file, output) { keptOutput ->
             scanTestPageJson(version, saved, page.corners, page.found, page.finding, look, strength, flatten, lab, keptOutput, result, preview, page.crop, capture, models, turn, kind, page.book, flattenChosen = page.flatten, pageLook = page.look.json(lab.lookPerPage), inspection = inspection, applied = applied, kindSource = io.github.artcraftandroid.pdfcraft.ui.scan.scanKindSource(page, lab), madeBeforeShown = vm.pageQueue.madeBeforeShown(page), shownKept = shownKept, discard = discard, position = index + 1, gallerySaved = gallerySaved, madeFullBeforeSave = madeFullBeforeSave, autoDecisions = autoDecisions, fromRecent = fromRecent,
                 // #495: how many marks of each kind, never what they are
-                marks = page.marks?.takeUnless { it.isEmpty }?.counts?.json(erasedShare, vm.scanMarkup.eyedropper[page.key] ?: 0),
+                marks = page.marks?.takeUnless { it.isEmpty }?.counts?.json(erasedShare, vm.scanMarkup.eyedropper[page.key] ?: 0)
+                    // #520: strokes taken back with Remove marks
+                    ?.put("marks_removed", vm.scanMarkup.marksRemoved[page.key] ?: 0),
                 // #505: how the page was stored at the size chosen
                 encoding = encoding,
                 // #513: opened from its PDF in the viewer

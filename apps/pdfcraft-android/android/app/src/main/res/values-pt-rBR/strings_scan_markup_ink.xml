@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Markup's ink (#520) -->
+<resources>
+    <string name="scan_lab_markup_ink">Tinta das marcações na tela, desfazer na hora, remover marcas</string>
+    <string name="scan_markup_remove">Tirar traços</string>
+    <string name="scan_markup_remove_hint">Passe sobre seus traços de caneta, marca-texto ou cor para tirá-los.</string>
+</resources>
