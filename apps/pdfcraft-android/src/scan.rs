@@ -177,6 +177,11 @@ pub struct ScanPageRequest {
     /// its check and the text lines again (#549). False decides afresh, as before.
     #[uniffi(default = false)]
     pub flatten_reuse: bool,
+    /// With `flatten_check` (the automatic mode): a page whose four sides were found straight
+    /// (`curved_sides` 0) and whose lines of text are already straight is left straightened by its
+    /// corners without the network, its check or the text lines (#549). False flattens it as before.
+    #[uniffi(default = false)]
+    pub skip_flat: bool,
 }
 
 /// How a page was stored (#505). Short words and numbers only: it goes into the log as it is.
@@ -494,6 +499,8 @@ pub struct ScanPageResult {
     pub line_flatten: Option<ScanLineFlatten>,
     /// The flattening was the preview's decision, taken over instead of made again (#549).
     pub flatten_reused: bool,
+    /// The page was found flat already and not flattened (#549).
+    pub flatten_skipped_flat: bool,
     /// The quarter turns clockwise the page was given to stand upright (#339): 0 when it was not
     /// asked, already upright, or the classifier was not sure.
     pub quarter_turns: u8,
@@ -1001,6 +1008,7 @@ fn page_request<'a>(
         markup,
         size: pdfcraft_scan::size::SizeChoice::from_id(&request.size).unwrap_or_default(),
         auto_encode: request.auto_encode,
+        skip_flat: request.skip_flat,
         ..PageRequest::new(photo, corners)
     }
 }
@@ -1129,6 +1137,8 @@ pub struct ScanPreview {
     pub trim: Option<ScanTrim>,
     /// What the text-line fallback did, when it ran (#303, part B).
     pub line_flatten: Option<ScanLineFlatten>,
+    /// The page was found flat already and not flattened (#549).
+    pub flatten_skipped_flat: bool,
     /// The straightened page was still at hand from an earlier preview: only its look was made.
     pub reused: bool,
     /// Clean scan or Whiteboard found the page's light estimate kept from an earlier look of the
@@ -1157,6 +1167,9 @@ struct PreviewKey {
     flatten_trim: bool,
     flatten_min_lines: u8,
     line_flatten: bool,
+    /// A flat page left unflattened (#549) depends on its sides found straight.
+    skip_flat: bool,
+    curved_sides: u8,
     upright: bool,
     turns: u8,
     max_side: u32,
@@ -1187,6 +1200,8 @@ fn preview_key(photo: PathBuf, request: &ScanPageRequest, corners: [f32; 8], max
         flatten_trim: request.flatten_trim,
         flatten_min_lines: request.flatten_min_lines,
         line_flatten: request.line_flatten,
+        skip_flat: request.skip_flat,
+        curved_sides: request.curved_sides,
         upright: request.upright,
         turns: request.turns % 4,
         max_side,
@@ -1462,6 +1477,7 @@ pub(crate) fn preview_stoppable(
         flatten_check: base.flatten_check.map(Into::into),
         trim: base.trim.map(|t| ScanTrim::of(t, before_turn(base.page.width, base.page.height, base.turns))),
         line_flatten: base.line_flatten.as_ref().map(Into::into),
+        flatten_skipped_flat: base.flatten_skipped_flat,
         reused,
         light_reused: applied.light_reused,
         timings,
@@ -1583,6 +1599,7 @@ fn result_of(page: pdfcraft_scan::page::PageResult, path: String) -> ScanPageRes
         trim: page.trim.map(|t| ScanTrim::of(t, before_turn(page.width, page.height, page.turns))),
         line_flatten: page.line_flatten.as_ref().map(Into::into),
         flatten_reused: page.flatten_reused,
+        flatten_skipped_flat: page.flatten_skipped_flat,
         quarter_turns: page.quarter_turns,
         orientation: page.orientation.map(orientation_of),
         turns: page.turns,
@@ -1810,6 +1827,7 @@ mod tests {
             size: "best".into(),
             auto_encode: false,
             flatten_reuse: false,
+            skip_flat: false,
         }
     }
 

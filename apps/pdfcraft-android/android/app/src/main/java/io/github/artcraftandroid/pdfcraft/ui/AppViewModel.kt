@@ -2322,6 +2322,8 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 "quarter_turns" to (p?.quarterTurns?.toInt() ?: 0), "flattened" to (p?.flattened ?: false),
                 // flattened and straightened compared (#302)
                 "flatten_auto" to lab.flattenAuto, *scanFlattenCheckDiag(p?.flattenCheck),
+                // a page already flat left unflattened (#549)
+                "skip_flat" to lab.skipFlat, "flatten_skipped_flat" to (p?.flattenSkippedFlat ?: false),
                 // the automatic look decided the page's flattening (#466)
                 "flatten_decided" to autoFlatten,
                 // fingers at the page's edge removed after Clean scan (#466)
@@ -2838,6 +2840,8 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 *scanLineFlattenDiag(lab.lineFlatten, r?.lineFlatten),
                 // the preview's flattening decision taken over instead of made again (#549)
                 "flatten_reuse" to lab.flattenReuse, "flatten_reused" to (r?.flattenReused ?: false),
+                // a page already flat left unflattened (#549)
+                "skip_flat" to lab.skipFlat, "flatten_skipped_flat" to (r?.flattenSkippedFlat ?: false),
                 "strength" to strength, "side_proportions" to !lab.perspective, "snap_paper" to lab.snapPaper,
                 // the strength the page was really made at, and whether the slider's counts as set by hand (#424)
                 *scanAppliedStrengthDiag(scanAppliedStrength(page.look, lab, r?.kind?.strength?.toInt()), lab),
@@ -2904,6 +2908,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                         paperSpread = it.paperSpread?.toDouble(),
                         whitePoint = it.whitePoint?.toDouble(),
                         flattenReused = it.flattenReused,
+                        flattenSkippedFlat = it.flattenSkippedFlat,
                     )
                 }
                 val turn = ScanTestTurn(page.turns, autoUpright, r?.turns?.toInt() ?: 0, followed, turnSource)

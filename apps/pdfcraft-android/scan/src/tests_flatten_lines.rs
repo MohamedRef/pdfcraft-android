@@ -370,7 +370,7 @@ fn a_previews_flattening_decision_is_taken_over_at_full_size() {
     assert!(fresh.timings.iter().any(|&(stage, _)| stage == crate::page::STAGE_FLATTEN));
     assert_eq!(fresh.flattened, reused.flattened);
 
-    let straight = crate::page::FlattenDecision { grid: None, network: false, bend: 0.0, check: None, line_flatten: None };
+    let straight = crate::page::FlattenDecision { grid: None, network: false, bend: 0.0, check: None, line_flatten: None, skipped_flat: false };
     let kept_straight = crate::page_base(&crate::PageRequest { flatten_known: Some(&straight), ..ask() }).unwrap();
     let plain = crate::page_base(&crate::PageRequest::new(&bytes, corners)).unwrap();
     assert!(!kept_straight.flattened && kept_straight.flatten_reused);
@@ -378,4 +378,46 @@ fn a_previews_flattening_decision_is_taken_over_at_full_size() {
     // without flattening asked, a decision is not used
     let off = crate::page_base(&crate::PageRequest { flatten_known: Some(&known), ..crate::PageRequest::new(&bytes, corners) }).unwrap();
     assert!(!off.flattened && !off.flatten_reused && off.flatten_decision.is_none());
+}
+
+/// In the automatic mode a page with four straight sides and straight lines of text is left
+/// straightened by its corners without the network, its check or the lines (#549); a curled page,
+/// a page with a curved side, and the option off all go through flattening as before.
+#[test]
+fn a_flat_page_skips_flattening_when_asked() {
+    let flat_scene = curled(0.0, 0.0, [0.3, 0.15, 0.0]);
+    let bytes = png_of(&flat_scene.photograph(&text(18)));
+    let corners = flat_scene.corners().to_shares(flat_scene.photo.0, flat_scene.photo.1);
+    let ask = |skip_flat, curved_sides| crate::PageRequest {
+        flatten: true,
+        flatten_check: true,
+        line_flatten: true,
+        skip_flat,
+        curved_sides,
+        ..crate::PageRequest::new(&bytes, corners)
+    };
+    let skipped = crate::page_base(&ask(true, 0)).unwrap();
+    let measured: Vec<_> = skipped.timings.iter().map(|&(stage, _)| stage).collect();
+    println!("flat page: {measured:?}");
+    assert!(skipped.flatten_skipped_flat && !skipped.flattened, "{measured:?}");
+    assert!(measured.contains(&crate::page::STAGE_FLATTEN_FLAT));
+    assert!(!measured.iter().any(|s| [crate::page::STAGE_FLATTEN, crate::page::STAGE_FLATTEN_CHECK, crate::page::STAGE_FLATTEN_LINES].contains(s)));
+    assert!(skipped.flatten_decision.as_ref().is_some_and(|d| d.skipped_flat && d.grid.is_none()));
+    let plain = crate::page_base(&crate::PageRequest::new(&bytes, corners)).unwrap();
+    assert_eq!(skipped.page, plain.page);
+    // a curved side, or the option off: flattened as before
+    assert!(!crate::page_base(&ask(true, 1)).unwrap().flatten_skipped_flat);
+    let off = crate::page_base(&ask(false, 0)).unwrap();
+    assert!(!off.flatten_skipped_flat && off.timings.iter().all(|&(stage, _)| stage != crate::page::STAGE_FLATTEN_FLAT));
+
+    // a curled page is measured, found not flat, and flattened with the same result as without
+    let scene = curled(0.4, -0.1, [0.15, 0.0, 0.0]);
+    let curled_bytes = png_of(&scene.photograph(&text(18)));
+    let corners = scene.corners().to_shares(scene.photo.0, scene.photo.1);
+    let ask = |skip_flat| crate::PageRequest { flatten: true, flatten_check: true, line_flatten: true, skip_flat, ..crate::PageRequest::new(&curled_bytes, corners) };
+    let measured = crate::page_base(&ask(true)).unwrap();
+    let before = crate::page_base(&ask(false)).unwrap();
+    assert!(!measured.flatten_skipped_flat && measured.flattened);
+    assert_eq!(measured.page, before.page);
+    assert_eq!(measured.flatten_check, before.flatten_check);
 }

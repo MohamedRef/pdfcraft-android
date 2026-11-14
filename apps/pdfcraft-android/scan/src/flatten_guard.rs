@@ -26,7 +26,7 @@ pub const FEW_LINES: u32 = 4;
 pub const FEW_GAIN: f64 = 0.5;
 
 /// Both figures below this many pixels: the page is already straight, so there is nothing to gain.
-const STRAIGHT_ENOUGH_PX: f64 = 0.5;
+pub(crate) const STRAIGHT_ENOUGH_PX: f64 = 0.5;
 /// The border search runs on a copy reduced this many times in each direction (spec section 3: 4).
 const REDUCE: usize = 4;
 /// The most a side may be trimmed, as a share of the page's size across that side (spec: 2 %).

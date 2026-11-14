@@ -51,6 +51,7 @@ fn base(page: Rgb) -> PageBase {
         line_flatten: None,
         flatten_decision: None,
         flatten_reused: false,
+        flatten_skipped_flat: false,
         timings: Vec::new(),
         measured: std::sync::OnceLock::new(),
         look_kept: Prepared::new(),
