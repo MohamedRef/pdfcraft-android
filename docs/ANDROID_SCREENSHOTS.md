@@ -38,7 +38,7 @@ case under a drawn page (#493).
 
 `app/src/test/java/io/github/artcraftandroid/pdfcraft/ui/viewer/ViewerTopBarScreenshotsTest.kt`:
 the viewer's top bar (#525) with a short name, a long name with "Unsaved changes", Saving…, a tool
-active, reading aloud, and without the Read aloud switch. All seven languages at 320 dp, English and
+active, and reading aloud. All seven languages at 320 dp, English and
 Arabic at 360 dp, English also dark.
 
 Files: `app/build/screenshots/viewer/top_bar_<locale>_<width>_<theme>.png`.

@@ -75,8 +75,9 @@ val TopBarHeight = 57.dp
 val BottomBarHeight = 70.dp
 
 /**
- * The top bar in plain viewing: back, a divider and the Read aloud switch, the document's name with
- * its save state under it (#525), then Undo, Find, Share and More. With a tool active the back arrow becomes a check mark (Done), the switch goes, and Undo
+ * The top bar in plain viewing: back, the document's name with its save state under it (#525),
+ * then Undo, Find, Share and More. Read aloud starts from More tools, the bottom bar or the
+ * selection menu; while it reads, a divider and its switch (to stop it) follow Back. With a tool active the back arrow becomes a check mark (Done), the switch goes, and Undo
  * and Redo take fixed slots, disabled while there is nothing to undo or redo.
  */
 @Composable
@@ -105,8 +106,6 @@ fun ViewerTopBar(
     /** The document's name, always on the bar in plain viewing (#525); a tap opens File details. */
     docName: String? = null,
     onDocName: () -> Unit = {},
-    /** The Read aloud switch after Back (#525 leaves this to the owner). */
-    readAloudInBar: Boolean = true,
 ) {
     val c = pdfColors
     Row(
@@ -130,10 +129,10 @@ fun ViewerTopBar(
             Spacer(Modifier.width(10.dp))
             return@Row
         }
-        if (!toolActive && (readAloudInBar || readingAloud)) {
+        if (!toolActive && readingAloud) {
             BarDivider(height = 24.dp)
             Spacer(Modifier.width(14.dp))
-            // The switch keeps its size after the first edit so nothing in the bar moves (#189).
+            // only while reading: the owner moved Read aloud out of the bar (#525)
             ReadAloudSwitch(readingAloud, onReadAloud)
         }
         Box(Modifier.weight(1f).padding(horizontal = 6.dp), contentAlignment = Alignment.CenterStart) {

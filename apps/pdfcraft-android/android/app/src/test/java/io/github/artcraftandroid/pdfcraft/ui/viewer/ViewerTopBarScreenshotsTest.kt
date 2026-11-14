@@ -31,7 +31,7 @@ import org.robolectric.annotation.GraphicsMode
 
 /**
  * The viewer's top bar for UI review (#525, #462): a short name, a long name with "Unsaved
- * changes", Saving…, a tool active, reading aloud, and the bar without the Read aloud switch.
+ * changes", Saving…, a tool active, and reading aloud (the only time the Read aloud switch shows).
  * In the seven languages at 320 dp and 360 dp. Nothing is compared; the files are for a person
  * to look at (docs/ANDROID_SCREENSHOTS.md). Off unless Gradle gets -Ppdfcraft.screenshots=true.
  */
@@ -56,13 +56,12 @@ class ViewerTopBarScreenshotsTest {
         state: SaveState? = null,
         toolActive: Boolean = false,
         readingAloud: Boolean = false,
-        switchInBar: Boolean = true,
         canUndo: Boolean = false,
     ) = ViewerTopBar(
         toolActive = toolActive, doneIsCheck = true, canUndo = canUndo, canRedo = false,
         onBack = {}, onUndo = {}, onRedo = {}, readingAloud = readingAloud, onReadAloud = {},
         onSearch = {}, onShare = {}, onMore = {}, moreOpen = false,
-        saveState = state, docName = name, readAloudInBar = switchInBar,
+        saveState = state, docName = name,
     )
 
     private fun draw(config: String, theme: ThemeChoice = ThemeChoice.Light) {
@@ -80,9 +79,6 @@ class ViewerTopBarScreenshotsTest {
                     Bar(long, SaveState.Unsaved, toolActive = true, canUndo = true)
                     Caption("Reading aloud")
                     Bar(long, SaveState.Saved, readingAloud = true)
-                    Caption("Without the Read aloud switch: short name, long name with Unsaved changes")
-                    Bar("Invoice 42", switchInBar = false)
-                    Bar(long, SaveState.Unsaved, switchInBar = false, canUndo = true)
                 }
             }
         }
