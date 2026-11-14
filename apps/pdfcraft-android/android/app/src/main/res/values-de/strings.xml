@@ -1867,7 +1867,7 @@
     <string name="focus_work_started">Zurück zum Fokus</string>
     <string name="study_section">Lernstatistik</string>
     <string name="study_clear_stats">Lernstatistik löschen</string>
-    <string name="study_stats_body">Lesezeit zählt nur, solange ein Dokument im Vordergrund geöffnet ist und Sie in den letzten 2 Minuten den Bildschirm berührt haben. Sie bleibt auf diesem Telefon.</string>
+    <string name="study_stats_body">Lesezeit zählt nur, solange ein Dokument im Vordergrund geöffnet ist und Sie in den letzten 2 Minuten den Bildschirm berührt haben. Auf der Startseite zählt „Weiterlernen“ nur Dokumente in Lernen. Sie bleibt auf diesem Telefon.</string>
     <string name="study_stats_cleared">Lernstatistik gelöscht</string>
     <string name="study_continue">Weiterlernen</string>
     <string name="study_week_minutes">Diese Woche %1$d h %2$d min</string>
@@ -2057,4 +2057,24 @@
     <string name="scan_model_cancel">Download abbrechen</string>
     <string name="scan_model_remove">Entfernen</string>
     <string name="scan_model_download_failed">Der Download wurde nicht abgeschlossen. Tippe auf Herunterladen, um es erneut zu versuchen; Gespeichertes bleibt erhalten.</string>
+    <string name="category_study">Lernen</string>
+    <string name="category_work">Arbeit</string>
+    <string name="category_personal">Privat</string>
+    <string name="category_label">Kategorie</string>
+    <string name="category_edit">Kategorien bearbeiten</string>
+    <string name="category_new">Neue Kategorie</string>
+    <string name="category_name_hint">Name der Kategorie</string>
+    <string name="category_delete">Kategorie löschen</string>
+    <string name="category_delete_body">Dokumente in „%1$s“ behalten ihre Lesezeit; nur diese Kategorie wird entfernt.</string>
+    <string name="category_move_up">Nach oben</string>
+    <string name="category_move_down">Nach unten</string>
+    <string name="category_choose">Kategorie wählen</string>
+    <string name="category_no_category">Ohne Kategorie</string>
+    <string name="study_card_all">Alle</string>
+    <string name="study_continue_reading">Weiterlesen</string>
+    <string name="study_suggest">„%1$s“ zu Lernen hinzufügen?</string>
+    <string name="study_suggest_add">Hinzufügen</string>
+    <string name="study_suggest_dismiss">Nicht jetzt</string>
+    <string name="study_week_by_category">Diese Woche: %1$s</string>
+    <string name="study_category_time">%1$s %2$d h %3$d min</string>
 </resources>

@@ -1875,7 +1875,7 @@
     <string name="focus_work_started">De vuelta a concentrarse</string>
     <string name="study_section">Estadísticas de estudio</string>
     <string name="study_clear_stats">Eliminar estadísticas de estudio</string>
-    <string name="study_stats_body">El tiempo de lectura solo cuenta con un documento abierto en primer plano y si tocaste la pantalla en los últimos 2 minutos. Se queda en este teléfono.</string>
+    <string name="study_stats_body">El tiempo de lectura solo cuenta con un documento abierto en primer plano y si tocaste la pantalla en los últimos 2 minutos. En Inicio, Seguir estudiando cuenta solo los documentos de Estudio. Se queda en este teléfono.</string>
     <string name="study_stats_cleared">Estadísticas de estudio eliminadas</string>
     <string name="study_continue">Seguir estudiando</string>
     <string name="study_week_minutes">Esta semana %1$d h %2$d min</string>
@@ -2070,4 +2070,24 @@
     <string name="scan_model_cancel">Cancelar descarga</string>
     <string name="scan_model_remove">Quitar</string>
     <string name="scan_model_download_failed">La descarga no terminó. Toca Descargar para volver a intentarlo; lo guardado se conserva.</string>
+    <string name="category_study">Estudio</string>
+    <string name="category_work">Trabajo</string>
+    <string name="category_personal">Personal</string>
+    <string name="category_label">Categoría</string>
+    <string name="category_edit">Editar categorías</string>
+    <string name="category_new">Nueva categoría</string>
+    <string name="category_name_hint">Nombre de la categoría</string>
+    <string name="category_delete">Eliminar categoría</string>
+    <string name="category_delete_body">Los documentos de «%1$s» conservan su tiempo de lectura; solo se les quita esta categoría.</string>
+    <string name="category_move_up">Subir</string>
+    <string name="category_move_down">Bajar</string>
+    <string name="category_choose">Elegir una categoría</string>
+    <string name="category_no_category">Sin categoría</string>
+    <string name="study_card_all">Todo</string>
+    <string name="study_continue_reading">Seguir leyendo</string>
+    <string name="study_suggest">¿Añadir «%1$s» a Estudio?</string>
+    <string name="study_suggest_add">Añadir</string>
+    <string name="study_suggest_dismiss">Ahora no</string>
+    <string name="study_week_by_category">Esta semana: %1$s</string>
+    <string name="study_category_time">%1$s %2$d h %3$d min</string>
 </resources>

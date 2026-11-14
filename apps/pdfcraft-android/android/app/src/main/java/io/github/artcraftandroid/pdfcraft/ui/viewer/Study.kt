@@ -359,6 +359,7 @@ fun AppViewModel.addTape(doc: OpenDocument, page: Int, rect: FloatArray) {
     }
     runTool(doc, "comment_add", tapeArgs(page, rect, doc.study.tapeColor, commenting.commentAuthor, doc.study.tapePattern))
     MarkupDiag.tapeAdd(doc, doc.study.tapeColor, doc.study.tapePattern, freehand = false)
+    study.suggestStudy(doc, "tape")
 }
 
 /** Lay freehand tape with corners [outline] on [page] (#350): one undo step. */
@@ -369,6 +370,7 @@ fun AppViewModel.addFreehandTape(doc: OpenDocument, page: Int, outline: FloatArr
     }
     runTool(doc, "comment_add", freehandTapeArgs(page, outline, doc.study.tapeColor, commenting.commentAuthor, doc.study.tapePattern))
     MarkupDiag.tapeAdd(doc, doc.study.tapeColor, doc.study.tapePattern, freehand = true)
+    study.suggestStudy(doc, "tape")
 }
 
 /** The layer Share ▸ With tape showing puts tape on, so a reader's Layers panel can hide it (#350). */
@@ -420,6 +422,7 @@ fun AppViewModel.startQuiz(doc: OpenDocument, page: Int?) {
         doc.study.results = false
         doc.study.quiz = QuizSession(items)
         MarkupDiag.quizStart(doc, if (page == null) "document" else "page", items.size)
+        study.suggestStudy(doc, "quiz")
         if (page == null) doc.viewer.goToPage(items.first().page, items.first().rect[1])
     }
 }

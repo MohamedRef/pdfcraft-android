@@ -193,6 +193,7 @@ class NoteTakingController internal constructor(private val vm: AppViewModel) {
             // the comments already there are not marked as written during the lecture
             vm.comments(doc)?.mapNotNullTo(session.known) { it.name }
             Diag.event(DiagArea.Study, "lecture_start", "doc" to doc.diagNumber, "comments_before" to session.known.size, "free_mb" to app.filesDir.usableSpace / (1024 * 1024))
+            vm.study.suggestStudy(doc, "lecture")
             lectureRecording = session
             lecturePaused = false
             withContext(Dispatchers.IO) { lectures.put(uri, io.github.artcraftandroid.pdfcraft.engine.Lecture(id, now, 0, emptyList())) }

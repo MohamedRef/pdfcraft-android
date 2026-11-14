@@ -3081,6 +3081,8 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 // the kept scan knows the file it became (#513)
                 if (recent != null && linkId != null) withContext(Dispatchers.IO) { scanRecent.link(linkId, uri.toString(), pages.size) }
                 tell(if (editing != null) text(R.string.scan_edit_closed) else text(R.string.msg_saved_downloads, name) + unenhancedNote)
+                // a scan starts with no category and is never offered for Study (#560)
+                study.markScanMade(uri.toString())
                 open(uri)
             }
         } finally {
@@ -3171,6 +3173,9 @@ enum class DigestFormat(@androidx.annotation.StringRes val label: Int) {
 internal const val MAX_INDEX_BYTES = 300L * 1024 * 1024
 
 /** A flashcard being written: its deck (document URI), page, sides, and its id when editing one. */
+/** A document offered for Study once (#560): a study tool ([reason]) was used on it and it had no category. */
+data class StudySuggestion(val uri: String, val name: String, val reason: String, val docNumber: Int)
+
 data class CardDraft(val deck: String, val deckName: String, val page: Int, val front: String, val back: String, val id: String?)
 
 /** A review session: the cards still due in it, in order, and how many were reviewed. */

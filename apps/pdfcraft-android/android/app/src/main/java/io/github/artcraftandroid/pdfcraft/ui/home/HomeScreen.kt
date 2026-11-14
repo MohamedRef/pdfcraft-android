@@ -58,6 +58,7 @@ import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -218,7 +219,7 @@ private fun HomeTabScreen(vm: AppViewModel, onBrowse: () -> Unit) {
                     ToolsCarousel(vm, onBrowse)
                     // the last scans, one tap from Home (#516)
                     io.github.artcraftandroid.pdfcraft.ui.scan.ScanRecentHomeRow(vm)
-                    if (vm.study.studyRecent.isNotEmpty() || vm.study.dueCounts.isNotEmpty()) ContinueStudying(vm)
+                    if (vm.study.studyAnyRows || vm.study.dueCounts.values.sum() > 0 || vm.study.studySuggestion != null) ContinueStudying(vm)
                     Spacer(Modifier.height(16.dp))
                     Row(Modifier.fillMaxWidth().padding(start = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                         listOf(R.string.home_list_recent, R.string.home_list_starred, R.string.home_list_on_device).forEachIndexed { i, label ->
@@ -485,6 +486,9 @@ fun FileSheet(vm: AppViewModel, r: FileRow, recent: Boolean, onDismiss: () -> Un
         }
         SheetDivider()
         Column(Modifier.verticalScroll(rememberScrollState())) {
+            // its category, one tap from ⋮ (#560)
+            CategoryChooser(vm, r.key, r.name, if (vm.home.homeTab == HomeTab.Home) "home_row" else "files")
+            SheetDivider()
             SheetRow(LucideIcons.FilePenLine, stringResource(R.string.common_tool_edit_pdf), { act { vm.home.openFor(r, QuickTool.Edit) } })
             SheetRow(LucideIcons.Volume2, stringResource(R.string.common_tool_read_aloud), { act { vm.home.openFor(r, QuickTool.ReadAloud) } })
             SheetRow(LucideIcons.FileOutput, stringResource(R.string.home_export_as), { act { vm.home.openFor(r, QuickTool.Export) } })
@@ -520,40 +524,89 @@ fun FileSheet(vm: AppViewModel, r: FileRow, recent: Boolean, onDismiss: () -> Un
 }
 
 
-/** The last documents studied, each with its page and how much of it was read, and this week's time. */
+/**
+ * The documents read last, each with its page and how much of it was read (#560): chips for All
+ * and each category in use; Study is "Continue studying" with this week's Study time, its bars and
+ * the flashcards due, the others "Continue reading". Holding a row sets its category.
+ */
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
-private fun ContinueStudying(vm: AppViewModel) {
+internal fun ContinueStudying(vm: AppViewModel) {
     val c = pdfColors
     LaunchedEffect(Unit) { vm.study.refreshStudy() }
-    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp).clip(RoundedCornerShape(8.dp)).background(c.surfaceRaised).padding(12.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(stringResource(R.string.study_continue), color = c.text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-            val week = vm.study.studyWeek.sum() / 60_000
-            Text(stringResource(R.string.study_week_minutes, week / 60, week % 60), color = c.textSecondary, fontSize = 12.sp)
-        }
-        if (vm.study.studyWeek.isNotEmpty()) {
-            // this week's days, oldest first, as small bars
-            val max = (vm.study.studyWeek.maxOrNull() ?: 0L).coerceAtLeast(1L)
-            Row(Modifier.fillMaxWidth().height(24.dp).padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.Bottom) {
-                for (d in vm.study.studyWeek) Box(Modifier.weight(1f).height((2 + 16 * d / max).toInt().dp).background(c.accent.copy(alpha = if (d > 0) 0.8f else 0.2f), RoundedCornerShape(2.dp)))
+    var categoryFor by remember { mutableStateOf<io.github.artcraftandroid.pdfcraft.engine.DocStudy?>(null) }
+    val chip = vm.study.studyChip
+    val studies = io.github.artcraftandroid.pdfcraft.engine.StudyCard.studies(chip)
+    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp).clip(RoundedCornerShape(8.dp)).background(c.surfaceRaised).padding(vertical = 12.dp)) {
+        Row(Modifier.padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                stringResource(if (studies) R.string.study_continue else R.string.study_continue_reading), color = c.text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.weight(1f).semantics { heading() },
+            )
+            if (studies) {
+                val week = vm.study.studyWeek.sum() / 60_000
+                Text(stringResource(R.string.study_week_minutes, week / 60, week % 60), color = c.textSecondary, fontSize = 12.sp)
             }
         }
-        val due = vm.study.dueCounts.values.sum()
-        if (due > 0) Text(
-            pluralStringResource(R.plurals.cards_due_review, due, due), color = c.accent, fontSize = 14.sp, fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.fillMaxWidth().clickable(role = Role.Button) { vm.study.startReview(null, "") }.padding(vertical = 8.dp),
-        )
-        for (d in vm.study.studyRecent) {
-            val label = stringResource(R.string.study_resume_row, d.name.removeSuffix(".pdf"), d.lastPage + 1, (d.progress * 100).toInt())
-            Column(Modifier.fillMaxWidth().clickable(role = Role.Button) { vm.open(android.net.Uri.parse(d.uri)) }.semantics { contentDescription = label }.padding(vertical = 8.dp)) {
-                Text(d.name.removeSuffix(".pdf"), color = c.text, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                val docDue = vm.study.dueCounts[d.uri] ?: 0
-                Text(stringResource(R.string.study_page_progress, d.lastPage + 1, (d.progress * 100).toInt(), d.activeMs / 60_000) +
-                    if (docDue > 0) " · " + pluralStringResource(R.plurals.cards_due, docDue, docDue) else "", color = c.textSecondary, fontSize = 12.sp)
-                Box(Modifier.padding(top = 4.dp).fillMaxWidth().height(3.dp).background(c.divider, RoundedCornerShape(2.dp))) {
-                    Box(Modifier.fillMaxWidth(d.progress).height(3.dp).background(c.accent, RoundedCornerShape(2.dp)))
+        if (vm.study.studyChips.isNotEmpty()) {
+            // All, then each category in use; they scroll, none is squeezed (#538's rule)
+            Row(
+                Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp).padding(top = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                CategoryChip(stringResource(R.string.study_card_all), chip == null) { vm.study.chooseStudyChip(null) }
+                for (id in vm.study.studyChips) {
+                    val cat = vm.study.libraryData.category(id) ?: continue
+                    CategoryChip(categoryName(cat), chip == id) { vm.study.chooseStudyChip(id) }
+                }
+            }
+        }
+        Column(Modifier.padding(horizontal = 12.dp)) {
+            if (studies && vm.study.studyWeek.isNotEmpty()) {
+                // this week's days, oldest first, as small bars
+                val max = (vm.study.studyWeek.maxOrNull() ?: 0L).coerceAtLeast(1L)
+                Row(Modifier.fillMaxWidth().height(24.dp).padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.Bottom) {
+                    for (d in vm.study.studyWeek) Box(Modifier.weight(1f).height((2 + 16 * d / max).toInt().dp).background(c.accent.copy(alpha = if (d > 0) 0.8f else 0.2f), RoundedCornerShape(2.dp)))
+                }
+            }
+            val due = vm.study.dueCounts.values.sum()
+            if (studies && due > 0) Text(
+                pluralStringResource(R.plurals.cards_due_review, due, due), color = c.accent, fontSize = 14.sp, fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.fillMaxWidth().clickable(role = Role.Button) { vm.study.startReview(null, "") }.padding(vertical = 8.dp),
+            )
+            vm.study.studySuggestion?.let { s ->
+                // a quiet offer, once per document: never a dialog, never decided for the person
+                Row(Modifier.fillMaxWidth().padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(stringResource(R.string.study_suggest, s.name.removeSuffix(".pdf")), color = c.textSecondary, fontSize = 13.sp, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                    Text(stringResource(R.string.study_suggest_dismiss), color = c.textSecondary, fontSize = 13.sp, modifier = Modifier.clickable(role = Role.Button) { vm.study.answerSuggestion("dismissed") }.padding(horizontal = 8.dp, vertical = 10.dp))
+                    Text(stringResource(R.string.study_suggest_add), color = c.accent, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.clickable(role = Role.Button) { vm.study.answerSuggestion("accepted") }.padding(horizontal = 8.dp, vertical = 10.dp))
+                }
+            }
+            val chooseLabel = stringResource(R.string.category_choose)
+            for (d in vm.study.studyRecent) {
+                val label = stringResource(R.string.study_resume_row, d.name.removeSuffix(".pdf"), d.lastPage + 1, (d.progress * 100).toInt())
+                Column(
+                    Modifier.fillMaxWidth()
+                        .combinedClickable(role = Role.Button, onLongClickLabel = chooseLabel, onLongClick = { categoryFor = d }) { vm.open(android.net.Uri.parse(d.uri)) }
+                        .semantics { contentDescription = label }.padding(vertical = 8.dp),
+                ) {
+                    Text(d.name.removeSuffix(".pdf"), color = c.text, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    val docDue = if (studies) vm.study.dueCounts[d.uri] ?: 0 else 0
+                    val category = if (chip == null) vm.study.studyCategories[d.uri]?.let { vm.study.libraryData.category(it) } else null
+                    Text(
+                        listOfNotNull(
+                            stringResource(R.string.study_page_progress, d.lastPage + 1, (d.progress * 100).toInt(), d.activeMs / 60_000),
+                            docDue.takeIf { it > 0 }?.let { pluralStringResource(R.plurals.cards_due, it, it) },
+                            category?.let { categoryName(it) },
+                        ).joinToString(" · "),
+                        color = c.textSecondary, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    )
+                    Box(Modifier.padding(top = 4.dp).fillMaxWidth().height(3.dp).background(c.divider, RoundedCornerShape(2.dp))) {
+                        Box(Modifier.fillMaxWidth(d.progress).height(3.dp).background(c.accent, RoundedCornerShape(2.dp)))
+                    }
                 }
             }
         }
     }
+    categoryFor?.let { d -> CategorySheet(vm, d.uri, d.name, "card_row") { categoryFor = null } }
 }
