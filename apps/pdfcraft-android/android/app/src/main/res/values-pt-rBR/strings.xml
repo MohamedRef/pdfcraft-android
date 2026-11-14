@@ -188,7 +188,7 @@
     <string name="tools_repeat_password">Repita a senha *</string>
     <string name="tools_password_rule">Use de 6 a 128 caracteres: letras, números e símbolos, sem espaços.</string>
     <string name="tools_password_mismatch">As senhas não correspondem.</string>
-    <string name="tools_about_passwords_body">A cópia é criptografada com AES-256. Guarde a senha em segurança: não é possível recuperá-la. Para remover a senha depois, abra a cópia com ela e escolha Remover senha.</string>
+    <string name="tools_about_passwords_body">A cópia é criptografada com AES-256. Guarde a senha em segurança: não é possível recuperá-la. Para removê-la depois, use Desbloquear PDF.</string>
     <string name="tools_export_action">Exportar</string>
     <string name="tools_export_document">Documento</string>
     <string name="tools_export_image">Imagem</string>

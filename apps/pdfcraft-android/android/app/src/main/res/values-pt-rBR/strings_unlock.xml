@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Unlock PDF (#517) -->
+<resources>
+    <string name="unlock_title">Desbloquear PDF</string>
+    <string name="home_about_unlock">Remover a senha e as restrições de um PDF</string>
+    <string name="toolbar_label_unlock">Desbloquear</string>
+    <string name="unlock_intro">Salva cópias sem senhas nem restrições em Downloads como name_unlocked.pdf. Os arquivos não mudam. Senhas nunca são adivinhadas.</string>
+    <string name="unlock_add">Adicionar arquivos</string>
+    <string name="unlock_empty">Adicione os PDFs a desbloquear.</string>
+    <string name="unlock_run">Desbloquear</string>
+    <string name="unlock_progress">%1$d de %2$d</string>
+    <string name="unlock_password_title">Senha de %1$s</string>
+    <string name="unlock_password_body">Este arquivo precisa da senha para abrir. Sem ela, não pode ser desbloqueado.</string>
+    <string name="unlock_password_wrong">Essa senha não abre este arquivo. Tente de novo ou pule.</string>
+    <string name="unlock_password_field">Senha</string>
+    <string name="unlock_password_all">Usar esta senha para os outros arquivos</string>
+    <string name="unlock_skip">Pular este arquivo</string>
+    <string name="unlock_signed_title">Este arquivo está assinado</string>
+    <string name="unlock_signed_body">Desbloquear %1$s altera o arquivo, então as assinaturas deixarão de ser válidas.</string>
+    <string name="unlock_signed_go">Desbloquear mesmo assim</string>
+    <string name="unlock_done_password">Desbloqueado: senha removida</string>
+    <string name="unlock_done_restrictions">Desbloqueado: restrições removidas (impressão, cópia ou alterações estavam limitadas)</string>
+    <string name="unlock_not_protected">Sem proteção: nada a remover</string>
+    <string name="unlock_skipped_password">Pulado: a senha é necessária para desbloqueá-lo</string>
+    <string name="unlock_skipped_signed">Pulado: assinado</string>
+    <string name="unlock_failed">Falhou: %1$s</string>
+    <string name="unlock_summary">Desbloqueados %1$d · Pulados %2$d · Falharam %3$d</string>
+    <string name="unlock_failed_names">Falharam: %1$s</string>
+    <string name="unlock_cancelled">Interrompido. Os arquivos já desbloqueados estão em Downloads.</string>
+    <string name="unlock_offer_text">Este arquivo está protegido por senha.</string>
+    <string name="unlock_offer">Remover senha</string>
+</resources>

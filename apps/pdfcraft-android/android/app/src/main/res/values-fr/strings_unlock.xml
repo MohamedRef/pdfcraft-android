@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Unlock PDF (#517) -->
+<resources>
+    <string name="unlock_title">Déverrouiller un PDF</string>
+    <string name="home_about_unlock">Retirer le mot de passe et les restrictions d’un PDF</string>
+    <string name="toolbar_label_unlock">Déverrouiller</string>
+    <string name="unlock_intro">Enregistre des copies sans mot de passe ni restrictions dans Téléchargements, nommées name_unlocked.pdf. Les fichiers ne changent pas. Aucun mot de passe n’est deviné.</string>
+    <string name="unlock_add">Ajouter des fichiers</string>
+    <string name="unlock_empty">Ajoutez les PDF à déverrouiller.</string>
+    <string name="unlock_run">Déverrouiller</string>
+    <string name="unlock_progress">%1$d sur %2$d</string>
+    <string name="unlock_password_title">Mot de passe de %1$s</string>
+    <string name="unlock_password_body">Ce fichier demande son mot de passe pour s’ouvrir. Sans lui, il ne peut pas être déverrouillé.</string>
+    <string name="unlock_password_wrong">Ce mot de passe n’ouvre pas ce fichier. Réessayez ou ignorez-le.</string>
+    <string name="unlock_password_field">Mot de passe</string>
+    <string name="unlock_password_all">Utiliser ce mot de passe pour les autres fichiers</string>
+    <string name="unlock_skip">Ignorer ce fichier</string>
+    <string name="unlock_signed_title">Ce fichier est signé</string>
+    <string name="unlock_signed_body">Déverrouiller %1$s le modifie : ses signatures ne seront plus valides.</string>
+    <string name="unlock_signed_go">Déverrouiller quand même</string>
+    <string name="unlock_done_password">Déverrouillé : mot de passe retiré</string>
+    <string name="unlock_done_restrictions">Déverrouillé : restrictions retirées (l’impression, la copie ou les modifications étaient limitées)</string>
+    <string name="unlock_not_protected">Non protégé : rien à retirer</string>
+    <string name="unlock_skipped_password">Ignoré : son mot de passe est nécessaire pour le déverrouiller</string>
+    <string name="unlock_skipped_signed">Ignoré : signé</string>
+    <string name="unlock_failed">Échec : %1$s</string>
+    <string name="unlock_summary">Déverrouillés %1$d · Ignorés %2$d · Échecs %3$d</string>
+    <string name="unlock_failed_names">Échec : %1$s</string>
+    <string name="unlock_cancelled">Arrêté. Les fichiers déjà déverrouillés sont dans Téléchargements.</string>
+    <string name="unlock_offer_text">Ce fichier est protégé par un mot de passe.</string>
+    <string name="unlock_offer">Retirer le mot de passe</string>
+</resources>

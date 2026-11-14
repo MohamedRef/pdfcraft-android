@@ -86,6 +86,8 @@ pub(crate) fn check_permission(edit: &Edit, p: &pdfcraft_cos::Permissions) -> Re
                 Err(EditError::NotPermitted("filling in form fields"))
             }
         }
+        // Unlock PDF (Android #517): the owner chose that restrictions alone do not stop it
+        Edit::Unlock => Ok(()),
         Edit::Protect(_) | Edit::RemoveProtection => {
             if unrestricted(p) {
                 Ok(())
@@ -1131,7 +1133,7 @@ pub(crate) fn run_edit(doc: &mut pdfcraft_cos::Document, edit: &Edit, cx: &mut E
             };
             doc.set_encryption(&params).map_err(|e| EditError::Protection(e.to_string()))?;
         }
-        Edit::RemoveProtection => {
+        Edit::RemoveProtection | Edit::Unlock => {
             if doc.output_handler().is_none() {
                 return Err(EditError::Protection("the document isn't protected".into()));
             }

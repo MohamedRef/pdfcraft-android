@@ -3069,6 +3069,13 @@ fn protecting_through_tools() {
     assert_eq!(ok(&mut b, "doc_info", json!({ "doc": re }))["security"]["extract_pages"], false);
     assert!(matches!(b.call("page_delete", &json!({ "doc": re, "pages": [1] })), Err(ToolError::Failed(_))));
     assert!(matches!(b.call("doc_unprotect", &json!({ "doc": re })), Err(ToolError::Failed(_))));
+    // Unlock PDF (Android #517): restrictions alone don't stop it, in a document of its own
+    let unlock = ok(&mut b, "doc_open", json!({ "path": "locked.pdf", "password": "open" }))["doc"].as_u64().unwrap();
+    assert_eq!(ok(&mut b, "doc_unprotect", json!({ "doc": unlock, "restrictions": true }))["security"]["protected"], false);
+    ok(&mut b, "doc_save", json!({ "doc": unlock, "path": "unlocked.pdf" }));
+    let mut u = auto(&dir);
+    let back = ok(&mut u, "doc_open", json!({ "path": "unlocked.pdf" }))["doc"].as_u64().unwrap();
+    assert_eq!(ok(&mut u, "doc_info", json!({ "doc": back }))["security"]["protected"], false);
     ok(&mut b, "comment_add", json!({ "doc": re, "page": 1, "type": "note", "at": [10, 10], "contents": "allowed" }));
     // Copying wasn't allowed either (#568): no text or images come out, though search works.
     for (tool, args) in [

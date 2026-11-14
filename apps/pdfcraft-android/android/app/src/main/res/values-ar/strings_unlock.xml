@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Unlock PDF (#517) -->
+<resources>
+    <string name="unlock_title">إزالة قفل PDF</string>
+    <string name="home_about_unlock">إزالة كلمة مرور ملف PDF وقيوده</string>
+    <string name="toolbar_label_unlock">إزالة القفل</string>
+    <string name="unlock_intro">تُحفظ نسخ بلا كلمات مرور ولا قيود في التنزيلات باسم name_unlocked.pdf. تبقى الملفات كما هي. لا تُخمَّن كلمات المرور أبدًا.</string>
+    <string name="unlock_add">إضافة ملفات</string>
+    <string name="unlock_empty">أضف ملفات PDF المراد إزالة قفلها.</string>
+    <string name="unlock_run">إزالة القفل</string>
+    <string name="unlock_progress">%1$d من %2$d</string>
+    <string name="unlock_password_title">كلمة مرور %1$s</string>
+    <string name="unlock_password_body">يحتاج هذا الملف إلى كلمة مروره ليُفتح، ومن دونها لا يمكن إزالة قفله.</string>
+    <string name="unlock_password_wrong">كلمة المرور هذه لا تفتح الملف. حاول مرة أخرى أو تخطَّه.</string>
+    <string name="unlock_password_field">كلمة المرور</string>
+    <string name="unlock_password_all">استخدام كلمة المرور هذه لبقية الملفات</string>
+    <string name="unlock_skip">تخطي هذا الملف</string>
+    <string name="unlock_signed_title">هذا الملف موقَّع</string>
+    <string name="unlock_signed_body">إزالة قفل %1$s تغيّره، فلا تبقى توقيعاته صالحة.</string>
+    <string name="unlock_signed_go">إزالة القفل على أي حال</string>
+    <string name="unlock_done_password">أُزيل القفل: حُذفت كلمة المرور</string>
+    <string name="unlock_done_restrictions">أُزيل القفل: حُذفت القيود (كانت الطباعة أو النسخ أو التعديل مقيّدة)</string>
+    <string name="unlock_not_protected">غير محمي: لا شيء لإزالته</string>
+    <string name="unlock_skipped_password">تخطٍّ: يلزم كلمة مروره لإزالة قفله</string>
+    <string name="unlock_skipped_signed">تخطٍّ: موقَّع</string>
+    <string name="unlock_failed">فشل: %1$s</string>
+    <string name="unlock_summary">أُزيل القفل %1$d · تخطٍّ %2$d · فشل %3$d</string>
+    <string name="unlock_failed_names">فشل: %1$s</string>
+    <string name="unlock_cancelled">توقف. الملفات التي أُزيل قفلها موجودة في التنزيلات.</string>
+    <string name="unlock_offer_text">هذا الملف محمي بكلمة مرور.</string>
+    <string name="unlock_offer">إزالة كلمة المرور</string>
+</resources>

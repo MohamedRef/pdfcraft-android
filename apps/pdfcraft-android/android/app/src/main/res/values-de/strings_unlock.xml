@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Unlock PDF (#517) -->
+<resources>
+    <string name="unlock_title">PDF entsperren</string>
+    <string name="home_about_unlock">Passwort und Einschränkungen einer PDF entfernen</string>
+    <string name="toolbar_label_unlock">Entsperren</string>
+    <string name="unlock_intro">Speichert Kopien ohne Passwörter und Einschränkungen in Downloads als name_unlocked.pdf. Die Dateien bleiben unverändert. Passwörter werden nie erraten.</string>
+    <string name="unlock_add">Dateien hinzufügen</string>
+    <string name="unlock_empty">Füge die PDFs hinzu, die entsperrt werden sollen.</string>
+    <string name="unlock_run">Entsperren</string>
+    <string name="unlock_progress">%1$d von %2$d</string>
+    <string name="unlock_password_title">Passwort für %1$s</string>
+    <string name="unlock_password_body">Diese Datei braucht zum Öffnen ihr Passwort. Ohne es kann sie nicht entsperrt werden.</string>
+    <string name="unlock_password_wrong">Dieses Passwort öffnet die Datei nicht. Versuche es erneut oder überspringe sie.</string>
+    <string name="unlock_password_field">Passwort</string>
+    <string name="unlock_password_all">Dieses Passwort für die anderen Dateien verwenden</string>
+    <string name="unlock_skip">Datei überspringen</string>
+    <string name="unlock_signed_title">Diese Datei ist signiert</string>
+    <string name="unlock_signed_body">Das Entsperren ändert %1$s, daher sind ihre Signaturen danach nicht mehr gültig.</string>
+    <string name="unlock_signed_go">Trotzdem entsperren</string>
+    <string name="unlock_done_password">Entsperrt: Passwort entfernt</string>
+    <string name="unlock_done_restrictions">Entsperrt: Einschränkungen entfernt (Drucken, Kopieren oder Änderungen waren eingeschränkt)</string>
+    <string name="unlock_not_protected">Nicht geschützt: nichts zu entfernen</string>
+    <string name="unlock_skipped_password">Übersprungen: Zum Entsperren wird ihr Passwort gebraucht</string>
+    <string name="unlock_skipped_signed">Übersprungen: signiert</string>
+    <string name="unlock_failed">Fehlgeschlagen: %1$s</string>
+    <string name="unlock_summary">Entsperrt %1$d · Übersprungen %2$d · Fehlgeschlagen %3$d</string>
+    <string name="unlock_failed_names">Fehlgeschlagen: %1$s</string>
+    <string name="unlock_cancelled">Angehalten. Bereits entsperrte Dateien liegen in Downloads.</string>
+    <string name="unlock_offer_text">Diese Datei ist mit einem Passwort geschützt.</string>
+    <string name="unlock_offer">Passwort entfernen</string>
+</resources>

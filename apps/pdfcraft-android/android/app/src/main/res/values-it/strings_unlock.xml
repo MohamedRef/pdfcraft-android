@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Unlock PDF (#517) -->
+<resources>
+    <string name="unlock_title">Sblocca PDF</string>
+    <string name="home_about_unlock">Rimuovi la password e le restrizioni di un PDF</string>
+    <string name="toolbar_label_unlock">Sblocca</string>
+    <string name="unlock_intro">Salva copie senza password né restrizioni in Download come name_unlocked.pdf. I file restano come sono. Le password non vengono mai indovinate.</string>
+    <string name="unlock_add">Aggiungi file</string>
+    <string name="unlock_empty">Aggiungi i PDF da sbloccare.</string>
+    <string name="unlock_run">Sblocca</string>
+    <string name="unlock_progress">%1$d di %2$d</string>
+    <string name="unlock_password_title">Password di %1$s</string>
+    <string name="unlock_password_body">Questo file chiede la sua password per aprirsi. Senza di essa non può essere sbloccato.</string>
+    <string name="unlock_password_wrong">Questa password non apre il file. Riprova o saltalo.</string>
+    <string name="unlock_password_field">Password</string>
+    <string name="unlock_password_all">Usa questa password per gli altri file</string>
+    <string name="unlock_skip">Salta questo file</string>
+    <string name="unlock_signed_title">Questo file è firmato</string>
+    <string name="unlock_signed_body">Sbloccare %1$s lo modifica, quindi le sue firme non saranno più valide.</string>
+    <string name="unlock_signed_go">Sblocca comunque</string>
+    <string name="unlock_done_password">Sbloccato: password rimossa</string>
+    <string name="unlock_done_restrictions">Sbloccato: restrizioni rimosse (stampa, copia o modifiche erano limitate)</string>
+    <string name="unlock_not_protected">Non protetto: niente da rimuovere</string>
+    <string name="unlock_skipped_password">Saltato: serve la sua password per sbloccarlo</string>
+    <string name="unlock_skipped_signed">Saltato: firmato</string>
+    <string name="unlock_failed">Non riuscito: %1$s</string>
+    <string name="unlock_summary">Sbloccati %1$d · Saltati %2$d · Non riusciti %3$d</string>
+    <string name="unlock_failed_names">Non riusciti: %1$s</string>
+    <string name="unlock_cancelled">Interrotto. I file già sbloccati sono in Download.</string>
+    <string name="unlock_offer_text">Questo file è protetto da password.</string>
+    <string name="unlock_offer">Rimuovi password</string>
+</resources>

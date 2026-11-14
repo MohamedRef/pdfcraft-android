@@ -9,6 +9,8 @@ sealed class ToolScreen {
     class Crop(val doc: OpenDocument) : ToolScreen()
     class Export(val doc: OpenDocument) : ToolScreen()
     data object Bates : ToolScreen()
+    /** Unlock PDF (#517): copies without passwords or restrictions. */
+    data object Unlock : ToolScreen()
     data object OcrBatch : ToolScreen()
     data object Scan : ToolScreen()
     /** Recent scans, kept to be edited again (#461). */
