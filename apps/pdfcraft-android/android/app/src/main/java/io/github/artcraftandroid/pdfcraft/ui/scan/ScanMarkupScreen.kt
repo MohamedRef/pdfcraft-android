@@ -222,10 +222,14 @@ internal fun ScanMarkupScreen(vm: AppViewModel, index: Int, page: ScanPage) {
         version++
     }
 
-    fun close(done: Boolean) {
-        val out = h.now.copy(turns = frameTurns ?: 0)
-        if (ink && done && inkStats.removed > 0) vm.scanMarkup.marksRemoved.merge(page.key, inkStats.removed, Int::plus)
-        vm.finishScanMarkup(index, if (done) out else null, cancelled = !done, erasedShare = drawn?.erasedShare, eyedropper = dropperUses, eraseFill = fill.id, ink = inkStats.diag(ink))
+    /** Markup is left by Done, the arrow or the Back gesture: every way keeps the marks (#531). */
+    fun close(leftBy: ScanMarkupLeftBy) {
+        val left = scanMarkupLeave(h.now.copy(turns = frameTurns ?: 0))
+        if (ink && left.kept != null && inkStats.removed > 0) vm.scanMarkup.marksRemoved.merge(page.key, inkStats.removed, Int::plus)
+        vm.finishScanMarkup(
+            index, left.kept, cancelled = left.kept == null, erasedShare = drawn?.erasedShare, eyedropper = dropperUses, eraseFill = fill.id,
+            ink = inkStats.diag(ink) + scanMarkupLeaveDiag(leftBy, left.discarded),
+        )
     }
 
     /** The mark tool and colour a stroke of [t] is made with now. */
@@ -298,13 +302,15 @@ internal fun ScanMarkupScreen(vm: AppViewModel, index: Int, page: ScanPage) {
     val inkNow by rememberUpdatedState(ink)
 
     io.github.artcraftandroid.pdfcraft.ui.ToolScaffold(
-        stringResource(R.string.scan_markup), { close(false) }, stringResource(R.string.common_done), image != null, { close(true) },
+        stringResource(R.string.scan_markup), { close(ScanMarkupLeftBy.Back) }, stringResource(R.string.common_done), image != null, { close(ScanMarkupLeftBy.Done) },
         trailing = {
             BarIcon(LucideIcons.Undo2, stringResource(R.string.common_undo), { changedAt = android.os.SystemClock.elapsedRealtime(); h.undo(); version++; selected = null }, enabled = h.canUndo)
             BarIcon(LucideIcons.Redo2, stringResource(R.string.common_redo), { changedAt = android.os.SystemClock.elapsedRealtime(); h.redo(); version++; selected = null }, enabled = h.canRedo)
             BarIcon(LucideIcons.Trash2, stringResource(R.string.scan_markup_clear), { changedAt = android.os.SystemClock.elapsedRealtime(); commit(ScanMarks()); selected = null }, enabled = !marks.isEmpty)
         },
     ) {
+        // Android's Back gesture: the same as the arrow, logged apart (#531); composed after the bar's, so it is the one asked
+        androidx.activity.compose.BackHandler { close(ScanMarkupLeftBy.Gesture) }
         val description = stringResource(R.string.scan_markup_page_description, index + 1)
         Box(
             Modifier.weight(1f).fillMaxWidth().background(c.desk).onSizeChanged { box = it }.semantics { contentDescription = description }

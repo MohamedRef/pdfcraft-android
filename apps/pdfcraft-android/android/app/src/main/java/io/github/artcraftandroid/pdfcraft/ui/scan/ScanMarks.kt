@@ -244,3 +244,22 @@ internal fun scanStateRead(kept: String, file: java.io.File): String? {
     if (kept.removePrefix(SCAN_STATE_FILE_HEADER) != file.name) return null
     return runCatching { file.readText() }.getOrNull()
 }
+
+/** How Markup was left (#531): Done, the top bar's arrow, or Android's Back gesture. */
+internal enum class ScanMarkupLeftBy(val id: String) {
+    Done("done"),
+    Back("back"),
+    Gesture("gesture"),
+}
+
+/** What leaving Markup does (#531): the marks [kept] on the page (null: the page stays as it was) and how many made in the session were [discarded]. */
+internal class ScanMarkupLeave(val kept: ScanMarks?, val discarded: Int)
+
+/**
+ * Leaving Markup with the session's marks [now]: every way out ([ScanMarkupLeftBy]) keeps them, as
+ * Done does (the owner's choice on #531), so nothing is dropped; Undo and Clear take marks away.
+ */
+internal fun scanMarkupLeave(now: ScanMarks): ScanMarkupLeave = ScanMarkupLeave(now, 0)
+
+/** `markup_done`'s fields for how Markup was left (#531). */
+internal fun scanMarkupLeaveDiag(leftBy: ScanMarkupLeftBy, discarded: Int): Array<Pair<String, Any?>> = arrayOf("left_by" to leftBy.id, "discarded" to discarded)
