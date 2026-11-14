@@ -11,6 +11,11 @@
             <action android:name="android.intent.action.VIEW" />
             <data android:mimeType="application/vnd.android.package-archive" />
         </intent>
+        <!-- other apps' text actions (translate, define…) offered in the selection menu (#535) -->
+        <intent>
+            <action android:name="android.intent.action.PROCESS_TEXT" />
+            <data android:mimeType="text/plain" />
+        </intent>
     </queries>
 
     <!-- No storage permission: files come through the system's pickers (On this device lists the
