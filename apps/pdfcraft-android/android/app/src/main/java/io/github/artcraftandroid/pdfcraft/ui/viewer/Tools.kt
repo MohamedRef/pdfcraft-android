@@ -101,6 +101,7 @@ import io.github.artcraftandroid.pdfcraft.ui.PdfSheet
 import io.github.artcraftandroid.pdfcraft.ui.SheetHost
 import io.github.artcraftandroid.pdfcraft.ui.pdfColors
 import kotlinx.coroutines.Job
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -582,11 +583,11 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
     val selectionBounds by remember { androidx.compose.runtime.derivedStateOf { inkLassoBounds(selectionPaths()) } }
     val selectedSet by remember { androidx.compose.runtime.derivedStateOf { selected.toHashSet() } }
     /** A Draw edit of the document; [steps] learns whether it became an undo step. */
-    fun documentEdit(name: String, args: Map<String, Any?>) {
+    fun documentEdit(name: String, args: Map<String, Any?>, settled: (Boolean) -> Unit = {}) {
         steps.started()
         var made = 0
         // A refused edit or a no-op (an eraser that met no ink) answers without the document summary.
-        vm.runTool(doc, name, args, onSettled = { steps.finished(made) }) { r -> if (r.has("doc")) made = 1 }
+        vm.runTool(doc, name, args, onSettled = { steps.finished(made); settled(made > 0) }) { r -> if (r.has("doc")) made = 1 }
     }
     fun savedEdit(page: Int, extra: Map<String, Any?>) {
         val indices = savedSelected.map { it.index.toInt() + 1 }
@@ -790,6 +791,24 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
     val rulerReach = with(density) { 24.dp.toPx() }
     var rulerEdge by remember(doc) { mutableStateOf<Int?>(null) }
     var layerSize by remember(doc) { mutableStateOf(androidx.compose.ui.geometry.Size.Zero) }
+    // The live eraser (#521): the page without its erasable ink, shown along the eraser's path.
+    var liveErase by remember(doc) { mutableStateOf<LiveErase?>(null) }
+    val liveEraseScope = rememberCoroutineScope()
+    LaunchedEffect(liveErase) {
+        // gone once the edit's own page is drawn (or the edit changed nothing), at the latest after a few seconds
+        val le = liveErase ?: return@LaunchedEffect
+        while (true) {
+            delay(32)
+            val gen = le.liftedGen ?: continue
+            val now = android.os.SystemClock.uptimeMillis()
+            val shown = (doc.images.latestBase(le.region.page)?.key?.gen ?: Long.MIN_VALUE) > gen
+            if (shown || now - le.liftedAt > 5_000) {
+                le.log(if (shown) "page_drawn" else "timed_out", now)
+                if (liveErase === le) liveErase = null
+                return@LaunchedEffect
+            }
+        }
+    }
     if (doc.controller.rulerOn && doc.controller.ruler == null && layerSize.width > 0f) {
         doc.controller.ruler = Ruler(
             Offset(layerSize.width / 2f, layerSize.height / 2f), 0f,
@@ -860,6 +879,22 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
     val guardSizePx = with(LocalDensity.current) { prefs.palmGuardSizeDp.dp.toPx() }
     val buttonClick = remember(doc) { PenButtonClickDetector() }
 
+    /** Renders the page under its erasable ink for the gesture starting at [first] (#521). */
+    fun startLiveErase(page: Int, first: Offset) {
+        liveErase = null
+        val hidden = erasableInk(doc.comments, page)
+        if (hidden.isEmpty()) return
+        val view = androidx.compose.ui.geometry.Rect(Offset.Zero, layerSize)
+        val region = eraseRegion(page, doc.viewer.pageRectOnScreen(page), view, doc.viewer.pixelsPerPoint(page)) ?: return
+        val le = LiveErase(region, activeEraserRadius, android.os.SystemClock.uptimeMillis())
+        le.add(first)
+        liveErase = le
+        liveEraseScope.launch {
+            val img = doc.images.renderHiding(page, region.scale, io.github.artcraftandroid.pdfcraft.core.TileRect(region.x.toUInt(), region.y.toUInt(), region.w.toUInt(), region.h.toUInt()), hidden)
+            le.rendered(img, android.os.SystemClock.uptimeMillis())
+        }
+    }
+
     fun beginErase(p: Offset) {
         clearSelection()
         val at = doc.viewer.screenToPage(p) ?: return
@@ -873,6 +908,7 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
         eraserPoints.clear()
         eraserPoints.add(Offset(at.x, at.y))
         eraserChunks[0] = 0
+        startLiveErase(at.page, Offset(at.x, at.y))
     }
 
     fun moveErase(p: Offset) {
@@ -880,6 +916,7 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
         // Unclamped: an eraser that leaves the page is not dragged along its edge (#75).
         val at = doc.viewer.screenToPageUnclamped(page, p) ?: return
         eraserScreen = p
+        liveErase?.takeIf { it.region.page == page && it.liftedGen == null }?.add(Offset(at.x, at.y))
         appendEraserPoint(eraserPoints, Offset(at.x, at.y), activeEraserRadius)?.let { chunk ->
             // A very long gesture erases its finished part now; the rest follows on lift (#76).
             eraserChunks[0]++
@@ -888,6 +925,8 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
     }
 
     fun cancelErase() {
+        // a cancelled gesture erases nothing: the page under the ink must not stay shown
+        liveErase?.takeIf { it.liftedGen == null }?.let { it.log("cancelled", android.os.SystemClock.uptimeMillis()); liveErase = null }
         eraserPage = null
         eraserScreen = null
         eraserPoints.clear()
@@ -898,12 +937,25 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
         moveErase(p)
         val path = eraserPoints.toList()
         val radius = activeEraserRadius
+        // the live view stays until the edit's page is drawn (#521)
+        val le = liveErase?.takeIf { it.region.page == page }?.also {
+            it.liftedGen = doc.pageGenerations.of(page)
+            it.liftedAt = android.os.SystemClock.uptimeMillis()
+        }
+        if (le != null) liveErase = null
         cancelErase()
+        if (le != null) liveErase = le
         logEraseGesture(path.size, eraserChunks[0], radius)
         if (path.isNotEmpty()) {
             // One native Edit::Batch per gesture, including freehand marker Ink.
-            documentEdit("comment_erase", inkEraseCommand(page, path, activeEraserRadius.toDouble()))
-        }
+            documentEdit("comment_erase", inkEraseCommand(page, path, activeEraserRadius.toDouble())) { made ->
+                // nothing erased: nothing changes on the page, so the live view goes now
+                if (!made && le != null && liveErase === le) {
+                    le.log("nothing_erased", android.os.SystemClock.uptimeMillis())
+                    liveErase = null
+                }
+            }
+        } else if (le != null) liveErase = null
     }
 
     /** [s] cut to its page; off-page parts are dropped and the pieces replace it in paint order. */
@@ -1379,6 +1431,29 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                         scale = doc.viewer.pixelsPerPoint(s.page),
                         pageBoundsOnScreen = pageRect,
                     )
+                }
+            }
+            // The live eraser (#521): along the eraser's path, the page without its erasable ink
+            // covers the ink there (and drafts being saved), until the edit's own page is drawn.
+            liveErase?.let { le ->
+                val img = le.image ?: return@let
+                val r = le.region
+                val pts = le.path.toList()
+                if (pts.isEmpty()) return@let
+                val ppp = doc.viewer.pixelsPerPoint(r.page)
+                val topLeft = doc.viewer.pageToScreen(r.page, r.x / r.scale, r.y / r.scale)
+                val size = androidx.compose.ui.unit.IntSize(Math.round(r.w / r.scale * ppp), Math.round(r.h / r.scale * ppp))
+                drawIntoCanvas { canvas ->
+                    canvas.saveLayer(androidx.compose.ui.geometry.Rect(Offset.Zero, this.size), androidx.compose.ui.graphics.Paint())
+                    drawPath(
+                        erasePathOnScreen(pts) { doc.viewer.pageToScreen(r.page, it.x, it.y) }, Color.Black,
+                        style = androidx.compose.ui.graphics.drawscope.Stroke(
+                            width = 2f * le.radius * ppp,
+                            cap = androidx.compose.ui.graphics.StrokeCap.Round, join = androidx.compose.ui.graphics.StrokeJoin.Round,
+                        ),
+                    )
+                    drawImage(img, dstOffset = androidx.compose.ui.unit.IntOffset(Math.round(topLeft.x), Math.round(topLeft.y)), dstSize = size, blendMode = androidx.compose.ui.graphics.BlendMode.SrcIn)
+                    canvas.restore()
                 }
             }
             // how long the drafts took to draw this frame, and the time since the last frame (#128)

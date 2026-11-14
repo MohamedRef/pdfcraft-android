@@ -232,6 +232,21 @@ class PageImages(
         null
     }
 
+    /**
+     * [region] of [page] at [scale], drawn without the comments at [hidden] (their positions on
+     * the page): the live eraser's view of what lies under the ink it erases (#521). Not cached.
+     */
+    suspend fun renderHiding(page: Int, scale: Float, region: TileRect, hidden: List<Int>): ImageBitmap? = try {
+        withContext(engine.renders + job) {
+            engine.session.renderPageHiding(doc, page.toUInt(), scale, region, hidden.map { it.toUInt() }).toBitmap().asImageBitmap()
+        }
+    } catch (e: kotlinx.coroutines.CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        io.github.artcraftandroid.pdfcraft.engine.Diag.failure(io.github.artcraftandroid.pdfcraft.engine.DiagArea.Ink, "erase_under_render", e)
+        null
+    }
+
     /** Forget everything (the document was replaced). */
     fun clear() = synchronized(lock) {
         cache.clear()

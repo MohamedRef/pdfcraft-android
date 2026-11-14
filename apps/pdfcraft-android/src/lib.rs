@@ -796,6 +796,7 @@ impl MobileSession {
         scale: f32,
         tile: Option<TileRect>,
         stop: Option<&Arc<AtomicBool>>,
+        hidden: Option<Arc<Vec<usize>>>,
     ) -> Result<pdfcraft_render::RenderedPage, MobileError> {
         if !(scale.is_finite() && scale > 0.0) {
             return Err(MobileError::Render(format!("the scale must be a positive number, not {scale}")));
@@ -848,7 +849,10 @@ impl MobileSession {
         let mut renderer = self.take_renderer(doc, &bytes, config);
         let raster_tile = tile.map(|t| Tile { x: t.x, y: t.y, w: t.width, h: t.height });
         let request = RenderRequest { page: index, kind: RequestKind::Pixels, tile: raster_tile, scale: mobile_scale, tag: 0, preview: false };
-        let out = renderer.render_until(request, stop);
+        let out = match hidden {
+            Some(hidden) => renderer.render_hiding(request, stop, hidden),
+            None => renderer.render_until(request, stop),
+        };
         self.return_renderer(doc, &bytes, key, renderer);
         if let Some(e) = out.error {
             return Err(MobileError::Render(format!("page {} could not be drawn: {e}", index.saturating_add(1))));
@@ -1202,13 +1206,13 @@ impl MobileSession {
     /// result stays within the renderer's size limits. Sticky notes are left out: the app draws
     /// them as icons of its own.
     pub fn render_page(&self, doc: u64, page: u32, scale: f32, tile: Option<TileRect>) -> Result<RenderedImage, MobileError> {
-        let out = self.render_pixels(doc, page, scale, tile, None)?;
+        let out = self.render_pixels(doc, page, scale, tile, None, None)?;
         Ok(RenderedImage { width: out.width, height: out.height, rgba: pdfcraft_android_ffi_bytes::Bytes::new(out.rgba) })
     }
 
     /// Optional compact opaque page previews; tiles and translucent pixels retain RGBA8.
     pub fn render_page_compact(&self, doc: u64, page: u32, scale: f32, tile: Option<TileRect>, compact: bool) -> Result<CompactImage, MobileError> {
-        self.compact_image(self.render_pixels(doc, page, scale, tile, None)?, compact && tile.is_none())
+        self.compact_image(self.render_pixels(doc, page, scale, tile, None, None)?, compact && tile.is_none())
     }
 
     /// [`Self::render_page_compact`] that stops drawing once `cancel` is cancelled (#91), for a
@@ -1222,7 +1226,25 @@ impl MobileSession {
         compact: bool,
         cancel: Arc<RenderCancel>,
     ) -> Result<CompactImage, MobileError> {
-        self.compact_image(self.render_pixels(doc, page, scale, tile, Some(&cancel.0))?, compact && tile.is_none())
+        self.compact_image(self.render_pixels(doc, page, scale, tile, Some(&cancel.0), None)?, compact && tile.is_none())
+    }
+
+    /// Android adaptation (#521): page `page`, or `tile` of it, drawn without the comments at
+    /// `hidden` (their 0-based positions on the page, as [`CommentInfo::index`]). The live eraser
+    /// shows this under the ink it is erasing until the edit's own render arrives. Always RGBA8.
+    pub fn render_page_hiding(
+        &self,
+        doc: u64,
+        page: u32,
+        scale: f32,
+        tile: Option<TileRect>,
+        hidden: Vec<u32>,
+    ) -> Result<CompactImage, MobileError> {
+        if hidden.len() > 4096 {
+            return Err(MobileError::Render("too many comments to leave out of one render".into()));
+        }
+        let hidden = Arc::new(hidden.into_iter().map(|i| i as usize).collect());
+        self.compact_image(self.render_pixels(doc, page, scale, tile, None, Some(hidden))?, false)
     }
 
     /// Run tool `name` with JSON arguments (`""` = none) and return its JSON result: the tools and
