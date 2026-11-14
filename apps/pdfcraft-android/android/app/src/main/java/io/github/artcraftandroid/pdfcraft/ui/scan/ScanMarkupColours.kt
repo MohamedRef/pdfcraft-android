@@ -95,6 +95,7 @@ internal fun scanMarkIsCustomColour(tool: ScanMarkTool?, colour: Int): Boolean {
 internal fun scanMarkupSwatches(tool: ScanMarkupTool, fill: ScanEraseFill, current: Int, bilevel: Boolean): List<Int> {
     val own = when (tool) {
         ScanMarkupTool.Erase -> if (fill == ScanEraseFill.Colour) SCAN_ERASE_COLOURS else return emptyList()
+        ScanMarkupTool.RemoveMarks -> return emptyList()
         else -> scanMarkupColours(tool)
     }
     val rgb = current and 0xFFFFFF

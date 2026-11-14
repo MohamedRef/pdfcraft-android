@@ -155,6 +155,8 @@ internal fun ScanLabSettings(vm: AppViewModel) {
     Sw(R.string.scan_lab_markup_colours, o.markupColours) { lab.update(o.copy(markupColours = it)) }
     // Erase's "Follow the edges" fill, while it is judged (#503)
     Sw(R.string.scan_lab_markup_edge, o.markupEdge) { lab.update(o.copy(markupEdge = it)) }
+    // the pen drawn on the screen as the engine draws it, Undo at once, Remove marks (#520)
+    Sw(R.string.scan_lab_markup_ink, o.markupInk) { lab.update(o.copy(markupInk = it)) }
     // each page stored as what is on it asks, and a size for every save (#505)
     Sw(R.string.scan_lab_auto_encode, o.autoEncode) { lab.update(o.copy(autoEncode = it)) }
     val ask = stringResource(R.string.scan_lab_size_ask)

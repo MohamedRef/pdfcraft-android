@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Markup's ink (#520) -->
+<resources>
+    <string name="scan_lab_markup_ink">Encre des annotations à l\'écran, annulation immédiate, retirer des traits</string>
+    <string name="scan_markup_remove">Retirer traits</string>
+    <string name="scan_markup_remove_hint">Frottez vos traits de stylo, de surligneur ou de couleur pour les retirer.</string>
+</resources>

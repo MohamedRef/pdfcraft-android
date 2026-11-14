@@ -164,9 +164,9 @@ fun MeasureLayer(vm: AppViewModel, doc: OpenDocument) {
 fun MeasureToolbar(vm: AppViewModel, doc: OpenDocument) {
     val m = vm.linksAndMeasure.measureSession(doc)
     SubToolbar {
-        SubTool(LucideIcons.Ruler, stringResource(R.string.measure_distance), m.mode == MeasureMode.Distance && !m.calibrating, { vm.linksAndMeasure.setMeasureMode(m, MeasureMode.Distance) })
-        SubTool(LucideIcons.Spline, stringResource(R.string.measure_perimeter), m.mode == MeasureMode.Perimeter && !m.calibrating, { vm.linksAndMeasure.setMeasureMode(m, MeasureMode.Perimeter) })
-        SubTool(LucideIcons.Pentagon, stringResource(R.string.measure_area), m.mode == MeasureMode.Area && !m.calibrating, { vm.linksAndMeasure.setMeasureMode(m, MeasureMode.Area) })
+        SubTool(io.github.artcraftandroid.pdfcraft.ui.PdfIcons.Distance, stringResource(R.string.measure_distance), m.mode == MeasureMode.Distance && !m.calibrating, { vm.linksAndMeasure.setMeasureMode(m, MeasureMode.Distance) })
+        SubTool(io.github.artcraftandroid.pdfcraft.ui.PdfIcons.Perimeter, stringResource(R.string.measure_perimeter), m.mode == MeasureMode.Perimeter && !m.calibrating, { vm.linksAndMeasure.setMeasureMode(m, MeasureMode.Perimeter) })
+        SubTool(io.github.artcraftandroid.pdfcraft.ui.PdfIcons.Area, stringResource(R.string.measure_area), m.mode == MeasureMode.Area && !m.calibrating, { vm.linksAndMeasure.setMeasureMode(m, MeasureMode.Area) })
         SubDivider()
         SubTool(LucideIcons.Undo2, stringResource(R.string.measure_undo_point), false, { vm.linksAndMeasure.undoMeasurePoint(m) }, enabled = m.points.isNotEmpty())
         SubTool(LucideIcons.Check, stringResource(R.string.measure_done), false, { vm.linksAndMeasure.finishMeasurement(m) }, enabled = m.points.size >= m.mode.minPoints && !m.calibrating)

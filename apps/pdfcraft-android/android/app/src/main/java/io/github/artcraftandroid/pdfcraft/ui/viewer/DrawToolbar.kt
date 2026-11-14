@@ -254,7 +254,7 @@ internal class DrawShape(val mode: InkShapeMode, val icon: ImageVector, @StringR
 
 /** The seven shapes, in the order the Shapes sheet shows them. */
 internal val DrawShapes = listOf(
-    DrawShape(InkShapeMode.Line, LucideIcons.Minus, R.string.toolbar_draw_line, R.string.ink_toolbar_line),
+    DrawShape(InkShapeMode.Line, io.github.artcraftandroid.pdfcraft.ui.PdfIcons.StraightLine, R.string.toolbar_draw_line, R.string.ink_toolbar_line),
     DrawShape(InkShapeMode.Rectangle, LucideIcons.Square, R.string.toolbar_draw_rectangle, R.string.ink_toolbar_rectangle),
     DrawShape(InkShapeMode.Oval, LucideIcons.Circle, R.string.toolbar_draw_oval, R.string.ink_toolbar_oval),
     DrawShape(InkShapeMode.Arrow, LucideIcons.ArrowUpRight, R.string.toolbar_draw_arrow, R.string.ink_toolbar_arrow),

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Markup's ink (#520) -->
+<resources>
+    <string name="scan_lab_markup_ink">حبر التعليقات يُرسم على الشاشة، تراجع فوري، إزالة العلامات</string>
+    <string name="scan_markup_remove">إزالة العلامات</string>
+    <string name="scan_markup_remove_hint">امسح فوق خطوط القلم أو التظليل أو اللون التي رسمتها لإزالتها.</string>
+</resources>

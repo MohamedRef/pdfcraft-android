@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Markup's ink (#520) -->
+<resources>
+    <string name="scan_lab_markup_ink">Markierungstinte auf dem Bildschirm, sofortiges Rückgängig, Markierungen entfernen</string>
+    <string name="scan_markup_remove">Striche entfernen</string>
+    <string name="scan_markup_remove_hint">Über eigene Stift-, Marker- oder Farbstriche wischen, um sie zu entfernen.</string>
+</resources>

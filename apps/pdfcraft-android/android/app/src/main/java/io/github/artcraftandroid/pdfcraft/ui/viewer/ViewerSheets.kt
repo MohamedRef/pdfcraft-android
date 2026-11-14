@@ -118,7 +118,8 @@ fun MoreSheet(vm: AppViewModel, doc: OpenDocument) {
                     )
                 }
             }
-            BarIcon(LucideIcons.Printer, stringResource(R.string.sheet_print), { close(); vm.sharing.print(doc) }, size = 40.dp)
+            // the shortcut to Print, the same as its row below (#526)
+            BarIcon(LucideIcons.Printer, stringResource(R.string.sheet_print), { close(); vm.docTools.openPrintOptions(doc) }, size = 40.dp)
             BarIcon(LucideIcons.Star, stringResource(if (starred) R.string.sheet_remove_star else R.string.sheet_add_star), { vm.settings.toggleStar(doc) },
                 tint = if (starred) Color(0xFFF5B800) else c.icon, size = 40.dp)
         }
@@ -131,18 +132,9 @@ fun MoreSheet(vm: AppViewModel, doc: OpenDocument) {
             SheetRow(LucideIcons.Info, stringResource(R.string.file_details_title), { ctl.fileDetailsBack = ViewerSheet.More; ctl.sheet = ViewerSheet.FileDetails }, chevron = true)
             SheetRow(LucideIcons.Glasses, stringResource(R.string.sheet_view_settings), { ctl.sheet = ViewerSheet.ViewSettings }, chevron = true)
             SheetRow(LucideIcons.Presentation, stringResource(R.string.sheet_present), { close(); vm.sharing.startPresenting(doc) })
-            // tabs (#138): keep this document open and open another beside it
-            SheetRow(LucideIcons.FilePlus, stringResource(R.string.tabs_open_another), { close(); vm.tabs.openAnother() })
-            SheetRow(LucideIcons.LayoutGrid, stringResource(R.string.sheet_pages), {
-                close()
-                // Draft ink keeps page numbers; add it before pages can move or go away.
-                doc.commitTool?.invoke()
-                ctl.pagesOpen = true
-            }, chevron = true)
-            SheetRow(LucideIcons.Clock, stringResource(R.string.focus_timer), { ctl.sheet = ViewerSheet.FocusTimer })
-            SheetRow(LucideIcons.Bandage, stringResource(R.string.study_title), { ctl.sheet = ViewerSheet.Study }, chevron = true)
-            if (doc.source != null) SheetRow(LucideIcons.Mic, stringResource(if (vm.noteTaking.lectureRecording != null) R.string.lecture_recording else R.string.lecture_title), { ctl.sheet = ViewerSheet.Lectures }, chevron = true)
             GroupDivider()
+            // View changes how the document is seen; finding your way, Pages and another
+            // document are Navigate's, the study tools have their own group (#526)
             MoreHeading(stringResource(R.string.sheet_group_navigate))
             SheetRow(LucideIcons.Bookmark, stringResource(R.string.sheet_bookmarks_contents), { ctl.sheet = ViewerSheet.Bookmarks }, chevron = true)
             SheetRow(
@@ -150,10 +142,23 @@ fun MoreSheet(vm: AppViewModel, doc: OpenDocument) {
                 stringResource(if (bookmarked) R.string.sheet_remove_bookmark else R.string.sheet_add_bookmark),
                 { close(); vm.settings.toggleBookmark(doc) },
             )
+            SheetRow(LucideIcons.LayoutGrid, stringResource(R.string.sheet_pages), {
+                close()
+                // Draft ink keeps page numbers; add it before pages can move or go away.
+                doc.commitTool?.invoke()
+                ctl.pagesOpen = true
+            }, chevron = true)
             SheetRow(LucideIcons.MessagesSquare, stringResource(R.string.sheet_comment_list), { ctl.sheet = ViewerSheet.Comments }, chevron = true)
             if (doc.info.attachments > 0u) SheetRow(LucideIcons.Paperclip, stringResource(R.string.sheet_attachments), { ctl.sheet = ViewerSheet.Attachments }, chevron = true)
             SheetRow(LucideIcons.ShieldCheck, stringResource(R.string.sign_signatures), { ctl.sheet = ViewerSheet.Signatures }, chevron = true)
             if (doc.info.layers > 0u) SheetRow(LucideIcons.Layers, stringResource(R.string.sheet_layers), { ctl.sheet = ViewerSheet.Layers }, chevron = true)
+            // tabs (#138): keep this document open and open another beside it
+            SheetRow(LucideIcons.FilePlus, stringResource(R.string.tabs_open_another), { close(); vm.tabs.openAnother() })
+            GroupDivider()
+            MoreHeading(stringResource(R.string.sheet_group_study))
+            SheetRow(LucideIcons.Clock, stringResource(R.string.focus_timer), { ctl.sheet = ViewerSheet.FocusTimer })
+            SheetRow(LucideIcons.Bandage, stringResource(R.string.study_title), { ctl.sheet = ViewerSheet.Study }, chevron = true)
+            if (doc.source != null) SheetRow(LucideIcons.Mic, stringResource(if (vm.noteTaking.lectureRecording != null) R.string.lecture_recording else R.string.lecture_title), { ctl.sheet = ViewerSheet.Lectures }, chevron = true)
             doc.source?.let { src ->
                 val due = vm.study.dueCounts[src.toString()] ?: 0
                 SheetRow(LucideIcons.SwatchBook, if (due > 0) stringResource(R.string.cards_row_due, due) else stringResource(R.string.cards_title), { close(); vm.study.startReview(src.toString(), doc.info.name) })
@@ -173,9 +178,8 @@ fun MoreSheet(vm: AppViewModel, doc: OpenDocument) {
             SheetRow(LucideIcons.BadgeCheck, stringResource(R.string.std_title), { close(); vm.docTools.openStandards(doc) })
             SheetRow(LucideIcons.Heading, stringResource(R.string.marks_title), { close(); vm.docTools.openPageMarks(doc) }, enabled = canEditDocument(doc))
             SheetRow(LucideIcons.Stamp, stringResource(R.string.flatten_title), { close(); vm.docTools.flattenPrompt = doc }, enabled = canEditDocument(doc))
-            // a clean copy to print; the working file keeps its comments (#155). Sharing one is in Share.
-            SheetRow(LucideIcons.Printer, stringResource(R.string.print_options_title), { close(); vm.docTools.openPrintOptions(doc) })
-            SheetRow(LucideIcons.Printer, stringResource(R.string.sheet_print_clean), { close(); vm.sharing.print(doc, clean = true) })
+            // one Print: its options, with printing without comments as a switch there (#185, #526)
+            SheetRow(LucideIcons.Printer, stringResource(R.string.sheet_print), { close(); vm.docTools.openPrintOptions(doc) }, chevron = true)
             Spacer(Modifier.height(8.dp))
         }
     }
