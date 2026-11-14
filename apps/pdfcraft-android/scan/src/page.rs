@@ -33,6 +33,9 @@ pub const STAGE_FLATTEN_TRIM: &str = "scan_flatten_trim";
 /// The page flattened from its lines of text and checked (#303, part B); only there when that
 /// fallback ran.
 pub const STAGE_FLATTEN_LINES: &str = "scan_flatten_lines";
+/// Measuring the lines of text on the page straightened by its corners, to skip flattening a page
+/// that is already flat (#549); only there when that was asked.
+pub const STAGE_FLATTEN_FLAT: &str = "scan_flatten_flat";
 /// The orientation classifier's run and the turn; only there when turning upright was asked for.
 pub const STAGE_UPRIGHT: &str = "scan_upright";
 pub const STAGE_LOOK: &str = "scan_look";
@@ -157,6 +160,11 @@ pub struct PageRequest<'a> {
     /// flattened by the preview's grid, or straightened by its corners when the preview was,
     /// without running the network, the check or the text lines again. `None` decides afresh.
     pub flatten_known: Option<&'a FlattenDecision>,
+    /// With `flatten_check` (the automatic mode): a page whose four sides were found straight
+    /// (`curved_sides` 0) and whose lines of text are already straight on the page straightened
+    /// by its corners is left so, without the network, its check or the text lines (#549). False
+    /// flattens every such page as before.
+    pub skip_flat: bool,
 }
 
 /// The weakest Clean scan strength at which fingers are looked for (#466): below it the paper is
@@ -204,6 +212,7 @@ impl<'a> PageRequest<'a> {
             size: crate::size::SizeChoice::Best,
             auto_encode: false,
             flatten_known: None,
+            skip_flat: false,
         }
     }
 }
@@ -248,6 +257,8 @@ pub struct PageResult {
     pub line_flatten: Option<LineFlatten>,
     /// The flattening was the preview's decision, taken over instead of made again (#549).
     pub flatten_reused: bool,
+    /// The page was found flat already and not flattened (#549).
+    pub flatten_skipped_flat: bool,
     /// The page's grain as the Auto look measured it: the standard deviation of its noise on
     /// blank paper, in grey levels of 255 (`None` for the other looks).
     pub noise: Option<f32>,
@@ -312,6 +323,8 @@ pub struct FlattenDecision {
     pub bend: f32,
     pub check: Option<FlattenCheck>,
     pub line_flatten: Option<LineFlatten>,
+    /// The page was found flat already, so nothing was run (#549).
+    pub skipped_flat: bool,
 }
 
 /// A page straightened (and flattened and turned upright, when that was asked): everything before
@@ -342,6 +355,8 @@ pub struct PageBase {
     pub flatten_decision: Option<FlattenDecision>,
     /// The flattening was [`PageRequest::flatten_known`]'s, not made again (#549).
     pub flatten_reused: bool,
+    /// The page was found flat already and not flattened ([`PageRequest::skip_flat`], #549).
+    pub flatten_skipped_flat: bool,
     /// (stage, milliseconds) of the stages so far.
     pub timings: Vec<(&'static str, u32)>,
     /// What the page measures as for the document types (#299), taken the first time a look asks
@@ -405,6 +420,7 @@ fn untouched(request: &PageRequest<'_>) -> Option<Result<PageResult, ScanError>>
         trim: None,
         line_flatten: None,
         flatten_reused: false,
+        flatten_skipped_flat: false,
         noise: None,
         paper_spread: None,
         white_point: None,
@@ -455,6 +471,7 @@ pub fn process_page_stored(request: &PageRequest<'_>, also: &[crate::size::SizeC
         line_flatten,
         flatten_decision: _,
         flatten_reused,
+        flatten_skipped_flat,
         mut timings,
         measured: _,
         look_kept: _,
@@ -496,6 +513,7 @@ pub fn process_page_stored(request: &PageRequest<'_>, also: &[crate::size::SizeC
         trim,
         line_flatten,
         flatten_reused,
+        flatten_skipped_flat,
         noise,
         paper_spread,
         white_point,
@@ -687,7 +705,7 @@ pub fn page_base(request: &PageRequest<'_>) -> Result<PageBase, ScanError> {
         Some(known) => reuse_flattening(&photo, &quad, (w, h), request, known, &mut |stage, t| lap(stage, t), &mut timings)?,
         None => decide_flattening(&photo, &quad, (w, h), request, &mut |stage, t| lap(stage, t), &mut timings)?,
     };
-    let Flat { page, flattened, bend, flatten_check, trim, line_flatten, decision } = flat;
+    let Flat { page, flattened, bend, flatten_check, trim, line_flatten, skipped_flat, decision } = flat;
     drop(photo);
 
     // the right way up, when the classifier is sure: the same pixels in new places, so the page
@@ -722,6 +740,7 @@ pub fn page_base(request: &PageRequest<'_>) -> Result<PageBase, ScanError> {
         line_flatten,
         flatten_decision: decision.filter(|_| request.flatten),
         flatten_reused: known.is_some(),
+        flatten_skipped_flat: skipped_flat,
         timings,
         measured: std::sync::OnceLock::new(),
         look_kept: crate::enhance::Prepared::new(),
@@ -736,6 +755,7 @@ struct Flat {
     flatten_check: Option<FlattenCheck>,
     trim: Option<Trim>,
     line_flatten: Option<LineFlatten>,
+    skipped_flat: bool,
     decision: Option<FlattenDecision>,
 }
 
@@ -757,6 +777,30 @@ fn decide_flattening(
     // page read 26 % straighter and was further from the reference (#466). So it is not asked
     // there; the page's lines of text may still flatten it. Flatten page chosen by hand asks it.
     let whole = request.corners.iter().zip(WHOLE_PHOTO).all(|(a, b)| (a - b).abs() < 1e-6);
+    // A page with four straight sides whose lines of text are already straight needs no
+    // flattening (#549): measured on the page straightened by its corners, before the network
+    // runs. A page that is not flat keeps that page and its measure for the check.
+    let mut measured_plain: Option<(Rgb, Option<Straightness>)> = None;
+    if request.flatten && request.flatten_check && request.skip_flat && request.curved_sides == 0 {
+        let plain = rectify_with_threads(photo, quad, w, h, request.threads)?;
+        lap(STAGE_RECTIFY, timings);
+        let measure = line_straightness(&evened_grey(&plain));
+        lap(STAGE_FLATTEN_FLAT, timings);
+        if measure.is_some_and(|m| already_flat(m, request.flatten_min_lines)) {
+            let decision = FlattenDecision { grid: None, network: false, bend: 0.0, check: None, line_flatten: None, skipped_flat: true };
+            return Ok(Flat {
+                page: plain,
+                flattened: false,
+                bend: 0.0,
+                flatten_check: None,
+                trim: None,
+                line_flatten: None,
+                skipped_flat: true,
+                decision: Some(decision),
+            });
+        }
+        measured_plain = Some((plain, measure));
+    }
     let grid = if request.flatten && !(whole && request.flatten_check) { predict_grid(photo, quad) } else { None };
     if request.flatten {
         lap(STAGE_FLATTEN, timings);
@@ -766,8 +810,15 @@ fn decide_flattening(
     let (page, flatten_check, flattened) = match flat {
         Some(flat) if request.flatten_check => {
             lap(STAGE_RECTIFY, timings);
-            let plain = rectify_with_threads(photo, quad, w, h, request.threads)?;
-            let check = compare_flattened(&plain, &flat, request.flatten_min_lines);
+            let check = match measured_plain.take() {
+                Some((plain, measure)) => (plain, compare_measured(measure, &flat, request.flatten_min_lines)),
+                None => {
+                    let plain = rectify_with_threads(photo, quad, w, h, request.threads)?;
+                    let check = compare_flattened(&plain, &flat, request.flatten_min_lines);
+                    (plain, check)
+                }
+            };
+            let (plain, check) = check;
             lap(STAGE_FLATTEN_CHECK, timings);
             let kept = check.kept;
             (if kept { flat } else { plain }, Some(check), kept)
@@ -776,11 +827,14 @@ fn decide_flattening(
             lap(STAGE_RECTIFY, timings);
             (flat, None, true)
         }
-        None => {
-            let plain = rectify_with_threads(photo, quad, w, h, request.threads)?;
-            lap(STAGE_RECTIFY, timings);
-            (plain, None, false)
-        }
+        None => match measured_plain.take() {
+            Some((plain, _)) => (plain, None, false),
+            None => {
+                let plain = rectify_with_threads(photo, quad, w, h, request.threads)?;
+                lap(STAGE_RECTIFY, timings);
+                (plain, None, false)
+            }
+        },
     };
     // a flattened page can keep a thin strip of table along an edge: drawn again without it (#302)
     let (page, trim) = match grid.as_ref() {
@@ -809,8 +863,8 @@ fn decide_flattening(
         }
         false => (page, flattened, None),
     };
-    let decision = FlattenDecision { grid: kept_grid, network, bend, check: flatten_check, line_flatten: line_flatten.clone() };
-    Ok(Flat { page, flattened, bend, flatten_check, trim, line_flatten, decision: Some(decision) })
+    let decision = FlattenDecision { grid: kept_grid, network, bend, check: flatten_check, line_flatten: line_flatten.clone(), skipped_flat: false };
+    Ok(Flat { page, flattened, bend, flatten_check, trim, line_flatten, skipped_flat: false, decision: Some(decision) })
 }
 
 /// The page flattened or straightened as `known` decided (#549): drawn once from its grid, or
@@ -846,8 +900,16 @@ fn reuse_flattening(
         flatten_check: known.check,
         trim,
         line_flatten: known.line_flatten.clone(),
+        skipped_flat: known.skipped_flat,
         decision: Some(known.clone()),
     })
+}
+
+/// The page straightened by its corners is flat already (#549): its lines of text are as straight
+/// as the guard calls "already straight", and enough of them were followed to say so (the guard's
+/// floor, at least [`crate::flatten_guard::FEW_LINES`]).
+fn already_flat(m: Straightness, min_lines: u32) -> bool {
+    m.px < crate::flatten_guard::STRAIGHT_ENOUGH_PX && m.lines >= min_lines.max(crate::flatten_guard::FEW_LINES)
 }
 
 /// A flattened page without the strip of background along its edges, if it has one (#302): the
@@ -905,7 +967,12 @@ fn flatten_by_lines_grid(
 /// lines cannot be followed otherwise (#466: on the owner's sheet in the shade of a tree 4 lines
 /// were followed, and 16 once the light was evened).
 pub fn compare_flattened(straightened: &Rgb, flattened: &Rgb, min_lines: u32) -> FlattenCheck {
-    let (s, f) = (line_straightness(&evened_grey(straightened)), line_straightness(&evened_grey(flattened)));
+    compare_measured(line_straightness(&evened_grey(straightened)), flattened, min_lines)
+}
+
+/// [`compare_flattened`] with the straightened page's lines already measured (`s`, #549).
+fn compare_measured(s: Option<Straightness>, flattened: &Rgb, min_lines: u32) -> FlattenCheck {
+    let f = line_straightness(&evened_grey(flattened));
     let decision = guard_with_floor(s.map(|m| m.px), f.map(|m| m.px), (s.map(|m| m.lines), f.map(|m| m.lines)), min_lines);
     FlattenCheck { kept: decision.kept == Kept::Flattened, why: decision.why.id(), min_lines, straightened: s, flattened: f }
 }

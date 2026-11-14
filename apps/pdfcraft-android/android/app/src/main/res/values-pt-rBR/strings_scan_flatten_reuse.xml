@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- The preview's flattening decision taken over at full size (#549) -->
+<!-- Flattening made faster (#549): the preview's decision taken over at full size, flat pages skipped -->
 <resources>
     <string name="scan_lab_flatten_reuse">Manter a decisão de achatamento da prévia para a página salva</string>
+    <string name="scan_lab_skip_flat">Não achatar páginas que já estão planas</string>
 </resources>

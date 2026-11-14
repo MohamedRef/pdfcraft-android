@@ -103,6 +103,8 @@ internal fun ScanLabSettings(vm: AppViewModel) {
     Sw(R.string.scan_lab_line_flatten, o.lineFlatten) { lab.update(o.copy(lineFlatten = it)) }
     // the preview's flattening decision taken over at full size (#549)
     Sw(R.string.scan_lab_flatten_reuse, o.flattenReuse) { lab.update(o.copy(flattenReuse = it)) }
+    // a page already flat is not flattened (#549)
+    Sw(R.string.scan_lab_skip_flat, o.skipFlat) { lab.update(o.copy(skipFlat = it)) }
 
     SettingsHeader(stringResource(R.string.scan_lab_group_looks))
     Sw(R.string.scan_lab_preview, o.preview) { lab.update(o.copy(preview = it)) }
