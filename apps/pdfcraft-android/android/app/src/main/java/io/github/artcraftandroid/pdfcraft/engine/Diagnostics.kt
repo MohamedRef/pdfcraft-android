@@ -19,7 +19,7 @@ internal enum class DiagArea(val tag: String, val issues: String) {
     Scan("scan", "#286-#307"),
     Memory("memory", "#212 #92 #95"),
     Tool("tool", "#96 #113 #131, slow or failed engine tools"),
-    Text("text", "#87 #88, search, Read Aloud word count, slow selection"),
+    Text("text", "#87 #88 #523, search, Read Aloud word count, slow selection, selection menu use"),
     Home("home", "#93 #94, file thumbnails and recent files"),
     Pages("pages", "#165 #168 #172 #173 #174-#177 #181 #183 #185, page and document tools"),
     Error("error", "#114, any failure"),
