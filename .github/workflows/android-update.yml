@@ -95,15 +95,8 @@ jobs:
       # pdfcraft-scan's tests take about half the test time, so they run in their own job (#562)
       - name: Compile all Rust test targets except the scanner's
         run: cargo build --locked --tests --keep-going -p pdfcraft-bytes -p pdfcraft-automation -p pdfcraft-cos -p pdfcraft-create -p pdfcraft-sign -p pdfcraft-js -p pdfcraft-forms -p pdfcraft-xfa -p pdfcraft-engine -p pdfcraft-render -p pdfcraft-android
-      # cargo-nextest runs the test binaries side by side instead of one after another (#566):
-      # locally 104 s instead of 145 s for the same 3831 tests. rust-cache keeps ~/.cargo/bin, so
-      # the install is a no-op after the first run. Doc tests are not nextest's, so cargo runs them.
-      - name: Install cargo-nextest
-        run: cargo install cargo-nextest --version 0.9.152 --locked
       - name: Run Rust tests except the scanner's
-        run: cargo nextest run --locked --no-fail-fast -p pdfcraft-bytes -p pdfcraft-automation -p pdfcraft-cos -p pdfcraft-create -p pdfcraft-sign -p pdfcraft-js -p pdfcraft-forms -p pdfcraft-xfa -p pdfcraft-engine -p pdfcraft-render -p pdfcraft-android
-      - name: Run Rust doc tests except the scanner's
-        run: cargo test --locked --doc --no-fail-fast -p pdfcraft-bytes -p pdfcraft-automation -p pdfcraft-cos -p pdfcraft-create -p pdfcraft-sign -p pdfcraft-js -p pdfcraft-forms -p pdfcraft-xfa -p pdfcraft-engine -p pdfcraft-render -p pdfcraft-android
+        run: cargo test --locked --no-fail-fast -p pdfcraft-bytes -p pdfcraft-automation -p pdfcraft-cos -p pdfcraft-create -p pdfcraft-sign -p pdfcraft-js -p pdfcraft-forms -p pdfcraft-xfa -p pdfcraft-engine -p pdfcraft-render -p pdfcraft-android
 
   # The scanner's tests and measuring runner, in parallel with the other Rust jobs (issue #562).
   rust-scan:
