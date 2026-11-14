@@ -90,6 +90,9 @@ class ViewerController {
 
     var sheet by mutableStateOf(ViewerSheet.None)
 
+    /** Where File details' back arrow goes: the More sheet, or closed when the name in the top bar opened it (#525). */
+    var fileDetailsBack = ViewerSheet.More
+
     /** The active tool's open picker (colour, thickness, text size), and Fill & Sign's Sign panel. */
     var picker by mutableStateOf(Picker.None)
     var signPanel by mutableStateOf(false)

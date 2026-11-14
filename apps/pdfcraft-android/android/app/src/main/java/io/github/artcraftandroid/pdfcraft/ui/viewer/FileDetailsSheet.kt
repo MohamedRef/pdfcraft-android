@@ -208,7 +208,7 @@ fun FileDetailsSheet(vm: AppViewModel, doc: OpenDocument) {
         }
     }
     PdfSheet(onDismiss = { ctl.sheet = ViewerSheet.None }, maxHeightFraction = 0.92f, fill = true) {
-        SheetBackHeader(stringResource(R.string.file_details_title), onBack = { ctl.sheet = ViewerSheet.More })
+        SheetBackHeader(stringResource(R.string.file_details_title), onBack = { ctl.sheet = ctl.fileDetailsBack })
         if (source == null || !propertiesLoaded) {
             Text(stringResource(R.string.file_details_loading), color = pdfColors.textSecondary, fontSize = 13.sp,
                 modifier = Modifier.padding(horizontal = 18.dp, vertical = 5.dp))

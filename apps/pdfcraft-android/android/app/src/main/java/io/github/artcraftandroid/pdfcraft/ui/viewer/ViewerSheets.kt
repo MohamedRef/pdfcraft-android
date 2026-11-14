@@ -129,7 +129,7 @@ fun MoreSheet(vm: AppViewModel, doc: OpenDocument) {
         // More tools only (#195).
         Column(Modifier.verticalScroll(scroll).padding(top = 5.dp)) {
             MoreHeading(stringResource(R.string.sheet_group_view))
-            SheetRow(LucideIcons.Info, stringResource(R.string.file_details_title), { ctl.sheet = ViewerSheet.FileDetails }, chevron = true)
+            SheetRow(LucideIcons.Info, stringResource(R.string.file_details_title), { ctl.fileDetailsBack = ViewerSheet.More; ctl.sheet = ViewerSheet.FileDetails }, chevron = true)
             SheetRow(LucideIcons.Glasses, stringResource(R.string.sheet_view_settings), { ctl.sheet = ViewerSheet.ViewSettings }, chevron = true)
             SheetRow(LucideIcons.Presentation, stringResource(R.string.sheet_present), { close(); vm.sharing.startPresenting(doc) })
             GroupDivider()
