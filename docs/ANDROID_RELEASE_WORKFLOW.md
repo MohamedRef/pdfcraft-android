@@ -1,12 +1,11 @@
 # Android release flow: clear and verified stages
 
 This workflow is intentionally split into distinct named GitHub Actions jobs:
-1. Rust engine and provenance tests
-2. Android JVM and UI unit tests
-3. Build and verify signed ARM64 APK, produce checksum, and upload two immutable artifacts
-4. Publish GitHub Release and update feed, only after the verified signed artifact is available
+1. Test jobs, in parallel: provenance, release notes and workflow checks; Rust engine tests; Rust scanner tests; Rust native checks; Android JVM and UI unit tests. Pull requests skip the test jobs their changed files cannot affect (issue #562, `scripts/ci_changed_paths.py`); main pushes, manual runs and release PRs always run every test job, and signing needs all of them.
+2. Build and verify signed ARM64 APK, produce checksum, and upload two immutable artifacts
+3. Publish GitHub Release and update feed, only after the verified signed artifact is available
 
-The third job uses the original PKCS12 keystore, checks the Android application ID, ABI and SHA-256 certificate, and creates the APK and `.sha256` in the `dist/` artifact. The fourth job downloads **the exact artifact from the same workflow run**, rechecks checksum, manifest version/build and permanent signer fingerprint, and publishes the release. No parallel signing or fallback debug build exists.
+The signing job uses the original PKCS12 keystore, checks the Android application ID, ABI and SHA-256 certificate, and creates the APK and `.sha256` in the `dist/` artifact. The publishing job downloads **the exact artifact from the same workflow run**, rechecks checksum, manifest version/build and permanent signer fingerprint, and publishes the release. No parallel signing or fallback debug build exists.
 
 ## What's New formatting
 

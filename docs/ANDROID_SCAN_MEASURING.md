@@ -180,7 +180,7 @@ How to read it:
 
 ## The CI gate (`tests_gate.rs`)
 
-A test of the scan crate, so it runs in CI's "Rust engine and provenance" job with the others:
+A test of the scan crate, so it runs in CI's "Rust scanner tests" job with the crate's other tests:
 40 drawn photos (seeds 288–327, the six kinds in turn) go through the pipeline, and a summary of
 each gated measure must stay within its limit. Each limit is a little looser than what the
 pipeline measured on these photos when the gate was set. A change that makes a measure better

@@ -52,7 +52,7 @@ Third-party actions in jobs are pinned to full commit SHAs; first-party `actions
 
 ## Pull requests and merge protection
 
-Owner policy (2026-11-06): work in batches of three PRs. Each PR must pass `rust-tests` (including provenance), `android-tests` (JVM/regressions) and `Merge gate (Rust and Android)` plus the title check. JVM tests may compile the native library to generate matching UniFFI bindings; they do not package a release APK.
+Owner policy (2026-11-06): work in batches of three PRs. Each PR must pass `Merge gate (Rust and Android)` plus the title check. Since issue #562 the gate needs the repository checks (provenance, release notes, workflow tests) and every test job the PR's changed files can affect: `rust-tests`, `rust-scan` and `rust-checks` (Rust), `android-tests` (JVM/regressions). A Kotlin/resources-only PR skips the Rust jobs and a docs/scripts-only PR skips both (`scripts/ci_changed_paths.py`); main pushes and release PRs run everything. JVM tests may compile the native library to generate matching UniFFI bindings; they do not package a release APK.
 
 After a batch is merged, dispatch `android-update.yml` on `main` once to run tests, build the permanent-key signed ARM64 APK, verify certificate/package/manifest, hash and publish the release. No APK smoke packaging per PR and no signed build on ordinary main pushes. Do not skip failed tests. APK/device checks are release gates, not PR evidence.
 
