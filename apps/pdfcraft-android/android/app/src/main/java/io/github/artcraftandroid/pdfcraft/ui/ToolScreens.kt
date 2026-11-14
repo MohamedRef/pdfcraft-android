@@ -920,6 +920,17 @@ fun ScanScreen(vm: AppViewModel) {
         if (pages.size > seen) current = pages.lastIndex
         seen = pages.size
     }
+    // a page tapped in the viewer opens here (#513)
+    LaunchedEffect(vm.scanShowAt) {
+        vm.scanShowAt?.let { at ->
+            current = at.coerceIn(0, (pages.size - 1).coerceAtLeast(0))
+            vm.scanShowAt = null
+        }
+    }
+    // "Keep the comments on changed pages?" before a scan opened from its PDF goes back into it (#513)
+    vm.scanEdit.asking?.let { ask ->
+        io.github.artcraftandroid.pdfcraft.ui.scan.ScanEditCommentsDialog(ask.comments, onKeep = { vm.scanEdit.answer(remove = false) }, onRemove = { vm.scanEdit.answer(remove = true) }, onDismiss = { vm.scanEdit.cancelAsk() })
+    }
     // Adjust borders, the step after a photo (#458): the crop screen with its own bars
     val stepsOn = vm.scanLab.options.steps
     val borders = vm.scanSteps.borders

@@ -65,7 +65,7 @@ internal class ScanLabController(private val vm: AppViewModel) {
      * Keep page [index] of the scan in [scan]: its photo, its facts and, when it was saved, the
      * page made of it ([output], [result]). Blocking.
      */
-    fun keepPage(scan: File, index: Int, page: ScanPage, saved: Boolean, look: String?, strength: Int?, flatten: Boolean, output: File?, result: ScanTestResult?, preview: ScanTestPreview? = null, turn: ScanTestTurn? = null, kind: ScanTestKind? = null, applied: ScanAppliedStrength? = null, shownKept: org.json.JSONObject? = null, discard: ScanDiscard? = null, gallerySaved: Boolean = false, autoDecisions: org.json.JSONObject? = null, fromRecent: Boolean = false, erasedShare: Double? = null, madeFullBeforeSave: Boolean? = null, encoding: org.json.JSONObject? = null) {
+    fun keepPage(scan: File, index: Int, page: ScanPage, saved: Boolean, look: String?, strength: Int?, flatten: Boolean, output: File?, result: ScanTestResult?, preview: ScanTestPreview? = null, turn: ScanTestTurn? = null, kind: ScanTestKind? = null, applied: ScanAppliedStrength? = null, shownKept: org.json.JSONObject? = null, discard: ScanDiscard? = null, gallerySaved: Boolean = false, autoDecisions: org.json.JSONObject? = null, fromRecent: Boolean = false, erasedShare: Double? = null, madeFullBeforeSave: Boolean? = null, encoding: org.json.JSONObject? = null, viewerSource: String? = null) {
         val lab = options
         val version = "${vm.home.appVersion} (${versionCode()})"
         // which models the engine accepted (#289); a loaded model is not hashed again
@@ -77,7 +77,9 @@ internal class ScanLabController(private val vm: AppViewModel) {
                 // #495: how many marks of each kind, never what they are
                 marks = page.marks?.takeUnless { it.isEmpty }?.counts?.json(erasedShare, vm.scanMarkup.eyedropper[page.key] ?: 0),
                 // #505: how the page was stored at the size chosen
-                encoding = encoding)
+                encoding = encoding,
+                // #513: opened from its PDF in the viewer
+                viewerSource = viewerSource)
         }
     }
 

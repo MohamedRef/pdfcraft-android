@@ -106,7 +106,8 @@ internal fun ScanDocumentScreen(vm: AppViewModel, onOpen: (Int) -> Unit) {
     // a page deleted or retaken meanwhile is no longer chosen
     LaunchedEffect(keys) { picked = scanSelectionKept(picked, keys) }
     val selecting = choosing || picked.isNotEmpty()
-    val renamable = vm.insertScanAt == null
+    // a scan opened from its PDF keeps that file's name (#513)
+    val renamable = vm.insertScanAt == null && vm.scanEdit.target == null
     val back = {
         when {
             selecting -> {
@@ -315,6 +316,8 @@ internal fun ScanDocumentScreen(vm: AppViewModel, onOpen: (Int) -> Unit) {
             // the size choice first (#505), unless a testing option sets one for every save
             onShare = { if (vm.scanLab.options.size != null) vm.saveScan(share = true) else sizing = true },
             onSave = { if (vm.scanLab.options.size != null) vm.saveScan() else sizing = false },
+            // a scan opened from its PDF goes back into it (#513)
+            saveLabel = if (vm.scanEdit.target != null) R.string.scan_edit_save else R.string.tools_save_pdf,
         )
     }
     sizing?.let { share -> ScanSizeSheet(vm, share) { sizing = null } }
@@ -414,6 +417,8 @@ internal fun ScanDocumentBar(
     onImport: () -> Unit,
     onShare: () -> Unit,
     onSave: () -> Unit,
+    /** Save PDF, or "Save to this PDF" for a scan opened from its PDF (#513). */
+    saveLabel: Int = R.string.tools_save_pdf,
 ) {
     val c = pdfColors
     Row(
@@ -438,7 +443,7 @@ internal fun ScanDocumentBar(
                 contentPadding = PaddingValues(horizontal = 12.dp),
                 // as wide as its words, so "PDF speichern" or "Enregistrer le PDF" is never cut; the icons share the rest
                 modifier = Modifier.padding(horizontal = 4.dp).widthIn(max = 176.dp).height(48.dp),
-            ) { Text(stringResource(R.string.tools_save_pdf), fontWeight = FontWeight.SemiBold, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+            ) { Text(stringResource(saveLabel), fontWeight = FontWeight.SemiBold, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis) }
         }
     }
 }

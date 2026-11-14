@@ -316,6 +316,8 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
                                 doc.viewer.turnPage(edgeTap(p.x, doc.viewer.viewW))
                                 ctl.barsVisible = false
                             }
+                            // a page of a saved scan shows alone, with Edit (#513)
+                            at != null && ctl.tool == ViewerTool.None && vm.scanEdit.tapPage(doc, at.page) -> Unit
                             else -> ctl.toggleBars()
                         }
                     }
@@ -723,7 +725,11 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
         if (ctl.goToPage) GoToPageDialog(doc, onDismiss = { ctl.goToPage = false })
         if (vm.sharing.shortcutsHelp) ShortcutsDialog(onDismiss = { vm.sharing.shortcutsHelp = false })
         if (ctl.pagesOpen) PagesScreen(vm, doc, onClose = { ctl.pagesOpen = false })
+        // a saved scan's page alone, with Edit (#513)
+        vm.scanEdit.shown?.takeIf { it.first === doc }?.let { (_, page) -> io.github.artcraftandroid.pdfcraft.ui.scan.ScanViewerPage(vm, doc, page) }
     }
+    // which kept scan the PDF was made from, once its information is read (#513)
+    LaunchedEffect(doc, doc.info.preparing, doc.info.generation, vm.scanLab.options.editFromViewer) { vm.scanEdit.load(doc) }
 }
 
 /** -1 for a tap in the left edge strip, 1 in the right one, else 0 (18 % of the width, at most 150 px). */

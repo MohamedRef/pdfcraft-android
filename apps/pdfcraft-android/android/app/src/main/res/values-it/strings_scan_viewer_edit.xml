@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A saved scan edited from its PDF in the viewer (#513) -->
+<resources>
+    <string name="scan_lab_edit_viewer">Modifica una scansione salvata dal suo PDF</string>
+    <string name="scan_edit_page_edit">Modifica</string>
+    <string name="scan_edit_page_edit_description">Modifica questa pagina come scansione</string>
+    <string name="scan_edit_page_of">Pagina %1$d di %2$d</string>
+    <string name="scan_edit_gone">Le foto di questa scansione non sono più conservate, quindi non si può modificare come scansione.</string>
+    <string name="scan_edit_pages_changed">Dal salvataggio sono state aggiunte o rimosse pagine in questo PDF, quindi non si può modificare come scansione.</string>
+    <string name="scan_edit_save">Salva in questo PDF</string>
+    <string name="scan_edit_nothing">Nessuna modifica. Il PDF resta com\'era.</string>
+    <string name="scan_edit_closed">Il PDF è stato chiuso, quindi la scansione è stata salvata come nuovo file.</string>
+    <string name="scan_edit_comments_title">Tenere i commenti sulle pagine cambiate?</string>
+    <string name="scan_edit_comments_keep">Tieni</string>
+    <string name="scan_edit_comments_remove">Rimuovi</string>
+    <string name="scan_edit_editing">Modifica di una pagina di %1$s</string>
+    <string name="scan_edit_as_scan">Modifica come scansione</string>
+    <string name="scan_edit_not_a_picture">Solo una pagina fatta di una sola immagine si può modificare come scansione.</string>
+    <string name="scan_edit_from_picture">Si parte dall\'immagine salvata nel PDF, non dalla foto originale.</string>
+    <plurals name="scan_edit_replaced">
+        <item quantity="one">%d pagina aggiornata in questo PDF</item>
+        <item quantity="other">%d pagine aggiornate in questo PDF</item>
+    </plurals>
+    <plurals name="scan_edit_comments_body">
+        <item quantity="one">%d commento è su una pagina i cui bordi o posto sono cambiati. Potrebbe non trovarsi più sopra ciò che segnava.</item>
+        <item quantity="other">%d commenti sono su pagine i cui bordi o posto sono cambiati. Potrebbero non trovarsi più sopra ciò che segnavano.</item>
+    </plurals>
+</resources>

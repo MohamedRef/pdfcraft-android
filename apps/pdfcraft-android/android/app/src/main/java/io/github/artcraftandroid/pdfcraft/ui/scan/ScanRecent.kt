@@ -102,7 +102,8 @@ internal class ScanRecentStore(private val root: File) {
     fun keep(id: String?, session: ScanSession, now: Long, max: Int = SCAN_RECENT_MAX, cover: File? = null): ScanRecentKept {
         root.mkdirs()
         val updated = id != null && dir(id).isDirectory
-        val key = if (updated) id!! else "scan-$now-${System.nanoTime() % 100000}"
+        // an id named ahead (the one written into the PDF, #513) is used even when its folder is new
+        val key = id?.takeIf(::scanLinkIdValid) ?: newId(now)
         val d = dir(key).apply { mkdirs() }
         val moved = LinkedHashMap<String, String>()
         for ((n, path) in scanRecentPhotos(session.pages).withIndex()) {
@@ -121,7 +122,7 @@ internal class ScanRecentStore(private val root: File) {
         // the first page as made, for the list (#494); a scan saved without one shows its photo
         val hasCover = cover?.isFile == true && runCatching { cover.copyTo(File(d, COVER), overwrite = true) }.isSuccess
         // the photos of the scan as it was before it was opened again
-        val used = moved.values.map { File(it).name }.toSet() + setOf(SESSION, SAVED) + (if (hasCover) setOf(COVER) else emptySet())
+        val used = moved.values.map { File(it).name }.toSet() + setOf(SESSION, SAVED, LINK) + (if (hasCover) setOf(COVER) else emptySet())
         d.listFiles()?.forEach { if (it.name !in used) it.delete() }
         val all = (root.listFiles()?.filter { it.isDirectory } ?: emptyList()).associate { it.name to savedAt(it) }
         val prune = scanRecentToPrune(all, max, keep = key)
@@ -144,6 +145,24 @@ internal class ScanRecentStore(private val root: File) {
         }
         val opened = scanRecentRepath(s, copied)
         return ScanRecentOpened(opened, s.pages.size - opened.pages.size, savedAt(d))
+    }
+
+    /** A new scan's id, as [keep] names it; the PDF is told it before the scan is kept (#513). */
+    fun newId(now: Long): String = "scan-$now-${Math.floorMod(System.nanoTime(), 100000L)}"
+
+    /** Scan [id]'s page count and when it was saved; null when it is not kept or can't be read (#513). */
+    fun pagesOf(id: String): Pair<Int, Long>? {
+        if (!scanLinkIdValid(id)) return null
+        val d = dir(id)
+        val s = session(d) ?: return null
+        return s.pages.size to savedAt(d)
+    }
+
+    /** Record the file scan [id] became and its page count (#513): `link.txt`, the file's address and the pages. */
+    fun link(id: String, uri: String, pages: Int) {
+        val d = dir(id)
+        if (!d.isDirectory) return
+        writeAtomically(File(d, LINK), uri.replace('\n', ' ') + "\n" + pages + "\n")
     }
 
     /** Remove scan [id]; the space it took. */
@@ -175,5 +194,7 @@ internal class ScanRecentStore(private val root: File) {
         const val SAVED = "saved.txt"
         /** The first page as made (#494). */
         const val COVER = "cover.jpg"
+        /** The file the scan became and its page count (#513). */
+        const val LINK = "link.txt"
     }
 }
