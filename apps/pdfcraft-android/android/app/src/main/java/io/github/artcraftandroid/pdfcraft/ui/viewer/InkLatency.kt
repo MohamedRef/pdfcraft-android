@@ -53,6 +53,18 @@ internal data class StrokeSummary(
     val normalMaxMs: Long,
     val front: LatencySummary?,
     val frontMaxMs: Long,
+    /** What wrote it: `pen`, `eraser` or `finger`. */
+    val pointer: String = "pen",
+    /** Compose draws of the ink layer while the stroke was being written. */
+    val draws: Int = 0,
+    /** Time between those draws: about 8 ms at 120 frames a second; more means dropped frames. */
+    val frameGap: LatencySummary? = null,
+    val frameGapMaxMs: Long = 0L,
+    /** Time the ink layer's draw code took per draw, in microseconds (recording only, not the GPU). */
+    val drawUs: LatencySummary? = null,
+    val drawMaxUs: Long = 0L,
+    /** How often the whole tool layer was recomposed during the stroke. */
+    val recompositions: Int = 0,
 ) {
     /** Pen samples per second Android delivered (historical ones included). */
     val sampleHz: Long get() = if (durationMs > 0) samples * 1000L / durationMs else 0L
@@ -68,18 +80,43 @@ internal class StrokeTrace {
     private var events = 0
     private var samples = 0
     private var eraser = false
+    private var pointer = "pen"
     private val normal = ArrayList<Long>()
     private val front = ArrayList<Long>()
+    private val drawUs = ArrayList<Long>()
+    private val frameGaps = ArrayList<Long>()
+    private var lastDrawNs = 0L
+    private var recompositions = 0
 
     @Synchronized
-    fun down(time: Long, eraser: Boolean, active: Boolean) {
+    fun down(time: Long, eraser: Boolean, active: Boolean, pointer: String = if (eraser) "eraser" else "pen") {
         this.active = active
         downAt = time
         events = 0
         samples = 0
         this.eraser = eraser
+        this.pointer = pointer
         normal.clear()
         front.clear()
+        drawUs.clear()
+        frameGaps.clear()
+        lastDrawNs = 0L
+        recompositions = 0
+    }
+
+    /** The ink layer drew the stroke in progress at [nowNs], its draw code taking [tookUs]. */
+    @Synchronized
+    fun drawn(nowNs: Long, tookUs: Long) {
+        if (!active || drawUs.size >= 4096) return
+        drawUs.add(tookUs)
+        if (lastDrawNs > 0L) frameGaps.add((nowNs - lastDrawNs) / 1_000_000)
+        lastDrawNs = nowNs
+    }
+
+    /** The tool layer recomposed while the stroke was written. */
+    @Synchronized
+    fun recomposed() {
+        if (active) recompositions++
     }
 
     /** A move event carrying [count] samples (its historical ones and its own). */
@@ -104,6 +141,8 @@ internal class StrokeTrace {
         return StrokeSummary(
             (time - downAt).coerceAtLeast(0), events, samples, eraser, cancelled,
             latencySummary(normal), normal.maxOrNull() ?: 0L, latencySummary(front), front.maxOrNull() ?: 0L,
+            pointer, drawUs.size, latencySummary(frameGaps), frameGaps.maxOrNull() ?: 0L,
+            latencySummary(drawUs), drawUs.maxOrNull() ?: 0L, recompositions,
         )
     }
 }
