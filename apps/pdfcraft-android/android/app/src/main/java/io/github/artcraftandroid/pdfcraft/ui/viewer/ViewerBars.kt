@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -352,6 +353,18 @@ val QuickHandleHeight = 22.dp
 /** The quick toolbar's height with its handle, the shortcuts folded away. */
 val QuickBarHeight = BottomBarHeight + QuickHandleHeight
 
+/** The widest a [barShare] item grows on a wide screen. */
+val BarItemMaxWidth = 104.dp
+
+/**
+ * An item's place on a bar whose items divide its width among them (#538): each takes an equal
+ * share, at most [max] wide, so a wide screen keeps them together in the middle. No item relies on
+ * the others' fixed widths adding up to less than the screen: before #538 Edit PDF's bar gave Link
+ * no width at all on a 360 dp phone once Paste showed. The item's label wraps onto a second line
+ * ([io.github.artcraftandroid.pdfcraft.ui.WordWrapLabel]) rather than being cut.
+ */
+fun RowScope.barShare(max: Dp = BarItemMaxWidth): Modifier = Modifier.weight(1f, fill = false).widthIn(max = max).fillMaxWidth()
+
 /** A shortcut in the row the quick toolbar's handle pulls up. */
 class QuickChip(val label: String, val icon: ImageVector, val tint: Color, val onClick: () -> Unit)
 
@@ -376,7 +389,8 @@ fun QuickToolbar(
     androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxWidth().background(c.surface)) {
         val slots = toolbarSlots(androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp)
         val shown = tools.take(slots)
-        val itemW = minOf(72.dp, (maxWidth - 16.dp) / maxOf(7, shown.size + 1))
+        // as wide as the bar's full set of slots allows, the same width however many tools it holds
+        val itemW = minOf(72.dp, (maxWidth - 16.dp) / (maxOf(slots, shown.size) + 1))
         Column(
             Modifier.fillMaxWidth().pointerInput(chips.isNotEmpty()) {
                 if (chips.isEmpty()) return@pointerInput

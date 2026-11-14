@@ -834,7 +834,7 @@ private fun ScanTextDialog(edit: ScanTextEdit, onDismiss: () -> Unit, onDone: (S
     )
 }
 
-private fun scanMarkupToolLabel(t: ScanMarkupTool): Int = when (t) {
+internal fun scanMarkupToolLabel(t: ScanMarkupTool): Int = when (t) {
     ScanMarkupTool.Erase -> R.string.scan_markup_erase
     ScanMarkupTool.RemoveMarks -> R.string.scan_markup_remove
     ScanMarkupTool.Pen -> R.string.scan_markup_pen
