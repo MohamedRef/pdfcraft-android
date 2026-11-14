@@ -3105,6 +3105,69 @@ fn protecting_through_tools() {
     ok(&mut c, "doc_open", json!({ "path": "open.pdf" }));
 }
 
+/// Unlock PDF in one step (Android #550): `doc_unprotect` with `out` writes exactly the bytes
+/// `doc_unprotect` then `doc_save` with `full: true` write, for every kind of protection and
+/// with comments and a form field in the file, and closes the document, also when it fails.
+#[test]
+fn unprotect_to_a_file_writes_what_unprotect_and_save_write() {
+    let dir = workdir("unprotect-out");
+    let mut make = auto(&dir);
+    let base = ok(&mut make, "doc_open", json!({ "path": "a.pdf" }))["doc"].as_u64().unwrap();
+    ok(&mut make, "comment_add", json!({ "doc": base, "page": 2, "type": "note", "at": [20, 20], "contents": "kept" }));
+    ok(&mut make, "form_add_field", json!({ "doc": base, "page": 1, "type": "text", "name": "Name", "rect": [40, 40, 200, 60] }));
+    ok(&mut make, "doc_save", json!({ "doc": base, "path": "marked.pdf" }));
+    let cases = [
+        ("aes-256", None, "boss"),
+        ("aes-128", None, "boss"),
+        ("rc4-128", None, "boss"),
+        ("rc4-40", None, "boss"),
+        ("aes-256", Some("open"), "boss"),
+        ("aes-128", Some("open"), "boss"),
+    ];
+    for (i, (compatibility, open_password, permissions)) in cases.into_iter().enumerate() {
+        let mut a = auto(&dir);
+        let doc = ok(&mut a, "doc_open", json!({ "path": "marked.pdf" }))["doc"].as_u64().unwrap();
+        let mut protect =
+            json!({ "doc": doc, "permissions_password": permissions, "changes": "none", "printing": "none", "compatibility": compatibility });
+        if let Some(p) = open_password {
+            protect["open_password"] = json!(p);
+        }
+        ok(&mut a, "doc_protect", protect);
+        let locked = format!("locked-{i}.pdf");
+        ok(&mut a, "doc_save", json!({ "doc": doc, "path": locked }));
+        // as Unlock PDF opened it: with the open password when there is one, never the permissions one
+        let open = |a: &mut Automation| ok(a, "doc_open", json!({ "path": locked, "password": open_password }))["doc"].as_u64().unwrap();
+        let (old_path, new_path) = (format!("old-{i}.pdf"), format!("new-{i}.pdf"));
+        let mut old = auto(&dir);
+        let id = open(&mut old);
+        ok(&mut old, "doc_unprotect", json!({ "doc": id, "restrictions": true }));
+        ok(&mut old, "doc_save", json!({ "doc": id, "path": old_path, "full": true }));
+        let mut new = auto(&dir);
+        let id = open(&mut new);
+        let r = ok(&mut new, "doc_unprotect", json!({ "doc": id, "restrictions": true, "out": new_path }));
+        assert_eq!((r["closed"].as_u64(), r["security"]["protected"].as_bool()), (Some(id), Some(false)), "{compatibility}");
+        assert!(ok(&mut new, "doc_list", json!({}))["documents"].as_array().unwrap().is_empty(), "{compatibility}: closed");
+        let (old_bytes, new_bytes) = (std::fs::read(dir.join(&old_path)).unwrap(), std::fs::read(dir.join(&new_path)).unwrap());
+        assert_eq!(r["bytes"].as_u64(), Some(new_bytes.len() as u64));
+        assert!(old_bytes == new_bytes, "{compatibility} {open_password:?}: the one-step unlock wrote other bytes");
+        let mut check = auto(&dir);
+        let back = ok(&mut check, "doc_open", json!({ "path": new_path }))["doc"].as_u64().unwrap();
+        let info = ok(&mut check, "doc_info", json!({ "doc": back }));
+        assert_eq!(info["security"]["protected"], false, "{compatibility}");
+        assert_eq!(info["pages"].as_array().map(Vec::len), Some(3));
+    }
+    // A failure closes the document too and leaves no file.
+    let mut a = auto(&dir);
+    let id = ok(&mut a, "doc_open", json!({ "path": "locked-0.pdf" }))["doc"].as_u64().unwrap();
+    assert!(a.call("doc_unprotect", &json!({ "doc": id, "restrictions": true, "out": "../outside.pdf" })).is_err());
+    assert!(ok(&mut a, "doc_list", json!({}))["documents"].as_array().unwrap().is_empty());
+    // An unprotected document can't be unprotected: refused, closed, nothing written.
+    let id = ok(&mut a, "doc_open", json!({ "path": "a.pdf" }))["doc"].as_u64().unwrap();
+    assert!(matches!(a.call("doc_unprotect", &json!({ "doc": id, "restrictions": true, "out": "plain.pdf" })), Err(ToolError::Failed(_))));
+    assert!(!dir.join("plain.pdf").exists());
+    assert!(ok(&mut a, "doc_list", json!({}))["documents"].as_array().unwrap().is_empty());
+}
+
 /// A refused `doc_split` or separate-file `page_extract` leaves no output directory behind
 /// (#5081), whether the protection allows no page changes ("Any except extracting pages") or
 /// page changes without copying; with copying allowed as well, the user may extract.

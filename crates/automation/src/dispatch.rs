@@ -717,9 +717,14 @@ impl Automation {
             "doc_unprotect" => {
                 // Unlock PDF (Android #517): with restrictions, no permissions password is needed
                 let edit = if a.opt_bool("restrictions")?.unwrap_or(false) { Edit::Unlock } else { Edit::RemoveProtection };
-                let mut out = self.apply(&a, edit)?;
-                out["security"] = security(self.doc(&a)?);
-                out
+                if let Some(path) = a.opt_str("out")? {
+                    // Unlock PDF (Android #550): saved to `out` and closed in one step
+                    self.unprotect_to(&a, edit, path)?
+                } else {
+                    let mut out = self.apply(&a, edit)?;
+                    out["security"] = security(self.doc(&a)?);
+                    out
+                }
             }
             "form_fields" => self.form_fields(&a)?,
             "form_fill" => self.form_fill(&a)?,
