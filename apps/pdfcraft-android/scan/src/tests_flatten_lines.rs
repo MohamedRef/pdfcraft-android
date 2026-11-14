@@ -347,3 +347,35 @@ fn a_whole_photo_is_not_given_to_the_network_in_the_automatic_mode() {
     let by_hand = crate::page_base(&crate::PageRequest { flatten: true, ..crate::PageRequest::new(&bytes, whole) }).unwrap();
     assert!(by_hand.flattened && by_hand.bend > 0.0);
 }
+
+/// A preview's flattening decision holds at full size (#549): the page made from it is flattened
+/// by the same grid without the network or the lines again, and a page the preview left straightened is
+/// the page straightened by its corners, pixel for pixel.
+#[test]
+fn a_previews_flattening_decision_is_taken_over_at_full_size() {
+    let scene = curled(0.4, -0.1, [0.15, 0.0, 0.0]);
+    let bytes = png_of(&scene.photograph(&text(18)));
+    let corners = scene.corners().to_shares(scene.photo.0, scene.photo.1);
+    let ask = || crate::PageRequest { flatten: true, flatten_check: true, line_flatten: true, ..crate::PageRequest::new(&bytes, corners) };
+    let preview = crate::page_base(&crate::PageRequest { max_side: Some(480), ..ask() }).unwrap();
+    assert!(preview.flattened && !preview.flatten_reused);
+    let known = preview.flatten_decision.clone().expect("a decision when flattening is asked");
+    assert!(known.grid.is_some());
+    let fresh = crate::page_base(&ask()).unwrap();
+    let reused = crate::page_base(&crate::PageRequest { flatten_known: Some(&known), ..ask() }).unwrap();
+    assert!(reused.flattened && reused.flatten_reused);
+    assert_eq!(reused.line_flatten, preview.line_flatten);
+    assert_eq!((reused.page.width, reused.page.height), (fresh.page.width, fresh.page.height));
+    assert!(reused.timings.iter().all(|&(stage, _)| stage != crate::page::STAGE_FLATTEN_LINES && stage != crate::page::STAGE_FLATTEN));
+    assert!(fresh.timings.iter().any(|&(stage, _)| stage == crate::page::STAGE_FLATTEN));
+    assert_eq!(fresh.flattened, reused.flattened);
+
+    let straight = crate::page::FlattenDecision { grid: None, network: false, bend: 0.0, check: None, line_flatten: None };
+    let kept_straight = crate::page_base(&crate::PageRequest { flatten_known: Some(&straight), ..ask() }).unwrap();
+    let plain = crate::page_base(&crate::PageRequest::new(&bytes, corners)).unwrap();
+    assert!(!kept_straight.flattened && kept_straight.flatten_reused);
+    assert_eq!(kept_straight.page, plain.page);
+    // without flattening asked, a decision is not used
+    let off = crate::page_base(&crate::PageRequest { flatten_known: Some(&known), ..crate::PageRequest::new(&bytes, corners) }).unwrap();
+    assert!(!off.flattened && !off.flatten_reused && off.flatten_decision.is_none());
+}

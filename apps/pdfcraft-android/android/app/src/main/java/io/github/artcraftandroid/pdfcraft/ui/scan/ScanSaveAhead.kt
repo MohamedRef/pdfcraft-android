@@ -64,8 +64,10 @@ internal fun scanSaveWaitDiag(ahead: Boolean, pagesReady: Int, waitMs: Long, ocr
 )
 
 /** One `full_page_ready` line (#504): a page made at full size ahead of Save. */
-internal fun scanFullReadyDiag(index: Int, ms: Long, bytes: Long, why: String): Array<Pair<String, Any?>> = arrayOf(
+internal fun scanFullReadyDiag(index: Int, ms: Long, bytes: Long, why: String, flattenReused: Boolean = false): Array<Pair<String, Any?>> = arrayOf(
     "index" to index + 1, "ms" to ms, "bytes" to bytes, "why" to why,
+    // the preview's flattening decision taken over instead of made again (#549)
+    "flatten_reused" to flattenReused,
 )
 
 /**
