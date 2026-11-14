@@ -225,6 +225,30 @@ impl Automation {
         Ok(out)
     }
 
+    /// `doc_unprotect` with `out` (Unlock PDF, Android #550): apply `edit`, write the result to
+    /// `out` as `doc_save` with `full: true` writes it (Will Save scripts first, the same full
+    /// rewrite, the same check before the file is replaced), then close the document, also when
+    /// a step fails. The bytes are those of `doc_unprotect` followed by `doc_save`; what is left
+    /// out is the work that only keeps the document open and shown: rebuilding its view after
+    /// the edit, and reopening and inspecting the saved file afterwards.
+    pub(crate) fn unprotect_to(&mut self, a: &Args, edit: Edit, out: &str) -> Result<Value> {
+        let id = self.doc(a)?.id;
+        let result = self.resolve(out, true).and_then(|target| {
+            self.session.apply_before_closing(id, edit).map_err(failed)?;
+            let scripts = self.session.run_document_actions(id, pdfcraft_engine::js::DocumentScriptEvent::WillSave);
+            let bytes = self.session.save_full_bytes(id).map_err(failed)?;
+            self.session.check_save(id, &bytes).map_err(failed)?;
+            write_atomic(&target, &bytes)?;
+            let mut out = json!({ "path": target.to_string_lossy(), "bytes": bytes.len(), "closed": id.0, "security": { "protected": false } });
+            if !scripts.is_empty() {
+                out["will_save"] = crate::a11y::form_tools::js_output_json(&scripts);
+            }
+            Ok(out)
+        });
+        self.doc_close(&Args(&json!({ "doc": id.0, "discard_changes": true })))?;
+        result
+    }
+
     /// Validate the prepared bytes before publishing them or marking the document saved.
     pub(crate) fn publish_save(
         &mut self,

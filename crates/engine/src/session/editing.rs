@@ -125,19 +125,31 @@ fn sync_script_history(doc: &Document, previous: &pdfcraft_cos::Document, restor
 impl Session {
     /// Apply an edit. On success the previous state is undoable and the view data is refreshed.
     pub fn apply(&mut self, id: DocId, edit: Edit) -> Result<(), EditError> {
-        self.apply_reporting(id, edit).map(|_| ())
+        self.apply_reporting(id, edit, true).map(|_| ())
+    }
+
+    /// Android adaptation (#550): apply `edit` to a document that is about to be written to a new
+    /// file and closed (Unlock PDF's hidden copy), without rebuilding its view. Everything that
+    /// shapes the saved bytes runs exactly as in [`Session::apply`]; only the refresh after it is
+    /// left out, which on a large file decrypts and writes the whole file once more and inspects
+    /// it again, for a view nobody sees. The document's view data (bytes, info, form,
+    /// signatures, renderer) still show it as before the edit, so the caller must save it with
+    /// [`Session::save_full_bytes`] and close it, and nothing else.
+    pub fn apply_before_closing(&mut self, id: DocId, edit: Edit) -> Result<(), EditError> {
+        self.apply_reporting(id, edit, false).map(|_| ())
     }
 
     /// Edit a PDF ▸ Edit text: make the grouped text on `page` (0-based) editable, as one undoable
     /// [`Edit::PrepareText`], and say what it prepared, which fonts' maps it repaired and which
     /// groups it left as they were (and why). The counts are this edit's own, not a preview's.
     pub fn prepare_text(&mut self, id: DocId, page: usize) -> Result<pdfcraft_edit::text::forms::Preparation, EditError> {
-        self.apply_reporting(id, Edit::PrepareText { page })?
+        self.apply_reporting(id, Edit::PrepareText { page }, true)?
             .ok_or_else(|| EditError::Invalid("preparing grouped text gave no result; the document was not changed".into()))
     }
 
     /// [`Session::apply`], giving back what an [`Edit::PrepareText`] did (`None` for other edits).
-    fn apply_reporting(&mut self, id: DocId, edit: Edit) -> Result<Option<pdfcraft_edit::text::forms::Preparation>, EditError> {
+    /// Without `refresh` the view is not rebuilt (see [`Session::apply_before_closing`]).
+    fn apply_reporting(&mut self, id: DocId, edit: Edit, refresh: bool) -> Result<Option<pdfcraft_edit::text::forms::Preparation>, EditError> {
         let now = self.now();
         let today = self.today();
         let js_off = self.js_off;
@@ -340,8 +352,12 @@ impl Session {
         }
         editor.redo.clear();
         Self::adopt_keys(doc);
-        let refreshed = guard(|| if scope == Scope::Content { Self::refresh_content(doc, Some(&edit)) } else { Self::refresh_scoped(doc, scope) })
-            .unwrap_or_else(|m| Err(EditError::Reopen(m)));
+        let refreshed = if !refresh {
+            Ok(())
+        } else {
+            guard(|| if scope == Scope::Content { Self::refresh_content(doc, Some(&edit)) } else { Self::refresh_scoped(doc, scope) })
+                .unwrap_or_else(|m| Err(EditError::Reopen(m)))
+        };
         if let Err(e) = refreshed {
             discard_edit_callbacks(&cx);
             // Roll back: the edit produced something we cannot display.
