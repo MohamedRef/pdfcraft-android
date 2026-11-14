@@ -157,7 +157,9 @@ fn a_kept_page_reuses_its_light_unless_the_testing_option_is_off() {
     {
         let (made, _) = page_look_kind(&page, &ask(look, strength, keep_paper, true)).unwrap();
         assert!(made.light_reused, "{look:?} {strength}");
-        assert_eq!(names(&made.stages), [STAGE_TONE], "{look:?} {strength}");
+        // the tone curve alone is drawn again (the document type and the whiteboard's colour are named apart, #549)
+        let drawn: Vec<&str> = names(&made.stages).into_iter().filter(|s| ![crate::look::STAGE_KIND, crate::look::STAGE_WHITEBOARD].contains(s)).collect();
+        assert_eq!(drawn, [STAGE_TONE], "{look:?} {strength}");
         let (again, _) = page_look_kind(&page, &ask(look, strength, keep_paper, false)).unwrap();
         assert!(!again.light_reused && names(&again.stages).contains(&STAGE_LIGHT), "{look:?} {strength}");
         assert!(rgb(&made.pixels) == rgb(&again.pixels), "{look:?} {strength}: kept and measured again differ");

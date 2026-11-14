@@ -11,6 +11,17 @@ use crate::enhance::{
 };
 use crate::photo_mask::PhotoMask;
 
+/// The look's part that gives a whiteboard its stronger colour (#549).
+pub const STAGE_WHITEBOARD: &str = "look_whiteboard";
+/// The look's part that finds the document type: the page measured and its kind chosen (#549).
+pub const STAGE_KIND: &str = "look_kind";
+/// The look's part that finds fingers at the page's edge and papers them over (#549).
+pub const STAGE_FINGERS: &str = "look_fingers";
+/// The look's part that draws the marks made by hand (#549).
+pub const STAGE_MARKUP: &str = "look_markup";
+/// What the look's time holds besides its named parts: copying and converting its pixels (#549).
+pub const STAGE_REST: &str = "look_rest";
+
 /// A page's look.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub enum Look {
@@ -154,15 +165,18 @@ pub fn apply_prepared(page: &Rgb, look: Look, params: &LookParams, photos: Optio
                 let made =
                     auto_prepared(page, &AutoParams { strength, paper, threads, sharpen, denoise, dpi, shape, grain_white }, photos, prepared)?;
                 let mut rgb = made.rgb.data;
+                let mut stages = made.stages;
                 if look == Look::Whiteboard {
+                    let clock = std::time::Instant::now();
                     whiteboard_tone(&mut rgb, WHITEBOARD_COLOUR_FACTOR);
+                    stages.push((STAGE_WHITEBOARD, u32::try_from(clock.elapsed().as_millis()).unwrap_or(u32::MAX)));
                 }
                 Applied {
                     pixels: Pixels::Rgb(rgb),
                     noise: Some(made.noise),
                     paper_spread: Some(made.paper_spread),
                     white_point: Some(made.white_point),
-                    stages: made.stages,
+                    stages,
                     light_reused: made.light_reused,
                     detail_reused: made.detail_reused,
                     fingers: None,
