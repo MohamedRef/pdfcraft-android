@@ -36,6 +36,13 @@ drawn page stands in for the engine's result) and page 2 still waiting (#494).
 `enhance_notes_<locale>_320x640.png` (German and French) is Enhance's notes line in its worst
 case under a drawn page (#493).
 
+`app/src/test/java/io/github/artcraftandroid/pdfcraft/ui/viewer/DrawToolbarScreenshotsTest.kt`: the
+viewer's Draw bar (#522) with 3 and 12 favourites, the Shapes and Guides sheets drawn above it, an
+arrow and the ruler switched on. English at 320, 360 and 384 dp wide, Arabic at 384 dp, French at
+360 dp; light and dark at 360 and 384 dp in English and Arabic.
+
+Files: `app/build/screenshots/viewer/draw_<n>fav_<locale>_<size>_<theme>.png`.
+
 `app/src/test/java/io/github/artcraftandroid/pdfcraft/ui/viewer/ViewerTopBarScreenshotsTest.kt`:
 the viewer's top bar (#525) with a short name, a long name with "Unsaved changes", Saving…, a tool
 active, and reading aloud. All seven languages at 320 dp, English and

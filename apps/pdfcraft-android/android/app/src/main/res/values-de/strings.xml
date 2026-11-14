@@ -1382,6 +1382,9 @@
     <string name="bates_export_failed">Diese neue Kopie konnte nicht in „Downloads“ gespeichert werden.</string>
     <string name="ink_presets_title">Lieblingsstifte</string>
     <string name="ink_presets_help">Jeder Stift behält seine eigene Farbe, Breite und Deckkraft. Tippe auf einen Favoriten, um seine Einstellungen wiederherzustellen.</string>
+    <string name="ink_shapes">Formen</string>
+    <string name="ink_toolbar_guides">Hilfen</string>
+    <string name="ink_guides_title">Lineal, Winkelmesser und Zoomfenster</string>
     <string name="ink_latency_reset">Zurücksetzen</string>
     <string name="ink_latency_refresh">Aktualisieren</string>
     <string name="ink_latency_none">noch nicht gemessen</string>

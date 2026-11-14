@@ -1779,7 +1779,7 @@ private fun MarkupLayer(vm: AppViewModel, doc: OpenDocument) {
 }
 
 /** Which property picker a sub-toolbar has open. */
-enum class Picker { None, Color, Width, TextSize, Presets, PenStyle, EraserSize, Stamp }
+enum class Picker { None, Color, Width, TextSize, Presets, PenStyle, EraserSize, Stamp, Shapes, Guides }
 
 /** The active tool's sub-toolbar. */
 @Composable
@@ -1843,7 +1843,7 @@ fun ToolSheets(vm: AppViewModel, doc: OpenDocument) {
         else -> null
     }
     SheetHost(ctl.picker.takeIf { it != Picker.None && styled != null }) { p ->
-        PropertyPicker(vm, styled ?: StyledTool.Highlight, p, ctl.markup) {
+        PropertyPicker(vm, ctl, styled ?: StyledTool.Highlight, p, ctl.markup) {
             ctl.picker = Picker.None
             // Pen selection works even after the eraser/lasso or shape tool was active.
             if (p == Picker.Presets && ctl.tool == ViewerTool.Draw) {
@@ -1859,7 +1859,7 @@ fun ToolSheets(vm: AppViewModel, doc: OpenDocument) {
 
 /** The colour, thickness or text-size picker of a tool, as a sheet above its sub-toolbar. */
 @Composable
-fun PropertyPicker(vm: AppViewModel, tool: StyledTool, picker: Picker, markup: TextMarkup, onDismiss: () -> Unit) {
+fun PropertyPicker(vm: AppViewModel, ctl: ViewerController, tool: StyledTool, picker: Picker, markup: TextMarkup, onDismiss: () -> Unit) {
     val prefs = vm.settings.toolPrefs
     val c = pdfColors
     // over the tool's bar, which stays in view with the picker's button shaded
@@ -1906,6 +1906,8 @@ fun PropertyPicker(vm: AppViewModel, tool: StyledTool, picker: Picker, markup: T
             }
             Picker.Presets -> InkPresetsPicker(vm, onDismiss)
             Picker.PenStyle -> PenStylePicker(vm)
+            Picker.Shapes -> DrawShapesPicker(ctl, prefs)
+            Picker.Guides -> DrawGuidesPicker(ctl)
             Picker.EraserSize -> {
                 Text(
                     stringResource(R.string.ink_eraser_size_title),
