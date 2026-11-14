@@ -453,6 +453,7 @@
     <string name="sheet_undo_action">Desfazer %1$s</string>
     <string name="sheet_redo_action">Refazer %1$s</string>
     <string name="sheet_continuous">Contínuo</string>
+    <string name="sheet_fit_each_page">Cada página na largura</string>
     <string name="sheet_single_page">Página única</string>
     <string name="sheet_reading_mode">Modo de leitura</string>
     <string name="sheet_night_mode">Modo noturno</string>

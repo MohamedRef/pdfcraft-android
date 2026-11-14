@@ -676,6 +676,7 @@
 
     <!-- Viewer sheets: View settings -->
     <string name="sheet_continuous">Fortlaufend</string>
+    <string name="sheet_fit_each_page">Jede Seite auf Breite</string>
     <string name="sheet_single_page">Einzelseite</string>
     <string name="sheet_reading_mode">Lesemodus</string>
     <string name="sheet_night_mode">Nachtmodus</string>

@@ -103,7 +103,8 @@ Areas (lines · issues):
 | `jump` | `from_page`, `mode` | A contents, bookmark, link or Go to page jump left this page (#198) |
 | `jump_back`, `jump_forward` | `from_page`, `to_page` | The back and forward chip or key returned to the right place (#198) |
 | `go_to_page` | `doc`, `labels` (page labels in use), `ok` (false: the entry was refused), `page_count` | Go to page took or refused what was typed (#203) |
-| `layout_open` | `doc`, `source` (`remembered`, `file`, `app`), `mode`, `spread`, `auto` | Which layout a file opened in, and why (#152) |
+| `layout_open` | `doc`, `source` (`remembered`, `file`, `app`), `mode`, `spread`, `auto`, `fit_each` (`on`, `off` as chosen; `auto_on`, `auto_off`), `width_spread` (narrowest page over widest), `made_scan` | Which layout a file opened in, and why (#152); whether the continuous view fits every page to the width, and how often documents need it (#524) |
+| `fit_each` | `doc`, `on`, `width_spread`, `made_scan`, `page` | Fit every page to the width was turned on or off for the document (#524) |
 | `page_mode` | `doc`, `from`, `to`, `page` | Continuous, single page or pages in a row was chosen, and the page kept (#152) |
 | `spread`, `spread_auto` | `spread`; `on` | Two pages, cover or automatic two pages was chosen (#152) |
 | `spread_shown` | `doc`, `spread` (shown), `chosen`, `auto`, `width_dp`, `height_dp` | What the window showed after a rotation or resize, and why (#152) |
