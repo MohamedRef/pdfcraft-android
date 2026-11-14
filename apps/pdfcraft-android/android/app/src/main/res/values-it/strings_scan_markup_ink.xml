@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Markup's ink (#520) -->
+<resources>
+    <string name="scan_lab_markup_ink">Inchiostro dei segni sullo schermo, annulla subito, rimuovi segni</string>
+    <string name="scan_markup_remove">Togli tratti</string>
+    <string name="scan_markup_remove_hint">Passa sui tuoi tratti di penna, evidenziatore o colore per toglierli.</string>
+</resources>

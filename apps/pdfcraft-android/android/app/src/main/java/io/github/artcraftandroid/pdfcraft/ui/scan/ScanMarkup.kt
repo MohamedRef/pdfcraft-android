@@ -33,6 +33,9 @@ internal class ScanMarkupState {
 
     /** How many times the eyedropper picked a colour on each page (by key) in this scan (#503), for a kept page file. */
     val eyedropper = HashMap<String, Int>()
+
+    /** How many strokes Remove marks took back on each page (by key) in this scan (#520), for a kept page file. */
+    val marksRemoved = HashMap<String, Int>()
 }
 
 /** A change that would move page [index] under its marks: what it is (for the log) and what to do on Remove. */
@@ -52,7 +55,7 @@ internal fun AppViewModel.openScanMarkup(index: Int) {
  * last drawing of the page; [eyedropper] how many colours the eyedropper picked there and
  * [eraseFill] Erase's fill when it closed (#503).
  */
-internal fun AppViewModel.finishScanMarkup(index: Int, marks: ScanMarks?, cancelled: Boolean, erasedShare: Float?, eyedropper: Int = 0, eraseFill: String = "paper") {
+internal fun AppViewModel.finishScanMarkup(index: Int, marks: ScanMarks?, cancelled: Boolean, erasedShare: Float?, eyedropper: Int = 0, eraseFill: String = "paper", ink: Array<Pair<String, Any?>> = emptyArray()) {
     val page = scanPages.getOrNull(index)
     val kept = marks?.takeUnless { it.isEmpty }
     val changed = !cancelled && page != null && page.marks != kept
@@ -60,7 +63,8 @@ internal fun AppViewModel.finishScanMarkup(index: Int, marks: ScanMarks?, cancel
     if (page != null && eyedropper > 0) scanMarkup.eyedropper.merge(page.key, eyedropper, Int::plus)
     scanMarkup.open = null
     val ms = android.os.SystemClock.elapsedRealtime() - scanMarkup.openedAt
-    Diag.event(DiagArea.Scan, "markup_done", *scanMarkupDoneDiag(index, if (cancelled) page?.marks else kept, erasedShare, ms, cancelled, changed, eyedropper, eraseFill))
+    // what Markup's ink did (#520): the engine's drawings, Undo's time, strokes taken back, long frames
+    Diag.event(DiagArea.Scan, "markup_done", *scanMarkupDoneDiag(index, if (cancelled) page?.marks else kept, erasedShare, ms, cancelled, changed, eyedropper, eraseFill), *ink)
 }
 
 /** Clear markup (#495): every mark of page [index] gone; [why] is "clear" from More, or the change that asked for it. */

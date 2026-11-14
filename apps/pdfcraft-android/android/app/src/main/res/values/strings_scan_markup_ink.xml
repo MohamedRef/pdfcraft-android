@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Markup's ink (#520) -->
+<resources>
+    <string name="scan_lab_markup_ink">Markup ink drawn on the screen, Undo at once, Remove marks</string>
+    <string name="scan_markup_remove">Remove marks</string>
+    <string name="scan_markup_remove_hint">Rub over your own pen, highlighter or color strokes to take them back.</string>
+</resources>

@@ -237,6 +237,14 @@ internal data class ScanLab(
      * becoming paper. Off: the fill is not offered (strokes already made with it stay as they are).
      */
     val markupEdge: Boolean = true,
+    /**
+     * Markup's ink (#520): the pen and highlighter drawn on the screen as the engine will draw
+     * them, with every sample the pen sends, the engine asked to draw the page only for the eraser's
+     * paper and edge fills, Undo at once, a ring showing the eraser's size, "Remove marks" taking
+     * back one's own strokes, and fingers moving the page when the viewer's "Pen only" is on.
+     * Off: the pen as in #495 and #503, the page drawn by the engine after every stroke.
+     */
+    val markupInk: Boolean = true,
     /** Double-tap or pinch the preview to look closer, with a sharper page once zoomed in (#301); off, the preview doesn't zoom. */
     val previewZoom: Boolean = true,
     /**
@@ -266,7 +274,7 @@ internal data class ScanLab(
         "snap_paper" to snapPaper, "strength_override" to (strength ?: -1), "upright" to upright, "sharpen" to sharpen,
         "denoise" to denoise, "grain_white" to grainWhite, "preview" to preview, "crop_tools" to cropTools, "crop_detect_note" to cropDetectNote, "flatten_auto" to flattenAuto, "flatten_trim" to flattenTrim, "flatten_line_floor" to flattenLineFloor, "settle_turns" to settleTurns, "presets" to presets, "kind_tone" to kindTone, "photo_sharpen" to photoSharpen, "suggestions" to suggestions, "strict_gutter" to strictGutter, "strict_photo" to strictPhoto, "strict_book" to strictBook, "book_gutter" to bookGutter, "line_flatten" to lineFlatten,
         "page_strength" to pageStrength, "unfound_document" to unfoundDocument, "background_pages" to backgroundPages, "full_pages_ahead" to fullPagesAhead, "ask_discard" to askDiscard, "auto_look" to autoLook, "remove_fingers" to removeFingers, "look_per_page" to lookPerPage, "look_strip" to lookStrip,
-        "whiteboard_look" to whiteboardLook, "preview_stop" to previewStop, "preview_zoom" to previewZoom, "look_reuse" to lookReuse, "camera_bar" to cameraBar, "steps" to steps, "recent_scans" to recentScans, "edit_from_viewer" to editFromViewer, "snap_while_dragging" to snapWhileDragging, "pull_catch_dp" to pullCatchDp, "pull_release_dp" to pullReleaseDp, "batch_borders" to batchBorders, "tools_in_reach" to toolsInReach, "markup" to markup, "markup_colours" to markupColours, "markup_edge" to markupEdge, "auto_encode" to autoEncode, "size_override" to (size ?: "none"), "keep" to keep, "inspect" to inspect,
+        "whiteboard_look" to whiteboardLook, "preview_stop" to previewStop, "preview_zoom" to previewZoom, "look_reuse" to lookReuse, "camera_bar" to cameraBar, "steps" to steps, "recent_scans" to recentScans, "edit_from_viewer" to editFromViewer, "snap_while_dragging" to snapWhileDragging, "pull_catch_dp" to pullCatchDp, "pull_release_dp" to pullReleaseDp, "batch_borders" to batchBorders, "tools_in_reach" to toolsInReach, "markup" to markup, "markup_colours" to markupColours, "markup_edge" to markupEdge, "markup_ink" to markupInk, "auto_encode" to autoEncode, "size_override" to (size ?: "none"), "keep" to keep, "inspect" to inspect,
     )
 
     /** The options as JSON, for a kept scan's page file. */
@@ -275,7 +283,7 @@ internal data class ScanLab(
         .put("snap_paper", snapPaper).put("strength_override", strength ?: JSONObject.NULL).put("upright", upright)
         .put("sharpen", sharpen).put("denoise", denoise).put("grain_white", grainWhite).put("preview", preview).put("crop_tools", cropTools).put("crop_detect_note", cropDetectNote).put("flatten_auto", flattenAuto).put("flatten_trim", flattenTrim).put("flatten_line_floor", flattenLineFloor).put("settle_turns", settleTurns).put("presets", presets).put("kind_tone", kindTone).put("photo_sharpen", photoSharpen).put("suggestions", suggestions).put("strict_gutter", strictGutter).put("strict_photo", strictPhoto).put("strict_book", strictBook).put("book_gutter", bookGutter).put("line_flatten", lineFlatten)
         .put("page_strength", pageStrength).put("unfound_document", unfoundDocument).put("background_pages", backgroundPages).put("full_pages_ahead", fullPagesAhead).put("ask_discard", askDiscard).put("auto_look", autoLook).put("remove_fingers", removeFingers).put("look_per_page", lookPerPage).put("look_strip", lookStrip)
-        .put("whiteboard_look", whiteboardLook).put("preview_stop", previewStop).put("preview_zoom", previewZoom).put("look_reuse", lookReuse).put("camera_bar", cameraBar).put("steps", steps).put("recent_scans", recentScans).put("edit_from_viewer", editFromViewer).put("snap_while_dragging", snapWhileDragging).put("pull_catch_dp", pullCatchDp).put("pull_release_dp", pullReleaseDp).put("batch_borders", batchBorders).put("tools_in_reach", toolsInReach).put("markup", markup).put("markup_colours", markupColours).put("markup_edge", markupEdge).put("auto_encode", autoEncode).put("size_override", size ?: JSONObject.NULL).put("inspect", inspect)
+        .put("whiteboard_look", whiteboardLook).put("preview_stop", previewStop).put("preview_zoom", previewZoom).put("look_reuse", lookReuse).put("camera_bar", cameraBar).put("steps", steps).put("recent_scans", recentScans).put("edit_from_viewer", editFromViewer).put("snap_while_dragging", snapWhileDragging).put("pull_catch_dp", pullCatchDp).put("pull_release_dp", pullReleaseDp).put("batch_borders", batchBorders).put("tools_in_reach", toolsInReach).put("markup", markup).put("markup_colours", markupColours).put("markup_edge", markupEdge).put("markup_ink", markupInk).put("auto_encode", autoEncode).put("size_override", size ?: JSONObject.NULL).put("inspect", inspect)
 
     /** One line of text for the app's preferences. */
     fun encode(): String = listOf(
@@ -284,7 +292,7 @@ internal data class ScanLab(
         "upright" to flag(upright), "sharpen" to sharpen.toString(), "denoise" to flag(denoise), "grain_white" to flag(grainWhite), "preview" to flag(preview), "crop" to flag(cropTools), "detect_note" to flag(cropDetectNote), "flatten_auto_on" to flag(flattenAuto), "flatten_trim" to flag(flattenTrim), "line_floor" to flag(flattenLineFloor),
         "settle" to flag(settleTurns), "presets" to flag(presets), "kind_tone" to flag(kindTone), "photo_sharpen" to flag(photoSharpen), "suggest" to flag(suggestions), "strict_gutter" to flag(strictGutter), "strict_photo" to flag(strictPhoto), "strict_book" to flag(strictBook), "gutter" to flag(bookGutter), "line_flatten" to flag(lineFlatten),
         "page_strength" to flag(pageStrength), "unfound_doc" to flag(unfoundDocument), "bg_pages" to flag(backgroundPages), "full_ahead" to flag(fullPagesAhead), "ask_discard" to flag(askDiscard), "auto_look" to flag(autoLook), "fingers" to flag(removeFingers), "look_page" to flag(lookPerPage), "look_strip" to flag(lookStrip),
-        "board" to flag(whiteboardLook), "stop" to flag(previewStop), "zoom" to flag(previewZoom), "look_reuse" to flag(lookReuse), "camera_bar" to flag(cameraBar), "steps" to flag(steps), "recent" to flag(recentScans), "edit_viewer" to flag(editFromViewer), "snap_drag" to flag(snapWhileDragging), "catch_dp" to pullCatchDp.toString(), "release_dp" to pullReleaseDp.toString(), "batch" to flag(batchBorders), "reach" to flag(toolsInReach), "markup" to flag(markup), "markup_colours" to flag(markupColours), "markup_edge" to flag(markupEdge), "auto_encode" to flag(autoEncode), "size" to (size ?: ""), "inspect" to flag(inspect),
+        "board" to flag(whiteboardLook), "stop" to flag(previewStop), "zoom" to flag(previewZoom), "look_reuse" to flag(lookReuse), "camera_bar" to flag(cameraBar), "steps" to flag(steps), "recent" to flag(recentScans), "edit_viewer" to flag(editFromViewer), "snap_drag" to flag(snapWhileDragging), "catch_dp" to pullCatchDp.toString(), "release_dp" to pullReleaseDp.toString(), "batch" to flag(batchBorders), "reach" to flag(toolsInReach), "markup" to flag(markup), "markup_colours" to flag(markupColours), "markup_edge" to flag(markupEdge), "ink" to flag(markupInk), "auto_encode" to flag(autoEncode), "size" to (size ?: ""), "inspect" to flag(inspect),
     ).joinToString(";") { (k, v) -> "$k=$v" }
 
     companion object {
@@ -371,6 +379,7 @@ internal data class ScanLab(
                 markup = on("markup", default.markup),
                 markupColours = on("markup_colours", default.markupColours),
                 markupEdge = on("markup_edge", default.markupEdge),
+                markupInk = on("ink", default.markupInk),
                 autoEncode = on("auto_encode", default.autoEncode),
                 size = values["size"]?.takeIf { it in SIZES },
                 inspect = on("inspect", default.inspect),
