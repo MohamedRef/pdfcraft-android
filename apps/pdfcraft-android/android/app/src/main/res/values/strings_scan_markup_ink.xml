@@ -4,4 +4,5 @@
     <string name="scan_lab_markup_ink">Markup ink drawn on the screen, Undo at once, Remove marks</string>
     <string name="scan_markup_remove">Remove marks</string>
     <string name="scan_markup_remove_hint">Rub over your own pen, highlighter or color strokes to take them back.</string>
+    <string name="scan_markup_size">Size</string>
 </resources>

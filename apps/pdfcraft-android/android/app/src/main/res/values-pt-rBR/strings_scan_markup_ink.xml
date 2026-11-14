@@ -4,4 +4,5 @@
     <string name="scan_lab_markup_ink">Tinta das marcações na tela, desfazer na hora, remover marcas</string>
     <string name="scan_markup_remove">Tirar traços</string>
     <string name="scan_markup_remove_hint">Passe sobre seus traços de caneta, marca-texto ou cor para tirá-los.</string>
+    <string name="scan_markup_size">Tamanho</string>
 </resources>

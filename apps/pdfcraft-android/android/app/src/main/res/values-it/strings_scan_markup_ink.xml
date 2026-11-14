@@ -4,4 +4,5 @@
     <string name="scan_lab_markup_ink">Inchiostro dei segni sullo schermo, annulla subito, rimuovi segni</string>
     <string name="scan_markup_remove">Togli tratti</string>
     <string name="scan_markup_remove_hint">Passa sui tuoi tratti di penna, evidenziatore o colore per toglierli.</string>
+    <string name="scan_markup_size">Dimensione</string>
 </resources>

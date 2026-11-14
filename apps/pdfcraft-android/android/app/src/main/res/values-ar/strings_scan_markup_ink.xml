@@ -4,4 +4,5 @@
     <string name="scan_lab_markup_ink">حبر التعليقات يُرسم على الشاشة، تراجع فوري، إزالة العلامات</string>
     <string name="scan_markup_remove">إزالة العلامات</string>
     <string name="scan_markup_remove_hint">امسح فوق خطوط القلم أو التظليل أو اللون التي رسمتها لإزالتها.</string>
+    <string name="scan_markup_size">الحجم</string>
 </resources>
