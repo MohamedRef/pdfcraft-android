@@ -11,7 +11,7 @@ use pdfcraft_scan::page_kind::{PageKind, PresetChoice, preset_from_id};
 use pdfcraft_scan::upright_pages::{PageTurn, followed, settle};
 use pdfcraft_scan::{
     AspectSource, Finder, Format, Look, PageBase, PageRequest, Paper, Photo, Pyramid, Quad, QuadSource, RefineOptions, detect_frame, detect_with,
-    page_base, process_page, refine,
+    page_base, refine,
 };
 
 use crate::MobileError;
@@ -605,6 +605,16 @@ pub fn scan_process_page(request: ScanPageRequest) -> Result<ScanPageResult, Mob
     let root = SCAN_ROOT.read().unwrap_or_else(std::sync::PoisonError::into_inner).clone();
     let root = root.ok_or_else(|| MobileError::Command("scanning is not ready yet".into()))?;
     process_in(&root, &request)
+}
+
+/// The page of `request` made once and stored at every size choice (#528): the request's size
+/// first, then the others, each written beside `output_path` as `<name>-<size>.<ext>`. A page made
+/// ahead of Save is then ready at whatever size is picked on the sheet; only the storing differs.
+#[uniffi::export]
+pub fn scan_process_page_sizes(request: ScanPageRequest) -> Result<Vec<ScanPageResult>, MobileError> {
+    let root = SCAN_ROOT.read().unwrap_or_else(std::sync::PoisonError::into_inner).clone();
+    let root = root.ok_or_else(|| MobileError::Command("scanning is not ready yet".into()))?;
+    process_sizes_in(&root, &request, &pdfcraft_scan::size::SizeChoice::ALL)
 }
 
 /// One size choice for a page, as the Save sheet shows it (#505).
@@ -1359,6 +1369,12 @@ pub fn scan_settle_turns(pages: Vec<Option<ScanOrientation>>) -> Vec<ScanSettled
 }
 
 pub(crate) fn process_in(root: &Path, request: &ScanPageRequest) -> Result<ScanPageResult, MobileError> {
+    process_sizes_in(root, request, &[]).map(|mut all| all.swap_remove(0))
+}
+
+/// [`process_in`], and the same page stored also at each size choice of `also` that is not the
+/// request's (#528), written beside it as `<name>-<size>.<ext>`: the request's first.
+pub(crate) fn process_sizes_in(root: &Path, request: &ScanPageRequest, also: &[pdfcraft_scan::size::SizeChoice]) -> Result<Vec<ScanPageResult>, MobileError> {
     let outside = || MobileError::Command("the scan's files must be in the app's own folder".into());
     let corners: [f32; 8] = request.corners.as_slice().try_into().map_err(|_| MobileError::Command("a page needs four corners".into()))?;
     // The output's folder must exist inside the root; its name may not carry a folder.
@@ -1370,15 +1386,41 @@ pub(crate) fn process_in(root: &Path, request: &ScanPageRequest) -> Result<ScanP
     }
     let bytes = read_photo(root, &request.photo_path)?;
     let markup = request.markup.as_ref().map(markup_of);
-    let page = process_page(&page_request(request, &bytes, corners, None, markup.as_ref())).map_err(|e| MobileError::Command(e.to_string()))?;
+    let (page, others) = pdfcraft_scan::page::process_page_stored(&page_request(request, &bytes, corners, None, markup.as_ref()), also)
+        .map_err(|e| MobileError::Command(e.to_string()))?;
     drop(bytes);
     let mut file_name = name.to_os_string();
     file_name.push(".");
     file_name.push(page.format.extension());
     let target = parent.join(file_name);
     std::fs::write(&target, &page.bytes).map_err(|_| MobileError::Command("the page could not be saved".into()))?;
-    Ok(ScanPageResult {
-        path: target.to_string_lossy().into_owned(),
+    let main = result_of(page, target.to_string_lossy().into_owned());
+    let mut out = vec![main.clone()];
+    for s in others {
+        // the same page stored at another size: beside the first, named by its size
+        let mut file_name = name.to_os_string();
+        file_name.push(format!("-{}.{}", s.encoded.choice.id(), s.format.extension()));
+        let target = parent.join(file_name);
+        std::fs::write(&target, &s.bytes).map_err(|_| MobileError::Command("the page could not be saved".into()))?;
+        out.push(ScanPageResult {
+            path: target.to_string_lossy().into_owned(),
+            width: s.encoded.width,
+            height: s.encoded.height,
+            format: match s.format {
+                Format::Jpeg => ScanFormat::Jpeg,
+                Format::Png => ScanFormat::Png,
+            },
+            dpi: f32::from(s.encoded.dpi),
+            encoding: Some((&s.encoded).into()),
+            ..main.clone()
+        });
+    }
+    Ok(out)
+}
+
+/// A made page as the app gets it, written at `path`.
+fn result_of(page: pdfcraft_scan::page::PageResult, path: String) -> ScanPageResult {
+    ScanPageResult {
         width: page.width,
         height: page.height,
         format: match page.format {
@@ -1418,7 +1460,8 @@ pub(crate) fn process_in(root: &Path, request: &ScanPageRequest) -> Result<ScanP
         markup: page.markup.map(Into::into),
         encoding: page.encoded.as_ref().map(Into::into),
         timings: page.timings.into_iter().map(|(stage, ms)| ScanTiming { stage: stage.into(), ms }).collect(),
-    })
+        path,
+    }
 }
 
 /// How sharp the page in a photo is (#296). **Not a verdict to act on yet**: see
@@ -1686,6 +1729,32 @@ mod tests {
         assert!((sizes[0].0 - sizes[1].0).abs() < 1.0 && (sizes[0].1 - sizes[1].1).abs() < 1.0, "{sizes:?}");
         // outside the app's folder: refused
         assert!(size_options_in(&root, &ScanPageRequest { output_path: "/tmp/elsewhere/x".into(), ..ask("best", true, "x") }).is_err());
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    /// A page made once and stored at every size (#528): the asked size first, at the asked path,
+    /// then one file per other size beside it, each with its own encoding and the same page.
+    #[test]
+    fn a_page_made_once_is_stored_at_every_size() {
+        let root = temp("sizes-ahead");
+        let shot = photo(&root);
+        let ask = ScanPageRequest { look: ScanLook::Auto, size: "balanced".into(), auto_encode: true, ..request(&shot, &root.join("ahead")) };
+        let all = process_sizes_in(&root, &ask, &pdfcraft_scan::size::SizeChoice::ALL).unwrap();
+        assert_eq!(all.len(), 4, "{all:?}");
+        assert!(all[0].path.starts_with(&format!("{}.", ask.output_path)), "{}", all[0].path);
+        let choices: Vec<String> = all.iter().map(|r| r.encoding.as_ref().unwrap().size_choice.clone()).collect();
+        assert_eq!(choices[0], "balanced");
+        let mut sorted = choices.clone();
+        sorted.sort();
+        assert_eq!(sorted, ["balanced", "best", "small", "smallest"]);
+        for r in &all[1..] {
+            let size = &r.encoding.as_ref().unwrap().size_choice;
+            assert!(r.path.contains(&format!("ahead-{size}.")) && std::fs::metadata(&r.path).unwrap().len() > 0, "{}", r.path);
+            assert_eq!(r.turns, all[0].turns);
+        }
+        // one size only: as before
+        let one = process_sizes_in(&root, &ScanPageRequest { output_path: root.join("one").to_string_lossy().into(), ..ask.clone() }, &[]).unwrap();
+        assert_eq!(one.len(), 1);
         std::fs::remove_dir_all(root).unwrap();
     }
 

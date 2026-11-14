@@ -22,15 +22,27 @@ import java.io.File
  * Testing option "Make full-size pages before Save" (`fullPagesAhead`): off is Save as before.
  */
 
-/** A page made at full size: the request it was made from (with no output path) and what came out. */
+/**
+ * A page made at full size: the request it was made from (with no output path and no size) and
+ * the page stored at each size it has been stored at (#528), by size choice.
+ */
 internal class ScanFullPage(
     val request: io.github.artcraftandroid.pdfcraft.core.ScanPageRequest,
     val previewKey: ScanPreviewKey,
-    val result: io.github.artcraftandroid.pdfcraft.core.ScanPageResult,
-)
+    val results: Map<String, io.github.artcraftandroid.pdfcraft.core.ScanPageResult>,
+) {
+    /** Every file this page is kept in. */
+    fun paths(): List<String> = results.values.map { it.path }
+}
 
 /** The request with no output path: two requests that agree on this make the same page. */
 internal fun io.github.artcraftandroid.pdfcraft.core.ScanPageRequest.withoutOutput() = copy(outputPath = "")
+
+/** The request with no output path and no size (#528): two requests that agree on this make the same page, stored at whatever size. */
+internal fun io.github.artcraftandroid.pdfcraft.core.ScanPageRequest.made() = copy(outputPath = "", size = "")
+
+/** The size [result] was stored at: its encoding's choice, else [asked]. */
+internal fun scanStoredSize(result: io.github.artcraftandroid.pdfcraft.core.ScanPageResult, asked: String): String = result.encoding?.sizeChoice ?: asked
 
 /** The pages made at full size ahead of Save (#504), kept apart from [AppViewModel]. */
 internal class ScanFullPages(private val vm: AppViewModel) {
@@ -65,17 +77,44 @@ internal class ScanFullPages(private val vm: AppViewModel) {
         if (!open) kick()
     }
 
-    /** [page]'s full-size result when it was made from [request] (its output path aside); null otherwise. */
+    /**
+     * [page]'s full-size result when it was made from [request] (its output path aside) and stored
+     * at its size; null otherwise. Pages made ahead are stored at every size (#528), so a size
+     * picked on the sheet finds them.
+     */
     fun take(page: ScanPage, request: io.github.artcraftandroid.pdfcraft.core.ScanPageRequest): io.github.artcraftandroid.pdfcraft.core.ScanPageResult? =
-        made[page.key]?.takeIf { it.request == request.withoutOutput() && File(it.result.path).isFile }?.result
+        made[page.key]?.takeIf { it.request == request.made() }?.results?.get(request.size)?.takeIf { File(it.path).isFile }
+
+    /** Whether [page] was made from [request] at all, whatever the size it was stored at (#528's log). */
+    fun madeFrom(page: ScanPage, request: io.github.artcraftandroid.pdfcraft.core.ScanPageRequest): Boolean = made[page.key]?.request == request.made()
+
+    /** [page] made from [request], stored at each size it was stored at; null when it was not (#528). */
+    fun storedOf(page: ScanPage, request: io.github.artcraftandroid.pdfcraft.core.ScanPageRequest): Map<String, io.github.artcraftandroid.pdfcraft.core.ScanPageResult>? =
+        made[page.key]?.takeIf { it.request == request.made() }?.results?.filterValues { File(it.path).isFile }
 
     /**
      * Keep [result], made for [page] from [request], in place of the page's earlier one. With [why]
      * (a page made ahead of Save) one `full_page_ready` line goes to the log for page [index].
      */
-    fun keep(index: Int, page: ScanPage, request: io.github.artcraftandroid.pdfcraft.core.ScanPageRequest, result: io.github.artcraftandroid.pdfcraft.core.ScanPageResult, ms: Long, why: String?) {
-        val old = made.put(page.key, ScanFullPage(request.withoutOutput(), vm.pageQueue.keyOf(page), result))
-        old?.result?.path?.takeIf { it != result.path }?.let { File(it).delete() }
+    fun keep(index: Int, page: ScanPage, request: io.github.artcraftandroid.pdfcraft.core.ScanPageRequest, result: io.github.artcraftandroid.pdfcraft.core.ScanPageResult, ms: Long, why: String?) =
+        keepAll(index, page, request, listOf(result), ms, why)
+
+    /**
+     * Keep [results], [page] made once from [request] and stored at one size or several (#528).
+     * Sizes already kept for the same request stay; anything kept for another request goes.
+     */
+    fun keepAll(index: Int, page: ScanPage, request: io.github.artcraftandroid.pdfcraft.core.ScanPageRequest, results: List<io.github.artcraftandroid.pdfcraft.core.ScanPageResult>, ms: Long, why: String?) {
+        val result = results.firstOrNull() ?: return
+        val old = made[page.key]
+        val sameMaking = old?.request == request.made()
+        val bySize = HashMap<String, io.github.artcraftandroid.pdfcraft.core.ScanPageResult>()
+        if (sameMaking) bySize.putAll(old!!.results)
+        for (r in results) {
+            val size = scanStoredSize(r, request.size)
+            bySize.put(size, r)?.path?.takeIf { it != r.path }?.let { File(it).delete() }
+        }
+        made[page.key] = ScanFullPage(request.made(), vm.pageQueue.keyOf(page), bySize)
+        if (!sameMaking) old?.paths()?.forEach { File(it).delete() }
         failed.remove(page.key)
         if (why != null) {
             Diag.event(DiagArea.Scan, "full_page_ready", *io.github.artcraftandroid.pdfcraft.ui.scan.scanFullReadyDiag(index, ms, File(result.path).length(), why))
@@ -113,8 +152,10 @@ internal class ScanFullPages(private val vm: AppViewModel) {
             if (pages.isEmpty()) break
             // results of pages no longer in the scan go
             val keys = pages.mapTo(HashSet()) { it.key }
-            made.keys.filter { it !in keys }.forEach { made.remove(it)?.result?.path?.let { p -> File(p).delete() } }
+            made.keys.filter { it !in keys }.forEach { made.remove(it)?.paths()?.forEach { p -> File(p).delete() } }
             val lab = vm.scanLab.options
+            // every size stored from one making (#528): a size picked on the sheet then finds its pages ready
+            val allSizes = lab.sizesAhead && lab.autoEncode
             val autoUpright = io.github.artcraftandroid.pdfcraft.ui.scan.ScanUprightSetting.get(vm.settings.appPrefs)
             val wanted = HashMap<Int, io.github.artcraftandroid.pdfcraft.core.ScanPageRequest>()
             for ((i, p) in pages.withIndex()) {
@@ -122,7 +163,9 @@ internal class ScanFullPages(private val vm: AppViewModel) {
                 if (vm.pageQueue.readyOf(p) == null) continue
                 val shown = vm.scanShownOf(p, lab)
                 val request = vm.scanSaveRequest(p, "", p.turns ?: shown?.turns, shown, lab, autoUpright)
-                if (made[p.key]?.request == request || failed[p.key] == request) continue
+                // made already (at every size, #528), or at the size asked when only that was stored
+                val have = made[p.key]?.takeIf { it.request == request.made() }
+                if ((have != null && (allSizes || request.size in have.results)) || failed[p.key] == request) continue
                 wanted[i] = request
             }
             val next = scanQueueNext(wanted.keys.toList(), vm.pageQueue.shownIndex) ?: break
@@ -135,7 +178,12 @@ internal class ScanFullPages(private val vm: AppViewModel) {
             val result = lock.withLock {
                 // Save came first: it makes what it needs itself
                 if (held) return
-                withContext(Dispatchers.Default) { runCatching { io.github.artcraftandroid.pdfcraft.core.scanProcessPage(request) } }
+                withContext(Dispatchers.Default) {
+                    runCatching {
+                        if (allSizes) io.github.artcraftandroid.pdfcraft.core.scanProcessPageSizes(request)
+                        else listOf(io.github.artcraftandroid.pdfcraft.core.scanProcessPage(request))
+                    }
+                }
             }
             val ms = android.os.SystemClock.elapsedRealtime() - started
             val r = result.onFailure { Diag.failure(DiagArea.Scan, "scan_full_page", it) }.getOrNull()
@@ -145,8 +193,8 @@ internal class ScanFullPages(private val vm: AppViewModel) {
                     out.delete()
                 }
                 // the page went, or changed while it was made: the next round sees it
-                vm.scanPages.none { it.key == page.key } -> File(r.path).delete()
-                else -> keep(next, page, request, r, ms, why)
+                vm.scanPages.none { it.key == page.key } -> r.forEach { File(it.path).delete() }
+                else -> keepAll(next, page, request, r, ms, why)
             }
         }
     }
