@@ -36,10 +36,17 @@ drawn page stands in for the engine's result) and page 2 still waiting (#494).
 `enhance_notes_<locale>_320x640.png` (German and French) is Enhance's notes line in its worst
 case under a drawn page (#493).
 
+`app/src/test/java/io/github/artcraftandroid/pdfcraft/ui/viewer/ViewerTopBarScreenshotsTest.kt`:
+the viewer's top bar (#525) with a short name, a long name with "Unsaved changes", Saving…, a tool
+active, reading aloud, and without the Read aloud switch. All seven languages at 320 dp, English and
+Arabic at 360 dp, English also dark.
+
+Files: `app/build/screenshots/viewer/top_bar_<locale>_<width>_<theme>.png`.
+
 ## In CI
 
 The Android job runs the pictures on a pull request whose merge commit changes
-`app/src/main/java/.../ui/`, `app/src/main/res/` or one of the two tests, and uploads them as the
+`app/src/main/java/.../ui/`, `app/src/main/res/` or one of the `*ScreenshotsTest` files, and uploads them as the
 `screen-pictures` artifact (the run's Summary page, Artifacts). They add about half a minute.
 
 ## Locally

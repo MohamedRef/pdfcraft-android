@@ -75,8 +75,8 @@ val TopBarHeight = 57.dp
 val BottomBarHeight = 70.dp
 
 /**
- * The top bar in plain viewing: back, a divider and the Read aloud switch, then Find, Share and
- * More. With a tool active the back arrow becomes a check mark (Done), the switch goes, and Undo
+ * The top bar in plain viewing: back, a divider and the Read aloud switch, the document's name with
+ * its save state under it (#525), then Undo, Find, Share and More. With a tool active the back arrow becomes a check mark (Done), the switch goes, and Undo
  * and Redo take fixed slots, disabled while there is nothing to undo or redo.
  */
 @Composable
@@ -99,9 +99,14 @@ fun ViewerTopBar(
     /** What Undo and Redo would take back or bring back, for their menu. */
     undoLabel: String? = null,
     redoLabel: String? = null,
-    /** Saved, Saving…, Unsaved changes or Kept in PdfCraft, between the switch and Undo (#190). */
+    /** Saved, Saving…, Unsaved changes or Kept in PdfCraft, under the document's name (#190). */
     saveState: SaveState? = null,
     onSaveState: () -> Unit = {},
+    /** The document's name, always on the bar in plain viewing (#525); a tap opens File details. */
+    docName: String? = null,
+    onDocName: () -> Unit = {},
+    /** The Read aloud switch after Back (#525 leaves this to the owner). */
+    readAloudInBar: Boolean = true,
 ) {
     val c = pdfColors
     Row(
@@ -125,14 +130,14 @@ fun ViewerTopBar(
             Spacer(Modifier.width(10.dp))
             return@Row
         }
-        if (!toolActive) {
+        if (!toolActive && (readAloudInBar || readingAloud)) {
             BarDivider(height = 24.dp)
             Spacer(Modifier.width(14.dp))
             // The switch keeps its size after the first edit so nothing in the bar moves (#189).
             ReadAloudSwitch(readingAloud, onReadAloud)
         }
         Box(Modifier.weight(1f).padding(horizontal = 6.dp), contentAlignment = Alignment.CenterStart) {
-            if (saveState != null && !toolActive && !readingAloud) SaveStateLabel(saveState, onSaveState)
+            if (!toolActive) DocNameAndState(docName, onDocName, saveState.takeIf { !readingAloud }, onSaveState)
         }
         // while reading aloud the bar holds only back and the switch, as the reference's
         if (readingAloud && !toolActive) {
@@ -577,8 +582,30 @@ internal fun saveState(edited: Boolean, saving: Boolean, dirty: Boolean, notWrit
     else -> SaveState.Unsaved
 }
 
+/**
+ * The document's name on one line, cut in the middle when long so its start and end both show,
+ * and the save state under it in small type (#525). Either may be missing; the name opens
+ * File details, the save state keeps its own Save now tap.
+ */
 @Composable
-private fun SaveStateLabel(state: SaveState, onClick: () -> Unit) {
+private fun DocNameAndState(name: String?, onName: () -> Unit, state: SaveState?, onSaveState: () -> Unit) {
+    val c = pdfColors
+    androidx.compose.foundation.layout.Column(verticalArrangement = androidx.compose.foundation.layout.Arrangement.Center) {
+        if (!name.isNullOrBlank()) {
+            Text(
+                name, color = c.label, fontSize = 15.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium,
+                maxLines = 1, softWrap = false, overflow = androidx.compose.ui.text.style.TextOverflow.MiddleEllipsis,
+                modifier = Modifier.clip(androidx.compose.foundation.shape.RoundedCornerShape(6.dp))
+                    .clickable(onClickLabel = stringResource(R.string.file_details_title), role = Role.Button, onClick = onName)
+                    .padding(horizontal = 4.dp, vertical = if (state != null) 1.dp else 8.dp),
+            )
+        }
+        if (state != null) SaveStateLabel(state, onSaveState, compact = !name.isNullOrBlank())
+    }
+}
+
+@Composable
+private fun SaveStateLabel(state: SaveState, onClick: () -> Unit, compact: Boolean = false) {
     val c = pdfColors
     val (icon, label) = when (state) {
         SaveState.Saved -> LucideIcons.Check to R.string.save_state_saved
@@ -591,10 +618,10 @@ private fun SaveStateLabel(state: SaveState, onClick: () -> Unit) {
     Row(
         Modifier.clip(androidx.compose.foundation.shape.RoundedCornerShape(6.dp))
             .then(if (tappable) Modifier.clickable(onClickLabel = action, role = Role.Button, onClick = onClick) else Modifier)
-            .padding(horizontal = 4.dp, vertical = 6.dp),
+            .padding(horizontal = 4.dp, vertical = if (compact) 1.dp else 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(icon, null, tint = c.textSecondary, modifier = Modifier.size(14.dp))
+        Icon(icon, null, tint = c.textSecondary, modifier = Modifier.size(if (compact) 12.dp else 14.dp))
         Spacer(Modifier.width(4.dp))
         Text(stringResource(label), color = c.textSecondary, fontSize = 12.sp, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
     }
