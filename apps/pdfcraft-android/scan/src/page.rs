@@ -431,8 +431,10 @@ pub fn process_page_stored(request: &PageRequest<'_>, also: &[crate::size::SizeC
     let (w, h) = (page.width, page.height);
     drop(page);
     lap(STAGE_LOOK, &mut timings);
-    // the look's own parts (#446), after the whole
+    // the look's own parts (#446), after the whole, and what the whole holds besides them (#549)
+    let rest = look_rest(timings.last().map_or(0, |t| t.1), &look_stages);
     timings.extend(look_stages.into_iter().map(|(stage, ms)| (scan_stage(stage), ms)));
+    timings.extend(rest.map(|ms| (scan_stage(crate::look::STAGE_REST), ms)));
 
     let made = crate::size::Made { pixels: &pixels, width: w, height: h, dpi, look: request.look, kind: kind.as_ref() };
     let stored = crate::size::store(&made, request.size, request.auto_encode)?;
@@ -487,9 +489,20 @@ pub fn page_sizes(request: &PageRequest<'_>) -> Result<Vec<crate::size::Stored>,
     crate::size::SizeChoice::ALL.into_iter().map(|choice| crate::size::store(&made, choice, true)).collect()
 }
 
+/// The part of a look of `total` milliseconds its named `parts` do not account for (#549): `None`
+/// for a look with no named parts (Original, Colour, Greyscale, Black and white).
+pub fn look_rest(total: u32, parts: &[(&'static str, u32)]) -> Option<u32> {
+    (!parts.is_empty()).then(|| total.saturating_sub(parts.iter().map(|p| p.1).sum()))
+}
+
 /// The timing stage `scan_look_…` of a part of the look (#446).
 fn scan_stage(stage: &'static str) -> &'static str {
     match stage {
+        crate::look::STAGE_WHITEBOARD => "scan_look_whiteboard",
+        crate::look::STAGE_KIND => "scan_look_kind",
+        crate::look::STAGE_FINGERS => "scan_look_fingers",
+        crate::look::STAGE_MARKUP => "scan_look_markup",
+        crate::look::STAGE_REST => "scan_look_rest",
         crate::enhance::STAGE_LIGHT => "scan_look_light",
         crate::enhance::STAGE_NOISE => "scan_look_noise",
         crate::enhance::STAGE_DENOISE => "scan_look_denoise",
@@ -517,6 +530,9 @@ pub fn kind_sharpen(kind: u8, asked: u8) -> u8 {
 /// its strength (unless the strength was set by hand: the slider or the testing option), its
 /// sharpening (scaled by the request's, #424) and its paper colour replace the request's.
 pub fn page_look_kind(base: &PageBase, request: &PageRequest<'_>) -> Result<(Applied, Option<PageKind>), ScanError> {
+    let ms = |clock: Instant| u32::try_from(clock.elapsed().as_millis()).unwrap_or(u32::MAX);
+    let clock = Instant::now();
+    let asks_kind = matches!(request.look, Look::Auto) && request.preset != PresetChoice::Off;
     let kind = match request.look {
         Look::Auto if request.preset != PresetChoice::Off => {
             let rules = Rules { strict_gutter: request.strict_gutter, strict_photo: request.strict_photo, strict_book: request.strict_book };
@@ -525,6 +541,8 @@ pub fn page_look_kind(base: &PageBase, request: &PageRequest<'_>) -> Result<(App
         }
         _ => None,
     };
+    // the document type's time (#549): measuring the page (once for a base) and choosing its kind
+    let kind_ms = asks_kind.then(|| ms(clock));
     let mut params = LookParams {
         strength: request.strength,
         threads: request.threads,
@@ -561,17 +579,24 @@ pub fn page_look_kind(base: &PageBase, request: &PageRequest<'_>) -> Result<(App
         }
     };
     let mut applied = apply_prepared(&base.page, request.look, &params, photos, kept).ok_or(ScanError::Encode)?;
+    if let Some(kind_ms) = kind_ms {
+        applied.stages.insert(0, (crate::look::STAGE_KIND, kind_ms));
+    }
     // fingers at the page's edge, found on the look's own output and papered over (#466)
     if request.remove_fingers && request.look == Look::Auto && params.strength >= FINGER_MIN_STRENGTH {
         if let Pixels::Rgb(data) = &mut applied.pixels {
+            let clock = Instant::now();
             let mut page = Rgb { width: base.page.width, height: base.page.height, data: std::mem::take(data) };
             applied.fingers = Some(crate::defects::remove_fingers(&mut page));
             *data = page.data;
+            applied.stages.push((crate::look::STAGE_FINGERS, ms(clock)));
         }
     }
     // the marks made by hand (#495), over the look and the finger step, turned with the page
     if let Some(markup) = request.markup.filter(|m| !m.is_empty()) {
+        let clock = Instant::now();
         applied.markup = Some(crate::markup::apply(&mut applied.pixels, base.page.width, base.page.height, base.turns, markup));
+        applied.stages.push((crate::look::STAGE_MARKUP, ms(clock)));
     }
     Ok((applied, kind))
 }

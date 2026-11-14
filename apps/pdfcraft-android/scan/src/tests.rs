@@ -291,6 +291,7 @@ fn the_same_photo_gives_the_same_bytes_on_any_number_of_threads() {
                     "scan_look_noise",
                     "scan_look_sharpen",
                     "scan_look_tone",
+                    "scan_look_rest",
                     "scan_encode"
                 ]
             ),
@@ -300,6 +301,41 @@ fn the_same_photo_gives_the_same_bytes_on_any_number_of_threads() {
         assert_eq!(a.format, want);
         assert!((72.0..=600.0).contains(&a.dpi));
     }
+}
+
+/// Every part of the look's time has a name (#549): with the document type and the finger step,
+/// each is listed after the whole, and the whole is its parts and what is left (`scan_look_rest`)
+/// added up. Whiteboard names its own colour step.
+#[test]
+fn every_part_of_the_looks_time_is_named() {
+    let photo = sample_photo();
+    for look in [Look::Auto, Look::Whiteboard] {
+        let page = process_page(&PageRequest {
+            look,
+            strength: 60,
+            preset: crate::page_kind::PresetChoice::Auto,
+            remove_fingers: true,
+            ..PageRequest::new(&photo, SAMPLE_CORNERS)
+        })
+        .unwrap();
+        let total = page.timings.iter().find(|t| t.0 == "scan_look").map(|t| t.1).unwrap();
+        let parts: Vec<(&str, u32)> = page.timings.iter().filter(|t| t.0.starts_with("scan_look_")).copied().collect();
+        let names: Vec<&str> = parts.iter().map(|p| p.0).collect();
+        assert_eq!(names.last(), Some(&"scan_look_rest"), "{look:?}: {names:?}");
+        match look {
+            Look::Auto => {
+                assert_eq!(names.first(), Some(&"scan_look_kind"), "{names:?}");
+                assert!(names.contains(&"scan_look_fingers"), "{names:?}");
+            }
+            _ => assert!(names.contains(&"scan_look_whiteboard") && !names.contains(&"scan_look_kind"), "{names:?}"),
+        }
+        let sum: u32 = parts.iter().map(|p| p.1).sum();
+        // each part is rounded down to a millisecond, the rest too
+        assert!(sum <= total && total - sum <= names.len() as u32, "{look:?}: parts {sum} ms of {total} ms");
+    }
+    assert_eq!(crate::page::look_rest(100, &[]), None);
+    assert_eq!(crate::page::look_rest(100, &[("look_tone", 30), ("look_light", 50)]), Some(20));
+    assert_eq!(crate::page::look_rest(10, &[("look_tone", 30)]), Some(0));
 }
 
 #[test]
