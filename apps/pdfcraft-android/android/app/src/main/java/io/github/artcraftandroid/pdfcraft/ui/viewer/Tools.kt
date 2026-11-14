@@ -548,6 +548,8 @@ private fun TapLayer(doc: OpenDocument, onTap: (PagePoint) -> Unit) {
 
 @Composable
 private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
+    // counted per stroke in the diagnostics log: a recomposition per pen move would be costly (#128)
+    androidx.compose.runtime.SideEffect { InkLatency.stroke.recomposed() }
     // Drafts live with the document (#73): a save refused after Draw was left keeps them there.
     val drafts = doc.ink
     val strokes = drafts.strokes
@@ -1361,6 +1363,7 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
     ) {
         Canvas(Modifier.fillMaxSize()) {
             if (current != null) pendingInput.drawn(android.os.SystemClock.uptimeMillis(), InkLatency.normal)
+            val drawStart = if (current != null) System.nanoTime() else 0L
             // Strokes being saved stay drawn until the document has them, under the newer drafts.
             for (s in drafts.saving + strokes) {
                 val pageRect = doc.viewer.pageRectOnScreen(s.page)
@@ -1378,6 +1381,8 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                     )
                 }
             }
+            // how long the drafts took to draw this frame, and the time since the last frame (#128)
+            if (drawStart != 0L) System.nanoTime().let { now -> InkLatency.stroke.drawn(now, (now - drawStart) / 1000) }
             // A predicted tail on the stroke being drawn (pen only): where the pen will be about
             // one frame from now, from its real speed. Drawn only, never saved; the next real
             // sample replaces it.

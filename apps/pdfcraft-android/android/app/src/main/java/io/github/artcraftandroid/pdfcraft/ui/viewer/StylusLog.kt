@@ -80,7 +80,7 @@ internal object StylusLog {
     fun record(event: MotionEvent) {
         val index = (0 until event.pointerCount).firstOrNull {
             event.getToolType(it) == MotionEvent.TOOL_TYPE_STYLUS || event.getToolType(it) == MotionEvent.TOOL_TYPE_ERASER
-        } ?: return
+        } ?: return recordFinger(event)
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN, MotionEvent.ACTION_POINTER_DOWN -> {
                 pen.setDown(true)
@@ -104,9 +104,22 @@ internal object StylusLog {
         }
     }
 
+    /**
+     * A one-finger touch, traced like a pen stroke (#128: the owner's lag was with a finger too). Its
+     * samples stay out of the pen log, and a touch that drew no ink writes no line (see [strokeEnded]).
+     */
+    private fun recordFinger(event: MotionEvent) {
+        if (event.getToolType(0) != MotionEvent.TOOL_TYPE_FINGER) return
+        when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN -> InkLatency.stroke.down(event.eventTime, eraser = false, active = Diag.enabled(), pointer = "finger")
+            MotionEvent.ACTION_MOVE -> if (event.pointerCount == 1) InkLatency.stroke.move(event.historySize + 1)
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> strokeEnded(event.eventTime, event.actionMasked == MotionEvent.ACTION_CANCEL)
+        }
+    }
+
     /** One line per stroke in the diagnostics log (#128): counts, rate and app-side latency. */
     private fun strokeEnded(time: Long, cancelled: Boolean) {
-        val t = InkLatency.stroke.up(time, cancelled)
+        val t = InkLatency.stroke.up(time, cancelled)?.takeIf { it.pointer != "finger" || it.draws > 0 || it.normal != null }
         val mode = PenDiag.takePenMode()
         if (t != null) Diag.event(
             DiagArea.Ink, "stroke",
@@ -114,6 +127,10 @@ internal object StylusLog {
             "eraser" to t.eraser, "cancelled" to t.cancelled, "mode" to mode,
             "normal_n" to (t.normal?.count ?: 0), "normal_p50_ms" to t.normal?.medianMs, "normal_p95_ms" to t.normal?.p95Ms, "normal_max_ms" to t.normalMaxMs,
             "front_n" to (t.front?.count ?: 0), "front_p50_ms" to t.front?.medianMs, "front_p95_ms" to t.front?.p95Ms, "front_max_ms" to t.frontMaxMs,
+            "pointer" to t.pointer, "draws" to t.draws,
+            "frame_p50_ms" to t.frameGap?.medianMs, "frame_p95_ms" to t.frameGap?.p95Ms, "frame_max_ms" to t.frameGapMaxMs,
+            "draw_p50_us" to t.drawUs?.medianMs, "draw_p95_us" to t.drawUs?.p95Ms, "draw_max_us" to t.drawMaxUs,
+            "recompositions" to t.recompositions,
         )
         // the palm guard's ignored touches around this stroke (#156)
         PenDiag.flushPalm()

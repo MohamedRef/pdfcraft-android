@@ -30,6 +30,27 @@ class DiagnosticsTracesTest {
     }
 
     @Test
+    fun strokeTraceCountsFramesDrawTimeAndRecompositions() {
+        val t = StrokeTrace()
+        t.down(time = 0, eraser = false, active = true, pointer = "finger")
+        // draws 8, 8 and 25 ms apart: one dropped frame
+        listOf(0L, 8L, 16L, 41L).forEachIndexed { i, ms -> t.drawn(nowNs = 1_000_000_000L + ms * 1_000_000, tookUs = 100L + i * 100) }
+        repeat(3) { t.recomposed() }
+        val s = t.up(time = 50, cancelled = false)!!
+        assertEquals("finger", s.pointer)
+        assertEquals(4, s.draws)
+        assertEquals(8, s.frameGap!!.medianMs)
+        assertEquals(25, s.frameGapMaxMs)
+        assertEquals(400, s.drawMaxUs)
+        assertEquals(3, s.recompositions)
+        // an idle trace ignores draws
+        t.drawn(nowNs = 2_000_000_000L, tookUs = 5)
+        t.recomposed()
+        t.down(time = 0, eraser = true, active = true)
+        assertEquals("eraser", t.up(time = 10, cancelled = false)!!.pointer)
+    }
+
+    @Test
     fun strokeTraceIsIdleWhileTheLogIsOff() {
         val t = StrokeTrace()
         t.down(time = 0, eraser = true, active = false)
