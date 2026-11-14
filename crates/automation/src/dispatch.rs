@@ -715,7 +715,9 @@ impl Automation {
             "doc_header_footer" | "doc_watermark" | "doc_background" | "doc_printer_marks" | "doc_remove_marks" => self.marks(name, &a)?,
             "doc_backdrops" => self.backdrops(&a)?,
             "doc_unprotect" => {
-                let mut out = self.apply(&a, Edit::RemoveProtection)?;
+                // Unlock PDF (Android #517): with restrictions, no permissions password is needed
+                let edit = if a.opt_bool("restrictions")?.unwrap_or(false) { Edit::Unlock } else { Edit::RemoveProtection };
+                let mut out = self.apply(&a, edit)?;
                 out["security"] = security(self.doc(&a)?);
                 out
             }

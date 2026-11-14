@@ -466,6 +466,8 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             settings.readingMode = recent?.reading == true && home.pendingTool == null
             document = doc
             tabs.opened(doc, doc.title)
+            // a file just opened with its password (#517): one line offers to remove the password
+            if (!password.isNullOrEmpty() && home.pendingTool == null) tell(text(R.string.unlock_offer_text), text(R.string.unlock_offer)) { openUnlock(doc) }
             io.github.artcraftandroid.pdfcraft.engine.OpenTiming.milestone("viewer_model_ready", openStartedAt, pages = info.pages.size)
             if (!info.preparing) {
                 viewModelScope.launch {
@@ -1903,29 +1905,6 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         deliver(out, "${doc.title}_protected.pdf")
     }
 
-    /**
-     * An unprotected copy of [doc] (`doc_unprotect` on a second, temporary engine document, as
-     * [protect] does), in Downloads. The document must have been opened with its permissions
-     * password, or have none; the engine says so otherwise.
-     */
-    fun unprotect(doc: OpenDocument) = job(text(R.string.msg_busy_removing_security)) { eng ->
-        save(doc)
-        val out = tempFile("pdf")
-        val copy = eng.tool("doc_open", mapOf("path" to savedFile(doc, "unprotect").absolutePath, "password" to doc.password)).optLong("doc")
-        try {
-            Diag.measure(DiagArea.Pages, "unprotect_copy", "doc" to doc.diagNumber, "encrypted" to doc.info.encrypted) {
-                eng.tool("doc_unprotect", mapOf("doc" to copy))
-                eng.tool("doc_save", mapOf("doc" to copy, "path" to out.absolutePath, "full" to true))
-            }
-        } catch (e: Exception) {
-            out.delete()
-            throw e
-        } finally {
-            runCatching { eng.tool("doc_close", mapOf("doc" to copy, "discard_changes" to true)) }
-        }
-        tools.toolScreen = null
-        deliver(out, "${doc.title}_unprotected.pdf")
-    }
 
     // ---- Flashcards, Library, Study sessions, Study digest, Notebooks: see StudyController ----
 
@@ -2265,6 +2244,9 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
 
     /** The Markup screen (#495): the page open in it, and the question before a change that clears marks. */
     internal val scanMarkup = io.github.artcraftandroid.pdfcraft.ui.scan.ScanMarkupState()
+
+    /** Unlock PDF (#517). */
+    internal val unlock = UnlockState()
 
     /** Borders and looks for several pages in one pass (#515). */
     internal val scanBatch = io.github.artcraftandroid.pdfcraft.ui.scan.ScanBatchState()

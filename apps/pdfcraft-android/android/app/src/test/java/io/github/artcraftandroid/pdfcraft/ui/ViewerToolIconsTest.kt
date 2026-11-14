@@ -41,10 +41,12 @@ class ViewerToolIconsTest {
             subTool.findAll(body(file, fn)).filter { it.groupValues[3].trim() != "false" }.forEach { found += it.groupValues[1] to it.groupValues[2] }
         }
         val draw = File(viewer, "DrawToolbar.kt").readText()
-        Regex("""DrawShapeButton\(ctl, prefs, InkShapeMode\.\w+, $icon, stringResource\(R\.string\.(\w+)\)\)""").findAll(draw)
+        Regex("""DrawShape\(InkShapeMode\.\w+, $icon, R\.string\.(\w+)""").findAll(draw)
             .forEach { found += it.groupValues[1] to it.groupValues[2] }
-        // a Draw button's label, then the icon drawn in its content, before the next button
+        // a Draw button's label, then the icon drawn in its content, before the next button; a
+        // button that opens a sheet of tools (Shapes, Guides, Pen settings) is not a tool itself
         for (chunk in draw.split("DrawToolbarButton(").drop(1)) {
+            if ("ctl.picker = if (" in chunk.substringBefore(") {")) continue
             val label = Regex("""label = stringResource\(R\.string\.(\w+)\)""").find(chunk) ?: continue
             val drawn = Regex("""\bIcon\($icon,""").find(chunk) ?: continue
             found += drawn.groupValues[1] to label.groupValues[1]

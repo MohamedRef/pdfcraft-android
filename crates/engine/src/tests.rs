@@ -2107,6 +2107,24 @@ fn the_permissions_password_unlocks_an_open_document() {
 }
 
 #[test]
+fn unlock_removes_restrictions_without_the_permissions_password() {
+    // Unlock PDF (Android #517): a file that opens without a password but is restricted, and one
+    // opened with its open password, both come out with no security at all.
+    for (open, password) in [("", None), ("user", Some("user"))] {
+        let mut s = Session::new();
+        let id = s.open("r.pdf", None, protected(open, "owner", 0b1100), password).unwrap();
+        assert_eq!(s.apply(id, Edit::RemoveProtection), Err(EditError::NotPermitted("changing security")));
+        s.apply(id, Edit::Unlock).unwrap();
+        assert!(!s.get(id).unwrap().info.encrypted, "{open:?}");
+        let plain = s.save_bytes(id).unwrap();
+        assert!(pdfcraft_cos::Document::open(plain).unwrap().security().is_none(), "{open:?}: security removed");
+    }
+    // A document with no security has nothing to unlock.
+    let (mut s, id) = session_with(1);
+    assert!(matches!(s.apply(id, Edit::Unlock), Err(EditError::Protection(_))));
+}
+
+#[test]
 fn remove_security_from_a_file_with_its_encrypt_dictionary_in_the_trailer() {
     // MuPDF writes /Encrypt inline in the trailer rather than as an object (#2661).
     let mut doc = pdfcraft_cos::Document::open_with_password(protected("user", "owner", -1), Some("owner")).unwrap();

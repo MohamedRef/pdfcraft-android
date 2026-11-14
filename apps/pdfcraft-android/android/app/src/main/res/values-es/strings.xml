@@ -264,7 +264,7 @@
     <string name="tools_password_rule">Usa de 6 a 128 caracteres: letras, números y símbolos, sin espacios.</string>
     <string name="tools_password_mismatch">Las contraseñas no coinciden.</string>
     <!-- "Remove password" is the name of a command in the viewer -->
-    <string name="tools_about_passwords_body">La copia está cifrada con AES-256. Guarda bien la contraseña: no se puede recuperar. Para quitar la contraseña más tarde, abre la copia con ella y elige Quitar contraseña.</string>
+    <string name="tools_about_passwords_body">La copia está cifrada con AES-256. Guarda bien la contraseña: no se puede recuperar. Para quitarla más tarde, usa Desbloquear PDF.</string>
 
     <!-- Tool screens: Export PDF -->
     <string name="tools_export_action">Exportar</string>
@@ -1390,6 +1390,9 @@
     <string name="bates_export_failed">No se pudo guardar esta copia nueva en Descargas.</string>
     <string name="ink_presets_title">Lápices favoritos</string>
     <string name="ink_presets_help">Cada lápiz conserva su propio color, grosor y opacidad. Toca un favorito para recuperar sus ajustes.</string>
+    <string name="ink_shapes">Formas</string>
+    <string name="ink_toolbar_guides">Guías</string>
+    <string name="ink_guides_title">Regla, transportador y lupa</string>
     <string name="ink_latency_reset">Restablecer</string>
     <string name="ink_latency_refresh">Actualizar</string>
     <string name="ink_latency_none">aún sin medir</string>

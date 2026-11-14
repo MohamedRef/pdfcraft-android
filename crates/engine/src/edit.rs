@@ -686,6 +686,10 @@ pub enum Edit {
     Protect(Protection),
     /// Remove password security (needs the owner password).
     RemoveProtection,
+    /// Unlock PDF (Android #517): remove password security and restrictions from a document that
+    /// is open, without the permissions password. Opening it already took its open password (or it
+    /// has none), so nothing that guards reading is broken; nothing is guessed.
+    Unlock,
     /// Several edits applied as one undoable step (all or nothing).
     Batch {
         label: String,

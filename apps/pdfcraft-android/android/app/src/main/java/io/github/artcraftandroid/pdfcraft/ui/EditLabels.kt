@@ -168,6 +168,7 @@ internal val EditLabelResources: Map<String, Int> = mapOf(
     "Flatten Fill & Sign" to R.string.edit_label_flatten_fill_sign,
     "Protect with password" to R.string.edit_label_protect_with_password,
     "Remove security" to R.string.edit_label_remove_security,
+    "Unlock PDF" to R.string.unlock_title,
     "Set document title" to R.string.edit_label_set_document_title,
     "Mark differences" to R.string.edit_label_mark_differences,
     "Detect form fields" to R.string.edit_label_detect_form_fields,

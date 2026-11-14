@@ -1,5 +1,6 @@
 package io.github.artcraftandroid.pdfcraft.ui.home
 
+import io.github.artcraftandroid.pdfcraft.ui.openUnlock
 import io.github.artcraftandroid.pdfcraft.ui.safeTopPadding
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
@@ -168,7 +169,7 @@ private class HubTool(val icon: ImageVector, val name: String, @StringRes val la
 
 /** Where a category lists its tools in an order of its own (the rest keep the All order). */
 private val CategoryOrder = mapOf(
-    "Edit" to listOf("Edit PDF", "Crop pages", "Organize pages", "Combine files", "Set password"),
+    "Edit" to listOf("Edit PDF", "Crop pages", "Organize pages", "Combine files", "Set password", "Unlock PDF"),
     "Convert" to listOf("Export PDF", "Compress PDF"),
 )
 
@@ -201,6 +202,8 @@ fun ToolsTab(vm: AppViewModel) {
             HubTool(LucideIcons.FileArchive, "Compress PDF", R.string.common_tool_compress, R.string.home_about_compress, ToolHues.compress, setOf("Convert")) { vm.home.toolForFile(FileTool.Compress) },
             HubTool(LucideIcons.FileOutput, "Export PDF", R.string.common_tool_export, R.string.home_about_export, ToolHues.export, setOf("Convert")) { vm.home.toolForFile(FileTool.Export) },
             HubTool(LucideIcons.FileLock2, "Set password", R.string.common_tool_set_password, R.string.home_about_protect, ToolHues.protect, setOf("Edit")) { vm.home.toolForFile(FileTool.Protect) },
+            // the opposite of Set password (#517): one or several files chosen on the tool's screen
+            HubTool(LucideIcons.LockOpen, "Unlock PDF", R.string.unlock_title, R.string.home_about_unlock, ToolHues.protect, setOf("Edit")) { vm.openUnlock(null) },
         )
     }
     Column(Modifier.fillMaxSize().safeTopPadding()) {

@@ -313,7 +313,7 @@
     <string name="tools_password_rule">Use 6 to 128 characters: letters, numbers and symbols, no spaces.</string>
     <string name="tools_password_mismatch">The passwords don\'t match.</string>
     <!-- "Remove password" is the name of a command in the viewer -->
-    <string name="tools_about_passwords_body">The copy is encrypted with AES-256. The password can\'t be recovered, so keep it safe. To remove it later, open the copy and choose Remove password.</string>
+    <string name="tools_about_passwords_body">The copy is encrypted with AES-256. The password can\'t be recovered, so keep it safe. To remove it later, use Unlock PDF.</string>
 
     <!-- Tool screens: Export PDF -->
     <string name="tools_export_action">Export</string>
@@ -1615,6 +1615,9 @@
     <!-- Translator note: Pen presets: each pen remembers its own color, width and opacity. -->
     <string name="ink_presets_title">Favorite pens</string>
     <string name="ink_presets_help">Each pen keeps its own color, width and opacity. Tap a favorite to restore its settings.</string>
+    <string name="ink_shapes">Shapes</string>
+    <string name="ink_toolbar_guides">Guides</string>
+    <string name="ink_guides_title">Ruler, protractor and zoom box</string>
     <!-- Translator note: Ink latency: a measurement of how fast drawn ink appears on this device. Keep numbers and ms units as is. -->
     <string name="ink_latency_reset">Reset</string>
     <string name="ink_latency_refresh">Update</string>

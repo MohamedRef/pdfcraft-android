@@ -360,7 +360,7 @@ private fun SpaceAuditDialog(vm: AppViewModel, doc: OpenDocument, onDismiss: () 
 
 /** A password field of Set password: its label above an outlined box, with the eye to show it. */
 @Composable
-private fun PasswordField(label: String, value: String, onValue: (String) -> Unit, visible: Boolean, onToggle: (() -> Unit)?, error: Boolean, focus: androidx.compose.ui.focus.FocusRequester? = null) {
+internal fun PasswordField(label: String, value: String, onValue: (String) -> Unit, visible: Boolean, onToggle: (() -> Unit)?, error: Boolean, focus: androidx.compose.ui.focus.FocusRequester? = null) {
     val c = pdfColors
     var focused by remember { mutableStateOf(false) }
     Text(label, color = c.label, fontSize = 16.sp, modifier = Modifier.padding(start = 24.dp, top = 20.dp, bottom = 8.dp))
@@ -395,7 +395,6 @@ fun ProtectScreen(vm: AppViewModel, doc: OpenDocument) {
     var owner by remember { mutableStateOf("") }
     var ownerConfirm by remember { mutableStateOf("") }
     var rules by remember { mutableStateOf(Restrictions()) }
-    var removing by remember { mutableStateOf(false) }
     val focus = remember { androidx.compose.ui.focus.FocusRequester() }
     LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
     val bad = pw.isNotEmpty() && !passwordOk(pw)
@@ -428,9 +427,10 @@ fun ProtectScreen(vm: AppViewModel, doc: OpenDocument) {
             }
             if (doc.info.encrypted) {
                 Spacer(Modifier.height(16.dp))
+                // the same name as the tool (#517): it opens Unlock PDF on this document
                 Text(
-                    stringResource(R.string.protect_remove), color = c.accent, fontSize = 16.sp, fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.clickable(role = androidx.compose.ui.semantics.Role.Button) { removing = true }.padding(horizontal = 24.dp, vertical = 12.dp),
+                    stringResource(R.string.unlock_title), color = c.accent, fontSize = 16.sp, fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.clickable(role = androidx.compose.ui.semantics.Role.Button) { vm.openUnlock(doc) }.padding(horizontal = 24.dp, vertical = 12.dp),
                 )
             }
             Spacer(Modifier.height(24.dp))
@@ -439,11 +439,6 @@ fun ProtectScreen(vm: AppViewModel, doc: OpenDocument) {
     if (info) {
         PdfDialog(onDismiss = { info = false }, title = stringResource(R.string.tools_about_passwords), confirm = stringResource(R.string.common_ok), onConfirm = { info = false }, dismiss = null) {
             Text(stringResource(R.string.tools_about_passwords_body), color = c.text, fontSize = 14.sp)
-        }
-    }
-    if (removing) {
-        PdfDialog(onDismiss = { removing = false }, title = stringResource(R.string.protect_remove), confirm = stringResource(R.string.protect_remove_action), onConfirm = { removing = false; vm.unprotect(doc) }) {
-            Text(stringResource(R.string.protect_remove_explain), color = c.text, fontSize = 14.sp)
         }
     }
 }
@@ -581,6 +576,7 @@ fun ToolScreenHost(vm: AppViewModel, screen: ToolScreen) {
         is ToolScreen.Crop -> CropScreen(vm, screen.doc)
         is ToolScreen.Export -> ExportScreen(vm, screen.doc)
         ToolScreen.Bates -> BatesScreen(vm)
+        ToolScreen.Unlock -> UnlockScreen(vm)
         ToolScreen.OcrBatch -> OcrBatchScreen(vm)
         ToolScreen.Scan -> ScanScreen(vm)
         ToolScreen.ScanRecent -> io.github.artcraftandroid.pdfcraft.ui.scan.ScanRecentScreen(vm)
