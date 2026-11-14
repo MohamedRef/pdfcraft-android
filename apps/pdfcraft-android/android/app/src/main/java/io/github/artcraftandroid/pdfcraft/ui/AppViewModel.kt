@@ -2215,6 +2215,9 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     /** Previews run one at a time, off the main thread and away from saving; the latest asked for wins. */
     @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
     internal val scanPreviewDispatcher = Dispatchers.Default.limitedParallelism(1)
+    /** The background queue's two lanes when it makes two pages at once (#549); with one it uses [scanPreviewDispatcher]. */
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    internal val scanQueueDispatcher = Dispatchers.Default.limitedParallelism(2)
     private var scanPreviewJob: kotlinx.coroutines.Job? = null
     /** Tells the native preview running now to stop when a newer one is asked for (#301). */
     private var scanPreviewStop: io.github.artcraftandroid.pdfcraft.core.ScanCancel? = null

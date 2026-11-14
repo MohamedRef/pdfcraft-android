@@ -62,6 +62,14 @@ internal fun scanQueueWhy(old: ScanPreviewKey?, now: ScanPreviewKey, applyAll: B
 /** The page the queue makes next (#465): the one on screen when it waits, else the first waiting; null for none. */
 internal fun scanQueueNext(waiting: List<Int>, shown: Int): Int? = if (shown in waiting) shown else waiting.minOrNull()
 
+/** How many pages the queue makes at once (#549): two with the testing option on, else one as before. */
+internal fun scanQueueLanes(parallel: Boolean): Int = if (parallel) 2 else 1
+
+/** The `scan_ready` line's fields (#465, #549): the pages, the time, the option and the most pages made at once. */
+internal fun scanReadyDiag(pages: Int, ms: Long, parallel: Boolean, mostAtOnce: Int): Array<Pair<String, Any?>> = arrayOf(
+    "pages" to pages, "ms" to ms, "parallel" to parallel, "most_at_once" to mostAtOnce,
+)
+
 /** The scan screen's line while pages wait (#465): [ready] of [total]; null when every page is ready or there is none. */
 internal fun scanPreparingCount(ready: Int, total: Int): Pair<Int, Int>? = if (total > 0 && ready < total) ready to total else null
 
@@ -90,9 +98,8 @@ internal class ScanPageQueue(private val vm: AppViewModel) {
     /** Each page's latest result, by [ScanPage.key]; out of date when its key is not the page's now. */
     val made = mutableStateMapOf<String, ScanMadePage>()
 
-    /** The page being made now ([ScanPage.key]), for its thumbnail's mark. */
-    var working by mutableStateOf<String?>(null)
-        private set
+    /** The pages being made now ([ScanPage.key]), for their thumbnails' marks, each with its stop (#549: up to two). */
+    private val working = mutableStateMapOf<String, io.github.artcraftandroid.pdfcraft.core.ScanCancel>()
 
     /** The page on screen: it goes first. */
     var shownIndex = 0
@@ -112,8 +119,11 @@ internal class ScanPageQueue(private val vm: AppViewModel) {
 
     /** When the pages now waiting began to (for `scan_ready`); null while every page is ready. */
     private var batchStarted: Long? = null
+    /** The most pages made at once in this batch (#549). */
+    private var batchMostAtOnce = 0
     private var worker: Job? = null
-    private var stop: io.github.artcraftandroid.pdfcraft.core.ScanCancel? = null
+    /** A page the queue was making is done (or stopped): the loop looks again. */
+    private val finished = kotlinx.coroutines.channels.Channel<Unit>(kotlinx.coroutines.channels.Channel.UNLIMITED)
 
     private fun on(): Boolean = vm.scanLab.options.let { it.backgroundPages && it.preview }
 
@@ -166,7 +176,7 @@ internal class ScanPageQueue(private val vm: AppViewModel) {
     }
 
     /** [page]'s thumbnail mark, or [ScanPageMark.Ready] with the option off. */
-    fun mark(page: ScanPage): ScanPageMark = if (!on()) ScanPageMark.Ready else scanPageMark(readyOf(page) != null, working == page.key)
+    fun mark(page: ScanPage): ScanPageMark = if (!on()) ScanPageMark.Ready else scanPageMark(readyOf(page) != null, page.key in working)
 
     /** "Preparing pages: n of m", or null. */
     fun preparing(pages: List<ScanPage>): Pair<Int, Int>? = if (!on()) null else scanPreparingCount(pages.count { readyOf(it) != null }, pages.size)
@@ -198,16 +208,22 @@ internal class ScanPageQueue(private val vm: AppViewModel) {
     }
 
     /** No page is being made or waits to be made by the queue (#504): pages made at full size may go. */
-    fun idle(): Boolean = working == null && worker?.isActive != true
+    fun idle(): Boolean = working.isEmpty() && worker?.isActive != true
 
     /** Start the queue if pages wait and it is not running. Main thread. */
     fun kick() {
-        if (!on() || worker?.isActive == true) return
+        if (!on()) return
+        // running: the loop looks again, so a free lane takes a new page at once (#549)
+        if (worker?.isActive == true) {
+            finished.trySend(Unit)
+            return
+        }
         worker = vm.viewModelScope.launch { run() }
     }
 
-    private suspend fun run() {
+    private suspend fun run() = kotlinx.coroutines.coroutineScope {
         while (on()) {
+            val lanes = scanQueueLanes(vm.scanLab.options.parallelPages)
             val pages = vm.scanPages.toList()
             // results of pages no longer in the scan go
             val keys = pages.mapTo(HashSet()) { it.key }
@@ -215,41 +231,62 @@ internal class ScanPageQueue(private val vm: AppViewModel) {
             val wanted = vm.scanPreviewWantedKey()
             val waiting = ArrayList<Int>()
             for ((i, p) in pages.withIndex()) {
-                if (p.file.path in finding) continue
+                if (p.file.path in finding || p.key in working) continue
                 val key = keyOf(p)
                 if (made[p.key]?.key == key || failed[p.key] == key) continue
                 noteWaiting(p, key)
                 // the screen's preview is making this one: it is stored when it comes
                 if (key != wanted) waiting += i
             }
-            val next = scanQueueNext(waiting, shownIndex) ?: break
-            val page = pages[next]
-            val key = keyOf(page)
-            working = page.key
-            val cancel = io.github.artcraftandroid.pdfcraft.core.ScanCancel()
-            stop = cancel
-            val started = android.os.SystemClock.elapsedRealtime()
-            val result = withContext(vm.scanPreviewDispatcher) {
-                runCatching { io.github.artcraftandroid.pdfcraft.core.scanPreviewPageWith(vm.scanPreviewRequest(page, key.flatten, key.lab, key.autoUpright, key.autoFlatten), SCAN_PREVIEW_SIDE.toUInt(), cancel) }
-            }
-            working = null
-            // stopped for the page on screen, whose preview goes first: this page is asked again
-            if (cancel.isCancelled()) continue
-            val p = result.onFailure { Diag.failure(DiagArea.Scan, "scan_page_queue", it) }.getOrNull()
-            if (p == null) {
-                // a page that can't be made is not tried again until it changes
-                made.remove(page.key)
-                waitingSince.remove(page.key)
-                Diag.event(DiagArea.Scan, "page_ready", "index" to next + 1, "made" to false, "ms" to android.os.SystemClock.elapsedRealtime() - started)
-                markFailed(page.key, key)
+            val next = if (working.size < lanes) scanQueueNext(waiting, shownIndex) else null
+            if (next == null) {
+                if (working.isEmpty()) break
+                // a page being made finishes first, then the queue looks again
+                finished.receive()
                 continue
             }
-            store(next, page, key, p, null, android.os.SystemClock.elapsedRealtime() - started)
-            // a receipt becomes Grayscale by itself, without being opened (#466)
-            vm.scanApplyAutoLook(page.key, p.kind?.suggestGreyscale == true)
+            val page = pages[next]
+            val key = keyOf(page)
+            val cancel = io.github.artcraftandroid.pdfcraft.core.ScanCancel()
+            working[page.key] = cancel
+            batchMostAtOnce = maxOf(batchMostAtOnce, working.size)
+            launch {
+                try {
+                    makeOne(next, page, key, cancel, lanes)
+                } finally {
+                    if (working[page.key] === cancel) working.remove(page.key)
+                    finished.trySend(Unit)
+                }
+            }
         }
         // every preview is made: the pages can be made at full size for Save (#504)
         vm.fullPages.kick()
+    }
+
+    /**
+     * Make page [index] ([page], from [key]) in the background and keep it. With one lane it runs
+     * on the screen's preview thread as before; with two, on the queue's own two (#549).
+     */
+    private suspend fun makeOne(index: Int, page: ScanPage, key: ScanPreviewKey, cancel: io.github.artcraftandroid.pdfcraft.core.ScanCancel, lanes: Int) {
+        val started = android.os.SystemClock.elapsedRealtime()
+        val dispatcher = if (lanes > 1) vm.scanQueueDispatcher else vm.scanPreviewDispatcher
+        val result = withContext(dispatcher) {
+            runCatching { io.github.artcraftandroid.pdfcraft.core.scanPreviewPageWith(vm.scanPreviewRequest(page, key.flatten, key.lab, key.autoUpright, key.autoFlatten), SCAN_PREVIEW_SIDE.toUInt(), cancel) }
+        }
+        // stopped for the page on screen, whose preview goes first: this page is asked again
+        if (cancel.isCancelled()) return
+        val p = result.onFailure { Diag.failure(DiagArea.Scan, "scan_page_queue", it) }.getOrNull()
+        if (p == null) {
+            // a page that can't be made is not tried again until it changes
+            made.remove(page.key)
+            waitingSince.remove(page.key)
+            Diag.event(DiagArea.Scan, "page_ready", "index" to index + 1, "made" to false, "ms" to android.os.SystemClock.elapsedRealtime() - started)
+            markFailed(page.key, key)
+            return
+        }
+        store(index, page, key, p, null, android.os.SystemClock.elapsedRealtime() - started)
+        // a receipt becomes Grayscale by itself, without being opened (#466)
+        vm.scanApplyAutoLook(page.key, p.kind?.suggestGreyscale == true)
     }
 
     /** Pages that could not be made, by key: not asked again until they change. */
@@ -271,7 +308,7 @@ internal class ScanPageQueue(private val vm: AppViewModel) {
      * is kept natively when it got that far, and it is made again afterwards.
      */
     fun yieldTo(pageKey: String) {
-        if (on() && working != null && working != pageKey) stop?.cancel()
+        if (on()) working.filterKeys { it != pageKey }.values.forEach { it.cancel() }
     }
 
     /**
@@ -319,7 +356,9 @@ internal class ScanPageQueue(private val vm: AppViewModel) {
         val pages = vm.scanPages.toList()
         if (pages.any { it.file.path in finding || (readyOf(it) == null && failed[it.key] != keyOf(it)) }) return
         batchStarted = null
-        Diag.event(DiagArea.Scan, "scan_ready", "pages" to pages.size, "ms" to android.os.SystemClock.elapsedRealtime() - started)
+        val most = batchMostAtOnce
+        batchMostAtOnce = 0
+        Diag.event(DiagArea.Scan, "scan_ready", *scanReadyDiag(pages.size, android.os.SystemClock.elapsedRealtime() - started, vm.scanLab.options.parallelPages, most))
     }
 
     /** Decode [page]'s kept result for the screen; null when it is not up to date or can't be read. */
@@ -332,10 +371,10 @@ internal class ScanPageQueue(private val vm: AppViewModel) {
 
     /** The scan is over: stop, and forget every result. */
     fun clear() {
-        stop?.cancel()
+        working.values.forEach { it.cancel() }
         worker?.cancel()
         worker = null
-        working = null
+        working.clear()
         made.clear()
         tiles.evictAll()
         finding.clear()
