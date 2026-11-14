@@ -455,30 +455,6 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
         // (80 % white: grey over the desk, near-white over a page, as the reference's)
         // the first document opened shows the first-run tips once (#202)
         LaunchedEffect(doc) { if (vm.settings.toolPrefs.takeFirstRunTips()) vm.tipsOpen = true }
-        var nameChip by remember(doc) { mutableStateOf(false) }
-        LaunchedEffect(doc) {
-            delay(900)
-            nameChip = true
-            delay(2000)
-            nameChip = false
-        }
-        androidx.compose.animation.AnimatedVisibility(
-            nameChip && ctl.tool == ViewerTool.None,
-            modifier = Modifier.align(Alignment.TopCenter).padding(top = with(density) { doc.viewer.padTop.toDp() } + 22.dp),
-            enter = androidx.compose.animation.fadeIn(), exit = androidx.compose.animation.fadeOut(),
-        ) {
-            Row(
-                Modifier.height(32.dp).clip(androidx.compose.foundation.shape.RoundedCornerShape(5.dp)).background(Color(0xCCFFFFFF))
-                    .border(0.5.dp, Color(0xFFF5F5F5), androidx.compose.foundation.shape.RoundedCornerShape(5.dp))
-                    .padding(horizontal = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(doc.title.removeSuffix(".pdf"), color = Color(0xFF202020), fontSize = 13.sp, maxLines = 1)
-                Spacer(Modifier.width(4.dp))
-                Text("PDF", color = Color(0xFF202020), fontSize = 11.sp)
-            }
-        }
-
         // The bars.
         Column(Modifier.fillMaxWidth().align(Alignment.TopCenter)) {
             Box(
@@ -554,6 +530,8 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
                                 notWrittenBack = doc.notWrittenBack, writable = doc.writable, hasSource = doc.source != null,
                             ),
                             onSaveState = { vm.saveNow(doc) },
+                            docName = doc.title,
+                            onDocName = { selection.clear(); ctl.fileDetailsBack = ViewerSheet.None; ctl.sheet = ViewerSheet.FileDetails },
                         )
                 }
                 }

@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Borders and looks for several pages in one pass (#515) -->
+<resources>
+    <string name="scan_lab_batch">الحواف والمظهر لعدة صفحات مرة واحدة</string>
+    <string name="scan_batch_look">المظهر</string>
+    <string name="scan_batch_check">مراجعة</string>
+    <string name="scan_batch_marks_body">الحواف الجديدة تحرّك الصفحة تحت التعليم عليها، لذلك يُحذف التعليم حيث تتغير الحواف. «إبقاء» يُخرج الصفحات التي عليها تعليم من هذه المراجعة.</string>
+    <plurals name="scan_batch_offer">
+        <item quantity="zero">لا توجد صفحات لمراجعة حوافها</item>
+        <item quantity="one">راجِع حواف صفحة واحدة</item>
+        <item quantity="two">راجِع حواف صفحتين</item>
+        <item quantity="few">راجِع حواف %1$d صفحات</item>
+        <item quantity="many">راجِع حواف %1$d صفحة</item>
+        <item quantity="other">راجِع حواف %1$d صفحة</item>
+    </plurals>
+    <plurals name="scan_batch_look_note">
+        <item quantity="zero">لم تُختر صفحات</item>
+        <item quantity="one">المظهر الذي تختاره يُطبَّق على صفحة واحدة مختارة</item>
+        <item quantity="two">المظهر الذي تختاره يُطبَّق على صفحتين مختارتين</item>
+        <item quantity="few">المظهر الذي تختاره يُطبَّق على %1$d صفحات مختارة</item>
+        <item quantity="many">المظهر الذي تختاره يُطبَّق على %1$d صفحة مختارة</item>
+        <item quantity="other">المظهر الذي تختاره يُطبَّق على %1$d صفحة مختارة</item>
+    </plurals>
+    <plurals name="scan_batch_marks_title">
+        <item quantity="zero">لا يوجد تعليم لحذفه</item>
+        <item quantity="one">حذف التعليم من صفحة واحدة؟</item>
+        <item quantity="two">حذف التعليم من صفحتين؟</item>
+        <item quantity="few">حذف التعليم من %1$d صفحات؟</item>
+        <item quantity="many">حذف التعليم من %1$d صفحة؟</item>
+        <item quantity="other">حذف التعليم من %1$d صفحة؟</item>
+    </plurals>
+</resources>

@@ -68,12 +68,14 @@ internal fun AppViewModel.chooseScanLook(index: Int, look: ScanPageLook, why: St
     val lab = scanLab.options
     val looks = scanPages.map { it.look }
     if (looks.getOrNull(index) == look && !log) return
-    setScanLooks(scanChooseLook(looks, index, look, lab.lookPerPage))
+    // a look pass from the document screen's selection (#515): the chosen pages take it, the others stay
+    val batch = scanBatchTakesLook(index, look)
+    if (!batch) setScanLooks(scanChooseLook(looks, index, look, lab.lookPerPage))
     if (log) {
         Diag.event(
             DiagArea.Scan, "look_chosen", "index" to index + 1, "why" to why, "look" to scanFilterId(look.filter),
             "strength" to look.level, "strength_source" to look.strengthSource, "paper" to look.paper.word, "look_per_page" to lab.lookPerPage,
-            "pages" to looks.size,
+            "pages" to looks.size, "batch" to batch,
         )
     }
 }

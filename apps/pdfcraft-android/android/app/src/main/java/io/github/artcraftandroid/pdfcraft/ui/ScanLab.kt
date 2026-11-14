@@ -199,6 +199,13 @@ internal data class ScanLab(
     /** The pull's release distance in dp (#514), a testing value; never below the catch distance. */
     val pullReleaseDp: Int = io.github.artcraftandroid.pdfcraft.ui.scan.PULL_RELEASE_DP,
     /**
+     * Borders and looks for several pages in one pass (#515): the document screen's selection has
+     * Borders and Look, Borders goes through the chosen pages with a counter and a swipe, Look
+     * gives the chosen pages the look picked, and an import of several photos offers the pass.
+     * Off: the selection has Rotate, Save to gallery and Delete, as before.
+     */
+    val batchBorders: Boolean = true,
+    /**
      * Markup on a scanned page (#495): Enhance's More has Markup (erase, pen, highlighter, text)
      * and Clear markup, and a page's marks are drawn after its look. Off: the entry is hidden and
      * no page is drawn with marks, as before.
@@ -253,7 +260,7 @@ internal data class ScanLab(
         "snap_paper" to snapPaper, "strength_override" to (strength ?: -1), "upright" to upright, "sharpen" to sharpen,
         "denoise" to denoise, "grain_white" to grainWhite, "preview" to preview, "crop_tools" to cropTools, "crop_detect_note" to cropDetectNote, "flatten_auto" to flattenAuto, "flatten_trim" to flattenTrim, "flatten_line_floor" to flattenLineFloor, "settle_turns" to settleTurns, "presets" to presets, "kind_tone" to kindTone, "photo_sharpen" to photoSharpen, "suggestions" to suggestions, "strict_gutter" to strictGutter, "strict_photo" to strictPhoto, "strict_book" to strictBook, "book_gutter" to bookGutter, "line_flatten" to lineFlatten,
         "page_strength" to pageStrength, "unfound_document" to unfoundDocument, "background_pages" to backgroundPages, "full_pages_ahead" to fullPagesAhead, "ask_discard" to askDiscard, "auto_look" to autoLook, "remove_fingers" to removeFingers, "look_per_page" to lookPerPage, "look_strip" to lookStrip,
-        "whiteboard_look" to whiteboardLook, "preview_stop" to previewStop, "preview_zoom" to previewZoom, "look_reuse" to lookReuse, "camera_bar" to cameraBar, "steps" to steps, "recent_scans" to recentScans, "edit_from_viewer" to editFromViewer, "snap_while_dragging" to snapWhileDragging, "pull_catch_dp" to pullCatchDp, "pull_release_dp" to pullReleaseDp, "markup" to markup, "markup_colours" to markupColours, "markup_edge" to markupEdge, "auto_encode" to autoEncode, "size_override" to (size ?: "none"), "keep" to keep, "inspect" to inspect,
+        "whiteboard_look" to whiteboardLook, "preview_stop" to previewStop, "preview_zoom" to previewZoom, "look_reuse" to lookReuse, "camera_bar" to cameraBar, "steps" to steps, "recent_scans" to recentScans, "edit_from_viewer" to editFromViewer, "snap_while_dragging" to snapWhileDragging, "pull_catch_dp" to pullCatchDp, "pull_release_dp" to pullReleaseDp, "batch_borders" to batchBorders, "markup" to markup, "markup_colours" to markupColours, "markup_edge" to markupEdge, "auto_encode" to autoEncode, "size_override" to (size ?: "none"), "keep" to keep, "inspect" to inspect,
     )
 
     /** The options as JSON, for a kept scan's page file. */
@@ -262,7 +269,7 @@ internal data class ScanLab(
         .put("snap_paper", snapPaper).put("strength_override", strength ?: JSONObject.NULL).put("upright", upright)
         .put("sharpen", sharpen).put("denoise", denoise).put("grain_white", grainWhite).put("preview", preview).put("crop_tools", cropTools).put("crop_detect_note", cropDetectNote).put("flatten_auto", flattenAuto).put("flatten_trim", flattenTrim).put("flatten_line_floor", flattenLineFloor).put("settle_turns", settleTurns).put("presets", presets).put("kind_tone", kindTone).put("photo_sharpen", photoSharpen).put("suggestions", suggestions).put("strict_gutter", strictGutter).put("strict_photo", strictPhoto).put("strict_book", strictBook).put("book_gutter", bookGutter).put("line_flatten", lineFlatten)
         .put("page_strength", pageStrength).put("unfound_document", unfoundDocument).put("background_pages", backgroundPages).put("full_pages_ahead", fullPagesAhead).put("ask_discard", askDiscard).put("auto_look", autoLook).put("remove_fingers", removeFingers).put("look_per_page", lookPerPage).put("look_strip", lookStrip)
-        .put("whiteboard_look", whiteboardLook).put("preview_stop", previewStop).put("preview_zoom", previewZoom).put("look_reuse", lookReuse).put("camera_bar", cameraBar).put("steps", steps).put("recent_scans", recentScans).put("edit_from_viewer", editFromViewer).put("snap_while_dragging", snapWhileDragging).put("pull_catch_dp", pullCatchDp).put("pull_release_dp", pullReleaseDp).put("markup", markup).put("markup_colours", markupColours).put("markup_edge", markupEdge).put("auto_encode", autoEncode).put("size_override", size ?: JSONObject.NULL).put("inspect", inspect)
+        .put("whiteboard_look", whiteboardLook).put("preview_stop", previewStop).put("preview_zoom", previewZoom).put("look_reuse", lookReuse).put("camera_bar", cameraBar).put("steps", steps).put("recent_scans", recentScans).put("edit_from_viewer", editFromViewer).put("snap_while_dragging", snapWhileDragging).put("pull_catch_dp", pullCatchDp).put("pull_release_dp", pullReleaseDp).put("batch_borders", batchBorders).put("markup", markup).put("markup_colours", markupColours).put("markup_edge", markupEdge).put("auto_encode", autoEncode).put("size_override", size ?: JSONObject.NULL).put("inspect", inspect)
 
     /** One line of text for the app's preferences. */
     fun encode(): String = listOf(
@@ -271,7 +278,7 @@ internal data class ScanLab(
         "upright" to flag(upright), "sharpen" to sharpen.toString(), "denoise" to flag(denoise), "grain_white" to flag(grainWhite), "preview" to flag(preview), "crop" to flag(cropTools), "detect_note" to flag(cropDetectNote), "flatten_auto_on" to flag(flattenAuto), "flatten_trim" to flag(flattenTrim), "line_floor" to flag(flattenLineFloor),
         "settle" to flag(settleTurns), "presets" to flag(presets), "kind_tone" to flag(kindTone), "photo_sharpen" to flag(photoSharpen), "suggest" to flag(suggestions), "strict_gutter" to flag(strictGutter), "strict_photo" to flag(strictPhoto), "strict_book" to flag(strictBook), "gutter" to flag(bookGutter), "line_flatten" to flag(lineFlatten),
         "page_strength" to flag(pageStrength), "unfound_doc" to flag(unfoundDocument), "bg_pages" to flag(backgroundPages), "full_ahead" to flag(fullPagesAhead), "ask_discard" to flag(askDiscard), "auto_look" to flag(autoLook), "fingers" to flag(removeFingers), "look_page" to flag(lookPerPage), "look_strip" to flag(lookStrip),
-        "board" to flag(whiteboardLook), "stop" to flag(previewStop), "zoom" to flag(previewZoom), "look_reuse" to flag(lookReuse), "camera_bar" to flag(cameraBar), "steps" to flag(steps), "recent" to flag(recentScans), "edit_viewer" to flag(editFromViewer), "snap_drag" to flag(snapWhileDragging), "catch_dp" to pullCatchDp.toString(), "release_dp" to pullReleaseDp.toString(), "markup" to flag(markup), "markup_colours" to flag(markupColours), "markup_edge" to flag(markupEdge), "auto_encode" to flag(autoEncode), "size" to (size ?: ""), "inspect" to flag(inspect),
+        "board" to flag(whiteboardLook), "stop" to flag(previewStop), "zoom" to flag(previewZoom), "look_reuse" to flag(lookReuse), "camera_bar" to flag(cameraBar), "steps" to flag(steps), "recent" to flag(recentScans), "edit_viewer" to flag(editFromViewer), "snap_drag" to flag(snapWhileDragging), "catch_dp" to pullCatchDp.toString(), "release_dp" to pullReleaseDp.toString(), "batch" to flag(batchBorders), "markup" to flag(markup), "markup_colours" to flag(markupColours), "markup_edge" to flag(markupEdge), "auto_encode" to flag(autoEncode), "size" to (size ?: ""), "inspect" to flag(inspect),
     ).joinToString(";") { (k, v) -> "$k=$v" }
 
     companion object {
@@ -353,6 +360,7 @@ internal data class ScanLab(
                 snapWhileDragging = on("snap_drag", default.snapWhileDragging),
                 pullCatchDp = values["catch_dp"]?.toIntOrNull()?.takeIf { it in 4..96 } ?: default.pullCatchDp,
                 pullReleaseDp = values["release_dp"]?.toIntOrNull()?.takeIf { it in 4..160 } ?: default.pullReleaseDp,
+                batchBorders = on("batch", default.batchBorders),
                 markup = on("markup", default.markup),
                 markupColours = on("markup_colours", default.markupColours),
                 markupEdge = on("markup_edge", default.markupEdge),
@@ -604,6 +612,8 @@ internal fun scanTestPageJson(
             } ?: JSONObject.NULL,
         )
         .put("crop", crop?.json() ?: JSONObject.NULL)
+        // #515: the page was shown in Borders or in a pass over several pages, and whether in a pass
+        .put("borders_checked", crop != null && crop.visits > 0).put("batch", (crop?.batchVisits ?: 0) > 0)
         .put("capture", capture ?: JSONObject.NULL)
         .put("models", models ?: JSONObject.NULL)
         .put("book", book?.json() ?: JSONObject.NULL)

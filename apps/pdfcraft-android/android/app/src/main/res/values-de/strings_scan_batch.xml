@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Borders and looks for several pages in one pass (#515) -->
+<resources>
+    <string name="scan_lab_batch">Ränder und Aussehen für mehrere Seiten auf einmal</string>
+    <string name="scan_batch_look">Aussehen</string>
+    <string name="scan_batch_check">Prüfen</string>
+    <string name="scan_batch_marks_body">Neue Ränder verschieben eine Seite unter ihren Markierungen, daher werden diese entfernt, wo sich die Ränder ändern. Behalten lässt Seiten mit Markierungen in diesem Durchgang aus.</string>
+    <plurals name="scan_batch_offer">
+        <item quantity="one">Ränder von %1$d Seite prüfen</item>
+        <item quantity="other">Ränder von %1$d Seiten prüfen</item>
+    </plurals>
+    <plurals name="scan_batch_look_note">
+        <item quantity="one">Das gewählte Aussehen gilt für %1$d ausgewählte Seite</item>
+        <item quantity="other">Das gewählte Aussehen gilt für %1$d ausgewählte Seiten</item>
+    </plurals>
+    <plurals name="scan_batch_marks_title">
+        <item quantity="one">Markierungen auf %1$d Seite entfernen?</item>
+        <item quantity="other">Markierungen auf %1$d Seiten entfernen?</item>
+    </plurals>
+</resources>

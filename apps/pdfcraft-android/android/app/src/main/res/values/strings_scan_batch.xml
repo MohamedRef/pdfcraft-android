@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Borders and looks for several pages in one pass (#515) -->
+<resources>
+    <string name="scan_lab_batch">Borders and looks for several pages at once</string>
+    <string name="scan_batch_look">Look</string>
+    <string name="scan_batch_check">Check</string>
+    <string name="scan_batch_marks_body">New borders move a page under its markup, so its markup is removed where the borders change. Keep leaves the pages with markup out of this pass.</string>
+    <plurals name="scan_batch_offer">
+        <item quantity="one">Check the borders of %1$d page</item>
+        <item quantity="other">Check the borders of %1$d pages</item>
+    </plurals>
+    <plurals name="scan_batch_look_note">
+        <item quantity="one">The look you choose goes to %1$d chosen page</item>
+        <item quantity="other">The look you choose goes to %1$d chosen pages</item>
+    </plurals>
+    <plurals name="scan_batch_marks_title">
+        <item quantity="one">Remove the markup on %1$d page?</item>
+        <item quantity="other">Remove the markup on %1$d pages?</item>
+    </plurals>
+</resources>

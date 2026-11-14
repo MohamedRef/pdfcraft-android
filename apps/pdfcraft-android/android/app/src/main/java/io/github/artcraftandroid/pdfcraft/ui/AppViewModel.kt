@@ -2193,6 +2193,10 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         scanPageDir().listFiles()?.forEach { it.delete() }
         scanPages.clear()
         scanSteps.reset()
+        scanBatch.borders = null
+        scanBatch.look = null
+        scanBatch.offer = 0
+        scanBatch.asking = null
         // a scan opened from Recent scans and given up on stays there as it was saved (#461)
         scanRecent.openedFrom = null
         scanGallerySaved.clear()
@@ -2261,6 +2265,9 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
 
     /** The Markup screen (#495): the page open in it, and the question before a change that clears marks. */
     internal val scanMarkup = io.github.artcraftandroid.pdfcraft.ui.scan.ScanMarkupState()
+
+    /** Borders and looks for several pages in one pass (#515). */
+    internal val scanBatch = io.github.artcraftandroid.pdfcraft.ui.scan.ScanBatchState()
 
     /** What the last preview of each photo was, for a kept scan's page file. */
     private val scanPreviewStats = java.util.concurrent.ConcurrentHashMap<String, ScanTestPreview>()
@@ -3020,6 +3027,10 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             releaseScanPreviews()
             scanPages.clear()
             scanSteps.reset()
+            scanBatch.borders = null
+            scanBatch.look = null
+            scanBatch.offer = 0
+            scanBatch.asking = null
             scanGallerySaved.clear()
             scanName = ""
             tools.toolScreen = null
