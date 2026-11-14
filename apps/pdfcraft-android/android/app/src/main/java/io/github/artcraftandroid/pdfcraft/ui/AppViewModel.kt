@@ -2836,6 +2836,8 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 "flatten_page" to io.github.artcraftandroid.pdfcraft.ui.scan.scanFlattenChoiceId(page.flatten),
                 "flatten_trim" to lab.flattenTrim, "flatten_line_floor" to lab.flattenLineFloor, *io.github.artcraftandroid.pdfcraft.ui.scan.scanTrimDiag(r?.trim),
                 *scanLineFlattenDiag(lab.lineFlatten, r?.lineFlatten),
+                // the preview's flattening decision taken over instead of made again (#549)
+                "flatten_reuse" to lab.flattenReuse, "flatten_reused" to (r?.flattenReused ?: false),
                 "strength" to strength, "side_proportions" to !lab.perspective, "snap_paper" to lab.snapPaper,
                 // the strength the page was really made at, and whether the slider's counts as set by hand (#424)
                 *scanAppliedStrengthDiag(scanAppliedStrength(page.look, lab, r?.kind?.strength?.toInt()), lab),
@@ -2901,6 +2903,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                         it.lineFlatten,
                         paperSpread = it.paperSpread?.toDouble(),
                         whitePoint = it.whitePoint?.toDouble(),
+                        flattenReused = it.flattenReused,
                     )
                 }
                 val turn = ScanTestTurn(page.turns, autoUpright, r?.turns?.toInt() ?: 0, followed, turnSource)
