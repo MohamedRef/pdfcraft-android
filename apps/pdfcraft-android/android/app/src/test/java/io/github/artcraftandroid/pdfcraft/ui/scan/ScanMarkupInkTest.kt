@@ -125,4 +125,51 @@ class ScanMarkupInkTest {
         assertEquals(120L, stroke["rate_hz"])
         assertEquals("normal", stroke["path"])
     }
+
+    @Test
+    fun onlyThePenGoesToTheFrontBufferWithLowLatencyInk() {
+        assertTrue(scanMarkupFront(ScanMarkupTool.Pen, ink = true, lowLatency = true))
+        assertFalse(scanMarkupFront(ScanMarkupTool.Pen, ink = true, lowLatency = false))
+        assertFalse(scanMarkupFront(ScanMarkupTool.Pen, ink = false, lowLatency = true))
+        // translucent ink and the eraser's veil would double up where the pieces meet
+        assertFalse(scanMarkupFront(ScanMarkupTool.Highlighter, ink = true, lowLatency = true))
+        assertFalse(scanMarkupFront(ScanMarkupTool.Erase, ink = true, lowLatency = true))
+    }
+
+    @Test
+    fun theSliderRunsPastTheDotsBothWays() {
+        val pen = scanMarkupSizes(ScanMarkupTool.Pen)
+        val range = scanMarkupWidthRange(pen)
+        assertTrue(range.start < pen.first() && range.endInclusive > pen.last())
+        assertTrue(pen.all { it in range })
+        assertTrue(scanMarkupSlider(ScanMarkupTool.Erase, ink = true))
+        // Text's size is the text dialog's; without the ink, the three dots as before
+        assertFalse(scanMarkupSlider(ScanMarkupTool.Text, ink = true))
+        assertFalse(scanMarkupSlider(ScanMarkupTool.Pen, ink = false))
+    }
+
+    @Test
+    fun aPatchIsLaidIntoACopyOfThePage() {
+        val base = IntArray(4 * 3) { 0xFFFFFFFF.toInt() }
+        // a 2 × 1 patch at (1, 2): red, then blue
+        val patch = byteArrayOf(255.toByte(), 0, 0, 255.toByte(), 0, 0, 255.toByte(), 255.toByte())
+        val out = scanLayPatch(base, 4, 1, 2, 2, 1, patch)
+        assertEquals(0xFFFF0000.toInt(), out[2 * 4 + 1])
+        assertEquals(0xFF0000FF.toInt(), out[2 * 4 + 2])
+        assertEquals(0xFFFFFFFF.toInt(), out[2 * 4 + 3])
+        assertEquals(10, out.count { it == 0xFFFFFFFF.toInt() })
+        // the page drawn once stays as it was, for the next patch
+        assertTrue(base.all { it == 0xFFFFFFFF.toInt() })
+    }
+
+    @Test
+    fun theLogSaysThePathPatchesAndWidth() {
+        val m = ScanInkStats().apply { patches = 3; patchMsMax = 7; frontStrokes = 2 }.diag(true).toMap()
+        assertEquals(3, m["patches"])
+        assertEquals(7L, m["patch_ms_max"])
+        assertEquals(2, m["front_strokes"])
+        val stroke = scanInkStrokeDiag("pen", 10, 100, true, 0, front = true, width = 0.0051234f).toMap()
+        assertEquals("front", stroke["path"])
+        assertEquals(0.00512, stroke["width"] as Double, 1e-9)
+    }
 }

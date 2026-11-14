@@ -1221,6 +1221,100 @@ pub fn scan_preview_page_with(request: ScanPageRequest, max_side: u32, cancel: s
     preview_stoppable(&root, &request, max_side, Some(&cancel))
 }
 
+/// The part of a preview page that its marks changed (#520): `width` × `height` RGBA pixels at
+/// (`x`, `y`) of the page, and what drawing the marks did.
+#[derive(Debug, Clone, PartialEq, uniffi::Record)]
+pub struct ScanMarkupPatch {
+    pub x: u32,
+    pub y: u32,
+    pub width: u32,
+    pub height: u32,
+    pub rgba: Vec<u8>,
+    pub applied: ScanMarkupApplied,
+}
+
+/// `markup` drawn on a preview page already made without marks (#520): its `rgba` pixels,
+/// `width` × `height`, whose quarter turns in all are `page_turns`. Only the marks are drawn, the
+/// way the page will be saved, with no photo read and no look made again, so Markup's paper fills
+/// show in a few milliseconds. A page whose pixels are all grey is drawn as grey, and one whose
+/// pixels are all black or white as black and white, as its look made it. Returns the smallest
+/// rectangle the marks changed, `None` when they changed nothing; "cancelled" when `cancel` was
+/// set before or after drawing.
+#[uniffi::export]
+pub fn scan_markup_draw(rgba: Vec<u8>, width: u32, height: u32, page_turns: u8, markup: ScanMarkup, cancel: std::sync::Arc<ScanCancel>) -> Result<Option<ScanMarkupPatch>, MobileError> {
+    markup_draw(&rgba, width, height, page_turns, &markup, Some(&cancel))
+}
+
+pub(crate) fn markup_draw(rgba: &[u8], width: u32, height: u32, page_turns: u8, markup: &ScanMarkup, cancel: Option<&ScanCancel>) -> Result<Option<ScanMarkupPatch>, MobileError> {
+    use pdfcraft_scan::look::Pixels;
+    let stopped = || cancel.is_some_and(ScanCancel::is_cancelled);
+    if stopped() {
+        return Err(MobileError::Command(PREVIEW_CANCELLED.into()));
+    }
+    let (w, h) = (width as usize, height as usize);
+    if w == 0 || h == 0 || rgba.len() != w * h * 4 {
+        return Err(MobileError::Command("the page's pixels do not match its size".into()));
+    }
+    let grey = rgba.chunks_exact(4).all(|p| p[0] == p[1] && p[1] == p[2]);
+    let bilevel = grey && rgba.chunks_exact(4).all(|p| p[0] == 0 || p[0] == 255);
+    let mut pixels = if bilevel {
+        let stride = w.div_ceil(8);
+        let mut bits = vec![0u8; stride * h];
+        for (i, p) in rgba.chunks_exact(4).enumerate() {
+            if p[0] >= 128 {
+                bits[(i / w) * stride + (i % w) / 8] |= 0x80 >> ((i % w) % 8);
+            }
+        }
+        Pixels::Bilevel(pdfcraft_scan::enhance::Bitmap1 { width, height, data: bits })
+    } else if grey {
+        Pixels::Grey(rgba.chunks_exact(4).map(|p| p[0]).collect())
+    } else {
+        Pixels::Rgb(rgba.chunks_exact(4).flat_map(|p| [p[0], p[1], p[2]]).collect())
+    };
+    let applied = pdfcraft_scan::markup::apply(&mut pixels, width, height, page_turns, &markup_of(markup));
+    if stopped() {
+        return Err(MobileError::Command(PREVIEW_CANCELLED.into()));
+    }
+    let grey_now;
+    let (data, channels): (&[u8], usize) = match &pixels {
+        Pixels::Rgb(d) => (d, 3),
+        Pixels::Grey(d) => (d, 1),
+        Pixels::Bilevel(b) => {
+            grey_now = b.to_grey();
+            (&grey_now, 1)
+        }
+    };
+    let at = |x: usize, y: usize| -> [u8; 3] {
+        let i = (y * w + x) * channels;
+        if channels == 3 { [data[i], data[i + 1], data[i + 2]] } else { [data[i]; 3] }
+    };
+    // the rectangle of pixels the marks changed
+    let (mut x0, mut y0, mut x1, mut y1) = (w, h, 0, 0);
+    for y in 0..h {
+        for x in 0..w {
+            let o = &rgba[(y * w + x) * 4..(y * w + x) * 4 + 3];
+            if at(x, y) != [o[0], o[1], o[2]] {
+                x0 = x0.min(x);
+                y0 = y0.min(y);
+                x1 = x1.max(x + 1);
+                y1 = y1.max(y + 1);
+            }
+        }
+    }
+    if x0 >= x1 || y0 >= y1 {
+        return Ok(None);
+    }
+    let mut out = Vec::with_capacity((x1 - x0) * (y1 - y0) * 4);
+    for y in y0..y1 {
+        for x in x0..x1 {
+            let [r, g, b] = at(x, y);
+            out.extend([r, g, b, 255]);
+        }
+    }
+    let n = |v: usize| u32::try_from(v).unwrap_or(u32::MAX);
+    Ok(Some(ScanMarkupPatch { x: n(x0), y: n(y0), width: n(x1 - x0), height: n(y1 - y0), rgba: out, applied: applied.into() }))
+}
+
 pub(crate) fn preview_in(root: &Path, request: &ScanPageRequest, max_side: u32) -> Result<ScanPreview, MobileError> {
     preview_stoppable(root, request, max_side, None)
 }
@@ -2196,6 +2290,74 @@ mod tests {
         assert!(page.get_pixel(page.width() / 2, page.height() / 10).0[0] < 60);
         assert!(page.get_pixel(page.width() / 2, page.height() / 2).0[0] > 200);
         std::fs::remove_dir_all(root).unwrap();
+    }
+
+    /// Markup's paper fills drawn on the preview already made (#520): the page with the patch laid
+    /// in is the preview made with the marks, pixel for pixel, on a colour, a grey and a black and
+    /// white page; nothing changed is no patch; a cancelled draw says so.
+    #[test]
+    fn marks_drawn_on_a_made_preview_match_the_preview_made_with_them() {
+        let _store = PREVIEWS_TEST_LOCK.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let root = temp("markup-patch");
+        let shot = root.join("page.png");
+        // paper shaded across, with a dark block of "print" for the eraser to cover
+        image::RgbImage::from_fn(600, 800, |x, y| {
+            if (200..320).contains(&x) && (300..340).contains(&y) { image::Rgb([30, 30, 40]) } else { image::Rgb([230 - (x / 30) as u8, 226, 215 - (y / 40) as u8]) }
+        })
+        .save(&shot)
+        .unwrap();
+        let whole = vec![0.0, 0.0, 1.0, 0.0, 1.0, 1.0, 0.0, 1.0];
+        let strokes = vec![
+            ScanStroke { tool: "pen".into(), colour: 0x1030c0, width: 0.01, points: vec![0.1, 0.1, 1.0, 0.8, 0.15, 0.5] },
+            ScanStroke { tool: "erase".into(), colour: 0, width: 0.06, points: vec![0.3, 0.4, 1.0, 0.55, 0.4, 1.0] },
+            ScanStroke { tool: "erase_colour".into(), colour: 0xffee00, width: 0.04, points: vec![0.2, 0.7, 1.0, 0.6, 0.75, 1.0] },
+        ];
+        for look in [ScanLook::Original, ScanLook::Greyscale, ScanLook::BlackWhite] {
+            let ask = ScanPageRequest { corners: whole.clone(), look, upright: false, ..request(&shot, &root.join("m")) };
+            let marks = ScanMarkup { turns: 0, strokes: strokes.clone(), texts: Vec::new() };
+            scan_release_previews();
+            let plain = preview_in(&root, &ask, 400).unwrap();
+            let made = preview_in(&root, &ScanPageRequest { markup: Some(marks.clone()), ..ask.clone() }, 400).unwrap();
+            let patch = markup_draw(&plain.rgba, plain.width, plain.height, plain.turns, &marks, None).unwrap().expect("the marks changed the page");
+            let mut laid = plain.rgba.clone();
+            for row in 0..patch.height as usize {
+                let from = row * patch.width as usize * 4;
+                let to = ((patch.y as usize + row) * plain.width as usize + patch.x as usize) * 4;
+                laid[to..to + patch.width as usize * 4].copy_from_slice(&patch.rgba[from..from + patch.width as usize * 4]);
+            }
+            assert!(laid == made.rgba, "{look:?}: the patch is the page made with the marks");
+            assert!(patch.width < plain.width || patch.height < plain.height, "{look:?}: only a part of the page is sent back");
+            assert_eq!(patch.applied.erase, 2, "{look:?}");
+        }
+        let plain = preview_in(&root, &ScanPageRequest { corners: whole.clone(), look: ScanLook::Original, upright: false, ..request(&shot, &root.join("m")) }, 400).unwrap();
+        let none = ScanMarkup { turns: 0, strokes: Vec::new(), texts: Vec::new() };
+        assert!(markup_draw(&plain.rgba, plain.width, plain.height, plain.turns, &none, None).unwrap().is_none());
+        let stop = ScanCancel::default();
+        stop.cancel();
+        let marks = ScanMarkup { turns: 0, strokes: strokes.clone(), texts: Vec::new() };
+        assert!(matches!(markup_draw(&plain.rgba, plain.width, plain.height, 0, &marks, Some(&stop)), Err(MobileError::Command(m)) if m == PREVIEW_CANCELLED));
+        assert!(markup_draw(&plain.rgba[..8], plain.width, plain.height, 0, &marks, None).is_err());
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    /// The pen's width on the page (#520): what the screen draws, `width` × the longer side ×
+    /// (PEN_MIN_WIDTH + (1 − PEN_MIN_WIDTH) × pressure), is the engine's within one pixel.
+    #[test]
+    fn the_pens_width_on_the_page_is_the_screens_within_a_pixel() {
+        let (w, h) = (300u32, 400u32);
+        // a colour page (a pure white one would be taken for black and white)
+        let white: Vec<u8> = (0..w * h).flat_map(|_| [250u8, 248, 244, 255]).collect();
+        for (width, pressure) in [(0.0025f32, 1.0f32), (0.009, 1.0), (0.009, 0.0), (0.02, 0.5), (0.03, 1.0)] {
+            // a level line across the middle
+            let pen = ScanStroke { tool: "pen".into(), colour: 0, width, points: vec![0.2, 0.5, pressure, 0.8, 0.5, pressure] };
+            let marks = ScanMarkup { turns: 0, strokes: vec![pen], texts: Vec::new() };
+            let patch = markup_draw(&white, w, h, 0, &marks, None).unwrap().unwrap();
+            // the ink across one column in the line's middle, its soft edge counted by weight
+            let col = (w / 2 - patch.x) as usize;
+            let ink: f32 = (0..patch.height as usize).map(|row| (250 - patch.rgba[(row * patch.width as usize + col) * 4]) as f32 / 250.0).sum();
+            let screen = width * h as f32 * (pdfcraft_scan::markup::PEN_MIN_WIDTH + (1.0 - pdfcraft_scan::markup::PEN_MIN_WIDTH) * pressure);
+            assert!((ink - screen).abs() < 1.0, "width {width} pressure {pressure}: the engine drew {ink:.2} px, the screen {screen:.2} px");
+        }
     }
 
     /// A preview that is no longer wanted stops at its next stage and says "cancelled" (#301);

@@ -36,6 +36,9 @@ internal class ScanMarkupState {
 
     /** How many strokes Remove marks took back on each page (by key) in this scan (#520), for a kept page file. */
     val marksRemoved = HashMap<String, Int>()
+
+    /** Each tool's width from the size slider in this run of the app (#520), by tool. */
+    val widths = HashMap<ScanMarkupTool, Float>()
 }
 
 /** A change that would move page [index] under its marks: what it is (for the log) and what to do on Remove. */
@@ -122,5 +125,56 @@ internal suspend fun AppViewModel.scanMarkupDrawn(page: ScanPage, marks: ScanMar
         val p = made.getOrNull() ?: return@withContext null
         val bitmap = scanPreviewBitmap(p) ?: return@withContext null
         ScanMarkupDrawn(bitmap.asImageBitmap(), strokesOnly.strokes, p.markup?.erasedShare, p.turns.toInt())
+    }
+}
+
+/**
+ * A page drawn by the engine once without its strokes (#520): Markup's paper fills are drawn on
+ * its [pixels] (ARGB, [width] × [height]) with no photo read and no look made again.
+ */
+internal class ScanMarkupBase(val drawn: ScanMarkupDrawn, val pixels: IntArray, val rgba: ByteArray, val width: Int, val height: Int)
+
+/** [page] drawn by the engine with no strokes, for Markup's paper fills to be drawn on (#520); null when it could not be made. */
+internal suspend fun AppViewModel.scanMarkupBase(page: ScanPage): ScanMarkupBase? {
+    val lab = scanLab.options
+    val autoUpright = ScanUprightSetting.get(settings.appPrefs)
+    val request = scanPreviewRequest(page.copy(marks = null), scanPageFlattens(page.flatten, scanCanFlatten), lab, autoUpright, scanAutoFlattens(page, lab))
+    return withContext(scanPreviewDispatcher) {
+        val made = runCatching { io.github.artcraftandroid.pdfcraft.core.scanPreviewPage(request, SCAN_PREVIEW_SIDE.toUInt()) }
+        made.exceptionOrNull()?.let { Diag.failure(DiagArea.Scan, "scan_markup_preview", it) }
+        val p = made.getOrNull() ?: return@withContext null
+        val bitmap = scanPreviewBitmap(p) ?: return@withContext null
+        val w = p.width.toInt()
+        val h = p.height.toInt()
+        val pixels = IntArray(w * h).also { bitmap.getPixels(it, 0, w, 0, 0, w, h) }
+        ScanMarkupBase(ScanMarkupDrawn(bitmap.asImageBitmap(), emptyList(), null, p.turns.toInt()), pixels, p.rgba, w, h)
+    }
+}
+
+/**
+ * Markup's paper fills drawn on a page made once (#520): one at a time, off the preview thread
+ * the page queue uses; a new drawing stops the one before it (the latest wins), and one not yet
+ * started when its screen moved on is never started.
+ */
+internal class ScanMarkupPatcher {
+    private val thread = kotlinx.coroutines.Dispatchers.Default.limitedParallelism(1)
+    @Volatile private var last: io.github.artcraftandroid.pdfcraft.core.ScanCancel? = null
+
+    /** [base] with [marks]' strokes drawn; null when the drawing failed or was stopped. */
+    suspend fun draw(base: ScanMarkupBase, marks: ScanMarks): ScanMarkupDrawn? {
+        val native = scanNativeMarkup(marks.copy(texts = emptyList())) ?: return base.drawn
+        val cancel = io.github.artcraftandroid.pdfcraft.core.ScanCancel()
+        last?.cancel()
+        last = cancel
+        return withContext(thread) {
+            if (cancel.isCancelled()) return@withContext null
+            val made = runCatching { io.github.artcraftandroid.pdfcraft.core.scanMarkupDraw(base.rgba, base.width.toUInt(), base.height.toUInt(), base.drawn.turns.mod(4).toUByte(), native, cancel) }
+            made.exceptionOrNull()?.takeUnless { it.message?.contains("cancelled") == true }?.let { Diag.failure(DiagArea.Scan, "scan_markup_patch", it) }
+            if (made.isFailure) return@withContext null
+            val patch = made.getOrNull() ?: return@withContext ScanMarkupDrawn(base.drawn.image, marks.strokes, 0f, base.drawn.turns)
+            val pixels = scanLayPatch(base.pixels, base.width, patch.x.toInt(), patch.y.toInt(), patch.width.toInt(), patch.height.toInt(), patch.rgba)
+            val bitmap = android.graphics.Bitmap.createBitmap(pixels, base.width, base.height, android.graphics.Bitmap.Config.ARGB_8888)
+            ScanMarkupDrawn(bitmap.asImageBitmap(), marks.strokes, patch.applied.erasedShare, base.drawn.turns)
+        }
     }
 }
