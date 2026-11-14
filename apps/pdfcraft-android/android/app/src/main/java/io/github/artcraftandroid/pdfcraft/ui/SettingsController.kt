@@ -147,8 +147,15 @@ class SettingsController internal constructor(private val vm: AppViewModel) {
     internal fun applyLayout(doc: OpenDocument, layout: ViewLayout?, source: String) {
         val l = layout ?: ViewLayout(savedPageMode, savedSpread, appPrefs.getBoolean("spreadAuto", false))
         // where the layout a file opened in came from: remembered for it, its initial view, or the app's (#152)
-        io.github.artcraftandroid.pdfcraft.engine.Diag.event(io.github.artcraftandroid.pdfcraft.engine.DiagArea.Viewer, "layout_open", "doc" to doc.diagNumber, "source" to (if (layout == null) "app" else source), "mode" to l.mode, "spread" to l.spread, "auto" to l.autoSpread)
         if (l.mode != doc.viewer.mode) doc.viewer.switchMode(l.mode)
+        doc.viewer.chooseFitEach(l.fitEach)
+        // fit_each: whether each page fills the width in the continuous view, chosen or by itself, and
+        // width_spread: the narrowest page over the widest, so the log shows how often it's needed (#524)
+        io.github.artcraftandroid.pdfcraft.engine.Diag.event(
+            io.github.artcraftandroid.pdfcraft.engine.DiagArea.Viewer, "layout_open", "doc" to doc.diagNumber, "source" to (if (layout == null) "app" else source),
+            "mode" to l.mode, "spread" to l.spread, "auto" to l.autoSpread,
+            "fit_each" to fitEachDiag(doc.viewer), "width_spread" to widthSpreadDiag(doc.viewer.widthSpread), "made_scan" to doc.viewer.madeScan,
+        )
         spreadPref = l.spread
         spreadAuto = l.autoSpread
     }
@@ -161,7 +168,20 @@ class SettingsController internal constructor(private val vm: AppViewModel) {
 
     /** How [doc] is laid out now, to remember for it (the layout it had before presenting, if presenting). */
     internal fun currentLayout(doc: OpenDocument) =
-        ViewLayout(doc.controller.modeBeforePresenting ?: doc.viewer.mode, spreadPref, spreadAuto)
+        ViewLayout(doc.controller.modeBeforePresenting ?: doc.viewer.mode, spreadPref, spreadAuto, doc.viewer.fitEachChoice)
+
+    /**
+     * Fit every page of [doc] to the width in the continuous view, or keep them to one scale
+     * (#524). Remembered for the document with its layout when it closes.
+     */
+    fun setFitEach(doc: OpenDocument, on: Boolean) {
+        readingMode = false
+        doc.viewer.chooseFitEach(on)
+        io.github.artcraftandroid.pdfcraft.engine.Diag.event(
+            io.github.artcraftandroid.pdfcraft.engine.DiagArea.Viewer, "fit_each", "doc" to doc.diagNumber, "on" to on,
+            "width_spread" to widthSpreadDiag(doc.viewer.widthSpread), "made_scan" to doc.viewer.madeScan, "page" to doc.viewer.currentPage + 1,
+        )
+    }
 
     /**
      * Write [doc]'s layout into the file as its initial view, so other readers open it the same
@@ -387,3 +407,13 @@ class SettingsController internal constructor(private val vm: AppViewModel) {
         appPrefs.edit().putBoolean("statusBarInDocuments", on).apply()
     }
 }
+
+/** How [v] fits pages to the width, for the log (#524): `on` or `off` as chosen, else `auto_on` or `auto_off`. */
+internal fun fitEachDiag(v: io.github.artcraftandroid.pdfcraft.ui.viewer.ViewerState): String = when (v.fitEachChoice) {
+    true -> "on"
+    false -> "off"
+    null -> if (v.fitEach) "auto_on" else "auto_off"
+}
+
+/** [spread] rounded to two places, for the log. */
+internal fun widthSpreadDiag(spread: Float): Float = kotlin.math.round(spread * 100f) / 100f

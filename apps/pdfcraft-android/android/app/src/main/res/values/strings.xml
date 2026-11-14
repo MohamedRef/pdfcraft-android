@@ -955,6 +955,7 @@
 
     <!-- Viewer sheets: View settings -->
     <string name="sheet_continuous">Continuous</string>
+    <string name="sheet_fit_each_page">Fit every page to the width</string>
     <string name="sheet_single_page">Single page</string>
     <string name="sheet_two_pages">Two pages</string>
     <string name="sheet_two_pages_cover">Two pages with cover</string>

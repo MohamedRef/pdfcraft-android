@@ -317,6 +317,8 @@ private fun DrawScope.drawPages(state: ViewerState, images: PageImages, gens: Pa
                 // An older generation's tile stands in while this one renders, as the page does,
                 // rather than dropping to the blurry whole-page image after every edit.
                 val t = images.get(ImageKey(i, gen, level, ty * cols + tx)) ?: images.latestTile(i, level, ty * cols + tx) ?: continue
+                // a tile cut at another scale (the layout changed, #524) covers another part of the page
+                if (!sameScale(t.scale, s)) continue
                 val dst = Rect(r.left + t.x * k, r.top + t.y * k, r.left + (t.x + t.bitmap.width) * k, r.top + (t.y + t.bitmap.height) * k)
                 drawImageIn(t, dst, look.invert)
             }

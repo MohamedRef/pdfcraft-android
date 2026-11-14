@@ -599,6 +599,7 @@
     <string name="sheet_undo_action">تراجع عن %1$s</string>
     <string name="sheet_redo_action">إعادة %1$s</string>
     <string name="sheet_continuous">متواصل</string>
+    <string name="sheet_fit_each_page">كل صفحة بعرض الشاشة</string>
     <string name="sheet_single_page">صفحة واحدة</string>
     <string name="sheet_two_pages">صفحتان</string>
     <string name="sheet_two_pages_cover">صفحتان مع الغلاف</string>

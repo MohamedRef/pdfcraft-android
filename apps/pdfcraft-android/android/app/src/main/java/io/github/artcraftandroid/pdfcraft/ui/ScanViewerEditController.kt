@@ -67,6 +67,8 @@ internal class ScanViewerEditController(private val vm: AppViewModel) {
         val eng = vm.engine ?: return
         val props = runCatching { eng.command { fileProperties(doc.id) } }.getOrNull() ?: return
         doc.scanLink = scanLinkId(props.customMetadata.map { it.name to it.value })
+        // a scan the app made fits each page to the width in the continuous view (#524)
+        doc.viewer.markMadeScan(doc.scanLink != null)
     }
 
     /** A tap on [page] (0-based) of [doc] with no tool out: true when it showed the page alone. */
