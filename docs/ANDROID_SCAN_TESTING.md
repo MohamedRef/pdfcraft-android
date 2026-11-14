@@ -49,6 +49,7 @@ page, Borders, Flattening, Looks, Camera, Reports. The table below lists them by
 | Trim the background left along a flattened page's edges (#302) | On | Off: a flattened page is kept as the network's grid gives it, with any strip of table along its edges |
 | Book mode: cut at the gutter found in the photo (#303) | On | Off: in book mode every spread is cut at its centre line, whatever the photo shows |
 | Flatten from the lines of text when the network gives nothing better (#303) | On | Off: a flattened page whose network result was missing or not kept stays straightened by its corners, as before |
+| Keep the preview's flattening decision for the saved page (#549) | On | Off: the page saved at full size runs the flattening network, its check and the lines of text again, as before. On: when its preview (same photo, corners and flattening settings) is still kept, the saved page is drawn from the preview's grid, or straightened by its corners when the preview was, without running them again. The page log's `flatten_reused` and the page file's `result.flatten_reused` say whether it was |
 | Turn pages upright (#339) | On | Off: a page stays as its corners gave it (Rotate still works) |
 | Unsure pages follow their neighbors (#339) | On | Off: in a scan of several pages each page is turned by its own answer only |
 | Sharpen text, in Clean scan (#299) | 30 | Off, 60 or 100. With document types on, the type's own sharpening is scaled by this level over 30 (#424): 60 is twice the type's, 100 three and a third times it, at most 100 |
@@ -116,7 +117,7 @@ The zip also holds `diagnostics.txt`, the diagnostics log as **Share diagnostics
  "finding": {"source": "model", "confidence": 0.835, "angle": 0, "passes": 1, "refined_sides": 4, "curved_sides": 0, "curved_opposite": false},
  "look": "auto", "strength": 60, "flatten": false, "flatten_chosen": null,
  "options": {"finder": "auto", "refine": true, "side_proportions": false, "snap_paper": true, "strength_override": null, "upright": true,
-             "sharpen": 30, "denoise": true, "grain_white": true, "preview": true, "crop_tools": true, "flatten_auto": true, "flatten_trim": true, "flatten_line_floor": true, "settle_turns": true, "presets": true, "strict_gutter": true, "strict_photo": true, "strict_book": true, "book_gutter": true, "line_flatten": true,
+             "sharpen": 30, "denoise": true, "grain_white": true, "preview": true, "crop_tools": true, "flatten_auto": true, "flatten_trim": true, "flatten_line_floor": true, "settle_turns": true, "presets": true, "strict_gutter": true, "strict_photo": true, "strict_book": true, "book_gutter": true, "line_flatten": true, "flatten_reuse": true,
              "look_per_page": true, "look_strip": true, "whiteboard_look": true, "preview_stop": true,
              "preview_zoom": true, "look_reuse": true},
  "document_type": {"preset": "receipt", "chosen": false, "strength": 80, "sharpen": 35, "keep_paper": false, "suggest_flatten": false,
@@ -144,7 +145,7 @@ The zip also holds `diagnostics.txt`, the diagnostics log as **Share diagnostics
             "paper": "a4", "aspect": "known_focal", "focal_mismatch": false, "flattened": false, "bend_pct": 0.0,
             "quarter_turns": 3,
             "orientation": {"quarter_turns": 3, "confidence": 0.81, "agreement": 1.0, "tiles": 4, "sure": true},
-            "noise": 0.33, "flatten_check": null, "flatten_trim": null, "line_flatten": null}
+            "noise": 0.33, "flatten_check": null, "flatten_trim": null, "line_flatten": null, "flatten_reused": false}
 }
 ```
 

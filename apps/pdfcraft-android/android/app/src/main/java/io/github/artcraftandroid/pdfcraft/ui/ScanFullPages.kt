@@ -117,7 +117,7 @@ internal class ScanFullPages(private val vm: AppViewModel) {
         if (!sameMaking) old?.paths()?.forEach { File(it).delete() }
         failed.remove(page.key)
         if (why != null) {
-            Diag.event(DiagArea.Scan, "full_page_ready", *io.github.artcraftandroid.pdfcraft.ui.scan.scanFullReadyDiag(index, ms, File(result.path).length(), why))
+            Diag.event(DiagArea.Scan, "full_page_ready", *io.github.artcraftandroid.pdfcraft.ui.scan.scanFullReadyDiag(index, ms, File(result.path).length(), why, result.flattenReused))
         }
     }
 

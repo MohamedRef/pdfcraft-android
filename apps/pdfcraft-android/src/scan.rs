@@ -172,6 +172,11 @@ pub struct ScanPageRequest {
     /// (JPEG quality 92 at full size, 1 bit for Black and white), whatever `size` says.
     #[uniffi(default = false)]
     pub auto_encode: bool,
+    /// With `flatten`: the page saved at full size takes its preview's flattening decision (the
+    /// grid it was flattened by, or straightened by its corners) instead of running the network,
+    /// its check and the text lines again (#549). False decides afresh, as before.
+    #[uniffi(default = false)]
+    pub flatten_reuse: bool,
 }
 
 /// How a page was stored (#505). Short words and numbers only: it goes into the log as it is.
@@ -487,6 +492,8 @@ pub struct ScanPageResult {
     pub trim: Option<ScanTrim>,
     /// What the text-line fallback did, when it ran (#303, part B).
     pub line_flatten: Option<ScanLineFlatten>,
+    /// The flattening was the preview's decision, taken over instead of made again (#549).
+    pub flatten_reused: bool,
     /// The quarter turns clockwise the page was given to stand upright (#339): 0 when it was not
     /// asked, already upright, or the classifier was not sure.
     pub quarter_turns: u8,
@@ -1155,6 +1162,49 @@ struct PreviewKey {
     max_side: u32,
 }
 
+impl PreviewKey {
+    /// The two pages are flattened alike: the same photo, corners and flattening choices, and
+    /// the same page shape (#549). The size, the classifier's and the person's turns come after.
+    fn flattens_like(&self, other: &PreviewKey) -> bool {
+        PreviewKey { upright: false, turns: 0, max_side: 0, ..self.clone() } == PreviewKey { upright: false, turns: 0, max_side: 0, ..other.clone() }
+    }
+}
+
+/// What a preview of `request` at `max_side` depends on, for the photo at `photo` (already
+/// checked to be in the app's folder). `None` when the photo cannot be read.
+fn preview_key(photo: PathBuf, request: &ScanPageRequest, corners: [f32; 8], max_side: u32) -> Option<PreviewKey> {
+    let on_disk = std::fs::metadata(&photo).ok()?;
+    Some(PreviewKey {
+        photo,
+        bytes: on_disk.len(),
+        modified: on_disk.modified().ok(),
+        corners: corners.map(f32::to_bits),
+        focal: request.focal_35mm.map(f32::to_bits),
+        snap_paper: request.snap_paper,
+        side_proportions: request.side_proportions,
+        flatten: request.flatten,
+        flatten_check: request.flatten_check,
+        flatten_trim: request.flatten_trim,
+        flatten_min_lines: request.flatten_min_lines,
+        line_flatten: request.line_flatten,
+        upright: request.upright,
+        turns: request.turns % 4,
+        max_side,
+    })
+}
+
+/// The flattening decision of the newest kept preview of the same photo and corners (#549), for
+/// a page `request` asks at full size; `None` when it does not ask for it, or no preview is kept.
+fn preview_flattening(root: &Path, request: &ScanPageRequest, corners: [f32; 8]) -> Option<pdfcraft_scan::page::FlattenDecision> {
+    if !(request.flatten && request.flatten_reuse) {
+        return None;
+    }
+    let photo = Path::new(&request.photo_path).canonicalize().ok().filter(|p| p.starts_with(root))?;
+    let key = preview_key(photo, request, corners, 0)?;
+    let previews = PREVIEWS.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+    previews.iter().rev().find(|(k, _)| k.flattens_like(&key)).and_then(|(_, base)| base.flatten_decision.clone())
+}
+
 /// The straightened pages of the last few previews, newest last. A page 1280 pixels long is
 /// under 5 MB, so four of them are under 20 MB.
 static PREVIEWS: std::sync::Mutex<Vec<(PreviewKey, std::sync::Arc<PageBase>)>> = std::sync::Mutex::new(Vec::new());
@@ -1337,24 +1387,7 @@ pub(crate) fn preview_stoppable(
     if !photo.starts_with(root) {
         return Err(MobileError::Command("the scan's files must be in the app's own folder".into()));
     }
-    let on_disk = std::fs::metadata(&photo).map_err(|_| unreadable())?;
-    let key = PreviewKey {
-        photo,
-        bytes: on_disk.len(),
-        modified: on_disk.modified().ok(),
-        corners: corners.map(f32::to_bits),
-        focal: request.focal_35mm.map(f32::to_bits),
-        snap_paper: request.snap_paper,
-        side_proportions: request.side_proportions,
-        flatten: request.flatten,
-        flatten_check: request.flatten_check,
-        flatten_trim: request.flatten_trim,
-        flatten_min_lines: request.flatten_min_lines,
-        line_flatten: request.line_flatten,
-        upright: request.upright,
-        turns: request.turns % 4,
-        max_side,
-    };
+    let key = preview_key(photo, request, corners, max_side).ok_or_else(unreadable)?;
     let kept = {
         let mut previews = PREVIEWS.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
         // the one asked for becomes the newest
@@ -1484,7 +1517,9 @@ pub(crate) fn process_sizes_in(root: &Path, request: &ScanPageRequest, also: &[p
     }
     let bytes = read_photo(root, &request.photo_path)?;
     let markup = request.markup.as_ref().map(markup_of);
-    let (page, others) = pdfcraft_scan::page::process_page_stored(&page_request(request, &bytes, corners, None, markup.as_ref()), also)
+    let known = preview_flattening(root, request, corners);
+    let asked = PageRequest { flatten_known: known.as_ref(), ..page_request(request, &bytes, corners, None, markup.as_ref()) };
+    let (page, others) = pdfcraft_scan::page::process_page_stored(&asked, also)
         .map_err(|e| MobileError::Command(e.to_string()))?;
     drop(bytes);
     let mut file_name = name.to_os_string();
@@ -1547,6 +1582,7 @@ fn result_of(page: pdfcraft_scan::page::PageResult, path: String) -> ScanPageRes
         flatten_check: page.flatten_check.map(Into::into),
         trim: page.trim.map(|t| ScanTrim::of(t, before_turn(page.width, page.height, page.turns))),
         line_flatten: page.line_flatten.as_ref().map(Into::into),
+        flatten_reused: page.flatten_reused,
         quarter_turns: page.quarter_turns,
         orientation: page.orientation.map(orientation_of),
         turns: page.turns,
@@ -1773,6 +1809,7 @@ mod tests {
             markup: None,
             size: "best".into(),
             auto_encode: false,
+            flatten_reuse: false,
         }
     }
 
@@ -1853,6 +1890,32 @@ mod tests {
         // one size only: as before
         let one = process_sizes_in(&root, &ScanPageRequest { output_path: root.join("one").to_string_lossy().into(), ..ask.clone() }, &[]).unwrap();
         assert_eq!(one.len(), 1);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    /// The page saved at full size takes its preview's flattening decision when asked (#549), and
+    /// only for the same photo, corners and flattening choices.
+    #[test]
+    fn the_saved_page_takes_its_previews_flattening_decision_when_asked() {
+        let _store = PREVIEWS_TEST_LOCK.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        scan_release_previews();
+        let root = temp("flatten-reuse");
+        let shot = photo(&root);
+        let ask = ScanPageRequest { flatten: true, line_flatten: true, flatten_reuse: true, ..request(&shot, &root.join("reuse")) };
+        // no preview yet: decided afresh
+        assert!(!process_in(&root, &ask).unwrap().flatten_reused);
+        preview_stoppable(&root, &ask, 320, None).unwrap();
+        let reused = process_in(&root, &ask).unwrap();
+        assert!(reused.flatten_reused);
+        // the same page decided afresh is the same page
+        let fresh = process_in(&root, &ScanPageRequest { flatten_reuse: false, output_path: root.join("fresh").to_string_lossy().into(), ..ask.clone() }).unwrap();
+        assert!(!fresh.flatten_reused);
+        assert_eq!((fresh.width, fresh.height, fresh.flattened), (reused.width, reused.height, reused.flattened));
+        // other corners or a turn: the turn comes after flattening, the corners do not
+        assert!(process_in(&root, &ScanPageRequest { turns: 1, ..ask.clone() }).unwrap().flatten_reused);
+        let moved = ScanPageRequest { corners: vec![0.12, 0.1, 0.9, 0.1, 0.9, 0.9, 0.1, 0.9], ..ask.clone() };
+        assert!(!process_in(&root, &moved).unwrap().flatten_reused);
+        scan_release_previews();
         std::fs::remove_dir_all(root).unwrap();
     }
 

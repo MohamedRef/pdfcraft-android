@@ -121,6 +121,8 @@ internal fun scanPageRequest(
     flattenMinLines = (if (lab.flattenLineFloor) ScanLab.FLATTEN_MIN_LINES else 0).toUByte(),
     // when the network gives nothing better, the page's lines of text may still flatten it (#303)
     lineFlatten = lab.lineFlatten,
+    // the preview's flattening decision taken over at full size (#549)
+    flattenReuse = lab.flattenReuse,
     sideProportions = !lab.perspective,
     upright = ask.upright,
     turns = ask.turns.toUByte(),

@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The preview's flattening decision taken over at full size (#549) -->
+<resources>
+    <string name="scan_lab_flatten_reuse">Manter a decisão de achatamento da prévia para a página salva</string>
+</resources>
