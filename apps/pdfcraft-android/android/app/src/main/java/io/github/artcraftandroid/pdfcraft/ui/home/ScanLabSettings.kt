@@ -145,6 +145,8 @@ internal fun ScanLabSettings(vm: AppViewModel) {
     Sw(R.string.scan_lab_steps, o.steps) { lab.update(o.copy(steps = it)) }
     // saved scans kept to be opened and saved again (#461)
     Sw(R.string.scan_lab_recent, o.recentScans) { lab.update(o.copy(recentScans = it)) }
+    // every tool in reach: Markup on the bar, Select shown, Extract text and Print before saving, scans on Home (#516)
+    Sw(R.string.scan_lab_reach, o.toolsInReach) { lab.update(o.copy(toolsInReach = it)) }
     // a saved scan edited from its PDF in the viewer (#513)
     Sw(R.string.scan_lab_edit_viewer, o.editFromViewer) { lab.update(o.copy(editFromViewer = it)) }
     // erase, pen, highlighter and text on a scanned page (#495)

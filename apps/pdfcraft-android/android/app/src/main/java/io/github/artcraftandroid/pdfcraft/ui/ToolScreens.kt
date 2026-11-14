@@ -13,6 +13,7 @@ import io.github.artcraftandroid.pdfcraft.ui.scan.undoScanTurn
 import io.github.artcraftandroid.pdfcraft.ui.scan.setScanRemoveFingers
 import io.github.artcraftandroid.pdfcraft.ui.scan.undoScanAuto
 import io.github.artcraftandroid.pdfcraft.ui.scan.afterScanMarkupAsk
+import io.github.artcraftandroid.pdfcraft.ui.scan.scanToolOpened
 import io.github.artcraftandroid.pdfcraft.ui.scan.clearScanMarks
 import io.github.artcraftandroid.pdfcraft.ui.scan.openScanMarkup
 import io.github.artcraftandroid.pdfcraft.ui.scan.scanCornersChanging
@@ -1053,6 +1054,22 @@ fun ScanScreen(vm: AppViewModel) {
         }
         return
     }
+        // Delete asks first (#456); off, it deletes at once, as before
+        val deleteShown = {
+            if (pages.isNotEmpty()) {
+                val at = current.coerceAtMost(pages.lastIndex)
+                if (io.github.artcraftandroid.pdfcraft.ui.scan.scanDeleteAsks(pages.size, vm.scanLab.options)) {
+                    askingDelete = at
+                } else {
+                    vm.deleteScanPage(at)
+                    current = (current - 1).coerceAtLeast(0)
+                }
+            }
+        }
+    // every tool in reach (#516): Markup takes Delete's place on the bar, Delete goes to the top bar
+    val reach = vm.scanLab.options.toolsInReach
+    val barItems = io.github.artcraftandroid.pdfcraft.ui.scan.scanEnhanceBarItems(reach, vm.scanLab.options.markup)
+    val deleteOnTop = stepsOn && pages.isNotEmpty() && io.github.artcraftandroid.pdfcraft.ui.scan.scanDeleteOnTopBar(reach, vm.scanLab.options.markup)
     val addPageLabel = stringResource(R.string.tools_add_page)
     ToolScaffold(
         if (pages.isEmpty()) stringResource(R.string.common_tool_scan) else stringResource(R.string.tools_page_of, current.coerceAtMost(pages.lastIndex) + 1, pages.size),
@@ -1074,6 +1091,14 @@ fun ScanScreen(vm: AppViewModel) {
             vm.endScanLookBatch("done")
             if (stepsOn) vm.scanSteps.showDocument("enhance", pages.size) else vm.saveScan()
         },
+        trailing = if (deleteOnTop) {
+            {
+                BarIcon(LucideIcons.Trash2, stringResource(R.string.common_delete), {
+                    vm.scanToolOpened(io.github.artcraftandroid.pdfcraft.ui.scan.ScanReachTool.Delete, "top")
+                    deleteShown()
+                })
+            }
+        } else null,
     ) {
         // a reminder that the scanner is not as it is meant to be used: a testing option is on (#288)
         if (!vm.scanLab.options.asDesigned) {
@@ -1354,6 +1379,7 @@ fun ScanScreen(vm: AppViewModel) {
                 if (page.look.hasStrength || page.look.hasPaper || vm.scanCanFlatten) {
                     io.github.artcraftandroid.pdfcraft.ui.scan.ScanAdjustButton {
                         io.github.artcraftandroid.pdfcraft.ui.scan.logScanAdjustOpen(shownAt, page.look)
+                        vm.scanToolOpened(io.github.artcraftandroid.pdfcraft.ui.scan.ScanReachTool.AdjustControl, "adjust")
                         adjusting = true
                     }
                 }
@@ -1402,18 +1428,6 @@ fun ScanScreen(vm: AppViewModel) {
             // book mode (#303): photos taken from now on become a spread's two pages
             io.github.artcraftandroid.pdfcraft.ui.scan.ScanBookChips(vm.scanBook)
         }
-        // Delete asks first (#456); off, it deletes at once, as before
-        val deleteShown = {
-            if (pages.isNotEmpty()) {
-                val at = current.coerceAtMost(pages.lastIndex)
-                if (io.github.artcraftandroid.pdfcraft.ui.scan.scanDeleteAsks(pages.size, vm.scanLab.options)) {
-                    askingDelete = at
-                } else {
-                    vm.deleteScanPage(at)
-                    current = (current - 1).coerceAtLeast(0)
-                }
-            }
-        }
         if (stepsOn) {
             // Enhance's bottom bar (#459): five icons with words, nothing scrolls sideways
             val lookAt = current.coerceAtMost(pages.lastIndex)
@@ -1428,15 +1442,33 @@ fun ScanScreen(vm: AppViewModel) {
                         canMarkup = lab.preview && preview != null, hasMarks = pages.getOrNull(lookAt)?.marks?.isEmpty == false,
                     )
                 },
-                moreShown = { item -> io.github.artcraftandroid.pdfcraft.ui.scan.scanEnhanceMoreShown(item, lab.markup) },
-                onRetake = { vm.retakeScan(lookAt) },
+                moreShown = { item -> io.github.artcraftandroid.pdfcraft.ui.scan.scanEnhanceMoreShown(item, lab.markup, markupOnBar = io.github.artcraftandroid.pdfcraft.ui.scan.ScanEnhanceBarItem.Markup in barItems) },
+                items = barItems,
+                // Markup draws on the page as it will be saved (#495): it needs the page's preview
+                markupEnabled = lab.preview && preview != null,
+                onMarkup = {
+                    vm.scanToolOpened(io.github.artcraftandroid.pdfcraft.ui.scan.ScanReachTool.Markup, "bar")
+                    vm.openScanMarkup(lookAt)
+                },
+                onRetake = {
+                    vm.scanToolOpened(io.github.artcraftandroid.pdfcraft.ui.scan.ScanReachTool.Retake, "bar")
+                    vm.retakeScan(lookAt)
+                },
                 onBorders = {
+                    vm.scanToolOpened(io.github.artcraftandroid.pdfcraft.ui.scan.ScanReachTool.Borders, "bar")
                     // a page with marks asks first: new borders move the page under them (#495)
                     vm.afterScanMarkupAsk(lookAt, "borders", clearFirst = false) { pages.getOrNull(lookAt)?.key?.let { vm.scanSteps.openFromPage(it, lookAt + 1, "page") } }
                 },
-                onRotate = { vm.rotateScanPage(lookAt) },
-                onDelete = deleteShown,
+                onRotate = {
+                    vm.scanToolOpened(io.github.artcraftandroid.pdfcraft.ui.scan.ScanReachTool.Rotate, "bar")
+                    vm.rotateScanPage(lookAt)
+                },
+                onDelete = {
+                    vm.scanToolOpened(io.github.artcraftandroid.pdfcraft.ui.scan.ScanReachTool.Delete, "bar")
+                    deleteShown()
+                },
                 onMore = { item ->
+                    io.github.artcraftandroid.pdfcraft.ui.scan.scanMoreTool(item)?.let { vm.scanToolOpened(it, "more") }
                     when (item) {
                         io.github.artcraftandroid.pdfcraft.ui.scan.ScanEnhanceMore.ApplyAll -> confirmApply = true
                         io.github.artcraftandroid.pdfcraft.ui.scan.ScanEnhanceMore.ResetLook -> vm.chooseScanLook(lookAt, defaultLook, "reset")

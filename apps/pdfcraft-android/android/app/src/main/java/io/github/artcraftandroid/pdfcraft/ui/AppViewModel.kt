@@ -2669,18 +2669,21 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     /**
      * Make the scan's PDF and save it into Downloads, or into the open document it was for. With
      * [share] (the document screen's Share, #460) the same PDF goes to Android's share sheet
-     * instead: nothing is saved, and the scan stays open to be saved or shared again.
+     * instead: nothing is saved, and the scan stays open to be saved or shared again. [out] Print
+     * and Text (#516) make the same PDF for the print screen, or read its words and hand them out
+     * as text; nothing is saved either.
      */
-    fun saveScan(share: Boolean = false, size: String? = null) {
+    internal fun saveScan(share: Boolean = false, size: String? = null, out: io.github.artcraftandroid.pdfcraft.ui.scan.ScanOut = if (share) io.github.artcraftandroid.pdfcraft.ui.scan.ScanOut.Share else io.github.artcraftandroid.pdfcraft.ui.scan.ScanOut.Save) {
+        val saving = out == io.github.artcraftandroid.pdfcraft.ui.scan.ScanOut.Save
         // a scan opened from its PDF (#513): comments on pages whose borders or place change are asked about first
-        if (!share && scanEdit.mustAsk(size)) return
-        job(text(R.string.msg_busy_saving_scan)) { eng ->
+        if (saving && scanEdit.mustAsk(size)) return
+        job(text(if (saving || out == io.github.artcraftandroid.pdfcraft.ui.scan.ScanOut.Share) R.string.msg_busy_saving_scan else R.string.scan_busy_preparing)) { eng ->
             // the pages made at full size ahead (#504) are not touched while Save runs
-            fullPages.exclusive { saveScanNow(eng, share, size) }
+            fullPages.exclusive { saveScanNow(eng, !saving, size, out) }
         }
     }
 
-    private suspend fun saveScanNow(eng: io.github.artcraftandroid.pdfcraft.engine.Engine, share: Boolean, size: String?) {
+    private suspend fun saveScanNow(eng: io.github.artcraftandroid.pdfcraft.engine.Engine, share: Boolean, size: String?, purpose: io.github.artcraftandroid.pdfcraft.ui.scan.ScanOut) {
         val pages = scanPages.toList()
         val scanStarted = android.os.SystemClock.elapsedRealtime()
         // the PDF this scan was opened from in the viewer, and its pages as they are now (#513)
@@ -2924,7 +2927,12 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             }
             // the scan's words become text, searchable and selectable, only when the person asked for
             // it in Settings ▸ Scanner (#504); Skip saves the PDF without the pages not read yet
-            val ocrOn = io.github.artcraftandroid.pdfcraft.ui.scan.ScanOcrSetting.get(settings.appPrefs)
+            // Extract text (#516) always reads the pages; Print never waits for it
+            val ocrOn = when (purpose) {
+                io.github.artcraftandroid.pdfcraft.ui.scan.ScanOut.Text -> true
+                io.github.artcraftandroid.pdfcraft.ui.scan.ScanOut.Print -> false
+                else -> io.github.artcraftandroid.pdfcraft.ui.scan.ScanOcrSetting.get(settings.appPrefs)
+            }
             var ocrAvailable = false
             var ocrSkipped = false
             val ocrStarted = android.os.SystemClock.elapsedRealtime()
@@ -2954,6 +2962,10 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             }
             val ocr = io.github.artcraftandroid.pdfcraft.ui.scan.scanOcrOutcome(ocrOn, ocrAvailable, ocrSkipped)
             val ocrMs = if (ocrOn && ocrAvailable) android.os.SystemClock.elapsedRealtime() - ocrStarted else 0L
+            if (purpose == io.github.artcraftandroid.pdfcraft.ui.scan.ScanOut.Text) {
+                scanTextOut(eng, id, pages.size, ocrAvailable, ocrSkipped, android.os.SystemClock.elapsedRealtime() - scanStarted)
+                return
+            }
             // a scan of its own that is kept names its kept scan in the PDF, so a tap on a page in the
             // viewer can open it again (#513); a share or pages going into an open document are not kept
             val keepsRecent = !share && insertScanAt == null && scanRecent.on()
@@ -2965,6 +2977,14 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             eng.tool("doc_save", mapOf("doc" to id, "path" to out.absolutePath, "full" to true))
             // from the tap to the file (#504)
             val waitDiag = io.github.artcraftandroid.pdfcraft.ui.scan.scanSaveWaitDiag(ahead, readyAtTap.count { it }, android.os.SystemClock.elapsedRealtime() - scanStarted, ocr, ocrMs)
+            if (purpose == io.github.artcraftandroid.pdfcraft.ui.scan.ScanOut.Print) {
+                // the print screen reads the copy and deletes it when the job is done (#516); the scan stays as it is
+                Diag.event(DiagArea.Scan, "print", "pages" to pages.size, "bytes" to out.length(), "ms" to android.os.SystemClock.elapsedRealtime() - scanStarted)
+                val stamp = java.text.SimpleDateFormat("yyyy-MM-dd HH.mm.ss", java.util.Locale.US).format(java.util.Date())
+                prints.trySend(PrintJob(out, DocumentFiles.safeName(scanName.trim().ifEmpty { "Scan $stamp" }), deleteWhenDone = true))
+                if (unenhanced > 0) tell(text(R.string.msg_scan_unenhanced, unenhanced))
+                return
+            }
             if (share) {
                 // the scan stays as it is; the copy handed out is swept from the share folder later
                 Diag.event(DiagArea.Scan, "share", *io.github.artcraftandroid.pdfcraft.ui.scan.scanShareDiag(pages.size, out.length(), android.os.SystemClock.elapsedRealtime() - scanStarted), *waitDiag, *io.github.artcraftandroid.pdfcraft.ui.scan.scanSavedSizeDiag(sizeChoice, out.length(), pages.size, pagesBytes))
@@ -3036,6 +3056,32 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         } finally {
             runCatching { eng.tool("doc_close", mapOf("doc" to id, "discard_changes" to true)) }
         }
+    }
+
+    /**
+     * Extract text (#516): the words of scan document [id] ([pages] pages, read just now) handed to
+     * Android's share sheet as text, where Copy is one of the choices. The scan stays as it is.
+     */
+    private suspend fun scanTextOut(eng: io.github.artcraftandroid.pdfcraft.engine.Engine, id: Long, pages: Int, available: Boolean, skipped: Boolean, ms: Long) {
+        if (!available) {
+            Diag.event(DiagArea.Scan, "extract_text", "pages" to pages, "available" to false, "ms" to ms)
+            tell(text(R.string.msg_ocr_not_installed))
+            return
+        }
+        val read = runCatching { eng.tool("text_extract", mapOf("doc" to id)) }.onFailure { Diag.failure(DiagArea.Scan, "extract_text", it) }.getOrNull()
+        val texts = read?.optJSONArray("pages")?.let { a -> (0 until a.length()).map { a.optJSONObject(it)?.optString("text").orEmpty().trim() } }.orEmpty()
+        val words = io.github.artcraftandroid.pdfcraft.ui.scan.scanTextJoin(texts)
+        // counts only: the words themselves never go into the log
+        Diag.event(DiagArea.Scan, "extract_text", "pages" to pages, "available" to true, "skipped" to skipped, "pages_with_text" to texts.count { it.isNotEmpty() }, "chars" to words.length, "ms" to ms)
+        if (words.isBlank()) {
+            tell(text(R.string.scan_text_none))
+            return
+        }
+        val name = scanName.trim().ifEmpty { text(R.string.common_tool_scan) }
+        val send = android.content.Intent(android.content.Intent.ACTION_SEND).setType("text/plain")
+            .putExtra(android.content.Intent.EXTRA_TEXT, io.github.artcraftandroid.pdfcraft.ui.scan.scanTextForIntent(words))
+            .putExtra(android.content.Intent.EXTRA_SUBJECT, name)
+        intents.trySend(android.content.Intent.createChooser(send, null))
     }
 
     // ---- Home, Files: see HomeController ----

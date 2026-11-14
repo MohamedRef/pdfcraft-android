@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Every scanner tool in reach (#516) -->
+<resources>
+    <string name="scan_lab_reach">Every scanner tool in reach</string>
+    <string name="scan_doc_select_short">Select</string>
+    <string name="scan_doc_extract_text">Extract text</string>
+    <string name="scan_text_none">No words were found on these pages.</string>
+    <string name="scan_recent_see_all">See all</string>
+    <string name="scan_busy_preparing">Preparing the scan…</string>
+</resources>
