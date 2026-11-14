@@ -469,7 +469,8 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
               Column {
                 Box(barSides) {
                     if (ctl.searching) {
-                        var query by remember { mutableStateOf(search.query) }
+                        // keyed on the query, so Find from a selection (#523) fills a bar that is already open
+                        var query by remember(search.query) { mutableStateOf(search.query) }
                         SearchBar(
                             query = query,
                             onQuery = {
@@ -739,7 +740,7 @@ private fun toolHint(tool: ViewerTool, markup: TextMarkup, doc: OpenDocument): S
     else -> null
 }
 
-private fun runSearch(vm: AppViewModel, doc: OpenDocument, query: String) {
+internal fun runSearch(vm: AppViewModel, doc: OpenDocument, query: String) {
     if (query.isEmpty()) return
     doc.search.run(query, doc.pageCount, doc.viewer.currentPage) { first -> showHit(doc, first) }
     vm.sharing.whenSearchDone(doc)

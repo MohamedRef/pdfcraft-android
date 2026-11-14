@@ -460,6 +460,8 @@
     <string name="viewer_search_count">%1$d von %2$d</string>
     <string name="viewer_read_from_here">Ab hier vorlesen</string>
     <string name="viewer_copy_text">Text kopieren</string>
+    <string name="viewer_select_all">Alle auswählen</string>
+    <string name="viewer_selection_more">Mehr</string>
     <!-- Translator note: accessibility labels of the two handles at the ends of selected text. -->
     <string name="viewer_selection_start">Anfang der Auswahl</string>
     <string name="viewer_selection_end">Ende der Auswahl</string>
