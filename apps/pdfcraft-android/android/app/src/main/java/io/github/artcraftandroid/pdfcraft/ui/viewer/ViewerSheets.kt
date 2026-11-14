@@ -217,6 +217,12 @@ fun ViewSettingsSheet(vm: AppViewModel, doc: OpenDocument) {
             vm.settings.setPageMode(doc, PageMode.Horizontal)
             ctl.sheet = ViewerSheet.None
         }, checked = doc.viewer.mode == PageMode.Horizontal && !vm.settings.readingMode)
+        // each page scaled on its own to fill the width, for scans and pages of mixed sizes (#524)
+        if (doc.viewer.mode == PageMode.Continuous && !vm.settings.readingMode) {
+            SheetRow(LucideIcons.MoveHorizontal, stringResource(R.string.sheet_fit_each_page), { vm.settings.setFitEach(doc, !doc.viewer.fitEach) }) {
+                PdfSwitch(doc.viewer.fitEach, { vm.settings.setFitEach(doc, it) })
+            }
+        }
         // two pages side by side: only where the window has room for them (#152)
         if (spreadFits(androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp)) {
             GroupDivider()

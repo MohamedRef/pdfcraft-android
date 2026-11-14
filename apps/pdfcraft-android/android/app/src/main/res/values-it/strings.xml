@@ -672,6 +672,7 @@
     <!-- Impostazioni di visualizzazione -->
 
     <string name="sheet_continuous">Continua</string>
+    <string name="sheet_fit_each_page">Ogni pagina in larghezza</string>
     <string name="sheet_single_page">Pagina singola</string>
     <string name="sheet_reading_mode">Modalità lettura</string>
     <string name="sheet_night_mode">Modalità notturna</string>

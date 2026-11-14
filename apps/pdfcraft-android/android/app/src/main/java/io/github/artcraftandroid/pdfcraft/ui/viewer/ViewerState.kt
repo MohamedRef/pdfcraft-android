@@ -32,6 +32,30 @@ class ViewerState(pages: List<PageSize>) {
     var spread by mutableStateOf(Spread.Single)
         private set
 
+    /**
+     * Fit every page to the width in the continuous view (#524): the reader's choice for this
+     * document, or null to decide from the pages ([fitEachShown]).
+     */
+    var fitEachChoice by mutableStateOf<Boolean?>(null)
+        private set
+
+    /** A scan the app made: its pages fit the width one by one unless the reader says otherwise (#524). */
+    var madeScan by mutableStateOf(false)
+        private set
+
+    private var spreadOf: Pair<List<PageSize>, Float>? = null
+
+    /** The narrowest page's width over the widest's ([widthSpread]), worked out once per page list. */
+    val widthSpread: Float
+        get() {
+            val p = pages
+            spreadOf?.let { if (it.first === p) return it.second }
+            return widthSpread(p).also { spreadOf = p to it }
+        }
+
+    /** Whether the continuous view fits every page to the width now. */
+    val fitEach: Boolean get() = fitEachShown(fitEachChoice, madeScan, widthSpread)
+
     var viewW by mutableFloatStateOf(0f)
         private set
     var viewH by mutableFloatStateOf(0f)
@@ -55,8 +79,9 @@ class ViewerState(pages: List<PageSize>) {
     val layout: DocLayout
         get() {
             val c = cachedLayout
-            if (c != null && c.pages === pages && c.mode == mode && c.spread == spread && c.viewW == viewW && c.viewH == viewH && c.padTop == padTop && c.padBottom == padBottom) return c
-            return DocLayout(pages, mode, viewW, viewH, gap, margin, padTop, padBottom, spread).also { cachedLayout = it }
+            val fit = mode == PageMode.Continuous && fitEach
+            if (c != null && c.pages === pages && c.mode == mode && c.spread == spread && c.fitEach == fit && c.viewW == viewW && c.viewH == viewH && c.padTop == padTop && c.padBottom == padBottom) return c
+            return DocLayout(pages, mode, viewW, viewH, gap, margin, padTop, padBottom, spread, fit).also { cachedLayout = it }
         }
 
     /** Continuous pages zoom out past fit-width; single-page mode rests on one page filling the width. */
@@ -126,6 +151,37 @@ class ViewerState(pages: List<PageSize>) {
         mode = m
         zoom = 1f
         goToPage(page)
+    }
+
+    /** Fit every page to the width ([on]), keep them to one scale, or decide from the pages (null), staying where the reader is (#524). */
+    fun chooseFitEach(on: Boolean?) = keepingPlace { fitEachChoice = on }
+
+    /** Mark the document as a scan the app made (or not), staying where the reader is. */
+    fun markMadeScan(scan: Boolean) {
+        if (scan != madeScan) keepingPlace { madeScan = scan }
+    }
+
+    /**
+     * Make [change] to the layout, then put the spot of the page that was at the top of the
+     * screen (mid-width, under the bars) back where it was.
+     */
+    private fun keepingPlace(change: () -> Unit) {
+        val before = fitEach
+        if (mode != PageMode.Continuous || viewW == 0f || layout.rects.isEmpty()) {
+            change()
+            return
+        }
+        val focus = Offset(viewW / 2f, padTop)
+        val l = layout
+        val page = l.nearestPage((focus.x + scrollX) / zoom, (focus.y + scrollY) / zoom)
+        val at = screenToPageUnclamped(page, focus)
+        change()
+        if (fitEach == before || at == null) return
+        val r = layout.rects[page]
+        val s = layout.scaleOf(page)
+        scrollX = (r.left + at.x * s) * zoom - focus.x
+        scrollY = (r.top + at.y * s) * zoom - focus.y
+        clamp()
     }
 
     /** Show pages [s] side by side, staying on the same page. */

@@ -685,6 +685,7 @@
 
     <!-- Viewer sheets: View settings -->
     <string name="sheet_continuous">Continuo</string>
+    <string name="sheet_fit_each_page">Cada página al ancho</string>
     <string name="sheet_single_page">Página única</string>
     <string name="sheet_reading_mode">Modo lectura</string>
     <string name="sheet_night_mode">Modo nocturno</string>

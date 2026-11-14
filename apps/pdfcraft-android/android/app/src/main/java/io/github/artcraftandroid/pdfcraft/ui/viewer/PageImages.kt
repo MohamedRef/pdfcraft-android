@@ -36,6 +36,9 @@ class PageImage(val key: ImageKey, val bitmap: ImageBitmap, val scale: Float, va
     val bytes: Int get() = allocationBytes
 }
 
+/** Whether an image rendered at [had] pixels per point serves a request for [wanted] (within half a percent). */
+internal fun sameScale(had: Float, wanted: Float): Boolean = kotlin.math.abs(had - wanted) <= 0.005f * kotlin.math.max(had, wanted)
+
 /** A request: the key, and how to render it (page, scale, tile). */
 data class ImageRequest(val key: ImageKey, val scale: Float, val tile: TileRect?, val prefetch: Boolean = false)
 
@@ -172,6 +175,16 @@ class PageImages(
         }
         synchronized(lock) {
             wanted = requests
+            // The layout changed under a cached image (fit each page to the width, #524; another
+            // page mode or window size): its key is the same, its scale is not. It goes, so the page
+            // renders sharp again; the old pixels stay as the fallback until then.
+            for (r in requests) {
+                val have = cache[r.key] ?: continue
+                if (!sameScale(have.scale, r.scale)) {
+                    cache.remove(r.key)
+                    bytes -= have.bytes
+                }
+            }
             requests.maxOfOrNull { it.key.gen }?.let(failures::generationWanted)
             // #91: a tile the view stopped wanting stops drawing, so the workers get to the ones in
             // view sooner. Whole pages finish: they stand in while their page scrolls back.

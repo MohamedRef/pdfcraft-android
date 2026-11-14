@@ -15,7 +15,10 @@ data class LRect(val left: Float, val top: Float, val right: Float, val bottom: 
 
 /** How pages follow each other. */
 enum class PageMode {
-    /** One column, scrolled vertically; every page as wide as the widest fits the screen. */
+    /**
+     * One column, scrolled vertically; every page as wide as the widest fits the screen, or each
+     * page fitted to the width on its own ([DocLayout.fitEach], #524).
+     */
     Continuous,
 
     /** One page at a time, side by side, each fitted to the screen; swipes go page to page. */
@@ -54,12 +57,41 @@ fun spreadGroups(count: Int, spread: Spread): List<IntRange> {
 }
 
 /**
+ * Pages are fitted to the width one by one when the narrowest is under this share of the widest
+ * (#524): a scan's pages, or a PDF put together from parts. A book's equal pages stay as they are.
+ */
+const val FIT_EACH_AUTO_SPREAD = 0.85f
+
+/** The narrowest page's width over the widest's: 1 when all are as wide (or there are none). */
+fun widthSpread(pages: List<PageSize>): Float {
+    if (pages.isEmpty()) return 1f
+    var lo = Float.MAX_VALUE
+    var hi = 0f
+    for (p in pages) {
+        val w = p.width.coerceAtLeast(1f)
+        if (w < lo) lo = w
+        if (w > hi) hi = w
+    }
+    return lo / hi
+}
+
+/**
+ * Whether the continuous view fits every page to the width (#524): the reader's [choice] for the
+ * document, else on by itself for a scan the app made ([madeScan]) or pages whose widths differ
+ * by more than [FIT_EACH_AUTO_SPREAD] ([spread], from [widthSpread]).
+ */
+fun fitEachShown(choice: Boolean?, madeScan: Boolean, spread: Float): Boolean =
+    choice ?: (madeScan || spread < FIT_EACH_AUTO_SPREAD)
+
+/**
  * Where each page is at zoom 1, in layout pixels, for a viewport of [viewW] × [viewH] pixels.
  * Pure geometry, so it can be tested off the device.
  *
  * Continuous: the rows of pages ([spread]: one page, or two side by side) stack in one column
  * with [gap] between them, scaled together so the widest row fills the width less [margin] on
- * each side; [padTop] and [padBottom] keep the first and last pages clear of the bars.
+ * each side; [padTop] and [padBottom] keep the first and last pages clear of the bars. With
+ * [fitEach] every row is scaled on its own to fill the width (#524); a row short of pages (the
+ * cover, an odd last page) fills the slots it has, as it would beside its partner.
  * SinglePage: each spread is fitted into the viewport (less the margins and paddings) and
  * centred in a slot one viewport wide.
  * Horizontal: the spreads follow each other left to right with [gap] between them, scaled
@@ -75,6 +107,7 @@ class DocLayout(
     val padTop: Float,
     val padBottom: Float,
     val spread: Spread = Spread.Single,
+    val fitEach: Boolean = false,
 ) {
     val rects: List<LRect>
     val width: Float
@@ -96,9 +129,15 @@ class DocLayout(
             PageMode.Continuous -> {
                 val widestRow = groups.maxOfOrNull { r -> r.sumOf { pages[it].width.coerceAtLeast(1f).toDouble() }.toFloat() }?.coerceAtLeast(1f) ?: 1f
                 val most = groups.maxOfOrNull { it.count() } ?: 1
-                val scale = max(1f, viewW - 2 * margin - (most - 1) * gap) / widestRow
+                val avail = max(1f, viewW - 2 * margin - (most - 1) * gap)
+                val shared = avail / widestRow
                 var y = padTop
                 groups.forEachIndexed { g, r ->
+                    val scale = if (fitEach) {
+                        // this row alone fills the width: its pages' share of the slots a full row has
+                        val rowW = r.sumOf { pages[it].width.coerceAtLeast(1f).toDouble() }.toFloat()
+                        avail * r.count() / most / rowW
+                    } else shared
                     val total = r.sumOf { (pages[it].width.coerceAtLeast(1f) * scale).toDouble() }.toFloat() + (r.count() - 1) * gap
                     var x = (viewW - total) / 2f
                     var rowH = 0f
