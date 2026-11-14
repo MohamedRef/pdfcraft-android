@@ -184,6 +184,32 @@ impl<'a> Default for InterpreterCache<'a> {
     }
 }
 
+/// PdfCraft patch (104): the decoded images of one document's data, to be kept from one
+/// [`InterpreterCache`] to the next ([`InterpreterCache::with_decoded_images`]). An interpreter
+/// cache borrows the parsed document, so it lives for one render; these hold owned pixels keyed
+/// by where each image lies in the data (see `DecodedImageKey`), so they may outlive it, as long
+/// as every cache that shares them reads the very same data.
+#[derive(Clone)]
+pub struct DecodedImages(DecodedImageCache);
+
+impl Default for DecodedImages {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl DecodedImages {
+    /// None decoded yet.
+    pub fn new() -> Self {
+        Self(DecodedImageCache::new())
+    }
+
+    /// How many images were decoded into these (misses), for diagnostics and tests.
+    pub fn decodes(&self) -> usize {
+        self.0.decodes()
+    }
+}
+
 impl<'a> InterpreterCache<'a> {
     /// Create a new interpreter cache.
     pub fn new() -> Self {
@@ -193,6 +219,13 @@ impl<'a> InterpreterCache<'a> {
             decoded_cache: DecodedImageCache::new(),
             type3_procs: Rc::default(),
         }
+    }
+
+    /// PdfCraft patch (104): a new interpreter cache that decodes images into `images`, and
+    /// draws those already there without decoding them again. Only for the same document data
+    /// `images` was filled from.
+    pub fn with_decoded_images(images: &DecodedImages) -> Self {
+        Self { decoded_cache: images.0.clone(), ..Self::new() }
     }
 
     /// PdfCraft patch (87): how many Type 3 glyph procedures the fonts of this cache decoded,

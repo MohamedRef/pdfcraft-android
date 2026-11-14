@@ -193,6 +193,8 @@ internal fun ScanMarkupScreen(vm: AppViewModel, index: Int, page: ScanPage) {
     // low-latency ink (#520): the viewer's own setting, the pen drawn into the display's front buffer
     val lowLatency = vm.settings.toolPrefs.lowLatencyInk
     val wet = remember { io.github.artcraftandroid.pdfcraft.ui.viewer.WetInk() }
+    // the wet-ink surface is the photo's own box here; nothing the app draws lies over it
+    val wetCovers = remember { io.github.artcraftandroid.pdfcraft.ui.viewer.WetInkCovers() }
     val pendingInput = remember { io.github.artcraftandroid.pdfcraft.ui.viewer.PendingInput() }
     // the page drawn once without strokes, for the paper fills to be drawn on (#520)
     var base by remember { mutableStateOf<ScanMarkupBase?>(null) }
@@ -571,7 +573,7 @@ internal fun ScanMarkupScreen(vm: AppViewModel, index: Int, page: ScanPage) {
                     for ((i, t) in texts.withIndex()) drawTextBox(rect, t, i == selected && tool0 == ScanMarkupTool.Text)
                     if (lens != null) drawLoupe(image, rect, lens.first, lens.second)
                 }
-                if (ink && lowLatency) io.github.artcraftandroid.pdfcraft.ui.viewer.FrontBufferedInkOverlay(wet, Modifier.fillMaxSize())
+                if (ink && lowLatency) io.github.artcraftandroid.pdfcraft.ui.viewer.FrontBufferedInkOverlay(wet, wetCovers, Modifier.fillMaxSize())
             }
         }
         val colours = lab.markupColours && !bilevel

@@ -1486,11 +1486,55 @@ impl ToRgb for ICCProfile {
         if self.is_srgb() {
             output.copy_from_slice(input);
         } else {
-            self.transform_u8().transform(input, output).ok()?;
+            transform_u8_in_parts(self.transform_u8(), input, output)?;
         }
 
         Some(())
     }
+}
+
+/// PdfCraft patch (104): images of at least this many pixels are converted in parts at once.
+const PARALLEL_CONVERT_PIXELS: usize = 1 << 20;
+
+/// PdfCraft patch (104): at most this many parts.
+const MAX_CONVERT_PARTS: usize = 4;
+
+/// PdfCraft patch (104): `transform` over `input` into `output` (3 bytes a pixel), a large image
+/// in up to [`MAX_CONVERT_PARTS`] runs of whole pixels on threads of their own. The transform maps
+/// each pixel on its own, so the parts give the very bytes one run gives; a 2550 × 3300 CMYK
+/// photo spent half of its page's render here on one thread (#236). Where a thread cannot be
+/// started, or a part fails, the whole image is converted in one run as before.
+fn transform_u8_in_parts(transform: &Arc<Transform8BitExecutor>, input: &[u8], output: &mut [u8]) -> Option<()> {
+    let pixels = output.len() / 3;
+    #[cfg(not(target_arch = "wasm32"))]
+    if pixels >= PARALLEL_CONVERT_PIXELS && pixels * 3 == output.len() && input.len() % pixels == 0 {
+        let stride = input.len() / pixels;
+        let parts = std::thread::available_parallelism().map_or(1, |n| n.get()).min(MAX_CONVERT_PARTS);
+        if parts > 1 {
+            let per = pixels.div_ceil(parts);
+            let converted = std::thread::scope(|scope| {
+                let mut running = Vec::with_capacity(parts);
+                let mut chunks = input.chunks(per * stride).zip(output.chunks_mut(per * 3));
+                // The first part runs on this thread, after the others have started.
+                let first = chunks.next();
+                for (i, o) in chunks {
+                    let spawned = std::thread::Builder::new()
+                        .name("hayro-convert".into())
+                        .spawn_scoped(scope, move || transform.transform(i, o).is_ok());
+                    match spawned {
+                        Ok(handle) => running.push(handle),
+                        Err(_) => return false,
+                    }
+                }
+                let first_ok = first.is_none_or(|(i, o)| transform.transform(i, o).is_ok());
+                running.into_iter().fold(first_ok, |ok, handle| handle.join().unwrap_or(false) && ok)
+            });
+            if converted {
+                return Some(());
+            }
+        }
+    }
+    transform.transform(input, output).ok()
 }
 
 #[inline(always)]

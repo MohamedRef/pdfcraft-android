@@ -26,7 +26,7 @@ use std::sync::{
 
 use pdfcraft_automation::{Automation, Content, ToolError};
 use pdfcraft_engine::{DocId, Document};
-use pdfcraft_render::{OpenError, PageRenderer, PageText, RenderConfig, RenderRequest, RequestKind, Tile};
+use pdfcraft_render::{DecodedImages, OpenError, PageRenderer, PageText, RenderConfig, RenderRequest, RequestKind, Tile};
 use serde_json::{Value, json};
 
 uniffi::setup_scaffolding!();
@@ -552,7 +552,9 @@ const MAX_MOBILE_TILE_PIXELS: u64 = 1024 * 1024;
 
 /// The documents' idle renderers: the bytes they render, the view settings they draw with, and the
 /// renderers themselves.
-type RendererCache = HashMap<u64, (pdfcraft_cos::PdfBytes, ViewKey, Vec<PageRenderer>)>;
+/// The images they decoded are kept with them for every renderer of those bytes, whatever the
+/// view settings (#236): an image decodes the same under any of them.
+type RendererCache = HashMap<u64, (pdfcraft_cos::PdfBytes, ViewKey, Vec<PageRenderer>, DecodedImages)>;
 
 /// The view settings a renderer is built with that can change while a document is open (Hide all
 /// comments, Reading colours, layers). A renderer built for other settings is not reused.
@@ -749,11 +751,18 @@ impl MobileSession {
     /// An idle renderer for `bytes`, or a new one (parsed outside the cache lock, #113).
     fn take_renderer(&self, doc: u64, bytes: &pdfcraft_cos::PdfBytes, config: RenderConfig) -> PageRenderer {
         let key = ViewKey::of(&config);
-        let idle = match self.cache().get_mut(&doc) {
-            Some((b, k, idle)) if pdfcraft_cos::same_storage(b, bytes) && *k == key => idle.pop(),
-            _ => None,
+        // A new renderer of the same bytes shares the images the others decoded (#236).
+        let (idle, images) = match self.cache().get_mut(&doc) {
+            Some((b, k, idle, images)) if pdfcraft_cos::same_storage(b, bytes) => (if *k == key { idle.pop() } else { None }, Some(images.clone())),
+            _ => (None, None),
         };
-        idle.unwrap_or_else(|| PageRenderer::new(bytes.clone(), config))
+        idle.unwrap_or_else(|| {
+            let renderer = PageRenderer::new(bytes.clone(), config);
+            match images {
+                Some(images) => renderer.sharing_images(images),
+                None => renderer,
+            }
+        })
     }
 
     /// Give a renderer back for the next render, unless the document has changed since.
@@ -763,11 +772,13 @@ impl MobileSession {
             return;
         }
         let mut cache = self.cache();
-        let entry = cache.entry(doc).or_insert_with(|| (bytes.clone(), key.clone(), Vec::new()));
-        if !pdfcraft_cos::same_storage(&entry.0, bytes) || entry.1 != key {
-            // the renderers of an older version of the document, or of other view settings, are
-            // no use any more
-            *entry = (bytes.clone(), key, Vec::new());
+        let entry = cache.entry(doc).or_insert_with(|| (bytes.clone(), key.clone(), Vec::new(), renderer.images()));
+        if !pdfcraft_cos::same_storage(&entry.0, bytes) {
+            // the renderers and images of an older version of the document are no use any more
+            *entry = (bytes.clone(), key, Vec::new(), renderer.images());
+        } else if entry.1 != key {
+            // nor are renderers made with other view settings; the images still are
+            *entry = (bytes.clone(), key, Vec::new(), entry.3.clone());
         }
         if entry.2.len() < RENDERERS_PER_DOC {
             entry.2.push(renderer);
@@ -1133,7 +1144,7 @@ impl MobileSession {
         // while the completed document still draws the same bytes; a display copy supersedes them.
         if let Ok(display) = self.with_doc(doc, |d| d.display.clone()) {
             let mut cache = self.cache();
-            if cache.get(&doc).is_some_and(|(bytes, _, _)| !pdfcraft_cos::same_storage(bytes, &display)) {
+            if cache.get(&doc).is_some_and(|(bytes, _, _, _)| !pdfcraft_cos::same_storage(bytes, &display)) {
                 cache.remove(&doc);
             }
         }

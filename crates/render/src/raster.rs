@@ -23,6 +23,7 @@ use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 use work_queue::{ResultReceiver, WorkQueue};
 
+pub use hayro::hayro_interpret::DecodedImages;
 use hayro::hayro_interpret::font::{FontData, FontQuery};
 use hayro::hayro_interpret::hayro_cmap::CidFamily;
 use hayro::hayro_interpret::{InterpreterSettings, InterpreterWarning};
@@ -525,13 +526,30 @@ pub struct PageRenderer {
     pdf: Option<Pdf>,
     settings: InterpreterSettings,
     stats: RenderStats,
+    /// Android adaptation (#236): images decoded by earlier renders of these bytes, kept for the
+    /// next (hayro's decoded-image cache, byte-budgeted). A page with a large photo decoded and
+    /// converted it again at every render. Shared with other renderers of the same bytes through
+    /// [`Self::sharing_images`].
+    images: DecodedImages,
 }
 
 impl PageRenderer {
     pub fn new(bytes: pdfcraft_cos::PdfBytes, config: RenderConfig) -> Self {
         let pdf = parse(&bytes, config.password.as_deref());
         let settings = config.settings();
-        Self { bytes, config, pdf, settings, stats: RenderStats { parser_builds: 1, ..RenderStats::default() } }
+        Self { bytes, config, pdf, settings, stats: RenderStats { parser_builds: 1, ..RenderStats::default() }, images: DecodedImages::new() }
+    }
+
+    /// Android adaptation (#236): this renderer, keeping its decoded images in `images`, which
+    /// other renderers of the very same bytes (and only those) may share.
+    pub fn sharing_images(mut self, images: DecodedImages) -> Self {
+        self.images = images;
+        self
+    }
+
+    /// The decoded images this renderer keeps, to share with another renderer of the same bytes.
+    pub fn images(&self) -> DecodedImages {
+        self.images.clone()
     }
 
     /// Android adaptation (#212): a renderer over a parse already made of `bytes` with
@@ -539,7 +557,14 @@ impl PageRenderer {
     /// would make, without making it again.
     pub fn from_parsed(bytes: pdfcraft_cos::PdfBytes, config: RenderConfig, parsed: crate::ParsedPdf) -> Self {
         let settings = config.settings();
-        Self { bytes, config, pdf: Some(parsed.0), settings, stats: RenderStats { parser_builds: 1, ..RenderStats::default() } }
+        Self {
+            bytes,
+            config,
+            pdf: Some(parsed.0),
+            settings,
+            stats: RenderStats { parser_builds: 1, ..RenderStats::default() },
+            images: DecodedImages::new(),
+        }
     }
 
     pub fn page_count(&self) -> usize {
@@ -590,7 +615,7 @@ impl PageRenderer {
         let Some(pdf) = self.pdf.as_ref() else {
             return finish(req, start, Err(("the document could not be parsed".into(), false)), Vec::new());
         };
-        let cache = RenderCache::new();
+        let cache = RenderCache::with_decoded_images(&self.images);
         let warnings = Arc::new(Mutex::new(Vec::new()));
         let stopping;
         let base = match stop {

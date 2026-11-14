@@ -456,7 +456,7 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
         // the first document opened shows the first-run tips once (#202)
         LaunchedEffect(doc) { if (vm.settings.toolPrefs.takeFirstRunTips()) vm.tipsOpen = true }
         // The bars.
-        Column(Modifier.fillMaxWidth().align(Alignment.TopCenter)) {
+        Column(Modifier.fillMaxWidth().align(Alignment.TopCenter).coversWetInk(ctl.wetCovers)) {
             Box(
                 Modifier.fillMaxWidth().height(with(density) { statusPx.toDp() })
                     .background(if (!statusBar) Color.Black else if (ctl.barsVisible) c.surface else Color.Transparent),
@@ -572,7 +572,7 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
                 .padding(
                     top = with(density) { doc.viewer.padTop.toDp() },
                     bottom = with(density) { navPx.toDp() + 8.dp },
-                ).then(cutoutSides).palmGuardedTaps(ctl, vm.settings.toolPrefs),
+                ).then(cutoutSides).palmGuardedTaps(ctl, vm.settings.toolPrefs).coversWetInk(ctl.wetCovers),
         ) {
             VerticalQuickToolbar(
                 tools = vm.settings.quickToolbar.bar,
@@ -598,7 +598,7 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
 
         // the Read Aloud player takes the bottom bar's place
         // while typing on the page, the bar (with its formatting) rides above the keyboard
-        if (vm.sharing.readAloud == null && vm.editor.fieldActions == null) Column(Modifier.fillMaxWidth().align(Alignment.BottomCenter).then(if (vm.editor.editing != null) Modifier.imePadding() else Modifier)) {
+        if (vm.sharing.readAloud == null && vm.editor.fieldActions == null) Column(Modifier.fillMaxWidth().align(Alignment.BottomCenter).then(if (vm.editor.editing != null) Modifier.imePadding() else Modifier).coversWetInk(ctl.wetCovers)) {
             vm.tools.success?.let { SuccessBannerView(it, onClose = { vm.tools.success = null }) }
             // edits that can't reach the original: said as soon as there are any, not only on leaving (#191)
             if (showReadOnlyNotice(doc.writable, doc.source != null, doc.info.dirty || doc.notWrittenBack, doc.readOnlyNoticeClosed)) {

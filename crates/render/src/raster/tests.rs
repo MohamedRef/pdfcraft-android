@@ -11763,3 +11763,79 @@ fn render_until_matches_render_and_stops_when_asked() {
     let again = stoppable.render_until(req(None), Some(&unset));
     assert!(again.error.is_none() && again.rgba == plain.render(req(None)).rgba);
 }
+
+/// A one-page PDF of `width` × `height` points showing a `/DeviceCMYK` image at one pixel a
+/// point: `iw` × `ih` pixels, whose pixel (x, y) is the CMYK of (x mod 100, y mod 10).
+fn cmyk_pattern_pdf(iw: usize, ih: usize) -> Vec<u8> {
+    use std::io::Write;
+    let data: Vec<u8> = (0..ih)
+        .flat_map(|y| (0..iw).map(move |x| (x % 100, y % 10)))
+        .flat_map(|(x, y)| [(x * 37 % 256) as u8, (y * 53 + x * 3) as u8, (x * 11 + y * 29) as u8, (x * y % 97) as u8])
+        .collect();
+    let mut z = flate2::write::ZlibEncoder::new(Vec::new(), flate2::Compression::fast());
+    z.write_all(&data).unwrap();
+    let pixels = z.finish().unwrap();
+    let content = format!("q {iw} 0 0 {ih} 0 0 cm /Im Do Q");
+    let mut pdf = format!(
+        "%PDF-1.4
+1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj
+2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj
+3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 {iw} {ih}] /Contents 4 0 R /Resources << /XObject << /Im 5 0 R >> >> >> endobj
+4 0 obj << /Length {} >> stream
+{content}
+endstream endobj
+5 0 obj << /Type /XObject /Subtype /Image /Width {iw} /Height {ih} /ColorSpace /DeviceCMYK /BitsPerComponent 8 /Filter /FlateDecode /Length {} >> stream
+",
+        content.len(),
+        pixels.len()
+    )
+    .into_bytes();
+    pdf.extend_from_slice(&pixels);
+    pdf.extend_from_slice(b"\nendstream endobj\ntrailer << /Root 1 0 R >>\n%%EOF");
+    pdf
+}
+
+fn render_whole(renderer: &mut PageRenderer) -> RenderedPage {
+    let out = renderer.render(RenderRequest { page: 0, kind: RequestKind::Pixels, scale: 1.0, ..Default::default() });
+    assert!(out.error.is_none(), "{:?}", out.error);
+    out
+}
+
+/// #236 (vendored hayro-interpret patch 104): a CMYK image large enough to be converted in parts
+/// on several threads gives every pixel the colour a small image converted in one run gives it.
+#[test]
+fn large_cmyk_images_converted_in_parts_match_one_run() {
+    let (big_w, big_h) = (1100, 1000); // 1.1 million pixels, past the parts threshold
+    let big = render_whole(&mut PageRenderer::new(Arc::new(cmyk_pattern_pdf(big_w, big_h)), RenderConfig::default()));
+    let small = render_whole(&mut PageRenderer::new(Arc::new(cmyk_pattern_pdf(100, 10)), RenderConfig::default()));
+    assert_eq!((big.width, big.height, small.width, small.height), (1100, 1000, 100, 10));
+    let mut distinct = std::collections::HashSet::new();
+    for y in 0..big_h {
+        for x in 0..big_w {
+            let want = rgb_at(&small.rgba, 100, x % 100, y % 10);
+            assert_eq!(rgb_at(&big.rgba, big_w, x, y), want, "pixel ({x}, {y})");
+            distinct.insert(want);
+        }
+    }
+    assert!(distinct.len() > 500, "the pattern has many colours ({})", distinct.len());
+}
+
+/// #236: a renderer keeps the images it decoded for its next render, and shares them with
+/// another renderer of the same bytes: a page with a large photo is decoded once, and every
+/// render draws the same pixels as a renderer that decoded it afresh.
+#[test]
+fn renderers_keep_and_share_decoded_images_with_identical_pixels() {
+    let bytes: pdfcraft_cos::PdfBytes = Arc::new(cmyk_pattern_pdf(600, 400));
+    let fresh = render_whole(&mut PageRenderer::new(bytes.clone(), RenderConfig::default()));
+    let mut first = PageRenderer::new(bytes.clone(), RenderConfig::default());
+    let once = render_whole(&mut first);
+    assert_eq!(first.images().decodes(), 1);
+    let again = render_whole(&mut first);
+    assert_eq!(first.images().decodes(), 1, "the second render decoded nothing");
+    let mut second = PageRenderer::new(bytes, RenderConfig::default()).sharing_images(first.images());
+    let shared = render_whole(&mut second);
+    assert_eq!(second.images().decodes(), 1, "a renderer sharing the images decoded nothing");
+    for page in [&once, &again, &shared] {
+        assert!(page.rgba[..] == fresh.rgba[..]);
+    }
+}

@@ -1407,9 +1407,13 @@ pub(crate) fn preview_stoppable(
     if rgba.len() != pixels * 4 {
         return Err(MobileError::Command("the page could not be drawn".into()));
     }
-    timings.push(ScanTiming { stage: "scan_preview_look".into(), ms: ms(clock) });
-    // the look's own parts (#446)
+    let look_ms = ms(clock);
+    timings.push(ScanTiming { stage: "scan_preview_look".into(), ms: look_ms });
+    // the look's own parts (#446), and what the look's time holds besides them (#549)
     timings.extend(applied.stages.iter().map(|&(stage, ms)| ScanTiming { stage: format!("scan_preview_{stage}"), ms }));
+    if let Some(rest) = pdfcraft_scan::page::look_rest(look_ms, &applied.stages) {
+        timings.push(ScanTiming { stage: format!("scan_preview_{}", pdfcraft_scan::look::STAGE_REST), ms: rest });
+    }
     check()?;
     Ok(ScanPreview {
         width,
@@ -2167,8 +2171,8 @@ mod tests {
             // Clean scan and Whiteboard list their parts after the look; the second of them finds
             // the light estimate kept and draws the tone curve alone (#446)
             let parts: &[&str] = match look {
-                ScanLook::Auto => &["scan_preview_look_light", "scan_preview_look_noise", "scan_preview_look_sharpen", "scan_preview_look_tone"],
-                ScanLook::Whiteboard => &["scan_preview_look_tone"],
+                ScanLook::Auto => &["scan_preview_look_light", "scan_preview_look_noise", "scan_preview_look_sharpen", "scan_preview_look_tone", "scan_preview_look_rest"],
+                ScanLook::Whiteboard => &["scan_preview_look_tone", "scan_preview_look_whiteboard", "scan_preview_look_rest"],
                 _ => &[],
             };
             assert_eq!(preview.light_reused, look == ScanLook::Whiteboard, "{look:?}");
@@ -2433,7 +2437,10 @@ mod tests {
         for (strength, paper) in [(30, "auto"), (90, "keep"), (60, "white")] {
             let changed = preview_in(&root, &ask(strength, paper, true), 640).unwrap();
             assert!(changed.reused && changed.light_reused, "{strength} {paper}");
-            assert_eq!(parts(&changed), ["scan_preview_look_tone"], "{strength} {paper}");
+            // the tone curve alone is drawn again; the document type kept, and what is left (#549), are listed too
+            let drawn: Vec<String> = parts(&changed).into_iter().filter(|s| !s.ends_with("_kind") && !s.ends_with("_rest")).collect();
+            assert_eq!(drawn, ["scan_preview_look_tone"], "{strength} {paper}");
+            assert_eq!(parts(&changed).last().map(String::as_str), Some("scan_preview_look_rest"));
             let measured = preview_in(&root, &ask(strength, paper, false), 640).unwrap();
             assert!(measured.reused && !measured.light_reused, "{strength} {paper}");
             assert!(parts(&measured).contains(&"scan_preview_look_light".to_string()));
