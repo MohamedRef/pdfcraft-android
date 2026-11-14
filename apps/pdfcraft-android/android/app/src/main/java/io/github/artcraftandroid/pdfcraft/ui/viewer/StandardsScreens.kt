@@ -224,6 +224,8 @@ fun PrintOptionsScreen(vm: AppViewModel, doc: OpenDocument) {
                 SmallChip(stringResource(R.string.print_even), o.subset == PrintSubset.Even) { o = o.copy(subset = PrintSubset.Even) }
             }
             SwitchRow(stringResource(R.string.print_reverse), o.reverse) { o = o.copy(reverse = it) }
+            // near the top: Print in ⋮ is this screen, and printing without comments is this switch (#526)
+            SwitchRow(stringResource(R.string.print_comments), o.comments) { o = o.copy(comments = it) }
             SectionTitle(stringResource(R.string.print_layout))
             listOf(
                 PrintLayout.Fit to R.string.print_layout_fit, PrintLayout.Actual to R.string.print_layout_actual,
@@ -242,7 +244,6 @@ fun PrintOptionsScreen(vm: AppViewModel, doc: OpenDocument) {
                     SmallChip(stringResource(R.string.print_binding_right), o.bookletBinding == "right") { o = o.copy(bookletBinding = "right") }
                 }
             }
-            SwitchRow(stringResource(R.string.print_comments), o.comments) { o = o.copy(comments = it) }
             Para(stringResource(R.string.print_explain), c.textSecondary)
             Spacer(Modifier.height(24.dp))
         }

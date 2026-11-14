@@ -50,6 +50,15 @@ Arabic at 360 dp, English also dark.
 
 Files: `app/build/screenshots/viewer/top_bar_<locale>_<width>_<theme>.png`.
 
+`app/src/test/java/io/github/artcraftandroid/pdfcraft/ui/viewer/ViewerScreenshotsTest.kt`: the
+viewer's rows of sub-tools with their captions (#526): Highlight's, Comment's (Stamp chosen) and
+Text's, at 320×640 dp in English (light and dark), Arabic, German, Spanish, French, Italian and
+Brazilian Portuguese. Unlike the others, its check runs in every test run: no row may scroll
+sideways at 320 dp, so no caption is cut or pushed off the screen. The ⋮ sheet needs an open
+document, which needs the engine, so it is not drawn.
+
+Files: `app/build/screenshots/viewer/subtools_<locale>_320x640_<theme>.png`.
+
 ## In CI
 
 The Android job runs the pictures on a pull request whose merge commit changes

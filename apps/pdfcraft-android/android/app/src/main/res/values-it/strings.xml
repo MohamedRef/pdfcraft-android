@@ -1557,6 +1557,17 @@
     <string name="sheet_group_view">Visualizza</string>
     <string name="sheet_group_navigate">Naviga</string>
     <string name="sheet_group_file">File</string>
+    <string name="sheet_group_study">Studio</string>
+    <!-- short captions under the Highlight, Comment and Text sub-tools, as Draw has (#526) -->
+    <string name="tool_caption_highlight">Evidenzia</string>
+    <string name="tool_caption_underline">Sottolinea</string>
+    <string name="tool_caption_strike">Barrato</string>
+    <string name="tool_caption_squiggly">Ondulato</string>
+    <string name="tool_caption_text_comment">Testo</string>
+    <string name="tool_caption_voice_comment">Voce</string>
+    <string name="tool_caption_stamp">Timbro</string>
+    <string name="tool_caption_text_box">Casella</string>
+    <string name="tool_caption_callout">Richiamo</string>
     <string name="pages_select_action">Seleziona</string>
     <string name="pages_select_all">Seleziona tutto</string>
     <string name="pages_select_none">Deseleziona tutto</string>
