@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Borders pulled onto the page's edges while dragging (#514) -->
+<resources>
+    <string name="scan_lab_snap_drag">Ränder beim Ziehen an die Seitenkanten heranziehen</string>
+    <string name="scan_crop_bad_shape">Diese Form kann keine Seite sein.</string>
+</resources>

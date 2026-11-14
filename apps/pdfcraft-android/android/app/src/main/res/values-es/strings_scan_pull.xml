@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Borders pulled onto the page's edges while dragging (#514) -->
+<resources>
+    <string name="scan_lab_snap_drag">Atraer los bordes a los bordes de la página al arrastrar</string>
+    <string name="scan_crop_bad_shape">Esa forma no puede ser una página.</string>
+</resources>

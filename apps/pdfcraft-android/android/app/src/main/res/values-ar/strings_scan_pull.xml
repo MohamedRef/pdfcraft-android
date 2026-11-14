@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Borders pulled onto the page's edges while dragging (#514) -->
+<resources>
+    <string name="scan_lab_snap_drag">سحب الحواف إلى حواف الصفحة أثناء التحريك</string>
+    <string name="scan_crop_bad_shape">هذا الشكل لا يمكن أن يكون صفحة.</string>
+</resources>

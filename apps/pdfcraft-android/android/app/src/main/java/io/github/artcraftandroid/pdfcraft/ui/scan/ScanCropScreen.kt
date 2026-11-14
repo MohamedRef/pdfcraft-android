@@ -190,6 +190,16 @@ internal fun ScanCropScreen(page: ScanPage, index: Int, lab: ScanLab, onDone: (F
     }
     // a drag started after a snap was asked for makes that snap's answer stale
     var dragSerial by remember { mutableStateOf(0) }
+    // the pull during a drag (#514): where the finger has the handle, the edge holding it, a shape
+    // that can't be a page, which sides ended on an edge, and the latest search asked for
+    val pulling = lab.snapWhileDragging
+    var free by remember { mutableStateOf<FloatArray?>(null) }
+    var caught by remember { mutableStateOf<ScanPullCaught?>(null) }
+    var badShape by remember(page.key) { mutableStateOf(false) }
+    var badThisDrag by remember { mutableStateOf(false) }
+    var onEdge by remember(page.key) { mutableStateOf(List(4) { false }) }
+    val pullWanted = remember(page.file) { MutableStateFlow<ScanPullAsk?>(null) }
+    DisposableEffect(page.file) { onDispose { runCatching { io.github.artcraftandroid.pdfcraft.core.scanReleaseCatch() } } }
     var info by remember(page.file) { mutableStateOf<ScanPhotoInfo?>(null) }
     var loupe by remember(page.file) { mutableStateOf<LoupeImage?>(null) }
     val loupeWanted = remember(page.file) { MutableStateFlow<Triple<Float, Float, Int>?>(null) }
@@ -218,6 +228,43 @@ internal fun ScanCropScreen(page: ScanPage, index: Int, lab: ScanLab, onDone: (F
 
     val aspect = info?.let { it.uprightW.toFloat() / it.uprightH } ?: (page.thumb.width.toFloat() / page.thumb.height)
 
+    // the pull's searches (#514): the latest move wins; an answer comes back only while the same
+    // drag still holds the same handle and nothing has caught it yet
+    LaunchedEffect(page.file, pulling) {
+        if (!pulling) return@LaunchedEffect
+        pullWanted.collectLatest { ask ->
+            ask ?: return@collectLatest
+            val started = SystemClock.elapsedRealtime()
+            val asked = sidesToSnap(ask.handle)
+            val quad = withContext(Dispatchers.Default) {
+                runCatching { io.github.artcraftandroid.pdfcraft.core.scanCatchQuad(page.file.absolutePath, ask.free.toList(), asked, ask.searchPx) }
+                    .onFailure { e -> Diag.failure(DiagArea.Scan, "scan_catch_quad", e) }.getOrNull()
+            }
+            val ms = SystemClock.elapsedRealtime() - started
+            val now = free
+            if (quad == null || ask.serial != dragSerial || held != ask.handle || caught != null || now == null || !snapOn) return@collectLatest
+            val candidate = snapped(asked, quad.refined, quad.corners.toFloatArray())?.takeIf { convexQuad(it) } ?: return@collectLatest
+            val d = pullCatches(now, candidate, ask.handle, ask.catchPx, ask.viewW, ask.viewH) ?: return@collectLatest
+            val (fx, fy) = handlePoint(now, ask.handle)
+            val target = pullTarget(ask.handle, quad.refined)
+            caught = ScanPullCaught(candidate, fx, fy, target, d, SystemClock.elapsedRealtime())
+            corners = candidate
+            onEdge = List(4) { k -> if (asked[k]) quad.refined.getOrElse(k) { false } else onEdge[k] }
+            byHand = List(4) { k -> if (asked[k] && quad.refined.getOrElse(k) { false }) false else byHand[k] }
+            stats = stats.copy(catches = stats.catches + 1)
+            haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+            Diag.event(DiagArea.Scan, "crop_snap", "index" to scanLogPageNumber(index), "handle" to if (ask.handle is QuadHandle.Corner) "corner" else "side", *pullDiag("drag", target, d / density.density, 0L, "none", ms))
+        }
+    }
+
+    /** A caught handle let go: by the finger pulling past the release distance, or lifting. */
+    fun letGo(how: String) {
+        val k = caught ?: return
+        caught = null
+        if (how == "pulled") stats = stats.copy(pulledFree = stats.pulledFree + 1)
+        Diag.event(DiagArea.Scan, "crop_snap", "index" to scanLogPageNumber(index), *pullDiag("drag", k.target, k.distancePx / density.density, SystemClock.elapsedRealtime() - k.since, how, 0L))
+    }
+
     fun animateTo(target: FloatArray) {
         val from = corners.copyOf()
         scope.launch {
@@ -229,7 +276,8 @@ internal fun ScanCropScreen(page: ScanPage, index: Int, lab: ScanLab, onDone: (F
     }
 
     fun snap(handle: QuadHandle, stillMs: Long) {
-        if (!snapOnRelease(snapOn, stillMs)) {
+        // with the pull (#514) placing by hand is pulling past the release distance, or Snap off
+        if (!snapOnRelease(snapOn, stillMs, pulling)) {
             if (snapOn) stats = stats.copy(snapsHeld = stats.snapsHeld + 1)
             return
         }
@@ -250,7 +298,7 @@ internal fun ScanCropScreen(page: ScanPage, index: Int, lab: ScanLab, onDone: (F
                 DiagArea.Scan, "crop_snap", "index" to scanLogPageNumber(index), "handle" to if (handle is QuadHandle.Corner) "corner" else "side",
                 "sides" to asked.count { it }, "refined" to (quad?.refined?.withIndex()?.count { (k, r) -> r && asked[k] } ?: 0),
                 "curved" to (quad?.curved?.withIndex()?.count { (k, r) -> r && asked[k] } ?: 0),
-                "taken" to (result != null && !stale), "stale" to stale, "failed" to (quad == null), "ms" to ms,
+                "taken" to (result != null && !stale), "stale" to stale, "failed" to (quad == null), "ms" to ms, "when" to "release",
             )
             stats = stats.copy(
                 snapsTaken = stats.snapsTaken + if (result != null && !stale) 1 else 0,
@@ -260,6 +308,7 @@ internal fun ScanCropScreen(page: ScanPage, index: Int, lab: ScanLab, onDone: (F
             if (result == null || stale) return@launch
             val refined = quad?.refined.orEmpty()
             byHand = List(4) { k -> if (asked[k] && refined.getOrElse(k) { false }) false else byHand[k] }
+            onEdge = List(4) { k -> if (asked[k] && refined.getOrElse(k) { false }) true else onEdge[k] }
             haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
             animateTo(result)
         }
@@ -276,6 +325,7 @@ internal fun ScanCropScreen(page: ScanPage, index: Int, lab: ScanLab, onDone: (F
             visits = if (done) 1 else 0, snapOn = snapOn, ms = SystemClock.elapsedRealtime() - openedAt,
             movedPct = if (done) maxCornerMovePct(opened, corners, aspect) else 0.0,
             cornersOff = if (done) cornersOffPhoto(corners) else 0,
+            sidesOnEdge = if (done) onEdge else stats.sidesOnEdge,
         )
         Diag.event(DiagArea.Scan, "crop", "index" to scanLogPageNumber(index), "done" to done, "opened_by" to (steps?.opener?.id ?: "crop_button"), *s.diag())
         if (done) onDone(corners, s) else onCancel()
@@ -442,6 +492,9 @@ internal fun ScanCropScreen(page: ScanPage, index: Int, lab: ScanLab, onDone: (F
                         if (h != null) {
                             heldSpan = quadSpan(latest.value)
                             dragSerial++
+                            free = latest.value.copyOf()
+                            caught = null
+                            badThisDrag = false
                             selected = h
                             lastMove = SystemClock.uptimeMillis()
                             stats = if (h is QuadHandle.Corner) stats.copy(cornerDrags = stats.cornerDrags + 1) else stats.copy(sideDrags = stats.sideDrags + 1)
@@ -453,16 +506,58 @@ internal fun ScanCropScreen(page: ScanPage, index: Int, lab: ScanLab, onDone: (F
                         val h = held
                         held = null
                         heldSpan = null
+                        letGo("lifted")
+                        free = null
+                        badShape = false
+                        pullWanted.value = null
                         if (h != null) snap(h, SystemClock.uptimeMillis() - lastMove)
                     },
                     onDragCancel = {
                         held = null
                         heldSpan = null
+                        letGo("lifted")
+                        free = null
+                        badShape = false
+                        pullWanted.value = null
                     },
                 ) { change, d ->
                     val h = held ?: return@detectDragGestures
                     change.consume()
                     val f = latestFit.value
+                    if (pulling) {
+                        // the pull (#514): the finger moves its own copy of the corners; an edge near
+                        // it holds the handle until the finger has gone past the release distance
+                        val from = free ?: latest.value
+                        val dx = d.x / f.width
+                        val dy = d.y / f.height
+                        val whole = moveHandle(from, h, dx, dy, latestAspect.value, slide = true)
+                        val moved = whole ?: moveTowards(from, h, dx, dy, latestAspect.value, slide = true)
+                        // a shape that can't be a page is said so; the outline stays at the last good one
+                        badShape = whole == null && d.getDistance() > 0.5f
+                        if (badShape && !badThisDrag) {
+                            badThisDrag = true
+                            stats = stats.copy(badShapes = stats.badShapes + 1)
+                        }
+                        if (d.getDistance() > 0.5f) lastMove = SystemClock.uptimeMillis()
+                        free = moved
+                        val k = caught
+                        val releasePx = max(lab.pullReleaseDp, lab.pullCatchDp).dp.toPx()
+                        if (k != null && pullLetsGo(moved, k, h, releasePx, f.width, f.height)) letGo("pulled")
+                        if (caught == null) {
+                            if (!moved.contentEquals(latest.value)) {
+                                corners = moved
+                                byHand = List(4) { s -> byHand[s] || sidesToSnap(h)[s] }
+                                onEdge = List(4) { s -> onEdge[s] && !sidesToSnap(h)[s] }
+                            }
+                            if (snapOn) {
+                                val catchPx = lab.pullCatchDp.dp.toPx()
+                                val photoW = (info?.uprightW ?: thumb.width).toFloat()
+                                pullWanted.value = ScanPullAsk(dragSerial, moved.copyOf(), h, catchPx, catchPx * photoW / f.width, f.width, f.height)
+                            }
+                        }
+                        wantLoupe(h)
+                        return@detectDragGestures
+                    }
                     val moved = moveTowards(latest.value, h, d.x / f.width, d.y / f.height, latestAspect.value)
                     if (!moved.contentEquals(latest.value)) {
                         // a finger resting on the glass still reports tiny moves
@@ -485,7 +580,8 @@ internal fun ScanCropScreen(page: ScanPage, index: Int, lab: ScanLab, onDone: (F
                     clipPath(quad, ClipOp.Difference) { drawRect(Color.Black.copy(alpha = 0.5f), Offset(fit.left, fit.top), Size(iw, ih)) }
                     val dash = PathEffect.dashPathEffect(floatArrayOf(8.dp.toPx(), 6.dp.toPx()))
                     for (s in 0..3) {
-                        drawLine(c.accent, pt(s), pt((s + 1) % 4), 2.dp.toPx(), pathEffect = if (byHand[s]) dash else null)
+                        // a shape that can't be a page shows in the warning colour while the finger tries it (#514)
+                        drawLine(if (badShape) c.red else c.accent, pt(s), pt((s + 1) % 4), 2.dp.toPx(), pathEffect = if (byHand[s]) dash else null)
                     }
                     for (h in QuadHandle.ALL) {
                         val (sx, sy) = handlePoint(q, h)
@@ -526,7 +622,7 @@ internal fun ScanCropScreen(page: ScanPage, index: Int, lab: ScanLab, onDone: (F
         }
         }
         // what Auto-detect came to (#443): always in place and a polite live region, so TalkBack reads each new line
-        val noteText = detectNote?.let { stringResource(it.text) }.orEmpty()
+        val noteText = if (badShape) stringResource(R.string.scan_crop_bad_shape) else detectNote?.let { stringResource(it.text) }.orEmpty()
         Text(
             noteText, color = c.textSecondary, fontSize = 13.sp,
             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = if (noteText.isEmpty()) 0.dp else 6.dp)

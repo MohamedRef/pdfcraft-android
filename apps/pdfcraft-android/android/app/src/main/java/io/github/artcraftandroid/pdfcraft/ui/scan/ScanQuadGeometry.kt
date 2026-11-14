@@ -138,7 +138,7 @@ internal fun moveCorner(q: FloatArray, i: Int, dx: Float, dy: Float): FloatArray
  * slide along the neighbouring sides' lines, so those sides keep their direction. Null when the
  * shape stops being convex or a corner would leave the photo.
  */
-internal fun moveSide(q: FloatArray, i: Int, dx: Float, dy: Float, aspect: Float): FloatArray? {
+internal fun moveSide(q: FloatArray, i: Int, dx: Float, dy: Float, aspect: Float, slide: Boolean = false): FloatArray? {
     val a = aspect.toDouble()
     // photo proportions: x in heights
     fun px(k: Int) = q[2 * k] * a
@@ -174,15 +174,18 @@ internal fun moveSide(q: FloatArray, i: Int, dx: Float, dy: Float, aspect: Float
     out[2 * i + 1] = ci.second.toFloat()
     out[2 * j] = (cj.first / a).toFloat()
     out[2 * j + 1] = cj.second.toFloat()
-    if (!onPhoto(out)) return null
+    // with [slide] (#514) a corner that would leave the photo stays on its border and the side
+    // turns, instead of the side stopping where it is
+    if (!slide && !onPhoto(out)) return null
+    if (out.any { !it.isFinite() }) return null
     for (k in out.indices) out[k] = out[k].coerceIn(QUAD_MIN, QUAD_MAX)
     return out.takeIf { keepsShape(it, q) }
 }
 
 /** [h] moved by ([dx], [dy]) shares, or null where [moveCorner] or [moveSide] refuse. */
-internal fun moveHandle(q: FloatArray, h: QuadHandle, dx: Float, dy: Float, aspect: Float): FloatArray? = when (h) {
+internal fun moveHandle(q: FloatArray, h: QuadHandle, dx: Float, dy: Float, aspect: Float, slide: Boolean = false): FloatArray? = when (h) {
     is QuadHandle.Corner -> moveCorner(q, h.index, dx, dy)
-    is QuadHandle.Side -> moveSide(q, h.index, dx, dy, aspect)
+    is QuadHandle.Side -> moveSide(q, h.index, dx, dy, aspect, slide)
 }
 
 /**
@@ -190,14 +193,14 @@ internal fun moveHandle(q: FloatArray, h: QuadHandle, dx: Float, dy: Float, aspe
  * the photo's edge or into a fold of the shape stops at the last good place instead of where the
  * finger was a frame before. [q] itself when nothing of the move is allowed.
  */
-internal fun moveTowards(q: FloatArray, h: QuadHandle, dx: Float, dy: Float, aspect: Float): FloatArray {
-    moveHandle(q, h, dx, dy, aspect)?.let { return it }
+internal fun moveTowards(q: FloatArray, h: QuadHandle, dx: Float, dy: Float, aspect: Float, slide: Boolean = false): FloatArray {
+    moveHandle(q, h, dx, dy, aspect, slide)?.let { return it }
     var good = 0f
     var bad = 1f
     var best = q
     repeat(16) {
         val t = (good + bad) / 2f
-        val moved = moveHandle(q, h, dx * t, dy * t, aspect)
+        val moved = moveHandle(q, h, dx * t, dy * t, aspect, slide)
         if (moved != null) {
             good = t
             best = moved
@@ -239,7 +242,7 @@ internal const val SNAP_HOLD_MS = 600L
 internal const val SNAP_SEARCH_SHARE = 0.012f
 
 /** Whether letting go of a handle, still for [stillMs], snaps it: only with Snap on and not held still. */
-internal fun snapOnRelease(snapOn: Boolean, stillMs: Long): Boolean = snapOn && stillMs < SNAP_HOLD_MS
+internal fun snapOnRelease(snapOn: Boolean, stillMs: Long, pull: Boolean = false): Boolean = snapOn && (pull || stillMs < SNAP_HOLD_MS)
 
 /**
  * What a snap gives back, applied: the edge finder's corners when one of the sides asked for

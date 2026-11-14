@@ -87,6 +87,8 @@ internal fun ScanLabSettings(vm: AppViewModel) {
     SettingsHeader(stringResource(R.string.scan_lab_group_borders))
     Sw(R.string.scan_lab_perspective, o.perspective) { lab.update(o.copy(perspective = it)) }
     Sw(R.string.scan_lab_snap_paper, o.snapPaper) { lab.update(o.copy(snapPaper = it)) }
+    // a dragged corner or side is pulled onto the paper's edge while the finger moves (#514)
+    Sw(R.string.scan_lab_snap_drag, o.snapWhileDragging) { lab.update(o.copy(snapWhileDragging = it)) }
     Sw(R.string.scan_lab_crop, o.cropTools) { lab.update(o.copy(cropTools = it)) }
     // Auto-detect says when it finds nothing and does not repeat a search that found nothing (#443)
     Sw(R.string.scan_lab_crop_detect_note, o.cropDetectNote) { lab.update(o.copy(cropDetectNote = it)) }

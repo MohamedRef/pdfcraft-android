@@ -682,6 +682,60 @@ pub fn scan_refine_quad(photo_path: String, corners: Vec<f32>, sides: Vec<bool>,
     refine_in(&root, &photo_path, &corners, &sides, search_share)
 }
 
+/// The photo whose pyramid the pull during a drag reads (#514): its path, the pyramid and the
+/// photo's width and height. One photo at a time: Adjust borders shows one page.
+static CATCH: std::sync::Mutex<Option<(String, std::sync::Arc<Pyramid>, u32, u32)>> = std::sync::Mutex::new(None);
+
+/// The edge finder of [`scan_refine_quad`] for a handle being dragged (#514): the same search,
+/// with `search_px` in full-size pixels (the catch distance on screen, worked out by the app),
+/// on a pyramid built once per photo and kept until [`scan_release_catch`] or another photo. The
+/// first call for a photo decodes it (`scan_decode` in the timings); later calls only search.
+#[uniffi::export]
+pub fn scan_catch_quad(photo_path: String, corners: Vec<f32>, sides: Vec<bool>, search_px: f32) -> Result<ScanQuad, MobileError> {
+    let root = SCAN_ROOT.read().unwrap_or_else(std::sync::PoisonError::into_inner).clone();
+    let root = root.ok_or_else(|| MobileError::Command("scanning is not ready yet".into()))?;
+    catch_in(&root, &photo_path, &corners, &sides, search_px)
+}
+
+/// Forget the pyramid kept for the pull during a drag (#514): Adjust borders closed.
+#[uniffi::export]
+pub fn scan_release_catch() {
+    *CATCH.lock().unwrap_or_else(std::sync::PoisonError::into_inner) = None;
+}
+
+pub(crate) fn catch_in(root: &Path, photo_path: &str, corners: &[f32], sides: &[bool], search_px: f32) -> Result<ScanQuad, MobileError> {
+    let corners: [f32; 8] = corners.try_into().map_err(|_| MobileError::Command("a page needs four corners".into()))?;
+    let mut timings = Vec::with_capacity(2);
+    let mut clock = std::time::Instant::now();
+    let kept = CATCH.lock().unwrap_or_else(std::sync::PoisonError::into_inner).as_ref().filter(|(p, ..)| p == photo_path).map(|(_, py, w, h)| (py.clone(), *w, *h));
+    let (pyramid, width, height) = match kept {
+        Some(k) => k,
+        None => {
+            let bytes = read_photo(root, photo_path)?;
+            let photo = Photo::decode(&bytes).map_err(|e| MobileError::Command(e.to_string()))?;
+            drop(bytes);
+            let (w, h) = (photo.width, photo.height);
+            let pyramid = std::sync::Arc::new(Pyramid::new(photo.luma()));
+            drop(photo);
+            *CATCH.lock().unwrap_or_else(std::sync::PoisonError::into_inner) = Some((photo_path.to_string(), pyramid.clone(), w, h));
+            timings.push(ScanTiming { stage: "scan_decode".into(), ms: u32::try_from(clock.elapsed().as_millis()).unwrap_or(u32::MAX) });
+            clock = std::time::Instant::now();
+            (pyramid, w, h)
+        }
+    };
+    let quad = Quad::from_shares(&corners, width, height).map_err(|e| MobileError::Command(e.to_string()))?;
+    let search_px = (search_px.is_finite() && search_px > 0.0).then_some(search_px);
+    let options = RefineOptions { search_px, sides: sides.try_into().unwrap_or([true; 4]) };
+    let found = refine(&pyramid, &quad, &options);
+    timings.push(ScanTiming { stage: "scan_catch".into(), ms: u32::try_from(clock.elapsed().as_millis()).unwrap_or(u32::MAX) });
+    Ok(ScanQuad {
+        corners: found.quad.to_shares(width, height).to_vec(),
+        refined: found.sides.iter().map(|s| s.refined).collect(),
+        curved: found.sides.iter().map(|s| s.curved).collect(),
+        timings,
+    })
+}
+
 /// Whether pages can be flattened (#302): the flattening network's model file is installed.
 #[uniffi::export]
 pub fn scan_can_flatten() -> bool {
@@ -1727,6 +1781,39 @@ mod tests {
         assert!(refine_in(&root, &path, &rough[..6], &[], 0.0).is_err());
         std::fs::remove_dir_all(root).unwrap();
         std::fs::remove_dir_all(other).unwrap();
+    }
+
+    /// The pull during a drag (#514): a side 40 pixels off the sheet's edge is caught with a wide
+    /// enough search, not with a narrow one, and the photo is decoded only once.
+    #[test]
+    fn a_dragged_side_is_caught_by_the_sheets_edge_from_the_catch_distance() {
+        let root = temp("catch");
+        let shot = root.join("desk.png");
+        let (w, h) = (1600u32, 1200u32);
+        image::GrayImage::from_fn(w, h, |x, y| image::Luma([if (300..1300).contains(&x) && (200..1000).contains(&y) { 230 } else { 50 }]))
+            .save(&shot)
+            .unwrap();
+        let path = shot.to_string_lossy().into_owned();
+        // the right side dragged 40 pixels inside the sheet
+        let held = [300.0 / 1600.0, 200.0 / 1200.0, 1260.0 / 1600.0, 200.0 / 1200.0, 1260.0 / 1600.0, 1000.0 / 1200.0, 300.0 / 1600.0, 1000.0 / 1200.0];
+        let right = [false, true, false, false];
+        let near = catch_in(&root, &path, &held, &right, 15.0).unwrap();
+        assert_eq!(near.refined, [false; 4], "a 15-pixel search does not reach an edge 40 pixels away");
+        assert_eq!(near.timings.iter().map(|t| t.stage.as_str()).collect::<Vec<_>>(), ["scan_decode", "scan_catch"]);
+        let caught = catch_in(&root, &path, &held, &right, 60.0).unwrap();
+        assert_eq!(caught.refined, [false, true, false, false]);
+        for k in [2usize, 4] {
+            let px = caught.corners[k] * w as f32;
+            assert!((px - 1300.0).abs() < 0.5, "corner coordinate {k}: {px}");
+        }
+        // the kept pyramid: no second decode for the same photo
+        assert_eq!(caught.timings.iter().map(|t| t.stage.as_str()).collect::<Vec<_>>(), ["scan_catch"]);
+        scan_release_catch();
+        let again = catch_in(&root, &path, &held, &right, 60.0).unwrap();
+        assert_eq!(again.timings[0].stage, "scan_decode");
+        assert!(catch_in(&root, &path, &held[..6], &right, 60.0).is_err());
+        scan_release_catch();
+        std::fs::remove_dir_all(root).unwrap();
     }
 
     /// A black-and-white page (#300) stays one bit per pixel all the way into the saved PDF.
