@@ -90,6 +90,8 @@ internal fun ScanLabSettings(vm: AppViewModel) {
     // a dragged corner or side is pulled onto the paper's edge while the finger moves (#514)
     Sw(R.string.scan_lab_snap_drag, o.snapWhileDragging) { lab.update(o.copy(snapWhileDragging = it)) }
     Sw(R.string.scan_lab_crop, o.cropTools) { lab.update(o.copy(cropTools = it)) }
+    // borders and looks for several pages in one pass (#515)
+    Sw(R.string.scan_lab_batch, o.batchBorders) { lab.update(o.copy(batchBorders = it)) }
     // Auto-detect says when it finds nothing and does not repeat a search that found nothing (#443)
     Sw(R.string.scan_lab_crop_detect_note, o.cropDetectNote) { lab.update(o.copy(cropDetectNote = it)) }
     Sw(R.string.scan_lab_book_gutter, o.bookGutter) { lab.update(o.copy(bookGutter = it)) }

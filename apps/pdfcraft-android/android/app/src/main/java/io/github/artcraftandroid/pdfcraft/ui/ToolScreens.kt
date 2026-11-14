@@ -16,6 +16,11 @@ import io.github.artcraftandroid.pdfcraft.ui.scan.afterScanMarkupAsk
 import io.github.artcraftandroid.pdfcraft.ui.scan.clearScanMarks
 import io.github.artcraftandroid.pdfcraft.ui.scan.openScanMarkup
 import io.github.artcraftandroid.pdfcraft.ui.scan.scanCornersChanging
+import io.github.artcraftandroid.pdfcraft.ui.scan.answerScanBatchMarks
+import io.github.artcraftandroid.pdfcraft.ui.scan.cancelScanBatch
+import io.github.artcraftandroid.pdfcraft.ui.scan.endScanLookBatch
+import io.github.artcraftandroid.pdfcraft.ui.scan.leaveScanBatchPage
+import io.github.artcraftandroid.pdfcraft.ui.scan.scanBatchLost
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -931,6 +936,35 @@ fun ScanScreen(vm: AppViewModel) {
     vm.scanEdit.asking?.let { ask ->
         io.github.artcraftandroid.pdfcraft.ui.scan.ScanEditCommentsDialog(ask.comments, onKeep = { vm.scanEdit.answer(remove = false) }, onRemove = { vm.scanEdit.answer(remove = true) }, onDismiss = { vm.scanEdit.cancelAsk() })
     }
+    // "Remove the markup on N pages?" once before a borders pass over pages with markup (#515)
+    vm.scanBatch.asking?.let { ask ->
+        io.github.artcraftandroid.pdfcraft.ui.scan.ScanBatchMarksDialog(ask.marked.size, onKeep = { vm.answerScanBatchMarks(remove = false) }, onRemove = { vm.answerScanBatchMarks(remove = true) })
+    }
+    // Borders for several pages in one pass (#515): Adjust borders on each chosen page in turn
+    val batchPass = vm.scanBatch.borders
+    val batchAt = batchPass?.key?.let { k -> pages.indexOfFirst { it.key == k } } ?: -1
+    LaunchedEffect(batchPass, batchAt) { if (batchPass != null && batchAt < 0) vm.scanBatchLost() }
+    if (batchPass != null && batchAt >= 0) {
+        val p = pages[batchAt]
+        io.github.artcraftandroid.pdfcraft.ui.scan.ScanCropScreen(
+            p, batchAt, vm.scanLab.options,
+            onDone = { _, _ -> }, onCancel = {},
+            steps = io.github.artcraftandroid.pdfcraft.ui.scan.ScanBordersStep(
+                page = batchAt + 1, pages = pages.size, opener = io.github.artcraftandroid.pdfcraft.ui.scan.ScanBordersOpener.Page,
+                finding = io.github.artcraftandroid.pdfcraft.ui.scan.scanBordersFinding(p.found, p.file.absolutePath in vm.scanSteps.searched, p.uncropped),
+                turns = io.github.artcraftandroid.pdfcraft.ui.scan.scanTurnShown(p.turns, vm.scanAutoTurns(batchAt)),
+                onRetake = null,
+                onRotate = { d -> vm.rotateScanPageBy(batchAt, d) },
+                onDiscard = {},
+                batch = io.github.artcraftandroid.pdfcraft.ui.scan.ScanBatchNav(
+                    batchPass.at + 1, batchPass.keys.size,
+                    onLeave = { dir, q, stats -> vm.leaveScanBatchPage(dir, q, stats) },
+                    onBack = { vm.cancelScanBatch() },
+                ),
+            ),
+        )
+        return
+    }
     // Adjust borders, the step after a photo (#458): the crop screen with its own bars
     val stepsOn = vm.scanLab.options.steps
     val borders = vm.scanSteps.borders
@@ -1029,7 +1063,10 @@ fun ScanScreen(vm: AppViewModel) {
         {
             when {
                 // Enhance goes back to the pages (#460), where Back asks before the scan goes
-                stepsOn && pages.isNotEmpty() -> vm.scanSteps.showDocument("enhance", pages.size)
+                stepsOn && pages.isNotEmpty() -> {
+                    vm.endScanLookBatch("back")
+                    vm.scanSteps.showDocument("enhance", pages.size)
+                }
                 // with pages, the arrow and Android's Back ask first; with none they leave at once (#456)
                 io.github.artcraftandroid.pdfcraft.ui.scan.scanBackAsks(pages.size, vm.scanLab.options) -> askingDiscard = true
                 else -> vm.discardScan()
@@ -1037,11 +1074,21 @@ fun ScanScreen(vm: AppViewModel) {
         },
         // Enhance's Done leads to the document screen, which saves and shares (#460)
         stringResource(if (stepsOn) R.string.scan_camera_done_short else R.string.tools_save_pdf), pages.isNotEmpty(),
-        { if (stepsOn) vm.scanSteps.showDocument("enhance", pages.size) else vm.saveScan() },
+        {
+            vm.endScanLookBatch("done")
+            if (stepsOn) vm.scanSteps.showDocument("enhance", pages.size) else vm.saveScan()
+        },
     ) {
         // a reminder that the scanner is not as it is meant to be used: a testing option is on (#288)
         if (!vm.scanLab.options.asDesigned) {
             Text(stringResource(R.string.scan_lab_active), color = c.textSecondary, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp))
+        }
+        // a look pass from the document screen's selection (#515): the look chosen goes to the chosen pages
+        vm.scanBatch.look?.let { pass ->
+            Text(
+                androidx.compose.ui.res.pluralStringResource(R.plurals.scan_batch_look_note, pass.keys.size, pass.keys.size), color = c.accent, fontSize = 13.sp,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp),
+            )
         }
         // the new file's name, changeable before it's saved (not when the pages go into an open document)
         if (!stepsOn && vm.insertScanAt == null && vm.scanName.isNotBlank()) {

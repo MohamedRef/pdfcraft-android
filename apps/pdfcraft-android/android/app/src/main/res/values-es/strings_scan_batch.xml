@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Borders and looks for several pages in one pass (#515) -->
+<resources>
+    <string name="scan_lab_batch">Bordes y aspecto de varias páginas a la vez</string>
+    <string name="scan_batch_look">Aspecto</string>
+    <string name="scan_batch_check">Revisar</string>
+    <string name="scan_batch_marks_body">Los bordes nuevos mueven la página bajo sus marcas, así que estas se quitan donde cambian los bordes. Conservar deja fuera de esta revisión las páginas con marcas.</string>
+    <plurals name="scan_batch_offer">
+        <item quantity="one">Revisar los bordes de %1$d página</item>
+        <item quantity="other">Revisar los bordes de %1$d páginas</item>
+    </plurals>
+    <plurals name="scan_batch_look_note">
+        <item quantity="one">El aspecto que elijas se aplica a %1$d página elegida</item>
+        <item quantity="other">El aspecto que elijas se aplica a %1$d páginas elegidas</item>
+    </plurals>
+    <plurals name="scan_batch_marks_title">
+        <item quantity="one">¿Quitar las marcas de %1$d página?</item>
+        <item quantity="other">¿Quitar las marcas de %1$d páginas?</item>
+    </plurals>
+</resources>
