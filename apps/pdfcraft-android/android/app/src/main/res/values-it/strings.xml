@@ -462,6 +462,8 @@
     <string name="viewer_search_count">%1$d di %2$d</string>
     <string name="viewer_read_from_here">Leggi da qui</string>
     <string name="viewer_copy_text">Copia testo</string>
+    <string name="viewer_select_all">Seleziona tutto</string>
+    <string name="viewer_selection_more">Altro</string>
     <string name="viewer_selection_start">Inizio selezione</string>
     <string name="viewer_selection_end">Fine selezione</string>
 

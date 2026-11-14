@@ -312,6 +312,35 @@ class CommentsController internal constructor(private val vm: AppViewModel) {
         }
     }
 
+    /**
+     * Hand the selected text to Android's share sheet (#523): other apps' translate, search and
+     * note actions are offered there. Sharing is copying, so it follows the same permission.
+     */
+    fun shareSelection(doc: OpenDocument) {
+        if (!doc.info.allowsCopying) {
+            vm.tell(text(R.string.msg_copy_not_allowed))
+            return
+        }
+        vm.viewModelScope.launch {
+            val text = doc.selection.text()?.takeIf { it.isNotBlank() } ?: return@launch
+            doc.selection.clear()
+            val send = Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, text)
+            vm.intents.trySend(Intent.createChooser(send, null))
+        }
+    }
+
+    /** Find the selected words in the whole document (#523): the Find bar opens with them and their results. */
+    fun findSelection(doc: OpenDocument) {
+        vm.viewModelScope.launch {
+            val query = io.github.artcraftandroid.pdfcraft.ui.viewer.selectionFindQuery(doc.selection.text() ?: return@launch)
+            if (query.isEmpty()) return@launch
+            doc.selection.clear()
+            doc.controller.sheet = io.github.artcraftandroid.pdfcraft.ui.viewer.ViewerSheet.None
+            doc.controller.searching = true
+            io.github.artcraftandroid.pdfcraft.ui.viewer.runSearch(vm, doc, query)
+        }
+    }
+
     // ---- Selecting a comment ------------------------------------------------------------------
 
     /** The comment tapped: its panel shows over the viewer. */

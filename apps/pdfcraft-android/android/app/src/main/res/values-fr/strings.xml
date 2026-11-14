@@ -448,6 +448,8 @@
     <string name="viewer_search_count">%1$d sur %2$d</string>
     <string name="viewer_read_from_here">Lire à partir d\'ici</string>
     <string name="viewer_copy_text">Copier le texte</string>
+    <string name="viewer_select_all">Tout sélectionner</string>
+    <string name="viewer_selection_more">Plus</string>
     <string name="viewer_selection_start">Début de la sélection</string>
     <string name="viewer_selection_end">Fin de la sélection</string>
 
