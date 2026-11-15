@@ -1415,6 +1415,9 @@
     <string name="pen_lab_pressure">Tu presión al escribir: de %1$s a %2$s, de %3$d trazos</string>
     <string name="pen_lab_pressure_none">Aún sin medir: escribe unas líneas con el lápiz</string>
     <string name="pen_lab_pressure_reset">Volver a medir la presión</string>
+    <string name="pen_lab_group_curve">Curva de presión (todos los lápices)</string>
+    <string name="pen_lab_curve_body">Arrastra los tres puntos hacia arriba o abajo. A la izquierda, un toque suave; a la derecha, uno fuerte; más arriba, un trazo más grueso. Luego cada lápiz aplica su propio rango.</string>
+    <string name="pen_lab_curve_reset">Volver a enderezar la curva</string>
     <string name="pen_lab_group_save">Valores</string>
     <string name="pen_lab_reset">Restablecer este lápiz</string>
     <string name="pen_lab_write_log">Escribir los valores en el registro</string>

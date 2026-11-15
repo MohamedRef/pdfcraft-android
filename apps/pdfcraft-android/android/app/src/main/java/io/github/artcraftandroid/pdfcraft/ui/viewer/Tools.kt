@@ -183,7 +183,8 @@ internal fun newInkStroke(page: Int, appearance: InkAppearance, stylus: Boolean,
     val onGlass = dpPerPt.takeIf { it.isFinite() && it > 0f } ?: 1f
     val stats = PenStrokeStats(style, source, appearance.width, dials, appearance.opacity, onGlass)
     val range = if (stylus) tuning.calibration.range else PressureRange()
-    val dynamics = PenDynamics(dials, source, range, appearance.width.takeIf { it.isFinite() && it > 0f } ?: 1f, stats, onGlass)
+    val curve = if (stylus) tuning.pressureCurve else PressureCurve.LINEAR
+    val dynamics = PenDynamics(dials, source, range, appearance.width.takeIf { it.isFinite() && it > 0f } ?: 1f, stats, curve, onGlass)
     PenDiag.inkStroke(stats)
     return InkStroke(page, appearance, dials.varies && style != InkStyle.Highlighter, mode, dynamics, stylus, onGlass)
 }

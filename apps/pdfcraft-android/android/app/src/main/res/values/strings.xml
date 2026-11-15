@@ -1640,6 +1640,9 @@
     <string name="pen_lab_pressure">Your writing pressure: %1$s to %2$s, from %3$d strokes</string>
     <string name="pen_lab_pressure_none">Not measured yet: write a few lines with the pen</string>
     <string name="pen_lab_pressure_reset">Measure the pressure again</string>
+    <string name="pen_lab_group_curve">Pressure curve (every pen)</string>
+    <string name="pen_lab_curve_body">Drag the three points up or down. Left is a light touch, right a hard one; higher is a thicker line. The pens then add their own range on top.</string>
+    <string name="pen_lab_curve_reset">Make the curve straight again</string>
     <string name="pen_lab_group_save">Values</string>
     <string name="pen_lab_reset">Reset this pen</string>
     <string name="pen_lab_write_log">Write the values to the log</string>

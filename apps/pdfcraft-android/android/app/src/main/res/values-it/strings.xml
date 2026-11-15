@@ -1397,6 +1397,9 @@
     <string name="pen_lab_pressure">La tua pressione di scrittura: da %1$s a %2$s, su %3$d tratti</string>
     <string name="pen_lab_pressure_none">Non ancora misurata: scrivi qualche riga con la penna</string>
     <string name="pen_lab_pressure_reset">Misura di nuovo la pressione</string>
+    <string name="pen_lab_group_curve">Curva di pressione (tutte le penne)</string>
+    <string name="pen_lab_curve_body">Trascina i tre punti in su o in giù. A sinistra un tocco leggero, a destra uno deciso; più in alto, un tratto più spesso. Poi ogni penna applica il proprio intervallo.</string>
+    <string name="pen_lab_curve_reset">Raddrizza di nuovo la curva</string>
     <string name="pen_lab_group_save">Valori</string>
     <string name="pen_lab_reset">Ripristina questa penna</string>
     <string name="pen_lab_write_log">Scrivi i valori nel registro</string>

@@ -2,7 +2,6 @@ package io.github.artcraftandroid.pdfcraft.ui.viewer
 
 import androidx.compose.ui.geometry.Offset
 import kotlin.math.PI
-import kotlin.math.abs
 import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.exp
@@ -181,6 +180,8 @@ internal class PenDynamics(
     /** The pen's width in points; the start taper's length is counted in it. */
     private val penWidth: Float,
     val stats: PenStrokeStats? = null,
+    /** This hand's pressure curve (Pen lab), applied to the pen's own pressure after the stretch. */
+    private val pressureCurve: PressureCurve = PressureCurve.LINEAR,
     dpPerPt: Float = 1f,
 ) {
     private val d = dials.sanitized()
@@ -221,13 +222,12 @@ internal class PenDynamics(
         last = p
 
         val made = source == PressureSource.Speed
-        val p01 = if (made) (1f - speed / d.speedRef).coerceIn(0f, 1f) else range.stretch(pressure)
+        val p01 = if (made) (1f - speed / d.speedRef).coerceIn(0f, 1f) else pressureCurve.map(range.stretch(pressure))
         val shaped = p01.pow(d.curve)
         var target = d.minScale + (d.maxScale - d.minScale) * shaped
         if (d.speedThin > 0f) target *= 1f - d.speedThin * (speed / d.speedRef).coerceIn(0f, 1f)
         if (d.nib > 0f && (dirX != 0f || dirY != 0f)) {
-            val angle = atan2(dirY, dirX) - Math.toRadians(d.nibAngleDeg.toDouble()).toFloat()
-            target *= 1f - d.nib * abs(cos(angle))
+            target *= nibWidth(atan2(dirY, dirX) - Math.toRadians(d.nibAngleDeg.toDouble()).toFloat(), d.nib)
         }
         scale = if (scale.isNaN() || d.dampingMs <= 0f) target else {
             // same-time samples still move a little, as if 2 ms apart
@@ -272,6 +272,21 @@ internal class PenDynamics(
         /** How quickly the measured speed follows the pen. */
         const val SPEED_TAU_MS = 30f
     }
+}
+
+/**
+ * The width an elliptical nib draws moving at [angle] (radians from its long axis), as a fraction
+ * of its long axis; [flat] is how much thinner it is across (0 = round). An ellipse with axes
+ * `u`, `v` and semi-axes `a`, `b` swept along direction `d` covers `2·√(a²(u·n)² + b²(v·n)²)` across
+ * the normal `n` (the support-point width, as VectorCraft's calligraphic brush, Apache-2.0, sweeps
+ * its nib). So a stroke along the long axis is `1 - flat` wide, one across it full width, and the
+ * width turns smoothly between, without the kink of a plain `|cos|`.
+ */
+internal fun nibWidth(angle: Float, flat: Float): Float {
+    val b = 1f - flat.coerceIn(0f, 0.95f)
+    val s = kotlin.math.sin(angle)
+    val c = cos(angle)
+    return kotlin.math.sqrt(s * s + b * b * c * c)
 }
 
 /** The width fraction at [t] (0 = the tip, 1 = full width) of a tapered end: a smooth ease out. */
@@ -384,4 +399,75 @@ internal fun inkTailPoints(last: Offset, tip: Offset?, ahead: Pair<Float, Float>
         out += Offset(pen.x + ahead.first, pen.y + ahead.second)
     }
     return if (out.size < 2) emptyList() else out
+}
+
+/**
+ * How the pen's pressure (0…1, after the stretch) turns into the pressure the pens use: a smooth
+ * curve through (0, 0), three points at 0.25, 0.5 and 0.75 that the owner drags in the Pen lab
+ * ([ys]), and (1, 1). A monotone cubic (Fritsch and Carlson, 1980), as PhotoCraft's response
+ * curve (Apache-2.0), so a harder press never gives a thinner line and the curve never overshoots.
+ */
+internal class PressureCurve(ys: List<Float>) {
+    /** The three dragged points, kept in 0…1 and rising. */
+    val ys: List<Float>
+    private val yk: FloatArray
+    private val mk: FloatArray
+
+    init {
+        var lo = 0f
+        val clean = List(3) { i ->
+            val y = (ys.getOrNull(i)?.takeIf { it.isFinite() } ?: XS[i + 1]).coerceIn(0f, 1f).coerceAtLeast(lo)
+            lo = y
+            y
+        }
+        this.ys = clean
+        yk = floatArrayOf(0f, clean[0], clean[1], clean[2], 1f)
+        val n = XS.size
+        val delta = FloatArray(n - 1) { (yk[it + 1] - yk[it]) / (XS[it + 1] - XS[it]) }
+        mk = FloatArray(n) { k ->
+            when (k) {
+                0 -> delta[0]
+                n - 1 -> delta[n - 2]
+                else -> if (delta[k - 1] * delta[k] <= 0f) 0f else (delta[k - 1] + delta[k]) / 2f
+            }
+        }
+        for (k in 0 until n - 1) {
+            if (delta[k] == 0f) {
+                mk[k] = 0f
+                mk[k + 1] = 0f
+                continue
+            }
+            val a = mk[k] / delta[k]
+            val b = mk[k + 1] / delta[k]
+            val h = a * a + b * b
+            if (h > 9f) {
+                val t = 3f / kotlin.math.sqrt(h)
+                mk[k] = t * a * delta[k]
+                mk[k + 1] = t * b * delta[k]
+            }
+        }
+    }
+
+    val linear: Boolean get() = ys.indices.all { kotlin.math.abs(ys[it] - XS[it + 1]) < 1e-4f }
+
+    fun map(x: Float): Float {
+        if (!x.isFinite()) return 1f
+        val v = x.coerceIn(0f, 1f)
+        val k = (v * 4f).toInt().coerceAtMost(3)
+        val h = XS[k + 1] - XS[k]
+        val t = (v - XS[k]) / h
+        val t2 = t * t
+        val t3 = t2 * t
+        val y = (2 * t3 - 3 * t2 + 1) * yk[k] + (t3 - 2 * t2 + t) * h * mk[k] +
+            (-2 * t3 + 3 * t2) * yk[k + 1] + (t3 - t2) * h * mk[k + 1]
+        return y.coerceIn(0f, 1f)
+    }
+
+    override fun equals(other: Any?) = other is PressureCurve && other.ys == ys
+    override fun hashCode() = ys.hashCode()
+
+    companion object {
+        val XS = floatArrayOf(0f, 0.25f, 0.5f, 0.75f, 1f)
+        val LINEAR = PressureCurve(listOf(0.25f, 0.5f, 0.75f))
+    }
 }

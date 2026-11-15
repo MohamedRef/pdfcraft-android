@@ -1150,6 +1150,9 @@
     <string name="pen_lab_pressure">ضغط كتابتك: من %1$s إلى %2$s، من %3$d خطًا</string>
     <string name="pen_lab_pressure_none">لم يُقَس بعد: اكتب بضعة أسطر بالقلم</string>
     <string name="pen_lab_pressure_reset">قِس الضغط من جديد</string>
+    <string name="pen_lab_group_curve">منحنى الضغط (لكل الأقلام)</string>
+    <string name="pen_lab_curve_body">اسحب النقط التلاتة لفوق أو لتحت. الشمال لمسة خفيفة واليمين ضغطة جامدة، وكل ما النقطة تعلى الخط يتخن. وبعدها كل قلم بيطبّق مداه هو.</string>
+    <string name="pen_lab_curve_reset">رجّع المنحنى مستقيم</string>
     <string name="pen_lab_group_save">القيم</string>
     <string name="pen_lab_reset">أعد ضبط هذا القلم</string>
     <string name="pen_lab_write_log">اكتب القيم في السجل</string>

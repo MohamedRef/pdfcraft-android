@@ -1287,6 +1287,9 @@
     <string name="pen_lab_pressure">Votre pression d’écriture : de %1$s à %2$s, sur %3$d traits</string>
     <string name="pen_lab_pressure_none">Pas encore mesurée : écrivez quelques lignes avec le stylet</string>
     <string name="pen_lab_pressure_reset">Mesurer la pression à nouveau</string>
+    <string name="pen_lab_group_curve">Courbe de pression (tous les stylos)</string>
+    <string name="pen_lab_curve_body">Faites glisser les trois points vers le haut ou le bas. À gauche une touche légère, à droite une forte ; plus haut, un trait plus épais. Chaque stylo applique ensuite sa propre plage.</string>
+    <string name="pen_lab_curve_reset">Remettre la courbe droite</string>
     <string name="pen_lab_group_save">Valeurs</string>
     <string name="pen_lab_reset">Réinitialiser ce stylo</string>
     <string name="pen_lab_write_log">Écrire les valeurs dans le journal</string>

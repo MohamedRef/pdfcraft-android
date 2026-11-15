@@ -9,6 +9,8 @@ import io.github.artcraftandroid.pdfcraft.ui.viewer.PenDials
 import io.github.artcraftandroid.pdfcraft.ui.viewer.PenDynamics
 import io.github.artcraftandroid.pdfcraft.ui.viewer.PenStrokeStats
 import io.github.artcraftandroid.pdfcraft.ui.viewer.PressureCalibration
+import io.github.artcraftandroid.pdfcraft.ui.viewer.PressureCurve
+import io.github.artcraftandroid.pdfcraft.ui.viewer.nibWidth
 import io.github.artcraftandroid.pdfcraft.ui.viewer.PressureRange
 import io.github.artcraftandroid.pdfcraft.ui.viewer.PressureSource
 import io.github.artcraftandroid.pdfcraft.ui.viewer.inkStylePointWidths
@@ -259,6 +261,36 @@ class PenModelTest {
         val p = s.next(Offset(10f, 0f), 16L)
         assertTrue(p.x.isFinite() && p.y.isFinite())
         assertTrue(InkSmoother(Float.NaN).next(Offset(2f, 2f), 0L) == Offset(2f, 2f))
+    }
+
+    @Test fun theNibIsAnEllipse() {
+        assertEquals(0.65f, nibWidth(0f, 0.35f), 1e-5f) // along the long axis: thin
+        assertEquals(1f, nibWidth((PI / 2).toFloat(), 0.35f), 1e-5f) // across it: full
+        assertEquals(1f, nibWidth(1.234f, 0f), 1e-5f) // a round tip
+        // it turns smoothly: no kink where the stroke crosses the long axis
+        val e = 1e-3f
+        val slope = (nibWidth(e, 0.35f) - nibWidth(0f, 0.35f)) / e
+        assertTrue("slope $slope", kotlin.math.abs(slope) < 0.01f)
+    }
+
+    @Test fun thePressureCurveRisesAndStaysInside() {
+        assertTrue(PressureCurve.LINEAR.linear)
+        for (i in 0..20) assertEquals(i / 20f, PressureCurve.LINEAR.map(i / 20f), 1e-4f)
+        val soft = PressureCurve(listOf(0.55f, 0.8f, 0.92f)) // a light hand: thick early
+        val xs = (0..200).map { it / 200f }
+        val ys = xs.map { soft.map(it) }
+        assertTrue(ys.zipWithNext().all { (a, b) -> b >= a - 1e-6f })
+        assertTrue(ys.all { it in 0f..1f })
+        assertEquals(0.55f, soft.map(0.25f), 1e-4f)
+        assertEquals(0f, soft.map(0f), 1e-6f)
+        assertEquals(1f, soft.map(1f), 1e-6f)
+        // stored nonsense is made sane: in range, rising
+        val bad = PressureCurve(listOf(Float.NaN, 2f, 0.1f))
+        assertEquals(listOf(0.25f, 1f, 1f), bad.ys)
+        // and the curve reaches the stroke
+        val dyn = PenDynamics(PenDials(0f + 0.05f, 1f), PressureSource.Pen, PressureRange(), penWidth, null, soft)
+        val plain = PenDynamics(PenDials(0.05f, 1f), PressureSource.Pen, PressureRange(), penWidth)
+        assertTrue(dyn.next(Offset.Zero, 0L, 0.25f) > plain.next(Offset.Zero, 0L, 0.25f) * 1.5f)
     }
 
     /** The same pen movement on the glass ([dp], in dp), on a page shown at [dpPerPt] dp a point. */
