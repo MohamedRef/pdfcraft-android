@@ -626,7 +626,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         val lent = doc.lent ?: return
         viewModelScope.launch {
             while (document === doc || tabs.tabs.any { it.doc === doc }) {
-                kotlinx.coroutines.delay(LENT_WATCH_MS)
+                kotlinx.coroutines.delay(io.github.artcraftandroid.pdfcraft.engine.LENT_WATCH_MS)
                 val changed = runCatching { io.github.artcraftandroid.pdfcraft.core.lentFileChanged(lent.dev.toULong(), lent.ino.toULong()) }.getOrDefault(false)
                 if (changed) {
                     lentChanged(doc)
