@@ -987,6 +987,7 @@
     <string name="pen_lab_taper_start">Início pontudo (larguras da caneta)</string>
     <string name="pen_lab_taper_end">Fim pontudo (larguras da caneta)</string>
     <string name="pen_lab_damping">Suavização da largura (ms)</string>
+    <string name="pen_lab_smoothing">Suavização do traço</string>
     <string name="pen_lab_group_measured">Pressão medida</string>
     <string name="pen_lab_pressure">Sua pressão ao escrever: de %1$s a %2$s, em %3$d traços</string>
     <string name="pen_lab_pressure_none">Ainda não medida: escreva algumas linhas com a caneta</string>

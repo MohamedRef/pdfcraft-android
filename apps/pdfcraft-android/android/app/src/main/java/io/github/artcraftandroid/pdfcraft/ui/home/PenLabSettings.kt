@@ -136,6 +136,7 @@ internal fun PenLabSettings(vm: AppViewModel) {
     Dial(R.string.pen_lab_taper_start, d.taperStart, 0f..10f, 1) { d.copy(taperStart = it) }
     Dial(R.string.pen_lab_taper_end, d.taperEnd, 0f..10f, 1) { d.copy(taperEnd = it) }
     Dial(R.string.pen_lab_damping, d.dampingMs, 0f..200f, 0) { d.copy(dampingMs = it) }
+    Dial(R.string.pen_lab_smoothing, d.smoothing, 0f..1f, 2) { d.copy(smoothing = it) }
 
     SettingsHeader(stringResource(R.string.pen_lab_group_measured))
     val cal = tuning.calibration

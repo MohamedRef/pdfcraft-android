@@ -1410,6 +1410,7 @@
     <string name="pen_lab_taper_start">Inicio en punta (anchos del lápiz)</string>
     <string name="pen_lab_taper_end">Final en punta (anchos del lápiz)</string>
     <string name="pen_lab_damping">Suavizado del ancho (ms)</string>
+    <string name="pen_lab_smoothing">Suavizado del trazo</string>
     <string name="pen_lab_group_measured">Presión medida</string>
     <string name="pen_lab_pressure">Tu presión al escribir: de %1$s a %2$s, de %3$d trazos</string>
     <string name="pen_lab_pressure_none">Aún sin medir: escribe unas líneas con el lápiz</string>

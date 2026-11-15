@@ -109,7 +109,7 @@ internal class PenTuning(private val prefs: SharedPreferences) {
                 "min" to d.minScale, "max" to d.maxScale, "curve" to d.curve,
                 "speed_thin" to d.speedThin, "speed_ref" to d.speedRef.toInt(),
                 "nib" to d.nib, "nib_angle" to d.nibAngleDeg.toInt(),
-                "taper_start" to d.taperStart, "taper_end" to d.taperEnd, "damping_ms" to d.dampingMs.toInt(),
+                "taper_start" to d.taperStart, "taper_end" to d.taperEnd, "damping_ms" to d.dampingMs.toInt(), "smoothing" to d.smoothing,
             )
         }
         logRange()
@@ -125,13 +125,13 @@ internal class PenTuning(private val prefs: SharedPreferences) {
     private fun key(style: InkStyle, dial: String) = "${style.key}.$dial"
 
     companion object {
-        val KEYS = listOf("min", "max", "curve", "speedThin", "speedRef", "nib", "nibAngle", "taperStart", "taperEnd", "damping")
+        val KEYS = listOf("min", "max", "curve", "speedThin", "speedRef", "nib", "nibAngle", "taperStart", "taperEnd", "damping", "smoothing")
         const val LOG_EVERY = 25
     }
 }
 
 /** The dials in [PenTuning.KEYS] order. */
 internal fun PenDials.toList(): List<Float> =
-    listOf(minScale, maxScale, curve, speedThin, speedRef, nib, nibAngleDeg, taperStart, taperEnd, dampingMs)
+    listOf(minScale, maxScale, curve, speedThin, speedRef, nib, nibAngleDeg, taperStart, taperEnd, dampingMs, smoothing)
 
-internal fun penDialsOf(v: List<Float>): PenDials = PenDials(v[0], v[1], v[2], v[3], v[4], v[5], v[6], v[7], v[8], v[9])
+internal fun penDialsOf(v: List<Float>): PenDials = PenDials(v[0], v[1], v[2], v[3], v[4], v[5], v[6], v[7], v[8], v[9], v[10])
