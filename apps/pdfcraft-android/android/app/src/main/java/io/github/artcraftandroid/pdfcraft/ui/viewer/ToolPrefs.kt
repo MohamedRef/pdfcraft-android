@@ -65,6 +65,9 @@ class ToolPrefs(context: Context) {
         loaded.mapValues { mutableStateOf(it.value) }
     }
 
+    /** The Pen lab's dials per pen and the measured pressure range (#569). */
+    internal val penTuning = PenTuning(context.getSharedPreferences("pen_lab", Context.MODE_PRIVATE))
+
     /** The settings of one pen, for its toolbar preview. */
     internal fun penSettings(style: InkStyle): InkPenSettings = penSettings.getValue(style).value
 

@@ -19,7 +19,7 @@ import org.junit.Test
 class DrawUndoTest {
     private fun stroke() = InkStroke(0, InkAppearance(0xFF000000.toInt(), 1f, 2f, null)).apply {
         points.add(Offset(0f, 0f)); points.add(Offset(1f, 1f))
-        pressures.add(1f); pressures.add(1f)
+        scales.add(1f); scales.add(1f)
     }
 
     /** A fake document history: each command is one undo step, `bad` ones are refused. */

@@ -7,7 +7,9 @@ internal data class InkSaveStroke(
     val page: Int,
     val appearance: InkAppearance,
     val points: List<Offset>,
-    val pressures: List<Float>,
+    /** Each point's width as a multiple of the pen width ([PenDynamics]). */
+    val scales: List<Float>,
+    /** The width varies along the stroke: saved with a width per point. */
     val pressureSensitive: Boolean,
 )
 
@@ -30,16 +32,16 @@ internal fun inkSaveCommands(strokes: List<InkSaveStroke>, hex: (Int) -> String)
     data class Piece(val stroke: InkSaveStroke, val points: List<Offset>, val widths: List<Float>?, val width: Float)
     val pieces = strokes.flatMap { s ->
         val pressure = s.pressureSensitive && s.appearance.style != InkStyle.Highlighter && s.points.size >= 2 &&
-            s.pressures.size == s.points.size
+            s.scales.size == s.points.size
         if (pressure) {
-            val widths = inkStylePointWidths(s.pressures, s.appearance.width, s.appearance.style)
+            val widths = inkStylePointWidths(s.scales, s.appearance.width, s.appearance.style)
             s.points.indices.chunked(MAX_PRESSURE_INK_POINTS - 1).map { idx ->
                 // Neighbouring pieces share their boundary point, so the line stays continuous.
                 val range = idx.first()..minOf(idx.last() + 1, s.points.lastIndex)
                 Piece(s, s.points.slice(range), widths.slice(range), 0f)
             }.filter { it.points.size >= 2 }
         } else {
-            inkStyleWidthRuns(s.pressures, s.appearance.width, s.pressureSensitive, s.appearance.style).map { run ->
+            inkStyleWidthRuns(s.scales, s.appearance.width, s.pressureSensitive, s.appearance.style).map { run ->
                 Piece(s, s.points.subList(run.start, run.end + 1), null, run.width)
             }
         }

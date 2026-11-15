@@ -107,11 +107,31 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import androidx.compose.material3.minimumInteractiveComponentSize
 
-/** A stroke being drawn: its page and points (in the page's points). */
-internal class InkStroke(val page: Int, val appearance: InkAppearance, stylus: Boolean = false, val shapeMode: InkShapeMode = InkShapeMode.Freehand) {
+/**
+ * A stroke being drawn: its page and points (in the page's points), and each point's width as a
+ * multiple of the pen width ([scales], from [dynamics] as the stroke grows, #569). [pressureSensitive]
+ * means the width varies along the stroke (it is drawn and saved with a width per point); [stylus]
+ * that a pen drew it.
+ */
+internal class InkStroke(
+    val page: Int,
+    val appearance: InkAppearance,
+    varies: Boolean = false,
+    val shapeMode: InkShapeMode = InkShapeMode.Freehand,
+    val dynamics: PenDynamics? = null,
+    val stylus: Boolean = false,
+) {
     val points = mutableStateListOf<Offset>()
-    val pressures = mutableStateListOf<Float>()
-    var pressureSensitive by mutableStateOf(stylus)
+    val scales = mutableStateListOf<Float>()
+    var pressureSensitive by mutableStateOf(varies)
+    /** Bumped when [scales] change in place (the end taper), so cached outlines are rebuilt. */
+    var widthVersion by mutableStateOf(0)
+
+    /** Adds a sample: [p] in page points at [timeMs] with the pen's [pressure]. */
+    fun add(p: Offset, timeMs: Long, pressure: Float) {
+        points.add(p)
+        scales.add(dynamics?.next(p, timeMs, pressure) ?: 1f)
+    }
 
     /** The clean shape shown while the finger is held still (press and hold to snap). */
     var preview by mutableStateOf<List<Offset>?>(null)
@@ -119,6 +139,42 @@ internal class InkStroke(val page: Int, val appearance: InkAppearance, stylus: B
     /** Smoothed page-space paths, rebuilt only when this stroke's points change. */
     val paths = InkPathCache()
 }
+
+/**
+ * A new ink stroke (#569): a freehand stroke gets the pen model with [tuning]'s dials for its
+ * style, pressure from the pen (stretched by the measured range) or, for a finger, from speed. A
+ * shape keeps the pen's constant width. Its numbers go to the next `stroke` log line.
+ */
+internal fun newInkStroke(page: Int, appearance: InkAppearance, stylus: Boolean, mode: InkShapeMode, tuning: PenTuning): InkStroke {
+    if (mode != InkShapeMode.Freehand) {
+        PenDiag.inkStroke(null)
+        return InkStroke(page, appearance, false, mode, null, stylus)
+    }
+    val style = appearance.style
+    val dials = tuning.dials(style)
+    val source = if (stylus) PressureSource.Pen else PressureSource.Speed
+    val stats = PenStrokeStats(style, source, appearance.width, dials, appearance.opacity)
+    val range = if (stylus) tuning.calibration.range else PressureRange()
+    val dynamics = PenDynamics(dials, source, range, appearance.width.takeIf { it.isFinite() && it > 0f } ?: 1f, stats)
+    PenDiag.inkStroke(stats)
+    return InkStroke(page, appearance, dials.varies && style != InkStyle.Highlighter, mode, dynamics, stylus)
+}
+
+/** A freehand stroke is lifted: its end taper goes on, and a pen stroke's pressures measure the pen's range (#569). */
+internal fun finishInkStroke(s: InkStroke, tuning: PenTuning) {
+    val d = s.dynamics ?: return
+    if (s.pressureSensitive) {
+        d.finish(s.points, s.scales)
+        s.widthVersion++
+    }
+    if (s.stylus) d.stats?.let { tuning.learn(it.raw.toList()) }
+}
+
+/**
+ * The event time of the sample [toolGestures] is handing to `onDown` or `onMove` right now, so the
+ * pen model (#569) can measure speed without changing every tool's callback.
+ */
+internal var inkSampleTimeMs = 0L
 
 /** How long the finger stays still to snap a stroke to a shape, and how far it may wander. */
 private const val SNAP_HOLD_MS = 500L
@@ -222,6 +278,7 @@ fun Modifier.toolGestures(
         var zoomDrift = 0f
         var endTime = down.uptimeMillis
         val diag = if (io.github.artcraftandroid.pdfcraft.engine.Diag.enabled()) GestureDiag(down.uptimeMillis, down.type.toolPointer(), route.role) else null
+        inkSampleTimeMs = down.uptimeMillis
         if (one) { onPenDownMode(route.mode); onDown(last, lastPressure, route.activePen) }
         if (eraseOne) onEraserDown(last)
         fun dispatchPenMotion(change: androidx.compose.ui.input.pointer.PointerInputChange) {
@@ -245,6 +302,7 @@ fun Modifier.toolGestures(
             for (sample in samples) {
                 route.motion(sample.position)
                 last = sample.position
+                inkSampleTimeMs = sample.uptimeMillis
                 if (eraseOne) onEraserMove(last) else if (one) onMove(last, sample.pressure, true)
             }
             lastPressure = nextPressure
@@ -267,6 +325,7 @@ fun Modifier.toolGestures(
                     eraseOne = role == GestureRole.Erase
                     last = arrivingPen.position
                     lastPressure = arrivingPen.pressure
+                    inkSampleTimeMs = arrivingPen.uptimeMillis
                     if (one) { onPenDownMode(route.mode); onDown(last, lastPressure, true) }
                     if (eraseOne) onEraserDown(last)
                 }
@@ -333,6 +392,7 @@ fun Modifier.toolGestures(
                     for (point in points) {
                         route.motion(point)
                         last = point
+                        inkSampleTimeMs = active.uptimeMillis
                         onMove(point, active.pressure, false)
                     }
                     active.consume()
@@ -449,19 +509,18 @@ private fun ZoomWritingPad(
                 if (down.type == PointerType.Eraser || (!stylus && prefs.stylusOnly)) return@awaitEachGesture
                 val zb = ctl.zoomBox ?: return@awaitEachGesture
                 val pad = androidx.compose.ui.geometry.Size(size.width.toFloat(), size.height.toFloat())
+                inkSampleTimeMs = down.uptimeMillis
                 val s = newStroke(zb.page, down.pressure, stylus, zb.toPage(down.position, pad))
                 var lastPressure = down.pressure
                 while (true) {
                     val event = awaitPointerEvent()
                     val change = event.changes.firstOrNull { it.id == down.id } ?: break
                     change.historical.forEach { h ->
-                        s.points.add(zb.toPage(h.position, pad))
-                        s.pressures.add(lastPressure)
+                        s.add(zb.toPage(h.position, pad), h.uptimeMillis, lastPressure)
                     }
                     if (change.positionChanged()) {
                         lastPressure = change.pressure.takeIf { it.isFinite() && it > 0f } ?: lastPressure
-                        s.points.add(zb.toPage(change.position, pad))
-                        s.pressures.add(lastPressure)
+                        s.add(zb.toPage(change.position, pad), change.uptimeMillis, lastPressure)
                     }
                     event.changes.forEach { it.consume() }
                     if (!change.pressed) break
@@ -683,7 +742,7 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
             clearSelection()
             if (taken.isNotEmpty()) {
                 val groups = inkSaveCommandGroups(
-                    taken.map { s -> InkSaveStroke(s.page, s.appearance, s.points.toList(), s.pressures.toList(), s.pressureSensitive) },
+                    taken.map { s -> InkSaveStroke(s.page, s.appearance, s.points.toList(), s.scales.toList(), s.pressureSensitive) },
                 ) { argb -> Color(argb).hex() }
                 steps.started()
                 // The drafts stay drawn until the engine has them; the ones it refuses stay drafts (#73).
@@ -962,14 +1021,14 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
     fun clipStrokeToPage(s: InkStroke): List<InkStroke> {
         val page = doc.viewer.pages.getOrNull(s.page) ?: return listOf(s)
         val points = s.points.toList()
-        val runs = clipInkToPage(points, s.pressures.toList(), page.width, page.height)
+        val runs = clipInkToPage(points, s.scales.toList(), page.width, page.height)
         if (runs.size == 1 && runs[0].points == points) return listOf(s)
         val at = strokes.indexOf(s).takeIf { it >= 0 } ?: strokes.size
         strokes.remove(s)
         val pieces = runs.map { run ->
-            InkStroke(s.page, s.appearance, s.pressureSensitive, s.shapeMode).also {
+            InkStroke(s.page, s.appearance, s.pressureSensitive, s.shapeMode, null, s.stylus).also {
                 it.points.addAll(run.points)
-                it.pressures.addAll(run.pressures)
+                it.scales.addAll(run.pressures)
             }
         }
         strokes.addAll(at.coerceAtMost(strokes.size), pieces)
@@ -1166,9 +1225,8 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                     inkStyleOpacity(pen.opacity, inkStyle),
                     pen.width, prefs.author.ifBlank { null }, inkStyle,
                 )
-                current = InkStroke(at.page, appearance, isStylus && doc.controller.inkShapeMode == InkShapeMode.Freehand, doc.controller.inkShapeMode).also {
-                    it.points.add(Offset(at.x, at.y))
-                    it.pressures.add(pressure)
+                current = newInkStroke(at.page, appearance, isStylus, doc.controller.inkShapeMode, prefs.penTuning).also {
+                    it.add(Offset(at.x, at.y), inkSampleTimeMs, pressure)
                     strokes.add(it)
                 }
                 wetLast = if (prefs.lowLatencyInk && doc.controller.inkShapeMode == InkShapeMode.Freehand &&
@@ -1195,12 +1253,12 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                     // Unclamped: ink that leaves the page keeps its real path and is cut at the
                     // page edge on lift, never pinned along the border (#75).
                     val at = doc.viewer.screenToPageUnclamped(s.page, p) ?: return@toolGestures
-                    s.points.add(Offset(at.x, at.y))
-                    s.pressures.add(pressure)
-                    val inputAt = if (s.pressureSensitive) penTracker.timeMs else 0L
+                    s.add(Offset(at.x, at.y), inkSampleTimeMs, pressure)
+                    val inputAt = if (s.stylus) penTracker.timeMs else 0L
                     if (wetLast == null) pendingInput.at = inputAt
                     wetLast?.let { from ->
-                        val w = inkStylePointWidths(listOf(if (s.pressureSensitive) pressure else 1f), s.appearance.width, s.appearance.style).first()
+                        // the width the model gave this sample: the fast path draws the same line (#569)
+                        val w = inkStylePointWidths(listOf(s.scales.last()), s.appearance.width, s.appearance.style).first()
                         wet.segment(WetSegment(from, p, w * doc.viewer.pixelsPerPoint(s.page), s.appearance.argb or 0xFF000000.toInt(), inputAt))
                         wetLast = p
                     }
@@ -1279,6 +1337,7 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                     return@toolGestures
                 }
                 if (s != null) {
+                    finishInkStroke(s, prefs.penTuning)
                     // A palm/cancelled gesture must not discard a user's redo history.
                     // A tap is an actual dot, not a discarded stroke. Native PDF Ink needs
                     // two points, so represent the dot by a microscopic round-capped segment.
@@ -1286,7 +1345,7 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                         val persisted = persistedInkTapPoints(s.points.toList())
                         if (persisted.size == 2) {
                             s.points.add(persisted.last())
-                            s.pressures.add(s.pressures.firstOrNull() ?: 1f)
+                            s.scales.add(s.scales.firstOrNull() ?: 1f)
                         }
                     }
                     if (s.shapeMode.isAnnotation) {
@@ -1323,8 +1382,8 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                         s.points.addAll(shape)
                         // Shape snapping deliberately uses the selected, constant pen width.
                         s.pressureSensitive = false
-                        s.pressures.clear()
-                        s.pressures.addAll(List(shape.size) { 1f })
+                        s.scales.clear()
+                        s.scales.addAll(List(shape.size) { 1f })
                     }
                     // Cut at the page edge: what is off the page is dropped (#75).
                     val pointsIn = s.points.size
@@ -1461,12 +1520,11 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
             // A predicted tail on the stroke being drawn (pen only): where the pen will be about
             // one frame from now, from its real speed. Drawn only, never saved; the next real
             // sample replaces it.
-            current?.takeIf { it.pressureSensitive && it.shapeMode == InkShapeMode.Freehand && it.preview == null }?.let { s ->
+            current?.takeIf { it.stylus && it.shapeMode == InkShapeMode.Freehand && it.preview == null }?.let { s ->
                 val last = s.points.lastOrNull() ?: return@let
                 val (dx, dy) = StylusLog.pen.predictedOffset(android.os.SystemClock.uptimeMillis()) ?: return@let
                 val from = doc.viewer.pageToScreen(s.page, last.x, last.y)
-                val width = inkStyleWidthRuns(listOf(s.pressures.lastOrNull() ?: 1f, s.pressures.lastOrNull() ?: 1f), s.appearance.width, true, s.appearance.style)
-                    .firstOrNull()?.width ?: s.appearance.width
+                val width = inkStylePointWidths(listOf(s.scales.lastOrNull() ?: 1f), s.appearance.width, s.appearance.style).first()
                 val pageRect = doc.viewer.pageRectOnScreen(s.page)
                 clipRect(pageRect.left, pageRect.top, pageRect.right, pageRect.bottom) {
                     drawLine(
@@ -1618,18 +1676,18 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                 newStroke = { page, pressure, isStylus, at ->
                     val pen = prefs.penSettings(prefs.inkStyle)
                     val appearance = InkAppearance(pen.argb, inkStyleOpacity(pen.opacity, prefs.inkStyle), pen.width, prefs.author.ifBlank { null }, prefs.inkStyle)
-                    InkStroke(page, appearance, isStylus, InkShapeMode.Freehand).also {
-                        it.points.add(at)
-                        it.pressures.add(pressure)
+                    newInkStroke(page, appearance, isStylus, InkShapeMode.Freehand, prefs.penTuning).also {
+                        it.add(at, inkSampleTimeMs, pressure)
                         strokes.add(it)
                     }
                 },
                 finishStroke = { s ->
+                    finishInkStroke(s, prefs.penTuning)
                     if (s.points.size == 1) {
                         val persisted = persistedInkTapPoints(s.points.toList())
                         if (persisted.size == 2) {
                             s.points.add(persisted.last())
-                            s.pressures.add(s.pressures.firstOrNull() ?: 1f)
+                            s.scales.add(s.scales.firstOrNull() ?: 1f)
                         }
                     }
                     if (s.points.size >= 2) {

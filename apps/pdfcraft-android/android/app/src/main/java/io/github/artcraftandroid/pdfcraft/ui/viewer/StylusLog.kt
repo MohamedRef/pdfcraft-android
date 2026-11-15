@@ -76,6 +76,18 @@ internal class PenSampleLog(private val capacity: Int = 256) {
 internal object StylusLog {
     val pen = PenSampleLog()
 
+    // the pen's tilt over the current stroke, in degrees (#569); NaN until a sample has it
+    @Volatile private var tiltMin = Float.NaN
+    @Volatile private var tiltMax = Float.NaN
+    @Volatile private var tiltReported: Boolean? = null
+
+    private fun tilt(rad: Float) {
+        if (!rad.isFinite()) return
+        val deg = Math.toDegrees(rad.toDouble()).toFloat()
+        if (tiltMin.isNaN() || deg < tiltMin) tiltMin = deg
+        if (tiltMax.isNaN() || deg > tiltMax) tiltMax = deg
+    }
+
     /** Record the stylus pointer of [event] with all its historical samples. */
     fun record(event: MotionEvent) {
         val index = (0 until event.pointerCount).firstOrNull {
@@ -84,14 +96,19 @@ internal object StylusLog {
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN, MotionEvent.ACTION_POINTER_DOWN -> {
                 pen.setDown(true)
+                tiltMin = Float.NaN
+                tiltMax = Float.NaN
+                tiltReported = runCatching { event.device?.getMotionRange(MotionEvent.AXIS_TILT, event.source) != null }.getOrNull()
                 InkLatency.stroke.down(event.eventTime, event.getToolType(index) == MotionEvent.TOOL_TYPE_ERASER, Diag.enabled())
             }
             MotionEvent.ACTION_MOVE -> InkLatency.stroke.move(event.historySize + 1)
         }
         for (h in 0 until event.historySize) {
             pen.add(PenSample(event.getHistoricalEventTime(h), event.getHistoricalX(index, h), event.getHistoricalY(index, h), event.getHistoricalPressure(index, h)))
+            tilt(event.getHistoricalAxisValue(MotionEvent.AXIS_TILT, index, h))
         }
         pen.add(PenSample(event.eventTime, event.getX(index), event.getY(index), event.getPressure(index)))
+        tilt(event.getAxisValue(MotionEvent.AXIS_TILT, index))
         when (event.actionMasked) {
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                 pen.setDown(false)
@@ -111,7 +128,12 @@ internal object StylusLog {
     private fun recordFinger(event: MotionEvent) {
         if (event.getToolType(0) != MotionEvent.TOOL_TYPE_FINGER) return
         when (event.actionMasked) {
-            MotionEvent.ACTION_DOWN -> InkLatency.stroke.down(event.eventTime, eraser = false, active = Diag.enabled(), pointer = "finger")
+            MotionEvent.ACTION_DOWN -> {
+                tiltMin = Float.NaN
+                tiltMax = Float.NaN
+                tiltReported = null
+                InkLatency.stroke.down(event.eventTime, eraser = false, active = Diag.enabled(), pointer = "finger")
+            }
             MotionEvent.ACTION_MOVE -> if (event.pointerCount == 1) InkLatency.stroke.move(event.historySize + 1)
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> strokeEnded(event.eventTime, event.actionMasked == MotionEvent.ACTION_CANCEL)
         }
@@ -121,6 +143,7 @@ internal object StylusLog {
     private fun strokeEnded(time: Long, cancelled: Boolean) {
         val t = InkLatency.stroke.up(time, cancelled)?.takeIf { it.pointer != "finger" || it.draws > 0 || it.normal != null }
         val mode = PenDiag.takePenMode()
+        val ink = PenDiag.takeInkStroke()
         if (t != null) Diag.event(
             DiagArea.Ink, "stroke",
             "ms" to t.durationMs, "events" to t.events, "samples" to t.samples, "sample_hz" to t.sampleHz,
@@ -131,8 +154,33 @@ internal object StylusLog {
             "frame_p50_ms" to t.frameGap?.medianMs, "frame_p95_ms" to t.frameGap?.p95Ms, "frame_max_ms" to t.frameGapMaxMs,
             "draw_p50_us" to t.drawUs?.medianMs, "draw_p95_us" to t.drawUs?.p95Ms, "draw_max_us" to t.drawMaxUs,
             "recompositions" to t.recompositions,
+            *inkStrokeFields(ink, tiltMin, tiltMax, tiltReported),
         )
         // the palm guard's ignored touches around this stroke (#156)
         PenDiag.flushPalm()
     }
+}
+
+/**
+ * The pen model's numbers for one ink stroke's `stroke` line (#569), numbers and fixed words only:
+ * nothing when the gesture drew no ink. Tilt is in degrees; NaN tilt (never reported) is left out.
+ */
+internal fun inkStrokeFields(ink: PenStrokeStats?, tiltMin: Float, tiltMax: Float, tiltReported: Boolean?): Array<Pair<String, Any?>> {
+    if (ink == null) return emptyArray()
+    val p = ink.pressures.toList()
+    val v = ink.speeds.toList()
+    val w = ink.widths.toList()
+    return arrayOf(
+        "style" to ink.style.key, "pressure_source" to ink.source.key,
+        "pressure_min" to p.minOrNull(), "pressure_p10" to quantile(p, 0.1f), "pressure_median" to quantile(p, 0.5f),
+        "pressure_p90" to quantile(p, 0.9f), "pressure_max" to p.maxOrNull(),
+        "raw_pressure_p10" to quantile(ink.raw.toList(), 0.1f), "raw_pressure_p90" to quantile(ink.raw.toList(), 0.9f),
+        "speed_median" to quantile(v, 0.5f)?.toInt(), "speed_p90" to quantile(v, 0.9f)?.toInt(),
+        "tilt_min" to tiltMin.takeIf { it.isFinite() }?.let { kotlin.math.round(it).toInt() },
+        "tilt_max" to tiltMax.takeIf { it.isFinite() }?.let { kotlin.math.round(it).toInt() },
+        "tilt_reported" to tiltReported,
+        "width_min" to w.minOrNull(), "width_median" to quantile(w, 0.5f), "width_max" to w.maxOrNull(),
+        "opacity_min" to ink.opacity, "opacity_max" to ink.opacity,
+        "taper_start_pt" to ink.taperStartPt, "taper_end_pt" to ink.taperEndPt, "stabilisation" to 0,
+    )
 }

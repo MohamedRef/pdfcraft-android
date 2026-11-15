@@ -50,6 +50,16 @@ internal object PenDiag {
     /** The mode of the stroke that just ended, once; null when the page did not see its start. */
     fun takePenMode(): PenDownMode? = penMode.also { penMode = null }
 
+    @Volatile private var inkStats: PenStrokeStats? = null
+
+    /** The ink stroke that just started (#569), for the `stroke` line; null for a gesture that draws no ink. */
+    fun inkStroke(stats: PenStrokeStats?) {
+        inkStats = stats
+    }
+
+    /** The ink stroke's numbers, once. */
+    fun takeInkStroke(): PenStrokeStats? = inkStats.also { inkStats = null }
+
     /** A side-button click while hovering (#144) and what it did. */
     fun penButtonClick(action: PenButtonClick) =
         Diag.event(DiagArea.Ink, "pen_button_click", "action" to action.key)

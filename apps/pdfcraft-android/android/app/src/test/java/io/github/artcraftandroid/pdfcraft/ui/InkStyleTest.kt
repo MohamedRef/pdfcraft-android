@@ -5,47 +5,35 @@ import io.github.artcraftandroid.pdfcraft.ui.viewer.InkStyle
 import io.github.artcraftandroid.pdfcraft.ui.viewer.inkStyleOpacity
 import io.github.artcraftandroid.pdfcraft.ui.viewer.inkStyleWidthRuns
 import io.github.artcraftandroid.pdfcraft.ui.viewer.inkStyleEngineType
-import io.github.artcraftandroid.pdfcraft.ui.viewer.inkWidthRuns
 import io.github.artcraftandroid.pdfcraft.ui.viewer.MAX_INK_WIDTH_RUNS
 import org.junit.Assert.*
 import org.junit.Test
 
 class InkStyleTest {
-    @Test fun defaultBallpointRetainsExistingPressureBehavior() {
-        val pressures = listOf(0.2f, 0.4f, 1f, 0.6f, 0.1f)
-        assertEquals(inkWidthRuns(pressures, 4f, true), inkStyleWidthRuns(pressures, 4f, true, InkStyle.Ballpoint))
-    }
-
-    @Test fun penTypesHaveDifferentNibBehaviorEvenOnTouch() {
-        val neutral = listOf(0.2f, 0.8f, 0.4f)
-        val ball = inkStyleWidthRuns(neutral, 4f, false, InkStyle.Ballpoint).single().width
-        val pencil = inkStyleWidthRuns(neutral, 4f, false, InkStyle.Pencil).single().width
-        val brush = inkStyleWidthRuns(neutral, 4f, false, InkStyle.Brush).single().width
-        val marker = inkStyleWidthRuns(neutral, 4f, false, InkStyle.Highlighter).single().width
-        assertTrue(pencil < ball)
-        assertTrue(brush > ball)
-        assertTrue(marker > brush)
-    }
-
-    @Test fun brushAndFountainUseStylusPressureAndMarkerDoesNot() {
-        val pressures = listOf(0.12f, 0.12f, 0.12f, 1f, 1f, 1f)
-        for (style in listOf(InkStyle.Fountain, InkStyle.Brush)) {
-            val runs = inkStyleWidthRuns(pressures, 5f, true, style)
-            assertTrue(runs.size > 1)
-            assertTrue(runs.first().width < runs.last().width)
+    @Test fun aConstantStrokeIsOneRunAtThePenWidth() {
+        val scales = listOf(0.2f, 0.8f, 0.4f)
+        for (style in listOf(InkStyle.Ballpoint, InkStyle.Fountain, InkStyle.Pencil, InkStyle.Brush)) {
+            assertEquals(4f, inkStyleWidthRuns(scales, 4f, false, style).single().width, 0.001f)
         }
-        val marker = inkStyleWidthRuns(pressures, 5f, true, InkStyle.Highlighter)
-        assertEquals(1, marker.size)
-        assertEquals(11.25f, marker.single().width, 0.001f)
+        // the marker is broader, and constant even when the stroke would vary
+        assertEquals(9f, inkStyleWidthRuns(scales, 4f, true, InkStyle.Highlighter).single().width, 0.001f)
+    }
+
+    @Test fun aVaryingStrokeSplitsWhereItsWidthChanges() {
+        val scales = listOf(0.2f, 0.2f, 0.2f, 1f, 1f, 1f)
+        val runs = inkStyleWidthRuns(scales, 5f, true, InkStyle.Fountain)
+        assertTrue(runs.size > 1)
+        assertTrue(runs.first().width < runs.last().width)
+        assertEquals(5f, runs.last().width, 0.001f)
     }
 
     @Test fun styledInkStillHasBoundedNativeWidthRuns() {
-        val pressures = List(4097) { if (it % 8 < 4) 0.1f else 0.95f }
+        val scales = List(4097) { if (it % 8 < 4) 0.1f else 0.95f }
         for (style in InkStyle.entries) {
-            val runs = inkStyleWidthRuns(pressures, 8f, true, style)
+            val runs = inkStyleWidthRuns(scales, 8f, true, style)
             assertTrue(runs.size in 1..MAX_INK_WIDTH_RUNS)
             assertEquals(0, runs.first().start)
-            assertEquals(pressures.lastIndex, runs.last().end)
+            assertEquals(scales.lastIndex, runs.last().end)
             assertTrue(runs.all { it.width.isFinite() && it.width > 0f })
         }
     }

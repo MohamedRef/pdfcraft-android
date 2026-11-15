@@ -21,6 +21,11 @@ class SettingsPagesTest {
         assertEquals(listOf(SettingsPage.Root, SettingsPage.Diagnostics, SettingsPage.ScanTesting), settingsStack(SettingsPage.ScanTesting))
     }
 
+    @Test
+    fun penLabSitsInDiagnostics() {
+        assertEquals(listOf(SettingsPage.Root, SettingsPage.Diagnostics, SettingsPage.PenLab), settingsStack(SettingsPage.PenLab))
+    }
+
     private val source = File("src/main/java/io/github/artcraftandroid/pdfcraft/ui/home/Settings.kt").readText()
 
     /** The owner shares logs through Settings > About > Diagnostics; About keeps that row. */

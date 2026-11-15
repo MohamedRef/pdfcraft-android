@@ -1,7 +1,5 @@
 package io.github.artcraftandroid.pdfcraft.ui.viewer
 
-import kotlin.math.pow
-
 /**
  * Distinct pen behaviors. The engine stores width-run PDF Ink, while freehand highlighter
  * uses the engine's dedicated highlight annotation. No proprietary brush assets are used.
@@ -28,57 +26,52 @@ internal fun inkStyleOpacity(opacity: Float, style: InkStyle): Float {
     }
 }
 
+/** A pen's width against its chosen thickness, before its dials: only the marker is broader. */
+internal fun inkStyleWidthFactor(style: InkStyle): Float = if (style == InkStyle.Highlighter) 2.25f else 1f
+
 /**
- * Width and pressure profiles differ even with touch input:
- * Ballpoint = existing behavior, Fountain = pronounced pressure variation,
- * Pencil = fine/soft, Brush = bold and pressure-responsive, Highlighter = flat broad marker.
- * Output uses the existing bounded, deterministic native PDF width-run representation.
+ * Width runs for a stroke saved without a width per point. [scales] are the stroke's widths as
+ * multiples of the pen width ([PenDynamics]); a constant stroke ([varies] false, a shape, the
+ * marker) is one run at the pen's width. A varying stroke is split where its width, rounded to
+ * a quarter point, changes, at most [MAX_INK_WIDTH_RUNS] runs.
  */
 internal fun inkStyleWidthRuns(
-    pressures: List<Float>,
+    scales: List<Float>,
     width: Float,
-    stylus: Boolean,
+    varies: Boolean,
     style: InkStyle,
 ): List<InkWidthRun> {
+    if (scales.size < 2) return emptyList()
     val safeWidth = width.takeIf { it.isFinite() && it > 0f }?.coerceIn(0.1f, 30f) ?: 1f
-    val factor = when (style) {
-        InkStyle.Ballpoint -> 1f
-        InkStyle.Fountain -> 1.12f
-        InkStyle.Pencil -> 0.7f
-        InkStyle.Brush -> 1.55f
-        InkStyle.Highlighter -> 2.25f
+    val base = safeWidth * inkStyleWidthFactor(style)
+    if (!varies || style == InkStyle.Highlighter) return listOf(InkWidthRun(0, scales.lastIndex, base))
+    val widths = inkStylePointWidths(scales, width, style)
+    fun segment(i: Int) = (kotlin.math.round((widths[i] + widths[i + 1]) / 2f * 4f) / 4f).coerceAtLeast(0.05f)
+    val runs = ArrayList<InkWidthRun>()
+    var start = 0
+    var current = segment(0)
+    val minimumRunEdges = ((scales.lastIndex + MAX_INK_WIDTH_RUNS - 1) / MAX_INK_WIDTH_RUNS).coerceAtLeast(1)
+    for (i in 1 until scales.lastIndex) {
+        val next = segment(i)
+        if (next != current && i - start >= minimumRunEdges && runs.size < MAX_INK_WIDTH_RUNS - 1) {
+            runs += InkWidthRun(start, i, current)
+            start = i
+            current = next
+        }
     }
-    val effectivePressure = if (stylus) when (style) {
-        InkStyle.Fountain -> pressures.map { p -> p.takeIf { it.isFinite() && it > 0f }?.coerceIn(0f, 1f)?.pow(1.6f) ?: 1f }
-        InkStyle.Brush -> pressures.map { p -> p.takeIf { it.isFinite() && it > 0f }?.coerceIn(0f, 1f)?.pow(1.35f) ?: 1f }
-        else -> pressures
-    } else pressures
-    return inkWidthRuns(effectivePressure, safeWidth * factor, stylus && style != InkStyle.Highlighter)
+    runs += InkWidthRun(start, scales.lastIndex, current)
+    return runs
 }
 
 internal fun inkStyleEngineType(style: InkStyle): String =
     if (style == InkStyle.Highlighter) "freehand_highlight" else "ink"
 
 /**
- * One width per point for pressure ink saved as a single drawing (engine `comment_add` `widths`).
- * Same profile as [inkStyleWidthRuns], unquantized: base × style factor × (0.35 + 0.65 × pressure).
+ * One width per point (engine `comment_add` `widths`, the file's `/PCWidths`): the pen width ×
+ * the style's factor × each point's scale from [PenDynamics]. A bad scale counts as 1.
  */
-internal fun inkStylePointWidths(pressures: List<Float>, width: Float, style: InkStyle): List<Float> {
+internal fun inkStylePointWidths(scales: List<Float>, width: Float, style: InkStyle): List<Float> {
     val safeWidth = width.takeIf { it.isFinite() && it > 0f }?.coerceIn(0.1f, 30f) ?: 1f
-    val factor = when (style) {
-        InkStyle.Ballpoint -> 1f
-        InkStyle.Fountain -> 1.12f
-        InkStyle.Pencil -> 0.7f
-        InkStyle.Brush -> 1.55f
-        InkStyle.Highlighter -> 2.25f
-    }
-    return pressures.map { raw ->
-        val p = raw.takeIf { it.isFinite() && it > 0f }?.coerceIn(0f, 1f) ?: 1f
-        val shaped = when (style) {
-            InkStyle.Fountain -> p.pow(1.6f)
-            InkStyle.Brush -> p.pow(1.35f)
-            else -> p
-        }
-        safeWidth * factor * (0.35f + 0.65f * shaped)
-    }
+    val base = safeWidth * inkStyleWidthFactor(style)
+    return scales.map { raw -> base * (raw.takeIf { it.isFinite() && it > 0f }?.coerceIn(0.01f, 3f) ?: 1f) }
 }
