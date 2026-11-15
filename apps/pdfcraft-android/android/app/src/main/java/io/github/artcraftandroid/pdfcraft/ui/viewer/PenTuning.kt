@@ -71,6 +71,15 @@ internal class PenTuning(private val prefs: SharedPreferences) {
 
     fun dials(style: InkStyle): PenDials = dials.getValue(style).value
 
+    /** The Pen lab trial (#569): Jetpack Ink draws the ballpoint, fountain pen and brush. Off by default. */
+    var jetpackInk by mutableStateOf(prefs.getBoolean("jetpack", false))
+        private set
+
+    fun updateJetpackInk(on: Boolean) {
+        jetpackInk = on
+        prefs.edit().putBoolean("jetpack", on).apply()
+    }
+
     /** Whether [style]'s dials differ from its defaults. */
     fun tuned(style: InkStyle): Boolean = dials(style) != PenDials.default(style)
 
