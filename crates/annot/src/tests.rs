@@ -2022,6 +2022,24 @@ fn the_eraser_cuts_a_wide_stroke_where_it_meets_its_edge() {
 }
 
 #[test]
+fn the_whole_stroke_eraser_removes_each_stroke_it_touches_and_keeps_the_rest() {
+    // Android #521: "Erase whole strokes".
+    let mut doc = fixture();
+    let line = |y: f64| (0..=10).map(|k| [100.0 + k as f64 * 20.0, y]).collect::<Vec<_>>();
+    let i = add_annotation(&mut doc, &new(0, Shape::Ink { strokes: vec![line(500.0), line(400.0)] }), &meta("i")).unwrap();
+    let before = ink_list(&doc, i);
+    // A short tap on the end of the first line takes all of it, not a piece.
+    assert!(erase_ink_strokes(&mut doc, 0, i, &[[300.0, 502.0]], 4.0, true, &meta("e")).unwrap());
+    let after = ink_list(&doc, i);
+    assert_eq!(after.len(), 1, "only the touched stroke is gone");
+    assert_eq!(after[0], before[1], "the other stroke keeps its exact points");
+    assert!(!erase_ink_strokes(&mut doc, 0, i, &[[600.0, 100.0]], 4.0, true, &meta("e")).unwrap(), "nothing under the eraser");
+    // Touching the last stroke deletes the drawing.
+    assert!(erase_ink_strokes(&mut doc, 0, i, &[[150.0, 400.0]], 4.0, true, &meta("e")).unwrap());
+    assert!(!list(&doc, 0).iter().any(|d| d.name(b"Subtype") == Some(&b"Ink"[..])));
+}
+
+#[test]
 fn freehand_highlight_segments_can_be_erased_without_losing_their_intent() {
     let mut doc = fixture();
     let stroke = (0..=20).map(|k| [100.0 + k as f64 * 10.0, 400.0]).collect::<Vec<_>>();

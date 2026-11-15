@@ -1316,6 +1316,8 @@
     <string name="ink_eraser_size_short">%1$d نقطة</string>
     <string name="ink_eraser_diameter">القطر %1$d نقطة</string>
     <string name="ink_eraser_size_help">تُظهر الدائرة بالضبط ما سيُمحى.</string>
+    <string name="ink_eraser_whole">مسح الخطوط كاملة</string>
+    <string name="ink_eraser_whole_summary">المس الخط ليُحذف كله، لا الجزء الذي تحت الممحاة فقط.</string>
     <string name="ink_toolbar_marker">ماركر</string>
     <string name="ink_toolbar_brush">فرشاة</string>
     <string name="ink_toolbar_pencil">رصاص</string>

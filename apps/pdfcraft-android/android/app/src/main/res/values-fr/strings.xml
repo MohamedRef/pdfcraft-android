@@ -1453,6 +1453,8 @@
     <string name="ink_eraser_size_short">%1$d pt</string>
     <string name="ink_eraser_diameter">Diamètre %1$d pt</string>
     <string name="ink_eraser_size_help">Le cercle montre exactement ce qui sera effacé.</string>
+    <string name="ink_eraser_whole">Effacer des traits entiers</string>
+    <string name="ink_eraser_whole_summary">Touchez un trait pour le retirer en entier, pas seulement la partie sous la gomme.</string>
     <string name="ink_toolbar_marker">Marqueur</string>
     <string name="ink_toolbar_brush">Pinceau</string>
     <string name="ink_toolbar_pencil">Crayon</string>

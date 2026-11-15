@@ -29,6 +29,8 @@ import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.Spacer
@@ -940,6 +942,7 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
     var eraserScreen by remember { mutableStateOf<Offset?>(null) }
     // Snapshot for the duration of a gesture: slider changes never resize an in-flight erase.
     var activeEraserRadius by remember { mutableFloatStateOf(prefs.eraserRadius) }
+    var activeEraseWhole by remember { mutableStateOf(prefs.eraseWholeStrokes) }
     // Preview only: hovering never inserts annotation points or touches document history.
     var hoverPosition by remember(doc) { mutableStateOf<Offset?>(null) }
     var hoverEraser by remember(doc) { mutableStateOf(false) }
@@ -1066,6 +1069,8 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
             val half = inkStylePointWidths(s.scales.toList(), s.appearance.width, s.appearance.style).map { it / 2f }
             val runs = eraseInkRun(pts, s.scales.toList(), half, a, b, radius)
             if (runs == null) { i++; continue }
+            // the whole-stroke eraser takes all of a stroke it touches (#521)
+            if (activeEraseWhole) { strokes.removeAt(i); continue }
             // the same cut carries a pencil's densities (the points come out the same)
             val densityRuns = if (s.densities.size == pts.size) eraseInkRun(pts, s.densities.toList(), half, a, b, radius) else null
             strokes.removeAt(i)
@@ -1090,6 +1095,7 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
         current = null
         eraseDraftsBefore = strokes.toList()
         activeEraserRadius = prefs.eraserRadius
+        activeEraseWhole = prefs.eraseWholeStrokes
         eraseDrafts(at.page, Offset(at.x, at.y), Offset(at.x, at.y))
         eraserPage = at.page
         activeEraserRadius = prefs.eraserRadius
@@ -1097,7 +1103,8 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
         eraserPoints.clear()
         eraserPoints.add(Offset(at.x, at.y))
         eraserChunks[0] = 0
-        startLiveErase(at.page, Offset(at.x, at.y))
+        // the live view rubs out only what is under the eraser; whole strokes go when the edit lands
+        if (!activeEraseWhole) startLiveErase(at.page, Offset(at.x, at.y))
     }
 
     fun moveErase(p: Offset) {
@@ -1110,7 +1117,7 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
         appendEraserPoint(eraserPoints, Offset(at.x, at.y), activeEraserRadius)?.let { chunk ->
             // A very long gesture erases its finished part now; the rest follows on lift (#76).
             eraserChunks[0]++
-            documentEdit("comment_erase", inkEraseCommand(page, chunk, activeEraserRadius.toDouble()))
+            documentEdit("comment_erase", inkEraseCommand(page, chunk, activeEraserRadius.toDouble(), activeEraseWhole))
         }
     }
 
@@ -1154,7 +1161,7 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
         logEraseGesture(path.size, eraserChunks[0], radius)
         if (path.isNotEmpty() && savedInk) {
             // One native Edit::Batch per gesture, including freehand marker Ink.
-            documentEdit("comment_erase", inkEraseCommand(page, path, activeEraserRadius.toDouble())) { made ->
+            documentEdit("comment_erase", inkEraseCommand(page, path, activeEraserRadius.toDouble(), activeEraseWhole)) { made ->
                 // nothing erased: nothing changes on the page, so the live view goes now
                 if (!made && le != null && liveErase === le) {
                     le.log("nothing_erased", android.os.SystemClock.uptimeMillis())
@@ -2270,6 +2277,18 @@ fun PropertyPicker(vm: AppViewModel, ctl: ViewerController, tool: StyledTool, pi
                     fontSize = 12.sp,
                     modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
                 )
+                Row(
+                    Modifier.fillMaxWidth().heightIn(min = 48.dp)
+                        .toggleable(value = prefs.eraseWholeStrokes, role = androidx.compose.ui.semantics.Role.Switch) { prefs.updateEraseWholeStrokes(it) }
+                        .padding(horizontal = 20.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text(stringResource(R.string.ink_eraser_whole), color = c.text, fontSize = 15.sp)
+                        Text(stringResource(R.string.ink_eraser_whole_summary), color = c.label, fontSize = 12.sp)
+                    }
+                    io.github.artcraftandroid.pdfcraft.ui.PdfSwitch(prefs.eraseWholeStrokes, null)
+                }
                 Spacer(Modifier.height(12.dp))
             }
             Picker.None, Picker.Stamp -> Unit

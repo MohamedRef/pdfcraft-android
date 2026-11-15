@@ -1581,6 +1581,8 @@
     <string name="ink_eraser_size_short">%1$d pt</string>
     <string name="ink_eraser_diameter">Diámetro %1$d pt</string>
     <string name="ink_eraser_size_help">El círculo muestra exactamente lo que se borrará.</string>
+    <string name="ink_eraser_whole">Borrar trazos enteros</string>
+    <string name="ink_eraser_whole_summary">Toca un trazo para quitarlo entero, no solo la parte bajo el borrador.</string>
     <string name="ink_toolbar_marker">Marcador</string>
     <string name="ink_toolbar_brush">Pincel</string>
     <string name="ink_toolbar_pencil">Lápiz</string>

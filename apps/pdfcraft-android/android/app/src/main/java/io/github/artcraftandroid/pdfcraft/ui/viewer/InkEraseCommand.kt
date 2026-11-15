@@ -31,7 +31,7 @@ internal fun appendEraserPoint(points: MutableList<Offset>, pt: Offset, radius: 
     return flushed
 }
 
-internal fun inkEraseCommand(page: Int, points: List<Offset>, radius: Double = ERASER_RADIUS_DEFAULT.toDouble()): Map<String, Any> {
+internal fun inkEraseCommand(page: Int, points: List<Offset>, radius: Double = ERASER_RADIUS_DEFAULT.toDouble(), whole: Boolean = false): Map<String, Any> {
     require(page >= 0) { "Negative PDF page" }
     require(points.isNotEmpty() && points.size <= MAX_ERASER_PATH_POINTS) { "Invalid eraser gesture" }
     require(radius.isFinite() && radius in ERASER_RADIUS_MIN.toDouble()..ERASER_RADIUS_MAX.toDouble()) { "Invalid eraser radius" }
@@ -41,5 +41,5 @@ internal fun inkEraseCommand(page: Int, points: List<Offset>, radius: Double = E
         "path" to points.map { listOf(it.x.toDouble(), it.y.toDouble()) },
         "radius" to radius,
         "erase_highlights" to true,
-    )
+    ) + (if (whole) mapOf("whole" to true) else emptyMap())
 }
