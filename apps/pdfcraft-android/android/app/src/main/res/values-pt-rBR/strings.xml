@@ -1667,4 +1667,9 @@
     <string name="study_suggest_dismiss">Agora não</string>
     <string name="study_week_by_category">Esta semana: %1$s</string>
     <string name="study_category_time">%1$s %2$d h %3$d min</string>
+    <string name="error_engine_command">Não foi possível concluir esta ação.</string>
+    <string name="error_engine_open">Não foi possível abrir este arquivo como PDF.</string>
+    <string name="error_engine_render">Não foi possível exibir esta página.</string>
+    <string name="error_engine_no_document">Este documento não está mais aberto.</string>
+    <string name="error_engine_internal">Um erro interno interrompeu esta ação. Se o documento parecer errado, feche-o e abra-o novamente.</string>
 </resources>

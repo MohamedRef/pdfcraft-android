@@ -1962,4 +1962,9 @@
     <string name="study_suggest_dismiss">Pas maintenant</string>
     <string name="study_week_by_category">Cette semaine : %1$s</string>
     <string name="study_category_time">%1$s %2$d h %3$d min</string>
+    <string name="error_engine_command">Cette action n\'a pas pu être effectuée.</string>
+    <string name="error_engine_open">Ce fichier n\'a pas pu être ouvert en tant que PDF.</string>
+    <string name="error_engine_render">Cette page n\'a pas pu être affichée.</string>
+    <string name="error_engine_no_document">Ce document n\'est plus ouvert.</string>
+    <string name="error_engine_internal">Une erreur interne a interrompu cette action. Si le document semble incorrect, fermez-le puis rouvrez-le.</string>
 </resources>
