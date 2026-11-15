@@ -122,31 +122,21 @@ internal class ScanInkStats {
     var patches = 0
     var patchMsMax = 0L
 
-    /** Strokes drawn into the display's front buffer (low-latency ink). */
-    var frontStrokes = 0
-
     fun diag(ink: Boolean): Array<Pair<String, Any?>> = arrayOf(
         "ink" to ink, "engine_draws" to engineDraws, "engine_ms_max" to engineMsMax, "undo_ms_max" to undoMsMax,
         "marks_removed" to removed, "frames_over_16ms" to framesOver16, "samples" to samples, "ink_strokes" to strokes,
-        "patches" to patches, "patch_ms_max" to patchMsMax, "front_strokes" to frontStrokes,
+        "patches" to patches, "patch_ms_max" to patchMsMax,
     )
 }
 
 /** One stroke's line (#520): its tool, its samples, how long it took and its sample rate; whether a pen drew it. */
-internal fun scanInkStrokeDiag(tool: String, samples: Int, ms: Long, stylus: Boolean, framesOver16: Int, front: Boolean = false, width: Float? = null): Array<Pair<String, Any?>> = arrayOf(
+internal fun scanInkStrokeDiag(tool: String, samples: Int, ms: Long, stylus: Boolean, framesOver16: Int, width: Float? = null): Array<Pair<String, Any?>> = arrayOf(
     "tool" to tool, "samples" to samples, "ms" to ms,
     "rate_hz" to (if (ms > 0) Math.round(samples * 1000.0 / ms) else 0L),
-    "stylus" to stylus, "path" to (if (front) "front" else "normal"), "frames_over_16ms" to framesOver16,
+    "stylus" to stylus, "frames_over_16ms" to framesOver16,
     // the stroke's width as a share of the page's longer side, with the slider (#520)
     "width" to width?.let { Math.round(it * 100000.0) / 100000.0 },
 )
-
-/**
- * Whether a stroke of [tool] is drawn into the display's front buffer (#520): with Markup's ink
- * and the viewer's own "Low-latency ink" setting, the pen only, as the viewer's Draw does with
- * opaque ink (a highlighter or the eraser's veil would double up where segments meet).
- */
-internal fun scanMarkupFront(tool: ScanMarkupTool, ink: Boolean, lowLatency: Boolean): Boolean = ink && lowLatency && tool == ScanMarkupTool.Pen
 
 /** The widths the size slider runs between (#520): from half the smallest dot to half again the largest. */
 internal fun scanMarkupWidthRange(sizes: List<Float>): ClosedFloatingPointRange<Float> = sizes.first() * 0.5f..sizes.last() * 1.5f

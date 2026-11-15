@@ -1002,9 +1002,7 @@
     <string name="ink_latency_refresh">Atualizar</string>
     <string name="ink_latency_none">ainda não medida</string>
     <string name="ink_latency_value">%1$d ms típico, %2$d ms no pior caso (95%%), %3$d amostras</string>
-    <string name="ink_latency_low">Baixa latência</string>
-    <string name="ink_latency_normal">Normal</string>
-    <string name="ink_latency_explanation">Escreva com a caneta com a tinta de baixa latência desligada e depois ligada, e compare. Medido do evento da caneta até o desenho do app; a tela acrescenta um pouco mais.</string>
+    <string name="ink_latency_explanation">Medido do evento da caneta até o desenho do app; a tela acrescenta um pouco mais.</string>
     <string name="ink_latency_title">Latência da tinta neste dispositivo</string>
     <string name="palm_guard_calibrate_clear">Limpar toques</string>
     <string name="palm_guard_calibrate_help">Aproxime a caneta ou escreva e apoie a mão como ao escrever. Toques verdes são ignorados; vermelhos rolariam a página ou tocariam botões. Ajuste o tamanho até a mão apoiada cair no verde.</string>
@@ -1035,8 +1033,6 @@
     <string name="ink_color_vermillion">Vermelhão</string>
     <string name="ink_color_bluish_green">Verde-azulado</string>
     <string name="ink_color_sky_blue">Azul-celeste</string>
-    <string name="ink_low_latency_explanation">Desenha a linha que você escreve direto na tela antes de o app redesenhar. Só canetas opacas.</string>
-    <string name="ink_low_latency">Tinta de baixa latência (experimental)</string>
     <string name="zoom_box_new_line">Nova linha</string>
     <string name="zoom_box">Lupa</string>
     <string name="pen_gesture_scratched">%1$d traços apagados. Desfazer os restaura.</string>

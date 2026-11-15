@@ -1651,9 +1651,7 @@
     <string name="ink_latency_refresh">Update</string>
     <string name="ink_latency_none">not measured yet</string>
     <string name="ink_latency_value">%1$d ms typical, %2$d ms at worst (95%%), %3$d samples</string>
-    <string name="ink_latency_low">Low-latency</string>
-    <string name="ink_latency_normal">Normal</string>
-    <string name="ink_latency_explanation">Write with the pen with Low-latency ink off, then on, and compare. Measured from the pen event to the app\'s drawing; the screen adds a little more.</string>
+    <string name="ink_latency_explanation">Measured from the pen event to the app\'s drawing; the screen adds a little more.</string>
     <string name="ink_latency_title">Ink latency on this device</string>
     <!-- Translator note: Palm guard: ignores touches from the side of the hand while writing with a stylus. -->
     <string name="palm_guard_calibrate_clear">Clear touches</string>
@@ -1688,8 +1686,6 @@
     <string name="ink_color_bluish_green">Bluish green</string>
     <string name="ink_color_sky_blue">Sky blue</string>
     <!-- Translator note: Low-latency ink: an experimental faster way of drawing on screen. -->
-    <string name="ink_low_latency_explanation">Draws the line you are writing straight to the screen before the app redraws. Opaque pens only.</string>
-    <string name="ink_low_latency">Low-latency ink (experimental)</string>
     <!-- Translator note: Zoom box: a magnified strip for writing small, neat ink that is placed on the page. -->
     <string name="zoom_box_new_line">New line</string>
     <string name="zoom_box">Zoom box</string>
