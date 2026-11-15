@@ -1287,6 +1287,10 @@
     <string name="pen_lab_taper_end">Fin en pointe (largeurs de stylo)</string>
     <string name="pen_lab_damping">Lissage de la largeur (ms)</string>
     <string name="pen_lab_smoothing">Lissage du trait</string>
+    <string name="pen_lab_group_ink">Encre et papier</string>
+    <string name="pen_lab_density_min">Encre au toucher le plus léger (1 = pleine)</string>
+    <string name="pen_lab_density_max">Encre à la pression la plus forte (1 = pleine)</string>
+    <string name="pen_lab_tilt">Incliner le stylet (plus large, plus clair)</string>
     <string name="pen_lab_group_measured">Pression mesurée</string>
     <string name="pen_lab_pressure">Votre pression d’écriture : de %1$s à %2$s, sur %3$d traits</string>
     <string name="pen_lab_pressure_none">Pas encore mesurée : écrivez quelques lignes avec le stylet</string>

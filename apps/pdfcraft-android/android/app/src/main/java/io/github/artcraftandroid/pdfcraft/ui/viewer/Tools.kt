@@ -134,6 +134,8 @@ internal class InkStroke(
 
     val points = mutableStateListOf<Offset>()
     val scales = mutableStateListOf<Float>()
+    /** A pencil's ink density per point (#569), from [dynamics]; empty for solid ink. */
+    val densities = mutableStateListOf<Float>()
     var pressureSensitive by mutableStateOf(varies)
     /** Bumped when [scales] change in place (the end taper), so cached outlines are rebuilt. */
     var widthVersion by mutableStateOf(0)
@@ -155,7 +157,8 @@ internal class InkStroke(
         lastTimeMs = timeMs
         lastPressure = pressure
         points.add(q)
-        scales.add(dynamics?.next(q, timeMs, pressure) ?: 1f)
+        scales.add(dynamics?.next(q, timeMs, pressure, if (stylus) StylusLog.tiltRad else Float.NaN) ?: 1f)
+        addDensity()
         jetpack?.let { j ->
             j.add(p, timeMs, pressure)
             jetpackPath = j.path()
@@ -180,11 +183,27 @@ internal class InkStroke(
         return true
     }
 
+    private fun addDensity() {
+        if (grain) densities.add(dynamics?.density ?: 1f)
+    }
+
+    /** Whether this stroke shows the paper through a pencil's grain. */
+    val grain: Boolean = dynamics?.grain == true
+
     /** On lift: a smoothed line that stopped short of the pen is taken to where the pen left the page. */
     fun catchUp() {
         val end = smoother?.end() ?: return
         points.add(end)
-        scales.add(dynamics?.next(end, lastTimeMs, lastPressure) ?: 1f)
+        scales.add(dynamics?.next(end, lastTimeMs, lastPressure, if (stylus) StylusLog.tiltRad else Float.NaN) ?: 1f)
+        addDensity()
+    }
+
+    /** Keeps [densities] one per point after [points] changed shape (a dot, a straightened or snapped line). */
+    fun matchDensities() {
+        if (densities.isEmpty()) return
+        val fill = densities.firstOrNull() ?: 1f
+        while (densities.size < points.size) densities.add(fill)
+        while (densities.size > points.size) densities.removeAt(densities.lastIndex)
     }
 
     /** The clean shape shown while the finger is held still (press and hold to snap). */
@@ -641,7 +660,7 @@ private fun ZoomWritingPad(
                     )
                 }
                 for (s in drafts) if (s.page == zb.page) {
-                    if (!drawJetpackLive(s, origin, m)) drawInkStroke(s.paths.runs(s), Color(s.appearance.argb), s.appearance.opacity, s.appearance.style == InkStyle.Highlighter, origin, m, pageRect)
+                    if (!drawJetpackLive(s, origin, m)) drawInkStroke(s.paths.runs(s), Color(s.appearance.argb), s.appearance.opacity, s.appearance.style == InkStyle.Highlighter, origin, m, pageRect, page.height)
                 }
                 // the tail to the pen while a stroke is written on the pad: smoothing keeps the line a little behind it
                 writing?.takeIf { it.page == zb.page && it.jetpack == null }?.let { s ->
@@ -827,7 +846,7 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
             clearSelection()
             if (taken.isNotEmpty()) {
                 val groups = inkSaveCommandGroups(
-                    taken.map { s -> InkSaveStroke(s.page, s.appearance, s.points.toList(), s.scales.toList(), s.pressureSensitive) },
+                    taken.map { s -> InkSaveStroke(s.page, s.appearance, s.points.toList(), s.scales.toList(), s.pressureSensitive, s.densities.toList()) },
                 ) { argb -> Color(argb).hex() }
                 steps.started()
                 // The drafts stay drawn until the engine has them; the ones it refuses stay drafts (#73).
@@ -1047,11 +1066,14 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
             val half = inkStylePointWidths(s.scales.toList(), s.appearance.width, s.appearance.style).map { it / 2f }
             val runs = eraseInkRun(pts, s.scales.toList(), half, a, b, radius)
             if (runs == null) { i++; continue }
+            // the same cut carries a pencil's densities (the points come out the same)
+            val densityRuns = if (s.densities.size == pts.size) eraseInkRun(pts, s.densities.toList(), half, a, b, radius) else null
             strokes.removeAt(i)
-            val pieces = runs.map { run ->
+            val pieces = runs.mapIndexed { k, run ->
                 InkStroke(s.page, s.appearance, s.pressureSensitive, s.shapeMode, null, s.stylus).also {
                     it.points.addAll(run.points)
                     it.scales.addAll(run.scales)
+                    densityRuns?.getOrNull(k)?.scales?.takeIf { d -> d.size == run.points.size }?.let { d -> it.densities.addAll(d) }
                 }
             }
             strokes.addAll(i, pieces)
@@ -1148,12 +1170,15 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
         val points = s.points.toList()
         val runs = clipInkToPage(points, s.scales.toList(), page.width, page.height)
         if (runs.size == 1 && runs[0].points == points) return listOf(s)
+        // the same cut carries a pencil's densities (the points come out the same)
+        val densityRuns = if (s.densities.size == points.size) clipInkToPage(points, s.densities.toList(), page.width, page.height) else null
         val at = strokes.indexOf(s).takeIf { it >= 0 } ?: strokes.size
         strokes.remove(s)
-        val pieces = runs.map { run ->
+        val pieces = runs.mapIndexed { i, run ->
             InkStroke(s.page, s.appearance, s.pressureSensitive, s.shapeMode, null, s.stylus).also {
                 it.points.addAll(run.points)
                 it.scales.addAll(run.pressures)
+                densityRuns?.getOrNull(i)?.pressures?.takeIf { d -> d.size == run.points.size }?.let { d -> it.densities.addAll(d) }
             }
         }
         strokes.addAll(at.coerceAtMost(strokes.size), pieces)
@@ -1467,6 +1492,7 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                         if (persisted.size == 2) {
                             s.points.add(persisted.last())
                             s.scales.add(s.scales.firstOrNull() ?: 1f)
+                            s.matchDensities()
                         }
                     }
                     if (s.shapeMode.isAnnotation) {
@@ -1498,6 +1524,7 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                         s.pressureSensitive = false
                         s.scales.clear()
                         s.scales.addAll(listOf(scale, scale))
+                        s.matchDensities()
                     }
                     // a held shape always snaps; with Snap to shape on, any stroke that is one does
                     val shape = if (s.shapeMode != InkShapeMode.Freehand) {
@@ -1516,6 +1543,7 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                         s.pressureSensitive = false
                         s.scales.clear()
                         s.scales.addAll(List(shape.size) { 1f })
+                        s.densities.clear()
                     }
                     // Cut at the page edge: what is off the page is dropped (#75).
                     val pointsIn = s.points.size
@@ -1622,6 +1650,7 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                         highlighter = s.appearance.style == InkStyle.Highlighter,
                         origin = doc.viewer.pageToScreen(s.page, lift.x, lift.y),
                         scale = doc.viewer.pixelsPerPoint(s.page),
+                        pageHeightPt = doc.viewer.pages.getOrNull(s.page)?.height ?: 0f,
                         pageBoundsOnScreen = pageRect,
                     )
                 }
@@ -1823,6 +1852,7 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                         if (persisted.size == 2) {
                             s.points.add(persisted.last())
                             s.scales.add(s.scales.firstOrNull() ?: 1f)
+                            s.matchDensities()
                         }
                     }
                     if (s.points.size >= 2) {

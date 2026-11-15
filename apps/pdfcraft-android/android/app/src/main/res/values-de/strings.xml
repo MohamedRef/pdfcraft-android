@@ -1407,6 +1407,10 @@
     <string name="pen_lab_taper_end">Spitzes Ende (Stiftbreiten)</string>
     <string name="pen_lab_damping">Breitenglättung (ms)</string>
     <string name="pen_lab_smoothing">Linienglättung</string>
+    <string name="pen_lab_group_ink">Tinte und Papier</string>
+    <string name="pen_lab_density_min">Tinte bei leichtester Berührung (1 = deckend)</string>
+    <string name="pen_lab_density_max">Tinte bei stärkstem Druck (1 = deckend)</string>
+    <string name="pen_lab_tilt">Stift neigen (breiter, heller)</string>
     <string name="pen_lab_group_measured">Gemessener Druck</string>
     <string name="pen_lab_pressure">Ihr Schreibdruck: %1$s bis %2$s, aus %3$d Strichen</string>
     <string name="pen_lab_pressure_none">Noch nicht gemessen: Schreiben Sie ein paar Zeilen mit dem Stift</string>

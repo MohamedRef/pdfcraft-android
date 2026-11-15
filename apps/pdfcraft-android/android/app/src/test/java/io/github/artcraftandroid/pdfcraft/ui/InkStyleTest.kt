@@ -40,7 +40,7 @@ class InkStyleTest {
 
     @Test fun lowOpacityAndEngineHighlightAreExplicit() {
         assertEquals(0.4f, inkStyleOpacity(1f, InkStyle.Highlighter), 0.00001f)
-        assertEquals(0.4f, inkStyleOpacity(0.5f, InkStyle.Pencil), 0.00001f)
+        assertEquals(0.5f, inkStyleOpacity(0.5f, InkStyle.Pencil), 0.00001f)
         assertEquals("freehand_highlight", inkStyleEngineType(InkStyle.Highlighter))
         assertEquals("ink", inkStyleEngineType(InkStyle.Brush))
         assertEquals(1f, inkStyleOpacity(Float.NaN, InkStyle.Ballpoint), 0.00001f)

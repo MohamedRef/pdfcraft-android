@@ -1640,6 +1640,10 @@
     <string name="pen_lab_taper_end">Pointed end (pen widths)</string>
     <string name="pen_lab_damping">Width smoothing (ms)</string>
     <string name="pen_lab_smoothing">Line smoothing</string>
+    <string name="pen_lab_group_ink">Ink and paper</string>
+    <string name="pen_lab_density_min">Ink at the lightest touch (1 = solid)</string>
+    <string name="pen_lab_density_max">Ink at the hardest touch (1 = solid)</string>
+    <string name="pen_lab_tilt">Leaning the pen (wider, lighter)</string>
     <string name="pen_lab_group_measured">Measured pressure</string>
     <string name="pen_lab_pressure">Your writing pressure: %1$s to %2$s, from %3$d strokes</string>
     <string name="pen_lab_pressure_none">Not measured yet: write a few lines with the pen</string>

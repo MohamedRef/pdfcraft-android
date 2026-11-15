@@ -992,6 +992,10 @@
     <string name="pen_lab_taper_end">Fim pontudo (larguras da caneta)</string>
     <string name="pen_lab_damping">Suavização da largura (ms)</string>
     <string name="pen_lab_smoothing">Suavização do traço</string>
+    <string name="pen_lab_group_ink">Tinta e papel</string>
+    <string name="pen_lab_density_min">Tinta no toque mais leve (1 = sólida)</string>
+    <string name="pen_lab_density_max">Tinta na pressão mais forte (1 = sólida)</string>
+    <string name="pen_lab_tilt">Inclinar a caneta (mais largo, mais claro)</string>
     <string name="pen_lab_group_measured">Pressão medida</string>
     <string name="pen_lab_pressure">Sua pressão ao escrever: de %1$s a %2$s, em %3$d traços</string>
     <string name="pen_lab_pressure_none">Ainda não medida: escreva algumas linhas com a caneta</string>

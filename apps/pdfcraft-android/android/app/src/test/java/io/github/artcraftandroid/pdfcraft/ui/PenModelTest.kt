@@ -6,6 +6,9 @@ import io.github.artcraftandroid.pdfcraft.ui.viewer.InkSmoother
 import io.github.artcraftandroid.pdfcraft.ui.viewer.InkStyle
 import io.github.artcraftandroid.pdfcraft.ui.viewer.PEN_TAPER_FLOOR
 import io.github.artcraftandroid.pdfcraft.ui.viewer.PenDials
+import io.github.artcraftandroid.pdfcraft.ui.viewer.PencilGrain
+import io.github.artcraftandroid.pdfcraft.ui.viewer.pencilGrainLevels
+import io.github.artcraftandroid.pdfcraft.ui.viewer.PenTuning
 import io.github.artcraftandroid.pdfcraft.ui.viewer.PenDynamics
 import io.github.artcraftandroid.pdfcraft.ui.viewer.PenStrokeStats
 import io.github.artcraftandroid.pdfcraft.ui.viewer.PressureCalibration
@@ -217,7 +220,7 @@ class PenModelTest {
     }
 
     @Test fun storedDialsCannotBreakAStroke() {
-        val bad = penDialsOf(List(11) { Float.NaN }).sanitized()
+        val bad = penDialsOf(List(PenTuning.KEYS.size) { Float.NaN }).sanitized()
         val dyn = PenDynamics(bad, PressureSource.Pen, PressureRange(), penWidth)
         val w = slowWord.map { dyn.next(it.p, it.t, it.pressure) }
         assertTrue(w.all { it.isFinite() && it > 0f })
@@ -375,5 +378,66 @@ class PenModelTest {
         assertEquals(emptyList<Offset>(), inkTailPoints(Offset(1f, 1f), Offset(Float.NaN, 0f), Float.NaN to 0f))
         assertEquals(emptyList<Offset>(), inkTailPoints(Offset(Float.NaN, 1f), Offset(2f, 2f), 1f to 1f))
         assertEquals(null, InkSmoother(0.5f).tip)
+    }
+
+    @Test fun thePencilGrainIsTheEnginesGrain() {
+        // the engine's grain_hash gives these words (crates/annot tests check the same)
+        assertEquals(listOf(0, 0x5D139822, 0x65EF3B87), listOf(PencilGrain.hash(0), PencilGrain.hash(1), PencilGrain.hash(1023)))
+        val cells = PencilGrain.TILE * PencilGrain.TILE
+        for (level in 1..PencilGrain.LEVELS) {
+            var on = 0
+            for (gy in 0 until PencilGrain.TILE) for (gx in 0 until PencilGrain.TILE) {
+                if (PencilGrain.on(gx, gy, level)) {
+                    on++
+                    if (level < PencilGrain.LEVELS) assertTrue(PencilGrain.on(gx, gy, level + 1))
+                }
+                assertEquals(PencilGrain.on(gx, gy, level), PencilGrain.on(gx - 3 * PencilGrain.TILE, gy - PencilGrain.TILE, level))
+            }
+            assertEquals(cells * level / PencilGrain.LEVELS, on)
+        }
+        assertEquals(listOf(1, 2, 8, 8), listOf(0.0, 0.31, 0.94, Double.NaN).map(PencilGrain::level))
+        assertEquals(0.31, PencilGrain.saved(0.3149f), 1e-9)
+    }
+
+    @Test fun thePencilIsLighterWhenLightAndWhenLeaned() {
+        val dials = PenDials.default(InkStyle.Pencil)
+        assertTrue(dials.grain && dials.varies)
+        fun density(pressure: Float, tilt: Float = Float.NaN): Float {
+            val dyn = PenDynamics(dials, PressureSource.Pen, PressureRange(), penWidth)
+            repeat(30) { dyn.next(Offset(it.toFloat(), 0f), it * 8L, pressure, tilt) }
+            return dyn.density
+        }
+        assertTrue(density(0.05f) < 0.45f)
+        assertTrue(density(1f) > 0.85f)
+        assertTrue("leaned ${density(0.6f, 1.4f)} < upright ${density(0.6f, 0.1f)}", density(0.6f, 1.4f) < density(0.6f, 0.1f) * 0.75f)
+        // held as for writing (the owner's S Pen: 41°…50° from upright) is not shading
+        assertEquals(density(0.6f, 0.1f), density(0.6f, 0.85f), 1e-6f)
+        // and broader when leaned
+        fun width(tilt: Float): Float {
+            val dyn = PenDynamics(dials, PressureSource.Pen, PressureRange(), penWidth)
+            var w = 0f
+            repeat(30) { w = dyn.next(Offset(it.toFloat(), 0f), it * 8L, 0.6f, tilt) }
+            return w
+        }
+        assertTrue(width(1.4f) > width(0.1f) * 2.5f)
+        assertEquals(width(0.1f), width(0.85f), 1e-6f)
+        // the other pens stay solid
+        val ball = PenDynamics(PenDials.default(InkStyle.Ballpoint), PressureSource.Pen, PressureRange(), penWidth)
+        ball.next(Offset.Zero, 0L, 0.2f, 1.2f)
+        assertEquals(1f, ball.density, 0f)
+    }
+
+    @Test fun aPencilStrokeIsDrawnPerGrainStep() {
+        val pts = List(5) { Offset(it * 10f, 0f) }
+        val radii = List(5) { 3f }
+        // light, light, dense, dense, solid
+        val (disc, seg) = pencilGrainLevels(listOf(0.3f, 0.3f, 0.8f, 0.8f, 1f))
+        // (0.3+0.8)/2 = 0.55 -> 4; (0.8+1)/2 = 0.9 -> 7
+        assertEquals(listOf(2, 4, 6, 7), (disc + seg).distinct().sorted())
+        assertEquals(4, seg.size)
+        // a point takes the lighter of its two segments
+        assertEquals(minOf(seg[1], seg[2]), disc[2])
+        assertTrue(pencilGrainLevels(List(5) { 1f }).let { (d, s) -> (d + s).all { it >= io.github.artcraftandroid.pdfcraft.ui.viewer.PencilGrain.LEVELS } })
+        assertEquals(radii.size, disc.size)
     }
 }

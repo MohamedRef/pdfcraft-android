@@ -5920,3 +5920,28 @@ endstream",
     assert!(list(&doc, 0)[0].contains(b"AAPL:AKExtras"));
     assert!(doc.repair_log().is_empty(), "{:?}", doc.repair_log());
 }
+
+#[test]
+fn the_pencil_grain_nests_and_covers_its_density() {
+    use crate::appearance::{GRAIN_LEVELS, GRAIN_TILE, grain_hash, grain_level, grain_on};
+    // the app draws the same grain: its hash gives these words
+    assert_eq!([grain_hash(0), grain_hash(1), grain_hash(1023)], [0x0, 0x5D139822, 0x65EF3B87]);
+    let cells = GRAIN_TILE * GRAIN_TILE;
+    for level in 1..=GRAIN_LEVELS {
+        let mut on = 0;
+        for gy in 0..GRAIN_TILE {
+            for gx in 0..GRAIN_TILE {
+                if grain_on(gx, gy, level) {
+                    on += 1;
+                    if level < GRAIN_LEVELS {
+                        assert!(grain_on(gx, gy, level + 1), "a denser step keeps every dot");
+                    }
+                }
+                // the grain repeats, also to the left of and below the origin
+                assert_eq!(grain_on(gx, gy, level), grain_on(gx - GRAIN_TILE * 3, gy - GRAIN_TILE, level));
+            }
+        }
+        assert_eq!(on, cells * i64::from(level) / i64::from(GRAIN_LEVELS));
+    }
+    assert_eq!((grain_level(0.0), grain_level(0.31), grain_level(0.94), grain_level(f64::NAN)), (1, 2, 8, 8));
+}

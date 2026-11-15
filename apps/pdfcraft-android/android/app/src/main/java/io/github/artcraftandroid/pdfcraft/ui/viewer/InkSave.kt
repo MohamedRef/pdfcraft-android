@@ -11,6 +11,8 @@ internal data class InkSaveStroke(
     val scales: List<Float>,
     /** The width varies along the stroke: saved with a width per point. */
     val pressureSensitive: Boolean,
+    /** A pencil's ink density per point (#569); empty for solid ink. */
+    val densities: List<Float> = emptyList(),
 )
 
 /** PDF annotations stay bounded: a longer pressure drawing is split into further annotations. */
@@ -29,7 +31,7 @@ internal fun inkSaveCommandGroups(strokes: List<InkSaveStroke>, hex: (Int) -> St
 
 /** The `comment_add` argument maps of the strokes of one group (see [inkSaveCommandGroups]). */
 internal fun inkSaveCommands(strokes: List<InkSaveStroke>, hex: (Int) -> String): List<Map<String, Any?>> {
-    data class Piece(val stroke: InkSaveStroke, val points: List<Offset>, val widths: List<Float>?, val width: Float)
+    data class Piece(val stroke: InkSaveStroke, val points: List<Offset>, val widths: List<Float>?, val width: Float, val densities: List<Float>? = null)
     val pieces = strokes.flatMap { s ->
         val pressure = s.pressureSensitive && s.appearance.style != InkStyle.Highlighter && s.points.size >= 2 &&
             s.scales.size == s.points.size
@@ -38,7 +40,7 @@ internal fun inkSaveCommands(strokes: List<InkSaveStroke>, hex: (Int) -> String)
             s.points.indices.chunked(MAX_PRESSURE_INK_POINTS - 1).map { idx ->
                 // Neighbouring pieces share their boundary point, so the line stays continuous.
                 val range = idx.first()..minOf(idx.last() + 1, s.points.lastIndex)
-                Piece(s, s.points.slice(range), widths.slice(range), 0f)
+                Piece(s, s.points.slice(range), widths.slice(range), 0f, s.densities.takeIf { it.size == s.points.size }?.slice(range))
             }.filter { it.points.size >= 2 }
         } else {
             inkStyleWidthRuns(s.scales, s.appearance.width, s.pressureSensitive, s.appearance.style).map { run ->
@@ -47,7 +49,7 @@ internal fun inkSaveCommands(strokes: List<InkSaveStroke>, hex: (Int) -> String)
         }
     }
     val batches = consecutiveInkBatches(pieces) { p ->
-        Triple(p.stroke.page, p.stroke.appearance.copy(width = if (p.widths != null) 0f else p.width), p.widths != null)
+        Triple(p.stroke.page, p.stroke.appearance.copy(width = if (p.widths != null) 0f else p.width), (p.widths != null) to (p.densities != null))
     }
     return batches.map { list ->
         val first = list.first()
@@ -60,6 +62,9 @@ internal fun inkSaveCommands(strokes: List<InkSaveStroke>, hex: (Int) -> String)
             "author" to a.author,
         )
         if (first.widths != null) command["widths"] = list.map { piece -> piece.widths!!.map { it.toDouble() } }
+        if (first.widths != null && list.all { it.densities != null }) {
+            command["densities"] = list.map { piece -> piece.densities!!.map { (Math.round(it.coerceIn(0f, 1f) * 100f) / 100.0) } }
+        }
         command
     }
 }

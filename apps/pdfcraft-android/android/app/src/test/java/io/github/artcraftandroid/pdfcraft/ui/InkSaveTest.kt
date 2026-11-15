@@ -100,4 +100,15 @@ class InkSaveTest {
         assertEquals(1, groups.size)
         assertEquals(1, groups[0].size)
     }
+
+    @Suppress("UNCHECKED_CAST")
+    @Test fun aPencilSavesItsInkDensityPerPoint() {
+        val s = InkSaveStroke(0, pen, line(4), listOf(0.5f, 0.6f, 0.7f, 0.8f), true, listOf(0.354f, 0.5f, 0.71f, 0.9f))
+        val cmds = inkSaveCommands(listOf(s), ::hex)
+        assertEquals(listOf(listOf(0.35, 0.5, 0.71, 0.9)), cmds[0]["densities"] as List<List<Double>>)
+        // a solid pen sends none, and a pencil next to a pen is not merged with it
+        val plain = InkSaveStroke(0, pen, line(4), listOf(0.5f, 0.6f, 0.7f, 0.8f), true)
+        assertNull(inkSaveCommands(listOf(plain), ::hex)[0]["densities"])
+        assertEquals(2, inkSaveCommands(listOf(s, plain), ::hex).size)
+    }
 }

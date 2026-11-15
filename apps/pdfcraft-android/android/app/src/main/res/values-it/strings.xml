@@ -1397,6 +1397,10 @@
     <string name="pen_lab_taper_end">Fine a punta (larghezze della penna)</string>
     <string name="pen_lab_damping">Smussatura della larghezza (ms)</string>
     <string name="pen_lab_smoothing">Smussatura del tratto</string>
+    <string name="pen_lab_group_ink">Inchiostro e carta</string>
+    <string name="pen_lab_density_min">Inchiostro al tocco più leggero (1 = pieno)</string>
+    <string name="pen_lab_density_max">Inchiostro alla pressione più forte (1 = pieno)</string>
+    <string name="pen_lab_tilt">Inclinare la penna (più largo, più chiaro)</string>
     <string name="pen_lab_group_measured">Pressione misurata</string>
     <string name="pen_lab_pressure">La tua pressione di scrittura: da %1$s a %2$s, su %3$d tratti</string>
     <string name="pen_lab_pressure_none">Non ancora misurata: scrivi qualche riga con la penna</string>

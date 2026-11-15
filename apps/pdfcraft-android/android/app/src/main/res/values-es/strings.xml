@@ -1415,6 +1415,10 @@
     <string name="pen_lab_taper_end">Final en punta (anchos del lápiz)</string>
     <string name="pen_lab_damping">Suavizado del ancho (ms)</string>
     <string name="pen_lab_smoothing">Suavizado del trazo</string>
+    <string name="pen_lab_group_ink">Tinta y papel</string>
+    <string name="pen_lab_density_min">Tinta con el toque más suave (1 = sólida)</string>
+    <string name="pen_lab_density_max">Tinta con la presión más fuerte (1 = sólida)</string>
+    <string name="pen_lab_tilt">Inclinar el lápiz (más ancho, más claro)</string>
     <string name="pen_lab_group_measured">Presión medida</string>
     <string name="pen_lab_pressure">Tu presión al escribir: de %1$s a %2$s, de %3$d trazos</string>
     <string name="pen_lab_pressure_none">Aún sin medir: escribe unas líneas con el lápiz</string>

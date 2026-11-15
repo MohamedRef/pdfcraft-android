@@ -1256,7 +1256,15 @@ fn draw_ink(context: &AppearanceContext<'_>, drawing: &mut AppearanceDrawing) ->
     let highlighter = is_freehand_highlight(context);
     let col = if highlighter { highlighter_colour(stroke?, context.parts.line) } else { stroke? };
     let list = d.get(b"InkList")?.as_array()?;
-    if let Some(outline) = pressure_ink_outline(list, d.get(b"PCWidths").and_then(Object::as_array).map(Vec::as_slice), w) {
+    let factors = d.get(b"PCWidths").and_then(Object::as_array).map(Vec::as_slice);
+    if let (Some(f), Some(dens)) = (factors, d.get(b"PCDensity").and_then(Object::as_array)) {
+        if let Some(content) = pencil_content(list, f, dens, w) {
+            c.push_str(&rg(col));
+            c.push_str(&content);
+            return Some(());
+        }
+    }
+    if let Some(outline) = pressure_ink_outline(list, factors, w) {
         // Android pressure ink: one filled outline, so a translucent line is as opaque throughout
         // as one pen stroke, where overlapping strokes of varying width would darken.
         c.push_str(&rg(col));
@@ -1291,11 +1299,32 @@ const PRESSURE_INK_MAX_SAMPLES: usize = 20_000;
 /// point and a quadrilateral between neighbouring samples, all wound the same way so the nonzero
 /// fill paints their union once. `None` (draw the plain ink) unless the widths match the points.
 pub(crate) fn pressure_ink_outline(list: &[Object], factors: Option<&[Object]>, width: f64) -> Option<String> {
+    let mut out = String::new();
+    for piece in pressure_ink_pieces(list, factors, width)? {
+        for (p, r) in &piece.discs {
+            disc(&mut out, *p, *r);
+        }
+        for (_, quad) in &piece.quads {
+            quad_path(&mut out, quad);
+        }
+    }
+    (!out.is_empty()).then_some(out)
+}
+
+/// One stroke of pressure ink as the shapes its outline is the union of: a disc at every point,
+/// and quadrilaterals along the smoothed curve, each with the index of the segment it lies on.
+pub(crate) struct InkPieces {
+    pub discs: Vec<((f64, f64), f64)>,
+    pub quads: Vec<(usize, [(f64, f64); 4])>,
+}
+
+/// The pieces of each stroke of pressure ink (see [`pressure_ink_outline`]).
+pub(crate) fn pressure_ink_pieces(list: &[Object], factors: Option<&[Object]>, width: f64) -> Option<Vec<InkPieces>> {
     let factors = factors?;
     if factors.len() != list.len() || !(width.is_finite() && width > 0.0) {
         return None;
     }
-    let mut out = String::new();
+    let mut all = Vec::with_capacity(list.len());
     for (s, f) in list.iter().zip(factors) {
         let v: Vec<f64> = s.as_array()?.iter().map(Object::as_f64).collect::<Option<_>>()?;
         let pts: Vec<(f64, f64)> = v.as_chunks::<2>().0.iter().map(|p| (p[0], p[1])).collect();
@@ -1304,8 +1333,9 @@ pub(crate) fn pressure_ink_outline(list: &[Object], factors: Option<&[Object]>, 
             return None;
         }
         let radius = |i: usize| (ws[i] * width / 2.0).clamp(0.01, 400.0);
-        // Samples along the smoothed curve, with widths between their points' widths.
-        let mut samples: Vec<((f64, f64), f64)> = vec![(pts[0], radius(0))];
+        // Samples along the smoothed curve, with widths between their points' widths, each with
+        // the segment it ends on.
+        let mut samples: Vec<((f64, f64), f64, usize)> = vec![(pts[0], radius(0), 0)];
         for (i, [c1, c2, end]) in smooth_segments(&pts).into_iter().enumerate() {
             let p0 = pts[i];
             let (r0, r1) = (radius(i), radius(i + 1));
@@ -1316,7 +1346,7 @@ pub(crate) fn pressure_ink_outline(list: &[Object], factors: Option<&[Object]>, 
                 let u = 1.0 - t;
                 let b = [u * u * u, 3.0 * u * u * t, 3.0 * u * t * t, t * t * t];
                 let at = (b[0] * p0.0 + b[1] * c1.0 + b[2] * c2.0 + b[3] * end.0, b[0] * p0.1 + b[1] * c1.1 + b[2] * c2.1 + b[3] * end.1);
-                samples.push((at, r0 + (r1 - r0) * t));
+                samples.push((at, r0 + (r1 - r0) * t, i));
             }
         }
         if samples.len() > PRESSURE_INK_MAX_SAMPLES {
@@ -1325,11 +1355,10 @@ pub(crate) fn pressure_ink_outline(list: &[Object], factors: Option<&[Object]>, 
             samples = samples.into_iter().step_by(stride).collect();
             samples.push(last);
         }
-        for i in 0..pts.len() {
-            disc(&mut out, pts[i], radius(i));
-        }
+        let discs = (0..pts.len()).map(|i| (pts[i], radius(i))).collect();
+        let mut quads = Vec::with_capacity(samples.len());
         for pair in samples.windows(2) {
-            let ((a, ra), (b, rb)) = (pair[0], pair[1]);
+            let ((a, ra, _), (b, rb, seg)) = (pair[0], pair[1]);
             let (dx, dy) = (b.0 - a.0, b.1 - a.1);
             let len = dx.hypot(dy);
             if len < 1e-6 {
@@ -1340,16 +1369,156 @@ pub(crate) fn pressure_ink_outline(list: &[Object], factors: Option<&[Object]>, 
             if signed_area(&quad) < 0.0 {
                 quad.reverse();
             }
-            out.push_str(&format!("{} {} m\n", n(quad[0].0), n(quad[0].1)));
-            for p in &quad[1..] {
-                out.push_str(&format!("{} {} l\n", n(p.0), n(p.1)));
+            quads.push((seg, quad));
+        }
+        all.push(InkPieces { discs, quads });
+    }
+    Some(all)
+}
+
+fn quad_path(out: &mut String, quad: &[(f64, f64); 4]) {
+    out.push_str(&format!("{} {} m\n", n(quad[0].0), n(quad[0].1)));
+    for p in &quad[1..] {
+        out.push_str(&format!("{} {} l\n", n(p.0), n(p.1)));
+    }
+    out.push_str("h\n");
+}
+
+/// The side of one grain dot of a pencil (#569), in points.
+pub const GRAIN_PT: f64 = 0.3;
+/// The grain repeats every this many dots, across and up.
+pub const GRAIN_TILE: i64 = 32;
+/// The pencil's densities are drawn in this many steps; the top one is solid.
+pub const GRAIN_LEVELS: u8 = 8;
+
+/// The grain's order (#569): every dot of the tile has a rank, and a density shows the dots ranked
+/// below it, so a denser grain holds every dot of a lighter one and where two densities meet
+/// nothing is drawn twice. The ranks come from a fixed integer hash, the same in the app.
+fn grain_ranks() -> &'static [u16] {
+    static RANKS: std::sync::OnceLock<Vec<u16>> = std::sync::OnceLock::new();
+    RANKS.get_or_init(|| {
+        let cells = (GRAIN_TILE * GRAIN_TILE) as u32;
+        let mut order: Vec<u32> = (0..cells).collect();
+        order.sort_by_key(|&i| (grain_hash(i), i));
+        let mut ranks = vec![0u16; cells as usize];
+        for (rank, &i) in order.iter().enumerate() {
+            ranks[i as usize] = rank as u16;
+        }
+        ranks
+    })
+}
+
+/// A 32-bit integer hash (multiply, shift, xor), for [`grain_ranks`].
+pub fn grain_hash(i: u32) -> u32 {
+    let mut x = i.wrapping_mul(0x9E37_79B1);
+    x ^= x >> 15;
+    x = x.wrapping_mul(0x85EB_CA77);
+    x ^= x >> 13;
+    x
+}
+
+/// The step (1…[`GRAIN_LEVELS`]) a density 0…1 is drawn at.
+pub fn grain_level(density: f64) -> u8 {
+    if !density.is_finite() {
+        return GRAIN_LEVELS;
+    }
+    (density * f64::from(GRAIN_LEVELS)).round().clamp(1.0, f64::from(GRAIN_LEVELS)) as u8
+}
+
+/// Whether the grain dot in column `gx`, row `gy` (counted in dots from the page's origin, up)
+/// is inked at `level`.
+pub fn grain_on(gx: i64, gy: i64, level: u8) -> bool {
+    let i = (gy.rem_euclid(GRAIN_TILE) * GRAIN_TILE + gx.rem_euclid(GRAIN_TILE)) as usize;
+    u32::from(grain_ranks()[i]) * u32::from(GRAIN_LEVELS) < u32::from(level) * (GRAIN_TILE * GRAIN_TILE) as u32
+}
+
+/// The most grain dots one stroke's level may cover; past it that part is drawn solid.
+const GRAIN_MAX_DOTS: i64 = 4_000_000;
+
+/// A pencil drawing (#569): pressure ink whose `/PCDensity` gives each point's ink density. Each
+/// stroke is drawn per density step: the shapes at that step clip an image mask of the grain over
+/// them, so the paper shows between the dots; the top step is filled solid. A disc takes the
+/// lighter step of its two segments, so a denser part never spills round into a lighter one.
+fn pencil_content(list: &[Object], factors: &[Object], densities: &[Object], width: f64) -> Option<String> {
+    let pieces = pressure_ink_pieces(list, Some(factors), width)?;
+    if densities.len() != pieces.len() {
+        return None;
+    }
+    let mut out = String::new();
+    for (piece, dens) in pieces.iter().zip(densities) {
+        let dv: Vec<f64> = dens.as_array()?.iter().map(Object::as_f64).collect::<Option<_>>()?;
+        if dv.len() != piece.discs.len() {
+            return None;
+        }
+        let seg_level = |i: usize| grain_level((dv[i] + dv[(i + 1).min(dv.len() - 1)]) / 2.0);
+        let segments = dv.len().saturating_sub(1);
+        let disc_level = |i: usize| match (i.checked_sub(1).filter(|_| segments > 0), (i < segments).then_some(i)) {
+            (Some(a), Some(b)) => seg_level(a).min(seg_level(b)),
+            (Some(a), None) => seg_level(a),
+            (None, Some(b)) => seg_level(b),
+            (None, None) => grain_level(dv[i]),
+        };
+        let mut levels: Vec<u8> = (0..dv.len()).map(disc_level).chain(piece.quads.iter().map(|(s, _)| seg_level(*s))).collect();
+        levels.sort_unstable();
+        levels.dedup();
+        for level in levels {
+            let mut path = String::new();
+            let mut b = [f64::INFINITY, f64::INFINITY, f64::NEG_INFINITY, f64::NEG_INFINITY];
+            let mut take = |x: f64, y: f64, r: f64| {
+                b = [b[0].min(x - r), b[1].min(y - r), b[2].max(x + r), b[3].max(y + r)];
+            };
+            for (i, (p, r)) in piece.discs.iter().enumerate() {
+                if disc_level(i) == level {
+                    disc(&mut path, *p, *r);
+                    take(p.0, p.1, *r);
+                }
             }
-            out.push_str("h\n");
+            for (seg, quad) in &piece.quads {
+                if seg_level(*seg) == level {
+                    quad_path(&mut path, quad);
+                    for q in quad {
+                        take(q.0, q.1, 0.0);
+                    }
+                }
+            }
+            if path.is_empty() {
+                continue;
+            }
+            let (x0, y0) = ((b[0] / GRAIN_PT).floor() as i64, (b[1] / GRAIN_PT).floor() as i64);
+            let (x1, y1) = ((b[2] / GRAIN_PT).ceil() as i64, (b[3] / GRAIN_PT).ceil() as i64);
+            let (w, h) = (x1 - x0, y1 - y0);
+            if level >= GRAIN_LEVELS || w <= 0 || h <= 0 || w.saturating_mul(h) > GRAIN_MAX_DOTS {
+                out.push_str(&path);
+                out.push_str("f\n");
+                continue;
+            }
+            out.push_str("q\n");
+            out.push_str(&path);
+            out.push_str("W n\n");
+            out.push_str(&format!("{} 0 0 {} {} {} cm\n", n(w as f64 * GRAIN_PT), n(h as f64 * GRAIN_PT), n(x0 as f64 * GRAIN_PT), n(y0 as f64 * GRAIN_PT)));
+            out.push_str(&format!("BI /W {w} /H {h} /IM true /BPC 1 /D [1 0] /F /AHx ID\n"));
+            let row_bytes = (w as usize).div_ceil(8);
+            let mut hex = String::with_capacity(row_bytes * h as usize * 2 + h as usize);
+            for r in 0..h {
+                // the image's first row is its top
+                let gy = y1 - 1 - r;
+                let mut row = vec![0u8; row_bytes];
+                for c in 0..w {
+                    if grain_on(x0 + c, gy, level) {
+                        row[c as usize / 8] |= 0x80 >> (c % 8);
+                    }
+                }
+                for byte in row {
+                    hex.push_str(&format!("{byte:02X}"));
+                }
+                hex.push('\n');
+            }
+            out.push_str(&hex);
+            out.push_str(">\nEI\nQ\n");
         }
     }
     (!out.is_empty()).then_some(out)
 }
-
 /// Twice the signed area of a closed polygon: positive when it winds counter-clockwise.
 fn signed_area(p: &[(f64, f64)]) -> f64 {
     (0..p.len()).map(|i| {

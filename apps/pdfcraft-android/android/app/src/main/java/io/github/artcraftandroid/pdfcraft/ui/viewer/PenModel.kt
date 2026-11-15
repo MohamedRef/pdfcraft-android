@@ -21,6 +21,9 @@ import kotlin.math.pow
  * - [nib] flattens the tip: a stroke along [nibAngleDeg] is thinner by that fraction (0 = round).
  * - [taperStart] and [taperEnd] draw the stroke's ends out to a point over that many pen widths.
  * - [dampingMs] is how fast the width may follow a change (a time constant; 0 = at once).
+ * - [densityMin]…[densityMax] is how much of the paper the ink covers at the lightest and the
+ *   hardest touch (1 = solid ink; less shows the paper through a grain, as a pencil does).
+ * - [tilt] is how much leaning the pen widens the line (up to 3 times) and lightens it.
  * - [smoothing] takes the hand's tremor out of the line itself (0 = the points as the pen gave
  *   them, 1 = the most), see [InkSmoother].
  */
@@ -36,6 +39,9 @@ internal data class PenDials(
     val taperEnd: Float = 0f,
     val dampingMs: Float = 20f,
     val smoothing: Float = 0f,
+    val densityMin: Float = 1f,
+    val densityMax: Float = 1f,
+    val tilt: Float = 0f,
 ) {
     /** The same dials kept inside their slider ranges, so a stored value can never break a stroke. */
     fun sanitized(): PenDials {
@@ -53,11 +59,17 @@ internal data class PenDials(
             taperEnd = taperEnd.ok(0f, 10f, 0f),
             dampingMs = dampingMs.ok(0f, 200f, 20f),
             smoothing = smoothing.ok(0f, 1f, 0f),
+            densityMin = densityMin.ok(0.05f, 1f, 1f).let { dl -> minOf(dl, densityMax.ok(0.05f, 1f, 1f)) },
+            densityMax = densityMax.ok(0.05f, 1f, 1f).let { dh -> maxOf(dh, densityMin.ok(0.05f, 1f, 1f)) },
+            tilt = tilt.ok(0f, 1f, 0f),
         )
     }
 
     /** Whether the width can change along a stroke; a constant pen saves as one plain line. */
-    val varies: Boolean get() = maxScale - minScale > 1e-3f || speedThin > 0f || nib > 0f || taperStart > 0f || taperEnd > 0f
+    val varies: Boolean get() = maxScale - minScale > 1e-3f || speedThin > 0f || nib > 0f || taperStart > 0f || taperEnd > 0f || grain || tilt > 0f
+
+    /** Whether the ink shows the paper through a grain somewhere (a pencil). */
+    val grain: Boolean get() = densityMin < 1f - 1e-3f || densityMax < 1f - 1e-3f
 
     companion object {
         /** The starting values of #569: guesses for the owner to tune in the Pen lab, not targets. */
@@ -68,7 +80,8 @@ internal data class PenDials(
             InkStyle.Fountain -> PenDials(0.25f, 1.6f, curve = 1.3f, speedThin = 0.3f, nib = 0.35f, taperStart = 2.5f, taperEnd = 3f, dampingMs = 25f, smoothing = 0.5f)
             // very wide range, strong speed, long pointed ends
             InkStyle.Brush -> PenDials(0.1f, 2.5f, curve = 1.5f, speedThin = 0.5f, taperStart = 4f, taperEnd = 6f, dampingMs = 35f, smoothing = 0.5f)
-            InkStyle.Pencil -> PenDials(0.8f, 1.1f, smoothing = 0.3f)
+            // graphite: lighter and grainier at a light touch, broader and lighter when leaned
+            InkStyle.Pencil -> PenDials(0.8f, 1.1f, smoothing = 0.3f, densityMin = 0.35f, densityMax = 0.9f, tilt = 1f)
             // the marker keeps one width (its own factor), whatever the pen does
             InkStyle.Highlighter -> PenDials(1f, 1f, dampingMs = 0f, smoothing = 0.5f)
         }
@@ -135,6 +148,7 @@ internal class PenStrokeStats(
     val raw = FloatSampleList()
     val speeds = FloatSampleList()
     val widths = FloatSampleList()
+    val densities = FloatSampleList()
     val taperStartPt: Float get() = dials.taperStart * penWidth
     val taperEndPt: Float get() = dials.taperEnd * penWidth
 }
@@ -204,7 +218,17 @@ internal class PenDynamics(
     private var scale = Float.NaN
 
     /** The width (a multiple of the pen width) of the sample at [p] (page points), [timeMs], [pressure] (0…1 from the pen). */
-    fun next(p: Offset, timeMs: Long, pressure: Float): Float {
+    /** The ink density (0…1) of the sample [next] gave last; 1 for solid ink. */
+    var density = 1f
+        private set
+    private var lean = Float.NaN
+
+    /**
+     * The width (a multiple of the pen width) of the sample at [p] (page points), [timeMs],
+     * [pressure] (0…1 from the pen) and [tiltRad] (the pen's lean from upright; NaN when the pen
+     * does not report it, as a finger never does).
+     */
+    fun next(p: Offset, timeMs: Long, pressure: Float, tiltRad: Float = Float.NaN): Float {
         val prev = last
         var dtMs = 0f
         if (prev != null) {
@@ -237,6 +261,13 @@ internal class PenDynamics(
         if (d.nib > 0f && (dirX != 0f || dirY != 0f)) {
             target *= nibWidth(atan2(dirY, dirX) - Math.toRadians(d.nibAngleDeg.toDouble()).toFloat(), d.nib)
         }
+        // A leaned pencil lays its side on the paper: broader and lighter. The lean follows the
+        // pen smoothly, as the width does.
+        val leanNow = if (d.tilt > 0f && tiltRad.isFinite()) ((tiltRad - TILT_UPRIGHT_RAD) / TILT_SPAN_RAD).coerceIn(0f, 1f) else 0f
+        lean = if (lean.isNaN() || d.dampingMs <= 0f) leanNow else lean + (leanNow - lean) * (1f - exp(-maxOf(dtMs, 2f) / maxOf(d.dampingMs, 20f)))
+        target *= 1f + TILT_WIDEN * d.tilt * lean
+        density = if (!d.grain) 1f else
+            ((d.densityMin + (d.densityMax - d.densityMin) * shaped) * (1f - TILT_LIGHTEN * d.tilt * lean)).coerceIn(0.05f, 1f)
         scale = if (scale.isNaN() || d.dampingMs <= 0f) target else {
             // same-time samples still move a little, as if 2 ms apart
             val alpha = 1f - exp(-maxOf(dtMs, 2f) / d.dampingMs)
@@ -250,6 +281,7 @@ internal class PenDynamics(
             if (!made) it.raw.add(pressure)
             it.speeds.add(speed)
             it.widths.add(out * penWidth * inkStyleWidthFactor(it.style))
+            it.densities.add(density)
         }
         return out
     }
@@ -270,6 +302,9 @@ internal class PenDynamics(
         if (d.taperEnd > 0f) inkEndTaper(points, scales, minOf(d.taperEnd * penWidth, travelled / 2f))
     }
 
+    /** Whether this stroke shows the paper through a grain ([PenDials.grain]). */
+    val grain: Boolean get() = d.grain
+
     /** How much this stroke's points are smoothed ([PenDials.smoothing]). */
     val smoothing: Float get() = d.smoothing
 
@@ -279,6 +314,17 @@ internal class PenDynamics(
     companion object {
         /** How quickly the measured speed follows the pen. */
         const val SPEED_TAU_MS = 30f
+        /**
+         * A pen leaned less than this (about 55°) is held as for writing: the owner's S Pen
+         * writes at 41°…50° from upright (0.0.33 log), which must not shade every stroke.
+         */
+        const val TILT_UPRIGHT_RAD = 0.96f
+        /** …and this much more (about 25°, so 80°) as laid on its side. */
+        const val TILT_SPAN_RAD = 0.44f
+        /** A fully leaned pencil is up to 1 + this times as wide… */
+        const val TILT_WIDEN = 2f
+        /** …and this much lighter. */
+        const val TILT_LIGHTEN = 0.4f
     }
 }
 
