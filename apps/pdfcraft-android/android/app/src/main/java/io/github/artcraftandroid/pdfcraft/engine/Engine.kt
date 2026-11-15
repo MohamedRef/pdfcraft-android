@@ -254,24 +254,28 @@ fun Throwable.userMessage(tidy: (String) -> String): String {
         is MobileException -> if (message == INTERNAL_ERROR) text(R.string.error_engine_internal) else engineFailure(
             detail,
             english = appLanguage() == "en",
-            summary = text(
+        ) {
+            text(
                 when (this) {
                     is MobileException.Open -> R.string.error_engine_open
                     is MobileException.Render -> R.string.error_engine_render
                     is MobileException.NoDocument -> R.string.error_engine_no_document
                     else -> R.string.error_engine_command
                 },
-            ),
-        )
+            )
+        }
         else -> detail ?: text(R.string.files_error_generic)
     }
 }
 
-/** An engine failure's message: its English [detail] as is in English, else after the translated [summary]. */
-internal fun engineFailure(detail: String?, english: Boolean, summary: String): String = when {
-    detail == null -> summary
+/**
+ * An engine failure's message: its English [detail] as is in English, else after the translated
+ * [summary], which is only read when it is needed.
+ */
+internal inline fun engineFailure(detail: String?, english: Boolean, summary: () -> String): String = when {
+    detail == null -> summary()
     english -> detail
-    else -> "$summary\n$detail"
+    else -> "${summary()}\n$detail"
 }
 
 /** Native compact rasters stay packed across JNI. Android may align RGB565 rows to four bytes. */

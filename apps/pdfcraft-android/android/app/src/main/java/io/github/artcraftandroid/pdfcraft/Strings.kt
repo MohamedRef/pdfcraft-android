@@ -21,5 +21,9 @@ fun text(@StringRes id: Int, vararg args: Any): String = appContext.getString(id
 /** The plural string [id] for [count], formatted with [args]. */
 fun plural(@PluralsRes id: Int, count: Int, vararg args: Any): String = appContext.resources.getQuantityString(id, count, *args)
 
-/** The language the app runs in, such as "en" or "ar". */
-fun appLanguage(): String = appContext.resources.configuration.locales[0].language
+/**
+ * The language the app runs in, such as "en" or "ar". Before the app has started (plain JVM tests)
+ * there are no translated strings to read, so it is English, the text the code itself holds.
+ */
+fun appLanguage(): String =
+    if (::appContext.isInitialized) appContext.resources.configuration.locales[0].language else "en"
