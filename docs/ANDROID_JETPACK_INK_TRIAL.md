@@ -21,3 +21,7 @@ answer that, so it is a switch to compare with, not a replacement.
 
 `InkTubeTest` checks the outline-to-stroke conversion. Jetpack Ink itself needs the device: it is
 judged by the owner's hand, and its `stroke` log lines are the same as for any pen.
+
+## The first stroke closed the app (0.0.35-beta)
+
+With the switch on, the first stroke closed the app (three times in the owner's 0.0.35-beta log, `IllegalArgumentException` from `MutableStrokeInputBatch.appendSingle`). The pressure was passed as the fifth positional argument of `MutableStrokeInputBatch.add`, which is the stroke's unit length (`strokeUnitLengthCm`), and Jetpack Ink refused it. The call now names its arguments, so the pressure goes where it belongs. Any later error from Jetpack Ink while drawing or on lift drops it for that stroke, which goes on as PdfCraft's own line, and is logged as `[error] ink jetpack_ink`. Jetpack Ink needs its native library, so this is not covered by the JVM tests; check it on a phone.
