@@ -43,7 +43,9 @@ internal class JetpackInkLine(style: InkStyle, argb: Int, widthPt: Float, privat
         lastMs = t
         batch.clear()
         val pr = if (tool == InputToolType.STYLUS && pressure.isFinite()) pressure.coerceIn(0f, 1f) else -1f
-        batch.add(tool, p.x * dpPerPt, p.y * dpPerPt, t, pr)
+        // named: the argument after the time is the stroke's unit length, not the pressure, and
+        // a pressure given there was refused on the first sample, closing the app (0.0.35-beta log)
+        batch.add(type = tool, x = p.x * dpPerPt, y = p.y * dpPerPt, elapsedTimeMillis = t, pressure = pr)
         stroke.enqueueInputs(batch, EMPTY)
         stroke.updateShape(t)
     }

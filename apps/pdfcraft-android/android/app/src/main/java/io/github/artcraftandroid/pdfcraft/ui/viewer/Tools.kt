@@ -162,9 +162,20 @@ internal class InkStroke(
         scales.add(dynamics?.next(q, timeMs, pressure, if (stylus) StylusLog.tiltRad else Float.NaN) ?: 1f)
         addDensity()
         jetpack?.let { j ->
-            j.add(p, timeMs, pressure)
-            jetpackPath = j.path()
+            try {
+                j.add(p, timeMs, pressure)
+                jetpackPath = j.path()
+            } catch (e: Exception) {
+                dropJetpack(e)
+            }
         }
+    }
+
+    /** Jetpack Ink refused a sample: this stroke goes on as PdfCraft's own line instead of closing the app. */
+    private fun dropJetpack(e: Exception) {
+        jetpack = null
+        jetpackPath = null
+        io.github.artcraftandroid.pdfcraft.engine.Diag.failure(io.github.artcraftandroid.pdfcraft.engine.DiagArea.Ink, "jetpack_ink", e)
     }
 
     /**
@@ -176,8 +187,14 @@ internal class InkStroke(
         val j = jetpack ?: return false
         jetpack = null
         jetpackPath = null
-        j.finish()
-        val (pts, widths) = tubeCentreline(points.toList(), j.outlines(), base) ?: return false
+        val outlines = try {
+            j.finish()
+            j.outlines()
+        } catch (e: Exception) {
+            dropJetpack(e)
+            return false
+        }
+        val (pts, widths) = tubeCentreline(points.toList(), outlines, base) ?: return false
         points.clear(); points.addAll(pts)
         scales.clear(); scales.addAll(widths)
         pressureSensitive = true

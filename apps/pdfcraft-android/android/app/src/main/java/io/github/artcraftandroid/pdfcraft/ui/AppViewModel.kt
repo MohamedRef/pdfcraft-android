@@ -33,6 +33,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.update
 import org.json.JSONObject
 import android.app.Application
 import android.net.Uri
@@ -824,6 +825,13 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         val eng = engine ?: return@withLock false
         // A reading stage has no edits; do not write an incompletely checked source back.
         if (doc.info.preparing) return@withLock true
+        // Ink added as the document closes or the app pauses is still being applied: [info]
+        // does not show it as changed yet, and a save that went on would close the document
+        // with the strokes unsaved (#597).
+        if (doc.pendingEdits.value > 0) {
+            val settled = kotlinx.coroutines.withTimeoutOrNull(PENDING_EDITS_WAIT_MS) { doc.pendingEdits.first { it <= 0 } } != null
+            Diag.event(DiagArea.Save, "pending_edits_wait", "doc" to doc.diagNumber, "trigger" to trigger, "settled" to settled)
+        }
         if (!doc.info.dirty && !doc.notWrittenBack) return@withLock true
         // its original lost pages to another app (#476): a save would carry their zeros
         if (doc.lentChanged) {
@@ -1123,6 +1131,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
      */
     fun runTool(doc: OpenDocument, name: String, args: Map<String, Any?> = emptyMap(), onSettled: (() -> Unit)? = null, onDone: (JSONObject) -> Unit = {}) {
         val eng = engine ?: return
+        val pending = PendingEdit(doc)
         viewModelScope.launch {
             try {
                 val start = System.nanoTime()
@@ -1130,6 +1139,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 if (name == "comment_add") study.studyNote(doc)
                 if (name == "comment_add") noteTaking.lectureNoted(doc)
                 refresh(doc, io.github.artcraftandroid.pdfcraft.ui.viewer.pageTouchedBy(name, args))
+                pending.done()
                 // organize (#165): each page edit with the pages it touched and the time to the redrawn view
                 if (name.startsWith("page_") && Diag.enabled()) {
                     Diag.event(DiagArea.Pages, "page_edit", "doc" to doc.diagNumber, "tool" to name, "pages" to ((args["pages"] as? List<*>)?.size ?: -1),
@@ -1139,6 +1149,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             } catch (e: MobileException) {
                 tell(e.userMessage)
             } finally {
+                pending.done()
                 onSettled?.invoke()
             }
         }
@@ -1154,6 +1165,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         if (groups.isEmpty()) return onSettled(0)
         val eng = engine ?: return onSettled(0)
         val all = groups.flatten()
+        val pending = PendingEdit(doc)
         viewModelScope.launch {
             var applied = 0
             try {
@@ -1170,6 +1182,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                     refresh(doc, io.github.artcraftandroid.pdfcraft.ui.viewer.pageTouchedByBatch(name, all))
                     if (name == "comment_add" && applied > 0) noteTaking.lectureNoted(doc)
                 } finally {
+                    pending.done()
                     onSettled(applied)
                 }
             }
@@ -3247,3 +3260,21 @@ enum class MarginSide { Right, Bottom, Both }
  */
 internal fun writeBackWaits(deferWriteBack: Boolean, scheme: String?, sourcePath: String?, workingPath: String): Boolean =
     deferWriteBack && (scheme == "content" || (scheme == "file" && sourcePath != null && sourcePath != workingPath))
+
+/** Longest a save waits for edits still being applied (#597). */
+private const val PENDING_EDITS_WAIT_MS = 15_000L
+
+/** One edit on its way to [doc]'s engine (#597): counted from now until [done], once. */
+private class PendingEdit(private val doc: OpenDocument) {
+    private var open = true
+
+    init {
+        doc.pendingEdits.update { it + 1 }
+    }
+
+    fun done() {
+        if (!open) return
+        open = false
+        doc.pendingEdits.update { it - 1 }
+    }
+}
