@@ -76,13 +76,21 @@ class Engine private constructor(val session: MobileSession) {
     suspend fun tool(name: String, args: Map<String, Any?> = emptyMap()): JSONObject = command {
         val started = System.nanoTime()
         var ok = false
+        var error: Throwable? = null
         try {
             val out = execute(name, toJson(args).toString())
             (if (out.trimStart().startsWith("{")) JSONObject(out) else JSONObject().put("result", out)).also { ok = true }
+        } catch (e: Throwable) {
+            error = e
+            throw e
         } finally {
-            // the diagnostics log keeps failed and slow tools only: an edit is a tool call too
+            // the diagnostics log keeps failed and slow tools only: an edit is a tool call too.
+            // A failure says its kind and a fixed reason word, never its text (#572).
             val ms = (System.nanoTime() - started) / 1_000_000
-            if (!ok || ms >= SLOW_TOOL_MS) Diag.event(DiagArea.Tool, "tool", "name" to name, "ms" to ms, "ok" to ok)
+            if (!ok || ms >= SLOW_TOOL_MS) Diag.event(
+                DiagArea.Tool, "tool", "name" to name, "ms" to ms, "ok" to ok,
+                "error_class" to error?.let(::DiagClass), "reason" to error?.message?.let(::toolRefusalWord),
+            )
         }
     }
 
@@ -296,5 +304,24 @@ internal fun paddedRasterRows(pixels: ByteArray, packedRow: Int, rowBytes: Int, 
     require(rowBytes.toLong() * height <= 32L * 1024 * 1024)
     return ByteArray(rowBytes * height).also { out ->
         repeat(height) { row -> pixels.copyInto(out, row * rowBytes, row * packedRow, (row + 1) * packedRow) }
+    }
+}
+
+/**
+ * A fixed word for why the engine refused a tool, from its message (#572): the message itself
+ * can name a file or quote PDF text, so only the kind of refusal reaches the log.
+ */
+internal fun toolRefusalWord(message: String): String {
+    val m = message.lowercase()
+    return when {
+        "unknown argument" in m -> "unknown_argument"
+        "unknown tool" in m -> "unknown_tool"
+        "password" in m -> "password"
+        "locked" in m -> "locked"
+        "too large" in m || "more than" in m || "at most" in m || " to 4096" in m -> "too_large"
+        "must be" in m || "requires" in m || "invalid" in m || "must have" in m -> "invalid_argument"
+        "no such" in m || "not found" in m || "out of range" in m || "no annotation" in m -> "not_found"
+        "not allowed" in m || "permission" in m || "read-only" in m || "read only" in m -> "not_allowed"
+        else -> "other"
     }
 }

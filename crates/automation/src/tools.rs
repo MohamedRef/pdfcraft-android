@@ -1106,8 +1106,9 @@ pub fn tools() -> Vec<ToolDef> {
             .with(schema(json!({
                 "doc": doc(),
                 "page": { "type": "integer", "minimum": 1 },
-                "path": { "type": "array", "items": point(), "minItems": 1, "maxItems": 512 },
-                "radius": { "type": "number", "minimum": 0.1, "maximum": 100.0, "default": 8.0 }
+                "path": { "type": "array", "items": point(), "minItems": 1, "maxItems": 4096 },
+                "radius": { "type": "number", "minimum": 0.1, "maximum": 100.0, "default": 8.0 },
+                "erase_highlights": { "type": "boolean", "default": false, "description": "Also erase freehand highlights (Android's marker)." }
             }), &["doc", "page", "path"])),
         t("comments_edit_many", "Edit selected comments", "Android lasso: move (`move` [dx, dy] in points, y down), recolour (`color`) or delete (`delete`: true) several comments on one page as one undo step. `comments`: 1-based indices from comment_list. Locked and Fill & Sign comments are left alone and listed in `skipped`. Exactly one of move, color or delete.")
             .destructive()
