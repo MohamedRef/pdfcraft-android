@@ -1130,6 +1130,7 @@
     <string name="updater_progress">%1$d%% · %2$s / %3$s MB</string>
     <string name="updater_download_verified">Download concluído e verificado. Confirme a instalação abaixo.</string>
     <string name="updater_paused">Download pausado. Seu progresso foi mantido.</string>
+    <string name="updater_paused_background">Download pausado enquanto o PdfCraft estava em segundo plano. Ele continua quando você voltar.</string>
     <string name="updater_interrupted">Download interrompido. Toque em Retomar para tentar de novo.</string>
     <string name="updater_resume">Retomar download</string>
     <string name="updater_download">Baixar atualização</string>
