@@ -1,6 +1,7 @@
 package io.github.artcraftandroid.pdfcraft.ui.home
 
 import androidx.compose.foundation.Canvas
+import io.github.artcraftandroid.pdfcraft.ui.viewer.drawJetpackLive
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -79,6 +80,11 @@ internal fun PenLabSettings(vm: AppViewModel) {
         InkStyle.entries.map { it to stringResource(styleName(it)) },
         style, { style = it; strokes.clear() },
     )
+    // the trial (#569): Jetpack Ink's own pens beside ours, to compare on this phone
+    SettingsSwitch(
+        stringResource(R.string.pen_lab_jetpack), tuning.jetpackInk, { tuning.updateJetpackInk(it); strokes.clear() },
+        summary = stringResource(R.string.pen_lab_jetpack_summary),
+    )
 
     // the strip: write with the pen (or a finger) exactly as on a page
     Text(stringResource(R.string.pen_lab_try), color = c.textSecondary, fontSize = 13.sp, modifier = Modifier.padding(start = 20.dp, top = 8.dp))
@@ -122,9 +128,10 @@ internal fun PenLabSettings(vm: AppViewModel) {
                 // reading the points and widths here redraws the strip as the stroke grows
                 s.points.size
                 s.widthVersion
-                drawInkStroke(s.paths.runs(s), Color(s.appearance.argb), s.appearance.opacity, s.appearance.style == InkStyle.Highlighter, Offset.Zero, pxPerPt, bounds)
+                s.jetpackPath
+                if (!drawJetpackLive(s, Offset.Zero, pxPerPt)) drawInkStroke(s.paths.runs(s), Color(s.appearance.argb), s.appearance.opacity, s.appearance.style == InkStyle.Highlighter, Offset.Zero, pxPerPt, bounds)
                 // the tail to the pen while the stroke is written, as on a page
-                if (s === writing) {
+                if (s === writing && s.jetpack == null) {
                     val tail = inkTailPoints(s.points.last() * pxPerPt, s.penTip?.let { it * pxPerPt }, null)
                     val width = inkStylePointWidths(listOf(s.scales.lastOrNull() ?: 1f), s.appearance.width, s.appearance.style).first()
                     drawInkTail(tail, Color(s.appearance.argb), s.appearance.opacity, width * pxPerPt, s.appearance.style == InkStyle.Highlighter)

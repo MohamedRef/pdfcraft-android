@@ -1,4 +1,5 @@
 [versions]
+androidxInk = "1.0.0"
 agp = "9.2.1"
 kotlin = "2.3.21"
 composeBom = "2026.09.00"
@@ -20,6 +21,9 @@ robolectric = "4.16"
 androidxTestCore = "1.6.1"
 
 [libraries]
+androidx-ink-strokes = { group = "androidx.ink", name = "ink-strokes", version.ref = "androidxInk" }
+androidx-ink-brush = { group = "androidx.ink", name = "ink-brush", version.ref = "androidxInk" }
+androidx-ink-geometry = { group = "androidx.ink", name = "ink-geometry", version.ref = "androidxInk" }
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
 androidx-lifecycle-runtime-compose = { group = "androidx.lifecycle", name = "lifecycle-runtime-compose", version.ref = "lifecycle" }
 androidx-lifecycle-viewmodel-compose = { group = "androidx.lifecycle", name = "lifecycle-viewmodel-compose", version.ref = "lifecycle" }
