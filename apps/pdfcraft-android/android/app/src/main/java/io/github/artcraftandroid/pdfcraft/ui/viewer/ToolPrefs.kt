@@ -345,6 +345,15 @@ class ToolPrefs(context: Context) {
         prefs.edit().putBoolean("ink.snap", on).apply()
     }
 
+    /** The highlighter's "Straighten lines" (#569): every highlighter stroke comes out straight. */
+    var highlighterStraight by mutableStateOf(prefs.getBoolean("ink.highlighterStraight", false))
+        private set
+
+    fun updateHighlighterStraight(on: Boolean) {
+        highlighterStraight = on
+        prefs.edit().putBoolean("ink.highlighterStraight", on).apply()
+    }
+
     /** Shows the "Snap to shape on" hint on entering Draw, the first few times only. */
     /** Whether a tool's start hint is still shown: the first four times for each tool, as the reference does. */
     fun takeToolHint(key: String): Boolean {

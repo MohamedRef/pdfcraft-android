@@ -2035,6 +2035,31 @@ fn freehand_highlight_segments_can_be_erased_without_losing_their_intent() {
     assert_eq!(list(&reopened, 0)[i].name(b"IT"), Some(&b"FreehandHighlight"[..]));
 }
 
+#[test]
+fn a_freehand_highlighter_is_laid_down_once_where_it_crosses_itself() {
+    // #569: drawn opaque in its colour mixed with white, with Darken and flat ends, so two
+    // strokes of one colour that cross do not darken, and the text under them stays black.
+    let mut doc = fixture();
+    let a = (0..=10).map(|k| [100.0 + k as f64 * 10.0, 400.0]).collect::<Vec<_>>();
+    let b = (0..=10).map(|k| [150.0, 350.0 + k as f64 * 10.0]).collect::<Vec<_>>();
+    let shape = Shape::FreehandHighlight { strokes: vec![a, b] };
+    let mut annotation = new(0, shape.clone());
+    annotation.style = Style::default_for(&shape);
+    let i = add_annotation(&mut doc, &annotation, &meta("marker")).unwrap();
+    let d = list(&doc, 0)[i].clone();
+    let ap = d.get(b"AP").unwrap().as_dict().unwrap().reference(b"N").unwrap();
+    let res = doc.get(ap).as_dict().unwrap().get(b"Resources").cloned().unwrap();
+    let gs = res.as_dict().unwrap().get(b"ExtGState").unwrap().as_dict().unwrap().get(b"GS0").unwrap().as_dict().unwrap().clone();
+    assert_eq!(gs.name(b"BM"), Some(&b"Darken"[..]));
+    assert_eq!(gs.get(b"CA").and_then(|o| o.as_f64()), Some(1.0));
+    let content = ap_content(&doc, &d);
+    assert!(content.contains(" 2 J 1 j"), "flat ends: {content}");
+    // the default yellow at 35 %, mixed with white
+    assert!(content.contains("1 0.979 0.65 RG"), "{content}");
+    // the comment itself keeps its colour and opacity
+    assert_eq!(d.get(b"CA").and_then(|o| o.as_f64()).map(|x| (x * 100.0).round()), Some(35.0));
+}
+
 /// A document holding only a catalog, for appearance builds from a bare dictionary whose
 /// values are all direct.
 fn bare_doc() -> Document {
@@ -4815,7 +4840,7 @@ fn freehand_highlight_is_compatible_ink_with_marker_blending() {
     let ap = ink.get(b"AP").unwrap().as_dict().unwrap().reference(b"N").unwrap();
     let resources = doc.get(ap).as_dict().unwrap().get(b"Resources").cloned().unwrap();
     let blend = resources.as_dict().unwrap().get(b"ExtGState").unwrap().as_dict().unwrap().get(b"GS0").unwrap().as_dict().unwrap();
-    assert_eq!(blend.name(b"BM"), Some(&b"Multiply"[..]));
+    assert_eq!(blend.name(b"BM"), Some(&b"Darken"[..]));
 
     let mut doc = doc;
     let rect_of = |doc: &Document, idx: usize| -> Vec<f64> {
@@ -4875,7 +4900,7 @@ fn freehand_highlight_eraser_keeps_marker_intent_and_blending() {
     let ap = ink.get(b"AP").unwrap().as_dict().unwrap().reference(b"N").unwrap();
     let resources = reopened.get(ap).as_dict().unwrap().get(b"Resources").cloned().unwrap();
     let blend = resources.as_dict().unwrap().get(b"ExtGState").unwrap().as_dict().unwrap().get(b"GS0").unwrap().as_dict().unwrap();
-    assert_eq!(blend.name(b"BM"), Some(&b"Multiply"[..]));
+    assert_eq!(blend.name(b"BM"), Some(&b"Darken"[..]));
 }
 
 /// A drawing whose /InkList lists one stroke array over and over is refused once its points

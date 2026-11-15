@@ -224,10 +224,11 @@ internal class InkPathCache {
 /**
  * Whether a stroke must be composited as one layer: translucent ink split into pressure-width
  * runs overlaps at every run boundary (round caps), which painted darker beads along the line.
- * A single layer applies the opacity once, as a pen would.
+ * A single layer applies the opacity once, as a pen would. A highlighter needs none: it is drawn
+ * opaque with Darken ([inkHighlighterColor]).
  */
 internal fun inkNeedsLayer(runCount: Int, opacity: Float, highlighter: Boolean): Boolean =
-    runCount > 1 && (opacity < 1f || highlighter)
+    runCount > 1 && opacity < 1f && !highlighter
 
 /**
  * Draw one draft stroke: page points mapped by [origin] (screen position of the page's top-left
@@ -243,9 +244,14 @@ internal fun DrawScope.drawInkStroke(
     pageBoundsOnScreen: Rect,
 ) {
     if (runs.isEmpty() || !scale.isFinite() || scale <= 0f) return
-    val blend = if (highlighter) BlendMode.Multiply else BlendMode.SrcOver
+    val blend = if (highlighter) BlendMode.Darken else BlendMode.SrcOver
     val layered = inkNeedsLayer(runs.size, opacity, highlighter)
-    val paintColor = if (layered) color.copy(alpha = 1f) else color.copy(alpha = opacity)
+    val paintColor = when {
+        highlighter -> inkHighlighterColor(color, opacity)
+        layered -> color.copy(alpha = 1f)
+        else -> color.copy(alpha = opacity)
+    }
+    val cap = if (highlighter) StrokeCap.Square else StrokeCap.Round
     fun strokes() = withTransform({
         translate(origin.x, origin.y)
         scale(scale, scale, Offset.Zero)
@@ -253,7 +259,7 @@ internal fun DrawScope.drawInkStroke(
         for (run in runs) {
             drawPath(
                 run.path, paintColor,
-                style = if (run.filled) Fill else Stroke(width = run.width, cap = StrokeCap.Round, join = StrokeJoin.Round),
+                style = if (run.filled) Fill else Stroke(width = run.width, cap = cap, join = StrokeJoin.Round),
                 blendMode = if (layered) BlendMode.SrcOver else blend,
             )
         }
@@ -274,13 +280,30 @@ internal fun DrawScope.drawInkStroke(
  * Draw the tail of the stroke being written ([inkTailPoints], in screen pixels) at [widthPx]: one
  * path, so a translucent pen's tail is laid down once. Drawn only, never saved.
  */
-internal fun DrawScope.drawInkTail(tail: List<Offset>, color: Color, opacity: Float, widthPx: Float) {
+internal fun DrawScope.drawInkTail(tail: List<Offset>, color: Color, opacity: Float, widthPx: Float, highlighter: Boolean = false) {
     if (tail.size < 2 || !(widthPx > 0f)) return
     val path = Path()
     path.moveTo(tail[0].x, tail[0].y)
     for (i in 1 until tail.size) path.lineTo(tail[i].x, tail[i].y)
+    if (highlighter) {
+        // opaque and Darken, as the stroke itself: the tail does not darken where it meets the line
+        drawPath(path, inkHighlighterColor(color, opacity), style = Stroke(width = widthPx, cap = StrokeCap.Square, join = StrokeJoin.Round), blendMode = BlendMode.Darken)
+        return
+    }
     drawPath(
         path, color.copy(alpha = opacity.takeIf { it.isFinite() }?.coerceIn(0f, 1f) ?: 1f),
         style = Stroke(width = widthPx, cap = StrokeCap.Round, join = StrokeJoin.Round),
     )
+}
+
+/**
+ * The highlighter's paint (#569): its colour at [opacity] mixed with white, opaque, drawn with
+ * Darken. Over white it is the colour at that opacity, as Multiply gave; text under it stays
+ * black; and where two strokes of one colour cross, or one crosses itself, the colour is not laid
+ * down twice. The saved comment is drawn the same way (`highlighter_colour` in the engine).
+ */
+internal fun inkHighlighterColor(color: Color, opacity: Float): Color {
+    val a = opacity.takeIf { it.isFinite() }?.coerceIn(0f, 1f) ?: 1f
+    fun mix(v: Float) = 1f - a * (1f - v.coerceIn(0f, 1f))
+    return Color(mix(color.red), mix(color.green), mix(color.blue), 1f)
 }

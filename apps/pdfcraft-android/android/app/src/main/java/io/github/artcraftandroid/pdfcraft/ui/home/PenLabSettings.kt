@@ -127,7 +127,7 @@ internal fun PenLabSettings(vm: AppViewModel) {
                 if (s === writing) {
                     val tail = inkTailPoints(s.points.last() * pxPerPt, s.penTip?.let { it * pxPerPt }, null)
                     val width = inkStylePointWidths(listOf(s.scales.lastOrNull() ?: 1f), s.appearance.width, s.appearance.style).first()
-                    drawInkTail(tail, Color(s.appearance.argb), s.appearance.opacity, width * pxPerPt)
+                    drawInkTail(tail, Color(s.appearance.argb), s.appearance.opacity, width * pxPerPt, s.appearance.style == InkStyle.Highlighter)
                 }
             }
         }
