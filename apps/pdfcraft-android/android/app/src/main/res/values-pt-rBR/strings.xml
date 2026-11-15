@@ -992,6 +992,9 @@
     <string name="pen_lab_pressure">Sua pressão ao escrever: de %1$s a %2$s, em %3$d traços</string>
     <string name="pen_lab_pressure_none">Ainda não medida: escreva algumas linhas com a caneta</string>
     <string name="pen_lab_pressure_reset">Medir a pressão de novo</string>
+    <string name="pen_lab_group_curve">Curva de pressão (todas as canetas)</string>
+    <string name="pen_lab_curve_body">Arraste os três pontos para cima ou para baixo. À esquerda, um toque leve; à direita, um forte; mais alto, um traço mais grosso. Depois cada caneta aplica sua própria faixa.</string>
+    <string name="pen_lab_curve_reset">Deixar a curva reta de novo</string>
     <string name="pen_lab_group_save">Valores</string>
     <string name="pen_lab_reset">Redefinir esta caneta</string>
     <string name="pen_lab_write_log">Gravar os valores no registro</string>

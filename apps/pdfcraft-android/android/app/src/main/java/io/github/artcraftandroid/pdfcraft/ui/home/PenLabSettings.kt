@@ -18,12 +18,15 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.PointerType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChanged
@@ -31,6 +34,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlin.math.roundToInt
 import io.github.artcraftandroid.pdfcraft.R
 import io.github.artcraftandroid.pdfcraft.text
 import io.github.artcraftandroid.pdfcraft.ui.AppViewModel
@@ -41,6 +45,7 @@ import io.github.artcraftandroid.pdfcraft.ui.viewer.InkShapeMode
 import io.github.artcraftandroid.pdfcraft.ui.viewer.InkStroke
 import io.github.artcraftandroid.pdfcraft.ui.viewer.InkStyle
 import io.github.artcraftandroid.pdfcraft.ui.viewer.PenDials
+import io.github.artcraftandroid.pdfcraft.ui.viewer.PressureCurve
 import io.github.artcraftandroid.pdfcraft.ui.viewer.drawInkStroke
 import io.github.artcraftandroid.pdfcraft.ui.viewer.finishInkStroke
 import io.github.artcraftandroid.pdfcraft.ui.viewer.inkStyleOpacity
@@ -148,9 +153,67 @@ internal fun PenLabSettings(vm: AppViewModel) {
     )
     SettingsRow(stringResource(R.string.pen_lab_pressure_reset), { tuning.resetPressure() }, icon = LucideIcons.RotateCw)
 
+    SettingsHeader(stringResource(R.string.pen_lab_group_curve))
+    SettingsNote(stringResource(R.string.pen_lab_curve_body))
+    PressureCurveEditor(tuning.pressureCurve) { tuning.updatePressureCurve(it) }
+    SettingsRow(stringResource(R.string.pen_lab_curve_reset), { tuning.updatePressureCurve(PressureCurve.LINEAR) }, icon = LucideIcons.RotateCcw, enabled = !tuning.pressureCurve.linear)
+
     SettingsHeader(stringResource(R.string.pen_lab_group_save))
     SettingsRow(stringResource(R.string.pen_lab_reset), { tuning.reset(style); strokes.clear() }, icon = LucideIcons.RotateCcw, enabled = tuning.tuned(style))
     SettingsRow(stringResource(R.string.pen_lab_write_log), { tuning.logValues(); vm.tell(text(R.string.pen_lab_written)) }, icon = LucideIcons.FileText)
+}
+
+/**
+ * The pressure curve (#569): light touch on the left, hard on the right, thin at the bottom and
+ * thick at the top. Each of the three points is dragged up or down; it stays between its neighbours.
+ */
+@Composable
+private fun PressureCurveEditor(curve: PressureCurve, onChange: (PressureCurve) -> Unit) {
+    val c = pdfColors
+    val latest by rememberUpdatedState(curve)
+    val change by rememberUpdatedState(onChange)
+    Canvas(
+        Modifier.padding(horizontal = 20.dp, vertical = 8.dp).fillMaxWidth().height(180.dp)
+            .clip(RoundedCornerShape(8.dp)).background(Color.White).border(1.dp, c.divider, RoundedCornerShape(8.dp))
+            .pointerInput(Unit) {
+                awaitEachGesture {
+                    val down = awaitFirstDown(requireUnconsumed = false)
+                    val i = (down.position.x / size.width * 4f - 1f).roundToInt().coerceIn(0, 2)
+                    down.consume()
+                    fun set(pos: Offset) {
+                        val ys = latest.ys.toMutableList()
+                        val lo = if (i == 0) 0f else ys[i - 1]
+                        val hi = if (i == 2) 1f else ys[i + 1]
+                        ys[i] = (1f - pos.y / size.height).coerceIn(lo, hi)
+                        change(PressureCurve(ys))
+                    }
+                    set(down.position)
+                    while (true) {
+                        val event = awaitPointerEvent()
+                        val ch = event.changes.firstOrNull { it.id == down.id } ?: break
+                        if (!ch.pressed) break
+                        set(ch.position)
+                        ch.consume()
+                    }
+                }
+            },
+    ) {
+        val w = size.width
+        val h = size.height
+        for (k in 1..3) {
+            drawLine(c.divider, Offset(w * k / 4f, 0f), Offset(w * k / 4f, h))
+            drawLine(c.divider, Offset(0f, h * k / 4f), Offset(w, h * k / 4f))
+        }
+        drawLine(c.divider, Offset(0f, h), Offset(w, 0f), strokeWidth = 2.dp.toPx())
+        val path = Path()
+        for (j in 0..64) {
+            val x = j / 64f
+            val p = Offset(x * w, (1f - curve.map(x)) * h)
+            if (j == 0) path.moveTo(p.x, p.y) else path.lineTo(p.x, p.y)
+        }
+        drawPath(path, c.accent, style = Stroke(width = 3.dp.toPx()))
+        curve.ys.forEachIndexed { i, y -> drawCircle(c.accent, 8.dp.toPx(), Offset(PressureCurve.XS[i + 1] * w, (1f - y) * h)) }
+    }
 }
 
 private fun styleName(style: InkStyle): Int = when (style) {

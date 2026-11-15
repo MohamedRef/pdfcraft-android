@@ -56,6 +56,19 @@ internal class PenTuning(private val prefs: SharedPreferences) {
     )
         private set
 
+    /** This hand's pressure curve, for every pen (Pen lab). */
+    var pressureCurve by mutableStateOf(
+        PressureCurve(List(3) { i -> runCatching { prefs.getFloat("curve.y$i", PressureCurve.XS[i + 1]) }.getOrDefault(PressureCurve.XS[i + 1]) }),
+    )
+        private set
+
+    fun updatePressureCurve(c: PressureCurve) {
+        pressureCurve = c
+        val e = prefs.edit()
+        c.ys.forEachIndexed { i, y -> if (c.linear) e.remove("curve.y$i") else e.putFloat("curve.y$i", y) }
+        e.apply()
+    }
+
     fun dials(style: InkStyle): PenDials = dials.getValue(style).value
 
     /** Whether [style]'s dials differ from its defaults. */
@@ -112,6 +125,8 @@ internal class PenTuning(private val prefs: SharedPreferences) {
                 "taper_start" to d.taperStart, "taper_end" to d.taperEnd, "damping_ms" to d.dampingMs.toInt(), "smoothing" to d.smoothing,
             )
         }
+        val c = pressureCurve
+        Diag.event(DiagArea.Ink, "pressure_curve", "y25" to c.ys[0], "y50" to c.ys[1], "y75" to c.ys[2], "linear" to c.linear)
         logRange()
     }
 

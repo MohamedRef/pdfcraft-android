@@ -1407,6 +1407,9 @@
     <string name="pen_lab_pressure">Ihr Schreibdruck: %1$s bis %2$s, aus %3$d Strichen</string>
     <string name="pen_lab_pressure_none">Noch nicht gemessen: Schreiben Sie ein paar Zeilen mit dem Stift</string>
     <string name="pen_lab_pressure_reset">Druck neu messen</string>
+    <string name="pen_lab_group_curve">Druckkurve (alle Stifte)</string>
+    <string name="pen_lab_curve_body">Ziehe die drei Punkte nach oben oder unten. Links ist leichter Druck, rechts starker; höher ergibt eine dickere Linie. Jeder Stift legt danach seinen eigenen Bereich darüber.</string>
+    <string name="pen_lab_curve_reset">Kurve wieder gerade machen</string>
     <string name="pen_lab_group_save">Werte</string>
     <string name="pen_lab_reset">Diesen Stift zurücksetzen</string>
     <string name="pen_lab_write_log">Werte ins Protokoll schreiben</string>
