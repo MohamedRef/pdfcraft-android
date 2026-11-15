@@ -64,6 +64,12 @@ class OpenDocument(
     /** Opened in place from its provider's file (#453): how its saves reach that file. */
     var lent: io.github.artcraftandroid.pdfcraft.engine.LentState? = null
 
+    /**
+     * Another app cut its original short while it was open in place (#476): the lost pages read as
+     * zeros, so nothing is saved from it any more and it is opened again.
+     */
+    var lentChanged = false
+
     /** The kept scan this PDF was made from (#513), as its document information names it; null for any other PDF. */
     var scanLink by mutableStateOf<String?>(null)
 

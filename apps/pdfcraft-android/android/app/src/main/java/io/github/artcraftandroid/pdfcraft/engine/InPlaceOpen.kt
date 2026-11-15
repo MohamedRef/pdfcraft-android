@@ -119,6 +119,9 @@ internal fun keepsOneVisitCopy(inRecent: Boolean, marked: Boolean): Boolean = in
 
 private val APP_OWNED_FOLDER = Regex("""^/storage/[^/]+(/[0-9]+)?/Android/(media|data|obb)/""")
 
+/** How often an open in-place document asks whether another app cut its original short (#476). */
+internal const val LENT_WATCH_MS = 1000L
+
 /** How a save of an in-place document reaches its original (the log's `mode`). */
 internal enum class InPlaceWriteBack { Append, Full, AtClose }
 

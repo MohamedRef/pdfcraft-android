@@ -17,4 +17,6 @@
     <string name="all_files_prompt_body">Para guardar directamente en archivos que otras apps abren solo para lectura, da a PdfCraft acceso a todos los archivos en los ajustes de Android, como hacen otros lectores de PDF.</string>
     <string name="all_files_allow">Permitir guardar en los archivos originales</string>
     <string name="all_files_now_writable">Tus cambios ahora se guardan en el archivo original.</string>
+    <string name="lent_file_changed">Otra app cambió este archivo mientras estaba abierto aquí. Ábrelo de nuevo para verlo tal como está ahora. Se perdieron los cambios que no se habían guardado en él.</string>
+    <string name="lent_file_open_again">Abrir de nuevo</string>
 </resources>

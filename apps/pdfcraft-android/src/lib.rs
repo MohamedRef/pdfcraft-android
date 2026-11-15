@@ -237,6 +237,13 @@ pub fn lent_file_in_use(dev: u64, ino: u64) -> bool {
     pdfcraft_bytes::lent_inode_in_use(dev, ino)
 }
 
+/// Whether another app cut the lent file `dev`/`ino` short while it was open (#476): the pages it
+/// lost read as zeros instead of crashing the app, and the document should be opened again.
+#[uniffi::export]
+pub fn lent_file_changed(dev: u64, ino: u64) -> bool {
+    pdfcraft_bytes::lent_inode_changed(dev, ino)
+}
+
 /// [`file_thumbnail`] of a provider's file read in place from its open descriptor `fd` (#453),
 /// which the caller closes when this returns: mapped at any size the viewer opens, so a large
 /// file has a preview without a copy in the app's storage.

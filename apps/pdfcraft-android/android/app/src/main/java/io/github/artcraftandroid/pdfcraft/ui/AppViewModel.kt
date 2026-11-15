@@ -452,6 +452,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             doc.fromOtherApp = fromOtherApp
             doc.diagNumber = settings.diagDoc
             doc.lent = lent?.let { io.github.artcraftandroid.pdfcraft.engine.LentState(it.dev, it.ino, it.size) }
+            watchLent(doc)
             val access = source?.let { withContext(Dispatchers.IO) { files.writeAccess(it) } }
             doc.writable = access == null || access in io.github.artcraftandroid.pdfcraft.engine.WriteAccess.WRITABLE
             if (!doc.writable) doc.readOnlyReason = access
@@ -614,6 +615,50 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
           } finally {
               if (closingDoc === doc) closingDoc = null
           }
+        }
+    }
+
+    /**
+     * Watch [doc]'s original while it is open in place (#476). Another app that cuts it short
+     * would have crashed the app; the engine now reads the lost pages as zeros and says so.
+     */
+    private fun watchLent(doc: OpenDocument) {
+        val lent = doc.lent ?: return
+        viewModelScope.launch {
+            while (document === doc || tabs.tabs.any { it.doc === doc }) {
+                kotlinx.coroutines.delay(LENT_WATCH_MS)
+                val changed = runCatching { io.github.artcraftandroid.pdfcraft.core.lentFileChanged(lent.dev.toULong(), lent.ino.toULong()) }.getOrDefault(false)
+                if (changed) {
+                    lentChanged(doc)
+                    return@launch
+                }
+            }
+        }
+    }
+
+    /** [doc]'s original was cut short by another app (#476): stop saving it, and offer to open it again. */
+    internal fun lentChanged(doc: OpenDocument) {
+        if (doc.lentChanged) return
+        doc.lentChanged = true
+        // the other app's file is not written over at close either
+        doc.lent?.writeBackAtClose = false
+        Diag.event(DiagArea.Open, "lent_file_changed", "doc" to doc.diagNumber, "front" to (document === doc), "dirty" to doc.info.dirty)
+        if (document === doc) tell(text(R.string.lent_file_changed), text(R.string.lent_file_open_again)) { openChangedAgain(doc) }
+    }
+
+    /** Close [doc] without saving and open its original again, as it is now (#476). */
+    private fun openChangedAgain(doc: OpenDocument) {
+        val eng = engine ?: return
+        val src = doc.source ?: return
+        viewModelScope.launch {
+            openMutex.withLock {
+                if (document !== doc) return@withLock
+                closeQuietly(eng, doc)
+                document = null
+                tabs.closed(doc)
+                refreshRecents()
+            }
+            open(src, doc.password, doc.fromOtherApp)
         }
     }
 
@@ -780,6 +825,11 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         // A reading stage has no edits; do not write an incompletely checked source back.
         if (doc.info.preparing) return@withLock true
         if (!doc.info.dirty && !doc.notWrittenBack) return@withLock true
+        // its original lost pages to another app (#476): a save would carry their zeros
+        if (doc.lentChanged) {
+            Diag.event(DiagArea.Save, "save", "doc" to doc.diagNumber, "trigger" to trigger, "outcome" to "lent_changed")
+            return@withLock true
+        }
         doc.saving = true
         // #97: what each save costs, and what started it (pause, close, an edit, a tool)
         val started = android.os.SystemClock.elapsedRealtime()
