@@ -91,14 +91,16 @@ enum class SettingsPage(@StringRes val title: Int) {
     Updates(R.string.updater_title),
     Diagnostics(R.string.home_section_diagnostics),
     ScanTesting(R.string.scan_lab_section),
+    PenLab(R.string.pen_lab_title),
     Help(R.string.home_help_support),
     About(R.string.home_about_app),
 }
 
-/** The pages above [page]: Scanner testing sits in Diagnostics, everything else in Settings. */
+/** The pages above [page]: Scanner testing and the Pen lab sit in Diagnostics, everything else in Settings. */
 internal fun settingsStack(page: SettingsPage): List<SettingsPage> = when (page) {
     SettingsPage.Root -> listOf(SettingsPage.Root)
     SettingsPage.ScanTesting -> listOf(SettingsPage.Root, SettingsPage.Diagnostics, SettingsPage.ScanTesting)
+    SettingsPage.PenLab -> listOf(SettingsPage.Root, SettingsPage.Diagnostics, SettingsPage.PenLab)
     else -> listOf(SettingsPage.Root, page)
 }
 
@@ -138,6 +140,7 @@ fun SettingsScreen(vm: AppViewModel) {
                 SettingsPage.Updates -> UpdatesPage()
                 SettingsPage.Diagnostics -> DiagnosticsPage(vm, open)
                 SettingsPage.ScanTesting -> ScanLabSettings(vm)
+                SettingsPage.PenLab -> PenLabSettings(vm)
                 SettingsPage.Help -> HelpPage(vm)
                 SettingsPage.About -> AboutPage(vm, open)
             }
@@ -497,6 +500,8 @@ private fun DiagnosticsPage(vm: AppViewModel, open: (SettingsPage) -> Unit) = Gr
         summary = stringResource(if (s.recordDiagnostics) R.string.settings_scan_testing_summary else R.string.settings_scan_testing_needs_log),
         icon = LucideIcons.Wrench, chevron = true, enabled = s.recordDiagnostics,
     )
+    // each pen's dials, tuned on the phone (#569); usable without the log, written to it on request
+    SettingsRow(stringResource(R.string.pen_lab_title), { open(SettingsPage.PenLab) }, summary = stringResource(R.string.pen_lab_summary), icon = LucideIcons.PenLine, chevron = true)
 }
 
 @Composable

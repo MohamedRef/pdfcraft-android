@@ -53,11 +53,13 @@ internal data class InkPathKey(
     val pressureCount: Int,
     val pressureSensitive: Boolean,
     val width: Float,
+    /** Bumped when widths change without the points changing (the end taper on lift, #569). */
+    val version: Int = 0,
 )
 
-internal fun inkPathKey(points: List<Offset>, preview: List<Offset>?, pressures: Int, pressureSensitive: Boolean, width: Float): InkPathKey {
+internal fun inkPathKey(points: List<Offset>, preview: List<Offset>?, pressures: Int, pressureSensitive: Boolean, width: Float, version: Int = 0): InkPathKey {
     val shown = preview ?: points
-    return InkPathKey(shown.size, shown.firstOrNull(), shown.lastOrNull(), preview, pressures, pressureSensitive, width)
+    return InkPathKey(shown.size, shown.firstOrNull(), shown.lastOrNull(), preview, pressures, pressureSensitive, width, version)
 }
 
 /**
@@ -159,6 +161,7 @@ internal class InkPathCache {
     private var stableLast: Offset? = null
     private var stableDiscs = 0
     private var stableSegments = 0
+    private var stableVersion = 0
 
     private fun resetStable() {
         stable.reset()
@@ -170,8 +173,10 @@ internal class InkPathCache {
 
     private fun outline(stroke: InkStroke): Path {
         val pts = stroke.points.toList()
-        val radii = pressureInkRadii(inkStylePointWidths(stroke.pressures.toList(), stroke.appearance.width, stroke.appearance.style))
-        // Any change other than appending (lasso move, replaced points) rebuilds from scratch.
+        val radii = pressureInkRadii(inkStylePointWidths(stroke.scales.toList(), stroke.appearance.width, stroke.appearance.style))
+        // Any change other than appending (lasso move, replaced points, new widths) rebuilds from scratch.
+        if (stableVersion != stroke.widthVersion) resetStable()
+        stableVersion = stroke.widthVersion
         if (stableFirst != pts.first() || stableDiscs > pts.size || (stableDiscs > 0 && stableLast != pts[stableDiscs - 1])) resetStable()
         stableFirst = pts.first()
         while (stableDiscs < pts.size) { stable.addInkDisc(pts[stableDiscs], radii[stableDiscs]); stableDiscs++ }
@@ -191,9 +196,9 @@ internal class InkPathCache {
     }
 
     fun runs(stroke: InkStroke): List<InkRunPath> {
-        val k = inkPathKey(stroke.points, stroke.preview, stroke.pressures.size, stroke.pressureSensitive, stroke.appearance.width)
+        val k = inkPathKey(stroke.points, stroke.preview, stroke.scales.size, stroke.pressureSensitive, stroke.appearance.width, stroke.widthVersion)
         if (k == key) return runs
-        if (inkPreviewIsPressureOutline(stroke.pressureSensitive, stroke.appearance.style, stroke.points.size, stroke.pressures.size, stroke.preview != null)) {
+        if (inkPreviewIsPressureOutline(stroke.pressureSensitive, stroke.appearance.style, stroke.points.size, stroke.scales.size, stroke.preview != null)) {
             runs = listOf(InkRunPath(outline(stroke), stroke.appearance.width, filled = true))
             key = k
             return runs
@@ -202,7 +207,7 @@ internal class InkPathCache {
         val pts = stroke.preview ?: stroke.points.toList()
         val widthRuns = if (stroke.preview != null) {
             if (pts.size >= 2) inkStyleWidthRuns(List(pts.size) { 1f }, stroke.appearance.width, false, stroke.appearance.style) else emptyList()
-        } else inkStyleWidthRuns(stroke.pressures.toList(), stroke.appearance.width, stroke.pressureSensitive, stroke.appearance.style)
+        } else inkStyleWidthRuns(stroke.scales.toList(), stroke.appearance.width, stroke.pressureSensitive, stroke.appearance.style)
         runs = widthRuns.map { run ->
             val path = Path()
             path.moveTo(pts[run.start].x, pts[run.start].y)
