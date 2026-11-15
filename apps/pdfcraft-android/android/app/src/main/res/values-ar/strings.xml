@@ -1145,6 +1145,7 @@
     <string name="pen_lab_taper_start">بداية مدبّبة (بعرض القلم)</string>
     <string name="pen_lab_taper_end">نهاية مدبّبة (بعرض القلم)</string>
     <string name="pen_lab_damping">تنعيم العرض (مللي ثانية)</string>
+    <string name="pen_lab_smoothing">تنعيم الخط</string>
     <string name="pen_lab_group_measured">الضغط المقاس</string>
     <string name="pen_lab_pressure">ضغط كتابتك: من %1$s إلى %2$s، من %3$d خطًا</string>
     <string name="pen_lab_pressure_none">لم يُقَس بعد: اكتب بضعة أسطر بالقلم</string>

@@ -1392,6 +1392,7 @@
     <string name="pen_lab_taper_start">Inizio a punta (larghezze della penna)</string>
     <string name="pen_lab_taper_end">Fine a punta (larghezze della penna)</string>
     <string name="pen_lab_damping">Smussatura della larghezza (ms)</string>
+    <string name="pen_lab_smoothing">Smussatura del tratto</string>
     <string name="pen_lab_group_measured">Pressione misurata</string>
     <string name="pen_lab_pressure">La tua pressione di scrittura: da %1$s a %2$s, su %3$d tratti</string>
     <string name="pen_lab_pressure_none">Non ancora misurata: scrivi qualche riga con la penna</string>

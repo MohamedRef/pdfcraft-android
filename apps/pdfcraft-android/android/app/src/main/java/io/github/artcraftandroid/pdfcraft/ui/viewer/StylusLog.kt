@@ -181,6 +181,6 @@ internal fun inkStrokeFields(ink: PenStrokeStats?, tiltMin: Float, tiltMax: Floa
         "tilt_reported" to tiltReported,
         "width_min" to w.minOrNull(), "width_median" to quantile(w, 0.5f), "width_max" to w.maxOrNull(),
         "opacity_min" to ink.opacity, "opacity_max" to ink.opacity,
-        "taper_start_pt" to ink.taperStartPt, "taper_end_pt" to ink.taperEndPt, "stabilisation" to 0,
+        "taper_start_pt" to ink.taperStartPt, "taper_end_pt" to ink.taperEndPt, "stabilisation" to ink.dials.smoothing,
     )
 }

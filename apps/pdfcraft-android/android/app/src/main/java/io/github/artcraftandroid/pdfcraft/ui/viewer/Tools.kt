@@ -127,10 +127,25 @@ internal class InkStroke(
     /** Bumped when [scales] change in place (the end taper), so cached outlines are rebuilt. */
     var widthVersion by mutableStateOf(0)
 
+    /** Takes the tremor out of a freehand stroke's points ([PenDials.smoothing]). */
+    private val smoother = dynamics?.let { InkSmoother(it.smoothing) }
+    private var lastTimeMs = 0L
+    private var lastPressure = 1f
+
     /** Adds a sample: [p] in page points at [timeMs] with the pen's [pressure]. */
     fun add(p: Offset, timeMs: Long, pressure: Float) {
-        points.add(p)
-        scales.add(dynamics?.next(p, timeMs, pressure) ?: 1f)
+        val q = smoother?.next(p, timeMs) ?: p
+        lastTimeMs = timeMs
+        lastPressure = pressure
+        points.add(q)
+        scales.add(dynamics?.next(q, timeMs, pressure) ?: 1f)
+    }
+
+    /** On lift: a smoothed line that stopped short of the pen is taken to where the pen left the page. */
+    fun catchUp() {
+        val end = smoother?.end() ?: return
+        points.add(end)
+        scales.add(dynamics?.next(end, lastTimeMs, lastPressure) ?: 1f)
     }
 
     /** The clean shape shown while the finger is held still (press and hold to snap). */
@@ -163,6 +178,7 @@ internal fun newInkStroke(page: Int, appearance: InkAppearance, stylus: Boolean,
 /** A freehand stroke is lifted: its end taper goes on, and a pen stroke's pressures measure the pen's range (#569). */
 internal fun finishInkStroke(s: InkStroke, tuning: PenTuning) {
     val d = s.dynamics ?: return
+    s.catchUp()
     if (s.pressureSensitive) {
         d.finish(s.points, s.scales)
         s.widthVersion++

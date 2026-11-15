@@ -2,6 +2,7 @@ package io.github.artcraftandroid.pdfcraft.ui
 
 import androidx.compose.ui.geometry.Offset
 import io.github.artcraftandroid.pdfcraft.ui.viewer.FloatSampleList
+import io.github.artcraftandroid.pdfcraft.ui.viewer.InkSmoother
 import io.github.artcraftandroid.pdfcraft.ui.viewer.InkStyle
 import io.github.artcraftandroid.pdfcraft.ui.viewer.PEN_TAPER_FLOOR
 import io.github.artcraftandroid.pdfcraft.ui.viewer.PenDials
@@ -175,7 +176,7 @@ class PenModelTest {
     }
 
     @Test fun storedDialsCannotBreakAStroke() {
-        val bad = penDialsOf(List(10) { Float.NaN }).sanitized()
+        val bad = penDialsOf(List(11) { Float.NaN }).sanitized()
         val dyn = PenDynamics(bad, PressureSource.Pen, PressureRange(), penWidth)
         val w = slowWord.map { dyn.next(it.p, it.t, it.pressure) }
         assertTrue(w.all { it.isFinite() && it > 0f })
@@ -197,5 +198,43 @@ class PenModelTest {
         assertEquals(0.05f, stats.raw.toList().first(), 1e-6f)
         // 240 pt in 1.27 s: about 189 pt/s once the speed has settled
         assertEquals(189f, quantile(stats.speeds.toList(), 0.9f)!!, 15f)
+    }
+
+    /** A slow line with a 0.6 pt hand tremor across it, sampled every 8 ms. */
+    private fun shakyLine(ptPerS: Float, n: Int = 120) = List(n) { i ->
+        val x = ptPerS * i * 8 / 1000f
+        S(Offset(x, if (i % 2 == 0) 0.6f else -0.6f), i * 8L, 0.6f)
+    }
+
+    @Test fun smoothingTakesOutTheTremorOfASlowHand() {
+        val shaky = shakyLine(60f)
+        val s = InkSmoother(0.5f)
+        val out = shaky.map { s.next(it.p, it.t) }
+        val wobble = out.subList(out.size / 10, out.size - out.size / 10).maxOf { kotlin.math.abs(it.y) }
+        assertTrue("wobble $wobble", wobble < 0.6f * 0.35f)
+        // nothing is smoothed at 0
+        val off = InkSmoother(0f)
+        assertEquals(shaky.map { it.p }, shaky.map { off.next(it.p, it.t) })
+    }
+
+    @Test fun aFastLineDoesNotTrailThePen() {
+        val fast = line(Offset(0f, 0f), Offset(400f, 0f), 50, 8L, 0.6f, 0.6f) // 1000 pt/s
+        val s = InkSmoother(0.5f)
+        val out = fast.map { s.next(it.p, it.t) }
+        val lag = (fast.last().p - out.last()).getDistance()
+        assertTrue("lag $lag pt", lag < 6f) // under one sample's travel
+        // on lift the line reaches where the pen left the page
+        assertEquals(fast.last().p, s.end())
+        assertEquals(null, InkSmoother(0.5f).also { it.next(Offset(1f, 1f), 0L) }.end())
+    }
+
+    @Test fun smoothingSurvivesBadSamples() {
+        val s = InkSmoother(1f)
+        s.next(Offset(0f, 0f), 0L)
+        s.next(Offset(Float.NaN, 3f), 8L)
+        s.next(Offset(5f, 0f), 8L) // same time
+        val p = s.next(Offset(10f, 0f), 16L)
+        assertTrue(p.x.isFinite() && p.y.isFinite())
+        assertTrue(InkSmoother(Float.NaN).next(Offset(2f, 2f), 0L) == Offset(2f, 2f))
     }
 }

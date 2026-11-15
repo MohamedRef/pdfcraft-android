@@ -1402,6 +1402,7 @@
     <string name="pen_lab_taper_start">Spitzer Anfang (Stiftbreiten)</string>
     <string name="pen_lab_taper_end">Spitzes Ende (Stiftbreiten)</string>
     <string name="pen_lab_damping">Breitenglättung (ms)</string>
+    <string name="pen_lab_smoothing">Linienglättung</string>
     <string name="pen_lab_group_measured">Gemessener Druck</string>
     <string name="pen_lab_pressure">Ihr Schreibdruck: %1$s bis %2$s, aus %3$d Strichen</string>
     <string name="pen_lab_pressure_none">Noch nicht gemessen: Schreiben Sie ein paar Zeilen mit dem Stift</string>

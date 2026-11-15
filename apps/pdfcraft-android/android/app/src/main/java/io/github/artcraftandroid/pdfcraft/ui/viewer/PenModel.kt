@@ -1,6 +1,7 @@
 package io.github.artcraftandroid.pdfcraft.ui.viewer
 
 import androidx.compose.ui.geometry.Offset
+import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.atan2
 import kotlin.math.cos
@@ -19,6 +20,8 @@ import kotlin.math.pow
  * - [nib] flattens the tip: a stroke along [nibAngleDeg] is thinner by that fraction (0 = round).
  * - [taperStart] and [taperEnd] draw the stroke's ends out to a point over that many pen widths.
  * - [dampingMs] is how fast the width may follow a change (a time constant; 0 = at once).
+ * - [smoothing] takes the hand's tremor out of the line itself (0 = the points as the pen gave
+ *   them, 1 = the most), see [InkSmoother].
  */
 internal data class PenDials(
     val minScale: Float,
@@ -31,6 +34,7 @@ internal data class PenDials(
     val taperStart: Float = 0f,
     val taperEnd: Float = 0f,
     val dampingMs: Float = 20f,
+    val smoothing: Float = 0f,
 ) {
     /** The same dials kept inside their slider ranges, so a stored value can never break a stroke. */
     fun sanitized(): PenDials {
@@ -47,6 +51,7 @@ internal data class PenDials(
             taperStart = taperStart.ok(0f, 10f, 0f),
             taperEnd = taperEnd.ok(0f, 10f, 0f),
             dampingMs = dampingMs.ok(0f, 200f, 20f),
+            smoothing = smoothing.ok(0f, 1f, 0f),
         )
     }
 
@@ -57,14 +62,14 @@ internal data class PenDials(
         /** The starting values of #569: guesses for the owner to tune in the Pen lab, not targets. */
         fun default(style: InkStyle): PenDials = when (style) {
             // nearly constant: a ballpoint moves a little with pressure, nothing else
-            InkStyle.Ballpoint -> PenDials(minScale = 0.85f, maxScale = 1f)
+            InkStyle.Ballpoint -> PenDials(minScale = 0.85f, maxScale = 1f, smoothing = 0.4f)
             // wide range, thins when fast, downstrokes thicker than sidestrokes, pointed ends
-            InkStyle.Fountain -> PenDials(0.25f, 1.6f, curve = 1.3f, speedThin = 0.3f, nib = 0.35f, taperStart = 2.5f, taperEnd = 3f, dampingMs = 25f)
+            InkStyle.Fountain -> PenDials(0.25f, 1.6f, curve = 1.3f, speedThin = 0.3f, nib = 0.35f, taperStart = 2.5f, taperEnd = 3f, dampingMs = 25f, smoothing = 0.5f)
             // very wide range, strong speed, long pointed ends
-            InkStyle.Brush -> PenDials(0.1f, 2.5f, curve = 1.5f, speedThin = 0.5f, taperStart = 4f, taperEnd = 6f, dampingMs = 35f)
-            InkStyle.Pencil -> PenDials(0.8f, 1.1f)
+            InkStyle.Brush -> PenDials(0.1f, 2.5f, curve = 1.5f, speedThin = 0.5f, taperStart = 4f, taperEnd = 6f, dampingMs = 35f, smoothing = 0.5f)
+            InkStyle.Pencil -> PenDials(0.8f, 1.1f, smoothing = 0.3f)
             // the marker keeps one width (its own factor), whatever the pen does
-            InkStyle.Highlighter -> PenDials(1f, 1f, dampingMs = 0f)
+            InkStyle.Highlighter -> PenDials(1f, 1f, dampingMs = 0f, smoothing = 0.5f)
         }
     }
 }
@@ -226,6 +231,9 @@ internal class PenDynamics(
         if (d.taperEnd > 0f) inkEndTaper(points, scales, minOf(d.taperEnd * penWidth, travelled / 2f))
     }
 
+    /** How much this stroke's points are smoothed ([PenDials.smoothing]). */
+    val smoothing: Float get() = d.smoothing
+
     /** The speed now, pt/s (for tests). */
     val speedPtPerS: Float get() = speed
 
@@ -254,5 +262,64 @@ internal fun inkEndTaper(points: List<Offset>, scales: MutableList<Float>, lengt
         if (i < points.lastIndex) fromEnd += (points[i + 1] - points[i]).getDistance()
         if (fromEnd >= lengthPt) break
         scales[i] = scales[i] * taperFactor(fromEnd / lengthPt)
+    }
+}
+
+/**
+ * Takes the hand's tremor out of a stroke's points as they come (#569): a One Euro filter (Casiez,
+ * Roussel and Vogel, CHI 2012), a low-pass filter whose cut-off rises with the pen's speed. A slow
+ * pen, where a wobble shows, is smoothed hard; a fast one hardly at all, so the line does not trail
+ * behind the pen. [amount] 0 passes the points through unchanged. Each point is final once given,
+ * so the line drawn under the pen is the line saved; on lift the line is taken to the pen's last
+ * point ([end]), as PhotoCraft's "catch-up on end" does.
+ */
+internal class InkSmoother(amount: Float) {
+    private val a = amount.takeIf { it.isFinite() }?.coerceIn(0f, 1f) ?: 0f
+    /** The cut-off when the pen is still: 30 Hz (barely smoothed) at a little, 2 Hz at the most. */
+    private val minCutoffHz = 2f + 28f * (1f - a) * (1f - a)
+    private var smoothed: Offset? = null
+    private var raw: Offset? = null
+    private var velocity = Offset.Zero
+    private var lastTime = 0L
+
+    /** The smoothed point for the pen at [p] (page points) at [timeMs]. */
+    fun next(p: Offset, timeMs: Long): Offset {
+        val prev = smoothed
+        // a broken sample keeps the line where it is
+        if (!p.x.isFinite() || !p.y.isFinite()) return prev ?: p
+        if (a <= 0f || prev == null) {
+            raw = p
+            smoothed = p
+            lastTime = timeMs
+            return p
+        }
+        raw = p
+        // samples batched at one time count as 1 ms apart
+        val dt = (timeMs - lastTime).coerceAtLeast(1L) / 1000f
+        if (timeMs > lastTime) lastTime = timeMs
+        velocity += ((p - prev) / dt - velocity) * alpha(VELOCITY_CUTOFF_HZ, dt)
+        val cutoff = minCutoffHz + BETA * velocity.getDistance()
+        val out = prev + (p - prev) * alpha(cutoff, dt)
+        smoothed = out
+        return out
+    }
+
+    /** The pen's last point when the smoothed line stopped short of it, else null. */
+    fun end(): Offset? {
+        val r = raw ?: return null
+        val s = smoothed ?: return null
+        return r.takeIf { a > 0f && (r - s).getDistance() > END_SLOP_PT }
+    }
+
+    private fun alpha(cutoffHz: Float, dt: Float): Float {
+        val tau = 1f / (2f * PI.toFloat() * cutoffHz)
+        return 1f / (1f + tau / dt)
+    }
+
+    companion object {
+        /** How much the cut-off rises per pt/s of speed. */
+        const val BETA = 0.06f
+        const val VELOCITY_CUTOFF_HZ = 1f
+        const val END_SLOP_PT = 0.05f
     }
 }
