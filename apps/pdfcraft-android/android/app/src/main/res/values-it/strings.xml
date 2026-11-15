@@ -1382,7 +1382,7 @@
     <string name="pen_lab_try">Scrivi qui per provare la penna</string>
     <string name="pen_lab_clear_strip">Cancella la striscia</string>
     <string name="pen_lab_jetpack">Prova le penne Jetpack Ink</string>
-    <string name="pen_lab_jetpack_summary">La penna a sfera, la stilografica e il pennello li disegna Jetpack Ink (open source, di Android) invece di PdfCraft, ovunque scrivi. L\'inchiostro salvato è dello stesso tipo; disattivalo per confrontare.</string>
+    <string name="pen_lab_jetpack_summary">Jetpack Ink (open source, di Android) disegna penna a sfera, stilografica e pennello al posto di PdfCraft. Stesso inchiostro; disattiva per confrontare.</string>
     <string name="pen_lab_group_pressure">Pressione</string>
     <string name="pen_lab_min">Più sottile (tocco leggero)</string>
     <string name="pen_lab_max">Più spesso (pressione forte)</string>

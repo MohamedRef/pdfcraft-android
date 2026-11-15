@@ -1135,7 +1135,7 @@
     <string name="pen_lab_try">اكتب هنا لتجربة القلم</string>
     <string name="pen_lab_clear_strip">امسح الشريط</string>
     <string name="pen_lab_jetpack">جرّب أقلام Jetpack Ink</string>
-    <string name="pen_lab_jetpack_summary">قلم الحبر الجاف وقلم الحبر والفرشاة ترسمها Jetpack Ink (مفتوحة المصدر، من أندرويد) بدل أقلام PdfCraft، في كل مكان تكتب فيه. الحبر المحفوظ من نفس النوع؛ أطفئه للمقارنة.</string>
+    <string name="pen_lab_jetpack_summary">Jetpack Ink (مفتوحة المصدر، من أندرويد) ترسم الحبر الجاف وقلم الحبر والفرشاة بدل PdfCraft. الحبر المحفوظ زي ما هو؛ أطفئه للمقارنة.</string>
     <string name="pen_lab_group_pressure">الضغط</string>
     <string name="pen_lab_min">الأرفع (لمسة خفيفة)</string>
     <string name="pen_lab_max">الأعرض (ضغط قوي)</string>

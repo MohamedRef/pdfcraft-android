@@ -1392,7 +1392,7 @@
     <string name="pen_lab_try">Hier schreiben, um den Stift zu testen</string>
     <string name="pen_lab_clear_strip">Streifen leeren</string>
     <string name="pen_lab_jetpack">Jetpack-Ink-Stifte ausprobieren</string>
-    <string name="pen_lab_jetpack_summary">Kugelschreiber, Füller und Pinsel zeichnet Jetpack Ink (Open Source, von Android) statt PdfCraft selbst, überall, wo du schreibst. Die gespeicherte Tinte ist dieselbe Art; zum Vergleichen ausschalten.</string>
+    <string name="pen_lab_jetpack_summary">Jetpack Ink (Open Source, von Android) zeichnet Kugelschreiber, Füller und Pinsel statt PdfCraft. Gespeicherte Tinte bleibt gleich; zum Vergleich ausschalten.</string>
     <string name="pen_lab_group_pressure">Druck</string>
     <string name="pen_lab_min">Am dünnsten (leichte Berührung)</string>
     <string name="pen_lab_max">Am dicksten (fester Druck)</string>

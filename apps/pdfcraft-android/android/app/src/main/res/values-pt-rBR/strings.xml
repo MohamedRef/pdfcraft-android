@@ -977,7 +977,7 @@
     <string name="pen_lab_try">Escreva aqui para testar a caneta</string>
     <string name="pen_lab_clear_strip">Limpar a faixa</string>
     <string name="pen_lab_jetpack">Testar as canetas do Jetpack Ink</string>
-    <string name="pen_lab_jetpack_summary">A esferográfica, a caneta-tinteiro e o pincel são desenhados pelo Jetpack Ink (código aberto, do Android) em vez do PdfCraft, em todo lugar onde você escreve. A tinta salva é do mesmo tipo; desligue para comparar.</string>
+    <string name="pen_lab_jetpack_summary">O Jetpack Ink (código aberto, do Android) desenha a esferográfica, a caneta-tinteiro e o pincel no lugar do PdfCraft. Mesma tinta; desligue para comparar.</string>
     <string name="pen_lab_group_pressure">Pressão</string>
     <string name="pen_lab_min">Mais fina (toque leve)</string>
     <string name="pen_lab_max">Mais grossa (pressão forte)</string>
