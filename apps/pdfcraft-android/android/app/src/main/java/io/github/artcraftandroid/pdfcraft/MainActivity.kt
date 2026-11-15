@@ -280,6 +280,7 @@ class MainActivity : ComponentActivity() {
             "changing_config" to isChangingConfigurations, "finishing" to isFinishing,
         )
         vm.onPause(ownScreen)
+        io.github.artcraftandroid.pdfcraft.ui.home.UpdaterState.onForeground(this, false)
     }
 
     override fun onResume() {
@@ -287,6 +288,7 @@ class MainActivity : ComponentActivity() {
         io.github.artcraftandroid.pdfcraft.engine.Diag.event(io.github.artcraftandroid.pdfcraft.engine.DiagArea.App, "resume")
         vm.home.onResumed()
         vm.recheckWriteAccess()
+        io.github.artcraftandroid.pdfcraft.ui.home.UpdaterState.onForeground(this, true)
     }
 
     override fun onNewIntent(intent: Intent) {

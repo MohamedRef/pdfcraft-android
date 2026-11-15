@@ -35,6 +35,7 @@ import androidx.compose.ui.unit.sp
 import io.github.artcraftandroid.pdfcraft.R
 import io.github.artcraftandroid.pdfcraft.engine.Diag
 import io.github.artcraftandroid.pdfcraft.engine.DiagArea
+import io.github.artcraftandroid.pdfcraft.engine.DiagClass
 import io.github.artcraftandroid.pdfcraft.ui.pdfColors
 import java.io.File
 import kotlinx.coroutines.CancellationException
@@ -84,7 +85,6 @@ internal fun UpdatePanel(showTitle: Boolean = true) {
     val uriHandler = LocalUriHandler.current
     // The check and the download outlive this screen: leaving About must not stop a download (#193).
     val appContext = context.applicationContext
-    val scope = UpdaterState.scope
     var checking by UpdaterState::checking
     var candidate by UpdaterState::candidate
     var message by UpdaterState::message
@@ -180,31 +180,7 @@ internal fun UpdatePanel(showTitle: Boolean = true) {
                     PrimaryButton(
                         enabled = !downloading && !checking,
                         onClick = {
-                            downloading = true
-                            message = null
-                            downloadJob = scope.launch {
-                                try {
-                                    verifiedApk = downloadAndVerifyApk(appContext, update) { percent ->
-                                        progress = percent
-                                    }
-                                    cachedBytes = update.size
-                                    message = appContext.getString(R.string.updater_download_verified)
-                                    Diag.event(DiagArea.Update, "download", "outcome" to "verified", "bytes" to update.size)
-                                } catch (_: CancellationException) {
-                                    Diag.event(DiagArea.Update, "download", "outcome" to "paused", "progress" to progress)
-                                    cachedBytes = apkCachedBytes(appContext, update)
-                                    progress = (cachedBytes * 100L / update.size).toInt()
-                                    message = appContext.getString(R.string.updater_paused)
-                                } catch (e: Exception) {
-                                    Diag.failure(DiagArea.Update, "download", e)
-                                    cachedBytes = apkCachedBytes(appContext, update)
-                                    progress = (cachedBytes * 100L / update.size).toInt()
-                                    message = e.updaterMessage(appContext, R.string.updater_interrupted)
-                                } finally {
-                                    downloading = false
-                                    downloadJob = null
-                                }
-                            }
+                            UpdaterState.download(appContext)
                         },
                         label = stringResource(if (cachedBytes > 0L) R.string.updater_resume else R.string.updater_download),
                     )
@@ -347,6 +323,72 @@ internal object UpdaterState {
                 if (!quiet) message = app.getString(R.string.updater_check_error)
             } finally {
                 checking = false
+            }
+        }
+    }
+
+    /** Whether the app is on screen; MainActivity reports pause and resume (#596). */
+    private var inForeground = true
+    /** The app went to the background while the running download was on. */
+    private var leftDuringDownload = false
+    /** A download stopped by the background network cut, to resume when the app is back. */
+    private var resumeOnReturn = false
+
+    /** MainActivity's onPause and onResume: resumes a download that the background stopped (#596). */
+    fun onForeground(context: Context, on: Boolean) {
+        inForeground = on
+        if (!on) {
+            if (downloading) leftDuringDownload = true
+            return
+        }
+        if (resumeOnReturn && !downloading && candidate != null) {
+            resumeOnReturn = false
+            Diag.event(DiagArea.Update, "download_resume", "auto" to true, "cached_bytes" to cachedBytes)
+            download(context)
+        }
+    }
+
+    /** Download and verify [candidate], continuing from saved bytes. */
+    fun download(context: Context) {
+        val update = candidate ?: return
+        if (downloading) return
+        val app = context.applicationContext
+        downloading = true
+        message = null
+        resumeOnReturn = false
+        leftDuringDownload = !inForeground
+        downloadJob = scope.launch {
+            try {
+                verifiedApk = downloadAndVerifyApk(app, update) { percent -> progress = percent }
+                cachedBytes = update.size
+                message = app.getString(R.string.updater_download_verified)
+                Diag.event(DiagArea.Update, "download", "outcome" to "verified", "bytes" to update.size)
+            } catch (_: CancellationException) {
+                Diag.event(DiagArea.Update, "download", "outcome" to "paused", "progress" to progress)
+                cachedBytes = apkCachedBytes(app, update)
+                progress = (cachedBytes * 100L / update.size).toInt()
+                message = app.getString(R.string.updater_paused)
+            } catch (e: Exception) {
+                val left = leftDuringDownload || !inForeground
+                Diag.failure(DiagArea.Update, "download", e)
+                cachedBytes = apkCachedBytes(app, update)
+                progress = (cachedBytes * 100L / update.size).toInt()
+                val resume = apkResumesOnReturn(e, left)
+                Diag.event(
+                    DiagArea.Update, "download", "outcome" to if (resume) "paused_background" else "failed",
+                    "background" to left, "cause" to DiagClass(e.cause ?: e), "progress" to progress,
+                )
+                if (resume) {
+                    message = app.getString(R.string.updater_paused_background)
+                    resumeOnReturn = true
+                } else {
+                    message = e.updaterMessage(app, R.string.updater_interrupted)
+                }
+            } finally {
+                downloading = false
+                downloadJob = null
+                // back on screen before the failure arrived: resume now rather than on the next return
+                if (resumeOnReturn && inForeground) onForeground(app, true)
             }
         }
     }

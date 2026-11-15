@@ -83,3 +83,13 @@ internal fun apkPartialFileName(sha256: String): String {
 
 internal fun readableMegabytes(bytes: Long): String =
     String.format(java.util.Locale.ROOT, "%.1f", bytes.coerceAtLeast(0L).toDouble() / (1024.0 * 1024.0))
+
+/**
+ * A download that lost the network after the person left the app resumes by itself on return
+ * (#596): Android cuts background network access, so this is a pause, not a failure.
+ */
+internal fun apkResumesOnReturn(error: Throwable, leftApp: Boolean): Boolean {
+    if (!leftApp) return false
+    val network = if (error is UpdateException) error.cause else error
+    return network is IOException && apkRetryable(network)
+}

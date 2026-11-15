@@ -82,4 +82,16 @@ class ApkResumePolicyTest {
         assertEquals("0.0", readableMegabytes(-1))
         assertEquals("1.5", readableMegabytes(1572864L))
     }
+
+    /** #596: a network loss after leaving the app pauses and resumes on return; other failures don't. */
+    @Test fun backgroundNetworkLossResumesOnReturn() {
+        val lost = UpdateException(io.github.artcraftandroid.pdfcraft.R.string.updater_interrupted, "interrupted", SocketException("reset"))
+        assertEquals(true, apkResumesOnReturn(lost, leftApp = true))
+        assertEquals(true, apkResumesOnReturn(SocketTimeoutException(), leftApp = true))
+        assertEquals(false, apkResumesOnReturn(lost, leftApp = false))
+        val trust = UpdateException(io.github.artcraftandroid.pdfcraft.R.string.updater_err_checksum, "checksum")
+        assertEquals(false, apkResumesOnReturn(trust, leftApp = true))
+        assertEquals(false, apkResumesOnReturn(SSLHandshakeException("bad"), leftApp = true))
+        assertEquals(false, apkResumesOnReturn(IllegalStateException(), leftApp = true))
+    }
 }

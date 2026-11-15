@@ -1288,6 +1288,7 @@
     <string name="updater_progress">%1$d%% · %2$s / %3$s ميغابايت</string>
     <string name="updater_download_verified">اكتمل التنزيل وتم التحقق منه. أكّد التثبيت أدناه.</string>
     <string name="updater_paused">توقّف التنزيل مؤقتًا. تم الاحتفاظ بتقدّمك.</string>
+    <string name="updater_paused_background">توقف التنزيل مؤقتًا أثناء وجود PdfCraft في الخلفية. سيكمل عند عودتك.</string>
     <string name="updater_interrupted">انقطع التنزيل. انقر على استئناف لإعادة المحاولة.</string>
     <string name="updater_resume">استئناف التنزيل</string>
     <string name="updater_download">نزّل التحديث</string>
