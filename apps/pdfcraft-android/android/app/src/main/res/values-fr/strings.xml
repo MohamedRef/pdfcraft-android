@@ -1275,7 +1275,7 @@
     <string name="pen_lab_curve">Courbe de pression</string>
     <string name="pen_lab_group_speed">Vitesse</string>
     <string name="pen_lab_speed_thin">Plus fin quand on va vite</string>
-    <string name="pen_lab_speed_ref">Vitesse rapide (pt/s)</string>
+    <string name="pen_lab_speed_ref">Vitesse rapide (dp/s)</string>
     <string name="pen_lab_group_tip">Pointe</string>
     <string name="pen_lab_nib">Plume plate</string>
     <string name="pen_lab_nib_angle">Angle de la plume (°)</string>

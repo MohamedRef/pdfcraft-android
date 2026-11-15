@@ -14,6 +14,7 @@ import io.github.artcraftandroid.pdfcraft.ui.viewer.nibWidth
 import io.github.artcraftandroid.pdfcraft.ui.viewer.PressureRange
 import io.github.artcraftandroid.pdfcraft.ui.viewer.PressureSource
 import io.github.artcraftandroid.pdfcraft.ui.viewer.inkStylePointWidths
+import io.github.artcraftandroid.pdfcraft.ui.viewer.inkTailPoints
 import io.github.artcraftandroid.pdfcraft.ui.viewer.penDialsOf
 import io.github.artcraftandroid.pdfcraft.ui.viewer.quantile
 import io.github.artcraftandroid.pdfcraft.ui.viewer.toList
@@ -167,14 +168,36 @@ class PenModelTest {
         assertEquals(2000L, c.measuredAt)
         val r = c.range
         assertTrue(r.lo in 0.29f..0.33f && r.hi in 0.47f..0.51f)
-        assertEquals(0f, r.stretch(0.2f), 1e-6f)
-        assertEquals(1f, r.stretch(0.6f), 1e-6f)
+        // the band takes the middle of the pen's range: its ends land at 10 % and 90 %
+        assertEquals(PressureRange.BAND_LOW, r.stretch(r.lo), 1e-5f)
+        assertEquals(PressureRange.BAND_HIGH, r.stretch(r.hi), 1e-5f)
         assertEquals(0.5f, r.stretch((r.lo + r.hi) / 2f), 1e-4f)
         // a short stroke and a pen with one fixed pressure measure nothing
         assertEquals(c, c.learn(listOf(0.4f, 0.4f), 3000L))
         assertEquals(c, c.learn(List(40) { 1f }, 3000L))
         // a too narrow band is not stretched
         assertEquals(0.42f, PressureRange(0.4f, 0.45f).stretch(0.42f), 1e-6f)
+    }
+
+    @Test fun aLighterOrHarderTouchThanUsualStillChangesTheLine() {
+        val r = PressureRange(0.3f, 0.5f)
+        // below and above the band the line keeps answering, up to the pen's real limits
+        assertTrue(r.stretch(0.1f) < r.stretch(0.2f) && r.stretch(0.2f) < r.stretch(0.3f))
+        assertTrue(r.stretch(0.5f) < r.stretch(0.7f) && r.stretch(0.7f) < r.stretch(0.9f))
+        assertEquals(1f, r.stretch(1f), 1e-6f)
+        assertTrue(r.stretch(0.001f) < 0.01f)
+        // never backwards, and no flat stretch anywhere between the lightest and the hardest touch
+        val steps = List(200) { r.stretch((it + 1) / 200f) }
+        assertTrue(steps.zipWithNext().all { (a, b) -> b > a })
+        // Fountain: pressing harder than the usual hardest still thickens the line
+        fun width(p: Float) = PenDynamics(PenDials.default(InkStyle.Fountain).copy(dampingMs = 0f, taperStart = 0f), PressureSource.Pen, r, penWidth).next(Offset.Zero, 0L, p)
+        assertTrue(width(0.9f) > width(0.5f) * 1.05f)
+        assertTrue(width(1f) > width(0.5f) * 1.1f)
+        assertTrue(width(0.1f) < width(0.3f) * 0.95f)
+        // the unmeasured range, and a band that reaches the pen's limit, leave no room to invent
+        assertEquals(0.37f, PressureRange().stretch(0.37f), 1e-6f)
+        assertEquals(1f, PressureRange(0.4f, 1f).stretch(1f), 1e-6f)
+        assertEquals(PressureRange.BAND_LOW, PressureRange(0.4f, 1f).stretch(0.4f), 1e-6f)
     }
 
     @Test fun storedDialsCannotBreakAStroke() {
@@ -268,5 +291,73 @@ class PenModelTest {
         val dyn = PenDynamics(PenDials(0f + 0.05f, 1f), PressureSource.Pen, PressureRange(), penWidth, null, soft)
         val plain = PenDynamics(PenDials(0.05f, 1f), PressureSource.Pen, PressureRange(), penWidth)
         assertTrue(dyn.next(Offset.Zero, 0L, 0.25f) > plain.next(Offset.Zero, 0L, 0.25f) * 1.5f)
+    }
+
+    /** The same pen movement on the glass ([dp], in dp), on a page shown at [dpPerPt] dp a point. */
+    private fun onPage(dp: List<S>, dpPerPt: Float) = dp.map { S(it.p / dpPerPt, it.t, it.pressure) }
+
+    @Test fun theSameHandGivesTheSameLineAtEveryZoom() {
+        // one movement of the hand: a word 120 dp long written in half a second, with a small tremor
+        val hand = fastWord.mapIndexed { i, s -> S(s.p + Offset(0f, if (i % 2 == 0) 0.2f else -0.2f), s.t, s.pressure) }
+        fun line(dpPerPt: Float): Pair<List<Offset>, List<Float>> {
+            val smoother = InkSmoother(0.5f, dpPerPt)
+            val dyn = PenDynamics(PenDials.default(InkStyle.Fountain), PressureSource.Pen, PressureRange(), penWidth, dpPerPt = dpPerPt)
+            val points = ArrayList<Offset>()
+            val scales = ArrayList<Float>()
+            for (s in onPage(hand, dpPerPt)) {
+                val q = smoother.next(s.p, s.t)
+                points += q * dpPerPt // back on the glass, to compare
+                scales += dyn.next(q, s.t, s.pressure)
+            }
+            return points to scales
+        }
+        // fit-width on a phone, fit-width on a tablet, and zoomed in: the page differs sevenfold
+        val (phonePoints, phoneScales) = line(0.6f)
+        for (dpPerPt in listOf(1.3f, 4f)) {
+            val (points, scales) = line(dpPerPt)
+            // the start taper is counted in pen widths on the page, so compare past it
+            val from = points.size / 2
+            for (i in from until points.size) {
+                assertEquals("width at $i, $dpPerPt dp/pt", phoneScales[i], scales[i], 0.01f)
+                assertTrue("point $i, $dpPerPt dp/pt", (points[i] - phonePoints[i]).getDistance() < 0.01f)
+            }
+        }
+        // and a finger's pressure, made from speed, is the same too
+        fun fingerWidths(dpPerPt: Float): List<Float> {
+            val dyn = PenDynamics(PenDials.default(InkStyle.Ballpoint).copy(minScale = 0.3f, maxScale = 1.5f), PressureSource.Speed, PressureRange(), penWidth, dpPerPt = dpPerPt)
+            return onPage(fastWord, dpPerPt).map { dyn.next(it.p, it.t, 1f) }
+        }
+        fingerWidths(0.6f).zip(fingerWidths(4f)).forEach { (a, b) -> assertEquals(a, b, 0.01f) }
+    }
+
+    @Test fun speedIsMeasuredOnTheGlass() {
+        // 240 pt in 1.27 s on a page shown at 2 dp a point: about 378 dp/s
+        val dyn = PenDynamics(PenDials.default(InkStyle.Fountain), PressureSource.Pen, PressureRange(), penWidth, dpPerPt = 2f)
+        lightToHard.forEach { dyn.next(it.p, it.t, it.pressure) }
+        assertEquals(378f, dyn.speedDpPerS, 30f)
+        // a size that cannot be right counts as 1 dp a point
+        val broken = PenDynamics(PenDials.default(InkStyle.Fountain), PressureSource.Pen, PressureRange(), penWidth, dpPerPt = Float.NaN)
+        lightToHard.forEach { broken.next(it.p, it.t, it.pressure) }
+        assertEquals(189f, broken.speedDpPerS, 15f)
+    }
+
+    @Test fun theTailReachesThePen() {
+        val fast = line(Offset(0f, 0f), Offset(400f, 0f), 50, 8L, 0.6f, 0.6f)
+        val s = InkSmoother(0.5f)
+        val out = fast.map { s.next(it.p, it.t) }
+        // the smoothed line stops short of the pen; the tip is where the pen is
+        assertTrue(out.last().x < fast.last().p.x)
+        assertEquals(fast.last().p, s.tip)
+        // the tail: from the line's end to the pen, then on to where the pen is going
+        assertEquals(listOf(out.last(), fast.last().p, fast.last().p + Offset(3f, 1f)), inkTailPoints(out.last(), s.tip, 3f to 1f))
+        assertEquals(listOf(out.last(), fast.last().p), inkTailPoints(out.last(), s.tip, null))
+        // nothing to draw when the line is at the pen and no prediction is known
+        assertEquals(emptyList<Offset>(), inkTailPoints(Offset(1f, 1f), Offset(1f, 1f), null))
+        assertEquals(emptyList<Offset>(), inkTailPoints(Offset(1f, 1f), null, 0f to 0f))
+        // an unsmoothed line still gets its predicted tail, and bad numbers draw nothing extra
+        assertEquals(listOf(Offset(1f, 1f), Offset(4f, 1f)), inkTailPoints(Offset(1f, 1f), null, 3f to 0f))
+        assertEquals(emptyList<Offset>(), inkTailPoints(Offset(1f, 1f), Offset(Float.NaN, 0f), Float.NaN to 0f))
+        assertEquals(emptyList<Offset>(), inkTailPoints(Offset(Float.NaN, 1f), Offset(2f, 2f), 1f to 1f))
+        assertEquals(null, InkSmoother(0.5f).tip)
     }
 }

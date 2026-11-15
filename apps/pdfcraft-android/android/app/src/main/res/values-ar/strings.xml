@@ -1138,7 +1138,7 @@
     <string name="pen_lab_curve">منحنى الضغط</string>
     <string name="pen_lab_group_speed">السرعة</string>
     <string name="pen_lab_speed_thin">أرفع عند السرعة</string>
-    <string name="pen_lab_speed_ref">السرعة العالية (نقطة/ث)</string>
+    <string name="pen_lab_speed_ref">السرعة العالية (dp/ث)</string>
     <string name="pen_lab_group_tip">السن</string>
     <string name="pen_lab_nib">سن مسطّح</string>
     <string name="pen_lab_nib_angle">زاوية السن (°)</string>

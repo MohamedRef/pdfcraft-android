@@ -980,7 +980,7 @@
     <string name="pen_lab_curve">Curva de pressão</string>
     <string name="pen_lab_group_speed">Velocidade</string>
     <string name="pen_lab_speed_thin">Mais fina quando rápida</string>
-    <string name="pen_lab_speed_ref">Velocidade rápida (pt/s)</string>
+    <string name="pen_lab_speed_ref">Velocidade rápida (dp/s)</string>
     <string name="pen_lab_group_tip">Ponta</string>
     <string name="pen_lab_nib">Pena chata</string>
     <string name="pen_lab_nib_angle">Ângulo da pena (°)</string>

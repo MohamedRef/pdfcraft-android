@@ -1385,7 +1385,7 @@
     <string name="pen_lab_curve">Curva di pressione</string>
     <string name="pen_lab_group_speed">Velocità</string>
     <string name="pen_lab_speed_thin">Più sottile se veloce</string>
-    <string name="pen_lab_speed_ref">Velocità alta (pt/s)</string>
+    <string name="pen_lab_speed_ref">Velocità alta (dp/s)</string>
     <string name="pen_lab_group_tip">Punta</string>
     <string name="pen_lab_nib">Pennino piatto</string>
     <string name="pen_lab_nib_angle">Angolo del pennino (°)</string>

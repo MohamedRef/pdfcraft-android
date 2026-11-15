@@ -14,8 +14,10 @@ import kotlin.math.pow
  *
  * - [minScale]…[maxScale] is the pressure range: the width at the lightest and the hardest touch,
  *   [curve] the shape between (1 = straight, more = stays thin longer).
- * - [speedThin] is how much a fast stroke thins (0.3 = down to 70 % at [speedRef] pt/s and faster).
- *   [speedRef] is also the speed that counts as the lightest touch when pressure is made from speed.
+ * - [speedThin] is how much a fast stroke thins (0.3 = down to 70 % at [speedRef] and faster).
+ *   [speedRef] is the pen's speed on the glass, in dp per second, so the same hand movement
+ *   thins the same at every zoom and on a phone as on a tablet. It is also the speed that counts
+ *   as the lightest touch when pressure is made from speed.
  * - [nib] flattens the tip: a stroke along [nibAngleDeg] is thinner by that fraction (0 = round).
  * - [taperStart] and [taperEnd] draw the stroke's ends out to a point over that many pen widths.
  * - [dampingMs] is how fast the width may follow a change (a time constant; 0 = at once).
@@ -80,24 +82,46 @@ internal const val PEN_TAPER_FLOOR = 0.12f
 internal enum class PressureSource(val key: String) { Pen("pen"), Speed("speed") }
 
 /**
- * The pressure band ordinary handwriting uses on this pen ([lo]…[hi], measured, see [PressureCalibration]),
- * stretched over the pen's whole range. The identity (0…1) until it is measured.
+ * The pressure band ordinary handwriting uses on this pen ([lo]…[hi], its 10th and 90th percentile,
+ * measured, see [PressureCalibration]), stretched over the pen's range. The identity (0…1) until
+ * it is measured.
+ *
+ * The band takes the middle of the range ([BAND_LOW]…[BAND_HIGH]), not all of it: a touch lighter
+ * than usual still gets thinner and a press harder than usual still gets thicker, up to the pen's
+ * real limits. Stretching the band over the whole range left a tenth of ordinary writing at the
+ * thinnest width, a tenth at the thickest, and nothing more to give when pressing for emphasis.
  */
 internal data class PressureRange(val lo: Float = 0f, val hi: Float = 1f) {
     fun stretch(raw: Float): Float {
         val p = raw.takeIf { it.isFinite() && it > 0f }?.coerceIn(0f, 1f) ?: return 1f
         if (!(hi - lo >= MIN_SPAN)) return p
-        return ((p - lo) / (hi - lo)).coerceIn(0f, 1f)
+        // a band that starts at 0 or ends at 1 has no room beyond it: the unmeasured 0…1 stays as it is
+        val low = if (lo > 0f) BAND_LOW else 0f
+        val high = if (hi < 1f) BAND_HIGH else 1f
+        return when {
+            p < lo -> low * p / lo
+            p > hi -> high + (1f - high) * (p - hi) / (1f - hi)
+            else -> low + (high - low) * (p - lo) / (hi - lo)
+        }
     }
 
     companion object {
         /** A narrower band is not trusted: the stretch would turn sensor noise into width. */
         const val MIN_SPAN = 0.08f
+        /** Where the measured band's ends land in the pen's range: its percentiles, 10 % and 90 %. */
+        const val BAND_LOW = 0.1f
+        const val BAND_HIGH = 0.9f
     }
 }
 
-/** What one stroke used, for its `stroke` log line (#569): numbers only. */
-internal class PenStrokeStats(val style: InkStyle, val source: PressureSource, val penWidth: Float, val dials: PenDials, val opacity: Float) {
+/**
+ * What one stroke used, for its `stroke` log line (#569): numbers only. [dpPerPt] is the page's
+ * size on the glass while it was drawn (dp per page point): the zoom the owner writes at.
+ */
+internal class PenStrokeStats(
+    val style: InkStyle, val source: PressureSource, val penWidth: Float, val dials: PenDials, val opacity: Float,
+    val dpPerPt: Float = 1f,
+) {
     val pressures = FloatSampleList()
     /** The raw sensor pressures (pen only), for the pressure range measurement. */
     val raw = FloatSampleList()
@@ -143,6 +167,11 @@ internal fun quantile(values: List<Float>, q: Float): Float? {
  * (measured range stretched, or made from speed), speed, direction, start taper and damping.
  * Everything is worked out from the samples so far, so the line drawn under the pen is the line
  * that is saved; only the end taper ([inkEndTaper]) is added on lift.
+ *
+ * Speed is the pen's speed on the glass (dp per second), not on the page: [dpPerPt] is how many dp
+ * one page point takes on screen while the stroke is drawn. Measured on the page, the same hand
+ * movement was several times "faster" at fit-width on a phone than zoomed in on a tablet, so a
+ * pen tuned at one zoom drew a different line at another.
  */
 internal class PenDynamics(
     dials: PenDials,
@@ -153,8 +182,10 @@ internal class PenDynamics(
     val stats: PenStrokeStats? = null,
     /** This hand's pressure curve (Pen lab), applied to the pen's own pressure after the stretch. */
     private val pressureCurve: PressureCurve = PressureCurve.LINEAR,
+    dpPerPt: Float = 1f,
 ) {
     private val d = dials.sanitized()
+    private val dpPerPt = dpPerPt.takeIf { it.isFinite() && it > 0f } ?: 1f
     private var last: Offset? = null
     private var lastTime = Long.MIN_VALUE
     private var pendingDist = 0f
@@ -182,7 +213,7 @@ internal class PenDynamics(
             if (timeMs > lastTime) {
                 // batched samples can share one time: their distance waits for the next time step
                 dtMs = (timeMs - lastTime).toFloat()
-                val instant = pendingDist / (dtMs / 1000f)
+                val instant = pendingDist * dpPerPt / (dtMs / 1000f)
                 speed += (instant - speed) * (1f - exp(-dtMs / SPEED_TAU_MS))
                 pendingDist = 0f
             }
@@ -234,8 +265,8 @@ internal class PenDynamics(
     /** How much this stroke's points are smoothed ([PenDials.smoothing]). */
     val smoothing: Float get() = d.smoothing
 
-    /** The speed now, pt/s (for tests). */
-    val speedPtPerS: Float get() = speed
+    /** The pen's speed on the glass now, dp/s (for tests). */
+    val speedDpPerS: Float get() = speed
 
     companion object {
         /** How quickly the measured speed follows the pen. */
@@ -287,9 +318,15 @@ internal fun inkEndTaper(points: List<Offset>, scales: MutableList<Float>, lengt
  * behind the pen. [amount] 0 passes the points through unchanged. Each point is final once given,
  * so the line drawn under the pen is the line saved; on lift the line is taken to the pen's last
  * point ([end]), as PhotoCraft's "catch-up on end" does.
+ *
+ * The speed is the pen's speed on the glass (dp per second; [dpPerPt] is how many dp one page point
+ * takes on screen), because the tremor is the hand's: measured on the page, the same writing was
+ * smoothed more, and trailed the pen further, the more the page was zoomed in. While the stroke is
+ * drawn the gap between the smoothed line and the pen is filled by a tail to [tip], drawn only.
  */
-internal class InkSmoother(amount: Float) {
+internal class InkSmoother(amount: Float, dpPerPt: Float = 1f) {
     private val a = amount.takeIf { it.isFinite() }?.coerceIn(0f, 1f) ?: 0f
+    private val dpPerPt = dpPerPt.takeIf { it.isFinite() && it > 0f } ?: 1f
     /** The cut-off when the pen is still: 30 Hz (barely smoothed) at a little, 2 Hz at the most. */
     private val minCutoffHz = 2f + 28f * (1f - a) * (1f - a)
     private var smoothed: Offset? = null
@@ -312,12 +349,16 @@ internal class InkSmoother(amount: Float) {
         // samples batched at one time count as 1 ms apart
         val dt = (timeMs - lastTime).coerceAtLeast(1L) / 1000f
         if (timeMs > lastTime) lastTime = timeMs
-        velocity += ((p - prev) / dt - velocity) * alpha(VELOCITY_CUTOFF_HZ, dt)
+        // how fast the pen is leaving the line behind, on the glass
+        velocity += ((p - prev) * dpPerPt / dt - velocity) * alpha(VELOCITY_CUTOFF_HZ, dt)
         val cutoff = minCutoffHz + BETA * velocity.getDistance()
         val out = prev + (p - prev) * alpha(cutoff, dt)
         smoothed = out
         return out
     }
+
+    /** Where the pen is now (page points): the last point given, smoothed or not; null before the first. */
+    val tip: Offset? get() = raw
 
     /** The pen's last point when the smoothed line stopped short of it, else null. */
     fun end(): Offset? {
@@ -332,11 +373,32 @@ internal class InkSmoother(amount: Float) {
     }
 
     companion object {
-        /** How much the cut-off rises per pt/s of speed. */
-        const val BETA = 0.06f
+        /**
+         * How much the cut-off rises per dp/s of speed on the glass. 0.1 is what the first version
+         * (0.06 per pt/s on the page) came to with a page at fit-width on a phone (0.6 dp a point).
+         */
+        const val BETA = 0.1f
         const val VELOCITY_CUTOFF_HZ = 1f
         const val END_SLOP_PT = 0.05f
     }
+}
+
+/**
+ * The tail drawn after a growing stroke's last point, in screen pixels (#569): on to the pen
+ * ([tip]) when smoothing keeps the line behind it, then on by [ahead] (how far the pen will have
+ * moved a frame from now) when that is known. Empty when there is nothing to draw. Drawn only: the
+ * next sample replaces it, so the ink reaches the pen without the saved line being any less smooth.
+ */
+internal fun inkTailPoints(last: Offset, tip: Offset?, ahead: Pair<Float, Float>?): List<Offset> {
+    if (!last.x.isFinite() || !last.y.isFinite()) return emptyList()
+    val out = ArrayList<Offset>(3)
+    out += last
+    val pen = tip?.takeIf { it.x.isFinite() && it.y.isFinite() } ?: last
+    if (pen != last) out += pen
+    if (ahead != null && ahead.first.isFinite() && ahead.second.isFinite() && (ahead.first != 0f || ahead.second != 0f)) {
+        out += Offset(pen.x + ahead.first, pen.y + ahead.second)
+    }
+    return if (out.size < 2) emptyList() else out
 }
 
 /**

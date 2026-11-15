@@ -106,7 +106,7 @@ class PenDiagTest {
         val lines = recorded { Diag.event(DiagArea.Ink, "stroke", *inkStrokeFields(stats, -12f, 48.6f, true)) }
         val line = lines.single()
         assertFalse(Diag.REDACTED in line)
-        for (part in listOf("style=fountain", "pressure_source=pen", "tilt_min=-12", "tilt_max=49", "tilt_reported=true", "taper_start_pt=10.00", "taper_end_pt=12.00", "stabilisation=0")) {
+        for (part in listOf("style=fountain", "pressure_source=pen", "tilt_min=-12", "tilt_max=49", "tilt_reported=true", "taper_start_pt=10.00", "taper_end_pt=12.00", "stabilisation=0", "dp_per_pt=1.00")) {
             org.junit.Assert.assertTrue("$part in $line", part in line)
         }
         // a gesture that drew no ink adds nothing

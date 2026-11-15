@@ -269,3 +269,18 @@ internal fun DrawScope.drawInkStroke(
         canvas.restore()
     }
 }
+
+/**
+ * Draw the tail of the stroke being written ([inkTailPoints], in screen pixels) at [widthPx]: one
+ * path, so a translucent pen's tail is laid down once. Drawn only, never saved.
+ */
+internal fun DrawScope.drawInkTail(tail: List<Offset>, color: Color, opacity: Float, widthPx: Float) {
+    if (tail.size < 2 || !(widthPx > 0f)) return
+    val path = Path()
+    path.moveTo(tail[0].x, tail[0].y)
+    for (i in 1 until tail.size) path.lineTo(tail[i].x, tail[i].y)
+    drawPath(
+        path, color.copy(alpha = opacity.takeIf { it.isFinite() }?.coerceIn(0f, 1f) ?: 1f),
+        style = Stroke(width = widthPx, cap = StrokeCap.Round, join = StrokeJoin.Round),
+    )
+}

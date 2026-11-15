@@ -1395,7 +1395,7 @@
     <string name="pen_lab_curve">Druckkurve</string>
     <string name="pen_lab_group_speed">Tempo</string>
     <string name="pen_lab_speed_thin">Dünner bei schnellem Schreiben</string>
-    <string name="pen_lab_speed_ref">Schnelles Tempo (pt/s)</string>
+    <string name="pen_lab_speed_ref">Schnelles Tempo (dp/s)</string>
     <string name="pen_lab_group_tip">Spitze</string>
     <string name="pen_lab_nib">Flache Feder</string>
     <string name="pen_lab_nib_angle">Federwinkel (°)</string>
