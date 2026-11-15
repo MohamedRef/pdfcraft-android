@@ -152,3 +152,67 @@ fn lasso_edits_many_comments_as_one_undo_step() {
     }
     assert_eq!(s.document(doc).unwrap().generation, generation);
 }
+
+/// A pencil stroke (#569) along y = [`Y`] from x=100 to x=300, 10 pt wide, at one ink `density`.
+fn pencil_stroke(s: &MobileSession, doc: u64, density: f64) -> Result<String, super::MobileError> {
+    let points: Vec<Value> = (0..=20).map(|i| json!([100.0 + i as f64 * 10.0, Y as f64])).collect();
+    s.execute(
+        "comment_add".into(),
+        json!({"doc": doc, "page": 1, "type": "ink", "strokes": [points], "widths": [vec![10.0; 21]], "densities": [vec![density; 21]], "color": "#000000", "width": 10}).to_string(),
+    )
+}
+
+/// The share of the pixels in the stroke's middle (x 150…250, 3 pt either side of the line) that
+/// are inked, rendered at `scale`.
+fn inked_share(img: &super::RenderedImage, scale: f64) -> f64 {
+    let (x0, x1) = ((150.0 * scale) as usize, (250.0 * scale) as usize);
+    let (y0, y1) = (((Y as f64 - 3.0) * scale) as usize, ((Y as f64 + 3.0) * scale) as usize);
+    let mut inked = 0usize;
+    let mut all = 0usize;
+    for y in y0..y1 {
+        for x in x0..x1 {
+            all += 1;
+            if pixel(img, x, y)[0] < 128 {
+                inked += 1;
+            }
+        }
+    }
+    inked as f64 / all as f64
+}
+
+#[test]
+fn a_pencil_shows_the_paper_through_its_grain() {
+    let s = MobileSession::new();
+    for (density, lo, hi) in [(0.5, 0.35, 0.65), (0.25, 0.12, 0.4), (1.0, 0.98, 1.0)] {
+        let doc = s.open(blank_letter(), None).unwrap().id;
+        pencil_stroke(&s, doc, density).unwrap();
+        // a large render is drawn at a lower scale (the engine's pixel limit): measure at the real one
+        let img = s.render_page(doc, 0, 6.0, None).unwrap();
+        let share = inked_share(&img, img.width as f64 / 612.0);
+        assert!(share >= lo && share <= hi, "density {density}: {share:.2} of the stroke inked");
+    }
+}
+
+#[test]
+fn a_pencils_densities_survive_the_eraser_and_a_bad_list_is_refused() {
+    let s = MobileSession::new();
+    let doc = s.open(blank_letter(), None).unwrap().id;
+    pencil_stroke(&s, doc, 0.5).unwrap();
+    s.execute("comment_erase".into(), json!({"doc": doc, "page": 1, "path": [[200.0, Y as f64]], "radius": 6.0}).to_string()).unwrap();
+    let img = s.render_page(doc, 0, 6.0, None).unwrap();
+    let k = img.width as f64 / 612.0;
+    // still grainy either side of the cut
+    let (x0, x1) = ((120.0 * k) as usize, (180.0 * k) as usize);
+    let row = (Y as f64 * k) as usize;
+    let inked = (x0..x1).filter(|&x| pixel(&img, x, row)[0] < 128).count() as f64 / (x1 - x0) as f64;
+    assert!(inked > 0.25 && inked < 0.75, "{inked:.2}");
+    // one density per point, from 0 to 1
+    for bad in [json!([[0.5, 0.5]]), json!([[0.5, 0.5, 1.5]]), json!([[0.5, -0.1, 0.5]])] {
+        let r = s.execute(
+            "comment_add".into(),
+            json!({"doc": doc, "page": 1, "type": "ink", "strokes": [[[10, 10], [20, 20], [30, 10]]], "widths": [[1, 2, 3]], "densities": bad}).to_string(),
+        );
+        assert!(r.is_err(), "{bad} was accepted");
+    }
+}
+

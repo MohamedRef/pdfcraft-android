@@ -938,6 +938,7 @@ pub fn tools() -> Vec<ToolDef> {
                 "dynamic": { "type": "boolean" },
                 "strokes": { "type": "array", "items": { "type": "array", "items": point() } },
                 "widths": { "type": "array", "items": { "type": "array", "items": { "type": "number", "exclusiveMinimum": 0, "maximum": 400 } } },
+                "densities": { "type": "array", "items": { "type": "array", "items": { "type": "number", "minimum": 0, "maximum": 1 } }, "description": "ink with widths: a pencil's ink density per point (0 to 1), shown through a paper grain." },
                 "icon": { "type": "string", "description": "note: Comment, Note, Help, Insert, Key, NewParagraph, Paragraph (the standard names), Check, Circle, Cross, CrossHairs, Star, RightArrow, UpArrow; attachment: PushPin, Paperclip, Graph, Tag." },
                 "color": color(),
                 "fill": color(),

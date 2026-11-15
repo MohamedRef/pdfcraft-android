@@ -412,7 +412,24 @@ impl Automation {
                             if widths.len() != strokes.len() || widths.iter().zip(&strokes).any(|(w, s)| w.len() != s.len()) {
                                 return Err(bad());
                             }
-                            Shape::PressureInk { strokes, widths }
+                            // A pencil (#569): `densities`, one ink density 0…1 per point of each stroke.
+                            let densities = match a.get("densities").filter(|d| !d.is_null()) {
+                                Some(d) => {
+                                    let bad = || ToolError::InvalidArgs("densities must have one density from 0 to 1 per point of each stroke".into());
+                                    let densities = d
+                                        .as_array()
+                                        .ok_or_else(bad)?
+                                        .iter()
+                                        .map(|s| s.as_array().ok_or_else(bad)?.iter().map(|v| v.as_f64().filter(|x| x.is_finite() && (0.0..=1.0).contains(x)).ok_or_else(bad)).collect::<Result<Vec<f64>>>())
+                                        .collect::<Result<Vec<_>>>()?;
+                                    if densities.len() != strokes.len() || densities.iter().zip(&strokes).any(|(d, s)| d.len() != s.len()) {
+                                        return Err(bad());
+                                    }
+                                    densities
+                                }
+                                None => Vec::new(),
+                            };
+                            Shape::PressureInk { strokes, widths, densities }
                         }
                         Some(_) => return Err(ToolError::InvalidArgs("widths apply to ink only".into())),
                         None if kind == "freehand_highlight" => Shape::FreehandHighlight { strokes },

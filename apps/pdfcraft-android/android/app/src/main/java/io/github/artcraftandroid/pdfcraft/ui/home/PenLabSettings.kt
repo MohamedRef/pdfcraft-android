@@ -117,6 +117,7 @@ internal fun PenLabSettings(vm: AppViewModel) {
                     if (s.points.size == 1) {
                         s.points.add(s.points[0] + Offset(0.01f, 0f))
                         s.scales.add(s.scales[0])
+                        s.matchDensities()
                     }
                 }
             },
@@ -129,7 +130,7 @@ internal fun PenLabSettings(vm: AppViewModel) {
                 s.points.size
                 s.widthVersion
                 s.jetpackPath
-                if (!drawJetpackLive(s, Offset.Zero, pxPerPt)) drawInkStroke(s.paths.runs(s), Color(s.appearance.argb), s.appearance.opacity, s.appearance.style == InkStyle.Highlighter, Offset.Zero, pxPerPt, bounds)
+                if (!drawJetpackLive(s, Offset.Zero, pxPerPt)) drawInkStroke(s.paths.runs(s), Color(s.appearance.argb), s.appearance.opacity, s.appearance.style == InkStyle.Highlighter, Offset.Zero, pxPerPt, bounds, size.height / pxPerPt)
                 // the tail to the pen while the stroke is written, as on a page
                 if (s === writing && s.jetpack == null) {
                     val tail = inkTailPoints(s.points.last() * pxPerPt, s.penTip?.let { it * pxPerPt }, null)
@@ -162,6 +163,10 @@ internal fun PenLabSettings(vm: AppViewModel) {
     Dial(R.string.pen_lab_taper_end, d.taperEnd, 0f..10f, 1) { d.copy(taperEnd = it) }
     Dial(R.string.pen_lab_damping, d.dampingMs, 0f..200f, 0) { d.copy(dampingMs = it) }
     Dial(R.string.pen_lab_smoothing, d.smoothing, 0f..1f, 2) { d.copy(smoothing = it) }
+    SettingsHeader(stringResource(R.string.pen_lab_group_ink))
+    Dial(R.string.pen_lab_density_min, d.densityMin, 0.05f..1f, 2) { d.copy(densityMin = it, densityMax = maxOf(d.densityMax, it)) }
+    Dial(R.string.pen_lab_density_max, d.densityMax, 0.05f..1f, 2) { d.copy(densityMax = it, densityMin = minOf(d.densityMin, it)) }
+    Dial(R.string.pen_lab_tilt, d.tilt, 0f..1f, 2) { d.copy(tilt = it) }
 
     SettingsHeader(stringResource(R.string.pen_lab_group_measured))
     val cal = tuning.calibration

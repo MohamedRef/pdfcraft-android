@@ -1522,6 +1522,13 @@ pub fn erase_ink(doc: &mut Document, page: usize, index: usize, path: &[[f64; 2]
         .and_then(|l| l.as_array().cloned())
         .map(|l| l.iter().map(|s| doc.resolve(s).as_array().map(|a| a.iter().filter_map(|x| doc.resolve(x).as_f64()).collect()).unwrap_or_default()).collect())
         .filter(|f: &Vec<Vec<f64>>| f.len() == strokes.len() && f.iter().zip(&strokes).all(|(f, s)| f.len() == s.len()));
+    // A pencil's density per point (`/PCDensity`, #569), carried the same way.
+    let densities: Option<Vec<Vec<f64>>> = d
+        .get(b"PCDensity")
+        .map(|l| doc.resolve(l))
+        .and_then(|l| l.as_array().cloned())
+        .map(|l| l.iter().map(|s| doc.resolve(s).as_array().map(|a| a.iter().filter_map(|x| doc.resolve(x).as_f64()).collect()).unwrap_or_default()).collect())
+        .filter(|f: &Vec<Vec<f64>>| f.len() == strokes.len() && f.iter().zip(&strokes).all(|(f, s)| f.len() == s.len()));
     // The eraser's path as segments (a single point is a segment of length zero).
     let segs: Vec<([f64; 2], [f64; 2])> = if path.len() == 1 { vec![(path[0], path[0])] } else { path.windows(2).map(|w| (w[0], w[1])).collect() };
     // Ink is cut where the eraser circle meets its painted edge, not only its centreline:
@@ -1530,11 +1537,14 @@ pub fn erase_ink(doc: &mut Document, page: usize, index: usize, path: &[[f64; 2]
     let reach = |factor: f64| radius + half_width * factor.max(0.0);
     let mut kept: Vec<Vec<[f64; 2]>> = Vec::new();
     let mut kept_factors: Vec<Vec<f64>> = Vec::new();
+    let mut kept_dens: Vec<Vec<f64>> = Vec::new();
     let mut erased = false;
     let mut samples = 0usize;
     for (si, s) in strokes.iter().enumerate() {
         let f = factors.as_ref().map(|f| &f[si]);
         let factor = |i: usize| f.map_or(1.0, |f| f[i]);
+        let dn = densities.as_ref().map(|d| &d[si]);
+        let density = |i: usize| dn.map_or(1.0, |d| d[i]);
         // Only the eraser segments that can reach this stroke are tested against it.
         let widest = (0..s.len()).map(factor).fold(1.0_f64, f64::max);
         let local: Vec<([f64; 2], [f64; 2])> = match bounds(s.iter().copied()) {
@@ -1548,16 +1558,17 @@ pub fn erase_ink(doc: &mut Document, page: usize, index: usize, path: &[[f64; 2]
         if local.is_empty() {
             kept.push(s.clone());
             kept_factors.push((0..s.len()).map(factor).collect());
+            kept_dens.push((0..s.len()).map(density).collect());
             continue;
         }
         let near = |p: [f64; 2], r: f64| local.iter().any(|(a, b)| point_segment_distance(p, *a, *b) <= r);
         // Densify only the segments the eraser can reach, so they are cut where it crosses
         // them; elsewhere the stroke keeps its original vertices.
-        let mut pts: Vec<([f64; 2], f64)> = Vec::new();
+        let mut pts: Vec<([f64; 2], f64, f64)> = Vec::new();
         for (i, w) in s.windows(2).enumerate() {
             let r = reach(factor(i).max(factor(i + 1)));
             if !local.iter().any(|(a, b)| segment_distance(w[0], w[1], *a, *b) <= r) {
-                pts.push((w[0], factor(i)));
+                pts.push((w[0], factor(i), density(i)));
                 continue;
             }
             let n = ((w[1][0] - w[0][0]).hypot(w[1][1] - w[0][1]) / (radius / 2.0)).ceil().clamp(1.0, 2000.0) as usize;
@@ -1568,7 +1579,8 @@ pub fn erase_ink(doc: &mut Document, page: usize, index: usize, path: &[[f64; 2]
             for k in 0..n {
                 let t = k as f64 / n as f64;
                 let fw = factor(i) + (factor(i + 1) - factor(i)) * t;
-                pts.push(([w[0][0] + (w[1][0] - w[0][0]) * t, w[0][1] + (w[1][1] - w[0][1]) * t], fw));
+                let dv = density(i) + (density(i + 1) - density(i)) * t;
+                pts.push(([w[0][0] + (w[1][0] - w[0][0]) * t, w[0][1] + (w[1][1] - w[0][1]) * t], fw, dv));
             }
         }
         if let Some(last) = s.last() {
@@ -1577,32 +1589,38 @@ pub fn erase_ink(doc: &mut Document, page: usize, index: usize, path: &[[f64; 2]
             if samples > MAX_ERASE_SAMPLES {
                 return Err(AnnotError::Invalid("the drawing is too large to erase at this eraser size".into()));
             }
-            pts.push((*last, factor(s.len() - 1)));
+            pts.push((*last, factor(s.len() - 1), density(s.len() - 1)));
         }
-        if !pts.iter().any(|(p, fw)| near(*p, reach(*fw))) {
+        if !pts.iter().any(|(p, fw, _)| near(*p, reach(*fw))) {
             kept.push(s.clone());
             kept_factors.push((0..s.len()).map(factor).collect());
+            kept_dens.push((0..s.len()).map(density).collect());
             continue;
         }
         erased = true;
         let mut run: Vec<[f64; 2]> = Vec::new();
         let mut run_f: Vec<f64> = Vec::new();
-        for (p, fw) in pts {
+        let mut run_d: Vec<f64> = Vec::new();
+        for (p, fw, dv) in pts {
             if near(p, reach(fw)) {
                 if run.len() >= 2 {
                     kept.push(std::mem::take(&mut run));
                     kept_factors.push(std::mem::take(&mut run_f));
+                    kept_dens.push(std::mem::take(&mut run_d));
                 }
                 run.clear();
                 run_f.clear();
+                run_d.clear();
             } else {
                 run.push(p);
                 run_f.push(fw);
+                run_d.push(dv);
             }
         }
         if run.len() >= 2 {
             kept.push(run);
             kept_factors.push(run_f);
+            kept_dens.push(run_d);
         }
     }
     if !erased {
@@ -1625,6 +1643,9 @@ pub fn erase_ink(doc: &mut Document, page: usize, index: usize, path: &[[f64; 2]
         d.set(b"InkList".to_vec(), Object::Array(kept.iter().map(|s| num_array(&s.concat())).collect()));
         if factors.is_some() {
             d.set(b"PCWidths".to_vec(), Object::Array(kept_factors.iter().map(|f| num_array(f)).collect()));
+        }
+        if densities.is_some() {
+            d.set(b"PCDensity".to_vec(), Object::Array(kept_dens.iter().map(|f| num_array(&f.iter().map(|v| (v * 100.0).round() / 100.0).collect::<Vec<_>>())).collect()));
         }
         d.set(b"Rect".to_vec(), num_array(&rect));
         touch(d, meta);

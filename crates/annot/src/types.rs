@@ -392,6 +392,9 @@ pub enum Shape {
     PressureInk {
         strokes: Vec<Vec<[f64; 2]>>,
         widths: Vec<Vec<f64>>,
+        /// A pencil's ink density per point (0…1, #569): empty for solid ink. Kept as
+        /// `/PCDensity`; the appearance shows the paper through a grain where it is below 1.
+        densities: Vec<Vec<f64>>,
     },
     /// A text box (FreeText) showing the comment's contents.
     TextBox {

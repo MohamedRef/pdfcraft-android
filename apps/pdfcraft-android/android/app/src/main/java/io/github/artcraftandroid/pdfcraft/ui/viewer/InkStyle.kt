@@ -16,11 +16,13 @@ internal enum class InkStyle(val key: String) {
     }
 }
 
-/** Snapshots are taken on pen-down, so changing style cannot recolor a prior stroke. */
+/**
+ * Snapshots are taken on pen-down, so changing style cannot recolor a prior stroke. The pencil's
+ * lightness is its ink density now (#569: the paper shows through its grain), not a lower opacity.
+ */
 internal fun inkStyleOpacity(opacity: Float, style: InkStyle): Float {
     val safe = opacity.takeIf { it.isFinite() }?.coerceIn(0f, 1f) ?: 1f
     return when (style) {
-        InkStyle.Pencil -> safe * 0.8f
         InkStyle.Highlighter -> safe * 0.4f
         else -> safe
     }

@@ -103,7 +103,10 @@ pub(crate) fn rect_for(shape: &Shape, style: &Style) -> Result<[f64; 4], AnnotEr
             }
             grow(ink_bounds(strokes).unwrap_or_default(), half + 1.0)
         }
-        Shape::PressureInk { strokes, widths } => {
+        Shape::PressureInk { strokes, widths, densities } => {
+            if densities.len() > 0 && pencil_densities(strokes, densities).is_none() {
+                return Err(bad("drawing (one density from 0 to 1 per point)"));
+            }
             if strokes.iter().all(Vec::is_empty) || !strokes.iter().flatten().all(|p| finite(p)) {
                 return Err(bad("drawing (no points)"));
             }
@@ -429,12 +432,15 @@ pub fn add_annotation(doc: &mut Document, new: &NewAnnotation, meta: &Meta) -> R
             }
             border(&mut d);
         }
-        Shape::PressureInk { strokes, widths } => {
+        Shape::PressureInk { strokes, widths, densities } => {
             d.set(b"C".to_vec(), rgb(style.color));
             let (factors, _, mean) = pressure_ink_factors(strokes, widths).ok_or_else(|| AnnotError::Invalid("pressure ink widths".into()))?;
             let kept: Vec<usize> = (0..strokes.len()).filter(|&i| !strokes[i].is_empty()).collect();
             d.set(b"InkList".to_vec(), Object::Array(kept.iter().map(|&i| num_array(&strokes[i].concat())).collect()));
             d.set(b"PCWidths".to_vec(), Object::Array(kept.iter().map(|&i| num_array(&factors[i])).collect()));
+            if let Some(dens) = pencil_densities(strokes, densities) {
+                d.set(b"PCDensity".to_vec(), Object::Array(kept.iter().map(|&i| num_array(&dens[i])).collect()));
+            }
             border(&mut d);
             // The mean width, which the relative widths multiply; not the requested style width.
             if let Some(Object::Dict(bs)) = d.get_mut(b"BS") {
@@ -683,6 +689,21 @@ pub fn orient_image_stamp(doc: &mut Document, page: usize, index: usize, rotatio
     doc.set(normal, Object::Stream(stream));
     Ok(())
 }
+
+/// A pencil drawing's densities (`/PCDensity`, #569), rounded to two places and kept within
+/// [`PENCIL_MIN_DENSITY`]…1; `None` when there are none or they do not give one per point.
+pub(crate) fn pencil_densities(strokes: &[Vec<[f64; 2]>], densities: &[Vec<f64>]) -> Option<Vec<Vec<f64>>> {
+    if densities.is_empty() || densities.len() != strokes.len() || strokes.iter().zip(densities).any(|(s, d)| s.len() != d.len()) {
+        return None;
+    }
+    if !densities.iter().flatten().all(|v| v.is_finite() && (0.0..=1.0).contains(v)) {
+        return None;
+    }
+    Some(densities.iter().map(|s| s.iter().map(|v| ((v * 100.0).round() / 100.0).clamp(PENCIL_MIN_DENSITY, 1.0)).collect()).collect())
+}
+
+/// The lightest a pencil's ink may be.
+pub(crate) const PENCIL_MIN_DENSITY: f64 = 0.05;
 
 /// The widest pressure-ink drawing may be, relative to its `/BS /W` (and the narrowest).
 pub(crate) const PRESSURE_INK_MAX_FACTOR: f64 = 8.0;

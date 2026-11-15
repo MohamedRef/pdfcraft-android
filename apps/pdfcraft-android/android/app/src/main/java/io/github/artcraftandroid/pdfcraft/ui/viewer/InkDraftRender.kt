@@ -6,6 +6,7 @@ import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
@@ -66,7 +67,44 @@ internal fun inkPathKey(points: List<Offset>, preview: List<Offset>?, pressures:
  * A smoothed run path in page points, with the stroke width (points) it is drawn with, or (when
  * [filled]) the nonzero-filled outline of a whole pressure stroke.
  */
-internal class InkRunPath(val path: Path, val width: Float, val filled: Boolean = false)
+internal class InkRunPath(val path: Path, val width: Float, val filled: Boolean = false, val grainLevel: Int = 0)
+
+/**
+ * A pencil stroke's outline split by ink density (#569), as the engine draws the saved comment
+ * (`pencil_content`): each segment at the step of its two points' mean density, each point's disc
+ * at the lighter step of its two segments. One filled path per step, lightest first.
+ */
+internal fun pencilInkRuns(points: List<Offset>, radii: List<Float>, densities: List<Float>, width: Float): List<InkRunPath> {
+    if (points.size < 2 || radii.size != points.size || densities.size != points.size) return emptyList()
+    val (discLevel, segLevel) = pencilGrainLevels(densities)
+    val paths = sortedMapOf<Int, Path>()
+    for (i in points.indices) paths.getOrPut(discLevel[i]) { Path() }.addInkDisc(points[i], radii[i])
+    val curve = inkSmoothSegments(points, 0, points.lastIndex)
+    for (i in curve.indices) {
+        val path = paths.getOrPut(segLevel[i]) { Path() }
+        pressureInkQuads(points[i], curve[i], radii[i], radii[i + 1]).forEach { path.addInkQuad(it) }
+    }
+    return paths.map { (level, path) -> InkRunPath(path, width, filled = true, grainLevel = if (level >= PencilGrain.LEVELS) 0 else level) }
+}
+
+/**
+ * The grain step of each point's disc and of each segment of a pencil stroke with [densities]
+ * (at least two points), as the engine's `pencil_content` picks them: a segment takes the mean of
+ * its ends, a point the lighter of its two segments.
+ */
+internal fun pencilGrainLevels(densities: List<Float>): Pair<List<Int>, List<Int>> {
+    val saved = densities.map(PencilGrain::saved)
+    val seg = List(maxOf(saved.size - 1, 0)) { i -> PencilGrain.level((saved[i] + saved[i + 1]) / 2.0) }
+    val disc = List(saved.size) { i ->
+        when {
+            i > 0 && i < seg.size -> minOf(seg[i - 1], seg[i])
+            i > 0 -> seg[i - 1]
+            seg.isNotEmpty() -> seg[0]
+            else -> PencilGrain.level(saved[0])
+        }
+    }
+    return disc to seg
+}
 
 /** One stroke point's disc of the pressure-ink outline. */
 internal data class InkDisc(val center: Offset, val radius: Float)
@@ -198,6 +236,16 @@ internal class InkPathCache {
     fun runs(stroke: InkStroke): List<InkRunPath> {
         val k = inkPathKey(stroke.points, stroke.preview, stroke.scales.size, stroke.pressureSensitive, stroke.appearance.width, stroke.widthVersion)
         if (k == key) return runs
+        if (stroke.densities.size == stroke.points.size && stroke.preview == null &&
+            inkPreviewIsPressureOutline(stroke.pressureSensitive, stroke.appearance.style, stroke.points.size, stroke.scales.size, false)
+        ) {
+            // a pencil (#569): rebuilt whole, one path per grain step
+            val pts = stroke.points.toList()
+            val radii = pressureInkRadii(inkStylePointWidths(stroke.scales.toList(), stroke.appearance.width, stroke.appearance.style))
+            runs = pencilInkRuns(pts, radii, stroke.densities.toList(), stroke.appearance.width)
+            key = k
+            return runs
+        }
         if (inkPreviewIsPressureOutline(stroke.pressureSensitive, stroke.appearance.style, stroke.points.size, stroke.scales.size, stroke.preview != null)) {
             runs = listOf(InkRunPath(outline(stroke), stroke.appearance.width, filled = true))
             key = k
@@ -242,6 +290,8 @@ internal fun DrawScope.drawInkStroke(
     origin: Offset,
     scale: Float,
     pageBoundsOnScreen: Rect,
+    /** The page's height in points, so a pencil's grain meets the saved comment's grid. */
+    pageHeightPt: Float = 0f,
 ) {
     if (runs.isEmpty() || !scale.isFinite() || scale <= 0f) return
     val blend = if (highlighter) BlendMode.Darken else BlendMode.SrcOver
@@ -257,6 +307,14 @@ internal fun DrawScope.drawInkStroke(
         scale(scale, scale, Offset.Zero)
     }) {
         for (run in runs) {
+            if (run.grainLevel > 0) {
+                drawPath(
+                    run.path, PencilGrain.brush(color.copy(alpha = 1f).toArgb(), run.grainLevel, pageHeightPt),
+                    alpha = if (layered) 1f else opacity, style = Fill,
+                    blendMode = if (layered) BlendMode.SrcOver else blend,
+                )
+                continue
+            }
             drawPath(
                 run.path, paintColor,
                 style = if (run.filled) Fill else Stroke(width = run.width, cap = cap, join = StrokeJoin.Round),

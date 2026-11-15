@@ -81,7 +81,12 @@ internal object StylusLog {
     @Volatile private var tiltMax = Float.NaN
     @Volatile private var tiltReported: Boolean? = null
 
+    /** The pen's lean from upright in radians at its newest sample (NaN when not reported), for the pen model. */
+    @Volatile var tiltRad = Float.NaN
+        private set
+
     private fun tilt(rad: Float) {
+        tiltRad = rad
         if (!rad.isFinite()) return
         val deg = Math.toDegrees(rad.toDouble()).toFloat()
         if (tiltMin.isNaN() || deg < tiltMin) tiltMin = deg
@@ -96,6 +101,7 @@ internal object StylusLog {
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN, MotionEvent.ACTION_POINTER_DOWN -> {
                 pen.setDown(true)
+                tiltRad = Float.NaN
                 tiltMin = Float.NaN
                 tiltMax = Float.NaN
                 tiltReported = runCatching { event.device?.getMotionRange(MotionEvent.AXIS_TILT, event.source) != null }.getOrNull()
@@ -181,7 +187,8 @@ internal fun inkStrokeFields(ink: PenStrokeStats?, tiltMin: Float, tiltMax: Floa
         "tilt_max" to tiltMax.takeIf { it.isFinite() }?.let { kotlin.math.round(it).toInt() },
         "tilt_reported" to tiltReported,
         "width_min" to w.minOrNull(), "width_median" to quantile(w, 0.5f), "width_max" to w.maxOrNull(),
-        "opacity_min" to ink.opacity, "opacity_max" to ink.opacity,
+        // a pencil's ink density shows the paper through its grain: the opacity it looks like
+        "opacity_min" to ink.opacity * (ink.densities.toList().minOrNull() ?: 1f), "opacity_max" to ink.opacity * (ink.densities.toList().maxOrNull() ?: 1f),
         "taper_start_pt" to ink.taperStartPt, "taper_end_pt" to ink.taperEndPt, "stabilisation" to ink.dials.smoothing,
     )
 }
