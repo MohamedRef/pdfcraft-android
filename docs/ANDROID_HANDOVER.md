@@ -26,7 +26,7 @@
 
 - Release PR publishes `0.0.37-beta` / ARM64 build `37012` (`pdfcraft.versionCode=3701`), same package ID and signer. Trigger matches only `chore(release): publish 0.0.37-beta (37012)`.
 - Next pen batch under the owner's "do all of it to the end" (12:59 UTC).
-- Included: #602 (#601 mid-stroke blob, bounded pen widths; part of #569). Old Pen lab dial values reset once. See [`releases/0.0.37-beta.md`](releases/0.0.37-beta.md).
+- Included: #602 (#601 mid-stroke blob, bounded pen widths; part of #569), #606 (#604 Jetpack Ink trial switched off once, #605 pencil tail lightness). Old Pen lab dial values reset once. See [`releases/0.0.37-beta.md`](releases/0.0.37-beta.md).
 - Open: not run on a device; the owner's pens set to 13.8 pt and 15.2 pt need setting back down.
 
 ## RELEASE 0.0.36-beta (36012) — 2026-11-15 (owner requested)
