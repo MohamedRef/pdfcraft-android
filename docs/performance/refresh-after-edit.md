@@ -69,3 +69,19 @@ Measured with `session_contention_timings edit`, release profile, on the same ki
 | Image pages with no comments | 227–241 ms | 210–248 ms (no comments to keep, unchanged) |
 
 These are host numbers, not phone results.
+
+## The working bytes after an edit extend a mapped file (#582)
+
+Every edit's refresh built the new working bytes with `write_incremental`, which copies the whole original file and puts the new revision after it. On the owner's 869-page, 352 MB file opened in place this was most of the 630–1100 ms each comment and erase took on the phone (0.0.33-beta log).
+
+`refresh_scoped`, `refresh_content` and `refresh` now use `write_incremental_shared`, as the display copy already did (#234). A file that is mapped (opened in place, or the app's managed working copy) is extended by the new revision instead of copied; an owned file is copied once, as before. The bytes are the same.
+
+Measured with `edit_time_by_file_size` (apps/pdfcraft-android, `--release -- --ignored --nocapture`): 869 pages plus one incompressible image of the given size, opened in place, four ink comments each:
+
+| File | Before | After |
+| --- | ---: | ---: |
+| 1 MB | 4–7 ms | 4–7 ms |
+| 50 MB | 34–37 ms | 5–6 ms |
+| 100 MB | 68–69 ms | 3–8 ms |
+
+These are host numbers, not phone results. `a_comment_on_a_file_opened_in_place_extends_the_mapping_instead_of_copying_it` checks that the bytes stay mapped after each edit.

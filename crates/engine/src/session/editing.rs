@@ -4,9 +4,10 @@ use super::{
     Arc, DocId, Document, Edit, EditCtx, EditError, Label, MAX_UNDO, ObjectKind, OnceLock, RenderPool, SaveOptions, Scope, Session,
     XFA_REMOVED_PREFIX, XFA_SCRIPTS_OFF, carry_verdict_marks, check_permission, comment_list, display_bytes, display_config, guard, info_fields,
     inspect, js, keys_after, note_warnings, render_threads, run_edit, scan_colours, scope_of, shown_under_redactions, signatures_of, sync_xfa_state,
-    undrawn_notices, uses_scripts, write_incremental, xfa, xfa_sync_datasets,
+    undrawn_notices, uses_scripts, xfa, xfa_sync_datasets,
 };
 use crate::{EditNotice, MarkKind, print_preview_layers};
+use pdfcraft_cos::write_incremental_shared;
 
 /// Add scan cover and ink to edits of invisible OCR text, returning no edit for an unchanged draft.
 fn prepare_ocr_text_edit(editor: &mut crate::history::Editor, info: &pdfcraft_render::DocInfo, edit: Edit) -> Option<Edit> {
@@ -515,7 +516,7 @@ impl Session {
         // annotation dictionary and the values it follows, so a changed annotation is drawn
         // again and an unchanged one is reused (#322).
         let bytes = if editor.cos.is_modified() {
-            Arc::new(write_incremental(&editor.cos, &SaveOptions::default()).map_err(|e| EditError::Write(e.to_string()))?)
+            write_incremental_shared(&editor.cos, &SaveOptions::default()).map_err(|e| EditError::Write(e.to_string()))?
         } else {
             editor.cos.bytes().clone()
         };
@@ -633,7 +634,7 @@ impl Session {
         sync_xfa_state(doc);
         let Some(editor) = doc.editor.as_mut() else { return Ok(()) };
         let bytes = if editor.cos.is_modified() {
-            Arc::new(write_incremental(&editor.cos, &SaveOptions::default()).map_err(|e| EditError::Write(e.to_string()))?)
+            write_incremental_shared(&editor.cos, &SaveOptions::default()).map_err(|e| EditError::Write(e.to_string()))?
         } else {
             editor.cos.bytes().clone()
         };
@@ -706,7 +707,7 @@ impl Session {
         sync_xfa_state(doc);
         let Some(editor) = doc.editor.as_mut() else { return Ok(()) };
         let bytes = if editor.cos.is_modified() {
-            Arc::new(write_incremental(&editor.cos, &SaveOptions::default()).map_err(|e| EditError::Write(e.to_string()))?)
+            write_incremental_shared(&editor.cos, &SaveOptions::default()).map_err(|e| EditError::Write(e.to_string()))?
         } else {
             editor.cos.bytes().clone()
         };
