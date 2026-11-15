@@ -126,6 +126,12 @@ class OpenDocument(
     /** What the active tool still holds (ink being drawn), to add when the tool is left. */
     var commitTool: (() -> Unit)? = null
 
+    /**
+     * Edits sent to the engine and not yet seen in [info] (#597): a save waits for them, so ink
+     * added as the document closes is saved, not dropped as "nothing changed".
+     */
+    internal val pendingEdits = kotlinx.coroutines.flow.MutableStateFlow(0)
+
     /** The Draw tool's ink the document does not have yet (see [InkDrafts]). */
     internal val ink = io.github.artcraftandroid.pdfcraft.ui.viewer.InkDrafts()
 
