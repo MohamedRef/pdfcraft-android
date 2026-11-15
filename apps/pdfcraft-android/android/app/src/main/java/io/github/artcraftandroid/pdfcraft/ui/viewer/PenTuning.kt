@@ -46,6 +46,17 @@ internal data class PressureCalibration(val lo: Float = 0f, val hi: Float = 1f, 
  */
 @Stable
 internal class PenTuning(private val prefs: SharedPreferences) {
+    init {
+        // Dials moved under an older pen model are dropped once: they were tuned against its
+        // faults (#601: the owner had cut the fountain pen to 0.25…0.28 to get rid of the blob) and
+        // mean something else now. The hand's pressure curve and measured range stay.
+        if (prefs.getInt(MODEL_KEY, 1) < MODEL) {
+            val e = prefs.edit()
+            InkStyle.entries.forEach { style -> KEYS.forEach { e.remove(key(style, it)) } }
+            e.putInt(MODEL_KEY, MODEL).apply()
+        }
+    }
+
     private val dials = InkStyle.entries.associateWith { mutableStateOf(load(it)) }
 
     var calibration by mutableStateOf(
@@ -151,6 +162,9 @@ internal class PenTuning(private val prefs: SharedPreferences) {
     companion object {
         val KEYS = listOf("min", "max", "curve", "speedThin", "speedRef", "nib", "nibAngle", "taperStart", "taperEnd", "damping", "smoothing", "densityMin", "densityMax", "tilt")
         const val LOG_EVERY = 25
+        /** The pen model the stored dials were tuned for; a newer [MODEL] drops them (2: #601). */
+        const val MODEL = 2
+        const val MODEL_KEY = "dials.model"
     }
 }
 

@@ -76,15 +76,22 @@ class PenModelTest {
         assertTrue(spread(widths(InkStyle.Ballpoint, lightToHard, finish = true)) <= 1.25f)
     }
 
-    @Test fun fountainAndBrushAnswerPressureFourAndTenTimes() {
-        assertTrue(spread(middle(widths(InkStyle.Fountain, lightToHard))) >= 4f)
-        assertTrue(spread(middle(widths(InkStyle.Brush, lightToHard))) >= 10f)
+    /**
+     * The first ranges (#569: four and ten times, and more with speed, nib and tapers) drew a blob
+     * in every stroke on the owner's phone (#601). A pen's range is what the eye reads as one line.
+     */
+    @Test fun fountainAndBrushAnswerPressureWithinBounds() {
+        val fountain = spread(middle(widths(InkStyle.Fountain, lightToHard)))
+        val brush = spread(middle(widths(InkStyle.Brush, lightToHard)))
+        assertTrue("fountain $fountain", fountain in 2f..3.5f)
+        assertTrue("brush $brush", brush in 3.5f..8f)
+        assertTrue(brush > fountain * 1.5f)
     }
 
     @Test fun fountainThinsWhenFast() {
         val slow = quantile(middle(widths(InkStyle.Fountain, slowWord)), 0.5f)!!
         val fast = quantile(middle(widths(InkStyle.Fountain, fastWord)), 0.5f)!!
-        assertTrue("fast $fast < slow $slow", fast < slow * 0.9f)
+        assertTrue("fast $fast < slow $slow", fast < slow * 0.93f)
         // a ballpoint does not care
         val bSlow = quantile(middle(widths(InkStyle.Ballpoint, slowWord)), 0.5f)!!
         val bFast = quantile(middle(widths(InkStyle.Ballpoint, fastWord)), 0.5f)!!
@@ -94,7 +101,7 @@ class PenModelTest {
     @Test fun fountainDownstrokesAreThickerThanSidestrokes() {
         val d = quantile(middle(widths(InkStyle.Fountain, down)), 0.5f)!!
         val s = quantile(middle(widths(InkStyle.Fountain, side)), 0.5f)!!
-        assertTrue("down $d > side $s", d > s * 1.3f)
+        assertTrue("down $d > side $s", d > s * 1.2f)
         // the ballpoint's tip is round
         assertEquals(quantile(middle(widths(InkStyle.Ballpoint, down)), 0.5f)!!, quantile(middle(widths(InkStyle.Ballpoint, side)), 0.5f)!!, 0.01f)
     }
@@ -104,7 +111,7 @@ class PenModelTest {
             quantile(middle(widths(style, fastWord, PressureSource.Speed)), 0.5f)!! / quantile(middle(widths(style, slowWord, PressureSource.Speed)), 0.5f)!!
         val ball = ratio(InkStyle.Ballpoint)
         val fountain = ratio(InkStyle.Fountain)
-        assertTrue("fountain $fountain much below ballpoint $ball", fountain < ball - 0.2f)
+        assertTrue("fountain $fountain below ballpoint $ball", fountain < ball - 0.1f)
         assertTrue(ball > 0.8f)
     }
 
@@ -211,7 +218,7 @@ class PenModelTest {
         // Fountain: pressing harder than the usual hardest still thickens the line
         fun width(p: Float) = PenDynamics(PenDials.default(InkStyle.Fountain).copy(dampingMs = 0f, taperStart = 0f), PressureSource.Pen, r, penWidth).next(Offset.Zero, 0L, p)
         assertTrue(width(0.9f) > width(0.5f) * 1.05f)
-        assertTrue(width(1f) > width(0.5f) * 1.1f)
+        assertTrue(width(1f) > width(0.5f) * 1.06f)
         assertTrue(width(0.1f) < width(0.3f) * 0.95f)
         // the unmeasured range, and a band that reaches the pen's limit, leave no room to invent
         assertEquals(0.37f, PressureRange().stretch(0.37f), 1e-6f)
@@ -238,7 +245,7 @@ class PenModelTest {
         val dyn = PenDynamics(PenDials.default(InkStyle.Fountain), PressureSource.Pen, PressureRange(), penWidth, stats)
         lightToHard.forEach { dyn.next(it.p, it.t, it.pressure) }
         assertEquals(lightToHard.size, stats.widths.size)
-        assertEquals(10f, stats.taperStartPt, 1e-4f)
+        assertEquals(6f, stats.taperStartPt, 1e-4f)
         assertEquals(0.05f, stats.raw.toList().first(), 1e-6f)
         // 240 pt in 1.27 s: about 189 pt/s once the speed has settled
         assertEquals(189f, quantile(stats.speeds.toList(), 0.9f)!!, 15f)

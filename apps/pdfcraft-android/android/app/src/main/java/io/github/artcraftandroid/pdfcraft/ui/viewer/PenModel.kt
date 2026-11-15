@@ -26,6 +26,11 @@ import kotlin.math.pow
  * - [tilt] is how much leaning the pen widens the line (up to 3 times) and lightens it.
  * - [smoothing] takes the hand's tremor out of the line itself (0 = the points as the pen gave
  *   them, 1 = the most), see [InkSmoother].
+ *
+ * The chosen width is the width of ordinary writing: every pen's range sits around 1, so a pen set
+ * to 2 pt writes about 2 pt wide and gets thinner and thicker from there. Whatever the dials say,
+ * the width never changes faster along the line than [PEN_MAX_WIDTH_SLOPE] ([PEN_MAX_TAPER_SLOPE]
+ * inside a tapered end) (#601).
  */
 internal data class PenDials(
     val minScale: Float,
@@ -72,14 +77,21 @@ internal data class PenDials(
     val grain: Boolean get() = densityMin < 1f - 1e-3f || densityMax < 1f - 1e-3f
 
     companion object {
-        /** The starting values of #569: guesses for the owner to tune in the Pen lab, not targets. */
+        /**
+         * The starting values. The first ones (#569) gave the fountain pen a range of 0.25…1.6 and
+         * the brush 0.1…2.5, both further thinned by speed, nib and tapers 2.5 to 6 widths long: on
+         * the owner's phone one fountain stroke went from 0.6 pt to 8 pt and a brush stroke from
+         * 0.2 pt to 35 pt (0.0.36 log), a blob in the middle of every stroke (#601). These keep
+         * each pen's character inside a range the eye reads as one line.
+         */
         fun default(style: InkStyle): PenDials = when (style) {
             // nearly constant: a ballpoint moves a little with pressure, nothing else
             InkStyle.Ballpoint -> PenDials(minScale = 0.85f, maxScale = 1f, smoothing = 0.4f)
-            // wide range, thins when fast, downstrokes thicker than sidestrokes, pointed ends
-            InkStyle.Fountain -> PenDials(0.25f, 1.6f, curve = 1.3f, speedThin = 0.3f, nib = 0.35f, taperStart = 2.5f, taperEnd = 3f, dampingMs = 25f, smoothing = 0.5f)
-            // very wide range, strong speed, long pointed ends
-            InkStyle.Brush -> PenDials(0.1f, 2.5f, curve = 1.5f, speedThin = 0.5f, taperStart = 4f, taperEnd = 6f, dampingMs = 35f, smoothing = 0.5f)
+            // three times from lightest to hardest, a little thinner when fast, downstrokes thicker
+            // than sidestrokes, short pointed ends
+            InkStyle.Fountain -> PenDials(0.5f, 1.5f, speedThin = 0.15f, nib = 0.25f, taperStart = 1.5f, taperEnd = 2f, dampingMs = 25f, smoothing = 0.5f)
+            // seven times, thinner when fast, longer pointed ends
+            InkStyle.Brush -> PenDials(0.25f, 1.8f, curve = 1.2f, speedThin = 0.3f, taperStart = 2f, taperEnd = 3f, dampingMs = 35f, smoothing = 0.5f)
             // graphite: lighter and grainier at a light touch, broader and lighter when leaned
             InkStyle.Pencil -> PenDials(0.8f, 1.1f, smoothing = 0.3f, densityMin = 0.35f, densityMax = 0.9f, tilt = 1f)
             // the marker keeps one width (its own factor), whatever the pen does
@@ -89,7 +101,32 @@ internal data class PenDials(
 }
 
 /** The thinnest a tapered end goes, as a fraction of the width it would have had. */
-internal const val PEN_TAPER_FLOOR = 0.12f
+internal const val PEN_TAPER_FLOOR = 0.2f
+
+/**
+ * The most a stroke's width may change per distance the pen travels (points of width per point of
+ * line, at every zoom): each edge of the line leaves its centre by at most about 11°. A width that
+ * jumps while the pen has hardly moved is what shows as a blob (#601), whatever caused it: a hard
+ * press, a pause, a turn of a flat nib, a taper longer than the stroke. perfect-freehand (MIT)
+ * bounds it the same way, by letting pressure follow only as far as the pen has moved.
+ */
+internal const val PEN_MAX_WIDTH_SLOPE = 0.4f
+
+/** The same bound inside a tapered end, which is drawn to a point: each edge at up to about 27°. */
+internal const val PEN_MAX_TAPER_SLOPE = 1f
+
+/**
+ * A pen held still may still swell, as ink does, but slowly: its width changes as if the pen were
+ * moving this fast on the glass (dp per second). It is also what lets a dot reach its width.
+ */
+internal const val PEN_STILL_CREEP_DP_PER_S = 40f
+
+/**
+ * Pressure made from speed (a finger) stays inside the middle of the pen's range, this far either
+ * side of the middle: a finger that stops does not draw the pen's thickest line, and a fast one not
+ * its thinnest.
+ */
+internal const val PEN_MADE_PRESSURE_SPAN = 0.35f
 
 /** Where a stroke's pressure comes from: the pen's sensor, or made from the stroke's speed. */
 internal enum class PressureSource(val key: String) { Pen("pen"), Speed("speed") }
@@ -216,8 +253,13 @@ internal class PenDynamics(
     private var dirX = 0f
     private var dirY = 0f
     private var scale = Float.NaN
+    /** Whether a time step has measured the speed yet. */
+    private var speedKnown = false
+    /** The last pressure the pen's sensor gave (after the stretch and curve); NaN before the first. */
+    private var lastP01 = Float.NaN
+    /** The width given for the last sample, which the next may leave only by [PEN_MAX_WIDTH_SLOPE]. */
+    private var lastOut = Float.NaN
 
-    /** The width (a multiple of the pen width) of the sample at [p] (page points), [timeMs], [pressure] (0…1 from the pen). */
     /** The ink density (0…1) of the sample [next] gave last; 1 for solid ink. */
     var density = 1f
         private set
@@ -231,11 +273,13 @@ internal class PenDynamics(
     fun next(p: Offset, timeMs: Long, pressure: Float, tiltRad: Float = Float.NaN): Float {
         val prev = last
         var dtMs = 0f
+        var stepPt = 0f
         if (prev != null) {
             val dx = p.x - prev.x
             val dy = p.y - prev.y
             val len = hypot(dx, dy)
             if (len.isFinite()) {
+                stepPt = len
                 travelled += len
                 pendingDist += len
                 // the stroke's direction over its last few samples
@@ -246,7 +290,11 @@ internal class PenDynamics(
                 // batched samples can share one time: their distance waits for the next time step
                 dtMs = (timeMs - lastTime).toFloat()
                 val instant = pendingDist * dpPerPt / (dtMs / 1000f)
-                speed += (instant - speed) * (1f - exp(-dtMs / SPEED_TAU_MS))
+                // the first step starts the measure where the pen is (no faster than the pen's
+                // reference speed, one step being a rough measure), not at a standstill: a stroke
+                // that began "still" began at its thickest and its slowest
+                speed = if (!speedKnown) minOf(instant, d.speedRef) else speed + (instant - speed) * (1f - exp(-dtMs / SPEED_TAU_MS))
+                speedKnown = true
                 pendingDist = 0f
             }
         }
@@ -254,10 +302,23 @@ internal class PenDynamics(
         last = p
 
         val made = source == PressureSource.Speed
-        val p01 = if (made) (1f - speed / d.speedRef).coerceIn(0f, 1f) else pressureCurve.map(range.stretch(pressure))
+        val p01 = when {
+            // Made from speed: the middle of the range at the reference speed, heavier when slower
+            // and lighter when faster, levelling off smoothly instead of hitting an end (a finger
+            // writes at 600…950 dp/s and pauses at every turn, 0.0.36 log: the old straight ramp
+            // drew its thinnest line all along and its thickest at each pause).
+            made -> if (!speedKnown) 0.5f else 0.5f + PEN_MADE_PRESSURE_SPAN * (1f - 2f * speed / (speed + d.speedRef))
+            // a sample without a pressure (0, or not a number) keeps the last one: it used to
+            // count as the hardest press
+            pressure.isFinite() && pressure > 0f -> pressureCurve.map(range.stretch(pressure))
+            lastP01.isFinite() -> lastP01
+            else -> 0.5f
+        }
+        if (!made) lastP01 = p01
         val shaped = p01.pow(d.curve)
         var target = d.minScale + (d.maxScale - d.minScale) * shaped
-        if (d.speedThin > 0f) target *= 1f - d.speedThin * (speed / d.speedRef).coerceIn(0f, 1f)
+        // made pressure already is the speed
+        if (d.speedThin > 0f && !made) target *= 1f - d.speedThin * (speed / d.speedRef).coerceIn(0f, 1f)
         if (d.nib > 0f && (dirX != 0f || dirY != 0f)) {
             target *= nibWidth(atan2(dirY, dirX) - Math.toRadians(d.nibAngleDeg.toDouble()).toFloat(), d.nib)
         }
@@ -276,6 +337,14 @@ internal class PenDynamics(
         untapered.add(scale)
         var out = scale
         if (d.taperStart > 0f) out *= taperFactor(travelled / (d.taperStart * penWidth))
+        // however the width came about, it leaves the last one only as far as the pen has moved
+        if (lastOut.isFinite()) {
+            val creepPt = PEN_STILL_CREEP_DP_PER_S * maxOf(dtMs, 0f) / 1000f / dpPerPt
+            val slope = if (d.taperStart > 0f && travelled < d.taperStart * penWidth) PEN_MAX_TAPER_SLOPE else PEN_MAX_WIDTH_SLOPE
+            val room = slope * (stepPt + creepPt) / penWidthPt
+            out = out.coerceIn(lastOut - room, lastOut + room)
+        }
+        lastOut = out
         stats?.let {
             it.pressures.add(p01)
             if (!made) it.raw.add(pressure)
@@ -289,17 +358,29 @@ internal class PenDynamics(
     /** Each sample's width before the start taper, for [finish]. */
     private val untapered = ArrayList<Float>()
 
+    /** The pen's width in points, never so small that a width could not be told from it. */
+    private val penWidthPt = penWidth.takeIf { it.isFinite() && it > 0.01f } ?: 1f
+
     /**
-     * The stroke is lifted: its end is drawn out to a point ([inkEndTaper]) over at most half its
-     * length. A stroke shorter than the start taper (a dot, a full stop) keeps its full width
-     * instead, so a dot is never a faint speck.
+     * The stroke is lifted: its end is drawn out to a point ([inkEndTaper]) over at most a third
+     * of its length, and no more steeply than [PEN_MAX_TAPER_SLOPE] allows. A dot or a full stop
+     * (the pen moved less than one pen width) keeps its full, even width instead, so a dot is never
+     * a faint speck.
+     *
+     * Every stroke shorter than its start taper used to be given its untapered widths here. With
+     * tapers counted in pen widths that was most of handwriting with a thick pen: the line swelled
+     * to full width the moment the pen was lifted (#601).
      */
     fun finish(points: List<Offset>, scales: MutableList<Float>) {
         if (points.size != scales.size || points.isEmpty()) return
-        if (d.taperStart > 0f && travelled < d.taperStart * penWidth && untapered.size == scales.size) {
-            for (i in scales.indices) scales[i] = untapered[i]
+        if (travelled < penWidthPt) {
+            if (d.taperStart > 0f && untapered.size == scales.size) {
+                val full = untapered.max()
+                for (i in scales.indices) scales[i] = full
+            }
+            return
         }
-        if (d.taperEnd > 0f) inkEndTaper(points, scales, minOf(d.taperEnd * penWidth, travelled / 2f))
+        if (d.taperEnd > 0f) inkEndTaper(points, scales, minOf(d.taperEnd * penWidthPt, travelled / 3f), PEN_MAX_TAPER_SLOPE / penWidthPt)
     }
 
     /** Whether this stroke shows the paper through a grain ([PenDials.grain]). */
@@ -354,14 +435,23 @@ internal fun taperFactor(t: Float): Float {
 /**
  * Draw the end of a finished stroke out to a point (#569): the widths within [lengthPt] of the
  * last point are scaled down smoothly to [PEN_TAPER_FLOOR], so nothing jumps where the taper starts.
+ * The end narrows by at most [maxSlope] (scale per point of line; unbounded when not given): where
+ * the taper is too short for the width it ends, the tip stays blunter rather than pinching in.
  */
-internal fun inkEndTaper(points: List<Offset>, scales: MutableList<Float>, lengthPt: Float) {
+internal fun inkEndTaper(points: List<Offset>, scales: MutableList<Float>, lengthPt: Float, maxSlope: Float = Float.POSITIVE_INFINITY) {
     if (!(lengthPt > 0f) || points.size < 2 || scales.size != points.size) return
     var fromEnd = 0f
+    var first = points.lastIndex
     for (i in points.lastIndex downTo 0) {
         if (i < points.lastIndex) fromEnd += (points[i + 1] - points[i]).getDistance()
         if (fromEnd >= lengthPt) break
         scales[i] = scales[i] * taperFactor(fromEnd / lengthPt)
+        first = i
+    }
+    if (!(maxSlope < Float.POSITIVE_INFINITY) || !(maxSlope > 0f)) return
+    for (i in maxOf(first, 1)..points.lastIndex) {
+        val step = (points[i] - points[i - 1]).getDistance()
+        if (step.isFinite()) scales[i] = maxOf(scales[i], scales[i - 1] - maxSlope * step)
     }
 }
 
