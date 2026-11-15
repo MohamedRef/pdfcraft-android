@@ -2019,4 +2019,9 @@
     <string name="study_suggest_dismiss">مش دلوقتي</string>
     <string name="study_week_by_category">الأسبوع ده: %1$s</string>
     <string name="study_category_time">%1$s %2$d س %3$d د</string>
+    <string name="error_engine_command">تعذّر إكمال هذا الإجراء.</string>
+    <string name="error_engine_open">تعذّر فتح هذا الملف كملف PDF.</string>
+    <string name="error_engine_render">تعذّر عرض هذه الصفحة.</string>
+    <string name="error_engine_no_document">هذا المستند لم يعد مفتوحًا.</string>
+    <string name="error_engine_internal">أوقف خطأ داخلي هذا الإجراء. إذا بدا المستند غير سليم، فأغلقه ثم افتحه مرة أخرى.</string>
 </resources>
