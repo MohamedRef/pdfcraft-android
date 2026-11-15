@@ -151,3 +151,29 @@ fn the_draw_erasers_own_arguments_are_accepted() {
     }
     mobile.close(doc.id, true).unwrap();
 }
+
+#[test]
+fn the_whole_stroke_eraser_removes_a_touched_line_and_is_one_undo_step() {
+    // #521: "Erase whole strokes" takes every line the eraser touches, all of it.
+    let fixture = Fixture::new();
+    let mobile = MobileSession::new();
+    let doc = mobile.open(fixture.0.to_string_lossy().to_string(), None).unwrap();
+    for strokes in [json!([[[20, 20], [90, 90]]]), json!([[[150, 160], [180, 190]]])] {
+        tool(&mobile, "comment_add", json!({
+            "doc": doc.id, "page": 1, "type": "ink", "strokes": strokes,
+            "color": "#161616", "opacity": 1.0, "width": 2.0,
+        }));
+    }
+    let before = mobile.comments(doc.id).unwrap();
+    let done = tool(&mobile, "comment_erase", json!({
+        "doc": doc.id, "page": 1, "path": [[20, 20]], "radius": 3.0, "whole": true,
+    }));
+    assert_eq!(done["candidates"], 1);
+    let after = mobile.comments(doc.id).unwrap();
+    assert_eq!(after.len(), 1, "the touched line is gone whole");
+    assert_eq!(after[0].rect, before[1].rect, "the other line stays");
+    tool(&mobile, "edit_undo", json!({ "doc": doc.id }));
+    assert_eq!(mobile.comments(doc.id).unwrap().len(), 2);
+    let bad = mobile.execute("comment_erase".into(), json!({ "doc": doc.id, "page": 1, "path": [[20, 20]], "whole": "yes" }).to_string());
+    assert!(bad.is_err() || bad.unwrap().contains("error"));
+}

@@ -1827,6 +1827,8 @@
     <string name="ink_eraser_size_short">%1$d pt</string>
     <string name="ink_eraser_diameter">Diameter %1$d pt</string>
     <string name="ink_eraser_size_help">The circle shows exactly what will be erased.</string>
+    <string name="ink_eraser_whole">Erase whole strokes</string>
+    <string name="ink_eraser_whole_summary">Touch a stroke to remove all of it, not only the part under the eraser.</string>
     <string name="ink_toolbar_marker">Highlighter</string>
     <string name="ink_toolbar_brush">Brush</string>
     <string name="ink_toolbar_pencil">Pencil</string>

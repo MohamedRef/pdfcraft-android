@@ -71,4 +71,10 @@ class InkEraseCommandTest {
         appendEraserPoint(path, Offset(10.6f, 10f), 4f)
         assertEquals(2, path.size)
     }
+
+    @Test fun theWholeStrokeEraserAsksForWholeStrokes() {
+        val command = inkEraseCommand(0, listOf(Offset(12f, 30f)), 8.0, whole = true)
+        assertEquals(true, command["whole"])
+        assertEquals(setOf("page", "path", "radius", "erase_highlights", "whole"), command.keys)
+    }
 }

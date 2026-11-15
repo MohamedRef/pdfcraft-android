@@ -1563,6 +1563,8 @@
     <string name="ink_eraser_size_short">%1$d pt</string>
     <string name="ink_eraser_diameter">Diametro %1$d pt</string>
     <string name="ink_eraser_size_help">Il cerchio mostra esattamente cosa verrà cancellato.</string>
+    <string name="ink_eraser_whole">Cancella tratti interi</string>
+    <string name="ink_eraser_whole_summary">Tocca un tratto per rimuoverlo tutto, non solo la parte sotto la gomma.</string>
     <string name="ink_toolbar_marker">Marcatore</string>
     <string name="ink_toolbar_brush">Pennello</string>
     <string name="ink_toolbar_pencil">Matita</string>

@@ -1573,6 +1573,8 @@
     <string name="ink_eraser_size_short">%1$d pt</string>
     <string name="ink_eraser_diameter">Durchmesser %1$d pt</string>
     <string name="ink_eraser_size_help">Der Kreis zeigt genau, was gelöscht wird.</string>
+    <string name="ink_eraser_whole">Ganze Striche löschen</string>
+    <string name="ink_eraser_whole_summary">Einen Strich berühren, um ihn ganz zu entfernen, nicht nur den Teil unter dem Radierer.</string>
     <string name="ink_toolbar_marker">Marker</string>
     <string name="ink_toolbar_brush">Pinsel</string>
     <string name="ink_toolbar_pencil">Bleistift</string>

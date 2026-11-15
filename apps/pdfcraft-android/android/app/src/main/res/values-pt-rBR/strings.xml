@@ -1158,6 +1158,8 @@
     <string name="ink_eraser_size_short">%1$d pt</string>
     <string name="ink_eraser_diameter">Diâmetro %1$d pt</string>
     <string name="ink_eraser_size_help">O círculo mostra exatamente o que será apagado.</string>
+    <string name="ink_eraser_whole">Apagar traços inteiros</string>
+    <string name="ink_eraser_whole_summary">Toque em um traço para removê-lo inteiro, não só a parte sob a borracha.</string>
     <string name="ink_toolbar_marker">Marcador</string>
     <string name="ink_toolbar_brush">Pincel</string>
     <string name="ink_toolbar_pencil">Lápis</string>

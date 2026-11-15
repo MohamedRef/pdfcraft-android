@@ -1505,6 +1505,13 @@ fn segment_distance(a: [f64; 2], b: [f64; 2], c: [f64; 2], d: [f64; 2]) -> f64 {
 /// drawing with nothing left is deleted.
 /// Returns whether anything was erased.
 pub fn erase_ink(doc: &mut Document, page: usize, index: usize, path: &[[f64; 2]], radius: f64, meta: &Meta) -> Result<bool, AnnotError> {
+    erase_ink_strokes(doc, page, index, path, radius, false, meta)
+}
+
+/// Android adaptation (#521): [`erase_ink`], or with `whole` the eraser removes every stroke of
+/// the drawing it touches (the "Erase whole strokes" eraser), leaving the strokes it misses as
+/// they are. A drawing with no stroke left is deleted.
+pub fn erase_ink_strokes(doc: &mut Document, page: usize, index: usize, path: &[[f64; 2]], radius: f64, whole: bool, meta: &Meta) -> Result<bool, AnnotError> {
     let (_, r) = annot_ref(doc, page, index)?;
     unlocked(doc, r)?;
     let d = annot_dict(doc, r);
@@ -1598,6 +1605,9 @@ pub fn erase_ink(doc: &mut Document, page: usize, index: usize, path: &[[f64; 2]
             continue;
         }
         erased = true;
+        if whole {
+            continue;
+        }
         let mut run: Vec<[f64; 2]> = Vec::new();
         let mut run_f: Vec<f64> = Vec::new();
         let mut run_d: Vec<f64> = Vec::new();

@@ -97,6 +97,15 @@ class ToolPrefs(context: Context) {
         prefs.edit().putFloat("ink.eraser.radius", eraserRadius).apply()
     }
 
+    /** The eraser takes every stroke it touches, all of it, instead of only the part under it (#521). */
+    var eraseWholeStrokes by mutableStateOf(prefs.getBoolean("ink.eraser.whole", false))
+        private set
+
+    fun updateEraseWholeStrokes(on: Boolean) {
+        eraseWholeStrokes = on
+        prefs.edit().putBoolean("ink.eraser.whole", on).apply()
+    }
+
     /** Fill & Sign's one colour for everything it places, and its text size. */
     var fillColor by mutableIntStateOf(prefs.getInt("fill.color", 0xFF000000.toInt()))
         private set

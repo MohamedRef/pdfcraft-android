@@ -901,6 +901,12 @@ impl Automation {
             Some(Value::Bool(value)) => *value,
             _ => return Err(ToolError::InvalidArgs("erase_highlights must be a boolean".into())),
         };
+        // Android adaptation (#521): the eraser's "Erase whole strokes" choice.
+        let whole = match a.get("whole") {
+            None => false,
+            Some(Value::Bool(value)) => *value,
+            _ => return Err(ToolError::InvalidArgs("whole must be a boolean".into())),
+        };
         let min_x = path.iter().map(|p| p[0]).fold(f64::INFINITY, f64::min);
         let min_y = path.iter().map(|p| p[1]).fold(f64::INFINITY, f64::min);
         let max_x = path.iter().map(|p| p[0]).fold(f64::NEG_INFINITY, f64::max);
@@ -930,7 +936,7 @@ impl Automation {
         indices.sort_unstable_by(|a, b| b.cmp(a));
         indices.dedup();
         let candidates = indices.len();
-        let edits = indices.into_iter().map(|index| Edit::EraseInk { page, index, path: path.clone(), radius }).collect();
+        let edits = indices.into_iter().map(|index| Edit::EraseInk { page, index, path: path.clone(), radius, whole }).collect();
         let mut out = self.apply(a, Edit::Batch { label: "Erase ink".into(), edits })?;
         out["candidates"] = json!(candidates);
         Ok(out)
