@@ -200,6 +200,10 @@ internal fun finishInkStroke(s: InkStroke, tuning: PenTuning) {
     if (s.stylus) d.stats?.let { tuning.learn(it.raw.toList()) }
 }
 
+/** Whether [s] is a highlighter stroke that "Straighten lines" ([on]) draws straight (#569). */
+internal fun inkStraightened(s: InkStroke, on: Boolean): Boolean =
+    on && s.shapeMode == InkShapeMode.Freehand && s.appearance.style == InkStyle.Highlighter && s.points.size >= 2
+
 /**
  * The event time of the sample [toolGestures] is handing to `onDown` or `onMove` right now, so the
  * pen model (#569) can measure speed without changing every tool's callback.
@@ -605,7 +609,7 @@ private fun ZoomWritingPad(
                     val last = s.points.lastOrNull() ?: return@let
                     val tail = inkTailPoints(origin + last * m, s.penTip?.let { origin + it * m }, null)
                     val width = inkStylePointWidths(listOf(s.scales.lastOrNull() ?: 1f), s.appearance.width, s.appearance.style).first()
-                    drawInkTail(tail, Color(s.appearance.argb), s.appearance.opacity, width * m)
+                    drawInkTail(tail, Color(s.appearance.argb), s.appearance.opacity, width * m, s.appearance.style == InkStyle.Highlighter)
                 }
                 // The advance zone: lifting the pen here moves the box on.
                 drawRect(Color(0xFF2E7DFF).copy(alpha = 0.07f), Offset(size.width * 0.8f, 0f), androidx.compose.ui.geometry.Size(size.width * 0.2f, size.height))
@@ -1290,6 +1294,8 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                     // page edge on lift, never pinned along the border (#75).
                     val at = doc.viewer.screenToPageUnclamped(s.page, p) ?: return@toolGestures
                     s.add(Offset(at.x, at.y), inkSampleTimeMs, pressure)
+                    // Straighten lines (#569): the highlighter is shown as the straight line it will be
+                    if (inkStraightened(s, prefs.highlighterStraight)) s.preview = listOf(s.points.first(), s.points.last())
                     // the newest pen sample a draw has not shown yet (#128)
                     pendingInput.at = if (s.stylus) penTracker.timeMs else 0L
                     return@toolGestures
@@ -1395,6 +1401,17 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                             MarkupDiag.shape(doc, s.shapeMode.name.lowercase(), s.points.size)
                         }
                         return@toolGestures
+                    }
+                    if (inkStraightened(s, prefs.highlighterStraight)) {
+                        // Straighten lines (#569): from where the stroke began to where it ended
+                        val line = listOf(s.points.first(), s.points.last())
+                        val scale = s.scales.firstOrNull() ?: 1f
+                        s.preview = null
+                        s.points.clear()
+                        s.points.addAll(line)
+                        s.pressureSensitive = false
+                        s.scales.clear()
+                        s.scales.addAll(listOf(scale, scale))
                     }
                     // a held shape always snaps; with Snap to shape on, any stroke that is one does
                     val shape = if (s.shapeMode != InkShapeMode.Freehand) {
@@ -1560,7 +1577,7 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                 val width = inkStylePointWidths(listOf(s.scales.lastOrNull() ?: 1f), s.appearance.width, s.appearance.style).first()
                 val pageRect = doc.viewer.pageRectOnScreen(s.page)
                 clipRect(pageRect.left, pageRect.top, pageRect.right, pageRect.bottom) {
-                    drawInkTail(tail, Color(s.appearance.argb), s.appearance.opacity, width * doc.viewer.pixelsPerPoint(s.page))
+                    drawInkTail(tail, Color(s.appearance.argb), s.appearance.opacity, width * doc.viewer.pixelsPerPoint(s.page), s.appearance.style == InkStyle.Highlighter)
                 }
             }
             // the polygon or connected lines placed so far, with a dot on each point

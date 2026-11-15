@@ -360,6 +360,19 @@ internal fun PenStylePicker(vm: AppViewModel) {
                 Offset(0f, size.height / 2), Offset(size.width, size.height / 2),
                 strokeWidth = lineWidth.dp.toPx(), cap = if (style == InkStyle.Highlighter) StrokeCap.Square else StrokeCap.Round)
         }
+        if (style == InkStyle.Highlighter) {
+            Row(
+                Modifier.fillMaxWidth().toggleable(value = prefs.highlighterStraight, role = Role.Switch) { prefs.updateHighlighterStraight(it) }
+                    .padding(vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text(stringResource(R.string.ink_highlighter_straight), color = c.text, fontSize = 14.sp)
+                    Text(stringResource(R.string.ink_highlighter_straight_explanation), color = c.label, fontSize = 12.sp)
+                }
+                PdfSwitch(prefs.highlighterStraight, null)
+            }
+        }
         Text(stringResource(R.string.toolbar_color_drawing), color = c.text, fontSize = 14.sp)
         if (prefs.recentInkColors.isNotEmpty()) {
             Text(stringResource(R.string.ink_recent_colors), color = c.label, fontSize = 12.sp)

@@ -28,6 +28,8 @@ JVM cases cover ARGB/width/opacity round-trips, corrupted/future/oversized/non-f
 
 ## S Pen side button (#144)
 
+**Marker** (#569): flat (chisel) ends, drawn and saved. It is painted opaque in its colour mixed with white at its opacity, with the Darken blend: over white it looks as the colour at that opacity did with Multiply, text under it stays black, and where two marker strokes of one colour cross, or one crosses itself, the colour is not laid down twice, while drawing, after saving and in other PDF readers that blend. The comment keeps its colour and opacity (`/C`, `/CA`). **Straighten lines** in the marker's own popover (off by default): every marker stroke is shown and saved as a straight line from where it began to where it ended; a straight marker stroke over text still becomes a Highlight when Smart pen gestures is on.
+
 Pen settings has two choices. **While the S Pen button is held**: Eraser (default, the earlier behaviour), Marker (that stroke uses the highlighter's own settings, then the selected pen is back) or Nothing. **S Pen button click while hovering**: Nothing (default), Undo, or Switch to previous pen. The mode of a stroke is decided at contact: pressing the button mid-stroke never cancels, splits or erases the stroke being written. The hardware eraser end always erases. A click is a press and release within 600 ms while the pen hovers without touching. Hover-click behaviour depends on the device reporting the button during hover and still needs checking on a Galaxy S Pen device.
 
 ## Writing hand and palm guard (#156)

@@ -59,6 +59,14 @@ class InkDraftRenderTest {
         assertFalse(inkNeedsLayer(1, 0.5f, highlighter = false))
         assertFalse(inkNeedsLayer(4, 1f, highlighter = false))
         assertTrue(inkNeedsLayer(4, 0.8f, highlighter = false))
-        assertTrue(inkNeedsLayer(2, 1f, highlighter = true))
+        assertFalse(inkNeedsLayer(2, 0.4f, highlighter = true))
+    }
+
+    @Test fun theHighlighterIsItsColourMixedWithWhite() {
+        val c = io.github.artcraftandroid.pdfcraft.ui.viewer.inkHighlighterColor(androidx.compose.ui.graphics.Color(1f, 0.94f, 0f), 0.35f)
+        assertEquals(1f, c.alpha, 1e-6f)
+        assertEquals(1f, c.red, 1e-2f)
+        assertEquals(0.979f, c.green, 1e-2f)
+        assertEquals(0.65f, c.blue, 1e-2f)
     }
 }

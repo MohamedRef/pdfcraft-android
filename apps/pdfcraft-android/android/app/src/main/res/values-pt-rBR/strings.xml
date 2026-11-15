@@ -968,6 +968,8 @@
     <string name="bates_export_failed">Não foi possível salvar esta nova cópia em Downloads.</string>
     <string name="ink_presets_title">Canetas favoritas</string>
     <string name="ink_presets_help">Cada caneta guarda a própria cor, espessura e opacidade. Toque em uma favorita para restaurar as configurações dela.</string>
+    <string name="ink_highlighter_straight">Endireitar linhas</string>
+    <string name="ink_highlighter_straight_explanation">Cada traço do marca-texto sai como uma linha reta.</string>
     <string name="pen_lab_title">Laboratório de canetas</string>
     <string name="pen_lab_summary">Ajuste como cada caneta responde à pressão e à velocidade</string>
     <string name="pen_lab_body">Cada mudança vale na hora para a caneta, também na página. Escreva na faixa para testar.</string>

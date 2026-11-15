@@ -1616,6 +1616,8 @@
     <!-- Translator note: Pen presets: each pen remembers its own color, width and opacity. -->
     <string name="ink_presets_title">Favorite pens</string>
     <string name="ink_presets_help">Each pen keeps its own color, width and opacity. Tap a favorite to restore its settings.</string>
+    <string name="ink_highlighter_straight">Straighten lines</string>
+    <string name="ink_highlighter_straight_explanation">Every highlighter stroke comes out as a straight line.</string>
     <string name="pen_lab_title">Pen lab</string>
     <string name="pen_lab_summary">Tune how each pen answers pressure and speed</string>
     <string name="pen_lab_body">Each change applies to the pen at once, on the page too. Write on the strip to try it.</string>

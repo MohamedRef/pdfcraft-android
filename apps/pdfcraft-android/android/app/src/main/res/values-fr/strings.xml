@@ -1263,6 +1263,8 @@
     <string name="bates_export_failed">Impossible d\'enregistrer cette nouvelle copie dans Téléchargements.</string>
     <string name="ink_presets_title">Stylos favoris</string>
     <string name="ink_presets_help">Chaque stylo garde sa propre couleur, son épaisseur et son opacité. Touchez un favori pour restaurer ses réglages.</string>
+    <string name="ink_highlighter_straight">Redresser les traits</string>
+    <string name="ink_highlighter_straight_explanation">Chaque trait de surligneur devient une ligne droite.</string>
     <string name="pen_lab_title">Labo des stylos</string>
     <string name="pen_lab_summary">Réglez la réponse de chaque stylo à la pression et à la vitesse</string>
     <string name="pen_lab_body">Chaque changement s’applique tout de suite au stylo, sur la page aussi. Écrivez sur la bande pour l’essayer.</string>

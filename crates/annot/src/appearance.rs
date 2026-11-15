@@ -470,17 +470,33 @@ pub fn part_opacity(d: &Dict) -> PartOpacity {
     PartOpacity { line, fill, text }
 }
 
+/// How a comment's appearance is blended onto the page.
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum Blend {
+    Normal,
+    /// A text highlight: Multiply, so the text under it stays readable.
+    Multiply,
+    /// A freehand highlighter: its colour mixed with white at its opacity, drawn opaque with
+    /// Darken ([`highlighter_colour`]). Over white it looks exactly like Multiply at that opacity,
+    /// text under it stays black, and where two strokes of one colour cross the colour is not
+    /// applied twice, in any reader that blends.
+    Darken,
+}
+
 /// `/GS0`: the line's opacity for strokes and the fill's for everything filled; `/GS1`, where the
 /// text's differs from the fill's: the text's for its glyphs.
-fn ext_gstate(parts: PartOpacity, multiply: bool) -> Option<Dict> {
-    if parts.line >= 1.0 && parts.fill >= 1.0 && parts.text >= 1.0 && !multiply {
+fn ext_gstate(parts: PartOpacity, blend: Blend) -> Option<Dict> {
+    let parts = if blend == Blend::Darken { PartOpacity { line: 1.0, fill: 1.0, text: 1.0 } } else { parts };
+    if parts.line >= 1.0 && parts.fill >= 1.0 && parts.text >= 1.0 && blend == Blend::Normal {
         return None;
     }
     let gs = |stroke: f64, fill: f64| {
         let mut gs = Dict::new();
         gs.set(b"Type".to_vec(), Object::name("ExtGState"));
-        if multiply {
-            gs.set(b"BM".to_vec(), Object::name("Multiply"));
+        match blend {
+            Blend::Normal => {}
+            Blend::Multiply => gs.set(b"BM".to_vec(), Object::name("Multiply")),
+            Blend::Darken => gs.set(b"BM".to_vec(), Object::name("Darken")),
         }
         gs.set(b"CA".to_vec(), Object::Real(stroke));
         gs.set(b"ca".to_vec(), Object::Real(fill));
@@ -492,6 +508,18 @@ fn ext_gstate(parts: PartOpacity, multiply: bool) -> Option<Dict> {
         res.set(b"GS1".to_vec(), gs(parts.line, parts.text));
     }
     Some(res)
+}
+
+/// A freehand highlighter's colour `c` at `opacity`, mixed with white: the opaque colour that,
+/// drawn with Darken (or Multiply) over white, matches `c` at that opacity.
+pub(crate) fn highlighter_colour(c: Rgb, opacity: f64) -> Rgb {
+    let a = if opacity.is_finite() { opacity.clamp(0.0, 1.0) } else { 1.0 };
+    c.map(|v| 1.0 - a * (1.0 - v.clamp(0.0, 1.0)))
+}
+
+/// Whether the comment is a freehand highlighter stroke (an Ink with `/IT /FreehandHighlight`).
+fn is_freehand_highlight(context: &AppearanceContext<'_>) -> bool {
+    context.subtype == b"Ink" && context.dict.name(b"IT") == Some(b"FreehandHighlight")
 }
 
 pub(crate) fn form(bbox: [f64; 4], content: &[u8], resources: Dict) -> Stream {
@@ -645,10 +673,14 @@ impl AppearanceDrawing {
     /// Initialize an appearance drawing buffer and configure its graphics state for opacity and blend mode.
     fn new(context: &AppearanceContext<'_>) -> Self {
         let mut drawing = Self::default();
-        if let Some(gs) = ext_gstate(
-            context.parts,
-            context.subtype == b"Highlight" || (context.subtype == b"Ink" && context.dict.name(b"IT") == Some(b"FreehandHighlight")),
-        ) {
+        let blend = if is_freehand_highlight(context) {
+            Blend::Darken
+        } else if context.subtype == b"Highlight" {
+            Blend::Multiply
+        } else {
+            Blend::Normal
+        };
+        if let Some(gs) = ext_gstate(context.parts, blend) {
             drawing.resources.set(b"ExtGState".to_vec(), Object::Dict(gs));
             drawing.content.push_str("/GS0 gs\n");
         }
@@ -1221,7 +1253,8 @@ fn draw_ink(context: &AppearanceContext<'_>, drawing: &mut AppearanceDrawing) ->
     let stroke = context.stroke;
     let w = context.width;
     let c = &mut drawing.content;
-    let col = stroke?;
+    let highlighter = is_freehand_highlight(context);
+    let col = if highlighter { highlighter_colour(stroke?, context.parts.line) } else { stroke? };
     let list = d.get(b"InkList")?.as_array()?;
     if let Some(outline) = pressure_ink_outline(list, d.get(b"PCWidths").and_then(Object::as_array).map(Vec::as_slice), w) {
         // Android pressure ink: one filled outline, so a translucent line is as opaque throughout
@@ -1231,8 +1264,10 @@ fn draw_ink(context: &AppearanceContext<'_>, drawing: &mut AppearanceDrawing) ->
         c.push_str("f\n");
         return Some(());
     }
-    // `/BS` gives an ink stroke its width and dash pattern (Table 182).
-    c.push_str(&format!("{}{} w 1 J 1 j\n{}", rg_stroke(col), n(w), dash(d)));
+    // `/BS` gives an ink stroke its width and dash pattern (Table 182). A highlighter's ends are
+    // flat, as a chisel tip's (projecting square caps).
+    let cap = if highlighter { 2 } else { 1 };
+    c.push_str(&format!("{}{} w {cap} J 1 j\n{}", rg_stroke(col), n(w), dash(d)));
     for s in list {
         let pts: Vec<f64> = s.as_array()?.iter().map(|o| o.as_f64()).collect::<Option<_>>()?;
         let pts: Vec<(f64, f64)> = pts.as_chunks::<2>().0.iter().map(|p| (p[0], p[1])).collect();

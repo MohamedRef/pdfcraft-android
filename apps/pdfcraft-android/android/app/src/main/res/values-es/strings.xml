@@ -1391,6 +1391,8 @@
     <string name="bates_export_failed">No se pudo guardar esta copia nueva en Descargas.</string>
     <string name="ink_presets_title">Lápices favoritos</string>
     <string name="ink_presets_help">Cada lápiz conserva su propio color, grosor y opacidad. Toca un favorito para recuperar sus ajustes.</string>
+    <string name="ink_highlighter_straight">Enderezar líneas</string>
+    <string name="ink_highlighter_straight_explanation">Cada trazo del resaltador sale como una línea recta.</string>
     <string name="pen_lab_title">Laboratorio de lápices</string>
     <string name="pen_lab_summary">Ajusta cómo responde cada lápiz a la presión y la velocidad</string>
     <string name="pen_lab_body">Cada cambio se aplica al lápiz al instante, también en la página. Escribe en la franja para probarlo.</string>
