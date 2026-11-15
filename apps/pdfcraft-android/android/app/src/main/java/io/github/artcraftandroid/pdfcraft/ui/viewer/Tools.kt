@@ -70,6 +70,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.layout.boundsInParent
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.text.drawText
@@ -898,6 +899,10 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
     var layerSize by remember(doc) { mutableStateOf(androidx.compose.ui.geometry.Size.Zero) }
     // The live eraser (#521): the page without its erasable ink, shown along the eraser's path.
     var liveErase by remember(doc) { mutableStateOf<LiveErase?>(null) }
+    /** The drafts as they were when the eraser touched down: its undo step, or what a cancel puts back. */
+    var eraseDraftsBefore by remember(doc) { mutableStateOf<List<InkStroke>?>(null) }
+    /** Where the lasso's action buttons are, in this layer; touches there are theirs, not the page's. */
+    var lassoMenuBounds by remember(doc) { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
     val liveEraseScope = rememberCoroutineScope()
     LaunchedEffect(liveErase) {
         // gone once the edit's own page is drawn (or the edit changed nothing), at the latest after a few seconds
@@ -993,13 +998,39 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
         }
     }
 
+    /** The eraser over draft strokes on [page], from [a] to [b]: they are cut here, at once. */
+    fun eraseDrafts(page: Int, a: Offset, b: Offset) {
+        val radius = activeEraserRadius
+        var i = 0
+        while (i < strokes.size) {
+            val s = strokes[i]
+            if (s.page != page) { i++; continue }
+            val pts = s.points.toList()
+            val half = inkStylePointWidths(s.scales.toList(), s.appearance.width, s.appearance.style).map { it / 2f }
+            val runs = eraseInkRun(pts, s.scales.toList(), half, a, b, radius)
+            if (runs == null) { i++; continue }
+            strokes.removeAt(i)
+            val pieces = runs.map { run ->
+                InkStroke(s.page, s.appearance, s.pressureSensitive, s.shapeMode, null, s.stylus).also {
+                    it.points.addAll(run.points)
+                    it.scales.addAll(run.scales)
+                }
+            }
+            strokes.addAll(i, pieces)
+            i += pieces.size
+        }
+    }
+
     fun beginErase(p: Offset) {
         clearSelection()
         val at = doc.viewer.screenToPage(p) ?: return
-        // Queue all pending freehand ink first. The native eraser then sees the just-drawn
-        // annotations on the same serial engine dispatcher, not a stale UI comment list.
-        doc.commitTool?.invoke()
+        // Drafts are not saved first: the eraser cuts them here, at once, and the engine erases
+        // only the saved ink. Saving first made the first erase after writing wait for every
+        // stroke to be saved, seconds on a big document, with nothing erased meanwhile.
         current = null
+        eraseDraftsBefore = strokes.toList()
+        activeEraserRadius = prefs.eraserRadius
+        eraseDrafts(at.page, Offset(at.x, at.y), Offset(at.x, at.y))
         eraserPage = at.page
         activeEraserRadius = prefs.eraserRadius
         eraserScreen = p
@@ -1014,6 +1045,7 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
         // Unclamped: an eraser that leaves the page is not dragged along its edge (#75).
         val at = doc.viewer.screenToPageUnclamped(page, p) ?: return
         eraserScreen = p
+        eraserPoints.lastOrNull()?.let { from -> eraseDrafts(page, from, Offset(at.x, at.y)) }
         liveErase?.takeIf { it.region.page == page && it.liftedGen == null }?.add(Offset(at.x, at.y))
         appendEraserPoint(eraserPoints, Offset(at.x, at.y), activeEraserRadius)?.let { chunk ->
             // A very long gesture erases its finished part now; the rest follows on lift (#76).
@@ -1023,7 +1055,11 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
     }
 
     fun cancelErase() {
-        // a cancelled gesture erases nothing: the page under the ink must not stay shown
+        // a cancelled gesture erases nothing: the page under the ink must not stay shown, and the drafts come back
+        eraseDraftsBefore?.let { before ->
+            if (strokes.toList() != before) { strokes.clear(); strokes.addAll(before) }
+        }
+        eraseDraftsBefore = null
         liveErase?.takeIf { it.liftedGen == null }?.let { it.log("cancelled", android.os.SystemClock.uptimeMillis()); liveErase = null }
         eraserPage = null
         eraserScreen = null
@@ -1035,6 +1071,18 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
         moveErase(p)
         val path = eraserPoints.toList()
         val radius = activeEraserRadius
+        // the drafts the eraser cut are one undo step of their own
+        eraseDraftsBefore?.let { before ->
+            val after = strokes.toList()
+            if (after != before) {
+                edits.add(DraftInkEdit.Erased(before, after))
+                undone.clear()
+                steps.drafted()
+            }
+        }
+        eraseDraftsBefore = null
+        // the engine only has saved ink to erase, and ink still being saved
+        val savedInk = erasableInk(doc.comments, page).isNotEmpty() || drafts.saving.any { it.page == page }
         // the live view stays until the edit's page is drawn (#521)
         val le = liveErase?.takeIf { it.region.page == page }?.also {
             it.liftedGen = doc.pageGenerations.of(page)
@@ -1044,7 +1092,7 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
         cancelErase()
         if (le != null) liveErase = le
         logEraseGesture(path.size, eraserChunks[0], radius)
-        if (path.isNotEmpty()) {
+        if (path.isNotEmpty() && savedInk) {
             // One native Edit::Batch per gesture, including freehand marker Ink.
             documentEdit("comment_erase", inkEraseCommand(page, path, activeEraserRadius.toDouble())) { made ->
                 // nothing erased: nothing changes on the page, so the live view goes now
@@ -1468,7 +1516,9 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
             onEraserUp = { p -> finishErase(p) },
             onEraserCancel = { cancelErase() },
             penButtonHold = prefs.penButtonHold,
-            ignoreAt = if (doc.controller.zoomBoxOn) ({ p -> p.y >= layerSize.height - padHeightPx }) else null,
+            // A touch on the lasso's Delete / Link / Recolour is the button's own: drawn on the
+            // page under it, it started a new lasso first and the selection was gone before Delete.
+            ignoreAt = { p -> (doc.controller.zoomBoxOn && p.y >= layerSize.height - padHeightPx) || lassoMenuBounds?.contains(p) == true },
             overlayHit = if (doc.controller.rulerOn || doc.controller.zoomBoxOn || doc.controller.protractorOn) ({ p ->
                 when {
                     doc.controller.protractorOn && doc.controller.protractor?.contains(p) == true -> { overlayTarget = 2; true }
@@ -1676,9 +1726,11 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
             if (b != null) {
                 val anchor = doc.viewer.pageToScreen(selPage, b.left, b.bottom)
                 val density = LocalDensity.current
+                DisposableEffect(Unit) { onDispose { lassoMenuBounds = null } }
                 Row(
                     Modifier
                         .offset { androidx.compose.ui.unit.IntOffset(anchor.x.toInt().coerceAtLeast(0), (anchor.y + with(density) { 8.dp.toPx() }).toInt()) }
+                        .onGloballyPositioned { lassoMenuBounds = it.boundsInParent() }
                         .background(pdfColors.menu, RoundedCornerShape(8.dp))
                         .padding(horizontal = 4.dp),
                     verticalAlignment = Alignment.CenterVertically,

@@ -22,3 +22,15 @@ Undo and Redo now share one ordered local edit history across newly drawn stroke
 `InkLassoTest` checks containment and crossing, invalid/incomplete inputs, rigid group clamps, disjoint bounds and a 4,000-point input decimated to a bounded lasso. Existing pressure, eraser and ink appearance regressions must still pass on the **exact PR head**.
 
 This is **not** full parity with desktop ink editing: selecting already-saved PDF Ink annotations, resize, rotation, nested groups, per-stroke handles and copy/paste remain separate future work. Native saved-ink editability requires engine-level edit and Undo contract review. Physical Samsung S Pen hover/button/palm, Cancel/back, scrolling, device rotation, accessibility and save/reopen checks are not covered by JVM tests. No APK is published for this PR.
+
+## Erasing drafts and the lasso's buttons (0.0.33-beta log)
+
+- The eraser no longer saves the drafts before it erases. It cuts draft strokes in the app, at
+  once, the way the engine's `comment_erase` cuts saved ink (to the painted edge, split where it
+  crosses); the cut is one Draw undo step (`DraftInkEdit.Erased`), and a cancelled gesture puts
+  the drafts back. The engine erases only saved ink, and ink still being saved. Before, the first
+  erase after writing waited for every stroke to be saved, most of a second each on an 869-page
+  document, with nothing erased on screen meanwhile. `InkDraftEraseTest` checks the cut.
+- A touch on the lasso's Delete, Link or Recolour belongs to the button. The page under it used
+  to take the same touch as the start of a new lasso, which cleared the selection, so Delete had
+  nothing left to delete.
