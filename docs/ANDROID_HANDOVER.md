@@ -26,7 +26,7 @@
 
 - Release PR publishes `0.0.36-beta` / ARM64 build `36012` (`pdfcraft.versionCode=3601`), same package ID and signer. Trigger matches only `chore(release): publish 0.0.36-beta (36012)`.
 - Next pen batch under the owner's "do all of it to the end" (12:59 UTC).
-- Included: #588 (#521), #589 (#582), #593 (#592, Jetpack Ink crash). Published by manual dispatch on main: the push run on #590 failed a timing-sensitive test fixed by #591. See [`releases/0.0.36-beta.md`](releases/0.0.36-beta.md).
+- Included: #588 (#521), #589 (#582), #593 (#592 Jetpack Ink crash, #597 ink lost on close). Published by manual dispatch on main: the push run on #590 failed a timing-sensitive test fixed by #591. See [`releases/0.0.36-beta.md`](releases/0.0.36-beta.md).
 - Open: not run on a device; #589's speed-up is measured on a computer only.
 
 ## RELEASE 0.0.35-beta (35012) — 2026-11-15 (owner requested)
