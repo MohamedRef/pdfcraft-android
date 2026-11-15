@@ -123,17 +123,6 @@ class ScanMarkupInkTest {
         assertEquals(4L, m["undo_ms_max"])
         val stroke = scanInkStrokeDiag("pen", 120, 1000, true, 0).toMap()
         assertEquals(120L, stroke["rate_hz"])
-        assertEquals("normal", stroke["path"])
-    }
-
-    @Test
-    fun onlyThePenGoesToTheFrontBufferWithLowLatencyInk() {
-        assertTrue(scanMarkupFront(ScanMarkupTool.Pen, ink = true, lowLatency = true))
-        assertFalse(scanMarkupFront(ScanMarkupTool.Pen, ink = true, lowLatency = false))
-        assertFalse(scanMarkupFront(ScanMarkupTool.Pen, ink = false, lowLatency = true))
-        // translucent ink and the eraser's veil would double up where the pieces meet
-        assertFalse(scanMarkupFront(ScanMarkupTool.Highlighter, ink = true, lowLatency = true))
-        assertFalse(scanMarkupFront(ScanMarkupTool.Erase, ink = true, lowLatency = true))
     }
 
     @Test
@@ -164,12 +153,10 @@ class ScanMarkupInkTest {
 
     @Test
     fun theLogSaysThePathPatchesAndWidth() {
-        val m = ScanInkStats().apply { patches = 3; patchMsMax = 7; frontStrokes = 2 }.diag(true).toMap()
+        val m = ScanInkStats().apply { patches = 3; patchMsMax = 7 }.diag(true).toMap()
         assertEquals(3, m["patches"])
         assertEquals(7L, m["patch_ms_max"])
-        assertEquals(2, m["front_strokes"])
-        val stroke = scanInkStrokeDiag("pen", 10, 100, true, 0, front = true, width = 0.0051234f).toMap()
-        assertEquals("front", stroke["path"])
+        val stroke = scanInkStrokeDiag("pen", 10, 100, true, 0, width = 0.0051234f).toMap()
         assertEquals(0.00512, stroke["width"] as Double, 1e-9)
     }
 }

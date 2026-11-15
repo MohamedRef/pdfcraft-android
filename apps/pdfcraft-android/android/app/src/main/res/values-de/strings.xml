@@ -1417,9 +1417,7 @@
     <string name="ink_latency_refresh">Aktualisieren</string>
     <string name="ink_latency_none">noch nicht gemessen</string>
     <string name="ink_latency_value">typisch %1$d ms, höchstens %2$d ms (95 %%), %3$d Messungen</string>
-    <string name="ink_latency_low">Geringe Latenz</string>
-    <string name="ink_latency_normal">Normal</string>
-    <string name="ink_latency_explanation">Schreibe mit dem Stift bei ausgeschalteter und dann eingeschalteter Tinte mit geringer Latenz und vergleiche. Gemessen vom Stiftereignis bis zum Zeichnen der App; der Bildschirm fügt noch etwas hinzu.</string>
+    <string name="ink_latency_explanation">Gemessen vom Stiftereignis bis zum Zeichnen der App; der Bildschirm fügt noch etwas hinzu.</string>
     <string name="ink_latency_title">Tintenlatenz auf diesem Gerät</string>
     <string name="palm_guard_calibrate_clear">Berührungen löschen</string>
     <string name="palm_guard_calibrate_help">Halte den Stift über den Bildschirm oder schreibe, und lege dann die Hand ab wie beim Schreiben. Grüne Berührungen werden ignoriert, rote würden scrollen oder Schaltflächen drücken. Passe die Größe an, bis die aufgelegte Hand im Grünen landet.</string>
@@ -1450,8 +1448,6 @@
     <string name="ink_color_vermillion">Zinnoberrot</string>
     <string name="ink_color_bluish_green">Blaugrün</string>
     <string name="ink_color_sky_blue">Himmelblau</string>
-    <string name="ink_low_latency_explanation">Zeichnet die Linie, die du schreibst, direkt auf den Bildschirm, bevor die App neu zeichnet. Nur deckende Stifte.</string>
-    <string name="ink_low_latency">Tinte mit geringer Latenz (experimentell)</string>
     <string name="zoom_box_new_line">Neue Zeile</string>
     <string name="zoom_box">Zoomfenster</string>
     <string name="pen_gesture_scratched">%1$d Striche weggekritzelt. Rückgängig stellt sie wieder her.</string>

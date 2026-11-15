@@ -190,11 +190,7 @@ internal fun ScanMarkupScreen(vm: AppViewModel, index: Int, page: ScanPage) {
 
     /** The width a stroke of [t] is drawn with now: the slider's with Markup's ink, else the dot picked. */
     fun widthFor(t: ScanMarkupTool): Float = if (scanMarkupSlider(t, ink)) widthOf[t.ordinal] else scanMarkupSizes(t).let { it[sizeAt[t.ordinal].coerceIn(it.indices)] }
-    // low-latency ink (#520): the viewer's own setting, the pen drawn into the display's front buffer
-    val lowLatency = vm.settings.toolPrefs.lowLatencyInk
-    val wet = remember { io.github.artcraftandroid.pdfcraft.ui.viewer.WetInk() }
-    // the wet-ink surface is the photo's own box here; nothing the app draws lies over it
-    val wetCovers = remember { io.github.artcraftandroid.pdfcraft.ui.viewer.WetInkCovers() }
+    // ink latency (#128): the newest pen sample a draw has not shown yet
     val pendingInput = remember { io.github.artcraftandroid.pdfcraft.ui.viewer.PendingInput() }
     // the page drawn once without strokes, for the paper fills to be drawn on (#520)
     var base by remember { mutableStateOf<ScanMarkupBase?>(null) }
@@ -337,7 +333,6 @@ internal fun ScanMarkupScreen(vm: AppViewModel, index: Int, page: ScanPage) {
     val toolNow by rememberUpdatedState(tool)
     val marksNow by rememberUpdatedState(marks)
     val droppingNow by rememberUpdatedState(dropping)
-    val lowNow by rememberUpdatedState(lowLatency)
     val imageNow by rememberUpdatedState(image)
     val inkNow by rememberUpdatedState(ink)
 
@@ -406,18 +401,9 @@ internal fun ScanMarkupScreen(vm: AppViewModel, index: Int, page: ScanPage) {
                         val removeRadius = if (t == ScanMarkupTool.RemoveMarks) widthFor(t) / 2f else 0f
                         var touched = emptySet<Int>()
                         val stylus = down.type == PointerType.Stylus
-                        // the pen into the display's front buffer, with low-latency ink (#520)
-                        val front = stylus && scanMarkupFront(t, inkNow, lowNow)
-                        var wetFrom: Offset? = if (front) down.position else null
-                        val wetWidth = if (front) widthFor(t) * r.long else 0f
-                        val wetArgb = if (front) strokeOf(t).second or 0xFF000000.toInt() else 0
                         fun add(p: Offset, pressure: Float, at: Long = 0L) {
                             val (x, y) = r.toMarks(p)
-                            wetFrom?.let { from ->
-                                wet.segment(io.github.artcraftandroid.pdfcraft.ui.viewer.WetSegment(from, p, scanPenWidth(wetWidth, pressure), wetArgb, at))
-                                wetFrom = p
-                            }
-                            if (stylus && wetFrom == null && at > 0L) pendingInput.at = at
+                            if (stylus && at > 0L) pendingInput.at = at
                             if (t == ScanMarkupTool.RemoveMarks) {
                                 val hits = scanStrokesTouched(marksNow.strokes, x, y, removeRadius, aspect)
                                 if (!touched.containsAll(hits)) {
@@ -444,7 +430,6 @@ internal fun ScanMarkupScreen(vm: AppViewModel, index: Int, page: ScanPage) {
                             if (e.changes.count { it.pressed } >= 2) {
                                 // two fingers: the stroke is dropped, the page moves and zooms
                                 current = null
-                                wet.clear()
                                 drawing = false
                                 ring = null
                                 removing = emptySet()
@@ -489,12 +474,11 @@ internal fun ScanMarkupScreen(vm: AppViewModel, index: Int, page: ScanPage) {
                         if (inkNow && t != ScanMarkupTool.Text && points.count > 0) {
                             inkStats.strokes++
                             inkStats.samples += points.count
-                            if (front) inkStats.frontStrokes++
                             io.github.artcraftandroid.pdfcraft.engine.Diag.event(
                                 io.github.artcraftandroid.pdfcraft.engine.DiagArea.Scan, "markup_stroke",
                                 *scanInkStrokeDiag(
                                     if (t == ScanMarkupTool.RemoveMarks) "remove" else strokeOf(t).first.id, points.count, android.os.SystemClock.elapsedRealtime() - startedAt,
-                                    stylus, strokeFramesOver[0], front, widthFor(t),
+                                    stylus, strokeFramesOver[0], widthFor(t),
                                 ),
                             )
                         }
@@ -523,8 +507,6 @@ internal fun ScanMarkupScreen(vm: AppViewModel, index: Int, page: ScanPage) {
                             }
                             else -> current = null
                         }
-                        // the stroke is the screen's now: the front buffer is wiped
-                        if (front) wet.clear()
                         liveStylus = false
                     }
                 },
@@ -573,7 +555,6 @@ internal fun ScanMarkupScreen(vm: AppViewModel, index: Int, page: ScanPage) {
                     for ((i, t) in texts.withIndex()) drawTextBox(rect, t, i == selected && tool0 == ScanMarkupTool.Text)
                     if (lens != null) drawLoupe(image, rect, lens.first, lens.second)
                 }
-                if (ink && lowLatency) io.github.artcraftandroid.pdfcraft.ui.viewer.FrontBufferedInkOverlay(wet, wetCovers, Modifier.fillMaxSize())
             }
         }
         val colours = lab.markupColours && !bilevel

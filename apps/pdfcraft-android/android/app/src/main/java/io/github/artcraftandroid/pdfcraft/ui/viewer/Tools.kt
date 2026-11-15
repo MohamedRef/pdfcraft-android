@@ -886,13 +886,6 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
     var rayDeg by remember(doc) { mutableStateOf<Float?>(null) }
     var arcStartDeg by remember(doc) { mutableStateOf(0f) }
     var protractorReadout by remember(doc) { mutableStateOf<Float?>(null) }
-    // Low-latency wet ink (#128), only with the setting on.
-    val wet = remember(doc) { WetInk() }
-    var wetLast by remember(doc) { mutableStateOf<Offset?>(null) }
-    fun endWet() {
-        if (wetLast != null) wet.clear()
-        wetLast = null
-    }
     // The zoom writing box (#130): a frame on the page, written in through a magnified pad.
     var padSize by remember(doc) { mutableStateOf(androidx.compose.ui.geometry.Size.Zero) }
     var overlayTarget by remember(doc) { mutableStateOf(0) }
@@ -1229,8 +1222,6 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                     it.add(Offset(at.x, at.y), inkSampleTimeMs, pressure)
                     strokes.add(it)
                 }
-                wetLast = if (prefs.lowLatencyInk && doc.controller.inkShapeMode == InkShapeMode.Freehand &&
-                    wetInkEligible(inkStyle, appearance.opacity)) rulerPoint(p) else null
             },
             onMove = { raw, pressure, _ ->
                 val p = if (current != null) rulerPoint(raw) else raw
@@ -1254,14 +1245,8 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                     // page edge on lift, never pinned along the border (#75).
                     val at = doc.viewer.screenToPageUnclamped(s.page, p) ?: return@toolGestures
                     s.add(Offset(at.x, at.y), inkSampleTimeMs, pressure)
-                    val inputAt = if (s.stylus) penTracker.timeMs else 0L
-                    if (wetLast == null) pendingInput.at = inputAt
-                    wetLast?.let { from ->
-                        // the width the model gave this sample: the fast path draws the same line (#569)
-                        val w = inkStylePointWidths(listOf(s.scales.last()), s.appearance.width, s.appearance.style).first()
-                        wet.segment(WetSegment(from, p, w * doc.viewer.pixelsPerPoint(s.page), s.appearance.argb or 0xFF000000.toInt(), inputAt))
-                        wetLast = p
-                    }
+                    // the newest pen sample a draw has not shown yet (#128)
+                    pendingInput.at = if (s.stylus) penTracker.timeMs else 0L
                     return@toolGestures
                 }
                 val at = doc.viewer.screenToPage(p, nearest = true) ?: return@toolGestures
@@ -1276,7 +1261,6 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                 }
             },
             onUp = { p, _ ->
-                endWet()
                 if (doc.controller.lassoMode) {
                     finishLasso(p)
                     return@toolGestures
@@ -1402,7 +1386,6 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                 }
             },
             onCancel = {
-                endWet()
                 if (doc.controller.lassoMode) {
                     if (moving) {
                         lassoDrag.end(selected.size, savedSelected.size, moved = false)
@@ -1665,11 +1648,10 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                 }
             }
         }
-        if (prefs.lowLatencyInk) FrontBufferedInkOverlay(wet, doc.controller.wetCovers, Modifier.fillMaxSize())
         if (doc.controller.zoomBoxOn) {
             ZoomWritingPad(
                 doc, prefs,
-                modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(ZOOM_PAD_HEIGHT).coversWetInk(doc.controller.wetCovers)
+                modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(ZOOM_PAD_HEIGHT)
                     .onSizeChanged { padSize = androidx.compose.ui.geometry.Size(it.width.toFloat(), it.height.toFloat()) },
                 padSize = padSize,
                 drafts = strokes,
