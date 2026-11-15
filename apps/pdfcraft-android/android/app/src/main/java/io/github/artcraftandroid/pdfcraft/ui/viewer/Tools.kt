@@ -277,6 +277,17 @@ internal fun finishInkStroke(s: InkStroke, tuning: PenTuning) {
     if (s.stylus) d.stats?.let { tuning.learn(it.raw.toList()) }
 }
 
+/**
+ * The opacity of the tail drawn from [s]'s last point to the pen: a pencil's is lightened by the
+ * ink density it is laying down, so a light pencil line is not led by a solid dark tip (#605).
+ */
+internal fun inkTailOpacity(s: InkStroke): Float = inkTailOpacity(s.appearance.opacity, s.densities.lastOrNull())
+
+internal fun inkTailOpacity(opacity: Float, density: Float?): Float {
+    val o = opacity.takeIf { it.isFinite() }?.coerceIn(0f, 1f) ?: 1f
+    return o * (density?.takeIf { it.isFinite() }?.coerceIn(0.05f, 1f) ?: 1f)
+}
+
 /** Whether [s] is a highlighter stroke that "Straighten lines" ([on]) draws straight (#569). */
 internal fun inkStraightened(s: InkStroke, on: Boolean): Boolean =
     on && s.shapeMode == InkShapeMode.Freehand && s.appearance.style == InkStyle.Highlighter && s.points.size >= 2
@@ -686,7 +697,7 @@ private fun ZoomWritingPad(
                     val last = s.points.lastOrNull() ?: return@let
                     val tail = inkTailPoints(origin + last * m, s.penTip?.let { origin + it * m }, null)
                     val width = inkStylePointWidths(listOf(s.scales.lastOrNull() ?: 1f), s.appearance.width, s.appearance.style).first()
-                    drawInkTail(tail, Color(s.appearance.argb), s.appearance.opacity, width * m, s.appearance.style == InkStyle.Highlighter)
+                    drawInkTail(tail, Color(s.appearance.argb), inkTailOpacity(s), width * m, s.appearance.style == InkStyle.Highlighter)
                 }
                 // The advance zone: lifting the pen here moves the box on.
                 drawRect(Color(0xFF2E7DFF).copy(alpha = 0.07f), Offset(size.width * 0.8f, 0f), androidx.compose.ui.geometry.Size(size.width * 0.2f, size.height))
@@ -1719,7 +1730,7 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                 val width = inkStylePointWidths(listOf(s.scales.lastOrNull() ?: 1f), s.appearance.width, s.appearance.style).first()
                 val pageRect = doc.viewer.pageRectOnScreen(s.page)
                 clipRect(pageRect.left, pageRect.top, pageRect.right, pageRect.bottom) {
-                    drawInkTail(tail, Color(s.appearance.argb), s.appearance.opacity, width * doc.viewer.pixelsPerPoint(s.page), s.appearance.style == InkStyle.Highlighter)
+                    drawInkTail(tail, Color(s.appearance.argb), inkTailOpacity(s), width * doc.viewer.pixelsPerPoint(s.page), s.appearance.style == InkStyle.Highlighter)
                 }
             }
             // the polygon or connected lines placed so far, with a dot on each point

@@ -53,6 +53,10 @@ internal class PenTuning(private val prefs: SharedPreferences) {
         if (prefs.getInt(MODEL_KEY, 1) < MODEL) {
             val e = prefs.edit()
             InkStyle.entries.forEach { style -> KEYS.forEach { e.remove(key(style, it)) } }
+            // and the Jetpack Ink trial is switched off again: it closed the app on its first
+            // stroke up to 0.0.36-beta, so the switch was left on without ever having drawn, and
+            // left on it would draw instead of the pens this model fixes
+            e.remove("jetpack")
             e.putInt(MODEL_KEY, MODEL).apply()
         }
     }
