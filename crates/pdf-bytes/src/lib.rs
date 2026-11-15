@@ -65,6 +65,11 @@ pub fn joined(source: &PdfBytes, tail: &[u8]) -> PdfBytes {
 /// open so [`PdfSource::appended`] can map the same inode again beneath an appended revision.
 #[derive(Debug)]
 struct ManagedMap {
+    /// A lent file's mapping guarded against the file being cut short (#476). Declared first, so
+    /// it is unregistered before the mapping goes.
+    #[cfg(any(target_os = "android", target_os = "linux"))]
+    #[allow(dead_code)]
+    guard: Option<lent_guard::Guarded>,
     map: memmap2::Mmap,
     #[cfg_attr(not(any(target_os = "android", target_os = "linux")), allow(dead_code))]
     file: File,
@@ -168,7 +173,13 @@ fn read_private_bounded(
     }
     if metadata.len() >= 1024 * 1024 && root.is_some_and(|root| managed_private_file(path, root, &metadata)) {
         if let Ok(map) = map(&file) {
-            return Ok(Arc::new(ManagedMap { map, file, lent: None }));
+            return Ok(Arc::new(ManagedMap {
+                #[cfg(any(target_os = "android", target_os = "linux"))]
+                guard: None,
+                map,
+                file,
+                lent: None,
+            }));
         }
     }
     if metadata.is_file() && metadata.len() > owned_cap {
@@ -298,7 +309,8 @@ pub fn read_lent_descriptor(fd: i32, cap: u64) -> io::Result<PdfBytes> {
             return Err(io::Error::new(io::ErrorKind::InvalidData, "the file changed while it was mapped"));
         }
         LENT.lock().unwrap_or_else(std::sync::PoisonError::into_inner).push(Arc::downgrade(&token));
-        return Ok(Arc::new(ManagedMap { map, file, lent: Some(token) }));
+        let guard = Some(lent_guard::guard(map.as_ptr(), map.len(), token.dev, token.ino));
+        return Ok(Arc::new(ManagedMap { guard, map, file, lent: Some(token) }));
     }
     let mut bytes = vec![0u8; len as usize];
     // positional reads: the caller's descriptor shares this one's file position
@@ -339,6 +351,180 @@ mod lent {
     }
 }
 
+/// The fourth audited unsafe boundary (#476): a lent file another app cuts short while it is
+/// mapped. Reading a mapped page past the file's new end raises `SIGBUS`, which would end the
+/// process. Every mapping of a lent file registers its address range here; a `SIGBUS` inside one
+/// of them is answered by putting a page of zeros where the lost page was, recording the file as
+/// changed ([`lent_inode_changed`]) and returning, so the read finishes with zeros instead of a
+/// crash. The app sees the record and opens the document again. A `SIGBUS` anywhere else goes to
+/// the handler that was there before, so other faults end the process exactly as they did.
+#[cfg(any(target_os = "android", target_os = "linux"))]
+#[allow(unsafe_code)]
+mod lent_guard {
+    use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
+    use std::sync::Once;
+
+    /// At most this many lent mappings are guarded at once; a document holds one or two.
+    const SLOTS: usize = 64;
+    /// The lent files recorded as changed (dev, ino), oldest first overwritten.
+    const CHANGED: usize = 16;
+
+    struct Slot {
+        start: AtomicUsize,
+        end: AtomicUsize,
+        dev: AtomicU64,
+        ino: AtomicU64,
+    }
+    #[allow(clippy::declare_interior_mutable_const)]
+    const EMPTY: Slot = Slot { start: AtomicUsize::new(0), end: AtomicUsize::new(0), dev: AtomicU64::new(0), ino: AtomicU64::new(0) };
+    static RANGES: [Slot; SLOTS] = [EMPTY; SLOTS];
+
+    struct Changed {
+        set: AtomicBool,
+        dev: AtomicU64,
+        ino: AtomicU64,
+    }
+    #[allow(clippy::declare_interior_mutable_const)]
+    const NONE: Changed = Changed { set: AtomicBool::new(false), dev: AtomicU64::new(0), ino: AtomicU64::new(0) };
+    static CHANGES: [Changed; CHANGED] = [NONE; CHANGED];
+    static NEXT_CHANGE: AtomicUsize = AtomicUsize::new(0);
+
+    static PAGE: AtomicUsize = AtomicUsize::new(0);
+    static INSTALL: Once = Once::new();
+    static INSTALLED: AtomicBool = AtomicBool::new(false);
+    /// The `SIGBUS` action before ours, written once before ours is installed.
+    static mut PREVIOUS: std::mem::MaybeUninit<libc::sigaction> = std::mem::MaybeUninit::uninit();
+
+    /// A registered range; unregistered when dropped.
+    #[derive(Debug)]
+    pub(crate) struct Guarded(Option<usize>);
+
+    impl Drop for Guarded {
+        fn drop(&mut self) {
+            if let Some(i) = self.0 {
+                // end first: a range whose end is 0 matches no address
+                RANGES[i].end.store(0, Ordering::SeqCst);
+                RANGES[i].start.store(0, Ordering::SeqCst);
+            }
+        }
+    }
+
+    /// Guard `len` bytes at `start`, which map the lent file `dev`/`ino`. When the handler cannot
+    /// be installed or every slot is taken, the range is not guarded and a fault crashes as before.
+    pub(crate) fn guard(start: *const u8, len: usize, dev: u64, ino: u64) -> Guarded {
+        if len == 0 || !install() {
+            return Guarded(None);
+        }
+        let start = start as usize;
+        let Some(end) = start.checked_add(len) else { return Guarded(None) };
+        for (i, slot) in RANGES.iter().enumerate() {
+            // claim a free slot by its start; the end is published last, so a half-written slot
+            // matches nothing
+            if slot.start.compare_exchange(0, start, Ordering::SeqCst, Ordering::SeqCst).is_ok() {
+                slot.dev.store(dev, Ordering::SeqCst);
+                slot.ino.store(ino, Ordering::SeqCst);
+                slot.end.store(end, Ordering::SeqCst);
+                return Guarded(Some(i));
+            }
+        }
+        Guarded(None)
+    }
+
+    /// Whether a guarded mapping of `dev`/`ino` lost pages because the file was cut short.
+    pub(crate) fn changed(dev: u64, ino: u64) -> bool {
+        CHANGES.iter().any(|c| c.set.load(Ordering::SeqCst) && c.dev.load(Ordering::SeqCst) == dev && c.ino.load(Ordering::SeqCst) == ino)
+    }
+
+    fn install() -> bool {
+        INSTALL.call_once(|| {
+            // SAFETY: sysconf has no preconditions.
+            let page = unsafe { libc::sysconf(libc::_SC_PAGESIZE) };
+            let Some(page) = usize::try_from(page).ok().filter(|p| p.is_power_of_two()) else { return };
+            PAGE.store(page, Ordering::SeqCst);
+            // SAFETY: a zeroed sigaction is a valid value; the previous action is written into
+            // PREVIOUS before our handler can run, and never again.
+            unsafe {
+                let mut ours: libc::sigaction = std::mem::zeroed();
+                ours.sa_sigaction = on_sigbus as *const () as usize;
+                ours.sa_flags = libc::SA_SIGINFO | libc::SA_ONSTACK | libc::SA_RESTART;
+                libc::sigemptyset(&mut ours.sa_mask);
+                let previous = &raw mut PREVIOUS;
+                if libc::sigaction(libc::SIGBUS, &ours, (*previous).as_mut_ptr()) == 0 {
+                    INSTALLED.store(true, Ordering::SeqCst);
+                }
+            }
+        });
+        INSTALLED.load(Ordering::SeqCst)
+    }
+
+    /// Only async-signal-safe work: atomics, `mmap` and the previous handler.
+    extern "C" fn on_sigbus(sig: libc::c_int, info: *mut libc::siginfo_t, context: *mut libc::c_void) {
+        // SAFETY: the kernel passes a valid siginfo for a handler installed with SA_SIGINFO.
+        let addr = if info.is_null() { 0 } else { unsafe { (*info).si_addr() as usize } };
+        let page = PAGE.load(Ordering::SeqCst);
+        if addr != 0 && page != 0 {
+            for slot in RANGES.iter() {
+                let end = slot.end.load(Ordering::SeqCst);
+                let start = slot.start.load(Ordering::SeqCst);
+                if end == 0 || addr < start || addr >= end {
+                    continue;
+                }
+                let at = addr & !(page - 1);
+                // SAFETY: `at` is a page of a mapping this crate made and still owns (its slot is
+                // registered until the mapping is dropped); a private anonymous page replaces the
+                // file's lost page within that mapping, readable like the rest of it.
+                let zero = unsafe {
+                    libc::mmap(at as *mut libc::c_void, page, libc::PROT_READ, libc::MAP_PRIVATE | libc::MAP_ANONYMOUS | libc::MAP_FIXED, -1, 0)
+                };
+                if zero as usize == at {
+                    let i = NEXT_CHANGE.fetch_add(1, Ordering::SeqCst) % CHANGED;
+                    CHANGES[i].set.store(false, Ordering::SeqCst);
+                    CHANGES[i].dev.store(slot.dev.load(Ordering::SeqCst), Ordering::SeqCst);
+                    CHANGES[i].ino.store(slot.ino.load(Ordering::SeqCst), Ordering::SeqCst);
+                    CHANGES[i].set.store(true, Ordering::SeqCst);
+                    return;
+                }
+                break;
+            }
+        }
+        // not ours: what was there before
+        // SAFETY: PREVIOUS was written before this handler was installed and is only read here.
+        unsafe {
+            let previous: *const std::mem::MaybeUninit<libc::sigaction> = &raw const PREVIOUS;
+            let previous = (*previous).assume_init_ref();
+            let handler = previous.sa_sigaction;
+            if handler == libc::SIG_DFL || handler == libc::SIG_IGN {
+                // let the fault happen again with the default action, which ends the process
+                let mut default: libc::sigaction = std::mem::zeroed();
+                default.sa_sigaction = libc::SIG_DFL;
+                libc::sigemptyset(&mut default.sa_mask);
+                libc::sigaction(libc::SIGBUS, &default, std::ptr::null_mut());
+                return;
+            }
+            if previous.sa_flags & libc::SA_SIGINFO != 0 {
+                let f: extern "C" fn(libc::c_int, *mut libc::siginfo_t, *mut libc::c_void) = std::mem::transmute(handler);
+                f(sig, info, context);
+            } else {
+                let f: extern "C" fn(libc::c_int) = std::mem::transmute(handler);
+                f(sig);
+            }
+        }
+    }
+}
+
+/// Whether a mapping of the lent file `dev`/`ino` (see [`read_lent_descriptor`]) lost pages
+/// because another app cut the file short while it was open (#476). Those pages read as zeros;
+/// the document should be opened again.
+#[cfg(any(target_os = "android", target_os = "linux"))]
+pub fn lent_inode_changed(dev: u64, ino: u64) -> bool {
+    lent_guard::changed(dev, ino)
+}
+
+#[cfg(not(any(target_os = "android", target_os = "linux")))]
+pub fn lent_inode_changed(_dev: u64, _ino: u64) -> bool {
+    false
+}
+
 impl PartialEq for dyn PdfSource {
     fn eq(&self, other: &Self) -> bool {
         self.as_slice() == other.as_slice()
@@ -363,6 +549,8 @@ mod splice {
         reserved: usize,
         /// A lent file's token (#453): this region maps that file's pages too.
         _lent: Option<std::sync::Arc<super::LentInode>>,
+        /// Those pages guarded against the file being cut short (#476).
+        guard: Option<super::lent_guard::Guarded>,
     }
     // SAFETY: the region is read-only for its whole life and owned by this value alone.
     unsafe impl Send for Spliced {}
@@ -397,6 +585,8 @@ mod splice {
     }
     impl Drop for Spliced {
         fn drop(&mut self) {
+            // unguarded before the region goes, so its addresses are never left registered
+            drop(self.guard.take());
             // SAFETY: the region was mapped by `append` with exactly this base and length.
             unsafe { libc::munmap(self.ptr.as_ptr().cast(), self.reserved) };
         }
@@ -445,7 +635,8 @@ mod splice {
         if unsafe { libc::mprotect(base, reserved, libc::PROT_READ) } != 0 {
             return fail(base);
         }
-        Some(Spliced { ptr: NonNull::new(base.cast())?, len: prefix + tail.len(), reserved, _lent: lent })
+        let guard = lent.as_ref().map(|l| super::lent_guard::guard(base.cast::<u8>(), file_span, l.dev, l.ino));
+        Some(Spliced { ptr: NonNull::new(base.cast())?, len: prefix + tail.len(), reserved, _lent: lent, guard })
     }
 }
 
@@ -611,7 +802,7 @@ mod tests {
         let file = File::open(&path).unwrap();
         let map = map_managed_inode(&file).unwrap();
         std::fs::OpenOptions::new().append(true).open(&path).unwrap().write_all(b"x").unwrap();
-        let managed: PdfBytes = Arc::new(ManagedMap { map, file, lent: None });
+        let managed: PdfBytes = Arc::new(ManagedMap { guard: None, map, file, lent: None });
         assert!(managed.appended(b"tail").is_none());
         let joined_bytes = joined(&managed, b"tail");
         assert!(!joined_bytes.is_mapped());
@@ -648,6 +839,47 @@ mod tests {
         assert_eq!(&spliced[original.len()..], b"\nrevision 2\n%%EOF\n");
         drop(source);
         assert!(lent_inode_in_use(dev, ino), "the spliced revision still maps the file");
+        drop(spliced);
+        assert!(!lent_inode_in_use(dev, ino));
+    }
+
+    /// #476: another app cuts a lent file short while it is mapped. Reading the lost pages
+    /// gives zeros instead of ending the process with SIGBUS, and the file is reported changed.
+    /// Pages still in the file read as before.
+    #[test]
+    fn a_lent_file_cut_short_while_mapped_reads_zeros_and_is_reported() {
+        use std::os::fd::AsRawFd;
+        use std::os::unix::fs::MetadataExt;
+        let fixture = Fixture::new();
+        let original: Vec<u8> = (0..3 * 1024 * 1024 + 7).map(|i| (i * 7 % 251 + 1) as u8).collect();
+        let path = fixture.write("shared/cut.pdf", &original);
+        let meta = std::fs::metadata(&path).unwrap();
+        let (dev, ino) = (meta.dev(), meta.ino());
+        let lent = File::open(&path).unwrap();
+        let source = read_lent_descriptor(lent.as_raw_fd(), 8 * 1024 * 1024).unwrap();
+        drop(lent);
+        assert!(source.is_mapped());
+        let spliced = source.appended(b"\nrevision 2\n%%EOF\n").expect("spliced");
+        assert_eq!(source.as_slice(), original);
+        assert!(!lent_inode_changed(dev, ino));
+        // an editor that writes in place keeps the first MiB and drops the rest
+        let kept = 1024 * 1024;
+        std::fs::OpenOptions::new().write(true).open(&path).unwrap().set_len(kept as u64).unwrap();
+        // without the guard each of these reads ends the test process with SIGBUS
+        assert_eq!(&source[..kept], &original[..kept], "pages still in the file read as before");
+        assert!(source[kept..].iter().all(|&b| b == 0), "lost pages read as zeros");
+        assert!(lent_inode_changed(dev, ino));
+        assert_eq!(&spliced[..kept], &original[..kept]);
+        assert!(spliced[kept..original.len()].iter().all(|&b| b == 0));
+        // the revision's bytes that share the file's last page went with it: the kernel drops a
+        // private copy of a page past the new end too, so they read as zeros or as written
+        let tail = &spliced[original.len()..];
+        assert!(tail.iter().zip(b"\nrevision 2\n%%EOF\n").all(|(&got, &want)| got == 0 || got == want));
+        // another lent file is not reported
+        let other = fixture.write("shared/other.pdf", &original);
+        let other_meta = std::fs::metadata(&other).unwrap();
+        assert!(!lent_inode_changed(other_meta.dev(), other_meta.ino()));
+        drop(source);
         drop(spliced);
         assert!(!lent_inode_in_use(dev, ino));
     }

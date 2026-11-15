@@ -17,4 +17,6 @@
     <string name="all_files_prompt_body">Para salvar direto em arquivos que outros apps abrem só para leitura, dê ao PdfCraft acesso a todos os arquivos nas configurações do Android, como outros leitores de PDF fazem.</string>
     <string name="all_files_allow">Permitir salvar nos arquivos originais</string>
     <string name="all_files_now_writable">Suas alterações agora são salvas no arquivo original.</string>
+    <string name="lent_file_changed">Outro app alterou este arquivo enquanto ele estava aberto aqui. Abra-o de novo para vê-lo como está agora. As alterações que não tinham sido salvas nele foram perdidas.</string>
+    <string name="lent_file_open_again">Abrir de novo</string>
 </resources>

@@ -17,4 +17,6 @@
     <string name="all_files_prompt_body">Pour enregistrer directement dans les fichiers que d’autres applis ouvrent en lecture seule, accordez à PdfCraft l’accès à tous les fichiers dans les paramètres Android, comme le font d’autres lecteurs PDF.</string>
     <string name="all_files_allow">Autoriser l’enregistrement dans les fichiers d’origine</string>
     <string name="all_files_now_writable">Vos modifications sont désormais enregistrées dans le fichier d’origine.</string>
+    <string name="lent_file_changed">Une autre app a modifié ce fichier pendant qu\'il était ouvert ici. Rouvrez-le pour le voir tel qu\'il est maintenant. Les modifications qui n\'y avaient pas été enregistrées sont perdues.</string>
+    <string name="lent_file_open_again">Rouvrir</string>
 </resources>

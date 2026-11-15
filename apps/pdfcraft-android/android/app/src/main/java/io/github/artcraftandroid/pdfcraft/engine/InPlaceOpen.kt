@@ -63,6 +63,8 @@ internal object InPlaceReason {
     const val EMPTY_OR_UNKNOWN_SIZE = "unknown_size"
     const val TOO_LARGE = "too_large"
     const val ENGINE_REFUSED = "engine_refused"
+    /** Lent for one visit (a chat or mail app's "Open with" or Share): copied so Recent can reopen it (#476). */
+    const val ONE_VISIT = "one_visit"
 }
 
 /** The largest file the engine opens (the same 512 MiB limit as a copied one). */
@@ -80,9 +82,12 @@ internal fun inPlaceRefusal(
     declaredLength: Long,
     statSize: Long,
     regular: Boolean,
+    lasting: Boolean = true,
 ): String? = when {
     !enabled -> InPlaceReason.SETTING_OFF
     !content -> InPlaceReason.NOT_CONTENT
+    // the owner's rule (#476): a file lent for one visit is copied, whatever its size
+    !lasting -> InPlaceReason.ONE_VISIT
     // a failed write-back may have damaged the original: its recovery copy opens instead
     pendingWriteBack -> InPlaceReason.PENDING_WRITE_BACK
     !regular -> InPlaceReason.NOT_REGULAR_FILE
@@ -92,6 +97,30 @@ internal fun inPlaceRefusal(
     statSize > MAX_IN_PLACE_BYTES -> InPlaceReason.TOO_LARGE
     else -> null
 }
+
+/**
+ * Whether PdfCraft can reach a document again later without the app that lent it (#476): it took
+ * lasting access to it ([persistedRead]), or All files access found its real file at [realPath]
+ * in shared storage that no other app owns. A file under an app's `Android/media`, `Android/data`
+ * or `Android/obb` folder (where a chat app keeps what it received) counts as lent for one visit:
+ * that app may delete it, so it is copied.
+ */
+internal fun lastingAccess(persistedRead: Boolean, realPath: String?): Boolean =
+    persistedRead || (realPath != null && !ownedByAnotherApp(realPath))
+
+/** Whether [path] is inside an app's own folder of shared storage (`…/Android/media/<app>/…`). */
+internal fun ownedByAnotherApp(path: String): Boolean = APP_OWNED_FOLDER.containsMatchIn(path)
+
+/** The file in a working folder that marks the copy of a file lent for one visit (#476). */
+internal const val ONE_VISIT_MARK = ".one_visit"
+
+/** Whether opening in place still keeps a working folder: a one-visit copy whose document is in Recent (#476). */
+internal fun keepsOneVisitCopy(inRecent: Boolean, marked: Boolean): Boolean = inRecent && marked
+
+private val APP_OWNED_FOLDER = Regex("""^/storage/[^/]+(/[0-9]+)?/Android/(media|data|obb)/""")
+
+/** How often an open in-place document asks whether another app cut its original short (#476). */
+internal const val LENT_WATCH_MS = 1000L
 
 /** How a save of an in-place document reaches its original (the log's `mode`). */
 internal enum class InPlaceWriteBack { Append, Full, AtClose }
