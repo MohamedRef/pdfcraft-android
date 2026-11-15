@@ -537,7 +537,19 @@ fn lent_descriptor_opens_in_place_and_saves_to_the_working_file() {
         std::fs::OpenOptions::new().append(true).open(&original).unwrap().write_all(&written[bytes.len()..]).unwrap();
         assert_eq!(session.render_page(id, 0, 1.0, None).unwrap().rgba, ordinary.render_page(expected.id, 0, 1.0, None).unwrap().rgba);
         session.close(id, true).unwrap();
-        assert!(!lent_file_in_use(meta.dev(), meta.ino()), "closing releases every mapping");
+        // Closing lets go of every mapping, but a render worker of the closed document drops its
+        // own copy of the bytes when it notices the pool is gone, a moment later: the app waits
+        // for that (up to 3 s, `waitUntilUnmapped` and `finishInPlace`) before rewriting the
+        // file, and so does this test. Since #589 an edited document's bytes extend the lent
+        // mapping instead of copying it, so its workers hold the mapping too.
+        let released = (0..60).any(|_| {
+            let free = !lent_file_in_use(meta.dev(), meta.ino());
+            if !free {
+                std::thread::sleep(std::time::Duration::from_millis(50));
+            }
+            free
+        });
+        assert!(released, "closing releases every mapping within 3 s");
         std::fs::write(&original, &bytes).unwrap();
         std::fs::remove_file(&working).unwrap();
     }
