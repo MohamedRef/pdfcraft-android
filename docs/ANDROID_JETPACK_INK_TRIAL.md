@@ -25,3 +25,7 @@ judged by the owner's hand, and its `stroke` log lines are the same as for any p
 ## The first stroke closed the app (0.0.35-beta)
 
 With the switch on, the first stroke closed the app (three times in the owner's 0.0.35-beta log, `IllegalArgumentException` from `MutableStrokeInputBatch.appendSingle`). The pressure was passed as the fifth positional argument of `MutableStrokeInputBatch.add`, which is the stroke's unit length (`strokeUnitLengthCm`), and Jetpack Ink refused it. The call now names its arguments, so the pressure goes where it belongs. Any later error from Jetpack Ink while drawing or on lift drops it for that stroke, which goes on as PdfCraft's own line, and is logged as `[error] ink jetpack_ink`. Jetpack Ink needs its native library, so this is not covered by the JVM tests; check it on a phone.
+
+## Switched off once after 0.0.36-beta (#604)
+
+The app still closed on the first Jetpack Ink stroke in the owner's 0.0.36-beta log (three times; #593 was merged after that build), so the trial has never drawn a stroke on his phone, and its switch was left on. The build after #602 turns the switch off once (with the Pen lab dials saved for the older pen model), so that PdfCraft's own pens, which #601 changes, are what he tests next. The switch is still in the Pen lab.

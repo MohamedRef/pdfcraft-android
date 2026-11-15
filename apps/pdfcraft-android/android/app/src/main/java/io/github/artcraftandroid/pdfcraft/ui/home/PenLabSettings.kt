@@ -52,6 +52,7 @@ import io.github.artcraftandroid.pdfcraft.ui.viewer.drawInkTail
 import io.github.artcraftandroid.pdfcraft.ui.viewer.finishInkStroke
 import io.github.artcraftandroid.pdfcraft.ui.viewer.inkStyleOpacity
 import io.github.artcraftandroid.pdfcraft.ui.viewer.inkStylePointWidths
+import io.github.artcraftandroid.pdfcraft.ui.viewer.inkTailOpacity
 import io.github.artcraftandroid.pdfcraft.ui.viewer.inkTailPoints
 import io.github.artcraftandroid.pdfcraft.ui.viewer.newInkStroke
 
@@ -135,7 +136,7 @@ internal fun PenLabSettings(vm: AppViewModel) {
                 if (s === writing && s.jetpack == null) {
                     val tail = inkTailPoints(s.points.last() * pxPerPt, s.penTip?.let { it * pxPerPt }, null)
                     val width = inkStylePointWidths(listOf(s.scales.lastOrNull() ?: 1f), s.appearance.width, s.appearance.style).first()
-                    drawInkTail(tail, Color(s.appearance.argb), s.appearance.opacity, width * pxPerPt, s.appearance.style == InkStyle.Highlighter)
+                    drawInkTail(tail, Color(s.appearance.argb), inkTailOpacity(s), width * pxPerPt, s.appearance.style == InkStyle.Highlighter)
                 }
             }
         }

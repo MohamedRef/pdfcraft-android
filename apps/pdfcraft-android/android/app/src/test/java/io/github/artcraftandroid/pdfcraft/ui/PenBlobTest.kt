@@ -11,6 +11,7 @@ import io.github.artcraftandroid.pdfcraft.ui.viewer.PenDynamics
 import io.github.artcraftandroid.pdfcraft.ui.viewer.PressureRange
 import io.github.artcraftandroid.pdfcraft.ui.viewer.PressureSource
 import io.github.artcraftandroid.pdfcraft.ui.viewer.inkStylePointWidths
+import io.github.artcraftandroid.pdfcraft.ui.viewer.inkTailOpacity
 import io.github.artcraftandroid.pdfcraft.ui.viewer.quantile
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -124,6 +125,14 @@ class PenBlobTest {
         // a pen that never gives a pressure writes at the middle of the range
         val dyn = PenDynamics(PenDials(0.5f, 1.5f, dampingMs = 0f), PressureSource.Pen, PressureRange(), 4f)
         assertEquals(1f, dyn.next(Offset.Zero, 0L, 0f), 1e-5f)
+    }
+
+    @Test fun aPencilsTailIsAsLightAsItsLine() {
+        assertEquals(0.35f, inkTailOpacity(1f, 0.35f), 1e-6f)
+        assertEquals(0.4f, inkTailOpacity(0.5f, 0.8f), 1e-6f)
+        // solid ink, and numbers that cannot be right, leave the pen's own opacity
+        assertEquals(0.7f, inkTailOpacity(0.7f, null), 1e-6f)
+        assertEquals(1f, inkTailOpacity(Float.NaN, Float.NaN), 1e-6f)
     }
 
     @Test fun smoothingDoesNotOvershootACorner() {
