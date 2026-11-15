@@ -162,7 +162,13 @@ class DocumentFiles(private val context: Context) {
      */
     fun lend(uri: Uri, enabled: Boolean): Pair<LentSource?, String?> {
         val dir = File(workDir, sha(uri.toString()))
-        val early = inPlaceRefusal(enabled, uri.scheme == ContentResolver.SCHEME_CONTENT, PendingWorkingCopy.isPending(dir), 0, -1, 1, true)
+        val content = uri.scheme == ContentResolver.SCHEME_CONTENT
+        // asked only when it matters: a content document with the setting on
+        val lasting = !enabled || !content || lastingAccess(
+            runCatching { resolver.persistedUriPermissions.any { it.uri == uri && it.isReadPermission } }.getOrDefault(false),
+            runCatching { directFile(uri)?.path }.getOrNull(),
+        )
+        val early = inPlaceRefusal(enabled, content, PendingWorkingCopy.isPending(dir), 0, -1, 1, true, lasting)
         if (early != null) return null to early
         val asset = openAsset(uri) ?: return null to InPlaceReason.NO_DESCRIPTOR
         var handed = false
@@ -281,15 +287,19 @@ class DocumentFiles(private val context: Context) {
      * With documents opened in place (#453), no copy is kept for later: remove every working
      * folder except those owing a write-back, those of [keep] (the open document and the other
      * tabs) and one written in the last few minutes (a document being opened right now). This
-     * also clears the copies earlier versions kept (#214). Returns how many folders and bytes went.
+     * also clears the copies earlier versions kept (#214). The copy of a file lent for one visit
+     * ([markOneVisit]) stays while its document is in [recent], so Recent can reopen it (#476).
+     * Returns how many folders and bytes went.
      */
-    fun removeKeptCopies(keep: Collection<String>): Pair<Int, Long> {
+    fun removeKeptCopies(keep: Collection<String>, recent: Collection<String> = emptyList()): Pair<Int, Long> {
         val wanted = keep.mapTo(HashSet()) { sha(it) }
+        val inRecent = recent.mapTo(HashSet()) { sha(it) }
         val settled = System.currentTimeMillis() - 10 * 60 * 1000L
         var count = 0
         var bytes = 0L
         workDir.listFiles()?.forEach { dir ->
             if (!dir.isDirectory || PendingWorkingCopy.isPending(dir) || dir.name in wanted || dir.lastModified() >= settled) return@forEach
+            if (keepsOneVisitCopy(dir.name in inRecent, File(dir, ONE_VISIT_MARK).exists())) return@forEach
             val size = dir.walkBottomUp().filter { it.isFile }.sumOf { it.length() }
             if (dir.deleteRecursively()) {
                 count++
@@ -412,6 +422,11 @@ class DocumentFiles(private val context: Context) {
             }
         } ?: false
     }.getOrDefault(false)
+
+    /** Mark [uri]'s working copy as the copy of a file lent for one visit, kept while it is in Recent (#476). */
+    fun markOneVisit(uri: Uri) {
+        runCatching { File(File(workDir, sha(uri.toString())), ONE_VISIT_MARK).createNewFile() }
+    }
 
     /**
      * The working copy made earlier for [uri], if there is one: the copy a pending write-back

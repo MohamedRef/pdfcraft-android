@@ -177,9 +177,10 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                     // are pruned, so a document whose grant goes keeps its copy
                     runCatching { files.releaseUnusedAccess(uris + tabUris + study.library.load().items.map { it.uri }, open) }
                     // copies of documents that left Recent go too (#42); opening in place keeps
-                    // none, and clears those earlier versions kept (#453)
+                    // none but the copies of files lent for one visit still in Recent (#476), and
+                    // clears those earlier versions kept (#453)
                     if (settings.openInPlace) {
-                        runCatching { files.removeKeptCopies(listOfNotNull(open) + tabUris) }.getOrNull()?.takeIf { it.first > 0 }?.let { (n, bytes) ->
+                        runCatching { files.removeKeptCopies(listOfNotNull(open) + tabUris, uris) }.getOrNull()?.takeIf { it.first > 0 }?.let { (n, bytes) ->
                             Diag.event(DiagArea.Open, "stale_copies_removed", "folders" to n, "bytes" to bytes)
                         }
                     } else {
@@ -368,6 +369,8 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             return@withContext OpenSource(lent.file, lent)
         }
         val file = io.github.artcraftandroid.pdfcraft.engine.OpenTiming.measure("provider_and_working_copy") { files.workingCopy(uri) }
+        // a chat or mail app's file: its copy stays while it is in Recent, which reopens it (#476)
+        if (reason == io.github.artcraftandroid.pdfcraft.engine.InPlaceReason.ONE_VISIT) files.markOneVisit(uri)
         io.github.artcraftandroid.pdfcraft.engine.OpenTiming.milestone("working_copy_ready", openStartedAt, bytes = file.length())
         Diag.event(DiagArea.Open, "open_source", "doc" to settings.diagDoc, "mode" to "copy", "reason" to reason, "bytes" to file.length())
         OpenSource(file)
