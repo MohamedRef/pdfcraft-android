@@ -21,6 +21,8 @@ internal sealed class DraftInkEdit {
      * the raw stroke back and takes the markup back; a second Undo then removes the stroke.
      */
     data class BecameMarkup(val index: Int, val stroke: InkStroke, val ownStep: Int) : DraftInkEdit()
+    /** The eraser over drafts: all of them [before] and after it, in paint order. */
+    data class Erased(val before: List<InkStroke>, val after: List<InkStroke>) : DraftInkEdit()
 }
 
 internal fun applyDraftInkEdit(strokes: SnapshotStateList<InkStroke>, edit: DraftInkEdit, forward: Boolean) {
@@ -35,6 +37,10 @@ internal fun applyDraftInkEdit(strokes: SnapshotStateList<InkStroke>, edit: Draf
         is DraftInkEdit.BecameMarkup -> {
             // Only the stroke's side; the caller undoes or redoes the document's markup step.
             if (forward) strokes.remove(edit.stroke) else strokes.add(edit.index.coerceIn(0, strokes.size), edit.stroke)
+        }
+        is DraftInkEdit.Erased -> {
+            strokes.clear()
+            strokes.addAll(if (forward) edit.after else edit.before)
         }
         is DraftInkEdit.Moved -> {
             val d = if (forward) edit.offset else -edit.offset

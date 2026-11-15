@@ -95,6 +95,12 @@ internal data class PressureRange(val lo: Float = 0f, val hi: Float = 1f) {
     fun stretch(raw: Float): Float {
         val p = raw.takeIf { it.isFinite() && it > 0f }?.coerceIn(0f, 1f) ?: return 1f
         if (!(hi - lo >= MIN_SPAN)) return p
+        // A narrow band is widened around its middle first (0.0.33 log: a light hand wrote at
+        // 0.07…0.15, stretched about ten times, so a touch more pressure jumped the line to its
+        // thickest). The stretch never multiplies the pen's pressure by more than about 2.6.
+        val span = maxOf(hi - lo, MIN_STRETCH_SPAN)
+        val lo = ((lo + hi - span) / 2f).coerceIn(0f, 1f - span)
+        val hi = lo + span
         // a band that starts at 0 or ends at 1 has no room beyond it: the unmeasured 0…1 stays as it is
         val low = if (lo > 0f) BAND_LOW else 0f
         val high = if (hi < 1f) BAND_HIGH else 1f
@@ -108,6 +114,8 @@ internal data class PressureRange(val lo: Float = 0f, val hi: Float = 1f) {
     companion object {
         /** A narrower band is not trusted: the stretch would turn sensor noise into width. */
         const val MIN_SPAN = 0.08f
+        /** The narrowest band stretched over [BAND_LOW]…[BAND_HIGH]: at most 0.9 / 0.35 ≈ 2.6 times the pen's own change. */
+        const val MIN_STRETCH_SPAN = 0.35f
         /** Where the measured band's ends land in the pen's range: its percentiles, 10 % and 90 %. */
         const val BAND_LOW = 0.1f
         const val BAND_HIGH = 0.9f

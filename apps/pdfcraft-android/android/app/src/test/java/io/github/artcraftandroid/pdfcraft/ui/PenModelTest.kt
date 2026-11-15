@@ -168,15 +168,31 @@ class PenModelTest {
         assertEquals(2000L, c.measuredAt)
         val r = c.range
         assertTrue(r.lo in 0.29f..0.33f && r.hi in 0.47f..0.51f)
-        // the band takes the middle of the pen's range: its ends land at 10 % and 90 %
-        assertEquals(PressureRange.BAND_LOW, r.stretch(r.lo), 1e-5f)
-        assertEquals(PressureRange.BAND_HIGH, r.stretch(r.hi), 1e-5f)
+        // the band takes the middle of the pen's range: a wide band's ends land at 10 % and 90 %
+        val wide = PressureRange(0.2f, 0.7f)
+        assertEquals(PressureRange.BAND_LOW, wide.stretch(0.2f), 1e-5f)
+        assertEquals(PressureRange.BAND_HIGH, wide.stretch(0.7f), 1e-5f)
         assertEquals(0.5f, r.stretch((r.lo + r.hi) / 2f), 1e-4f)
         // a short stroke and a pen with one fixed pressure measure nothing
         assertEquals(c, c.learn(listOf(0.4f, 0.4f), 3000L))
         assertEquals(c, c.learn(List(40) { 1f }, 3000L))
         // a too narrow band is not stretched
         assertEquals(0.42f, PressureRange(0.4f, 0.45f).stretch(0.42f), 1e-6f)
+    }
+
+    @Test fun aLightHandsNarrowBandIsNotStretchedIntoSuddenThickLines() {
+        // 0.0.33 log, Galaxy S24 Ultra: the hand wrote at 0.07…0.15, and 0.22 drew the thickest line
+        val r = PressureRange(0.07f, 0.15f)
+        val gain = (r.stretch(0.15f) - r.stretch(0.07f)) / (0.15f - 0.07f)
+        assertTrue(gain <= PressureRange.BAND_HIGH / PressureRange.MIN_STRETCH_SPAN + 1e-3f)
+        assertTrue(r.stretch(0.22f) < 0.65f)
+        // still more pressure, still a thicker line, never backwards
+        val steps = List(200) { r.stretch((it + 1) / 200f) }
+        assertTrue(steps.zipWithNext().all { (a, b) -> b > a })
+        // Fountain: the usual light and hard ends of the band stay within about twice each other
+        fun width(p: Float) = PenDynamics(PenDials.default(InkStyle.Fountain).copy(dampingMs = 0f, taperStart = 0f, nib = 0f, speedThin = 0f), PressureSource.Pen, r, penWidth).next(Offset.Zero, 0L, p)
+        assertTrue(width(0.15f) / width(0.07f) < 2.5f)
+        assertTrue(width(0.15f) > width(0.07f) * 1.2f)
     }
 
     @Test fun aLighterOrHarderTouchThanUsualStillChangesTheLine() {
