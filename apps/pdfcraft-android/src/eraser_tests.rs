@@ -130,3 +130,24 @@ fn a_page_can_be_drawn_without_the_ink_being_erased() {
     // nothing is hidden for good: the next ordinary render draws the ink again
     assert_eq!(dark(&mobile.render_page(doc.id, 0, 1.0, None).unwrap().rgba), inked);
 }
+
+/// #572: the Draw eraser's exact arguments (Android sends `erase_highlights` and whole gestures)
+/// are accepted, also on pressure ink saved with a width per point.
+#[test]
+fn the_draw_erasers_own_arguments_are_accepted() {
+    let fixture = Fixture::new();
+    let mobile = MobileSession::new();
+    let doc = mobile.open(fixture.0.to_string_lossy().to_string(), None).unwrap();
+    tool(&mobile, "comment_add", json!({
+        "doc": doc.id, "page": 1, "type": "ink", "strokes": [[[20, 20], [60, 60], [90, 90]]], "widths": [[1.0, 3.0, 2.0]],
+        "color": "#161616", "opacity": 1.0, "width": 2.0,
+    }));
+    let long: Vec<[f64; 2]> = (0..1617).map(|i| [10.0 + (i % 100) as f64, 10.0 + (i / 20) as f64]).collect();
+    for path in [json!([[20, 20]]), json!(long)] {
+        let out = mobile.execute("comment_erase".into(), json!({
+            "doc": doc.id, "page": 1, "path": path, "radius": 11.81, "erase_highlights": true,
+        }).to_string());
+        assert!(out.is_ok(), "{out:?}");
+    }
+    mobile.close(doc.id, true).unwrap();
+}
