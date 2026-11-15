@@ -120,6 +120,8 @@ internal class InkStroke(
     val shapeMode: InkShapeMode = InkShapeMode.Freehand,
     val dynamics: PenDynamics? = null,
     val stylus: Boolean = false,
+    /** How many dp one page point takes on screen while this stroke is drawn (the pen's speed is measured on the glass). */
+    dpPerPt: Float = 1f,
 ) {
     val points = mutableStateListOf<Offset>()
     val scales = mutableStateListOf<Float>()
@@ -128,9 +130,15 @@ internal class InkStroke(
     var widthVersion by mutableStateOf(0)
 
     /** Takes the tremor out of a freehand stroke's points ([PenDials.smoothing]). */
-    private val smoother = dynamics?.let { InkSmoother(it.smoothing) }
+    private val smoother = dynamics?.let { InkSmoother(it.smoothing, dpPerPt) }
     private var lastTimeMs = 0L
     private var lastPressure = 1f
+
+    /**
+     * Where the pen is now, in page points: smoothing keeps the line's last point a little behind
+     * it, and the tail drawn while writing fills that gap so the ink always reaches the pen.
+     */
+    val penTip: Offset? get() = smoother?.tip
 
     /** Adds a sample: [p] in page points at [timeMs] with the pen's [pressure]. */
     fun add(p: Offset, timeMs: Long, pressure: Float) {
@@ -159,8 +167,12 @@ internal class InkStroke(
  * A new ink stroke (#569): a freehand stroke gets the pen model with [tuning]'s dials for its
  * style, pressure from the pen (stretched by the measured range) or, for a finger, from speed. A
  * shape keeps the pen's constant width. Its numbers go to the next `stroke` log line.
+ *
+ * [dpPerPt] is how many dp one page point takes on screen where the stroke is drawn (the page at
+ * its zoom, the zoom pad, the Pen lab's strip): the pen's speed is measured on the glass, so the
+ * same hand movement gives the same line wherever and however large the page is shown.
  */
-internal fun newInkStroke(page: Int, appearance: InkAppearance, stylus: Boolean, mode: InkShapeMode, tuning: PenTuning): InkStroke {
+internal fun newInkStroke(page: Int, appearance: InkAppearance, stylus: Boolean, mode: InkShapeMode, tuning: PenTuning, dpPerPt: Float): InkStroke {
     if (mode != InkShapeMode.Freehand) {
         PenDiag.inkStroke(null)
         return InkStroke(page, appearance, false, mode, null, stylus)
@@ -168,11 +180,12 @@ internal fun newInkStroke(page: Int, appearance: InkAppearance, stylus: Boolean,
     val style = appearance.style
     val dials = tuning.dials(style)
     val source = if (stylus) PressureSource.Pen else PressureSource.Speed
-    val stats = PenStrokeStats(style, source, appearance.width, dials, appearance.opacity)
+    val onGlass = dpPerPt.takeIf { it.isFinite() && it > 0f } ?: 1f
+    val stats = PenStrokeStats(style, source, appearance.width, dials, appearance.opacity, onGlass)
     val range = if (stylus) tuning.calibration.range else PressureRange()
-    val dynamics = PenDynamics(dials, source, range, appearance.width.takeIf { it.isFinite() && it > 0f } ?: 1f, stats)
+    val dynamics = PenDynamics(dials, source, range, appearance.width.takeIf { it.isFinite() && it > 0f } ?: 1f, stats, onGlass)
     PenDiag.inkStroke(stats)
-    return InkStroke(page, appearance, dials.varies && style != InkStyle.Highlighter, mode, dynamics, stylus)
+    return InkStroke(page, appearance, dials.varies && style != InkStyle.Highlighter, mode, dynamics, stylus, onGlass)
 }
 
 /** A freehand stroke is lifted: its end taper goes on, and a pen stroke's pressures measure the pen's range (#569). */
@@ -494,7 +507,8 @@ private fun ZoomWritingPad(
     modifier: Modifier,
     padSize: androidx.compose.ui.geometry.Size,
     drafts: List<InkStroke>,
-    newStroke: (page: Int, pressure: Float, isStylus: Boolean, at: Offset) -> InkStroke,
+    /** [dpPerPt]: how many dp one page point takes on the pad, where the pen moves. */
+    newStroke: (page: Int, pressure: Float, isStylus: Boolean, at: Offset, dpPerPt: Float) -> InkStroke,
     finishStroke: (InkStroke) -> Unit,
 ) {
     val c = pdfColors
@@ -503,6 +517,8 @@ private fun ZoomWritingPad(
     // a short moment after the box settles; until then the whole-page image stands in.
     var sharp by remember(doc) { mutableStateOf<Pair<PadRender, androidx.compose.ui.graphics.ImageBitmap>?>(null) }
     var sharpGen by remember(doc) { mutableStateOf<Long?>(null) }
+    // the stroke being written on the pad, for its tail to the pen
+    var writing by remember(doc) { mutableStateOf<InkStroke?>(null) }
     val zbNow = ctl.zoomBox
     val wanted = zbNow?.let { zb -> doc.viewer.pages.getOrNull(zb.page)?.let { zb.padRender(padSize, it.width, it.height) } }
     val gen = zbNow?.let { doc.pageGenerations.of(it.page) }
@@ -526,7 +542,8 @@ private fun ZoomWritingPad(
                 val zb = ctl.zoomBox ?: return@awaitEachGesture
                 val pad = androidx.compose.ui.geometry.Size(size.width.toFloat(), size.height.toFloat())
                 inkSampleTimeMs = down.uptimeMillis
-                val s = newStroke(zb.page, down.pressure, stylus, zb.toPage(down.position, pad))
+                val s = newStroke(zb.page, down.pressure, stylus, zb.toPage(down.position, pad), zb.magnification(pad) / density)
+                writing = s
                 var lastPressure = down.pressure
                 while (true) {
                     val event = awaitPointerEvent()
@@ -542,6 +559,7 @@ private fun ZoomWritingPad(
                     if (!change.pressed) break
                 }
                 finishStroke(s)
+                writing = null
                 val last = s.points.lastOrNull() ?: return@awaitEachGesture
                 val page = doc.viewer.pages.getOrNull(zb.page) ?: return@awaitEachGesture
                 if (ctl.zoomBox == zb && zb.inAdvanceZone(last.x)) {
@@ -580,6 +598,13 @@ private fun ZoomWritingPad(
                 }
                 for (s in drafts) if (s.page == zb.page) {
                     drawInkStroke(s.paths.runs(s), Color(s.appearance.argb), s.appearance.opacity, s.appearance.style == InkStyle.Highlighter, origin, m, pageRect)
+                }
+                // the tail to the pen while a stroke is written on the pad: smoothing keeps the line a little behind it
+                writing?.takeIf { it.page == zb.page }?.let { s ->
+                    val last = s.points.lastOrNull() ?: return@let
+                    val tail = inkTailPoints(origin + last * m, s.penTip?.let { origin + it * m }, null)
+                    val width = inkStylePointWidths(listOf(s.scales.lastOrNull() ?: 1f), s.appearance.width, s.appearance.style).first()
+                    drawInkTail(tail, Color(s.appearance.argb), s.appearance.opacity, width * m)
                 }
                 // The advance zone: lifting the pen here moves the box on.
                 drawRect(Color(0xFF2E7DFF).copy(alpha = 0.07f), Offset(size.width * 0.8f, 0f), androidx.compose.ui.geometry.Size(size.width * 0.2f, size.height))
@@ -1234,7 +1259,10 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                     inkStyleOpacity(pen.opacity, inkStyle),
                     pen.width, prefs.author.ifBlank { null }, inkStyle,
                 )
-                current = newInkStroke(at.page, appearance, isStylus, doc.controller.inkShapeMode, prefs.penTuning).also {
+                current = newInkStroke(
+                    at.page, appearance, isStylus, doc.controller.inkShapeMode, prefs.penTuning,
+                    dpPerPt = doc.viewer.pixelsPerPoint(at.page) / density.density,
+                ).also {
                     it.add(Offset(at.x, at.y), inkSampleTimeMs, pressure)
                     strokes.add(it)
                 }
@@ -1516,22 +1544,22 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
             }
             // how long the drafts took to draw this frame, and the time since the last frame (#128)
             if (drawStart != 0L) System.nanoTime().let { now -> InkLatency.stroke.drawn(now, (now - drawStart) / 1000) }
-            // A predicted tail on the stroke being drawn (pen only): where the pen will be about
-            // one frame from now, from its real speed. Drawn only, never saved; the next real
-            // sample replaces it.
-            current?.takeIf { it.stylus && it.shapeMode == InkShapeMode.Freehand && it.preview == null }?.let { s ->
+            // The tail of the stroke being drawn: from the line's last point on to the pen, which
+            // smoothing keeps a little ahead of it (#569), and for a pen on to where it will be
+            // about one frame from now, from its real speed. Drawn only, never saved; the next
+            // real sample replaces it.
+            current?.takeIf { it.shapeMode == InkShapeMode.Freehand && it.preview == null }?.let { s ->
                 val last = s.points.lastOrNull() ?: return@let
-                val (dx, dy) = StylusLog.pen.predictedOffset(android.os.SystemClock.uptimeMillis()) ?: return@let
-                val from = doc.viewer.pageToScreen(s.page, last.x, last.y)
+                val tail = inkTailPoints(
+                    doc.viewer.pageToScreen(s.page, last.x, last.y),
+                    s.penTip?.let { doc.viewer.pageToScreen(s.page, it.x, it.y) },
+                    if (s.stylus) StylusLog.pen.predictedOffset(android.os.SystemClock.uptimeMillis()) else null,
+                )
+                if (tail.isEmpty()) return@let
                 val width = inkStylePointWidths(listOf(s.scales.lastOrNull() ?: 1f), s.appearance.width, s.appearance.style).first()
                 val pageRect = doc.viewer.pageRectOnScreen(s.page)
                 clipRect(pageRect.left, pageRect.top, pageRect.right, pageRect.bottom) {
-                    drawLine(
-                        Color(s.appearance.argb).copy(alpha = s.appearance.opacity),
-                        from, Offset(from.x + dx, from.y + dy),
-                        strokeWidth = width * doc.viewer.pixelsPerPoint(s.page),
-                        cap = androidx.compose.ui.graphics.StrokeCap.Round,
-                    )
+                    drawInkTail(tail, Color(s.appearance.argb), s.appearance.opacity, width * doc.viewer.pixelsPerPoint(s.page))
                 }
             }
             // the polygon or connected lines placed so far, with a dot on each point
@@ -1671,10 +1699,10 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                     .onSizeChanged { padSize = androidx.compose.ui.geometry.Size(it.width.toFloat(), it.height.toFloat()) },
                 padSize = padSize,
                 drafts = strokes,
-                newStroke = { page, pressure, isStylus, at ->
+                newStroke = { page, pressure, isStylus, at, dpPerPt ->
                     val pen = prefs.penSettings(prefs.inkStyle)
                     val appearance = InkAppearance(pen.argb, inkStyleOpacity(pen.opacity, prefs.inkStyle), pen.width, prefs.author.ifBlank { null }, prefs.inkStyle)
-                    newInkStroke(page, appearance, isStylus, InkShapeMode.Freehand, prefs.penTuning).also {
+                    newInkStroke(page, appearance, isStylus, InkShapeMode.Freehand, prefs.penTuning, dpPerPt).also {
                         it.add(at, inkSampleTimeMs, pressure)
                         strokes.add(it)
                     }

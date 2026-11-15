@@ -1628,7 +1628,7 @@
     <string name="pen_lab_curve">Pressure curve</string>
     <string name="pen_lab_group_speed">Speed</string>
     <string name="pen_lab_speed_thin">Thinner when fast</string>
-    <string name="pen_lab_speed_ref">Fast speed (pt/s)</string>
+    <string name="pen_lab_speed_ref">Fast speed (dp/s)</string>
     <string name="pen_lab_group_tip">Tip</string>
     <string name="pen_lab_nib">Flat nib</string>
     <string name="pen_lab_nib_angle">Nib angle (°)</string>

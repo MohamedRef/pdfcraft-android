@@ -42,8 +42,11 @@ import io.github.artcraftandroid.pdfcraft.ui.viewer.InkStroke
 import io.github.artcraftandroid.pdfcraft.ui.viewer.InkStyle
 import io.github.artcraftandroid.pdfcraft.ui.viewer.PenDials
 import io.github.artcraftandroid.pdfcraft.ui.viewer.drawInkStroke
+import io.github.artcraftandroid.pdfcraft.ui.viewer.drawInkTail
 import io.github.artcraftandroid.pdfcraft.ui.viewer.finishInkStroke
 import io.github.artcraftandroid.pdfcraft.ui.viewer.inkStyleOpacity
+import io.github.artcraftandroid.pdfcraft.ui.viewer.inkStylePointWidths
+import io.github.artcraftandroid.pdfcraft.ui.viewer.inkTailPoints
 import io.github.artcraftandroid.pdfcraft.ui.viewer.newInkStroke
 
 /** The strip's scale: one point of ink is this many dp, about a page at 150 %. */
@@ -62,6 +65,8 @@ internal fun PenLabSettings(vm: AppViewModel) {
     var style by remember { mutableStateOf(prefs.inkStyle) }
     val d = tuning.dials(style)
     val strokes = remember { mutableStateListOf<InkStroke>() }
+    // the stroke being written on the strip, for its tail to the pen
+    var writing by remember { mutableStateOf<InkStroke?>(null) }
 
     SettingsNote(stringResource(R.string.pen_lab_body))
     SettingsChoice(
@@ -84,9 +89,10 @@ internal fun PenLabSettings(vm: AppViewModel) {
                     down.consume()
                     val pen = prefs.penSettings(style)
                     val appearance = InkAppearance(pen.argb, inkStyleOpacity(pen.opacity, style), pen.width, null, style)
-                    val s = newInkStroke(0, appearance, down.type == PointerType.Stylus, InkShapeMode.Freehand, tuning)
+                    val s = newInkStroke(0, appearance, down.type == PointerType.Stylus, InkShapeMode.Freehand, tuning, STRIP_DP_PER_PT)
                     s.add(down.position / pxPerPt, down.uptimeMillis, down.pressure)
                     strokes.add(s)
+                    writing = s
                     while (true) {
                         val event = awaitPointerEvent()
                         val change = event.changes.firstOrNull { it.id == down.id } ?: break
@@ -96,6 +102,7 @@ internal fun PenLabSettings(vm: AppViewModel) {
                         if (!change.pressed) break
                     }
                     finishInkStroke(s, tuning)
+                    writing = null
                     if (s.points.size == 1) {
                         s.points.add(s.points[0] + Offset(0.01f, 0f))
                         s.scales.add(s.scales[0])
@@ -111,6 +118,12 @@ internal fun PenLabSettings(vm: AppViewModel) {
                 s.points.size
                 s.widthVersion
                 drawInkStroke(s.paths.runs(s), Color(s.appearance.argb), s.appearance.opacity, s.appearance.style == InkStyle.Highlighter, Offset.Zero, pxPerPt, bounds)
+                // the tail to the pen while the stroke is written, as on a page
+                if (s === writing) {
+                    val tail = inkTailPoints(s.points.last() * pxPerPt, s.penTip?.let { it * pxPerPt }, null)
+                    val width = inkStylePointWidths(listOf(s.scales.lastOrNull() ?: 1f), s.appearance.width, s.appearance.style).first()
+                    drawInkTail(tail, Color(s.appearance.argb), s.appearance.opacity, width * pxPerPt)
+                }
             }
         }
     }

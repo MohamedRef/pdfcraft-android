@@ -176,6 +176,7 @@ internal fun inkStrokeFields(ink: PenStrokeStats?, tiltMin: Float, tiltMax: Floa
         "pressure_p90" to quantile(p, 0.9f), "pressure_max" to p.maxOrNull(),
         "raw_pressure_p10" to quantile(ink.raw.toList(), 0.1f), "raw_pressure_p90" to quantile(ink.raw.toList(), 0.9f),
         "speed_median" to quantile(v, 0.5f)?.toInt(), "speed_p90" to quantile(v, 0.9f)?.toInt(),
+        "dp_per_pt" to ink.dpPerPt,
         "tilt_min" to tiltMin.takeIf { it.isFinite() }?.let { kotlin.math.round(it).toInt() },
         "tilt_max" to tiltMax.takeIf { it.isFinite() }?.let { kotlin.math.round(it).toInt() },
         "tilt_reported" to tiltReported,
