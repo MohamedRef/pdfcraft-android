@@ -212,7 +212,18 @@ impl Automation {
         }
         // The document's Will Save actions run first: what they change is saved (#269).
         let scripts = self.session.run_document_actions(id, pdfcraft_engine::js::DocumentScriptEvent::WillSave);
-        let bytes = if full { self.session.save_full_bytes(id) } else { self.session.save_bytes(id) }.map_err(failed)?;
+        let bytes = if full {
+            // A full rewrite is told object by object and can be stopped (#646): for a protected
+            // copy it encrypts and writes the whole file. Nothing is written before it ends, so a
+            // stop leaves no file; the document keeps what it was given before this save.
+            let watch = self.job_watch.clone();
+            self.session.save_full_bytes_watched(id, &mut |done, total| {
+                watch.as_ref().is_none_or(|w| w(crate::JobStep { stage: "saving", done, total, fraction: 0.9 * Self::part(done, total), attempt: 1 }))
+            })
+        } else {
+            self.session.save_bytes(id)
+        }
+        .map_err(failed)?;
         // A save that adds or removes encryption, or must not keep the old revision (Sanitize,
         // redaction), is rewritten in full even when an incremental save was asked for.
         let incremental = !full && bytes.starts_with(&self.doc(a)?.saved_bytes());

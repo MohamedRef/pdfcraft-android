@@ -1,6 +1,6 @@
 use super::{
     Arc, DocId, Document, EditError, Keys, OpenError, RecoverySnapshot, RenderPool, SaveOptions, Session, SignOptions, StatusCaptions, TrustStore,
-    display_bytes, display_config, guard, render_threads, signatures_of, writable, write_full, write_incremental, xfa_sync_datasets,
+    display_bytes, display_config, guard, render_threads, signatures_of, writable, write_incremental, xfa_sync_datasets,
 };
 
 impl Session {
@@ -44,6 +44,14 @@ impl Session {
 
     /// A compact, garbage-collected rewrite (Save As ▸ "Optimized" / Reduce File Size groundwork).
     pub fn save_full_bytes(&self, id: DocId) -> Result<pdfcraft_cos::PdfBytes, EditError> {
+        self.save_full_bytes_watched(id, &mut |_, _| true)
+    }
+
+    /// [`Self::save_full_bytes`], telling `step` how many objects are written (`done` of `total`)
+    /// and stopping with [`EditError::Cancelled`] when it says so. Android adaptation (#646):
+    /// saving a protected copy encrypts and writes the whole file, and Cancel had to wait for it.
+    /// Nothing is written anywhere by this call, so a stop leaves nothing behind.
+    pub fn save_full_bytes_watched(&self, id: DocId, step: &mut dyn FnMut(usize, usize) -> bool) -> Result<pdfcraft_cos::PdfBytes, EditError> {
         let doc = self.get(id).ok_or(EditError::NoDocument)?;
         if doc.preparing() {
             return Err(EditError::ReadOnly("Document preparation is still running".into()));
@@ -54,10 +62,11 @@ impl Session {
         let editor = doc.editor.as_ref().ok_or_else(|| EditError::ReadOnly(doc.read_only_reason.clone().unwrap_or_default()))?;
         let opts = SaveOptions { mod_date: self.now().map(pdfcraft_cos::pdf_date), ..SaveOptions::default() };
         let cos = writable(&editor.cos)?;
-        guard(|| write_full(&cos, &opts))
+        guard(|| pdfcraft_cos::write_full_watched(&cos, &opts, step))
             .map_err(EditError::Write)?
+            .map_err(|e| EditError::Write(e.to_string()))?
             .map(|v| Arc::new(v) as pdfcraft_cos::PdfBytes)
-            .map_err(|e| EditError::Write(e.to_string()))
+            .ok_or(EditError::Cancelled)
     }
 
     /// Check that `bytes`, from [`Self::save_bytes`] or [`Self::save_full_bytes`], reopen as this

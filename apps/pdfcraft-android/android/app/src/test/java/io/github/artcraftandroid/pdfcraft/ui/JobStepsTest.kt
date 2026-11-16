@@ -76,4 +76,42 @@ class JobStepsTest {
         assertNull(createLine("files", 0, 0))
         assertNull(createLine("something_new", 0, 0))
     }
+
+    /** #646: the steps the engine now tells inside a stage keep the same lines, whatever their counts. */
+    @Test
+    fun countsInsideAStageKeepItsLine() {
+        assertEquals(JobLine(R.string.msg_busy_extracting_copying), extractLine("copying", 300, 869))
+        assertEquals(JobLine(R.string.msg_busy_extracting_writing), extractLine("writing", 41_000, 96_000))
+        assertEquals(JobLine(R.string.msg_busy_combining_pages), combineLine("combining", 512, 1738))
+        assertEquals(JobLine(R.string.msg_busy_combining_writing), combineLine("writing", 41_000, 96_000))
+        assertEquals(JobLine(R.string.msg_busy_combining_writing), createLine("writing", 41_000, 96_000))
+        assertEquals(JobLine(R.string.compare_busy_comparing), compareLine("comparing", 120_000, 400_000))
+        assertEquals(JobLine(R.string.print_busy_sheet, listOf(435, 435)), printLine("sheets", 435, 435))
+    }
+
+    /** #646: Set a password's bar is three steps, and the saving moves through its own third. */
+    @Test
+    fun protectBarMovesThroughTheSaving() {
+        assertEquals(0 to 300, protectBar(0, 0))
+        assertEquals(100 to 300, protectBar(1, 0))
+        assertEquals(200 to 300, protectBar(2, 0))
+        assertEquals(245 to 300, protectBar(2, 45))
+        assertEquals(290 to 300, protectBar(2, 90))
+        // never past its third, nor past the end
+        assertEquals(300 to 300, protectBar(2, 250))
+        assertEquals(200 to 300, protectBar(2, -5))
+        assertEquals(300 to 300, protectBar(3, 80))
+    }
+
+    /** #646: enhancing scanned pages counts its images from one. */
+    @Test
+    fun scanEnhanceCountsImagesFromOne() {
+        assertEquals(JobLine(R.string.scan_enhance_busy_image, listOf(1, 12)), scanEnhanceLine("images", 0, 12))
+        assertEquals(JobLine(R.string.scan_enhance_busy_image, listOf(12, 12)), scanEnhanceLine("images", 11, 12))
+        assertEquals(JobLine(R.string.scan_enhance_busy_image, listOf(12, 12)), scanEnhanceLine("applying", 12, 12))
+        // no scanned image on the pages: the job's own message stays
+        assertNull(scanEnhanceLine("images", 0, 0))
+        assertNull(scanEnhanceLine("applying", 0, 0))
+        assertNull(scanEnhanceLine("something_new", 1, 4))
+    }
 }

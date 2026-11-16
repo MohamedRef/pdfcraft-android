@@ -1,7 +1,7 @@
 use super::error::PrintError;
 use super::settings::{Content, Settings};
 use super::sheets::{Sheet, layout};
-use super::{DecodeBudget, Dict, Document, Matrix, ObjRef, Object, SaveOptions, Stream, write_full};
+use super::{DecodeBudget, Dict, Document, Matrix, ObjRef, Object, SaveOptions, Stream};
 
 // Transforms and clipping bounds need their full PDF decimal precision.
 fn geometry_number(value: f64) -> String {
@@ -499,7 +499,10 @@ pub fn impose_watched(src: &Document, settings: &Settings, step: &mut dyn FnMut(
     if doc.trailer().contains(b"Encrypt") {
         doc.remove_encryption();
     }
-    Ok(Some(write_full(&doc, &SaveOptions::default())?))
+    // The writing is asked again as it goes (#646), every sheet being laid by now: a stop takes
+    // hold inside it.
+    let laid = sheets.len();
+    Ok(pdfcraft_cos::write_full_watched(&doc, &SaveOptions::default(), &mut |_, _| step(laid, laid))?)
 }
 
 /// Which source pages land on each sheet (for previews and the sheet count).

@@ -1019,7 +1019,17 @@ impl Automation {
             settings.despeckle = on;
         }
         let id = self.doc(a)?.id;
-        let report = self.session.enhance_scanned_pages(id, &pages, settings).map_err(failed)?;
+        // Android adaptation (#646): image by image, each told to the job watch, with a stop
+        // between them. The cleaned images are put in place only at the end, as one edit, so a
+        // stop changes nothing. It is `enhance_scanned_pages` taken apart for the watch.
+        let job = self.session.scan_clean_job(id, &pages, settings).map_err(failed)?;
+        let total = job.total();
+        let watch = self.job_watch.clone();
+        let cleaned = job
+            .run(|done, total| watch.as_ref().is_none_or(|w| w(crate::JobStep { stage: "images", done, total, fraction: 0.95 * Self::part(done, total), attempt: 1 })))
+            .map_err(failed)?;
+        self.job_step("applying", total, total, 0.95)?;
+        let report = self.session.apply_scan_clean(id, cleaned).map_err(failed)?;
         let numbered = |p: &[usize]| p.iter().map(|p| p + 1).collect::<Vec<_>>();
         let skipped: Vec<Value> = report.skipped.iter().map(|k| json!({ "pages": numbered(&k.pages), "name": k.name, "reason": k.reason })).collect();
         let mut out = summary(self.doc(a)?);

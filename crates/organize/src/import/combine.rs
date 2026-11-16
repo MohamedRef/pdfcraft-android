@@ -1,18 +1,25 @@
 use super::carry::{Mark, add_outline, collect_attachments, kept_bookmarks, set_attachments, source_outline, write_outline_level};
-use super::{Dict, Document, FieldConflicts, HashMap, HashSet, ObjRef, Object, OrganizeError, import_pages_mapped, rebuild};
+use super::{Dict, Document, FieldConflicts, HashMap, HashSet, ObjRef, Object, OrganizeError, import_pages_mapped, import_pages_mapped_watched, rebuild};
 
 /// A new document containing copies of `pages` from `src` (Extract Pages / Split).
 /// Document information (title, author…) is carried over, and so is the print standard the
 /// source declares (PDF/X: its output intents and identification, #263), and the bookmarks that
 /// go to the copied pages.
 pub fn extract_pages(src: &Document, pages: &[usize]) -> Result<Document, OrganizeError> {
+    // Nothing stops it without a watch.
+    extract_pages_watched(src, pages, &mut |_, _| true)?.ok_or_else(|| OrganizeError::Invalid("the copy was stopped".into()))
+}
+
+/// [`extract_pages`], telling `step` each page before it is copied (`done` of `total`); `None`
+/// when `step` says stop, with nothing made. Android adaptation (#646).
+pub fn extract_pages_watched(src: &Document, pages: &[usize], step: &mut dyn FnMut(usize, usize) -> bool) -> Result<Option<Document>, OrganizeError> {
     let mut out = Document::new_empty();
     let mut labels = Vec::new();
     let mut has_labels = false;
     crate::labels::collect_page_labels(src, pages, 0, &mut labels, &mut has_labels)?;
     // One source: nothing to deduplicate. Its fields keep their names (a source with two
     // same-named field roots stays one field, as it was), so Extract and Split never rename.
-    let imported = import_pages_mapped(&mut out, src, pages, 0, FieldConflicts::Merge)?;
+    let Some(imported) = import_pages_mapped_watched(&mut out, src, pages, 0, FieldConflicts::Merge, step)? else { return Ok(None) };
     crate::labels::finish_page_labels(&mut out, &labels, has_labels)?;
     // The bookmarks of these pages come along, mapped to the copies (#4020).
     let outline = kept_bookmarks(source_outline(src, imported.page_map));
@@ -37,7 +44,7 @@ pub fn extract_pages(src: &Document, pages: &[usize]) -> Result<Document, Organi
     // The pages share their source's resource dictionary, so the part would otherwise carry every
     // XObject the source lists — images and all (#204). Keep only what these pages draw.
     crate::prune::prune_unused_xobjects(&mut out)?;
-    Ok(out)
+    Ok(Some(out))
 }
 
 /// How to split a document.
@@ -107,11 +114,36 @@ pub fn combine_selected(sources: &[(&str, &Document, Option<&[usize]>)]) -> Resu
 
 /// [`combine_selected`] reporting what the conflict resolution renamed.
 pub fn combine_selected_with(sources: &[(&str, &Document, Option<&[usize]>)], conflicts: FieldConflicts) -> Result<CombineOutcome, OrganizeError> {
-    let mut combiner = Combiner::with_field_conflicts(conflicts);
-    for (title, src, chosen) in sources {
-        combiner.add(title, src, *chosen)?;
+    // Nothing stops it without a watch.
+    combine_selected_watched(sources, conflicts, &mut |_, _| true)?.ok_or_else(|| OrganizeError::Invalid("the copy was stopped".into()))
+}
+
+/// [`combine_selected_with`], telling `step` each page before it is copied: `done` of `total`
+/// pages over all the sources. `None` when `step` says stop, with nothing made. Android
+/// adaptation (#646).
+pub fn combine_selected_watched(
+    sources: &[(&str, &Document, Option<&[usize]>)],
+    conflicts: FieldConflicts,
+    step: &mut dyn FnMut(usize, usize) -> bool,
+) -> Result<Option<CombineOutcome>, OrganizeError> {
+    // How many pages each source brings, so the count runs over the whole job.
+    let mut counts = Vec::with_capacity(sources.len());
+    for (_, src, chosen) in sources {
+        counts.push(match chosen {
+            Some(pages) => pages.len(),
+            None => crate::page_count(src)?,
+        });
     }
-    combiner.finish_with_renames()
+    let total: usize = counts.iter().sum();
+    let mut combiner = Combiner::with_field_conflicts(conflicts);
+    let mut before = 0usize;
+    for ((title, src, chosen), count) in sources.iter().zip(counts) {
+        if !combiner.add_watched(title, src, *chosen, &mut |done, _| step(before + done, total))? {
+            return Ok(None);
+        }
+        before += count;
+    }
+    combiner.finish_with_renames().map(Some)
 }
 
 /// Combine Files one source at a time, with the same result as [`combine_selected`]. [`Combiner::add`]
@@ -179,6 +211,14 @@ impl Combiner {
     /// Add `src`'s `pages` (0-based, in that order; `None` for all of them) after the pages added so far,
     /// under a bookmark titled `title`. `src` need not outlive the call.
     pub fn add(&mut self, title: &str, src: &Document, pages: Option<&[usize]>) -> Result<(), OrganizeError> {
+        // Nothing stops it without a watch.
+        self.add_watched(title, src, pages, &mut |_, _| true).map(|_| ())
+    }
+
+    /// [`Combiner::add`], telling `step` each page of `src` before it is copied (`done` of
+    /// `total`). `false` when `step` said stop: the result then holds part of this source and
+    /// the combine must be dropped, not finished. Android adaptation (#646).
+    pub fn add_watched(&mut self, title: &str, src: &Document, pages: Option<&[usize]>, step: &mut dyn FnMut(usize, usize) -> bool) -> Result<bool, OrganizeError> {
         let n = crate::page_count(src)?;
         let pages: Vec<usize> = match pages {
             Some(p) => {
@@ -193,7 +233,7 @@ impl Combiner {
         let mut labels = self.labels.clone();
         let mut has_labels = self.has_labels;
         crate::labels::collect_page_labels(src, &pages, at, &mut labels, &mut has_labels)?;
-        let imported = import_pages_mapped(&mut self.out, src, &pages, at, self.field_conflicts)?;
+        let Some(imported) = import_pages_mapped_watched(&mut self.out, src, &pages, at, self.field_conflicts, step)? else { return Ok(false) };
         self.labels = labels;
         self.has_labels = has_labels;
         self.renamed_fields.extend(imported.renamed_fields);
@@ -214,7 +254,7 @@ impl Combiner {
                 self.standard = Some(Standard { declared, objects: imported.objects, source });
             }
         }
-        Ok(())
+        Ok(true)
     }
 
     /// The combined document: the pages as added, the print standard of the first source when every

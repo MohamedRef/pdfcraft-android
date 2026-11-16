@@ -4,7 +4,7 @@
 use std::collections::{BTreeMap, HashSet};
 use std::sync::Arc;
 
-use pdfcraft_cos::{Algorithm, Dict, Document, NewEncryption, ObjRef, Object, PdfString, SaveOptions, XrefEntry, write_full};
+use pdfcraft_cos::{Algorithm, Dict, Document, NewEncryption, ObjRef, Object, PdfString, SaveOptions, XrefEntry, write_full, write_full_watched};
 
 const NODES: usize = 260;
 const EDITED: usize = 129;
@@ -232,5 +232,49 @@ fn large_packed_strings_round_trip_across_byte_limited_batches() {
         assert_eq!(bytes.len(), 192 * 1024);
         assert_eq!(bytes[0], i as u8);
         assert!(bytes[1..].iter().all(|&b| b == b'a' + i as u8 % 26));
+    }
+}
+
+/// Android adaptation (#646): the watched rewrite is the same rewrite, and a stop leaves nothing.
+#[test]
+fn a_watched_full_rewrite_writes_the_same_bytes_and_can_be_stopped() {
+    for object_streams in [false, true] {
+        let doc = edited_document();
+        let opts = SaveOptions { object_streams, mod_date: Some("D:20261008000000Z".into()), ..SaveOptions::default() };
+        let plain = write_full(&doc, &opts).unwrap();
+
+        let mut told = Vec::new();
+        let watched = write_full_watched(&doc, &opts, &mut |done, total| {
+            told.push((done, total));
+            true
+        })
+        .unwrap();
+        assert_eq!(watched.as_deref(), Some(plain.as_slice()), "object_streams={object_streams}");
+        let total = told[0].1;
+        assert!(total > NODES, "every object written is counted: {total}");
+        assert_eq!(told[0].0, 0, "the watch is asked before the first object");
+        assert!(told.iter().all(|&(done, t)| t == total && done <= total));
+        assert!(told.windows(2).all(|w| w[0].0 <= w[1].0), "it never goes back: {told:?}");
+        assert!(told.len() > 60 && told.len() <= 4 * 128, "{} tells for {total} objects", told.len());
+        assert!(told.last().unwrap().0 * 10 >= total * 9, "the last tell is near the end: {:?}", told.last());
+
+        // a stop at the first ask, and one half way through
+        let mut asked = 0;
+        let stopped = write_full_watched(&doc, &opts, &mut |_, _| {
+            asked += 1;
+            false
+        })
+        .unwrap();
+        assert_eq!((stopped, asked), (None, 1));
+        let mut last = 0;
+        let stopped = write_full_watched(&doc, &opts, &mut |done, total| {
+            last = done;
+            done * 2 < total
+        })
+        .unwrap();
+        assert_eq!(stopped, None);
+        assert!(last * 2 >= total && last * 4 < total * 3, "stopped at {last} of {total}");
+        // a stopped write changes nothing in the document it was writing
+        assert_eq!(write_full(&doc, &opts).unwrap(), plain);
     }
 }

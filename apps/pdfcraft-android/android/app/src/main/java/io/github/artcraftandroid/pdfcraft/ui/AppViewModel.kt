@@ -1525,13 +1525,15 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             if (document !== doc || tools.busy != null || doc.info.generation != generation) return@launch
             tools.busy = text(R.string.scan_enhance_busy)
             try {
-                val result = eng.tool("page_enhance_scan", mapOf(
+                // image by image, with Cancel between them (#646): the engine puts the cleaned
+                // images in place only at the end, so a stopped run changes nothing
+                val result = watchedTool(eng, doc, "scan_enhance", "page_enhance_scan", mapOf(
                     "doc" to doc.id,
                     "pages" to plan.pages,
                     "level" to plan.level,
                     "edge_shadows" to plan.edgeShadows,
                     "despeckle" to plan.despeckle,
-                ))
+                ), text(R.string.busy_cancel_scan_enhance), ::scanEnhanceLine, pages = plan.pages.size) ?: return@launch
                 refresh(doc)
                 if (document !== doc) return@launch
                 val done = result.optJSONArray("pages_cleaned")?.length() ?: 0
@@ -2198,9 +2200,10 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         save(doc)
         val out = tempFile("pdf")
         // Three steps, said in the dialog, with Cancel between them (#634). Saving the protected
-        // copy is one call that encrypts the whole file: Cancel takes hold when it ends, and the
-        // copy is then dropped.
-        val stop = offerCancel(text(R.string.busy_cancel_protect))
+        // copy encrypts and writes the whole file: the engine tells how far it is, so the bar
+        // moves through it and Cancel stops inside it, with no file written (#646).
+        val saving = io.github.artcraftandroid.pdfcraft.core.ToolJob()
+        val stop = offerCancel(text(R.string.busy_cancel_protect)) { saving.cancel() }
         val started = System.nanoTime()
         val bytes = doc.info.fileSize.toLong()
         var at = "opening"
@@ -2208,7 +2211,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             if (stop.asked) return false
             at = stage
             tools.busy = text(res)
-            tools.busyProgress = n to 3
+            tools.busyProgress = protectBar(n, 0)
             return true
         }
         var copy: Long? = null
@@ -2218,7 +2221,23 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             copy = eng.tool("doc_open", mapOf("path" to savedFile(doc, "protect").absolutePath, "password" to doc.password)).optLong("doc")
             Diag.measure(DiagArea.Pages, "protect_copy", "doc" to doc.diagNumber, "settings" to protection.size) {
                 if (step("protecting", 1, R.string.msg_busy_protect_protecting)) eng.tool("doc_protect", protection + ("doc" to copy))
-                if (step("saving", 2, R.string.msg_busy_protect_saving)) eng.tool("doc_save", mapOf("doc" to copy, "path" to out.absolutePath, "full" to true))
+                if (step("saving", 2, R.string.msg_busy_protect_saving)) {
+                    val watching = viewModelScope.launch {
+                        while (true) {
+                            val p = saving.progress()
+                            if (p.steps > 0uL) tools.busyProgress = protectBar(2, p.percent.toInt())
+                            kotlinx.coroutines.delay(JOB_WATCH_MS)
+                        }
+                    }
+                    try {
+                        eng.tool("doc_save", mapOf("doc" to copy, "path" to out.absolutePath, "full" to true), saving)
+                    } catch (e: MobileException) {
+                        // stopped inside the save: the engine wrote nothing
+                        if (!stop.asked) throw e
+                    } finally {
+                        watching.cancel()
+                    }
+                }
             }
             outcome = if (stop.asked) "stopped" else "finished"
         } finally {
@@ -2226,7 +2245,8 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             tools.busyProgress = null
             copy?.let { c -> runCatching { eng.tool("doc_close", mapOf("doc" to c, "discard_changes" to true)) } }
             if (outcome != "finished") out.delete()
-            jobEnd("protect", doc, outcome, started, bytes, doc.pageCount, at, if (outcome == "finished") 3 else listOf("opening", "protecting", "saving").indexOf(at), 3, 0)
+            jobEnd("protect", doc, outcome, started, bytes, doc.pageCount, at, if (outcome == "finished") 3 else listOf("opening", "protecting", "saving").indexOf(at), 3,
+                if (outcome == "finished") 100 else saving.progress().percent.toInt())
         }
         if (outcome != "finished") return@docJob
         tools.toolScreen = null
