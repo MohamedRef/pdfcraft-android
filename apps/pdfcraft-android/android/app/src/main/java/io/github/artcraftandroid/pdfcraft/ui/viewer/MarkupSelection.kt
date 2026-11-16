@@ -6,7 +6,12 @@ import io.github.artcraftandroid.pdfcraft.core.TextRange
 internal const val MAX_MARKUP_LINE_RECTS = 1024
 internal const val MAX_MARKUP_GLYPHS = 100_000u
 
-/** Return no partial selection if the native line rectangle payload is malformed or oversized. */
+/**
+ * The line boxes of a text range. Nothing at all if the native payload is malformed, not finite or
+ * oversized. A box with no width or no height (a line of only a space, a zero-height rule) is left
+ * out (#657): before, one such line dropped the whole selection, and a Highlight drag over several
+ * lines became an area box.
+ */
 internal fun markupLineRects(flat: List<Float>): List<FloatArray> {
     if (flat.isEmpty() || flat.size % 4 != 0 || flat.size / 4 > MAX_MARKUP_LINE_RECTS)
         return emptyList()
@@ -16,9 +21,8 @@ internal fun markupLineRects(flat: List<Float>): List<FloatArray> {
         val y0 = flat[i + 1]
         val x1 = flat[i + 2]
         val y1 = flat[i + 3]
-        if (!x0.isFinite() || !y0.isFinite() || !x1.isFinite() || !y1.isFinite() ||
-            x0 >= x1 || y0 >= y1) return emptyList()
-        rects += floatArrayOf(x0, y0, x1, y1)
+        if (!x0.isFinite() || !y0.isFinite() || !x1.isFinite() || !y1.isFinite()) return emptyList()
+        if (x0 < x1 && y0 < y1) rects += floatArrayOf(x0, y0, x1, y1)
     }
     return rects
 }

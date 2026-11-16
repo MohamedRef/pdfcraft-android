@@ -19,6 +19,14 @@ import org.junit.Test
 class MarkupSelectionTest {
     // ---- #657: a drag marks the letters it covered, not whole words
 
+    @Test fun aLineWithNoHeightOrWidthIsLeftOutNotTheWholeSelection() {
+        // three lines; the middle one is only a space with no width, one has no height (#657)
+        val rects = markupLineRects(listOf(10f, 20f, 120f, 35f, 50f, 40f, 50f, 55f, 10f, 60f, 90f, 60f, 10f, 80f, 75f, 95f))
+        assertEquals(2, rects.size)
+        assertArrayEquals(floatArrayOf(10f, 20f, 120f, 35f), rects[0], 0f)
+        assertArrayEquals(floatArrayOf(10f, 80f, 75f, 95f), rects[1], 0f)
+    }
+
     @Test fun aDragMarksFromItsFirstLetterToItsLastInEitherDirection() {
         // forward: glyph 12 (inside a word) to glyph 41 (inside another word, lines later)
         assertEquals(TextRange(3u, 12u, 42u), markupLetterRange(3u, 12u, 41u))
@@ -46,7 +54,7 @@ class MarkupSelectionTest {
         assertTrue(markupLineRects(listOf(1f, 2f, 3f)).isEmpty())
         assertTrue(markupLineRects(listOf(1f, 2f, Float.NaN, 5f)).isEmpty())
         assertTrue(markupLineRects(listOf(1f, 2f, 1f, 4f)).isEmpty())
-        assertTrue(markupLineRects(listOf(1f, 2f, 4f, 4f, 1f, 2f, Float.POSITIVE_INFINITY, 5f)).isEmpty())
+        assertTrue(markupLineRects(listOf(1f, 2f, 4f, 5f, 1f, 2f, Float.POSITIVE_INFINITY, 5f)).isEmpty())
         assertTrue(markupLineRects(List((MAX_MARKUP_LINE_RECTS + 1) * 4) { it.toFloat() }).isEmpty())
     }
     @Test fun aDragBesideALineTakesItsNearestLetterButNotAFarOne() {

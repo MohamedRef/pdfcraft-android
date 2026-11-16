@@ -1993,12 +1993,22 @@ private suspend fun resolveMarkup(
     end: PagePoint,
     slopPoints: Float,
     tap: Boolean,
-): MarkupDrag? = withContext(eng.commands) {
-    if (start.page != end.page) return@withContext null
+): MarkupDrag? = resolveMarkupWhy(eng, doc, start, end, slopPoints, tap).first
+
+/** [resolveMarkup], with why nothing was found (the reasons of `markup_unresolved`). */
+private suspend fun resolveMarkupWhy(
+    eng: Engine,
+    doc: OpenDocument,
+    start: PagePoint,
+    end: PagePoint,
+    slopPoints: Float,
+    tap: Boolean,
+): Pair<MarkupDrag?, String?> = withContext(eng.commands) {
+    if (start.page != end.page) return@withContext null to "two_pages"
     val page = start.page.toUInt()
     val range = if (tap) {
         // A tap deliberately does not reach far: blank space must stay blank.
-        eng.session.wordAt(doc.id, page, start.x, start.y, slopPoints) ?: return@withContext null
+        eng.session.wordAt(doc.id, page, start.x, start.y, slopPoints) ?: return@withContext null to "no_start_letter"
     } else {
         // The engine's nearestGlyph prefers the same line; the reach keeps it from another column.
         fun letter(p: PagePoint, vertical: Float): UInt? {
@@ -2006,12 +2016,12 @@ private suspend fun resolveMarkup(
             val rect = eng.session.glyphRect(doc.id, page, glyph).toList()
             return glyph.takeIf { markupNearLine(p.x, p.y, rect, MARKUP_SIDE_REACH_PT, vertical) }
         }
-        val a = letter(start, slopPoints) ?: return@withContext null
-        val b = letter(end, (slopPoints * 2f).coerceAtMost(40f)) ?: return@withContext null
-        markupLetterRange(page, a, b) ?: return@withContext null
+        val a = letter(start, slopPoints) ?: return@withContext null to "no_start_letter"
+        val b = letter(end, (slopPoints * 2f).coerceAtMost(40f)) ?: return@withContext null to "no_end_letter"
+        markupLetterRange(page, a, b) ?: return@withContext null to "too_long"
     }
     val rects = markupLineRects(eng.session.textRects(doc.id, range).toList())
-    if (rects.isEmpty()) null else MarkupDrag(range, rects)
+    if (rects.isEmpty()) null to "no_lines" else MarkupDrag(range, rects) to null
 }
 
 @Composable
@@ -2102,7 +2112,7 @@ private fun MarkupLayer(vm: AppViewModel, doc: OpenDocument) {
                     var queued = false
                     try {
                         if (vm.document !== doc || !doc.info.allowsAnnotation) return@launch
-                        val selected = resolveMarkup(eng, doc, gesture.start, end, radius, tap)
+                        val (selected, why) = resolveMarkupWhy(eng, doc, gesture.start, end, radius, tap)
                         if (vm.document !== doc || !doc.info.allowsAnnotation) return@launch
                         if (selected != null) {
                             if (requestSerial == serial) {
@@ -2136,7 +2146,7 @@ private fun MarkupLayer(vm: AppViewModel, doc: OpenDocument) {
                                 areaHighlightRect(gesture.start.x, gesture.start.y, end.x, end.y) else null
                             when {
                                 // a page with text: a drag far from it marks nothing, never a free box (#657)
-                                glyphs != 0u -> if (!tap) MarkupDiag.missed(doc, selectedMarkup, glyphs.toLong())
+                                glyphs != 0u -> MarkupDiag.unresolved(doc, selectedMarkup, why ?: "-", tap, glyphs.toLong())
                                 // no text on the page at all (a scan, a picture): highlight the area itself (#134)
                                 area != null -> {
                                     queued = true
@@ -2154,8 +2164,10 @@ private fun MarkupLayer(vm: AppViewModel, doc: OpenDocument) {
                                     })
                                 }
                                 // a tap, or Underline or Strikeout, where there is no text: say how to get some
-                                (tap || selectedMarkup != TextMarkup.Highlight) && vm.document === doc ->
+                                (tap || selectedMarkup != TextMarkup.Highlight) && vm.document === doc -> {
+                                    MarkupDiag.unresolved(doc, selectedMarkup, "no_text", tap, 0)
                                     vm.tell(text(R.string.toolbar_no_text_to_mark), text(R.string.common_tool_recognize_text)) { vm.recognizeText(doc) }
+                                }
                             }
                         }
                     } catch (e: MobileException) {
