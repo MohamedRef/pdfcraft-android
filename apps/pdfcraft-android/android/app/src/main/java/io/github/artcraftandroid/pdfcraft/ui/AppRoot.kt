@@ -72,7 +72,15 @@ fun AppRoot(vm: AppViewModel, onBrowse: () -> Unit, onPickSignatureImage: () -> 
     val c = pdfColors
     val doc = vm.document
     // a message about a document goes when that document leaves the front (#618)
-    LaunchedEffect(doc) { vm.messageBoard.frontChanged(doc) }
+    LaunchedEffect(doc) {
+        vm.messageBoard.frontChanged(doc)
+        // and its Undo button goes when the tool in front takes a step of its own (#635): in Draw,
+        // Undo would take back that stroke and not the edit the message names
+        if (doc != null) {
+            androidx.compose.runtime.snapshotFlow { doc.localUndo?.ownSteps?.invoke() == true }
+                .collect { own -> if (own) vm.messageBoard.ownerChanged(doc) }
+        }
+    }
     // outside the viewer (which sets its own) the bar icons follow the app's theme, not the system's
     val view = androidx.compose.ui.platform.LocalView.current
     val activity = androidx.compose.ui.platform.LocalContext.current as? android.app.Activity

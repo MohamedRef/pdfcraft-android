@@ -36,8 +36,12 @@ enum class MessageEnd(val diag: String) {
  * - A new message replaces the one on screen at once.
  * - The same text raised again while it is shown stays where it is; its time starts again.
  * - Undo/Redo steps update one message in place; it goes [STEP_MS] after the last one.
- * - A routine message raised while an error younger than [ERROR_MIN_MS] is shown is dropped, so the
- *   error can be read. Errors in a row update one message in place, with how many happened.
+ * - A routine message raised while an error younger than [ERROR_MIN_MS] is shown does not replace
+ *   it, so the error can be read. One such message waits (#635) and takes the error's place when
+ *   those seconds are up: the newest, except that one with a button is not given up for one
+ *   without, and an Undo/Redo step never waits. One place, not a queue: nothing else is kept.
+ *   Errors in a row update one message in place, with how many happened; when the text changes,
+ *   its seconds start again.
  * - A message goes when its owner (the document it was about) leaves the front, errors excepted.
  * - A button whose action is no longer valid (the document changed again) closes the message
  *   instead of acting.
@@ -64,7 +68,17 @@ class MessageBoard(
         internal val shownAt: Long,
         val until: Long,
         internal val updates: Int,
+        /** When the text now shown came on screen: an error's [ERROR_MIN_MS] run from here (#635). */
+        internal val readFrom: Long = shownAt,
     )
+
+    /** A message raised behind a fresh error, waiting for the error's place (#635). */
+    private class Held(
+        val text: String, val kind: MessageKind, val actionLabel: String?, val action: (() -> Unit)?,
+        val owner: Any?, val valid: (() -> Boolean)?,
+    )
+
+    private var waiting: Held? = null
 
     /** Lengthens a time on screen: (ms, has a button) → ms. The accessibility timeout setting, in the app. */
     var timeout: (Long, Boolean) -> Long = { ms, _ -> ms }
@@ -104,30 +118,68 @@ class MessageBoard(
                     current = cur.updated(text, k, t, actionLabel, action, valid, count = if (k == MessageKind.Error) cur.count + 1 else cur.count)
                     return true
                 }
-                // an error is read before anything routine replaces it
-                cur.kind == MessageKind.Error && k != MessageKind.Error && t - cur.shownAt < ERROR_MIN_MS -> {
-                    log(MessageLog.Dropped(k, cur.kind))
-                    return false
-                }
+                // an error is read before anything routine replaces it; the newcomer may wait for its place
+                cur.kind == MessageKind.Error && k != MessageKind.Error && t - cur.readFrom < ERROR_MIN_MS ->
+                    return hold(cur, Held(text, k, actionLabel, action, owner, valid))
                 // a run of Undo/Redo, or of errors: one message, updated in place
                 (cur.kind == MessageKind.Step || cur.kind == MessageKind.Error) && k == cur.kind && cur.owner === owner -> {
                     current = cur.updated(text, k, t, actionLabel, action, valid, count = cur.count + 1)
                     return true
                 }
-                else -> end(cur, MessageEnd.Replaced, t)
+                else -> {
+                    end(cur, MessageEnd.Replaced, t)
+                    // the newcomer is newer than anything that waited behind the error
+                    dropWaiting(cur.kind)
+                }
             }
         }
-        val shown = Shown(
-            id = nextId++, text = text, kind = k, count = 1, actionLabel = actionLabel, action = action,
-            owner = owner, valid = valid, shownAt = t, until = t + duration(k), updates = 0,
-        )
-        current = shown
-        log(MessageLog.Started(k))
+        show(Held(text, k, actionLabel, action, owner, valid), t)
         return true
     }
 
-    private fun Shown.updated(text: String, kind: MessageKind, t: Long, actionLabel: String?, action: (() -> Unit)?, valid: (() -> Boolean)?, count: Int) =
-        Shown(id, text, kind, count, actionLabel, action, owner, valid, shownAt, t + duration(kind), updates + 1)
+    private fun show(m: Held, t: Long) {
+        current = Shown(
+            id = nextId++, text = m.text, kind = m.kind, count = 1, actionLabel = m.actionLabel, action = m.action,
+            owner = m.owner, valid = m.valid, shownAt = t, until = t + duration(m.kind), updates = 0,
+        )
+        log(MessageLog.Started(m.kind))
+    }
+
+    /**
+     * [m] was raised while the error [cur] is still being read: it waits, and the error leaves as
+     * soon as its [ERROR_MIN_MS] are up instead of staying its full time. Never on screen now.
+     */
+    private fun hold(cur: Shown, m: Held): Boolean {
+        val w = waiting
+        // "Ink undone" three seconds late says nothing; a button is not given up for a plain notice
+        if (m.kind == MessageKind.Step || (w != null && w.actionLabel != null && m.actionLabel == null)) {
+            log(MessageLog.Dropped(m.kind, cur.kind))
+            return false
+        }
+        if (w != null) log(MessageLog.Dropped(w.kind, cur.kind))
+        waiting = m
+        log(MessageLog.Held(m.kind))
+        val readable = cur.readFrom + ERROR_MIN_MS
+        if (cur.until > readable) current = cur.withUntil(readable)
+        return false
+    }
+
+    private fun dropWaiting(behind: MessageKind) {
+        val w = waiting ?: return
+        waiting = null
+        log(MessageLog.Dropped(w.kind, behind))
+    }
+
+    private fun Shown.withUntil(until: Long) = Shown(id, text, kind, count, actionLabel, action, owner, valid, shownAt, until, updates, readFrom)
+
+    private fun Shown.updated(text: String, kind: MessageKind, t: Long, actionLabel: String?, action: (() -> Unit)?, valid: (() -> Boolean)?, count: Int): Shown {
+        // a new text has its own seconds to be read; the same text again has had them
+        val readFrom = if (text == this.text) readFrom else t
+        var until = t + duration(kind)
+        // with a message waiting, an error stays only until it could be read
+        if (kind == MessageKind.Error && waiting != null) until = minOf(until, maxOf(t, readFrom + ERROR_MIN_MS))
+        return Shown(id, text, kind, count, actionLabel, action, owner, valid, shownAt, until, updates + 1, readFrom)
+    }
 
     /** How long a message of [kind] stays, before [timeout]. */
     private fun duration(kind: MessageKind): Long = timeout(
@@ -144,10 +196,19 @@ class MessageBoard(
     fun expire() {
         val cur = current ?: return
         val t = now()
-        if (t >= cur.until) end(cur, MessageEnd.Time, t, clear = true)
+        if (t < cur.until) return
+        // the message that waited behind an error takes its place, if its button still does what it names
+        val next = waiting?.takeIf { it.valid?.invoke() != false }
+        if (next == null) {
+            end(cur, MessageEnd.Time, t, clear = true)
+            return
+        }
+        waiting = null
+        end(cur, MessageEnd.Time, t)
+        show(next, t)
     }
 
-    /** Swiped away (or its ✕): nothing comes up behind it. */
+    /** Swiped away (or its ✕): nothing comes up behind it, not even a message that waited behind an error. */
     fun dismiss() {
         val cur = current ?: return
         end(cur, MessageEnd.Swipe, now(), clear = true)
@@ -168,19 +229,25 @@ class MessageBoard(
 
     /** [front] is now the document (or null: Home) in front: a message about another one goes. */
     fun frontChanged(front: Any?) {
+        waiting?.let { w -> if (w.owner != null && w.owner !== front) dropWaiting(MessageKind.Error) }
         val cur = current ?: return
         if (cur.owner != null && cur.owner !== front && cur.kind != MessageKind.Error) end(cur, MessageEnd.Closed, now(), clear = true)
     }
 
     /** [owner] changed (an edit, an undo): a button that would no longer do what it names goes. */
     fun ownerChanged(owner: Any?) {
+        waiting?.let { w -> if (w.owner === owner && w.valid?.invoke() == false) dropWaiting(MessageKind.Error) }
         val cur = current ?: return
         if (cur.owner === owner && cur.valid?.invoke() == false) end(cur, MessageEnd.Stale, now(), clear = true)
     }
 
     private fun end(cur: Shown, how: MessageEnd, t: Long, clear: Boolean = false) {
         log(MessageLog.Ended(cur.kind, how, t - cur.shownAt, cur.updates))
-        if (clear) current = null
+        if (clear) {
+            // closed by hand or with its screen: nothing comes up behind it
+            dropWaiting(cur.kind)
+            current = null
+        }
     }
 
     companion object {
@@ -190,7 +257,7 @@ class MessageBoard(
         /** Undo/Redo: gone about two seconds after the last tap. */
         const val STEP_MS = 2_000L
 
-        /** An error stays longer, and is not replaced by a notice for [ERROR_MIN_MS]. */
+        /** An error stays longer, and is not replaced by a notice for [ERROR_MIN_MS] from when its text came on screen. */
         const val ERROR_MS = 6_000L
         const val ERROR_MIN_MS = 3_000L
 
@@ -199,9 +266,21 @@ class MessageBoard(
     }
 }
 
+/**
+ * Whether a message's Undo button still undoes the edit the message names (#618, #635): its
+ * document is in front ([inFront]), has not changed since ([unchanged]), and the tool in front has
+ * no step of its own that Undo would take back first ([toolHasOwnStep]: in Draw, a stroke drawn
+ * and not yet added).
+ */
+internal fun undoButtonValid(inFront: Boolean, unchanged: Boolean, toolHasOwnStep: Boolean): Boolean =
+    inFront && unchanged && !toolHasOwnStep
+
 /** What the diagnostics log is told about a message: never its text, which can hold file names. */
 sealed class MessageLog {
     data class Started(val kind: MessageKind) : MessageLog()
     data class Ended(val kind: MessageKind, val how: MessageEnd, val ms: Long, val updates: Int) : MessageLog()
     data class Dropped(val kind: MessageKind, val behind: MessageKind) : MessageLog()
+
+    /** A message waits for the place of the error on screen (#635); it is `Started` when shown, or `Dropped`. */
+    data class Held(val kind: MessageKind) : MessageLog()
 }

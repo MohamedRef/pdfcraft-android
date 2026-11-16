@@ -166,5 +166,12 @@ class OpenDocument(
     }
 }
 
-/** A tool's own undo history (see [OpenDocument.localUndo]); the checks read Compose state. */
-class LocalUndo(val canUndo: () -> Boolean, val canRedo: () -> Boolean, val undo: () -> Unit, val redo: () -> Unit)
+/**
+ * A tool's own undo history (see [OpenDocument.localUndo]); the checks read Compose state.
+ * [ownSteps] is whether Undo would now take back a step of the tool's own (a stroke not yet added)
+ * and not the document's newest step: a message's Undo button must not be spent on it (#635).
+ */
+class LocalUndo(
+    val canUndo: () -> Boolean, val canRedo: () -> Boolean, val undo: () -> Unit, val redo: () -> Unit,
+    val ownSteps: () -> Boolean = { false },
+)
