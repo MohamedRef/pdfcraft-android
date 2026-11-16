@@ -6,4 +6,8 @@
     <string name="busy_cancel_combine">Annulla si ferma prima del file successivo. Non viene creato nulla e i tuoi file restano come sono.</string>
     <string name="busy_cancel_export_images">Annulla si ferma dopo questa pagina. Nessuna immagine viene salvata.</string>
     <string name="busy_cancel_save_files">Annulla si ferma dopo questo file. I file già salvati restano nella cartella.</string>
+    <string name="msg_busy_compressing_reading">Compressione: lettura della pagina %1$d di %2$d…</string>
+    <string name="msg_busy_compressing_images">Compressione: immagine %1$d di %2$d…</string>
+    <string name="msg_busy_compressing_again">Nuova compressione per raggiungere la dimensione: tentativo %1$d…</string>
+    <string name="busy_cancel_compress">Annulla si ferma qui. Non viene creato alcun file e il tuo documento resta com’è.</string>
 </resources>

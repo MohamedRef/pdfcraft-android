@@ -6,4 +6,8 @@
     <string name="busy_cancel_combine">Abbrechen hält vor der nächsten Datei an. Nichts wird erstellt, deine Dateien bleiben unverändert.</string>
     <string name="busy_cancel_export_images">Abbrechen hält nach dieser Seite an. Es werden keine Bilder gespeichert.</string>
     <string name="busy_cancel_save_files">Abbrechen hält nach dieser Datei an. Bereits gespeicherte Dateien bleiben im Ordner.</string>
+    <string name="msg_busy_compressing_reading">Wird komprimiert: Seite %1$d von %2$d wird gelesen …</string>
+    <string name="msg_busy_compressing_images">Wird komprimiert: Bild %1$d von %2$d …</string>
+    <string name="msg_busy_compressing_again">Wird erneut komprimiert, um die Größe zu erreichen: Versuch %1$d …</string>
+    <string name="busy_cancel_compress">Abbrechen hält hier an. Es wird keine Datei erstellt, dein Dokument bleibt unverändert.</string>
 </resources>

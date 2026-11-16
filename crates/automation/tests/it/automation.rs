@@ -14983,3 +14983,66 @@ fn comments_put_on_a_layer_share_one_optional_content_group() {
     ok(&mut a, "edit_undo", json!({ "doc": doc }));
     assert_eq!(ok(&mut a, "doc_info", json!({ "doc": doc }))["layers"], json!([]), "undo removes the layer");
 }
+
+/// #634: a watch set on the session is told each stage of `doc_optimize` with how far it is, and
+/// stops it by returning false; a stopped run writes no file and leaves the document as it was.
+#[test]
+fn a_job_watch_follows_compress_and_can_stop_it() {
+    use pdfcraft_automation::JobStep;
+    use std::sync::{Arc, Mutex};
+    let dir = workdir("optimize-watch");
+    let mut a = auto(&dir);
+    let doc = ok(&mut a, "doc_open", json!({ "path": "a.pdf" }))["doc"].as_u64().unwrap();
+    let before = ok(&mut a, "doc_info", json!({ "doc": doc }));
+
+    let seen: Arc<Mutex<Vec<JobStep>>> = Arc::default();
+    let log = seen.clone();
+    a.set_job_watch(Some(Arc::new(move |s| {
+        log.lock().unwrap().push(s);
+        true
+    })));
+    let r = ok(&mut a, "doc_optimize", json!({ "doc": doc, "path": "watched.pdf" }));
+    a.set_job_watch(None);
+    assert!(dir.join("watched.pdf").is_file(), "{r}");
+    let steps = seen.lock().unwrap().clone();
+    let stages: Vec<&str> = steps.iter().map(|s| s.stage).collect();
+    assert_eq!(stages.last(), Some(&"writing"), "{stages:?}");
+    // the three pages are read one by one: told before each, with how many are read by then
+    for done in 0..3 {
+        assert!(steps.iter().any(|s| s.stage == "reading" && (s.done, s.total) == (done, 3)), "page {done}: {steps:?}");
+    }
+    assert!(steps.windows(2).all(|w| w[0].fraction <= w[1].fraction), "it never steps back: {steps:?}");
+    assert!(steps.iter().all(|s| s.attempt == 1 && (0.0..=1.0).contains(&s.fraction)), "{steps:?}");
+
+    // Stopped at its last stage: cancelled, no file, and the document as it was.
+    a.set_job_watch(Some(Arc::new(|s: JobStep| s.stage != "writing")));
+    let e = err(&mut a, "doc_optimize", json!({ "doc": doc, "path": "stopped.pdf" }));
+    a.set_job_watch(None);
+    assert!(matches!(&e, ToolError::Failed(m) if m.contains("cancelled")), "{e}");
+    assert!(!dir.join("stopped.pdf").exists());
+    assert_eq!(ok(&mut a, "doc_info", json!({ "doc": doc })), before);
+
+    // Stopped at the first step it is told of.
+    a.set_job_watch(Some(Arc::new(|_| false)));
+    let e = err(&mut a, "doc_optimize", json!({ "doc": doc, "path": "stopped.pdf" }));
+    a.set_job_watch(None);
+    assert!(matches!(&e, ToolError::Failed(m) if m.contains("cancelled")), "{e}");
+    assert!(!dir.join("stopped.pdf").exists());
+
+    // A target size runs it again with stronger settings: each run is counted.
+    let seen: Arc<Mutex<Vec<JobStep>>> = Arc::default();
+    let log = seen.clone();
+    a.set_job_watch(Some(Arc::new(move |s| {
+        log.lock().unwrap().push(s);
+        true
+    })));
+    ok(&mut a, "doc_optimize", json!({ "doc": doc, "path": "target.pdf", "target_bytes": 1 }));
+    a.set_job_watch(None);
+    let attempts: Vec<usize> = seen.lock().unwrap().iter().map(|s| s.attempt).collect();
+    assert_eq!(attempts.first(), Some(&1), "{attempts:?}");
+    assert!(attempts.windows(2).all(|w| w[0] <= w[1]) && attempts.last() > Some(&1), "{attempts:?}");
+
+    // Without a watch it runs to its end as before.
+    ok(&mut a, "doc_optimize", json!({ "doc": doc, "path": "plain.pdf" }));
+    assert!(dir.join("plain.pdf").is_file());
+}

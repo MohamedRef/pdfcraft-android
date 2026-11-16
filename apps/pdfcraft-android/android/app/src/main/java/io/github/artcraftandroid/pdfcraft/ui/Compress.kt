@@ -18,6 +18,37 @@ data class CompressOptions(
     val discardAlternateImages: Boolean = true,
 )
 
+/** What the busy dialog says while Compress runs (#634), from the step the engine reports. */
+sealed class CompressStep {
+    /** No count to show: before the first step, and the short steps between and after the counted ones. */
+    data object Working : CompressStep()
+
+    /** Reading what page [page] of [pages] draws. */
+    data class Reading(val page: Int, val pages: Int) : CompressStep()
+
+    /** Compressing image [image] of [images]. */
+    data class Images(val image: Int, val images: Int) : CompressStep()
+
+    /** A target size was not reached: compressing again with stronger settings, run [attempt]. */
+    data class Again(val attempt: Int) : CompressStep()
+}
+
+/**
+ * The step to show for the engine's [stage] of `doc_optimize`, [done] of [total] in it, in run
+ * [attempt] (#634). The engine counts from 0 ([done] pages read, about to do image [done]), so the
+ * one in hand is [done] + 1, never past [total].
+ */
+fun compressStep(stage: String, done: Int, total: Int, attempt: Int): CompressStep = when {
+    attempt > 1 -> CompressStep.Again(attempt)
+    total <= 0 -> CompressStep.Working
+    stage == "reading" -> CompressStep.Reading(minOf(done + 1, total), total)
+    stage == "images" -> CompressStep.Images(minOf(done + 1, total), total)
+    else -> CompressStep.Working
+}
+
+/** How often the busy dialog asks a running Compress how far it is (#634). */
+const val COMPRESS_WATCH_MS = 250L
+
 /** The level's image settings: (ppi, above ppi, JPEG quality). 0 high, 1 medium, 2 low compression. */
 fun levelImages(level: Int): Triple<Int, Int, Int> = when (level) {
     0 -> Triple(72, 108, 40)

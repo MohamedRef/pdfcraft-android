@@ -372,6 +372,39 @@ impl Automation {
         Ok(out)
     }
 
+    /// One optimization of document `id`, as `Session::optimized_bytes`, with each stage told to
+    /// the job watch (#634): `attempt` is which run this is. Stopped by the watch, it fails with
+    /// "cancelled"; the document is not changed either way.
+    fn optimize_watched(
+        &self,
+        id: pdfcraft_engine::DocId,
+        settings: &pdfcraft_engine::optimize::Settings,
+        discard: &[pdfcraft_engine::Hidden],
+        attempt: usize,
+    ) -> Result<(pdfcraft_cos::PdfBytes, pdfcraft_engine::OptimizeReport)> {
+        use pdfcraft_engine::optimizer::OptimizeStage;
+        let watch = self.job_watch.clone();
+        let job = self.session.optimize_job(id, settings, discard).map_err(failed)?;
+        // A page's picture fragments are merged after the pages are read and count as no progress
+        // of their own, so the stage's own fraction would step back there: it never does here.
+        let mut reached = 0.0f32;
+        job.run(|stage| {
+            let Some(watch) = &watch else { return true };
+            let (name, done, total) = match stage {
+                OptimizeStage::Discarding => ("discarding", 0, 0),
+                OptimizeStage::Reading { done, total } => ("reading", done, total),
+                OptimizeStage::Fragments => ("fragments", 0, 0),
+                OptimizeStage::Images { done, total } => ("images", done, total),
+                OptimizeStage::CleaningUp => ("cleaning_up", 0, 0),
+                OptimizeStage::Merging => ("merging", 0, 0),
+                OptimizeStage::Writing => ("writing", 0, 0),
+            };
+            reached = reached.max(stage.fraction());
+            watch(crate::JobStep { stage: name, done, total, fraction: reached, attempt })
+        })
+        .map_err(failed)
+    }
+
     pub(crate) fn doc_optimize(&mut self, a: &Args) -> Result<Value> {
         use pdfcraft_engine::optimize::{Compatibility, Compression, ImageSettings, MonoCompression, Preset};
         const MONO_KEYS: [&str; 4] = ["downsample", "ppi", "above_ppi", "compression"];
@@ -481,7 +514,7 @@ impl Automation {
             Some(t) if t >= 1 => Some(usize::try_from(t).map_err(|_| ToolError::InvalidArgs(format!("target_bytes {t} is too large")))?),
             Some(t) => return Err(ToolError::InvalidArgs(format!("target_bytes must be at least 1, not {t}"))),
         };
-        let (mut bytes, mut r) = self.session.optimized_bytes(id, &settings, &discard).map_err(failed)?;
+        let (mut bytes, mut r) = self.optimize_watched(id, &settings, &discard, 1)?;
         let mut attempts = 1;
         let mut step_used = 0;
         // Settings already optimized with; a rung that changes nothing is not run again.
@@ -507,7 +540,7 @@ impl Automation {
                 if tried.contains(&s) {
                     continue;
                 }
-                let (b2, r2) = self.session.optimized_bytes(id, &s, &discard).map_err(failed)?;
+                let (b2, r2) = self.optimize_watched(id, &s, &discard, attempts + 1)?;
                 tried.push(s);
                 attempts += 1;
                 if b2.len() < bytes.len() {

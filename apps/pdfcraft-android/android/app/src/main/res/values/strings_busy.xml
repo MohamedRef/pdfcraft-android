@@ -6,4 +6,9 @@
     <string name="busy_cancel_combine">Cancel stops before the next file. Nothing is made, and your files stay as they are.</string>
     <string name="busy_cancel_export_images">Cancel stops after this page. No images are saved.</string>
     <string name="busy_cancel_save_files">Cancel stops after this file. The files already saved stay in the folder.</string>
+    <!-- Compress says how far it is and can be stopped (#634): the page being read, the image being compressed, and another run when a chosen size was not reached -->
+    <string name="msg_busy_compressing_reading">Compressing: reading page %1$d of %2$d…</string>
+    <string name="msg_busy_compressing_images">Compressing: image %1$d of %2$d…</string>
+    <string name="msg_busy_compressing_again">Compressing again to reach the size: try %1$d…</string>
+    <string name="busy_cancel_compress">Cancel stops here. No file is made, and your document stays as it is.</string>
 </resources>

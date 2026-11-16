@@ -736,12 +736,20 @@ impl MobileSession {
 
     /// Run tool `name`; its JSON result (`null` if it gave none).
     fn call(&self, name: &str, args: &Value) -> Result<Value, MobileError> {
+        self.call_watched(name, args, None)
+    }
+
+    /// [`Self::call`] with `watch` told how far a long tool is and able to stop it (#634).
+    fn call_watched(&self, name: &str, args: &Value, watch: Option<pdfcraft_automation::JobWatch>) -> Result<Value, MobileError> {
         self.with_auto(name, |auto| {
             if name != "doc_close" && name != "doc_list" && auto.session().docs().iter().any(Document::preparing) {
                 return Err(MobileError::Command("Document preparation is still running".into()));
             }
-            let out = auto.call(name, args).map_err(|e| MobileError::Command(e.to_string()))?;
-            Ok(first_json(out))
+            // Set on every call, so a watch left behind by a tool that panicked never watches the next one.
+            auto.set_job_watch(watch);
+            let out = auto.call(name, args).map_err(|e| MobileError::Command(e.to_string()));
+            auto.set_job_watch(None);
+            Ok(first_json(out?))
         })
         .inspect(|_| {
             // Layer visibility is a view setting, not an edit: the document's bytes stay the same,
@@ -970,6 +978,81 @@ fn glyph_range(text: &PageText, start: u32, end: u32) -> std::ops::Range<usize> 
 
 fn flatten_rects(rects: &[[f32; 4]]) -> Vec<f32> {
     rects.iter().flat_map(|r| r.iter().copied()).collect()
+}
+
+/// A tool's JSON arguments (`""` = none).
+fn tool_args(name: &str, args_json: &str) -> Result<Value, MobileError> {
+    if args_json.trim().is_empty() {
+        return Ok(Value::Null);
+    }
+    serde_json::from_str(args_json).map_err(|e| MobileError::Command(format!("`{name}`: the arguments are not valid JSON: {e}")))
+}
+
+/// How far a watched tool is (#634), as [`ToolJob::progress`] gives it.
+#[derive(Debug, Clone, Default, PartialEq, Eq, uniffi::Record)]
+pub struct ToolProgress {
+    /// The tool's own word for what it is doing (`doc_optimize`: `discarding`, `reading`,
+    /// `fragments`, `images`, `cleaning_up`, `merging`, `writing`); empty before its first step.
+    pub stage: String,
+    /// `done` of `total` in this stage (pages read, images compressed); 0 of 0 for a stage that is
+    /// one step.
+    pub done: u32,
+    pub total: u32,
+    /// How far the run is, 0 to 100.
+    pub percent: u32,
+    /// Which run this is, from 1 (`doc_optimize` with a target size may run several times); 0
+    /// before the first step.
+    pub attempt: u32,
+    /// How many steps the tool has reported.
+    pub steps: u64,
+}
+
+/// A long tool's progress and its stop switch (#634). The app makes one, passes it to
+/// [`MobileSession::execute_watched`] and, from another thread, reads [`ToolJob::progress`] and
+/// calls [`ToolJob::cancel`]: neither waits for the session lock the tool holds.
+#[derive(uniffi::Object, Default)]
+pub struct ToolJob {
+    cancelled: AtomicBool,
+    progress: Mutex<ToolProgress>,
+}
+
+#[uniffi::export]
+impl ToolJob {
+    #[uniffi::constructor]
+    pub fn new() -> Arc<Self> {
+        Arc::new(Self::default())
+    }
+
+    /// Stop the tool at its next step: it fails with "cancelled", having written nothing.
+    pub fn cancel(&self) {
+        self.cancelled.store(true, Ordering::Release);
+    }
+
+    pub fn is_cancelled(&self) -> bool {
+        self.cancelled.load(Ordering::Acquire)
+    }
+
+    /// Where the tool is now.
+    pub fn progress(&self) -> ToolProgress {
+        self.progress.lock().unwrap_or_else(PoisonError::into_inner).clone()
+    }
+}
+
+impl ToolJob {
+    /// One step of the tool, kept for [`Self::progress`]; `false` when it was asked to stop.
+    fn step(&self, step: pdfcraft_automation::JobStep) -> bool {
+        let count = |n: usize| u32::try_from(n).unwrap_or(u32::MAX);
+        let mut progress = self.progress.lock().unwrap_or_else(PoisonError::into_inner);
+        *progress = ToolProgress {
+            stage: step.stage.to_string(),
+            done: count(step.done),
+            total: count(step.total),
+            percent: (step.fraction.clamp(0.0, 1.0) * 100.0).round() as u32,
+            attempt: count(step.attempt),
+            steps: progress.steps + 1,
+        };
+        !self.is_cancelled()
+    }
 }
 
 /// A stop switch for one render (#91): the app cancels it when the view no longer wants the page
@@ -1257,12 +1340,20 @@ impl MobileSession {
     /// Run tool `name` with JSON arguments (`""` = none) and return its JSON result: the tools and
     /// arguments of `pdfcraft-cli run` and MCP (pages are 1-based there).
     pub fn execute(&self, name: String, args_json: String) -> Result<String, MobileError> {
-        let args = if args_json.trim().is_empty() {
-            Value::Null
-        } else {
-            serde_json::from_str(&args_json).map_err(|e| MobileError::Command(format!("`{name}`: the arguments are not valid JSON: {e}")))?
-        };
-        Ok(self.call(&name, &args)?.to_string())
+        Ok(self.call(&name, &tool_args(&name, &args_json)?)?.to_string())
+    }
+
+    /// [`Self::execute`] with `job` told how far the tool is and able to stop it (#634). The tools
+    /// that report their steps do (`doc_optimize`); any other runs exactly as with `execute`. A
+    /// stopped tool fails with "cancelled", having written nothing and changed no document; a job
+    /// cancelled before the call starts nothing.
+    pub fn execute_watched(&self, name: String, args_json: String, job: Arc<ToolJob>) -> Result<String, MobileError> {
+        let args = tool_args(&name, &args_json)?;
+        if job.is_cancelled() {
+            return Err(MobileError::Command("cancelled".into()));
+        }
+        let watch: pdfcraft_automation::JobWatch = Arc::new(move |step| job.step(step));
+        Ok(self.call_watched(&name, &args, Some(watch))?.to_string())
     }
 
     /// Every tool, with its argument schema.

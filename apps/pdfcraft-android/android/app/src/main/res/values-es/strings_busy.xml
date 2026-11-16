@@ -6,4 +6,8 @@
     <string name="busy_cancel_combine">Cancelar se detiene antes del siguiente archivo. No se crea nada y tus archivos quedan como están.</string>
     <string name="busy_cancel_export_images">Cancelar se detiene tras esta página. No se guarda ninguna imagen.</string>
     <string name="busy_cancel_save_files">Cancelar se detiene tras este archivo. Los archivos ya guardados se quedan en la carpeta.</string>
+    <string name="msg_busy_compressing_reading">Comprimiendo: leyendo la página %1$d de %2$d…</string>
+    <string name="msg_busy_compressing_images">Comprimiendo: imagen %1$d de %2$d…</string>
+    <string name="msg_busy_compressing_again">Comprimiendo de nuevo para alcanzar el tamaño: intento %1$d…</string>
+    <string name="busy_cancel_compress">Cancelar se detiene aquí. No se crea ningún archivo y tu documento queda como está.</string>
 </resources>

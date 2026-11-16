@@ -15,11 +15,11 @@ internal object BusyJobs {
         "msg_busy_exporting_images", // Export to images, page by page †; Images in the PDF is one call (below)
         "msg_busy_combining", "msg_busy_creating_pdf", // files read in one by one †, then one call that cannot count
         "msg_busy_saving_files", // files saved to a folder one by one †
+        "msg_busy_compressing", // Compress: the engine reports pages read and images done, and stops when asked † (#634)
     )
 
     /** Jobs that can neither count nor stop, with the reason: each is one call into the PDF library, or a few short ones. */
     val notCounted = mapOf(
-        "msg_busy_compressing" to "one call: doc_optimize",
         "msg_busy_splitting" to "one call: doc_split",
         "msg_busy_exporting_to" to "one call: doc_export_office or doc_export_text",
         "msg_busy_extracting" to "one call: page_extract",
