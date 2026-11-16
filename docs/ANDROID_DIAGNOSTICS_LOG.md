@@ -157,6 +157,8 @@ Every line carries `doc` (the document's number in the log).
 | `comments_copy`, `comments_paste` | `comments`, `pages`; `pages`, `skipped_pages` | Comments copied to another document, and pages a paste had to skip because the document is shorter (#169) |
 | `comment_status`, `comment_lock` | `status` (`accepted`, `rejected`, `cancelled`, `completed`, `none`); `locked` | A review status or lock was set from the list (#196) |
 | `markup_follow_up` | `action` (`recolor`, `note`, `delete`) | The bar that follows a new markup was used (#197) |
+| `markup_in_hand` | `markup` (`highlight`, `underline`, `strikethrough`, `squiggly`), `lines` | A markup made with the Highlight tool got the follow-up bar by it (#650). Against `markup_follow_up`, it says how often the bar is used and how often it is only passed |
+| `markup_quick_color` | `markup` | A colour was picked from Highlight's row in one tap (#650) |
 | `area_highlight` | `w_pt`, `h_pt` | A Highlight drag that found no text highlighted the area instead (#134) |
 | `text_suggestion` | `kind` (`replace`, `insert`), `lines` | A replace or insert suggestion on selected text (#133) |
 | `shape` | `type` (the shape mode, such as `arrow`, `cloud`, `polygon`), `points` | A drawn shape became its own annotation rather than ink (#170) |
