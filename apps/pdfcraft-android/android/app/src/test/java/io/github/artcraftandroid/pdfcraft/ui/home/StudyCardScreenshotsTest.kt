@@ -51,6 +51,8 @@ class StudyCardScreenshotsTest {
             }
         }
         rule.waitForIdle()
+        // the card open, as a tablet shows it and a phone does after a tap (#615)
+        rule.runOnUiThread { vm.home.setFoldContinue(false) }
         val s = vm.study
         s.studyStats.clear()
         val lib = s.library

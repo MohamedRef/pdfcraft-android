@@ -115,6 +115,9 @@ fun HomeRoot(vm: AppViewModel, onBrowse: () -> Unit) {
                 HomeTab.Search -> SearchTab(vm)
             }
         }
+        // documents still open in tabs (#138): back to them, on a line of its own between the list
+        // and the bottom bar, so it never covers a file (#615)
+        if (vm.tabs.tabs.isNotEmpty()) io.github.artcraftandroid.pdfcraft.ui.viewer.OpenTabsBar(vm, Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp))
         BottomNav(vm.home.homeTab) { vm.home.homeTab = it }
     }
 }
@@ -206,8 +209,9 @@ private fun HomeTabScreen(vm: AppViewModel, onBrowse: () -> Unit) {
                             Text(stringResource(R.string.updater_home_view), color = c.accent, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                         }
                     }
-                    Text(stringResource(if (vm.recentList.isEmpty()) R.string.home_welcome else R.string.home_welcome_back), color = c.text, fontSize = 24.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 16.dp, top = 8.dp, bottom = 16.dp))
+                    // "Welcome back" gave way to the files once there are some (#615): only a first visit is welcomed
                     if (vm.recentList.isEmpty()) {
+                        Text(stringResource(R.string.home_welcome), color = c.text, fontSize = 24.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 16.dp, top = 8.dp, bottom = 16.dp))
                         // a first visit: one primary action (#202)
                         Box(
                             Modifier.padding(start = 16.dp, end = 16.dp, bottom = 20.dp).fillMaxWidth().height(48.dp)
@@ -215,7 +219,7 @@ private fun HomeTabScreen(vm: AppViewModel, onBrowse: () -> Unit) {
                             contentAlignment = Alignment.Center,
                         ) { Text(stringResource(R.string.home_open_pdf), color = c.onAccent, fontSize = 16.sp, fontWeight = FontWeight.SemiBold) }
                     }
-                    Text(stringResource(if (vm.recentList.isEmpty()) R.string.home_or_start_with_tool else R.string.home_start_with_tool), color = c.text, fontSize = 15.sp, lineHeight = 22.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(start = 16.dp, bottom = 8.dp))
+                    Text(stringResource(if (vm.recentList.isEmpty()) R.string.home_or_start_with_tool else R.string.home_start_with_tool), color = c.text, fontSize = 15.sp, lineHeight = 22.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(start = 16.dp, top = if (vm.recentList.isEmpty()) 0.dp else 8.dp, bottom = 8.dp))
                     ToolsCarousel(vm, onBrowse)
                     // the last scans, one tap from Home (#516)
                     io.github.artcraftandroid.pdfcraft.ui.scan.ScanRecentHomeRow(vm)
@@ -302,6 +306,25 @@ private fun HomeTabScreen(vm: AppViewModel, onBrowse: () -> Unit) {
             confirm = stringResource(R.string.common_clear), onConfirm = { confirmClear = false; vm.home.clearRecents() }, destructive = true,
         ) { Text(stringResource(R.string.home_clear_recent_body), color = c.text, fontSize = 14.sp) }
     }
+}
+
+/**
+ * Whether Home's cards start folded to their title line (#615): on a phone, so that three recent
+ * files show without scrolling whatever cards are above them; open on a tablet. The person's own
+ * fold or unfold is remembered and wins.
+ */
+@Composable
+internal fun homeCardsFoldedByDefault(): Boolean = androidx.compose.ui.platform.LocalConfiguration.current.smallestScreenWidthDp < 600
+
+/** The chevron at the end of a Home card's title line: folds the card, or opens it (#615). */
+@Composable
+internal fun FoldChevron(folded: Boolean, title: String, onToggle: () -> Unit) {
+    val c = pdfColors
+    val label = stringResource(if (folded) R.string.home_card_unfold else R.string.home_card_fold, title)
+    Box(
+        Modifier.minimumInteractiveComponentSize().size(40.dp).clip(CircleShape).clickable(role = Role.Button, onClick = onToggle).semantics { contentDescription = label },
+        contentAlignment = Alignment.Center,
+    ) { Icon(if (folded) LucideIcons.ChevronDown else LucideIcons.ChevronUp, null, tint = c.icon, modifier = Modifier.size(20.dp)) }
 }
 
 /** A tool that starts by choosing a PDF. */
@@ -537,17 +560,23 @@ internal fun ContinueStudying(vm: AppViewModel) {
     var categoryFor by remember { mutableStateOf<io.github.artcraftandroid.pdfcraft.engine.DocStudy?>(null) }
     val chip = vm.study.studyChip
     val studies = io.github.artcraftandroid.pdfcraft.engine.StudyCard.studies(chip)
-    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp).clip(RoundedCornerShape(8.dp)).background(c.surfaceRaised).padding(vertical = 12.dp)) {
-        Row(Modifier.padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+    // folded to its title line on a phone until opened (#615); one document, then More
+    val folded = vm.home.foldContinue ?: homeCardsFoldedByDefault()
+    var allRows by remember { mutableStateOf(false) }
+    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp).clip(RoundedCornerShape(8.dp)).background(c.surfaceRaised).padding(top = if (folded) 2.dp else 4.dp, bottom = if (folded) 2.dp else 12.dp)) {
+        val title = stringResource(if (studies) R.string.study_continue else R.string.study_continue_reading)
+        Row(Modifier.padding(start = 12.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(
-                stringResource(if (studies) R.string.study_continue else R.string.study_continue_reading), color = c.text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold,
+                title, color = c.text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold,
                 modifier = Modifier.weight(1f).semantics { heading() },
             )
             if (studies) {
                 val week = vm.study.studyWeek.sum() / 60_000
                 Text(stringResource(R.string.study_week_minutes, week / 60, week % 60), color = c.textSecondary, fontSize = 12.sp)
             }
+            FoldChevron(folded, title) { vm.home.setFoldContinue(!folded) }
         }
+        if (folded) return@Column
         if (vm.study.studyChips.isNotEmpty()) {
             // All, then each category in use; they scroll, none is squeezed (#538's rule)
             Row(
@@ -583,7 +612,8 @@ internal fun ContinueStudying(vm: AppViewModel) {
                 }
             }
             val chooseLabel = stringResource(R.string.category_choose)
-            for (d in vm.study.studyRecent) {
+            val rows = vm.study.studyRecent
+            for (d in if (allRows) rows else rows.take(1)) {
                 val label = stringResource(R.string.study_resume_row, d.name.removeSuffix(".pdf"), d.lastPage + 1, (d.progress * 100).toInt())
                 Column(
                     Modifier.fillMaxWidth()
@@ -606,6 +636,11 @@ internal fun ContinueStudying(vm: AppViewModel) {
                     }
                 }
             }
+            if (rows.size > 1) Text(
+                if (allRows) stringResource(R.string.study_card_fewer) else stringResource(R.string.study_card_more, rows.size - 1),
+                color = c.accent, fontSize = 14.sp, fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.fillMaxWidth().clickable(role = Role.Button) { allRows = !allRows }.padding(vertical = 8.dp),
+            )
         }
     }
     categoryFor?.let { d -> CategorySheet(vm, d.uri, d.name, "card_row") { categoryFor = null } }

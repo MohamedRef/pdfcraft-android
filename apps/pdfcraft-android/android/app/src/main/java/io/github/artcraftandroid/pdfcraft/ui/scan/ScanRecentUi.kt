@@ -125,12 +125,16 @@ internal fun ScanRecentHomeRow(vm: AppViewModel) {
     LaunchedEffect(Unit) { recent.refresh() }
     val list = recent.list.take(SCAN_RECENT_HOME)
     if (list.isEmpty()) return
+    // folded to its title line on a phone until opened (#615), so three recent files show below
+    val folded = vm.home.foldScans ?: io.github.artcraftandroid.pdfcraft.ui.home.homeCardsFoldedByDefault()
     Column(Modifier.fillMaxWidth().padding(top = 12.dp)) {
+        val title = stringResource(R.string.scan_recent_title)
         Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(stringResource(R.string.scan_recent_title), color = c.text, fontSize = 15.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium, modifier = Modifier.weight(1f))
+            Text(title, color = c.text, fontSize = 15.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium, modifier = Modifier.weight(1f))
             androidx.compose.material3.TextButton(onClick = { recent.show() }) { Text(stringResource(R.string.scan_recent_see_all), color = c.accent, fontSize = 14.sp) }
+            io.github.artcraftandroid.pdfcraft.ui.home.FoldChevron(folded, title) { vm.home.setFoldScans(!folded) }
         }
-        androidx.compose.foundation.lazy.LazyRow(
+        if (!folded) androidx.compose.foundation.lazy.LazyRow(
             contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 16.dp),
             horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(12.dp),
         ) {
