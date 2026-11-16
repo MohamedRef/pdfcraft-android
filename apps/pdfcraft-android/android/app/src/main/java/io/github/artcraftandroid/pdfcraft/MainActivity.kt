@@ -396,13 +396,24 @@ class MainActivity : ComponentActivity() {
         return true
     }
 
+    /**
+     * The kind of app that sent [intent] (#656): the referrer Android reports, else the one the
+     * intent names. Only its kind is kept, never the package name.
+     */
+    private fun senderOf(intent: Intent?): String {
+        val pkg = runCatching { referrer?.takeIf { it.scheme == "android-app" }?.host }.getOrNull()
+            ?: runCatching { IntentCompat.getParcelableExtra(intent!!, Intent.EXTRA_REFERRER, Uri::class.java)?.takeIf { it.scheme == "android-app" }?.host }.getOrNull()
+            ?: runCatching { intent?.getStringExtra(Intent.EXTRA_REFERRER_NAME)?.let(Uri::parse)?.takeIf { it.scheme == "android-app" }?.host }.getOrNull()
+        return io.github.artcraftandroid.pdfcraft.engine.senderKind(pkg, packageName)
+    }
+
     /** An external document must not terminate the whole app on a malformed parcelable. */
     private fun openFromIntent(intent: Intent?) {
         if (runCatching { startFromIntent(intent) }.getOrDefault(false)) return
         val uri = runCatching { externalPdfUri(intent) }.getOrNull() ?: return
         // shared comments (#158) go into the document open now, not open as one
         if (isCommentsType(runCatching { intent?.type }.getOrNull())) vm.commenting.receiveComments(uri)
-        else vm.open(uri, fromOtherApp = true)
+        else vm.open(uri, fromOtherApp = true, sender = senderOf(intent))
     }
 
     /**

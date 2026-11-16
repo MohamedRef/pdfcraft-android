@@ -164,10 +164,23 @@ class DocumentFiles(private val context: Context) {
         val dir = File(workDir, sha(uri.toString()))
         val content = uri.scheme == ContentResolver.SCHEME_CONTENT
         // asked only when it matters: a content document with the setting on
-        val lasting = !enabled || !content || lastingAccess(
-            runCatching { resolver.persistedUriPermissions.any { it.uri == uri && it.isReadPermission } }.getOrDefault(false),
-            runCatching { directFile(uri)?.path }.getOrNull(),
-        )
+        val lasting = !enabled || !content || run {
+            val persisted = runCatching { resolver.persistedUriPermissions.any { it.uri == uri && it.isReadPermission } }.getOrDefault(false)
+            val realPath = runCatching { directFile(uri)?.path }.getOrNull()
+            // a chat or mail app sent it (marked as it arrived), or its copy was made before: a copy, always (#656)
+            val marked = File(dir, ONE_VISIT_MARK).exists()
+            val reachable = !marked && lastingAccess(persisted, realPath)
+            Diag.event(
+                DiagArea.Open, "one_visit_check", "persisted" to persisted, "marked" to marked,
+                "path" to when {
+                    realPath == null -> "none"
+                    ownedByAnotherApp(realPath) -> "app_folder"
+                    else -> "shared"
+                },
+                "lasting" to reachable,
+            )
+            reachable
+        }
         val early = inPlaceRefusal(enabled, content, PendingWorkingCopy.isPending(dir), 0, -1, 1, true, lasting)
         if (early != null) return null to early
         val asset = openAsset(uri) ?: return null to InPlaceReason.NO_DESCRIPTOR
@@ -425,7 +438,7 @@ class DocumentFiles(private val context: Context) {
 
     /** Mark [uri]'s working copy as the copy of a file lent for one visit, kept while it is in Recent (#476). */
     fun markOneVisit(uri: Uri) {
-        runCatching { File(File(workDir, sha(uri.toString())), ONE_VISIT_MARK).createNewFile() }
+        runCatching { File(workDir, sha(uri.toString())).apply { mkdirs() }.let { File(it, ONE_VISIT_MARK).createNewFile() } }
     }
 
     /**
