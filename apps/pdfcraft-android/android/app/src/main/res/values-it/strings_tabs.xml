@@ -21,4 +21,10 @@
         <item quantity="many">%1$d documenti aperti</item>
         <item quantity="other">%1$d documenti aperti</item>
     </plurals>
+    <plurals name="tabs_close_all_title">
+        <item quantity="one">Chiudere %1$d documento aperto?</item>
+        <item quantity="many">Chiudere %1$d documenti aperti?</item>
+        <item quantity="other">Chiudere %1$d documenti aperti?</item>
+    </plurals>
+    <string name="tabs_close_all_body">Le modifiche vengono salvate prima. Puoi riaprire i documenti da Recenti.</string>
 </resources>

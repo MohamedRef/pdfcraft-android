@@ -7,8 +7,10 @@ import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.performClick
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.test.core.app.ApplicationProvider
@@ -121,6 +123,26 @@ class HomeLayoutTest {
         rule.onNodeWithText("More (2)").assertExists()
         rule.onNodeWithText("A novel").assertDoesNotExist()
         capture("home_card_open_en_384x832_light")
+    }
+
+    /** #636: the ✕ in the bar closes nothing by itself; it asks, and only "Close all" there closes the documents. */
+    @Test @Config(qualifiers = "en-w384dp-h832dp-xhdpi")
+    fun closeAllAsksFirstAndClosesOnlyOnYes() {
+        show()
+        rule.onNodeWithContentDescription("Close all").performClick()
+        rule.waitForIdle()
+        assertEquals("nothing closed by the tap", 3, vm.tabs.tabs.size)
+        rule.onNodeWithText("Close 3 open documents?").assertExists()
+        rule.onNodeWithText("Changes are saved first. You can open the documents again from Recent.").assertExists()
+        rule.onNodeWithText("Cancel").performClick()
+        rule.waitForIdle()
+        assertEquals("Cancel keeps them open", 3, vm.tabs.tabs.size)
+        rule.onNodeWithText("Close 3 open documents?").assertDoesNotExist()
+        rule.onNodeWithContentDescription("Close all").performClick()
+        rule.waitForIdle()
+        rule.onNodeWithText("Close all").performClick()
+        settle { vm.tabs.tabs.isEmpty() }
+        rule.onNodeWithText("Back to documents").assertDoesNotExist()
     }
 
     @Test @Config(qualifiers = "de-w320dp-h640dp-xhdpi")

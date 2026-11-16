@@ -20,4 +20,10 @@
         <item quantity="one">%1$d open document</item>
         <item quantity="other">%1$d open documents</item>
     </plurals>
+    <!-- Close all on Home asks first (#636): the ✕ beside "Back to documents" could be read as "hide this bar" -->
+    <plurals name="tabs_close_all_title">
+        <item quantity="one">Close %1$d open document?</item>
+        <item quantity="other">Close %1$d open documents?</item>
+    </plurals>
+    <string name="tabs_close_all_body">Changes are saved first. You can open the documents again from Recent.</string>
 </resources>
