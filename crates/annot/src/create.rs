@@ -97,7 +97,7 @@ pub(crate) fn rect_for(shape: &Shape, style: &Style) -> Result<[f64; 4], AnnotEr
             let pad = half + if ending_draws(*start) || ending_draws(*end) { appearance::arrow_size(style.width) } else { 0.0 };
             grow(bounds([*from, *to].into_iter()).unwrap_or_default(), pad + 1.0)
         }
-        Shape::Ink { strokes } | Shape::FreehandHighlight { strokes } | Shape::Signature { strokes } => {
+        Shape::Ink { strokes } | Shape::FreehandHighlight { strokes } | Shape::FreehandHighlightOnDark { strokes } | Shape::Signature { strokes } => {
             if strokes.iter().all(Vec::is_empty) || !strokes.iter().flatten().all(|p| finite(p)) {
                 return Err(bad("drawing (no points)"));
             }
@@ -187,7 +187,7 @@ fn subject(shape: &Shape) -> &'static str {
         Shape::Oval { .. } => "Oval",
         Shape::Line { start: LineEnding::None, end: LineEnding::OpenArrow, .. } => "Arrow",
         Shape::Line { .. } => "Line",
-        Shape::FreehandHighlight { .. } => "Freehand Highlight",
+        Shape::FreehandHighlight { .. } | Shape::FreehandHighlightOnDark { .. } => "Freehand Highlight",
         Shape::Ink { .. } | Shape::PressureInk { .. } => "Pencil",
         Shape::TextBox { .. } => "Text Box",
         Shape::Typewriter { .. } => "Typewriter",
@@ -423,12 +423,15 @@ pub fn add_annotation(doc: &mut Document, new: &NewAnnotation, meta: &Meta) -> R
                 }
             }
         }
-        Shape::Ink { strokes } | Shape::FreehandHighlight { strokes } | Shape::Signature { strokes } => {
+        Shape::Ink { strokes } | Shape::FreehandHighlight { strokes } | Shape::FreehandHighlightOnDark { strokes } | Shape::Signature { strokes } => {
             d.set(b"C".to_vec(), rgb(style.color));
             let list = strokes.iter().filter(|s| !s.is_empty()).map(|s| num_array(&s.concat())).collect();
             d.set(b"InkList".to_vec(), Object::Array(list));
-            if matches!(&new.shape, Shape::FreehandHighlight { .. }) {
+            if matches!(&new.shape, Shape::FreehandHighlight { .. } | Shape::FreehandHighlightOnDark { .. }) {
                 d.set(b"IT".to_vec(), Object::name("FreehandHighlight"));
+            }
+            if matches!(&new.shape, Shape::FreehandHighlightOnDark { .. }) {
+                d.set(b"PCBackdrop".to_vec(), Object::name("Dark"));
             }
             border(&mut d);
         }

@@ -103,6 +103,9 @@ class ViewerController {
     /** Pages drawn as inverted greyscale (View settings ▸ Night Mode). */
     var nightMode by mutableStateOf(false)
 
+    /** The document is a notebook made here with Dark paper (#610): pens start light and the marker lightens. */
+    var darkPaper by mutableStateOf(false)
+
     /** View settings ▸ Reading colours, as set in the engine for this document. */
     var readingColors by mutableStateOf(ReadingColors.Off)
 

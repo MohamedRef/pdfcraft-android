@@ -1,7 +1,11 @@
 package io.github.artcraftandroid.pdfcraft.ui.viewer
 
 /** Immutable appearance captured when ink begins, retained through undo/redo and save. */
-internal data class InkAppearance(val argb: Int, val opacity: Float, val width: Float, val author: String?, val style: InkStyle = InkStyle.Ballpoint)
+internal data class InkAppearance(
+    val argb: Int, val opacity: Float, val width: Float, val author: String?, val style: InkStyle = InkStyle.Ballpoint,
+    /** The stroke is written on dark paper (#610): a marker is then drawn and saved with Lighten. */
+    val onDark: Boolean = false,
+)
 
 /** Merge only adjacent equal appearances; globally grouping red/blue/red changes paint order. */
 internal fun <T, K> consecutiveInkBatches(items: List<T>, key: (T) -> K): List<List<T>> {

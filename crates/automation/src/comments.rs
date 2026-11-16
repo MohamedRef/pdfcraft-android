@@ -432,7 +432,12 @@ impl Automation {
                             Shape::PressureInk { strokes, widths, densities }
                         }
                         Some(_) => return Err(ToolError::InvalidArgs("widths apply to ink only".into())),
-                        None if kind == "freehand_highlight" => Shape::FreehandHighlight { strokes },
+                        // Android adaptation (#610): `backdrop: "dark"` for a marker on dark paper.
+                        None if kind == "freehand_highlight" => match a.opt_str("backdrop")? {
+                            Some("dark") => Shape::FreehandHighlightOnDark { strokes },
+                            None | Some("light") => Shape::FreehandHighlight { strokes },
+                            Some(_) => return Err(ToolError::InvalidArgs("backdrop must be \"light\" or \"dark\"".into())),
+                        },
                         None => Shape::Ink { strokes },
                     }
                 }

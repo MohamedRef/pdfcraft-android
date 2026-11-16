@@ -2632,6 +2632,31 @@ fn freehand_highlight_through_tools() {
     assert_eq!(ok(&mut a, "comment_list", json!({ "doc": doc }))["count"], 0);
 }
 
+#[test]
+fn freehand_highlight_on_dark_paper_through_tools() {
+    // #610: `backdrop: "dark"` makes the marker one for dark paper (Lighten, checked in the annot
+    // crate's tests); it is the same comment otherwise, and any other word is refused
+    let dir = workdir("freehand-highlight-dark");
+    let mut a = auto(&dir);
+    let doc = ok(&mut a, "doc_open", json!({ "path": "a.pdf" }))["doc"].as_u64().unwrap();
+    for backdrop in ["dark", "light"] {
+        ok(
+            &mut a,
+            "comment_add",
+            json!({ "doc": doc, "page": 1, "type": "freehand_highlight", "width": 100, "backdrop": backdrop,
+            "strokes": [[[20, 100], [120, 100]]] }),
+        );
+    }
+    let list = ok(&mut a, "comment_list", json!({ "doc": doc }));
+    assert_eq!(list["count"], 2);
+    for c in list["comments"].as_array().unwrap() {
+        assert_eq!(c["type"], "Ink");
+        assert_eq!(c["intent"], "FreehandHighlight");
+    }
+    let refused = a.call("comment_add", &json!({ "doc": doc, "page": 1, "type": "freehand_highlight", "backdrop": "grey", "strokes": [[[20, 100], [120, 100]]] }));
+    assert!(refused.is_err());
+}
+
 fn add_comment_examples(a: &mut Automation, doc: u64) -> String {
     // "Page 2" sits at y = 150 (user space) = 150 from the top of the 300 pt page.
     let hl = ok(a, "comment_add", json!({ "doc": doc, "page": 2, "type": "highlight", "find": "page 2", "contents": "check", "author": "Ada" }));

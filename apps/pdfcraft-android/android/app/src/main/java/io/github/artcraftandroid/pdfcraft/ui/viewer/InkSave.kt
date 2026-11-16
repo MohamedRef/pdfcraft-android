@@ -61,6 +61,8 @@ internal fun inkSaveCommands(strokes: List<InkSaveStroke>, hex: (Int) -> String)
             "width" to (if (first.widths != null) a.width else first.width).toDouble(),
             "author" to a.author,
         )
+        // a marker on dark paper is saved for it: Lighten in place of Darken (#610)
+        if (a.style == InkStyle.Highlighter && a.onDark) command["backdrop"] = "dark"
         if (first.widths != null) command["widths"] = list.map { piece -> piece.widths!!.map { it.toDouble() } }
         if (first.widths != null && list.all { it.densities != null }) {
             command["densities"] = list.map { piece -> piece.densities!!.map { (Math.round(it.coerceIn(0f, 1f) * 100f) / 100.0) } }

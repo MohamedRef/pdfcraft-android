@@ -2078,6 +2078,46 @@ fn a_freehand_highlighter_is_laid_down_once_where_it_crosses_itself() {
     assert_eq!(d.get(b"CA").and_then(|o| o.as_f64()).map(|x| (x * 100.0).round()), Some(35.0));
 }
 
+#[test]
+fn a_freehand_highlighter_on_dark_paper_is_drawn_with_lighten() {
+    // #610: Darken keeps the darker colour, so over dark paper the marker drew nothing. On dark
+    // paper it is drawn opaque in its colour mixed with black, with Lighten: the paper takes the
+    // marker's colour and light ink under it stays light.
+    let mut doc = fixture();
+    let a = (0..=20).map(|k| [100.0 + k as f64 * 10.0, 400.0]).collect::<Vec<_>>();
+    let shape = Shape::FreehandHighlightOnDark { strokes: vec![a] };
+    let mut annotation = new(0, shape.clone());
+    annotation.style = Style::default_for(&shape);
+    let i = add_annotation(&mut doc, &annotation, &meta("marker")).unwrap();
+    let check = |doc: &Document| {
+        let d = list(doc, 0)[i].clone();
+        assert_eq!(d.name(b"Subtype"), Some(&b"Ink"[..]));
+        assert_eq!(d.name(b"IT"), Some(&b"FreehandHighlight"[..]));
+        assert_eq!(d.name(b"PCBackdrop"), Some(&b"Dark"[..]));
+        let ap = d.get(b"AP").unwrap().as_dict().unwrap().reference(b"N").unwrap();
+        let res = doc.get(ap).as_dict().unwrap().get(b"Resources").cloned().unwrap();
+        let gs = res.as_dict().unwrap().get(b"ExtGState").unwrap().as_dict().unwrap().get(b"GS0").unwrap().as_dict().unwrap().clone();
+        assert_eq!(gs.name(b"BM"), Some(&b"Lighten"[..]));
+        assert_eq!(gs.get(b"CA").and_then(|o| o.as_f64()), Some(1.0));
+        let content = ap_content(doc, &d);
+        // the default yellow at 35 %, mixed with black
+        assert!(content.contains("0.35 0.329 0 RG"), "{content}");
+        // the comment itself keeps its colour and opacity
+        assert_eq!(d.get(b"CA").and_then(|o| o.as_f64()).map(|x| (x * 100.0).round()), Some(35.0));
+    };
+    check(&doc);
+    // erasing a part of it rebuilds the appearance: still on dark paper
+    assert!(erase_ink(&mut doc, 0, i, &[[200.0, 450.0], [200.0, 350.0]], 8.0, &meta("erase")).unwrap());
+    check(&doc);
+    check(&reopen(&doc));
+    // the same stroke on light paper is unchanged: Darken, no backdrop key
+    let light = Shape::FreehandHighlight { strokes: vec![vec![[100.0, 300.0], [300.0, 300.0]]] };
+    let mut annotation = new(0, light.clone());
+    annotation.style = Style::default_for(&light);
+    let j = add_annotation(&mut doc, &annotation, &meta("light")).unwrap();
+    assert!(list(&doc, 0)[j].get(b"PCBackdrop").is_none());
+}
+
 /// A document holding only a catalog, for appearance builds from a bare dictionary whose
 /// values are all direct.
 fn bare_doc() -> Document {

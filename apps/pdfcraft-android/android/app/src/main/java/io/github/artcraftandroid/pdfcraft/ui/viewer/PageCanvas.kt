@@ -328,16 +328,19 @@ private fun DrawScope.drawPages(state: ViewerState, images: PageImages, gens: Pa
 
 /** Night Mode: each pixel becomes inverted grey (255 − the mean of R, G and B), as the reference draws pages. */
 private const val THIRD = -1f / 3f
-private val invertFilter = androidx.compose.ui.graphics.ColorFilter.colorMatrix(
-    androidx.compose.ui.graphics.ColorMatrix(
-        floatArrayOf(
-            THIRD, THIRD, THIRD, 0f, 255f,
-            THIRD, THIRD, THIRD, 0f, 255f,
-            THIRD, THIRD, THIRD, 0f, 255f,
-            0f, 0f, 0f, 1f, 0f,
-        ),
-    ),
+
+/** Night Mode's colour matrix (rows R, G, B, A; the fifth column in 0…255). [nightColor] is the same for one colour. */
+internal val NIGHT_INVERT_MATRIX = floatArrayOf(
+    THIRD, THIRD, THIRD, 0f, 255f,
+    THIRD, THIRD, THIRD, 0f, 255f,
+    THIRD, THIRD, THIRD, 0f, 255f,
+    0f, 0f, 0f, 1f, 0f,
 )
+
+/** Night Mode for a page image, and for everything else that shows a page's image (the zoom pad, the live eraser). */
+internal val nightInvertFilter by lazy {
+    androidx.compose.ui.graphics.ColorFilter.colorMatrix(androidx.compose.ui.graphics.ColorMatrix(NIGHT_INVERT_MATRIX))
+}
 
 private fun DrawScope.drawImageIn(img: PageImage, dst: Rect, invert: Boolean) {
     val l = dst.left.roundToInt()
@@ -349,7 +352,7 @@ private fun DrawScope.drawImageIn(img: PageImage, dst: Rect, invert: Boolean) {
         dstOffset = IntOffset(l, t),
         dstSize = IntSize((dst.right.roundToInt() - l).coerceAtLeast(1), (dst.bottom.roundToInt() - t).coerceAtLeast(1)),
         filterQuality = FilterQuality.Medium,
-        colorFilter = if (invert) invertFilter else null,
+        colorFilter = if (invert) nightInvertFilter else null,
     )
 }
 
