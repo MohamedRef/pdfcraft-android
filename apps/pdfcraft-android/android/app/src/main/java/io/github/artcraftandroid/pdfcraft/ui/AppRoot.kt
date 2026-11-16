@@ -107,10 +107,7 @@ fun AppRoot(vm: AppViewModel, onBrowse: () -> Unit, onPickSignatureImage: () -> 
                 doc != null -> androidx.compose.runtime.key(doc) { AdaptiveViewer(vm, doc) }
                 else -> HomeRoot(vm, onBrowse)
             }
-            // documents still open in tabs (#138): back to them from Home
-            if (doc == null && vm.tabs.tabs.isNotEmpty() && vm.tools.toolScreen == null && !vm.home.settingsOpen) {
-                io.github.artcraftandroid.pdfcraft.ui.viewer.OpenTabsBar(vm, Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = 72.dp, start = 16.dp, end = 16.dp))
-            }
+            // documents still open in tabs (#138): HomeRoot shows the way back, above its bottom bar (#615)
             // here rather than in the file's row: a sheet inside a scrolling list has no height to fill
             if (doc == null) vm.home.fileSheet?.let { (r, recent) -> io.github.artcraftandroid.pdfcraft.ui.home.FileSheet(vm, r, recent) { vm.home.fileSheet = null } }
             vm.tools.toolScreen?.let { ToolScreenHost(vm, it) }

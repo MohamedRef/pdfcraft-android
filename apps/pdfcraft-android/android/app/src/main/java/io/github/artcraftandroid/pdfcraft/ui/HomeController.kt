@@ -64,6 +64,21 @@ class HomeController internal constructor(private val vm: AppViewModel) {
             vm.settings.appPrefs.edit().putBoolean("gridView", v).apply()
         }
 
+    /**
+     * Home's cards folded to their title line (#615): the recent scans and the Continue card.
+     * Null until the person folds or opens one; then the screen's height decides (folded on a
+     * phone, so three recent files show without scrolling; open on a tablet).
+     */
+    private var foldScansState by mutableStateOf(foldPref("home.fold.scans"))
+    private var foldContinueState by mutableStateOf(foldPref("home.fold.continue"))
+    val foldScans: Boolean? get() = foldScansState
+    val foldContinue: Boolean? get() = foldContinueState
+
+    fun setFoldScans(folded: Boolean) { foldScansState = folded; vm.settings.appPrefs.edit().putBoolean("home.fold.scans", folded).apply() }
+    fun setFoldContinue(folded: Boolean) { foldContinueState = folded; vm.settings.appPrefs.edit().putBoolean("home.fold.continue", folded).apply() }
+
+    private fun foldPref(key: String): Boolean? = vm.settings.appPrefs.takeIf { it.contains(key) }?.getBoolean(key, false)
+
     /** Starred: 0 by date, 1 by name. */
     private var starSortState by mutableStateOf(vm.settings.appPrefs.getInt("starSort", 0))
     var starSort: Int
