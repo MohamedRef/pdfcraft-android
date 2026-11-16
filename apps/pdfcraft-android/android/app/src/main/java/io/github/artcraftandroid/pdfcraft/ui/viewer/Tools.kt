@@ -104,8 +104,10 @@ import io.github.artcraftandroid.pdfcraft.ui.PdfSheet
 import io.github.artcraftandroid.pdfcraft.ui.SheetHost
 import io.github.artcraftandroid.pdfcraft.ui.pdfColors
 import kotlinx.coroutines.Job
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import androidx.compose.material3.minimumInteractiveComponentSize
@@ -170,7 +172,7 @@ internal class InkStroke(
     val grain: Boolean = dynamics?.grain == true
 
     /** The pen has lifted: the stroke's end is its own from here on ([endPreview] is over). */
-    var lifted = false
+    var lifted by mutableStateOf(false)
         private set
 
     /**
@@ -788,6 +790,50 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
         documentEdit("comments_edit_many", mapOf("page" to page + 1, "comments" to indices) + extra)
     }
     val prefs = vm.settings.toolPrefs
+    // The finished drafts as one picture (#609), so a frame of writing does not fill every draft again.
+    val draftPicture = remember(doc) { InkDraftPicture() }
+    var canvasSize by remember { mutableStateOf(androidx.compose.ui.unit.IntSize.Zero) }
+    fun pictureView() = InkPictureView(canvasSize.width, canvasSize.height, doc.viewer.zoom, doc.viewer.scrollX, doc.viewer.scrollY, doc.viewer.layout, doc.controller.nightMode)
+    // not while the lasso holds strokes: a selection is drawn where it is being moved to
+    fun pictureWanted() = prefs.penTuning.draftPicture && !moving && !doc.controller.lassoMode
+    /** One draft as the screen shows it: clipped to its page (#75), [lift]ed while the lasso moves it. */
+    fun DrawScope.drawDraft(s: InkStroke, lift: Offset = Offset.Zero) {
+        val pageRect = doc.viewer.pageRectOnScreen(s.page)
+        // Ink being drawn may run off its page (#75); only the part on the page shows.
+        clipRect(pageRect.left, pageRect.top, pageRect.right, pageRect.bottom) {
+            drawInkStroke(
+                runs = s.paths.runs(s),
+                color = Color(s.appearance.argb),
+                opacity = s.appearance.opacity,
+                highlighter = s.appearance.style == InkStyle.Highlighter,
+                origin = doc.viewer.pageToScreen(s.page, lift.x, lift.y),
+                scale = doc.viewer.pixelsPerPoint(s.page),
+                pageHeightPt = doc.viewer.pages.getOrNull(s.page)?.height ?: 0f,
+                pageBoundsOnScreen = pageRect,
+                look = InkLook(doc.controller.nightMode, s.appearance.onDark),
+            )
+        }
+    }
+    val pictureDensity = LocalDensity.current
+    LaunchedEffect(doc) {
+        // What the picture is of. A stroke being written, here or on the zoom pad, is left out, so
+        // its samples ask for nothing.
+        snapshotFlow {
+            if (!pictureWanted()) null else {
+                val writing = current
+                Triple(pictureView(), (drafts.saving + strokes).filter { it !== writing && (it.dynamics == null || it.lifted) }.map(::inkDraftKey), writing != null)
+            }
+        }.collectLatest { wanted ->
+            if (wanted == null) {
+                draftPicture.clear()
+                return@collectLatest
+            }
+            // never while the pen is down, and only once the page and the drafts have stood still
+            if (wanted.third) return@collectLatest
+            delay(INK_PICTURE_SETTLE_MS)
+            draftPicture.update(wanted.first, wanted.second.map { it.stroke }, pictureDensity) { drawDraft(it) }
+        }
+    }
     /** Drops a just-drawn draft stroke that turned out to be a gesture, without an undo step of its own. */
     fun dropGestureStroke(s: InkStroke) {
         strokes.remove(s)
@@ -879,8 +925,10 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                     taken.map { s -> InkSaveStroke(s.page, s.appearance, s.points.toList(), s.scales.toList(), s.pressureSensitive, s.densities.toList()) },
                 ) { argb -> Color(argb).hex() }
                 steps.started()
+                val savedAt = android.os.SystemClock.uptimeMillis()
                 // The drafts stay drawn until the engine has them; the ones it refuses stay drafts (#73).
                 vm.runToolBatch(doc, "comment_add", groups) { applied ->
+                    PenDiag.draftsSaved(taken.size, taken.sumOf { it.points.size }, groups.sumOf { it.size }, applied, android.os.SystemClock.uptimeMillis() - savedAt)
                     val kept = drafts.settle(taken, applied)
                     steps.finished(groups.take(applied).sumOf { it.size })
                     if (kept > 0) vm.inkKept(doc, kept)
@@ -1415,6 +1463,10 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                     dpPerPt = doc.viewer.pixelsPerPoint(at.page) / density.density,
                     pressureSetting = prefs.penPressure(inkStyle),
                 ).also {
+                    it.dynamics?.stats?.let { stats ->
+                        stats.draftsBefore = strokes.size + drafts.saving.size
+                        stats.draftPointsBefore = strokes.sumOf { d -> d.points.size } + drafts.saving.sumOf { d -> d.points.size }
+                    }
                     it.add(Offset(at.x, at.y), inkSampleTimeMs, pressure)
                     strokes.add(it)
                 }
@@ -1669,27 +1721,28 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
             },
         ),
     ) {
-        Canvas(Modifier.fillMaxSize()) {
+        Canvas(Modifier.fillMaxSize().onSizeChanged { canvasSize = it }) {
             if (current != null) pendingInput.drawn(android.os.SystemClock.uptimeMillis(), InkLatency.normal)
             val drawStart = if (current != null) System.nanoTime() else 0L
             // Strokes being saved stay drawn until the document has them, under the newer drafts.
-            for (s in drafts.saving + strokes) {
-                val pageRect = doc.viewer.pageRectOnScreen(s.page)
-                val lift = if (moving && s in selectedSet) moveOffset else Offset.Zero
-                // Ink being drawn may run off its page (#75); only the part on the page shows.
-                clipRect(pageRect.left, pageRect.top, pageRect.right, pageRect.bottom) {
-                    drawInkStroke(
-                        runs = s.paths.runs(s),
-                        color = Color(s.appearance.argb),
-                        opacity = s.appearance.opacity,
-                        highlighter = s.appearance.style == InkStyle.Highlighter,
-                        origin = doc.viewer.pageToScreen(s.page, lift.x, lift.y),
-                        scale = doc.viewer.pixelsPerPoint(s.page),
-                        pageHeightPt = doc.viewer.pages.getOrNull(s.page)?.height ?: 0f,
-                        pageBoundsOnScreen = pageRect,
-                        look = InkLook(doc.controller.nightMode, s.appearance.onDark),
-                    )
+            val all = drafts.saving + strokes
+            // Finished drafts are shown from their picture when it stands for exactly what is on
+            // the page at this view (#609); the stroke being written and anything newer than the
+            // picture are drawn on top, stroke by stroke.
+            draftPicture.generation
+            val pictured = if (pictureWanted()) draftPicture.covers(pictureView(), all) else null
+            current?.dynamics?.stats?.let { it.draftsPictured = maxOf(it.draftsPictured, pictured?.count() ?: 0) }
+            var i = 0
+            while (i < all.size) {
+                val image = draftPicture.image
+                if (pictured != null && image != null && i == pictured.first) {
+                    drawImage(image)
+                    i = pictured.last + 1
+                    continue
                 }
+                val s = all[i]
+                drawDraft(s, if (moving && s in selectedSet) moveOffset else Offset.Zero)
+                i++
             }
             // The live eraser (#521): along the eraser's path, the page without its erasable ink
             // covers the ink there (and drafts being saved), until the edit's own page is drawn.

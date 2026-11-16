@@ -1412,6 +1412,9 @@
     <string name="pen_lab_group_save">Valori</string>
     <string name="pen_lab_reset">Ripristina questa penna</string>
     <string name="pen_lab_write_log">Scrivi i valori nel registro</string>
+    <string name="pen_lab_group_drawing">Disegno</string>
+    <string name="pen_lab_draft_picture">Tieni i tratti finiti come immagine</string>
+    <string name="pen_lab_draft_picture_body">Mentre scrivi, i tratti già scritti sono mostrati da un’immagine invece di essere ridisegnati a ogni fotogramma. Disattiva per confrontare, o se i tratti appaiono sbagliati.</string>
     <string name="pen_lab_written">Valori delle penne scritti nel registro</string>
     <string name="ink_shapes">Forme</string>
     <string name="ink_toolbar_guides">Guide</string>

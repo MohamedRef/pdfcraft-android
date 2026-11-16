@@ -71,7 +71,7 @@ class PenSheetPictures {
         return img
     }
 
-    /** The union of a disc at every point and a quad between neighbours, as the app's outline is. */
+    /** The union of a disc at every point and a quad between neighbours: the line the app's ribbon outlines (#609), drawn the plain way. */
     private fun outline(pts: List<Offset>, radii: List<Float>): Area {
         val path = Path2D.Float(Path2D.WIND_NON_ZERO)
         val area = Area()

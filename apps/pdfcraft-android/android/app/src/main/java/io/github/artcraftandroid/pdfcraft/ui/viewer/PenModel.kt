@@ -231,6 +231,12 @@ internal class PenStrokeStats(
     /** How many samples the pen gave this stroke, and how many became points of the line (#609). */
     var given = 0
     var kept = 0
+    /** The drafts already on the screen when this stroke began, and their points (#609): what is drawn again each frame. */
+    var draftsBefore = 0
+    var draftPointsBefore = 0
+
+    /** How many of those drafts were shown from their picture while this stroke was written (#609); 0 when each was drawn. */
+    var draftsPictured = 0
     val taperStartPt: Float get() = dials.taperStart * penWidth
     val taperEndPt: Float get() = dials.taperEnd * penWidth
 }

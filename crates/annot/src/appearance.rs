@@ -1318,31 +1318,34 @@ fn draw_ink(context: &AppearanceContext<'_>, drawing: &mut AppearanceDrawing) ->
 const PRESSURE_INK_MAX_SAMPLES: usize = 20_000;
 
 /// The filled outline of Android pressure ink (`/PCWidths`, one width relative to `width` per
-/// `/InkList` point): along each stroke's Catmull-Rom curve ([`smooth_segments`]), a disc at every
-/// point and a quadrilateral between neighbouring samples, all wound the same way so the nonzero
-/// fill paints their union once. `None` (draw the plain ink) unless the widths match the points.
+/// `/InkList` point): a ribbon along each stroke's Catmull-Rom curve ([`smooth_segments`]) with a
+/// disc at its two ends and where it turns too sharply to stay one ribbon ([`ink_pieces`]), all
+/// wound the same way so the nonzero fill paints their union once. `None` (draw the plain ink)
+/// unless the widths match the points.
 pub(crate) fn pressure_ink_outline(list: &[Object], factors: Option<&[Object]>, width: f64) -> Option<String> {
     let mut out = String::new();
-    for piece in pressure_ink_pieces(list, factors, width)? {
-        for (p, r) in &piece.discs {
+    for (pts, radii) in pressure_ink_strokes(list, factors, width)? {
+        let pieces = ink_pieces(&pts, &radii, &|_| 0, 0);
+        for (p, r, _) in &pieces.discs {
             disc(&mut out, *p, *r);
         }
-        for (_, quad) in &piece.quads {
-            quad_path(&mut out, quad);
+        for (_, ribbon) in &pieces.ribbons {
+            polygon_path(&mut out, ribbon);
         }
     }
     (!out.is_empty()).then_some(out)
 }
 
-/// One stroke of pressure ink as the shapes its outline is the union of: a disc at every point,
-/// and quadrilaterals along the smoothed curve, each with the index of the segment it lies on.
+/// One stroke of pressure ink as the shapes its outline is the union of, each with the step
+/// (`level`) it is drawn at: closed counter-clockwise polygons along the smoothed curve, and discs.
 pub(crate) struct InkPieces {
-    pub discs: Vec<((f64, f64), f64)>,
-    pub quads: Vec<(usize, [(f64, f64); 4])>,
+    pub discs: Vec<((f64, f64), f64, u8)>,
+    pub ribbons: Vec<(u8, Vec<(f64, f64)>)>,
 }
 
-/// The pieces of each stroke of pressure ink (see [`pressure_ink_outline`]).
-pub(crate) fn pressure_ink_pieces(list: &[Object], factors: Option<&[Object]>, width: f64) -> Option<Vec<InkPieces>> {
+/// The points and the radius at each point of every stroke of pressure ink; `None` unless every
+/// stroke has one finite positive width per point.
+pub(crate) fn pressure_ink_strokes(list: &[Object], factors: Option<&[Object]>, width: f64) -> Option<Vec<InkLine>> {
     let factors = factors?;
     if factors.len() != list.len() || !(width.is_finite() && width > 0.0) {
         return None;
@@ -1355,53 +1358,213 @@ pub(crate) fn pressure_ink_pieces(list: &[Object], factors: Option<&[Object]>, w
         if pts.is_empty() || ws.len() != pts.len() || !ws.iter().all(|x| x.is_finite() && *x > 0.0) {
             return None;
         }
-        let radius = |i: usize| (ws[i] * width / 2.0).clamp(0.01, 400.0);
-        // Samples along the smoothed curve, with widths between their points' widths, each with
-        // the segment it ends on.
-        let mut samples: Vec<((f64, f64), f64, usize)> = vec![(pts[0], radius(0), 0)];
-        for (i, [c1, c2, end]) in smooth_segments(&pts).into_iter().enumerate() {
-            let p0 = pts[i];
-            let (r0, r1) = (radius(i), radius(i + 1));
-            let len = (end.0 - p0.0).hypot(end.1 - p0.1);
-            let steps = (len / r0.min(r1).max(0.5)).ceil().clamp(1.0, 8.0) as usize;
-            for k in 1..=steps {
-                let t = k as f64 / steps as f64;
-                let u = 1.0 - t;
-                let b = [u * u * u, 3.0 * u * u * t, 3.0 * u * t * t, t * t * t];
-                let at = (b[0] * p0.0 + b[1] * c1.0 + b[2] * c2.0 + b[3] * end.0, b[0] * p0.1 + b[1] * c1.1 + b[2] * c2.1 + b[3] * end.1);
-                samples.push((at, r0 + (r1 - r0) * t, i));
-            }
-        }
-        if samples.len() > PRESSURE_INK_MAX_SAMPLES {
-            let stride = samples.len().div_ceil(PRESSURE_INK_MAX_SAMPLES);
-            let last = *samples.last()?;
-            samples = samples.into_iter().step_by(stride).collect();
-            samples.push(last);
-        }
-        let discs = (0..pts.len()).map(|i| (pts[i], radius(i))).collect();
-        let mut quads = Vec::with_capacity(samples.len());
-        for pair in samples.windows(2) {
-            let ((a, ra, _), (b, rb, seg)) = (pair[0], pair[1]);
-            let (dx, dy) = (b.0 - a.0, b.1 - a.1);
-            let len = dx.hypot(dy);
-            if len < 1e-6 {
-                continue;
-            }
-            let (nx, ny) = (-dy / len, dx / len);
-            let mut quad = [(a.0 + nx * ra, a.1 + ny * ra), (a.0 - nx * ra, a.1 - ny * ra), (b.0 - nx * rb, b.1 - ny * rb), (b.0 + nx * rb, b.1 + ny * rb)];
-            if signed_area(&quad) < 0.0 {
-                quad.reverse();
-            }
-            quads.push((seg, quad));
-        }
-        all.push(InkPieces { discs, quads });
+        let radii = ws.iter().map(|w| (w * width / 2.0).clamp(0.01, 400.0)).collect();
+        all.push((pts, radii));
     }
     Some(all)
 }
 
-fn quad_path(out: &mut String, quad: &[(f64, f64); 4]) {
-    out.push_str(&format!("{} {} m\n", n(quad[0].0), n(quad[0].1)));
-    for p in &quad[1..] {
+/// A stroke's points and the radius at each.
+pub(crate) type InkLine = (Vec<(f64, f64)>, Vec<f64>);
+
+/// One sample along a stroke's smoothed curve.
+pub(crate) struct InkSample {
+    pub at: (f64, f64),
+    pub r: f64,
+    /// The segment it ends on.
+    seg: usize,
+    /// From the sample to the line's left and right edge ([`ink_edges`]), when the curve has a
+    /// direction here.
+    edges: Option<[(f64, f64); 2]>,
+}
+
+/// Where the edges of a line pass a sample: the line is every disc along its middle, so where its
+/// radius changes its edges touch a disc a little behind or ahead of straight across. `(dx, dy)`
+/// is the curve's direction and `slope` how much the radius grows for each point along it.
+fn ink_edges(dx: f64, dy: f64, radius: f64, slope: f64) -> Option<[(f64, f64); 2]> {
+    let len = dx.hypot(dy);
+    if len < 1e-9 || !slope.is_finite() {
+        return None;
+    }
+    let (tx, ty) = (dx / len, dy / len);
+    let k = slope.clamp(-0.95, 0.95);
+    let s = (1.0 - k * k).sqrt();
+    Some([(radius * (-k * tx - s * ty), radius * (-k * ty + s * tx)), (radius * (-k * tx + s * ty), radius * (-k * ty - s * tx))])
+}
+
+/// The quadrilateral between two neighbouring samples, counter-clockwise.
+pub(crate) struct InkQuad {
+    pub seg: usize,
+    pub corners: [(f64, f64); 4],
+    /// Its two ends lie across the curve at its samples, so it shares each end with the quad
+    /// beyond it. Otherwise its ends are square to its own direction and a disc joins it on.
+    pub shared: bool,
+    /// The samples it lies between.
+    from: usize,
+}
+
+/// Whether the quadrilateral is convex and winds counter-clockwise.
+fn convex_ccw(q: &[(f64, f64); 4]) -> bool {
+    (0..4).all(|i| {
+        let (a, b, c) = (q[i], q[(i + 1) % 4], q[(i + 2) % 4]);
+        (b.0 - a.0) * (c.1 - b.1) - (b.1 - a.1) * (c.0 - b.0) > 1e-12
+    })
+}
+
+/// How far a ribbon's straight edges may be from the curved outline they stand for, in points.
+const INK_FLATNESS_PT: f64 = 0.03;
+
+/// How many samples a segment of the smoothed curve (from `p0`, control points `c1` and `c2`, to
+/// `end`) is drawn with, 1 to 8: enough that neither the middle of the line nor its edge, `radius`
+/// from the middle, is further than [`INK_FLATNESS_PT`] from the straight pieces. A segment of
+/// handwriting, a fraction of a point long, is mostly one.
+fn ink_steps(p0: (f64, f64), c1: (f64, f64), c2: (f64, f64), end: (f64, f64), radius: f64) -> usize {
+    let legs = [(c1.0 - p0.0, c1.1 - p0.1), (c2.0 - c1.0, c2.1 - c1.1), (end.0 - c2.0, end.1 - c2.1)];
+    let legs: Vec<(f64, f64)> = legs.into_iter().filter(|l| l.0.hypot(l.1) >= 1e-9).collect();
+    // how far the curve turns, and how far it bends away from its chord
+    let turn: f64 = legs.windows(2).map(|l| (l[0].0 * l[1].1 - l[0].1 * l[1].0).atan2(l[0].0 * l[1].0 + l[0].1 * l[1].1).abs()).sum();
+    let bend = (p0.0 - 2.0 * c1.0 + c2.0).hypot(p0.1 - 2.0 * c1.1 + c2.1).max((c1.0 - 2.0 * c2.0 + end.0).hypot(c1.1 - 2.0 * c2.1 + end.1));
+    // with one piece the middle is up to 0.75 × bend off and the edge radius × turn² / 8 more;
+    // n pieces divide both by n²
+    ((0.75 * bend + radius * turn * turn / 8.0) / INK_FLATNESS_PT).sqrt().ceil().clamp(1.0, 8.0) as usize
+}
+
+/// The samples along a stroke's smoothed curve ([`ink_steps`] a segment), with radii between
+/// their points' radii, and the quadrilaterals between them (#609).
+///
+/// A quadrilateral's ends lie across the curve at its samples ([`ink_edges`]), so neighbours share
+/// an edge and the pieces are one ribbon: two numbers a side for each sample. Where that is not a
+/// convex quadrilateral (a turn tighter than the line is wide, a point given twice), its ends are
+/// square to its own direction instead, as every quadrilateral's were before, and discs at its two
+/// samples join it to its neighbours.
+pub(crate) fn ink_samples(pts: &[(f64, f64)], radii: &[f64]) -> (Vec<InkSample>, Vec<InkQuad>) {
+    let last = pts.len() - 1;
+    // at a point the curve runs along the chord between its neighbours, and the radius changes as
+    // between them
+    let at_point = |i: usize| {
+        let (a, b) = (i.saturating_sub(1), (i + 1).min(last));
+        let (dx, dy) = (pts[b].0 - pts[a].0, pts[b].1 - pts[a].1);
+        ink_edges(dx, dy, radii[i], (radii[b] - radii[a]) / dx.hypot(dy))
+    };
+    let mut samples = vec![InkSample { at: pts[0], r: radii[0], seg: 0, edges: at_point(0) }];
+    for (i, [c1, c2, end]) in smooth_segments(pts).into_iter().enumerate() {
+        let p0 = pts[i];
+        let (r0, r1) = (radii[i], radii[i + 1]);
+        let steps = ink_steps(p0, c1, c2, end, r0.max(r1));
+        for k in 1..=steps {
+            let t = k as f64 / steps as f64;
+            let u = 1.0 - t;
+            let b = [u * u * u, 3.0 * u * u * t, 3.0 * u * t * t, t * t * t];
+            let at = (b[0] * p0.0 + b[1] * c1.0 + b[2] * c2.0 + b[3] * end.0, b[0] * p0.1 + b[1] * c1.1 + b[2] * c2.1 + b[3] * end.1);
+            let r = r0 + (r1 - r0) * t;
+            let edges = if k == steps {
+                at_point(i + 1)
+            } else {
+                // between two points: straight across the curve's direction here
+                let d = [u * u, 2.0 * u * t, t * t];
+                ink_edges(
+                    d[0] * (c1.0 - p0.0) + d[1] * (c2.0 - c1.0) + d[2] * (end.0 - c2.0),
+                    d[0] * (c1.1 - p0.1) + d[1] * (c2.1 - c1.1) + d[2] * (end.1 - c2.1),
+                    r,
+                    0.0,
+                )
+            };
+            samples.push(InkSample { at, r, seg: i, edges });
+        }
+    }
+    if samples.len() > PRESSURE_INK_MAX_SAMPLES {
+        let stride = samples.len().div_ceil(PRESSURE_INK_MAX_SAMPLES);
+        let count = samples.len();
+        let mut kept = Vec::with_capacity(count / stride + 2);
+        for (i, s) in samples.into_iter().enumerate() {
+            if i % stride == 0 || i == count - 1 {
+                kept.push(s);
+            }
+        }
+        samples = kept;
+    }
+    let mut quads = Vec::with_capacity(samples.len());
+    for (from, pair) in samples.windows(2).enumerate() {
+        let (a, b) = (&pair[0], &pair[1]);
+        let (dx, dy) = (b.at.0 - a.at.0, b.at.1 - a.at.1);
+        let len = dx.hypot(dy);
+        if len < 1e-6 {
+            continue;
+        }
+        let across = a.edges.zip(b.edges).map(|(ea, eb)| {
+            [(a.at.0 + ea[0].0, a.at.1 + ea[0].1), (a.at.0 + ea[1].0, a.at.1 + ea[1].1), (b.at.0 + eb[1].0, b.at.1 + eb[1].1), (b.at.0 + eb[0].0, b.at.1 + eb[0].1)]
+        });
+        let (nx, ny) = (-dy / len, dx / len);
+        let square = [(a.at.0 + nx * a.r, a.at.1 + ny * a.r), (a.at.0 - nx * a.r, a.at.1 - ny * a.r), (b.at.0 - nx * b.r, b.at.1 - ny * b.r), (b.at.0 + nx * b.r, b.at.1 + ny * b.r)];
+        let across = across.filter(convex_ccw);
+        quads.push(InkQuad { seg: b.seg, corners: across.unwrap_or(square), shared: across.is_some(), from });
+    }
+    (samples, quads)
+}
+
+/// The pieces of one stroke (`pts` not empty, a radius for each): its quadrilaterals
+/// ([`ink_samples`]) joined into ribbons while they share their ends and are drawn at the same
+/// step (`level` of a segment), a disc at the first and the last point, and one wherever two
+/// neighbours do not share an edge or change step. A disc takes the lighter step of the pieces it
+/// joins, so a denser part never spills round into a lighter one; a lone point is at `lone`.
+pub(crate) fn ink_pieces(pts: &[(f64, f64)], radii: &[f64], level: &dyn Fn(usize) -> u8, lone: u8) -> InkPieces {
+    let (samples, quads) = ink_samples(pts, radii);
+    let mut pieces = InkPieces { discs: Vec::new(), ribbons: Vec::new() };
+    // the quad that ends at each sample and the one that starts there
+    let mut before: Vec<Option<&InkQuad>> = vec![None; samples.len()];
+    let mut after: Vec<Option<&InkQuad>> = vec![None; samples.len()];
+    for q in &quads {
+        after[q.from] = Some(q);
+        before[q.from + 1] = Some(q);
+    }
+    let last = samples.len() - 1;
+    for (i, s) in samples.iter().enumerate() {
+        let joined = match (before[i], after[i]) {
+            (Some(a), Some(b)) => a.shared && b.shared && level(a.seg) == level(b.seg),
+            _ => false,
+        };
+        if joined {
+            continue;
+        }
+        let step = match (i > 0, i < last) {
+            (true, true) => level(s.seg).min(level(samples[i + 1].seg)),
+            (true, false) => level(s.seg),
+            (false, true) => level(samples[1].seg),
+            (false, false) => lone,
+        };
+        pieces.discs.push((s.at, s.r, step));
+    }
+    // one side of a ribbon out, the other side back
+    let mut right: Vec<(f64, f64)> = Vec::new();
+    let mut left: Vec<(f64, f64)> = Vec::new();
+    let mut open: Option<(u8, usize)> = None;
+    let close = |open: &mut Option<(u8, usize)>, right: &mut Vec<(f64, f64)>, left: &mut Vec<(f64, f64)>, ribbons: &mut Vec<(u8, Vec<(f64, f64)>)>| {
+        if let Some((step, _)) = open.take() {
+            let mut ring = std::mem::take(right);
+            ring.extend(left.drain(..).rev());
+            ribbons.push((step, ring));
+        }
+    };
+    for q in &quads {
+        let step = level(q.seg);
+        if !(q.shared && open == Some((step, q.from))) {
+            close(&mut open, &mut right, &mut left, &mut pieces.ribbons);
+            left.push(q.corners[0]);
+            right.push(q.corners[1]);
+        }
+        right.push(q.corners[2]);
+        left.push(q.corners[3]);
+        // only a quad that shares its ends is carried on by the next
+        open = Some((step, if q.shared { q.from + 1 } else { usize::MAX }));
+    }
+    close(&mut open, &mut right, &mut left, &mut pieces.ribbons);
+    pieces
+}
+
+fn polygon_path(out: &mut String, ring: &[(f64, f64)]) {
+    let Some(first) = ring.first() else { return };
+    out.push_str(&format!("{} {} m\n", n(first.0), n(first.1)));
+    for p in &ring[1..] {
         out.push_str(&format!("{} {} l\n", n(p.0), n(p.1)));
     }
     out.push_str("h\n");
@@ -1463,25 +1626,19 @@ const GRAIN_MAX_DOTS: i64 = 4_000_000;
 /// them, so the paper shows between the dots; the top step is filled solid. A disc takes the
 /// lighter step of its two segments, so a denser part never spills round into a lighter one.
 fn pencil_content(list: &[Object], factors: &[Object], densities: &[Object], width: f64) -> Option<String> {
-    let pieces = pressure_ink_pieces(list, Some(factors), width)?;
-    if densities.len() != pieces.len() {
+    let strokes = pressure_ink_strokes(list, Some(factors), width)?;
+    if densities.len() != strokes.len() {
         return None;
     }
     let mut out = String::new();
-    for (piece, dens) in pieces.iter().zip(densities) {
+    for ((pts, radii), dens) in strokes.iter().zip(densities) {
         let dv: Vec<f64> = dens.as_array()?.iter().map(Object::as_f64).collect::<Option<_>>()?;
-        if dv.len() != piece.discs.len() {
+        if dv.len() != pts.len() {
             return None;
         }
         let seg_level = |i: usize| grain_level((dv[i] + dv[(i + 1).min(dv.len() - 1)]) / 2.0);
-        let segments = dv.len().saturating_sub(1);
-        let disc_level = |i: usize| match (i.checked_sub(1).filter(|_| segments > 0), (i < segments).then_some(i)) {
-            (Some(a), Some(b)) => seg_level(a).min(seg_level(b)),
-            (Some(a), None) => seg_level(a),
-            (None, Some(b)) => seg_level(b),
-            (None, None) => grain_level(dv[i]),
-        };
-        let mut levels: Vec<u8> = (0..dv.len()).map(disc_level).chain(piece.quads.iter().map(|(s, _)| seg_level(*s))).collect();
+        let piece = ink_pieces(pts, radii, &seg_level, grain_level(dv[0]));
+        let mut levels: Vec<u8> = piece.discs.iter().map(|d| d.2).chain(piece.ribbons.iter().map(|r| r.0)).collect();
         levels.sort_unstable();
         levels.dedup();
         for level in levels {
@@ -1490,18 +1647,14 @@ fn pencil_content(list: &[Object], factors: &[Object], densities: &[Object], wid
             let mut take = |x: f64, y: f64, r: f64| {
                 b = [b[0].min(x - r), b[1].min(y - r), b[2].max(x + r), b[3].max(y + r)];
             };
-            for (i, (p, r)) in piece.discs.iter().enumerate() {
-                if disc_level(i) == level {
-                    disc(&mut path, *p, *r);
-                    take(p.0, p.1, *r);
-                }
+            for (p, r, _) in piece.discs.iter().filter(|d| d.2 == level) {
+                disc(&mut path, *p, *r);
+                take(p.0, p.1, *r);
             }
-            for (seg, quad) in &piece.quads {
-                if seg_level(*seg) == level {
-                    quad_path(&mut path, quad);
-                    for q in quad {
-                        take(q.0, q.1, 0.0);
-                    }
+            for (_, ring) in piece.ribbons.iter().filter(|r| r.0 == level) {
+                polygon_path(&mut path, ring);
+                for q in ring {
+                    take(q.0, q.1, 0.0);
                 }
             }
             if path.is_empty() {
@@ -1542,14 +1695,6 @@ fn pencil_content(list: &[Object], factors: &[Object], densities: &[Object], wid
     }
     (!out.is_empty()).then_some(out)
 }
-/// Twice the signed area of a closed polygon: positive when it winds counter-clockwise.
-fn signed_area(p: &[(f64, f64)]) -> f64 {
-    (0..p.len()).map(|i| {
-        let (a, b) = (p[i], p[(i + 1) % p.len()]);
-        a.0 * b.1 - b.0 * a.1
-    }).sum()
-}
-
 /// A counter-clockwise circle of four Bézier quarters (the winding [`pressure_ink_outline`] fills).
 fn disc(out: &mut String, (x, y): (f64, f64), r: f64) {
     let k = r * 0.552_284_75;

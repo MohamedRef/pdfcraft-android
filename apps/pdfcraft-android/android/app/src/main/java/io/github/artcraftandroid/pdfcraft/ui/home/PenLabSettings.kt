@@ -179,6 +179,9 @@ internal fun PenLabSettings(vm: AppViewModel) {
     PressureCurveEditor(tuning.pressureCurve) { tuning.updatePressureCurve(it) }
     SettingsRow(stringResource(R.string.pen_lab_curve_reset), { tuning.updatePressureCurve(PressureCurve.LINEAR) }, icon = LucideIcons.RotateCcw, enabled = !tuning.pressureCurve.linear)
 
+    SettingsHeader(stringResource(R.string.pen_lab_group_drawing))
+    SettingsSwitch(stringResource(R.string.pen_lab_draft_picture), tuning.draftPicture, { tuning.updateDraftPicture(it) }, summary = stringResource(R.string.pen_lab_draft_picture_body))
+
     SettingsHeader(stringResource(R.string.pen_lab_group_save))
     SettingsRow(stringResource(R.string.pen_lab_reset), { tuning.reset(style); strokes.clear() }, icon = LucideIcons.RotateCcw, enabled = tuning.tuned(style))
     SettingsRow(stringResource(R.string.pen_lab_write_log), { tuning.logValues(); vm.tell(text(R.string.pen_lab_written)) }, icon = LucideIcons.FileText)

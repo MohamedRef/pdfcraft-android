@@ -1302,6 +1302,9 @@
     <string name="pen_lab_group_save">Valeurs</string>
     <string name="pen_lab_reset">Réinitialiser ce stylo</string>
     <string name="pen_lab_write_log">Écrire les valeurs dans le journal</string>
+    <string name="pen_lab_group_drawing">Dessin</string>
+    <string name="pen_lab_draft_picture">Garder les traits terminés comme image</string>
+    <string name="pen_lab_draft_picture_body">Pendant l’écriture, les traits déjà écrits sont affichés depuis une image au lieu d’être redessinés à chaque image. Désactivez pour comparer, ou si des traits s’affichent mal.</string>
     <string name="pen_lab_written">Valeurs des stylos écrites dans le journal</string>
     <string name="ink_shapes">Formes</string>
     <string name="ink_toolbar_guides">Guides</string>

@@ -72,24 +72,6 @@ internal fun inkPathKey(points: List<Offset>, preview: List<Offset>?, pressures:
 internal class InkRunPath(val path: Path, val width: Float, val filled: Boolean = false, val grainLevel: Int = 0)
 
 /**
- * A pencil stroke's outline split by ink density (#569), as the engine draws the saved comment
- * (`pencil_content`): each segment at the step of its two points' mean density, each point's disc
- * at the lighter step of its two segments. One filled path per step, lightest first.
- */
-internal fun pencilInkRuns(points: List<Offset>, radii: List<Float>, densities: List<Float>, width: Float): List<InkRunPath> {
-    if (points.size < 2 || radii.size != points.size || densities.size != points.size) return emptyList()
-    val (discLevel, segLevel) = pencilGrainLevels(densities)
-    val paths = sortedMapOf<Int, Path>()
-    for (i in points.indices) paths.getOrPut(discLevel[i]) { Path() }.addInkDisc(points[i], radii[i])
-    val curve = inkSmoothSegments(points, 0, points.lastIndex)
-    for (i in curve.indices) {
-        val path = paths.getOrPut(segLevel[i]) { Path() }
-        pressureInkQuads(points[i], curve[i], radii[i], radii[i + 1]).forEach { path.addInkQuad(it) }
-    }
-    return paths.map { (level, path) -> InkRunPath(path, width, filled = true, grainLevel = if (level >= PencilGrain.LEVELS) 0 else level) }
-}
-
-/**
  * The grain step of each point's disc and of each segment of a pencil stroke with [densities]
  * (at least two points), as the engine's `pencil_content` picks them: a segment takes the mean of
  * its ends, a point the lighter of its two segments.
@@ -108,55 +90,159 @@ internal fun pencilGrainLevels(densities: List<Float>): Pair<List<Int>, List<Int
     return disc to seg
 }
 
-/** One stroke point's disc of the pressure-ink outline. */
-internal data class InkDisc(val center: Offset, val radius: Float)
-
-/** Radius per point, as the engine's `pressure_ink_outline` clamps it. */
+/** Radius per point, as the engine's `pressure_ink_strokes` clamps it. */
 internal fun pressureInkRadii(widths: List<Float>): List<Float> = widths.map { (it / 2f).coerceIn(0.01f, 400f) }
 
+/** How far a ribbon's straight edges may be from the curved outline they stand for, in points (the engine's `INK_FLATNESS_PT`). */
+internal const val INK_FLATNESS_PT = 0.03f
+
 /**
- * The quadrilaterals of segment [i] of the pressure-ink outline, as the engine builds them
- * (`pdfcraft_annot::appearance::pressure_ink_outline`): samples along the Catmull-Rom cubic, at
- * most 8 per segment and about one per smaller radius, with radii interpolated linearly, and a
- * quad between neighbouring samples, every quad wound with positive signed area so the nonzero
- * fill paints the union of discs and quads once (#129).
+ * How many samples a segment of the smoothed curve is drawn with, 1 to 8, as the engine's
+ * `ink_steps`: enough that neither the middle of the line nor its edge, [radius] from the middle,
+ * is further than [INK_FLATNESS_PT] from the straight pieces.
  */
-internal fun pressureInkSegmentQuads(points: List<Offset>, radii: List<Float>, i: Int): List<List<Offset>> {
-    if (i < 0 || i >= points.lastIndex || radii.size != points.size) return emptyList()
-    val seg = inkSmoothSegments(points, 0, points.lastIndex).getOrNull(i) ?: return emptyList()
-    return pressureInkQuads(points[i], seg, radii[i], radii[i + 1])
+internal fun inkSteps(p0: Offset, seg: InkCubic, radius: Float): Int {
+    val legs = listOf(seg.c1 - p0, seg.c2 - seg.c1, seg.end - seg.c2).filter { it.getDistance() >= 1e-9f }
+    var turn = 0f
+    for (i in 1 until legs.size) {
+        val a = legs[i - 1]
+        val b = legs[i]
+        turn += kotlin.math.abs(kotlin.math.atan2(a.x * b.y - a.y * b.x, a.x * b.x + a.y * b.y))
+    }
+    val bend = maxOf((p0 - seg.c1 * 2f + seg.c2).getDistance(), (seg.c1 - seg.c2 * 2f + seg.end).getDistance())
+    return kotlin.math.ceil(kotlin.math.sqrt((0.75f * bend + radius * turn * turn / 8f) / INK_FLATNESS_PT)).coerceIn(1f, 8f).toInt()
 }
 
-private fun pressureInkQuads(p0: Offset, seg: InkCubic, r0: Float, r1: Float): List<List<Offset>> {
+/**
+ * Where the edges of a line pass a sample, from the sample: to its left edge and to its right, as
+ * the engine's `ink_edges`. The line is every disc along its middle, so where its radius changes
+ * its edges touch a disc a little behind or ahead of straight across. [d] is the curve's direction,
+ * [slope] how much the radius grows for each point along it; `null` where the curve has no direction.
+ */
+internal fun inkEdges(d: Offset, radius: Float, slope: Float): Pair<Offset, Offset>? {
+    val len = d.getDistance()
+    if (!(len >= 1e-9f) || !slope.isFinite()) return null
+    val tx = d.x / len
+    val ty = d.y / len
+    val k = slope.coerceIn(-0.95f, 0.95f)
+    val s = kotlin.math.sqrt(1f - k * k)
+    return Offset(radius * (-k * tx - s * ty), radius * (-k * ty + s * tx)) to Offset(radius * (-k * tx + s * ty), radius * (-k * ty - s * tx))
+}
+
+/**
+ * The quadrilateral between two neighbouring samples of the outline, wound with positive area.
+ * [shared]: its two ends lie across the curve at its samples ([inkEdges]), so it shares each end
+ * with the quad beyond it; otherwise its ends are square to its own direction and a disc joins it on.
+ */
+internal class InkQuad(val corners: List<Offset>, val shared: Boolean)
+
+/** Whether a quadrilateral is convex and wound with positive area, as the engine's `convex_ccw`. */
+internal fun inkConvex(q: List<Offset>): Boolean = (0 until 4).all { i ->
+    val a = q[i]
+    val b = q[(i + 1) % 4]
+    val c = q[(i + 2) % 4]
+    (b.x - a.x) * (c.y - b.y) - (b.y - a.y) * (c.x - b.x) > 1e-12f
+}
+
+/**
+ * One segment of a stroke's outline (#609), as the engine builds it (`ink_samples`): its samples
+ * along the Catmull-Rom cubic ([inkSteps] of them after the point it starts at) with their radii,
+ * and the quadrilateral before each sample after the first (`null` between two samples at one place).
+ */
+internal class InkSegment(val centers: List<Offset>, val radii: List<Float>, val quads: List<InkQuad?>) {
+    val startShared get() = quads.first()?.shared == true
+    val endShared get() = quads.last()?.shared == true
+
+    /**
+     * The segment's pieces: its quads joined into ribbons while they share their ends, and a disc
+     * at each sample inside it where two neighbours do not (the points at its ends are the caller's).
+     */
+    fun emit(sink: InkOutlineSink) {
+        for (k in 1 until quads.size) if (!(quads[k - 1]?.shared == true && quads[k]?.shared == true)) sink.disc(centers[k], radii[k])
+        // one side of a ribbon out, the other side back
+        var right = ArrayList<Offset>()
+        var left = ArrayList<Offset>()
+        fun close() {
+            if (right.isEmpty()) return
+            sink.polygon(right + left.asReversed())
+            right = ArrayList()
+            left = ArrayList()
+        }
+        var open = false
+        for (q in quads) {
+            if (q == null) {
+                close()
+                open = false
+                continue
+            }
+            if (!(q.shared && open)) {
+                close()
+                left += q.corners[0]
+                right += q.corners[1]
+            }
+            right += q.corners[2]
+            left += q.corners[3]
+            open = q.shared
+        }
+        close()
+    }
+}
+
+/** Segment [i] of the outline of the line with points [point] and radii [radius], 0…[last]. */
+internal fun inkSegment(point: (Int) -> Offset, radius: (Int) -> Float, i: Int, last: Int): InkSegment {
+    // at a point the curve runs along the chord between its neighbours, and the radius changes as between them
+    fun atPoint(j: Int): Pair<Offset, Offset>? {
+        val a = (j - 1).coerceAtLeast(0)
+        val b = (j + 1).coerceAtMost(last)
+        val d = point(b) - point(a)
+        return inkEdges(d, radius(j), (radius(b) - radius(a)) / d.getDistance())
+    }
+    val p0 = point(i)
+    val seg = inkSmoothSegment(point, i, last)
     val (c1, c2, end) = seg
-    val len = (end - p0).getDistance()
-    val steps = kotlin.math.ceil(len / maxOf(minOf(r0, r1), 0.5f)).coerceIn(1f, 8f).toInt()
-    var prev = p0
-    var prevR = r0
-    val out = ArrayList<List<Offset>>(steps)
+    val r0 = radius(i)
+    val r1 = radius(i + 1)
+    val steps = inkSteps(p0, seg, maxOf(r0, r1))
+    val centers = ArrayList<Offset>(steps + 1)
+    val radii = ArrayList<Float>(steps + 1)
+    val quads = ArrayList<InkQuad?>(steps)
+    centers += p0
+    radii += r0
+    var prevEdges = atPoint(i)
     for (k in 1..steps) {
         val t = k.toFloat() / steps
         val u = 1f - t
         val b0 = u * u * u; val b1 = 3f * u * u * t; val b2 = 3f * u * t * t; val b3 = t * t * t
         val at = Offset(b0 * p0.x + b1 * c1.x + b2 * c2.x + b3 * end.x, b0 * p0.y + b1 * c1.y + b2 * c2.y + b3 * end.y)
         val r = r0 + (r1 - r0) * t
+        val edges = if (k == steps) atPoint(i + 1) else {
+            // between two points: straight across the curve's direction here
+            inkEdges((c1 - p0) * (u * u) + (c2 - c1) * (2f * u * t) + (end - c2) * (t * t), r, 0f)
+        }
+        val prev = centers.last()
+        val prevR = radii.last()
         val dx = at.x - prev.x
         val dy = at.y - prev.y
         val l = kotlin.math.hypot(dx, dy)
-        if (l >= 1e-6f) {
+        quads += if (l < 1e-6f) null else {
+            val across = if (prevEdges != null && edges != null) {
+                listOf(prev + prevEdges.first, prev + prevEdges.second, at + edges.second, at + edges.first).takeIf(::inkConvex)
+            } else null
             val nx = -dy / l
             val ny = dx / l
-            val quad = mutableListOf(
-                Offset(prev.x + nx * prevR, prev.y + ny * prevR), Offset(prev.x - nx * prevR, prev.y - ny * prevR),
-                Offset(at.x - nx * r, at.y - ny * r), Offset(at.x + nx * r, at.y + ny * r),
+            InkQuad(
+                across ?: listOf(
+                    Offset(prev.x + nx * prevR, prev.y + ny * prevR), Offset(prev.x - nx * prevR, prev.y - ny * prevR),
+                    Offset(at.x - nx * r, at.y - ny * r), Offset(at.x + nx * r, at.y + ny * r),
+                ),
+                across != null,
             )
-            if (inkSignedArea(quad) < 0f) quad.reverse()
-            out += quad
         }
-        prev = at
-        prevR = r
+        centers += at
+        radii += r
+        prevEdges = edges
     }
-    return out
+    return InkSegment(centers, radii, quads)
 }
 
 /** Twice the signed area of a closed polygon. */
@@ -174,7 +260,7 @@ private fun Path.addInkDisc(c: Offset, r: Float) {
     close()
 }
 
-private fun Path.addInkQuad(q: List<Offset>) {
+private fun Path.addInkPolygon(q: List<Offset>) {
     moveTo(q[0].x, q[0].y)
     for (j in 1 until q.size) lineTo(q[j].x, q[j].y)
     close()
@@ -184,89 +270,199 @@ private fun Path.addInkQuad(q: List<Offset>) {
 internal fun inkPreviewIsPressureOutline(pressureSensitive: Boolean, style: InkStyle, points: Int, pressures: Int, shapePreview: Boolean): Boolean =
     pressureSensitive && style != InkStyle.Highlighter && !shapePreview && points >= 2 && pressures == points
 
+/** One segment of [inkSmoothSegments] over points given by index ([at], 0…[last]), without a list of them all. */
+internal fun inkSmoothSegment(at: (Int) -> Offset, i: Int, last: Int): InkCubic {
+    val p0 = at((i - 1).coerceAtLeast(0))
+    val p1 = at(i)
+    val p2 = at(i + 1)
+    val p3 = at((i + 2).coerceAtMost(last))
+    return InkCubic(
+        Offset(p1.x + (p2.x - p0.x) / 6f, p1.y + (p2.y - p0.y) / 6f),
+        Offset(p2.x - (p3.x - p1.x) / 6f, p2.y - (p3.y - p1.y) / 6f),
+        p2,
+    )
+}
+
+/** Where the pieces of a pressure outline go: a disc, a closed polygon of ribbon. */
+internal interface InkOutlineSink {
+    fun disc(center: Offset, radius: Float)
+    fun polygon(corners: List<Offset>)
+}
+
+/**
+ * Builds the outline of a stroke as it grows, doing work for its new points only (#609). A segment
+ * that can no longer change is given once, to the sink that is kept ([settledSink]); what can still
+ * change (the newest points, the pointed end drawn while writing) is given again each time, to
+ * [liveSink]. Before, every frame copied every point and width of the stroke being written, built
+ * every smoothed segment again and copied the finished path.
+ *
+ * The outline is the engine's ([inkSegment]): a ribbon whose pieces share their edges, a disc at
+ * the two ends of the line, and one where two neighbours do not share an edge or are drawn at
+ * different steps. One more disc lies where the kept part and the live part meet, since they are
+ * two paths. A segment goes to a step (`level`): a pencil's grain step, or one step for solid ink;
+ * a disc takes the lighter step of the two segments it joins.
+ */
+internal class InkOutlineBuilder {
+    /** How many segments are settled, and how many points have their disc, or none, settled. */
+    var segments = 0
+        private set
+    var discs = 0
+        private set
+    private var endShared = false
+
+    /** Discs and segments given by the last [update]: the work it did. */
+    var touched = 0
+        private set
+
+    fun reset() {
+        discs = 0
+        segments = 0
+        endShared = false
+    }
+
+    /**
+     * The line has [own] points of its own and [total] with the pointed end's ([total] ≥ [own]);
+     * the widths of the points before [settled] are final; [closed] when the pen has lifted and
+     * everything is. [loneLevel] is the step of a line of one point.
+     */
+    fun update(
+        own: Int, total: Int, settled: Int, closed: Boolean,
+        point: (Int) -> Offset, radius: (Int) -> Float,
+        segmentLevel: (Int) -> Int, loneLevel: () -> Int,
+        settledSink: (level: Int) -> InkOutlineSink, liveSink: (level: Int) -> InkOutlineSink,
+    ) {
+        touched = 0
+        if (total <= 0) return
+        val last = total - 1
+        fun segment(i: Int): InkSegment {
+            touched++
+            return inkSegment(point, radius, i, last)
+        }
+        fun pointLevel(i: Int) = when {
+            last == 0 -> loneLevel()
+            i == 0 -> segmentLevel(0)
+            i == last -> segmentLevel(last - 1)
+            else -> minOf(segmentLevel(i - 1), segmentLevel(i))
+        }
+        fun disc(i: Int, sink: (Int) -> InkOutlineSink) {
+            sink(pointLevel(i)).disc(point(i), radius(i))
+            touched++
+        }
+        // A segment is final when the two points after it are the line's own and the widths its
+        // edges depend on are settled: its two points' and, for the edge at its end, the next one's.
+        val finalSegments = if (closed) last else minOf(own - 2, settled - 2).coerceAtLeast(0)
+        while (segments < finalSegments) {
+            val i = segments
+            val s = segment(i)
+            val level = segmentLevel(i)
+            if (i == 0 || !endShared || !s.startShared || segmentLevel(i - 1) != level) disc(i, settledSink)
+            s.emit(settledSink(level))
+            endShared = s.endShared
+            segments++
+            discs = segments
+        }
+        if (closed) {
+            if (discs < total) disc(last, settledSink)
+            discs = total
+            return
+        }
+        // a disc always covers where the kept path and the live one meet
+        var shared = false
+        for (i in segments until last) {
+            val s = segment(i)
+            val level = segmentLevel(i)
+            if (!shared || !s.startShared || (i > 0 && segmentLevel(i - 1) != level)) disc(i, liveSink)
+            s.emit(liveSink(level))
+            shared = s.endShared
+        }
+        disc(last, liveSink)
+    }
+}
+
+private class PathSink(val path: Path = Path()) : InkOutlineSink {
+    var used = false
+    override fun disc(center: Offset, radius: Float) { path.addInkDisc(center, radius); used = true }
+    override fun polygon(corners: List<Offset>) { path.addInkPolygon(corners); used = true }
+}
+
 /**
  * Per-stroke cache of smoothed paths in page coordinates. Before this, every frame rebuilt a
  * screen-space polyline for every point of every uncommitted stroke on every page, so writing
  * got slower the more had been written in one Draw session. Now only the stroke whose points
- * changed (normally the one being drawn) is rebuilt; zoom and scroll are a canvas transform.
+ * changed (normally the one being drawn) is rebuilt, and of that stroke only what is new
+ * ([InkOutlineBuilder], #609); zoom and scroll are a canvas transform.
  */
 internal class InkPathCache {
     private var key: InkPathKey? = null
     private var runs: List<InkRunPath> = emptyList()
 
-    // Pressure outline built incrementally: discs and quads of segments that can no longer change
-    // (a segment depends on the next two points) stay in [stable]; only the tail is rebuilt.
-    private val stable = Path()
-    private var stableFirst: Offset? = null
-    private var stableLast: Offset? = null
-    private var stableDiscs = 0
-    private var stableSegments = 0
-    private var stableVersion = 0
+    // The settled part of a pressure outline, per step (a pencil's grain steps; solid ink has one).
+    private val builder = InkOutlineBuilder()
+    private val settledPaths = sortedMapOf<Int, PathSink>()
+    private var settledFirst: Offset? = null
+    private var settledLast: Offset? = null
+    private var settledVersion = 0
+    private var settledPencil = false
 
-    private fun resetStable() {
-        stable.reset()
-        stableFirst = null
-        stableLast = null
-        stableDiscs = 0
-        stableSegments = 0
+    private fun resetSettled() {
+        builder.reset()
+        settledPaths.clear()
+        settledFirst = null
+        settledLast = null
     }
 
-    private fun outline(stroke: InkStroke, end: InkEndPreview?): Path {
-        val line = stroke.points.toList()
+    private fun outline(stroke: InkStroke, end: InkEndPreview?, pencil: Boolean): List<InkRunPath> {
+        val line = stroke.points
+        val own = line.size
         // While the stroke is written its end is drawn to a point (#611): the last stretch has
-        // the widths the lift would give it and runs on to the pen. Those points are not final,
-        // so they stay out of [stable] and are rebuilt each frame; the rest of the line is not.
-        val settled = end?.from ?: line.size
-        val pts = if (end == null) line else line + end.extra
-        val scales = if (end == null) stroke.scales.toList() else stroke.scales.subList(0, settled) + end.scales
-        val radii = pressureInkRadii(inkStylePointWidths(scales, stroke.appearance.width, stroke.appearance.style))
+        // the widths the lift would give it and runs on to the pen. Those points are not final.
+        val settled = end?.from ?: own
+        val total = own + (end?.extra?.size ?: 0)
+        val base = inkStylePointWidths(listOf(1f), stroke.appearance.width, stroke.appearance.style).first()
+        fun point(i: Int) = if (i < own) line[i] else end!!.extra[i - own]
+        fun radius(i: Int): Float {
+            val scale = if (end != null && i >= settled) end.scales[i - settled] else stroke.scales[i]
+            return (base * (scale.takeIf { it.isFinite() && it > 0f }?.coerceIn(0.01f, 3f) ?: 1f) / 2f).coerceIn(0.01f, 400f)
+        }
+        // a pencil: each segment at the step of its two points' mean density, as the engine's `pencil_content`
+        fun segmentLevel(i: Int) = if (!pencil) 0 else
+            PencilGrain.level((PencilGrain.saved(stroke.densities[i]) + PencilGrain.saved(stroke.densities[i + 1])) / 2.0)
         // Any change other than appending (lasso move, replaced points, new widths) rebuilds from scratch.
-        if (stableVersion != stroke.widthVersion) resetStable()
-        stableVersion = stroke.widthVersion
-        if (stableFirst != pts.first() || stableDiscs > pts.size || (stableDiscs > 0 && stableLast != pts[stableDiscs - 1])) resetStable()
-        stableFirst = pts.first()
-        while (stableDiscs < minOf(line.size, settled)) { stable.addInkDisc(pts[stableDiscs], radii[stableDiscs]); stableDiscs++ }
-        if (stableDiscs > 0) stableLast = pts[stableDiscs - 1]
-        val segments = inkSmoothSegments(pts, 0, pts.lastIndex)
-        // a segment is final when the two points after it are the line's own and its two widths are settled
-        val finalSegments = minOf(line.lastIndex - 1, settled - 1).coerceAtLeast(0)
-        while (stableSegments < finalSegments) {
-            pressureInkQuads(pts[stableSegments], segments[stableSegments], radii[stableSegments], radii[stableSegments + 1]).forEach { stable.addInkQuad(it) }
-            stableSegments++
+        if (settledVersion != stroke.widthVersion || settledPencil != pencil) resetSettled()
+        settledVersion = stroke.widthVersion
+        settledPencil = pencil
+        if (settledFirst != line.first() || builder.discs > own || (builder.discs > 0 && settledLast != line[builder.discs - 1])) resetSettled()
+        settledFirst = line.first()
+        val live = sortedMapOf<Int, PathSink>()
+        builder.update(
+            own, total, settled, closed = stroke.lifted,
+            point = ::point, radius = ::radius, segmentLevel = ::segmentLevel,
+            loneLevel = { if (pencil) PencilGrain.level(PencilGrain.saved(stroke.densities[0])) else 0 },
+            settledSink = { level -> settledPaths.getOrPut(level) { PathSink() } },
+            liveSink = { level -> live.getOrPut(level) { PathSink() } },
+        )
+        if (builder.discs > 0) settledLast = line[builder.discs - 1]
+        // lightest first; at each step the settled path, then what is still live
+        return (settledPaths.keys + live.keys).toSortedSet().flatMap { level ->
+            val grain = if (!pencil || level >= PencilGrain.LEVELS) 0 else level
+            listOfNotNull(settledPaths[level], live[level]).filter { it.used }.map { InkRunPath(it.path, stroke.appearance.width, filled = true, grainLevel = grain) }
         }
-        val path = Path()
-        path.addPath(stable)
-        for (i in stableDiscs until pts.size) path.addInkDisc(pts[i], radii[i])
-        for (i in stableSegments until segments.size) {
-            pressureInkQuads(pts[i], segments[i], radii[i], radii[i + 1]).forEach { path.addInkQuad(it) }
-        }
-        return path
     }
 
     fun runs(stroke: InkStroke): List<InkRunPath> {
-        val outlined = stroke.densities.size != stroke.points.size &&
-            inkPreviewIsPressureOutline(stroke.pressureSensitive, stroke.appearance.style, stroke.points.size, stroke.scales.size, stroke.preview != null)
+        val outlined = inkPreviewIsPressureOutline(stroke.pressureSensitive, stroke.appearance.style, stroke.points.size, stroke.scales.size, stroke.preview != null)
+        val pencil = outlined && stroke.densities.size == stroke.points.size
         // the pointed end of a line still being written (#611); a pencil has none
-        val end = if (outlined) stroke.endPreview() else null
+        val end = if (outlined && !pencil) stroke.endPreview() else null
         val k = inkPathKey(stroke.points, stroke.preview, stroke.scales.size, stroke.pressureSensitive, stroke.appearance.width, stroke.widthVersion)
             .copy(end = end?.extra?.lastOrNull())
         if (k == key) return runs
-        if (stroke.densities.size == stroke.points.size && stroke.preview == null &&
-            inkPreviewIsPressureOutline(stroke.pressureSensitive, stroke.appearance.style, stroke.points.size, stroke.scales.size, false)
-        ) {
-            // a pencil (#569): rebuilt whole, one path per grain step
-            val pts = stroke.points.toList()
-            val radii = pressureInkRadii(inkStylePointWidths(stroke.scales.toList(), stroke.appearance.width, stroke.appearance.style))
-            runs = pencilInkRuns(pts, radii, stroke.densities.toList(), stroke.appearance.width)
+        if (outlined) {
+            runs = outline(stroke, end, pencil)
             key = k
             return runs
         }
-        if (inkPreviewIsPressureOutline(stroke.pressureSensitive, stroke.appearance.style, stroke.points.size, stroke.scales.size, stroke.preview != null)) {
-            runs = listOf(InkRunPath(outline(stroke, end), stroke.appearance.width, filled = true))
-            key = k
-            return runs
-        }
-        resetStable()
+        resetSettled()
         val pts = stroke.preview ?: stroke.points.toList()
         val widthRuns = if (stroke.preview != null) {
             if (pts.size >= 2) inkStyleWidthRuns(List(pts.size) { 1f }, stroke.appearance.width, false, stroke.appearance.style) else emptyList()

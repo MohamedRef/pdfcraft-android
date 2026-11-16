@@ -1430,6 +1430,9 @@
     <string name="pen_lab_group_save">Valores</string>
     <string name="pen_lab_reset">Restablecer este lápiz</string>
     <string name="pen_lab_write_log">Escribir los valores en el registro</string>
+    <string name="pen_lab_group_drawing">Dibujo</string>
+    <string name="pen_lab_draft_picture">Guardar los trazos terminados como imagen</string>
+    <string name="pen_lab_draft_picture_body">Mientras escribes, los trazos ya escritos se muestran desde una imagen en lugar de dibujarse de nuevo en cada fotograma. Desactívalo para comparar, o si los trazos se ven mal.</string>
     <string name="pen_lab_written">Valores de los lápices escritos en el registro</string>
     <string name="ink_shapes">Formas</string>
     <string name="ink_toolbar_guides">Guías</string>
