@@ -118,6 +118,13 @@ internal const val PEN_PRESSURE_DEFAULT = 0.5f
  */
 internal fun penPressureGain(setting: Float): Float = penPressureSetting(setting) / PEN_PRESSURE_DEFAULT
 
+/**
+ * The end of a line while it is written ([PenDynamics.endPreview]): the points from [from] on are
+ * drawn with [scales] in place of their own, and the line runs on through [extra] (page points),
+ * whose widths are the last of [scales].
+ */
+internal class InkEndPreview(val from: Int, val extra: List<Offset>, val scales: List<Float>)
+
 /** A stored or dragged Pressure setting kept inside 0…1 in steps of 5 %; the default when it is not a number. */
 internal fun penPressureSetting(v: Float): Float =
     if (v.isFinite()) kotlin.math.round(v.coerceIn(0f, 1f) * 20f) / 20f else PEN_PRESSURE_DEFAULT
@@ -425,6 +432,58 @@ internal class PenDynamics(
             return
         }
         if (d.taperEnd > 0f) inkEndTaper(points, scales, minOf(d.taperEnd * penWidthPt, travelled / 3f), PEN_MAX_TAPER_SLOPE / penWidthPt)
+    }
+
+    /**
+     * The end of the line as it is drawn while the pen is still down (#611): what [finish] would
+     * make of it if the pen lifted now, so the line always ends in a point at the pen and the lift
+     * changes nothing that can be seen. Drawn only; [scales] are not touched. The line then runs
+     * on from its last point through [pending] (the last sample, when thinning has not made it a
+     * point yet) to [tip] (the pen, which smoothing keeps a little ahead), as it will after the
+     * lift. Only the last stretch is walked: the end taper's length, not the stroke.
+     *
+     * Null when there is nothing to change: a pen without a pointed end, or a stroke still a dot.
+     * A dot gets its even, full width on lift ([finish]); showing that while the pen is down would
+     * swell the start of every stroke and take it back a pen width later.
+     */
+    fun endPreview(points: List<Offset>, scales: List<Float>, pending: Triple<Offset, Float, Float>? = null, tip: Offset? = null): InkEndPreview? {
+        if (!(d.taperEnd > 0f) || points.isEmpty() || points.size != scales.size) return null
+        val extra = ArrayList<Offset>(2)
+        val extraScales = ArrayList<Float>(2)
+        var end = points.last()
+        var endScale = scales.last()
+        var beyond = 0f
+        pending?.let {
+            beyond += (it.first - end).getDistance()
+            extra += it.first
+            extraScales += it.second
+            end = it.first
+            endScale = it.second
+        }
+        var total = travelled
+        if (tip != null && tip.x.isFinite() && tip.y.isFinite()) {
+            val gap = (tip - end).getDistance()
+            // as [InkSmoother.end]: the line is taken to the pen only when it stopped short of it
+            if (gap > InkSmoother.END_SLOP_PT) {
+                beyond += gap
+                total += gap
+                extra += tip
+                extraScales += endScale
+            }
+        }
+        if (!beyond.isFinite() || total < penWidthPt) return null
+        val length = minOf(d.taperEnd * penWidthPt, total / 3f)
+        // back from the end to the first point the taper leaves as it is
+        var from = points.lastIndex
+        var fromEnd = beyond
+        while (from > 0 && fromEnd < length) {
+            fromEnd += (points[from] - points[from - 1]).getDistance()
+            from--
+        }
+        val stretch = points.subList(from, points.size) + extra
+        val tapered = (scales.subList(from, scales.size) + extraScales).toMutableList()
+        inkEndTaper(stretch, tapered, length, PEN_MAX_TAPER_SLOPE / penWidthPt)
+        return InkEndPreview(from, extra, tapered)
     }
 
     /** Whether this stroke shows the paper through a grain ([PenDials.grain]). */

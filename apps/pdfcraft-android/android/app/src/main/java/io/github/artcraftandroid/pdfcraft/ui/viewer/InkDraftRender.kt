@@ -56,6 +56,8 @@ internal data class InkPathKey(
     val width: Float,
     /** Bumped when widths change without the points changing (the end taper on lift, #569). */
     val version: Int = 0,
+    /** Where the line drawn ends while it is written: the pen, beyond the last point (#611). */
+    val end: Offset? = null,
 )
 
 internal fun inkPathKey(points: List<Offset>, preview: List<Offset>?, pressures: Int, pressureSensitive: Boolean, width: Float, version: Int = 0): InkPathKey {
@@ -209,24 +211,32 @@ internal class InkPathCache {
         stableSegments = 0
     }
 
-    private fun outline(stroke: InkStroke): Path {
-        val pts = stroke.points.toList()
-        val radii = pressureInkRadii(inkStylePointWidths(stroke.scales.toList(), stroke.appearance.width, stroke.appearance.style))
+    private fun outline(stroke: InkStroke, end: InkEndPreview?): Path {
+        val line = stroke.points.toList()
+        // While the stroke is written its end is drawn to a point (#611): the last stretch has
+        // the widths the lift would give it and runs on to the pen. Those points are not final,
+        // so they stay out of [stable] and are rebuilt each frame; the rest of the line is not.
+        val settled = end?.from ?: line.size
+        val pts = if (end == null) line else line + end.extra
+        val scales = if (end == null) stroke.scales.toList() else stroke.scales.subList(0, settled) + end.scales
+        val radii = pressureInkRadii(inkStylePointWidths(scales, stroke.appearance.width, stroke.appearance.style))
         // Any change other than appending (lasso move, replaced points, new widths) rebuilds from scratch.
         if (stableVersion != stroke.widthVersion) resetStable()
         stableVersion = stroke.widthVersion
         if (stableFirst != pts.first() || stableDiscs > pts.size || (stableDiscs > 0 && stableLast != pts[stableDiscs - 1])) resetStable()
         stableFirst = pts.first()
-        while (stableDiscs < pts.size) { stable.addInkDisc(pts[stableDiscs], radii[stableDiscs]); stableDiscs++ }
-        stableLast = pts[stableDiscs - 1]
+        while (stableDiscs < minOf(line.size, settled)) { stable.addInkDisc(pts[stableDiscs], radii[stableDiscs]); stableDiscs++ }
+        if (stableDiscs > 0) stableLast = pts[stableDiscs - 1]
         val segments = inkSmoothSegments(pts, 0, pts.lastIndex)
-        val finalSegments = (pts.lastIndex - 1).coerceAtLeast(0)
+        // a segment is final when the two points after it are the line's own and its two widths are settled
+        val finalSegments = minOf(line.lastIndex - 1, settled - 1).coerceAtLeast(0)
         while (stableSegments < finalSegments) {
             pressureInkQuads(pts[stableSegments], segments[stableSegments], radii[stableSegments], radii[stableSegments + 1]).forEach { stable.addInkQuad(it) }
             stableSegments++
         }
         val path = Path()
         path.addPath(stable)
+        for (i in stableDiscs until pts.size) path.addInkDisc(pts[i], radii[i])
         for (i in stableSegments until segments.size) {
             pressureInkQuads(pts[i], segments[i], radii[i], radii[i + 1]).forEach { path.addInkQuad(it) }
         }
@@ -234,7 +244,12 @@ internal class InkPathCache {
     }
 
     fun runs(stroke: InkStroke): List<InkRunPath> {
+        val outlined = stroke.densities.size != stroke.points.size &&
+            inkPreviewIsPressureOutline(stroke.pressureSensitive, stroke.appearance.style, stroke.points.size, stroke.scales.size, stroke.preview != null)
+        // the pointed end of a line still being written (#611); a pencil has none
+        val end = if (outlined) stroke.endPreview() else null
         val k = inkPathKey(stroke.points, stroke.preview, stroke.scales.size, stroke.pressureSensitive, stroke.appearance.width, stroke.widthVersion)
+            .copy(end = end?.extra?.lastOrNull())
         if (k == key) return runs
         if (stroke.densities.size == stroke.points.size && stroke.preview == null &&
             inkPreviewIsPressureOutline(stroke.pressureSensitive, stroke.appearance.style, stroke.points.size, stroke.scales.size, false)
@@ -247,7 +262,7 @@ internal class InkPathCache {
             return runs
         }
         if (inkPreviewIsPressureOutline(stroke.pressureSensitive, stroke.appearance.style, stroke.points.size, stroke.scales.size, stroke.preview != null)) {
-            runs = listOf(InkRunPath(outline(stroke), stroke.appearance.width, filled = true))
+            runs = listOf(InkRunPath(outline(stroke, end), stroke.appearance.width, filled = true))
             key = k
             return runs
         }

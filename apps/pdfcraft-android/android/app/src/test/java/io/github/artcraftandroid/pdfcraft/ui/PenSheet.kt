@@ -28,7 +28,13 @@ internal object PenSheet {
     data class S(val p: Offset, val t: Long, val pressure: Float)
 
     /** A drawn stroke: its points, their times, the widths (pt) under the pen and after the lift. */
-    class Line(val points: List<Offset>, val times: List<Long>, val live: List<Float>, val widths: List<Float>)
+    class Line(
+        val points: List<Offset>, val times: List<Long>, val live: List<Float>, val widths: List<Float>,
+        /** The line as it was drawn with the pen still down, after its last sample (#611): its points on to the pen, and their widths (pt). */
+        val downPoints: List<Offset> = points, val downWidths: List<Float> = live,
+        /** The index the pointed end drawn with the pen down starts at: the points before it were not walked. */
+        val downFrom: Int = points.size,
+    )
 
     /**
      * A movement on the glass: [path] gives the position (dp) at 0…1 along it, [ms] how long it
@@ -111,6 +117,13 @@ internal object PenSheet {
                 scales += scale
             }
         }
+        // the last picture with the pen down: the end drawn to a point at the pen (#611)
+        val down = dyn.endPreview(points, scales, thinner.pending, smoother.tip)
+        // a pen without a pointed end has the tail instead: from its last point to the pen, at the last width
+        val tail = listOfNotNull(smoother.tip?.takeIf { points.isNotEmpty() && it != points.last() })
+        val downPoints = if (down == null) points + tail else points + down.extra
+        val downWidths = inkStylePointWidths(if (down == null) scales + tail.map { scales.last() } else scales.subList(0, down.from) + down.scales, penWidth, style)
+        val downFrom = down?.from ?: points.size
         thinner.flush()?.let { (q, scale, _) ->
             points += q
             times += stroke.last().t
@@ -123,6 +136,6 @@ internal object PenSheet {
         }
         val live = inkStylePointWidths(scales, penWidth, style)
         dyn.finish(points, scales)
-        return Line(points, times, live, inkStylePointWidths(scales, penWidth, style))
+        return Line(points, times, live, inkStylePointWidths(scales, penWidth, style), downPoints, downWidths, downFrom)
     }
 }
