@@ -135,6 +135,7 @@ Areas (lines · issues):
 | `tab_switch` | `doc`, `parked`, `tabs`, `ms` | A tab came to the front; `parked=true` means it opened again from its file, else `ms` is the switch time (#138) |
 | `tab_park` | `doc`, `hot` | A tab was saved and closed in the engine to keep at most four documents open (#138) |
 | `tab_close` | `doc`, `tabs`, `background`, `parked` | A tab closed: the one in front, one behind it, or a parked one (#138) |
+| `tab_close_all` | `tabs`, `confirmed` | Close all on Home's open-documents bar (#636): `confirmed=false` when it was tapped and the question came up, `confirmed=true` when the person said yes; a tap with no `true` after it was a tap by mistake or a change of mind |
 | `tab_home`, `tab_key` | `doc`, `tabs`; `action` (`cycle`, `close`) | Home was opened with tabs kept; Ctrl+Tab or Ctrl+W was pressed (#138) |
 | `split_open`, `split_close`, `split_swap` | `doc`, `other`, `tabs` | Split view started, ended or swapped its panes (#139) |
 | `split_shown`, `split_resize` | `doc`, `other`, `side_by_side`, `width_dp`, `height_dp`; `percent` | How split view was laid out for the window, and the main pane's share after dragging the divider (#139) |
