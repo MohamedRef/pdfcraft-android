@@ -10,4 +10,12 @@
     <string name="msg_busy_compressing_images">Wird komprimiert: Bild %1$d von %2$d …</string>
     <string name="msg_busy_compressing_again">Wird erneut komprimiert, um die Größe zu erreichen: Versuch %1$d …</string>
     <string name="busy_cancel_compress">Abbrechen hält hier an. Es wird keine Datei erstellt, dein Dokument bleibt unverändert.</string>
+    <string name="msg_busy_splitting_measuring">Wird geteilt: Seite %1$d von %2$d wird gemessen …</string>
+    <string name="msg_busy_splitting_part">Wird geteilt: Teil %1$d von %2$d …</string>
+    <string name="msg_busy_extracting_copying">Wird extrahiert: Seiten werden kopiert …</string>
+    <string name="msg_busy_extracting_writing">Wird extrahiert: neue Datei wird geschrieben …</string>
+    <string name="msg_busy_extracting_checking">Wird extrahiert: neue Datei wird geprüft …</string>
+    <string name="msg_busy_extracting_page">Wird extrahiert: Seite %1$d von %2$d …</string>
+    <string name="busy_cancel_split">Abbrechen hält vor dem nächsten Teil an. Es bleiben keine Teile übrig, dein Dokument bleibt unverändert.</string>
+    <string name="busy_cancel_extract">Abbrechen hält beim nächsten Schritt an. Es wird keine Datei erstellt, dein Dokument bleibt unverändert.</string>
 </resources>

@@ -10,4 +10,12 @@
     <string name="msg_busy_compressing_images">Comprimiendo: imagen %1$d de %2$d…</string>
     <string name="msg_busy_compressing_again">Comprimiendo de nuevo para alcanzar el tamaño: intento %1$d…</string>
     <string name="busy_cancel_compress">Cancelar se detiene aquí. No se crea ningún archivo y tu documento queda como está.</string>
+    <string name="msg_busy_splitting_measuring">Dividiendo: midiendo la página %1$d de %2$d…</string>
+    <string name="msg_busy_splitting_part">Dividiendo: parte %1$d de %2$d…</string>
+    <string name="msg_busy_extracting_copying">Extrayendo: copiando las páginas…</string>
+    <string name="msg_busy_extracting_writing">Extrayendo: escribiendo el archivo nuevo…</string>
+    <string name="msg_busy_extracting_checking">Extrayendo: comprobando el archivo nuevo…</string>
+    <string name="msg_busy_extracting_page">Extrayendo: página %1$d de %2$d…</string>
+    <string name="busy_cancel_split">Cancelar se detiene antes de la siguiente parte. No se conserva ninguna parte y tu documento queda como está.</string>
+    <string name="busy_cancel_extract">Cancelar se detiene en el siguiente paso. No se crea ningún archivo y tu documento queda como está.</string>
 </resources>

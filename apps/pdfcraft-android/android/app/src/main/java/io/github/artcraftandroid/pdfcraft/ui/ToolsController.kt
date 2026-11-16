@@ -520,8 +520,13 @@ class ToolsController internal constructor(private val vm: AppViewModel) {
     /** Pages [pages] (0-based) of [doc] as a new PDF in Downloads. */
     fun extractPages(doc: OpenDocument, pages: List<Int>) = vm.docJob(doc, text(R.string.msg_busy_extracting)) { eng ->
         val out = vm.tempFile("pdf")
+        // What it is doing, with Cancel (#634): a stop makes no file and leaves the document as it was.
         Diag.measure(DiagArea.Pages, "extract_pages", "doc" to doc.diagNumber, "pages" to pages.size) {
-            eng.tool("page_extract", mapOf("doc" to doc.id, "pages" to pages.map { it + 1 }, "out" to out.absolutePath))
+            vm.watchedTool(eng, doc, "extract", "page_extract", mapOf("doc" to doc.id, "pages" to pages.map { it + 1 }, "out" to out.absolutePath),
+                text(R.string.busy_cancel_extract), ::extractLine)
+        } ?: run {
+            out.delete()
+            return@docJob
         }
         vm.deliver(out, "Pages from ${doc.title}.pdf")
     }

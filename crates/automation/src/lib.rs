@@ -158,6 +158,18 @@ impl Automation {
         self.job_watch = watch;
     }
 
+    /// Tell the job watch one step of a tool (#634): `stage` in the tool's own words, `done` of
+    /// `total` in it, `fraction` of the whole run. A watch that says stop makes this fail with
+    /// "cancelled"; without a watch it does nothing.
+    pub(crate) fn job_step(&self, stage: &'static str, done: usize, total: usize, fraction: f32) -> std::result::Result<(), ToolError> {
+        match &self.job_watch {
+            Some(watch) if !watch(JobStep { stage, done, total, fraction: fraction.clamp(0.0, 1.0), attempt: 1 }) => {
+                Err(error::failed(pdfcraft_engine::EditError::Cancelled))
+            }
+            _ => Ok(()),
+        }
+    }
+
     /// Confine every path the tools read or write to `root` (relative paths resolve inside it).
     pub fn with_root(mut self, root: impl Into<PathBuf>) -> std::io::Result<Self> {
         let root = root.into().canonicalize()?;
