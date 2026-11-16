@@ -229,6 +229,42 @@ fn runs_tools_and_tracks_undo() {
     assert_eq!(s.document(doc).unwrap().pages.len(), 2);
 }
 
+/// #634: Compress through the watched call says how far it is. A job cancelled before the call
+/// starts nothing: no file, and the document as it was. A tool with no steps to report runs as
+/// with `execute`, and no watch is left behind for the next call.
+#[test]
+fn a_watched_compress_reports_its_steps_and_a_cancelled_one_writes_nothing() {
+    let s = MobileSession::new();
+    let doc = s.open(blank_pdf(3), None).unwrap().id;
+    let generation = s.document(doc).unwrap().generation;
+    let out = scratch().join("small.pdf");
+    let job = ToolJob::new();
+    assert_eq!(job.progress(), ToolProgress::default());
+    let r = s.execute_watched("doc_optimize".into(), json!({ "doc": doc, "path": out }).to_string(), job.clone()).unwrap();
+    assert!(out.is_file(), "{r}");
+    let p = job.progress();
+    assert_eq!((p.stage.as_str(), p.attempt), ("writing", 1), "{p:?}");
+    assert!(p.steps >= 2 && p.percent >= 90, "{p:?}");
+
+    let stopped = scratch().join("stopped.pdf");
+    let job = ToolJob::new();
+    job.cancel();
+    let e = s.execute_watched("doc_optimize".into(), json!({ "doc": doc, "path": stopped }).to_string(), job.clone()).unwrap_err();
+    assert!(matches!(&e, MobileError::Command(m) if m == "cancelled"), "{e}");
+    assert_eq!(job.progress().steps, 0);
+    assert!(!stopped.exists());
+    assert_eq!(s.document(doc).unwrap().generation, generation);
+
+    let job = ToolJob::new();
+    s.execute_watched("page_rotate".into(), format!(r#"{{"doc": {doc}, "degrees": 90}}"#), job.clone()).unwrap();
+    assert_eq!(job.progress().steps, 0);
+    // that job, cancelled now, does not stop a later call it was never given to
+    job.cancel();
+    let plain = scratch().join("plain.pdf");
+    s.execute("doc_optimize".into(), json!({ "doc": doc, "path": plain }).to_string()).unwrap();
+    assert!(plain.is_file());
+}
+
 #[test]
 fn reports_tool_errors_instead_of_failing_hard() {
     let s = MobileSession::new();
