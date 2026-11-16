@@ -1656,8 +1656,8 @@
     <string name="pen_lab_reset">Reset this pen</string>
     <string name="pen_lab_write_log">Write the values to the log</string>
     <string name="pen_lab_group_drawing">Drawing</string>
-    <string name="pen_lab_draft_picture">Keep finished strokes as a picture</string>
-    <string name="pen_lab_draft_picture_body">While you write, strokes already written are shown from one picture instead of being drawn again on every frame. Turn off to compare, or if strokes ever show wrong.</string>
+    <string name="pen_lab_draft_picture">Keep finished strokes as an image</string>
+    <string name="pen_lab_draft_picture_body">Strokes already written are shown from one image instead of being drawn again on every frame. Turn off to compare, or if strokes ever show wrong.</string>
     <string name="pen_lab_written">Pen values written to the log</string>
     <string name="ink_shapes">Shapes</string>
     <string name="ink_toolbar_guides">Guides</string>
