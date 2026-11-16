@@ -940,6 +940,8 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
             // quietly for this session's own and announced for an older one (#78). A Draw edit
             // still running holds both until it is known whether it became a step.
             canUndo = { steps.idle && (edits.isNotEmpty() || doc.info.undo != null) },
+            // with a Draw edit of its own on top, Undo takes that back, not the document's newest step (#635)
+            ownSteps = { edits.isNotEmpty() },
             canRedo = {
                 steps.idle && (undone.isNotEmpty() || steps.canRedoDocument(doc.info.redo != null))
             },

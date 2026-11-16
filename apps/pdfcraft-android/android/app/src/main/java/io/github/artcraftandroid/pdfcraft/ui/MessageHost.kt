@@ -12,6 +12,7 @@ import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Snackbar
@@ -22,21 +23,30 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalAccessibilityManager
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.dismiss
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.dp
 import io.github.artcraftandroid.pdfcraft.R
 import kotlin.math.abs
 import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+
+/** The widest the message grows (#635), Material's own limit for a snackbar: on a tablet it sits in the middle. */
+val MessageMaxWidth = 600.dp
+
+/** The message's own box, for layout tests: what can be swiped, and all that takes a touch. */
+const val MESSAGE_BAR_TAG = "message_bar"
 
 /**
  * The one message at the bottom of the screen (#618): [AppViewModel.messageBoard] decides what it
@@ -74,38 +84,44 @@ private fun MessageBar(s: MessageBoard.Shown, onClose: () -> Unit, onPress: () -
     val dx = remember(s.id) { Animatable(0f) }
     val width = remember(s.id) { intArrayOf(1) }
     val closeLabel = stringResource(R.string.viewer_close)
-    Box(
-        Modifier.fillMaxWidth()
-            .onSizeChanged { width[0] = it.width.coerceAtLeast(1) }
-            .offset { IntOffset(dx.value.roundToInt(), 0) }
-            .graphicsLayer { alpha = 1f - (abs(dx.value) / width[0]).coerceIn(0f, 1f) }
-            .draggable(
-                orientation = Orientation.Horizontal,
-                state = rememberDraggableState { d -> scope.launch { dx.snapTo(dx.value + d) } },
-                onDragStopped = { velocity ->
-                    if (abs(dx.value) > width[0] * 0.3f || abs(velocity) > 1_500f) {
-                        val out = if (dx.value + velocity / 10f < 0f) -width[0].toFloat() else width[0].toFloat()
-                        dx.animateTo(out)
-                        onClose()
-                    } else {
-                        dx.animateTo(0f)
-                    }
+    // The line is the screen's width only to put the message in its middle: it takes no touch. The
+    // box that is swiped is as wide as the message and no wider (#635), so on a tablet the page
+    // beside the message stays the page's to write on.
+    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+        Box(
+            Modifier.widthIn(max = MessageMaxWidth)
+                .testTag(MESSAGE_BAR_TAG)
+                .onSizeChanged { width[0] = it.width.coerceAtLeast(1) }
+                .offset { IntOffset(dx.value.roundToInt(), 0) }
+                .graphicsLayer { alpha = 1f - (abs(dx.value) / width[0]).coerceIn(0f, 1f) }
+                .draggable(
+                    orientation = Orientation.Horizontal,
+                    state = rememberDraggableState { d -> scope.launch { dx.snapTo(dx.value + d) } },
+                    onDragStopped = { velocity ->
+                        if (abs(dx.value) > width[0] * 0.3f || abs(velocity) > 1_500f) {
+                            val out = if (dx.value + velocity / 10f < 0f) -width[0].toFloat() else width[0].toFloat()
+                            dx.animateTo(out)
+                            onClose()
+                        } else {
+                            dx.animateTo(0f)
+                        }
+                    },
+                )
+                .semantics {
+                    liveRegion = LiveRegionMode.Polite
+                    dismiss(closeLabel) { onClose(); true }
                 },
-            )
-            .semantics {
-                liveRegion = LiveRegionMode.Polite
-                dismiss(closeLabel) { onClose(); true }
-            },
-    ) {
-        Snackbar(
-            action = s.actionLabel?.let { label -> { TextButton(onClick = onPress) { Text(label) } } },
-            dismissAction = {
-                IconButton(onClick = onClose) { Icon(LucideIcons.X, contentDescription = closeLabel) }
-            },
         ) {
-            // errors in a row are one message with how many happened
-            val count = if (s.kind == MessageKind.Error && s.count > 1) "  ×" + java.text.NumberFormat.getInstance().format(s.count) else ""
-            Text(s.text + count)
+            Snackbar(
+                action = s.actionLabel?.let { label -> { TextButton(onClick = onPress) { Text(label) } } },
+                dismissAction = {
+                    IconButton(onClick = onClose) { Icon(LucideIcons.X, contentDescription = closeLabel) }
+                },
+            ) {
+                // errors in a row are one message with how many happened
+                val count = if (s.kind == MessageKind.Error && s.count > 1) "  ×" + java.text.NumberFormat.getInstance().format(s.count) else ""
+                Text(s.text + count)
+            }
         }
     }
 }
