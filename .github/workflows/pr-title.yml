@@ -1,10 +1,12 @@
 # Pull request titles follow Conventional Commits (feat: …, fix: …, docs: …, chore: …): a pull
 # request is squash-merged and its title becomes the commit on main. This check fails while the
 # title doesn't; editing the title re-runs it. It reads only the title, never the pull request's code.
+# It runs on pull_request, not pull_request_target: it needs no secrets and no write access, and
+# GitHub blocks pull_request_target by default for public repositories (#663).
 name: PR title
 
 on:
-  pull_request_target:
+  pull_request:
     types: [opened, edited, reopened, synchronize]
 
 permissions:
