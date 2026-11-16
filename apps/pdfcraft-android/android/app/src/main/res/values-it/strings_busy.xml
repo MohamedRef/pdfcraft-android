@@ -38,5 +38,7 @@
     <string name="msg_busy_protect_opening">Impostazione password: apertura di una copia…</string>
     <string name="msg_busy_protect_protecting">Impostazione password: protezione della copia…</string>
     <string name="msg_busy_protect_saving">Impostazione password: salvataggio della copia protetta…</string>
-    <string name="busy_cancel_protect">Annulla si ferma prima del passaggio successivo. Non viene creato alcun file e il tuo documento resta com’è. Il salvataggio della copia protetta è un solo passaggio: Annulla agisce quando finisce.</string>
+    <string name="busy_cancel_protect">Annulla si ferma prima del passaggio successivo, anche durante il salvataggio della copia protetta. Non viene creato alcun file e il tuo documento resta com’è.</string>
+    <string name="scan_enhance_busy_image">Miglioramento dell’immagine scansionata %1$d di %2$d…</string>
+    <string name="busy_cancel_scan_enhance">Annulla si ferma prima dell’immagine successiva. Nelle tue pagine non cambia nulla.</string>
 </resources>

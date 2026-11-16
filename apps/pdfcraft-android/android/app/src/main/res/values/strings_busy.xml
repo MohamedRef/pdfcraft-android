@@ -43,5 +43,7 @@
     <string name="msg_busy_protect_opening">Setting password: opening a copy…</string>
     <string name="msg_busy_protect_protecting">Setting password: protecting the copy…</string>
     <string name="msg_busy_protect_saving">Setting password: saving the protected copy…</string>
-    <string name="busy_cancel_protect">Cancel stops before the next step. No file is made, and your document stays as it is. Saving the protected copy is one step: Cancel takes hold when it ends.</string>
+    <string name="busy_cancel_protect">Cancel stops before the next step, and while the protected copy is saved. No file is made, and your document stays as it is.</string>
+    <string name="scan_enhance_busy_image">Enhancing scanned image %1$d of %2$d…</string>
+    <string name="busy_cancel_scan_enhance">Cancel stops before the next image. Nothing on your pages changes.</string>
 </resources>

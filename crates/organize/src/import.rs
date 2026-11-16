@@ -34,8 +34,8 @@ mod fields;
 use carry::{Mark, source_outline, write_outline_level};
 pub(crate) use carry::{set_attachments, set_attachments_exact};
 pub use combine::{
-    CombineOutcome, Combiner, Run, SplitBy, combine, combine_grouped, combine_grouped_with, combine_selected, combine_selected_with, combine_with,
-    extract_pages, split, split_ranges,
+    CombineOutcome, Combiner, Run, SplitBy, combine, combine_grouped, combine_grouped_with, combine_selected, combine_selected_watched,
+    combine_selected_with, combine_with, extract_pages, extract_pages_watched, split, split_ranges,
 };
 pub(crate) use copy::{Copier, copy_object};
 use copy::{MAX_COPY_DEPTH, SKIP_ON_PAGE};
@@ -203,6 +203,23 @@ fn import_pages_mapped(
     at: usize,
     conflicts: FieldConflicts,
 ) -> Result<Imported, OrganizeError> {
+    // Nothing stops it without a watch.
+    import_pages_mapped_watched(dst, src, src_pages, at, conflicts, &mut |_, _| true)?
+        .ok_or_else(|| OrganizeError::Invalid("the copy was stopped".into()))
+}
+
+/// [`import_pages_mapped`], telling `step` each page before it is copied (`done` of `total`).
+/// `step` returning `false` stops it with `Ok(None)`; `dst` then holds part of the copy and is
+/// only fit to be thrown away, which is what Extract and Combine do with the document they were
+/// building. Android adaptation (#646).
+fn import_pages_mapped_watched(
+    dst: &mut Document,
+    src: &Document,
+    src_pages: &[usize],
+    at: usize,
+    conflicts: FieldConflicts,
+    step: &mut dyn FnMut(usize, usize) -> bool,
+) -> Result<Option<Imported>, OrganizeError> {
     let source = walk(src)?;
     if let Some(bad) = src_pages.iter().find(|i| **i >= source.len()) {
         return Err(OrganizeError::NoSuchPage(*bad));
@@ -229,7 +246,11 @@ fn import_pages_mapped(
     let mut annot_pages = HashMap::new();
     let mut new_pages = Vec::new();
     let mut done: HashMap<ObjRef, ObjRef> = HashMap::new();
-    for (page, new, inherited) in targets {
+    let total = targets.len();
+    for (k, (page, new, inherited)) in targets.into_iter().enumerate() {
+        if !step(k, total) {
+            return Ok(None);
+        }
         // A page listed twice: make a second, independent page object sharing resources, and
         // with copies of its own annotations (an annotation belongs to one page: its `/P`, its
         // popup, a widget's place). Destinations still map to the pages copied.
@@ -350,7 +371,7 @@ fn import_pages_mapped(
     let inserted: Vec<(ObjRef, Dict)> = new_pages.iter().map(|r| (*r, Dict::new())).collect();
     existing.splice(at..at, inserted);
     rebuild(dst, &existing)?;
-    Ok(Imported { pages: new_pages, page_map: copier.pages, objects: copier.map, renamed_fields })
+    Ok(Some(Imported { pages: new_pages, page_map: copier.pages, objects: copier.map, renamed_fields }))
 }
 
 /// A page's `/Resources` with the names that only its page-tree ancestors list, or `None` when

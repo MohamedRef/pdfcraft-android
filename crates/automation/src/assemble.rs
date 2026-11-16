@@ -267,7 +267,10 @@ impl Automation {
         // Each file is read, converted and copied in turn, so a long list holds one file at a time.
         // How far it is (#634): each file converted and copied in, then the writing; a stop writes nothing.
         let files = paths.len();
+        // The file in hand, for the steps the engine tells while it copies that file's pages (#646).
+        let at = std::cell::Cell::new(0usize);
         let sources = paths.into_iter().zip(ranges).enumerate().map(|(i, (p, range))| -> std::result::Result<pdfcraft_engine::CombineSource, ToolError> {
+            at.set(i);
             self.job_step("files", i, files, 0.9 * i as f32 / files as f32)?;
             let path = self.resolve(p, false)?;
             let bytes = read_input(&path)?;
@@ -276,7 +279,20 @@ impl Automation {
             let title = path.file_stem().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
             Ok((title, pdf, range))
         });
-        let bytes = self.session.combine_each(sources)?.ok_or_else(|| ToolError::InvalidArgs("paths must list at least one file".into()))?;
+        // Inside a file its pages are copied one by one, and the new file is written object by
+        // object (#646): both move the bar and can be stopped.
+        let watch = self.job_watch.clone();
+        let bytes = self
+            .session
+            .combine_each_watched(sources, &mut |stage, done, total| {
+                let (stage, done, total, fraction) = match stage {
+                    "copying" => ("files", at.get(), files, 0.9 * (at.get() as f32 + Self::part(done, total)) / files.max(1) as f32),
+                    "writing" => ("writing", done, total, 0.9 + 0.05 * Self::part(done, total)),
+                    _ => ("writing", 0, 0, 0.95),
+                };
+                watch.as_ref().is_none_or(|w| w(crate::JobStep { stage, done, total, fraction, attempt: 1 }))
+            })?
+            .ok_or_else(|| ToolError::InvalidArgs("paths must list at least one file".into()))?;
         self.job_step("writing", 0, 0, 0.95)?;
         self.deliver(a, "Combined", bytes)
     }
@@ -323,13 +339,14 @@ impl Automation {
             let watch = self.job_watch.clone();
             let bytes = self
                 .session
-                .extract_watched(id, &pages, &mut |stage| {
+                .extract_watched(id, &pages, &mut |stage, done, total| {
+                    // inside the copying, page by page, and the writing, object by object (#646)
                     let fraction = match stage {
-                        "copying" => 0.0,
-                        "writing" => 0.6,
+                        "copying" => 0.6 * Self::part(done, total),
+                        "writing" => 0.6 + 0.2 * Self::part(done, total),
                         _ => 0.8,
                     };
-                    watch.as_ref().is_none_or(|w| w(crate::JobStep { stage, done: 0, total: 0, fraction, attempt: 1 }))
+                    watch.as_ref().is_none_or(|w| w(crate::JobStep { stage, done, total, fraction, attempt: 1 }))
                 })
                 .map_err(failed)?;
             self.deliver(a, &name, bytes)?
@@ -455,10 +472,11 @@ impl Automation {
         let watch = self.job_watch.clone();
         let combined = match groups {
             None => self.session.combine_unlocked_reporting_watched(&sources, &passwords, field_conflicts, &mut |stage, done, total| {
+                // inside the copying, page by page, and the writing, object by object (#646)
                 let fraction = match stage {
                     "opening" => 0.4 + 0.2 * done as f32 / total.max(1) as f32,
-                    "combining" => 0.6,
-                    "writing" => 0.75,
+                    "combining" => 0.6 + 0.15 * Self::part(done, total),
+                    "writing" => 0.75 + 0.15 * Self::part(done, total),
                     _ => 0.9,
                 };
                 watch.as_ref().is_none_or(|w| w(crate::JobStep { stage, done, total, fraction, attempt: 1 }))
@@ -541,9 +559,23 @@ impl Automation {
         let mut created = Vec::new();
         let mut used = std::collections::HashSet::new();
         let total = ranges.len();
+        let watch = self.job_watch.clone();
         let outcome = ranges.into_iter().enumerate().try_for_each(|(i, range)| -> Result<()> {
             self.job_step("parts", i, total, from + (1.0 - from) * i as f32 / total as f32)?;
-            let (first, last, bytes) = self.session.split_part(id, range).map_err(failed)?;
+            // Inside a part (#646): its pages copied, its file written and checked. Still told as
+            // part `i` of `total`, with the bar moving through the part, and stopped inside it.
+            let (first, last, bytes) = self
+                .session
+                .split_part_watched(id, range, &mut |stage, done, of| {
+                    let inside = match stage {
+                        "copying" => 0.6 * Self::part(done, of),
+                        "writing" => 0.6 + 0.3 * Self::part(done, of),
+                        _ => 0.9,
+                    };
+                    let fraction = from + (1.0 - from) * (i as f32 + inside) / total.max(1) as f32;
+                    watch.as_ref().is_none_or(|w| w(crate::JobStep { stage: "parts", done: i, total, fraction, attempt: 1 }))
+                })
+                .map_err(failed)?;
             let safe = |t: &str| t.chars().map(|c| if c.is_alphanumeric() || " -_.,()".contains(c) { c } else { '_' }).collect::<String>();
             let mut base = match titles.iter().find(|t| t.0 + 1 == first) {
                 Some((_, t)) => format!("{stem}-{}", safe(t)),

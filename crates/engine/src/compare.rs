@@ -73,7 +73,8 @@ impl Session {
     }
 
     /// [`Session::compare`], telling `step` each page whose text is read (`reading`: the older
-    /// file's pages, then the newer's, as one count) and the comparing itself (`comparing`);
+    /// file's pages, then the newer's, as one count) and the comparing itself (`comparing`: 0 of
+    /// 0 as it starts, then `done` of `total` words settled, #646);
     /// stops with [`EditError::Cancelled`] when `step` says so. Android adaptation (#634).
     pub fn compare_watched(&self, old: DocId, new: DocId, step: &mut dyn FnMut(&'static str, usize, usize) -> bool) -> Result<Comparison, EditError> {
         let a = self.get(old).ok_or(EditError::NoDocument)?;
@@ -84,10 +85,11 @@ impl Session {
         let total = na + nb;
         let wa = a.words_watched(&mut |p| step("reading", p, total)).ok_or(EditError::Cancelled)?;
         let wb = b.words_watched(&mut |p| step("reading", na + p, total)).ok_or(EditError::Cancelled)?;
-        if !step("comparing", total, total) {
+        if !step("comparing", 0, 0) {
             return Err(EditError::Cancelled);
         }
-        Ok(pdfcraft_compare::compare(&wa, &wb))
+        // Stretch by stretch (#646): `done` of `total` words settled, and a stop inside it.
+        pdfcraft_compare::compare_watched(&wa, &wb, &mut |done, total| step("comparing", done, total)).ok_or(EditError::Cancelled)
     }
 
     /// [`Session::compare`], keeping the changes on `pages` of `new` (0-based; empty: every page).

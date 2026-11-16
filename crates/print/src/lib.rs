@@ -18,7 +18,10 @@
 #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
 
 use pdfcraft_content::Matrix;
-use pdfcraft_cos::{DecodeBudget, Dict, Document, ObjRef, Object, SaveOptions, Stream, write_full};
+// The lib writes through `write_full_watched` (#646); the tests still write plain files.
+#[cfg(test)]
+use pdfcraft_cos::write_full;
+use pdfcraft_cos::{DecodeBudget, Dict, Document, ObjRef, Object, SaveOptions, Stream};
 
 mod font_names;
 pub mod range;

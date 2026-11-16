@@ -14,36 +14,42 @@ internal object BusyJobs {
         "scan_gallery_busy", // a scan's pages to the gallery †
         "msg_busy_exporting_images", // Export to images, page by page †; Images in the PDF is one call (below)
         "msg_busy_combining", "msg_busy_creating_pdf", // files read in one by one †, then the engine's steps file by file † (#634)
-        "msg_busy_setting_password", // Set a password: opening a copy, protecting, saving; between them † (#634)
+        "msg_busy_setting_password", // Set a password: opening a copy, protecting, saving; between them and inside the saving † (#634, #646)
         "msg_busy_saving_files", // files saved to a folder one by one †
         "msg_busy_compressing", // Compress: the engine reports pages read and images done, and stops when asked † (#634)
-        "msg_busy_splitting", // Split: part by part (and page by page measuring for a size) † (#634)
-        "msg_busy_extracting", // Extract pages: copying, writing and checking; between them † (#634)
+        "msg_busy_splitting", // Split: part by part (and page by page measuring for a size), and inside a part † (#634, #646)
+        "msg_busy_extracting", // Extract pages: copying page by page, writing, checking; between and inside them † (#634, #646)
         "msg_busy_exporting_to", // Export to Word, Excel, PowerPoint, RTF or text: page by page, then writing † (#634)
         "print_busy", // Print options: pages drawn for Print as image, sheet by sheet, then writing † (#634)
         "compare_busy", // Compare: both files' pages read, the comparing, page by page for visual † (#634)
+        "scan_enhance_busy", // Enhance scanned pages (at most 12): image by image † (#646)
     )
 
-    /** Jobs that can neither count nor stop, with the reason: each is one call into the PDF library, or a few short ones. */
+    /**
+     * Jobs that neither count nor stop, with the reason (#646): each is one call into the PDF
+     * library that changes or writes one thing whole, or a few short ones. They show the time
+     * taken, and a large file's note, like every job.
+     */
     val notCounted = mapOf(
-        "msg_busy_signing" to "one signing call",
+        "msg_busy_signing" to "one signing call: the signature is written whole or not at all",
         "msg_busy_creating_id" to "one key made",
-        "msg_busy_preparing_ocr" to "the recognition models copied once",
-        "comments_exporting" to "one call",
-        "comments_importing" to "one call",
-        "comments_summarizing" to "one call",
-        "measure_exporting" to "one call",
-        "backup_restoring" to "one backup copied back",
+        "msg_busy_preparing_ocr" to "the recognition models copied once, on first use",
+        "comments_exporting" to "one call: the comments, not the pages",
+        "comments_importing" to "one call, one undo step",
+        "comments_summarizing" to "one call: a page per group of comments, not per page of the document",
+        "measure_exporting" to "one call: the measurements, not the pages",
+        "backup_restoring" to "one backup file copied back",
         "cards_busy_export" to "one file written",
         "digest_busy" to "one file written",
         "edit_script_applying" to "one batch of edits, undone whole on failure",
         "handwriting_busy" to "one page",
         "notebook_busy_creating" to "one document made",
         "notebook_busy_saving_template" to "one page",
-        "scan_enhance_busy" to "one call on the open pages",
-        "sheet_copy_embedded_bookmarks_busy" to "one call",
-        "sheet_export_embedded_bookmarks" to "one call",
-        "sheet_import_embedded_bookmarks" to "one call",
-        "text_styles_creating" to "one call",
+        "sheet_copy_embedded_bookmarks_busy" to "one call: the bookmarks, not the pages",
+        "sheet_export_embedded_bookmarks" to "one call: the bookmarks, not the pages",
+        "sheet_import_embedded_bookmarks" to "one call, one undo step",
+        // reads every page's text inside one edit, which cannot report or stop part-way; on a long
+        // book it is the one job here that grows with the pages
+        "text_styles_creating" to "one edit, undone whole",
     )
 }

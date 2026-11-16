@@ -31,7 +31,8 @@ pub use pdfcraft_crypt::{
     Algorithm, Auth, Method as CryptMethod, NewEncryption, Permissions, SecurityHandler, effective_password, pdfdoc_byte, pdfdoc_char,
 };
 pub use writer::{
-    SaveOptions, civil_from_days, new_file_id, pdf_date, reachable_objects, serialize, write_full, write_incremental, write_incremental_shared,
+    SaveOptions, civil_from_days, new_file_id, pdf_date, reachable_objects, serialize, write_full, write_full_watched, write_incremental,
+    write_incremental_shared,
 };
 
 #[derive(Debug, thiserror::Error, Clone, PartialEq)]

@@ -195,7 +195,8 @@ impl Automation {
         let c = self
             .session
             .compare_watched(old, new, &mut |stage, done, total| {
-                let part = if stage == "comparing" { 0.9 } else { 0.9 * done as f32 / total.max(1) as f32 };
+                // finding the changes is told stretch by stretch (#646): the last tenth of the text compare
+                let part = if stage == "comparing" { 0.9 + 0.1 * Self::part(done, total) } else { 0.9 * done as f32 / total.max(1) as f32 };
                 tell(stage, done, total, text_share * part)
             })
             .map_err(failed)?;

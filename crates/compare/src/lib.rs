@@ -87,8 +87,51 @@ enum Op {
 /// frontiers (O(D²) memory) stay small.
 const DIRECT: usize = 3000;
 
-/// The edit script for `a` → `b`.
-fn diff(a: &[u64], b: &[u64], out: &mut Vec<Op>, depth: usize) {
+/// How far a compare is, for [`compare_watched`]: `done` of `total` words (old and new together)
+/// settled, the watch to tell, and whether it has said stop.
+struct Progress<'a> {
+    step: &'a mut dyn FnMut(usize, usize) -> bool,
+    done: usize,
+    total: usize,
+    /// `done` when the watch was last told.
+    told: usize,
+    stopped: bool,
+}
+
+/// The watch is told about this many times over one compare, however many stretches there are:
+/// two long documents can fall into tens of thousands of short ones.
+const TELLS: usize = 200;
+
+impl<'a> Progress<'a> {
+    /// Tells the watch that nothing is settled yet, so a stop asked before the compare began holds.
+    fn begin(step: &'a mut dyn FnMut(usize, usize) -> bool, total: usize) -> Self {
+        let stopped = !step(0, total);
+        Self { step, done: 0, total, told: 0, stopped }
+    }
+
+    /// `words` more are settled: tell the watch when that is a step worth telling, and when all
+    /// are. Nothing more is told once it has said stop.
+    fn settle(&mut self, words: usize) {
+        self.done = self.done.saturating_add(words).min(self.total);
+        if self.stopped || self.done == self.told {
+            return;
+        }
+        if self.done < self.total && self.done - self.told < (self.total / TELLS).max(1) {
+            return;
+        }
+        self.told = self.done;
+        if !(self.step)(self.done, self.total) {
+            self.stopped = true;
+        }
+    }
+}
+
+/// The edit script for `a` → `b`. Each stretch settled is told to `progress`; once its watch has
+/// said stop nothing more is compared, and what `out` holds is not a whole script.
+fn diff(a: &[u64], b: &[u64], out: &mut Vec<Op>, depth: usize, progress: &mut Progress<'_>) {
+    if progress.stopped {
+        return;
+    }
     let prefix = a.iter().zip(b).take_while(|(x, y)| x == y).count();
     let suffix = a[prefix..].iter().rev().zip(b[prefix..].iter().rev()).take_while(|(x, y)| x == y).count();
     out.extend(std::iter::repeat_n(Op::Equal, prefix));
@@ -96,20 +139,28 @@ fn diff(a: &[u64], b: &[u64], out: &mut Vec<Op>, depth: usize) {
     let replace = |out: &mut Vec<Op>| out.extend(std::iter::repeat_n(Op::Delete, ma.len()).chain(std::iter::repeat_n(Op::Insert, mb.len())));
     if ma.len() + mb.len() <= DIRECT {
         out.extend(myers(ma, mb));
+        progress.settle(2 * (prefix + suffix) + ma.len() + mb.len());
     } else {
         let anchors = if depth > 8 { Vec::new() } else { anchors(ma, mb) };
         if anchors.is_empty() {
             // A long stretch with nothing in common: one replacement.
             replace(out);
+            progress.settle(2 * (prefix + suffix) + ma.len() + mb.len());
         } else {
+            // Words are settled in the order they stand in the documents (the equal start, each
+            // stretch and the anchor after it, the equal end), so what is told follows the place
+            // in the documents and not how the work was cut up.
+            progress.settle(2 * prefix);
             let (mut i, mut j) = (0, 0);
             for (x, y) in anchors {
-                diff(&ma[i..x], &mb[j..y], out, depth + 1);
+                diff(&ma[i..x], &mb[j..y], out, depth + 1, progress);
                 out.push(Op::Equal);
+                progress.settle(2);
                 i = x + 1;
                 j = y + 1;
             }
-            diff(&ma[i..], &mb[j..], out, depth + 1);
+            diff(&ma[i..], &mb[j..], out, depth + 1, progress);
+            progress.settle(2 * suffix);
         }
     }
     out.extend(std::iter::repeat_n(Op::Equal, suffix));
@@ -255,10 +306,23 @@ fn side(words: &[&Word], neighbour: Option<&Word>) -> Side {
 
 /// Compare two documents' words.
 pub fn compare(old: &[Word], new: &[Word]) -> Comparison {
+    // Nothing stops it without a watch.
+    compare_watched(old, new, &mut |_, _| true).unwrap_or_default()
+}
+
+/// [`compare`], telling `step` how far it is: `done` of `total` words (both documents' together)
+/// settled, first with none and then about [`TELLS`] times. `None` when `step` says stop. Android adaptation
+/// (#646): on two long documents that differ a lot, finding the changes was one step that Cancel
+/// had to wait for.
+pub fn compare_watched(old: &[Word], new: &[Word], step: &mut dyn FnMut(usize, usize) -> bool) -> Option<Comparison> {
     let a: Vec<u64> = old.iter().map(|w| hash(&w.text)).collect();
     let b: Vec<u64> = new.iter().map(|w| hash(&w.text)).collect();
     let mut ops = Vec::with_capacity(a.len().max(b.len()));
-    diff(&a, &b, &mut ops, 0);
+    let mut progress = Progress::begin(step, a.len() + b.len());
+    diff(&a, &b, &mut ops, 0, &mut progress);
+    if progress.stopped {
+        return None;
+    }
 
     let mut changes = Vec::new();
     let (mut i, mut j) = (0usize, 0usize);
@@ -294,7 +358,7 @@ pub fn compare(old: &[Word], new: &[Word]) -> Comparison {
         let new_near = new.get(j).or_else(|| new.last());
         changes.push(Change { kind, old: side(&del, old_near), new: side(&ins, new_near) });
     }
-    Comparison { changes, old_words: old.len(), new_words: new.len() }
+    Some(Comparison { changes, old_words: old.len(), new_words: new.len() })
 }
 
 /// The compare report's text: a summary, then each change with its pages.
@@ -408,6 +472,72 @@ mod tests {
         let c = compare(&old, &new);
         assert_eq!(c.changes.len(), 1);
         assert_eq!(c.changes[0].kind, Kind::Replaced);
+    }
+
+    /// Two long documents with edits all along them, so the compare falls into many stretches.
+    fn scattered() -> (Vec<Word>, Vec<Word>) {
+        let old: Vec<Word> = (0..40_000).map(|i| Word { text: format!("w{i}"), page: i / 400, rect: [0.0; 4] }).collect();
+        let mut new = old.clone();
+        for k in (50..40_000).step_by(97) {
+            new[k].text = format!("changed{k}");
+        }
+        new.remove(21_000);
+        (old, new)
+    }
+
+    #[test]
+    fn a_watched_compare_finds_the_same_and_tells_how_far_it_is() {
+        let (old, new) = scattered();
+        let mut told = Vec::new();
+        let watched = compare_watched(&old, &new, &mut |done, total| {
+            told.push((done, total));
+            true
+        });
+        assert_eq!(watched, Some(compare(&old, &new)));
+        let total = old.len() + new.len();
+        assert_eq!(told.first(), Some(&(0, total)), "the watch is asked before anything is compared");
+        assert_eq!(told.last(), Some(&(total, total)), "every word is settled at the end");
+        assert!(told.iter().all(|&(_, t)| t == total));
+        assert!(told.windows(2).all(|w| w[0].0 < w[1].0), "it only moves on: {told:?}");
+        // many stretches, yet the watch is not told for each of them
+        assert!(told.len() > 20 && told.len() <= TELLS + 2, "{} tells", told.len());
+    }
+
+    #[test]
+    fn a_watched_compare_stops_when_told_to() {
+        let (old, new) = scattered();
+        // before it began
+        let mut asked = 0;
+        assert_eq!(
+            compare_watched(&old, &new, &mut |_, _| {
+                asked += 1;
+                false
+            }),
+            None
+        );
+        assert_eq!(asked, 1, "nothing more is told after a stop");
+        // part of the way in
+        let mut last = 0;
+        let stopped = compare_watched(&old, &new, &mut |done, total| {
+            last = done;
+            done * 4 < total
+        });
+        assert_eq!(stopped, None);
+        assert!(last * 4 >= old.len() + new.len() && last * 2 < old.len() + new.len(), "stopped at {last}, soon after a quarter");
+        // two documents with nothing in common are one stretch: asked before it, and once it is done
+        let a: Vec<Word> = (0..9000).map(|i| Word { text: format!("a{i}"), page: 0, rect: [0.0; 4] }).collect();
+        let b: Vec<Word> = (0..9000).map(|i| Word { text: format!("b{i}"), page: 0, rect: [0.0; 4] }).collect();
+        let mut told = Vec::new();
+        assert!(
+            compare_watched(&a, &b, &mut |done, total| {
+                told.push((done, total));
+                true
+            })
+            .is_some()
+        );
+        assert_eq!(told, [(0, 18_000), (18_000, 18_000)]);
+        // and nothing at all to compare still answers
+        assert_eq!(compare_watched(&[], &[], &mut |_, _| true), Some(Comparison::default()));
     }
 }
 

@@ -7,7 +7,7 @@
 
 use std::sync::Arc;
 
-use pdfcraft_cos::{SaveOptions, write_full};
+use pdfcraft_cos::SaveOptions;
 
 use crate::{DocId, EditError, Hidden, OptimizeReport, Session, guard, optimize};
 
@@ -135,7 +135,11 @@ impl OptimizeJob {
         let all: Vec<pdfcraft_cos::ObjRef> = cos.object_numbers().into_iter().map(|n| pdfcraft_cos::ObjRef::new(n, cos.generation(n))).collect();
         let merged = pdfcraft_organize::dedupe_resources(&mut cos, &all, false);
         step(OptimizeStage::Writing)?;
-        let bytes = write_full(&cos, &opts).map_err(|e| EditError::Write(e.to_string()))?;
+        // The writing is asked again as it goes (#646), so a stop takes hold inside it: on a large
+        // file it is one of the longest steps.
+        let bytes = pdfcraft_cos::write_full_watched(&cos, &opts, &mut |_, _| progress(OptimizeStage::Writing))
+            .map_err(|e| EditError::Write(e.to_string()))?
+            .ok_or(EditError::Cancelled)?;
         Ok((Arc::new(bytes), OptimizeReport { optimize: report, merged, discarded }))
     }
 }
