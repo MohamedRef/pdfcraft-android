@@ -342,8 +342,13 @@ class ToolsController internal constructor(private val vm: AppViewModel) {
     /** Export [doc] as a Word, RTF, Excel or PowerPoint document. */
     fun exportDocument(doc: OpenDocument, ext: String) = vm.docJob(doc, text(R.string.msg_busy_exporting_to, ext.uppercase())) { eng ->
         val out = vm.tempFile(ext)
-        if (ext == "txt") eng.tool("doc_export_text", mapOf("doc" to doc.id, "path" to out.absolutePath))
-        else eng.tool("doc_export_office", mapOf("doc" to doc.id, "path" to out.absolutePath))
+        // How far it is, with Cancel (#634): the file is written last, so a stop leaves nothing.
+        val tool = if (ext == "txt") "doc_export_text" else "doc_export_office"
+        vm.watchedTool(eng, doc, "export", tool, mapOf("doc" to doc.id, "path" to out.absolutePath),
+            text(R.string.busy_cancel_export), ::exportLine) ?: run {
+            out.delete()
+            return@docJob
+        }
         toolScreen = null
         val mime = when (ext) {
             "txt" -> "text/plain"

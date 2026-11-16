@@ -34,3 +34,13 @@ internal fun extractLine(stage: String, done: Int, total: Int): JobLine? = when 
     "pages" -> if (total > 0) JobLine(R.string.msg_busy_extracting_page, listOf(minOf(done + 1, total), total)) else null
     else -> null
 }
+
+/**
+ * The line for one step of `doc_export_office` and `doc_export_text` (#634): `pages`, page [done]
+ * of [total] being read, then `writing` the file.
+ */
+internal fun exportLine(stage: String, done: Int, total: Int): JobLine? = when (stage) {
+    "pages" -> if (total > 0) JobLine(R.string.msg_busy_exporting_doc_page, listOf(minOf(done + 1, total), total)) else null
+    "writing" -> JobLine(R.string.msg_busy_exporting_writing)
+    else -> null
+}

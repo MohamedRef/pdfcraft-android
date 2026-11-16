@@ -18,4 +18,7 @@
     <string name="msg_busy_extracting_page">Estrazione: pagina %1$d di %2$d…</string>
     <string name="busy_cancel_split">Annulla si ferma prima della parte successiva. Non viene conservata nessuna parte e il tuo documento resta com’è.</string>
     <string name="busy_cancel_extract">Annulla si ferma al passaggio successivo. Non viene creato alcun file e il tuo documento resta com’è.</string>
+    <string name="msg_busy_exporting_doc_page">Esportazione: pagina %1$d di %2$d…</string>
+    <string name="msg_busy_exporting_writing">Esportazione: scrittura del file…</string>
+    <string name="busy_cancel_export">Annulla si ferma dopo questa pagina. Non viene creato alcun file e il tuo documento resta com’è.</string>
 </resources>

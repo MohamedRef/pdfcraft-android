@@ -15162,3 +15162,51 @@ fn a_job_watch_follows_extract_and_can_stop_it() {
     assert!(!dir.join("each-stopped").exists());
     assert_eq!(ok(&mut a, "doc_info", json!({ "doc": doc })), before);
 }
+
+/// #634: doc_export_office and doc_export_text tell the job watch each page (and the office
+/// export its writing), and a stop writes no file and leaves the document as it was.
+#[test]
+fn a_job_watch_follows_export_and_can_stop_it() {
+    use pdfcraft_automation::JobStep;
+    use std::sync::{Arc, Mutex};
+    let dir = workdir("export-watch");
+    let mut a = auto(&dir);
+    let doc = ok(&mut a, "doc_open", json!({ "path": "a.pdf" }))["doc"].as_u64().unwrap();
+    let before = ok(&mut a, "doc_info", json!({ "doc": doc }));
+
+    for (tool, file) in [("doc_export_office", "a.docx"), ("doc_export_text", "a.txt")] {
+        let unwatched = format!("plain-{file}");
+        ok(&mut a, tool, json!({ "doc": doc, "path": unwatched }));
+        let seen: Arc<Mutex<Vec<JobStep>>> = Arc::default();
+        let log = seen.clone();
+        a.set_job_watch(Some(Arc::new(move |s| {
+            log.lock().unwrap().push(s);
+            true
+        })));
+        ok(&mut a, tool, json!({ "doc": doc, "path": file }));
+        a.set_job_watch(None);
+        let steps = seen.lock().unwrap().clone();
+        let pages: Vec<(usize, usize)> = steps.iter().filter(|s| s.stage == "pages").map(|s| (s.done, s.total)).collect();
+        assert_eq!(pages, vec![(0, 3), (1, 3), (2, 3)], "{tool}: {steps:?}");
+        assert!(steps.windows(2).all(|w| w[0].fraction <= w[1].fraction), "{tool}: {steps:?}");
+        if tool == "doc_export_office" {
+            assert_eq!(steps.last().map(|s| s.stage), Some("writing"), "{steps:?}");
+        } else {
+            // the same text as without a watch
+            assert_eq!(std::fs::read(dir.join(file)).unwrap(), std::fs::read(dir.join(&unwatched)).unwrap());
+        }
+
+        a.set_job_watch(Some(Arc::new(|s: JobStep| !(s.stage == "pages" && s.done == 1))));
+        let stopped = format!("stopped-{file}");
+        let e = err(&mut a, tool, json!({ "doc": doc, "path": stopped }));
+        a.set_job_watch(None);
+        assert!(matches!(&e, ToolError::Failed(m) if m.contains("cancelled")), "{tool}: {e}");
+        assert!(!dir.join(&stopped).exists(), "{tool}");
+    }
+    a.set_job_watch(Some(Arc::new(|s: JobStep| s.stage != "writing")));
+    let e = err(&mut a, "doc_export_office", json!({ "doc": doc, "path": "late.docx" }));
+    a.set_job_watch(None);
+    assert!(matches!(&e, ToolError::Failed(m) if m.contains("cancelled")), "{e}");
+    assert!(!dir.join("late.docx").exists());
+    assert_eq!(ok(&mut a, "doc_info", json!({ "doc": doc })), before);
+}

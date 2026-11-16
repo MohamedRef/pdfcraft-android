@@ -20,4 +20,8 @@
     <string name="msg_busy_extracting_page">Extracting: page %1$d of %2$d…</string>
     <string name="busy_cancel_split">Cancel stops before the next part. No parts are kept, and your document stays as it is.</string>
     <string name="busy_cancel_extract">Cancel stops at the next step. No file is made, and your document stays as it is.</string>
+    <!-- Export (Word, Excel, PowerPoint, RTF, text) says how far it is and can be stopped (#634): the page being read, then the file being written -->
+    <string name="msg_busy_exporting_doc_page">Exporting: page %1$d of %2$d…</string>
+    <string name="msg_busy_exporting_writing">Exporting: writing the file…</string>
+    <string name="busy_cancel_export">Cancel stops after this page. No file is made, and your document stays as it is.</string>
 </resources>

@@ -13,7 +13,15 @@ impl Automation {
             (_, "rich") => format,
             (_, _) => return Err(ToolError::InvalidArgs("html_mode is only available for HTML exports (rich or simple)".into())),
         };
-        let export = self.doc_to_copy(a)?.export_office_checked(format);
+        // Told each page and then the writing (#634); a stop writes no file.
+        let watch = self.job_watch.clone();
+        let export = self
+            .doc_to_copy(a)?
+            .export_office_watched(format, &mut |stage, done, total| {
+                let fraction = if total > 0 { 0.9 * done as f32 / total as f32 } else { 0.9 };
+                watch.as_ref().is_none_or(|w| w(crate::JobStep { stage, done, total, fraction, attempt: 1 }))
+            })
+            .map_err(failed)?;
         write_atomic(&path, &export.bytes)?;
         // Text left out to keep a hostile page bounded is said, not silent (#3120).
         let truncated: Vec<usize> = export.truncated_pages.iter().map(|p| p.saturating_add(1)).collect();
