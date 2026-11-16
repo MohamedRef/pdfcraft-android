@@ -78,7 +78,7 @@ fun VoiceSheet(vm: AppViewModel, prompt: VoicePrompt) {
         player.release()
         if (!recorder.start()) {
             vm.commenting.voicePrompt = null
-            vm.tell(text(R.string.voice_mic_failed))
+            vm.fail(text(R.string.voice_mic_failed))
         }
     }
 

@@ -130,7 +130,7 @@ class DocumentToolsController internal constructor(private val vm: AppViewModel)
                 }
                 doc.images.invalidate()
             } catch (e: MobileException) {
-                vm.tell(e.userMessage)
+                vm.fail(e.userMessage)
             } finally {
                 onDone()
             }
@@ -152,7 +152,7 @@ class DocumentToolsController internal constructor(private val vm: AppViewModel)
         val args = mutableMapOf<String, Any?>("path" to prompt.file.absolutePath, "name" to prompt.name)
         if (description.isNotBlank()) args["description"] = description.trim()
         vm.runTool(prompt.doc, "attachment_add", args, onSettled = { vm.dropPicked(listOf(prompt.file)) }) {
-            vm.tell(text(R.string.msg_attached, prompt.name), text(R.string.common_undo)) { vm.undo(prompt.doc) }
+            vm.tellUndoable(text(R.string.msg_attached, prompt.name), prompt.doc)
         }
     }
 
@@ -164,7 +164,7 @@ class DocumentToolsController internal constructor(private val vm: AppViewModel)
     /** Remove the document-level attachment [name]; Undo in the snackbar brings it back. */
     fun deleteAttachment(doc: OpenDocument, name: String) {
         vm.runTool(doc, "attachment_delete", mapOf("name" to name)) {
-            vm.tell(text(R.string.msg_attachment_removed, name), text(R.string.common_undo)) { vm.undo(doc) }
+            vm.tellUndoable(text(R.string.msg_attachment_removed, name), doc)
         }
     }
 
@@ -193,7 +193,7 @@ class DocumentToolsController internal constructor(private val vm: AppViewModel)
             }
             out
         } catch (e: MobileException) {
-            vm.tell(e.userMessage)
+            vm.fail(e.userMessage)
             null
         }
     }
@@ -218,7 +218,7 @@ class DocumentToolsController internal constructor(private val vm: AppViewModel)
     suspend fun initialView(doc: OpenDocument): JSONObject? {
         val eng = vm.engine ?: return null
         return try { eng.tool("doc_initial_view", mapOf("doc" to doc.id)).optJSONObject("initial_view") }
-        catch (e: MobileException) { vm.tell(e.userMessage); null }
+        catch (e: MobileException) { vm.fail(e.userMessage); null }
     }
 
     fun setInitialView(doc: OpenDocument, args: Map<String, Any?>) {
@@ -230,7 +230,7 @@ class DocumentToolsController internal constructor(private val vm: AppViewModel)
     suspend fun wordCount(doc: OpenDocument): JSONObject? {
         val eng = vm.engine ?: return null
         return try { eng.tool("text_word_count", mapOf("doc" to doc.id)).optJSONObject("total") }
-        catch (e: MobileException) { vm.tell(e.userMessage); null }
+        catch (e: MobileException) { vm.fail(e.userMessage); null }
     }
 
     fun wordCountLabel(words: Long, characters: Long): String {
@@ -247,7 +247,7 @@ class DocumentToolsController internal constructor(private val vm: AppViewModel)
         doc.commitTool?.invoke()
         vm.runTool(doc, "doc_flatten", mapOf("comments" to comments, "fields" to fields)) {
             Diag.event(DiagArea.Pages, "flattened", "doc" to doc.diagNumber, "comments" to comments, "fields" to fields)
-            vm.tell(text(R.string.msg_flattened), text(R.string.common_undo)) { vm.undo(doc) }
+            vm.tellUndoable(text(R.string.msg_flattened), doc)
         }
     }
 
@@ -260,7 +260,7 @@ class DocumentToolsController internal constructor(private val vm: AppViewModel)
     /** A read-only report from [tool] (null, with the reason told, when it fails). */
     suspend fun report(doc: OpenDocument, tool: String, args: Map<String, Any?> = emptyMap()): JSONObject? {
         val eng = vm.engine ?: return null
-        return try { eng.tool(tool, args + ("doc" to doc.id)) } catch (e: MobileException) { vm.tell(e.userMessage); null }
+        return try { eng.tool(tool, args + ("doc" to doc.id)) } catch (e: MobileException) { vm.fail(e.userMessage); null }
     }
 
     /** Save as PDF/A at [level] (`pdfa_convert`, one undo step); [onDone] gets what still breaks the rules. */
@@ -269,7 +269,7 @@ class DocumentToolsController internal constructor(private val vm: AppViewModel)
             val report = parsePdfaReport(r)
             Diag.event(DiagArea.Pages, "pdfa_convert", "doc" to doc.diagNumber, "level" to "pdfa${level.lowercase()}", "compliant" to report.compliant, "issues_left" to report.issues.size)
             onDone(report)
-            vm.tell(text(if (report.compliant) R.string.std_msg_pdfa_done else R.string.std_msg_pdfa_partly), text(R.string.common_undo)) { vm.undo(doc) }
+            vm.tellUndoable(text(if (report.compliant) R.string.std_msg_pdfa_done else R.string.std_msg_pdfa_partly), doc)
         }
     }
 
@@ -277,7 +277,7 @@ class DocumentToolsController internal constructor(private val vm: AppViewModel)
     fun removePdfaId(doc: OpenDocument, onDone: () -> Unit) {
         vm.runTool(doc, "standards_remove_id", mapOf("standard" to "pdfa")) {
             onDone()
-            vm.tell(text(R.string.std_msg_pdfa_id_removed), text(R.string.common_undo)) { vm.undo(doc) }
+            vm.tellUndoable(text(R.string.std_msg_pdfa_id_removed), doc)
         }
     }
 
@@ -287,14 +287,14 @@ class DocumentToolsController internal constructor(private val vm: AppViewModel)
             val n = r.optInt("fixed")
             Diag.event(DiagArea.Pages, "fix_hairlines", "doc" to doc.diagNumber, "fixed" to n, "pages" to r.optInt("pages"), "all_pages" to (pages == null))
             if (n == 0) vm.tell(text(R.string.std_msg_no_hairlines))
-            else vm.tell(plural(R.plurals.std_msg_hairlines_fixed, n, n, r.optInt("pages")), text(R.string.common_undo)) { vm.undo(doc) }
+            else vm.tellUndoable(plural(R.plurals.std_msg_hairlines_fixed, n, n, r.optInt("pages")), doc)
         }
     }
 
     /** Print options (#185): lay the pages out with `doc_print` before the system print dialog. */
     fun openPrintOptions(doc: OpenDocument) {
         if (!doc.info.allowsPrinting) {
-            vm.tell(text(R.string.msg_print_disabled))
+            vm.fail(text(R.string.msg_print_disabled))
             return
         }
         vm.tools.toolScreen = ToolScreen.PrintOptions(doc)
@@ -376,7 +376,7 @@ class DocumentToolsController internal constructor(private val vm: AppViewModel)
                 MarkKind.Watermark -> if (replace) R.string.marks_msg_wm_updated else R.string.marks_msg_wm_added
                 MarkKind.Background -> if (replace) R.string.marks_msg_bg_updated else R.string.marks_msg_bg_added
             }
-            vm.tell(text(msg), text(R.string.common_undo)) { vm.undo(doc) }
+            vm.tellUndoable(text(msg), doc)
         }
     }
 
@@ -386,7 +386,7 @@ class DocumentToolsController internal constructor(private val vm: AppViewModel)
             onDone()
             val warn = r.optJSONArray("warnings")?.length() ?: 0
             Diag.event(DiagArea.Pages, "marks_removed", "doc" to doc.diagNumber, "kind" to kind, "warnings" to warn)
-            vm.tell(text(if (warn > 0) R.string.marks_msg_removed_with_warnings else R.string.marks_msg_removed), text(R.string.common_undo)) { vm.undo(doc) }
+            vm.tellUndoable(text(if (warn > 0) R.string.marks_msg_removed_with_warnings else R.string.marks_msg_removed), doc)
         }
     }
 

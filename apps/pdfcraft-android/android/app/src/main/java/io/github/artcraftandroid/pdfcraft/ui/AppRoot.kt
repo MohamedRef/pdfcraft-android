@@ -30,10 +30,6 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
-import androidx.compose.material3.SnackbarDuration
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -74,17 +70,9 @@ import io.github.artcraftandroid.pdfcraft.ui.viewer.AdaptiveViewer
 @Composable
 fun AppRoot(vm: AppViewModel, onBrowse: () -> Unit, onPickSignatureImage: () -> Unit) {
     val c = pdfColors
-    val snackbar = remember { SnackbarHostState() }
-    LaunchedEffect(vm) {
-        for (m in vm.messages) {
-            val result = snackbar.showSnackbar(
-                m.text, actionLabel = m.actionLabel, withDismissAction = m.actionLabel == null,
-                duration = if (m.actionLabel != null) SnackbarDuration.Long else SnackbarDuration.Short,
-            )
-            if (result == SnackbarResult.ActionPerformed) m.action?.invoke()
-        }
-    }
     val doc = vm.document
+    // a message about a document goes when that document leaves the front (#618)
+    LaunchedEffect(doc) { vm.messageBoard.frontChanged(doc) }
     // outside the viewer (which sets its own) the bar icons follow the app's theme, not the system's
     val view = androidx.compose.ui.platform.LocalView.current
     val activity = androidx.compose.ui.platform.LocalContext.current as? android.app.Activity
@@ -140,7 +128,16 @@ fun AppRoot(vm: AppViewModel, onBrowse: () -> Unit, onPickSignatureImage: () -> 
                     LinearProgressIndicator(Modifier.fillMaxWidth().padding(top = 4.dp), color = c.accent)
                 }
             }
-            SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = 72.dp, start = 8.dp, end = 8.dp))
+            // over a document, just above its bottom bar (Draw's pens are taller than the others,
+            // and a full-screen page has none) so a message never covers the pens (#618)
+            val overViewer = doc != null && vm.tools.toolScreen == null
+            val density = androidx.compose.ui.platform.LocalDensity.current
+            MessageHost(
+                vm,
+                Modifier.align(Alignment.BottomCenter)
+                    .then(if (overViewer) Modifier.padding(bottom = with(density) { doc.viewer.padBottom.toDp() } + 8.dp) else Modifier.navigationBarsPadding().padding(bottom = 72.dp))
+                    .padding(horizontal = 8.dp),
+            )
 
             vm.passwordRequest?.let { PasswordDialog(vm, it) }
             vm.signing.idImport?.let { IdPasswordDialog(vm, it) }

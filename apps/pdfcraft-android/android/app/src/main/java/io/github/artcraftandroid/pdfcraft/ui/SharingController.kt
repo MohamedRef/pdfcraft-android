@@ -147,7 +147,7 @@ class SharingController internal constructor(private val vm: AppViewModel) {
             val intent = try {
                 make()
             } catch (e: Exception) {
-                vm.tell(e.userMessage)
+                vm.fail(e.userMessage)
                 null
             } ?: return@launch
             vm.intents.trySend(Intent.createChooser(intent, null))
@@ -303,7 +303,7 @@ class SharingController internal constructor(private val vm: AppViewModel) {
     /** Print [doc] through Android's print framework; with [clean], without its comments and markups (#155). */
     fun print(doc: OpenDocument, clean: Boolean = false) {
         if (!doc.info.allowsPrinting) {
-            vm.tell(text(R.string.msg_print_disabled))
+            vm.fail(text(R.string.msg_print_disabled))
             return
         }
         // The ink being drawn is printed too, as Share sends it (#79).
@@ -315,7 +315,7 @@ class SharingController internal constructor(private val vm: AppViewModel) {
             // the system's printing can't open a password-protected file: print an unlocked copy
             val prepared = if (doc.info.encrypted || clean) preparedCopy(doc, unlock = doc.info.encrypted, clean = clean) else null
             if (clean && prepared == null) {
-                vm.tell(text(R.string.msg_clean_copy_failed))
+                vm.fail(text(R.string.msg_clean_copy_failed))
                 return@launch
             }
             // a copy, not the working file the app's pause may be saving (#79); either copy is
@@ -496,7 +496,7 @@ class SharingController internal constructor(private val vm: AppViewModel) {
                     vm.readOnlyPrompt = doc
                     vm.resolvingReadOnly = false
                 }
-                vm.tell(e.userMessage)
+                vm.fail(e.userMessage)
             }
         }
     }

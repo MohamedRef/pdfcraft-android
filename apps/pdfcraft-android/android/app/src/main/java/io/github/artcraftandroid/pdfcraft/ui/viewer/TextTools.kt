@@ -112,7 +112,7 @@ fun AppViewModel.importFont(doc: OpenDocument, para: Paragraph) {
         viewModelScope.launch {
             val name = displayName(ctx, uri)
             val suffix = if (name?.lowercase()?.endsWith(".otf") == true) ".otf" else ".ttf"
-            val file = try { copyIntoCache(ctx, uri, "font", suffix) } catch (e: Exception) { tell(e.userMessage); return@launch }
+            val file = try { copyIntoCache(ctx, uri, "font", suffix) } catch (e: Exception) { fail(e.userMessage); return@launch }
             try {
                 val r = eng.tool("text_font_import", mapOf("doc" to doc.id, "page" to para.page + 1, "path" to file.absolutePath))
                 val res = r.optString("resource")
@@ -127,7 +127,7 @@ fun AppViewModel.importFont(doc: OpenDocument, para: Paragraph) {
                 tell(appText(R.string.edit_font_imported, face))
                 loadDocFonts(doc, para.page, force = true)
             } catch (e: Exception) {
-                tell(e.userMessage)
+                fail(e.userMessage)
             } finally {
                 file.delete()
             }

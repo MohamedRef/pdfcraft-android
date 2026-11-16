@@ -67,7 +67,7 @@ class ToolsController internal constructor(private val vm: AppViewModel) {
             try {
                 repeat(steps) { if (vm.document === doc && doc.info.undo != null) { eng.tool("edit_undo", mapOf("doc" to doc.id)); vm.refresh(doc) } }
             } catch (e: MobileException) {
-                vm.tell(e.userMessage)
+                vm.fail(e.userMessage)
             }
         }
     }
@@ -107,7 +107,7 @@ class ToolsController internal constructor(private val vm: AppViewModel) {
         return try {
             val a = eng.tool("doc_hidden_info", mapOf("doc" to doc.id)).optJSONArray("categories") ?: return emptyList()
             (0 until a.length()).map { a.getJSONObject(it).let { o -> o.optString("category") to o.optInt("count") } }
-        } catch (e: MobileException) { vm.tell(e.userMessage); null }
+        } catch (e: MobileException) { vm.fail(e.userMessage); null }
     }
 
     /** Remove [categories] (all of them, Sanitize, when null); undoable until saved. */
@@ -116,7 +116,7 @@ class ToolsController internal constructor(private val vm: AppViewModel) {
         vm.runTool(doc, "doc_remove_hidden", if (categories == null) emptyMap() else mapOf("categories" to categories)) {
             doc.controller.sheet = io.github.artcraftandroid.pdfcraft.ui.viewer.ViewerSheet.None
             Diag.event(DiagArea.Pages, "hidden_removed", "doc" to doc.diagNumber, "all" to (categories == null), "categories" to (categories?.size ?: -1))
-            vm.tell(text(R.string.msg_hidden_removed), text(R.string.common_undo)) { vm.undo(doc) }
+            vm.tellUndoable(text(R.string.msg_hidden_removed), doc)
         }
     }
 
@@ -155,7 +155,7 @@ class ToolsController internal constructor(private val vm: AppViewModel) {
     ) = vm.job(text(R.string.text_styles_creating)) { eng ->
         if (vm.document !== doc || doc.info.generation != generation || !doc.writable ||
             doc.info.signed || doc.info.readOnlyReason != null || !doc.info.allowsCopying || !doc.info.allowsAssembly) {
-            vm.tell(text(R.string.text_styles_unavailable))
+            vm.fail(text(R.string.text_styles_unavailable))
             return@job
         }
         val levels = io.github.artcraftandroid.pdfcraft.engine.headingStyleArguments(styles)
@@ -178,7 +178,7 @@ class ToolsController internal constructor(private val vm: AppViewModel) {
 
     fun pickEmbeddedBookmarksImport(doc: OpenDocument) {
         if (vm.document !== doc || !doc.writable || doc.info.signed || doc.info.readOnlyReason != null) {
-            vm.tell(text(R.string.sheet_import_embedded_bookmarks_unavailable))
+            vm.fail(text(R.string.sheet_import_embedded_bookmarks_unavailable))
             return
         }
         bookmarkJsonTarget = doc
@@ -191,7 +191,7 @@ class ToolsController internal constructor(private val vm: AppViewModel) {
         bookmarkJsonTarget = null
         if (uri == null || doc == null) return
         if (vm.document !== doc || !doc.writable || doc.info.signed || doc.info.readOnlyReason != null) {
-            vm.tell(text(R.string.sheet_import_embedded_bookmarks_unavailable))
+            vm.fail(text(R.string.sheet_import_embedded_bookmarks_unavailable))
             return
         }
         vm.job(text(R.string.sheet_import_embedded_bookmarks)) { eng ->
@@ -209,7 +209,7 @@ class ToolsController internal constructor(private val vm: AppViewModel) {
                 }
                 // The SAF provider may be slow. Recheck after staging and before every write.
                 if (vm.document !== doc || !doc.writable || doc.info.signed || doc.info.readOnlyReason != null) {
-                    vm.tell(text(R.string.sheet_import_embedded_bookmarks_unavailable))
+                    vm.fail(text(R.string.sheet_import_embedded_bookmarks_unavailable))
                     return@job
                 }
                 val result = eng.tool("bookmark_import", mapOf(
@@ -235,7 +235,7 @@ class ToolsController internal constructor(private val vm: AppViewModel) {
 
     fun pickEmbeddedBookmarksCopy(doc: OpenDocument) {
         if (vm.document !== doc || !doc.writable || doc.info.signed || doc.info.readOnlyReason != null) {
-            vm.tell(text(R.string.sheet_copy_embedded_bookmarks_unavailable))
+            vm.fail(text(R.string.sheet_copy_embedded_bookmarks_unavailable))
             return
         }
         bookmarkCopyTarget = doc
@@ -248,7 +248,7 @@ class ToolsController internal constructor(private val vm: AppViewModel) {
         bookmarkCopyTarget = null
         if (uri == null || doc == null) return
         if (vm.document !== doc || !doc.writable || doc.info.signed || doc.info.readOnlyReason != null) {
-            vm.tell(text(R.string.sheet_copy_embedded_bookmarks_unavailable))
+            vm.fail(text(R.string.sheet_copy_embedded_bookmarks_unavailable))
             return
         }
         if (uri == doc.source) {
@@ -275,7 +275,7 @@ class ToolsController internal constructor(private val vm: AppViewModel) {
                     }
                 }
                 if (vm.document !== doc || !doc.writable || doc.info.signed || doc.info.readOnlyReason != null) {
-                    vm.tell(text(R.string.sheet_copy_embedded_bookmarks_unavailable))
+                    vm.fail(text(R.string.sheet_copy_embedded_bookmarks_unavailable))
                     return@job
                 }
 
@@ -295,7 +295,7 @@ class ToolsController internal constructor(private val vm: AppViewModel) {
                 ) { from ->
                     val sourceInfo = eng.command { document(from.toULong()) }
                     if (!sourceInfo.allowsCopying) {
-                        vm.tell(text(R.string.sheet_copy_embedded_bookmarks_copy_restricted))
+                        vm.fail(text(R.string.sheet_copy_embedded_bookmarks_copy_restricted))
                         return@withTemporaryBookmarkSource
                     }
                     if (!sourceInfo.hasOutline) {
@@ -303,7 +303,7 @@ class ToolsController internal constructor(private val vm: AppViewModel) {
                         return@withTemporaryBookmarkSource
                     }
                     if (vm.document !== doc || !doc.writable || doc.info.signed || doc.info.readOnlyReason != null) {
-                        vm.tell(text(R.string.sheet_copy_embedded_bookmarks_unavailable))
+                        vm.fail(text(R.string.sheet_copy_embedded_bookmarks_unavailable))
                         return@withTemporaryBookmarkSource
                     }
                     val result = eng.tool("bookmark_copy", mapOf("doc" to doc.id, "from" to from, "replace" to false))

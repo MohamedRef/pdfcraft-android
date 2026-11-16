@@ -154,12 +154,12 @@ fun AppViewModel.replaceImage(doc: OpenDocument, img: EditImage) {
             val f = try {
                 copyIntoCache(getApplication<Application>(), uri, "replace", "-" + files.displayName(uri))
             } catch (e: Exception) {
-                tell(text(R.string.msg_picture_unreadable))
+                fail(text(R.string.msg_picture_unreadable))
                 return@launch
             }
             if (f.name.lowercase().endsWith(".gif")) {
                 f.delete()
-                tell(text(R.string.msg_gif_not_supported))
+                fail(text(R.string.msg_gif_not_supported))
                 return@launch
             }
             imageAction(doc, img, "replace", mapOf("path" to f.absolutePath))
@@ -182,7 +182,7 @@ fun AppViewModel.saveImage(doc: OpenDocument, img: EditImage) {
         val written = try {
             File(eng.tool("image_save", mapOf("doc" to doc.id, "page" to img.page + 1, "image" to img.number, "path" to base.absolutePath)).getString("path"))
         } catch (e: Exception) {
-            tell(e.userMessage)
+            fail(e.userMessage)
             return@launch
         }
         val name = "${doc.name.removeSuffix(".pdf")}-p${img.page + 1}-${img.number}.${written.extension}"
@@ -194,7 +194,7 @@ fun AppViewModel.saveImage(doc: OpenDocument, img: EditImage) {
                         tell(text(R.string.edit_image_saved))
                     }
                 } catch (e: Exception) {
-                    tell(e.userMessage)
+                    fail(e.userMessage)
                 } finally {
                     written.delete()
                 }

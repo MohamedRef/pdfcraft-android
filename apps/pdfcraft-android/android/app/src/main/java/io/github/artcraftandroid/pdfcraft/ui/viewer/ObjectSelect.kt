@@ -127,7 +127,7 @@ fun AppViewModel.loadObjects(doc: OpenDocument, page: Int, keep: Set<String> = e
             editor.objectSelect.objects = parsePageObjects(r)
             editor.objectSelect.selected = keep.filterTo(HashSet()) { k -> editor.objectSelect.objects.any { it.key == k } }
         } catch (e: Exception) {
-            tell(e.userMessage)
+            fail(e.userMessage)
         }
     }
 }

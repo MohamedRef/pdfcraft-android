@@ -99,7 +99,7 @@ internal class ScanRecentController(private val vm: AppViewModel) {
             val work = File(app.cacheDir, "camera")
             val opened = withContext(Dispatchers.IO) { runCatching { store.open(id, work) }.onFailure { Diag.failure(DiagArea.Scan, "recent_open", it) }.getOrNull() }
             if (opened == null || opened.session.pages.isEmpty()) {
-                vm.tell(text(R.string.scan_recent_unreadable))
+                vm.fail(text(R.string.scan_recent_unreadable))
                 refresh()
                 return@launch
             }
