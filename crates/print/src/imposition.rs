@@ -400,6 +400,12 @@ fn source_pages(doc: &Document) -> Vec<pdfcraft_model::Page> {
 /// Build the print-ready PDF for `settings`. Encryption is not carried over (the file goes to a
 /// printer or is the user's own copy); callers must check the print permission first.
 pub fn impose(src: &Document, settings: &Settings) -> Result<Vec<u8>, PrintError> {
+    Ok(impose_watched(src, settings, &mut |_, _| true)?.unwrap_or_default())
+}
+
+/// [`impose`], telling `step` each sheet before it is laid (`done` of `total`); `None` when
+/// `step` says stop, before anything is written. Android adaptation (#634).
+pub fn impose_watched(src: &Document, settings: &Settings, step: &mut dyn FnMut(usize, usize) -> bool) -> Result<Option<Vec<u8>>, PrintError> {
     let pages = source_pages(src);
     let sizes: Vec<(f64, f64)> = pages.iter().map(|p| p.display_size(src)).collect();
     let sheets = layout(&sizes, settings)?;
@@ -410,7 +416,10 @@ pub fn impose(src: &Document, settings: &Settings) -> Result<Vec<u8>, PrintError
     let views: Vec<[f64; 6]> = pages.iter().map(|p| p.view_matrix(src)).collect();
     let pages_root = doc.add(Object::Null);
     let mut kids = Vec::new();
-    for sheet in &sheets {
+    for (k, sheet) in sheets.iter().enumerate() {
+        if !step(k, sheets.len()) {
+            return Ok(None);
+        }
         let mut c = String::new();
         let mut xo = Dict::new();
         for (i, pl) in sheet.placed.iter().enumerate() {
@@ -490,7 +499,7 @@ pub fn impose(src: &Document, settings: &Settings) -> Result<Vec<u8>, PrintError
     if doc.trailer().contains(b"Encrypt") {
         doc.remove_encryption();
     }
-    Ok(write_full(&doc, &SaveOptions::default())?)
+    Ok(Some(write_full(&doc, &SaveOptions::default())?))
 }
 
 /// Which source pages land on each sheet (for previews and the sheet count).

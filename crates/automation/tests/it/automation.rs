@@ -15210,3 +15210,84 @@ fn a_job_watch_follows_export_and_can_stop_it() {
     assert!(!dir.join("late.docx").exists());
     assert_eq!(ok(&mut a, "doc_info", json!({ "doc": doc })), before);
 }
+
+#[test]
+fn a_job_watch_follows_print_and_can_stop_it() {
+    use pdfcraft_automation::JobStep;
+    use std::sync::{Arc, Mutex};
+    let dir = workdir("print-watch");
+    let mut a = auto(&dir);
+    let doc = ok(&mut a, "doc_open", json!({ "path": "a.pdf" }))["doc"].as_u64().unwrap();
+    let before = ok(&mut a, "doc_info", json!({ "doc": doc }));
+
+    for (args, pictures) in [(json!({ "layout": "multiple", "per_sheet": 2 }), false), (json!({ "as_image": true, "dpi": 72 }), true)] {
+        let mut call = args.clone();
+        call["doc"] = json!(doc);
+        call["path"] = json!("plain.pdf");
+        let plain = ok(&mut a, "doc_print", call.clone());
+        let seen: Arc<Mutex<Vec<JobStep>>> = Arc::default();
+        let log = seen.clone();
+        a.set_job_watch(Some(Arc::new(move |s| {
+            log.lock().unwrap().push(s);
+            true
+        })));
+        call["path"] = json!("watched.pdf");
+        let r = ok(&mut a, "doc_print", call.clone());
+        a.set_job_watch(None);
+        assert_eq!(r["sheets"], plain["sheets"], "{r}");
+        let steps = seen.lock().unwrap().clone();
+        let stages: Vec<&str> = steps.iter().map(|s| s.stage).collect();
+        let sheets = plain["sheets"].as_u64().unwrap() as usize;
+        let mut want = Vec::new();
+        if pictures {
+            want.extend(std::iter::repeat_n("pictures", 3));
+        }
+        want.extend(std::iter::repeat_n("sheets", sheets));
+        want.push("writing");
+        assert_eq!(stages, want, "{steps:?}");
+        assert!(steps.windows(2).all(|w| w[0].fraction <= w[1].fraction), "{steps:?}");
+
+        for stop_at in ["pictures", "sheets", "writing"].into_iter().filter(|s| pictures || *s != "pictures") {
+            a.set_job_watch(Some(Arc::new(move |s: JobStep| s.stage != stop_at)));
+            call["path"] = json!("stopped.pdf");
+            let e = err(&mut a, "doc_print", call.clone());
+            a.set_job_watch(None);
+            assert!(matches!(&e, ToolError::Failed(m) if m.contains("cancelled")), "{stop_at}: {e}");
+            assert!(!dir.join("stopped.pdf").exists(), "{stop_at}");
+        }
+    }
+    assert_eq!(ok(&mut a, "doc_info", json!({ "doc": doc })), before);
+}
+
+#[test]
+fn a_job_watch_follows_compare_and_can_stop_it() {
+    use pdfcraft_automation::JobStep;
+    use std::sync::{Arc, Mutex};
+    let dir = workdir("compare-watch");
+    let mut a = auto(&dir);
+    let v1 = ok(&mut a, "doc_create", json!({ "from": "text", "text": "Rent is 900 per month. Pets are not allowed." }))["doc"].as_u64().unwrap();
+    let v2 = ok(&mut a, "doc_create", json!({ "from": "text", "text": "Rent is 950 per month. Pets are allowed. Parking included." }))["doc"]
+        .as_u64()
+        .unwrap();
+    let plain = ok(&mut a, "doc_compare", json!({ "doc": v2, "other": v1, "visual": true }));
+    let seen: Arc<Mutex<Vec<JobStep>>> = Arc::default();
+    let log = seen.clone();
+    a.set_job_watch(Some(Arc::new(move |s| {
+        log.lock().unwrap().push(s);
+        true
+    })));
+    let r = ok(&mut a, "doc_compare", json!({ "doc": v2, "other": v1, "visual": true }));
+    a.set_job_watch(None);
+    assert_eq!(r, plain);
+    let steps = seen.lock().unwrap().clone();
+    let got: Vec<(&str, usize, usize)> = steps.iter().map(|s| (s.stage, s.done, s.total)).collect();
+    assert_eq!(got, vec![("reading", 0, 2), ("reading", 1, 2), ("comparing", 2, 2), ("visual", 0, 1)], "{steps:?}");
+    assert!(steps.windows(2).all(|w| w[0].fraction <= w[1].fraction), "{steps:?}");
+
+    for stop_at in ["reading", "comparing", "visual"] {
+        a.set_job_watch(Some(Arc::new(move |s: JobStep| s.stage != stop_at)));
+        let e = err(&mut a, "doc_compare", json!({ "doc": v2, "other": v1, "visual": true }));
+        a.set_job_watch(None);
+        assert!(matches!(&e, ToolError::Failed(m) if m.contains("cancelled")), "{stop_at}: {e}");
+    }
+}

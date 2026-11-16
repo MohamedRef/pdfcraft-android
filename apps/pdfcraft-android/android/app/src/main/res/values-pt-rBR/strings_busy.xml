@@ -21,4 +21,12 @@
     <string name="msg_busy_exporting_doc_page">Exportando: página %1$d de %2$d…</string>
     <string name="msg_busy_exporting_writing">Exportando: gravando o arquivo…</string>
     <string name="busy_cancel_export">Cancelar para depois desta página. Nenhum arquivo é criado e seu documento fica como está.</string>
+    <string name="print_busy_picture">Preparando a impressão: página %1$d de %2$d como imagem…</string>
+    <string name="print_busy_sheet">Preparando a impressão: folha %1$d de %2$d…</string>
+    <string name="print_busy_writing">Preparando a impressão: gravando o arquivo…</string>
+    <string name="busy_cancel_print">Cancelar para aqui. Nada é impresso ou salvo e seu documento fica como está.</string>
+    <string name="compare_busy_reading">Comparando: lendo a página %1$d de %2$d…</string>
+    <string name="compare_busy_comparing">Comparando: procurando as mudanças…</string>
+    <string name="compare_busy_visual">Comparando: examinando a página %1$d de %2$d…</string>
+    <string name="busy_cancel_compare">Cancelar interrompe a comparação. Os dois documentos ficam como estão.</string>
 </resources>

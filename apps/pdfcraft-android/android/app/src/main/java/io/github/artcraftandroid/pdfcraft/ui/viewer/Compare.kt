@@ -43,6 +43,7 @@ import io.github.artcraftandroid.pdfcraft.ui.PdfSheet
 import io.github.artcraftandroid.pdfcraft.ui.PdfSwitch
 import io.github.artcraftandroid.pdfcraft.ui.SheetBackHeader
 import io.github.artcraftandroid.pdfcraft.ui.SheetDivider
+import io.github.artcraftandroid.pdfcraft.ui.compareLine
 import io.github.artcraftandroid.pdfcraft.ui.copyIntoCache
 import io.github.artcraftandroid.pdfcraft.ui.copyOut
 import io.github.artcraftandroid.pdfcraft.ui.pdfColors
@@ -165,7 +166,14 @@ fun AppViewModel.runCompare(doc: OpenDocument) {
         tools.busy = appText(R.string.compare_busy)
         try {
             val t0 = System.nanoTime()
-            val r = eng.tool("doc_compare", mapOf("doc" to doc.id, "other" to older.toLong(), "visual" to tools.compare.visual, "limit" to 2000))
+            // How far it is, with Cancel (#634): a stop ends the comparing; nothing was changed.
+            val r = watchedTool(eng, doc, "compare", "doc_compare", mapOf("doc" to doc.id, "other" to older.toLong(), "visual" to tools.compare.visual, "limit" to 2000),
+                appText(R.string.busy_cancel_compare), ::compareLine)
+            if (r == null) {
+                if (doc.controller.sheet == ViewerSheet.Compare) doc.controller.sheet = ViewerSheet.None
+                closeCompare()
+                return@launch
+            }
             tools.compare.result = parseCompare(r, doc.info.pages.map { it.height })
             editEvent(doc, "compare", "visual" to tools.compare.visual, "changes" to tools.compare.result?.changes?.size, "identical" to tools.compare.result?.identical, "ms" to (System.nanoTime() - t0) / 1_000_000)
             doc.controller.sheet = ViewerSheet.Compare

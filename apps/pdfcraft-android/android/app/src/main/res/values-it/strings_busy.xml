@@ -21,4 +21,12 @@
     <string name="msg_busy_exporting_doc_page">Esportazione: pagina %1$d di %2$d…</string>
     <string name="msg_busy_exporting_writing">Esportazione: scrittura del file…</string>
     <string name="busy_cancel_export">Annulla si ferma dopo questa pagina. Non viene creato alcun file e il tuo documento resta com’è.</string>
+    <string name="print_busy_picture">Preparazione della stampa: pagina %1$d di %2$d come immagine…</string>
+    <string name="print_busy_sheet">Preparazione della stampa: foglio %1$d di %2$d…</string>
+    <string name="print_busy_writing">Preparazione della stampa: scrittura del file…</string>
+    <string name="busy_cancel_print">Annulla si ferma qui. Non viene stampato né salvato nulla e il tuo documento resta com’è.</string>
+    <string name="compare_busy_reading">Confronto: lettura della pagina %1$d di %2$d…</string>
+    <string name="compare_busy_comparing">Confronto: ricerca delle modifiche…</string>
+    <string name="compare_busy_visual">Confronto: esame della pagina %1$d di %2$d…</string>
+    <string name="busy_cancel_compare">Annulla interrompe il confronto. Entrambi i documenti restano come sono.</string>
 </resources>

@@ -39,4 +39,22 @@ class JobStepsTest {
         assertNull(exportLine("pages", 0, 0))
         assertNull(exportLine("something_new", 0, 0))
     }
+
+    @Test
+    fun printCountsPicturesAndSheets() {
+        assertEquals(JobLine(R.string.print_busy_picture, listOf(1, 3)), printLine("pictures", 0, 3))
+        assertEquals(JobLine(R.string.print_busy_sheet, listOf(2, 2)), printLine("sheets", 1, 2))
+        assertEquals(JobLine(R.string.print_busy_writing), printLine("writing", 0, 0))
+        assertNull(printLine("sheets", 0, 0))
+        assertNull(printLine("something_new", 0, 0))
+    }
+
+    @Test
+    fun compareCountsBothFilesThenTheVisualPages() {
+        assertEquals(JobLine(R.string.compare_busy_reading, listOf(5, 20)), compareLine("reading", 4, 20))
+        assertEquals(JobLine(R.string.compare_busy_comparing), compareLine("comparing", 20, 20))
+        assertEquals(JobLine(R.string.compare_busy_visual, listOf(10, 10)), compareLine("visual", 10, 10))
+        assertNull(compareLine("visual", 0, 0))
+        assertNull(compareLine("something_new", 0, 0))
+    }
 }

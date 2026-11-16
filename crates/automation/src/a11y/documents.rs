@@ -184,7 +184,21 @@ impl Automation {
     pub(crate) fn doc_compare(&self, a: &Args) -> Result<Value> {
         use pdfcraft_engine::compare::Kind;
         let (old, new) = self.compare_ids(a)?;
-        let c = self.session.compare(old, new).map_err(failed)?;
+        // How far it is (#634): both files' pages read, the comparing, then for visual each page
+        // drawn. Nothing is written, so a stop only ends the call.
+        let visual_asked = a.opt_bool("visual")?.unwrap_or(false);
+        let text_share = if visual_asked { 0.5 } else { 1.0 };
+        let watch = self.job_watch.clone();
+        let tell = |stage: &'static str, done: usize, total: usize, fraction: f32| {
+            watch.as_ref().is_none_or(|w| w(crate::JobStep { stage, done, total, fraction, attempt: 1 }))
+        };
+        let c = self
+            .session
+            .compare_watched(old, new, &mut |stage, done, total| {
+                let part = if stage == "comparing" { 0.9 } else { 0.9 * done as f32 / total.max(1) as f32 };
+                tell(stage, done, total, text_share * part)
+            })
+            .map_err(failed)?;
         let limit = a.opt_int("limit")?.unwrap_or(500).max(1) as usize;
         let r2 = |r: &[f64; 4]| r.map(|v| (v * 100.0).round() / 100.0);
         let side =
@@ -195,8 +209,10 @@ impl Automation {
             .take(limit)
             .map(|ch| json!({ "kind": ch.kind.label().to_lowercase(), "old": side(&ch.old), "new": side(&ch.new) }))
             .collect();
-        let visual: Vec<Value> = if a.opt_bool("visual")?.unwrap_or(false) {
-            self.session.compare_visual(old, new, 72.0).map_err(failed)?.iter().map(|(p, r)| json!({ "page": p + 1, "rect": r2(r) })).collect()
+        let visual: Vec<Value> = if visual_asked {
+            self.session
+                .compare_visual_watched(old, new, 72.0, &mut |done, total| tell("visual", done, total, 0.5 + 0.5 * done as f32 / total.max(1) as f32))
+                .map_err(failed)?.iter().map(|(p, r)| json!({ "page": p + 1, "rect": r2(r) })).collect()
         } else {
             Vec::new()
         };

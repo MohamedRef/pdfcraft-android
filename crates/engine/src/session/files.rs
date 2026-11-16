@@ -238,6 +238,18 @@ impl Session {
 
     /// The print-ready PDF for `settings` (sheets laid out for the paper; see `pdfcraft-print`).
     pub fn print_pdf(&self, id: DocId, settings: &print::Settings) -> Result<Vec<u8>, EditError> {
+        self.print_pdf_watched(id, settings, &mut |_, _, _| true)
+    }
+
+    /// [`Session::print_pdf`], telling `step` each page drawn as a picture (`pictures`, for
+    /// Print as image) and each sheet laid (`sheets`); stops with [`EditError::Cancelled`] when
+    /// `step` says so. Android adaptation (#634).
+    pub fn print_pdf_watched(
+        &self,
+        id: DocId,
+        settings: &print::Settings,
+        step: &mut dyn FnMut(&'static str, usize, usize) -> bool,
+    ) -> Result<Vec<u8>, EditError> {
         let doc = self.get(id).ok_or(EditError::NoDocument)?;
         if !doc.allows_printing() {
             return Err(EditError::NotPermitted("printing"));
@@ -257,7 +269,9 @@ impl Session {
                     distinct.push(p);
                 }
             }
-            let bytes = print_raster::rasterize(doc, &distinct, raster, settings.content).map_err(EditError::Print)?;
+            let bytes = print_raster::rasterize_watched(doc, &distinct, raster, settings.content, &mut |done, total| step("pictures", done, total))
+                .map_err(EditError::Print)?
+                .ok_or(EditError::Cancelled)?;
             let pictures = pdfcraft_cos::Document::open(Arc::new(bytes)).map_err(|e| EditError::Print(e.to_string()))?;
             let remapped = print::Settings {
                 pages: settings.pages.iter().map(|p| distinct.iter().position(|d| d == p).unwrap_or(0)).collect(),
@@ -265,7 +279,9 @@ impl Session {
                 raster: None,
                 ..settings.clone()
             };
-            return pdfcraft_print::impose(&pictures, &remapped).map_err(|e| EditError::Print(e.to_string()));
+            return pdfcraft_print::impose_watched(&pictures, &remapped, &mut |done, total| step("sheets", done, total))
+                .map_err(|e| EditError::Print(e.to_string()))?
+                .ok_or(EditError::Cancelled);
         }
         let mut cos = match doc.editor.as_ref() {
             Some(e) => e.cos.clone(),
@@ -295,7 +311,9 @@ impl Session {
         if doc.signatures.iter().any(|s| s.verdict_shown) {
             let _ = pdfcraft_sign::show_status_layers(&mut cos, &mut doc.signatures.to_vec(), &doc.captions);
         }
-        pdfcraft_print::impose(&cos, settings).map_err(|e| EditError::Print(e.to_string()))
+        pdfcraft_print::impose_watched(&cos, settings, &mut |done, total| step("sheets", done, total))
+            .map_err(|e| EditError::Print(e.to_string()))?
+            .ok_or(EditError::Cancelled)
     }
 
     /// For each page, whether its text mostly runs bottom-to-top ([`pdfcraft_print::text_reads_up`]);

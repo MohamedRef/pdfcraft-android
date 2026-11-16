@@ -17,6 +17,18 @@ use crate::{Document, guard, print_layer_states};
 /// page per entry, the size of the source page as displayed, drawing what `content` prints.
 /// Pages too large for the renderer at `raster.dpi` render at the largest resolution it allows.
 pub fn rasterize(doc: &Document, pages: &[usize], raster: &Raster, content: Content) -> Result<Vec<u8>, String> {
+    Ok(rasterize_watched(doc, pages, raster, content, &mut |_, _| true)?.unwrap_or_default())
+}
+
+/// [`rasterize`], telling `step` each page before it is drawn (`done` of `total`); `None` when
+/// `step` says stop. Android adaptation (#634).
+pub fn rasterize_watched(
+    doc: &Document,
+    pages: &[usize],
+    raster: &Raster,
+    content: Content,
+    step: &mut dyn FnMut(usize, usize) -> bool,
+) -> Result<Option<Vec<u8>>, String> {
     let dpi = raster.dpi.clamp(72.0, 600.0);
     let src = doc.export_source();
     let mut config = src.config.clone();
@@ -38,7 +50,10 @@ pub fn rasterize(doc: &Document, pages: &[usize], raster: &Raster, content: Cont
     let mut renderer = PageRenderer::new(std::sync::Arc::new(printed), config);
     let mut images: Vec<(String, Vec<u8>)> = Vec::with_capacity(pages.len());
     let mut used: Option<f64> = None;
-    for &page in pages {
+    for (k, &page) in pages.iter().enumerate() {
+        if !step(k, pages.len()) {
+            return Ok(None);
+        }
         let (w, h) = src.sizes.get(page).copied().ok_or_else(|| format!("page {} does not exist", page + 1))?;
         let scale = pdfcraft_render::effective_scale(w, h, (dpi / 72.0) as f32);
         let page_dpi = f64::from(scale) * 72.0;
@@ -55,7 +70,7 @@ pub fn rasterize(doc: &Document, pages: &[usize], raster: &Raster, content: Cont
     }
     let dpi = used.unwrap_or(dpi);
     let doc = pdfcraft_create::from_images_with_resolution(&images, ImageResolution::Dpi(dpi)).map_err(|e| e.to_string())?;
-    pdfcraft_cos::write_full(&doc, &pdfcraft_cos::SaveOptions::default()).map_err(|e| e.to_string())
+    pdfcraft_cos::write_full(&doc, &pdfcraft_cos::SaveOptions::default()).map(Some).map_err(|e| e.to_string())
 }
 
 /// Premultiplied RGBA composed over white paper (opaque), in grey when asked (Rec. 601 luma).
