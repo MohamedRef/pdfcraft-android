@@ -341,6 +341,13 @@ fun BookmarksSheet(vm: AppViewModel, doc: OpenDocument) {
     }
 }
 
+/** The icon that names [t] in the side panel's tabs and on its folded strip (#659). */
+internal fun contentsTabIcon(t: ContentsTab) = when (t) {
+    ContentsTab.Contents -> LucideIcons.List
+    ContentsTab.Bookmarks -> LucideIcons.Bookmark
+    ContentsTab.Pages -> LucideIcons.LayoutGrid
+}
+
 /** The tabs over the contents: the chosen one in the text colour with the accent's line under it. */
 @Composable
 internal fun ContentsTabs(tabs: List<ContentsTab>, chosen: ContentsTab, icons: Boolean = false, onChoose: (ContentsTab) -> Unit) {
@@ -363,12 +370,7 @@ internal fun ContentsTabs(tabs: List<ContentsTab>, chosen: ContentsTab, icons: B
             ) {
                 // the narrow side panel names its tabs by icon, so three fit in any language; the sheet has room for the words
                 if (icons) {
-                    val icon = when (t) {
-                        ContentsTab.Contents -> LucideIcons.List
-                        ContentsTab.Bookmarks -> LucideIcons.Bookmark
-                        ContentsTab.Pages -> LucideIcons.LayoutGrid
-                    }
-                    Icon(icon, null, tint = if (chosen == t) c.accent else c.icon, modifier = Modifier.size(22.dp))
+                    Icon(contentsTabIcon(t), null, tint = if (chosen == t) c.accent else c.icon, modifier = Modifier.size(22.dp))
                 } else {
                     Text(
                         label, color = if (chosen == t) c.text else c.textSecondary, fontSize = 15.sp,

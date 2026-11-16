@@ -522,7 +522,6 @@
     <string name="viewer_add_comment">Add comment</string>
     <string name="viewer_strikethrough">Strikethrough</string>
     <string name="viewer_edit_text">Edit text</string>
-    <string name="viewer_show_page_navigator">Show side panel</string>
     <string name="viewer_hide_page_navigator">Hide side panel</string>
     <string name="viewer_fit_width">Fit width</string>
     <string name="viewer_zoom_in">Zoom in</string>

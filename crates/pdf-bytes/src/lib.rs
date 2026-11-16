@@ -547,6 +547,10 @@ mod splice {
         ptr: NonNull<u8>,
         len: usize,
         reserved: usize,
+        /// The file whose first [`Self::prefix`] bytes this region maps, kept so a later save can
+        /// map it again beneath a longer tail (#654) instead of copying the whole region.
+        file: File,
+        prefix: usize,
         /// A lent file's token (#453): this region maps that file's pages too.
         _lent: Option<std::sync::Arc<super::LentInode>>,
         /// Those pages guarded against the file being cut short (#476).
@@ -581,6 +585,15 @@ mod splice {
         }
         fn is_mapped(&self) -> bool {
             true
+        }
+        /// Android adaptation (#654): an already extended file extended again, as a save of a
+        /// document opened in place does each time. The file's pages are mapped again; only the
+        /// earlier tail and the new one are copied, never the file's own bytes.
+        fn appended(&self, tail: &[u8]) -> Option<super::PdfBytes> {
+            let mut rest = Vec::with_capacity((self.len - self.prefix).checked_add(tail.len())?);
+            rest.extend_from_slice(&self[self.prefix..]);
+            rest.extend_from_slice(tail);
+            append(&self.file, self.prefix, &rest, self._lent.clone()).map(|s| std::sync::Arc::new(s) as super::PdfBytes)
         }
     }
     impl Drop for Spliced {
@@ -635,8 +648,9 @@ mod splice {
         if unsafe { libc::mprotect(base, reserved, libc::PROT_READ) } != 0 {
             return fail(base);
         }
+        let Ok(file) = file.try_clone() else { return fail(base) };
         let guard = lent.as_ref().map(|l| super::lent_guard::guard(base.cast::<u8>(), file_span, l.dev, l.ino));
-        Some(Spliced { ptr: NonNull::new(base.cast())?, len: prefix + tail.len(), reserved, _lent: lent, guard })
+        Some(Spliced { ptr: NonNull::new(base.cast())?, len: prefix + tail.len(), reserved, file, prefix, _lent: lent, guard })
     }
 }
 

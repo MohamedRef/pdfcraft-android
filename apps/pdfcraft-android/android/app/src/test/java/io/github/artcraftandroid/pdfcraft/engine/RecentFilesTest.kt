@@ -21,12 +21,13 @@ class RecentFilesTest {
     @Test fun openingAgainKeepsTheStarReadingModeAndPlace() {
         val r = recents()
         r.touch(entry("a"))
-        r.update("a") { it.copy(starred = true, reading = true, lastX = 10f, lastY = 20f, lastZoom = 2f, layout = "two") }
+        r.update("a") { it.copy(starred = true, reading = true, lastX = 10f, lastY = 20f, lastZoom = 2f, layout = "two", panel = "closed:bookmarks") }
         r.touch(entry("a", opened = 9))
         val a = r.list().single()
         assertTrue(a.starred && a.reading)
         assertEquals(listOf(10f, 20f, 2f), listOf(a.lastX, a.lastY, a.lastZoom))
         assertEquals("two", a.layout)
+        assertEquals("closed:bookmarks", a.panel) // the tablet's side panel as it was left (#659)
     }
 
     @Test fun theListIsTrimmedToMax() {

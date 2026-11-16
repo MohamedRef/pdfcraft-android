@@ -535,9 +535,7 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
                             // Reading Mode keeps its bare bar, as it has no search
                             onContents = if (vm.settings.readingMode) null else ({
                                 selection.clear()
-                                if (ctl.sheet == ViewerSheet.Bookmarks) ctl.sheet = ViewerSheet.None
-                                else if (ctl.contentsInPanel && ctl.panelOpen && ctl.contentsTab?.let { it != ContentsTab.Pages } == true) ctl.panelOpen = false
-                                else openContents(doc, "button")
+                                toggleContentsFromButton(doc)
                             }),
                             contentsOpen = ctl.sheet == ViewerSheet.Bookmarks,
                             showShare = topBarHoldsShare(config.screenWidthDp),
