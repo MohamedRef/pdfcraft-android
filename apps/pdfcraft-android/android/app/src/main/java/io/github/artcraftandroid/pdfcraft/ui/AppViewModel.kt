@@ -668,7 +668,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 refreshRecents()
                 study.indexLibrary()
                 withContext(Dispatchers.IO) { sweepCache() }
-                if (doc.fromOtherApp) leave.trySend(Unit) else showTab(next)
+                afterClose(doc, next)
             }
           } finally {
               if (closingDoc === doc) closingDoc = null
@@ -726,6 +726,8 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     /** Resolve an unsaved write-back prompt without racing an incoming Open with. */
     fun answerReadOnly(saveCopy: Boolean?) {
         val doc = readOnlyPrompt ?: return
+        val answer = when (saveCopy) { true -> "save_copy"; false -> "discard"; null -> "keep_editing" }
+        Diag.event(DiagArea.Save, "read_only_answer", "doc" to doc.diagNumber, "answer" to answer, "from_other_app" to doc.fromOtherApp, "tabs" to tabs.tabs.size)
         if (saveCopy == null) {
             readOnlyPrompt = null
             return
@@ -744,7 +746,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                             document = null
                             val next = tabs.closed(doc)
                             refreshRecents()
-                            if (doc.fromOtherApp) leave.trySend(Unit) else showTab(next)
+                            afterClose(doc, next)
                         }
                     } finally {
                         resolvingReadOnly = false
@@ -771,13 +773,24 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                         document = null
                         val next = tabs.closed(doc)
                         refreshRecents()
-                        if (doc.fromOtherApp) leave.trySend(Unit) else showTab(next)
+                        afterClose(doc, next)
                     }
                 } finally {
                     resolvingReadOnly = false
                 }
             }
         }
+    }
+
+    /**
+     * After [doc], in front, closed and its tab went: a document another app opened goes back to
+     * that app only when it was the last document open (#662); otherwise the next tab comes to
+     * the front, as after any other close.
+     */
+    private fun afterClose(doc: OpenDocument, next: DocTab?) {
+        val left = tabs.tabs.size
+        if (doc.fromOtherApp) Diag.event(DiagArea.Viewer, "leave", "doc" to doc.diagNumber, "tabs" to left, "finish" to TabPolicy.leavesAfterClose(true, left))
+        if (TabPolicy.leavesAfterClose(doc.fromOtherApp, left)) leave.trySend(Unit) else showTab(next)
     }
 
     /** After the document in front closed: the next tab comes to the front (a parked one opens again). */
