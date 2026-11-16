@@ -49,3 +49,41 @@ internal fun markupEndpointNearGlyph(x: Float, y: Float, rect: List<Float>, tole
     return x >= left - tolerance && x <= right + tolerance &&
         y >= top - tolerance && y <= bottom + tolerance
 }
+
+/** The box around a markup's line rectangles, as [x0, y0, x1, y1]; null when there are none or one is not finite. */
+internal fun markupBounds(rects: List<FloatArray>): FloatArray? {
+    if (rects.isEmpty() || rects.any { r -> r.size < 4 || r.any { !it.isFinite() } }) return null
+    return floatArrayOf(rects.minOf { it[0] }, rects.minOf { it[1] }, rects.maxOf { it[2] }, rects.maxOf { it[3] })
+}
+
+/**
+ * Where the bar by a new markup goes (#197, #650), as its top in screen pixels: [top] and [bottom]
+ * of the markup, the bar's [height], the [margin] between them, and the page area from [minTop]
+ * to [maxBottom]. After the selection menu it goes below the markup when it fits, else above. In
+ * the Highlight tool ([preferAbove]) it goes above when it fits under the top bar, so it does not
+ * cover the lines still to be marked, else below. It never leaves the page area.
+ */
+internal fun followUpBarTop(top: Float, bottom: Float, height: Float, margin: Float, minTop: Float, maxBottom: Float, preferAbove: Boolean): Float {
+    val above = top - margin - height
+    val below = bottom + margin
+    val fitsAbove = above >= minTop
+    val fitsBelow = below + height < maxBottom
+    val y = when {
+        preferAbove && fitsAbove -> above
+        preferAbove -> below
+        fitsBelow -> below
+        else -> above
+    }
+    return y.coerceIn(minTop, (maxBottom - height).coerceAtLeast(minTop))
+}
+
+/** The colours one tap away on Highlight's row (#650), as ARGB: yellow, green, light blue, pink and red of the comment palette. */
+internal val MARKUP_QUICK_COLORS = listOf(0xFFFFD100, 0xFF6AD928, 0xFF38E5FF, 0xFFFF809D, 0xFFE52237)
+
+/**
+ * How many of them Highlight's row has room for at a window [widthDp] wide, beside its four
+ * tools and the colour button (about 276 dp), each 36 dp wide: three on a 384 dp phone, one at
+ * 320 dp, all five from 456 dp.
+ */
+internal fun markupQuickColorCount(widthDp: Int): Int = ((widthDp - 276) / 36).coerceIn(0, MARKUP_QUICK_COLORS.size)
+

@@ -26,6 +26,10 @@ internal object MarkupDiag {
 
     // markup (#197 #134 #170 #133)
     fun followUp(doc: OpenDocument, action: String) = e("markup_follow_up", doc, "action" to action)
+    /** A colour picked from Highlight's row in one tap (#650). */
+    fun quickColor(doc: OpenDocument, markup: TextMarkup) = e("markup_quick_color", doc, "markup" to markup.name.lowercase())
+    /** The markup just made with the Highlight tool is in hand, its bar by it (#650). */
+    fun inHand(doc: OpenDocument, markup: TextMarkup, lines: Int) = e("markup_in_hand", doc, "markup" to markup.name.lowercase(), "lines" to lines)
     fun areaHighlight(doc: OpenDocument, rect: FloatArray) = e("area_highlight", doc, "w_pt" to (rect[2] - rect[0]).toInt(), "h_pt" to (rect[3] - rect[1]).toInt())
     fun textEdit(doc: OpenDocument, kind: String, lines: Int) = e("text_suggestion", doc, "kind" to kind, "lines" to lines)
     fun shape(doc: OpenDocument, type: String, points: Int) = e("shape", doc, "type" to type, "points" to points)

@@ -6,6 +6,12 @@ import io.github.artcraftandroid.pdfcraft.ui.viewer.MAX_MARKUP_LINE_RECTS
 import io.github.artcraftandroid.pdfcraft.ui.viewer.markupLineRects
 import io.github.artcraftandroid.pdfcraft.ui.viewer.markupWordRange
 import io.github.artcraftandroid.pdfcraft.ui.viewer.markupEndpointNearGlyph
+import io.github.artcraftandroid.pdfcraft.ui.viewer.CommentPalette
+import io.github.artcraftandroid.pdfcraft.ui.viewer.MARKUP_QUICK_COLORS
+import io.github.artcraftandroid.pdfcraft.ui.viewer.followUpBarTop
+import io.github.artcraftandroid.pdfcraft.ui.viewer.markupBounds
+import io.github.artcraftandroid.pdfcraft.ui.viewer.markupQuickColorCount
+import io.github.artcraftandroid.pdfcraft.ui.viewer.toArgbInt
 import org.junit.Assert.*
 import org.junit.Test
 
@@ -62,4 +68,52 @@ class MarkupSelectionTest {
         assertTrue(markupEndpointNearGlyph(54f, 110f, listOf(62f, 100f, 50f, 118f), 4f))
     }
 
+
+    // ---- #650: the markup just made stays in hand, and colours are a tap away
+
+    @Test fun aMarkupsBoundsCoverAllItsLines() {
+        val b = markupBounds(listOf(floatArrayOf(72f, 100f, 300f, 112f), floatArrayOf(40f, 114f, 180f, 126f)))
+        assertArrayEquals(floatArrayOf(40f, 100f, 300f, 126f), b, 0f)
+        assertNull(markupBounds(emptyList()))
+        assertNull(markupBounds(listOf(floatArrayOf(1f, 2f, Float.NaN, 4f))))
+        assertNull(markupBounds(listOf(floatArrayOf(1f, 2f, 3f))))
+    }
+
+    @Test fun afterTheSelectionMenuTheBarGoesBelowWhenItFits() {
+        // a markup from 400 to 430 px, a 96 px bar, 24 px apart, the page area from 120 to 1600
+        assertEquals(454f, followUpBarTop(400f, 430f, 96f, 24f, 120f, 1600f, preferAbove = false), 0f)
+        // near the foot there is no room below: above
+        assertEquals(1380f, followUpBarTop(1500f, 1530f, 96f, 24f, 120f, 1600f, preferAbove = false), 0f)
+    }
+
+    @Test fun inTheHighlightToolTheBarGoesAboveClearOfTheLinesBelow() {
+        assertEquals(280f, followUpBarTop(400f, 430f, 96f, 24f, 120f, 1600f, preferAbove = true), 0f)
+        // just under the top bar there is no room above: below
+        assertEquals(214f, followUpBarTop(160f, 190f, 96f, 24f, 120f, 1600f, preferAbove = true), 0f)
+    }
+
+    @Test fun theBarNeverLeavesThePageArea() {
+        // a markup scrolled above the page area, or below it
+        assertEquals(120f, followUpBarTop(-500f, -470f, 96f, 24f, 120f, 1600f, preferAbove = false), 0f)
+        assertEquals(1504f, followUpBarTop(2400f, 2430f, 96f, 24f, 120f, 1600f, preferAbove = true), 0f)
+        // a page area shorter than the bar: its top, never a place above it
+        assertEquals(120f, followUpBarTop(130f, 140f, 96f, 24f, 120f, 180f, preferAbove = true), 0f)
+    }
+
+    @Test fun quickColoursAreAsManyAsTheRowHasRoomFor() {
+        val count = ::markupQuickColorCount
+        assertEquals(0, count(300))
+        assertEquals(1, count(320))
+        assertEquals(2, count(360))
+        assertEquals(3, count(384))
+        assertEquals(5, count(600))
+        assertEquals(5, count(1280))
+        assertEquals(0, count(0))
+    }
+
+    @Test fun everyQuickColourIsANamedColourOfThePalette() {
+        val palette = CommentPalette.map { it.first.toArgbInt() }
+        for (argb in MARKUP_QUICK_COLORS) assertTrue("%08X".format(argb), argb.toInt() in palette)
+        assertEquals(5, MARKUP_QUICK_COLORS.toSet().size)
+    }
 }

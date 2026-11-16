@@ -2042,6 +2042,8 @@ private fun MarkupLayer(vm: AppViewModel, doc: OpenDocument) {
             onDown = { screen, _, _ ->
                 requestSerial++
                 resetPreview()
+                // the bar by the last markup goes as the next one begins (#650)
+                vm.commenting.markupFollowUp = null
                 pendingTap = screen
                 val start = doc.viewer.screenToPage(screen) ?: return@toolGestures
                 val gesture = MarkupGesture(start, screen)
@@ -2109,6 +2111,13 @@ private fun MarkupLayer(vm: AppViewModel, doc: OpenDocument) {
                                         drag = null
                                     }
                                 },
+                                // the new markup stays in hand until the page is touched again (#650)
+                                onDone = { r ->
+                                    if (requestSerial == serial && doc.controller.tool == ViewerTool.Markup) {
+                                        vm.commenting.keepInHand(doc, selected.range.page.toInt(), selected.rects, selectedColor, r)
+                                        MarkupDiag.inHand(doc, selectedMarkup, selected.rects.size)
+                                    }
+                                },
                             )
                         } else if (!tap && selectedMarkup == TextMarkup.Highlight) {
                             // no text under the drag (a scan, a picture): highlight the area itself (#134)
@@ -2120,6 +2129,11 @@ private fun MarkupLayer(vm: AppViewModel, doc: OpenDocument) {
                                     if (requestSerial == serial) {
                                         pendingTap = null
                                         drag = null
+                                    }
+                                }, onDone = { r ->
+                                    if (requestSerial == serial && doc.controller.tool == ViewerTool.Markup) {
+                                        vm.commenting.keepInHand(doc, page, listOf(area), selectedColor, r)
+                                        MarkupDiag.inHand(doc, TextMarkup.Highlight, 1)
                                     }
                                 })
                             }
@@ -2182,15 +2196,29 @@ private fun MarkupLayer(vm: AppViewModel, doc: OpenDocument) {
 /** Which property picker a sub-toolbar has open. */
 enum class Picker { None, Color, Width, TextSize, Presets, PenStyle, EraserSize, Stamp, Shapes, Guides }
 
-/** Highlight's row: the four text markups, each with its caption (#526), and the colour. */
+/**
+ * Highlight's row: the four text markups, each with its caption (#526), then the first [quick]
+ * colours of [MARKUP_QUICK_COLORS] one tap away (#650) and the colour button, which opens all
+ * colours and the opacity.
+ */
 @Composable
-internal fun MarkupSubTools(markup: TextMarkup, onMarkup: (TextMarkup) -> Unit, color: Color, colorOpen: Boolean, onColor: () -> Unit) {
+internal fun MarkupSubTools(
+    markup: TextMarkup, onMarkup: (TextMarkup) -> Unit, color: Color, colorOpen: Boolean,
+    quick: Int = 0, onQuickColor: (Color) -> Unit = {},
+    // last, so a trailing lambda is the colour button's, as it was before the quick colours came
+    onColor: () -> Unit,
+) {
     SubToolbar {
         SubTool(LucideIcons.Highlighter, stringResource(R.string.common_tool_highlight), markup == TextMarkup.Highlight, { onMarkup(TextMarkup.Highlight) }, caption = stringResource(R.string.tool_caption_highlight))
         SubTool(LucideIcons.Underline, stringResource(R.string.common_tool_underline), markup == TextMarkup.Underline, { onMarkup(TextMarkup.Underline) }, caption = stringResource(R.string.tool_caption_underline))
         SubTool(LucideIcons.Strikethrough, stringResource(R.string.toolbar_strikethrough), markup == TextMarkup.Strikethrough, { onMarkup(TextMarkup.Strikethrough) }, caption = stringResource(R.string.tool_caption_strike))
         SubTool(io.github.artcraftandroid.pdfcraft.ui.PdfIcons.SquigglyUnderline, stringResource(R.string.toolbar_squiggly), markup == TextMarkup.Squiggly, { onMarkup(TextMarkup.Squiggly) }, caption = stringResource(R.string.tool_caption_squiggly))
         SubDivider()
+        for (argb in MARKUP_QUICK_COLORS.take(quick)) {
+            val quickColor = Color(argb)
+            val name = CommentPalette.firstOrNull { it.first.toArgbInt() == quickColor.toArgbInt() }?.second
+            QuickColorDot(quickColor, stringResource(name ?: R.string.viewer_markup_color), quickColor.toArgbInt() == color.toArgbInt()) { onQuickColor(quickColor) }
+        }
         ColorDot(color, colorOpen, onColor)
     }
 }
@@ -2231,7 +2259,15 @@ fun ToolSubToolbar(vm: AppViewModel, doc: OpenDocument) {
         ctl.picker = if (ctl.picker == p) Picker.None else p
     }
     when (ctl.tool) {
-        ViewerTool.Markup -> MarkupSubTools(ctl.markup, { ctl.markup = it }, prefs.color(ctl.markup.styled), picker == Picker.Color) { toggle(Picker.Color) }
+        ViewerTool.Markup -> MarkupSubTools(
+            ctl.markup, { ctl.markup = it }, prefs.color(ctl.markup.styled), picker == Picker.Color,
+            quick = markupQuickColorCount(androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp),
+            onQuickColor = {
+                MarkupDiag.quickColor(doc, ctl.markup)
+                prefs.setColor(ctl.markup.styled, it)
+            },
+            onColor = { toggle(Picker.Color) },
+        )
         ViewerTool.Draw -> DrawToolbar(vm, doc)
         ViewerTool.Comment -> CommentSubTools(ctl.commentMode, {
             ctl.commentMode = it

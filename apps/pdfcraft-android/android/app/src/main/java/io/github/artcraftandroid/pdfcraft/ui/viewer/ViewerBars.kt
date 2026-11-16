@@ -610,6 +610,25 @@ fun SubDivider() {
     Box(Modifier.padding(horizontal = 4.dp)) { BarDivider(height = 30.dp) }
 }
 
+/**
+ * One of the colours a tap away on a sub-toolbar (#650): a dot of that colour, ringed when it is
+ * the tool's colour now. [name] is the colour's, for TalkBack.
+ */
+@Composable
+fun QuickColorDot(color: androidx.compose.ui.graphics.Color, name: String, selected: Boolean, onClick: () -> Unit) {
+    val c = pdfColors
+    Box(
+        Modifier.width(36.dp).height(54.dp).clickable(role = Role.RadioButton, onClick = onClick).semantics {
+            contentDescription = name
+            this.selected = selected
+        },
+        contentAlignment = Alignment.Center,
+    ) {
+        if (selected) Box(Modifier.size(28.dp).border(2.dp, c.toolAccent, androidx.compose.foundation.shape.CircleShape))
+        Box(Modifier.size(20.dp).background(color, androidx.compose.foundation.shape.CircleShape))
+    }
+}
+
 /** The colour button of a sub-toolbar: a filled dot of the tool's colour. */
 @Composable
 fun ColorDot(color: androidx.compose.ui.graphics.Color, selected: Boolean, onClick: () -> Unit) {

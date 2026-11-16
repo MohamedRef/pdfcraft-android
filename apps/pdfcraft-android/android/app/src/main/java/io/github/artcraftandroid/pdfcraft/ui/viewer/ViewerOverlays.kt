@@ -469,11 +469,12 @@ private fun MenuIcon(icon: ImageVector, label: String, enabled: Boolean, short: 
 }
 
 /**
- * After a text markup from the selection menu: five colours, Add note and Delete, by the new
- * markup (#197). Any other tap on the page dismisses it.
+ * After a text markup from the selection menu (#197) or the Highlight tool (#650): five colours,
+ * Add note and Delete, by the new markup. Any other tap on the page dismisses it. In the tool it
+ * goes above the markup ([above]), clear of the lines still to be marked.
  */
 @Composable
-fun BoxScope.MarkupFollowUpBar(vm: AppViewModel, f: MarkupFollowUp) {
+fun BoxScope.MarkupFollowUpBar(vm: AppViewModel, f: MarkupFollowUp, above: Boolean = false) {
     val c = pdfColors
     val density = LocalDensity.current
     val doc = f.doc
@@ -481,9 +482,8 @@ fun BoxScope.MarkupFollowUpBar(vm: AppViewModel, f: MarkupFollowUp) {
     val a = doc.viewer.pageToScreen(f.page, f.bounds[0], f.bounds[1])
     val b = doc.viewer.pageToScreen(f.page, f.bounds[2], f.bounds[3])
     val margin = with(density) { 12.dp.toPx() }
-    val below = b.y + margin
     val maxBottom = doc.viewer.viewH - doc.viewer.padBottom
-    val y = if (below + size.height < maxBottom) below else (a.y - margin - size.height).coerceAtLeast(doc.viewer.padTop)
+    val y = followUpBarTop(minOf(a.y, b.y), maxOf(a.y, b.y), size.height.toFloat(), margin, doc.viewer.padTop, maxBottom, above)
     val x = ((a.x + b.x) / 2f - size.width / 2f).coerceIn(with(density) { 8.dp.toPx() }, (doc.viewer.viewW - size.width - with(density) { 8.dp.toPx() }).coerceAtLeast(0f))
     Row(
         Modifier.offset { IntOffset(x.roundToInt(), y.roundToInt()) }.onSizeChanged { size = it }
