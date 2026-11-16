@@ -56,7 +56,7 @@ class BackupController internal constructor(private val vm: AppViewModel) {
         tree ?: return
         val resolver = app.contentResolver
         val ok = runCatching { resolver.takePersistableUriPermission(tree, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION or android.content.Intent.FLAG_GRANT_WRITE_URI_PERMISSION) }.isSuccess
-        if (!ok) { vm.tell(text(R.string.backup_folder_not_writable)); return }
+        if (!ok) { vm.fail(text(R.string.backup_folder_not_writable)); return }
         backupTree?.takeIf { it != tree }?.let { old -> releaseBackupGrant(old) }
         backupTree = tree
         vm.settings.appPrefs.edit().putString("backupTree", tree.toString()).apply()
@@ -225,7 +225,7 @@ class BackupController internal constructor(private val vm: AppViewModel) {
             } catch (e: Exception) {
                 Diag.failure(DiagArea.Study, "backup_restore_copy", e)
                 vm.tools.busy = null
-                vm.tell(e.userMessage)
+                vm.fail(e.userMessage)
             }
         }
     }
@@ -246,7 +246,7 @@ class BackupController internal constructor(private val vm: AppViewModel) {
                 vm.tell(text(R.string.backup_comments_restored))
             } catch (e: Exception) {
                 Diag.failure(DiagArea.Study, "backup_restore_comments", e)
-                vm.tell(e.userMessage)
+                vm.fail(e.userMessage)
             } finally {
                 withContext(Dispatchers.IO) { tmp.delete() }
             }

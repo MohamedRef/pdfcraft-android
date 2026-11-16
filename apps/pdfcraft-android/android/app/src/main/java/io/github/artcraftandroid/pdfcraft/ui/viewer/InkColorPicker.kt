@@ -239,7 +239,7 @@ private fun AppViewModel.exportInkPalette(palette: InkPalette) {
                 tell(text(R.string.ink_palette_exported, palette.name))
             } catch (e: Exception) {
                 PenDiag.palette("export", "failed")
-                tell(e.userMessage)
+                fail(e.userMessage)
             }
         }
     }
@@ -276,7 +276,7 @@ private fun AppViewModel.importInkPalette() {
                 palette == null -> {
                     val why = (parsed?.exceptionOrNull() as? PaletteImport)?.reason?.diagWord() ?: "too_large"
                     PenDiag.palette("import", why)
-                    tell(text(R.string.ink_palette_import_invalid))
+                    fail(text(R.string.ink_palette_import_invalid))
                 }
                 !settings.toolPrefs.addInkPalette(palette) -> {
                     PenDiag.palette("import", "full", palette.colors.size)

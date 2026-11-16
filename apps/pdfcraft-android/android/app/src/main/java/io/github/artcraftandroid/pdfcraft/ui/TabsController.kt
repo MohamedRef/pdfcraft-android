@@ -380,7 +380,7 @@ class TabsController internal constructor(private val vm: AppViewModel) {
                 throw e
             } catch (e: Exception) {
                 Diag.event(DiagArea.Viewer, "split_drop", "doc" to target.diagNumber, "other" to source.diagNumber, "kind" to "failed")
-                vm.tell(e.userMessage)
+                vm.fail(e.userMessage)
                 vm.refresh(target)
             }
         }

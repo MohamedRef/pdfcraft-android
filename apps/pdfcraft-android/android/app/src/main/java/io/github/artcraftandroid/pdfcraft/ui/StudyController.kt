@@ -204,7 +204,7 @@ class StudyController internal constructor(private val vm: AppViewModel) {
                 }.getOrDefault(-1)
             }
             Diag.event(DiagArea.Study, "cards_import", "cards" to n.coerceAtLeast(0), "ok" to (n >= 0))
-            if (n < 0) vm.tell(text(R.string.msg_that_file_unreadable)) else vm.tell(text(R.string.cards_imported, n))
+            if (n < 0) vm.fail(text(R.string.msg_that_file_unreadable)) else vm.tell(text(R.string.cards_imported, n))
             refreshDue()
             reviewing?.let { reload(it) }
         }
@@ -917,7 +917,7 @@ class StudyController internal constructor(private val vm: AppViewModel) {
                 vm.open(uri)
             } catch (e: Exception) {
                 Diag.failure(DiagArea.Study, "notebook_create", e)
-                vm.tell(e.userMessage)
+                vm.fail(e.userMessage)
             } finally {
                 vm.tools.busy = null
             }
@@ -943,7 +943,7 @@ class StudyController internal constructor(private val vm: AppViewModel) {
      * neighbour.
      */
     fun insertNotebookPage(doc: OpenDocument, page: io.github.artcraftandroid.pdfcraft.engine.NotebookPage?, at: Int = doc.pageCount + 1) {
-        if (!doc.writable || !doc.info.allowsAnnotation) { vm.tell(text(R.string.notebook_cannot_add_page)); return }
+        if (!doc.writable || !doc.info.allowsAnnotation) { vm.fail(text(R.string.notebook_cannot_add_page)); return }
         vm.viewModelScope.launch {
             val chosen = page ?: notebookPageOf(doc)
             Diag.event(DiagArea.Study, "notebook_add_page", "doc" to doc.diagNumber, "template" to notebookTemplateWord(chosen), "at_end" to (at == doc.pageCount + 1))

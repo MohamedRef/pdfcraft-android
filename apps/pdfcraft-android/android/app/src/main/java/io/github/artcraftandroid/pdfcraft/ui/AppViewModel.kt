@@ -70,10 +70,7 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-/** A message for the snackbar, with an optional action. */
 data class BatesExportResult(val name: String, val message: String, val uri: Uri?)
-
-data class Message(val text: String, val actionLabel: String? = null, val action: (() -> Unit)? = null)
 
 /** How the engine's `begin_open_lent` error starts when it can't use a provider's descriptor (#453). */
 internal const val IN_PLACE_REFUSED = "the file could not be read in place"
@@ -131,7 +128,12 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     var opening by mutableStateOf(false)
         private set
 
-    val messages = Channel<Message>(Channel.BUFFERED)
+    /** The one message at the bottom of the screen and what may replace it (#618). */
+    val messageBoard = MessageBoard(android.os.SystemClock::elapsedRealtime, ::logMessage)
+
+    /** The message on screen, for the UI. */
+    var message by mutableStateOf<MessageBoard.Shown?>(null)
+        private set
 
     /** System pickers the editing tools ask the activity for (a picture, files, a folder, a place to save). */
     val requests = FileRequests()
@@ -143,6 +145,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     private val imageBudget = runtimeImageBudget(Runtime.getRuntime().maxMemory())
 
     init {
+        messageBoard.onChange = { message = it }
         // temporary files a crash or a killed process left in the cache (#105)
         viewModelScope.launch(Dispatchers.IO) { sweepCache() }
         // posted, never run inside the constructor: with the engine already loaded, Main.immediate
@@ -161,8 +164,47 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         }
     }
 
+    /** A routine message about the document in front (or the app), shown at once or not at all (#618). */
     fun tell(text: String, actionLabel: String? = null, action: (() -> Unit)? = null) {
-        messages.trySend(Message(text, actionLabel, action))
+        val owner = document
+        onMain { messageBoard.raise(text, MessageKind.Notice, actionLabel, action, owner = owner) }
+    }
+
+    /** Something failed or was refused: not hidden by a routine message before it could be read (#618). */
+    fun fail(text: String) {
+        val owner = document
+        onMain { messageBoard.raise(text, MessageKind.Error, owner = owner) }
+    }
+
+    private val mainHandler by lazy { android.os.Handler(android.os.Looper.getMainLooper()) }
+
+    /** The board and the UI state are the main thread's: a message raised elsewhere is posted there. */
+    private fun onMain(block: () -> Unit) {
+        if (android.os.Looper.myLooper() == android.os.Looper.getMainLooper()) block() else mainHandler.post(block)
+    }
+
+    /**
+     * [text] names an edit just made to [doc], with an Undo button. The button undoes that edit
+     * only: once [doc] changes again the message goes, so it never undoes a later one (#618).
+     */
+    fun tellUndoable(message: String, doc: OpenDocument) {
+        val generation = doc.info.generation
+        val label = text(R.string.common_undo)
+        onMain {
+            messageBoard.raise(
+                message, MessageKind.Notice, label, { undo(doc) }, owner = doc,
+                valid = { document === doc && doc.info.generation == generation },
+            )
+        }
+    }
+
+    private fun logMessage(line: MessageLog) {
+        if (!Diag.enabled()) return
+        when (line) {
+            is MessageLog.Started -> Diag.event(DiagArea.App, "message_shown", "kind" to line.kind.diag)
+            is MessageLog.Ended -> Diag.event(DiagArea.App, "message_ended", "kind" to line.kind.diag, "how" to line.how.diag, "ms" to line.ms, "updates" to line.updates)
+            is MessageLog.Dropped -> Diag.event(DiagArea.App, "message_dropped", "kind" to line.kind.diag, "behind" to line.behind.diag)
+        }
     }
 
     fun refreshRecents() {
@@ -298,12 +340,12 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                     openFile(eng, uri, OpenSource(copy), password, fromOtherApp, requestId)
                     tell(text(R.string.msg_opened_own_copy), text(R.string.common_save_copy)) { document?.let { sharing.saveCopyAs(it) } }
                 } else {
-                    tell(text(R.string.msg_file_access_lost))
+                    fail(text(R.string.msg_file_access_lost))
                 }
             } catch (e: Exception) {
                 io.github.artcraftandroid.pdfcraft.engine.OpenTiming.failure(openStage, e)
                 // An obsolete provider error must not interrupt the newer viewer.
-                if (isCurrentOpenRequest(requestId)) tell(e.userMessage)
+                if (isCurrentOpenRequest(requestId)) fail(e.userMessage)
             } finally {
                 opening = false
             }
@@ -339,7 +381,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                     val source = if (req.inPlace) openSource(req.uri) else OpenSource(req.file)
                     openFile(eng, req.uri, source, password, req.fromOtherApp, req.requestId)
                 } catch (e: Exception) {
-                    tell(e.userMessage)
+                    fail(e.userMessage)
                 } finally {
                     opening = false
                 }
@@ -506,7 +548,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         } catch (e: MobileException.WrongPassword) {
             passwordRequest = PasswordRequest(uri, file, lent != null, wrong = true, fromOtherApp = fromOtherApp, requestId = requestId)
         } catch (e: MobileException) {
-            tell(e.userMessage)
+            fail(e.userMessage)
         }
     }
 
@@ -536,7 +578,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 throw e
             } catch (e: Exception) {
                 if (document === doc && isCurrentOpenRequest(requestId)) {
-                    tell(e.userMessage)
+                    fail(e.userMessage)
                     closeQuietly(eng, doc)
                     document = null
                     settings.readingMode = false
@@ -705,7 +747,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                         doc.source?.let { src ->
                             val discarded = withContext(Dispatchers.IO) {
                                 runCatching { files.discardWorkingCopy(src) }
-                                    .onFailure { tell(it.userMessage) }
+                                    .onFailure { fail(it.userMessage) }
                                     .getOrDefault(false)
                             }
                             // The original may be truncated: the edited copy stays for the next open.
@@ -916,7 +958,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             doc.writable = false
             doc.readOnlyReason = OpenDocument.WRITE_FAILED
             doc.notWrittenBack = true
-            if (!quiet) tell(e.userMessage)
+            if (!quiet) fail(e.userMessage)
             false
         } finally {
             doc.saving = false
@@ -1058,6 +1100,8 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         val info = runCatching { eng.command { document(doc.id) } }.getOrNull() ?: return
         val changed = info.generation != doc.info.generation
         doc.update(info, touchedPage)
+        // an Undo button that would now undo a later edit goes (#618)
+        if (changed) messageBoard.ownerChanged(doc)
         if (changed) loadLinks(eng, doc)
     }
 
@@ -1147,7 +1191,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 }
                 onDone(r)
             } catch (e: MobileException) {
-                tell(e.userMessage)
+                fail(e.userMessage)
             } finally {
                 pending.done()
                 onSettled?.invoke()
@@ -1173,9 +1217,9 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 applied = eng.toolBatch(name, groups.map { group -> group.map { it + ("doc" to doc.id) } })
             } catch (e: io.github.artcraftandroid.pdfcraft.engine.ToolBatchException) {
                 applied = e.applied
-                tell(e.cause.userMessage)
+                fail(e.cause.userMessage)
             } catch (e: MobileException) {
-                tell(e.userMessage)
+                fail(e.userMessage)
             } finally {
                 // A partially accepted batch must be visible even if a later group is refused.
                 try {
@@ -1206,12 +1250,17 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
      */
     fun undoDocument(doc: OpenDocument, announce: Boolean) {
         val label = doc.info.undoLabel ?: return
-        runTool(doc, "edit_undo") { if (announce) tell(text(R.string.msg_undone, label)) }
+        runTool(doc, "edit_undo") { if (announce) step(doc, text(R.string.msg_undone, label)) }
     }
 
     fun redoDocument(doc: OpenDocument, announce: Boolean) {
         val label = doc.info.redoLabel ?: return
-        runTool(doc, "edit_redo") { if (announce) tell(text(R.string.msg_redone, label)) }
+        runTool(doc, "edit_redo") { if (announce) step(doc, text(R.string.msg_redone, label)) }
+    }
+
+    /** Undo/Redo: one message for a run of them, updated in place, gone soon after the last (#618). */
+    private fun step(doc: OpenDocument, message: String) {
+        onMain { messageBoard.raise(message, MessageKind.Step, owner = doc) }
     }
 
     /** [count] Draw strokes the document refused stay drafts (#73); say where, once Draw is left. */
@@ -1370,7 +1419,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         val eng = engine ?: return null
         val result = try { eng.command { comments(doc.id) } }
         catch (e: kotlinx.coroutines.CancellationException) { throw e }
-        catch (e: Exception) { if (document === doc) tell(e.userMessage); return null }
+        catch (e: Exception) { if (document === doc) fail(e.userMessage); return null }
         if (document !== doc || generation != doc.info.generation) return null
         doc.comments = result
         doc.commentsComplete = true
@@ -1394,7 +1443,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                     if (io.github.artcraftandroid.pdfcraft.ui.viewer.installableAttachment(out.name, type)) {
                         // An app package inside a PDF is never handed to the installer.
                         dir.deleteRecursively()
-                        tell(text(R.string.attachment_install_refused, out.name))
+                        fail(text(R.string.attachment_install_refused, out.name))
                         return@launch
                     }
                     val uri = try {
@@ -1406,7 +1455,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                     intents.trySend(Intent.createChooser(Intent(Intent.ACTION_VIEW).setDataAndType(uri, type ?: "*/*").addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION), null))
                 }
             } catch (e: Exception) {
-                tell(e.userMessage)
+                fail(e.userMessage)
             }
         }
     }
@@ -1459,7 +1508,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         if (document !== doc || tools.busy != null || !doc.writable || doc.info.signed ||
             doc.info.readOnlyReason != null || doc.pageCount == 0 ||
             !io.github.artcraftandroid.pdfcraft.ui.viewer.validScanEnhancePlan(plan, doc.pageCount)) {
-            tell(text(R.string.scan_enhance_unavailable))
+            fail(text(R.string.scan_enhance_unavailable))
             return
         }
         val eng = engine ?: return
@@ -1484,7 +1533,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                     tell(text(R.string.scan_enhance_no_changes))
                 }
             } catch (e: MobileException) {
-                if (document === doc) tell(e.userMessage)
+                if (document === doc) fail(e.userMessage)
             } finally {
                 tools.busy = null
             }
@@ -1581,7 +1630,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                     } else tell(text(R.string.bates_limits))
                 }
             } catch (e: kotlinx.coroutines.CancellationException) { throw e }
-            catch (_: Exception) { tell(text(R.string.bates_failed)) }
+            catch (_: Exception) { fail(text(R.string.bates_failed)) }
             finally { if (epoch == batesEpoch) batesSelectionLoading = false }
         }
     }
@@ -1810,7 +1859,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             FilePickKind.Open -> open(uris.first())
             FilePickKind.MarkImage -> viewModelScope.launch {
                 val f = withContext(Dispatchers.IO) { runCatching { copyIn(uris.first()) }.getOrNull() }
-                if (f == null) { tell(text(R.string.msg_that_file_unreadable)); return@launch }
+                if (f == null) { fail(text(R.string.msg_that_file_unreadable)); return@launch }
                 docTools.clearMarkImage()
                 docTools.markImage = f
             }
@@ -1820,7 +1869,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 viewModelScope.launch {
                     val uri = uris.first()
                     val f = withContext(Dispatchers.IO) { runCatching { copyIn(uri) }.getOrNull() }
-                    if (f == null) tell(text(R.string.msg_that_file_unreadable))
+                    if (f == null) fail(text(R.string.msg_that_file_unreadable))
                     else docTools.attachPrompt = AttachPrompt(doc, f, f.name)
                 }
             }
@@ -1829,7 +1878,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 docTools.replaceTarget = null
                 viewModelScope.launch {
                     val f = withContext(Dispatchers.IO) { runCatching { copyIn(uris.first()) }.getOrNull() }
-                    if (f == null) tell(text(R.string.msg_that_file_unreadable))
+                    if (f == null) fail(text(R.string.msg_that_file_unreadable))
                     else docTools.replacePrompt = ReplacePrompt(doc, pages, f)
                 }
             }
@@ -1837,7 +1886,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             FilePickKind.DigitalId -> viewModelScope.launch {
                 val uri = uris.first()
                 val picked = withContext(Dispatchers.IO) { runCatching { copyIn(uri) }.getOrNull() }
-                if (picked == null) tell(text(R.string.msg_that_file_unreadable))
+                if (picked == null) fail(text(R.string.msg_that_file_unreadable))
                 else signing.idImport = io.github.artcraftandroid.pdfcraft.ui.viewer.IdImport(picked, picked.name, wrong = false)
             }
         }
@@ -1872,7 +1921,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             try {
                 block(eng)
             } catch (e: Exception) {
-                tell(e.userMessage)
+                fail(e.userMessage)
             } finally {
                 tools.busy = null
                 tools.busyProgress = null
@@ -1958,7 +2007,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             val a = eng.tool("doc_audit_space", mapOf("doc" to doc.id)).optJSONArray("categories") ?: return emptyList()
             (0 until a.length()).map { a.getJSONObject(it).let { o -> Triple(o.optString("category"), o.optLong("bytes"), o.optDouble("percent")) } }
                 .sortedByDescending { it.second }
-        } catch (e: MobileException) { tell(e.userMessage); null }
+        } catch (e: MobileException) { fail(e.userMessage); null }
     }
 
     /** Combine the gathered files, in order, into [name].pdf. */
@@ -3192,7 +3241,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     private suspend fun scanTextOut(eng: io.github.artcraftandroid.pdfcraft.engine.Engine, id: Long, pages: Int, available: Boolean, skipped: Boolean, ms: Long) {
         if (!available) {
             Diag.event(DiagArea.Scan, "extract_text", "pages" to pages, "available" to false, "ms" to ms)
-            tell(text(R.string.msg_ocr_not_installed))
+            fail(text(R.string.msg_ocr_not_installed))
             return
         }
         val read = runCatching { eng.tool("text_extract", mapOf("doc" to id)) }.onFailure { Diag.failure(DiagArea.Scan, "extract_text", it) }.getOrNull()

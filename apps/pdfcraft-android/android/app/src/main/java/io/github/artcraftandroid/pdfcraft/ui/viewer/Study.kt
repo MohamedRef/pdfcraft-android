@@ -354,7 +354,7 @@ fun setAllTapeLifted(doc: OpenDocument, lifted: Boolean) {
 /** Lay a strip of tape over [rect] on [page]: one undo step. */
 fun AppViewModel.addTape(doc: OpenDocument, page: Int, rect: FloatArray) {
     if (!canEditDocument(doc)) {
-        tell(text(R.string.study_tape_read_only))
+        fail(text(R.string.study_tape_read_only))
         return
     }
     runTool(doc, "comment_add", tapeArgs(page, rect, doc.study.tapeColor, commenting.commentAuthor, doc.study.tapePattern))
@@ -365,7 +365,7 @@ fun AppViewModel.addTape(doc: OpenDocument, page: Int, rect: FloatArray) {
 /** Lay freehand tape with corners [outline] on [page] (#350): one undo step. */
 fun AppViewModel.addFreehandTape(doc: OpenDocument, page: Int, outline: FloatArray) {
     if (!canEditDocument(doc)) {
-        tell(text(R.string.study_tape_read_only))
+        fail(text(R.string.study_tape_read_only))
         return
     }
     runTool(doc, "comment_add", freehandTapeArgs(page, outline, doc.study.tapeColor, commenting.commentAuthor, doc.study.tapePattern))
