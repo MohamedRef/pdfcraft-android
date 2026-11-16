@@ -159,7 +159,9 @@ Every line carries `doc` (the document's number in the log).
 | `markup_follow_up` | `action` (`recolor`, `note`, `delete`) | The bar that follows a new markup was used (#197) |
 | `markup_in_hand` | `markup` (`highlight`, `underline`, `strikethrough`, `squiggly`), `lines` | A markup made with the Highlight tool got the follow-up bar by it (#650). Against `markup_follow_up`, it says how often the bar is used and how often it is only passed |
 | `markup_quick_color` | `markup` | A colour was picked from Highlight's row in one tap (#650) |
-| `area_highlight` | `w_pt`, `h_pt` | A Highlight drag that found no text highlighted the area instead (#134) |
+| `area_highlight` | `w_pt`, `h_pt` | A Highlight drag on a page with no text at all (a scan, a picture) highlighted the area instead (#134). Since #657 a page with text never gets one |
+| `markup_text` | `markup`, `letters`, `lines` | A drag with Highlight, Underline, Strikeout or Squiggly marked these letters, from the one where it began to the one where it ended (#657) |
+| `markup_missed` | `markup`, `page_glyphs` | A drag on a page with text found no letter near where it began or ended, so nothing was marked (#657). Many of these on a page with text mean the letters are not where the page shows them |
 | `text_suggestion` | `kind` (`replace`, `insert`), `lines` | A replace or insert suggestion on selected text (#133) |
 | `shape` | `type` (the shape mode, such as `arrow`, `cloud`, `polygon`), `points` | A drawn shape became its own annotation rather than ink (#170) |
 | `link` | `action` (`add`, `edit`, `delete`), `target` (`page`, `file`, `web`, `mail`), `from` (`box`, `lasso`) | A link was made, changed or removed, and how its area was chosen (#179 #334) |

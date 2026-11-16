@@ -6,16 +6,6 @@ import io.github.artcraftandroid.pdfcraft.core.TextRange
 internal const val MAX_MARKUP_LINE_RECTS = 1024
 internal const val MAX_MARKUP_GLYPHS = 100_000u
 
-/** Include complete words at both ends, including for right-to-left or upward drags. */
-internal fun markupWordRange(anchor: TextRange?, focus: TextRange?): TextRange? {
-    if (anchor == null || focus == null || anchor.page != focus.page ||
-        anchor.start >= anchor.end || focus.start >= focus.end) return null
-    val start = minOf(anchor.start, focus.start)
-    val end = maxOf(anchor.end, focus.end)
-    if (end - start > MAX_MARKUP_GLYPHS) return null
-    return TextRange(anchor.page, start, end)
-}
-
 /** Return no partial selection if the native line rectangle payload is malformed or oversized. */
 internal fun markupLineRects(flat: List<Float>): List<FloatArray> {
     if (flat.isEmpty() || flat.size % 4 != 0 || flat.size / 4 > MAX_MARKUP_LINE_RECTS)
@@ -34,20 +24,34 @@ internal fun markupLineRects(flat: List<Float>): List<FloatArray> {
 }
 
 /**
- * A small additional tolerance is allowed only for the drag endpoint. Never
- * accept a distant nearestGlyph result, such as text in another column.
- * Reject truncated or nonfinite native glyph geometry before indexing it.
+ * The letters a markup drag covers (#657): from glyph [a] to glyph [b] in reading order, both
+ * included, whichever way the drag went. Null when they are not on one page or the range is too long.
  */
-internal fun markupEndpointNearGlyph(x: Float, y: Float, rect: List<Float>, tolerance: Float): Boolean {
-    if (!x.isFinite() || !y.isFinite() || !tolerance.isFinite() || tolerance < 0f ||
+internal fun markupLetterRange(page: UInt, a: UInt, b: UInt): TextRange? {
+    val start = minOf(a, b)
+    val end = maxOf(a, b) + 1u
+    if (end - start > MAX_MARKUP_GLYPHS) return null
+    return TextRange(page, start, end)
+}
+
+/** How far beside a line, in points, a markup drag may start or end and still take its nearest letter (#657): about a page margin. */
+internal const val MARKUP_SIDE_REACH_PT = 72f
+
+/**
+ * Whether a drag's start or end at ([x], [y]) is close enough to the glyph [rect] it found to take
+ * it (#657): beside the line up to [side] points (the margin, the gap before a short line), but
+ * above or below it only up to [vertical] points, so a drag between two columns or far under the
+ * text does not reach them.
+ */
+internal fun markupNearLine(x: Float, y: Float, rect: List<Float>, side: Float, vertical: Float): Boolean {
+    if (!x.isFinite() || !y.isFinite() || !side.isFinite() || !vertical.isFinite() || side < 0f || vertical < 0f ||
         rect.size != 4 || rect.any { !it.isFinite() }) return false
     val left = minOf(rect[0], rect[2])
     val right = maxOf(rect[0], rect[2])
     val top = minOf(rect[1], rect[3])
     val bottom = maxOf(rect[1], rect[3])
     if (left >= right || top >= bottom) return false
-    return x >= left - tolerance && x <= right + tolerance &&
-        y >= top - tolerance && y <= bottom + tolerance
+    return x >= left - side && x <= right + side && y >= top - vertical && y <= bottom + vertical
 }
 
 /** The box around a markup's line rectangles, as [x0, y0, x1, y1]; null when there are none or one is not finite. */

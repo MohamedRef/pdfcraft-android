@@ -1981,9 +1981,10 @@ private class MarkupGesture(val start: PagePoint, val downScreen: Offset) {
 }
 
 /**
- * Resolve both word endpoints and their rectangles on the native serial dispatcher.
- * A tap marks its whole word; a drag snaps to word boundaries in either direction.
- * The engine's wordAt has a bounded glyph hit box, unlike unrestricted nearestGlyph.
+ * What a markup gesture covers, resolved on the native serial dispatcher (#657). A tap marks its
+ * whole word. A drag marks from the letter where it started to the letter under the pen now, in
+ * reading order, like a text selection: not whole words. Either end may lie beside its line (the
+ * margin, between lines) and takes that line's nearest letter; one far from any text gives null.
  */
 private suspend fun resolveMarkup(
     eng: Engine,
@@ -1995,21 +1996,20 @@ private suspend fun resolveMarkup(
 ): MarkupDrag? = withContext(eng.commands) {
     if (start.page != end.page) return@withContext null
     val page = start.page.toUInt()
-    val anchor = eng.session.wordAt(doc.id, page, start.x, start.y, slopPoints) ?: return@withContext null
-    // A drag ending slightly outside the last line still targets its nearest word.
-    // A tap deliberately does not use nearestGlyph: blank space must stay blank.
-    val focus = if (tap) anchor else {
-        eng.session.wordAt(doc.id, page, end.x, end.y, slopPoints) ?: run {
-            val glyph = eng.session.nearestGlyph(doc.id, page, end.x, end.y) ?: return@withContext null
+    val range = if (tap) {
+        // A tap deliberately does not reach far: blank space must stay blank.
+        eng.session.wordAt(doc.id, page, start.x, start.y, slopPoints) ?: return@withContext null
+    } else {
+        // The engine's nearestGlyph prefers the same line; the reach keeps it from another column.
+        fun letter(p: PagePoint, vertical: Float): UInt? {
+            val glyph = eng.session.nearestGlyph(doc.id, page, p.x, p.y) ?: return null
             val rect = eng.session.glyphRect(doc.id, page, glyph).toList()
-            if (!markupEndpointNearGlyph(end.x, end.y, rect, (slopPoints * 2f).coerceAtMost(40f)))
-                return@withContext null
-            val centerX = (minOf(rect[0], rect[2]) + maxOf(rect[0], rect[2])) / 2f
-            val centerY = (minOf(rect[1], rect[3]) + maxOf(rect[1], rect[3])) / 2f
-            eng.session.wordAt(doc.id, page, centerX, centerY, 0.1f)
+            return glyph.takeIf { markupNearLine(p.x, p.y, rect, MARKUP_SIDE_REACH_PT, vertical) }
         }
+        val a = letter(start, slopPoints) ?: return@withContext null
+        val b = letter(end, (slopPoints * 2f).coerceAtMost(40f)) ?: return@withContext null
+        markupLetterRange(page, a, b) ?: return@withContext null
     }
-    val range = markupWordRange(anchor, focus) ?: return@withContext null
     val rects = markupLineRects(eng.session.textRects(doc.id, range).toList())
     if (rects.isEmpty()) null else MarkupDrag(range, rects)
 }
@@ -2023,6 +2023,9 @@ private fun MarkupLayer(vm: AppViewModel, doc: OpenDocument) {
     var previewJob by remember(doc) { mutableStateOf<Job?>(null) }
     var pendingTap by remember(doc) { mutableStateOf<Offset?>(null) }
     var requestSerial by remember(doc) { androidx.compose.runtime.mutableIntStateOf(0) }
+    // How many letters the touched page has: only a page without any (a scan, a picture) gets an
+    // area highlight; on a page with text a drag marks letters or nothing (#657).
+    var pageGlyphs by remember(doc) { mutableStateOf<Pair<Int, UInt>?>(null) }
     val marker = doc.controller.markup
     val color = vm.settings.toolPrefs.color(marker.styled)
     val opacity = vm.settings.toolPrefs.opacity(marker.styled)
@@ -2048,6 +2051,13 @@ private fun MarkupLayer(vm: AppViewModel, doc: OpenDocument) {
                 val start = doc.viewer.screenToPage(screen) ?: return@toolGestures
                 val gesture = MarkupGesture(start, screen)
                 active = gesture
+                if (pageGlyphs?.first != start.page) {
+                    pageGlyphs = null
+                    scope.launch {
+                        val n = runCatching { withContext(eng.commands) { eng.session.glyphCount(doc.id, start.page.toUInt()) } }.getOrNull()
+                        if (n != null && active === gesture) pageGlyphs = start.page to n
+                    }
+                }
                 // One native query at a time, skipping intermediate points. The initial
                 // word previews on finger-down; fast moves cannot starve the preview.
                 previewJob = scope.launch {
@@ -2100,6 +2110,7 @@ private fun MarkupLayer(vm: AppViewModel, doc: OpenDocument) {
                                 pendingTap = null
                             }
                             queued = true
+                            if (!tap) MarkupDiag.textMarked(doc, selectedMarkup, (selected.range.end - selected.range.start).toInt(), selected.rects.size)
                             vm.commenting.addMarkup(
                                 doc, selectedMarkup, selected.range.page.toInt(), selected.rects,
                                 selectedColor, selectedOpacity,
@@ -2119,28 +2130,32 @@ private fun MarkupLayer(vm: AppViewModel, doc: OpenDocument) {
                                     }
                                 },
                             )
-                        } else if (!tap && selectedMarkup == TextMarkup.Highlight) {
-                            // no text under the drag (a scan, a picture): highlight the area itself (#134)
-                            val area = areaHighlightRect(gesture.start.x, gesture.start.y, end.x, end.y)
-                            if (area != null) {
-                                queued = true
-                                MarkupDiag.areaHighlight(doc, area)
-                                vm.commenting.addMarkup(doc, TextMarkup.Highlight, page, listOf(area), selectedColor, selectedOpacity, onSettled = {
-                                    if (requestSerial == serial) {
-                                        pendingTap = null
-                                        drag = null
-                                    }
-                                }, onDone = { r ->
-                                    if (requestSerial == serial && doc.controller.tool == ViewerTool.Markup) {
-                                        vm.commenting.keepInHand(doc, page, listOf(area), selectedColor, r)
-                                        MarkupDiag.inHand(doc, TextMarkup.Highlight, 1)
-                                    }
-                                })
-                            }
-                        } else if (tap) {
-                            val count = withContext(eng.commands) { eng.session.glyphCount(doc.id, page.toUInt()) }
-                            if (count == 0u && vm.document === doc) {
-                                vm.tell(text(R.string.toolbar_no_text_to_mark), text(R.string.common_tool_recognize_text)) { vm.recognizeText(doc) }
+                        } else {
+                            val glyphs = withContext(eng.commands) { eng.session.glyphCount(doc.id, page.toUInt()) }
+                            val area = if (!tap && glyphs == 0u && selectedMarkup == TextMarkup.Highlight)
+                                areaHighlightRect(gesture.start.x, gesture.start.y, end.x, end.y) else null
+                            when {
+                                // a page with text: a drag far from it marks nothing, never a free box (#657)
+                                glyphs != 0u -> if (!tap) MarkupDiag.missed(doc, selectedMarkup, glyphs.toLong())
+                                // no text on the page at all (a scan, a picture): highlight the area itself (#134)
+                                area != null -> {
+                                    queued = true
+                                    MarkupDiag.areaHighlight(doc, area)
+                                    vm.commenting.addMarkup(doc, TextMarkup.Highlight, page, listOf(area), selectedColor, selectedOpacity, onSettled = {
+                                        if (requestSerial == serial) {
+                                            pendingTap = null
+                                            drag = null
+                                        }
+                                    }, onDone = { r ->
+                                        if (requestSerial == serial && doc.controller.tool == ViewerTool.Markup) {
+                                            vm.commenting.keepInHand(doc, page, listOf(area), selectedColor, r)
+                                            MarkupDiag.inHand(doc, TextMarkup.Highlight, 1)
+                                        }
+                                    })
+                                }
+                                // a tap, or Underline or Strikeout, where there is no text: say how to get some
+                                (tap || selectedMarkup != TextMarkup.Highlight) && vm.document === doc ->
+                                    vm.tell(text(R.string.toolbar_no_text_to_mark), text(R.string.common_tool_recognize_text)) { vm.recognizeText(doc) }
                             }
                         }
                     } catch (e: MobileException) {
@@ -2170,7 +2185,7 @@ private fun MarkupLayer(vm: AppViewModel, doc: OpenDocument) {
             }
             // a Highlight drag that found no text previews the area it will highlight
             val g = active
-            if (drag == null && g != null && g.moved && marker == TextMarkup.Highlight) {
+            if (drag == null && g != null && g.moved && marker == TextMarkup.Highlight && pageGlyphs == (g.start.page to 0u)) {
                 areaHighlightRect(g.start.x, g.start.y, g.latest.x, g.latest.y)?.let { r ->
                     val a = doc.viewer.pageToScreen(g.start.page, r[0], r[1])
                     val b = doc.viewer.pageToScreen(g.start.page, r[2], r[3])
