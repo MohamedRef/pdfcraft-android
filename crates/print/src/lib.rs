@@ -36,7 +36,7 @@ mod sheets;
 pub use error::{PrintError, WORDINGS, Words, in_english};
 #[cfg(test)]
 use imposition::{PAGES_LISTED, appearance, appearance_matrix, decoded_contents, page_form, prints};
-pub use imposition::{impose, keep_printed, sheet_pages};
+pub use imposition::{impose, impose_watched, keep_printed, sheet_pages};
 pub use settings::{
     Binding, BookletSubset, Content, Crop, LABEL_PAPER, Layout, MAX_GRID, Orientation, PAPERS, PageOrder, Raster, Settings, SizeMode, booklet_duplex,
     booklet_job_duplex, cups_media, custom_media, driver_needs_grayscale, media_option, paper_media, paper_media_option,

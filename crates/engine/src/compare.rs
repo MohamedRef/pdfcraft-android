@@ -39,16 +39,25 @@ impl crate::Document {
 
     /// Every word of the document in reading order, with page and box.
     pub fn words(&self) -> Vec<pdfcraft_compare::Word> {
+        self.words_watched(&mut |_| true).unwrap_or_default()
+    }
+
+    /// [`Document::words`], telling `step` each page before its text is read; `None` when it
+    /// says stop. Android adaptation (#634).
+    pub fn words_watched(&self, step: &mut dyn FnMut(usize) -> bool) -> Option<Vec<pdfcraft_compare::Word>> {
         let config = pdfcraft_render::RenderConfig { password: self.password.as_deref().map(Arc::from), ..Default::default() };
         let mut r = pdfcraft_render::PageRenderer::new(self.bytes.clone(), config);
         let mut out = Vec::new();
         for (page, info) in self.info.pages.iter().enumerate() {
+            if !step(page) {
+                return None;
+            }
             let res = r.render(pdfcraft_render::RenderRequest { page, kind: pdfcraft_render::RequestKind::Text, scale: 1.0, ..Default::default() });
             if let Some(t) = res.text {
                 out.extend(crate::js::page_words(&t, info).into_iter().map(|(text, rect)| pdfcraft_compare::Word { text, page, rect }));
             }
         }
-        out
+        Some(out)
     }
 }
 
@@ -63,6 +72,24 @@ impl Session {
         Ok(pdfcraft_compare::compare(&a.words(), &b.words()))
     }
 
+    /// [`Session::compare`], telling `step` each page whose text is read (`reading`: the older
+    /// file's pages, then the newer's, as one count) and the comparing itself (`comparing`);
+    /// stops with [`EditError::Cancelled`] when `step` says so. Android adaptation (#634).
+    pub fn compare_watched(&self, old: DocId, new: DocId, step: &mut dyn FnMut(&'static str, usize, usize) -> bool) -> Result<Comparison, EditError> {
+        let a = self.get(old).ok_or(EditError::NoDocument)?;
+        let b = self.get(new).ok_or(EditError::NoDocument)?;
+        a.check_copying()?;
+        b.check_copying()?;
+        let (na, nb) = (a.info.pages.len(), b.info.pages.len());
+        let total = na + nb;
+        let wa = a.words_watched(&mut |p| step("reading", p, total)).ok_or(EditError::Cancelled)?;
+        let wb = b.words_watched(&mut |p| step("reading", na + p, total)).ok_or(EditError::Cancelled)?;
+        if !step("comparing", total, total) {
+            return Err(EditError::Cancelled);
+        }
+        Ok(pdfcraft_compare::compare(&wa, &wb))
+    }
+
     /// [`Session::compare`], keeping the changes on `pages` of `new` (0-based; empty: every page).
     pub fn compare_pages(&self, old: DocId, new: DocId, pages: &[usize]) -> Result<Comparison, EditError> {
         let mut c = self.compare(old, new)?;
@@ -75,6 +102,18 @@ impl Session {
     /// Visual compare: regions where page n of `new` looks different from page n of `old`
     /// (rendered at `dpi`), as (page, user-space box in `new`).
     pub fn compare_visual(&self, old: DocId, new: DocId, dpi: f32) -> Result<Vec<(usize, [f64; 4])>, EditError> {
+        self.compare_visual_watched(old, new, dpi, &mut |_, _| true)
+    }
+
+    /// [`Session::compare_visual`], telling `step` each page before it is drawn (`done` of
+    /// `total`); stops with [`EditError::Cancelled`] when it says so. Android adaptation (#634).
+    pub fn compare_visual_watched(
+        &self,
+        old: DocId,
+        new: DocId,
+        dpi: f32,
+        step: &mut dyn FnMut(usize, usize) -> bool,
+    ) -> Result<Vec<(usize, [f64; 4])>, EditError> {
         let a = self.get(old).ok_or(EditError::NoDocument)?;
         let b = self.get(new).ok_or(EditError::NoDocument)?;
         let renderer = |d: &crate::Document| {
@@ -86,7 +125,11 @@ impl Session {
         let (mut ra, mut rb) = (renderer(a), renderer(b));
         let scale = dpi.clamp(18.0, 150.0) / 72.0;
         let mut out = Vec::new();
-        for (page, info) in b.info.pages.iter().enumerate().take(a.info.pages.len()) {
+        let total = b.info.pages.len().min(a.info.pages.len());
+        for (page, info) in b.info.pages.iter().enumerate().take(total) {
+            if !step(page, total) {
+                return Err(EditError::Cancelled);
+            }
             let req = pdfcraft_render::RenderRequest { page, scale, ..Default::default() };
             let (x, y) = (ra.render(req), rb.render(req));
             if x.error.is_some() || y.error.is_some() {

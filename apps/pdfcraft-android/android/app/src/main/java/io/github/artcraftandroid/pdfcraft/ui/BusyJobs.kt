@@ -19,11 +19,12 @@ internal object BusyJobs {
         "msg_busy_splitting", // Split: part by part (and page by page measuring for a size) † (#634)
         "msg_busy_extracting", // Extract pages: copying, writing and checking; between them † (#634)
         "msg_busy_exporting_to", // Export to Word, Excel, PowerPoint, RTF or text: page by page, then writing † (#634)
+        "print_busy", // Print options: pages drawn for Print as image, sheet by sheet, then writing † (#634)
+        "compare_busy", // Compare: both files' pages read, the comparing, page by page for visual † (#634)
     )
 
     /** Jobs that can neither count nor stop, with the reason: each is one call into the PDF library, or a few short ones. */
     val notCounted = mapOf(
-        "print_busy" to "one call: doc_print",
         "msg_busy_setting_password" to "a copy opened, protected and saved: three calls",
         "msg_busy_signing" to "one signing call",
         "msg_busy_creating_id" to "one key made",
@@ -32,7 +33,6 @@ internal object BusyJobs {
         "comments_importing" to "one call",
         "comments_summarizing" to "one call",
         "measure_exporting" to "one call",
-        "compare_busy" to "one call: doc_compare",
         "backup_restoring" to "one backup copied back",
         "cards_busy_export" to "one file written",
         "digest_busy" to "one file written",

@@ -377,13 +377,29 @@ impl Automation {
         } else {
             Default::default()
         };
-        let bytes = self.session.print_pdf(id, &settings).map_err(failed)?;
+        // How far it is (#634): pages drawn as pictures for Print as image, then each sheet laid,
+        // then the file written. A stop writes nothing.
+        let watch = self.job_watch.clone();
+        let pictures = settings.raster.is_some() || !self.doc(a)?.permissions().is_none_or(|p| p.print_high_quality());
+        let bytes = self
+            .session
+            .print_pdf_watched(id, &settings, &mut |stage, done, total| {
+                let part = done as f32 / total.max(1) as f32;
+                let fraction = match (stage, pictures) {
+                    ("pictures", _) => 0.5 * part,
+                    (_, true) => 0.5 + 0.45 * part,
+                    _ => 0.95 * part,
+                };
+                watch.as_ref().is_none_or(|w| w(crate::JobStep { stage, done, total, fraction, attempt: 1 }))
+            })
+            .map_err(failed)?;
         let mut out = json!({ "sheets": sheets, "pages": settings.pages.len(), "bytes": bytes.len() });
         if !scripts.is_empty() {
             out["will_print"] = crate::a11y::form_tools::js_output_json(&scripts);
         }
         match destination {
             Destination::File(path) => {
+                self.job_step("writing", 0, 0, 0.95)?;
                 write_atomic(&path, &bytes)?;
                 out["path"] = json!(path.to_string_lossy());
             }

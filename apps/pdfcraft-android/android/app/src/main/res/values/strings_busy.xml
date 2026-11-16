@@ -24,4 +24,13 @@
     <string name="msg_busy_exporting_doc_page">Exporting: page %1$d of %2$d…</string>
     <string name="msg_busy_exporting_writing">Exporting: writing the file…</string>
     <string name="busy_cancel_export">Cancel stops after this page. No file is made, and your document stays as it is.</string>
+    <!-- Print and Compare say how far they are and can be stopped (#634): Print as image's pages, the sheets laid out, the file written; Compare's pages read across both files, the comparing, the pages looked at side by side -->
+    <string name="print_busy_picture">Preparing to print: page %1$d of %2$d as an image…</string>
+    <string name="print_busy_sheet">Preparing to print: sheet %1$d of %2$d…</string>
+    <string name="print_busy_writing">Preparing to print: writing the file…</string>
+    <string name="busy_cancel_print">Cancel stops here. Nothing is printed or saved, and your document stays as it is.</string>
+    <string name="compare_busy_reading">Comparing: reading page %1$d of %2$d…</string>
+    <string name="compare_busy_comparing">Comparing: finding the changes…</string>
+    <string name="compare_busy_visual">Comparing: looking at page %1$d of %2$d…</string>
+    <string name="busy_cancel_compare">Cancel stops the comparing. Both documents stay as they are.</string>
 </resources>

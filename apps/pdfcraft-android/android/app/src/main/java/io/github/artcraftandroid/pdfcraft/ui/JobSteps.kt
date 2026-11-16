@@ -44,3 +44,25 @@ internal fun exportLine(stage: String, done: Int, total: Int): JobLine? = when (
     "writing" -> JobLine(R.string.msg_busy_exporting_writing)
     else -> null
 }
+
+/**
+ * The line for one step of `doc_print` (#634): `pictures`, page [done] of [total] drawn for Print
+ * as image, then `sheets`, sheet [done] of [total], then `writing` the file.
+ */
+internal fun printLine(stage: String, done: Int, total: Int): JobLine? = when (stage) {
+    "pictures" -> if (total > 0) JobLine(R.string.print_busy_picture, listOf(minOf(done + 1, total), total)) else null
+    "sheets" -> if (total > 0) JobLine(R.string.print_busy_sheet, listOf(minOf(done + 1, total), total)) else null
+    "writing" -> JobLine(R.string.print_busy_writing)
+    else -> null
+}
+
+/**
+ * The line for one step of `doc_compare` (#634): `reading`, page [done] of [total] across both
+ * files, `comparing`, then `visual`, page [done] of [total] looked at side by side.
+ */
+internal fun compareLine(stage: String, done: Int, total: Int): JobLine? = when (stage) {
+    "reading" -> if (total > 0) JobLine(R.string.compare_busy_reading, listOf(minOf(done + 1, total), total)) else null
+    "comparing" -> JobLine(R.string.compare_busy_comparing)
+    "visual" -> if (total > 0) JobLine(R.string.compare_busy_visual, listOf(minOf(done + 1, total), total)) else null
+    else -> null
+}

@@ -329,7 +329,12 @@ class DocumentToolsController internal constructor(private val vm: AppViewModel)
             try {
                 val r = Diag.measure(DiagArea.Pages, "print_layout", "doc" to doc.diagNumber, "layout" to options.layout, "per_sheet" to options.perSheet,
                     "subset" to options.subset, "reverse" to options.reverse, "page_range" to options.pages.isNotBlank(), "save" to save) {
-                    eng.tool("doc_print", options.args(out.absolutePath) + ("doc" to doc.id))
+                    // How far it is, with Cancel (#634): the file is written last, so a stop leaves nothing.
+                    vm.watchedTool(eng, doc, "print", "doc_print", options.args(out.absolutePath) + ("doc" to doc.id),
+                        text(R.string.busy_cancel_print), ::printLine)
+                } ?: run {
+                    dir.deleteRecursively()
+                    return@docJob
                 }
                 Diag.event(DiagArea.Pages, "print_layout_result", "doc" to doc.diagNumber, "sheets" to r.optInt("sheets"), "bytes" to out.length())
                 vm.tools.toolScreen = null

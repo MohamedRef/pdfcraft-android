@@ -21,4 +21,12 @@
     <string name="msg_busy_exporting_doc_page">التصدير: الصفحة %1$d من %2$d…</string>
     <string name="msg_busy_exporting_writing">التصدير: بنكتب الملف…</string>
     <string name="busy_cancel_export">الإلغاء بيوقف بعد الصفحة دي. مفيش ملف هيتعمل، ومستندك زي ما هو.</string>
+    <string name="print_busy_picture">تجهيز الطباعة: الصفحة %1$d من %2$d كصورة…</string>
+    <string name="print_busy_sheet">تجهيز الطباعة: الورقة %1$d من %2$d…</string>
+    <string name="print_busy_writing">تجهيز الطباعة: بنكتب الملف…</string>
+    <string name="busy_cancel_print">الإلغاء بيوقف هنا. مفيش حاجة هتتطبع أو تتحفظ، ومستندك زي ما هو.</string>
+    <string name="compare_busy_reading">المقارنة: بنقرا الصفحة %1$d من %2$d…</string>
+    <string name="compare_busy_comparing">المقارنة: بندوّر على الاختلافات…</string>
+    <string name="compare_busy_visual">المقارنة: بنبص على الصفحة %1$d من %2$d…</string>
+    <string name="busy_cancel_compare">الإلغاء بيوقف المقارنة. المستندين زي ما هم.</string>
 </resources>
