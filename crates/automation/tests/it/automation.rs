@@ -15007,8 +15007,10 @@ fn a_job_watch_follows_compress_and_can_stop_it() {
     let steps = seen.lock().unwrap().clone();
     let stages: Vec<&str> = steps.iter().map(|s| s.stage).collect();
     assert_eq!(stages.last(), Some(&"writing"), "{stages:?}");
-    // the three pages are read one by one, and all of them
-    assert!(steps.iter().any(|s| s.stage == "reading" && (s.done, s.total) == (3, 3)), "{steps:?}");
+    // the three pages are read one by one: told before each, with how many are read by then
+    for done in 0..3 {
+        assert!(steps.iter().any(|s| s.stage == "reading" && (s.done, s.total) == (done, 3)), "page {done}: {steps:?}");
+    }
     assert!(steps.windows(2).all(|w| w[0].fraction <= w[1].fraction), "it never steps back: {steps:?}");
     assert!(steps.iter().all(|s| s.attempt == 1 && (0.0..=1.0).contains(&s.fraction)), "{steps:?}");
 
