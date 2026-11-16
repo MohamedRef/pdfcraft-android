@@ -243,7 +243,20 @@ impl crate::Document {
         image_budget: usize,
         image_work: &mut pdfcraft_cos::ImageBudget,
     ) -> (Vec<pdfcraft_export::Page>, Vec<usize>) {
-        let Some(cos) = self.editor.as_ref().map(|e| &e.cos) else { return (Vec::new(), Vec::new()) };
+        self.export_pages_watched(images, image_budget, image_work, &mut |_, _| true).unwrap_or_default()
+    }
+
+    /// [`Self::export_pages_within`] telling `step(page, pages)` before each page is read (#634);
+    /// `None` when `step` returned `false`.
+    fn export_pages_watched(
+        &self,
+        images: bool,
+        image_budget: usize,
+        image_work: &mut pdfcraft_cos::ImageBudget,
+        step: &mut dyn FnMut(usize, usize) -> bool,
+    ) -> Option<(Vec<pdfcraft_export::Page>, Vec<usize>)> {
+        let Some(cos) = self.editor.as_ref().map(|e| &e.cos) else { return Some((Vec::new(), Vec::new())) };
+        let total = self.info.pages.len();
         let mut truncated = Vec::new();
         // Each image object is encoded once and shared by every place that draws it.
         let mut encoded: HashMap<ObjRef, PreparedImage> = HashMap::new();
@@ -254,6 +267,9 @@ impl crate::Document {
             .iter()
             .enumerate()
             .map(|(i, info)| {
+                if !step(i, total) {
+                    return None;
+                }
                 // Export uses the visible page in points, y up. Raw PDF coordinates include
                 // CropBox offsets and precede /Rotate and /UserUnit.
                 let visible_rect = |r: [f64; 4]| {
@@ -315,10 +331,10 @@ impl crate::Document {
                 let background = pdfcraft_edit::page_background(cos, i).ok().flatten();
                 // The ruled lines tell a drawn table from text that merely lines up (#5149).
                 let rules = pdfcraft_edit::page_rules(cos, i).unwrap_or_default().into_iter().map(visible_rect).collect();
-                pdfcraft_export::Page { width: info.width as f64, height: info.height as f64, blocks, images, background, rules }
+                Some(pdfcraft_export::Page { width: info.width as f64, height: info.height as f64, blocks, images, background, rules })
             })
-            .collect();
-        (pages, truncated)
+            .collect::<Option<Vec<_>>>()?;
+        Some((pages, truncated))
     }
 
     /// The document as a Word, PowerPoint, HTML or RTF file.
@@ -329,9 +345,28 @@ impl crate::Document {
     /// [`Self::export_office`], and the pages whose text it had to leave out
     /// ([`OfficeExport::truncated_pages`]).
     pub fn export_office_checked(&self, format: OfficeFormat) -> OfficeExport {
+        match self.export_office_watched(format, &mut |_, _, _| true) {
+            Ok(export) => export,
+            // Nothing stops it without a watch.
+            Err(_) => OfficeExport { bytes: Vec::new(), truncated_pages: Vec::new() },
+        }
+    }
+
+    /// [`Self::export_office_checked`] telling `step` how far it is (#634): `pages`, page `done` of
+    /// `total` before each is read, then `writing` the file (0 of 0). `step` returning `false`
+    /// stops it with [`EditError::Cancelled`]; the document is not changed either way.
+    pub fn export_office_watched(&self, format: OfficeFormat, step: &mut dyn FnMut(&'static str, usize, usize) -> bool) -> Result<OfficeExport, EditError> {
         // RTF and Markdown leave pictures out.
-        let (pages, truncated_pages) =
-            self.export_pages_checked(!matches!(format, OfficeFormat::Rtf | OfficeFormat::Markdown), MAX_EXPORT_IMAGE_BYTES);
+        let images = !matches!(format, OfficeFormat::Rtf | OfficeFormat::Markdown);
+        let (pages, truncated_pages) = match self.editor.as_ref() {
+            Some(editor) => self
+                .export_pages_watched(images, MAX_EXPORT_IMAGE_BYTES, &mut pdfcraft_cos::ImageBudget::new(&editor.cos), &mut |p, n| step("pages", p, n))
+                .ok_or(EditError::Cancelled)?,
+            None => (Vec::new(), Vec::new()),
+        };
+        if !step("writing", 0, 0) {
+            return Err(EditError::Cancelled);
+        }
         let title = self.info.title.clone().unwrap_or_else(|| self.name.trim_end_matches(".pdf").to_string());
         // Word and HTML name the document's language (`/Lang`), so spelling is checked in it.
         let language = self.initial_view().language;
@@ -343,6 +378,6 @@ impl crate::Document {
             OfficeFormat::Rtf => pdfcraft_export::rtf(&pages).into_bytes(),
             OfficeFormat::Markdown => pdfcraft_export::markdown(&pages).into_bytes(),
         };
-        OfficeExport { bytes, truncated_pages }
+        Ok(OfficeExport { bytes, truncated_pages })
     }
 }

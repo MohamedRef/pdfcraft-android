@@ -18,4 +18,7 @@
     <string name="msg_busy_extracting_page">Extraction : page %1$d sur %2$d…</string>
     <string name="busy_cancel_split">Annuler s’arrête avant la partie suivante. Aucune partie n’est conservée et votre document reste intact.</string>
     <string name="busy_cancel_extract">Annuler s’arrête à l’étape suivante. Aucun fichier n’est créé et votre document reste intact.</string>
+    <string name="msg_busy_exporting_doc_page">Export : page %1$d sur %2$d…</string>
+    <string name="msg_busy_exporting_writing">Export : écriture du fichier…</string>
+    <string name="busy_cancel_export">Annuler s’arrête après cette page. Aucun fichier n’est créé et votre document reste intact.</string>
 </resources>

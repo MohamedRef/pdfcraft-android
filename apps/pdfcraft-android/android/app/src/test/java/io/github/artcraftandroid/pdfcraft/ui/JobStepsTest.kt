@@ -30,4 +30,13 @@ class JobStepsTest {
         assertNull(extractLine("pages", 0, 0))
         assertNull(extractLine("something_new", 0, 0))
     }
+
+    @Test
+    fun exportCountsPagesThenWrites() {
+        assertEquals(JobLine(R.string.msg_busy_exporting_doc_page, listOf(1, 40)), exportLine("pages", 0, 40))
+        assertEquals(JobLine(R.string.msg_busy_exporting_doc_page, listOf(40, 40)), exportLine("pages", 40, 40))
+        assertEquals(JobLine(R.string.msg_busy_exporting_writing), exportLine("writing", 0, 0))
+        assertNull(exportLine("pages", 0, 0))
+        assertNull(exportLine("something_new", 0, 0))
+    }
 }

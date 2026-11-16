@@ -18,4 +18,7 @@
     <string name="msg_busy_extracting_page">الاستخراج: الصفحة %1$d من %2$d…</string>
     <string name="busy_cancel_split">الإلغاء بيوقف قبل الجزء اللي بعده. مفيش أجزاء هتفضل، ومستندك زي ما هو.</string>
     <string name="busy_cancel_extract">الإلغاء بيوقف عند الخطوة اللي بعدها. مفيش ملف هيتعمل، ومستندك زي ما هو.</string>
+    <string name="msg_busy_exporting_doc_page">التصدير: الصفحة %1$d من %2$d…</string>
+    <string name="msg_busy_exporting_writing">التصدير: بنكتب الملف…</string>
+    <string name="busy_cancel_export">الإلغاء بيوقف بعد الصفحة دي. مفيش ملف هيتعمل، ومستندك زي ما هو.</string>
 </resources>

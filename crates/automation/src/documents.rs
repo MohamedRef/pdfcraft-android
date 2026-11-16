@@ -798,7 +798,16 @@ impl Automation {
         let mut ex = pdfcraft_engine::export::Exporter::new(doc);
         if tool == "doc_export_text" {
             let path = self.resolve(a.str("path")?, true)?;
-            let text = ex.text_of(&pages).map_err(failed)?;
+            // As Exporter::text_of, a page at a time, each told to the job watch (#634); a stop writes no file.
+            let mut text = String::new();
+            for (k, p) in pages.iter().enumerate() {
+                self.job_step("pages", k, pages.len(), k as f32 / pages.len() as f32)?;
+                if k > 0 {
+                    text.push('\u{c}');
+                }
+                text.push_str(ex.text(*p).map_err(failed)?.trim_end());
+                text.push('\n');
+            }
             write_atomic(&path, text.as_bytes())?;
             return Ok(json!({ "path": path.to_string_lossy(), "pages": pages.len(), "bytes": text.len() }));
         }
