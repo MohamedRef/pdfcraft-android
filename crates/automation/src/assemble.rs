@@ -315,7 +315,19 @@ impl Automation {
             let out_dir = a.str("out_dir").map_err(|_| ToolError::InvalidArgs("separate files need out_dir".into()))?;
             json!({ "files": self.extract_separate(id, &pages, out_dir, &stem)? })
         } else {
-            let bytes = self.session.extract(id, &pages).map_err(failed)?;
+            // Told as each stage starts (#634): copying the pages, writing the file, checking it.
+            let watch = self.job_watch.clone();
+            let bytes = self
+                .session
+                .extract_watched(id, &pages, &mut |stage| {
+                    let fraction = match stage {
+                        "copying" => 0.0,
+                        "writing" => 0.6,
+                        _ => 0.8,
+                    };
+                    watch.as_ref().is_none_or(|w| w(crate::JobStep { stage, done: 0, total: 0, fraction, attempt: 1 }))
+                })
+                .map_err(failed)?;
             self.deliver(a, &name, bytes)?
         };
         if a.opt_bool("delete")?.unwrap_or(false) {
@@ -337,7 +349,9 @@ impl Automation {
         let made_dir = !dir.exists();
         std::fs::create_dir_all(&dir).map_err(|e| failed(format!("{}: {e}", dir.display())))?;
         let (mut files, mut created) = (Vec::new(), Vec::new());
-        let outcome = pages.iter().try_for_each(|&p| -> Result<()> {
+        let outcome = pages.iter().enumerate().try_for_each(|(i, &p)| -> Result<()> {
+            // One step per page (#634); a stop removes what this call wrote, as a failure does.
+            self.job_step("pages", i, pages.len(), i as f32 / pages.len() as f32)?;
             let bytes = match first_bytes.take() {
                 Some(bytes) => bytes,
                 None => self.session.extract(id, &[p]).map_err(failed)?,
@@ -471,11 +485,22 @@ impl Automation {
             ));
         }
         let mut titles: Vec<(usize, String)> = Vec::new();
-        let parts = if let Some(mb) = max_mb {
+        // The parts' pages first, then each part made and written one at a time (#634), so the job
+        // watch hears of each and can stop between them, and only one part is held at once.
+        // Measuring for a size takes the first half of the run.
+        let (ranges, from) = if let Some(mb) = max_mb {
             if !mb.is_finite() || mb <= 0.0 {
                 return Err(ToolError::InvalidArgs("max_mb must be positive".into()));
             }
-            self.session.split_by_size(id, (mb * 1_048_576.0) as usize).map_err(failed)?
+            let watch = self.job_watch.clone();
+            let cuts = self
+                .session
+                .split_size_cuts(id, (mb * 1_048_576.0) as usize, &mut |page, pages| {
+                    let fraction = 0.5 * page as f32 / pages.max(1) as f32;
+                    watch.as_ref().is_none_or(|w| w(crate::JobStep { stage: "measuring", done: page, total: pages, fraction, attempt: 1 }))
+                })
+                .map_err(failed)?;
+            (self.session.split_ranges(id, &pdfcraft_organize::SplitBy::Before(cuts)).map_err(failed)?, 0.5)
         } else {
             let by = match (a.opt_int("every")?, a.opt_ints("before")?) {
                 (Some(n), None) if n > 0 => pdfcraft_organize::SplitBy::PageCount(n as usize),
@@ -489,15 +514,20 @@ impl Automation {
                 }
                 _ => return Err(ToolError::InvalidArgs("every must be a positive page count".into())),
             };
-            self.session.split(id, &by).map_err(failed)?
+            (self.session.split_ranges(id, &by).map_err(failed)?, 0.0)
         };
         let dir = self.resolve(a.str("out_dir")?, true)?;
+        let made_dir = !dir.exists();
         std::fs::create_dir_all(&dir).map_err(|e| failed(format!("{}: {e}", dir.display())))?;
         let mut files = Vec::new();
+        let mut created = Vec::new();
         let mut used = std::collections::HashSet::new();
-        for (i, (first, last, bytes)) in parts.iter().enumerate() {
+        let total = ranges.len();
+        let outcome = ranges.into_iter().enumerate().try_for_each(|(i, range)| -> Result<()> {
+            self.job_step("parts", i, total, from + (1.0 - from) * i as f32 / total as f32)?;
+            let (first, last, bytes) = self.session.split_part(id, range).map_err(failed)?;
             let safe = |t: &str| t.chars().map(|c| if c.is_alphanumeric() || " -_.,()".contains(c) { c } else { '_' }).collect::<String>();
-            let mut base = match titles.iter().find(|t| t.0 + 1 == *first) {
+            let mut base = match titles.iter().find(|t| t.0 + 1 == first) {
                 Some((_, t)) => format!("{stem}-{}", safe(t)),
                 None => format!("{stem}-part{}", i + 1),
             };
@@ -514,8 +544,24 @@ impl Automation {
                 unique = format!("{base}-{n}.pdf");
             }
             let path = child(&dir, &unique);
-            write_atomic(&path, bytes)?;
+            let existed = path.exists();
+            write_atomic(&path, &bytes)?;
+            if !existed {
+                created.push(path.clone());
+            }
             files.push(json!({ "path": path.to_string_lossy(), "first_page": first, "last_page": last }));
+            Ok(())
+        });
+        if let Err(e) = outcome {
+            // Stopped or failed: the parts this call wrote go, and the folder if it made it, so
+            // nothing half-done is left behind. Best effort; the error reported is the split's.
+            for path in &created {
+                let _ = std::fs::remove_file(path);
+            }
+            if made_dir {
+                let _ = std::fs::remove_dir(&dir);
+            }
+            return Err(e);
         }
         Ok(json!({ "files": files }))
     }

@@ -11,4 +11,13 @@
     <string name="msg_busy_compressing_images">Compressing: image %1$d of %2$d…</string>
     <string name="msg_busy_compressing_again">Compressing again to reach the size: try %1$d…</string>
     <string name="busy_cancel_compress">Cancel stops here. No file is made, and your document stays as it is.</string>
+    <!-- Split and Extract pages say how far they are and can be stopped (#634): the page measured for a split by size, the part being made, Extract's three steps or the page when each page is its own file -->
+    <string name="msg_busy_splitting_measuring">Splitting: measuring page %1$d of %2$d…</string>
+    <string name="msg_busy_splitting_part">Splitting: part %1$d of %2$d…</string>
+    <string name="msg_busy_extracting_copying">Extracting: copying the pages…</string>
+    <string name="msg_busy_extracting_writing">Extracting: writing the new file…</string>
+    <string name="msg_busy_extracting_checking">Extracting: checking the new file…</string>
+    <string name="msg_busy_extracting_page">Extracting: page %1$d of %2$d…</string>
+    <string name="busy_cancel_split">Cancel stops before the next part. No parts are kept, and your document stays as it is.</string>
+    <string name="busy_cancel_extract">Cancel stops at the next step. No file is made, and your document stays as it is.</string>
 </resources>

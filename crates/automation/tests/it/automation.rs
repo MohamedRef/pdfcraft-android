@@ -15046,3 +15046,119 @@ fn a_job_watch_follows_compress_and_can_stop_it() {
     ok(&mut a, "doc_optimize", json!({ "doc": doc, "path": "plain.pdf" }));
     assert!(dir.join("plain.pdf").is_file());
 }
+
+/// #634: doc_split tells the job watch each part it makes (and, for a size, each page it
+/// measures), and a stop leaves no part behind and the document as it was.
+#[test]
+fn a_job_watch_follows_split_and_can_stop_it() {
+    use pdfcraft_automation::JobStep;
+    use std::sync::{Arc, Mutex};
+    let dir = workdir("split-watch");
+    let mut a = auto(&dir);
+    let doc = ok(&mut a, "doc_open", json!({ "path": "a.pdf" }))["doc"].as_u64().unwrap();
+    let before = ok(&mut a, "doc_info", json!({ "doc": doc }));
+
+    let seen: Arc<Mutex<Vec<JobStep>>> = Arc::default();
+    let log = seen.clone();
+    a.set_job_watch(Some(Arc::new(move |s| {
+        log.lock().unwrap().push(s);
+        true
+    })));
+    let r = ok(&mut a, "doc_split", json!({ "doc": doc, "every": 1, "out_dir": "parts" }));
+    a.set_job_watch(None);
+    assert_eq!(r["files"].as_array().unwrap().len(), 3, "{r}");
+    let steps = seen.lock().unwrap().clone();
+    let parts: Vec<(usize, usize)> = steps.iter().filter(|s| s.stage == "parts").map(|s| (s.done, s.total)).collect();
+    assert_eq!(parts, vec![(0, 3), (1, 3), (2, 3)], "{steps:?}");
+    assert!(steps.windows(2).all(|w| w[0].fraction <= w[1].fraction), "{steps:?}");
+
+    // By size: every page is measured first, in the first half of the run.
+    let seen: Arc<Mutex<Vec<JobStep>>> = Arc::default();
+    let log = seen.clone();
+    a.set_job_watch(Some(Arc::new(move |s| {
+        log.lock().unwrap().push(s);
+        true
+    })));
+    ok(&mut a, "doc_split", json!({ "doc": doc, "max_mb": 100, "out_dir": "sized" }));
+    a.set_job_watch(None);
+    let steps = seen.lock().unwrap().clone();
+    let measured: Vec<usize> = steps.iter().filter(|s| s.stage == "measuring").map(|s| s.done).collect();
+    assert_eq!(measured, vec![0, 1, 2], "{steps:?}");
+    assert!(steps.iter().filter(|s| s.stage == "measuring").all(|s| s.fraction < 0.5), "{steps:?}");
+    assert!(steps.windows(2).all(|w| w[0].fraction <= w[1].fraction), "{steps:?}");
+
+    // Stopped before the third part: cancelled, the two parts written are gone with the folder.
+    a.set_job_watch(Some(Arc::new(|s: JobStep| !(s.stage == "parts" && s.done == 2))));
+    let e = err(&mut a, "doc_split", json!({ "doc": doc, "every": 1, "out_dir": "stopped" }));
+    a.set_job_watch(None);
+    assert!(matches!(&e, ToolError::Failed(m) if m.contains("cancelled")), "{e}");
+    assert!(!dir.join("stopped").exists());
+
+    // Into a folder that was there already: the folder stays, with only what was in it.
+    std::fs::create_dir_all(dir.join("kept")).unwrap();
+    std::fs::write(dir.join("kept/mine.txt"), b"mine").unwrap();
+    a.set_job_watch(Some(Arc::new(|s: JobStep| !(s.stage == "parts" && s.done == 1))));
+    let e = err(&mut a, "doc_split", json!({ "doc": doc, "every": 1, "out_dir": "kept" }));
+    a.set_job_watch(None);
+    assert!(matches!(&e, ToolError::Failed(m) if m.contains("cancelled")), "{e}");
+    let left: Vec<String> = std::fs::read_dir(dir.join("kept")).unwrap().map(|e| e.unwrap().file_name().to_string_lossy().into_owned()).collect();
+    assert_eq!(left, vec!["mine.txt".to_string()]);
+
+    // Stopped while measuring: nothing is made.
+    a.set_job_watch(Some(Arc::new(|s: JobStep| s.stage != "measuring")));
+    let e = err(&mut a, "doc_split", json!({ "doc": doc, "max_mb": 100, "out_dir": "unmeasured" }));
+    a.set_job_watch(None);
+    assert!(matches!(&e, ToolError::Failed(m) if m.contains("cancelled")), "{e}");
+    assert!(!dir.join("unmeasured").exists());
+    assert_eq!(ok(&mut a, "doc_info", json!({ "doc": doc })), before);
+}
+
+/// #634: page_extract tells the job watch its stages (one file) or each page (separate files),
+/// and a stop writes nothing and leaves the document as it was.
+#[test]
+fn a_job_watch_follows_extract_and_can_stop_it() {
+    use pdfcraft_automation::JobStep;
+    use std::sync::{Arc, Mutex};
+    let dir = workdir("extract-watch");
+    let mut a = auto(&dir);
+    let doc = ok(&mut a, "doc_open", json!({ "path": "a.pdf" }))["doc"].as_u64().unwrap();
+    let before = ok(&mut a, "doc_info", json!({ "doc": doc }));
+
+    let seen: Arc<Mutex<Vec<JobStep>>> = Arc::default();
+    let log = seen.clone();
+    a.set_job_watch(Some(Arc::new(move |s| {
+        log.lock().unwrap().push(s);
+        true
+    })));
+    ok(&mut a, "page_extract", json!({ "doc": doc, "pages": [1, 3], "out": "two.pdf" }));
+    a.set_job_watch(None);
+    assert!(dir.join("two.pdf").is_file());
+    let stages: Vec<&str> = seen.lock().unwrap().iter().map(|s| s.stage).collect();
+    assert_eq!(stages, vec!["copying", "writing", "checking"]);
+
+    for stage in ["copying", "writing", "checking"] {
+        a.set_job_watch(Some(Arc::new(move |s: JobStep| s.stage != stage)));
+        let e = err(&mut a, "page_extract", json!({ "doc": doc, "pages": [1, 3], "out": "stopped.pdf" }));
+        a.set_job_watch(None);
+        assert!(matches!(&e, ToolError::Failed(m) if m.contains("cancelled")), "{stage}: {e}");
+        assert!(!dir.join("stopped.pdf").exists(), "{stage}");
+    }
+
+    // One file per page: a step per page, and a stop removes the pages already written.
+    let seen: Arc<Mutex<Vec<JobStep>>> = Arc::default();
+    let log = seen.clone();
+    a.set_job_watch(Some(Arc::new(move |s| {
+        log.lock().unwrap().push(s);
+        true
+    })));
+    ok(&mut a, "page_extract", json!({ "doc": doc, "pages": [1, 2, 3], "separate": true, "out_dir": "each" }));
+    a.set_job_watch(None);
+    let pages: Vec<(usize, usize)> = seen.lock().unwrap().iter().filter(|s| s.stage == "pages").map(|s| (s.done, s.total)).collect();
+    assert_eq!(pages, vec![(0, 3), (1, 3), (2, 3)]);
+    a.set_job_watch(Some(Arc::new(|s: JobStep| !(s.stage == "pages" && s.done == 2))));
+    let e = err(&mut a, "page_extract", json!({ "doc": doc, "pages": [1, 2, 3], "separate": true, "out_dir": "each-stopped" }));
+    a.set_job_watch(None);
+    assert!(matches!(&e, ToolError::Failed(m) if m.contains("cancelled")), "{e}");
+    assert!(!dir.join("each-stopped").exists());
+    assert_eq!(ok(&mut a, "doc_info", json!({ "doc": doc })), before);
+}

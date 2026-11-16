@@ -2074,6 +2074,61 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         deliver(out, "${doc.title}_compressed.pdf", lead = listOfNotNull(sizes, target).joinToString(" "))
     }
 
+    /**
+     * Run engine tool [name] on [doc] with a [io.github.artcraftandroid.pdfcraft.core.ToolJob]
+     * (#634): the busy dialog says what [line] makes of each step the tool reports, with a bar for
+     * the whole run, and offers Cancel with [cancelNote]. Returns the tool's result, or null when
+     * the person stopped it; the tool then wrote nothing and changed no document. Any other
+     * failure is thrown, as from [Engine.tool]. Logs `job_end` with [job], how it ended
+     * (`finished`, `stopped`, `failed`), its time, the file's size and its page count, and where a
+     * stopped run was.
+     */
+    internal suspend fun watchedTool(
+        eng: Engine,
+        doc: OpenDocument,
+        job: String,
+        name: String,
+        args: Map<String, Any?>,
+        cancelNote: String,
+        line: (stage: String, done: Int, total: Int) -> JobLine?,
+    ): JSONObject? {
+        val work = io.github.artcraftandroid.pdfcraft.core.ToolJob()
+        val stop = offerCancel(cancelNote) { work.cancel() }
+        val own = tools.busy
+        val watching = viewModelScope.launch {
+            while (true) {
+                val p = work.progress()
+                if (p.steps > 0uL) {
+                    val l = line(p.stage, p.done.toInt(), p.total.toInt())
+                    tools.busy = l?.let { io.github.artcraftandroid.pdfcraft.text(it.res, *it.args.toTypedArray()) } ?: own
+                    tools.busyProgress = p.percent.toInt() to 100
+                }
+                kotlinx.coroutines.delay(JOB_WATCH_MS)
+            }
+        }
+        val started = System.nanoTime()
+        fun end(outcome: String) {
+            val p = work.progress()
+            Diag.event(DiagArea.Pages, "job_end", "job" to job, "doc" to doc.diagNumber, "outcome" to outcome,
+                "ms" to (System.nanoTime() - started) / 1_000_000, "bytes" to doc.info.fileSize.toLong(), "pages" to doc.pageCount,
+                "stage" to p.stage, "done" to p.done.toInt(), "total" to p.total.toInt(), "percent" to p.percent.toInt())
+        }
+        return try {
+            eng.tool(name, args, work).also { end("finished") }
+        } catch (e: MobileException) {
+            if (!stop.asked) {
+                end("failed")
+                throw e
+            }
+            end("stopped")
+            null
+        } finally {
+            watching.cancel()
+            withdrawCancel()
+            tools.busyProgress = null
+        }
+    }
+
     /** What takes the file's space (`doc_audit_space`): (category, bytes, percent), biggest first. */
     suspend fun auditSpace(doc: OpenDocument): List<Triple<String, Long, Double>>? {
         val eng = engine ?: return null

@@ -90,7 +90,13 @@ class DocumentToolsController internal constructor(private val vm: AppViewModel)
         try {
             val args = mutableMapOf<String, Any?>("doc" to doc.id, "out_dir" to dir.absolutePath)
             args += mode.args()
-            val r = Diag.measure(DiagArea.Pages, "split", "doc" to doc.diagNumber, "share" to share) { eng.tool("doc_split", args) }
+            // Part by part, with Cancel (#634): a stop leaves no part behind and the document as it was.
+            val r = Diag.measure(DiagArea.Pages, "split", "doc" to doc.diagNumber, "share" to share) {
+                vm.watchedTool(eng, doc, "split", "doc_split", args, text(R.string.busy_cancel_split), ::splitLine)
+            } ?: run {
+                dir.deleteRecursively()
+                return@docJob
+            }
             val list = r.optJSONArray("files")
             val parts = (0 until (list?.length() ?: 0)).map { File(list!!.getJSONObject(it).getString("path")) }.filter { it.isFile }
             if (Diag.enabled()) Diag.event(DiagArea.Pages, "split_result", "doc" to doc.diagNumber, "files" to parts.size, "bytes" to parts.sumOf { it.length() })

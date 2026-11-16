@@ -481,42 +481,69 @@ impl Session {
 
     /// New PDF bytes containing copies of `pages` of the document (Extract Pages).
     pub fn extract(&self, id: DocId, pages: &[usize]) -> Result<pdfcraft_cos::PdfBytes, EditError> {
+        self.extract_watched(id, pages, &mut |_| true)
+    }
+
+    /// [`Self::extract`] telling `step` each stage as it starts (#634): `copying` the pages,
+    /// `writing` the new file, `checking` that it reopens with every page. `step` returning
+    /// `false` stops it with [`EditError::Cancelled`]; nothing is made and the document is not
+    /// changed either way.
+    pub fn extract_watched(&self, id: DocId, pages: &[usize], step: &mut dyn FnMut(&'static str) -> bool) -> Result<pdfcraft_cos::PdfBytes, EditError> {
         let src = self.cos(id)?;
         if src.permissions().is_some_and(|p| !p.extract_pages()) {
             return Err(EditError::NotPermitted("extracting pages"));
         }
+        let mut go = |stage| if step(stage) { Ok(()) } else { Err(EditError::Cancelled) };
+        go("copying")?;
         let out = pdfcraft_organize::extract_pages(src, pages)?;
-        self.write_new(&out)
+        go("writing")?;
+        let bytes = self.write_unchecked(&out)?;
+        go("checking")?;
+        self.check_new(&out, &bytes)?;
+        Ok(bytes)
     }
 
     /// Split the document into several new PDFs.
     pub fn split(&self, id: DocId, by: &pdfcraft_organize::SplitBy) -> Result<Vec<SplitPart>, EditError> {
-        let src = self.cos(id)?;
-        if src.permissions().is_some_and(|p| !p.extract_pages()) {
-            return Err(EditError::NotPermitted("splitting the document"));
-        }
+        self.split_ranges(id, by)?.into_iter().map(|r| self.split_part(id, r)).collect()
+    }
+
+    /// The pages of each part [`Self::split`] makes (0-based, end exclusive), in order, without
+    /// making them (#634): a caller makes them one at a time with [`Self::split_part`].
+    pub fn split_ranges(&self, id: DocId, by: &pdfcraft_organize::SplitBy) -> Result<Vec<std::ops::Range<usize>>, EditError> {
+        let src = self.splittable(id)?;
         let n = pdfcraft_organize::page_count(src)?;
-        pdfcraft_organize::split_ranges(n, by)
-            .into_iter()
-            .map(|r| {
-                let doc = pdfcraft_organize::extract_pages(src, &r.clone().collect::<Vec<_>>())?;
-                Ok((r.start + 1, r.end, self.write_new(&doc)?))
-            })
-            .collect()
+        Ok(pdfcraft_organize::split_ranges(n, by))
+    }
+
+    /// One part of a split: `pages` (as [`Self::split_ranges`] gives them) as a new PDF, with its
+    /// first and last page 1-based, as [`Self::split`] returns each part.
+    pub fn split_part(&self, id: DocId, pages: std::ops::Range<usize>) -> Result<SplitPart, EditError> {
+        let src = self.splittable(id)?;
+        let doc = pdfcraft_organize::extract_pages(src, &pages.clone().collect::<Vec<_>>())?;
+        Ok((pages.start + 1, pages.end, self.write_new(&doc)?))
     }
 
     /// Split into parts of at most `max_bytes` each (Acrobat's "File size"): pages are taken in
     /// order while their size (as single-page files, an over-estimate because shared fonts and
     /// images count once per part) fits; a page larger than the limit is a part of its own.
     pub fn split_by_size(&self, id: DocId, max_bytes: usize) -> Result<Vec<SplitPart>, EditError> {
-        let src = self.cos(id)?;
-        if src.permissions().is_some_and(|p| !p.extract_pages()) {
-            return Err(EditError::NotPermitted("splitting the document"));
-        }
+        let cuts = self.split_size_cuts(id, max_bytes, &mut |_, _| true)?;
+        self.split(id, &pdfcraft_organize::SplitBy::Before(cuts))
+    }
+
+    /// Where [`Self::split_by_size`] cuts: the 0-based pages that start a new part, telling
+    /// `step(page, pages)` before each page is measured (#634). `step` returning `false` stops it
+    /// with [`EditError::Cancelled`].
+    pub fn split_size_cuts(&self, id: DocId, max_bytes: usize, step: &mut dyn FnMut(usize, usize) -> bool) -> Result<Vec<usize>, EditError> {
+        let src = self.splittable(id)?;
         let n = pdfcraft_organize::page_count(src)?;
         let mut cuts = Vec::new();
         let mut used = 0usize;
         for p in 0..n {
+            if !step(p, n) {
+                return Err(EditError::Cancelled);
+            }
             let size = self.write_unchecked(&pdfcraft_organize::extract_pages(src, &[p])?)?.len();
             if used > 0 && used + size > max_bytes {
                 cuts.push(p);
@@ -524,7 +551,16 @@ impl Session {
             }
             used += size;
         }
-        self.split(id, &pdfcraft_organize::SplitBy::Before(cuts))
+        Ok(cuts)
+    }
+
+    /// The document to split, if its permissions allow taking its pages out.
+    fn splittable(&self, id: DocId) -> Result<&pdfcraft_cos::Document, EditError> {
+        let src = self.cos(id)?;
+        if src.permissions().is_some_and(|p| !p.extract_pages()) {
+            return Err(EditError::NotPermitted("splitting the document"));
+        }
+        Ok(src)
     }
 
     fn cos(&self, id: DocId) -> Result<&pdfcraft_cos::Document, EditError> {
@@ -536,10 +572,16 @@ impl Session {
     /// writes it (#1698, #2166): it reopens, and shows the pages it was built from.
     pub(crate) fn write_new(&self, doc: &pdfcraft_cos::Document) -> Result<pdfcraft_cos::PdfBytes, EditError> {
         let bytes = self.write_unchecked(doc)?;
+        self.check_new(doc, &bytes)?;
+        Ok(bytes)
+    }
+
+    /// The check of [`Self::write_new`]: `bytes`, written from `doc`, reopen and show its pages.
+    fn check_new(&self, doc: &pdfcraft_cos::Document, bytes: &pdfcraft_cos::PdfBytes) -> Result<(), EditError> {
         let expected = pdfcraft_organize::page_count(doc)?;
         pdfcraft_cos::Document::open(bytes.clone()).map_err(|e| EditError::Reopen(e.to_string()))?;
         pdfcraft_render::check_pages(bytes.clone(), None, expected).map_err(|e| EditError::Reopen(e.to_string()))?;
-        Ok(bytes)
+        Ok(())
     }
 
     /// [`Self::write_new`] without the check, for bytes nobody writes: measuring a part's size.
