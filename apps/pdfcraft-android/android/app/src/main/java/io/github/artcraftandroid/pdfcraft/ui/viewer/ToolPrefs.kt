@@ -68,6 +68,19 @@ class ToolPrefs(context: Context) {
     /** The Pen lab's dials per pen and the measured pressure range (#569). */
     internal val penTuning = PenTuning(context.getSharedPreferences("pen_lab", Context.MODE_PRIVATE))
 
+    /** Each pen's Pressure setting (#608): how much its line answers pressure, 0…1 ([penPressureGain]). */
+    private val penPressures = InkStyle.entries.associateWith {
+        mutableFloatStateOf(penPressureSetting(runCatching { prefs.getFloat(penPressureKey(it), PEN_PRESSURE_DEFAULT) }.getOrDefault(PEN_PRESSURE_DEFAULT)))
+    }
+
+    internal fun penPressure(style: InkStyle): Float = penPressures.getValue(style).floatValue
+
+    internal fun updatePenPressure(style: InkStyle, v: Float) {
+        val safe = penPressureSetting(v)
+        penPressures.getValue(style).floatValue = safe
+        prefs.edit().putFloat(penPressureKey(style), safe).apply()
+    }
+
     /** The settings of one pen, for its toolbar preview. */
     internal fun penSettings(style: InkStyle): InkPenSettings = penSettings.getValue(style).value
 

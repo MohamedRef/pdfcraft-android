@@ -196,8 +196,15 @@ class PenModelTest {
         // 0.0.33 log, Galaxy S24 Ultra: the hand wrote at 0.07…0.15, and 0.22 drew the thickest line
         val r = PressureRange(0.07f, 0.15f)
         val gain = (r.stretch(0.15f) - r.stretch(0.07f)) / (0.15f - 0.07f)
-        assertTrue(gain <= PressureRange.BAND_HIGH / PressureRange.MIN_STRETCH_SPAN + 1e-3f)
-        assertTrue(r.stretch(0.22f) < 0.65f)
+        assertTrue(gain <= (PressureRange.BAND_HIGH - PressureRange.BAND_LOW) / PressureRange.LIGHTEST_STRETCH_SPAN + 1e-3f)
+        // the band is widened to twice its middle (#608): ordinary writing sits around the pen's
+        // middle, and the pen's top needs half as much pressure again as the band's hard end
+        assertEquals(0.5f, r.stretch(0.11f), 0.01f)
+        assertTrue(r.stretch(0.07f) in 0.3f..0.4f && r.stretch(0.15f) in 0.6f..0.7f)
+        assertTrue(r.stretch(0.18f) < PressureRange.BAND_HIGH)
+        // a hand lighter still is never stretched more than four times
+        val faint = PressureRange(0.02f, 0.04f)
+        assertTrue((faint.stretch(0.04f) - faint.stretch(0.02f)) / 0.02f <= 4f + 1e-3f)
         // still more pressure, still a thicker line, never backwards
         val steps = List(200) { r.stretch((it + 1) / 200f) }
         assertTrue(steps.zipWithNext().all { (a, b) -> b > a })

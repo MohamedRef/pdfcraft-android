@@ -177,7 +177,7 @@ internal fun inkStrokeFields(ink: PenStrokeStats?, tiltMin: Float, tiltMax: Floa
     val v = ink.speeds.toList()
     val w = ink.widths.toList()
     return arrayOf(
-        "style" to ink.style.key, "pressure_source" to ink.source.key,
+        "style" to ink.style.key, "pressure_source" to ink.source.key, "pressure_setting" to ink.pressureSetting,
         "pressure_min" to p.minOrNull(), "pressure_p10" to quantile(p, 0.1f), "pressure_median" to quantile(p, 0.5f),
         "pressure_p90" to quantile(p, 0.9f), "pressure_max" to p.maxOrNull(),
         "raw_pressure_p10" to quantile(ink.raw.toList(), 0.1f), "raw_pressure_p90" to quantile(ink.raw.toList(), 0.9f),
