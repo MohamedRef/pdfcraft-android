@@ -29,4 +29,14 @@
     <string name="compare_busy_comparing">المقارنة: بندوّر على الاختلافات…</string>
     <string name="compare_busy_visual">المقارنة: بنبص على الصفحة %1$d من %2$d…</string>
     <string name="busy_cancel_compare">الإلغاء بيوقف المقارنة. المستندين زي ما هم.</string>
+    <string name="msg_busy_combining_reading">الدمج: بنقرا الملف %1$d من %2$d…</string>
+    <string name="msg_busy_combining_opening">الدمج: بنفتح الملف %1$d من %2$d…</string>
+    <string name="msg_busy_combining_pages">الدمج: بننسخ الصفحات…</string>
+    <string name="msg_busy_combining_writing">الدمج: بنكتب الملف الجديد…</string>
+    <string name="msg_busy_creating_file">إنشاء PDF: الملف %1$d من %2$d…</string>
+    <string name="busy_cancel_combine_step">الإلغاء بيوقف عند الخطوة اللي بعدها. مفيش حاجة هتتعمل، وملفاتك زي ما هي.</string>
+    <string name="msg_busy_protect_opening">تعيين كلمة المرور: بنفتح نسخة…</string>
+    <string name="msg_busy_protect_protecting">تعيين كلمة المرور: بنحمي النسخة…</string>
+    <string name="msg_busy_protect_saving">تعيين كلمة المرور: بنحفظ النسخة المحمية…</string>
+    <string name="busy_cancel_protect">الإلغاء بيوقف قبل الخطوة اللي بعدها. مفيش ملف هيتعمل، ومستندك زي ما هو. حفظ النسخة المحمية خطوة واحدة: الإلغاء بيشتغل لما تخلص.</string>
 </resources>

@@ -57,4 +57,23 @@ class JobStepsTest {
         assertNull(compareLine("visual", 0, 0))
         assertNull(compareLine("something_new", 0, 0))
     }
+
+    @Test
+    fun combineCountsFilesThenNamesItsSteps() {
+        assertEquals(JobLine(R.string.msg_busy_combining_reading, listOf(1, 4)), combineLine("reading", 0, 4))
+        assertEquals(JobLine(R.string.msg_busy_combining_opening, listOf(4, 4)), combineLine("opening", 3, 4))
+        assertEquals(JobLine(R.string.msg_busy_combining_pages), combineLine("combining", 0, 0))
+        assertEquals(JobLine(R.string.msg_busy_combining_writing), combineLine("writing", 0, 0))
+        assertEquals(JobLine(R.string.msg_busy_combining_writing), combineLine("saving", 0, 0))
+        assertNull(combineLine("opening", 0, 0))
+        assertNull(combineLine("something_new", 0, 0))
+    }
+
+    @Test
+    fun createCountsFilesThenWrites() {
+        assertEquals(JobLine(R.string.msg_busy_creating_file, listOf(2, 3)), createLine("files", 1, 3))
+        assertEquals(JobLine(R.string.msg_busy_combining_writing), createLine("writing", 0, 0))
+        assertNull(createLine("files", 0, 0))
+        assertNull(createLine("something_new", 0, 0))
+    }
 }

@@ -411,11 +411,27 @@ impl Session {
         passwords: &[Option<&str>],
         field_conflicts: pdfcraft_organize::FieldConflicts,
     ) -> Result<Combined, EditError> {
-        let docs = sources
-            .iter()
-            .enumerate()
-            .map(|(i, (n, b, _))| open_source_with(n, b, passwords.get(i).copied().flatten()))
-            .collect::<Result<Vec<_>, _>>()?;
+        self.combine_unlocked_reporting_watched(sources, passwords, field_conflicts, &mut |_, _, _| true)
+    }
+
+    /// [`Self::combine_unlocked_reporting`], telling `step` each source opened (`opening`, `done`
+    /// of `total`), the copying (`combining`), the writing (`writing`) and the check that the new
+    /// file opens (`checking`); stops with [`EditError::Cancelled`] when `step` says so.
+    /// Android adaptation (#634).
+    pub fn combine_unlocked_reporting_watched(
+        &self,
+        sources: &[CombineSource],
+        passwords: &[Option<&str>],
+        field_conflicts: pdfcraft_organize::FieldConflicts,
+        step: &mut dyn FnMut(&'static str, usize, usize) -> bool,
+    ) -> Result<Combined, EditError> {
+        let mut docs = Vec::with_capacity(sources.len());
+        for (i, (n, b, _)) in sources.iter().enumerate() {
+            if !step("opening", i, sources.len()) {
+                return Err(EditError::Cancelled);
+            }
+            docs.push(open_source_with(n, b, passwords.get(i).copied().flatten())?);
+        }
         let mut pages = Vec::with_capacity(docs.len());
         for ((name, _, range), d) in sources.iter().zip(&docs) {
             let range = range.as_deref().map(str::trim).filter(|r| !r.is_empty());
@@ -431,8 +447,18 @@ impl Session {
         }
         let named: Vec<(&str, &pdfcraft_cos::Document, Option<&[usize]>)> =
             sources.iter().zip(docs.iter()).zip(&pages).map(|(((n, _, _), d), p)| (n.as_str(), d, p.as_deref())).collect();
+        if !step("combining", 0, 0) {
+            return Err(EditError::Cancelled);
+        }
         let out = pdfcraft_organize::combine_selected_with(&named, field_conflicts)?;
-        let bytes = self.write_new(&out.doc)?;
+        if !step("writing", 0, 0) {
+            return Err(EditError::Cancelled);
+        }
+        let bytes = self.write_unchecked(&out.doc)?;
+        if !step("checking", 0, 0) {
+            return Err(EditError::Cancelled);
+        }
+        self.check_new(&out.doc, &bytes)?;
         Ok(Combined { bytes, renamed_fields: out.renamed_fields })
     }
 
