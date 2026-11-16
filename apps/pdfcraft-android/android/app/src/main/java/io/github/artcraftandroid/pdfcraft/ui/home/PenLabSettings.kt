@@ -53,6 +53,7 @@ import io.github.artcraftandroid.pdfcraft.ui.viewer.inkStyleOpacity
 import io.github.artcraftandroid.pdfcraft.ui.viewer.inkStylePointWidths
 import io.github.artcraftandroid.pdfcraft.ui.viewer.inkTailOpacity
 import io.github.artcraftandroid.pdfcraft.ui.viewer.inkTailPoints
+import io.github.artcraftandroid.pdfcraft.ui.viewer.inkTailStart
 import io.github.artcraftandroid.pdfcraft.ui.viewer.newInkStroke
 
 /** The strip's scale: one point of ink is this many dp, about a page at 150 %. */
@@ -127,8 +128,9 @@ internal fun PenLabSettings(vm: AppViewModel) {
                 drawInkStroke(s.paths.runs(s), Color(s.appearance.argb), s.appearance.opacity, s.appearance.style == InkStyle.Highlighter, Offset.Zero, pxPerPt, bounds, size.height / pxPerPt)
                 // the tail to the pen while the stroke is written, as on a page
                 if (s === writing) {
-                    val tail = inkTailPoints(s.points.last() * pxPerPt, s.penTip?.let { it * pxPerPt }, null)
-                    val width = inkStylePointWidths(listOf(s.scales.lastOrNull() ?: 1f), s.appearance.width, s.appearance.style).first()
+                    val (last, tip, scale) = inkTailStart(s) ?: continue
+                    val tail = inkTailPoints(last * pxPerPt, tip?.let { it * pxPerPt }, null)
+                    val width = inkStylePointWidths(listOf(scale), s.appearance.width, s.appearance.style).first()
                     drawInkTail(tail, Color(s.appearance.argb), inkTailOpacity(s), width * pxPerPt, s.appearance.style == InkStyle.Highlighter)
                 }
             }

@@ -169,8 +169,22 @@ internal class InkStroke(
     /** Whether this stroke shows the paper through a pencil's grain. */
     val grain: Boolean = dynamics?.grain == true
 
+    /** The pen has lifted: the stroke's end is its own from here on ([endPreview] is over). */
+    var lifted = false
+        private set
+
+    /**
+     * The pointed end the line is drawn with while it is still being written (#611,
+     * [PenDynamics.endPreview]); null once lifted, for a shape, and for a line of one width.
+     */
+    fun endPreview(): InkEndPreview? {
+        if (lifted || !pressureSensitive || preview != null || shapeMode != InkShapeMode.Freehand) return null
+        return dynamics?.endPreview(points, scales, thinner.pending, penTip)
+    }
+
     /** On lift: a smoothed line that stopped short of the pen is taken to where the pen left the page. */
     fun catchUp() {
+        lifted = true
         // the last sample, when thinning had not made it a point yet
         thinner.flush()?.let { (q, scale, density) -> addPoint(q, scale, density) }
         val end = smoother?.end() ?: return
@@ -247,6 +261,18 @@ internal fun finishInkStroke(s: InkStroke, tuning: PenTuning, trial: Boolean = f
  */
 internal fun inkStrokeMeasuresPressure(stylus: Boolean, style: InkStyle, trial: Boolean): Boolean =
     stylus && !trial && style != InkStyle.Highlighter
+
+/**
+ * The tail of the stroke being written: where it starts, the pen's tip when the tail has to reach
+ * it, and its width as a multiple of the pen width. A line drawn with a pointed end
+ * ([InkStroke.endPreview], #611) already reaches the pen, so its tail is only the piece ahead of
+ * the pen, as thin as the point; any other line's tail runs from its last point to the pen.
+ */
+internal fun inkTailStart(s: InkStroke): Triple<Offset, Offset?, Float>? {
+    val last = s.points.lastOrNull() ?: return null
+    val end = s.endPreview() ?: return Triple(last, s.penTip, s.scales.lastOrNull() ?: 1f)
+    return Triple(end.extra.lastOrNull() ?: last, null, end.scales.lastOrNull() ?: 1f)
+}
 
 /**
  * The opacity of the tail drawn from [s]'s last point to the pen: a pencil's is lightened by the
@@ -668,9 +694,9 @@ private fun ZoomWritingPad(
                 }
                 // the tail to the pen while a stroke is written on the pad: smoothing keeps the line a little behind it
                 writing?.takeIf { it.page == zb.page }?.let { s ->
-                    val last = s.points.lastOrNull() ?: return@let
-                    val tail = inkTailPoints(origin + last * m, s.penTip?.let { origin + it * m }, null)
-                    val width = inkStylePointWidths(listOf(s.scales.lastOrNull() ?: 1f), s.appearance.width, s.appearance.style).first()
+                    val (last, tip, scale) = inkTailStart(s) ?: return@let
+                    val tail = inkTailPoints(origin + last * m, tip?.let { origin + it * m }, null)
+                    val width = inkStylePointWidths(listOf(scale), s.appearance.width, s.appearance.style).first()
                     drawInkTail(tail, Color(s.appearance.argb), inkTailOpacity(s), width * m, s.appearance.style == InkStyle.Highlighter, InkLook(ctl.nightMode, s.appearance.onDark))
                 }
                 // The advance zone: lifting the pen here moves the box on.
@@ -1699,14 +1725,14 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
             // about one frame from now, from its real speed. Drawn only, never saved; the next
             // real sample replaces it.
             current?.takeIf { it.shapeMode == InkShapeMode.Freehand && it.preview == null }?.let { s ->
-                val last = s.points.lastOrNull() ?: return@let
+                val (last, tip, scale) = inkTailStart(s) ?: return@let
                 val tail = inkTailPoints(
                     doc.viewer.pageToScreen(s.page, last.x, last.y),
-                    s.penTip?.let { doc.viewer.pageToScreen(s.page, it.x, it.y) },
+                    tip?.let { doc.viewer.pageToScreen(s.page, it.x, it.y) },
                     if (s.stylus) StylusLog.pen.predictedOffset(android.os.SystemClock.uptimeMillis()) else null,
                 )
                 if (tail.isEmpty()) return@let
-                val width = inkStylePointWidths(listOf(s.scales.lastOrNull() ?: 1f), s.appearance.width, s.appearance.style).first()
+                val width = inkStylePointWidths(listOf(scale), s.appearance.width, s.appearance.style).first()
                 val pageRect = doc.viewer.pageRectOnScreen(s.page)
                 clipRect(pageRect.left, pageRect.top, pageRect.right, pageRect.bottom) {
                     drawInkTail(tail, Color(s.appearance.argb), inkTailOpacity(s), width * doc.viewer.pixelsPerPoint(s.page), s.appearance.style == InkStyle.Highlighter, InkLook(doc.controller.nightMode, s.appearance.onDark))
