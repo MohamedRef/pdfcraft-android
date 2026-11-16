@@ -47,6 +47,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
@@ -105,20 +109,82 @@ data class FileRow(
 fun HomeRoot(vm: AppViewModel, onBrowse: () -> Unit) {
     val c = pdfColors
     // Home and its tabs sit on the reference's home background: white, or black in dark mode
-    Column(Modifier.fillMaxSize().background(c.home)) {
-        Box(Modifier.weight(1f)) {
-            when (vm.home.homeTab) {
-                HomeTab.Home -> HomeTabScreen(vm, onBrowse)
-                HomeTab.Files -> FilesTab(vm, onBrowse)
-                HomeTab.Library -> LibraryTab(vm)
-                HomeTab.Tools -> ToolsTab(vm)
-                HomeTab.Search -> SearchTab(vm)
+    val wide = io.github.artcraftandroid.pdfcraft.ui.isWideScreen()
+    val content = @Composable {
+        // on a tablet the lists keep a readable width, centred (#613)
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
+            Box(Modifier.widthIn(max = io.github.artcraftandroid.pdfcraft.ui.ListMaxWidth).fillMaxSize()) {
+                when (vm.home.homeTab) {
+                    HomeTab.Home -> HomeTabScreen(vm, onBrowse)
+                    HomeTab.Files -> FilesTab(vm, onBrowse)
+                    HomeTab.Library -> LibraryTab(vm)
+                    HomeTab.Tools -> ToolsTab(vm)
+                    HomeTab.Search -> SearchTab(vm)
+                }
             }
         }
-        // documents still open in tabs (#138): back to them, on a line of its own between the list
-        // and the bottom bar, so it never covers a file (#615)
-        if (vm.tabs.tabs.isNotEmpty()) io.github.artcraftandroid.pdfcraft.ui.viewer.OpenTabsBar(vm, Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp))
-        BottomNav(vm.home.homeTab) { vm.home.homeTab = it }
+    }
+    if (wide) {
+        // a side rail instead of the bottom bar on a wide screen (#613)
+        Row(Modifier.fillMaxSize().background(c.home)) {
+            SideRail(vm.home.homeTab) { vm.home.homeTab = it }
+            Column(Modifier.weight(1f).fillMaxHeight().navigationBarsPadding()) {
+                Box(Modifier.weight(1f)) { content() }
+                OpenTabsLine(vm)
+            }
+        }
+    } else {
+        Column(Modifier.fillMaxSize().background(c.home)) {
+            Box(Modifier.weight(1f)) { content() }
+            OpenTabsLine(vm)
+            BottomNav(vm.home.homeTab) { vm.home.homeTab = it }
+        }
+    }
+}
+
+/**
+ * Documents still open in tabs (#138): back to them, on a line of its own between the list and the
+ * bottom bar (or the foot of the screen beside the rail), so it never covers a file (#615).
+ */
+@Composable
+private fun OpenTabsLine(vm: AppViewModel) {
+    if (vm.tabs.tabs.isNotEmpty()) {
+        io.github.artcraftandroid.pdfcraft.ui.viewer.OpenTabsBar(vm, Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp))
+    }
+}
+
+private fun HomeTab.icon(): ImageVector = when (this) {
+    HomeTab.Home -> LucideIcons.House
+    HomeTab.Files -> LucideIcons.Folder
+    HomeTab.Library -> LucideIcons.Layers
+    HomeTab.Tools -> LucideIcons.LayoutGrid
+    HomeTab.Search -> LucideIcons.Search
+}
+
+/** The tabs down the side on a wide screen (#613): the same tabs as the bottom bar, 80 dp wide. */
+@Composable
+private fun SideRail(selected: HomeTab, onSelect: (HomeTab) -> Unit) {
+    val c = pdfColors
+    Column(
+        Modifier.fillMaxHeight().width(80.dp).background(c.home).safeTopPadding().navigationBarsPadding()
+            .drawBehind { drawLine(c.divider, Offset(size.width, 0f), Offset(size.width, size.height), 1.dp.toPx()) }
+            .padding(top = 12.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        for (t in HomeTab.entries) {
+            val tint = if (t == selected) c.toolAccent else c.icon
+            val label = stringResource(t.label)
+            Column(
+                Modifier.width(80.dp).height(64.dp).clickable(role = Role.Tab) { onSelect(t) }.semantics { contentDescription = label },
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center,
+            ) {
+                Icon(t.icon(), null, tint = tint, modifier = Modifier.size(22.dp))
+                Spacer(Modifier.height(5.dp))
+                Text(label, color = tint, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+        }
     }
 }
 
@@ -194,7 +260,9 @@ private fun HomeTabScreen(vm: AppViewModel, onBrowse: () -> Unit) {
             }
             val context = androidx.compose.ui.platform.LocalContext.current
             LaunchedEffect(Unit) { UpdaterState.autoCheck(context) }
-            LazyColumn(Modifier.weight(1f)) {
+            var listWidth by remember { mutableStateOf(0) }
+            val columns = io.github.artcraftandroid.pdfcraft.ui.gridColumns(with(androidx.compose.ui.platform.LocalDensity.current) { listWidth.toDp().value.toInt() })
+            LazyColumn(Modifier.weight(1f).onSizeChanged { listWidth = it.width }) {
                 item {
                     UpdaterState.candidate?.let { update ->
                         Row(
@@ -263,10 +331,11 @@ private fun HomeTabScreen(vm: AppViewModel, onBrowse: () -> Unit) {
                         }
                     }
                 } else if (vm.home.gridView) {
-                    items(rows.chunked(2)) { pair ->
+                    // two cells on a phone, more on a wider list (#613)
+                    items(rows.chunked(columns)) { line ->
                         Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            pair.forEach { r -> FileGridCell(vm, r, Modifier.weight(1f), recent = tab == 0) }
-                            if (pair.size == 1) Spacer(Modifier.weight(1f))
+                            line.forEach { r -> FileGridCell(vm, r, Modifier.weight(1f), recent = tab == 0) }
+                            repeat(columns - line.size) { Spacer(Modifier.weight(1f)) }
                         }
                     }
                 } else {
