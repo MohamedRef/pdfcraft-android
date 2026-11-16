@@ -85,7 +85,7 @@ class DocumentToolsController internal constructor(private val vm: AppViewModel)
      * Split [doc] by [mode] into parts, then save them to a folder the person picks (or share them).
      * Parts keep the engine's names: `<name>-partK.pdf`, or the bookmark titles.
      */
-    fun split(doc: OpenDocument, mode: SplitMode, share: Boolean) = vm.job(text(R.string.msg_busy_splitting)) { eng ->
+    fun split(doc: OpenDocument, mode: SplitMode, share: Boolean) = vm.docJob(doc, text(R.string.msg_busy_splitting)) { eng ->
         val dir = File(app.cacheDir, "split/${System.nanoTime()}").apply { mkdirs() }
         try {
             val args = mutableMapOf<String, Any?>("doc" to doc.id, "out_dir" to dir.absolutePath)
@@ -97,7 +97,7 @@ class DocumentToolsController internal constructor(private val vm: AppViewModel)
             if (parts.isEmpty()) {
                 vm.tell(text(R.string.msg_split_nothing))
                 dir.deleteRecursively()
-                return@job
+                return@docJob
             }
             splitOpen = false
             val named = parts.map { it to it.name }
@@ -317,7 +317,7 @@ class DocumentToolsController internal constructor(private val vm: AppViewModel)
             return
         }
         if (doc.controller.tool == ViewerTool.Draw) doc.commitTool?.invoke()
-        vm.job(text(R.string.print_busy)) { eng ->
+        vm.docJob(doc, text(R.string.print_busy)) { eng ->
             val dir = File(app.cacheDir, "print/${System.nanoTime()}").apply { mkdirs() }
             val out = File(dir, "${doc.title}-print.pdf")
             try {
@@ -445,10 +445,17 @@ class DocumentToolsController internal constructor(private val vm: AppViewModel)
         }
         vm.job(text(R.string.msg_busy_saving_files)) {
             try {
+                // file by file, counted; Cancel stops before the next, and the files saved stay (#614)
+                val stop = vm.offerCancel(text(R.string.busy_cancel_save_files))
                 val saved = Diag.measure(DiagArea.Pages, "save_to_folder", "files" to out.files.size) {
-                    withContext(Dispatchers.IO) { vm.files.saveAllToTree(tree, out.files, out.mime) }
+                    withContext(Dispatchers.IO) {
+                        vm.files.saveAllToTree(tree, out.files, out.mime) { done ->
+                            vm.tools.busyProgress = done to out.files.size
+                            !stop.asked
+                        }
+                    }
                 }
-                Diag.event(DiagArea.Pages, "save_to_folder_result", "files" to out.files.size, "saved" to saved)
+                Diag.event(DiagArea.Pages, "save_to_folder_result", "files" to out.files.size, "saved" to saved, "cancelled" to stop.asked)
                 vm.tell(plural(R.plurals.msg_files_saved_folder, saved, saved))
             } finally {
                 withContext(NonCancellable + Dispatchers.IO) { out.discard() }

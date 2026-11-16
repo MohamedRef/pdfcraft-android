@@ -239,6 +239,20 @@ fun AppRoot(vm: AppViewModel, onBrowse: () -> Unit, onPickSignatureImage: () -> 
                         Spacer(Modifier.width(20.dp))
                         Text(message, color = c.text)
                     }
+                    // the time taken so far, after the first few seconds (#614)
+                    val since = vm.tools.busySince
+                    val now by androidx.compose.runtime.produceState(android.os.SystemClock.elapsedRealtime(), since) {
+                        while (true) { value = android.os.SystemClock.elapsedRealtime(); kotlinx.coroutines.delay(1_000) }
+                    }
+                    val taken = now - since
+                    vm.tools.busyNote?.let {
+                        Spacer(Modifier.height(10.dp))
+                        Text(it, color = c.textSecondary, fontSize = 13.sp)
+                    }
+                    if (taken >= BUSY_SHOW_TIME_AFTER_MS) {
+                        Spacer(Modifier.height(6.dp))
+                        Text(stringResource(R.string.busy_elapsed, busyElapsed(taken)), color = c.textSecondary, fontSize = 13.sp)
+                    }
                     vm.tools.busyProgress?.let { (done, total) ->
                         Spacer(Modifier.height(14.dp))
                         LinearProgressIndicator(
