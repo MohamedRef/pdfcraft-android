@@ -385,12 +385,15 @@ private fun SplitPane(vm: AppViewModel, doc: OpenDocument, side: Boolean, onGhos
 }
 
 /**
- * On Home with documents still open in tabs (#138): go back to them, or close them all.
+ * On Home with documents still open in tabs (#138): go back to them, or close them all. Close all
+ * asks first (#636): an ✕ at the end of a bar reads as "hide this bar", and this one saves and
+ * closes every open document, which for a large book is a long wait to take back.
  */
 @Composable
 fun OpenTabsBar(vm: AppViewModel, modifier: Modifier = Modifier) {
     val c = pdfColors
     val count = vm.tabs.tabs.size
+    var asking by remember { mutableStateOf(false) }
     if (count == 0) return
     // one line at 320 dp and up (#615): the count gives way first, Close all is an icon with its name
     // for TalkBack, and the way back never wraps
@@ -405,9 +408,18 @@ fun OpenTabsBar(vm: AppViewModel, modifier: Modifier = Modifier) {
             color = c.text, fontSize = 14.sp, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f).padding(vertical = 10.dp),
         )
-        io.github.artcraftandroid.pdfcraft.ui.BarIcon(LucideIcons.X, closeAll, { vm.tabs.closeOthers() })
+        io.github.artcraftandroid.pdfcraft.ui.BarIcon(LucideIcons.X, closeAll, { vm.tabs.askedCloseAll(); asking = true })
         TextButton(onClick = { vm.tabs.resume() }) {
             Text(stringResource(R.string.tabs_resume), color = c.toolAccent, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, softWrap = false)
         }
+    }
+    if (asking) {
+        // how many, and what happens to them: nothing closes until the person says so
+        io.github.artcraftandroid.pdfcraft.ui.PdfDialog(
+            onDismiss = { asking = false },
+            title = androidx.compose.ui.res.pluralStringResource(R.plurals.tabs_close_all_title, count, count),
+            confirm = closeAll,
+            onConfirm = { asking = false; vm.tabs.closeAll() },
+        ) { Text(stringResource(R.string.tabs_close_all_body), color = c.text, fontSize = 14.sp) }
     }
 }

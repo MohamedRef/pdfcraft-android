@@ -20,4 +20,9 @@
         <item quantity="one">%1$d geöffnetes Dokument</item>
         <item quantity="other">%1$d geöffnete Dokumente</item>
     </plurals>
+    <plurals name="tabs_close_all_title">
+        <item quantity="one">%1$d geöffnetes Dokument schließen?</item>
+        <item quantity="other">%1$d geöffnete Dokumente schließen?</item>
+    </plurals>
+    <string name="tabs_close_all_body">Änderungen werden zuerst gespeichert. Du kannst die Dokumente unter „Zuletzt verwendet“ wieder öffnen.</string>
 </resources>

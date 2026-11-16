@@ -24,4 +24,13 @@
         <item quantity="many">%1$d مستندًا مفتوحًا</item>
         <item quantity="other">%1$d مستند مفتوح</item>
     </plurals>
+    <plurals name="tabs_close_all_title">
+        <item quantity="zero">إغلاق المستندات المفتوحة؟</item>
+        <item quantity="one">إغلاق المستند المفتوح؟</item>
+        <item quantity="two">إغلاق المستندين المفتوحين؟</item>
+        <item quantity="few">إغلاق %1$d مستندات مفتوحة؟</item>
+        <item quantity="many">إغلاق %1$d مستندًا مفتوحًا؟</item>
+        <item quantity="other">إغلاق %1$d مستند مفتوح؟</item>
+    </plurals>
+    <string name="tabs_close_all_body">تُحفظ التغييرات أولًا. يمكنك فتح المستندات مجددًا من «الأخيرة».</string>
 </resources>

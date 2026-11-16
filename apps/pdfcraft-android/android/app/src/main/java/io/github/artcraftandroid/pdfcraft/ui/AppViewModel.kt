@@ -185,7 +185,8 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
 
     /**
      * [text] names an edit just made to [doc], with an Undo button. The button undoes that edit
-     * only: once [doc] changes again the message goes, so it never undoes a later one (#618).
+     * only: once [doc] changes again the message goes, so it never undoes a later one (#618). Nor
+     * a stroke drawn since and not yet added, which Undo would take back first in Draw (#635).
      */
     fun tellUndoable(message: String, doc: OpenDocument) {
         val generation = doc.info.generation
@@ -193,7 +194,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         onMain {
             messageBoard.raise(
                 message, MessageKind.Notice, label, { undo(doc) }, owner = doc,
-                valid = { document === doc && doc.info.generation == generation },
+                valid = { undoButtonValid(document === doc, doc.info.generation == generation, doc.localUndo?.ownSteps?.invoke() == true) },
             )
         }
     }
@@ -204,6 +205,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             is MessageLog.Started -> Diag.event(DiagArea.App, "message_shown", "kind" to line.kind.diag)
             is MessageLog.Ended -> Diag.event(DiagArea.App, "message_ended", "kind" to line.kind.diag, "how" to line.how.diag, "ms" to line.ms, "updates" to line.updates)
             is MessageLog.Dropped -> Diag.event(DiagArea.App, "message_dropped", "kind" to line.kind.diag, "behind" to line.behind.diag)
+            is MessageLog.Held -> Diag.event(DiagArea.App, "message_held", "kind" to line.kind.diag)
         }
     }
 

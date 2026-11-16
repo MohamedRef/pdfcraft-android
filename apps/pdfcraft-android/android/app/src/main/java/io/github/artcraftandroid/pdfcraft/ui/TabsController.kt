@@ -220,6 +220,17 @@ class TabsController internal constructor(private val vm: AppViewModel) {
         tabs.filter { it.doc == null || it.doc !== vm.document }.forEach { close(it) }
     }
 
+    /** Home's bar: Close all was tapped, and the question is on screen (#636). Nothing closes yet. */
+    fun askedCloseAll() {
+        Diag.event(DiagArea.Viewer, "tab_close_all", "tabs" to tabs.size, "confirmed" to false)
+    }
+
+    /** Home's bar: the person said yes to Close all (#636). Each document is saved and closed. */
+    fun closeAll() {
+        Diag.event(DiagArea.Viewer, "tab_close_all", "tabs" to tabs.size, "confirmed" to true)
+        closeOthers()
+    }
+
     /** Go to Home to open another document, keeping this one open in its tab. */
     fun openAnother() {
         val current = vm.document ?: return
