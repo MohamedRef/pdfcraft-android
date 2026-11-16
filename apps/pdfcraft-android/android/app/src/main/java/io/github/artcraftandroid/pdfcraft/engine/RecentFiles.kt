@@ -24,6 +24,8 @@ data class RecentFile(
     val lastZoom: Float = 1f,
     /** How its pages were laid out ([io.github.artcraftandroid.pdfcraft.ui.viewer.ViewLayout]), to reopen the same way (#152); null: the app's. */
     val layout: String? = null,
+    /** The tablet's side panel as it was left, open or folded and on which tab (#659); null: never set. */
+    val panel: String? = null,
 )
 
 /**
@@ -40,7 +42,7 @@ class RecentFiles(private val file: File) {
         val merged = entry.copy(
             starred = old?.starred ?: entry.starred, reading = old?.reading ?: entry.reading,
             lastX = old?.lastX ?: entry.lastX, lastY = old?.lastY ?: entry.lastY, lastZoom = old?.lastZoom ?: entry.lastZoom,
-            layout = old?.layout ?: entry.layout,
+            layout = old?.layout ?: entry.layout, panel = old?.panel ?: entry.panel,
         )
         write(listOf(merged) + read().filter { it.uri != entry.uri })
     }
@@ -72,6 +74,7 @@ class RecentFiles(private val file: File) {
                     lastY = o.optDouble("lastY", -1.0).toFloat(),
                     lastZoom = o.optDouble("lastZoom", 1.0).toFloat(),
                     layout = o.optString("layout").ifEmpty { null },
+                    panel = o.optString("panel").ifEmpty { null },
                 )
             }
         }.getOrDefault(emptyList())
@@ -84,7 +87,7 @@ class RecentFiles(private val file: File) {
                 JSONObject().put("uri", r.uri).put("name", r.name).put("opened", r.opened).put("pages", r.pages)
                     .put("size", r.size).put("lastPage", r.lastPage).put("starred", r.starred).put("reading", r.reading)
                     .put("lastX", r.lastX.toDouble()).put("lastY", r.lastY.toDouble()).put("lastZoom", r.lastZoom.toDouble())
-                    .apply { r.layout?.let { put("layout", it) } },
+                    .apply { r.layout?.let { put("layout", it) }; r.panel?.let { put("panel", it) } },
             )
         }
         val tmp = File(file.parentFile, file.name + ".tmp")

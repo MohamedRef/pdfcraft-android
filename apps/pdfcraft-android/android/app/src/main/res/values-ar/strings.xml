@@ -1047,7 +1047,6 @@
     <string name="comments_loading">جارٍ تحميل التعليقات…</string>
     <string name="compact_previews">تقليل ذاكرة معاينات الصفحات</string>
     <string name="compact_previews_body">يقلل دقة ألوان الصفحة الكاملة مع الحفاظ على جودة التفاصيل عند التكبير. يُطبق عند إعادة فتح المستند.</string>
-    <string name="viewer_show_page_navigator">إظهار اللوحة الجانبية</string>
     <string name="viewer_hide_page_navigator">إخفاء اللوحة الجانبية</string>
     <string name="viewer_fit_width">ملاءمة العرض</string>
     <string name="sheet_export_embedded_bookmarks">صدّر إشارات PDF المرجعية إلى ملف</string>

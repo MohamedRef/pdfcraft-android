@@ -47,6 +47,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.github.artcraftandroid.pdfcraft.R
 import io.github.artcraftandroid.pdfcraft.ui.AppViewModel
+import io.github.artcraftandroid.pdfcraft.ui.BarDivider
 import io.github.artcraftandroid.pdfcraft.ui.LucideIcons
 import io.github.artcraftandroid.pdfcraft.ui.OpenDocument
 import io.github.artcraftandroid.pdfcraft.ui.pdfColors
@@ -83,11 +84,12 @@ internal fun activateDrawingPreset(ctl: ViewerController, prefs: ToolPrefs, inde
 }
 
 @Composable
-internal fun DrawToolbar(vm: AppViewModel, doc: OpenDocument) = DrawToolbarBar(doc.controller, vm.settings.toolPrefs)
+internal fun DrawToolbar(vm: AppViewModel, doc: OpenDocument) =
+    DrawToolbarBar(doc.controller, vm.settings.toolPrefs, onMarkup = { switchAnnotateTool(vm, doc, markup = it) })
 
 /** The Draw bar itself, from the viewer's state and the tool settings (laid out alone in tests). */
 @Composable
-internal fun DrawToolbarBar(ctl: ViewerController, prefs: ToolPrefs) {
+internal fun DrawToolbarBar(ctl: ViewerController, prefs: ToolPrefs, onMarkup: ((TextMarkup) -> Unit)? = null) {
     val c = pdfColors
     val color = prefs.color(StyledTool.Ink)
     val opacity = prefs.opacity(StyledTool.Ink)
@@ -96,7 +98,8 @@ internal fun DrawToolbarBar(ctl: ViewerController, prefs: ToolPrefs) {
     Column(Modifier.fillMaxWidth().height(DrawToolbarHeight).barTopLine().background(c.surface).palmGuardedTaps(ctl, prefs)) {
         // Seven primary tools. 7 * 48dp = 336dp; all are directly usable on normal phones.
         BoxWithConstraints(Modifier.fillMaxWidth().height(DrawRowHeight)) {
-            val contentWidth = maxOf(maxWidth, DrawToolSlot * 7)
+            // the four text markups follow the pens (#660); the row scrolls where they do not fit
+            val contentWidth = maxOf(maxWidth, DrawToolSlot * (if (onMarkup != null) 11 else 7) + (if (onMarkup != null) 9.dp else 0.dp))
             val pens = rememberScrollState()
             Box(Modifier.fillMaxSize().horizontalScroll(pens)) {
                 Row(
@@ -147,6 +150,35 @@ internal fun DrawToolbarBar(ctl: ViewerController, prefs: ToolPrefs) {
                             ctl.picker = Picker.None
                         },
                     ) { Icon(LucideIcons.Lasso, null, tint = if (ctl.lassoMode) c.toolAccent else c.icon, modifier = Modifier.size(24.dp)) }
+                    if (onMarkup != null) {
+                        // the text markups, one tap from the pens and back (#660): they mark the
+                        // text itself, unlike the free-hand highlighter pen above
+                        BarDivider(height = 30.dp)
+                        DrawToolbarButton(
+                            label = stringResource(R.string.common_tool_highlight),
+                            active = false,
+                            caption = stringResource(R.string.tool_caption_highlight),
+                            onClick = { onMarkup(TextMarkup.Highlight) },
+                        ) { Icon(LucideIcons.Highlighter, null, tint = c.icon, modifier = Modifier.size(24.dp)) }
+                        DrawToolbarButton(
+                            label = stringResource(R.string.common_tool_underline),
+                            active = false,
+                            caption = stringResource(R.string.tool_caption_underline),
+                            onClick = { onMarkup(TextMarkup.Underline) },
+                        ) { Icon(LucideIcons.Underline, null, tint = c.icon, modifier = Modifier.size(24.dp)) }
+                        DrawToolbarButton(
+                            label = stringResource(R.string.toolbar_strikethrough),
+                            active = false,
+                            caption = stringResource(R.string.tool_caption_strike),
+                            onClick = { onMarkup(TextMarkup.Strikethrough) },
+                        ) { Icon(LucideIcons.Strikethrough, null, tint = c.icon, modifier = Modifier.size(24.dp)) }
+                        DrawToolbarButton(
+                            label = stringResource(R.string.toolbar_squiggly),
+                            active = false,
+                            caption = stringResource(R.string.tool_caption_squiggly),
+                            onClick = { onMarkup(TextMarkup.Squiggly) },
+                        ) { Icon(io.github.artcraftandroid.pdfcraft.ui.PdfIcons.SquigglyUnderline, null, tint = c.icon, modifier = Modifier.size(24.dp)) }
+                    }
                 }
             }
             MoreToTheSide(pens)
