@@ -162,6 +162,8 @@ Every line carries `doc` (the document's number in the log).
 | `area_highlight` | `w_pt`, `h_pt` | A Highlight drag on a page with no text at all (a scan, a picture) highlighted the area instead (#134). Since #657 a page with text never gets one |
 | `markup_text` | `markup`, `letters`, `lines` | A drag with Highlight, Underline, Strikeout or Squiggly marked these letters, from the one where it began to the one where it ended (#657) |
 | `markup_unresolved` | `markup`, `reason`, `tap`, `page_glyphs` | A Highlight-tool tap or drag that marked no text (#657), and why: `no_start_letter` / `no_end_letter` (no letter near where it began or ended), `two_pages`, `too_long`, `no_lines` (the letters have no line boxes), `no_text` (the page has no letters; Underline, Strikeout and Squiggly then say so). A Highlight drag on a page with no letters logs `area_highlight` instead |
+| `annotate_switch` | `from`, `to` (`pen`, `eraser`, `lasso`, `highlight`, `underline`, `strikethrough`, `squiggly`) | One tap from Draw's bar to a text markup, or from Highlight's row back to the pens or the eraser (#660): whether the reader finds them |
+| `markup_erased` | `count` | The Draw eraser removed this many text markups whole, one undo step (#660) |
 | `text_suggestion` | `kind` (`replace`, `insert`), `lines` | A replace or insert suggestion on selected text (#133) |
 | `shape` | `type` (the shape mode, such as `arrow`, `cloud`, `polygon`), `points` | A drawn shape became its own annotation rather than ink (#170) |
 | `link` | `action` (`add`, `edit`, `delete`), `target` (`page`, `file`, `web`, `mail`), `from` (`box`, `lasso`) | A link was made, changed or removed, and how its area was chosen (#179 #334) |

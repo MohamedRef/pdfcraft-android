@@ -629,7 +629,10 @@ fun QuickColorDot(color: androidx.compose.ui.graphics.Color, name: String, selec
     }
 }
 
-/** The colour button of a sub-toolbar: a filled dot of the tool's colour. */
+/**
+ * The colour button of a sub-toolbar: a dot of the tool's colour inside a rainbow ring, so it is
+ * not taken for one more quick colour beside it (#660): it opens all colours and the opacity.
+ */
 @Composable
 fun ColorDot(color: androidx.compose.ui.graphics.Color, selected: Boolean, onClick: () -> Unit) {
     val c = pdfColors
@@ -639,9 +642,15 @@ fun ColorDot(color: androidx.compose.ui.graphics.Color, selected: Boolean, onCli
         contentAlignment = Alignment.Center,
     ) {
         if (selected) Box(Modifier.requiredSize(40.dp).background(c.pressed, androidx.compose.foundation.shape.RoundedCornerShape(5.dp)))
-        Box(Modifier.size(20.dp).background(color, androidx.compose.foundation.shape.CircleShape))
+        Box(Modifier.size(28.dp).border(3.dp, ColourButtonRing, androidx.compose.foundation.shape.CircleShape))
+        Box(Modifier.size(16.dp).background(color, androidx.compose.foundation.shape.CircleShape))
     }
 }
+
+/** The ring of the colour button: the hues around the circle. */
+private val ColourButtonRing = androidx.compose.ui.graphics.Brush.sweepGradient(
+    listOf(0xFFE52237, 0xFFFFD100, 0xFF6AD928, 0xFF38E5FF, 0xFF3B5BFF, 0xFFB03BFF, 0xFFE52237).map { androidx.compose.ui.graphics.Color(it) },
+)
 
 /** Whether the open document's changes are in its file (#190). */
 enum class SaveState { Saved, Saving, Unsaved, KeptInApp }

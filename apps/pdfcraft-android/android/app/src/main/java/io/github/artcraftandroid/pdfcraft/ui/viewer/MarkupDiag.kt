@@ -40,6 +40,10 @@ internal object MarkupDiag {
      */
     fun unresolved(doc: OpenDocument, markup: TextMarkup, reason: String, tap: Boolean, glyphs: Long) =
         e("markup_unresolved", doc, "markup" to markup.name.lowercase(), "reason" to reason, "tap" to tap, "page_glyphs" to glyphs)
+    /** One tap from the pens to a text markup or back (#660): the tool left and the tool taken (`pen`, `eraser`, `lasso`, `highlight`, …). */
+    fun toolSwitch(doc: OpenDocument, from: String, to: String) = e("annotate_switch", doc, "from" to from, "to" to to)
+    /** The Draw eraser removed this many text markups whole (#660). */
+    fun markupsErased(doc: OpenDocument, count: Int) = e("markup_erased", doc, "count" to count)
     fun areaHighlight(doc: OpenDocument, rect: FloatArray) = e("area_highlight", doc, "w_pt" to (rect[2] - rect[0]).toInt(), "h_pt" to (rect[3] - rect[1]).toInt())
     fun textEdit(doc: OpenDocument, kind: String, lines: Int) = e("text_suggestion", doc, "kind" to kind, "lines" to lines)
     fun shape(doc: OpenDocument, type: String, points: Int) = e("shape", doc, "type" to type, "points" to points)

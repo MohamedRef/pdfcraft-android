@@ -1039,6 +1039,13 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
     var liveErase by remember(doc) { mutableStateOf<LiveErase?>(null) }
     /** The drafts as they were when the eraser touched down: its undo step, or what a cancel puts back. */
     var eraseDraftsBefore by remember(doc) { mutableStateOf<List<InkStroke>?>(null) }
+    // The text markups on the eraser's page and those it has touched so far (#660): each goes
+    // whole on lift, one undo step, whatever "Erase whole strokes" says (a markup has no part).
+    var eraseMarkups by remember(doc) { mutableStateOf<List<ErasableMarkup>>(emptyList()) }
+    val eraseMarkupHits = remember(doc) { mutableSetOf<List<Any?>>() }
+    fun touchMarkups(a: Offset, b: Offset) {
+        for (m in eraseMarkups) if (m.key !in eraseMarkupHits && m.boxes.any { eraserTouchesBox(a, b, activeEraserRadius, it) }) eraseMarkupHits += m.key
+    }
     /** Where the lasso's action buttons are, in this layer; touches there are theirs, not the page's. */
     var lassoMenuBounds by remember(doc) { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
     val liveEraseScope = rememberCoroutineScope()
@@ -1175,6 +1182,9 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
         activeEraserRadius = prefs.eraserRadius
         activeEraseWhole = prefs.eraseWholeStrokes
         eraseDrafts(at.page, Offset(at.x, at.y), Offset(at.x, at.y))
+        eraseMarkupHits.clear()
+        eraseMarkups = erasableMarkups(doc.comments, at.page)
+        touchMarkups(Offset(at.x, at.y), Offset(at.x, at.y))
         eraserPage = at.page
         activeEraserRadius = prefs.eraserRadius
         eraserScreen = p
@@ -1190,7 +1200,10 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
         // Unclamped: an eraser that leaves the page is not dragged along its edge (#75).
         val at = doc.viewer.screenToPageUnclamped(page, p) ?: return
         eraserScreen = p
-        eraserPoints.lastOrNull()?.let { from -> eraseDrafts(page, from, Offset(at.x, at.y)) }
+        eraserPoints.lastOrNull()?.let { from ->
+            eraseDrafts(page, from, Offset(at.x, at.y))
+            touchMarkups(from, Offset(at.x, at.y))
+        }
         liveErase?.takeIf { it.region.page == page && it.liftedGen == null }?.add(Offset(at.x, at.y))
         appendEraserPoint(eraserPoints, Offset(at.x, at.y), activeEraserRadius)?.let { chunk ->
             // A very long gesture erases its finished part now; the rest follows on lift (#76).
@@ -1209,6 +1222,8 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
         eraserPage = null
         eraserScreen = null
         eraserPoints.clear()
+        eraseMarkupHits.clear()
+        eraseMarkups = emptyList()
     }
 
     fun finishErase(p: Offset) {
@@ -1226,6 +1241,13 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
             }
         }
         eraseDraftsBefore = null
+        // the text markups it touched go whole, before the ink: removing them first keeps the
+        // ink's indices, and the ink eraser finds its own (#660)
+        val markups = markupIndicesNow(doc.comments, page, eraseMarkupHits.toSet()).sortedDescending()
+        if (markups.isNotEmpty()) {
+            MarkupDiag.markupsErased(doc, markups.size)
+            documentEdit("comments_edit_many", mapOf("page" to page + 1, "comments" to markups.map { it + 1 }, "delete" to true))
+        }
         // the engine only has saved ink to erase, and ink still being saved
         val savedInk = erasableInk(doc.comments, page).isNotEmpty() || drafts.saving.any { it.page == page }
         // the live view stays until the edit's page is drawn (#521)
@@ -2223,6 +2245,33 @@ private fun MarkupLayer(vm: AppViewModel, doc: OpenDocument) {
 /** Which property picker a sub-toolbar has open. */
 enum class Picker { None, Color, Width, TextSize, Presets, PenStyle, EraserSize, Stamp, Shapes, Guides }
 
+/** What [annotateToolName] calls the tool in use, for the log line of a switch (#660). */
+internal fun annotateToolName(tool: ViewerTool, markup: TextMarkup, eraser: Boolean, lasso: Boolean): String = when (tool) {
+    ViewerTool.Markup -> markup.name.lowercase()
+    ViewerTool.Draw -> if (eraser) "eraser" else if (lasso) "lasso" else "pen"
+    else -> tool.name.lowercase()
+}
+
+/**
+ * From the pens to a text markup ([markup]) or back to the pens or the eraser ([eraser]) in one
+ * tap (#660), without Done: leaving Draw adds its strokes first, as Done does.
+ */
+internal fun switchAnnotateTool(vm: AppViewModel, doc: OpenDocument, markup: TextMarkup? = null, eraser: Boolean = false) {
+    val ctl = doc.controller
+    val from = annotateToolName(ctl.tool, ctl.markup, ctl.eraserMode, ctl.lassoMode)
+    val target = if (markup != null) ViewerTool.Markup else ViewerTool.Draw
+    if (ctl.tool != target) vm.enterTool(doc, target)
+    if (ctl.tool != target) return
+    if (markup != null) ctl.markup = markup
+    else {
+        ctl.eraserMode = eraser
+        ctl.lassoMode = false
+        ctl.inkShapeMode = InkShapeMode.Freehand
+    }
+    ctl.picker = Picker.None
+    MarkupDiag.toolSwitch(doc, from, annotateToolName(ctl.tool, ctl.markup, ctl.eraserMode, ctl.lassoMode))
+}
+
 /**
  * Highlight's row: the four text markups, each with its caption (#526), then the first [quick]
  * colours of [MARKUP_QUICK_COLORS] one tap away (#650) and the colour button, which opens all
@@ -2232,10 +2281,15 @@ enum class Picker { None, Color, Width, TextSize, Presets, PenStyle, EraserSize,
 internal fun MarkupSubTools(
     markup: TextMarkup, onMarkup: (TextMarkup) -> Unit, color: Color, colorOpen: Boolean,
     quick: Int = 0, onQuickColor: (Color) -> Unit = {},
+    // the pens and the eraser one tap away (#660); none in tests that lay out the row alone
+    onPen: (() -> Unit)? = null, onEraser: (() -> Unit)? = null,
     // last, so a trailing lambda is the colour button's, as it was before the quick colours came
     onColor: () -> Unit,
 ) {
     SubToolbar {
+        if (onPen != null) SubTool(LucideIcons.PenLine, stringResource(R.string.common_tool_draw), false, onPen, caption = stringResource(R.string.common_tool_draw))
+        if (onEraser != null) SubTool(LucideIcons.Eraser, stringResource(R.string.toolbar_eraser), false, onEraser, caption = stringResource(R.string.ink_toolbar_eraser))
+        if (onPen != null || onEraser != null) SubDivider()
         SubTool(LucideIcons.Highlighter, stringResource(R.string.common_tool_highlight), markup == TextMarkup.Highlight, { onMarkup(TextMarkup.Highlight) }, caption = stringResource(R.string.tool_caption_highlight))
         SubTool(LucideIcons.Underline, stringResource(R.string.common_tool_underline), markup == TextMarkup.Underline, { onMarkup(TextMarkup.Underline) }, caption = stringResource(R.string.tool_caption_underline))
         SubTool(LucideIcons.Strikethrough, stringResource(R.string.toolbar_strikethrough), markup == TextMarkup.Strikethrough, { onMarkup(TextMarkup.Strikethrough) }, caption = stringResource(R.string.tool_caption_strike))
@@ -2288,11 +2342,13 @@ fun ToolSubToolbar(vm: AppViewModel, doc: OpenDocument) {
     when (ctl.tool) {
         ViewerTool.Markup -> MarkupSubTools(
             ctl.markup, { ctl.markup = it }, prefs.color(ctl.markup.styled), picker == Picker.Color,
-            quick = markupQuickColorCount(androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp),
+            quick = markupQuickColorCount(androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp - MARKUP_ROW_SWITCH_DP),
             onQuickColor = {
                 MarkupDiag.quickColor(doc, ctl.markup)
                 prefs.setColor(ctl.markup.styled, it)
             },
+            onPen = { switchAnnotateTool(vm, doc) },
+            onEraser = { switchAnnotateTool(vm, doc, eraser = true) },
             onColor = { toggle(Picker.Color) },
         )
         ViewerTool.Draw -> DrawToolbar(vm, doc)

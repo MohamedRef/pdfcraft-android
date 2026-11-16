@@ -96,3 +96,56 @@ internal fun erasePathOnScreen(points: List<Offset>, toScreen: (Offset) -> Offse
     if (points.size == 1) toScreen(points[0]).let { path.lineTo(it.x + 0.01f, it.y) }
     return path
 }
+
+/** The PDF subtypes of the text markups (#660): Highlight, Underline, Strikethrough, Squiggly. */
+internal val TEXT_MARKUP_SUBTYPES = setOf("Highlight", "Underline", "StrikeOut", "Squiggly")
+
+/** A text markup the Draw eraser can remove: its index on the page and its line boxes (points). */
+internal class ErasableMarkup(val index: Int, val boxes: List<FloatArray>, val key: List<Any?> = emptyList())
+
+/** What tells a markup apart if the page's indices moved while the eraser was down (a long gesture erases ink in chunks). */
+internal fun markupKey(c: io.github.artcraftandroid.pdfcraft.core.CommentInfo): List<Any?> = listOf(c.subtype, c.name, c.rect.toList(), c.lines.toList())
+
+/** The indices on [page] now of the markups with [keys] (#660). */
+internal fun markupIndicesNow(comments: List<io.github.artcraftandroid.pdfcraft.core.CommentInfo>, page: Int, keys: Collection<List<Any?>>): List<Int> =
+    comments.filter { it.page.toInt() == page && markupKey(it) in keys }.map { it.index.toInt() }
+
+/**
+ * The text markups on [page] the Draw eraser removes whole when it touches one of their lines
+ * (#660): unlocked, shown, not Fill & Sign. Each line is its own box ([CommentInfo.lines]), so the
+ * blank end of a short line does not count; a markup with none uses its rectangle.
+ */
+internal fun erasableMarkups(comments: List<io.github.artcraftandroid.pdfcraft.core.CommentInfo>, page: Int): List<ErasableMarkup> =
+    comments.filter { it.page.toInt() == page && it.subtype in TEXT_MARKUP_SUBTYPES && !it.locked && !it.fillSign && !it.hidden }
+        .mapNotNull { c ->
+            val flat = c.lines.takeIf { it.size >= 4 && it.size % 4 == 0 } ?: c.rect.takeIf { it.size == 4 } ?: return@mapNotNull null
+            val boxes = flat.chunked(4).map { it.toFloatArray() }.filter { b -> b.all { it.isFinite() } && b[0] <= b[2] && b[1] <= b[3] }
+            if (boxes.isEmpty()) null else ErasableMarkup(c.index.toInt(), boxes, markupKey(c))
+        }
+
+/**
+ * Whether the eraser moving from [a] to [b] (page points), [radius] wide on each side, touches
+ * [box] (`x0, y0, x1, y1`): the segment meets the box grown by the radius.
+ */
+internal fun eraserTouchesBox(a: Offset, b: Offset, radius: Float, box: FloatArray): Boolean {
+    if (box.size < 4 || !radius.isFinite() || radius < 0f) return false
+    val x0 = box[0] - radius
+    val y0 = box[1] - radius
+    val x1 = box[2] + radius
+    val y1 = box[3] + radius
+    // Liang-Barsky: clip the segment to the grown box
+    var t0 = 0f
+    var t1 = 1f
+    val dx = b.x - a.x
+    val dy = b.y - a.y
+    for ((p, q) in listOf(-dx to a.x - x0, dx to x1 - a.x, -dy to a.y - y0, dy to y1 - a.y)) {
+        if (p == 0f) {
+            if (q < 0f) return false
+        } else {
+            val r = q / p
+            if (p < 0f) { if (r > t1) return false; if (r > t0) t0 = r }
+            else { if (r < t0) return false; if (r < t1) t1 = r }
+        }
+    }
+    return t0 <= t1
+}
