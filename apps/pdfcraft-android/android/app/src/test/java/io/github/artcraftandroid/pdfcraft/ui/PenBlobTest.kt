@@ -3,6 +3,7 @@ package io.github.artcraftandroid.pdfcraft.ui
 import androidx.compose.ui.geometry.Offset
 import io.github.artcraftandroid.pdfcraft.ui.viewer.InkSmoother
 import io.github.artcraftandroid.pdfcraft.ui.viewer.InkStyle
+import io.github.artcraftandroid.pdfcraft.ui.viewer.PEN_DOT_FILL_MS
 import io.github.artcraftandroid.pdfcraft.ui.viewer.PEN_MAX_TAPER_SLOPE
 import io.github.artcraftandroid.pdfcraft.ui.viewer.PEN_MAX_WIDTH_SLOPE
 import io.github.artcraftandroid.pdfcraft.ui.viewer.PEN_STILL_CREEP_DP_PER_S
@@ -51,7 +52,9 @@ class PenBlobTest {
                         // a tapered end may come to its point more steeply than the line's body changes
                         val inTaper = (dials.taperStart > 0f && along - step < dials.taperStart * penWidth) ||
                             (lifted && dials.taperEnd > 0f && length - along < minOf(dials.taperEnd * penWidth, length / 3f))
-                        val room = (if (inTaper) PEN_MAX_TAPER_SLOPE else PEN_MAX_WIDTH_SLOPE) * (step + PEN_STILL_CREEP_DP_PER_S * dt / dpPerPt)
+                        // a pen resting where it came down fills its dot in PEN_DOT_FILL_MS (#661): only inside the pointed start
+                        val filling = if (dials.taperStart > 0f && along - step < dials.taperStart * penWidth) dt * 1000f / PEN_DOT_FILL_MS * inkStylePointWidths(listOf(1f), penWidth, style).first() else 0f
+                        val room = (if (inTaper) PEN_MAX_TAPER_SLOPE else PEN_MAX_WIDTH_SLOPE) * (step + PEN_STILL_CREEP_DP_PER_S * dt / dpPerPt) + filling
                         assertTrue(
                             "$style $name finger=$finger pen=$penWidth at ${dpPerPt}dp/pt lifted=$lifted: width ${w[i - 1]} -> ${w[i]} over $step pt",
                             kotlin.math.abs(w[i] - w[i - 1]) <= room + 1e-3f,

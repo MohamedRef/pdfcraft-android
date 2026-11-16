@@ -55,6 +55,18 @@ class EndTaperPreviewTest {
         }
     }
 
+    @Test fun theLiftDoesNotMakeADotGrow() {
+        // #661: the sheet's full stop (60 ms) with the owner's pens, 13.8 and 15.2 pt, and a fine one
+        for (style in pointed) for (finger in listOf(false, true)) for ((dpPerPt, pen) in listOf(0.65f to 13.8f, 0.65f to 15.2f, 1.5f to 2f)) {
+            val line = PenSheet.draw(style, PenSheet.strokes(finger, dpPerPt).getValue("dot"), finger, pen, dpPerPt, hand)
+            val down = line.downWidths.max()
+            val lifted = line.widths.max()
+            // within a tenth: the very last sample is not a point of the line until the lift (it was five times before)
+            assertTrue("$style finger=$finger, $pen pt: the dot is $down pt with the pen down and $lifted pt lifted", kotlin.math.abs(lifted - down) < maxOf(0.1f, lifted * 0.12f))
+            assertEquals(line.widths.max(), line.widths.min(), 1e-4f)
+        }
+    }
+
     @Test fun withoutThePreviewTheLiftDidChangeTheEnd() {
         // what the issue measured: the line drawn at its full width to the end, then tapered on lift
         val line = PenSheet.draw(InkStyle.Fountain, PenSheet.strokes(false, 0.61f).getValue("word"), false, 1.5f, 0.61f, hand)
