@@ -36,7 +36,9 @@ class PenBlobTest {
     @Test fun theWidthNeverJumpsAlongTheLine() {
         for (style in varying) for (finger in listOf(false, true)) for (penWidth in listOf(1.5f, 13.8f)) for (dpPerPt in listOf(0.61f, 1.5f)) {
             for ((name, stroke) in PenSheet.strokes(finger, dpPerPt)) {
-                val line = PenSheet.draw(style, stroke, finger, penWidth, dpPerPt, hand)
+                // every sample kept: the bound is on the path the pen took, which a thinned line's
+                // straight pieces cut short where the path doubles back
+                val line = PenSheet.draw(style, stroke, finger, penWidth, dpPerPt, hand, spacingDp = 0f)
                 for (lifted in listOf(false, true)) {
                     val w = if (lifted) line.widths else line.live
                     val dials = PenDials.default(style)
