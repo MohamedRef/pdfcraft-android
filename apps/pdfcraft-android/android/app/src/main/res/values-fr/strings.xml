@@ -639,6 +639,7 @@
     <string name="sheet_no_contents">Ce document n\'a pas de table des matières.</string>
     <string name="sheet_up_level">Niveau supérieur</string>
     <string name="sheet_expand_entry">Développer %1$s</string>
+    <string name="sheet_collapse_entry">Réduire %1$s</string>
     <string name="sheet_bookmarks_empty">Vos signets apparaissent ici.</string>
     <string name="sheet_add_a_bookmark">Ajouter un signet</string>
     <string name="sheet_bookmark_name_invalid">Ce nom ne peut pas être utilisé.</string>
@@ -1131,8 +1132,8 @@
     <string name="home_diagnostics_empty">Aucun diagnostic pour l’instant : activez l’option puis utilisez l’app.</string>
     <string name="home_diagnostics_subject">Journal de diagnostic PdfCraft</string>
     <string name="home_diagnostics_cleared">Journal de diagnostic effacé</string>
-    <string name="viewer_show_page_navigator">Afficher le navigateur de pages</string>
-    <string name="viewer_hide_page_navigator">Masquer le navigateur de pages</string>
+    <string name="viewer_show_page_navigator">Afficher le panneau latéral</string>
+    <string name="viewer_hide_page_navigator">Masquer le panneau latéral</string>
     <string name="viewer_fit_width">Ajuster à la largeur</string>
     <string name="file_details_title">Détails du fichier</string>
     <string name="file_details_copy_all">Copier tous les détails</string>

@@ -136,7 +136,7 @@ fun MoreSheet(vm: AppViewModel, doc: OpenDocument) {
             // View changes how the document is seen; finding your way, Pages and another
             // document are Navigate's, the study tools have their own group (#526)
             MoreHeading(stringResource(R.string.sheet_group_navigate))
-            SheetRow(LucideIcons.Bookmark, stringResource(R.string.sheet_bookmarks_contents), { ctl.sheet = ViewerSheet.Bookmarks }, chevron = true)
+            SheetRow(LucideIcons.Bookmark, stringResource(R.string.sheet_bookmarks_contents), { openContents(doc, "menu") }, chevron = true)
             SheetRow(
                 if (bookmarked) LucideIcons.BookmarkMinus else LucideIcons.BookmarkPlus,
                 stringResource(if (bookmarked) R.string.sheet_remove_bookmark else R.string.sheet_add_bookmark),
@@ -172,6 +172,10 @@ fun MoreSheet(vm: AppViewModel, doc: OpenDocument) {
             MoreHeading(stringResource(R.string.sheet_group_file))
             // the document's category, one tap here (#560)
             doc.source?.let { src -> io.github.artcraftandroid.pdfcraft.ui.home.CategoryChooser(vm, src.toString(), doc.info.name, "viewer_sheet") }
+            // on a narrow window the top bar gives Share's place to Contents (#647): Share is here
+            if (!topBarHoldsShare(androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp)) {
+                SheetRow(LucideIcons.Share2, stringResource(R.string.common_share), { ctl.sheet = ViewerSheet.Share })
+            }
             SheetRow(LucideIcons.Copy, stringResource(R.string.common_save_copy), { close(); vm.sharing.saveCopyAs(doc) })
             if (vm.backups.backupTree != null) SheetRow(LucideIcons.RotateCcw, stringResource(R.string.backup_history), { ctl.sheet = ViewerSheet.Backups }, chevron = true)
             SheetRow(LucideIcons.GitCompare, stringResource(R.string.compare_with_older), { close(); vm.startCompare(doc) })
@@ -309,161 +313,176 @@ private fun ReadingColorsPicker(current: ReadingColors, enabled: Boolean, onPick
     }
 }
 
-/** Bookmarks & Table of Contents: the outline, one level at a time, and the reader's own bookmarks. */
+/**
+ * Bookmarks & Table of Contents: the outline as a tree that opens in place, and the reader's own
+ * bookmarks (#647). The tab last used comes back; the back arrow closes the sheet when the
+ * reading page opened it, and goes to More when More did.
+ */
 @Composable
 fun BookmarksSheet(vm: AppViewModel, doc: OpenDocument) {
-    val c = pdfColors
     val ctl = doc.controller
-    var outline by remember { mutableStateOf<List<OutlineEntry>?>(null) }
-    LaunchedEffect(doc.info.generation) { outline = vm.outline(doc) }
+    val outline = outlineOf(vm, doc)
     val hasOutline = doc.info.hasOutline
-    var tab by remember { mutableStateOf(if (hasOutline) 0 else 1) }
-    // the outline level shown: the index of its parent entry (-1: the top level)
-    var parent by remember { mutableStateOf(-1) }
-    var renaming by remember { mutableStateOf<Int?>(null) }
+    val tab = ctl.contentsTab?.takeIf { it != ContentsTab.Pages } ?: if (hasOutline) ContentsTab.Contents else ContentsTab.Bookmarks
+    val go: (Int) -> Unit = { page ->
+        ctl.rememberJump(doc.viewer)
+        doc.viewer.goToPage(page)
+        ctl.sheet = ViewerSheet.None
+    }
     PdfSheet(onDismiss = { ctl.sheet = ViewerSheet.None }, maxHeightFraction = 0.69f, fill = true) {
-        // contents tools stay out of the reader's way, in the header's overflow menu (#204)
-        val locked = !doc.writable || doc.info.signed || doc.info.readOnlyReason != null
-        val headingsLocked = locked || !doc.info.allowsCopying || !doc.info.allowsAssembly
-        var manage by remember { mutableStateOf(false) }
-        SheetBackHeader(stringResource(R.string.sheet_bookmarks_contents), onBack = { ctl.sheet = ViewerSheet.More }, trailing = if (tab != 0) null else ({
-            Box {
-                BarIcon(LucideIcons.EllipsisVertical, stringResource(R.string.sheet_contents_manage), { manage = true })
-                androidx.compose.material3.DropdownMenu(expanded = manage, onDismissRequest = { manage = false }, containerColor = c.menu) {
-                    @Composable
-                    fun item(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, enabled: Boolean, onClick: () -> Unit) =
-                        androidx.compose.material3.DropdownMenuItem(
-                            text = { Text(label, color = if (enabled) c.text else c.textTertiary) },
-                            leadingIcon = { Icon(icon, null, tint = if (enabled) c.icon else c.textTertiary) },
-                            enabled = enabled,
-                            onClick = { manage = false; onClick() },
-                        )
-                    item(LucideIcons.SquarePen, stringResource(R.string.contents_edit_title), !locked) { ctl.sheet = ViewerSheet.EditContents }
-                    item(LucideIcons.ListTree, stringResource(R.string.sheet_contents_from_headings), !headingsLocked) { ctl.sheet = ViewerSheet.TextStyles }
-                    if (doc.info.tagged) item(LucideIcons.Heading, stringResource(R.string.contents_from_tags), !locked) { vm.docTools.editBookmark(doc, "bookmark_from_structure", null) }
-                    item(LucideIcons.Copy, stringResource(R.string.sheet_contents_copy_from_pdf), !locked) { vm.tools.pickEmbeddedBookmarksCopy(doc) }
-                    if (hasOutline) item(LucideIcons.FileOutput, stringResource(R.string.sheet_contents_backup), true) { vm.tools.exportEmbeddedBookmarks(doc) }
-                    item(LucideIcons.FileInput, stringResource(R.string.sheet_contents_restore), !locked) { vm.tools.pickEmbeddedBookmarksImport(doc) }
-                    if (locked) Text(
-                        stringResource(R.string.sheet_contents_locked), color = c.textSecondary, fontSize = 13.sp,
-                        modifier = Modifier.widthIn(max = 280.dp).padding(horizontal = 16.dp, vertical = 8.dp),
-                    )
-                }
-            }
-        }))
-        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
-            listOf(stringResource(R.string.sheet_tab_contents), stringResource(R.string.sheet_tab_bookmarks)).forEachIndexed { i, label ->
-                Column(
-                    Modifier.weight(1f).clickable(role = Role.Tab) { tab = i }.padding(top = 8.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                ) {
-                    Text(label, color = if (tab == i) c.text else c.textSecondary, fontSize = 15.sp, fontWeight = if (tab == i) FontWeight.SemiBold else FontWeight.Normal)
-                    Spacer(Modifier.height(8.dp))
-                    Box(Modifier.fillMaxWidth().height(2.dp).background(if (tab == i) c.accent else Color.Transparent))
-                }
-            }
-        }
+        SheetBackHeader(
+            stringResource(R.string.sheet_bookmarks_contents), onBack = { ctl.sheet = ctl.bookmarksBack },
+            trailing = if (tab != ContentsTab.Contents) null else ({ ContentsManageMenu(vm, doc) }),
+        )
+        ContentsTabs(listOf(ContentsTab.Contents, ContentsTab.Bookmarks), tab, onChoose = { ctl.contentsTab = it })
         SheetDivider(inset = 0.dp)
-        if (tab == 0) {
-            val all = outline
-            when {
-                all == null -> Text("…", color = c.textSecondary, modifier = Modifier.padding(20.dp))
-                all.isEmpty() -> Column(Modifier.padding(20.dp)) {
-                    Text(stringResource(R.string.sheet_no_contents), color = c.textSecondary, fontSize = 15.sp)
-                    // with no contents yet, building them is the one useful thing to offer here
-                    if (!headingsLocked) Text(
-                        stringResource(R.string.sheet_contents_from_headings), color = c.accent, fontSize = 15.sp, fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier.padding(top = 12.dp).clickable(role = Role.Button) { ctl.sheet = ViewerSheet.TextStyles }.padding(vertical = 8.dp),
-                    )
-                }
-                else -> {
-                    val level = if (parent < 0) 0u else all[parent].level + 1u
-                    val start = parent + 1
-                    // the entries of this level under `parent`: until the level rises back above it
-                    val entries = buildList {
-                        var i = start
-                        while (i < all.size) {
-                            val e = all[i]
-                            if (e.level < level) break
-                            if (e.level == level) add(i)
-                            i++
-                        }
-                    }
-                    LazyColumn(Modifier.weight(1f)) {
-                        if (parent >= 0) {
-                            item {
-                                Row(Modifier.fillMaxWidth().clickable { parent = parentOf(all, parent) }.padding(horizontal = 12.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(LucideIcons.ArrowLeft, stringResource(R.string.sheet_up_level), tint = c.icon, modifier = Modifier.size(22.dp))
-                                    Spacer(Modifier.width(16.dp))
-                                    Text(all[parent].title, color = c.text, fontWeight = FontWeight.SemiBold, fontSize = 16.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                                }
-                            }
-                        }
-                        items(entries) { i ->
-                            val e = all[i]
-                            Row(
-                                Modifier.fillMaxWidth().clickable {
-                                    e.page?.let { p ->
-                                        ctl.rememberJump(doc.viewer)
-                                        doc.viewer.goToPage(p.toInt())
-                                        ctl.sheet = ViewerSheet.None
-                                    }
-                                }.padding(start = 20.dp, end = 4.dp).heightIn(min = 48.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Text(e.title, color = c.text, fontSize = 16.sp, modifier = Modifier.weight(1f).padding(vertical = 10.dp), maxLines = 3, overflow = TextOverflow.Ellipsis)
-                                if (e.children > 0u) BarIcon(LucideIcons.ChevronRight, stringResource(R.string.sheet_expand_entry, e.title), { parent = i })
-                            }
-                        }
-                    }
-                }
-            }
-        } else {
-            val list = vm.settings.bookmarks.list(doc)
-            if (list.isEmpty()) {
-                Column(Modifier.fillMaxWidth().padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(LucideIcons.Bookmark, null, tint = c.textSecondary, modifier = Modifier.size(40.dp))
-                    Spacer(Modifier.height(12.dp))
-                    Text(stringResource(R.string.sheet_bookmarks_empty), color = c.text, fontSize = 15.sp)
-                    Spacer(Modifier.height(16.dp))
-                    Text(stringResource(R.string.sheet_add_a_bookmark), color = c.accent, fontSize = 15.sp, fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier.clickable { vm.settings.toggleBookmark(doc) }.padding(8.dp))
-                }
-            } else {
-                LazyColumn(Modifier.weight(1f)) {
-                    items(list.size) { i ->
-                        val b = list[i]
-                        UserBookmarkRow(
-                            name = b.name,
-                            page = b.page,
-                            renaming = renaming == i,
-                            onOpen = {
-                                ctl.rememberJump(doc.viewer)
-                                doc.viewer.goToPage(b.page)
-                                ctl.sheet = ViewerSheet.None
-                            },
-                            onRename = { renaming = i },
-                            onRenamed = { name ->
-                                renaming = null
-                                if (name.isBlank()) vm.fail(text(R.string.sheet_bookmark_name_invalid)) else vm.settings.bookmarks.rename(doc, b, name.trim())
-                            },
-                            onDelete = { vm.settings.bookmarks.remove(doc, b); vm.tell(text(R.string.sheet_bookmark_removed, b.name)) },
-                            onDeleteAll = { vm.settings.confirmDeleteAllBookmarks = doc },
-                        )
-                    }
-                }
-            }
-        }
+        if (tab == ContentsTab.Contents) ContentsTabBody(vm, doc, outline, Modifier.weight(1f), go) else BookmarksTabBody(vm, doc, Modifier.weight(1f), go)
         Spacer(Modifier.height(8.dp))
     }
 }
 
-private fun parentOf(all: List<OutlineEntry>, i: Int): Int {
-    val level = all[i].level
-    if (level == 0u) return -1
-    var k = i - 1
-    while (k >= 0 && all[k].level >= level) k--
-    return k
+/** The tabs over the contents: the chosen one in the text colour with the accent's line under it. */
+@Composable
+internal fun ContentsTabs(tabs: List<ContentsTab>, chosen: ContentsTab, icons: Boolean = false, onChoose: (ContentsTab) -> Unit) {
+    val c = pdfColors
+    Row(Modifier.fillMaxWidth().padding(horizontal = if (icons) 4.dp else 16.dp)) {
+        for (t in tabs) {
+            val label = stringResource(
+                when (t) {
+                    ContentsTab.Contents -> R.string.sheet_tab_contents
+                    ContentsTab.Bookmarks -> R.string.sheet_tab_bookmarks
+                    ContentsTab.Pages -> R.string.pages_title
+                },
+            )
+            Column(
+                Modifier.weight(1f).clickable(role = Role.Tab) { onChoose(t) }
+                    .semantics { selected = chosen == t; if (icons) contentDescription = label }
+                    .heightIn(min = 48.dp).padding(top = 8.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Bottom,
+            ) {
+                // the narrow side panel names its tabs by icon, so three fit in any language; the sheet has room for the words
+                if (icons) {
+                    val icon = when (t) {
+                        ContentsTab.Contents -> LucideIcons.List
+                        ContentsTab.Bookmarks -> LucideIcons.Bookmark
+                        ContentsTab.Pages -> LucideIcons.LayoutGrid
+                    }
+                    Icon(icon, null, tint = if (chosen == t) c.accent else c.icon, modifier = Modifier.size(22.dp))
+                } else {
+                    Text(
+                        label, color = if (chosen == t) c.text else c.textSecondary, fontSize = 15.sp,
+                        fontWeight = if (chosen == t) FontWeight.SemiBold else FontWeight.Normal, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                Spacer(Modifier.height(8.dp))
+                Box(Modifier.fillMaxWidth().height(2.dp).background(if (chosen == t) c.accent else Color.Transparent))
+            }
+        }
+    }
+}
+
+/** Whether the document's contents can be changed, and whether they can be made from its headings. */
+private fun contentsLocked(doc: OpenDocument): Pair<Boolean, Boolean> {
+    val locked = !doc.writable || doc.info.signed || doc.info.readOnlyReason != null
+    return locked to (locked || !doc.info.allowsCopying || !doc.info.allowsAssembly)
+}
+
+/** The contents' tools, out of the reader's way in the header's overflow menu (#204). */
+@Composable
+internal fun ContentsManageMenu(vm: AppViewModel, doc: OpenDocument) {
+    val c = pdfColors
+    val ctl = doc.controller
+    val (locked, headingsLocked) = contentsLocked(doc)
+    var manage by remember { mutableStateOf(false) }
+    Box {
+        BarIcon(LucideIcons.EllipsisVertical, stringResource(R.string.sheet_contents_manage), { manage = true })
+        androidx.compose.material3.DropdownMenu(expanded = manage, onDismissRequest = { manage = false }, containerColor = c.menu) {
+            @Composable
+            fun item(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, enabled: Boolean, onClick: () -> Unit) =
+                androidx.compose.material3.DropdownMenuItem(
+                    text = { Text(label, color = if (enabled) c.text else c.textTertiary) },
+                    leadingIcon = { Icon(icon, null, tint = if (enabled) c.icon else c.textTertiary) },
+                    enabled = enabled,
+                    onClick = { manage = false; onClick() },
+                )
+            item(LucideIcons.SquarePen, stringResource(R.string.contents_edit_title), !locked) { ctl.sheet = ViewerSheet.EditContents }
+            item(LucideIcons.ListTree, stringResource(R.string.sheet_contents_from_headings), !headingsLocked) { ctl.sheet = ViewerSheet.TextStyles }
+            if (doc.info.tagged) item(LucideIcons.Heading, stringResource(R.string.contents_from_tags), !locked) { vm.docTools.editBookmark(doc, "bookmark_from_structure", null) }
+            item(LucideIcons.Copy, stringResource(R.string.sheet_contents_copy_from_pdf), !locked) { vm.tools.pickEmbeddedBookmarksCopy(doc) }
+            if (doc.info.hasOutline) item(LucideIcons.FileOutput, stringResource(R.string.sheet_contents_backup), true) { vm.tools.exportEmbeddedBookmarks(doc) }
+            item(LucideIcons.FileInput, stringResource(R.string.sheet_contents_restore), !locked) { vm.tools.pickEmbeddedBookmarksImport(doc) }
+            if (locked) Text(
+                stringResource(R.string.sheet_contents_locked), color = c.textSecondary, fontSize = 13.sp,
+                modifier = Modifier.widthIn(max = 280.dp).padding(horizontal = 16.dp, vertical = 8.dp),
+            )
+        }
+    }
+}
+
+/** The Contents tab: the outline once it is read, or what to do when the file has none. */
+@Composable
+internal fun ContentsTabBody(vm: AppViewModel, doc: OpenDocument, outline: List<OutlineEntry>?, modifier: Modifier = Modifier, onOpen: (Int) -> Unit) {
+    val c = pdfColors
+    val ctl = doc.controller
+    val headingsLocked = contentsLocked(doc).second
+    when {
+        outline == null -> Text("…", color = c.textSecondary, modifier = Modifier.padding(20.dp))
+        outline.isEmpty() -> Column(Modifier.padding(20.dp)) {
+            Text(stringResource(R.string.sheet_no_contents), color = c.textSecondary, fontSize = 15.sp)
+            // with no contents yet, building them is the one useful thing to offer here
+            if (!headingsLocked) Text(
+                stringResource(R.string.sheet_contents_from_headings), color = c.accent, fontSize = 15.sp, fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.padding(top = 12.dp).clickable(role = Role.Button) { ctl.sheet = ViewerSheet.TextStyles }.padding(vertical = 8.dp),
+            )
+        }
+        else -> ContentsList(doc, outline, modifier, onOpen)
+    }
+}
+
+/** The Bookmarks tab: this page's bookmark, one tap to add or remove, then the reader's bookmarks. */
+@Composable
+internal fun BookmarksTabBody(vm: AppViewModel, doc: OpenDocument, modifier: Modifier = Modifier, onOpen: (Int) -> Unit) {
+    val c = pdfColors
+    val list = vm.settings.bookmarks.list(doc)
+    var renaming by remember { mutableStateOf<Int?>(null) }
+    val here = vm.settings.bookmarks.isBookmarked(doc, doc.viewer.currentPage)
+    // the page in view, bookmarked or not, from where the list is (#647)
+    Row(
+        Modifier.fillMaxWidth().clickable(role = Role.Button) { vm.settings.toggleBookmark(doc) }.padding(start = 20.dp, end = 16.dp).heightIn(min = 52.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(if (here) LucideIcons.BookmarkMinus else LucideIcons.BookmarkPlus, null, tint = c.accent, modifier = Modifier.size(20.dp))
+        Spacer(Modifier.width(16.dp))
+        Text(stringResource(if (here) R.string.sheet_remove_bookmark else R.string.sheet_add_bookmark), color = c.accent, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+    }
+    SheetDivider(inset = 0.dp)
+    if (list.isEmpty()) {
+        Column(Modifier.fillMaxWidth().padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            Icon(LucideIcons.Bookmark, null, tint = c.textSecondary, modifier = Modifier.size(40.dp))
+            Spacer(Modifier.height(12.dp))
+            Text(stringResource(R.string.sheet_bookmarks_empty), color = c.text, fontSize = 15.sp, textAlign = TextAlign.Center)
+        }
+    } else {
+        LazyColumn(modifier) {
+            items(list.size) { i ->
+                val b = list[i]
+                UserBookmarkRow(
+                    name = b.name,
+                    page = b.page,
+                    renaming = renaming == i,
+                    onOpen = { onOpen(b.page) },
+                    onRename = { renaming = i },
+                    onRenamed = { name ->
+                        renaming = null
+                        if (name.isBlank()) vm.fail(text(R.string.sheet_bookmark_name_invalid)) else vm.settings.bookmarks.rename(doc, b, name.trim())
+                    },
+                    onDelete = { vm.settings.bookmarks.remove(doc, b); vm.tell(text(R.string.sheet_bookmark_removed, b.name)) },
+                    onDeleteAll = { vm.settings.confirmDeleteAllBookmarks = doc },
+                )
+            }
+        }
+    }
 }
 
 @Composable

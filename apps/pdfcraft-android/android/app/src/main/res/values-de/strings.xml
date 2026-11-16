@@ -692,6 +692,7 @@
     <string name="sheet_up_level">Eine Ebene nach oben</string>
     <!-- Translator note: accessibility label. %1$s is the title of an entry in the table of contents -->
     <string name="sheet_expand_entry">%1$s aufklappen</string>
+    <string name="sheet_collapse_entry">%1$s zuklappen</string>
     <string name="sheet_bookmarks_empty">Deine Lesezeichen werden hier angezeigt.</string>
     <string name="sheet_add_a_bookmark">Lesezeichen hinzufügen</string>
     <string name="sheet_bookmark_name_invalid">Dieser Name kann nicht verwendet werden.</string>
@@ -1251,8 +1252,8 @@
     <string name="home_diagnostics_empty">Noch keine Diagnose: Einschalten und dann die App verwenden.</string>
     <string name="home_diagnostics_subject">PdfCraft-Diagnoseprotokoll</string>
     <string name="home_diagnostics_cleared">Diagnoseprotokoll gelöscht</string>
-    <string name="viewer_show_page_navigator">Seitennavigation einblenden</string>
-    <string name="viewer_hide_page_navigator">Seitennavigation ausblenden</string>
+    <string name="viewer_show_page_navigator">Seitenleiste einblenden</string>
+    <string name="viewer_hide_page_navigator">Seitenleiste ausblenden</string>
     <string name="viewer_fit_width">An Breite anpassen</string>
     <string name="file_details_title">Dateidetails</string>
     <string name="file_details_copy_all">Alle Details kopieren</string>

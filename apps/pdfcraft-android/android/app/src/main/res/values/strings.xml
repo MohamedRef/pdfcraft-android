@@ -522,8 +522,8 @@
     <string name="viewer_add_comment">Add comment</string>
     <string name="viewer_strikethrough">Strikethrough</string>
     <string name="viewer_edit_text">Edit text</string>
-    <string name="viewer_show_page_navigator">Show page navigator</string>
-    <string name="viewer_hide_page_navigator">Hide page navigator</string>
+    <string name="viewer_show_page_navigator">Show side panel</string>
+    <string name="viewer_hide_page_navigator">Hide side panel</string>
     <string name="viewer_fit_width">Fit width</string>
     <string name="viewer_zoom_in">Zoom in</string>
     <string name="viewer_zoom_out">Zoom out</string>
@@ -1019,6 +1019,7 @@
     <string name="sheet_up_level">Up a level</string>
     <!-- Translator note: accessibility label. %1$s is the title of an entry in the table of contents -->
     <string name="sheet_expand_entry">Expand %1$s</string>
+    <string name="sheet_collapse_entry">Collapse %1$s</string>
     <string name="sheet_bookmarks_empty">Your bookmarks show up here.</string>
     <string name="sheet_add_a_bookmark">Add a bookmark</string>
     <string name="sheet_bookmark_name_invalid">That name can\'t be used.</string>

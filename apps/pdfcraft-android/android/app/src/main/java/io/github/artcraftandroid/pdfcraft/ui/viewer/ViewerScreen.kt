@@ -532,6 +532,15 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
                             onSaveState = { vm.saveNow(doc) },
                             docName = doc.title,
                             onDocName = { selection.clear(); ctl.fileDetailsBack = ViewerSheet.None; ctl.sheet = ViewerSheet.FileDetails },
+                            // Reading Mode keeps its bare bar, as it has no search
+                            onContents = if (vm.settings.readingMode) null else ({
+                                selection.clear()
+                                if (ctl.sheet == ViewerSheet.Bookmarks) ctl.sheet = ViewerSheet.None
+                                else if (ctl.contentsInPanel && ctl.panelOpen && ctl.contentsTab?.let { it != ContentsTab.Pages } == true) ctl.panelOpen = false
+                                else openContents(doc, "button")
+                            }),
+                            contentsOpen = ctl.sheet == ViewerSheet.Bookmarks,
+                            showShare = topBarHoldsShare(config.screenWidthDp),
                         )
                 }
                 }
