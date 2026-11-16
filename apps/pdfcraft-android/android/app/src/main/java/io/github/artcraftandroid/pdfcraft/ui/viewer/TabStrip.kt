@@ -6,7 +6,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.gestures.rememberDraggableState
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -24,7 +23,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -42,6 +40,7 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -83,26 +82,44 @@ val TabStripHeight = 40.dp
 /** Whether [vm] shows the tab strip for its document. */
 fun showTabStrip(vm: AppViewModel): Boolean = vm.tabs.tabs.size > 1
 
+/** The button on the strip that shows every open document as cards, for layout tests (#669). */
+const val TAB_COUNT_TAG = "tab_count"
+
 /**
- * The open documents as tabs (#138): tap one to bring it to the front with its page, zoom and
- * tool, × to close it (saved first, as Back does), + to open another from Home, and the split
- * button to show another open document beside this one (#139).
+ * The open documents as tabs (#138): first the number of them, which shows them all as cards
+ * (#669); then a chip each, tap one to bring it to the front with its page, zoom and tool, × to
+ * close it (saved first, as Back does); + to open another from Home, and the split button to
+ * show another open document beside this one (#139). The chip of the document in front is
+ * brought into view: with many open it would sit past the strip's end.
  */
 @Composable
 fun TabStrip(vm: AppViewModel, doc: OpenDocument) {
     val c = pdfColors
     val tabs = vm.tabs.tabs
-    val scroll = rememberScrollState()
+    val list = androidx.compose.foundation.lazy.rememberLazyListState()
+    val front = tabs.indexOfFirst { it.doc != null && it.doc === doc }
+    LaunchedEffect(front, tabs.size) {
+        if (front < 0) return@LaunchedEffect
+        val info = list.layoutInfo
+        val chip = info.visibleItemsInfo.firstOrNull { it.index == front }
+        val whole = chip != null && chip.offset >= info.viewportStartOffset && chip.offset + chip.size <= info.viewportEndOffset
+        if (!whole) list.animateScrollToItem(front)
+    }
     Row(
-        Modifier.fillMaxWidth().height(TabStripHeight).background(c.surface).padding(start = 8.dp),
+        Modifier.fillMaxWidth().height(TabStripHeight).background(c.surface),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Row(
-            Modifier.weight(1f).horizontalScroll(scroll),
+        TabCountButton(tabs.size, stringResource(R.string.tabs_show_all), Modifier.testTag(TAB_COUNT_TAG), size = 40.dp) { vm.tabs.showOverview("strip") }
+        androidx.compose.foundation.lazy.LazyRow(
+            Modifier.weight(1f),
+            state = list,
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            for (tab in tabs) TabChip(vm, tab, active = tab.doc != null && tab.doc === doc)
+            // the place is part of the key: a list must never hold two equal keys, whatever the tabs' own are
+            items(tabs.size, key = { "$it:${tabs.getOrNull(it)?.key}" }) { i ->
+                tabs.getOrNull(i)?.let { tab -> TabChip(vm, tab, active = tab.doc != null && tab.doc === doc) }
+            }
         }
         BarIcon(LucideIcons.Plus, stringResource(R.string.tabs_open_another), { vm.tabs.openAnother() }, size = 40.dp, iconSize = 20.dp)
         SplitButton(vm)
@@ -403,10 +420,13 @@ fun OpenTabsBar(vm: AppViewModel, modifier: Modifier = Modifier) {
             .padding(start = 14.dp, end = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        // the count shows them all as cards (#669)
         Text(
             androidx.compose.ui.res.pluralStringResource(R.plurals.tabs_open_count, count, count),
             color = c.text, fontSize = 14.sp, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f).padding(vertical = 10.dp),
+            modifier = Modifier.weight(1f)
+                .clickable(role = Role.Button, onClickLabel = stringResource(R.string.tabs_show_all)) { vm.tabs.showOverview("home") }
+                .padding(vertical = 10.dp),
         )
         io.github.artcraftandroid.pdfcraft.ui.BarIcon(LucideIcons.X, closeAll, { vm.tabs.askedCloseAll(); asking = true })
         TextButton(onClick = { vm.tabs.resume() }) {

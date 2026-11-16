@@ -59,6 +59,27 @@ class TabsController internal constructor(private val vm: AppViewModel) {
     /** The tab in front, if a document is open. */
     val active: DocTab? get() = vm.document?.let { d -> tabs.firstOrNull { it.doc === d } }
 
+    /** Every open document is shown as a card, over Home or the viewer (#669). */
+    var overviewOpen by mutableStateOf(false)
+        private set
+
+    /** Show every open document as cards (#669); [from] is `strip` or `home`, for the log. */
+    fun showOverview(from: String) {
+        if (tabs.isEmpty()) return
+        Diag.event(DiagArea.Viewer, "tab_overview", "from" to from, "tabs" to tabs.size, "parked" to tabs.count { it.parked })
+        overviewOpen = true
+    }
+
+    fun closeOverview() {
+        overviewOpen = false
+    }
+
+    /** A card was chosen: the overview goes and its document comes to the front (it stays there when it already is). */
+    fun chooseFromOverview(tab: DocTab) {
+        overviewOpen = false
+        switchTo(tab)
+    }
+
     /** Tabs other than the one in front: Home offers to go back to them. */
     val waiting: Int get() = tabs.count { it.doc == null || it.doc !== vm.document }
 
@@ -220,12 +241,18 @@ class TabsController internal constructor(private val vm: AppViewModel) {
         tabs.filter { it.doc == null || it.doc !== vm.document }.forEach { close(it) }
     }
 
-    /** Home's bar: Close all was tapped, and the question is on screen (#636). Nothing closes yet. */
+    /**
+     * Close all on Home's bar, or Close all / Close others over the cards (#669), was tapped, and
+     * the question is on screen (#636). Nothing closes yet.
+     */
     fun askedCloseAll() {
         Diag.event(DiagArea.Viewer, "tab_close_all", "tabs" to tabs.size, "confirmed" to false)
     }
 
-    /** Home's bar: the person said yes to Close all (#636). Each document is saved and closed. */
+    /**
+     * The person said yes to Close all (#636), or to Close others over the cards (#669): every
+     * document but the one in front is saved and closed.
+     */
     fun closeAll() {
         Diag.event(DiagArea.Viewer, "tab_close_all", "tabs" to tabs.size, "confirmed" to true)
         closeOthers()
