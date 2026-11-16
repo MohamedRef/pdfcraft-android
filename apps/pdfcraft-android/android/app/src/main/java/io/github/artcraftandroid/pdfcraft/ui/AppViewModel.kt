@@ -261,9 +261,11 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     /**
      * Open the PDF at [uri] (picked, shared, or from Recent), asking for its password if it has one.
      * [fromOtherApp]: another app opened it, so closing it goes back to that app rather than Home,
-     * as the reference does (#47).
+     * as the reference does (#47). [sender]: the kind of app that sent it
+     * ([io.github.artcraftandroid.pdfcraft.engine.SenderKind]); a chat or mail app's file is
+     * copied, never opened in place (#656).
      */
-    fun open(uri: Uri, password: String? = null, fromOtherApp: Boolean = false) {
+    fun open(uri: Uri, password: String? = null, fromOtherApp: Boolean = false, sender: String? = null) {
         // a file opened from another app comes to the front, not under Settings
         home.settingsOpen = false
         home.showLicences = false
@@ -298,7 +300,11 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             openStartedAt = android.os.SystemClock.elapsedRealtime()
             settings.diagDoc = Diag.nextDocNumber()
             // a number per open, never the file's name (#105): the lines after it are about this file
-            Diag.event(DiagArea.Open, "open_start", "doc" to settings.diagDoc, "scheme" to uri.scheme, "from_other_app" to fromOtherApp, "has_password" to (password != null))
+            Diag.event(DiagArea.Open, "open_start", "doc" to settings.diagDoc, "scheme" to uri.scheme, "from_other_app" to fromOtherApp, "has_password" to (password != null), "sender" to (sender ?: "none"))
+            // the owner's rule (#656): a file a chat or mail app sent is copied, and stays a copy from Recent
+            if (sender == io.github.artcraftandroid.pdfcraft.engine.SenderKind.CHAT_OR_MAIL && uri.scheme == android.content.ContentResolver.SCHEME_CONTENT) {
+                withContext(Dispatchers.IO) { files.markOneVisit(uri) }
+            }
             opening = true
             var openStage = "provider_copy"
             try {

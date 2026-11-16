@@ -99,17 +99,53 @@ internal fun inPlaceRefusal(
 }
 
 /**
- * Whether PdfCraft can reach a document again later without the app that lent it (#476): it took
- * lasting access to it ([persistedRead]), or All files access found its real file at [realPath]
- * in shared storage that no other app owns. A file under an app's `Android/media`, `Android/data`
- * or `Android/obb` folder (where a chat app keeps what it received) counts as lent for one visit:
- * that app may delete it, so it is copied.
+ * Whether PdfCraft can reach a document again later without the app that lent it (#476): All
+ * files access found its real file at [realPath] in shared storage that no other app owns, or,
+ * when its real file is unknown, it took lasting access to it ([persistedRead]). The owner's
+ * rule (#656): a file a chat or mail app received is copied whatever the grant, so the path
+ * decides when it is known. A file under an app's `Android/media`, `Android/data` or
+ * `Android/obb` folder, or a chat app's own top-level folder (`WhatsApp`, `Telegram`), counts as
+ * lent for one visit: that app may delete it, so it is copied.
  */
 internal fun lastingAccess(persistedRead: Boolean, realPath: String?): Boolean =
-    persistedRead || (realPath != null && !ownedByAnotherApp(realPath))
+    if (realPath != null) !ownedByAnotherApp(realPath) else persistedRead
 
-/** Whether [path] is inside an app's own folder of shared storage (`…/Android/media/<app>/…`). */
-internal fun ownedByAnotherApp(path: String): Boolean = APP_OWNED_FOLDER.containsMatchIn(path)
+/** Whether [path] is inside an app's own folder of shared storage (`…/Android/media/<app>/…`, `…/WhatsApp/…`). */
+internal fun ownedByAnotherApp(path: String): Boolean =
+    APP_OWNED_FOLDER.containsMatchIn(path) || CHAT_APP_FOLDER.containsMatchIn(path)
+
+/** What kind of app sent a document to PdfCraft (the log's `sender`), from its package name (#656). */
+internal object SenderKind {
+    const val NONE = "none"
+    const val SELF = "self"
+    const val CHAT_OR_MAIL = "chat_or_mail"
+    const val OTHER = "other"
+}
+
+/**
+ * The kind of app [senderPackage] is ([SenderKind]). [ownPackage] is PdfCraft's own. A chat or
+ * mail app's file is copied (the owner's rule, #656); a file manager's opens in place.
+ */
+internal fun senderKind(senderPackage: String?, ownPackage: String): String {
+    val pkg = senderPackage?.trim()?.lowercase().orEmpty()
+    return when {
+        pkg.isEmpty() -> SenderKind.NONE
+        pkg == ownPackage.lowercase() -> SenderKind.SELF
+        CHAT_OR_MAIL_PACKAGES.any { pkg == it || pkg.startsWith("$it.") } -> SenderKind.CHAT_OR_MAIL
+        else -> SenderKind.OTHER
+    }
+}
+
+/** Chat and mail apps whose received files PdfCraft copies (#656); a name also covers its `.x` variants. */
+private val CHAT_OR_MAIL_PACKAGES = listOf(
+    "com.whatsapp", "com.whatsapp.w4b", "org.telegram.messenger", "org.telegram.plus", "org.thunderdog.challegram",
+    "org.thoughtcrime.securesms", "com.facebook.orca", "com.facebook.mlite", "com.viber.voip", "com.discord",
+    "com.slack", "com.microsoft.teams", "im.vector.app", "com.tencent.mm", "jp.naver.line.android",
+    "com.imo.android.imoim", "com.google.android.apps.messaging", "com.samsung.android.messaging",
+    "com.snapchat.android", "com.instagram.android", "com.google.android.gm", "com.microsoft.office.outlook",
+    "com.samsung.android.email.provider", "com.yahoo.mobile.client.android.mail", "ch.protonmail.android",
+    "me.proton.android.mail", "com.fsck.k9", "net.thunderbird.android", "eu.faircode.email", "com.android.email",
+)
 
 /** The file in a working folder that marks the copy of a file lent for one visit (#476). */
 internal const val ONE_VISIT_MARK = ".one_visit"
@@ -118,6 +154,9 @@ internal const val ONE_VISIT_MARK = ".one_visit"
 internal fun keepsOneVisitCopy(inRecent: Boolean, marked: Boolean): Boolean = inRecent && marked
 
 private val APP_OWNED_FOLDER = Regex("""^/storage/[^/]+(/[0-9]+)?/Android/(media|data|obb)/""")
+
+/** A chat app's own top-level folder in shared storage, kept by older installs (`/storage/emulated/0/WhatsApp/…`). */
+private val CHAT_APP_FOLDER = Regex("""^/storage/[^/]+(/[0-9]+)?/(WhatsApp|WhatsApp Business|Telegram)/""", RegexOption.IGNORE_CASE)
 
 /** How often an open in-place document asks whether another app cut its original short (#476). */
 internal const val LENT_WATCH_MS = 1000L
