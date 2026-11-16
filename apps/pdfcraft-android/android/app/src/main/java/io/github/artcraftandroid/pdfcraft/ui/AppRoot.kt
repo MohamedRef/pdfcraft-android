@@ -127,6 +127,8 @@ fun AppRoot(vm: AppViewModel, onBrowse: () -> Unit, onPickSignatureImage: () -> 
             if (vm.signing.idCreate) CreateIdScreen(vm)
             if (vm.home.settingsOpen) SettingsScreen(vm)
             if (vm.home.showLicences) LicencesScreen(vm)
+            // every open document as cards (#669), over Home or the viewer; a tool's own screen keeps the front
+            if (vm.tabs.overviewOpen && vm.tools.toolScreen == null) io.github.artcraftandroid.pdfcraft.ui.viewer.TabsOverview(vm)
 
             if (vm.opening && doc == null) CircularProgressIndicator(Modifier.align(Alignment.Center), color = c.accent)
             if (doc?.info?.preparing == true) {

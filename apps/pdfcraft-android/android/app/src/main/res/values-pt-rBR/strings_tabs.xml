@@ -9,6 +9,9 @@
     <string name="tabs_split_choose">Mostrar ao lado deste documento</string>
     <string name="tabs_close_all">Fechar tudo</string>
     <string name="tabs_resume">Voltar aos documentos</string>
+    <string name="tabs_show_all">Mostrar todos os documentos abertos</string>
+    <string name="tabs_close_others">Fechar os outros</string>
+    <string name="tabs_overview_parked">Abre de novo ao ser escolhido</string>
     <string name="tabs_split_edit_here">Editar aqui</string>
     <string name="tabs_snip">Copiar uma área</string>
     <string name="tabs_snip_hint">Arraste sobre a área a copiar</string>

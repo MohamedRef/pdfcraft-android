@@ -9,6 +9,9 @@
     <string name="tabs_split_choose">عرض بجانب هذا المستند</string>
     <string name="tabs_close_all">إغلاق الكل</string>
     <string name="tabs_resume">العودة إلى المستندات</string>
+    <string name="tabs_show_all">عرض كل المستندات المفتوحة</string>
+    <string name="tabs_close_others">إغلاق الأخرى</string>
+    <string name="tabs_overview_parked">يُفتح من جديد عند اختياره</string>
     <string name="tabs_split_edit_here">تعديل هنا</string>
     <string name="tabs_snip">نسخ منطقة</string>
     <string name="tabs_snip_hint">اسحب فوق المنطقة المراد نسخها</string>
