@@ -1265,6 +1265,9 @@
     <string name="ink_presets_help">Chaque stylo garde sa propre couleur, son épaisseur et son opacité. Touchez un favori pour restaurer ses réglages.</string>
     <string name="ink_highlighter_straight">Redresser les traits</string>
     <string name="ink_highlighter_straight_explanation">Chaque trait de surligneur devient une ligne droite.</string>
+    <string name="ink_pressure">Pression</string>
+    <string name="ink_pressure_explanation">À quel point le trait change quand vous appuyez. À 0 %, il garde une seule largeur.</string>
+    <string name="ink_pressure_percent">Pression %1$d %%</string>
     <string name="pen_lab_title">Labo des stylos</string>
     <string name="pen_lab_summary">Réglez la réponse de chaque stylo à la pression et à la vitesse</string>
     <string name="pen_lab_body">Chaque changement s’applique tout de suite au stylo, sur la page aussi. Écrivez sur la bande pour l’essayer.</string>

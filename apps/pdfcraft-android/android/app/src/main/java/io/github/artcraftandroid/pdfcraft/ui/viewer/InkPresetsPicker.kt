@@ -373,6 +373,26 @@ internal fun PenStylePicker(vm: AppViewModel) {
                 PdfSwitch(prefs.highlighterStraight, null)
             }
         }
+        if (style != InkStyle.Highlighter) {
+            // How much the line answers pressure (#608): none at the left end, the pen as it is in the middle, twice at the right.
+            val pressure = prefs.penPressure(style)
+            val percent = stringResource(R.string.ink_pressure_percent, Math.round(pressure * 100f))
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(stringResource(R.string.ink_pressure), color = c.text, fontSize = 14.sp)
+                    Text(stringResource(R.string.ink_pressure_explanation), color = c.label, fontSize = 12.sp)
+                }
+                Text(percent, color = c.text, fontSize = 13.sp)
+            }
+            Slider(
+                value = pressure,
+                onValueChange = { prefs.updatePenPressure(style, it) },
+                valueRange = 0f..1f,
+                steps = 19,
+                colors = SliderDefaults.colors(thumbColor = c.accent, activeTrackColor = c.accent),
+                modifier = Modifier.semantics { contentDescription = percent },
+            )
+        }
         Text(stringResource(R.string.toolbar_color_drawing), color = c.text, fontSize = 14.sp)
         if (prefs.recentInkColors.isNotEmpty()) {
             Text(stringResource(R.string.ink_recent_colors), color = c.label, fontSize = 12.sp)
