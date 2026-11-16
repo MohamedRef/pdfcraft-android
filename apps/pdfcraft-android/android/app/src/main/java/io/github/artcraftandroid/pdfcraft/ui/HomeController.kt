@@ -274,7 +274,7 @@ class HomeController internal constructor(private val vm: AppViewModel) {
 
     fun printFile(row: io.github.artcraftandroid.pdfcraft.ui.home.FileRow) {
         vm.viewModelScope.launch {
-            val f = localFileOf(row) ?: return@launch vm.tell(text(R.string.common_file_unreadable))
+            val f = localFileOf(row) ?: return@launch vm.fail(text(R.string.common_file_unreadable))
             // a temporary copy of a file from another app goes when the print job is done
             vm.prints.trySend(PrintJob(f, row.name, deleteWhenDone = Uri.parse(row.key).scheme != "file"))
         }
@@ -320,7 +320,7 @@ class HomeController internal constructor(private val vm: AppViewModel) {
                     }
                 }
             }
-            ok.onFailure { vm.tell(it.userMessage) }
+            ok.onFailure { vm.fail(it.userMessage) }
             vm.refreshRecents()
             scanLocal(force = true)
         }
@@ -328,7 +328,7 @@ class HomeController internal constructor(private val vm: AppViewModel) {
 
     fun duplicateFile(row: io.github.artcraftandroid.pdfcraft.ui.home.FileRow) {
         vm.viewModelScope.launch {
-            val f = localFileOf(row) ?: return@launch vm.tell(text(R.string.common_file_unreadable))
+            val f = localFileOf(row) ?: return@launch vm.fail(text(R.string.common_file_unreadable))
             val copy = withContext(Dispatchers.IO) { File(app.cacheDir, "dup-${System.nanoTime()}.pdf").also { f.copyTo(it, overwrite = true) } }
             val base = row.name.removeSuffix(".pdf")
             val uri = withContext(Dispatchers.IO) { vm.files.saveToDownloads(copy, "$base copy.pdf").also { copy.delete() } }
@@ -344,9 +344,9 @@ class HomeController internal constructor(private val vm: AppViewModel) {
     /** The place chosen for a file row's Save a copy. */
     internal fun copyRowTo(row: io.github.artcraftandroid.pdfcraft.ui.home.FileRow, target: Uri) {
         vm.viewModelScope.launch {
-            val f = localFileOf(row) ?: return@launch vm.tell(text(R.string.common_file_unreadable))
+            val f = localFileOf(row) ?: return@launch vm.fail(text(R.string.common_file_unreadable))
             runCatching { withContext(Dispatchers.IO) { vm.files.writeBack(f, target) } }
-                .onSuccess { vm.tell(text(R.string.msg_saved_copy)) }.onFailure { vm.tell(it.userMessage) }
+                .onSuccess { vm.tell(text(R.string.msg_saved_copy)) }.onFailure { vm.fail(it.userMessage) }
         }
     }
 
@@ -364,7 +364,7 @@ class HomeController internal constructor(private val vm: AppViewModel) {
                     vm.recents.remove(setOf(row.key))
                 }
             }
-            ok.onFailure { vm.tell(it.userMessage) }.onSuccess { vm.tell(text(R.string.msg_file_deleted, row.name)) }
+            ok.onFailure { vm.fail(it.userMessage) }.onSuccess { vm.tell(text(R.string.msg_file_deleted, row.name)) }
             vm.refreshRecents()
             scanLocal(force = true)
         }

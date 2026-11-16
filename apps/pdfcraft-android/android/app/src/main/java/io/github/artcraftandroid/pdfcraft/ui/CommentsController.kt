@@ -221,7 +221,7 @@ class CommentsController internal constructor(private val vm: AppViewModel) {
     fun startVoice(doc: OpenDocument, at: PagePoint) {
         val app = app
         if (app.cacheDir.usableSpace < 60L * 1024 * 1024) {
-            vm.tell(text(R.string.msg_voice_no_storage))
+            vm.fail(text(R.string.msg_voice_no_storage))
             return
         }
         val prompt = VoicePrompt(doc, at)
@@ -238,12 +238,12 @@ class CommentsController internal constructor(private val vm: AppViewModel) {
         vm.noteTaking.pendingLecture?.let { d ->
             vm.noteTaking.pendingLecture = null
             Diag.event(DiagArea.Study, "lecture_mic", "granted" to granted)
-            if (granted) vm.noteTaking.startLecture(d) else vm.tell(text(R.string.msg_voice_no_mic))
+            if (granted) vm.noteTaking.startLecture(d) else vm.fail(text(R.string.msg_voice_no_mic))
             return
         }
         val p = pendingVoice
         pendingVoice = null
-        if (granted && p != null) voicePrompt = p else if (!granted) vm.tell(text(R.string.msg_voice_no_mic))
+        if (granted && p != null) voicePrompt = p else if (!granted) vm.fail(text(R.string.msg_voice_no_mic))
     }
 
     fun dismissMicRationale(openSettings: Boolean) {
@@ -300,7 +300,7 @@ class CommentsController internal constructor(private val vm: AppViewModel) {
     /** Copy the selected text (when the document allows copying). */
     fun copySelection(doc: OpenDocument) {
         if (!doc.info.allowsCopying) {
-            vm.tell(text(R.string.msg_copy_not_allowed))
+            vm.fail(text(R.string.msg_copy_not_allowed))
             return
         }
         vm.viewModelScope.launch {
@@ -318,7 +318,7 @@ class CommentsController internal constructor(private val vm: AppViewModel) {
      */
     fun shareSelection(doc: OpenDocument) {
         if (!doc.info.allowsCopying) {
-            vm.tell(text(R.string.msg_copy_not_allowed))
+            vm.fail(text(R.string.msg_copy_not_allowed))
             return
         }
         vm.viewModelScope.launch {
@@ -332,7 +332,7 @@ class CommentsController internal constructor(private val vm: AppViewModel) {
     /** Hand the selected text to another app's text action (#535), read only. Needs copying allowed, like Share. */
     fun processSelection(doc: OpenDocument, app: io.github.artcraftandroid.pdfcraft.ui.viewer.TextActionApp) {
         if (!doc.info.allowsCopying) {
-            vm.tell(text(R.string.msg_copy_not_allowed))
+            vm.fail(text(R.string.msg_copy_not_allowed))
             return
         }
         vm.viewModelScope.launch {
@@ -448,7 +448,7 @@ class CommentsController internal constructor(private val vm: AppViewModel) {
 
     private fun canImportComments(doc: OpenDocument): Boolean {
         if (vm.document !== doc || !doc.info.allowsAnnotation || doc.info.readOnlyReason != null) {
-            vm.tell(text(R.string.comments_import_unavailable))
+            vm.fail(text(R.string.comments_import_unavailable))
             return false
         }
         return true
@@ -559,7 +559,7 @@ class CommentsController internal constructor(private val vm: AppViewModel) {
                 io.github.artcraftandroid.pdfcraft.ui.viewer.MarkupDiag.commentsCopy(doc, n, out.size)
                 vm.tell(plural(R.plurals.comments_copied, n, n))
             } catch (e: MobileException) {
-                vm.tell(e.userMessage)
+                vm.fail(e.userMessage)
             }
         }
     }
@@ -578,7 +578,7 @@ class CommentsController internal constructor(private val vm: AppViewModel) {
                     eng.tool("comments_paste", mapOf("doc" to doc.id, "page" to page, "xfdf" to xfdf))
                 }
             } catch (e: MobileException) {
-                vm.tell(e.userMessage)
+                vm.fail(e.userMessage)
             } finally {
                 vm.refresh(doc)
             }

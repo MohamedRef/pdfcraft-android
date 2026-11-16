@@ -130,7 +130,7 @@ fun AppViewModel.checkAccessibility(doc: OpenDocument) {
             tools.accessibility.figures = parseA11yFigures(eng.tool("accessibility_figures", mapOf("doc" to doc.id)))
             editEvent(doc, "a11y_check", "failed" to r.optInt("failed"), "manual" to r.optInt("manual"), "passed" to r.optInt("passed"), "figures" to tools.accessibility.figures.size, "ms" to (System.nanoTime() - t0) / 1_000_000)
         } catch (e: Exception) {
-            tell(e.userMessage)
+            fail(e.userMessage)
         } finally {
             tools.accessibility.checking = false
         }
@@ -175,7 +175,7 @@ fun AppViewModel.previewAutotag(doc: OpenDocument, page: Int) {
             )
             editEvent(doc, "a11y_autotag_preview", "page" to page + 1, "candidates" to cs.length(), "unclassified_images" to r.optInt("unclassified_images"))
         } catch (e: Exception) {
-            tell(e.userMessage)
+            fail(e.userMessage)
         }
     }
 }
@@ -199,7 +199,7 @@ fun AppViewModel.saveAccessibilityReport(doc: OpenDocument) {
             eng.tool("accessibility_report", mapOf("doc" to doc.id, "path" to out.absolutePath))
         } catch (e: Exception) {
             out.delete()
-            tell(e.userMessage)
+            fail(e.userMessage)
             return@launch
         }
         editEvent(doc, "a11y_report")
@@ -211,7 +211,7 @@ fun AppViewModel.saveAccessibilityReport(doc: OpenDocument) {
                         tell(appText(R.string.a11y_report_saved))
                     }
                 } catch (e: Exception) {
-                    tell(e.userMessage)
+                    fail(e.userMessage)
                 } finally {
                     out.delete()
                 }

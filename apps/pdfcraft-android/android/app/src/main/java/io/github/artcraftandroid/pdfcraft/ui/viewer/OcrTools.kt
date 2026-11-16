@@ -57,7 +57,7 @@ suspend fun AppViewModel.ocrReady(eng: Engine): Boolean {
     tools.busy = null
     val status = runCatching { eng.tool("ocr_status") }.getOrNull()
     if (status?.optBoolean("available", false) != true) {
-        tell(text(R.string.msg_ocr_not_installed))
+        fail(text(R.string.msg_ocr_not_installed))
         return false
     }
     val langs = status.optJSONArray("languages")
@@ -103,7 +103,7 @@ fun AppViewModel.runOcr(doc: OpenDocument, o: OcrOptions) {
                                 tell(text(R.string.ocr_editable_saved), text(R.string.common_open)) { open(uri) }
                             }
                         } catch (e: Exception) {
-                            tell(e.userMessage)
+                            fail(e.userMessage)
                         } finally {
                             out.delete()
                         }
@@ -113,7 +113,7 @@ fun AppViewModel.runOcr(doc: OpenDocument, o: OcrOptions) {
             ok = true
         } catch (e: Exception) {
             out?.delete()
-            tell(e.userMessage)
+            fail(e.userMessage)
         } finally {
             tools.busy = null
             editEvent(doc, "ocr_run", "editable" to (out != null), "pages" to doc.pageCount, "ms" to (System.nanoTime() - t0) / 1_000_000, "ok" to ok)
@@ -175,7 +175,7 @@ suspend fun AppViewModel.addToOcrDictionary(language: String, word: String): Boo
         eng.tool("ocr_dictionary", mapOf("path" to f.absolutePath, "add" to listOf(word)))
         true
     } catch (e: Exception) {
-        tell(e.userMessage)
+        fail(e.userMessage)
         false
     }
 }

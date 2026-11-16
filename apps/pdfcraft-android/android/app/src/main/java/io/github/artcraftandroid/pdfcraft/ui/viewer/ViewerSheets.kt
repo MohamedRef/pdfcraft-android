@@ -445,7 +445,7 @@ fun BookmarksSheet(vm: AppViewModel, doc: OpenDocument) {
                             onRename = { renaming = i },
                             onRenamed = { name ->
                                 renaming = null
-                                if (name.isBlank()) vm.tell(text(R.string.sheet_bookmark_name_invalid)) else vm.settings.bookmarks.rename(doc, b, name.trim())
+                                if (name.isBlank()) vm.fail(text(R.string.sheet_bookmark_name_invalid)) else vm.settings.bookmarks.rename(doc, b, name.trim())
                             },
                             onDelete = { vm.settings.bookmarks.remove(doc, b); vm.tell(text(R.string.sheet_bookmark_removed, b.name)) },
                             onDeleteAll = { vm.settings.confirmDeleteAllBookmarks = doc },

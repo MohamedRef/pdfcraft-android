@@ -251,7 +251,7 @@ fun AppViewModel.editFieldProps(doc: OpenDocument, field: String) {
                 format = FieldFormat.of(f.optJSONObject("format")?.optString("type")),
             )
         } catch (e: Exception) {
-            tell(e.userMessage)
+            fail(e.userMessage)
         }
     }
 }
@@ -282,7 +282,7 @@ fun AppViewModel.detectFields(doc: OpenDocument) {
             editEvent(doc, "form_detect_found", "found" to list.size)
             if (list.isEmpty()) tell(appText(R.string.form_detect_none)) else tools.prepareForm.detected = list
         } catch (e: Exception) {
-            tell(e.userMessage)
+            fail(e.userMessage)
         }
     }
 }
@@ -309,7 +309,7 @@ fun AppViewModel.addDetected(doc: OpenDocument, all: List<DetectedField>, accept
                 added++
             }
         } catch (e: Exception) {
-            tell(e.userMessage)
+            fail(e.userMessage)
         } finally {
             refresh(doc, null)
             editEvent(doc, "form_detect_add", "proposed" to all.size, "accepted" to accepted.size, "added" to added)
@@ -336,7 +336,7 @@ fun AppViewModel.tabOrder(doc: OpenDocument, order: String? = null, field: Strin
             val t = r.optJSONArray("tab_order") ?: JSONArray()
             tools.prepareForm.tabOrder = (0 until t.length()).map { t.getString(it) }
         } catch (e: Exception) {
-            tell(e.userMessage)
+            fail(e.userMessage)
         }
     }
 }

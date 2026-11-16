@@ -175,10 +175,10 @@ internal class ScanLabController(private val vm: AppViewModel) {
             } catch (e: io.github.artcraftandroid.pdfcraft.ui.scan.ScanModelTimingFailed) {
                 // why it failed and how long it took, as words and numbers the log can carry (#445)
                 Diag.event(DiagArea.Scan, "model_timing_failed", *io.github.artcraftandroid.pdfcraft.ui.scan.scanModelTimingFailedDiag(e, android.os.SystemClock.elapsedRealtime() - started))
-                vm.tell(text(R.string.scan_lab_time_model_failed, e.shown))
+                vm.fail(text(R.string.scan_lab_time_model_failed, e.shown))
             } catch (e: Exception) {
                 Diag.failure(DiagArea.Scan, "scan_time_model", e)
-                vm.tell(text(R.string.scan_lab_time_model_failed, e.userMessage))
+                vm.fail(text(R.string.scan_lab_time_model_failed, e.userMessage))
             } finally {
                 withContext(kotlinx.coroutines.NonCancellable + Dispatchers.IO) { file.delete() }
                 timingModel = false
