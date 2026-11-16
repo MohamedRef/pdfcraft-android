@@ -420,6 +420,11 @@ pub struct CommentInfo {
     /// A polygon's corners, `x0, y0, x1, y1, …` (points, top-left origin), so the app can draw
     /// the freehand study tape it makes (#350); empty for other comments.
     pub points: Vec<f32>,
+    /// A text markup's lines (Highlight, Underline, StrikeOut, Squiggly), one box per quad,
+    /// `x0, y0, x1, y1, …` (points, top-left origin): what the Draw eraser touches (#660), not the
+    /// rectangle around all of them, which also covers the blank ends of short lines.
+    #[uniffi(default = [])]
+    pub lines: Vec<f32>,
 }
 
 /// A form field's widget on a page: what a tap there fills.
@@ -1765,6 +1770,21 @@ fn comment_records(snapshot: &pdfcraft_engine::OverlaySnapshot) -> Vec<CommentIn
                 hidden: props.as_ref().is_some_and(|p| p.hidden),
                 points: match (a.subtype.as_str(), snapshot.pages.get(a.page)) {
                     ("Polygon", Some(p)) => a.points.iter().flat_map(|q| p.user_to_view(q[0], q[1])).collect(),
+                    _ => Vec::new(),
+                },
+                lines: match (a.subtype.as_str(), snapshot.pages.get(a.page)) {
+                    ("Highlight" | "Underline" | "StrikeOut" | "Squiggly", Some(p)) => a
+                        .quads
+                        .iter()
+                        .filter_map(|q| {
+                            let corners = [0, 2, 4, 6].map(|k| p.user_to_view(q[k], q[k + 1]));
+                            let xs = corners.map(|c| c[0]);
+                            let ys = corners.map(|c| c[1]);
+                            let b = [xs.into_iter().fold(f32::INFINITY, f32::min), ys.into_iter().fold(f32::INFINITY, f32::min), xs.into_iter().fold(f32::NEG_INFINITY, f32::max), ys.into_iter().fold(f32::NEG_INFINITY, f32::max)];
+                            b.iter().all(|v| v.is_finite()).then_some(b)
+                        })
+                        .flatten()
+                        .collect(),
                     _ => Vec::new(),
                 },
             }

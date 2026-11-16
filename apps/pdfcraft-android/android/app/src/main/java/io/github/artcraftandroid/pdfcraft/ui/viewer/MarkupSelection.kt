@@ -93,5 +93,12 @@ internal val MARKUP_QUICK_COLORS = listOf(0xFFFFD100, 0xFF6AD928, 0xFF38E5FF, 0x
  * tools and the colour button (about 276 dp), each 36 dp wide: three on a 384 dp phone, one at
  * 320 dp, all five from 456 dp.
  */
+/**
+ * The room the pen and eraser buttons take at the start of Highlight's row (#660): two 54 dp
+ * tools and a divider. On a 384 dp phone the quick colours then give way to them, and the colour
+ * button opens all colours, as Draw's does; from about 520 dp they are back.
+ */
+internal const val MARKUP_ROW_SWITCH_DP = 117
+
 internal fun markupQuickColorCount(widthDp: Int): Int = ((widthDp - 276) / 36).coerceIn(0, MARKUP_QUICK_COLORS.size)
 
