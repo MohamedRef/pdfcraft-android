@@ -187,6 +187,9 @@ internal class PenStrokeStats(
     val speeds = FloatSampleList()
     val widths = FloatSampleList()
     val densities = FloatSampleList()
+    /** How many samples the pen gave this stroke, and how many became points of the line (#609). */
+    var given = 0
+    var kept = 0
     val taperStartPt: Float get() = dials.taperStart * penWidth
     val taperEndPt: Float get() = dials.taperEnd * penWidth
 }
@@ -375,7 +378,8 @@ internal class PenDynamics(
     fun finish(points: List<Offset>, scales: MutableList<Float>) {
         if (points.size != scales.size || points.isEmpty()) return
         if (travelled < penWidthPt) {
-            if (d.taperStart > 0f && untapered.size == scales.size) {
+            // every sample has an untapered width; the line keeps only some of them as points (#609)
+            if (d.taperStart > 0f && untapered.isNotEmpty()) {
                 val full = untapered.max()
                 for (i in scales.indices) scales[i] = full
             }
@@ -525,6 +529,89 @@ internal class InkSmoother(amount: Float, dpPerPt: Float = 1f) {
         const val BETA = 0.1f
         const val VELOCITY_CUTOFF_HZ = 1f
         const val END_SLOP_PT = 0.05f
+    }
+}
+
+/**
+ * How far apart on the glass (dp) the points of a freehand line are kept (#609). An S Pen gives
+ * about 550 samples a second, 0.1 to 0.3 dp apart in handwriting, and every point costs a disc and
+ * a quadrilateral to draw and about 250 bytes in the saved comment. At this spacing the sheet's
+ * word keeps 4 points in 10 and its centre line moves by less than 0.1 dp.
+ */
+internal const val INK_POINT_SPACING_DP = 0.75f
+
+/** How far (dp on the glass) a sample passed over may lie from the thinned line before it is kept after all: a corner. */
+internal const val INK_POINT_CORNER_DP = 0.04f
+
+/** The thinner for a freehand line written with a pen [penWidthPt] wide on a page shown at [dpPerPt]: a point is also kept when the width has changed by 0.1 dp. */
+internal fun inkPointThinner(dpPerPt: Float, penWidthPt: Float, spacingDp: Float = INK_POINT_SPACING_DP): InkPointThinner {
+    val onGlass = dpPerPt.takeIf { it.isFinite() && it > 0f } ?: 1f
+    val width = penWidthPt.takeIf { it.isFinite() && it > 0.01f } ?: 1f
+    return InkPointThinner(spacingDp / onGlass, INK_POINT_CORNER_DP / onGlass, 0.1f / onGlass / width)
+}
+
+/**
+ * Thins a freehand line's points as it grows (#609): a sample becomes a point when it is at least
+ * [spacingPt] from the last point kept, when leaving it out would cut a corner by more than
+ * [cornerPt], or when the width has changed by `scaleStep` since the last point kept. The pen model still sees every sample (smoothing, speed and the width's slope are
+ * worked out sample by sample); only what is stored and drawn is thinned. The last sample not kept
+ * waits in [pending], so that on lift the line ends where the pen did.
+ */
+internal class InkPointThinner(spacingPt: Float, cornerPt: Float = 0f, scaleStep: Float = 0f) {
+    private val spacing = spacingPt.takeIf { it.isFinite() && it > 0f } ?: 0f
+    private val corner = cornerPt.takeIf { it.isFinite() && it > 0f } ?: Float.POSITIVE_INFINITY
+    /** A sample whose width scale has left the last kept point's by this much is kept wherever it is (a pen pressed harder while hardly moving). */
+    private val scaleStep = scaleStep.takeIf { it.isFinite() && it > 0f } ?: Float.POSITIVE_INFINITY
+    private var last: Offset? = null
+    private var lastScale = Float.NaN
+
+    /** The newest sample when it was not kept: its point, width scale and ink density. */
+    var pending: Triple<Offset, Float, Float>? = null
+        private set
+
+    /**
+     * The sample at [p] with its width [scale] and ink [density]: [emit] is called for each point
+     * the line gains (none, this sample, or the one before it when the line turned there).
+     */
+    fun add(p: Offset, scale: Float, density: Float, emit: (Offset, Float, Float) -> Unit) {
+        val l = last
+        if (l == null || !p.x.isFinite() || !p.y.isFinite()) {
+            pending = null
+            last = p.takeIf { it.x.isFinite() && it.y.isFinite() } ?: l
+            lastScale = scale
+            emit(p, scale, density)
+            return
+        }
+        // the sample passed over last time would be cut off by a straight piece to this one: keep it
+        pending?.let { w ->
+            if (distanceToSegment(w.first, l, p) > corner) {
+                emit(w.first, w.second, w.third)
+                last = w.first
+                lastScale = w.second
+                pending = null
+            }
+        }
+        if ((p - (last ?: l)).getDistance() >= spacing || kotlin.math.abs(scale - lastScale) >= scaleStep) {
+            last = p
+            lastScale = scale
+            pending = null
+            emit(p, scale, density)
+        } else {
+            pending = Triple(p, scale, density)
+        }
+    }
+
+    /** The waiting sample, to add as the line's last point on lift; none is left waiting after. */
+    fun flush(): Triple<Offset, Float, Float>? = pending.also {
+        if (it != null) last = it.first
+        pending = null
+    }
+
+    private fun distanceToSegment(p: Offset, a: Offset, b: Offset): Float {
+        val ab = b - a
+        val l2 = ab.x * ab.x + ab.y * ab.y
+        val t = if (l2 <= 0f) 0f else (((p.x - a.x) * ab.x + (p.y - a.y) * ab.y) / l2).coerceIn(0f, 1f)
+        return (p - (a + ab * t)).getDistance()
     }
 }
 
