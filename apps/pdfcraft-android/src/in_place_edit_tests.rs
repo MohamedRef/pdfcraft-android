@@ -91,3 +91,82 @@ fn edit_time_by_file_size() {
         let _ = std::fs::remove_file(&path);
     }
 }
+
+/// The process's anonymous memory (heap and private maps), in MB: what a full copy of a file adds.
+fn anon_mb() -> u64 {
+    let status = std::fs::read_to_string("/proc/self/status").unwrap_or_default();
+    status.lines().find_map(|l| l.strip_prefix("RssAnon:")).and_then(|v| v.trim().trim_end_matches("kB").trim().parse::<u64>().ok()).unwrap_or(0) / 1024
+}
+
+/// Save as the app saves a document opened in place (#654): `doc_save` to the working file,
+/// then the new revision appended to the original.
+fn save_in_place(mobile: &MobileSession, doc: u64, original: &std::path::Path) -> u128 {
+    let t = Instant::now();
+    let saved: serde_json::Value = serde_json::from_str(&mobile.execute("doc_save".into(), json!({ "doc": doc }).to_string()).unwrap()).unwrap();
+    let elapsed = t.elapsed().as_millis();
+    let working = std::fs::read(saved["path"].as_str().unwrap()).unwrap();
+    let had = std::fs::metadata(original).unwrap().len() as usize;
+    assert!(working.len() > had, "an incremental save appends to what the original has");
+    use std::io::Write;
+    std::fs::OpenOptions::new().append(true).open(original).unwrap().write_all(&working[had..]).unwrap();
+    elapsed
+}
+
+fn ink(mobile: &MobileSession, doc: u64, k: i64) {
+    mobile
+        .execute("comment_add".into(), json!({
+            "doc": doc, "page": 2, "type": "ink", "strokes": [[[20 + k, 20], [90, 90]]],
+            "color": "#161616", "opacity": 1.0, "width": 2.0,
+        }).to_string())
+        .unwrap();
+}
+
+#[test]
+fn saving_a_file_opened_in_place_keeps_it_mapped() {
+    let path = std::env::temp_dir().join(format!("pdfcraft-in-place-save-{}.pdf", std::process::id()));
+    std::fs::write(&path, big_pdf(3, 2)).unwrap();
+    let mobile = MobileSession::new();
+    let doc = open_in_place(&mobile, &path, "save");
+    let mapped = |m: &MobileSession| {
+        let s = m.lock();
+        let d = s.session().get(DocId(doc)).unwrap();
+        d.bytes.is_mapped() && d.saved_bytes().is_mapped()
+    };
+    for k in 0..3 {
+        ink(&mobile, doc, k);
+        // an edit after a save extends the saved mapping too (it copied the book each time, #654)
+        assert!(mobile.lock().session().get(DocId(doc)).unwrap().bytes.is_mapped(), "edit {k} copied the whole file");
+        save_in_place(&mobile, doc, &path);
+        // the saved document is the mapped file with its new revisions after it, not a copy
+        assert!(mapped(&mobile), "save {k} copied the whole file");
+        // and what was saved is what the original now holds
+        assert_eq!(&**mobile.lock().session().get(DocId(doc)).unwrap().saved_bytes(), &std::fs::read(&path).unwrap()[..]);
+    }
+    assert_eq!(mobile.comments(doc).unwrap().len(), 3);
+    assert!(mobile.render_page(doc, 1, 1.0, None).is_ok());
+    let _ = std::fs::remove_file(&path);
+}
+
+/// Save time and anonymous memory by file size, opened in place (`--ignored --nocapture`, release).
+#[test]
+#[ignore]
+fn save_time_and_memory_by_file_size() {
+    for mb in [100usize, 350] {
+        let path = std::env::temp_dir().join(format!("pdfcraft-big-save-{mb}.pdf"));
+        std::fs::write(&path, big_pdf(869, mb)).unwrap();
+        let mobile = MobileSession::new();
+        let id = open_in_place(&mobile, &path, &format!("save{mb}"));
+        let start = anon_mb();
+        let mut lines = Vec::new();
+        for k in 0..3 {
+            for j in 0..3 {
+                ink(&mobile, id, k * 3 + j);
+            }
+            let edited = anon_mb().saturating_sub(start);
+            let ms = save_in_place(&mobile, id, &path);
+            lines.push(format!("3 edits: anon +{edited} MB, save {k}: {ms} ms, anon +{} MB", anon_mb().saturating_sub(start)));
+        }
+        eprintln!("{mb} MB: {}", lines.join("; "));
+        let _ = std::fs::remove_file(&path);
+    }
+}
