@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Starting a scan from photos already taken (#617): the picker, shared pictures, launcher shortcuts -->
+    <string name="scan_from_photos">مسح من الصور</string>
+    <string name="shortcut_scan_photos">مسح الصور</string>
+    <string name="toolbar_label_scan_photos">من الصور</string>
+    <string name="scan_share_label">مسح إلى PDF</string>
+    <string name="scan_shared_none">ولا ملف من الملفات المشاركة صورة يقدر PdfCraft يقراها. ما اتحفظش حاجة.</string>
+    <string name="scan_shared_first">اتضافت أول %1$d صورة بس.</string>
+    <plurals name="scan_shared_left_out">
+        <item quantity="zero">كل الملفات المشاركة اتقرت.</item>
+        <item quantity="one">ملف مشارك واحد مش صورة تتقري واتساب.</item>
+        <item quantity="two">ملفين مشاركين مش صور تتقري واتسابوا.</item>
+        <item quantity="few">%1$d ملفات مشاركة مش صور تتقري واتسابوا.</item>
+        <item quantity="many">%1$d ملف مشارك مش صور تتقري واتسابوا.</item>
+        <item quantity="other">%1$d ملف مشارك مش صور تتقري واتسابوا.</item>
+    </plurals>
+</resources>

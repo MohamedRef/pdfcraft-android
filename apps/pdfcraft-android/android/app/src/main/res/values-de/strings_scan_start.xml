@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Starting a scan from photos already taken (#617): the picker, shared pictures, launcher shortcuts -->
+    <string name="scan_from_photos">Aus Fotos scannen</string>
+    <string name="shortcut_scan_photos">Fotos scannen</string>
+    <string name="toolbar_label_scan_photos">Aus Fotos</string>
+    <string name="scan_share_label">Als PDF scannen</string>
+    <string name="scan_shared_none">Keine der geteilten Dateien ist ein Bild, das PdfCraft lesen kann. Nichts wurde behalten.</string>
+    <string name="scan_shared_first">Nur die ersten %1$d Bilder wurden hinzugefügt.</string>
+    <plurals name="scan_shared_left_out">
+        <item quantity="one">%1$d geteilte Datei ist kein lesbares Bild und wurde ausgelassen.</item>
+        <item quantity="other">%1$d geteilte Dateien sind keine lesbaren Bilder und wurden ausgelassen.</item>
+    </plurals>
+</resources>

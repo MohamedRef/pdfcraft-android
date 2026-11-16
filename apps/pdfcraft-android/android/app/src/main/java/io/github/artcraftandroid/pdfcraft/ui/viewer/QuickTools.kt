@@ -123,6 +123,8 @@ enum class QuickTool(val id: String, @StringRes val label: Int, @StringRes val t
     Create("create", R.string.common_tool_create_pdf, R.string.common_tool_create_pdf, LucideIcons.FilePlus2, ToolHues.create, ToolCategory.Convert),
     Text("text", R.string.toolbar_label_add_text, R.string.toolbar_tool_text, LucideIcons.Type, ToolHues.text, ToolCategory.Annotate),
     Scan("scan", R.string.common_tool_scan, R.string.common_tool_scan, LucideIcons.Camera, ToolHues.scan, ToolCategory.Scan),
+    // straight to the photo picker (#617)
+    ScanPhotos("scanphotos", R.string.toolbar_label_scan_photos, R.string.scan_from_photos, LucideIcons.Images, ToolHues.scan, ToolCategory.Scan),
     // the kept scans (#461, #539: was on Home only)
     ScanRecent("recentscans", R.string.toolbar_label_recent_scans, R.string.scan_recent_title, LucideIcons.FileStack, ToolHues.scan, ToolCategory.Scan),
     ReadAloud("readaloud", R.string.common_tool_read_aloud, R.string.common_tool_read_aloud, LucideIcons.Volume2, ToolHues.read, ToolCategory.Read),
@@ -139,7 +141,7 @@ enum class QuickTool(val id: String, @StringRes val label: Int, @StringRes val t
         val DEFAULT_BAR = listOf(Edit, Comment, Highlight, Draw, FillSign, Export)
 
         /** Tools that start without an open file: they make one, or choose their files on their own screen. */
-        val WITHOUT_FILE = setOf(Create, Scan, ScanRecent, Combine, Unlock, Bates, OcrBatch)
+        val WITHOUT_FILE = setOf(Create, Scan, ScanPhotos, ScanRecent, Combine, Unlock, Bates, OcrBatch)
 
         /** "Start with a tool" on Home, after Open file: Scan first, one tap from Home (#539). */
         val HOME_START = listOf(Scan, Edit, ReadAloud, FillSign, Create, Organize, Combine, Compress, Export, Protect)
@@ -155,7 +157,7 @@ enum class QuickTool(val id: String, @StringRes val label: Int, @StringRes val t
             return entries
                 .filter { category == null || it.category == category }
                 .filter { q.isEmpty() || nameOf(it).lowercase().contains(q) || categoryName(it.category).lowercase().contains(q) }
-                .sortedWith(compareBy<QuickTool>({ it.category.ordinal }, { it != Scan }, { nameOf(it).lowercase() }))
+                .sortedWith(compareBy<QuickTool>({ it.category.ordinal }, { it != Scan }, { it != ScanPhotos }, { nameOf(it).lowercase() }))
         }
     }
 }
@@ -165,6 +167,7 @@ fun AppViewModel.startToolFromHome(tool: QuickTool) {
     when (tool) {
         QuickTool.Create -> tools.openCreate()
         QuickTool.Scan -> startScan()
+        QuickTool.ScanPhotos -> startScan(io.github.artcraftandroid.pdfcraft.ui.scan.ScanStart.Import, photos = true)
         QuickTool.ScanRecent -> scanRecent.show()
         QuickTool.Combine -> pickFiles(io.github.artcraftandroid.pdfcraft.ui.FilePickKind.Combine)
         QuickTool.Unlock -> openUnlock(null)
@@ -284,6 +287,7 @@ fun AppViewModel.runQuickTool(doc: OpenDocument, tool: QuickTool) {
         QuickTool.Handwriting -> noteTaking.recognizeHandwriting(doc, doc.viewer.currentPage)
         QuickTool.Create -> tools.openCreate()
         QuickTool.Scan -> startScan()
+        QuickTool.ScanPhotos -> startScan(io.github.artcraftandroid.pdfcraft.ui.scan.ScanStart.Import, photos = true)
         QuickTool.ReadAloud -> sharing.startReadAloud(doc)
         QuickTool.Measure -> enterTool(doc, ViewerTool.Measure)
         QuickTool.Bates -> openBates()

@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A launcher shortcut's icon (#617): Lucide "images" (ISC, assets/icons/LICENSE-lucide.txt), in the app's crimson. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="48dp"
+    android:height="48dp"
+    android:viewportWidth="48"
+    android:viewportHeight="48">
+    <group android:translateX="12" android:translateY="12">
+        <path
+            android:pathData="m22 11-1.296-1.296a2.4 2.4 0 0 0-3.408 0L11 16"
+            android:strokeColor="@color/ic_launcher_background"
+            android:strokeWidth="2"
+            android:strokeLineCap="round"
+            android:strokeLineJoin="round" />
+        <path
+            android:pathData="M4 8a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2"
+            android:strokeColor="@color/ic_launcher_background"
+            android:strokeWidth="2"
+            android:strokeLineCap="round"
+            android:strokeLineJoin="round" />
+        <path
+            android:pathData="M10,2h10a2,2 0 0 1 2,2v10a2,2 0 0 1 -2,2h-10a2,2 0 0 1 -2,-2v-10a2,2 0 0 1 2,-2z"
+            android:strokeColor="@color/ic_launcher_background"
+            android:strokeWidth="2"
+            android:strokeLineCap="round"
+            android:strokeLineJoin="round" />
+        <path
+            android:pathData="M12,7a1,1 0 1,0 2,0a1,1 0 1,0 -2,0"
+            android:fillColor="@color/ic_launcher_background" />
+    </group>
+</vector>
