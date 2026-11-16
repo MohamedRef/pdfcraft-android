@@ -22,6 +22,13 @@
 - Merged so far: the `pdfcraft-scan` crate and single-pass pipeline (#331, #346), the Auto look (#346), true proportions (#353), edge refinement (#356), 1-bit black and white (#359), the detector network (#360), Flatten page (#365), testing options and kept scans (#367), upright pages (#370), grain and sharpening (#373), the native preview (#376).
 - **The scanner has run on the owner's phone since 13 November 2026** (0.0.27 and 0.0.28-beta, SM-S928B); what his logs showed is in [`ANDROID_SCAN_HANDOVER.md`](ANDROID_SCAN_HANDOVER.md#1a-what-has-run-on-the-owners-phone). He tests with the options and kept scans described in [`ANDROID_SCAN_TESTING.md`](ANDROID_SCAN_TESTING.md). Release 0.0.25-beta (25012) is the first to contain it.
 
+## RELEASE 0.0.38-beta (38012) — 2026-11-16 (owner requested)
+
+- Release PR publishes `0.0.38-beta` / ARM64 build `38012` (`pdfcraft.versionCode=3801`), same package ID and signer. Trigger matches only `chore(release): publish 0.0.38-beta (38012)`.
+- Pen batch under the owner's "a beta per batch", plus #618 which the owner asked to ship in the next beta.
+- Included: #612 (#607), #619 and #632 (#609), #620 (Jetpack Ink trial removed), #621 (#615), #622 (#618), #623 (#608), #624 (#617), #625 (#616), #628 (#614), #629 (#613), #630 (#610), #631 (#611). See [`releases/0.0.38-beta.md`](releases/0.0.38-beta.md).
+- Open: nothing tried on a device.
+
 ## RELEASE 0.0.37-beta (37012) — 2026-11-15 (owner requested)
 
 - Release PR publishes `0.0.37-beta` / ARM64 build `37012` (`pdfcraft.versionCode=3701`), same package ID and signer. Trigger matches only `chore(release): publish 0.0.37-beta (37012)`.
