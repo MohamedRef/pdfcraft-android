@@ -120,7 +120,7 @@ internal fun DrawToolbarBar(ctl: ViewerController, prefs: ToolPrefs) {
                             InkStyle.Brush -> R.string.ink_toolbar_brush
                             InkStyle.Highlighter -> R.string.ink_toolbar_marker
                         }), onClickLabel = if (active) stringResource(R.string.ink_pen_edit_action) else null) {
-                            PenNibPreview(Color(pen.argb), pen.width, pen.opacity, style, Modifier.size(29.dp, 31.dp))
+                            PenNibPreview(Color(inkColorOnPaper(pen.argb, style, ctl.darkPaper)), pen.width, pen.opacity, style, Modifier.size(29.dp, 31.dp))
                         }
                     }
                     DrawToolbarButton(

@@ -279,6 +279,52 @@ internal fun inkNeedsLayer(runCount: Int, opacity: Float, highlighter: Boolean):
     runCount > 1 && opacity < 1f && !highlighter
 
 /**
+ * How the page under a draft is shown (#610), so the draft looks as it will once it is saved and
+ * drawn as part of the page: [night] is Night Mode (the page's image is drawn as inverted grey),
+ * [darkPaper] a stroke written on dark paper ([InkAppearance.onDark]).
+ */
+internal data class InkLook(val night: Boolean = false, val darkPaper: Boolean = false) {
+    companion object {
+        val Plain = InkLook()
+    }
+}
+
+/** [c] as Night Mode shows it: inverted grey, the same numbers as [NIGHT_INVERT_MATRIX]; its alpha is kept. */
+internal fun nightColor(c: Color): Color {
+    val grey = (1f - (c.red + c.green + c.blue) / 3f).coerceIn(0f, 1f)
+    return Color(grey, grey, grey, c.alpha)
+}
+
+/**
+ * The colour a draft is painted with so that it matches the saved stroke. Night Mode's inversion
+ * is the same for every pixel and keeps a mix a mix, so ink of a colour at an opacity over the
+ * page, then inverted, is the inverted colour at that opacity over the inverted page.
+ */
+internal fun inkScreenColor(c: Color, look: InkLook): Color = if (look.night) nightColor(c) else c
+
+/**
+ * The marker's paint and blend. On light paper it is [inkHighlighterColor] with Darken; on dark
+ * paper [inkHighlighterColorOnDark] with Lighten, as the saved comment (the engine's `backdrop`).
+ * Night Mode inverts the page after the marker is on it, which turns the keeping of the darker
+ * colour into the keeping of the lighter one and back.
+ */
+internal fun inkHighlighterPaint(color: Color, opacity: Float, look: InkLook): Pair<Color, BlendMode> {
+    val saved = if (look.darkPaper) inkHighlighterColorOnDark(color, opacity) else inkHighlighterColor(color, opacity)
+    return inkScreenColor(saved, look) to if (look.darkPaper != look.night) BlendMode.Lighten else BlendMode.Darken
+}
+
+/**
+ * The marker's paint on dark paper (#610): its colour at [opacity] mixed with black, opaque, drawn
+ * with Lighten. Darken keeps the darker colour, so over dark paper it drew nothing; Lighten gives
+ * the paper the marker's colour, leaves light ink under it light, and still lays a colour down
+ * once where strokes cross. The saved comment is drawn the same way (`highlighter_colour_on_dark`).
+ */
+internal fun inkHighlighterColorOnDark(color: Color, opacity: Float): Color {
+    val a = opacity.takeIf { it.isFinite() }?.coerceIn(0f, 1f) ?: 1f
+    return Color(a * color.red.coerceIn(0f, 1f), a * color.green.coerceIn(0f, 1f), a * color.blue.coerceIn(0f, 1f), 1f)
+}
+
+/**
  * Draw one draft stroke: page points mapped by [origin] (screen position of the page's top-left
  * plus any lasso move, already scaled) and [scale] (screen pixels per point).
  */
@@ -292,12 +338,16 @@ internal fun DrawScope.drawInkStroke(
     pageBoundsOnScreen: Rect,
     /** The page's height in points, so a pencil's grain meets the saved comment's grid. */
     pageHeightPt: Float = 0f,
+    /** How the page under the stroke is shown, so the draft matches the saved stroke (#610). */
+    look: InkLook = InkLook.Plain,
 ) {
     if (runs.isEmpty() || !scale.isFinite() || scale <= 0f) return
-    val blend = if (highlighter) BlendMode.Darken else BlendMode.SrcOver
+    val marker = if (highlighter) inkHighlighterPaint(color, opacity, look) else null
+    val blend = marker?.second ?: BlendMode.SrcOver
     val layered = inkNeedsLayer(runs.size, opacity, highlighter)
+    val color = inkScreenColor(color, look)
     val paintColor = when {
-        highlighter -> inkHighlighterColor(color, opacity)
+        marker != null -> marker.first
         layered -> color.copy(alpha = 1f)
         else -> color.copy(alpha = opacity)
     }
@@ -338,18 +388,21 @@ internal fun DrawScope.drawInkStroke(
  * Draw the tail of the stroke being written ([inkTailPoints], in screen pixels) at [widthPx]: one
  * path, so a translucent pen's tail is laid down once. Drawn only, never saved.
  */
-internal fun DrawScope.drawInkTail(tail: List<Offset>, color: Color, opacity: Float, widthPx: Float, highlighter: Boolean = false) {
+internal fun DrawScope.drawInkTail(
+    tail: List<Offset>, color: Color, opacity: Float, widthPx: Float, highlighter: Boolean = false, look: InkLook = InkLook.Plain,
+) {
     if (tail.size < 2 || !(widthPx > 0f)) return
     val path = Path()
     path.moveTo(tail[0].x, tail[0].y)
     for (i in 1 until tail.size) path.lineTo(tail[i].x, tail[i].y)
     if (highlighter) {
-        // opaque and Darken, as the stroke itself: the tail does not darken where it meets the line
-        drawPath(path, inkHighlighterColor(color, opacity), style = Stroke(width = widthPx, cap = StrokeCap.Square, join = StrokeJoin.Round), blendMode = BlendMode.Darken)
+        // opaque and blended as the stroke itself: the tail does not darken where it meets the line
+        val (paint, blend) = inkHighlighterPaint(color, opacity, look)
+        drawPath(path, paint, style = Stroke(width = widthPx, cap = StrokeCap.Square, join = StrokeJoin.Round), blendMode = blend)
         return
     }
     drawPath(
-        path, color.copy(alpha = opacity.takeIf { it.isFinite() }?.coerceIn(0f, 1f) ?: 1f),
+        path, inkScreenColor(color, look).copy(alpha = opacity.takeIf { it.isFinite() }?.coerceIn(0f, 1f) ?: 1f),
         style = Stroke(width = widthPx, cap = StrokeCap.Round, join = StrokeJoin.Round),
     )
 }

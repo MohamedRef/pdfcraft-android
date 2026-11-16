@@ -481,12 +481,18 @@ enum Blend {
     /// text under it stays black, and where two strokes of one colour cross the colour is not
     /// applied twice, in any reader that blends.
     Darken,
+    /// Android adaptation (#610): a freehand highlighter on dark paper (`/PCBackdrop /Dark`): its
+    /// colour mixed with black at its opacity, drawn opaque with Lighten
+    /// ([`highlighter_colour_on_dark`]). Darken keeps the darker colour, so over dark paper it
+    /// drew nothing; Lighten is its mirror: the paper takes the marker's colour, light ink under
+    /// it stays light, and crossing strokes of one colour are still not applied twice.
+    Lighten,
 }
 
 /// `/GS0`: the line's opacity for strokes and the fill's for everything filled; `/GS1`, where the
 /// text's differs from the fill's: the text's for its glyphs.
 fn ext_gstate(parts: PartOpacity, blend: Blend) -> Option<Dict> {
-    let parts = if blend == Blend::Darken { PartOpacity { line: 1.0, fill: 1.0, text: 1.0 } } else { parts };
+    let parts = if matches!(blend, Blend::Darken | Blend::Lighten) { PartOpacity { line: 1.0, fill: 1.0, text: 1.0 } } else { parts };
     if parts.line >= 1.0 && parts.fill >= 1.0 && parts.text >= 1.0 && blend == Blend::Normal {
         return None;
     }
@@ -497,6 +503,7 @@ fn ext_gstate(parts: PartOpacity, blend: Blend) -> Option<Dict> {
             Blend::Normal => {}
             Blend::Multiply => gs.set(b"BM".to_vec(), Object::name("Multiply")),
             Blend::Darken => gs.set(b"BM".to_vec(), Object::name("Darken")),
+            Blend::Lighten => gs.set(b"BM".to_vec(), Object::name("Lighten")),
         }
         gs.set(b"CA".to_vec(), Object::Real(stroke));
         gs.set(b"ca".to_vec(), Object::Real(fill));
@@ -515,6 +522,18 @@ fn ext_gstate(parts: PartOpacity, blend: Blend) -> Option<Dict> {
 pub(crate) fn highlighter_colour(c: Rgb, opacity: f64) -> Rgb {
     let a = if opacity.is_finite() { opacity.clamp(0.0, 1.0) } else { 1.0 };
     c.map(|v| 1.0 - a * (1.0 - v.clamp(0.0, 1.0)))
+}
+
+/// A freehand highlighter's colour `c` at `opacity` on dark paper, mixed with black: the opaque
+/// colour that, drawn with Lighten over black, matches `c` at that opacity (#610).
+pub(crate) fn highlighter_colour_on_dark(c: Rgb, opacity: f64) -> Rgb {
+    let a = if opacity.is_finite() { opacity.clamp(0.0, 1.0) } else { 1.0 };
+    c.map(|v| a * v.clamp(0.0, 1.0))
+}
+
+/// Whether the comment was made on dark paper (`/PCBackdrop /Dark`, #610).
+fn on_dark_paper(context: &AppearanceContext<'_>) -> bool {
+    context.dict.name(b"PCBackdrop") == Some(b"Dark")
 }
 
 /// Whether the comment is a freehand highlighter stroke (an Ink with `/IT /FreehandHighlight`).
@@ -674,7 +693,7 @@ impl AppearanceDrawing {
     fn new(context: &AppearanceContext<'_>) -> Self {
         let mut drawing = Self::default();
         let blend = if is_freehand_highlight(context) {
-            Blend::Darken
+            if on_dark_paper(context) { Blend::Lighten } else { Blend::Darken }
         } else if context.subtype == b"Highlight" {
             Blend::Multiply
         } else {
@@ -1254,7 +1273,11 @@ fn draw_ink(context: &AppearanceContext<'_>, drawing: &mut AppearanceDrawing) ->
     let w = context.width;
     let c = &mut drawing.content;
     let highlighter = is_freehand_highlight(context);
-    let col = if highlighter { highlighter_colour(stroke?, context.parts.line) } else { stroke? };
+    let col = match highlighter {
+        true if on_dark_paper(context) => highlighter_colour_on_dark(stroke?, context.parts.line),
+        true => highlighter_colour(stroke?, context.parts.line),
+        false => stroke?,
+    };
     let list = d.get(b"InkList")?.as_array()?;
     let factors = d.get(b"PCWidths").and_then(Object::as_array).map(Vec::as_slice);
     if let (Some(f), Some(dens)) = (factors, d.get(b"PCDensity").and_then(Object::as_array)) {

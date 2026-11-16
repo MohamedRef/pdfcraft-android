@@ -595,7 +595,8 @@ private fun ZoomWritingPad(
         if (img != null) { sharp = wanted to img; sharpGen = gen }
     }
     Box(
-        modifier.background(Color.White).drawBehind {
+        // the pad's paper and page are shown as the page above it is: inverted in Night Mode (#610)
+        modifier.background(if (ctl.nightMode) Color.Black else Color.White).drawBehind {
             drawLine(c.divider, Offset(0f, 0f), Offset(size.width, 0f), strokeWidth = 2f)
         }.pointerInput(doc) {
             awaitEachGesture {
@@ -648,6 +649,7 @@ private fun ZoomWritingPad(
                         img.bitmap,
                         dstOffset = androidx.compose.ui.unit.IntOffset(pageRect.left.toInt(), pageRect.top.toInt()),
                         dstSize = androidx.compose.ui.unit.IntSize(pageRect.width.toInt(), pageRect.height.toInt()),
+                        colorFilter = if (ctl.nightMode) nightInvertFilter else null,
                     )
                 }
                 // The sharp render on top, placed by page points so it lines up even while a newer one renders.
@@ -658,17 +660,18 @@ private fun ZoomWritingPad(
                         img,
                         dstOffset = androidx.compose.ui.unit.IntOffset(Math.round(origin.x + r.x * k), Math.round(origin.y + r.y * k)),
                         dstSize = androidx.compose.ui.unit.IntSize(Math.round(r.w * k), Math.round(r.h * k)),
+                        colorFilter = if (ctl.nightMode) nightInvertFilter else null,
                     )
                 }
                 for (s in drafts) if (s.page == zb.page) {
-                    drawInkStroke(s.paths.runs(s), Color(s.appearance.argb), s.appearance.opacity, s.appearance.style == InkStyle.Highlighter, origin, m, pageRect, page.height)
+                    drawInkStroke(s.paths.runs(s), Color(s.appearance.argb), s.appearance.opacity, s.appearance.style == InkStyle.Highlighter, origin, m, pageRect, page.height, InkLook(ctl.nightMode, s.appearance.onDark))
                 }
                 // the tail to the pen while a stroke is written on the pad: smoothing keeps the line a little behind it
                 writing?.takeIf { it.page == zb.page }?.let { s ->
                     val last = s.points.lastOrNull() ?: return@let
                     val tail = inkTailPoints(origin + last * m, s.penTip?.let { origin + it * m }, null)
                     val width = inkStylePointWidths(listOf(s.scales.lastOrNull() ?: 1f), s.appearance.width, s.appearance.style).first()
-                    drawInkTail(tail, Color(s.appearance.argb), inkTailOpacity(s), width * m, s.appearance.style == InkStyle.Highlighter)
+                    drawInkTail(tail, Color(s.appearance.argb), inkTailOpacity(s), width * m, s.appearance.style == InkStyle.Highlighter, InkLook(ctl.nightMode, s.appearance.onDark))
                 }
                 // The advance zone: lifting the pen here moves the box on.
                 drawRect(Color(0xFF2E7DFF).copy(alpha = 0.07f), Offset(size.width * 0.8f, 0f), androidx.compose.ui.geometry.Size(size.width * 0.2f, size.height))
@@ -1377,9 +1380,9 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                 val inkStyle = if (buttonHighlighter) InkStyle.Highlighter else prefs.inkStyle
                 val pen = prefs.penSettings(inkStyle)
                 val appearance = InkAppearance(
-                    pen.argb,
+                    inkColorOnPaper(pen.argb, inkStyle, doc.controller.darkPaper),
                     inkStyleOpacity(pen.opacity, inkStyle),
-                    pen.width, prefs.author.ifBlank { null }, inkStyle,
+                    pen.width, prefs.author.ifBlank { null }, inkStyle, onDark = doc.controller.darkPaper,
                 )
                 current = newInkStroke(
                     at.page, appearance, isStylus, doc.controller.inkShapeMode, prefs.penTuning,
@@ -1658,6 +1661,7 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                         scale = doc.viewer.pixelsPerPoint(s.page),
                         pageHeightPt = doc.viewer.pages.getOrNull(s.page)?.height ?: 0f,
                         pageBoundsOnScreen = pageRect,
+                        look = InkLook(doc.controller.nightMode, s.appearance.onDark),
                     )
                 }
             }
@@ -1680,7 +1684,11 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                             cap = androidx.compose.ui.graphics.StrokeCap.Round, join = androidx.compose.ui.graphics.StrokeJoin.Round,
                         ),
                     )
-                    drawImage(img, dstOffset = androidx.compose.ui.unit.IntOffset(Math.round(topLeft.x), Math.round(topLeft.y)), dstSize = size, blendMode = androidx.compose.ui.graphics.BlendMode.SrcIn)
+                    drawImage(
+                        img, dstOffset = androidx.compose.ui.unit.IntOffset(Math.round(topLeft.x), Math.round(topLeft.y)), dstSize = size, blendMode = androidx.compose.ui.graphics.BlendMode.SrcIn,
+                        // the page under the eraser is shown as the page around it: inverted in Night Mode (#610)
+                        colorFilter = if (doc.controller.nightMode) nightInvertFilter else null,
+                    )
                     canvas.restore()
                 }
             }
@@ -1701,7 +1709,7 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                 val width = inkStylePointWidths(listOf(s.scales.lastOrNull() ?: 1f), s.appearance.width, s.appearance.style).first()
                 val pageRect = doc.viewer.pageRectOnScreen(s.page)
                 clipRect(pageRect.left, pageRect.top, pageRect.right, pageRect.bottom) {
-                    drawInkTail(tail, Color(s.appearance.argb), inkTailOpacity(s), width * doc.viewer.pixelsPerPoint(s.page), s.appearance.style == InkStyle.Highlighter)
+                    drawInkTail(tail, Color(s.appearance.argb), inkTailOpacity(s), width * doc.viewer.pixelsPerPoint(s.page), s.appearance.style == InkStyle.Highlighter, InkLook(doc.controller.nightMode, s.appearance.onDark))
                 }
             }
             // the polygon or connected lines placed so far, with a dot on each point
@@ -1845,7 +1853,10 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                 drafts = strokes,
                 newStroke = { page, pressure, isStylus, at, dpPerPt ->
                     val pen = prefs.penSettings(prefs.inkStyle)
-                    val appearance = InkAppearance(pen.argb, inkStyleOpacity(pen.opacity, prefs.inkStyle), pen.width, prefs.author.ifBlank { null }, prefs.inkStyle)
+                    val appearance = InkAppearance(
+                        inkColorOnPaper(pen.argb, prefs.inkStyle, doc.controller.darkPaper), inkStyleOpacity(pen.opacity, prefs.inkStyle),
+                        pen.width, prefs.author.ifBlank { null }, prefs.inkStyle, onDark = doc.controller.darkPaper,
+                    )
                     newInkStroke(page, appearance, isStylus, InkShapeMode.Freehand, prefs.penTuning, dpPerPt, prefs.penPressure(prefs.inkStyle)).also {
                         it.add(at, inkSampleTimeMs, pressure)
                         strokes.add(it)

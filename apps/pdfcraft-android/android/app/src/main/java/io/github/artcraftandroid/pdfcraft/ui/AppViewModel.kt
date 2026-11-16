@@ -504,6 +504,8 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             doc.notWrittenBack = source?.let { withContext(Dispatchers.IO) { files.hasPendingWriteBack(it) } } ?: false
             io.github.artcraftandroid.pdfcraft.engine.OpenTiming.milestone("source_access_ready", openStartedAt)
             doc.controller.nightMode = settings.savedNightMode
+            doc.controller.darkPaper = source?.let { withContext(Dispatchers.IO) { notebooks.get(it.toString()) } }
+                .let { it is io.github.artcraftandroid.pdfcraft.engine.NotebookPage.Builtin && it.template.color == io.github.artcraftandroid.pdfcraft.engine.NotebookColor.Dark }
             // the layout this file was left in, else the one the file asks for, else the app's (#152)
             val remembered = ViewLayout.decode(recent?.layout)
             val fromFile = if (remembered == null && recent?.layout == null && !info.preparing) settings.fileLayout(eng, info.id) else null

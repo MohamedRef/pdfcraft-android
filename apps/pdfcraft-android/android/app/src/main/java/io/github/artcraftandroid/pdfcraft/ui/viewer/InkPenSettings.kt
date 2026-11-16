@@ -28,6 +28,19 @@ internal data class InkPenSettings(val argb: Int, val width: Float, val opacity:
             InkStyle.Highlighter -> InkPenSettings(0xFFFFD100.toInt(), 6f, 1f)
         }
 
+        /**
+         * What a pen whose colour was never changed writes with on dark paper (#610): the default
+         * colours above are black, grey, blue and red, which do not show on a Dark notebook's
+         * paper. Each of these has a contrast of at least 4.5 to 1 against it.
+         */
+        fun defaultOnDark(style: InkStyle): Int = when (style) {
+            InkStyle.Ballpoint -> 0xFFFFFFFF.toInt()
+            InkStyle.Fountain -> 0xFF8AB4FF.toInt()
+            InkStyle.Pencil -> 0xFFD0D0D0.toInt()
+            InkStyle.Brush -> 0xFFFF6B7A.toInt()
+            InkStyle.Highlighter -> default(style).argb
+        }
+
         fun colorKey(style: InkStyle) = "ink.${style.key}.color"
         fun widthKey(style: InkStyle) = "ink.${style.key}.width"
         fun opacityKey(style: InkStyle) = "ink.${style.key}.opacity"
@@ -40,6 +53,13 @@ internal data class InkPenSettings(val argb: Int, val width: Float, val opacity:
         val LEGACY_DEFAULT = InkPenSettings(0xFFE52237.toInt(), 1f, 1f)
     }
 }
+
+/**
+ * The colour a pen writes with on this paper: its own, except that on dark paper a pen still at its
+ * default colour writes with [InkPenSettings.defaultOnDark]. A colour the owner chose is never changed.
+ */
+internal fun inkColorOnPaper(argb: Int, style: InkStyle, darkPaper: Boolean): Int =
+    if (darkPaper && argb == InkPenSettings.default(style).argb) InkPenSettings.defaultOnDark(style) else argb
 
 /** The few typed reads that loading pen settings needs, so the migration is unit-testable. */
 internal interface InkPrefsReader {

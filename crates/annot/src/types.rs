@@ -381,6 +381,12 @@ pub enum Shape {
     FreehandHighlight {
         strokes: Vec<Vec<[f64; 2]>>,
     },
+    /// Android adaptation (#610): the same highlighting on dark paper (`/PCBackdrop /Dark`). It is
+    /// drawn with Lighten in its colour mixed with black, where Darken would leave the paper as
+    /// it is.
+    FreehandHighlightOnDark {
+        strokes: Vec<Vec<[f64; 2]>>,
+    },
     /// Freehand strokes (Draw tool).
     Ink {
         strokes: Vec<Vec<[f64; 2]>>,
@@ -532,7 +538,7 @@ impl Shape {
             Shape::Rectangle { .. } => "Square",
             Shape::Oval { .. } => "Circle",
             Shape::Line { .. } => "Line",
-            Shape::Ink { .. } | Shape::PressureInk { .. } | Shape::FreehandHighlight { .. } | Shape::Signature { .. } => "Ink",
+            Shape::Ink { .. } | Shape::PressureInk { .. } | Shape::FreehandHighlight { .. } | Shape::FreehandHighlightOnDark { .. } | Shape::Signature { .. } => "Ink",
             Shape::TextBox { .. } | Shape::Typewriter { .. } | Shape::Callout { .. } => "FreeText",
             Shape::Mark { .. } | Shape::Stamp { .. } | Shape::CustomStamp { .. } | Shape::TypedSignature { .. } => "Stamp",
             Shape::Redact { .. } => "Redact",
@@ -767,7 +773,7 @@ impl Style {
             }
             Shape::Callout { .. } => ([0.0, 0.0, 0.0], 1.0),
             Shape::Caret { .. } | Shape::Attachment { .. } | Shape::Sound { .. } => ([0.0, 0.47, 0.84], 1.0),
-            Shape::FreehandHighlight { .. } => return Self { color: [1.0, 0.94, 0.0], opacity: 0.35, width: 14.0, ..Self::default() },
+            Shape::FreehandHighlight { .. } | Shape::FreehandHighlightOnDark { .. } => return Self { color: [1.0, 0.94, 0.0], opacity: 0.35, width: 14.0, ..Self::default() },
             Shape::Ink { .. } | Shape::PressureInk { .. } => ([0.0, 0.4, 0.87], 2.0),
             Shape::TextBox { .. } | Shape::Typewriter { .. } => ([0.0, 0.0, 0.0], 0.0),
             Shape::Mark { .. } => ([0.0, 0.0, 0.0], 1.5),
