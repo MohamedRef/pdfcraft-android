@@ -190,5 +190,7 @@ internal fun inkStrokeFields(ink: PenStrokeStats?, tiltMin: Float, tiltMax: Floa
         // a pencil's ink density shows the paper through its grain: the opacity it looks like
         "opacity_min" to ink.opacity * (ink.densities.toList().minOrNull() ?: 1f), "opacity_max" to ink.opacity * (ink.densities.toList().maxOrNull() ?: 1f),
         "taper_start_pt" to ink.taperStartPt, "taper_end_pt" to ink.taperEndPt, "stabilisation" to ink.dials.smoothing,
+        // how many of the pen's samples became points of the line (#609)
+        "points" to ink.kept, "points_from" to ink.given,
     )
 }

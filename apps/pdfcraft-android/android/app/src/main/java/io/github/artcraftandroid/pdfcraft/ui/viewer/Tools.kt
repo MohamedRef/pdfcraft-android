@@ -144,6 +144,8 @@ internal class InkStroke(
 
     /** Takes the tremor out of a freehand stroke's points ([PenDials.smoothing]). */
     private val smoother = dynamics?.let { InkSmoother(it.smoothing, dpPerPt) }
+    /** Keeps a freehand line's points [INK_POINT_SPACING_DP] apart on the glass (#609); a shape keeps every point. */
+    private val thinner = if (dynamics != null) inkPointThinner(dpPerPt, appearance.width * inkStyleWidthFactor(appearance.style)) else InkPointThinner(0f)
     private var lastTimeMs = 0L
     private var lastPressure = 1f
 
@@ -158,9 +160,11 @@ internal class InkStroke(
         val q = smoother?.next(p, timeMs) ?: p
         lastTimeMs = timeMs
         lastPressure = pressure
-        points.add(q)
-        scales.add(dynamics?.next(q, timeMs, pressure, if (stylus) StylusLog.tiltRad else Float.NaN) ?: 1f)
-        addDensity()
+        // the pen model sees every sample; the line keeps a point every so often
+        val scale = dynamics?.next(q, timeMs, pressure, if (stylus) StylusLog.tiltRad else Float.NaN) ?: 1f
+        val density = dynamics?.density ?: 1f
+        dynamics?.stats?.let { it.given++ }
+        thinner.add(q, scale, density, ::addPoint)
         jetpack?.let { j ->
             try {
                 j.add(p, timeMs, pressure)
@@ -202,8 +206,11 @@ internal class InkStroke(
         return true
     }
 
-    private fun addDensity() {
-        if (grain) densities.add(dynamics?.density ?: 1f)
+    private fun addPoint(q: Offset, scale: Float, density: Float) {
+        points.add(q)
+        scales.add(scale)
+        if (grain) densities.add(density)
+        dynamics?.stats?.let { it.kept++ }
     }
 
     /** Whether this stroke shows the paper through a pencil's grain. */
@@ -211,10 +218,11 @@ internal class InkStroke(
 
     /** On lift: a smoothed line that stopped short of the pen is taken to where the pen left the page. */
     fun catchUp() {
+        // the last sample, when thinning had not made it a point yet
+        thinner.flush()?.let { (q, scale, density) -> addPoint(q, scale, density) }
         val end = smoother?.end() ?: return
-        points.add(end)
-        scales.add(dynamics?.next(end, lastTimeMs, lastPressure, if (stylus) StylusLog.tiltRad else Float.NaN) ?: 1f)
-        addDensity()
+        val scale = dynamics?.next(end, lastTimeMs, lastPressure, if (stylus) StylusLog.tiltRad else Float.NaN) ?: 1f
+        addPoint(end, scale, dynamics?.density ?: 1f)
     }
 
     /** Keeps [densities] one per point after [points] changed shape (a dot, a straightened or snapped line). */
