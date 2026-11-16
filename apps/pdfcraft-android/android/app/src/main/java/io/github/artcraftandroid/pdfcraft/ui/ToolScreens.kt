@@ -551,6 +551,7 @@ fun CreateSourcesScreen(vm: AppViewModel) {
         Text(stringResource(R.string.tools_or_make_new), color = c.textSecondary, fontSize = 14.sp, modifier = Modifier.padding(start = 20.dp, top = 20.dp, bottom = 6.dp))
         Box(Modifier.padding(horizontal = 16.dp).fillMaxWidth().height(1.dp).background(c.divider))
         SourceRow(LucideIcons.Camera, stringResource(R.string.tools_scan_document)) { vm.tools.toolScreen = null; vm.startScan() }
+        SourceRow(LucideIcons.Images, stringResource(R.string.scan_from_photos)) { vm.tools.toolScreen = null; vm.startScan(io.github.artcraftandroid.pdfcraft.ui.scan.ScanStart.Import, photos = true) }
         SourceRow(LucideIcons.BookOpen, stringResource(R.string.notebook_new)) { vm.tools.toolScreen = null; vm.study.newNotebookOpen = true }
     }
 }
@@ -915,7 +916,8 @@ fun ScanScreen(vm: AppViewModel) {
     val dismissedSuggestions = remember { androidx.compose.runtime.mutableStateListOf<String>() }
     // the page as it will be saved, or the photo it is made from (#301)
     var view by remember { mutableStateOf(ScanView.Result) }
-    LaunchedEffect(Unit) { if (pages.isEmpty()) vm.takeScanPhoto() }
+    // opened on the picker or on shared pictures (#617): no camera on top of them
+    LaunchedEffect(Unit) { if (pages.isEmpty() && !vm.scanSkipCamera) vm.takeScanPhoto() }
     // a page just taken is the one shown
     var seen by remember { mutableStateOf(pages.size) }
     LaunchedEffect(pages.size) {

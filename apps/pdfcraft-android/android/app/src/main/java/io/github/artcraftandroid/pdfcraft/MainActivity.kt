@@ -95,6 +95,7 @@ class MainActivity : ComponentActivity() {
             )
         ) openFromIntent(intent)
         collectRequests()
+        publishShortcuts()
         setContent {
             PdfcraftTheme {
                 androidx.compose.foundation.layout.Box {
@@ -161,6 +162,10 @@ class MainActivity : ComponentActivity() {
         }
         lifecycleScope.launch {
             for (u in vm.scanImports) scanCamera.importPhotos()
+        }
+        // pictures shared from another app start a scan (#617)
+        lifecycleScope.launch {
+            for (uris in vm.scanShared) scanCamera.importShared(uris)
         }
         lifecycleScope.launch {
             for (r in vm.requests.creates) launchSafely {
@@ -346,8 +351,54 @@ class MainActivity : ComponentActivity() {
         return candidates[chosen]
     }
 
+    /**
+     * The launcher's shortcuts (#617): New scan, Scan from photos, Open file. Dynamic, so they
+     * follow the build's own package name; refreshed at each start, in the app's language.
+     */
+    private fun publishShortcuts() {
+        runCatching {
+            fun shortcut(id: String, action: String, short: Int, long: Int, icon: Int) =
+                androidx.core.content.pm.ShortcutInfoCompat.Builder(this, id)
+                    .setShortLabel(getString(short)).setLongLabel(getString(long))
+                    .setIcon(androidx.core.graphics.drawable.IconCompat.createWithResource(this, icon))
+                    .setIntent(Intent(action).setClass(this, MainActivity::class.java))
+                    .build()
+            androidx.core.content.pm.ShortcutManagerCompat.setDynamicShortcuts(this, listOf(
+                shortcut("new_scan", io.github.artcraftandroid.pdfcraft.ui.scan.ScanShortcuts.ACTION_NEW_SCAN, R.string.home_new_scan, R.string.home_new_scan, R.drawable.ic_shortcut_scan),
+                shortcut("scan_photos", io.github.artcraftandroid.pdfcraft.ui.scan.ScanShortcuts.ACTION_SCAN_PHOTOS, R.string.shortcut_scan_photos, R.string.scan_from_photos, R.drawable.ic_shortcut_photos),
+                shortcut("open_file", io.github.artcraftandroid.pdfcraft.ui.scan.ScanShortcuts.ACTION_OPEN_FILE, R.string.home_open_file, R.string.home_open_file, R.drawable.ic_shortcut_open),
+            ))
+        }.onFailure { Diag.failure(DiagArea.Scan, "shortcuts_publish", it) }
+    }
+
+    /**
+     * A launcher shortcut, or pictures shared to the app (#617). True when [intent] was one of
+     * them, so it is not read as a PDF.
+     */
+    private fun startFromIntent(intent: Intent?): Boolean {
+        val action = runCatching { intent?.action }.getOrNull() ?: return false
+        when (action) {
+            io.github.artcraftandroid.pdfcraft.ui.scan.ScanShortcuts.ACTION_NEW_SCAN -> vm.startScan(io.github.artcraftandroid.pdfcraft.ui.scan.ScanStart.Shortcut)
+            io.github.artcraftandroid.pdfcraft.ui.scan.ScanShortcuts.ACTION_SCAN_PHOTOS -> vm.startScan(io.github.artcraftandroid.pdfcraft.ui.scan.ScanStart.Shortcut, photos = true)
+            io.github.artcraftandroid.pdfcraft.ui.scan.ScanShortcuts.ACTION_OPEN_FILE -> {
+                Diag.event(DiagArea.Home, "shortcut_open_file")
+                launchSafely { pickPdf.launch(arrayOf("application/pdf")) }
+            }
+            else -> {
+                val streams = mutableListOf<Uri?>()
+                runCatching { IntentCompat.getParcelableArrayListExtra(intent!!, Intent.EXTRA_STREAM, Uri::class.java) }.getOrNull()?.let(streams::addAll)
+                runCatching { IntentCompat.getParcelableExtra(intent!!, Intent.EXTRA_STREAM, Uri::class.java) }.getOrNull()?.let(streams::add)
+                val clip = runCatching { intent!!.clipData?.let { c -> (0 until minOf(c.itemCount, 200)).map { c.getItemAt(it).uri } } }.getOrNull().orEmpty()
+                val images = io.github.artcraftandroid.pdfcraft.ui.scan.scanSharedImages(action, runCatching { intent!!.type }.getOrNull(), streams, clip) ?: return false
+                if (images.isEmpty()) vm.tell(getString(R.string.scan_shared_none)) else vm.startScanShared(images)
+            }
+        }
+        return true
+    }
+
     /** An external document must not terminate the whole app on a malformed parcelable. */
     private fun openFromIntent(intent: Intent?) {
+        if (runCatching { startFromIntent(intent) }.getOrDefault(false)) return
         val uri = runCatching { externalPdfUri(intent) }.getOrNull() ?: return
         // shared comments (#158) go into the document open now, not open as one
         if (isCommentsType(runCatching { intent?.type }.getOrNull())) vm.commenting.receiveComments(uri)
