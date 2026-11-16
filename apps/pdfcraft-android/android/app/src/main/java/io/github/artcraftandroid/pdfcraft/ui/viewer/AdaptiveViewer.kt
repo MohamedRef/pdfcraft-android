@@ -19,10 +19,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -65,14 +61,16 @@ fun AdaptiveViewer(vm: AppViewModel, doc: OpenDocument) {
         configuration.smallestScreenWidthDp,
         isDesktop(context, configuration),
     )
-    var railOpen by remember(doc) { mutableStateOf(true) }
+    val ctl = doc.controller
     val showRail = wide && vm.tabs.splitWith == null && doc.pageCount >= 2 && !vm.settings.readingMode && !doc.controller.pagesOpen
+    // the top bar's Contents button opens this panel where there is one, the sheet where there is not (#647)
+    androidx.compose.runtime.SideEffect { ctl.contentsInPanel = showRail }
     // Keep ViewerScreen at one composition call site across breakpoint changes. Moving it
     // between compact/expanded branches discards remembered uncommitted ink and tool state.
     Row(Modifier.fillMaxSize()) {
         if (showRail) {
-            if (railOpen) {
-                ExpandedPageRail(doc, onCollapse = { railOpen = false })
+            if (ctl.panelOpen) {
+                SidePanel(vm, doc, onCollapse = { ctl.panelOpen = false })
             } else {
                 Column(
                     Modifier.width(52.dp).fillMaxHeight().background(pdfColors.surface),
@@ -81,7 +79,7 @@ fun AdaptiveViewer(vm: AppViewModel, doc: OpenDocument) {
                     BarIcon(
                         LucideIcons.ChevronRight,
                         stringResource(R.string.viewer_show_page_navigator),
-                        onClick = { railOpen = true },
+                        onClick = { ctl.panelOpen = true },
                     )
                 }
             }
@@ -92,58 +90,52 @@ fun AdaptiveViewer(vm: AppViewModel, doc: OpenDocument) {
     }
 }
 
+/** The side panel's width with the pages' short rows, and with the contents' or bookmarks' titles (#647). */
+internal val SidePanelPagesWidth = 204.dp
+internal val SidePanelContentsWidth = 300.dp
+
+/**
+ * The tablet's side panel (#647): the page in view over three tabs, Pages (the page navigator it
+ * always was), Contents and Bookmarks, the same lists as the phone's sheet. It stays open while
+ * reading; choosing an entry goes to its page and leaves the panel as it is.
+ */
 @Composable
-private fun ExpandedPageRail(doc: OpenDocument, onCollapse: () -> Unit) {
+private fun SidePanel(vm: AppViewModel, doc: OpenDocument, onCollapse: () -> Unit) {
     val c = pdfColors
+    val ctl = doc.controller
     val current = doc.viewer.currentPage.coerceIn(0, doc.pageCount - 1)
-    val list = rememberLazyListState()
-    // Large documents are virtualized: do not request thumbnails or open another engine session.
-    LaunchedEffect(current, doc.pageCount) {
-        if (list.layoutInfo.visibleItemsInfo.none { it.index == current }) list.scrollToItem(current)
+    val tab = ctl.contentsTab ?: ContentsTab.Pages
+    val go: (Int) -> Unit = { page ->
+        ctl.rememberJump(doc.viewer)
+        doc.viewer.goToPage(page)
     }
-    Column(Modifier.width(204.dp).fillMaxHeight().background(c.surface)) {
+    Column(Modifier.width(if (tab == ContentsTab.Pages) SidePanelPagesWidth else SidePanelContentsWidth).fillMaxHeight().background(c.surface)) {
         Row(
             Modifier.fillMaxWidth().height(56.dp).padding(start = 16.dp, end = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
-                stringResource(R.string.pages_title),
+                stringResource(R.string.viewer_page_of, current + 1, doc.pageCount),
                 modifier = Modifier.weight(1f),
                 color = c.text,
                 fontWeight = FontWeight.SemiBold,
-                fontSize = 16.sp,
+                fontSize = 15.sp,
+                maxLines = 1,
             )
+            if (tab == ContentsTab.Contents) ContentsManageMenu(vm, doc)
             BarIcon(
                 LucideIcons.ChevronLeft,
                 stringResource(R.string.viewer_hide_page_navigator),
                 onClick = onCollapse,
             )
         }
-        Text(
-            stringResource(R.string.viewer_page_of, current + 1, doc.pageCount),
-            Modifier.padding(start = 16.dp, bottom = 10.dp),
-            color = c.textSecondary,
-            fontSize = 12.sp,
-        )
+        ContentsTabs(listOf(ContentsTab.Pages, ContentsTab.Contents, ContentsTab.Bookmarks), tab, icons = true) { ctl.contentsTab = it }
         Box(Modifier.fillMaxWidth().height(1.dp).background(c.divider))
-        LazyColumn(
-            modifier = Modifier.weight(1f).fillMaxWidth(),
-            state = list,
-            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(2.dp),
-        ) {
-            items(doc.pageCount) { index ->
-                val selected = index == current
-                Text(
-                    stringResource(R.string.pages_page, index + 1),
-                    modifier = Modifier.fillMaxWidth()
-                        .background(if (selected) c.pressed else Color.Transparent, RoundedCornerShape(6.dp))
-                        .clickable { doc.viewer.goToPage(index) }
-                        .padding(horizontal = 14.dp, vertical = 12.dp),
-                    color = if (selected) c.toolAccent else c.text,
-                    fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
-                    fontSize = 14.sp,
-                )
+        Column(Modifier.weight(1f).fillMaxWidth()) {
+            when (tab) {
+                ContentsTab.Pages -> PanelPages(doc, current, Modifier.weight(1f).fillMaxWidth())
+                ContentsTab.Contents -> ContentsTabBody(vm, doc, outlineOf(vm, doc), Modifier.weight(1f), go)
+                ContentsTab.Bookmarks -> BookmarksTabBody(vm, doc, Modifier.weight(1f), go)
             }
         }
         Box(Modifier.fillMaxWidth().height(1.dp).background(c.divider))
@@ -174,6 +166,37 @@ private fun ExpandedPageRail(doc: OpenDocument, onCollapse: () -> Unit) {
                 onClick = { viewer.zoomStep(1, focus) },
                 enabled = viewer.canZoomIn,
                 size = 42.dp,
+            )
+        }
+    }
+}
+
+/** The Pages tab: every page by its number, the one in view marked. */
+@Composable
+private fun PanelPages(doc: OpenDocument, current: Int, modifier: Modifier) {
+    val c = pdfColors
+    val list = rememberLazyListState()
+    // Large documents are virtualized: do not request thumbnails or open another engine session.
+    LaunchedEffect(current, doc.pageCount) {
+        if (list.layoutInfo.visibleItemsInfo.none { it.index == current }) list.scrollToItem(current)
+    }
+    LazyColumn(
+        modifier = modifier,
+        state = list,
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        items(doc.pageCount) { index ->
+            val selected = index == current
+            Text(
+                stringResource(R.string.pages_page, index + 1),
+                modifier = Modifier.fillMaxWidth()
+                    .background(if (selected) c.pressed else Color.Transparent, RoundedCornerShape(6.dp))
+                    .clickable { doc.viewer.goToPage(index) }
+                    .padding(horizontal = 14.dp, vertical = 12.dp),
+                color = if (selected) c.toolAccent else c.text,
+                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+                fontSize = 14.sp,
             )
         }
     }
