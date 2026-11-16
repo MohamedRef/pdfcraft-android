@@ -396,10 +396,6 @@ dependencies {
     implementation(libs.androidx.compose.material3)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.androidx.exifinterface)
-    // the Pen lab trial (#569): Jetpack Ink pens, Apache-2.0, from AOSP
-    implementation(libs.androidx.ink.strokes)
-    implementation(libs.androidx.ink.brush)
-    implementation(libs.androidx.ink.geometry)
     // Scan: the in-app camera (#294), Apache-2.0 like the other AndroidX libraries
     implementation(libs.androidx.camera.core)
     implementation(libs.androidx.camera.camera2)

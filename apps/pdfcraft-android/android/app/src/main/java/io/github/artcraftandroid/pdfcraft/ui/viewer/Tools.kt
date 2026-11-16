@@ -125,15 +125,7 @@ internal class InkStroke(
     val stylus: Boolean = false,
     /** How many dp one page point takes on screen while this stroke is drawn (the pen's speed is measured on the glass). */
     dpPerPt: Float = 1f,
-    /** Jetpack Ink draws this stroke (the Pen lab trial, #569); it becomes a PdfCraft stroke on lift. */
-    jetpack: JetpackInkLine? = null,
 ) {
-    var jetpack: JetpackInkLine? = jetpack
-        private set
-    /** Jetpack Ink's outline so far (page points), drawn instead of the stroke while it is written. */
-    var jetpackPath by mutableStateOf<androidx.compose.ui.graphics.Path?>(null)
-        private set
-
     val points = mutableStateListOf<Offset>()
     val scales = mutableStateListOf<Float>()
     /** A pencil's ink density per point (#569), from [dynamics]; empty for solid ink. */
@@ -161,45 +153,6 @@ internal class InkStroke(
         points.add(q)
         scales.add(dynamics?.next(q, timeMs, pressure, if (stylus) StylusLog.tiltRad else Float.NaN) ?: 1f)
         addDensity()
-        jetpack?.let { j ->
-            try {
-                j.add(p, timeMs, pressure)
-                jetpackPath = j.path()
-            } catch (e: Exception) {
-                dropJetpack(e)
-            }
-        }
-    }
-
-    /** Jetpack Ink refused a sample: this stroke goes on as PdfCraft's own line instead of closing the app. */
-    private fun dropJetpack(e: Exception) {
-        jetpack = null
-        jetpackPath = null
-        io.github.artcraftandroid.pdfcraft.engine.Diag.failure(io.github.artcraftandroid.pdfcraft.engine.DiagArea.Ink, "jetpack_ink", e)
-    }
-
-    /**
-     * On lift, a Jetpack Ink stroke becomes an ordinary one: the centre of its outline along the
-     * pen's path, with the outline's width at each point (`/PCWidths` when saved). False when the
-     * outline could not be measured; the stroke then keeps PdfCraft's own line.
-     */
-    fun takeJetpackShape(base: Float): Boolean {
-        val j = jetpack ?: return false
-        jetpack = null
-        jetpackPath = null
-        val outlines = try {
-            j.finish()
-            j.outlines()
-        } catch (e: Exception) {
-            dropJetpack(e)
-            return false
-        }
-        val (pts, widths) = tubeCentreline(points.toList(), outlines, base) ?: return false
-        points.clear(); points.addAll(pts)
-        scales.clear(); scales.addAll(widths)
-        pressureSensitive = true
-        widthVersion++
-        return true
     }
 
     private fun addDensity() {
@@ -255,11 +208,7 @@ internal fun newInkStroke(page: Int, appearance: InkAppearance, stylus: Boolean,
     val curve = if (stylus) tuning.pressureCurve else PressureCurve.LINEAR
     val dynamics = PenDynamics(dials, source, range, appearance.width.takeIf { it.isFinite() && it > 0f } ?: 1f, stats, curve, onGlass)
     PenDiag.inkStroke(stats)
-    // the Pen lab trial: Jetpack Ink draws this pen instead (a missing native library leaves ours)
-    val jetpack = if (tuning.jetpackInk && jetpackInkDraws(style)) {
-        runCatching { JetpackInkLine(style, appearance.argb, appearance.width * inkStyleWidthFactor(style), onGlass, stylus) }.getOrNull()
-    } else null
-    return InkStroke(page, appearance, dials.varies && style != InkStyle.Highlighter, mode, dynamics, stylus, onGlass, jetpack)
+    return InkStroke(page, appearance, dials.varies && style != InkStyle.Highlighter, mode, dynamics, stylus, onGlass)
 }
 
 /**
@@ -271,10 +220,6 @@ internal fun finishInkStroke(s: InkStroke, tuning: PenTuning, trial: Boolean = f
     val d = s.dynamics ?: return
     val measures = inkStrokeMeasuresPressure(s.stylus, s.appearance.style, trial)
     s.catchUp()
-    if (s.jetpack != null && s.takeJetpackShape(s.appearance.width * inkStyleWidthFactor(s.appearance.style))) {
-        if (measures) d.stats?.let { tuning.learn(it.raw.toList()) }
-        return
-    }
     if (s.pressureSensitive) {
         d.finish(s.points, s.scales)
         s.widthVersion++
@@ -704,10 +649,10 @@ private fun ZoomWritingPad(
                     )
                 }
                 for (s in drafts) if (s.page == zb.page) {
-                    if (!drawJetpackLive(s, origin, m)) drawInkStroke(s.paths.runs(s), Color(s.appearance.argb), s.appearance.opacity, s.appearance.style == InkStyle.Highlighter, origin, m, pageRect, page.height)
+                    drawInkStroke(s.paths.runs(s), Color(s.appearance.argb), s.appearance.opacity, s.appearance.style == InkStyle.Highlighter, origin, m, pageRect, page.height)
                 }
                 // the tail to the pen while a stroke is written on the pad: smoothing keeps the line a little behind it
-                writing?.takeIf { it.page == zb.page && it.jetpack == null }?.let { s ->
+                writing?.takeIf { it.page == zb.page }?.let { s ->
                     val last = s.points.lastOrNull() ?: return@let
                     val tail = inkTailPoints(origin + last * m, s.penTip?.let { origin + it * m }, null)
                     val width = inkStylePointWidths(listOf(s.scales.lastOrNull() ?: 1f), s.appearance.width, s.appearance.style).first()
@@ -1691,7 +1636,6 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                 val lift = if (moving && s in selectedSet) moveOffset else Offset.Zero
                 // Ink being drawn may run off its page (#75); only the part on the page shows.
                 clipRect(pageRect.left, pageRect.top, pageRect.right, pageRect.bottom) {
-                    if (drawJetpackLive(s, doc.viewer.pageToScreen(s.page, lift.x, lift.y), doc.viewer.pixelsPerPoint(s.page))) return@clipRect
                     drawInkStroke(
                         runs = s.paths.runs(s),
                         color = Color(s.appearance.argb),
@@ -1733,7 +1677,7 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
             // smoothing keeps a little ahead of it (#569), and for a pen on to where it will be
             // about one frame from now, from its real speed. Drawn only, never saved; the next
             // real sample replaces it.
-            current?.takeIf { it.shapeMode == InkShapeMode.Freehand && it.preview == null && it.jetpack == null }?.let { s ->
+            current?.takeIf { it.shapeMode == InkShapeMode.Freehand && it.preview == null }?.let { s ->
                 val last = s.points.lastOrNull() ?: return@let
                 val tail = inkTailPoints(
                     doc.viewer.pageToScreen(s.page, last.x, last.y),

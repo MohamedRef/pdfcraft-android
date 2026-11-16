@@ -1399,8 +1399,6 @@
     <string name="pen_lab_pen">Lápiz</string>
     <string name="pen_lab_try">Escribe aquí para probar el lápiz</string>
     <string name="pen_lab_clear_strip">Borrar la franja</string>
-    <string name="pen_lab_jetpack">Probar los bolígrafos de Jetpack Ink</string>
-    <string name="pen_lab_jetpack_summary">Jetpack Ink (código abierto, de Android) dibuja el bolígrafo, la pluma y el pincel en lugar de PdfCraft. La tinta guardada es igual; desactívalo para comparar.</string>
     <string name="pen_lab_group_pressure">Presión</string>
     <string name="pen_lab_min">Más fino (toque suave)</string>
     <string name="pen_lab_max">Más grueso (presión fuerte)</string>
