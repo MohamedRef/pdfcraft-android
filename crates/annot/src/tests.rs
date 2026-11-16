@@ -6003,3 +6003,167 @@ fn the_pencil_grain_nests_and_covers_its_density() {
     }
     assert_eq!((grain_level(0.0), grain_level(0.31), grain_level(0.94), grain_level(f64::NAN)), (1, 2, 8, 8));
 }
+
+/// Test strokes for the pressure outline: handwriting-like, a sharp corner, a loop tighter than
+/// the line is wide, a point given twice, two points, one point.
+fn ribbon_lines() -> Vec<appearance::InkLine> {
+    let wave: Vec<(f64, f64)> = (0..300).map(|i| (100.0 + i as f64 * 0.6, 400.0 + 6.0 * (i as f64 * 0.11).sin() + 2.0 * (i as f64 * 0.37).cos())).collect();
+    let wave_r: Vec<f64> = (0..300).map(|i| 0.75 + 0.35 * (i as f64 * 0.05).sin()).collect();
+    let corner: Vec<(f64, f64)> = (0..=20).map(|i| (100.0 + i as f64, 300.0 + i as f64 * 1.5)).chain((1..=20).map(|i| (120.0 + i as f64 * 0.3, 330.0 - i as f64 * 1.6))).collect();
+    let corner_r = vec![1.2; corner.len()];
+    let curl: Vec<(f64, f64)> = (0..60).map(|i| { let a = i as f64 * 0.35; (200.0 + (0.4 + i as f64 * 0.02) * a.cos() + i as f64 * 0.1, 300.0 + (0.4 + i as f64 * 0.02) * a.sin()) }).collect();
+    let curl_r: Vec<f64> = (0..60).map(|i| 1.0 + 0.5 * (i as f64 * 0.3).sin()).collect();
+    let twice = vec![(300.0, 300.0), (303.0, 301.0), (303.0, 301.0), (306.0, 300.0), (306.0, 300.0)];
+    vec![
+        (wave, wave_r),
+        (corner, corner_r),
+        (curl, curl_r),
+        (twice, vec![0.8, 1.0, 1.0, 0.6, 0.6]),
+        (vec![(320.0, 300.0), (324.0, 302.0)], vec![0.5, 1.5]),
+        (vec![(340.0, 300.0)], vec![1.0]),
+    ]
+}
+
+/// #609: the leaner outline (one ribbon, a disc where it is needed) paints what a disc at every
+/// point and a quadrilateral between neighbouring samples painted, within 0.035 pt: everything
+/// the old outline inked is inked, and nothing is inked outside the old outline or the line
+/// itself. Every piece winds the same way, so a nonzero fill paints their union once.
+#[test]
+fn the_ink_ribbon_paints_what_the_discs_and_quads_painted() {
+    const TOL: f64 = 0.035;
+    let winding = |ring: &[(f64, f64)], (x, y): (f64, f64)| -> i32 {
+        let mut w = 0;
+        for i in 0..ring.len() {
+            let (a, b) = (ring[i], ring[(i + 1) % ring.len()]);
+            let side = (b.0 - a.0) * (y - a.1) - (b.1 - a.1) * (x - a.0);
+            if a.1 <= y && b.1 > y && side > 0.0 {
+                w += 1;
+            } else if a.1 > y && b.1 <= y && side < 0.0 {
+                w -= 1;
+            }
+        }
+        w
+    };
+    for (which, (pts, radii)) in ribbon_lines().iter().enumerate() {
+        let pieces = appearance::ink_pieces(pts, radii, &|_| 0, 0);
+        // as it was drawn before: a disc at every point, a quad square to each pair of samples
+        let (samples, _) = appearance::ink_samples(pts, radii);
+        let mut the_line = Vec::new();
+        for (i, [c1, c2, end]) in appearance::smooth_segments(pts).into_iter().enumerate() {
+            for k in 0..=16 {
+                let t = k as f64 / 16.0;
+                let u = 1.0 - t;
+                let b = [u * u * u, 3.0 * u * u * t, 3.0 * u * t * t, t * t * t];
+                the_line.push(((b[0] * pts[i].0 + b[1] * c1.0 + b[2] * c2.0 + b[3] * end.0, b[0] * pts[i].1 + b[1] * c1.1 + b[2] * c2.1 + b[3] * end.1), radii[i] + (radii[i + 1] - radii[i]) * t));
+            }
+        }
+        let before = |p: (f64, f64), grow: f64| {
+            pts.iter().zip(radii).any(|(c, r)| (p.0 - c.0).hypot(p.1 - c.1) <= r + grow)
+                // the line itself, a disc of its width at every place along its middle: between
+                // two quads on the outside of a bend the old outline had a notch where there was
+                // no point, and the ribbon has none
+                || (grow > 0.0 && the_line.iter().any(|(c, r)| (p.0 - c.0).hypot(p.1 - c.1) <= r + grow))
+                || samples.windows(2).any(|s| {
+                    let (a, b) = (&s[0], &s[1]);
+                    let (dx, dy) = (b.at.0 - a.at.0, b.at.1 - a.at.1);
+                    let len = dx.hypot(dy);
+                    if len < 1e-6 || (p.0 - a.at.0).hypot(p.1 - a.at.1) > len + a.r + b.r + 1.0 {
+                        return false;
+                    }
+                    let (nx, ny) = (-dy / len, dx / len);
+                    let (ra, rb) = ((a.r + grow).max(0.0), (b.r + grow).max(0.0));
+                    let mut quad = vec![(a.at.0 + nx * ra, a.at.1 + ny * ra), (a.at.0 - nx * ra, a.at.1 - ny * ra), (b.at.0 - nx * rb, b.at.1 - ny * rb), (b.at.0 + nx * rb, b.at.1 + ny * rb)];
+                    if winding(&quad, ((a.at.0 + b.at.0) / 2.0, (a.at.1 + b.at.1) / 2.0)) < 0 {
+                        quad.reverse();
+                    }
+                    winding(&quad, p) != 0
+                })
+        };
+        let now = |p: (f64, f64)| {
+            let mut w = 0;
+            for (_, ring) in &pieces.ribbons {
+                let one = winding(ring, p);
+                assert!(one >= 0, "line {which}: a piece winds the other way at {p:?}");
+                w += one;
+            }
+            w > 0 || pieces.discs.iter().any(|(c, r, _)| (p.0 - c.0).hypot(p.1 - c.1) <= *r)
+        };
+        let (mut x0, mut y0, mut x1, mut y1) = (f64::INFINITY, f64::INFINITY, f64::NEG_INFINITY, f64::NEG_INFINITY);
+        for (p, r) in pts.iter().zip(radii) {
+            (x0, y0, x1, y1) = (x0.min(p.0 - r - 0.2), y0.min(p.1 - r - 0.2), x1.max(p.0 + r + 0.2), y1.max(p.1 + r + 0.2));
+        }
+        let step = if pts.len() > 100 { 0.045 } else { 0.021 };
+        let (mut checked, mut inked) = (0, 0);
+        let mut y = y0;
+        while y <= y1 {
+            let mut x = x0;
+            while x <= x1 {
+                let p = (x, y);
+                let painted = now(p);
+                if before(p, -TOL) {
+                    assert!(painted, "line {which}: {p:?} was inked and is not");
+                }
+                if painted {
+                    inked += 1;
+                    assert!(before(p, TOL), "line {which}: {p:?} is inked and was not");
+                }
+                checked += 1;
+                x += step;
+            }
+            y += step;
+        }
+        assert!(inked > 20 && inked < checked, "line {which}: {inked} of {checked}");
+    }
+    // handwriting is one ribbon with a disc at each end; a sharp corner adds a few discs, not one a point
+    let lines = ribbon_lines();
+    let wave = appearance::ink_pieces(&lines[0].0, &lines[0].1, &|_| 0, 0);
+    assert_eq!((wave.discs.len(), wave.ribbons.len()), (2, 1));
+    let corner = appearance::ink_pieces(&lines[1].0, &lines[1].1, &|_| 0, 0);
+    assert!(corner.discs.len() >= 3 && corner.discs.len() <= 8, "{}", corner.discs.len());
+    let lone = appearance::ink_pieces(&lines[5].0, &lines[5].1, &|_| 0, 0);
+    assert_eq!((lone.discs.len(), lone.ribbons.len()), (1, 0));
+}
+
+/// #609: what a saved stroke of handwriting costs in the file, a point: 38 bytes and 2.1 path
+/// operators here. Before, a disc and a quadrilateral at every point were about 250 bytes and 11
+/// operators a point.
+#[test]
+fn a_saved_pressure_stroke_is_under_its_budget_a_point() {
+    let mut doc = fixture();
+    // handwriting with a 1.5 pt pen: a point every 0.6 pt (0.75 dp at fit-width, #619), turns of 2 pt radius and wider
+    let pts: Vec<(f64, f64)> = (0..300).map(|i| (100.0 + i as f64 * 0.6, 400.0 + 3.0 * (i as f64 * 0.11).sin() + (i as f64 * 0.37).cos())).collect();
+    let radii: Vec<f64> = (0..300).map(|i| 0.75 + 0.25 * (i as f64 * 0.05).sin()).collect();
+    let shape = Shape::PressureInk { strokes: vec![pts.iter().map(|p| [p.0, p.1]).collect()], widths: vec![radii.iter().map(|r| r * 2.0).collect()], densities: Vec::new() };
+    let i = add_annotation(&mut doc, &new(0, shape), &meta("ink")).unwrap();
+    let content = ap_content(&doc, &list(&doc, 0)[i]);
+    let per_point = content.len() as f64 / pts.len() as f64;
+    assert!(per_point <= 45.0, "{per_point} bytes a point");
+    let operators = content.lines().filter(|l| l.ends_with(" m") || l.ends_with(" l") || l.ends_with(" c") || *l == "h").count();
+    assert!(operators as f64 / pts.len() as f64 <= 2.2, "{operators} operators");
+    assert_eq!(content.lines().filter(|l| l.ends_with(" c")).count(), 8, "a disc at each end only");
+    // erasing through it rebuilds two shorter strokes the same way
+    assert!(erase_ink(&mut doc, 0, i, &[[160.0, 380.0], [160.0, 420.0]], 2.0, &meta("erase")).unwrap());
+    let cut = ap_content(&doc, &list(&doc, 0)[i]);
+    assert_eq!(cut.lines().filter(|l| l.ends_with(" c")).count(), 16);
+}
+
+/// #609: a stroke saved before the leaner outline keeps the appearance it was saved with when the
+/// file is opened, added to and saved again.
+#[test]
+fn a_pressure_stroke_saved_before_keeps_its_appearance() {
+    let old = "0 0 1 rg\n10.5 10 m\n10.5 10.276 10.276 10.5 10 10.5 c\n9.724 10.5 9.5 10.276 9.5 10 c\n9.5 9.724 9.724 9.5 10 9.5 c\n10.276 9.5 10.5 9.724 10.5 10 c\nh\n9.8 10.5 m\n10.2 9.5 l\n20.2 13.5 l\n19.8 14.5 l\nh\nf\n";
+    let stream = format!("<< /Type /XObject /Subtype /Form /BBox [0 0 50 50] /Length {} >>\nstream\n{old}\nendstream", old.len());
+    let mut doc = document_of(&[
+        b"<< /Type /Catalog /Pages 2 0 R >>",
+        b"<< /Type /Pages /Kids [3 0 R] /Count 1 /MediaBox [0 0 612 792] >>",
+        b"<< /Type /Page /Parent 2 0 R /Annots [4 0 R] >>",
+        b"<< /Type /Annot /Subtype /Ink /Rect [9 9 21 15] /C [0 0 1] /BS << /W 1 >> /InkList [[10 10 20 14]] /PCWidths [[1 1]] /AP << /N 5 0 R >> >>",
+        stream.as_bytes(),
+    ]);
+    assert_eq!(ap_content(&doc, &list(&doc, 0)[0]).trim_end(), old.trim_end());
+    let shape = Shape::PressureInk { strokes: vec![vec![[100.0, 100.0], [110.0, 104.0]]], widths: vec![vec![1.0, 2.0]], densities: Vec::new() };
+    add_annotation(&mut doc, &new(0, shape), &meta("new")).unwrap();
+    let again = reopen(&doc);
+    assert_eq!(ap_content(&again, &list(&again, 0)[0]).trim_end(), old.trim_end());
+    assert!(!ap_content(&again, &list(&again, 0)[1]).is_empty());
+}

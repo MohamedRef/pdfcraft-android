@@ -1422,6 +1422,9 @@
     <string name="pen_lab_group_save">Werte</string>
     <string name="pen_lab_reset">Diesen Stift zurücksetzen</string>
     <string name="pen_lab_write_log">Werte ins Protokoll schreiben</string>
+    <string name="pen_lab_group_drawing">Zeichnen</string>
+    <string name="pen_lab_draft_picture">Fertige Striche als Bild behalten</string>
+    <string name="pen_lab_draft_picture_body">Beim Schreiben werden bereits geschriebene Striche aus einem Bild gezeigt, statt in jedem Frame neu gezeichnet zu werden. Zum Vergleichen ausschalten, oder falls Striche einmal falsch erscheinen.</string>
     <string name="pen_lab_written">Stiftwerte ins Protokoll geschrieben</string>
     <string name="ink_shapes">Formen</string>
     <string name="ink_toolbar_guides">Hilfen</string>

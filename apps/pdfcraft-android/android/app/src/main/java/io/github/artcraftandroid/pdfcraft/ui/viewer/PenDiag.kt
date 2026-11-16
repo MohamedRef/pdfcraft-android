@@ -60,6 +60,21 @@ internal object PenDiag {
     /** The ink stroke's numbers, once. */
     fun takeInkStroke(): PenStrokeStats? = inkStats.also { inkStats = null }
 
+    /**
+     * The drafts of a Draw session were saved (#609): how many strokes with how many points went
+     * to the engine as how many comments, how many groups of them it took, and how long that was.
+     */
+    fun draftsSaved(strokes: Int, points: Int, comments: Int, appliedGroups: Int, ms: Long) =
+        Diag.event(DiagArea.Ink, "drafts_saved", "strokes" to strokes, "points" to points, "comments" to comments, "applied_groups" to appliedGroups, "ms" to ms)
+
+    /**
+     * The picture of the finished drafts was made or added to (#609): how many strokes it holds,
+     * how many of them were painted now (the rest were on it), how long that took, and its size.
+     * [made] false: there was no memory for it and the drafts are drawn stroke by stroke.
+     */
+    fun draftPicture(strokes: Int, painted: Int, ms: Long, width: Int, height: Int, made: Boolean) =
+        Diag.event(DiagArea.Ink, "draft_picture", "strokes" to strokes, "painted" to painted, "ms" to ms, "width" to width, "height" to height, "made" to made)
+
     /** A side-button click while hovering (#144) and what it did. */
     fun penButtonClick(action: PenButtonClick) =
         Diag.event(DiagArea.Ink, "pen_button_click", "action" to action.key)

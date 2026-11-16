@@ -5,74 +5,134 @@ import io.github.artcraftandroid.pdfcraft.ui.viewer.InkStyle
 import io.github.artcraftandroid.pdfcraft.ui.viewer.inkPreviewIsPressureOutline
 import io.github.artcraftandroid.pdfcraft.ui.viewer.inkSignedArea
 import io.github.artcraftandroid.pdfcraft.ui.viewer.pressureInkRadii
-import io.github.artcraftandroid.pdfcraft.ui.viewer.pressureInkSegmentQuads
+import io.github.artcraftandroid.pdfcraft.ui.viewer.InkOutlineBuilder
+import io.github.artcraftandroid.pdfcraft.ui.viewer.InkOutlineSink
+import io.github.artcraftandroid.pdfcraft.ui.viewer.inkSegment
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Differential test for #129: the draft preview's pressure outline must be the same geometry the
- * engine saves (`pdfcraft_annot::appearance::pressure_ink_outline`). The expected contours were
- * produced by that Rust function for this fixture (`/PCWidths` = widths, `/BS /W` = 1) and are
- * rounded to the engine's three decimals.
+ * Differential test for #129 and #609: the draft preview's pressure outline must be the same
+ * geometry the engine saves (`pdfcraft_annot::appearance::ink_samples` and `ink_pieces`). The
+ * expected quadrilaterals and discs were produced by those Rust functions for this fixture (a
+ * gentle line, a sharp turn back, a point given twice) and are rounded to three decimals.
  */
 class InkPressureOutlineTest {
-    private val points = listOf(Offset(10f, 10f), Offset(20f, 14f), Offset(32f, 12f), Offset(40f, 25f), Offset(41f, 40f))
-    private val widths = listOf(1f, 2f, 3f, 1.5f, 0.8f)
+    private val points = listOf(Offset(10f, 10f), Offset(20f, 14f), Offset(32f, 12f), Offset(40f, 25f), Offset(41f, 40f), Offset(41.2f, 39f), Offset(41.2f, 39f), Offset(43f, 30f))
+    private val radii = pressureInkRadii(listOf(1f, 2f, 3f, 1.5f, 0.8f, 1.2f, 1.2f, 2f))
 
-    /** Each disc's first point (x + r) as the engine writes it. */
-    private val engineDiscStartX = floatArrayOf(10.5f, 21f, 33.5f, 40.75f, 41.4f)
+    /** A quad of the engine's outline: its segment, whether it shares its ends, x0, y0, … x3, y3. */
+    private class Q(val seg: Int, val shared: Boolean, vararg val at: Float)
 
-    /** Each quad of the engine outline, in order: x0, y0, ... x3, y3. */
     private val engineQuads = listOf(
-        floatArrayOf(9.791f, 10.454f, 10.209f, 9.546f, 10.993f, 9.839f, 10.522f, 10.86f),
-        floatArrayOf(10.501f, 10.85f, 11.015f, 9.849f, 12.036f, 10.303f, 11.464f, 11.415f),
-        floatArrayOf(11.462f, 11.414f, 12.038f, 10.304f, 13.246f, 10.86f, 12.613f, 12.081f),
-        floatArrayOf(12.624f, 12.087f, 13.235f, 10.855f, 14.583f, 11.453f, 13.917f, 12.797f),
-        floatArrayOf(13.941f, 12.809f, 14.559f, 11.441f, 15.999f, 12.023f, 15.33f, 13.504f),
-        floatArrayOf(15.371f, 13.522f, 15.957f, 12.006f, 17.44f, 12.512f, 16.81f, 14.144f),
-        floatArrayOf(16.877f, 14.167f, 17.373f, 12.489f, 18.852f, 12.861f, 18.32f, 14.659f),
-        floatArrayOf(18.429f, 14.684f, 18.743f, 12.836f, 20.167f, 13.014f, 19.833f, 14.986f),
-        floatArrayOf(20.046f, 14.999f, 19.954f, 13.001f, 21.383f, 12.873f, 21.48f, 14.996f),
-        floatArrayOf(21.679f, 14.968f, 21.184f, 12.901f, 22.691f, 12.476f, 23.215f, 14.664f),
-        floatArrayOf(23.318f, 14.635f, 22.588f, 12.506f, 24.144f, 11.907f, 24.914f, 14.154f),
-        floatArrayOf(24.943f, 14.143f, 24.116f, 11.917f, 25.69f, 11.266f, 26.56f, 13.609f),
-        floatArrayOf(26.517f, 13.624f, 25.733f, 11.251f, 27.293f, 10.669f, 28.117f, 13.161f),
-        floatArrayOf(27.981f, 13.198f, 27.429f, 10.632f, 28.945f, 10.242f, 29.524f, 12.93f),
-        floatArrayOf(29.246f, 12.961f, 29.222f, 10.211f, 30.665f, 10.136f, 30.69f, 13.011f),
-        floatArrayOf(30.236f, 12.941f, 31.119f, 10.205f, 32.461f, 10.573f, 31.539f, 13.427f),
-        floatArrayOf(31.123f, 13.217f, 32.877f, 10.783f, 34.062f, 11.753f, 32.417f, 14.034f),
-        floatArrayOf(32.225f, 13.868f, 34.253f, 11.919f, 35.392f, 13.239f, 33.499f, 15.058f),
-        floatArrayOf(33.395f, 14.936f, 35.495f, 13.361f, 36.576f, 14.957f, 34.626f, 16.42f),
-        floatArrayOf(34.565f, 16.332f, 36.636f, 15.045f, 37.643f, 16.844f, 35.732f, 18.031f),
-        floatArrayOf(35.694f, 17.966f, 37.681f, 16.909f, 38.599f, 18.835f, 36.778f, 19.804f),
-        floatArrayOf(36.753f, 19.753f, 38.624f, 18.886f, 39.437f, 20.864f, 37.735f, 21.652f),
-        floatArrayOf(37.717f, 21.609f, 39.455f, 20.906f, 40.144f, 22.86f, 38.58f, 23.493f),
-        floatArrayOf(38.566f, 23.455f, 40.159f, 22.898f, 40.708f, 24.752f, 39.292f, 25.248f),
-        floatArrayOf(39.272f, 25.181f, 40.728f, 24.819f, 41.152f, 26.712f, 39.781f, 27.052f),
-        floatArrayOf(39.768f, 26.982f, 41.166f, 26.781f, 41.421f, 28.867f, 40.11f, 29.055f),
-        floatArrayOf(40.105f, 29.011f, 41.426f, 28.911f, 41.549f, 31.091f, 40.315f, 31.185f),
-        floatArrayOf(40.313f, 31.157f, 41.55f, 31.118f, 41.575f, 33.294f, 40.425f, 33.331f),
-        floatArrayOf(40.425f, 33.314f, 41.575f, 33.311f, 41.537f, 35.384f, 40.475f, 35.387f),
-        floatArrayOf(40.475f, 35.38f, 41.537f, 35.392f, 41.472f, 37.263f, 40.497f, 37.252f),
-        floatArrayOf(40.497f, 37.254f, 41.472f, 37.262f, 41.414f, 38.833f, 40.527f, 38.825f),
-        floatArrayOf(40.527f, 38.84f, 41.414f, 38.818f, 41.4f, 39.99f, 40.6f, 40.01f),
+        Q(0, true, 9.793f, 10.455f, 10.164f, 9.528f, 11.008f, 9.846f, 10.507f, 10.853f),
+        Q(0, true, 10.507f, 10.853f, 11.008f, 9.846f, 12.039f, 10.305f, 11.461f, 11.414f),
+        Q(0, true, 11.461f, 11.414f, 12.039f, 10.305f, 13.242f, 10.858f, 12.617f, 12.083f),
+        Q(0, true, 12.617f, 12.083f, 13.242f, 10.858f, 14.573f, 11.448f, 13.927f, 12.802f),
+        Q(0, true, 13.927f, 12.802f, 14.573f, 11.448f, 15.981f, 12.015f, 15.348f, 13.512f),
+        Q(0, true, 15.348f, 13.512f, 15.981f, 12.015f, 17.411f, 12.501f, 16.839f, 14.155f),
+        Q(0, true, 16.839f, 14.155f, 17.411f, 12.501f, 18.804f, 12.848f, 18.368f, 14.672f),
+        Q(0, true, 18.368f, 14.672f, 18.804f, 12.848f, 20.045f, 13.001f, 19.864f, 14.991f),
+        Q(1, true, 19.864f, 14.991f, 20.045f, 13.001f, 21.265f, 12.885f, 21.598f, 14.984f),
+        Q(1, true, 21.598f, 14.984f, 21.265f, 12.885f, 22.626f, 12.494f, 23.280f, 14.647f),
+        Q(1, true, 23.280f, 14.647f, 22.626f, 12.494f, 24.118f, 11.916f, 24.940f, 14.144f),
+        Q(1, true, 24.940f, 14.144f, 24.118f, 11.916f, 25.699f, 11.262f, 26.551f, 13.613f),
+        Q(1, true, 26.551f, 13.613f, 25.699f, 11.262f, 27.344f, 10.653f, 28.066f, 13.177f),
+        Q(1, true, 28.066f, 13.177f, 27.344f, 10.653f, 29.059f, 10.222f, 29.409f, 12.950f),
+        Q(1, true, 29.409f, 12.950f, 29.059f, 10.222f, 30.869f, 10.149f, 30.486f, 12.998f),
+        Q(1, true, 30.486f, 12.998f, 30.869f, 10.149f, 32.737f, 10.694f, 31.292f, 13.322f),
+        Q(2, true, 31.292f, 13.322f, 32.737f, 10.694f, 34.172f, 11.841f, 32.306f, 13.946f),
+        Q(2, true, 32.306f, 13.946f, 34.172f, 11.841f, 35.451f, 13.305f, 33.440f, 14.992f),
+        Q(2, true, 33.440f, 14.992f, 35.451f, 13.305f, 36.609f, 15.004f, 34.592f, 16.373f),
+        Q(2, true, 34.592f, 16.373f, 36.609f, 15.004f, 37.664f, 16.878f, 35.711f, 17.997f),
+        Q(2, true, 35.711f, 17.997f, 37.664f, 16.878f, 38.613f, 18.862f, 36.764f, 19.777f),
+        Q(2, true, 36.764f, 19.777f, 38.613f, 18.862f, 39.446f, 20.886f, 37.725f, 21.630f),
+        Q(2, true, 37.725f, 21.630f, 39.446f, 20.886f, 40.152f, 22.879f, 38.573f, 23.474f),
+        Q(2, true, 38.573f, 23.474f, 40.152f, 22.879f, 40.722f, 24.797f, 39.295f, 25.256f),
+        Q(3, true, 39.295f, 25.256f, 40.722f, 24.797f, 41.160f, 26.759f, 39.771f, 27.018f),
+        Q(3, true, 39.771f, 27.018f, 41.160f, 26.759f, 41.420f, 28.917f, 40.102f, 29.052f),
+        Q(3, true, 40.102f, 29.052f, 41.420f, 28.917f, 41.541f, 31.152f, 40.305f, 31.212f),
+        Q(3, true, 40.305f, 31.212f, 41.541f, 31.152f, 41.562f, 33.368f, 40.413f, 33.382f),
+        Q(3, true, 40.413f, 33.382f, 41.562f, 33.368f, 41.522f, 35.463f, 40.460f, 35.455f),
+        Q(3, true, 40.460f, 35.455f, 41.522f, 35.463f, 41.458f, 37.334f, 40.483f, 37.322f),
+        Q(3, true, 40.483f, 37.322f, 41.458f, 37.334f, 41.405f, 38.874f, 40.517f, 38.880f),
+        Q(3, true, 40.517f, 38.880f, 41.405f, 38.874f, 41.399f, 39.970f, 40.602f, 40.038f),
+        Q(4, true, 40.602f, 40.038f, 41.399f, 39.970f, 41.486f, 40.577f, 40.643f, 40.690f),
+        Q(4, false, 40.649f, 40.722f, 41.480f, 40.545f, 41.551f, 40.758f, 40.671f, 40.945f),
+        Q(4, false, 41.540f, 40.988f, 40.682f, 40.715f, 40.690f, 40.609f, 41.595f, 40.897f),
+        Q(4, true, 41.614f, 40.806f, 40.670f, 40.700f, 40.663f, 40.418f, 41.662f, 40.457f),
+        Q(4, true, 41.662f, 40.457f, 40.663f, 40.418f, 40.650f, 39.994f, 41.700f, 40.016f),
+        Q(4, true, 41.700f, 40.016f, 40.650f, 39.994f, 40.633f, 39.546f, 41.733f, 39.564f),
+        Q(4, true, 41.733f, 39.564f, 40.633f, 39.546f, 40.615f, 39.171f, 41.765f, 39.202f),
+        Q(4, false, 41.764f, 39.217f, 40.616f, 39.156f, 40.601f, 38.968f, 41.799f, 39.032f),
+        Q(5, false, 40.612f, 38.882f, 41.788f, 39.118f, 41.786f, 39.131f, 40.609f, 38.896f),
+        Q(5, true, 40.609f, 38.896f, 41.786f, 39.131f, 41.760f, 39.258f, 40.584f, 39.023f),
+        Q(5, true, 40.584f, 39.023f, 41.760f, 39.258f, 41.724f, 39.440f, 40.547f, 39.205f),
+        Q(5, true, 40.547f, 39.205f, 41.724f, 39.440f, 41.688f, 39.618f, 40.512f, 39.382f),
+        Q(5, true, 40.512f, 39.382f, 41.688f, 39.618f, 41.665f, 39.733f, 40.489f, 39.498f),
+        Q(5, false, 41.665f, 39.733f, 40.489f, 39.498f, 40.490f, 39.492f, 41.666f, 39.727f),
+        Q(5, true, 41.666f, 39.727f, 40.490f, 39.492f, 40.527f, 39.306f, 41.704f, 39.541f),
+        Q(5, true, 41.704f, 39.541f, 40.527f, 39.306f, 40.607f, 38.908f, 41.783f, 39.143f),
+        Q(6, true, 41.783f, 39.143f, 40.607f, 38.908f, 40.714f, 38.117f, 41.989f, 38.372f),
+        Q(6, true, 41.989f, 38.372f, 40.714f, 38.117f, 40.879f, 37.035f, 42.252f, 37.309f),
+        Q(6, true, 42.252f, 37.309f, 40.879f, 37.035f, 41.087f, 35.742f, 42.558f, 36.036f),
+        Q(6, true, 42.558f, 36.036f, 41.087f, 35.742f, 41.316f, 34.343f, 42.884f, 34.657f),
+        Q(6, true, 42.884f, 34.657f, 41.316f, 34.343f, 41.544f, 32.945f, 43.211f, 33.278f),
+        Q(6, true, 43.211f, 33.278f, 41.544f, 32.945f, 41.752f, 31.652f, 43.517f, 32.005f),
+        Q(6, true, 43.517f, 32.005f, 41.752f, 31.652f, 41.917f, 30.570f, 43.780f, 30.942f),
+        Q(6, true, 43.780f, 30.942f, 41.917f, 30.570f, 42.012f, 29.847f, 43.971f, 30.239f),
     )
+
+    /** The engine's discs, in order: x, y, radius. */
+    private val engineDiscs = listOf(
+        floatArrayOf(10.000f, 10.000f, 0.500f),
+        floatArrayOf(41.065f, 40.634f, 0.425f),
+        floatArrayOf(41.111f, 40.852f, 0.450f),
+        floatArrayOf(41.142f, 40.753f, 0.475f),
+        floatArrayOf(41.190f, 39.187f, 0.575f),
+        floatArrayOf(41.200f, 39.000f, 0.600f),
+        floatArrayOf(41.197f, 39.014f, 0.600f),
+        floatArrayOf(41.077f, 39.615f, 0.600f),
+        floatArrayOf(41.078f, 39.609f, 0.600f),
+        floatArrayOf(43.000f, 30.000f, 1.000f),
+    )
+
+    private class Pieces : InkOutlineSink {
+        val discs = ArrayList<Pair<Offset, Float>>()
+        val polygons = ArrayList<List<Offset>>()
+        override fun disc(center: Offset, radius: Float) { discs += center to radius }
+        override fun polygon(corners: List<Offset>) { polygons += corners }
+    }
 
     @Test
     fun previewOutlineMatchesTheEngineOutline() {
-        val radii = pressureInkRadii(widths)
-        points.indices.forEach { i -> assertEquals(engineDiscStartX[i], points[i].x + radii[i], 0.002f) }
-        val quads = (0 until points.lastIndex).flatMap { pressureInkSegmentQuads(points, radii, it) }
+        val quads = (0 until points.lastIndex).flatMap { i -> inkSegment({ points[it] }, { radii[it] }, i, points.lastIndex).quads.filterNotNull().map { i to it } }
         assertEquals(engineQuads.size, quads.size)
-        quads.forEachIndexed { i, quad ->
-            quad.forEachIndexed { j, p ->
-                assertEquals("quad $i x$j", engineQuads[i][2 * j], p.x, 0.002f)
-                assertEquals("quad $i y$j", engineQuads[i][2 * j + 1], p.y, 0.002f)
+        quads.forEachIndexed { i, (seg, quad) ->
+            assertEquals("quad $i", engineQuads[i].seg, seg)
+            assertEquals("quad $i", engineQuads[i].shared, quad.shared)
+            quad.corners.forEachIndexed { j, p ->
+                assertEquals("quad $i x$j", engineQuads[i].at[2 * j], p.x, 0.003f)
+                assertEquals("quad $i y$j", engineQuads[i].at[2 * j + 1], p.y, 0.003f)
             }
-            assertTrue(inkSignedArea(quad) >= 0f)
+            assertTrue(inkSignedArea(quad.corners) > 0f)
         }
+        // the whole outline: the engine's discs, and ribbons that are those quads joined
+        val all = Pieces()
+        InkOutlineBuilder().update(points.size, points.size, points.size, closed = true, point = { points[it] }, radius = { radii[it] }, segmentLevel = { 0 }, loneLevel = { 0 }, settledSink = { all }, liveSink = { all })
+        assertEquals(engineDiscs.size, all.discs.size)
+        all.discs.forEachIndexed { i, (c, r) ->
+            assertEquals("disc $i", engineDiscs[i][0], c.x, 0.003f)
+            assertEquals("disc $i", engineDiscs[i][1], c.y, 0.003f)
+            assertEquals("disc $i", engineDiscs[i][2], r, 0.003f)
+        }
+        // each quad adds two corners to a ribbon, each ribbon starts with two more
+        assertEquals(2 * quads.size + 2 * all.polygons.size, all.polygons.sumOf { it.size })
+        assertTrue(all.polygons.all { inkSignedArea(it) > 0f })
+        val corners = quads.flatMap { it.second.corners }.toSet()
+        assertTrue(all.polygons.flatten().all { it in corners })
     }
 
     @Test

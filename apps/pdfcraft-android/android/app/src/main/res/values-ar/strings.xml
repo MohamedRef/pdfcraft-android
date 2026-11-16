@@ -1165,6 +1165,9 @@
     <string name="pen_lab_group_save">القيم</string>
     <string name="pen_lab_reset">أعد ضبط هذا القلم</string>
     <string name="pen_lab_write_log">اكتب القيم في السجل</string>
+    <string name="pen_lab_group_drawing">الرسم</string>
+    <string name="pen_lab_draft_picture">حفظ الخطوط المكتملة كصورة</string>
+    <string name="pen_lab_draft_picture_body">أثناء الكتابة تُعرض الخطوط المكتوبة من صورة واحدة بدلًا من رسمها من جديد في كل إطار. أوقفه للمقارنة، أو إذا ظهرت الخطوط بشكل خاطئ.</string>
     <string name="pen_lab_written">كُتبت قيم الأقلام في السجل</string>
     <string name="ink_shapes">أشكال</string>
     <string name="ink_toolbar_guides">أدوات</string>

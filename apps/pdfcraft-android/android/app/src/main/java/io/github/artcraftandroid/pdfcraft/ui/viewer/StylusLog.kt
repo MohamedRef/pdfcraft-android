@@ -192,5 +192,7 @@ internal fun inkStrokeFields(ink: PenStrokeStats?, tiltMin: Float, tiltMax: Floa
         "taper_start_pt" to ink.taperStartPt, "taper_end_pt" to ink.taperEndPt, "stabilisation" to ink.dials.smoothing,
         // how many of the pen's samples became points of the line (#609)
         "points" to ink.kept, "points_from" to ink.given,
+        // what else was drawn each frame while it was written: with draw_p50_us, whether drawing slows as the page fills
+        "drafts" to ink.draftsBefore, "draft_points" to ink.draftPointsBefore, "drafts_pictured" to ink.draftsPictured,
     )
 }
