@@ -262,20 +262,34 @@ internal fun newInkStroke(page: Int, appearance: InkAppearance, stylus: Boolean,
     return InkStroke(page, appearance, dials.varies && style != InkStyle.Highlighter, mode, dynamics, stylus, onGlass, jetpack)
 }
 
-/** A freehand stroke is lifted: its end taper goes on, and a pen stroke's pressures measure the pen's range (#569). */
-internal fun finishInkStroke(s: InkStroke, tuning: PenTuning) {
+/**
+ * A freehand stroke is lifted: its end taper goes on, and a pen stroke's pressures measure the
+ * pen's range (#569) when it is ordinary writing ([inkStrokeMeasuresPressure]; [trial] is true for
+ * the Pen lab's strip).
+ */
+internal fun finishInkStroke(s: InkStroke, tuning: PenTuning, trial: Boolean = false) {
     val d = s.dynamics ?: return
+    val measures = inkStrokeMeasuresPressure(s.stylus, s.appearance.style, trial)
     s.catchUp()
     if (s.jetpack != null && s.takeJetpackShape(s.appearance.width * inkStyleWidthFactor(s.appearance.style))) {
-        if (s.stylus) d.stats?.let { tuning.learn(it.raw.toList()) }
+        if (measures) d.stats?.let { tuning.learn(it.raw.toList()) }
         return
     }
     if (s.pressureSensitive) {
         d.finish(s.points, s.scales)
         s.widthVersion++
     }
-    if (s.stylus) d.stats?.let { tuning.learn(it.raw.toList()) }
+    if (measures) d.stats?.let { tuning.learn(it.raw.toList()) }
 }
+
+/**
+ * Whether a stroke's pressures count towards the band ordinary handwriting uses (#607): a pen's,
+ * written on a page. Not the marker's, whose width does not answer pressure and which is held
+ * differently, and not a stroke on the Pen lab's strip ([trial]), where the pen is pressed hard and
+ * light on purpose to try it: five such strokes among thirty moved the band's top from 0.15 to 0.21.
+ */
+internal fun inkStrokeMeasuresPressure(stylus: Boolean, style: InkStyle, trial: Boolean): Boolean =
+    stylus && !trial && style != InkStyle.Highlighter
 
 /**
  * The opacity of the tail drawn from [s]'s last point to the pen: a pencil's is lightened by the
