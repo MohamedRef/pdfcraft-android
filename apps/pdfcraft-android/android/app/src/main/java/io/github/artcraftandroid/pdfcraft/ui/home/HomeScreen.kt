@@ -292,6 +292,8 @@ private fun HomeTabScreen(vm: AppViewModel, onBrowse: () -> Unit) {
         PdfSheet(onDismiss = { fabMenu = false }, dim = true) {
             SheetRow(LucideIcons.FolderOpen, stringResource(R.string.home_open_file), { fabMenu = false; onBrowse() })
             SheetRow(LucideIcons.Camera, stringResource(R.string.home_new_scan), { fabMenu = false; vm.startScan() })
+            // straight to the photo picker, for pages already photographed (#617)
+            SheetRow(LucideIcons.Images, stringResource(R.string.scan_from_photos), { fabMenu = false; vm.startScan(io.github.artcraftandroid.pdfcraft.ui.scan.ScanStart.Import, photos = true) })
             SheetRow(LucideIcons.BookOpen, stringResource(R.string.notebook_new), { fabMenu = false; vm.study.newNotebookOpen = true })
             SheetDivider()
             SheetRow(LucideIcons.FilePenLine, stringResource(R.string.common_tool_edit_pdf), { fabMenu = false; vm.startToolFromHome(QuickTool.Edit) })

@@ -72,6 +72,7 @@ change was made after the build he ran, or his logs have no line for it.
 | #492 | A finger removal taken back can be done again; the chip always says Undo | Done in code, not run on a phone | #498 | Adjust has a **Remove fingers** switch beside Flatten page where the finger step runs (Clean scan, strength ≥40, `removeFingers` on); it and the chip's Undo are one state, per page (Apply to all does not carry it). The over-print case reads "Finger removed · Undo" with a separate note that does nothing on a tap. A page whose marks change is made again on Enhance (before, only the background queue noticed). Log `auto_redone` (`what=fingers`, `by=switch`) and `by` on `auto_undone`; page file: `undone`, as before. Not checked: on a phone |
 | #339 | Pages turned upright | Done in code, not run on a phone | #370, #387 | The chip, Rotate, the multi-page rule and the setting are in. Acceptance on the owner's test set per script, and phone timing; the neighbour rule's 0.95 bar may seldom act with this network's confidences (`ANDROID_SCAN_UPRIGHT.md`) |
 | #446 | Clean scan preview: 200 to 400 ms per strength or paper change on the phone | Done in code, not run on a phone | #454 | The light estimate (about 80 % of a change on a desktop) is kept with the straightened preview page, so a change runs the tone curve alone: 175–202 ms down to 20–24 ms per change on a desktop, same bytes (`docs/performance/scan-clean-look-reuse.md`). Testing option `lookReuse` (off is the old way); log `preview_look_light_ms` … `preview_look_tone_ms`, `light_reused`; page file `preview.light_reused`, `preview.look_parts_ms`. Left: the phone's figures in the next log; Black and white (255 ms) is unchanged |
+| #617 | Start a scan from photos already taken: Scan from photos (Home's ＋ sheet, Create, the Tools list), pictures shared from another app, launcher shortcuts (New scan, Scan from photos, Open file) | Done in code, not run on a phone | (this PR) | Log `scan_start from=camera\|import\|shared\|shortcut picker=…`, `camera_import … how=`; page file `capture.started`, and `capture.source` is `shared` for a shared picture. A shared file that is not a readable picture is left out and said; none readable keeps nothing. Left: the owner's next log, and whether his launcher shows the shortcuts |
 
 "Core done" means the code and its tests are merged and the issue's acceptance items that need
 the owner's phone or his test set are open. Each issue has a comment saying the same in detail.
@@ -131,6 +132,8 @@ One document per feature says how it works, what was measured and what was not:
 ## 2. How a scan goes through the code today
 
 ```
+How a scan starts (#617): New scan (the camera), Scan from photos (the picker), pictures shared
+to the app, or a launcher shortcut -> AppViewModel.startScan / startScanShared (ui/scan/ScanStart.kt)
 ScanCameraRouter: PdfCraft's camera screen (ui/scan, #294) or the phone's camera app
                                                      ->  cacheDir/camera/scan-*.jpg
 AppViewModel.onScanPhoto
