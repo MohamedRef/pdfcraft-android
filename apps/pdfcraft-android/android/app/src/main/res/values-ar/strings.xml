@@ -1128,6 +1128,9 @@
     <string name="ink_presets_help">كل قلم يحتفظ بلونه وسُمكه وشفافيته. انقر على قلم مفضّل لاستعادة إعداداته.</string>
     <string name="ink_highlighter_straight">خطوط مستقيمة</string>
     <string name="ink_highlighter_straight_explanation">كل خط بالهايلايتر يطلع مستقيم.</string>
+    <string name="ink_pressure">الضغط</string>
+    <string name="ink_pressure_explanation">مقدار تغيّر الخط عند الضغط. عند 0% يبقى بعرض واحد.</string>
+    <string name="ink_pressure_percent">الضغط %1$d%%</string>
     <string name="pen_lab_title">معمل الأقلام</string>
     <string name="pen_lab_summary">اضبط استجابة كل قلم للضغط والسرعة</string>
     <string name="pen_lab_body">كل تغيير يُطبَّق على القلم فورًا، وعلى الصفحة أيضًا. اكتب على الشريط لتجربته.</string>

@@ -1385,6 +1385,9 @@
     <string name="ink_presets_help">Jeder Stift behält seine eigene Farbe, Breite und Deckkraft. Tippe auf einen Favoriten, um seine Einstellungen wiederherzustellen.</string>
     <string name="ink_highlighter_straight">Linien begradigen</string>
     <string name="ink_highlighter_straight_explanation">Jeder Textmarker-Strich wird zu einer geraden Linie.</string>
+    <string name="ink_pressure">Druck</string>
+    <string name="ink_pressure_explanation">Wie stark sich die Linie beim Drücken ändert. Bei 0 % bleibt sie gleich breit.</string>
+    <string name="ink_pressure_percent">Druck %1$d %%</string>
     <string name="pen_lab_title">Stiftlabor</string>
     <string name="pen_lab_summary">Einstellen, wie jeder Stift auf Druck und Tempo reagiert</string>
     <string name="pen_lab_body">Jede Änderung gilt sofort für den Stift, auch auf der Seite. Schreiben Sie zum Ausprobieren auf den Streifen.</string>

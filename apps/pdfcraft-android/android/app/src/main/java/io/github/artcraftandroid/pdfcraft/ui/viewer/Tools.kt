@@ -202,7 +202,11 @@ internal class InkStroke(
  * its zoom, the zoom pad, the Pen lab's strip): the pen's speed is measured on the glass, so the
  * same hand movement gives the same line wherever and however large the page is shown.
  */
-internal fun newInkStroke(page: Int, appearance: InkAppearance, stylus: Boolean, mode: InkShapeMode, tuning: PenTuning, dpPerPt: Float): InkStroke {
+internal fun newInkStroke(
+    page: Int, appearance: InkAppearance, stylus: Boolean, mode: InkShapeMode, tuning: PenTuning, dpPerPt: Float,
+    /** The pen's Pressure setting from its popover (#608); the Pen lab's strip shows the dials as they are. */
+    pressureSetting: Float = PEN_PRESSURE_DEFAULT,
+): InkStroke {
     if (mode != InkShapeMode.Freehand) {
         PenDiag.inkStroke(null)
         return InkStroke(page, appearance, false, mode, null, stylus)
@@ -211,10 +215,10 @@ internal fun newInkStroke(page: Int, appearance: InkAppearance, stylus: Boolean,
     val dials = tuning.dials(style)
     val source = if (stylus) PressureSource.Pen else PressureSource.Speed
     val onGlass = dpPerPt.takeIf { it.isFinite() && it > 0f } ?: 1f
-    val stats = PenStrokeStats(style, source, appearance.width, dials, appearance.opacity, onGlass)
+    val stats = PenStrokeStats(style, source, appearance.width, dials, appearance.opacity, onGlass, penPressureSetting(pressureSetting))
     val range = if (stylus) tuning.calibration.range else PressureRange()
     val curve = if (stylus) tuning.pressureCurve else PressureCurve.LINEAR
-    val dynamics = PenDynamics(dials, source, range, appearance.width.takeIf { it.isFinite() && it > 0f } ?: 1f, stats, curve, onGlass)
+    val dynamics = PenDynamics(dials, source, range, appearance.width.takeIf { it.isFinite() && it > 0f } ?: 1f, stats, curve, onGlass, pressureSetting)
     PenDiag.inkStroke(stats)
     return InkStroke(page, appearance, dials.varies && style != InkStyle.Highlighter, mode, dynamics, stylus, onGlass)
 }
@@ -1380,6 +1384,7 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                 current = newInkStroke(
                     at.page, appearance, isStylus, doc.controller.inkShapeMode, prefs.penTuning,
                     dpPerPt = doc.viewer.pixelsPerPoint(at.page) / density.density,
+                    pressureSetting = prefs.penPressure(inkStyle),
                 ).also {
                     it.add(Offset(at.x, at.y), inkSampleTimeMs, pressure)
                     strokes.add(it)
@@ -1841,7 +1846,7 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                 newStroke = { page, pressure, isStylus, at, dpPerPt ->
                     val pen = prefs.penSettings(prefs.inkStyle)
                     val appearance = InkAppearance(pen.argb, inkStyleOpacity(pen.opacity, prefs.inkStyle), pen.width, prefs.author.ifBlank { null }, prefs.inkStyle)
-                    newInkStroke(page, appearance, isStylus, InkShapeMode.Freehand, prefs.penTuning, dpPerPt).also {
+                    newInkStroke(page, appearance, isStylus, InkShapeMode.Freehand, prefs.penTuning, dpPerPt, prefs.penPressure(prefs.inkStyle)).also {
                         it.add(at, inkSampleTimeMs, pressure)
                         strokes.add(it)
                     }

@@ -90,8 +90,11 @@ internal data class PenDials(
             // three times from lightest to hardest, a little thinner when fast, downstrokes thicker
             // than sidestrokes, short pointed ends
             InkStyle.Fountain -> PenDials(0.5f, 1.5f, speedThin = 0.15f, nib = 0.25f, taperStart = 1.5f, taperEnd = 2f, dampingMs = 25f, smoothing = 0.5f)
-            // seven times, thinner when fast, longer pointed ends
-            InkStyle.Brush -> PenDials(0.25f, 1.8f, curve = 1.2f, speedThin = 0.3f, taperStart = 2f, taperEnd = 3f, dampingMs = 35f, smoothing = 0.5f)
+            // eight times from lightest to hardest, most of it above the middle, so ordinary
+            // writing already varies about twice (the fountain pen's about one and a half times);
+            // thinner when fast, longer pointed ends (#608: 0.25…1.8 with a flatter curve wrote
+            // nearly the fountain pen's line for a light hand)
+            InkStyle.Brush -> PenDials(0.3f, 2.4f, curve = 1.8f, speedThin = 0.3f, taperStart = 2f, taperEnd = 3f, dampingMs = 25f, smoothing = 0.5f)
             // graphite: lighter and grainier at a light touch, broader and lighter when leaned
             InkStyle.Pencil -> PenDials(0.8f, 1.1f, smoothing = 0.3f, densityMin = 0.35f, densityMax = 0.9f, tilt = 1f)
             // the marker keeps one width (its own factor), whatever the pen does
@@ -99,6 +102,27 @@ internal data class PenDials(
         }
     }
 }
+
+/**
+ * A pen's Pressure setting (#608, in the pen's popover) is how much its line answers pressure, 0…1.
+ * This one, the middle, is the pen as its dials make it.
+ */
+internal const val PEN_PRESSURE_DEFAULT = 0.5f
+
+/**
+ * What a Pressure setting does to a stroke: how far the pressure the pen feels (after the stretch,
+ * or made from speed) is moved away from the middle of the pen's range, 0…2 times. At 0 every touch
+ * is the middle one, so the line keeps the chosen width (a flat nib and pointed ends stay); at 2
+ * the pen's thinnest and broadest come at half the change of pressure. The width at the middle
+ * never moves, so the chosen width stays the width of ordinary writing at every setting.
+ */
+internal fun penPressureGain(setting: Float): Float = penPressureSetting(setting) / PEN_PRESSURE_DEFAULT
+
+/** A stored or dragged Pressure setting kept inside 0…1 in steps of 5 %; the default when it is not a number. */
+internal fun penPressureSetting(v: Float): Float =
+    if (v.isFinite()) kotlin.math.round(v.coerceIn(0f, 1f) * 20f) / 20f else PEN_PRESSURE_DEFAULT
+
+internal fun penPressureKey(style: InkStyle) = "ink.${style.key}.pressure"
 
 /** The thinnest a tapered end goes, as a fraction of the width it would have had. */
 internal const val PEN_TAPER_FLOOR = 0.2f
@@ -148,14 +172,20 @@ internal data class PressureRange(val lo: Float = 0f, val hi: Float = 1f) {
         // is the width of the owner's own band: his line was stretched 2.6 times for one stroke
         // and not at all for the next. Only a band with no width at all (never measured) is not one.
         if (!(hi > lo)) return p
+        // the unmeasured 0…1 is the pen's own pressure
+        if (lo <= 0f && hi >= 1f) return p
         // A narrow band is widened around its middle first (0.0.33 log: a light hand wrote at
         // 0.07…0.15, stretched about ten times, so a touch more pressure jumped the line to its
-        // thickest). The stretch never multiplies the pen's pressure by more than about 2.6.
-        val span = maxOf(hi - lo, MIN_STRETCH_SPAN)
+        // thickest). A light hand's band is widened to twice its middle, so it starts at zero and
+        // ordinary writing sits in the middle of the pen (#608); the widening was to a fixed 0.35
+        // before, which put this hand's writing in the pen's lower third. The stretch never
+        // multiplies the pen's pressure by more than 4 ([LIGHTEST_STRETCH_SPAN]).
+        val span = maxOf(hi - lo, minOf(MIN_STRETCH_SPAN, maxOf(lo + hi, LIGHTEST_STRETCH_SPAN)))
         val lo = ((lo + hi - span) / 2f).coerceIn(0f, 1f - span)
         val hi = lo + span
-        // a band that starts at 0 or ends at 1 has no room beyond it: the unmeasured 0…1 stays as it is
-        val low = if (lo > 0f) BAND_LOW else 0f
+        // the band's ends are where a tenth of this hand's writing is lighter and a tenth harder,
+        // also when the widened band starts at 0; only a band that ends at 1 has no room above it
+        val low = BAND_LOW
         val high = if (hi < 1f) BAND_HIGH else 1f
         return when {
             p < lo -> low * p / lo
@@ -165,8 +195,10 @@ internal data class PressureRange(val lo: Float = 0f, val hi: Float = 1f) {
     }
 
     companion object {
-        /** The narrowest band stretched over [BAND_LOW]…[BAND_HIGH]: at most 0.9 / 0.35 ≈ 2.6 times the pen's own change. */
+        /** A narrower band than this is widened: to this, or for a light hand to twice its middle. */
         const val MIN_STRETCH_SPAN = 0.35f
+        /** The narrowest a band is widened to, so the stretch is at most 0.8 / 0.2 = 4 times the pen's own change. */
+        const val LIGHTEST_STRETCH_SPAN = 0.2f
         /** Where the measured band's ends land in the pen's range: its percentiles, 10 % and 90 %. */
         const val BAND_LOW = 0.1f
         const val BAND_HIGH = 0.9f
@@ -180,6 +212,8 @@ internal data class PressureRange(val lo: Float = 0f, val hi: Float = 1f) {
 internal class PenStrokeStats(
     val style: InkStyle, val source: PressureSource, val penWidth: Float, val dials: PenDials, val opacity: Float,
     val dpPerPt: Float = 1f,
+    /** The pen's Pressure setting the stroke was drawn with (#608). */
+    val pressureSetting: Float = PEN_PRESSURE_DEFAULT,
 ) {
     val pressures = FloatSampleList()
     /** The raw sensor pressures (pen only), for the pressure range measurement. */
@@ -246,8 +280,11 @@ internal class PenDynamics(
     /** This hand's pressure curve (Pen lab), applied to the pen's own pressure after the stretch. */
     private val pressureCurve: PressureCurve = PressureCurve.LINEAR,
     dpPerPt: Float = 1f,
+    /** The pen's Pressure setting, 0…1 ([penPressureGain]). */
+    pressureSetting: Float = PEN_PRESSURE_DEFAULT,
 ) {
     private val d = dials.sanitized()
+    private val gain = penPressureGain(pressureSetting)
     private val dpPerPt = dpPerPt.takeIf { it.isFinite() && it > 0f } ?: 1f
     private var last: Offset? = null
     private var lastTime = Long.MIN_VALUE
@@ -259,7 +296,7 @@ internal class PenDynamics(
     private var scale = Float.NaN
     /** Whether a time step has measured the speed yet. */
     private var speedKnown = false
-    /** The last pressure the pen's sensor gave (after the stretch and curve); NaN before the first. */
+    /** The last pressure the pen's sensor gave (after the stretch and curve, before the Pressure setting); NaN before the first. */
     private var lastP01 = Float.NaN
     /** The width given for the last sample, which the next may leave only by [PEN_MAX_WIDTH_SLOPE]. */
     private var lastOut = Float.NaN
@@ -306,7 +343,7 @@ internal class PenDynamics(
         last = p
 
         val made = source == PressureSource.Speed
-        val p01 = when {
+        val felt = when {
             // Made from speed: the middle of the range at the reference speed, heavier when slower
             // and lighter when faster, levelling off smoothly instead of hitting an end (a finger
             // writes at 600…950 dp/s and pauses at every turn, 0.0.36 log: the old straight ramp
@@ -318,11 +355,13 @@ internal class PenDynamics(
             lastP01.isFinite() -> lastP01
             else -> 0.5f
         }
-        if (!made) lastP01 = p01
+        if (!made) lastP01 = felt
+        // the pen's Pressure setting: every touch nearer to the middle one, or further from it
+        val p01 = (0.5f + (felt - 0.5f) * gain).coerceIn(0f, 1f)
         val shaped = p01.pow(d.curve)
         var target = d.minScale + (d.maxScale - d.minScale) * shaped
         // made pressure already is the speed
-        if (d.speedThin > 0f && !made) target *= 1f - d.speedThin * (speed / d.speedRef).coerceIn(0f, 1f)
+        if (d.speedThin > 0f && !made) target *= 1f - d.speedThin * minOf(gain, 1f) * (speed / d.speedRef).coerceIn(0f, 1f)
         if (d.nib > 0f && (dirX != 0f || dirY != 0f)) {
             target *= nibWidth(atan2(dirY, dirX) - Math.toRadians(d.nibAngleDeg.toDouble()).toFloat(), d.nib)
         }
@@ -350,7 +389,7 @@ internal class PenDynamics(
         }
         lastOut = out
         stats?.let {
-            it.pressures.add(p01)
+            it.pressures.add(felt)
             if (!made) it.raw.add(pressure)
             it.speeds.add(speed)
             it.widths.add(out * penWidth * inkStyleWidthFactor(it.style))

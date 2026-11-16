@@ -6,6 +6,7 @@ import io.github.artcraftandroid.pdfcraft.ui.viewer.INK_POINT_SPACING_DP
 import io.github.artcraftandroid.pdfcraft.ui.viewer.InkPointThinner
 import io.github.artcraftandroid.pdfcraft.ui.viewer.InkSmoother
 import io.github.artcraftandroid.pdfcraft.ui.viewer.InkStyle
+import io.github.artcraftandroid.pdfcraft.ui.viewer.PEN_PRESSURE_DEFAULT
 import io.github.artcraftandroid.pdfcraft.ui.viewer.PenDials
 import io.github.artcraftandroid.pdfcraft.ui.viewer.PenDynamics
 import io.github.artcraftandroid.pdfcraft.ui.viewer.PressureRange
@@ -88,13 +89,14 @@ internal object PenSheet {
     /**
      * [stroke] written with [style] at [penWidth] pt as the app writes it: smoothed, widths as it
      * grows, its points kept [spacingDp] apart on the glass (#609; 0 keeps every sample), then lifted.
+     * [dials] are the pen's and [pressureSetting] its Pressure setting; [densities] takes the ink density of each point kept while writing.
      */
     fun draw(
         style: InkStyle, stroke: List<S>, finger: Boolean, penWidth: Float, dpPerPt: Float, range: PressureRange,
-        spacingDp: Float = INK_POINT_SPACING_DP,
+        spacingDp: Float = INK_POINT_SPACING_DP, dials: PenDials = PenDials.default(style),
+        densities: MutableList<Float>? = null, pressureSetting: Float = PEN_PRESSURE_DEFAULT,
     ): Line {
-        val dials = PenDials.default(style)
-        val dyn = PenDynamics(dials, if (finger) PressureSource.Speed else PressureSource.Pen, if (finger) PressureRange() else range, penWidth, dpPerPt = dpPerPt)
+        val dyn = PenDynamics(dials, if (finger) PressureSource.Speed else PressureSource.Pen, if (finger) PressureRange() else range, penWidth, dpPerPt = dpPerPt, pressureSetting = pressureSetting)
         val smoother = InkSmoother(dials.smoothing, dpPerPt)
         val points = ArrayList<Offset>()
         val times = ArrayList<Long>()
@@ -102,7 +104,8 @@ internal object PenSheet {
         val thinner = if (spacingDp > 0f) inkPointThinner(dpPerPt, penWidth, spacingDp) else InkPointThinner(0f)
         for (s in stroke) {
             val q = smoother.next(s.p, s.t)
-            thinner.add(q, dyn.next(q, s.t, s.pressure), dyn.density) { point, scale, _ ->
+            thinner.add(q, dyn.next(q, s.t, s.pressure), dyn.density) { point, scale, density ->
+                densities?.add(density)
                 points += point
                 times += s.t
                 scales += scale
