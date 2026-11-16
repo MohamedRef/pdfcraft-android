@@ -28,17 +28,19 @@ impl Session {
         // a reconstructed file) still writes the current graph on its own.
         let rewrite = editor.cos.full_save_required() || editor.cos.encryption_changed() || editor.cos.revisions().is_empty();
         let cos = writable(&editor.cos)?;
+        // Android adaptation (#654): the same bytes as write_incremental, as a shared source that
+        // extends a mapped original instead of copying it. Each save of a 353 MB book opened in
+        // place copied the whole book into memory, and the document kept that copy afterwards.
         guard(|| {
             if on_saved || rewrite {
-                write_incremental(&cos, &opts)
+                pdfcraft_cos::write_incremental_shared(&cos, &opts)
             } else {
                 let mut base = pdfcraft_cos::Document::open_with_password(editor.saved.clone(), editor.saved_keys.reopen.as_deref())?;
                 base.overlay_changes_from(&cos)?;
-                write_incremental(&base, &opts)
+                pdfcraft_cos::write_incremental_shared(&base, &opts)
             }
         })
         .map_err(EditError::Write)?
-        .map(|v| Arc::new(v) as pdfcraft_cos::PdfBytes)
         .map_err(|e| EditError::Write(e.to_string()))
     }
 

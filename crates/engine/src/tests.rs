@@ -15614,3 +15614,21 @@ fn inline_conversions_refuse_office_documents_without_running_libreoffice() {
     assert_eq!(s.convert_to_pdf_inline("notes.txt", &pdfcraft_cos::owned_bytes(b"hello".to_vec())).unwrap().0, SourceKind::Text);
     assert!(s.as_pdf_inline("scan.jpg", &pdfcraft_cos::owned_bytes(jpeg_bytes())).unwrap().starts_with(b"%PDF-"));
 }
+
+/// #654: `save_bytes` writes exactly what `write_incremental` writes (old vs new), save after
+/// save, now that it returns them as a shared source instead of a copied buffer.
+#[test]
+fn save_bytes_are_the_bytes_write_incremental_writes() {
+    let (mut s, id) = session_with(3);
+    let old = |s: &Session| {
+        let cos = &s.get(id).unwrap().editor.as_ref().unwrap().cos;
+        let opts = pdfcraft_cos::SaveOptions { mod_date: Some(pdfcraft_cos::pdf_date(1_700_000_000)), drop_unlinked: true, ..pdfcraft_cos::SaveOptions::default() };
+        pdfcraft_cos::write_incremental(cos, &opts).unwrap()
+    };
+    for k in 0..3usize {
+        s.apply(id, Edit::RotatePages { pages: vec![k], degrees: 90 }).unwrap();
+        let new = s.save_bytes(id).unwrap();
+        assert_eq!(&new[..], &old(&s)[..], "save {k}");
+        s.mark_saved(id, new, None).unwrap();
+    }
+}
