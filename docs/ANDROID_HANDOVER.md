@@ -22,6 +22,13 @@
 - Merged so far: the `pdfcraft-scan` crate and single-pass pipeline (#331, #346), the Auto look (#346), true proportions (#353), edge refinement (#356), 1-bit black and white (#359), the detector network (#360), Flatten page (#365), testing options and kept scans (#367), upright pages (#370), grain and sharpening (#373), the native preview (#376).
 - **The scanner has run on the owner's phone since 13 November 2026** (0.0.27 and 0.0.28-beta, SM-S928B); what his logs showed is in [`ANDROID_SCAN_HANDOVER.md`](ANDROID_SCAN_HANDOVER.md#1a-what-has-run-on-the-owners-phone). He tests with the options and kept scans described in [`ANDROID_SCAN_TESTING.md`](ANDROID_SCAN_TESTING.md). Release 0.0.25-beta (25012) is the first to contain it.
 
+## RELEASE 0.0.41-beta (41012) — 2026-11-16 (owner requested)
+
+- Release PR publishes `0.0.41-beta` / ARM64 build `41012` (`pdfcraft.versionCode=4101`), same package ID and signer. Trigger matches only `chore(release): publish 0.0.41-beta (41012)`.
+- Owner asked for the review notes of #641–#644 to be fixed, for the contents to be one tap away and for the Highlight tool to learn from a recording of another reader, and then for a release.
+- Included: #648 (Cancel inside long steps, Enhance scanned pages counted; #646), #649 (Contents button, the contents as a tree, the tablet's side panel; #647), #651 (the new markup in hand in the Highlight tool, quick colours; #650). See [`releases/0.0.41-beta.md`](releases/0.0.41-beta.md).
+- Open: nothing tried on a device; the top bar, the contents list, the side panel and the Highlight tool's bar have not been seen on one. #652 (Contents from headings has no count and no Cancel).
+
 ## RELEASE 0.0.40-beta (40012) — 2026-11-16 (owner requested)
 
 - Release PR publishes `0.0.40-beta` / ARM64 build `40012` (`pdfcraft.versionCode=4001`), same package ID and signer. Trigger matches only `chore(release): publish 0.0.40-beta (40012)`.
