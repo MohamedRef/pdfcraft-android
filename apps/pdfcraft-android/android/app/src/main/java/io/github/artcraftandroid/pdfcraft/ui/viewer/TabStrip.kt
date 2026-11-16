@@ -392,17 +392,22 @@ fun OpenTabsBar(vm: AppViewModel, modifier: Modifier = Modifier) {
     val c = pdfColors
     val count = vm.tabs.tabs.size
     if (count == 0) return
+    // one line at 320 dp and up (#615): the count gives way first, Close all is an icon with its name
+    // for TalkBack, and the way back never wraps
+    val closeAll = stringResource(R.string.tabs_close_all)
     Row(
-        modifier.background(c.surfaceRaised, RoundedCornerShape(12.dp)).border(1.dp, c.divider, RoundedCornerShape(12.dp))
+        modifier.heightIn(min = 48.dp).background(c.surfaceRaised, RoundedCornerShape(12.dp)).border(1.dp, c.divider, RoundedCornerShape(12.dp))
             .padding(start = 14.dp, end = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
             androidx.compose.ui.res.pluralStringResource(R.plurals.tabs_open_count, count, count),
-            color = c.text, fontSize = 14.sp, modifier = Modifier.padding(vertical = 10.dp),
+            color = c.text, fontSize = 14.sp, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f).padding(vertical = 10.dp),
         )
-        Spacer(Modifier.width(8.dp))
-        TextButton(onClick = { vm.tabs.closeOthers() }) { Text(stringResource(R.string.tabs_close_all), color = c.textSecondary, fontSize = 13.sp) }
-        TextButton(onClick = { vm.tabs.resume() }) { Text(stringResource(R.string.tabs_resume), color = c.toolAccent, fontSize = 13.sp, fontWeight = FontWeight.SemiBold) }
+        io.github.artcraftandroid.pdfcraft.ui.BarIcon(LucideIcons.X, closeAll, { vm.tabs.closeOthers() })
+        TextButton(onClick = { vm.tabs.resume() }) {
+            Text(stringResource(R.string.tabs_resume), color = c.toolAccent, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, softWrap = false)
+        }
     }
 }
