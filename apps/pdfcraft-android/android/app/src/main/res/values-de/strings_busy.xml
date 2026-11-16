@@ -38,5 +38,7 @@
     <string name="msg_busy_protect_opening">Passwort wird festgelegt: Kopie wird geöffnet …</string>
     <string name="msg_busy_protect_protecting">Passwort wird festgelegt: Kopie wird geschützt …</string>
     <string name="msg_busy_protect_saving">Passwort wird festgelegt: geschützte Kopie wird gespeichert …</string>
-    <string name="busy_cancel_protect">Abbrechen hält vor dem nächsten Schritt an. Es wird keine Datei erstellt, dein Dokument bleibt unverändert. Das Speichern der geschützten Kopie ist ein Schritt: Abbrechen greift, wenn er endet.</string>
+    <string name="busy_cancel_protect">Abbrechen hält vor dem nächsten Schritt an, auch während die geschützte Kopie gespeichert wird. Es wird keine Datei erstellt, dein Dokument bleibt unverändert.</string>
+    <string name="scan_enhance_busy_image">Gescanntes Bild %1$d von %2$d wird verbessert …</string>
+    <string name="busy_cancel_scan_enhance">Abbrechen hält vor dem nächsten Bild an. An deinen Seiten ändert sich nichts.</string>
 </resources>

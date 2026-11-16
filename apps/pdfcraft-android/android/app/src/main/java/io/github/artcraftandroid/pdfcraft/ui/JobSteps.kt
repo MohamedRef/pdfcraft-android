@@ -88,3 +88,19 @@ internal fun createLine(stage: String, done: Int, total: Int): JobLine? = when (
     "writing" -> JobLine(R.string.msg_busy_combining_writing)
     else -> null
 }
+
+/**
+ * The bar of Set a password (#646): three steps (opening the copy, protecting it, saving it), with
+ * the saving moving through its own third as the engine tells how far the writing is ([percent]).
+ */
+internal fun protectBar(step: Int, percent: Int): Pair<Int, Int> = step.coerceIn(0, 3) * 100 + (if (step < 3) percent.coerceIn(0, 100) else 0) to 300
+
+/**
+ * The line for one step of `page_enhance_scan` (#646): `images`, scanned image [done] of [total]
+ * being cleaned; `applying` them keeps the last line.
+ */
+internal fun scanEnhanceLine(stage: String, done: Int, total: Int): JobLine? = when {
+    total <= 0 -> null
+    stage == "images" || stage == "applying" -> JobLine(R.string.scan_enhance_busy_image, listOf(minOf(done + 1, total), total))
+    else -> null
+}

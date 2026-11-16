@@ -361,6 +361,18 @@ impl Session {
         I: IntoIterator<Item = Result<CombineSource, E>>,
         E: From<EditError>,
     {
+        self.combine_each_watched(sources, &mut |_, _, _| true)
+    }
+
+    /// [`Self::combine_each`], telling `step` how far it is inside each source and at the end
+    /// (#646): `copying` (`done` of `total` pages of the source in hand), then `writing` the new
+    /// file (`done` of `total` objects) and `checking` it. `step` returning `false` stops it with
+    /// [`EditError::Cancelled`]; nothing is made.
+    pub fn combine_each_watched<I, E>(&self, sources: I, step: &mut dyn FnMut(&'static str, usize, usize) -> bool) -> Result<Option<pdfcraft_cos::PdfBytes>, E>
+    where
+        I: IntoIterator<Item = Result<CombineSource, E>>,
+        E: From<EditError>,
+    {
         let mut combiner = pdfcraft_organize::Combiner::new();
         let mut added = false;
         for source in sources {
@@ -376,14 +388,24 @@ impl Session {
                 }
                 None => None,
             };
-            combiner.add(&title, &doc, pages.as_deref()).map_err(EditError::from)?;
+            if !combiner.add_watched(&title, &doc, pages.as_deref(), &mut |done, total| step("copying", done, total)).map_err(EditError::from)? {
+                return Err(EditError::Cancelled.into());
+            }
             added = true;
         }
         if !added {
             return Ok(None);
         }
         let out = combiner.finish().map_err(EditError::from)?;
-        Ok(Some(self.write_new(&out)?))
+        if !step("writing", 0, 0) {
+            return Err(EditError::Cancelled.into());
+        }
+        let bytes = self.write_unchecked_watched(&out, &mut |done, total| step("writing", done, total))?.ok_or(EditError::Cancelled)?;
+        if !step("checking", 0, 0) {
+            return Err(EditError::Cancelled.into());
+        }
+        self.check_new(&out, &bytes)?;
+        Ok(Some(bytes))
     }
 
     /// [`Self::combine_ranges`] with the password each encrypted source is opened with, by
@@ -450,11 +472,13 @@ impl Session {
         if !step("combining", 0, 0) {
             return Err(EditError::Cancelled);
         }
-        let out = pdfcraft_organize::combine_selected_with(&named, field_conflicts)?;
+        // Page by page, and the writing object by object (#646): both are told and can be stopped.
+        let out = pdfcraft_organize::combine_selected_watched(&named, field_conflicts, &mut |done, total| step("combining", done, total))?
+            .ok_or(EditError::Cancelled)?;
         if !step("writing", 0, 0) {
             return Err(EditError::Cancelled);
         }
-        let bytes = self.write_unchecked(&out.doc)?;
+        let bytes = self.write_unchecked_watched(&out.doc, &mut |done, total| step("writing", done, total))?.ok_or(EditError::Cancelled)?;
         if !step("checking", 0, 0) {
             return Err(EditError::Cancelled);
         }
@@ -525,24 +549,46 @@ impl Session {
 
     /// New PDF bytes containing copies of `pages` of the document (Extract Pages).
     pub fn extract(&self, id: DocId, pages: &[usize]) -> Result<pdfcraft_cos::PdfBytes, EditError> {
-        self.extract_watched(id, pages, &mut |_| true)
+        self.extract_watched(id, pages, &mut |_, _, _| true)
     }
 
-    /// [`Self::extract`] telling `step` each stage as it starts (#634): `copying` the pages,
-    /// `writing` the new file, `checking` that it reopens with every page. `step` returning
-    /// `false` stops it with [`EditError::Cancelled`]; nothing is made and the document is not
-    /// changed either way.
-    pub fn extract_watched(&self, id: DocId, pages: &[usize], step: &mut dyn FnMut(&'static str) -> bool) -> Result<pdfcraft_cos::PdfBytes, EditError> {
+    /// [`Self::extract`] telling `step` each stage as it starts (#634) and how far it is in it
+    /// (#646): `copying` the pages (`done` of `total` pages), `writing` the new file (`done` of
+    /// `total` objects), `checking` that it reopens with every page (0 of 0). `step` returning
+    /// `false` stops it with [`EditError::Cancelled`], also inside the copying and the writing;
+    /// nothing is made and the document is not changed either way.
+    pub fn extract_watched(
+        &self,
+        id: DocId,
+        pages: &[usize],
+        step: &mut dyn FnMut(&'static str, usize, usize) -> bool,
+    ) -> Result<pdfcraft_cos::PdfBytes, EditError> {
         let src = self.cos(id)?;
         if src.permissions().is_some_and(|p| !p.extract_pages()) {
             return Err(EditError::NotPermitted("extracting pages"));
         }
-        let mut go = |stage| if step(stage) { Ok(()) } else { Err(EditError::Cancelled) };
-        go("copying")?;
-        let out = pdfcraft_organize::extract_pages(src, pages)?;
-        go("writing")?;
-        let bytes = self.write_unchecked(&out)?;
-        go("checking")?;
+        self.copy_out(src, pages, step)
+    }
+
+    /// `pages` of `src` as a new PDF, for [`Self::extract_watched`] and [`Self::split_part_watched`]:
+    /// copied page by page, written object by object, then checked, each told to `step`.
+    fn copy_out(
+        &self,
+        src: &pdfcraft_cos::Document,
+        pages: &[usize],
+        step: &mut dyn FnMut(&'static str, usize, usize) -> bool,
+    ) -> Result<pdfcraft_cos::PdfBytes, EditError> {
+        if !step("copying", 0, pages.len()) {
+            return Err(EditError::Cancelled);
+        }
+        let out = pdfcraft_organize::extract_pages_watched(src, pages, &mut |done, total| step("copying", done, total))?.ok_or(EditError::Cancelled)?;
+        if !step("writing", 0, 0) {
+            return Err(EditError::Cancelled);
+        }
+        let bytes = self.write_unchecked_watched(&out, &mut |done, total| step("writing", done, total))?.ok_or(EditError::Cancelled)?;
+        if !step("checking", 0, 0) {
+            return Err(EditError::Cancelled);
+        }
         self.check_new(&out, &bytes)?;
         Ok(bytes)
     }
@@ -563,9 +609,22 @@ impl Session {
     /// One part of a split: `pages` (as [`Self::split_ranges`] gives them) as a new PDF, with its
     /// first and last page 1-based, as [`Self::split`] returns each part.
     pub fn split_part(&self, id: DocId, pages: std::ops::Range<usize>) -> Result<SplitPart, EditError> {
+        self.split_part_watched(id, pages, &mut |_, _, _| true)
+    }
+
+    /// [`Self::split_part`], telling `step` how far the part is as [`Self::extract_watched`]
+    /// does (`copying`, `writing`, `checking`), and stopping inside it with
+    /// [`EditError::Cancelled`] when `step` says so (#646): one part of a large book is itself a
+    /// long step.
+    pub fn split_part_watched(
+        &self,
+        id: DocId,
+        pages: std::ops::Range<usize>,
+        step: &mut dyn FnMut(&'static str, usize, usize) -> bool,
+    ) -> Result<SplitPart, EditError> {
         let src = self.splittable(id)?;
-        let doc = pdfcraft_organize::extract_pages(src, &pages.clone().collect::<Vec<_>>())?;
-        Ok((pages.start + 1, pages.end, self.write_new(&doc)?))
+        let bytes = self.copy_out(src, &pages.clone().collect::<Vec<_>>(), step)?;
+        Ok((pages.start + 1, pages.end, bytes))
     }
 
     /// Split into parts of at most `max_bytes` each (Acrobat's "File size"): pages are taken in
@@ -635,5 +694,19 @@ impl Session {
         let opts = SaveOptions { mod_date: self.now().map(pdfcraft_cos::pdf_date), ..SaveOptions::default() };
         let doc = writable(doc)?;
         write_full(&doc, &opts).map(|v| Arc::new(v) as pdfcraft_cos::PdfBytes).map_err(|e| EditError::Write(e.to_string()))
+    }
+
+    /// [`Self::write_unchecked`], telling `step` how many objects are written (`done` of `total`);
+    /// `None` when `step` says stop (#646).
+    fn write_unchecked_watched(
+        &self,
+        doc: &pdfcraft_cos::Document,
+        step: &mut dyn FnMut(usize, usize) -> bool,
+    ) -> Result<Option<pdfcraft_cos::PdfBytes>, EditError> {
+        let opts = SaveOptions { mod_date: self.now().map(pdfcraft_cos::pdf_date), ..SaveOptions::default() };
+        let doc = writable(doc)?;
+        pdfcraft_cos::write_full_watched(&doc, &opts, step)
+            .map(|v| v.map(|v| Arc::new(v) as pdfcraft_cos::PdfBytes))
+            .map_err(|e| EditError::Write(e.to_string()))
     }
 }

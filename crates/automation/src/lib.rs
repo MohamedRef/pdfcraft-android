@@ -158,6 +158,12 @@ impl Automation {
         self.job_watch = watch;
     }
 
+    /// How much of a stage is done, 0 to 1, for the fractions a tool tells its watch: 0 when the
+    /// stage has no count.
+    pub(crate) fn part(done: usize, total: usize) -> f32 {
+        if total > 0 { done.min(total) as f32 / total as f32 } else { 0.0 }
+    }
+
     /// Tell the job watch one step of a tool (#634): `stage` in the tool's own words, `done` of
     /// `total` in it, `fraction` of the whole run. A watch that says stop makes this fail with
     /// "cancelled"; without a watch it does nothing.

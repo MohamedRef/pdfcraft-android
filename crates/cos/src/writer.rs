@@ -434,6 +434,20 @@ pub fn reachable_objects(doc: &Document) -> Result<HashSet<u32>, CosError> {
 
 /// Write only reachable objects, renumbered from 1, with a table or cross-reference stream.
 pub fn write_full(doc: &Document, opts: &SaveOptions) -> Result<Vec<u8>, CosError> {
+    // Nothing stops it without a watch.
+    Ok(write_full_watched(doc, opts, &mut |_, _| true)?.unwrap_or_default())
+}
+
+/// [`write_full_watched`] tells its watch once every `total / WRITE_STEPS` objects, so a few
+/// hundred times at most over the whole file however many objects it has.
+const WRITE_STEPS: usize = 128;
+
+/// [`write_full`], telling `step` how far it is: `done` of `total` objects written, every
+/// `total / WRITE_STEPS` objects. `step` returning `false` stops it with `Ok(None)`:
+/// the bytes exist only in memory, so nothing is left behind. Android adaptation (#646): on a
+/// large file the writing is the longest single step of Extract, Split, Combine, Compress and
+/// Set a password, and Cancel had to wait for it to end.
+pub fn write_full_watched(doc: &Document, opts: &SaveOptions, step: &mut dyn FnMut(usize, usize) -> bool) -> Result<Option<Vec<u8>>, CosError> {
     if doc.stream_limited() {
         return Err(CosError::ReadOnlyLimit);
     }
@@ -481,7 +495,13 @@ pub fn write_full(doc: &Document, opts: &SaveOptions) -> Result<Vec<u8>, CosErro
     // Keep only references, not renamed copies of the entire object graph. Standalone
     // objects still precede object streams, preserving the established output order.
     let mut packed: Vec<(u32, ObjRef, Option<Arc<Object>>)> = Vec::new();
+    let total = order.len();
+    let every = (total / WRITE_STEPS).max(1);
+    let mut written = 0usize;
     for (i, (r, is_stream)) in order.iter().enumerate() {
+        if i % every == 0 && !step(written, total) {
+            return Ok(None);
+        }
         let num = output_number(i)?;
         let in_stream = opts.object_streams && !is_stream && !encryption_objects.contains(&num) && root_outside != Some(num);
         if in_stream {
@@ -491,13 +511,18 @@ pub fn write_full(doc: &Document, opts: &SaveOptions) -> Result<Vec<u8>, CosErro
             let o = renumber(&prepared(&reader.document, r.num, num, 0, &o), &map);
             rows.insert(num, Row::InFile(out.len() as u64, 0));
             write_indirect(num, 0, &o, &mut out);
+            written += 1;
         }
     }
     // Object streams take the numbers after the last object. Their contents are not encrypted
     // individually: the whole stream is (§7.5.7, §7.6.2).
     let mut next = output_number(order.len())?;
     let mut batch = ObjectStreamBatch::default();
-    for (num, reference, parsed) in packed {
+    for (k, (num, reference, parsed)) in packed.into_iter().enumerate() {
+        if k % every == 0 && !step(written, total) {
+            return Ok(None);
+        }
+        written += 1;
         let mut encoded = Vec::new();
         serialize(&renumber(&*written_object(&mut reader, reference, false, parsed)?, &map), &mut encoded);
         if batch.count > 0 && batch.body.len().saturating_add(encoded.len()).saturating_add(1) > OBJSTM_BYTES {
@@ -530,7 +555,7 @@ pub fn write_full(doc: &Document, opts: &SaveOptions) -> Result<Vec<u8>, CosErro
     // The size isn't known until the end, and the buffer grew by doubling. The result is often
     // kept as a document's working bytes for as long as it's open: drop the unused capacity.
     out.shrink_to_fit();
-    Ok(out)
+    Ok(Some(out))
 }
 
 /// What `write_full` keeps of the objects it parsed while numbering them, measured with

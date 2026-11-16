@@ -4558,7 +4558,12 @@ fn an_optimize_job_reports_its_stages_and_can_be_cancelled() {
     assert_eq!(stages.first(), Some(&OptimizeStage::Reading { done: 0, total: 2 }), "it says what it does first");
     assert!(!stages.contains(&OptimizeStage::Discarding), "nothing was chosen to discard: {stages:?}");
     assert!(stages.iter().any(|st| matches!(st, OptimizeStage::Images { .. })), "{stages:?}");
-    assert_eq!(&stages[stages.len() - 3..], [OptimizeStage::CleaningUp, OptimizeStage::Merging, OptimizeStage::Writing]);
+    // Android adaptation (#646): the writing asks again as it goes, so a stop takes hold inside
+    // it; it is still the last stage, after the same two.
+    assert!(stages.iter().filter(|st| **st == OptimizeStage::Writing).count() > 1, "{stages:?}");
+    let mut in_order = stages.clone();
+    in_order.dedup();
+    assert_eq!(&in_order[in_order.len() - 3..], [OptimizeStage::CleaningUp, OptimizeStage::Merging, OptimizeStage::Writing]);
     let fractions: Vec<f32> = stages.iter().map(|st| st.fraction()).collect();
     assert!(fractions.windows(2).all(|w| w[0] <= w[1]), "the bar never goes back: {fractions:?}");
     assert!(fractions.iter().all(|f| (0.0..=1.0).contains(f)));
@@ -4586,6 +4591,18 @@ fn an_optimize_job_reports_its_stages_and_can_be_cancelled() {
     let before = s.get(id).unwrap().bytes.clone();
     let r = s.optimize_job(id, &settings, &[]).unwrap().run(|st| st != OptimizeStage::Merging);
     assert!(matches!(r, Err(EditError::Cancelled)), "{r:?}");
+    assert_eq!((s.get(id).unwrap().bytes).as_slice(), (before).as_slice());
+
+    // Android adaptation (#646): cancelled inside the writing, the second time it asks.
+    let mut asked = 0;
+    let r = s.optimize_job(id, &settings, &[]).unwrap().run(|st| {
+        if st == OptimizeStage::Writing {
+            asked += 1;
+        }
+        asked < 2
+    });
+    assert!(matches!(r, Err(EditError::Cancelled)), "{r:?}");
+    assert_eq!(asked, 2, "nothing more is asked after the stop");
     assert_eq!((s.get(id).unwrap().bytes).as_slice(), (before).as_slice());
 }
 

@@ -38,5 +38,7 @@
     <string name="msg_busy_protect_opening">Définition du mot de passe : ouverture d’une copie…</string>
     <string name="msg_busy_protect_protecting">Définition du mot de passe : protection de la copie…</string>
     <string name="msg_busy_protect_saving">Définition du mot de passe : enregistrement de la copie protégée…</string>
-    <string name="busy_cancel_protect">Annuler s’arrête avant l’étape suivante. Aucun fichier n’est créé et votre document reste intact. L’enregistrement de la copie protégée est une seule étape : Annuler agit à sa fin.</string>
+    <string name="busy_cancel_protect">Annuler s’arrête avant l’étape suivante, et aussi pendant l’enregistrement de la copie protégée. Aucun fichier n’est créé et votre document reste intact.</string>
+    <string name="scan_enhance_busy_image">Amélioration de l’image numérisée %1$d sur %2$d…</string>
+    <string name="busy_cancel_scan_enhance">Annuler s’arrête avant l’image suivante. Rien ne change sur vos pages.</string>
 </resources>

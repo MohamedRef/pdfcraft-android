@@ -4982,3 +4982,55 @@ fn combining_some_pages_brings_only_their_bookmarks_and_no_attachments() {
     assert_eq!(source_bookmarks(&all), [("Chapter one".to_string(), vec!["Section".to_string()])]);
     assert!(attachments(&all));
 }
+
+/// Android adaptation (#646): a watched copy is the same copy, told page by page, and a stop
+/// makes nothing and leaves the sources as they were.
+#[test]
+fn watched_extract_and_combine_copy_the_same_and_can_be_stopped() {
+    let save = |d: &Document| write_full(d, &SaveOptions::default()).unwrap();
+
+    let pages = [2usize, 0, 1];
+    let mut told = Vec::new();
+    let watched = extract_pages_watched(&doc_a(), &pages, &mut |done, total| {
+        told.push((done, total));
+        true
+    })
+    .unwrap()
+    .expect("not stopped");
+    assert_eq!(save(&watched), save(&extract_pages(&doc_a(), &pages).unwrap()));
+    assert_eq!(told, [(0, 3), (1, 3), (2, 3)], "asked before each page");
+    let mut asked = 0;
+    let stopped = extract_pages_watched(&doc_a(), &pages, &mut |done, _| {
+        asked += 1;
+        done < 1
+    })
+    .unwrap();
+    assert!(stopped.is_none());
+    assert_eq!(asked, 2, "nothing is copied after a stop");
+
+    let picked: &[usize] = &[1];
+    let (a, b) = (doc_a(), doc_b());
+    let sources: [(&str, &Document, Option<&[usize]>); 2] = [("A", &a, None), ("B", &b, Some(picked))];
+    let mut told = Vec::new();
+    let watched = combine_selected_watched(&sources, FieldConflicts::Rename, &mut |done, total| {
+        told.push((done, total));
+        true
+    })
+    .unwrap()
+    .expect("not stopped");
+    let plain = combine_selected_with(&sources, FieldConflicts::Rename).unwrap();
+    assert_eq!(save(&watched.doc), save(&plain.doc));
+    assert_eq!(watched.renamed_fields, plain.renamed_fields);
+    assert_eq!(told, [(0, 4), (1, 4), (2, 4), (3, 4)], "one count over both sources");
+    // a stop in the second source
+    let mut last = (0, 0);
+    let stopped = combine_selected_watched(&sources, FieldConflicts::Rename, &mut |done, total| {
+        last = (done, total);
+        done < 3
+    })
+    .unwrap();
+    assert!(stopped.is_none());
+    assert_eq!(last, (3, 4));
+    assert_eq!(save(&a), save(&doc_a()));
+    assert_eq!(save(&b), save(&doc_b()));
+}

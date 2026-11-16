@@ -38,5 +38,7 @@
     <string name="msg_busy_protect_opening">Definindo senha: abrindo uma cópia…</string>
     <string name="msg_busy_protect_protecting">Definindo senha: protegendo a cópia…</string>
     <string name="msg_busy_protect_saving">Definindo senha: salvando a cópia protegida…</string>
-    <string name="busy_cancel_protect">Cancelar para antes da próxima etapa. Nenhum arquivo é criado e seu documento fica como está. Salvar a cópia protegida é uma única etapa: Cancelar age quando ela termina.</string>
+    <string name="busy_cancel_protect">Cancelar para antes da próxima etapa, e também enquanto a cópia protegida é salva. Nenhum arquivo é criado e seu documento fica como está.</string>
+    <string name="scan_enhance_busy_image">Melhorando a imagem digitalizada %1$d de %2$d…</string>
+    <string name="busy_cancel_scan_enhance">Cancelar para antes da próxima imagem. Nada muda nas suas páginas.</string>
 </resources>

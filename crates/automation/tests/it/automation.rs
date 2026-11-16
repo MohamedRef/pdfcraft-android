@@ -5078,6 +5078,54 @@ fn enhance_scanned_file_cleans_the_scan_in_place_through_tools() {
     }
 }
 
+/// #646: page_enhance_scan tells the job watch each image before it is cleaned and stops between
+/// them; the cleaned images are put in place only at the end, so a stop changes nothing.
+#[test]
+fn a_job_watch_follows_scan_clean_up_and_can_stop_it() {
+    use pdfcraft_automation::JobStep;
+    use std::sync::{Arc, Mutex};
+    let dir = workdir("enhance-scan-watch");
+    // Two grey scans that differ, so each page keeps an image of its own.
+    for (name, paper) in [("scan1.jpg", 0.78f32), ("scan2.jpg", 0.7)] {
+        let img = image::GrayImage::from_fn(300, 400, |x, y| {
+            let light = 0.55 + 0.45 * (x as f32 / 60.0).min(1.0);
+            let ink = if (60..360).contains(&y) && (y - 60) % 40 < 6 && (60..240).contains(&x) { 0.12 } else { paper };
+            image::Luma([(ink * light * 255.0) as u8])
+        });
+        img.save(dir.join(name)).unwrap();
+    }
+    let mut a = auto(&dir);
+    let scan = ok(&mut a, "doc_create", json!({ "from": "images", "paths": ["scan1.jpg", "scan2.jpg"] }))["doc"].as_u64().unwrap();
+    let before = ok(&mut a, "doc_info", json!({ "doc": scan }));
+    ok(&mut a, "image_save", json!({ "doc": scan, "page": 1, "image": 1, "path": "before.jpg" }));
+
+    // Stopped before the second image, and after the last one before they are put in place.
+    let stops: [(&str, fn(&JobStep) -> bool); 2] = [("the second image", |s| s.stage == "images" && s.done == 1), ("putting them in place", |s| s.stage == "applying")];
+    for (what, at) in stops {
+        a.set_job_watch(Some(Arc::new(move |s: JobStep| !at(&s))));
+        let e = err(&mut a, "page_enhance_scan", json!({ "doc": scan, "level": 100 }));
+        a.set_job_watch(None);
+        assert!(matches!(&e, ToolError::Failed(m) if m.contains("cancelled")), "{what}: {e}");
+        assert_eq!(ok(&mut a, "doc_info", json!({ "doc": scan })), before, "{what}");
+        ok(&mut a, "image_save", json!({ "doc": scan, "page": 1, "image": 1, "path": "stopped.jpg" }));
+        assert_eq!(std::fs::read(dir.join("stopped.jpg")).unwrap(), std::fs::read(dir.join("before.jpg")).unwrap(), "{what}");
+    }
+
+    let seen: Arc<Mutex<Vec<JobStep>>> = Arc::default();
+    let log = seen.clone();
+    a.set_job_watch(Some(Arc::new(move |s| {
+        log.lock().unwrap().push(s);
+        true
+    })));
+    let r = ok(&mut a, "page_enhance_scan", json!({ "doc": scan, "level": 100 }));
+    a.set_job_watch(None);
+    assert_eq!((r["pages_cleaned"].clone(), r["images"].clone(), r["undo"].clone()), (json!([1, 2]), json!(2), json!("Enhance scanned file")));
+    let steps = seen.lock().unwrap().clone();
+    let got: Vec<(&str, usize, usize)> = steps.iter().map(|s| (s.stage, s.done, s.total)).collect();
+    assert_eq!(got, vec![("images", 0, 2), ("images", 1, 2), ("applying", 2, 2)], "{steps:?}");
+    assert!(steps.windows(2).all(|w| w[0].fraction < w[1].fraction), "{steps:?}");
+}
+
 #[test]
 fn enhance_camera_image_finds_the_edges_by_itself() {
     let dir = workdir("enhance-camera-auto");
@@ -15068,9 +15116,15 @@ fn a_job_watch_follows_split_and_can_stop_it() {
     a.set_job_watch(None);
     assert_eq!(r["files"].as_array().unwrap().len(), 3, "{r}");
     let steps = seen.lock().unwrap().clone();
-    let parts: Vec<(usize, usize)> = steps.iter().filter(|s| s.stage == "parts").map(|s| (s.done, s.total)).collect();
+    // A part is told more than once (#646): as it starts, then as its pages are copied and its
+    // file written, with the bar moving through the part.
+    let mut parts: Vec<(usize, usize)> = steps.iter().filter(|s| s.stage == "parts").map(|s| (s.done, s.total)).collect();
+    assert!(parts.len() > 3, "{steps:?}");
+    parts.dedup();
     assert_eq!(parts, vec![(0, 3), (1, 3), (2, 3)], "{steps:?}");
     assert!(steps.windows(2).all(|w| w[0].fraction <= w[1].fraction), "{steps:?}");
+    let inside: Vec<f32> = steps.iter().filter(|s| s.stage == "parts" && s.done == 1).map(|s| s.fraction).collect();
+    assert!(inside.first() < inside.last() && inside.iter().all(|f| (1.0 / 3.0 - 0.001..2.0 / 3.0).contains(f)), "{inside:?}");
 
     // By size: every page is measured first, in the first half of the run.
     let seen: Arc<Mutex<Vec<JobStep>>> = Arc::default();
@@ -15093,6 +15147,13 @@ fn a_job_watch_follows_split_and_can_stop_it() {
     a.set_job_watch(None);
     assert!(matches!(&e, ToolError::Failed(m) if m.contains("cancelled")), "{e}");
     assert!(!dir.join("stopped").exists());
+
+    // Stopped inside the second part, while its file is being written (#646): the same.
+    a.set_job_watch(Some(Arc::new(|s: JobStep| !(s.stage == "parts" && s.done == 1 && s.fraction > 0.55))));
+    let e = err(&mut a, "doc_split", json!({ "doc": doc, "every": 1, "out_dir": "stopped-inside" }));
+    a.set_job_watch(None);
+    assert!(matches!(&e, ToolError::Failed(m) if m.contains("cancelled")), "{e}");
+    assert!(!dir.join("stopped-inside").exists());
 
     // Into a folder that was there already: the folder stays, with only what was in it.
     std::fs::create_dir_all(dir.join("kept")).unwrap();
@@ -15133,8 +15194,17 @@ fn a_job_watch_follows_extract_and_can_stop_it() {
     ok(&mut a, "page_extract", json!({ "doc": doc, "pages": [1, 3], "out": "two.pdf" }));
     a.set_job_watch(None);
     assert!(dir.join("two.pdf").is_file());
-    let stages: Vec<&str> = seen.lock().unwrap().iter().map(|s| s.stage).collect();
+    let steps = seen.lock().unwrap().clone();
+    let mut stages: Vec<&str> = steps.iter().map(|s| s.stage).collect();
+    stages.dedup();
     assert_eq!(stages, vec!["copying", "writing", "checking"]);
+    // Inside the copying each page is told, and inside the writing the objects (#646).
+    let copied: Vec<(usize, usize)> = steps.iter().filter(|s| s.stage == "copying").map(|s| (s.done, s.total)).collect();
+    assert_eq!(copied, vec![(0, 2), (0, 2), (1, 2)], "{steps:?}");
+    let written: Vec<(usize, usize)> = steps.iter().filter(|s| s.stage == "writing" && s.total > 0).map(|s| (s.done, s.total)).collect();
+    assert!(written.len() > 1 && written.windows(2).all(|w| w[0].0 <= w[1].0 && w[0].1 == w[1].1), "{steps:?}");
+    assert!(written.last().is_some_and(|(done, total)| done > &0 && done <= total), "{steps:?}");
+    assert!(steps.windows(2).all(|w| w[0].fraction <= w[1].fraction), "{steps:?}");
 
     for stage in ["copying", "writing", "checking"] {
         a.set_job_watch(Some(Arc::new(move |s: JobStep| s.stage != stage)));
@@ -15142,6 +15212,15 @@ fn a_job_watch_follows_extract_and_can_stop_it() {
         a.set_job_watch(None);
         assert!(matches!(&e, ToolError::Failed(m) if m.contains("cancelled")), "{stage}: {e}");
         assert!(!dir.join("stopped.pdf").exists(), "{stage}");
+    }
+    // Stopped inside a stage (#646): after the first page is copied, and after the first objects are written.
+    let inside: [(&str, fn(&JobStep) -> bool); 2] = [("copying", |s| s.stage == "copying" && s.done == 1), ("writing", |s| s.stage == "writing" && s.done > 0)];
+    for (stage, at) in inside {
+        a.set_job_watch(Some(Arc::new(move |s: JobStep| !at(&s))));
+        let e = err(&mut a, "page_extract", json!({ "doc": doc, "pages": [1, 3], "out": "stopped.pdf" }));
+        a.set_job_watch(None);
+        assert!(matches!(&e, ToolError::Failed(m) if m.contains("cancelled")), "inside {stage}: {e}");
+        assert!(!dir.join("stopped.pdf").exists(), "inside {stage}");
     }
 
     // One file per page: a step per page, and a stop removes the pages already written.
@@ -15236,15 +15315,23 @@ fn a_job_watch_follows_print_and_can_stop_it() {
         a.set_job_watch(None);
         assert_eq!(r["sheets"], plain["sheets"], "{r}");
         let steps = seen.lock().unwrap().clone();
-        let stages: Vec<&str> = steps.iter().map(|s| s.stage).collect();
         let sheets = plain["sheets"].as_u64().unwrap() as usize;
-        let mut want = Vec::new();
+        let count = |stage: &str| {
+            let mut told: Vec<(usize, usize)> = steps.iter().filter(|s| s.stage == stage).map(|s| (s.done, s.total)).collect();
+            told.dedup();
+            told
+        };
         if pictures {
-            want.extend(std::iter::repeat_n("pictures", 3));
+            assert_eq!(count("pictures"), vec![(0, 3), (1, 3), (2, 3)], "{steps:?}");
         }
-        want.extend(std::iter::repeat_n("sheets", sheets));
-        want.push("writing");
-        assert_eq!(stages, want, "{steps:?}");
+        // each sheet as it is laid out, then all of them while the file is written (#646: the
+        // writing asks again as it goes, so a stop takes hold inside it)
+        let mut want: Vec<(usize, usize)> = (0..sheets).map(|i| (i, sheets)).collect();
+        want.push((sheets, sheets));
+        assert_eq!(count("sheets"), want, "{steps:?}");
+        let mut stages: Vec<&str> = steps.iter().map(|s| s.stage).collect();
+        stages.dedup();
+        assert_eq!(stages, if pictures { vec!["pictures", "sheets", "writing"] } else { vec!["sheets", "writing"] }, "{steps:?}");
         assert!(steps.windows(2).all(|w| w[0].fraction <= w[1].fraction), "{steps:?}");
 
         for stop_at in ["pictures", "sheets", "writing"].into_iter().filter(|s| pictures || *s != "pictures") {
@@ -15255,6 +15342,13 @@ fn a_job_watch_follows_print_and_can_stop_it() {
             assert!(matches!(&e, ToolError::Failed(m) if m.contains("cancelled")), "{stop_at}: {e}");
             assert!(!dir.join("stopped.pdf").exists(), "{stop_at}");
         }
+        // Stopped while the sheets are written into the file (#646): nothing is left.
+        a.set_job_watch(Some(Arc::new(move |s: JobStep| !(s.stage == "sheets" && s.done == s.total))));
+        call["path"] = json!("stopped.pdf");
+        let e = err(&mut a, "doc_print", call.clone());
+        a.set_job_watch(None);
+        assert!(matches!(&e, ToolError::Failed(m) if m.contains("cancelled")), "inside the writing: {e}");
+        assert!(!dir.join("stopped.pdf").exists());
     }
     assert_eq!(ok(&mut a, "doc_info", json!({ "doc": doc })), before);
 }
@@ -15281,8 +15375,18 @@ fn a_job_watch_follows_compare_and_can_stop_it() {
     assert_eq!(r, plain);
     let steps = seen.lock().unwrap().clone();
     let got: Vec<(&str, usize, usize)> = steps.iter().map(|s| (s.stage, s.done, s.total)).collect();
-    assert_eq!(got, vec![("reading", 0, 2), ("reading", 1, 2), ("comparing", 2, 2), ("visual", 0, 1)], "{steps:?}");
+    // Finding the changes is told as it starts, then word by word settled (#646): 19 words in the two texts.
+    assert_eq!(
+        got,
+        vec![("reading", 0, 2), ("reading", 1, 2), ("comparing", 0, 0), ("comparing", 0, 19), ("comparing", 19, 19), ("visual", 0, 1)],
+        "{steps:?}"
+    );
     assert!(steps.windows(2).all(|w| w[0].fraction <= w[1].fraction), "{steps:?}");
+    // Stopped inside the comparing, once its words are counted (#646).
+    a.set_job_watch(Some(Arc::new(|s: JobStep| !(s.stage == "comparing" && s.total > 0))));
+    let e = err(&mut a, "doc_compare", json!({ "doc": v2, "other": v1, "visual": true }));
+    a.set_job_watch(None);
+    assert!(matches!(&e, ToolError::Failed(m) if m.contains("cancelled")), "inside comparing: {e}");
 
     for stop_at in ["reading", "comparing", "visual"] {
         a.set_job_watch(Some(Arc::new(move |s: JobStep| s.stage != stop_at)));
@@ -15311,20 +15415,18 @@ fn a_job_watch_follows_combine_and_create_and_can_stop_them() {
     assert_eq!(r["bytes"], plain["bytes"], "{r}");
     let steps = seen.lock().unwrap().clone();
     let got: Vec<(&str, usize, usize)> = steps.iter().map(|s| (s.stage, s.done, s.total)).collect();
-    assert_eq!(
-        got,
-        vec![
-            ("reading", 0, 2),
-            ("reading", 1, 2),
-            ("opening", 0, 2),
-            ("opening", 1, 2),
-            ("combining", 0, 0),
-            ("writing", 0, 0),
-            ("checking", 0, 0),
-            ("saving", 0, 0)
-        ],
-        "{steps:?}"
-    );
+    let mut stages: Vec<&str> = got.iter().map(|g| g.0).collect();
+    stages.dedup();
+    assert_eq!(stages, vec!["reading", "opening", "combining", "writing", "checking", "saving"], "{steps:?}");
+    let of = |stage: &str| got.iter().filter(|g| g.0 == stage).map(|g| (g.1, g.2)).collect::<Vec<_>>();
+    assert_eq!(of("reading"), vec![(0, 2), (1, 2)]);
+    assert_eq!(of("opening"), vec![(0, 2), (1, 2)]);
+    // Inside the combining each page of both files is told, and inside the writing the objects (#646).
+    assert_eq!(of("combining"), vec![(0, 0), (0, 5), (1, 5), (2, 5), (3, 5), (4, 5)], "{steps:?}");
+    let written: Vec<(usize, usize)> = of("writing").into_iter().filter(|w| w.1 > 0).collect();
+    assert!(written.len() > 1 && written.windows(2).all(|w| w[0].0 <= w[1].0 && w[0].1 == w[1].1), "{steps:?}");
+    assert!(written.last().is_some_and(|(done, total)| done > &0 && done <= total), "{steps:?}");
+    assert_eq!((of("checking"), of("saving")), (vec![(0, 0)], vec![(0, 0)]));
     assert!(steps.windows(2).all(|w| w[0].fraction <= w[1].fraction), "{steps:?}");
     for stop_at in ["reading", "opening", "combining", "writing", "checking", "saving"] {
         a.set_job_watch(Some(Arc::new(move |s: JobStep| s.stage != stop_at)));
@@ -15332,6 +15434,15 @@ fn a_job_watch_follows_combine_and_create_and_can_stop_them() {
         a.set_job_watch(None);
         assert!(matches!(&e, ToolError::Failed(m) if m.contains("cancelled")), "{stop_at}: {e}");
         assert!(!dir.join("stopped.pdf").exists(), "{stop_at}");
+    }
+    // Stopped inside a stage (#646): in the second file's pages, and after the first objects are written.
+    let inside: [(&str, fn(&JobStep) -> bool); 2] = [("combining", |s| s.stage == "combining" && s.done == 3), ("writing", |s| s.stage == "writing" && s.done > 0)];
+    for (stage, at) in inside {
+        a.set_job_watch(Some(Arc::new(move |s: JobStep| !at(&s))));
+        let e = err(&mut a, "doc_combine", json!({ "paths": ["a.pdf", "b.pdf"], "out": "stopped.pdf" }));
+        a.set_job_watch(None);
+        assert!(matches!(&e, ToolError::Failed(m) if m.contains("cancelled")), "inside {stage}: {e}");
+        assert!(!dir.join("stopped.pdf").exists(), "inside {stage}");
     }
 
     let plain = ok(&mut a, "doc_create_multiple", json!({ "paths": ["a.pdf", "b.pdf"], "out": "plain-create.pdf" }));
@@ -15344,8 +15455,17 @@ fn a_job_watch_follows_combine_and_create_and_can_stop_them() {
     let r = ok(&mut a, "doc_create_multiple", json!({ "paths": ["a.pdf", "b.pdf"], "out": "watched-create.pdf" }));
     a.set_job_watch(None);
     assert_eq!(r["bytes"], plain["bytes"], "{r}");
-    let got: Vec<(&str, usize, usize)> = seen.lock().unwrap().iter().map(|s| (s.stage, s.done, s.total)).collect();
-    assert_eq!(got, vec![("files", 0, 2), ("files", 1, 2), ("writing", 0, 0)]);
+    let steps = seen.lock().unwrap().clone();
+    // A file is told as it starts and again for each of its pages copied in (#646), still as
+    // file n of 2 with the bar moving through it; then the writing, object by object.
+    let mut files: Vec<(usize, usize)> = steps.iter().filter(|s| s.stage == "files").map(|s| (s.done, s.total)).collect();
+    assert!(files.len() > 2, "{steps:?}");
+    files.dedup();
+    assert_eq!(files, vec![(0, 2), (1, 2)], "{steps:?}");
+    let mut stages: Vec<&str> = steps.iter().map(|s| s.stage).collect();
+    stages.dedup();
+    assert_eq!(stages, vec!["files", "writing"], "{steps:?}");
+    assert!(steps.windows(2).all(|w| w[0].fraction <= w[1].fraction), "{steps:?}");
     for stop_at in ["files", "writing"] {
         a.set_job_watch(Some(Arc::new(move |s: JobStep| s.stage != stop_at)));
         let e = err(&mut a, "doc_create_multiple", json!({ "paths": ["a.pdf", "b.pdf"], "out": "stopped-create.pdf" }));
@@ -15353,4 +15473,50 @@ fn a_job_watch_follows_combine_and_create_and_can_stop_them() {
         assert!(matches!(&e, ToolError::Failed(m) if m.contains("cancelled")), "{stop_at}: {e}");
         assert!(!dir.join("stopped-create.pdf").exists(), "{stop_at}");
     }
+    // Stopped inside the second file's pages, and after the first objects are written (#646).
+    let inside: [(&str, fn(&JobStep) -> bool); 2] =
+        [("files", |s| s.stage == "files" && s.done == 1 && s.fraction > 0.5), ("writing", |s| s.stage == "writing" && s.done > 0)];
+    for (stage, at) in inside {
+        a.set_job_watch(Some(Arc::new(move |s: JobStep| !at(&s))));
+        let e = err(&mut a, "doc_create_multiple", json!({ "paths": ["a.pdf", "b.pdf"], "out": "stopped-create.pdf" }));
+        a.set_job_watch(None);
+        assert!(matches!(&e, ToolError::Failed(m) if m.contains("cancelled")), "inside {stage}: {e}");
+        assert!(!dir.join("stopped-create.pdf").exists(), "inside {stage}");
+    }
+}
+
+/// #646: a full save (what Set a password's protected copy is written with) tells the job watch
+/// how many objects are written and stops inside the writing; a stop writes no file and the
+/// document can still be saved after it.
+#[test]
+fn a_job_watch_follows_a_full_save_and_can_stop_it() {
+    use pdfcraft_automation::JobStep;
+    use std::sync::{Arc, Mutex};
+    let dir = workdir("save-watch");
+    let mut a = auto(&dir);
+    let doc = ok(&mut a, "doc_open", json!({ "path": "a.pdf" }))["doc"].as_u64().unwrap();
+    ok(&mut a, "doc_protect", json!({ "doc": doc, "open_password": "openme" }));
+
+    a.set_job_watch(Some(Arc::new(|s: JobStep| !(s.stage == "saving" && s.done > 0))));
+    let e = err(&mut a, "doc_save", json!({ "doc": doc, "path": "stopped.pdf", "full": true }));
+    a.set_job_watch(None);
+    assert!(matches!(&e, ToolError::Failed(m) if m.contains("cancelled")), "{e}");
+    assert!(!dir.join("stopped.pdf").exists());
+
+    let seen: Arc<Mutex<Vec<JobStep>>> = Arc::default();
+    let log = seen.clone();
+    a.set_job_watch(Some(Arc::new(move |s| {
+        log.lock().unwrap().push(s);
+        true
+    })));
+    ok(&mut a, "doc_save", json!({ "doc": doc, "path": "protected.pdf", "full": true }));
+    a.set_job_watch(None);
+    let steps = seen.lock().unwrap().clone();
+    assert!(steps.len() > 1 && steps.iter().all(|s| s.stage == "saving" && s.total > 0 && s.done <= s.total), "{steps:?}");
+    assert!(steps.windows(2).all(|w| w[0].done <= w[1].done && w[0].fraction <= w[1].fraction), "{steps:?}");
+    assert!(steps.last().is_some_and(|s| s.done > 0 && s.fraction <= 0.9), "{steps:?}");
+    // the copy is protected and opens with the password; an incremental save tells nothing
+    assert!(a.call("doc_open", &json!({ "path": "protected.pdf" })).is_err());
+    let reopened = ok(&mut a, "doc_open", json!({ "path": "protected.pdf", "password": "openme" }));
+    assert_eq!(reopened["pages"], 3, "{reopened}");
 }
