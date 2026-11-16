@@ -523,6 +523,8 @@ class SharingController internal constructor(private val vm: AppViewModel) {
                 if (!discarded) vm.tell(text(R.string.discard_kept_recovery))
             }
             vm.document = null
+            // the copy replaces it: no tab may stay for a document the engine no longer has (#662)
+            vm.tabs.closed(doc)
             vm.refreshRecents()
             left = true
         }

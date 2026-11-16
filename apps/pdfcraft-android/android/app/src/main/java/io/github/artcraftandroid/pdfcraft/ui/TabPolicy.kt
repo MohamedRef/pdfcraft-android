@@ -15,6 +15,12 @@ internal object TabPolicy {
         return if (closed < size - 1) closed else closed - 1
     }
 
+    /**
+     * Whether closing a document finishes the app: only one another app opened, and only when
+     * [tabsLeft] is 0, so closing it never throws the reader out of other open documents (#662).
+     */
+    fun leavesAfterClose(fromOtherApp: Boolean, tabsLeft: Int): Boolean = fromOtherApp && tabsLeft <= 0
+
     /** Ctrl+Tab ([step] 1) and Ctrl+Shift+Tab ([step] -1) from [current] of [size], wrapping round. */
     fun cycle(size: Int, current: Int, step: Int): Int? {
         if (size <= 1) return null

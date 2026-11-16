@@ -84,4 +84,16 @@ class TabPolicyTest {
         assertEquals(listOf(10f, 20f, 110f, 70f), SplitDrop.area(110f, 70f, 10f, 20f)!!.toList())
         assertNull(SplitDrop.area(10f, 10f, 12f, 40f))
     }
+
+    @Test
+    fun closingADocumentFromAnotherAppLeavesOnlyWhenItWasTheLastOne() {
+        // #662: with other documents open, closing the other app's file shows the next tab
+        assertEquals(false, TabPolicy.leavesAfterClose(fromOtherApp = true, tabsLeft = 4))
+        assertEquals(false, TabPolicy.leavesAfterClose(fromOtherApp = true, tabsLeft = 1))
+        // alone, it still goes back to the app that opened it
+        assertEquals(true, TabPolicy.leavesAfterClose(fromOtherApp = true, tabsLeft = 0))
+        // a document opened in PdfCraft never finishes the app
+        assertEquals(false, TabPolicy.leavesAfterClose(fromOtherApp = false, tabsLeft = 0))
+        assertEquals(false, TabPolicy.leavesAfterClose(fromOtherApp = false, tabsLeft = 3))
+    }
 }
