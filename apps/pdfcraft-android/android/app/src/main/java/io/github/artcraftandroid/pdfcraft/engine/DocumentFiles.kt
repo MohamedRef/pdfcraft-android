@@ -753,10 +753,12 @@ class DocumentFiles(private val context: Context) {
      * under its name (the provider makes taken names unique). Returns how many were written; a
      * failure part-way removes the file it was writing and says which.
      */
-    fun saveAllToTree(tree: Uri, files: List<Pair<File, String>>, mime: String): Int {
+    fun saveAllToTree(tree: Uri, files: List<Pair<File, String>>, mime: String, next: (done: Int) -> Boolean = { true }): Int {
         val parent = DocumentsContract.buildDocumentUriUsingTree(tree, DocumentsContract.getTreeDocumentId(tree))
         var saved = 0
         for ((file, name) in files) {
+            // before each file: the count so far, and whether to go on (#614: Cancel keeps the files saved)
+            if (!next(saved)) break
             val doc = DocumentsContract.createDocument(resolver, parent, mime, name)
                 ?: throw IOException(context.getString(R.string.files_error_save_folder, name))
             try {

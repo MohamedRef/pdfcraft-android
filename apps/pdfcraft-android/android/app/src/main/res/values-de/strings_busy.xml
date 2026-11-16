@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The busy dialog (#614): a large file's note (%1$s is its size), the time taken so far (%1$s is 0:07), and what Cancel keeps -->
+    <string name="busy_large_file">Große Datei (%1$s): Das kann einige Minuten dauern.</string>
+    <string name="busy_elapsed">Bisher %1$s</string>
+    <string name="busy_cancel_combine">Abbrechen hält vor der nächsten Datei an. Nichts wird erstellt, deine Dateien bleiben unverändert.</string>
+    <string name="busy_cancel_export_images">Abbrechen hält nach dieser Seite an. Es werden keine Bilder gespeichert.</string>
+    <string name="busy_cancel_save_files">Abbrechen hält nach dieser Datei an. Bereits gespeicherte Dateien bleiben im Ordner.</string>
+</resources>

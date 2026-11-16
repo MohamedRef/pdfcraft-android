@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The busy dialog (#614): a large file's note (%1$s is its size), the time taken so far (%1$s is 0:07), and what Cancel keeps -->
+    <string name="busy_large_file">File grande (%1$s): può richiedere qualche minuto.</string>
+    <string name="busy_elapsed">%1$s finora</string>
+    <string name="busy_cancel_combine">Annulla si ferma prima del file successivo. Non viene creato nulla e i tuoi file restano come sono.</string>
+    <string name="busy_cancel_export_images">Annulla si ferma dopo questa pagina. Nessuna immagine viene salvata.</string>
+    <string name="busy_cancel_save_files">Annulla si ferma dopo questo file. I file già salvati restano nella cartella.</string>
+</resources>

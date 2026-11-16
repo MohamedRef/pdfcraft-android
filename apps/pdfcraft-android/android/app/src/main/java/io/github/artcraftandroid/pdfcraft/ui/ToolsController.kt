@@ -97,7 +97,25 @@ class ToolsController internal constructor(private val vm: AppViewModel) {
     var success by mutableStateOf<SuccessBanner?>(null)
 
     /** A long-running job's message (a progress dialog over everything), or null. */
-    var busy by mutableStateOf<String?>(null)
+    var busy: String?
+        get() = busyState
+        set(v) {
+            // a new job starts its clock (#614); the message changing within a job keeps it
+            if (busyState == null && v != null) busySince = android.os.SystemClock.elapsedRealtime()
+            if (v == null) busyNote = null
+            busyState = v
+        }
+    private var busyState by mutableStateOf<String?>(null)
+
+    /** When the job in the busy dialog started (elapsedRealtime), for the time shown after a few seconds (#614). */
+    var busySince by mutableStateOf(0L)
+        private set
+
+    /**
+     * A line under the busy message for a job that can neither count nor stop (#614): how large
+     * the file is, so a long wait is expected. Never a promised time.
+     */
+    var busyNote by mutableStateOf<String?>(null)
 
     // ---- Remove hidden information (#177) ------------------------------------------------------
 
@@ -322,7 +340,7 @@ class ToolsController internal constructor(private val vm: AppViewModel) {
     }
 
     /** Export [doc] as a Word, RTF, Excel or PowerPoint document. */
-    fun exportDocument(doc: OpenDocument, ext: String) = vm.job(text(R.string.msg_busy_exporting_to, ext.uppercase())) { eng ->
+    fun exportDocument(doc: OpenDocument, ext: String) = vm.docJob(doc, text(R.string.msg_busy_exporting_to, ext.uppercase())) { eng ->
         val out = vm.tempFile(ext)
         if (ext == "txt") eng.tool("doc_export_text", mapOf("doc" to doc.id, "path" to out.absolutePath))
         else eng.tool("doc_export_office", mapOf("doc" to doc.id, "path" to out.absolutePath))
@@ -370,17 +388,31 @@ class ToolsController internal constructor(private val vm: AppViewModel) {
      * Pictures of [pages] (0-based) drawn by the engine (`doc_export_images`) at [imageDpi], saved
      * (PNG and JPEG to Pictures/PdfCraft, TIFF to Downloads) or handed to the share sheet.
      */
-    fun writeImages(doc: OpenDocument, ext: String, pages: List<Int>, share: Boolean) = vm.job(text(R.string.msg_busy_exporting_images)) { eng ->
+    fun writeImages(doc: OpenDocument, ext: String, pages: List<Int>, share: Boolean) = vm.docJob(doc, text(R.string.msg_busy_exporting_images)) { eng ->
         val format = when (ext) { "png" -> "png"; "tif", "tiff" -> "tiff"; else -> "jpeg" }
         val mime = when (format) { "png" -> "image/png"; "tiff" -> "image/tiff"; else -> "image/jpeg" }
         val dir = File(app.cacheDir, "images/${System.nanoTime()}").apply { mkdirs() }
         try {
-            val r = Diag.measure(DiagArea.Pages, "export_pages_render", "doc" to doc.diagNumber, "format" to format, "dpi" to imageDpi, "pages" to pages.size) {
-                eng.tool("doc_export_images", mapOf(
-                    "doc" to doc.id, "folder" to dir.absolutePath, "format" to format, "dpi" to imageDpi, "quality" to imageQuality,
-                    "pages" to pages.map { it + 1 },
-                ))
+            // a page at a time, counted, and Cancel stops before the next with nothing saved (#614)
+            val stop = vm.offerCancel(text(R.string.busy_cancel_export_images))
+            val r = JSONObject().put("files", org.json.JSONArray()).put("lower_dpi", org.json.JSONArray())
+            Diag.measure(DiagArea.Pages, "export_pages_render", "doc" to doc.diagNumber, "format" to format, "dpi" to imageDpi, "pages" to pages.size) {
+                for ((i, page) in pages.withIndex()) {
+                    if (stop.asked) break
+                    vm.tools.busyProgress = i to pages.size
+                    val one = eng.tool("doc_export_images", mapOf(
+                        "doc" to doc.id, "folder" to dir.absolutePath, "format" to format, "dpi" to imageDpi, "quality" to imageQuality,
+                        "pages" to listOf(page + 1),
+                    ))
+                    mergeExportReport(r, one)
+                }
             }
+            if (stop.asked) {
+                Diag.event(DiagArea.Pages, "job_cancelled", "job" to "export_images", "done" to (r.optJSONArray("files")?.length() ?: 0), "pages" to pages.size)
+                return@docJob
+            }
+            vm.tools.busyProgress = pages.size to pages.size
+            vm.withdrawCancel()
             val made = exportedFiles(r).map { f -> f to "${doc.title}_${f.name.substringAfterLast("_page_")}" }
             if (Diag.enabled()) Diag.event(DiagArea.Pages, "export_pages_result", "doc" to doc.diagNumber, "files" to made.size,
                 "bytes" to made.sumOf { it.first.length() }, "lower_dpi" to (r.optJSONArray("lower_dpi")?.length() ?: 0), "share" to share)
@@ -405,6 +437,15 @@ class ToolsController internal constructor(private val vm: AppViewModel) {
         }
     }
 
+    /** Add one page's `doc_export_images` report ([one]) to the whole export's ([into]): its files and its pages drawn at a lower resolution (#614). */
+    private fun mergeExportReport(into: JSONObject, one: JSONObject) {
+        for (key in listOf("files", "lower_dpi")) {
+            val from = one.optJSONArray(key) ?: continue
+            val to = into.getJSONArray(key)
+            for (i in 0 until from.length()) to.put(from.get(i))
+        }
+    }
+
     /** The files an export reports in `files` (paths, or objects with a `path`), in its order. */
     private fun exportedFiles(r: JSONObject): List<File> {
         val a = r.optJSONArray("files") ?: return emptyList()
@@ -415,7 +456,7 @@ class ToolsController internal constructor(private val vm: AppViewModel) {
      * Pictures in the PDF: every image the pages use, once each (`doc_export_all_images`), saved
      * into a folder the person picks or shared; images under 64 px are skipped when [skipSmall].
      */
-    fun exportAllImages(doc: OpenDocument, skipSmall: Boolean, share: Boolean) = vm.job(text(R.string.msg_busy_exporting_images)) { eng ->
+    fun exportAllImages(doc: OpenDocument, skipSmall: Boolean, share: Boolean) = vm.docJob(doc, text(R.string.msg_busy_exporting_images)) { eng ->
         val dir = File(app.cacheDir, "images/${System.nanoTime()}").apply { mkdirs() }
         try {
             val r = Diag.measure(DiagArea.Pages, "export_all_images", "doc" to doc.diagNumber, "skip_small" to skipSmall) {
@@ -430,7 +471,7 @@ class ToolsController internal constructor(private val vm: AppViewModel) {
             if (made.isEmpty()) {
                 vm.tell(text(R.string.msg_no_images_found))
                 dir.deleteRecursively()
-                return@job
+                return@docJob
             }
             if (reasons.isNotEmpty()) vm.tell(plural(R.plurals.msg_images_skipped, skipped!!.length(), skipped.length(), reasons.take(3).joinToString("; ")))
             if (share) {
@@ -453,7 +494,16 @@ class ToolsController internal constructor(private val vm: AppViewModel) {
         val copies = mutableListOf<File>()
         val out = vm.tempFile("pdf")
         try {
-            val paths = withContext(Dispatchers.IO) { uris.map { vm.copyIn(it).also(copies::add).absolutePath } }
+            // read in one by one, counted; Cancel stops before the next with nothing made (#614)
+            val stop = vm.offerCancel(text(R.string.busy_cancel_combine))
+            val paths = vm.copyInCounted(uris, copies, stop)
+            if (paths == null) {
+                Diag.event(DiagArea.Pages, "job_cancelled", "job" to "create", "copied" to copies.size, "files" to uris.size)
+                out.delete()
+                return@job
+            }
+            vm.withdrawCancel()
+            vm.tools.busyProgress = null
             eng.tool("doc_create_multiple", mapOf("paths" to paths, "out" to out.absolutePath, "mode" to "combine"))
         } catch (e: Exception) {
             out.delete()
@@ -468,11 +518,35 @@ class ToolsController internal constructor(private val vm: AppViewModel) {
     }
 
     /** Pages [pages] (0-based) of [doc] as a new PDF in Downloads. */
-    fun extractPages(doc: OpenDocument, pages: List<Int>) = vm.job(text(R.string.msg_busy_extracting)) { eng ->
+    fun extractPages(doc: OpenDocument, pages: List<Int>) = vm.docJob(doc, text(R.string.msg_busy_extracting)) { eng ->
         val out = vm.tempFile("pdf")
         Diag.measure(DiagArea.Pages, "extract_pages", "doc" to doc.diagNumber, "pages" to pages.size) {
             eng.tool("page_extract", mapOf("doc" to doc.id, "pages" to pages.map { it + 1 }, "out" to out.absolutePath))
         }
         vm.deliver(out, "Pages from ${doc.title}.pdf")
     }
+}
+
+/** From this size a job without a count says the file is large (#614). */
+internal const val BUSY_LARGE_FILE_BYTES = 50L * 1024 * 1024
+
+/** The busy dialog's line for a large file (#614), or null under [BUSY_LARGE_FILE_BYTES]. */
+internal fun busyLargeFileNote(bytes: Long): String? =
+    if (bytes < BUSY_LARGE_FILE_BYTES) null else text(R.string.busy_large_file, io.github.artcraftandroid.pdfcraft.ui.viewer.formatSize(bytes))
+
+/** The time a job has taken, as the busy dialog shows it from [BUSY_SHOW_TIME_AFTER_MS] (#614): "0:07", "12:30", "1:02:03". */
+internal fun busyElapsed(ms: Long): String {
+    val s = (ms / 1000).coerceAtLeast(0)
+    val h = s / 3600
+    val m = (s % 3600) / 60
+    val sec = s % 60
+    return if (h > 0) "%d:%02d:%02d".format(java.util.Locale.ROOT, h, m, sec) else "%d:%02d".format(java.util.Locale.ROOT, m, sec)
+}
+
+/** After this long the busy dialog shows the time taken so far (#614). */
+internal const val BUSY_SHOW_TIME_AFTER_MS = 3_000L
+
+/** A job's Cancel was pressed (#614): the job's loop reads it before each page or file. */
+internal class JobStop {
+    @Volatile var asked = false
 }
