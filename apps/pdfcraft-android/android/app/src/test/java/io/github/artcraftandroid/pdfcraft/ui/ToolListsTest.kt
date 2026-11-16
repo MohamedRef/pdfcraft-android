@@ -32,11 +32,13 @@ class ToolListsTest {
     @Test
     fun allIsByCategoryThenByName() {
         val all = QuickTool.listed(null, "", name)
-        val expected = QuickTool.entries.sortedWith(compareBy<QuickTool>({ it.category.ordinal }, { it != QuickTool.Scan }, { it.name.lowercase() }))
+        val expected = QuickTool.entries.sortedWith(compareBy<QuickTool>({ it.category.ordinal }, { it != QuickTool.Scan }, { it != QuickTool.ScanPhotos }, { it.name.lowercase() }))
         assertEquals(expected, all)
         // every category has tools, and the scanner's come first
         for (c in ToolCategory.entries) assertTrue("$c has tools", all.any { it.category == c })
         assertEquals(QuickTool.Scan, all.first())
+        // Scan from photos right after it (#617)
+        assertEquals(QuickTool.ScanPhotos, all[1])
     }
 
     @Test

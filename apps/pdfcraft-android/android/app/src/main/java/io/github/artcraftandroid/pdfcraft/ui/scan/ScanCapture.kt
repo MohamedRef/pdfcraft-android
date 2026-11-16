@@ -8,7 +8,7 @@ import org.json.JSONObject
  * kept scan's page file (`capture`), so a page that comes out wrong can be traced to its capture.
  */
 internal data class ScanCapture(
-    /** `in_app`, `phone_app` or `import`. */
+    /** `in_app`, `phone_app`, `import` or `shared` (#617). */
     val source: String,
     /** The still's size in tenths of a megapixel; 0 when not known (the phone's camera app, an import). */
     val megapixelsTenths: Int = 0,
@@ -55,6 +55,8 @@ internal data class ScanCapture(
     val zoom: Double = 1.0,
     /** Whether the lines of thirds were over the viewfinder (#457). */
     val grid: Boolean = false,
+    /** How the scan began (#617): `camera`, `import`, `shared` or `shortcut` ([ScanStart]). */
+    val started: String = ScanStart.Camera.id,
 ) {
     /** The photo is a page the merge already straightened: its edges are not searched for again. */
     val straightened: Boolean get() = merge?.merged == true
@@ -67,7 +69,7 @@ internal data class ScanCapture(
         "live" to live, "live_found" to liveFound, "live_stable" to liveStable, "live_hint" to liveHint,
         "auto_on" to autoOn, "auto_shot" to autoShot, "burst" to (merge != null), "merged" to straightened,
         "merge_setting" to (mergeSetting ?: "none"), "merge_chosen" to mergeChosen,
-        "mode" to (mode ?: "none"), "zoom" to zoom, "grid" to grid,
+        "mode" to (mode ?: "none"), "zoom" to zoom, "grid" to grid, "started" to started,
     )
 
     /** The facts as JSON, for a kept scan's page file. */
@@ -81,7 +83,7 @@ internal data class ScanCapture(
         .put("sharpness_blurred_unverified", sharpnessBlurredUnverified).put("sharpness_ms", sharpnessMs)
         .put("merge", merge?.json() ?: JSONObject.NULL)
         .put("merge_setting", mergeSetting ?: JSONObject.NULL).put("merge_chosen", mergeChosen)
-        .put("mode", mode ?: JSONObject.NULL).put("zoom", zoom).put("grid", grid)
+        .put("mode", mode ?: JSONObject.NULL).put("zoom", zoom).put("grid", grid).put("started", started)
         // a merged page is already cropped by the detector and its photos were deleted (#426): not raw ground truth
         .put("photos_kept", !straightened)
         .put(
@@ -98,8 +100,11 @@ internal data class ScanCapture(
 internal object ScanCaptures {
     private val byPath = ConcurrentHashMap<String, ScanCapture>()
 
+    /** How the scan in progress began (#617): stamped on every capture put here. */
+    @Volatile var startedFrom: ScanStart = ScanStart.Camera
+
     fun put(path: String, capture: ScanCapture) {
-        byPath[path] = capture
+        byPath[path] = capture.copy(started = startedFrom.id)
         // a scan is a few dozen photos at most; this only stops a very long session from growing
         if (byPath.size > MAX) byPath.keys.firstOrNull()?.let(byPath::remove)
     }

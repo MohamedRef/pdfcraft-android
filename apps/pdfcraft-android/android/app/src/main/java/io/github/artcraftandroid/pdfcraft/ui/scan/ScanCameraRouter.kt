@@ -246,9 +246,17 @@ internal class ScanCameraRouter(private val activity: ComponentActivity, private
     }
 
     /** Photos picked to scan: copied next to the camera's, each through the same path as a photo taken. */
-    private fun imported(uris: List<Uri>) {
-        if (uris.isEmpty()) return
+    /** Pictures shared from another app (#617): added exactly as an import, as `shared`. */
+    fun importShared(uris: List<Uri>) = imported(uris, ScanStart.Shared)
+
+    private fun imported(uris: List<Uri>, how: ScanStart = ScanStart.Import) {
         val v = vm()
+        if (uris.isEmpty()) {
+            // the picker opened by Scan from photos was closed with nothing chosen: no empty scan stays behind
+            if (v.scanSkipCamera && v.scanPages.isEmpty()) v.tools.toolScreen = null
+            v.scanSkipCamera = false
+            return
+        }
         // a retake replaces one page
         val picked = if (v.scanRetaking) uris.take(1) else uris
         model().hide()
@@ -259,12 +267,21 @@ internal class ScanCameraRouter(private val activity: ComponentActivity, private
                     runCatching {
                         val f = File(dir, "scan-${System.nanoTime()}.jpg")
                         activity.contentResolver.openInputStream(uri)?.use { input -> f.outputStream().use { input.copyTo(it) } }
-                        f.takeIf { scanCaptureUsable(it.isFile, it.length()) } ?: run { f.delete(); null }
+                        // a shared file may be anything that says it is a picture (#617): only a readable one is kept
+                        val bounds = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                        if (f.isFile) android.graphics.BitmapFactory.decodeFile(f.path, bounds)
+                        f.takeIf { scanCaptureUsable(it.isFile, it.length()) && scanSharedReadable(bounds.outWidth, bounds.outHeight) } ?: run { f.delete(); null }
                     }.getOrNull()
                 }
             }
-            Diag.event(DiagArea.Scan, "camera_import", "picked" to picked.size, "copied" to files.size)
+            Diag.event(DiagArea.Scan, "camera_import", "picked" to picked.size, "copied" to files.size, "how" to how.id)
+            v.scanSkipCamera = false
+            val refused = picked.size - files.size
+            if (how == ScanStart.Shared && refused > 0) {
+                v.tell(if (files.isEmpty()) io.github.artcraftandroid.pdfcraft.text(R.string.scan_shared_none) else io.github.artcraftandroid.pdfcraft.plural(R.plurals.scan_shared_left_out, refused, refused))
+            }
             if (files.isEmpty()) {
+                if (v.scanPages.isEmpty()) v.tools.toolScreen = null
                 v.onScanPhoto(false)
                 return@launch
             }
@@ -280,7 +297,7 @@ internal class ScanCameraRouter(private val activity: ComponentActivity, private
             // several photos: the document screen shows them, as after Many pages (#460)
             if (scanDocumentAfterCamera(v.scanLab.options.steps, v.scanRetaking, v.scanSteps.pending)) v.scanSteps.showDocument("import", v.scanPages.size + files.size)
             for (f in files) {
-                ScanCaptures.put(f.path, ScanCapture("import"))
+                ScanCaptures.put(f.path, ScanCapture(if (how == ScanStart.Shared) "shared" else "import"))
                 v.shotFile = f
                 v.onScanPhoto(true)
             }
