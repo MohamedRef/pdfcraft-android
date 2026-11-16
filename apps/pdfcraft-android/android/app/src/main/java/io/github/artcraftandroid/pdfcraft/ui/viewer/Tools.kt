@@ -2038,7 +2038,7 @@ private fun MarkupLayer(vm: AppViewModel, doc: OpenDocument) {
                             }
                         }
                     } catch (e: MobileException) {
-                        if (vm.document === doc) vm.tell(e.userMessage)
+                        if (vm.document === doc) vm.fail(e.userMessage)
                     } finally {
                         if (!queued && requestSerial == serial) {
                             pendingTap = null

@@ -147,7 +147,7 @@ fun AppViewModel.startCompare(doc: OpenDocument) {
                 tools.compare.olderName = files.displayName(uri)
                 runCompare(doc)
             } catch (e: Exception) {
-                tell(e.userMessage)
+                fail(e.userMessage)
                 tools.busy = null
             } finally {
                 // the engine holds the document's bytes once it is open
@@ -170,7 +170,7 @@ fun AppViewModel.runCompare(doc: OpenDocument) {
             editEvent(doc, "compare", "visual" to tools.compare.visual, "changes" to tools.compare.result?.changes?.size, "identical" to tools.compare.result?.identical, "ms" to (System.nanoTime() - t0) / 1_000_000)
             doc.controller.sheet = ViewerSheet.Compare
         } catch (e: Exception) {
-            tell(e.userMessage)
+            fail(e.userMessage)
         } finally {
             tools.busy = null
         }
@@ -182,7 +182,7 @@ fun AppViewModel.markCompare(doc: OpenDocument) {
     val older = tools.compare.olderId ?: return
     runTool(doc, "doc_compare_mark", mapOf("other" to older.toLong())) { r ->
         editEvent(doc, "compare_mark", "comments" to r.optInt("comments"))
-        tell(appText(R.string.compare_marked, r.optInt("comments")), appText(R.string.common_undo)) { undo(doc) }
+        tellUndoable(appText(R.string.compare_marked, r.optInt("comments")), doc)
     }
 }
 
@@ -197,7 +197,7 @@ fun AppViewModel.saveCompareReport(doc: OpenDocument) {
             eng.tool("doc_compare_report", mapOf("doc" to doc.id, "other" to older.toLong(), "path" to out.absolutePath))
         } catch (e: Exception) {
             out.delete()
-            tell(e.userMessage)
+            fail(e.userMessage)
             return@launch
         }
         editEvent(doc, "compare_report")
@@ -209,7 +209,7 @@ fun AppViewModel.saveCompareReport(doc: OpenDocument) {
                         tell(appText(R.string.compare_report_saved))
                     }
                 } catch (e: Exception) {
-                    tell(e.userMessage)
+                    fail(e.userMessage)
                 } finally {
                     out.delete()
                 }

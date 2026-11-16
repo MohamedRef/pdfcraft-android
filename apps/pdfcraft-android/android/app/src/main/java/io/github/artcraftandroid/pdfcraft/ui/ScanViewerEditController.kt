@@ -105,7 +105,7 @@ internal class ScanViewerEditController(private val vm: AppViewModel) {
             if (opened == null || opened.session.pages.isEmpty() || opened.missing > 0) {
                 // a page whose photo is gone can't be made again: the PDF stays as it is
                 opened?.session?.pages?.forEach { File(it.path).delete() }
-                vm.tell(text(R.string.scan_recent_unreadable))
+                vm.fail(text(R.string.scan_recent_unreadable))
                 return@launch
             }
             shown = null

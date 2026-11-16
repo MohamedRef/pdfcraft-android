@@ -156,13 +156,13 @@ class EditController internal constructor(private val vm: AppViewModel) {
         if (script !in setOf("superscript", "subscript") || (typing != null &&
             (typing.number != para.number || typing.page != para.page || editDraft != para.text || editComposing)) || vm.document !== doc ||
             !doc.writable || doc.info.signed || doc.info.readOnlyReason != null) {
-            vm.tell(text(R.string.edit_script_unavailable))
+            vm.fail(text(R.string.edit_script_unavailable))
             return
         }
         val range = if (typing != null) {
             val (anchor, focus) = editTextSelection ?: (0 to 0)
             try { io.github.artcraftandroid.pdfcraft.engine.nativeUtf8Range(para.text, anchor, focus) }
-            catch (_: IllegalArgumentException) { vm.tell(text(R.string.edit_script_unavailable)); return }
+            catch (_: IllegalArgumentException) { vm.fail(text(R.string.edit_script_unavailable)); return }
         } else null
         // Only an unchanged draft reaches here, so dismissing the inline editor loses no typing.
         editing = null
@@ -172,7 +172,7 @@ class EditController internal constructor(private val vm: AppViewModel) {
         val generation = doc.info.generation
         vm.job(text(R.string.edit_script_applying)) { eng ->
             if (vm.document !== doc || editing != null || !doc.writable) {
-                vm.tell(text(R.string.edit_script_unavailable))
+                vm.fail(text(R.string.edit_script_unavailable))
                 return@job
             }
             val raw = eng.command {
@@ -364,7 +364,7 @@ class EditController internal constructor(private val vm: AppViewModel) {
                     }
                 }
                 if (name.lowercase().endsWith(".gif")) {
-                    vm.tell(text(R.string.msg_gif_not_supported))
+                    vm.fail(text(R.string.msg_gif_not_supported))
                     return@launch
                 }
                 val eng = vm.engine ?: return@launch
@@ -389,7 +389,7 @@ class EditController internal constructor(private val vm: AppViewModel) {
                 eng.tool("page_add_image", args)
                 vm.refresh(doc)
             } catch (e: Exception) {
-                vm.tell(e.userMessage)
+                vm.fail(e.userMessage)
             }
         }
     }
@@ -413,7 +413,7 @@ class EditController internal constructor(private val vm: AppViewModel) {
         } ?: return false
         if (w.readOnly) return true
         if (!doc.info.allowsFormFilling) {
-            vm.tell(text(R.string.msg_tool_blocked_security))
+            vm.fail(text(R.string.msg_tool_blocked_security))
             return true
         }
         when (w.kind) {

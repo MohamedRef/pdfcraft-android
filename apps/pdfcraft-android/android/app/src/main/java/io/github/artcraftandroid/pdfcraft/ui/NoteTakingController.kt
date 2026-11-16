@@ -37,7 +37,7 @@ class NoteTakingController internal constructor(private val vm: AppViewModel) {
      * first page's width (or height, below). One undo step; the content keeps its place.
      */
     fun addNoteMargin(doc: OpenDocument, pages: List<Int>, side: MarginSide, fraction: Float) {
-        if (!doc.writable) { vm.tell(text(R.string.margin_read_only)); return }
+        if (!doc.writable) { vm.fail(text(R.string.margin_read_only)); return }
         val first = doc.info.pages.getOrNull(pages.firstOrNull() ?: 0) ?: return
         val right = if (side != MarginSide.Bottom) (first.width * fraction).toDouble() else 0.0
         val bottom = if (side != MarginSide.Right) (first.height * fraction).toDouble() else 0.0
@@ -56,7 +56,7 @@ class NoteTakingController internal constructor(private val vm: AppViewModel) {
 
     /** Take off the note margins of [pages] (every page when empty), back to the original size. */
     fun removeNoteMargins(doc: OpenDocument, pages: List<Int>) {
-        if (!doc.writable) { vm.tell(text(R.string.margin_read_only)); return }
+        if (!doc.writable) { vm.fail(text(R.string.margin_read_only)); return }
         val args = buildMap<String, Any?> {
             put("remove", true)
             if (pages.isNotEmpty()) put("pages", pages.map { it + 1 })
@@ -80,7 +80,7 @@ class NoteTakingController internal constructor(private val vm: AppViewModel) {
      */
     fun recognizeHandwriting(doc: OpenDocument, page: Int) {
         val eng = vm.engine ?: return
-        if (!doc.writable) { vm.tell(text(R.string.margin_read_only)); return }
+        if (!doc.writable) { vm.fail(text(R.string.margin_read_only)); return }
         doc.commitTool?.invoke()
         vm.viewModelScope.launch {
             vm.tools.busy = text(R.string.msg_busy_preparing_ocr)
@@ -89,7 +89,7 @@ class NoteTakingController internal constructor(private val vm: AppViewModel) {
             if (status?.optBoolean("available", false) != true) {
                 Diag.event(DiagArea.Study, "handwriting", "doc" to doc.diagNumber, "outcome" to "ocr_missing")
                 vm.tools.busy = null
-                vm.tell(text(R.string.msg_ocr_not_installed))
+                vm.fail(text(R.string.msg_ocr_not_installed))
                 return@launch
             }
             vm.tools.busy = text(R.string.handwriting_busy)
@@ -126,7 +126,7 @@ class NoteTakingController internal constructor(private val vm: AppViewModel) {
                 vm.tools.success = SuccessBanner(plural(R.plurals.handwriting_done, found.size, found.size), null)
             } catch (e: Exception) {
                 Diag.failure(DiagArea.Study, "handwriting", e)
-                vm.tell(e.userMessage)
+                vm.fail(e.userMessage)
             } finally {
                 copy?.let { c -> runCatching { eng.tool("doc_close", mapOf("doc" to c, "discard_changes" to true)) } }
                 withContext(Dispatchers.IO) { blank.delete() }
@@ -159,7 +159,7 @@ class NoteTakingController internal constructor(private val vm: AppViewModel) {
         val app = app
         val uri = doc.source?.toString() ?: run { vm.tell(text(R.string.lecture_needs_saved)); return }
         if (lectureRecording != null) return
-        if (app.filesDir.usableSpace < 100L * 1024 * 1024) { vm.tell(text(R.string.msg_voice_no_storage)); return }
+        if (app.filesDir.usableSpace < 100L * 1024 * 1024) { vm.fail(text(R.string.msg_voice_no_storage)); return }
         if (androidx.core.content.ContextCompat.checkSelfPermission(app, android.Manifest.permission.RECORD_AUDIO) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
             pendingLecture = doc
             vm.commenting.micRequests.trySend(Unit)
@@ -184,7 +184,7 @@ class NoteTakingController internal constructor(private val vm: AppViewModel) {
                 Diag.failure(DiagArea.Study, "lecture_start", e)
                 recorder.release()
                 file.delete()
-                vm.tell(text(R.string.lecture_cannot_record))
+                vm.fail(text(R.string.lecture_cannot_record))
                 return@launch
             }
             val clock = io.github.artcraftandroid.pdfcraft.engine.RecordingClock { android.os.SystemClock.elapsedRealtime() }
@@ -241,7 +241,7 @@ class NoteTakingController internal constructor(private val vm: AppViewModel) {
                 withContext(Dispatchers.Main) { vm.tell(text(R.string.lecture_saved, io.github.artcraftandroid.pdfcraft.ui.viewer.timerClock(duration))) }
             } else {
                 lectures.delete(s.uri, s.id)
-                withContext(Dispatchers.Main) { vm.tell(text(R.string.lecture_cannot_record)) }
+                withContext(Dispatchers.Main) { vm.fail(text(R.string.lecture_cannot_record)) }
             }
         }
     }
@@ -294,7 +294,7 @@ class NoteTakingController internal constructor(private val vm: AppViewModel) {
         } catch (e: Exception) {
             Diag.failure(DiagArea.Study, "lecture_play", e)
             player.release()
-            vm.tell(text(R.string.lecture_cannot_play))
+            vm.fail(text(R.string.lecture_cannot_play))
             return
         }
         Diag.event(DiagArea.Study, "lecture_play", "doc" to doc.diagNumber, "from_ms" to fromMs, "duration_ms" to player.duration, "marks" to l.marks.size)

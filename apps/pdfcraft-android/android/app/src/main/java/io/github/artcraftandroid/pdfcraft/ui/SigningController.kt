@@ -146,7 +146,7 @@ class SigningController internal constructor(private val vm: AppViewModel) {
                     bmp
                 }.getOrNull()
             }
-            if (importedSignature == null) vm.tell(text(R.string.msg_image_unreadable))
+            if (importedSignature == null) vm.fail(text(R.string.msg_image_unreadable))
         }
     }
 
@@ -184,7 +184,7 @@ class SigningController internal constructor(private val vm: AppViewModel) {
     fun startCertPlacing(doc: OpenDocument) {
         if (!doc.info.readOnlyReason.isNullOrEmpty()) {
             editEvent(doc, "sign_cert_target", "placement" to "read_only")
-            vm.tell(text(R.string.msg_sign_read_only))
+            vm.fail(text(R.string.msg_sign_read_only))
             return
         }
         if (doc.controller.tool != ViewerTool.FillSign) vm.enterTool(doc, ViewerTool.FillSign)
@@ -227,7 +227,7 @@ class SigningController internal constructor(private val vm: AppViewModel) {
                 eng.tool("doc_save", mapOf("doc" to copy, "path" to out.absolutePath, "full" to true))
                 vm.open(Uri.fromFile(out))
             } catch (e: Exception) {
-                vm.tell(e.userMessage)
+                vm.fail(e.userMessage)
             } finally {
                 copy?.let { c -> runCatching { eng.tool("doc_close", mapOf("doc" to c, "discard_changes" to true)) } }
             }
@@ -276,7 +276,7 @@ class SigningController internal constructor(private val vm: AppViewModel) {
                 if (problem != null) {
                     imp.file.delete()
                     idEvent("sign_id_import", "result" to "cannot_sign")
-                    vm.tell(text(R.string.msg_id_cannot_sign, problem))
+                    vm.fail(text(R.string.msg_id_cannot_sign, problem))
                     return@launch
                 }
                 val id = withContext(Dispatchers.IO) { digitalIds.add(imp.file, info) }
@@ -290,7 +290,7 @@ class SigningController internal constructor(private val vm: AppViewModel) {
             } catch (e: MobileException) {
                 imp.file.delete()
                 idEvent("sign_id_import", "result" to "unusable")
-                vm.tell(text(R.string.msg_id_unusable, e.userMessage))
+                vm.fail(text(R.string.msg_id_unusable, e.userMessage))
             }
         }
     }
@@ -314,7 +314,7 @@ class SigningController internal constructor(private val vm: AppViewModel) {
                 vm.tell(text(R.string.msg_id_created))
             } catch (e: MobileException) {
                 idEvent("sign_id_create", "ok" to false, "ms" to (System.nanoTime() - started) / 1_000_000)
-                vm.tell(toolMessage(e, "sign_id_create"))
+                vm.fail(toolMessage(e, "sign_id_create"))
             } finally {
                 tmp.delete()
                 vm.tools.busy = null
@@ -407,7 +407,7 @@ class SigningController internal constructor(private val vm: AppViewModel) {
             } catch (e: Exception) {
                 // e.g. the recovery marker could not be written: nothing was signed
                 signEvent("error")
-                vm.tell(e.userMessage)
+                vm.fail(e.userMessage)
             } finally {
                 vm.tools.busy = null
             }
@@ -487,7 +487,7 @@ class SigningController internal constructor(private val vm: AppViewModel) {
                 loadSignatures(eng, doc)
                 vm.tell(s.signer?.let { text(R.string.msg_signer_trusted, it) } ?: text(R.string.msg_signer_trusted_unknown))
             } catch (e: MobileException) {
-                vm.tell(e.userMessage)
+                vm.fail(e.userMessage)
             }
         }
     }

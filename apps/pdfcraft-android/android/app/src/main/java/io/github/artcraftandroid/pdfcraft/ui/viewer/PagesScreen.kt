@@ -312,7 +312,7 @@ fun PagesScreen(vm: AppViewModel, doc: OpenDocument, onClose: () -> Unit) {
                     // no confirmation step: the deletion says what it did and offers Undo at once (#199)
                     val count = picked.size
                     vm.runTool(doc, "page_delete", mapOf("pages" to picked.map { it + 1 })) {
-                        vm.tell(plural(R.plurals.pages_deleted, count, count), text(R.string.common_undo)) { vm.undo(doc) }
+                        vm.tellUndoable(plural(R.plurals.pages_deleted, count, count), doc)
                     }
                     selected.clear()
                 }
