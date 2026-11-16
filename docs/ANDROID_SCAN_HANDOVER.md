@@ -1,15 +1,18 @@
 # Scanner: handover
 
-State of the document scanner on 12 November 2026, for whoever continues it. The plan, the
+State of the document scanner on 12 November 2026 (phone runs added 16 November), for whoever continues it. The plan, the
 priorities and the rules are in the tracking issue, #286; this file says where the work stands,
 what is left, and what was learned on the way. **Keep it current: a pull request that changes
 the scanner's state changes this file in the same pull request.**
 
 The owner's goal, in his order: very precise page edges and a flat, correctly proportioned page;
 a one-tap filter that makes a photo look like a clean scan; high quality from capture to PDF.
-The app is for his own use. He will test on his phone over a long period once the features are
-in, with the testing options and kept scans described below. **Nothing in the scanner has run on
-a phone yet.** Every number in the scanner's documents was measured on a desktop.
+The app is for his own use. He tests on his phone over a long period, with the testing options
+and kept scans described below. **The scanner has run on the owner's phone since 13 November
+2026** (Samsung SM-S928B, Galaxy S24 Ultra; 0.0.27 and 0.0.28-beta): what those runs showed is
+in [section 1a](#1a-what-has-run-on-the-owners-phone). Everything else, and every number not
+listed there, was measured on a desktop. A row below that says "not run on a phone" means that
+change was made after the build he ran, or his logs have no line for it.
 
 ## 1. Where each issue stands
 
@@ -69,9 +72,28 @@ a phone yet.** Every number in the scanner's documents was measured on a desktop
 | #492 | A finger removal taken back can be done again; the chip always says Undo | Done in code, not run on a phone | #498 | Adjust has a **Remove fingers** switch beside Flatten page where the finger step runs (Clean scan, strength ≥40, `removeFingers` on); it and the chip's Undo are one state, per page (Apply to all does not carry it). The over-print case reads "Finger removed · Undo" with a separate note that does nothing on a tap. A page whose marks change is made again on Enhance (before, only the background queue noticed). Log `auto_redone` (`what=fingers`, `by=switch`) and `by` on `auto_undone`; page file: `undone`, as before. Not checked: on a phone |
 | #339 | Pages turned upright | Done in code, not run on a phone | #370, #387 | The chip, Rotate, the multi-page rule and the setting are in. Acceptance on the owner's test set per script, and phone timing; the neighbour rule's 0.95 bar may seldom act with this network's confidences (`ANDROID_SCAN_UPRIGHT.md`) |
 | #446 | Clean scan preview: 200 to 400 ms per strength or paper change on the phone | Done in code, not run on a phone | #454 | The light estimate (about 80 % of a change on a desktop) is kept with the straightened preview page, so a change runs the tone curve alone: 175–202 ms down to 20–24 ms per change on a desktop, same bytes (`docs/performance/scan-clean-look-reuse.md`). Testing option `lookReuse` (off is the old way); log `preview_look_light_ms` … `preview_look_tone_ms`, `light_reused`; page file `preview.light_reused`, `preview.look_parts_ms`. Left: the phone's figures in the next log; Black and white (255 ms) is unchanged |
+| #617 | Start a scan from photos already taken: Scan from photos (Home's ＋ sheet, Create, the Tools list), pictures shared from another app, launcher shortcuts (New scan, Scan from photos, Open file) | Done in code, not run on a phone | (this PR) | Log `scan_start from=camera\|import\|shared\|shortcut picker=…`, `camera_import … how=`; page file `capture.started`, and `capture.source` is `shared` for a shared picture. A shared file that is not a readable picture is left out and said; none readable keeps nothing. Left: the owner's next log, and whether his launcher shows the shortcuts |
 
 "Core done" means the code and its tests are merged and the issue's acceptance items that need
 the owner's phone or his test set are open. Each issue has a comment saying the same in detail.
+
+## 1a. What has run on the owner's phone
+
+From the diagnostics logs and screenshots he sent on 13 and 14 November 2026 (0.0.27 and
+0.0.28-beta, SM-S928B). The logs and his photos stay out of the repository; the issues quote the
+log lines that matter.
+
+| What ran | What the log showed | Issue |
+|---|---|---|
+| Making pages: previews and full-size pages, Clean scan and the other looks, Flatten | Timings per stage: a Clean scan preview's look 202–394 ms on a page already straightened, a first preview 344–1022 ms, the Flatten network 352–400 ms | #446 (fixed in code by #454) |
+| A whole scan from nine imported photos (about 100 KB each) to a saved PDF | A page at full size 2.06 s at the median (2.51 s at most), a preview 1.2 s (59 `page_ready` lines); flattening paid twice | #549 (four parts in code; his next log decides) |
+| Crop (Adjust borders) on a page, and the model timing (`scan_time_model`) | `crop` lines numbered pages from 0; a model timing failed with no reason in the log | #445 (fixed in #464) |
+| Markup, three times (13 Nov 19:36, 14 Nov 10:00 and 10:01), eyedropper used | All three ended cancelled: Back threw the marks away | #531 (fixed in code) |
+| How scans start | Every scan began on the camera's permission page (`camera_open route=ask`), then an import of photos already taken; the in-app camera took no photo | #617 |
+
+Not yet seen in any log of his: the in-app camera taking a photo (#294–#297), book mode (#303),
+DocRes timing (#304), and anything merged after 0.0.28-beta. Logs owed: #549 (page speed after
+its four parts), #560, #550. Ask for a log before saying a later change works on a phone.
 
 ### Blocks already written for the open issues
 
@@ -110,6 +132,8 @@ One document per feature says how it works, what was measured and what was not:
 ## 2. How a scan goes through the code today
 
 ```
+How a scan starts (#617): New scan (the camera), Scan from photos (the picker), pictures shared
+to the app, or a launcher shortcut -> AppViewModel.startScan / startScanShared (ui/scan/ScanStart.kt)
 ScanCameraRouter: PdfCraft's camera screen (ui/scan, #294) or the phone's camera app
                                                      ->  cacheDir/camera/scan-*.jpg
 AppViewModel.onScanPhoto
@@ -312,7 +336,8 @@ Open until he has scanned for a while:
 - whether the orientation thresholds hold on Arabic, Latin and handwriting separately;
 - whether Flatten is worth an automatic mode, and what would trigger it;
 - whether sharper than the reference looks better to him, and at which setting;
-- how long each stage takes on his phone (the log records every stage);
+- how long each stage takes on his phone after #549's changes (the 14 November figures are in
+  section 1a; the log records every stage);
 - whether smoothing ever runs (none of the ten photos has enough grain) and what it does then.
 
 ## 9. Reviewing a scanner pull request

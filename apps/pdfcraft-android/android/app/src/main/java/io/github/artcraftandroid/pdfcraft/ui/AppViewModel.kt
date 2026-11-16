@@ -1469,7 +1469,36 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     val tools = ToolsController(this)
 
     // ---- Scan and scanned-page cleanup: stay here with the scanner work ----------------------
-    fun startScan() { tools.toolScreen = ToolScreen.Scan }
+    /**
+     * Open the scan: the camera, or with [photos] the photo picker straight away (#617). [from]
+     * says how it began, for the log and the kept scan's page files. A scan already in progress
+     * gets the new pages added, as Import does.
+     */
+    internal fun startScan(from: io.github.artcraftandroid.pdfcraft.ui.scan.ScanStart = io.github.artcraftandroid.pdfcraft.ui.scan.ScanStart.Camera, photos: Boolean = false) {
+        if (scanPages.isEmpty()) io.github.artcraftandroid.pdfcraft.ui.scan.ScanCaptures.startedFrom = from
+        Diag.event(DiagArea.Scan, "scan_start", "from" to from.id, "picker" to photos, "pages" to scanPages.size)
+        if (photos) {
+            scanSkipCamera = true
+            scanImports.trySend(Unit)
+        }
+        tools.toolScreen = ToolScreen.Scan
+    }
+
+    /** Pictures shared from another app (#617): a scan with them as its pages, in the order shared. */
+    fun startScanShared(uris: List<Uri>) {
+        if (scanPages.isEmpty()) io.github.artcraftandroid.pdfcraft.ui.scan.ScanCaptures.startedFrom = io.github.artcraftandroid.pdfcraft.ui.scan.ScanStart.Shared
+        Diag.event(DiagArea.Scan, "scan_start", "from" to "shared", "picker" to false, "pages" to scanPages.size, "shared" to uris.size)
+        if (uris.size > io.github.artcraftandroid.pdfcraft.ui.scan.SCAN_SHARED_MAX) tell(text(R.string.scan_shared_first, io.github.artcraftandroid.pdfcraft.ui.scan.SCAN_SHARED_MAX))
+        scanSkipCamera = true
+        scanShared.trySend(uris.take(io.github.artcraftandroid.pdfcraft.ui.scan.SCAN_SHARED_MAX))
+        tools.toolScreen = ToolScreen.Scan
+    }
+
+    /** The scan opened on the picker or on shared pictures (#617): the camera does not open by itself. */
+    internal var scanSkipCamera by mutableStateOf(false)
+
+    /** Pictures shared to the app, waiting for the scan's importer (#617). */
+    val scanShared = Channel<List<Uri>>(Channel.CONFLATED)
 
     /**
      * Native 0.19.0 scanned-page cleanup. Bounded UI page scope, explicit confirm,

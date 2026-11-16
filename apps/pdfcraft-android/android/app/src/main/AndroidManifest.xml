@@ -87,6 +87,13 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="application/pdf" />
             </intent-filter>
+            <!-- Pictures shared to PdfCraft start a scan with them as its pages (#617) -->
+            <intent-filter android:label="@string/scan_share_label">
+                <action android:name="android.intent.action.SEND" />
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="image/*" />
+            </intent-filter>
             <!-- Comments (XFDF or FDF) shared or opened from a messaging app: imported into the open PDF -->
             <intent-filter android:label="@string/comments_import_with">
                 <action android:name="android.intent.action.VIEW" />
