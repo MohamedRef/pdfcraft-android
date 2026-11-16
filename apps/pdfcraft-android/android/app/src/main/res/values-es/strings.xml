@@ -1260,7 +1260,6 @@
     <string name="home_diagnostics_empty">Aún no hay diagnóstico: actívalo y usa la app.</string>
     <string name="home_diagnostics_subject">Registro de diagnóstico de PdfCraft</string>
     <string name="home_diagnostics_cleared">Registro de diagnóstico borrado</string>
-    <string name="viewer_show_page_navigator">Mostrar panel lateral</string>
     <string name="viewer_hide_page_navigator">Ocultar panel lateral</string>
     <string name="viewer_fit_width">Ajustar al ancho</string>
     <string name="file_details_title">Detalles del archivo</string>

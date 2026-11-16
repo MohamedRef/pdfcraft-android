@@ -99,11 +99,18 @@ class ViewerController {
     /** The tab of the contents last used, in the sheet or the side panel; null until one is (#647). */
     var contentsTab by mutableStateOf<ContentsTab?>(null)
 
-    /** The window shows the side panel beside the page (a tablet in landscape): Contents opens there, not in the sheet (#647). */
-    var contentsInPanel by mutableStateOf(false)
+    /** Where the contents open in this window: the sheet (a phone), or the side panel docked or over the page (a tablet, #659). */
+    var contentsPlace by mutableStateOf(ContentsPlace.Sheet)
 
-    /** The side panel is open, not folded to its edge (#647). */
+    /** The docked side panel is open, not folded to its strip (#647); kept for each document (#659). */
     var panelOpen by mutableStateOf(true)
+
+    /** The side panel shows over the page, in a tablet window too narrow to dock it (#659). */
+    var overlayOpen by mutableStateOf(false)
+
+    /** The window's width and the device's smallest width (dp), for the diagnostics log (#659). */
+    var windowWidthDp = 0
+    var windowSmallestWidthDp = 0
 
     /** The active tool's open picker (colour, thickness, text size), and Fill & Sign's Sign panel. */
     var picker by mutableStateOf(Picker.None)

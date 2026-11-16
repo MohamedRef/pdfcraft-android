@@ -518,6 +518,11 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             val remembered = ViewLayout.decode(recent?.layout)
             val fromFile = if (remembered == null && recent?.layout == null && !info.preparing) settings.fileLayout(eng, info.id) else null
             settings.applyLayout(doc, remembered ?: fromFile, if (remembered != null) "remembered" else "file")
+            // the tablet's side panel as this file left it (#659); the first time, open where there are pages to list
+            io.github.artcraftandroid.pdfcraft.ui.viewer.decodeContentsPanel(recent?.panel).let { kept ->
+                doc.controller.panelOpen = kept?.first ?: (info.pages.size >= 2)
+                doc.controller.contentsTab = kept?.second
+            }
             // a file left in Reading Mode reopens in it, unless it was opened for a tool
             settings.readingMode = recent?.reading == true && home.pendingTool == null
             document = doc
@@ -789,12 +794,13 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         val spot = if (pending == null && v.mode == io.github.artcraftandroid.pdfcraft.ui.viewer.PageMode.Continuous) v.screenToPage(androidx.compose.ui.geometry.Offset(0f, v.padTop), nearest = true) else null
         val zoom = v.zoom
         val layout = settings.currentLayout(doc).encode()
+        val panel = io.github.artcraftandroid.pdfcraft.ui.viewer.encodeContentsPanel(doc.controller.panelOpen, doc.controller.contentsTab)
         withContext(Dispatchers.IO) {
             // in Reading Mode the page canvas has no layout: the page read is the pending one
             val page = pending ?: spot?.page ?: v.currentPage
             doc.source?.let { src ->
                 recents.update(src.toString()) {
-                    it.copy(lastPage = page, reading = reading, lastX = spot?.x ?: -1f, lastY = spot?.y ?: -1f, lastZoom = if (spot != null) zoom else 1f, layout = layout)
+                    it.copy(lastPage = page, reading = reading, lastX = spot?.x ?: -1f, lastY = spot?.y ?: -1f, lastZoom = if (spot != null) zoom else 1f, layout = layout, panel = panel)
                 }
             }
         }
