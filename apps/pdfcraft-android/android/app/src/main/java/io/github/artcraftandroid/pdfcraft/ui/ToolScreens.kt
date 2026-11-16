@@ -144,7 +144,10 @@ fun ToolScaffold(
             Text(title, color = c.label, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
             trailing?.invoke()
         }
-        Column(Modifier.weight(1f).fillMaxWidth(), content = content)
+        // a readable column on a tablet, centred (#613)
+        Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
+            Column(Modifier.widthIn(max = ReadableMaxWidth).fillMaxWidth(), content = content)
+        }
         if (action != null) {
             Button(
                 onClick = onAction,
