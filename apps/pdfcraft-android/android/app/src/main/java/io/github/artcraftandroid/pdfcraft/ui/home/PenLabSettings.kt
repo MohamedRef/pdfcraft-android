@@ -113,7 +113,7 @@ internal fun PenLabSettings(vm: AppViewModel) {
                         event.changes.forEach { it.consume() }
                         if (!change.pressed) break
                     }
-                    finishInkStroke(s, tuning)
+                    finishInkStroke(s, tuning, trial = true)
                     writing = null
                     if (s.points.size == 1) {
                         s.points.add(s.points[0] + Offset(0.01f, 0f))

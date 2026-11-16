@@ -186,8 +186,10 @@ class PenModelTest {
         // a short stroke and a pen with one fixed pressure measure nothing
         assertEquals(c, c.learn(listOf(0.4f, 0.4f), 3000L))
         assertEquals(c, c.learn(List(40) { 1f }, 3000L))
-        // a too narrow band is not stretched
-        assertEquals(0.42f, PressureRange(0.4f, 0.45f).stretch(0.42f), 1e-6f)
+        // a narrow band is widened around its middle like any other (#607), and the unmeasured one is left alone
+        assertEquals(0.5f, PressureRange(0.4f, 0.45f).stretch(0.425f), 1e-4f)
+        assertEquals(0.42f, PressureRange().stretch(0.42f), 1e-6f)
+        assertEquals(0.42f, PressureRange(0.4f, 0.4f).stretch(0.42f), 1e-6f)
     }
 
     @Test fun aLightHandsNarrowBandIsNotStretchedIntoSuddenThickLines() {

@@ -15,7 +15,7 @@ import io.github.artcraftandroid.pdfcraft.engine.DiagArea
  */
 internal data class PressureCalibration(val lo: Float = 0f, val hi: Float = 1f, val strokes: Int = 0, val measuredAt: Long = 0L) {
     /** The range the next stroke stretches by: the identity until enough strokes are measured. */
-    val range: PressureRange get() = if (strokes >= MIN_STROKES && hi - lo >= PressureRange.MIN_SPAN) PressureRange(lo, hi) else PressureRange()
+    val range: PressureRange get() = if (strokes >= MIN_STROKES && hi > lo) PressureRange(lo, hi) else PressureRange()
 
     /** The calibration after one more stroke of raw sensor [pressures]; unchanged for a stroke too short or pressureless. */
     fun learn(pressures: List<Float>, now: Long): PressureCalibration {
@@ -113,10 +113,13 @@ internal class PenTuning(private val prefs: SharedPreferences) {
     fun learn(pressures: List<Float>, now: Long = System.currentTimeMillis()) {
         val next = calibration.learn(pressures, now)
         if (next == calibration) return
+        val wasInUse = calibration.range != PressureRange()
+        val inUse = next.range != PressureRange()
         calibration = next
         prefs.edit().putFloat("pressure.lo", next.lo).putFloat("pressure.hi", next.hi)
             .putInt("pressure.strokes", next.strokes).putLong("pressure.at", next.measuredAt).apply()
-        if (next.strokes == PressureCalibration.MIN_STROKES || next.strokes % LOG_EVERY == 0) logRange(now)
+        // also whenever the stretch comes into use or goes out of it, so the log shows a switch (#607)
+        if (next.strokes == PressureCalibration.MIN_STROKES || next.strokes % LOG_EVERY == 0 || inUse != wasInUse) logRange(now)
     }
 
     /** Forget the measured range; the next strokes measure it again. */
