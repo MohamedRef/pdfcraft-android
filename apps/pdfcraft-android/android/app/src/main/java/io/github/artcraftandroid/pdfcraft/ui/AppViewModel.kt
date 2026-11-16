@@ -1913,11 +1913,16 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         return out
     }
 
-    /** Run [block] with the busy dialog showing [message]; failures are told in a snackbar. */
-    internal fun job(message: String, block: suspend (Engine) -> Unit) {
+    /**
+     * Run [block] with the busy dialog showing [message]; failures are told in a snackbar. The
+     * dialog shows the time that has passed after a few seconds (#614); [fileBytes], the size of
+     * the file a job without a count works on, adds a line saying a large file takes a while.
+     */
+    internal fun job(message: String, fileBytes: Long = 0L, block: suspend (Engine) -> Unit) {
         val eng = engine ?: return
         viewModelScope.launch {
             tools.busy = message
+            tools.busyNote = busyLargeFileNote(fileBytes)
             try {
                 block(eng)
             } catch (e: Exception) {
@@ -1925,11 +1930,44 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             } finally {
                 tools.busy = null
                 tools.busyProgress = null
+                tools.busyCancel = null
                 tools.busyCancelNote = null
                 tools.busyCancelLabel = null
             }
         }
     }
+
+    /**
+     * Offer Cancel in the busy dialog (#614) for a job that can stop between pages or files;
+     * [note] says what Cancel keeps. The loop reads [JobStop.asked] before each step.
+     */
+    internal fun offerCancel(note: String): JobStop {
+        val stop = JobStop()
+        tools.busyCancel = { stop.asked = true }
+        tools.busyCancelNote = note
+        return stop
+    }
+
+    /** The job reached a step it cannot stop in: Cancel goes (#614). */
+    internal fun withdrawCancel() {
+        tools.busyCancel = null
+        tools.busyCancelNote = null
+    }
+
+    /** Copy the picked [uris] in, counting "file n of m" in the busy dialog, and stopping when [stop] is asked (#614). */
+    internal suspend fun copyInCounted(uris: List<Uri>, copies: MutableList<File>, stop: JobStop): List<String>? {
+        val paths = mutableListOf<String>()
+        for ((i, u) in uris.withIndex()) {
+            if (stop.asked) return null
+            tools.busyProgress = i to uris.size
+            paths += withContext(Dispatchers.IO) { copyIn(u).also(copies::add).absolutePath }
+        }
+        tools.busyProgress = uris.size to uris.size
+        return paths
+    }
+
+    /** [job] on [doc]'s file: its size for the busy dialog's note (#614). */
+    internal fun docJob(doc: OpenDocument, message: String, block: suspend (Engine) -> Unit) = job(message, doc.info.fileSize.toLong(), block)
 
     /** Put [file] into Downloads as [name] and say so, with Open. */
     internal suspend fun deliver(file: File, name: String, mime: String = "application/pdf", lead: String? = null) {
@@ -1980,7 +2018,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     }
 
     /** Compress PDF at [level] (0 high, 1 medium, 2 low compression), or with Advanced [options]. */
-    fun compress(doc: OpenDocument, level: Int, options: CompressOptions = compressOptions) = job(text(R.string.msg_busy_compressing)) { eng ->
+    fun compress(doc: OpenDocument, level: Int, options: CompressOptions = compressOptions) = docJob(doc, text(R.string.msg_busy_compressing)) { eng ->
         val out = tempFile("pdf")
         val r = Diag.measure(DiagArea.Pages, "compress_run", "doc" to doc.diagNumber, "level" to level, "advanced" to options.enabled) {
             eng.tool("doc_optimize", compressArgs(level, options) + mapOf("doc" to doc.id, "path" to out.absolutePath))
@@ -1993,7 +2031,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             // as the reference: nothing is saved when the file can't get any smaller
             out.delete()
             tell(text(R.string.msg_compress_no_gain))
-            return@job
+            return@docJob
         }
         val sizes = text(R.string.msg_compressed_sizes, io.github.artcraftandroid.pdfcraft.ui.viewer.formatSize(before), io.github.artcraftandroid.pdfcraft.ui.viewer.formatSize(out.length()))
         val target = if (r.has("target_reached")) text(if (r.optBoolean("target_reached")) R.string.msg_compress_target_reached else R.string.msg_compress_target_missed) else null
@@ -2015,7 +2053,18 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         val copies = mutableListOf<File>()
         val out = tempFile("pdf")
         try {
-            val paths = withContext(Dispatchers.IO) { combineFiles.map { copyIn(it.uri).also(copies::add).absolutePath } }
+            // the files are read in one by one, counted, and Cancel stops before the next (#614)
+            val stop = offerCancel(text(R.string.busy_cancel_combine))
+            val paths = copyInCounted(combineFiles.map { it.uri }, copies, stop)
+            if (paths == null) {
+                Diag.event(DiagArea.Pages, "job_cancelled", "job" to "combine", "copied" to copies.size, "files" to combineFiles.size)
+                out.delete()
+                return@job
+            }
+            // one engine call from here: it cannot stop or count
+            withdrawCancel()
+            tools.busyProgress = null
+            tools.busyNote = busyLargeFileNote(copies.sumOf { it.length() })
             eng.tool("doc_combine", mapOf("paths" to paths, "out" to out.absolutePath))
         } catch (e: Exception) {
             out.delete()
@@ -2032,7 +2081,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
      * A protected copy of [doc] with [password] as its open password. The copy is made from a
      * second, temporary engine document, so the open one keeps its file and history.
      */
-    fun protect(doc: OpenDocument, protection: Map<String, Any?>) = job(text(R.string.msg_busy_setting_password)) { eng ->
+    fun protect(doc: OpenDocument, protection: Map<String, Any?>) = docJob(doc, text(R.string.msg_busy_setting_password)) { eng ->
         save(doc)
         val out = tempFile("pdf")
         val copy = eng.tool("doc_open", mapOf("path" to savedFile(doc, "protect").absolutePath, "password" to doc.password)).optLong("doc")

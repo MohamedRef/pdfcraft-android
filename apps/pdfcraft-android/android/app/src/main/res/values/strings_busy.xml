@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The busy dialog (#614): a large file's note (%1$s is its size), the time taken so far (%1$s is 0:07), and what Cancel keeps -->
+    <string name="busy_large_file">Large file (%1$s): this can take a few minutes.</string>
+    <string name="busy_elapsed">%1$s so far</string>
+    <string name="busy_cancel_combine">Cancel stops before the next file. Nothing is made, and your files stay as they are.</string>
+    <string name="busy_cancel_export_images">Cancel stops after this page. No images are saved.</string>
+    <string name="busy_cancel_save_files">Cancel stops after this file. The files already saved stay in the folder.</string>
+</resources>

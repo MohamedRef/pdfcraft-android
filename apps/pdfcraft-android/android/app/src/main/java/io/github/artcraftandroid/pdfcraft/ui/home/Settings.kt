@@ -127,7 +127,9 @@ fun SettingsScreen(vm: AppViewModel) {
                 maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).padding(end = 16.dp).semantics { heading() },
             )
         }
-        Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
+        // a readable column on a tablet, centred (#613)
+        Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()), horizontalAlignment = Alignment.CenterHorizontally) {
+          Column(Modifier.widthIn(max = io.github.artcraftandroid.pdfcraft.ui.ReadableMaxWidth).fillMaxWidth()) {
             when (page) {
                 SettingsPage.Root -> RootPage(vm, open)
                 SettingsPage.Reading -> ReadingPage(vm)
@@ -145,6 +147,7 @@ fun SettingsScreen(vm: AppViewModel) {
                 SettingsPage.About -> AboutPage(vm, open)
             }
             Spacer(Modifier.height(24.dp))
+          }
         }
     }
 }

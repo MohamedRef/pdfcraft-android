@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The busy dialog (#614): a large file's note (%1$s is its size), the time taken so far (%1$s is 0:07), and what Cancel keeps -->
+    <string name="busy_large_file">ملف كبير (%1$s): ممكن ياخد كام دقيقة.</string>
+    <string name="busy_elapsed">عدّى %1$s</string>
+    <string name="busy_cancel_combine">الإلغاء بيوقف قبل الملف اللي بعده. مفيش حاجة هتتعمل، وملفاتك زي ما هي.</string>
+    <string name="busy_cancel_export_images">الإلغاء بيوقف بعد الصفحة دي. مفيش صور هتتحفظ.</string>
+    <string name="busy_cancel_save_files">الإلغاء بيوقف بعد الملف ده. الملفات اللي اتحفظت بتفضل في الفولدر.</string>
+</resources>

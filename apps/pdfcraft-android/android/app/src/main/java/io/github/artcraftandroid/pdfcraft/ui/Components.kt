@@ -214,7 +214,8 @@ fun PdfSheet(
                 exit = slideOutVertically(tween(PdfMotion.SHEET_OUT_MS, easing = FastOutLinearInEasing)) { it },
             ) {
                 Column(
-                    modifier
+                    // on a tablet a sheet keeps a readable width, centred (#613)
+                    Modifier.widthIn(max = SheetMaxWidth).then(modifier)
                         .fillMaxWidth()
                         .heightIn(max = maxH)
                         .offset { IntOffset(0, drag.roundToInt()) }
@@ -527,3 +528,26 @@ fun WordWrapLabel(
         Text(text, style = style.copy(fontSize = size * scale, lineHeight = lineHeight * scale), maxLines = maxLines, overflow = TextOverflow.Ellipsis)
     }
 }
+
+
+/**
+ * Wide screens (#613): a tablet, or a phone on its side wider than this, gets the side rail and
+ * the widths below instead of the phone's layout stretched.
+ */
+val WideScreenMinWidth = 600.dp
+
+/** The widest a sheet grows (#613): centred over the screen on a tablet. */
+val SheetMaxWidth = 560.dp
+
+/** The widest a form, a settings page or a tool screen's content grows (#613): a readable column. */
+val ReadableMaxWidth = 720.dp
+
+/** The widest Home's lists grow (#613): rows stop stretching across a tablet. */
+val ListMaxWidth = 840.dp
+
+/** Whether the window is wide enough for the tablet layout (#613). */
+@Composable
+fun isWideScreen(): Boolean = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp.dp >= WideScreenMinWidth
+
+/** Cells in a row of Home's grid view (#613): two on a phone, as many 180 dp cells as fit on a wider list. */
+fun gridColumns(widthDp: Int): Int = (widthDp / 180).coerceAtLeast(2)
