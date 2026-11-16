@@ -1,22 +1,27 @@
 package io.github.artcraftandroid.pdfcraft.ui
 
 import androidx.compose.ui.geometry.Offset
+import io.github.artcraftandroid.pdfcraft.ui.viewer.ContentsPlace
 import io.github.artcraftandroid.pdfcraft.ui.viewer.PageSize
 import io.github.artcraftandroid.pdfcraft.ui.viewer.ViewerState
-import io.github.artcraftandroid.pdfcraft.ui.viewer.showTabletPageRail
+import io.github.artcraftandroid.pdfcraft.ui.viewer.contentsPlace
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class AdaptiveViewerTest {
-    @Test fun railRequiresAnExpandedTabletWindow() {
-        assertFalse(showTabletPageRail(839, 800, false))
-        assertTrue(showTabletPageRail(840, 600, false))
-        assertTrue(showTabletPageRail(1024, 800, false))
-        assertFalse(showTabletPageRail(900, 393, false)) // a phone rotated sideways
-        assertTrue(showTabletPageRail(900, 393, true)) // DeX resizable desktop window
-        assertFalse(showTabletPageRail(700, 393, true)) // compact DeX window
+    /** #659: the device decides, a tablet never gets the sheet, a phone always does. */
+    @Test fun contentsGoToTheSideOnEveryTabletAndToTheSheetOnAPhone() {
+        assertEquals(ContentsPlace.Docked, contentsPlace(800, 800, false)) // tablet upright: the page keeps 500 dp
+        assertEquals(ContentsPlace.Docked, contentsPlace(1280, 800, false)) // tablet sideways, as in 0.0.41
+        assertEquals(ContentsPlace.Docked, contentsPlace(780, 780, false)) // the line: 480 dp beside 300 dp
+        assertEquals(ContentsPlace.Overlay, contentsPlace(779, 779, false))
+        assertEquals(ContentsPlace.Overlay, contentsPlace(600, 600, false)) // a small tablet upright
+        assertEquals(ContentsPlace.Sheet, contentsPlace(384, 384, false)) // a phone
+        assertEquals(ContentsPlace.Sheet, contentsPlace(900, 393, false)) // a phone turned sideways
+        assertEquals(ContentsPlace.Docked, contentsPlace(900, 393, true)) // a DeX desktop window
+        assertEquals(ContentsPlace.Overlay, contentsPlace(700, 393, true)) // a narrow DeX window
+        assertEquals(ContentsPlace.Sheet, contentsPlace(500, 393, true)) // a DeX window phone-wide
     }
 
     @Test fun jumpingAndResizingKeepPageWithinDocumentBounds() {

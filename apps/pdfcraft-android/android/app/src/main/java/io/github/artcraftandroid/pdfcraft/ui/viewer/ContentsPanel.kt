@@ -48,23 +48,107 @@ enum class ContentsTab { Contents, Bookmarks, Pages }
 const val CONTENTS_CURRENT_TAG = "contents_current"
 
 /**
- * Open the contents from the reading page (#647): in the side panel where the window has one
- * (a tablet in landscape), else in the sheet. The tab last used comes back; the first time it is
- * Contents, or Bookmarks when the file has no outline. [from] is `button` or `menu`, for the log.
+ * Where the contents open (#659): the bottom sheet on a phone, the side panel on a tablet.
+ * [Docked] sits beside the page and stays while reading; [Overlay] slides in over the page in a
+ * window too narrow to keep the page readable beside it, and closes when an entry is chosen or
+ * the page is tapped.
  */
-internal fun openContents(doc: OpenDocument, from: String) {
-    val ctl = doc.controller
-    val tab = ctl.contentsTab?.takeIf { it != ContentsTab.Pages } ?: if (doc.info.hasOutline) ContentsTab.Contents else ContentsTab.Bookmarks
-    ctl.contentsTab = tab
-    val panel = ctl.contentsInPanel
-    Diag.event(DiagArea.Viewer, "contents_open", "from" to from, "where" to if (panel) "panel" else "sheet", "tab" to tab.name.lowercase(), "page" to doc.viewer.currentPage + 1)
-    if (panel) {
-        ctl.panelOpen = true
-        ctl.sheet = ViewerSheet.None
-    } else {
-        ctl.bookmarksBack = if (from == "menu") ViewerSheet.More else ViewerSheet.None
-        ctl.sheet = ViewerSheet.Bookmarks
+enum class ContentsPlace { Sheet, Overlay, Docked }
+
+/** The page keeps at least this much width beside a docked panel (#659); narrower, the panel slides over it. */
+internal const val CONTENTS_DOCK_MIN_PAGE_DP = 480
+
+/** The folded panel's strip at the side of the page (#659). */
+internal const val CONTENTS_STRIP_WIDTH_DP = 52
+
+/**
+ * Decided by the device, not by the window's width alone (#659): a tablet (smallest width 600 dp
+ * or more) never gets the bottom sheet, held upright or sideways; a phone does, also turned
+ * sideways, since its short side is still a phone's. A DeX or ChromeOS desktop window counts as a
+ * tablet while it is 600 dp wide or more. The panel is docked while the page keeps
+ * [CONTENTS_DOCK_MIN_PAGE_DP] beside the contents' 300 dp, so from 780 dp: an 800 dp portrait
+ * tablet is docked, a 600 dp window gets the panel over the page. The folded strip is not
+ * counted, as an open panel takes its place.
+ */
+internal fun contentsPlace(widthDp: Int, smallestWidthDp: Int, desktop: Boolean): ContentsPlace {
+    val tablet = smallestWidthDp >= 600 || desktop
+    if (!tablet || widthDp < 600) return ContentsPlace.Sheet
+    return if (widthDp - SidePanelContentsWidth.value.toInt() >= CONTENTS_DOCK_MIN_PAGE_DP) ContentsPlace.Docked else ContentsPlace.Overlay
+}
+
+/** The tab the contents open on: the last one used, else Contents, or Bookmarks when the file has no outline. */
+internal fun ViewerController.contentsTabToOpen(hasOutline: Boolean): ContentsTab =
+    contentsTab?.takeIf { it != ContentsTab.Pages } ?: if (hasOutline) ContentsTab.Contents else ContentsTab.Bookmarks
+
+/**
+ * Show the side panel or the sheet on [tab], by [contentsPlace] (#659). A [tab] of Pages opens
+ * only the panel; on a phone it has no sheet, so it opens Contents. [from] decides where the
+ * sheet's back arrow goes. Returns where they opened, for the log.
+ */
+internal fun ViewerController.showContents(tab: ContentsTab, from: String): ContentsPlace {
+    val place = contentsPlace
+    when (place) {
+        ContentsPlace.Docked -> { contentsTab = tab; panelOpen = true; overlayOpen = false; sheet = ViewerSheet.None }
+        ContentsPlace.Overlay -> { contentsTab = tab; overlayOpen = true; sheet = ViewerSheet.None }
+        ContentsPlace.Sheet -> {
+            if (tab != ContentsTab.Pages) contentsTab = tab
+            bookmarksBack = if (from == "menu") ViewerSheet.More else ViewerSheet.None
+            sheet = ViewerSheet.Bookmarks
+        }
     }
+    return place
+}
+
+/**
+ * The top bar's Contents button (#659): it opens the contents, and folds the panel when the panel
+ * already shows them.
+ */
+internal fun ViewerController.toggleContents(hasOutline: Boolean): ContentsPlace? {
+    val showing = contentsTab?.let { it != ContentsTab.Pages } == true
+    when {
+        sheet == ViewerSheet.Bookmarks -> sheet = ViewerSheet.None
+        contentsPlace == ContentsPlace.Docked && panelOpen && showing -> panelOpen = false
+        contentsPlace == ContentsPlace.Overlay && overlayOpen && showing -> overlayOpen = false
+        else -> return showContents(contentsTabToOpen(hasOutline), "button")
+    }
+    return null
+}
+
+/**
+ * Open the contents from the reading page (#647, #659): in the side panel on a tablet, else in
+ * the sheet. [from] is `button`, `menu` or `strip`, for the log; [tab] is the strip's icon tapped,
+ * else the tab last used.
+ */
+internal fun openContents(doc: OpenDocument, from: String, tab: ContentsTab? = null) {
+    val ctl = doc.controller
+    val place = ctl.showContents(tab ?: ctl.contentsTabToOpen(doc.info.hasOutline), from)
+    logContentsOpen(doc, from, place)
+}
+
+private fun logContentsOpen(doc: OpenDocument, from: String, place: ContentsPlace) {
+    val ctl = doc.controller
+    val where = when (place) { ContentsPlace.Docked -> "panel"; ContentsPlace.Overlay -> "overlay"; ContentsPlace.Sheet -> "sheet" }
+    Diag.event(
+        DiagArea.Viewer, "contents_open", "from" to from, "where" to where, "tab" to (ctl.contentsTab ?: ContentsTab.Contents).name.lowercase(),
+        "page" to doc.viewer.currentPage + 1, "width_dp" to ctl.windowWidthDp, "sw_dp" to ctl.windowSmallestWidthDp,
+    )
+}
+
+/** The top bar's Contents button (#659). */
+internal fun toggleContentsFromButton(doc: OpenDocument) {
+    val place = doc.controller.toggleContents(doc.info.hasOutline) ?: return
+    logContentsOpen(doc, "button", place)
+}
+
+/** The panel's state kept for each document between visits (#659): `open:contents`, `closed:pages`. */
+internal fun encodeContentsPanel(open: Boolean, tab: ContentsTab?): String =
+    (if (open) "open" else "closed") + ":" + (tab ?: ContentsTab.Pages).name.lowercase()
+
+internal fun decodeContentsPanel(s: String?): Pair<Boolean, ContentsTab>? {
+    val parts = s?.split(':')?.takeIf { it.size == 2 } ?: return null
+    val open = when (parts[0]) { "open" -> true; "closed" -> false; else -> return null }
+    val tab = ContentsTab.entries.firstOrNull { it.name.lowercase() == parts[1] } ?: return null
+    return open to tab
 }
 
 /**
