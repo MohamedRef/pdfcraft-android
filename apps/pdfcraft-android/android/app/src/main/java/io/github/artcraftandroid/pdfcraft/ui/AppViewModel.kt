@@ -2081,16 +2081,18 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
      * the person stopped it; the tool then wrote nothing and changed no document. Any other
      * failure is thrown, as from [Engine.tool]. Logs `job_end` with [job], how it ended
      * (`finished`, `stopped`, `failed`), its time, the file's size and its page count, and where a
-     * stopped run was.
+     * stopped run was. With no [doc] (Combine), [bytes] and [pages] say what the job worked on.
      */
     internal suspend fun watchedTool(
         eng: Engine,
-        doc: OpenDocument,
+        doc: OpenDocument?,
         job: String,
         name: String,
         args: Map<String, Any?>,
         cancelNote: String,
         line: (stage: String, done: Int, total: Int) -> JobLine?,
+        bytes: Long = doc?.info?.fileSize?.toLong() ?: 0L,
+        pages: Int = doc?.pageCount ?: 0,
     ): JSONObject? {
         val work = io.github.artcraftandroid.pdfcraft.core.ToolJob()
         val stop = offerCancel(cancelNote) { work.cancel() }
@@ -2109,9 +2111,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         val started = System.nanoTime()
         fun end(outcome: String) {
             val p = work.progress()
-            Diag.event(DiagArea.Pages, "job_end", "job" to job, "doc" to doc.diagNumber, "outcome" to outcome,
-                "ms" to (System.nanoTime() - started) / 1_000_000, "bytes" to doc.info.fileSize.toLong(), "pages" to doc.pageCount,
-                "stage" to p.stage, "done" to p.done.toInt(), "total" to p.total.toInt(), "percent" to p.percent.toInt())
+            jobEnd(job, doc, outcome, started, bytes, pages, p.stage, p.done.toInt(), p.total.toInt(), p.percent.toInt())
         }
         return try {
             eng.tool(name, args, work).also { end("finished") }
@@ -2127,6 +2127,18 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             withdrawCancel()
             tools.busyProgress = null
         }
+    }
+
+    /**
+     * The `job_end` log line (#634): [job], how it ended (`finished`, `stopped`, `failed`), the
+     * time since [started] (System.nanoTime), the file's [bytes] and [pages], and the last step.
+     * Never a file name.
+     */
+    internal fun jobEnd(job: String, doc: OpenDocument?, outcome: String, started: Long, bytes: Long, pages: Int,
+                        stage: String, done: Int, total: Int, percent: Int) {
+        Diag.event(DiagArea.Pages, "job_end", "job" to job, "doc" to (doc?.diagNumber ?: -1), "outcome" to outcome,
+            "ms" to (System.nanoTime() - started) / 1_000_000, "bytes" to bytes, "pages" to pages,
+            "stage" to stage, "done" to done, "total" to total, "percent" to percent)
     }
 
     /** What takes the file's space (`doc_audit_space`): (category, bytes, percent), biggest first. */
@@ -2152,11 +2164,17 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
                 out.delete()
                 return@job
             }
-            // one engine call from here: it cannot stop or count
             withdrawCancel()
             tools.busyProgress = null
-            tools.busyNote = busyLargeFileNote(copies.sumOf { it.length() })
-            eng.tool("doc_combine", mapOf("paths" to paths, "out" to out.absolutePath))
+            val bytes = copies.sumOf { it.length() }
+            tools.busyNote = busyLargeFileNote(bytes)
+            // the combining itself, step by step, with Cancel (#634): the file is written last
+            watchedTool(eng, null, "combine", "doc_combine", mapOf("paths" to paths, "out" to out.absolutePath),
+                text(R.string.busy_cancel_combine_step), ::combineLine, bytes = bytes, pages = 0) ?: run {
+                Diag.event(DiagArea.Pages, "job_cancelled", "job" to "combine", "copied" to copies.size, "files" to combineFiles.size)
+                out.delete()
+                return@job
+            }
         } catch (e: Exception) {
             out.delete()
             throw e
@@ -2175,15 +2193,38 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     fun protect(doc: OpenDocument, protection: Map<String, Any?>) = docJob(doc, text(R.string.msg_busy_setting_password)) { eng ->
         save(doc)
         val out = tempFile("pdf")
-        val copy = eng.tool("doc_open", mapOf("path" to savedFile(doc, "protect").absolutePath, "password" to doc.password)).optLong("doc")
-        try {
-            Diag.measure(DiagArea.Pages, "protect_copy", "doc" to doc.diagNumber, "settings" to protection.size) {
-                eng.tool("doc_protect", protection + ("doc" to copy))
-                eng.tool("doc_save", mapOf("doc" to copy, "path" to out.absolutePath, "full" to true))
-            }
-        } finally {
-            runCatching { eng.tool("doc_close", mapOf("doc" to copy, "discard_changes" to true)) }
+        // Three steps, said in the dialog, with Cancel between them (#634). Saving the protected
+        // copy is one call that encrypts the whole file: Cancel takes hold when it ends, and the
+        // copy is then dropped.
+        val stop = offerCancel(text(R.string.busy_cancel_protect))
+        val started = System.nanoTime()
+        val bytes = doc.info.fileSize.toLong()
+        var at = "opening"
+        fun step(stage: String, n: Int, res: Int): Boolean {
+            if (stop.asked) return false
+            at = stage
+            tools.busy = text(res)
+            tools.busyProgress = n to 3
+            return true
         }
+        var copy: Long? = null
+        var outcome = "failed"
+        try {
+            if (!step("opening", 0, R.string.msg_busy_protect_opening)) { outcome = "stopped"; return@docJob }
+            copy = eng.tool("doc_open", mapOf("path" to savedFile(doc, "protect").absolutePath, "password" to doc.password)).optLong("doc")
+            Diag.measure(DiagArea.Pages, "protect_copy", "doc" to doc.diagNumber, "settings" to protection.size) {
+                if (step("protecting", 1, R.string.msg_busy_protect_protecting)) eng.tool("doc_protect", protection + ("doc" to copy))
+                if (step("saving", 2, R.string.msg_busy_protect_saving)) eng.tool("doc_save", mapOf("doc" to copy, "path" to out.absolutePath, "full" to true))
+            }
+            outcome = if (stop.asked) "stopped" else "finished"
+        } finally {
+            withdrawCancel()
+            tools.busyProgress = null
+            copy?.let { c -> runCatching { eng.tool("doc_close", mapOf("doc" to c, "discard_changes" to true)) } }
+            if (outcome != "finished") out.delete()
+            jobEnd("protect", doc, outcome, started, bytes, doc.pageCount, at, if (outcome == "finished") 3 else listOf("opening", "protecting", "saving").indexOf(at), 3, 0)
+        }
+        if (outcome != "finished") return@docJob
         tools.toolScreen = null
         deliver(out, "${doc.title}_protected.pdf")
     }

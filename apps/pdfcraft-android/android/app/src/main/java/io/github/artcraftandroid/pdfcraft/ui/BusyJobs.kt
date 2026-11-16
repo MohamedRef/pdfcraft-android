@@ -13,7 +13,8 @@ internal object BusyJobs {
         "msg_busy_cleaning_page", "msg_busy_finishing_page", "msg_busy_saving_scan", "scan_busy_preparing", // a scan's pages †
         "scan_gallery_busy", // a scan's pages to the gallery †
         "msg_busy_exporting_images", // Export to images, page by page †; Images in the PDF is one call (below)
-        "msg_busy_combining", "msg_busy_creating_pdf", // files read in one by one †, then one call that cannot count
+        "msg_busy_combining", "msg_busy_creating_pdf", // files read in one by one †, then the engine's steps file by file † (#634)
+        "msg_busy_setting_password", // Set a password: opening a copy, protecting, saving; between them † (#634)
         "msg_busy_saving_files", // files saved to a folder one by one †
         "msg_busy_compressing", // Compress: the engine reports pages read and images done, and stops when asked † (#634)
         "msg_busy_splitting", // Split: part by part (and page by page measuring for a size) † (#634)
@@ -25,7 +26,6 @@ internal object BusyJobs {
 
     /** Jobs that can neither count nor stop, with the reason: each is one call into the PDF library, or a few short ones. */
     val notCounted = mapOf(
-        "msg_busy_setting_password" to "a copy opened, protected and saved: three calls",
         "msg_busy_signing" to "one signing call",
         "msg_busy_creating_id" to "one key made",
         "msg_busy_preparing_ocr" to "the recognition models copied once",

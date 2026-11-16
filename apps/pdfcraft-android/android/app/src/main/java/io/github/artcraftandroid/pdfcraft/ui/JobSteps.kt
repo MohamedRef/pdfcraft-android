@@ -66,3 +66,25 @@ internal fun compareLine(stage: String, done: Int, total: Int): JobLine? = when 
     "visual" -> if (total > 0) JobLine(R.string.compare_busy_visual, listOf(minOf(done + 1, total), total)) else null
     else -> null
 }
+
+/**
+ * The line for one step of `doc_combine` (#634): `reading`, file [done] of [total], `opening`,
+ * file [done] of [total] opened, then `combining`, `writing`, `checking` and `saving`.
+ */
+internal fun combineLine(stage: String, done: Int, total: Int): JobLine? = when (stage) {
+    "reading" -> if (total > 0) JobLine(R.string.msg_busy_combining_reading, listOf(minOf(done + 1, total), total)) else null
+    "opening" -> if (total > 0) JobLine(R.string.msg_busy_combining_opening, listOf(minOf(done + 1, total), total)) else null
+    "combining" -> JobLine(R.string.msg_busy_combining_pages)
+    "writing", "checking", "saving" -> JobLine(R.string.msg_busy_combining_writing)
+    else -> null
+}
+
+/**
+ * The line for one step of `doc_create_multiple` (#634): `files`, file [done] of [total] made
+ * into PDF and copied in, then `writing`.
+ */
+internal fun createLine(stage: String, done: Int, total: Int): JobLine? = when (stage) {
+    "files" -> if (total > 0) JobLine(R.string.msg_busy_creating_file, listOf(minOf(done + 1, total), total)) else null
+    "writing" -> JobLine(R.string.msg_busy_combining_writing)
+    else -> null
+}

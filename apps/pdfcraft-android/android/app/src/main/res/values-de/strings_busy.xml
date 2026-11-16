@@ -29,4 +29,14 @@
     <string name="compare_busy_comparing">Wird verglichen: Änderungen werden gesucht …</string>
     <string name="compare_busy_visual">Wird verglichen: Seite %1$d von %2$d wird angesehen …</string>
     <string name="busy_cancel_compare">Abbrechen beendet den Vergleich. Beide Dokumente bleiben unverändert.</string>
+    <string name="msg_busy_combining_reading">Wird zusammengeführt: Datei %1$d von %2$d wird gelesen …</string>
+    <string name="msg_busy_combining_opening">Wird zusammengeführt: Datei %1$d von %2$d wird geöffnet …</string>
+    <string name="msg_busy_combining_pages">Wird zusammengeführt: Seiten werden kopiert …</string>
+    <string name="msg_busy_combining_writing">Wird zusammengeführt: neue Datei wird geschrieben …</string>
+    <string name="msg_busy_creating_file">PDF wird erstellt: Datei %1$d von %2$d …</string>
+    <string name="busy_cancel_combine_step">Abbrechen hält beim nächsten Schritt an. Es wird nichts erstellt, deine Dateien bleiben unverändert.</string>
+    <string name="msg_busy_protect_opening">Passwort wird festgelegt: Kopie wird geöffnet …</string>
+    <string name="msg_busy_protect_protecting">Passwort wird festgelegt: Kopie wird geschützt …</string>
+    <string name="msg_busy_protect_saving">Passwort wird festgelegt: geschützte Kopie wird gespeichert …</string>
+    <string name="busy_cancel_protect">Abbrechen hält vor dem nächsten Schritt an. Es wird keine Datei erstellt, dein Dokument bleibt unverändert. Das Speichern der geschützten Kopie ist ein Schritt: Abbrechen greift, wenn er endet.</string>
 </resources>

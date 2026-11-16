@@ -265,7 +265,10 @@ impl Automation {
             Some(_) => return Err(ToolError::InvalidArgs("pages must list a range (or null) for each path".into())),
         };
         // Each file is read, converted and copied in turn, so a long list holds one file at a time.
-        let sources = paths.into_iter().zip(ranges).map(|(p, range)| -> std::result::Result<pdfcraft_engine::CombineSource, ToolError> {
+        // How far it is (#634): each file converted and copied in, then the writing; a stop writes nothing.
+        let files = paths.len();
+        let sources = paths.into_iter().zip(ranges).enumerate().map(|(i, (p, range))| -> std::result::Result<pdfcraft_engine::CombineSource, ToolError> {
+            self.job_step("files", i, files, 0.9 * i as f32 / files as f32)?;
             let path = self.resolve(p, false)?;
             let bytes = read_input(&path)?;
             let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
@@ -274,6 +277,7 @@ impl Automation {
             Ok((title, pdf, range))
         });
         let bytes = self.session.combine_each(sources)?.ok_or_else(|| ToolError::InvalidArgs("paths must list at least one file".into()))?;
+        self.job_step("writing", 0, 0, 0.95)?;
         self.deliver(a, "Combined", bytes)
     }
 
@@ -420,7 +424,10 @@ impl Automation {
         };
         let mut sources: Vec<CombineSource> = Vec::new();
         let mut firsts: Vec<(u64, PathBuf, usize)> = Vec::new();
+        // How far it is (#634): each file read, then the engine's steps; a stop writes nothing.
+        let files = paths.len();
         for (i, (p, range)) in paths.into_iter().zip(ranges).enumerate() {
+            self.job_step("reading", i, files, 0.4 * i as f32 / files as f32)?;
             let path = self.resolve(p, false)?;
             let group = groups.as_ref().and_then(|g| g.get(i).copied().flatten());
             let first = group.and_then(|g| firsts.iter().find(|f| f.0 == g));
@@ -445,9 +452,19 @@ impl Automation {
             sources.push((name, bytes, range));
         }
         let passwords: Vec<Option<&str>> = passwords.iter().map(Option::as_deref).collect();
+        let watch = self.job_watch.clone();
         let combined = match groups {
-            None => self.session.combine_unlocked_reporting(&sources, &passwords, field_conflicts),
+            None => self.session.combine_unlocked_reporting_watched(&sources, &passwords, field_conflicts, &mut |stage, done, total| {
+                let fraction = match stage {
+                    "opening" => 0.4 + 0.2 * done as f32 / total.max(1) as f32,
+                    "combining" => 0.6,
+                    "writing" => 0.75,
+                    _ => 0.9,
+                };
+                watch.as_ref().is_none_or(|w| w(crate::JobStep { stage, done, total, fraction, attempt: 1 }))
+            }),
             Some(groups) => {
+                self.job_step("combining", 0, 0, 0.6)?;
                 // A path without a group is a file of its own: give it a key no group uses.
                 let mut next = groups.iter().flatten().max().map_or(Some(0), |m| m.checked_add(1));
                 let mut keys = Vec::with_capacity(groups.len());
@@ -465,6 +482,7 @@ impl Automation {
             }
         }
         .map_err(failed)?;
+        self.job_step("saving", 0, 0, 0.95)?;
         let mut result = self.deliver(a, "Combined", combined.bytes)?;
         if !combined.renamed_fields.is_empty() {
             result["renamed_fields"] = json!(combined.renamed_fields.iter().map(|(old, new)| json!([old, new])).collect::<Vec<_>>());

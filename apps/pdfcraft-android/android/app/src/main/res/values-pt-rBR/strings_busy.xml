@@ -29,4 +29,14 @@
     <string name="compare_busy_comparing">Comparando: procurando as mudanças…</string>
     <string name="compare_busy_visual">Comparando: examinando a página %1$d de %2$d…</string>
     <string name="busy_cancel_compare">Cancelar interrompe a comparação. Os dois documentos ficam como estão.</string>
+    <string name="msg_busy_combining_reading">Combinando: lendo o arquivo %1$d de %2$d…</string>
+    <string name="msg_busy_combining_opening">Combinando: abrindo o arquivo %1$d de %2$d…</string>
+    <string name="msg_busy_combining_pages">Combinando: copiando as páginas…</string>
+    <string name="msg_busy_combining_writing">Combinando: gravando o novo arquivo…</string>
+    <string name="msg_busy_creating_file">Criando PDF: arquivo %1$d de %2$d…</string>
+    <string name="busy_cancel_combine_step">Cancelar para na próxima etapa. Nada é criado e seus arquivos ficam como estão.</string>
+    <string name="msg_busy_protect_opening">Definindo senha: abrindo uma cópia…</string>
+    <string name="msg_busy_protect_protecting">Definindo senha: protegendo a cópia…</string>
+    <string name="msg_busy_protect_saving">Definindo senha: salvando a cópia protegida…</string>
+    <string name="busy_cancel_protect">Cancelar para antes da próxima etapa. Nenhum arquivo é criado e seu documento fica como está. Salvar a cópia protegida é uma única etapa: Cancelar age quando ela termina.</string>
 </resources>

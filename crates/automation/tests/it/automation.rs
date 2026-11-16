@@ -15291,3 +15291,66 @@ fn a_job_watch_follows_compare_and_can_stop_it() {
         assert!(matches!(&e, ToolError::Failed(m) if m.contains("cancelled")), "{stop_at}: {e}");
     }
 }
+
+#[test]
+fn a_job_watch_follows_combine_and_create_and_can_stop_them() {
+    use pdfcraft_automation::JobStep;
+    use std::sync::{Arc, Mutex};
+    let dir = workdir("combine-watch");
+    let mut a = auto(&dir);
+
+    let plain = ok(&mut a, "doc_combine", json!({ "paths": ["a.pdf", "b.pdf"], "out": "plain.pdf" }));
+    let seen: Arc<Mutex<Vec<JobStep>>> = Arc::default();
+    let log = seen.clone();
+    a.set_job_watch(Some(Arc::new(move |s| {
+        log.lock().unwrap().push(s);
+        true
+    })));
+    let r = ok(&mut a, "doc_combine", json!({ "paths": ["a.pdf", "b.pdf"], "out": "watched.pdf" }));
+    a.set_job_watch(None);
+    assert_eq!(r["bytes"], plain["bytes"], "{r}");
+    let steps = seen.lock().unwrap().clone();
+    let got: Vec<(&str, usize, usize)> = steps.iter().map(|s| (s.stage, s.done, s.total)).collect();
+    assert_eq!(
+        got,
+        vec![
+            ("reading", 0, 2),
+            ("reading", 1, 2),
+            ("opening", 0, 2),
+            ("opening", 1, 2),
+            ("combining", 0, 0),
+            ("writing", 0, 0),
+            ("checking", 0, 0),
+            ("saving", 0, 0)
+        ],
+        "{steps:?}"
+    );
+    assert!(steps.windows(2).all(|w| w[0].fraction <= w[1].fraction), "{steps:?}");
+    for stop_at in ["reading", "opening", "combining", "writing", "checking", "saving"] {
+        a.set_job_watch(Some(Arc::new(move |s: JobStep| s.stage != stop_at)));
+        let e = err(&mut a, "doc_combine", json!({ "paths": ["a.pdf", "b.pdf"], "out": "stopped.pdf" }));
+        a.set_job_watch(None);
+        assert!(matches!(&e, ToolError::Failed(m) if m.contains("cancelled")), "{stop_at}: {e}");
+        assert!(!dir.join("stopped.pdf").exists(), "{stop_at}");
+    }
+
+    let plain = ok(&mut a, "doc_create_multiple", json!({ "paths": ["a.pdf", "b.pdf"], "out": "plain-create.pdf" }));
+    let seen: Arc<Mutex<Vec<JobStep>>> = Arc::default();
+    let log = seen.clone();
+    a.set_job_watch(Some(Arc::new(move |s| {
+        log.lock().unwrap().push(s);
+        true
+    })));
+    let r = ok(&mut a, "doc_create_multiple", json!({ "paths": ["a.pdf", "b.pdf"], "out": "watched-create.pdf" }));
+    a.set_job_watch(None);
+    assert_eq!(r["bytes"], plain["bytes"], "{r}");
+    let got: Vec<(&str, usize, usize)> = seen.lock().unwrap().iter().map(|s| (s.stage, s.done, s.total)).collect();
+    assert_eq!(got, vec![("files", 0, 2), ("files", 1, 2), ("writing", 0, 0)]);
+    for stop_at in ["files", "writing"] {
+        a.set_job_watch(Some(Arc::new(move |s: JobStep| s.stage != stop_at)));
+        let e = err(&mut a, "doc_create_multiple", json!({ "paths": ["a.pdf", "b.pdf"], "out": "stopped-create.pdf" }));
+        a.set_job_watch(None);
+        assert!(matches!(&e, ToolError::Failed(m) if m.contains("cancelled")), "{stop_at}: {e}");
+        assert!(!dir.join("stopped-create.pdf").exists(), "{stop_at}");
+    }
+}

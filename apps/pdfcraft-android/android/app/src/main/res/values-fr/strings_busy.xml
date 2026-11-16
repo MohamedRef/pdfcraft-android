@@ -29,4 +29,14 @@
     <string name="compare_busy_comparing">Comparaison : recherche des modifications…</string>
     <string name="compare_busy_visual">Comparaison : examen de la page %1$d sur %2$d…</string>
     <string name="busy_cancel_compare">Annuler arrête la comparaison. Les deux documents restent intacts.</string>
+    <string name="msg_busy_combining_reading">Combinaison : lecture du fichier %1$d sur %2$d…</string>
+    <string name="msg_busy_combining_opening">Combinaison : ouverture du fichier %1$d sur %2$d…</string>
+    <string name="msg_busy_combining_pages">Combinaison : copie des pages…</string>
+    <string name="msg_busy_combining_writing">Combinaison : écriture du nouveau fichier…</string>
+    <string name="msg_busy_creating_file">Création du PDF : fichier %1$d sur %2$d…</string>
+    <string name="busy_cancel_combine_step">Annuler s’arrête à l’étape suivante. Rien n’est créé et vos fichiers restent intacts.</string>
+    <string name="msg_busy_protect_opening">Définition du mot de passe : ouverture d’une copie…</string>
+    <string name="msg_busy_protect_protecting">Définition du mot de passe : protection de la copie…</string>
+    <string name="msg_busy_protect_saving">Définition du mot de passe : enregistrement de la copie protégée…</string>
+    <string name="busy_cancel_protect">Annuler s’arrête avant l’étape suivante. Aucun fichier n’est créé et votre document reste intact. L’enregistrement de la copie protégée est une seule étape : Annuler agit à sa fin.</string>
 </resources>

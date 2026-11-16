@@ -509,7 +509,13 @@ class ToolsController internal constructor(private val vm: AppViewModel) {
             }
             vm.withdrawCancel()
             vm.tools.busyProgress = null
-            eng.tool("doc_create_multiple", mapOf("paths" to paths, "out" to out.absolutePath, "mode" to "combine"))
+            // converting and combining, file by file, with Cancel (#634): the file is written last
+            vm.watchedTool(eng, null, "create", "doc_create_multiple", mapOf("paths" to paths, "out" to out.absolutePath, "mode" to "combine"),
+                text(R.string.busy_cancel_combine_step), ::createLine, bytes = copies.sumOf { it.length() }, pages = 0) ?: run {
+                Diag.event(DiagArea.Pages, "job_cancelled", "job" to "create", "copied" to copies.size, "files" to uris.size)
+                out.delete()
+                return@job
+            }
         } catch (e: Exception) {
             out.delete()
             throw e

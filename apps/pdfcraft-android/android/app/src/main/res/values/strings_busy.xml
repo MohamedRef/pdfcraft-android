@@ -33,4 +33,15 @@
     <string name="compare_busy_comparing">Comparing: finding the changes…</string>
     <string name="compare_busy_visual">Comparing: looking at page %1$d of %2$d…</string>
     <string name="busy_cancel_compare">Cancel stops the comparing. Both documents stay as they are.</string>
+    <!-- Combine, Create PDF and Set a password say how far they are and can be stopped (#634): the files read and opened, the pages copied, the new file written; Set a password's three steps -->
+    <string name="msg_busy_combining_reading">Combining: reading file %1$d of %2$d…</string>
+    <string name="msg_busy_combining_opening">Combining: opening file %1$d of %2$d…</string>
+    <string name="msg_busy_combining_pages">Combining: copying the pages…</string>
+    <string name="msg_busy_combining_writing">Combining: writing the new file…</string>
+    <string name="msg_busy_creating_file">Creating PDF: file %1$d of %2$d…</string>
+    <string name="busy_cancel_combine_step">Cancel stops at the next step. Nothing is made, and your files stay as they are.</string>
+    <string name="msg_busy_protect_opening">Setting password: opening a copy…</string>
+    <string name="msg_busy_protect_protecting">Setting password: protecting the copy…</string>
+    <string name="msg_busy_protect_saving">Setting password: saving the protected copy…</string>
+    <string name="busy_cancel_protect">Cancel stops before the next step. No file is made, and your document stays as it is. Saving the protected copy is one step: Cancel takes hold when it ends.</string>
 </resources>
