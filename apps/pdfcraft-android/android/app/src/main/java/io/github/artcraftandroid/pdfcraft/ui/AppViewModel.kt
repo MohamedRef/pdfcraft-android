@@ -1254,11 +1254,15 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
      */
     fun undoDocument(doc: OpenDocument, announce: Boolean) {
         val label = doc.info.undoLabel ?: return
+        // the bar by a new markup names it by its place among the page's comments: after an undo
+        // that place may be another comment's (#650)
+        commenting.markupFollowUp = null
         runTool(doc, "edit_undo") { if (announce) step(doc, text(R.string.msg_undone, label)) }
     }
 
     fun redoDocument(doc: OpenDocument, announce: Boolean) {
         val label = doc.info.redoLabel ?: return
+        commenting.markupFollowUp = null
         runTool(doc, "edit_redo") { if (announce) step(doc, text(R.string.msg_redone, label)) }
     }
 

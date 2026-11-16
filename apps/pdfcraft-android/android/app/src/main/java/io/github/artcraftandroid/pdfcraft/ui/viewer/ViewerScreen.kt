@@ -643,7 +643,13 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
             if (selection.magnifierAt == null) SelectionMenu(vm, doc, sel)
         }
         // the markup just added from that menu: colours, Add note, Delete (#197)
-        if (selection.selection == null) vm.commenting.markupFollowUp?.takeIf { it.doc === doc && ctl.tool == ViewerTool.None }?.let { MarkupFollowUpBar(vm, it) }
+        // and the markup just made with the Highlight tool, above it (#650)
+        if (selection.selection == null) vm.commenting.markupFollowUp?.takeIf { it.doc === doc && (ctl.tool == ViewerTool.None || ctl.tool == ViewerTool.Markup) }
+            ?.let { MarkupFollowUpBar(vm, it, above = ctl.tool == ViewerTool.Markup) }
+        // another tool has no use for it, and it must not come back by an old markup afterwards
+        LaunchedEffect(ctl.tool) {
+            if (ctl.tool != ViewerTool.None && ctl.tool != ViewerTool.Markup) vm.commenting.markupFollowUp = null
+        }
 
         // Sheets and dialogs.
         SheetHost(ctl.sheet.takeIf { it != ViewerSheet.None }) { sheet ->

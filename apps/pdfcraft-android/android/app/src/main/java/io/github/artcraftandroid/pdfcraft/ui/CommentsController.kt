@@ -67,15 +67,19 @@ class CommentsController internal constructor(private val vm: AppViewModel) {
         pendingMarkupPreview = preview
         addMarkup(doc, markup, page, rects, color, opacity, onSettled = {
             if (pendingMarkupPreview === preview) pendingMarkupPreview = null
-        }, onDone = { r ->
-            // the new markup stays in hand: recolour it, add a note to it or delete it (#197)
-            val added = r.optJSONObject("comment")
-            val index = added?.optInt("index", 0) ?: 0
-            if (index > 0 && vm.document === doc) {
-                val bounds = floatArrayOf(rects.minOf { it[0] }, rects.minOf { it[1] }, rects.maxOf { it[2] }, rects.maxOf { it[3] })
-                markupFollowUp = io.github.artcraftandroid.pdfcraft.ui.viewer.MarkupFollowUp(doc, page, index - 1, bounds, color)
-            }
-        })
+        }, onDone = { r -> keepInHand(doc, page, rects, color, r) })
+    }
+
+    /**
+     * The markup `comment_add` just answered with ([added]) stays in hand: recolour it, add a note
+     * to it or delete it, from the bar by it (#197; from the Highlight tool too since #650).
+     */
+    internal fun keepInHand(doc: OpenDocument, page: Int, rects: List<FloatArray>, color: androidx.compose.ui.graphics.Color, added: JSONObject) {
+        val index = added.optJSONObject("comment")?.optInt("index", 0) ?: 0
+        val bounds = io.github.artcraftandroid.pdfcraft.ui.viewer.markupBounds(rects)
+        if (index > 0 && bounds != null && vm.document === doc) {
+            markupFollowUp = io.github.artcraftandroid.pdfcraft.ui.viewer.MarkupFollowUp(doc, page, index - 1, bounds, color)
+        }
     }
 
     /** The text markup just added from the selection menu, with its follow-up bar (#197). */
