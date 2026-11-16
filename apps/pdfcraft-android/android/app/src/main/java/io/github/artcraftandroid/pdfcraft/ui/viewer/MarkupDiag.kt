@@ -30,6 +30,16 @@ internal object MarkupDiag {
     fun quickColor(doc: OpenDocument, markup: TextMarkup) = e("markup_quick_color", doc, "markup" to markup.name.lowercase())
     /** The markup just made with the Highlight tool is in hand, its bar by it (#650). */
     fun inHand(doc: OpenDocument, markup: TextMarkup, lines: Int) = e("markup_in_hand", doc, "markup" to markup.name.lowercase(), "lines" to lines)
+    /** A markup drag that found text (#657): how many letters and lines it marked. */
+    fun textMarked(doc: OpenDocument, markup: TextMarkup, letters: Int, lines: Int) =
+        e("markup_text", doc, "markup" to markup.name.lowercase(), "letters" to letters, "lines" to lines)
+    /**
+     * A markup gesture that marked no text (#657), and why: `no_start_letter`, `no_end_letter`
+     * (no letter near where it began or ended), `two_pages`, `too_long`, `no_lines` (the letters
+     * have no line boxes), `no_text` (the page has no letters at all).
+     */
+    fun unresolved(doc: OpenDocument, markup: TextMarkup, reason: String, tap: Boolean, glyphs: Long) =
+        e("markup_unresolved", doc, "markup" to markup.name.lowercase(), "reason" to reason, "tap" to tap, "page_glyphs" to glyphs)
     fun areaHighlight(doc: OpenDocument, rect: FloatArray) = e("area_highlight", doc, "w_pt" to (rect[2] - rect[0]).toInt(), "h_pt" to (rect[3] - rect[1]).toInt())
     fun textEdit(doc: OpenDocument, kind: String, lines: Int) = e("text_suggestion", doc, "kind" to kind, "lines" to lines)
     fun shape(doc: OpenDocument, type: String, points: Int) = e("shape", doc, "type" to type, "points" to points)
