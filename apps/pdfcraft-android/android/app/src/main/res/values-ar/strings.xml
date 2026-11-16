@@ -640,6 +640,7 @@
     <string name="sheet_contents_locked">هذا الملف موقّع أو للقراءة فقط، لذلك لا يمكن تغيير فهرسه هنا. احفظ نسخة قابلة للتعديل أولاً.</string>
     <string name="sheet_up_level">المستوى الأعلى</string>
     <string name="sheet_expand_entry">توسيع %1$s</string>
+    <string name="sheet_collapse_entry">طي %1$s</string>
     <string name="sheet_bookmarks_empty">ستظهر إشاراتك المرجعية هنا.</string>
     <string name="sheet_add_a_bookmark">إضافة إشارة مرجعية</string>
     <string name="sheet_bookmark_name_invalid">لا يمكن استخدام هذا الاسم.</string>
@@ -1046,8 +1047,8 @@
     <string name="comments_loading">جارٍ تحميل التعليقات…</string>
     <string name="compact_previews">تقليل ذاكرة معاينات الصفحات</string>
     <string name="compact_previews_body">يقلل دقة ألوان الصفحة الكاملة مع الحفاظ على جودة التفاصيل عند التكبير. يُطبق عند إعادة فتح المستند.</string>
-    <string name="viewer_show_page_navigator">إظهار متصفح الصفحات</string>
-    <string name="viewer_hide_page_navigator">إخفاء متصفح الصفحات</string>
+    <string name="viewer_show_page_navigator">إظهار اللوحة الجانبية</string>
+    <string name="viewer_hide_page_navigator">إخفاء اللوحة الجانبية</string>
     <string name="viewer_fit_width">ملاءمة العرض</string>
     <string name="sheet_export_embedded_bookmarks">صدّر إشارات PDF المرجعية إلى ملف</string>
     <string name="sheet_export_embedded_bookmarks_failed">تعذّر إنشاء ملف تصدير إشارات PDF المرجعية.</string>

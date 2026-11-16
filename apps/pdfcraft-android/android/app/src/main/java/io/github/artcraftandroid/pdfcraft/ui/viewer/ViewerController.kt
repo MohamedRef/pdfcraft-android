@@ -93,6 +93,18 @@ class ViewerController {
     /** Where File details' back arrow goes: the More sheet, or closed when the name in the top bar opened it (#525). */
     var fileDetailsBack = ViewerSheet.More
 
+    /** Where Bookmarks & contents' back arrow goes: the More sheet, or closed when the reading page's button opened it (#647). */
+    var bookmarksBack = ViewerSheet.More
+
+    /** The tab of the contents last used, in the sheet or the side panel; null until one is (#647). */
+    var contentsTab by mutableStateOf<ContentsTab?>(null)
+
+    /** The window shows the side panel beside the page (a tablet in landscape): Contents opens there, not in the sheet (#647). */
+    var contentsInPanel by mutableStateOf(false)
+
+    /** The side panel is open, not folded to its edge (#647). */
+    var panelOpen by mutableStateOf(true)
+
     /** The active tool's open picker (colour, thickness, text size), and Fill & Sign's Sign panel. */
     var picker by mutableStateOf(Picker.None)
     var signPanel by mutableStateOf(false)

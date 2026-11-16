@@ -48,6 +48,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -75,9 +76,13 @@ val TopBarHeight = 57.dp
 /** The bottom quick toolbar's height (the reference's: 70 dp). */
 val BottomBarHeight = 70.dp
 
+/** The Contents button of the top bar, for layout tests (#647). */
+const val TOP_BAR_CONTENTS_TAG = "top_bar_contents"
+
 /**
  * The top bar in plain viewing: back, the document's name with its save state under it (#525),
- * then Undo, Find, Share and More. Read aloud starts from More tools, the bottom bar or the
+ * then Undo, Contents (#647), Find, Share and More. On a window too narrow to hold them all
+ * beside the name, Share's place goes to Contents and Share is in More ([showShare]). Read aloud starts from More tools, the bottom bar or the
  * selection menu; while it reads, a divider and its switch (to stop it) follow Back. With a tool active the back arrow becomes a check mark (Done), the switch goes, and Undo
  * and Redo take fixed slots, disabled while there is nothing to undo or redo.
  */
@@ -107,6 +112,11 @@ fun ViewerTopBar(
     /** The document's name, always on the bar in plain viewing (#525); a tap opens File details. */
     docName: String? = null,
     onDocName: () -> Unit = {},
+    /** Bookmarks & contents, one tap from the reading page (#647); null leaves the button out. */
+    onContents: (() -> Unit)? = null,
+    contentsOpen: Boolean = false,
+    /** False where the bar has no room for Share beside Contents: Share is then a row of More. */
+    showShare: Boolean = true,
 ) {
     val c = pdfColors
     Row(
@@ -152,8 +162,12 @@ fun ViewerTopBar(
         } else {
             UndoMenuButton(canUndo, canRedo, onUndo, onRedo, undoLabel, redoLabel)
         }
+        // Contents is for reading: with a tool active the bar holds Undo and Redo instead
+        if (onContents != null && !toolActive) {
+            BarIcon(LucideIcons.List, stringResource(R.string.sheet_bookmarks_contents), onContents, modifier = Modifier.testTag(TOP_BAR_CONTENTS_TAG), selected = contentsOpen)
+        }
         if (onSearch != null) BarIcon(LucideIcons.Search, stringResource(R.string.viewer_find_in_document), onSearch)
-        BarIcon(LucideIcons.Share2, stringResource(R.string.common_share), onShare)
+        if (showShare || onContents == null) BarIcon(LucideIcons.Share2, stringResource(R.string.common_share), onShare)
         BarIcon(LucideIcons.EllipsisVertical, stringResource(R.string.common_more_options), onMore, selected = moreOpen)
         Spacer(Modifier.width(10.dp))
     }
