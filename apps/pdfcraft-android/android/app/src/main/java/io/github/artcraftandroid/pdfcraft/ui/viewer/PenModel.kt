@@ -153,6 +153,20 @@ internal const val PEN_MAX_TAPER_SLOPE = 1f
 internal const val PEN_STILL_CREEP_DP_PER_S = 40f
 
 /**
+ * A pen resting where it came down fills its dot in this long (#661): the pointed start is for a
+ * pen that moves off, and a pen that stays is making a dot, which is drawn at its width while the
+ * pen is still on it. Before, a dot was drawn a fifth as wide and given its width on lift, so
+ * every dot and full stop of a fountain pen or brush grew the moment the pen left it.
+ */
+internal const val PEN_DOT_FILL_MS = 60f
+
+/** Slower than this on the glass (dp per second) the pen counts as resting, the more the slower. */
+internal const val PEN_REST_SPEED_DP_PER_S = 200f
+
+/** The least a lifted dot's width may be of the width its pressure asked for, however short the touch. */
+internal const val PEN_DOT_MIN = 0.5f
+
+/**
  * Pressure made from speed (a finger) stays inside the middle of the pen's range, this far either
  * side of the middle: a finger that stops does not draw the pen's thickest line, and a fast one not
  * its thinnest.
@@ -328,6 +342,7 @@ internal class PenDynamics(
         val prev = last
         var dtMs = 0f
         var stepPt = 0f
+        var restedStepMs = 0f
         if (prev != null) {
             val dx = p.x - prev.x
             val dy = p.y - prev.y
@@ -347,6 +362,9 @@ internal class PenDynamics(
                 // the first step starts the measure where the pen is (no faster than the pen's
                 // reference speed, one step being a rough measure), not at a standstill: a stroke
                 // that began "still" began at its thickest and its slowest
+                // how long the pen has rested: all of a step at a standstill, none of one at writing speed
+                if (instant.isFinite()) restedStepMs = dtMs * (1f - instant / PEN_REST_SPEED_DP_PER_S).coerceIn(0f, 1f)
+                restedMs += restedStepMs
                 speed = if (!speedKnown) minOf(instant, d.speedRef) else speed + (instant - speed) * (1f - exp(-dtMs / SPEED_TAU_MS))
                 speedKnown = true
                 pendingDist = 0f
@@ -392,12 +410,15 @@ internal class PenDynamics(
         }
         untapered.add(scale)
         var out = scale
-        if (d.taperStart > 0f) out *= taperFactor(travelled / (d.taperStart * penWidth))
+        // the start is pointed for a pen that moves off; one that rests there fills its dot (#661)
+        if (d.taperStart > 0f) out *= taperFactor(maxOf(travelled / (d.taperStart * penWidth), restedMs / PEN_DOT_FILL_MS))
         // however the width came about, it leaves the last one only as far as the pen has moved
         if (lastOut.isFinite()) {
             val creepPt = PEN_STILL_CREEP_DP_PER_S * maxOf(dtMs, 0f) / 1000f / dpPerPt
             val slope = if (d.taperStart > 0f && travelled < d.taperStart * penWidth) PEN_MAX_TAPER_SLOPE else PEN_MAX_WIDTH_SLOPE
-            val room = slope * (stepPt + creepPt) / penWidthPt
+            // a resting pen's dot fills in [PEN_DOT_FILL_MS], which the creep alone would not let it
+            val fill = if (d.taperStart > 0f && travelled < d.taperStart * penWidth) restedStepMs / PEN_DOT_FILL_MS else 0f
+            val room = slope * (stepPt + creepPt) / penWidthPt + fill
             out = out.coerceIn(lastOut - room, lastOut + room)
         }
         lastOut = out
@@ -411,6 +432,9 @@ internal class PenDynamics(
         return out
     }
 
+    /** How long the pen has rested so far, in ms (see [PEN_REST_SPEED_DP_PER_S]). */
+    private var restedMs = 0f
+
     /** Each sample's width before the start taper, for [finish]. */
     private val untapered = ArrayList<Float>()
 
@@ -420,8 +444,8 @@ internal class PenDynamics(
     /**
      * The stroke is lifted: its end is drawn out to a point ([inkEndTaper]) over at most a third
      * of its length, and no more steeply than [PEN_MAX_TAPER_SLOPE] allows. A dot or a full stop
-     * (the pen moved less than one pen width) keeps its full, even width instead, so a dot is never
-     * a faint speck.
+     * (the pen moved less than one pen width) keeps the width it was drawn with instead, evened
+     * out, and is never a faint speck ([PEN_DOT_MIN]).
      *
      * Every stroke shorter than its start taper used to be given its untapered widths here. With
      * tapers counted in pen widths that was most of handwriting with a thick pen: the line swelled
@@ -431,8 +455,10 @@ internal class PenDynamics(
         if (points.size != scales.size || points.isEmpty()) return
         if (travelled < penWidthPt) {
             // every sample has an untapered width; the line keeps only some of them as points (#609)
+            // The dot keeps the width it was drawn with while the pen was on it (#661), evened out,
+            // and only a touch too short to have filled it is brought up to [PEN_DOT_MIN].
             if (d.taperStart > 0f && untapered.isNotEmpty()) {
-                val full = untapered.max()
+                val full = maxOf(scales.max(), untapered.max() * PEN_DOT_MIN)
                 for (i in scales.indices) scales[i] = full
             }
             return
@@ -449,7 +475,7 @@ internal class PenDynamics(
      * lift. Only the last stretch is walked: the end taper's length, not the stroke.
      *
      * Null when there is nothing to change: a pen without a pointed end, or a stroke still a dot.
-     * A dot gets its even, full width on lift ([finish]); showing that while the pen is down would
+     * A dot is evened out on lift at the width it was drawn with ([finish]); evening it while the pen is down would
      * swell the start of every stroke and take it back a pen width later.
      */
     fun endPreview(points: List<Offset>, scales: List<Float>, pending: Triple<Offset, Float, Float>? = null, tip: Offset? = null): InkEndPreview? {

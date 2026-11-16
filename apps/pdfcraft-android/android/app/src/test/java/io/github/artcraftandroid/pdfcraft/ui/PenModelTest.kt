@@ -4,6 +4,7 @@ import androidx.compose.ui.geometry.Offset
 import io.github.artcraftandroid.pdfcraft.ui.viewer.FloatSampleList
 import io.github.artcraftandroid.pdfcraft.ui.viewer.InkSmoother
 import io.github.artcraftandroid.pdfcraft.ui.viewer.InkStyle
+import io.github.artcraftandroid.pdfcraft.ui.viewer.PEN_DOT_MIN
 import io.github.artcraftandroid.pdfcraft.ui.viewer.PEN_TAPER_FLOOR
 import io.github.artcraftandroid.pdfcraft.ui.viewer.PenDials
 import io.github.artcraftandroid.pdfcraft.ui.viewer.PencilGrain
@@ -155,11 +156,41 @@ class PenModelTest {
         assertTrue(untapered.first() < untapered[20] * 0.3f)
     }
 
-    @Test fun aDotKeepsItsFullWidth() {
+    /** A pen resting on one spot for [ms] at 500 samples a second, pressing 0.7. */
+    private fun rest(ms: Int) = List(ms / 2 + 1) { S(Offset(5f + 0.002f * it, 5f), it * 2L, 0.7f) }
+
+    private val brushAtSevenTenths = PenDials.default(InkStyle.Brush).let { it.minScale + (it.maxScale - it.minScale) * Math.pow(0.7, it.curve.toDouble()).toFloat() } * penWidth
+
+    @Test fun aDotIsDrawnAtItsWidthWhileThePenIsOnIt() {
+        // #661: it was drawn a fifth as wide and given its width on lift, so every dot grew as the pen left it
+        for (ms in listOf(30, 60, 120)) {
+            val down = widths(InkStyle.Brush, rest(ms))
+            val lifted = widths(InkStyle.Brush, rest(ms), finish = true)
+            assertTrue("a ${ms} ms dot is ${down.max()} of $brushAtSevenTenths while the pen is down", down.max() > brushAtSevenTenths * (if (ms >= 60) 0.95f else 0.7f))
+            assertEquals("the lift changes a ${ms} ms dot", down.max(), lifted.max(), 1e-3f)
+            assertEquals("a lifted dot has one width", lifted.max(), lifted.min(), 1e-4f)
+        }
+    }
+
+    @Test fun aDotIsNeverAFaintSpeck() {
+        // a touch too short to have filled its dot: half the width its pressure asked for, not a fifth
         val dot = listOf(S(Offset(5f, 5f), 0L, 0.7f), S(Offset(5.2f, 5f), 8L, 0.7f))
         val w = widths(InkStyle.Brush, dot, finish = true)
-        val plain = PenDials.default(InkStyle.Brush).let { it.minScale + (it.maxScale - it.minScale) * Math.pow(0.7, it.curve.toDouble()).toFloat() }
-        assertTrue("dot ${w.first()} vs ${plain * penWidth}", w.first() > plain * penWidth * 0.8f)
+        assertTrue("dot ${w.first()} vs $brushAtSevenTenths", w.first() >= brushAtSevenTenths * PEN_DOT_MIN - 1e-3f)
+        assertEquals(w.first(), w.last(), 1e-4f)
+    }
+
+    @Test fun aPenThatMovesOffAtOnceStillStartsPointed() {
+        // the rest that fills a dot is not counted against a stroke written at the owner's pace (150…350 dp/s)
+        for (dpPerSecond in listOf(150f, 250f, 350f)) {
+            val line = List(120) { S(Offset(dpPerSecond * it * 0.002f, 0f), it * 2L, 0.7f) }
+            val w = widths(InkStyle.Fountain, line)
+            val body = w[w.size - 1]
+            assertTrue("at $dpPerSecond dp/s the start is ${w.first()} of $body", w.first() < body * 0.3f)
+            // and it is still narrow a third of the way along its start taper
+            val taperEnd = line.indexOfFirst { it.p.x >= PenDials.default(InkStyle.Fountain).taperStart * penWidth }
+            assertTrue(w[taperEnd / 3] < w[taperEnd] * 0.85f)
+        }
     }
 
     @Test fun theMarkerKeepsOneWidth() {
