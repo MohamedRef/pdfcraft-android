@@ -1271,8 +1271,6 @@
     <string name="pen_lab_pen">Stylo</string>
     <string name="pen_lab_try">Écrivez ici pour essayer le stylo</string>
     <string name="pen_lab_clear_strip">Effacer la bande</string>
-    <string name="pen_lab_jetpack">Essayer les stylos Jetpack Ink</string>
-    <string name="pen_lab_jetpack_summary">Jetpack Ink (open source, d\'Android) dessine le stylo bille, le stylo plume et le pinceau au lieu de PdfCraft. Même encre ; désactivez pour comparer.</string>
     <string name="pen_lab_group_pressure">Pression</string>
     <string name="pen_lab_min">Le plus fin (toucher léger)</string>
     <string name="pen_lab_max">Le plus épais (pression forte)</string>

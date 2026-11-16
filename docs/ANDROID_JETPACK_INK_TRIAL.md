@@ -29,3 +29,7 @@ With the switch on, the first stroke closed the app (three times in the owner's 
 ## Switched off once after 0.0.36-beta (#604)
 
 The app still closed on the first Jetpack Ink stroke in the owner's 0.0.36-beta log (three times; #593 was merged after that build), so the trial has never drawn a stroke on his phone, and its switch was left on. The build after #602 turns the switch off once (with the Pen lab dials saved for the older pen model), so that PdfCraft's own pens, which #601 changes, are what he tests next. The switch is still in the Pen lab.
+
+## Removed (owner's choice, after 0.0.37-beta)
+
+The owner tried it and found Jetpack Ink's fountain pen, ballpoint and brush much worse than PdfCraft's own pens (a large blob in the middle of the line), and chose to remove it. The Pen lab switch, `InkJetpack.kt`, `InkTube.kt` (with `InkTubeTest`), the `androidx.ink` libraries (about 1.3 MB of native code per ABI) and the two `pen_lab_jetpack` strings are gone. Ink saved while the trial drew is ordinary PdfCraft ink (`/PCWidths`) and opens as before. The old `pen_lab/jetpack` pref is still cleared once by `PenTuning`'s pen-model reset.

@@ -1624,8 +1624,6 @@
     <string name="pen_lab_pen">Pen</string>
     <string name="pen_lab_try">Write here to try the pen</string>
     <string name="pen_lab_clear_strip">Clear the strip</string>
-    <string name="pen_lab_jetpack">Try Jetpack Ink pens</string>
-    <string name="pen_lab_jetpack_summary">Jetpack Ink (open source, from Android) draws the ballpoint, fountain pen and brush instead of PdfCraft. Saved ink is the same; turn it off to compare.</string>
     <string name="pen_lab_group_pressure">Pressure</string>
     <string name="pen_lab_min">Thinnest (light touch)</string>
     <string name="pen_lab_max">Thickest (hard press)</string>

@@ -53,9 +53,7 @@ internal class PenTuning(private val prefs: SharedPreferences) {
         if (prefs.getInt(MODEL_KEY, 1) < MODEL) {
             val e = prefs.edit()
             InkStyle.entries.forEach { style -> KEYS.forEach { e.remove(key(style, it)) } }
-            // and the Jetpack Ink trial is switched off again: it closed the app on its first
-            // stroke up to 0.0.36-beta, so the switch was left on without ever having drawn, and
-            // left on it would draw instead of the pens this model fixes
+            // and the old Jetpack Ink trial's switch (the trial itself is removed) is cleared
             e.remove("jetpack")
             e.putInt(MODEL_KEY, MODEL).apply()
         }
@@ -85,15 +83,6 @@ internal class PenTuning(private val prefs: SharedPreferences) {
     }
 
     fun dials(style: InkStyle): PenDials = dials.getValue(style).value
-
-    /** The Pen lab trial (#569): Jetpack Ink draws the ballpoint, fountain pen and brush. Off by default. */
-    var jetpackInk by mutableStateOf(prefs.getBoolean("jetpack", false))
-        private set
-
-    fun updateJetpackInk(on: Boolean) {
-        jetpackInk = on
-        prefs.edit().putBoolean("jetpack", on).apply()
-    }
 
     /** Whether [style]'s dials differ from its defaults. */
     fun tuned(style: InkStyle): Boolean = dials(style) != PenDials.default(style)
