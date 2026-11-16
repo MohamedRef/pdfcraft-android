@@ -80,6 +80,26 @@ struct OcrReview {
     pages: Vec<pdfcraft_engine::ocr::OcrPage>,
 }
 
+/// How far a long tool is (#634), as its watch is told ([`Automation::set_job_watch`]).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct JobStep {
+    /// What is being done, in the tool's own words: `doc_optimize` says `discarding`, `reading`,
+    /// `fragments`, `images`, `cleaning_up`, `merging`, `writing`.
+    pub stage: &'static str,
+    /// `done` of `total` in this stage (pages read, images compressed); 0 of 0 for a stage that is
+    /// one step.
+    pub done: usize,
+    pub total: usize,
+    /// How far the run is, 0 to 1.
+    pub fraction: f32,
+    /// Which run this is, from 1: `doc_optimize` with a target size may optimize several times.
+    pub attempt: usize,
+}
+
+/// Watches a long tool (#634): called as each step starts. Returning `false` stops the tool, which
+/// then fails with "cancelled", having written nothing and changed no document.
+pub type JobWatch = Arc<dyn Fn(JobStep) -> bool + Send + Sync>;
+
 /// A headless PdfCraft session driven by tool calls.
 pub struct Automation {
     session: Session,
@@ -103,6 +123,8 @@ pub struct Automation {
     next_ocr_review: u64,
     /// What object_copy copied, for object_paste into any open document.
     objects_clipboard: Option<pdfcraft_engine::ObjectClipboard>,
+    /// Told how far a long tool is, and able to stop it (#634). None: tools run to their end.
+    job_watch: Option<JobWatch>,
 }
 
 impl Default for Automation {
@@ -125,7 +147,15 @@ impl Automation {
             ocr_reviews: HashMap::new(),
             next_ocr_review: 0,
             objects_clipboard: None,
+            job_watch: None,
         }
+    }
+
+    /// Watch the long tools called from now on (#634), or with `None` let them run to their end.
+    /// The caller sets it before the call it wants watched and clears it after: it is not part of
+    /// a tool's arguments, so a script or an MCP client cannot leave one behind.
+    pub fn set_job_watch(&mut self, watch: Option<JobWatch>) {
+        self.job_watch = watch;
     }
 
     /// Confine every path the tools read or write to `root` (relative paths resolve inside it).

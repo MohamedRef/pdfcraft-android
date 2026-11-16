@@ -6,4 +6,8 @@
     <string name="busy_cancel_combine">Annuler s’arrête avant le fichier suivant. Rien n’est créé et vos fichiers restent intacts.</string>
     <string name="busy_cancel_export_images">Annuler s’arrête après cette page. Aucune image n’est enregistrée.</string>
     <string name="busy_cancel_save_files">Annuler s’arrête après ce fichier. Les fichiers déjà enregistrés restent dans le dossier.</string>
+    <string name="msg_busy_compressing_reading">Compression : lecture de la page %1$d sur %2$d…</string>
+    <string name="msg_busy_compressing_images">Compression : image %1$d sur %2$d…</string>
+    <string name="msg_busy_compressing_again">Nouvelle compression pour atteindre la taille : essai %1$d…</string>
+    <string name="busy_cancel_compress">Annuler s’arrête ici. Aucun fichier n’est créé et votre document reste intact.</string>
 </resources>

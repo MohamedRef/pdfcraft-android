@@ -1943,9 +1943,9 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
      * Offer Cancel in the busy dialog (#614) for a job that can stop between pages or files;
      * [note] says what Cancel keeps. The loop reads [JobStop.asked] before each step.
      */
-    internal fun offerCancel(note: String): JobStop {
+    internal fun offerCancel(note: String, onAsked: () -> Unit = {}): JobStop {
         val stop = JobStop()
-        tools.busyCancel = { stop.asked = true }
+        tools.busyCancel = { stop.asked = true; onAsked() }
         tools.busyCancelNote = note
         return stop
     }
@@ -2022,8 +2022,40 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
     /** Compress PDF at [level] (0 high, 1 medium, 2 low compression), or with Advanced [options]. */
     fun compress(doc: OpenDocument, level: Int, options: CompressOptions = compressOptions) = docJob(doc, text(R.string.msg_busy_compressing)) { eng ->
         val out = tempFile("pdf")
-        val r = Diag.measure(DiagArea.Pages, "compress_run", "doc" to doc.diagNumber, "level" to level, "advanced" to options.enabled) {
-            eng.tool("doc_optimize", compressArgs(level, options) + mapOf("doc" to doc.id, "path" to out.absolutePath))
+        // How far it is, and Cancel (#634). The engine works on a copy and writes the file last, so
+        // stopping leaves the open document and its file as they were and makes no file.
+        val work = io.github.artcraftandroid.pdfcraft.core.ToolJob()
+        val stop = offerCancel(text(R.string.busy_cancel_compress)) { work.cancel() }
+        val compressing = text(R.string.msg_busy_compressing)
+        val watching = viewModelScope.launch {
+            while (true) {
+                val p = work.progress()
+                if (p.steps > 0uL) {
+                    tools.busy = when (val step = compressStep(p.stage, p.done.toInt(), p.total.toInt(), p.attempt.toInt())) {
+                        is CompressStep.Reading -> text(R.string.msg_busy_compressing_reading, step.page, step.pages)
+                        is CompressStep.Images -> text(R.string.msg_busy_compressing_images, step.image, step.images)
+                        is CompressStep.Again -> text(R.string.msg_busy_compressing_again, step.attempt)
+                        CompressStep.Working -> compressing
+                    }
+                    tools.busyProgress = p.percent.toInt() to 100
+                }
+                kotlinx.coroutines.delay(COMPRESS_WATCH_MS)
+            }
+        }
+        val r = try {
+            Diag.measure(DiagArea.Pages, "compress_run", "doc" to doc.diagNumber, "level" to level, "advanced" to options.enabled) {
+                eng.tool("doc_optimize", compressArgs(level, options) + mapOf("doc" to doc.id, "path" to out.absolutePath), work)
+            }
+        } catch (e: MobileException) {
+            out.delete()
+            if (!stop.asked) throw e
+            val p = work.progress()
+            Diag.event(DiagArea.Pages, "job_cancelled", "job" to "compress", "doc" to doc.diagNumber, "stage" to p.stage, "percent" to p.percent.toInt(), "attempt" to p.attempt.toInt())
+            return@docJob
+        } finally {
+            watching.cancel()
+            withdrawCancel()
+            tools.busyProgress = null
         }
         tools.toolScreen = null
         val before = doc.info.fileSize.toLong()

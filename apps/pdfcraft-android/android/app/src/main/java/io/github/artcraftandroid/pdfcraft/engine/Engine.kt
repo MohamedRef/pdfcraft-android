@@ -6,6 +6,7 @@ import io.github.artcraftandroid.pdfcraft.core.InternalException
 import io.github.artcraftandroid.pdfcraft.core.MobileException
 import io.github.artcraftandroid.pdfcraft.core.MobileSession
 import io.github.artcraftandroid.pdfcraft.core.RenderedImage
+import io.github.artcraftandroid.pdfcraft.core.ToolJob
 import io.github.artcraftandroid.pdfcraft.core.initLogging
 import io.github.artcraftandroid.pdfcraft.appLanguage
 import io.github.artcraftandroid.pdfcraft.text
@@ -71,14 +72,16 @@ class Engine private constructor(val session: MobileSession) {
     /**
      * Run the engine tool [name] (the tools of `pdfcraft-cli run` and MCP; pages are 1-based)
      * with [args], after the commands issued before it. Throws [MobileException] with a message
-     * for the user when the tool refuses or fails.
+     * for the user when the tool refuses or fails. A [job], for the tools that report their steps
+     * (`doc_optimize`), can be read for how far the tool is and can stop it (#634): the tool then
+     * fails, having written nothing.
      */
-    suspend fun tool(name: String, args: Map<String, Any?> = emptyMap()): JSONObject = command {
+    suspend fun tool(name: String, args: Map<String, Any?> = emptyMap(), job: ToolJob? = null): JSONObject = command {
         val started = System.nanoTime()
         var ok = false
         var error: Throwable? = null
         try {
-            val out = execute(name, toJson(args).toString())
+            val out = if (job == null) execute(name, toJson(args).toString()) else executeWatched(name, toJson(args).toString(), job)
             (if (out.trimStart().startsWith("{")) JSONObject(out) else JSONObject().put("result", out)).also { ok = true }
         } catch (e: Throwable) {
             error = e
