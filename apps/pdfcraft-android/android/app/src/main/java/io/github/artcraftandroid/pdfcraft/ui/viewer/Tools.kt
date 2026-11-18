@@ -149,13 +149,19 @@ internal class InkStroke(
      */
     val penTip: Offset? get() = smoother?.tip
 
+    /**
+     * The pen's lean (radians) for the sample at [timeMs]: that sample's own, from the raw pen log;
+     * the newest one when the log has no sample at that time; NaN for a finger.
+     */
+    private fun tiltAt(timeMs: Long): Float = if (stylus) StylusLog.pen.tiltAt(timeMs) ?: StylusLog.tiltRad else Float.NaN
+
     /** Adds a sample: [p] in page points at [timeMs] with the pen's [pressure]. */
     fun add(p: Offset, timeMs: Long, pressure: Float) {
         val q = smoother?.next(p, timeMs) ?: p
         lastTimeMs = timeMs
         lastPressure = pressure
         // the pen model sees every sample; the line keeps a point every so often
-        val scale = dynamics?.next(q, timeMs, pressure, if (stylus) StylusLog.tiltRad else Float.NaN) ?: 1f
+        val scale = dynamics?.next(q, timeMs, pressure, tiltAt(timeMs)) ?: 1f
         val density = dynamics?.density ?: 1f
         dynamics?.stats?.let { it.given++ }
         thinner.add(q, scale, density, ::addPoint)
@@ -190,7 +196,7 @@ internal class InkStroke(
         // the last sample, when thinning had not made it a point yet
         thinner.flush()?.let { (q, scale, density) -> addPoint(q, scale, density) }
         val end = smoother?.end() ?: return
-        val scale = dynamics?.next(end, lastTimeMs, lastPressure, if (stylus) StylusLog.tiltRad else Float.NaN) ?: 1f
+        val scale = dynamics?.next(end, lastTimeMs, lastPressure, tiltAt(lastTimeMs)) ?: 1f
         addPoint(end, scale, dynamics?.density ?: 1f)
     }
 

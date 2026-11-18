@@ -62,4 +62,20 @@ class PenSampleLogTest {
         assertNull(log.pressureAt(2))
         assertTrue(log.pressureAt(9) != null)
     }
+
+    @Test fun eachSampleKeepsItsOwnTilt() {
+        val log = log(PenSample(100, 0f, 0f, 0.5f, 0.2f), PenSample(104, 4f, 0f, 0.5f, 0.6f), PenSample(108, 8f, 0f, 0.5f, 0.9f))
+        // the newest sample leans 0.9; the older ones keep 0.2 and 0.6
+        assertEquals(0.2f, log.tiltAt(100)!!, 0f)
+        assertEquals(0.6f, log.tiltAt(104)!!, 0f)
+        assertEquals(0.9f, log.tiltAt(108)!!, 0f)
+    }
+
+    @Test fun tiltLookupNeedsAMatchingTimeAndAReportedTilt() {
+        val log = log(PenSample(100, 0f, 0f, 0.5f, 0.4f), PenSample(110, 0f, 0f, 0.5f))
+        assertEquals(0.4f, log.tiltAt(101)!!, 0f)
+        assertNull(log.tiltAt(105))
+        // a pen that reports no tilt axis gives NaN: no tilt, not a lean of NaN
+        assertNull(log.tiltAt(110))
+    }
 }
