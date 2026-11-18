@@ -58,20 +58,20 @@ internal fun lassoTurnSpot(box: InkLassoBounds, turnOffset: Float, room: LassoTu
             LassoTurnSide.Below -> LassoTurnSpot(side, Offset(cx, box.bottom + turnOffset), Offset(cx, box.bottom))
         }
     }
-    if (room == null) return spots[0]
+    val r = room ?: return spots[0]
     val corner = Offset(box.right, box.bottom)
     // [margin] inside what is shown and off the buttons, and at least [apart] from the resize handle
     fun fits(s: LassoTurnSpot, margin: Float, apart: Float): Boolean {
         val p = s.knob
-        val v = room.visible
+        val v = r.visible
         if (!(p.x >= v.left + margin && p.x <= v.right - margin && p.y >= v.top + margin && p.y <= v.bottom - margin)) return false
-        if (room.menu?.inflate(margin)?.contains(p) == true) return false
+        if (r.menu?.inflate(margin)?.contains(p) == true) return false
         return (p - corner).getDistance() >= apart
     }
-    val reach = maxOf(room.knob, room.slop)
+    val reach = maxOf(r.knob, r.slop)
     // above stays above wherever it is shown, as before (#689); beside or below, the two handles' touches stay apart
-    return spots.firstOrNull { fits(it, reach, if (it.side == LassoTurnSide.Above) 0f else 2f * room.slop) }
-        ?: spots.firstOrNull { fits(it, room.knob, room.knob + room.slop) }
+    return spots.firstOrNull { fits(it, reach, if (it.side == LassoTurnSide.Above) 0f else 2f * r.slop) }
+        ?: spots.firstOrNull { fits(it, r.knob, r.knob + r.slop) }
         ?: spots[0]
 }
 
