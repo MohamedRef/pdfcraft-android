@@ -196,7 +196,7 @@ fun PdfSheet(
             Box(
                 Modifier
                     .fillMaxSize()
-                    .background(if (dim) pdfColors.scrim else Color.Transparent)
+                    .background(sheetScrim(dim, androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp.dp, pdfColors.scrim))
                     .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onDismiss)
                     .semantics { contentDescription = closeLabel },
             )
@@ -538,6 +538,19 @@ val WideScreenMinWidth = 600.dp
 
 /** The widest a sheet grows (#613): centred over the screen on a tablet. */
 val SheetMaxWidth = 560.dp
+
+/**
+ * What is drawn behind a sheet (#719): the full scrim when [dim], else nothing on a phone, where the
+ * sheet spans the screen and the page stays undimmed behind it. Where the screen is wider than the
+ * sheet (a tablet, #613) the bars beside it stay in view but a tap there only closes the sheet, so
+ * they are dimmed lightly (half the scrim) instead of looking ready to use: the owner's tablet showed
+ * Read aloud's "1.0x" twice and the scan's Save PDF beside its own sheet's.
+ */
+internal fun sheetScrim(dim: Boolean, screenWidth: androidx.compose.ui.unit.Dp, scrim: Color): Color = when {
+    dim -> scrim
+    screenWidth > SheetMaxWidth + 32.dp -> scrim.copy(alpha = scrim.alpha * 0.5f)
+    else -> Color.Transparent
+}
 
 /** The widest a form, a settings page or a tool screen's content grows (#613): a readable column. */
 val ReadableMaxWidth = 720.dp
