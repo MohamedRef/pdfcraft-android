@@ -47,7 +47,7 @@ pub(crate) use modify::n;
 pub use modify::erase_ink_strokes;
 pub use modify::{
     MAX_LAYER_NAME_CHARS, add_reply, add_text_replacement, annots_to_layer, deletable, delete_annotation, erase_ink, fillable, goes_with, lift_annotation,
-    move_annotation, release_members, set_border_color, set_border_shape, set_contents, set_fill, set_font_size, set_locked, set_marked,
+    move_annotation, release_members, transform_annotation, set_border_color, set_border_shape, set_contents, set_fill, set_font_size, set_locked, set_marked,
     set_part_opacity, set_points, set_popup, set_rect, set_review_state, set_style, with_replies_and_popups,
 };
 pub use threed::{Activation as Activation3d, MAX_MODEL_BYTES, ModelFormat, NewModel3d, PosterPicture, add_3d_model, check_model};

@@ -2061,6 +2061,54 @@ fn a_dashed_shape_is_drawn_dashed_and_stays_dashed() {
     assert_eq!(list(&reopened, 0)[first.unwrap()].get(b"BS").and_then(|b| b.as_dict()).unwrap().name(b"S"), Some(&b"D"[..]));
 }
 
+/// Android adaptation (#689): the lasso's handles turn and scale a drawing about an anchor, its
+/// width with it, and refuse to turn a rectangle (which they scale).
+#[test]
+fn a_drawing_turns_and_scales_about_an_anchor_with_its_width() {
+    let mut doc = fixture();
+    let i = add_annotation(&mut doc, &new(0, Shape::Ink { strokes: vec![vec![[100.0, 400.0], [200.0, 400.0]]] }), &meta("i")).unwrap();
+    // a quarter turn counter-clockwise about the line's start, twice as big
+    transform_annotation(&mut doc, 0, i, [100.0, 400.0], 2.0, 90.0, &meta("t")).unwrap();
+    let pts = &ink_list(&doc, i)[0];
+    let close = |a: f64, b: f64| (a - b).abs() < 1e-6;
+    assert!(close(pts[0], 100.0) && close(pts[1], 400.0) && close(pts[2], 100.0) && close(pts[3], 600.0), "{pts:?}");
+    let d = &list(&doc, 0)[i];
+    let w = d.get(b"BS").and_then(|b| b.as_dict()).and_then(|b| b.get(b"W")).and_then(|w| w.as_f64()).unwrap();
+    assert!(close(w, 4.0), "the 2 pt line is 4 pt now: {w}");
+    let rect: Vec<f64> = d.get(b"Rect").unwrap().as_array().unwrap().iter().filter_map(|x| x.as_f64()).collect();
+    assert!(rect[0] <= 98.0 && rect[2] >= 102.0 && rect[1] <= 400.0 && rect[3] >= 600.0, "{rect:?}");
+    assert!(!ap_content(&doc, d).is_empty());
+    // and back: half the size, a quarter turn the other way
+    transform_annotation(&mut doc, 0, i, [100.0, 400.0], 0.5, -90.0, &meta("t")).unwrap();
+    let pts = &ink_list(&doc, i)[0];
+    assert!(close(pts[2], 200.0) && close(pts[3], 400.0), "{pts:?}");
+    let reopened = reopen(&doc);
+    assert_eq!(ink_list(&reopened, i)[0].len(), 4);
+
+    // a pressure drawing keeps its widths per point, its pen width scaled
+    let shape = Shape::PressureInk { strokes: vec![vec![[100.0, 100.0], [140.0, 100.0], [180.0, 100.0]]], widths: vec![vec![1.0, 2.0, 1.0]], densities: Vec::new() };
+    let j = add_annotation(&mut doc, &new(0, shape), &meta("p")).unwrap();
+    let before = pcwidths(&doc, j);
+    transform_annotation(&mut doc, 0, j, [140.0, 100.0], 0.5, 0.0, &meta("t")).unwrap();
+    assert_eq!(pcwidths(&doc, j), before);
+
+    // a rectangle is scaled, not turned
+    let k = add_annotation(&mut doc, &new(0, Shape::Rectangle { rect: [300.0, 300.0, 400.0, 350.0] }), &meta("r")).unwrap();
+    assert!(matches!(transform_annotation(&mut doc, 0, k, [300.0, 300.0], 1.0, 30.0, &meta("t")), Err(AnnotError::Unsupported(_))));
+    transform_annotation(&mut doc, 0, k, [300.0, 300.0], 2.0, 0.0, &meta("t")).unwrap();
+    let rect: Vec<f64> = list(&doc, 0)[k].get(b"Rect").unwrap().as_array().unwrap().iter().filter_map(|x| x.as_f64()).collect();
+    assert!(close(rect[2] - rect[0], 200.0) && close(rect[3] - rect[1], 100.0), "{rect:?}");
+    // a line turns about its middle, its ends moved
+    let l = add_annotation(&mut doc, &new(0, Shape::Line { from: [100.0, 700.0], to: [200.0, 700.0], start: LineEnding::None, end: LineEnding::OpenArrow }), &meta("l")).unwrap();
+    transform_annotation(&mut doc, 0, l, [150.0, 700.0], 1.0, 90.0, &meta("t")).unwrap();
+    let ends: Vec<f64> = list(&doc, 0)[l].get(b"L").unwrap().as_array().unwrap().iter().filter_map(|x| x.as_f64()).collect();
+    assert!(close(ends[0], 150.0) && close(ends[1], 650.0) && close(ends[2], 150.0) && close(ends[3], 750.0), "{ends:?}");
+    // nonsense is refused
+    for (s, a) in [(0.0, 0.0), (f64::NAN, 0.0), (1.0, f64::INFINITY), (100.0, 0.0)] {
+        assert!(transform_annotation(&mut doc, 0, i, [0.0, 0.0], s, a, &meta("t")).is_err(), "{s} {a}");
+    }
+}
+
 #[test]
 fn the_whole_stroke_eraser_removes_each_stroke_it_touches_and_keeps_the_rest() {
     // Android #521: "Erase whole strokes".

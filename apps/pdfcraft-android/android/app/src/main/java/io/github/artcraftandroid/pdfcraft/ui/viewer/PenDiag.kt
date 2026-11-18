@@ -60,6 +60,10 @@ internal object PenDiag {
     /** The ink stroke's numbers, once. */
     fun takeInkStroke(): PenStrokeStats? = inkStats.also { inkStats = null }
 
+    /** A lasso selection was resized or turned by its handle (#689): numbers only. */
+    fun lassoTransform(handle: String, scale: Float, angle: Float, drafts: Int, saved: Int, notTurned: Int) =
+        Diag.event(DiagArea.Ink, "lasso_transform", "handle" to handle, "scale" to scale, "angle" to Math.round(angle), "drafts" to drafts, "saved" to saved, "not_turned" to notTurned)
+
     /**
      * The drafts of a Draw session were saved (#609): how many strokes with how many points went
      * to the engine as how many comments, how many groups of them it took, and how long that was.

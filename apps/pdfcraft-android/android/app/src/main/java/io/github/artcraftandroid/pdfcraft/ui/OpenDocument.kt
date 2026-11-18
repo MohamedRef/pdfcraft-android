@@ -135,6 +135,9 @@ class OpenDocument(
     /** The Draw tool's ink the document does not have yet (see [InkDrafts]). */
     internal val ink = io.github.artcraftandroid.pdfcraft.ui.viewer.InkDrafts()
 
+    /** The journal of [ink]'s strokes the file does not have yet (#680); null when it is off or the document has no source. */
+    internal var inkJournal: io.github.artcraftandroid.pdfcraft.ui.viewer.DocInkJournal? = null
+
     /**
      * Undo and redo inside the active tool (strokes drawn but not yet added): while it is set the
      * top bar's undo and redo act on it and never reach the document, as the reference's do.
