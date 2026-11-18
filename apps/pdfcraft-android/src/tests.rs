@@ -679,6 +679,40 @@ fn backdrop_inspection_is_scoped_and_does_not_edit_the_document() {
     std::fs::remove_dir_all(dir).unwrap();
 }
 
+/// #652: Contents from headings through the watched call says each page it reads for the
+/// headings, then adding them. A stop while reading makes no bookmarks and leaves no undo step:
+/// the document is as it was.
+#[test]
+fn watched_style_bookmarks_count_the_pages_and_a_stop_changes_nothing() {
+    let s = MobileSession::new();
+    let doc = s.open(text_pdf("Heading\nBody text"), None).unwrap().id;
+    let before = s.document(doc).unwrap();
+    let styles: Value = serde_json::from_str(&s.execute("text_styles".into(), json!({"doc": doc}).to_string()).unwrap()).unwrap();
+    let style = styles["styles"].as_array().unwrap().first().unwrap();
+    let level = json!({"font": style["font"], "size": style["size"], "bold": style["bold"], "italic": style["italic"]});
+    let args = json!({"doc": doc, "levels": [level]});
+    let steps = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    let told = steps.clone();
+    let stop: pdfcraft_automation::JobWatch = std::sync::Arc::new(move |step| {
+        told.lock().unwrap().push((step.stage, step.done, step.total));
+        false
+    });
+    let e = s.call_watched("bookmark_from_text_styles", &args, Some(stop)).unwrap_err();
+    assert!(matches!(&e, MobileError::Command(m) if m.contains("cancelled")), "{e}");
+    assert_eq!(*steps.lock().unwrap(), [("reading", 0, 1)]);
+    let after = s.document(doc).unwrap();
+    assert_eq!(after.generation, before.generation);
+    assert!(after.undo.is_none() && !after.dirty);
+    assert!(s.outline(doc).unwrap().is_empty());
+
+    let job = ToolJob::new();
+    s.execute_watched("bookmark_from_text_styles".into(), args.to_string(), job.clone()).unwrap();
+    let p = job.progress();
+    assert_eq!((p.stage.as_str(), p.steps), ("adding", 2), "{p:?}");
+    assert_eq!(s.outline(doc).unwrap()[0].title, "Untitled");
+    assert!(s.document(doc).unwrap().undo.is_some());
+}
+
 #[test]
 fn style_bookmarks_append_undo_and_survive_save_through_mobile_tools() {
     let s = MobileSession::new();

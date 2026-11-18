@@ -2490,6 +2490,55 @@ fn headings_in_two_columns_are_two_bookmarks() {
     assert_eq!(outline_titles(&s.get(id).unwrap().info.outline), ["Untitled→0[Left heading→1,Right heading→1]"]);
 }
 
+/// Android adaptation (#652): the headings read page by page before the edit are those the edit
+/// reads itself. Each page is told before it is read; a stop gives Cancelled and reads no
+/// further; levels the edit refuses are refused before anything is read. Put in with `found`,
+/// they make the same bookmarks in one undo step.
+#[test]
+fn text_style_headings_are_read_page_by_page_and_can_stop() {
+    let mut s = Session::new();
+    let id = s.open("styled.pdf", None, Arc::new(styled_headings_fixture()), None).unwrap();
+    let styles = s.get(id).unwrap().text_styles();
+    let levels = vec![styles[0].style.clone(), styles[1].style.clone()];
+    let mut told = Vec::new();
+    let found = s
+        .get(id)
+        .unwrap()
+        .text_style_headings(&levels, |done, pages| {
+            told.push((done, pages));
+            true
+        })
+        .unwrap();
+    assert_eq!(told, [(0, 3), (1, 3), (2, 3)]);
+    let cos = pdfcraft_cos::Document::open(Arc::new(styled_headings_fixture())).unwrap();
+    assert_eq!(found, text_style_bookmarks::headings(&cos, &levels));
+    assert_eq!(found.len(), 7);
+
+    let mut asked = 0;
+    let err = s
+        .get(id)
+        .unwrap()
+        .text_style_headings(&levels, |done, _| {
+            asked += 1;
+            done < 1
+        })
+        .unwrap_err();
+    assert_eq!(err, EditError::Cancelled);
+    assert_eq!(asked, 2, "no page is read after the stop");
+    let err = s.get(id).unwrap().text_style_headings(&[], |_, _| panic!("nothing is read")).unwrap_err();
+    assert!(err.to_string().contains("at least one bookmark level"), "{err}");
+    assert!(s.get(id).unwrap().info.outline.is_empty());
+    assert_eq!(s.get(id).unwrap().can_undo(), None);
+
+    s.apply(id, Edit::BookmarksFromTextStyles { levels: levels.clone(), found: Some(found) }).unwrap();
+    let given = outline_titles(&s.get(id).unwrap().info.outline);
+    assert_eq!(s.get(id).unwrap().can_undo(), Some("New bookmarks from text styles"));
+    s.undo(id).unwrap();
+    assert_eq!(s.get(id).unwrap().can_undo(), None);
+    s.apply(id, Edit::BookmarksFromTextStyles { levels, found: None }).unwrap();
+    assert_eq!(outline_titles(&s.get(id).unwrap().info.outline), given);
+}
+
 /// `style` at another size.
 fn pdfcraft_engine_style(style: &text_style_bookmarks::TextStyle, size: f64) -> text_style_bookmarks::TextStyle {
     text_style_bookmarks::TextStyle { size, ..style.clone() }
