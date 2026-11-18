@@ -279,7 +279,7 @@ class PageImages(
      * measures them (#655); null when they cannot be read. Read beside the view's text, not
      * behind queued tools, so they are in while the eraser is still down.
      */
-    suspend fun erasableStrokes(page: Int): List<ErasableInkStroke>? = try {
+    internal suspend fun erasableStrokes(page: Int): List<ErasableInkStroke>? = try {
         withContext(engine.interactive + job) {
             engine.session.erasableStrokes(doc, page.toUInt()).mapNotNull { erasableInkStroke(it.index.toInt(), it.stroke.toInt(), it.points, it.halfWidths) }
         }
