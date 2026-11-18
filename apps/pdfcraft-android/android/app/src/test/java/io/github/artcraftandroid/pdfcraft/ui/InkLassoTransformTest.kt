@@ -1,6 +1,7 @@
 package io.github.artcraftandroid.pdfcraft.ui
 
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import io.github.artcraftandroid.pdfcraft.ui.viewer.InkAppearance
 import io.github.artcraftandroid.pdfcraft.ui.viewer.InkLassoBounds
 import io.github.artcraftandroid.pdfcraft.ui.viewer.InkStroke
@@ -8,6 +9,9 @@ import io.github.artcraftandroid.pdfcraft.ui.viewer.LASSO_MAX_SCALE
 import io.github.artcraftandroid.pdfcraft.ui.viewer.LASSO_MIN_SCALE
 import io.github.artcraftandroid.pdfcraft.ui.viewer.LASSO_TURNABLE_SUBTYPES
 import io.github.artcraftandroid.pdfcraft.ui.viewer.LassoHandle
+import io.github.artcraftandroid.pdfcraft.ui.viewer.LassoTurnRoom
+import io.github.artcraftandroid.pdfcraft.ui.viewer.LassoTurnSide
+import io.github.artcraftandroid.pdfcraft.ui.viewer.LassoTurnSpot
 import io.github.artcraftandroid.pdfcraft.ui.viewer.lassoHandleAt
 import io.github.artcraftandroid.pdfcraft.ui.viewer.lassoHandlePosition
 import io.github.artcraftandroid.pdfcraft.ui.viewer.lassoPivot
@@ -15,6 +19,7 @@ import io.github.artcraftandroid.pdfcraft.ui.viewer.lassoResizeScale
 import io.github.artcraftandroid.pdfcraft.ui.viewer.lassoTransformPoint
 import io.github.artcraftandroid.pdfcraft.ui.viewer.lassoTransformedDraft
 import io.github.artcraftandroid.pdfcraft.ui.viewer.lassoTurnAngle
+import io.github.artcraftandroid.pdfcraft.ui.viewer.lassoTurnSpot
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -41,6 +46,53 @@ class InkLassoTransformTest {
         // a resize keeps the opposite corner where it is; a turn goes about the middle
         assertNear(Offset(100f, 200f), lassoPivot(box, LassoHandle.Resize))
         assertNear(Offset(200f, 250f), lassoPivot(box, LassoHandle.Turn))
+    }
+
+    /**
+     * #709: the turn handle is drawn, and taken, where it is shown: above the box while there is
+     * room under the tab strip, else beside it (right, then left), else below, clear of the resize
+     * handle and the buttons. Here a page point is a dp: the handle 28 off the box, a knob of 7, a
+     * touch within 18.
+     */
+    @Test fun theTurnHandleGoesWhereItIsShown() {
+        fun room(left: Float, top: Float, right: Float, menu: Rect? = null) = LassoTurnRoom(Rect(left, top, right, 800f), menu, 7f, 18f)
+        // with the whole page shown, or nothing known of it: above the middle, its stalk from the top, as before
+        assertEquals(LassoTurnSpot(LassoTurnSide.Above, Offset(200f, 172f), Offset(200f, 200f)), lassoTurnSpot(box, 28f, room(0f, 0f, 600f)))
+        assertEquals(LassoTurnSpot(LassoTurnSide.Above, Offset(200f, 172f), Offset(200f, 200f)), lassoTurnSpot(box, 28f, null))
+        // near the bottom of what is shown it stays above
+        assertEquals(LassoTurnSide.Above, lassoTurnSpot(InkLassoBounds(100f, 700f, 300f, 790f), 28f, room(0f, 0f, 600f)).side)
+
+        // the box's top just under the tab strip: off the middle of its right side, its stalk from there
+        val underStrip = room(0f, 195f, 600f)
+        assertEquals(LassoTurnSpot(LassoTurnSide.Right, Offset(328f, 250f), Offset(300f, 250f)), lassoTurnSpot(box, 28f, underStrip))
+        assertNear(Offset(328f, 250f), lassoHandlePosition(box, LassoHandle.Turn, 28f, underStrip))
+        // taken there, not under the strip; the resize handle stays at the corner
+        assertEquals(LassoHandle.Turn, lassoHandleAt(box, Offset(325f, 254f), 18f, 28f, underStrip))
+        assertNull(lassoHandleAt(box, Offset(200f, 172f), 18f, 28f, underStrip))
+        assertEquals(LassoHandle.Resize, lassoHandleAt(box, Offset(305f, 296f), 18f, 28f, underStrip))
+        // the right side out of view too (the glass's edge or the page's): off the left side
+        val rightOut = room(0f, 195f, 340f)
+        assertEquals(LassoTurnSpot(LassoTurnSide.Left, Offset(72f, 250f), Offset(100f, 250f)), lassoTurnSpot(box, 28f, rightOut))
+        assertEquals(LassoHandle.Turn, lassoHandleAt(box, Offset(74f, 247f), 18f, 28f, rightOut))
+        // both sides out: below the middle, its stalk from the bottom
+        assertEquals(LassoTurnSpot(LassoTurnSide.Below, Offset(200f, 328f), Offset(200f, 300f)), lassoTurnSpot(box, 28f, room(80f, 195f, 320f)))
+        // ... unless the buttons are there; with nowhere left, above as before
+        val buttons = Rect(100f, 308f, 250f, 356f)
+        assertEquals(LassoTurnSide.Above, lassoTurnSpot(box, 28f, room(80f, 195f, 320f, buttons)).side)
+
+        // a short selection under the strip: its right side would crowd the resize handle, so the left
+        val short = InkLassoBounds(100f, 200f, 300f, 220f)
+        assertEquals(LassoTurnSpot(LassoTurnSide.Left, Offset(72f, 210f), Offset(100f, 210f)), lassoTurnSpot(short, 28f, room(0f, 180f, 600f)))
+        // right at the strip's edge, its touches beside it partly under the strip: below, where they are all shown ...
+        assertEquals(LassoTurnSide.Below, lassoTurnSpot(short, 28f, room(0f, 200f, 600f)).side)
+        // ... and with the buttons below it, beside it: the knob is shown and taken there
+        val shortButtons = Rect(100f, 228f, 250f, 276f)
+        val atStrip = room(0f, 200f, 600f, shortButtons)
+        assertEquals(LassoTurnSpot(LassoTurnSide.Right, Offset(328f, 210f), Offset(300f, 210f)), lassoTurnSpot(short, 28f, atStrip))
+        assertEquals(LassoHandle.Turn, lassoHandleAt(short, Offset(328f, 214f), 18f, 28f, atStrip))
+        assertEquals(LassoHandle.Resize, lassoHandleAt(short, Offset(302f, 222f), 18f, 28f, atStrip))
+        // the turn still goes about the middle, wherever its handle is
+        assertNear(Offset(200f, 210f), lassoPivot(short, LassoHandle.Turn))
     }
 
     @Test fun aResizeKeepsTheProportions() {
