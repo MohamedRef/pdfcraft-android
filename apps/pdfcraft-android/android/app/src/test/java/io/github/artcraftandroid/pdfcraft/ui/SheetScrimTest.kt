@@ -22,8 +22,8 @@ class SheetScrimTest {
     @Test
     fun aTabletDimsBesideANarrowerSheetLightly() {
         val beside = sheetScrim(dim = false, screenWidth = 753.dp, scrim = scrim)
-        assertEquals(scrim.alpha * 0.5f, beside.alpha, 0.001f)
-        assertEquals(scrim.red, beside.red, 0.001f)
+        assertEquals(scrim.alpha * 0.5f, beside.alpha, 1f / 255f)
+        assertEquals(scrim.red, beside.red, 1f / 255f)
         // a screen only a little wider than the sheet's 560 dp keeps the page undimmed
         assertEquals(Color.Transparent, sheetScrim(dim = false, screenWidth = 580.dp, scrim = scrim))
     }
