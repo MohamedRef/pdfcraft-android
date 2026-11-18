@@ -7,6 +7,8 @@ package io.github.artcraftandroid.pdfcraft.ui.viewer
 internal enum class InkStyle(val key: String) {
     Ballpoint("ballpoint"),
     Fountain("fountain"),
+    /** A flat nib held at an angle (#678): thick across it, thin along it. */
+    Calligraphy("calligraphy"),
     Pencil("pencil"),
     Brush("brush"),
     Highlighter("highlighter");

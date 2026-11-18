@@ -196,7 +196,7 @@ internal class InkStroke(
         // the last sample, when thinning had not made it a point yet
         thinner.flush()?.let { (q, scale, density) -> addPoint(q, scale, density) }
         val end = smoother?.end() ?: return
-        val scale = dynamics?.next(end, lastTimeMs, lastPressure, tiltAt(lastTimeMs)) ?: 1f
+        val scale = dynamics?.liftScale(end, lastTimeMs, lastPressure, tiltAt(lastTimeMs)) ?: 1f
         addPoint(end, scale, dynamics?.density ?: 1f)
     }
 
