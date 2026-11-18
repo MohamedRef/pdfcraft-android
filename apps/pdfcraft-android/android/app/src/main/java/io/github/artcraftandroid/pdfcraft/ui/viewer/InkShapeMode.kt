@@ -20,6 +20,13 @@ internal enum class InkShapeMode {
 
     /** Connected lines (`PolyLine`): tap its points, then the last one again (#133). */
     Polyline,
+
+    // More shapes (#693), each from one drag ([catalogShapeParts]): flat ones saved as an editable
+    // polygon, a line with two arrowheads, or connected lines for axes;
+    Triangle, RightTriangle, Diamond, Pentagon, Hexagon, DoubleArrow, Axes,
+
+    // solids, drawn in an oblique view, their hidden edges dashed
+    Cube, Prism, Pyramid, Cylinder, Cone, Sphere, Hemisphere, Frustum, Tube,
 }
 
 /**
@@ -87,6 +94,12 @@ internal fun inkShapeGeometry(
         InkShapeMode.Line, InkShapeMode.Arrow -> if ((a - b).getDistance() >= 2f) SnappedShape.Line(a, b) else null
         InkShapeMode.Rectangle, InkShapeMode.Cloud -> if (width >= 2f && height >= 2f) SnappedShape.Rectangle(left, top, right, bottom) else null
         InkShapeMode.Oval -> if (width >= 2f && height >= 2f) SnappedShape.Oval(left, top, right, bottom) else null
+        // the double arrow keeps its direction; the other catalog shapes fill the dragged box (#693)
+        InkShapeMode.DoubleArrow -> if ((a - b).getDistance() >= 2f) SnappedShape.Line(a, b) else null
+        InkShapeMode.Triangle, InkShapeMode.RightTriangle, InkShapeMode.Diamond, InkShapeMode.Pentagon, InkShapeMode.Hexagon,
+        InkShapeMode.Axes, InkShapeMode.Cube, InkShapeMode.Prism, InkShapeMode.Pyramid, InkShapeMode.Cylinder,
+        InkShapeMode.Cone, InkShapeMode.Sphere, InkShapeMode.Hemisphere, InkShapeMode.Frustum, InkShapeMode.Tube,
+        -> if (width >= 2f && height >= 2f) SnappedShape.Rectangle(left, top, right, bottom) else null
     }
 }
 
@@ -98,6 +111,8 @@ internal fun inkShapeOutline(
     pageWidth: Float,
     pageHeight: Float,
 ): List<Offset>? {
+    // a catalog shape is several parts, drawn by itself while it is dragged (#693)
+    if (mode.isCatalog) return null
     val shape = inkShapeGeometry(mode, from, to, pageWidth, pageHeight) ?: return null
     return if (mode == InkShapeMode.Arrow && shape is SnappedShape.Line) arrowPreview(shape.from, shape.to) else shape.outline()
 }

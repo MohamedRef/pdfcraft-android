@@ -2021,6 +2021,46 @@ fn the_eraser_cuts_a_wide_stroke_where_it_meets_its_edge() {
     assert!(!erase_ink(&mut clear, 0, j, &[[200.0, 414.0], [210.0, 414.0]], 2.0, &meta("e")).unwrap());
 }
 
+/// Android adaptation (#693): a shape or drawing made with a dash array has a dashed `/BS`, is
+/// drawn dashed, and stays dashed when it is drawn again.
+#[test]
+fn a_dashed_shape_is_drawn_dashed_and_stays_dashed() {
+    let mut doc = fixture();
+    let dashed = |shape: Shape| NewAnnotation { style: Style { dash: Some(vec![4.0, 3.0]), ..new(0, shape.clone()).style }, ..new(0, shape) };
+    let shapes = [
+        Shape::Rectangle { rect: [100.0, 100.0, 200.0, 150.0] },
+        Shape::Polygon { vertices: vec![[300.0, 300.0], [350.0, 380.0], [250.0, 380.0]], cloud: false },
+        Shape::Ink { strokes: vec![vec![[100.0, 500.0], [200.0, 520.0], [300.0, 500.0]]] },
+    ];
+    let mut first = None;
+    for shape in shapes {
+        let polygon = matches!(shape, Shape::Polygon { .. });
+        let i = add_annotation(&mut doc, &dashed(shape), &meta("d")).unwrap();
+        first.get_or_insert(i);
+        let d = &list(&doc, 0)[i];
+        let bs = d.get(b"BS").and_then(|b| b.as_dict()).unwrap();
+        assert_eq!(bs.name(b"S"), Some(&b"D"[..]));
+        let dash: Vec<f64> = bs.get(b"D").unwrap().as_array().unwrap().iter().filter_map(|x| x.as_f64()).collect();
+        assert_eq!(dash, vec![4.0, 3.0]);
+        assert!(ap_content(&doc, d).contains("[4 3] 0 d"), "{}", ap_content(&doc, d));
+        // moved, then drawn again from its geometry: still dashed
+        move_annotation(&mut doc, 0, i, 10.0, 10.0, &meta("m")).unwrap();
+        if polygon {
+            set_points(&mut doc, 0, i, &[[310.0, 310.0], [370.0, 400.0], [250.0, 400.0]], &meta("p")).unwrap();
+        } else {
+            let r: Vec<f64> = list(&doc, 0)[i].get(b"Rect").unwrap().as_array().unwrap().iter().filter_map(|x| x.as_f64()).collect();
+            set_rect(&mut doc, 0, i, [r[0], r[1], r[2] + 40.0, r[3] + 20.0], &meta("r")).unwrap();
+        }
+        assert!(ap_content(&doc, &list(&doc, 0)[i]).contains("[4 3] 0 d"));
+    }
+    // a solid one has no dash
+    let j = add_annotation(&mut doc, &new(0, Shape::Rectangle { rect: [400.0, 100.0, 500.0, 150.0] }), &meta("s")).unwrap();
+    assert_eq!(list(&doc, 0)[j].get(b"BS").and_then(|b| b.as_dict()).unwrap().name(b"S"), Some(&b"S"[..]));
+    assert!(!ap_content(&doc, &list(&doc, 0)[j]).contains("] 0 d\n["));
+    let reopened = reopen(&doc);
+    assert_eq!(list(&reopened, 0)[first.unwrap()].get(b"BS").and_then(|b| b.as_dict()).unwrap().name(b"S"), Some(&b"D"[..]));
+}
+
 #[test]
 fn the_whole_stroke_eraser_removes_each_stroke_it_touches_and_keeps_the_rest() {
     // Android #521: "Erase whole strokes".

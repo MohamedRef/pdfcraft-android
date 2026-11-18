@@ -340,7 +340,14 @@ pub fn add_annotation(doc: &mut Document, new: &NewAnnotation, meta: &Meta) -> R
     let border = |d: &mut Dict| {
         let mut bs = Dict::new();
         bs.set(b"W".to_vec(), Object::Real(style.width.max(0.0)));
-        bs.set(b"S".to_vec(), Object::name("S"));
+        // Android adaptation (#693): a dashed line or border, which the appearance draws
+        match style.dash.as_deref().filter(|a| !a.is_empty() && a.iter().all(|x| x.is_finite() && *x >= 0.0) && a.iter().any(|x| *x > 0.0)) {
+            Some(dash) => {
+                bs.set(b"S".to_vec(), Object::name("D"));
+                bs.set(b"D".to_vec(), num_array(dash));
+            }
+            None => bs.set(b"S".to_vec(), Object::name("S")),
+        }
         d.set(b"BS".to_vec(), Object::Dict(bs));
     };
     let mut popup = None;
