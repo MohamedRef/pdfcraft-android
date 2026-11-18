@@ -1660,7 +1660,7 @@
     <string name="pen_lab_draft_picture">Keep finished strokes as an image</string>
     <string name="pen_lab_draft_picture_body">Strokes already written are shown from one image instead of being drawn again on every frame. Turn off to compare, or if strokes ever show wrong.</string>
     <string name="pen_lab_ink_journal">Keep unsaved ink through a crash</string>
-    <string name="pen_lab_ink_journal_body">Writes each stroke not saved yet to a small file as you write, and adds it back when the document is opened again after the app closed unexpectedly. Off: strokes not saved are lost then, as before.</string>
+    <string name="pen_lab_ink_journal_body">Keeps each stroke not saved yet in a small file and adds it back when the document opens after the app closed unexpectedly.</string>
     <string name="pen_lab_written">Pen values written to the log</string>
     <string name="ink_shapes">Shapes</string>
     <string name="ink_toolbar_guides">Guides</string>

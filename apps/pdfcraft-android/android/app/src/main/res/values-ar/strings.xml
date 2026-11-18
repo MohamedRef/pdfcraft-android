@@ -1170,7 +1170,7 @@
     <string name="pen_lab_draft_picture">حفظ الخطوط المكتملة كصورة</string>
     <string name="pen_lab_draft_picture_body">أثناء الكتابة تُعرض الخطوط المكتوبة من صورة واحدة بدلًا من رسمها من جديد في كل إطار. أوقفه للمقارنة، أو إذا ظهرت الخطوط بشكل خاطئ.</string>
     <string name="pen_lab_ink_journal">الاحتفاظ بالحبر غير المحفوظ إذا أُغلق التطبيق فجأة</string>
-    <string name="pen_lab_ink_journal_body">يكتب كل خط لم يُحفظ بعد في ملف صغير أثناء الكتابة، ويعيده عند فتح المستند مرة أخرى بعد أن يُغلق التطبيق بشكل غير متوقع. عند الإيقاف تضيع الخطوط غير المحفوظة كما كان من قبل.</string>
+    <string name="pen_lab_ink_journal_body">يحفظ كل خط لم يُحفظ بعد في ملف صغير ويعيده عند فتح المستند بعد أن يُغلق التطبيق بشكل غير متوقع.</string>
     <string name="pen_lab_written">كُتبت قيم الأقلام في السجل</string>
     <string name="ink_shapes">أشكال</string>
     <string name="ink_toolbar_guides">أدوات</string>

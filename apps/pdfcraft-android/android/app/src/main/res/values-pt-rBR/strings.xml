@@ -1012,7 +1012,7 @@
     <string name="pen_lab_draft_picture">Manter os traços prontos como imagem</string>
     <string name="pen_lab_draft_picture_body">Enquanto você escreve, os traços já escritos são mostrados a partir de uma imagem em vez de serem desenhados de novo a cada quadro. Desative para comparar, ou se os traços aparecerem errados.</string>
     <string name="pen_lab_ink_journal">Manter a tinta não salva se o app fechar</string>
-    <string name="pen_lab_ink_journal_body">Grava cada traço ainda não salvo em um pequeno arquivo enquanto você escreve e o adiciona de volta quando o documento é aberto de novo depois que o app fechou inesperadamente. Desligado: os traços não salvos se perdem, como antes.</string>
+    <string name="pen_lab_ink_journal_body">Mantém cada traço ainda não salvo em um pequeno arquivo e o adiciona de volta quando o documento abre depois que o app fechou inesperadamente.</string>
     <string name="pen_lab_written">Valores das canetas gravados no registro</string>
     <string name="ink_shapes">Formas</string>
     <string name="ink_toolbar_guides">Guias</string>
