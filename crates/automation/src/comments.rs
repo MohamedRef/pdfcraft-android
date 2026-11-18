@@ -539,6 +539,21 @@ impl Automation {
         if let Some(w) = a.opt_num("width")? {
             style.width = w.max(0.0);
         }
+        // Android adaptation (#693): a dashed line or border for the drawn shapes and ink
+        if let Some(v) = a.get("dash") {
+            let lengths: Option<Vec<f64>> = v.as_array().and_then(|l| l.iter().map(Value::as_f64).collect::<Option<Vec<f64>>>());
+            let lengths = lengths
+                .filter(|l| (1..=4).contains(&l.len()) && l.iter().all(|x| x.is_finite() && (0.0..=200.0).contains(x)) && l.iter().any(|x| *x > 0.0))
+                .ok_or_else(|| ToolError::InvalidArgs("dash takes 1 to 4 lengths in points, 0 to 200, not all 0".into()))?;
+            let drawn = matches!(
+                shape,
+                Shape::Ink { .. } | Shape::PressureInk { .. } | Shape::Line { .. } | Shape::Rectangle { .. } | Shape::Oval { .. } | Shape::Polygon { .. } | Shape::PolyLine { .. }
+            );
+            if !drawn {
+                return Err(ToolError::InvalidArgs("dash is for ink, a line, an arrow, a rectangle, an oval, a polygon, a cloud or connected lines".into()));
+            }
+            style.dash = Some(lengths);
+        }
         if let Some(b) = border_shape(a)? {
             if !matches!(shape, Shape::TextBox { .. } | Shape::Typewriter { .. }) {
                 return Err(ToolError::InvalidArgs("border_shape is for a text box or typewriter text".into()));
@@ -564,6 +579,11 @@ impl Automation {
             let mut out = self.apply(a, Edit::ReplaceText { page, quads, text: contents, author, strike, caret })?;
             out["comment"] = json!({ "page": page + 1, "type": "replace" });
             return Ok(out);
+        }
+        // Android adaptation (#693): read for `comments_add`, which adds them all at once
+        if let Some(list) = self.collect_adds.as_mut() {
+            list.push(NewAnnotation { page, shape, style, contents, author });
+            return Ok(json!({}));
         }
         let marked = match &shape {
             Shape::TextMarkup { quads, .. } => Some(quads.len()),
@@ -1040,6 +1060,40 @@ impl Automation {
         let mut out = self.apply(a, Edit::Batch { label: label.into(), edits })?;
         out["changed"] = json!(changed);
         out["skipped"] = json!(skipped);
+        Ok(out)
+    }
+
+    /// Android adaptation (#693): add several drawn comments as one undo step ("Add shape"), as a
+    /// shape drawn in parts is (a solid's visible edges and its dashed hidden ones). `comments`:
+    /// `comment_add` arguments without `doc`, each a drawing, line, arrow, rectangle, oval,
+    /// polygon, cloud or connected lines; all are read before any is added, so one refused adds
+    /// none.
+    pub(crate) fn comments_add(&mut self, a: &Args) -> Result<Value> {
+        let items = a.get("comments").and_then(Value::as_array).cloned().ok_or_else(|| ToolError::InvalidArgs("comments must be an array of comment_add arguments".into()))?;
+        if items.is_empty() || items.len() > 16 {
+            return Err(ToolError::InvalidArgs("comments must list 1 to 16 comments".into()));
+        }
+        let doc = a.get("doc").cloned().ok_or_else(|| Args::missing("doc"))?;
+        self.collect_adds = Some(Vec::new());
+        let mut read = || -> Result<()> {
+            for item in &items {
+                let mut one = item.as_object().cloned().ok_or_else(|| ToolError::InvalidArgs("each comment must be an object of comment_add arguments".into()))?;
+                let kind = one.get("type").and_then(Value::as_str).unwrap_or_default();
+                if !matches!(kind, "ink" | "line" | "arrow" | "rectangle" | "oval" | "polygon" | "cloud" | "polyline") {
+                    return Err(ToolError::InvalidArgs(format!("comments_add adds drawings and shapes, not {kind:?}")));
+                }
+                one.insert("doc".into(), doc.clone());
+                let one = Value::Object(one);
+                self.comment_add(&Args(&one))?;
+            }
+            Ok(())
+        };
+        let outcome = read();
+        let added = self.collect_adds.take().unwrap_or_default();
+        outcome?;
+        let count = added.len();
+        let mut out = self.apply(a, Edit::Batch { label: "Add shape".into(), edits: added.into_iter().map(Edit::AddAnnotation).collect() })?;
+        out["added"] = json!(count);
         Ok(out)
     }
 

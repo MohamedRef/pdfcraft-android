@@ -947,6 +947,7 @@ pub fn tools() -> Vec<ToolDef> {
                 "fill_opacity": { "type": "number", "minimum": 0, "maximum": 1, "description": "The fill's own opacity: rectangle, oval, polygon, cloud, text box, typewriter text or callout." },
                 "text_opacity": { "type": "number", "minimum": 0, "maximum": 1, "description": "The text's own opacity: text box, typewriter text or callout." },
                 "width": { "type": "number", "minimum": 0, "description": "Line width in points." },
+                "dash": { "type": "array", "items": { "type": "number", "minimum": 0, "maximum": 200 }, "minItems": 1, "maxItems": 4, "description": "Android adaptation: a dashed line or border (dash lengths in points, /BS /S /D) for ink, a line, an arrow, a rectangle, an oval, a polygon, a cloud or connected lines." },
                 "border_shape": { "type": "string", "enum": ["rectangle", "oval", "circle"], "description": "A text box's or typewriter text's border shape: an oval or a circle goes around the text box." },
                 "endings": { "type": "array", "items": { "type": "string", "enum": ["None", "Square", "Circle", "Diamond", "OpenArrow", "ClosedArrow", "Butt", "ROpenArrow", "RClosedArrow", "Slash"] }, "minItems": 1, "maxItems": 2, "description": "Line endings. Two names (start, end) for a line, arrow or polyline; one name for a callout." },
                 "ortho": { "type": "boolean", "description": "line/arrow/polygon/cloud/polyline: hold each end or corner level or plumb with the one before, whichever is nearer (Shift while drawing)." },
@@ -1124,6 +1125,13 @@ pub fn tools() -> Vec<ToolDef> {
                 "color": color(),
                 "delete": { "type": "boolean" }
             }), &["doc", "page", "comments"])),
+        // Android adaptation (#693)
+        t("comments_add", "Add a shape", "Android Draw: add several drawings and shapes as one undo step (Add shape), as a shape drawn in parts is: a solid's visible edges and its dashed hidden ones. `comments`: comment_add arguments without `doc` (each with its `page` and `type`: ink, line, arrow, rectangle, oval, polygon, cloud or polyline). All are read before any is added, so one refused adds none.")
+            .destructive()
+            .with(schema(json!({
+                "doc": doc(),
+                "comments": { "type": "array", "items": { "type": "object" }, "minItems": 1, "maxItems": 16 }
+            }), &["doc", "comments"])),
         // Android adaptation (#350)
         t("comments_to_layer", "Put comments on a layer", "Put comments of one page on a layer (optional content group) named `layer`, so a reader's Layers panel shows and hides them together; the layer is made, and on, when the document has none of that name. `comments`: 1-based indices from comment_list. One undo step.")
             .with(schema(json!({

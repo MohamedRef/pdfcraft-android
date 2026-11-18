@@ -629,6 +629,9 @@ pub struct Style {
     pub fill_opacity: Option<f64>,
     /// A text box's text's own opacity, 0–1 (`/PCTextOpacity`); `None`: as the fill's.
     pub text_opacity: Option<f64>,
+    /// Android adaptation (#693): a dashed line or border, its dash array in points
+    /// (`/BS << /S /D /D [...] >>`, ISO 32000-2 Table 168); `None`: solid.
+    pub dash: Option<Vec<f64>>,
 }
 
 /// The style properties changed by one annotation edit. `None` leaves a property unchanged.
@@ -669,6 +672,7 @@ impl Default for Style {
             text_opacity: None,
             border_color: None,
             border_shape: BorderShape::Rectangle,
+            dash: None,
         }
     }
 }

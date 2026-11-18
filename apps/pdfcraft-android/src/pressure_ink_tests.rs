@@ -153,6 +153,32 @@ fn lasso_edits_many_comments_as_one_undo_step() {
     assert_eq!(s.document(doc).unwrap().generation, generation);
 }
 
+/// #693: a solid's visible edges and its dashed hidden edges are added as one undo step, all or
+/// none, and a dash is refused where it means nothing.
+#[test]
+fn a_shape_in_parts_is_added_as_one_undo_step() {
+    let s = MobileSession::new();
+    let doc = s.open(blank_letter(), None).unwrap().id;
+    let visible = json!({"page": 1, "type": "ink", "strokes": [[[100, 100], [200, 100], [200, 200], [100, 200], [100, 100]]], "width": 1.5});
+    let hidden = json!({"page": 1, "type": "ink", "strokes": [[[130, 70], [130, 170], [230, 170]]], "width": 1.5, "dash": [4.5, 4.5]});
+    let r: Value = serde_json::from_str(&s.execute("comments_add".into(), json!({"doc": doc, "comments": [visible, hidden]}).to_string()).unwrap()).unwrap();
+    assert_eq!(r["added"], 2);
+    assert_eq!(s.comments(doc).unwrap().len(), 2);
+    s.execute("edit_undo".into(), json!({"doc": doc}).to_string()).unwrap();
+    assert!(s.comments(doc).unwrap().is_empty(), "one undo takes the whole shape back");
+    // one bad part: nothing is added
+    let generation = s.document(doc).unwrap().generation;
+    let bad = json!({"page": 1, "type": "ink", "strokes": [[[1, 1], [2, 2]]], "dash": [0, 0]});
+    assert!(s.execute("comments_add".into(), json!({"doc": doc, "comments": [visible, bad]}).to_string()).is_err());
+    assert!(s.execute("comments_add".into(), json!({"doc": doc, "comments": [{"page": 1, "type": "note", "rect": [1, 1, 20, 20]}]}).to_string()).is_err());
+    assert!(s.execute("comments_add".into(), json!({"doc": doc, "comments": []}).to_string()).is_err());
+    assert_eq!(s.document(doc).unwrap().generation, generation);
+    assert!(s.comments(doc).unwrap().is_empty());
+    // a single dashed line on its own, and a dash where it means nothing refused
+    s.execute("comment_add".into(), json!({"doc": doc, "page": 1, "type": "line", "from": [10, 10], "to": [100, 10], "dash": [3]}).to_string()).unwrap();
+    assert!(s.execute("comment_add".into(), json!({"doc": doc, "page": 1, "type": "highlight", "rect": [10, 10, 50, 20], "dash": [3]}).to_string()).is_err());
+}
+
 /// #689: the lasso's handles turn and scale saved comments about an anchor, in the view's
 /// coordinates (y down: a positive angle turns clockwise as seen), as one undo step.
 #[test]

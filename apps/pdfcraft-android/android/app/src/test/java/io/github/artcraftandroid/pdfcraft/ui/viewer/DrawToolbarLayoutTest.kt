@@ -148,6 +148,29 @@ class DrawToolbarLayoutTest {
         rule.waitForIdle()
         assertTrue(ctl.rulerOn)
     }
+
+    /** #693: the More shapes sheet shows every flat shape and solid at every width, and one tap draws with it. */
+    @Test
+    fun moreShapesSheetShowsEveryShapeAtEveryWidth() {
+        val prefs = ToolPrefs(context)
+        val ctl = ViewerController()
+        var width by mutableStateOf(widths.first())
+        rule.setContent {
+            PdfcraftTheme(ThemeChoice.Light) {
+                Box(Modifier.requiredWidth(width)) { DrawMoreShapesPicker(ctl, prefs) }
+            }
+        }
+        for (w in widths) {
+            width = w
+            rule.waitForIdle()
+            DrawMoreShapes.forEach { assertReachable(text(it.label), w) }
+        }
+        ctl.picker = Picker.MoreShapes
+        rule.onNodeWithContentDescription(text(R.string.ink_shape_cube)).performClick()
+        rule.waitForIdle()
+        assertEquals(InkShapeMode.Cube, ctl.inkShapeMode)
+        assertEquals(Picker.None, ctl.picker)
+    }
 }
 
 /** Replaces the favourites with [n] pens of each type in turn, each a little wider than the last. */

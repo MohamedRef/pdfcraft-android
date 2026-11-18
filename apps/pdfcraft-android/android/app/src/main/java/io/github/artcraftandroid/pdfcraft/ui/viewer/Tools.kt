@@ -859,6 +859,26 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
     /** One draft as the screen shows it: clipped to its page (#75), [lift]ed while the lasso moves it. */
     fun DrawScope.drawDraft(s: InkStroke, lift: Offset = Offset.Zero) {
         val pageRect = doc.viewer.pageRectOnScreen(s.page)
+        // a catalog shape being dragged (#693): its parts as they will be saved, hidden edges dashed
+        if (s.shapeMode.isCatalog) {
+            val page = doc.viewer.pages.getOrNull(s.page)
+            if (page == null || s.points.size < 2) return
+            val geometry = inkShapeGeometry(s.shapeMode, s.points.first(), s.points.last(), page.width, page.height) ?: return
+            val parts = when (geometry) {
+                is SnappedShape.Line -> catalogShapeParts(s.shapeMode, 0f, 0f, 0f, 0f, geometry.from, geometry.to)
+                is SnappedShape.Rectangle -> catalogShapeParts(s.shapeMode, geometry.left, geometry.top, geometry.right, geometry.bottom)
+                else -> null
+            } ?: return
+            val k = doc.viewer.pixelsPerPoint(s.page)
+            val width = s.appearance.width.coerceAtLeast(0.5f)
+            clipRect(pageRect.left, pageRect.top, pageRect.right, pageRect.bottom) {
+                drawShapeParts(
+                    parts, { p -> doc.viewer.pageToScreen(s.page, p.x, p.y) }, Color(s.appearance.argb).copy(alpha = s.appearance.opacity),
+                    width * k, catalogHiddenDash(width).map { it.toFloat() * k },
+                )
+            }
+            return
+        }
         // a dashed or dotted line being written (not cut yet) is shown through its pattern (#682)
         val mask = if (s.group == null) inkPatternMask(s.pattern, inkStylePointWidths(listOf(1f), s.appearance.width, s.appearance.style).first()) else null
         if (mask != null && s.points.size >= 2) {
@@ -1789,6 +1809,25 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                             s.matchDensities()
                         }
                     }
+                    if (s.shapeMode.isCatalog) {
+                        // More shapes (#693): a flat one is one annotation, a solid its visible and
+                        // its dashed hidden edges, added together as one undo step
+                        strokes.remove(s)
+                        s.preview = null
+                        val pageSize = doc.viewer.pages.getOrNull(s.page)
+                        val geometry = if (pageSize != null && s.points.size >= 2) {
+                            inkShapeGeometry(s.shapeMode, s.points.first(), s.points.last(), pageSize.width, pageSize.height)
+                        } else null
+                        val commands = geometry?.let {
+                            catalogShapeCommands(s.shapeMode, it, s.page, Color(s.appearance.argb).hex(), s.appearance.opacity, s.appearance.width.coerceAtLeast(0.5f), s.appearance.author)
+                        }
+                        if (!commands.isNullOrEmpty()) {
+                            doc.commitTool?.invoke()
+                            if (commands.size == 1) documentEdit("comment_add", commands[0]) else documentEdit("comments_add", mapOf("comments" to commands))
+                            MarkupDiag.shape(doc, s.shapeMode.name.lowercase(), s.points.size)
+                        }
+                        return@toolGestures
+                    }
                     if (s.shapeMode.isAnnotation) {
                         // An arrow or cloud is its own PDF annotation, not ink: add the pending
                         // drafts first so the document's history keeps the drawing order.
@@ -2477,7 +2516,7 @@ private fun MarkupLayer(vm: AppViewModel, doc: OpenDocument) {
 }
 
 /** Which property picker a sub-toolbar has open. */
-enum class Picker { None, Color, Width, TextSize, Presets, PenStyle, EraserSize, Stamp, Shapes, Guides }
+enum class Picker { None, Color, Width, TextSize, Presets, PenStyle, EraserSize, Stamp, Shapes, Guides, MoreShapes }
 
 /** What [annotateToolName] calls the tool in use, for the log line of a switch (#660). */
 internal fun annotateToolName(tool: ViewerTool, markup: TextMarkup, eraser: Boolean, lasso: Boolean): String = when (tool) {
@@ -2682,6 +2721,7 @@ fun PropertyPicker(vm: AppViewModel, ctl: ViewerController, tool: StyledTool, pi
             Picker.Presets -> InkPresetsPicker(vm, onDismiss)
             Picker.PenStyle -> PenStylePicker(vm)
             Picker.Shapes -> DrawShapesPicker(ctl, prefs)
+            Picker.MoreShapes -> DrawMoreShapesPicker(ctl, prefs)
             Picker.Guides -> DrawGuidesPicker(ctl)
             Picker.EraserSize -> {
                 Text(

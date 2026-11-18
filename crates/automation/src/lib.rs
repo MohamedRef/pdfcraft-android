@@ -125,6 +125,9 @@ pub struct Automation {
     objects_clipboard: Option<pdfcraft_engine::ObjectClipboard>,
     /// Told how far a long tool is, and able to stop it (#634). None: tools run to their end.
     job_watch: Option<JobWatch>,
+    /// Android adaptation (#693): while `comments_add` reads its comments, `comment_add` puts each
+    /// here instead of adding it, so they are added together as one undo step.
+    collect_adds: Option<Vec<pdfcraft_engine::NewAnnotation>>,
 }
 
 impl Default for Automation {
@@ -148,6 +151,7 @@ impl Automation {
             next_ocr_review: 0,
             objects_clipboard: None,
             job_watch: None,
+            collect_adds: None,
         }
     }
 

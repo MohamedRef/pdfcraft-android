@@ -252,20 +252,21 @@ internal fun DrawToolbarBar(ctl: ViewerController, prefs: ToolPrefs, onMarkup: (
                 Icon(LucideIcons.SlidersHorizontal, null, tint = if (picker == Picker.Presets) c.toolAccent else c.icon, modifier = Modifier.size(24.dp))
             }
             // Shows the shape in use, so a glance at the bar says which one a stroke will draw.
-            val shape = DrawShapes.firstOrNull { it.mode == ctl.inkShapeMode }
+            val shape = (DrawShapes + DrawMoreShapes).firstOrNull { it.mode == ctl.inkShapeMode }
                 ?.takeIf { !ctl.eraserMode && !ctl.lassoMode }
-            val shapesOpen = picker == Picker.Shapes
+            val shapesOpen = picker == Picker.Shapes || picker == Picker.MoreShapes
             DrawToolbarButton(
                 label = stringResource(R.string.ink_shapes),
                 active = shape != null || shapesOpen,
                 caption = if (shape != null) stringResource(shape.caption) else stringResource(R.string.ink_shapes),
                 onClick = { ctl.picker = if (shapesOpen) Picker.None else Picker.Shapes },
             ) {
-                Icon(
-                    shape?.icon ?: LucideIcons.Shapes, null,
-                    tint = if (shape != null || shapesOpen) c.toolAccent else c.icon,
-                    modifier = Modifier.size(24.dp),
-                )
+                val tint = if (shape != null || shapesOpen) c.toolAccent else c.icon
+                if (shape != null && shape.icon == null) {
+                    androidx.compose.foundation.Canvas(Modifier.size(24.dp)) { drawCatalogShapeIcon(shape.mode, tint) }
+                } else {
+                    Icon(shape?.icon ?: LucideIcons.Shapes, null, tint = tint, modifier = Modifier.size(24.dp))
+                }
             }
             val guidesOn = ctl.rulerOn || ctl.protractorOn || ctl.zoomBoxOn
             val guidesOpen = picker == Picker.Guides
@@ -284,8 +285,8 @@ internal fun DrawToolbarBar(ctl: ViewerController, prefs: ToolPrefs, onMarkup: (
 /** What the favourites part of Draw's second row is tagged with in tests. */
 internal const val DrawFavouritesTag = "draw_favourites"
 
-/** One of Draw's shapes: its mode, icon, full name (read aloud) and short caption. */
-internal class DrawShape(val mode: InkShapeMode, val icon: ImageVector, @StringRes val label: Int, @StringRes val caption: Int)
+/** One of Draw's shapes: its mode, icon (null: a picture drawn from its geometry, #693), full name (read aloud) and short caption. */
+internal class DrawShape(val mode: InkShapeMode, val icon: ImageVector?, @StringRes val label: Int, @StringRes val caption: Int)
 
 /** The seven shapes, in the order the Shapes sheet shows them. */
 internal val DrawShapes = listOf(
@@ -296,6 +297,26 @@ internal val DrawShapes = listOf(
     DrawShape(InkShapeMode.Cloud, LucideIcons.Cloud, R.string.toolbar_draw_cloud, R.string.ink_toolbar_cloud),
     DrawShape(InkShapeMode.Polygon, LucideIcons.Pentagon, R.string.toolbar_draw_polygon, R.string.ink_toolbar_polygon),
     DrawShape(InkShapeMode.Polyline, LucideIcons.Spline, R.string.toolbar_draw_polyline, R.string.ink_toolbar_polyline),
+)
+
+/** More shapes (#693), on their own sheet: flat ones, then solids; each name is its caption too. */
+internal val DrawMoreShapes = listOf(
+    DrawShape(InkShapeMode.Triangle, null, R.string.ink_shape_triangle, R.string.ink_shape_triangle),
+    DrawShape(InkShapeMode.RightTriangle, null, R.string.ink_shape_right_triangle, R.string.ink_shape_right_triangle),
+    DrawShape(InkShapeMode.Diamond, null, R.string.ink_shape_diamond, R.string.ink_shape_diamond),
+    DrawShape(InkShapeMode.Pentagon, null, R.string.ink_shape_pentagon, R.string.ink_shape_pentagon),
+    DrawShape(InkShapeMode.Hexagon, null, R.string.ink_shape_hexagon, R.string.ink_shape_hexagon),
+    DrawShape(InkShapeMode.DoubleArrow, null, R.string.ink_shape_double_arrow, R.string.ink_shape_double_arrow),
+    DrawShape(InkShapeMode.Axes, null, R.string.ink_shape_axes, R.string.ink_shape_axes),
+    DrawShape(InkShapeMode.Cube, null, R.string.ink_shape_cube, R.string.ink_shape_cube),
+    DrawShape(InkShapeMode.Prism, null, R.string.ink_shape_prism, R.string.ink_shape_prism),
+    DrawShape(InkShapeMode.Pyramid, null, R.string.ink_shape_pyramid, R.string.ink_shape_pyramid),
+    DrawShape(InkShapeMode.Cylinder, null, R.string.ink_shape_cylinder, R.string.ink_shape_cylinder),
+    DrawShape(InkShapeMode.Cone, null, R.string.ink_shape_cone, R.string.ink_shape_cone),
+    DrawShape(InkShapeMode.Sphere, null, R.string.ink_shape_sphere, R.string.ink_shape_sphere),
+    DrawShape(InkShapeMode.Hemisphere, null, R.string.ink_shape_hemisphere, R.string.ink_shape_hemisphere),
+    DrawShape(InkShapeMode.Frustum, null, R.string.ink_shape_frustum, R.string.ink_shape_frustum),
+    DrawShape(InkShapeMode.Tube, null, R.string.ink_shape_tube, R.string.ink_shape_tube),
 )
 
 /**
@@ -339,6 +360,32 @@ internal fun DrawShapesPicker(ctl: ViewerController, prefs: ToolPrefs) {
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         DrawShapes.forEach { DrawShapeButton(ctl, prefs, it) }
+        // the catalog's shapes and solids, on a sheet of their own (#693)
+        DrawToolbarButton(stringResource(R.string.ink_more_shapes), false, caption = stringResource(R.string.ink_more_shapes), onClick = {
+            ctl.picker = Picker.MoreShapes
+        }) {
+            Icon(LucideIcons.Shapes, null, tint = c.icon, modifier = Modifier.size(24.dp))
+        }
+    }
+}
+
+/** More shapes (#693): flat shapes, then solids with their hidden edges dashed, each drawn by one drag. */
+@Composable
+internal fun DrawMoreShapesPicker(ctl: ViewerController, prefs: ToolPrefs) {
+    val c = pdfColors
+    Text(
+        stringResource(R.string.ink_more_shapes), color = c.text, fontSize = 17.sp, fontWeight = FontWeight.SemiBold,
+        modifier = Modifier.padding(start = 20.dp, bottom = 8.dp),
+    )
+    for ((title, modes) in listOf(R.string.ink_flat_shapes to CATALOG_FLAT_SHAPES, R.string.ink_solid_shapes to CATALOG_SOLIDS)) {
+        Text(stringResource(title), color = c.label, fontSize = 13.sp, modifier = Modifier.padding(start = 20.dp, bottom = 4.dp))
+        FlowRow(
+            Modifier.fillMaxWidth().padding(horizontal = 12.dp).padding(bottom = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterHorizontally),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            DrawMoreShapes.filter { it.mode in modes }.forEach { DrawShapeButton(ctl, prefs, it) }
+        }
     }
 }
 
@@ -386,7 +433,10 @@ private fun DrawShapeButton(ctl: ViewerController, prefs: ToolPrefs, shape: Draw
         ctl.lassoMode = false
         ctl.picker = Picker.None
     }) {
-        Icon(shape.icon, null, tint = if (selected) c.toolAccent else c.icon, modifier = Modifier.size(24.dp))
+        val tint = if (selected) c.toolAccent else c.icon
+        val icon = shape.icon
+        if (icon != null) Icon(icon, null, tint = tint, modifier = Modifier.size(24.dp))
+        else androidx.compose.foundation.Canvas(Modifier.size(24.dp)) { drawCatalogShapeIcon(shape.mode, tint) }
     }
 }
 
