@@ -1404,6 +1404,7 @@
     <string name="pen_lab_group_tip">Spitze</string>
     <string name="pen_lab_nib">Flache Feder</string>
     <string name="pen_lab_nib_angle">Federwinkel (°)</string>
+    <string name="pen_lab_width_slope">Breitenänderung je pt</string>
     <string name="pen_lab_taper_start">Spitzer Anfang (Stiftbreiten)</string>
     <string name="pen_lab_taper_end">Spitzes Ende (Stiftbreiten)</string>
     <string name="pen_lab_damping">Breitenglättung (ms)</string>
@@ -1564,6 +1565,7 @@
     <string name="ink_width_value">%1$.1f pt</string>
     <string name="ink_style_ballpoint">Kugelschreiber</string>
     <string name="ink_style_fountain">Füller</string>
+    <string name="ink_style_calligraphy">Kalligrafie</string>
     <string name="ink_style_pencil">Bleistift</string>
     <string name="ink_style_brush">Pinsel</string>
     <string name="ink_style_highlighter">Textmarker</string>
@@ -1584,6 +1586,7 @@
     <string name="ink_toolbar_brush">Pinsel</string>
     <string name="ink_toolbar_pencil">Bleistift</string>
     <string name="ink_toolbar_fountain">Füller</string>
+    <string name="ink_toolbar_calligraphy">Kalligrafie</string>
     <string name="ink_toolbar_ballpoint">Kuli</string>
     <string name="ocr_review_title">Erkannten Text prüfen</string>
     <string name="ocr_review_scope">Aktuelle Seite: %1$d</string>

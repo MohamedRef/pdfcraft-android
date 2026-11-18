@@ -132,7 +132,8 @@ internal object PenSheet {
         smoother.end()?.let { end ->
             points += end
             times += stroke.last().t
-            scales += dyn.next(end, stroke.last().t, stroke.last().pressure)
+            // as InkStroke.catchUp
+            scales += dyn.liftScale(end, stroke.last().t, stroke.last().pressure)
         }
         val live = inkStylePointWidths(scales, penWidth, style)
         dyn.finish(points, scales)

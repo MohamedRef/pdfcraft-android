@@ -99,7 +99,9 @@ internal fun DrawToolbarBar(ctl: ViewerController, prefs: ToolPrefs, onMarkup: (
         // Seven primary tools. 7 * 48dp = 336dp; all are directly usable on normal phones.
         BoxWithConstraints(Modifier.fillMaxWidth().height(DrawRowHeight)) {
             // the four text markups follow the pens (#660); the row scrolls where they do not fit
-            val contentWidth = maxOf(maxWidth, DrawToolSlot * (if (onMarkup != null) 11 else 7) + (if (onMarkup != null) 9.dp else 0.dp))
+            // the pens, the eraser and the lasso, then the four text markups (#678: six pens)
+            val slots = InkStyle.entries.size + 2 + if (onMarkup != null) 4 else 0
+            val contentWidth = maxOf(maxWidth, DrawToolSlot * slots + (if (onMarkup != null) 9.dp else 0.dp))
             val pens = rememberScrollState()
             Box(Modifier.fillMaxSize().horizontalScroll(pens)) {
                 Row(
@@ -119,6 +121,7 @@ internal fun DrawToolbarBar(ctl: ViewerController, prefs: ToolPrefs, onMarkup: (
                         }, caption = stringResource(when (style) {
                             InkStyle.Ballpoint -> R.string.ink_toolbar_ballpoint
                             InkStyle.Fountain -> R.string.ink_toolbar_fountain
+                            InkStyle.Calligraphy -> R.string.ink_toolbar_calligraphy
                             InkStyle.Pencil -> R.string.ink_toolbar_pencil
                             InkStyle.Brush -> R.string.ink_toolbar_brush
                             InkStyle.Highlighter -> R.string.ink_toolbar_marker

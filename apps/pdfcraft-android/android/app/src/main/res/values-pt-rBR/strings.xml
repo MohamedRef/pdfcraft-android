@@ -989,6 +989,7 @@
     <string name="pen_lab_group_tip">Ponta</string>
     <string name="pen_lab_nib">Pena chata</string>
     <string name="pen_lab_nib_angle">Ângulo da pena (°)</string>
+    <string name="pen_lab_width_slope">Variação de largura por pt</string>
     <string name="pen_lab_taper_start">Início pontudo (larguras da caneta)</string>
     <string name="pen_lab_taper_end">Fim pontudo (larguras da caneta)</string>
     <string name="pen_lab_damping">Suavização da largura (ms)</string>
@@ -1149,6 +1150,7 @@
     <string name="ink_width_value">%1$.1f pt</string>
     <string name="ink_style_ballpoint">Esferográfica</string>
     <string name="ink_style_fountain">Tinteiro</string>
+    <string name="ink_style_calligraphy">Caligrafia</string>
     <string name="ink_style_pencil">Lápis</string>
     <string name="ink_style_brush">Pincel</string>
     <string name="ink_style_highlighter">Marca-texto</string>
@@ -1169,6 +1171,7 @@
     <string name="ink_toolbar_brush">Pincel</string>
     <string name="ink_toolbar_pencil">Lápis</string>
     <string name="ink_toolbar_fountain">Tinteiro</string>
+    <string name="ink_toolbar_calligraphy">Caligrafia</string>
     <string name="ink_toolbar_ballpoint">Esfera</string>
     <string name="ocr_review_title">Revisar texto reconhecido</string>
     <string name="ocr_review_scope">Página atual: %1$d</string>
