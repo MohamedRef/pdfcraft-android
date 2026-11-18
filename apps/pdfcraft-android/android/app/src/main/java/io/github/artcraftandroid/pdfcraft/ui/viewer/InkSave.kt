@@ -13,6 +13,8 @@ internal data class InkSaveStroke(
     val pressureSensitive: Boolean,
     /** A pencil's ink density per point (#569); empty for solid ink. */
     val densities: List<Float> = emptyList(),
+    /** The pieces of one dashed or dotted line share this (#682): they are saved as one annotation. */
+    val group: Any? = null,
 )
 
 /** PDF annotations stay bounded: a longer pressure drawing is split into further annotations. */
@@ -27,7 +29,7 @@ internal const val MAX_PRESSURE_INK_POINTS = 4000
  * past [MAX_PRESSURE_INK_POINTS]; constant-width strokes are unchanged. [hex] formats colours.
  */
 internal fun inkSaveCommandGroups(strokes: List<InkSaveStroke>, hex: (Int) -> String): List<List<Map<String, Any?>>> =
-    strokes.map { inkSaveCommands(listOf(it), hex) }
+    inkSaveStrokeGroups(strokes).map { inkSaveCommands(it, hex) }
 
 /** The `comment_add` argument maps of the strokes of one group (see [inkSaveCommandGroups]). */
 internal fun inkSaveCommands(strokes: List<InkSaveStroke>, hex: (Int) -> String): List<Map<String, Any?>> {

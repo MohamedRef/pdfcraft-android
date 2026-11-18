@@ -12,6 +12,12 @@ This is an original, Samsung Notes-inspired tool experience, not a copy of propr
 
 The on-screen drawing overlay and native PDF annotations use the same style-specific width runs and opacity multipliers. All width runs remain capped by the existing 64-run bound per stroke, pressure/author input is captured at gesture start, and ink-order batching keeps styles separate.
 
+## Dashed and dotted lines (#682)
+- Each pen's popover (not the marker's) has **Line: Solid, Dashed, Dotted**, kept per pen (`ink.<pen>.pattern`). Dashes are three pen widths long with gaps of two, the ink's round ends included; dots are one pen width across, their centres 2.2 widths apart. The pieces start where the line starts; a last dash may be shorter, and a crumb under a quarter width is left off. A line shorter than one dash stays one dash.
+- While the pen is down the line is drawn through a mask of the same pattern (square-cut dashes, round dots) placed where the pieces will be. When it lifts, after the page-edge cut (#75), the stroke is cut into its pieces (`inkPatternRuns`): each keeps the line's own points inside it, two cut points at its ends, and the widths and a pencil's densities interpolated there. The pieces are drafts like any stroke: the eraser cuts them (keeping their line), the lasso selects them, and Undo takes the whole line back in one step. The popover's sample line shows the pattern.
+- Saving puts the pieces of one line in **one Ink annotation with one `/InkList` path per piece** (and its `/PCWidths`), so other readers show the same dashes and the document's history has one step for the line (`inkSaveStrokeGroups`). Log: `ink_pattern` (`pattern`, `pieces`, `points`) when a line is cut.
+- Not covered: shapes (Line, Rectangle, Oval, Arrow, Polygon), which need the engine to dash their border (`/BS /D`); changing a drawn line's pattern; a line erased into a piece shorter than a dash keeps that piece. Nothing was run on a phone.
+
 ## UI and favorites
 - Draw > Favorite pens includes a horizontally scrolling nib-type rail with six choices, stylus tip illustrations, 3 style-aware favorites, a slider and sample stroke, color swatches and opacity control.
 - The three persisted appearance slots now store `v2|argb|width|opacity|style`. Existing `v1` slots decode as Ballpoint and do not lose saved colors or widths. Unknown or corrupted v2 styles are rejected.

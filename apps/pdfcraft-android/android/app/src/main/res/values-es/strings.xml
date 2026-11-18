@@ -1397,6 +1397,10 @@
     <string name="ink_highlighter_straight_explanation">Cada trazo del resaltador sale como una línea recta.</string>
     <string name="ink_pressure">Presión</string>
     <string name="ink_pressure_explanation">Cuánto cambia la línea al presionar. Al 0 % mantiene un solo grosor.</string>
+    <string name="ink_pattern">Línea</string>
+    <string name="ink_pattern_solid">Continua</string>
+    <string name="ink_pattern_dashed">Discontinua</string>
+    <string name="ink_pattern_dotted">Punteada</string>
     <string name="ink_pressure_percent">Presión %1$d %%</string>
     <string name="pen_lab_title">Laboratorio de lápices</string>
     <string name="pen_lab_summary">Ajusta cómo responde cada lápiz a la presión y la velocidad</string>
