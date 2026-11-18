@@ -787,6 +787,7 @@
     <string name="toolbar_label_password">Password</string>
     <string name="toolbar_label_combine">Unisci</string>
     <string name="toolbar_label_compress">Comprimi</string>
+    <string name="toolbar_label_export">Esporta</string>
     <string name="toolbar_label_organize">Organizza</string>
     <string name="toolbar_label_crop">Ritaglia</string>
     <string name="toolbar_label_recognize">Riconosci</string>
