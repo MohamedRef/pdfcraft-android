@@ -489,7 +489,8 @@ internal class PenDynamics(
      * swell the start of every stroke and take it back a pen width later.
      */
     fun endPreview(points: List<Offset>, scales: List<Float>, pending: Triple<Offset, Float, Float>? = null, tip: Offset? = null): InkEndPreview? {
-        if (!(d.taperEnd > 0f) || points.isEmpty() || points.size != scales.size) return null
+        if (points.isEmpty() || points.size != scales.size) return null
+        if (!(d.taperEnd > 0f)) return if (turnsAtOnce) levelEnd(points, scales, pending, tip) else null
         val extra = ArrayList<Offset>(2)
         val extraScales = ArrayList<Float>(2)
         var end = points.last()
@@ -527,6 +528,41 @@ internal class PenDynamics(
         inkEndTaper(stretch, tapered, length, PEN_MAX_TAPER_SLOPE / penWidthPt)
         return InkEndPreview(from, extra, tapered)
     }
+
+    /**
+     * A pen whose width follows the stroke's direction at once (#678, the calligraphy nib: a
+     * [PenDials.widthSlope] above the others'): the last sample not yet a point of the line can have
+     * a width the line's last point does not, so the end is drawn through it at its own width and on
+     * to the pen at that width, and the lift ([liftScale]) gives the line no other.
+     */
+    private val turnsAtOnce: Boolean get() = d.widthSlope > PEN_MAX_WIDTH_SLOPE + 1e-6f
+
+    private fun levelEnd(points: List<Offset>, scales: List<Float>, pending: Triple<Offset, Float, Float>?, tip: Offset?): InkEndPreview? {
+        val extra = ArrayList<Offset>(2)
+        val extraScales = ArrayList<Float>(2)
+        var end = points.last()
+        var endScale = scales.last()
+        pending?.let {
+            extra += it.first
+            extraScales += it.second
+            end = it.first
+            endScale = it.second
+        }
+        // as [InkSmoother.end]: the line is taken to the pen only when it stopped short of it
+        if (tip != null && tip.x.isFinite() && tip.y.isFinite() && (tip - end).getDistance() > InkSmoother.END_SLOP_PT) {
+            extra += tip
+            extraScales += endScale
+        }
+        return if (extra.isEmpty()) null else InkEndPreview(points.size, extra, extraScales)
+    }
+
+    /**
+     * The width of the point the line is taken to when the pen lifts ([InkSmoother.end]): for a pen
+     * that [turnsAtOnce], the width its last sample had, which the end was drawn with while the pen
+     * was down; for the others, the sample's own ([next]).
+     */
+    fun liftScale(p: Offset, timeMs: Long, pressure: Float, tiltRad: Float = Float.NaN): Float =
+        if (turnsAtOnce && lastOut.isFinite()) lastOut else next(p, timeMs, pressure, tiltRad)
 
     /** Whether this stroke shows the paper through a grain ([PenDials.grain]). */
     val grain: Boolean get() = d.grain
