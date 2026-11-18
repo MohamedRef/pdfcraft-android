@@ -3,7 +3,6 @@ package io.github.artcraftandroid.pdfcraft.ui.viewer
 import android.content.Context
 import android.database.Cursor
 import android.net.Uri
-import android.os.Build
 import android.provider.DocumentsContract
 import android.provider.OpenableColumns
 import androidx.compose.foundation.layout.Column
@@ -75,9 +74,10 @@ private fun sourceProperties(context: Context, uri: Uri?): SourceProperties {
     if (uri.scheme == "file") {
         val path = uri.path ?: return SourceProperties(location = uri.toString())
         val file = File(path)
-        val attributes = if (Build.VERSION.SDK_INT >= 26) runCatching {
+        // java.nio.file is there on every Android this app runs on (minSdk 29, #691)
+        val attributes = runCatching {
             Files.readAttributes(file.toPath(), BasicFileAttributes::class.java, LinkOption.NOFOLLOW_LINKS)
-        }.getOrNull() else null
+        }.getOrNull()
         return SourceProperties(
             name = file.name,
             mimeType = "application/pdf",
