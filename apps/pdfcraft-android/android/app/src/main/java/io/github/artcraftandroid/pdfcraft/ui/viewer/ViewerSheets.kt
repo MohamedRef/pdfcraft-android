@@ -176,7 +176,7 @@ fun MoreSheet(vm: AppViewModel, doc: OpenDocument) {
             if (!topBarHoldsShare(androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp)) {
                 SheetRow(LucideIcons.Share2, stringResource(R.string.common_share), { ctl.sheet = ViewerSheet.Share })
             }
-            SheetRow(LucideIcons.Copy, stringResource(R.string.common_save_copy), { close(); vm.sharing.saveCopyAs(doc) })
+            SaveRows(saveState(doc), onSave = { close(); vm.saveNow(doc, trigger = "save_menu") }, onSaveCopy = { close(); vm.sharing.saveCopyAs(doc) })
             if (vm.backups.backupTree != null) SheetRow(LucideIcons.RotateCcw, stringResource(R.string.backup_history), { ctl.sheet = ViewerSheet.Backups }, chevron = true)
             SheetRow(LucideIcons.GitCompare, stringResource(R.string.compare_with_older), { close(); vm.startCompare(doc) })
             SheetRow(LucideIcons.FileOutput, stringResource(R.string.sheet_export_as), { close(); vm.sharing.openExport(doc) })
@@ -189,6 +189,17 @@ fun MoreSheet(vm: AppViewModel, doc: OpenDocument) {
             Spacer(Modifier.height(8.dp))
         }
     }
+}
+
+/**
+ * ⋮ → File's save rows (#190): Save while the document has changes its file doesn't have yet,
+ * the same as tapping Unsaved changes on the top bar, then Save a copy. A file PdfCraft can't
+ * write (Kept in PdfCraft) gets no Save: Save a copy is how its changes leave the app.
+ */
+@Composable
+internal fun SaveRows(state: SaveState?, onSave: () -> Unit, onSaveCopy: () -> Unit) {
+    if (state == SaveState.Unsaved) SheetRow(LucideIcons.Save, stringResource(R.string.common_save), onSave)
+    SheetRow(LucideIcons.Copy, stringResource(R.string.common_save_copy), onSaveCopy)
 }
 
 /** When the file was modified: the time today, [yesterday] ("Yesterday"), else the date. */

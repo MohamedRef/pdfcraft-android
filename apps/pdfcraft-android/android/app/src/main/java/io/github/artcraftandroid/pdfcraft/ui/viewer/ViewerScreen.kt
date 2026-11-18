@@ -525,10 +525,7 @@ fun ViewerScreen(vm: AppViewModel, doc: OpenDocument) {
                             title = if (ctl.tool == ViewerTool.Edit) stringResource(R.string.common_tool_edit_pdf) else null,
                             undoLabel = if (doc.localUndo != null) stringResource(R.string.viewer_undo_drawing) else doc.info.undoLabel,
                             redoLabel = if (doc.localUndo != null) stringResource(R.string.viewer_undo_drawing) else doc.info.redoLabel,
-                            saveState = saveState(
-                                edited = doc.info.undo != null || doc.wroteOriginal, saving = doc.saving, dirty = doc.info.dirty,
-                                notWrittenBack = doc.notWrittenBack, writable = doc.writable, hasSource = doc.source != null,
-                            ),
+                            saveState = saveState(doc),
                             onSaveState = { vm.saveNow(doc) },
                             docName = doc.title,
                             onDocName = { selection.clear(); ctl.fileDetailsBack = ViewerSheet.None; ctl.sheet = ViewerSheet.FileDetails },

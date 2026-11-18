@@ -1109,8 +1109,11 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         return doc.file
     }
 
-    /** The top bar's save state, tapped: save now, or Save a copy when the original can't be written (#190). */
-    fun saveNow(doc: OpenDocument) {
+    /**
+     * The top bar's save state tapped, or ⋮ → File → Save ([trigger] `save_menu` in the log): save
+     * now, or Save a copy when the original can't be written (#190).
+     */
+    fun saveNow(doc: OpenDocument, trigger: String = "save_now") {
         if (doc.saving) return
         if (!doc.writable && doc.source != null) {
             sharing.saveCopyAs(doc)
@@ -1118,7 +1121,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         }
         viewModelScope.launch {
             openMutex.withLock {
-                if (document === doc && readOnlyPrompt == null && !resolvingReadOnly && save(doc, trigger = "save_now")) tell(text(R.string.save_state_saved))
+                if (document === doc && readOnlyPrompt == null && !resolvingReadOnly && save(doc, trigger = trigger)) tell(text(R.string.save_state_saved))
             }
         }
     }

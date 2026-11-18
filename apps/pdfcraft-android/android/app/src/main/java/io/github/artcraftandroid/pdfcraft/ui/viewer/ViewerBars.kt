@@ -67,6 +67,7 @@ import io.github.artcraftandroid.pdfcraft.ui.BarDivider
 import io.github.artcraftandroid.pdfcraft.ui.BarIcon
 import io.github.artcraftandroid.pdfcraft.ui.Inter
 import io.github.artcraftandroid.pdfcraft.ui.LucideIcons
+import io.github.artcraftandroid.pdfcraft.ui.PdfColors
 import io.github.artcraftandroid.pdfcraft.ui.pdfColors
 import kotlinx.coroutines.flow.first
 
@@ -679,6 +680,27 @@ internal fun saveState(edited: Boolean, saving: Boolean, dirty: Boolean, notWrit
     else -> SaveState.Unsaved
 }
 
+/** [doc]'s save state, the same on the top bar and in ⋮ (#190). */
+internal fun saveState(doc: io.github.artcraftandroid.pdfcraft.ui.OpenDocument): SaveState? = saveState(
+    edited = doc.info.undo != null || doc.wroteOriginal, saving = doc.saving, dirty = doc.info.dirty,
+    notWrittenBack = doc.notWrittenBack, writable = doc.writable, hasSource = doc.source != null,
+)
+
+/** Unsaved changes and Kept in PdfCraft are buttons (#190): Save, or Save a copy when the original can't be written. */
+internal fun saveStateTappable(state: SaveState): Boolean = state == SaveState.Unsaved || state == SaveState.KeptInApp
+
+/** How the save state is drawn: its icon, its words and what lies behind them. */
+internal data class SaveStateLook(val icon: Color, val text: Color, val background: Color)
+
+/**
+ * A save state that can be tapped looks like a button (#190): a chip tinted with the accent, the
+ * icon in the accent and the words in the text colour. The accent itself is too light for 12 sp
+ * words on white. Saved and Saving… stay quiet grey words.
+ */
+internal fun saveStateLook(state: SaveState, c: PdfColors): SaveStateLook =
+    if (saveStateTappable(state)) SaveStateLook(icon = c.accent, text = c.text, background = c.accent.copy(alpha = 0.12f))
+    else SaveStateLook(icon = c.textSecondary, text = c.textSecondary, background = Color.Transparent)
+
 /** The document's name on the top bar, and the size a name too wide for it steps down to before it is cut (#706). */
 private val DocNameSize = 15.sp
 private val DocNameSmallerSize = 14.sp
@@ -686,7 +708,7 @@ private val DocNameSmallerSize = 14.sp
 /**
  * The document's name on one line, cut in the middle when long so its start and end both show,
  * and the save state under it in small type (#525). Either may be missing; the name opens
- * File details, the save state keeps its own Save now tap. A name a little too wide at 15 sp is
+ * File details, and the save state is its own Save button (#190). A name a little too wide at 15 sp is
  * shown at 14 sp before it is cut (#706): "PdfCraft sample" whole on a 360 dp phone.
  */
 @Composable
@@ -728,16 +750,19 @@ private fun SaveStateLabel(state: SaveState, onClick: () -> Unit, compact: Boole
         SaveState.Unsaved -> LucideIcons.Save to R.string.save_state_unsaved
         SaveState.KeptInApp -> LucideIcons.TriangleAlert to R.string.save_state_kept
     }
-    val tappable = state == SaveState.Unsaved || state == SaveState.KeptInApp
-    val action = stringResource(if (state == SaveState.KeptInApp) R.string.common_save_copy else R.string.save_state_save_now)
+    val tappable = saveStateTappable(state)
+    val look = saveStateLook(state, c)
+    // TalkBack: "Unsaved changes, button, double-tap to save" (#190), the same Save as ⋮ → File
+    val action = stringResource(if (state == SaveState.KeptInApp) R.string.common_save_copy else R.string.common_save)
     Row(
         Modifier.clip(androidx.compose.foundation.shape.RoundedCornerShape(6.dp))
+            .background(look.background)
             .then(if (tappable) Modifier.clickable(onClickLabel = action, role = Role.Button, onClick = onClick) else Modifier)
             .padding(horizontal = 4.dp, vertical = if (compact) 1.dp else 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(icon, null, tint = c.textSecondary, modifier = Modifier.size(if (compact) 12.dp else 14.dp))
+        Icon(icon, null, tint = look.icon, modifier = Modifier.size(if (compact) 12.dp else 14.dp))
         Spacer(Modifier.width(4.dp))
-        Text(stringResource(label), color = c.textSecondary, fontSize = 12.sp, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+        Text(stringResource(label), color = look.text, fontSize = 12.sp, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
     }
 }
