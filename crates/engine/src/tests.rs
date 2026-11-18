@@ -2539,6 +2539,32 @@ fn text_style_headings_are_read_page_by_page_and_can_stop() {
     assert_eq!(outline_titles(&s.get(id).unwrap().info.outline), given);
 }
 
+/// Android adaptation (#723): the text styles read page by page are those of `text_styles`. Each
+/// page is told before it is read; a stop gives `None` and reads no further.
+#[test]
+fn text_styles_are_read_page_by_page_and_can_stop() {
+    let mut s = Session::new();
+    let id = s.open("styled.pdf", None, Arc::new(styled_headings_fixture()), None).unwrap();
+    let doc = s.get(id).unwrap();
+    let mut told = Vec::new();
+    let styles = doc
+        .text_styles_watched(|done, pages| {
+            told.push((done, pages));
+            true
+        })
+        .unwrap();
+    assert_eq!(told, [(0, 3), (1, 3), (2, 3)]);
+    assert_eq!(styles, doc.text_styles());
+    assert_eq!(styles.len(), 3);
+    let mut asked = 0;
+    let stopped = doc.text_styles_watched(|done, _| {
+        asked += 1;
+        done < 1
+    });
+    assert_eq!(stopped, None);
+    assert_eq!(asked, 2, "no page is read after the stop");
+}
+
 /// `style` at another size.
 fn pdfcraft_engine_style(style: &text_style_bookmarks::TextStyle, size: f64) -> text_style_bookmarks::TextStyle {
     text_style_bookmarks::TextStyle { size, ..style.clone() }
