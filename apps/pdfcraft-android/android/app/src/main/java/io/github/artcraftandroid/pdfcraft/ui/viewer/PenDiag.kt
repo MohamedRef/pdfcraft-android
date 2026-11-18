@@ -64,9 +64,12 @@ internal object PenDiag {
     fun pattern(pattern: String, pieces: Int, points: Int) =
         Diag.event(DiagArea.Ink, "ink_pattern", "pattern" to pattern, "pieces" to pieces, "points" to points)
 
-    /** A lasso selection was resized or turned by its handle (#689): numbers only. */
-    fun lassoTransform(handle: String, scale: Float, angle: Float, drafts: Int, saved: Int, notTurned: Int) =
-        Diag.event(DiagArea.Ink, "lasso_transform", "handle" to handle, "scale" to scale, "angle" to Math.round(angle), "drafts" to drafts, "saved" to saved, "not_turned" to notTurned)
+    /**
+     * A lasso selection was resized or turned by its handle (#689): numbers only, and for a turn
+     * which side of the box its handle was on ([side], #709; null for a resize).
+     */
+    fun lassoTransform(handle: String, scale: Float, angle: Float, drafts: Int, saved: Int, notTurned: Int, side: String? = null) =
+        Diag.event(DiagArea.Ink, "lasso_transform", "handle" to handle, "scale" to scale, "angle" to Math.round(angle), "drafts" to drafts, "saved" to saved, "not_turned" to notTurned, "side" to side)
 
     /**
      * The drafts of a Draw session were saved (#609): how many strokes with how many points went

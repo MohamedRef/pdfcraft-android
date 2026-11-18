@@ -1,23 +1,79 @@
 package io.github.artcraftandroid.pdfcraft.ui.viewer
 
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.sin
 
 /**
  * The lasso selection's handles (#689): [Resize] at its bottom-right corner scales it about the
- * opposite corner, keeping its proportions; [Turn], above its middle, turns it about its centre.
- * Page points throughout, y pointing down, so a positive angle turns clockwise as seen (the
- * engine's `comments_edit_many` `transform` takes it the same way).
+ * opposite corner, keeping its proportions; [Turn], above its middle (or beside or below it where
+ * that is hidden, #709), turns it about its centre. Page points throughout, y pointing down, so a
+ * positive angle turns clockwise as seen (the engine's `comments_edit_many` `transform` takes it
+ * the same way).
  */
 internal enum class LassoHandle { Resize, Turn }
 
-/** How far above the selection the turn handle sits, in dp on the glass. */
+/** How far off the selection the turn handle sits, in dp on the glass. */
 internal const val LASSO_TURN_HANDLE_DP = 28f
 
 /** How near a handle a touch counts as on it, in dp on the glass. */
 internal const val LASSO_HANDLE_SLOP_DP = 18f
+
+/** The radius of a handle's knob, in dp on the glass. */
+internal const val LASSO_KNOB_DP = 7f
+
+/** Which side of the selection the turn handle is on (#709), in the order they are tried. */
+internal enum class LassoTurnSide { Above, Right, Left, Below }
+
+/**
+ * What the turn handle has to keep clear of (#709), in page points: [visible] is the part of the
+ * selection's page that is shown and can be touched (the top bar, the tab strip and the toolbar
+ * cover the rest of the glass, and a touch off the page does not reach the handles); [menu] is
+ * where the selection's buttons are, which take the touches on them; [knob] is a handle's radius
+ * and [slop] how near a handle a touch counts as on it.
+ */
+internal data class LassoTurnRoom(val visible: Rect, val menu: Rect?, val knob: Float, val slop: Float)
+
+/** The turn handle's [side] of the selection, its knob's centre and where its stem meets the box ([root]). */
+internal data class LassoTurnSpot(val side: LassoTurnSide, val knob: Offset, val root: Offset)
+
+/**
+ * Where the turn handle of a selection in [box] is, [turnOffset] page points off it (#709): above
+ * its middle where its knob and the touches around it are shown; else off the middle of its right
+ * side, its left side or its bottom, the first where they are shown and kept off the buttons and
+ * off the resize handle's touches; else the first of the four where the knob itself is shown, off
+ * the buttons and the resize knob; else, or with no [room], above. The drawing and the touch both
+ * go by it, so the handle is taken where it is drawn.
+ */
+internal fun lassoTurnSpot(box: InkLassoBounds, turnOffset: Float, room: LassoTurnRoom?): LassoTurnSpot {
+    val cx = (box.left + box.right) / 2f
+    val cy = (box.top + box.bottom) / 2f
+    val spots = LassoTurnSide.entries.map { side ->
+        when (side) {
+            LassoTurnSide.Above -> LassoTurnSpot(side, Offset(cx, box.top - turnOffset), Offset(cx, box.top))
+            LassoTurnSide.Right -> LassoTurnSpot(side, Offset(box.right + turnOffset, cy), Offset(box.right, cy))
+            LassoTurnSide.Left -> LassoTurnSpot(side, Offset(box.left - turnOffset, cy), Offset(box.left, cy))
+            LassoTurnSide.Below -> LassoTurnSpot(side, Offset(cx, box.bottom + turnOffset), Offset(cx, box.bottom))
+        }
+    }
+    if (room == null) return spots[0]
+    val corner = Offset(box.right, box.bottom)
+    // [margin] inside what is shown and off the buttons, and at least [apart] from the resize handle
+    fun fits(s: LassoTurnSpot, margin: Float, apart: Float): Boolean {
+        val p = s.knob
+        val v = room.visible
+        if (!(p.x >= v.left + margin && p.x <= v.right - margin && p.y >= v.top + margin && p.y <= v.bottom - margin)) return false
+        if (room.menu?.inflate(margin)?.contains(p) == true) return false
+        return (p - corner).getDistance() >= apart
+    }
+    val reach = maxOf(room.knob, room.slop)
+    // above stays above wherever it is shown, as before (#689); beside or below, the two handles' touches stay apart
+    return spots.firstOrNull { fits(it, reach, if (it.side == LassoTurnSide.Above) 0f else 2f * room.slop) }
+        ?: spots.firstOrNull { fits(it, room.knob, room.knob + room.slop) }
+        ?: spots[0]
+}
 
 /** The smallest and largest the selection may be scaled in one drag. */
 internal const val LASSO_MIN_SCALE = 0.05f
@@ -26,16 +82,19 @@ internal const val LASSO_MAX_SCALE = 20f
 /** A turn this near a quarter turn (in degrees) is that quarter turn. */
 internal const val LASSO_TURN_SNAP_DEG = 4f
 
-/** Where [handle] is for a selection in [box], with the turn handle [turnOffset] page points above it. */
-internal fun lassoHandlePosition(box: InkLassoBounds, handle: LassoHandle, turnOffset: Float): Offset = when (handle) {
+/**
+ * Where [handle] is for a selection in [box], with the turn handle [turnOffset] page points off it
+ * where [room] leaves it shown ([lassoTurnSpot]).
+ */
+internal fun lassoHandlePosition(box: InkLassoBounds, handle: LassoHandle, turnOffset: Float, room: LassoTurnRoom? = null): Offset = when (handle) {
     LassoHandle.Resize -> Offset(box.right, box.bottom)
-    LassoHandle.Turn -> Offset((box.left + box.right) / 2f, box.top - turnOffset)
+    LassoHandle.Turn -> lassoTurnSpot(box, turnOffset, room).knob
 }
 
-/** The handle [p] is on (within [slop] page points), the turn handle first; null when on neither. */
-internal fun lassoHandleAt(box: InkLassoBounds, p: Offset, slop: Float, turnOffset: Float): LassoHandle? {
+/** The handle [p] is on (within [slop] page points), the resize handle first; null when on neither. */
+internal fun lassoHandleAt(box: InkLassoBounds, p: Offset, slop: Float, turnOffset: Float, room: LassoTurnRoom? = null): LassoHandle? {
     if (!(p.x.isFinite() && p.y.isFinite())) return null
-    return LassoHandle.entries.firstOrNull { (lassoHandlePosition(box, it, turnOffset) - p).getDistance() <= slop }
+    return LassoHandle.entries.firstOrNull { (lassoHandlePosition(box, it, turnOffset, room) - p).getDistance() <= slop }
 }
 
 /** The point the handle turns or scales about: the opposite corner for a resize, the centre for a turn. */

@@ -812,6 +812,8 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
     var transformFrom by remember { mutableStateOf(Offset.Zero) }
     var transformScale by remember { androidx.compose.runtime.mutableFloatStateOf(1f) }
     var transformAngle by remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
+    // which side of the box the turn handle was taken on (#709), for the log
+    var transformSide by remember { mutableStateOf(LassoTurnSide.Above) }
     fun endTransform() { transformHandle = null; transformScale = 1f; transformAngle = 0f }
     fun clearSelection() { selected.clear(); savedSelected.clear(); lassoPage = null; lassoPoints.clear(); moving = false; moveAnchor = null; moveOffset = Offset.Zero; endTransform() }
     /** Every selected outline in page points: draft stroke points and saved comments' rectangles. */
@@ -1430,6 +1432,30 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
         pieces
     }
 
+    /**
+     * What the lasso's turn handle has to keep clear of on [page] (#709), in its points: the part of
+     * the page shown under the top bar and the tab strip and above the toolbar and the zoom pad, and
+     * the selection's buttons. Null before the layer is laid out (the handle is then above the box).
+     */
+    fun lassoTurnRoom(page: Int): LassoTurnRoom? {
+        val size = doc.viewer.pages.getOrNull(page) ?: return null
+        val perPt = doc.viewer.pixelsPerPoint(page).takeIf { it > 0f } ?: return null
+        if (layerSize.width <= 0f || layerSize.height <= 0f) return null
+        val covered = maxOf(doc.viewer.padBottom, if (doc.controller.zoomBoxOn) padHeightPx else 0f)
+        val a = doc.viewer.screenToPageUnclamped(page, Offset(0f, doc.viewer.padTop)) ?: return null
+        val b = doc.viewer.screenToPageUnclamped(page, Offset(layerSize.width, layerSize.height - covered)) ?: return null
+        val menu = lassoMenuBounds?.let { m ->
+            val p = doc.viewer.screenToPageUnclamped(page, m.topLeft)
+            val q = doc.viewer.screenToPageUnclamped(page, m.bottomRight)
+            if (p != null && q != null) androidx.compose.ui.geometry.Rect(p.x, p.y, q.x, q.y) else null
+        }
+        val ptPerDp = density.density / perPt
+        return LassoTurnRoom(
+            androidx.compose.ui.geometry.Rect(maxOf(0f, a.x), maxOf(0f, a.y), minOf(size.width, b.x), minOf(size.height, b.y)),
+            menu, LASSO_KNOB_DP * ptPerDp, LASSO_HANDLE_SLOP_DP * ptPerDp,
+        )
+    }
+
     fun beginLasso(p: Offset) {
         val at = doc.viewer.screenToPage(p) ?: run { clearSelection(); return }
         val existing = lassoPage
@@ -1437,11 +1463,15 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
             val b = selectionBounds
             // a handle first (#689): the resize handle is a corner of the box, which a move would take
             val perPt = doc.viewer.pixelsPerPoint(at.page).takeIf { it > 0f } ?: 1f
-            val handle = b?.let { lassoHandleAt(it, Offset(at.x, at.y), LASSO_HANDLE_SLOP_DP * density.density / perPt, LASSO_TURN_HANDLE_DP * density.density / perPt) }
+            val turnOffset = LASSO_TURN_HANDLE_DP * density.density / perPt
+            // the turn handle where it is drawn: beside or below the box where above is hidden (#709)
+            val room = lassoTurnRoom(at.page)
+            val handle = b?.let { lassoHandleAt(it, Offset(at.x, at.y), LASSO_HANDLE_SLOP_DP * density.density / perPt, turnOffset, room) }
             if (b != null && handle != null) {
                 transformHandle = handle
                 transformPivot = lassoPivot(b, handle)
-                transformFrom = lassoHandlePosition(b, handle, LASSO_TURN_HANDLE_DP * density.density / perPt)
+                transformFrom = lassoHandlePosition(b, handle, turnOffset, room)
+                transformSide = lassoTurnSpot(b, turnOffset, room).side
                 transformScale = 1f
                 transformAngle = 0f
                 return
@@ -1508,6 +1538,7 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
         val scale = if (handle == LassoHandle.Resize) transformScale else 1f
         val angle = if (handle == LassoHandle.Turn) transformAngle else 0f
         val pivot = transformPivot
+        val side = if (handle == LassoHandle.Turn) transformSide.name.lowercase() else null
         endTransform()
         if (kotlin.math.abs(scale - 1f) < 1e-3f && kotlin.math.abs(angle) < 0.05f) return
         val draftCount = selected.size
@@ -1539,7 +1570,7 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
             if (selected.isEmpty()) lassoPage = null
             if (notTurned > 0) vm.tell(text(R.string.ink_lasso_not_turned))
         }
-        PenDiag.lassoTransform(handle.name.lowercase(), scale, angle, draftCount, savedCount, notTurned)
+        PenDiag.lassoTransform(handle.name.lowercase(), scale, angle, draftCount, savedCount, notTurned, side)
     }
 
     fun finishLasso(p: Offset) {
@@ -2108,17 +2139,20 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                         val b = doc.viewer.pageToScreen(page, bounds.right + moveOffset.x, bounds.bottom + moveOffset.y)
                         drawRect(Color(0xFF1A85CA).copy(alpha = 0.12f), a, Size(b.x - a.x, b.y - a.y))
                         drawRect(Color(0xFF1A85CA), a, Size(b.x - a.x, b.y - a.y), style = Stroke(width = 1.5.dp.toPx()))
-                        // the resize handle at the corner and the turn handle above (#689), while the selection stands still
+                        // the resize handle at the corner and the turn handle above (#689), or beside or below
+                        // the box where above is hidden (#709), while the selection stands still
                         if (!moving && lassoPoints.isEmpty()) {
                             val perPt = doc.viewer.pixelsPerPoint(page).takeIf { it > 0f } ?: 1f
                             val turnOffset = LASSO_TURN_HANDLE_DP * density.density / perPt
                             val corner = lassoHandlePosition(bounds, LassoHandle.Resize, turnOffset).let { doc.viewer.pageToScreen(page, it.x, it.y) }
-                            val turn = lassoHandlePosition(bounds, LassoHandle.Turn, turnOffset).let { doc.viewer.pageToScreen(page, it.x, it.y) }
-                            val top = doc.viewer.pageToScreen(page, (bounds.left + bounds.right) / 2f, bounds.top)
-                            drawLine(Color(0xFF1A85CA), top, turn, strokeWidth = 1.5.dp.toPx())
+                            // the same spot the touch looks for it at (beginLasso)
+                            val spot = lassoTurnSpot(bounds, turnOffset, lassoTurnRoom(page))
+                            val turn = doc.viewer.pageToScreen(page, spot.knob.x, spot.knob.y)
+                            // its stalk from the box's edge nearest it
+                            drawLine(Color(0xFF1A85CA), doc.viewer.pageToScreen(page, spot.root.x, spot.root.y), turn, strokeWidth = 1.5.dp.toPx())
                             for (o in listOf(corner, turn)) {
-                                drawCircle(Color.White, 7.dp.toPx(), o)
-                                drawCircle(Color(0xFF1A85CA), 7.dp.toPx(), o, style = Stroke(width = 2.dp.toPx()))
+                                drawCircle(Color.White, LASSO_KNOB_DP.dp.toPx(), o)
+                                drawCircle(Color(0xFF1A85CA), LASSO_KNOB_DP.dp.toPx(), o, style = Stroke(width = 2.dp.toPx()))
                             }
                             drawCircle(Color(0xFF1A85CA), 2.5.dp.toPx(), turn)
                         }
