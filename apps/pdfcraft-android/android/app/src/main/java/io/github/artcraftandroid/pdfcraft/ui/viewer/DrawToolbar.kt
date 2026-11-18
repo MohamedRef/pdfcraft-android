@@ -106,6 +106,8 @@ internal fun DrawToolbarBar(ctl: ViewerController, prefs: ToolPrefs, onMarkup: (
             val markupWidth = if (onMarkup != null) DrawToolSlot * 4 + 9.dp else 0.dp
             val shared = DrawToolSlot * primarySlots + markupWidth <= maxWidth
             val primaryWidth = maxOf(maxWidth, DrawToolSlot * primarySlots)
+            // read here: the Box and Row scopes below cannot see BoxWithConstraints' maxWidth
+            val barWidth = maxWidth
             val pens = rememberScrollState()
             val primaryTools: @Composable () -> Unit = {
                 InkStyle.entries.forEach { style ->
@@ -187,7 +189,7 @@ internal fun DrawToolbarBar(ctl: ViewerController, prefs: ToolPrefs, onMarkup: (
             Box(Modifier.fillMaxSize().horizontalScroll(pens)) {
                 if (shared) {
                     Row(
-                        Modifier.width(maxWidth).height(DrawRowHeight),
+                        Modifier.width(barWidth).height(DrawRowHeight),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceEvenly,
                     ) {
