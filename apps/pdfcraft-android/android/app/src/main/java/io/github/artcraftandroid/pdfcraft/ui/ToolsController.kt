@@ -165,7 +165,11 @@ class ToolsController internal constructor(private val vm: AppViewModel) {
         }
     }
 
-    /** Append heading-derived contents with the native engine; reject stale style analyses. */
+    /**
+     * Append heading-derived contents with the native engine; reject stale style analyses. The
+     * pages read for the headings are counted, with Cancel between them (#652): a stop adds no
+     * contents and leaves no undo step. The job's `job_end` line has its time, pages and size.
+     */
     internal fun createStyleBookmarks(
         doc: OpenDocument,
         generation: ULong,
@@ -177,14 +181,19 @@ class ToolsController internal constructor(private val vm: AppViewModel) {
             return@job
         }
         val levels = io.github.artcraftandroid.pdfcraft.engine.headingStyleArguments(styles)
-        eng.command {
-            // Check and mutate in one serialized native command: a queued double tap or another
-            // edit cannot apply a second tree from the same stale analysis.
-            val current = document(doc.id)
-            require(current.generation == generation && !current.signed && current.readOnlyReason == null &&
-                current.allowsCopying && current.allowsAssembly) { text(R.string.text_styles_unavailable) }
-            execute("bookmark_from_text_styles", Engine.toJson(mapOf("doc" to doc.id, "levels" to levels)).toString())
-        }
+        val args = mapOf("doc" to doc.id, "levels" to levels)
+        vm.watchedTool(eng, doc, "contents_from_headings", "bookmark_from_text_styles", args,
+            text(R.string.busy_cancel_text_styles), ::textStylesLine) { work ->
+            eng.command {
+                // Check and mutate in one serialized native command: a queued double tap or another
+                // edit cannot apply a second tree from the same stale analysis.
+                val current = document(doc.id)
+                require(current.generation == generation && !current.signed && current.readOnlyReason == null &&
+                    current.allowsCopying && current.allowsAssembly) { text(R.string.text_styles_unavailable) }
+                val out = executeWatched("bookmark_from_text_styles", Engine.toJson(args).toString(), work)
+                if (out.trimStart().startsWith("{")) org.json.JSONObject(out) else org.json.JSONObject()
+            }
+        } ?: return@job // stopped: nothing was added
         vm.refresh(doc)
         if (vm.document === doc) doc.controller.sheet = io.github.artcraftandroid.pdfcraft.ui.viewer.ViewerSheet.Bookmarks
         vm.tell(text(R.string.text_styles_created))

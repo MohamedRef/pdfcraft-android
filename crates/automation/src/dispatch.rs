@@ -302,7 +302,18 @@ impl Automation {
             }
             "bookmark_from_text_styles" => {
                 let levels = text_style_levels(&a)?;
-                let mut out = self.apply(&a, Edit::BookmarksFromTextStyles { levels })?;
+                // Android adaptation (#652): the headings are read page by page first, each page
+                // told to the job watch (`reading`) with a stop between pages, then put in as one
+                // edit (`adding`). A stop makes no bookmarks and no undo step.
+                let watch = self.job_watch.clone();
+                let found = self
+                    .doc(&a)?
+                    .text_style_headings(&levels, |done, total| {
+                        watch.as_ref().is_none_or(|w| w(crate::JobStep { stage: "reading", done, total, fraction: 0.95 * Self::part(done, total), attempt: 1 }))
+                    })
+                    .map_err(failed)?;
+                self.job_step("adding", 0, 0, 0.95)?;
+                let mut out = self.apply(&a, Edit::BookmarksFromTextStyles { levels, found: Some(found) })?;
                 let listing = self.bookmark_listing(&a)?;
                 out["bookmarks"] = listing["bookmarks"].clone();
                 out["next"] = listing["next"].clone();

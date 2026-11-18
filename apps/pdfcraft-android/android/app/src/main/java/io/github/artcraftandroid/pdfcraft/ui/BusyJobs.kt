@@ -23,6 +23,7 @@ internal object BusyJobs {
         "print_busy", // Print options: pages drawn for Print as image, sheet by sheet, then writing † (#634)
         "compare_busy", // Compare: both files' pages read, the comparing, page by page for visual † (#634)
         "scan_enhance_busy", // Enhance scanned pages (at most 12): image by image † (#646)
+        "text_styles_creating", // Contents from headings: the pages read for the headings †, then one edit (#652)
     )
 
     /**
@@ -48,8 +49,5 @@ internal object BusyJobs {
         "sheet_copy_embedded_bookmarks_busy" to "one call: the bookmarks, not the pages",
         "sheet_export_embedded_bookmarks" to "one call: the bookmarks, not the pages",
         "sheet_import_embedded_bookmarks" to "one call, one undo step",
-        // reads every page's text inside one edit, which cannot report or stop part-way; on a long
-        // book it is the one job here that grows with the pages
-        "text_styles_creating" to "one edit, undone whole",
     )
 }

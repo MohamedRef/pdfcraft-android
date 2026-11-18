@@ -437,6 +437,24 @@ impl Document {
         self.editor.as_ref().map(|e| crate::text_style_bookmarks::styles(&e.cos)).unwrap_or_default()
     }
 
+    /// Android adaptation (#652): the bookmarks [`Edit::BookmarksFromTextStyles`] makes for
+    /// `levels`, read page by page before the edit so a long book can say how far it is and
+    /// stop: `step(done, pages)` is told before each page. Refused as the edit is (a read-only
+    /// document, its permissions, the levels) before anything is read; a `step` that says stop
+    /// gives [`EditError::Cancelled`].
+    pub fn text_style_headings(
+        &self,
+        levels: &[crate::text_style_bookmarks::TextStyle],
+        step: impl FnMut(usize, usize) -> bool,
+    ) -> Result<Vec<pdfcraft_organize::OutlineEntry>, EditError> {
+        let editor = self.editor.as_ref().ok_or_else(|| EditError::ReadOnly(self.read_only_reason.clone().unwrap_or_default()))?;
+        if let Some(p) = editor.cos.permissions() {
+            crate::edit::check_permission(&Edit::BookmarksFromTextStyles { levels: Vec::new(), found: None }, &p)?;
+        }
+        crate::text_style_bookmarks::check_levels(levels).map_err(EditError::Invalid)?;
+        crate::text_style_bookmarks::headings_watched(&editor.cos, levels, step).ok_or(EditError::Cancelled)
+    }
+
     /// Edit a PDF ▸ Edit text: the lines of existing text on `page` (0-based).
     pub fn text_lines(&self, page: usize) -> Vec<pdfcraft_edit::TextLine> {
         self.editor.as_ref().and_then(|e| pdfcraft_edit::text_lines(&e.cos, page).ok()).unwrap_or_default()

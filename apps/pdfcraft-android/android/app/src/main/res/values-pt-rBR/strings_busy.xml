@@ -41,4 +41,6 @@
     <string name="busy_cancel_protect">Cancelar para antes da próxima etapa, e também enquanto a cópia protegida é salva. Nenhum arquivo é criado e seu documento fica como está.</string>
     <string name="scan_enhance_busy_image">Melhorando a imagem digitalizada %1$d de %2$d…</string>
     <string name="busy_cancel_scan_enhance">Cancelar para antes da próxima imagem. Nada muda nas suas páginas.</string>
+    <string name="text_styles_reading">Criando sumário do PDF: lendo a página %1$d de %2$d…</string>
+    <string name="busy_cancel_text_styles">Cancelar para antes da próxima página. Nenhum sumário é adicionado e seu documento fica como está.</string>
 </resources>

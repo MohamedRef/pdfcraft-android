@@ -41,4 +41,6 @@
     <string name="busy_cancel_protect">Annuler s’arrête avant l’étape suivante, et aussi pendant l’enregistrement de la copie protégée. Aucun fichier n’est créé et votre document reste intact.</string>
     <string name="scan_enhance_busy_image">Amélioration de l’image numérisée %1$d sur %2$d…</string>
     <string name="busy_cancel_scan_enhance">Annuler s’arrête avant l’image suivante. Rien ne change sur vos pages.</string>
+    <string name="text_styles_reading">Création du sommaire PDF : lecture de la page %1$d sur %2$d…</string>
+    <string name="busy_cancel_text_styles">Annuler s’arrête avant la page suivante. Aucun sommaire n’est ajouté et votre document reste intact.</string>
 </resources>

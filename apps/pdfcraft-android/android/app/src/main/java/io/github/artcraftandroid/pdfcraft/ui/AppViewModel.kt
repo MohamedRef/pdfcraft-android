@@ -2223,6 +2223,8 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
      * failure is thrown, as from [Engine.tool]. Logs `job_end` with [job], how it ended
      * (`finished`, `stopped`, `failed`), its time, the file's size and its page count, and where a
      * stopped run was. With no [doc] (Combine), [bytes] and [pages] say what the job worked on.
+     * [run] calls the tool with the job; by default it is [Engine.tool], and a job that checks the
+     * document in the same command as the tool (Contents from headings, #652) calls it itself.
      */
     internal suspend fun watchedTool(
         eng: Engine,
@@ -2234,6 +2236,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
         line: (stage: String, done: Int, total: Int) -> JobLine?,
         bytes: Long = doc?.info?.fileSize?.toLong() ?: 0L,
         pages: Int = doc?.pageCount ?: 0,
+        run: suspend (io.github.artcraftandroid.pdfcraft.core.ToolJob) -> JSONObject = { eng.tool(name, args, it) },
     ): JSONObject? {
         val work = io.github.artcraftandroid.pdfcraft.core.ToolJob()
         val stop = offerCancel(cancelNote) { work.cancel() }
@@ -2255,7 +2258,7 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             jobEnd(job, doc, outcome, started, bytes, pages, p.stage, p.done.toInt(), p.total.toInt(), p.percent.toInt())
         }
         return try {
-            eng.tool(name, args, work).also { end("finished") }
+            run(work).also { end("finished") }
         } catch (e: MobileException) {
             if (!stop.asked) {
                 end("failed")

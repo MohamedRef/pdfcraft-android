@@ -41,4 +41,6 @@
     <string name="busy_cancel_protect">Cancelar se detiene antes del siguiente paso, y también mientras se guarda la copia protegida. No se crea ningún archivo y tu documento queda como está.</string>
     <string name="scan_enhance_busy_image">Mejorando la imagen escaneada %1$d de %2$d…</string>
     <string name="busy_cancel_scan_enhance">Cancelar se detiene antes de la siguiente imagen. No cambia nada en tus páginas.</string>
+    <string name="text_styles_reading">Creando el índice del PDF: leyendo la página %1$d de %2$d…</string>
+    <string name="busy_cancel_text_styles">Cancelar se detiene antes de la página siguiente. No se añade ningún índice y tu documento queda como está.</string>
 </resources>

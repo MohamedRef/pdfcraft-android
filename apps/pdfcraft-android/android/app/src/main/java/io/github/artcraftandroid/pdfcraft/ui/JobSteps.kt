@@ -104,3 +104,13 @@ internal fun scanEnhanceLine(stage: String, done: Int, total: Int): JobLine? = w
     stage == "images" || stage == "applying" -> JobLine(R.string.scan_enhance_busy_image, listOf(minOf(done + 1, total), total))
     else -> null
 }
+
+/**
+ * The line for one step of `bookmark_from_text_styles` (#652): `reading`, page [done] of [total]
+ * read for the headings; `adding` them keeps the job's own message.
+ */
+internal fun textStylesLine(stage: String, done: Int, total: Int): JobLine? = when {
+    total <= 0 -> null
+    stage == "reading" -> JobLine(R.string.text_styles_reading, listOf(minOf(done + 1, total), total))
+    else -> null
+}
