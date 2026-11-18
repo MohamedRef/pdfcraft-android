@@ -1641,6 +1641,7 @@
     <string name="pen_lab_group_tip">Tip</string>
     <string name="pen_lab_nib">Flat nib</string>
     <string name="pen_lab_nib_angle">Nib angle (°)</string>
+    <string name="pen_lab_width_slope">Width change per pt</string>
     <string name="pen_lab_taper_start">Pointed start (pen widths)</string>
     <string name="pen_lab_taper_end">Pointed end (pen widths)</string>
     <string name="pen_lab_damping">Width smoothing (ms)</string>
@@ -1822,6 +1823,7 @@
     <string name="ink_width_value">%1$.1f pt</string>
     <string name="ink_style_ballpoint">Ballpoint</string>
     <string name="ink_style_fountain">Fountain</string>
+    <string name="ink_style_calligraphy">Calligraphy</string>
     <string name="ink_style_pencil">Pencil</string>
     <string name="ink_style_brush">Brush</string>
     <string name="ink_style_highlighter">Highlighter</string>
@@ -1842,6 +1844,7 @@
     <string name="ink_toolbar_brush">Brush</string>
     <string name="ink_toolbar_pencil">Pencil</string>
     <string name="ink_toolbar_fountain">Fountain</string>
+    <string name="ink_toolbar_calligraphy">Calligraphy</string>
     <string name="ink_toolbar_ballpoint">Ball</string>
     <!-- Translator note: Text recognition review: shows, per page, the words the app was unsure about after reading text from an image. -->
     <string name="ocr_review_title">Review recognized text</string>

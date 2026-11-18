@@ -84,6 +84,20 @@ internal fun PenNibPreview(color: Color, width: Float, opacity: Float, style: In
                 drawLine(dark, Offset(cx, bottom - 11f * u), Offset(cx, bottom + 8f * u), 1.4f * u)
                 drawCircle(dark, radius = 2.5f * u, center = Offset(cx, bottom - 3f * u))
             }
+            InkStyle.Calligraphy -> {
+                // a holder and a broad, square-cut nib, its edge slanted as the pen is held
+                drawRoundRect(dark, Offset(cx - 7f * u, top), Size(14f * u, bottom - top - 12f * u), cornerRadius = androidx.compose.ui.geometry.CornerRadius(4f * u))
+                val nib = Path().apply {
+                    moveTo(cx - 8f * u, bottom - 13f * u)
+                    lineTo(cx + 8f * u, bottom - 13f * u)
+                    lineTo(cx + 9f * u, bottom + 6f * u)
+                    lineTo(cx - 9f * u, bottom + 12f * u)
+                    close()
+                }
+                drawPath(nib, Color(0xFFC8A76B))
+                drawLine(color.copy(alpha = 1f), Offset(cx - 9f * u, bottom + 12f * u), Offset(cx + 9f * u, bottom + 6f * u), 2.2f * u)
+                drawLine(dark, Offset(cx, bottom - 11f * u), Offset(cx, bottom + 5f * u), 1.2f * u)
+            }
             InkStyle.Pencil -> {
                 drawRect(Color(0xFFD6B079), Offset(cx - 8f * u, top), Size(16f * u, bottom - top - 11f * u))
                 drawRect(Color(0xFFF0D3A6), Offset(cx - 8f * u, top), Size(4f * u, bottom - top - 11f * u))
@@ -126,7 +140,7 @@ internal fun PenNibPreview(color: Color, width: Float, opacity: Float, style: In
         drawLine(
             color.copy(alpha = inkAlpha),
             Offset(cx - 19f * u, baseline),
-            Offset(cx + 19f * u, baseline - if (style == InkStyle.Fountain || style == InkStyle.Brush) 3f * u else 0f),
+            Offset(cx + 19f * u, baseline - if (style == InkStyle.Fountain || style == InkStyle.Brush || style == InkStyle.Calligraphy) 3f * u else 0f),
             strokeWidth = (visibleWidth.coerceIn(1f, 22f) * 0.45f + 1.2f) * u,
             cap = if (style == InkStyle.Highlighter) StrokeCap.Square else StrokeCap.Round,
         )
@@ -511,6 +525,7 @@ private fun HexColorField(current: Int, onColor: (Int) -> Unit) {
 internal fun inkStyleLabel(style: InkStyle): Int = when (style) {
     InkStyle.Ballpoint -> R.string.ink_style_ballpoint
     InkStyle.Fountain -> R.string.ink_style_fountain
+    InkStyle.Calligraphy -> R.string.ink_style_calligraphy
     InkStyle.Pencil -> R.string.ink_style_pencil
     InkStyle.Brush -> R.string.ink_style_brush
     InkStyle.Highlighter -> R.string.ink_style_highlighter

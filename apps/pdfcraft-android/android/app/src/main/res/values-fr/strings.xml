@@ -1288,6 +1288,7 @@
     <string name="pen_lab_group_tip">Pointe</string>
     <string name="pen_lab_nib">Plume plate</string>
     <string name="pen_lab_nib_angle">Angle de la plume (°)</string>
+    <string name="pen_lab_width_slope">Variation de largeur par pt</string>
     <string name="pen_lab_taper_start">Début en pointe (largeurs de stylo)</string>
     <string name="pen_lab_taper_end">Fin en pointe (largeurs de stylo)</string>
     <string name="pen_lab_damping">Lissage de la largeur (ms)</string>
@@ -1448,6 +1449,7 @@
     <string name="ink_width_value">%1$.1f pt</string>
     <string name="ink_style_ballpoint">Bille</string>
     <string name="ink_style_fountain">Plume</string>
+    <string name="ink_style_calligraphy">Calligraphie</string>
     <string name="ink_style_pencil">Crayon</string>
     <string name="ink_style_brush">Pinceau</string>
     <string name="ink_style_highlighter">Surligneur</string>
@@ -1468,6 +1470,7 @@
     <string name="ink_toolbar_brush">Pinceau</string>
     <string name="ink_toolbar_pencil">Crayon</string>
     <string name="ink_toolbar_fountain">Plume</string>
+    <string name="ink_toolbar_calligraphy">Calligraphie</string>
     <string name="ink_toolbar_ballpoint">Bille</string>
     <string name="ocr_review_title">Vérifier le texte reconnu</string>
     <string name="ocr_review_scope">Page actuelle : %1$d</string>
