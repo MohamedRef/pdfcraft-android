@@ -96,91 +96,116 @@ internal fun DrawToolbarBar(ctl: ViewerController, prefs: ToolPrefs, onMarkup: (
     val picker = ctl.picker
 
     Column(Modifier.fillMaxWidth().height(DrawToolbarHeight).barTopLine().background(c.surface).palmGuardedTaps(ctl, prefs)) {
-        // Seven primary tools. 7 * 48dp = 336dp; all are directly usable on normal phones.
+        // Six pens, the eraser and the lasso: 8 * 48dp = 384dp, a whole phone bar (#697).
         BoxWithConstraints(Modifier.fillMaxWidth().height(DrawRowHeight)) {
-            // the four text markups follow the pens (#660); the row scrolls where they do not fit
-            // the pens, the eraser and the lasso, then the four text markups (#678: six pens)
-            val slots = InkStyle.entries.size + 2 + if (onMarkup != null) 4 else 0
-            val contentWidth = maxOf(maxWidth, DrawToolSlot * slots + (if (onMarkup != null) 9.dp else 0.dp))
+            // The pens, the eraser and the lasso, then the four text markups (#660), in one row
+            // that scrolls. Where they all fit (a tablet) they share the bar; where they don't,
+            // the pens, the eraser and the lasso keep the bar's width, so the lasso stays in view
+            // with six pens on a 384 dp phone, and the markups follow in the scroll (#697).
+            val primarySlots = InkStyle.entries.size + 2
+            val markupWidth = if (onMarkup != null) DrawToolSlot * 4 + 9.dp else 0.dp
+            val shared = DrawToolSlot * primarySlots + markupWidth <= maxWidth
+            val primaryWidth = maxOf(maxWidth, DrawToolSlot * primarySlots)
             val pens = rememberScrollState()
-            Box(Modifier.fillMaxSize().horizontalScroll(pens)) {
-                Row(
-                    Modifier.width(contentWidth).height(DrawRowHeight),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceEvenly,
-                ) {
-                    InkStyle.entries.forEach { style ->
-                        val label = stringResource(inkStyleLabel(style))
-                        val active = !ctl.eraserMode && !ctl.lassoMode &&
-                            ctl.inkShapeMode == InkShapeMode.Freehand && prefs.inkStyle == style
-                        val pen = prefs.penSettings(style)
-                        DrawToolbarButton(label, active, onClick = {
-                            // Like the eraser: a second tap on the selected pen opens its colour and width.
-                            ctl.picker = penButtonPicker(active, picker)
-                            if (!active) activateDrawingPen(ctl, prefs, style)
-                        }, caption = stringResource(when (style) {
-                            InkStyle.Ballpoint -> R.string.ink_toolbar_ballpoint
-                            InkStyle.Fountain -> R.string.ink_toolbar_fountain
-                            InkStyle.Calligraphy -> R.string.ink_toolbar_calligraphy
-                            InkStyle.Pencil -> R.string.ink_toolbar_pencil
-                            InkStyle.Brush -> R.string.ink_toolbar_brush
-                            InkStyle.Highlighter -> R.string.ink_toolbar_marker
-                        }), onClickLabel = if (active) stringResource(R.string.ink_pen_edit_action) else null) {
-                            PenNibPreview(Color(inkColorOnPaper(pen.argb, style, ctl.darkPaper)), pen.width, pen.opacity, style, Modifier.size(29.dp, 31.dp))
-                        }
+            val primaryTools: @Composable () -> Unit = {
+                InkStyle.entries.forEach { style ->
+                    val label = stringResource(inkStyleLabel(style))
+                    val active = !ctl.eraserMode && !ctl.lassoMode &&
+                        ctl.inkShapeMode == InkShapeMode.Freehand && prefs.inkStyle == style
+                    val pen = prefs.penSettings(style)
+                    DrawToolbarButton(label, active, onClick = {
+                        // Like the eraser: a second tap on the selected pen opens its colour and width.
+                        ctl.picker = penButtonPicker(active, picker)
+                        if (!active) activateDrawingPen(ctl, prefs, style)
+                    }, caption = stringResource(when (style) {
+                        InkStyle.Ballpoint -> R.string.ink_toolbar_ballpoint
+                        InkStyle.Fountain -> R.string.ink_toolbar_fountain
+                        InkStyle.Calligraphy -> R.string.ink_toolbar_calligraphy
+                        InkStyle.Pencil -> R.string.ink_toolbar_pencil
+                        InkStyle.Brush -> R.string.ink_toolbar_brush
+                        InkStyle.Highlighter -> R.string.ink_toolbar_marker
+                    }), onClickLabel = if (active) stringResource(R.string.ink_pen_edit_action) else null) {
+                        PenNibPreview(Color(inkColorOnPaper(pen.argb, style, ctl.darkPaper)), pen.width, pen.opacity, style, Modifier.size(29.dp, 31.dp))
                     }
-                    DrawToolbarButton(
-                        label = stringResource(R.string.toolbar_eraser),
-                        active = ctl.eraserMode,
-                        caption = stringResource(R.string.ink_toolbar_eraser),
-                        onClick = {
-                            if (ctl.eraserMode) {
-                                ctl.picker = if (picker == Picker.EraserSize) Picker.None else Picker.EraserSize
-                            } else {
-                                ctl.eraserMode = true
-                                ctl.lassoMode = false
-                                ctl.picker = Picker.None
-                            }
-                        },
-                    ) { Icon(LucideIcons.Eraser, null, tint = if (ctl.eraserMode) c.toolAccent else c.icon, modifier = Modifier.size(24.dp)) }
-                    DrawToolbarButton(
-                        label = stringResource(R.string.toolbar_ink_lasso),
-                        active = ctl.lassoMode,
-                        caption = stringResource(R.string.ink_toolbar_lasso),
-                        onClick = {
-                            ctl.lassoMode = true
-                            ctl.eraserMode = false
+                }
+                DrawToolbarButton(
+                    label = stringResource(R.string.toolbar_eraser),
+                    active = ctl.eraserMode,
+                    caption = stringResource(R.string.ink_toolbar_eraser),
+                    onClick = {
+                        if (ctl.eraserMode) {
+                            ctl.picker = if (picker == Picker.EraserSize) Picker.None else Picker.EraserSize
+                        } else {
+                            ctl.eraserMode = true
+                            ctl.lassoMode = false
                             ctl.picker = Picker.None
-                        },
-                    ) { Icon(LucideIcons.Lasso, null, tint = if (ctl.lassoMode) c.toolAccent else c.icon, modifier = Modifier.size(24.dp)) }
-                    if (onMarkup != null) {
-                        // the text markups, one tap from the pens and back (#660): they mark the
-                        // text itself, unlike the free-hand highlighter pen above
-                        BarDivider(height = 30.dp)
-                        DrawToolbarButton(
-                            label = stringResource(R.string.common_tool_highlight),
-                            active = false,
-                            caption = stringResource(R.string.tool_caption_highlight),
-                            onClick = { onMarkup(TextMarkup.Highlight) },
-                        ) { Icon(LucideIcons.Highlighter, null, tint = c.icon, modifier = Modifier.size(24.dp)) }
-                        DrawToolbarButton(
-                            label = stringResource(R.string.common_tool_underline),
-                            active = false,
-                            caption = stringResource(R.string.tool_caption_underline),
-                            onClick = { onMarkup(TextMarkup.Underline) },
-                        ) { Icon(LucideIcons.Underline, null, tint = c.icon, modifier = Modifier.size(24.dp)) }
-                        DrawToolbarButton(
-                            label = stringResource(R.string.toolbar_strikethrough),
-                            active = false,
-                            caption = stringResource(R.string.tool_caption_strike),
-                            onClick = { onMarkup(TextMarkup.Strikethrough) },
-                        ) { Icon(LucideIcons.Strikethrough, null, tint = c.icon, modifier = Modifier.size(24.dp)) }
-                        DrawToolbarButton(
-                            label = stringResource(R.string.toolbar_squiggly),
-                            active = false,
-                            caption = stringResource(R.string.tool_caption_squiggly),
-                            onClick = { onMarkup(TextMarkup.Squiggly) },
-                        ) { Icon(io.github.artcraftandroid.pdfcraft.ui.PdfIcons.SquigglyUnderline, null, tint = c.icon, modifier = Modifier.size(24.dp)) }
+                        }
+                    },
+                ) { Icon(LucideIcons.Eraser, null, tint = if (ctl.eraserMode) c.toolAccent else c.icon, modifier = Modifier.size(24.dp)) }
+                DrawToolbarButton(
+                    label = stringResource(R.string.toolbar_ink_lasso),
+                    active = ctl.lassoMode,
+                    caption = stringResource(R.string.ink_toolbar_lasso),
+                    onClick = {
+                        ctl.lassoMode = true
+                        ctl.eraserMode = false
+                        ctl.picker = Picker.None
+                    },
+                ) { Icon(LucideIcons.Lasso, null, tint = if (ctl.lassoMode) c.toolAccent else c.icon, modifier = Modifier.size(24.dp)) }
+            }
+            val markupTools: @Composable () -> Unit = {
+                if (onMarkup != null) {
+                    // the text markups, one tap from the pens and back (#660): they mark the
+                    // text itself, unlike the free-hand highlighter pen above
+                    BarDivider(height = 30.dp)
+                    DrawToolbarButton(
+                        label = stringResource(R.string.common_tool_highlight),
+                        active = false,
+                        caption = stringResource(R.string.tool_caption_highlight),
+                        onClick = { onMarkup(TextMarkup.Highlight) },
+                    ) { Icon(LucideIcons.Highlighter, null, tint = c.icon, modifier = Modifier.size(24.dp)) }
+                    DrawToolbarButton(
+                        label = stringResource(R.string.common_tool_underline),
+                        active = false,
+                        caption = stringResource(R.string.tool_caption_underline),
+                        onClick = { onMarkup(TextMarkup.Underline) },
+                    ) { Icon(LucideIcons.Underline, null, tint = c.icon, modifier = Modifier.size(24.dp)) }
+                    DrawToolbarButton(
+                        label = stringResource(R.string.toolbar_strikethrough),
+                        active = false,
+                        caption = stringResource(R.string.tool_caption_strike),
+                        onClick = { onMarkup(TextMarkup.Strikethrough) },
+                    ) { Icon(LucideIcons.Strikethrough, null, tint = c.icon, modifier = Modifier.size(24.dp)) }
+                    DrawToolbarButton(
+                        label = stringResource(R.string.toolbar_squiggly),
+                        active = false,
+                        caption = stringResource(R.string.tool_caption_squiggly),
+                        onClick = { onMarkup(TextMarkup.Squiggly) },
+                    ) { Icon(io.github.artcraftandroid.pdfcraft.ui.PdfIcons.SquigglyUnderline, null, tint = c.icon, modifier = Modifier.size(24.dp)) }
+                }
+            }
+            Box(Modifier.fillMaxSize().horizontalScroll(pens)) {
+                if (shared) {
+                    Row(
+                        Modifier.width(maxWidth).height(DrawRowHeight),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceEvenly,
+                    ) {
+                        primaryTools()
+                        markupTools()
+                    }
+                } else {
+                    Row(Modifier.height(DrawRowHeight), verticalAlignment = Alignment.CenterVertically) {
+                        Row(
+                            Modifier.width(primaryWidth).height(DrawRowHeight).testTag(DrawPrimaryToolsTag),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceEvenly,
+                        ) { primaryTools() }
+                        Row(
+                            Modifier.width(markupWidth).height(DrawRowHeight),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceEvenly,
+                        ) { markupTools() }
                     }
                 }
             }
@@ -281,6 +306,9 @@ internal fun DrawToolbarBar(ctl: ViewerController, prefs: ToolPrefs, onMarkup: (
         }
     }
 }
+
+/** What the pens, the eraser and the lasso of Draw's first row are tagged with in tests (#697). */
+internal const val DrawPrimaryToolsTag = "draw_primary_tools"
 
 /** What the favourites part of Draw's second row is tagged with in tests. */
 internal const val DrawFavouritesTag = "draw_favourites"
