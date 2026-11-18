@@ -41,4 +41,6 @@
     <string name="busy_cancel_protect">Abbrechen hält vor dem nächsten Schritt an, auch während die geschützte Kopie gespeichert wird. Es wird keine Datei erstellt, dein Dokument bleibt unverändert.</string>
     <string name="scan_enhance_busy_image">Gescanntes Bild %1$d von %2$d wird verbessert …</string>
     <string name="busy_cancel_scan_enhance">Abbrechen hält vor dem nächsten Bild an. An deinen Seiten ändert sich nichts.</string>
+    <string name="text_styles_reading">PDF-Inhaltsverzeichnis wird erstellt: Seite %1$d von %2$d wird gelesen …</string>
+    <string name="busy_cancel_text_styles">Abbrechen hält vor der nächsten Seite an. Es wird kein Inhaltsverzeichnis hinzugefügt, dein Dokument bleibt unverändert.</string>
 </resources>

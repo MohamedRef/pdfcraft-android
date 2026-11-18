@@ -114,4 +114,17 @@ class JobStepsTest {
         assertNull(scanEnhanceLine("applying", 0, 0))
         assertNull(scanEnhanceLine("something_new", 1, 4))
     }
+
+    /** #652: Contents from headings counts the pages read for the headings from one. */
+    @Test
+    fun contentsFromHeadingsCountsPagesFromOne() {
+        assertEquals(JobLine(R.string.text_styles_reading, listOf(1, 869)), textStylesLine("reading", 0, 869))
+        assertEquals(JobLine(R.string.text_styles_reading, listOf(869, 869)), textStylesLine("reading", 868, 869))
+        // never past the total
+        assertEquals(JobLine(R.string.text_styles_reading, listOf(869, 869)), textStylesLine("reading", 869, 869))
+        // adding the bookmarks, or a document with no pages: the job's own message stays
+        assertNull(textStylesLine("adding", 0, 0))
+        assertNull(textStylesLine("reading", 0, 0))
+        assertNull(textStylesLine("something_new", 1, 4))
+    }
 }

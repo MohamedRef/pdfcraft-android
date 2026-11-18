@@ -46,4 +46,7 @@
     <string name="busy_cancel_protect">Cancel stops before the next step, and while the protected copy is saved. No file is made, and your document stays as it is.</string>
     <string name="scan_enhance_busy_image">Enhancing scanned image %1$d of %2$d…</string>
     <string name="busy_cancel_scan_enhance">Cancel stops before the next image. Nothing on your pages changes.</string>
+    <!-- Contents from headings says how far it is and can be stopped (#652): the page read for the headings -->
+    <string name="text_styles_reading">Creating PDF contents: reading page %1$d of %2$d…</string>
+    <string name="busy_cancel_text_styles">Cancel stops before the next page. No contents are added, and your document stays as it is.</string>
 </resources>
