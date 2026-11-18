@@ -11,7 +11,6 @@ import android.content.pm.ServiceInfo
 import android.graphics.drawable.Icon
 import android.media.session.MediaSession
 import android.media.session.PlaybackState
-import android.os.Build
 import android.os.IBinder
 
 /**
@@ -74,11 +73,8 @@ class ReadAloudService : Service() {
                 .build(),
         )
         val notification = notification(title, playing)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            startForeground(NOTIFICATION, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK)
-        } else {
-            startForeground(NOTIFICATION, notification)
-        }
+        // minSdk 29 (Android 10) always has the typed form (#691)
+        startForeground(NOTIFICATION, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK)
         return START_NOT_STICKY
     }
 

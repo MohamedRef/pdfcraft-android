@@ -2002,7 +2002,7 @@ fn the_eraser_leaves_strokes_it_never_reaches_exactly_as_they_were() {
     let original: Vec<[f64; 2]> = before[0].chunks(2).map(|p| [p[0], p[1]]).collect();
     let left: Vec<[f64; 2]> = after[0].chunks(2).map(|p| [p[0], p[1]]).collect();
     assert_eq!(left[..4], original[..4], "vertices left of the cut are the originals");
-    assert!(left.len() <= 16, "only the segment the eraser reaches is densified: {}", left.len());
+    assert!(left.len() <= original.len(), "the cut adds one point at its edge and no others: {}", left.len());
 }
 
 #[test]
@@ -2037,6 +2037,81 @@ fn the_whole_stroke_eraser_removes_each_stroke_it_touches_and_keeps_the_rest() {
     // Touching the last stroke deletes the drawing.
     assert!(erase_ink_strokes(&mut doc, 0, i, &[[150.0, 400.0]], 4.0, true, &meta("e")).unwrap());
     assert!(!list(&doc, 0).iter().any(|d| d.name(b"Subtype") == Some(&b"Ink"[..])));
+}
+
+fn pcwidths(doc: &Document, i: usize) -> Vec<Vec<f64>> {
+    let d = &list(doc, 0)[i];
+    let l = doc.resolve(d.get(b"PCWidths").unwrap()).as_array().cloned().unwrap();
+    l.iter().map(|s| doc.resolve(s).as_array().unwrap().iter().map(|x| doc.resolve(x).as_f64().unwrap()).collect()).collect()
+}
+
+/// Android adaptation: the eraser cuts a stroke exactly where its circle meets the stroke's painted
+/// edge, even inside one long segment, instead of at the nearest of samples half a radius apart.
+#[test]
+fn the_eraser_cuts_a_long_segment_exactly_at_its_edge() {
+    let mut doc = fixture();
+    // one 200 pt segment, 2 pt wide: the eraser's reach is its radius and 1 pt
+    let i = add_annotation(&mut doc, &new(0, Shape::Ink { strokes: vec![vec![[100.0, 400.0], [300.0, 400.0]]] }), &meta("i")).unwrap();
+    assert!(erase_ink(&mut doc, 0, i, &[[200.0, 450.0], [200.0, 350.0]], 5.0, &meta("e")).unwrap());
+    let pieces = ink_list(&doc, i);
+    assert_eq!(pieces.len(), 2, "{pieces:?}");
+    // sampling every 2.5 pt from x = 100 cut at 192.5 and 207.5; the edge is at 194 and 206
+    let close = |a: f64, b: f64| (a - b).abs() < 1e-6;
+    assert!(close(pieces[0][0], 100.0) && close(pieces[0][2], 194.0), "{:?}", pieces[0]);
+    assert!(close(pieces[1][0], 206.0) && close(pieces[1][2], 300.0), "{:?}", pieces[1]);
+    assert_eq!((pieces[0].len(), pieces[1].len()), (4, 4), "two points a piece: nothing added along the segment");
+}
+
+/// Android adaptation: on a curved pressure stroke, a 6 pt eraser through its middle leaves two
+/// pieces whose cut ends lie on the eraser's reach (its radius and half the stroke's width there)
+/// within 0.05 pt, carrying /PCWidths and /PCDensity through the cut.
+#[test]
+fn the_eraser_cuts_a_curved_pressure_stroke_on_its_reach() {
+    let mut doc = fixture();
+    let n = 40;
+    let points: Vec<[f64; 2]> = (0..=n)
+        .map(|k| {
+            let a = std::f64::consts::PI * k as f64 / n as f64;
+            [300.0 - 100.0 * a.cos(), 400.0 + 60.0 * a.sin()]
+        })
+        .collect();
+    // the width grows from half to twice the pen's 2 pt along the arc
+    let widths: Vec<f64> = (0..=n).map(|k| 0.5 + 1.5 * k as f64 / n as f64).collect();
+    let densities: Vec<f64> = (0..=n).map(|k| 0.4 + 0.5 * k as f64 / n as f64).collect();
+    let shape = Shape::PressureInk { strokes: vec![points], widths: vec![widths], densities: vec![densities] };
+    let i = add_annotation(&mut doc, &new(0, shape), &meta("i")).unwrap();
+    // a pressure stroke stores its widest width as /BS /W and each point's share of it in /PCWidths
+    let width = list(&doc, 0)[i].get(b"BS").and_then(|b| b.as_dict()).and_then(|b| b.get(b"W")).and_then(|w| w.as_f64()).unwrap();
+    let (radius, half_width) = (6.0, width / 2.0);
+    // a vertical swipe through the top of the arc
+    let eraser = [[300.0, 500.0], [300.0, 420.0]];
+    assert!(erase_ink(&mut doc, 0, i, &eraser, radius, &meta("e")).unwrap());
+    let pieces = ink_list(&doc, i);
+    let factors = pcwidths(&doc, i);
+    assert_eq!(pieces.len(), 2, "cut in two");
+    assert_eq!(factors.len(), 2);
+    let d = &list(&doc, 0)[i];
+    let dens = doc.resolve(d.get(b"PCDensity").unwrap()).as_array().cloned().unwrap();
+    assert_eq!(dens.len(), 2, "densities follow the cut");
+    // the end of the first piece and the start of the second are the cut points
+    let ends = [(pieces[0].len() / 2 - 1, 0), (0, 1)];
+    for (point, piece) in ends {
+        let p = [pieces[piece][point * 2], pieces[piece][point * 2 + 1]];
+        let f = factors[piece][point];
+        let reach = radius + half_width * f;
+        let distance = super::modify::point_segment_distance_for_tests(p, eraser[0], eraser[1]);
+        assert!((distance - reach).abs() < 0.05, "piece {piece}: {distance} from the eraser, reach {reach}");
+        // and nothing of either piece is left inside the reach
+        let k = factors[piece].len();
+        for j in 0..k {
+            let q = [pieces[piece][j * 2], pieces[piece][j * 2 + 1]];
+            let inside = super::modify::point_segment_distance_for_tests(q, eraser[0], eraser[1]) < radius + half_width * factors[piece][j] - 1e-6;
+            assert!(!inside, "piece {piece} point {j} is under the eraser");
+        }
+    }
+    // the widths grow along the arc, and the cut's are interpolated between their neighbours'
+    let all: Vec<f64> = factors.iter().flatten().copied().collect();
+    assert!(all.windows(2).all(|w| w[1] >= w[0]), "{factors:?}");
 }
 
 #[test]
@@ -4993,29 +5068,28 @@ fn ink_points_are_counted_as_strokes_resolve() {
     }
 }
 
-/// The eraser's densified samples have a total: a tiny eraser over long strokes is refused
-/// instead of interpolating millions of points.
+/// Android adaptation: a tiny eraser over long strokes is no longer refused (it was, when the cut
+/// sampled every half radius): the exact cut costs the same at any eraser size.
 #[test]
-fn the_eraser_densifies_within_a_total() {
+fn a_tiny_eraser_cuts_a_long_zigzag() {
     let zigzag: String = (0..2100).map(|k| format!(" {} {}", if k % 2 == 0 { 0 } else { 5000 }, k)).collect();
     let mut doc = doc_of(&[
         "<< /Type /Catalog /Pages 2 0 R >>".into(),
         "<< /Type /Pages /Kids [3 0 R] /Count 1 /MediaBox [0 0 612 792] >>".into(),
         "<< /Type /Page /Parent 2 0 R /Annots [4 0 R] >>".into(),
-        format!("<< /Type /Annot /Subtype /Ink /Rect [0 0 5000 2100] /InkList [[{zigzag}]] >>"),
+        format!("<< /Type /Annot /Subtype /Ink /Rect [0 0 5000 2100] /C [0 0 1] /BS << /W 1 >> /InkList [[{zigzag}]] >>"),
     ]);
-    // Android's eraser densifies only the segments it can reach (#77), so the path crosses every
-    // segment of the zigzag: 2099 segments at the 2000-sample clamp are past the total.
-    match erase_ink(&mut doc, 0, 0, &[[2500.0, 0.0], [2500.0, 2100.0]], 0.01, &meta("")) {
-        Err(AnnotError::Invalid(m)) => assert!(m.contains("too large to erase"), "{m}"),
-        other => panic!("refused: {other:?}"),
-    }
+    // the path crosses every one of the 2099 segments
+    assert!(erase_ink(&mut doc, 0, 0, &[[2500.0, 0.0], [2500.0, 2100.0]], 0.01, &meta("")).unwrap());
+    let d = &list(&doc, 0)[0];
+    let strokes = doc.resolve(d.get(b"InkList").unwrap()).as_array().unwrap().len();
+    assert_eq!(strokes, 2100, "each segment is cut once, leaving one more piece than cuts");
 }
 
-/// Each stroke's final point is a sample too: 500,000 strokes of two points at 8 samples a segment
-/// are 4,000,000 densified samples and as many final points again, past the total.
+/// Android adaptation: the exact cut's searches have a total. 500,000 small strokes under three
+/// eraser segments that reach them all are 1,500,000 searches, past it, and are refused.
 #[test]
-fn the_eraser_counts_each_strokes_final_point() {
+fn the_eraser_counts_every_cut_it_searches() {
     let refs = " 5 0 R".repeat(500_000);
     let mut doc = doc_of(&[
         "<< /Type /Catalog /Pages 2 0 R >>".into(),
@@ -5024,7 +5098,7 @@ fn the_eraser_counts_each_strokes_final_point() {
         format!("<< /Type /Annot /Subtype /Ink /Rect [0 0 100 100] /InkList [{refs}] >>"),
         "[0 0 8 0]".into(),
     ]);
-    match erase_ink(&mut doc, 0, 0, &[[1.0, 1.0]], 2.0, &meta("")) {
+    match erase_ink(&mut doc, 0, 0, &[[1.0, 1.0], [2.0, 1.0], [1.0, 1.0], [2.0, 1.0]], 2.0, &meta("")) {
         Err(AnnotError::Invalid(m)) => assert!(m.contains("too large to erase"), "{m}"),
         other => panic!("refused: {other:?}"),
     }
