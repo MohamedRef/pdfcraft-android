@@ -646,7 +646,9 @@ class DocumentFiles(private val context: Context) {
     /**
      * Give back the lasting access taken by [keepAccess] for documents that left Recent, and keep
      * the rest within [MAX_DOCUMENT_GRANTS], so document grants never push the user's folder
-     * grants out of Android's per-app limit (#108). Folder (tree) grants are never released here.
+     * grants out of Android's per-app limit (#108). Folder (tree) grants are never released here,
+     * nor one taken in the last few minutes: its document may still be opening, not yet in
+     * Recent (#705).
      */
     fun releaseUnusedAccess(recent: Collection<String>, open: String?) {
         // the real paths of documents that left Recent are forgotten with their grants (#491)

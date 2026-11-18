@@ -28,4 +28,29 @@ class UriGrantsTest {
         val grants = listOf(doc(1), doc(2), tree(1))
         assertEquals(emptySet<String>(), documentGrantsToRelease(grants, setOf(doc(1).uri, doc(2).uri), open = null, cap = 96))
     }
+
+    @Test
+    fun aGrantTakenMomentsAgoStaysThoughRecentDoesNotListItYet() {
+        // Open file took access a second ago and Home's clean-up ran as the picker closed: the file
+        // is still opening, so Recent does not list it yet (#705)
+        val opening = doc(2, at = System.currentTimeMillis() - 1_000)
+        val release = documentGrantsToRelease(listOf(doc(1), opening, tree(1)), recent = emptySet(), open = null, cap = 96)
+        assertEquals(setOf(doc(1).uri), release)
+    }
+
+    @Test
+    fun aGrantNotInRecentGoesOnceItHasSettled() {
+        val now = 1_000_000_000L
+        val grants = listOf(doc(1, at = now - GRANT_SETTLING_MS - 1), doc(2, at = now - GRANT_SETTLING_MS + 1_000))
+        assertEquals(setOf(doc(1).uri), documentGrantsToRelease(grants, recent = emptySet(), open = null, cap = 96, now = now))
+    }
+
+    @Test
+    fun grantsTakenMomentsAgoCountTowardTheCap() {
+        val now = 1_000_000_000L
+        // three settled ones in Recent and two still opening: with room for four, the oldest goes
+        val grants = (1..3).map { doc(it) } + (4..5).map { doc(it, at = now - 1_000 + it) }
+        val recent = (1..3).map { doc(it).uri }.toSet()
+        assertEquals(setOf(doc(1).uri), documentGrantsToRelease(grants, recent, open = null, cap = 4, now = now))
+    }
 }
