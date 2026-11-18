@@ -935,7 +935,11 @@ class AppViewModel(app: Application, private val saved: SavedStateHandle) : Andr
             markBeforeWorkingCopyChanges(doc)
             stage = "doc_save"
             if (doc.info.dirty) {
-                val out = Diag.measure(DiagArea.Save, "doc_save", "doc" to doc.diagNumber) { eng.tool("doc_save", mapOf("doc" to doc.id)) }
+                val out = Diag.measure(DiagArea.Save, "doc_save", "doc" to doc.diagNumber) {
+                    eng.tool("doc_save", mapOf("doc" to doc.id, "save_timings" to true))
+                }
+                // #595: which part of the engine's save took the time on a large book
+                Diag.event(DiagArea.Save, "doc_save_stages", "doc" to doc.diagNumber, *saveStageFields(out))
                 // an in-place original takes only appended revisions while it is open (#453)
                 doc.lent?.saved(out.optBoolean("incremental", false))
             }
@@ -3697,5 +3701,17 @@ private class PendingEdit(private val doc: OpenDocument) {
         if (!open) return
         open = false
         doc.pendingEdits.update { it - 1 }
+    }
+}
+
+/**
+ * The engine's save stages (#595) as log fields, in the order they ran: `build_ms`, `check_open_ms`,
+ * `check_pages_ms`, `write_ms`, `reopen_ms` and `refresh_ms` (stage names are code constants).
+ */
+internal fun saveStageFields(out: JSONObject): Array<Pair<String, Any?>> {
+    val stages = out.optJSONArray("save_timings") ?: return emptyArray()
+    return Array(stages.length()) { i ->
+        val stage = stages.optJSONObject(i)
+        (stage?.optString("stage").orEmpty().removePrefix("save_") + "_ms") to stage?.optLong("duration_ms")
     }
 }
