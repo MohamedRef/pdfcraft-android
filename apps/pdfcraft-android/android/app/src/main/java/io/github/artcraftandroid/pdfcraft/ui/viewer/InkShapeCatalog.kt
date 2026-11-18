@@ -8,6 +8,8 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import kotlin.math.abs
+import kotlin.math.ceil
 import kotlin.math.cos
 import kotlin.math.sin
 
@@ -42,12 +44,41 @@ private fun regular(n: Int, startDeg: Double, l: Float, t: Float, r: Float, b: F
     return unit.map { (x, y) -> Offset(l + ((x - x0) / (x1 - x0) * (r - l)).toFloat(), t + ((y - y0) / (y1 - y0) * (b - t)).toFloat()) }
 }
 
-/** Points of the ellipse at ([cx], [cy]) with radii [rx], [ry] from [fromDeg] to [toDeg] (0 = right, 90 = down). */
-private fun arc(cx: Float, cy: Float, rx: Float, ry: Float, fromDeg: Double, toDeg: Double, steps: Int = 24): List<Offset> =
-    List(steps + 1) { k ->
-        val a = Math.toRadians(fromDeg + (toDeg - fromDeg) * k / steps)
+/**
+ * Points of the ellipse at ([cx], [cy]) with radii [rx], [ry] from [fromDeg] to [toDeg] (0 = right,
+ * 90 = down): at least [steps] pieces, and enough that none is longer than [CATALOG_INK_STEP] (#701).
+ */
+private fun arc(cx: Float, cy: Float, rx: Float, ry: Float, fromDeg: Double, toDeg: Double, steps: Int = 24): List<Offset> {
+    val length = Math.toRadians(abs(toDeg - fromDeg)) * maxOf(abs(rx), abs(ry))
+    val n = maxOf(steps, ceil(length / CATALOG_INK_STEP).toInt())
+    return List(n + 1) { k ->
+        val a = Math.toRadians(fromDeg + (toDeg - fromDeg) * k / n)
         Offset(cx + rx * cos(a).toFloat(), cy + ry * sin(a).toFloat())
     }
+}
+
+/**
+ * The longest piece, in page points, of a solid's saved drawing (#701). Saved ink is smoothed through
+ * its points as handwriting is, so an edge held only by its two corners bowed out and its corners
+ * rounded off; with a point every few page points the smoothing stays on the edge, and a corner rounds
+ * only within about half of this, under a pen's own width.
+ */
+internal const val CATALOG_INK_STEP = 3f
+
+/** [points] with points added along each piece longer than [step], every one of [points] kept (#701). */
+internal fun densified(points: List<Offset>, step: Float = CATALOG_INK_STEP): List<Offset> {
+    if (points.size < 2) return points
+    val out = ArrayList<Offset>(points.size * 4)
+    out += points.first()
+    for (i in 1 until points.size) {
+        val a = points[i - 1]
+        val b = points[i]
+        val n = maxOf(1, ceil((b - a).getDistance() / step).toInt())
+        for (k in 1 until n) out += a + (b - a) * (k.toFloat() / n)
+        out += b
+    }
+    return out
+}
 
 /** An ellipse lying flat: its near half (the lower one as seen) solid, its far half [farHidden] or solid. */
 private fun flatEllipse(cx: Float, cy: Float, rx: Float, ry: Float, farHidden: Boolean): List<ShapePart> = listOf(
@@ -176,7 +207,8 @@ internal fun catalogShapeCommands(
         InkShapeMode.Axes -> listOf(common + mapOf("type" to "polyline", "points" to parts[0].points.map { it.json() }, "endings" to arrows))
         in CATALOG_FLAT_SHAPES -> listOf(common + mapOf("type" to "polygon", "points" to parts[0].points.map { it.json() }))
         else -> {
-            fun ink(of: List<ShapePart>) = common + mapOf("type" to "ink", "strokes" to of.map { p -> (if (p.closed) p.points + p.points.first() else p.points).map { it.json() } })
+            // each edge with a point every few page points, so the saved drawing keeps it straight (#701)
+            fun ink(of: List<ShapePart>) = common + mapOf("type" to "ink", "strokes" to of.map { p -> densified(if (p.closed) p.points + p.points.first() else p.points).map { it.json() } })
             val (hidden, visible) = parts.partition { it.hidden }
             listOfNotNull(
                 visible.takeIf { it.isNotEmpty() }?.let { ink(it) },
