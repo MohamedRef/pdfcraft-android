@@ -805,6 +805,7 @@
     <string name="toolbar_label_password">Contraseña</string>
     <string name="toolbar_label_combine">Combinar</string>
     <string name="toolbar_label_compress">Comprimir</string>
+    <string name="toolbar_label_export">Exportar</string>
     <string name="toolbar_label_organize">Organizar</string>
     <string name="toolbar_label_crop">Recortar</string>
     <!-- Note: the Recognize text tool's short name on the toolbar -->
