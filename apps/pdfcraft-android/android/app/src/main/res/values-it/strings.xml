@@ -1571,7 +1571,7 @@
     <string name="ink_toolbar_rectangle">Box</string>
     <string name="ink_toolbar_line">Linea</string>
     <string name="ink_toolbar_color">Colore</string>
-    <string name="ink_toolbar_settings">Impostazioni</string>
+    <string name="ink_toolbar_settings">Opzioni</string>
     <string name="ink_toolbar_lasso">Lazo</string>
     <string name="ink_toolbar_eraser">Gomma</string>
     <string name="ink_eraser_size_title">Dimensione gomma</string>
@@ -2545,6 +2545,10 @@
     <string name="ink_more_shapes">Altre forme</string>
     <string name="ink_flat_shapes">Forme piane</string>
     <string name="ink_solid_shapes">Solidi</string>
+    <string name="ink_toolbar_right_triangle">Rettangolo</string>
+    <string name="ink_toolbar_double_arrow">Doppia</string>
+    <string name="ink_toolbar_frustum">Tronco</string>
+    <string name="ink_toolbar_more_shapes">Altre</string>
     <string name="viewer_hint_polygon">Tocca ogni angolo. Tocca di nuovo il primo angolo per finire.</string>
     <string name="viewer_hint_polyline">Tocca ogni punto. Tocca di nuovo l\'ultimo punto per finire.</string>
     <string name="edit_link">Link</string>

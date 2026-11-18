@@ -2563,6 +2563,10 @@
     <string name="ink_more_shapes">Más formas</string>
     <string name="ink_flat_shapes">Formas planas</string>
     <string name="ink_solid_shapes">Cuerpos</string>
+    <string name="ink_toolbar_right_triangle">Rectángulo</string>
+    <string name="ink_toolbar_double_arrow">Doble</string>
+    <string name="ink_toolbar_frustum">Tronco</string>
+    <string name="ink_toolbar_more_shapes">Más</string>
     <string name="viewer_hint_polygon">Toca cada esquina. Toca otra vez la primera para terminar.</string>
     <string name="viewer_hint_polyline">Toca cada punto. Toca otra vez el último para terminar.</string>
     <string name="edit_link">Enlace</string>
