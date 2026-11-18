@@ -92,6 +92,9 @@ internal val LASSO_TURNABLE_SUBTYPES = setOf("Ink", "Line", "Polygon", "PolyLine
 internal fun lassoTransformedDraft(s: InkStroke, pivot: Offset, scale: Float, angleDeg: Float): InkStroke {
     val width = (s.appearance.width * scale).coerceIn(0.1f, 30f)
     return InkStroke(s.page, s.appearance.copy(width = width), s.pressureSensitive, s.shapeMode, null, s.stylus).also {
+        // a dashed or dotted line's pieces stay one line (#682): its pattern, and its group, saved as one annotation
+        it.pattern = s.pattern
+        it.group = s.group
         it.points.addAll(s.points.map { p -> lassoTransformPoint(p, pivot, scale, angleDeg) })
         it.scales.addAll(s.scales)
         it.densities.addAll(s.densities)

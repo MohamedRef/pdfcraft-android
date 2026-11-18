@@ -94,6 +94,17 @@ class InkLassoTransformTest {
         assertEquals(3f, s.appearance.width, 0f)
         // the width stays within the pens' bounds
         assertEquals(30f, lassoTransformedDraft(s, Offset.Zero, 20f, 0f).appearance.width, 0f)
+        // a dashed line's piece keeps its pattern and its line (#682)
+        val group = Any()
+        val dash = InkStroke(0, InkAppearance(0xFF000000.toInt(), 1f, 2f, null)).also {
+            it.pattern = io.github.artcraftandroid.pdfcraft.ui.viewer.InkPattern.Dashed
+            it.group = group
+            it.points.addAll(listOf(Offset(0f, 0f), Offset(4f, 0f)))
+            it.scales.addAll(listOf(1f, 1f))
+        }
+        val turned = lassoTransformedDraft(dash, Offset.Zero, 1f, 90f)
+        assertEquals(io.github.artcraftandroid.pdfcraft.ui.viewer.InkPattern.Dashed, turned.pattern)
+        assertTrue(turned.group === group)
     }
 
     @Test fun onlyDrawingsLinesAndPolygonsTurn() {

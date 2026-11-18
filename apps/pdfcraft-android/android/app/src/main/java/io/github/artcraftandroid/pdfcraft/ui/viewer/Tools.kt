@@ -131,6 +131,10 @@ internal class InkStroke(
 ) {
     val points = mutableStateListOf<Offset>()
     val scales = mutableStateListOf<Float>()
+    /** Dashed or dotted (#682): cut into its pieces when the pen lifts, shown through a mask until then. */
+    var pattern = InkPattern.Solid
+    /** The pieces of one dashed or dotted line share this token, so they are saved as one annotation. */
+    var group: Any? = null
     /** A pencil's ink density per point (#569), from [dynamics]; empty for solid ink. */
     val densities = mutableStateListOf<Float>()
     var pressureSensitive by mutableStateOf(varies)
@@ -835,9 +839,7 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
     fun pictureView() = InkPictureView(canvasSize.width, canvasSize.height, doc.viewer.zoom, doc.viewer.scrollX, doc.viewer.scrollY, doc.viewer.layout, doc.controller.nightMode)
     // not while the lasso holds strokes: a selection is drawn where it is being moved to
     fun pictureWanted() = prefs.penTuning.draftPicture && !moving && !doc.controller.lassoMode
-    /** One draft as the screen shows it: clipped to its page (#75), [lift]ed while the lasso moves it. */
-    fun DrawScope.drawDraft(s: InkStroke, lift: Offset = Offset.Zero) {
-        val pageRect = doc.viewer.pageRectOnScreen(s.page)
+    fun DrawScope.drawDraftInk(s: InkStroke, lift: Offset, pageRect: androidx.compose.ui.geometry.Rect) {
         // Ink being drawn may run off its page (#75); only the part on the page shows.
         clipRect(pageRect.left, pageRect.top, pageRect.right, pageRect.bottom) {
             drawInkStroke(
@@ -852,6 +854,37 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                 look = InkLook(doc.controller.nightMode, s.appearance.onDark),
             )
         }
+    }
+
+    /** One draft as the screen shows it: clipped to its page (#75), [lift]ed while the lasso moves it. */
+    fun DrawScope.drawDraft(s: InkStroke, lift: Offset = Offset.Zero) {
+        val pageRect = doc.viewer.pageRectOnScreen(s.page)
+        // a dashed or dotted line being written (not cut yet) is shown through its pattern (#682)
+        val mask = if (s.group == null) inkPatternMask(s.pattern, inkStylePointWidths(listOf(1f), s.appearance.width, s.appearance.style).first()) else null
+        if (mask != null && s.points.size >= 2) {
+            drawIntoCanvas { it.saveLayer(pageRect, androidx.compose.ui.graphics.Paint()) }
+            drawDraftInk(s, lift, pageRect)
+            val k = doc.viewer.pixelsPerPoint(s.page)
+            val line = androidx.compose.ui.graphics.Path()
+            s.points.forEachIndexed { i, p ->
+                val q = doc.viewer.pageToScreen(s.page, p.x + lift.x, p.y + lift.y)
+                if (i == 0) line.moveTo(q.x, q.y) else line.lineTo(q.x, q.y)
+            }
+            val widest = inkStylePointWidths(listOf(s.scales.maxOrNull() ?: 1f), s.appearance.width, s.appearance.style).first() * k
+            drawPath(
+                line, Color.Black,
+                style = Stroke(
+                    // dashes cut square across the line wherever it is widest; dots are discs as wide as the line
+                    width = if (mask.round) widest * 1.05f else widest * 4f,
+                    cap = if (mask.round) androidx.compose.ui.graphics.StrokeCap.Round else androidx.compose.ui.graphics.StrokeCap.Butt, join = androidx.compose.ui.graphics.StrokeJoin.Round,
+                    pathEffect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(mask.on * k, mask.off * k), mask.phase * k),
+                ),
+                blendMode = androidx.compose.ui.graphics.BlendMode.DstIn,
+            )
+            drawIntoCanvas { it.restore() }
+            return
+        }
+        drawDraftInk(s, lift, pageRect)
     }
     val pictureDensity = LocalDensity.current
     LaunchedEffect(doc) {
@@ -960,17 +993,21 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
             val taken = drafts.takeForSaving()
             clearSelection()
             if (taken.isNotEmpty()) {
-                val groups = inkSaveCommandGroups(
-                    taken.map { s -> InkSaveStroke(s.page, s.appearance, s.points.toList(), s.scales.toList(), s.pressureSensitive, s.densities.toList()) },
-                ) { argb -> Color(argb).hex() }
+                // the pieces of a dashed or dotted line are one annotation, one group (#682)
+                val strokeGroups = inkSaveStrokeGroups(
+                    taken.map { s -> InkSaveStroke(s.page, s.appearance, s.points.toList(), s.scales.toList(), s.pressureSensitive, s.densities.toList(), s.group) },
+                )
+                val groups = strokeGroups.map { group -> inkSaveCommands(group) { argb -> Color(argb).hex() } }
                 steps.started()
                 val savedAt = android.os.SystemClock.uptimeMillis()
                 // The drafts stay drawn until the engine has them; the ones it refuses stay drafts (#73).
                 vm.runToolBatch(doc, "comment_add", groups) { applied ->
                     PenDiag.draftsSaved(taken.size, taken.sumOf { it.points.size }, groups.sumOf { it.size }, applied, android.os.SystemClock.uptimeMillis() - savedAt)
-                    val kept = drafts.settle(taken, applied)
+                    // the engine took the first [applied] groups: a dashed line is one group of many strokes (#682)
+                    val savedStrokes = strokeGroups.take(applied).sumOf { it.size }
+                    val kept = drafts.settle(taken, savedStrokes)
                     // in the engine now, but not in the file until the next save (#680)
-                    doc.inkJournal?.committed(taken.take(applied))
+                    doc.inkJournal?.committed(taken.take(savedStrokes))
                     steps.finished(groups.take(applied).sumOf { it.size })
                     if (kept > 0) vm.inkKept(doc, kept)
                 }
@@ -1206,6 +1243,8 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
             strokes.removeAt(i)
             val pieces = runs.mapIndexed { k, run ->
                 InkStroke(s.page, s.appearance, s.pressureSensitive, s.shapeMode, null, s.stylus).also {
+                    it.pattern = s.pattern
+                    it.group = s.group
                     it.points.addAll(run.points)
                     it.scales.addAll(run.scales)
                     densityRuns?.getOrNull(k)?.scales?.takeIf { d -> d.size == run.points.size }?.let { d -> it.densities.addAll(d) }
@@ -1328,6 +1367,7 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
         strokes.remove(s)
         val pieces = runs.mapIndexed { i, run ->
             InkStroke(s.page, s.appearance, s.pressureSensitive, s.shapeMode, null, s.stylus).also {
+                it.pattern = s.pattern
                 it.points.addAll(run.points)
                 it.scales.addAll(run.pressures)
                 densityRuns?.getOrNull(i)?.pressures?.takeIf { d -> d.size == run.points.size }?.let { d -> it.densities.addAll(d) }
@@ -1335,6 +1375,39 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
         }
         strokes.addAll(at.coerceAtMost(strokes.size), pieces)
         return pieces
+    }
+
+    /**
+     * A dashed or dotted line (#682), cut on lift into its pieces, which take its place in the
+     * drafts and share one group (one annotation when saved). A solid stroke, or one shorter than a
+     * dash, is itself.
+     */
+    fun layPattern(lines: List<InkStroke>): List<InkStroke> = lines.flatMap { s ->
+        if (s.pattern == InkPattern.Solid || s.shapeMode != InkShapeMode.Freehand) return@flatMap listOf(s)
+        val points = s.points.toList()
+        val width = inkStylePointWidths(listOf(1f), s.appearance.width, s.appearance.style).first()
+        val runs = inkPatternRuns(points, s.scales.toList(), s.pattern, width)
+        if (runs.size == 1) {
+            s.pattern = InkPattern.Solid
+            return@flatMap listOf(s)
+        }
+        // the same cut carries a pencil's densities (the points come out the same)
+        val densityRuns = if (s.densities.size == points.size) inkPatternRuns(points, s.densities.toList(), s.pattern, width) else null
+        val group = Any()
+        val pieces = runs.mapIndexed { i, run ->
+            InkStroke(s.page, s.appearance, s.pressureSensitive, s.shapeMode, null, s.stylus).also {
+                it.pattern = s.pattern
+                it.group = group
+                it.points.addAll(run.points)
+                it.scales.addAll(run.pressures)
+                densityRuns?.getOrNull(i)?.pressures?.takeIf { d -> d.size == run.points.size }?.let { d -> it.densities.addAll(d) }
+            }
+        }
+        val at = strokes.indexOf(s).takeIf { it >= 0 } ?: strokes.size
+        strokes.remove(s)
+        strokes.addAll(at.coerceAtMost(strokes.size), pieces)
+        PenDiag.pattern(s.pattern.key, pieces.size, points.size)
+        pieces
     }
 
     fun beginLasso(p: Offset) {
@@ -1595,6 +1668,7 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                     dpPerPt = doc.viewer.pixelsPerPoint(at.page) / density.density,
                     pressureSetting = prefs.penPressure(inkStyle),
                 ).also {
+                    if (doc.controller.inkShapeMode == InkShapeMode.Freehand) it.pattern = prefs.penPattern(inkStyle)
                     it.dynamics?.stats?.let { stats ->
                         stats.draftsBefore = strokes.size + drafts.saving.size
                         stats.draftPointsBefore = strokes.sumOf { d -> d.points.size } + drafts.saving.sumOf { d -> d.points.size }
@@ -1767,8 +1841,9 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                     }
                     // Cut at the page edge: what is off the page is dropped (#75).
                     val pointsIn = s.points.size
-                    val pieces = clipStrokeToPage(s)
-                    if (pieces.singleOrNull() !== s) logStrokeClip(pointsIn, pieces)
+                    val clipped = clipStrokeToPage(s)
+                    if (clipped.singleOrNull() !== s) logStrokeClip(pointsIn, clipped)
+                    val pieces = layPattern(clipped)
                     if (pieces.isNotEmpty()) {
                         edits.add(DraftInkEdit.Added(pieces))
                         undone.clear()
@@ -2119,6 +2194,7 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                         pen.width, prefs.author.ifBlank { null }, prefs.inkStyle, onDark = doc.controller.darkPaper,
                     )
                     newInkStroke(page, appearance, isStylus, InkShapeMode.Freehand, prefs.penTuning, dpPerPt, prefs.penPressure(prefs.inkStyle)).also {
+                        it.pattern = prefs.penPattern(prefs.inkStyle)
                         it.add(at, inkSampleTimeMs, pressure)
                         strokes.add(it)
                     }
@@ -2134,7 +2210,7 @@ private fun DrawLayer(vm: AppViewModel, doc: OpenDocument) {
                         }
                     }
                     if (s.points.size >= 2) {
-                        edits.add(DraftInkEdit.Added(listOf(s)))
+                        edits.add(DraftInkEdit.Added(layPattern(listOf(s))))
                         undone.clear()
                         steps.drafted()
                     } else strokes.remove(s)

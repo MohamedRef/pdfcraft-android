@@ -1132,6 +1132,10 @@
     <string name="ink_highlighter_straight_explanation">كل خط بالهايلايتر يطلع مستقيم.</string>
     <string name="ink_pressure">الضغط</string>
     <string name="ink_pressure_explanation">مقدار تغيّر الخط عند الضغط. عند 0% يبقى بعرض واحد.</string>
+    <string name="ink_pattern">الخط</string>
+    <string name="ink_pattern_solid">متصل</string>
+    <string name="ink_pattern_dashed">متقطع</string>
+    <string name="ink_pattern_dotted">منقّط</string>
     <string name="ink_pressure_percent">الضغط %1$d%%</string>
     <string name="pen_lab_title">معمل الأقلام</string>
     <string name="pen_lab_summary">اضبط استجابة كل قلم للضغط والسرعة</string>

@@ -1389,6 +1389,10 @@
     <string name="ink_highlighter_straight_explanation">Jeder Textmarker-Strich wird zu einer geraden Linie.</string>
     <string name="ink_pressure">Druck</string>
     <string name="ink_pressure_explanation">Wie stark sich die Linie beim Drücken ändert. Bei 0 % bleibt sie gleich breit.</string>
+    <string name="ink_pattern">Linie</string>
+    <string name="ink_pattern_solid">Durchgezogen</string>
+    <string name="ink_pattern_dashed">Gestrichelt</string>
+    <string name="ink_pattern_dotted">Gepunktet</string>
     <string name="ink_pressure_percent">Druck %1$d %%</string>
     <string name="pen_lab_title">Stiftlabor</string>
     <string name="pen_lab_summary">Einstellen, wie jeder Stift auf Druck und Tempo reagiert</string>

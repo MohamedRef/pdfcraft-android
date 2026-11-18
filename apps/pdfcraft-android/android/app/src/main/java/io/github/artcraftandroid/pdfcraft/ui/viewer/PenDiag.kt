@@ -60,6 +60,10 @@ internal object PenDiag {
     /** The ink stroke's numbers, once. */
     fun takeInkStroke(): PenStrokeStats? = inkStats.also { inkStats = null }
 
+    /** A dashed or dotted line was cut into its pieces on lift (#682): numbers only. */
+    fun pattern(pattern: String, pieces: Int, points: Int) =
+        Diag.event(DiagArea.Ink, "ink_pattern", "pattern" to pattern, "pieces" to pieces, "points" to points)
+
     /** A lasso selection was resized or turned by its handle (#689): numbers only. */
     fun lassoTransform(handle: String, scale: Float, angle: Float, drafts: Int, saved: Int, notTurned: Int) =
         Diag.event(DiagArea.Ink, "lasso_transform", "handle" to handle, "scale" to scale, "angle" to Math.round(angle), "drafts" to drafts, "saved" to saved, "not_turned" to notTurned)

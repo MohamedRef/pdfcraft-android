@@ -1379,6 +1379,10 @@
     <string name="ink_highlighter_straight_explanation">Ogni tratto dell\'evidenziatore diventa una linea retta.</string>
     <string name="ink_pressure">Pressione</string>
     <string name="ink_pressure_explanation">Quanto cambia la linea quando premi. Allo 0% mantiene una sola larghezza.</string>
+    <string name="ink_pattern">Linea</string>
+    <string name="ink_pattern_solid">Continua</string>
+    <string name="ink_pattern_dashed">Tratteggiata</string>
+    <string name="ink_pattern_dotted">Punteggiata</string>
     <string name="ink_pressure_percent">Pressione %1$d%%</string>
     <string name="pen_lab_title">Laboratorio penne</string>
     <string name="pen_lab_summary">Regola come ogni penna risponde a pressione e velocità</string>
