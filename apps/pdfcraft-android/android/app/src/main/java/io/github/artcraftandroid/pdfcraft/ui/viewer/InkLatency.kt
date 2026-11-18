@@ -2,9 +2,9 @@ package io.github.artcraftandroid.pdfcraft.ui.viewer
 
 /**
  * App-side ink latency (#128): from a pen sample's event time to the moment the app issues the
- * draw that shows it, for the normal Compose path and for the front-buffered (low-latency) path.
- * It leaves out what the display adds afterwards (composition, scan-out, the panel), so it is a
- * before/after comparison of the two paths, not touch-to-photon latency.
+ * Compose draw that shows it. It leaves out what the display adds afterwards (composition,
+ * scan-out, the panel), so it compares builds and settings, not touch-to-photon latency. (The
+ * front-buffered path it once compared with was removed in #574.)
  */
 internal class LatencyStats(private val capacity: Int = 512, private val onSample: (Long) -> Unit = {}) {
     private val samples = ArrayDeque<Long>(capacity)
@@ -38,8 +38,7 @@ internal fun latencySummary(samples: List<Long>): LatencySummary? {
 internal object InkLatency {
     /** The stroke in progress, for the diagnostics log's line per stroke. */
     val stroke = StrokeTrace()
-    val normal = LatencyStats { stroke.latency(front = false, ms = it) }
-    val lowLatency = LatencyStats { stroke.latency(front = true, ms = it) }
+    val normal = LatencyStats { stroke.latency(ms = it) }
 }
 
 /** One pen stroke, as the diagnostics log shows it (#128): no positions, only times and counts. */
@@ -51,8 +50,6 @@ internal data class StrokeSummary(
     val cancelled: Boolean,
     val normal: LatencySummary?,
     val normalMaxMs: Long,
-    val front: LatencySummary?,
-    val frontMaxMs: Long,
     /** What wrote it: `pen`, `eraser` or `finger`. */
     val pointer: String = "pen",
     /** Compose draws of the ink layer while the stroke was being written. */
@@ -82,7 +79,6 @@ internal class StrokeTrace {
     private var eraser = false
     private var pointer = "pen"
     private val normal = ArrayList<Long>()
-    private val front = ArrayList<Long>()
     private val drawUs = ArrayList<Long>()
     private val frameGaps = ArrayList<Long>()
     private var lastDrawNs = 0L
@@ -97,7 +93,6 @@ internal class StrokeTrace {
         this.eraser = eraser
         this.pointer = pointer
         normal.clear()
-        front.clear()
         drawUs.clear()
         frameGaps.clear()
         lastDrawNs = 0L
@@ -128,9 +123,9 @@ internal class StrokeTrace {
     }
 
     @Synchronized
-    fun latency(front: Boolean, ms: Long) {
-        if (!active || normal.size + this.front.size >= 4096) return
-        (if (front) this.front else normal).add(ms)
+    fun latency(ms: Long) {
+        if (!active || normal.size >= 4096) return
+        normal.add(ms)
     }
 
     /** The pen lifted (or the stroke was cancelled): the stroke's summary, or null when inactive. */
@@ -140,7 +135,7 @@ internal class StrokeTrace {
         active = false
         return StrokeSummary(
             (time - downAt).coerceAtLeast(0), events, samples, eraser, cancelled,
-            latencySummary(normal), normal.maxOrNull() ?: 0L, latencySummary(front), front.maxOrNull() ?: 0L,
+            latencySummary(normal), normal.maxOrNull() ?: 0L,
             pointer, drawUs.size, latencySummary(frameGaps), frameGaps.maxOrNull() ?: 0L,
             latencySummary(drawUs), drawUs.maxOrNull() ?: 0L, recompositions,
         )
