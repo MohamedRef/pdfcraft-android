@@ -45,6 +45,14 @@ class LentState(val dev: Long, val ino: Long, providerLength: Long) {
         if (!incremental) chainIntact = false
     }
 
+    /**
+     * Save a copy goes on in the copy (#724): a save of this visit still waiting for the close
+     * would write the working file, which by then holds the edits made for the copy too, over the
+     * original as the document closes. The copy has every change, so the original is left as it was
+     * opened. Returns whether a write-back was waiting.
+     */
+    fun dropWriteAtClose(): Boolean = writeBackAtClose.also { writeBackAtClose = false }
+
     /** The saved revision was appended to the original, which is now [length] bytes long. */
     fun appended(length: Long) {
         providerLength = length
